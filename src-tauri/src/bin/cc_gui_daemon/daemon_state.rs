@@ -3575,6 +3575,12 @@ impl DaemonState {
         workspace_id: String,
         thread_id: String,
     ) -> Result<Value, String> {
+        if thread_id.trim().starts_with("shared:") {
+            return Err(
+                "shared-compaction-route-required: daemon refuses unresolved Shared logical ids"
+                    .to_string(),
+            );
+        }
         if thread_id.trim().starts_with("claude:") {
             return self.compact_claude_thread(workspace_id, thread_id).await;
         }

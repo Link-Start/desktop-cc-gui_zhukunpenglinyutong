@@ -20,6 +20,7 @@ import type {
   BrowserContextSendAttachment,
   IntentCanvasContextSendAttachment,
   SelectedAgentOption,
+  SharedQueuedExecutionTarget,
   SkillInvocation,
 } from "../../../types";
 import type { AutoSessionMetadata } from "../../../services/tauri";
@@ -39,6 +40,7 @@ import {
   listKimiSessions as listKimiSessionsService,
 } from "../../../services/tauri";
 import { sendSharedSessionTurnRouted } from "../../shared-session/runtime/sendSharedSessionTurn";
+import type { SendSharedSessionTurnV2Result } from "../../shared-session/runtime/sendSharedSessionTurnV2";
 import { isSharedV2SendEnabled } from "../../shared-session/runtime/sharedV2SendFlag";
 import { sharedSessionV2InterruptTurn as sharedSessionV2InterruptTurnService } from "../../shared-session/services/sharedSessions";
 import {
@@ -163,7 +165,16 @@ type SendMessageOptions = {
   intentCanvasContextAttachments?: IntentCanvasContextSendAttachment[];
   codexInvalidThreadRetryAttempted?: boolean;
   autoSession?: AutoSessionMetadata | null;
+  sharedExecutionTarget?: SharedQueuedExecutionTarget;
 };
+
+export type ThreadMessageDispatchResult =
+  | SendSharedSessionTurnV2Result
+  | {
+      status: "ambiguous-error";
+      reason: string;
+    }
+  | undefined;
 
 type SendMessageToThreadFn = (
   workspace: WorkspaceInfo,
@@ -171,7 +182,7 @@ type SendMessageToThreadFn = (
   text: string,
   images?: string[],
   options?: SendMessageOptions,
-) => Promise<void>;
+) => Promise<ThreadMessageDispatchResult>;
 
 type InterruptTurnOptions = {
   reason?: "user-stop" | "queue-fusion" | "plan-handoff";
@@ -393,7 +404,7 @@ export function useThreadMessaging({
       text: string,
       images: string[] = [],
       options?: SendMessageOptions,
-    ) => {
+    ): Promise<ThreadMessageDispatchResult> => {
       const messageText = text.trim();
       if (!messageText && images.length === 0) {
         return;
@@ -410,8 +421,13 @@ export function useThreadMessaging({
         );
         const retrySend = sendMessageToThreadRef.current;
         if (reconciledThreadId && retrySend) {
-          await retrySend(workspace, reconciledThreadId, text, images, options);
-          return;
+          return retrySend(
+            workspace,
+            reconciledThreadId,
+            text,
+            images,
+            options,
+          );
         }
       }
       if (threadId.startsWith("codex-pending-")) {
@@ -426,8 +442,7 @@ export function useThreadMessaging({
           // finalize never returns the pending id itself (it resolves to the
           // real backend id or null), so always re-enter with the resolved id
           // instead of falling through and sending the pending id upstream.
-          await retrySend(workspace, finalizedThreadId, text, images, options);
-          return;
+          return retrySend(workspace, finalizedThreadId, text, images, options);
         } else {
           // finalize returns null both when the backend start failed and when
           // the pending thread was deleted mid-flight; only surface the
@@ -462,7 +477,8 @@ export function useThreadMessaging({
         threadKind === "shared" && isSharedV2SendEnabled();
       const storedSharedTarget =
         threadKind === "shared"
-          ? getSharedTargetState(workspace.id, threadId).selectedNextTarget
+          ? (options?.sharedExecutionTarget ??
+            getSharedTargetState(workspace.id, threadId).selectedNextTarget)
           : null;
       const supportedStoredSharedTarget =
         storedSharedTarget &&
@@ -484,7 +500,11 @@ export function useThreadMessaging({
             state: sharedSendState.state,
           },
         });
-        return;
+        return {
+          status: "blocked",
+          state: sharedSendState.state,
+          reason: "shared-send-not-idle",
+        };
       }
       if (storedSharedTarget && !supportedStoredSharedTarget) {
         pushThreadErrorMessage(
@@ -493,7 +513,10 @@ export function useThreadMessaging({
           "当前 Shared Session 目标暂不可执行，请重新选择可用的 CLI 和 Provider。",
         );
         safeMessageActivity();
-        return;
+        return {
+          status: "target-unavailable",
+          reason: "shared-target-unsupported",
+        };
       }
       if (
         sharedV2SendEnabled &&
@@ -505,7 +528,10 @@ export function useThreadMessaging({
           "当前 Shared Session 目标不完整，请重新选择 CLI、Provider 和 Model。",
         );
         safeMessageActivity();
-        return;
+        return {
+          status: "target-unavailable",
+          reason: "shared-target-incomplete",
+        };
       }
       const resolvedEngine =
         threadKind === "shared"
@@ -1159,6 +1185,7 @@ export function useThreadMessaging({
       const retryCodexSendAfterThreadRefresh = async (errorMessage: string) => {
         const staleRecoveryClassification = classifyStaleThreadRecovery(errorMessage);
         if (
+          threadKind === "shared" ||
           resolvedEngine !== "codex" ||
           options?.codexInvalidThreadRetryAttempted ||
           !isRecoverableCodexThreadBindingError(errorMessage)
@@ -1353,7 +1380,7 @@ export function useThreadMessaging({
             markProcessing(threadId, false);
             setActiveTurnId(threadId, null);
             safeMessageActivity();
-            return;
+            return response as SendSharedSessionTurnV2Result;
           }
           const sharedNativeThreadId = asString(response?.nativeThreadId ?? "").trim();
           if (sharedNativeThreadId && !sharedNativeThreadId.startsWith("shared:")) {
@@ -1406,7 +1433,7 @@ export function useThreadMessaging({
             markProcessing(threadId, false);
             setActiveTurnId(threadId, null);
             safeMessageActivity();
-            return;
+            return response as SendSharedSessionTurnV2Result;
           }
         } else {
 
@@ -2067,6 +2094,12 @@ export function useThreadMessaging({
           });
         }
         safeMessageActivity();
+        if (threadKind === "shared") {
+          return {
+            status: "ambiguous-error",
+            reason: rawMessage,
+          };
+        }
       }
     },
     [
@@ -2254,7 +2287,7 @@ export function useThreadMessaging({
       images: string[] = [],
       options?: SendMessageOptions,
     ) => {
-      await sendMessageToThread(workspace, threadId, text, images, options);
+      return sendMessageToThread(workspace, threadId, text, images, options);
     },
     [sendMessageToThread],
   );
@@ -2829,6 +2862,7 @@ export function useThreadMessaging({
     resolveCollaborationRuntimeMode,
     resolveComposerSelection,
     resolveThreadEngine,
+    resolveThreadKind,
     safeMessageActivity,
     sendMessageToThread,
     sessionSpecLinkByThreadRef,

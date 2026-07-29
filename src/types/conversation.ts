@@ -276,12 +276,32 @@ export type ComposerEnginePrefs = {
   collaborationModeId: string | null;
 };
 
+/**
+ * Shared follow-up 入队时冻结的可执行目标。
+ *
+ * 该结构刻意放在通用 conversation contract 中，避免 queue 层反向依赖
+ * shared-session feature；字段与 ResolvedExecutionTarget 保持结构兼容。
+ */
+export type SharedQueuedExecutionTarget = {
+  engine: EngineType;
+  providerProfileId: string | null;
+  modelCatalogEntryId: string;
+  model: string;
+  reasoning: { effort: string } | null;
+  providerProfileNameSnapshot: string;
+  providerProfileSource: "disk" | "managed";
+};
+
 export type QueuedMessage = {
   id: string;
   text: string;
   createdAt: number;
   images?: string[];
   sendOptions?: MessageSendOptions;
+  sharedExecutionTarget?: SharedQueuedExecutionTarget;
+  sharedPredecessorAttemptId?: string | null;
+  /** 已开始 Shared V2 handoff、但尚未拿到 canonical commit ACK。 */
+  sharedDispatchState?: "pending-ack";
 };
 
 export type IntentCanvasContextCount = {
@@ -482,6 +502,8 @@ export type MessageSendOptions = {
   browserContextAttachment?: BrowserContextSendAttachment | null;
   intentCanvasContextAttachments?: IntentCanvasContextSendAttachment[];
   createSessionTarget?: ComposerCreateSessionTarget;
+  /** Queue/Fusion 专用：发送边界必须优先使用该冻结目标，禁止重读 Picker。 */
+  sharedExecutionTarget?: SharedQueuedExecutionTarget;
 };
 
 export type SelectedAgentOption = {

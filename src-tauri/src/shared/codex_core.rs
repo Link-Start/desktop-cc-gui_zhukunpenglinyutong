@@ -291,6 +291,9 @@ pub(crate) async fn thread_compact_core(
     }
     let session_key = session_key_for_provider(&workspace_id, provider_profile_id.as_deref());
     let session = get_session_clone(sessions, &session_key).await?;
+    session
+        .try_reserve_codex_manual_compaction(&normalized_thread_id)
+        .await?;
 
     let mut attempts = Vec::new();
     for method in THREAD_COMPACTION_METHOD_CANDIDATES {
@@ -312,6 +315,9 @@ pub(crate) async fn thread_compact_core(
         }
     }
 
+    session
+        .release_codex_compaction_reservation(&normalized_thread_id)
+        .await;
     Err(format!(
         "all compaction methods failed for thread {}: {}",
         normalized_thread_id,
@@ -982,6 +988,10 @@ pub(crate) async fn send_user_message_core(
         params.insert("preferredLanguage".to_string(), json!(language));
     }
     let timeout_duration = session.initial_turn_start_timeout();
+    // Close the auto-compaction race before the first runtime side effect. If
+    // compaction already owns this native thread, preserve the original prompt
+    // and wait; otherwise this reservation prevents compaction from replacing it.
+    session.reserve_codex_user_dispatch(&thread_id).await?;
     session
         .note_codex_turn_start_pending(&thread_id, timeout_duration)
         .await;
@@ -1056,13 +1066,21 @@ pub(crate) async fn send_user_message_core(
                 .await
                 {
                     Ok(retry_response) => {
+                        if extract_error_message_from_response(&retry_response).is_some() {
+                            session
+                                .clear_codex_foreground_work(Some(&thread_id), None)
+                                .await;
+                            session
+                                .release_codex_user_dispatch_reservation(&thread_id)
+                                .await;
+                        }
                         return Ok(attach_codex_dispatch_receipt(
                             retry_response,
                             provider_profile_id.as_deref(),
                             &session_key,
                             model.as_deref(),
                             effort.as_deref(),
-                        ))
+                        ));
                     }
                     Err(retry_error) => {
                         log::warn!(
@@ -1077,6 +1095,9 @@ pub(crate) async fn send_user_message_core(
                     }
                 }
             }
+            session
+                .release_codex_user_dispatch_reservation(&thread_id)
+                .await;
             return Err(if error == "request timed out" {
                 build_first_packet_timeout_error(timeout_duration)
             } else {
@@ -1103,15 +1124,27 @@ pub(crate) async fn send_user_message_core(
         session
             .start_codex_turn_timing(&thread_id, crate::backend::app_server::now_millis())
             .await;
-        let fallback_response = session
+        let fallback_response = match session
             .send_request("turn/start", Value::Object(params))
-            .await?;
+            .await
+        {
+            Ok(response) => response,
+            Err(error) => {
+                session
+                    .release_codex_user_dispatch_reservation(&thread_id)
+                    .await;
+                return Err(error);
+            }
+        };
         session
             .record_codex_turn_start_response(&thread_id, crate::backend::app_server::now_millis())
             .await;
-        if fallback_response.get("error").is_some() {
+        if extract_error_message_from_response(&fallback_response).is_some() {
             session
                 .clear_codex_foreground_work(Some(&thread_id), None)
+                .await;
+            session
+                .release_codex_user_dispatch_reservation(&thread_id)
                 .await;
         }
         return Ok(attach_codex_dispatch_receipt(
@@ -1121,6 +1154,11 @@ pub(crate) async fn send_user_message_core(
             model.as_deref(),
             effort.as_deref(),
         ));
+    }
+    if extract_error_message_from_response(&response).is_some() {
+        session
+            .release_codex_user_dispatch_reservation(&thread_id)
+            .await;
     }
     Ok(attach_codex_dispatch_receipt(
         response,

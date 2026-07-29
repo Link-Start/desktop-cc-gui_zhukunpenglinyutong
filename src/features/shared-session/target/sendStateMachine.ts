@@ -147,9 +147,12 @@ export function isPickerLocked(state: SharedSendState): boolean {
   return state !== "idle" && state !== "target-unavailable";
 }
 
-/** 新 Turn 仅在 idle 可提交，避免破坏 Shared Canonical Thread 的线性顺序。 */
+/**
+ * running / settling 的提交会被 Composer 收敛为 frozen follow-up，不会直接创建
+ * Runtime Turn；pre-acceptance 与 ambiguous 状态继续 fail closed。
+ */
 export function isComposerSubmitLocked(state: SharedSendState): boolean {
-  return state !== "idle";
+  return state !== "idle" && state !== "running" && state !== "settling";
 }
 
 /** 只有 ACK/ordering 不确定时才锁文本编辑；正常运行期允许提前写下一条草稿。 */
@@ -168,9 +171,9 @@ export function canCancel(
   return state === "awaiting-acceptance" && supportsCancelPendingDelivery;
 }
 
-export function sharedAdapterCapabilities(
-  engine: string | null | undefined,
-): { cancelPendingDelivery: boolean } {
+export function sharedAdapterCapabilities(engine: string | null | undefined): {
+  cancelPendingDelivery: boolean;
+} {
   switch (engine) {
     // 当前两条 Shared adapter 都通过阻塞式 request/response bridge 投递，
     // runtime 尚未暴露“ACK 前撤销指定 delivery”的 identity。

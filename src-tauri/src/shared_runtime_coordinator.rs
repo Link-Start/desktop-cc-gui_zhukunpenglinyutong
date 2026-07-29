@@ -2148,6 +2148,18 @@ fn deserialize_vec_by_aliases<T: serde::de::DeserializeOwned>(
 fn completion_outcome(value: Option<&Value>) -> OutcomeStatus {
     let status =
         value_string_by_aliases(value, &["status", "outcome", "stopReason", "stop_reason"])
+            .or_else(|| {
+                value.and_then(|root| {
+                    ["turn", "result"].iter().find_map(|key| {
+                        root.get(*key).and_then(|nested| {
+                            value_string_by_aliases(
+                                Some(nested),
+                                &["status", "outcome", "stopReason", "stop_reason"],
+                            )
+                        })
+                    })
+                })
+            })
             .unwrap_or_default()
             .to_ascii_lowercase();
     match status.as_str() {
@@ -3202,6 +3214,45 @@ mod tests {
         assert!(coordinator.settled_for_attempt("attempt-1").is_some());
         coordinator.remove_attempt("attempt-1");
         assert!(coordinator.settled_for_attempt("attempt-1").is_none());
+    }
+
+    #[test]
+    fn codex_nested_replaced_completion_preserves_replaced_outcome() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        coordinator
+            .register_attempt(owner(
+                "attempt-replaced",
+                Some("run-replaced"),
+                Some("native-replaced"),
+            ))
+            .expect("register");
+
+        let event = json!({
+            "method": "turn/completed",
+            "params": {
+                "threadId": "native-replaced",
+                "turn": {
+                    "id": "run-replaced",
+                    "status": "replaced"
+                }
+            }
+        });
+        let settled = coordinator
+            .ingest_codex_event("ws-1", &event)
+            .settled
+            .expect("nested replaced terminal");
+
+        assert_eq!(settled.final_snapshot.outcome, OutcomeStatus::Replaced);
+    }
+
+    #[test]
+    fn completion_outcome_falls_through_supported_nested_aliases() {
+        let params = json!({
+            "turn": {"id": "run-replaced"},
+            "result": {"status": "replaced"}
+        });
+
+        assert_eq!(completion_outcome(Some(&params)), OutcomeStatus::Replaced);
     }
 
     #[test]

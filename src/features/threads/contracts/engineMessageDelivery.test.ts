@@ -30,7 +30,7 @@ describe("engine message delivery contract", () => {
     });
   });
 
-  it("identifies compatibility steering without pretending it is native", () => {
+  it("degrades compatibility input to a queued follow-up", () => {
     expect(
       decideEngineMessageDelivery({
         intent: "steer",
@@ -41,7 +41,22 @@ describe("engine message delivery contract", () => {
       }),
     ).toMatchObject({
       status: "degraded",
-      route: "steer",
+      route: "queue",
+      fallbackIntent: "followUp",
+      reason: "input.mid-turn:compat-input",
+    });
+  });
+
+  it("rejects compatibility input when no follow-up fallback is allowed", () => {
+    expect(
+      decideEngineMessageDelivery({
+        intent: "steer",
+        engine: "codex",
+        sessionId: "session-1",
+        activeRunId: "run-1",
+      }),
+    ).toMatchObject({
+      status: "rejected",
       reason: "input.mid-turn:compat-input",
     });
   });

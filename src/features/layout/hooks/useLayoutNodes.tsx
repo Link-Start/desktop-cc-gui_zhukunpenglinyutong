@@ -1500,11 +1500,19 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           onCodexAutoCompactionSettingsChange={
             options.onCodexAutoCompactionSettingsChange
           }
-          isContextCompacting={false}
-          codexCompactionLifecycleState="idle"
-          codexCompactionSource={null}
-          codexCompactionCompletedAt={null}
-          lastTokenUsageUpdatedAt={null}
+          isContextCompacting={activeThreadStatus?.isContextCompacting ?? false}
+          codexCompactionLifecycleState={
+            activeThreadStatus?.codexCompactionLifecycleState ?? "idle"
+          }
+          codexCompactionSource={
+            activeThreadStatus?.codexCompactionSource ?? null
+          }
+          codexCompactionCompletedAt={
+            activeThreadStatus?.codexCompactionCompletedAt ?? null
+          }
+          lastTokenUsageUpdatedAt={
+            activeThreadStatus?.lastTokenUsageUpdatedAt ?? null
+          }
           accountRateLimits={null}
           usageShowRemaining={options.usageShowRemaining}
           onRefreshAccountRateLimits={options.onRefreshAccountRateLimits}
@@ -1514,7 +1522,10 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           runtimeLifecycleState={composerRuntimeLifecycleState}
           sendLabel={
             options.composerSendLabel ??
-            (options.isProcessing && !options.steerEnabled
+            ((isSharedSession &&
+              (sharedSendState === "running" ||
+                sharedSendState === "settling")) ||
+            (options.isProcessing && !options.steerEnabled)
               ? t("messages.queue")
               : t("messages.send"))
           }

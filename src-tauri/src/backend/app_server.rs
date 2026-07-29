@@ -13,7 +13,7 @@ use tokio::io::AsyncWriteExt;
 #[cfg(test)]
 use tokio::process::Command;
 use tokio::process::{Child, ChildStdin};
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{mpsc, oneshot, Mutex, Notify};
 use tokio::time::timeout;
 
 use crate::backend::events::{
@@ -514,6 +514,7 @@ pub(crate) struct WorkspaceSession {
     auto_compaction_threshold_percent: f64,
     auto_compaction_enabled: bool,
     auto_compaction_thread_state: Mutex<HashMap<String, AutoCompactionThreadState>>,
+    auto_compaction_state_changed: Notify,
     plan_turn_state: Mutex<HashMap<String, PlanTurnState>>,
     local_user_input_requests: Mutex<HashMap<String, String>>,
     local_request_seq: AtomicU64,
@@ -933,6 +934,109 @@ impl WorkspaceSession {
     fn auto_compaction_enabled(&self) -> bool {
         self.auto_compaction_enabled
     }
+
+    pub(crate) async fn reserve_codex_user_dispatch(&self, thread_id: &str) -> Result<(), String> {
+        let normalized_thread_id = thread_id.trim();
+        if normalized_thread_id.is_empty() {
+            return Err("thread_id is required".to_string());
+        }
+        loop {
+            let notified = self.auto_compaction_state_changed.notified();
+            tokio::pin!(notified);
+            // Register before checking the gate. `notify_waiters()` does not
+            // retain a permit, so registering afterwards could miss the exact
+            // compaction-release edge and stall until the bounded timeout.
+            notified.as_mut().enable();
+            let wait_ms = {
+                let now = now_millis();
+                let mut states = self.auto_compaction_thread_state.lock().await;
+                let state = states.entry(normalized_thread_id.to_string()).or_default();
+                if state.reserve_user_dispatch(now) {
+                    return Ok(());
+                }
+                state.barrier_wait_ms(now)
+            };
+            if timeout(Duration::from_millis(wait_ms), notified)
+                .await
+                .is_err()
+            {
+                let released = {
+                    let mut states = self.auto_compaction_thread_state.lock().await;
+                    states
+                        .get_mut(normalized_thread_id)
+                        .is_some_and(|state| state.release_expired_barrier(now_millis()))
+                };
+                if released {
+                    log::warn!(
+                        "[codex][compaction-barrier] workspace_id={} thread_id={} outcome=stale-barrier-released",
+                        self.entry.id,
+                        normalized_thread_id
+                    );
+                    self.auto_compaction_state_changed.notify_waiters();
+                }
+            }
+        }
+    }
+
+    pub(crate) async fn release_codex_user_dispatch_reservation(&self, thread_id: &str) {
+        let normalized_thread_id = thread_id.trim();
+        if normalized_thread_id.is_empty() {
+            return;
+        }
+        if let Some(state) = self
+            .auto_compaction_thread_state
+            .lock()
+            .await
+            .get_mut(normalized_thread_id)
+        {
+            state.release_user_dispatch();
+        }
+        self.auto_compaction_state_changed.notify_waiters();
+    }
+
+    pub(crate) async fn try_reserve_codex_manual_compaction(
+        &self,
+        thread_id: &str,
+    ) -> Result<(), String> {
+        let normalized_thread_id = thread_id.trim();
+        if normalized_thread_id.is_empty() {
+            return Err("thread_id is required".to_string());
+        }
+        let reserved = {
+            let mut states = self.auto_compaction_thread_state.lock().await;
+            states
+                .entry(normalized_thread_id.to_string())
+                .or_default()
+                .try_reserve_manual_compaction(now_millis())
+        };
+        if reserved {
+            Ok(())
+        } else {
+            Err(format!(
+                "context compaction is busy for thread {normalized_thread_id}"
+            ))
+        }
+    }
+
+    pub(crate) async fn release_codex_compaction_reservation(&self, thread_id: &str) {
+        let normalized_thread_id = thread_id.trim();
+        if normalized_thread_id.is_empty() {
+            return;
+        }
+        if let Some(state) = self
+            .auto_compaction_thread_state
+            .lock()
+            .await
+            .get_mut(normalized_thread_id)
+        {
+            state.release_compaction();
+        }
+        self.auto_compaction_state_changed.notify_waiters();
+    }
+
+    pub(crate) fn notify_codex_compaction_state_changed(&self) {
+        self.auto_compaction_state_changed.notify_waiters();
+    }
 }
 
 #[allow(dead_code)]
@@ -1214,6 +1318,7 @@ async fn spawn_workspace_session_once<E: EventSink>(
         auto_compaction_threshold_percent,
         auto_compaction_enabled,
         auto_compaction_thread_state: Mutex::new(HashMap::new()),
+        auto_compaction_state_changed: Notify::new(),
         plan_turn_state: Mutex::new(HashMap::new()),
         local_user_input_requests: Mutex::new(HashMap::new()),
         local_request_seq: AtomicU64::new(1),
@@ -1355,6 +1460,7 @@ pub(crate) async fn make_test_workspace_session(id: &str) -> Arc<WorkspaceSessio
         auto_compaction_threshold_percent: AUTO_COMPACTION_THRESHOLD_PERCENT,
         auto_compaction_enabled: true,
         auto_compaction_thread_state: Mutex::new(HashMap::new()),
+        auto_compaction_state_changed: Notify::new(),
         plan_turn_state: Mutex::new(HashMap::new()),
         local_user_input_requests: Mutex::new(HashMap::new()),
         local_request_seq: AtomicU64::new(1),

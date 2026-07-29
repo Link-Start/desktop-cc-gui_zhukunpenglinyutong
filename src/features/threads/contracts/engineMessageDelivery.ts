@@ -5,10 +5,7 @@ import {
 } from "../../engine/engineCapabilityMatrix";
 
 export type EngineMessageDeliveryIntent =
-  | "prompt"
-  | "steer"
-  | "followUp"
-  | "nextTurn";
+  "prompt" | "steer" | "followUp" | "nextTurn";
 
 export type EngineMessageDeliveryRequest = Readonly<{
   intent: EngineMessageDeliveryIntent;
@@ -113,13 +110,11 @@ export function decideEngineMessageDelivery(
     return rejectOrQueueFallback(request, evidence, "active-run-required");
   }
   if (midTurnCapability === "compat-input") {
-    return {
-      status: "degraded",
-      intent: request.intent,
-      route: "steer",
-      reason: "input.mid-turn:compat-input",
+    return rejectOrQueueFallback(
+      request,
       evidence,
-    };
+      "input.mid-turn:compat-input",
+    );
   }
   if (midTurnCapability !== "supported") {
     return rejectOrQueueFallback(

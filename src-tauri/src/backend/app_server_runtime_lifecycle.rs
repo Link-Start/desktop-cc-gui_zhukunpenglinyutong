@@ -831,6 +831,12 @@ async fn maybe_trigger_auto_compaction<E: EventSink>(
             now_millis(),
         )
     };
+    if matches!(
+        method,
+        "turn/started" | "thread/compacted" | "thread/compactionFailed"
+    ) {
+        session.notify_codex_compaction_state_changed();
+    }
     if !should_trigger {
         return;
     }
@@ -860,12 +866,9 @@ async fn maybe_trigger_auto_compaction<E: EventSink>(
             .await;
         }
         Err(error) => {
-            {
-                let mut states = session.auto_compaction_thread_state.lock().await;
-                if let Some(state) = states.get_mut(thread_id) {
-                    state.in_flight = false;
-                }
-            }
+            session
+                .release_codex_compaction_reservation(thread_id)
+                .await;
             eprintln!(
                 "[codex] auto compaction dispatch failed workspace={} thread={}: {}",
                 workspace_id, thread_id, error

@@ -19,6 +19,10 @@ import type {
   LayoutNodesOptions,
 } from "./layoutNodesTypes";
 import { getCodexProviders } from "../../../services/tauri";
+import {
+  dispatchSharedSendEvent,
+  resetSharedSendStateStoreForTests,
+} from "../../shared-session/runtime/sharedSendStateStore";
 
 const clientUiVisibilityMock = vi.hoisted(() => ({
   visiblePanels: new Set<string>(),
@@ -237,6 +241,10 @@ vi.mock("../../composer/components/Composer", async () => {
     createSessionTargetPicker = false,
     onCreationTargetEngineChange,
     isSharedSession = false,
+    submitDisabled = false,
+    isContextCompacting = false,
+    codexCompactionLifecycleState = "idle",
+    codexCompactionSource = null,
   }: {
     activeThreadId?: string | null;
     onDraftChange: (next: string) => void;
@@ -250,6 +258,10 @@ vi.mock("../../composer/components/Composer", async () => {
       engine: "claude" | "codex" | "gemini" | "kimi" | "opencode" | null,
     ) => void;
     isSharedSession?: boolean;
+    submitDisabled?: boolean;
+    isContextCompacting?: boolean;
+    codexCompactionLifecycleState?: string;
+    codexCompactionSource?: string | null;
   }) => {
     const draftText = useComposerDraft(activeThreadId ?? null);
     composerMockState.thinkingCallbacks.push(onResolvedAlwaysThinkingChange);
@@ -261,6 +273,10 @@ vi.mock("../../composer/components/Composer", async () => {
         )}
         data-create-session-target-picker={String(createSessionTargetPicker)}
         data-is-shared-session={String(isSharedSession)}
+        data-submit-disabled={String(submitDisabled)}
+        data-is-context-compacting={String(isContextCompacting)}
+        data-codex-compaction-lifecycle={codexCompactionLifecycleState}
+        data-codex-compaction-source={codexCompactionSource ?? ""}
       >
         <textarea
           aria-label="composer input"
@@ -1085,6 +1101,7 @@ async function renderUseLayoutNodes(
 
 describe("useLayoutNodes client UI visibility", () => {
   afterEach(() => {
+    resetSharedSendStateStoreForTests();
     capturedGitDiffPanelProps = null;
     capturedFileTreePanelProps = null;
     clientUiVisibilityMock.visiblePanels.clear();
@@ -1129,6 +1146,54 @@ describe("useLayoutNodes client UI visibility", () => {
     expect(
       homeComposer.getByTestId("composer").dataset.isSharedSession,
     ).toBe("false");
+  });
+
+  it("allows Shared running follow-up queue and projects compaction lifecycle", async () => {
+    const threadId = "shared-thread";
+    dispatchSharedSendEvent(workspace.id, threadId, { type: "send" });
+    dispatchSharedSendEvent(workspace.id, threadId, {
+      type: "packagePrepared",
+    });
+    dispatchSharedSendEvent(workspace.id, threadId, { type: "runtimeAck" });
+    const options = createLayoutOptions({
+      activeThreadId: threadId,
+      isProcessing: true,
+      composerSendLabel: undefined,
+      threadStatusById: {
+        [threadId]: {
+          isProcessing: true,
+          hasUnread: false,
+          isReviewing: false,
+          isContextCompacting: true,
+          processingStartedAt: 1,
+          lastDurationMs: null,
+          codexCompactionLifecycleState: "compacting",
+          codexCompactionSource: "auto",
+        },
+      },
+      threadsByWorkspace: {
+        [workspace.id]: [
+          {
+            id: threadId,
+            name: "Shared",
+            updatedAt: 1,
+            engineSource: "codex",
+            threadKind: "shared",
+          },
+        ],
+      },
+    });
+    const { result } = await renderUseLayoutNodes(options);
+
+    const rendered = render(<>{result.current.composerNode}</>);
+    const composer = rendered.getByTestId("composer");
+    expect(composer.dataset.submitDisabled).toBe("false");
+    expect(composer.dataset.isContextCompacting).toBe("true");
+    expect(composer.dataset.codexCompactionLifecycle).toBe("compacting");
+    expect(composer.dataset.codexCompactionSource).toBe("auto");
+    expect(
+      rendered.getByRole("button", { name: "messages.queue" }),
+    ).toBeTruthy();
   });
 
   it("projects the Home creation target Engine into the hero icon owner", async () => {

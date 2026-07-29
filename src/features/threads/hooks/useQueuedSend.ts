@@ -3,17 +3,34 @@ import type {
   EngineType,
   MessageSendOptions,
   QueuedMessage,
+  SharedQueuedExecutionTarget,
   WorkspaceInfo,
 } from "../../../types";
+import {
+  getSharedSendActiveAttemptId,
+  getSharedSendStateRevision,
+  useSharedSendState,
+} from "../../shared-session/runtime/sharedSendStateStore";
+import { getSharedTargetState } from "../../shared-session/target/targetStore";
+import {
+  isResolvedExecutionTarget,
+  type ResolvedExecutionTarget,
+} from "../../shared-session/target/types";
+import type { SharedSendState } from "../../shared-session/target/sendStateMachine";
 import {
   buildQueuedHandoffBubbleItem,
   type QueuedHandoffBubble,
 } from "../utils/queuedHandoffBubble";
 import {
+  readSharedQueuedFollowUps,
+  writeSharedQueuedFollowUps,
+} from "../utils/sharedQueuedFollowUpStore";
+import {
   createEngineMessageDeliveryDiagnostic,
   decideEngineMessageDelivery,
   type EngineMessageDeliveryDiagnostic,
 } from "../contracts/engineMessageDelivery";
+import type { ThreadMessageDispatchResult } from "./useThreadMessaging";
 
 const OPENCODE_INFLIGHT_STALL_MS = 18_000;
 const FUSION_RESUME_TIMEOUT_MS = 48_000;
@@ -27,6 +44,7 @@ type UseQueuedSendOptions = {
   activeTerminalPulse?: number;
   isProcessing: boolean;
   isReviewing: boolean;
+  isContextCompacting?: boolean;
   // True while an AskUserQuestion dialog is open for the active thread. The CLI
   // turn is blocked awaiting the answer, so the queue must NOT flush into it —
   // isProcessing can drop to false mid-ask, which would otherwise send queued
@@ -36,11 +54,16 @@ type UseQueuedSendOptions = {
   steerEnabled: boolean;
   activeWorkspace: WorkspaceInfo | null;
   activeEngine?: EngineType;
+  isSharedSession?: boolean;
   resolveCanonicalThreadId: (threadId: string) => string;
   connectWorkspace: (workspace: WorkspaceInfo) => Promise<void>;
   startThreadForWorkspace: (
     workspaceId: string,
-    options?: { activate?: boolean; engine?: EngineType; folderId?: string | null },
+    options?: {
+      activate?: boolean;
+      engine?: EngineType;
+      folderId?: string | null;
+    },
   ) => Promise<string | null>;
   sendUserMessage: (
     text: string,
@@ -53,7 +76,7 @@ type UseQueuedSendOptions = {
     text: string,
     images?: string[],
     options?: MessageSendOptions,
-  ) => Promise<void>;
+  ) => Promise<ThreadMessageDispatchResult>;
   startFork: (text: string, options?: MessageSendOptions) => Promise<void>;
   startReview: (text: string) => Promise<void>;
   startResume: (text: string) => Promise<void>;
@@ -105,11 +128,15 @@ type ThreadFusionState = {
   messageId: string;
   turnIdBeforeFusion: string | null;
   mode: "same-run" | "cutover";
-  stage: "dispatching" | "awaiting-continuation";
+  stage:
+    "awaiting-predecessor-settlement" | "dispatching" | "awaiting-continuation";
   startedAtMs: number;
   continuationPulseAtStart: number;
   terminalPulseAtStart: number;
 };
+
+type QueuedDispatchResult =
+  "committed" | "dispatched" | "blocked" | "ambiguous";
 
 type SlashCommandKind =
   | "fork"
@@ -236,7 +263,88 @@ function parseSlashCommand(text: string): SlashCommandKind | null {
 }
 
 function isQueuedMessageFuseEligible(item: QueuedMessage): boolean {
-  return readSlashCommandToken(item.text) === null;
+  return (
+    readSlashCommandToken(item.text) === null &&
+    item.sharedDispatchState !== "pending-ack"
+  );
+}
+
+function cloneSharedExecutionTarget(
+  target: ResolvedExecutionTarget,
+): SharedQueuedExecutionTarget {
+  return {
+    engine: target.engine,
+    providerProfileId: target.providerProfileId?.trim() || null,
+    modelCatalogEntryId: target.modelCatalogEntryId,
+    model: target.model,
+    reasoning: target.reasoning ? { effort: target.reasoning.effort } : null,
+    providerProfileNameSnapshot: target.providerProfileNameSnapshot,
+    providerProfileSource: target.providerProfileSource,
+  };
+}
+
+function isSharedFollowUpState(state: SharedSendState): boolean {
+  return state === "running" || state === "settling";
+}
+
+function isSameSharedExecutionTarget(
+  current: ResolvedExecutionTarget,
+  frozen: SharedQueuedExecutionTarget,
+): boolean {
+  return (
+    current.engine === frozen.engine &&
+    normalizeOptionalIdentity(current.providerProfileId) ===
+      normalizeOptionalIdentity(frozen.providerProfileId) &&
+    current.modelCatalogEntryId === frozen.modelCatalogEntryId &&
+    current.model === frozen.model &&
+    normalizeOptionalIdentity(current.reasoning?.effort) ===
+      normalizeOptionalIdentity(frozen.reasoning?.effort) &&
+    current.providerProfileNameSnapshot ===
+      frozen.providerProfileNameSnapshot &&
+    current.providerProfileSource === frozen.providerProfileSource
+  );
+}
+
+function normalizeOptionalIdentity(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function classifySharedDispatchResult(
+  value: unknown,
+  expectedTarget: SharedQueuedExecutionTarget | undefined,
+): QueuedDispatchResult {
+  if (!value || typeof value !== "object") {
+    return "ambiguous";
+  }
+  const response = value as Record<string, unknown>;
+  const v2 =
+    response.v2 && typeof response.v2 === "object"
+      ? (response.v2 as Record<string, unknown>)
+      : null;
+  if (
+    response.status === "accepted" &&
+    v2?.committed === true &&
+    normalizeOptionalIdentity(v2.attemptId) !== null &&
+    normalizeOptionalIdentity(v2.logicalTurnId) !== null &&
+    expectedTarget !== undefined &&
+    response.engine === expectedTarget.engine &&
+    normalizeOptionalIdentity(response.providerProfileId) ===
+      normalizeOptionalIdentity(expectedTarget.providerProfileId) &&
+    normalizeOptionalIdentity(response.model) === expectedTarget.model &&
+    normalizeOptionalIdentity(response.reasoningEffort) ===
+      normalizeOptionalIdentity(expectedTarget.reasoning?.effort)
+  ) {
+    return "committed";
+  }
+  if (
+    response.status === "blocked" ||
+    response.status === "cancelled" ||
+    response.status === "recovery-required" ||
+    response.status === "target-unavailable"
+  ) {
+    return "blocked";
+  }
+  return "ambiguous";
 }
 
 function isCodexOnlyCommand(command: SlashCommandKind): boolean {
@@ -287,10 +395,12 @@ export function useQueuedSend({
   activeTerminalPulse = 0,
   isProcessing,
   isReviewing,
+  isContextCompacting = false,
   hasPendingUserInput = false,
   steerEnabled,
   activeWorkspace,
   activeEngine = "claude",
+  isSharedSession = false,
   resolveCanonicalThreadId,
   connectWorkspace,
   startThreadForWorkspace,
@@ -318,10 +428,32 @@ export function useQueuedSend({
   clearActiveImages,
 }: UseQueuedSendOptions): UseQueuedSendResult {
   const isClaudePendingBootstrapThread =
-    activeEngine === "claude" && Boolean(activeThreadId?.startsWith("claude-pending-"));
-  const [queuedByThread, setQueuedByThread] = useState<
+    activeEngine === "claude" &&
+    Boolean(activeThreadId?.startsWith("claude-pending-"));
+  const sharedSendEntry = useSharedSendState(
+    isSharedSession ? (activeWorkspace?.id ?? "") : "",
+    isSharedSession ? (activeThreadId ?? "") : "",
+  );
+  const activeSharedSendState: SharedSendState = isSharedSession
+    ? sharedSendEntry.state
+    : "idle";
+  const initialSharedQueueOwner =
+    isSharedSession && activeWorkspace && activeThreadId
+      ? `${activeWorkspace.id}::${activeThreadId}`
+      : null;
+  const [queuedByThread, setQueuedByThreadState] = useState<
     Record<string, QueuedMessage[]>
-  >({});
+  >(() =>
+    isSharedSession && activeWorkspace && activeThreadId
+      ? {
+          [activeThreadId]: readSharedQueuedFollowUps(
+            activeWorkspace.id,
+            activeThreadId,
+          ),
+        }
+      : {},
+  );
+  const queuedByThreadRef = useRef(queuedByThread);
   const [inFlightByThread, setInFlightByThread] = useState<
     Record<string, QueuedMessage | null>
   >({});
@@ -336,7 +468,66 @@ export function useQueuedSend({
   >({});
   const previousActiveThreadIdRef = useRef<string | null>(activeThreadId);
   const queuedAfterTerminalPulseRef = useRef(new Map<string, number>());
+  const queuedAfterSharedRevisionRef = useRef(new Map<string, number>());
   const deliveryDiagnosticsRef = useRef<EngineMessageDeliveryDiagnostic[]>([]);
+  const hydratedSharedQueueOwnersRef = useRef(
+    new Set(initialSharedQueueOwner ? [initialSharedQueueOwner] : []),
+  );
+  const fusionDispatchingRef = useRef(new Set<string>());
+  const queueDispatchingRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    queuedByThreadRef.current = queuedByThread;
+  }, [queuedByThread]);
+
+  useEffect(() => {
+    if (!isSharedSession || !activeWorkspace || !activeThreadId) {
+      return;
+    }
+    const ownerKey = `${activeWorkspace.id}::${activeThreadId}`;
+    if (hydratedSharedQueueOwnersRef.current.has(ownerKey)) {
+      return;
+    }
+    hydratedSharedQueueOwnersRef.current.add(ownerKey);
+    const persisted = readSharedQueuedFollowUps(
+      activeWorkspace.id,
+      activeThreadId,
+    );
+    setQueuedByThreadState((prev) => {
+      if (prev[activeThreadId]) {
+        return prev;
+      }
+      const next = {
+        ...prev,
+        [activeThreadId]: persisted,
+      };
+      queuedByThreadRef.current = next;
+      return next;
+    });
+  }, [activeThreadId, activeWorkspace, isSharedSession]);
+
+  const setQueuedByThread = useCallback(
+    (
+      updater: (
+        previous: Record<string, QueuedMessage[]>,
+      ) => Record<string, QueuedMessage[]>,
+    ) => {
+      const next = updater(queuedByThreadRef.current);
+      if (Object.is(next, queuedByThreadRef.current)) {
+        return;
+      }
+      queuedByThreadRef.current = next;
+      setQueuedByThreadState(next);
+      if (isSharedSession && activeWorkspace && activeThreadId) {
+        writeSharedQueuedFollowUps(
+          activeWorkspace.id,
+          activeThreadId,
+          next[activeThreadId] ?? [],
+        );
+      }
+    },
+    [activeThreadId, activeWorkspace, isSharedSession],
+  );
 
   const recordDeliveryDecision = useCallback(
     (diagnostic: EngineMessageDeliveryDiagnostic) => {
@@ -349,21 +540,22 @@ export function useQueuedSend({
   );
 
   const activeQueue = useMemo(
-    () => (activeThreadId ? queuedByThread[activeThreadId] ?? [] : []),
+    () => (activeThreadId ? (queuedByThread[activeThreadId] ?? []) : []),
     [activeThreadId, queuedByThread],
   );
   const activeFusion = useMemo(
-    () => (activeThreadId ? fusionByThread[activeThreadId] ?? null : null),
+    () => (activeThreadId ? (fusionByThread[activeThreadId] ?? null) : null),
     [activeThreadId, fusionByThread],
   );
   const activeQueuedHandoffBubble = useMemo(
-    () => (activeThreadId ? queuedHandoffByThread[activeThreadId] ?? null : null),
+    () =>
+      activeThreadId ? (queuedHandoffByThread[activeThreadId] ?? null) : null,
     [activeThreadId, queuedHandoffByThread],
   );
   const activeFusingMessageId = activeFusion?.messageId ?? null;
-  const activeSteeringRoute = useMemo(() => {
-    if (!activeThreadId || !activeTurnId || !steerEnabled) {
-      return false;
+  const activeFusionCapability = useMemo(() => {
+    if (!activeThreadId || !activeTurnId) {
+      return { sameRun: false, cutover: false };
     }
     const decision = decideEngineMessageDelivery({
       intent: "steer",
@@ -371,30 +563,43 @@ export function useQueuedSend({
       sessionId: activeThreadId,
       activeRunId: activeTurnId,
     });
-    return decision.status !== "rejected" && decision.route === "steer";
-  }, [activeEngine, activeThreadId, activeTurnId, steerEnabled]);
+    return {
+      sameRun:
+        steerEnabled &&
+        decision.status !== "rejected" &&
+        decision.route === "steer",
+      cutover:
+        decision.evidence.midTurnCapability === "compat-input" &&
+        typeof interruptTurn === "function",
+    };
+  }, [activeEngine, activeThreadId, activeTurnId, interruptTurn, steerEnabled]);
   const canFuseActiveQueue = useMemo(
     () =>
       Boolean(
         activeThreadId &&
-          activeWorkspace &&
-          activeQueue.length > 0 &&
-          !activeFusion &&
-          !isClaudePendingBootstrapThread &&
-          isProcessing &&
-          !isReviewing &&
-          (activeSteeringRoute || interruptTurn),
+        activeWorkspace &&
+        activeQueue.length > 0 &&
+        !activeFusion &&
+        !isClaudePendingBootstrapThread &&
+        !isContextCompacting &&
+        isProcessing &&
+        !isReviewing &&
+        (!isSharedSession ||
+          isSharedFollowUpState(activeSharedSendState)) &&
+        (activeFusionCapability.sameRun || activeFusionCapability.cutover),
       ),
     [
       activeFusion,
       activeQueue.length,
       activeThreadId,
-      activeSteeringRoute,
+      activeFusionCapability,
       activeWorkspace,
+      activeSharedSendState,
       isClaudePendingBootstrapThread,
-      interruptTurn,
+      isContextCompacting,
       isProcessing,
       isReviewing,
+      isSharedSession,
     ],
   );
 
@@ -488,33 +693,74 @@ export function useQueuedSend({
       delete next[oldThreadId];
       return next;
     });
-  }, [activeThreadId, resolveCanonicalThreadId]);
+  }, [activeThreadId, resolveCanonicalThreadId, setQueuedByThread]);
 
   const buildQueuedMessage = useCallback(
     (
       text: string,
       images: string[] = [],
       options?: MessageSendOptions,
-    ): QueuedMessage => ({
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      text,
-      createdAt: Date.now(),
-      images,
-      sendOptions: options,
-    }),
-    [],
+    ): QueuedMessage => {
+      let sharedExecutionTarget: SharedQueuedExecutionTarget | undefined;
+      let sharedPredecessorAttemptId: string | null | undefined;
+      if (isSharedSession) {
+        if (!activeWorkspace || !activeThreadId) {
+          throw new Error("Shared follow-up 缺少 workspace/thread owner。");
+        }
+        const selectedTarget = getSharedTargetState(
+          activeWorkspace.id,
+          activeThreadId,
+        ).selectedNextTarget;
+        if (!isResolvedExecutionTarget(selectedTarget)) {
+          throw new Error(
+            "Shared follow-up Target 不完整，请重新选择 CLI、Provider 和 Model。",
+          );
+        }
+        sharedExecutionTarget = cloneSharedExecutionTarget(selectedTarget);
+        sharedPredecessorAttemptId = getSharedSendActiveAttemptId(
+          activeWorkspace.id,
+          activeThreadId,
+        );
+        if (
+          isSharedFollowUpState(activeSharedSendState) &&
+          !sharedPredecessorAttemptId
+        ) {
+          throw new Error(
+            "Shared follow-up 缺少 durable predecessor Attempt，已拒绝入队。",
+          );
+        }
+      }
+      return {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        text,
+        createdAt: Date.now(),
+        images: [...images],
+        sendOptions:
+          options === undefined ? undefined : structuredClone(options),
+        sharedExecutionTarget,
+        sharedPredecessorAttemptId,
+      };
+    },
+    [activeSharedSendState, activeThreadId, activeWorkspace, isSharedSession],
   );
 
-  const enqueueMessage = useCallback((threadId: string, item: QueuedMessage) => {
-    setQueuedByThread((prev) => ({
-      ...prev,
-      [threadId]: [...(prev[threadId] ?? []), item],
-    }));
-  }, []);
+  const enqueueMessage = useCallback(
+    (threadId: string, item: QueuedMessage) => {
+      setQueuedByThread((prev) => ({
+        ...prev,
+        [threadId]: [...(prev[threadId] ?? []), item],
+      }));
+    },
+    [setQueuedByThread],
+  );
 
   const removeQueuedMessage = useCallback(
     (threadId: string, messageId: string) => {
+      if (inFlightByThread[threadId]?.id === messageId) {
+        return;
+      }
       queuedAfterTerminalPulseRef.current.delete(messageId);
+      queuedAfterSharedRevisionRef.current.delete(messageId);
       setQueuedByThread((prev) => ({
         ...prev,
         [threadId]: (prev[threadId] ?? []).filter(
@@ -522,7 +768,7 @@ export function useQueuedSend({
         ),
       }));
     },
-    [],
+    [inFlightByThread, setQueuedByThread],
   );
 
   const insertQueuedMessageAt = useCallback(
@@ -537,7 +783,7 @@ export function useQueuedSend({
         };
       });
     },
-    [],
+    [setQueuedByThread],
   );
 
   const prependQueuedMessage = useCallback(
@@ -545,6 +791,18 @@ export function useQueuedSend({
       insertQueuedMessageAt(threadId, item, 0);
     },
     [insertQueuedMessageAt],
+  );
+
+  const replaceQueuedMessage = useCallback(
+    (threadId: string, item: QueuedMessage) => {
+      setQueuedByThread((prev) => ({
+        ...prev,
+        [threadId]: (prev[threadId] ?? []).map((entry) =>
+          entry.id === item.id ? item : entry,
+        ),
+      }));
+    },
+    [setQueuedByThread],
   );
 
   const withCodexCollaborationMode = useCallback(
@@ -740,7 +998,7 @@ export function useQueuedSend({
     async (
       item: QueuedMessage,
       options?: { targetThreadId?: string | null },
-    ): Promise<boolean> => {
+    ): Promise<QueuedDispatchResult> => {
       const trimmed = item.text.trim();
       const command = parseSlashCommand(trimmed);
       const commandEnabled = canExecuteSlashCommand(
@@ -754,7 +1012,7 @@ export function useQueuedSend({
       if (commandEnabled && command) {
         const handled = await runSlashCommand(command, trimmed, item.sendOptions);
         if (handled) {
-          return command === "review";
+          return "dispatched";
         }
       }
       const implicitModeQuery =
@@ -764,35 +1022,46 @@ export function useQueuedSend({
         isImplicitModeQuery(trimmed);
       if (implicitModeQuery) {
         await startMode(trimmed);
-        return false;
+        return "dispatched";
       }
-      const effectiveOptions = withCodexCollaborationMode(item.sendOptions);
-      const targetThreadId = options?.targetThreadId?.trim() ?? "";
+      const frozenTargetOptions = item.sharedExecutionTarget
+        ? {
+            ...(item.sendOptions ?? {}),
+            sharedExecutionTarget: item.sharedExecutionTarget,
+          }
+        : item.sendOptions;
+      const effectiveOptions = withCodexCollaborationMode(frozenTargetOptions);
+      const targetThreadId =
+        options?.targetThreadId?.trim() ??
+        (isSharedSession ? (activeThreadId?.trim() ?? "") : "");
       const shouldUseDirectThreadSend =
-        activeEngine === "codex" &&
+        (isSharedSession || activeEngine === "codex") &&
         Boolean(activeWorkspace && targetThreadId);
       if (shouldUseDirectThreadSend && activeWorkspace) {
-        await sendUserMessageToThread(
+        const response = await sendUserMessageToThread(
           activeWorkspace,
           targetThreadId,
           trimmed,
           item.images ?? [],
           effectiveOptions,
         );
-        return true;
+        return isSharedSession
+          ? classifySharedDispatchResult(response, item.sharedExecutionTarget)
+          : "dispatched";
       }
       if (effectiveOptions) {
         await sendUserMessage(trimmed, item.images ?? [], effectiveOptions);
       } else {
         await sendUserMessage(trimmed, item.images ?? []);
       }
-      return true;
+      return "dispatched";
     },
     [
       activeEngine,
       activeThreadId,
       activeWorkspace,
       connectWorkspace,
+      isSharedSession,
       runSlashCommand,
       sendUserMessage,
       sendUserMessageToThread,
@@ -821,14 +1090,24 @@ export function useQueuedSend({
       if (activeThreadId && isReviewing) {
         return;
       }
+      const shouldQueueSharedFollowUp =
+        isSharedSession && isSharedFollowUpState(activeSharedSendState);
+      const shouldQueueSharedCompaction =
+        isSharedSession && isContextCompacting;
+      if (
+        isSharedSession &&
+        activeSharedSendState !== "idle" &&
+        !shouldQueueSharedFollowUp
+      ) {
+        return;
+      }
       const shouldQueueWhileProcessing =
         isProcessing && (!steerEnabled || isClaudePendingBootstrapThread);
       const deliveryRequest = {
-        intent:
-          isProcessing && steerEnabled && activeTurnId ? "steer" : "prompt",
+        intent: isProcessing && steerEnabled ? "steer" : "prompt",
         engine: activeEngine,
         sessionId: activeThreadId,
-        activeRunId: isProcessing ? activeTurnId ?? null : null,
+        activeRunId: isProcessing ? (activeTurnId ?? null) : null,
         allowFollowUpFallback: true,
       } as const;
       const deliveryResult = decideEngineMessageDelivery(deliveryRequest);
@@ -839,12 +1118,20 @@ export function useQueuedSend({
       // blocked on the answer, so a fresh send must queue rather than dispatch.
       if (
         activeThreadId &&
-        (shouldQueueWhileProcessing ||
+        (shouldQueueSharedFollowUp ||
+          shouldQueueSharedCompaction ||
+          shouldQueueWhileProcessing ||
           hasPendingUserInput ||
           (deliveryResult.status === "degraded" &&
             deliveryResult.route === "queue") ||
           (deliveryResult.status === "accepted" && deliveryResult.route === "queue"))
       ) {
+        // Shared durable queue only accepts user prompts. Local slash commands
+        // have no canonical V2 commit ACK and would otherwise execute once while
+        // leaving a permanent pending-ack item behind.
+        if (isSharedSession && command) {
+          return;
+        }
         const item = buildQueuedMessage(trimmed, nextImages, options);
         if (isProcessing && activeTurnId) {
           queuedAfterTerminalPulseRef.current.set(item.id, activeTerminalPulse);
@@ -861,6 +1148,7 @@ export function useQueuedSend({
     },
     [
       activeEngine,
+      activeSharedSendState,
       activeThreadId,
       activeTerminalPulse,
       activeTurnId,
@@ -870,8 +1158,10 @@ export function useQueuedSend({
       enqueueMessage,
       hasPendingUserInput,
       isClaudePendingBootstrapThread,
+      isContextCompacting,
       isProcessing,
       isReviewing,
+      isSharedSession,
       recordDeliveryDecision,
       steerEnabled,
     ],
@@ -900,6 +1190,16 @@ export function useQueuedSend({
       if (!activeThreadId) {
         return;
       }
+      if (
+        isSharedSession &&
+        !isSharedFollowUpState(activeSharedSendState) &&
+        !(activeSharedSendState === "idle" && isContextCompacting)
+      ) {
+        return;
+      }
+      if (isSharedSession && command) {
+        return;
+      }
       const item = buildQueuedMessage(trimmed, nextImages, options);
       if (isProcessing && activeTurnId) {
         queuedAfterTerminalPulseRef.current.set(item.id, activeTerminalPulse);
@@ -909,6 +1209,7 @@ export function useQueuedSend({
     },
     [
       activeEngine,
+      activeSharedSendState,
       activeThreadId,
       activeTerminalPulse,
       activeTurnId,
@@ -917,104 +1218,101 @@ export function useQueuedSend({
       enqueueMessage,
       isProcessing,
       isReviewing,
+      isContextCompacting,
+      isSharedSession,
     ],
   );
 
-  const fuseQueuedMessage = useCallback(
-    async (threadId: string, messageId: string) => {
-      if (!activeThreadId || threadId !== activeThreadId) {
+  const dispatchFusionSuccessor = useCallback(
+    async (
+      threadId: string,
+      messageId: string,
+      fusionOverride?: ThreadFusionState,
+    ) => {
+      const dispatchKey = `${threadId}:${messageId}`;
+      if (fusionDispatchingRef.current.has(dispatchKey)) {
         return;
       }
-      if (isClaudePendingBootstrapThread) {
-        return;
-      }
-      if (!activeWorkspace || !isProcessing || isReviewing) {
-        return;
-      }
-      if (fusionByThread[threadId]) {
-        return;
-      }
-      const threadQueue = queuedByThread[threadId] ?? [];
-      const originalIndex = threadQueue.findIndex((entry) => entry.id === messageId);
-      if (originalIndex < 0) {
-        return;
-      }
-      const item = threadQueue[originalIndex];
-      if (!item) {
-        return;
-      }
-      if (!isQueuedMessageFuseEligible(item)) {
-        return;
-      }
-      const predecessorTerminalPulse =
-        queuedAfterTerminalPulseRef.current.get(messageId);
-
-      const steeringDecision = decideEngineMessageDelivery({
-        intent: "steer",
-        engine: activeEngine,
-        sessionId: threadId,
-        activeRunId: activeTurnId ?? null,
-      });
-      recordDeliveryDecision(
-        createEngineMessageDeliveryDiagnostic(
-          {
-            intent: "steer",
-            engine: activeEngine,
-            sessionId: threadId,
-            activeRunId: activeTurnId ?? null,
-          },
-          steeringDecision,
-        ),
+      const fusion = fusionOverride ?? fusionByThread[threadId];
+      const item = (queuedByThread[threadId] ?? []).find(
+        (entry) => entry.id === messageId,
       );
-      const useSameRunContinuation =
-        steerEnabled &&
-        steeringDecision.status !== "rejected" &&
-        steeringDecision.route === "steer";
-      const canUseSafeCutover =
-        !useSameRunContinuation && typeof interruptTurn === "function";
-      if (!useSameRunContinuation && !canUseSafeCutover) {
+      if (!fusion || !item) {
         return;
       }
-
-      setFusionByThread((prev) => ({
-        ...prev,
-        [threadId]: {
-          messageId,
-          turnIdBeforeFusion: activeTurnId ?? null,
-          mode: useSameRunContinuation ? "same-run" : "cutover",
-          stage: "dispatching",
-          startedAtMs: Date.now(),
-          continuationPulseAtStart: activeContinuationPulse,
-          terminalPulseAtStart: activeTerminalPulse,
-        },
-      }));
-      setQueuedByThread((prev) => ({
-        ...prev,
-        [threadId]: (prev[threadId] ?? []).filter(
-          (entry) => entry.id !== messageId,
-        ),
-      }));
-      queuedAfterTerminalPulseRef.current.delete(messageId);
-
-      try {
-        if (!useSameRunContinuation && interruptTurn) {
-          await interruptTurn({ reason: "queue-fusion" });
+      fusionDispatchingRef.current.add(dispatchKey);
+      const dispatchItem: QueuedMessage = isSharedSession
+        ? { ...item, sharedDispatchState: "pending-ack" }
+        : item;
+      if (isSharedSession) {
+        replaceQueuedMessage(threadId, dispatchItem);
+      }
+      setFusionByThread((prev) => {
+        const current = prev[threadId];
+        if (!current || current.messageId !== messageId) {
+          return prev;
         }
-        const fusionItem =
-          useSameRunContinuation
-            ? item
-            : {
-                ...item,
-                sendOptions: {
-                  ...(item.sendOptions ?? {}),
-                  resumeSource: "queue-fusion-cutover" as const,
-                  resumeTurnId: activeTurnId ?? null,
-                },
-              };
-        const dispatchedRun = await dispatchQueuedMessage(fusionItem, {
-          targetThreadId: activeEngine === "codex" ? threadId : null,
+        return {
+          ...prev,
+          [threadId]: {
+            ...current,
+            stage: "dispatching",
+            startedAtMs: Date.now(),
+            turnIdBeforeFusion: activeTurnId ?? null,
+            continuationPulseAtStart: activeContinuationPulse,
+            terminalPulseAtStart: activeTerminalPulse,
+          },
+        };
+      });
+      const successorItem =
+        fusion.mode === "cutover"
+          ? {
+              ...dispatchItem,
+              sendOptions: {
+                ...(dispatchItem.sendOptions ?? {}),
+                resumeSource: "queue-fusion-cutover" as const,
+                resumeTurnId: fusion.turnIdBeforeFusion,
+              },
+            }
+          : dispatchItem;
+      try {
+        const dispatchResult = await dispatchQueuedMessage(successorItem, {
+          targetThreadId:
+            isSharedSession || activeEngine === "codex" ? threadId : null,
         });
-        if (!dispatchedRun) {
+        const dispatchAccepted =
+          dispatchResult === "committed" ||
+          (!isSharedSession && dispatchResult === "dispatched");
+        if (!dispatchAccepted) {
+          if (isSharedSession && dispatchResult === "blocked") {
+            replaceQueuedMessage(threadId, {
+              ...dispatchItem,
+              sharedDispatchState: undefined,
+            });
+            if (activeWorkspace) {
+              queuedAfterSharedRevisionRef.current.set(
+                messageId,
+                getSharedSendStateRevision(activeWorkspace.id, threadId),
+              );
+            }
+          }
+          queuedAfterTerminalPulseRef.current.set(
+            messageId,
+            activeTerminalPulse,
+          );
+          setFusionByThread((prev) => ({ ...prev, [threadId]: null }));
+          return;
+        }
+        if (dispatchResult === "committed") {
+          // canonical commit 比 successor-start 更强：已证明 successor 启动且结算。
+          queuedAfterTerminalPulseRef.current.delete(messageId);
+          queuedAfterSharedRevisionRef.current.delete(messageId);
+          setQueuedByThread((prev) => ({
+            ...prev,
+            [threadId]: (prev[threadId] ?? []).filter(
+              (entry) => entry.id !== messageId,
+            ),
+          }));
           setFusionByThread((prev) => ({ ...prev, [threadId]: null }));
           return;
         }
@@ -1033,16 +1331,125 @@ export function useQueuedSend({
           };
         });
       } catch (error) {
+        queuedAfterTerminalPulseRef.current.set(messageId, activeTerminalPulse);
         setFusionByThread((prev) => ({ ...prev, [threadId]: null }));
-        if (predecessorTerminalPulse !== undefined) {
-          queuedAfterTerminalPulseRef.current.set(
-            messageId,
-            predecessorTerminalPulse,
-          );
-        }
-        insertQueuedMessageAt(threadId, item, originalIndex);
         throw error;
+      } finally {
+        fusionDispatchingRef.current.delete(dispatchKey);
       }
+    },
+    [
+      activeContinuationPulse,
+      activeEngine,
+      activeTerminalPulse,
+      activeTurnId,
+      activeWorkspace,
+      dispatchQueuedMessage,
+      fusionByThread,
+      isSharedSession,
+      queuedByThread,
+      replaceQueuedMessage,
+      setQueuedByThread,
+    ],
+  );
+
+  const fuseQueuedMessage = useCallback(
+    async (threadId: string, messageId: string) => {
+      if (!activeThreadId || threadId !== activeThreadId) {
+        return;
+      }
+      if (isClaudePendingBootstrapThread) {
+        return;
+      }
+      if (!activeWorkspace || !isProcessing || isReviewing) {
+        return;
+      }
+      if (
+        isContextCompacting ||
+        (isSharedSession &&
+          !isSharedFollowUpState(activeSharedSendState))
+      ) {
+        return;
+      }
+      if (fusionByThread[threadId] || inFlightByThread[threadId]) {
+        return;
+      }
+      const item = (queuedByThread[threadId] ?? []).find(
+        (entry) => entry.id === messageId,
+      );
+      if (!item || !isQueuedMessageFuseEligible(item)) {
+        return;
+      }
+      if (
+        isSharedSession &&
+        (!item.sharedPredecessorAttemptId ||
+          item.sharedPredecessorAttemptId !==
+            getSharedSendActiveAttemptId(activeWorkspace.id, threadId))
+      ) {
+        return;
+      }
+      if (isSharedSession) {
+        const currentTarget = getSharedTargetState(
+          activeWorkspace.id,
+          threadId,
+        ).selectedNextTarget;
+        if (
+          !item.sharedExecutionTarget ||
+          !isResolvedExecutionTarget(currentTarget) ||
+          !isSameSharedExecutionTarget(
+            currentTarget,
+            item.sharedExecutionTarget,
+          )
+        ) {
+          return;
+        }
+      }
+      const deliveryRequest = {
+        intent: "steer" as const,
+        engine: activeEngine,
+        sessionId: threadId,
+        activeRunId: activeTurnId ?? null,
+      };
+      const steeringDecision = decideEngineMessageDelivery(deliveryRequest);
+      recordDeliveryDecision(
+        createEngineMessageDeliveryDiagnostic(
+          deliveryRequest,
+          steeringDecision,
+        ),
+      );
+      const useSameRunContinuation =
+        steerEnabled &&
+        steeringDecision.status !== "rejected" &&
+        steeringDecision.route === "steer";
+      const useSafeCutover =
+        !useSameRunContinuation &&
+        steeringDecision.evidence.midTurnCapability === "compat-input" &&
+        typeof interruptTurn === "function";
+      if (!useSameRunContinuation && !useSafeCutover) {
+        return;
+      }
+
+      const nextFusion: ThreadFusionState = {
+        messageId,
+        turnIdBeforeFusion: activeTurnId ?? null,
+        mode: useSameRunContinuation ? "same-run" : "cutover",
+        stage: useSameRunContinuation
+          ? "dispatching"
+          : "awaiting-predecessor-settlement",
+        startedAtMs: Date.now(),
+        continuationPulseAtStart: activeContinuationPulse,
+        terminalPulseAtStart: activeTerminalPulse,
+      };
+      setFusionByThread((prev) => ({
+        ...prev,
+        [threadId]: nextFusion,
+      }));
+
+      if (useSameRunContinuation) {
+        await dispatchFusionSuccessor(threadId, messageId, nextFusion);
+        return;
+      }
+      await interruptTurn?.({ reason: "queue-fusion" });
     },
     [
       activeEngine,
@@ -1051,13 +1458,16 @@ export function useQueuedSend({
       activeTerminalPulse,
       activeTurnId,
       activeWorkspace,
-      dispatchQueuedMessage,
+      dispatchFusionSuccessor,
       fusionByThread,
-      isClaudePendingBootstrapThread,
-      insertQueuedMessageAt,
+      inFlightByThread,
       interruptTurn,
+      activeSharedSendState,
+      isClaudePendingBootstrapThread,
+      isContextCompacting,
       isProcessing,
       isReviewing,
+      isSharedSession,
       queuedByThread,
       recordDeliveryDecision,
       steerEnabled,
@@ -1069,59 +1479,85 @@ export function useQueuedSend({
       return;
     }
     const fusion = fusionByThread[activeThreadId];
+    if (
+      !fusion ||
+      fusion.mode !== "same-run" ||
+      fusion.stage !== "dispatching"
+    ) {
+      return;
+    }
+    void dispatchFusionSuccessor(activeThreadId, fusion.messageId).catch(
+      () => undefined,
+    );
+  }, [activeThreadId, dispatchFusionSuccessor, fusionByThread]);
+
+  useEffect(() => {
+    if (!activeThreadId) {
+      return;
+    }
+    const fusion = fusionByThread[activeThreadId];
+    const predecessorSettled = isSharedSession
+      ? activeSharedSendState === "idle"
+      : activeTerminalPulse > (fusion?.terminalPulseAtStart ?? Infinity);
+    if (
+      !fusion ||
+      fusion.stage !== "awaiting-predecessor-settlement" ||
+      !predecessorSettled ||
+      isProcessing ||
+      (isSharedSession && isContextCompacting)
+    ) {
+      return;
+    }
+    void dispatchFusionSuccessor(activeThreadId, fusion.messageId).catch(
+      () => undefined,
+    );
+  }, [
+    activeSharedSendState,
+    activeTerminalPulse,
+    activeThreadId,
+    dispatchFusionSuccessor,
+    fusionByThread,
+    isContextCompacting,
+    isProcessing,
+    isSharedSession,
+  ]);
+
+  useEffect(() => {
+    if (!activeThreadId) {
+      return;
+    }
+    const fusion = fusionByThread[activeThreadId];
     if (!fusion || fusion.stage !== "awaiting-continuation") {
       return;
     }
-    const hasTerminalSettlement =
-      activeTerminalPulse > fusion.terminalPulseAtStart;
     const hasSameRunContinuation =
       fusion.mode === "same-run"
       && activeContinuationPulse > fusion.continuationPulseAtStart;
     const hasCutoverContinuation =
-      fusion.mode === "cutover"
-      && activeTurnId !== undefined
-      && Boolean(activeTurnId)
-      && activeTurnId !== fusion.turnIdBeforeFusion;
-    if (
-      !hasTerminalSettlement
-      && !hasSameRunContinuation
-      && !hasCutoverContinuation
-    ) {
+      fusion.mode === "cutover" &&
+      Boolean(activeTurnId) &&
+      activeTurnId !== fusion.turnIdBeforeFusion;
+    if (!hasSameRunContinuation && !hasCutoverContinuation) {
       return;
     }
-    setFusionByThread((prev) => {
-      const current = prev[activeThreadId];
-      if (!current || current.stage !== "awaiting-continuation") {
-        return prev;
-      }
-      const currentHasTerminalSettlement =
-        activeTerminalPulse > current.terminalPulseAtStart;
-      const currentHasSameRunContinuation =
-        current.mode === "same-run"
-        && activeContinuationPulse > current.continuationPulseAtStart;
-      const currentHasCutoverContinuation =
-        current.mode === "cutover"
-        && activeTurnId !== undefined
-        && Boolean(activeTurnId)
-        && activeTurnId !== current.turnIdBeforeFusion;
-      if (
-        !currentHasTerminalSettlement
-        && !currentHasSameRunContinuation
-        && !currentHasCutoverContinuation
-      ) {
-        return prev;
-      }
-      return {
-        ...prev,
-        [activeThreadId]: null,
-      };
-    });
+    queuedAfterTerminalPulseRef.current.delete(fusion.messageId);
+    queuedAfterSharedRevisionRef.current.delete(fusion.messageId);
+    setQueuedByThread((prev) => ({
+      ...prev,
+      [activeThreadId]: (prev[activeThreadId] ?? []).filter(
+        (entry) => entry.id !== fusion.messageId,
+      ),
+    }));
+    setFusionByThread((prev) => ({
+      ...prev,
+      [activeThreadId]: null,
+    }));
   }, [
     activeContinuationPulse,
-    activeTerminalPulse,
     activeThreadId,
     activeTurnId,
     fusionByThread,
+    setQueuedByThread,
   ]);
 
   useEffect(() => {
@@ -1150,7 +1586,7 @@ export function useQueuedSend({
   }, [activeThreadId, queuedHandoffByThread]);
 
   useEffect(() => {
-    if (!activeThreadId) {
+    if (!activeThreadId || isSharedSession) {
       return;
     }
     const inFlight = inFlightByThread[activeThreadId];
@@ -1176,6 +1612,7 @@ export function useQueuedSend({
     inFlightByThread,
     isProcessing,
     isReviewing,
+    isSharedSession,
   ]);
 
   useEffect(() => {
@@ -1183,15 +1620,29 @@ export function useQueuedSend({
       return;
     }
     const fusion = fusionByThread[activeThreadId];
-    if (!fusion || fusion.stage !== "awaiting-continuation") {
+    if (
+      !fusion ||
+      (fusion.stage !== "awaiting-predecessor-settlement" &&
+        fusion.stage !== "awaiting-continuation")
+    ) {
       return;
     }
     const timer = window.setTimeout(() => {
       setFusionByThread((prev) => {
         const current = prev[activeThreadId];
-        if (!current || current.stage !== "awaiting-continuation") {
+        if (
+          !current ||
+          (current.stage !== "awaiting-predecessor-settlement" &&
+            current.stage !== "awaiting-continuation")
+        ) {
           return prev;
         }
+        // Timeout 后无法证明 successor 是否已接受；保留 item，但禁止
+        // auto-drain 盲重放。用户仍可显式再次 Fusion 或删除该 item。
+        queuedAfterTerminalPulseRef.current.set(
+          current.messageId,
+          Number.MAX_SAFE_INTEGER,
+        );
         return {
           ...prev,
           [activeThreadId]: null,
@@ -1246,6 +1697,12 @@ export function useQueuedSend({
     if (!activeThreadId || isProcessing || isReviewing) {
       return;
     }
+    if (
+      isSharedSession &&
+      (activeSharedSendState !== "idle" || isContextCompacting)
+    ) {
+      return;
+    }
     // Hold the queue while an AskUserQuestion dialog is open: the CLI turn is
     // blocked awaiting the answer even though isProcessing may read false, so
     // flushing here would send the queued message as a fresh turn and strand
@@ -1266,12 +1723,28 @@ export function useQueuedSend({
     }
     const threadId = activeThreadId;
     const nextItem = queue[0];
-    if (!nextItem) {
+    if (!nextItem || nextItem.sharedDispatchState === "pending-ack") {
+      return;
+    }
+    const queueDispatchKey = `${activeThreadId}:${nextItem.id}`;
+    if (queueDispatchingRef.current.has(queueDispatchKey)) {
+      return;
+    }
+    const blockedAtSharedRevision =
+      queuedAfterSharedRevisionRef.current.get(nextItem.id);
+    if (
+      isSharedSession &&
+      activeWorkspace &&
+      blockedAtSharedRevision !== undefined &&
+      getSharedSendStateRevision(activeWorkspace.id, activeThreadId) <=
+        blockedAtSharedRevision
+    ) {
       return;
     }
     const predecessorTerminalPulse =
       queuedAfterTerminalPulseRef.current.get(nextItem.id);
     if (
+      !isSharedSession &&
       predecessorTerminalPulse !== undefined &&
       activeTerminalPulse <= predecessorTerminalPulse
     ) {
@@ -1279,6 +1752,7 @@ export function useQueuedSend({
     }
     const nextTrimmedText = nextItem.text.trim();
     const shouldCreateHandoffBubble =
+      !isSharedSession &&
       activeEngine === "codex" &&
       !parseSlashCommand(nextTrimmedText) &&
       !(
@@ -1291,42 +1765,94 @@ export function useQueuedSend({
         [threadId]: buildQueuedHandoffBubbleItem(nextItem),
       }));
     }
-    setInFlightByThread((prev) => ({ ...prev, [threadId]: nextItem }));
+    const dispatchItem: QueuedMessage = isSharedSession
+      ? { ...nextItem, sharedDispatchState: "pending-ack" }
+      : nextItem;
+    if (isSharedSession) {
+      replaceQueuedMessage(threadId, dispatchItem);
+    }
+    setInFlightByThread((prev) => ({ ...prev, [threadId]: dispatchItem }));
     setHasStartedByThread((prev) => ({ ...prev, [threadId]: false }));
-    setQueuedByThread((prev) => ({
-      ...prev,
-      [threadId]: (prev[threadId] ?? []).slice(1),
-    }));
     queuedAfterTerminalPulseRef.current.delete(nextItem.id);
+    queuedAfterSharedRevisionRef.current.delete(nextItem.id);
+    queueDispatchingRef.current.add(queueDispatchKey);
     (async () => {
       try {
-        const dispatchedRun = await dispatchQueuedMessage(nextItem, {
-          targetThreadId: activeEngine === "codex" ? threadId : null,
+        const dispatchResult = await dispatchQueuedMessage(dispatchItem, {
+          targetThreadId:
+            isSharedSession || activeEngine === "codex" ? threadId : null,
         });
-        if (!dispatchedRun) {
-          setInFlightByThread((prev) => ({ ...prev, [threadId]: null }));
-          setHasStartedByThread((prev) => ({ ...prev, [threadId]: false }));
-          setQueuedHandoffByThread((prev) => ({ ...prev, [threadId]: null }));
+        const dispatchAccepted =
+          dispatchResult === "committed" ||
+          (!isSharedSession && dispatchResult === "dispatched");
+        if (dispatchAccepted) {
+          queuedAfterSharedRevisionRef.current.delete(nextItem.id);
+          setQueuedByThread((prev) => ({
+            ...prev,
+            [threadId]: (prev[threadId] ?? []).filter(
+              (entry) => entry.id !== nextItem.id,
+            ),
+          }));
+          if (isSharedSession) {
+            setInFlightByThread((prev) => ({ ...prev, [threadId]: null }));
+            setHasStartedByThread((prev) => ({ ...prev, [threadId]: false }));
+          }
+          return;
         }
-      } catch {
+        if (isSharedSession && dispatchResult === "blocked") {
+          replaceQueuedMessage(threadId, {
+            ...dispatchItem,
+            sharedDispatchState: undefined,
+          });
+          if (activeWorkspace) {
+            queuedAfterSharedRevisionRef.current.set(
+              nextItem.id,
+              getSharedSendStateRevision(activeWorkspace.id, threadId),
+            );
+          }
+        }
+        queuedAfterTerminalPulseRef.current.set(
+          nextItem.id,
+          activeTerminalPulse,
+        );
         setInFlightByThread((prev) => ({ ...prev, [threadId]: null }));
         setHasStartedByThread((prev) => ({ ...prev, [threadId]: false }));
         setQueuedHandoffByThread((prev) => ({ ...prev, [threadId]: null }));
-        prependQueuedMessage(threadId, nextItem);
+      } catch {
+        if (isSharedSession) {
+          queuedAfterTerminalPulseRef.current.set(
+            nextItem.id,
+            activeTerminalPulse,
+          );
+        }
+        setInFlightByThread((prev) => ({ ...prev, [threadId]: null }));
+        setHasStartedByThread((prev) => ({ ...prev, [threadId]: false }));
+        setQueuedHandoffByThread((prev) => ({ ...prev, [threadId]: null }));
+        if (!isSharedSession) {
+          // Native queue item 尚未删除；保持原位等待既有恢复策略。
+          return;
+        }
+      } finally {
+        queueDispatchingRef.current.delete(queueDispatchKey);
       }
     })();
   }, [
     activeEngine,
+    activeSharedSendState,
     activeThreadId,
     activeTerminalPulse,
+    activeWorkspace,
     dispatchQueuedMessage,
     fusionByThread,
     hasPendingUserInput,
     inFlightByThread,
     isProcessing,
     isReviewing,
-    prependQueuedMessage,
+    isContextCompacting,
+    isSharedSession,
     queuedByThread,
+    replaceQueuedMessage,
+    setQueuedByThread,
   ]);
 
   return {

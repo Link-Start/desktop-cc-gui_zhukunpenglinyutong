@@ -11,9 +11,10 @@ use super::{
     should_block_request_user_input, should_skip_codex_stderr_line,
     visible_console_fallback_enabled_from_env, wrapper_kind_for_binary, AutoCompactionThreadState,
     DeferredStartupEventSink, PlanTurnState, RuntimeShutdownSource, TimedOutRequest,
-    WorkspaceSession, AUTO_COMPACTION_THRESHOLD_PERCENT, MODE_BLOCKED_PLAN_REASON,
-    MODE_BLOCKED_PLAN_SUGGESTION, MODE_BLOCKED_REASON, MODE_BLOCKED_REASON_CODE_PLAN_READONLY,
-    MODE_BLOCKED_REASON_CODE_REQUEST_USER_INPUT, MODE_BLOCKED_SUGGESTION,
+    WorkspaceSession, AUTO_COMPACTION_INFLIGHT_TIMEOUT_MS, AUTO_COMPACTION_THRESHOLD_PERCENT,
+    MODE_BLOCKED_PLAN_REASON, MODE_BLOCKED_PLAN_SUGGESTION, MODE_BLOCKED_REASON,
+    MODE_BLOCKED_REASON_CODE_PLAN_READONLY, MODE_BLOCKED_REASON_CODE_REQUEST_USER_INPUT,
+    MODE_BLOCKED_SUGGESTION,
 };
 use crate::backend::events::{AppServerEvent, EventSink, TerminalOutput};
 use crate::runtime::RuntimeManager;
@@ -26,7 +27,7 @@ use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader, Lines};
 use tokio::process::Command;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{mpsc, oneshot, Mutex, Notify};
 
 #[derive(Clone, Default)]
 struct TestEventSink {
@@ -184,6 +185,7 @@ async fn make_workspace_session_with_runtime_key(
         auto_compaction_threshold_percent: AUTO_COMPACTION_THRESHOLD_PERCENT,
         auto_compaction_enabled: true,
         auto_compaction_thread_state: Mutex::new(HashMap::new()),
+        auto_compaction_state_changed: Notify::new(),
         plan_turn_state: Mutex::new(HashMap::new()),
         local_user_input_requests: Mutex::new(HashMap::new()),
         local_request_seq: AtomicU64::new(1),
@@ -762,6 +764,220 @@ fn evaluate_auto_compaction_state_respects_disabled_setting() {
         100_000,
     ));
     assert!(!state.in_flight);
+}
+
+#[test]
+fn evaluate_auto_compaction_state_latches_high_watermark_until_terminal() {
+    let mut state = AutoCompactionThreadState::default();
+
+    assert!(!evaluate_auto_compaction_state(
+        &mut state,
+        "turn/started",
+        None,
+        AUTO_COMPACTION_THRESHOLD_PERCENT,
+        true,
+        100_000,
+    ));
+    assert!(!evaluate_auto_compaction_state(
+        &mut state,
+        "thread/tokenUsage/updated",
+        Some(95.0),
+        AUTO_COMPACTION_THRESHOLD_PERCENT,
+        true,
+        110_000,
+    ));
+    assert!(evaluate_auto_compaction_state(
+        &mut state,
+        "turn/completed",
+        None,
+        AUTO_COMPACTION_THRESHOLD_PERCENT,
+        true,
+        120_000,
+    ));
+    assert!(state.in_flight);
+}
+
+#[test]
+fn pending_user_dispatch_survives_stale_predecessor_terminal() {
+    let mut state = AutoCompactionThreadState::default();
+    assert!(state.reserve_user_dispatch(100_000));
+    assert!(!evaluate_auto_compaction_state(
+        &mut state,
+        "thread/tokenUsage/updated",
+        Some(95.0),
+        AUTO_COMPACTION_THRESHOLD_PERCENT,
+        true,
+        110_000,
+    ));
+
+    assert!(!evaluate_auto_compaction_state(
+        &mut state,
+        "turn/completed",
+        None,
+        AUTO_COMPACTION_THRESHOLD_PERCENT,
+        true,
+        120_000,
+    ));
+    assert!(state.pending_user_dispatch);
+    assert!(state.is_processing);
+
+    assert!(!evaluate_auto_compaction_state(
+        &mut state,
+        "turn/started",
+        None,
+        AUTO_COMPACTION_THRESHOLD_PERCENT,
+        true,
+        130_000,
+    ));
+    assert!(evaluate_auto_compaction_state(
+        &mut state,
+        "turn/completed",
+        None,
+        AUTO_COMPACTION_THRESHOLD_PERCENT,
+        true,
+        140_000,
+    ));
+}
+
+#[test]
+fn compaction_reservation_blocks_user_dispatch_until_released() {
+    let mut state = AutoCompactionThreadState::default();
+    assert!(state.try_reserve_manual_compaction(100_000));
+    assert!(!state.reserve_user_dispatch(100_001));
+
+    state.release_compaction();
+    assert!(state.reserve_user_dispatch(100_002));
+}
+
+#[test]
+fn stale_compaction_reservation_is_bounded() {
+    let mut state = AutoCompactionThreadState::default();
+    assert!(state.try_reserve_manual_compaction(100_000));
+
+    assert!(state.reserve_user_dispatch(100_000 + AUTO_COMPACTION_INFLIGHT_TIMEOUT_MS + 1));
+    assert!(!state.in_flight);
+    assert!(state.pending_user_dispatch);
+}
+
+#[test]
+fn stale_user_dispatch_reservation_is_bounded_and_exclusive() {
+    let mut state = AutoCompactionThreadState::default();
+    assert!(state.reserve_user_dispatch(100_000));
+    assert!(!state.reserve_user_dispatch(100_001));
+
+    assert!(state.reserve_user_dispatch(100_000 + AUTO_COMPACTION_INFLIGHT_TIMEOUT_MS + 1));
+    assert!(state.pending_user_dispatch);
+    assert!(!state.in_flight);
+}
+
+#[tokio::test]
+async fn compaction_first_holds_prompt_until_lifecycle_release() {
+    let session = make_workspace_session("compaction-first").await;
+    session
+        .try_reserve_codex_manual_compaction("thread-1")
+        .await
+        .expect("reserve compaction");
+
+    let waiting_session = Arc::clone(&session);
+    let mut waiting_prompt = tokio::spawn(async move {
+        waiting_session
+            .reserve_codex_user_dispatch("thread-1")
+            .await
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(25), &mut waiting_prompt)
+            .await
+            .is_err(),
+        "prompt must remain blocked while compaction owns the native thread"
+    );
+
+    session
+        .release_codex_compaction_reservation("thread-1")
+        .await;
+    tokio::time::timeout(Duration::from_secs(1), waiting_prompt)
+        .await
+        .expect("prompt reservation wake")
+        .expect("prompt task")
+        .expect("prompt reservation");
+
+    session
+        .release_codex_user_dispatch_reservation("thread-1")
+        .await;
+    dispose_workspace_session(&session).await;
+}
+
+#[tokio::test]
+async fn second_prompt_waits_until_first_start_evidence() {
+    let session = make_workspace_session("prompt-start-order").await;
+    session
+        .reserve_codex_user_dispatch("thread-1")
+        .await
+        .expect("reserve first prompt");
+
+    let waiting_session = Arc::clone(&session);
+    let mut waiting_prompt = tokio::spawn(async move {
+        waiting_session
+            .reserve_codex_user_dispatch("thread-1")
+            .await
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(25), &mut waiting_prompt)
+            .await
+            .is_err(),
+        "a second prompt must not share the pending start reservation"
+    );
+
+    {
+        let mut states = session.auto_compaction_thread_state.lock().await;
+        let state = states.get_mut("thread-1").expect("thread barrier state");
+        assert!(!evaluate_auto_compaction_state(
+            state,
+            "turn/started",
+            None,
+            AUTO_COMPACTION_THRESHOLD_PERCENT,
+            true,
+            100_000,
+        ));
+    }
+    session.notify_codex_compaction_state_changed();
+
+    tokio::time::timeout(Duration::from_secs(1), waiting_prompt)
+        .await
+        .expect("second prompt reservation wake")
+        .expect("second prompt task")
+        .expect("second prompt reservation");
+
+    session
+        .release_codex_user_dispatch_reservation("thread-1")
+        .await;
+    dispose_workspace_session(&session).await;
+}
+
+#[tokio::test]
+async fn prompt_first_rejects_manual_compaction_without_replacing_turn() {
+    let session = make_workspace_session("prompt-first").await;
+    session
+        .reserve_codex_user_dispatch("thread-1")
+        .await
+        .expect("reserve prompt");
+
+    let error = session
+        .try_reserve_codex_manual_compaction("thread-1")
+        .await
+        .expect_err("manual compaction must not cross an accepted prompt");
+    assert!(error.contains("context compaction is busy"));
+
+    session
+        .release_codex_user_dispatch_reservation("thread-1")
+        .await;
+    session
+        .try_reserve_codex_manual_compaction("thread-1")
+        .await
+        .expect("reserve compaction after prompt settles");
+    session
+        .release_codex_compaction_reservation("thread-1")
+        .await;
+    dispose_workspace_session(&session).await;
 }
 
 #[test]

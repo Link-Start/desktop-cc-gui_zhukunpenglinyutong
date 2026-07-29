@@ -1159,9 +1159,13 @@ export function AppShell() {
     activeWorkspace,
     isProcessing,
     isReviewing,
+    isContextCompacting: activeThreadId
+      ? (threadStatusById[activeThreadId]?.isContextCompacting ?? false)
+      : false,
     hasPendingUserInput,
     steerEnabled: appSettings.experimentalSteerEnabled,
     activeEngine,
+    isSharedSession: activeThreadSummary?.threadKind === "shared",
     resolveCanonicalThreadId,
     connectWorkspace,
     startThreadForWorkspace,

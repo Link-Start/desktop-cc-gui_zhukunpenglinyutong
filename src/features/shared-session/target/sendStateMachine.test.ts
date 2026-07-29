@@ -133,17 +133,19 @@ describe("SharedSendStateMachine selectors (§14.5.6)", () => {
     expect(isComposerInputLocked("target-unavailable")).toBe(false);
   });
 
-  it("normal progress keeps draft editable while blocking another turn submission", () => {
-    const draftableStates: SharedSendState[] = [
+  it("normal progress keeps draft editable and only queues after acceptance", () => {
+    const preAcceptanceStates: SharedSendState[] = [
       "preparing-context",
       "degraded-context",
       "awaiting-acceptance",
-      "running",
-      "settling",
     ];
-    for (const state of draftableStates) {
+    for (const state of preAcceptanceStates) {
       expect(isComposerInputLocked(state)).toBe(false);
       expect(isComposerSubmitLocked(state)).toBe(true);
+    }
+    for (const state of ["running", "settling"] as const) {
+      expect(isComposerInputLocked(state)).toBe(false);
+      expect(isComposerSubmitLocked(state)).toBe(false);
     }
   });
 
