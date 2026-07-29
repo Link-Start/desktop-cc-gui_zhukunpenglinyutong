@@ -20,6 +20,8 @@ const workspace = {
     loadingProgressCreateSessionTitle: "正在创建会话...",
     loadingProgressCreateSessionMessage:
       "正在为 {{workspace}} 准备 {{engine}} 会话。",
+    sharedSessionLocalModelUnavailable:
+      "{{engine}} 没有可用于 Shared Session 的本地 Model，请刷新 CLI 状态后重试。",
     loadingProgressAddProjectTitle: "正在添加项目...",
     loadingProgressAddProjectMessage: "正在把 {{project}} 加入当前窗口。",
     loadingProgressOpenProjectTitle: "正在打开项目...",

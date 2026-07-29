@@ -21,6 +21,8 @@ const workspace = {
     loadingProgressCreateSessionTitle: "Creating session...",
     loadingProgressCreateSessionMessage:
       "Preparing a {{engine}} session for {{workspace}}.",
+    sharedSessionLocalModelUnavailable:
+      "{{engine}} has no local model available for Shared Session. Refresh the CLI status and try again.",
     loadingProgressAddProjectTitle: "Adding project...",
     loadingProgressAddProjectMessage:
       "Adding {{project}} to the current window.",

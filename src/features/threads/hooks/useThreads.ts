@@ -303,6 +303,26 @@ export function useThreads({
   const cleanupThreadTransientStateRef = useRef<
     (workspaceId: string | null | undefined, threadId: string) => number
   >(() => 0);
+  const settleSharedDurableTurnRef = useRef<
+    (threadId: string, runtimeTurnId: string) => void
+  >(() => {});
+  const settleSharedDurableTurn = useCallback(
+    (threadId: string, runtimeTurnId: string) => {
+      settleSharedDurableTurnRef.current(threadId, runtimeTurnId);
+    },
+    [],
+  );
+  const registerSharedDurableTurnSettlement = useCallback(
+    (settle: (threadId: string, runtimeTurnId: string) => void) => {
+      settleSharedDurableTurnRef.current = settle;
+      return () => {
+        if (settleSharedDurableTurnRef.current === settle) {
+          settleSharedDurableTurnRef.current = () => {};
+        }
+      };
+    },
+    [],
+  );
   const sharedSessionSyncTimerByThreadRef = useRef<
     Record<string, ReturnType<typeof setTimeout> | null>
   >({});
@@ -1993,6 +2013,7 @@ export function useThreads({
     onInputMemoryCaptured: handleInputMemoryCaptured,
     resolveCollaborationRuntimeMode,
     runWithCreateSessionLoading,
+    onSharedDurableTurnCommitted: settleSharedDurableTurn,
   });
 
   useMailDrivenSessionContinuation({
@@ -2787,6 +2808,8 @@ export function useThreads({
         cleanupThreadTransientStateRef.current = () => 0;
       };
     },
+    onDurableRealtimeTurnSettlementReady:
+      registerSharedDurableTurnSettlement,
     onCollaborationModeResolved: onCollaborationModeResolved
       ? (event) => {
           onCollaborationModeResolved({

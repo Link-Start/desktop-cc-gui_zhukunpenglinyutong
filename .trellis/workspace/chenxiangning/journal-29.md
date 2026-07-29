@@ -957,3 +957,169 @@ Native Session 按当前 CLI 展示 Provider Profiles 并复用续接 Dialog；S
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1225: 补全 Shared CLI 创建与运行时修复设计
+
+**Date**: 2026-07-30
+**Task**: 补全 Shared CLI 创建与运行时修复设计
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+新增 repair-shared-cli-creation-runtime-contracts OpenSpec 与设计文档，确定 Shared CLI 二级选择、OpenCode runtime catalog authority、Kimi/Grok canonical Runtime key 修复方案；OpenSpec strict validation 通过，尚未实施产品代码，按用户要求后续仅跑增量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `62e7f668b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1226: 补全 Shared CLI 创建入口
+
+**Date**: 2026-07-30
+**Task**: 补全 Shared CLI 创建入口
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+Shared CLI 改为五类本机 CLI 二级选择，创建时按所选 CLI 的本地模型目录生成初始 Execution Target；focused frontend tests 108/108、targeted ESLint 与 runtime contracts 通过。按用户要求未运行全量测试；最终 typecheck 复跑受并行 durable-terminal 改动中的既有测试类型错误阻断，本批改动在并行文件出现前已通过 typecheck。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a8fb1c45c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1227: 统一 Shared CLI 模型与运行时契约
+
+**Date**: 2026-07-30
+**Task**: 统一 Shared CLI 模型与运行时契约
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；Kimi/Grok local launch profile 与 durable Attempt 统一 canonical provider runtime key。6 个 focused Rust tests、cargo fmt --check、cargo check、runtime contracts、OpenSpec strict validation 与 diff check 通过；按用户要求未运行全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `800bc2466` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1228: Shared CLI 接入人工验收通过
+
+**Date**: 2026-07-30
+**Task**: Shared CLI 接入人工验收通过
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+用户已人工验收 Shared CLI 二级创建入口，以及 Kimi、Grok、OpenCode Shared Session 接入与对话链路，并确认通过。功能代码保持为两批独立提交；当前 durable-terminal 并行改动未暂存、未混入。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a8fb1c45c` | (see git log) |
+| `800bc2466` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1229: 修复 Shared Session 终态偶发复燃
+
+**Date**: 2026-07-30
+**Task**: 修复 Shared Session 终态偶发复燃
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+修复 Shared durable commit 后 terminal ledger 被普通 rerender cleanup 清空的问题；用 exact runtimeTurnId 安装 frontend terminal barrier，阻止 Kimi/MiniMax 迟到事件复燃 processing，并补齐回归测试与 OpenSpec/Trellis 契约。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `80b764a74` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

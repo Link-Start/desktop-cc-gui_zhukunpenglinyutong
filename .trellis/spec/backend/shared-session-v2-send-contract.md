@@ -242,6 +242,14 @@ shared_binding_state.provisioning_json.state =
 - 带 `sharedOwner` 的 Shared V2 `turn/started` 只作为 Runtime projection evidence，
   不得进入 generic Native lifecycle 重新设置 `activeTurnId` / processing；后续
   assistant/reasoning/tool/error/terminal projection 仍按 Shared owner 路由。
+- frontend 收到 Shared V2 durable committed response 后，MUST 在清理 processing /
+  `activeTurnId` 前，用 response 的 exact `runtimeTurnId` flush pending realtime batch
+  并写入 terminal ledger。之后同一 Runtime Turn 的 assistant/reasoning/normalized/raw
+  item event 只能作为迟到 projection 丢弃，MUST NOT 重新设置 processing。
+- Shared `turn/started` MAY 只更新 realtime ledger 的 active Runtime identity，以解除
+  上一 Turn 的 thread-level settled fallback；该 identity-only path MUST NOT 进入
+  generic Native lifecycle 或自行点亮 processing。缺失 exact `runtimeTurnId` 时必须
+  输出 diagnostic，禁止用 `attemptId` / `logicalTurnId` 伪造 Runtime identity。
 - Claude Shared coordinator 必须对等价 cumulative/full assistant、reasoning observation
   与 terminal fallback 做 canonical exactly-once merge；该兼容只位于 Shared
   accumulator，禁止改动 Native Claude event conversion 或 Codex accumulation。
@@ -615,6 +623,9 @@ Binding context cursor {
   durable `conversation.turnCommitted` 为最终成功判据。projected UI event、Agent Event
   Bus 与 inline terminal 只能用于 rendering、notification 或 fast path，不得单独把
   Composer 置为 idle，也不得因 listener 漏事件把已 commit Attempt 标为 recovery。
+- durable commit 写入 frontend terminal ledger 的生命周期 MUST 跨普通 React rerender
+  保持稳定；清空 ledger / pending queue / timer 的 cleanup 只能发生在 hook unmount。
+  cleanup effect 不得因 flush callback identity 更新而执行。
 - await command MUST 在等待前、收到 settlement signal 后、以及 coordinator owner 被
   critical sink 清理后复查 durable fact；terminal commit/remove race 必须幂等收敛。
   command shape 只接收 Workspace/Shared Thread/Attempt，不接收 Target 或 Runtime owner。

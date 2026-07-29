@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
-  getClaudeProviders,
-  getCodexProviders,
+  getEngineModels,
   getWorkspaceFiles,
 } from "../services/tauri";
 import { pushErrorToast } from "../services/toasts";
@@ -17,12 +16,8 @@ import { useAppMenuEvents } from "../features/app/hooks/useAppMenuEvents";
 import { useMenuAcceleratorController } from "../features/app/hooks/useMenuAcceleratorController";
 import { useMenuLocalization } from "../features/app/hooks/useMenuLocalization";
 import { runWithLoadingProgress } from "../features/app/utils/loadingProgressActions";
-import { normalizeSharedSessionEngine } from "../features/shared-session/utils/sharedSessionEngines";
-import type { ExecutionTarget } from "../features/shared-session/target/types";
-import {
-  CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
-  CODEX_DISK_PROVIDER_PROFILE_ID,
-} from "../features/threads/constants/codexProviderProfiles";
+import { buildLocalSharedSessionInitialTarget } from "../features/shared-session/target/initialTarget";
+import type { SharedSessionSupportedEngine } from "../features/shared-session/utils/sharedSessionEngines";
 import {
   buildDetachedSpecHubSession,
   openOrFocusDetachedSpecHub,
@@ -90,7 +85,6 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     activeWorkspace,
     workspaces,
     setAppMode,
-    activeEngine,
     activeWorkspaceId,
     activeThreadId,
     addWorkspaceFromPath,
@@ -116,10 +110,6 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     recentThreads,
     collapseRightPanel,
     setActiveEngine,
-    effectiveSelectedModel,
-    effectiveSelectedModelId,
-    resolvedEffort,
-    resolvedModel,
     removeThread,
     removeThreads,
     clearDraftForThread,
@@ -345,19 +335,10 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
   );
 
   const handleStartSharedConversation = useCallback(
-    async (engineOrWorkspace: EngineType | WorkspaceInfo = "claude") => {
-      const targetWorkspace =
-        typeof engineOrWorkspace === "object" && engineOrWorkspace !== null
-          ? engineOrWorkspace
-          : activeWorkspace;
-      if (!targetWorkspace) {
-        return;
-      }
-      const engine: EngineType =
-        typeof engineOrWorkspace === "string"
-          ? engineOrWorkspace
-          : activeEngine;
-      const sharedEngine = normalizeSharedSessionEngine(engine);
+    async (
+      targetWorkspace: WorkspaceInfo,
+      sharedEngine: SharedSessionSupportedEngine,
+    ) => {
       try {
         return await runWithLoadingProgress(
           { showLoadingProgressDialog, hideLoadingProgressDialog },
@@ -374,68 +355,24 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
             if (!targetWorkspace.connected) {
               await connectWorkspace(targetWorkspace);
             }
-            if (activeEngine !== sharedEngine) {
-              throw new Error(
-                `Shared Session 当前 Composer Target 属于 ${activeEngine}，不能静默改写为 ${sharedEngine}。`,
-              );
-            }
-            const modelCatalogEntryId = effectiveSelectedModelId?.trim() || "";
-            const runtimeModel = resolvedModel?.trim() || "";
-            if (!modelCatalogEntryId || !runtimeModel) {
-              throw new Error(
-                "Shared Session 初始 Execution Target 缺少 Model，请先选择可用 Model。",
-              );
-            }
-            const rawProviderProfileId =
-              effectiveSelectedModel?.providerProfileId?.trim() || null;
-            const localProviderProfileId =
-              sharedEngine === "codex"
-                ? CODEX_DISK_PROVIDER_PROFILE_ID
-                : CLAUDE_LOCAL_PROVIDER_PROFILE_ID;
-            const providerProfileId =
-              rawProviderProfileId === localProviderProfileId
-                ? null
-                : rawProviderProfileId;
-            let providerProfileNameSnapshot = t("providers.localConfig", {
+            const localProviderName = t("providers.localConfig", {
               defaultValue: "本地配置",
             });
-            if (providerProfileId) {
-              const activeThreadSummary =
-                threadsByWorkspace[targetWorkspace.id]?.find(
-                  (thread) => thread.id === activeThreadId,
-                ) ?? null;
-              const knownProfileName =
-                activeThreadSummary &&
-                activeThreadSummary.providerProfileId === providerProfileId
-                  ? activeThreadSummary.providerProfileName?.trim() || null
-                  : null;
-              const providers = knownProfileName
-                ? []
-                : sharedEngine === "codex"
-                  ? await getCodexProviders()
-                  : await getClaudeProviders();
-              providerProfileNameSnapshot =
-                knownProfileName ??
-                providers.find(
-                  (provider) => provider.id.trim() === providerProfileId,
-                )
-                  ?.name.trim() ??
-                "";
-              if (!providerProfileNameSnapshot) {
-                throw new Error(
-                  `Shared Session 无法解析 Provider Profile 可读名称：${providerProfileId}`,
-                );
-              }
-            }
-            const initialTarget: ExecutionTarget = {
-              engine: sharedEngine,
-              providerProfileId,
-              modelCatalogEntryId,
-              model: runtimeModel,
-              reasoning: resolvedEffort ? { effort: resolvedEffort } : null,
-              providerProfileNameSnapshot,
-              providerProfileSource: providerProfileId ? "managed" : "disk",
-            };
+            const engineLabelKey = {
+              claude: "workspace.engineClaudeCode",
+              codex: "workspace.engineCodex",
+              opencode: "workspace.engineOpenCode",
+              kimi: "workspace.engineKimi",
+              grok: "workspace.engineGrok",
+            }[sharedEngine];
+            const initialTarget = buildLocalSharedSessionInitialTarget(
+              sharedEngine,
+              await getEngineModels(sharedEngine),
+              localProviderName,
+              t("workspace.sharedSessionLocalModelUnavailable", {
+                engine: t(engineLabelKey),
+              }),
+            );
             const threadId = await startSharedSessionForWorkspace(
               targetWorkspace.id,
               {
@@ -461,18 +398,11 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
       }
     },
     [
-      activeEngine,
-      activeThreadId,
-      activeWorkspace,
       alertError,
       collapseRightPanel,
       connectWorkspace,
-      effectiveSelectedModel,
-      effectiveSelectedModelId,
       hideLoadingProgressDialog,
       isCompact,
-      resolvedEffort,
-      resolvedModel,
       selectWorkspace,
       setActiveThreadId,
       setActiveTab,
@@ -480,7 +410,6 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
       startSharedSessionForWorkspace,
       showLoadingProgressDialog,
       t,
-      threadsByWorkspace,
     ],
   );
 

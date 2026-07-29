@@ -58,6 +58,11 @@ React Component
     context 应记录 manifest/diagnostic 并自动 best-effort delivery；只有 package
     preparation、Runtime ACK、Provider rejection 等真实执行错误才阻断发送。禁止把
     “历史无法完整迁移”升级为每次切换 Target 都要人工确认的发送 gate。
+20. 修复 terminal UI residue 时，不能只审计 `turn/started`。必须枚举所有 sibling
+    propagation path（assistant/reasoning delta、normalized/raw item、batch flush、
+    heartbeat）中可写 `processing=true` 的入口。durable control completion 应先用
+    exact Runtime identity 安装 terminal barrier，再清 UI；ledger cleanup 只能绑定
+    component unmount，禁止绑定会随 rerender 变化的 callback dependency。
 
 ## 常见失败模式
 
@@ -88,6 +93,8 @@ React Component
 - 把 frontend terminal listener 当作 send completion owner：SQL 已存在
   `conversation.turnCommitted`，但 event 在 Tauri/WebView 边界丢失后 Composer 永久
   `running`，Stop 也只能处理 UI residue。
+- terminal ledger 已正确写入，却被普通 React rerender 触发的 effect cleanup 清空；
+  后续迟到 assistant/reasoning/item event 再次把已 commit Turn 标成 processing。
 - context package 已成功生成，仅 fidelity 降级，却弹出 Continue/Cancel 并阻塞发送；
   Target 切换因此退化成重复审批。
 
@@ -117,6 +124,9 @@ React Component
   terminal fast path、late typed terminal、duplicate terminal、frontend terminal event
   完全缺失但 SQL 已 commit；断言所有 CLI 都走同一 Attempt durable await 与 settle
   逻辑，不出现 engine-name branch。
+- frontend durable terminal barrier 至少覆盖：barrier 安装早于 processing cleanup、
+  普通 rerender 不清 ledger、同 Turn 的 normalized/raw/reasoning 迟到事件不复燃、
+  下一 Turn identity-only start 能解除旧 fallback 且不提前点亮 processing。
 - degraded context 至少覆盖：preview/actual package 均可直发、diagnostic/manifest
   仍持久化、真正 prepare/ACK/rejection 失败仍 fail closed，且 UI 不进入确认 gate。
 - 历史/Projection 至少覆盖：rich terminal blocks、failed/cancelled、

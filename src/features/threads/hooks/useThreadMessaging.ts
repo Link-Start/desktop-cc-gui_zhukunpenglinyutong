@@ -303,6 +303,10 @@ type UseThreadMessagingOptions = {
     threadId: string,
   ) => "plan" | "code" | null;
   runWithCreateSessionLoading?: RunWithCreateSessionLoading;
+  onSharedDurableTurnCommitted?: (
+    threadId: string,
+    runtimeTurnId: string,
+  ) => void;
 };
 
 export function useThreadMessaging({
@@ -349,6 +353,7 @@ export function useThreadMessaging({
   onInputMemoryCaptured,
   resolveCollaborationRuntimeMode,
   runWithCreateSessionLoading,
+  onSharedDurableTurnCommitted,
 }: UseThreadMessagingOptions) {
   const { t, i18n } = useTranslation();
   const internalCodexCompactionInFlightByThreadRef = useRef<Record<string, boolean>>({});
@@ -1372,6 +1377,31 @@ export function useThreadMessaging({
               : null;
           if (sharedV2SendEnabled && sharedV2Result?.committed === true) {
             // Shared V2 command 直到 Runtime terminal 被 canonical commit 后才返回。
+            // 先用 exact Runtime identity 建立 terminal barrier，避免已排队的
+            // assistant/reasoning/item event 在 UI cleanup 后复燃 Stop。
+            const sharedRuntimeTurnId = asString(
+              response.runtimeTurnId ?? "",
+            ).trim();
+            if (sharedRuntimeTurnId) {
+              onSharedDurableTurnCommitted?.(
+                threadId,
+                sharedRuntimeTurnId,
+              );
+            } else {
+              onDebug?.({
+                id: `${Date.now()}-shared-durable-terminal-runtime-id-missing`,
+                timestamp: Date.now(),
+                source: "error",
+                label: "shared-session/durable-terminal-runtime-id-missing",
+                payload: {
+                  workspaceId: workspace.id,
+                  threadId,
+                  attemptId: asString(sharedV2Result.attemptId).trim() || null,
+                  logicalTurnId:
+                    asString(sharedV2Result.logicalTurnId).trim() || null,
+                },
+              });
+            }
             // 此处只收敛 Shared UI projection；不得落入 Native turn-start lifecycle。
             markProcessing(threadId, false);
             setActiveTurnId(threadId, null);
@@ -2063,6 +2093,7 @@ export function useThreadMessaging({
       model,
       onDebug,
       onInputMemoryCaptured,
+      onSharedDurableTurnCommitted,
       itemsByThread,
       interruptedThreadsRef,
       pendingInterruptsRef,

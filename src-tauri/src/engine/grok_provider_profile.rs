@@ -322,7 +322,7 @@ pub(crate) fn resolve_grok_provider_launch_profile(
         return Ok(GrokProviderLaunchProfile {
             binding: None,
             home_dir: None,
-            runtime_key: workspace_id.to_string(),
+            runtime_key: grok_runtime_key(workspace_id, GROK_LOCAL_PROVIDER_PROFILE_ID),
         });
     }
 
@@ -402,6 +402,17 @@ mod tests {
         assert_ne!(
             grok_runtime_key("ws-1", "provider-a"),
             grok_runtime_key("ws-1", "provider-b")
+        );
+    }
+
+    #[test]
+    fn local_launch_profile_uses_canonical_runtime_key() {
+        let profile =
+            resolve_grok_provider_launch_profile("ws-1", None).expect("local launch profile");
+
+        assert_eq!(
+            profile.runtime_key,
+            grok_runtime_key("ws-1", GROK_LOCAL_PROVIDER_PROFILE_ID)
         );
     }
 

@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from "react";
 import {
   workspaceScopedDelete,
   workspaceScopedHas,
@@ -98,6 +104,7 @@ export function useThreadEventHandlers({
   onTurnCompletedExternal,
   onTurnTerminalExternal,
   onThreadTransientCleanupReady,
+  onDurableRealtimeTurnSettlementReady,
   onCollaborationModeResolved,
   onExitPlanModeToolCompleted,
   domainEventController = null,
@@ -1260,6 +1267,37 @@ export function useThreadEventHandlers({
     onExitPlanModeToolCompleted,
   });
 
+  const settleDurableRealtimeTurn = useCallback(
+    (threadId: string, runtimeTurnId: string) => {
+      const normalizedThreadId = threadId.trim();
+      const normalizedRuntimeTurnId = runtimeTurnId.trim();
+      if (!normalizedThreadId || !normalizedRuntimeTurnId) {
+        return;
+      }
+      // Durable Shared commit 是 control authority。先收敛已排队内容，再建立
+      // exact-turn barrier，后续迟到 event 只能被丢弃，不能复燃 processing。
+      flushPendingRealtimeEvents();
+      markRealtimeTurnTerminal(normalizedThreadId, normalizedRuntimeTurnId);
+      onDebug?.({
+        id: `${Date.now()}-shared-durable-terminal-barrier-installed`,
+        timestamp: Date.now(),
+        source: "event",
+        label: "thread/session:shared-durable-terminal-barrier-installed",
+        payload: {
+          threadId: normalizedThreadId,
+          runtimeTurnId: normalizedRuntimeTurnId,
+        },
+      });
+    },
+    [flushPendingRealtimeEvents, markRealtimeTurnTerminal, onDebug],
+  );
+  useLayoutEffect(() => {
+    return onDurableRealtimeTurnSettlementReady?.(settleDurableRealtimeTurn);
+  }, [
+    onDurableRealtimeTurnSettlementReady,
+    settleDurableRealtimeTurn,
+  ]);
+
   const {
     onThreadStarted,
     onTurnStarted,
@@ -1448,6 +1486,13 @@ export function useThreadEventHandlers({
       clearAssistantSnapshotIngressForThread,
       findQuarantinedCodexTurn,
     ],
+  );
+
+  const onSharedRuntimeTurnStarted = useCallback(
+    (threadId: string, runtimeTurnId: string) => {
+      noteRealtimeTurnStarted(threadId, runtimeTurnId);
+    },
+    [noteRealtimeTurnStarted],
   );
 
   const onAgentMessageDeltaTracked = useCallback(
@@ -1664,6 +1709,18 @@ export function useThreadEventHandlers({
         event.turnId &&
         isRealtimeTurnTerminalExact(event.threadId, event.turnId)
       ) {
+        onDebug?.({
+          id: `${Date.now()}-realtime-terminal-exact-drop`,
+          timestamp: Date.now(),
+          source: "event",
+          label: "thread/session:realtime-terminal-exact-drop",
+          payload: {
+            threadId: event.threadId,
+            turnId: event.turnId,
+            operation: event.operation,
+            sourceMethod: event.sourceMethod,
+          },
+        });
         return;
       }
       if (shouldSkipLateCodexNormalizedEvent(event)) {
@@ -1747,6 +1804,7 @@ export function useThreadEventHandlers({
       maybeRecordAgentMessageSnapshotIngress,
       noteCodexTurnProgressEvidence,
       noteNonTextRuntimeProgress,
+      onDebug,
       onNormalizedRealtimeEvent,
       recordAssistantCompletionEvidence,
       recordAssistantStreamIngress,
@@ -2539,6 +2597,7 @@ export function useThreadEventHandlers({
       onFileChangeOutputDelta: onFileChangeOutputDeltaTracked,
       onThreadStarted,
       onTurnStarted: onTurnStartedTracked,
+      onSharedRuntimeTurnStarted,
       onTurnCompleted: onTurnCompletedTracked,
       onProcessingHeartbeat,
       onTurnPlanUpdated,
@@ -2573,6 +2632,7 @@ export function useThreadEventHandlers({
       onFileChangeOutputDeltaTracked,
       onThreadStarted,
       onTurnStartedTracked,
+      onSharedRuntimeTurnStarted,
       onTurnCompletedTracked,
       onProcessingHeartbeat,
       onTurnPlanUpdated,

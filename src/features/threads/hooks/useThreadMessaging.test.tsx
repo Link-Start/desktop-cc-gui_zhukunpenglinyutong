@@ -540,6 +540,7 @@ describe("useThreadMessaging", () => {
 
   it("does not revive a canonically committed Shared V2 turn from its response", async () => {
     const sharedThreadId = "shared:thread-committed-response";
+    const onSharedDurableTurnCommitted = vi.fn();
     selectNextTarget("ws-1", sharedThreadId, {
       engine: "claude",
       providerProfileId: "provider-a",
@@ -552,6 +553,7 @@ describe("useThreadMessaging", () => {
     vi.mocked(sendSharedSessionTurnRouted).mockResolvedValueOnce({
       result: { turn: { id: "runtime-turn-already-completed" } },
       nativeThreadId: "claude:native-session-1",
+      runtimeTurnId: "runtime-turn-already-completed",
       v2: {
         attemptId: "attempt-committed",
         logicalTurnId: "logical-turn-committed",
@@ -563,6 +565,7 @@ describe("useThreadMessaging", () => {
       makeThreadMessagingHook("claude", {
         activeThreadId: sharedThreadId,
         threadEngineById: { [sharedThreadId]: "claude" },
+        onSharedDurableTurnCommitted,
       });
 
     await act(async () => {
@@ -573,14 +576,76 @@ describe("useThreadMessaging", () => {
       );
     });
 
+    expect(onSharedDurableTurnCommitted).toHaveBeenCalledWith(
+      sharedThreadId,
+      "runtime-turn-already-completed",
+    );
     expect(markProcessing).toHaveBeenCalledWith(sharedThreadId, false);
     expect(setActiveTurnId).toHaveBeenCalledWith(sharedThreadId, null);
+    expect(
+      onSharedDurableTurnCommitted.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      markProcessing.mock.invocationCallOrder.find(
+        (_order, index) =>
+          markProcessing.mock.calls[index]?.[0] === sharedThreadId &&
+          markProcessing.mock.calls[index]?.[1] === false,
+      ) ?? Number.POSITIVE_INFINITY,
+    );
     expect(setActiveTurnId).not.toHaveBeenCalledWith(
       sharedThreadId,
       "runtime-turn-already-completed",
     );
     expect(engineSendMessage).not.toHaveBeenCalled();
     expect(sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("records missing Runtime identity instead of fabricating a durable terminal barrier", async () => {
+    const sharedThreadId = "shared:thread-missing-runtime-id";
+    const onSharedDurableTurnCommitted = vi.fn();
+    selectNextTarget("ws-1", sharedThreadId, {
+      engine: "claude",
+      providerProfileId: "provider-a",
+      modelCatalogEntryId: "settings-main",
+      providerProfileNameSnapshot: "Provider A",
+      providerProfileSource: "managed",
+      model: "kimi-for-coding",
+      reasoning: null,
+    });
+    vi.mocked(sendSharedSessionTurnRouted).mockResolvedValueOnce({
+      result: { turn: { id: "nested-id-must-not-be-used" } },
+      nativeThreadId: "claude:native-session-2",
+      v2: {
+        attemptId: "attempt-missing-runtime",
+        logicalTurnId: "logical-missing-runtime",
+        committed: true,
+        duplicate: false,
+      },
+    });
+    const { result, onDebug } = makeThreadMessagingHook("claude", {
+      activeThreadId: sharedThreadId,
+      threadEngineById: { [sharedThreadId]: "claude" },
+      onSharedDurableTurnCommitted,
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        sharedThreadId,
+        "finish with malformed response",
+      );
+    });
+
+    expect(onSharedDurableTurnCommitted).not.toHaveBeenCalled();
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "shared-session/durable-terminal-runtime-id-missing",
+        payload: expect.objectContaining({
+          threadId: sharedThreadId,
+          attemptId: "attempt-missing-runtime",
+          logicalTurnId: "logical-missing-runtime",
+        }),
+      }),
+    );
   });
 
   it("passes custom spec root through cli engine send when configured", async () => {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react
 import { useTranslation } from "react-i18next";
 
 import type { EngineType, ThreadSummary, WorkspaceInfo } from "../../../types";
+import type { SharedSessionSupportedEngine } from "../../shared-session/utils/sharedSessionEngines";
 import {
   createNativeProviderContinuation,
   discardPreparedNativeProviderContinuation,
@@ -158,6 +159,8 @@ export type WorkspaceMenuAction = {
   onTogglePinned?: () => void;
   /** Hint shown inside the submenu after one of its children is selected. */
   selectionHint?: string;
+  /** Parent click opens its submenu instead of running a default leaf action. */
+  submenuOnly?: boolean;
   onSelect: () => void;
   onRefresh?: () => Promise<void> | void;
   children?: WorkspaceMenuAction[];
@@ -200,7 +203,10 @@ type SidebarMenuHandlers = {
     | Promise<EngineRefreshResult | void>
     | EngineRefreshResult
     | void;
-  onAddSharedAgent?: (workspace: WorkspaceInfo) => Promise<string | null> | string | null | void;
+  onAddSharedAgent?: (
+    workspace: WorkspaceInfo,
+    engine: SharedSessionSupportedEngine,
+  ) => Promise<string | null> | string | null | void;
   onAssignNewSessionToFolder?: (
     workspaceId: string,
     threadId: string,
@@ -269,6 +275,8 @@ function resolveEngineDisplayName(engineType: EngineType): string {
       return "OpenCode";
     case "kimi":
       return "Kimi CLI";
+    case "grok":
+      return "Grok CLI";
     case "claude":
     default:
       return "Claude Code";
@@ -1240,16 +1248,39 @@ export function useSidebarMenus({
       const opencodeSelectedProfile =
         opencodeProfiles.find((profile) => profile.id === opencodeSelectedProfileId) ??
         opencodeProfiles[0];
+      const sharedEngineLabels: Record<SharedSessionSupportedEngine, string> = {
+        claude: t("workspace.engineClaudeCode"),
+        codex: t("workspace.engineCodex"),
+        opencode: t("workspace.engineOpenCode"),
+        kimi: t("workspace.engineKimi"),
+        grok: t("workspace.engineGrok"),
+      };
       const actions = [
         {
           id: "new-session-shared",
           label: t("sidebar.newSharedSession"),
           iconKind: "new-shared",
           unavailable: !onAddSharedAgent,
-          onSelect: async () => {
-            const threadId = await onAddSharedAgent?.(workspace);
-            await handleCreatedSession(threadId);
-          },
+          submenuOnly: true,
+          onSelect: () => {},
+          children: (
+            [
+              ["claude", "engine-claude"],
+              ["codex", "engine-codex"],
+              ["opencode", "engine-opencode"],
+              ["kimi", "engine-kimi"],
+              ["grok", "engine-grok"],
+            ] as const
+          ).map(([engine, iconKind]) => ({
+            id: `new-session-shared-${engine}`,
+            label: sharedEngineLabels[engine],
+            iconKind,
+            ...resolveEngineActionMeta(workspace, engine),
+            onSelect: async () => {
+              const threadId = await onAddSharedAgent?.(workspace, engine);
+              await handleCreatedSession(threadId);
+            },
+          })),
         },
         {
           id: "new-session-claude",
