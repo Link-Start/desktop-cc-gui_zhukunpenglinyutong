@@ -1023,3 +1023,36 @@ Shared CLI 改为五类本机 CLI 二级选择，创建时按所选 CLI 的本�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1227: 统一 Shared CLI 模型与运行时契约
+
+**Date**: 2026-07-30
+**Task**: 统一 Shared CLI 模型与运行时契约
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；Kimi/Grok local launch profile 与 durable Attempt 统一 canonical provider runtime key。6 个 focused Rust tests、cargo fmt --check、cargo check、runtime contracts、OpenSpec strict validation 与 diff check 通过；按用户要求未运行全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `800bc2466` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
