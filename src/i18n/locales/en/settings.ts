@@ -1191,6 +1191,11 @@ const settings = {
     typeShortcut: "Type shortcut",
     pressShortcutPrompt: "Press shortcut…",
     resetToDefault: "Reset to default",
+    resetToShortcut: "Reset to",
+    resetAllShortcuts: "Reset all to defaults",
+    searchShortcuts: "Search shortcuts…",
+    clickToRecordShortcut: "Click to record a new shortcut",
+    noShortcutsFound: "No shortcuts found",
     pressNewShortcut: "Press a new shortcut while focused. Default:",
     composerSubtitle: "Composer",
     composerSubDescription:

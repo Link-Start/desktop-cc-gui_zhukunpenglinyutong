@@ -1695,7 +1695,7 @@ export function SettingsView({
   };
 
   const handleShortcutKeyDown = (
-    event: React.KeyboardEvent<HTMLInputElement>,
+    event: React.KeyboardEvent<HTMLElement>,
     key: ShortcutSettingKey,
   ) => {
     if (event.key === "Tab" && key !== "composerCollaborationShortcut") {
@@ -1713,11 +1713,11 @@ export function SettingsView({
     if (!value) {
       return;
     }
-    // Blur after a successful capture so the recorded value shows immediately
-    // (the input renders blank while focused to surface the "press shortcut" prompt).
-    const input = event.currentTarget;
+    // Blur after a successful capture so the recorder exits recording mode
+    // and the recorded value shows immediately.
+    const target = event.currentTarget;
     void updateShortcut(key, value);
-    input.blur();
+    target.blur();
   };
 
   const trimmedGroupName = newGroupName.trim();

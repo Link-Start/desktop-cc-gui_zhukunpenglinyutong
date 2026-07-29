@@ -685,11 +685,6 @@
   accent-color: var(--border-accent);
 }
 
-.settings-input--shortcut {
-  font-family: "SF Mono", "Fira Mono", "Menlo", monospace;
-  letter-spacing: 0.02em;
-}
-
 
 .settings-scale-controls {
   display: flex;

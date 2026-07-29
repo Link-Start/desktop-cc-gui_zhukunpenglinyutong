@@ -1,4 +1,4 @@
-import { useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw";
 import Search from "lucide-react/dist/esm/icons/search";
 import {
@@ -99,6 +99,12 @@ export function ShortcutsSection({
   const [selectedSetting, setSelectedSetting] =
     useState<ShortcutSettingKey | null>(null);
   const [recording, setRecording] = useState(false);
+  const [resettingAll, setResettingAll] = useState(false);
+
+  // Switching the selected action always exits recording mode.
+  useEffect(() => {
+    setRecording(false);
+  }, [selectedSetting]);
 
   const shortcutGroups = useMemo(
     () =>
@@ -149,6 +155,24 @@ export function ShortcutsSection({
     visibleActions.find((action) => action.setting === selectedSetting) ??
     visibleActions[0] ??
     null;
+
+  const handleResetAll = async () => {
+    if (resettingAll) {
+      return;
+    }
+    setResettingAll(true);
+    try {
+      for (const action of shortcutActions) {
+        const defaultShortcut = resolveDefaultShortcut(action) ?? "";
+        const currentValue = shortcutDrafts[action.draftKey] ?? "";
+        if (currentValue !== defaultShortcut) {
+          await updateShortcut(action.setting, defaultShortcut || null);
+        }
+      }
+    } finally {
+      setResettingAll(false);
+    }
+  };
 
   const renderDetail = () => {
     if (!selectedAction) {
@@ -222,13 +246,7 @@ export function ShortcutsSection({
   };
 
   return (
-    <section className="settings-section settings-shortcuts-section">
-      <div className="settings-section-title">
-        {t("settings.shortcutsTitle")}
-      </div>
-      <div className="settings-section-subtitle">
-        {t("settings.shortcutsDescription")}
-      </div>
+    <section className="settings-section settings-section-tabbed settings-shortcuts-section">
       <div className="settings-shortcuts-layout">
         <div className="settings-shortcuts-list">
           <div className="settings-shortcuts-search">
@@ -248,8 +266,7 @@ export function ShortcutsSection({
                   {group.title}
                 </div>
                 {group.items.map((item) => {
-                  const isSelected =
-                    selectedAction?.setting === item.setting;
+                  const isSelected = selectedAction?.setting === item.setting;
                   return (
                     <button
                       type="button"
@@ -275,6 +292,15 @@ export function ShortcutsSection({
               </div>
             )}
           </div>
+          <button
+            type="button"
+            className="settings-shortcuts-reset-all"
+            disabled={resettingAll}
+            onClick={() => void handleResetAll()}
+          >
+            <RotateCcw size={12} strokeWidth={2.2} aria-hidden="true" />
+            <span>{t("settings.resetAllShortcuts")}</span>
+          </button>
         </div>
         <div className="settings-shortcuts-detail">{renderDetail()}</div>
       </div>
