@@ -610,3 +610,36 @@ Native Session 按当前 CLI 展示 Provider Profiles 并复用续接 Dialog；S
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1215: 续接会话围挡默认折叠
+
+**Date**: 2026-07-29
+**Task**: 续接会话围挡默认折叠
+**Branch**: `feature/v-0710`
+
+### Summary
+
+完成 Sidebar Continuation Family 默认折叠：保留首个代表 Session，支持 disclosure 展开/收起，普通与 pinned 列表行为一致；用户已完成 UI 验收。Focused Vitest 48/48、typecheck、lint、runtime contracts、OpenSpec strict validation 通过；全量测试被既有 modelOptions 两条无关断言阻断。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `53759006f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

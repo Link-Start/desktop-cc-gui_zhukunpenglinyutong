@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-29.md`
-- **Total Sessions**: 1214
+- **Total Sessions**: 1215
 - **Last Active**: 2026-07-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-29.md` | ~612 | Active |
+| `journal-29.md` | ~645 | Active |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
@@ -57,6 +57,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1215 | 2026-07-29 | 续接会话围挡默认折叠 | `53759006f` | `feature/v-0710` |
 | 1214 | 2026-07-29 | 闭环 Codex CLI 供应商续接 | `d528fc91c` | `feature/v-0710` |
 | 1213 | 2026-07-29 | 优化普通 CLI 供应商续接 | `93ce0a709` | `feature/v-0710` |
 | 1212 | 2026-07-29 | 闭环共享会话多 CLI Provider 基石 | `29bcf6c65`, `6e08a700e`, `94c1795ac` | `feature/v-0710` |
