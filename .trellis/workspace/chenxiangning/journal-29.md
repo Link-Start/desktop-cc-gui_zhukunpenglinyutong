@@ -1157,3 +1157,36 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1231: 同步并归档 Shared 连续性 OpenSpec
+
+**Date**: 2026-07-30
+**Task**: 同步并归档 Shared 连续性 OpenSpec
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+将 Queue/Fusion 与 CLI-specific compaction delta 同步到五个主 specs，并归档已完成的 OpenSpec change；受影响 specs 均通过 strict validation。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8de5f121d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
