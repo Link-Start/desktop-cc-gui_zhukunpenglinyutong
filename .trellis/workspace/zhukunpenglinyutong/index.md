@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 66
+- **Total Sessions**: 67
 - **Last Active**: 2026-07-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~734 | Active |
+| `journal-2.md` | ~804 | Active |
 | `journal-1.md` | ~1997 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 67 | 2026-07-30 | 设置页重构为无顶栏居中窄列布局 | `cc6ae1007` | `chore/bump-version-0.7.12` |
 | 66 | 2026-07-30 | 快捷键设置页对齐参考样式并补全部重置 | `15a30e24f` | `chore/bump-version-0.7.12` |
 | 65 | 2026-07-30 | 重构快捷键设置页为双栏录制布局 | `eb4ed9027` | `chore/bump-version-0.7.12` |
 | 64 | 2026-07-28 | 修复 CI 编译失败：grok entry 缺 native_title | `d5b6f42ca` | `chore/bump-version-0.7.11` |

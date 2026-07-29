@@ -769,3 +769,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 67: 设置页重构为无顶栏居中窄列布局
+
+**Date**: 2026-07-30
+**Task**: 设置页重构为无顶栏居中窄列布局
+**Branch**: `chore/bump-version-0.7.12`
+
+### Summary
+
+删顶部标题栏,大标题+描述移入内容区(.settings-page-head,兼作Windows拖拽面);侧边栏加44px拖拽spacer避让红绿灯/全局drag-strip;内容列1080→860px居中,变量上移到settings-content-wrap供页头与滚动区共用;providers页无页头改渲染44px拖拽条防macOS全局drag-strip遮挡搜索框;侧边栏精修(200px宽/32px行高/6px圆角/16px图标/选中500字重);快捷键页键帽去边框、行13px、选中#f2f2f2;删除Dictation/Composer/Commit/Placeholder四处与新页头重复的section-title;同步SettingsView.test与scroll-area契约测试;tsc+72测试+vite build全绿
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cc6ae1007` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
