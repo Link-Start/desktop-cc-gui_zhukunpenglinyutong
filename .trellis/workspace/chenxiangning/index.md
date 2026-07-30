@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-29.md`
-- **Total Sessions**: 1243
+- **Total Sessions**: 1244
 - **Last Active**: 2026-07-31
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-29.md` | ~1614 | Active |
+| `journal-29.md` | ~1647 | Active |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
@@ -57,6 +57,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1244 | 2026-07-31 | 修复 Grok 历史 tool 扁平解析 | `0d4765346` | `bump-version-0.7.12` |
 | 1243 | 2026-07-31 | 幕布文件修改场景默认折叠 | `63461ec54` | `bump-version-0.7.12` |
 | 1242 | 2026-07-31 | 补齐多引擎图片输入能力 | `2bdaa4db6` | `bump-version-0.7.12` |
 | 1241 | 2026-07-30 | 修复实时历史展开点击 | `422d49f1c` | `bump-version-0.7.12` |

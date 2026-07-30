@@ -1612,3 +1612,36 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1244: 修复 Grok 历史 tool 扁平解析
+
+**Date**: 2026-07-31
+**Task**: 修复 Grok 历史 tool 扁平解析
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+修复 Grok chat_history tool_calls 只读 nested function 导致历史幕布整批显示 Tool 的问题；兼容 flat/nested，扩展 list_dir/search_replace/run_terminal_command 分类以进入既有分组渲染。OpenSpec: fix-grok-history-tool-projection。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0d4765346` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
