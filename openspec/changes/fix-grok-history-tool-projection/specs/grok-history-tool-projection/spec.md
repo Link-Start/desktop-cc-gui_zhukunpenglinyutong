@@ -26,6 +26,10 @@ When loading Grok `chat_history.jsonl`, the history reader MUST project each ass
 
 After history projection, Grok tool items MUST be classifiable by shared tool semantics (`read` / `edit` / `bash` / `search` / hide). Known names including at least `read_file`, `list_dir`, `grep`, `run_terminal_command`, `search_replace` MUST NOT remain unknown generic presentation solely due to lost names.
 
+Specialized snapshot types such as `commandExecution` and `fileChange` MUST use
+exact known-name matching. A genuine unknown name MUST NOT be retyped solely
+because it contains a keyword such as `command` or `write`.
+
 #### Scenario: consecutive file reads group
 
 - **WHEN** history contains two or more consecutive `read_file` (or equivalent read-classified) tool items
@@ -40,3 +44,16 @@ After history projection, Grok tool items MUST be classifiable by shared tool se
 
 - **WHEN** history contains `todo_write` / `TodoWrite` style tools
 - **THEN** the canvas MUST continue to hide them per existing hide rules
+
+#### Scenario: list_dir keeps directory identity
+
+- **WHEN** history contains `list_dir` with `target_directory`
+- **THEN** the read group MUST preserve and display that directory path
+- **AND** MUST present the row action as `List`, not a pathless `Read`
+
+#### Scenario: command-like unknown tool is not executable command
+
+- **WHEN** history contains `get_command_or_subagent_output` with `task_ids` and
+  `timeout_ms` but no executable command
+- **THEN** projection MUST preserve `get_command_or_subagent_output` as the real name
+- **AND** MUST NOT convert it to `commandExecution`

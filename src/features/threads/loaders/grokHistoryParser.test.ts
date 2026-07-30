@@ -172,6 +172,65 @@ describe("parseGrokHistoryMessages", () => {
     );
   });
 
+  it("does not infer specialized tool types from command or write substrings", () => {
+    const items = parseGrokHistoryMessages([
+      {
+        id: "call-output-1",
+        kind: "tool",
+        role: "assistant",
+        toolType: "get_command_or_subagent_output",
+        title: "get_command_or_subagent_output",
+        toolInput: {
+          task_ids: ["task-1"],
+          timeout_ms: 1000,
+        },
+      },
+      {
+        id: "todo-1",
+        kind: "tool",
+        role: "assistant",
+        toolType: "todo_write",
+        title: "todo_write",
+        toolInput: {
+          merge: false,
+          todos: [],
+        },
+      },
+      {
+        id: "command-1",
+        kind: "tool",
+        role: "assistant",
+        toolType: "run_terminal_command",
+        title: "run_terminal_command",
+        toolInput: {
+          command: "pwd",
+          description: "Inspect working directory",
+        },
+      },
+    ]);
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        id: "call-output-1",
+        kind: "tool",
+        toolType: "get_command_or_subagent_output",
+        title: "get_command_or_subagent_output",
+      }),
+      expect.objectContaining({
+        id: "todo-1",
+        kind: "tool",
+        toolType: "todo_write",
+        title: "todo_write",
+      }),
+      expect.objectContaining({
+        id: "command-1",
+        kind: "tool",
+        toolType: "commandExecution",
+        title: "Command: Inspect working directory",
+      }),
+    ]);
+  });
+
   it("marks error tool results as failed on the source tool call", () => {
     const items = parseGrokHistoryMessages([
       {

@@ -14,3 +14,10 @@ When a tool item's title/name classifies as read, edit, bash, or search under sh
 
 - **WHEN** a tool name is genuinely unknown and not classifiable
 - **THEN** generic tool presentation remains allowed
+
+#### Scenario: unknown name containing a specialized keyword stays generic
+
+- **WHEN** a genuine tool name such as `get_command_or_subagent_output` contains
+  `command` but is not an executable command tool
+- **THEN** presentation MUST preserve the real name and generic arguments
+- **AND** MUST NOT specialize it as `commandExecution` from substring matching alone

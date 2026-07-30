@@ -50,6 +50,9 @@ Grok 历史幕布把工具几乎都渲染成「Tool」扳手卡，无法按读�
 - nested 旧 fixture 仍通过。
 - call/result 配对正确。
 - 连续同类工具可进对应 group；`todo_write` 仍隐藏。
+- `toolType` specialization 仅匹配 exact allowlist；`get_command_or_subagent_output`
+  等未知真实 name 不得因 substring 被误投影为 command/file-change。
+- `list_dir.target_directory` 在 read group 中保留目录身份并显示为 `List`。
 - 人工重载真实 Grok 历史：不再「一排 Tool」。
 - `cargo test`（grok_history）+ focused Vitest + typecheck + `openspec validate --strict`。
 

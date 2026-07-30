@@ -29,7 +29,17 @@ arguments 若为 JSON 字符串则 parse 为 object 写入 `tool_input`。
 | `search_replace` | edit（补） |
 | `todo_write` | hide（已有） |
 
-### D3. Live 无 tool 不算 bug
+`toolType` specialization 使用 exact allowlist，不使用 `includes("command")` /
+`includes("write")`。真实未知 name 保留 generic fallback；只有
+`run_terminal_command` 等明确 command tool 才转为 `commandExecution`。
+
+### D3. 目录读取参数
+
+`ReadToolGroupBlock` 同时识别 file path 与 directory path。Grok
+`list_dir.target_directory` 必须保留路径，并依据 tool name / directory key 显示
+`List`，不能退化为 `Read ...`。
+
+### D4. Live 无 tool 不算 bug
 
 streaming-json 无 tool 事件；仅 history 有 tool 行。parity 不要求 live/history tool 基数一致。
 
