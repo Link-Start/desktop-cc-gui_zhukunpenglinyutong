@@ -1388,3 +1388,36 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1238: 修复 Grok 终稿尾段丢失
+
+**Date**: 2026-07-30
+**Task**: 修复 Grok 终稿尾段丢失
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+在共享 turn/completed settlement 前回灌 liveAssistantTextChannel 尾段，补 Grok terminal handoff 回归测试与 OpenSpec 契约；82 个增量测试、定向 ESLint、typecheck、OpenSpec strict validate 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bedfc5a73` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
