@@ -437,7 +437,7 @@ export const MessagesCore = memo(function MessagesCore({
         isThinking,
         showAllHistoryItems,
         // 流式期裁到 live 尾窗（buildLiveTailWorkingSet 仅在 isThinking 时裁剪）；
-        // show all 只在 idle 恢复全量，避免展开历史后每个 token 都重跑完整 timeline。
+        // 用户显式 show all 后恢复全量；默认折叠态仍限制每个 token 的 timeline 工作集。
         visibleWindow: STREAMING_VISIBLE_WINDOW,
         enableCollaborationBadge,
       }),
