@@ -57,7 +57,6 @@ import {
   type ProviderContinuationDialogRequest,
 } from "../../threads/services/providerContinuationRequests";
 import { isWeakSessionDisplayTitle } from "../../threads/utils/sessionDisplayProjection";
-import { toCanonicalProviderProfileSource } from "../../shared-session/target/types";
 
 const LAST_PROVIDER_PROFILE_KEYS = {
   claude: "claudeLastProviderProfileId",
@@ -1798,100 +1797,6 @@ export function useSidebarMenus({
         },
       ];
       if (
-        thread?.threadKind !== "shared" &&
-        thread?.engineSource &&
-        ["claude", "codex", "kimi"].includes(thread.engineSource)
-      ) {
-        const targetProviders = [
-          ...claudeProviderProfiles.map((provider) => ({
-            engine: "claude" as const,
-            engineLabel: "Claude",
-            provider,
-          })),
-          ...codexProviderProfiles.map((provider) => ({
-            engine: "codex" as const,
-            engineLabel: "Codex",
-            provider,
-          })),
-        ].filter(
-          ({ engine, provider }) =>
-            provider.availability !== "unavailable" &&
-            !(
-              thread.engineSource === engine &&
-              provider.id === thread.providerProfileId
-            ),
-        );
-        const unavailableKimiTargets = (
-          kimiProviderProfiles.length > 0
-            ? kimiProviderProfiles
-            : [
-                {
-                  id: KIMI_LOCAL_PROVIDER_PROFILE_ID,
-                  name: KIMI_LOCAL_PROVIDER_PROFILE_NAME,
-                  source: "disk" as const,
-                },
-              ]
-        ).map((provider) => ({
-          type: "item" as const,
-          id: `continue-with-kimi-${provider.id}`,
-          label: t("threads.providerContinuationKimiUnavailableWithProvider", {
-            defaultValue: "Kimi CLI · {{provider}}（目标续接尚未验证）",
-            provider: provider.name,
-          }),
-          disabled: true,
-          onSelect: () => {},
-        }));
-        if (targetProviders.length > 0 || unavailableKimiTargets.length > 0) {
-          items.push({
-            type: "submenu",
-            id: "continue-with-provider",
-            label: t("threads.continueWithProvider", {
-              defaultValue: "使用其他 Provider 继续",
-            }),
-            items: [
-              ...targetProviders.map(({ engine, engineLabel, provider }) => ({
-                type: "item" as const,
-                id: `continue-with-${engine}-${provider.id}`,
-                label: `${engineLabel} · ${provider.name}`,
-                onSelect: () => {
-                  prepareProviderContinuationDialog(thread, {
-                    workspaceId,
-                    sourceSessionId: thread.id,
-                    destination: {
-                      engine,
-                      providerProfileId: provider.id,
-                      providerProfileNameSnapshot: provider.name,
-                      providerProfileSource: toCanonicalProviderProfileSource(
-                        provider.source,
-                        provider.source === "disk",
-                      ),
-                      runtimeCapabilityFingerprint:
-                        engine === "claude" ? "echo-checksum" : null,
-                    },
-                  });
-                },
-              })),
-              ...(targetProviders.length > 0 && unavailableKimiTargets.length > 0
-                ? [
-                    {
-                      type: "separator" as const,
-                      id: "continue-with-kimi-separator",
-                    },
-                    {
-                      type: "label" as const,
-                      id: "continue-with-kimi-status",
-                      label: t("threads.providerContinuationKimiUnavailable", {
-                        defaultValue: "Kimi CLI · 可作为来源，目标暂不可用",
-                      }),
-                    },
-                  ]
-                : []),
-              ...unavailableKimiTargets,
-            ],
-          });
-        }
-      }
-      if (
         thread?.originKind === "provider-continuation" &&
         thread.sourceSessionId
       ) {
@@ -2081,12 +1986,8 @@ export function useSidebarMenus({
       onSyncThread,
       onUnpinThread,
       onSelectThread,
-      claudeProviderProfiles,
-      codexProviderProfiles,
-      kimiProviderProfiles,
       isThreadAvailable,
       getThreadSummary,
-      prepareProviderContinuationDialog,
     ],
   );
 

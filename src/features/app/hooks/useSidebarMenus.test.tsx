@@ -976,7 +976,7 @@ describe("useSidebarMenus", () => {
     expect(items[6]?.type).toBe("label");
   });
 
-  it("creates a top-level provider continuation from a native thread", async () => {
+  it("creates a provider continuation from a native thread", async () => {
     const catalogRefresh = createDeferred<void>();
     prepareNativeProviderContinuationMock.mockResolvedValueOnce({
       status: "prepared",
@@ -1016,26 +1016,17 @@ describe("useSidebarMenus", () => {
     const { result } = renderHook(() => useSidebarMenus(handlers));
 
     act(() => {
-      result.current.showThreadMenu(
-        {
-          clientX: 1,
-          clientY: 1,
-          preventDefault: vi.fn(),
-          stopPropagation: vi.fn(),
-        } as unknown as Parameters<typeof result.current.showThreadMenu>[0],
-        "ws-1",
-        "claude:source-1",
-        true,
-      );
-    });
-    const submenu = result.current.sidebarContextMenuState?.items.find(
-      (item) => item.type === "submenu" && item.id === "continue-with-provider",
-    );
-    expect(submenu?.type).toBe("submenu");
-    await act(async () => {
-      if (submenu?.type === "submenu" && submenu.items[0]?.type === "item") {
-        await submenu.items[0].onSelect();
-      }
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "claude:source-1",
+        destination: {
+          engine: "codex",
+          providerProfileId: "provider-b",
+          providerProfileNameSnapshot: "Provider B",
+          providerProfileSource: "managed",
+          runtimeCapabilityFingerprint: null,
+        },
+      });
     });
 
     await waitFor(() => {
@@ -1116,25 +1107,17 @@ describe("useSidebarMenus", () => {
     };
     const { result } = renderHook(() => useSidebarMenus(handlers));
     act(() => {
-      result.current.showThreadMenu(
-        {
-          clientX: 1,
-          clientY: 1,
-          preventDefault: vi.fn(),
-          stopPropagation: vi.fn(),
-        } as unknown as Parameters<typeof result.current.showThreadMenu>[0],
-        "ws-1",
-        "claude:source-1",
-        true,
-      );
-    });
-    const submenu = result.current.sidebarContextMenuState?.items.find(
-      (item) => item.type === "submenu" && item.id === "continue-with-provider",
-    );
-    await act(async () => {
-      if (submenu?.type === "submenu" && submenu.items[0]?.type === "item") {
-        await submenu.items[0].onSelect();
-      }
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "claude:source-1",
+        destination: {
+          engine: "codex",
+          providerProfileId: "provider-b",
+          providerProfileNameSnapshot: "Provider B",
+          providerProfileSource: "managed",
+          runtimeCapabilityFingerprint: null,
+        },
+      });
     });
 
     await waitFor(() => {
@@ -1192,26 +1175,17 @@ describe("useSidebarMenus", () => {
     const { result } = renderHook(() => useSidebarMenus(handlers));
 
     act(() => {
-      result.current.showThreadMenu(
-        {
-          clientX: 1,
-          clientY: 1,
-          preventDefault: vi.fn(),
-          stopPropagation: vi.fn(),
-        } as unknown as Parameters<typeof result.current.showThreadMenu>[0],
-        "ws-1",
-        "claude:source-1",
-        true,
-      );
-    });
-    const submenu = result.current.sidebarContextMenuState?.items.find(
-      (item) =>
-        item.type === "submenu" && item.id === "continue-with-provider",
-    );
-    act(() => {
-      if (submenu?.type === "submenu" && submenu.items[0]?.type === "item") {
-        void submenu.items[0].onSelect();
-      }
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "claude:source-1",
+        destination: {
+          engine: "codex",
+          providerProfileId: "provider-b",
+          providerProfileNameSnapshot: "Provider B",
+          providerProfileSource: "managed",
+          runtimeCapabilityFingerprint: null,
+        },
+      });
     });
     expect(result.current.providerContinuationDialogState?.stage).toBe(
       "preparing",
@@ -1415,25 +1389,17 @@ describe("useSidebarMenus", () => {
     const { result } = renderHook(() => useSidebarMenus(handlers));
 
     act(() => {
-      result.current.showThreadMenu(
-        {
-          clientX: 1,
-          clientY: 1,
-          preventDefault: vi.fn(),
-          stopPropagation: vi.fn(),
-        } as unknown as Parameters<typeof result.current.showThreadMenu>[0],
-        "ws-1",
-        "claude:source-1",
-        true,
-      );
-    });
-    const submenu = result.current.sidebarContextMenuState?.items.find(
-      (item) => item.type === "submenu" && item.id === "continue-with-provider",
-    );
-    await act(async () => {
-      if (submenu?.type === "submenu" && submenu.items[0]?.type === "item") {
-        await submenu.items[0].onSelect();
-      }
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "claude:source-1",
+        destination: {
+          engine: "codex",
+          providerProfileId: "provider-b",
+          providerProfileNameSnapshot: "Provider B",
+          providerProfileSource: "managed",
+          runtimeCapabilityFingerprint: null,
+        },
+      });
     });
     await waitFor(() => {
       expect(result.current.providerContinuationDialogState?.stage).toBe(
@@ -1493,25 +1459,17 @@ describe("useSidebarMenus", () => {
     const { result } = renderHook(() => useSidebarMenus(handlers));
 
     act(() => {
-      result.current.showThreadMenu(
-        {
-          clientX: 1,
-          clientY: 1,
-          preventDefault: vi.fn(),
-          stopPropagation: vi.fn(),
-        } as unknown as Parameters<typeof result.current.showThreadMenu>[0],
-        "ws-1",
-        "codex-history-1",
-        true,
-      );
-    });
-    const submenu = result.current.sidebarContextMenuState?.items.find(
-      (item) => item.type === "submenu" && item.id === "continue-with-provider",
-    );
-    await act(async () => {
-      if (submenu?.type === "submenu" && submenu.items[0]?.type === "item") {
-        await submenu.items[0].onSelect();
-      }
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "codex-history-1",
+        destination: {
+          engine: "claude",
+          providerProfileId: "provider-a",
+          providerProfileNameSnapshot: "Provider A",
+          providerProfileSource: "managed",
+          runtimeCapabilityFingerprint: "echo-checksum",
+        },
+      });
     });
     await waitFor(() => {
       expect(result.current.providerContinuationDialogState?.stage).toBe(

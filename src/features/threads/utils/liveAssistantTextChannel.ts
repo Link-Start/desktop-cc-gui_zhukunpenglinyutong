@@ -185,9 +185,9 @@ export function clearLiveAssistantText(threadId: string): void {
 }
 
 /**
- * 中断时取走「尚未落入 reducer 的尾段」并清除条目。
+ * terminal settlement / 中断时取走「尚未落入 reducer 的尾段」并清除条目。
  * 调用方应把 tailDelta 作为一条普通 delta dispatch，让被中断的部分正文
- * 落进 items（否则中断后该行会回退到壳首段）。
+ * 落进 items（否则退出 streaming 后该行会回退到壳首段）。
  */
 export function drainLiveAssistantTextTail(
   threadId: string,

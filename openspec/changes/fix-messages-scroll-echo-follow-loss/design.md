@@ -91,10 +91,13 @@ type ScrollGeometrySnapshot = {
 - 无 user intent、无活跃 run、合法 echo 落在 near-bottom 时 `autoScrollRef.current = true`。
 - 这是 recovery 行为，不得覆盖 D4 的用户输入优先级。
 
-### D6: 收尾 repin 守卫维持 `autoScrollRef`
+### D6: continuous follow 与 turn boundary placement 分权
 
-- 不把 turn-settle 改成只识别 wheel 的第二套 authority。
-- 所有输入统一在 D4 转成 user-intent evidence；`autoScrollRef` 仍是 convergence/settle 的唯一 armed 状态。
+- streaming growth 的 `live-follow` 继续受 `liveAutoFollowEnabled`、`autoScrollRef` 与 user-intent lease 约束。
+- 同一 render scope 的 pending user message cardinality 增长产生 `turn-send`，覆盖 working 期间 queued handoff；history-loading settlement 不得伪装成 send。working `false → true` 是无 optimistic bubble 引擎的 send fallback，`true → false` 产生 `turn-settle`。optimistic → canonical replacement cardinality 不变，不得重复触发 send。
+- boundary 开始时清除边沿前 user-intent lease、设置 `autoScrollRef=true`，并绕过 live auto-follow preference；boundary 后的新 wheel、scrolling-key、touch、pointer/scrollbar 输入仍按 D4 取消 convergence。
+- scope switch 只更新 edge baseline，不得把旧 thread 的 working 下降沿投射成新 thread 的 settle。
+- boundary 继续复用 geometry-based multi-frame convergence 与 ResizeObserver。队尾空 `bottomRef` 不参与任何定位，删除 dead ref，避免把一次性 DOM sentinel 误当成动态布局正确性来源。
 
 ### D7: 测试必须证明 protocol phase
 
@@ -115,6 +118,13 @@ type ScrollGeometrySnapshot = {
 
 重新启用的前置条件：必须先加入 static → virtual `initialOffset` handoff、remeasure 后 anchor compensation、bottom-armed 与 mid-history 两类 discriminating regression，再显式翻转 kill switch。
 
+### D9: boundary regression 必须区分边沿前后 ownership
+
+- send regression：先建立 mid-history + recent user intent，再触发同 scope working 上升沿或 working 期间新增 queued user bubble；必须立即收敛到底部，且 live auto-follow preference 关闭时结果不变。
+- settle regression：streaming 中主动上滚可暂停 continuous follow；working 下降沿必须重置旧 ownership，并在 deferred/back-fill height growth 后继续追到真实底部。
+- post-boundary regression：boundary 已启动后产生的新用户输入必须取消后续 recheck，防止“必吸底”退化成持续抢滚动权。
+- scope regression：thread/workspace 切换同时改变 working 状态时不得误发 send/settle boundary。
+
 ## Risks / Trade-offs
 
 - [350ms 后仍到达的真实程序化 echo 无法证明来源] → fail open to user control：按真实位置处理；不得无限扩大 grace 或复活旧 entry。
@@ -122,6 +132,7 @@ type ScrollGeometrySnapshot = {
 - [pointerdown 可能是消息内容点击而非滚动条] → 它只建立短租约且必须后续真的出现 scroll 才生效，不直接改变 `autoScrollRef`。
 - [background tab timer throttling] → per-entry timestamp 使用 monotonic clock；恢复前台后过期 echo 按当前位置处理，后续合法 content signal/near-bottom 可重新武装。
 - [环 churn] → 只记录 actual write/proven clamp，显著少于第一版“每个 RO 两条 + 每帧 observation”；bounded 32 足够且不会靠全局续期掩盖容量问题。
+- [boundary 强制吸底改变旧阅读语义] → 这是 product owner 对 send/settle 的明确新 contract；连续 streaming 期间仍允许用户上滚，只有新 lifecycle boundary 重置旧 ownership。
 - [禁用 virtualization/lightweight 增加重型历史渲染成本] → 这是 product owner 明确选择的 correctness-first containment；保留 render-weight diagnostics 与历史实现，重新启用必须先通过 D8 的 transition gate。
 
 ## Migration Plan

@@ -120,7 +120,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     workspaceId,
   } = runtime;
   const {
-    bottomRef,
     messageNodeByIdRef,
     onPendingJumpTargetReady,
     pendingJumpMessageId,
@@ -694,7 +693,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
             />
           </div>
         )}
-        <div ref={bottomRef} />
       </div>
     </div>
   );

@@ -65,10 +65,6 @@ const threads = {
     providerContinuationSourceExcerptUnavailable: "No source excerpt available",
     providerContinuationOpenSourceTitle: "Open source conversation",
     providerContinuationOpenSource: "Open source",
-    providerContinuationKimiUnavailableWithProvider:
-      "Kimi CLI · {{provider}} (target continuation is not verified)",
-    providerContinuationKimiUnavailable:
-      "Kimi CLI · source only; target unavailable",
     providerContinuationEstimatedTokens:
       "Portable history tokens → continuation package tokens",
     providerContinuationErrorCode: "Error code: {{code}}",
