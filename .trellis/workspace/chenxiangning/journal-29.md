@@ -1289,3 +1289,36 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1235: 修复消息滚动回声并禁用轻量渲染
+
+**Date**: 2026-07-30
+**Task**: 修复消息滚动回声并禁用轻量渲染
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+闭环修复 programmatic scroll echo 归因与用户滚动优先级；硬禁用 timeline virtualization、lightweight mode 和 summary prompt，恢复静态完整渲染及锚点跳转；7 个相关测试文件 122 passed、3 skipped，并通过 typecheck、定向 ESLint、OpenSpec strict validation 与 diff check，未运行全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `770a943a1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
