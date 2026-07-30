@@ -36,11 +36,16 @@ const PROGRAMMATIC_SCROLL_ECHO_LIMIT = 32;
 type ConversationScrollIntent =
   | "history-open"
   | "live-follow"
+  | "turn-send"
   | "turn-settle"
   | "explicit-control";
 
 function isFocusFollowScrollIntent(intent: ConversationScrollIntent | null) {
-  return intent === "live-follow" || intent === "turn-settle";
+  return intent === "live-follow";
+}
+
+function isTurnBoundaryScrollIntent(intent: ConversationScrollIntent | null) {
+  return intent === "turn-send" || intent === "turn-settle";
 }
 
 type UseMessagesScrollControllerInput = {
@@ -62,10 +67,11 @@ export function useMessagesScrollController({
   rawScrollKey,
   renderScopeKey,
 }: UseMessagesScrollControllerInput) {
-  const bottomRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stickToBottomDeadlineRef = useRef(0);
-  const stickToBottomIntentRef = useRef<"history-open" | "turn-settle" | null>(null);
+  const stickToBottomIntentRef = useRef<
+    "history-open" | "turn-send" | "turn-settle" | null
+  >(null);
   const autoScrollRef = useRef(true);
   const activeScrollConvergenceCancelRef = useRef<(() => void) | null>(null);
   const activeProgrammaticScrollEdgeRef = useRef<ConversationScrollEdge | null>(null);
@@ -161,6 +167,7 @@ export function useMessagesScrollController({
       }
       if (
         intent !== "explicit-control" &&
+        !isTurnBoundaryScrollIntent(intent) &&
         activeScrollIntentRef.current === "explicit-control" &&
         activeProgrammaticScrollMotionRef.current === "smooth"
       ) {
@@ -286,20 +293,30 @@ export function useMessagesScrollController({
     stickToBottomDeadlineRef.current = Date.now() + SETTLE_REPIN_WINDOW_MS;
     requestHistoryBottomConvergence();
   }, [requestHistoryBottomConvergence]);
-  const requestSettleBottomConvergence = useCallback(() => {
-    requestScrollConvergence("bottom", "instant", "turn-settle", {
+  const requestTurnBoundaryBottomConvergence = useCallback(() => {
+    const intent = stickToBottomIntentRef.current;
+    if (!isTurnBoundaryScrollIntent(intent)) {
+      return;
+    }
+    requestScrollConvergence("bottom", "instant", intent, {
       recheckDelaysMs: AUTOMATIC_BOTTOM_RECHECK_DELAYS_MS,
       shouldContinue: () =>
-        liveAutoFollowEnabledRef.current &&
+        stickToBottomIntentRef.current === intent &&
         autoScrollRef.current &&
         !hasRecentUserScrollIntent() &&
         Date.now() <= stickToBottomDeadlineRef.current,
     });
-  }, [
-    hasRecentUserScrollIntent,
-    liveAutoFollowEnabledRef,
-    requestScrollConvergence,
-  ]);
+  }, [hasRecentUserScrollIntent, requestScrollConvergence]);
+  const beginTurnBoundaryBottomConvergence = useCallback(
+    (intent: "turn-send" | "turn-settle") => {
+      clearUserScrollIntent();
+      autoScrollRef.current = true;
+      stickToBottomIntentRef.current = intent;
+      stickToBottomDeadlineRef.current = Date.now() + SETTLE_REPIN_WINDOW_MS;
+      requestTurnBoundaryBottomConvergence();
+    },
+    [clearUserScrollIntent, requestTurnBoundaryBottomConvergence],
+  );
   // 内容高度与输入事件共同决定 follow ownership。所有 listener/observer 由 controller
   // 持有，避免 component 再维护第二套 convergence side effect。
   useEffect(() => {
@@ -419,8 +436,8 @@ export function useMessagesScrollController({
         } else if (Date.now() <= stickToBottomDeadlineRef.current) {
           if (stickToBottomIntentRef.current === "history-open") {
             requestHistoryBottomConvergence();
-          } else if (stickToBottomIntentRef.current === "turn-settle") {
-            requestSettleBottomConvergence();
+          } else if (isTurnBoundaryScrollIntent(stickToBottomIntentRef.current)) {
+            requestTurnBoundaryBottomConvergence();
           }
         }
       }
@@ -443,7 +460,7 @@ export function useMessagesScrollController({
     renderScopeKey,
     requestAutoScroll,
     requestHistoryBottomConvergence,
-    requestSettleBottomConvergence,
+    requestTurnBoundaryBottomConvergence,
   ]);
   const handleScrollControlRequest = useCallback(
     (edge: ConversationScrollEdge) => {
@@ -462,7 +479,7 @@ export function useMessagesScrollController({
     activeProgrammaticScrollEdgeRef,
     activeProgrammaticScrollMotionRef,
     autoScrollRef,
-    bottomRef,
+    beginTurnBoundaryBottomConvergence,
     cancelFocusFollowConvergence,
     cancelScrollConvergence,
     clearUserScrollIntent,
@@ -477,7 +494,6 @@ export function useMessagesScrollController({
     recordCurrentScrollGeometry,
     requestAutoScroll,
     requestHistoryBottomConvergence,
-    requestSettleBottomConvergence,
     requestTimelineLayoutBottomConvergence,
     scrollKey,
     stickToBottomDeadlineRef,

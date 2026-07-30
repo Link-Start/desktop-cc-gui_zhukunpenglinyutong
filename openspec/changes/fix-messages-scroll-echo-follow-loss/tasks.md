@@ -51,3 +51,11 @@
 - [x] 7.3 禁用 suggested/oversized/manual lightweight policy，隐藏 prompt 并禁止 heavy-row summary hydration
 - [x] 7.4 补充 full-detail + static anchor jump 回归，证明重型对话所有 anchor 均挂载且跳转不经过 `scrollToIndex`
 - [x] 7.5 只执行相关增量 tests（7 files / 122 passed）、typecheck、改动文件 ESLint 与 OpenSpec strict validation；不跑全量测试
+
+## 8. Turn boundary deterministic bottom placement
+
+- [x] 8.1 更新 proposal/design/spec：拆分 interruptible `live-follow` 与 mandatory `turn-send` / `turn-settle` placement
+- [x] 8.2 `useMessagesScrollController.ts`：新增 boundary ownership reset + convergence，允许边沿后新 user intent 取消 recheck
+- [x] 8.3 `MessagesCore.tsx`：用 scope-aware working rising/falling edge 驱动 send/settle；删除未参与定位的 dead `bottomRef`
+- [x] 8.4 更新 focused regression：send/queued-send/settle 忽略边沿前位置与 preference、late back-fill 追底、边沿后输入可取消、scope switch 不误触发
+- [x] 8.5 增量门禁：8 个相关 test files（139 passed / 3 skipped）、typecheck、改动文件 ESLint、OpenSpec strict validation 通过；`check:messages-boundaries` 已执行并仅命中 13 条本次 diff 未新增的既有 import edge；按用户要求不跑全量测试

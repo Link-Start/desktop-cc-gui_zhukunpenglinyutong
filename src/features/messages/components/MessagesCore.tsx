@@ -84,7 +84,6 @@ import {
 } from "../orchestration/presentation/messagesViewModel";
 import {
   INITIAL_BOTTOM_PIN_BUDGET_MS,
-  SETTLE_REPIN_WINDOW_MS,
 } from "../constants/messagesConstants";
 import {
   isProgrammaticScrollEcho,
@@ -270,7 +269,6 @@ export const MessagesCore = memo(function MessagesCore({
   } = useMessagesHistoryWindow({ firstItemId: items[0]?.id ?? null });
   const renderStartedAt =
     typeof performance === "undefined" ? 0 : performance.now();
-  const settleRepinPrevThinkingRef = useRef(isThinking);
   const messageNodeByIdRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const agentTaskNodeByTaskIdRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const agentTaskNodeByToolUseIdRef = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -426,6 +424,13 @@ export const MessagesCore = memo(function MessagesCore({
     messageActionTargetsCacheRef.current = { baseItems: effectiveItems, result };
     return result;
   }, [effectiveItems]);
+  const turnBoundaryStateRef = useRef({
+    isHistoryLoading,
+    isWorking,
+    pendingWorkingStartCovered: false,
+    renderScopeKey,
+    userMessageCount: messageActionTargets.userMessageCount,
+  });
   const liveTailWorkingSet = useMemo(
     () =>
       buildLiveTailWorkingSet(effectiveItems, {
@@ -522,7 +527,7 @@ export const MessagesCore = memo(function MessagesCore({
     activeProgrammaticScrollEdgeRef,
     activeProgrammaticScrollMotionRef,
     autoScrollRef,
-    bottomRef,
+    beginTurnBoundaryBottomConvergence,
     cancelFocusFollowConvergence,
     cancelScrollConvergence,
     clearUserScrollIntent,
@@ -537,7 +542,6 @@ export const MessagesCore = memo(function MessagesCore({
     recordCurrentScrollGeometry,
     requestAutoScroll,
     requestHistoryBottomConvergence,
-    requestSettleBottomConvergence,
     requestTimelineLayoutBottomConvergence,
     scrollKey,
     stickToBottomDeadlineRef,
@@ -786,13 +790,6 @@ export const MessagesCore = memo(function MessagesCore({
       window.removeEventListener("storage", handleStorage);
     };
   }, [cancelFocusFollowConvergence, isWorking, rearmAutoFollowToBottom]);
-  useEffect(() => {
-    if (!liveAutoFollowEnabled || !isWorking) {
-      return;
-    }
-    autoScrollRef.current = true;
-    requestAutoScroll();
-  }, [autoScrollRef, isWorking, liveAutoFollowEnabled, requestAutoScroll]);
   const reasoningMetaById = useMemo(() => {
     const meta = new Map<string, ReturnType<typeof parseReasoning>>();
     deferredRenderSourceItems.forEach((item) => {
@@ -1569,26 +1566,61 @@ export const MessagesCore = memo(function MessagesCore({
     workspaceId,
   ]);
 
-  // 对话结束（isThinking true→false）后开一个收尾跟随窗口：live 尾窗回刷成全量
-  // timeline 时几百条历史带着估算高度插进列表，scrollHeight 暴涨；且全量渲染源经
-  // useDeferredValue 延后数帧才落地。窗口内的高度变化都由观察器钉回底部。
+  // send/settle 是确定性 boundary placement，不属于可中断的 continuous live-follow：
+  // 边沿发生前的滚动 ownership 失效，边沿后的新输入仍可取消后续 convergence。
+  // scope switch 只刷新 baseline，避免把旧会话的 working 状态投射到新会话。
   useLayoutEffect(() => {
-    const wasThinking = settleRepinPrevThinkingRef.current;
-    settleRepinPrevThinkingRef.current = isThinking;
-    if (wasThinking && !isThinking) {
-      if (!liveAutoFollowEnabledRef.current || !autoScrollRef.current) {
-        return;
-      }
-      stickToBottomIntentRef.current = "turn-settle";
-      stickToBottomDeadlineRef.current = Date.now() + SETTLE_REPIN_WINDOW_MS;
-      requestSettleBottomConvergence();
+    const previous = turnBoundaryStateRef.current;
+    if (previous.renderScopeKey !== renderScopeKey) {
+      turnBoundaryStateRef.current = {
+        isHistoryLoading,
+        isWorking,
+        pendingWorkingStartCovered: false,
+        renderScopeKey,
+        userMessageCount: messageActionTargets.userMessageCount,
+      };
+      return;
     }
+    const userMessageAdded =
+      !previous.isHistoryLoading &&
+      messageActionTargets.hasPendingUserTurn &&
+      messageActionTargets.userMessageCount > previous.userMessageCount;
+    const enteredWorking = !previous.isWorking && isWorking;
+    const exitedWorking = previous.isWorking && !isWorking;
+    let pendingWorkingStartCovered = previous.pendingWorkingStartCovered;
+    let sendBoundaryStarted = false;
+
+    if (userMessageAdded) {
+      beginTurnBoundaryBottomConvergence("turn-send");
+      sendBoundaryStarted = true;
+      pendingWorkingStartCovered = !isWorking;
+    }
+    if (enteredWorking) {
+      if (!sendBoundaryStarted && !pendingWorkingStartCovered) {
+        beginTurnBoundaryBottomConvergence("turn-send");
+      }
+      pendingWorkingStartCovered = false;
+    } else if (exitedWorking) {
+      beginTurnBoundaryBottomConvergence("turn-settle");
+      pendingWorkingStartCovered = false;
+    }
+    if (!messageActionTargets.hasPendingUserTurn && !isWorking) {
+      pendingWorkingStartCovered = false;
+    }
+    turnBoundaryStateRef.current = {
+      isHistoryLoading,
+      isWorking,
+      pendingWorkingStartCovered,
+      renderScopeKey,
+      userMessageCount: messageActionTargets.userMessageCount,
+    };
   }, [
-    autoScrollRef,
-    isThinking,
-    requestSettleBottomConvergence,
-    stickToBottomDeadlineRef,
-    stickToBottomIntentRef,
+    beginTurnBoundaryBottomConvergence,
+    isHistoryLoading,
+    isWorking,
+    messageActionTargets.hasPendingUserTurn,
+    messageActionTargets.userMessageCount,
+    renderScopeKey,
   ]);
 
   useEffect(() => {
@@ -1723,7 +1755,6 @@ export const MessagesCore = memo(function MessagesCore({
     navigation: {
       agentTaskNodeByTaskIdRef,
       agentTaskNodeByToolUseIdRef,
-      bottomRef,
       messageNodeByIdRef,
       onPendingJumpTargetReady: handlePendingJumpTargetReady,
       pendingJumpMessageId,

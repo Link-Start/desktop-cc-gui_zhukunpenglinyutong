@@ -983,6 +983,145 @@ describe("Messages live behavior", () => {
     expect(metrics.getScrollTopWriteCount()).toBe(baselineWrites);
   });
 
+  it("forces send and settle boundaries to the bottom with live auto-follow off", () => {
+    window.localStorage.setItem("ccgui.messages.live.autoFollow", "0");
+    const renderWith = (thinking: boolean) => (
+      <Messages
+        items={[
+          {
+            id: "boundary-force-assistant",
+            kind: "message",
+            role: "assistant",
+            text: thinking ? "streaming" : "settled",
+          },
+        ]}
+        threadId="thread-boundary-force"
+        workspaceId="ws-1"
+        isThinking={thinking}
+        processingStartedAt={thinking ? Date.now() - 1_000 : null}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />
+    );
+    const { container, rerender } = render(renderWith(false));
+    const scroller = getMessagesScroller(container);
+    let scrollHeight = 2_400;
+    setScrollerMetrics(scroller, 400, () => scrollHeight);
+    fireEvent.wheel(scroller, { deltaY: -120 });
+    fireEvent.scroll(scroller);
+
+    // 边沿前的 user intent 与 preference 不得阻止 send placement。
+    rerender(renderWith(true));
+    expect(scroller.scrollTop).toBe(scrollHeight - 720);
+
+    // Streaming 期间仍允许用户解除 continuous follow。
+    fireEvent.wheel(scroller, { deltaY: -120 });
+    scroller.scrollTop = 400;
+    fireEvent.scroll(scroller);
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(400);
+
+    // settle 是新的 boundary，再次重置旧 ownership 并强制吸底。
+    rerender(renderWith(false));
+    expect(scroller.scrollTop).toBe(scrollHeight - 720);
+
+    // boundary 之后的新输入拥有控制权，必须能取消迟到 recheck。
+    fireEvent.wheel(scroller, { deltaY: -120 });
+    scroller.scrollTop = 400;
+    fireEvent.scroll(scroller);
+    scrollHeight = 3_200;
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(400);
+  });
+
+  it("forces a queued user message to the bottom while the current turn stays working", () => {
+    window.localStorage.setItem("ccgui.messages.live.autoFollow", "0");
+    const renderWith = (includeQueuedUser: boolean) => (
+      <Messages
+        items={[
+          { id: "queued-send-user-1", kind: "message", role: "user", text: "first" },
+          {
+            id: "queued-send-assistant-1",
+            kind: "message",
+            role: "assistant",
+            text: "streaming",
+          },
+          ...(includeQueuedUser
+            ? [
+                {
+                  id: "queued-handoff-message-2",
+                  kind: "message" as const,
+                  role: "user" as const,
+                  text: "second",
+                },
+              ]
+            : []),
+        ]}
+        threadId="thread-queued-send-boundary"
+        workspaceId="ws-1"
+        isThinking
+        processingStartedAt={Date.now() - 1_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />
+    );
+    const { container, rerender } = render(renderWith(false));
+    const scroller = getMessagesScroller(container);
+    setScrollerMetrics(scroller, 400, 2400);
+    fireEvent.wheel(scroller, { deltaY: -120 });
+    fireEvent.scroll(scroller);
+
+    rerender(renderWith(true));
+
+    expect(scroller.scrollTop).toBe(2400 - 720);
+  });
+
+  it("does not repeat send placement when working starts after the optimistic user bubble", () => {
+    const renderWith = (includeOptimisticUser: boolean, thinking: boolean) => (
+      <Messages
+        items={[
+          { id: "delayed-working-user-1", kind: "message", role: "user", text: "first" },
+          {
+            id: "delayed-working-assistant-1",
+            kind: "message",
+            role: "assistant",
+            text: "settled",
+            isFinal: true,
+          },
+          ...(includeOptimisticUser
+            ? [
+                {
+                  id: "optimistic-user-delayed-working",
+                  kind: "message" as const,
+                  role: "user" as const,
+                  text: "second",
+                },
+              ]
+            : []),
+        ]}
+        threadId="thread-delayed-working-boundary"
+        workspaceId="ws-1"
+        isThinking={thinking}
+        processingStartedAt={thinking ? Date.now() - 1_000 : null}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />
+    );
+    const { container, rerender } = render(renderWith(false, false));
+    const scroller = getMessagesScroller(container);
+    setScrollerMetrics(scroller, 400, 2400);
+
+    rerender(renderWith(true, false));
+    expect(scroller.scrollTop).toBe(2400 - 720);
+
+    // optimistic bubble 后的新用户滚动，不能被随后到达的 working 状态重复覆盖。
+    fireEvent.wheel(scroller, { deltaY: -120 });
+    scroller.scrollTop = 400;
+    fireEvent.scroll(scroller);
+    rerender(renderWith(true, true));
+    expect(scroller.scrollTop).toBe(400);
+  });
+
   it("stops auto-follow after the user scrolls up, then resumes at the bottom", async () => {
     window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
     const renderWith = (extraChunk: boolean) => (
@@ -1277,7 +1416,7 @@ describe("Messages live behavior", () => {
     }
   });
 
-  it("does not mistake active-first settlement for a missing history placement", () => {
+  it("uses settle placement after an active-first history load", () => {
     vi.useFakeTimers();
     try {
       const items: ConversationItem[] = [
@@ -1318,7 +1457,8 @@ describe("Messages live behavior", () => {
         vi.advanceTimersByTime(2_100);
       });
 
-      expect(scroller.scrollTop).toBe(400);
+      // 这次写入来自 turn-settle，而不是 history-open 重复初始化。
+      expect(scroller.scrollTop).toBe(4_000 - 720);
     } finally {
       vi.useRealTimers();
     }
@@ -1854,6 +1994,40 @@ describe("Messages live behavior", () => {
     scrollSpy.mockRestore();
   });
 
+  it("does not synthesize a settle boundary when switching from a working thread", () => {
+    const renderWith = (threadId: string, thinking: boolean, messageId: string) => (
+      <Messages
+        items={[
+          { id: messageId, kind: "message", role: "user", text: threadId },
+        ]}
+        threadId={threadId}
+        workspaceId="ws-1"
+        isThinking={thinking}
+        processingStartedAt={thinking ? Date.now() - 1_000 : null}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />
+    );
+    const { container, rerender } = render(
+      renderWith("thread-scope-working", true, "scope-working-user"),
+    );
+    const scroller = getMessagesScroller(container);
+    setScrollerMetrics(scroller, 400, 2400);
+
+    // 预置新会话的 message jump，使 history-open 明确让位给 pending anchor。
+    act(() => {
+      document.dispatchEvent(
+        new CustomEvent<string>("ccgui:jump-to-message", {
+          detail: "scope-idle-user",
+        }),
+      );
+    });
+    rerender(renderWith("thread-scope-idle", false, "scope-idle-user"));
+
+    // working true→false 来自 scope switch，不是同一 turn 的 settle，不能写到底部。
+    expect(scroller.scrollTop).toBe(400);
+  });
+
   it("re-pins to the bottom after the conversation settles and the timeline back-fills", async () => {
     window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
     const scrollSpy = vi
@@ -1913,7 +2087,7 @@ describe("Messages live behavior", () => {
     scrollSpy.mockRestore();
   });
 
-  it("does not re-pin on settle back-fill when the user has scrolled up", async () => {
+  it("re-pins on settle back-fill even when the user scrolled up during streaming", async () => {
     window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
     const scrollSpy = vi
       .spyOn(HTMLElement.prototype, "scrollIntoView")
@@ -1950,20 +2124,24 @@ describe("Messages live behavior", () => {
     // user sends a new turn and scrolls up mid-stream to read history.
     const { container, rerender } = render(renderWith(false, false));
     const scroller = getMessagesScroller(container);
+    let scrollHeight = 2400;
     rerender(renderWith(true, false));
     // User scrolls up to read history during streaming — auto-follow released.
-    setScrollerMetrics(scroller, 400, 2400); // far from the bottom
+    setScrollerMetrics(scroller, 400, () => scrollHeight); // far from the bottom
     fireEvent.scroll(scroller);
 
+    // settle boundary resets the preceding streaming ownership and snaps bottom.
     rerender(renderWith(false, false));
+    expect(scroller.scrollTop).toBe(scrollHeight - 720);
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 380));
     });
 
-    // Curtain back-fills, but the user is not at the bottom: must not yank down.
+    // Deferred curtain back-fill remains inside the settle convergence window.
+    scrollHeight = 3200;
     rerender(renderWith(false, true));
     notifyContentResized();
-    expect(scroller.scrollTop).toBe(400);
+    expect(scroller.scrollTop).toBe(scrollHeight - 720);
     scrollSpy.mockRestore();
   });
 

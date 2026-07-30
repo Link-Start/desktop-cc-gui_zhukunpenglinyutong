@@ -58,6 +58,29 @@ The realtime conversation message canvas MUST keep the active assistant output r
 - **WHEN** the rendered conversation scope changes (workspace or thread switch)
 - **THEN** the system MUST clear the programmatic echo fingerprint ring, geometry snapshot, and user-intent lease before any new convergence run starts
 
+#### Scenario: send boundary deterministically places the viewport at the bottom
+
+- **WHEN** the same rendered conversation scope adds a new pending user message outside history loading or enters working state without a new optimistic user bubble
+- **THEN** the message canvas MUST clear user-scroll intent established before that boundary and start an instant bottom convergence
+- **AND** this placement MUST NOT be blocked by the live auto-follow preference or the viewport's pre-send position
+- **AND** a queued user message added while the current turn remains working MUST trigger the same placement
+- **AND** optimistic-to-canonical replacement with unchanged user-message cardinality MUST NOT trigger a duplicate placement
+- **AND** history-loading settlement MUST NOT be classified as a send boundary
+- **AND** user scroll intent established after the boundary MUST still be able to cancel later convergence rechecks
+
+#### Scenario: settle boundary deterministically restores the final bottom
+
+- **WHEN** the same rendered conversation scope exits working state
+- **THEN** the message canvas MUST clear user-scroll intent established before that boundary and start an instant bottom convergence
+- **AND** deferred presentation settlement, Markdown layout, or late content-height growth inside the settle window MUST be chased to the latest true bottom
+- **AND** this placement MUST NOT be blocked because the user scrolled away during the preceding streaming interval or disabled continuous live auto-follow
+
+#### Scenario: scope switches do not synthesize turn boundaries
+
+- **WHEN** the rendered workspace or thread scope changes while its working state differs from the previous scope
+- **THEN** the message canvas MUST prime the new scope's boundary baseline without emitting a send or settle placement for the old scope
+- **AND** history-open placement remains the authority for the newly selected scope
+
 #### Scenario: adaptive timeline rendering remains disabled until coordinate handoff is safe
 
 - **WHEN** any conversation reaches a row-count or render-weight threshold, enters/exits streaming, carries a legacy manual lightweight selection, or qualifies as oversized
