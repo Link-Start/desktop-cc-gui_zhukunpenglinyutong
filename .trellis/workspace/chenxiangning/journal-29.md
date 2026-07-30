@@ -1355,3 +1355,36 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1237: 修复流式渲染卡顿与终止事件乱序
+
+**Date**: 2026-07-30
+**Task**: 修复流式渲染卡顿与终止事件乱序
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+完成 live text 48ms 发布节奏、Markdown 调度收口、Codex terminal causal barrier、前端 workspace-scoped backpressure、Shared defer 诊断及 OpenSpec/增量测试闭环；按约束未运行全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1537211a1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

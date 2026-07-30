@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-29.md`
-- **Total Sessions**: 1236
+- **Total Sessions**: 1237
 - **Last Active**: 2026-07-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-29.md` | ~1357 | Active |
+| `journal-29.md` | ~1390 | Active |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
@@ -57,6 +57,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1237 | 2026-07-30 | 修复流式渲染卡顿与终止事件乱序 | `1537211a1` | `bump-version-0.7.12` |
 | 1236 | 2026-07-30 | 修复幕布锚点预览与局部凸起 | `c4498f6b1` | `bump-version-0.7.12` |
 | 1235 | 2026-07-30 | 修复消息滚动回声并禁用轻量渲染 | `770a943a1` | `bump-version-0.7.12` |
 | 1234 | 2026-07-30 | 合入上游 v0.7.12 Settings 更新 | `9a2b205fb6ad5a0f63b5bfdbc44265db493ddedf` | `bump-version-0.7.12` |
