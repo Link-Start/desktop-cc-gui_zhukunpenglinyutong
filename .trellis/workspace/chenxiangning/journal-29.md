@@ -1454,3 +1454,51 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1240: 移除会话右键菜单的跨 Provider 续接入口
+
+**Date**: 2026-07-30
+**Task**: 移除会话右键菜单的跨 Provider 续接入口
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Item | Description |
+|------|-------------|
+| 菜单移除 | 删除 showThreadMenu 中 continue-with-provider 子菜单（含 Claude/Codex 目标项与 Kimi 占位项） |
+| 清理 | 移除失效的 toCanonicalProviderProfileSource import、useCallback deps、providerContinuationKimiUnavailable 系列 i18n key（en/zh） |
+| 测试 | 5 个原经右键菜单触发续接对话框的用例改为直接调用 requestProviderContinuationDialog（与 Composer 入口同路径），89 个相关测试全绿 |
+| Spec 同步 | openspec/specs/native-provider-continuation 发起入口 scenario 改为 Composer 单入口 |
+
+**保留入口**：Composer provider 切换（Composer.tsx 中 handleNativeProviderTargetChange）、Provider Continuation Dialog、「查看来源会话」菜单项均不受影响。
+
+**Updated Files**:
+- `src/features/app/hooks/useSidebarMenus.ts`
+- `src/features/app/hooks/useSidebarMenus.test.tsx`
+- `src/i18n/locales/en/threads.ts`
+- `src/i18n/locales/zh/threads.ts`
+- `openspec/specs/native-provider-continuation/spec.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4ad92f021` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
