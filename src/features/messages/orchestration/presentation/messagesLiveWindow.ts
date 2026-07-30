@@ -300,8 +300,8 @@ export function buildLiveTailWorkingSet(
     enableCollaborationBadge?: boolean;
   },
 ) {
-  const { isThinking, visibleWindow } = options;
-  if (!isThinking || visibleWindow <= 0) {
+  const { isThinking, showAllHistoryItems, visibleWindow } = options;
+  if (!isThinking || showAllHistoryItems || visibleWindow <= 0) {
     return {
       items,
       omittedBeforeWorkingSetCount: 0,

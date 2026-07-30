@@ -2364,6 +2364,40 @@ describe("Messages live behavior", () => {
     });
   });
 
+  it("reveals collapsed history when clicked during streaming", async () => {
+    const items: ConversationItem[] = Array.from({ length: 130 }, (_, index) => ({
+      id: `live-history-reveal-${index + 1}`,
+      kind: "message",
+      role: index % 2 === 0 ? "user" : "assistant",
+      text: `live history reveal message ${index + 1}`,
+    }));
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-live-history-reveal"
+        workspaceId="ws-1"
+        isThinking
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const indicator = container.querySelector(".messages-collapsed-indicator");
+    expect(indicator).toBeTruthy();
+    expect(screen.queryByText("live history reveal message 1")).toBeNull();
+    if (!indicator) {
+      return;
+    }
+
+    fireEvent.click(indicator);
+
+    await waitFor(() => {
+      expect(container.querySelector(".messages-collapsed-indicator")).toBeNull();
+      expect(screen.getByText("live history reveal message 1")).toBeTruthy();
+    });
+  });
+
   it("keeps manual history expansion stable even when scroller metrics are non-finite", async () => {
     const items: ConversationItem[] = Array.from({ length: 32 }, (_, index) => ({
       id: `history-reveal-invalid-${index + 1}`,

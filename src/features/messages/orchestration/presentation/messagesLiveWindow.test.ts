@@ -128,7 +128,7 @@ describe("messages live window", () => {
     expect(workingSet.omittedBeforeWorkingSetCount).toBeGreaterThan(0);
   });
 
-  it("bounds streaming history even when show all is enabled, then restores full idle history", () => {
+  it("keeps full history when show all is enabled during streaming", () => {
     const items: ConversationItem[] = [
       userMessage("user-latest", "最新问题"),
       ...Array.from({ length: 80 }, (_, index) =>
@@ -142,19 +142,9 @@ describe("messages live window", () => {
       visibleWindow: 30,
     });
 
-    expect(streaming.items).not.toBe(items);
-    expect(streaming.items.length).toBeLessThan(items.length);
-    expect(streaming.items.some((item) => item.id === "user-latest")).toBe(true);
-    expect(streaming.omittedBeforeWorkingSetCount).toBeGreaterThan(0);
-
-    const idle = buildLiveTailWorkingSet(items, {
-      isThinking: false,
-      showAllHistoryItems: true,
-      visibleWindow: 30,
-    });
-
-    expect(idle.items).toBe(items);
-    expect(idle.omittedBeforeWorkingSetCount).toBe(0);
+    expect(streaming.items).toBe(items);
+    expect(streaming.omittedBeforeWorkingSetCount).toBe(0);
+    expect(streaming.preservedUserMessageId).toBeNull();
   });
 
   it("adds omitted prefix count to rendered collapsed history count", () => {

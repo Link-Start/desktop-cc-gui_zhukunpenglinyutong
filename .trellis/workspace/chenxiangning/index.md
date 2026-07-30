@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-29.md`
-- **Total Sessions**: 1240
+- **Total Sessions**: 1241
 - **Last Active**: 2026-07-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-29.md` | ~1504 | Active |
+| `journal-29.md` | ~1537 | Active |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
@@ -57,6 +57,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1241 | 2026-07-30 | 修复实时历史展开点击 | `422d49f1c` | `bump-version-0.7.12` |
 | 1240 | 2026-07-30 | 移除会话右键菜单的跨 Provider 续接入口 | `4ad92f021` | `bump-version-0.7.12` |
 | 1239 | 2026-07-30 | 修复消息回合边界吸底 | `5aeb5e597` | `bump-version-0.7.12` |
 | 1238 | 2026-07-30 | 修复 Grok 终稿尾段丢失 | `bedfc5a73` | `bump-version-0.7.12` |
