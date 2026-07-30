@@ -802,3 +802,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 68: 统一设置页内容列宽为 980px
+
+**Date**: 2026-07-30
+**Task**: 统一设置页内容列宽为 980px
+**Branch**: `chore/bump-version-0.7.12`
+
+### Summary
+
+设置页列宽原为双事实源：wrap 变量 860px（页头/CLI配置管理/普通 section）与 basic-redesign 980px 覆盖（基础/快捷键/项目管理/智能体/运行环境）。本次将 --settings-content-fixed-width 提为 980px、删除冗余的 1360px 媒体查询与 basic/tabbed 的 980 覆盖（并发会话已提交 8b60dafd8），全部页面与页头共用 min(100%, 980px) 居中列，≤1100px 视口仍回落 100%。另发现 2 个 HEAD 上预存失败测试（sidebar-compact 180 vs 200、file-view-panel-visual-contract）未修。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `75b9ee299` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
