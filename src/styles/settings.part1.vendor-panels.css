@@ -180,6 +180,84 @@
   background: #f7f7f7;
 }
 
+/* Row main button: fills the visual row so the trailing Switch stays a sibling
+ * instead of nesting an interactive control inside the row button. */
+.vendor-engine-tab-main {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vendor-engine-group-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 4px 7px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+}
+
+.vendor-engine-group-header:hover {
+  color: var(--text-secondary);
+}
+
+.vendor-engine-group-chevron {
+  transition: transform 0.15s ease;
+}
+
+.vendor-engine-group-chevron-collapsed {
+  transform: rotate(-90deg);
+}
+
+.vendor-engine-group-collapsed .vendor-engine-group-items {
+  display: none;
+}
+
+.vendor-engine-group-empty {
+  padding: 4px 7px 6px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+/* Row「...」触发器:常驻显示,hover / 菜单打开时高亮。 */
+.vendor-engine-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.vendor-engine-more:hover,
+.vendor-engine-more[data-state="open"] {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--surface-hover) 68%, transparent);
+}
+
 .vendor-engine-icon {
   width: 28px;
   height: 28px;
@@ -1199,6 +1277,19 @@
 
   .vendor-engine-tab {
     justify-content: center;
+  }
+
+  /* 横排导航不出组 header：组容器透明化，items 按组序平铺；
+   * 折叠状态在移动端不生效（用户经搜索仍可触达暂未开放项）。 */
+  .vendor-engine-group,
+  .vendor-engine-group-items,
+  .vendor-engine-group-collapsed .vendor-engine-group-items {
+    display: contents;
+  }
+
+  .vendor-engine-group-header,
+  .vendor-engine-group-empty {
+    display: none;
   }
 
   .vendor-settings-content {

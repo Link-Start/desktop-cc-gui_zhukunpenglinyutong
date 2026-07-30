@@ -41,9 +41,8 @@ beforeEach(() => {
 function baseSettings(): AppSettings {
   return {
     backendMode: "local",
-    geminiEnabled: true,
-    opencodeEnabled: true,
-  } as AppSettings;
+    disabledCliEngines: [],
+  } as unknown as AppSettings;
 }
 
 function t(key: string) {

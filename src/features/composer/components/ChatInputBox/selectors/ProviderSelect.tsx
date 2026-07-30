@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { AVAILABLE_PROVIDERS } from '../types';
 import type { ProviderId } from '../types';
 import { EngineIcon } from '../../../../engine/components/EngineIcon';
+import { useCliEngineVisibility } from '../../../hooks/cliEngineVisibilityStore';
 
 interface ProviderSelectProps {
   value: string;
@@ -56,6 +57,7 @@ export const ProviderSelect = ({
   const [toastMessage, setToastMessage] = useState('');
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const disabledCliEngineIds = useCliEngineVisibility();
 
   const providers = AVAILABLE_PROVIDERS.map((provider) => ({
     ...provider,
@@ -64,8 +66,12 @@ export const ProviderSelect = ({
     statusLabel: providerStatusLabels?.[provider.id] ?? null,
     disabledMessage: providerDisabledMessages?.[provider.id] ?? null,
   }));
+  // 用户在「CLI配置管理」停用的引擎不下拉展示;当前选中引擎即使已停用仍兜底显示,
+  // 保证进行中的会话不受开关影响。
   const visibleProviders = providers.filter(
-    (provider) => provider.enabled || provider.id === value,
+    (provider) =>
+      provider.id === value ||
+      (!disabledCliEngineIds.has(provider.id) && provider.enabled),
   );
   const currentProvider =
     visibleProviders.find((provider) => provider.id === value) ??

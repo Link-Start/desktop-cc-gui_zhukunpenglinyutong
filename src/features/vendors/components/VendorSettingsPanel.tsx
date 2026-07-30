@@ -6,7 +6,7 @@ import ArrowLeftRight from "lucide-react/dist/esm/icons/arrow-left-right";
 import File from "lucide-react/dist/esm/icons/file";
 import Import from "lucide-react/dist/esm/icons/import";
 import Search from "lucide-react/dist/esm/icons/search";
-import type { CodexCustomModel, CodexProviderConfig } from "../types";
+import type { CodexCustomModel, CodexProviderConfig, VendorTab } from "../types";
 import { LOCAL_GROK_PROVIDER_ID, LOCAL_KIMI_PROVIDER_ID, LOCAL_OPENCODE_PROVIDER_ID, STORAGE_KEYS, validateCodexCustomModels } from "../types";
 import type { AppSettings, CodexUnifiedExecExternalStatus } from "../../../types";
 import { useProviderManagement } from "../hooks/useProviderManagement";
@@ -35,8 +35,12 @@ import { CurrentCodexGlobalConfigCard } from "./CurrentCodexGlobalConfigCard";
 import {
   CLI_DOCS_HREF_BY_ID,
   buildCliEngineNavItems,
+  CliEngineNavGroupSection,
+  CliEngineNavRow,
   CliIcon,
+  groupCliEngineNavItems,
   type CliEngineId,
+  type CliEngineNavGroupKey,
   type CliEngineNavItem,
 } from "./cliEngineNav";
 import {
@@ -178,6 +182,13 @@ export function VendorSettingsPanel({
   const { t } = useTranslation();
   const [activeCli, setActiveCli] = useState<CliEngineId>("claude");
   const [cliSearchQuery, setCliSearchQuery] = useState("");
+  const [collapsedCliGroups, setCollapsedCliGroups] = useState<
+    Record<CliEngineNavGroupKey, boolean>
+  >({
+    enabled: false,
+    disabled: true,
+    upcoming: true,
+  });
   const [dialogTarget, setDialogTarget] = useState<ModelDialogTarget>("claude");
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const [modelDialogAddMode, setModelDialogAddMode] = useState(false);
@@ -604,6 +615,58 @@ export function VendorSettingsPanel({
     );
   }, [cliSearchQuery, engineNavItems]);
 
+  const isCliSearchActive = cliSearchQuery.trim().length > 0;
+  const disabledCliEngineIds = useMemo(
+    () => appSettings.disabledCliEngines ?? [],
+    [appSettings.disabledCliEngines],
+  );
+  const disabledCliEngineIdSet = useMemo(
+    () => new Set(disabledCliEngineIds),
+    [disabledCliEngineIds],
+  );
+  const cliEngineNavGroups = useMemo(
+    () => groupCliEngineNavItems(engineNavItems, disabledCliEngineIds),
+    [engineNavItems, disabledCliEngineIds],
+  );
+  // 「未启用」默认折叠,但当用户刚停用一个 CLI(组内数量增加)时自动展开一次,
+  // 让被停用的行有可见归宿;首次挂载(含重启后)只记录基线,不自动展开。
+  const prevDisabledCliCountRef = useRef<number | null>(null);
+  useEffect(() => {
+    const count = cliEngineNavGroups.disabled.length;
+    if (prevDisabledCliCountRef.current === null) {
+      prevDisabledCliCountRef.current = count;
+      return;
+    }
+    if (count > prevDisabledCliCountRef.current) {
+      setCollapsedCliGroups((prev) => ({ ...prev, disabled: false }));
+    }
+    prevDisabledCliCountRef.current = count;
+  }, [cliEngineNavGroups.disabled.length]);
+  const toggleCliGroup = useCallback((key: CliEngineNavGroupKey) => {
+    setCollapsedCliGroups((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+  const handleToggleCliEngine = useCallback(
+    (engineId: VendorTab, enabled: boolean) => {
+      const current = appSettings.disabledCliEngines ?? [];
+      const next = enabled
+        ? current.filter((id) => id !== engineId)
+        : current.includes(engineId)
+          ? current
+          : [...current, engineId];
+      void onUpdateAppSettings({ ...appSettings, disabledCliEngines: next });
+    },
+    [appSettings, onUpdateAppSettings],
+  );
+  const cliMoreActionsLabel = t("settings.vendor.cliMoreActions", {
+    defaultValue: "更多操作",
+  });
+  const cliDisableLabel = t("settings.vendor.cliDisableEngine", {
+    defaultValue: "关闭启用",
+  });
+  const cliEnableLabel = t("settings.vendor.cliEnableEngine", {
+    defaultValue: "启用",
+  });
+
   return (
     <div
       className={cn(
@@ -633,35 +696,74 @@ export function VendorSettingsPanel({
             onChange={(event) => setCliSearchQuery(event.currentTarget.value)}
           />
         </label>
-        {filteredEngineNavItems.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            className={cn(
-              "vendor-engine-tab flex w-full items-center text-left text-foreground transition-colors",
-              "max-md:flex-1",
-              activeCli === item.key && "vendor-engine-tab-active",
-              !item.supported && "vendor-engine-tab-upcoming",
-            )}
-            aria-current={activeCli === item.key ? "true" : undefined}
-            onClick={() => setActiveCli(item.key)}
-          >
-            <span className="vendor-engine-icon flex shrink-0 items-center justify-center border bg-background">
-              <CliIcon
-                id={item.key}
-                label={item.label}
-                monochrome={!item.supported}
-              />
-            </span>
-            <span className="min-w-0 flex-1 truncate">{item.label}</span>
-            {item.supported && item.hasConfig ? (
-              <span
-                className="size-1.5 shrink-0 rounded-full bg-emerald-500"
-                aria-hidden="true"
+        {isCliSearchActive ? (
+          filteredEngineNavItems.map((item) => (
+            <CliEngineNavRow
+              key={item.key}
+              item={item}
+              active={activeCli === item.key}
+              disabledIds={disabledCliEngineIdSet}
+              moreLabel={cliMoreActionsLabel}
+              disableLabel={cliDisableLabel}
+              enableLabel={cliEnableLabel}
+              onSelectCli={setActiveCli}
+              onToggleCliEnabled={handleToggleCliEngine}
+            />
+          ))
+        ) : (
+          <>
+            <CliEngineNavGroupSection
+              label={t("settings.vendor.cliGroupEnabled", {
+                defaultValue: "已启用",
+              })}
+              items={cliEngineNavGroups.enabled}
+              collapsed={collapsedCliGroups.enabled}
+              activeCli={activeCli}
+              disabledIds={disabledCliEngineIdSet}
+              moreLabel={cliMoreActionsLabel}
+              disableLabel={cliDisableLabel}
+              enableLabel={cliEnableLabel}
+              emptyHint={t("settings.vendor.cliGroupEnabledEmpty", {
+                defaultValue: "没有已启用的 CLI",
+              })}
+              onToggleGroup={() => toggleCliGroup("enabled")}
+              onSelectCli={setActiveCli}
+              onToggleCliEnabled={handleToggleCliEngine}
+            />
+            {cliEngineNavGroups.disabled.length > 0 ? (
+              <CliEngineNavGroupSection
+                label={t("settings.vendor.cliGroupDisabled", {
+                  defaultValue: "未启用",
+                })}
+                items={cliEngineNavGroups.disabled}
+                collapsed={collapsedCliGroups.disabled}
+                activeCli={activeCli}
+                disabledIds={disabledCliEngineIdSet}
+                moreLabel={cliMoreActionsLabel}
+                disableLabel={cliDisableLabel}
+                enableLabel={cliEnableLabel}
+                onToggleGroup={() => toggleCliGroup("disabled")}
+                onSelectCli={setActiveCli}
+                onToggleCliEnabled={handleToggleCliEngine}
               />
             ) : null}
-          </button>
-        ))}
+            <CliEngineNavGroupSection
+              label={t("settings.vendor.cliGroupUpcoming", {
+                defaultValue: "暂未开放",
+              })}
+              items={cliEngineNavGroups.upcoming}
+              collapsed={collapsedCliGroups.upcoming}
+              activeCli={activeCli}
+              disabledIds={disabledCliEngineIdSet}
+              moreLabel={cliMoreActionsLabel}
+              disableLabel={cliDisableLabel}
+              enableLabel={cliEnableLabel}
+              onToggleGroup={() => toggleCliGroup("upcoming")}
+              onSelectCli={setActiveCli}
+              onToggleCliEnabled={handleToggleCliEngine}
+            />
+          </>
+        )}
       </nav>
 
       <div className="vendor-settings-content min-w-0 flex-1 min-h-0">

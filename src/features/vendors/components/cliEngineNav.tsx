@@ -18,7 +18,15 @@ import piCliMonoIcon from "@lobehub/icons-static-svg/icons/pi.svg";
 import qoderCliMonoIcon from "@lobehub/icons-static-svg/icons/qoder.svg";
 import qwenCliMonoIcon from "@lobehub/icons-static-svg/icons/qwen.svg";
 import traeCliMonoIcon from "@lobehub/icons-static-svg/icons/trae.svg";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
+import Ellipsis from "lucide-react/dist/esm/icons/ellipsis";
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { VendorTab } from "../types";
 
 type UnsupportedCliEngineId =
@@ -42,6 +50,48 @@ export type CliEngineId = VendorTab | UnsupportedCliEngineId;
 export type CliEngineNavItem =
   | { key: VendorTab; label: string; hasConfig: boolean; supported: true; docsUrl: string }
   | { key: UnsupportedCliEngineId; label: string; supported: false; docsUrl: string };
+
+export type SupportedCliEngineNavItem = Extract<
+  CliEngineNavItem,
+  { supported: true }
+>;
+export type UnsupportedCliEngineNavItem = Extract<
+  CliEngineNavItem,
+  { supported: false }
+>;
+
+export type CliEngineNavGroupKey = "enabled" | "disabled" | "upcoming";
+
+export type CliEngineNavGroups = {
+  enabled: SupportedCliEngineNavItem[];
+  disabled: SupportedCliEngineNavItem[];
+  upcoming: UnsupportedCliEngineNavItem[];
+};
+
+/**
+ * 把平铺 nav items 按「用户意愿 × supported」分三组：
+ * 已启用（supported 且未停用）/ 未启用（supported 且已停用）/ 暂未开放（unsupported）。
+ * 组内保持注册表固定顺序，不做智能排序。
+ */
+export function groupCliEngineNavItems(
+  items: CliEngineNavItem[],
+  disabledCliEngineIds: readonly string[],
+): CliEngineNavGroups {
+  const disabledIds = new Set(disabledCliEngineIds);
+  const enabled: SupportedCliEngineNavItem[] = [];
+  const disabled: SupportedCliEngineNavItem[] = [];
+  const upcoming: UnsupportedCliEngineNavItem[] = [];
+  for (const item of items) {
+    if (!item.supported) {
+      upcoming.push(item);
+    } else if (disabledIds.has(item.key)) {
+      disabled.push(item);
+    } else {
+      enabled.push(item);
+    }
+  }
+  return { enabled, disabled, upcoming };
+}
 
 export const CLI_DOCS_HREF_BY_ID: Record<CliEngineId, string> = {
   claude: "https://code.claude.com/docs/en/cli-reference",
@@ -170,5 +220,155 @@ export function CliIcon({
     >
       {label.charAt(0)}
     </span>
+  );
+}
+
+type CliEngineNavRowProps = {
+  item: CliEngineNavItem;
+  active: boolean;
+  disabledIds: ReadonlySet<string>;
+  moreLabel: string;
+  disableLabel: string;
+  enableLabel: string;
+  onSelectCli: (id: CliEngineId) => void;
+  onToggleCliEnabled: (id: VendorTab, enabled: boolean) => void;
+};
+
+/**
+ * 单行 CLI nav row：视觉容器内放「选中主按钮 + 兄弟 hover「...」菜单」，
+ * 避免 button 嵌套 button 的非法结构;菜单只控制前台可见性,默认收起不打扰。
+ */
+export function CliEngineNavRow({
+  item,
+  active,
+  disabledIds,
+  moreLabel,
+  disableLabel,
+  enableLabel,
+  onSelectCli,
+  onToggleCliEnabled,
+}: CliEngineNavRowProps) {
+  return (
+    <div
+      className={cn(
+        "vendor-engine-tab flex w-full items-center text-left text-foreground transition-colors",
+        "max-md:flex-1",
+        active && "vendor-engine-tab-active",
+        !item.supported && "vendor-engine-tab-upcoming",
+      )}
+    >
+      <button
+        type="button"
+        className="vendor-engine-tab-main"
+        aria-current={active ? "true" : undefined}
+        onClick={() => onSelectCli(item.key)}
+      >
+        <span className="vendor-engine-icon flex shrink-0 items-center justify-center border bg-background">
+          <CliIcon
+            id={item.key}
+            label={item.label}
+            monochrome={!item.supported}
+          />
+        </span>
+        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+      </button>
+      {item.supported ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="vendor-engine-more"
+              aria-label={moreLabel}
+            >
+              <Ellipsis size={14} aria-hidden="true" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" side="bottom">
+            <DropdownMenuItem
+              onSelect={() =>
+                onToggleCliEnabled(item.key, disabledIds.has(item.key))
+              }
+            >
+              {disabledIds.has(item.key) ? enableLabel : disableLabel}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
+    </div>
+  );
+}
+
+type CliEngineNavGroupSectionProps = {
+  label: string;
+  items: CliEngineNavItem[];
+  collapsed: boolean;
+  activeCli: CliEngineId;
+  disabledIds: ReadonlySet<string>;
+  moreLabel: string;
+  disableLabel: string;
+  enableLabel: string;
+  emptyHint?: string;
+  onToggleGroup: () => void;
+  onSelectCli: (id: CliEngineId) => void;
+  onToggleCliEnabled: (id: VendorTab, enabled: boolean) => void;
+};
+
+export function CliEngineNavGroupSection({
+  label,
+  items,
+  collapsed,
+  activeCli,
+  disabledIds,
+  moreLabel,
+  disableLabel,
+  enableLabel,
+  emptyHint,
+  onToggleGroup,
+  onSelectCli,
+  onToggleCliEnabled,
+}: CliEngineNavGroupSectionProps) {
+  return (
+    <div
+      className={cn(
+        "vendor-engine-group",
+        collapsed && "vendor-engine-group-collapsed",
+      )}
+    >
+      <button
+        type="button"
+        className="vendor-engine-group-header"
+        aria-expanded={!collapsed}
+        onClick={onToggleGroup}
+      >
+        <ChevronDown
+          size={12}
+          aria-hidden="true"
+          className={cn(
+            "vendor-engine-group-chevron",
+            collapsed && "vendor-engine-group-chevron-collapsed",
+          )}
+        />
+        <span>{label}</span>
+      </button>
+      <div className="vendor-engine-group-items">
+        {items.length === 0 && emptyHint ? (
+          <div className="vendor-engine-group-empty">{emptyHint}</div>
+        ) : (
+          items.map((item) => (
+            <CliEngineNavRow
+              key={item.key}
+              item={item}
+              active={activeCli === item.key}
+              disabledIds={disabledIds}
+              moreLabel={moreLabel}
+              disableLabel={disableLabel}
+              enableLabel={enableLabel}
+              onSelectCli={onSelectCli}
+              onToggleCliEnabled={onToggleCliEnabled}
+            />
+          ))
+        )}
+      </div>
+    </div>
   );
 }

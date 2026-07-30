@@ -24,19 +24,19 @@ describe("MessagesAnchorRail styles", () => {
       /\.messages-anchor-item\s*\{[\s\S]*position:\s*relative;[\s\S]*flex:\s*0 0 8px;[\s\S]*height:\s*8px;/,
     );
     expect(statusCss).toMatch(
-      /\.messages-anchor-dash::before\s*\{[\s\S]*width:\s*6px;[\s\S]*height:\s*2px;/,
+      /\.messages-anchor-dash::before\s*\{[\s\S]*width:\s*14px;[\s\S]*height:\s*2px;/,
     );
     expect(statusCss).toMatch(
-      /\.messages-anchor-dash\.is-proximity-3::before\s*\{[\s\S]*width:\s*8px;/,
+      /\.messages-anchor-dash\.is-proximity-3::before\s*\{[\s\S]*width:\s*18px;/,
     );
     expect(statusCss).toMatch(
-      /\.messages-anchor-dash\.is-proximity-2::before\s*\{[\s\S]*width:\s*12px;/,
+      /\.messages-anchor-dash\.is-proximity-2::before\s*\{[\s\S]*width:\s*22px;/,
     );
     expect(statusCss).toMatch(
-      /\.messages-anchor-dash\.is-proximity-1::before\s*\{[\s\S]*width:\s*20px;/,
+      /\.messages-anchor-dash\.is-proximity-1::before\s*\{[\s\S]*width:\s*26px;/,
     );
     expect(statusCss).toMatch(
-      /\.messages-anchor-dash\.is-proximity-0::before,[\s\S]*\.messages-anchor-dash:hover::before,[\s\S]*\.messages-anchor-dash:focus-visible::before\s*\{[\s\S]*width:\s*26px;/,
+      /\.messages-anchor-dash\.is-proximity-0::before,[\s\S]*\.messages-anchor-dash:hover::before,[\s\S]*\.messages-anchor-dash:focus-visible::before\s*\{[\s\S]*width:\s*32px;/,
     );
     const activeDashRule =
       statusCss.match(/\.messages-anchor-dash\.is-active::before\s*\{([^}]*)\}/)?.[1] ??
