@@ -1711,3 +1711,45 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1247: 修复 Grok 历史工具投影信息损失
+
+**Date**: 2026-07-31
+**Task**: 修复 Grok 历史工具投影信息损失
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+将 Grok specialized toolType 改为 exact allowlist，保留未知真实工具名；补齐 list_dir target_directory 展示与回归测试；focused Vitest 26 passed，targeted ESLint 与 OpenSpec strict validate 通过。
+
+### Main Changes
+
+- `grokHistoryParser.ts` 将 specialized `toolType` 推断改为 exact allowlist，避免
+  `get_command_or_subagent_output` / `todo_write` 被 substring heuristic 误分类。
+- `ReadToolGroupBlock` 补齐 `target_directory` / `targetDirectory` / `directory` /
+  `dir`，并将 `list_dir` 明确显示为 `List`。
+- 新增 parser 与 render-level regression tests，并同步校准
+  `fix-grok-history-tool-projection` OpenSpec artifacts。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ad2cceff8` | fix(grok): 修复历史工具投影信息损失 |
+
+### Testing
+
+- [OK] `npx vitest run src/features/threads/loaders/grokHistoryParser.test.ts src/features/messages/components/toolBlocks/ReadToolGroupBlock.test.tsx src/utils/toolSemantics.test.ts src/features/messages/utils/groupToolItems.test.ts --reporter=verbose`（4 files / 26 tests）
+- [OK] targeted ESLint（4 touched TypeScript files）
+- [OK] `openspec validate fix-grok-history-tool-projection --strict --no-interactive`
+- [OK] `git diff --check`
+- [SKIP] 全量 test / typecheck（按用户要求仅跑增量测试）
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- OpenSpec task `4.1` 仍待后续 verify / sync / archive。
