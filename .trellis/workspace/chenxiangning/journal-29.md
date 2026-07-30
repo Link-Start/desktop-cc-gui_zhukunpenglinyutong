@@ -1645,3 +1645,36 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1245: 长幕布 idle 虚拟化缓解滚动阻滞
+
+**Date**: 2026-07-31
+**Task**: 长幕布 idle 虚拟化缓解滚动阻滞
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+恢复 idle 长历史 timeline 虚拟化（流式期仍 static），补 initialOffset=scrollTop，收紧 content-visibility 估高，降低长幕布滚动全量 DOM 成本。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4e932e672` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
