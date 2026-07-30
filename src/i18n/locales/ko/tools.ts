@@ -32,6 +32,8 @@ const tools = {
     "batchSearch": "일괄 검색",
     "batchSearchMatch": "일괄 검색/일치",
     "batchEditFile": "파일 일괄 편집",
+    "fileEditSceneCount": "파일 수정 ({{count}}개)",
+    "fileEditSceneToggle": "파일 수정 {{count}}개, 상세 펼치기/접기",
     "bashGroupBatchRun": "명령 일괄 실행",
     "bashGroupCompleted": "완료됨",
     "bashGroupAllCompleted": "모두 완료됨",

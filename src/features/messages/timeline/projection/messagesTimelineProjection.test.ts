@@ -32,6 +32,34 @@ describe("messagesTimelineProjection", () => {
     expect(rows.at(-1)?.kind).toBe("bottomAnchor");
   });
 
+  it("keeps editGroup projection key stable when the group grows", () => {
+    const first = {
+      id: "edit-1",
+      kind: "tool" as const,
+      toolType: "edit" as const,
+      title: "Tool: edit",
+      detail: JSON.stringify({ file_path: "a.ts", old_string: "a", new_string: "b" }),
+      status: "completed" as const,
+    };
+    const second = {
+      id: "edit-2",
+      kind: "tool" as const,
+      toolType: "edit" as const,
+      title: "Tool: edit",
+      detail: JSON.stringify({ file_path: "b.ts", old_string: "a", new_string: "b" }),
+      status: "completed" as const,
+    };
+
+    const small = groupToolItems([first]);
+    const grown = groupToolItems([first, second]);
+    expect(small[0]?.kind).toBe("editGroup");
+    expect(grown[0]?.kind).toBe("editGroup");
+    expect(getGroupedEntryProjectionKey(small[0]!)).toBe(
+      getGroupedEntryProjectionKey(grown[0]!),
+    );
+    expect(getGroupedEntryProjectionKey(grown[0]!)).toBe("editGroup:edit-1");
+  });
+
   it("marks active user input anchor without moving the owning entry", () => {
     const entries = groupToolItems(buildLongListFixture(9));
     const rows = buildTimelineProjectionRows({

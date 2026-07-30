@@ -8,15 +8,31 @@ import { asRecord, asString } from "./historyLoaderUtils";
 import { parseClaudeHistoryMessages } from "./claudeHistoryLoader";
 
 const RESULT_TOOL_SUFFIXES = ["-result", ":result", "_result", ".result", "/result"];
-const COMMAND_TOOL_KEYWORDS = [
+const COMMAND_TOOL_TYPES = new Set([
   "exec",
+  "exec_command",
   "bash",
   "shell",
+  "shell_command",
   "terminal",
   "command",
+  "execute_command",
+  "run_command",
+  "run_terminal_cmd",
+  "run_terminal_command",
   "stdin",
-];
-const FILE_CHANGE_TOOL_KEYWORDS = ["apply", "patch", "write", "edit"];
+  "write_stdin",
+]);
+const FILE_CHANGE_TOOL_TYPES = new Set([
+  "apply",
+  "apply_patch",
+  "patch",
+  "write",
+  "write_file",
+  "write_to_file",
+  "edit",
+  "edit_file",
+]);
 
 function mergeAdjacentReasoningText(existing: string, incoming: string): string {
   const normalizedExisting = existing.trim();
@@ -245,14 +261,10 @@ function normalizeGrokToolSnapshotType(rawToolType: string): string {
   if (normalized === "mcptoolcall") {
     return "mcpToolCall";
   }
-  if (COMMAND_TOOL_KEYWORDS.some((keyword) => normalized.includes(keyword))) {
+  if (COMMAND_TOOL_TYPES.has(normalized)) {
     return "commandExecution";
   }
-  if (
-    FILE_CHANGE_TOOL_KEYWORDS.some((keyword) => normalized.includes(keyword)) ||
-    normalized.startsWith("replace-") ||
-    normalized.includes("replace-")
-  ) {
+  if (FILE_CHANGE_TOOL_TYPES.has(normalized)) {
     return "fileChange";
   }
   return rawToolType;

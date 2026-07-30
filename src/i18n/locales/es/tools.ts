@@ -32,6 +32,8 @@ const tools = {
     "batchSearch": "Búsqueda por lotes",
     "batchSearchMatch": "Búsqueda/coincidencia por lotes",
     "batchEditFile": "Editar archivos por lotes",
+    "fileEditSceneCount": "Cambios de archivo ({{count}})",
+    "fileEditSceneToggle": "Cambios de archivo, {{count}} archivos, expandir o contraer",
     "bashGroupBatchRun": "Ejecutar comandos por lotes",
     "bashGroupCompleted": "completado",
     "bashGroupAllCompleted": "Todos completados",

@@ -32,6 +32,8 @@ const tools = {
     "batchSearch": "一括検索",
     "batchSearchMatch": "一括検索/マッチ",
     "batchEditFile": "ファイルを一括編集",
+    "fileEditSceneCount": "ファイル変更（{{count}}）",
+    "fileEditSceneToggle": "ファイル変更 {{count}} 件、詳細を切り替え",
     "bashGroupBatchRun": "コマンドを一括実行",
     "bashGroupCompleted": "完了",
     "bashGroupAllCompleted": "すべて完了",

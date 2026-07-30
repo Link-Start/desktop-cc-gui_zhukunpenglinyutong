@@ -1568,3 +1568,188 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1243: 幕布文件修改场景默认折叠
+
+**Date**: 2026-07-31
+**Task**: 幕布文件修改场景默认折叠
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| OpenSpec | `add-message-file-edit-scene-collapse`（proposal/design/specs/tasks） |
+| 行为 | 幕布文件修改默认折叠为「文件修改（N 个）」；edit+fileChange 同桶智能合并 |
+| 优化 | 折叠懒解析 diff；editGroup 投影 key 稳定；失败/进行中 status 聚合 |
+| 范围外 | 未纳入 `repair-grok-canvas-tools-and-file-edit-collapse` |
+
+**关键文件**:
+- `groupToolItems.ts` / `EditToolGroupBlock.tsx` / `fileEditSceneUtils.ts`
+- `ToolMarkerShell.tsx` / `messagesTimelineProjection.ts`
+- i18n `tools.fileEditSceneCount`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `63461ec54` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1244: 修复 Grok 历史 tool 扁平解析
+
+**Date**: 2026-07-31
+**Task**: 修复 Grok 历史 tool 扁平解析
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+修复 Grok chat_history tool_calls 只读 nested function 导致历史幕布整批显示 Tool 的问题；兼容 flat/nested，扩展 list_dir/search_replace/run_terminal_command 分类以进入既有分组渲染。OpenSpec: fix-grok-history-tool-projection。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0d4765346` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1245: 长幕布 idle 虚拟化缓解滚动阻滞
+
+**Date**: 2026-07-31
+**Task**: 长幕布 idle 虚拟化缓解滚动阻滞
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+恢复 idle 长历史 timeline 虚拟化（流式期仍 static），补 initialOffset=scrollTop，收紧 content-visibility 估高，降低长幕布滚动全量 DOM 成本。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4e932e672` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1246: 修复对话结束滚动乱跳未贴底
+
+**Date**: 2026-07-31
+**Task**: 修复对话结束滚动乱跳未贴底
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+回合 settle 窗口内防止 scrollHeight 暴涨误解除 autoScroll；virtual 布局钉底保留 turn-settle 并在窗口内重钉底部。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d38d0f9b9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1247: 修复 Grok 历史工具投影信息损失
+
+**Date**: 2026-07-31
+**Task**: 修复 Grok 历史工具投影信息损失
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+将 Grok specialized toolType 改为 exact allowlist，保留未知真实工具名；补齐 list_dir target_directory 展示与回归测试；focused Vitest 26 passed，targeted ESLint 与 OpenSpec strict validate 通过。
+
+### Main Changes
+
+- `grokHistoryParser.ts` 将 specialized `toolType` 推断改为 exact allowlist，避免
+  `get_command_or_subagent_output` / `todo_write` 被 substring heuristic 误分类。
+- `ReadToolGroupBlock` 补齐 `target_directory` / `targetDirectory` / `directory` /
+  `dir`，并将 `list_dir` 明确显示为 `List`。
+- 新增 parser 与 render-level regression tests，并同步校准
+  `fix-grok-history-tool-projection` OpenSpec artifacts。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ad2cceff8` | fix(grok): 修复历史工具投影信息损失 |
+
+### Testing
+
+- [OK] `npx vitest run src/features/threads/loaders/grokHistoryParser.test.ts src/features/messages/components/toolBlocks/ReadToolGroupBlock.test.tsx src/utils/toolSemantics.test.ts src/features/messages/utils/groupToolItems.test.ts --reporter=verbose`（4 files / 26 tests）
+- [OK] targeted ESLint（4 touched TypeScript files）
+- [OK] `openspec validate fix-grok-history-tool-projection --strict --no-interactive`
+- [OK] `git diff --check`
+- [SKIP] 全量 test / typecheck（按用户要求仅跑增量测试）
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- OpenSpec task `4.1` 仍待后续 verify / sync / archive。

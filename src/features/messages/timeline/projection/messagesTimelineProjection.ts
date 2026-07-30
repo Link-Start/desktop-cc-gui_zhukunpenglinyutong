@@ -72,6 +72,11 @@ export function getGroupedEntryProjectionKey(entry: GroupedEntry): string {
     return `${entry.kind}:${entry.item.kind}:${entry.item.id}:${task?.taskId ?? task?.toolUseId ?? ""}`;
   }
   const firstId = entry.items[0]?.id ?? "empty";
+  // editGroup：仅用 firstId 锚定投影 identity。
+  // streaming 时文件数增长若写入 lastId/length，会 remount 并丢掉用户展开态。
+  if (entry.kind === "editGroup") {
+    return `${entry.kind}:${firstId}`;
+  }
   const lastId = entry.items.at(-1)?.id ?? firstId;
   return `${entry.kind}:${firstId}:${lastId}:${entry.items.length}`;
 }

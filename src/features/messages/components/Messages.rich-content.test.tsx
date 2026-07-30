@@ -1162,6 +1162,12 @@ describe("Messages rich content", () => {
       />,
     );
 
+    // 场景默认折叠，先展开再断言文件名
+    const sceneHeader = screen.getByRole("button", {
+      name: /tools\.fileEditSceneToggle|File changes|文件修改/i,
+    });
+    fireEvent.click(sceneHeader);
+
     // 文件名统一为纯文本：不再存在可点跳转的 diff 链接按钮
     expect(screen.queryByRole("button", { name: "App.tsx" })).toBeNull();
     expect(screen.getByText("App.tsx")).toBeTruthy();

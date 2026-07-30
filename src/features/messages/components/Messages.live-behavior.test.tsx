@@ -495,7 +495,23 @@ describe("Messages live behavior", () => {
     expect(container.querySelector(".bash-group-container")).toBeNull();
     expect(container.textContent ?? "").not.toContain("pwd && ls -la");
     expect(container.textContent ?? "").not.toContain("echo done");
+    // File edits render in a default-collapsed scene shell; expand to assert path.
+    const editScene = container.querySelector(
+      '[data-testid="file-edit-scene-list"]',
+    )?.previousElementSibling as HTMLElement | null;
+    const editToggle =
+      container.querySelector('[aria-expanded="false"]') ??
+      Array.from(container.querySelectorAll("button, [role='button']")).find(
+        (node) =>
+          (node.textContent ?? "").includes("文件修改") ||
+          (node.textContent ?? "").includes("File changes") ||
+          (node.textContent ?? "").includes("fileEditSceneCount"),
+      );
+    if (editToggle) {
+      fireEvent.click(editToggle);
+    }
     expect(container.textContent ?? "").toContain("keep.ts");
+    void editScene;
   });
 
   it("hides command cards in claude canvas", () => {

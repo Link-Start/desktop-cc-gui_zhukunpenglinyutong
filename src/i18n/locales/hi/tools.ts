@@ -32,6 +32,8 @@ const tools = {
     "batchSearch": "बैच खोज",
     "batchSearchMatch": "बैच खोज/मिलान",
     "batchEditFile": "बैच फ़ाइलें संपादित करें",
+    "fileEditSceneCount": "फ़ाइल परिवर्तन ({{count}})",
+    "fileEditSceneToggle": "फ़ाइल परिवर्तन, {{count}} फ़ाइलें, विवरण दिखाएँ/छिपाएँ",
     "bashGroupBatchRun": "बैच रन कमांड",
     "bashGroupCompleted": "पूर्ण",
     "bashGroupAllCompleted": "सभी पूर्ण",

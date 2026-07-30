@@ -52,6 +52,9 @@ export function useMessagesTimelineVirtualizer(input: {
   const timelineVirtualizer = useVirtualizer({
     count: shouldVirtualizeTimeline ? timelineProjectionRows.length : 0,
     enabled: shouldVirtualizeTimeline,
+    // Preserve viewport when static → virtual attaches; default initialOffset=0
+    // was the main reason adaptive rendering was hard-disabled.
+    initialOffset: () => scrollElementRef.current?.scrollTop ?? 0,
     estimateSize: (index) => {
       const projectionRow = timelineProjectionRows[index];
       if (!projectionRow) {
