@@ -835,3 +835,60 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 69: 重做供应商设置面板并支持 CC Switch 文件导入
+
+**Date**: 2026-07-30
+**Task**: 重做供应商设置面板并支持 CC Switch 文件导入
+**Branch**: `chore/bump-version-0.7.12`
+
+### Summary
+
+供应商设置页重做: CC Switch 手动选文件导入(按 id 匹配去重)、取消授权伪供应商、官方直连预设、品牌图标、预设模型更新(fable/glm-5.2/kimi-k3/deepseek-v4)、Codex sortOrder 排序, 46 文件 +4419/-1315
+
+### Main Changes
+
+### Main Changes
+
+- CC Switch 导入: 新增 `vendor_list_cc_switch_providers_from_path` 命令, 支持用户手动选择 `.json`(legacy) / SQLite `.db` 文件导入, 解析失败按不可用空态处理; 前端去重从 name+baseUrl 改为按 id 匹配新增/更新, 面板入口改 DropdownMenu 选择导入源
+- 取消授权: 新增 `__disabled__` 伪供应商(前后端 `DISABLED_PROVIDER_ID`), 仅用于清空 current 标记, 不出现在列表
+- 官方直连: 新增 `OFFICIAL_DIRECT_PRESET_ID` 预设(锁定 Anthropic 官方端点) 与 `VendorOfficialConfigCard` / `ClaudeLocalSettingsCard` 组件
+- 品牌图标: 新增 `providerBrandIcon.ts` 映射与 `ProviderBrandIconImg` 组件
+- 预设模型更新: 新增 `ANTHROPIC_DEFAULT_FABLE_MODEL` env; glm-5.2 / kimi-k3 / 新增 kimi-coding 预设(262144 上下文) / deepseek-v4-pro / MiniMax 50 分钟超时注释
+- Codex 供应商: 支持 `sortOrder` 排序(后端排序键从 created_at 改为 sort_order + created_at 兜底) 与 `source` 字段
+- 重构 ProviderList / ProviderDialog / CodexProviderList / CodexProviderDialog / VendorSettingsPanel / CcSwitchImportDialog
+- 补齐 10 语言 i18n 与供应商面板/对话框/滚动条样式
+
+### Testing
+
+- [OK] `npx vitest run src/features/vendors src/styles/settings.part1.vendor-panels.test.ts src/styles/settings.part2.scroll-area.test.ts` — 24 文件 114 测试全部通过
+- [OK] `npm run typecheck` — 通过
+- [OK] `cargo test --lib vendors` — 40 测试全部通过(含新增 list_from_file 3 个用例)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d7a657f5a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

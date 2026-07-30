@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 68
+- **Total Sessions**: 69
 - **Last Active**: 2026-07-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~837 | Active |
+| `journal-2.md` | ~894 | Active |
 | `journal-1.md` | ~1997 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 69 | 2026-07-30 | 重做供应商设置面板并支持 CC Switch 文件导入 | `d7a657f5a` | `chore/bump-version-0.7.12` |
 | 68 | 2026-07-30 | 统一设置页内容列宽为 980px | `75b9ee299` | `chore/bump-version-0.7.12` |
 | 67 | 2026-07-30 | 设置页重构为无顶栏居中窄列布局 | `cc6ae1007` | `chore/bump-version-0.7.12` |
 | 66 | 2026-07-30 | 快捷键设置页对齐参考样式并补全部重置 | `15a30e24f` | `chore/bump-version-0.7.12` |
