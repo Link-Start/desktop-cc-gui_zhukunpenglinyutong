@@ -14,6 +14,46 @@ import { normalizeMessageImageSrc } from "../../utils/messagesRenderUtils";
 
 type MessageItem = Extract<ConversationItem, { kind: "message" }>;
 
+/**
+ * Recover a filesystem path for LocalImage fallback from a message image entry.
+ * Returns null for pure data:/http(s) sources that need no disk read.
+ */
+export function resolveMessageImageLocalPath(image: string): string | null {
+  const trimmed = image.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (
+    trimmed.startsWith("data:") ||
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://")
+  ) {
+    return null;
+  }
+  if (trimmed.startsWith("file://")) {
+    try {
+      const withoutScheme = decodeURIComponent(trimmed.slice("file://".length));
+      const hostless = withoutScheme.startsWith("localhost/")
+        ? withoutScheme.slice("localhost/".length)
+        : withoutScheme;
+      if (/^\/[A-Za-z]:[\\/]/.test(hostless)) {
+        return hostless.slice(1);
+      }
+      if (/^[A-Za-z]:[\\/]/.test(hostless)) {
+        return hostless;
+      }
+      return hostless.startsWith("/") ? hostless : `/${hostless}`;
+    } catch {
+      return null;
+    }
+  }
+  // Absolute POSIX / Windows path
+  if (trimmed.startsWith("/") || /^[A-Za-z]:[\\/]/.test(trimmed) || /^\\\\[^\\]/.test(trimmed)) {
+    return trimmed;
+  }
+  return null;
+}
+
 function normalizeNoteCardImageIdentity(value: string) {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -174,8 +214,23 @@ export function buildMessageRowPresentation(input: {
     if (noteCardImagePathSet.has(normalizeNoteCardImageIdentity(image))) {
       return [];
     }
-    const src = normalizeMessageImageSrc(image);
-    return src ? [{ src, label: `Image ${index + 1}` }] : [];
+    // Keep absolute path / file:// for LocalImage fallback when asset:// fails
+    // (common with non-ASCII workspace paths like Chinese folder names).
+    const localPath = resolveMessageImageLocalPath(image);
+    const normalizedSrc = normalizeMessageImageSrc(image);
+    // Prefer convertFileSrc / data URL; if protocol conversion yields empty but
+    // we still have a disk path, seed a file:// src so LocalImage can fall back.
+    const src =
+      normalizedSrc ||
+      (localPath
+        ? localPath.startsWith("/")
+          ? `file://${localPath}`
+          : `file:///${localPath.replace(/\\/g, "/")}`
+        : "");
+    if (!src) {
+      return [];
+    }
+    return [{ src, label: `Image ${index + 1}`, localPath }];
   });
 
   return {

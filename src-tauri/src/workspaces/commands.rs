@@ -394,6 +394,15 @@ async fn allowed_image_preview_roots(
     roots.push(app_data_dir_for_state(state)?.join("workspaces"));
     roots.extend(app_paths::workspace_root_candidates()?);
     roots.push(app_paths::note_card_dir()?);
+    // Grok CLI persists multimodal attachments under ~/.grok/sessions/.../assets/
+    // (or $GROK_HOME/sessions/...). Allow preview of those saved images.
+    if let Some(grok_home) = std::env::var_os("GROK_HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|home| home.join(".grok")))
+    {
+        roots.push(grok_home.join("sessions"));
+    }
 
     let mut canonical_roots = roots
         .into_iter()

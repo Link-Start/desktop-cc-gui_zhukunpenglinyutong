@@ -1535,3 +1535,36 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1242: 补齐多引擎图片输入能力
+
+**Date**: 2026-07-31
+**Task**: 补齐多引擎图片输入能力
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+完成 Grok、Kimi、OpenCode 图片 transport 与六引擎 capability 对齐；修复 Grok workspace-relative path、data URL 限流、prompt 原文保真、daemon module 注册和预览白名单；校准 OpenSpec 与审核报告，并通过增量测试及契约验证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2bdaa4db6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -78,6 +78,101 @@ describe("useThreadMessaging", () => {
     },
   );
 
+  it.each(["claude", "grok", "kimi", "opencode"] as const)(
+    "does not block %s sends with non-empty images at client boundary",
+    async (engine) => {
+      const { result, pushThreadErrorMessage } = makeThreadMessagingHook(engine, {
+        activeThreadId: `${engine}:session-1`,
+        threadEngineById: {
+          [`${engine}:session-1`]: engine,
+        },
+      });
+
+      await act(async () => {
+        await result.current.sendUserMessageToThread(
+          workspace,
+          `${engine}:session-1`,
+          `${engine} send with image`,
+          ["/tmp/example.png"],
+        );
+      });
+
+      expect(pushThreadErrorMessage).not.toHaveBeenCalledWith(
+        workspace.id,
+        `${engine}:session-1`,
+        expect.stringContaining("does not support image input"),
+      );
+      expect(engineSendMessage).toHaveBeenCalledWith(
+        workspace.id,
+        expect.objectContaining({
+          engine,
+          images: ["/tmp/example.png"],
+        }),
+      );
+    },
+  );
+
+  it("does not block codex sends with non-empty images at client boundary", async () => {
+    const { result, pushThreadErrorMessage } = makeThreadMessagingHook("codex", {
+      activeThreadId: "thread-codex-1",
+      threadEngineById: {
+        "thread-codex-1": "codex",
+      },
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "thread-codex-1",
+        "codex send with image",
+        ["/tmp/example.png"],
+      );
+    });
+
+    expect(pushThreadErrorMessage).not.toHaveBeenCalledWith(
+      workspace.id,
+      "thread-codex-1",
+      expect.stringContaining("does not support image input"),
+    );
+    // Codex native path uses sendUserMessage, not engineSendMessage.
+    expect(sendUserMessage).toHaveBeenCalledWith(
+      workspace.id,
+      "thread-codex-1",
+      "codex send with image",
+      expect.objectContaining({
+        images: ["/tmp/example.png"],
+      }),
+    );
+    expect(engineSendMessage).not.toHaveBeenCalled();
+  });
+
+  it("treats only non-empty image entries as attachment content for grok", async () => {
+    const { result } = makeThreadMessagingHook("grok", {
+      activeThreadId: "grok:session-1",
+      threadEngineById: {
+        "grok:session-1": "grok",
+      },
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "grok:session-1",
+        "grok send without real images",
+        ["  ", "\n", ""],
+      );
+    });
+
+    expect(engineSendMessage).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(engineSendMessage)).toHaveBeenCalledWith(
+      workspace.id,
+      expect.objectContaining({
+        engine: "grok",
+        images: null,
+      }),
+    );
+  });
+
   beforeEach(() => {
     resetThreadMessagingTestMocks();
     resetSharedTargetStoreForTests();

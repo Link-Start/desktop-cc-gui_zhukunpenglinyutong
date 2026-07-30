@@ -118,6 +118,12 @@ import {
 import { useStreamActivityPhase } from "../../threads/hooks/useStreamActivityPhase";
 import { exportRewindFiles } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
+import {
+  engineSupportsImageInput,
+  formatEngineImageInputUnsupportedMessage,
+  getEngineImageInputLabel,
+  sanitizeImageAttachmentPaths,
+} from "../../engine/utils/engineImageInput";
 import { getManualMemoryInjectionMode } from "../../project-memory/utils/manualInjectionMode";
 import { estimateClaudeContextWindow } from "../../models/claudeContextWindow";
 import type { RewindMode } from "../../threads/utils/rewindMode";
@@ -738,6 +744,61 @@ function ComposerImpl({
     : createSessionTargetPicker
       ? effectiveCreationTarget
       : null;
+  const imageAttachEngine = useMemo((): EngineType | null => {
+    if (
+      isSharedSession &&
+      isResolvedExecutionTarget(selectedSharedTarget)
+    ) {
+      return selectedSharedTarget.engine;
+    }
+    if (
+      createSessionTargetPicker &&
+      isResolvedExecutionTarget(effectiveCreationTarget)
+    ) {
+      return effectiveCreationTarget.engine;
+    }
+    return selectedEngine ?? null;
+  }, [
+    createSessionTargetPicker,
+    effectiveCreationTarget,
+    isSharedSession,
+    selectedEngine,
+    selectedSharedTarget,
+  ]);
+  const imageInputSupported = engineSupportsImageInput(imageAttachEngine);
+  const notifyImageInputUnsupported = useCallback(() => {
+    if (!imageAttachEngine) {
+      return;
+    }
+    pushErrorToast({
+      title: t("composer.imageInputUnsupportedTitle", {
+        defaultValue: "Image not supported",
+      }),
+      message: t("composer.imageAttachUnsupported", {
+        engine: getEngineImageInputLabel(imageAttachEngine),
+        defaultValue:
+          "{{engine}} does not support image attachments in this release",
+      }),
+      durationMs: 3600,
+    });
+  }, [imageAttachEngine, t]);
+  const handleAttachImagesGuarded = useCallback(
+    (paths: string[]) => {
+      if (!imageInputSupported) {
+        notifyImageInputUnsupported();
+        return;
+      }
+      onAttachImages?.(paths);
+    },
+    [imageInputSupported, notifyImageInputUnsupported, onAttachImages],
+  );
+  const handlePickImagesGuarded = useCallback(() => {
+    if (!imageInputSupported) {
+      notifyImageInputUnsupported();
+      return;
+    }
+    onPickImages?.();
+  }, [imageInputSupported, notifyImageInputUnsupported, onPickImages]);
   const sharedTargetResolved =
     !isSharedSession || isResolvedExecutionTarget(selectedSharedTarget);
   const effectiveSubmitDisabled = submitDisabled || !sharedTargetResolved;
@@ -1597,9 +1658,10 @@ function ComposerImpl({
       }
       const trimmed = (submittedText ?? text).trim();
       // Merge images from Composer state (file picker) and ChatInputBox (paste/drop)
-      const mergedImages = Array.from(
-        new Set([...attachedImages, ...(submittedImages ?? [])]),
-      );
+      const mergedImages = sanitizeImageAttachmentPaths([
+        ...attachedImages,
+        ...(submittedImages ?? []),
+      ]);
       const hasIntentCanvasAttachments = intentCanvasAttachments.length > 0;
       if (
         !trimmed &&
@@ -1607,6 +1669,29 @@ function ComposerImpl({
         !selectedOpenCodeDirectCommand &&
         !hasIntentCanvasAttachments
       ) {
+        return;
+      }
+      // Composer-side capability gate: keep draft when engine cannot accept images.
+      // Current engines are all image-capable; retained for future unsupported engines.
+      if (
+        mergedImages.length > 0 &&
+        imageAttachEngine &&
+        !engineSupportsImageInput(imageAttachEngine)
+      ) {
+        pushErrorToast({
+          title: t("composer.imageInputUnsupportedTitle", {
+            defaultValue: "Image not supported",
+          }),
+          message: formatEngineImageInputUnsupportedMessage(
+            imageAttachEngine,
+            // i18next TFunction is wider than our helper; keep runtime options intact.
+            t as (key: string, options?: Record<string, unknown>) => string,
+          ),
+          durationMs: 4200,
+        });
+        // ChatInputBox clears before onSubmit; restore Composer-owned draft + images.
+        setComposerText(submittedText ?? text);
+        onAttachImages?.(mergedImages);
         return;
       }
       const browserNavigationUrl =
@@ -1763,6 +1848,7 @@ function ComposerImpl({
       effectiveCreationTarget,
       disabled,
       effectiveSubmitDisabled,
+      imageAttachEngine,
       intentCanvasAttachments.length,
       applyActiveFileReference,
       commands,
@@ -1772,6 +1858,7 @@ function ComposerImpl({
       selectedSkills,
       selectedInlineFileReferences,
       selectedCodeAnnotations,
+      onAttachImages,
       onClearCodeAnnotations,
       selectedManualMemories,
       selectedNoteCards,
@@ -1781,6 +1868,7 @@ function ComposerImpl({
       selectedCommonsNames,
       selectedSkillNames,
       setSelectedManualMemories,
+      t,
       text,
       carryOverContextChipKeys,
       carryOverManualMemoryIds,
@@ -2683,8 +2771,14 @@ function ComposerImpl({
               onResolvedAlwaysThinkingChange={onResolvedAlwaysThinkingChange}
               attachments={attachedImages}
               hasContextAttachment={intentCanvasAttachments.length > 0}
-              onAddAttachment={onPickImages}
-              onAttachImages={onAttachImages}
+              onAddAttachment={
+                onPickImages || !imageInputSupported
+                  ? handlePickImagesGuarded
+                  : undefined
+              }
+              onAttachImages={
+                onAttachImages ? handleAttachImagesGuarded : undefined
+              }
               onRemoveAttachment={onRemoveImage}
               textareaHeight={textareaHeight}
               onHeightChange={onTextareaHeightChange}

@@ -66,6 +66,8 @@ const messages = {
     opencodeModelSwitchTitle: "OpenCode Notice",
     opencodeModelSwitchMessage:
       "Model switch detected in the same session. A new backend session has been created to avoid timeouts.",
+    imageInputUnsupported:
+      "{{engine}} does not support image input in this release",
     doneIn: "Done in {{duration}}",
     messageActions: "Message actions",
     copyMessage: "Copy message",
