@@ -113,27 +113,42 @@ import { MessagesLinkedRunBanner } from "../orchestration/components/MessagesLin
 const EMPTY_TASK_RUNS: NonNullable<MessagesCoreProps["runtime"]["taskRuns"]> = [];
 
 const ANCHOR_TITLE_MAX_LENGTH = 60;
+const ANCHOR_DESCRIPTION_MAX_LENGTH = 160;
 
 function isAgentTaskNotificationText(text: string) {
   return Boolean(parseAgentTaskNotification(text));
 }
 
 /**
- * Derive a short, human-readable label for an anchor dot from the raw
- * user message text: take the first non-empty line, collapse inner
- * whitespace, and truncate. Used for the hover tooltip + outline label
- * on the messages anchor rail.
+ * Derive bounded, plain-text copy for the anchor preview from the user
+ * message only. Assistant rows remain outside this model so streaming output
+ * cannot turn the navigation rail into another live render surface.
  */
-function deriveAnchorTitle(text: string): string {
-  const firstLine =
-    text
-      .split("\n")
-      .map((line) => line.trim())
-      .find((line) => line.length > 0) ?? "";
-  const normalized = firstLine.replace(/\s+/g, " ");
-  return normalized.length > ANCHOR_TITLE_MAX_LENGTH
-    ? `${normalized.slice(0, ANCHOR_TITLE_MAX_LENGTH)}…`
-    : normalized;
+function deriveAnchorPreviewCopy(text: string): {
+  description?: string;
+  title: string;
+} {
+  const normalizedLines = text
+    .split("\n")
+    .map((line) => line.trim().replace(/\s+/g, " "))
+    .filter(Boolean);
+  const firstLine = normalizedLines[0] ?? "";
+  const title =
+    firstLine.length > ANCHOR_TITLE_MAX_LENGTH
+      ? `${firstLine.slice(0, ANCHOR_TITLE_MAX_LENGTH)}…`
+      : firstLine;
+  const descriptionSource =
+    normalizedLines.length > 1
+      ? normalizedLines.slice(1).join(" ")
+      : firstLine.slice(ANCHOR_TITLE_MAX_LENGTH).trim();
+  const description =
+    descriptionSource.length > ANCHOR_DESCRIPTION_MAX_LENGTH
+      ? `${descriptionSource.slice(0, ANCHOR_DESCRIPTION_MAX_LENGTH)}…`
+      : descriptionSource;
+  return {
+    title,
+    ...(description ? { description } : {}),
+  };
 }
 
 // 流式期间每个 token 都会替换 items 数组引用,但通常只有最后一条正在流式输出的
@@ -1198,7 +1213,7 @@ export const MessagesCore = memo(function MessagesCore({
     return messageItems.map((item) => ({
       id: item.id,
       role: item.role,
-      title: deriveAnchorTitle(item.text),
+      ...deriveAnchorPreviewCopy(item.text),
     }));
   }, [timelinePresentationItems]);
   const hasAnchorRail = showMessageAnchors && messageAnchors.length > 0;
