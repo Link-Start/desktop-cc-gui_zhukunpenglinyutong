@@ -11,6 +11,7 @@ import {
   updateCodexProvider,
   deleteCodexProvider,
   switchCodexProvider,
+  reorderCodexProviders,
 } from "../../../services/tauri";
 
 export interface CodexProviderDialogState {
@@ -256,6 +257,39 @@ export function useCodexProviderManagement() {
     [loadCodexProviders],
   );
 
+  const handleReorderCodexProviders = useCallback(
+    async (orderedIds: string[]) => {
+      const providerById = new Map(
+        codexProviders.map((provider) => [provider.id, provider]),
+      );
+      const orderedProviders = orderedIds
+        .map((id) => providerById.get(id))
+        .filter((provider): provider is CodexProviderConfig =>
+          Boolean(provider),
+        );
+
+      setCodexProviders(orderedProviders);
+
+      try {
+        await reorderCodexProviders(orderedIds);
+        // 与 Claude 侧一致:重排只写 sortOrder,乐观顺序即持久顺序,
+        // 成功后不重新拉取,避免引用整体替换造成闪烁。
+        setCodexProviderError(null);
+        return { ok: true } as const;
+      } catch (error) {
+        // 持久化失败:从后端重新加载以回滚乐观顺序。
+        await loadCodexProviders();
+        const message = getErrorMessage(
+          error,
+          "Failed to reorder Codex providers.",
+        );
+        setCodexProviderError(message);
+        return { ok: false, error: message } as const;
+      }
+    },
+    [codexProviders, loadCodexProviders],
+  );
+
   const handleDeleteCodexProvider = useCallback(
     (provider: CodexProviderConfig) => {
       setDeleteCodexConfirm({ isOpen: true, provider });
@@ -295,6 +329,7 @@ export function useCodexProviderManagement() {
     handleCloseCodexProviderDialog,
     handleSaveCodexProvider,
     handleSwitchCodexProvider,
+    handleReorderCodexProviders,
     handleDeleteCodexProvider,
     confirmDeleteCodexProvider,
     cancelDeleteCodexProvider,

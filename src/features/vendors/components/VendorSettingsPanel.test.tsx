@@ -25,6 +25,7 @@ const mockState = vi.hoisted(() => ({
     currentConfig: null,
     currentConfigLoading: false,
     providers: [],
+    localProvider: null,
     loading: false,
     handleSwitchProvider: vi.fn(),
     handleAddProvider: vi.fn(),
@@ -140,6 +141,12 @@ vi.mock("../modelManagerRequest", () => ({
 
 vi.mock("./ProviderList", () => ({
   ProviderList: () => <div data-testid="provider-list-stub" />,
+}));
+
+vi.mock("./ClaudeLocalSettingsCard", () => ({
+  ClaudeLocalSettingsCard: () => (
+    <div data-testid="claude-local-settings-stub" />
+  ),
 }));
 
 vi.mock("./CodexProviderList", () => ({
@@ -269,7 +276,7 @@ async function openCodexTab() {
     expect(getCodexUnifiedExecExternalStatusMock).toHaveBeenCalled();
   });
   return (await screen.findByText("Background terminal")).closest(
-    ".vendor-codex-compact-setting",
+    ".vendor-group-row",
   ) as HTMLElement;
 }
 
@@ -580,9 +587,9 @@ describe("VendorSettingsPanel", () => {
     const brandHeader = screen
       .getByRole("heading", { name: "Codex CLI" })
       .closest(".vendor-brand-header") as HTMLElement;
-    const officialConfigHeader = screen
-      .getByText("Official Config")
-      .closest(".vendor-list-header") as HTMLElement;
+    const codexGroupCard = document.querySelector(
+      ".vendor-group-card",
+    ) as HTMLElement;
 
     expect(brandHeader).toBeTruthy();
     expect(
@@ -590,9 +597,11 @@ describe("VendorSettingsPanel", () => {
         name: "settings.codexRuntimeReload",
       }),
     ).toBeNull();
-    expect(officialConfigHeader).toBeTruthy();
+    expect(codexGroupCard).toBeTruthy();
     expect(
-      within(officialConfigHeader).queryByRole("button"),
+      within(codexGroupCard).queryByRole("button", {
+        name: "settings.codexRuntimeReload",
+      }),
     ).toBeNull();
     expect(document.querySelector(".vendor-codex-runtime-reload-row")).toBeNull();
   });
@@ -629,6 +638,9 @@ describe("VendorSettingsPanel", () => {
         "Configure Claude Code CLI providers and local settings used by ccgui.",
       ),
     ).toBeNull();
+    expect(screen.getByTestId("claude-local-settings-stub")).toBeTruthy();
+    expect(screen.getByTestId("provider-list-stub")).toBeTruthy();
+    expect(screen.queryByTestId("current-codex-config-stub")).toBeNull();
   });
 
   it("renders a Codex brand header above the config sections", async () => {

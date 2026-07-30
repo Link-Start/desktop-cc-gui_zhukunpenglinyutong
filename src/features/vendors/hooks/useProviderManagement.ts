@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import type { ClaudeCurrentConfig, ProviderConfig } from "../types";
 import { LOCAL_SETTINGS_PROVIDER_ID } from "../types";
 import {
@@ -8,6 +8,7 @@ import {
   deleteClaudeProvider,
   reorderClaudeProviders,
   getCurrentClaudeConfig,
+  switchClaudeProvider,
 } from "../../../services/tauri";
 import { migrateModelMappingStorage } from "../../models/constants";
 
@@ -26,6 +27,7 @@ export type ClaudeProviderAction =
   | "save"
   | "reorder"
   | "delete"
+  | "switch"
   | "storage";
 
 export type ClaudeProviderActionError = Readonly<{
@@ -264,6 +266,22 @@ export function useProviderManagement() {
     setDeleteConfirm({ isOpen: true, provider });
   }, []);
 
+  const handleSwitchProvider = useCallback(
+    async (id: string) => {
+      try {
+        await switchClaudeProvider(id);
+        await Promise.all([loadProviders(), loadCurrentConfig()]);
+        setProviderError(null);
+        return { ok: true } as const;
+      } catch (cause) {
+        const error = providerActionError("switch", cause);
+        setProviderError(error);
+        return { ok: false, error } as const;
+      }
+    },
+    [loadProviders, loadCurrentConfig],
+  );
+
   const confirmDeleteProvider = useCallback(async () => {
     const provider = deleteConfirm.provider;
     if (!provider) return;
@@ -286,8 +304,19 @@ export function useProviderManagement() {
     setDeleteConfirm({ isOpen: false, provider: null });
   }, []);
 
+  const localProvider = useMemo(
+    () =>
+      providers.find(
+        (provider) =>
+          provider.id === LOCAL_SETTINGS_PROVIDER_ID ||
+          provider.isLocalProvider,
+      ) ?? null,
+    [providers],
+  );
+
   return {
     providers,
+    localProvider,
     loading,
     currentConfig,
     currentConfigLoading,
@@ -305,6 +334,7 @@ export function useProviderManagement() {
     handleClaudeSettingsJsonSaved,
     handleSaveProvider,
     handleReorderProviders,
+    handleSwitchProvider,
     handleDeleteProvider,
     confirmDeleteProvider,
     cancelDeleteProvider,

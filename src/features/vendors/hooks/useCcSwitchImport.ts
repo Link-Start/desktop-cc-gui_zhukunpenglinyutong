@@ -2,17 +2,21 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   addClaudeProvider,
   addCodexProvider,
-  addKimiProvider,
   listCcSwitchProviders,
+  listCcSwitchProvidersFromPath,
+  updateClaudeProvider,
+  updateCodexProvider,
 } from "../../../services/tauri";
 import type { CcSwitchProvider } from "../../../services/tauri";
 import type { ProviderCategory } from "../types";
 
-export type CcSwitchImportTarget = "claude" | "codex" | "kimi";
+export type CcSwitchImportTarget = "claude" | "codex";
+
+export type CcSwitchImportStatus = "new" | "update";
 
 export interface CcSwitchImportItem extends CcSwitchProvider {
-  /** 与当前列表 name + baseUrl 命中, 禁止重复导入 */
-  imported: boolean;
+  /** 与当前列表按 id 命中为 update, 否则为 new */
+  status: CcSwitchImportStatus;
 }
 
 export interface CcSwitchImportFailure {
@@ -21,14 +25,9 @@ export interface CcSwitchImportFailure {
 }
 
 export interface CcSwitchImportSummary {
-  importedCount: number;
+  addedCount: number;
+  updatedCount: number;
   failures: CcSwitchImportFailure[];
-}
-
-/** 现有供应商的去重视图, 由调用方按各自数据结构提取 */
-export interface ExistingProviderKey {
-  name: string;
-  baseUrl: string | null;
 }
 
 const PROVIDER_CATEGORIES: readonly ProviderCategory[] = [
@@ -39,40 +38,20 @@ const PROVIDER_CATEGORIES: readonly ProviderCategory[] = [
   "custom",
 ];
 
-function generateProviderId(): string {
-  return crypto.randomUUID ? crypto.randomUUID() : Date.now().toString();
-}
-
-/** name + baseUrl 归一化: trim、去尾部斜杠、大小写不敏感 */
-export function normalizeDedupKey(name: string, baseUrl: string | null): string {
-  const normalizedName = name.trim().toLowerCase();
-  const normalizedUrl = (baseUrl ?? "").trim().replace(/\/+$/, "").toLowerCase();
-  return `${normalizedName}\n${normalizedUrl}`;
-}
-
-/** 从 codex config.toml 文本中提取第一个 base_url (仅用于去重比对) */
+/** 从 codex config.toml 文本中提取第一个 base_url */
 export function extractCodexTomlBaseUrl(configToml: string | undefined): string | null {
   if (!configToml) return null;
   const match = configToml.match(/base_url\s*=\s*"([^"]+)"/);
   return match ? match[1] : null;
 }
 
-function readEnvString(
-  settingsConfig: Record<string, unknown>,
-  key: string,
-): string {
-  const env = settingsConfig.env;
-  if (!env || typeof env !== "object") return "";
-  const value = (env as Record<string, unknown>)[key];
-  return typeof value === "string" ? value : "";
-}
-
+/** 保留 cc-switch 原始 id: 再次导入同一条目时按 id 走更新而不是新增 */
 export function buildClaudeProviderFromCcSwitch(item: CcSwitchProvider) {
   const category = PROVIDER_CATEGORIES.includes(item.category as ProviderCategory)
     ? (item.category as ProviderCategory)
     : undefined;
   return {
-    id: generateProviderId(),
+    id: item.id,
     name: item.name,
     websiteUrl: item.websiteUrl ?? undefined,
     category,
@@ -85,35 +64,29 @@ export function buildCodexProviderFromCcSwitch(item: CcSwitchProvider) {
   const config = item.settingsConfig.config;
   const auth = item.settingsConfig.auth;
   return {
-    id: generateProviderId(),
+    id: item.id,
     name: item.name,
+    source: "cc-switch",
     configToml: typeof config === "string" ? config : "",
     authJson: auth && typeof auth === "object" ? JSON.stringify(auth) : "{}",
   };
 }
 
-export function buildKimiProviderFromCcSwitch(item: CcSwitchProvider) {
-  return {
-    id: generateProviderId(),
-    name: item.name,
-    websiteUrl: item.websiteUrl ?? undefined,
-    baseUrl: readEnvString(item.settingsConfig, "ANTHROPIC_BASE_URL"),
-    apiKey: readEnvString(item.settingsConfig, "ANTHROPIC_AUTH_TOKEN"),
-    model: readEnvString(item.settingsConfig, "ANTHROPIC_MODEL"),
-  };
-}
-
 interface UseCcSwitchImportOptions {
   target: CcSwitchImportTarget;
-  existingProviders: ExistingProviderKey[];
+  /** 现有供应商 id 集合, 用于区分 新增/更新 */
+  existingProviderIds: readonly string[];
   /** 对话框打开时才加载数据源 */
   isOpen: boolean;
+  /** 指定 cc-switch.db / config.json 文件路径; 缺省自动检测 ~/.cc-switch */
+  sourcePath?: string | null;
 }
 
 export function useCcSwitchImport({
   target,
-  existingProviders,
+  existingProviderIds,
   isOpen,
+  sourcePath = null,
 }: UseCcSwitchImportOptions) {
   const appType = target === "codex" ? "codex" : "claude";
   const [rawItems, setRawItems] = useState<CcSwitchProvider[]>([]);
@@ -121,26 +94,26 @@ export function useCcSwitchImport({
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
-  /** 本次会话内已成功导入的 CC Switch 条目 id */
-  const [sessionImportedIds, setSessionImportedIds] = useState<ReadonlySet<string>>(
-    new Set(),
-  );
 
-  // load 只依赖 appType (由 target 派生, 稳定), 避免 effect 因引用变化无限重跑
+  // load 只依赖 appType + sourcePath, 避免 effect 因引用变化无限重跑
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await listCcSwitchProviders(appType);
+      const result = sourcePath
+        ? await listCcSwitchProvidersFromPath(sourcePath, appType)
+        : await listCcSwitchProviders(appType);
       setAvailable(result.available);
       setRawItems(result.providers);
-      setSelectedIds(new Set());
+      // 与参考一致: 默认全选
+      setSelectedIds(new Set(result.providers.map((provider) => provider.id)));
     } catch {
       setAvailable(false);
       setRawItems([]);
+      setSelectedIds(new Set());
     } finally {
       setLoading(false);
     }
-  }, [appType]);
+  }, [appType, sourcePath]);
 
   useEffect(() => {
     if (isOpen) {
@@ -148,20 +121,13 @@ export function useCcSwitchImport({
     }
   }, [isOpen, load]);
 
-  // 去重为派生计算: 现有列表 (外部) ∪ 本次已导入 (内部)
   const items = useMemo<CcSwitchImportItem[]>(() => {
-    const existingKeys = new Set(
-      existingProviders.map((provider) =>
-        normalizeDedupKey(provider.name, provider.baseUrl),
-      ),
-    );
+    const existingIds = new Set(existingProviderIds);
     return rawItems.map((provider) => ({
       ...provider,
-      imported:
-        sessionImportedIds.has(provider.id) ||
-        existingKeys.has(normalizeDedupKey(provider.name, provider.baseUrl)),
+      status: existingIds.has(provider.id) ? "update" : "new",
     }));
-  }, [rawItems, existingProviders, sessionImportedIds]);
+  }, [rawItems, existingProviderIds]);
 
   const toggleItem = useCallback((id: string) => {
     setSelectedIds((previous) => {
@@ -175,37 +141,40 @@ export function useCcSwitchImport({
     });
   }, []);
 
-  const selectableIds = useMemo(
-    () => items.filter((item) => !item.imported).map((item) => item.id),
-    [items],
-  );
-
   const toggleAll = useCallback(() => {
     setSelectedIds((previous) =>
-      previous.size >= selectableIds.length
-        ? new Set()
-        : new Set(selectableIds),
+      previous.size >= items.length ? new Set() : new Set(items.map((item) => item.id)),
     );
-  }, [selectableIds]);
+  }, [items]);
 
   const importSelected = useCallback(async (): Promise<CcSwitchImportSummary> => {
-    const selected = items.filter(
-      (item) => selectedIds.has(item.id) && !item.imported,
-    );
+    const selected = items.filter((item) => selectedIds.has(item.id));
     setImporting(true);
     const failures: CcSwitchImportFailure[] = [];
-    const succeededIds: string[] = [];
+    let addedCount = 0;
+    let updatedCount = 0;
     try {
       for (const item of selected) {
         try {
           if (target === "claude") {
-            await addClaudeProvider(buildClaudeProviderFromCcSwitch(item));
-          } else if (target === "codex") {
-            await addCodexProvider(buildCodexProviderFromCcSwitch(item));
+            const built = buildClaudeProviderFromCcSwitch(item);
+            if (item.status === "update") {
+              await updateClaudeProvider(item.id, built);
+              updatedCount += 1;
+            } else {
+              await addClaudeProvider(built);
+              addedCount += 1;
+            }
           } else {
-            await addKimiProvider(buildKimiProviderFromCcSwitch(item));
+            const built = buildCodexProviderFromCcSwitch(item);
+            if (item.status === "update") {
+              await updateCodexProvider(item.id, built);
+              updatedCount += 1;
+            } else {
+              await addCodexProvider(built);
+              addedCount += 1;
+            }
           }
-          succeededIds.push(item.id);
         } catch (cause) {
           failures.push({
             name: item.name,
@@ -217,11 +186,8 @@ export function useCcSwitchImport({
       setImporting(false);
     }
 
-    if (succeededIds.length > 0) {
-      setSessionImportedIds((previous) => new Set([...previous, ...succeededIds]));
-    }
     setSelectedIds(new Set());
-    return { importedCount: succeededIds.length, failures };
+    return { addedCount, updatedCount, failures };
   }, [items, selectedIds, target]);
 
   return {
@@ -230,7 +196,6 @@ export function useCcSwitchImport({
     loading,
     importing,
     selectedIds,
-    selectableCount: selectableIds.length,
     toggleItem,
     toggleAll,
     importSelected,

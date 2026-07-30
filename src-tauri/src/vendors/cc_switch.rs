@@ -244,6 +244,31 @@ fn list_from_dir(dir: &Path, app_type: &str) -> CcSwitchProviderList {
     }
 }
 
+/// 从用户显式选择的文件导入: `.json` 按 legacy JSON 解析, 其余按 SQLite db 解析。
+/// 与目录探测一致, 解析失败按不可用空态处理, 不向前端抛错。
+fn list_from_file(file_path: &Path, app_type: &str) -> CcSwitchProviderList {
+    let is_json = file_path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.eq_ignore_ascii_case("json"))
+        .unwrap_or(false);
+    let result = if is_json {
+        list_from_legacy_json(file_path, app_type)
+    } else {
+        list_from_db(file_path, app_type)
+    };
+    match result {
+        Ok(providers) => CcSwitchProviderList {
+            available: true,
+            providers,
+        },
+        Err(_) => CcSwitchProviderList {
+            available: false,
+            providers: Vec::new(),
+        },
+    }
+}
+
 #[tauri::command]
 pub(crate) async fn vendor_list_cc_switch_providers(
     app_type: String,
@@ -258,6 +283,23 @@ pub(crate) async fn vendor_list_cc_switch_providers(
     tauri::async_runtime::spawn_blocking(move || list_from_dir(&dir, &app_type))
         .await
         .map_err(|error| format!("CC Switch scan task failed: {error}"))
+}
+
+#[tauri::command]
+pub(crate) async fn vendor_list_cc_switch_providers_from_path(
+    path: String,
+    app_type: String,
+) -> Result<CcSwitchProviderList, String> {
+    let file_path = PathBuf::from(path);
+    if !file_path.is_file() {
+        return Ok(CcSwitchProviderList {
+            available: false,
+            providers: Vec::new(),
+        });
+    }
+    tauri::async_runtime::spawn_blocking(move || list_from_file(&file_path, &app_type))
+        .await
+        .map_err(|error| format!("CC Switch file scan task failed: {error}"))
 }
 
 #[cfg(test)]
@@ -423,6 +465,58 @@ mod tests {
 
         let result = list_from_dir(&dir.0, "claude");
         assert!(result.available);
+        assert!(result.providers.is_empty());
+    }
+
+    #[test]
+    fn list_from_file_reads_db_file_at_arbitrary_path() {
+        let dir = TestDir::new();
+        seed_db(&dir.0);
+        insert_provider(
+            &dir.0,
+            "p1",
+            "claude",
+            "DeepSeek",
+            r#"{"env":{"ANTHROPIC_AUTH_TOKEN":"sk-x","ANTHROPIC_BASE_URL":"https://api.deepseek.com/anthropic"}}"#,
+        );
+
+        let result = list_from_file(&dir.0.join(CC_SWITCH_DB_NAME), "claude");
+        assert!(result.available);
+        assert_eq!(result.providers.len(), 1);
+        assert_eq!(result.providers[0].name, "DeepSeek");
+    }
+
+    #[test]
+    fn list_from_file_reads_legacy_json_by_extension() {
+        let dir = TestDir::new();
+        let json_path = dir.0.join("exported.json");
+        let legacy = serde_json::json!({
+            "codex": {
+                "providers": [{
+                    "id": "c1",
+                    "name": "My Codex",
+                    "settingsConfig": {"auth": {"OPENAI_API_KEY": "sk-codex"}, "config": ""}
+                }]
+            }
+        });
+        fs::write(&json_path, serde_json::to_string(&legacy).unwrap())
+            .expect("write legacy json");
+
+        let result = list_from_file(&json_path, "codex");
+        assert!(result.available);
+        assert_eq!(result.providers.len(), 1);
+        assert_eq!(result.providers[0].name, "My Codex");
+        assert!(result.providers[0].has_api_key);
+    }
+
+    #[test]
+    fn list_from_file_broken_db_returns_unavailable() {
+        let dir = TestDir::new();
+        let broken_path = dir.0.join("broken.db");
+        fs::write(&broken_path, b"not a sqlite db").expect("write broken db");
+
+        let result = list_from_file(&broken_path, "claude");
+        assert!(!result.available);
         assert!(result.providers.is_empty());
     }
 }

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
-import LayoutList from "lucide-react/dist/esm/icons/layout-list";
-import PackagePlus from "lucide-react/dist/esm/icons/package-plus";
+import ArrowLeftRight from "lucide-react/dist/esm/icons/arrow-left-right";
+import File from "lucide-react/dist/esm/icons/file";
 import Import from "lucide-react/dist/esm/icons/import";
 import Search from "lucide-react/dist/esm/icons/search";
 import type { CodexCustomModel, CodexProviderConfig } from "../types";
@@ -15,6 +16,7 @@ import { useGrokProviderManagement } from "../hooks/useGrokProviderManagement";
 import { useOpenCodeProviderManagement } from "../hooks/useOpenCodeProviderManagement";
 import { usePluginModels } from "../hooks/usePluginModels";
 import { ProviderList } from "./ProviderList";
+import { ClaudeLocalSettingsCard } from "./ClaudeLocalSettingsCard";
 import { CodexProviderList } from "./CodexProviderList";
 import { KimiProviderList } from "./KimiProviderList";
 import { GrokProviderList } from "./GrokProviderList";
@@ -28,11 +30,7 @@ import { OpenCodeProviderDialog } from "./OpenCodeProviderDialog";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { CustomModelDialog } from "./CustomModelDialog";
 import { CcSwitchImportDialog } from "./CcSwitchImportDialog";
-import {
-  extractCodexTomlBaseUrl,
-  type CcSwitchImportTarget,
-  type ExistingProviderKey,
-} from "../hooks/useCcSwitchImport";
+import { type CcSwitchImportTarget } from "../hooks/useCcSwitchImport";
 import { CurrentCodexGlobalConfigCard } from "./CurrentCodexGlobalConfigCard";
 import {
   CLI_DOCS_HREF_BY_ID,
@@ -59,6 +57,12 @@ import {
 } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
@@ -203,48 +207,66 @@ export function VendorSettingsPanel({
   const kimi = useKimiProviderManagement();
   const grok = useGrokProviderManagement();
   const openCode = useOpenCodeProviderManagement();
-  const [ccSwitchImportTarget, setCcSwitchImportTarget] =
-    useState<CcSwitchImportTarget | null>(null);
+  const [ccSwitchImportSource, setCcSwitchImportSource] = useState<{
+    target: CcSwitchImportTarget;
+    sourcePath: string | null;
+  } | null>(null);
 
-  // CC Switch 导入去重视图: 各列表现有供应商的 name + baseUrl
-  const claudeExistingProviderKeys = useMemo<ExistingProviderKey[]>(
+  // CC Switch 导入按 id 匹配 新增/更新
+  const ccSwitchExistingProviderIds = useMemo<string[]>(
     () =>
-      claude.providers.map((provider) => ({
-        name: provider.name,
-        baseUrl: provider.settingsConfig?.env?.ANTHROPIC_BASE_URL ?? null,
-      })),
-    [claude.providers],
+      ccSwitchImportSource?.target === "codex"
+        ? codex.codexProviders.map((provider) => provider.id)
+        : claude.providers.map((provider) => provider.id),
+    [ccSwitchImportSource?.target, codex.codexProviders, claude.providers],
   );
-  const codexExistingProviderKeys = useMemo<ExistingProviderKey[]>(
-    () =>
-      codex.codexProviders.map((provider) => ({
-        name: provider.name,
-        baseUrl: extractCodexTomlBaseUrl(provider.configToml),
-      })),
-    [codex.codexProviders],
-  );
-  const ccSwitchExistingProviderKeys =
-    ccSwitchImportTarget === "codex"
-      ? codexExistingProviderKeys
-      : claudeExistingProviderKeys;
 
   const handleCcSwitchImported = useCallback(() => {
-    if (ccSwitchImportTarget === "claude") {
+    if (ccSwitchImportSource?.target === "claude") {
       void claude.loadProviders();
-    } else if (ccSwitchImportTarget === "codex") {
+    } else if (ccSwitchImportSource?.target === "codex") {
       void codex.loadCodexProviders();
     }
-  }, [ccSwitchImportTarget, claude, codex]);
+  }, [ccSwitchImportSource?.target, claude, codex]);
+
+  const handlePickCcSwitchFile = useCallback(
+    async (target: CcSwitchImportTarget) => {
+      const selection = await openFileDialog({
+        multiple: false,
+        directory: false,
+        filters: [{ name: "cc-switch", extensions: ["db", "json"] }],
+      });
+      if (!selection || Array.isArray(selection)) {
+        return;
+      }
+      setCcSwitchImportSource({ target, sourcePath: selection });
+    },
+    [],
+  );
 
   const renderCcSwitchImportButton = (target: CcSwitchImportTarget) => (
-    <Button
-      size="sm"
-      variant="outline"
-      onClick={() => setCcSwitchImportTarget(target)}
-    >
-      <Import size={14} />
-      {t("settings.vendor.ccSwitchImport.entry")}
-    </Button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" variant="outline">
+          <Import size={14} />
+          {t("settings.vendor.ccSwitchImport.entry")}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem
+          onSelect={() => setCcSwitchImportSource({ target, sourcePath: null })}
+        >
+          <ArrowLeftRight size={14} />
+          {t("settings.vendor.importMenu.fromCcSwitchUpdate")}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => void handlePickCcSwitchFile(target)}
+        >
+          <File size={14} />
+          {t("settings.vendor.importMenu.fromCcSwitchFile")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
   const claudeModels = usePluginModels(STORAGE_KEYS.CLAUDE_CUSTOM_MODELS);
   const codexModels = usePluginModels(STORAGE_KEYS.CODEX_CUSTOM_MODELS);
@@ -256,6 +278,39 @@ export function VendorSettingsPanel({
     setModelDialogAddMode(addMode);
     setModelDialogOpen(true);
   }, []);
+
+  const renderPluginModelsEntry = (target: ModelDialogTarget, count: number) => (
+    <div
+      className="vendor-group-row vendor-group-row-clickable vendor-plugin-models-row"
+      onClick={() => openModelDialog(target)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          openModelDialog(target);
+        }
+      }}
+    >
+      <div className="vendor-group-row-copy">
+        <span className="vendor-group-row-title">
+          {t("settings.vendor.pluginModels")}
+        </span>
+      </div>
+      {count > 0 ? (
+        <span className="vendor-plugin-model-entry-count">{count}</span>
+      ) : null}
+      <button
+        type="button"
+        className="vendor-plugin-models-manage-btn"
+        onClick={(event) => {
+          event.stopPropagation();
+          openModelDialog(target);
+        }}
+      >
+        {t("settings.vendor.manageModels")}
+      </button>
+    </div>
+  );
 
   const closeModelDialog = useCallback(() => {
     setModelDialogOpen(false);
@@ -629,30 +684,23 @@ export function VendorSettingsPanel({
                 {claude.providerError.message}
               </div>
             ) : null}
+            <div className="vendor-group-card">
+              <ClaudeLocalSettingsCard
+                localProvider={claude.localProvider}
+                onSwitch={claude.handleSwitchProvider}
+                onEdit={claude.handleOpenClaudeSettingsJsonDialog}
+              />
+              {renderPluginModelsEntry("claude", claudeModels.models.length)}
+            </div>
             <ProviderList
               providers={claude.providers}
               loading={claude.loading}
-              headerActions={
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => openModelDialog("claude")}
-                >
-                  <PackagePlus size={14} />
-                  {t("settings.vendor.pluginModels")}
-                  {claudeModels.models.length > 0 ? (
-                    <span className="vendor-plugin-model-entry-count">
-                      {claudeModels.models.length}
-                    </span>
-                  ) : null}
-                </Button>
-              }
+              headerActions={renderCcSwitchImportButton("claude")}
               onAdd={claude.handleAddProvider}
-              trailingActions={renderCcSwitchImportButton("claude")}
-              onEditLocalSettings={claude.handleOpenClaudeSettingsJsonDialog}
               onEdit={claude.handleEditProvider}
               onDelete={claude.handleDeleteProvider}
               onReorder={claude.handleReorderProviders}
+              onSwitch={claude.handleSwitchProvider}
             />
             <ProviderDialog
               isOpen={claude.providerDialog.isOpen}
@@ -703,13 +751,7 @@ export function VendorSettingsPanel({
                 {codex.codexProviderError}
               </div>
             )}
-            <div className="vendor-provider-list vendor-codex-official-config-list">
-              <div className="vendor-list-header">
-                <span className="vendor-list-title">
-                  {t("settings.vendor.officialConfig")}
-                </span>
-              </div>
-
+            <div className="vendor-group-card">
               <CurrentCodexGlobalConfigCard
                 configLoading={codexGlobalConfigLoading}
                 configContent={codexGlobalConfigContent}
@@ -724,42 +766,38 @@ export function VendorSettingsPanel({
                 onSaved={refreshUnifiedExecConfigViews}
               />
 
-              <div className="settings-toggle-row vendor-codex-compact-setting">
-                <div className="vendor-codex-compact-setting-copy">
-                  <div className="vendor-plugin-model-entry-main">
-                    <div>
-                      <span className="vendor-plugin-model-entry-title">
-                        {t("settings.backgroundTerminal")}
-                      </span>
-                      {unifiedExecOfficialConfigDetail ? (
-                        <div className="settings-help">
-                          {unifiedExecOfficialConfigDetail}
-                        </div>
-                      ) : (
-                        <div className="settings-help">
-                          {t("settings.backgroundTerminalDesc")}
-                        </div>
-                      )}
-                      {unifiedExecOfficialDefaultDetail ? (
-                        <div className="settings-help">
-                          {unifiedExecOfficialDefaultDetail}
-                        </div>
-                      ) : null}
-                      {unifiedExecExternalStatusLoading ? (
-                        <div className="settings-help">{t("settings.loading")}</div>
-                      ) : null}
-                      {unifiedExecExternalStatusError ? (
-                        <div className="settings-help">
-                          {unifiedExecExternalStatusError}
-                        </div>
-                      ) : null}
-                      {unifiedExecActionNotice ? (
-                        <div className="settings-help">
-                          {unifiedExecActionNotice.message}
-                        </div>
-                      ) : null}
+              <div className="settings-toggle-row vendor-group-row">
+                <div className="vendor-group-row-copy">
+                  <span className="vendor-group-row-title">
+                    {t("settings.backgroundTerminal")}
+                  </span>
+                  {unifiedExecOfficialConfigDetail ? (
+                    <div className="settings-help">
+                      {unifiedExecOfficialConfigDetail}
                     </div>
-                  </div>
+                  ) : (
+                    <div className="settings-help">
+                      {t("settings.backgroundTerminalDesc")}
+                    </div>
+                  )}
+                  {unifiedExecOfficialDefaultDetail ? (
+                    <div className="settings-help">
+                      {unifiedExecOfficialDefaultDetail}
+                    </div>
+                  ) : null}
+                  {unifiedExecExternalStatusLoading ? (
+                    <div className="settings-help">{t("settings.loading")}</div>
+                  ) : null}
+                  {unifiedExecExternalStatusError ? (
+                    <div className="settings-help">
+                      {unifiedExecExternalStatusError}
+                    </div>
+                  ) : null}
+                  {unifiedExecActionNotice ? (
+                    <div className="settings-help">
+                      {unifiedExecActionNotice.message}
+                    </div>
+                  ) : null}
                 </div>
                 <div
                   className="settings-segmented vendor-codex-runtime-segmented"
@@ -807,18 +845,13 @@ export function VendorSettingsPanel({
                 </div>
               </div>
 
-              <div className="settings-toggle-row vendor-codex-compact-setting">
-                <div className="vendor-codex-compact-setting-copy">
-                  <div className="vendor-plugin-model-entry-main">
-                    <LayoutList size={16} />
-                    <div>
-                      <span className="vendor-plugin-model-entry-title">
-                        {t("settings.sidebarProviderLabels")}
-                      </span>
-                      <div className="settings-help">
-                        {t("settings.sidebarProviderLabelsDesc")}
-                      </div>
-                    </div>
+              <div className="settings-toggle-row vendor-group-row">
+                <div className="vendor-group-row-copy">
+                  <span className="vendor-group-row-title">
+                    {t("settings.sidebarProviderLabels")}
+                  </span>
+                  <div className="settings-help">
+                    {t("settings.sidebarProviderLabelsDesc")}
                   </div>
                 </div>
                 <Switch
@@ -832,29 +865,18 @@ export function VendorSettingsPanel({
                   }
                 />
               </div>
+
+              {renderPluginModelsEntry("codex", codexModels.models.length)}
             </div>
             <CodexProviderList
               providers={codex.codexProviders}
               loading={codex.codexLoading}
-              headerActions={
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => openModelDialog("codex")}
-                >
-                  <PackagePlus size={14} />
-                  {t("settings.vendor.pluginModels")}
-                  {codexModels.models.length > 0 ? (
-                    <span className="vendor-plugin-model-entry-count">
-                      {codexModels.models.length}
-                    </span>
-                  ) : null}
-                </Button>
-              }
+              headerActions={renderCcSwitchImportButton("codex")}
               onAdd={codex.handleAddCodexProvider}
-              trailingActions={renderCcSwitchImportButton("codex")}
               onEdit={codex.handleEditCodexProvider}
               onDelete={codex.handleDeleteCodexProvider}
+              onReorder={codex.handleReorderCodexProviders}
+              onSwitch={codex.handleSwitchCodexProvider}
             />
             <CodexProviderDialog
               isOpen={codex.codexProviderDialog.isOpen}
@@ -893,7 +915,7 @@ export function VendorSettingsPanel({
                 {kimi.kimiProviderError}
               </div>
             )}
-            <div className="vendor-provider-list">
+            <div className="vendor-provider-list vendor-summary-card">
               <div className="vendor-list-header">
                 <span className="vendor-list-title">
                   {t("settings.vendor.kimiCurrentConfig")}
@@ -968,7 +990,7 @@ export function VendorSettingsPanel({
                 {grok.grokProviderError}
               </div>
             )}
-            <div className="vendor-provider-list">
+            <div className="vendor-provider-list vendor-summary-card">
               <div className="vendor-list-header">
                 <span className="vendor-list-title">
                   {t("settings.vendor.grokCurrentConfig")}
@@ -1043,7 +1065,7 @@ export function VendorSettingsPanel({
                 {openCode.openCodeProviderError}
               </div>
             )}
-            <div className="vendor-provider-list">
+            <div className="vendor-provider-list vendor-summary-card">
               <div className="vendor-list-header">
                 <span className="vendor-list-title">
                   {t("settings.vendor.opencodeCurrentConfig")}
@@ -1133,10 +1155,11 @@ export function VendorSettingsPanel({
         modelValidation={dialogTarget === "claude" ? "shape-only" : "model-id"}
       />
       <CcSwitchImportDialog
-        isOpen={ccSwitchImportTarget !== null}
-        target={ccSwitchImportTarget ?? "claude"}
-        existingProviders={ccSwitchExistingProviderKeys}
-        onClose={() => setCcSwitchImportTarget(null)}
+        isOpen={ccSwitchImportSource !== null}
+        target={ccSwitchImportSource?.target ?? "claude"}
+        existingProviderIds={ccSwitchExistingProviderIds}
+        sourcePath={ccSwitchImportSource?.sourcePath ?? null}
+        onClose={() => setCcSwitchImportSource(null)}
         onImported={handleCcSwitchImported}
       />
     </div>

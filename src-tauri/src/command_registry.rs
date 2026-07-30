@@ -442,6 +442,7 @@ pub(crate) fn invoke_handler(
         crate::vendors::vendor_update_codex_provider,
         crate::vendors::vendor_delete_codex_provider,
         crate::vendors::vendor_switch_codex_provider,
+        crate::vendors::vendor_reorder_codex_providers,
         crate::vendors::vendor_get_gemini_settings,
         crate::vendors::vendor_save_gemini_settings,
         crate::vendors::vendor_gemini_preflight,
@@ -467,6 +468,7 @@ pub(crate) fn invoke_handler(
         crate::vendors::vendor_switch_opencode_provider,
         crate::vendors::vendor_fetch_opencode_models,
         crate::vendors::vendor_list_cc_switch_providers,
+        crate::vendors::vendor_list_cc_switch_providers_from_path,
         // Open paths
         crate::get_pending_open_paths
     ]

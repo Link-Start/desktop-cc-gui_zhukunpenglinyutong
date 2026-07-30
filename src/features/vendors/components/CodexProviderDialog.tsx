@@ -1,6 +1,20 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import Shield from "lucide-react/dist/esm/icons/shield";
+import SlidersHorizontal from "lucide-react/dist/esm/icons/sliders-horizontal";
 import type { CodexProviderConfig, CodexCustomModel } from "../types";
+import {
+  CODEX_PROVIDER_PRESETS,
+  DEFAULT_CODEX_AUTH_JSON,
+  OFFICIAL_CODEX_CONFIG_TOML,
+  OFFICIAL_CODEX_PROVIDER_NAME,
+  OFFICIAL_DIRECT_PRESET_ID,
+} from "../types";
+import {
+  PROVIDER_BRAND_ICON_SRC,
+  resolveProviderBrandIcon,
+} from "../providerBrandIcon";
+import { ProviderBrandIconImg } from "./ProviderBrandIconImg";
 
 interface CodexProviderDialogProps {
   isOpen: boolean;
@@ -19,38 +33,35 @@ export function CodexProviderDialog({
   const isAdding = !provider;
 
   const [providerName, setProviderName] = useState("");
+  const [remark, setRemark] = useState("");
   const [configToml, setConfigToml] = useState("");
   const [authJson, setAuthJson] = useState("");
   const [customModels, setCustomModels] = useState<CodexCustomModel[]>([]);
   const [newModelId, setNewModelId] = useState("");
   const [newModelLabel, setNewModelLabel] = useState("");
+  const [activePreset, setActivePreset] = useState("custom");
+  const [formError, setFormError] = useState("");
 
   useEffect(() => {
     if (isOpen) {
       if (provider) {
         setProviderName(provider.name || "");
+        setRemark(provider.remark || "");
         setConfigToml(provider.configToml || "");
         setAuthJson(provider.authJson || "");
         setCustomModels(provider.customModels || []);
+        setActivePreset("custom");
       } else {
-        setProviderName("");
-        setConfigToml(`disable_response_storage = true
-model = "gpt-5.1-codex"
-model_reasoning_effort = "high"
-model_provider = "crs"
-
-[model_providers.crs]
-base_url = "https://api.example.com/v1"
-name = "crs"
-requires_openai_auth = true
-wire_api = "responses"`);
-        setAuthJson(`{
-  "OPENAI_API_KEY": ""
-}`);
+        setProviderName(OFFICIAL_CODEX_PROVIDER_NAME);
+        setRemark("");
+        setConfigToml(OFFICIAL_CODEX_CONFIG_TOML);
+        setAuthJson(DEFAULT_CODEX_AUTH_JSON);
         setCustomModels([]);
+        setActivePreset(OFFICIAL_DIRECT_PRESET_ID);
       }
       setNewModelId("");
       setNewModelLabel("");
+      setFormError("");
     }
   }, [isOpen, provider]);
 
@@ -63,6 +74,46 @@ wire_api = "responses"`);
       return () => window.removeEventListener("keydown", handleEscape);
     }
   }, [isOpen, onClose]);
+
+  const handlePresetClick = (presetId: string) => {
+    setFormError("");
+    if (presetId === OFFICIAL_DIRECT_PRESET_ID) {
+      setActivePreset(OFFICIAL_DIRECT_PRESET_ID);
+      setProviderName(OFFICIAL_CODEX_PROVIDER_NAME);
+      setConfigToml(OFFICIAL_CODEX_CONFIG_TOML);
+      setAuthJson(DEFAULT_CODEX_AUTH_JSON);
+      return;
+    }
+
+    const preset = CODEX_PROVIDER_PRESETS.find((item) => item.id === presetId);
+    if (!preset) return;
+
+    setActivePreset(preset.id);
+    setProviderName(preset.name);
+    setConfigToml(preset.configToml);
+    setAuthJson(preset.authJson);
+  };
+
+  // config.toml 不是 JSON,参考实现同样仅对合法 JSON 生效,失败提示 formatError
+  const handleFormatConfigToml = () => {
+    try {
+      const parsed = JSON.parse(configToml);
+      setConfigToml(JSON.stringify(parsed, null, 2));
+      setFormError("");
+    } catch {
+      setFormError(t("settings.vendor.codexDialog.formatError"));
+    }
+  };
+
+  const handleFormatAuthJson = () => {
+    try {
+      const parsed = JSON.parse(authJson);
+      setAuthJson(JSON.stringify(parsed, null, 2));
+      setFormError("");
+    } catch {
+      setFormError(t("settings.vendor.codexDialog.formatError"));
+    }
+  };
 
   const handleAddModel = () => {
     if (!newModelId.trim() || !newModelLabel.trim()) return;
@@ -80,12 +131,16 @@ wire_api = "responses"`);
   };
 
   const handleSave = () => {
-    if (!providerName.trim()) return;
+    if (!providerName.trim()) {
+      setFormError(t("settings.vendor.codexDialog.nameRequired"));
+      return;
+    }
 
     if (authJson.trim()) {
       try {
         JSON.parse(authJson);
       } catch {
+        setFormError(t("settings.vendor.codexDialog.authJsonError"));
         return;
       }
     }
@@ -93,6 +148,7 @@ wire_api = "responses"`);
     const providerData: CodexProviderConfig = {
       id: provider?.id || (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString()),
       name: providerName.trim(),
+      remark: remark.trim() || undefined,
       createdAt: provider?.createdAt,
       configToml: configToml.trim(),
       authJson: authJson.trim(),
@@ -114,7 +170,9 @@ wire_api = "responses"`);
           <h3>
             {isAdding
               ? t("settings.vendor.codexDialog.addTitle")
-              : t("settings.vendor.codexDialog.editTitle")}
+              : t("settings.vendor.codexDialog.editTitle", {
+                  name: provider?.name,
+                })}
           </h3>
           <button type="button" className="vendor-dialog-close" onClick={onClose}>
             &times;
@@ -122,6 +180,76 @@ wire_api = "responses"`);
         </div>
 
         <div className="vendor-dialog-body">
+          {isAdding && (
+            <>
+              <div className="vendor-security-notice">
+                <Shield size={14} />
+                <span>{t("settings.vendor.dialog.securityNotice")}</span>
+              </div>
+
+              <div className="vendor-preset-group">
+                <div className="vendor-preset-title">
+                  {t("settings.vendor.dialog.officialSectionTitle")}
+                </div>
+                <div className="vendor-preset-buttons">
+                  <button
+                    type="button"
+                    className={`vendor-preset-btn ${
+                      activePreset === OFFICIAL_DIRECT_PRESET_ID ? "active" : ""
+                    }`}
+                    onClick={() => handlePresetClick(OFFICIAL_DIRECT_PRESET_ID)}
+                  >
+                    <span className="vendor-preset-btn-icon" aria-hidden>
+                      <ProviderBrandIconImg
+                        src={PROVIDER_BRAND_ICON_SRC.openai}
+                      />
+                    </span>
+                    {t("settings.vendor.codexDialog.officialPreset")}
+                  </button>
+                </div>
+                <small className="vendor-hint">
+                  {t("settings.vendor.codexDialog.officialSectionHint")}
+                </small>
+              </div>
+
+              <div className="vendor-preset-group">
+                <div className="vendor-preset-title">
+                  {t("settings.vendor.dialog.proxySectionTitle")}
+                </div>
+                <div className="vendor-preset-buttons">
+                  {CODEX_PROVIDER_PRESETS.map((preset) => {
+                    const brandIconSrc =
+                      preset.id === "custom"
+                        ? null
+                        : resolveProviderBrandIcon({ presetId: preset.id });
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        className={`vendor-preset-btn ${
+                          activePreset === preset.id ? "active" : ""
+                        }`}
+                        onClick={() => handlePresetClick(preset.id)}
+                      >
+                        <span className="vendor-preset-btn-icon" aria-hidden>
+                          {brandIconSrc ? (
+                            <ProviderBrandIconImg src={brandIconSrc} />
+                          ) : (
+                            <SlidersHorizontal size={14} strokeWidth={2.1} />
+                          )}
+                        </span>
+                        {t(preset.nameKey)}
+                      </button>
+                    );
+                  })}
+                </div>
+                <small className="vendor-hint">
+                  {t("settings.vendor.codexDialog.presetHint")}
+                </small>
+              </div>
+            </>
+          )}
+
           <div className="vendor-form-group">
             <label>{t("settings.vendor.dialog.providerName")} *</label>
             <input
@@ -134,7 +262,28 @@ wire_api = "responses"`);
           </div>
 
           <div className="vendor-form-group">
-            <label>config.toml *</label>
+            <label>{t("settings.vendor.dialog.remark")}</label>
+            <input
+              type="text"
+              className="vendor-input"
+              placeholder={t("settings.vendor.dialog.remarkPlaceholder")}
+              value={remark}
+              onChange={(e) => setRemark(e.target.value)}
+            />
+          </div>
+
+          <div className="vendor-form-group">
+            <div className="vendor-form-label-row">
+              <label>config.toml *</label>
+              <button
+                type="button"
+                className="vendor-btn-format"
+                onClick={handleFormatConfigToml}
+                title={t("settings.vendor.codexDialog.formatJson")}
+              >
+                {t("settings.vendor.codexDialog.formatJson")}
+              </button>
+            </div>
             <textarea
               className="vendor-code-editor"
               value={configToml}
@@ -147,7 +296,17 @@ wire_api = "responses"`);
           </div>
 
           <div className="vendor-form-group">
-            <label>auth.json</label>
+            <div className="vendor-form-label-row">
+              <label>auth.json</label>
+              <button
+                type="button"
+                className="vendor-btn-format"
+                onClick={handleFormatAuthJson}
+                title={t("settings.vendor.codexDialog.formatJson")}
+              >
+                {t("settings.vendor.codexDialog.formatJson")}
+              </button>
+            </div>
             <textarea
               className="vendor-code-editor"
               value={authJson}
@@ -206,6 +365,12 @@ wire_api = "responses"`);
               </div>
             </div>
           </div>
+
+          {formError && (
+            <div className="vendor-json-error" role="alert">
+              {formError}
+            </div>
+          )}
         </div>
 
         <div className="vendor-dialog-footer">

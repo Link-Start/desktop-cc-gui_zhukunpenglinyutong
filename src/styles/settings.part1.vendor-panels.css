@@ -198,6 +198,22 @@
   filter: grayscale(1) brightness(0);
 }
 
+/*
+ * 单色品牌字形默认被 filter 强制为纯黑,深色主题下在深色底衬上不可见;
+ * 暗色(data-theme=dark/dim)与 system+OS 暗色时反白,选择器与 globals.css
+ * @custom-variant dark 的覆盖口径保持一致。
+ */
+:root[data-theme="dark"] .vendor-cli-logo-img-mono,
+:root[data-theme="dim"] .vendor-cli-logo-img-mono {
+  filter: grayscale(1) brightness(0) invert(1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .vendor-cli-logo-img-mono {
+    filter: grayscale(1) brightness(0) invert(1);
+  }
+}
+
 .vendor-cli-logo {
   width: 15px;
   height: 15px;
@@ -241,7 +257,7 @@
 
 .vendor-settings-panel [data-slot="button"][data-variant="default"] {
   background: var(--vendor-button-primary);
-  color: #fff;
+  color: var(--vendor-button-primary-fg);
 }
 
 .vendor-settings-panel
@@ -259,14 +275,14 @@
   [data-slot="button"][data-variant="outline"]:hover:not(:disabled) {
   border-color: var(--vendor-button-primary);
   background: var(--vendor-button-primary);
-  color: #fff;
+  color: var(--vendor-button-primary-fg);
 }
 
 .vendor-tab-content {
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 22px;
 }
 
 .vendor-brand-header {
@@ -430,10 +446,28 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   font-size: 11px;
   font-weight: 600;
-  color: var(--vendor-button-primary-fg);
-  background: var(--vendor-button-primary);
+  color: var(--text-secondary);
+  background: var(--settings-basic-control);
+}
+
+.vendor-plugin-models-manage-btn {
+  padding: 5px 12px;
+  background: var(--settings-basic-control);
+  border: 1px solid var(--settings-basic-control-border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.vendor-plugin-models-manage-btn:hover {
+  background: var(--settings-basic-control-hover);
+  color: var(--text-primary);
 }
 
 .vendor-provider-list {
@@ -442,15 +476,11 @@
   gap: 0;
 }
 
-.vendor-provider-list > .vendor-provider-list {
-  gap: 8px;
-}
-
-.vendor-provider-list > .vendor-provider-list + .vendor-list-header {
-  margin-top: 20px;
-}
-
 .vendor-provider-list > .vendor-list-header + .vendor-provider-table-stack {
+  margin-top: 10px;
+}
+
+.vendor-provider-list > .vendor-list-header + .vendor-card-list {
   margin-top: 10px;
 }
 
@@ -486,9 +516,9 @@
 .vendor-btn-add {
   padding: 5px 14px;
   background: var(--vendor-button-primary);
-  color: #fff;
+  color: var(--vendor-button-primary-fg);
   border: 1px solid var(--vendor-button-primary);
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -529,7 +559,7 @@
 .vendor-provider-table-frame {
   overflow: hidden;
   border: 1px solid var(--settings-basic-border);
-  border-radius: 5px;
+  border-radius: 14px;
   background: var(--settings-basic-surface);
 }
 
@@ -549,8 +579,8 @@
 
 .vendor-provider-table th,
 .vendor-provider-table td {
-  height: 42px;
-  padding: 6px 12px;
+  height: 46px;
+  padding: 8px 16px;
   vertical-align: middle;
   border-bottom: 1px solid var(--settings-basic-divider);
 }
@@ -643,32 +673,213 @@
   margin-left: 4px;
 }
 
+.vendor-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/*
+ * Group card: one rounded surface holding hairline-separated rows, matching
+ * the reference settings style. Used by the Codex config stack
+ * (.vendor-group-card) and the draggable provider lists
+ * (.vendor-provider-group on .vendor-card-list).
+ */
+.vendor-group-card,
+.vendor-provider-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--settings-basic-border);
+  border-radius: 14px;
+  background: var(--settings-basic-surface);
+  overflow: hidden;
+}
+
+.vendor-group-card > * + *:not(.vendor-dialog-overlay),
+.vendor-provider-group > * + * {
+  border-top: 1px solid var(--settings-basic-divider);
+}
+
+.vendor-provider-group .vendor-card-list {
+  gap: 0;
+}
+
+.vendor-provider-group .vendor-card + .vendor-card {
+  border-top: 1px solid var(--settings-basic-divider);
+}
+
+.vendor-group-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 18px;
+}
+
+.vendor-group-row-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.vendor-group-row-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.vendor-group-row .settings-help {
+  margin-top: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.vendor-group-row-clickable {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.vendor-group-row-clickable:hover {
+  background: color-mix(in srgb, var(--surface-hover) 62%, transparent);
+}
+
+:root[data-theme="light"] .vendor-group-row-clickable:hover {
+  background: #f8f8f8;
+}
+
+/* Strip the standalone-card chrome from rows living inside a group card. */
+.vendor-group-card > .vendor-current-config {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.vendor-group-card .vendor-official-config-row {
+  min-height: 0;
+  padding: 14px 18px;
+}
+
+.vendor-official-config-copy .vendor-current-config-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vendor-official-config-help {
+  width: 20px;
+  height: 20px;
+  color: var(--text-faint);
+}
+
+.vendor-official-config-help:hover {
+  color: var(--text-secondary);
+}
+
+.vendor-official-config-help svg {
+  width: 13px;
+  height: 13px;
+}
+
+.vendor-group-card > .settings-toggle-row.vendor-group-row {
+  min-height: 0;
+  margin: 0;
+  padding: 13px 18px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.vendor-summary-card {
+  gap: 4px;
+  padding: 15px 18px;
+  border: 1px solid var(--settings-basic-border);
+  border-radius: 14px;
+  background: var(--settings-basic-surface);
+}
+
+.vendor-summary-card .vendor-list-header {
+  margin-bottom: 4px;
+}
+
+.vendor-summary-card .settings-help {
+  margin-top: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.vendor-provider-group .vendor-empty {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 .vendor-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
-  border-radius: 5px;
-  border: 1px solid var(--border-muted);
-  background: var(--surface-card);
-  transition: border-color 0.15s;
   gap: 12px;
+  padding: 13px 16px;
+  background: transparent;
+  transition: background 0.15s ease;
 }
 
 .vendor-card.is-dragging {
-  background: var(--surface-hover);
-  border-color: var(--border-accent);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  border-radius: 10px;
+  background: var(--settings-basic-surface);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
   z-index: 100;
 }
 
-.vendor-card:hover {
-  border-color: var(--border-stronger);
+.vendor-provider-group .vendor-card:hover {
+  background: color-mix(in srgb, var(--surface-hover) 62%, transparent);
+}
+
+:root[data-theme="light"] .vendor-provider-group .vendor-card:hover {
+  background: #f8f8f8;
 }
 
 .vendor-card.active {
-  border-color: var(--vendor-button-primary-border);
   background: var(--vendor-button-primary-soft);
+}
+
+.vendor-provider-group .vendor-card.active:hover {
+  background: var(--vendor-button-primary-soft);
+}
+
+.vendor-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--surface-card-strong);
+  color: var(--text-secondary);
+  overflow: hidden;
+}
+
+.vendor-card-icon img {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.vendor-card-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* 白色主体字形的品牌图标(如 kimi)在浅色底上不可见,衬深色品牌瓦片;
+   外层尺寸仍由 .vendor-preset-btn-icon / .vendor-card-icon 的 img 规则控制 */
+.vendor-brand-icon-tile {
+  background: #0d0d0d;
+  border-radius: 3px;
+  padding: 2px;
+  object-fit: contain;
 }
 
 .vendor-card-info {
@@ -714,11 +925,11 @@
 }
 
 .vendor-settings-panel [data-slot="button"] {
-  border-radius: 5px;
+  border-radius: 8px;
 }
 
 .vendor-settings-panel [data-slot="badge"] {
-  border-radius: 5px;
+  border-radius: 8px;
 }
 
 .vendor-engine-tab {
@@ -767,16 +978,10 @@
   height: 14px;
 }
 
-.vendor-local-provider-card {
-  border-left: 2px solid #f39c12;
-  background: color-mix(in srgb, #f39c12 5%, var(--surface-card));
-}
-
-.vendor-local-provider-name svg {
-  color: #f39c12;
-}
-
 .vendor-active-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   color: var(--text-accent);
   font-weight: 500;
@@ -784,11 +989,14 @@
 }
 
 .vendor-btn-enable {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 3px 10px;
   background: var(--vendor-button-primary);
   border: 1px solid var(--vendor-button-primary);
-  border-radius: 5px;
-  color: #fff;
+  border-radius: 8px;
+  color: var(--vendor-button-primary-fg);
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
@@ -802,6 +1010,27 @@
   background: var(--vendor-button-primary-hover);
 }
 
+.vendor-btn-revoke {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  background: color-mix(in srgb, #f39c12 8%, transparent);
+  border: 1px solid #f39c12;
+  border-radius: 8px;
+  color: #f39c12;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.vendor-btn-revoke:hover {
+  background: color-mix(in srgb, #f39c12 16%, transparent);
+}
+
 .vendor-btn-icon {
   width: 26px;
   height: 26px;
@@ -810,7 +1039,7 @@
   justify-content: center;
   background: none;
   border: none;
-  border-radius: 5px;
+  border-radius: 8px;
   color: var(--text-secondary);
   cursor: pointer;
   font-size: 13px;

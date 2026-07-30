@@ -50,14 +50,6 @@ describe("vendor settings panel compact layout", () => {
       vendorPanelsCss,
       ".vendor-provider-list",
     );
-    const officialSectionRule = getCssRuleBlock(
-      vendorPanelsCss,
-      ".vendor-provider-list > .vendor-provider-list",
-    );
-    const thirdPartyHeaderRule = getCssRuleBlock(
-      vendorPanelsCss,
-      ".vendor-provider-list > .vendor-provider-list + .vendor-list-header",
-    );
     const thirdPartyTableRule = getCssRuleBlock(
       vendorPanelsCss,
       ".vendor-provider-list > .vendor-list-header + .vendor-provider-table-stack",
@@ -146,21 +138,19 @@ describe("vendor settings panel compact layout", () => {
     expect(headingRule).toContain("gap: 24px;");
     expect(headingRule).toContain("margin-bottom: 28px;");
     expect(tabContentRule).toContain("min-height: 100%;");
-    expect(tabContentRule).toContain("gap: 16px;");
+    expect(tabContentRule).toContain("gap: 22px;");
     expect(providerListRule).toContain("gap: 0;");
-    expect(officialSectionRule).toContain("gap: 8px;");
-    expect(thirdPartyHeaderRule).toContain("margin-top: 20px;");
     expect(thirdPartyTableRule).toContain("margin-top: 10px;");
     expect(listHeaderRule).toContain("gap: 20px;");
     expect(stackRule).toContain("flex-direction: column;");
-    expect(frameRule).toContain("border-radius: 5px;");
+    expect(frameRule).toContain("border-radius: 14px;");
     expect(emptyFrameRule).toContain("border-bottom: 0;");
     expect(emptyFrameRule).toContain("border-bottom-right-radius: 0;");
     expect(emptyRule).toContain("border: 1px solid var(--border-muted);");
     expect(emptyAdjacentRule).toContain("border-top: 0;");
     expect(emptyAdjacentRule).toContain("border-top-left-radius: 0;");
-    expect(buttonRule).toContain("border-radius: 5px;");
-    expect(badgeRule).toContain("border-radius: 5px;");
+    expect(buttonRule).toContain("border-radius: 8px;");
+    expect(badgeRule).toContain("border-radius: 8px;");
     expect(iconRule).toContain("width: 28px;");
     expect(iconRule).toContain("height: 28px;");
     expect(iconRule).toContain("border-radius: 5px;");
@@ -175,5 +165,40 @@ describe("vendor settings panel compact layout", () => {
     expect(cliVersionRule).toContain("flex-wrap: wrap;");
     expect(monoLogoRule).toContain("filter: grayscale(1) brightness(0);");
     expect(iflowLogoRule).not.toContain("linear-gradient");
+  });
+
+  it("keeps provider card list styles aligned with the reference card design", () => {
+    const cardListRule = getCssRuleBlock(vendorPanelsCss, ".vendor-card-list");
+    const groupRule = getCssRuleBlock(vendorPanelsCss, ".vendor-provider-group");
+    const cardRule = getCssRuleBlock(vendorPanelsCss, ".vendor-card");
+    const activeCardRule = getCssRuleBlock(vendorPanelsCss, ".vendor-card.active");
+    const cardIconRule = getCssRuleBlock(vendorPanelsCss, ".vendor-card-icon");
+    const cardIconImgRule = getCssRuleBlock(vendorPanelsCss, ".vendor-card-icon img");
+    const brandIconTileRule = getCssRuleBlock(
+      vendorPanelsCss,
+      ".vendor-brand-icon-tile",
+    );
+    const enableBtnRule = getCssRuleBlock(vendorPanelsCss, ".vendor-btn-enable");
+    const revokeBtnRule = getCssRuleBlock(vendorPanelsCss, ".vendor-btn-revoke");
+
+    expect(cardListRule).toContain("flex-direction: column;");
+    expect(groupRule).toContain("gap: 0;");
+    expect(groupRule).toContain(
+      "border: 1px solid var(--settings-basic-border);",
+    );
+    expect(groupRule).toContain("border-radius: 14px;");
+    expect(groupRule).toContain("background: var(--settings-basic-surface);");
+    expect(cardRule).toContain("background: transparent;");
+    expect(activeCardRule).toContain(
+      "background: var(--vendor-button-primary-soft);",
+    );
+    expect(cardIconRule).toContain("width: 28px;");
+    expect(cardIconRule).toContain("height: 28px;");
+    expect(cardIconImgRule).toContain("width: 18px;");
+    // 白色主体字形的品牌图标(如 kimi)需深色底衬瓦片,避免浅色底不可见
+    expect(brandIconTileRule).toContain("background: #0d0d0d;");
+    expect(brandIconTileRule).toContain("padding: 2px;");
+    expect(enableBtnRule).toContain("background: var(--vendor-button-primary);");
+    expect(revokeBtnRule).toContain("border: 1px solid #f39c12;");
   });
 });

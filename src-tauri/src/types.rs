@@ -2210,8 +2210,12 @@ pub(crate) struct CodexProviderConfig {
     pub(crate) remark: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) created_at: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) sort_order: Option<i64>,
     #[serde(default)]
     pub(crate) is_active: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) source: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) config_toml: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -1498,6 +1498,20 @@
     var(--settings-content-pad-bottom) var(--settings-content-pad-x);
 }
 
+.settings-content > [data-slot="scroll-area-viewport"] {
+  /* The settings column never scrolls sideways — wide children scroll inside
+   * their own overflow box (see the wrapper pin below). Clipping x here also
+   * guarantees no native horizontal scrollbar can appear. */
+  overflow-x: hidden !important;
+}
+
+.settings-content
+  > [data-slot="scroll-area-scrollbar"][data-orientation="horizontal"] {
+  /* Horizontal scrolling is disabled on the page viewport, so the overlay
+   * indicator would be dead weight. */
+  display: none !important;
+}
+
 .settings-content
   > [data-slot="scroll-area-scrollbar"][data-orientation="vertical"] {
   width: 6px !important;
@@ -1855,11 +1869,32 @@
   line-height: 1.2;
 }
 
+.settings-shortcuts-kbd-group--large {
+  gap: 6px;
+}
+
 .settings-shortcuts-kbd-group--large .settings-shortcuts-kbd {
-  min-width: 44px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  font-size: 17px;
+  min-width: 38px;
+  padding: 8px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 7px;
+  background: #2c2c2e;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 15px;
+}
+
+:root[data-theme="light"] .settings-shortcuts-kbd-group--large .settings-shortcuts-kbd {
+  border: none;
+  background: var(--settings-basic-control);
+  color: var(--settings-basic-text);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .settings-shortcuts-kbd-group--large .settings-shortcuts-kbd {
+    border: none;
+    background: var(--settings-basic-control);
+    color: var(--settings-basic-text);
+  }
 }
 
 .settings-shortcuts-kbd-empty {
@@ -1888,7 +1923,7 @@
   padding: 32px 24px;
   border: 1px solid color-mix(in srgb, var(--settings-basic-control-border) 55%, transparent);
   border-radius: 16px;
-  background: color-mix(in srgb, var(--settings-basic-control) 60%, transparent);
+  background: #191919;
 }
 
 :root[data-theme="light"] .settings-shortcuts-detail {
@@ -1923,15 +1958,27 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 220px;
-  min-height: 76px;
-  padding: 12px 20px;
-  border: 1px solid var(--settings-basic-control-border);
-  border-radius: 12px;
-  background: var(--settings-basic-surface-strong);
+  min-width: 200px;
+  min-height: 58px;
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: #202020;
   cursor: pointer;
   outline: none;
   transition: border-color 130ms ease, box-shadow 130ms ease;
+}
+
+:root[data-theme="light"] .settings-shortcuts-recorder {
+  border-color: var(--settings-basic-control-border);
+  background: var(--settings-basic-surface-strong);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .settings-shortcuts-recorder {
+    border-color: var(--settings-basic-control-border);
+    background: var(--settings-basic-surface-strong);
+  }
 }
 
 .settings-shortcuts-recorder:hover {
