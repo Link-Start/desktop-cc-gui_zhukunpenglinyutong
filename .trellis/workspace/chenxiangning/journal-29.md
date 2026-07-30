@@ -1289,3 +1289,102 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1235: 修复消息滚动回声并禁用轻量渲染
+
+**Date**: 2026-07-30
+**Task**: 修复消息滚动回声并禁用轻量渲染
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+闭环修复 programmatic scroll echo 归因与用户滚动优先级；硬禁用 timeline virtualization、lightweight mode 和 summary prompt，恢复静态完整渲染及锚点跳转；7 个相关测试文件 122 passed、3 skipped，并通过 typecheck、定向 ESLint、OpenSpec strict validation 与 diff check，未运行全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `770a943a1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1236: 修复幕布锚点预览与局部凸起
+
+**Date**: 2026-07-30
+**Task**: 修复幕布锚点预览与局部凸起
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+将幕布锚点改为紧凑左侧刻度；hover/focus 仅显示单条目录与简述，并用 26/20/12/8/6px 距离梯度形成局部凸起。完成边界定位、键盘跳转、32 条上限与局部性能审计；focused tests 38 passed、targeted ESLint、typecheck、OpenSpec strict validation 通过，按验收要求未跑全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c4498f6b1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1237: 修复流式渲染卡顿与终止事件乱序
+
+**Date**: 2026-07-30
+**Task**: 修复流式渲染卡顿与终止事件乱序
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+完成 live text 48ms 发布节奏、Markdown 调度收口、Codex terminal causal barrier、前端 workspace-scoped backpressure、Shared defer 诊断及 OpenSpec/增量测试闭环；按约束未运行全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1537211a1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

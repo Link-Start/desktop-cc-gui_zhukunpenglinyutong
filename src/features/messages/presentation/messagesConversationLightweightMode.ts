@@ -1,4 +1,7 @@
-import type { TimelineRenderWeightSummary } from "../timeline/virtualization/messagesTimelineVirtualization";
+import {
+  TIMELINE_ADAPTIVE_RENDERING_ENABLED,
+  type TimelineRenderWeightSummary,
+} from "../timeline/virtualization/messagesTimelineVirtualization";
 
 export const CONVERSATION_LIGHTWEIGHT_SUGGEST_RENDER_WEIGHT = 180;
 export const CONVERSATION_LIGHTWEIGHT_SUGGEST_HEAVY_ROWS = 4;
@@ -19,6 +22,9 @@ export type ConversationLightweightModeState = {
 export function resolveConversationLightweightPolicy(
   summary: Pick<TimelineRenderWeightSummary, "rowCount" | "renderWeight" | "heavyRowCount">,
 ): ConversationLightweightPolicy {
+  if (!TIMELINE_ADAPTIVE_RENDERING_ENABLED) {
+    return { suggested: false, oversized: false };
+  }
   const oversized =
     summary.renderWeight >= CONVERSATION_OVERSIZED_HISTORY_RENDER_WEIGHT ||
     summary.rowCount >= CONVERSATION_OVERSIZED_HISTORY_ROWS;
@@ -34,6 +40,9 @@ export function resolveConversationLightweightModeState(input: {
   manualEnabled: boolean;
   detailHydrationRequested: boolean;
 }): ConversationLightweightModeState {
+  if (!TIMELINE_ADAPTIVE_RENDERING_ENABLED) {
+    return { active: false, reason: "inactive" };
+  }
   if (input.manualEnabled) {
     return { active: true, reason: "manual" };
   }

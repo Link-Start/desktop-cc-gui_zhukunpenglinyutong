@@ -1577,9 +1577,9 @@ describe("Messages live behavior", () => {
     const scroller = getMessagesScroller(container);
 
     let scrollHeight = 2400;
-    setScrollerMetrics(scroller, 1680, () => scrollHeight);
+    setScrollerMetrics(scroller, 1000, () => scrollHeight);
 
-    // 内容变化触发 live-follow 收敛：写入 scrollTop=1680（真实底部），进入回声指纹。
+    // 内容变化触发真实 write：1000 → 1680，applied value 进入 fingerprint ring。
     notifyContentResized();
     expect(scroller.scrollTop).toBe(1680);
 
@@ -1591,6 +1591,266 @@ describe("Messages live behavior", () => {
     // 下一次内容高度信号应把视口追回新的真实底部，而不是滞留在 1680。
     notifyContentResized();
     expect(scroller.scrollTop).toBe(6000 - 720);
+    scrollSpy.mockRestore();
+  });
+
+  it("keeps following when an actual write echo arrives after convergence completes", () => {
+    vi.useFakeTimers();
+    try {
+      window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
+      const scrollSpy = vi
+        .spyOn(HTMLElement.prototype, "scrollIntoView")
+        .mockImplementation(() => {});
+      const { container } = render(
+        <Messages
+          items={[
+            { id: "grace-echo-user", kind: "message", role: "user", text: "go" },
+            { id: "grace-echo-assistant", kind: "message", role: "assistant", text: "partial" },
+          ]}
+          threadId="thread-grace-echo"
+          workspaceId="ws-1"
+          isThinking
+          processingStartedAt={Date.now() - 1_000}
+          openTargets={[]}
+          selectedOpenAppId=""
+        />,
+      );
+      const scroller = getMessagesScroller(container);
+
+      let scrollHeight = 2400;
+      const metrics = setScrollerMetrics(scroller, 1000, () => scrollHeight);
+      notifyContentResized();
+      expect(scroller.scrollTop).toBe(1680);
+
+      // 在最后一个 2000ms checkpoint 制造第二次真实 write。fake rAF 也由 timer 驱动，
+      // checkpoint 后的 settle frames 会在本次 advance 内完成，active run 随即清空。
+      act(() => {
+        vi.advanceTimersByTime(1900);
+      });
+      scrollHeight = 3000;
+      const writesBeforeFinalCheckpoint = metrics.getScrollTopWriteCount();
+      act(() => {
+        vi.advanceTimersByTime(101);
+      });
+      expect(scroller.scrollTop).toBe(2280);
+      expect(metrics.getScrollTopWriteCount()).toBeGreaterThan(
+        writesBeforeFinalCheckpoint,
+      );
+
+      // run 已完成，但 2280 的独立 write fingerprint 尚在 350ms grace 内。
+      scrollHeight = 6000;
+      fireEvent.scroll(scroller);
+      notifyContentResized();
+      expect(scroller.scrollTop).toBe(6000 - 720);
+      scrollSpy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not manufacture post-write grace from no-op convergence frames", () => {
+    vi.useFakeTimers();
+    try {
+      const scrollSpy = vi
+        .spyOn(HTMLElement.prototype, "scrollIntoView")
+        .mockImplementation(() => {});
+      const { container } = render(
+        <Messages
+          items={[
+            { id: "noop-user", kind: "message", role: "user", text: "go" },
+            { id: "noop-assistant", kind: "message", role: "assistant", text: "partial" },
+          ]}
+          threadId="thread-noop-echo"
+          workspaceId="ws-1"
+          isThinking
+          processingStartedAt={Date.now() - 1_000}
+          openTargets={[]}
+          selectedOpenAppId=""
+        />,
+      );
+      const scroller = getMessagesScroller(container);
+      let scrollHeight = 2400;
+      const metrics = setScrollerMetrics(scroller, 1680, () => scrollHeight);
+
+      notifyContentResized();
+      act(() => {
+        vi.advanceTimersByTime(2100);
+      });
+      expect(metrics.getScrollTopWriteCount()).toBe(0);
+
+      scrollHeight = 6000;
+      fireEvent.scroll(scroller);
+      notifyContentResized();
+      expect(scroller.scrollTop).toBe(1680);
+      scrollSpy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    ["keyboard", (scroller: HTMLDivElement) => fireEvent.keyDown(scroller, { key: "PageUp" })],
+    ["touch", (scroller: HTMLDivElement) => fireEvent.touchStart(scroller)],
+    [
+      "pointer/scrollbar",
+      (scroller: HTMLDivElement) =>
+        fireEvent.pointerDown(scroller, { button: 0, pointerId: 7 }),
+    ],
+  ])("lets %s user intent override a matching fingerprint", (_source, signalIntent) => {
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
+    const { container } = render(
+      <Messages
+        items={[
+          { id: `intent-${_source}-user`, kind: "message", role: "user", text: "go" },
+          {
+            id: `intent-${_source}-assistant`,
+            kind: "message",
+            role: "assistant",
+            text: "partial",
+          },
+        ]}
+        threadId={`thread-intent-${_source}`}
+        workspaceId="ws-1"
+        isThinking
+        processingStartedAt={Date.now() - 1_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+    const scroller = getMessagesScroller(container);
+    let scrollHeight = 2400;
+    setScrollerMetrics(scroller, 1000, () => scrollHeight);
+
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(1680);
+    signalIntent(scroller);
+
+    // 位置仍命中刚写入的 1680 fingerprint，但 user intent 必须取得所有权。
+    scrollHeight = 6000;
+    fireEvent.scroll(scroller);
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(1680);
+    scrollSpy.mockRestore();
+  });
+
+  it("does not restart convergence between touch intent and its scroll event", () => {
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
+    const { container } = render(
+      <Messages
+        items={[
+          { id: "touch-race-user", kind: "message", role: "user", text: "go" },
+          {
+            id: "touch-race-assistant",
+            kind: "message",
+            role: "assistant",
+            text: "partial",
+          },
+        ]}
+        threadId="thread-touch-race"
+        workspaceId="ws-1"
+        isThinking
+        processingStartedAt={Date.now() - 1_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+    const scroller = getMessagesScroller(container);
+    let scrollHeight = 2400;
+    setScrollerMetrics(scroller, 1000, () => scrollHeight);
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(1680);
+
+    fireEvent.touchStart(scroller);
+    scrollHeight = 6000;
+    notifyContentResized();
+
+    // touch 已取得 owner、scroll 尚未派发：ResizeObserver 不得抢先写回新底部。
+    expect(scroller.scrollTop).toBe(1680);
+    scrollSpy.mockRestore();
+  });
+
+  it("recognizes a geometry-proven browser clamp as a programmatic echo", () => {
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
+    const { container } = render(
+      <Messages
+        items={[
+          { id: "clamp-user", kind: "message", role: "user", text: "go" },
+          { id: "clamp-assistant", kind: "message", role: "assistant", text: "partial" },
+        ]}
+        threadId="thread-clamp"
+        workspaceId="ws-1"
+        isThinking
+        processingStartedAt={Date.now() - 1_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+    const scroller = getMessagesScroller(container);
+    let scrollHeight = 6000;
+    setScrollerMetrics(scroller, 5280, () => scrollHeight);
+
+    // 建立 collapse 前 geometry，再模拟浏览器将越界位置钳位到新的 maxScrollTop。
+    notifyContentResized();
+    scrollHeight = 2400;
+    scroller.scrollTop = 1680;
+    notifyContentResized();
+
+    // 钳位事件迟到时 geometry 已回填；clamp fingerprint 必须保护 follow owner。
+    scrollHeight = 6000;
+    fireEvent.scroll(scroller);
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(5280);
+    scrollSpy.mockRestore();
+  });
+
+  it("clears echo fingerprints on thread switch so stale positions are not exempted", async () => {
+    // 回归：指纹环必须随会话切换清空。会话 A 的写入位置 1680 若残留进环，切到
+    // 会话 B 后处于 grace 窗口内的旧位置 scroll 事件会被误判为回声而保持跟随。
+    window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
+    const renderWith = (threadId: string) => (
+      <Messages
+        items={[
+          { id: `clear-${threadId}-user`, kind: "message", role: "user", text: "go" },
+          { id: `clear-${threadId}-assistant`, kind: "message", role: "assistant", text: "partial" },
+        ]}
+        threadId={threadId}
+        workspaceId="ws-1"
+        isThinking
+        processingStartedAt={Date.now() - 1_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />
+    );
+    const { container, rerender } = render(renderWith("thread-clear-A"));
+    const scroller = getMessagesScroller(container);
+
+    // 会话 A：写入 scrollTop=1680，进入回声指纹。
+    setScrollerMetrics(scroller, 1200, 2400);
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(1680);
+
+    // 切到会话 B：几何不同（底部 7280），history-open 钉底写入新指纹。
+    setScrollerMetrics(scroller, 7000, 8000);
+    rerender(renderWith("thread-clear-B"));
+    expect(scroller.scrollTop).toBe(7280);
+
+    // 旧会话的指纹位置 1680 处发生 scroll 事件：环已清空 → 不豁免 → 按真实用户
+    // 上滚解除跟随（而不是被残留指纹误判成回声）。
+    scroller.scrollTop = 1680;
+    fireEvent.scroll(scroller);
+
+    // 跟随已解除：后续内容高度信号不得把视口拽回底部。
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(1680);
     scrollSpy.mockRestore();
   });
 

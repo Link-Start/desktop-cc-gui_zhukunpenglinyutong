@@ -101,6 +101,18 @@ pub(crate) struct SharedRuntimeObservation {
     /// `true` 时该 ingress 已由 Shared owner 接管并等待 replay barrier；普通
     /// Native/UI fan-out 必须跳过，durable accept 后由 drain 唯一发出。
     pub ui_fanout_deferred: bool,
+    /// 区分“等待 exact owner identity”与“已绑定但等待 replay barrier”。
+    pub ui_fanout_defer_reason: Option<SharedRuntimeUiFanoutDeferReason>,
+    /// 当前 defer queue 深度，只用于 content-safe attribution。
+    pub deferred_queue_depth: usize,
+    /// coordinator 生命周期内因 unowned queue 满而丢弃的累计事件数。
+    pub unowned_overflow_drop_count: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SharedRuntimeUiFanoutDeferReason {
+    AwaitingOwnerIdentity,
+    ReplayBarrier,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -118,6 +130,7 @@ struct CoordinatorState {
     held_attempt_by_native_session: HashMap<RuntimeIdentityKey, String>,
     held_provisioning_attempts_by_runtime: HashMap<RuntimeScopeKey, HashSet<String>>,
     unowned_events: VecDeque<RuntimeIngress>,
+    unowned_overflow_drop_count: u64,
 }
 
 #[derive(Debug, Default)]
@@ -932,19 +945,59 @@ impl CoordinatorState {
             if !self.is_held_shared_ingress(&ingress) {
                 return SharedRuntimeObservation::default();
             }
-            if self.unowned_events.len() >= MAX_UNOWNED_EVENTS {
+            let first_deferred_event = self.unowned_events.is_empty();
+            let overflowed = self.unowned_events.len() >= MAX_UNOWNED_EVENTS;
+            if overflowed {
                 self.unowned_events.pop_front();
+                self.unowned_overflow_drop_count =
+                    self.unowned_overflow_drop_count.saturating_add(1);
             }
-            self.unowned_events.push_back(ingress);
-            return SharedRuntimeObservation {
+            let observation = SharedRuntimeObservation {
                 ui_fanout_deferred: true,
+                ui_fanout_defer_reason: Some(
+                    SharedRuntimeUiFanoutDeferReason::AwaitingOwnerIdentity,
+                ),
+                deferred_queue_depth: self.unowned_events.len() + 1,
+                unowned_overflow_drop_count: self.unowned_overflow_drop_count,
                 ..SharedRuntimeObservation::default()
             };
+            if first_deferred_event {
+                log::debug!(
+                    "[shared-runtime] UI fan-out deferred reason={:?} workspace_id={} engine={:?} provider_runtime_key={} queue_depth={}",
+                    observation.ui_fanout_defer_reason,
+                    ingress.workspace_id,
+                    ingress.engine,
+                    ingress.provider_runtime_key,
+                    observation.deferred_queue_depth
+                );
+            }
+            if overflowed
+                && (observation.unowned_overflow_drop_count == 1
+                    || observation.unowned_overflow_drop_count.is_power_of_two())
+            {
+                log::warn!(
+                    "[shared-runtime] unowned ingress overflow workspace_id={} engine={:?} provider_runtime_key={} queue_depth={} queue_limit={} dropped_total={}",
+                    ingress.workspace_id,
+                    ingress.engine,
+                    ingress.provider_runtime_key,
+                    observation.deferred_queue_depth,
+                    MAX_UNOWNED_EVENTS,
+                    observation.unowned_overflow_drop_count
+                );
+            }
+            self.unowned_events.push_back(ingress);
+            return observation;
         };
         if self.replay_barriers.contains_key(&attempt_id) {
             self.queue_behind_replay_barrier(&attempt_id, ingress);
             return SharedRuntimeObservation {
                 ui_fanout_deferred: true,
+                ui_fanout_defer_reason: Some(SharedRuntimeUiFanoutDeferReason::ReplayBarrier),
+                deferred_queue_depth: self
+                    .replay_barriers
+                    .get(&attempt_id)
+                    .map_or(0, |barrier| barrier.pending.len()),
+                unowned_overflow_drop_count: self.unowned_overflow_drop_count,
                 ..SharedRuntimeObservation::default()
             };
         }
@@ -1045,6 +1098,9 @@ impl CoordinatorState {
             agent_event: ingress.agent_event,
             settled,
             ui_fanout_deferred: false,
+            ui_fanout_defer_reason: None,
+            deferred_queue_depth: 0,
+            unowned_overflow_drop_count: self.unowned_overflow_drop_count,
         }
     }
 
@@ -1117,7 +1173,14 @@ impl CoordinatorState {
             return;
         }
         if let Some(barrier) = self.replay_barriers.get_mut(attempt_id) {
+            let first_deferred_event = barrier.pending.is_empty();
             barrier.pending.push_back(ingress);
+            if first_deferred_event {
+                log::debug!(
+                    "[shared-runtime] UI fan-out deferred reason=replay-barrier attempt_id={} queue_depth=1",
+                    attempt_id
+                );
+            }
         }
     }
 
@@ -2939,6 +3002,12 @@ mod tests {
             }),
         );
         assert!(early.ui_fanout_deferred);
+        assert_eq!(
+            early.ui_fanout_defer_reason,
+            Some(SharedRuntimeUiFanoutDeferReason::AwaitingOwnerIdentity)
+        );
+        assert_eq!(early.deferred_queue_depth, 1);
+        assert_eq!(early.unowned_overflow_drop_count, 0);
         coordinator.ingest_codex_event(
             "ws-1",
             &json!({
@@ -2950,6 +3019,19 @@ mod tests {
         coordinator
             .bind_runtime_turn("attempt-1", Some("run-1"), Some("native-1"))
             .expect("bind");
+        let barrier_deferred = coordinator.ingest_codex_event(
+            "ws-1",
+            &json!({
+                "method": "item/agentMessage/delta",
+                "params": {"threadId": "native-1", "turnId": "run-1", "delta": "barrier"}
+            }),
+        );
+        assert!(barrier_deferred.ui_fanout_deferred);
+        assert_eq!(
+            barrier_deferred.ui_fanout_defer_reason,
+            Some(SharedRuntimeUiFanoutDeferReason::ReplayBarrier)
+        );
+        assert!(barrier_deferred.deferred_queue_depth >= 1);
         let batch = coordinator
             .drain_replay_barrier("attempt-1")
             .expect("drain");
@@ -2962,6 +3044,40 @@ mod tests {
             settled.final_snapshot.assistant_blocks.as_slice(),
             [CanonicalBlock::Text { text }] if text == "early"
         ));
+    }
+
+    #[test]
+    fn unowned_queue_overflow_reports_bounded_attribution() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        coordinator
+            .register_attempt(owner("attempt-overflow", None, None))
+            .expect("register");
+        coordinator
+            .hold_native_session("attempt-overflow", "native-overflow")
+            .expect("hold");
+
+        let mut latest = SharedRuntimeObservation::default();
+        for index in 0..=MAX_UNOWNED_EVENTS {
+            latest = coordinator.ingest_codex_event(
+                "ws-1",
+                &json!({
+                    "method": "item/agentMessage/delta",
+                    "params": {
+                        "threadId": "native-overflow",
+                        "turnId": "run-overflow",
+                        "delta": format!("chunk-{index}")
+                    }
+                }),
+            );
+        }
+
+        assert!(latest.ui_fanout_deferred);
+        assert_eq!(
+            latest.ui_fanout_defer_reason,
+            Some(SharedRuntimeUiFanoutDeferReason::AwaitingOwnerIdentity)
+        );
+        assert_eq!(latest.deferred_queue_depth, MAX_UNOWNED_EVENTS);
+        assert_eq!(latest.unowned_overflow_drop_count, 1);
     }
 
     #[test]

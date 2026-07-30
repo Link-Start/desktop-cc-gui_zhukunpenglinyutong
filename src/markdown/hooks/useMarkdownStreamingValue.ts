@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   normalizeProgressiveRevealChunkChars,
   normalizeProgressiveRevealStepMs,
@@ -31,9 +31,7 @@ export function useMarkdownStreamingValue({
   latestValueRef.current = value;
 
   const scheduleThrottledValueUpdate = useCallback((nextValue: string) => {
-    startTransition(() => {
-      setThrottledValue((currentValue) => currentValue === nextValue ? currentValue : nextValue);
-    });
+    setThrottledValue((currentValue) => currentValue === nextValue ? currentValue : nextValue);
   }, []);
 
   useEffect(() => {
@@ -80,11 +78,9 @@ export function useMarkdownStreamingValue({
   const previousProgressiveRevealRef = useRef(progressiveReveal);
 
   const scheduleProgressiveValueUpdate = useCallback((updater: string | ((current: string) => string)) => {
-    startTransition(() => {
-      setProgressiveValue((current) => {
-        const next = typeof updater === "function" ? updater(current) : updater;
-        return next === current ? current : next;
-      });
+    setProgressiveValue((current) => {
+      const next = typeof updater === "function" ? updater(current) : updater;
+      return next === current ? current : next;
     });
   }, []);
 

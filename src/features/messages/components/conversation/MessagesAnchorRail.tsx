@@ -1,9 +1,16 @@
-import { useCollapsibleFloater } from "../../hooks/useCollapsibleFloater";
+import { useId, useState, type KeyboardEvent } from "react";
 
 type MessageAnchor = {
+  description?: string;
   id: string;
   role: string;
   title?: string;
+};
+
+type VisibleMessageAnchor = {
+  anchor: MessageAnchor;
+  originalIndex: number;
+  placement: "down" | "center" | "up";
 };
 
 type MessagesAnchorRailProps = {
@@ -14,28 +21,46 @@ type MessagesAnchorRailProps = {
   onScrollToAnchor: (messageId: string) => void;
 };
 
-const MAX_COLLAPSED_ANCHOR_DASHES = 10;
+const MAX_VISIBLE_ANCHOR_DASHES = 32;
+const PREVIEW_EDGE_ROW_COUNT = 6;
 
-function getCollapsedAnchorDashes(
+function getVisibleAnchorDashes(
   anchors: MessageAnchor[],
   activeAnchorId: string | null,
-): MessageAnchor[] {
-  if (anchors.length <= MAX_COLLAPSED_ANCHOR_DASHES) {
-    return anchors;
-  }
-
+): VisibleMessageAnchor[] {
   const activeIndex = activeAnchorId
     ? anchors.findIndex((anchor) => anchor.id === activeAnchorId)
     : -1;
+  const visibleAnchorIndexes =
+    anchors.length <= MAX_VISIBLE_ANCHOR_DASHES
+      ? anchors.map((_, index) => index)
+      : Array.from({ length: MAX_VISIBLE_ANCHOR_DASHES }, (_, bucketIndex) => {
+          const start = Math.floor(
+            (bucketIndex * anchors.length) / MAX_VISIBLE_ANCHOR_DASHES,
+          );
+          const end = Math.floor(
+            ((bucketIndex + 1) * anchors.length) / MAX_VISIBLE_ANCHOR_DASHES,
+          );
+          const bucketEnd = Math.max(start + 1, end);
+          return activeIndex >= start && activeIndex < bucketEnd
+            ? activeIndex
+            : Math.floor((start + bucketEnd - 1) / 2);
+        });
 
-  return Array.from({ length: MAX_COLLAPSED_ANCHOR_DASHES }, (_, index) => {
-    const start = Math.floor((index * anchors.length) / MAX_COLLAPSED_ANCHOR_DASHES);
-    const end = Math.floor(((index + 1) * anchors.length) / MAX_COLLAPSED_ANCHOR_DASHES);
-    const bucketEnd = Math.max(start + 1, end);
-    if (activeIndex >= start && activeIndex < bucketEnd) {
-      return anchors[activeIndex]!;
-    }
-    return anchors[Math.floor((start + bucketEnd - 1) / 2)]!;
+  return visibleAnchorIndexes.map((originalIndex, visibleIndex) => {
+    const hasMiddleRows =
+      visibleAnchorIndexes.length > PREVIEW_EDGE_ROW_COUNT * 2;
+    return {
+      anchor: anchors[originalIndex]!,
+      originalIndex,
+      placement:
+        visibleIndex < PREVIEW_EDGE_ROW_COUNT
+          ? "down"
+          : hasMiddleRows &&
+              visibleIndex >= visibleAnchorIndexes.length - PREVIEW_EDGE_ROW_COUNT
+            ? "up"
+            : "center",
+    };
   });
 }
 
@@ -46,68 +71,95 @@ export function MessagesAnchorRail({
   getFallbackTitle,
   onScrollToAnchor,
 }: MessagesAnchorRailProps) {
-  const { state, expand, scheduleCollapse } = useCollapsibleFloater();
+  const previewId = useId();
+  const [previewAnchorId, setPreviewAnchorId] = useState<string | null>(null);
 
   if (anchors.length === 0) {
     return null;
   }
 
-  const isExpanded = state !== "collapsed";
-  const collapsedDashes = getCollapsedAnchorDashes(anchors, activeAnchorId);
+  const visibleAnchors = getVisibleAnchorDashes(anchors, activeAnchorId);
+  const previewAnchorIndex = previewAnchorId
+    ? visibleAnchors.findIndex(({ anchor }) => anchor.id === previewAnchorId)
+    : -1;
 
   const handleJump = (messageId: string) => {
+    setPreviewAnchorId(null);
     onScrollToAnchor(messageId);
-    scheduleCollapse();
+  };
+
+  const handleDashKeyDown = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    messageId: string,
+  ) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    event.preventDefault();
+    handleJump(messageId);
   };
 
   return (
     <div
       className="messages-anchor-rail"
-      data-state={state}
       role="navigation"
       aria-label={anchorNavigationLabel}
-      onMouseEnter={expand}
-      onMouseLeave={scheduleCollapse}
+      onMouseLeave={() => setPreviewAnchorId(null)}
     >
-      {/* Collapsed: compact dash ruler capped for long conversations. */}
-      <div className="messages-anchor-ruler" aria-hidden={isExpanded}>
-        {collapsedDashes.map((anchor) => {
+      {visibleAnchors.map(
+        ({ anchor, originalIndex, placement }, visibleIndex) => {
           const isActive = activeAnchorId === anchor.id;
+          const isPreviewVisible = previewAnchorId === anchor.id;
+          const previewDistance =
+            previewAnchorIndex < 0
+              ? -1
+              : Math.abs(visibleIndex - previewAnchorIndex);
+          const proximityClass =
+            previewDistance >= 0 && previewDistance <= 3
+              ? ` is-proximity-${previewDistance}`
+              : "";
+          const label = anchor.title?.trim() || getFallbackTitle(originalIndex);
           return (
-            <span
+            <div
               key={anchor.id}
-              className={`messages-anchor-dash${isActive ? " is-active" : ""}`}
-            />
+              className={`messages-anchor-item is-preview-${placement}`}
+            >
+              <button
+                type="button"
+                className={`messages-anchor-dash${isActive ? " is-active" : ""}${proximityClass}`}
+                onMouseEnter={() => setPreviewAnchorId(anchor.id)}
+                onFocus={() => setPreviewAnchorId(anchor.id)}
+                onBlur={() => setPreviewAnchorId(null)}
+                onClick={() => handleJump(anchor.id)}
+                onKeyDown={(event) => handleDashKeyDown(event, anchor.id)}
+                aria-current={isActive ? "location" : undefined}
+                aria-describedby={isPreviewVisible ? previewId : undefined}
+                aria-label={label}
+                title={label}
+                data-anchor-id={anchor.id}
+                data-testid="messages-anchor-dash"
+              />
+              {isPreviewVisible ? (
+                <div
+                  id={previewId}
+                  className="messages-anchor-preview"
+                  role="tooltip"
+                  data-testid="messages-anchor-preview"
+                >
+                  <strong className="messages-anchor-preview-title">
+                    {originalIndex + 1}. {label}
+                  </strong>
+                  {anchor.description ? (
+                    <span className="messages-anchor-preview-description">
+                      {anchor.description}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
           );
-        })}
-      </div>
-
-      {/* Expanded: full outline panel flying out to the right. */}
-      {isExpanded ? (
-        <div className="messages-anchor-panel" role="menu">
-          <ul className="messages-anchor-list">
-            {anchors.map((anchor, index) => {
-              const isActive = activeAnchorId === anchor.id;
-              const label = anchor.title?.trim() || getFallbackTitle(index);
-              return (
-                <li key={anchor.id}>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={`messages-anchor-row${isActive ? " is-active" : ""}`}
-                    onClick={() => handleJump(anchor.id)}
-                    aria-current={isActive ? "true" : undefined}
-                    title={label}
-                    data-testid="messages-anchor-row"
-                  >
-                    {label}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ) : null}
+        },
+      )}
     </div>
   );
 }

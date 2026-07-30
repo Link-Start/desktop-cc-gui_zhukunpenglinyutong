@@ -16,6 +16,7 @@ import {
 } from "../../tasks/utils/taskRunNavigationEvents";
 import type { TaskRunRecord } from "../../tasks/types";
 import { Messages } from "./Messages";
+import { MessagesAnchorRail } from "./conversation/MessagesAnchorRail";
 
 function makeRun(overrides: Partial<TaskRunRecord> = {}): TaskRunRecord {
   return {
@@ -1505,7 +1506,7 @@ describe("Messages", () => {
         id: "anchor-u1",
         kind: "message",
         role: "user",
-        text: "first",
+        text: "first\nsimple description",
       },
       {
         id: "anchor-a1",
@@ -1534,18 +1535,21 @@ describe("Messages", () => {
 
     const rail = screen.getByRole("navigation", { name: "messages.anchorNavigation" });
     expect(rail).toBeTruthy();
-    // Collapsed: one dash per user message (assistant message skipped).
-    expect(rail.querySelectorAll(".messages-anchor-dash").length).toBe(2);
+    const dashes = screen.getAllByTestId("messages-anchor-dash");
+    expect(dashes.length).toBe(2);
 
-    // Hovering the rail expands the full outline panel.
-    fireEvent.mouseEnter(rail);
-    const rows = screen.getAllByTestId("messages-anchor-row");
-    expect(rows.length).toBe(2);
-    // Each row shows the real user-message text.
-    expect(rows[0]?.textContent).toBe("first");
-    expect(rows[1]?.textContent).toBe("third");
+    fireEvent.mouseEnter(dashes[0]!);
+    const preview = screen.getByTestId("messages-anchor-preview");
+    expect(preview.textContent).toContain("1. first");
+    expect(preview.textContent).toContain("simple description");
+    expect(screen.getAllByTestId("messages-anchor-preview").length).toBe(1);
+    expect(screen.queryByTestId("messages-anchor-row")).toBeNull();
 
-    fireEvent.click(rows[0]!);
+    fireEvent.mouseEnter(dashes[1]!);
+    expect(screen.getByTestId("messages-anchor-preview").textContent).toContain("2. third");
+    expect(screen.getAllByTestId("messages-anchor-preview").length).toBe(1);
+
+    fireEvent.click(dashes[0]!);
     expect(scrollToMock).toHaveBeenCalledWith(
       expect.objectContaining({ behavior: "smooth" }),
     );
@@ -1569,32 +1573,85 @@ describe("Messages", () => {
     expect(rail.querySelectorAll(".messages-anchor-dash").length).toBe(1);
   });
 
-  it("caps collapsed anchor rail dashes while keeping the full outline", () => {
-    HTMLElement.prototype.scrollIntoView = vi.fn();
-
-    const items: ConversationItem[] = Array.from({ length: 14 }, (_, index) => ({
+  it("bounds anchor dashes, preserves active anchor, and supports keyboard jump", () => {
+    const onScrollToAnchor = vi.fn();
+    const anchors = Array.from({ length: 40 }, (_, index) => ({
       id: `anchor-many-${index + 1}`,
-      kind: "message",
       role: "user",
-      text: `message ${index + 1}`,
+      title: `message ${index + 1}`,
+      description: `description ${index + 1}`,
     }));
-
     render(
-      <Messages
-        items={items}
-        threadId="thread-1"
-        workspaceId="ws-1"
-        isThinking={false}
-        openTargets={[]}
-        selectedOpenAppId=""
+      <MessagesAnchorRail
+        activeAnchorId="anchor-many-40"
+        anchors={anchors}
+        anchorNavigationLabel="Message anchors"
+        getFallbackTitle={(index) => `User ${index + 1}`}
+        onScrollToAnchor={onScrollToAnchor}
       />,
     );
 
-    const rail = screen.getByRole("navigation", { name: "messages.anchorNavigation" });
-    expect(rail.querySelectorAll(".messages-anchor-dash").length).toBe(10);
+    const dashes = screen.getAllByTestId("messages-anchor-dash");
+    expect(dashes.length).toBe(32);
+    expect(
+      dashes.every((dash) => !dash.closest(".messages-anchor-item")?.hasAttribute("style")),
+    ).toBe(true);
 
-    fireEvent.mouseEnter(rail);
-    expect(screen.getAllByTestId("messages-anchor-row").length).toBe(14);
+    const firstDash = document.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="anchor-many-1"]',
+    );
+    const lastDash = document.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="anchor-many-40"]',
+    );
+    expect(firstDash?.closest(".messages-anchor-item")?.classList.contains("is-preview-down")).toBe(
+      true,
+    );
+    expect(
+      dashes.some((dash) =>
+        dash.closest(".messages-anchor-item")?.classList.contains("is-preview-center"),
+      ),
+    ).toBe(true);
+    expect(lastDash).toBeTruthy();
+    expect(lastDash?.classList.contains("is-active")).toBe(true);
+    expect(
+      lastDash?.closest(".messages-anchor-item")?.classList.contains("is-preview-up"),
+    ).toBe(true);
+
+    fireEvent.mouseEnter(dashes[16]!);
+    expect(dashes[16]?.classList.contains("is-proximity-0")).toBe(true);
+    expect(dashes[15]?.classList.contains("is-proximity-1")).toBe(true);
+    expect(dashes[17]?.classList.contains("is-proximity-1")).toBe(true);
+    expect(dashes[14]?.classList.contains("is-proximity-2")).toBe(true);
+    expect(dashes[18]?.classList.contains("is-proximity-2")).toBe(true);
+    expect(dashes[13]?.classList.contains("is-proximity-3")).toBe(true);
+    expect(dashes[19]?.classList.contains("is-proximity-3")).toBe(true);
+    expect(dashes[12]?.className).not.toContain("is-proximity-");
+    fireEvent.mouseLeave(screen.getByRole("navigation", { name: "Message anchors" }));
+    expect(dashes[16]?.className).not.toContain("is-proximity-");
+
+    if (!lastDash) {
+      throw new Error("Active anchor dash not found");
+    }
+    fireEvent.focus(lastDash);
+    expect(lastDash.classList.contains("is-proximity-0")).toBe(true);
+    expect(screen.getByTestId("messages-anchor-preview").textContent).toContain(
+      "40. message 40",
+    );
+    fireEvent.keyDown(lastDash, { key: "Enter" });
+    fireEvent.focus(lastDash);
+    fireEvent.keyDown(lastDash, { key: " " });
+    expect(onScrollToAnchor).toHaveBeenNthCalledWith(1, "anchor-many-40");
+    expect(onScrollToAnchor).toHaveBeenNthCalledWith(2, "anchor-many-40");
+
+    if (!firstDash) {
+      throw new Error("First anchor dash not found");
+    }
+    fireEvent.mouseEnter(firstDash);
+    expect(screen.getByTestId("messages-anchor-preview").textContent).toContain(
+      "1. message 1",
+    );
+    fireEvent.mouseLeave(screen.getByRole("navigation", { name: "Message anchors" }));
+    expect(screen.queryByTestId("messages-anchor-preview")).toBeNull();
   });
 
   // A2:VISIBLE_MESSAGE_WINDOW=10000(95bc726a)有意禁用数量折叠(旧阈值 30,故 32 条折叠 2 条);折叠当前不启用,恢复策略后去 skip。

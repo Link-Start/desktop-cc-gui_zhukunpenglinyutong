@@ -5,7 +5,7 @@ import { createHeavyHistoryFixture } from "../test-support/messagesHeavyHistoryF
 import { useMessagesTimelineHydration } from "./useMessagesTimelineHydration";
 
 describe("useMessagesTimelineHydration", () => {
-  it("owns heavy-row summary promotion without virtualizer side effects when static", () => {
+  it("keeps direct lightweight inputs on static full-detail rendering", () => {
     const { rows } = createHeavyHistoryFixture("heavy");
     const { result } = renderHook(() => useMessagesTimelineHydration({
       activeLiveTimelineRowKeys: [],
@@ -27,14 +27,21 @@ describe("useMessagesTimelineHydration", () => {
       visibleTimelineRowKeySet: new Set(),
       workspaceId: "workspace-1",
     }));
-    const heavyState = [...result.current.timelineRowHydrationStateByKey.values()]
-      .find((state) => state.heavy);
-    const heavyRow = rows.find((row) => row.key === heavyState?.rowKey);
-
-    expect(heavyState?.mode).toBe("summary");
-    expect(heavyRow && result.current.shouldRenderLightweightProjectionRow(
-      heavyRow,
-      heavyState,
-    )).toBe(true);
+    expect(
+      [...result.current.timelineRowHydrationStateByKey.values()].every(
+        (state) =>
+          !state.heavy &&
+          state.mode === "static" &&
+          state.hydrationReason === "not-heavy",
+      ),
+    ).toBe(true);
+    expect(
+      rows.every((row) =>
+        !result.current.shouldRenderLightweightProjectionRow(
+          row,
+          result.current.timelineRowHydrationStateByKey.get(row.key),
+        ),
+      ),
+    ).toBe(true);
   });
 });

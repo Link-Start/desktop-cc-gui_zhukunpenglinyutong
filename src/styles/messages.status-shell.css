@@ -1,125 +1,155 @@
 /*
- * Notion-style anchor rail.
+ * Left-side message anchor rail.
  *
- * Collapsed: a compact column of short horizontal dashes, capped for
- * long conversations; the currently visible message lights up
- * (`.is-active`) when its bucket is visible.
- *
- * Hovering anywhere on the rail expands a full outline panel that
- * flies out to the right, listing every user message so the reader can
- * pick one. Active + hover states use neutral greys / near-black (no
- * blue accent), matching the workspace list aesthetic.
+ * Dashes keep bounded user-message anchors in a compact top-aligned stack.
+ * Hover/focus reveals one local preview card; the rail never expands into
+ * a full conversation outline.
  */
 .messages-anchor-rail {
   position: absolute;
-  right: 50px;
-  top: 150px;
-  width: 24px;
+  left: 40px;
+  top: calc(var(--main-topbar-height) + 22px);
+  bottom: 22px;
+  width: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   z-index: 12;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  pointer-events: none;
+}
+
+.messages-anchor-item {
+  position: relative;
+  flex: 0 0 8px;
+  width: 52px;
+  height: 8px;
   pointer-events: auto;
-  --messages-anchor-bottom-gap: 42px;
 }
 
-/* ── Collapsed: compact dash ruler ─────────────────────────────── */
-
-.messages-anchor-ruler {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 11px;
-  padding: 4px 0;
-  cursor: pointer;
-}
-
-/* Every dash is the same short length, active included. */
 .messages-anchor-dash {
-  width: 18px;
+  position: relative;
+  display: block;
+  width: 52px;
+  height: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  outline: none;
+}
+
+.messages-anchor-dash::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 6px;
   height: 2px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--text-faint) 60%, transparent);
-  transition: background-color 0.16s ease;
+  background: color-mix(in srgb, var(--text-faint) 54%, transparent);
+  transform: translateY(-50%);
+  transition:
+    width 0.16s ease,
+    background-color 0.16s ease;
 }
 
-.messages-anchor-rail:hover .messages-anchor-dash {
-  background: color-mix(in srgb, var(--text-faint) 78%, transparent);
+.messages-anchor-dash.is-proximity-3::before {
+  width: 8px;
 }
 
-.messages-anchor-dash.is-active {
+.messages-anchor-dash.is-proximity-2::before {
+  width: 12px;
+}
+
+.messages-anchor-dash.is-proximity-1::before {
+  width: 20px;
+}
+
+.messages-anchor-dash.is-proximity-0::before,
+.messages-anchor-dash:hover::before,
+.messages-anchor-dash:focus-visible::before {
+  width: 26px;
+  background: color-mix(in srgb, var(--text-muted) 78%, transparent);
+}
+
+.messages-anchor-dash:focus-visible {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 42%, transparent);
+}
+
+.messages-anchor-dash.is-active::before {
   background: var(--text-strong);
 }
 
-/* ── Expanded: outline panel (flyout to the right) ─────────────── */
+.messages-anchor-dash.is-active:hover::before,
+.messages-anchor-dash.is-active:focus-visible::before {
+  background: var(--text-strong);
+}
 
-.messages-anchor-panel {
+.messages-anchor-preview {
   position: absolute;
   z-index: 1;
-  right: 0;
-  top: 0;
-  width: 240px;
-  max-height: min(300px, calc(100vh - 210px - var(--messages-anchor-bottom-gap)));
-  overflow-y: auto;
-  padding: 6px;
-  border-radius: 8px;
-  background: var(--surface-popover, var(--surface-card-strong));
+  left: 36px;
+  top: 50%;
+  display: grid;
+  gap: 6px;
+  width: clamp(240px, 42cqw, 420px);
+  max-width: calc(100cqw - 98px);
+  padding: 10px 12px;
   border: 1px solid var(--border-subtle);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  animation: messages-anchor-panel-in 0.14s ease;
+  border-radius: 10px;
+  background: var(--surface-popover, var(--surface-card-strong));
+  box-shadow: 0 8px 22px color-mix(in srgb, #000 16%, transparent);
+  color: var(--text-primary);
+  transform: translateY(-50%);
+  pointer-events: auto;
+  animation: messages-anchor-preview-in 0.14s ease;
 }
 
-@keyframes messages-anchor-panel-in {
+.messages-anchor-item.is-preview-down .messages-anchor-preview {
+  top: -2px;
+  transform: none;
+}
+
+.messages-anchor-item.is-preview-up .messages-anchor-preview {
+  top: auto;
+  bottom: -2px;
+  transform: none;
+}
+
+.messages-anchor-preview-title {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.messages-anchor-preview-description {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+@keyframes messages-anchor-preview-in {
   from {
     opacity: 0;
-    transform: translateX(4px);
+    margin-left: -2px;
   }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.messages-anchor-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.messages-anchor-row {
-  display: block;
-  width: 100%;
-  padding: 5px 9px;
-  border: 0;
-  border-radius: 6px;
-  background: none;
-  color: var(--text-primary);
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.4;
-  text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: pointer;
-  transition: background-color 0.12s ease;
-}
-
-.messages-anchor-row:hover,
-.messages-anchor-row:focus-visible {
-  outline: none;
-  background: var(--surface-hover);
-}
-
-.messages-anchor-row.is-active {
-  background: var(--surface-hover);
-  color: var(--text-strong);
-  font-weight: 600;
 }
 
 @media (max-width: 1100px) {
@@ -143,8 +173,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .messages-anchor-dash,
-  .messages-anchor-panel {
+  .messages-anchor-dash::before,
+  .messages-anchor-preview {
     transition: none !important;
     animation: none !important;
   }

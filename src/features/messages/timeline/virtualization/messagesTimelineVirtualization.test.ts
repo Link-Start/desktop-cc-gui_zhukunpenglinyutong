@@ -18,6 +18,7 @@ import {
   resolveVirtualizedTimelineRowVisualHeight,
   resolveVirtualizedTimelineScopeReset,
   shouldVirtualizeTimelineRows,
+  TIMELINE_ADAPTIVE_RENDERING_ENABLED,
   TIMELINE_CANVAS_STABLE_OVERSCAN,
   TIMELINE_CANVAS_STREAMING_OVERSCAN,
   TIMELINE_LIGHTWEIGHT_ROW_PLACEHOLDER_HEIGHT,
@@ -38,65 +39,29 @@ describe("messagesTimelineVirtualization", () => {
     globalThis.localStorage.removeItem(TIMELINE_RENDER_WEIGHT_BASELINE_FLAG_KEY);
   });
 
-  it("enables virtualization for stable timelines at the lowered row threshold", () => {
+  it("keeps adaptive rendering disabled for stable and streaming timelines", () => {
+    expect(TIMELINE_ADAPTIVE_RENDERING_ENABLED).toBe(false);
     expect(shouldVirtualizeTimelineRows({
       isThinking: false,
       rowCount: TIMELINE_VIRTUALIZATION_MIN_ROWS,
-    })).toBe(true);
-    expect(shouldVirtualizeTimelineRows({
-      isThinking: false,
-      rowCount: TIMELINE_VIRTUALIZATION_MIN_ROWS - 1,
     })).toBe(false);
-  });
-
-  it("virtualizes streaming timelines once the streaming row threshold is reached", () => {
     expect(shouldVirtualizeTimelineRows({
       isThinking: true,
-      rowCount: TIMELINE_VIRTUALIZATION_STREAMING_MIN_ROWS,
-    })).toBe(true);
-    expect(shouldVirtualizeTimelineRows({
-      isThinking: true,
-      rowCount: TIMELINE_VIRTUALIZATION_STREAMING_MIN_ROWS - 1,
+      rowCount: TIMELINE_VIRTUALIZATION_STREAMING_MIN_ROWS * 100,
+      renderWeight: TIMELINE_VIRTUALIZATION_MIN_RENDER_WEIGHT * 100,
     })).toBe(false);
-  });
-
-  it("uses the streaming row threshold while the timeline is still working", () => {
     expect(shouldVirtualizeTimelineRows({
       isThinking: false,
       isWorking: true,
-      rowCount: TIMELINE_VIRTUALIZATION_STREAMING_MIN_ROWS,
-    })).toBe(true);
-    expect(shouldVirtualizeTimelineRows({
-      isThinking: false,
-      isWorking: true,
-      rowCount: TIMELINE_VIRTUALIZATION_STREAMING_MIN_ROWS - 1,
+      rowCount: TIMELINE_VIRTUALIZATION_STREAMING_MIN_ROWS * 100,
+      renderWeight: TIMELINE_VIRTUALIZATION_MIN_RENDER_WEIGHT * 100,
     })).toBe(false);
   });
 
-  it("virtualizes moderate active streaming timelines before static rows dominate commits", () => {
+  it("does not let extreme row count bypass the adaptive-rendering kill switch", () => {
     expect(shouldVirtualizeTimelineRows({
       isThinking: true,
       rowCount: 1_000,
-    })).toBe(true);
-    expect(shouldVirtualizeTimelineRows({
-      isThinking: true,
-      rowCount: 200,
-    })).toBe(true);
-    expect(shouldVirtualizeTimelineRows({
-      isThinking: true,
-      rowCount: 50,
-    })).toBe(true);
-    expect(shouldVirtualizeTimelineRows({
-      isThinking: true,
-      rowCount: 24,
-    })).toBe(true);
-    expect(shouldVirtualizeTimelineRows({
-      isThinking: true,
-      rowCount: 20,
-    })).toBe(true);
-    expect(shouldVirtualizeTimelineRows({
-      isThinking: true,
-      rowCount: 8,
     })).toBe(false);
   });
 
@@ -170,7 +135,7 @@ describe("messagesTimelineVirtualization", () => {
     })).toBe(false);
   });
 
-  it("keeps the render-weight gate enabled when storage is unavailable", () => {
+  it("reports the render-weight gate disabled when storage is unavailable", () => {
     const descriptor = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
     Object.defineProperty(globalThis, "localStorage", {
       configurable: true,
@@ -180,12 +145,12 @@ describe("messagesTimelineVirtualization", () => {
     });
 
     try {
-      expect(isTimelineRenderWeightGateEnabled()).toBe(true);
+      expect(isTimelineRenderWeightGateEnabled()).toBe(false);
       expect(shouldVirtualizeTimelineRows({
         isThinking: false,
         rowCount: 12,
         renderWeight: TIMELINE_VIRTUALIZATION_MIN_RENDER_WEIGHT * 4,
-      })).toBe(true);
+      })).toBe(false);
     } finally {
       if (descriptor) {
         Object.defineProperty(globalThis, "localStorage", descriptor);
@@ -260,7 +225,7 @@ describe("messagesTimelineVirtualization", () => {
     expect(estimateTimelineProjectionRenderWeight(imageRow)).toBeGreaterThan(40);
   });
 
-  it("virtualizes #721-class heavy history even when row count is below the threshold", () => {
+  it("keeps #721-class heavy history static despite its render weight", () => {
     const { rows } = createHeavyHistoryFixture("heavy");
     const summary = summarizeTimelineProjectionRenderWeight(rows);
 
@@ -275,7 +240,7 @@ describe("messagesTimelineVirtualization", () => {
       isThinking: false,
       rowCount: summary.rowCount,
       renderWeight: summary.renderWeight,
-    })).toBe(true);
+    })).toBe(false);
   });
 
   it("builds content-safe heavy-history baseline diagnostics", () => {

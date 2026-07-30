@@ -1,19 +1,22 @@
 // @vitest-environment jsdom
 import { act, renderHook } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { useLiveAssistantText } from "./useLiveAssistantText";
 import {
   appendLiveAssistantText,
   clearLiveAssistantText,
+  LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS,
   resetLiveAssistantTextChannelForTests,
 } from "../utils/liveAssistantTextChannel";
 
 describe("useLiveAssistantText", () => {
   afterEach(() => {
     resetLiveAssistantTextChannelForTests();
+    vi.useRealTimers();
   });
 
   it("streams channel updates into the subscribed row and falls back on clear", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     const { result } = renderHook(() => useLiveAssistantText("t1", true));
     expect(result.current).toBeNull();
 
@@ -24,6 +27,11 @@ describe("useLiveAssistantText", () => {
 
     act(() => {
       appendLiveAssistantText("t1", "item-1", " world");
+    });
+    expect(result.current?.text).toBe("Hello");
+
+    act(() => {
+      vi.advanceTimersByTime(LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS);
     });
     expect(result.current?.text).toBe("Hello world");
 

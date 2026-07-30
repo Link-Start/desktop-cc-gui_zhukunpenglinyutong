@@ -288,12 +288,17 @@ export const MessageRow = memo(function MessageRow({
     ? liveAssistantText ?? staticDisplayText
     : staticDisplayText;
   const hasText = displayText.trim().length > 0;
-  // 流式 delta 到达时的紧急渲染先复用上一帧文本（memo 全部命中、DOM 不变，
-  // 几乎零开销），昂贵的 markdown/复杂度计算被推到后台的 deferred 渲染中，
-  // 避免每个 token 都同步阻塞主线程。非流式或历史消息文本不变，等价于直通。
-  const deferredDisplayText = useDeferredValue(displayText);
-  const streamingDisplayText =
-    item.role === "assistant" && isStreaming && !streamMitigationProfile
+  const usesLiveAssistantText =
+    canUseLiveAssistantText && liveAssistantText !== null;
+  // liveAssistantTextChannel 已在 store→React 边界按 cadence 发布；这里若再 defer，
+  // 连续输入会反复重启 background render。channel-backed 行给 hook 一个稳定壳文本，
+  // 直接消费 published text；非 channel 路径保留原 deferred 策略。
+  const deferredDisplayText = useDeferredValue(
+    usesLiveAssistantText ? staticDisplayText : displayText,
+  );
+  const streamingDisplayText = usesLiveAssistantText
+    ? displayText
+    : item.role === "assistant" && isStreaming && !streamMitigationProfile
       ? deferredDisplayText
       : displayText;
   useEffect(() => {
