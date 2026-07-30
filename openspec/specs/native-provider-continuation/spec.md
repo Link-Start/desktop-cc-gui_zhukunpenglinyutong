@@ -212,12 +212,12 @@ Continuation Dialog 与现有 idempotent continuation operation；目标 snapsho
 - **THEN** 来源 Session、Provider binding 与 Model selection MUST 保持不变
 - **AND** 系统 MUST NOT 创建目标 Session 或 operation side effect
 
-#### Scenario: context menu and composer share one preparation contract
+#### Scenario: composer entry uses the shared preparation contract
 
-- **WHEN** Provider Continuation 从 sidebar context menu 或 Native Composer 发起
-- **THEN** 两个入口 MUST 使用相同的 source snapshot、operation idempotency 与 Dialog state
+- **WHEN** Provider Continuation 从 Native Composer 发起
+- **THEN** 入口 MUST 复用统一的 source snapshot、operation idempotency 与 Dialog state
   preparation
-- **AND** 两个入口 MUST 使用相同的 degraded confirmation 与 recovery path
+- **AND** MUST 复用统一的 degraded confirmation 与 recovery path
 
 ### Requirement: Provider Continuation MUST Freeze Runtime Model Identity
 
