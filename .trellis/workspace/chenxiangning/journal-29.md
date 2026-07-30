@@ -1678,3 +1678,36 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1246: 修复对话结束滚动乱跳未贴底
+
+**Date**: 2026-07-31
+**Task**: 修复对话结束滚动乱跳未贴底
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+回合 settle 窗口内防止 scrollHeight 暴涨误解除 autoScroll；virtual 布局钉底保留 turn-settle 并在窗口内重钉底部。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d38d0f9b9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
