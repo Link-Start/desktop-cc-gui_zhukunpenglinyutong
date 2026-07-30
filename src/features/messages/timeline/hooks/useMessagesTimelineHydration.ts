@@ -10,6 +10,7 @@ import {
 } from "../virtualization/messagesTimelineHydration";
 import {
   remeasureTimelineVirtualizerRows,
+  TIMELINE_ADAPTIVE_RENDERING_ENABLED,
   TIMELINE_LIGHTWEIGHT_ROW_PLACEHOLDER_HEIGHT,
 } from "../virtualization/messagesTimelineVirtualization";
 import {
@@ -115,7 +116,7 @@ export function useMessagesTimelineHydration(input: {
     return retained.rowKeys;
   }, [retainedScopeKey]);
   const timelineRowHydrationStates = useMemo(() => {
-    if (isThinking || isWorking) {
+    if (!TIMELINE_ADAPTIVE_RENDERING_ENABLED || isThinking || isWorking) {
       return timelineProjectionRows.map((row) => ({
         rowKey: row.key,
         contentHash: `${rendererOptionsKey}:${row.key}`,

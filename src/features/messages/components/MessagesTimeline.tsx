@@ -26,6 +26,7 @@ import {
   getTimelineVirtualizationThresholdReason,
   shouldVirtualizeTimelineRows,
   summarizeTimelineProjectionRenderWeight,
+  TIMELINE_ADAPTIVE_RENDERING_ENABLED,
 } from "../timeline/virtualization/messagesTimelineVirtualization";
 import type { MessagesTimelineProps } from "../orchestration/models/messagesTimelineModels";
 import { ConversationLightweightPrompt } from "../timeline/components/ConversationLightweightPrompt";
@@ -218,7 +219,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   );
   const timelineRenderWeightSummary = useMemo(
     () => {
-      if (isThinking || isWorking) {
+      if (!TIMELINE_ADAPTIVE_RENDERING_ENABLED || isThinking || isWorking) {
         return {
           rowCount: timelineProjectionRows.length,
           renderWeight: timelineProjectionRows.length,
