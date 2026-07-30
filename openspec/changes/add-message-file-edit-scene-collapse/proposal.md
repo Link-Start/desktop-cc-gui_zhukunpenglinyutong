@@ -1,7 +1,5 @@
-> **Status (2026-07-31):** Absorbed by `repair-grok-canvas-tools-and-file-edit-collapse`.
-> UI for default-collapsed file-edit scenes largely landed in tree; remaining verification,
-> main-spec sync, and Grok history tool grouping that makes this shell useful for Grok
-> sessions are owned by the absorbing change. Do not implement in parallel.
+> **Status (2026-07-31):** Collapse UI is largely already landed in tree. Remaining work is
+> main-spec sync / archive when ready. Unrelated to `fix-grok-history-tool-projection`.
 
 ## Why
 
