@@ -2039,13 +2039,8 @@ export function SettingsView({
           </button>
         </aside>
         <div className="settings-content-wrap">
-          {activeSection === "providers" || activeSection === "vendors" ? (
-            <div
-              className="settings-providers-drag"
-              data-tauri-drag-region="true"
-            />
-          ) : (
-            <div className="settings-page-head" data-tauri-drag-region="true">
+          <div className="settings-page-head" data-tauri-drag-region="true">
+            <div className="settings-page-head-inner">
               <h1 className="settings-page-title">
                 {activeSectionHeader.title}
               </h1>
@@ -2055,7 +2050,7 @@ export function SettingsView({
                 </p>
               )}
             </div>
-          )}
+          </div>
           <ScrollArea
             className={`settings-content ${
               activeSection === "providers" || activeSection === "vendors"

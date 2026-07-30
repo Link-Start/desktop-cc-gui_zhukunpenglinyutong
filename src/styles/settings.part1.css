@@ -15,14 +15,22 @@
 }
 
 /* Page head lives inside the content column (no top header bar): the global
- * drag-strip covers macOS, and the head itself is a drag region for Windows. */
+ * drag-strip covers macOS, and the head itself is a drag region for Windows.
+ * The head mirrors the scroll viewport's structure — full-width box with the
+ * same horizontal padding, plus a centered inner column — so the title aligns
+ * exactly with .settings-section below (centering an 860px box in the wrap
+ * while the section centers in the narrower viewport content box would drift
+ * the title right by (pad-x - pad-right)/2 + pad-x). */
 .settings-page-head {
   flex: 0 0 auto;
-  width: min(100%, var(--settings-content-fixed-width));
-  margin-inline: auto;
   padding: 44px var(--settings-content-pad-right) 18px
     var(--settings-content-pad-x);
   user-select: none;
+}
+
+.settings-page-head-inner {
+  width: min(100%, var(--settings-content-fixed-width));
+  margin-inline: auto;
 }
 
 .settings-page-title {
@@ -115,12 +123,24 @@
 .settings-sidebar {
   height: 100%;
   min-height: 0;
-  padding: 0 10px 12px;
+  padding: 0 12px 12px;
   border-right: 1px solid var(--border-muted);
   background: var(--desktop-sidebar-background, var(--surface-sidebar));
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
+}
+
+/* Light themes use a near-white settings sidebar (#f9f9f9); dark themes keep
+ * the theme-provided desktop sidebar background. */
+:root[data-theme="light"] .settings-sidebar {
+  background: #f9f9f9;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .settings-sidebar {
+    background: #f9f9f9;
+  }
 }
 
 /* Top spacer: keeps the nav clear of the macOS traffic lights and the global
@@ -144,26 +164,18 @@
   min-height: 0;
 }
 
-/* The providers panel renders no page head; this strip keeps its interactive
- * top row (search, engine tabs) below the global macOS drag-strip and serves
- * as the drag surface on Windows. */
-.settings-providers-drag {
-  flex: 0 0 auto;
-  height: 44px;
-}
-
 .settings-nav {
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
   width: 100%;
-  min-height: 32px;
-  gap: 8px;
+  min-height: 36px;
+  gap: 10px;
   font-size: 13px;
   font-weight: 400;
   color: var(--text-muted);
-  padding: 6px 10px;
-  border-radius: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
   background: transparent;
   border: none;
   line-height: 1.15;
@@ -171,21 +183,21 @@
 }
 
 .settings-nav svg {
-  width: 16px;
-  height: 16px;
-  stroke-width: 1.9;
+  width: 17px;
+  height: 17px;
+  stroke-width: 1.7;
   flex-shrink: 0;
 }
 
 .settings-nav .codicon {
-  width: 16px;
-  font-size: 16px;
+  width: 17px;
+  font-size: 17px;
   line-height: 1;
   flex-shrink: 0;
 }
 
 .settings-nav-return {
-  margin-bottom: 8px;
+  margin-bottom: 14px;
   margin-left: -4px;
   color: color-mix(in srgb, var(--text-muted) 92%, var(--text-strong) 8%);
   font-weight: 400;
@@ -198,13 +210,13 @@
 }
 
 .settings-nav.active {
-  background: var(--surface-card);
+  background: var(--surface-control);
   color: var(--text-strong);
   font-weight: 500;
 }
 
-.settings-nav:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--surface-card) 40%, transparent);
+.settings-nav:hover:not(:disabled):not(.active) {
+  background: color-mix(in srgb, var(--surface-control) 55%, transparent);
 }
 
 .settings-nav-return:hover {

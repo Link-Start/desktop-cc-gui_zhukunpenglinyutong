@@ -645,9 +645,21 @@ describe("SettingsView Display", () => {
       screen.getByRole("button", { name: "settings.sidebarProviders" }),
     );
 
-    // The providers panel is full-bleed with its own brand header, so the
-    // shared page head is hidden for it.
-    expect(document.querySelector(".settings-page-head")).toBeNull();
+    // The providers page shares the same centered-column page head as every
+    // other section; only the title and description swap.
+    const providersHead = document.querySelector(
+      ".settings-page-head",
+    ) as HTMLElement | null;
+    if (!providersHead) {
+      throw new Error("Expected providers page head");
+    }
+    const providersHeadQueries = within(providersHead);
+    expect(
+      providersHeadQueries.getByText("settings.sidebarProviders"),
+    ).toBeTruthy();
+    expect(
+      providersHeadQueries.getByText("settings.vendorsDescription"),
+    ).toBeTruthy();
   });
 
   it("opens basic settings by default when no external section is provided", async () => {

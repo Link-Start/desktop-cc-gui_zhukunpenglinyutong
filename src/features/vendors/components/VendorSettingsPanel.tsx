@@ -554,8 +554,7 @@ export function VendorSettingsPanel({
       className={cn(
         "vendor-settings-panel",
         "flex items-stretch",
-        "-ml-[var(--settings-content-pad-x)]",
-        "max-md:ml-0 max-md:flex-col",
+        "max-md:flex-col",
       )}
     >
       <nav

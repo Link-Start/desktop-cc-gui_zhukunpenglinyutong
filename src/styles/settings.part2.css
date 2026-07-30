@@ -1470,8 +1470,10 @@
 }
 
 .settings-content-wrap:has(> .settings-content--providers) {
+  /* Keep the same left/right gutters as every other settings page; only the
+   * vertical padding stays zero because the vendor panel is a full-height
+   * pane that scrolls internally. */
   --settings-content-pad-top: 0px;
-  --settings-content-pad-right: 0px;
   --settings-content-pad-bottom: 0px;
 }
 
@@ -1530,7 +1532,8 @@
 }
 
 .settings-section,
-.settings-workspace-picker {
+.settings-workspace-picker,
+.vendor-settings-panel {
   width: min(100%, var(--settings-content-fixed-width));
   margin-inline: auto;
 }
@@ -2250,14 +2253,18 @@
   margin-top: 2px;
 }
 
+/* Width overrides must live on the wrap (same layer as the base variables):
+ * the page head is a sibling of .settings-content and inherits the column
+ * metrics from the wrap, so overriding them on .settings-content would
+ * desync the head from the content column. */
 @media (max-width: 1360px) {
-  .settings-content {
+  .settings-content-wrap {
     --settings-content-fixed-width: 980px;
   }
 }
 
 @media (max-width: 1100px) {
-  .settings-content {
+  .settings-content-wrap {
     --settings-content-fixed-width: 100%;
     --settings-content-pad-x: 20px;
   }
