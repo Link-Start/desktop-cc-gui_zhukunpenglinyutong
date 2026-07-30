@@ -411,6 +411,46 @@ fn stringify_tool_result_content(content: Option<&Value>) -> String {
     }
 }
 
+/// Resolve tool name from Grok 4.5 flat calls (`name`) or OpenAI-style nested
+/// (`function.name`). Only fall back to `"tool"` when both are missing.
+fn resolve_tool_call_name(call: &Value) -> String {
+    if let Some(name) = call
+        .get("name")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+    {
+        return name.to_string();
+    }
+    if let Some(name) = call
+        .get("function")
+        .and_then(|function| function.get("name"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+    {
+        return name.to_string();
+    }
+    "tool".to_string()
+}
+
+/// Resolve tool arguments from flat `arguments` or nested `function.arguments`.
+/// JSON strings are parsed into objects when possible.
+fn resolve_tool_call_arguments(call: &Value) -> Option<Value> {
+    let arguments = call
+        .get("arguments")
+        .or_else(|| {
+            call.get("function")
+                .and_then(|function| function.get("arguments"))
+        })?;
+    if let Some(raw) = arguments.as_str() {
+        return serde_json::from_str::<Value>(raw)
+            .ok()
+            .or_else(|| Some(Value::String(raw.to_string())));
+    }
+    Some(arguments.clone())
+}
+
 /// Parse `chat_history.jsonl` content into normalized messages.
 /// Grok history lines carry no usage data, so `usage` is always `None`.
 fn parse_messages_from_chat_history(raw: &str) -> GrokSessionLoadResult {
@@ -502,12 +542,7 @@ fn parse_messages_from_chat_history(raw: &str) -> GrokSessionLoadResult {
                 }
                 if let Some(tool_calls) = value.get("tool_calls").and_then(|v| v.as_array()) {
                     for call in tool_calls {
-                        let function = call.get("function");
-                        let tool_name = function
-                            .and_then(|f| f.get("name"))
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("tool")
-                            .to_string();
+                        let tool_name = resolve_tool_call_name(call);
                         let call_id = call
                             .get("id")
                             .and_then(|v| v.as_str())
@@ -516,18 +551,7 @@ fn parse_messages_from_chat_history(raw: &str) -> GrokSessionLoadResult {
                                 counter += 1;
                                 format!("grok-tool-{}", counter)
                             });
-                        let input_value =
-                            function
-                                .and_then(|f| f.get("arguments"))
-                                .and_then(|arguments| {
-                                    if let Some(raw) = arguments.as_str() {
-                                        serde_json::from_str::<Value>(raw)
-                                            .ok()
-                                            .or(Some(Value::String(raw.to_string())))
-                                    } else {
-                                        Some(arguments.clone())
-                                    }
-                                });
+                        let input_value = resolve_tool_call_arguments(call);
                         let input_text = input_value
                             .as_ref()
                             .and_then(|v| serde_json::to_string_pretty(v).ok())
@@ -882,6 +906,60 @@ mod tests {
         assert_eq!(result.messages[4].text, "1→test file content\n");
         assert_eq!(result.messages[5].text, "The first word is \ntest");
         assert!(result.usage.is_none());
+    }
+
+    #[test]
+    fn parses_flat_tool_calls_with_top_level_name_and_arguments() {
+        // Grok 4.5 / agent sessions use flat tool_calls (no nested `function`).
+        let chat_history = concat!(
+            "{\"type\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"call-flat-1\",\"name\":\"read_file\",\"arguments\":\"{\\\"target_file\\\":\\\"src/a.ts\\\"}\"},{\"id\":\"call-flat-2\",\"name\":\"grep\",\"arguments\":{\"pattern\":\"foo\",\"path\":\"src\"}},{\"id\":\"call-flat-3\",\"name\":\"run_terminal_command\",\"arguments\":\"{\\\"command\\\":\\\"ls\\\"}\"}]}\n",
+            "{\"type\":\"tool_result\",\"tool_call_id\":\"call-flat-1\",\"content\":\"file body\"}\n",
+            "{\"type\":\"tool_result\",\"tool_call_id\":\"call-flat-2\",\"content\":\"match\"}\n"
+        );
+
+        let result = parse_messages_from_chat_history(chat_history);
+        assert_eq!(result.messages.len(), 5);
+
+        assert_eq!(result.messages[0].kind, "tool");
+        assert_eq!(result.messages[0].id, "call-flat-1");
+        assert_eq!(result.messages[0].tool_type.as_deref(), Some("read_file"));
+        assert_eq!(result.messages[0].title.as_deref(), Some("read_file"));
+        assert_eq!(
+            result.messages[0].tool_input,
+            Some(serde_json::json!({"target_file": "src/a.ts"}))
+        );
+
+        assert_eq!(result.messages[1].tool_type.as_deref(), Some("grep"));
+        assert_eq!(result.messages[1].title.as_deref(), Some("grep"));
+        assert_eq!(
+            result.messages[1].tool_input,
+            Some(serde_json::json!({"pattern": "foo", "path": "src"}))
+        );
+
+        assert_eq!(
+            result.messages[2].tool_type.as_deref(),
+            Some("run_terminal_command")
+        );
+        assert_eq!(
+            result.messages[2].title.as_deref(),
+            Some("run_terminal_command")
+        );
+
+        assert_eq!(result.messages[3].id, "call-flat-1-result");
+        assert_eq!(result.messages[3].text, "file body");
+        assert_eq!(result.messages[4].id, "call-flat-2-result");
+        assert_eq!(result.messages[4].text, "match");
+    }
+
+    #[test]
+    fn flat_tool_call_prefers_top_level_name_over_missing_function() {
+        let chat_history = concat!(
+            "{\"type\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"call-x\",\"arguments\":\"{}\"}]}\n"
+        );
+        let result = parse_messages_from_chat_history(chat_history);
+        assert_eq!(result.messages.len(), 1);
+        assert_eq!(result.messages[0].tool_type.as_deref(), Some("tool"));
+        assert_eq!(result.messages[0].title.as_deref(), Some("tool"));
     }
 
     #[test]

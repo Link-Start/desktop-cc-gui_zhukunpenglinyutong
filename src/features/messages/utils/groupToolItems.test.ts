@@ -49,6 +49,32 @@ describe("groupToolItems", () => {
     }
   });
 
+  it("groups Grok-style flat tool names into read/search/bash/edit scenes", () => {
+    const entries = groupToolItems([
+      createToolItem("r1", "read_file"),
+      createToolItem("r2", "list_dir"),
+      createToolItem("g1", "grep"),
+      createToolItem("g2", "grep"),
+      createToolItem("b1", "run_terminal_command"),
+      createToolItem("b2", "run_terminal_command"),
+      createToolItem("e1", "search_replace"),
+    ]);
+
+    expect(entries.map((entry) => entry.kind)).toEqual([
+      "readGroup",
+      "searchGroup",
+      "bashGroup",
+      "editGroup",
+    ]);
+    if (entries[0]?.kind === "readGroup") {
+      expect(entries[0].items.map((item) => item.id)).toEqual(["r1", "r2"]);
+    }
+    if (entries[3]?.kind === "editGroup") {
+      expect(entries[3].items).toHaveLength(1);
+      expect(entries[3].items[0]?.title).toBe("search_replace");
+    }
+  });
+
   it("merges consecutive edit and fileChange tools into one file-edit scene", () => {
     const entries = groupToolItems([
       createToolItem("tool-1", "Tool: edit"),

@@ -114,6 +114,64 @@ describe("parseGrokHistoryMessages", () => {
     );
   });
 
+  it("preserves flat Grok tool names for canvas classification", () => {
+    const items = parseGrokHistoryMessages([
+      {
+        id: "call-flat-1",
+        kind: "tool",
+        role: "assistant",
+        toolType: "read_file",
+        title: "read_file",
+        toolInput: {
+          target_file: "src/a.ts",
+        },
+      },
+      {
+        id: "call-flat-1-result",
+        kind: "tool",
+        role: "assistant",
+        toolType: "result",
+        title: "Result",
+        text: "contents",
+        toolOutput: "contents",
+      },
+      {
+        id: "call-flat-2",
+        kind: "tool",
+        role: "assistant",
+        toolType: "search_replace",
+        title: "search_replace",
+        toolInput: {
+          target_file: "src/a.ts",
+          old_string: "a",
+          new_string: "b",
+        },
+      },
+    ]);
+
+    expect(items).toHaveLength(2);
+    expect(items[0]).toEqual(
+      expect.objectContaining({
+        id: "call-flat-1",
+        kind: "tool",
+        title: "read_file",
+        status: "completed",
+        output: "contents",
+      }),
+    );
+    expect(items[1]).toEqual(
+      expect.objectContaining({
+        id: "call-flat-2",
+        kind: "tool",
+        title: "search_replace",
+      }),
+    );
+    // Must not collapse known names into generic Tool
+    expect(items.every((item) => item.kind !== "tool" || item.title !== "Tool")).toBe(
+      true,
+    );
+  });
+
   it("marks error tool results as failed on the source tool call", () => {
     const items = parseGrokHistoryMessages([
       {
