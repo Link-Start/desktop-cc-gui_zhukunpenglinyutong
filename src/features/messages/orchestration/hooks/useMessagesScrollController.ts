@@ -285,14 +285,6 @@ export function useMessagesScrollController({
         Date.now() <= stickToBottomDeadlineRef.current,
     });
   }, [hasRecentUserScrollIntent, requestScrollConvergence]);
-  const requestTimelineLayoutBottomConvergence = useCallback(() => {
-    if (!autoScrollRef.current) {
-      return;
-    }
-    stickToBottomIntentRef.current = "history-open";
-    stickToBottomDeadlineRef.current = Date.now() + SETTLE_REPIN_WINDOW_MS;
-    requestHistoryBottomConvergence();
-  }, [requestHistoryBottomConvergence]);
   const requestTurnBoundaryBottomConvergence = useCallback(() => {
     const intent = stickToBottomIntentRef.current;
     if (!isTurnBoundaryScrollIntent(intent)) {
@@ -307,6 +299,40 @@ export function useMessagesScrollController({
         Date.now() <= stickToBottomDeadlineRef.current,
     });
   }, [hasRecentUserScrollIntent, requestScrollConvergence]);
+  const requestTimelineLayoutBottomConvergence = useCallback(() => {
+    // Virtualization/static layout flips may call this while autoScroll was briefly
+    // disarmed by a nearBottom false-negative during scrollHeight growth. If the
+    // user is not actively scrolling, re-arm and pin so turn-settle still lands
+    // on the latest messages.
+    if (hasRecentUserScrollIntent()) {
+      return;
+    }
+    if (!autoScrollRef.current) {
+      // Only re-arm when a settle/open pin window is already active.
+      // Mid-history readers who scrolled up stay put.
+      const settleActive =
+        stickToBottomIntentRef.current !== null &&
+        Date.now() <= stickToBottomDeadlineRef.current;
+      if (!settleActive) {
+        return;
+      }
+      autoScrollRef.current = true;
+    }
+    // Preserve an active turn boundary intent; only default to history-open.
+    if (!isTurnBoundaryScrollIntent(stickToBottomIntentRef.current)) {
+      stickToBottomIntentRef.current = "history-open";
+    }
+    stickToBottomDeadlineRef.current = Date.now() + SETTLE_REPIN_WINDOW_MS;
+    if (isTurnBoundaryScrollIntent(stickToBottomIntentRef.current)) {
+      requestTurnBoundaryBottomConvergence();
+      return;
+    }
+    requestHistoryBottomConvergence();
+  }, [
+    hasRecentUserScrollIntent,
+    requestHistoryBottomConvergence,
+    requestTurnBoundaryBottomConvergence,
+  ]);
   const beginTurnBoundaryBottomConvergence = useCallback(
     (intent: "turn-send" | "turn-settle") => {
       clearUserScrollIntent();

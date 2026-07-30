@@ -69,6 +69,7 @@ import {
   MESSAGES_SLOW_ANCHOR_WARN_MS,
   MESSAGES_SLOW_RENDER_WARN_MS,
   resolveWorkingActivityLabel,
+  SCROLL_THRESHOLD_PX,
   shouldDisplayWorkingActivityLabel,
   shouldHideClaudeReasoningModule,
   STREAMING_VISIBLE_WINDOW,
@@ -1327,6 +1328,10 @@ export const MessagesCore = memo(function MessagesCore({
     }
     const now = performance.now();
     const userOwnsScroll = hasRecentUserScrollIntent();
+    const previousGeometry = {
+      scrollTop: container.scrollTop,
+      maxScrollTop: Math.max(0, container.scrollHeight - container.clientHeight),
+    };
     recordCurrentScrollGeometry(container);
     const activeProgrammaticEdge = activeProgrammaticScrollEdgeRef.current;
     const activeProgrammaticMotion = activeProgrammaticScrollMotionRef.current;
@@ -1363,10 +1368,30 @@ export const MessagesCore = memo(function MessagesCore({
       scheduleAnchorUpdate("scroll");
       return;
     }
+    const nearBottom = isNearBottom(container);
+    // 回合结束 / 打开历史 settle 窗口：live 尾窗→全量、static→virtual 会让
+    // scrollHeight 暴涨而 scrollTop 尚未追上，nearBottom 瞬时 false。不得因此解除
+    // autoScroll。若用户已主动上滚离开底部（scrollTop 明显低于 max），仍释放跟随。
+    const settleIntent = stickToBottomIntentRef.current;
+    const settleWindowOpen =
+      settleIntent !== null && Date.now() <= stickToBottomDeadlineRef.current;
+    const userLeftBottom =
+      !nearBottom &&
+      previousGeometry.maxScrollTop - previousGeometry.scrollTop >
+        SCROLL_THRESHOLD_PX;
+    const settleArmed =
+      settleWindowOpen &&
+      !userOwnsScroll &&
+      (autoScrollRef.current || activeProgrammaticEdge === "bottom") &&
+      !userLeftBottom;
+    if (settleArmed) {
+      autoScrollRef.current = true;
+      scheduleAnchorUpdate("scroll");
+      return;
+    }
     // Auto-follow tracks the user's real scroll position: stick to the bottom
     // only while the viewport is actually near the bottom. Scrolling up cancels
     // the follow; scrolling back to the bottom re-enables it.
-    const nearBottom = isNearBottom(container);
     if (nearBottom && userOwnsScroll) {
       // 用户已明确回到底部，输入租约完成；后续同 tick 的 content resize 可立即恢复跟随。
       clearUserScrollIntent();
@@ -1388,6 +1413,8 @@ export const MessagesCore = memo(function MessagesCore({
     programmaticScrollTopEchoRef,
     recordCurrentScrollGeometry,
     scheduleAnchorUpdate,
+    stickToBottomDeadlineRef,
+    stickToBottomIntentRef,
   ]);
   const clearTransientUiState = useCallback(() => {
     if (anchorUpdateRafRef.current !== null) {
