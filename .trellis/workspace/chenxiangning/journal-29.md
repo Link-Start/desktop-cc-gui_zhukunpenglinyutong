@@ -1502,3 +1502,36 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1241: 修复实时历史展开点击
+
+**Date**: 2026-07-30
+**Task**: 修复实时历史展开点击
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+恢复 live streaming 中 showAllHistoryItems 的完整历史 derivation；新增 helper 与点击回归测试，76 个 targeted tests、typecheck、lint 和目标 OpenSpec validation 通过；同步并归档 fix-live-history-reveal-click。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `422d49f1c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
