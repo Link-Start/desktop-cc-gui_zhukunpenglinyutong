@@ -343,7 +343,6 @@ use web_service_runtime::WebServiceRuntime;
 use workspace_settings::apply_workspace_settings_update;
 
 const DEFAULT_LISTEN_ADDR: &str = "127.0.0.1:4732";
-const EVENT_FORWARDER_TIMEOUT_SECS: u64 = 30 * 60;
 const GEMINI_POST_COMPLETION_REASONING_GRACE_MS: u64 = 8_000;
 
 #[derive(Debug, Clone, Serialize)]

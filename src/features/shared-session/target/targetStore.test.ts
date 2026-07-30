@@ -103,6 +103,26 @@ describe("SharedTargetStore", () => {
     expect(getActiveTurnTargetForAttempt(WS, THREAD, "attempt-a")).toBeNull();
   });
 
+  it("ignores a stale observer clearing a newer active Attempt", () => {
+    const staleSnapshot = freezeTurnSnapshot({
+      engine: "codex",
+      model: "stale",
+    });
+    const currentSnapshot = freezeTurnSnapshot({
+      engine: "codex",
+      model: "current",
+    });
+    beginTurn(WS, THREAD, staleSnapshot, "attempt-stale");
+    beginTurn(WS, THREAD, currentSnapshot, "attempt-current");
+
+    expect(endTurn(WS, THREAD, "attempt-stale")).toBe(false);
+    expect(getSharedTargetState(WS, THREAD).activeTurnTarget).toBe(
+      currentSnapshot,
+    );
+    expect(endTurn(WS, THREAD, "attempt-current")).toBe(true);
+    expect(getSharedTargetState(WS, THREAD).activeTurnTarget).toBeNull();
+  });
+
   it("keeps state isolated per thread", () => {
     selectNextTarget(WS, THREAD, { engine: "claude" });
     selectNextTarget(WS, "thread-2", { engine: "codex" });

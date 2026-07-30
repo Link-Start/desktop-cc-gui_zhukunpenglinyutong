@@ -63,6 +63,13 @@ React Component
     heartbeat）中可写 `processing=true` 的入口。durable control completion 应先用
     exact Runtime identity 安装 terminal barrier，再清 UI；ledger cleanup 只能绑定
     component unmount，禁止绑定会随 rerender 变化的 callback dependency。
+21. 长时 Turn 的 timeout 必须按 protocol phase 审计。允许首包、ACK、health probe、
+    completion 后 cleanup grace 等 bounded timeout；禁止在 terminal observer、Runtime
+    event forwarder 或 accepted owner 上施加从 Turn start 计时的总 deadline。若 observer
+    可重附，settlement/removal 必须 broadcast 给同 Attempt 的全部 waiters。
+22. reattachment cleanup 必须带 exact owner compare-and-clear。旧 Runtime terminal
+    可以为自己的 identity 安装 ledger barrier，但不能用 thread-level cleanup 清掉新
+    Attempt 的 processing、active owner 或 frozen Target。
 
 ## 常见失败模式
 
@@ -95,6 +102,14 @@ React Component
   `running`，Stop 也只能处理 UI residue。
 - terminal ledger 已正确写入，却被普通 React rerender 触发的 effect cleanup 清空；
   后续迟到 assistant/reasoning/item event 再次把已 commit Turn 标成 processing。
+- 只移除 frontend/Tauri await 的 30 分钟 timeout，却遗漏 upstream Provider event
+  forwarder 的同类 deadline；waiter 永远收不到真实 terminal。
+- `Probe(active)` 只恢复 UI enum，没有恢复 exact owner、frozen Target 与 terminal
+  observer；界面显示 running，实际无人负责 durable 收口。
+- settlement 用 `notify_one`，旧 observer 与 reattachment 同时等待时只有一个被唤醒，
+  另一个成为永久 pending ghost waiter。
+- 旧 reattachment 晚到后无条件 `endTurn(threadId)`，把已经开始的新 Attempt owner 与
+  frozen Target 一并清空。
 - context package 已成功生成，仅 fidelity 降级，却弹出 Continue/Cancel 并阻塞发送；
   Target 切换因此退化成重复审批。
 
@@ -127,6 +142,10 @@ React Component
 - frontend durable terminal barrier 至少覆盖：barrier 安装早于 processing cleanup、
   普通 rerender 不清 ledger、同 Turn 的 normalized/raw/reasoning 迟到事件不复燃、
   下一 Turn identity-only start 能解除旧 fallback 且不提前点亮 processing。
+- long-running recovery 至少覆盖：exact waiter 超过外部 observation window 仍 pending、
+  原 observer + reattach observer 都被 terminal/removal 唤醒、desktop/daemon event
+  forwarder 均无 full-Turn deadline、restart 在 reattach 前保持 recovery lock、
+  observer detach 保留 processing/owner/Target、晚到 commit 回 idle。
 - degraded context 至少覆盖：preview/actual package 均可直发、diagnostic/manifest
   仍持久化、真正 prepare/ACK/rejection 失败仍 fail closed，且 UI 不进入确认 gate。
 - 历史/Projection 至少覆盖：rich terminal blocks、failed/cancelled、

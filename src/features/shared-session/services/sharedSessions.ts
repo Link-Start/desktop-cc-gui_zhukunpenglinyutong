@@ -7,6 +7,7 @@ import type {
 import type {
   CanonicalProviderProfileSource,
   ExecutionTarget,
+  TurnExecutionSnapshot,
 } from "../target/types";
 import { isResolvedExecutionTarget } from "../target/types";
 import { normalizeSharedSessionEngine } from "../utils/sharedSessionEngines";
@@ -364,12 +365,23 @@ export type SharedV2AwaitTurnTerminalResult = {
   };
 };
 
-export type SharedV2MarkRecoveryResult = {
-  status: "recovery-required" | "terminal-committed";
+export type SharedV2ActiveAttemptRecovery = {
+  status: "active";
   attemptId: string;
   bindingKey: string;
-  sequence?: number | null;
+  nativeThreadId: string;
+  runtimeTurnId: string;
+  executionTargetSnapshot: TurnExecutionSnapshot;
 };
+
+export type SharedV2MarkRecoveryResult =
+  | SharedV2ActiveAttemptRecovery
+  | {
+      status: "recovery-required" | "terminal-committed";
+      attemptId: string;
+      bindingKey: string;
+      sequence?: number | null;
+    };
 
 export type SharedV2CancelAttemptResult = {
   status: "cancelled" | "terminal-committed";
@@ -399,17 +411,18 @@ export type SharedV2InFlightAttempt = {
   runtimeObserverOwned?: boolean;
 };
 
-export type SharedV2RecoverAttemptResult = {
-  status:
-    | "active"
-    | "terminal-committed"
-    | "not-accepted-committed"
-    | "unknown";
-  attemptId: string;
-  bindingKey?: string | null;
-  sequence?: number | null;
-  pendingPhase?: string | null;
-};
+export type SharedV2RecoverAttemptResult =
+  | SharedV2ActiveAttemptRecovery
+  | {
+      status:
+        | "terminal-committed"
+        | "not-accepted-committed"
+        | "unknown";
+      attemptId: string;
+      bindingKey?: string | null;
+      sequence?: number | null;
+      pendingPhase?: string | null;
+    };
 
 export type SharedV2ProbeBindingResult = {
   status: "ok";

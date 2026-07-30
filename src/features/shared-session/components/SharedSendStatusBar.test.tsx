@@ -7,6 +7,11 @@ import {
   getSharedSendState,
   resetSharedSendStateStoreForTests,
 } from "../runtime/sharedSendStateStore";
+import { resetSharedSessionAttemptReattachmentsForTests } from "../runtime/reattachSharedSessionAttempt";
+import {
+  getSharedTargetState,
+  resetSharedTargetStoreForTests,
+} from "../target/targetStore";
 import { SharedSendStatusBar } from "./SharedSendStatusBar";
 
 const mockServices = vi.hoisted(() => ({
@@ -15,6 +20,8 @@ const mockServices = vi.hoisted(() => ({
   sharedSessionV2ProbeBinding: vi.fn(),
   sharedSessionV2RecoverAttempt: vi.fn(),
   sharedSessionV2RebuildBinding: vi.fn(),
+  sharedSessionV2AwaitTurnTerminal: vi.fn(),
+  registerSharedSessionNativeBinding: vi.fn(),
 }));
 
 vi.mock("react-i18next", () => ({
@@ -39,6 +46,13 @@ vi.mock("../services/sharedSessions", () => ({
   sharedSessionV2ProbeBinding: mockServices.sharedSessionV2ProbeBinding,
   sharedSessionV2RecoverAttempt: mockServices.sharedSessionV2RecoverAttempt,
   sharedSessionV2RebuildBinding: mockServices.sharedSessionV2RebuildBinding,
+  sharedSessionV2AwaitTurnTerminal:
+    mockServices.sharedSessionV2AwaitTurnTerminal,
+}));
+
+vi.mock("../runtime/sharedSessionBridge", () => ({
+  registerSharedSessionNativeBinding:
+    mockServices.registerSharedSessionNativeBinding,
 }));
 
 const WS = "ws-1";
@@ -52,11 +66,16 @@ function renderBar() {
 
 beforeEach(() => {
   resetSharedSendStateStoreForTests();
+  resetSharedTargetStoreForTests();
+  resetSharedSessionAttemptReattachmentsForTests();
   mockServices.pushErrorToast.mockReset();
   mockServices.sharedSessionV2TurnState.mockReset();
   mockServices.sharedSessionV2ProbeBinding.mockReset();
   mockServices.sharedSessionV2RecoverAttempt.mockReset();
   mockServices.sharedSessionV2RebuildBinding.mockReset();
+  mockServices.sharedSessionV2AwaitTurnTerminal.mockReset();
+  mockServices.registerSharedSessionNativeBinding.mockReset();
+  mockServices.registerSharedSessionNativeBinding.mockReturnValue(true);
 });
 
 afterEach(() => {
@@ -193,7 +212,22 @@ describe("SharedSendStatusBar", () => {
       status: "active",
       attemptId: "attempt-active",
       bindingKey: "codex:provider-a",
+      nativeThreadId: "native-active",
+      runtimeTurnId: "runtime-active",
+      executionTargetSnapshot: {
+        engine: "codex",
+        providerProfileId: "provider-a",
+        modelCatalogEntryId: "catalog-gpt-5",
+        model: "gpt-5",
+        reasoning: { effort: "high" },
+        providerProfileNameSnapshot: "Provider A",
+        providerProfileSource: "managed",
+        runtimeCapabilityFingerprint: null,
+      },
     });
+    mockServices.sharedSessionV2AwaitTurnTerminal.mockReturnValue(
+      new Promise(() => undefined),
+    );
 
     renderBar();
     fireEvent.click(screen.getByText("sharedSend.recoveryProbe"));
@@ -206,6 +240,72 @@ describe("SharedSendStatusBar", () => {
       "attempt-active",
     );
     expect(mockServices.sharedSessionV2ProbeBinding).not.toHaveBeenCalled();
+    expect(mockServices.sharedSessionV2AwaitTurnTerminal).toHaveBeenCalledWith(
+      WS,
+      THREAD,
+      "attempt-active",
+    );
+    expect(getSharedTargetState(WS, THREAD).activeTurnTarget).toMatchObject({
+      engine: "codex",
+      model: "gpt-5",
+    });
+  });
+
+  it("Probe(active) 后 terminal 要求 Binding recovery：卡片保持 held", async () => {
+    dispatchSharedSendEvent(WS, THREAD, { type: "send" });
+    dispatchSharedSendEvent(WS, THREAD, { type: "packagePrepared" });
+    dispatchSharedSendEvent(WS, THREAD, { type: "ackAmbiguous" });
+    mockServices.sharedSessionV2TurnState.mockResolvedValue({
+      status: "ok",
+      inFlightAttempts: [
+        {
+          attemptId: "attempt-missing-native",
+          bindingKey: "codex:provider-a",
+          accepted: true,
+        },
+      ],
+      bindings: [],
+    });
+    mockServices.sharedSessionV2RecoverAttempt.mockResolvedValue({
+      status: "active",
+      attemptId: "attempt-missing-native",
+      bindingKey: "codex:provider-a",
+      nativeThreadId: "native-missing",
+      runtimeTurnId: "runtime-missing",
+      executionTargetSnapshot: {
+        engine: "codex",
+        providerProfileId: "provider-a",
+        modelCatalogEntryId: "catalog-gpt-5",
+        model: "gpt-5",
+        reasoning: { effort: "high" },
+        providerProfileNameSnapshot: "Provider A",
+        providerProfileSource: "managed",
+        runtimeCapabilityFingerprint: null,
+      },
+    });
+    mockServices.sharedSessionV2AwaitTurnTerminal.mockResolvedValue({
+      status: "committed",
+      duplicate: false,
+      sequence: 19,
+      bindingKey: "codex:provider-a",
+      terminal: {
+        type: "run.settled",
+        outcome: "failed",
+        recoveryReason: "native-session-not-found",
+      },
+    });
+
+    renderBar();
+    fireEvent.click(screen.getByText("sharedSend.recoveryProbe"));
+
+    await waitFor(() => {
+      expect(getSharedSendState(WS, THREAD).state).toBe(
+        "recovery-required",
+      );
+      expect(screen.getByTestId("shared-send-status").textContent).toContain(
+        "sharedSend.recoveryProbeHeld",
+      );
+    });
   });
 
   it("recovery-required：Probe 失败保持锁定并显示错误", async () => {

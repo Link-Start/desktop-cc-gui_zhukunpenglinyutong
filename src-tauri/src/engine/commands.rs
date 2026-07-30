@@ -123,9 +123,6 @@ pub use commands_opencode::*;
 use opencode_helpers::*;
 use parse_helpers::*;
 
-/// Maximum lifetime for an event forwarder task. Prevents orphaned tasks from
-/// leaking memory when the underlying process hangs or is killed externally.
-const EVENT_FORWARDER_TIMEOUT_SECS: u64 = 30 * 60;
 /// Gemini may emit fallback reasoning shortly after turn/completed.
 /// Keep the forwarder alive briefly so realtime reasoning is not dropped.
 const GEMINI_POST_COMPLETION_REASONING_GRACE_MS: u64 = 8_000;
@@ -1863,15 +1860,13 @@ pub async fn engine_send_message(
                     reasoning_item_id,
                     turn_id_for_forwarder.clone(),
                 );
-                let deadline = tokio::time::Instant::now()
-                    + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
                 let mut post_completion_grace_deadline: Option<tokio::time::Instant> = None;
                 loop {
-                    let active_deadline = post_completion_grace_deadline
-                        .map(|grace| std::cmp::min(grace, deadline))
-                        .unwrap_or(deadline);
-                    let recv_result =
-                        tokio::time::timeout_at(active_deadline, receiver.recv()).await;
+                    let recv_result = if let Some(grace_deadline) = post_completion_grace_deadline {
+                        tokio::time::timeout_at(grace_deadline, receiver.recv()).await
+                    } else {
+                        Ok(receiver.recv().await)
+                    };
                     let turn_event = match recv_result {
                         Ok(Ok(event)) => event,
                         Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
@@ -1883,7 +1878,7 @@ pub async fn engine_send_message(
                             );
                             continue;
                         }
-                        Err(_) => break, // timeout reached
+                        Err(_) => break, // post-completion grace reached
                     };
                     if turn_event.turn_id != turn_id_for_forwarder {
                         continue;
@@ -2207,14 +2202,11 @@ pub async fn engine_send_message(
                 .or_else(|| provider_binding_lookup_session_id.clone());
             // Spawn event forwarder (same pattern as Claude forwarder above).
             tokio::spawn(async move {
-                let deadline = tokio::time::Instant::now()
-                    + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
                 loop {
-                    let recv_result = tokio::time::timeout_at(deadline, receiver.recv()).await;
-                    let turn_event = match recv_result {
-                        Ok(Ok(event)) => event,
-                        Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
-                        Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped))) => {
+                    let turn_event = match receiver.recv().await {
+                        Ok(event) => event,
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
                             log::warn!(
                                 "OpenCode event forwarder lagged; skipped {} events for turn {}",
                                 skipped,
@@ -2222,7 +2214,6 @@ pub async fn engine_send_message(
                             );
                             continue;
                         }
-                        Err(_) => break,
                     };
                     if turn_event.turn_id != turn_id_for_forwarder {
                         continue;
@@ -2374,16 +2365,14 @@ pub async fn engine_send_message(
             let turn_id_for_forwarder = turn_id.clone();
             let mut accumulated_agent_text = String::new();
             tokio::spawn(async move {
-                let deadline = tokio::time::Instant::now()
-                    + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
                 let mut render_state = GeminiRenderRoutingState::default();
                 let mut post_completion_grace_deadline: Option<tokio::time::Instant> = None;
                 loop {
-                    let active_deadline = post_completion_grace_deadline
-                        .map(|grace| std::cmp::min(grace, deadline))
-                        .unwrap_or(deadline);
-                    let recv_result =
-                        tokio::time::timeout_at(active_deadline, receiver.recv()).await;
+                    let recv_result = if let Some(grace_deadline) = post_completion_grace_deadline {
+                        tokio::time::timeout_at(grace_deadline, receiver.recv()).await
+                    } else {
+                        Ok(receiver.recv().await)
+                    };
                     let turn_event = match recv_result {
                         Ok(Ok(event)) => event,
                         Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
@@ -2625,15 +2614,12 @@ pub async fn engine_send_message(
                 .clone()
                 .or_else(|| provider_binding_lookup_session_id.clone());
             tokio::spawn(async move {
-                let deadline = tokio::time::Instant::now()
-                    + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
                 let mut render_state = GeminiRenderRoutingState::default();
                 loop {
-                    let recv_result = tokio::time::timeout_at(deadline, receiver.recv()).await;
-                    let turn_event = match recv_result {
-                        Ok(Ok(event)) => event,
-                        Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
-                        Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped))) => {
+                    let turn_event = match receiver.recv().await {
+                        Ok(event) => event,
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
                             log::warn!(
                                 "Kimi event forwarder lagged; skipped {} events for turn {}",
                                 skipped,
@@ -2641,7 +2627,6 @@ pub async fn engine_send_message(
                             );
                             continue;
                         }
-                        Err(_) => break,
                     };
                     if turn_event.turn_id != turn_id_for_forwarder {
                         continue;
@@ -2892,15 +2877,12 @@ pub async fn engine_send_message(
                 .clone()
                 .or_else(|| provider_binding_lookup_session_id.clone());
             tokio::spawn(async move {
-                let deadline = tokio::time::Instant::now()
-                    + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
                 let mut render_state = GeminiRenderRoutingState::default();
                 loop {
-                    let recv_result = tokio::time::timeout_at(deadline, receiver.recv()).await;
-                    let turn_event = match recv_result {
-                        Ok(Ok(event)) => event,
-                        Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
-                        Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped))) => {
+                    let turn_event = match receiver.recv().await {
+                        Ok(event) => event,
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
                             log::warn!(
                                 "Grok event forwarder lagged; skipped {} events for turn {}",
                                 skipped,
@@ -2908,7 +2890,6 @@ pub async fn engine_send_message(
                             );
                             continue;
                         }
-                        Err(_) => break,
                     };
                     if turn_event.turn_id != turn_id_for_forwarder {
                         continue;

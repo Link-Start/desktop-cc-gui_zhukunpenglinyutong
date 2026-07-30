@@ -12,7 +12,8 @@
  * - Runtime dispatch 不接收重复 Target；Rust 只读取 durable attempt snapshot。
  * - terminal 内容由 Rust runtime lifecycle owner 持久化；frontend 通过 backend durable
  *   await 等待 exact Attempt commit，不以 UI event 作为控制终态。
- * - `endTurn` 在 finally 中兜底；只有 begin 早退（未 beginTurn）时不执行。
+ * - observer 断开但 backend 仍持有 accepted owner 时保留 processing/Target，
+ *   交由 Probe 重挂 exact Attempt；其余路径由 finally 收敛 active Target。
  *
  * V0 仅保留给显式 rollback；V2 不得调用 V0 actual-send。
  */
@@ -102,6 +103,20 @@ export type SendSharedSessionTurnV2Result =
   | SharedV2SendEarlyReturn
   | SharedV2SendBlocked
   | SharedV2SendCommitted;
+
+export class SharedActiveAttemptObserverError extends Error {
+  readonly attemptId: string;
+  readonly observerCause: unknown;
+
+  constructor(attemptId: string, observerCause: unknown) {
+    super(
+      `shared-terminal-observer-detached: ${toErrorMessage(observerCause)}`,
+    );
+    this.name = "SharedActiveAttemptObserverError";
+    this.attemptId = attemptId;
+    this.observerCause = observerCause;
+  }
+}
 
 /** 组装 Rust `ExecutionTargetInput`（reasoning 拍平为 reasoningEffort）。 */
 function toTargetPayload(
@@ -297,6 +312,7 @@ export async function sendSharedSessionTurnV2(
     turnSnapshot,
     attemptId,
   );
+  let preserveActiveLifecycle = false;
   try {
     let preparedDelivery: Awaited<
       ReturnType<typeof sharedSessionV2PrepareDelivery>
@@ -434,9 +450,27 @@ export async function sendSharedSessionTurnV2(
       dispatchSendEvent(input.workspaceId, input.threadId, {
         type: "connectionLost",
       });
-      await markAttemptRecovery(
+      const recovery = await markAttemptRecovery(
         `terminal-await-failed: ${toErrorMessage(terminalError)}`,
       );
+      if (recovery?.status === "terminal-committed") {
+        return {
+          ...response,
+          v2: {
+            attemptId,
+            logicalTurnId,
+            bindingKey: recovery.bindingKey ?? begin.bindingKey,
+            committed: true,
+            duplicate: false,
+          },
+        };
+      }
+      if (recovery?.status === "active" || recovery === undefined) {
+        // Recovery RPC 本身不可达时仍不能丢掉已确认 accepted 的本地 owner。
+        // 保持 fail closed，交由后续 Probe 重新取得 authoritative disposition。
+        preserveActiveLifecycle = true;
+        throw new SharedActiveAttemptObserverError(attemptId, terminalError);
+      }
       throw terminalError;
     }
     dispatchSendEvent(input.workspaceId, input.threadId, { type: "runSettled" });
@@ -466,6 +500,8 @@ export async function sendSharedSessionTurnV2(
       },
     };
   } finally {
-    endTurn(input.workspaceId, input.threadId);
+    if (!preserveActiveLifecycle) {
+      endTurn(input.workspaceId, input.threadId, attemptId);
+    }
   }
 }

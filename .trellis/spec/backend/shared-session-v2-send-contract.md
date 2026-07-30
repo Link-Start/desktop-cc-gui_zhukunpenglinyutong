@@ -52,6 +52,14 @@ restoreSharedSendStateFromTurnState(
   turnState,
   expectedRevision?,
 ): boolean
+
+reattachSharedSessionAttempt(
+  workspaceId,
+  threadId,
+  activeRecoveryEnvelope,
+): Promise<void>
+
+subscribeSharedSessionAttemptSettlements(listener): () => void
 ```
 
 Production Tauri commands：
@@ -97,7 +105,7 @@ SharedRuntimeCoordinator.bind_runtime_turn(
 )
 SharedRuntimeCoordinator.ingest_*_event(...)
 SharedRuntimeCoordinator.drain_replay_barrier(attemptId)
-SharedRuntimeCoordinator.wait_for_settlement(attemptId, timeout)
+SharedRuntimeCoordinator.wait_for_settlement(attemptId)
 SharedRuntimeCoordinator.mark_cancel_intent(attemptId)
 SharedRuntimeCoordinator.clear_cancel_intent(attemptId)
 
@@ -210,6 +218,12 @@ shared_binding_state.provisioning_json.state =
   call/result、Artifact、private refs/omissions 与 structured outcome。terminal
   exactly-once 生成 immutable settlement；canonical commit 成功后才清 Runtime owner
   与 replay cache。
+- accepted Shared Attempt 的 Runtime event forwarder 与 exact-Attempt settlement waiter
+  MUST NOT 使用 full-Turn wall-clock deadline。Provider 已发出 typed completion 后的
+  reasoning/stdout drain MAY 使用 bounded grace window；该局部 grace 不能从 Turn
+  开始计时，也不能把仍 active 的 Runtime 解释为 terminal/recovery。
+- 同一 Attempt MAY 同时存在原 observer 与 recovery reattachment。settlement 或 owner
+  removal MUST 唤醒全部 waiters；只唤醒一个 observer 会让另一个永久悬挂。
 
 #### 3.5 Control, recovery and projection
 
@@ -231,6 +245,21 @@ shared_binding_state.provisioning_json.state =
   `shared_session_v2_recover_attempt`，仅有 Binding 时先走
   `shared_session_v2_probe_binding`。零个/多个/unknown/error 均保持锁定，RPC error
   必须可见。
+- accepted 且 coordinator-owned 的 recovery response MUST 返回 exact
+  `attemptId`、`bindingKey`、`nativeThreadId`、`runtimeTurnId` 与 durable
+  `executionTargetSnapshot`。Frontend 只有在以这些字段恢复 owner、Target 并挂上
+  deduplicated terminal observer 后，才可展示 `running`；禁止从当前 Picker 重建。
+- terminal observer transport failure 不是 Runtime failure。若 exact accepted owner
+  仍存活，`mark_recovery` MUST 返回 `active` 且不得改写 Binding；frontend MUST 保留
+  processing、Stop/Queue owner 与 frozen Target。晚到 durable terminal 通过同一
+  reattachment path 安装 terminal barrier、清理 processing 并回到 `idle`。
+- reattachment terminal cleanup MUST compare exact `attemptId` before clearing send owner、
+  processing 或 active Target。旧 observer 的迟到 terminal 仍要安装其
+  `runtimeTurnId` barrier，但不得清理已换代的新 Attempt。
+- renderer restore 读到唯一 accepted/live owner 时，MUST 先进入
+  `recovery-required` 关闭 send window，再调用 authoritative recovery + reattachment；
+  在 observer 实际挂载前不得直接投影 `running`。owner absent/ambiguous 继续 fail
+  closed。
 - canonical projection 默认用于新 V2 Turn；legacy Shared snapshot 使用 dual-read，
   不读取或拼接 Native CLI session files。
 - Shared dispatch terminal 收敛必须 Engine-neutral：任意 CLI 可以先返回 accepted start
@@ -293,6 +322,8 @@ shared_binding_state.provisioning_json.state =
 | event 在 Runtime identity bind 前到达 | 缓存，bind 后有序 replay | 丢 event |
 | event 在 replay drain 期间到达 | 排在 barrier 后部，不能越过早到 event | live emit 抢跑 |
 | Claude context echo 早到 | ACK waiter 可立即观察；visible event 仍有序 | barrier deadlock |
+| accepted Turn 超过 30 分钟 | forwarder/waiter 继续 event-driven 观察 | elapsed time 伪造 recovery |
+| 同 Attempt 有原 observer + reattach observer | terminal/removal 唤醒全部 waiter | `notify_one` 遗留幽灵 waiter |
 | duplicate terminal | 只保留首次 settlement/commit | 第二条 final |
 | exact `runtimeTurnId` + rebound native id | exact Run owner 结算 | 因 Thread id 变化丢 terminal |
 | cancel intent 后同步 `TurnError` | commit `cancelled` | 显示普通 failure |
@@ -307,6 +338,10 @@ shared_binding_state.provisioning_json.state =
 | 两个 caller 同时通过 idle preflight | exact 一个 admission；loser 零 optimistic/processing/RPC | read-check 当锁 |
 | Recovery Binding 无 direct Attempt | 真实 probe binding；唯一 Attempt 再 recover | 只改 UI 文案假 Probe |
 | Probe/Rebuild RPC 失败 | 保持 recovery-required + 可见错误 | 吞异常后伪装可恢复 |
+| Probe 返回 accepted active owner | exact owner/Target + dedup observer 后 running | 只改 enum 或从 Picker 猜 Target |
+| observer transport 失败但 owner active | 保留 owner/processing/Target，允许 reattach | 清状态并把 Runtime 当中断 |
+| restart 发现唯一 live owner | recovery lock → authoritative reattach → running | 无 observer 直接 running |
+| old observer 在新 Attempt 后返回 | 安装旧 Runtime barrier，不改新 owner/processing/Target | thread-level 无条件 cleanup |
 | 同 Binding 只有 `destination-owned` facts | ready + zero-delta no-op | 弹迁移确认或发送空 marker |
 | Claude raw UUID event + canonical Binding | 归一为 `claude:<uuid>` 并按 Provider scope 认领 | 新建 identity 或跨 Provider settle |
 | Codex 首发 `thread/started` 早于 start ACK | provisioning hold；exact bind 后投影 Shared | 普通 Session row 闪现 |
@@ -319,12 +354,19 @@ shared_binding_state.provisioning_json.state =
   key 与 CLI runtime model 都可观测为 A。
 - Good：早到 terminal 与 drain 期间新 delta 均留在 barrier；authoritative
   observation 先于 UI event，terminal 只 commit 一次。
+- Good：Turn 运行超过历史 30 分钟边界，event forwarder 与 settlement waiter 均继续
+  等待；renderer observer 断开后 Probe 用 exact owner 重附，晚到 terminal 正常回
+  `idle`。
 - Base：`prepare_context(Target A)` 只返回预览，真正 Tx3 仍由
   `prepare_delivery(attemptId)` 从 Tx1 重新派生。
 - Bad：V2 wrapper 在 Tx1 后调用 V0 command，并再次传
   `engine/model/effort/providerProfileId`。
 - Bad：看到 `turn/start` response 或可见 final text 就由 frontend 构造 canonical
   `run.settled`。
+- Bad：用 `timeout(30min, await_terminal)` 或从 Turn start 计算 forwarder deadline，
+  timeout 后清空 active owner。
+- Bad：`Probe(active)` 只把状态 enum 改为 `running`，没有恢复 exact terminal
+  observer。
 - Bad：先 `selectNextTarget(newTarget)`，持久化失败后仍让 UI 显示 newTarget。
 - Bad：`rebuild_binding(bindingKey, engine, providerProfileId)` 信任 caller Target。
 
@@ -336,6 +378,8 @@ shared_binding_state.provisioning_json.state =
 pnpm vitest run \
   src/features/shared-session/services/sharedSessions.test.ts \
   src/features/shared-session/runtime/sendSharedSessionTurnV2.test.ts \
+  src/features/shared-session/runtime/reattachSharedSessionAttempt.test.ts \
+  src/features/shared-session/runtime/useSharedSendStateRestore.test.tsx \
   src/features/shared-session/runtime/sharedSessionBridge.test.ts \
   src/features/shared-session/runtime/sharedSendStateStore.test.ts \
   src/features/shared-session/components/SharedSendStatusBar.test.tsx \
@@ -353,11 +397,13 @@ pnpm exec tsc --noEmit --pretty false
 pnpm run check:runtime-contracts
 
 cargo test --manifest-path src-tauri/Cargo.toml --lib shared_runtime_coordinator
+cargo test --manifest-path src-tauri/Cargo.toml --lib settlement_wait_
 cargo test --manifest-path src-tauri/Cargo.toml --lib execution_target_contract_tests
 cargo test --manifest-path src-tauri/Cargo.toml --test shared_session_v2
 cargo test --manifest-path src-tauri/Cargo.toml --test shared_session_v2_target_matrix
 cargo test --manifest-path src-tauri/Cargo.toml --test shared_projection
 cargo check --manifest-path src-tauri/Cargo.toml --lib
+cargo check --manifest-path src-tauri/Cargo.toml --lib --bin cc_gui_daemon
 ```
 
 关键断言：
@@ -369,8 +415,14 @@ cargo check --manifest-path src-tauri/Cargo.toml --lib
 - poisoned flat fields 无法影响实际 Provider process key、Binding 或 CLI model。
 - `modelCatalogEntryId != model` 时两者均落盘，Runtime 只收到 `model`。
 - pre-bind event、drain 期间 event、duplicate terminal 的顺序与 exactly-once。
+- exact Attempt waiter 在任意短 observation window 后仍 pending；settlement/removal
+  唤醒全部并发 waiter；desktop/daemon provider forwarder 源码不含 full-Turn deadline。
 - 两个并发 caller 只有一个 optimistic/processing/send；admission revision 只能消费一次。
 - Recovery Attempt/Binding Probe 均真实调用 owner API；unknown/error 不解锁。
+- Probe(active) 先恢复 exact owner/Target 并 dedup reattach；observer detach 与 restart
+  不清 processing，晚到 durable terminal 安装 barrier 后统一回 idle。
+- stale reattachment terminal 只安装旧 Runtime barrier；exact attempt guard 保留新
+  owner、processing 与 active Target。
 - context echo 不被 barrier 阻塞，assistant/reasoning/tool 不被 prompt filter 吞掉。
 - cancel intent/clear intent 分别产生 cancelled/failed。
 - destination-owned-only package 为 `ready`、`promptPrefix=""`、`0 → 0`，Runtime 只收到
@@ -416,6 +468,28 @@ await sharedSessionV2DispatchTurn(workspaceId, threadId, {
   artifactId: prepared.artifactId,
   artifactChecksum: prepared.artifactChecksum,
 });
+```
+
+#### Wrong
+
+```ts
+await withTimeout(
+  sharedSessionV2AwaitTurnTerminal(workspaceId, threadId, attemptId),
+  THIRTY_MINUTES,
+);
+setSharedSendState(workspaceId, threadId, "recovery-required");
+clearActiveAttempt(workspaceId, threadId);
+```
+
+#### Correct
+
+```ts
+await reattachSharedSessionAttempt(
+  workspaceId,
+  threadId,
+  activeRecoveryEnvelope,
+);
+// exact Runtime settlement / owner removal 决定结束；elapsed time 不是 terminal。
 ```
 
 #### Wrong
@@ -887,6 +961,9 @@ Binding context cursor {
   durable `conversation.turnCommitted` 为最终成功判据。projected UI event、Agent Event
   Bus 与 inline terminal 只能用于 rendering、notification 或 fast path，不得单独把
   Composer 置为 idle，也不得因 listener 漏事件把已 commit Attempt 标为 recovery。
+- exact-Attempt await 与 upstream Runtime event forwarder MUST 使用 event-driven
+  settlement，不得对完整 Turn 施加 wall-clock timeout。只允许 completion 后 cleanup
+  grace、首包/ACK、health probe 等 phase-local bounded timeout。
 - durable commit 写入 frontend terminal ledger 的生命周期 MUST 跨普通 React rerender
   保持稳定；清空 ledger / pending queue / timer 的 cleanup 只能发生在 hook unmount。
   cleanup effect 不得因 flush callback identity 更新而执行。

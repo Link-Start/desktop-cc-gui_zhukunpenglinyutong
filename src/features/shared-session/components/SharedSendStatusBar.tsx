@@ -33,6 +33,7 @@ import {
   dispatchSharedSendEvent,
   useSharedSendState,
 } from "../runtime/sharedSendStateStore";
+import { reattachSharedSessionAttempt } from "../runtime/reattachSharedSessionAttempt";
 import { isSharedV2SendEnabled } from "../runtime/sharedV2SendFlag";
 
 type SharedSendStatusBarProps = {
@@ -116,7 +117,25 @@ export function SharedSendStatusBar({
         attemptId,
       );
       if (recovery.status === "active") {
-        dispatchSharedSendEvent(workspaceId, threadId, { type: "probeActiveRun" });
+        const observer = reattachSharedSessionAttempt(
+          workspaceId,
+          threadId,
+          recovery,
+        );
+        void observer
+          .then((commit) => {
+            if (commit.terminal.recoveryReason) {
+              setRecoveryWork("held");
+            }
+          })
+          .catch((error: unknown) => {
+            setRecoveryWork("held");
+            pushErrorToast({
+              title: t("sharedSend.recoveryTitle"),
+              message: `${t("sharedSend.recoveryProbe")}: ${recoveryErrorMessage(error)}`,
+              durationMs: 4800,
+            });
+          });
         setRecoveryWork("cleared");
         return;
       }
@@ -135,7 +154,7 @@ export function SharedSendStatusBar({
       });
       setRecoveryWork("cleared");
     },
-    [workspaceId, threadId],
+    [workspaceId, threadId, t],
   );
 
   const handleProbe = useCallback(async () => {

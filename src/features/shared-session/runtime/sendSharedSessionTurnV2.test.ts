@@ -61,7 +61,10 @@ import {
 } from "../target/targetStore";
 import type { ExecutionTarget } from "../target/types";
 import { sendSharedSessionTurnRouted } from "./sendSharedSessionTurn";
-import { sendSharedSessionTurnV2 } from "./sendSharedSessionTurnV2";
+import {
+  sendSharedSessionTurnV2,
+  SharedActiveAttemptObserverError,
+} from "./sendSharedSessionTurnV2";
 import {
   dispatchSharedSendEvent,
   getSharedSendActiveAttemptId,
@@ -1177,13 +1180,34 @@ describe("sendSharedSessionTurnV2", () => {
     expect(getSharedTargetState("ws-1", "shared:thread-1").activeTurnTarget).toBeNull();
   });
 
-  it("durable terminal await 失败：进入 recovery 并保留原错误", async () => {
+  it("durable terminal observer 断开但 owner active：保留 Attempt 生命周期", async () => {
     const commitError = new Error("event log unavailable");
     sharedSessionV2AwaitTurnTerminal.mockRejectedValue(commitError);
+    sharedSessionV2MarkRecovery.mockResolvedValue({
+      status: "active",
+      attemptId: "attempt-1",
+      bindingKey: "claude:profile-1",
+      nativeThreadId: "claude:session-1",
+      runtimeTurnId: "claude-turn-1",
+      executionTargetSnapshot: {
+        engine: "claude",
+        providerProfileId: "profile-1",
+        modelCatalogEntryId: "settings-sonnet",
+        model: "sonnet-4",
+        reasoning: { effort: "high" },
+        providerProfileNameSnapshot: "Provider A",
+        providerProfileSource: "managed",
+        runtimeCapabilityFingerprint: null,
+      },
+    });
 
     await expect(
       sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET }),
-    ).rejects.toBe(commitError);
+    ).rejects.toMatchObject({
+      name: "SharedActiveAttemptObserverError",
+      attemptId: "attempt-1",
+      observerCause: commitError,
+    } satisfies Partial<SharedActiveAttemptObserverError>);
 
     expect(sharedSessionV2MarkRecovery).toHaveBeenCalledWith(
       "ws-1",
@@ -1191,7 +1215,67 @@ describe("sendSharedSessionTurnV2", () => {
       "attempt-1",
       "terminal-await-failed: event log unavailable",
     );
-    expect(getSharedTargetState("ws-1", "shared:thread-1").activeTurnTarget).toBeNull();
+    expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe(
+      "recovery-required",
+    );
+    expect(
+      getSharedSendActiveAttemptId("ws-1", "shared:thread-1"),
+    ).toBe("attempt-1");
+    expect(
+      getSharedTargetState("ws-1", "shared:thread-1").activeTurnTarget,
+    ).toMatchObject({
+      engine: "claude",
+      model: "sonnet-4",
+    });
+  });
+
+  it("terminal observer 与 recovery RPC 同时断开：仍保留 accepted Attempt owner", async () => {
+    const observerError = new Error("terminal observer detached");
+    sharedSessionV2AwaitTurnTerminal.mockRejectedValue(observerError);
+    sharedSessionV2MarkRecovery.mockRejectedValue(
+      new Error("recovery transport unavailable"),
+    );
+
+    await expect(
+      sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET }),
+    ).rejects.toMatchObject({
+      name: "SharedActiveAttemptObserverError",
+      attemptId: "attempt-1",
+      observerCause: observerError,
+    } satisfies Partial<SharedActiveAttemptObserverError>);
+
+    expect(
+      getSharedSendActiveAttemptId("ws-1", "shared:thread-1"),
+    ).toBe("attempt-1");
+    expect(
+      getSharedTargetState("ws-1", "shared:thread-1").activeTurnTarget,
+    ).toMatchObject({ engine: "claude", model: "sonnet-4" });
+  });
+
+  it("terminal await 断开但 mark recovery 发现 durable commit：按成功收口", async () => {
+    sharedSessionV2AwaitTurnTerminal.mockRejectedValue(
+      new Error("terminal response lost"),
+    );
+    sharedSessionV2MarkRecovery.mockResolvedValue({
+      status: "terminal-committed",
+      attemptId: "attempt-1",
+      bindingKey: "claude:profile-1",
+      sequence: 42,
+    });
+
+    await expect(
+      sendSharedSessionTurnV2({ ...BASE_INPUT, target: TARGET }),
+    ).resolves.toMatchObject({
+      v2: {
+        attemptId: "attempt-1",
+        bindingKey: "claude:profile-1",
+        committed: true,
+      },
+    });
+    expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe("idle");
+    expect(
+      getSharedTargetState("ws-1", "shared:thread-1").activeTurnTarget,
+    ).toBeNull();
   });
 
   it("frontend terminal event absence cannot strand a durable committed send", async () => {

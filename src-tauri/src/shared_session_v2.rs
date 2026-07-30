@@ -4051,8 +4051,6 @@ pub async fn shared_session_v2_await_turn_terminal(
     attempt_id: String,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
-    const TERMINAL_WAIT_TIMEOUT: Duration = Duration::from_secs(30 * 60);
-
     let writer = require_writer(&state)?;
     let shared_session_id = parse_shared_session_id(&thread_id)?;
     require_shared_session_workspace_owner(&workspace_id, &shared_session_id)?;
@@ -4064,25 +4062,10 @@ pub async fn shared_session_v2_await_turn_terminal(
         return Ok(committed);
     }
 
-    let settlement = match state
+    let settlement = state
         .shared_runtime_coordinator
-        .wait_for_settlement(&attempt_id, TERMINAL_WAIT_TIMEOUT)
-        .await
-    {
-        Ok(settlement) => settlement,
-        Err(wait_error) => {
-            // terminal commit 可能与 timeout 边界并发；durable fact 优先于 timer。
-            if let Some(committed) = committed_terminal_response(
-                writer,
-                &shared_session_id,
-                &attempt_id,
-                &owner.binding_key,
-            )? {
-                return Ok(committed);
-            }
-            return Err(wait_error);
-        }
-    };
+        .wait_for_settlement(&attempt_id)
+        .await;
 
     if let Some(settled) = settlement {
         if let Err(commit_error) = commit_observed_runtime_settlement(&state, settled) {
@@ -4204,13 +4187,19 @@ pub async fn shared_session_v2_mark_recovery(
         .map_err(|error| error.to_string())?
         .ok_or_else(|| format!("binding {} is missing", owner.binding_key))?;
     require_attempt_binding_generation(&binding, &owner)?;
-    if !unresolved_attempt_evidence(writer, &shared_session_id, None)?
+    let unresolved = unresolved_attempt_evidence(writer, &shared_session_id, None)?;
+    let evidence = unresolved
         .iter()
-        .any(|evidence| evidence.owner.requested.attempt_id == attempt_id)
-    {
-        return Err(format!(
-            "recovery-owner-missing: attempt {attempt_id} is not unresolved"
-        ));
+        .find(|evidence| evidence.owner.requested.attempt_id == attempt_id)
+        .ok_or_else(|| format!("recovery-owner-missing: attempt {attempt_id} is not unresolved"))?;
+    if let Some(active) = active_recovery_response(
+        writer,
+        &state.shared_runtime_coordinator,
+        &workspace_id,
+        &thread_id,
+        evidence,
+    )? {
+        return Ok(active);
     }
     mark_recovery_core(
         writer,
@@ -4447,7 +4436,7 @@ fn recovery_disposition(
     let attempt_id = &evidence.owner.requested.attempt_id;
     if coordinator.settled_for_attempt(attempt_id).is_some() {
         "terminal"
-    } else if coordinator.owns_attempt(attempt_id) {
+    } else if evidence.accepted && coordinator.owns_attempt(attempt_id) {
         "active"
     } else if !evidence.accepted
         && (!evidence.delivery_prepared || evidence.pending_phase.as_deref() == Some("prepared"))
@@ -4456,6 +4445,34 @@ fn recovery_disposition(
     } else {
         "unknown"
     }
+}
+
+fn active_recovery_response(
+    writer: &SharedEventWriter,
+    coordinator: &crate::shared_runtime_coordinator::SharedRuntimeCoordinator,
+    workspace_id: &str,
+    thread_id: &str,
+    evidence: &UnresolvedAttemptEvidence,
+) -> Result<Option<Value>, String> {
+    let attempt_id = &evidence.owner.requested.attempt_id;
+    if !evidence.accepted || !coordinator.owns_attempt(attempt_id) {
+        return Ok(None);
+    }
+    let route = resolve_shared_attempt_interrupt_route(
+        writer,
+        coordinator,
+        workspace_id,
+        thread_id,
+        attempt_id,
+    )?;
+    Ok(Some(json!({
+        "status": "active",
+        "attemptId": route.attempt_id,
+        "bindingKey": route.binding_key,
+        "nativeThreadId": route.native_thread_id,
+        "runtimeTurnId": route.runtime_turn_id,
+        "executionTargetSnapshot": evidence.owner.requested.target,
+    })))
 }
 
 /// Attempt-first recovery mutation。Probe 只是 UI 动作名；Backend 必须重新读取
@@ -4504,12 +4521,14 @@ pub async fn shared_session_v2_recover_attempt(
             "sequence": committed.sequence,
         }));
     }
-    if state.shared_runtime_coordinator.owns_attempt(&attempt_id) {
-        return Ok(json!({
-            "status": "active",
-            "attemptId": attempt_id,
-            "bindingKey": binding_key,
-        }));
+    if let Some(active) = active_recovery_response(
+        writer,
+        &state.shared_runtime_coordinator,
+        &workspace_id,
+        &thread_id,
+        &evidence,
+    )? {
+        return Ok(active);
     }
     if recovery_disposition(&evidence, &state.shared_runtime_coordinator) == "not-accepted" {
         let committed = commit_runtime_snapshot_core(
@@ -5028,6 +5047,155 @@ mod shared_interrupt_owner_tests {
         };
         assert_eq!(route.native_thread_id, expected_native_thread_id);
         assert_eq!(route.runtime_turn_id, format!("run-{provider}"));
+
+        coordinator.remove_attempt(&attempt_id);
+        writer.shutdown().expect("shutdown writer");
+        std::fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn active_recovery_returns_exact_accepted_owner_envelope() {
+        let session_id = "recovery-active-owner";
+        let shared_thread_id = format!("shared:{session_id}");
+        let provider = "provider-active";
+        let active_target = target(EngineType::Codex, provider);
+        let (root, writer) = open_test_writer("recovery-active-owner");
+        let begin = begin_turn_core(&writer, session_id, &active_target, "hello".to_string())
+            .expect("begin");
+        let attempt_id = begin.attempt_id.expect("attempt");
+        let logical_turn_id = begin.logical_turn_id.expect("logical turn");
+        let binding_key = begin.binding_key;
+        let snapshot = begin.snapshot.expect("snapshot");
+        let binding_operation_id = durable_attempt_owner(&writer, session_id, &attempt_id)
+            .expect("durable owner")
+            .binding_operation_id;
+        accept_turn_core(
+            &writer,
+            session_id,
+            &attempt_id,
+            &logical_turn_id,
+            &active_target,
+            "native-active",
+        )
+        .expect("accept");
+        let coordinator = SharedRuntimeCoordinator::default();
+        coordinator
+            .register_attempt(SharedRuntimeAttemptOwner {
+                workspace_id: "ws-1".to_string(),
+                provider_runtime_key: provider_runtime_key_for_target(
+                    "ws-1",
+                    EngineType::Codex,
+                    Some(provider),
+                )
+                .expect("provider runtime key"),
+                shared_session_id: session_id.to_string(),
+                shared_thread_id: shared_thread_id.clone(),
+                logical_turn_id,
+                attempt_id: attempt_id.clone(),
+                binding_key: binding_key.clone(),
+                binding_operation_id,
+                engine: EngineType::Codex,
+                execution_target_snapshot: snapshot,
+                native_session_id: Some("native-active".to_string()),
+                runtime_turn_id: Some("run-active".to_string()),
+                context_marker: None,
+            })
+            .expect("register owner");
+        let evidence = unresolved_attempt_evidence(&writer, session_id, None)
+            .expect("read evidence")
+            .into_iter()
+            .find(|evidence| evidence.owner.requested.attempt_id == attempt_id)
+            .expect("unresolved accepted attempt");
+
+        assert_eq!(recovery_disposition(&evidence, &coordinator), "active");
+        let response =
+            active_recovery_response(&writer, &coordinator, "ws-1", &shared_thread_id, &evidence)
+                .expect("resolve active recovery")
+                .expect("active response");
+        assert_eq!(
+            response.get("attemptId").and_then(Value::as_str),
+            Some(attempt_id.as_str())
+        );
+        assert_eq!(
+            response.get("bindingKey").and_then(Value::as_str),
+            Some(binding_key.as_str())
+        );
+        assert_eq!(
+            response.get("nativeThreadId").and_then(Value::as_str),
+            Some("native-active")
+        );
+        assert_eq!(
+            response.get("runtimeTurnId").and_then(Value::as_str),
+            Some("run-active")
+        );
+        assert_eq!(
+            response
+                .pointer("/executionTargetSnapshot/providerProfileId")
+                .and_then(Value::as_str),
+            Some(provider)
+        );
+
+        coordinator.remove_attempt(&attempt_id);
+        writer.shutdown().expect("shutdown writer");
+        std::fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn preaccepted_runtime_owner_is_not_reported_active() {
+        let session_id = "recovery-preaccepted-owner";
+        let shared_thread_id = format!("shared:{session_id}");
+        let provider = "provider-preaccepted";
+        let (root, writer) = open_test_writer("recovery-preaccepted-owner");
+        let begin = begin_turn_core(
+            &writer,
+            session_id,
+            &target(EngineType::Codex, provider),
+            "hello".to_string(),
+        )
+        .expect("begin");
+        let attempt_id = begin.attempt_id.expect("attempt");
+        let binding_operation_id = durable_attempt_owner(&writer, session_id, &attempt_id)
+            .expect("durable owner")
+            .binding_operation_id;
+        let coordinator = SharedRuntimeCoordinator::default();
+        coordinator
+            .register_attempt(SharedRuntimeAttemptOwner {
+                workspace_id: "ws-1".to_string(),
+                provider_runtime_key: provider_runtime_key_for_target(
+                    "ws-1",
+                    EngineType::Codex,
+                    Some(provider),
+                )
+                .expect("provider runtime key"),
+                shared_session_id: session_id.to_string(),
+                shared_thread_id: shared_thread_id.clone(),
+                logical_turn_id: begin.logical_turn_id.expect("logical turn"),
+                attempt_id: attempt_id.clone(),
+                binding_key: begin.binding_key,
+                binding_operation_id,
+                engine: EngineType::Codex,
+                execution_target_snapshot: begin.snapshot.expect("snapshot"),
+                native_session_id: Some("native-preaccepted".to_string()),
+                runtime_turn_id: Some("run-preaccepted".to_string()),
+                context_marker: None,
+            })
+            .expect("register owner");
+        let evidence = unresolved_attempt_evidence(&writer, session_id, None)
+            .expect("read evidence")
+            .into_iter()
+            .find(|evidence| evidence.owner.requested.attempt_id == attempt_id)
+            .expect("unresolved attempt");
+
+        assert_ne!(recovery_disposition(&evidence, &coordinator), "active");
+        assert!(active_recovery_response(
+            &writer,
+            &coordinator,
+            "ws-1",
+            &shared_thread_id,
+            &evidence,
+        )
+        .expect("resolve recovery")
+        .is_none());
 
         coordinator.remove_attempt(&attempt_id);
         writer.shutdown().expect("shutdown writer");
