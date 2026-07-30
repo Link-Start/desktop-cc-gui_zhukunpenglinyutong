@@ -1421,3 +1421,36 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1239: 修复消息回合边界吸底
+
+**Date**: 2026-07-30
+**Task**: 修复消息回合边界吸底
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+将发送与对话结束从 continuous live-follow 中拆为强制 bottom convergence；覆盖 queued send、settle 回填、scope switch 与边界后用户输入取消，并完成 8 个相关测试文件、typecheck、ESLint、OpenSpec strict validation。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5aeb5e597` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
