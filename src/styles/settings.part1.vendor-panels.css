@@ -90,9 +90,9 @@
  * icons, and a clear divider before the detail pane.
  *
  * Left padding stays zero so the search box and engine rows align flush with
- * the panel's left edge — which shares the same centered 860px column as the
- * page-head title above it. The right padding keeps the rows off the content
- * divider instead of kissing it.
+ * the panel's left edge — which shares the same centered fixed-width column
+ * as the page-head title above it. The right padding keeps the rows off the
+ * content divider instead of kissing it.
  */
 .vendor-engine-nav {
   width: 200px;

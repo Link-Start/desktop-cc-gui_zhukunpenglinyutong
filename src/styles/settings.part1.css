@@ -18,9 +18,9 @@
  * drag-strip covers macOS, and the head itself is a drag region for Windows.
  * The head mirrors the scroll viewport's structure — full-width box with the
  * same horizontal padding, plus a centered inner column — so the title aligns
- * exactly with .settings-section below (centering an 860px box in the wrap
- * while the section centers in the narrower viewport content box would drift
- * the title right by (pad-x - pad-right)/2 + pad-x). */
+ * exactly with .settings-section below (centering the fixed-width box in the
+ * wrap while the section centers in the narrower viewport content box would
+ * drift the title right by (pad-x - pad-right)/2 + pad-x). */
 .settings-page-head {
   flex: 0 0 auto;
   padding: 44px var(--settings-content-pad-right) 18px

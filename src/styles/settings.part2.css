@@ -1462,7 +1462,7 @@
 /* The variables live on the wrap so both the fixed page head and the scrolling
  * content share the same centered column metrics. */
 .settings-content-wrap {
-  --settings-content-fixed-width: 860px;
+  --settings-content-fixed-width: 980px;
   --settings-content-pad-top: 12px;
   --settings-content-pad-x: 30px;
   --settings-content-pad-right: 12px;
@@ -2257,12 +2257,6 @@
  * the page head is a sibling of .settings-content and inherits the column
  * metrics from the wrap, so overriding them on .settings-content would
  * desync the head from the content column. */
-@media (max-width: 1360px) {
-  .settings-content-wrap {
-    --settings-content-fixed-width: 980px;
-  }
-}
-
 @media (max-width: 1100px) {
   .settings-content-wrap {
     --settings-content-fixed-width: 100%;
