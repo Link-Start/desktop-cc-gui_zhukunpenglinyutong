@@ -22,6 +22,7 @@ use super::{
     OpenCodeAgentEntry, RegisteredEngineActiveProcessDiagnostic, StaleChildCandidate,
 };
 use crate::backend::events::AppServerEvent;
+use crate::engine::commands::require_image_support;
 use crate::engine::events::EngineEvent;
 use crate::session_management::{AutoSessionCreatedBy, AutoSessionMetadata, AutoSessionVisibility};
 use crate::types::{WorkspaceEntry, WorkspaceKind, WorkspaceSettings};
@@ -77,6 +78,30 @@ fn claude_dispatch_receipt_preserves_managed_provider_identity() {
         "claude::workspace-managed::provider-anthropic"
     );
     assert!(receipt["reasoningEffort"].is_null());
+}
+
+#[test]
+fn image_support_guard_follows_engine_feature_matrix() {
+    use crate::engine::EngineType;
+
+    let non_empty = Some(vec!["/tmp/example.png".to_string()]);
+    let whitespace_only = Some(vec!["  ".to_string(), "".to_string(), " \n ".to_string()]);
+
+    // All current CLI engines support image input at the capability gate.
+    // (Transport differs: Claude/Codex native, Grok prompt-json, OpenCode -f,
+    //  Kimi path+ReadMediaFile.)
+    for engine in [
+        EngineType::Claude,
+        EngineType::Codex,
+        EngineType::Gemini,
+        EngineType::Grok,
+        EngineType::Kimi,
+        EngineType::OpenCode,
+    ] {
+        assert_eq!(require_image_support(engine, &non_empty), Ok(()));
+        assert_eq!(require_image_support(engine, &whitespace_only), Ok(()));
+        assert_eq!(require_image_support(engine, &None), Ok(()));
+    }
 }
 
 #[test]

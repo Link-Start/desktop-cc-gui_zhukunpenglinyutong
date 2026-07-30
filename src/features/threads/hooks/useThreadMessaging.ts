@@ -93,6 +93,11 @@ import {
   normalizeSharedSessionEngine,
 } from "../../shared-session/utils/sharedSessionEngines";
 import {
+  engineSupportsImageInput,
+  formatEngineImageInputUnsupportedMessage,
+  sanitizeImageAttachmentPaths,
+} from "../../engine/utils/engineImageInput";
+import {
   clearPendingClaudeMcpOutputNotice,
   getClaudeMcpRuntimeSnapshot,
   setPendingClaudeMcpOutputNotice,
@@ -708,6 +713,24 @@ export function useThreadMessaging({
         finalImages = Array.from(
           new Set([...finalImages, ...noteInjectionResult.imagePaths]),
         );
+      }
+      finalImages = sanitizeImageAttachmentPaths(finalImages);
+      // Capability gate: matrix `image.input`. Current engines are all supported;
+      // keep the guard for future unsupported engines (fail before optimistic UI).
+      if (
+        finalImages.length > 0 &&
+        !engineSupportsImageInput(resolvedEngine)
+      ) {
+        pushThreadErrorMessage(
+          workspace.id,
+          threadId,
+          formatEngineImageInputUnsupportedMessage(
+            resolvedEngine,
+            t as (key: string, options?: Record<string, unknown>) => string,
+          ),
+        );
+        safeMessageActivity();
+        return;
       }
       let resolvedSelectedAgent =
         resolvedEngine !== "opencode" ? options?.selectedAgent ?? null : null;
@@ -1646,8 +1669,12 @@ export function useThreadMessaging({
                 id: userMessageId,
                 kind: "message",
                 role: "user",
+                // Keep user-visible text free of engine-private injection
+                // (e.g. Kimi ReadMediaFile path block is CLI-only).
                 text: visibleUserText,
-                images: images.length > 0 ? images : undefined,
+                // Prefer sanitized image list so canvas screenshots (data URLs /
+                // paths) still render as thumbnails, never as wire text.
+                images: finalImages.length > 0 ? finalImages : undefined,
                 collaborationMode: userCollaborationMode,
                 selectedAgentName,
                 selectedAgentIcon,

@@ -7,7 +7,9 @@ use tokio::time::timeout;
 
 use crate::backend::app_server::WorkspaceSession;
 use crate::backend::events::AppServerEvent;
+use crate::engine::codex_adapter::params_to_codex_input;
 use crate::engine::error_mapper::extract_error_message;
+use crate::engine::SendMessageParams;
 use crate::session_management::{self, AutoSessionMetadata};
 use crate::state::AppState;
 
@@ -244,6 +246,7 @@ pub(crate) async fn run_codex_prompt_sync(
     model: Option<String>,
     effort: Option<String>,
     access_mode: Option<String>,
+    images: Option<Vec<String>>,
     custom_spec_root: Option<String>,
     auto_session: Option<AutoSessionMetadata>,
     app: &AppHandle,
@@ -324,7 +327,6 @@ pub(crate) async fn run_codex_prompt_sync(
     let mut callback_guard =
         BackgroundCallbackGuard::new(session.clone(), helper_thread_id.clone());
 
-    let access_mode = access_mode.unwrap_or_else(|| "read-only".to_string());
     let mut writable_roots = vec![session.entry.path.clone()];
     if let Some(spec_root) = custom_spec_root {
         if !spec_root.is_empty()
@@ -334,6 +336,7 @@ pub(crate) async fn run_codex_prompt_sync(
             writable_roots.push(spec_root);
         }
     }
+    let access_mode = access_mode.unwrap_or_else(|| "read-only".to_string());
     let sandbox_policy = match access_mode.as_str() {
         "full-access" => json!({ "type": "dangerFullAccess" }),
         "current" => json!({
@@ -343,17 +346,34 @@ pub(crate) async fn run_codex_prompt_sync(
         }),
         _ => json!({ "type": "readOnly" }),
     };
+    let params = SendMessageParams {
+        text: text.to_string(),
+        model,
+        effort,
+        disable_thinking: false,
+        access_mode: Some(access_mode),
+        images,
+        continue_session: false,
+        session_id: None,
+        fork_session_id: None,
+        agent: None,
+        variant: None,
+        collaboration_mode: None,
+        custom_spec_root: None,
+    };
+    let turn_input = params_to_codex_input(&params);
+
     let turn_result = session
         .send_request(
             "turn/start",
             json!({
                 "threadId": helper_thread_id,
-                "input": [{ "type": "text", "text": text }],
+                "input": turn_input,
                 "cwd": session.entry.path,
                 "approvalPolicy": "never",
                 "sandboxPolicy": sandbox_policy,
-                "model": model,
-                "effort": effort,
+                "model": params.model,
+                "effort": params.effort,
             }),
         )
         .await;

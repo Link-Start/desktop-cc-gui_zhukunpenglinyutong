@@ -19,6 +19,8 @@ pub(crate) mod claude_history_subagents;
 #[allow(dead_code)]
 #[path = "../../engine/claude_message_content.rs"]
 pub(crate) mod claude_message_content;
+#[path = "../../engine/cli_image_input.rs"]
+pub(crate) mod cli_image_input;
 #[path = "../../engine/events.rs"]
 pub mod events;
 #[path = "../../engine/gemini.rs"]
@@ -680,7 +682,7 @@ impl EngineFeatures {
         Self {
             reasoning_effort: false,
             collaboration_mode: false,
-            image_input: false,
+            image_input: true,
             session_resume: true,
             tools_control: true,
             streaming: true,
@@ -704,7 +706,7 @@ impl EngineFeatures {
         Self {
             reasoning_effort: false,
             collaboration_mode: false,
-            image_input: false,
+            image_input: true,
             session_resume: true,
             tools_control: true,
             streaming: true,
@@ -716,7 +718,7 @@ impl EngineFeatures {
         Self {
             reasoning_effort: false,
             collaboration_mode: false,
-            image_input: false,
+            image_input: true,
             session_resume: true,
             tools_control: true,
             streaming: true,

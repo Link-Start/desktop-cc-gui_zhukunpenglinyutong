@@ -650,6 +650,7 @@ export const MessageRow = memo(function MessageRow({
           images={imageItems}
           onOpen={setLightboxIndex}
           hasText={hasText}
+          workspaceId={workspaceId}
         />
       )}
       {deferredImageItems.length > 0 ? (
@@ -761,6 +762,7 @@ export const MessageRow = memo(function MessageRow({
           images={lightboxImages}
           activeIndex={lightboxIndex}
           onClose={() => setLightboxIndex(null)}
+          workspaceId={workspaceId}
         />
       )}
     </div>

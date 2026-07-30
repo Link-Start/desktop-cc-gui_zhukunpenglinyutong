@@ -119,6 +119,9 @@ const composer = {
     send: "Send",
     stop: "Stop",
     attachImage: "Attach image",
+    imageInputUnsupportedTitle: "Image not supported",
+    imageAttachUnsupported:
+      "{{engine}} does not support image attachments in this release",
     removeAttachment: "Remove attachment",
     queue: "Queue",
     editQueued: "Edit",

@@ -9,6 +9,11 @@
 //! - `{"role":"tool","tool_call_id":"...","content":"..."}` — tool result
 //! - `{"role":"meta","type":"session.resume_hint","session_id":"session_<uuid>",...}`
 //!
+//! Image input (headless): Kimi `-p` only accepts a text prompt. Interactive paste
+//! expands to `image_url` parts via TUI store; headless injects absolute paths as
+//! `<image path="...">` tags and instructs the agent to call `ReadMediaFile`
+//! (print mode uses `permission: auto`, and ReadMediaFile is auto-approved).
+//!
 //! In `-p` mode Kimi always runs under the `auto` permission policy, so no
 //! approval events exist. Thinking content is not written to the JSONL stream.
 
@@ -287,7 +292,7 @@ impl KimiSession {
         );
     }
 
-    fn build_command(&self, params: &SendMessageParams) -> Command {
+    fn build_command(&self, params: &SendMessageParams) -> Result<Command, String> {
         let bin = if let Some(ref custom) = self.bin_path {
             custom.clone()
         } else {
@@ -329,10 +334,18 @@ impl KimiSession {
             }
         }
 
-        let safe_text = if params.text.starts_with('-') {
-            format!(" {}", params.text)
+        let image_files = crate::engine::cli_image_input::resolve_existing_image_files(
+            params.images.as_deref(),
+            &self.workspace_path,
+        )?;
+        let prompt_text = crate::engine::cli_image_input::build_kimi_prompt_with_images(
+            &params.text,
+            &image_files,
+        );
+        let safe_text = if prompt_text.starts_with('-') {
+            format!(" {}", prompt_text)
         } else {
-            params.text.clone()
+            prompt_text
         };
         cmd.arg("--prompt");
         cmd.arg(&safe_text);
@@ -344,7 +357,7 @@ impl KimiSession {
         cmd.stdin(Stdio::null());
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
-        cmd
+        Ok(cmd)
     }
 
     pub async fn send_message(
@@ -373,7 +386,14 @@ impl KimiSession {
             resume_session_id_len,
         );
 
-        let mut command = self.build_command(&params);
+        let mut command = match self.build_command(&params) {
+            Ok(command) => command,
+            Err(error) => {
+                let error_msg = format!("Failed to build kimi command: {}", error);
+                self.emit_error(turn_id, error_msg.clone());
+                return Err(error_msg);
+            }
+        };
         let mut child = match command.spawn() {
             Ok(child) => child,
             Err(error) => {

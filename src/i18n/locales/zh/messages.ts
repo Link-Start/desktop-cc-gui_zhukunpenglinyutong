@@ -59,6 +59,7 @@ const messages = {
     opencodeModelSwitchTitle: "OpenCode 提示",
     opencodeModelSwitchMessage:
       "检测到同会话切换模型，已自动新建后端会话以避免超时。",
+    imageInputUnsupported: "{{engine}} 当前版本不支持图片输入",
     doneIn: "完成，用时 {{duration}}",
     messageActions: "消息操作",
     copyMessage: "复制消息",

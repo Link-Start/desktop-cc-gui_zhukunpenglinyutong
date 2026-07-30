@@ -7,6 +7,8 @@ const composer = {
     send: "发送",
     stop: "停止",
     attachImage: "添加图片",
+    imageInputUnsupportedTitle: "不支持图片",
+    imageAttachUnsupported: "{{engine}} 当前版本不支持图片附件",
     removeAttachment: "移除附件",
     queue: "队列",
     editQueued: "编辑",

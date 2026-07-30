@@ -311,6 +311,17 @@ impl OpenCodeSession {
             }
         }
 
+        // Attach local image/files via `opencode run -f <path>` (multimodal).
+        // Resolve data URLs to staged workspace files so path-based CLI can read them.
+        let image_files = crate::engine::cli_image_input::resolve_existing_image_files(
+            params.images.as_deref(),
+            &self.workspace_path,
+        )?;
+        for image_path in &image_files {
+            cmd.arg("--file");
+            cmd.arg(image_path);
+        }
+
         // OpenCode 1.1.62 has a CLI regression with `-- <message>` in `run` mode:
         // it can crash with `arg.includes is not a function`.
         // Keep message positional and apply a safe leading space for dash-prefixed text.

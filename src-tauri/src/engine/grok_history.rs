@@ -307,11 +307,100 @@ fn extract_reasoning_summary(summary: Option<&Value>) -> String {
 
 fn strip_user_query_wrapper(text: &str) -> String {
     let trimmed = text.trim();
+    // Prefer extracting the last <user_query>…</user_query> body when present
+    // (Grok multimodal history prefixes an <image_files> block).
+    if let Some(start) = trimmed.rfind("<user_query>") {
+        let after = &trimmed[start + "<user_query>".len()..];
+        if let Some(end) = after.find("</user_query>") {
+            return after[..end].trim().to_string();
+        }
+    }
     let inner = trimmed
         .strip_prefix("<user_query>")
         .and_then(|rest| rest.strip_suffix("</user_query>"))
         .unwrap_or(trimmed);
     inner.trim().to_string()
+}
+
+/// Parse Grok wire user text into display text + image absolute paths.
+///
+/// Multimodal turns are stored as:
+/// ```text
+/// <image_files>
+/// ...
+/// 1. /path/to/assets/image-....png
+/// ...
+/// </image_files>
+///
+/// <user_query>
+/// user text
+/// </user_query>
+/// ```
+pub(crate) fn parse_grok_user_prompt_for_display(text: &str) -> (String, Vec<String>) {
+    let images = extract_grok_image_files_paths(text);
+    let display = strip_user_query_wrapper(text);
+    // If strip left residual image_files markup (no closing user_query), drop it.
+    let display = if display.contains("<image_files>") {
+        display
+            .split("</image_files>")
+            .nth(1)
+            .unwrap_or("")
+            .trim()
+            .to_string()
+    } else {
+        display
+    };
+    (display, images)
+}
+
+fn extract_grok_image_files_paths(text: &str) -> Vec<String> {
+    let Some(start) = text.find("<image_files>") else {
+        return Vec::new();
+    };
+    let after = &text[start + "<image_files>".len()..];
+    let block = after.split("</image_files>").next().unwrap_or(after);
+    let mut paths = Vec::new();
+    for line in block.lines() {
+        let trimmed = line.trim();
+        // Numbered list: `1. /abs/path.png`
+        let candidate = if let Some((_idx, rest)) = trimmed.split_once(". ") {
+            rest.trim()
+        } else {
+            trimmed
+        };
+        if candidate.is_empty() {
+            continue;
+        }
+        let looks_absolute = candidate.starts_with('/')
+            || candidate.starts_with("%2F")
+            || candidate.starts_with("%2f")
+            || (candidate.len() >= 3
+                && candidate.as_bytes()[0].is_ascii_alphabetic()
+                && (candidate.as_bytes()[1] == b':' || candidate.as_bytes()[1] == b'|')
+                && (candidate.as_bytes()[2] == b'/' || candidate.as_bytes()[2] == b'\\'))
+            || candidate.starts_with("\\\\");
+        if !looks_absolute {
+            continue;
+        }
+        let lower = candidate.to_ascii_lowercase();
+        let looks_image = lower.contains(".png")
+            || lower.contains(".jpg")
+            || lower.contains(".jpeg")
+            || lower.contains(".gif")
+            || lower.contains(".webp")
+            || lower.contains(".bmp")
+            || lower.contains("/assets/image-")
+            || lower.contains("\\assets\\image-")
+            || lower.contains("/assets/")
+            || lower.contains("\\assets\\");
+        if !looks_image {
+            continue;
+        }
+        if !paths.iter().any(|existing: &String| existing == candidate) {
+            paths.push(candidate.to_string());
+        }
+    }
+    paths
 }
 
 fn stringify_tool_result_content(content: Option<&Value>) -> String {
@@ -345,16 +434,21 @@ fn parse_messages_from_chat_history(raw: &str) -> GrokSessionLoadResult {
                 if value.get("synthetic_reason").is_some() {
                     continue;
                 }
-                let text = strip_user_query_wrapper(&extract_content_text(value.get("content")));
-                if text.is_empty() {
+                let raw_text = extract_content_text(value.get("content"));
+                let (display_text, image_paths) = parse_grok_user_prompt_for_display(&raw_text);
+                if display_text.is_empty() && image_paths.is_empty() {
                     continue;
                 }
                 counter += 1;
                 messages.push(GrokSessionMessage {
                     id: format!("grok-user-{}", counter),
                     role: "user".to_string(),
-                    text,
-                    images: None,
+                    text: display_text,
+                    images: if image_paths.is_empty() {
+                        None
+                    } else {
+                        Some(image_paths)
+                    },
                     timestamp,
                     kind: "message".to_string(),
                     tool_type: None,
@@ -502,9 +596,15 @@ fn first_user_prompt_text(raw: &str) -> Option<String> {
         if value.get("synthetic_reason").is_some() {
             continue;
         }
-        let text = strip_user_query_wrapper(&extract_content_text(value.get("content")));
-        if !text.is_empty() {
-            return Some(text);
+        let raw = extract_content_text(value.get("content"));
+        let (display_text, image_paths) = parse_grok_user_prompt_for_display(&raw);
+        let preview = if display_text.is_empty() && !image_paths.is_empty() {
+            format!("[{} image(s)]", image_paths.len())
+        } else {
+            display_text
+        };
+        if !preview.is_empty() {
+            return Some(preview);
         }
     }
     None
@@ -742,8 +842,9 @@ pub async fn delete_grok_session(
 #[cfg(test)]
 mod tests {
     use super::{
-        matches_workspace_path, parse_messages_from_chat_history, parse_timestamp_millis,
-        strip_user_query_wrapper, url_decode_dir_name,
+        matches_workspace_path, parse_grok_user_prompt_for_display,
+        parse_messages_from_chat_history, parse_timestamp_millis, strip_user_query_wrapper,
+        url_decode_dir_name,
     };
     use std::path::Path;
 
@@ -809,6 +910,44 @@ mod tests {
         );
         assert_eq!(strip_user_query_wrapper("plain text"), "plain text");
         assert_eq!(strip_user_query_wrapper("  padded  "), "padded");
+    }
+
+    #[test]
+    fn parses_multimodal_image_files_and_user_query() {
+        let raw = concat!(
+            "<image_files>\n",
+            "The following images were provided by the user and saved to the workspace for future use:\n",
+            "1. /Users/me/.grok/sessions/%2Fcode%2Fcontent/abc/assets/image-1.png\n",
+            "\n",
+            "These images can be copied for use in other locations.\n",
+            "</image_files>\n",
+            "\n",
+            "<user_query>\n",
+            "你看这是啥\n",
+            "</user_query>",
+        );
+        let (display, images) = parse_grok_user_prompt_for_display(raw);
+        assert_eq!(display, "你看这是啥");
+        assert_eq!(
+            images,
+            vec!["/Users/me/.grok/sessions/%2Fcode%2Fcontent/abc/assets/image-1.png".to_string()]
+        );
+    }
+
+    #[test]
+    fn history_loader_extracts_images_from_image_files_block() {
+        let chat_history = concat!(
+            r#"{"type":"user","content":[{"type":"text","text":"<image_files>\nThe following images were provided by the user and saved to the workspace for future use:\n1. /tmp/assets/image-abc.png\n\nThese images can be copied for use in other locations.\n</image_files>\n\n<user_query>\n看图\n</user_query>"}],"prompt_index":0}"#,
+            "\n",
+        );
+        let result = parse_messages_from_chat_history(chat_history);
+        assert_eq!(result.messages.len(), 1);
+        assert_eq!(result.messages[0].role, "user");
+        assert_eq!(result.messages[0].text, "看图");
+        assert_eq!(
+            result.messages[0].images.as_deref(),
+            Some(&["/tmp/assets/image-abc.png".to_string()][..])
+        );
     }
 
     #[test]

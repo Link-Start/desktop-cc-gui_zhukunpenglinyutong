@@ -103,14 +103,14 @@ mod tests {
     }
 
     #[test]
-    fn opencode_does_not_support_mcp_or_image_input() {
+    fn opencode_does_not_support_mcp_but_supports_image_input() {
         assert_eq!(
             capability_state(EngineType::OpenCode, "tool.mcp"),
             "unsupported"
         );
         assert_eq!(
             capability_state(EngineType::OpenCode, "image.input"),
-            "unsupported"
+            "supported"
         );
     }
 

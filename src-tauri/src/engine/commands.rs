@@ -134,6 +134,42 @@ fn unix_timestamp_ms_for_diagnostics() -> u64 {
         .unwrap_or(0)
 }
 
+fn has_non_empty_images(images: &Option<Vec<String>>) -> bool {
+    images
+        .as_ref()
+        .is_some_and(|entries| entries.iter().any(|entry| !entry.trim().is_empty()))
+}
+
+fn features_for_engine(engine: EngineType) -> super::EngineFeatures {
+    match engine {
+        EngineType::Claude => super::EngineFeatures::claude(),
+        EngineType::Codex => super::EngineFeatures::codex(),
+        EngineType::Gemini => super::EngineFeatures::gemini(),
+        EngineType::Grok => super::EngineFeatures::grok(),
+        EngineType::OpenCode => super::EngineFeatures::opencode(),
+        EngineType::Kimi => super::EngineFeatures::kimi(),
+    }
+}
+
+/// Reject non-empty image payloads when `EngineFeatures.image_input = false`.
+/// Current engines all report `image_input = true`; this remains as a guard for
+/// future unsupported engines.
+pub(crate) fn require_image_support(
+    engine: EngineType,
+    images: &Option<Vec<String>>,
+) -> Result<(), String> {
+    if features_for_engine(engine).image_input {
+        return Ok(());
+    }
+    if has_non_empty_images(images) {
+        return Err(format!(
+            "{} does not support image input in this release",
+            engine.display_name()
+        ));
+    }
+    Ok(())
+}
+
 fn build_engine_active_process_diagnostics(
     sampled_at_ms: u64,
     mut workspaces: Vec<EngineWorkspaceActiveProcessDiagnostics>,
@@ -1648,6 +1684,8 @@ pub async fn engine_send_message(
     let active_engine = manager.get_active_engine().await;
     let effective_engine =
         resolve_enabled_engine_for_send(&settings, requested_engine, active_engine)?;
+    // Capability gate follows EngineFeatures; all current engines allow images.
+    require_image_support(effective_engine, &images)?;
     log::info!(
         "[engine_send_message] engine={:?} active_engine={:?} workspace_id={} model={:?} continue_session={} thread_id={:?} session_id={:?} fork_session_id={:?} agent={:?} variant={:?} provider_profile_id={:?}",
         effective_engine,
@@ -3092,6 +3130,8 @@ pub async fn engine_send_message_sync(
     let manager = &state.engine_manager;
     let active_engine = manager.get_active_engine().await;
     let effective_engine = resolve_enabled_engine_for_send(&settings, engine, active_engine)?;
+    // Capability gate follows EngineFeatures; all current engines allow images.
+    require_image_support(effective_engine, &images)?;
     let normalized_custom_spec_root = normalize_custom_spec_root(custom_spec_root.as_deref());
 
     match effective_engine {
@@ -3107,9 +3147,7 @@ pub async fn engine_send_message_sync(
                 .get_claude_session(&workspace_id, &workspace_path)
                 .await;
 
-            let has_images = images
-                .as_ref()
-                .is_some_and(|entries| entries.iter().any(|entry| !entry.trim().is_empty()));
+            let has_images = has_non_empty_images(&images);
             let normalized_fork_session_id = fork_session_id
                 .as_ref()
                 .map(|value| value.trim())
@@ -3274,6 +3312,7 @@ pub async fn engine_send_message_sync(
                 model,
                 effort,
                 access_mode,
+                images,
                 normalized_custom_spec_root.clone(),
                 auto_session.clone(),
                 &app,
