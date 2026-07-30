@@ -1932,16 +1932,12 @@ export function SettingsView({
 
   return (
     <div className="settings-embedded">
-      <div className="settings-header" data-tauri-drag-region="true">
-        <div className="settings-header-copy">
-          <h1 className="settings-header-title">{activeSectionHeader.title}</h1>
-          <p className="settings-header-description">
-            {activeSectionHeader.description}
-          </p>
-        </div>
-      </div>
       <div className="settings-body">
         <aside className="settings-sidebar">
+          <div
+            className="settings-sidebar-drag"
+            data-tauri-drag-region="true"
+          />
           <button
             type="button"
             className="settings-nav settings-nav-return"
@@ -2042,13 +2038,26 @@ export function SettingsView({
             {t("settings.sidebarCommunity")}
           </button>
         </aside>
-        <ScrollArea
-          className={`settings-content ${
-            activeSection === "providers" || activeSection === "vendors"
-              ? "settings-content--providers"
-              : ""
-          }${activeSection === "shortcuts" ? " settings-content--shortcuts" : ""}`}
-        >
+        <div className="settings-content-wrap">
+          <div className="settings-page-head" data-tauri-drag-region="true">
+            <div className="settings-page-head-inner">
+              <h1 className="settings-page-title">
+                {activeSectionHeader.title}
+              </h1>
+              {activeSection !== "community" && activeSection !== "about" && (
+                <p className="settings-page-description">
+                  {activeSectionHeader.description}
+                </p>
+              )}
+            </div>
+          </div>
+          <ScrollArea
+            className={`settings-content ${
+              activeSection === "providers" || activeSection === "vendors"
+                ? "settings-content--providers"
+                : ""
+            }${activeSection === "shortcuts" ? " settings-content--shortcuts" : ""}`}
+          >
           {shouldShowWorkspaceSelector && (
             <div className="settings-workspace-picker">
               <div className="settings-workspace-picker-label">
@@ -2643,7 +2652,8 @@ export function SettingsView({
               />
             </section>
           )}
-        </ScrollArea>
+          </ScrollArea>
+        </div>
       </div>
     </div>
   );

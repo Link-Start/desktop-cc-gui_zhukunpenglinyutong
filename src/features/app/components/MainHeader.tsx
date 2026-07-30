@@ -239,13 +239,23 @@ function MainHeaderImpl({
     onRunLaunchScript,
     t,
   ]);
+  const shortcutsGuideAction: OpenAppMenuExtraAction = useMemo(
+    () => ({
+      id: "shortcuts-guide",
+      label: t("shortcutsGuide.title"),
+      icon: <Keyboard size={18} aria-hidden />,
+      onSelect: () => setShortcutsGuideOpen(true),
+    }),
+    [t],
+  );
   const openAppMenuActions = useMemo(
     () => [
       ...launchScriptMenuActions,
       ...openAppExtraActions.filter((action) => action.id !== "right-panel"),
+      shortcutsGuideAction,
       copyPathAction,
     ],
-    [copyPathAction, launchScriptMenuActions, openAppExtraActions],
+    [copyPathAction, launchScriptMenuActions, openAppExtraActions, shortcutsGuideAction],
   );
   const pinnedOpenTargets = useMemo(() => {
     if (!showOpenAppMenu) {
@@ -536,14 +546,6 @@ function MainHeaderImpl({
           />
         ) : null}
         {extraActionsNode}
-        <TooltipIconButton
-          className="ghost main-header-action"
-          onClick={() => setShortcutsGuideOpen(true)}
-          data-tauri-drag-region="false"
-          label={t("shortcutsGuide.title")}
-        >
-          <Keyboard size={14} aria-hidden />
-        </TooltipIconButton>
         {rightPanelAction ? (
           <TooltipIconButton
             className="ghost main-header-action"

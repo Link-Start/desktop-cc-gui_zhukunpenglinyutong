@@ -124,7 +124,7 @@ describe("vendor settings panel compact layout", () => {
     expect(navRule).toContain("width: 200px;");
     expect(navRule).toContain("height: 100%;");
     expect(navRule).toContain("min-height: 0;");
-    expect(navRule).toContain("padding: 16px 10px 0;");
+    expect(navRule).toContain("padding: 16px 10px 0 0;");
     expect(vendorPanelsCss).not.toContain("scrollbar-gutter: stable;");
     expect(searchRule).toContain("min-height: 32px;");
     expect(searchRule).toContain("margin-bottom: 10px;");

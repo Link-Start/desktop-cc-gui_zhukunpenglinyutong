@@ -27,7 +27,7 @@ describe("settings scroll area contract", () => {
     );
     const providersPaddingRule = getCssRuleBlock(
       settingsCss,
-      ".settings-content.settings-content--providers",
+      ".settings-content-wrap:has(> .settings-content--providers)",
     );
     const nativeScrollbarRule = getCssRuleBlock(
       scrollbarsCss,
@@ -51,8 +51,8 @@ describe("settings scroll area contract", () => {
     );
     expect(settingsCss).toContain("--settings-content-pad-right: 12px;");
     expect(providersPaddingRule).toContain("--settings-content-pad-top: 0px;");
-    expect(providersPaddingRule).toContain("--settings-content-pad-right: 0px;");
     expect(providersPaddingRule).toContain("--settings-content-pad-bottom: 0px;");
+    expect(providersPaddingRule).not.toContain("--settings-content-pad-right");
     expect(overlayScrollbarRule).toContain("width: 6px !important;");
     expect(overlayScrollbarRule).toContain("padding: 4px 1px !important;");
     expect(overlayThumbRule).toContain("min-width: 4px;");
@@ -103,7 +103,7 @@ describe("settings scroll area contract", () => {
   it("pins the shortcuts panes to the viewport height instead of a fixed cap", () => {
     const shortcutsPaddingRule = getCssRuleBlock(
       settingsCss,
-      ".settings-content.settings-content--shortcuts",
+      ".settings-content-wrap:has(> .settings-content--shortcuts)",
     );
     const shortcutsSectionRule = getCssRuleBlock(
       settingsCss,
