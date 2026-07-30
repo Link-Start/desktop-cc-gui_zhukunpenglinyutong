@@ -1,6 +1,7 @@
 /**
- * 批量编辑文件分组组件
- * 统一 Marker 风格折叠行：灰色描边图标 + 批量标题 + 计数 + 总统计；展开体为文件列表与 diff 统计
+ * 批量编辑文件分组组件（文件修改场景）
+ * 默认折叠：极简 header（icon + 文件修改（N 个）+ 聚合 status）；展开体为无边框文件列表。
+ * 入参可混排 edit / write / fileChange；折叠态不解析 diff 正文，仅在展开后按行懒加载。
  */
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,172 +19,223 @@ import {
   EDIT_CONTENT_KEYS,
 } from './toolConstants';
 import { computeDiff, computeDiffFromUnifiedPatch, type DiffStats } from '../../../../utils/diff';
-import { ToolMarkerShell } from './ToolMarkerShell';
+import { ToolMarkerShell, ToolStatusIcon } from './ToolMarkerShell';
 import {
   FileChangeRow,
   structuredDiffToLines,
   unifiedDiffToPreview,
   type FileChangeDiffLine,
+  type FileChangeDiffPreview,
 } from './FileChangeRow';
+import {
+  mergeEditSceneStatus,
+  normalizeEditScenePath,
+} from './fileEditSceneUtils';
+
+export { mergeEditSceneStatus, normalizeEditScenePath } from './fileEditSceneUtils';
 
 type ToolItem = Extract<ConversationItem, { kind: 'tool' }>;
 
 interface EditToolGroupBlockProps {
   items: ToolItem[];
   onOpenDiffPath?: (path: string) => void;
+  /** 默认折叠；测试或未来设置可覆盖 */
+  defaultCollapsed?: boolean;
 }
 
-interface ParsedEditItem {
+/** 折叠态只保留 path/status；stats/diff 在场景展开后按行解析。 */
+interface ParsedEditSceneItem {
   id: string;
   filePath: string;
-  diff: DiffStats;
-  diffLines: FileChangeDiffLine[];
   status: ToolStatusTone;
+  resolveStats: () => DiffStats;
+  loadDiff?: () => FileChangeDiffPreview;
 }
 
-const MAX_VISIBLE_ITEMS = 3;
+const MAX_VISIBLE_ITEMS = 6;
 const ITEM_HEIGHT = 32;
 
-function parseEditItem(item: ToolItem): ParsedEditItem | null {
-  const args = parseToolArgs(item.detail);
-  const nestedInput = asRecord(args?.input);
-  const nestedArgs = asRecord(args?.arguments);
-  let filePath = '';
-  let diff: DiffStats;
-  let diffLines: FileChangeDiffLine[] = [];
-  if (item.toolType === 'fileChange' && item.changes?.length) {
-    filePath = item.changes[0]?.path ?? '';
-    diff = item.changes.reduce(
-      (acc, change) => {
-        const stats = computeDiffFromUnifiedPatch(change.diff ?? '');
-        return { additions: acc.additions + stats.additions, deletions: acc.deletions + stats.deletions };
-      },
-      { additions: 0, deletions: 0 },
-    );
-    const unified = item.changes
-      .map((change) => change.diff ?? '')
-      .filter(Boolean)
-      .join('\n');
-    diffLines = unified ? unifiedDiffToPreview(unified).lines : [];
-  } else {
-    filePath = pickStringField(args, nestedInput, nestedArgs, EDIT_PATH_KEYS);
-    const oldString = pickStringField(args, nestedInput, nestedArgs, EDIT_OLD_KEYS);
-    const newString = pickStringField(args, nestedInput, nestedArgs, EDIT_NEW_KEYS);
-    if (oldString || newString) {
-      const result = computeDiff(oldString, newString);
-      diff = { additions: result.additions, deletions: result.deletions };
-      diffLines = structuredDiffToLines(result.lines);
-    } else {
-      const content = pickStringField(args, nestedInput, nestedArgs, EDIT_CONTENT_KEYS);
-      if (content) {
-        const result = computeDiff('', content);
-        diff = { additions: result.additions, deletions: result.deletions };
-        diffLines = structuredDiffToLines(result.lines);
-      } else {
-        diff = { additions: 0, deletions: 0 };
-      }
-    }
+/** 同一路径多次修改时保留最后一次（count 按唯一文件计）。 */
+function dedupeParsedEditsByPath(entries: ParsedEditSceneItem[]): ParsedEditSceneItem[] {
+  const byPath = new Map<string, ParsedEditSceneItem>();
+  for (const entry of entries) {
+    byPath.set(entry.filePath, entry);
   }
+  return Array.from(byPath.values());
+}
 
-  if (!filePath) {
-    return null;
-  }
-
+function parseEditSceneItems(item: ToolItem): ParsedEditSceneItem[] {
   const hasOutput = Boolean(item.output) || Boolean(item.changes?.length);
   const status = resolveToolStatus(item.status, hasOutput);
 
-  return {
-    id: item.id,
-    filePath,
-    diff,
-    diffLines,
-    status,
+  if (item.toolType === 'fileChange' && item.changes?.length) {
+    const rows: ParsedEditSceneItem[] = [];
+    item.changes.forEach((change, index) => {
+      const filePath = normalizeEditScenePath(change.path ?? '');
+      if (!filePath) {
+        return;
+      }
+      const diffText = change.diff ?? '';
+      rows.push({
+        id: `${item.id}::${filePath}::${index}`,
+        filePath,
+        status,
+        resolveStats: () => computeDiffFromUnifiedPatch(diffText),
+        loadDiff: diffText
+          ? () => unifiedDiffToPreview(diffText)
+          : undefined,
+      });
+    });
+    return rows;
+  }
+
+  const args = parseToolArgs(item.detail);
+  const nestedInput = asRecord(args?.input);
+  const nestedArgs = asRecord(args?.arguments);
+  const filePath = normalizeEditScenePath(
+    pickStringField(args, nestedInput, nestedArgs, EDIT_PATH_KEYS),
+  );
+  if (!filePath) {
+    return [];
+  }
+
+  const oldString = pickStringField(args, nestedInput, nestedArgs, EDIT_OLD_KEYS);
+  const newString = pickStringField(args, nestedInput, nestedArgs, EDIT_NEW_KEYS);
+  const content = pickStringField(args, nestedInput, nestedArgs, EDIT_CONTENT_KEYS);
+  const hasInlineDiff = Boolean(oldString || newString || content);
+
+  let cachedStructured: { stats: DiffStats; lines: FileChangeDiffLine[] } | null = null;
+  const resolveStructured = (): { stats: DiffStats; lines: FileChangeDiffLine[] } => {
+    if (cachedStructured) {
+      return cachedStructured;
+    }
+    if (oldString || newString) {
+      const result = computeDiff(oldString, newString);
+      cachedStructured = {
+        stats: { additions: result.additions, deletions: result.deletions },
+        lines: structuredDiffToLines(result.lines),
+      };
+      return cachedStructured;
+    }
+    if (content) {
+      const result = computeDiff('', content);
+      cachedStructured = {
+        stats: { additions: result.additions, deletions: result.deletions },
+        lines: structuredDiffToLines(result.lines),
+      };
+      return cachedStructured;
+    }
+    cachedStructured = { stats: { additions: 0, deletions: 0 }, lines: [] };
+    return cachedStructured;
   };
+
+  return [
+    {
+      id: item.id,
+      filePath,
+      status,
+      resolveStats: () => resolveStructured().stats,
+      loadDiff: hasInlineDiff
+        ? () => ({ lines: resolveStructured().lines })
+        : undefined,
+    },
+  ];
 }
 
 export const EditToolGroupBlock = memo(function EditToolGroupBlock({
   items,
   onOpenDiffPath,
+  defaultCollapsed = true,
 }: EditToolGroupBlockProps) {
   const { t } = useTranslation();
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(!defaultCollapsed);
   const listRef = useRef<HTMLDivElement | null>(null);
-  const previousCountRef = useRef(items.length);
+  const previousCountRef = useRef(0);
 
-  const parsedItems = useMemo(
-    () => items.map(parseEditItem).filter((entry): entry is ParsedEditItem => Boolean(entry)),
+  // 折叠态只建轻量索引（path/status + 懒闭包），不触发 diff 正文解析。
+  const sceneItems = useMemo(
+    () => dedupeParsedEditsByPath(items.flatMap(parseEditSceneItems)),
     [items],
   );
 
+  const sceneStatus = useMemo(
+    () => mergeEditSceneStatus(sceneItems.map((entry) => entry.status)),
+    [sceneItems],
+  );
+
+  // 仅在场景展开后解析 per-file stats，避免折叠付全量 diff 成本。
+  const expandedRows = useMemo(() => {
+    if (!isExpanded) {
+      return [];
+    }
+    return sceneItems.map((entry) => {
+      const stats = entry.resolveStats();
+      return {
+        id: entry.id,
+        filePath: entry.filePath,
+        status: entry.status,
+        additions: stats.additions,
+        deletions: stats.deletions,
+        loadDiff: entry.loadDiff,
+      };
+    });
+  }, [isExpanded, sceneItems]);
+
   useEffect(() => {
-    if (parsedItems.length > previousCountRef.current && listRef.current) {
+    if (
+      isExpanded &&
+      sceneItems.length > previousCountRef.current &&
+      listRef.current
+    ) {
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
-    previousCountRef.current = parsedItems.length;
-  }, [parsedItems.length]);
+    previousCountRef.current = sceneItems.length;
+  }, [sceneItems.length, isExpanded]);
 
-  if (!parsedItems.length) {
+  if (!sceneItems.length) {
     return null;
   }
 
-  const totalDiff = parsedItems.reduce(
-    (acc, item) => ({
-      additions: acc.additions + item.diff.additions,
-      deletions: acc.deletions + item.diff.deletions,
-    }),
-    { additions: 0, deletions: 0 },
-  );
-  const needsScroll = parsedItems.length > MAX_VISIBLE_ITEMS;
-  const listHeight = Math.min(parsedItems.length, MAX_VISIBLE_ITEMS) * ITEM_HEIGHT;
+  const fileCount = sceneItems.length;
+  const needsScroll = expandedRows.length > MAX_VISIBLE_ITEMS;
+  const listHeight = Math.min(expandedRows.length, MAX_VISIBLE_ITEMS) * ITEM_HEIGHT;
+  const sceneLabel = t('tools.fileEditSceneCount', { count: fileCount });
+  const sceneAriaLabel = t('tools.fileEditSceneToggle', { count: fileCount });
 
   return (
     <ToolMarkerShell
       icon={<FilePen />}
-      label={t('tools.batchEditFile')}
+      label={sceneLabel}
+      ariaLabel={sceneAriaLabel}
       expanded={isExpanded}
       onToggle={() => setIsExpanded((previous) => !previous)}
+      trailing={<ToolStatusIcon status={sceneStatus} />}
       body={
         <div
           ref={listRef}
-          className="file-list-container mt-1 overflow-hidden rounded-md"
+          className="file-list-container file-edit-scene-list mt-1 ml-4 overflow-hidden"
+          data-testid="file-edit-scene-list"
           style={{
-            padding: '6px 8px',
             maxHeight: needsScroll ? `${listHeight + 12}px` : undefined,
             overflowY: needsScroll ? 'auto' : 'hidden',
             overflowX: 'hidden',
           }}
         >
-          {parsedItems.map((entry) => (
+          {expandedRows.map((entry) => (
             <FileChangeRow
               key={entry.id}
               filePath={entry.filePath}
-              additions={entry.diff.additions}
-              deletions={entry.diff.deletions}
+              additions={entry.additions}
+              deletions={entry.deletions}
               status={entry.status}
-              canExpand={entry.diffLines.length > 0}
-              loadDiff={
-                entry.diffLines.length > 0
-                  ? () => ({ lines: entry.diffLines })
-                  : undefined
-              }
+              canExpand={Boolean(entry.loadDiff)}
+              loadDiff={entry.loadDiff}
               onOpenDiffPath={onOpenDiffPath}
             />
           ))}
         </div>
       }
-    >
-      <span className="shrink-0 text-muted-foreground">({parsedItems.length})</span>
-      {(totalDiff.additions > 0 || totalDiff.deletions > 0) && (
-        <span className="flex shrink-0 items-center gap-1 tabular-nums">
-          {totalDiff.additions > 0 && (
-            <span className="text-emerald-600 dark:text-emerald-400">+{totalDiff.additions}</span>
-          )}
-          {totalDiff.deletions > 0 && (
-            <span className="text-red-500 dark:text-red-400">-{totalDiff.deletions}</span>
-          )}
-        </span>
-      )}
-    </ToolMarkerShell>
+    />
   );
 });
 

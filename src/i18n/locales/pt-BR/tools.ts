@@ -32,6 +32,8 @@ const tools = {
     "batchSearch": "Buscar em lote",
     "batchSearchMatch": "Buscar/corresponder em lote",
     "batchEditFile": "Editar arquivos em lote",
+    "fileEditSceneCount": "Alterações de arquivo ({{count}})",
+    "fileEditSceneToggle": "Alterações de arquivo, {{count}} arquivos, expandir ou recolher",
     "bashGroupBatchRun": "Executar comandos em lote",
     "bashGroupCompleted": "concluído",
     "bashGroupAllCompleted": "Todos concluídos",
