@@ -1568,3 +1568,47 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1243: 幕布文件修改场景默认折叠
+
+**Date**: 2026-07-31
+**Task**: 幕布文件修改场景默认折叠
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| OpenSpec | `add-message-file-edit-scene-collapse`（proposal/design/specs/tasks） |
+| 行为 | 幕布文件修改默认折叠为「文件修改（N 个）」；edit+fileChange 同桶智能合并 |
+| 优化 | 折叠懒解析 diff；editGroup 投影 key 稳定；失败/进行中 status 聚合 |
+| 范围外 | 未纳入 `repair-grok-canvas-tools-and-file-edit-collapse` |
+
+**关键文件**:
+- `groupToolItems.ts` / `EditToolGroupBlock.tsx` / `fileEditSceneUtils.ts`
+- `ToolMarkerShell.tsx` / `messagesTimelineProjection.ts`
+- i18n `tools.fileEditSceneCount`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `63461ec54` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
