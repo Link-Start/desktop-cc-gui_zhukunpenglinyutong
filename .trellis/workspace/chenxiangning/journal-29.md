@@ -1256,3 +1256,36 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1234: 合入上游 v0.7.12 Settings 更新
+
+**Date**: 2026-07-30
+**Task**: 合入上游 v0.7.12 Settings 更新
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+将 upstream/chore/bump-version-0.7.12 以 merge 方式合入 bump-version-0.7.12；本地 Shared Session 修复与上游 Settings 重构文件零重叠，ort 无冲突完成。增量验证覆盖 SettingsView、Settings CSS contract 与 Shared Session reattach 哨兵，共 4 files / 62 tests 通过；未 push。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9a2b205fb6ad5a0f63b5bfdbc44265db493ddedf` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
