@@ -39,12 +39,19 @@ describe("messagesTimelineVirtualization", () => {
     globalThis.localStorage.removeItem(TIMELINE_RENDER_WEIGHT_BASELINE_FLAG_KEY);
   });
 
-  it("keeps adaptive rendering disabled for stable and streaming timelines", () => {
-    expect(TIMELINE_ADAPTIVE_RENDERING_ENABLED).toBe(false);
+  it("virtualizes idle long timelines but keeps streaming static", () => {
+    expect(TIMELINE_ADAPTIVE_RENDERING_ENABLED).toBe(true);
+    // Idle stable history at/above min rows → virtualize.
     expect(shouldVirtualizeTimelineRows({
       isThinking: false,
       rowCount: TIMELINE_VIRTUALIZATION_MIN_ROWS,
+    })).toBe(true);
+    // Short idle history stays static.
+    expect(shouldVirtualizeTimelineRows({
+      isThinking: false,
+      rowCount: Math.max(1, TIMELINE_VIRTUALIZATION_MIN_ROWS - 1),
     })).toBe(false);
+    // Streaming / working stay static (STREAMING virtualization off).
     expect(shouldVirtualizeTimelineRows({
       isThinking: true,
       rowCount: TIMELINE_VIRTUALIZATION_STREAMING_MIN_ROWS * 100,
@@ -58,14 +65,14 @@ describe("messagesTimelineVirtualization", () => {
     })).toBe(false);
   });
 
-  it("does not let extreme row count bypass the adaptive-rendering kill switch", () => {
+  it("does not virtualize streaming timelines even at extreme row counts", () => {
     expect(shouldVirtualizeTimelineRows({
       isThinking: true,
       rowCount: 1_000,
     })).toBe(false);
   });
 
-  it("does not virtualize active streaming timelines by render weight below the row-count threshold", () => {
+  it("does not virtualize active streaming timelines by render weight alone", () => {
     expect(shouldVirtualizeTimelineRows({
       isThinking: true,
       rowCount: 12,
@@ -135,7 +142,7 @@ describe("messagesTimelineVirtualization", () => {
     })).toBe(false);
   });
 
-  it("reports the render-weight gate disabled when storage is unavailable", () => {
+  it("keeps the render-weight gate on when storage is unavailable", () => {
     const descriptor = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
     Object.defineProperty(globalThis, "localStorage", {
       configurable: true,
@@ -145,12 +152,14 @@ describe("messagesTimelineVirtualization", () => {
     });
 
     try {
-      expect(isTimelineRenderWeightGateEnabled()).toBe(false);
+      // Adaptive rendering is on; unavailable storage defaults the weight gate to enabled.
+      expect(isTimelineRenderWeightGateEnabled()).toBe(true);
+      // High density below the row-count floor still virtualizes via weight.
       expect(shouldVirtualizeTimelineRows({
         isThinking: false,
         rowCount: 12,
         renderWeight: TIMELINE_VIRTUALIZATION_MIN_RENDER_WEIGHT * 4,
-      })).toBe(false);
+      })).toBe(true);
     } finally {
       if (descriptor) {
         Object.defineProperty(globalThis, "localStorage", descriptor);
@@ -225,7 +234,7 @@ describe("messagesTimelineVirtualization", () => {
     expect(estimateTimelineProjectionRenderWeight(imageRow)).toBeGreaterThan(40);
   });
 
-  it("keeps #721-class heavy history static despite its render weight", () => {
+  it("virtualizes #721-class heavy history by render density when row count is below the floor", () => {
     const { rows } = createHeavyHistoryFixture("heavy");
     const summary = summarizeTimelineProjectionRenderWeight(rows);
 
@@ -236,11 +245,12 @@ describe("messagesTimelineVirtualization", () => {
     expect(summary.categoryCounts.toolRawPayload).toBeGreaterThan(0);
     expect(summary.categoryCounts.readBatch).toBeGreaterThan(0);
     expect(summary.categoryCounts.diff).toBeGreaterThan(0);
+    // Dense short histories virtualize via render-weight gate (idle only).
     expect(shouldVirtualizeTimelineRows({
       isThinking: false,
       rowCount: summary.rowCount,
       renderWeight: summary.renderWeight,
-    })).toBe(false);
+    })).toBe(true);
   });
 
   it("builds content-safe heavy-history baseline diagnostics", () => {

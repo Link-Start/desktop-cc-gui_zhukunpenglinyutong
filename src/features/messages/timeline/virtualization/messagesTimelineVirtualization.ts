@@ -21,11 +21,12 @@ export const TIMELINE_RENDER_WEIGHT_BASELINE_FLAG_KEY =
   "ccgui.perf.timelineRenderWeightBaseline";
 export const TIMELINE_VIRTUALIZER_STABILITY_MAX_REMEASURE_COUNT = 3;
 /**
- * Correctness-first containment：static → virtual attach 会用默认 initialOffset=0
- * 重置既有 viewport。坐标交接 contract 与回归补齐前，所有会话固定使用 static
- * full-detail rendering；lightweight policy 也共享此唯一 authority。
+ * Adaptive timeline rendering：idle 长历史可进入虚拟化，降低全量 DOM 滚动成本。
+ * 流式期仍由 TIMELINE_VIRTUALIZATION_DURING_STREAMING_ENABLED 单独门禁
+ * （默认关闭，继续依赖 STREAMING_VISIBLE_WINDOW 尾窗 + static 行，避免 attach 重叠）。
+ * Virtualizer 须提供 initialOffset=当前 scrollTop，避免 attach 默认 0 把视口拽到顶。
  */
-export const TIMELINE_ADAPTIVE_RENDERING_ENABLED = false;
+export const TIMELINE_ADAPTIVE_RENDERING_ENABLED = true;
 
 export type TimelineRenderWeightCategory =
   | "anchorOutlinePressure"
@@ -54,10 +55,10 @@ export type TimelineRenderWeightSummary = {
 };
 
 /**
- * 历史策略：总开关重新启用后，流式期可按行数门槛启用虚拟化。当前 hard-disable
- * 期间该子策略不可达。
+ * 流式期虚拟化：默认关闭。流式期用 STREAMING_VISIBLE_WINDOW 裁剪 + static DOM，
+ * 避免 enabled 切换时空 size cache 导致行重叠；idle 长历史再走虚拟化。
  */
-export const TIMELINE_VIRTUALIZATION_DURING_STREAMING_ENABLED = true;
+export const TIMELINE_VIRTUALIZATION_DURING_STREAMING_ENABLED = false;
 
 function canReadBaselineFlag() {
   if (typeof globalThis === "undefined") {

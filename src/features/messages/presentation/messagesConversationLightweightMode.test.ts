@@ -10,44 +10,44 @@ import {
 } from "./messagesConversationLightweightMode";
 
 describe("messagesConversationLightweightMode", () => {
-  it("does not suggest lightweight mode for render-heavy timelines", () => {
+  it("suggests lightweight mode for render-heavy timelines", () => {
     const policy = resolveConversationLightweightPolicy({
       rowCount: 24,
       renderWeight: CONVERSATION_LIGHTWEIGHT_SUGGEST_RENDER_WEIGHT,
       heavyRowCount: 1,
     });
 
-    expect(policy).toEqual({ suggested: false, oversized: false });
+    expect(policy).toEqual({ suggested: true, oversized: false });
   });
 
-  it("does not suggest lightweight mode for repeated heavy rows", () => {
+  it("suggests lightweight mode for repeated heavy rows", () => {
     const policy = resolveConversationLightweightPolicy({
       rowCount: 24,
       renderWeight: 64,
       heavyRowCount: CONVERSATION_LIGHTWEIGHT_SUGGEST_HEAVY_ROWS,
     });
 
-    expect(policy).toEqual({ suggested: false, oversized: false });
+    expect(policy).toEqual({ suggested: true, oversized: false });
   });
 
-  it("does not activate oversized policy by row count or render weight", () => {
+  it("marks oversized policy by row count or render weight", () => {
     expect(
       resolveConversationLightweightPolicy({
         rowCount: CONVERSATION_OVERSIZED_HISTORY_ROWS,
         renderWeight: 1,
         heavyRowCount: 0,
       }),
-    ).toEqual({ suggested: false, oversized: false });
+    ).toEqual({ suggested: true, oversized: true });
     expect(
       resolveConversationLightweightPolicy({
         rowCount: 1,
         renderWeight: CONVERSATION_OVERSIZED_HISTORY_RENDER_WEIGHT,
         heavyRowCount: 0,
       }),
-    ).toEqual({ suggested: false, oversized: false });
+    ).toEqual({ suggested: true, oversized: true });
   });
 
-  it("keeps legacy oversized policy inactive", () => {
+  it("activates oversized policy until detail hydration is requested", () => {
     const policy = { suggested: true, oversized: true };
 
     expect(
@@ -56,7 +56,7 @@ describe("messagesConversationLightweightMode", () => {
         manualEnabled: false,
         detailHydrationRequested: false,
       }),
-    ).toEqual({ active: false, reason: "inactive" });
+    ).toEqual({ active: true, reason: "oversized" });
     expect(
       resolveConversationLightweightModeState({
         policy,
@@ -66,14 +66,14 @@ describe("messagesConversationLightweightMode", () => {
     ).toEqual({ active: false, reason: "inactive" });
   });
 
-  it("ignores legacy manual lightweight state", () => {
+  it("honors manual lightweight mode", () => {
     expect(
       resolveConversationLightweightModeState({
         policy: { suggested: false, oversized: false },
         manualEnabled: true,
         detailHydrationRequested: true,
       }),
-    ).toEqual({ active: false, reason: "inactive" });
+    ).toEqual({ active: true, reason: "manual" });
   });
 
   it("bounds remembered conversation render mode keys", () => {

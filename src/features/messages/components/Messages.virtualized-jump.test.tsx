@@ -64,7 +64,7 @@ describe("Messages virtualized jump behavior", () => {
     cleanup();
   });
 
-  it("keeps large-history anchors mounted and jumps through static geometry", async () => {
+  it("virtualizes large idle histories and jumps through virtualizer index", async () => {
     const items: ConversationItem[] = Array.from({ length: 220 }, (_, index) => ({
       id: `u${index + 1}`,
       kind: "message" as const,
@@ -86,10 +86,8 @@ describe("Messages virtualized jump behavior", () => {
 
     expect(
       container.querySelector(".messages-full")?.getAttribute("data-timeline-virtualized"),
-    ).toBe("false");
-    expect(container.querySelector('[data-message-anchor-id="u180"]')).toBeTruthy();
-    const scroller = container.querySelector(".messages") as HTMLDivElement;
-    const scrollToSpy = vi.spyOn(scroller, "scrollTo").mockImplementation(() => {});
+    ).toBe("true");
+    expect(container.querySelector(".messages-virtualized-canvas")).toBeTruthy();
 
     act(() => {
       document.dispatchEvent(
@@ -100,15 +98,11 @@ describe("Messages virtualized jump behavior", () => {
     });
 
     await waitFor(() => {
-      expect(scrollToSpy).toHaveBeenCalledWith({
-        top: expect.any(Number),
-        behavior: "smooth",
-      });
+      expect(scrollToIndexMock).toHaveBeenCalled();
     });
-    expect(scrollToIndexMock).not.toHaveBeenCalled();
   });
 
-  it("keeps render-heavy anchors mounted without activating virtualization", async () => {
+  it("virtualizes dense heavy histories by render weight", async () => {
     const heavyMarkdown = [
       "# Heavy section",
       "| A | B | C |",
@@ -140,10 +134,8 @@ describe("Messages virtualized jump behavior", () => {
 
     expect(
       container.querySelector(".messages-full")?.getAttribute("data-timeline-virtualized"),
-    ).toBe("false");
-    expect(container.querySelector('[data-message-anchor-id="heavy-u30"]')).toBeTruthy();
-    const scroller = container.querySelector(".messages") as HTMLDivElement;
-    const scrollToSpy = vi.spyOn(scroller, "scrollTo").mockImplementation(() => {});
+    ).toBe("true");
+    expect(container.querySelector(".messages-virtualized-canvas")).toBeTruthy();
 
     act(() => {
       document.dispatchEvent(
@@ -154,38 +146,25 @@ describe("Messages virtualized jump behavior", () => {
     });
 
     await waitFor(() => {
-      expect(scrollToSpy).toHaveBeenCalledWith({
-        top: expect.any(Number),
-        behavior: "smooth",
-      });
+      expect(scrollToIndexMock).toHaveBeenCalled();
     });
-    expect(scrollToIndexMock).not.toHaveBeenCalled();
-    expect(container.querySelector(".messages-virtualized-canvas")).toBeNull();
   });
 
-  it("renders heavy rows in full detail without a lightweight prompt", () => {
-    const heavyMarkdown = [
-      "# Heavy assistant answer",
-      "| A | B | C |",
-      "| - | - | - |",
-      ...Array.from({ length: 18 }, (_, index) => `| ${index} | value | value |`),
-      "```ts",
-      ...Array.from({ length: 18 }, (_, index) => `const heavyValue${index} = ${index};`),
-      "```",
-    ].join("\n");
+  it("keeps short light conversations static with full detail", () => {
+    // Under row-count floor and without dense markdown weight → static full-detail path.
     const items: ConversationItem[] = Array.from({ length: 8 }, (_, index) => ({
-      id: `assistant-heavy-${index + 1}`,
+      id: `assistant-light-${index + 1}`,
       kind: "message" as const,
       role: "assistant" as const,
-      text: `canonical assistant payload ${index + 1}\n\n${heavyMarkdown}`,
+      text: `canonical assistant payload ${index + 1}`,
       isFinal: true,
     }));
 
     const { container } = render(
       <Messages
         items={items}
-        threadId="thread-lightweight-toggle"
-        workspaceId="ws-heavy"
+        threadId="thread-static-short"
+        workspaceId="ws-short"
         isThinking={false}
         activeEngine="claude"
         openTargets={[]}
@@ -193,11 +172,10 @@ describe("Messages virtualized jump behavior", () => {
       />,
     );
 
-    expect(screen.queryByText("Heavy conversation detected")).toBeNull();
-    expect(screen.queryByText("Deferred detail")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Use lightweight" })).toBeNull();
-    expect(container.querySelector(".messages-lightweight-row-summary")).toBeNull();
     expect(container.querySelector(".messages-virtualized-canvas")).toBeNull();
+    expect(
+      container.querySelector(".messages-full")?.getAttribute("data-timeline-virtualized"),
+    ).toBe("false");
     expect(screen.getByText(/canonical assistant payload 8/)).toBeTruthy();
   });
 
@@ -358,7 +336,7 @@ describe("Messages virtualized jump behavior", () => {
     expect(screen.getAllByText(/Streaming heavy answer/).length).toBeGreaterThan(0);
   });
 
-  it("shows an oversized history prompt before full detail hydration", () => {
+  it("pins bottom when reopening dense history that may virtualize", () => {
     const oversizedMarkdown = [
       "# Oversized section",
       "| A | B | C |",
@@ -391,13 +369,6 @@ describe("Messages virtualized jump behavior", () => {
       renderWith("thread-oversized-prompt", items),
     );
 
-    expect(screen.queryByText("Oversized conversation opened in lightweight mode")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Stay lightweight" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Render details" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Retry full detail" })).toBeNull();
-    expect(container.querySelector(".messages-lightweight-row-summary")).toBeNull();
-    expect(container.querySelector(".messages-virtualized-canvas")).toBeNull();
-
     const scroller = container.querySelector(".messages") as HTMLDivElement;
     let scrollTop = 0;
     Object.defineProperties(scroller, {
@@ -415,7 +386,7 @@ describe("Messages virtualized jump behavior", () => {
     rerender(renderWith(null, []));
     rerender(renderWith("thread-oversized-prompt", items));
 
-    expect(screen.queryByText("Oversized conversation opened in lightweight mode")).toBeNull();
+    // Reopen should re-pin near bottom regardless of virtualized vs static path.
     expect(scroller.scrollTop).toBe(4_000 - 720);
   });
 
