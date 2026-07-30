@@ -1322,3 +1322,36 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1236: 修复幕布锚点预览与局部凸起
+
+**Date**: 2026-07-30
+**Task**: 修复幕布锚点预览与局部凸起
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+将幕布锚点改为紧凑左侧刻度；hover/focus 仅显示单条目录与简述，并用 26/20/12/8/6px 距离梯度形成局部凸起。完成边界定位、键盘跳转、32 条上限与局部性能审计；focused tests 38 passed、targeted ESLint、typecheck、OpenSpec strict validation 通过，按验收要求未跑全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c4498f6b1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
