@@ -10,7 +10,10 @@
   --settings-basic-control: color-mix(in srgb, var(--surface-control) 94%, var(--surface-card) 6%);
   --settings-basic-control-hover: color-mix(in srgb, var(--surface-control-hover) 92%, var(--surface-card) 8%);
   --settings-basic-control-border: color-mix(in srgb, var(--border-strong) 80%, transparent);
-  width: min(100%, 980px);
+  /* Width comes from the base .settings-section rule (the wrap's
+   * --settings-content-fixed-width) so the content column stays aligned with
+   * .settings-page-head-inner; a hardcoded width here desyncs the two on wide
+   * windows. */
   color: var(--settings-basic-text);
 }
 
