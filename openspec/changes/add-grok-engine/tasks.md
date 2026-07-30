@@ -35,6 +35,7 @@
 - [x] 5.3 [P0] `grokHistoryLoader` + parser（含单测）+ `services/tauri/session.ts` 三封装 + historyLoaderFactory / useThreadActionsResumeThread 接线。
 - [x] 5.4 [P1] i18n：10 locale `workspace.ts` / `providers.ts` / `settings.ts` / `sidebar.ts` / `runtimeNotice.ts` 的 grok key + `vitest.setup.ts` mock。
 - [x] 5.5 [P0] composer 模型选择器 Grok 分组：`AVAILABLE_PROVIDERS` + `ChatInputBoxAdapter` 的 availability/statusLabels/versions/enable map + `engineToProvider`/`providerToEngine` 映射（吸取 kimi 5.5/5.6 教训一次补全）；`generatedModelCatalog.json` grok roster。
+- [x] 5.6 [P0] terminal handoff regression：`turn/completed` 在 final settlement 前将 `liveAssistantTextChannel` 尾段回灌同一 assistant item，确保 Grok 无 `item/completed` 时结束流式或刷新历史后仍保留完整正文；补 hook 回归测试。
 
 ## 6. 验证与收尾（P6）
 
