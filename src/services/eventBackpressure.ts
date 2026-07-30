@@ -24,6 +24,7 @@ export type EventBackpressureOptions<T> = {
   maxQueueDepth?: number;
   rawRetainedLimit?: number;
   classify?: (event: T) => EventBackpressureCriticality;
+  isCriticalPredecessor?: (queuedEvent: T, criticalEvent: T) => boolean;
   coalesceKey?: (event: T) => string | null;
   dropPolicy?: (event: T) => "drop-eligible-snapshot" | "protected";
   estimateBytes?: (event: T) => number;
@@ -195,8 +196,30 @@ export function createEventBackpressure<T>(options: EventBackpressureOptions<T>)
   const push = (event: T) => {
     retainRawRecent(event);
     if (options.classify?.(event) === "critical") {
+      const predecessors: T[] = [];
+      if (options.isCriticalPredecessor) {
+        const retained: T[] = [];
+        for (const queuedEvent of queue) {
+          if (options.isCriticalPredecessor(queuedEvent, event)) {
+            predecessors.push(queuedEvent);
+            const coalesceKey = options.coalesceKey?.(queuedEvent);
+            if (coalesceKey) {
+              coalescedKeys.delete(coalesceKey);
+            }
+          } else {
+            retained.push(queuedEvent);
+          }
+        }
+        queue.length = 0;
+        for (const retainedEvent of retained) {
+          queue.push(retainedEvent);
+        }
+      }
       criticalBypassCount += 1;
-      deliveredCount += 1;
+      deliveredCount += predecessors.length + 1;
+      for (const predecessor of predecessors) {
+        deliverToListeners(listeners, predecessor);
+      }
       deliverToListeners(listeners, event);
       emitStats();
       return;

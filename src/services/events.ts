@@ -201,6 +201,11 @@ const APP_SERVER_EVENT_CRITICAL_METHODS = new Set<string>([
   "collaboration/modeBlocked",
   "collaboration/modeResolved",
 ]);
+const APP_SERVER_EVENT_TERMINAL_METHODS = new Set<string>([
+  "turn/completed",
+  "turn/error",
+  "runtime/ended",
+]);
 
 function appServerEventMethod(event: AppServerEvent): string {
   return String(event.message.method ?? "");
@@ -280,6 +285,17 @@ function appServerEventCriticality(event: AppServerEvent) {
     : "non-critical";
 }
 
+function isAppServerEventCriticalPredecessor(
+  queuedEvent: AppServerEvent,
+  criticalEvent: AppServerEvent,
+) {
+  return (
+    APP_SERVER_EVENT_TERMINAL_METHODS.has(
+      appServerEventMethod(criticalEvent),
+    ) && queuedEvent.workspace_id === criticalEvent.workspace_id
+  );
+}
+
 function appServerEventBytes(event: AppServerEvent) {
   try {
     return JSON.stringify(event).length;
@@ -296,6 +312,7 @@ export const appServerEventBackpressure = createEventBackpressure<AppServerEvent
   maxQueueDepth: 4_000,
   rawRetainedLimit: 128,
   classify: appServerEventCriticality,
+  isCriticalPredecessor: isAppServerEventCriticalPredecessor,
   coalesceKey: appServerEventCoalesceKey,
   dropPolicy: appServerEventDropPolicy,
   estimateBytes: appServerEventBytes,

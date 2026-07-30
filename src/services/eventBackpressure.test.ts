@@ -57,6 +57,62 @@ describe("eventBackpressure", () => {
     expect(listener).toHaveBeenCalledTimes(3);
   });
 
+  it("delivers scoped causal predecessors before a critical barrier", () => {
+    const scheduled: Array<() => void> = [];
+    const received: string[] = [];
+    const backpressure = createEventBackpressure<TestEvent>({
+      surfaceId: "test",
+      eventKind: "app-server-event",
+      schedule: (callback) => scheduled.push(callback),
+      classify: (event) => (event.critical ? "critical" : "non-critical"),
+      isCriticalPredecessor: (queued, critical) =>
+        critical.kind === "terminal" && queued.kind === critical.body,
+    });
+    backpressure.subscribe((event) => received.push(event.id));
+
+    backpressure.push({ id: "ws-a-1", kind: "ws-a" });
+    backpressure.push({ id: "ws-b-1", kind: "ws-b" });
+    backpressure.push({ id: "ws-a-2", kind: "ws-a" });
+    backpressure.push({
+      id: "ws-a-terminal",
+      kind: "terminal",
+      body: "ws-a",
+      critical: true,
+    });
+
+    expect(received).toEqual(["ws-a-1", "ws-a-2", "ws-a-terminal"]);
+    expect(backpressure.queueDepth).toBe(1);
+    scheduled.shift()?.();
+    expect(received).toEqual([
+      "ws-a-1",
+      "ws-a-2",
+      "ws-a-terminal",
+      "ws-b-1",
+    ]);
+  });
+
+  it("keeps urgent critical bypass independent from causal barriers", () => {
+    const scheduled: Array<() => void> = [];
+    const received: string[] = [];
+    const backpressure = createEventBackpressure<TestEvent>({
+      surfaceId: "test",
+      eventKind: "app-server-event",
+      schedule: (callback) => scheduled.push(callback),
+      classify: (event) => (event.critical ? "critical" : "non-critical"),
+      isCriticalPredecessor: (queued, critical) =>
+        critical.kind === "terminal" && queued.kind === critical.body,
+    });
+    backpressure.subscribe((event) => received.push(event.id));
+
+    backpressure.push({ id: "content", kind: "ws-a" });
+    backpressure.push({ id: "approval", kind: "approval", critical: true });
+
+    expect(received).toEqual(["approval"]);
+    expect(backpressure.queueDepth).toBe(1);
+    scheduled.shift()?.();
+    expect(received).toEqual(["approval", "content"]);
+  });
+
   it("coalesces duplicate status events by stable key", () => {
     const scheduled: Array<() => void> = [];
     const listener = vi.fn();
