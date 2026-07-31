@@ -545,10 +545,58 @@
   width: 100%;
 }
 
-.settings-workspace-picker--prompt .settings-select,
-.settings-prompt-grid .settings-select {
+.settings-prompt-select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
   width: 100%;
-  min-height: 38px;
+}
+
+.settings-prompt-select-wrap .settings-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 36px 7px 12px;
+  border-radius: 10px;
+  border-color: var(--border-muted);
+  background: var(--surface-control);
+  color: var(--text-strong);
+  font-size: 12px;
+  line-height: 18px;
+  box-shadow: none;
+  transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.settings-prompt-select-wrap .settings-select:hover {
+  border-color: color-mix(in srgb, var(--text-muted) 46%, var(--border-muted));
+  background: var(--surface-hover);
+}
+
+.settings-prompt-select-wrap .settings-select:focus {
+  border-color: var(--border-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--border-accent) 14%, transparent);
+}
+
+.settings-prompt-select-icon {
+  position: absolute;
+  right: 12px;
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+  pointer-events: none;
+  transition: color 140ms ease, transform 140ms ease;
+}
+
+.settings-prompt-select-wrap:hover .settings-prompt-select-icon,
+.settings-prompt-select-wrap:focus-within .settings-prompt-select-icon {
+  color: var(--text-strong);
+}
+
+.settings-prompt-select-wrap:focus-within .settings-prompt-select-icon {
+  transform: translateY(1px);
 }
 
 .settings-prompt-search-row {
@@ -570,14 +618,6 @@
 .settings-prompt-filter-wrap {
   flex: 0 0 128px;
   width: 128px;
-}
-
-.settings-prompt-filter-wrap .settings-select {
-  width: 100%;
-  min-height: 38px;
-  padding: 8px 34px 8px 12px;
-  font-size: 13px;
-  border-radius: 12px;
 }
 
 .settings-prompt-toolbar--secondary {
@@ -1629,10 +1669,6 @@
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 10px;
   margin-bottom: 10px;
-}
-
-.settings-prompt-grid .settings-select-wrap {
-  width: 100%;
 }
 
 .settings-field {

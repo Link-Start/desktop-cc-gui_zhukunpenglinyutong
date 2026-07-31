@@ -9,6 +9,7 @@ import Trash2 from "lucide-react/dist/esm/icons/trash-2";
 import Copy from "lucide-react/dist/esm/icons/copy";
 import Download from "lucide-react/dist/esm/icons/download";
 import Upload from "lucide-react/dist/esm/icons/upload";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import type { CustomPromptOption, WorkspaceInfo } from "../../../../types";
 import { useCustomPrompts } from "../../../prompts/hooks/useCustomPrompts";
 import {
@@ -341,9 +342,9 @@ export function PromptSection({
           {t("settings.workspacePickerLabel")}
         </div>
         {workspaces.length > 0 ? (
-          <div className="settings-select-wrap">
+          <div className="settings-select-wrap settings-prompt-select-wrap">
             <select
-              className="settings-select settings-select--compact"
+              className="settings-select"
               value={selectedWorkspaceId ?? ""}
               onChange={(event) => onWorkspaceChange(event.target.value || null)}
             >
@@ -353,6 +354,7 @@ export function PromptSection({
                 </option>
               ))}
             </select>
+            <ChevronDown className="settings-prompt-select-icon" aria-hidden />
           </div>
         ) : (
           <div className="settings-inline-muted">
@@ -374,9 +376,9 @@ export function PromptSection({
           </div>
 
           <div className="settings-prompt-toolbar settings-prompt-toolbar--primary">
-            <div className="settings-select-wrap settings-prompt-filter-wrap">
+            <div className="settings-select-wrap settings-prompt-filter-wrap settings-prompt-select-wrap">
               <select
-                className="settings-select settings-select--compact"
+                className="settings-select"
                 value={scopeFilter}
                 onChange={(event) =>
                   setScopeFilter(event.target.value as "all" | "workspace" | "global")
@@ -386,6 +388,7 @@ export function PromptSection({
                 <option value="workspace">{t("settings.prompt.scopeWorkspace")}</option>
                 <option value="global">{t("settings.prompt.scopeGlobal")}</option>
               </select>
+              <ChevronDown className="settings-prompt-select-icon" aria-hidden />
             </div>
             <Button
               type="button"
@@ -500,9 +503,9 @@ export function PromptSection({
                 </label>
                 <label className="settings-field">
                   <span>{t("settings.prompt.scope")}</span>
-                  <div className="settings-select-wrap">
+                  <div className="settings-select-wrap settings-prompt-select-wrap">
                     <select
-                      className="settings-select settings-select--compact"
+                      className="settings-select"
                       value={editor.scope}
                       onChange={(event) =>
                         setEditor((prev) =>
@@ -518,6 +521,7 @@ export function PromptSection({
                       <option value="workspace">{t("settings.prompt.scopeWorkspace")}</option>
                       <option value="global">{t("settings.prompt.scopeGlobal")}</option>
                     </select>
+                    <ChevronDown className="settings-prompt-select-icon" aria-hidden />
                   </div>
                 </label>
                 <label className="settings-field">
