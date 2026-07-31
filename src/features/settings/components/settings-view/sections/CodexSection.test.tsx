@@ -56,6 +56,8 @@ function t(key: string) {
     "settings.cliInstallerWaitingForOutput": "Waiting for installer output...",
     "settings.runDoctor": "Run Doctor",
     "settings.runClaudeDoctor": "Run Claude Doctor",
+    "settings.cliPathManagedInVendors":
+      "Executable paths are configured in CLI Config Management.",
     "settings.previewLaunch": "Preview launch",
     "settings.previewingLaunch": "Previewing launch...",
     "settings.codexLaunchPreviewTitle": "Launch preview",
@@ -105,42 +107,14 @@ function renderCodexSection(
       t={t}
       appSettings={baseSettings()}
       onUpdateAppSettings={vi.fn()}
-      claudePathDraft=""
-      setClaudePathDraft={vi.fn()}
-      claudeDirty={false}
-      handleBrowseClaude={vi.fn()}
-      handleSaveClaudeSettings={vi.fn()}
       handleRunClaudeDoctor={vi.fn()}
       claudeDoctorState={{ status: "idle", result: null }}
-      kimiPathDraft=""
-      setKimiPathDraft={vi.fn()}
-      kimiDirty={false}
-      handleBrowseKimi={vi.fn()}
-      handleSaveKimiSettings={vi.fn()}
       handleRunKimiDoctor={vi.fn()}
       kimiDoctorState={{ status: "idle", result: null }}
-      grokPathDraft=""
-      setGrokPathDraft={vi.fn()}
-      grokDirty={false}
-      handleBrowseGrok={vi.fn()}
-      handleSaveGrokSettings={vi.fn()}
       handleRunGrokDoctor={vi.fn()}
       grokDoctorState={{ status: "idle", result: null }}
-      openCodePathDraft=""
-      setOpenCodePathDraft={vi.fn()}
-      openCodeDirty={false}
-      handleBrowseOpenCode={vi.fn()}
-      handleSaveOpenCodeSettings={vi.fn()}
       handleRunOpenCodeDoctor={vi.fn()}
       openCodeDoctorState={{ status: "idle", result: null }}
-      codexPathDraft=""
-      setCodexPathDraft={vi.fn()}
-      codexArgsDraft=""
-      setCodexArgsDraft={vi.fn()}
-      codexDirty={false}
-      handleBrowseCodex={vi.fn()}
-      handleSaveCodexSettings={vi.fn()}
-      isSavingSettings={false}
       handleRunDoctor={vi.fn()}
       doctorState={{ status: "done", result: { ok: false } as any }}
       remoteHostDraft=""
@@ -243,13 +217,13 @@ describe("CodexSection CLI installer", () => {
     expect(screen.queryByText(/HTTPS_PROXY/)).toBeNull();
   });
 
-  it("previews global launch configuration without saving", async () => {
+  it("previews global launch configuration from saved settings", async () => {
     vi.mocked(previewCodexLaunchProfile).mockResolvedValueOnce({
       ok: true,
       scope: "global",
       workspaceId: null,
-      executableSource: "draft",
-      argumentsSource: "draft",
+      executableSource: "global",
+      argumentsSource: "global",
       codexBin: "/bin/codex",
       codexArgs: "--profile demo",
       resolvedExecutable: "/bin/codex",
@@ -263,64 +237,25 @@ describe("CodexSection CLI installer", () => {
       nextLaunchOnly: true,
     });
     renderCodexSection(vi.fn(), {
-      codexPathDraft: "/bin/codex",
-      codexArgsDraft: "--profile demo",
+      appSettings: {
+        ...baseSettings(),
+        codexBin: "/bin/codex",
+        codexArgs: "--profile demo",
+      },
     });
 
     fireEvent.click(screen.getAllByRole("button", { name: "Preview launch" })[0]);
 
     await waitFor(() => {
       expect(previewCodexLaunchProfile).toHaveBeenCalledWith({
-        codexBin: "/bin/codex",
-        codexArgs: "--profile demo",
+        codexBin: null,
+        codexArgs: null,
         workspaceId: null,
         useWorkspaceDraft: false,
       });
     });
     expect(await screen.findByText("Launch preview")).not.toBeNull();
     expect(await screen.findByText("/bin/codex")).not.toBeNull();
-    expect(await screen.findByText(/draft executable override/)).not.toBeNull();
-  });
-
-  it("previews clearing saved global launch overrides before saving", async () => {
-    vi.mocked(previewCodexLaunchProfile).mockResolvedValueOnce({
-      ok: true,
-      scope: "global",
-      workspaceId: null,
-      executableSource: "draft",
-      argumentsSource: "draft",
-      codexBin: null,
-      codexArgs: null,
-      resolvedExecutable: "codex",
-      wrapperKind: "direct",
-      userArguments: [],
-      injectedArguments: ["app-server"],
-      launchArguments: ["app-server"],
-      pathEnvUsed: null,
-      warnings: [],
-      details: null,
-      nextLaunchOnly: true,
-    });
-    renderCodexSection(vi.fn(), {
-      appSettings: {
-        ...baseSettings(),
-        codexBin: "/saved/codex",
-        codexArgs: "--profile saved",
-      },
-      codexPathDraft: "",
-      codexArgsDraft: "",
-    });
-
-    fireEvent.click(screen.getAllByRole("button", { name: "Preview launch" })[0]);
-
-    await waitFor(() => {
-      expect(previewCodexLaunchProfile).toHaveBeenCalledWith({
-        codexBin: "",
-        codexArgs: "",
-        workspaceId: null,
-        useWorkspaceDraft: false,
-      });
-    });
   });
 
   it("saves workspace launch overrides as next-launch-only settings", async () => {

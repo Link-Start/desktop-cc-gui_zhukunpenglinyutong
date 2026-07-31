@@ -1309,7 +1309,7 @@ const settings = {
         "baseUrlPlaceholder": "https://opencode.ai/zen/v1",
         "apiKeyPlaceholder": "sk-...",
         "models": "Modelos",
-        "modelsPlaceholder": "ex.: gpt-5.1, claude-opus-4-8",
+        "modelsPlaceholder": "ex.: gpt-5.1, claude-opus-5",
         "modelsHint": "Separe vários modelos com vírgulas; deixe vazio para permitir todos."
       },
       "gemini": {

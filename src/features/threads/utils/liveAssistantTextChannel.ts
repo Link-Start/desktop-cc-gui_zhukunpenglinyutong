@@ -96,11 +96,33 @@ function scheduleEntryPublish(
 }
 
 /**
+ * 若通道内已有「不同 itemId」的正文，取走其尚未落 reducer 的尾段并清空条目。
+ *
+ * Gemini/Grok/Kimi 在 Text↔Reasoning 交错时会为每个 text run 生成新 itemId
+ *（`base:text-2`…）。live 通道按 thread 只有一条活跃正文；若不在 itemId 切换
+ * 前 drain，上一段只剩建壳首 delta，界面会变成「先」「截」这类单字碎片，
+ * 历史重载才恢复完整正文。
+ */
+export function drainLiveAssistantTextTailIfItemChanged(
+  threadId: string,
+  nextItemId: string,
+): { itemId: string; tailDelta: string } | null {
+  const existing = entriesByThread.get(threadId);
+  if (!existing || existing.itemId === nextItemId) {
+    return null;
+  }
+  return drainLiveAssistantTextTail(threadId);
+}
+
+/**
  * 累计一条正文 delta。
  * - 线程无条目或 itemId 变化（新回合/分段切换/别名 id）→ 重置条目并返回
  *   isFirst=true，调用方应照旧 dispatch 该条 delta 以便 reducer 建壳。
  * - 否则无损追加文本并按 publish cadence 通知订阅者，返回 isFirst=false，
  *   调用方跳过 dispatch。
+ *
+ * 调用方在 itemId 可能变化时必须先
+ * {@link drainLiveAssistantTextTailIfItemChanged}，否则上一段尾部会丢失。
  */
 export function appendLiveAssistantText(
   threadId: string,

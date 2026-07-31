@@ -13,8 +13,6 @@ const activityPanel = {
     "eventsCount": "{{count}} 個事件",
     "sessionsCount": "{{count}} 個工作階段",
     "liveNow": "即時",
-    "collapsedLiveBadge": "{{count}} 個工作階段進行中",
-    "collapsedLiveBadge_other": "{{count}} 個工作階段進行中",
     "command": "指令",
     "commandPendingSummary": "執行指令中",
     "commandCategories": {

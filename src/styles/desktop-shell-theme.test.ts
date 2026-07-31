@@ -52,6 +52,20 @@ describe("desktop shell theme contract", () => {
     );
   });
 
+  it("defines light tooltip/dropdown tokens for system-light so portal tooltips stay readable", () => {
+    // Regression: system-light used to keep dark :root --tooltip-bg while
+    // flipping --text-primary to dark, which made:
+    // 1) Codex dual-view usage tooltips a black card (only native select visible)
+    // 2) Tool-menu CSS tooltips (mail / live-canvas / enhance) a solid black bar
+    //    because DropdownMenuContent portals outside .chat-input-box.
+    expect(lightThemeCss).toContain("--tooltip-bg: #ffffff;");
+    expect(systemThemeCss).toContain("--tooltip-bg: #ffffff;");
+    expect(systemThemeCss).toContain("--dropdown-bg: #ffffff;");
+    expect(systemThemeCss).toContain("--dropdown-text-color: #0d0d0d;");
+    expect(systemThemeCss).toContain("--surface-popover:");
+    expect(darkThemeCss).toMatch(/--tooltip-bg:\s*oklch\(/);
+  });
+
   it("keeps the workspace project dropdown aligned with shadcn menu tokens", () => {
     const dropdownRule = getCssRuleBlock(mainCss, ".workspace-project-dropdown");
     const searchRule = getCssRuleBlock(mainCss, ".workspace-project-search");

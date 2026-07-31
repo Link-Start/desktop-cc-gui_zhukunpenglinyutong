@@ -88,7 +88,6 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     liveReasoningItem,
     primaryWorkingLabel,
     processingStartedAt,
-    streamActivityPhase,
     waitingForFirstChunk,
   } = live;
   const {
@@ -691,7 +690,6 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
           activeEngine={activeEngine}
           waitingForFirstChunk={waitingForFirstChunk}
           presentationProfile={presentationProfile}
-          streamActivityPhase={streamActivityPhase}
         />
       );
     }

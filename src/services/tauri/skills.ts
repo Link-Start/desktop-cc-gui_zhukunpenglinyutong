@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { AppSettings, CuratedSkillOption } from "../../types";
 import { traceStartupCommand, type StartupWorkspaceScope } from "../../features/startup-orchestration/utils/startupTrace";
+import { isOpenCodeCliUnavailableError } from "./openCode";
 
 function workspaceScope(workspaceId: string): StartupWorkspaceScope {
   return { workspaceId };
@@ -60,9 +61,18 @@ export async function getClaudeCommandsList(workspaceId?: string | null) {
 }
 
 export async function getOpenCodeCommandsList(refresh = false) {
-  return traceStartupInvoke("opencode_commands_list", "global", () =>
-    invoke<unknown>("opencode_commands_list", { refresh }),
-  );
+  return traceStartupInvoke("opencode_commands_list", "global", async () => {
+    try {
+      return await invoke<unknown>("opencode_commands_list", { refresh });
+    } catch (error) {
+      // Active engine can be opencode while CLI is missing; treat as empty
+      // catalog so idle-prewarm does not surface "内部命令失败".
+      if (isOpenCodeCliUnavailableError(error)) {
+        return [];
+      }
+      throw error;
+    }
+  });
 }
 
 export async function startClaudeCommandsWatch(workspaceId?: string | null) {
@@ -99,7 +109,15 @@ export async function claudeCommandCreate(options: {
 }
 
 export async function getOpenCodeAgentsList(refresh = false) {
-  return traceStartupInvoke("opencode_agents_list", "global", () =>
-    invoke<unknown>("opencode_agents_list", { refresh }),
-  );
+  return traceStartupInvoke("opencode_agents_list", "global", async () => {
+    try {
+      return await invoke<unknown>("opencode_agents_list", { refresh });
+    } catch (error) {
+      // Same soft-empty contract as commands/session list when CLI is absent.
+      if (isOpenCodeCliUnavailableError(error)) {
+        return [];
+      }
+      throw error;
+    }
+  });
 }

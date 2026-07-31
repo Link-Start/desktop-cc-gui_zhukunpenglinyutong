@@ -213,4 +213,60 @@ describe("useThreadItemEvents live-text segmentation", () => {
     ]);
     expect(getLiveAssistantTextSnapshot(THREAD_ID)).toBeNull();
   });
+
+  it("drains the previous text-run tail when a new interleaved itemId starts", () => {
+    // 回归：对话中 Reasoning 交错产生多个 text run（item / item:text-2）。
+    // live 通道按 thread 单槽；若不在 itemId 切换时 drain，上一段只剩建壳首字
+    // （用户看到「先」「截」），历史重载才恢复完整正文。
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    const { result, dispatch } = makeHook();
+    const secondItemId = `${ITEM_ID}:text-2`;
+
+    act(() => {
+      result.current.onAgentMessageDelta({
+        workspaceId: WORKSPACE_ID,
+        threadId: THREAD_ID,
+        itemId: ITEM_ID,
+        delta: "先",
+      });
+      result.current.onAgentMessageDelta({
+        workspaceId: WORKSPACE_ID,
+        threadId: THREAD_ID,
+        itemId: ITEM_ID,
+        delta: "查看相关组件。",
+      });
+      // 新 text run（中间穿插过 reasoning，前端只看到 itemId 变化）。
+      result.current.onAgentMessageDelta({
+        workspaceId: WORKSPACE_ID,
+        threadId: THREAD_ID,
+        itemId: secondItemId,
+        delta: "截",
+      });
+      result.current.onAgentMessageDelta({
+        workspaceId: WORKSPACE_ID,
+        threadId: THREAD_ID,
+        itemId: secondItemId,
+        delta: "图右侧黑卡片。",
+      });
+    });
+
+    expect(agentDeltaCalls(dispatch)).toEqual([
+      expect.objectContaining({ itemId: ITEM_ID, delta: "先" }),
+      expect.objectContaining({
+        itemId: ITEM_ID,
+        delta: "查看相关组件。",
+      }),
+      expect.objectContaining({ itemId: secondItemId, delta: "截" }),
+    ]);
+    expect(getLiveAssistantTextSnapshot(THREAD_ID)?.itemId).toBe(secondItemId);
+    // 首条立即 publish；后续 delta 在 cadence 后才刷新 published 快照。
+    expect(getLiveAssistantTextSnapshot(THREAD_ID)?.text).toBe("截");
+
+    act(() => {
+      vi.advanceTimersByTime(LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS);
+    });
+    expect(getLiveAssistantTextSnapshot(THREAD_ID)?.text).toBe(
+      "截图右侧黑卡片。",
+    );
+  });
 });

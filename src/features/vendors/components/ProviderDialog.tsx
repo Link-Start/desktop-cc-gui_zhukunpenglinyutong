@@ -72,7 +72,7 @@ export function buildDefaultClaudeProviderSettingsConfig(): ClaudeProviderSettin
       ANTHROPIC_BASE_URL: "",
       ANTHROPIC_BETAS: "context-1m-2025-08-07",
       ANTHROPIC_DEFAULT_HAIKU_MODEL: "claude-haiku-4-5-20251001",
-      ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-4-8",
+      ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-5",
       ANTHROPIC_DEFAULT_SONNET_MODEL: "claude-sonnet-4-6",
       ANTHROPIC_SMALL_FAST_MODEL: "claude-haiku-4-5-20251001",
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",

@@ -37,16 +37,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .working.is-waiting .working-spinner,
-  .working.is-ingress .working-spinner {
-    animation-duration: 1s;
-    filter: none;
-  }
-
-  .working.is-ingress .working-spinner::before,
-  .working.is-ingress .working-spinner::after {
+  .working-spinner {
     animation: none;
-    display: none;
   }
 
   .message,

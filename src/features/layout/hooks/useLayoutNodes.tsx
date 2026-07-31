@@ -1698,21 +1698,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     options.workspaces,
   );
 
-  // D3 只读派生：右侧面板收起时，为顶栏 right-panel 展开按钮附加 running 会话
-  // 计数徽章数据；复用既有 sessionRadarRunningSessions，不新增订阅/定时器。
-  const sessionRadarRunningCount = options.sessionRadarRunningSessions.length;
-  const mainHeaderActionsWithRadarBadge = useMemo(() => {
-    const actions = options.mainHeaderActions;
-    if (!actions || sessionRadarRunningCount === 0) {
-      return actions;
-    }
-    return actions.map((action) =>
-      action.id === "right-panel" && action.rightPanelExpandAffordance
-        ? { ...action, badgeCount: sessionRadarRunningCount }
-        : action,
-    );
-  }, [options.mainHeaderActions, sessionRadarRunningCount]);
-
   const homeNode = (
     <HomeChat
       workspaces={homeWorkspaceOptions}
@@ -1756,7 +1741,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       launchScriptsState={options.launchScriptsState}
       showLaunchScriptControls={showTopRunControls}
       showOpenAppMenu={showOpenWorkspaceAppControl}
-      openAppExtraActions={mainHeaderActionsWithRadarBadge}
+      openAppExtraActions={options.mainHeaderActions}
       groupedWorkspaces={groupedWorkspacesForHeader}
       activeWorkspaceId={options.activeWorkspaceId}
       onSelectWorkspace={options.onSelectWorkspace}

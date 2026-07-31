@@ -160,9 +160,11 @@
   transform: translateX(-50%);
   margin-bottom: 8px;
 
-  background: var(--tooltip-bg, #1a1c24);
-  color: var(--text-primary);
-  border: 1px solid var(--dropdown-border);
+  /* Same theme-aware chain as context-bar: tool-menu / portals escape
+     .chat-input-box, so never hard-depend on scoped dark fallbacks only. */
+  background: var(--tooltip-bg, var(--surface-popover, var(--popover, #1a1c24)));
+  color: var(--text-primary, var(--popover-foreground, inherit));
+  border: 1px solid var(--dropdown-border, var(--border-strong, transparent));
   border-radius: 6px;
   padding: 6px 12px;
   font-size: 12px;
@@ -208,9 +210,12 @@
   transform: translateX(-50%);
   margin-bottom: 8px;
 
-  background: var(--tooltip-bg, #1a1c24);
-  color: var(--text-primary);
-  border: 1px solid var(--dropdown-border);
+  /* Mail / live-canvas / enhance buttons render inside DropdownMenuContent
+     (portaled to body). Prefer --tooltip-bg; fall back to popover surface so
+     system-light never paints a dark card against dark text. */
+  background: var(--tooltip-bg, var(--surface-popover, var(--popover, #1a1c24)));
+  color: var(--text-primary, var(--popover-foreground, inherit));
+  border: 1px solid var(--dropdown-border, var(--border-strong, transparent));
   border-radius: 6px;
   padding: 6px 12px;
   font-size: 12px;

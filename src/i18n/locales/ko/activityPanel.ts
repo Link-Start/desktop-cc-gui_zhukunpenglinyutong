@@ -13,8 +13,6 @@ const activityPanel = {
     "eventsCount": "이벤트 {{count}}개",
     "sessionsCount": "세션 {{count}}개",
     "liveNow": "실시간",
-    "collapsedLiveBadge": "세션 {{count}}개 실행 중",
-    "collapsedLiveBadge_other": "세션 {{count}}개 실행 중",
     "command": "명령",
     "commandPendingSummary": "명령 실행 중",
     "commandCategories": {

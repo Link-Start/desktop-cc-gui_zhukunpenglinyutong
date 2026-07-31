@@ -317,17 +317,6 @@ function MainHeaderImpl({
     };
   }, [projectMenuOpen]);
 
-  const rightPanelBadgeCount = rightPanelAction?.badgeCount;
-  const rightPanelBadge =
-    typeof rightPanelBadgeCount === "number" && rightPanelBadgeCount > 0
-      ? {
-          count: rightPanelBadgeCount,
-          label: t("activityPanel.collapsedLiveBadge", {
-            count: rightPanelBadgeCount,
-          }),
-        }
-      : null;
-
   return (
     <header
       className={`main-header${sessionTabsNode ? " has-session-tabs" : ""}`}
@@ -552,11 +541,6 @@ function MainHeaderImpl({
             onClick={rightPanelAction.onSelect}
             data-tauri-drag-region="false"
             label={rightPanelAction.label}
-            aria-label={
-              rightPanelBadge
-                ? `${rightPanelAction.label} · ${rightPanelBadge.label}`
-                : rightPanelAction.label
-            }
           >
             {isValidElement(rightPanelAction.icon)
               ? cloneElement(
@@ -564,11 +548,6 @@ function MainHeaderImpl({
                   { size: 14 },
                 )
               : rightPanelAction.icon}
-            {rightPanelBadge ? (
-              <span className="main-header-action-badge" aria-hidden="true">
-                {rightPanelBadge.count > 99 ? "99+" : rightPanelBadge.count}
-              </span>
-            ) : null}
           </TooltipIconButton>
         ) : null}
       </div>

@@ -140,41 +140,4 @@ describe("useMainHeaderActionItems", () => {
     action?.onSelect();
     expect(onOpenFileCompare).toHaveBeenCalledTimes(1);
   });
-
-  it("marks the right-panel action as expand affordance only when collapsed", () => {
-    const buildSidebarToggleProps = (rightPanelCollapsed: boolean) => ({
-      isCompact: false,
-      sidebarCollapsed: false,
-      rightPanelCollapsed,
-      rightPanelAvailable: true,
-      onCollapseSidebar: vi.fn(),
-      onExpandSidebar: vi.fn(),
-      onCollapseRightPanel: vi.fn(),
-      onExpandRightPanel: vi.fn(),
-    });
-
-    const collapsed = renderHook(() =>
-      useMainHeaderActionItems({
-        isCompact: false,
-        rightPanelCollapsed: true,
-        sidebarToggleProps: buildSidebarToggleProps(true),
-      }),
-    );
-    const collapsedAction = collapsed.result.current.find(
-      (item) => item.id === "right-panel",
-    );
-    expect(collapsedAction?.rightPanelExpandAffordance).toBe(true);
-
-    const expanded = renderHook(() =>
-      useMainHeaderActionItems({
-        isCompact: false,
-        rightPanelCollapsed: false,
-        sidebarToggleProps: buildSidebarToggleProps(false),
-      }),
-    );
-    const expandedAction = expanded.result.current.find(
-      (item) => item.id === "right-panel",
-    );
-    expect(expandedAction?.rightPanelExpandAffordance).toBe(false);
-  });
 });

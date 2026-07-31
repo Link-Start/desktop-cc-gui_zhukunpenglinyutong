@@ -13,8 +13,6 @@ const activityPanel = {
     "eventsCount": "{{count}} événements",
     "sessionsCount": "{{count}} sessions",
     "liveNow": "en direct",
-    "collapsedLiveBadge": "{{count}} session en cours",
-    "collapsedLiveBadge_other": "{{count}} sessions en cours",
     "command": "Commande",
     "commandPendingSummary": "Exécution de la commande",
     "commandCategories": {

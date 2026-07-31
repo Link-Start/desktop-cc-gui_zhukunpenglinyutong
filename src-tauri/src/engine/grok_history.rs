@@ -11,11 +11,16 @@
 //!   fields may evolve — parsed defensively).
 //! - `chat_history.jsonl`: one JSON object per line. Relevant line types:
 //!   - `user` — prompt (`content: [{type:"text", text:"<user_query>…</user_query>"}]`);
-//!     lines carrying `synthetic_reason` are synthetic reminders and skipped
+//!     lines carrying `synthetic_reason` are synthetic reminders and skipped.
+//!     Runtime context envelopes Grok injects without `synthetic_reason`
+//!     (`<user_info>`, `<git_status>`, bare `<system-reminder>`, …) are also
+//!     skipped so they do not appear as user bubbles or drive sidebar titles.
 //!   - `reasoning` — `{id, summary}` (summary string or parts array)
 //!   - `assistant` — `{content, tool_calls:[{id, function:{name, arguments}}]}`
 //!   - `tool_result` — `{tool_call_id, content}`
 //!   Other types (`system`, unknown) are skipped. Lines carry no usage data.
+//! - Sidebar `first_message` prefers the first real user prompt text; Grok's
+//!   `generated_title` / `session_summary` is only a fallback.
 
 use chrono::DateTime;
 use serde::{Deserialize, Serialize};
@@ -322,6 +327,72 @@ fn strip_user_query_wrapper(text: &str) -> String {
     inner.trim().to_string()
 }
 
+/// Known Grok runtime envelopes that are stored as `type:"user"` but are not
+/// human prompts. Grok only marks some of these with `synthetic_reason`.
+const GROK_RUNTIME_CONTEXT_TAGS: &[&str] = &[
+    "user_info",
+    "git_status",
+    "system-reminder",
+    "open_and_recently_viewed_files",
+    "agent_skills",
+    "mcp_servers",
+    "image_compression_notice",
+];
+
+fn remove_xml_block_case_insensitive(text: &str, tag: &str) -> String {
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
+    let lower = text.to_ascii_lowercase();
+    let open_lower = open.to_ascii_lowercase();
+    let close_lower = close.to_ascii_lowercase();
+    let Some(start) = lower.find(&open_lower) else {
+        return text.to_string();
+    };
+    let after_open = start + open.len();
+    let Some(rel_end) = lower[after_open..].find(&close_lower) else {
+        // Unclosed envelope: drop from the open tag to end.
+        return text[..start].to_string();
+    };
+    let end = after_open + rel_end + close.len();
+    let mut out = String::with_capacity(text.len().saturating_sub(end - start));
+    out.push_str(&text[..start]);
+    out.push_str(&text[end..]);
+    out
+}
+
+fn strip_grok_runtime_context_envelopes(text: &str) -> String {
+    let mut rest = text.to_string();
+    for _ in 0..12 {
+        let before = rest.clone();
+        for tag in GROK_RUNTIME_CONTEXT_TAGS {
+            rest = remove_xml_block_case_insensitive(&rest, tag);
+        }
+        if rest == before {
+            break;
+        }
+    }
+    rest
+}
+
+/// True when a Grok `user` history line is runtime-injected context rather than
+/// a real human prompt. Covers envelopes Grok writes without `synthetic_reason`
+/// (notably `<user_info>` / `<git_status>`).
+fn is_grok_runtime_context_user_text(raw: &str) -> bool {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return true;
+    }
+    // Explicit user prompts (including multimodal) are never treated as context.
+    if trimmed.contains("<user_query>") || trimmed.contains("<image_files>") {
+        return false;
+    }
+    // After stripping known envelopes, pure context leaves nothing behind.
+    // Free-text prompts (legacy / plain) remain and are kept.
+    strip_grok_runtime_context_envelopes(trimmed)
+        .trim()
+        .is_empty()
+}
+
 /// Parse Grok wire user text into display text + image absolute paths.
 ///
 /// Multimodal turns are stored as:
@@ -475,6 +546,11 @@ fn parse_messages_from_chat_history(raw: &str) -> GrokSessionLoadResult {
                     continue;
                 }
                 let raw_text = extract_content_text(value.get("content"));
+                // Grok also injects `<user_info>` / `<git_status>` as plain user
+                // lines without `synthetic_reason` — hide those from the UI.
+                if is_grok_runtime_context_user_text(&raw_text) {
+                    continue;
+                }
                 let (display_text, image_paths) = parse_grok_user_prompt_for_display(&raw_text);
                 if display_text.is_empty() && image_paths.is_empty() {
                     continue;
@@ -621,6 +697,9 @@ fn first_user_prompt_text(raw: &str) -> Option<String> {
             continue;
         }
         let raw = extract_content_text(value.get("content"));
+        if is_grok_runtime_context_user_text(&raw) {
+            continue;
+        }
         let (display_text, image_paths) = parse_grok_user_prompt_for_display(&raw);
         let preview = if display_text.is_empty() && !image_paths.is_empty() {
             format!("[{} image(s)]", image_paths.len())
@@ -709,8 +788,12 @@ async fn build_summary_from_session_dir(
         })
         .unwrap_or(0);
 
-    let first_message = title
-        .or_else(|| chat_history_raw.as_deref().and_then(first_user_prompt_text))
+    // Prefer the human's first real prompt over Grok's AI `generated_title`
+    // so the sidebar shows e.g. "你好" instead of "Chinese Hello Greeting Session".
+    let first_message = chat_history_raw
+        .as_deref()
+        .and_then(first_user_prompt_text)
+        .or(title)
         .map(|text| truncate_chars(&text, 60))
         .unwrap_or_else(|| session_id.to_string());
 
@@ -866,9 +949,9 @@ pub async fn delete_grok_session(
 #[cfg(test)]
 mod tests {
     use super::{
-        matches_workspace_path, parse_grok_user_prompt_for_display,
-        parse_messages_from_chat_history, parse_timestamp_millis, strip_user_query_wrapper,
-        url_decode_dir_name,
+        first_user_prompt_text, is_grok_runtime_context_user_text, matches_workspace_path,
+        parse_grok_user_prompt_for_display, parse_messages_from_chat_history,
+        parse_timestamp_millis, strip_user_query_wrapper, url_decode_dir_name,
     };
     use std::path::Path;
 
@@ -978,6 +1061,50 @@ mod tests {
         assert_eq!(result.messages.len(), 1);
         assert_eq!(result.messages[0].kind, "reasoning");
         assert_eq!(result.messages[0].text, "part one\npart two");
+    }
+
+    #[test]
+    fn skips_user_info_git_status_envelopes_without_synthetic_reason() {
+        let chat_history = concat!(
+            r#"{"type":"user","content":[{"type":"text","text":"<user_info>\nOS Version: macos\nShell: /bin/zsh\nWorkspace Path: /tmp/repo\nToday's date: 2026-07-31\n</user_info>"}]}"#,
+            "\n",
+            r#"{"type":"user","content":[{"type":"text","text":"<user_info>\nOS Version: macos\n</user_info>\n\n<git_status>\n## main\n M src/a.ts\n</git_status>"}]}"#,
+            "\n",
+            r#"{"type":"user","content":[{"type":"text","text":"<system-reminder>\nAs you answer...\n</system-reminder>"}],"synthetic_reason":"project_instructions"}"#,
+            "\n",
+            r#"{"type":"user","content":[{"type":"text","text":"<user_query>\n你好\n</user_query>"}],"prompt_index":0}"#,
+            "\n",
+            r#"{"type":"assistant","content":"你好。我是 Grok。","model_id":"grok-build"}"#,
+            "\n",
+        );
+
+        let result = parse_messages_from_chat_history(chat_history);
+        assert_eq!(result.messages.len(), 2);
+        assert_eq!(result.messages[0].role, "user");
+        assert_eq!(result.messages[0].text, "你好");
+        assert_eq!(result.messages[1].role, "assistant");
+        assert_eq!(result.messages[1].text, "你好。我是 Grok。");
+    }
+
+    #[test]
+    fn first_user_prompt_skips_runtime_context_and_returns_real_query() {
+        let chat_history = concat!(
+            r#"{"type":"user","content":[{"type":"text","text":"<user_info>\nOS Version: macos\n</user_info>"}]}"#,
+            "\n",
+            r#"{"type":"user","content":[{"type":"text","text":"<user_query>\n你好\n</user_query>"}],"prompt_index":0}"#,
+            "\n",
+        );
+        assert_eq!(
+            first_user_prompt_text(chat_history).as_deref(),
+            Some("你好")
+        );
+        assert!(is_grok_runtime_context_user_text(
+            "<user_info>\nOS Version: macos\n</user_info>"
+        ));
+        assert!(!is_grok_runtime_context_user_text(
+            "<user_query>\n你好\n</user_query>"
+        ));
+        assert!(!is_grok_runtime_context_user_text("plain hello"));
     }
 
     #[test]
@@ -1116,7 +1243,8 @@ mod tests {
                 .expect("list sessions");
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].session_id, "019fa245-0000-4000-8000-000000000001");
-        assert_eq!(listed[0].first_message, "Fixture title");
+        // Prefer first real user prompt over Grok generated_title / session_summary.
+        assert_eq!(listed[0].first_message, "hello");
         assert_eq!(listed[0].message_count, 2);
         assert_eq!(listed[0].engine.as_deref(), Some("grok"));
 

@@ -1314,6 +1314,13 @@ const settings = {
       customModels: "custom models",
       pluginModels: "Custom Models",
       manageModels: "Manage Models",
+      customPath: "Custom Path",
+      configurePath: "Configure Path",
+      customPathTitle: "Custom Path",
+      customPathDescription:
+        "Configure the executable path for this CLI. Leave empty to resolve via system PATH.",
+      customPathUsingSystemPath: "Using system PATH",
+      customPathNoArgs: "No extra args",
       cliSearchPlaceholder: "搜索CLI",
       cliComingSoon: "Support is coming soon.",
       cliComingSoonDetail: "This CLI is being adapted. Coming soon.",
@@ -1550,7 +1557,7 @@ const settings = {
         baseUrlPlaceholder: "https://opencode.ai/zen/v1",
         apiKeyPlaceholder: "sk-...",
         models: "Models",
-        modelsPlaceholder: "e.g. gpt-5.1, claude-opus-4-8",
+        modelsPlaceholder: "e.g. gpt-5.1, claude-opus-5",
         modelsHint:
           "Separate multiple models with commas; leave empty to allow all.",
       },
@@ -1638,6 +1645,8 @@ const settings = {
     codexPlaceholder: "codex",
     usePath: "Use PATH",
     pathResolutionDesc: "Leave empty to use the system PATH resolution.",
+    cliPathManagedInVendors:
+      "Executable paths are configured in CLI Config Management. This page is for diagnostics and install only.",
     defaultCodexArgs: "Default Codex args",
     codexArgsPlaceholder: "--profile personal",
     codexArgsDesc: "Extra flags passed before",

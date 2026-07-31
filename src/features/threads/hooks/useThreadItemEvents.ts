@@ -35,6 +35,7 @@ import {
   appendLiveAssistantText,
   clearLiveAssistantText,
   drainLiveAssistantTextTail,
+  drainLiveAssistantTextTailIfItemChanged,
   updateLiveAssistantTextSnapshot,
 } from "../utils/liveAssistantTextChannel";
 import { isLiveTextExternalizationEnabled } from "../utils/realtimePerfFlags";
@@ -1282,6 +1283,23 @@ export function useThreadItemEvents({
             text: agentMessageSnapshotText,
             turnId,
           });
+          // 同 delta 路径：snapshot 换 itemId 时先 drain 上一段，避免只剩建壳首字。
+          if (LIVE_TEXT_EXTERNALIZATION_ENABLED && shouldMarkProcessing) {
+            const previousTail = drainLiveAssistantTextTailIfItemChanged(
+              threadId,
+              itemId,
+            );
+            if (previousTail) {
+              dispatch({
+                type: "appendAgentDelta",
+                workspaceId,
+                threadId,
+                itemId: previousTail.itemId,
+                delta: previousTail.tailDelta,
+                hasCustomName: true,
+              });
+            }
+          }
           const liveSnapshotUpdate =
             LIVE_TEXT_EXTERNALIZATION_ENABLED && shouldMarkProcessing
               ? updateLiveAssistantTextSnapshot(
@@ -1576,6 +1594,25 @@ export function useThreadItemEvents({
       // A4：flag 开启时，首条 delta（或 itemId 变化）仍走 reducer 建壳；
       // 后续 delta 只累计进 live 通道（订阅的 MessageRow 小树渲染），
       // 不再逐条 dispatch 打根。终稿由 completed 全量落地。
+      //
+      // Text↔Reasoning 交错会换 itemId（Gemini/Grok/Kimi 的 text-N run）。
+      // 换 id 前必须先 drain 上一段尾部；否则上段只剩建壳首字，历史重载才完整。
+      if (LIVE_TEXT_EXTERNALIZATION_ENABLED) {
+        const previousTail = drainLiveAssistantTextTailIfItemChanged(
+          threadId,
+          itemId,
+        );
+        if (previousTail) {
+          enqueueRealtimeDeltaOperation({
+            kind: "agentDelta",
+            workspaceId,
+            threadId,
+            itemId: previousTail.itemId,
+            delta: previousTail.tailDelta,
+            turnId,
+          });
+        }
+      }
       const liveTextResult = LIVE_TEXT_EXTERNALIZATION_ENABLED
         ? appendLiveAssistantText(threadId, itemId, resolvedDelta)
         : null;

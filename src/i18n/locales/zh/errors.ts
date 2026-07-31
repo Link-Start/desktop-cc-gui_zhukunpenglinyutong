@@ -28,6 +28,29 @@ const errors = {
       "未找到 Codex CLI。请安装 Codex 并确保 `codex` 在您的 PATH 中。",
     couldntOpenWorkspace: "无法打开工作区",
     dismissError: "关闭错误",
+    applicationErrorTitle: "应用错误",
+    applicationErrorDescription:
+      "界面因意外错误无法继续显示。请先复制下方诊断信息反馈给开发者，再尝试重新加载应用。",
+    applicationErrorReload: "重新加载",
+    applicationErrorCopyReport: "一键复制诊断信息",
+    applicationErrorCopyDone: "诊断信息已复制，请粘贴到反馈里发给开发者。",
+    applicationErrorCopyDownloaded:
+      "当前环境无法写入剪贴板，已改为下载诊断文件。反馈时请附上该文件。",
+    applicationErrorCopyFailed:
+      "复制与下载都失败了。请手动选中下方文本复制后反馈。",
+    applicationErrorDetails: "错误详情",
+    applicationErrorFeedbackTitle: "如何反馈给开发者",
+    applicationErrorFeedbackStep1: "点击「一键复制诊断信息」。",
+    applicationErrorFeedbackStep2: "打开反馈页新建 Issue，把诊断信息粘贴进去。",
+    applicationErrorFeedbackStep3:
+      "补充你当时在做什么（冷启动 / 流式输出 / 切换工作区等），以及重新加载是否恢复。",
+    applicationErrorOpenFeedback: "打开反馈页面",
+    applicationErrorMeta:
+      "版本: {{version}} · 类型: {{errorClass}} · 平台: {{platform}}",
+    applicationErrorMessageLabel: "错误信息",
+    applicationErrorDecodedLabel: "React #{{code}} 完整含义",
+    applicationErrorComponentStackLabel: "组件堆栈",
+    applicationErrorStackLabel: "JavaScript 堆栈",
   },
 };
 

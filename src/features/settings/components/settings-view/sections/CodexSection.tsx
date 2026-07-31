@@ -29,42 +29,14 @@ type CodexSectionProps = {
   t: (key: string) => string;
   appSettings: AppSettings;
   onUpdateAppSettings: (next: AppSettings) => Promise<void>;
-  claudePathDraft: string;
-  setClaudePathDraft: (value: string) => void;
-  claudeDirty: boolean;
-  handleBrowseClaude: () => Promise<void>;
-  handleSaveClaudeSettings: () => Promise<void>;
   handleRunClaudeDoctor: () => Promise<void>;
   claudeDoctorState: DoctorState;
-  kimiPathDraft: string;
-  setKimiPathDraft: (value: string) => void;
-  kimiDirty: boolean;
-  handleBrowseKimi: () => Promise<void>;
-  handleSaveKimiSettings: () => Promise<void>;
   handleRunKimiDoctor: () => Promise<void>;
   kimiDoctorState: DoctorState;
-  grokPathDraft: string;
-  setGrokPathDraft: (value: string) => void;
-  grokDirty: boolean;
-  handleBrowseGrok: () => Promise<void>;
-  handleSaveGrokSettings: () => Promise<void>;
   handleRunGrokDoctor: () => Promise<void>;
   grokDoctorState: DoctorState;
-  openCodePathDraft: string;
-  setOpenCodePathDraft: (value: string) => void;
-  openCodeDirty: boolean;
-  handleBrowseOpenCode: () => Promise<void>;
-  handleSaveOpenCodeSettings: () => Promise<void>;
   handleRunOpenCodeDoctor: () => Promise<void>;
   openCodeDoctorState: DoctorState;
-  codexPathDraft: string;
-  setCodexPathDraft: (value: string) => void;
-  codexArgsDraft: string;
-  setCodexArgsDraft: (value: string) => void;
-  codexDirty: boolean;
-  handleBrowseCodex: () => Promise<void>;
-  handleSaveCodexSettings: () => Promise<void>;
-  isSavingSettings: boolean;
   handleRunDoctor: () => Promise<void>;
   doctorState: DoctorState;
   remoteHostDraft: string;
@@ -443,42 +415,14 @@ export function CodexSection({
   t,
   appSettings,
   onUpdateAppSettings,
-  claudePathDraft,
-  setClaudePathDraft,
-  claudeDirty,
-  handleBrowseClaude,
-  handleSaveClaudeSettings,
   handleRunClaudeDoctor,
   claudeDoctorState,
-  kimiPathDraft,
-  setKimiPathDraft,
-  kimiDirty,
-  handleBrowseKimi,
-  handleSaveKimiSettings,
   handleRunKimiDoctor,
   kimiDoctorState,
-  grokPathDraft,
-  setGrokPathDraft,
-  grokDirty,
-  handleBrowseGrok,
-  handleSaveGrokSettings,
   handleRunGrokDoctor,
   grokDoctorState,
-  openCodePathDraft,
-  setOpenCodePathDraft,
-  openCodeDirty,
-  handleBrowseOpenCode,
-  handleSaveOpenCodeSettings,
   handleRunOpenCodeDoctor,
   openCodeDoctorState,
-  codexPathDraft,
-  setCodexPathDraft,
-  codexArgsDraft,
-  setCodexArgsDraft,
-  codexDirty,
-  handleBrowseCodex,
-  handleSaveCodexSettings,
-  isSavingSettings,
   handleRunDoctor,
   doctorState,
   remoteHostDraft,
@@ -547,16 +491,6 @@ export function CodexSection({
   }, [selectedWorkspace?.parentId, workspaces]);
   const nextWorkspaceCodexBin = normalizeDraftValue(workspaceCodexPathDraft);
   const nextWorkspaceCodexArgs = normalizeDraftValue(workspaceCodexArgsDraft);
-  const nextGlobalCodexBin = normalizeDraftValue(codexPathDraft);
-  const nextGlobalCodexArgs = normalizeDraftValue(codexArgsDraft);
-  const globalCodexBinPreviewDraft =
-    nextGlobalCodexBin !== (appSettings.codexBin ?? null)
-      ? codexPathDraft.trim()
-      : null;
-  const globalCodexArgsPreviewDraft =
-    nextGlobalCodexArgs !== (appSettings.codexArgs ?? null)
-      ? codexArgsDraft.trim()
-      : null;
   const workspaceLaunchDirty =
     !!selectedWorkspace &&
     (nextWorkspaceCodexBin !== (selectedWorkspace.codex_bin ?? null) ||
@@ -607,9 +541,10 @@ export function CodexSection({
   const handlePreviewGlobalLaunch = async () => {
     setGlobalPreviewState({ status: "running", result: null, error: null });
     try {
+      // Path/args are edited in CLI config management; preview uses saved settings.
       const result = await previewCodexLaunchProfile({
-        codexBin: globalCodexBinPreviewDraft,
-        codexArgs: globalCodexArgsPreviewDraft,
+        codexBin: null,
+        codexArgs: null,
         workspaceId: null,
         useWorkspaceDraft: false,
       });
@@ -802,61 +737,10 @@ export function CodexSection({
               {t("settings.codexLaunchConfigurationTitle")}
             </div>
             <div className="settings-help">
+              {t("settings.cliPathManagedInVendors")}
+            </div>
+            <div className="settings-help">
               {t("settings.codexLaunchConfigurationDescription")}
-            </div>
-            <label className="settings-field-label" htmlFor="codex-path">
-              {t("settings.defaultCodexPath")}
-            </label>
-            <div className="settings-field-row">
-              <input
-                id="codex-path"
-                className="settings-input"
-                value={codexPathDraft}
-                placeholder={t("settings.codexPlaceholder")}
-                onChange={(event) => setCodexPathDraft(event.target.value)}
-              />
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => void handleBrowseCodex()}
-              >
-                {t("settings.browse")}
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => setCodexPathDraft("")}
-              >
-                {t("settings.usePath")}
-              </button>
-            </div>
-            <div className="settings-help">
-              {t("settings.pathResolutionDesc")}
-            </div>
-
-            <label className="settings-field-label" htmlFor="codex-args">
-              {t("settings.defaultCodexArgs")}
-            </label>
-            <div className="settings-field-row">
-              <input
-                id="codex-args"
-                className="settings-input"
-                value={codexArgsDraft}
-                placeholder={t("settings.codexArgsPlaceholder")}
-                onChange={(event) => setCodexArgsDraft(event.target.value)}
-              />
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => setCodexArgsDraft("")}
-              >
-                {t("settings.clear")}
-              </button>
-            </div>
-            <div className="settings-help">
-              {t("settings.codexArgsDesc")}{" "}
-              <code>{t("settings.appServer")}</code>
-              {t("settings.codexArgsDescSuffix")}
             </div>
             <div className="settings-help">
               {t("settings.codexLaunchNextLaunchOnly")}
@@ -875,18 +759,6 @@ export function CodexSection({
                   ? t("settings.previewingLaunch")
                   : t("settings.previewLaunch")}
               </button>
-              {codexDirty ? (
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => {
-                    void handleSaveCodexSettings();
-                  }}
-                  disabled={isSavingSettings}
-                >
-                  {isSavingSettings ? t("settings.saving") : t("common.save")}
-                </button>
-              ) : null}
               <button
                 type="button"
                 className="ghost settings-button-compact"
@@ -1041,48 +913,10 @@ export function CodexSection({
 
         <TabsPanel value="claude">
           <div className="settings-field">
-            <label className="settings-field-label" htmlFor="claude-path">
-              {t("settings.defaultClaudePath")}
-            </label>
-            <div className="settings-field-row">
-              <input
-                id="claude-path"
-                className="settings-input"
-                value={claudePathDraft}
-                placeholder={t("settings.claudePlaceholder")}
-                onChange={(event) => setClaudePathDraft(event.target.value)}
-              />
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => void handleBrowseClaude()}
-              >
-                {t("settings.browse")}
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => setClaudePathDraft("")}
-              >
-                {t("settings.usePath")}
-              </button>
-            </div>
             <div className="settings-help">
-              {t("settings.pathResolutionDesc")}
+              {t("settings.cliPathManagedInVendors")}
             </div>
             <div className="settings-field-actions">
-              {claudeDirty ? (
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => {
-                    void handleSaveClaudeSettings();
-                  }}
-                  disabled={isSavingSettings}
-                >
-                  {isSavingSettings ? t("settings.saving") : t("common.save")}
-                </button>
-              ) : null}
               <button
                 type="button"
                 className="ghost settings-button-compact"
@@ -1123,48 +957,10 @@ export function CodexSection({
 
         <TabsPanel value="kimi">
           <div className="settings-field">
-            <label className="settings-field-label" htmlFor="kimi-path">
-              {t("settings.defaultKimiPath")}
-            </label>
-            <div className="settings-field-row">
-              <input
-                id="kimi-path"
-                className="settings-input"
-                value={kimiPathDraft}
-                placeholder={t("settings.kimiPlaceholder")}
-                onChange={(event) => setKimiPathDraft(event.target.value)}
-              />
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => void handleBrowseKimi()}
-              >
-                {t("settings.browse")}
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => setKimiPathDraft("")}
-              >
-                {t("settings.usePath")}
-              </button>
-            </div>
             <div className="settings-help">
-              {t("settings.pathResolutionDesc")}
+              {t("settings.cliPathManagedInVendors")}
             </div>
             <div className="settings-field-actions">
-              {kimiDirty ? (
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => {
-                    void handleSaveKimiSettings();
-                  }}
-                  disabled={isSavingSettings}
-                >
-                  {isSavingSettings ? t("settings.saving") : t("common.save")}
-                </button>
-              ) : null}
               <button
                 type="button"
                 className="ghost settings-button-compact"
@@ -1205,48 +1001,10 @@ export function CodexSection({
 
         <TabsPanel value="grok">
           <div className="settings-field">
-            <label className="settings-field-label" htmlFor="grok-path">
-              {t("settings.defaultGrokPath")}
-            </label>
-            <div className="settings-field-row">
-              <input
-                id="grok-path"
-                className="settings-input"
-                value={grokPathDraft}
-                placeholder={t("settings.grokPlaceholder")}
-                onChange={(event) => setGrokPathDraft(event.target.value)}
-              />
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => void handleBrowseGrok()}
-              >
-                {t("settings.browse")}
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => setGrokPathDraft("")}
-              >
-                {t("settings.usePath")}
-              </button>
-            </div>
             <div className="settings-help">
-              {t("settings.pathResolutionDesc")}
+              {t("settings.cliPathManagedInVendors")}
             </div>
             <div className="settings-field-actions">
-              {grokDirty ? (
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => {
-                    void handleSaveGrokSettings();
-                  }}
-                  disabled={isSavingSettings}
-                >
-                  {isSavingSettings ? t("settings.saving") : t("common.save")}
-                </button>
-              ) : null}
               <button
                 type="button"
                 className="ghost settings-button-compact"
@@ -1287,48 +1045,10 @@ export function CodexSection({
 
         <TabsPanel value="opencode">
           <div className="settings-field">
-            <label className="settings-field-label" htmlFor="opencode-path">
-              {t("settings.defaultOpenCodePath")}
-            </label>
-            <div className="settings-field-row">
-              <input
-                id="opencode-path"
-                className="settings-input"
-                value={openCodePathDraft}
-                placeholder={t("settings.openCodePlaceholder")}
-                onChange={(event) => setOpenCodePathDraft(event.target.value)}
-              />
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => void handleBrowseOpenCode()}
-              >
-                {t("settings.browse")}
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => setOpenCodePathDraft("")}
-              >
-                {t("settings.usePath")}
-              </button>
-            </div>
             <div className="settings-help">
-              {t("settings.pathResolutionDesc")}
+              {t("settings.cliPathManagedInVendors")}
             </div>
             <div className="settings-field-actions">
-              {openCodeDirty ? (
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => {
-                    void handleSaveOpenCodeSettings();
-                  }}
-                  disabled={isSavingSettings}
-                >
-                  {isSavingSettings ? t("settings.saving") : t("common.save")}
-                </button>
-              ) : null}
               <button
                 type="button"
                 className="ghost settings-button-compact"

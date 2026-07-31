@@ -25,7 +25,25 @@ const errors = {
     "cliNotFoundHint": "Claude Code इंस्टॉल करें: curl -fsSL https://claude.ai/install.sh | bash\nCodex इंस्टॉल करें: npm install -g @openai/codex",
     "codexCliNotFound": "Codex CLI नहीं मिला। Codex इंस्टॉल करें और सुनिश्चित करें कि `codex` आपके PATH पर है।",
     "couldntOpenWorkspace": "वर्कस्पेस नहीं खुल सका",
-    "dismissError": "त्रुटि खारिज करें"
+    "dismissError": "त्रुटि खारिज करें",
+    "applicationErrorTitle": "Application Error",
+    "applicationErrorDescription": "An unexpected error stopped the UI. Copy the diagnostic report below, send it to the developers, then reload the app.",
+    "applicationErrorReload": "Reload",
+    "applicationErrorCopyReport": "Copy error report",
+    "applicationErrorCopyDone": "Error report copied. Paste it into your feedback.",
+    "applicationErrorCopyDownloaded": "Clipboard unavailable. A report file was downloaded instead — attach it when you report the issue.",
+    "applicationErrorCopyFailed": "Could not copy or download the report. Select the text below and copy it manually.",
+    "applicationErrorDetails": "Error details",
+    "applicationErrorFeedbackTitle": "How to report this to developers",
+    "applicationErrorFeedbackStep1": "Click “Copy error report”.",
+    "applicationErrorFeedbackStep2": "Open the feedback page and create a new issue, then paste the report.",
+    "applicationErrorFeedbackStep3": "Add what you were doing (cold start / streaming / switching workspace, etc.) and whether Reload recovers it.",
+    "applicationErrorOpenFeedback": "Open feedback page",
+    "applicationErrorMeta": "version: {{version}} · class: {{errorClass}} · platform: {{platform}}",
+    "applicationErrorMessageLabel": "Error message",
+    "applicationErrorDecodedLabel": "Decoded React #{{code}}",
+    "applicationErrorComponentStackLabel": "Component stack",
+    "applicationErrorStackLabel": "JavaScript stack"
   }
 };
 

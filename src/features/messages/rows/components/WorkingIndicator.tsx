@@ -1,7 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ProxyStatusBadge } from "../../../../components/ProxyStatusBadge";
-import type { StreamActivityPhase } from "../../../threads/hooks/useStreamActivityPhase";
 import type { PresentationProfile } from "../../../../conversation-presentation/presentationProfile";
 import {
   formatDurationMs,
@@ -23,10 +22,13 @@ type WorkingIndicatorProps = {
   activeEngine?: MessagesEngine;
   waitingForFirstChunk?: boolean;
   presentationProfile?: PresentationProfile | null;
-  streamActivityPhase?: StreamActivityPhase;
   primaryLabel?: string | null;
 };
 
+/**
+ * Unified working indicator — Claude Code style.
+ * Simple spinner + timer + label. No phase-based glow/spark/shimmer FX.
+ */
 export const WorkingIndicator = memo(function WorkingIndicator({
   isThinking,
   proxyEnabled = false,
@@ -40,7 +42,6 @@ export const WorkingIndicator = memo(function WorkingIndicator({
   activeEngine = "claude",
   waitingForFirstChunk = false,
   presentationProfile = null,
-  streamActivityPhase = "idle",
   primaryLabel = null,
 }: WorkingIndicatorProps) {
   const { t } = useTranslation();
@@ -67,16 +68,6 @@ export const WorkingIndicator = memo(function WorkingIndicator({
     reasoningLabel,
     activityLabel,
   );
-  const supportsStreamActivityPhaseFx =
-    activeEngine === "codex" || activeEngine === "claude" || activeEngine === "gemini" || activeEngine === "grok" || activeEngine === "kimi";
-  const visualStreamActivityPhase =
-    activeEngine === "codex" && streamActivityPhase === "ingress"
-      ? "waiting"
-      : streamActivityPhase;
-  const streamPhaseClass =
-    supportsStreamActivityPhaseFx && visualStreamActivityPhase !== "idle"
-      ? ` is-${visualStreamActivityPhase}`
-      : "";
   const nonStreamingHintText = t("messages.nonStreamingHint");
   const resolvedNonStreamingHint =
     nonStreamingHintText === "messages.nonStreamingHint"
@@ -133,7 +124,7 @@ export const WorkingIndicator = memo(function WorkingIndicator({
   return (
     <>
       {isThinking && (
-        <div className={`working${streamPhaseClass}`}>
+        <div className="working">
           {proxyEnabled && (
             <ProxyStatusBadge
               proxyUrl={proxyUrl}

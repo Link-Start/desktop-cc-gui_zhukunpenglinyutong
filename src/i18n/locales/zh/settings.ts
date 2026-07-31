@@ -1241,6 +1241,13 @@ const settings = {
       customModels: "个自定义模型",
       pluginModels: "自定义模型",
       manageModels: "管理模型",
+      customPath: "自定义路径",
+      configurePath: "配置路径",
+      customPathTitle: "自定义路径",
+      customPathDescription:
+        "配置该 CLI 的可执行文件路径。留空则使用系统 PATH 解析。",
+      customPathUsingSystemPath: "使用系统 PATH",
+      customPathNoArgs: "无额外参数",
       cliSearchPlaceholder: "搜索CLI",
       cliComingSoon: "即将开放支持",
       cliComingSoonDetail: "正在适配此CLI，即将开放",
@@ -1467,7 +1474,7 @@ const settings = {
         baseUrlPlaceholder: "https://opencode.ai/zen/v1",
         apiKeyPlaceholder: "sk-...",
         models: "模型",
-        modelsPlaceholder: "例如: gpt-5.1, claude-opus-4-8",
+        modelsPlaceholder: "例如: gpt-5.1, claude-opus-5",
         modelsHint: "多个模型用逗号分隔；留空则不限制。",
       },
       gemini: {
@@ -1550,6 +1557,8 @@ const settings = {
     codexPlaceholder: "codex",
     usePath: "使用 PATH",
     pathResolutionDesc: "留空以使用系统 PATH 解析。",
+    cliPathManagedInVendors:
+      "可执行文件路径请在「CLI配置管理」中设置；此处仅用于诊断与安装。",
     defaultCodexArgs: "默认 Codex 参数",
     codexArgsPlaceholder: "--profile personal",
     codexArgsDesc: "在",

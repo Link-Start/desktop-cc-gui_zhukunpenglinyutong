@@ -376,24 +376,6 @@ export function SettingsView({
   >("runtime-pool");
   const [commitPrompt, setCommitPrompt] = useState("");
   const [appVersion, setAppVersion] = useState<string | null>(null);
-  const [claudePathDraft, setClaudePathDraft] = useState(
-    appSettings.claudeBin ?? "",
-  );
-  const [kimiPathDraft, setKimiPathDraft] = useState(
-    appSettings.kimiBin ?? "",
-  );
-  const [grokPathDraft, setGrokPathDraft] = useState(
-    appSettings.grokBin ?? "",
-  );
-  const [openCodePathDraft, setOpenCodePathDraft] = useState(
-    appSettings.opencodeBin ?? "",
-  );
-  const [codexPathDraft, setCodexPathDraft] = useState(
-    appSettings.codexBin ?? "",
-  );
-  const [codexArgsDraft, setCodexArgsDraft] = useState(
-    appSettings.codexArgs ?? "",
-  );
   const [terminalShellPathDraft, setTerminalShellPathDraft] = useState(
     appSettings.terminalShellPath ?? "",
   );
@@ -502,7 +484,7 @@ export function SettingsView({
     }>({ status: "idle", message: null });
   const diagnosticsBundleRequestIdRef = useRef(0);
   const diagnosticsBundleMountedRef = useRef(true);
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
   const [shortcutDrafts, setShortcutDrafts] = useState<ShortcutDrafts>(() =>
     buildShortcutDrafts(appSettings),
   );
@@ -763,29 +745,6 @@ export function SettingsView({
     };
   }, []);
 
-  useEffect(() => {
-    setClaudePathDraft(appSettings.claudeBin ?? "");
-  }, [appSettings.claudeBin]);
-
-  useEffect(() => {
-    setKimiPathDraft(appSettings.kimiBin ?? "");
-  }, [appSettings.kimiBin]);
-
-  useEffect(() => {
-    setGrokPathDraft(appSettings.grokBin ?? "");
-  }, [appSettings.grokBin]);
-
-  useEffect(() => {
-    setOpenCodePathDraft(appSettings.opencodeBin ?? "");
-  }, [appSettings.opencodeBin]);
-
-  useEffect(() => {
-    setCodexPathDraft(appSettings.codexBin ?? "");
-  }, [appSettings.codexBin]);
-
-  useEffect(() => {
-    setCodexArgsDraft(appSettings.codexArgs ?? "");
-  }, [appSettings.codexArgs]);
 
   useEffect(() => {
     setTerminalShellPathDraft(appSettings.terminalShellPath ?? "");
@@ -993,87 +952,11 @@ export function SettingsView({
     return () => window.clearTimeout(timer);
   }, [activeSection, initialHighlightTarget]);
 
-  const nextClaudeBin = claudePathDraft.trim() ? claudePathDraft.trim() : null;
-  const nextKimiBin = kimiPathDraft.trim() ? kimiPathDraft.trim() : null;
-  const nextGrokBin = grokPathDraft.trim() ? grokPathDraft.trim() : null;
-  const nextOpenCodeBin = openCodePathDraft.trim()
-    ? openCodePathDraft.trim()
-    : null;
-  const nextCodexBin = codexPathDraft.trim() ? codexPathDraft.trim() : null;
-  const nextCodexArgs = codexArgsDraft.trim() ? codexArgsDraft.trim() : null;
   const nextTerminalShellPath = terminalShellPathDraft.trim()
     ? terminalShellPathDraft.trim()
     : null;
-  const claudeDirty = nextClaudeBin !== (appSettings.claudeBin ?? null);
-  const kimiDirty = nextKimiBin !== (appSettings.kimiBin ?? null);
-  const grokDirty = nextGrokBin !== (appSettings.grokBin ?? null);
-  const openCodeDirty = nextOpenCodeBin !== (appSettings.opencodeBin ?? null);
-  const codexDirty =
-    nextCodexBin !== (appSettings.codexBin ?? null) ||
-    nextCodexArgs !== (appSettings.codexArgs ?? null);
   const terminalShellPathDirty =
     nextTerminalShellPath !== (appSettings.terminalShellPath ?? null);
-
-  const handleSaveClaudeSettings = async () => {
-    setIsSavingSettings(true);
-    try {
-      await onUpdateAppSettings({
-        ...appSettings,
-        claudeBin: nextClaudeBin,
-      });
-    } finally {
-      setIsSavingSettings(false);
-    }
-  };
-
-  const handleSaveKimiSettings = async () => {
-    setIsSavingSettings(true);
-    try {
-      await onUpdateAppSettings({
-        ...appSettings,
-        kimiBin: nextKimiBin,
-      });
-    } finally {
-      setIsSavingSettings(false);
-    }
-  };
-
-  const handleSaveGrokSettings = async () => {
-    setIsSavingSettings(true);
-    try {
-      await onUpdateAppSettings({
-        ...appSettings,
-        grokBin: nextGrokBin,
-      });
-    } finally {
-      setIsSavingSettings(false);
-    }
-  };
-
-  const handleSaveOpenCodeSettings = async () => {
-    setIsSavingSettings(true);
-    try {
-      await onUpdateAppSettings({
-        ...appSettings,
-        opencodeBin: nextOpenCodeBin,
-      });
-    } finally {
-      setIsSavingSettings(false);
-    }
-  };
-
-  const handleSaveCodexSettings = async () => {
-    setIsSavingSettings(true);
-    try {
-      await onUpdateAppSettings({
-        ...appSettings,
-        codexBin: nextCodexBin,
-        codexArgs: nextCodexArgs,
-      });
-    } finally {
-      setIsSavingSettings(false);
-    }
-  };
 
   const handleSaveTerminalShellPath = async () => {
     await onUpdateAppSettings({
@@ -1453,60 +1336,22 @@ export function SettingsView({
     });
   };
 
-  const handleBrowseCodex = async () => {
-    const selection = await open({ multiple: false, directory: false });
-    if (!selection || Array.isArray(selection)) {
-      return;
-    }
-    setCodexPathDraft(selection);
-  };
-
-  const handleBrowseClaude = async () => {
-    const selection = await open({ multiple: false, directory: false });
-    if (!selection || Array.isArray(selection)) {
-      return;
-    }
-    setClaudePathDraft(selection);
-  };
-
-  const handleBrowseKimi = async () => {
-    const selection = await open({ multiple: false, directory: false });
-    if (!selection || Array.isArray(selection)) {
-      return;
-    }
-    setKimiPathDraft(selection);
-  };
-
-  const handleBrowseGrok = async () => {
-    const selection = await open({ multiple: false, directory: false });
-    if (!selection || Array.isArray(selection)) {
-      return;
-    }
-    setGrokPathDraft(selection);
-  };
-
-  const handleBrowseOpenCode = async () => {
-    const selection = await open({ multiple: false, directory: false });
-    if (!selection || Array.isArray(selection)) {
-      return;
-    }
-    setOpenCodePathDraft(selection);
-  };
-
   const handleRunDoctor = async () => {
+    const codexBin = appSettings.codexBin ?? null;
+    const codexArgs = appSettings.codexArgs ?? null;
     setDoctorState({ status: "running", result: null });
     try {
       if (!runCodexDoctor) {
         throw new Error("Codex doctor is not available.");
       }
-      const result = await runCodexDoctor(nextCodexBin, nextCodexArgs);
+      const result = await runCodexDoctor(codexBin, codexArgs);
       setDoctorState({ status: "done", result });
     } catch (error) {
       setDoctorState({
         status: "done",
         result: {
           ok: false,
-          codexBin: nextCodexBin,
+          codexBin,
           version: null,
           appServerOk: false,
           details: error instanceof Error ? error.message : String(error),
@@ -1520,19 +1365,20 @@ export function SettingsView({
   };
 
   const handleRunClaudeDoctor = async () => {
+    const claudeBin = appSettings.claudeBin ?? null;
     setClaudeDoctorState({ status: "running", result: null });
     try {
       if (!onRunClaudeDoctor) {
         throw new Error("Claude doctor is not available.");
       }
-      const result = await onRunClaudeDoctor(nextClaudeBin);
+      const result = await onRunClaudeDoctor(claudeBin);
       setClaudeDoctorState({ status: "done", result });
     } catch (error) {
       setClaudeDoctorState({
         status: "done",
         result: {
           ok: false,
-          codexBin: nextClaudeBin,
+          codexBin: claudeBin,
           version: null,
           appServerOk: false,
           details: error instanceof Error ? error.message : String(error),
@@ -1546,19 +1392,20 @@ export function SettingsView({
   };
 
   const handleRunKimiDoctor = async () => {
+    const kimiBin = appSettings.kimiBin ?? null;
     setKimiDoctorState({ status: "running", result: null });
     try {
       if (!onRunKimiDoctor) {
         throw new Error("Kimi doctor is not available.");
       }
-      const result = await onRunKimiDoctor(nextKimiBin);
+      const result = await onRunKimiDoctor(kimiBin);
       setKimiDoctorState({ status: "done", result });
     } catch (error) {
       setKimiDoctorState({
         status: "done",
         result: {
           ok: false,
-          codexBin: nextKimiBin,
+          codexBin: kimiBin,
           version: null,
           appServerOk: false,
           details: error instanceof Error ? error.message : String(error),
@@ -1572,19 +1419,20 @@ export function SettingsView({
   };
 
   const handleRunGrokDoctor = async () => {
+    const grokBin = appSettings.grokBin ?? null;
     setGrokDoctorState({ status: "running", result: null });
     try {
       if (!onRunGrokDoctor) {
         throw new Error("Grok doctor is not available.");
       }
-      const result = await onRunGrokDoctor(nextGrokBin);
+      const result = await onRunGrokDoctor(grokBin);
       setGrokDoctorState({ status: "done", result });
     } catch (error) {
       setGrokDoctorState({
         status: "done",
         result: {
           ok: false,
-          codexBin: nextGrokBin,
+          codexBin: grokBin,
           version: null,
           appServerOk: false,
           details: error instanceof Error ? error.message : String(error),
@@ -1598,19 +1446,20 @@ export function SettingsView({
   };
 
   const handleRunOpenCodeDoctor = async () => {
+    const openCodeBin = appSettings.opencodeBin ?? null;
     setOpenCodeDoctorState({ status: "running", result: null });
     try {
       if (!onRunOpenCodeDoctor) {
         throw new Error("OpenCode doctor is not available.");
       }
-      const result = await onRunOpenCodeDoctor(nextOpenCodeBin);
+      const result = await onRunOpenCodeDoctor(openCodeBin);
       setOpenCodeDoctorState({ status: "done", result });
     } catch (error) {
       setOpenCodeDoctorState({
         status: "done",
         result: {
           ok: false,
-          codexBin: nextOpenCodeBin,
+          codexBin: openCodeBin,
           version: null,
           appServerOk: false,
           details: error instanceof Error ? error.message : String(error),
@@ -2477,42 +2326,14 @@ export function SettingsView({
                 t={t}
                 appSettings={appSettings}
                 onUpdateAppSettings={onUpdateAppSettings}
-                claudePathDraft={claudePathDraft}
-                setClaudePathDraft={setClaudePathDraft}
-                claudeDirty={claudeDirty}
-                handleBrowseClaude={handleBrowseClaude}
-                handleSaveClaudeSettings={handleSaveClaudeSettings}
                 handleRunClaudeDoctor={handleRunClaudeDoctor}
                 claudeDoctorState={claudeDoctorState}
-                kimiPathDraft={kimiPathDraft}
-                setKimiPathDraft={setKimiPathDraft}
-                kimiDirty={kimiDirty}
-                handleBrowseKimi={handleBrowseKimi}
-                handleSaveKimiSettings={handleSaveKimiSettings}
                 handleRunKimiDoctor={handleRunKimiDoctor}
                 kimiDoctorState={kimiDoctorState}
-                grokPathDraft={grokPathDraft}
-                setGrokPathDraft={setGrokPathDraft}
-                grokDirty={grokDirty}
-                handleBrowseGrok={handleBrowseGrok}
-                handleSaveGrokSettings={handleSaveGrokSettings}
                 handleRunGrokDoctor={handleRunGrokDoctor}
                 grokDoctorState={grokDoctorState}
-                openCodePathDraft={openCodePathDraft}
-                setOpenCodePathDraft={setOpenCodePathDraft}
-                openCodeDirty={openCodeDirty}
-                handleBrowseOpenCode={handleBrowseOpenCode}
-                handleSaveOpenCodeSettings={handleSaveOpenCodeSettings}
                 handleRunOpenCodeDoctor={handleRunOpenCodeDoctor}
                 openCodeDoctorState={openCodeDoctorState}
-                codexPathDraft={codexPathDraft}
-                setCodexPathDraft={setCodexPathDraft}
-                codexArgsDraft={codexArgsDraft}
-                setCodexArgsDraft={setCodexArgsDraft}
-                codexDirty={codexDirty}
-                handleBrowseCodex={handleBrowseCodex}
-                handleSaveCodexSettings={handleSaveCodexSettings}
-                isSavingSettings={isSavingSettings}
                 handleRunDoctor={handleRunDoctor}
                 doctorState={doctorState}
                 remoteHostDraft={remoteHostDraft}

@@ -3,6 +3,7 @@ import {
   appendLiveAssistantText,
   clearLiveAssistantText,
   drainLiveAssistantTextTail,
+  drainLiveAssistantTextTailIfItemChanged,
   getLiveAssistantTextSnapshot,
   LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS,
   renameLiveAssistantTextThread,
@@ -74,6 +75,40 @@ describe("liveAssistantTextChannel", () => {
       isFirst: true,
     });
     expect(getLiveAssistantTextSnapshot("t1")?.text).toBe("second");
+  });
+
+  it("drains the previous item tail when the next text run switches itemId", () => {
+    // 模拟 Gemini/Grok/Kimi Text↔Reasoning 交错：text-1 建壳后只走通道，
+    // 随后 reasoning 打断，text-2 以新 itemId 到来。
+    appendLiveAssistantText("t1", "item-1", "先");
+    appendLiveAssistantText("t1", "item-1", "查看截图");
+    expect(
+      drainLiveAssistantTextTailIfItemChanged("t1", "item-1:text-2"),
+    ).toEqual({
+      itemId: "item-1",
+      tailDelta: "查看截图",
+    });
+    expect(getLiveAssistantTextSnapshot("t1")).toBeNull();
+    expect(
+      drainLiveAssistantTextTailIfItemChanged("t1", "item-1:text-2"),
+    ).toBeNull();
+
+    appendLiveAssistantText("t1", "item-1:text-2", "截");
+    appendLiveAssistantText("t1", "item-1:text-2", "图右侧");
+    expect(drainLiveAssistantTextTailIfItemChanged("t1", "item-1:text-2")).toBeNull();
+    expect(drainLiveAssistantTextTail("t1")).toEqual({
+      itemId: "item-1:text-2",
+      tailDelta: "图右侧",
+    });
+  });
+
+  it("does not drain when the next delta stays on the same itemId", () => {
+    appendLiveAssistantText("t1", "item-1", "shell");
+    appendLiveAssistantText("t1", "item-1", " tail");
+    expect(drainLiveAssistantTextTailIfItemChanged("t1", "item-1")).toBeNull();
+    expect(getLiveAssistantTextSnapshot("t1")?.text).toBe("shell");
+    vi.advanceTimersByTime(LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS);
+    expect(getLiveAssistantTextSnapshot("t1")?.text).toBe("shell tail");
   });
 
   it("publishes the first entry immediately and keeps snapshots stable until trailing flush", () => {
