@@ -19,36 +19,25 @@ export type ConversationLightweightModeState = {
   reason: "manual" | "oversized" | "inactive";
 };
 
+/**
+ * 统一幕布（unify-conversation-canvas）：对话级轻量「摘要墙」已下线。
+ * 仍导出阈值常量供诊断/历史测试引用；policy 恒不建议、mode 恒 inactive。
+ * 性能靠流式尾窗 + 闲时虚拟化 + 块级「显示详情」（保留）。
+ */
 export function resolveConversationLightweightPolicy(
-  summary: Pick<TimelineRenderWeightSummary, "rowCount" | "renderWeight" | "heavyRowCount">,
+  _summary: Pick<TimelineRenderWeightSummary, "rowCount" | "renderWeight" | "heavyRowCount">,
 ): ConversationLightweightPolicy {
-  if (!TIMELINE_ADAPTIVE_RENDERING_ENABLED) {
-    return { suggested: false, oversized: false };
-  }
-  const oversized =
-    summary.renderWeight >= CONVERSATION_OVERSIZED_HISTORY_RENDER_WEIGHT ||
-    summary.rowCount >= CONVERSATION_OVERSIZED_HISTORY_ROWS;
-  const suggested =
-    oversized ||
-    summary.renderWeight >= CONVERSATION_LIGHTWEIGHT_SUGGEST_RENDER_WEIGHT ||
-    summary.heavyRowCount >= CONVERSATION_LIGHTWEIGHT_SUGGEST_HEAVY_ROWS;
-  return { suggested, oversized };
+  void _summary;
+  void TIMELINE_ADAPTIVE_RENDERING_ENABLED;
+  return { suggested: false, oversized: false };
 }
 
-export function resolveConversationLightweightModeState(input: {
+export function resolveConversationLightweightModeState(_input: {
   policy: ConversationLightweightPolicy;
   manualEnabled: boolean;
   detailHydrationRequested: boolean;
 }): ConversationLightweightModeState {
-  if (!TIMELINE_ADAPTIVE_RENDERING_ENABLED) {
-    return { active: false, reason: "inactive" };
-  }
-  if (input.manualEnabled) {
-    return { active: true, reason: "manual" };
-  }
-  if (input.policy.oversized && !input.detailHydrationRequested) {
-    return { active: true, reason: "oversized" };
-  }
+  void _input;
   return { active: false, reason: "inactive" };
 }
 

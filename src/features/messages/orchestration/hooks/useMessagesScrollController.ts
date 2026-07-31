@@ -335,6 +335,9 @@ export function useMessagesScrollController({
   ]);
   const beginTurnBoundaryBottomConvergence = useCallback(
     (intent: "turn-send" | "turn-settle") => {
+      // turn-settle 有意 re-pin：流式中用户上滚读历史后，回合结束仍贴最新
+      // （Messages.live-behavior「re-pins on settle back-fill…」契约）。
+      // 闲时上滚读历史不会触发 turn-settle（无 isWorking 边沿）。
       clearUserScrollIntent();
       autoScrollRef.current = true;
       stickToBottomIntentRef.current = intent;

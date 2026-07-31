@@ -498,6 +498,9 @@ export function isEmptyVirtualProjectionRow(
       if (row.entry.kind === "bashGroup") {
         return (
           input.activeEngine === "codex" ||
+          input.activeEngine === "grok" ||
+          input.activeEngine === "kimi" ||
+          input.activeEngine === "opencode" ||
           (input.activeEngine === "claude" &&
             !input.claudeHistoryTranscriptFallbackActive)
         );
