@@ -1,96 +1,126 @@
-# 同 CLI 多供应商：独立配置、创建/续接/切会话适配（最终契约）
+# 同 CLI 多供应商：Native / Shared 供应商与模型切换（最终契约）
 
 > **日期**：2026-07-31  
-> **状态**：**人工验收通过**；实现见 OpenSpec change  
->   `openspec/changes/close-native-session-provider-create-binding/`  
-> **用途**：给后续 AI/工程师的 **最终行为契约** + 实现锚点（非草稿）
+> **状态**：**人工验收通过**（Native + Shared）  
+> **OpenSpec**：`openspec/changes/close-native-session-provider-create-binding/`  
+> **用途**：最终行为契约 + 实现锚点
 
 ---
 
 ## 0. 一句话
 
-**会话发送永远跟创建时绑定的供应商（L2）；UI「使用中 / 模型列表 / 底栏渠道」跟当前会话的创建供应商适配（L1 current-only + 映射 + catalog）；Claude managed 启用绝不盖写 `~/.claude/settings.json`。**
+| 场景 | 契约 |
+|------|------|
+| **Native** | 发送跟创建时 binding（L2）；UI 跟当前会话创建供应商适配（L1 current-only + 映射 + catalog）；Claude 启用**不盖盘** |
+| **Shared** | Picker 只改 **`selectedNextTarget`**；Claude 切供应商后**模型列表必须换到该供应商 catalog**；不新建会话、不走 Native 续接 |
 
 ---
 
-## 1. L1 / L2
+## 1. Native：L1 / L2
 
-| 层 | 是什么 | 做什么 | 不做什么 |
-|----|--------|--------|----------|
-| **L1** | app 内 current、「使用中」、模型映射展示 | 菜单选供应商、设置页启用、切会话、续接成功时更新 | **Claude 不写** `~/.claude/settings.json` |
-| **L2** | `thread.providerProfileId` | 创建写入；发送/launch 用它 + `--settings`/Codex home | 不因 L1 切换改写已有会话 binding |
+| 层 | 职责 | 不做什么 |
+|----|------|----------|
+| **L1** | 使用中、模型映射、底栏渠道 | Claude **不写** `~/.claude/settings.json` |
+| **L2** | `thread.providerProfileId` 创建/发送 | 不因 L1 切换改写已有 binding |
 
----
-
-## 2. 已实现路径（验收通过）
+### Native 已实现入口
 
 | 入口 | 行为 |
 |------|------|
-| **新建菜单右侧选供应商** | L1 activate + 创建记忆；左侧创建带完整 profile → L2 |
-| **设置页启用** | 同 L1 current-only（Claude 不盖盘） |
-| **Provider 续接成功** | activate 目标；model/effort；force catalog |
-| **切换老会话** | 按该会话 `providerProfileId` activate + mapping + force catalog；发送仍 L2 |
-| **底栏渠道芯片** | 跟会话供应商名；清 overrides；禁止回落列表首项 |
+| 新建菜单选供应商 | activate + 创建记忆 → 创建 L2 |
+| 设置页启用 | current-only（不盖盘） |
+| Provider 续接成功 | activate 目标 + model/effort + catalog |
+| 切换老会话 | 按会话 profile activate + force catalog；发送仍 L2 |
+| 底栏渠道芯片 | 清 overrides + name snapshot |
 
-### 关键代码
+---
+
+## 2. Shared：与 Native 不同
+
+| | Native | Shared |
+|--|--------|--------|
+| 状态 | 会话 `providerProfileId` | **`selectedNextTarget`**（下一次 Send） |
+| 选供应商 | 绑定会话 / 续接 | **只改 Picker 目标** |
+| 模型数据 | 切会话 catalog | **`ensureModels(engine, profileId)`** |
+| 根因（已修） | 盖盘、切会话不适配 | **catalog 未返回就写旧 model id** |
+
+### Shared 已实现
+
+| 点 | 行为 |
+|----|------|
+| 切渠道 | `await ensureModels` → 用**新** models 写 target |
+| 空 catalog | **不**沿用旧渠道 model id |
+| 标签 | 优先 provider-scoped `model.model`；Claude mapping 按渠道同步 |
+| 外观 | **不变** |
+
+### Shared 有意不做
+
+- 切渠道时**不强制**改配置页「使用中」（next-send only；与 Native 切会话不同）
+
+---
+
+## 3. 关键代码
 
 | 职责 | 路径 |
 |------|------|
 | Claude 不盖盘 switch | `src-tauri/src/vendors/commands.rs` |
-| activate + Claude mapping | `src/features/vendors/activateEngineProviderProfile.ts` |
-| 使用中刷新事件 | `src/features/vendors/vendorActiveProviderEvents.ts` |
-| 菜单/续接 | `src/features/app/hooks/useSidebarMenus.ts` |
-| 切会话 | `src/app-shell-parts/useProviderModelCatalogSync.ts` |
+| activate + mapping | `src/features/vendors/activateEngineProviderProfile.ts` |
+| Native 菜单/续接 | `useSidebarMenus.ts` |
+| Native 切会话 | `useProviderModelCatalogSync.ts` |
+| **Shared 渠道→模型** | `ModelSelect.handleChannelSwitch`、`useProviderTargetCatalogOwners.ensureModels` |
+| Shared target store | `shared-session/target/targetStore.ts` |
 | 底栏芯片 | `ModelSelect.tsx`、`Composer.tsx` `providerProfileName` |
-| 发送 L2 | `getThreadProviderProfileId` → `engine_send_message` |
-| Launch isolation | `engine/claude/provider_profile.rs`、`--settings` override |
+| 发送 L2（Native） | `getThreadProviderProfileId` → send |
+| Launch isolation | Claude launch profile + `--settings` |
 
 ---
 
-## 3. 明确禁止
+## 4. 禁止
 
-- managed 启用时 `apply_provider_to_claude_settings` 盖盘  
-- 发送用全局 current 顶替会话 binding  
-- 切会话时底栏/模型仍显示上一会话供应商  
-- 从零重写并行 runtime  
+- managed 启用盖写 `~/.claude/settings.json`
+- Native 发送用全局 current 顶会话 binding
+- Shared 切渠道沿用上一供应商 model id
+- 把 Shared 当成 Native 续接/切会话去 activate「使用中」（除非产品另定）
+- 从零重写并行 runtime
 
 ---
 
-## 4. 残余欠缺（review）
+## 5. 残余（review）
 
-| 项 | 严重度 | 建议 |
+| 项 | 严重度 | 说明 |
 |----|--------|------|
-| 无 `providerProfileId` 的极老会话 | 低 | 不强制适配；可选后续补绑工具 |
-| Kimi/Grok switch 仍可能 materialize 本机配置 | 中 | 另开 change 对齐「启用不写用户盘」 |
-| 无全链路 E2E | 中 | Playwright：菜单创建 / 续接 / 双会话切换 |
-| OpenSpec 未 sync 进主 specs | 流程 | 提交后 `openspec sync` + archive |
-| 快速连点会话多次 switch | 低 | 可节流；当前可接受 |
+| 无 profile 的极老 Native 会话 | 低 | 不强制 L1 |
+| Kimi/Grok materialize | 中 | 另 change |
+| Shared 不刷「使用中」 | 有意 | follow-up 若产品要同步 |
+| E2E / openspec sync | 流程 | 提交后 |
 
 ---
 
-## 5. 验收清单（已通过）
+## 6. 验收清单
 
-- [x] 菜单选 managed → 使用中对齐；创建绑定正确；settings.json 不盖  
-- [x] 双 Claude 会话不同供应商可分别用  
-- [x] 续接后目标供应商与模型正确  
-- [x] 切 m3/k3 老会话：使用中、模型、**底栏渠道**跟随会话  
-- [x] 发送跟创建时供应商  
-- [x] UI 无大改版  
+### Native
 
----
+- [x] 菜单启用 + 创建绑定 + 不盖盘  
+- [x] 续接 / 切老会话 / 底栏渠道 / 发送 L2  
 
-## 6. OpenSpec
+### Shared
 
-- Change：`close-native-session-provider-create-binding`  
-- Specs delta：`engine-per-session-provider-binding`、`claude-provider-management`  
-- 验证：`openspec validate close-native-session-provider-create-binding --strict`
+- [x] Claude 切供应商 → 模型列表切换  
+- [x] 仅 selectedNextTarget；外观不变  
 
 ---
 
-## 7. 变更记录
+## 7. OpenSpec
+
+- Change：`close-native-session-provider-create-binding`
+- Deltas：`engine-per-session-provider-binding`、`claude-provider-management`、**`shared-execution-target`**
+
+---
+
+## 8. 变更记录
 
 | 日期 | 说明 |
 |------|------|
-| 2026-07-31 | 问题分析与实现指导初稿 |
-| 2026-07-31 | 实现：不盖盘、菜单/续接/切会话/芯片；人工验收通过 |
-| 2026-07-31 | **终稿**：提案与本文同步为最终契约 + 残余 review |
+| 2026-07-31 | Native 契约与实现；人工验收 |
+| 2026-07-31 | Shared 渠道→模型；人工验收 |
+| 2026-07-31 | 文档/Spec 补齐 Native+Shared 对照 + review |

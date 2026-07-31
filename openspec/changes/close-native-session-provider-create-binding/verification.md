@@ -1,75 +1,86 @@
 # Verification — close-native-session-provider-create-binding
 
-**状态**：功能人工验收 **通过**（用户确认，2026-07-31 / 会话内）  
-**提交**：按用户要求实现期 **未 commit**；文档/提案本轮更新后仍待用户决定是否提交
+**状态**：
+
+- **Native Session** 供应商/模型适配：人工验收 **通过**（已 commit `e2ac4a1a6`）
+- **Shared Session** Claude 选供应商后模型列表切换：人工验收 **通过**（用户确认）
 
 ---
 
-## 交付能力矩阵（最终）
+## 交付能力矩阵
 
-| # | 能力 | 实现要点 | 验收 |
-|---|------|----------|------|
-| 1 | Claude managed 启用不盖盘 | switch 只写 `claude.current` | ✅ |
-| 2 | 新建菜单选供应商 = 启用 + 创建绑定 | activate + creationProviderSelection | ✅ |
-| 3 | 创建/首发 L2 binding | thread.providerProfileId → send | ✅ |
-| 4 | 同 CLI 多供应商并行意图 | 各会话独立 binding；不靠盖盘 | ✅ |
-| 5 | Provider 续接后启动设置 | activate 目标 + model + catalog | ✅ |
-| 6 | 切老会话适配创建供应商 | useProviderModelCatalogSync activate + force catalog | ✅ |
-| 7 | 底栏渠道显示当前会话供应商 | 清 overrides + name snapshot | ✅ |
-| 8 | UI 外观不重做 | 无启用按钮/菜单视觉改版 | ✅ |
+### Native Session
+
+| # | 能力 | 验收 |
+|---|------|------|
+| 1 | Claude managed 启用不盖盘 | ✅ |
+| 2 | 新建菜单选供应商 = 启用 + 创建 L2 绑定 | ✅ |
+| 3 | 创建/首发 L2 binding | ✅ |
+| 4 | 同 CLI 多供应商并行意图 | ✅ |
+| 5 | Provider 续接后启动设置 | ✅ |
+| 6 | 切老会话适配创建供应商 | ✅ |
+| 7 | 底栏渠道显示当前会话供应商 | ✅ |
+| 8 | UI 外观不重做 | ✅ |
+
+### Shared Session（路径不同）
+
+| # | 能力 | 验收 |
+|---|------|------|
+| S1 | Claude 切供应商 → 模型列表换到该供应商 catalog | ✅ |
+| S2 | 只改 `selectedNextTarget`，不新建会话/不走 Native 续接 | ✅ |
+| S3 | catalog 为空时不沿用旧渠道 model id | ✅（测 + 实现） |
+| S4 | 外观/交互形态不变 | ✅ |
+
+---
+
+## Native vs Shared 对照（review）
+
+| | Native | Shared |
+|--|--------|--------|
+| 状态 | `thread.providerProfileId` | `selectedNextTarget` |
+| 切供应商 | 会话级 / 续接 | Picker 渠道 only |
+| 模型刷新 | 切会话 force catalog + mapping | **await ensureModels** 再写 target |
+| 配置页使用中 | 随会话/菜单 activate | **不强制**（next-send only） |
 
 ---
 
 ## 自动化
 
-| 命令 | 结果 |
-|------|------|
-| `openspec validate close-native-session-provider-create-binding --strict` | PASS |
-| `pnpm vitest run useSidebarMenus.test.tsx useProviderModelCatalogSync.test.tsx ModelSelect.test.tsx sessionLifecycleController.test.ts` | 预期 PASS（实现期已跑过子集） |
+| 项 | 结果 |
+|----|------|
+| `openspec validate close-native-session-provider-create-binding --strict` | 应 PASS |
+| ModelSelect + useProviderTargetCatalogOwners | 实现期 66+ 相关用例 PASS |
+| useSidebarMenus / useProviderModelCatalogSync | PASS |
 
 ---
 
-## Review：是否还有欠缺
-
-### 已覆盖主路径
-
-- 菜单创建、续接、切会话、不盖盘、芯片与模型映射、L2 发送
-
-### 已知残余 / 后续可选
+## Review：残余欠缺
 
 | 项 | 严重度 | 说明 |
 |----|--------|------|
-| **无 providerProfileId 的极老 Claude 会话** | 低 | 不强制 L1；只能跟全局 current / local |
-| **Kimi/Grok switch 仍可能 materialize 各自配置文件** | 中（非本轮） | 与 Claude settings.json 盖盘不同；若要对齐「全面不盖盘」需另 change |
-| **底栏芯片在 catalog 未加载时 models 短暂为空** | 低 | 显示名正确，loading 态；catalog force 刷新后补齐 |
-| **全链路 E2E 未自动化** | 中 | 依赖人工；可加 Playwright 后续 |
-| **续接 + 极快连点会话** 可能并发多次 switch | 低 | catalog key 去重；可接受 |
-| **Composer 全局 selectedModelId 与 thread 选择竞态** | 低 | 已 persist 到 thread；极端切换可再观察 |
-| **OpenSpec 尚未 sync/archive 到主 specs** | 流程 | 验收提交后执行 sync + archive |
-| **分析文档曾有「菜单禁止 switch」旧表述** | 文档 | 本轮改为 current-only switch 契约 |
-
-### 建议不纳入本 change
-
-- Shared Session 多 provider UI
-- set-current-only 与 materialize 的 Kimi/Grok 统一治理
-- 为无 binding 老会话做启发式推断 provider
+| 无 providerProfileId 的极老 Native 会话 | 低 | 不强制 L1 |
+| Kimi/Grok switch materialize | 中 | 另 change |
+| Shared 不刷新配置页「使用中」 | 有意 | 与 next-send 语义一致；若产品要同步可 follow-up |
+| Shared catalog 失败仅不写 target | 低 | 用户可重试 |
+| E2E 未自动化 | 中 | 人工已覆盖 |
+| 主 specs 未 sync/archive | 流程 | 提交后处理 |
+| `allow-provider-continuation-cancel-while-running` 工作区另改 | 无关 | 勿与本能力混 commit |
 
 ---
 
-## 代码锚点（便于二次 review）
+## 代码锚点
 
 | 职责 | 文件 |
 |------|------|
-| Claude 不盖盘 switch | `src-tauri/src/vendors/commands.rs` `vendor_switch_claude_provider` |
-| activate + mapping | `src/features/vendors/activateEngineProviderProfile.ts` |
-| 菜单/续接 | `src/features/app/hooks/useSidebarMenus.ts` |
-| 切会话 | `src/app-shell-parts/useProviderModelCatalogSync.ts` |
-| 底栏渠道 | `ModelSelect.tsx` profileOverrides + snapshot；`Composer.tsx` providerProfileName |
-| 发送 L2 | `useThreadMessaging` + `getThreadProviderProfileId` |
+| Claude 不盖盘 | `vendors/commands.rs` |
+| activate + mapping | `activateEngineProviderProfile.ts` |
+| Native 菜单/续接/切会话 | `useSidebarMenus` / `useProviderModelCatalogSync` |
+| **Shared 渠道→模型** | `ModelSelect.handleChannelSwitch`、`ensureModels` 返回 catalog |
+| Shared target store | `shared-session/target/targetStore.ts` |
 
 ---
 
 ## 结论
 
-**主需求已闭环并通过人工验收。**  
-残余项均为边界/其他引擎/流程债，不阻塞本 change 合并；合并前建议再跑一遍完整相关 Vitest，合并后 `openspec sync` / archive。
+**Native + Shared 主路径均已人工验收通过。**  
+文档与 OpenSpec 已写明两套交互差异；残余为边界/流程债，不阻塞收口。

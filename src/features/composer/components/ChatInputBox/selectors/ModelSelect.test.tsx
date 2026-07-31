@@ -1162,7 +1162,10 @@ describe("ModelSelect atomic target groups", () => {
   it("switches the current engine channel immediately via the channel dialog", async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const onExecutionTargetChange = vi.fn();
-    const onOpenProviderProfile = vi.fn();
+    // Shared 路径：ensureModels 返回目标渠道 catalog，切换后必须用新模型而非旧渠道 id
+    const onOpenProviderProfile = vi.fn().mockResolvedValue([
+      { id: "kimi-k3", model: "kimi-k3", label: "Kimi K3", providerProfileId: "k3" },
+    ]);
 
     render(
       <ModelSelect
@@ -1197,15 +1200,63 @@ describe("ModelSelect atomic target groups", () => {
     fireEvent.click(k3Option);
 
     expect(onOpenProviderProfile).toHaveBeenCalledWith("claude", "k3");
-    expect(onExecutionTargetChange).toHaveBeenCalledWith({
-      engine: "claude",
-      providerProfileId: "k3",
-      modelCatalogEntryId: "kimi-k3",
-      model: "kimi-k3",
-      providerProfileNameSnapshot: "k3",
-      providerProfileSource: "managed",
-      reasoning: null,
+    await waitFor(() => {
+      expect(onExecutionTargetChange).toHaveBeenCalledWith({
+        engine: "claude",
+        providerProfileId: "k3",
+        modelCatalogEntryId: "kimi-k3",
+        model: "kimi-k3",
+        providerProfileNameSnapshot: "k3",
+        providerProfileSource: "managed",
+        reasoning: null,
+      });
     });
+  });
+
+  it("does not keep previous channel model when shared provider catalog is still empty", async () => {
+    const onExecutionTargetChange = vi.fn();
+    const onOpenProviderProfile = vi.fn().mockResolvedValue([]);
+    const groups = buildAtomicGroups();
+    // 模拟 Shared 刚切渠道、catalog 尚未返回
+    const k3 = groups[0].profiles.find((p) => p.id === "k3");
+    if (k3) {
+      k3.models = [];
+    }
+
+    render(
+      <ModelSelect
+        value="claude-opus-4-8"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        onExecutionTargetChange={onExecutionTargetChange}
+        onOpenProviderProfile={onOpenProviderProfile}
+        executionTarget={atomicExecutionTarget}
+        targetGroups={groups}
+      />,
+    );
+
+    await userEvent.setup({ pointerEventsCheck: 0 }).click(
+      screen.getByRole("button", { name: "chat.currentModel:Opus 4.8" }),
+    );
+    openPickerSubmenu(/Claude Code/);
+    fireEvent.click(
+      document.querySelector(
+        "[data-channel-select-trigger='claude']",
+      ) as HTMLButtonElement,
+    );
+    fireEvent.click(
+      await within(await screen.findByRole("dialog")).findByRole("button", {
+        name: /^k3$/,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(onOpenProviderProfile).toHaveBeenCalledWith("claude", "k3");
+    });
+    // 无新 catalog 时不得把旧 local 的 claude-opus-4-8 写进新渠道 target
+    await new Promise((r) => setTimeout(r, 50));
+    expect(onExecutionTargetChange).not.toHaveBeenCalled();
   });
 
   it("previews another engine channel without rewriting the active target until a model is picked", async () => {

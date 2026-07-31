@@ -1,52 +1,55 @@
 ## Context
 
-- 上游：`docs/analysis/native-session-provider-select-vs-disk-overwrite-2026-07-31.md`
-- 复用：Claude `provider_profile` launch env、`ClaudeProviderSettingsOverride` + `--settings`、Codex 独立 home、thread `providerProfileId` 发送
-- 历史：7/26–27 isolation；7/30 UI 加回「启用」并盖盘；本 change 去掉盖盘并补全创建/续接/切会话适配
+- 上游分析：`docs/analysis/native-session-provider-select-vs-disk-overwrite-2026-07-31.md`
+- Native：thread `providerProfileId` + launch/`--settings`
+- Shared：`selectedNextTarget` / `activeTurnTarget` 分离（`shared-execution-target`）
 
-## Goals / Non-Goals
+## Native vs Shared（必须拆开）
 
-见 proposal。实现原则：**复用 isolation，接线不重写栈；L1 不盖盘；L2 管发送。**
+| | Native Session | Shared Session |
+|--|----------------|----------------|
+| 选供应商语义 | 会话 L2 binding / 续接建会话 | **仅** `selectedNextTarget`（下一次 Send） |
+| 模型列表数据 | 切会话 force catalog + mapping | **Atomic** `ensureModels(engine, profileId)` per profile |
+| 写 target 时机 | 创建/续接/切会话 | Picker 渠道/模型变更 |
+| 失败模式 | 盖盘、芯片旧值、切会话不适配 | **catalog 未返回就写旧 model id** |
 
 ## Decisions
 
-### D1. L1 vs L2
+### D1. L1 vs L2（Native）
 
-| 层 | 职责 | 实现 |
-|----|------|------|
-| L1 | 配置页「使用中」、模型映射展示、底栏渠道芯片 | `switch*Provider` current-only + `syncClaudeModelMappingForProfile` |
-| L2 | 会话创建绑定、发送路由 | `thread.providerProfileId` + launch/`--settings` |
+- L1：使用中 + 映射展示（current-only，Claude 不盖盘）
+- L2：发送 binding
 
 ### D2. Claude managed 启用不盖盘
 
-`vendor_switch_claude_provider` managed：**仅** `claude.current = id`，**禁止** `apply_provider_to_claude_settings`。
+`vendor_switch_claude_provider` 仅 `claude.current`。
 
-### D3. 三条入口共用 activate
+### D3. Native 三入口 activate
 
-| 入口 | 行为 |
-|------|------|
-| 新建菜单选供应商 | `selectProviderForCreate` → activate + 创建记忆 |
-| Provider 续接成功 | activate 目标 + model/effort + `refreshEngineModels` |
-| 切换 active 会话 | `useProviderModelCatalogSync` → activate 会话 profile + force catalog |
+菜单 / 续接成功 / 切会话 → `activateEngineProviderProfileAndNotify`。
 
-公共模块：`activateEngineProviderProfile.ts` + `vendorActiveProviderEvents.ts`。
+### D4. Shared 渠道切换（本轮补充）
 
-### D4. 底栏渠道芯片
+1. `ensureModels` **返回** `ModelInfo[]`
+2. `handleChannelSwitch` **await** 返回值后再选模型
+3. **禁止** `profile.models` 为空时回落 `executionTarget.modelCatalogEntryId`（旧渠道）
+4. Claude：`syncClaudeModelMappingForProfile` + label 优先 `model.model`（provider-scoped）
+5. **不**要求 Shared 切渠道时改配置页「使用中」（与 Native 切会话不同）
 
-- 切会话清 `profileOverrides`
-- 匹配失败用 `providerProfileNameSnapshot`，禁止盲回 `profiles[0]`
-- Composer 传入会话 `providerProfileName`
+### D5. 底栏芯片（Native 为主，Shared 同源组件）
+
+- 清 `profileOverrides`；name snapshot；禁止盲回 `profiles[0]`
 
 ## Risks / Residual
 
-| 风险 | 状态 |
-|------|------|
-| 无 `providerProfileId` 的极老会话 | 不强制 L1；发送走 default/local |
-| Kimi/Grok switch 仍可能 materialize 各自配置文件 | 本轮未改（Claude 盖盘是主痛点） |
-| 并发快速连点会话可能多次 switch | 可接受；catalog key 去重 |
-| 全链路 E2E 未自动化 | 人工验收已覆盖主路径 |
+| 项 | 说明 |
+|----|------|
+| Shared catalog 拉取失败 | 不写 target；用户可重试切渠道 |
+| Shared 不刷新设置页「使用中」 | 有意：next-send only |
+| Kimi/Grok materialize | 另 change |
+| E2E | 人工已验；可后补 Playwright |
 
 ## Rollback
 
-- 恢复 `apply_provider_to_claude_settings` 调用会回到盖盘行为（不推荐）
-- 前端可单独回退 `useProviderModelCatalogSync` activate 与 ModelSelect 芯片逻辑
+- Shared：回退 `handleChannelSwitch` await + `ensureModels` 返回值即可
+- Native：回退 activate / switch 盖盘路径按文件粒度还原

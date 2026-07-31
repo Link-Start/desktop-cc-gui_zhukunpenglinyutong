@@ -72,7 +72,7 @@ interface ModelSelectProps {
   onOpenProviderProfile?: (
     providerId: ProviderId,
     providerProfileId: string,
-  ) => Promise<void> | void;
+  ) => Promise<ModelInfo[] | void> | ModelInfo[] | void;
   targetCatalogError?: string | null;
   onReloadProviderConfig?: (
     providerId: ProviderId,
@@ -530,10 +530,25 @@ export const ModelSelect = memo(({
     model: ModelInfo,
     providerId?: string | null,
   ): string => {
+    // Provider-scoped catalog（Shared 按渠道拉取）已把 runtime 写到 model.model；
+    // 优先展示它，避免全局 localStorage 映射仍停留在上一渠道（Native 切会话也会同步 mapping，
+    // 但 Shared 只改 next target 时 mapping 可能滞后）。
+    if (
+      (!providerId || providerId === "claude") &&
+      model.providerProfileId?.trim()
+    ) {
+      const scopedRuntime =
+        model.model?.trim() ||
+        (model.label && model.label.trim() !== model.id
+          ? model.label.trim()
+          : "");
+      if (scopedRuntime) {
+        return scopedRuntime;
+      }
+    }
+
     // Claude ANTHROPIC_* mapping only — never rewrite Codex/Grok/Kimi labels.
-    // Prefer active provider mapping (e.g. kimi-k3) so every Claude tier row
-    // shows the real runtime model — mirrors jetbrains-cc-gui behaviour.
-    if (!providerId || providerId === 'claude') {
+    if (!providerId || providerId === "claude") {
       const mappedName = resolveModelMappingValue(model.id, modelMapping);
       if (mappedName) {
         return mappedName;
@@ -541,8 +556,6 @@ export const ModelSelect = memo(({
     }
 
     const parentLabel = model.label?.trim() || "";
-    // Parent/backend already rewrote the label (mapped runtime name, or a
-    // curated tier title). Prefer it over static i18n so refresh paths work.
     if (parentLabel) {
       return parentLabel;
     }
@@ -674,7 +687,11 @@ export const ModelSelect = memo(({
   }, [isRefreshingConfig, onRefreshConfig]);
 
   /**
-   * 切换 CLI 渠道:立即投影模型列表;若是当前引擎则实时写回 ExecutionTarget。
+   * 切换 CLI 渠道（Shared / create-session Atomic 共用）。
+   *
+   * Shared 与 Native 不同：只改 selectedNextTarget，不新建会话、不走续接。
+   * 必须先 await 目标 provider 的 model catalog，再用新 catalog 选模型写回
+   * ExecutionTarget；禁止在 models 未加载时沿用上一供应商的 model id。
    */
   const handleChannelSwitch = useCallback(
     (group: PickerModelGroup, profileId: string) => {
@@ -686,48 +703,71 @@ export const ModelSelect = memo(({
         ...current,
         [group.providerId]: profileId,
       }));
-      void onOpenProviderProfile?.(group.providerId, profileId);
 
-      if (!hasTargetGroups || !onExecutionTargetChange) {
-        return;
-      }
-      // 当前引擎:渠道切换立刻生效(保留同 catalog/runtime 模型,否则回退首个可用)
-      if (group.providerId !== executionTarget?.engine) {
-        return;
-      }
-      const keptModel =
-        profile.models.find((model) =>
-          isSelectedExecutionModel(executionTarget, model),
-        ) ??
-        profile.models.find(
-          (model) =>
-            resolveRuntimeModel(model) ===
-            (executionTarget.model?.trim() || undefined),
-        ) ??
-        profile.models[0];
-      const runtimeModel = keptModel
-        ? resolveRuntimeModel(keptModel)
-        : executionTarget.model?.trim() || undefined;
-      const catalogEntryId =
-        keptModel?.id ??
-        executionTarget.modelCatalogEntryId ??
-        runtimeModel ??
-        '';
-      if (!catalogEntryId && !runtimeModel) {
-        return;
-      }
-      onExecutionTargetChange(
-        buildProviderExecutionTarget(
-          executionTarget,
-          group.providerId,
-          profileId,
-          catalogEntryId || runtimeModel || '',
-          profile.label,
-          profile.source,
-          true,
-          runtimeModel,
-        ),
-      );
+      void (async () => {
+        let profileModels = profile.models;
+        try {
+          const loaded = await onOpenProviderProfile?.(
+            group.providerId,
+            profileId,
+          );
+          if (Array.isArray(loaded) && loaded.length > 0) {
+            profileModels = loaded;
+          }
+        } catch {
+          // ensureModels 失败时仍尽量用已有 projection
+        }
+
+        // Claude：按目标渠道 env 刷新映射，避免 Shared 选供应商后仍显示上一渠道名
+        if (group.providerId === "claude") {
+          try {
+            const { syncClaudeModelMappingForProfile } = await import(
+              "../../../../vendors/activateEngineProviderProfile"
+            );
+            await syncClaudeModelMappingForProfile(profileId);
+          } catch {
+            // mapping 同步失败不阻断渠道切换
+          }
+        }
+
+        if (!hasTargetGroups || !onExecutionTargetChange) {
+          return;
+        }
+        if (group.providerId !== executionTarget?.engine) {
+          return;
+        }
+        const keptModel =
+          profileModels.find((model) =>
+            isSelectedExecutionModel(executionTarget, model),
+          ) ??
+          profileModels.find(
+            (model) =>
+              resolveRuntimeModel(model) ===
+              (executionTarget.model?.trim() || undefined),
+          ) ??
+          profileModels[0];
+        // Shared 关键：不得回落到旧渠道的 modelCatalogEntryId
+        if (!keptModel) {
+          return;
+        }
+        const runtimeModel = resolveRuntimeModel(keptModel);
+        const catalogEntryId = keptModel.id || runtimeModel || "";
+        if (!catalogEntryId && !runtimeModel) {
+          return;
+        }
+        onExecutionTargetChange(
+          buildProviderExecutionTarget(
+            executionTarget,
+            group.providerId,
+            profileId,
+            catalogEntryId || runtimeModel || "",
+            profile.label,
+            profile.source,
+            true,
+            runtimeModel,
+          ),
+        );
+      })();
     },
     [
       executionTarget,

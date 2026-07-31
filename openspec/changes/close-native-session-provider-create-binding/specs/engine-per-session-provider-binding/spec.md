@@ -76,6 +76,8 @@
 - **THEN** 模型选择器底栏渠道芯片 MUST 显示 P 的名称（如 Minimax-m3 / kimi-k3）
 - **AND** MUST NOT 因上一会话的渠道预览覆盖（profileOverrides）或 catalog 首项回退而显示错误供应商名（如 DeepSeek）
 
+> **Note**：Shared Session 渠道→模型切换见同 change 下 `shared-execution-target` delta（`selectedNextTarget` 路径，非 thread L2 binding）。
+
 ## MODIFIED Requirements
 
 ### Requirement: Parallel Sessions With Different Providers MUST Be Isolated
