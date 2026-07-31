@@ -32,6 +32,8 @@ import {
 
 const AUTOMATIC_BOTTOM_RECHECK_DELAYS_MS = [100, 300, 1_000, 2_000] as const;
 const PROGRAMMATIC_SCROLL_ECHO_LIMIT = 32;
+/** 与 convergence 模块同阈值：已在目标边 ±1px 视为到位，避免无意义二次写。 */
+const ACTIVE_CONVERGENCE_EDGE_TOLERANCE_PX = 1;
 
 type ConversationScrollIntent =
   | "history-open"
@@ -50,9 +52,7 @@ function isTurnBoundaryScrollIntent(intent: ConversationScrollIntent | null) {
 
 type UseMessagesScrollControllerInput = {
   clearPendingJumpMessage: () => void;
-  isAssistantFinalizingRef: MutableRefObject<boolean>;
   isThinking: boolean;
-  isWorkingRef: MutableRefObject<boolean>;
   liveAutoFollowEnabledRef: MutableRefObject<boolean>;
   rawScrollKey: string;
   renderScopeKey: string;
@@ -60,9 +60,7 @@ type UseMessagesScrollControllerInput = {
 
 export function useMessagesScrollController({
   clearPendingJumpMessage,
-  isAssistantFinalizingRef,
   isThinking,
-  isWorkingRef,
   liveAutoFollowEnabledRef,
   rawScrollKey,
   renderScopeKey,
@@ -84,12 +82,17 @@ export function useMessagesScrollController({
   const [scrollKey, setScrollKey] = useState(rawScrollKey);
   const [, startScrollKeyTransition] = useTransition();
   const scrollThrottleRef = useRef<number>(0);
+  const liveFollowCoalesceRafRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      if (liveFollowCoalesceRafRef.current !== null) {
+        window.cancelAnimationFrame(liveFollowCoalesceRafRef.current);
+        liveFollowCoalesceRafRef.current = null;
+      }
     };
   }, []);
   useEffect(() => {
@@ -139,18 +142,31 @@ export function useMessagesScrollController({
     },
     [],
   );
+  const cancelLiveFollowCoalesce = useCallback(() => {
+    if (liveFollowCoalesceRafRef.current !== null) {
+      window.cancelAnimationFrame(liveFollowCoalesceRafRef.current);
+      liveFollowCoalesceRafRef.current = null;
+    }
+  }, []);
   const cancelScrollConvergence = useCallback(() => {
+    cancelLiveFollowCoalesce();
     activeScrollConvergenceCancelRef.current?.();
     activeScrollConvergenceCancelRef.current = null;
     activeProgrammaticScrollEdgeRef.current = null;
     activeProgrammaticScrollMotionRef.current = null;
     activeScrollIntentRef.current = null;
-  }, []);
+  }, [cancelLiveFollowCoalesce]);
   const cancelFocusFollowConvergence = useCallback(() => {
+    cancelLiveFollowCoalesce();
     if (isFocusFollowScrollIntent(activeScrollIntentRef.current)) {
-      cancelScrollConvergence();
+      // 只清 live-follow owner；不要走 cancelScrollConvergence 以免误清非 follow 的 coalesce 语义外的状态。
+      activeScrollConvergenceCancelRef.current?.();
+      activeScrollConvergenceCancelRef.current = null;
+      activeProgrammaticScrollEdgeRef.current = null;
+      activeProgrammaticScrollMotionRef.current = null;
+      activeScrollIntentRef.current = null;
     }
-  }, [cancelScrollConvergence]);
+  }, [cancelLiveFollowCoalesce]);
   const requestScrollConvergence = useCallback(
     (
       edge: ConversationScrollEdge,
@@ -178,12 +194,31 @@ export function useMessagesScrollController({
       if (options?.shouldContinue && !options.shouldContinue()) {
         return;
       }
-      if (
+      const isSameActiveRun =
+        activeScrollConvergenceCancelRef.current !== null &&
         activeScrollIntentRef.current === intent &&
         activeProgrammaticScrollEdgeRef.current === edge &&
-        activeProgrammaticScrollMotionRef.current === motion &&
-        Math.abs(resolveConversationScrollEdgeTarget(container, edge) - container.scrollTop) <= 1
-      ) {
+        activeProgrammaticScrollMotionRef.current === motion;
+      if (isSameActiveRun) {
+        // 已在追同一条 edge：禁止 cancel/restart。
+        // 快速流式下每次 delta/Resize 若都拆掉 recheck 并新建 pulse，会同步连写 scrollTop → 幕布抖。
+        // active rAF 每帧会重读 target；recheck 间隙用 instant 单次 nudge 补高度增长。
+        if (motion === "instant") {
+          const target = resolveConversationScrollEdgeTarget(container, edge);
+          const observedScrollTop = container.scrollTop;
+          if (
+            Math.abs(target - observedScrollTop) > ACTIVE_CONVERGENCE_EDGE_TOLERANCE_PX
+          ) {
+            container.scrollTop = target;
+            if (container.scrollTop !== observedScrollTop) {
+              recordProgrammaticScrollEcho({
+                recordedAt: performance.now(),
+                scrollTop: container.scrollTop,
+                source: "write",
+              });
+            }
+          }
+        }
         return;
       }
       cancelScrollConvergence();
@@ -234,48 +269,51 @@ export function useMessagesScrollController({
   }, [cancelScrollConvergence, renderScopeKey]);
   useEffect(() => cancelScrollConvergence, [cancelScrollConvergence]);
 
-  const requestAutoScroll = useCallback(() => {
-    if (
-      !liveAutoFollowEnabledRef.current ||
-      !autoScrollRef.current ||
-      !containerRef.current ||
-      hasRecentUserScrollIntent() ||
-      (!isWorkingRef.current && !isAssistantFinalizingRef.current)
-    ) {
+  // 焦点跟随 stick-to-bottom：只要 liveAutoFollow 开着且用户仍停在底部（autoScroll），
+  // 内容高度变化就必须追真实底部。不得把资格绑死在 isWorking/finalizing——回合结束后
+  // 思考折叠、full markdown、虚拟化 remeasure 仍会改 scrollHeight，否则会「总差一点」。
+  // 关闭焦点跟随后此路径停手；turn-send/settle 仍走独立 boundary ownership。
+  const canContinueFocusFollowStick = useCallback(
+    () =>
+      liveAutoFollowEnabledRef.current &&
+      autoScrollRef.current &&
+      !hasRecentUserScrollIntent(),
+    [hasRecentUserScrollIntent, liveAutoFollowEnabledRef],
+  );
+  const flushLiveFollowStick = useCallback(() => {
+    if (!canContinueFocusFollowStick() || !containerRef.current) {
       return;
     }
     requestScrollConvergence("bottom", "instant", "live-follow", {
       recheckDelaysMs: AUTOMATIC_BOTTOM_RECHECK_DELAYS_MS,
-      shouldContinue: () =>
-        liveAutoFollowEnabledRef.current &&
-        autoScrollRef.current &&
-        !hasRecentUserScrollIntent() &&
-        (isWorkingRef.current || isAssistantFinalizingRef.current),
+      shouldContinue: canContinueFocusFollowStick,
     });
-  }, [
-    hasRecentUserScrollIntent,
-    isAssistantFinalizingRef,
-    isWorkingRef,
-    liveAutoFollowEnabledRef,
-    requestScrollConvergence,
-  ]);
+  }, [canContinueFocusFollowStick, requestScrollConvergence]);
+  // 同帧内 scrollKey + ResizeObserver + 工具块 onRequestAutoScroll 会连打；合并到下一帧
+  // 再落位，避免同一布局周期多次 cancel/restart。
+  const requestAutoScroll = useCallback(() => {
+    if (!canContinueFocusFollowStick() || !containerRef.current) {
+      return;
+    }
+    if (typeof window === "undefined") {
+      flushLiveFollowStick();
+      return;
+    }
+    if (liveFollowCoalesceRafRef.current !== null) {
+      return;
+    }
+    liveFollowCoalesceRafRef.current = window.requestAnimationFrame(() => {
+      liveFollowCoalesceRafRef.current = null;
+      flushLiveFollowStick();
+    });
+  }, [canContinueFocusFollowStick, flushLiveFollowStick]);
   const rearmAutoFollowToBottom = useCallback(() => {
+    // 显式打开焦点跟随：清掉 wheel 租约，否则 500ms 内 shouldContinue 会直接 no-op。
+    clearUserScrollIntent();
     autoScrollRef.current = true;
-    requestScrollConvergence("bottom", "instant", "live-follow", {
-      recheckDelaysMs: AUTOMATIC_BOTTOM_RECHECK_DELAYS_MS,
-      shouldContinue: () =>
-        liveAutoFollowEnabledRef.current &&
-        autoScrollRef.current &&
-        !hasRecentUserScrollIntent() &&
-        (isWorkingRef.current || isAssistantFinalizingRef.current),
-    });
-  }, [
-    hasRecentUserScrollIntent,
-    isAssistantFinalizingRef,
-    isWorkingRef,
-    liveAutoFollowEnabledRef,
-    requestScrollConvergence,
-  ]);
+    cancelLiveFollowCoalesce();
+    flushLiveFollowStick();
+  }, [cancelLiveFollowCoalesce, clearUserScrollIntent, flushLiveFollowStick]);
   const requestHistoryBottomConvergence = useCallback(() => {
     requestScrollConvergence("bottom", "instant", "history-open", {
       recheckDelaysMs: AUTOMATIC_BOTTOM_RECHECK_DELAYS_MS,
@@ -459,9 +497,13 @@ export function useMessagesScrollController({
         });
       }
       scrollGeometrySnapshotRef.current = currentGeometry;
-      if (autoScrollRef.current) {
-        if (isWorkingRef.current || isAssistantFinalizingRef.current) {
-          requestAutoScroll();
+      if (autoScrollRef.current && !hasRecentUserScrollIntent()) {
+        // 优先级：焦点跟随 stick（全阶段）> settle/open 预算窗 boundary。
+        // 高度增长时浏览器不会自动推 scrollTop；armed 贴底必须主动 re-pin。
+        // Resize 路径同步 flush（同 run 复用 + 单次 nudge），不走 rAF coalesce，
+        // 否则测高后一帧空白再跳底，快流时更像抖。
+        if (liveAutoFollowEnabledRef.current) {
+          flushLiveFollowStick();
         } else if (Date.now() <= stickToBottomDeadlineRef.current) {
           if (stickToBottomIntentRef.current === "history-open") {
             requestHistoryBottomConvergence();
@@ -482,12 +524,12 @@ export function useMessagesScrollController({
     };
   }, [
     cancelScrollConvergence,
-    isAssistantFinalizingRef,
-    isWorkingRef,
+    flushLiveFollowStick,
+    hasRecentUserScrollIntent,
+    liveAutoFollowEnabledRef,
     recordCurrentScrollGeometry,
     recordProgrammaticScrollEcho,
     renderScopeKey,
-    requestAutoScroll,
     requestHistoryBottomConvergence,
     requestTurnBoundaryBottomConvergence,
   ]);
