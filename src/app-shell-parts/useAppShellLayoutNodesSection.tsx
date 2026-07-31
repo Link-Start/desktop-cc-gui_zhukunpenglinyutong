@@ -1174,7 +1174,7 @@ export function useAppShellLayoutNodesSection(
     openSettings("dictation"),
   );
   const handleOpenSkillsSettings = useEventCallback(() =>
-    openSettings("mcp", "mcp-skills"),
+    openSettings("other", "mcp-skills"),
   );
   const handleSelectHome = useEventCallback(() => {
     closeSettings();

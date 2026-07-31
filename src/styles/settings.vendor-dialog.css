@@ -99,12 +99,18 @@
 }
 
 .vendor-proxy-warning {
-  margin-top: 8px;
+  margin-top: 0;
   padding: 8px 12px;
   border-color: color-mix(in srgb, #f39c12 45%, transparent);
   background: color-mix(in srgb, #f39c12 10%, var(--surface-card-strong));
   font-size: 12px;
   font-weight: 400;
+  white-space: nowrap;
+}
+
+.vendor-proxy-warning span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .vendor-proxy-warning svg {

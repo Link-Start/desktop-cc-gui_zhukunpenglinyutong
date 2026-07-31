@@ -47,16 +47,12 @@ import { DEFAULT_OPEN_APP_ID } from "../../app/constants";
 import { writeClientStoreValue } from "../../../services/clientStorage";
 import { VendorSettingsPanel } from "../../vendors/components/VendorSettingsPanel";
 import { AgentSettingsSection } from "./AgentSettingsSection";
-import { PlaceholderSection } from "./PlaceholderSection";
 import { CommitSection } from "./CommitSection";
 import { PromptSection } from "./PromptSection";
 import { UsageSection } from "./UsageSection";
-import { CuratedSection } from "../../curated-skills";
 import type { SessionRadarEntry } from "../../session-activity/hooks/useSessionRadarFeed";
 import { deleteSessionRadarHistoryEntries } from "../../session-activity/utils/sessionRadarHistoryManagement";
 import Settings from "lucide-react/dist/esm/icons/settings";
-import Server from "lucide-react/dist/esm/icons/server";
-import Shield from "lucide-react/dist/esm/icons/shield";
 import BarChart3 from "lucide-react/dist/esm/icons/bar-chart-3";
 import MoreHorizontalIcon from "lucide-react/dist/esm/icons/more-horizontal";
 import Users from "lucide-react/dist/esm/icons/users";
@@ -700,9 +696,6 @@ export function SettingsView({
     [],
   );
   const shouldShowWorkspaceSelector = false;
-  const mcpSectionDisabled = TEMPORARILY_DISABLED_SIDEBAR_SECTIONS.has("mcp");
-  const permissionsSectionDisabled =
-    TEMPORARILY_DISABLED_SIDEBAR_SECTIONS.has("permissions");
   const hasCodexHomeOverrides = useMemo(
     () => projects.some((workspace) => workspace.settings.codexHome != null),
     [projects],
@@ -835,6 +828,11 @@ export function SettingsView({
 
   useEffect(() => {
     if (initialSection) {
+      // 「内置精选」已并入其他设置；遗留 mcp 深链统一落到 other。
+      if (initialSection === "mcp") {
+        setActiveSection("other");
+        return;
+      }
       setActiveSection(
         TEMPORARILY_DISABLED_SIDEBAR_SECTIONS.has(initialSection)
           ? "providers"
@@ -879,7 +877,8 @@ export function SettingsView({
         return;
       case "mcp-servers":
       case "mcp-skills":
-        setActiveSection("mcp");
+        // 内置精选入口已取消，深链落到其他设置。
+        setActiveSection("other");
         return;
       case "runtime-pool":
         setActiveSection("runtime-environment");
@@ -1715,11 +1714,6 @@ export function SettingsView({
           title: t("settings.sidebarProjectManagement"),
           description: t("settings.projectManagementDescription"),
         };
-      case "mcp":
-        return {
-          title: t("settings.sidebarMcpSkills"),
-          description: t("settings.mcpSkillsDescription"),
-        };
       case "permissions":
         return {
           title: t("settings.placeholder.permissions.title"),
@@ -1827,32 +1821,6 @@ export function SettingsView({
           >
             <LayoutGrid aria-hidden />
             {t("settings.sidebarProjectManagement")}
-          </button>
-          <button
-            type="button"
-            className={`settings-nav ${!mcpSectionDisabled && activeSection === "mcp" ? "active" : ""}${mcpSectionDisabled ? " is-disabled" : ""}`}
-            onClick={() => {
-              if (!mcpSectionDisabled) {
-                setActiveSection("mcp");
-              }
-            }}
-            disabled={mcpSectionDisabled}
-          >
-            <Server aria-hidden />
-            {t("settings.sidebarMcpSkills")}
-          </button>
-          <button
-            type="button"
-            className={`settings-nav ${!permissionsSectionDisabled && activeSection === "permissions" ? "active" : ""}${permissionsSectionDisabled ? " is-disabled" : ""}`}
-            onClick={() => {
-              if (!permissionsSectionDisabled) {
-                setActiveSection("permissions");
-              }
-            }}
-            disabled={permissionsSectionDisabled}
-          >
-            <Shield aria-hidden />
-            {t("settings.sidebarPermissions")}
           </button>
           <button
             type="button"
@@ -2199,19 +2167,6 @@ export function SettingsView({
               onUpdateAppSettings={onUpdateAppSettings}
             />
           )}
-          {activeSection === "mcp" && (
-            // MCP 服务器清单已整体迁移到「拓展 → Mcps」；设置侧只保留
-            // 随包发布的内置精选 Skills 开关。
-            <section className="settings-section">
-              <CuratedSection
-                appSettings={appSettings}
-                onUpdateAppSettings={onUpdateAppSettings}
-              />
-            </section>
-          )}
-          {activeSection === "permissions" && (
-            <PlaceholderSection type="permissions" />
-          )}
           {activeSection === "commit" && (
             <CommitSection
               commitPrompt={commitPrompt}
@@ -2270,6 +2225,8 @@ export function SettingsView({
             <OtherSection
               title={null}
               description={null}
+              appSettings={appSettings}
+              onUpdateAppSettings={onUpdateAppSettings}
               sessionRadarRecentCompletedSessions={
                 sessionRadarRecentCompletedSessions
               }

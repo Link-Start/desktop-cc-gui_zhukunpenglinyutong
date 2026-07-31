@@ -492,12 +492,6 @@ export function ProviderDialog({
                   ? t("settings.vendor.dialog.apiUrlLockedHint")
                   : t("settings.vendor.dialog.apiUrlHint")}
               </small>
-              {!isOfficialAnthropicEndpoint(apiUrl) && (
-                <div className="vendor-security-notice vendor-proxy-warning">
-                  <Cloud size={14} />
-                  <span>{t("settings.vendor.dialog.proxyEndpointWarning")}</span>
-                </div>
-              )}
             </div>
 
             <div className="vendor-form-group">
@@ -532,6 +526,13 @@ export function ProviderDialog({
               </small>
             </div>
           </div>
+
+          {!isOfficialAnthropicEndpoint(apiUrl) && (
+            <div className="vendor-security-notice vendor-proxy-warning">
+              <Cloud size={14} />
+              <span>{t("settings.vendor.dialog.proxyEndpointWarning")}</span>
+            </div>
+          )}
 
           <div className="vendor-form-group">
             <label>{t("settings.vendor.dialog.modelMapping")}</label>
