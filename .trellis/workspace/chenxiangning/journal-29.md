@@ -1902,3 +1902,36 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1252: Provider Continuation running 可取消
+
+**Date**: 2026-08-01
+**Task**: Provider Continuation running 可取消
+**Branch**: `bump-version-0.7.14`
+
+### Summary
+
+OpenSpec + 实现：running 阶段允许取消续接；canceled set 忽略 late create 成功/失败侧效应；不 hard-abort 后端；Vitest 46 通过。提交范围仅 Dialog/hook/OpenSpec，未混入 ModelSelect 等无关改动。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b2b418500` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
