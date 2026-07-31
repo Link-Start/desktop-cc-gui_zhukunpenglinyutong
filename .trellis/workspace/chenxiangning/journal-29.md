@@ -1753,3 +1753,53 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - OpenSpec task `4.1` 仍待后续 verify / sync / archive。
+
+
+## Session 1248: 隔离 Claude 模型映射跨 CLI 污染
+
+**Date**: 2026-07-31
+**Task**: 隔离 Claude 模型映射跨 CLI 污染
+**Branch**: `bump-version-0.7.12`
+
+### Summary
+
+修复 Claude ANTHROPIC_MODEL/main 映射泄漏到 Codex/Grok/Kimi 展示名的问题；限制 mapping 仅作用于 Claude 目录，ModelSelect 与 useModels 按引擎隔离。
+
+### Main Changes
+
+## 问题
+选择模型时，Codex/Grok/Kimi 等 CLI 拉取的模型全部显示为 Claude 默认配置下的 deepseek-v4-pro。
+
+## 根因
+- resolveModelMappingValue 对任意未知 model id 回落 mapping.main
+- ModelSelect.getModelLabel 无差别应用 Claude mapping
+- useModels（Codex catalog）错误套用 Claude ANTHROPIC_* remap
+
+## 修复
+- 新增 isClaudeModelMappingTarget，非 Claude id 返回 null
+- ModelSelect label/icon 仅 provider===claude 时应用 mapping
+- useModels 移除 Claude mapping
+- 补回归测试
+
+## 验证
+- vitest: constants + ModelSelect 46/46 通过
+- 用户人工验收通过
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ac91bfa48` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
