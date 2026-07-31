@@ -545,6 +545,12 @@
   width: 100%;
 }
 
+.settings-workspace-picker--prompt .settings-select,
+.settings-prompt-grid .settings-select {
+  width: 100%;
+  min-height: 38px;
+}
+
 .settings-prompt-search-row {
   width: 100%;
   margin-bottom: 10px;
@@ -1623,6 +1629,10 @@
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 10px;
   margin-bottom: 10px;
+}
+
+.settings-prompt-grid .settings-select-wrap {
+  width: 100%;
 }
 
 .settings-field {

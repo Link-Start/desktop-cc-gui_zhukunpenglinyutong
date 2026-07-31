@@ -343,7 +343,7 @@ export function PromptSection({
         {workspaces.length > 0 ? (
           <div className="settings-select-wrap">
             <select
-              className="settings-select"
+              className="settings-select settings-select--compact"
               value={selectedWorkspaceId ?? ""}
               onChange={(event) => onWorkspaceChange(event.target.value || null)}
             >
@@ -500,23 +500,25 @@ export function PromptSection({
                 </label>
                 <label className="settings-field">
                   <span>{t("settings.prompt.scope")}</span>
-                  <select
-                    className="settings-select"
-                    value={editor.scope}
-                    onChange={(event) =>
-                      setEditor((prev) =>
-                        prev
-                          ? {
-                              ...prev,
-                              scope: event.target.value as "workspace" | "global",
-                            }
-                          : prev,
-                      )
-                    }
-                  >
-                    <option value="workspace">{t("settings.prompt.scopeWorkspace")}</option>
-                    <option value="global">{t("settings.prompt.scopeGlobal")}</option>
-                  </select>
+                  <div className="settings-select-wrap">
+                    <select
+                      className="settings-select settings-select--compact"
+                      value={editor.scope}
+                      onChange={(event) =>
+                        setEditor((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                scope: event.target.value as "workspace" | "global",
+                              }
+                            : prev,
+                        )
+                      }
+                    >
+                      <option value="workspace">{t("settings.prompt.scopeWorkspace")}</option>
+                      <option value="global">{t("settings.prompt.scopeGlobal")}</option>
+                    </select>
+                  </div>
                 </label>
                 <label className="settings-field">
                   <span>{t("settings.prompt.descriptionLabel")}</span>
