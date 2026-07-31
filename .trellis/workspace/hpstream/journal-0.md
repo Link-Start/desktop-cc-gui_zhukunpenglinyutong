@@ -161,3 +161,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: 统一提示词库 select 外壳
+
+**Date**: 2026-07-31
+**Task**: 统一提示词库 select 外壳
+**Branch**: `feat/from-main-20260729`
+
+### Summary
+
+排查提示词库页面三处下拉样式不一致的根因，确认问题不在单个 select 文本本身，而在缺少统一的 wrapper/arrow/尺寸约束。将 workspace picker、筛选器和编辑表单 scope 统一为同一套 settings-select-wrap 风格，补上自定义箭头与一致的 select 尺寸，并同步更新 OpenSpec tasks。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6e9ef2211` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
