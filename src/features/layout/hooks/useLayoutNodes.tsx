@@ -691,6 +691,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       onExpand={globalRuntimeNoticeDock.expand}
       onMinimize={globalRuntimeNoticeDock.minimize}
       onClear={globalRuntimeNoticeDock.clear}
+      // 桌面侧栏：不外显气泡，入口在设置二级菜单；手机端仍用底部气泡。
+      hideMinimizedTrigger={!options.isPhone}
     />
   ) : null;
   const sidebarRuntimeNoticeDockNode = options.isPhone ? null : globalRuntimeNoticeDockNode;
@@ -799,6 +801,16 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         isTerminalOpen={options.terminalOpen}
         onToggleTerminal={options.onToggleTerminal}
         runtimeNoticeDockNode={sidebarRuntimeNoticeDockNode}
+        onOpenRuntimeNotice={
+          showGlobalRuntimeNoticeDock ? globalRuntimeNoticeDock.expand : undefined
+        }
+        runtimeNoticeHasError={
+          showGlobalRuntimeNoticeDock &&
+          globalRuntimeNoticeDock.status === "has-error"
+        }
+        showRuntimeNoticeMenuItem={
+          Boolean(showGlobalRuntimeNoticeDock && !options.isPhone)
+        }
       />
     </Profiler>
   );

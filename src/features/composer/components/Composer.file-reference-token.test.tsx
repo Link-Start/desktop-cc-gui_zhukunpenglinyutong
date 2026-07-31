@@ -65,11 +65,8 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
     onSend,
     providerProfileId,
     selectedEffort,
-    onNativeProviderTargetChange,
     onExecutionTargetChange,
     providerTargetPickerMode,
-    onSelectEngine,
-    onSelectModel,
     onSelectEffort,
   }: {
     text: string;
@@ -77,14 +74,6 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
     onSend: () => void;
     providerProfileId?: string | null;
     selectedEffort?: string | null;
-    onNativeProviderTargetChange?: (target: {
-      engine: "codex";
-      providerProfileId: string;
-      modelCatalogEntryId: string;
-      model: string;
-      providerProfileNameSnapshot: string;
-      providerProfileSource: "managed";
-    }) => void;
     onExecutionTargetChange?: (target: {
       engine: "claude" | "codex";
       providerProfileId?: string | null;
@@ -94,18 +83,14 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
       providerProfileNameSnapshot?: string | null;
       providerProfileSource?: "disk" | "managed" | null;
     }) => void;
-    providerTargetPickerMode?: "native" | "shared" | "create-session";
-    onSelectEngine?: (engine: "codex") => void;
-    onSelectModel?: (modelId: string) => void;
+    providerTargetPickerMode?: "shared" | "create-session";
     onSelectEffort?: (effort: string | null) => void;
   }) => (
     <>
       <div
         data-testid="composer-target-authority"
         data-atomic-target={String(Boolean(onExecutionTargetChange))}
-        data-picker-mode={providerTargetPickerMode ?? "native"}
-        data-engine-bypass={String(Boolean(onSelectEngine))}
-        data-model-bypass={String(Boolean(onSelectModel))}
+        data-picker-mode={providerTargetPickerMode ?? "create-session"}
       />
       <textarea
         value={text}
@@ -123,16 +108,16 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
       <button
         type="button"
         data-testid="request-provider-continuation"
-        onClick={() =>
-          onNativeProviderTargetChange?.({
+        onClick={() => {
+          onExecutionTargetChange?.({
             engine: "codex",
             providerProfileId: "provider-b",
             modelCatalogEntryId: "settings-reasoning",
             model: "deepseek-v4-pro",
             providerProfileNameSnapshot: "Provider B",
             providerProfileSource: "managed",
-          })
-        }
+          });
+        }}
       />
       <button
         type="button"
@@ -321,8 +306,6 @@ describe("Composer file reference token", () => {
     const authority = view.getByTestId("composer-target-authority");
     expect(authority.dataset.atomicTarget).toBe("true");
     expect(authority.dataset.pickerMode).toBe("create-session");
-    expect(authority.dataset.engineBypass).toBe("false");
-    expect(authority.dataset.modelBypass).toBe("false");
 
     await act(async () => {
       fireEvent.click(view.getByTestId("select-shared-target"));
@@ -408,8 +391,7 @@ describe("Composer file reference token", () => {
     ).toBeNull();
     const authority = view.getByTestId("composer-target-authority");
     expect(authority.dataset.atomicTarget).toBe("true");
-    expect(authority.dataset.engineBypass).toBe("false");
-    expect(authority.dataset.modelBypass).toBe("false");
+    expect(authority.dataset.pickerMode).toBe("shared");
   });
 
   it("keeps explicit local Provider and empty reasoning instead of old props", () => {

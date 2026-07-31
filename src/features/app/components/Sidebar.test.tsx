@@ -142,14 +142,15 @@ describe("Sidebar", () => {
     expect(onRequestRootSessionFolderDraft).toHaveBeenCalledWith("ws-1");
   });
 
-  it("renders the runtime notice entry in the same bottom action group as settings", () => {
+  it("keeps runtime notice dock anchored in the bottom nav without an outer bubble entry", () => {
     const { container } = render(
       <Sidebar
         {...baseProps}
+        showRuntimeNoticeMenuItem
         runtimeNoticeDockNode={
-          <button type="button" className="global-runtime-notice-dock-bubble">
-            Runtime notice
-          </button>
+          <div className="global-runtime-notice-dock-shell is-menu-anchored">
+            <span className="global-runtime-notice-dock-anchor" />
+          </div>
         }
       />,
     );
@@ -157,12 +158,39 @@ describe("Sidebar", () => {
     const bottomNav = container.querySelector(".sidebar-bottom-nav");
     expect(bottomNav).toBeTruthy();
     const settingsButton = bottomNav?.querySelector(".sidebar-primary-nav-item-bottom");
-    const runtimeNoticeButton = bottomNav?.querySelector(".global-runtime-notice-dock-bubble");
+    const runtimeNoticeBubble = bottomNav?.querySelector(".global-runtime-notice-dock-bubble");
+    const runtimeNoticeAnchor = bottomNav?.querySelector(
+      ".global-runtime-notice-dock-shell.is-menu-anchored",
+    );
     expect(settingsButton).toBeTruthy();
-    expect(runtimeNoticeButton).toBeTruthy();
-    expect(
-      settingsButton?.compareDocumentPosition(runtimeNoticeButton as Node),
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(runtimeNoticeBubble).toBeNull();
+    expect(runtimeNoticeAnchor).toBeTruthy();
+  });
+
+  it("opens runtime notice from the settings secondary menu", async () => {
+    const onOpenRuntimeNotice = vi.fn();
+    const { container } = render(
+      <Sidebar
+        {...baseProps}
+        showRuntimeNoticeMenuItem
+        onOpenRuntimeNotice={onOpenRuntimeNotice}
+      />,
+    );
+
+    const settingsToggle = container.querySelector(".sidebar-primary-nav-item-bottom");
+    expect(settingsToggle).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(settingsToggle as Element);
+    });
+
+    const dropdown = container.querySelector(".sidebar-settings-dropdown");
+    expect(dropdown).toBeTruthy();
+    const runtimeNoticeItem = within(dropdown as HTMLElement).getByRole("menuitem", {
+      name: "Runtime Notice",
+    });
+    fireEvent.click(runtimeNoticeItem);
+    expect(onOpenRuntimeNotice).toHaveBeenCalledTimes(1);
+    expect(container.querySelector(".sidebar-settings-dropdown")).toBeNull();
   });
 
   it("marks the macOS sidebar titlebar placeholder as a drag region", () => {

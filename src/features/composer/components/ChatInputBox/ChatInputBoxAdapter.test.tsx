@@ -2036,7 +2036,7 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     });
   });
 
-  it('keeps gemini and opencode provider options enabled in native sessions', async () => {
+  it('keeps gemini and opencode provider options enabled outside shared sessions', async () => {
     renderAdapter({
       isSharedSession: false,
       engines: [
@@ -2064,8 +2064,7 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
   it('does not expose legacy engine/model callbacks inside shared sessions', async () => {
     renderAdapter({
       isSharedSession: true,
-      onSelectEngine: vi.fn(),
-      onSelectModel: vi.fn(),
+      onExecutionTargetChange: vi.fn(),
     });
 
     await waitFor(() => expect(mockState.latestProps).toBeTruthy());
@@ -2084,8 +2083,6 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     renderAdapter({
       isSharedSession: false,
       providerTargetPickerMode: 'create-session',
-      onSelectEngine: vi.fn(),
-      onSelectModel: vi.fn(),
       onExecutionTargetChange: vi.fn(),
     });
 
@@ -2103,20 +2100,22 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     expect(latest.onExecutionTargetChange).toEqual(expect.any(Function));
   });
 
-  it('routes kimi provider selection to the kimi engine', async () => {
-    const onSelectEngine = vi.fn();
-    renderAdapter({ selectedEngine: 'claude', onSelectEngine });
+  it('defaults conversation sessions to the home-style atomic create-session picker', async () => {
+    renderAdapter({
+      isSharedSession: false,
+      onExecutionTargetChange: vi.fn(),
+    });
 
     await waitFor(() => expect(mockState.latestProps).toBeTruthy());
 
     const latest = mockState.latestProps as {
+      providerTargetPickerMode?: string;
       onProviderSelect?: (providerId: string) => void;
+      onModelSelect?: (modelId: string) => void;
     };
-    act(() => {
-      latest.onProviderSelect?.('kimi');
-    });
-
-    expect(onSelectEngine).toHaveBeenCalledWith('kimi');
+    expect(latest.providerTargetPickerMode).toBe('create-session');
+    expect(latest.onProviderSelect).toBeUndefined();
+    expect(latest.onModelSelect).toBeUndefined();
   });
 
   it('reports kimi as the current provider when the kimi engine is selected', async () => {

@@ -51,7 +51,6 @@ import {
   useUndoRedoHistory,
 } from './hooks/index.js';
 import { useAtomicProviderTargetCatalog } from './hooks/useProviderTargetCatalogOwners';
-import { isSameProviderExecutionProfile } from './selectors/ModelSelect';
 import {
   commandToDropdownItem,
   fileReferenceProvider,
@@ -188,8 +187,8 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       currentProviderProfileId,
       executionTarget,
       onExecutionTargetChange,
-      onNativeProviderTargetChange,
-      providerTargetPickerMode = 'native',
+      // Atomic 双栏：shared catalog 或 create-session 投影。
+      providerTargetPickerMode = 'create-session',
       providerAvailability,
       providerVersions,
       providerStatusLabels,
@@ -217,8 +216,6 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       onAddAttachment,
       onRemoveAttachment,
       onModeSelect,
-      onModelSelect,
-      onProviderSelect,
       reasoningEffort = null,
       reasoningOptions,
       onReasoningChange,
@@ -280,8 +277,6 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     ref: React.ForwardedRef<ChatInputBoxHandle>
   ) => {
     const { t } = useTranslation();
-    const usesAtomicProviderTargetPicker =
-      providerTargetPickerMode !== 'native';
 
     // Open source banner state (show once, dismiss permanently)
     const BANNER_DISMISSED_KEY = 'openSourceBannerDismissed';
@@ -380,12 +375,9 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       [modelStorageSnapshot],
     );
     const atomicProviderTargetCatalog = useAtomicProviderTargetCatalog({
-      enabled: usesAtomicProviderTargetPicker,
+      enabled: true,
       workspaceId,
-      mode:
-        providerTargetPickerMode === 'create-session'
-          ? 'create-session'
-          : 'shared',
+      mode: providerTargetPickerMode,
       currentProvider: currentProvider as ProviderId,
       currentProviderProfileId,
       pluginCustomModels: atomicPluginCustomModels,
@@ -1334,54 +1326,11 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       [onModeSelect]
     );
 
-    /**
-     * Handle model select
-     */
-    const handleModelSelect = useCallback(
-      (modelId: string) => {
-        onModelSelect?.(modelId);
-      },
-      [onModelSelect]
-    );
-    const handleProviderModelSelect = useCallback(
-      (providerId: ProviderId, modelId: string) => {
-        if (providerId !== currentProvider) {
-          onProviderSelect?.(providerId);
-        }
-        onModelSelect?.(modelId);
-      },
-      [currentProvider, onModelSelect, onProviderSelect]
-    );
     const handleProviderTargetSelect = useCallback(
       (target: NonNullable<ChatInputBoxProps['executionTarget']>) => {
-        if (usesAtomicProviderTargetPicker) {
-          onExecutionTargetChange?.(target);
-          return;
-        }
-        if (
-          isSameProviderExecutionProfile(
-            currentProvider as ProviderId,
-            currentProviderProfileId,
-            target,
-          )
-        ) {
-          const selectedModelId =
-            target.modelCatalogEntryId ?? target.model;
-          if (selectedModelId) {
-            onModelSelect?.(selectedModelId);
-          }
-          return;
-        }
-        onNativeProviderTargetChange?.(target);
+        onExecutionTargetChange?.(target);
       },
-      [
-        currentProvider,
-        currentProviderProfileId,
-        onExecutionTargetChange,
-        onModelSelect,
-        onNativeProviderTargetChange,
-        usesAtomicProviderTargetPicker,
-      ],
+      [onExecutionTargetChange],
     );
     const handleOpenProviderModelSettings = useCallback(
       (providerId?: string) => {
@@ -1530,16 +1479,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         contextSourcesExpanded={contextSourcesExpanded}
         selectedModel={selectedModel}
         models={availableModels}
-        modelGroups={
-          !usesAtomicProviderTargetPicker && onProviderSelect
-            ? providerModelGroups
-            : undefined
-        }
-        targetGroups={
-          usesAtomicProviderTargetPicker
-            ? atomicProviderTargetCatalog.groups
-            : undefined
-        }
+        targetGroups={atomicProviderTargetCatalog.groups}
         executionTarget={executionTarget}
         onExecutionTargetChange={handleProviderTargetSelect}
         onOpenTargetCatalog={atomicProviderTargetCatalog.ensureProfiles}
@@ -1547,16 +1487,6 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         onReloadProviderConfig={atomicProviderTargetCatalog.reloadConfig}
         targetCatalogError={atomicProviderTargetCatalog.profileLoadError}
         currentProvider={currentProvider}
-        onModelSelect={
-          !usesAtomicProviderTargetPicker && onModelSelect
-            ? handleModelSelect
-            : undefined
-        }
-        onProviderModelSelect={
-          !usesAtomicProviderTargetPicker && onModelSelect && onProviderSelect
-            ? handleProviderModelSelect
-            : undefined
-        }
         onAddModel={
           onOpenModelSettings ? handleOpenProviderModelSettings : undefined
         }
@@ -1794,12 +1724,9 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
               onSubmit={handleSubmit}
               onStop={onStop}
               onModeSelect={handleModeSelect}
-              onModelSelect={
-                usesAtomicProviderTargetPicker ? undefined : handleModelSelect
-              }
-              onProviderSelect={
-                usesAtomicProviderTargetPicker ? undefined : onProviderSelect
-              }
+              // 模型/CLI 选择统一由 readiness Atomic 双栏 + executionTarget 承担。
+              onModelSelect={undefined}
+              onProviderSelect={undefined}
               onReasoningChange={onReasoningChange}
               onEnhancePrompt={handleEnhancePrompt}
               alwaysThinkingEnabled={alwaysThinkingEnabled}

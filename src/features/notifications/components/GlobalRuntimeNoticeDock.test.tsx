@@ -75,6 +75,24 @@ describe("GlobalRuntimeNoticeDock", () => {
     expect(indicator?.querySelector("svg")).toBeTruthy();
   });
 
+  it("hides the minimized bubble when entry is menu-anchored", () => {
+    render(
+      <GlobalRuntimeNoticeDock
+        notices={[]}
+        visibility="minimized"
+        status="idle"
+        onExpand={vi.fn()}
+        onMinimize={vi.fn()}
+        onClear={vi.fn()}
+        hideMinimizedTrigger
+      />,
+    );
+
+    expect(document.querySelector(".global-runtime-notice-dock-bubble")).toBeNull();
+    expect(document.querySelector(".global-runtime-notice-dock-shell.is-menu-anchored")).toBeTruthy();
+    expect(document.querySelector(".global-runtime-notice-dock-anchor")).toBeTruthy();
+  });
+
   it("keeps the minimized exclamation when the dock has errors", () => {
     render(
       <GlobalRuntimeNoticeDock

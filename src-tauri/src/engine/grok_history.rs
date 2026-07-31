@@ -21,6 +21,10 @@
 //!   Other types (`system`, unknown) are skipped. Lines carry no usage data.
 //! - Sidebar `first_message` prefers the first real user prompt text; Grok's
 //!   `generated_title` / `session_summary` is only a fallback.
+//! - Sidebar `updated_at` prefers `chat_history.jsonl` mtime over
+//!   `summary.json`'s `updated_at`. Grok CLI may bulk-rewrite summary metadata
+//!   (including `updated_at`) without new conversation activity; trusting the
+//!   summary stamp alone makes every row look like "刚刚".
 
 use chrono::DateTime;
 use serde::{Deserialize, Serialize};
@@ -108,6 +112,32 @@ fn parse_timestamp_millis(value: &str) -> Option<i64> {
     DateTime::parse_from_rfc3339(value)
         .ok()
         .map(|dt| dt.timestamp_millis())
+}
+
+fn file_mtime_millis(path: &Path) -> Option<i64> {
+    std::fs::metadata(path)
+        .ok()
+        .and_then(|metadata| metadata.modified().ok())
+        .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis() as i64)
+}
+
+/// Resolve the activity timestamp shown in the sidebar.
+///
+/// Prefer the conversation file mtime (`chat_history.jsonl`) over
+/// `summary.json`'s `updated_at`. Grok CLI has been observed bulk-rewriting
+/// summary metadata for many sessions at once without appending chat lines;
+/// using those stamps makes every visible row collapse to "刚刚".
+fn resolve_session_activity_millis(
+    chat_history_mtime_millis: Option<i64>,
+    summary_updated_at_millis: Option<i64>,
+    summary_mtime_millis: Option<i64>,
+    created_at_millis: i64,
+) -> i64 {
+    chat_history_mtime_millis
+        .or(summary_updated_at_millis)
+        .or(summary_mtime_millis)
+        .unwrap_or(created_at_millis)
 }
 
 fn truncate_chars(value: &str, max_chars: usize) -> String {
@@ -729,27 +759,28 @@ async fn build_summary_from_session_dir(
         .and_then(|raw| serde_json::from_str::<Value>(&raw).ok());
     let chat_history_raw = fs::read_to_string(&chat_history_path).await.ok();
 
-    let file_mtime_millis = std::fs::metadata(&chat_history_path)
-        .or_else(|_| std::fs::metadata(&summary_path))
-        .ok()
-        .and_then(|metadata| metadata.modified().ok())
-        .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|duration| duration.as_millis() as i64);
+    let chat_history_mtime_millis = file_mtime_millis(&chat_history_path);
+    let summary_mtime_millis = file_mtime_millis(&summary_path);
+    let fallback_file_mtime_millis = chat_history_mtime_millis.or(summary_mtime_millis);
 
     let created_at = summary_value
         .as_ref()
         .and_then(|summary| summary.get("created_at"))
         .and_then(|v| v.as_str())
         .and_then(parse_timestamp_millis)
-        .or(file_mtime_millis)
+        .or(fallback_file_mtime_millis)
         .unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
-    let updated_at = summary_value
+    let summary_updated_at = summary_value
         .as_ref()
         .and_then(|summary| summary.get("updated_at"))
         .and_then(|v| v.as_str())
-        .and_then(parse_timestamp_millis)
-        .or(file_mtime_millis)
-        .unwrap_or(created_at);
+        .and_then(parse_timestamp_millis);
+    let updated_at = resolve_session_activity_millis(
+        chat_history_mtime_millis,
+        summary_updated_at,
+        summary_mtime_millis,
+        created_at,
+    );
 
     let title = summary_value
         .as_ref()
@@ -949,9 +980,10 @@ pub async fn delete_grok_session(
 #[cfg(test)]
 mod tests {
     use super::{
-        first_user_prompt_text, is_grok_runtime_context_user_text, matches_workspace_path,
-        parse_grok_user_prompt_for_display, parse_messages_from_chat_history,
-        parse_timestamp_millis, strip_user_query_wrapper, url_decode_dir_name,
+        file_mtime_millis, first_user_prompt_text, is_grok_runtime_context_user_text,
+        matches_workspace_path, parse_grok_user_prompt_for_display, parse_messages_from_chat_history,
+        parse_timestamp_millis, resolve_session_activity_millis, strip_user_query_wrapper,
+        url_decode_dir_name,
     };
     use std::path::Path;
 
@@ -1190,6 +1222,49 @@ mod tests {
     }
 
     #[test]
+    fn session_activity_prefers_chat_mtime_over_bulk_summary_updated_at() {
+        // Grok CLI bulk-rewrote summary.updated_at for many idle sessions at the
+        // same instant. Chat history mtime still reflects real last activity.
+        let chat_mtime = 1_785_400_000_000;
+        let bulk_summary_updated_at = 1_785_488_000_000;
+        let summary_mtime = bulk_summary_updated_at;
+        let created_at = 1_785_300_000_000;
+        assert_eq!(
+            resolve_session_activity_millis(
+                Some(chat_mtime),
+                Some(bulk_summary_updated_at),
+                Some(summary_mtime),
+                created_at,
+            ),
+            chat_mtime,
+        );
+    }
+
+    #[test]
+    fn session_activity_falls_back_to_summary_when_chat_missing() {
+        let summary_updated_at = 1_785_400_000_000;
+        let summary_mtime = 1_785_400_000_100;
+        let created_at = 1_785_300_000_000;
+        assert_eq!(
+            resolve_session_activity_millis(
+                None,
+                Some(summary_updated_at),
+                Some(summary_mtime),
+                created_at,
+            ),
+            summary_updated_at,
+        );
+        assert_eq!(
+            resolve_session_activity_millis(None, None, Some(summary_mtime), created_at),
+            summary_mtime,
+        );
+        assert_eq!(
+            resolve_session_activity_millis(None, None, None, created_at),
+            created_at,
+        );
+    }
+
+    #[test]
     fn workspace_match_requires_variants() {
         assert!(!matches_workspace_path("/tmp", &[]));
         let _ = Path::new("/tmp");
@@ -1247,6 +1322,10 @@ mod tests {
         assert_eq!(listed[0].first_message, "hello");
         assert_eq!(listed[0].message_count, 2);
         assert_eq!(listed[0].engine.as_deref(), Some("grok"));
+        // Activity time follows chat_history mtime, not a stale/bulk summary stamp.
+        let chat_mtime = file_mtime_millis(&session_dir.join("chat_history.jsonl"))
+            .expect("chat history mtime");
+        assert_eq!(listed[0].updated_at, chat_mtime);
 
         let loaded = super::load_grok_session(
             &workspace,

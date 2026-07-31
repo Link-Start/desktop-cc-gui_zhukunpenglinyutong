@@ -16,6 +16,22 @@
   z-index: 5;
 }
 
+/* 入口收入设置二级菜单后：锚点不占位、不外显，仍作为展开面板的定位参照 */
+.sidebar-bottom-nav .global-runtime-notice-dock-shell.is-menu-anchored {
+  position: absolute;
+  width: 0;
+  height: 0;
+  flex: 0 0 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.global-runtime-notice-dock-anchor {
+  display: block;
+  width: 0;
+  height: 0;
+}
+
 .global-runtime-notice-dock-bubble {
   display: inline-flex;
   align-items: center;

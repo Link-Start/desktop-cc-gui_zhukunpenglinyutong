@@ -88,13 +88,7 @@
   box-shadow: none;
 }
 
-.thinking-block.is-live .reasoning-markdown-surface {
-  border-left-color: color-mix(
-    in srgb,
-    var(--status-success, #57d18c) 44%,
-    var(--color-thinking-border, var(--border-subtle))
-  );
-}
+/* live / 折叠完成态共用灰色左边线，不单独用 success 绿强调「思考中」 */
 
 .reasoning-markdown {
   font-size: var(--message-thinking-font-size, 11px);

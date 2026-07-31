@@ -104,6 +104,7 @@ vi.mock("react-i18next", () => ({
         "workspace.engineGrok": "Grok CLI",
         "sidebar.cliNotInstalled": "CLI not installed",
         "settings.title": "Settings",
+        "runtimeNotice.title": "Runtime Notice",
         "tabbar.primaryNavigation": "Primary navigation",
       };
       return translations[key] ?? key;

@@ -1864,14 +1864,6 @@ export function SettingsView({
           </button>
           <button
             type="button"
-            className={`settings-nav ${activeSection === "runtime-environment" ? "active" : ""}`}
-            onClick={() => setActiveSection("runtime-environment")}
-          >
-            <TerminalSquare aria-hidden />
-            {t("settings.sidebarRuntimeEnvironment")}
-          </button>
-          <button
-            type="button"
             className={`settings-nav ${activeSection === "other" ? "active" : ""}`}
             onClick={() => setActiveSection("other")}
           >

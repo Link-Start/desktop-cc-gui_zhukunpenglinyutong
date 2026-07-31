@@ -129,7 +129,7 @@ type ProviderTargetCatalogCommonOptions = {
   kimiDisabledReason: string;
 };
 
-/** 自定义模型按引擎注入(localStorage plugin models),与 session currentModels 解耦 */
+/** 自定义模型按引擎注入（localStorage plugin models） */
 export type PluginCustomModelsByEngine = Partial<
   Record<"claude" | "codex" | "gemini", ModelInfo[]>
 >;
@@ -140,25 +140,6 @@ type AtomicProviderTargetCatalogOptions =
     /** 各引擎 localStorage 自定义模型;添加后立即出现在 atomic 选择器 */
     pluginCustomModels?: PluginCustomModelsByEngine;
   };
-
-type NativeProviderTargetCatalogOptions =
-  ProviderTargetCatalogCommonOptions & {
-    currentModels: ModelInfo[];
-  };
-
-function isCurrentProviderProfile(
-  engine: "claude" | "codex" | "kimi" | "grok" | "opencode",
-  profileId: string,
-  currentProviderProfileId: string | null | undefined,
-): boolean {
-  if (currentProviderProfileId === profileId) {
-    return true;
-  }
-  if (currentProviderProfileId?.trim()) {
-    return false;
-  }
-  return DEFAULT_PROFILES[engine]?.[0]?.id === profileId;
-}
 
 function normalizeProfiles(
   engine: "claude" | "codex" | "kimi" | "grok" | "opencode",
@@ -277,7 +258,7 @@ function isLocalProviderProfile(
 }
 
 function initialLoadedModels(
-  mode: "shared" | "native" | "create-session",
+  mode: AtomicProviderTargetCatalogMode,
 ): Record<string, ModelInfo[]> {
   if (mode !== "shared") {
     return Object.fromEntries(modelCatalogCache);
@@ -414,21 +395,19 @@ function useProviderTargetCatalogOwner({
   workspaceId,
   mode = "shared",
   currentProvider,
-  currentProviderProfileId,
-  currentModels,
   pluginCustomModels,
   resolveProviderLabel,
-  kimiDisabledReason,
 }: {
   enabled: boolean;
   workspaceId?: string | null;
-  mode?: "shared" | "native" | "create-session";
+  mode?: AtomicProviderTargetCatalogMode;
   currentProvider: ProviderId;
+  /** 调用方仍可传入；Atomic groups 不再按 session binding 过滤。 */
   currentProviderProfileId?: string | null;
-  currentModels: ModelInfo[];
   pluginCustomModels?: PluginCustomModelsByEngine;
   resolveProviderLabel: (providerId: ProviderId) => string;
-  kimiDisabledReason: string;
+  /** 历史 API；Atomic 路径不再按 native 禁用 Kimi 行。 */
+  kimiDisabledReason?: string;
 }) {
   const [profiles, setProfiles] = useState<ProfileCatalog>(
     () => profileCatalogCache ?? DEFAULT_PROFILES,
@@ -617,15 +596,10 @@ function useProviderTargetCatalogOwner({
     if (!enabled) {
       return [];
     }
-    const engines =
-      mode === "native"
-        ? isProviderProfileEngine(currentProvider)
-          ? [currentProvider]
-          : []
-        : PROVIDER_PROFILE_ENGINES.filter(
-            (engine) =>
-              engine === currentProvider || !disabledCliEngineIds.has(engine),
-          );
+    const engines = PROVIDER_PROFILE_ENGINES.filter(
+      (engine) =>
+        engine === currentProvider || !disabledCliEngineIds.has(engine),
+    );
     return engines.map((engine) => ({
       providerId: engine,
       providerLabel: resolveProviderLabel(engine),
@@ -633,32 +607,20 @@ function useProviderTargetCatalogOwner({
       disabledReason: undefined,
       profiles: (profiles[engine] ?? []).map((profile) => {
         const key = modelCatalogKey(engine, profile.id);
-        const isCurrentBinding =
-          currentProvider === engine &&
-          isCurrentProviderProfile(
-            engine,
-            profile.id,
-            currentProviderProfileId,
-          );
-        const canUseCurrentModels =
-          mode === "native" && isCurrentBinding;
         const pluginModelsForEngine =
           engine === "claude" || engine === "codex"
             ? (pluginCustomModels?.[engine] ?? EMPTY_MODELS)
             : EMPTY_MODELS;
-        // native:会话当前列表里的 custom;atomic:localStorage 插件自定义模型
-        const customModels = canUseCurrentModels
-          ? currentModels.filter((model) => model.source === "custom")
-          : pluginModelsForEngine;
+        // Atomic：自定义模型来自 localStorage plugin models，scoped catalog 按 binding 加载。
         const configuredModels =
           loadedModels[key] ??
           (mode === "shared" &&
           isLocalProviderProfile(engine, profile.id)
             ? undefined
             : modelCatalogCache.get(key)) ??
-          (canUseCurrentModels ? currentModels : []);
+          [];
         const mergedModels = mergeProviderCatalogModels(
-          customModels,
+          pluginModelsForEngine,
           configuredModels,
           discoveredModelCatalogCache.get(key) ?? [],
         );
@@ -666,20 +628,13 @@ function useProviderTargetCatalogOwner({
           id: profile.id,
           label: profile.name,
           source: profile.source,
-          enabled:
-            mode !== "native" || engine !== "kimi" || isCurrentBinding,
-          disabledReason:
-            mode === "native" && engine === "kimi" && !isCurrentBinding
-              ? kimiDisabledReason
-              : undefined,
-          models:
-            mode === "native"
-              ? mergedModels
-              : filterAtomicProviderProfileModels(
-                  engine,
-                  profile.id,
-                  mergedModels,
-                ),
+          enabled: true,
+          disabledReason: undefined,
+          models: filterAtomicProviderProfileModels(
+            engine,
+            profile.id,
+            mergedModels,
+          ),
           loading: loadingBindings.has(key),
           reloadingConfig: catalogActions.has(`reload-config:${key}`),
           discoveringModels: catalogActions.has(`discover-models:${key}`),
@@ -689,13 +644,10 @@ function useProviderTargetCatalogOwner({
       }),
     }));
   }, [
-    currentModels,
     currentProvider,
-    currentProviderProfileId,
     catalogActions,
     disabledCliEngineIds,
     enabled,
-    kimiDisabledReason,
     loadedModels,
     loadingBindings,
     modelErrors,
@@ -719,9 +671,8 @@ function useProviderTargetCatalogOwner({
 /**
  * Atomic 双栏 catalog owner。
  *
- * 不接收 Native session `currentModels`；引擎/渠道 catalog 仍按
- * `engine + providerProfileId` 拉取。自定义模型单独经 `pluginCustomModels`
- * 注入,保证「添加模型」后当前页选择器立刻可见。
+ * 引擎/渠道 catalog 按 `engine + providerProfileId` 拉取。自定义模型单独经
+ * `pluginCustomModels` 注入，保证「添加模型」后当前页选择器立刻可见。
  */
 export function useAtomicProviderTargetCatalog({
   mode,
@@ -731,24 +682,7 @@ export function useAtomicProviderTargetCatalog({
   return useProviderTargetCatalogOwner({
     ...options,
     mode,
-    currentModels: EMPTY_MODELS,
     pluginCustomModels,
-  });
-}
-
-/**
- * Native 单栏 catalog owner。
- *
- * 仅该 owner 可以投影当前 Session 的 Models，并且只投影到当前 CLI/Profile。
- */
-export function useNativeProviderTargetCatalog({
-  currentModels,
-  ...options
-}: NativeProviderTargetCatalogOptions) {
-  return useProviderTargetCatalogOwner({
-    ...options,
-    mode: "native",
-    currentModels,
   });
 }
 

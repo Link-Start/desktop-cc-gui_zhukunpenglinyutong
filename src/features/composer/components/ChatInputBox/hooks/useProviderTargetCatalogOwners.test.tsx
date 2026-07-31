@@ -6,7 +6,6 @@ import {
   isProviderProfileEngine,
   resetProviderTargetCatalogForTests,
   useAtomicProviderTargetCatalog,
-  useNativeProviderTargetCatalog,
 } from "./useProviderTargetCatalogOwners";
 import { buildProviderExecutionTarget } from "../selectors/ModelSelect";
 import { seedCliEngineVisibility } from "../../../hooks/cliEngineVisibilityStore";
@@ -417,7 +416,7 @@ describe("Provider target catalog owners", () => {
     );
   });
 
-  it("keeps public fallback rows available in the Native owner", async () => {
+  it("keeps public fallback rows available in the Atomic owner", async () => {
     getEngineModelsMock.mockResolvedValueOnce([
       {
         id: "provider-scoped",
@@ -434,14 +433,15 @@ describe("Provider target catalog owners", () => {
         description: "",
         isDefault: false,
         providerProfileId: null,
+        source: "fallback",
       },
     ]);
     const { result } = renderHook(() =>
-      useNativeProviderTargetCatalog({
+      useAtomicProviderTargetCatalog({
         enabled: true,
+        mode: "create-session",
         currentProvider: "codex",
         currentProviderProfileId: "codex-b",
-        currentModels: [],
         resolveProviderLabel: (provider) => provider,
         kimiDisabledReason: "source only",
       }),
@@ -453,9 +453,9 @@ describe("Provider target catalog owners", () => {
     });
 
     expect(
-      result.current.groups[0]?.profiles.find(
-        (profile) => profile.id === "codex-b",
-      )?.models,
+      result.current.groups
+        .find((group) => group.providerId === "codex")
+        ?.profiles.find((profile) => profile.id === "codex-b")?.models,
     ).toEqual([
       expect.objectContaining({ id: "provider-scoped" }),
       expect.objectContaining({ id: "public-fallback" }),
@@ -604,15 +604,15 @@ describe("Provider target catalog owners", () => {
     expect(getEngineModelsMock).toHaveBeenCalledOnce();
   });
 
-  it("does not reuse a Native local request for a Shared authoritative refresh", async () => {
+  it("does not reuse a create-session local request for a Shared authoritative refresh", async () => {
     type EngineModels = Awaited<ReturnType<typeof getEngineModels>>;
-    let resolveNative: ((models: EngineModels) => void) | undefined;
+    let resolveCreateSession: ((models: EngineModels) => void) | undefined;
     let resolveShared: ((models: EngineModels) => void) | undefined;
     getEngineModelsMock
       .mockImplementationOnce(
         () =>
           new Promise((resolve) => {
-            resolveNative = resolve;
+            resolveCreateSession = resolve;
           }),
       )
       .mockImplementationOnce(
@@ -621,12 +621,12 @@ describe("Provider target catalog owners", () => {
             resolveShared = resolve;
           }),
       );
-    const nativeHook = renderHook(() =>
-      useNativeProviderTargetCatalog({
+    const createSessionHook = renderHook(() =>
+      useAtomicProviderTargetCatalog({
         enabled: true,
+        mode: "create-session",
         currentProvider: "claude",
         currentProviderProfileId: null,
-        currentModels: [],
         resolveProviderLabel: (provider) => provider,
         kimiDisabledReason: "source only",
       }),
@@ -643,7 +643,7 @@ describe("Provider target catalog owners", () => {
     );
 
     await act(async () => {
-      const nativeRequest = nativeHook.result.current.ensureModels(
+      const createSessionRequest = createSessionHook.result.current.ensureModels(
         "claude",
         "__local_settings_json__",
       );
@@ -660,9 +660,9 @@ describe("Provider target catalog owners", () => {
         providerProfileId: "__local_settings_json__",
         forceRefresh: true,
       });
-      resolveNative?.([]);
+      resolveCreateSession?.([]);
       resolveShared?.([]);
-      await Promise.all([nativeRequest, sharedRequest]);
+      await Promise.all([createSessionRequest, sharedRequest]);
     });
   });
 
@@ -765,99 +765,6 @@ describe("Provider target catalog owners", () => {
     ).toEqual(expect.arrayContaining([expect.objectContaining({ id: "claude-a" })]));
   });
 
-  it("projects only the current CLI in native mode", async () => {
-    const { result } = renderHook(() =>
-      useNativeProviderTargetCatalog({
-        enabled: true,
-        currentProvider: "codex",
-        currentProviderProfileId: "codex-b",
-        currentModels: [{ id: "current-model", label: "Current model" }],
-        resolveProviderLabel: (provider) => provider,
-        kimiDisabledReason: "source only",
-      }),
-    );
-
-    await act(async () => {
-      await result.current.ensureProfiles();
-    });
-
-    expect(result.current.groups).toHaveLength(1);
-    expect(result.current.groups[0]).toMatchObject({
-      providerId: "codex",
-      enabled: true,
-      profiles: expect.arrayContaining([
-        expect.objectContaining({
-          id: "codex-b",
-          models: [{ id: "current-model", label: "Current model" }],
-        }),
-      ]),
-    });
-  });
-
-  it("keeps only the current Kimi profile selectable in native mode", async () => {
-    const { result } = renderHook(() =>
-      useNativeProviderTargetCatalog({
-        enabled: true,
-        currentProvider: "kimi",
-        currentProviderProfileId: "kimi-c",
-        currentModels: [{ id: "kimi-model", label: "Kimi model" }],
-        resolveProviderLabel: (provider) => provider,
-        kimiDisabledReason: "source only",
-      }),
-    );
-
-    await act(async () => {
-      await result.current.ensureProfiles();
-    });
-
-    const kimiGroup = result.current.groups[0];
-    expect(kimiGroup).toMatchObject({ providerId: "kimi", enabled: true });
-    expect(
-      kimiGroup?.profiles.find((profile) => profile.id === "kimi-c"),
-    ).toMatchObject({ enabled: true });
-    expect(
-      kimiGroup?.profiles.find(
-        (profile) => profile.id === "__local_config_toml__",
-      ),
-    ).toMatchObject({ enabled: false, disabledReason: "source only" });
-  });
-
-  it.each([
-    ["grok", "grok-d"],
-    ["opencode", "opencode-e"],
-  ] as const)(
-    "scopes a native %s session to its current CLI provider group",
-    async (engine, providerProfileId) => {
-      const currentModel = {
-        id: `${engine}-current`,
-        label: `${engine} current`,
-      };
-      const { result } = renderHook(() =>
-        useNativeProviderTargetCatalog({
-          enabled: true,
-          currentProvider: engine,
-          currentProviderProfileId: providerProfileId,
-          currentModels: [currentModel],
-          resolveProviderLabel: (provider) => provider,
-          kimiDisabledReason: "source only",
-        }),
-      );
-
-      await act(async () => {
-        await result.current.ensureProfiles();
-      });
-
-      expect(result.current.groups.map((group) => group.providerId)).toEqual([
-        engine,
-      ]);
-      expect(
-        result.current.groups[0]?.profiles.find(
-          (profile) => profile.id === providerProfileId,
-        )?.models,
-      ).toEqual([currentModel]);
-    },
-  );
-
   it("merges plugin custom models into atomic engine groups without session currentModels", async () => {
     const { result } = renderHook(() =>
       useAtomicProviderTargetCatalog({
@@ -888,17 +795,17 @@ describe("Provider target catalog owners", () => {
     );
   });
 
-  it("reloads only the configured slice and preserves current custom models", async () => {
+  it("reloads only the configured slice and preserves plugin custom models", async () => {
     const { result } = renderHook(() =>
-      useNativeProviderTargetCatalog({
+      useAtomicProviderTargetCatalog({
         enabled: true,
+        mode: "create-session",
         workspaceId: "ws-1",
         currentProvider: "codex",
-        currentProviderProfileId: "codex-b",
-        currentModels: [
-          { id: "custom-model", label: "Custom", source: "custom" },
-          { id: "stale-model", label: "Stale", source: "provider-config" },
-        ],
+        currentProviderProfileId: "__disk__",
+        pluginCustomModels: {
+          codex: [{ id: "custom-model", label: "Custom", source: "custom" }],
+        },
         resolveProviderLabel: (provider) => provider,
         kimiDisabledReason: "source only",
       }),
@@ -914,16 +821,18 @@ describe("Provider target catalog owners", () => {
 
     await act(async () => {
       await result.current.ensureProfiles();
-      await result.current.reloadConfig("codex", "codex-b");
+      await result.current.reloadConfig("codex", "__disk__");
     });
 
     expect(getEngineModelsMock).toHaveBeenLastCalledWith("codex", {
-      providerProfileId: "codex-b",
+      providerProfileId: "__disk__",
       forceRefresh: true,
     });
-    expect(result.current.groups[0]?.profiles.find(
-      (profile) => profile.id === "codex-b",
-    )?.models).toEqual([
+    expect(
+      result.current.groups
+        .find((group) => group.providerId === "codex")
+        ?.profiles.find((profile) => profile.id === "__disk__")?.models,
+    ).toEqual([
       expect.objectContaining({ id: "custom-model" }),
       expect.objectContaining({ id: "configured-model" }),
     ]);
@@ -981,12 +890,15 @@ describe("Provider target catalog owners", () => {
       ],
     });
     const { result } = renderHook(() =>
-      useNativeProviderTargetCatalog({
+      useAtomicProviderTargetCatalog({
         enabled: true,
+        mode: "create-session",
         workspaceId: "ws-1",
         currentProvider: "codex",
-        currentProviderProfileId: "codex-b",
-        currentModels: [{ id: "custom-model", label: "Custom", source: "custom" }],
+        currentProviderProfileId: "__disk__",
+        pluginCustomModels: {
+          codex: [{ id: "custom-model", label: "Custom", source: "custom" }],
+        },
         resolveProviderLabel: (provider) => provider,
         kimiDisabledReason: "source only",
       }),
@@ -994,13 +906,15 @@ describe("Provider target catalog owners", () => {
 
     await act(async () => {
       await result.current.ensureProfiles();
-      await result.current.discoverModels("codex", "codex-b");
+      await result.current.discoverModels("codex", "__disk__");
     });
 
-    expect(discoverCodexModelsMock).toHaveBeenCalledWith("ws-1", "codex-b");
-    expect(result.current.groups[0]?.profiles.find(
-      (profile) => profile.id === "codex-b",
-    )?.models).toEqual([
+    expect(discoverCodexModelsMock).toHaveBeenCalledWith("ws-1", "__disk__");
+    expect(
+      result.current.groups
+        .find((group) => group.providerId === "codex")
+        ?.profiles.find((profile) => profile.id === "__disk__")?.models,
+    ).toEqual([
       expect.objectContaining({ id: "custom-model" }),
       expect.objectContaining({ id: "runtime-model", source: "runtime" }),
     ]);

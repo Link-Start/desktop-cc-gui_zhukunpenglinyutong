@@ -49,6 +49,7 @@ import {
   CLAUDE_LOCAL_PROVIDER_PROFILE_NAME,
   CODEX_DISK_PROVIDER_PROFILE_ID,
   CODEX_DISK_PROVIDER_PROFILE_NAME,
+  LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
 } from "../../threads/constants/codexProviderProfiles";
 import { computeDictationInsertion } from "../../../utils/dictation";
 import { useComposerAutocompleteState } from "../hooks/useComposerAutocompleteState";
@@ -56,8 +57,12 @@ import { useComposerDraft } from "../hooks/composerDraftStore";
 import { ChatInputBoxAdapter } from "./ChatInputBox/ChatInputBoxAdapter";
 import type { ChatInputBoxHandle } from "./ChatInputBox/ChatInputBoxAdapter";
 import {
+  isSameProviderExecutionProfile,
+} from "./ChatInputBox/selectors/ModelSelect";
+import {
   accessModeToPermissionMode,
   permissionModeToAccessMode,
+  type ProviderId,
 } from "./ChatInputBox/types";
 import {
   ClaudeRewindConfirmDialog,
@@ -741,11 +746,37 @@ function ComposerImpl({
       onCreationTargetEngineChange?.(null);
     };
   }, [createSessionTargetPicker, onCreationTargetEngineChange]);
+  // Native 会话合成 ExecutionTarget，驱动与首页相同的 Atomic 双栏选中态（含渠道）。
+  const nativeSessionTarget = useMemo((): ExecutionTarget | null => {
+    if (isSharedSession || createSessionTargetPicker || !selectedEngine) {
+      return null;
+    }
+    const modelId = selectedModelId?.trim() || null;
+    const profileId = providerProfileId?.trim() || null;
+    return {
+      engine: selectedEngine,
+      providerProfileId: profileId,
+      modelCatalogEntryId: modelId,
+      model: modelId,
+      reasoning: selectedEffort ? { effort: selectedEffort } : null,
+      providerProfileNameSnapshot: profileId
+        ? null
+        : LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
+      providerProfileSource: profileId ? "managed" : "disk",
+    };
+  }, [
+    createSessionTargetPicker,
+    isSharedSession,
+    providerProfileId,
+    selectedEffort,
+    selectedEngine,
+    selectedModelId,
+  ]);
   const selectedAtomicTarget = isSharedSession
     ? selectedSharedTarget
     : createSessionTargetPicker
       ? effectiveCreationTarget
-      : null;
+      : nativeSessionTarget;
   const imageAttachEngine = useMemo((): EngineType | null => {
     if (
       isSharedSession &&
@@ -900,6 +931,66 @@ function ComposerImpl({
       });
     },
     [activeThreadId, activeWorkspaceId, isSharedSession],
+  );
+  /**
+   * Native 会话也走首页同款 Atomic 双栏 picker（含「本地配置」渠道）。
+   * 同 engine+profile 只切模型；跨 managed profile 走续接；其余走 engine/model 切换。
+   */
+  const handleNativeAtomicTargetChange = useCallback(
+    (target: ExecutionTarget) => {
+      if (isSharedSession || createSessionTargetPicker || !selectedEngine) {
+        return;
+      }
+      const currentProvider = selectedEngine as ProviderId;
+      const sameProfile = isSameProviderExecutionProfile(
+        currentProvider,
+        providerProfileId,
+        target,
+      );
+      if (sameProfile) {
+        const modelId =
+          target.modelCatalogEntryId?.trim() || target.model?.trim() || null;
+        if (modelId) {
+          onSelectModel(modelId);
+        }
+        const nextEffort = target.reasoning?.effort ?? null;
+        if (nextEffort !== selectedEffort) {
+          onSelectEffort(nextEffort);
+        }
+        return;
+      }
+      // Claude/Codex 切到 managed 渠道 → Native Provider Continuation
+      if (
+        (target.engine === "claude" || target.engine === "codex") &&
+        target.providerProfileId?.trim()
+      ) {
+        handleNativeProviderTargetChange(target);
+        return;
+      }
+      if (target.engine !== selectedEngine) {
+        onSelectEngine?.(target.engine);
+      }
+      const modelId =
+        target.modelCatalogEntryId?.trim() || target.model?.trim() || null;
+      if (modelId) {
+        onSelectModel(modelId);
+      }
+      const nextEffort = target.reasoning?.effort ?? null;
+      if (nextEffort !== selectedEffort) {
+        onSelectEffort(nextEffort);
+      }
+    },
+    [
+      createSessionTargetPicker,
+      handleNativeProviderTargetChange,
+      isSharedSession,
+      onSelectEffort,
+      onSelectEngine,
+      onSelectModel,
+      providerProfileId,
+      selectedEffort,
+      selectedEngine,
+    ],
   );
   const handleCreationTargetChange = useCallback(
     (target: ExecutionTarget) => {
@@ -2701,22 +2792,15 @@ function ComposerImpl({
                 selectedAtomicTarget?.engine ?? selectedEngine
               }
               isSharedSession={isSharedSession}
+              // 全场景统一首页 Atomic 双栏 picker（含「本地配置」渠道），
+              // 不再维护 conversation native 单栏/无渠道分叉。
               providerTargetPickerMode={
-                isSharedSession
+                isSharedSession && !createSessionTargetPicker
                   ? "shared"
-                  : createSessionTargetPicker
-                    ? "create-session"
-                    : "native"
+                  : "create-session"
               }
               threadId={activeThreadId}
               engines={engines}
-              onSelectEngine={
-                isSharedSession ||
-                createSessionTargetPicker ||
-                sharedTargetPickerLocked
-                  ? undefined
-                  : onSelectEngine
-              }
               models={models}
               providerModelCatalogs={providerModelCatalogs}
               providerProfileId={
@@ -2730,19 +2814,7 @@ function ComposerImpl({
                   ? handleSharedTargetChange
                   : createSessionTargetPicker
                     ? handleCreationTargetChange
-                  : undefined
-              }
-              onNativeProviderTargetChange={
-                !isSharedSession && !createSessionTargetPicker
-                  ? handleNativeProviderTargetChange
-                  : undefined
-              }
-              onSelectModel={
-                isSharedSession ||
-                createSessionTargetPicker ||
-                sharedTargetPickerLocked
-                  ? undefined
-                  : onSelectModel
+                    : handleNativeAtomicTargetChange
               }
               reasoningOptions={reasoningOptions}
               selectedEffort={
