@@ -429,6 +429,7 @@ vi.mock("./features/app/hooks/useUpdaterController", () => ({
   useUpdaterController: () => ({
     updaterState: null,
     startUpdate: createNoopFunction(),
+    checkForUpdates: createNoopFunction(),
     dismissUpdate: createNoopFunction(),
     handleTestNotificationSound: createNoopFunction(),
   }),

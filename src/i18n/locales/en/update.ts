@@ -4,6 +4,7 @@ const update = {
     title: "Update",
     checkingForUpdates: "Checking for updates...",
     updateAvailable: "A new version is available!",
+    availableAction: "Update available",
     upToDate: "You're up to date.",
     downloading: "Downloading update…",
     installing: "Installing update…",

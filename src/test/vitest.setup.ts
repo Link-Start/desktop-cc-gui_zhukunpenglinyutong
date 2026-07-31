@@ -97,6 +97,7 @@ vi.mock("react-i18next", () => ({
         "update.releaseNotesPage": "{{current}} / {{total}}",
         "update.releaseNotesEnglish": "English:",
         "update.releaseNotesChinese": "中文：",
+        "update.availableAction": "Update available",
         "common.later": "Later",
         "common.dismiss": "Dismiss",
         "common.retry": "Retry",

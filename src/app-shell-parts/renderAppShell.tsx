@@ -106,6 +106,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     cancelClonePrompt,
     cancelWorktreePrompt,
     centerMode,
+    checkForUpdates,
     chooseCloneCopiesFolder,
     clearCloneCopiesFolder,
     clonePrompt,
@@ -282,6 +283,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     showKanban,
     showNextReleaseNotes,
     showPreviousReleaseNotes,
+    startUpdate,
     showSpecHub,
     showWorkspaceHome,
     sidebarCollapsed,
@@ -301,6 +303,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     ungroupedLabel,
     updateCloneCopyName,
     updateToastNode,
+    updaterState,
     updateWorkspaceCodexBin,
     updateWorkspaceSettings,
     updateWorktreeBaseRef,
@@ -741,10 +744,13 @@ export function renderAppShell(ctx: RenderAppShellContext) {
             activeIndex={releaseNotesActiveIndex}
             loading={releaseNotesLoading}
             error={releaseNotesError}
+            updaterState={updaterState}
             onClose={closeReleaseNotes}
             onPrev={showPreviousReleaseNotes}
             onNext={showNextReleaseNotes}
             onRetry={retryReleaseNotesLoad}
+            onCheckForUpdates={checkForUpdates}
+            onStartUpdate={startUpdate}
           />
         </Suspense>
       ) : null}

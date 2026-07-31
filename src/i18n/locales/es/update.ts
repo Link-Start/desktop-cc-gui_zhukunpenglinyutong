@@ -7,6 +7,7 @@ const update = {
     "title": "Actualizar",
     "checkingForUpdates": "Buscando actualizaciones...",
     "updateAvailable": "¡Hay una nueva versión disponible!",
+    "availableAction": "Actualización disponible",
     "upToDate": "Estás al día.",
     "downloading": "Descargando actualización…",
     "installing": "Instalando actualización…",

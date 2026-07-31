@@ -319,6 +319,7 @@ export function AppShell() {
   const {
     updaterState,
     startUpdate,
+    checkForUpdates,
     dismissUpdate,
     handleTestNotificationSound,
   } = useUpdaterController({
@@ -1700,6 +1701,7 @@ export function AppShell() {
       clearDictationTranscript,
       clearDraftForThread,
       clearGitRootCandidates,
+      checkForUpdates,
       clonePrompt,
       closePlanPanel,
       closeReleaseNotes,

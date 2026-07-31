@@ -119,6 +119,7 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "clearGitRootCandidates",
     "clonePrompt",
     "closePlanPanel",
+    "checkForUpdates",
     "closeReleaseNotes",
     "closeReviewPrompt",
     "closeSettings",
