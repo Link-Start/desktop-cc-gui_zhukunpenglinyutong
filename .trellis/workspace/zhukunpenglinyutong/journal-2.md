@@ -892,3 +892,48 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 70: Grok 图片输入与 Claude 模型目录
+
+**Date**: 2026-07-31
+**Task**: Grok 图片输入与 Claude 模型目录
+**Branch**: `chore/bump-version-0.7.12`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 领域 | 变更 |
+|------|------|
+| Grok engine | 多模态从 `--prompt-json` 改为 `--prompt-file` 暂存 ACP blocks，避免 ARG_MAX；RAII 清理 staging 文件 |
+| Claude 模型 | 内置目录同步 Fable 5 / Opus 4.8 / Sonnet 5 等；支持 `ANTHROPIC_DEFAULT_FABLE_MODEL` 与 fable 映射 |
+| Composer UI | ModelSelect 展示映射后品牌图标、CLI 设置入口；i18n 与 ModelMappingSettings 同步 |
+| OpenSpec | 更新 grok-cli-image-input-capability-gap 与 capability gap 报告 |
+
+**主要文件**:
+- `src-tauri/src/engine/grok.rs`
+- `src-tauri/src/engine/status.rs`
+- `src/features/models/constants.ts`
+- `src/features/composer/components/ChatInputBox/selectors/ModelSelect.tsx`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `78a09bb6a3b2c73b173b7b856b92280cc1bc2e19` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

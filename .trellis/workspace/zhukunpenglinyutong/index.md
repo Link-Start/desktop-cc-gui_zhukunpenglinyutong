@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 69
-- **Last Active**: 2026-07-30
+- **Total Sessions**: 70
+- **Last Active**: 2026-07-31
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~894 | Active |
+| `journal-2.md` | ~939 | Active |
 | `journal-1.md` | ~1997 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 70 | 2026-07-31 | Grok 图片输入与 Claude 模型目录 | `78a09bb6a3b2c73b173b7b856b92280cc1bc2e19` | `chore/bump-version-0.7.12` |
 | 69 | 2026-07-30 | 重做供应商设置面板并支持 CC Switch 文件导入 | `d7a657f5a` | `chore/bump-version-0.7.12` |
 | 68 | 2026-07-30 | 统一设置页内容列宽为 980px | `75b9ee299` | `chore/bump-version-0.7.12` |
 | 67 | 2026-07-30 | 设置页重构为无顶栏居中窄列布局 | `cc6ae1007` | `chore/bump-version-0.7.12` |
