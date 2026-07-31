@@ -167,3 +167,43 @@ VendorModelManagerDialogHost 在 AppShell 打开时未加载 settings.css，导�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1258: 修复冷启动 React #185 useModels effort 双写
+
+**Date**: 2026-08-01
+**Task**: 修复冷启动 React #185 useModels effort 双写
+**Branch**: `bump-version-0.7.14`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 内容 |
+|----|------|
+| 问题 | 冷启动 Maximum update depth (#185)，AppShell 被 ErrorBoundary 替换 |
+| 根因 | useModels selection layout 与 effort backfill 对 selectedEffort 互写 |
+| 修复 | resolveModelEffort/planComposerModelSelection 单源；幂等 commit；删互踩 effect；snapshot ref |
+| 回归 | useModels.test.tsx 23 通过 |
+| 文档 | docs/analysis/react-185-maximum-update-depth-playbook.md（可追加 case/backlog） |
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4c5e97c8e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
