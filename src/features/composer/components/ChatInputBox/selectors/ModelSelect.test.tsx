@@ -657,6 +657,82 @@ describe("ModelSelect", () => {
     expect(buttonText).not.toContain("Sonnet 4.6");
   });
 
+  it("does not rewrite non-Claude engine labels with Claude main mapping", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    window.localStorage.setItem(
+      STORAGE_KEYS.CLAUDE_MODEL_MAPPING,
+      JSON.stringify({ main: "deepseek-v4-pro" }),
+    );
+
+    render(
+      <ModelSelect
+        value="gpt-5.6-sol"
+        currentProvider="codex"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        models={[
+          { id: "gpt-5.6-sol", label: "gpt-5.6-sol" },
+          { id: "gpt-5.6-terra", label: "gpt-5.6-terra" },
+          { id: "gpt-5.6-luna", label: "gpt-5.6-luna" },
+          { id: "gpt-5.5", label: "gpt-5.5" },
+        ]}
+        modelGroups={[
+          {
+            providerId: "codex",
+            providerLabel: "Codex CLI",
+            enabled: true,
+            models: [
+              {
+                id: "gpt-5.6-sol",
+                label: "gpt-5.6-sol",
+                description: "Latest frontier agentic coding model.",
+              },
+              {
+                id: "gpt-5.6-terra",
+                label: "gpt-5.6-terra",
+                description: "Balanced agentic coding model for everyday work.",
+              },
+              {
+                id: "gpt-5.6-luna",
+                label: "gpt-5.6-luna",
+                description: "Fast and affordable agentic coding model.",
+              },
+              {
+                id: "gpt-5.5",
+                label: "gpt-5.5",
+                description:
+                  "Frontier model for complex coding, research, and real-world work.",
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: "chat.currentModel:gpt-5.6-sol",
+    });
+    expect(trigger.textContent).not.toContain("deepseek-v4-pro");
+
+    await user.click(trigger);
+    await user.hover(
+      await screen.findByRole("menuitem", { name: /Codex CLI/ }),
+    );
+
+    for (const modelId of [
+      "gpt-5.6-sol",
+      "gpt-5.6-terra",
+      "gpt-5.6-luna",
+      "gpt-5.5",
+    ]) {
+      const item = await screen.findByRole("menuitem", {
+        name: new RegExp(modelId),
+      });
+      expect(item.textContent).toContain(modelId);
+      expect(item.textContent).not.toContain("deepseek-v4-pro");
+    }
+  });
+
   it("does not synthesize a missing Claude selected value as a fallback option", () => {
     render(
       <ModelSelect

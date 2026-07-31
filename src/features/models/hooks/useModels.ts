@@ -14,12 +14,6 @@ import {
   STORAGE_KEYS as PROVIDER_STORAGE_KEYS,
   validateCodexCustomModels,
 } from "../../composer/types/provider";
-import {
-  STORAGE_KEYS,
-  getModelMapping,
-  applyModelMapping as applyMappingToDisplayName,
-  resolveModelMappingValue,
-} from "../constants";
 import { startupOrchestrator } from "../../startup-orchestration/utils/startupOrchestrator";
 
 type UseModelsOptions = {
@@ -288,30 +282,16 @@ export function useModels({
   const isConnected = Boolean(activeWorkspace?.connected);
   const activeWorkspaceIdRef = useRef<string | null>(workspaceId);
   activeWorkspaceIdRef.current = workspaceId;
+  // Codex catalog only — never apply Claude ANTHROPIC_* mapping here.
+  // modelCatalogVersion bumps when custom Codex models change in localStorage.
   const models = useMemo(() => {
     void modelMappingVersion;
-    const mapping = getModelMapping();
-    const mappedModels = rawModels.map((model) => {
-      const mappedRuntime = resolveModelMappingValue(model.id, mapping);
-      return {
-        ...model,
-        // Keep catalog id; rewrite display + runtime model when mapping exists
-        // so picker labels/icons and --model both use the provider's real model.
-        displayName: applyMappingToDisplayName(
-          model.displayName,
-          model.id,
-          mapping,
-        ),
-        model: mappedRuntime ?? model.model,
-      };
-    });
-    return mergeCodexSelectableModels(mappedModels);
+    return mergeCodexSelectableModels(rawModels);
   }, [rawModels, modelMappingVersion]);
 
   // Listen for localStorage changes (cross-tab sync + custom events)
   useEffect(() => {
     const isRelevantStorageKey = (key: string | null | undefined) =>
-      key === STORAGE_KEYS.CLAUDE_MODEL_MAPPING ||
       key === PROVIDER_STORAGE_KEYS.CODEX_CUSTOM_MODELS;
 
     const handleStorageChange = (e: StorageEvent) => {
@@ -330,12 +310,8 @@ export function useModels({
     window.addEventListener("storage", handleStorageChange);
     window.addEventListener("localStorageChange", handleCustomStorageChange);
 
-    // Initial read of model mapping in case it was set before we started listening
-    const initialMapping = getModelMapping();
-    const hasMapping = Object.keys(initialMapping).length > 0;
-    const hasCustomCodexModels = readCustomCodexModelOptions().length > 0;
-    if (hasMapping || hasCustomCodexModels) {
-      // Trigger a re-apply of model mapping
+    // Initial read of custom Codex models in case they were set before we started listening
+    if (readCustomCodexModelOptions().length > 0) {
       setModelMappingVersion((v) => v + 1);
     }
 

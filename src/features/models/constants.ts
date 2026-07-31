@@ -91,17 +91,42 @@ function getMappingKeyForModel(modelId: string): keyof ModelMapping | undefined 
 }
 
 /**
- * Resolve the mapped runtime model name for a catalog entry.
- * Falls back to `main` when a tier-specific slot is empty (mirrors jetbrains).
+ * Claude ANTHROPIC_* remap 只作用于 Claude 目录槽位 / Claude 命名空间 id。
+ * Codex / Grok / Kimi 等引擎的 catalog id 绝不能回落到 mapping.main，
+ * 否则会出现「gpt-5.6-sol 全部显示成 deepseek-v4-pro」这类跨引擎污染。
+ */
+export function isClaudeModelMappingTarget(modelId: string): boolean {
+  const trimmed = modelId.trim();
+  if (!trimmed) {
+    return false;
+  }
+  if (getMappingKeyForModel(trimmed) !== undefined) {
+    return true;
+  }
+  const normalized = trimmed.toLowerCase();
+  return (
+    normalized.startsWith("claude-") ||
+    normalized.startsWith("settings-") ||
+    normalized === "main"
+  );
+}
+
+/**
+ * Resolve the mapped runtime model name for a Claude catalog entry.
+ * Falls back to `main` when a Claude tier-specific slot is empty (mirrors jetbrains).
+ * Non-Claude model ids always return null (mapping is Claude-scoped).
  */
 export function resolveModelMappingValue(
   modelId: string,
   mapping: ModelMapping,
 ): string | null {
+  if (!isClaudeModelMappingTarget(modelId)) {
+    return null;
+  }
   const key = getMappingKeyForModel(modelId);
   const candidates = [
     key ? mapping[key] : undefined,
-    // settings-main / unknown claude ids still fall back to main
+    // Claude tier / unknown claude-* ids fall back to main (ANTHROPIC_MODEL)
     key !== "main" ? mapping.main : undefined,
   ];
   for (const candidate of candidates) {
