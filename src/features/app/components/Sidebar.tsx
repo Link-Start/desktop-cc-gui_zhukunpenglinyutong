@@ -242,7 +242,6 @@ type SidebarProps = {
   runtimeNoticeDockNode?: ReactNode;
   /** 打开运行时提示（入口在设置二级菜单，不在侧栏底部外显） */
   onOpenRuntimeNotice?: () => void;
-  runtimeNoticeHasError?: boolean;
   showRuntimeNoticeMenuItem?: boolean;
 };
 
@@ -338,7 +337,6 @@ function SidebarImpl({
   topbarNode,
   runtimeNoticeDockNode = null,
   onOpenRuntimeNotice,
-  runtimeNoticeHasError = false,
   showRuntimeNoticeMenuItem = false,
 }: SidebarProps) {
   const { t } = useTranslation();
@@ -2280,7 +2278,6 @@ function SidebarImpl({
               onOpenSettings={onOpenSettings}
               onAppModeChange={onAppModeChange}
               onOpenRuntimeNotice={onOpenRuntimeNotice}
-              runtimeNoticeHasError={runtimeNoticeHasError}
               showRuntimeNotice={showRuntimeNoticeMenuItem}
             />
             {/* 锚点保留在侧栏底部供展开面板定位；外显气泡入口已收入设置二级菜单 */}

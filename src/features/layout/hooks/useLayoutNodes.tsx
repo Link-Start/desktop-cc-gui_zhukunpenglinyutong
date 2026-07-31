@@ -804,10 +804,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         onOpenRuntimeNotice={
           showGlobalRuntimeNoticeDock ? globalRuntimeNoticeDock.expand : undefined
         }
-        runtimeNoticeHasError={
-          showGlobalRuntimeNoticeDock &&
-          globalRuntimeNoticeDock.status === "has-error"
-        }
         showRuntimeNoticeMenuItem={
           Boolean(showGlobalRuntimeNoticeDock && !options.isPhone)
         }

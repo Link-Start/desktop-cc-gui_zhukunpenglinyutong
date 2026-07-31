@@ -1,5 +1,4 @@
 import Brain from "lucide-react/dist/esm/icons/brain";
-import CircleAlert from "lucide-react/dist/esm/icons/circle-alert";
 import CircleCheck from "lucide-react/dist/esm/icons/circle-check";
 import GitCommitHorizontal from "lucide-react/dist/esm/icons/git-commit-horizontal";
 import LayoutDashboard from "lucide-react/dist/esm/icons/layout-dashboard";
@@ -23,8 +22,6 @@ type SidebarSettingsMenuProps = {
   onAppModeChange: (mode: AppMode) => void;
   /** 打开侧栏运行时提示面板（入口已收入设置二级菜单，不再外显） */
   onOpenRuntimeNotice?: () => void;
-  /** 是否有待处理的运行时错误，用于菜单项与齿轮角标 */
-  runtimeNoticeHasError?: boolean;
   /** 是否展示运行时提示菜单项（受 clientUiVisibility 控制） */
   showRuntimeNotice?: boolean;
 };
@@ -43,7 +40,6 @@ export function SidebarSettingsMenu({
   onOpenSettings,
   onAppModeChange,
   onOpenRuntimeNotice,
-  runtimeNoticeHasError = false,
   showRuntimeNotice = false,
 }: SidebarSettingsMenuProps) {
   return (
@@ -106,17 +102,13 @@ export function SidebarSettingsMenu({
             <button
               type="button"
               role="menuitem"
-              className={`sidebar-settings-dropdown-item${runtimeNoticeHasError ? " is-runtime-notice-error" : ""}`}
+              className="sidebar-settings-dropdown-item"
               onClick={() => {
                 onClose();
                 onOpenRuntimeNotice();
               }}
             >
-              {runtimeNoticeHasError ? (
-                <CircleAlert size={14} aria-hidden />
-              ) : (
-                <CircleCheck size={14} aria-hidden />
-              )}
+              <CircleCheck size={14} aria-hidden />
               <span>{t("runtimeNotice.title")}</span>
             </button>
           ) : null}
@@ -137,7 +129,7 @@ export function SidebarSettingsMenu({
       <button
         ref={buttonRef}
         type="button"
-        className={`sidebar-primary-nav-item sidebar-primary-nav-item-bottom${isOpen ? " is-active" : ""}${runtimeNoticeHasError ? " has-runtime-notice-error" : ""}`}
+        className={`sidebar-primary-nav-item sidebar-primary-nav-item-bottom${isOpen ? " is-active" : ""}`}
         onClick={onToggleOpen}
         title={t("settings.title")}
         aria-label={t("settings.title")}
@@ -146,9 +138,6 @@ export function SidebarSettingsMenu({
         data-tauri-drag-region="false"
       >
         <Settings className="sidebar-primary-nav-icon" aria-hidden />
-        {runtimeNoticeHasError ? (
-          <span className="sidebar-primary-nav-badge" aria-hidden />
-        ) : null}
       </button>
     </div>
   );

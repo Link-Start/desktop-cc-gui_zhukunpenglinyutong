@@ -105,23 +105,6 @@
   color: var(--text-strong);
 }
 
-.sidebar-primary-nav-item-bottom.has-runtime-notice-error {
-  position: relative;
-  color: #fda4af;
-}
-
-.sidebar-primary-nav-item-bottom .sidebar-primary-nav-badge {
-  position: absolute;
-  top: 5px;
-  right: 5px;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: #f43f5e;
-  box-shadow: 0 0 0 1.5px var(--surface-panel, #0f172a);
-  pointer-events: none;
-}
-
 .sidebar-primary-nav-item-collapse {
   margin-top: 2px;
 }
@@ -267,10 +250,6 @@
 
 .sidebar-settings-dropdown-item.is-active {
   color: var(--text-strong);
-}
-
-.sidebar-settings-dropdown-item.is-runtime-notice-error {
-  color: #fda4af;
 }
 
 .sidebar-settings-dropdown-item:disabled {
