@@ -643,7 +643,7 @@ function useProviderTargetCatalogOwner({
         const canUseCurrentModels =
           mode === "native" && isCurrentBinding;
         const pluginModelsForEngine =
-          engine === "claude" || engine === "codex" || engine === "gemini"
+          engine === "claude" || engine === "codex"
             ? (pluginCustomModels?.[engine] ?? EMPTY_MODELS)
             : EMPTY_MODELS;
         // native:会话当前列表里的 custom;atomic:localStorage 插件自定义模型
