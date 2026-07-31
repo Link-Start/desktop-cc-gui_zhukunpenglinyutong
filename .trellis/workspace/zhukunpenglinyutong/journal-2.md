@@ -1036,3 +1036,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 74: 统一 Atomic 选模、侧栏运行时入口与 Grok 会话时间
+
+**Date**: 2026-07-31
+**Task**: 统一 Atomic 选模、侧栏运行时入口与 Grok 会话时间
+**Branch**: `chore/bump-version-0.7.13`
+
+### Summary
+
+Native 会话复用 Atomic 双栏 picker；桌面运行时提示收入设置二级菜单（错误角标）；Grok 侧栏 updated_at 优先 chat_history mtime 避免 bulk summary 显示刚刚。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5a4d9da81` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
