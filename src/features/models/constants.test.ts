@@ -93,6 +93,31 @@ describe("model mapping", () => {
     })).toBeNull();
   });
 
+  it("does not apply Claude main mapping to non-Claude catalog ids", () => {
+    const mapping = { main: "deepseek-v4-pro" };
+
+    // Codex / Grok / Kimi / arbitrary runtime names must stay unmapped
+    expect(resolveModelMappingValue("gpt-5.6-sol", mapping)).toBeNull();
+    expect(resolveModelMappingValue("gpt-5.6-terra", mapping)).toBeNull();
+    expect(resolveModelMappingValue("gpt-5.6-luna", mapping)).toBeNull();
+    expect(resolveModelMappingValue("gpt-5.5", mapping)).toBeNull();
+    expect(resolveModelMappingValue("grok-build", mapping)).toBeNull();
+    expect(resolveModelMappingValue("kimi-code/k3", mapping)).toBeNull();
+    expect(resolveModelMappingValue("deepseek-v4-pro", mapping)).toBeNull();
+    expect(resolveModelMappingValue("Cxn[1m]", mapping)).toBeNull();
+
+    // Claude family / namespace still falls back to main
+    expect(resolveModelMappingValue("claude-opus-4-8", mapping)).toBe(
+      "deepseek-v4-pro",
+    );
+    expect(resolveModelMappingValue("settings-main", mapping)).toBe(
+      "deepseek-v4-pro",
+    );
+    expect(resolveModelMappingValue("claude-unknown-tier", mapping)).toBe(
+      "deepseek-v4-pro",
+    );
+  });
+
   it("falls back to a legacy key when an earlier candidate contains malformed JSON", () => {
     window.localStorage.setItem(STORAGE_KEYS.CLAUDE_MODEL_MAPPING, "{bad json");
     window.localStorage.setItem(

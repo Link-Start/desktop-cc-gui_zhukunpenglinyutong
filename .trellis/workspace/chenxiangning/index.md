@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-29.md`
-- **Total Sessions**: 1247
+- **Total Sessions**: 1248
 - **Last Active**: 2026-07-31
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-29.md` | ~1746 | Active |
+| `journal-29.md` | ~1805 | Active |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
@@ -57,6 +57,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1248 | 2026-07-31 | 隔离 Claude 模型映射跨 CLI 污染 | `ac91bfa48` | `bump-version-0.7.12` |
 | 1247 | 2026-07-31 | 修复 Grok 历史工具投影信息损失 | `ad2cceff8` | `bump-version-0.7.12` |
 | 1246 | 2026-07-31 | 修复对话结束滚动乱跳未贴底 | `d38d0f9b9` | `bump-version-0.7.12` |
 | 1245 | 2026-07-31 | 长幕布 idle 虚拟化缓解滚动阻滞 | `4e932e672` | `bump-version-0.7.12` |

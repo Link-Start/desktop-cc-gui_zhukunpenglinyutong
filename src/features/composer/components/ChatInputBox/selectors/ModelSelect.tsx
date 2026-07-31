@@ -206,17 +206,21 @@ function resolveRuntimeModel(model: ModelInfo): string | undefined {
  * Resolve the model id used for brand-icon matching.
  * Prefer the mapped runtime model (e.g. kimi-k3) so third-party providers show
  * their own logo instead of the Claude glyph.
+ * Claude ANTHROPIC_* mapping is Claude-scoped only — never rewrite other CLIs.
  */
 function resolveModelIdForIcon(
   model: ModelInfo | null | undefined,
   mapping: ModelMapping,
+  providerId?: string | null,
 ): string | null {
   if (!model) {
     return null;
   }
-  const mapped = resolveModelMappingValue(model.id, mapping);
-  if (mapped) {
-    return mapped;
+  if (!providerId || providerId === 'claude') {
+    const mapped = resolveModelMappingValue(model.id, mapping);
+    if (mapped) {
+      return mapped;
+    }
   }
   return resolveRuntimeModel(model) ?? model.id;
 }
@@ -495,12 +499,18 @@ export const ModelSelect = memo(({
       ? effectiveModels.find(m => m.id === selectedModelValue) ?? null
       : null);
 
-  const getModelLabel = (model: ModelInfo): string => {
-    // Prefer active provider mapping (e.g. kimi-k3) so every tier row shows the
-    // real runtime model — mirrors jetbrains-cc-gui ModelSelect behaviour.
-    const mappedName = resolveModelMappingValue(model.id, modelMapping);
-    if (mappedName) {
-      return mappedName;
+  const getModelLabel = (
+    model: ModelInfo,
+    providerId?: string | null,
+  ): string => {
+    // Claude ANTHROPIC_* mapping only — never rewrite Codex/Grok/Kimi labels.
+    // Prefer active provider mapping (e.g. kimi-k3) so every Claude tier row
+    // shows the real runtime model — mirrors jetbrains-cc-gui behaviour.
+    if (!providerId || providerId === 'claude') {
+      const mappedName = resolveModelMappingValue(model.id, modelMapping);
+      if (mappedName) {
+        return mappedName;
+      }
     }
 
     const parentLabel = model.label?.trim() || "";
@@ -528,9 +538,19 @@ export const ModelSelect = memo(({
     return model.description;
   };
 
-  const getModelIconId = (model?: ModelInfo | null): string | null =>
-    resolveModelIdForIcon(model, modelMapping);
-  const currentModelLabel = currentModel ? getModelLabel(currentModel) : t('models.selectModel');
+  const getModelIconId = (
+    model?: ModelInfo | null,
+    providerId?: string | null,
+  ): string | null => resolveModelIdForIcon(model, modelMapping, providerId);
+  // Atomic path: selected model belongs to executionTarget.engine, not necessarily
+  // the legacy currentProvider prop.
+  const selectedModelProvider =
+    hasTargetGroups && executionTarget?.engine
+      ? executionTarget.engine
+      : currentProvider;
+  const currentModelLabel = currentModel
+    ? getModelLabel(currentModel, selectedModelProvider)
+    : t('models.selectModel');
   const hasConfigActions = Boolean(onAddModel || onRefreshConfig);
 
   const isGroupCurrent = (group: PickerModelGroup): boolean =>
@@ -786,9 +806,12 @@ export const ModelSelect = memo(({
         <>
           <span className="composer-readiness-icon" aria-hidden="true">
             <ModelIcon
-              provider={currentProvider}
+              provider={selectedModelProvider}
               model={currentModel}
-              modelIdForIcon={getModelIconId(currentModel)}
+              modelIdForIcon={getModelIconId(
+                currentModel,
+                selectedModelProvider,
+              )}
               size={16}
             />
           </span>
@@ -799,9 +822,12 @@ export const ModelSelect = memo(({
       ) : (
         <>
           <ModelIcon
-            provider={currentProvider}
+            provider={selectedModelProvider}
             model={currentModel}
-            modelIdForIcon={getModelIconId(currentModel)}
+            modelIdForIcon={getModelIconId(
+              currentModel,
+              selectedModelProvider,
+            )}
             size={12}
           />
           <span className="selector-button-text">{currentModelLabel}</span>
@@ -933,11 +959,16 @@ export const ModelSelect = memo(({
                             <ModelIcon
                               provider={group.providerId}
                               model={model}
-                              modelIdForIcon={getModelIconId(model)}
+                              modelIdForIcon={getModelIconId(
+                                model,
+                                group.providerId,
+                              )}
                               size={18}
                             />
                             <div className="flex min-w-0 flex-1 flex-col">
-                              <span className="truncate text-sm">{getModelLabel(model)}</span>
+                              <span className="truncate text-sm">
+                                {getModelLabel(model, group.providerId)}
+                              </span>
                               {description && (
                                 <span className="text-xs text-muted-foreground whitespace-normal">
                                   {description}
@@ -1076,11 +1107,13 @@ export const ModelSelect = memo(({
                   <ModelIcon
                     provider={currentProvider}
                     model={model}
-                    modelIdForIcon={getModelIconId(model)}
+                    modelIdForIcon={getModelIconId(model, currentProvider)}
                     size={20}
                   />
                   <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="text-sm">{getModelLabel(model)}</span>
+                    <span className="text-sm">
+                      {getModelLabel(model, currentProvider)}
+                    </span>
                     {description && (
                       <span className="text-xs text-muted-foreground whitespace-normal">
                         {description}
