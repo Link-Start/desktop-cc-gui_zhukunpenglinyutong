@@ -465,7 +465,6 @@ function areWorkspaceSessionCatalogFiltersEqual(
 
 export function SessionManagementSection({
   title,
-  description,
   appSettings,
   workspaces,
   groupedWorkspaces,

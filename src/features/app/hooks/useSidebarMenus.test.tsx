@@ -1229,7 +1229,7 @@ describe("useSidebarMenus", () => {
   it("allows cancel while running and ignores late create success", async () => {
     const createDeferredResult = createDeferred<{
       status: string;
-      fidelity: string;
+      fidelity: "strong" | "degraded";
       operation: { phase: string; resultSessionId: string };
     }>();
     createNativeProviderContinuationMock.mockImplementationOnce(

@@ -319,9 +319,7 @@ export function ShortcutsSection({
           >
             <ArrowLeft size={14} strokeWidth={2.2} aria-hidden="true" />
             <span>
-              {t("settings.backToShortcutList", {
-                defaultValue: "返回快捷键列表",
-              })}
+              {t("settings.backToShortcutList")}
             </span>
           </button>
           {renderDetail()}
