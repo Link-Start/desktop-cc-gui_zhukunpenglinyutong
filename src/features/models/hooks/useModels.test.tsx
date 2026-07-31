@@ -4,7 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceInfo } from "../../../types";
 import { getConfigModel, getModelList } from "../../../services/tauri";
 import { STORAGE_KEYS } from "../../composer/types/provider";
-import { useModels } from "./useModels";
+import {
+  planComposerModelSelection,
+  resolveModelEffort,
+  useModels,
+} from "./useModels";
+import type { ModelOption } from "../../../types";
 
 vi.mock("../../../services/tauri", () => ({
   getModelList: vi.fn(),
@@ -125,13 +130,14 @@ describe("useModels", () => {
   });
 
   it("hydrates built-in Codex reasoning options when runtime metadata is empty", async () => {
+    // 使用当前 generated catalog 内的模型 id，验证 runtime 空 metadata 会与 built-in 合并
     vi.mocked(getModelList).mockResolvedValueOnce({
       result: {
         data: [
           {
-            id: "gpt-5.4",
-            model: "gpt-5.4",
-            displayName: "gpt-5.4",
+            id: "gpt-5.5",
+            model: "gpt-5.5",
+            displayName: "gpt-5.5",
             supportedReasoningEfforts: [],
             defaultReasoningEffort: null,
             isDefault: true,
@@ -139,13 +145,13 @@ describe("useModels", () => {
         ],
       },
     });
-    vi.mocked(getConfigModel).mockResolvedValueOnce("gpt-5.4");
+    vi.mocked(getConfigModel).mockResolvedValueOnce("gpt-5.5");
 
     const { result } = renderHook(() =>
       useModels({ activeWorkspace: workspace }),
     );
 
-    await waitFor(() => expect(result.current.selectedModelId).toBe("gpt-5.4"));
+    await waitFor(() => expect(result.current.selectedModelId).toBe("gpt-5.5"));
 
     expect(result.current.reasoningOptions).toEqual([
       "low",
@@ -703,5 +709,266 @@ describe("useModels", () => {
       expect(result.current.globalSelectionReady).toBe(false);
       expect(result.current.modelsReady).toBe(false);
     });
+  });
+
+  it("converges effort when runtime metadata is empty but defaultReasoningEffort is set", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(getModelList).mockResolvedValueOnce({
+      result: {
+        data: [
+          {
+            id: "runtime-only-model",
+            model: "runtime-only-model",
+            displayName: "Runtime Only",
+            supportedReasoningEfforts: [],
+            defaultReasoningEffort: "medium",
+            isDefault: true,
+          },
+        ],
+      },
+    });
+    vi.mocked(getConfigModel).mockResolvedValueOnce(null);
+
+    const { result } = renderHook(() =>
+      useModels({
+        activeWorkspace: workspace,
+        preferredModelId: null,
+        preferredEffort: null,
+        preferredSelectionReady: true,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.selectedModelId).toBe("runtime-only-model");
+      expect(result.current.selectedEffort).toBe("medium");
+    });
+
+    await act(async () => {
+      for (let i = 0; i < 10; i += 1) {
+        await Promise.resolve();
+      }
+    });
+
+    expect(result.current.selectedEffort).toBe("medium");
+    expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Maximum update depth exceeded"),
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("converges on cold start when preferred model is missing and preferred effort is null", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(getModelList).mockResolvedValueOnce({
+      result: {
+        data: [
+          {
+            id: "gpt-5.5",
+            model: "gpt-5.5",
+            displayName: "gpt-5.5",
+            supportedReasoningEfforts: [],
+            defaultReasoningEffort: "medium",
+            isDefault: true,
+          },
+        ],
+      },
+    });
+    vi.mocked(getConfigModel).mockResolvedValueOnce(null);
+
+    const { result } = renderHook(() =>
+      useModels({
+        activeWorkspace: workspace,
+        // 模拟跨引擎残留（如 Kimi k3）写入 lastComposerModelId 的冷启动形态
+        preferredModelId: "k3",
+        preferredEffort: null,
+        preferredSelectionReady: true,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.selectedModelId).toBeTruthy();
+      expect(result.current.selectedEffort).toBe("medium");
+    });
+
+    await act(async () => {
+      for (let i = 0; i < 10; i += 1) {
+        await Promise.resolve();
+      }
+    });
+
+    expect(result.current.selectedEffort).toBe("medium");
+    expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Maximum update depth exceeded"),
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("keeps an explicit preferred effort when supported reasoning list is empty", async () => {
+    vi.mocked(getModelList).mockResolvedValueOnce({
+      result: {
+        data: [
+          {
+            id: "runtime-only-model",
+            model: "runtime-only-model",
+            displayName: "Runtime Only",
+            supportedReasoningEfforts: [],
+            defaultReasoningEffort: "medium",
+            isDefault: true,
+          },
+        ],
+      },
+    });
+    vi.mocked(getConfigModel).mockResolvedValueOnce(null);
+
+    const { result } = renderHook(() =>
+      useModels({
+        activeWorkspace: workspace,
+        preferredModelId: "runtime-only-model",
+        preferredEffort: "high",
+        preferredSelectionReady: true,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.selectedModelId).toBe("runtime-only-model");
+      expect(result.current.selectedEffort).toBe("high");
+    });
+  });
+
+  it("keeps a user-selected effort when catalog preferred effort changes", async () => {
+    vi.mocked(getModelList).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "gpt-5.5",
+            model: "gpt-5.5",
+            displayName: "gpt-5.5",
+            supportedReasoningEfforts: [
+              { reasoningEffort: "low", description: "" },
+              { reasoningEffort: "medium", description: "" },
+              { reasoningEffort: "high", description: "" },
+            ],
+            defaultReasoningEffort: "medium",
+            isDefault: true,
+          },
+        ],
+      },
+    });
+    vi.mocked(getConfigModel).mockResolvedValue(null);
+
+    const { result, rerender } = renderHook(
+      ({ preferredEffort }: { preferredEffort: string | null }) =>
+        useModels({
+          activeWorkspace: workspace,
+          preferredModelId: "gpt-5.5",
+          preferredEffort,
+          preferredSelectionReady: true,
+        }),
+      { initialProps: { preferredEffort: "medium" as string | null } },
+    );
+
+    await waitFor(() => {
+      expect(result.current.selectedModelId).toBe("gpt-5.5");
+    });
+
+    act(() => {
+      result.current.setSelectedEffort("high");
+    });
+    expect(result.current.selectedEffort).toBe("high");
+
+    rerender({ preferredEffort: "low" });
+
+    await act(async () => {
+      for (let i = 0; i < 5; i += 1) {
+        await Promise.resolve();
+      }
+    });
+
+    expect(result.current.selectedEffort).toBe("high");
+  });
+});
+
+describe("resolveModelEffort / planComposerModelSelection", () => {
+  const emptySupportedModel: ModelOption = {
+    id: "runtime-only",
+    model: "runtime-only",
+    displayName: "Runtime Only",
+    description: "",
+    source: "runtime",
+    supportedReasoningEfforts: [],
+    defaultReasoningEffort: "medium",
+    isDefault: true,
+  };
+
+  const listedModel: ModelOption = {
+    id: "gpt-5.5",
+    model: "gpt-5.5",
+    displayName: "gpt-5.5",
+    description: "",
+    source: "catalog",
+    supportedReasoningEfforts: [
+      { reasoningEffort: "low", description: "" },
+      { reasoningEffort: "medium", description: "" },
+      { reasoningEffort: "high", description: "" },
+    ],
+    defaultReasoningEffort: "medium",
+    isDefault: true,
+  };
+
+  it("falls back to model default when preferred effort is null and supported list is empty", () => {
+    expect(
+      resolveModelEffort(emptySupportedModel, {
+        preferCurrent: false,
+        currentEffort: null,
+        preferredEffort: null,
+      }),
+    ).toBe("medium");
+  });
+
+  it("prefers explicit preferred effort over model default when supported list is empty", () => {
+    expect(
+      resolveModelEffort(emptySupportedModel, {
+        preferCurrent: false,
+        currentEffort: null,
+        preferredEffort: "high",
+      }),
+    ).toBe("high");
+  });
+
+  it("keeps current effort when preferCurrent is set", () => {
+    expect(
+      resolveModelEffort(listedModel, {
+        preferCurrent: true,
+        currentEffort: "high",
+        preferredEffort: "low",
+      }),
+    ).toBe("high");
+  });
+
+  it("plans a stable selection that does not oscillate on repeated calls", () => {
+    const input = {
+      models: [emptySupportedModel],
+      configModel: null,
+      preferredModelId: "k3",
+      preferredEffort: null as string | null,
+      preferredSelectionReady: true,
+      selectedModelId: null as string | null,
+      selectedEffort: null as string | null,
+      hasUserSelectedModel: false,
+      hasUserSelectedEffort: false,
+    };
+
+    const first = planComposerModelSelection(input);
+    expect(first).toEqual({
+      nextModelId: "runtime-only",
+      nextEffort: "medium",
+      clearUserSelectedModel: false,
+    });
+
+    const second = planComposerModelSelection({
+      ...input,
+      selectedModelId: first?.nextModelId ?? null,
+      selectedEffort: first?.nextEffort ?? null,
+    });
+    expect(second).toEqual(first);
   });
 });
