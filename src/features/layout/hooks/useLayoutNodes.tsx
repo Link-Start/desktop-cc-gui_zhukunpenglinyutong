@@ -1582,6 +1582,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           onOpenAgentSettings={options.onOpenAgentSettings}
           onOpenPromptSettings={options.onOpenPromptSettings}
           onOpenModelSettings={options.onOpenModelSettings}
+          onOpenCliSettings={options.onOpenCliSettings}
           onRefreshModelConfig={options.onRefreshModelConfig}
           isModelConfigRefreshing={options.isModelConfigRefreshing}
           opencodeVariantOptions={options.opencodeVariantOptions}

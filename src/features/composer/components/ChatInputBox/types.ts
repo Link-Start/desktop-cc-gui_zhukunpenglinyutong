@@ -669,6 +669,8 @@ export interface ChatInputBoxProps {
   onOpenPromptSettings?: () => void;
   /** Open model settings (navigate to provider management to add models) */
   onOpenModelSettings?: (providerId?: string) => void;
+  /** Open CLI / provider settings management page */
+  onOpenCliSettings?: () => void;
   /** Open a selected @ file reference via the host file surface */
   onOpenFileReference?: (path: string) => void;
   /** Refresh current provider model/config snapshot */

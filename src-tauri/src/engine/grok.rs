@@ -4,11 +4,12 @@
 //! - text-only:
 //!   `grok -p "<prompt>" --output-format streaming-json --always-approve [-m <model>] (-s|-r)`
 //! - multimodal (images):
-//!   `grok --prompt-json '<ACP content blocks>' --output-format streaming-json ...`
+//!   `grok --prompt-file <staging.json> --output-format streaming-json ...`
 //!
-//! `--prompt-json` accepts ACP content blocks. Image blocks are:
+//! Multimodal payloads are ACP content blocks written to a temp file (not argv):
 //! `{ "type": "image", "mimeType": "image/png", "data": "<base64>" }`
-//! (verified against grok 0.2.114 schema; text-only keeps the legacy `-p` path).
+//! Grok headless accepts the same blocks via `--prompt-file` (verified against
+//! grok 0.2.x; avoids ARG_MAX). Text-only keeps the legacy `-p` path.
 //!
 //! Grok's `streaming-json` output is NDJSON on stdout with four event shapes:
 //! - `{"type":"text","data":"..."}` — assistant text delta (true deltas, append)
@@ -35,17 +36,50 @@ use super::cli_image_input::{collect_non_empty_image_paths, normalize_local_imag
 use super::events::EngineEvent;
 use super::{EngineConfig, EngineType, SendMessageParams};
 
-/// Soft per-image cap. CLI still needs the whole `--prompt-json` on argv, so the
-/// practical limit is far below xAI's theoretical 20MiB vision cap.
+/// Soft per-image cap for attachments materialised into ACP image blocks.
+/// Payload rides `--prompt-file` (not argv), so this is a model/UX bound rather
+/// than an OS ARG_MAX bound. xAI vision caps are higher; keep a conservative
+/// client-side limit to avoid accidental multi-MB base64 staging.
 const GROK_MAX_IMAGE_BYTES: u64 = 2 * 1024 * 1024;
-/// Leave headroom under macOS/Linux `ARG_MAX` for other process args/env.
-const GROK_MAX_PROMPT_JSON_BYTES: usize = 700_000;
 
-/// Build ACP content blocks for `grok --prompt-json`.
+/// Built headless command plus optional multimodal prompt file to clean up.
+struct GrokBuiltCommand {
+    command: Command,
+    /// Staging path for ACP content blocks when images were attached.
+    prompt_file: Option<PathBuf>,
+}
+
+/// Best-effort RAII cleanup for the multimodal `--prompt-file` staging JSON.
+struct GrokPromptFileGuard(Option<PathBuf>);
+
+impl GrokPromptFileGuard {
+    fn new(path: Option<PathBuf>) -> Self {
+        Self(path)
+    }
+}
+
+impl Drop for GrokPromptFileGuard {
+    fn drop(&mut self) {
+        if let Some(path) = self.0.take() {
+            if let Err(error) = std::fs::remove_file(&path) {
+                log::warn!(
+                    "[grok] failed to remove prompt-file {}: {}",
+                    path.display(),
+                    error
+                );
+            }
+        }
+    }
+}
+
+/// Build ACP content blocks for Grok multimodal headless input.
 ///
 /// Returns `None` when there are no non-empty image attachments so callers can
 /// keep the lighter `-p` text path. Returns `Err` when the user attached images
 /// but none could be materialised (bad path / oversized / unreadable).
+///
+/// The encoded JSON is written to a staging file and passed via `--prompt-file`
+/// (not inlined on argv) so large screenshots do not hit ARG_MAX.
 pub(crate) fn build_grok_prompt_json(
     text: &str,
     images: Option<&[String]>,
@@ -108,14 +142,24 @@ pub(crate) fn build_grok_prompt_json(
 
     let encoded = serde_json::to_string(&blocks)
         .map_err(|error| format!("Failed to serialize Grok prompt-json: {error}"))?;
-    if encoded.len() > GROK_MAX_PROMPT_JSON_BYTES {
-        return Err(format!(
-            "Grok image payload is too large for CLI argv ({} bytes > {} limit). Use fewer or smaller images.",
-            encoded.len(),
-            GROK_MAX_PROMPT_JSON_BYTES
-        ));
-    }
     Ok(Some(encoded))
+}
+
+/// Write ACP content-block JSON to workspace staging and return its path.
+///
+/// Path is under `{workspace}/.mossx/image-staging/grok-prompt-<uuid>.json` so
+/// argv only carries a short path (Grok CLI `--prompt-file`).
+pub(crate) fn write_grok_prompt_file(
+    workspace_path: &Path,
+    prompt_json: &str,
+) -> Result<PathBuf, String> {
+    let dir = workspace_path.join(".mossx").join("image-staging");
+    std::fs::create_dir_all(&dir)
+        .map_err(|error| format!("Failed to create Grok prompt staging dir: {error}"))?;
+    let path = dir.join(format!("grok-prompt-{}.json", uuid::Uuid::new_v4()));
+    std::fs::write(&path, prompt_json.as_bytes())
+        .map_err(|error| format!("Failed to write Grok prompt-file {}: {error}", path.display()))?;
+    Ok(path)
 }
 
 fn load_image_as_grok_block(raw: &str, workspace_path: &Path) -> Result<Value, String> {
@@ -390,7 +434,7 @@ impl GrokSession {
         params: &SendMessageParams,
         canonical_session_id: &str,
         resume_session: bool,
-    ) -> Result<Command, String> {
+    ) -> Result<GrokBuiltCommand, String> {
         let bin = if let Some(ref custom) = self.bin_path {
             custom.clone()
         } else {
@@ -432,13 +476,19 @@ impl GrokSession {
             }
         }
 
-        // Multimodal: ACP content blocks via --prompt-json.
-        // Text-only keeps legacy -p for smaller argv and identical behaviour.
-        match build_grok_prompt_json(&params.text, params.images.as_deref(), &self.workspace_path)?
-        {
+        // Multimodal: ACP content blocks via --prompt-file (staging JSON).
+        // Avoids putting base64 image payloads on argv (ARG_MAX). Text-only
+        // keeps legacy -p for smaller argv and identical behaviour.
+        let prompt_file = match build_grok_prompt_json(
+            &params.text,
+            params.images.as_deref(),
+            &self.workspace_path,
+        )? {
             Some(prompt_json) => {
-                cmd.arg("--prompt-json");
-                cmd.arg(prompt_json);
+                let path = write_grok_prompt_file(&self.workspace_path, &prompt_json)?;
+                cmd.arg("--prompt-file");
+                cmd.arg(&path);
+                Some(path)
             }
             None => {
                 let safe_text = if params.text.starts_with('-') {
@@ -448,8 +498,9 @@ impl GrokSession {
                 };
                 cmd.arg("-p");
                 cmd.arg(&safe_text);
+                None
             }
-        }
+        };
 
         // Grok 0.2.111 has no `--no-auto-update` flag; disable via env.
         cmd.env("GROK_DISABLE_AUTOUPDATER", "1");
@@ -460,7 +511,10 @@ impl GrokSession {
         cmd.stdin(Stdio::null());
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
-        Ok(cmd)
+        Ok(GrokBuiltCommand {
+            command: cmd,
+            prompt_file,
+        })
     }
 
     pub async fn send_message(
@@ -499,14 +553,17 @@ impl GrokSession {
             resume_session_id.map(|value| value.len()).unwrap_or(0),
         );
 
-        let mut command = match self.build_command(&params, &canonical_session_id, resume_session) {
-            Ok(command) => command,
+        let built = match self.build_command(&params, &canonical_session_id, resume_session) {
+            Ok(built) => built,
             Err(error) => {
                 let error_msg = format!("Failed to build grok command: {}", error);
                 self.emit_error(turn_id, error_msg.clone());
                 return Err(error_msg);
             }
         };
+        // Clean staging prompt-file after the turn ends (success, error, or interrupt).
+        let _prompt_file_guard = GrokPromptFileGuard::new(built.prompt_file);
+        let mut command = built.command;
         let mut child = match command.spawn() {
             Ok(child) => child,
             Err(error) => {
@@ -1082,5 +1139,143 @@ mod tests {
         let error =
             build_grok_prompt_json("inspect", Some(&[data_url]), Path::new(".")).unwrap_err();
         assert!(error.contains("decoded-image limit"));
+    }
+
+    #[test]
+    fn prompt_json_allows_payloads_larger_than_former_argv_cap() {
+        // Former soft-cap was 700KB on --prompt-json argv. Multimodal now rides
+        // --prompt-file, so a ~750KB+ serialized payload must still serialize.
+        let dir = std::env::temp_dir().join(format!("grok-large-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("big.bin");
+        // ~560KB raw → ~747KB base64 + JSON wrapper > 700KB.
+        let bytes = vec![0x41u8; 560 * 1024];
+        std::fs::write(&path, &bytes).unwrap();
+
+        let encoded = build_grok_prompt_json(
+            "describe",
+            Some(&[path.to_string_lossy().to_string()]),
+            &dir,
+        )
+        .unwrap()
+        .expect("expected large prompt payload");
+        assert!(
+            encoded.len() > 700_000,
+            "expected payload above former argv cap, got {}",
+            encoded.len()
+        );
+        assert!(!encoded.contains("too large for CLI argv"));
+
+        let staging = write_grok_prompt_file(&dir, &encoded).unwrap();
+        assert!(staging.exists());
+        assert!(staging.starts_with(dir.join(".mossx").join("image-staging")));
+        let on_disk = std::fs::read_to_string(&staging).unwrap();
+        assert_eq!(on_disk, encoded);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn build_command_uses_prompt_file_for_images_not_prompt_json_argv() {
+        let dir = std::env::temp_dir().join(format!("grok-cmd-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("pixel.png");
+        let png = BASE64_STANDARD
+            .decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
+            .unwrap();
+        std::fs::write(&path, &png).unwrap();
+
+        let session = GrokSession::new(
+            "ws-test".to_string(),
+            dir.clone(),
+            Some(EngineConfig {
+                bin_path: Some("grok".to_string()),
+                ..Default::default()
+            }),
+        );
+        let params = SendMessageParams {
+            text: "what is this?".to_string(),
+            images: Some(vec![path.to_string_lossy().to_string()]),
+            ..Default::default()
+        };
+        let built = session
+            .build_command(&params, "11111111-1111-1111-1111-111111111111", false)
+            .expect("build command");
+
+        let args: Vec<String> = built
+            .command
+            .as_std()
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert!(
+            args.iter().any(|arg| arg == "--prompt-file"),
+            "expected --prompt-file in args: {args:?}"
+        );
+        assert!(
+            !args.iter().any(|arg| arg == "--prompt-json"),
+            "must not put multimodal payload on --prompt-json argv: {args:?}"
+        );
+        assert!(
+            !args.iter().any(|arg| arg == "-p"),
+            "image turns must not use -p: {args:?}"
+        );
+        let prompt_file = built.prompt_file.expect("prompt file path");
+        assert!(prompt_file.exists());
+        let file_arg = args
+            .iter()
+            .position(|arg| arg == "--prompt-file")
+            .and_then(|idx| args.get(idx + 1))
+            .expect("path after --prompt-file");
+        assert_eq!(Path::new(file_arg), prompt_file.as_path());
+        let body = std::fs::read_to_string(&prompt_file).unwrap();
+        assert!(body.contains("\"type\":\"image\""));
+
+        let _ = std::fs::remove_file(&prompt_file);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn build_command_text_only_keeps_dash_p() {
+        let dir = std::env::temp_dir().join(format!("grok-text-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let session = GrokSession::new(
+            "ws-text".to_string(),
+            dir.clone(),
+            Some(EngineConfig {
+                bin_path: Some("grok".to_string()),
+                ..Default::default()
+            }),
+        );
+        let params = SendMessageParams {
+            text: "hello only".to_string(),
+            ..Default::default()
+        };
+        let built = session
+            .build_command(&params, "22222222-2222-2222-2222-222222222222", false)
+            .expect("build command");
+        assert!(built.prompt_file.is_none());
+        let args: Vec<String> = built
+            .command
+            .as_std()
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert!(args.iter().any(|arg| arg == "-p"));
+        assert!(!args.iter().any(|arg| arg == "--prompt-file"));
+        assert!(!args.iter().any(|arg| arg == "--prompt-json"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn prompt_file_guard_removes_staging_file() {
+        let dir = std::env::temp_dir().join(format!("grok-guard-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = write_grok_prompt_file(&dir, r#"[{"type":"text","text":"x"}]"#).unwrap();
+        assert!(path.exists());
+        {
+            let _guard = GrokPromptFileGuard::new(Some(path.clone()));
+        }
+        assert!(!path.exists());
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

@@ -15,7 +15,7 @@ mossx 对 Grok / Kimi / OpenCode 早期只走了纯文本 CLI prompt，忽略 `i
 
 ## 目标
 
-- **Grok**：有图 `--prompt-json` ACP image blocks；无图保留 `-p`
+- **Grok**：有图 `--prompt-file` ACP image blocks（staging JSON）；无图保留 `-p`
 - **OpenCode**：`opencode run -f <path>`
 - **Kimi**：headless `-p` 注入 path + ReadMediaFile 指令；marker 可 strip
 - **矩阵**：六个 engine 的 `image.input = supported`（transport 语义见 design）
@@ -36,7 +36,7 @@ mossx 对 Grok / Kimi / OpenCode 早期只走了纯文本 CLI prompt，忽略 `i
 | Claude | supported | 既有 stream-json content 多模态 |
 | Codex | supported | `turn/start.input` image item；sync 用 `params_to_codex_input` |
 | Gemini | supported | 既有 |
-| Grok | supported | `--prompt-json` ACP `{type:image,mimeType,data}` |
+| Grok | supported | `--prompt-file` ACP `{type:image,mimeType,data}`（避免 argv 上限） |
 | Kimi | supported | `-p` + path tags + ReadMediaFile（agent 读图） |
 | OpenCode | supported | `run -f <abs-path>` |
 

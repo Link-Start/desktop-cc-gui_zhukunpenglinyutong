@@ -1,7 +1,7 @@
 //! Shared helpers for CLI engines that accept local image attachments.
 //!
-//! Used by Grok (`--prompt-json`), OpenCode (`run -f`), and Kimi (path injection
-//! + ReadMediaFile workflow).
+//! Used by Grok (`--prompt-file` ACP blocks), OpenCode (`run -f`), and Kimi
+//! (path injection + ReadMediaFile workflow).
 
 use std::path::{Path, PathBuf};
 

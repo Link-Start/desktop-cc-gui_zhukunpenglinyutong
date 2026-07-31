@@ -5,7 +5,10 @@
 const models = {
   "models": {
     "selectModel": "मॉडल चुनें",
+    "engineHeader": "{{name}} Engine",
     "addModel": "मॉडल जोड़ें",
+
+    "openCliSettings": "CLI सेटिंग्स",
     "refreshConfig": "कॉन्फ़िग रीफ़्रेश करें",
     "refreshingConfig": "रीफ़्रेश हो रहा है...",
     "reloadConfig": "कॉन्फ़िग फिर से लोड करें",
@@ -13,7 +16,36 @@ const models = {
     "discoverModels": "CLI से मॉडल खोजें",
     "discoveringModels": "मॉडल खोजे जा रहे हैं...",
     "refreshConfigFailed": "रीफ़्रेश विफल: {{message}}",
-    "claude": {},
+        "claude": {
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · Most powerful · Mythos-class"
+      },
+      "opus5": {
+        "label": "Opus 5",
+        "description": "Opus 5 · Latest Opus upgrade"
+      },
+      "opus48": {
+        "label": "Opus 4.8",
+        "description": "Opus 4.8 · Previous Opus generation"
+      },
+      "sonnet5": {
+        "label": "Sonnet 5",
+        "description": "Sonnet 5 · Upgraded Sonnet model"
+      },
+      "sonnet47": {
+        "label": "Sonnet 4.7",
+        "description": "Sonnet 4.7 · Default recommended model"
+      },
+      "sonnet46": {
+        "label": "Sonnet 4.6",
+        "description": "Sonnet 4.6 · Default recommended model"
+      },
+      "haiku45": {
+        "label": "Haiku 4.5",
+        "description": "Haiku · Fastest for quick answers"
+      }
+    },
     "codex": {
       "gpt56sol": {
         "label": "gpt-5.6-sol",
@@ -30,10 +62,6 @@ const models = {
       "gpt55": {
         "label": "gpt-5.5",
         "description": "जटिल कोडिंग, अनुसंधान और वास्तविक कार्य के लिए फ्रंटियर मॉडल।"
-      },
-      "gpt54": {
-        "label": "gpt-5.4",
-        "description": "रोज़मर्रा की कोडिंग के लिए सशक्त मॉडल।"
       }
     }
   }

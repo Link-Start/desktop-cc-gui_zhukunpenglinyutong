@@ -298,6 +298,19 @@ function modelRuntimeIdentity(model: ModelInfo): string {
   return (model.model?.trim() || model.id.trim()).toLowerCase();
 }
 
+/**
+ * Prefer stable catalog entry id so Claude family tiers that share the same
+ * mapped runtime model (e.g. all → kimi-k3) stay as separate picker rows.
+ */
+function modelCatalogIdentity(model: ModelInfo): string {
+  const id = model.id.trim().toLowerCase();
+  if (id) {
+    return `id:${id}`;
+  }
+  const runtime = modelRuntimeIdentity(model);
+  return runtime ? `runtime:${runtime}` : "";
+}
+
 function isPublicFallbackModel(model: ModelInfo): boolean {
   if (model.providerProfileId?.trim()) {
     return false;
@@ -317,7 +330,7 @@ export function mergeProviderCatalogModels(
     ...configuredModels,
     ...discoveredModels,
   ]) {
-    const identity = modelRuntimeIdentity(model);
+    const identity = modelCatalogIdentity(model);
     if (!identity || seen.has(identity)) {
       continue;
     }

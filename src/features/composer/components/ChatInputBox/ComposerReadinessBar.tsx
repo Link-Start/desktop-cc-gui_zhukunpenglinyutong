@@ -39,6 +39,7 @@ type ComposerReadinessBarProps = {
   onAddModel?: () => void;
   onRefreshModelConfig?: () => Promise<void> | void;
   isModelConfigRefreshing?: boolean;
+  onOpenCliSettings?: () => void;
   onReloadProviderConfig?: (
     providerId: ProviderId,
     providerProfileId: string,
@@ -66,6 +67,7 @@ export function ComposerReadinessBar({
   onAddModel,
   onRefreshModelConfig,
   isModelConfigRefreshing,
+  onOpenCliSettings,
   onReloadProviderConfig,
   rightAccessory,
 }: ComposerReadinessBarProps) {
@@ -136,6 +138,7 @@ export function ComposerReadinessBar({
             onAddModel={onAddModel}
             onRefreshConfig={onRefreshModelConfig}
             isRefreshingConfig={Boolean(isModelConfigRefreshing)}
+            onOpenCliSettings={onOpenCliSettings}
             onReloadProviderConfig={onReloadProviderConfig}
           />
         ) : (

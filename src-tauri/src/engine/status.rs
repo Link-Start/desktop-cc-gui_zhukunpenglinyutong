@@ -205,12 +205,16 @@ fn claude_provider_models_from_env(
 ) -> Vec<ModelInfo> {
     let overrides = ClaudeModelOverrides {
         main: normalize_non_empty(env.get("ANTHROPIC_MODEL").cloned()),
+        fable: normalize_non_empty(env.get("ANTHROPIC_DEFAULT_FABLE_MODEL").cloned()),
         sonnet: normalize_non_empty(env.get("ANTHROPIC_DEFAULT_SONNET_MODEL").cloned()),
         opus: normalize_non_empty(env.get("ANTHROPIC_DEFAULT_OPUS_MODEL").cloned()),
         haiku: normalize_non_empty(env.get("ANTHROPIC_DEFAULT_HAIKU_MODEL").cloned()),
         reasoning: normalize_non_empty(env.get("ANTHROPIC_REASONING_MODEL").cloned()),
     };
-    build_claude_settings_model_entries(&overrides)
+    let mut models = get_builtin_claude_models();
+    apply_claude_model_overrides(&mut models, overrides);
+    ensure_default_model(&mut models);
+    dedupe_models_preserve_order(models)
         .into_iter()
         .map(|model| model.with_provider_profile_id(provider_profile_id))
         .collect()
@@ -1260,35 +1264,35 @@ fn parse_gemini_model_from_config_json(root: &Value) -> Option<String> {
 /// Built-in Claude Code model catalog (mirrors the CLI `/model` roster).
 ///
 /// The Claude CLI does not expose a model-list RPC, so this catalog is
-/// hardcoded like `get_codex_models`. Settings/env overrides are spliced in
-/// front by `apply_claude_model_overrides` and shadow same-runtime entries
-/// through `dedupe_models_preserve_order`.
+/// hardcoded like `get_codex_models`. Settings/env overrides rewrite each
+/// tier's runtime model + display name via `apply_claude_model_overrides`
+/// (tier ids stay unique so the picker can keep one row per family).
 fn get_builtin_claude_models() -> Vec<ModelInfo> {
     vec![
+        ModelInfo::new("claude-fable-5", "Fable 5")
+            .with_provider("anthropic")
+            .with_protocol("anthropic-messages")
+            .with_provenance("curated:claude-builtin")
+            .with_description("Fable 5 · Most powerful · Mythos-class")
+            .with_source("builtin"),
         ModelInfo::new("claude-opus-4-8", "Opus 4.8")
             .as_default()
             .with_provider("anthropic")
             .with_protocol("anthropic-messages")
             .with_provenance("curated:claude-builtin")
-            .with_description("Best for everyday, complex tasks")
-            .with_source("builtin"),
-        ModelInfo::new("claude-fable-5", "Fable 5")
-            .with_provider("anthropic")
-            .with_protocol("anthropic-messages")
-            .with_provenance("curated:claude-builtin")
-            .with_description("Most capable for the hardest and longest-running tasks")
+            .with_description("Opus 4.8 · Previous Opus generation")
             .with_source("builtin"),
         ModelInfo::new("claude-sonnet-5", "Sonnet 5")
             .with_provider("anthropic")
             .with_protocol("anthropic-messages")
             .with_provenance("curated:claude-builtin")
-            .with_description("Efficient for routine tasks")
+            .with_description("Sonnet 5 · Upgraded Sonnet model")
             .with_source("builtin"),
         ModelInfo::new("claude-haiku-4-5-20251001", "Haiku 4.5")
             .with_provider("anthropic")
             .with_protocol("anthropic-messages")
             .with_provenance("curated:claude-builtin")
-            .with_description("Fastest for quick answers")
+            .with_description("Haiku 4.5 · Fastest for quick answers")
             .with_source("builtin"),
     ]
 }
@@ -1312,6 +1316,7 @@ async fn get_claude_models(_bin: &str, _path_env: Option<&String>) -> Vec<ModelI
 #[derive(Default, Clone)]
 struct ClaudeModelOverrides {
     main: Option<String>,
+    fable: Option<String>,
     sonnet: Option<String>,
     opus: Option<String>,
     haiku: Option<String>,
@@ -1332,6 +1337,7 @@ fn normalize_non_empty(input: Option<String>) -> Option<String> {
 fn read_claude_model_overrides() -> ClaudeModelOverrides {
     let mut overrides = ClaudeModelOverrides {
         main: normalize_non_empty(std::env::var("ANTHROPIC_MODEL").ok()),
+        fable: normalize_non_empty(std::env::var("ANTHROPIC_DEFAULT_FABLE_MODEL").ok()),
         sonnet: normalize_non_empty(std::env::var("ANTHROPIC_DEFAULT_SONNET_MODEL").ok()),
         opus: normalize_non_empty(std::env::var("ANTHROPIC_DEFAULT_OPUS_MODEL").ok()),
         haiku: normalize_non_empty(std::env::var("ANTHROPIC_DEFAULT_HAIKU_MODEL").ok()),
@@ -1341,6 +1347,9 @@ fn read_claude_model_overrides() -> ClaudeModelOverrides {
     if let Some(file_overrides) = read_claude_model_overrides_from_settings() {
         if file_overrides.main.is_some() {
             overrides.main = file_overrides.main;
+        }
+        if file_overrides.fable.is_some() {
+            overrides.fable = file_overrides.fable;
         }
         if file_overrides.sonnet.is_some() {
             overrides.sonnet = file_overrides.sonnet;
@@ -1370,6 +1379,11 @@ fn read_claude_model_overrides_from_settings() -> Option<ClaudeModelOverrides> {
                 .and_then(|value| value.as_str())
                 .map(str::to_string),
         ),
+        fable: normalize_non_empty(
+            env.get("ANTHROPIC_DEFAULT_FABLE_MODEL")
+                .and_then(|value| value.as_str())
+                .map(str::to_string),
+        ),
         sonnet: normalize_non_empty(
             env.get("ANTHROPIC_DEFAULT_SONNET_MODEL")
                 .and_then(|value| value.as_str())
@@ -1393,78 +1407,71 @@ fn read_claude_model_overrides_from_settings() -> Option<ClaudeModelOverrides> {
     })
 }
 
-fn apply_claude_model_overrides(models: &mut Vec<ModelInfo>, overrides: ClaudeModelOverrides) {
-    let settings_entries = build_claude_settings_model_entries(&overrides);
-    if !settings_entries.is_empty() {
-        for model in models.iter_mut() {
-            model.default = false;
-        }
-        models.splice(0..0, settings_entries);
+/// Infer Claude model family for ANTHROPIC_DEFAULT_* slot resolution.
+fn claude_model_family_key(model_id: &str) -> Option<&'static str> {
+    let normalized = model_id.to_ascii_lowercase();
+    if normalized.contains("fable") {
+        return Some("fable");
     }
+    if normalized.contains("haiku") {
+        return Some("haiku");
+    }
+    if normalized.contains("sonnet") {
+        return Some("sonnet");
+    }
+    if normalized.contains("opus") {
+        return Some("opus");
+    }
+    None
 }
 
-fn build_claude_settings_model_entries(overrides: &ClaudeModelOverrides) -> Vec<ModelInfo> {
-    let mut entries = Vec::new();
-    push_claude_settings_model_entry(
-        &mut entries,
-        "settings-main",
-        overrides.main.as_deref(),
-        true,
-        "Use the default model configured by ANTHROPIC_MODEL",
-    );
-    push_claude_settings_model_entry(
-        &mut entries,
-        "settings-sonnet",
-        overrides.sonnet.as_deref(),
-        false,
-        "Custom Sonnet model configured by ANTHROPIC_DEFAULT_SONNET_MODEL",
-    );
-    push_claude_settings_model_entry(
-        &mut entries,
-        "settings-opus",
-        overrides.opus.as_deref(),
-        false,
-        "Custom Opus model configured by ANTHROPIC_DEFAULT_OPUS_MODEL",
-    );
-    push_claude_settings_model_entry(
-        &mut entries,
-        "settings-haiku",
-        overrides.haiku.as_deref(),
-        false,
-        "Custom Haiku model configured by ANTHROPIC_DEFAULT_HAIKU_MODEL",
-    );
-    push_claude_settings_model_entry(
-        &mut entries,
-        "settings-reasoning",
-        overrides.reasoning.as_deref(),
-        false,
-        "Reasoning model configured by ANTHROPIC_REASONING_MODEL",
-    );
-    entries
-}
-
-fn push_claude_settings_model_entry(
-    entries: &mut Vec<ModelInfo>,
-    id: &str,
-    runtime_model: Option<&str>,
-    is_default: bool,
-    description: &str,
-) {
-    let Some(runtime_model) = runtime_model else {
-        return;
+fn resolve_override_for_family<'a>(
+    family: &str,
+    overrides: &'a ClaudeModelOverrides,
+) -> Option<&'a str> {
+    let tier = match family {
+        "fable" => overrides.fable.as_deref(),
+        "haiku" => overrides.haiku.as_deref(),
+        "sonnet" => overrides.sonnet.as_deref(),
+        "opus" => overrides.opus.as_deref(),
+        _ => None,
     };
-    let mut entry = ModelInfo::new(id, runtime_model)
-        .with_runtime_model(runtime_model)
-        .with_provider("anthropic")
-        .with_protocol("anthropic-messages")
-        .with_provenance("settings:claude-model-override")
-        .with_observed_at(model_catalog_now_ms())
-        .with_description(description)
-        .with_source("settings-override");
-    if is_default {
-        entry = entry.as_default();
+    tier.or(overrides.main.as_deref())
+}
+
+/// Apply settings/env model mapping onto the builtin tier catalog.
+///
+/// Keeps stable catalog ids (claude-opus-4-8, …) so the UI can still present
+/// one row per family with the original tier description, while rewriting:
+/// - `model` (runtime id sent to CLI)
+/// - `name` / displayName (what the picker shows when mapping is active)
+///
+/// This matches jetbrains-cc-gui: mapping changes labels, not the tier list.
+fn apply_claude_model_overrides(models: &mut Vec<ModelInfo>, overrides: ClaudeModelOverrides) {
+    let has_any = overrides.main.is_some()
+        || overrides.fable.is_some()
+        || overrides.sonnet.is_some()
+        || overrides.opus.is_some()
+        || overrides.haiku.is_some();
+    if !has_any {
+        return;
     }
-    entries.push(entry);
+
+    for model in models.iter_mut() {
+        let Some(family) = claude_model_family_key(&model.id) else {
+            continue;
+        };
+        let Some(mapped) = resolve_override_for_family(family, &overrides) else {
+            continue;
+        };
+        model.model = mapped.to_string();
+        model.name = mapped.to_string();
+        model.provenance = Some("settings:claude-model-override".to_string());
+        // Keep builtin tier descriptions so the subtitle still explains the family.
+        if model.source == "builtin" || model.source.is_empty() {
+            model.source = "settings-mapped".to_string();
+        }
+    }
 }
 
 fn ensure_default_model(models: &mut [ModelInfo]) {
@@ -1483,10 +1490,15 @@ fn dedupe_models_preserve_order(models: Vec<ModelInfo>) -> Vec<ModelInfo> {
     let mut seen = std::collections::HashSet::new();
     let mut deduped = Vec::with_capacity(models.len());
     for model in models {
-        let identity = if model.model.trim().is_empty() {
-            model.id.clone()
-        } else {
+        // Prefer stable catalog id so family-mapped tiers (same runtime model)
+        // remain distinct rows in the picker.
+        let identity = if model.id.trim().is_empty() {
+            if model.model.trim().is_empty() {
+                continue;
+            }
             model.model.clone()
+        } else {
+            model.id.clone()
         };
         if seen.insert(identity) {
             deduped.push(model);
@@ -1873,50 +1885,59 @@ mod tests {
     }
 
     #[test]
-    fn claude_settings_overrides_are_independent_runtime_entries() {
-        let mut models = Vec::new();
+    fn claude_settings_overrides_rewrite_builtin_tier_runtime_models() {
+        let mut models = get_builtin_claude_models();
         apply_claude_model_overrides(
             &mut models,
             ClaudeModelOverrides {
                 main: Some("MiniMax-M1[1m]".to_string()),
+                fable: Some("kimi-k3".to_string()),
                 sonnet: Some("GLM-5.1".to_string()),
                 opus: Some("MiniMax-M4[1m]".to_string()),
-                reasoning: Some("MiniMax-M2.7".to_string()),
+                haiku: Some("deepseek-v4-flash".to_string()),
                 ..ClaudeModelOverrides::default()
             },
         );
-        assert_eq!(models[0].id, "settings-main");
-        assert_eq!(models[0].model, "MiniMax-M1[1m]");
-        assert!(models[0].default);
-        assert_eq!(models[1].id, "settings-sonnet");
-        assert_eq!(models[1].model, "GLM-5.1");
-        assert_eq!(models[1].name, "GLM-5.1");
-        assert_eq!(models[0].source, "settings-override");
-        assert!(models.iter().any(|model| model.id == "settings-opus"
-            && model.model == "MiniMax-M4[1m]"
-            && model.name == "MiniMax-M4[1m]"));
-        assert!(models.iter().any(|model| model.id == "settings-reasoning"
-            && model.model == "MiniMax-M2.7"
-            && model.name == "MiniMax-M2.7"));
-        assert!(!models.iter().any(|model| model.id == "sonnet"));
-        assert!(!models.iter().any(|model| model.id == "claude-sonnet-4-6"));
+        // Tier ids stay stable; runtime model + display name are rewritten.
+        let fable = models.iter().find(|m| m.id == "claude-fable-5").unwrap();
+        assert_eq!(fable.model, "kimi-k3");
+        assert_eq!(fable.name, "kimi-k3");
+        assert!(fable.description.contains("Fable 5"));
+
+        let opus = models.iter().find(|m| m.id == "claude-opus-4-8").unwrap();
+        assert_eq!(opus.model, "MiniMax-M4[1m]");
+        assert_eq!(opus.name, "MiniMax-M4[1m]");
+
+        let sonnet = models.iter().find(|m| m.id == "claude-sonnet-5").unwrap();
+        assert_eq!(sonnet.model, "GLM-5.1");
+        assert_eq!(sonnet.name, "GLM-5.1");
+
+        let haiku = models
+            .iter()
+            .find(|m| m.id == "claude-haiku-4-5-20251001")
+            .unwrap();
+        assert_eq!(haiku.model, "deepseek-v4-flash");
+        assert_eq!(haiku.name, "deepseek-v4-flash");
+
+        // No synthetic settings-* catalog rows.
+        assert!(!models.iter().any(|model| model.id.starts_with("settings-")));
+        assert_eq!(models.len(), 4);
     }
 
     #[tokio::test]
     async fn claude_models_include_builtin_catalog() {
         let models = get_claude_models("claude", None).await;
-        // Builtin runtime models survive regardless of env/settings overrides:
-        // dedupe keys on the runtime model, so either the builtin entry or a
-        // same-runtime override entry remains.
-        for runtime in [
+        // Builtin tier catalog ids always remain, even when settings rewrite the
+        // runtime model (e.g. all tiers → kimi-k3).
+        for catalog_id in [
             "claude-opus-4-8",
             "claude-fable-5",
             "claude-sonnet-5",
             "claude-haiku-4-5-20251001",
         ] {
             assert!(
-                models.iter().any(|model| model.model == runtime),
-                "missing builtin runtime model {runtime}"
+                models.iter().any(|model| model.id == catalog_id),
+                "missing builtin catalog id {catalog_id}"
             );
         }
         // Bare help aliases are still not synthesized as catalog entries.
@@ -1927,32 +1948,38 @@ mod tests {
     }
 
     #[test]
-    fn claude_settings_overrides_take_precedence_over_builtin_catalog() {
+    fn claude_settings_overrides_map_all_tiers_to_same_runtime_without_collapse() {
         let mut models = get_builtin_claude_models();
         apply_claude_model_overrides(
             &mut models,
             ClaudeModelOverrides {
-                main: Some("GLM-5.1".to_string()),
-                opus: Some("claude-opus-4-8".to_string()),
+                fable: Some("kimi-k3".to_string()),
+                sonnet: Some("kimi-k3".to_string()),
+                opus: Some("kimi-k3".to_string()),
+                haiku: Some("kimi-k3".to_string()),
                 ..ClaudeModelOverrides::default()
             },
         );
         ensure_default_model(&mut models);
         let models = dedupe_models_preserve_order(models);
 
-        assert_eq!(models[0].id, "settings-main");
-        assert!(models[0].default);
-        // The settings opus entry shadows the builtin claude-opus-4-8.
-        let opus_entries: Vec<_> = models
-            .iter()
-            .filter(|model| model.model == "claude-opus-4-8")
-            .collect();
-        assert_eq!(opus_entries.len(), 1);
-        assert_eq!(opus_entries[0].source, "settings-override");
-        // Non-conflicting builtin models remain, without default flag.
+        // All four tiers remain visible even when they share the same runtime model.
+        assert_eq!(models.len(), 4);
+        assert!(models.iter().all(|model| model.model == "kimi-k3"));
+        assert!(models.iter().all(|model| model.name == "kimi-k3"));
+        assert!(models.iter().any(|model| model.id == "claude-fable-5"));
+        assert!(models.iter().any(|model| model.id == "claude-opus-4-8"));
+        assert!(models.iter().any(|model| model.id == "claude-sonnet-5"));
         assert!(models
             .iter()
-            .any(|model| model.model == "claude-fable-5" && !model.default));
+            .any(|model| model.id == "claude-haiku-4-5-20251001"));
+        // Tier descriptions are preserved for the subtitle row.
+        assert!(models
+            .iter()
+            .find(|model| model.id == "claude-fable-5")
+            .unwrap()
+            .description
+            .contains("Mythos"));
     }
 
     #[test]
@@ -1972,17 +1999,30 @@ mod tests {
     }
 
     #[test]
-    fn claude_model_dedupe_uses_runtime_model() {
-        let models = dedupe_models_preserve_order(vec![
+    fn claude_model_dedupe_uses_catalog_id() {
+        // Same catalog id collapses.
+        let same_id = dedupe_models_preserve_order(vec![
             ModelInfo::new("cli-sonnet", "Sonnet")
                 .with_runtime_model("sonnet")
                 .with_source("cli-discovered"),
-            ModelInfo::new("fallback-sonnet", "Fallback Sonnet")
+            ModelInfo::new("cli-sonnet", "Fallback Sonnet")
                 .with_runtime_model("sonnet")
                 .with_source("builtin-fallback"),
         ]);
-        assert_eq!(models.len(), 1);
-        assert_eq!(models[0].source, "cli-discovered");
+        assert_eq!(same_id.len(), 1);
+        assert_eq!(same_id[0].source, "cli-discovered");
+
+        // Different catalog ids with the same runtime model stay distinct
+        // (required when ANTHROPIC_DEFAULT_* map every tier to one model).
+        let shared_runtime = dedupe_models_preserve_order(vec![
+            ModelInfo::new("claude-opus-4-8", "kimi-k3")
+                .with_runtime_model("kimi-k3")
+                .with_source("settings-mapped"),
+            ModelInfo::new("claude-sonnet-5", "kimi-k3")
+                .with_runtime_model("kimi-k3")
+                .with_source("settings-mapped"),
+        ]);
+        assert_eq!(shared_runtime.len(), 2);
     }
 
     #[test]
@@ -1996,15 +2036,22 @@ mod tests {
             public_models_for_engine(EngineType::Claude),
         );
 
-        assert_eq!(
+        // Provider catalog carries the full tier list, all scoped to the profile.
+        // With only ANTHROPIC_MODEL set, every family falls back to that main slot.
+        assert!(
             models
                 .iter()
-                .filter(|model| model.model == "claude-opus-4-8")
-                .count(),
-            1
+                .filter(|model| model.provider_profile_id.as_deref() == Some("provider-a"))
+                .count()
+                >= 4
         );
         assert_eq!(models[0].provider_profile_id.as_deref(), Some("provider-a"));
-        assert!(models.iter().any(|model| model.model == "claude-sonnet-5"));
+        assert!(models.iter().any(|model| model.id == "claude-opus-4-8"));
+        assert!(models.iter().any(|model| model.id == "claude-sonnet-5"));
+        assert!(models
+            .iter()
+            .filter(|model| model.provider_profile_id.as_deref() == Some("provider-a"))
+            .all(|model| model.model == "claude-opus-4-8"));
     }
 
     #[test]

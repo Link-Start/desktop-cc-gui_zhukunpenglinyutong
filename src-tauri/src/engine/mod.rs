@@ -401,7 +401,7 @@ impl EngineFeatures {
         Self {
             reasoning_effort: false,
             collaboration_mode: false,
-            // Headless multimodal via `grok --prompt-json` ACP image blocks.
+            // Headless multimodal via `grok --prompt-file` ACP image blocks.
             image_input: true,
             session_resume: true,
             tools_control: true,

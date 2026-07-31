@@ -676,6 +676,7 @@ export type LayoutNodesFlatOptions = {
   onOpenAgentSettings: () => void;
   onOpenPromptSettings: () => void;
   onOpenModelSettings: (providerId?: string) => void;
+  onOpenCliSettings: () => void;
   onRefreshModelConfig?: (providerId?: string) => Promise<void> | void;
   isModelConfigRefreshing?: boolean;
   opencodeVariantOptions: string[];
@@ -820,6 +821,7 @@ export type ChromeLayoutNodesOptions = Pick<
   | "onOpenAgentSettings"
   | "onOpenPromptSettings"
   | "onOpenModelSettings"
+  | "onOpenCliSettings"
   | "onRefreshModelConfig"
   | "isModelConfigRefreshing"
   | "onOpenDictationSettings"

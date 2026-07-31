@@ -874,6 +874,7 @@ function createLayoutOptions(
     onOpenAgentSettings: noop,
     onOpenPromptSettings: noop,
     onOpenModelSettings: noop,
+    onOpenCliSettings: noop,
     opencodeVariantOptions: [],
     selectedOpenCodeVariant: null,
     onSelectOpenCodeVariant: noop,

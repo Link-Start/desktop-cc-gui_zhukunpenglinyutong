@@ -32,6 +32,34 @@
   font-size: 13px;
 }
 
+.selector-model-brand-icon {
+  align-items: center;
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+  line-height: 1;
+  /* Keep room for brand tiles (kimi white-on-dark) without clipping. */
+  overflow: visible;
+}
+
+.selector-model-brand-icon img {
+  display: block;
+  height: 100%;
+  width: 100%;
+  /* Match settings-side dark tile for white-glyph brands when CSS is available;
+     ProviderBrandIconImg also inlines the same look so chat works before
+     settings CSS loads. */
+  box-sizing: border-box;
+}
+
+/* kimi-color etc.: white glyph needs a dark plate on light theme */
+.selector-model-brand-icon img.vendor-brand-icon-tile {
+  background: #0d0d0d;
+  border-radius: 3px;
+  object-fit: contain;
+  padding: 2px;
+}
+
 .selector-button-mode-trigger {
   transition:
     background 0.2s ease,

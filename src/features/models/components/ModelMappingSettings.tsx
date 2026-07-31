@@ -27,6 +27,9 @@ export function ModelMappingSettings({
 
   const handleSave = useCallback(() => {
     const filtered: ModelMapping = {};
+    if (draftValues.fable?.trim()) {
+      filtered.fable = draftValues.fable.trim();
+    }
     if (draftValues.sonnet?.trim()) {
       filtered.sonnet = draftValues.sonnet.trim();
     }
@@ -53,11 +56,13 @@ export function ModelMappingSettings({
   }, []);
 
   const hasChanges =
+    (draftValues.fable ?? "") !== (mapping.fable ?? "") ||
     (draftValues.sonnet ?? "") !== (mapping.sonnet ?? "") ||
     (draftValues.opus ?? "") !== (mapping.opus ?? "") ||
     (draftValues.haiku ?? "") !== (mapping.haiku ?? "");
 
   const hasAnyMapping =
+    (mapping.fable ?? "") !== "" ||
     (mapping.sonnet ?? "") !== "" ||
     (mapping.opus ?? "") !== "" ||
     (mapping.haiku ?? "") !== "";
@@ -87,6 +92,25 @@ export function ModelMappingSettings({
       </div>
 
       <div className="model-mapping-fields">
+        <div className="model-mapping-field">
+          <label htmlFor="model-mapping-fable" className="model-mapping-label">
+            {t("settings.modelMappingFable", { defaultValue: "Fable 模型" })}
+            <span className="model-mapping-default">
+              {t("settings.modelMappingDefault", { model: "fable" })}
+            </span>
+          </label>
+          <input
+            id="model-mapping-fable"
+            type="text"
+            className="model-mapping-input"
+            placeholder={t("settings.modelMappingPlaceholder")}
+            value={draftValues.fable ?? ""}
+            onChange={(e) =>
+              setDraftValues((prev) => ({ ...prev, fable: e.target.value }))
+            }
+          />
+        </div>
+
         <div className="model-mapping-field">
           <label htmlFor="model-mapping-sonnet" className="model-mapping-label">
             {t("settings.modelMappingSonnet")}

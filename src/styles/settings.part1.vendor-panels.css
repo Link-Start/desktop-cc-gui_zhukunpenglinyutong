@@ -971,12 +971,14 @@
 }
 
 /* 白色主体字形的品牌图标(如 kimi)在浅色底上不可见,衬深色品牌瓦片;
-   外层尺寸仍由 .vendor-preset-btn-icon / .vendor-card-icon 的 img 规则控制 */
+   外层尺寸仍由 .vendor-preset-btn-icon / .vendor-card-icon 的 img 规则控制。
+   box-sizing:border-box 保证 padding 不额外撑开固定宽高(composer 18px 图标位)。 */
 .vendor-brand-icon-tile {
   background: #0d0d0d;
   border-radius: 3px;
-  padding: 2px;
+  box-sizing: border-box;
   object-fit: contain;
+  padding: 2px;
 }
 
 .vendor-card-info {

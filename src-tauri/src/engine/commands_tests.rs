@@ -88,7 +88,7 @@ fn image_support_guard_follows_engine_feature_matrix() {
     let whitespace_only = Some(vec!["  ".to_string(), "".to_string(), " \n ".to_string()]);
 
     // All current CLI engines support image input at the capability gate.
-    // (Transport differs: Claude/Codex native, Grok prompt-json, OpenCode -f,
+    // (Transport differs: Claude/Codex native, Grok prompt-file, OpenCode -f,
     //  Kimi path+ReadMediaFile.)
     for engine in [
         EngineType::Claude,

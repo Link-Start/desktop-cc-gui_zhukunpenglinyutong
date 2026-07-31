@@ -13,7 +13,7 @@
 
 | Engine | 有图命令形态 | 备注 |
 |---|---|---|
-| Grok | `--prompt-json` ACP blocks | prompt 原文保真；单图 ≤2MiB；json ≤700KB |
+| Grok | `--prompt-file` ACP blocks | prompt 原文保真；单图 ≤2MiB；JSON 写 staging 文件，不占 argv |
 | OpenCode | `run -f path` | data URL 先 staging |
 | Kimi | `-p` + path injection | agent ReadMediaFile；非首包 inline |
 | Claude/Codex/Gemini | 既有 | 本 change 不改 wire |
@@ -27,7 +27,7 @@
 - Kimi：`build_kimi_prompt_with_images` + `split_kimi_prompt_for_display`
 - marker：`<!-- mossx:kimi-image-attachments -->`
 
-Grok prompt-json 组装仍在 `grok.rs`（base64 ACP）；历史拆包在 `grok_history.rs`。
+Grok ACP blocks 组装仍在 `grok.rs`（base64 → staging `--prompt-file`）；历史拆包在 `grok_history.rs`。
 
 ## 2. 数据流
 
@@ -68,7 +68,7 @@ engine_send_message_sync(codex)
 
 | 风险 | 缓解 |
 |---|---|
-| Grok ARG_MAX | soft-cap + 明确错误 |
+| Grok ARG_MAX | multimodal 走 `--prompt-file`，argv 只传路径 |
 | Kimi 依赖 ReadMediaFile | 文档标明 agent 读图语义 |
 | 中文路径 asset 失败 | LocalImage + data URL 回退 |
 | staging 污染 | 路径在 `.mossx/image-staging/`；建议 gitignore |

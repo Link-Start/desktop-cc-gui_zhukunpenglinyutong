@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildProviderExecutionTarget,
@@ -30,7 +30,17 @@ vi.mock("../../../../engine/components/EngineIcon", () => ({
   ),
 }));
 
+vi.mock("../../../../vendors/providerBrandIcon", () => ({
+  providerBrandIconNeedsDarkTile: () => false,
+  resolveProviderBrandIcon: ({ modelId }: { modelId?: string | null }) =>
+    modelId === "kimi-k3" ? "/icons/kimi.svg" : null,
+}));
+
 describe("ModelSelect", () => {
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
   it("renders the readiness trigger with provider and selected model chrome", async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const onChange = vi.fn();
@@ -92,26 +102,171 @@ describe("ModelSelect", () => {
     );
 
     await user.click(
-      screen.getByRole("button", { name: "chat.currentModel:models.codex.gpt54.label" }),
+      screen.getByRole("button", { name: "chat.currentModel:GPT-5.4" }),
     );
 
     // The first level is provider/CLI only; models stay in the hover submenu.
     const claudeProviderItem = await screen.findByRole("menuitem", { name: /Claude Code/ });
     expect(screen.getByRole("menuitem", { name: /Codex/ })).toBeTruthy();
-    expect(screen.queryByText("Sonnet 4.6")).toBeNull();
-    expect(screen.queryByText("GPT-5.4")).toBeNull();
-    expect(screen.queryByText("hidden")).toBeNull();
+    // Trigger still shows the selected model text; model rows are not yet in the menu.
+    expect(screen.queryByRole("menuitem", { name: /Sonnet 4\.6/ })).toBeNull();
 
     await user.hover(claudeProviderItem);
-    const sonnetItem = await screen.findByRole("menuitem", { name: /Sonnet 4.6/ });
+    const sonnetItem = await screen.findByRole("menuitem", {
+      name: /Sonnet 4\.6|models\.claude\.sonnet46/,
+    });
     expect(sonnetItem).toBeTruthy();
-    // Grouped items stay compact (no description).
-    expect(screen.queryByText("hidden")).toBeNull();
+    // Grouped items now show the tier description subtitle (jetbrains parity).
+    expect(sonnetItem.textContent).toMatch(
+      /models\.claude\.sonnet46\.description|hidden/,
+    );
 
     fireEvent.click(sonnetItem);
 
     expect(onProviderModelChange).toHaveBeenCalledWith("claude", "claude-sonnet-4-6");
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("uses runtime model ids for mapped model brand icons", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    window.localStorage.setItem(
+      STORAGE_KEYS.CLAUDE_MODEL_MAPPING,
+      JSON.stringify({ opus: "kimi-k3" }),
+    );
+
+    render(
+      <ModelSelect
+        value="claude-opus-4-8"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        models={[
+          {
+            id: "claude-opus-4-8",
+            model: "kimi-k3",
+            label: "Opus 4.8",
+          },
+        ]}
+        modelGroups={[
+          {
+            providerId: "claude",
+            providerLabel: "Claude Code",
+            enabled: true,
+            models: [
+              {
+                id: "claude-opus-4-8",
+                model: "kimi-k3",
+                label: "Opus 4.8",
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    // Mapped label becomes kimi-k3 (not the original Opus 4.8 tier name).
+    const trigger = screen.getByRole("button", {
+      name: "chat.currentModel:kimi-k3",
+    });
+    expect(trigger.querySelector("img")?.getAttribute("src")).toBe(
+      "/icons/kimi.svg",
+    );
+    expect(within(trigger).queryByTestId("claude-icon")).toBeNull();
+
+    await user.click(trigger);
+    const claudeProviderItem = await screen.findByRole("menuitem", {
+      name: /Claude Code/,
+    });
+    expect(within(claudeProviderItem).getByTestId("claude-icon")).toBeTruthy();
+
+    await user.hover(claudeProviderItem);
+    const opusItem = await screen.findByRole("menuitem", { name: /kimi-k3/ });
+    expect(opusItem.querySelector("img")?.getAttribute("src")).toBe(
+      "/icons/kimi.svg",
+    );
+    // Subtitle explains the tier while the primary label shows the mapped model.
+    expect(opusItem.textContent).toMatch(/Opus 4\.8|models\.claude\.opus48/);
+  });
+
+  it("shows mapped labels and tier descriptions for every Claude family slot", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    window.localStorage.setItem(
+      STORAGE_KEYS.CLAUDE_MODEL_MAPPING,
+      JSON.stringify({
+        fable: "kimi-k3",
+        opus: "kimi-k3",
+        sonnet: "kimi-k3",
+        haiku: "kimi-k3",
+      }),
+    );
+
+    render(
+      <ModelSelect
+        value="claude-fable-5"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        models={[
+          { id: "claude-fable-5", model: "kimi-k3", label: "Fable 5" },
+          { id: "claude-opus-4-8", model: "kimi-k3", label: "Opus 4.8" },
+          { id: "claude-sonnet-5", model: "kimi-k3", label: "Sonnet 5" },
+          {
+            id: "claude-haiku-4-5-20251001",
+            model: "kimi-k3",
+            label: "Haiku 4.5",
+          },
+        ]}
+        modelGroups={[
+          {
+            providerId: "claude",
+            providerLabel: "Claude Code",
+            enabled: true,
+            models: [
+              { id: "claude-fable-5", model: "kimi-k3", label: "Fable 5" },
+              { id: "claude-opus-4-8", model: "kimi-k3", label: "Opus 4.8" },
+              { id: "claude-sonnet-5", model: "kimi-k3", label: "Sonnet 5" },
+              {
+                id: "claude-haiku-4-5-20251001",
+                model: "kimi-k3",
+                label: "Haiku 4.5",
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "chat.currentModel:kimi-k3" }),
+    ).toBeTruthy();
+
+    await user.click(
+      screen.getByRole("button", { name: "chat.currentModel:kimi-k3" }),
+    );
+    await user.hover(
+      await screen.findByRole("menuitem", { name: /Claude Code/ }),
+    );
+
+    const fableItem = await screen.findByRole("menuitem", {
+      name: /kimi-k3[\s\S]*models\.claude\.fable5\.description|kimi-k3[\s\S]*Fable 5/,
+    });
+    const opusItem = await screen.findByRole("menuitem", {
+      name: /kimi-k3[\s\S]*models\.claude\.opus48\.description|kimi-k3[\s\S]*Opus 4\.8/,
+    });
+    const sonnetItem = await screen.findByRole("menuitem", {
+      name: /kimi-k3[\s\S]*models\.claude\.sonnet5\.description|kimi-k3[\s\S]*Sonnet 5/,
+    });
+    const haikuItem = await screen.findByRole("menuitem", {
+      name: /kimi-k3[\s\S]*models\.claude\.haiku45\.description|kimi-k3[\s\S]*Haiku/,
+    });
+
+    for (const item of [fableItem, opusItem, sonnetItem, haikuItem]) {
+      expect(item.textContent).toContain("kimi-k3");
+      expect(item.querySelector("img")?.getAttribute("src")).toBe(
+        "/icons/kimi.svg",
+      );
+    }
   });
 
   it("does not display the first model when no model value is selected", () => {
@@ -232,10 +387,56 @@ describe("ModelSelect", () => {
     expect(onAddModel).toHaveBeenCalledTimes(1);
   });
 
-  it("uses refreshed model labels passed by the parent instead of stale localStorage mapping", () => {
+  it("renders a root footer action that opens CLI settings", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onOpenCliSettings = vi.fn();
+
+    render(
+      <ModelSelect
+        value="claude-opus-4-8"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        onOpenCliSettings={onOpenCliSettings}
+        models={[
+          { id: "claude-opus-4-8", label: "Opus 4.8" },
+          { id: "claude-sonnet-5", label: "Sonnet 5" },
+        ]}
+        modelGroups={[
+          {
+            providerId: "claude",
+            providerLabel: "Claude Code",
+            enabled: true,
+            models: [
+              { id: "claude-opus-4-8", label: "Opus 4.8" },
+              { id: "claude-sonnet-5", label: "Sonnet 5" },
+            ],
+          },
+          {
+            providerId: "codex",
+            providerLabel: "Codex CLI",
+            enabled: true,
+            models: [{ id: "gpt-5.4", label: "GPT-5.4" }],
+          },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "chat.currentModel:Opus 4.8" }));
+
+    const cliSettingsItem = await screen.findByRole("menuitem", {
+      name: "models.openCliSettings",
+    });
+    expect(cliSettingsItem).toBeTruthy();
+
+    fireEvent.click(cliSettingsItem);
+    expect(onOpenCliSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("prefers active localStorage mapping over parent-provided tier labels", () => {
     window.localStorage.setItem(
       STORAGE_KEYS.CLAUDE_MODEL_MAPPING,
-      JSON.stringify({ sonnet: "old-settings-model" }),
+      JSON.stringify({ sonnet: "kimi-k3" }),
     );
 
     render(
@@ -243,14 +444,14 @@ describe("ModelSelect", () => {
         value="claude-sonnet-4-6"
         currentProvider="claude"
         onChange={vi.fn()}
-        models={[{ id: "claude-sonnet-4-6", label: "new-settings-model" }]}
+        models={[{ id: "claude-sonnet-4-6", label: "Sonnet 4.6" }]}
       />,
     );
 
     const buttonText = screen.getByRole("button").textContent ?? "";
 
-    expect(buttonText).toContain("new-settings-model");
-    expect(buttonText).not.toContain("old-settings-model");
+    expect(buttonText).toContain("kimi-k3");
+    expect(buttonText).not.toContain("Sonnet 4.6");
   });
 
   it("does not synthesize a missing Claude selected value as a fallback option", () => {

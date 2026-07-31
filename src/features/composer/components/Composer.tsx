@@ -241,6 +241,7 @@ type ComposerProps = {
   onOpenAgentSettings?: () => void;
   onOpenPromptSettings?: () => void;
   onOpenModelSettings?: (providerId?: string) => void;
+  onOpenCliSettings?: () => void;
   onRefreshModelConfig?: (providerId?: string) => Promise<void> | void;
   isModelConfigRefreshing?: boolean;
   onForkQuickStart?: () => void;
@@ -520,6 +521,7 @@ function ComposerImpl({
   onOpenAgentSettings,
   onOpenPromptSettings,
   onOpenModelSettings,
+  onOpenCliSettings,
   onRefreshModelConfig,
   isModelConfigRefreshing,
   onForkQuickStart,
@@ -2827,6 +2829,7 @@ function ComposerImpl({
               onOpenAgentSettings={onOpenAgentSettings}
               onOpenPromptSettings={onOpenPromptSettings}
               onOpenModelSettings={onOpenModelSettings}
+              onOpenCliSettings={onOpenCliSettings}
               onOpenFileReference={onOpenDiffPath}
               onRefreshModelConfig={onRefreshModelConfig}
               isModelConfigRefreshing={isModelConfigRefreshing}

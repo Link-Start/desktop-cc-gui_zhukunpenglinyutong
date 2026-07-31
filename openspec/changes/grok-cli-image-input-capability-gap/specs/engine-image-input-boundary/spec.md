@@ -1,29 +1,32 @@
 ## ADDED Requirements
 
-### Requirement: Grok image transport via prompt-json
+### Requirement: Grok image transport via prompt-file
 
-The runtime MUST launch Grok with `--prompt-json` ACP content blocks when the
-resolved engine is Grok and the sanitized image list is non-empty. The blocks
-include:
+The runtime MUST launch Grok with `--prompt-file <path>` when the resolved
+engine is Grok and the sanitized image list is non-empty. The file content MUST
+be ACP content blocks including:
 
 - one `text` block preserving the non-empty user prompt verbatim (or a minimal
   placeholder if text is empty)
 - one `image` block per successfully loaded attachment:
   `{ "type": "image", "mimeType": "<mime>", "data": "<base64>" }`
 
+Argv MUST carry only the staging file path (not the base64 JSON body), so large
+screenshots are not subject to OS ARG_MAX / former 700KB soft-cap failures.
 Text-only Grok turns MUST keep the legacy `-p` path.
 
 #### Scenario: Grok text-only keeps -p
 
 - **WHEN** a Grok send has no non-empty image attachments
 - **THEN** the process args MUST include `-p` / `--single` text prompt
-- **AND** MUST NOT require `--prompt-json`
+- **AND** MUST NOT require `--prompt-file` or `--prompt-json`
 
-#### Scenario: Grok with local image uses prompt-json
+#### Scenario: Grok with local image uses prompt-file
 
 - **WHEN** a Grok send includes a readable local image path
-- **THEN** the process args MUST include `--prompt-json`
-- **AND** the JSON payload MUST contain an ACP `image` block with base64 data
+- **THEN** the process args MUST include `--prompt-file` followed by a staging path
+- **AND** MUST NOT place the ACP JSON body on `--prompt-json` argv
+- **AND** the staging file MUST contain an ACP `image` block with base64 data
 - **AND** non-empty user text MUST be preserved verbatim in the ACP `text` block
 
 #### Scenario: Grok image load failure is explicit

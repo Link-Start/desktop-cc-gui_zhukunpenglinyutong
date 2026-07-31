@@ -1,7 +1,7 @@
 ## 1. Grok real image transport (P0)
 
-- [x] 1.1 `grok.rs`：有图 `--prompt-json` ACP image blocks；无图保留 `-p`
-- [x] 1.2 prompt 原文保真 / workspace-relative path / data URL / mime / soft-cap（2MiB 图、700KB json）/ 显式加载失败
+- [x] 1.1 `grok.rs`：有图 `--prompt-file` ACP image blocks（staging JSON）；无图保留 `-p`
+- [x] 1.2 prompt 原文保真 / workspace-relative path / data URL / mime / soft-cap（2MiB 图；payload 经 `--prompt-file`）/ 显式加载失败
 - [x] 1.3 `EngineFeatures::grok().image_input = true` + matrix regenerate
 - [x] 1.4 `grok_history`：解析 `<image_files>` + `<user_query>` → text + images[]
 - [x] 1.5 预览白名单最小化为 `~/.grok/sessions` / `$GROK_HOME/sessions`

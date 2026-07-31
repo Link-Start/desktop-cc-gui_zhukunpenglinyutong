@@ -1167,6 +1167,9 @@ export function useAppShellLayoutNodesSection(
   const handleOpenPromptSettings = useEventCallback(() =>
     openSettings("agent-prompt-management", "prompt-library"),
   );
+  const handleOpenCliSettings = useEventCallback(() =>
+    openSettings("providers"),
+  );
   const handleOpenDictationSettings = useEventCallback(() =>
     openSettings("dictation"),
   );
@@ -1869,6 +1872,7 @@ export function useAppShellLayoutNodesSection(
       onOpenAgentSettings: handleOpenAgentSettings,
       onOpenPromptSettings: handleOpenPromptSettings,
       onOpenModelSettings: handleOpenModelSettings,
+      onOpenCliSettings: handleOpenCliSettings,
       onRefreshModelConfig: handleRefreshModelConfig,
       isModelConfigRefreshing,
       onOpenDictationSettings: handleOpenDictationSettings,

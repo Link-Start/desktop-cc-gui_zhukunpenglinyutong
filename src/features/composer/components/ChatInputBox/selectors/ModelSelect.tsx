@@ -1,6 +1,7 @@
-import { Fragment, memo, useCallback, useMemo, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import CheckIcon from 'lucide-react/dist/esm/icons/check';
+import Settings2Icon from 'lucide-react/dist/esm/icons/settings-2';
 import type { ModelInfo, ProviderId } from '../types';
 import type { ProviderModelGroup } from '../modelOptions';
 import type { ProviderTargetGroup } from '../hooks/useProviderTargetCatalogOwners';
@@ -13,6 +14,14 @@ import {
   OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
 } from '../../../../threads/constants/codexProviderProfiles';
 import { EngineIcon } from '../../../../engine/components/EngineIcon';
+import { ProviderBrandIconImg } from '../../../../vendors/components/ProviderBrandIconImg';
+import { resolveProviderBrandIcon } from '../../../../vendors/providerBrandIcon';
+import {
+  STORAGE_KEYS as MODEL_MAPPING_STORAGE_KEYS,
+  getModelMapping,
+  resolveModelMappingValue,
+  type ModelMapping,
+} from '../../../../models/constants';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -37,6 +46,8 @@ interface ModelSelectProps {
   onAddModel?: () => void;  // Navigate to model management
   onRefreshConfig?: () => Promise<void> | void; // Refresh current provider config
   isRefreshingConfig?: boolean;
+  /** Jump to CLI / provider settings management page */
+  onOpenCliSettings?: () => void;
   // 共享会话(atomic)目标选择:与 legacy 相同的「引擎子菜单 → 平铺模型」
   // 交互,数据来自 target catalog,选中产出完整 ExecutionTarget。
   targetGroups?: ProviderTargetGroup[];
@@ -55,19 +66,33 @@ interface ModelSelectProps {
 }
 
 const MODEL_LABEL_KEYS: Record<string, string> = {
+  'claude-fable-5': 'models.claude.fable5.label',
+  'claude-opus-5': 'models.claude.opus5.label',
+  'claude-opus-4-8': 'models.claude.opus48.label',
+  'claude-sonnet-5': 'models.claude.sonnet5.label',
+  'claude-sonnet-4-7': 'models.claude.sonnet47.label',
+  'claude-sonnet-4-6': 'models.claude.sonnet46.label',
+  'claude-haiku-4-5': 'models.claude.haiku45.label',
+  'claude-haiku-4-5-20251001': 'models.claude.haiku45.label',
   'gpt-5.6-sol': 'models.codex.gpt56sol.label',
   'gpt-5.6-terra': 'models.codex.gpt56terra.label',
   'gpt-5.6-luna': 'models.codex.gpt56luna.label',
   'gpt-5.5': 'models.codex.gpt55.label',
-  'gpt-5.4': 'models.codex.gpt54.label',
 };
 
 const MODEL_DESCRIPTION_KEYS: Record<string, string> = {
+  'claude-fable-5': 'models.claude.fable5.description',
+  'claude-opus-5': 'models.claude.opus5.description',
+  'claude-opus-4-8': 'models.claude.opus48.description',
+  'claude-sonnet-5': 'models.claude.sonnet5.description',
+  'claude-sonnet-4-7': 'models.claude.sonnet47.description',
+  'claude-sonnet-4-6': 'models.claude.sonnet46.description',
+  'claude-haiku-4-5': 'models.claude.haiku45.description',
+  'claude-haiku-4-5-20251001': 'models.claude.haiku45.description',
   'gpt-5.6-sol': 'models.codex.gpt56sol.description',
   'gpt-5.6-terra': 'models.codex.gpt56terra.description',
   'gpt-5.6-luna': 'models.codex.gpt56luna.description',
   'gpt-5.5': 'models.codex.gpt55.description',
-  'gpt-5.4': 'models.codex.gpt54.description',
 };
 
 const LOCAL_PROVIDER_PROFILE_IDS: Partial<Record<ProviderId, string>> = {
@@ -162,6 +187,25 @@ function resolveRuntimeModel(model: ModelInfo): string | undefined {
   return model.model?.trim() || model.id.trim() || undefined;
 }
 
+/**
+ * Resolve the model id used for brand-icon matching.
+ * Prefer the mapped runtime model (e.g. kimi-k3) so third-party providers show
+ * their own logo instead of the Claude glyph.
+ */
+function resolveModelIdForIcon(
+  model: ModelInfo | null | undefined,
+  mapping: ModelMapping,
+): string | null {
+  if (!model) {
+    return null;
+  }
+  const mapped = resolveModelMappingValue(model.id, mapping);
+  if (mapped) {
+    return mapped;
+  }
+  return resolveRuntimeModel(model) ?? model.id;
+}
+
 function isSelectedExecutionModel(
   executionTarget: ExecutionTarget | null | undefined,
   model: ModelInfo,
@@ -196,10 +240,38 @@ type PickerModelGroup = {
 };
 
 /**
- * Model icon component - displays different icons based on provider type
+ * Model icon component - displays vendor icons for mapped runtime models and
+ * falls back to the owning CLI icon.
  */
-const ModelIcon = ({ provider, size = 16 }: { provider?: string; size?: number }) => {
+const ModelIcon = ({
+  provider,
+  model,
+  modelIdForIcon,
+  size = 16,
+}: {
+  provider?: string;
+  model?: ModelInfo | null;
+  /** Pre-resolved id for brand matching (mapped runtime name preferred). */
+  modelIdForIcon?: string | null;
+  size?: number;
+}) => {
   const imgStyle = { width: size, height: size, flexShrink: 0 } as const;
+  const resolvedModelId =
+    modelIdForIcon?.trim() ||
+    (model ? resolveRuntimeModel(model) ?? model.id : null);
+  const brandIconSrc = resolvedModelId
+    ? resolveProviderBrandIcon({
+        modelId: resolvedModelId,
+        presetId: provider,
+      })
+    : null;
+  if (brandIconSrc) {
+    return (
+      <span style={imgStyle} className="selector-model-brand-icon" aria-hidden>
+        <ProviderBrandIconImg src={brandIconSrc} />
+      </span>
+    );
+  }
   switch (provider) {
     case 'codex':
       return <EngineIcon engine="codex" size={size} style={imgStyle} />;
@@ -232,6 +304,7 @@ export const ModelSelect = memo(({
   onAddModel,
   onRefreshConfig,
   isRefreshingConfig = false,
+  onOpenCliSettings,
   targetGroups,
   executionTarget,
   onExecutionTargetChange,
@@ -243,6 +316,36 @@ export const ModelSelect = memo(({
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [refreshConfigError, setRefreshConfigError] = useState<string | null>(null);
+  const [modelMappingVersion, setModelMappingVersion] = useState(0);
+
+  // Keep label/icon mapping in sync when the active provider rewrites
+  // claude-model-mapping (same-tab custom event + cross-tab storage).
+  useEffect(() => {
+    const isRelevant = (key: string | null | undefined) =>
+      key === MODEL_MAPPING_STORAGE_KEYS.CLAUDE_MODEL_MAPPING;
+    const onStorage = (event: StorageEvent) => {
+      if (isRelevant(event.key)) {
+        setModelMappingVersion((version) => version + 1);
+      }
+    };
+    const onCustom = (event: Event) => {
+      const detail = (event as CustomEvent<{ key?: string }>).detail;
+      if (isRelevant(detail?.key)) {
+        setModelMappingVersion((version) => version + 1);
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('localStorageChange', onCustom);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('localStorageChange', onCustom);
+    };
+  }, []);
+
+  const modelMapping = useMemo(() => {
+    void modelMappingVersion;
+    return getModelMapping();
+  }, [modelMappingVersion]);
 
   const hasTargetGroups = Boolean(targetGroups && targetGroups.length > 0);
 
@@ -311,24 +414,40 @@ export const ModelSelect = memo(({
       : null);
 
   const getModelLabel = (model: ModelInfo): string => {
-    // The parent owns refreshed provider/model mapping. Keep this selector
-    // presentational so manual config refreshes can update labels immediately.
-    const labelKey = MODEL_LABEL_KEYS[model.id];
+    // Prefer active provider mapping (e.g. kimi-k3) so every tier row shows the
+    // real runtime model — mirrors jetbrains-cc-gui ModelSelect behaviour.
+    const mappedName = resolveModelMappingValue(model.id, modelMapping);
+    if (mappedName) {
+      return mappedName;
+    }
 
+    const parentLabel = model.label?.trim() || "";
+    // Parent/backend already rewrote the label (mapped runtime name, or a
+    // curated tier title). Prefer it over static i18n so refresh paths work.
+    if (parentLabel) {
+      return parentLabel;
+    }
+
+    const labelKey = MODEL_LABEL_KEYS[model.id];
     if (labelKey) {
       return t(labelKey);
     }
 
-    return model.label;
+    return model.id;
   };
 
   const getModelDescription = (model: ModelInfo): string | undefined => {
+    // Always prefer the localized tier subtitle when available, so mapped
+    // labels (kimi-k3) still explain which Claude family slot they occupy.
     const descriptionKey = MODEL_DESCRIPTION_KEYS[model.id];
     if (descriptionKey) {
       return t(descriptionKey);
     }
     return model.description;
   };
+
+  const getModelIconId = (model?: ModelInfo | null): string | null =>
+    resolveModelIdForIcon(model, modelMapping);
   const currentModelLabel = currentModel ? getModelLabel(currentModel) : t('models.selectModel');
   const hasConfigActions = Boolean(onAddModel || onRefreshConfig);
 
@@ -405,6 +524,11 @@ export const ModelSelect = memo(({
     setIsOpen(false);
   }, [onAddModel]);
 
+  const handleOpenCliSettings = useCallback(() => {
+    onOpenCliSettings?.();
+    setIsOpen(false);
+  }, [onOpenCliSettings]);
+
   // Refresh keeps the menu open so the spinner / error stay visible.
   const handleRefreshConfig = useCallback(() => {
     if (!onRefreshConfig || isRefreshingConfig) {
@@ -472,7 +596,12 @@ export const ModelSelect = memo(({
       {triggerVariant === 'readiness' ? (
         <>
           <span className="composer-readiness-icon" aria-hidden="true">
-            <ModelIcon provider={currentProvider} size={16} />
+            <ModelIcon
+              provider={currentProvider}
+              model={currentModel}
+              modelIdForIcon={getModelIconId(currentModel)}
+              size={16}
+            />
           </span>
           <span className="composer-readiness-model">
             {currentModelLabel}
@@ -480,7 +609,12 @@ export const ModelSelect = memo(({
         </>
       ) : (
         <>
-          <ModelIcon provider={currentProvider} size={12} />
+          <ModelIcon
+            provider={currentProvider}
+            model={currentModel}
+            modelIdForIcon={getModelIconId(currentModel)}
+            size={12}
+          />
           <span className="selector-button-text">{currentModelLabel}</span>
           <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={{ fontSize: '10px', marginLeft: '2px' }} />
         </>
@@ -529,7 +663,12 @@ export const ModelSelect = memo(({
                       className="max-h-[380px] w-64 overflow-y-auto"
                     >
                       <DropdownMenuLabel className="flex items-center justify-between gap-2 text-muted-foreground">
-                        <span className="min-w-0 truncate">{group.providerLabel}</span>
+                        <span className="min-w-0 truncate">
+                          {t('models.engineHeader', {
+                            name: group.providerLabel,
+                            defaultValue: `${group.providerLabel} 引擎`,
+                          })}
+                        </span>
                         {groupRefresh && (
                           <button
                             type="button"
@@ -585,6 +724,7 @@ export const ModelSelect = memo(({
                         )}
                       {group.models.map((model) => {
                         const isSelected = isGroupModelSelected(group, model);
+                        const description = getModelDescription(model);
                         return (
                           <DropdownMenuItem
                             key={`${group.providerId}:${model.id}`}
@@ -594,11 +734,25 @@ export const ModelSelect = memo(({
                               event.preventDefault();
                               handlePickerSelect(group, model);
                             }}
-                            className="gap-2"
+                            className="items-start gap-2"
                           >
-                            <ModelIcon provider={group.providerId} size={18} />
-                            <span className="min-w-0 flex-1 truncate">{getModelLabel(model)}</span>
-                            {isSelected && <CheckIcon className="size-4 shrink-0" aria-hidden />}
+                            <ModelIcon
+                              provider={group.providerId}
+                              model={model}
+                              modelIdForIcon={getModelIconId(model)}
+                              size={18}
+                            />
+                            <div className="flex min-w-0 flex-1 flex-col">
+                              <span className="truncate text-sm">{getModelLabel(model)}</span>
+                              {description && (
+                                <span className="text-xs text-muted-foreground whitespace-normal">
+                                  {description}
+                                </span>
+                              )}
+                            </div>
+                            {isSelected && (
+                              <CheckIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
+                            )}
                           </DropdownMenuItem>
                         );
                       })}
@@ -633,29 +787,39 @@ export const ModelSelect = memo(({
             <DropdownMenuLabel className="text-muted-foreground">
               {t('models.selectModel')}
             </DropdownMenuLabel>
-            {effectiveModels.map((model) => (
-              <DropdownMenuItem
-                key={model.id}
-                data-model-id={model.id}
-                data-selected={model.id === value ? 'true' : undefined}
-                onSelect={(event) => {
-                  event.preventDefault();
-                  handleSelect(model.id);
-                }}
-                className="items-start gap-2"
-              >
-                <ModelIcon provider={currentProvider} size={20} />
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-sm">{getModelLabel(model)}</span>
-                  {getModelDescription(model) && (
-                    <span className="text-xs text-muted-foreground whitespace-normal">
-                      {getModelDescription(model)}
-                    </span>
+            {effectiveModels.map((model) => {
+              const description = getModelDescription(model);
+              return (
+                <DropdownMenuItem
+                  key={model.id}
+                  data-model-id={model.id}
+                  data-selected={model.id === value ? 'true' : undefined}
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    handleSelect(model.id);
+                  }}
+                  className="items-start gap-2"
+                >
+                  <ModelIcon
+                    provider={currentProvider}
+                    model={model}
+                    modelIdForIcon={getModelIconId(model)}
+                    size={20}
+                  />
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="text-sm">{getModelLabel(model)}</span>
+                    {description && (
+                      <span className="text-xs text-muted-foreground whitespace-normal">
+                        {description}
+                      </span>
+                    )}
+                  </div>
+                  {model.id === value && (
+                    <CheckIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
                   )}
-                </div>
-                {model.id === value && <CheckIcon className="mt-0.5 size-4 shrink-0" aria-hidden />}
-              </DropdownMenuItem>
-            ))}
+                </DropdownMenuItem>
+              );
+            })}
           </>
         )}
         {hasConfigActions && !hasPickerGroups && (
@@ -693,6 +857,23 @@ export const ModelSelect = memo(({
                 {t('models.refreshConfigFailed', { message: refreshConfigError })}
               </div>
             )}
+          </>
+        )}
+        {onOpenCliSettings && (
+          <>
+            <DropdownMenuSeparator />
+            <div className="p-1.5 pt-1">
+              <DropdownMenuItem
+                onSelect={(event) => {
+                  event.preventDefault();
+                  handleOpenCliSettings();
+                }}
+                className="justify-center gap-2 rounded-md border border-border/70 bg-muted/45 font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
+              >
+                <Settings2Icon className="size-3.5 shrink-0 opacity-80" aria-hidden />
+                <span>{t('models.openCliSettings')}</span>
+              </DropdownMenuItem>
+            </div>
           </>
         )}
       </DropdownMenuContent>

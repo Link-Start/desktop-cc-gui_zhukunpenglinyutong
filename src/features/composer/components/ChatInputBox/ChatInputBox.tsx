@@ -239,6 +239,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       onOpenAgentSettings,
       onOpenPromptSettings,
       onOpenModelSettings,
+      onOpenCliSettings,
       onOpenFileReference,
       onRefreshModelConfig,
       isModelConfigRefreshing,
@@ -1552,6 +1553,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
             : undefined
         }
         isModelConfigRefreshing={isModelConfigRefreshing}
+        onOpenCliSettings={onOpenCliSettings}
       />
     ) : null;
     const contextToolbarSurface = (

@@ -10,7 +10,10 @@ import {
   getCurrentClaudeConfig,
   switchClaudeProvider,
 } from "../../../services/tauri";
-import { migrateModelMappingStorage } from "../../models/constants";
+import {
+  migrateModelMappingStorage,
+  syncModelMappingFromProviderEnv,
+} from "../../models/constants";
 
 export interface ProviderDialogState {
   isOpen: boolean;
@@ -79,11 +82,42 @@ export function useProviderManagement() {
     provider: null,
   });
 
+  /**
+   * Mirror jetbrains-cc-gui: when the active Claude provider changes, push its
+   * ANTHROPIC_DEFAULT_* env slots into localStorage so the model picker can
+   * show mapped names (e.g. kimi-k3) and brand icons.
+   */
+  const syncActiveProviderModelMapping = useCallback(
+    (providerList: ProviderConfig[]) => {
+      const active =
+        providerList.find((provider) => provider.isActive) ??
+        providerList.find(
+          (provider) =>
+            provider.id === LOCAL_SETTINGS_PROVIDER_ID ||
+            provider.isLocalProvider,
+        ) ??
+        null;
+      const env = active?.settingsConfig?.env as
+        | Record<string, unknown>
+        | undefined;
+      const result = syncModelMappingFromProviderEnv(env);
+      if (!result.ok) {
+        setProviderError(providerActionError("storage", result.error));
+      } else if (result.warnings.length > 0) {
+        setProviderError(
+          providerActionError("storage", result.warnings.join("; ")),
+        );
+      }
+    },
+    [],
+  );
+
   const loadProviders = useCallback(async () => {
     setLoading(true);
     try {
       const list = await getClaudeProviders();
       setProviders(list);
+      syncActiveProviderModelMapping(list);
       return { ok: true } as const;
     } catch (error) {
       const actionError =
@@ -95,7 +129,7 @@ export function useProviderManagement() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [syncActiveProviderModelMapping]);
 
   const loadCurrentConfig = useCallback(async () => {
     setCurrentConfigLoading(true);

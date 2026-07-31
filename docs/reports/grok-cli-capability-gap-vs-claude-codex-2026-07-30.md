@@ -13,7 +13,7 @@
 | Claude | supported | 既有 stream-json / content 多模态 | 既有 |
 | Codex | supported | `turn/start.input` image item；sync 走 `params_to_codex_input` | 既有 |
 | Gemini | supported | 既有 path 注入 | 既有 |
-| **Grok** | **supported** | 有图：`--prompt-json` ACP `{type:image,mimeType,data}`；无图：`-p` | 历史剥离 `<image_files>` / `<user_query>`，路径进 `images[]` + LocalImage |
+| **Grok** | **supported** | 有图：`--prompt-file` ACP `{type:image,mimeType,data}`（staging JSON，避 ARG_MAX）；无图：`-p` | 历史剥离 `<image_files>` / `<user_query>`，路径进 `images[]` + LocalImage |
 | **Kimi** | **supported** | headless `-p`：注入绝对路径 + `<image path>` + ReadMediaFile 指令（print mode `permission: auto`） | 历史 loader 剥离注入 marker，路径进 `images[]` |
 | **OpenCode** | **supported** | `opencode run -f <abs-path>` | 路径直挂 |
 
@@ -46,7 +46,7 @@ Composer attachments (path | data URL | file://)
   -> matrix gate (engineSupportsImageInput；当前全 supported，门禁 no-op)
   -> engine_send_message / _sync(images)
        Claude / Codex / Gemini : 既有
-       Grok     : build_grok_prompt_json -> --prompt-json | -p
+       Grok     : build_grok_prompt_json -> --prompt-file | -p
        OpenCode : resolve_existing_image_files -> run --file ...
        Kimi     : resolve_existing_image_files -> build_kimi_prompt_with_images -> -p
   -> UI bubble: visibleUserText + images[]（不含 CLI 私有注入）
@@ -80,10 +80,10 @@ Composer attachments (path | data URL | file://)
 
 ### Grok
 
-- **有图**：`grok --prompt-json '[{type:text,...},{type:image,mimeType,data}]' --output-format streaming-json ...`
+- **有图**：`grok --prompt-file <staging.json> --output-format streaming-json ...`（ACP blocks 含 base64 image；argv 只传路径）
 - **无图**：`grok -p "..."`（兼容旧行为）
 - 非空 prompt 在 ACP `text` block 中原文保真，不做 `trim()` 改写
-- 单图 soft-cap **2MiB**；整段 prompt-json soft-cap **700KB**（ARGV 限制）
+- 单图 soft-cap **2MiB**；整段 payload 写 `{workspace}/.mossx/image-staging/grok-prompt-*.json`，不受 argv 700KB 限制
 - 历史：CLI 落盘为 `<image_files>…</image_files>` + `<user_query>…</user_query>`；加载时拆成正文 + `images[]`
 - relative path 按 workspace 解析；data URL 在 decode 前执行 2MiB guard
 - 预览白名单仅包含 `~/.grok/sessions` / `$GROK_HOME/sessions`
@@ -126,7 +126,7 @@ Composer attachments (path | data URL | file://)
 | 项 | 说明 |
 |---|---|
 | Kimi 读图 | 依赖模型调用 `ReadMediaFile`；模型无 `image_in` 时不可视 |
-| Grok 大图 | 超 2MiB / prompt-json 超 700KB 显式失败 |
+| Grok 大图 | 超单图 2MiB soft-cap 显式失败；整段 payload 经 `--prompt-file` 不受 argv 700KB 限制 |
 | staging | 写在 `{workspace}/.mossx/image-staging/`；建议 gitignore |
 | 远程模式 | `read_local_image_data_url` 不支持 remote |
 | fail-fast 门禁 | 当前全引擎 supported，client/backend 门禁基本 no-op，保留给未来 unsupported engine |
