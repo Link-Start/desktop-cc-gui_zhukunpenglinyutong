@@ -134,3 +134,36 @@ VendorModelManagerDialogHost 在 AppShell 打开时未加载 settings.css，导�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1257: fix-native-codex-local-model-select-freeform
+
+**Date**: 2026-08-01
+**Task**: fix-native-codex-local-model-select-freeform
+**Branch**: `bump-version-0.7.14`
+
+### Summary
+
+修复 Codex 本地配置下 Native 点选模型勾选不变；允许 Native/Shared catalog 外自定义模型名；更新契约文档并提交收口。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `44fcf26a6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

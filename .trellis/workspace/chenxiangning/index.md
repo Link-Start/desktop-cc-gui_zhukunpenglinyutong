@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-30.md`
-- **Total Sessions**: 1256
+- **Total Sessions**: 1257
 - **Last Active**: 2026-08-01
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-30.md` | ~136 | Active |
+| `journal-30.md` | ~169 | Active |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
@@ -58,6 +58,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1257 | 2026-08-01 | fix-native-codex-local-model-select-freeform | `44fcf26a6` | `bump-version-0.7.14` |
 | 1256 | 2026-08-01 | 修复当前页添加模型弹窗样式丢失 | `8d75e7a6a` | `bump-version-0.7.14` |
 | 1255 | 2026-08-01 | 统一幕布轻量下线与多 CLI 过程投影 | `bf3b35bd6` | `bump-version-0.7.14` |
 | 1254 | 2026-08-01 | fix Shared Hidden Binding 五引擎隐藏 | `33d7d02c6` | `bump-version-0.7.14` |
