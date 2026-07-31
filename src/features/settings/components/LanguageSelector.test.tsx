@@ -89,9 +89,7 @@ describe("LanguageSelector", () => {
     const { container } = render(<LanguageSelector />);
 
     const select = screen.getByRole("combobox", { name: "Language" });
-    const icon = container.querySelector(
-      ".settings-basic-language-select-icon",
-    );
+    const icon = container.querySelector(".settings-pref-select-icon");
 
     expect(select.nextElementSibling).toBe(icon);
     expect(icon?.getAttribute("aria-hidden")).toBe("true");

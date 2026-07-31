@@ -519,320 +519,401 @@ export function WebServiceSettings({
   );
 
   const isBusy = action != null;
+  const portDirty =
+    parsedPort != null && parsedPort !== appSettings.webServicePort;
 
   return (
-    <div className="settings-field">
-      <div className="settings-field-label">
-        {t("settings.webServiceTitle")}
-      </div>
-      <div className="settings-help">{t("settings.webServiceDescription")}</div>
-
-      <WebAssetsPackageSection
-        t={t}
-        status={webAssetsStatus}
-        action={webAssetsAction}
-        error={webAssetsError}
-        notice={webAssetsNotice}
-        onInstall={() => {
-          void handleInstallWebAssets();
-        }}
-        onInstallLocal={() => {
-          void handleInstallLocalWebAssets();
-        }}
-        onRefresh={() => {
-          void refreshWebAssetsStatus(true);
-        }}
-      />
-
-      <label className="settings-field-label" htmlFor="web-service-port">
-        {t("settings.webServicePort")}
-      </label>
-      <div className="settings-field-row">
-        <input
-          id="web-service-port"
-          className="settings-input settings-input--compact"
-          value={portDraft}
-          onChange={(event) => setPortDraft(event.target.value)}
-          onBlur={() => {
-            void savePort();
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              void savePort();
-            }
-          }}
-          aria-label={t("settings.webServicePortAriaLabel")}
-          disabled={isBusy}
-        />
-        <button
-          type="button"
-          className="ghost settings-button-compact"
-          onClick={() => {
-            void savePort();
-          }}
-          disabled={
-            isBusy ||
-            parsedPort == null ||
-            parsedPort === appSettings.webServicePort
-          }
-        >
-          {t("settings.webServiceSavePort")}
-        </button>
-      </div>
-
-      <label className="settings-field-label" htmlFor="web-service-fixed-token">
-        {t("settings.webServiceFixedToken")}
-      </label>
-      <div className="settings-field-row">
-        <input
-          id="web-service-fixed-token"
-          className="settings-input"
-          type="password"
-          value={fixedTokenDraft}
-          onChange={(event) => setFixedTokenDraft(event.target.value)}
-          placeholder={t("settings.webServiceFixedTokenAuto")}
-          aria-label={t("settings.webServiceFixedTokenAriaLabel")}
-          disabled={isBusy}
-        />
-        <button
-          type="button"
-          className="ghost settings-button-compact"
-          onClick={() => {
-            void saveFixedToken(fixedTokenDraft);
-          }}
-          disabled={isBusy || !hasFixedTokenDraftChange}
-        >
-          {t("settings.webServiceSaveToken")}
-        </button>
-        <button
-          type="button"
-          className="ghost settings-button-compact"
-          onClick={() => {
-            void clearFixedToken();
-          }}
-          disabled={
-            isBusy || (!fixedTokenDraft && !appSettings.webServiceToken)
-          }
-        >
-          {t("settings.webServiceClearToken")}
-        </button>
-        <button
-          type="button"
-          className="ghost settings-button-compact"
-          onClick={() => {
-            void generateAndSaveFixedToken();
-          }}
-          disabled={isBusy}
-        >
-          {t("settings.webServiceGenerateToken")}
-        </button>
-      </div>
-      <div className="settings-help">
-        {t("settings.webServiceFixedTokenHint")}
-      </div>
-      <div className="settings-help">
-        {running
-          ? t("settings.webServiceFixedTokenRunningHint")
-          : t("settings.webServiceFixedTokenStoppedHint")}
-      </div>
-
-      <div className="settings-field-label">
-        {t("settings.webServiceStatus")}
-      </div>
-      <div className="settings-field-row">
-        <div
-          className="settings-help"
-          style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}
-        >
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              backgroundColor: running ? "#16a34a" : "#9ca3af",
-              display: "inline-block",
-            }}
-          />
-          {running
-            ? t("settings.webServiceRunning")
-            : t("settings.webServiceStopped")}
+    <div className="settings-basic-web-service settings-basic-surface">
+      <div className="settings-pref-card-head settings-web-page-head">
+        <div className="settings-pref-title">{t("settings.webServiceTitle")}</div>
+        <div className="settings-pref-desc">
+          {t("settings.webServiceDescription")}
         </div>
-        <button
-          type="button"
-          className="ghost settings-button-compact"
-          onClick={() => {
-            void refreshStatus();
-          }}
-          disabled={isBusy}
-        >
-          {t("settings.refresh")}
-        </button>
-        {running ? (
-          <button
-            type="button"
-            className="ghost settings-button-compact"
-            onClick={() => {
-              void handleStop();
-            }}
-            disabled={isBusy}
-          >
-            {action === "stop"
-              ? t("settings.running")
-              : t("settings.webServiceStop")}
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="primary settings-button-compact"
-            onClick={() => {
-              void handleStart();
-            }}
-            disabled={isBusy || parsedPort == null || !webAssetsAvailable}
-          >
-            {action === "start"
-              ? t("settings.running")
-              : t("settings.webServiceStart")}
-          </button>
-        )}
       </div>
 
-      <div className="settings-field-label">
-        {t("settings.webServiceDaemonStatus")}
-      </div>
-      <div className="settings-field-row">
-        <div
-          className="settings-help"
-          style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}
-        >
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              backgroundColor: daemonRunning ? "#16a34a" : "#9ca3af",
-              display: "inline-block",
-            }}
-          />
-          {daemonRunning
-            ? t("settings.webServiceDaemonRunning")
-            : t("settings.webServiceDaemonStopped")}
-        </div>
-        <button
-          type="button"
-          className="ghost settings-button-compact"
-          onClick={() => {
-            void refreshDaemonStatus();
-          }}
-          disabled={isBusy}
-        >
-          {t("settings.refresh")}
-        </button>
-        {daemonRunning ? (
-          <button
-            type="button"
-            className="ghost settings-button-compact"
-            onClick={() => {
-              void handleStopDaemon();
-            }}
-            disabled={isBusy}
-          >
-            {action === "daemon-stop"
-              ? t("settings.running")
-              : t("settings.webServiceDaemonStop")}
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="primary settings-button-compact"
-            onClick={() => {
-              void handleStartDaemon();
-            }}
-            disabled={isBusy}
-          >
-            {action === "daemon-start"
-              ? t("settings.running")
-              : t("settings.webServiceDaemonStart")}
-          </button>
-        )}
-      </div>
-
-      <div className="settings-field-label">
-        {t("settings.webServiceRpcEndpoint")}
-      </div>
-      <input className="settings-input" value={rpcEndpoint} readOnly />
-
-      <div className="settings-field-label">
-        {t("settings.webServiceAddresses")}
-      </div>
-      {addresses.length === 0 ? (
-        <div className="settings-help">{t("settings.webServiceNoAddress")}</div>
-      ) : (
-        addresses.map((address) => (
-          <div className="settings-field-row" key={address}>
-            <input className="settings-input" value={address} readOnly />
+      {/* 1. 运行状态 */}
+      <div className="settings-basic-group-card settings-basic-group-card--list settings-pref-card">
+        <div className="settings-pref-row">
+          <div className="settings-pref-meta">
+            <div className="settings-pref-title">
+              {t("settings.webServiceStatus")}
+            </div>
+            <div className="settings-pref-desc settings-web-status-line">
+              <span
+                className={`settings-web-status-dot${running ? " is-ready" : ""}`}
+                aria-hidden
+              />
+              {running
+                ? t("settings.webServiceRunning")
+                : t("settings.webServiceStopped")}
+            </div>
+          </div>
+          <div className="settings-pref-control settings-web-actions">
             <button
               type="button"
-              className="ghost settings-button-compact"
+              className="settings-web-btn"
               onClick={() => {
-                void handleCopy(address);
+                void refreshStatus();
+              }}
+              disabled={isBusy}
+            >
+              {t("settings.refresh")}
+            </button>
+            {running ? (
+              <button
+                type="button"
+                className="settings-web-btn"
+                onClick={() => {
+                  void handleStop();
+                }}
+                disabled={isBusy}
+              >
+                {action === "stop"
+                  ? t("settings.running")
+                  : t("settings.webServiceStop")}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="settings-web-btn settings-web-btn--primary"
+                onClick={() => {
+                  void handleStart();
+                }}
+                disabled={isBusy || parsedPort == null || !webAssetsAvailable}
+              >
+                {action === "start"
+                  ? t("settings.running")
+                  : t("settings.webServiceStart")}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="settings-pref-row">
+          <div className="settings-pref-meta">
+            <div className="settings-pref-title">
+              {t("settings.webServiceDaemonStatus")}
+            </div>
+            <div className="settings-pref-desc settings-web-status-line">
+              <span
+                className={`settings-web-status-dot${
+                  daemonRunning ? " is-ready" : ""
+                }`}
+                aria-hidden
+              />
+              {daemonRunning
+                ? t("settings.webServiceDaemonRunning")
+                : t("settings.webServiceDaemonStopped")}
+            </div>
+          </div>
+          <div className="settings-pref-control settings-web-actions">
+            <button
+              type="button"
+              className="settings-web-btn"
+              onClick={() => {
+                void refreshDaemonStatus();
+              }}
+              disabled={isBusy}
+            >
+              {t("settings.refresh")}
+            </button>
+            {daemonRunning ? (
+              <button
+                type="button"
+                className="settings-web-btn"
+                onClick={() => {
+                  void handleStopDaemon();
+                }}
+                disabled={isBusy}
+              >
+                {action === "daemon-stop"
+                  ? t("settings.running")
+                  : t("settings.webServiceDaemonStop")}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="settings-web-btn settings-web-btn--primary"
+                onClick={() => {
+                  void handleStartDaemon();
+                }}
+                disabled={isBusy}
+              >
+                {action === "daemon-start"
+                  ? t("settings.running")
+                  : t("settings.webServiceDaemonStart")}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 2. 配置 */}
+      <div className="settings-basic-group-card settings-basic-group-card--list settings-pref-card">
+        <div className="settings-pref-card-head settings-web-group-head">
+          <div className="settings-pref-title">
+            {t("settings.webServiceConfigGroup")}
+          </div>
+        </div>
+
+        <WebAssetsPackageSection
+          t={t}
+          status={webAssetsStatus}
+          action={webAssetsAction}
+          error={webAssetsError}
+          notice={webAssetsNotice}
+          onInstall={() => {
+            void handleInstallWebAssets();
+          }}
+          onInstallLocal={() => {
+            void handleInstallLocalWebAssets();
+          }}
+          onRefresh={() => {
+            void refreshWebAssetsStatus(true);
+          }}
+        />
+
+        <div className="settings-pref-row">
+          <div className="settings-pref-meta">
+            <label className="settings-pref-title" htmlFor="web-service-port">
+              {t("settings.webServicePort")}
+            </label>
+            <div className="settings-pref-desc">
+              {t("settings.webServicePortHint")}
+            </div>
+          </div>
+          <div className="settings-pref-control settings-web-field-control">
+            <input
+              id="web-service-port"
+              className="settings-web-input settings-web-input--port"
+              value={portDraft}
+              onChange={(event) => setPortDraft(event.target.value)}
+              onBlur={() => {
+                void savePort();
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void savePort();
+                }
+              }}
+              aria-label={t("settings.webServicePortAriaLabel")}
+              disabled={isBusy}
+            />
+            {portDirty ? (
+              <button
+                type="button"
+                className="settings-web-btn settings-web-btn--primary"
+                onClick={() => {
+                  void savePort();
+                }}
+                disabled={isBusy || parsedPort == null}
+              >
+                {t("settings.webServiceSavePort")}
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="settings-pref-row settings-pref-row--stack">
+          <div className="settings-pref-row-main">
+            <div className="settings-pref-meta">
+              <label
+                className="settings-pref-title"
+                htmlFor="web-service-fixed-token"
+              >
+                {t("settings.webServiceFixedToken")}
+              </label>
+              <div className="settings-pref-desc">
+                {t("settings.webServiceFixedTokenHint")}
+              </div>
+            </div>
+            <div className="settings-pref-control settings-web-actions">
+              <button
+                type="button"
+                className="settings-web-btn"
+                onClick={() => {
+                  void generateAndSaveFixedToken();
+                }}
+                disabled={isBusy}
+              >
+                {t("settings.webServiceGenerateToken")}
+              </button>
+              {hasFixedTokenDraftChange ? (
+                <button
+                  type="button"
+                  className="settings-web-btn settings-web-btn--primary"
+                  onClick={() => {
+                    void saveFixedToken(fixedTokenDraft);
+                  }}
+                  disabled={isBusy}
+                >
+                  {t("settings.webServiceSaveToken")}
+                </button>
+              ) : null}
+              {fixedTokenDraft || appSettings.webServiceToken ? (
+                <button
+                  type="button"
+                  className="settings-web-btn"
+                  onClick={() => {
+                    void clearFixedToken();
+                  }}
+                  disabled={isBusy}
+                >
+                  {t("settings.webServiceClearToken")}
+                </button>
+              ) : null}
+            </div>
+          </div>
+          <div className="settings-pref-field-row">
+            <input
+              id="web-service-fixed-token"
+              className="settings-web-input"
+              type="password"
+              value={fixedTokenDraft}
+              onChange={(event) => setFixedTokenDraft(event.target.value)}
+              placeholder={t("settings.webServiceFixedTokenAuto")}
+              aria-label={t("settings.webServiceFixedTokenAriaLabel")}
+              disabled={isBusy}
+            />
+          </div>
+          <div className="settings-pref-hint">
+            <span className="settings-pref-hint-copy">
+              {running
+                ? t("settings.webServiceFixedTokenRunningHint")
+                : t("settings.webServiceFixedTokenStoppedHint")}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. 访问信息 */}
+      <div className="settings-basic-group-card settings-basic-group-card--list settings-pref-card">
+        <div className="settings-pref-card-head settings-web-group-head">
+          <div className="settings-pref-title">
+            {t("settings.webServiceAccessGroup")}
+          </div>
+          <div className="settings-pref-desc">
+            {t("settings.webServiceControlPlaneHint")
+              .replace("{{rpc}}", rpcEndpoint)
+              .replace("{{port}}", String(webPort))}
+          </div>
+        </div>
+
+        <div className="settings-pref-row">
+          <div className="settings-pref-meta">
+            <div className="settings-pref-title">
+              {t("settings.webServiceRpcEndpoint")}
+            </div>
+          </div>
+          <div className="settings-pref-control settings-web-field-control">
+            <input
+              className="settings-web-input settings-web-input--mono"
+              value={rpcEndpoint}
+              readOnly
+            />
+            <button
+              type="button"
+              className="settings-web-btn"
+              onClick={() => {
+                void handleCopy(rpcEndpoint);
               }}
             >
               {t("settings.copy")}
             </button>
           </div>
-        ))
-      )}
-
-      <div className="settings-field-label">
-        {t("settings.webServiceRuntimeToken")}
-      </div>
-      <div className="settings-field-row">
-        <input
-          className="settings-input"
-          value={tokenToDisplay}
-          readOnly
-          placeholder={t("settings.webServiceTokenEmpty")}
-        />
-        <button
-          type="button"
-          className="ghost settings-button-compact"
-          onClick={() => setShowToken((value) => !value)}
-          disabled={!rawToken}
-        >
-          {showToken
-            ? t("settings.webServiceHideToken")
-            : t("settings.webServiceShowToken")}
-        </button>
-        <button
-          type="button"
-          className="ghost settings-button-compact"
-          onClick={() => {
-            if (rawToken) {
-              void handleCopy(rawToken);
-            }
-          }}
-          disabled={!rawToken}
-        >
-          {t("settings.copy")}
-        </button>
-      </div>
-      <div className="settings-help">{t("settings.webServiceTokenHint")}</div>
-      {copiedMessage ? (
-        <div className="settings-help">{copiedMessage}</div>
-      ) : null}
-      {error ? (
-        <div
-          className="settings-help"
-          style={{ color: "var(--danger-text, #dc2626)" }}
-        >
-          {error}
         </div>
-      ) : null}
-      <div className="settings-help">
-        {t("settings.webServiceControlPlaneHint")
-          .replace("{{rpc}}", rpcEndpoint)
-          .replace("{{port}}", String(webPort))}
+
+        <div className="settings-pref-row settings-pref-row--stack">
+          <div className="settings-pref-meta">
+            <div className="settings-pref-title">
+              {t("settings.webServiceAddresses")}
+            </div>
+            {addresses.length === 0 ? (
+              <div className="settings-pref-desc">
+                {t("settings.webServiceNoAddress")}
+              </div>
+            ) : null}
+          </div>
+          {addresses.map((address) => (
+            <div className="settings-pref-field-row" key={address}>
+              <input
+                className="settings-web-input settings-web-input--mono"
+                value={address}
+                readOnly
+              />
+              <button
+                type="button"
+                className="settings-web-btn"
+                onClick={() => {
+                  void handleCopy(address);
+                }}
+              >
+                {t("settings.copy")}
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="settings-pref-row settings-pref-row--stack">
+          <div className="settings-pref-row-main">
+            <div className="settings-pref-meta">
+              <div className="settings-pref-title">
+                {t("settings.webServiceRuntimeToken")}
+              </div>
+              <div className="settings-pref-desc">
+                {t("settings.webServiceTokenHint")}
+              </div>
+            </div>
+            <div className="settings-pref-control settings-web-actions">
+              <button
+                type="button"
+                className="settings-web-btn"
+                onClick={() => setShowToken((value) => !value)}
+                disabled={!rawToken}
+              >
+                {showToken
+                  ? t("settings.webServiceHideToken")
+                  : t("settings.webServiceShowToken")}
+              </button>
+              <button
+                type="button"
+                className="settings-web-btn"
+                onClick={() => {
+                  if (rawToken) {
+                    void handleCopy(rawToken);
+                  }
+                }}
+                disabled={!rawToken}
+              >
+                {t("settings.copy")}
+              </button>
+            </div>
+          </div>
+          <div className="settings-pref-field-row">
+            <input
+              className="settings-web-input settings-web-input--mono"
+              value={tokenToDisplay}
+              readOnly
+              placeholder={t("settings.webServiceTokenEmpty")}
+            />
+          </div>
+        </div>
+
+        {copiedMessage ? (
+          <div className="settings-pref-row settings-pref-row--hint">
+            <div className="settings-pref-hint">
+              <span className="settings-pref-hint-copy">{copiedMessage}</span>
+            </div>
+          </div>
+        ) : null}
+        {error ? (
+          <div className="settings-pref-row settings-pref-row--hint">
+            <div className="settings-pref-hint settings-web-log is-error" role="alert">
+              <span className="settings-pref-hint-copy">{error}</span>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -252,7 +252,6 @@ export function CliEngineNavRow({
     <div
       className={cn(
         "vendor-engine-tab flex w-full items-center text-left text-foreground transition-colors",
-        "max-md:flex-1",
         active && "vendor-engine-tab-active",
         !item.supported && "vendor-engine-tab-upcoming",
       )}

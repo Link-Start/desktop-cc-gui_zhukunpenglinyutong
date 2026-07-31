@@ -1,31 +1,8 @@
 import type { TFunction } from "i18next";
 import FolderOpen from "lucide-react/dist/esm/icons/folder-open";
 import Download from "lucide-react/dist/esm/icons/download";
-import Info from "lucide-react/dist/esm/icons/info";
 import Save from "lucide-react/dist/esm/icons/save";
-import TerminalSquare from "lucide-react/dist/esm/icons/terminal-square";
-import Wifi from "lucide-react/dist/esm/icons/wifi";
-import Check from "lucide-react/dist/esm/icons/check";
 import { ProxyStatusBadge } from "@/components/ProxyStatusBadge";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import type { AppSettings } from "@/types";
 import {
@@ -124,67 +101,57 @@ export function BasicBehaviorSection({
 
   return (
     <div className="settings-basic-behavior settings-basic-surface">
-      <div className="settings-basic-group-card">
-        <div className="settings-subsection-title">{t("settings.sendShortcutSubtitle")}</div>
-        <div className="settings-subsection-subtitle">
-          {t("settings.sendShortcutSubDescription")}
-        </div>
-        <div className="settings-shortcut-cards">
-          <button
-            type="button"
-            className={`settings-shortcut-card ${
-              appSettings.composerSendShortcut === "enter" ? "active" : ""
-            }`}
-            onClick={() => {
-              handleComposerSendShortcutChange("enter");
-            }}
-          >
-            {appSettings.composerSendShortcut === "enter" ? (
-              <div className="settings-shortcut-card-check" aria-hidden>
-                <Check size={12} />
-              </div>
-            ) : null}
-            <div className="settings-shortcut-card-title">
-              {t("settings.sendShortcutEnterTitle")}
+      {/* 对话与布局 */}
+      <div className="settings-basic-group-card settings-basic-group-card--list settings-pref-card">
+        <div className="settings-pref-row">
+          <div className="settings-pref-meta">
+            <div className="settings-pref-title">
+              {t("settings.sendShortcutSubtitle")}
             </div>
-            <div className="settings-shortcut-card-desc">
-              {t("settings.sendShortcutEnterDesc")}
+            <div className="settings-pref-desc">
+              {t("settings.sendShortcutSubDescription")}
             </div>
-          </button>
-          <button
-            type="button"
-            className={`settings-shortcut-card ${
-              appSettings.composerSendShortcut === "cmdEnter" ? "active" : ""
-            }`}
-            onClick={() => {
-              handleComposerSendShortcutChange("cmdEnter");
-            }}
-          >
-            {appSettings.composerSendShortcut === "cmdEnter" ? (
-              <div className="settings-shortcut-card-check" aria-hidden>
-                <Check size={12} />
-              </div>
-            ) : null}
-            <div className="settings-shortcut-card-title">
-              {t("settings.sendShortcutCmdEnterTitle")}
-            </div>
-            <div className="settings-shortcut-card-desc">
-              {t("settings.sendShortcutCmdEnterDesc")}
-            </div>
-          </button>
-        </div>
-      </div>
-      <Card className="settings-basic-group-card settings-basic-shadcn-card settings-basic-streaming-card">
-        <CardHeader className="settings-card-switch-header">
-          <div className="settings-card-switch-meta">
-            <CardTitle className="settings-toggle-title">
-              {t("settings.behaviorStreaming")}
-            </CardTitle>
-            <CardDescription className="settings-toggle-subtitle">
-              {t("settings.behaviorStreamingDesc")}
-            </CardDescription>
           </div>
-          <CardAction className="settings-card-switch-action">
+          <div
+            className="settings-pref-control settings-pref-segmented settings-pref-segmented--pair settings-pref-segmented--wide"
+            role="radiogroup"
+            aria-label={t("settings.sendShortcutSubtitle")}
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={appSettings.composerSendShortcut === "enter"}
+              className={`settings-pref-segment ${
+                appSettings.composerSendShortcut === "enter" ? "is-active" : ""
+              }`}
+              onClick={() => handleComposerSendShortcutChange("enter")}
+            >
+              <span>{t("settings.sendShortcutEnterTitle")}</span>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={appSettings.composerSendShortcut === "cmdEnter"}
+              className={`settings-pref-segment ${
+                appSettings.composerSendShortcut === "cmdEnter" ? "is-active" : ""
+              }`}
+              onClick={() => handleComposerSendShortcutChange("cmdEnter")}
+            >
+              <span>{t("settings.sendShortcutCmdEnterTitle")}</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="settings-pref-row">
+          <div className="settings-pref-meta">
+            <div className="settings-pref-title">
+              {t("settings.behaviorStreaming")}
+            </div>
+            <div className="settings-pref-desc">
+              {t("settings.behaviorStreamingDesc")}
+            </div>
+          </div>
+          <div className="settings-pref-control">
             <Switch
               checked={appSettings.streamingEnabled ?? true}
               onCheckedChange={(checked) =>
@@ -193,66 +160,64 @@ export function BasicBehaviorSection({
                   streamingEnabled: checked,
                 })
               }
+              aria-label={t("settings.behaviorStreaming")}
             />
-          </CardAction>
-        </CardHeader>
-      </Card>
-      <Card className="settings-basic-group-card settings-basic-shadcn-card">
-        <CardHeader>
-          <CardTitle className="settings-toggle-title">
-            {t("settings.gitCommitComposerPlacementTitle")}
-          </CardTitle>
-          <CardDescription className="settings-toggle-subtitle">
-            {t("settings.gitCommitComposerPlacementDesc")}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="settings-shortcut-cards">
+          </div>
+        </div>
+
+        <div className="settings-pref-row">
+          <div className="settings-pref-meta">
+            <div className="settings-pref-title">
+              {t("settings.gitCommitComposerPlacementTitle")}
+            </div>
+            <div className="settings-pref-desc">
+              {t("settings.gitCommitComposerPlacementDesc")}
+            </div>
+          </div>
+          <div
+            className="settings-pref-control settings-pref-segmented settings-pref-segmented--pair"
+            role="radiogroup"
+            aria-label={t("settings.gitCommitComposerPlacementTitle")}
+          >
             {(["bottom", "top"] satisfies GitCommitComposerPlacement[]).map(
               (placement) => (
                 <button
                   key={placement}
                   type="button"
                   role="radio"
-                  aria-label={t(`settings.gitCommitComposerPlacement.${placement}`)}
                   aria-checked={gitCommitComposerPlacement === placement}
-                  className={`settings-shortcut-card ${
-                    gitCommitComposerPlacement === placement ? "active" : ""
+                  aria-label={t(`settings.gitCommitComposerPlacement.${placement}`)}
+                  className={`settings-pref-segment ${
+                    gitCommitComposerPlacement === placement ? "is-active" : ""
                   }`}
                   onClick={() => writeGitCommitComposerPlacement(placement)}
                 >
-                  {gitCommitComposerPlacement === placement ? (
-                    <div className="settings-shortcut-card-check" aria-hidden>
-                      <Check size={12} />
-                    </div>
-                  ) : null}
-                  <div className="settings-shortcut-card-title">
+                  <span>
                     {t(`settings.gitCommitComposerPlacement.${placement}`)}
-                  </div>
-                  <div className="settings-shortcut-card-desc">
-                    {t(`settings.gitCommitComposerPlacementDetail.${placement}`)}
-                  </div>
+                  </span>
                 </button>
               ),
             )}
           </div>
-        </CardContent>
-      </Card>
-      <Card
-        className={`settings-basic-group-card settings-basic-shadcn-card settings-basic-browser-agent-card${
+        </div>
+      </div>
+
+      {/* Browser Agent */}
+      <div
+        className={`settings-basic-group-card settings-basic-group-card--list settings-pref-card${
           appSettings.browserAgentEnabled ? " is-enabled" : ""
         }`}
       >
-        <CardHeader className="settings-card-switch-header">
-          <div className="settings-card-switch-meta">
-            <CardTitle className="settings-toggle-title">
+        <div className="settings-pref-row">
+          <div className="settings-pref-meta">
+            <div className="settings-pref-title">
               {t("settings.browserAgentTitle")}
-            </CardTitle>
-            <CardDescription className="settings-toggle-subtitle">
+            </div>
+            <div className="settings-pref-desc">
               {t("settings.browserAgentDesc")}
-            </CardDescription>
+            </div>
           </div>
-          <CardAction className="settings-card-switch-action">
+          <div className="settings-pref-control">
             <Switch
               checked={appSettings.browserAgentEnabled}
               onCheckedChange={(checked) =>
@@ -263,31 +228,30 @@ export function BasicBehaviorSection({
               }
               aria-label={t("settings.browserAgentEnabled")}
             />
-          </CardAction>
-        </CardHeader>
-        <CardContent className="settings-basic-sounds-card-content">
-          <div className="settings-help settings-sound-hint settings-sound-hint-shadcn">
-            <Badge variant="outline" className="settings-sound-status-badge">
-              <Info size={12} aria-hidden />
-              <span>
-                {appSettings.browserAgentEnabled
-                  ? t("settings.browserAgentStatusEnabled")
-                  : t("settings.browserAgentStatusDisabled")}
-              </span>
-            </Badge>
-            <span className="settings-sound-hint-copy">
+          </div>
+        </div>
+        <div className="settings-pref-row settings-pref-row--hint">
+          <div className="settings-pref-hint">
+            <span className="settings-pref-hint-badge">
+              {appSettings.browserAgentEnabled
+                ? t("settings.browserAgentStatusEnabled")
+                : t("settings.browserAgentStatusDisabled")}
+            </span>
+            <span className="settings-pref-hint-copy">
               {t("settings.browserAgentHint")}
             </span>
           </div>
-          <div className="settings-sound-toggle-row">
-            <div>
-              <div className="settings-toggle-title">
-                {t("settings.browserAgentPreferBuiltIn")}
-              </div>
-              <div className="settings-toggle-subtitle">
-                {t("settings.browserAgentPreferBuiltInDesc")}
-              </div>
+        </div>
+        <div className="settings-pref-row">
+          <div className="settings-pref-meta">
+            <div className="settings-pref-title">
+              {t("settings.browserAgentPreferBuiltIn")}
             </div>
+            <div className="settings-pref-desc">
+              {t("settings.browserAgentPreferBuiltInDesc")}
+            </div>
+          </div>
+          <div className="settings-pref-control">
             <Switch
               checked={appSettings.browserAgentPreferBuiltIn}
               onCheckedChange={(checked) =>
@@ -300,15 +264,17 @@ export function BasicBehaviorSection({
               aria-label={t("settings.browserAgentPreferBuiltIn")}
             />
           </div>
-          <div className="settings-sound-toggle-row">
-            <div>
-              <div className="settings-toggle-title">
-                {t("settings.browserAgentFallback")}
-              </div>
-              <div className="settings-toggle-subtitle">
-                {t("settings.browserAgentFallbackDesc")}
-              </div>
+        </div>
+        <div className="settings-pref-row">
+          <div className="settings-pref-meta">
+            <div className="settings-pref-title">
+              {t("settings.browserAgentFallback")}
             </div>
+            <div className="settings-pref-desc">
+              {t("settings.browserAgentFallbackDesc")}
+            </div>
+          </div>
+          <div className="settings-pref-control">
             <Switch
               checked={appSettings.browserAgentAllowExternalProviderFallback}
               onCheckedChange={(checked) =>
@@ -320,84 +286,77 @@ export function BasicBehaviorSection({
               aria-label={t("settings.browserAgentFallback")}
             />
           </div>
-        </CardContent>
-      </Card>
-      <Card
-        className={`settings-basic-group-card settings-basic-shadcn-card settings-basic-performance-card${
-          appSettings.performanceCompatibilityModeEnabled ? " is-enabled" : ""
-        }`}
-      >
-        <CardHeader className="settings-card-switch-header">
-          <div className="settings-card-switch-meta">
-            <CardTitle className="settings-toggle-title">
-              {t("settings.performanceCompatibilityTitle")}
-            </CardTitle>
-            <CardDescription className="settings-toggle-subtitle">
-              {t("settings.performanceCompatibilityDesc")}
-            </CardDescription>
+        </div>
+      </div>
+
+      {/* 性能 / 诊断 */}
+      <div className="settings-basic-group-card settings-basic-group-card--list settings-pref-card">
+        <div
+          className={`settings-pref-row settings-pref-row--stack${
+            appSettings.performanceCompatibilityModeEnabled ? " is-expanded" : ""
+          }`}
+        >
+          <div className="settings-pref-row-main">
+            <div className="settings-pref-meta">
+              <div className="settings-pref-title">
+                {t("settings.performanceCompatibilityTitle")}
+              </div>
+              <div className="settings-pref-desc">
+                {t("settings.performanceCompatibilityDesc")}
+              </div>
+            </div>
+            <div className="settings-pref-control">
+              <Switch
+                checked={appSettings.performanceCompatibilityModeEnabled}
+                onCheckedChange={(checked) =>
+                  void onUpdateAppSettings({
+                    ...appSettings,
+                    performanceCompatibilityModeEnabled: checked,
+                  })
+                }
+                aria-label={t("settings.performanceCompatibilityEnabled")}
+              />
+            </div>
           </div>
-          <CardAction className="settings-card-switch-action">
-            <Switch
-              checked={appSettings.performanceCompatibilityModeEnabled}
-              onCheckedChange={(checked) =>
-                void onUpdateAppSettings({
-                  ...appSettings,
-                  performanceCompatibilityModeEnabled: checked,
-                })
-              }
-              aria-label={t("settings.performanceCompatibilityEnabled")}
-            />
-          </CardAction>
-        </CardHeader>
-        <CardContent className="settings-basic-sounds-card-content">
-          <div className="settings-help settings-sound-hint settings-sound-hint-shadcn">
-            <Badge variant="outline" className="settings-sound-status-badge">
-              <Info size={12} aria-hidden />
-              <span>
-                {appSettings.performanceCompatibilityModeEnabled
-                  ? t("settings.performanceCompatibilityStatusEnabled")
-                  : t("settings.performanceCompatibilityStatusDisabled")}
-              </span>
-            </Badge>
-            <span className="settings-sound-hint-copy">
+          <div className="settings-pref-hint">
+            <span className="settings-pref-hint-badge">
+              {appSettings.performanceCompatibilityModeEnabled
+                ? t("settings.performanceCompatibilityStatusEnabled")
+                : t("settings.performanceCompatibilityStatusDisabled")}
+            </span>
+            <span className="settings-pref-hint-copy">
               {t("settings.performanceCompatibilityHint")}
             </span>
           </div>
-        </CardContent>
-      </Card>
-      <Card className="settings-basic-group-card settings-basic-shadcn-card settings-basic-diagnostics-card">
-        <CardHeader className="settings-card-switch-header">
-          <div className="settings-card-switch-meta">
-            <CardTitle className="settings-toggle-title">
-              {t("settings.diagnosticsBundleTitle")}
-            </CardTitle>
-            <CardDescription className="settings-toggle-subtitle">
-              {t("settings.diagnosticsBundleDesc")}
-            </CardDescription>
+        </div>
+
+        <div className="settings-pref-row settings-pref-row--stack">
+          <div className="settings-pref-row-main">
+            <div className="settings-pref-meta">
+              <div className="settings-pref-title">
+                {t("settings.diagnosticsBundleTitle")}
+              </div>
+              <div className="settings-pref-desc">
+                {t("settings.diagnosticsBundleDesc")}
+              </div>
+            </div>
+            <div className="settings-pref-control">
+              <button
+                type="button"
+                className="ghost settings-button-compact settings-pref-action-btn"
+                onClick={() => void handleExportDiagnosticsBundle()}
+                disabled={diagnosticsBundleExportState.status === "exporting"}
+                aria-label={t("settings.diagnosticsBundleExport")}
+              >
+                <Download size={14} aria-hidden />
+                {diagnosticsBundleExportState.status === "exporting"
+                  ? t("settings.diagnosticsBundleExporting")
+                  : t("settings.diagnosticsBundleExport")}
+              </button>
+            </div>
           </div>
-          <CardAction className="settings-card-switch-action">
-            <Button
-              type="button"
-              variant="outline"
-              className="settings-button-compact"
-              onClick={() => void handleExportDiagnosticsBundle()}
-              disabled={diagnosticsBundleExportState.status === "exporting"}
-              aria-label={t("settings.diagnosticsBundleExport")}
-            >
-              <Download size={14} aria-hidden />
-              {diagnosticsBundleExportState.status === "exporting"
-                ? t("settings.diagnosticsBundleExporting")
-                : t("settings.diagnosticsBundleExport")}
-            </Button>
-          </CardAction>
-        </CardHeader>
-        <CardContent className="settings-basic-sounds-card-content">
-          <div className="settings-help settings-sound-hint settings-sound-hint-shadcn">
-            <Badge variant="outline" className="settings-sound-status-badge">
-              <Info size={12} aria-hidden />
-              <span>{t("settings.diagnosticsBundleLocalOnly")}</span>
-            </Badge>
-            <span className="settings-sound-hint-copy">
+          <div className="settings-pref-hint">
+            <span className="settings-pref-hint-copy">
               {t("settings.diagnosticsBundleHint")}
             </span>
           </div>
@@ -408,138 +367,129 @@ export function BasicBehaviorSection({
                   ? "settings-inline-error"
                   : "settings-inline-success"
               }
-              role={diagnosticsBundleExportState.status === "failed" ? "alert" : "status"}
+              role={
+                diagnosticsBundleExportState.status === "failed"
+                  ? "alert"
+                  : "status"
+              }
             >
               {diagnosticsBundleExportState.message}
             </div>
           ) : null}
-        </CardContent>
-      </Card>
-      <Card className="settings-basic-group-card settings-basic-shadcn-card settings-basic-terminal-card">
-        <CardHeader className="settings-basic-sounds-card-header settings-proxy-card-header">
-          <div className="settings-card-switch-meta">
-            <CardTitle className="settings-subsection-title">
-              <span className="settings-proxy-card-title">
-                <TerminalSquare size={16} aria-hidden />
-                {t("settings.terminalShellPathTitle")}
-              </span>
-            </CardTitle>
-            <CardDescription className="settings-subsection-subtitle">
-              {t("settings.terminalShellPathDesc")}
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent className="settings-basic-sounds-card-content settings-proxy-card-content">
-          <div className="settings-proxy-input-row">
-            <Label className="settings-visually-hidden" htmlFor="terminal-shell-path">
-              {t("settings.terminalShellPathLabel")}
-            </Label>
-            <div className="settings-proxy-input-shell">
-              <Input
-                id="terminal-shell-path"
-                className="settings-proxy-input"
-                value={terminalShellPathDraft}
-                onChange={(event) => setTerminalShellPathDraft(event.target.value)}
-                placeholder={t("settings.terminalShellPathPlaceholder")}
-                spellCheck={false}
-                autoCapitalize="off"
-                autoCorrect="off"
-              />
+        </div>
+      </div>
+
+      {/* 终端 */}
+      <div className="settings-basic-group-card settings-basic-group-card--list settings-pref-card settings-basic-terminal-card">
+        <div className="settings-pref-row settings-pref-row--stack">
+          <div className="settings-pref-meta">
+            <div className="settings-pref-title">
+              {t("settings.terminalShellPathTitle")}
             </div>
-            <Button
+            <div className="settings-pref-desc">
+              {t("settings.terminalShellPathDesc")}
+            </div>
+          </div>
+          <div className="settings-pref-field-row">
+            <input
+              id="terminal-shell-path"
+              className="settings-pref-text-input"
+              value={terminalShellPathDraft}
+              onChange={(event) => setTerminalShellPathDraft(event.target.value)}
+              placeholder={t("settings.terminalShellPathPlaceholder")}
+              spellCheck={false}
+              autoCapitalize="off"
+              autoCorrect="off"
+              aria-label={t("settings.terminalShellPathLabel")}
+            />
+            <button
               type="button"
-              variant="outline"
-              className="settings-proxy-save-btn"
+              className="ghost settings-button-compact settings-pref-action-btn"
               onClick={() => void handleSaveTerminalShellPath()}
               disabled={!terminalShellPathDirty}
               aria-label={t("settings.terminalShellPathSave")}
             >
               <Save size={14} aria-hidden />
               {t("settings.terminalShellPathSave")}
-            </Button>
-            <Button
+            </button>
+            <button
               type="button"
-              variant="outline"
-              className="settings-button-compact"
+              className="settings-pref-reset"
               onClick={() => void handleClearTerminalShellPath()}
-              disabled={!terminalShellPathDraft && appSettings.terminalShellPath == null}
+              disabled={
+                !terminalShellPathDraft && appSettings.terminalShellPath == null
+              }
               aria-label={t("settings.terminalShellPathClear")}
             >
               {t("settings.clear")}
-            </Button>
+            </button>
           </div>
-          <div className="settings-help settings-sound-hint settings-sound-hint-shadcn settings-proxy-hint">
-            <span className="settings-sound-hint-copy">
+          <div className="settings-pref-hint">
+            <span className="settings-pref-hint-copy">
               {t("settings.terminalShellPathHint")}
             </span>
           </div>
-        </CardContent>
-      </Card>
-      <Card
-        className={`settings-basic-group-card settings-basic-shadcn-card settings-basic-proxy-card${
+        </div>
+      </div>
+
+      {/* 代理 */}
+      <div
+        className={`settings-basic-group-card settings-basic-group-card--list settings-pref-card settings-basic-proxy-card${
           systemProxyEnabledDraft ? " is-enabled" : ""
         }`}
       >
-        <CardHeader className="settings-basic-sounds-card-header settings-proxy-card-header">
-          <div className="settings-card-switch-meta">
-            <CardTitle className="settings-subsection-title">
-              <span className="settings-proxy-card-title">
-                <Wifi size={16} aria-hidden />
-                {t("settings.behaviorProxyTitle")}
-                {systemProxyEnabledDraft ? (
-                  <ProxyStatusBadge
-                    proxyUrl={systemProxyUrlDraft}
-                    label={t("messages.proxyBadge")}
-                    variant="compact"
-                    className="settings-proxy-header-badge"
-                  />
-                ) : null}
-              </span>
-            </CardTitle>
-            <CardDescription className="settings-subsection-subtitle">
+        <div className="settings-pref-row">
+          <div className="settings-pref-meta">
+            <div className="settings-pref-title settings-pref-title--inline">
+              <span>{t("settings.behaviorProxyTitle")}</span>
+              {systemProxyEnabledDraft ? (
+                <ProxyStatusBadge
+                  proxyUrl={systemProxyUrlDraft}
+                  label={t("messages.proxyBadge")}
+                  variant="compact"
+                  className="settings-proxy-header-badge"
+                />
+              ) : null}
+            </div>
+            <div className="settings-pref-desc">
               {t("settings.behaviorProxyDesc")}
-            </CardDescription>
+            </div>
           </div>
-          <CardAction className="settings-proxy-card-action">
+          <div className="settings-pref-control">
             <Switch
               checked={systemProxyEnabledDraft}
               onCheckedChange={handleToggleSystemProxy}
               aria-label={t("settings.behaviorProxyEnabled")}
             />
-          </CardAction>
-        </CardHeader>
-        <CardContent className="settings-basic-sounds-card-content settings-proxy-card-content">
-          <div className="settings-proxy-input-row">
-            <Label className="settings-visually-hidden" htmlFor="system-proxy-url">
-              {t("settings.behaviorProxyAddress")}
-            </Label>
-            <div className="settings-proxy-input-shell">
-              <Input
-                id="system-proxy-url"
-                className="settings-proxy-input"
-                value={systemProxyUrlDraft}
-                onChange={(event) => {
-                  handleSystemProxyUrlChange(event.target.value);
-                }}
-                placeholder={t("settings.behaviorProxyAddressPlaceholder")}
-                spellCheck={false}
-                autoCapitalize="off"
-                autoCorrect="off"
-              />
-            </div>
-            <Button
+          </div>
+        </div>
+        <div className="settings-pref-row settings-pref-row--stack">
+          <div className="settings-pref-field-row">
+            <input
+              id="system-proxy-url"
+              className="settings-pref-text-input"
+              value={systemProxyUrlDraft}
+              onChange={(event) => {
+                handleSystemProxyUrlChange(event.target.value);
+              }}
+              placeholder={t("settings.behaviorProxyAddressPlaceholder")}
+              spellCheck={false}
+              autoCapitalize="off"
+              autoCorrect="off"
+              aria-label={t("settings.behaviorProxyAddress")}
+            />
+            <button
               type="button"
-              variant="outline"
-              className="settings-proxy-save-btn"
+              className="ghost settings-button-compact settings-pref-action-btn"
               onClick={() => void handleSaveSystemProxy()}
               disabled={systemProxySaving || !systemProxyDirty}
             >
               <Save size={14} aria-hidden />
               {t("settings.behaviorProxySave")}
-            </Button>
+            </button>
           </div>
-          <div className="settings-help settings-sound-hint settings-sound-hint-shadcn settings-proxy-hint">
-            <span className="settings-sound-hint-copy">
+          <div className="settings-pref-hint">
+            <span className="settings-pref-hint-copy">
               {t("settings.behaviorProxyHint")}
             </span>
           </div>
@@ -556,33 +506,29 @@ export function BasicBehaviorSection({
             </div>
           ) : null}
           {systemProxyError ? (
-            <div className="settings-toggle-subtitle" role="alert">
+            <div className="settings-pref-desc" role="alert">
               {systemProxyError}
             </div>
           ) : null}
-        </CardContent>
-      </Card>
-      <Card
-        className={`settings-basic-group-card settings-basic-shadcn-card settings-basic-sounds-card${
+        </div>
+      </div>
+
+      {/* 通知音 */}
+      <div
+        className={`settings-basic-group-card settings-basic-group-card--list settings-pref-card settings-basic-sounds-card${
           appSettings.notificationSoundsEnabled ? " is-enabled" : ""
         }`}
       >
-        <CardHeader className="settings-basic-sounds-card-header">
-          <CardTitle className="settings-subsection-title">
-            {t("settings.soundsSubtitle")}
-          </CardTitle>
-          <CardDescription className="settings-subsection-subtitle">
-            {t("settings.soundsSubDescription")}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="settings-basic-sounds-card-content">
-          <div className="settings-sound-toggle-row">
-            <div>
-              <div className="settings-toggle-title">{t("settings.notificationSounds")}</div>
-              <div className="settings-toggle-subtitle">
-                {t("settings.notificationSoundsDesc")}
-              </div>
+        <div className="settings-pref-row">
+          <div className="settings-pref-meta">
+            <div className="settings-pref-title">
+              {t("settings.notificationSounds")}
             </div>
+            <div className="settings-pref-desc">
+              {t("settings.notificationSoundsDesc")}
+            </div>
+          </div>
+          <div className="settings-pref-control">
             <Switch
               checked={appSettings.notificationSoundsEnabled}
               onCheckedChange={(checked) =>
@@ -591,33 +537,43 @@ export function BasicBehaviorSection({
                   notificationSoundsEnabled: checked,
                 })
               }
+              aria-label={t("settings.notificationSounds")}
             />
           </div>
-          <div className="settings-help settings-sound-hint settings-sound-hint-shadcn">
-            <Badge variant="outline" className="settings-sound-status-badge">
-              <Info size={12} aria-hidden />
-              <span>
-                {appSettings.notificationSoundsEnabled
-                  ? t("settings.notificationSoundsEnabled")
-                  : t("settings.notificationSoundsDisabled")}
-              </span>
-            </Badge>
-            <span className="settings-sound-hint-copy">
+        </div>
+        <div className="settings-pref-row settings-pref-row--hint">
+          <div className="settings-pref-hint">
+            <span className="settings-pref-hint-badge">
+              {appSettings.notificationSoundsEnabled
+                ? t("settings.notificationSoundsEnabled")
+                : t("settings.notificationSoundsDisabled")}
+            </span>
+            <span className="settings-pref-hint-copy">
               {t("settings.notificationSoundsHint")}
             </span>
           </div>
-          {appSettings.notificationSoundsEnabled ? (
-            <div className="settings-sound-config settings-sound-config-shadcn">
-              <div className="settings-sound-control-item">
-                <Label className="settings-field-label" htmlFor="notification-sound-select-native">
+        </div>
+        {appSettings.notificationSoundsEnabled ? (
+          <>
+            <div className="settings-pref-row">
+              <div className="settings-pref-meta">
+                <label
+                  className="settings-pref-title"
+                  htmlFor="notification-sound-select-native"
+                >
                   {t("settings.soundSelectLabel")}
-                </Label>
-                <div className="settings-sound-select-row settings-sound-select-row-shadcn">
+                </label>
+              </div>
+              <div className="settings-pref-control settings-pref-font-control">
+                <div className="settings-pref-select-wrap settings-pref-select-wrap--grow">
                   <select
                     id="notification-sound-select-native"
-                    className="settings-sound-native-select-sr"
+                    className="settings-pref-select"
                     value={selectedNotificationSound}
-                    onChange={(event) => handleNotificationSoundOptionChange(event.target.value)}
+                    onChange={(event) =>
+                      handleNotificationSoundOptionChange(event.target.value)
+                    }
+                    aria-label={t("settings.soundSelectLabel")}
                   >
                     {soundOptions.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -625,87 +581,71 @@ export function BasicBehaviorSection({
                       </option>
                     ))}
                   </select>
-                  <Select
-                    value={selectedNotificationSound}
-                    onValueChange={handleNotificationSoundOptionChange}
+                </div>
+                <button
+                  type="button"
+                  className="ghost settings-button-compact settings-pref-action-btn"
+                  onClick={() =>
+                    onTestNotificationSound(
+                      selectedNotificationSound,
+                      notificationSoundPathDraft,
+                    )
+                  }
+                >
+                  {t("settings.test")}
+                </button>
+              </div>
+            </div>
+            {selectedNotificationSound === "custom" ? (
+              <div className="settings-pref-row settings-pref-row--stack">
+                <div className="settings-pref-meta">
+                  <label
+                    className="settings-pref-title"
+                    htmlFor="notification-sound-custom-path"
                   >
-                    <SelectTrigger
-                      id="notification-sound-select"
-                      className="settings-sound-select-trigger"
-                      aria-label={t("settings.soundSelectLabel")}
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="settings-sound-select-popup">
-                      {soundOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="settings-sound-test-btn"
-                    onClick={() =>
-                      onTestNotificationSound(
-                        selectedNotificationSound,
-                        notificationSoundPathDraft,
-                      )
+                    {t("settings.soundCustomFileLabel")}
+                  </label>
+                </div>
+                <div className="settings-pref-field-row">
+                  <input
+                    id="notification-sound-custom-path"
+                    type="text"
+                    className="settings-pref-text-input"
+                    value={notificationSoundPathDraft}
+                    placeholder={t("settings.soundCustomPlaceholder")}
+                    onChange={(event) =>
+                      setNotificationSoundPathDraft(event.target.value)
                     }
+                  />
+                  <button
+                    type="button"
+                    className="ghost settings-button-compact settings-pref-action-btn"
+                    onClick={() => {
+                      void handleBrowseNotificationSoundPath();
+                    }}
+                    aria-label={t("settings.browse")}
                   >
-                    {t("settings.test")}
-                  </Button>
+                    <FolderOpen size={14} aria-hidden />
+                    {t("settings.browse")}
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost settings-button-compact settings-pref-action-btn"
+                    onClick={handleSaveNotificationSoundPath}
+                  >
+                    {t("common.save")}
+                  </button>
+                </div>
+                <div className="settings-pref-hint">
+                  <span className="settings-pref-hint-copy">
+                    {t("settings.soundCustomHint")}
+                  </span>
                 </div>
               </div>
-              {selectedNotificationSound === "custom" ? (
-                <div className="settings-sound-control-item settings-sound-control-item-custom">
-                  <Label className="settings-field-label" htmlFor="notification-sound-custom-path">
-                    {t("settings.soundCustomFileLabel")}
-                  </Label>
-                  <div className="settings-sound-custom-path-row settings-sound-custom-path-row-shadcn">
-                    <Input
-                      id="notification-sound-custom-path"
-                      type="text"
-                      className="settings-sound-custom-input"
-                      value={notificationSoundPathDraft}
-                      placeholder={t("settings.soundCustomPlaceholder")}
-                      onChange={(event) => setNotificationSoundPathDraft(event.target.value)}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="settings-button-compact"
-                      onClick={() => {
-                        void handleBrowseNotificationSoundPath();
-                      }}
-                      aria-label={t("settings.browse")}
-                    >
-                      <FolderOpen size={14} aria-hidden />
-                      {t("settings.browse")}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="settings-button-compact"
-                      onClick={handleSaveNotificationSoundPath}
-                    >
-                      {t("common.save")}
-                    </Button>
-                  </div>
-                  <div className="settings-help settings-sound-custom-hint">
-                    {t("settings.soundCustomHint")}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
+            ) : null}
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }

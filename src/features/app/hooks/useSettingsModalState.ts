@@ -26,7 +26,6 @@ export type SettingsHighlightTarget =
   | "basic-email"
   | "project-groups"
   | "project-sessions"
-  | "project-usage"
   | "agent-management"
   | "prompt-library"
   | "mcp-servers"
