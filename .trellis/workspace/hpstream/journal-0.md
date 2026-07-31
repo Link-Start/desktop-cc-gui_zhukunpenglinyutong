@@ -95,3 +95,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: 修正隔离开发端口配置
+
+**Date**: 2026-07-31
+**Task**: 修正隔离开发端口配置
+**Branch**: `feat/from-main-20260729`
+
+### Summary
+
+提交隔离 Tauri dev 启动端口配置调整：仅在 MOSS_DEV_PORT_ISOLATED=1 时让 Vite 和端口释放脚本使用 MOSS_DEV_PORT，并为 tauri-dev-isolated 增加端口合法性校验和动态 devUrl 配置。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b95167e26` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
