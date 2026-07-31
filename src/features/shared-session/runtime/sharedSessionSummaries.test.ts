@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { normalizeSharedSessionSummary } from "./sharedSessionSummaries";
+import {
+  expandHiddenSharedBindingIds,
+  normalizeSharedSessionSummary,
+} from "./sharedSessionSummaries";
 
 describe("sharedSessionSummaries", () => {
   it("keeps native thread ids for all five supported Shared engines", () => {
@@ -44,5 +47,25 @@ describe("sharedSessionSummaries", () => {
         selectedEngine: "claude",
       }),
     ).toBeNull();
+  });
+
+  it("expands hidden binding ids for raw and engine-prefixed forms", () => {
+    const expanded = expandHiddenSharedBindingIds([
+      "grok:real-session-1",
+      "kimi-pending-shared-2",
+      "019d767b-5541-7010-a30d-a454864bccd8",
+      "opencode:ses_opc_1",
+    ]);
+
+    expect(expanded.has("grok:real-session-1")).toBe(true);
+    expect(expanded.has("real-session-1")).toBe(true);
+    expect(expanded.has("kimi:kimi-pending-shared-2")).toBe(true);
+    expect(expanded.has("kimi-pending-shared-2")).toBe(true);
+    expect(expanded.has("019d767b-5541-7010-a30d-a454864bccd8")).toBe(true);
+    expect(expanded.has("codex:019d767b-5541-7010-a30d-a454864bccd8")).toBe(
+      true,
+    );
+    expect(expanded.has("opencode:ses_opc_1")).toBe(true);
+    expect(expanded.has("ses_opc_1")).toBe(true);
   });
 });

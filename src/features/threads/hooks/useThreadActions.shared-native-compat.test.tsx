@@ -7,6 +7,8 @@ import {
   getOpenCodeSessionList,
   listClaudeSessions,
   listGeminiSessions,
+  listGrokSessions,
+  listKimiSessions,
   listWorkspaceSessions,
   listThreadTitles,
   listThreads,
@@ -152,13 +154,19 @@ describe("useThreadActions shared/native compatibility", () => {
     });
   });
 
-  it("keeps native gemini and opencode sessions visible when shared summaries contain legacy foreign bindings", async () => {
+  it("keeps gemini visible while hiding supported shared engines listed as bindings", async () => {
     vi.mocked(getOpenCodeSessionList).mockResolvedValue([
+      {
+        sessionId: "ses_opc_bound_1",
+        title: "OpenCode Bound",
+        updatedLabel: "1m ago",
+        updatedAt: 1_730_000_310_000,
+      },
       {
         sessionId: "ses_opc_visible_1",
         title: "OpenCode Visible",
         updatedLabel: "1m ago",
-        updatedAt: 1_730_000_310_000,
+        updatedAt: 1_730_000_311_000,
       },
     ]);
     vi.mocked(listGeminiSessions).mockResolvedValue([
@@ -176,8 +184,10 @@ describe("useThreadActions shared/native compatibility", () => {
         updatedAt: 1_730_000_330_000,
         selectedEngine: "claude",
         nativeThreadIds: [
+          // Gemini 不是 Shared 引擎：normalize 会剥离，不得误藏用户 Gemini 会话。
           "gemini:ses_gemini_visible_1",
-          "opencode:ses_opc_visible_1",
+          // OpenCode 是 Shared 引擎：必须隐藏 Hidden Binding。
+          "opencode:ses_opc_bound_1",
           "claude:session-1",
         ],
       },
@@ -204,7 +214,8 @@ describe("useThreadActions shared/native compatibility", () => {
           return (
             threadIds.includes("shared:shared-session-legacy-1") &&
             threadIds.includes("gemini:ses_gemini_visible_1") &&
-            threadIds.includes("opencode:ses_opc_visible_1")
+            threadIds.includes("opencode:ses_opc_visible_1") &&
+            !threadIds.includes("opencode:ses_opc_bound_1")
           );
         }),
       ).toBe(true);
@@ -314,6 +325,100 @@ describe("useThreadActions shared/native compatibility", () => {
           );
         }),
       ).toBe(true);
+    });
+  });
+
+  it("hides grok kimi and opencode shared bindings from native list surfaces", async () => {
+    vi.mocked(listGrokSessions).mockResolvedValue([
+      {
+        sessionId: "grok-hidden-1",
+        firstMessage: "MOSSX_CONTEXT_PACKAGE:pkg:checksum",
+        updatedAt: 1_730_000_400_000,
+      },
+      {
+        sessionId: "grok-visible-1",
+        firstMessage: "Visible Grok Session",
+        updatedAt: 1_730_000_410_000,
+      },
+    ]);
+    vi.mocked(listKimiSessions).mockResolvedValue([
+      {
+        sessionId: "kimi-hidden-1",
+        firstMessage: "Hidden Kimi Binding",
+        updatedAt: 1_730_000_420_000,
+      },
+      {
+        sessionId: "kimi-visible-1",
+        firstMessage: "Visible Kimi Session",
+        updatedAt: 1_730_000_430_000,
+      },
+    ]);
+    vi.mocked(getOpenCodeSessionList).mockResolvedValue([
+      {
+        sessionId: "ses_opc_hidden_1",
+        title: "Hidden OpenCode Binding",
+        updatedLabel: "1m ago",
+        updatedAt: 1_730_000_440_000,
+      },
+      {
+        sessionId: "ses_opc_visible_1",
+        title: "Visible OpenCode Session",
+        updatedLabel: "1m ago",
+        updatedAt: 1_730_000_450_000,
+      },
+    ]);
+    vi.mocked(listSharedSessions).mockResolvedValue([
+      {
+        id: "shared-session-multi-1",
+        threadId: "shared:shared-session-multi-1",
+        title: "Shared Multi",
+        updatedAt: 1_730_000_460_000,
+        selectedEngine: "grok",
+        nativeThreadIds: [
+          "grok:grok-hidden-1",
+          "kimi:kimi-hidden-1",
+          "opencode:ses_opc_hidden_1",
+        ],
+      },
+    ]);
+
+    const { result, dispatch } = renderActions();
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace, {
+        includeOpenCodeSessions: true,
+      });
+    });
+
+    // Grok/Kimi 走 async refresh 二次 setThreads；等到最终快照包含可见/隐藏判定。
+    await waitFor(() => {
+      const setThreadsActions = vi.mocked(dispatch).mock.calls
+        .map(([action]) => action)
+        .filter((action) => action?.type === "setThreads");
+      expect(setThreadsActions.length).toBeGreaterThan(0);
+      const latest = setThreadsActions[setThreadsActions.length - 1];
+      const threadIds = Array.isArray(latest?.threads)
+        ? latest.threads.map((thread: { id: string }) => thread.id)
+        : [];
+      // 合并多次 setThreads 的并集，因 Grok/Kimi refresh 是独立 dispatch。
+      const allSeen = new Set<string>();
+      for (const action of setThreadsActions) {
+        if (!Array.isArray(action.threads)) continue;
+        for (const thread of action.threads as { id: string }[]) {
+          allSeen.add(thread.id);
+        }
+      }
+      expect(allSeen.has("shared:shared-session-multi-1")).toBe(true);
+      expect(allSeen.has("opencode:ses_opc_visible_1")).toBe(true);
+      expect(allSeen.has("grok:grok-visible-1")).toBe(true);
+      expect(allSeen.has("kimi:kimi-visible-1")).toBe(true);
+      expect(allSeen.has("grok:grok-hidden-1")).toBe(false);
+      expect(allSeen.has("kimi:kimi-hidden-1")).toBe(false);
+      expect(allSeen.has("opencode:ses_opc_hidden_1")).toBe(false);
+      // 最终快照也不得把 hidden binding 带回。
+      expect(threadIds).not.toContain("grok:grok-hidden-1");
+      expect(threadIds).not.toContain("kimi:kimi-hidden-1");
+      expect(threadIds).not.toContain("opencode:ses_opc_hidden_1");
     });
   });
 });

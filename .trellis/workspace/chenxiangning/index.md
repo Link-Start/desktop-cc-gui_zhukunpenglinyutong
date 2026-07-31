@@ -7,9 +7,9 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-29.md`
-- **Total Sessions**: 1249
-- **Last Active**: 2026-07-31
+- **Active File**: `journal-30.md`
+- **Total Sessions**: 1254
+- **Last Active**: 2026-08-01
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-29.md` | ~1838 | Active |
+| `journal-30.md` | ~56 | Active |
+| `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
@@ -57,6 +58,11 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1254 | 2026-08-01 | fix Shared Hidden Binding 五引擎隐藏 | `33d7d02c6` | `bump-version-0.7.14` |
+| 1253 | 2026-08-01 | Shared Session 供应商切换后模型列表收口 | `fb6083584` | `bump-version-0.7.14` |
+| 1252 | 2026-08-01 | Provider Continuation running 可取消 | `b2b418500` | `bump-version-0.7.14` |
+| 1251 | 2026-08-01 | Native Session 供应商与模型切换收口 | `e2ac4a1a6` | `bump-version-0.7.14` |
+| 1250 | 2026-07-31 | 分析文档：对话幕布收敛与同CLI多供应商实现指导 | `d18436989` | `bump-version-0.7.14` |
 | 1249 | 2026-07-31 | 对话幕布结构分析文档 | `8f85693ed` | `bump-version-0.7.13` |
 | 1248 | 2026-07-31 | 隔离 Claude 模型映射跨 CLI 污染 | `ac91bfa48` | `bump-version-0.7.12` |
 | 1247 | 2026-07-31 | 修复 Grok 历史工具投影信息损失 | `ad2cceff8` | `bump-version-0.7.12` |

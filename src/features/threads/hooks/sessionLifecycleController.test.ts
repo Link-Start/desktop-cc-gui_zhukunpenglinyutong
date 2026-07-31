@@ -62,18 +62,19 @@ describe("sessionLifecycleController", () => {
     });
   });
 
-  it.each(["__local_settings_json__", "__local_config_toml__"])(
-    "normalizes local profile %s to no managed binding",
-    (profileId) => {
-      expect(
-        providerBindingFromSelectedProfile({
-          id: profileId,
-          name: "Local config",
-          source: "disk",
-        }),
-      ).toEqual({});
-    },
-  );
+  it.each([
+    "__local_settings_json__",
+    "__local_config_toml__",
+    "__local_opencode_json__",
+  ])("normalizes local profile %s to no managed binding", (profileId) => {
+    expect(
+      providerBindingFromSelectedProfile({
+        id: profileId,
+        name: "Local config",
+        source: "disk",
+      }),
+    ).toEqual({});
+  });
 
   it("prefixes Claude fork names without duplicating the prefix", () => {
     expect(addForkThreadNamePrefix("Release plan")).toBe("fork-Release plan");

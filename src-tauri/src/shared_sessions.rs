@@ -466,7 +466,7 @@ fn validate_shared_native_thread_id(value: &str) -> Result<String, String> {
     }
 }
 
-fn is_pending_shared_binding_thread_id(engine: EngineType, thread_id: &str) -> bool {
+pub(crate) fn is_pending_shared_binding_thread_id(engine: EngineType, thread_id: &str) -> bool {
     let normalized = thread_id.trim();
     if normalized.is_empty() {
         return true;
@@ -481,9 +481,23 @@ fn is_pending_shared_binding_thread_id(engine: EngineType, thread_id: &str) -> b
     }
 }
 
-fn binding_uses_established_native_thread(engine: EngineType, thread_id: &str) -> bool {
+pub(crate) fn binding_uses_established_native_thread(engine: EngineType, thread_id: &str) -> bool {
     let normalized = thread_id.trim();
     if normalized.is_empty() || is_pending_shared_binding_thread_id(engine, normalized) {
+        return false;
+    }
+    // 兼容 `engine:{raw}` 与历史 raw id；strip 前缀后再判 pending。
+    let raw = match engine {
+        EngineType::Claude | EngineType::Kimi | EngineType::Grok | EngineType::OpenCode => {
+            let prefix = format!("{}:", engine.icon());
+            normalized
+                .strip_prefix(prefix.as_str())
+                .unwrap_or(normalized)
+                .trim()
+        }
+        EngineType::Codex | EngineType::Gemini => normalized,
+    };
+    if raw.is_empty() || is_pending_shared_binding_thread_id(engine, raw) {
         return false;
     }
     match engine {
@@ -1953,6 +1967,11 @@ mod tests {
             assert!(binding_uses_established_native_thread(
                 engine,
                 &format!("native-{}-session", engine.icon()),
+            ));
+            // catalog / hide set 使用的前缀形式也必须视为 established。
+            assert!(binding_uses_established_native_thread(
+                engine,
+                &format!("{}:native-{}-session", engine.icon(), engine.icon()),
             ));
         }
     }

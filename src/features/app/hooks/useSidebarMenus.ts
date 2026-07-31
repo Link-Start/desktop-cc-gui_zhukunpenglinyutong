@@ -53,6 +53,7 @@ import {
   type ProviderContinuationDialogRequest,
 } from "../../threads/services/providerContinuationRequests";
 import { isWeakSessionDisplayTitle } from "../../threads/utils/sessionDisplayProjection";
+import { activateEngineProviderProfileAndNotify } from "../../vendors/activateEngineProviderProfile";
 
 const LAST_PROVIDER_PROFILE_KEYS = {
   claude: "claudeLastProviderProfileId",
@@ -115,6 +116,57 @@ function writeLastProviderProfileId(engine: ProviderEngine, id: string) {
   } catch {
     // ignore storage write failures
   }
+}
+
+/**
+ * 新建菜单「选供应商 = 启用启动」统一入口。
+ *
+ * 1) L2 记忆：last-selected + 选中态 → 创建会话写入 thread.providerProfileId
+ * 2) L1 标记 + Claude 模型映射：activateEngineProviderProfileAndNotify（不盖盘）
+ */
+function selectProviderForCreate(
+  engine: ProviderEngine,
+  profile: EngineProviderProfileOption,
+  setSelectedProfileId: (id: string) => void,
+  noticeMessageKey: string,
+) {
+  writeLastProviderProfileId(engine, profile.id);
+  setSelectedProfileId(profile.id);
+  pushGlobalRuntimeNotice({
+    severity: "info",
+    category: "runtime",
+    messageKey: noticeMessageKey,
+    messageParams: { name: profile.name },
+    dedupeKey: `${engine}-provider-selected-${profile.id}`,
+  });
+
+  void activateEngineProviderProfileAndNotify(engine, profile.id).catch(
+    (error: unknown) => {
+      const detail =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "unknown";
+      pushGlobalRuntimeNotice({
+        severity: "warning",
+        category: "runtime",
+        messageKey: "runtimeNotice.vendor.activateProviderFailed",
+        messageParams: { name: profile.name, detail },
+        dedupeKey: `${engine}-provider-activate-failed-${profile.id}`,
+      });
+    },
+  );
+}
+
+/** 左侧「创建会话」时始终携带完整 profile，避免只传 id 丢失 source/name。 */
+function creationProviderSelection(
+  profile: EngineProviderProfileOption,
+): EngineProviderProfileSelection {
+  return {
+    providerProfileId: profile.id,
+    providerProfile: profile,
+  };
 }
 
 export type WorkspaceMenuIconKind =
@@ -236,6 +288,18 @@ type SidebarMenuHandlers = {
     workspaceId: string,
   ) => Promise<void> | void;
   onSelectThread: (workspaceId: string, threadId: string) => void;
+  /**
+   * Provider 续接成功后：把目标 model/effort 落到新会话 composer，
+   * 并可由上层触发 provider-scoped 模型目录刷新。
+   */
+  onProviderContinuationTargetReady?: (input: {
+    workspaceId: string;
+    threadId: string;
+    engine: string;
+    providerProfileId: string | null;
+    modelId: string | null;
+    effort: string | null;
+  }) => void | Promise<void>;
   isThreadAvailable?: (workspaceId: string, threadId: string) => boolean;
   getThreadSummary?: (
     workspaceId: string,
@@ -298,6 +362,7 @@ export function useSidebarMenus({
   onOpenClaudeTui,
   onReloadWorkspaceThreads,
   onSelectThread,
+  onProviderContinuationTargetReady,
   isThreadAvailable,
   getThreadSummary,
   onActivateWorkspace,
@@ -645,18 +710,20 @@ export function useSidebarMenus({
 
   const closeProviderContinuationDialog = useCallback(() => {
     const current = providerContinuationDialogStateRef.current;
-    if (!current || current.stage === "running") {
+    if (!current) {
       return;
     }
+    const operationId = current.request.operationId;
+    // 任意 stage（含 running）都可关闭：放弃本次续接 UI 接管。
+    // running 时不 hard-abort 后端；late success 靠 canceled set 忽略。
+    canceledProviderContinuationOperationsRef.current.add(operationId);
+    providerContinuationOperationIdsRef.current.delete(current.operationKey);
     replaceProviderContinuationDialog(null);
     if (
       current.stage === "preparing" ||
       current.stage === "confirm" ||
       current.retryAction === "prepare"
     ) {
-      const operationId = current.request.operationId;
-      canceledProviderContinuationOperationsRef.current.add(operationId);
-      providerContinuationOperationIdsRef.current.delete(current.operationKey);
       void discardPreparedProviderContinuation(current).finally(() => {
         if (
           !providerContinuationPreviewOperationsRef.current.has(operationId)
@@ -664,6 +731,15 @@ export function useSidebarMenus({
           canceledProviderContinuationOperationsRef.current.delete(operationId);
         }
       });
+      return;
+    }
+    // running / error(execute)：不 discard 可能已进入 creating 的 operation。
+    // preview 未在途时即可清掉 canceled 标记；running 时保留至 confirm 收尾清理。
+    if (
+      current.stage !== "running" &&
+      !providerContinuationPreviewOperationsRef.current.has(operationId)
+    ) {
+      canceledProviderContinuationOperationsRef.current.delete(operationId);
     }
   }, [
     discardPreparedProviderContinuation,
@@ -690,6 +766,15 @@ export function useSidebarMenus({
       return;
     }
     providerContinuationOperationsRef.current.add(guardKey);
+    const operationId = dialog.request.operationId;
+    const abandonIfCanceled = (): boolean => {
+      if (!canceledProviderContinuationOperationsRef.current.has(operationId)) {
+        return false;
+      }
+      canceledProviderContinuationOperationsRef.current.delete(operationId);
+      providerContinuationOperationIdsRef.current.delete(dialog.operationKey);
+      return true;
+    };
     replaceProviderContinuationDialog({
       ...dialog,
       stage: "running",
@@ -704,11 +789,84 @@ export function useSidebarMenus({
         ...dialog.request,
         confirmDegraded: true,
       });
+      // 用户已在 running 中取消：忽略 late success/failure 对 UI 的接管。
+      if (abandonIfCanceled()) {
+        return;
+      }
       if (result.status === "ready" && result.operation.resultSessionId) {
         providerContinuationOperationIdsRef.current.delete(dialog.operationKey);
+        // 单一会话「换 Provider 续接」成功：同步目标供应商的启动设置
+        // （配置页「使用中」+ 菜单记忆；不盖盘；新会话 L2 binding 由后端/catalog 写入）
+        const destination = dialog.request.destination;
+        const destEngine = destination.engine;
+        const destProviderId =
+          typeof destination.providerProfileId === "string"
+            ? destination.providerProfileId.trim()
+            : "";
+        if (
+          destProviderId &&
+          (destEngine === "claude" ||
+            destEngine === "codex" ||
+            destEngine === "kimi" ||
+            destEngine === "grok" ||
+            destEngine === "opencode")
+        ) {
+          const engine = destEngine as ProviderEngine;
+          writeLastProviderProfileId(engine, destProviderId);
+          if (engine === "claude") {
+            setClaudeSelectedProfileId(destProviderId);
+          } else if (engine === "codex") {
+            setCodexSelectedProfileId(destProviderId);
+          } else if (engine === "kimi") {
+            setKimiSelectedProfileId(destProviderId);
+          } else if (engine === "grok") {
+            setGrokSelectedProfileId(destProviderId);
+          } else {
+            setOpencodeSelectedProfileId(destProviderId);
+          }
+          try {
+            await activateEngineProviderProfileAndNotify(engine, destProviderId);
+          } catch (activateError) {
+            const detail =
+              activateError instanceof Error
+                ? activateError.message
+                : String(activateError);
+            pushGlobalRuntimeNotice({
+              severity: "warning",
+              category: "runtime",
+              messageKey: "runtimeNotice.vendor.activateProviderFailed",
+              messageParams: {
+                name:
+                  destination.providerProfileNameSnapshot?.trim() ||
+                  destProviderId,
+                detail,
+              },
+              dedupeKey: `provider-continuation-activate:${dialog.workspaceId}:${destProviderId}`,
+            });
+          }
+        }
         await onReloadWorkspaceThreads(dialog.workspaceId);
         replaceProviderContinuationDialog(null);
         onSelectThread(dialog.workspaceId, result.operation.resultSessionId);
+        // 应用续接目标模型到新会话 composer，避免仍显示来源会话的 deepseek 等模型
+        const destModel =
+          typeof destination.model === "string"
+            ? destination.model.trim()
+            : "";
+        const destEffort =
+          typeof destination.reasoningEffort === "string"
+            ? destination.reasoningEffort.trim()
+            : "";
+        if (destModel || destEffort) {
+          onProviderContinuationTargetReady?.({
+            workspaceId: dialog.workspaceId,
+            threadId: result.operation.resultSessionId,
+            engine: destEngine,
+            providerProfileId: destProviderId || null,
+            modelId: destModel || null,
+            effort: destEffort || null,
+          });
+        }
         return;
       }
       const latest = providerContinuationDialogStateRef.current;
@@ -727,6 +885,9 @@ export function useSidebarMenus({
         technicalDetail: errorCode.trim() || null,
       });
     } catch (error) {
+      if (abandonIfCanceled()) {
+        return;
+      }
       const message = error instanceof Error ? error.message : String(error);
       const latest = providerContinuationDialogStateRef.current;
       if (latest?.request.operationId === dialog.request.operationId) {
@@ -753,6 +914,7 @@ export function useSidebarMenus({
     }
   }, [
     beginProviderContinuationPreview,
+    onProviderContinuationTargetReady,
     onReloadWorkspaceThreads,
     onSelectThread,
     replaceProviderContinuationDialog,
@@ -1291,10 +1453,10 @@ export function useSidebarMenus({
             claudeSelectedProfile,
           ),
           onSelect: async () => {
-            const threadId = await runAddAgent("claude", {
-              providerProfileId: claudeSelectedProfile.id,
-              providerProfile: claudeSelectedProfile,
-            });
+            const threadId = await runAddAgent(
+              "claude",
+              creationProviderSelection(claudeSelectedProfile),
+            );
             await handleCreatedSession(threadId);
           },
           children: claudeProfiles.map((profile) => ({
@@ -1314,15 +1476,12 @@ export function useSidebarMenus({
             selected: profile.id === claudeSelectedProfile.id,
             keepMenuOpen: true,
             onSelect: () => {
-              writeLastProviderProfileId("claude", profile.id);
-              setClaudeSelectedProfileId(profile.id);
-              pushGlobalRuntimeNotice({
-                severity: "info",
-                category: "runtime",
-                messageKey: "runtimeNotice.claude.providerSelected",
-                messageParams: { name: profile.name },
-                dedupeKey: `claude-provider-selected-${profile.id}`,
-              });
+              selectProviderForCreate(
+                "claude",
+                profile,
+                setClaudeSelectedProfileId,
+                "runtimeNotice.claude.providerSelected",
+              );
             },
           })),
         },
@@ -1337,10 +1496,10 @@ export function useSidebarMenus({
             codexSelectedProfile,
           ),
           onSelect: async () => {
-            const threadId = await runAddAgent("codex", {
-              providerProfileId: codexSelectedProfile.id,
-              providerProfile: codexSelectedProfile,
-            });
+            const threadId = await runAddAgent(
+              "codex",
+              creationProviderSelection(codexSelectedProfile),
+            );
             await handleCreatedSession(threadId);
           },
           children: codexProfiles.map((profile) => ({
@@ -1360,18 +1519,13 @@ export function useSidebarMenus({
             selected: profile.id === codexSelectedProfile.id,
             keepMenuOpen: true,
             onSelect: () => {
-              writeLastProviderProfileId("codex", profile.id);
-              setCodexSelectedProfileId(profile.id);
-              pushGlobalRuntimeNotice({
-                severity: "info",
-                category: "runtime",
-                messageKey: "runtimeNotice.codex.providerSelected",
-                messageParams: { name: profile.name },
-                // Per-profile key: a same-key merge keeps the old notice's
-                // messageParams, so a shared key would keep showing the
-                // previous provider's name on consecutive picks.
-                dedupeKey: `codex-provider-selected-${profile.id}`,
-              });
+              // Per-profile dedupeKey is inside selectProviderForCreate.
+              selectProviderForCreate(
+                "codex",
+                profile,
+                setCodexSelectedProfileId,
+                "runtimeNotice.codex.providerSelected",
+              );
             },
           })),
         },
@@ -1386,10 +1540,10 @@ export function useSidebarMenus({
             opencodeSelectedProfile,
           ),
           onSelect: async () => {
-            const threadId = await runAddAgent("opencode", {
-              providerProfileId: opencodeSelectedProfile.id,
-              providerProfile: opencodeSelectedProfile,
-            });
+            const threadId = await runAddAgent(
+              "opencode",
+              creationProviderSelection(opencodeSelectedProfile),
+            );
             await handleCreatedSession(threadId);
           },
           children: opencodeProfiles.map((profile) => ({
@@ -1409,15 +1563,12 @@ export function useSidebarMenus({
             selected: profile.id === opencodeSelectedProfile.id,
             keepMenuOpen: true,
             onSelect: () => {
-              writeLastProviderProfileId("opencode", profile.id);
-              setOpencodeSelectedProfileId(profile.id);
-              pushGlobalRuntimeNotice({
-                severity: "info",
-                category: "runtime",
-                messageKey: "runtimeNotice.opencode.providerSelected",
-                messageParams: { name: profile.name },
-                dedupeKey: `opencode-provider-selected-${profile.id}`,
-              });
+              selectProviderForCreate(
+                "opencode",
+                profile,
+                setOpencodeSelectedProfileId,
+                "runtimeNotice.opencode.providerSelected",
+              );
             },
           })),
         },
@@ -1442,10 +1593,10 @@ export function useSidebarMenus({
             kimiSelectedProfile,
           ),
           onSelect: async () => {
-            const threadId = await runAddAgent("kimi", {
-              providerProfileId: kimiSelectedProfile.id,
-              providerProfile: kimiSelectedProfile,
-            });
+            const threadId = await runAddAgent(
+              "kimi",
+              creationProviderSelection(kimiSelectedProfile),
+            );
             await handleCreatedSession(threadId);
           },
           children: kimiProfiles.map((profile) => ({
@@ -1465,15 +1616,12 @@ export function useSidebarMenus({
             selected: profile.id === kimiSelectedProfile.id,
             keepMenuOpen: true,
             onSelect: () => {
-              writeLastProviderProfileId("kimi", profile.id);
-              setKimiSelectedProfileId(profile.id);
-              pushGlobalRuntimeNotice({
-                severity: "info",
-                category: "runtime",
-                messageKey: "runtimeNotice.kimi.providerSelected",
-                messageParams: { name: profile.name },
-                dedupeKey: `kimi-provider-selected-${profile.id}`,
-              });
+              selectProviderForCreate(
+                "kimi",
+                profile,
+                setKimiSelectedProfileId,
+                "runtimeNotice.kimi.providerSelected",
+              );
             },
           })),
         },
@@ -1488,10 +1636,10 @@ export function useSidebarMenus({
             grokSelectedProfile,
           ),
           onSelect: async () => {
-            const threadId = await runAddAgent("grok", {
-              providerProfileId: grokSelectedProfile.id,
-              providerProfile: grokSelectedProfile,
-            });
+            const threadId = await runAddAgent(
+              "grok",
+              creationProviderSelection(grokSelectedProfile),
+            );
             await handleCreatedSession(threadId);
           },
           children: grokProfiles.map((profile) => ({
@@ -1511,15 +1659,12 @@ export function useSidebarMenus({
             selected: profile.id === grokSelectedProfile.id,
             keepMenuOpen: true,
             onSelect: () => {
-              writeLastProviderProfileId("grok", profile.id);
-              setGrokSelectedProfileId(profile.id);
-              pushGlobalRuntimeNotice({
-                severity: "info",
-                category: "runtime",
-                messageKey: "runtimeNotice.grok.providerSelected",
-                messageParams: { name: profile.name },
-                dedupeKey: `grok-provider-selected-${profile.id}`,
-              });
+              selectProviderForCreate(
+                "grok",
+                profile,
+                setGrokSelectedProfileId,
+                "runtimeNotice.grok.providerSelected",
+              );
             },
           })),
         },

@@ -14,6 +14,7 @@ import {
   migrateModelMappingStorage,
   syncModelMappingFromProviderEnv,
 } from "../../models/constants";
+import { VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT } from "../vendorActiveProviderEvents";
 
 export interface ProviderDialogState {
   isOpen: boolean;
@@ -155,6 +156,27 @@ export function useProviderManagement() {
       );
     }
     void Promise.all([loadProviders(), loadCurrentConfig()]);
+  }, [loadProviders, loadCurrentConfig]);
+
+  // 新建菜单选供应商并 switch 后，刷新「使用中」标记（与设置页点启用一致）
+  useEffect(() => {
+    const onActiveProviderChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ engine?: string }>).detail;
+      if (detail?.engine && detail.engine !== "claude") {
+        return;
+      }
+      void Promise.all([loadProviders(), loadCurrentConfig()]);
+    };
+    window.addEventListener(
+      VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT,
+      onActiveProviderChanged,
+    );
+    return () => {
+      window.removeEventListener(
+        VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT,
+        onActiveProviderChanged,
+      );
+    };
   }, [loadProviders, loadCurrentConfig]);
 
   const handleEditProvider = useCallback((provider: ProviderConfig) => {
@@ -300,6 +322,11 @@ export function useProviderManagement() {
     setDeleteConfirm({ isOpen: true, provider });
   }, []);
 
+  /**
+   * L1「启用 / 使用中」：只更新 app 内 claude.current（backend 不再盖写 ~/.claude/settings.json）。
+   * managed 会话 env 靠 thread.providerProfileId + launch/--settings；本地 settings 保持用户磁盘原样。
+   * 设置页与新建菜单共用此路径；已绑定会话的 L2 binding 不会被改写。
+   */
   const handleSwitchProvider = useCallback(
     async (id: string) => {
       try {

@@ -8,6 +8,7 @@ import {
   deleteGrokProvider,
   switchGrokProvider,
 } from "../../../services/tauri";
+import { VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT } from "../vendorActiveProviderEvents";
 
 export interface GrokProviderDialogState {
   isOpen: boolean;
@@ -85,6 +86,26 @@ export function useGrokProviderManagement() {
 
   useEffect(() => {
     void loadGrokProviders();
+  }, [loadGrokProviders]);
+
+  useEffect(() => {
+    const onActiveProviderChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ engine?: string }>).detail;
+      if (detail?.engine && detail.engine !== "grok") {
+        return;
+      }
+      void loadGrokProviders();
+    };
+    window.addEventListener(
+      VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT,
+      onActiveProviderChanged,
+    );
+    return () => {
+      window.removeEventListener(
+        VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT,
+        onActiveProviderChanged,
+      );
+    };
   }, [loadGrokProviders]);
 
   const handleAddGrokProvider = useCallback(() => {

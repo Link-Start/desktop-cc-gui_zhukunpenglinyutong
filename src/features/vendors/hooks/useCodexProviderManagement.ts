@@ -13,6 +13,7 @@ import {
   switchCodexProvider,
   reorderCodexProviders,
 } from "../../../services/tauri";
+import { VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT } from "../vendorActiveProviderEvents";
 
 export interface CodexProviderDialogState {
   isOpen: boolean;
@@ -202,6 +203,26 @@ export function useCodexProviderManagement() {
 
   useEffect(() => {
     void loadCodexProviders();
+  }, [loadCodexProviders]);
+
+  useEffect(() => {
+    const onActiveProviderChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ engine?: string }>).detail;
+      if (detail?.engine && detail.engine !== "codex") {
+        return;
+      }
+      void loadCodexProviders();
+    };
+    window.addEventListener(
+      VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT,
+      onActiveProviderChanged,
+    );
+    return () => {
+      window.removeEventListener(
+        VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT,
+        onActiveProviderChanged,
+      );
+    };
   }, [loadCodexProviders]);
 
   const handleAddCodexProvider = useCallback(() => {

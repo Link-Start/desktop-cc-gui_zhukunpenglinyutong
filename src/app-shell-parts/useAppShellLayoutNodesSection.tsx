@@ -492,7 +492,9 @@ export function useAppShellLayoutNodesSection(
     pickImages,
     pinThread,
     pinnedThreadsVersion,
+    persistComposerSelectionForThread,
     prefillDraft,
+    refreshEngineModels,
     prompts,
     pushError,
     pushLoading,
@@ -1218,6 +1220,51 @@ export function useAppShellLayoutNodesSection(
       });
     },
   );
+  const handleProviderContinuationTargetReady = useEventCallback(
+    (input: {
+      workspaceId: string;
+      threadId: string;
+      engine: string;
+      providerProfileId: string | null;
+      modelId: string | null;
+      effort: string | null;
+    }) => {
+      // 续接目标模型落到新会话；强制拉目标 provider 的 model catalog，避免仍显示来源 DeepSeek 映射
+      if (input.modelId || input.effort) {
+        persistComposerSelectionForThread(input.workspaceId, input.threadId, {
+          modelId: input.modelId,
+          effort: input.effort,
+        });
+      }
+      if (input.modelId) {
+        handleSelectModel(input.modelId);
+      }
+      if (input.effort) {
+        setSelectedEffort(input.effort);
+      }
+      const engine = input.engine as
+        | "claude"
+        | "codex"
+        | "kimi"
+        | "grok"
+        | "opencode"
+        | "gemini";
+      if (
+        engine === "claude" ||
+        engine === "codex" ||
+        engine === "kimi" ||
+        engine === "grok" ||
+        engine === "opencode"
+      ) {
+        void refreshEngineModels(engine, {
+          providerProfileId: input.providerProfileId,
+          forceRefresh: true,
+          phase: "on-demand",
+        });
+      }
+    },
+  );
+
   const handleSelectThread = useEventCallback(
     (workspaceId: string, threadId: string) => {
       const preserveEditor = shouldPreserveEditorOnThreadSelect({
@@ -1891,6 +1938,7 @@ export function useAppShellLayoutNodesSection(
       onAddCloneAgent: handleAddCloneAgent,
       onToggleWorkspaceCollapse: handleToggleWorkspaceCollapse,
       onSelectThread: handleSelectThread,
+      onProviderContinuationTargetReady: handleProviderContinuationTargetReady,
       onSelectHomeWorkspace: handleSelectHomeWorkspace,
       onDeleteThread: handleDeleteThread,
       onArchiveThread: handleArchiveThread,
