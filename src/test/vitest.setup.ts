@@ -359,7 +359,6 @@ vi.mock("react-i18next", () => ({
         "settings.basicEmailTab": "Email",
         "settings.mcpSkillsDescription":
           "Manage the curated Skills bundled with this app.",
-        "settings.sidebarUsage": "Usage",
         "settings.sidebarWebService": "Web Service",
         "settings.sidebarEmail": "Email",
         "settings.agentPromptAgentsTab": "Agents",
@@ -526,8 +525,6 @@ vi.mock("react-i18next", () => ({
         "settings.projectManagementDescription": "Manage project groups and real workspace sessions from one place.",
         "settings.projectManagementGroupsTab": "Groups",
         "settings.projectManagementSessionsTab": "Session Management",
-        "settings.projectManagementUsageTab": "Usage",
-        "settings.usagePanel.title": "Usage",
         "settings.webServiceTitle": "Web Service",
         "settings.webServiceFixedToken": "Fixed access token",
         "settings.webServiceFixedTokenAriaLabel": "Fixed Web service access token",

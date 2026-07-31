@@ -49,11 +49,9 @@ import { VendorSettingsPanel } from "../../vendors/components/VendorSettingsPane
 import { AgentSettingsSection } from "./AgentSettingsSection";
 import { CommitSection } from "./CommitSection";
 import { PromptSection } from "./PromptSection";
-import { UsageSection } from "./UsageSection";
 import type { SessionRadarEntry } from "../../session-activity/hooks/useSessionRadarFeed";
 import { deleteSessionRadarHistoryEntries } from "../../session-activity/utils/sessionRadarHistoryManagement";
 import Settings from "lucide-react/dist/esm/icons/settings";
-import BarChart3 from "lucide-react/dist/esm/icons/bar-chart-3";
 import MoreHorizontalIcon from "lucide-react/dist/esm/icons/more-horizontal";
 import Users from "lucide-react/dist/esm/icons/users";
 import {
@@ -204,7 +202,6 @@ export type SettingsViewProps = {
     | "basic-email"
     | "project-groups"
     | "project-sessions"
-    | "project-usage"
     | "agent-management"
     | "prompt-library"
     | "mcp-servers"
@@ -362,7 +359,7 @@ export function SettingsView({
     | "email"
   >("appearance");
   const [projectManagementSubTab, setProjectManagementSubTab] = useState<
-    "groups" | "sessions" | "usage"
+    "groups" | "sessions"
   >("groups");
   const [agentPromptSubTab, setAgentPromptSubTab] = useState<
     "agents" | "prompts"
@@ -861,10 +858,6 @@ export function SettingsView({
       case "project-sessions":
         setActiveSection("project-management");
         setProjectManagementSubTab("sessions");
-        return;
-      case "project-usage":
-        setActiveSection("project-management");
-        setProjectManagementSubTab("usage");
         return;
       case "agent-management":
         setActiveSection("agent-prompt-management");
@@ -2122,14 +2115,6 @@ export function SettingsView({
                   <Archive className="settings-basic-tab-icon" aria-hidden />
                   {t("settings.projectManagementSessionsTab")}
                 </button>
-                <button
-                  type="button"
-                  className={`settings-basic-tab ${projectManagementSubTab === "usage" ? "active" : ""}`}
-                  onClick={() => setProjectManagementSubTab("usage")}
-                >
-                  <BarChart3 className="settings-basic-tab-icon" aria-hidden />
-                  {t("settings.projectManagementUsageTab")}
-                </button>
               </div>
               <ProjectsSection
                 active={projectManagementSubTab === "groups"}
@@ -2168,17 +2153,6 @@ export function SettingsView({
                   onUpdateAppSettings={onUpdateAppSettings}
                   onUpdateWorkspaceSettings={onUpdateWorkspaceSettings}
                   onSessionsMutated={_onEnsureWorkspaceThreads}
-                />
-              )}
-              {projectManagementSubTab === "usage" && (
-                <UsageSection
-                  activeWorkspace={selectedSettingsWorkspace}
-                  activeEngine={activeEngine}
-                  workspaces={projects}
-                  selectedWorkspaceId={selectedSettingsWorkspace?.id ?? ""}
-                  onWorkspaceChange={(workspaceId) =>
-                    setSettingsWorkspaceId(workspaceId || null)
-                  }
                 />
               )}
             </section>

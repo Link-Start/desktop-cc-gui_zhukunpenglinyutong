@@ -401,7 +401,6 @@ pub(crate) fn invoke_handler(
         crate::dictation::dictation_cancel,
         // Local usage
         crate::local_usage::local_usage_snapshot,
-        crate::local_usage::local_usage_statistics,
         // TokenTracker
         crate::tokentracker::tt_detect_cli,
         crate::tokentracker::tt_server_status,
