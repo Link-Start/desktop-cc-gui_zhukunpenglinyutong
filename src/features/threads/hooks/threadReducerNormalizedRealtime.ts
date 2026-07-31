@@ -3,6 +3,7 @@ import { prepareThreadItems } from "../../../utils/threadItems";
 import { appendEvent as appendNormalizedRealtimeEvent } from "../assembly/conversationAssembler";
 import type { NormalizedThreadEvent } from "../contracts/conversationCurtainContracts";
 import type { ThreadAction, ThreadState } from "./useThreadsReducer";
+import { withAssistantTurnTokenCounts } from "./threadReducerAssistantFinalMetadata";
 
 type ApplyNormalizedRealtimeEventAction = Extract<
   ThreadAction,
@@ -23,6 +24,7 @@ function applyAssistantCompletionMetadata(
   itemId: string,
   completedAt: number,
   durationMs: number | null,
+  tokenUsage: ThreadState["tokenUsageByThread"][string] | null | undefined,
 ) {
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const candidate = items[index];
@@ -35,16 +37,19 @@ function applyAssistantCompletionMetadata(
       continue;
     }
     const next = [...items];
-    next[index] = {
-      ...candidate,
-      isFinal: true,
-      finalCompletedAt: Math.max(candidate.finalCompletedAt ?? 0, completedAt) || completedAt,
-      ...(typeof candidate.finalDurationMs === "number"
-        ? { finalDurationMs: candidate.finalDurationMs }
-        : durationMs !== null
-          ? { finalDurationMs: durationMs }
-          : {}),
-    };
+    next[index] = withAssistantTurnTokenCounts(
+      {
+        ...candidate,
+        isFinal: true,
+        finalCompletedAt: Math.max(candidate.finalCompletedAt ?? 0, completedAt) || completedAt,
+        ...(typeof candidate.finalDurationMs === "number"
+          ? { finalDurationMs: candidate.finalDurationMs }
+          : durationMs !== null
+            ? { finalDurationMs: durationMs }
+            : {}),
+      },
+      tokenUsage,
+    );
     return next;
   }
   return items;
@@ -106,6 +111,7 @@ export function reduceNormalizedRealtimeEvent(
       action.event.item.id,
       completedAt,
       durationMs,
+      state.tokenUsageByThread[action.threadId],
     );
   }
   if (shouldPrepareNormalizedRealtimeItems(action.event)) {

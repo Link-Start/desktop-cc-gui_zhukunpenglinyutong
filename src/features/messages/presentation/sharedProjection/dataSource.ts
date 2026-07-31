@@ -196,6 +196,15 @@ function toConversationItem(item: SharedProjectionItem): ConversationItem | null
         ...(typeof content.finalCompletedAt === "number"
           ? { finalCompletedAt: content.finalCompletedAt }
           : {}),
+        ...(typeof content.finalDurationMs === "number"
+          ? { finalDurationMs: content.finalDurationMs }
+          : {}),
+        ...(typeof content.finalInputTokens === "number"
+          ? { finalInputTokens: content.finalInputTokens }
+          : {}),
+        ...(typeof content.finalOutputTokens === "number"
+          ? { finalOutputTokens: content.finalOutputTokens }
+          : {}),
       };
     }
     case "reasoning":

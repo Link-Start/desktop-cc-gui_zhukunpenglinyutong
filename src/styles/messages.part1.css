@@ -111,8 +111,8 @@
 .message-action-bar {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 1px;
+  justify-content: flex-start;
+  gap: 2px;
   padding: 0;
   color: var(--text-muted);
 }
@@ -132,11 +132,35 @@
   transform: translateY(0);
 }
 
-/* 操作按钮(复制/分支/历史)挪入「最终消息」分隔线那一行，排到右侧线条之后、贴最右端 */
-.messages-final-boundary .message-action-bar-row {
-  order: 1;
+/* 助手最终消息：操作栏贴在正文下方（ChatGPT 风格），无「最终消息」分割线 */
+.message-assistant-action-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  /* 操作图标与左侧 meta 紧贴，避免把 meta 挤到行尾 */
+  gap: 6px 8px;
+  margin: 4px 0 2px;
+  min-height: 28px;
+}
+
+.message-assistant-action-footer .message-action-bar-row {
   flex-shrink: 0;
-  margin-left: 8px;
+  /* 图标之间留白更接近参考图：轻量、匀称 */
+  gap: 2px;
+}
+
+/* 贴在操作图标右侧（左对齐），不推到行尾 */
+.message-assistant-action-meta {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 2px;
+  letter-spacing: 0.01em;
+  font-size: var(--message-meta-font-size);
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--text-muted) 92%, var(--text-strong));
 }
 
 .message-action-button {
@@ -151,7 +175,7 @@
   background: transparent;
   box-shadow: none;
   color: var(--text-muted);
-  transition: color 160ms ease, opacity 160ms ease;
+  transition: color 160ms ease, background-color 160ms ease, opacity 160ms ease;
 }
 
 .message-action-button:hover,
@@ -169,6 +193,45 @@
 
 .message-action-bar-row .message-history-icon {
   font-size: 13px;
+}
+
+/* 助手 footer：细描边 + 柔和灰 + 宽松命中区，视觉对齐参考图 */
+.message-assistant-action-footer .message-action-button {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--text-muted) 78%, transparent);
+  opacity: 1;
+}
+
+.message-assistant-action-footer .message-action-button:hover,
+.message-assistant-action-footer .message-action-button:focus-visible {
+  background: color-mix(in srgb, var(--text-muted) 10%, transparent);
+  color: color-mix(in srgb, var(--text-primary) 82%, var(--text-muted));
+}
+
+.message-assistant-action-footer .message-action-button:active {
+  background: color-mix(in srgb, var(--text-muted) 14%, transparent);
+}
+
+.message-assistant-action-footer .message-action-icon,
+.message-assistant-action-footer .message-copy-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+
+.message-assistant-action-footer .message-copy-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.message-assistant-action-footer .message-copy-icon svg {
+  stroke-width: 1.5;
 }
 
 .message-fork-confirm-dialog {
@@ -223,8 +286,7 @@
   min-width: 88px;
 }
 
-/* 复制按钮用 lucide SVG，分支/历史用 codicon 字体：lucide 默认描边偏粗、12px 方框墨迹偏大，
-   收到 11px 并减细描边，使其视觉重量与同排 codicon(font-size:12px) 对齐 */
+/* 复制按钮：双层 lucide SVG 叠放（copy ↔ check） */
 .message-copy-icon {
   position: relative;
   width: 11px;

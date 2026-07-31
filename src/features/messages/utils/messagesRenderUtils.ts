@@ -199,6 +199,20 @@ export function formatDurationMs(durationMs: number) {
   return `${durationMinutes}:${String(durationRemainder).padStart(2, "0")}`;
 }
 
+/** Compact token count for message footers (1234 → "1.2K"), matching jetbrains MessageItem. */
+export function formatTokenCount(count: number) {
+  if (!Number.isFinite(count) || count < 0) {
+    return "0";
+  }
+  if (count >= 1_000_000) {
+    return `${(count / 1_000_000).toFixed(1)}M`;
+  }
+  if (count >= 1_000) {
+    return `${(count / 1_000).toFixed(1)}K`;
+  }
+  return String(Math.floor(count));
+}
+
 export function formatCompletedTimeMs(timestampMs: number) {
   const date = new Date(timestampMs);
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -207,6 +221,83 @@ export function formatCompletedTimeMs(timestampMs: number) {
   const minutes = String(date.getMinutes()).padStart(2, "0");
   const seconds = String(date.getSeconds()).padStart(2, "0");
   return `${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+type TranslateFn = (key: string, options?: Record<string, unknown>) => string;
+
+/** Whole seconds for compact duration labels like "耗时13s". */
+export function formatDurationSecondsLabel(durationMs: number) {
+  const seconds = Math.max(0, Math.floor(durationMs / 1000));
+  return `${seconds}s`;
+}
+
+/**
+ * Build final-boundary meta next to message actions, e.g.
+ * "07-31 20:42:26 耗时13s · 输入 41.1K token / 输出 105 token"
+ */
+export function buildAssistantFinalBoundaryMetaText(options: {
+  finalDurationMs?: number;
+  finalInputTokens?: number;
+  finalOutputTokens?: number;
+  finalCompletedAt?: number;
+  t: TranslateFn;
+}): string {
+  const headParts: string[] = [];
+  if (
+    typeof options.finalCompletedAt === "number" &&
+    options.finalCompletedAt > 0
+  ) {
+    headParts.push(formatCompletedTimeMs(options.finalCompletedAt));
+  }
+  if (
+    typeof options.finalDurationMs === "number" &&
+    Number.isFinite(options.finalDurationMs) &&
+    options.finalDurationMs >= 0
+  ) {
+    headParts.push(
+      options.t("messages.durationSeconds", {
+        seconds: Math.max(0, Math.floor(options.finalDurationMs / 1000)),
+      }),
+    );
+  }
+  const inputTokens =
+    typeof options.finalInputTokens === "number" &&
+    Number.isFinite(options.finalInputTokens) &&
+    options.finalInputTokens > 0
+      ? options.finalInputTokens
+      : 0;
+  const outputTokens =
+    typeof options.finalOutputTokens === "number" &&
+    Number.isFinite(options.finalOutputTokens) &&
+    options.finalOutputTokens > 0
+      ? options.finalOutputTokens
+      : 0;
+  const tokenText =
+    inputTokens > 0 || outputTokens > 0
+      ? options.t("messages.tokenUsageTooltip", {
+          input: formatTokenCount(inputTokens),
+          output: formatTokenCount(outputTokens),
+        })
+      : "";
+  const head = headParts.join(" ");
+  if (head && tokenText) {
+    return `${head} · ${tokenText}`;
+  }
+  return head || tokenText;
+}
+
+/** @deprecated Alias kept for call sites that still use the object helper name. */
+export function buildAssistantFinalBoundaryMeta(options: {
+  finalDurationMs?: number;
+  finalInputTokens?: number;
+  finalOutputTokens?: number;
+  finalCompletedAt?: number;
+  t: TranslateFn;
+}) {
+  return {
+    text: buildAssistantFinalBoundaryMetaText(options),
+    tokenTooltip: null as string | null,
+  };
 }
 
 export function scrollKeyForItems(items: ConversationItem[]) {

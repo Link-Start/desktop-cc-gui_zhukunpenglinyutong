@@ -60,6 +60,8 @@ import { isSameApprovalRequest } from "./threadReducerApprovalRequests";
 import {
   clearAssistantFinalMetadata,
   shouldPreserveAssistantFinalMetadata,
+  stampLatestFinalAssistantTurnTokens,
+  withAssistantTurnTokenCounts,
 } from "./threadReducerAssistantFinalMetadata";
 import { mergeThreadItemsPreservingOptimisticUsers } from "./threadReducerOptimisticItemMerge";
 import {
@@ -1870,20 +1872,26 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         typeof latestAssistant.finalDurationMs === "number"
           ? Math.max(0, latestAssistant.finalDurationMs)
           : derivedDuration;
+      const withTokens = withAssistantTurnTokenCounts(
+        {
+          ...latestAssistant,
+          isFinal: true,
+          finalCompletedAt: completedAt,
+          ...(durationMs !== null ? { finalDurationMs: durationMs } : {}),
+        },
+        state.tokenUsageByThread[action.threadId],
+      );
       const shouldUpdate =
         latestAssistant.isFinal !== true ||
         latestAssistant.finalCompletedAt !== completedAt ||
-        latestAssistant.finalDurationMs !== durationMs;
+        latestAssistant.finalDurationMs !== durationMs ||
+        latestAssistant.finalInputTokens !== withTokens.finalInputTokens ||
+        latestAssistant.finalOutputTokens !== withTokens.finalOutputTokens;
       if (!shouldUpdate) {
         return state;
       }
       const next = [...list];
-      next[latestAssistantIndex] = {
-        ...latestAssistant,
-        isFinal: true,
-        finalCompletedAt: completedAt,
-        ...(durationMs !== null ? { finalDurationMs: durationMs } : {}),
-      };
+      next[latestAssistantIndex] = withTokens;
       return {
         ...state,
         itemsByThread: {
@@ -2623,7 +2631,13 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       const shouldClearCompletedCompaction =
         existingStatus.codexCompactionLifecycleState === "completed" &&
         usageSnapshotChanged;
-      if (!usageSnapshotChanged && !shouldClearCompletedCompaction) {
+      const existingItems = state.itemsByThread[action.threadId] ?? [];
+      const nextItems = stampLatestFinalAssistantTurnTokens(
+        existingItems,
+        action.tokenUsage,
+      );
+      const itemsChanged = nextItems !== existingItems;
+      if (!usageSnapshotChanged && !shouldClearCompletedCompaction && !itemsChanged) {
         return state;
       }
       const tokenUsageUpdatedAt = usageSnapshotChanged
@@ -2635,6 +2649,14 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           ...state.tokenUsageByThread,
           [action.threadId]: action.tokenUsage,
         },
+        ...(itemsChanged
+          ? {
+              itemsByThread: {
+                ...state.itemsByThread,
+                [action.threadId]: nextItems,
+              },
+            }
+          : {}),
         threadStatusById: {
           ...state.threadStatusById,
           [action.threadId]: {
@@ -2807,32 +2829,38 @@ function applyCompleteAgentMessageToState(
     const nextBase = keepFinalMetadata
       ? existingItem
       : clearAssistantFinalMetadata(existingItem);
-    computedCompletedItem = {
-      ...nextBase,
-      id: targetItemId,
-      text: mergeCompletedAgentText(
-        existingItem.text,
-        params.text,
-        true,
-      ),
-      isFinal: true,
-      finalCompletedAt: nextBase.finalCompletedAt ?? completedAt,
-      ...(typeof nextBase.finalDurationMs === "number"
-        ? { finalDurationMs: nextBase.finalDurationMs }
-        : derivedDuration !== null
-          ? { finalDurationMs: derivedDuration }
-          : {}),
-    };
+    computedCompletedItem = withAssistantTurnTokenCounts(
+      {
+        ...nextBase,
+        id: targetItemId,
+        text: mergeCompletedAgentText(
+          existingItem.text,
+          params.text,
+          true,
+        ),
+        isFinal: true,
+        finalCompletedAt: nextBase.finalCompletedAt ?? completedAt,
+        ...(typeof nextBase.finalDurationMs === "number"
+          ? { finalDurationMs: nextBase.finalDurationMs }
+          : derivedDuration !== null
+            ? { finalDurationMs: derivedDuration }
+            : {}),
+      },
+      state.tokenUsageByThread[params.threadId],
+    );
   } else {
-    computedCompletedItem = {
-      id: targetItemId,
-      kind: "message",
-      role: "assistant",
-      text: params.text,
-      isFinal: true,
-      finalCompletedAt: completedAt,
-      ...(derivedDuration !== null ? { finalDurationMs: derivedDuration } : {}),
-    };
+    computedCompletedItem = withAssistantTurnTokenCounts(
+      {
+        id: targetItemId,
+        kind: "message",
+        role: "assistant",
+        text: params.text,
+        isFinal: true,
+        finalCompletedAt: completedAt,
+        ...(derivedDuration !== null ? { finalDurationMs: derivedDuration } : {}),
+      },
+      state.tokenUsageByThread[params.threadId],
+    );
   }
   if (
     INCREMENTAL_DERIVATION_ENABLED &&

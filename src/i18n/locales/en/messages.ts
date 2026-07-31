@@ -69,11 +69,15 @@ const messages = {
     imageInputUnsupported:
       "{{engine}} does not support image input in this release",
     doneIn: "Done in {{duration}}",
+    totalDuration: "Duration",
+    durationSeconds: "took {{seconds}}s",
+    tokenUsage: "In {{input}} / Out {{output}}",
+    tokenUsageTooltip: "In {{input}} token / Out {{output}} token",
     messageActions: "Message actions",
     copyMessage: "Copy message",
     copyUserMessage: "Copy user message",
-    forkMessage: "Fork new thread (keeps current, branches from here)",
-    rewindMessage: "Rewind to this message (edit and resend)",
+    forkMessage: "Fork: start a new chat from here",
+    rewindMessage: "Rewind: go back to this message to edit",
     forkConfirmTitle: "Confirm fork",
     forkConfirmDescription:
       "Fork creates a new thread from this message and keeps the current thread unchanged.",

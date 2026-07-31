@@ -75,10 +75,6 @@ export const ReasoningRow = memo(function ReasoningRow({
           <Brain className="thinking-brain-icon" size={15} aria-hidden />
           <span className="thinking-title">{title}</span>
         </span>
-        <span
-          className={`codicon thinking-icon ${isExpanded ? "codicon-chevron-down" : "codicon-chevron-right"}`}
-          aria-hidden
-        />
       </button>
       <div
         className="thinking-content"
