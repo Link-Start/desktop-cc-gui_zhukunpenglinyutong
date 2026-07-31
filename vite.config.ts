@@ -15,8 +15,10 @@ import reactComponentName from "react-scan/react-component-name/vite";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
-const rawDevPort = Number.parseInt(process.env.MOSS_DEV_PORT ?? "", 10);
-const devPort = Number.isInteger(rawDevPort) && rawDevPort > 0 ? rawDevPort : 1420;
+const rawDevPort =
+  process.env.MOSS_DEV_PORT_ISOLATED === "1" ? Number(process.env.MOSS_DEV_PORT ?? "") : NaN;
+const devPort =
+  Number.isInteger(rawDevPort) && rawDevPort > 0 && rawDevPort <= 65535 ? rawDevPort : 1420;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const nodeRequire = createRequire(import.meta.url);
 const workerSafeConditionalEntries = new Map([
