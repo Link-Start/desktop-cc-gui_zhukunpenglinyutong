@@ -331,22 +331,28 @@ describe("useAppShellComposerModelSection handleSelectModel", () => {
     });
   });
 
-  it("ignores model ids that no engine catalog knows", () => {
+  it("accepts freeform model ids not present in engine catalogs", () => {
     const persistComposerEnginePref = vi.fn();
     const handleSelectComposerSelection = vi.fn();
     const setSelectedModelId = vi.fn();
     const { result } = renderSection({
+      activeEngine: "codex",
+      activeThreadId: "codex-thread-local",
+      activeProviderProfileId: null,
       persistComposerEnginePref,
       handleSelectComposerSelection,
       setSelectedModelId,
     });
 
     act(() => {
-      result.current.handleSelectModel("no-such-model");
+      result.current.handleSelectModel("gpt-5.3-codex-spark");
     });
 
-    expect(persistComposerEnginePref).not.toHaveBeenCalled();
-    expect(handleSelectComposerSelection).not.toHaveBeenCalled();
+    expect(handleSelectComposerSelection).toHaveBeenCalledWith({
+      modelId: "gpt-5.3-codex-spark",
+      effort: null,
+    });
+    // Active codex thread keeps global selectedModelId for draft-less path only.
     expect(setSelectedModelId).not.toHaveBeenCalled();
   });
 });

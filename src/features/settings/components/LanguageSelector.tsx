@@ -1,6 +1,5 @@
 import { useTranslation } from "react-i18next";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
-import Languages from "lucide-react/dist/esm/icons/languages";
 import {
   SUPPORTED_LANGUAGES,
   saveLanguage,
@@ -42,15 +41,19 @@ export function LanguageSelector() {
   };
 
   return (
-    <div className="settings-field settings-basic-item">
-      <div className="settings-basic-field-header">
-        <Languages className="settings-basic-field-icon" aria-hidden />
-        <span className="settings-basic-field-label">{t("settings.language")}</span>
+    <div className="settings-pref-row">
+      <div className="settings-pref-meta">
+        <div className="settings-pref-title">{t("settings.language")}</div>
+        <div className="settings-pref-desc">
+          {t("settings.languageDesc", {
+            defaultValue: "切换应用界面显示语言。",
+          })}
+        </div>
       </div>
-      <div className="settings-control settings-basic-language-control">
-        <div className="settings-select-wrap settings-basic-language-select-wrap">
+      <div className="settings-pref-control">
+        <div className="settings-pref-select-wrap">
           <select
-            className="settings-select settings-basic-language-native-select"
+            className="settings-pref-select"
             aria-label={t("settings.language")}
             value={currentLanguage}
             onChange={(event) => handleLanguageChange(event.target.value)}
@@ -61,10 +64,7 @@ export function LanguageSelector() {
               </option>
             ))}
           </select>
-          <ChevronDown
-            className="settings-basic-language-select-icon"
-            aria-hidden
-          />
+          <ChevronDown className="settings-pref-select-icon" aria-hidden />
         </div>
       </div>
     </div>

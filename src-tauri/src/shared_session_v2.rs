@@ -755,11 +755,12 @@ fn validate_execution_target(target: &ExecutionTargetInput) -> Result<EngineType
             provider_profile_id.as_deref().unwrap_or("default")
         )
     })?;
+    // 与 selection 持久化一致：不因 catalog 未登记而拒绝用户自定义模型名。
     crate::engine::status::validate_model_catalog_pair(
         target.model_catalog_entry_id.as_deref(),
         target.model.as_deref(),
         &models,
-        crate::engine::status::UnlistedRuntimeModelPolicy::Reject,
+        crate::engine::status::UnlistedRuntimeModelPolicy::Allow,
     )?;
     Ok(engine)
 }

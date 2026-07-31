@@ -29,13 +29,14 @@
   width: 100%;
   min-height: 30px;
   padding: 0 10px;
-  border-radius: 8px;
-  border: 1px solid color-mix(in srgb, var(--border-default) 64%, transparent);
-  background: color-mix(in srgb, var(--surface-control, #1a2230) 56%, transparent);
-  color: var(--text-primary);
+  border-radius: var(--git-history-radius-sm, 8px);
+  border: 1px solid var(--input, var(--git-history-border, var(--border-default)));
+  background: var(--background, transparent);
+  color: var(--foreground, var(--text-primary));
   box-sizing: border-box;
   font-size: 12px;
   line-height: 1.2;
+  box-shadow: none;
   transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
 }
 
@@ -62,30 +63,34 @@
   white-space: nowrap;
 }
 
-.git-history-project-trigger:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--border-default) 86%, transparent);
-  background: color-mix(in srgb, var(--surface-control-hover, #263044) 62%, transparent);
+.git-history-project-trigger:hover:not(:disabled) .git-history-project-display {
+  background: var(--accent, var(--surface-hover));
 }
 
-.git-history-project-trigger:focus-visible {
+.git-history-project-trigger:focus-visible .git-history-project-display {
   outline: none;
-  border-color: color-mix(in srgb, var(--accent-primary, #2563eb) 56%, transparent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary, #2563eb) 18%, transparent);
+  border-color: color-mix(in srgb, var(--ring, var(--accent-primary, #2563eb)) 55%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring, var(--accent-primary, #2563eb)) 16%, transparent);
 }
 
 .git-history-project-dropdown {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + 6px);
   left: 0;
   min-width: max(260px, 100%);
   max-width: min(52vw, 560px);
   max-height: 420px;
-  padding: 8px;
-  border-radius: 18px;
+  padding: 6px;
+  border-radius: var(--git-history-radius, 10px);
+  border: 1px solid var(--border, var(--git-history-border, var(--border-default)));
+  background: var(--popover, var(--surface-popover, var(--background, #fff)));
+  box-shadow:
+    0 4px 6px -1px color-mix(in srgb, #000 8%, transparent),
+    0 10px 24px -4px color-mix(in srgb, #000 12%, transparent);
   z-index: 40;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .git-history-project-search {
@@ -139,11 +144,11 @@
 
 .git-history-project-item {
   width: 100%;
-  min-height: 34px;
+  min-height: 32px;
   border: none;
-  border-radius: 10px;
+  border-radius: var(--git-history-radius-xs, 6px);
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--muted-foreground, var(--text-secondary));
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -153,13 +158,13 @@
 }
 
 .git-history-project-item:hover {
-  background: color-mix(in srgb, var(--surface-control-hover, #263044) 72%, transparent);
-  color: var(--text-stronger);
+  background: var(--accent, var(--surface-hover));
+  color: var(--accent-foreground, var(--text-stronger));
 }
 
 .git-history-project-item.is-active {
-  background: color-mix(in srgb, var(--accent-primary, #2563eb) 76%, #1d4ed8);
-  color: #ffffff;
+  background: var(--accent, color-mix(in srgb, var(--primary, var(--accent-primary, #2563eb)) 10%, transparent));
+  color: var(--accent-foreground, var(--foreground, var(--text-primary)));
   font-weight: 600;
 }
 
@@ -239,34 +244,34 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--git-history-radius-xs, 6px);
   font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  color: color-mix(in srgb, var(--accent-primary, #2563eb) 86%, #dbeafe);
-  border: 1px solid color-mix(in srgb, var(--accent-primary, #2563eb) 58%, transparent);
-  background: color-mix(in srgb, var(--accent-primary, #2563eb) 18%, transparent);
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--secondary-foreground, var(--text-primary));
+  border: 1px solid transparent;
+  background: var(--secondary, var(--muted, var(--surface-control)));
 }
 
 .git-history-current-branch {
   display: inline-flex;
   align-items: center;
-  height: 20px;
+  height: 22px;
   padding: 0 8px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, #10b981 58%, transparent);
-  background: color-mix(in srgb, #10b981 16%, var(--surface-control, #1a2230));
+  border-radius: var(--git-history-radius-xs, 6px);
+  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--status-success, #10b981) 12%, transparent);
   min-width: 0;
   max-width: min(36vw, 440px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 500;
   line-height: 1;
-  color: color-mix(in srgb, #10b981 82%, #d1fae5);
+  color: var(--status-success, #059669);
 }
 
 .git-history-toolbar-count {
@@ -312,7 +317,7 @@
 .git-history-toolbar-actions {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
@@ -320,11 +325,11 @@
 .git-history-toolbar-action-group {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px;
-  border: 1px solid color-mix(in srgb, var(--border-default) 78%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-control, #1a2230) 42%, transparent);
+  gap: 1px;
+  padding: 0;
+  border: none;
+  border-radius: var(--git-history-radius-sm, 8px);
+  background: transparent;
 }
 
 .git-history-toolbar--hover-actions .git-history-toolbar-action-group {
@@ -377,7 +382,8 @@
   position: relative;
   cursor: col-resize;
   touch-action: none;
-  background: color-mix(in srgb, var(--surface-control, #1a2230) 58%, transparent);
+  background: transparent;
+  width: 5px;
 }
 
 .git-history-vertical-resizer::after {
@@ -387,13 +393,15 @@
   bottom: 0;
   left: 50%;
   width: 1px;
-  background: color-mix(in srgb, var(--border-default) 88%, transparent);
+  background: var(--git-history-border, var(--border-default));
   transform: translateX(-0.5px);
+  transition: background-color 140ms ease, width 140ms ease;
 }
 
 .git-history-vertical-resizer:hover::after,
 body[data-git-history-column-resizing="true"] .git-history-vertical-resizer::after {
-  background: color-mix(in srgb, var(--accent-primary, #2563eb) 72%, transparent);
+  width: 2px;
+  background: color-mix(in srgb, var(--ring, var(--accent-primary, #2563eb)) 55%, transparent);
 }
 
 .git-history-overview {

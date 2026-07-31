@@ -17,6 +17,25 @@ export const CODE_FONT_SIZE_DEFAULT = 11;
 export const CODE_FONT_SIZE_MIN = 9;
 export const CODE_FONT_SIZE_MAX = 16;
 
+/** Settings UI presets: 10px–15px. */
+export const CODE_FONT_SIZE_PRESETS = [10, 11, 12, 13, 14, 15] as const;
+
+export function isCodeFontSizePreset(value: number): boolean {
+  return (CODE_FONT_SIZE_PRESETS as readonly number[]).includes(value);
+}
+
+/**
+ * Options for the settings select. Values outside the preset grid (e.g. legacy
+ * 9/16) are temporarily included so the control stays controlled.
+ */
+export function listCodeFontSizeSelectOptions(current: number): number[] {
+  const resolved = clampCodeFontSize(current);
+  if (isCodeFontSizePreset(resolved)) {
+    return [...CODE_FONT_SIZE_PRESETS];
+  }
+  return [...CODE_FONT_SIZE_PRESETS, resolved].sort((a, b) => a - b);
+}
+
 export function normalizeFontFamily(
   value: string | null | undefined,
   fallback: string,

@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -12,6 +14,22 @@ describe("VendorModelManagerDialogHost", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
     window.localStorage.clear();
+  });
+
+  it("loads settings styles before showing the dialog outside SettingsView", () => {
+    // vendor-dialog CSS 挂在 settings.css 懒加载 chunk；当前页 host 必须显式拉取，
+    // 否则冷启动从未进设置时弹窗会完全无样式。test mode 下 hook 不真调 loader，
+    // 用源码契约锁住接线，防止回归。
+    const hostSource = readFileSync(
+      path.join(
+        process.cwd(),
+        "src/features/vendors/components/VendorModelManagerDialogHost.tsx",
+      ),
+      "utf8",
+    );
+    expect(hostSource).toContain("loadSettingsStyles");
+    expect(hostSource).toContain("useFeatureStylesReady");
+    expect(hostSource).toContain("open && stylesReady");
   });
 
   it("opens the model manager dialog on the current page when requested", async () => {

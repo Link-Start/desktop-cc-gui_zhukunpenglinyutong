@@ -28,6 +28,7 @@ import {
   type FileChangeDiffPreview,
 } from './FileChangeRow';
 import {
+  extractUnifiedDiffForPath,
   mergeEditSceneStatus,
   normalizeEditScenePath,
 } from './fileEditSceneUtils';
@@ -38,6 +39,9 @@ type ToolItem = Extract<ConversationItem, { kind: 'tool' }>;
 
 interface EditToolGroupBlockProps {
   items: ToolItem[];
+  /** Prefer in-app editor when a row has no expandable inline diff. */
+  onOpenFilePath?: (path: string) => void;
+  /** Legacy git dual-pane open (only when onOpenFilePath is absent). */
   onOpenDiffPath?: (path: string) => void;
   /** 默认折叠；测试或未来设置可覆盖 */
   defaultCollapsed?: boolean;
@@ -70,12 +74,16 @@ function parseEditSceneItems(item: ToolItem): ParsedEditSceneItem[] {
 
   if (item.toolType === 'fileChange' && item.changes?.length) {
     const rows: ParsedEditSceneItem[] = [];
+    const sharedOutput = item.output ?? '';
     item.changes.forEach((change, index) => {
       const filePath = normalizeEditScenePath(change.path ?? '');
       if (!filePath) {
         return;
       }
-      const diffText = change.diff ?? '';
+      // Prefer per-file diff; fall back to carving a slice from shared tool output.
+      const diffText =
+        (change.diff ?? '').trim() ||
+        extractUnifiedDiffForPath(sharedOutput, filePath);
       rows.push({
         id: `${item.id}::${filePath}::${index}`,
         filePath,
@@ -144,9 +152,13 @@ function parseEditSceneItems(item: ToolItem): ParsedEditSceneItem[] {
 
 export const EditToolGroupBlock = memo(function EditToolGroupBlock({
   items,
+  onOpenFilePath,
   onOpenDiffPath,
   defaultCollapsed = true,
 }: EditToolGroupBlockProps) {
+  // Missing inline diff → open workspace editor (friendly). Avoid git dual-pane
+  // which shows broken "Asrc/..." chrome for brand-new files without a baseline.
+  const openMissingDiffPath = onOpenFilePath ?? onOpenDiffPath;
   const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(!defaultCollapsed);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -230,7 +242,9 @@ export const EditToolGroupBlock = memo(function EditToolGroupBlock({
               status={entry.status}
               canExpand={Boolean(entry.loadDiff)}
               loadDiff={entry.loadDiff}
-              onOpenDiffPath={onOpenDiffPath}
+              onOpenDiffPath={
+                entry.loadDiff ? onOpenDiffPath : openMissingDiffPath
+              }
             />
           ))}
         </div>

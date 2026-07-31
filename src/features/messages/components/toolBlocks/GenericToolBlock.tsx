@@ -54,6 +54,7 @@ interface GenericToolBlockProps {
   activeCollaborationModeId?: string | null;
   activeEngine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
   hasPendingUserInputRequest?: boolean;
+  onOpenFilePath?: (path: string) => void;
   onOpenDiffPath?: (path: string) => void;
   selectedExitPlanExecutionMode?: ExitPlanExecutionMode | null;
   onExitPlanModeExecute?: (
@@ -194,6 +195,7 @@ export const GenericToolBlock = memo(function GenericToolBlock({
   activeCollaborationModeId = null,
   activeEngine,
   hasPendingUserInputRequest = false,
+  onOpenFilePath,
   onOpenDiffPath,
   selectedExitPlanExecutionMode = null,
   onExitPlanModeExecute,
@@ -363,6 +365,7 @@ export const GenericToolBlock = memo(function GenericToolBlock({
       <FileChangeToolContent
         changes={displayChanges}
         status={markerStatus}
+        onOpenFilePath={onOpenFilePath}
         onOpenDiffPath={onOpenDiffPath}
       />
     );

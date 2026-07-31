@@ -17,6 +17,8 @@ import type { ToolStatusTone } from "./toolConstants";
 type FileChangeToolContentProps = {
   changes: GenericToolDisplayChange[];
   status: GenericToolMarkerStatus;
+  /** Prefer editor open when a row has no expandable diff. */
+  onOpenFilePath?: (path: string) => void;
   onOpenDiffPath?: (path: string) => void;
   defaultCollapsed?: boolean;
 };
@@ -24,9 +26,11 @@ type FileChangeToolContentProps = {
 export function FileChangeToolContent({
   changes,
   status,
+  onOpenFilePath,
   onOpenDiffPath,
   defaultCollapsed = true,
 }: FileChangeToolContentProps) {
+  const openMissingDiffPath = onOpenFilePath ?? onOpenDiffPath;
   const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(!defaultCollapsed);
 
@@ -78,9 +82,7 @@ export function FileChangeToolContent({
                 canExpand={Boolean(diffText)}
                 loadDiff={diffText ? () => unifiedDiffToPreview(diffText) : undefined}
                 onOpenDiffPath={
-                  change.normalizedKind === "added" && !diffText
-                    ? onOpenDiffPath
-                    : undefined
+                  !diffText ? openMissingDiffPath : onOpenDiffPath
                 }
               />
             );

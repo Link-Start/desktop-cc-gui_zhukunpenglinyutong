@@ -32,6 +32,7 @@
 
 ## 专项材料
 
+- [React #185 Maximum Update Depth Playbook（可追加依据）](analysis/react-185-maximum-update-depth-playbook.md)
 - [v0.7.3 后续执行建议（时间快照）](analysis/client-shortcuts-and-priorities-2026-07.md)
 - [Browser Dock Phase 3 跨平台降级能力矩阵](browser-agent/phase3-cross-platform-degraded-capability-matrix.md)
 - [Sidebar Cache Implementation Plan（历史计划）](superpowers/plans/2026-04-16-sidebar-cache-implementation.md)
