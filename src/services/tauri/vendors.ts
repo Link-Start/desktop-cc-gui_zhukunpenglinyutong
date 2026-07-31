@@ -102,6 +102,10 @@ export async function switchCodexProvider(id: string): Promise<void> {
   return invoke("vendor_switch_codex_provider", { id });
 }
 
+export async function reorderCodexProviders(orderedIds: string[]): Promise<void> {
+  return invoke("vendor_reorder_codex_providers", { orderedIds });
+}
+
 export async function getKimiProviders(): Promise<VendorKimiProviderConfig[]> {
   return invoke<VendorKimiProviderConfig[]>("vendor_get_kimi_providers");
 }
@@ -248,6 +252,16 @@ export async function listCcSwitchProviders(
   appType: CcSwitchAppType,
 ): Promise<CcSwitchProviderList> {
   return invoke<CcSwitchProviderList>("vendor_list_cc_switch_providers", {
+    appType,
+  });
+}
+
+export async function listCcSwitchProvidersFromPath(
+  path: string,
+  appType: CcSwitchAppType,
+): Promise<CcSwitchProviderList> {
+  return invoke<CcSwitchProviderList>("vendor_list_cc_switch_providers_from_path", {
+    path,
     appType,
   });
 }

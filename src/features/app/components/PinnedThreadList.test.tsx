@@ -8,18 +8,25 @@ import { ScrollArea } from "../../../components/ui/scroll-area";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string) => {
+    t: (key: string, options?: Record<string, unknown>) => {
       const translations: Record<string, string> = {
         "threads.autoNaming": "Auto naming...",
         "threads.pin": "Pin",
         "threads.unpin": "Unpin",
         "threads.subagentTag": "Subagent",
+        "threads.providerContinuationShort": "Continued",
+        "threads.providerContinuationHint": "Provider continuation",
+        "threads.providerContinuationFamilyGroup":
+          "Continued sessions · {{count}}",
         "threads.subagentTreeExpand": "Expand subagent tree",
         "threads.subagentTreeCollapse": "Collapse subagent tree",
         "threads.runtimeProcessing": "Processing",
         "threads.runtimeReviewing": "Reviewing",
       };
-      return translations[key] ?? key;
+      const template = translations[key] ?? key;
+      return template.replace(/\{\{(\w+)\}\}/g, (_, token: string) =>
+        String(options?.[token] ?? ""),
+      );
     },
     i18n: { language: "en", changeLanguage: vi.fn() },
   }),
@@ -137,6 +144,54 @@ describe("PinnedThreadList", () => {
       true,
       "/tmp/ws-1",
     );
+  });
+
+  it("defaults pinned continuation family members to collapsed", () => {
+    const onSelectThread = vi.fn();
+    const { container } = render(
+      <PinnedThreadList
+        {...baseProps}
+        onSelectThread={onSelectThread}
+        rows={[
+          {
+            thread: {
+              ...thread,
+              id: "continuation",
+              familyId: "family-1",
+              originKind: "provider-continuation",
+              sourceSessionId: "source",
+            },
+            depth: 0,
+            workspaceId: "ws-1",
+            workspacePath: "/tmp/ws-1",
+          },
+          {
+            thread: {
+              ...otherThread,
+              id: "source",
+            },
+            depth: 0,
+            workspaceId: "ws-1",
+            workspacePath: "/tmp/ws-1",
+          },
+        ]}
+      />,
+    );
+
+    const familyToggle = screen.getByRole("button", {
+      name: "Continued sessions · 2",
+    });
+    expect(familyToggle.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      container.querySelectorAll('[data-continuation-family-id="family-1"]'),
+    ).toHaveLength(1);
+
+    fireEvent.click(familyToggle);
+    expect(onSelectThread).not.toHaveBeenCalled();
+    expect(familyToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      container.querySelectorAll('[data-continuation-family-id="family-1"]'),
+    ).toHaveLength(2);
   });
 
   it("marks shared pinned rows as not archivable for the context menu", () => {

@@ -122,6 +122,23 @@ describe("Messages runtime reconnect", () => {
     });
   });
 
+  it("suppresses Native runtime recovery diagnostics for Shared Session threads", () => {
+    renderMessages([
+      {
+        id: "assistant-shared-broken-pipe",
+        kind: "message",
+        role: "assistant",
+        text: "Broken pipe (os error 32)",
+      },
+    ], {
+      threadId: "shared:session-1",
+    });
+
+    expect(screen.queryByRole("group", { name: "messages.runtimeReconnectTitle" })).toBeNull();
+    expect(screen.queryByText("Broken pipe (os error 32)")).toBeNull();
+    expect(screen.queryByText("messages.runtimeReconnectAction")).toBeNull();
+  });
+
   it("shows a recover-specific error when runtime resumes but thread recovery returns null", async () => {
     vi.mocked(ensureRuntimeReady).mockResolvedValue(undefined);
     const onRecoverThreadRuntime = vi.fn().mockResolvedValue(null);

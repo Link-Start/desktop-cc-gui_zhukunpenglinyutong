@@ -22,8 +22,195 @@
 - parent timeline snapshot 可以附加“新插入的 live item id”，但 MUST NOT 因同一 item 的文本增长或 `isFinal` 翻转而在每个 delta 上全量重算整条时间线。
 - deferred `renderSourceItems` / `presentationRenderedItems` snapshot MUST be scoped by `workspaceId + threadId`; tab/session 切换时 scope 不同的旧 snapshot 必须立即失效，禁止把上一会话的 grouped entries 与当前会话 live tail 混到同一幕布。
 - streaming 结束后，stable snapshot MUST 自然收敛到 canonical latest presentation items；不得永久停留在旧快照。
+- `liveTextExternalization` 只允许把逐 delta 文本移出 root reducer；terminal event MUST 将 Provider 的完整 final text 以同一 assistant item identity 一次性 settle 回 reducer。`seenDelta` 不能成为 Shared Session 跳过 terminal settlement 的理由，否则 snapshot persistence 会把首个 delta 永久误写为 final。
 - `Claude Code` 与 `Codex` live row 收敛 MUST 先走 realtime path；history replay / reconcile 只能用于校验、补账或最终一致性，不得成为 live assistant text、reasoning、tool output 可见的唯一路径。
 - backend diagnostics、runtime ledger persistence、Windows process diagnostics、first-token timing、context ledger 或 runtime pool refresh MAY 提供 observability，但 MUST NOT 成为每个 delta 的前置门槛。
+
+## Shared Session Runtime / Projection Contract
+
+- Shared Runtime event 的 canonical lifecycle owner 是 Rust
+  `SharedRuntimeCoordinator`，不是 frontend terminal observer。authoritative
+  observation/settlement MUST 在普通 `AppServerEvent` fan-out 前进入 coordinator；
+  frontend 只消费已经投影到 Shared thread 的 live event 与 canonical history。
+- Shared live event 的 `sharedOwner` MUST 携带
+  `attemptId + logicalTurnId + bindingKey + engine + providerProfileId +
+  executionTargetSnapshot`。embedded Snapshot 只要 malformed、Engine/Provider 与 owner
+  冲突，就必须 fail closed；不得从当前 Picker 或 thread-level fallback 猜 Target。
+- Runtime identity bind 前的 early event 与 bind 期间的新 event MUST 经 Rust atomic
+  replay barrier 保序。每个 replay batch 必须先 publish authoritative observation，
+  后 emit 对应 UI event；frontend 不得建立第二个 replay/terminal persistence authority。
+- Shared canonical projection MUST default-on for new V2 facts。Legacy Shared history 通过
+  dual-read 合并且按 stable Turn identity 去重；不得读取或拼接 Native CLI session
+  files 来“补历史”。
+- `conversation.turnCommitted` 的 assistant、Reasoning、Tool、Artifact、structured
+  outcome 与 immutable Target 必须单向投影成既有 `ConversationItem` shape。
+  presentation item 不得反向写 canonical fact。
+- Reasoning-only / tool-only completed Turn MUST 生成空正文 provenance anchor，用来承载
+  per-turn CLI/Provider/Model Badge；anchor 不得制造可见空泡或伪造 assistant 文本。
+- Shared Runtime 的完整 Context Package prompt echo 只属于 transport/control。必须用
+  strict versioned classifier 验证 package/checksum 双 marker 和完整 envelope 后，只隐藏
+  重复 user echo；后续 assistant、Reasoning、Tool、Error 必须继续显示。禁止
+  `text.includes("MOSSX")` 之类宽匹配。
+- per-turn Badge MUST 只读 item 上的 immutable `executionTargetSnapshot`。Provider
+  删除后使用 name snapshot + unavailable；explicit canonical `local` 才显示“本地配置”；
+  legacy identity 不完整显示“历史配置未知”。
+
+## Scenario: Live text single publish cadence and Shared defer attribution
+
+### 1. Scope / Trigger
+
+- Trigger：修改 `liveAssistantTextChannel`、channel-backed `MessageRow`、Markdown streaming scheduler，或 Shared Runtime owner defer / replay barrier。
+- 目标：逐 delta 正文无损累积，但 React 只按单一 cadence 收到 stable snapshot；terminal 不丢 unpublished text；相同 stall-then-flush 外观可区分 frontend publish starvation 与 Shared owner defer。
+
+### 2. Signatures
+
+- `appendLiveAssistantText(threadId, itemId, delta) -> { isFirst }`
+- `updateLiveAssistantTextSnapshot(threadId, itemId, text) -> first | growth | unchanged | replacement`
+- `getLiveAssistantTextSnapshot(threadId) -> LiveAssistantTextEntry | null`
+- `clearLiveAssistantText(threadId) -> void`
+- `drainLiveAssistantTextTail(threadId) -> { itemId, tailDelta } | null`
+- `renameLiveAssistantTextThread(oldThreadId, newThreadId) -> void`
+- `LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS = 48`
+- `SharedRuntimeObservation.{ui_fanout_defer_reason,deferred_queue_depth,unowned_overflow_drop_count}`
+
+### 3. Contracts
+
+- `entriesByThread` 是逐 delta 权威 accumulated value；`publishedEntriesByThread` 是 `useSyncExternalStore` 唯一 snapshot source。notification 之间 published object MUST 保持稳定。
+- 新 item 首段 MUST 立即 publish；同 item growth MUST 使用 per-thread `48ms throttle + trailing latest snapshot`。禁止用 byte threshold 绕过 cadence。
+- `drain` / `clear` MUST 先取消 pending timer；`drain` MUST 从 accumulated value 计算 tail，不能从可能落后的 published snapshot 取值。
+- `rename` MUST 取消 old/new timer，迁移 accumulated + published state，并禁止旧 thread callback 回写。
+- channel-backed `MessageRow` MUST 直接消费 published text；不得再让同一 live text 变化驱动 `useDeferredValue`。Markdown 的 bounded timer / progressive step 到期后 MUST 直接 commit，不再叠加 `startTransition`。
+- `TIMELINE_ADAPTIVE_RENDERING_ENABLED = false` 期间，本优化 MUST NOT 恢复 conversation lightweight mode / virtualized canvas；anchor 继续解析 fully mounted static DOM。
+- Shared defer MUST 区分 `AwaitingOwnerIdentity` 与 `ReplayBarrier`；unowned queue overflow counter MUST saturating increment。warning 只在累计 drop 为 `1` 或 power-of-two 时输出，且不得记录正文/prompt/tool output。
+
+### 4. Validation & Error Matrix
+
+| 场景 | 必须行为 | 禁止行为 |
+|---|---|---|
+| 首段到达 | 立即 publish + reducer 建壳 | 等 trailing timer |
+| 48ms 内连续 growth | accumulated 逐字完整，published 保持旧引用，窗口尾 publish latest | 每 delta notify 或 byte bypass |
+| pending timer 时 interruption | drain 返回全部 shell 后尾段并清理 timer/maps | 从 stale published text 截断 |
+| pending → canonical rename | canonical 立即看到 latest accumulated；old timer 不再触发 | 旧 thread callback 回写 |
+| Markdown timer 到期 | deterministic state commit | 再包 `startTransition` 被新输入重启 |
+| Shared 未解析 exact owner | reason=`AwaitingOwnerIdentity` + queue depth | 归因成 frontend render stall |
+| Shared replay 未完成 | reason=`ReplayBarrier` + barrier depth | 修改 authoritative barrier 来“提速” |
+| unowned queue overflow | saturating drop count + bounded warning | silent FIFO drop 或每事件 warn |
+
+### 5. Good / Base / Bad Cases
+
+- Good：channel 累积 `Hello` + ` world`，React 首先看到 `Hello`，trailing tick 只再看到一次 `Hello world`。
+- Base：非 channel row 继续使用既有 deferred presentation；completed row 继续 full Markdown。
+- Bad：`getSnapshot` 直接读取每 delta 换引用的 accumulated map，但 listener 只按 cadence notify，违反 `useSyncExternalStore` contract。
+- Bad：为了修流式卡顿重新开启 timeline virtualization，导致 anchor static-to-virtual 坐标切换。
+
+### 6. Tests Required
+
+- fake-timer tests：首段立即、47ms 不 publish、48ms trailing latest、snapshot referential stability。
+- terminal tests：pending timer 下 clear/drain 无 stale callback，drain tail 逐字一致。
+- rename tests：old/new listener 各收敛一次，旧 timer 到期不再通知。
+- row test：每次 channel publish 只产生 latest Markdown value，不先提交 stale deferred value。
+- Markdown hook tests：throttle 与 progressive limits 保留，timer 到期可见值更新。
+- Shared coordinator tests：两种 defer reason、queue depth、512 cap 与 overflow count；authoritative replay 顺序原测试必须继续通过。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```typescript
+entriesByThread.set(threadId, nextEntry);
+notifyThread(threadId);
+const visible = useDeferredValue(nextEntry.text);
+startTransition(() => setMarkdownValue(visible));
+```
+
+#### Correct
+
+```typescript
+entriesByThread.set(threadId, nextEntry); // lossless accumulated truth
+scheduleEntryPublish(threadId, nextEntry); // 48ms trailing latest
+const visible = getLiveAssistantTextSnapshot(threadId); // published truth
+setMarkdownValue(visible?.text ?? ""); // timer 已负责 bounded scheduling
+```
+
+## Scenario: App-server settlement terminal causal barrier
+
+### 1. Scope / Trigger
+
+- Trigger：修改 `src-tauri/src/event_sink.rs`、`src/services/eventBackpressure.ts`、`src/services/events.ts`、app-server critical method 分类，或任何会在 content event 后发出 `turn/completed` / `turn/error` / `runtime/ended` 的路径。
+- 目标：critical event 保持 zero-loss / low-latency，但 settlement terminal 永远不能越过同 workspace 已接受的正文；不能用 provider-specific frontend guard 修补统一 transport 的重排。
+
+### 2. Signatures
+
+- Rust：`BatchedEventState::terminal_barrier_batch(event: AppServerEvent) -> Vec<AppServerEvent>`
+- Rust terminal methods：`turn/completed | turn/error | runtime/ended`
+- Rust/frontend interactive urgent methods：`item/tool/requestUserInput | approval/request | collaboration/modeBlocked | collaboration/modeResolved`
+- TypeScript：`EventBackpressureOptions<T>.isCriticalPredecessor?: (queuedEvent: T, criticalEvent: T) => boolean`
+- Frontend barrier scope：`AppServerEvent.workspace_id`
+
+### 3. Contracts
+
+- Codex `BatchedTauriEventSink` 收到 settlement terminal 时 MUST 用 per-sink emit-order lock 串行化 ticker 与 critical emitter；state mutex 内 take 同 workspace queue、保持 arrival order、append terminal，释放 state lock 后 emit batch，再释放 emit-order lock。
+- ticker MUST 在 drain queue 前取得同一 emit-order lock，并持有到 drained batches 全部 emit 完成；禁止出现“ticker 已 drain、terminal 先 emit、ticker 后 emit predecessors”的 ownership gap。
+- terminal barrier MUST 只修改当前 sink 内匹配 workspace 的 queue；其他 workspace MUST 保持 queued。
+- `queued_bytes` MUST 只扣除原先 queued predecessors；`last_flush_size_bytes` MUST 包含 predecessors + terminal。
+- unified `appServerEventBackpressure` MUST 在 critical terminal 前把同 workspace queued predecessors 按原顺序交付给既有 downstream scheduler。该操作是 queue ownership transfer，不得直接执行 reducer / render。
+- single-channel fallback 与 Claude / Gemini / Kimi / Grok / OpenCode direct emit MUST 复用同一 frontend barrier，不得在每个 adapter 复制 terminal ordering policy。
+- Shared projected event MUST 复用相同 workspace barrier；Rust `SharedRuntimeCoordinator` 继续是 owner/replay/settlement authority，frontend 不得建立第二 replay queue。
+- interactive critical event MUST 继续 immediate bypass；它们不是 settlement proof，不能写入 terminal quarantine。
+- `AgentEventBus` lane ordering 不属于本 contract 的当前 implementation surface；出现 production subscriber 时必须单独审计，禁止顺手扩散。
+
+### 4. Validation & Error Matrix
+
+| 场景 | 必须行为 | 禁止行为 |
+|---|---|---|
+| Codex queue=`delta,item/completed` 后 terminal | emit `[delta,item/completed,terminal]` | terminal 单独 emit、旧 queue 留待 40ms tick |
+| ticker 已 drain、尚未 emit 时 terminal 到达 | ticker batch 先 emit，terminal 后 emit | terminal 越过 in-flight drained batch |
+| workspace A terminal，queue 同时有 A/B | 只 take A；B 保持 queued | drain 全局 queue |
+| frontend queue 有同 workspace content | content 先进入 scheduled consumer，terminal 后进入 | terminal bypass 后 content 被 late guard 丢弃 |
+| approval 到达且正文仍 queued | approval immediate bypass | 因 terminal 修复让 approval 等待整条正文 |
+| batch flag off / non-Codex direct emit | frontend 仍保留 observed source order | 只在 Codex batch path 正确 |
+| Shared projected final | final content 先 dispatch，authoritative terminal 后 dispatch | renderer 猜 owner 或重复 commit |
+
+### 5. Good / Base / Bad Cases
+
+- Good：MiniMax burst 一次带来 large final snapshot，随后 25ms 到达 terminal；backend/frontend 都保持 snapshot-before-terminal。
+- Base：queue 为空时 terminal 仍 immediate delivery，额外 barrier 成本为一次空 scan。
+- Bad：把 terminal 归类为 critical 后直接 `deliverToListeners`，因为 zero-loss 不代表可越过 causal predecessors。
+- Bad：terminal 前调用通用 `flush()` drain 全局 queue，导致其他 workspace 的长 turn 阻塞当前 settlement。
+
+### 6. Tests Required
+
+- Rust `event_sink::tests`：`delta → item/completed → turn/completed` 精确 method/sequence order、other-workspace isolation、`queued_bytes` 与 flush stats。
+- Rust implementation inspection：ticker 与 terminal/urgent critical 使用同一 per-sink emit-order lock，且 state lock 不跨 `app.emit`。
+- Rust：approval/requestUserInput urgent bypass 保留 queue，不误走 terminal barrier。
+- TypeScript `eventBackpressure.test.ts`：scoped predecessor extraction、unrelated queue retention、urgent bypass。
+- TypeScript `events.test.ts`：batch channel 与 single channel observed order；既有“terminal 先于 snapshot”断言必须反转。
+- Integration：携带 Rust `sharedOwner` 的 `delta → item/completed → turn/completed` 必须按该顺序调用 dispatcher handlers。
+- 保留 terminal quarantine tests：真正 late/stale event 仍必须拒绝，不能用 ordering 修复放宽 lifecycle guard。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```typescript
+if (classify(event) === "critical") {
+  deliverToListeners(listeners, event);
+  return;
+}
+queue.push(event);
+```
+
+#### Correct
+
+```typescript
+if (classify(event) === "critical") {
+  const predecessors = takeMatchingPredecessors(queue, event);
+  predecessors.forEach(deliverToScheduledConsumer);
+  deliverToScheduledConsumer(event);
+  return;
+}
+queue.push(event);
+```
 
 ## Required Structure
 
@@ -37,6 +224,12 @@
   - 用 `liveAssistantItem` / `liveReasoningItem` 对 active tail 做 override
   - 把 lightweight mode bar / history sticky header / collapsed-history reveal control 与 rows 放在同一个 `messages-full` padding contract 下；不要把顶部 surface 放在 timeline root 外再靠 offset hack 补位
 - `messagesLiveWindow` 中的 snapshot helper 必须保持 pure helper 语义，方便单元测试锁定 contract。
+- `sharedSessionBridge` 只负责验证/映射 Rust `sharedOwner`，不能从
+  `selectedNextTarget` 拼 Snapshot。
+- `sharedProjection/dataSource` 只负责 canonical Presentation mapping 与 legacy
+  dual-read；不能读取 Native history，也不能把 unknown Provider 归一成 local。
+- `contextProtocol` classifier 必须匹配完整 protocol envelope；过滤只发生在
+  presentation boundary，原始 Runtime/Canonical evidence 保留。
 
 ## Forbidden Patterns
 
@@ -52,6 +245,12 @@
 - 在重构中把 `Codex` / `Claude Code` 的 no-text interval 直接当成 terminal stuck；非文本 runtime activity、heartbeat、tool progress、request-user-input、reasoning delta 都可能是合法 progress evidence。
 - 把 first-token diagnostics、process snapshot、runtime ledger write、context ledger persistence、history detail reload 插入 live delta emission 之前。
 - 为了统一代码路径，删除 `liveAssistantItem` / `liveReasoningItem` override，或让 final visible state 只能等待 history replay。
+- frontend 收到 Shared terminal 后自行拼 `assistantText/outcome` 并调用 canonical
+  commit，形成 Rust 与 renderer 两个 terminal authority。
+- `sharedOwner` Snapshot 无效时回退当前 Picker、thread metadata 或 Engine default。
+- 为修复历史缺失，把 Hidden Binding 的 Native history 与 Shared canonical history
+  直接拼接。
+- 将 Context Package prompt echo 连同后续 assistant/reasoning 一起过滤。
 
 ## Validation Matrix
 
@@ -64,6 +263,13 @@
 | parent rerender 但 throttled Markdown 未变 | outline callback identity 稳定，或 Markdown 复用同源 cache | 因 callback identity 变化再次 full scan 相同 source |
 | 切换 active conversation tab | 新 tab 只能消费同 `workspaceId + threadId` scope 的 stable snapshot | 上一会话 deferred snapshot 与当前会话 live row / working indicator 同屏 |
 | streaming turn 完成 | stable snapshot 收敛到 canonical latest items | 停留在旧 boundary / 旧 grouping |
+| Shared streaming 已收到 delta，随后收到 terminal full text | 同一 assistant item 一次性 settle 完整 final，并由 snapshot persistence 持久化 | 因 `seenDelta = true` 跳过 completion，只持久化首个 delta |
+| Shared event 在 runtime identity bind 前到达 | Rust barrier 保序 replay，live row 不丢 | frontend 猜 owner 或永久丢 event |
+| Shared event 的 embedded Snapshot 与 owner Provider 冲突 | 丢弃 Shared attribution/fail closed | 用当前 Picker 修正 |
+| V2 history reload | canonical rich blocks + immutable Badge；legacy dual-read 保留 | 读取 Native session file 拼接 |
+| reasoning-only / tool-only completed Turn | 无可见空正文，但保留 provenance Badge | 整轮 label 消失 |
+| exact Shared Runtime prompt echo | 只隐藏重复 user transport item | 吞掉后续 assistant/reasoning/tool |
+| 用户普通正文包含 `MOSSX` | 原样展示 | substring classifier 误杀 |
 | Claude Code first token 慢 | diagnostics 标记 startup/first-token 阶段，UI 不伪造文本也不误判 frontend render stall | 把无首 token 归因到 Markdown/render 卡顿或强制 final-only 输出 |
 | Claude Code delta 已到 backend forwarder | delta 先发给 frontend，diagnostics/ledger/process snapshot 后台或 checkpoint 执行 | 等 Windows process diagnostics、runtime ledger 或 history reconcile 完成后才发 delta |
 | Codex 长时间无 assistant text 但有 runtime/tool 活动 | activity 计入 progress evidence，保持 non-terminal suspicion 或 normal processing | text-delta-only 判断导致误结算、误停止或误恢复 |
@@ -80,6 +286,13 @@
 - outline regression：覆盖同一 throttled Markdown source 在 callback identity 变化时不重复 extraction；覆盖同 message + same outline 返回 previous snapshot reference。
 - Claude Code regression：覆盖 first-token diagnostics 不阻塞 first visible delta，且 diagnostics/history reconcile 不成为 live delta 前置条件。
 - Codex regression：覆盖 no-text 但有 heartbeat/tool/status progress 时不会 terminalize active turn；late stale progress 不能复活已 settled turn。
+- Shared terminal regression：覆盖 Codex/Claude 在已收到 delta 后仍以原 assistant item id settle `turn/completed.result.text`，且 completion 只触发一次。
+- Shared owner regression：覆盖 malformed Snapshot、Engine mismatch、Provider mismatch 均
+  fail closed；valid owner 保留 `modelCatalogEntryId + runtime model`。
+- Shared projection regression：覆盖 canonical default-on、legacy dual-read、failed Turn、
+  reasoning/tool-only provenance anchor、Picker mutation 不改旧 Badge。
+- Shared control-echo regression：覆盖 exact envelope 隐藏、ordinary `MOSSX` 文本保留、
+  echo 后 assistant/reasoning/tool 仍显示。
 
 ## Review Checklist
 
@@ -91,3 +304,9 @@
 - 是否把 Claude Code first-token / backend-forwarder / frontend-render 三段 latency 重新混成一个“流式卡顿”判断？
 - 是否把 Codex suspected silence 写成 terminal settlement，或把 progress evidence 收窄成只有 assistant text delta？
 - 是否引入了任何每 delta 都执行的 process snapshot、runtime ledger write、history detail reload、context ledger persistence？
+- 是否证明 externalized live text 在 terminal event 会完整回灌 reducer，而不是把 `seenDelta` 误当成“final 已持久化”？
+- 是否把 Shared lifecycle truth 留在 Rust coordinator，frontend 仅消费 Projection？
+- 是否验证 `sharedOwner.executionTargetSnapshot`，而不是从当前 Picker/thread metadata 猜？
+- 是否证明 early/live ingress 在 replay barrier 前后保持顺序，且 observation 先于 UI fan-out？
+- 是否让 canonical default-on 与 legacy dual-read 保留历史，而没有拼接 Native session？
+- 是否用 strict protocol classifier 只隐藏 prompt echo，而没有吞后续模型内容？

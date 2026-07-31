@@ -75,7 +75,7 @@ describe("MessageForkConfirmDialog", () => {
         providerProfileId: "__disk__",
         providerProfile: {
           id: "__disk__",
-          name: "codex-tui/default-config",
+          name: "本地配置",
           source: "disk",
         },
       });

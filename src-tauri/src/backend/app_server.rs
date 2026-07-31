@@ -13,10 +13,12 @@ use tokio::io::AsyncWriteExt;
 #[cfg(test)]
 use tokio::process::Command;
 use tokio::process::{Child, ChildStdin};
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{mpsc, oneshot, Mutex, Notify};
 use tokio::time::timeout;
 
-use crate::backend::events::{AppServerEvent, EventSink, TerminalOutput};
+use crate::backend::events::{
+    AppServerEvent, AppServerEventDisposition, EventSink, TerminalOutput,
+};
 use crate::codex::collaboration_policy::strict_local_collaboration_profile_enabled;
 use crate::codex::thread_mode_state::ThreadModeState;
 use crate::runtime::{RuntimeEndedRecord, RuntimeManager};
@@ -101,6 +103,15 @@ impl<E: EventSink> DeferredStartupEventSink<E> {
 }
 
 impl<E: EventSink> EventSink for DeferredStartupEventSink<E> {
+    fn observe_app_server_event(
+        &self,
+        provider_runtime_key: &str,
+        event: &mut AppServerEvent,
+    ) -> AppServerEventDisposition {
+        self.inner
+            .observe_app_server_event(provider_runtime_key, event)
+    }
+
     fn emit_app_server_event(&self, event: AppServerEvent) {
         let mut forward_event = Some(event);
         {
@@ -426,7 +437,7 @@ fn resolve_resume_after_user_input_timeout_ms() -> u64 {
     )
 }
 
-fn extract_thread_id(value: &Value) -> Option<String> {
+pub(crate) fn extract_thread_id(value: &Value) -> Option<String> {
     let params = value.get("params")?;
 
     params
@@ -445,7 +456,7 @@ fn extract_thread_id(value: &Value) -> Option<String> {
         })
 }
 
-fn extract_turn_id(value: &Value) -> Option<String> {
+pub(crate) fn extract_turn_id(value: &Value) -> Option<String> {
     let params = value.get("params")?;
 
     params
@@ -482,6 +493,9 @@ fn should_skip_codex_stderr_line(line: &str) -> bool {
 
 pub(crate) struct WorkspaceSession {
     pub(crate) entry: WorkspaceEntry,
+    /// Provider-scoped Runtime owner key。App-server event 只能在此 scope
+    /// 内与 Shared attempt 的 native/session/turn identity 匹配。
+    pub(crate) provider_runtime_key: String,
     pub(crate) child: Mutex<Child>,
     pub(crate) stdin: Mutex<ChildStdin>,
     pub(crate) wrapper_kind: String,
@@ -500,6 +514,7 @@ pub(crate) struct WorkspaceSession {
     auto_compaction_threshold_percent: f64,
     auto_compaction_enabled: bool,
     auto_compaction_thread_state: Mutex<HashMap<String, AutoCompactionThreadState>>,
+    auto_compaction_state_changed: Notify,
     plan_turn_state: Mutex<HashMap<String, PlanTurnState>>,
     local_user_input_requests: Mutex<HashMap<String, String>>,
     local_request_seq: AtomicU64,
@@ -919,6 +934,109 @@ impl WorkspaceSession {
     fn auto_compaction_enabled(&self) -> bool {
         self.auto_compaction_enabled
     }
+
+    pub(crate) async fn reserve_codex_user_dispatch(&self, thread_id: &str) -> Result<(), String> {
+        let normalized_thread_id = thread_id.trim();
+        if normalized_thread_id.is_empty() {
+            return Err("thread_id is required".to_string());
+        }
+        loop {
+            let notified = self.auto_compaction_state_changed.notified();
+            tokio::pin!(notified);
+            // Register before checking the gate. `notify_waiters()` does not
+            // retain a permit, so registering afterwards could miss the exact
+            // compaction-release edge and stall until the bounded timeout.
+            notified.as_mut().enable();
+            let wait_ms = {
+                let now = now_millis();
+                let mut states = self.auto_compaction_thread_state.lock().await;
+                let state = states.entry(normalized_thread_id.to_string()).or_default();
+                if state.reserve_user_dispatch(now) {
+                    return Ok(());
+                }
+                state.barrier_wait_ms(now)
+            };
+            if timeout(Duration::from_millis(wait_ms), notified)
+                .await
+                .is_err()
+            {
+                let released = {
+                    let mut states = self.auto_compaction_thread_state.lock().await;
+                    states
+                        .get_mut(normalized_thread_id)
+                        .is_some_and(|state| state.release_expired_barrier(now_millis()))
+                };
+                if released {
+                    log::warn!(
+                        "[codex][compaction-barrier] workspace_id={} thread_id={} outcome=stale-barrier-released",
+                        self.entry.id,
+                        normalized_thread_id
+                    );
+                    self.auto_compaction_state_changed.notify_waiters();
+                }
+            }
+        }
+    }
+
+    pub(crate) async fn release_codex_user_dispatch_reservation(&self, thread_id: &str) {
+        let normalized_thread_id = thread_id.trim();
+        if normalized_thread_id.is_empty() {
+            return;
+        }
+        if let Some(state) = self
+            .auto_compaction_thread_state
+            .lock()
+            .await
+            .get_mut(normalized_thread_id)
+        {
+            state.release_user_dispatch();
+        }
+        self.auto_compaction_state_changed.notify_waiters();
+    }
+
+    pub(crate) async fn try_reserve_codex_manual_compaction(
+        &self,
+        thread_id: &str,
+    ) -> Result<(), String> {
+        let normalized_thread_id = thread_id.trim();
+        if normalized_thread_id.is_empty() {
+            return Err("thread_id is required".to_string());
+        }
+        let reserved = {
+            let mut states = self.auto_compaction_thread_state.lock().await;
+            states
+                .entry(normalized_thread_id.to_string())
+                .or_default()
+                .try_reserve_manual_compaction(now_millis())
+        };
+        if reserved {
+            Ok(())
+        } else {
+            Err(format!(
+                "context compaction is busy for thread {normalized_thread_id}"
+            ))
+        }
+    }
+
+    pub(crate) async fn release_codex_compaction_reservation(&self, thread_id: &str) {
+        let normalized_thread_id = thread_id.trim();
+        if normalized_thread_id.is_empty() {
+            return;
+        }
+        if let Some(state) = self
+            .auto_compaction_thread_state
+            .lock()
+            .await
+            .get_mut(normalized_thread_id)
+        {
+            state.release_compaction();
+        }
+        self.auto_compaction_state_changed.notify_waiters();
+    }
+
+    pub(crate) fn notify_codex_compaction_state_changed(&self) {
+        self.auto_compaction_state_changed.notify_waiters();
+    }
 }
 
 #[allow(dead_code)]
@@ -978,6 +1096,7 @@ pub(crate) async fn spawn_workspace_session_with_launch_options<E: EventSink>(
     event_sink: E,
     launch_options: CodexAppServerLaunchOptions,
 ) -> Result<Arc<WorkspaceSession>, String> {
+    let provider_runtime_key = entry.id.clone();
     spawn_workspace_session_inner_with_settings(
         entry,
         default_codex_bin,
@@ -988,6 +1107,7 @@ pub(crate) async fn spawn_workspace_session_with_launch_options<E: EventSink>(
         auto_compaction_enabled,
         event_sink,
         launch_options,
+        provider_runtime_key,
         crate::types::AppSettings::default(),
     )
     .await
@@ -1010,6 +1130,7 @@ pub(crate) async fn spawn_workspace_session_inner_with_settings<E: EventSink>(
     auto_compaction_enabled: bool,
     event_sink: E,
     launch_options: CodexAppServerLaunchOptions,
+    provider_runtime_key: String,
     app_settings: crate::types::AppSettings,
 ) -> Result<Arc<WorkspaceSession>, String> {
     let codex_bin = entry
@@ -1041,6 +1162,7 @@ pub(crate) async fn spawn_workspace_session_inner_with_settings<E: EventSink>(
             event_sink,
             &launch_context,
             launch_options,
+            provider_runtime_key,
             app_settings,
         )
         .await;
@@ -1056,6 +1178,7 @@ pub(crate) async fn spawn_workspace_session_inner_with_settings<E: EventSink>(
         event_sink,
         &launch_context,
         launch_options,
+        provider_runtime_key,
         app_settings,
     )
     .await
@@ -1071,6 +1194,7 @@ async fn spawn_workspace_session_with_wrapper_fallback<E: EventSink>(
     event_sink: E,
     launch_context: &CodexLaunchContext,
     launch_options: CodexAppServerLaunchOptions,
+    provider_runtime_key: String,
     app_settings: crate::types::AppSettings,
 ) -> Result<Arc<WorkspaceSession>, String> {
     let primary_sink = DeferredStartupEventSink::new(event_sink.clone());
@@ -1084,6 +1208,7 @@ async fn spawn_workspace_session_with_wrapper_fallback<E: EventSink>(
         primary_sink.clone(),
         launch_context,
         launch_options,
+        provider_runtime_key.clone(),
         app_settings.clone(),
     )
     .await;
@@ -1113,6 +1238,7 @@ async fn spawn_workspace_session_with_wrapper_fallback<E: EventSink>(
                 CodexAppServerLaunchOptions::wrapper_compatibility_retry_for_mode(
                     launch_options.launch_mode,
                 ),
+                provider_runtime_key,
                 app_settings,
             )
             .await
@@ -1135,6 +1261,7 @@ async fn spawn_workspace_session_once<E: EventSink>(
     event_sink: E,
     launch_context: &CodexLaunchContext,
     launch_options: CodexAppServerLaunchOptions,
+    provider_runtime_key: String,
     app_settings: crate::types::AppSettings,
 ) -> Result<Arc<WorkspaceSession>, String> {
     let generated_developer_instructions_enabled =
@@ -1173,6 +1300,7 @@ async fn spawn_workspace_session_once<E: EventSink>(
 
     let session = Arc::new(WorkspaceSession {
         entry: entry.clone(),
+        provider_runtime_key,
         child: Mutex::new(child),
         stdin: Mutex::new(stdin),
         wrapper_kind: launch_context.wrapper_kind.to_string(),
@@ -1190,6 +1318,7 @@ async fn spawn_workspace_session_once<E: EventSink>(
         auto_compaction_threshold_percent,
         auto_compaction_enabled,
         auto_compaction_thread_state: Mutex::new(HashMap::new()),
+        auto_compaction_state_changed: Notify::new(),
         plan_turn_state: Mutex::new(HashMap::new()),
         local_user_input_requests: Mutex::new(HashMap::new()),
         local_request_seq: AtomicU64::new(1),
@@ -1313,6 +1442,7 @@ pub(crate) async fn make_test_workspace_session(id: &str) -> Arc<WorkspaceSessio
     let stdin = child.stdin.take().expect("test child stdin");
     Arc::new(WorkspaceSession {
         entry: make_test_workspace_entry(id),
+        provider_runtime_key: id.to_string(),
         child: Mutex::new(child),
         stdin: Mutex::new(stdin),
         wrapper_kind: "direct".to_string(),
@@ -1330,6 +1460,7 @@ pub(crate) async fn make_test_workspace_session(id: &str) -> Arc<WorkspaceSessio
         auto_compaction_threshold_percent: AUTO_COMPACTION_THRESHOLD_PERCENT,
         auto_compaction_enabled: true,
         auto_compaction_thread_state: Mutex::new(HashMap::new()),
+        auto_compaction_state_changed: Notify::new(),
         plan_turn_state: Mutex::new(HashMap::new()),
         local_user_input_requests: Mutex::new(HashMap::new()),
         local_request_seq: AtomicU64::new(1),

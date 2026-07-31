@@ -4,6 +4,7 @@ import { AppLayout } from "../features/app/components/AppLayout";
 import { AppModals } from "../features/app/components/AppModals";
 import { LockScreenOverlay } from "../features/app/components/LockScreenOverlay";
 import { RuntimeConsoleDock } from "../features/app/components/RuntimeConsoleDock";
+import { VendorModelManagerDialogHost } from "../features/vendors/components/VendorModelManagerDialogHost";
 import {
   GlobalSearchTitlebarButton,
   QuickSwitcherTitlebarButton,
@@ -772,6 +773,8 @@ export function renderAppShell(ctx: RenderAppShellContext) {
         onClonePromptCancel={cancelClonePrompt}
         onClonePromptConfirm={confirmClonePrompt}
       />
+      {/* 当前页弹「添加模型」管理弹窗,不跳设置 */}
+      <VendorModelManagerDialogHost />
     </div>
   );
 }

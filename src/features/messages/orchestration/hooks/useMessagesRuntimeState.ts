@@ -40,6 +40,7 @@ type UseMessagesRuntimeStateInput = {
   isWindowsDesktop: boolean;
   items: ConversationItem[];
   labels: RuntimeLabels;
+  nativeRuntimeRecoveryEnabled: boolean;
   renderScopeKey: string;
   reportVisibleTextRendered: (
     threadId: string,
@@ -63,6 +64,7 @@ export function useMessagesRuntimeState({
   isWindowsDesktop,
   items,
   labels,
+  nativeRuntimeRecoveryEnabled,
   renderScopeKey,
   reportVisibleTextRendered,
   renderSourceItems,
@@ -105,6 +107,9 @@ export function useMessagesRuntimeState({
     }
   }, [items]);
   const latestRuntimeReconnectItemId = useMemo(() => {
+    if (!nativeRuntimeRecoveryEnabled) {
+      return null;
+    }
     let sawUserMessageAfterDiagnostic = false;
     for (let index = items.length - 1; index >= 0; index -= 1) {
       const item = items[index];
@@ -143,7 +148,12 @@ export function useMessagesRuntimeState({
       return item.id;
     }
     return null;
-  }, [isAgentTaskNotificationText, items, transientRuntimeReconnectClock]);
+  }, [
+    isAgentTaskNotificationText,
+    items,
+    nativeRuntimeRecoveryEnabled,
+    transientRuntimeReconnectClock,
+  ]);
   useEffect(() => {
     if (!latestRuntimeReconnectItemId) {
       return;

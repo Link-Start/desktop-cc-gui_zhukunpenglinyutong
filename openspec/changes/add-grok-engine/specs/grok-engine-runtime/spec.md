@@ -26,6 +26,12 @@ Grok CLI SHALL run as a one-shot headless engine (`grok -p --output-format strea
 - **AND** an `error` line SHALL produce `TurnError`
 - **AND** unknown or future event types SHALL be skipped without failing the turn
 
+#### Scenario: Preserve the complete streamed response after turn completion
+
+- **WHEN** Grok emits multiple `text` deltas followed by `end` without a separate assistant `item/completed`
+- **THEN** frontend SHALL drain the externalized live-text tail into the same assistant item before final settlement
+- **AND** the static conversation timeline SHALL retain the complete response after streaming state ends or history is refreshed
+
 #### Scenario: Interrupt a running Grok turn
 
 - **WHEN** the user stops a running Grok turn

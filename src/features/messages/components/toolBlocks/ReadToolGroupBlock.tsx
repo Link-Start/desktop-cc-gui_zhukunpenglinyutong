@@ -7,7 +7,12 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import FileText from 'lucide-react/dist/esm/icons/file-text';
 import type { ConversationItem } from '../../../../types';
-import { parseToolArgs, getFirstStringField, getFileName } from './toolConstants';
+import {
+  extractToolName,
+  parseToolArgs,
+  getFirstStringField,
+  getFileName,
+} from './toolConstants';
 
 type ToolItem = Extract<ConversationItem, { kind: 'tool' }>;
 
@@ -22,6 +27,25 @@ interface ParsedReadItem {
   isDirectory: boolean;
   lineInfo: string;
 }
+
+const FILE_PATH_KEYS = [
+  'file_path',
+  'filePath',
+  'filepath',
+  'path',
+  'target_file',
+  'targetFile',
+  'filename',
+  'file',
+];
+const DIRECTORY_PATH_KEYS = [
+  'target_directory',
+  'targetDirectory',
+  'directory',
+  'dir',
+];
+const LIST_KEYS = ['files', 'file_paths', 'filePaths', 'paths'];
+const DIRECTORY_TOOL_NAMES = new Set(['list_dir', 'listdir', 'list_directory']);
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -48,26 +72,25 @@ function parseReadItem(item: ToolItem): ParsedReadItem {
   const args = parseToolArgs(item.detail);
   const nestedInput = asRecord(args?.input);
   const nestedArgs = asRecord(args?.arguments);
-  const pathKeys = [
-    'file_path',
-    'filePath',
-    'filepath',
-    'path',
-    'target_file',
-    'targetFile',
-    'filename',
-    'file',
-  ];
-  const listKeys = ['files', 'file_paths', 'filePaths', 'paths'];
+  const directoryPath =
+    getFirstStringField(args, DIRECTORY_PATH_KEYS) ||
+    getFirstStringField(nestedInput, DIRECTORY_PATH_KEYS) ||
+    getFirstStringField(nestedArgs, DIRECTORY_PATH_KEYS);
   const filePath =
-    getFirstStringField(args, pathKeys) ||
-    getFirstStringField(nestedInput, pathKeys) ||
-    getFirstStringField(nestedArgs, pathKeys) ||
-    getFirstStringInArray(args, listKeys) ||
-    getFirstStringInArray(nestedInput, listKeys) ||
-    getFirstStringInArray(nestedArgs, listKeys);
+    getFirstStringField(args, FILE_PATH_KEYS) ||
+    getFirstStringField(nestedInput, FILE_PATH_KEYS) ||
+    getFirstStringField(nestedArgs, FILE_PATH_KEYS) ||
+    directoryPath ||
+    getFirstStringInArray(args, LIST_KEYS) ||
+    getFirstStringInArray(nestedInput, LIST_KEYS) ||
+    getFirstStringInArray(nestedArgs, LIST_KEYS);
   const fileName = getFileName(filePath);
-  const isDirectory = filePath === '.' || filePath === '..' || (filePath?.endsWith('/') ?? false);
+  const isDirectory =
+    Boolean(directoryPath) ||
+    DIRECTORY_TOOL_NAMES.has(extractToolName(item.title)) ||
+    filePath === '.' ||
+    filePath === '..' ||
+    (filePath?.endsWith('/') ?? false);
 
   const offset = args?.offset as number | undefined;
   const limit = args?.limit as number | undefined;

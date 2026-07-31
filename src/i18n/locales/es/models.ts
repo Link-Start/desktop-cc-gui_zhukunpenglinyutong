@@ -5,11 +5,49 @@
 const models = {
   "models": {
     "selectModel": "Seleccionar modelo",
+    "engineHeader": "{{name}} Engine",
     "addModel": "Añadir modelo",
+
+    "openCliSettings": "Configuración CLI",
+    "switchChannel": "Cambiar canal",
+    "selectChannel": "Seleccionar canal",
     "refreshConfig": "Actualizar configuración",
     "refreshingConfig": "Actualizando...",
+    "reloadConfig": "Recargar configuración",
+    "reloadingConfig": "Recargando configuración...",
+    "discoverModels": "Descubrir modelos desde CLI",
+    "discoveringModels": "Descubriendo modelos...",
     "refreshConfigFailed": "Error al actualizar: {{message}}",
-    "claude": {},
+        "claude": {
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · Most powerful · Mythos-class"
+      },
+      "opus5": {
+        "label": "Opus 5",
+        "description": "Opus 5 · Latest Opus upgrade"
+      },
+      "opus48": {
+        "label": "Opus 4.8",
+        "description": "Opus 4.8 · Previous Opus generation"
+      },
+      "sonnet5": {
+        "label": "Sonnet 5",
+        "description": "Sonnet 5 · Upgraded Sonnet model"
+      },
+      "sonnet47": {
+        "label": "Sonnet 4.7",
+        "description": "Sonnet 4.7 · Default recommended model"
+      },
+      "sonnet46": {
+        "label": "Sonnet 4.6",
+        "description": "Sonnet 4.6 · Default recommended model"
+      },
+      "haiku45": {
+        "label": "Haiku 4.5",
+        "description": "Haiku · Fastest for quick answers"
+      }
+    },
     "codex": {
       "gpt56sol": {
         "label": "gpt-5.6-sol",
@@ -26,10 +64,6 @@ const models = {
       "gpt55": {
         "label": "gpt-5.5",
         "description": "Modelo de frontera para codificación compleja, investigación y trabajo del mundo real."
-      },
-      "gpt54": {
-        "label": "gpt-5.4",
-        "description": "Modelo potente para la codificación diaria."
       }
     }
   }

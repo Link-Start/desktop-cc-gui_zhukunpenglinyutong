@@ -3,6 +3,10 @@ export const READ_TOOL_NAMES = new Set([
   "read_file",
   "readfile",
   "file_read",
+  // Grok / agent-style directory browse (group with reads on canvas)
+  "list_dir",
+  "listdir",
+  "list_directory",
 ]);
 
 export const EDIT_TOOL_NAMES = new Set([
@@ -14,6 +18,7 @@ export const EDIT_TOOL_NAMES = new Set([
   "writefile",
   "write_to_file",
   "replace_string",
+  "search_replace",
   "file_edit",
   "file_write",
   "notebookedit",
@@ -25,6 +30,7 @@ export const BASH_TOOL_NAMES = new Set([
   "shell",
   "terminal",
   "run_terminal_cmd",
+  "run_terminal_command",
   "execute_command",
   "shell_command",
   "run_command",
@@ -108,7 +114,13 @@ export function extractToolName(title: unknown): string {
 
 export function isReadTool(toolName: string): boolean {
   const lower = toolName.toLowerCase();
-  return READ_TOOL_NAMES.has(lower) || lower.includes("read");
+  if (READ_TOOL_NAMES.has(lower)) {
+    return true;
+  }
+  if (lower.includes("list_dir") || lower.includes("listdir")) {
+    return true;
+  }
+  return lower.includes("read");
 }
 
 export function isEditTool(toolName: string): boolean {
@@ -118,6 +130,10 @@ export function isEditTool(toolName: string): boolean {
   }
   if (lower === "todowrite" || lower === "todo_write") {
     return false;
+  }
+  // search_replace / str_replace style editors
+  if (lower.includes("replace") && !lower.includes("search_query")) {
+    return true;
   }
   return lower.includes("edit") || lower.includes("write");
 }

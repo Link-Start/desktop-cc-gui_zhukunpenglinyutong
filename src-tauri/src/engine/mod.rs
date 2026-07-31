@@ -23,6 +23,8 @@ pub(crate) mod claude_history_large_payload;
 mod claude_history_large_payload_tests;
 pub(crate) mod claude_history_subagents;
 pub(crate) mod claude_message_content;
+pub(crate) mod cli_image_input;
+pub(crate) mod codex_adapter;
 pub(crate) mod codex_prompt_service;
 pub mod commands;
 pub(crate) mod error_mapper;
@@ -358,7 +360,8 @@ impl EngineFeatures {
         Self {
             reasoning_effort: false,
             collaboration_mode: false,
-            image_input: false,
+            // `opencode run -f <file>` attaches local images/files to the message.
+            image_input: true,
             session_resume: true,
             tools_control: true,
             streaming: true,
@@ -384,7 +387,8 @@ impl EngineFeatures {
         Self {
             reasoning_effort: false,
             collaboration_mode: false,
-            image_input: false,
+            // Headless: path tags + ReadMediaFile (print mode permission=auto).
+            image_input: true,
             session_resume: true,
             tools_control: true,
             streaming: true,
@@ -397,7 +401,8 @@ impl EngineFeatures {
         Self {
             reasoning_effort: false,
             collaboration_mode: false,
-            image_input: false,
+            // Headless multimodal via `grok --prompt-file` ACP image blocks.
+            image_input: true,
             session_resume: true,
             tools_control: true,
             streaming: true,

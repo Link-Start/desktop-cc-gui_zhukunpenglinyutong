@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Event, EventCallback, UnlistenFn } from "@tauri-apps/api/event";
 import { listen } from "@tauri-apps/api/event";
 import type { AppServerEvent } from "../types";
+import { dispatchAppServerEvent } from "../features/app/hooks/useAppServerEvents";
 import {
   getAppServerEventBackpressureForTests,
   resetAppServerEventBackpressureForTests,
@@ -10,6 +11,7 @@ import {
   subscribeMenuCycleCollaborationMode,
   subscribeMenuCycleModel,
   subscribeMenuNewAgent,
+  subscribeNativeProviderContinuationProgress,
   subscribeRuntimeLogStatus,
   subscribeTerminalOutput,
 } from "./events";
@@ -55,7 +57,7 @@ describe("events subscriptions", () => {
     expect(unlisten).toHaveBeenCalledTimes(2);
   });
 
-  it("fans out app-server-event-batch payloads through the per-event subscription", async () => {
+  it("fans out app-server-event-batch predecessors before terminal settlement", async () => {
     const listeners = new Map<string, EventCallback<unknown>>();
     const unlisten = vi.fn();
 
@@ -81,11 +83,196 @@ describe("events subscriptions", () => {
       payload: [first, second],
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(onEvent).toHaveBeenCalledWith(second);
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(onEvent).toHaveBeenCalledWith(first);
+    expect(onEvent).toHaveBeenNthCalledWith(1, first);
+    expect(onEvent).toHaveBeenNthCalledWith(2, second);
 
+    cleanup();
+  });
+
+  it("preserves single-channel source order through terminal settlement", () => {
+    const listeners = new Map<string, EventCallback<unknown>>();
+    const unlisten = vi.fn();
+
+    vi.mocked(listen).mockImplementation((eventName, handler) => {
+      listeners.set(String(eventName), handler as EventCallback<unknown>);
+      return Promise.resolve(unlisten);
+    });
+
+    const onEvent = vi.fn();
+    const cleanup = subscribeAppServerEvents(onEvent);
+    const delta: AppServerEvent = {
+      workspace_id: "ws-single",
+      message: {
+        method: "item/agentMessage/delta",
+        params: { threadId: "t-single", itemId: "item-single", delta: "done" },
+      },
+    };
+    const completed: AppServerEvent = {
+      workspace_id: "ws-single",
+      message: {
+        method: "item/completed",
+        params: {
+          threadId: "t-single",
+          item: { id: "item-single", type: "agentMessage", text: "done" },
+        },
+      },
+    };
+    const terminal: AppServerEvent = {
+      workspace_id: "ws-single",
+      message: {
+        method: "turn/completed",
+        params: { threadId: "t-single", turnId: "turn-single" },
+      },
+    };
+
+    for (const payload of [delta, completed, terminal]) {
+      listeners.get("app-server-event")?.({
+        event: "app-server-event",
+        id: 3,
+        payload,
+      });
+    }
+
+    expect(onEvent.mock.calls.map(([event]) => event)).toEqual([
+      delta,
+      completed,
+      terminal,
+    ]);
+    cleanup();
+  });
+
+  it("keeps unrelated workspace events queued when a terminal barrier arrives", async () => {
+    const listeners = new Map<string, EventCallback<unknown>>();
+    const unlisten = vi.fn();
+
+    vi.mocked(listen).mockImplementation((eventName, handler) => {
+      listeners.set(String(eventName), handler as EventCallback<unknown>);
+      return Promise.resolve(unlisten);
+    });
+
+    const onEvent = vi.fn();
+    const cleanup = subscribeAppServerEvents(onEvent);
+    const workspaceA: AppServerEvent = {
+      workspace_id: "ws-a",
+      message: { method: "item/completed", params: { threadId: "t-a" } },
+    };
+    const workspaceB: AppServerEvent = {
+      workspace_id: "ws-b",
+      message: { method: "item/completed", params: { threadId: "t-b" } },
+    };
+    const terminalA: AppServerEvent = {
+      workspace_id: "ws-a",
+      message: { method: "turn/completed", params: { threadId: "t-a" } },
+    };
+
+    listeners.get("app-server-event-batch")?.({
+      event: "app-server-event-batch",
+      id: 3,
+      payload: [workspaceA, workspaceB, terminalA],
+    });
+
+    expect(onEvent).toHaveBeenNthCalledWith(1, workspaceA);
+    expect(onEvent).toHaveBeenNthCalledWith(2, terminalA);
+    expect(onEvent).not.toHaveBeenCalledWith(workspaceB);
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(onEvent).toHaveBeenNthCalledWith(3, workspaceB);
+
+    cleanup();
+  });
+
+  it("dispatches Shared projected final content before terminal settlement", () => {
+    const listeners = new Map<string, EventCallback<unknown>>();
+    const unlisten = vi.fn();
+
+    vi.mocked(listen).mockImplementation((eventName, handler) => {
+      listeners.set(String(eventName), handler as EventCallback<unknown>);
+      return Promise.resolve(unlisten);
+    });
+
+    const dispatched: string[] = [];
+    const sharedOwner = {
+      sharedSessionId: "shared-session-order",
+      sharedThreadId: "shared:thread-order",
+      nativeThreadId: "native-thread-order",
+      runtimeTurnId: "turn-order",
+      attemptId: "attempt-order",
+      engine: "codex",
+    };
+    const cleanup = subscribeAppServerEvents((event) => {
+      dispatchAppServerEvent(
+        {
+          onAgentMessageDelta: () => dispatched.push("delta"),
+          onAgentMessageCompleted: () => dispatched.push("item/completed"),
+          onTurnCompleted: () => dispatched.push("turn/completed"),
+        },
+        event,
+        {
+          useNormalizedRealtimeAdapters: false,
+          threadAgentDeltaSeenRef: { current: {} },
+          threadAgentCompletedSeenRef: { current: {} },
+          threadAgentSnapshotSeenRef: { current: {} },
+        },
+      );
+    });
+
+    const events: AppServerEvent[] = [
+      {
+        workspace_id: "ws-shared-order",
+        message: {
+          method: "item/agentMessage/delta",
+          params: {
+            threadId: "shared:thread-order",
+            nativeThreadId: "native-thread-order",
+            turnId: "turn-order",
+            itemId: "assistant-order",
+            delta: "final text",
+            sharedOwner,
+          },
+        },
+      },
+      {
+        workspace_id: "ws-shared-order",
+        message: {
+          method: "item/completed",
+          params: {
+            threadId: "shared:thread-order",
+            nativeThreadId: "native-thread-order",
+            turnId: "turn-order",
+            item: {
+              id: "assistant-order",
+              type: "agentMessage",
+              text: "final text",
+            },
+            sharedOwner,
+          },
+        },
+      },
+      {
+        workspace_id: "ws-shared-order",
+        message: {
+          method: "turn/completed",
+          params: {
+            threadId: "shared:thread-order",
+            nativeThreadId: "native-thread-order",
+            turnId: "turn-order",
+            sharedOwner,
+          },
+        },
+      },
+    ];
+
+    listeners.get("app-server-event-batch")?.({
+      event: "app-server-event-batch",
+      id: 4,
+      payload: events,
+    });
+
+    expect(dispatched).toEqual([
+      "delta",
+      "item/completed",
+      "turn/completed",
+    ]);
     cleanup();
   });
 
@@ -211,6 +398,34 @@ describe("events subscriptions", () => {
 
     listener({
       event: "cli-installer-event",
+      id: 1,
+      payload,
+    });
+    expect(onEvent).toHaveBeenCalledWith(payload);
+
+    cleanup();
+  });
+
+  it("delivers native Provider continuation progress events", () => {
+    let listener: EventCallback<any> = () => {};
+    const unlisten = vi.fn();
+
+    vi.mocked(listen).mockImplementation((_event, handler) => {
+      listener = handler as EventCallback<any>;
+      return Promise.resolve(unlisten);
+    });
+
+    const onEvent = vi.fn();
+    const cleanup = subscribeNativeProviderContinuationProgress(onEvent);
+    const payload = {
+      workspaceId: "ws-1",
+      operationId: "operation-1",
+      phase: "delivering-context",
+      percent: 68,
+    };
+
+    listener({
+      event: "native-provider-continuation-progress",
       id: 1,
       payload,
     });

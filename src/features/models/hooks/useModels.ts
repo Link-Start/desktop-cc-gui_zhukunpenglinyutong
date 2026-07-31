@@ -18,6 +18,7 @@ import {
   STORAGE_KEYS,
   getModelMapping,
   applyModelMapping as applyMappingToDisplayName,
+  resolveModelMappingValue,
 } from "../constants";
 import { startupOrchestrator } from "../../startup-orchestration/utils/startupOrchestrator";
 
@@ -290,10 +291,20 @@ export function useModels({
   const models = useMemo(() => {
     void modelMappingVersion;
     const mapping = getModelMapping();
-    const mappedModels = rawModels.map((model) => ({
-      ...model,
-      displayName: applyMappingToDisplayName(model.displayName, model.id, mapping),
-    }));
+    const mappedModels = rawModels.map((model) => {
+      const mappedRuntime = resolveModelMappingValue(model.id, mapping);
+      return {
+        ...model,
+        // Keep catalog id; rewrite display + runtime model when mapping exists
+        // so picker labels/icons and --model both use the provider's real model.
+        displayName: applyMappingToDisplayName(
+          model.displayName,
+          model.id,
+          mapping,
+        ),
+        model: mappedRuntime ?? model.model,
+      };
+    });
     return mergeCodexSelectableModels(mappedModels);
   }, [rawModels, modelMappingVersion]);
 

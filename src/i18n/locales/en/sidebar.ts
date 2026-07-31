@@ -52,7 +52,7 @@ const sidebar = {
     clearSearch: "Clear search",
     pinned: "Pinned",
     newAgent: "New agent",
-    newSharedSession: "Claude Code + Codex",
+    newSharedSession: "Shared CLI",
     newWorktreeAgent: "New worktree agent",
     newCloneAgent: "New clone agent",
     codexProviderChoiceTitle: "Provider selection",

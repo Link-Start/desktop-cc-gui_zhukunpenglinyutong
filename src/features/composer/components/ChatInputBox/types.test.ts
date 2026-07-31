@@ -9,8 +9,10 @@ describe('CODEX_MODELS', () => {
       'gpt-5.6-terra',
       'gpt-5.6-luna',
       'gpt-5.5',
-      'gpt-5.4',
     ]);
+    expect(CODEX_MODELS.some(model => model.id === 'gpt-5.4')).toBe(false);
+    expect(CODEX_MODELS.some(model => model.id === 'gpt-5.4-mini')).toBe(false);
+    expect(CODEX_MODELS.some(model => model.id === 'gpt-5.3-codex-spark')).toBe(false);
     expect(CODEX_MODELS.some(model => model.id === 'gpt-5.3')).toBe(false);
     expect(CODEX_MODELS.some(model => model.id === 'gpt-5.2-codex')).toBe(false);
   });

@@ -73,6 +73,7 @@ export type TimelineRuntimeModel = {
   isHistoryLoading: boolean;
   latestRetryMessage: RetryMessage | null;
   latestRuntimeReconnectItemId: string | null;
+  nativeRuntimeRecoveryEnabled: boolean;
   proxyEnabled: boolean;
   proxyUrl: string | null;
   threadId: string | null;
@@ -82,7 +83,6 @@ export type TimelineRuntimeModel = {
 export type TimelineNavigationModel = {
   agentTaskNodeByTaskIdRef: MutableRefObject<Map<string, HTMLDivElement>>;
   agentTaskNodeByToolUseIdRef: MutableRefObject<Map<string, HTMLDivElement>>;
-  bottomRef: RefObject<HTMLDivElement | null>;
   messageNodeByIdRef: MutableRefObject<Map<string, HTMLDivElement>>;
   onPendingJumpTargetReady: (messageId: string) => void;
   pendingJumpMessageId: string | null;

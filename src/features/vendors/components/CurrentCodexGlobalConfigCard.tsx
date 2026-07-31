@@ -4,13 +4,12 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
-import FileText from "lucide-react/dist/esm/icons/file-text";
-import Pencil from "lucide-react/dist/esm/icons/pencil";
 import { Button } from "@/components/ui/button";
 import {
   writeGlobalCodexAuthJson,
   writeGlobalCodexConfigToml,
 } from "../../../services/tauri";
+import { VendorOfficialConfigCard } from "./VendorOfficialConfigCard";
 
 interface CurrentCodexGlobalConfigCardProps {
   configLoading: boolean;
@@ -246,35 +245,12 @@ export function CurrentCodexGlobalConfigCard({
 
   return (
     <>
-      <div className="vendor-current-config vendor-codex-global-config">
-        <div className="vendor-codex-official-config-row">
-          <div className="vendor-codex-official-config-main">
-            <FileText size={16} aria-hidden />
-            <div className="vendor-codex-official-config-copy">
-              <div className="vendor-current-config-title">
-                {t("settings.vendor.officialConfig")}
-              </div>
-              <div className="settings-help">{firstStatus}</div>
-            </div>
-          </div>
-          <div className="vendor-codex-official-config-actions">
-            <span className="vendor-codex-official-status">
-              <span aria-hidden className="size-1.5 rounded-full bg-emerald-500" />
-              {t("settings.vendor.inUse")}
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              title={t("settings.vendor.edit")}
-              aria-label={t("settings.vendor.edit")}
-              onClick={() => setEditOpen(true)}
-            >
-              <Pencil aria-hidden />
-            </Button>
-          </div>
-        </div>
-      </div>
+      <VendorOfficialConfigCard
+        title={t("settings.vendor.officialConfig")}
+        description={firstStatus}
+        inUse
+        onEdit={() => setEditOpen(true)}
+      />
 
       {editOpen ? (
         <div className="vendor-dialog-overlay" role="dialog" aria-modal="true">

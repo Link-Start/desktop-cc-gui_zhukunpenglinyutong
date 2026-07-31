@@ -42,6 +42,9 @@ pub(crate) struct AppState {
     pub(crate) detached_external_change_runtime: Mutex<DetachedExternalChangeRuntime>,
     pub(crate) claude_commands_watches: Mutex<crate::claude_commands_watch::CommandsWatchRegistry>,
     pub(crate) runtime_manager: Arc<crate::runtime::RuntimeManager>,
+    pub(crate) shared_event_writer: Option<crate::shared_event_log::SharedEventWriter>,
+    pub(crate) shared_runtime_coordinator:
+        crate::shared_runtime_coordinator::SharedRuntimeCoordinator,
     pub(crate) renderer_heartbeats: Mutex<crate::renderer_stability::RendererHeartbeatStore>,
     pub(crate) semantic_navigation_runtime: crate::code_intel_lsp::SemanticNavigationRuntime,
     pub(crate) engine_manager: EngineManager,
@@ -151,6 +154,21 @@ impl AppState {
         }
         let runtime_manager = Arc::new(crate::runtime::RuntimeManager::new(&data_dir));
         runtime_manager.orphan_sweep_on_startup(app_settings.runtime_orphan_sweep_on_launch);
+        let shared_event_writer = match crate::shared_event_log::open(
+            &data_dir.join("shared-event-log-v2.sqlite3"),
+        ) {
+            Ok(crate::shared_event_log::OpenOutcome::Ready(writer)) => Some(writer),
+            Ok(crate::shared_event_log::OpenOutcome::ReadOnlyRecovery { reason, .. }) => {
+                eprintln!(
+                        "[shared-event-log] read-only recovery active; shadow writes disabled: {reason:?}"
+                    );
+                None
+            }
+            Err(error) => {
+                eprintln!("[shared-event-log] failed to open shadow store: {error}");
+                None
+            }
+        };
         let engine_manager = EngineManager::new();
         let claude_resume_diagnostics_runtime = Arc::clone(&runtime_manager);
         engine_manager
@@ -193,6 +211,9 @@ impl AppState {
                 crate::claude_commands_watch::CommandsWatchRegistry::default(),
             ),
             runtime_manager,
+            shared_event_writer,
+            shared_runtime_coordinator:
+                crate::shared_runtime_coordinator::SharedRuntimeCoordinator::default(),
             renderer_heartbeats: Mutex::new(
                 crate::renderer_stability::RendererHeartbeatStore::default(),
             ),

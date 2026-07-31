@@ -1,6 +1,7 @@
 // providers — Simplified Chinese UI strings
 const providers = {
   providers: {
+    localConfig: "本地配置",
     claude: {
       label: "Claude Code",
     },

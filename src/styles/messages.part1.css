@@ -4,12 +4,10 @@
   display: flex;
   margin-bottom: 12px;
   content-visibility: auto;
-  /* ponytail: 屏外占位兜底高度。仅在「该消息本次会话从未渲染过」(如从历史进入长对话)
-     时生效;一旦渲染过,auto 会缓存真实高度。原值 120px 对常见折叠态工具块(~40px)
-     严重高估,导致历史回放时撑出大空隙。取加权中位 64px:折叠行略高估(空隙≈24px,
-     近乎不可见)、短消息命中、长消息仍靠 auto 缓存修正。
-     ceiling: 仍是静态估值;要根治需接通 messagesTimelineVirtualization 的按类型估高。 */
-  contain-intrinsic-block-size: auto 64px;
+  /* 屏外占位兜底。static 全量路径仍依赖此估值；虚拟化 idle 路径用
+     estimateTimelineProjectionRowSize。48px 更贴近短气泡/折叠工具节奏，
+     减少 content-visibility 进视口时高度跳变导致的滚动阻滞。 */
+  contain-intrinsic-block-size: auto 48px;
 }
 
 .message.assistant.is-live-streaming {
@@ -97,6 +95,25 @@
 
 .message-bubble {
   position: relative;
+}
+
+.message-turn-target-badge {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.message-turn-target-badge > span:not(:last-child)::after {
+  margin-left: 4px;
+  content: "·";
+}
+
+.message-turn-target-badge.is-unavailable {
+  color: var(--status-warning, #f59e0b);
 }
 
 .message-action-bar {
@@ -1915,10 +1932,9 @@
   margin-bottom: 12px;
   background: var(--surface-card);
   color: var(--text-stronger);
-  /* review/diff 等卡片屏幕外跳过渲染/绘制；72px 仅为首次渲染前的
-     占位估值，渲染过后由 auto 缓存真实高度。 */
+  /* review/diff 等卡片屏幕外跳过渲染/绘制；56px 贴近折叠工具/摘要行。 */
   content-visibility: auto;
-  contain-intrinsic-block-size: auto 72px;
+  contain-intrinsic-block-size: auto 56px;
 }
 
 .item-card.review {

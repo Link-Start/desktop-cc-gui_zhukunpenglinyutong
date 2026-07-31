@@ -20,6 +20,13 @@ export const TIMELINE_LIGHTWEIGHT_ROW_PLACEHOLDER_HEIGHT = 44;
 export const TIMELINE_RENDER_WEIGHT_BASELINE_FLAG_KEY =
   "ccgui.perf.timelineRenderWeightBaseline";
 export const TIMELINE_VIRTUALIZER_STABILITY_MAX_REMEASURE_COUNT = 3;
+/**
+ * Adaptive timeline rendering：idle 长历史可进入虚拟化，降低全量 DOM 滚动成本。
+ * 流式期仍由 TIMELINE_VIRTUALIZATION_DURING_STREAMING_ENABLED 单独门禁
+ * （默认关闭，继续依赖 STREAMING_VISIBLE_WINDOW 尾窗 + static 行，避免 attach 重叠）。
+ * Virtualizer 须提供 initialOffset=当前 scrollTop，避免 attach 默认 0 把视口拽到顶。
+ */
+export const TIMELINE_ADAPTIVE_RENDERING_ENABLED = true;
 
 export type TimelineRenderWeightCategory =
   | "anchorOutlinePressure"
@@ -48,10 +55,10 @@ export type TimelineRenderWeightSummary = {
 };
 
 /**
- * 流式期启用虚拟化：DMG 实测 static 全量 DOM（~56 行）+ 每 token 重跑 timeline
- * 是 240–760ms 掉帧主因；active-live-row 与 stability recovery 已覆盖 tail 高度变化。
+ * 流式期虚拟化：默认关闭。流式期用 STREAMING_VISIBLE_WINDOW 裁剪 + static DOM，
+ * 避免 enabled 切换时空 size cache 导致行重叠；idle 长历史再走虚拟化。
  */
-export const TIMELINE_VIRTUALIZATION_DURING_STREAMING_ENABLED = true;
+export const TIMELINE_VIRTUALIZATION_DURING_STREAMING_ENABLED = false;
 
 function canReadBaselineFlag() {
   if (typeof globalThis === "undefined") {
@@ -65,6 +72,9 @@ function canReadBaselineFlag() {
 }
 
 export function isTimelineRenderWeightGateEnabled() {
+  if (!TIMELINE_ADAPTIVE_RENDERING_ENABLED) {
+    return false;
+  }
   if (!canReadBaselineFlag()) {
     return true;
   }
@@ -82,6 +92,9 @@ export function shouldVirtualizeTimelineRows(input: {
   rowCount: number;
   renderWeight?: number;
 }) {
+  if (!TIMELINE_ADAPTIVE_RENDERING_ENABLED) {
+    return false;
+  }
   if (input.isThinking || input.isWorking) {
     return TIMELINE_VIRTUALIZATION_DURING_STREAMING_ENABLED &&
       input.rowCount >= TIMELINE_VIRTUALIZATION_STREAMING_MIN_ROWS;

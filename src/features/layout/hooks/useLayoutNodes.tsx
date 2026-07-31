@@ -122,6 +122,16 @@ import {
   type ActiveCanvasSnapshot,
 } from "./activeCanvasStore";
 import { ActiveCanvasComposer } from "./activeCanvasComposerNode";
+import { SharedSendStatusBar } from "../../shared-session/components/SharedSendStatusBar";
+import { ProviderContinuationContextCard } from "../../shared-session/components/ProviderContinuationContextCard";
+import { buildProviderContinuationSourceExcerpt } from "../../shared-session/components/providerContinuationSourceExcerpt";
+import { useSharedSendState } from "../../shared-session/runtime/sharedSendStateStore";
+import { useSharedSendStateRestore } from "../../shared-session/runtime/useSharedSendStateRestore";
+import {
+  isComposerInputLocked,
+  isComposerSubmitLocked,
+  isPickerLocked,
+} from "../../shared-session/target/sendStateMachine";
 import { ActiveCanvasStatusPanel } from "./activeCanvasStatusPanelNode";
 import { buildShellRuntimeSummary } from "./layoutShellSummary";
 import { buildConversationCanvasNode } from "./conversationCanvasNode";
@@ -279,6 +289,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   >([]);
   const [noteCardSelectionRequest, setNoteCardSelectionRequest] =
     useState<ComposerNoteCardSelectionRequest | null>(null);
+  const [homeCreationTargetEngine, setHomeCreationTargetEngine] =
+    useState<EngineType | null>(null);
   const [gitModalPreviewRequest, setGitModalPreviewRequest] =
     useState<GitModalPreviewRequest | null>(null);
   const [gitModeControlsTarget, setGitModeControlsTarget] =
@@ -927,18 +939,14 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const codexForkProviderProfiles = useMemo<
     CodexProviderProfileOption[]
   >(() => {
-    const profilesById = new Map<string, CodexProviderProfileOption>();
-    for (const profile of codexProviderProfiles) {
-      profilesById.set(profile.id, profile);
-    }
     const activeProviderId =
       activeThreadSummary?.providerProfileId?.trim() ||
       CODEX_DISK_PROVIDER_PROFILE_ID;
-    if (
-      activeProviderId !== CODEX_DISK_PROVIDER_PROFILE_ID &&
-      !profilesById.has(activeProviderId)
-    ) {
-      profilesById.set(activeProviderId, {
+    const activeProfile = codexProviderProfiles.find(
+      (profile) => profile.id === activeProviderId,
+    );
+    return [
+      activeProfile ?? {
         id: activeProviderId,
         name:
           activeThreadSummary?.providerProfileName?.trim() || activeProviderId,
@@ -946,9 +954,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           activeThreadSummary?.providerProfileSource === "managed"
             ? "managed"
             : "disk",
-      });
-    }
-    return Array.from(profilesById.values());
+      },
+    ];
   }, [
     activeThreadSummary?.providerProfileId,
     activeThreadSummary?.providerProfileName,
@@ -1030,9 +1037,60 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     setActiveCanvasSnapshot(activeCanvasSnapshot);
   }, [activeCanvasSnapshot]);
 
+  const continuationWorkspaceId = options.activeWorkspaceId ?? "";
+  const continuationThreadsByWorkspace = options.threadsByWorkspace;
+  const selectContinuationThread = options.onSelectThread;
+  const continuationSourceItems = activeThreadSummary?.sourceSessionId
+    ? options.threadItemsByThread[activeThreadSummary.sourceSessionId]
+    : undefined;
+  const continuationContext = useMemo(() => {
+    if (
+      activeThreadSummary?.originKind !== "provider-continuation" ||
+      !activeThreadSummary.sourceSessionId
+    ) {
+      return null;
+    }
+    const sourceSessionId = activeThreadSummary.sourceSessionId;
+    const source = continuationThreadsByWorkspace[
+      continuationWorkspaceId
+    ]?.find(
+      (thread) => thread.id === sourceSessionId,
+    ) ?? null;
+    return {
+      source,
+      sourceExcerpt: buildProviderContinuationSourceExcerpt(
+        continuationSourceItems ?? EMPTY_ACTIVE_CANVAS_ITEMS,
+      ),
+      onOpenSource: source
+        ? () =>
+            selectContinuationThread(
+              continuationWorkspaceId,
+              sourceSessionId,
+            )
+        : null,
+    };
+  }, [
+    activeThreadSummary,
+    continuationThreadsByWorkspace,
+    continuationWorkspaceId,
+    continuationSourceItems,
+    selectContinuationThread,
+  ]);
+
   const messagesNode = useMemo(
     () =>
       buildConversationCanvasNode({
+        isProviderContinuation:
+          activeThreadSummary?.originKind === "provider-continuation",
+        continuationContextNode:
+          activeThreadSummary?.originKind === "provider-continuation" ? (
+            <ProviderContinuationContextCard
+              thread={activeThreadSummary}
+              source={continuationContext?.source ?? null}
+              sourceExcerpt={continuationContext?.sourceExcerpt ?? null}
+              onOpenSource={continuationContext?.onOpenSource ?? null}
+            />
+          ) : null,
         messagesProps: {
           items: EMPTY_ACTIVE_CANVAS_ITEMS,
           threadId: null,
@@ -1105,6 +1163,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       options.systemProxyEnabled,
       options.systemProxyUrl,
       options.openAppTargets,
+      activeThreadSummary,
+      continuationContext,
       options.selectedOpenAppId,
       showMessageAnchors,
       options.codeBlockCopyUseModifier,
@@ -1120,7 +1180,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       forkConfirmUserMessageId,
       handleCancelForkConfirm,
       handleConfirmForkFromMessage,
-      activeThreadSummary?.providerProfileId,
       codexForkProviderProfiles,
       options.onRewind,
       handleOpenRewindDialogFromMessage,
@@ -1213,6 +1272,17 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     [],
   );
   const isSharedSession = activeThreadSummary?.threadKind === "shared";
+  // Wave 4 / B.6：Shared Send UI 状态机（§14.5）。V2 flag 关闭时状态恒为 idle，不影响现有行为。
+  const sharedSendEntry = useSharedSendState(
+    options.activeWorkspaceId ?? "",
+    options.activeThreadId ?? "",
+  );
+  useSharedSendStateRestore(
+    options.activeWorkspaceId ?? null,
+    options.activeThreadId ?? null,
+    isSharedSession,
+  );
+  const sharedSendState = isSharedSession ? sharedSendEntry.state : "idle";
   const rewindWorkspaceGitState = deriveRewindWorkspaceGitState(
     options.gitStatus,
   );
@@ -1386,9 +1456,15 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     showStatusPanelToggleOverride?: boolean,
     branchControlEnabled: boolean = true,
     externalNoteCardRequest: ComposerNoteCardSelectionRequest | null = null,
+    createSessionTargetPicker: boolean = false,
   ) =>
     options.showComposer ? (
       <Profiler id="composer" onRender={handleRuntimeProfileRender}>
+        <SharedSendStatusBar
+          workspaceId={options.activeWorkspaceId ?? null}
+          threadId={options.activeThreadId ?? null}
+          isSharedSession={isSharedSession && !createSessionTargetPicker}
+        />
         <ActiveCanvasComposer
           items={EMPTY_ACTIVE_CANVAS_ITEMS}
           activeThreadId={null}
@@ -1406,7 +1482,15 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           rewindDialogRequest={rewindDialogRequest}
           onRewindDialogRequestConsumed={handleRewindDialogRequestConsumed}
           canStop={options.canStop}
-          disabled={options.isReviewing}
+          disabled={
+            options.isReviewing ||
+            (!createSessionTargetPicker &&
+              isComposerInputLocked(sharedSendState))
+          }
+          submitDisabled={
+            !createSessionTargetPicker &&
+            isComposerSubmitLocked(sharedSendState)
+          }
           contextUsage={null}
           contextDualViewEnabled={options.contextDualViewEnabled}
           codexAutoCompactionEnabled={options.codexAutoCompactionEnabled}
@@ -1416,11 +1500,19 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           onCodexAutoCompactionSettingsChange={
             options.onCodexAutoCompactionSettingsChange
           }
-          isContextCompacting={false}
-          codexCompactionLifecycleState="idle"
-          codexCompactionSource={null}
-          codexCompactionCompletedAt={null}
-          lastTokenUsageUpdatedAt={null}
+          isContextCompacting={activeThreadStatus?.isContextCompacting ?? false}
+          codexCompactionLifecycleState={
+            activeThreadStatus?.codexCompactionLifecycleState ?? "idle"
+          }
+          codexCompactionSource={
+            activeThreadStatus?.codexCompactionSource ?? null
+          }
+          codexCompactionCompletedAt={
+            activeThreadStatus?.codexCompactionCompletedAt ?? null
+          }
+          lastTokenUsageUpdatedAt={
+            activeThreadStatus?.lastTokenUsageUpdatedAt ?? null
+          }
           accountRateLimits={null}
           usageShowRemaining={options.usageShowRemaining}
           onRefreshAccountRateLimits={options.onRefreshAccountRateLimits}
@@ -1430,7 +1522,10 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           runtimeLifecycleState={composerRuntimeLifecycleState}
           sendLabel={
             options.composerSendLabel ??
-            (options.isProcessing && !options.steerEnabled
+            ((isSharedSession &&
+              (sharedSendState === "running" ||
+                sharedSendState === "settling")) ||
+            (options.isProcessing && !options.steerEnabled)
               ? t("messages.queue")
               : t("messages.send"))
           }
@@ -1456,7 +1551,16 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           collaborationModesEnabled={options.collaborationModesEnabled}
           selectedCollaborationModeId={options.selectedCollaborationModeId}
           onSelectCollaborationMode={options.onSelectCollaborationMode}
-          isSharedSession={isSharedSession}
+          isSharedSession={isSharedSession && !createSessionTargetPicker}
+          createSessionTargetPicker={createSessionTargetPicker}
+          onCreationTargetEngineChange={
+            createSessionTargetPicker
+              ? setHomeCreationTargetEngine
+              : undefined
+          }
+          sharedTargetPickerLocked={
+            !createSessionTargetPicker && isPickerLocked(sharedSendState)
+          }
           engines={options.engines}
           selectedEngine={options.selectedEngine}
           onSelectEngine={options.onSelectEngine}
@@ -1478,6 +1582,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           onOpenAgentSettings={options.onOpenAgentSettings}
           onOpenPromptSettings={options.onOpenPromptSettings}
           onOpenModelSettings={options.onOpenModelSettings}
+          onOpenCliSettings={options.onOpenCliSettings}
           onRefreshModelConfig={options.onRefreshModelConfig}
           isModelConfigRefreshing={options.isModelConfigRefreshing}
           opencodeVariantOptions={options.opencodeVariantOptions}
@@ -1571,7 +1676,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     ) : null;
   const composerNode = renderComposerNode(false, true, noteCardSelectionRequest);
   // 首页：分支徽标与工作区选择并排渲染在 HomeChat 里，故 Composer 内不再重复
-  const homeComposerNode = renderComposerNode(false, false);
+  const homeComposerNode = renderComposerNode(false, false, null, true);
   const approvalToastsNode = null;
 
   const updateToastNode = (
@@ -1618,7 +1723,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       onSelectWorkspace={options.onSelectHomeWorkspace}
       onAddWorkspace={options.onAddWorkspace}
       composerNode={homeComposerNode}
-      selectedEngine={options.selectedEngine}
+      selectedEngine={homeCreationTargetEngine ?? options.selectedEngine}
       branchControl={composerBranchControl}
     />
   );
@@ -1655,6 +1760,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       groupedWorkspaces={groupedWorkspacesForHeader}
       activeWorkspaceId={options.activeWorkspaceId}
       onSelectWorkspace={options.onSelectWorkspace}
+      onOpenShortcutsSettings={options.onOpenShortcutsSettings}
     />
   ) : null;
 

@@ -401,6 +401,18 @@ impl ClaudeSession {
             }
 
             "user" => {
+                if event
+                    .get("isReplay")
+                    .or_else(|| event.get("is_replay"))
+                    .and_then(Value::as_bool)
+                    == Some(true)
+                {
+                    return Some(EngineEvent::Raw {
+                        workspace_id: self.workspace_id.clone(),
+                        engine: EngineType::Claude,
+                        data: event.clone(),
+                    });
+                }
                 if let Some(message) = event.get("message") {
                     if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
                         for block in content {

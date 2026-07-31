@@ -276,7 +276,14 @@ pub(crate) async fn terminal_open(
         sessions.insert(key, Arc::clone(&session));
     }
     let event_sink = build_event_sink(app.clone());
-    spawn_terminal_reader(app, event_sink, workspace_id, terminal_id, Arc::clone(&session), reader);
+    spawn_terminal_reader(
+        app,
+        event_sink,
+        workspace_id,
+        terminal_id,
+        Arc::clone(&session),
+        reader,
+    );
 
     Ok(TerminalSessionInfo { id: session_id })
 }
@@ -370,10 +377,7 @@ mod tests {
         let mut cmd = CommandBuilder::new(shell_path);
         #[cfg(not(windows))]
         cmd.arg("-i");
-        let child = pair
-            .slave
-            .spawn_command(cmd)
-            .expect("spawn test shell");
+        let child = pair.slave.spawn_command(cmd).expect("spawn test shell");
         let writer = pair.master.take_writer().expect("take test writer");
         Arc::new(super::TerminalSession {
             id: "terminal-test".to_string(),
@@ -399,8 +403,9 @@ mod tests {
     async fn remove_terminal_session_if_current_only_removes_matching_session() {
         let session = build_test_terminal_session();
         let replacement = build_test_terminal_session();
-        let sessions: Mutex<HashMap<String, Arc<super::TerminalSession>>> =
-            Mutex::new(HashMap::from([("workspace:terminal".to_string(), Arc::clone(&session))]));
+        let sessions: Mutex<HashMap<String, Arc<super::TerminalSession>>> = Mutex::new(
+            HashMap::from([("workspace:terminal".to_string(), Arc::clone(&session))]),
+        );
 
         remove_terminal_session_if_current(&sessions, "workspace:terminal", &replacement).await;
         assert!(sessions.lock().await.contains_key("workspace:terminal"));

@@ -40,6 +40,8 @@ import rewind from "./rewind";
 import runtimeNotice from "./runtimeNotice";
 import searchPalette from "./searchPalette";
 import settings from "./settings";
+import sharedSend from "./sharedSend";
+import shortcutsGuide from "./shortcutsGuide";
 import sidebar from "./sidebar";
 import specHub from "./specHub";
 import statusPanel from "./statusPanel";
@@ -97,6 +99,8 @@ const zh = {
   ...runtimeNotice,
   ...searchPalette,
   ...settings,
+  ...sharedSend,
+  ...shortcutsGuide,
   ...sidebar,
   ...specHub,
   ...statusPanel,

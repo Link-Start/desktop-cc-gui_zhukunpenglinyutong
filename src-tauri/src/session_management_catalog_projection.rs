@@ -54,6 +54,7 @@ fn build_claude_catalog_entry_from_fact(
         delete_mode: None,
         physical_path: Some(fact.physical_path),
         children_count: None,
+        continuation: ProviderContinuationProjection::default(),
     }
 }
 
@@ -346,6 +347,7 @@ async fn build_workspace_scope_catalog_data(
                         delete_mode: None,
                         physical_path: summary.physical_path,
                         children_count: None,
+                        continuation: ProviderContinuationProjection::default(),
                     };
                     finalize_existing_catalog_entry(entry, &metadata_by_workspace_id)
                 }));
@@ -506,6 +508,7 @@ async fn build_workspace_scope_catalog_data(
                         delete_mode: None,
                         physical_path: None,
                         children_count: None,
+                        continuation: ProviderContinuationProjection::default(),
                     };
                     finalize_existing_catalog_entry(entry, &metadata_by_workspace_id)
                 }));
@@ -586,6 +589,7 @@ async fn build_workspace_scope_catalog_data(
                         delete_mode: None,
                         physical_path: None,
                         children_count: None,
+                        continuation: ProviderContinuationProjection::default(),
                     };
                     finalize_existing_catalog_entry(entry, &metadata_by_workspace_id)
                 }));
@@ -666,6 +670,7 @@ async fn build_workspace_scope_catalog_data(
                         delete_mode: None,
                         physical_path: None,
                         children_count: None,
+                        continuation: ProviderContinuationProjection::default(),
                     };
                     finalize_existing_catalog_entry(entry, &metadata_by_workspace_id)
                 }));
@@ -744,6 +749,7 @@ async fn build_workspace_scope_catalog_data(
                         delete_mode: None,
                         physical_path: None,
                         children_count: None,
+                        continuation: ProviderContinuationProjection::default(),
                     };
                     finalize_existing_catalog_entry(entry, &metadata_by_workspace_id)
                 }));

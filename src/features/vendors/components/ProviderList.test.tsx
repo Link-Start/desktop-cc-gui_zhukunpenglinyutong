@@ -2,6 +2,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ProviderConfig } from "../types";
+import { LOCAL_SETTINGS_PROVIDER_ID } from "../types";
 import { buildClaudeProviderReorderIds, ProviderList } from "./ProviderList";
 
 vi.mock("react-i18next", () => ({
@@ -19,6 +20,24 @@ function provider(
     name: `Provider ${id.toUpperCase()}`,
     ...options,
   };
+}
+
+function renderList(
+  providers: ProviderConfig[],
+  overrides: Partial<Parameters<typeof ProviderList>[0]> = {},
+) {
+  const props = {
+    providers,
+    loading: false,
+    onAdd: vi.fn(),
+    onEdit: vi.fn(),
+    onDelete: vi.fn(),
+    onReorder: vi.fn(),
+    onSwitch: vi.fn(),
+    ...overrides,
+  };
+  const view = render(<ProviderList {...props} />);
+  return { ...view, props };
 }
 
 describe("buildClaudeProviderReorderIds", () => {
@@ -48,99 +67,64 @@ describe("buildClaudeProviderReorderIds", () => {
 });
 
 describe("ProviderList", () => {
-  it("renders the official config first and third-party providers separately", () => {
-    const { container } = render(
-      <ProviderList
-        providers={[
-          provider("__local_settings__", {
-            isActive: false,
-            isLocalProvider: true,
-          }),
-          provider("a"),
-          provider("b", { isActive: true }),
-          provider("c"),
-        ]}
-        loading={false}
-        onAdd={vi.fn()}
-        onEditLocalSettings={vi.fn()}
-        onEdit={vi.fn()}
-        onDelete={vi.fn()}
-        onReorder={vi.fn()}
-      />,
-    );
+  it("renders only regular providers; the local settings entry is not a card", () => {
+    const { container } = renderList([
+      provider(LOCAL_SETTINGS_PROVIDER_ID, {
+        isActive: false,
+        isLocalProvider: true,
+      }),
+      provider("a"),
+      provider("b", { isActive: true }),
+      provider("c"),
+    ]);
 
     const cardNames = Array.from(
       container.querySelectorAll(".vendor-card-name"),
     ).map((element) => element.textContent);
 
-    expect(cardNames).toEqual([
-      "settings.vendor.officialConfig",
-      "ProviderA",
-      "ProviderB",
-      "ProviderC",
-    ]);
+    expect(cardNames).toEqual(["ProviderA", "ProviderB", "ProviderC"]);
     expect(
-      Array.from(container.querySelectorAll(".vendor-list-title")).map(
-        (element) => element.textContent,
-      ),
-    ).toEqual([
-      "settings.vendor.officialConfig",
-      "settings.vendor.thirdPartyConfig",
-    ]);
+      container.querySelector(".vendor-list-title")?.textContent,
+    ).toBe("settings.vendor.allProviders");
     expect(
       container.querySelectorAll("[title='settings.vendor.dragToReorder']"),
     ).toHaveLength(3);
+    expect(container.querySelectorAll(".vendor-card.active")).toHaveLength(1);
   });
 
-  it("marks managed providers as new-session options without a global switch", () => {
-    const onEditLocalSettings = vi.fn();
-    const onEdit = vi.fn();
-    const onDelete = vi.fn();
-    const localProvider = provider("__local_settings_json__", {
-      isLocalProvider: true,
-    });
+  it("switches a provider on via its enable button", () => {
     const providerA = provider("a");
-    const providerB = provider("b", { isActive: true });
+    const { props } = renderList([providerA, provider("b", { isActive: true })]);
 
-    render(
-      <ProviderList
-        providers={[localProvider, providerA, providerB]}
-        loading={false}
-        onAdd={vi.fn()}
-        onEditLocalSettings={onEditLocalSettings}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onReorder={vi.fn()}
-      />,
+    fireEvent.click(
+      screen.getByRole("button", { name: /settings\.vendor\.enable/ }),
     );
 
-    fireEvent.click(screen.getAllByTitle("settings.vendor.edit")[0]);
-    fireEvent.click(screen.getAllByTitle("settings.vendor.edit")[1]);
-    fireEvent.click(screen.getAllByTitle("settings.vendor.delete")[0]);
+    expect(props.onSwitch).toHaveBeenCalledWith("a");
+    expect(
+      screen.getAllByText("settings.vendor.inUse").length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByRole("button", { name: /settings\.vendor\.enable/ }),
+    ).toHaveLength(1);
+  });
 
-    expect(
-      screen.getAllByText("settings.vendor.availableForNewCodexSessions"),
-    ).toHaveLength(3);
-    expect(
-      screen.queryByRole("button", { name: "settings.vendor.enable" }),
-    ).toBeNull();
-    expect(onEditLocalSettings).toHaveBeenCalledTimes(1);
+  it("wires edit and delete actions on cards", () => {
+    const onEdit = vi.fn();
+    const onDelete = vi.fn();
+    const providerA = provider("a");
+
+    renderList([providerA], { onEdit, onDelete });
+
+    fireEvent.click(screen.getByTitle("settings.vendor.edit"));
+    fireEvent.click(screen.getByTitle("settings.vendor.delete"));
+
     expect(onEdit).toHaveBeenCalledWith(providerA);
     expect(onDelete).toHaveBeenCalledWith(providerA);
   });
 
   it("renders provider name suffix as secondary text", () => {
-    const { container } = render(
-      <ProviderList
-        providers={[provider("a", { name: "midsummer 自用1" })]}
-        loading={false}
-        onAdd={vi.fn()}
-        onEditLocalSettings={vi.fn()}
-        onEdit={vi.fn()}
-        onDelete={vi.fn()}
-        onReorder={vi.fn()}
-      />,
-    );
+    const { container } = renderList([provider("a", { name: "midsummer 自用1" })]);
 
     expect(container.querySelector(".vendor-card-name")?.textContent).toBe(
       "midsummer自用1",
@@ -151,20 +135,9 @@ describe("ProviderList", () => {
   });
 
   it("renders header actions next to the add button", () => {
-    render(
-      <ProviderList
-        providers={[]}
-        loading={false}
-        headerActions={
-          <button type="button">settings.vendor.pluginModels</button>
-        }
-        onAdd={vi.fn()}
-        onEditLocalSettings={vi.fn()}
-        onEdit={vi.fn()}
-        onDelete={vi.fn()}
-        onReorder={vi.fn()}
-      />,
-    );
+    renderList([], {
+      headerActions: <button type="button">settings.vendor.pluginModels</button>,
+    });
 
     expect(
       screen.getByRole("button", { name: "settings.vendor.pluginModels" }),

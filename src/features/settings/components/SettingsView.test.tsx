@@ -204,8 +204,7 @@ const baseSettings: AppSettings = {
   codexBin: null,
   codexArgs: null,
   terminalShellPath: null,
-  geminiEnabled: true,
-  opencodeEnabled: true,
+  disabledCliEngines: [],
   browserAgentEnabled: true,
   browserAgentPreferBuiltIn: true,
   browserAgentAllowExternalProviderFallback: true,
@@ -625,18 +624,18 @@ describe("SettingsView projects display", () => {
 });
 
 describe("SettingsView Display", () => {
-  it("uses the titlebar for the active settings section title and description", async () => {
+  it("uses the in-content page head for the active settings section title and description", async () => {
     renderDisplaySection({ initialSection: null });
     await flushSettingsViewEffects();
 
-    const header = document.querySelector(".settings-header") as HTMLElement | null;
-    if (!header) {
-      throw new Error("Expected settings header");
+    const pageHead = document.querySelector(".settings-page-head") as HTMLElement | null;
+    if (!pageHead) {
+      throw new Error("Expected settings page head");
     }
 
-    const headerQueries = within(header);
-    expect(headerQueries.getByText("Basic Settings")).toBeTruthy();
-    expect(headerQueries.getByText("settings.basicDescription")).toBeTruthy();
+    const pageHeadQueries = within(pageHead);
+    expect(pageHeadQueries.getByText("Basic Settings")).toBeTruthy();
+    expect(pageHeadQueries.getByText("settings.basicDescription")).toBeTruthy();
     expect(
       document.querySelector(".settings-content .settings-section-title"),
     ).toBeNull();
@@ -645,8 +644,21 @@ describe("SettingsView Display", () => {
       screen.getByRole("button", { name: "settings.sidebarProviders" }),
     );
 
-    expect(headerQueries.getByText("settings.sidebarProviders")).toBeTruthy();
-    expect(headerQueries.getByText("settings.vendorsDescription")).toBeTruthy();
+    // The providers page shares the same centered-column page head as every
+    // other section; only the title and description swap.
+    const providersHead = document.querySelector(
+      ".settings-page-head",
+    ) as HTMLElement | null;
+    if (!providersHead) {
+      throw new Error("Expected providers page head");
+    }
+    const providersHeadQueries = within(providersHead);
+    expect(
+      providersHeadQueries.getByText("settings.sidebarProviders"),
+    ).toBeTruthy();
+    expect(
+      providersHeadQueries.getByText("settings.vendorsDescription"),
+    ).toBeTruthy();
   });
 
   it("opens basic settings by default when no external section is provided", async () => {
@@ -696,9 +708,6 @@ describe("SettingsView Display", () => {
       sidebarQueries.queryByRole("button", { name: "Prompts" }),
     ).toBeNull();
     expect(
-      sidebarQueries.queryByRole("button", { name: "Shortcuts" }),
-    ).toBeNull();
-    expect(
       sidebarQueries.queryByRole("button", { name: "Open in" }),
     ).toBeNull();
     expect(sidebarQueries.queryByRole("button", { name: "Usage" })).toBeNull();
@@ -730,6 +739,21 @@ describe("SettingsView Display", () => {
     expect(
       sidebarQueries.getByRole("button", { name: "Project Management" }),
     ).toBeTruthy();
+    const shortcutsEntry = sidebarQueries.getByRole("button", {
+      name: "Shortcuts",
+    });
+    const projectManagementEntry = sidebarQueries.getByRole("button", {
+      name: "Project Management",
+    });
+    expect(
+      Array.from(sidebar.querySelectorAll(".settings-nav")).indexOf(
+        shortcutsEntry,
+      ),
+    ).toBeLessThan(
+      Array.from(sidebar.querySelectorAll(".settings-nav")).indexOf(
+        projectManagementEntry,
+      ),
+    );
     expect(
       sidebarQueries.getByRole("button", { name: "Skills" }),
     ).toBeTruthy();
@@ -2227,7 +2251,6 @@ describe("SettingsView Shortcuts", () => {
 
     expectTabButtonHasIcon("Appearance");
     expectTabButtonHasIcon("Behavior");
-    expectTabButtonHasIcon("Shortcuts");
     expectTabButtonHasIcon("Open in");
     expectTabButtonHasIcon("Web Service");
     expectTabButtonHasIcon("Email");
@@ -2236,11 +2259,13 @@ describe("SettingsView Shortcuts", () => {
     await flushSettingsViewEffects();
     expect(screen.getAllByText("Shortcuts").length).toBeGreaterThanOrEqual(2);
     expect(
-      screen.getByText(
+      screen.getAllByText(
         "Customize keyboard shortcuts for file actions, composer, panels, and navigation.",
-      ),
-    ).toBeTruthy();
+      ).length,
+    ).toBeGreaterThanOrEqual(1);
 
+    fireEvent.click(screen.getByRole("button", { name: "Basic Settings" }));
+    await flushSettingsViewEffects();
     fireEvent.click(screen.getByRole("button", { name: "Open in" }));
     await flushSettingsViewEffects();
     expect(screen.getAllByText("Open in").length).toBeGreaterThanOrEqual(2);

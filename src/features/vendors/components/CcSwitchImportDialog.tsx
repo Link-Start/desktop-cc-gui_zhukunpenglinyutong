@@ -7,13 +7,15 @@ import {
   useCcSwitchImport,
   type CcSwitchImportSummary,
   type CcSwitchImportTarget,
-  type ExistingProviderKey,
 } from "../hooks/useCcSwitchImport";
 
 interface CcSwitchImportDialogProps {
   isOpen: boolean;
   target: CcSwitchImportTarget;
-  existingProviders: ExistingProviderKey[];
+  /** 现有供应商 id, 用于区分 新增/更新 */
+  existingProviderIds: string[];
+  /** 指定 cc-switch.db / config.json 文件路径; 缺省自动检测 ~/.cc-switch */
+  sourcePath?: string | null;
   onClose: () => void;
   /** 导入完成后通知父组件刷新列表 */
   onImported: (summary: CcSwitchImportSummary) => void;
@@ -22,7 +24,8 @@ interface CcSwitchImportDialogProps {
 export function CcSwitchImportDialog({
   isOpen,
   target,
-  existingProviders,
+  existingProviderIds,
+  sourcePath = null,
   onClose,
   onImported,
 }: CcSwitchImportDialogProps) {
@@ -33,19 +36,17 @@ export function CcSwitchImportDialog({
     loading,
     importing,
     selectedIds,
-    selectableCount,
     toggleItem,
     toggleAll,
     importSelected,
     reload,
-  } = useCcSwitchImport({ target, existingProviders, isOpen });
+  } = useCcSwitchImport({ target, existingProviderIds, isOpen, sourcePath });
 
   const [summary, setSummary] = useState<CcSwitchImportSummary | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       setSummary(null);
-      return;
     }
   }, [isOpen]);
 
@@ -60,20 +61,18 @@ export function CcSwitchImportDialog({
 
   if (!isOpen) return null;
 
-  const categoryLabel =
-    target === "codex"
-      ? t("settings.vendor.ccSwitchImport.categoryOpenAI")
-      : t("settings.vendor.ccSwitchImport.categoryAnthropic");
+  const newCount = items.filter((item) => item.status === "new").length;
+  const updateCount = items.length - newCount;
+  const allSelected = items.length > 0 && selectedIds.size >= items.length;
+  const importedTotal = (summary?.addedCount ?? 0) + (summary?.updatedCount ?? 0);
 
   const handleImport = async () => {
     const result = await importSelected();
     setSummary(result);
-    if (result.importedCount > 0) {
+    if (result.addedCount > 0 || result.updatedCount > 0) {
       onImported(result);
     }
   };
-
-  const allSelected = selectableCount > 0 && selectedIds.size >= selectableCount;
 
   return (
     <div className="vendor-dialog-overlay" onClick={onClose}>
@@ -84,142 +83,132 @@ export function CcSwitchImportDialog({
         <div className="vendor-dialog-header">
           <div className="vendor-cc-switch-import-heading">
             <h3>{t("settings.vendor.ccSwitchImport.title")}</h3>
-            <p className="vendor-dialog-description">
-              {t("settings.vendor.ccSwitchImport.subtitle")}
-            </p>
           </div>
-          <button
-            type="button"
-            className="vendor-dialog-close"
-            onClick={onClose}
-            aria-label={t("settings.vendor.ccSwitchImport.close")}
-          >
-            ×
-          </button>
+          <div className="vendor-cc-switch-import-toolbar-actions">
+            <button
+              type="button"
+              className="vendor-cc-switch-import-tool-btn"
+              onClick={reload}
+              disabled={loading}
+              aria-label={t("settings.vendor.ccSwitchImport.refresh")}
+            >
+              <RefreshCw size={12} />
+            </button>
+            <button
+              type="button"
+              className="vendor-dialog-close"
+              onClick={onClose}
+              aria-label={t("settings.vendor.ccSwitchImport.close")}
+            >
+              ×
+            </button>
+          </div>
         </div>
 
-        <div className="vendor-cc-switch-import-body">
-          <aside className="vendor-cc-switch-import-categories">
-            <div className="vendor-cc-switch-import-category active">
-              <span className="vendor-cc-switch-import-category-name">
-                {categoryLabel}
-              </span>
-              <span className="vendor-cc-switch-import-category-count">
-                {t("settings.vendor.ccSwitchImport.configCount", {
-                  count: items.length,
-                })}
-              </span>
+        <div className="vendor-dialog-body">
+          {loading ? (
+            <div className="vendor-cc-switch-import-empty">
+              {t("settings.vendor.ccSwitchImport.loading")}
             </div>
-          </aside>
-
-          <section className="vendor-cc-switch-import-list-pane">
-            <div className="vendor-cc-switch-import-toolbar">
-              <span>
-                {t("settings.vendor.ccSwitchImport.selectedCount", {
-                  selected: selectedIds.size,
-                  total: selectableCount,
+          ) : !available ? (
+            <div className="vendor-cc-switch-import-empty">
+              {t("settings.vendor.ccSwitchImport.emptySource")}
+            </div>
+          ) : items.length === 0 ? (
+            <div className="vendor-cc-switch-import-empty">
+              {t("settings.vendor.ccSwitchImport.emptyCategory")}
+            </div>
+          ) : (
+            <>
+              <div className="vendor-cc-switch-import-summary">
+                {t("settings.vendor.ccSwitchImport.summary", {
+                  total: items.length,
                 })}
-              </span>
-              <div className="vendor-cc-switch-import-toolbar-actions">
-                <button
-                  type="button"
-                  className="vendor-cc-switch-import-tool-btn"
-                  onClick={reload}
-                  disabled={loading}
-                  aria-label={t("settings.vendor.ccSwitchImport.refresh")}
-                >
-                  <RefreshCw size={12} />
-                </button>
-                <button
-                  type="button"
-                  className="vendor-cc-switch-import-tool-btn"
-                  onClick={toggleAll}
-                  disabled={selectableCount === 0}
-                >
-                  {allSelected
-                    ? t("settings.vendor.ccSwitchImport.deselectAll")
-                    : t("settings.vendor.ccSwitchImport.selectAll")}
-                </button>
+                <span className="vendor-cc-switch-import-badge-new">
+                  {t("settings.vendor.ccSwitchImport.newCount", {
+                    count: newCount,
+                  })}
+                </span>
+                ，
+                <span className="vendor-cc-switch-import-badge-update">
+                  {t("settings.vendor.ccSwitchImport.updateCount", {
+                    count: updateCount,
+                  })}
+                </span>
               </div>
-            </div>
 
-            <div className="vendor-cc-switch-import-list">
-              {loading ? (
-                <div className="vendor-cc-switch-import-empty">
-                  {t("settings.vendor.ccSwitchImport.loading")}
-                </div>
-              ) : !available ? (
-                <div className="vendor-cc-switch-import-empty">
-                  {t("settings.vendor.ccSwitchImport.emptySource")}
-                </div>
-              ) : items.length === 0 ? (
-                <div className="vendor-cc-switch-import-empty">
-                  {t("settings.vendor.ccSwitchImport.emptyCategory")}
-                </div>
-              ) : (
-                items.map((item) => (
-                  <label
+              <div className="vendor-cc-switch-import-table-header">
+                <Checkbox
+                  checked={allSelected}
+                  onCheckedChange={() => toggleAll()}
+                  aria-label={t("settings.vendor.ccSwitchImport.selectAll")}
+                />
+                <span>{t("settings.vendor.ccSwitchImport.columnName")}</span>
+                <span>{t("settings.vendor.ccSwitchImport.columnId")}</span>
+                <span>{t("settings.vendor.ccSwitchImport.columnStatus")}</span>
+              </div>
+
+              <div className="vendor-cc-switch-import-list">
+                {items.map((item) => (
+                  <div
                     key={item.id}
                     className={`vendor-cc-switch-import-row${
-                      item.imported ? " imported" : ""
+                      selectedIds.has(item.id) ? " selected" : ""
                     }`}
+                    onClick={() => toggleItem(item.id)}
                   >
                     <Checkbox
                       checked={selectedIds.has(item.id)}
-                      disabled={item.imported || importing}
+                      disabled={importing}
                       onCheckedChange={() => toggleItem(item.id)}
+                      onClick={(event) => event.stopPropagation()}
                       aria-label={item.name}
                     />
-                    <span className="vendor-cc-switch-import-row-main">
-                      <span className="vendor-cc-switch-import-row-title">
-                        {item.name}
-                        {item.imported ? (
-                          <span className="vendor-cc-switch-import-badge-imported">
-                            {t("settings.vendor.ccSwitchImport.importedBadge")}
-                          </span>
-                        ) : null}
-                        {!item.imported && !item.hasApiKey ? (
-                          <span className="vendor-cc-switch-import-badge-no-key">
-                            {t("settings.vendor.ccSwitchImport.noApiKey")}
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="vendor-cc-switch-import-row-subtitle">
-                        {item.baseUrl ??
-                          t("settings.vendor.ccSwitchImport.noBaseUrl")}
-                      </span>
+                    <span className="vendor-cc-switch-import-cell-name">
+                      {item.name || item.id}
                     </span>
-                  </label>
-                ))
-              )}
-            </div>
-
-            {summary ? (
-              <div
-                className={`vendor-cc-switch-import-banner${
-                  summary.failures.length > 0 ? " has-failures" : ""
-                }`}
-                role="status"
-              >
-                {t("settings.vendor.ccSwitchImport.successBanner", {
-                  count: summary.importedCount,
-                })}
-                {summary.failures.length > 0
-                  ? ` · ${t("settings.vendor.ccSwitchImport.failureBanner", {
-                      count: summary.failures.length,
-                      names: summary.failures.map((failure) => failure.name).join(", "),
-                    })}`
-                  : ""}
+                    <span className="vendor-cc-switch-import-cell-id">
+                      {item.id}
+                    </span>
+                    <span
+                      className={`vendor-cc-switch-import-status-${
+                        item.status === "new" ? "new" : "update"
+                      }`}
+                    >
+                      {item.status === "new"
+                        ? t("settings.vendor.ccSwitchImport.statusNew")
+                        : t("settings.vendor.ccSwitchImport.statusUpdate")}
+                    </span>
+                  </div>
+                ))}
               </div>
-            ) : null}
-          </section>
+            </>
+          )}
+
+          {summary ? (
+            <div
+              className={`vendor-cc-switch-import-banner${
+                summary.failures.length > 0 ? " has-failures" : ""
+              }`}
+              role="status"
+            >
+              {t("settings.vendor.ccSwitchImport.successBanner", {
+                count: importedTotal,
+              })}
+              {summary.failures.length > 0
+                ? ` · ${t("settings.vendor.ccSwitchImport.failureBanner", {
+                    count: summary.failures.length,
+                    names: summary.failures.map((failure) => failure.name).join(", "),
+                  })}`
+                : ""}
+            </div>
+          ) : null}
         </div>
 
         <div className="vendor-dialog-footer">
           <span className="vendor-cc-switch-import-footer-count">
             {t("settings.vendor.ccSwitchImport.selectedCount", {
-              selected: selectedIds.size,
-              total: selectableCount,
+              count: selectedIds.size,
             })}
           </span>
           <button
@@ -238,9 +227,7 @@ export function CcSwitchImportDialog({
           >
             {importing
               ? t("settings.vendor.ccSwitchImport.importing")
-              : t("settings.vendor.ccSwitchImport.importButton", {
-                  count: selectedIds.size,
-                })}
+              : t("settings.vendor.ccSwitchImport.confirmImport")}
           </Button>
         </div>
       </div>

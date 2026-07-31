@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import type { ClaudeCurrentConfig, ProviderConfig } from "../types";
 import { LOCAL_SETTINGS_PROVIDER_ID } from "../types";
 import {
@@ -8,8 +8,12 @@ import {
   deleteClaudeProvider,
   reorderClaudeProviders,
   getCurrentClaudeConfig,
+  switchClaudeProvider,
 } from "../../../services/tauri";
-import { migrateModelMappingStorage } from "../../models/constants";
+import {
+  migrateModelMappingStorage,
+  syncModelMappingFromProviderEnv,
+} from "../../models/constants";
 
 export interface ProviderDialogState {
   isOpen: boolean;
@@ -26,6 +30,7 @@ export type ClaudeProviderAction =
   | "save"
   | "reorder"
   | "delete"
+  | "switch"
   | "storage";
 
 export type ClaudeProviderActionError = Readonly<{
@@ -77,11 +82,42 @@ export function useProviderManagement() {
     provider: null,
   });
 
+  /**
+   * Mirror jetbrains-cc-gui: when the active Claude provider changes, push its
+   * ANTHROPIC_DEFAULT_* env slots into localStorage so the model picker can
+   * show mapped names (e.g. kimi-k3) and brand icons.
+   */
+  const syncActiveProviderModelMapping = useCallback(
+    (providerList: ProviderConfig[]) => {
+      const active =
+        providerList.find((provider) => provider.isActive) ??
+        providerList.find(
+          (provider) =>
+            provider.id === LOCAL_SETTINGS_PROVIDER_ID ||
+            provider.isLocalProvider,
+        ) ??
+        null;
+      const env = active?.settingsConfig?.env as
+        | Record<string, unknown>
+        | undefined;
+      const result = syncModelMappingFromProviderEnv(env);
+      if (!result.ok) {
+        setProviderError(providerActionError("storage", result.error));
+      } else if (result.warnings.length > 0) {
+        setProviderError(
+          providerActionError("storage", result.warnings.join("; ")),
+        );
+      }
+    },
+    [],
+  );
+
   const loadProviders = useCallback(async () => {
     setLoading(true);
     try {
       const list = await getClaudeProviders();
       setProviders(list);
+      syncActiveProviderModelMapping(list);
       return { ok: true } as const;
     } catch (error) {
       const actionError =
@@ -93,7 +129,7 @@ export function useProviderManagement() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [syncActiveProviderModelMapping]);
 
   const loadCurrentConfig = useCallback(async () => {
     setCurrentConfigLoading(true);
@@ -264,6 +300,22 @@ export function useProviderManagement() {
     setDeleteConfirm({ isOpen: true, provider });
   }, []);
 
+  const handleSwitchProvider = useCallback(
+    async (id: string) => {
+      try {
+        await switchClaudeProvider(id);
+        await Promise.all([loadProviders(), loadCurrentConfig()]);
+        setProviderError(null);
+        return { ok: true } as const;
+      } catch (cause) {
+        const error = providerActionError("switch", cause);
+        setProviderError(error);
+        return { ok: false, error } as const;
+      }
+    },
+    [loadProviders, loadCurrentConfig],
+  );
+
   const confirmDeleteProvider = useCallback(async () => {
     const provider = deleteConfirm.provider;
     if (!provider) return;
@@ -286,8 +338,19 @@ export function useProviderManagement() {
     setDeleteConfirm({ isOpen: false, provider: null });
   }, []);
 
+  const localProvider = useMemo(
+    () =>
+      providers.find(
+        (provider) =>
+          provider.id === LOCAL_SETTINGS_PROVIDER_ID ||
+          provider.isLocalProvider,
+      ) ?? null,
+    [providers],
+  );
+
   return {
     providers,
+    localProvider,
     loading,
     currentConfig,
     currentConfigLoading,
@@ -305,6 +368,7 @@ export function useProviderManagement() {
     handleClaudeSettingsJsonSaved,
     handleSaveProvider,
     handleReorderProviders,
+    handleSwitchProvider,
     handleDeleteProvider,
     confirmDeleteProvider,
     cancelDeleteProvider,

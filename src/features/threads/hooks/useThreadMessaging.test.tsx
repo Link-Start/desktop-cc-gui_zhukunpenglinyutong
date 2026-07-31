@@ -25,7 +25,28 @@ import {
 import { getClientStoreSync } from "../../../services/clientStorage";
 import { pushErrorToast } from "../../../services/toasts";
 import { getGlobalRuntimeNoticesSnapshot } from "../../../services/globalRuntimeNotices";
-import { sendSharedSessionTurn } from "../../shared-session/runtime/sendSharedSessionTurn";
+import { sendSharedSessionTurnRouted } from "../../shared-session/runtime/sendSharedSessionTurn";
+import { SharedActiveAttemptObserverError } from "../../shared-session/runtime/sendSharedSessionTurnV2";
+import {
+  sharedSessionV2AwaitTurnTerminal,
+  sharedSessionV2InterruptTurn,
+} from "../../shared-session/services/sharedSessions";
+import {
+  reattachSharedSessionAttempt,
+  resetSharedSessionAttemptReattachmentsForTests,
+} from "../../shared-session/runtime/reattachSharedSessionAttempt";
+import {
+  consumeSharedSendAdmission,
+  dispatchSharedSendEvent,
+  getSharedSendActiveAttemptId,
+  getSharedSendState,
+  resetSharedSendStateStoreForTests,
+  setSharedSendActiveAttempt,
+} from "../../shared-session/runtime/sharedSendStateStore";
+import {
+  resetSharedTargetStoreForTests,
+  selectNextTarget,
+} from "../../shared-session/target/targetStore";
 
 const CLAUDE_PENDING_NATIVE_SESSION_WAIT_MESSAGE =
   "Claude session is still initializing. Wait for the session to finish binding, then send again.";
@@ -57,8 +78,107 @@ describe("useThreadMessaging", () => {
     },
   );
 
+  it.each(["claude", "grok", "kimi", "opencode"] as const)(
+    "does not block %s sends with non-empty images at client boundary",
+    async (engine) => {
+      const { result, pushThreadErrorMessage } = makeThreadMessagingHook(engine, {
+        activeThreadId: `${engine}:session-1`,
+        threadEngineById: {
+          [`${engine}:session-1`]: engine,
+        },
+      });
+
+      await act(async () => {
+        await result.current.sendUserMessageToThread(
+          workspace,
+          `${engine}:session-1`,
+          `${engine} send with image`,
+          ["/tmp/example.png"],
+        );
+      });
+
+      expect(pushThreadErrorMessage).not.toHaveBeenCalledWith(
+        workspace.id,
+        `${engine}:session-1`,
+        expect.stringContaining("does not support image input"),
+      );
+      expect(engineSendMessage).toHaveBeenCalledWith(
+        workspace.id,
+        expect.objectContaining({
+          engine,
+          images: ["/tmp/example.png"],
+        }),
+      );
+    },
+  );
+
+  it("does not block codex sends with non-empty images at client boundary", async () => {
+    const { result, pushThreadErrorMessage } = makeThreadMessagingHook("codex", {
+      activeThreadId: "thread-codex-1",
+      threadEngineById: {
+        "thread-codex-1": "codex",
+      },
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "thread-codex-1",
+        "codex send with image",
+        ["/tmp/example.png"],
+      );
+    });
+
+    expect(pushThreadErrorMessage).not.toHaveBeenCalledWith(
+      workspace.id,
+      "thread-codex-1",
+      expect.stringContaining("does not support image input"),
+    );
+    // Codex native path uses sendUserMessage, not engineSendMessage.
+    expect(sendUserMessage).toHaveBeenCalledWith(
+      workspace.id,
+      "thread-codex-1",
+      "codex send with image",
+      expect.objectContaining({
+        images: ["/tmp/example.png"],
+      }),
+    );
+    expect(engineSendMessage).not.toHaveBeenCalled();
+  });
+
+  it("treats only non-empty image entries as attachment content for grok", async () => {
+    const { result } = makeThreadMessagingHook("grok", {
+      activeThreadId: "grok:session-1",
+      threadEngineById: {
+        "grok:session-1": "grok",
+      },
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "grok:session-1",
+        "grok send without real images",
+        ["  ", "\n", ""],
+      );
+    });
+
+    expect(engineSendMessage).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(engineSendMessage)).toHaveBeenCalledWith(
+      workspace.id,
+      expect.objectContaining({
+        engine: "grok",
+        images: null,
+      }),
+    );
+  });
+
   beforeEach(() => {
     resetThreadMessagingTestMocks();
+    resetSharedTargetStoreForTests();
+    resetSharedSendStateStoreForTests();
+    resetSharedSessionAttemptReattachmentsForTests();
+    window.localStorage.removeItem("mossx.sharedV2Send");
   });
 
   it("routes opencode thread through engineSendMessage", async () => {
@@ -80,7 +200,110 @@ describe("useThreadMessaging", () => {
     expect(sendUserMessage).not.toHaveBeenCalled();
   });
 
+  it("blocks a non-idle Shared V2 submit before optimistic or processing mutations", async () => {
+    dispatchSharedSendEvent("ws-1", "shared:thread-busy", { type: "send" });
+    const dispatch = vi.fn();
+    const {
+      result,
+      markProcessing,
+      recordThreadActivity,
+      safeMessageActivity,
+    } = makeThreadMessagingHook("claude", {
+      activeThreadId: "shared:thread-busy",
+      dispatch,
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "shared:thread-busy",
+        "must stay draft only",
+      );
+    });
+
+    expect(sendSharedSessionTurnRouted).not.toHaveBeenCalled();
+    expect(markProcessing).not.toHaveBeenCalled();
+    expect(recordThreadActivity).not.toHaveBeenCalled();
+    expect(safeMessageActivity).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "upsertItem" }),
+    );
+  });
+
+  it("atomically admits only one of two racing Shared V2 submits before optimistic UI", async () => {
+    selectNextTarget("ws-1", "shared:thread-race", {
+      engine: "codex",
+      providerProfileId: "provider-a",
+      modelCatalogEntryId: "provider-a:gpt-a",
+      providerProfileNameSnapshot: "Provider A",
+      providerProfileSource: "managed",
+      model: "gpt-a",
+      reasoning: { effort: "medium" },
+    });
+    let resolveFirstRoute:
+      | ((value: Record<string, unknown>) => void)
+      | undefined;
+    const firstRoute = new Promise<Record<string, unknown>>((resolve) => {
+      resolveFirstRoute = resolve;
+    });
+    vi.mocked(sendSharedSessionTurnRouted).mockImplementation((input) => {
+      const revision = input.sharedSendAdmissionRevision;
+      expect(typeof revision).toBe("number");
+      expect(
+        consumeSharedSendAdmission(
+          input.workspaceId,
+          input.threadId,
+          revision as number,
+        ),
+      ).toBe(true);
+      return firstRoute;
+    });
+    const dispatch = vi.fn();
+    const { result, markProcessing } = makeThreadMessagingHook("codex", {
+        activeThreadId: "shared:thread-race",
+        dispatch,
+      });
+
+    const firstSend = result.current.sendUserMessageToThread(
+      workspace,
+      "shared:thread-race",
+      "first",
+    );
+    await waitFor(() => {
+      expect(sendSharedSessionTurnRouted).toHaveBeenCalledTimes(1);
+    });
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "shared:thread-race",
+        "second",
+      );
+    });
+
+    expect(sendSharedSessionTurnRouted).toHaveBeenCalledTimes(1);
+    expect(
+      dispatch.mock.calls.filter(
+        ([action]) =>
+          action?.type === "upsertItem" &&
+          action.item?.kind === "message" &&
+          action.item?.role === "user",
+      ),
+    ).toHaveLength(1);
+    expect(
+      markProcessing.mock.calls.filter(
+        ([threadId, processing]) =>
+          threadId === "shared:thread-race" && processing === true,
+      ),
+    ).toHaveLength(1);
+
+    resolveFirstRoute?.({ result: { turn: { id: "shared-turn-race" } } });
+    await act(async () => {
+      await firstSend;
+    });
+  });
+
   it("normalizes unsupported shared-session sends back to claude", async () => {
+    window.localStorage.setItem("mossx.sharedV2Send", "0");
     const dispatch = vi.fn();
     const { result } = makeThreadMessagingHook("gemini", {
       activeThreadId: "shared:thread-1",
@@ -95,7 +318,7 @@ describe("useThreadMessaging", () => {
       );
     });
 
-    expect(sendSharedSessionTurn).toHaveBeenCalledWith(
+    expect(sendSharedSessionTurnRouted).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: "ws-1",
         threadId: "shared:thread-1",
@@ -114,6 +337,7 @@ describe("useThreadMessaging", () => {
   });
 
   it("uses active shared engine selection instead of stale thread engine when sending", async () => {
+    window.localStorage.setItem("mossx.sharedV2Send", "0");
     const dispatch = vi.fn();
     const { result } = makeThreadMessagingHook("claude", {
       activeThreadId: "shared:thread-sticky-engine",
@@ -131,7 +355,7 @@ describe("useThreadMessaging", () => {
       );
     });
 
-    expect(sendSharedSessionTurn).toHaveBeenCalledWith(
+    expect(sendSharedSessionTurnRouted).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: "ws-1",
         threadId: "shared:thread-sticky-engine",
@@ -145,6 +369,247 @@ describe("useThreadMessaging", () => {
         threadId: "shared:thread-sticky-engine",
         engine: "claude",
       }),
+    );
+  });
+
+  it("uses the current Composer target only during explicit Shared V0 rollback", async () => {
+    window.localStorage.setItem("mossx.sharedV2Send", "0");
+    const { result } = makeThreadMessagingHook("claude", {
+      activeThreadId: "shared:thread-provider-target",
+      resolveComposerSelection: () => ({
+        id: "provider-model",
+        model: "claude-provider-model",
+        source: "provider",
+        providerProfileId: "provider-openrouter",
+        effort: "high",
+        collaborationMode: null,
+      }),
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "shared:thread-provider-target",
+        "hello provider",
+      );
+    });
+
+    expect(sendSharedSessionTurnRouted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        engine: "claude",
+        model: "claude-provider-model",
+        effort: "high",
+        target: {
+          engine: "claude",
+          providerProfileId: "provider-openrouter",
+          model: "claude-provider-model",
+          reasoning: { effort: "high" },
+        },
+      }),
+    );
+  });
+
+  it("fails closed before UI mutations when Shared V2 has no durable Target", async () => {
+    const dispatch = vi.fn();
+    const { result, markProcessing, recordThreadActivity, pushThreadErrorMessage } =
+      makeThreadMessagingHook("claude", {
+        activeThreadId: "shared:thread-missing-target",
+        dispatch,
+        resolveComposerSelection: () => ({
+          id: "stale-provider-model",
+          model: "stale-provider-model",
+          source: "provider",
+          providerProfileId: "stale-provider",
+          effort: "high",
+          collaborationMode: null,
+        }),
+      });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "shared:thread-missing-target",
+        "must not rebuild target from Composer",
+      );
+    });
+
+    expect(sendSharedSessionTurnRouted).not.toHaveBeenCalled();
+    expect(markProcessing).not.toHaveBeenCalled();
+    expect(recordThreadActivity).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(pushThreadErrorMessage).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-missing-target",
+      expect.stringContaining("目标不完整"),
+    );
+  });
+
+  it("uses the Shared Target Store instead of a stale global Composer selection", async () => {
+    selectNextTarget("ws-1", "shared:thread-provider-store", {
+      engine: "codex",
+      providerProfileId: "provider-b",
+      modelCatalogEntryId: "provider-b:gpt-provider-b",
+      providerProfileNameSnapshot: "Provider B",
+      providerProfileSource: "managed",
+      model: "gpt-provider-b",
+      reasoning: { effort: "medium" },
+    });
+    const dispatch = vi.fn();
+    const { result, onDebug } = makeThreadMessagingHook("claude", {
+      activeThreadId: "shared:thread-provider-store",
+      dispatch,
+      resolveComposerSelection: () => ({
+        id: "stale-claude-model",
+        model: "stale-claude-model",
+        source: "provider",
+        providerProfileId: "provider-a",
+        effort: "high",
+        collaborationMode: null,
+      }),
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "shared:thread-provider-store",
+        "use selected target",
+      );
+    });
+
+    expect(sendSharedSessionTurnRouted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        engine: "codex",
+        model: "gpt-provider-b",
+        effort: "medium",
+        target: {
+          engine: "codex",
+          providerProfileId: "provider-b",
+          modelCatalogEntryId: "provider-b:gpt-provider-b",
+          providerProfileNameSnapshot: "Provider B",
+          providerProfileSource: "managed",
+          model: "gpt-provider-b",
+          reasoning: { effort: "medium" },
+        },
+      }),
+    );
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "model/resolve",
+        payload: expect.objectContaining({
+          engine: "codex",
+          selectedModelId: "provider-b:gpt-provider-b",
+          selectedModelSource: "managed",
+          resolvedModel: "gpt-provider-b",
+          modelForSend: "gpt-provider-b",
+        }),
+      }),
+    );
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "turn/start",
+        payload: expect.objectContaining({
+          engine: "codex",
+          providerProfileId: "provider-b",
+          modelCatalogEntryId: "provider-b:gpt-provider-b",
+          model: "gpt-provider-b",
+          effort: "medium",
+        }),
+      }),
+    );
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "setThreadEngine",
+        threadId: "shared:thread-provider-store",
+        engine: "codex",
+      }),
+    );
+  });
+
+  it("returns the Shared typed commit and prefers a frozen queue target", async () => {
+    const threadId = "shared:thread-frozen-target";
+    selectNextTarget("ws-1", threadId, {
+      engine: "claude",
+      providerProfileId: "current-provider",
+      modelCatalogEntryId: "current-provider:claude",
+      providerProfileNameSnapshot: "Current Provider",
+      providerProfileSource: "managed",
+      model: "claude-current",
+      reasoning: { effort: "high" },
+    });
+    const frozenTarget = {
+      engine: "codex" as const,
+      providerProfileId: "queued-provider",
+      modelCatalogEntryId: "queued-provider:gpt-5.6-sol",
+      providerProfileNameSnapshot: "Queued Provider",
+      providerProfileSource: "managed" as const,
+      model: "gpt-5.6-sol",
+      reasoning: { effort: "max" },
+    };
+    const committedResponse = {
+      status: "accepted",
+      runtimeTurnId: "runtime-turn-queued",
+      v2: {
+        attemptId: "attempt-queued",
+        logicalTurnId: "logical-turn-queued",
+        committed: true,
+        duplicate: false,
+      },
+    };
+    vi.mocked(sendSharedSessionTurnRouted).mockResolvedValueOnce(
+      committedResponse,
+    );
+    const { result } = makeThreadMessagingHook("claude", {
+      activeThreadId: threadId,
+    });
+
+    let response: unknown;
+    await act(async () => {
+      response = await result.current.sendUserMessageToThread(
+        workspace,
+        threadId,
+        "use frozen target",
+        [],
+        { sharedExecutionTarget: frozenTarget },
+      );
+    });
+
+    expect(sendSharedSessionTurnRouted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        engine: "codex",
+        model: "gpt-5.6-sol",
+        effort: "max",
+        target: frozenTarget,
+      }),
+    );
+    expect(response).toEqual(committedResponse);
+  });
+
+  it("fails closed for a stale unsupported Shared Target", async () => {
+    selectNextTarget("ws-1", "shared:thread-1", {
+      engine: "gemini",
+      providerProfileId: "provider-gemini",
+      modelCatalogEntryId: "provider-gemini:gemini-pro",
+      providerProfileNameSnapshot: "Gemini Provider",
+      providerProfileSource: "managed",
+      model: "gemini-pro",
+      reasoning: null,
+    });
+    const { result, pushThreadErrorMessage } = makeThreadMessagingHook("claude", {
+      activeThreadId: "shared:thread-1",
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "shared:thread-1",
+        "hello shared",
+      );
+    });
+    expect(sendSharedSessionTurnRouted).not.toHaveBeenCalled();
+    expect(pushThreadErrorMessage).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      expect.stringContaining("当前 Shared Session 目标暂不可执行"),
     );
   });
 
@@ -169,6 +634,15 @@ describe("useThreadMessaging", () => {
   });
 
   it("disables Claude CLI thinking for shared Claude sends when visibility is off", async () => {
+    selectNextTarget("ws-1", "shared:thread-disable-thinking", {
+      engine: "claude",
+      providerProfileId: null,
+      modelCatalogEntryId: "claude-local:sonnet",
+      providerProfileNameSnapshot: "本机配置",
+      providerProfileSource: "disk",
+      model: "sonnet",
+      reasoning: null,
+    });
     const { result } = makeThreadMessagingHook("claude", {
       activeThreadId: "shared:thread-disable-thinking",
       claudeThinkingVisible: false,
@@ -182,7 +656,7 @@ describe("useThreadMessaging", () => {
       );
     });
 
-    expect(sendSharedSessionTurn).toHaveBeenCalledWith(
+    expect(sendSharedSessionTurnRouted).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: "ws-1",
         threadId: "shared:thread-disable-thinking",
@@ -195,7 +669,16 @@ describe("useThreadMessaging", () => {
 
   it("hides shared native thread id returned from shared send response", async () => {
     const dispatch = vi.fn();
-    vi.mocked(sendSharedSessionTurn).mockResolvedValue({
+    selectNextTarget("ws-1", "shared:thread-2", {
+      engine: "codex",
+      providerProfileId: null,
+      modelCatalogEntryId: "codex-local:gpt-5.3-codex",
+      providerProfileNameSnapshot: "本机配置",
+      providerProfileSource: "disk",
+      model: "gpt-5.3-codex",
+      reasoning: null,
+    });
+    vi.mocked(sendSharedSessionTurnRouted).mockResolvedValue({
       result: { turn: { id: "shared-turn-2" } },
       nativeThreadId: "550e8400-e29b-41d4-a716-446655440000",
     });
@@ -217,6 +700,317 @@ describe("useThreadMessaging", () => {
         type: "hideThread",
         workspaceId: "ws-1",
         threadId: "550e8400-e29b-41d4-a716-446655440000",
+      }),
+    );
+  });
+
+  it("does not revive a canonically committed Shared V2 turn from its response", async () => {
+    const sharedThreadId = "shared:thread-committed-response";
+    const onSharedDurableTurnCommitted = vi.fn();
+    selectNextTarget("ws-1", sharedThreadId, {
+      engine: "claude",
+      providerProfileId: "provider-a",
+      modelCatalogEntryId: "settings-main",
+      providerProfileNameSnapshot: "Provider A",
+      providerProfileSource: "managed",
+      model: "claude-provider-model",
+      reasoning: { effort: "high" },
+    });
+    vi.mocked(sendSharedSessionTurnRouted).mockResolvedValueOnce({
+      result: { turn: { id: "runtime-turn-already-completed" } },
+      nativeThreadId: "claude:native-session-1",
+      runtimeTurnId: "runtime-turn-already-completed",
+      v2: {
+        attemptId: "attempt-committed",
+        logicalTurnId: "logical-turn-committed",
+        committed: true,
+        duplicate: false,
+      },
+    });
+    const { result, markProcessing, setActiveTurnId } =
+      makeThreadMessagingHook("claude", {
+        activeThreadId: sharedThreadId,
+        threadEngineById: { [sharedThreadId]: "claude" },
+        onSharedDurableTurnCommitted,
+      });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        sharedThreadId,
+        "finish without revival",
+      );
+    });
+
+    expect(onSharedDurableTurnCommitted).toHaveBeenCalledWith(
+      sharedThreadId,
+      "runtime-turn-already-completed",
+    );
+    expect(markProcessing).toHaveBeenCalledWith(sharedThreadId, false);
+    expect(setActiveTurnId).toHaveBeenCalledWith(sharedThreadId, null);
+    expect(
+      onSharedDurableTurnCommitted.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      markProcessing.mock.invocationCallOrder.find(
+        (_order, index) =>
+          markProcessing.mock.calls[index]?.[0] === sharedThreadId &&
+          markProcessing.mock.calls[index]?.[1] === false,
+      ) ?? Number.POSITIVE_INFINITY,
+    );
+    expect(setActiveTurnId).not.toHaveBeenCalledWith(
+      sharedThreadId,
+      "runtime-turn-already-completed",
+    );
+    expect(engineSendMessage).not.toHaveBeenCalled();
+    expect(sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("keeps Shared processing attached when only the terminal observer detached", async () => {
+    const sharedThreadId = "shared:thread-observer-detached";
+    const attemptId = "attempt-observer-detached";
+    selectNextTarget("ws-1", sharedThreadId, {
+      engine: "codex",
+      providerProfileId: "provider-a",
+      modelCatalogEntryId: "settings-gpt-5",
+      providerProfileNameSnapshot: "Provider A",
+      providerProfileSource: "managed",
+      model: "gpt-5",
+      reasoning: { effort: "high" },
+    });
+    setSharedSendActiveAttempt("ws-1", sharedThreadId, attemptId);
+    vi.mocked(sendSharedSessionTurnRouted).mockImplementationOnce((input) => {
+      expect(
+        consumeSharedSendAdmission(
+          input.workspaceId,
+          input.threadId,
+          input.sharedSendAdmissionRevision ?? -1,
+        ),
+      ).toBe(true);
+      return Promise.reject(
+        new SharedActiveAttemptObserverError(
+          attemptId,
+          new Error("frontend observer detached"),
+        ),
+      );
+    });
+    const {
+      result,
+      markProcessing,
+      setActiveTurnId,
+      pushThreadErrorMessage,
+      onDebug,
+    } =
+      makeThreadMessagingHook("codex", {
+        activeThreadId: sharedThreadId,
+        threadEngineById: { [sharedThreadId]: "codex" },
+      });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        sharedThreadId,
+        "keep running",
+      );
+    });
+
+    expect(markProcessing).toHaveBeenCalledWith(sharedThreadId, true);
+    expect(markProcessing).not.toHaveBeenCalledWith(sharedThreadId, false);
+    expect(setActiveTurnId).not.toHaveBeenCalledWith(sharedThreadId, null);
+    expect(getSharedSendActiveAttemptId("ws-1", sharedThreadId)).toBe(
+      attemptId,
+    );
+    expect(pushThreadErrorMessage).not.toHaveBeenCalled();
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "shared terminal observer detached",
+        payload: expect.objectContaining({ attemptId }),
+      }),
+    );
+  });
+
+  it("converges thread processing when a reattached Attempt reaches durable terminal", async () => {
+    const sharedThreadId = "shared:thread-reattached-terminal";
+    const onSharedDurableTurnCommitted = vi.fn();
+    const { markProcessing, setActiveTurnId } = makeThreadMessagingHook(
+      "codex",
+      {
+        activeThreadId: sharedThreadId,
+        threadEngineById: { [sharedThreadId]: "codex" },
+        onSharedDurableTurnCommitted,
+      },
+    );
+    dispatchSharedSendEvent("ws-1", sharedThreadId, { type: "send" });
+    dispatchSharedSendEvent("ws-1", sharedThreadId, {
+      type: "packagePrepared",
+    });
+    dispatchSharedSendEvent("ws-1", sharedThreadId, {
+      type: "ackAmbiguous",
+    });
+    vi.mocked(sharedSessionV2AwaitTurnTerminal).mockResolvedValueOnce({
+      status: "committed",
+      duplicate: false,
+      sequence: 17,
+      bindingKey: "codex:provider-a",
+      terminal: {
+        type: "run.settled",
+        outcome: "completed",
+        recoveryReason: null,
+      },
+    });
+
+    await act(async () => {
+      await reattachSharedSessionAttempt("ws-1", sharedThreadId, {
+        status: "active",
+        attemptId: "attempt-reattached-terminal",
+        bindingKey: "codex:provider-a",
+        nativeThreadId: "native-reattached-terminal",
+        runtimeTurnId: "runtime-reattached-terminal",
+        executionTargetSnapshot: {
+          engine: "codex",
+          providerProfileId: "provider-a",
+          modelCatalogEntryId: "settings-gpt-5",
+          model: "gpt-5",
+          reasoning: { effort: "high" },
+          providerProfileNameSnapshot: "Provider A",
+          providerProfileSource: "managed",
+          runtimeCapabilityFingerprint: null,
+        },
+      });
+    });
+
+    expect(onSharedDurableTurnCommitted).toHaveBeenCalledWith(
+      sharedThreadId,
+      "runtime-reattached-terminal",
+    );
+    expect(markProcessing).toHaveBeenCalledWith(sharedThreadId, false);
+    expect(setActiveTurnId).toHaveBeenCalledWith(sharedThreadId, null);
+    expect(getSharedSendState("ws-1", sharedThreadId).state).toBe("idle");
+  });
+
+  it("installs a stale observer terminal barrier without clearing a newer Attempt", async () => {
+    const sharedThreadId = "shared:thread-stale-reattachment";
+    const onSharedDurableTurnCommitted = vi.fn();
+    const { markProcessing, setActiveTurnId } = makeThreadMessagingHook(
+      "codex",
+      {
+        activeThreadId: sharedThreadId,
+        threadEngineById: { [sharedThreadId]: "codex" },
+        onSharedDurableTurnCommitted,
+      },
+    );
+    dispatchSharedSendEvent("ws-1", sharedThreadId, { type: "send" });
+    dispatchSharedSendEvent("ws-1", sharedThreadId, {
+      type: "packagePrepared",
+    });
+    dispatchSharedSendEvent("ws-1", sharedThreadId, {
+      type: "ackAmbiguous",
+    });
+    let resolveTerminal!: (
+      value: Awaited<ReturnType<typeof sharedSessionV2AwaitTurnTerminal>>,
+    ) => void;
+    vi.mocked(sharedSessionV2AwaitTurnTerminal).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveTerminal = resolve;
+      }),
+    );
+    const staleObserver = reattachSharedSessionAttempt(
+      "ws-1",
+      sharedThreadId,
+      {
+        status: "active",
+        attemptId: "attempt-stale",
+        bindingKey: "codex:provider-a",
+        nativeThreadId: "native-stale",
+        runtimeTurnId: "runtime-stale",
+        executionTargetSnapshot: {
+          engine: "codex",
+          providerProfileId: "provider-a",
+          modelCatalogEntryId: "settings-gpt-5",
+          model: "gpt-5",
+          reasoning: { effort: "high" },
+          providerProfileNameSnapshot: "Provider A",
+          providerProfileSource: "managed",
+          runtimeCapabilityFingerprint: null,
+        },
+      },
+    );
+    setSharedSendActiveAttempt(
+      "ws-1",
+      sharedThreadId,
+      "attempt-current",
+    );
+
+    await act(async () => {
+      resolveTerminal({
+        status: "committed",
+        duplicate: false,
+        sequence: 18,
+        bindingKey: "codex:provider-a",
+        terminal: {
+          type: "run.settled",
+          outcome: "completed",
+          recoveryReason: null,
+        },
+      });
+      await staleObserver;
+    });
+
+    expect(onSharedDurableTurnCommitted).toHaveBeenCalledWith(
+      sharedThreadId,
+      "runtime-stale",
+    );
+    expect(markProcessing).not.toHaveBeenCalledWith(sharedThreadId, false);
+    expect(setActiveTurnId).not.toHaveBeenCalledWith(sharedThreadId, null);
+    expect(getSharedSendActiveAttemptId("ws-1", sharedThreadId)).toBe(
+      "attempt-current",
+    );
+  });
+
+  it("records missing Runtime identity instead of fabricating a durable terminal barrier", async () => {
+    const sharedThreadId = "shared:thread-missing-runtime-id";
+    const onSharedDurableTurnCommitted = vi.fn();
+    selectNextTarget("ws-1", sharedThreadId, {
+      engine: "claude",
+      providerProfileId: "provider-a",
+      modelCatalogEntryId: "settings-main",
+      providerProfileNameSnapshot: "Provider A",
+      providerProfileSource: "managed",
+      model: "kimi-for-coding",
+      reasoning: null,
+    });
+    vi.mocked(sendSharedSessionTurnRouted).mockResolvedValueOnce({
+      result: { turn: { id: "nested-id-must-not-be-used" } },
+      nativeThreadId: "claude:native-session-2",
+      v2: {
+        attemptId: "attempt-missing-runtime",
+        logicalTurnId: "logical-missing-runtime",
+        committed: true,
+        duplicate: false,
+      },
+    });
+    const { result, onDebug } = makeThreadMessagingHook("claude", {
+      activeThreadId: sharedThreadId,
+      threadEngineById: { [sharedThreadId]: "claude" },
+      onSharedDurableTurnCommitted,
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        sharedThreadId,
+        "finish with malformed response",
+      );
+    });
+
+    expect(onSharedDurableTurnCommitted).not.toHaveBeenCalled();
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "shared-session/durable-terminal-runtime-id-missing",
+        payload: expect.objectContaining({
+          threadId: sharedThreadId,
+          attemptId: "attempt-missing-runtime",
+          logicalTurnId: "logical-missing-runtime",
+        }),
       }),
     );
   });
@@ -1040,6 +1834,67 @@ describe("useThreadMessaging", () => {
     expect(safeMessageActivity).toHaveBeenCalled();
   });
 
+  it("routes Shared Codex manual compaction through the logical Shared owner", async () => {
+    vi.mocked(compactThreadContext).mockResolvedValue({ status: "queued" });
+    const threadId = "shared:codex-session-1";
+    const {
+      result,
+      dispatch,
+      codexCompactionInFlightByThreadRef,
+    } = makeThreadMessagingHook("codex", {
+      activeThreadId: threadId,
+      ensuredThreadId: threadId,
+      threadEngineById: {
+        [threadId]: "codex",
+      },
+    });
+
+    await act(async () => {
+      await result.current.startCompact("/compact");
+    });
+
+    expect(compactThreadContext).toHaveBeenCalledWith("ws-1", threadId);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "markContextCompacting",
+      threadId,
+      isCompacting: true,
+      timestamp: expect.any(Number),
+      source: "manual",
+    });
+    expect(codexCompactionInFlightByThreadRef.current[threadId]).toBe(true);
+  });
+
+  it("routes Shared Claude manual compaction without requiring a claude-prefixed id", async () => {
+    vi.mocked(compactThreadContext).mockResolvedValue({
+      result: { turnId: "shared-compact-turn-1" },
+    });
+    const threadId = "shared:claude-session-1";
+    const { result, dispatch } = makeThreadMessagingHook("claude", {
+      activeThreadId: threadId,
+      ensuredThreadId: threadId,
+      threadEngineById: {
+        [threadId]: "claude",
+      },
+    });
+
+    await act(async () => {
+      await result.current.startCompact("/compact");
+    });
+
+    expect(compactThreadContext).toHaveBeenCalledWith("ws-1", threadId);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "markContextCompacting",
+      threadId,
+      isCompacting: true,
+      timestamp: expect.any(Number),
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "appendContextCompacted",
+      threadId,
+      turnId: "shared-compact-turn-1",
+    });
+  });
+
   it("does not send duplicate Codex compact RPCs while one is already in flight", async () => {
     const {
       result,
@@ -1188,7 +2043,7 @@ describe("useThreadMessaging", () => {
       await result.current.interruptTurn();
     });
 
-    expect(interruptTurn).toHaveBeenCalledWith("ws-1", "thread-1", "turn-1");
+    expect(interruptTurn).toHaveBeenCalledWith("ws-1", "thread-1", "turn-1", null);
     expect(engineInterrupt).toHaveBeenCalledWith("ws-1");
   });
 
@@ -1254,6 +2109,168 @@ describe("useThreadMessaging", () => {
       }),
     );
     expect(engineInterruptTurn).toHaveBeenCalledWith("ws-1", "turn-1", "claude");
+  });
+
+  it("routes a shared Claude interrupt to the active provider binding", async () => {
+    setSharedSendActiveAttempt("ws-1", "shared:thread-1", "attempt-claude");
+    const { result } = makeThreadMessagingHook("claude", {
+      activeThreadId: "shared:thread-1",
+      ensuredThreadId: "shared:thread-1",
+      activeTurnIdByThread: { "shared:thread-1": "turn-1" },
+      threadEngineById: { "shared:thread-1": "claude" },
+    });
+
+    await act(async () => {
+      await result.current.interruptTurn();
+    });
+
+    expect(sharedSessionV2InterruptTurn).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      "attempt-claude",
+    );
+    expect(engineInterruptTurn).not.toHaveBeenCalled();
+    expect(engineInterrupt).not.toHaveBeenCalled();
+    expect(interruptTurn).not.toHaveBeenCalled();
+  });
+
+  it("routes a shared Codex interrupt only through its durable attempt owner", async () => {
+    setSharedSendActiveAttempt("ws-1", "shared:thread-1", "attempt-codex");
+    const { result } = makeThreadMessagingHook("codex", {
+      activeThreadId: "shared:thread-1",
+      ensuredThreadId: "shared:thread-1",
+      activeTurnIdByThread: { "shared:thread-1": "ui-turn-stale" },
+      threadEngineById: { "shared:thread-1": "codex" },
+    });
+
+    await act(async () => {
+      await result.current.interruptTurn();
+    });
+
+    expect(sharedSessionV2InterruptTurn).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      "attempt-codex",
+    );
+    expect(interruptTurn).not.toHaveBeenCalled();
+    expect(engineInterrupt).not.toHaveBeenCalled();
+    expect(engineInterruptTurn).not.toHaveBeenCalled();
+  });
+
+  it("interrupts a durable Shared attempt even when the native reducer has no active turn", async () => {
+    setSharedSendActiveAttempt("ws-1", "shared:thread-1", "attempt-durable");
+    const { result, markProcessing, setActiveTurnId } =
+      makeThreadMessagingHook("claude", {
+        activeThreadId: "shared:thread-1",
+        ensuredThreadId: "shared:thread-1",
+        activeTurnIdByThread: {},
+        threadStatusById: {},
+        threadEngineById: { "shared:thread-1": "claude" },
+      });
+
+    await act(async () => {
+      await result.current.interruptTurn();
+    });
+
+    expect(sharedSessionV2InterruptTurn).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      "attempt-durable",
+    );
+    expect(markProcessing).toHaveBeenCalledWith("shared:thread-1", false);
+    expect(setActiveTurnId).toHaveBeenCalledWith("shared:thread-1", null);
+    expect(engineInterruptTurn).not.toHaveBeenCalled();
+    expect(engineInterrupt).not.toHaveBeenCalled();
+    expect(interruptTurn).not.toHaveBeenCalled();
+  });
+
+  it("converges a canonically committed Shared attempt without adding a stop notice", async () => {
+    setSharedSendActiveAttempt("ws-1", "shared:thread-1", "attempt-committed");
+    vi.mocked(sharedSessionV2InterruptTurn).mockResolvedValueOnce({
+      status: "terminal-committed",
+      attemptId: "attempt-committed",
+      sequence: 12,
+    });
+    const { result, dispatch, markProcessing, setActiveTurnId } =
+      makeThreadMessagingHook("claude", {
+        activeThreadId: "shared:thread-1",
+        ensuredThreadId: "shared:thread-1",
+        activeTurnIdByThread: { "shared:thread-1": "stale-ui-turn" },
+        threadEngineById: { "shared:thread-1": "claude" },
+      });
+
+    await act(async () => {
+      await result.current.interruptTurn();
+    });
+
+    expect(getSharedSendActiveAttemptId("ws-1", "shared:thread-1")).toBeNull();
+    expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe("idle");
+    expect(markProcessing).toHaveBeenCalledWith("shared:thread-1", false);
+    expect(setActiveTurnId).toHaveBeenCalledWith("shared:thread-1", null);
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "addAssistantMessage",
+        threadId: "shared:thread-1",
+      }),
+    );
+  });
+
+  it("clears an idle Shared V2 UI residue when the attempt owner is already released", async () => {
+    const { result, markProcessing, setActiveTurnId } = makeThreadMessagingHook("claude", {
+      activeThreadId: "shared:thread-1",
+      ensuredThreadId: "shared:thread-1",
+      activeTurnIdByThread: { "shared:thread-1": "ui-turn-1" },
+      threadStatusById: {
+        "shared:thread-1": {
+          isProcessing: true,
+          hasUnread: false,
+          isReviewing: false,
+          processingStartedAt: 1,
+          lastDurationMs: null,
+        },
+      },
+      threadEngineById: { "shared:thread-1": "claude" },
+    });
+
+    await act(async () => {
+      await result.current.interruptTurn();
+    });
+
+    expect(sharedSessionV2InterruptTurn).not.toHaveBeenCalled();
+    expect(engineInterruptTurn).not.toHaveBeenCalled();
+    expect(engineInterrupt).not.toHaveBeenCalled();
+    expect(interruptTurn).not.toHaveBeenCalled();
+    expect(markProcessing).toHaveBeenCalledWith("shared:thread-1", false);
+    expect(setActiveTurnId).toHaveBeenCalledWith("shared:thread-1", null);
+  });
+
+  it("fails closed when a non-idle Shared V2 interrupt has no attempt owner", async () => {
+    dispatchSharedSendEvent("ws-1", "shared:thread-1", { type: "send" });
+    dispatchSharedSendEvent("ws-1", "shared:thread-1", {
+      type: "packagePrepared",
+    });
+    dispatchSharedSendEvent("ws-1", "shared:thread-1", {
+      type: "runtimeAck",
+    });
+    const { result, markProcessing, setActiveTurnId } =
+      makeThreadMessagingHook("claude", {
+        activeThreadId: "shared:thread-1",
+        ensuredThreadId: "shared:thread-1",
+        activeTurnIdByThread: { "shared:thread-1": "ui-turn-1" },
+        threadEngineById: { "shared:thread-1": "claude" },
+      });
+
+    await act(async () => {
+      await result.current.interruptTurn();
+    });
+
+    expect(getSharedSendState("ws-1", "shared:thread-1").state).toBe("running");
+    expect(sharedSessionV2InterruptTurn).not.toHaveBeenCalled();
+    expect(engineInterruptTurn).not.toHaveBeenCalled();
+    expect(engineInterrupt).not.toHaveBeenCalled();
+    expect(interruptTurn).not.toHaveBeenCalled();
+    expect(markProcessing).not.toHaveBeenCalled();
+    expect(setActiveTurnId).not.toHaveBeenCalled();
   });
 
   it("interrupt routes opencode thread through engine interrupt only", async () => {

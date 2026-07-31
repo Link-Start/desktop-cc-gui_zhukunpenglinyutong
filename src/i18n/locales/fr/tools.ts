@@ -32,6 +32,8 @@ const tools = {
     "batchSearch": "Recherche par lot",
     "batchSearchMatch": "Recherche/Correspondance par lot",
     "batchEditFile": "Modification de fichiers par lot",
+    "fileEditSceneCount": "Modifications de fichiers ({{count}})",
+    "fileEditSceneToggle": "Modifications de fichiers, {{count}} fichiers, afficher ou masquer les détails",
     "bashGroupBatchRun": "Exécuter les commandes par lot",
     "bashGroupCompleted": "terminée",
     "bashGroupAllCompleted": "Toutes terminées",

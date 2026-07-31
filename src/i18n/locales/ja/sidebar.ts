@@ -54,7 +54,7 @@ const sidebar = {
     "clearSearch": "検索をクリア",
     "pinned": "ピン留め",
     "newAgent": "新しい Agent",
-    "newSharedSession": "Claude Code + Codex",
+    "newSharedSession": "Shared CLI",
     "newWorktreeAgent": "新しい Worktree Agent",
     "newCloneAgent": "新しいクローン Agent",
     "codexProviderChoiceTitle": "プロバイダーの選択",

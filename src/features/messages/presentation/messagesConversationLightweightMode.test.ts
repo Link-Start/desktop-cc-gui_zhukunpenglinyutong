@@ -10,7 +10,7 @@ import {
 } from "./messagesConversationLightweightMode";
 
 describe("messagesConversationLightweightMode", () => {
-  it("suggests lightweight mode for render-heavy timelines below oversized thresholds", () => {
+  it("suggests lightweight mode for render-heavy timelines", () => {
     const policy = resolveConversationLightweightPolicy({
       rowCount: 24,
       renderWeight: CONVERSATION_LIGHTWEIGHT_SUGGEST_RENDER_WEIGHT,
@@ -30,7 +30,7 @@ describe("messagesConversationLightweightMode", () => {
     expect(policy).toEqual({ suggested: true, oversized: false });
   });
 
-  it("marks severe histories as oversized by row count or render weight", () => {
+  it("marks oversized policy by row count or render weight", () => {
     expect(
       resolveConversationLightweightPolicy({
         rowCount: CONVERSATION_OVERSIZED_HISTORY_ROWS,
@@ -47,7 +47,7 @@ describe("messagesConversationLightweightMode", () => {
     ).toEqual({ suggested: true, oversized: true });
   });
 
-  it("keeps oversized histories lightweight until the user requests detail hydration", () => {
+  it("activates oversized policy until detail hydration is requested", () => {
     const policy = { suggested: true, oversized: true };
 
     expect(
@@ -66,7 +66,7 @@ describe("messagesConversationLightweightMode", () => {
     ).toEqual({ active: false, reason: "inactive" });
   });
 
-  it("honors manual lightweight mode even after detail hydration was requested", () => {
+  it("honors manual lightweight mode", () => {
     expect(
       resolveConversationLightweightModeState({
         policy: { suggested: false, oversized: false },

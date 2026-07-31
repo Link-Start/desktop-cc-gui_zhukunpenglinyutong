@@ -27,7 +27,12 @@ import {
   rebindSharedSessionNativeThread,
   resolvePendingSharedSessionBindingForEngine,
   resolveSharedSessionBindingByNativeThread,
+  resolveSharedSessionBindingFromRuntimeOwner,
+  resolveSharedRuntimeControlOwner,
 } from "../../shared-session/runtime/sharedSessionBridge";
+import { isSharedV2SendEnabled } from "../../shared-session/runtime/sharedV2SendFlag";
+import type { SharedSessionNativeBinding } from "../../shared-session/runtime/sharedSessionBridge";
+import { getActiveTurnTargetForAttempt } from "../../shared-session/target/targetStore";
 import { updateSharedSessionNativeBinding as updateSharedSessionNativeBindingService } from "../../shared-session/services/sharedSessions";
 import { noteThreadAppServerEventReceived } from "../../threads/utils/streamLatencyDiagnostics";
 import {
@@ -59,7 +64,9 @@ type AgentDelta = {
 type TurnErrorPayload = {
   message: string;
   willRetry: boolean;
+  suppressMessage?: boolean;
   engine?: ConversationEngine | null;
+  executionTargetSnapshot?: SharedSessionNativeBinding["executionTargetSnapshot"];
 };
 
 type TurnStalledPayload = {
@@ -110,6 +117,10 @@ export type AppServerEventHandlers = {
     workspaceId: string,
     threadId: string,
     turnId: string,
+  ) => void;
+  onSharedRuntimeTurnStarted?: (
+    threadId: string,
+    runtimeTurnId: string,
   ) => void;
   onTurnCompleted?: (
     workspaceId: string,
@@ -455,6 +466,18 @@ function extractTurnIdFromParams(params: Record<string, unknown>): string {
       turn.turn_id ??
       "",
   ).trim();
+}
+
+const PROVIDER_CONTINUATION_BOOTSTRAP_TURN_PREFIX =
+  "provider-continuation-";
+
+export function isProviderContinuationBootstrapEvent(
+  payload: AppServerEvent,
+): boolean {
+  const params = getAppServerEventParams(payload);
+  return extractTurnIdFromParams(params).startsWith(
+    PROVIDER_CONTINUATION_BOOTSTRAP_TURN_PREFIX,
+  );
 }
 
 function extractItemIdFromParams(params: Record<string, unknown>): string {
@@ -937,6 +960,14 @@ function hasThreadAgentSnapshotSeen(
   return Boolean(trackerRef.current[threadId]?.[itemId]);
 }
 
+function resolveLatestThreadAgentSnapshotItemId(
+  trackerRef: MutableRefObject<ThreadAgentSnapshotItemTracker>,
+  threadId: string,
+): string | null {
+  const itemIds = Object.keys(trackerRef.current[threadId] ?? {});
+  return itemIds[itemIds.length - 1] ?? null;
+}
+
 function emitReasoningSummaryDelta(
   handlers: AppServerEventHandlers,
   workspaceId: string,
@@ -1115,7 +1146,8 @@ function routeNormalizedRealtimeEvent({
   const itemId = event.item.id;
   const turnId = event.turnId ?? null;
   const shouldRouteDirectly =
-    event.engine === "codex" && Boolean(handlers.onNormalizedRealtimeEvent);
+    Boolean(handlers.onNormalizedRealtimeEvent) &&
+    (event.engine === "codex" || event.threadId.startsWith("shared:"));
   switch (event.operation) {
     case "itemStarted":
       if (
@@ -1211,6 +1243,11 @@ function routeNormalizedRealtimeEvent({
       ) {
         return true;
       }
+      markThreadAgentSnapshotSeen(
+        threadAgentSnapshotSeenRef,
+        threadId,
+        itemId,
+      );
       threadAgentDeltaSeenRef.current[threadId] = true;
       if (shouldRouteDirectly) {
         handlers.onNormalizedRealtimeEvent?.({
@@ -1386,6 +1423,7 @@ function tryRouteNormalizedRealtimeEvent({
   message,
   engineOverride,
   threadIdOverride,
+  sharedBinding,
   threadAgentDeltaSeenRef,
   threadAgentCompletedSeenRef,
   threadAgentSnapshotSeenRef,
@@ -1395,6 +1433,7 @@ function tryRouteNormalizedRealtimeEvent({
   message: Record<string, unknown>;
   engineOverride?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
   threadIdOverride?: string;
+  sharedBinding?: SharedSessionNativeBinding | null;
   threadAgentDeltaSeenRef: MutableRefObject<Record<string, true>>;
   threadAgentCompletedSeenRef: MutableRefObject<ThreadAgentCompletedItemTracker>;
   threadAgentSnapshotSeenRef: MutableRefObject<ThreadAgentSnapshotItemTracker>;
@@ -1429,11 +1468,26 @@ function tryRouteNormalizedRealtimeEvent({
   if (!normalized) {
     return false;
   }
-  if (shouldInjectThreadId) {
+  const isSharedOwnerProjection = effectiveThreadId.startsWith("shared:");
+  if (shouldInjectThreadId || isSharedOwnerProjection) {
+    const executionTargetSnapshot =
+      sharedBinding?.executionTargetSnapshot ??
+      (sharedBinding?.attemptId
+        ? getActiveTurnTargetForAttempt(
+            workspaceId,
+            effectiveThreadId,
+            sharedBinding.attemptId,
+          )
+        : null);
     normalized.threadId = effectiveThreadId;
     normalized.item = {
       ...normalized.item,
       engineSource: engine,
+      ...(executionTargetSnapshot &&
+      normalized.item.kind === "message" &&
+      normalized.item.role === "assistant"
+        ? { executionTargetSnapshot }
+        : {}),
     };
     if (normalized.rawItem) {
       normalized.rawItem = {
@@ -1476,6 +1530,11 @@ export function dispatchAppServerEvent(
     threadAgentCompletedSeenRef,
     threadAgentSnapshotSeenRef,
   } = options;
+  // Provider continuation bootstrap 是 control plane，不是用户 Turn。
+  // 在统一入口隔离，避免它进入 processing/reasoning/message/title 链路。
+  if (isProviderContinuationBootstrapEvent(payload)) {
+    return;
+  }
   handlers.onAppServerEvent?.(payload);
 
   const { workspace_id, message } = payload;
@@ -1505,9 +1564,11 @@ export function dispatchAppServerEvent(
       ? resolveCodexOwnerThreadId(handlers, workspace_id, method, params)
       : "";
   const realtimeThreadId = rawThreadId || fallbackGeneratedImageThreadId;
-  let sharedBridge = realtimeThreadId
-    ? resolveSharedSessionBindingByNativeThread(workspace_id, realtimeThreadId)
-    : null;
+  let sharedBridge =
+    resolveSharedSessionBindingFromRuntimeOwner(workspace_id, params) ??
+    (realtimeThreadId
+      ? resolveSharedSessionBindingByNativeThread(workspace_id, realtimeThreadId)
+      : null);
   const requestIdValue = message.id ?? params.requestId ?? params.request_id;
   const requestId =
     typeof requestIdValue === "number" || typeof requestIdValue === "string"
@@ -1519,16 +1580,41 @@ export function dispatchAppServerEvent(
     (method.includes("requestApproval") || method === "approval/request") &&
     hasRequestId
   ) {
+    const sharedControlOwner = resolveSharedRuntimeControlOwner(
+      workspace_id,
+      params,
+    );
+    const hasSharedControlClaim =
+      params.sharedOwner !== undefined ||
+      rawThreadId.startsWith("shared:") ||
+      Boolean(sharedBridge);
+    if (hasSharedControlClaim && !sharedControlOwner) {
+      return;
+    }
     handlers.onApprovalRequest?.({
       workspace_id,
       request_id: requestId,
       method,
       params,
+      ...(sharedControlOwner
+        ? { shared_runtime_owner: sharedControlOwner }
+        : {}),
     });
     return;
   }
 
   if (method === "collaboration/modeBlocked") {
+    const sharedControlOwner = resolveSharedRuntimeControlOwner(
+      workspace_id,
+      params,
+    );
+    const hasSharedControlClaim =
+      params.sharedOwner !== undefined ||
+      rawThreadId.startsWith("shared:") ||
+      Boolean(sharedBridge);
+    if (hasSharedControlClaim && !sharedControlOwner) {
+      return;
+    }
     const requestIdValue = params.requestId ?? params.request_id;
     const requestId =
       typeof requestIdValue === "number" || typeof requestIdValue === "string"
@@ -1541,6 +1627,9 @@ export function dispatchAppServerEvent(
         : String(reasonCodeValue);
     handlers.onModeBlocked?.({
       workspace_id,
+      ...(sharedControlOwner
+        ? { shared_runtime_owner: sharedControlOwner }
+        : {}),
       params: {
         thread_id: String(params.threadId ?? params.thread_id ?? ""),
         blocked_method: String(
@@ -1611,6 +1700,17 @@ export function dispatchAppServerEvent(
     if (requestId === null) {
       return;
     }
+    const sharedControlOwner = resolveSharedRuntimeControlOwner(
+      workspace_id,
+      params,
+    );
+    const hasSharedControlClaim =
+      params.sharedOwner !== undefined ||
+      rawThreadId.startsWith("shared:") ||
+      Boolean(sharedBridge);
+    if (hasSharedControlClaim && !sharedControlOwner) {
+      return;
+    }
     const resolvedThreadId = resolveCodexOwnerThreadId(
       handlers,
       workspace_id,
@@ -1618,8 +1718,7 @@ export function dispatchAppServerEvent(
       params,
     );
     const effectiveThreadId =
-      resolveSharedSessionBindingByNativeThread(workspace_id, resolvedThreadId)
-        ?.sharedThreadId ?? resolvedThreadId;
+      sharedControlOwner?.sharedThreadId ?? resolvedThreadId;
     const completed = Boolean(params.completed);
     const turn = (params.turn as Record<string, unknown> | undefined) ?? {};
     const questionsRaw = Array.isArray(params.questions)
@@ -1660,6 +1759,9 @@ export function dispatchAppServerEvent(
     handlers.onRequestUserInput?.({
       workspace_id,
       request_id: requestId,
+      ...(sharedControlOwner
+        ? { shared_runtime_owner: sharedControlOwner }
+        : {}),
       params: {
         thread_id: effectiveThreadId,
         turn_id: String(params.turnId ?? params.turn_id ?? turn.id ?? ""),
@@ -1674,11 +1776,14 @@ export function dispatchAppServerEvent(
   }
 
   if (
-    (useNormalizedRealtimeAdapters || shouldForceNormalizedRealtimeRoute) &&
+    (useNormalizedRealtimeAdapters ||
+      shouldForceNormalizedRealtimeRoute ||
+      Boolean(sharedBridge?.executionTargetSnapshot)) &&
     tryRouteNormalizedRealtimeEvent({
       handlers,
       workspaceId: workspace_id,
       message,
+      sharedBinding: sharedBridge,
       ...(sharedBridge
         ? {
             engineOverride: sharedBridge.engine,
@@ -1733,7 +1838,18 @@ export function dispatchAppServerEvent(
       delete threadAgentDeltaSeenRef.current[threadId];
       delete threadAgentCompletedSeenRef.current[threadId];
       delete threadAgentSnapshotSeenRef.current[threadId];
-      handlers.onTurnStarted?.(workspace_id, threadId, turnId);
+      // Shared V2 caller 已在 attempt admission 时建立 processing lifecycle。
+      // Rust 投影的 delayed turn/started 只提供 Runtime evidence；若再进入通用
+      // Native handler，会在 canonical commit 后复活 activeTurnId / Stop。
+      const isOwnedSharedV2Projection =
+        Boolean(sharedBridge) && params.sharedOwner !== undefined;
+      if (isOwnedSharedV2Projection) {
+        // Shared projection 不进入 generic Native lifecycle，但 exact Runtime identity
+        // 仍需更新 realtime ledger，解除上一 Turn 的 thread-level terminal fallback。
+        handlers.onSharedRuntimeTurnStarted?.(threadId, turnId);
+      } else {
+        handlers.onTurnStarted?.(workspace_id, threadId, turnId);
+      }
     }
     return;
   }
@@ -1777,13 +1893,19 @@ export function dispatchAppServerEvent(
           });
           if (rebound) {
             sharedBridge = rebound;
-            void updateSharedSessionNativeBindingService(
-              workspace_id,
-              rebound.sharedThreadId,
-              rebound.engine,
-              pendingBinding.nativeThreadId,
-              threadId,
-            ).catch(() => {});
+            // V2 Binding 的唯一 durable authority 是 Rust SQLite。这里的
+            // frontend bridge 只负责 event projection；仅显式回滚 V0 时写
+            // legacy Shared meta binding。
+            if (!isSharedV2SendEnabled()) {
+              void updateSharedSessionNativeBindingService(
+                workspace_id,
+                rebound.sharedThreadId,
+                rebound.engine,
+                pendingBinding.nativeThreadId,
+                threadId,
+                rebound.providerProfileId ?? null,
+              ).catch(() => {});
+            }
           }
         } else {
           sharedBridge = pendingBinding;
@@ -1807,13 +1929,16 @@ export function dispatchAppServerEvent(
             newNativeThreadId: finalizedNativeThreadId,
           });
           if (rebound) {
-            void updateSharedSessionNativeBindingService(
-              workspace_id,
-              rebound.sharedThreadId,
-              rebound.engine,
-              threadId,
-              finalizedNativeThreadId,
-            ).catch(() => {});
+            if (!isSharedV2SendEnabled()) {
+              void updateSharedSessionNativeBindingService(
+                workspace_id,
+                rebound.sharedThreadId,
+                rebound.engine,
+                threadId,
+                finalizedNativeThreadId,
+                rebound.providerProfileId ?? null,
+              ).catch(() => {});
+            }
           }
         }
       }
@@ -1877,6 +2002,9 @@ export function dispatchAppServerEvent(
       message: messageText,
       willRetry: false,
       engine: "codex",
+      ...(sharedBridge?.executionTargetSnapshot
+        ? { executionTargetSnapshot: sharedBridge.executionTargetSnapshot }
+        : {}),
     });
     return;
   }
@@ -2009,6 +2137,9 @@ export function dispatchAppServerEvent(
         message: normalizedMessage,
         willRetry: false,
         engine: resolveEventEngine(reboundThreadId, reboundBinding?.engine),
+        ...(reboundBinding?.executionTargetSnapshot
+          ? { executionTargetSnapshot: reboundBinding.executionTargetSnapshot }
+          : {}),
       });
     });
     return;
@@ -2028,11 +2159,20 @@ export function dispatchAppServerEvent(
         : typeof errorValue === "object" && errorValue
           ? String((errorValue as Record<string, unknown>).message ?? "")
           : "";
+    const suppressMessage =
+      Boolean(sharedBridge) &&
+      String(
+        params.sharedRecoveryReason ?? params.shared_recovery_reason ?? "",
+      ) === "native-session-not-found";
     if (threadId) {
       handlers.onTurnError?.(workspace_id, threadId, turnId, {
         message: messageText,
         willRetry,
+        ...(suppressMessage ? { suppressMessage: true } : {}),
         engine: resolveEventEngine(threadId, sharedBridge?.engine),
+        ...(sharedBridge?.executionTargetSnapshot
+          ? { executionTargetSnapshot: sharedBridge.executionTargetSnapshot }
+          : {}),
       });
     }
     return;
@@ -2106,11 +2246,20 @@ export function dispatchAppServerEvent(
     const error = (params.error as Record<string, unknown> | undefined) ?? {};
     const messageText = String(error.message ?? "");
     const willRetry = Boolean(params.willRetry ?? params.will_retry);
+    const suppressMessage =
+      Boolean(sharedBridge) &&
+      String(
+        params.sharedRecoveryReason ?? params.shared_recovery_reason ?? "",
+      ) === "native-session-not-found";
     if (threadId) {
       handlers.onTurnError?.(workspace_id, threadId, turnId, {
         message: messageText,
         willRetry,
+        ...(suppressMessage ? { suppressMessage: true } : {}),
         engine: resolveEventEngine(threadId, sharedBridge?.engine),
+        ...(sharedBridge?.executionTargetSnapshot
+          ? { executionTargetSnapshot: sharedBridge.executionTargetSnapshot }
+          : {}),
       });
     }
     return;
@@ -2149,8 +2298,52 @@ export function dispatchAppServerEvent(
       ]
         .map((item) => item.trim())
         .find((item) => item.length > 0);
-      if (!seenDelta && !seenCompleted && textFromResult) {
-        const fallbackItemId = turnId || `assistant-final-${Date.now()}`;
+      const shouldSettleTerminalFinal =
+        Boolean(textFromResult) &&
+        !seenCompleted &&
+        (!seenDelta || Boolean(sharedBridge));
+      const emitSharedTerminalProjection = (
+        itemId: string,
+        text: string,
+      ): boolean => {
+        if (
+          !sharedBridge?.executionTargetSnapshot ||
+          !handlers.onNormalizedRealtimeEvent
+        ) {
+          return false;
+        }
+        handlers.onNormalizedRealtimeEvent({
+          engine: sharedBridge.engine,
+          workspaceId: workspace_id,
+          threadId,
+          eventId: `shared-terminal:${turnId || itemId}`,
+          itemKind: "message",
+          timestampMs: Date.now(),
+          item: {
+            id: itemId,
+            kind: "message",
+            role: "assistant",
+            text,
+            isFinal: true,
+            engineSource: sharedBridge.engine,
+            executionTargetSnapshot: sharedBridge.executionTargetSnapshot,
+          },
+          operation: "completeAgentMessage",
+          sourceMethod: method,
+          turnId: turnId || null,
+        });
+        return true;
+      };
+      if (shouldSettleTerminalFinal && textFromResult) {
+        const fallbackItemId =
+          (sharedBridge
+            ? resolveLatestThreadAgentSnapshotItemId(
+                threadAgentSnapshotSeenRef,
+                threadId,
+              )
+            : null) ||
+          turnId ||
+          `assistant-final-${Date.now()}`;
         if (
           markThreadAgentCompletionSeen(
             threadAgentCompletedSeenRef,
@@ -2159,17 +2352,44 @@ export function dispatchAppServerEvent(
             textFromResult,
           )
         ) {
-          handlers.onAgentMessageCompleted?.({
-            workspaceId: workspace_id,
+          if (!emitSharedTerminalProjection(fallbackItemId, textFromResult)) {
+            handlers.onAgentMessageCompleted?.({
+              workspaceId: workspace_id,
+              threadId,
+              itemId: fallbackItemId,
+              text: textFromResult,
+              ...(turnId ? { turnId } : {}),
+            });
+          }
+        }
+      }
+      if (
+        !textFromResult &&
+        !seenCompleted &&
+        !seenDelta &&
+        sharedBridge?.executionTargetSnapshot
+      ) {
+        const provenanceAnchorId =
+          resolveLatestThreadAgentSnapshotItemId(
+            threadAgentSnapshotSeenRef,
             threadId,
-            itemId: fallbackItemId,
-            text: textFromResult,
-            ...(turnId ? { turnId } : {}),
-          });
+          ) ||
+          turnId ||
+          `assistant-provenance-${Date.now()}`;
+        if (
+          markThreadAgentCompletionSeen(
+            threadAgentCompletedSeenRef,
+            threadId,
+            provenanceAnchorId,
+            "",
+          )
+        ) {
+          emitSharedTerminalProjection(provenanceAnchorId, "");
         }
       }
       delete threadAgentDeltaSeenRef.current[threadId];
       delete threadAgentCompletedSeenRef.current[threadId];
+      delete threadAgentSnapshotSeenRef.current[threadId];
       handlers.onTurnCompleted?.(workspace_id, threadId, turnId);
 
       // Try to extract usage data from turn/completed (Codex may include it here)
@@ -2597,6 +2817,11 @@ export function dispatchAppServerEvent(
         hasAgentMessageSnapshotText(contextualItem)
       ) {
         threadAgentDeltaSeenRef.current[threadId] = true;
+        markThreadAgentSnapshotSeen(
+          threadAgentSnapshotSeenRef,
+          threadId,
+          String(contextualItem.id ?? ""),
+        );
       }
       handlers.onItemStarted?.(workspace_id, threadId, contextualItem);
     }
@@ -2638,6 +2863,11 @@ export function dispatchAppServerEvent(
         hasAgentMessageSnapshotText(contextualItem)
       ) {
         threadAgentDeltaSeenRef.current[threadId] = true;
+        markThreadAgentSnapshotSeen(
+          threadAgentSnapshotSeenRef,
+          threadId,
+          String(contextualItem.id ?? ""),
+        );
       }
       handlers.onItemUpdated?.(workspace_id, threadId, contextualItem);
     }

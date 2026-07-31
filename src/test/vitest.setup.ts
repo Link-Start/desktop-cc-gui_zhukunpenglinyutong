@@ -344,6 +344,7 @@ vi.mock("react-i18next", () => ({
         "settings.ungrouped": "Ungrouped",
         "settings.sidebarProjectManagement": "Project Management",
         "settings.sidebarBasic": "Basic Settings",
+        "settings.sidebarShortcuts": "Shortcuts",
         "settings.sidebarMcpSkills": "Skills",
         "settings.sidebarAgentPromptManagement": "Agents / Prompts",
         "settings.sidebarRuntimeEnvironment": "Runtime Environment",

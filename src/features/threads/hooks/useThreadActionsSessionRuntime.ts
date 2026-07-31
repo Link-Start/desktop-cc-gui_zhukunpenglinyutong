@@ -1033,6 +1033,19 @@ export function useThreadActionsSessionRuntime({
       const rewindMode = normalizeRewindMode(options?.mode);
       const shouldRestoreFiles = shouldRestoreWorkspaceFiles(rewindMode);
       const shouldRewindSession = shouldRewindMessages(rewindMode);
+      const sourceProviderProfileId =
+        threadsByWorkspace[workspaceId]
+          ?.find((thread) => thread.id === canonicalThreadId)
+          ?.providerProfileId?.trim() || CODEX_DISK_PROVIDER_PROFILE_ID;
+      if (
+        shouldRewindSession &&
+        providerProfileId &&
+        providerProfileId !== sourceProviderProfileId
+      ) {
+        throw new Error(
+          "Cross-provider Codex fork was replaced by “使用其他 Provider 继续”.",
+        );
+      }
       const rewindLockKey = `${workspaceId}:${canonicalThreadId}`;
       if (claudeRewindInFlightByThreadRef.current[rewindLockKey]) {
         return null;
@@ -1305,6 +1318,7 @@ export function useThreadActionsSessionRuntime({
       onDebug,
       renameThreadTitleMapping,
       resumeThreadForWorkspace,
+      threadsByWorkspace,
       workspacePathsByIdRef,
     ],
   );

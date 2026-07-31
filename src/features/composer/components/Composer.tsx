@@ -31,6 +31,25 @@ import type {
   ReviewPromptStep,
 } from "../../threads/hooks/useReviewPrompt";
 import type { EngineDisplayInfo } from "../../engine/hooks/useEngineController";
+import {
+  hydrateSharedTargetState,
+  useSharedTargetState,
+} from "../../shared-session/target/targetStore";
+import {
+  freezeTurnSnapshot,
+  isResolvedExecutionTarget,
+  resolveBackendAuthoritativeExecutionTarget,
+  type ExecutionTarget,
+} from "../../shared-session/target/types";
+import { persistSharedSessionSelectedTarget } from "../../shared-session/services/sharedSessions";
+import { dispatchSharedSendEvent } from "../../shared-session/runtime/sharedSendStateStore";
+import { requestProviderContinuationDialog } from "../../threads/services/providerContinuationRequests";
+import {
+  CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
+  CLAUDE_LOCAL_PROVIDER_PROFILE_NAME,
+  CODEX_DISK_PROVIDER_PROFILE_ID,
+  CODEX_DISK_PROVIDER_PROFILE_NAME,
+} from "../../threads/constants/codexProviderProfiles";
 import { computeDictationInsertion } from "../../../utils/dictation";
 import { useComposerAutocompleteState } from "../hooks/useComposerAutocompleteState";
 import { useComposerDraft } from "../hooks/composerDraftStore";
@@ -99,6 +118,12 @@ import {
 import { useStreamActivityPhase } from "../../threads/hooks/useStreamActivityPhase";
 import { exportRewindFiles } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
+import {
+  engineSupportsImageInput,
+  formatEngineImageInputUnsupportedMessage,
+  getEngineImageInputLabel,
+  sanitizeImageAttachmentPaths,
+} from "../../engine/utils/engineImageInput";
 import { getManualMemoryInjectionMode } from "../../project-memory/utils/manualInjectionMode";
 import { estimateClaudeContextWindow } from "../../models/claudeContextWindow";
 import type { RewindMode } from "../../threads/utils/rewindMode";
@@ -178,6 +203,8 @@ type ComposerProps = {
   onStop: () => void;
   canStop: boolean;
   disabled?: boolean;
+  /** 禁止提交但保留文本编辑；Shared non-idle 用于维持 Turn 线性顺序。 */
+  submitDisabled?: boolean;
   isProcessing: boolean;
   steerEnabled: boolean;
   collaborationModes: { id: string; label: string }[];
@@ -185,6 +212,12 @@ type ComposerProps = {
   selectedCollaborationModeId: string | null;
   onSelectCollaborationMode: (id: string | null) => void;
   isSharedSession?: boolean;
+  /** New Home 仅复用双栏 picker，不启用 Shared Session durable semantics。 */
+  createSessionTargetPicker?: boolean;
+  /** New Home 标题只接收 creation target 的 Engine projection；完整 Target 仍由 Composer 持有。 */
+  onCreationTargetEngineChange?: (engine: EngineType | null) => void;
+  /** Wave 4 / B.6：Shared Send 状态机非 idle 时锁定四级 Picker（§14.5.3）。 */
+  sharedTargetPickerLocked?: boolean;
   // Engine props
   engines?: EngineDisplayInfo[];
   selectedEngine?: EngineType;
@@ -208,6 +241,7 @@ type ComposerProps = {
   onOpenAgentSettings?: () => void;
   onOpenPromptSettings?: () => void;
   onOpenModelSettings?: (providerId?: string) => void;
+  onOpenCliSettings?: () => void;
   onRefreshModelConfig?: (providerId?: string) => Promise<void> | void;
   isModelConfigRefreshing?: boolean;
   onForkQuickStart?: () => void;
@@ -455,6 +489,7 @@ function ComposerImpl({
   onStop,
   canStop,
   disabled = false,
+  submitDisabled = false,
   isProcessing,
   steerEnabled: _steerEnabled,
   collaborationModes: _collaborationModes,
@@ -462,6 +497,9 @@ function ComposerImpl({
   selectedCollaborationModeId: _selectedCollaborationModeId,
   onSelectCollaborationMode: _onSelectCollaborationMode,
   isSharedSession = false,
+  createSessionTargetPicker = false,
+  onCreationTargetEngineChange,
+  sharedTargetPickerLocked = false,
   engines,
   selectedEngine,
   onSelectEngine,
@@ -483,6 +521,7 @@ function ComposerImpl({
   onOpenAgentSettings,
   onOpenPromptSettings,
   onOpenModelSettings,
+  onOpenCliSettings,
   onRefreshModelConfig,
   isModelConfigRefreshing,
   onForkQuickStart,
@@ -628,6 +667,249 @@ function ComposerImpl({
     selectedEngine === "gemini" ||
     selectedEngine === "grok" ||
     selectedEngine === "kimi";
+  const sharedTargetState = useSharedTargetState(
+    activeWorkspaceId ?? "",
+    activeThreadId ?? "",
+  );
+  const selectedSharedTarget = sharedTargetState.selectedNextTarget;
+  const [selectedCreationTarget, setSelectedCreationTarget] =
+    useState<ExecutionTarget | null>(null);
+  const defaultCreationTarget = useMemo<ExecutionTarget | null>(() => {
+    if (
+      !createSessionTargetPicker ||
+      (selectedEngine !== "claude" && selectedEngine !== "codex") ||
+      !selectedModelId?.trim()
+    ) {
+      return null;
+    }
+    const selectedModel =
+      models.find((candidate) => candidate.id === selectedModelId) ?? null;
+    const runtimeModel = selectedModel?.model?.trim() || null;
+    if (!selectedModel || !runtimeModel) {
+      return null;
+    }
+    const rawProviderProfileId = providerProfileId?.trim() || null;
+    const localProviderProfileId =
+      selectedEngine === "claude"
+        ? CLAUDE_LOCAL_PROVIDER_PROFILE_ID
+        : CODEX_DISK_PROVIDER_PROFILE_ID;
+    const normalizedProviderProfileId =
+      rawProviderProfileId === localProviderProfileId
+        ? null
+        : rawProviderProfileId;
+    return {
+      engine: selectedEngine,
+      providerProfileId: normalizedProviderProfileId,
+      modelCatalogEntryId: selectedModel.id,
+      model: runtimeModel,
+      reasoning: selectedEffort ? { effort: selectedEffort } : null,
+      providerProfileNameSnapshot:
+        normalizedProviderProfileId ??
+        (selectedEngine === "claude"
+          ? CLAUDE_LOCAL_PROVIDER_PROFILE_NAME
+          : CODEX_DISK_PROVIDER_PROFILE_NAME),
+      providerProfileSource: normalizedProviderProfileId ? "managed" : "disk",
+    };
+  }, [
+    createSessionTargetPicker,
+    models,
+    providerProfileId,
+    selectedEffort,
+    selectedEngine,
+    selectedModelId,
+  ]);
+  const effectiveCreationTarget =
+    selectedCreationTarget ?? defaultCreationTarget;
+  useEffect(() => {
+    if (!createSessionTargetPicker) {
+      return;
+    }
+    onCreationTargetEngineChange?.(
+      effectiveCreationTarget?.engine ?? selectedEngine ?? null,
+    );
+  }, [
+    createSessionTargetPicker,
+    effectiveCreationTarget?.engine,
+    onCreationTargetEngineChange,
+    selectedEngine,
+  ]);
+  useEffect(() => {
+    if (!createSessionTargetPicker) {
+      return;
+    }
+    return () => {
+      onCreationTargetEngineChange?.(null);
+    };
+  }, [createSessionTargetPicker, onCreationTargetEngineChange]);
+  const selectedAtomicTarget = isSharedSession
+    ? selectedSharedTarget
+    : createSessionTargetPicker
+      ? effectiveCreationTarget
+      : null;
+  const imageAttachEngine = useMemo((): EngineType | null => {
+    if (
+      isSharedSession &&
+      isResolvedExecutionTarget(selectedSharedTarget)
+    ) {
+      return selectedSharedTarget.engine;
+    }
+    if (
+      createSessionTargetPicker &&
+      isResolvedExecutionTarget(effectiveCreationTarget)
+    ) {
+      return effectiveCreationTarget.engine;
+    }
+    return selectedEngine ?? null;
+  }, [
+    createSessionTargetPicker,
+    effectiveCreationTarget,
+    isSharedSession,
+    selectedEngine,
+    selectedSharedTarget,
+  ]);
+  const imageInputSupported = engineSupportsImageInput(imageAttachEngine);
+  const notifyImageInputUnsupported = useCallback(() => {
+    if (!imageAttachEngine) {
+      return;
+    }
+    pushErrorToast({
+      title: t("composer.imageInputUnsupportedTitle", {
+        defaultValue: "Image not supported",
+      }),
+      message: t("composer.imageAttachUnsupported", {
+        engine: getEngineImageInputLabel(imageAttachEngine),
+        defaultValue:
+          "{{engine}} does not support image attachments in this release",
+      }),
+      durationMs: 3600,
+    });
+  }, [imageAttachEngine, t]);
+  const handleAttachImagesGuarded = useCallback(
+    (paths: string[]) => {
+      if (!imageInputSupported) {
+        notifyImageInputUnsupported();
+        return;
+      }
+      onAttachImages?.(paths);
+    },
+    [imageInputSupported, notifyImageInputUnsupported, onAttachImages],
+  );
+  const handlePickImagesGuarded = useCallback(() => {
+    if (!imageInputSupported) {
+      notifyImageInputUnsupported();
+      return;
+    }
+    onPickImages?.();
+  }, [imageInputSupported, notifyImageInputUnsupported, onPickImages]);
+  const sharedTargetResolved =
+    !isSharedSession || isResolvedExecutionTarget(selectedSharedTarget);
+  const effectiveSubmitDisabled = submitDisabled || !sharedTargetResolved;
+  const sharedTargetPersistenceByThreadRef = useRef(
+    new Map<string, Promise<void>>(),
+  );
+  const handleSharedTargetChange = useCallback(
+    (target: ExecutionTarget) => {
+      if (
+        !activeWorkspaceId ||
+        !activeThreadId ||
+        sharedTargetPickerLocked
+      ) {
+        return;
+      }
+      if (!isResolvedExecutionTarget(target)) {
+        // CLI / Provider 菜单导航属于 Picker 内部过渡态，不是一次持久化失败。
+        // 只有完整 Model row 形成 ResolvedExecutionTarget 后才允许跨过该边界。
+        return;
+      }
+      const workspaceId = activeWorkspaceId;
+      const threadId = activeThreadId;
+      const persistenceKey = `${workspaceId}::${threadId}`;
+      const previousPersistence =
+        sharedTargetPersistenceByThreadRef.current.get(persistenceKey) ??
+        Promise.resolve();
+      const currentPersistence = previousPersistence
+        .catch(() => undefined)
+        .then(async () => {
+          const response = await persistSharedSessionSelectedTarget(
+            workspaceId,
+            threadId,
+            target,
+          );
+          const persistedTarget =
+            resolveBackendAuthoritativeExecutionTarget(response, target);
+          hydrateSharedTargetState(workspaceId, threadId, persistedTarget);
+          dispatchSharedSendEvent(workspaceId, threadId, {
+            type: "targetRepaired",
+          });
+        })
+        .catch((error) => {
+          pushErrorToast({
+            title: t("sharedSend.selectionPersistFailedTitle"),
+            message: t("sharedSend.selectionPersistFailedMessage", {
+              reason: error instanceof Error ? error.message : String(error),
+            }),
+          });
+        });
+      sharedTargetPersistenceByThreadRef.current.set(
+        persistenceKey,
+        currentPersistence,
+      );
+      void currentPersistence.finally(() => {
+        if (
+          sharedTargetPersistenceByThreadRef.current.get(persistenceKey) ===
+          currentPersistence
+        ) {
+          sharedTargetPersistenceByThreadRef.current.delete(persistenceKey);
+        }
+      });
+    },
+    [
+      activeThreadId,
+      activeWorkspaceId,
+      sharedTargetPickerLocked,
+      t,
+    ],
+  );
+  const handleNativeProviderTargetChange = useCallback(
+    (target: ExecutionTarget) => {
+      if (
+        isSharedSession ||
+        !activeWorkspaceId ||
+        !activeThreadId ||
+        (target.engine !== "claude" && target.engine !== "codex") ||
+        !target.providerProfileId?.trim()
+      ) {
+        return;
+      }
+      const snapshot = freezeTurnSnapshot(target);
+      requestProviderContinuationDialog({
+        workspaceId: activeWorkspaceId,
+        sourceSessionId: activeThreadId,
+        destination: {
+          engine: target.engine,
+          providerProfileId: target.providerProfileId,
+          modelCatalogEntryId: target.modelCatalogEntryId ?? null,
+          model: target.model ?? null,
+          reasoningEffort: target.reasoning?.effort ?? null,
+          providerProfileNameSnapshot:
+            target.providerProfileNameSnapshot ?? null,
+          providerProfileSource: snapshot.providerProfileSource ?? null,
+          runtimeCapabilityFingerprint:
+            target.engine === "claude" ? "echo-checksum" : null,
+        },
+      });
+    },
+    [activeThreadId, activeWorkspaceId, isSharedSession],
+  );
+  const handleCreationTargetChange = useCallback(
+    (target: ExecutionTarget) => {
+      if (!createSessionTargetPicker || !isResolvedExecutionTarget(target)) {
+        return;
+      }
+      setSelectedCreationTarget(target);
+    },
+    [createSessionTargetPicker],
+  );
   // 草稿值直接订阅模块级 store(而非经 app-shell 根 prop 灌入):按键写 store 时
   // 只有 Composer 自身重渲染,不再把整个 app-shell 拖下水。
   const draftText = useComposerDraft(activeThreadId);
@@ -1317,7 +1599,7 @@ function ComposerImpl({
 
   const handleCodexQuickCommand = useCallback(
     (command: string) => {
-      if (disabled) {
+      if (disabled || effectiveSubmitDisabled) {
         return;
       }
       const normalized = command.trim().toLowerCase();
@@ -1334,11 +1616,17 @@ function ComposerImpl({
       }
       void onSend(command, []);
     },
-    [disabled, isReviewQuickActionEngine, onSend, selectedEngine],
+    [
+      disabled,
+      effectiveSubmitDisabled,
+      isReviewQuickActionEngine,
+      onSend,
+      selectedEngine,
+    ],
   );
 
   const handleForkQuickStart = useCallback(() => {
-    if (disabled) {
+    if (disabled || effectiveSubmitDisabled) {
       return;
     }
     if (onForkQuickStart) {
@@ -1349,11 +1637,17 @@ function ComposerImpl({
       return;
     }
     void onSend("/fork", []);
-  }, [disabled, onForkQuickStart, onSend, selectedEngine]);
+  }, [
+    disabled,
+    effectiveSubmitDisabled,
+    onForkQuickStart,
+    onSend,
+    selectedEngine,
+  ]);
 
   const handleSend = useCallback(
     (submittedText?: string, submittedImages?: string[]) => {
-      if (disabled) {
+      if (disabled || effectiveSubmitDisabled) {
         return;
       }
       if (opencodeDisconnected) {
@@ -1366,9 +1660,10 @@ function ComposerImpl({
       }
       const trimmed = (submittedText ?? text).trim();
       // Merge images from Composer state (file picker) and ChatInputBox (paste/drop)
-      const mergedImages = Array.from(
-        new Set([...attachedImages, ...(submittedImages ?? [])]),
-      );
+      const mergedImages = sanitizeImageAttachmentPaths([
+        ...attachedImages,
+        ...(submittedImages ?? []),
+      ]);
       const hasIntentCanvasAttachments = intentCanvasAttachments.length > 0;
       if (
         !trimmed &&
@@ -1376,6 +1671,29 @@ function ComposerImpl({
         !selectedOpenCodeDirectCommand &&
         !hasIntentCanvasAttachments
       ) {
+        return;
+      }
+      // Composer-side capability gate: keep draft when engine cannot accept images.
+      // Current engines are all image-capable; retained for future unsupported engines.
+      if (
+        mergedImages.length > 0 &&
+        imageAttachEngine &&
+        !engineSupportsImageInput(imageAttachEngine)
+      ) {
+        pushErrorToast({
+          title: t("composer.imageInputUnsupportedTitle", {
+            defaultValue: "Image not supported",
+          }),
+          message: formatEngineImageInputUnsupportedMessage(
+            imageAttachEngine,
+            // i18next TFunction is wider than our helper; keep runtime options intact.
+            t as (key: string, options?: Record<string, unknown>) => string,
+          ),
+          durationMs: 4200,
+        });
+        // ChatInputBox clears before onSubmit; restore Composer-owned draft + images.
+        setComposerText(submittedText ?? text);
+        onAttachImages?.(mergedImages);
         return;
       }
       const browserNavigationUrl =
@@ -1436,12 +1754,30 @@ function ComposerImpl({
       const shouldReferenceMemory = memoryReferenceMode !== "off";
       const browserContextAttachment = browserContext.attachment;
       const hasBrowserContextAttachment = Boolean(browserContextAttachment);
-      const sendOptions =
+      const createSessionTarget =
+        createSessionTargetPicker &&
+        isResolvedExecutionTarget(effectiveCreationTarget)
+          ? {
+              engine: effectiveCreationTarget.engine,
+              providerProfileId:
+                effectiveCreationTarget.providerProfileId?.trim() || null,
+              providerProfileName:
+                effectiveCreationTarget.providerProfileNameSnapshot,
+              providerProfileSource:
+                effectiveCreationTarget.providerProfileSource,
+              modelCatalogEntryId:
+                effectiveCreationTarget.modelCatalogEntryId,
+              model: effectiveCreationTarget.model,
+              effort: effectiveCreationTarget.reasoning?.effort ?? null,
+            }
+          : null;
+      const sendOptions: MessageSendOptions | undefined =
         skillInvocations.length > 0 ||
         selectedMemoryIds.length > 0 ||
         selectedNoteCardIds.length > 0 ||
         shouldReferenceMemory ||
-        hasBrowserContextAttachment
+        hasBrowserContextAttachment ||
+        createSessionTarget !== null
           ? {
               ...(skillInvocations.length > 0 ? { skillInvocations } : {}),
               ...(shouldReferenceMemory ? { memoryReferenceEnabled: true } : {}),
@@ -1450,6 +1786,7 @@ function ComposerImpl({
                 : {}),
               ...(selectedNoteCardIds.length > 0 ? { selectedNoteCardIds } : {}),
               ...(browserContextAttachment ? { browserContextAttachment } : {}),
+              ...(createSessionTarget ? { createSessionTarget } : {}),
             }
           : undefined;
       const sendResult = onSend(
@@ -1509,7 +1846,11 @@ function ComposerImpl({
       attachedImages,
       activeWorkspaceId,
       browserContext,
+      createSessionTargetPicker,
+      effectiveCreationTarget,
       disabled,
+      effectiveSubmitDisabled,
+      imageAttachEngine,
       intentCanvasAttachments.length,
       applyActiveFileReference,
       commands,
@@ -1519,6 +1860,7 @@ function ComposerImpl({
       selectedSkills,
       selectedInlineFileReferences,
       selectedCodeAnnotations,
+      onAttachImages,
       onClearCodeAnnotations,
       selectedManualMemories,
       selectedNoteCards,
@@ -1528,6 +1870,7 @@ function ComposerImpl({
       selectedCommonsNames,
       selectedSkillNames,
       setSelectedManualMemories,
+      t,
       text,
       carryOverContextChipKeys,
       carryOverManualMemoryIds,
@@ -2340,30 +2683,104 @@ function ComposerImpl({
               ref={chatInputRef}
               text={text}
               disabled={disabled}
+              submitDisabled={effectiveSubmitDisabled}
               isProcessing={isProcessing}
               streamActivityPhase={resolvedComposerStreamActivityPhase}
               canStop={canStop}
               onSend={handleSend}
               onStop={onStop}
               onTextChange={handleTextChangeWithHistory}
-              selectedModelId={selectedModelId}
-              selectedEngine={selectedEngine}
+              selectedModelId={
+                selectedAtomicTarget
+                  ? selectedAtomicTarget.modelCatalogEntryId ??
+                    selectedAtomicTarget.model ??
+                    ""
+                  : selectedModelId
+              }
+              selectedEngine={
+                selectedAtomicTarget?.engine ?? selectedEngine
+              }
               isSharedSession={isSharedSession}
+              providerTargetPickerMode={
+                isSharedSession
+                  ? "shared"
+                  : createSessionTargetPicker
+                    ? "create-session"
+                    : "native"
+              }
+              threadId={activeThreadId}
               engines={engines}
-              onSelectEngine={onSelectEngine}
+              onSelectEngine={
+                isSharedSession ||
+                createSessionTargetPicker ||
+                sharedTargetPickerLocked
+                  ? undefined
+                  : onSelectEngine
+              }
               models={models}
               providerModelCatalogs={providerModelCatalogs}
-              providerProfileId={providerProfileId}
-              onSelectModel={onSelectModel}
+              providerProfileId={
+                selectedAtomicTarget
+                  ? selectedAtomicTarget.providerProfileId ?? null
+                  : providerProfileId
+              }
+              executionTarget={selectedAtomicTarget}
+              onExecutionTargetChange={
+                isSharedSession && !sharedTargetPickerLocked
+                  ? handleSharedTargetChange
+                  : createSessionTargetPicker
+                    ? handleCreationTargetChange
+                  : undefined
+              }
+              onNativeProviderTargetChange={
+                !isSharedSession && !createSessionTargetPicker
+                  ? handleNativeProviderTargetChange
+                  : undefined
+              }
+              onSelectModel={
+                isSharedSession ||
+                createSessionTargetPicker ||
+                sharedTargetPickerLocked
+                  ? undefined
+                  : onSelectModel
+              }
               reasoningOptions={reasoningOptions}
-              selectedEffort={selectedEffort}
-              onSelectEffort={onSelectEffort}
+              selectedEffort={
+                selectedAtomicTarget
+                  ? selectedAtomicTarget.reasoning?.effort ?? null
+                  : selectedEffort
+              }
+              onSelectEffort={
+                sharedTargetPickerLocked
+                  ? undefined
+                  : isSharedSession &&
+                      isResolvedExecutionTarget(selectedSharedTarget)
+                    ? (effort) =>
+                        handleSharedTargetChange({
+                          ...selectedSharedTarget,
+                          reasoning: effort ? { effort } : null,
+                        })
+                    : createSessionTargetPicker &&
+                        isResolvedExecutionTarget(effectiveCreationTarget)
+                      ? (effort) =>
+                          setSelectedCreationTarget({
+                            ...effectiveCreationTarget,
+                            reasoning: effort ? { effort } : null,
+                          })
+                    : onSelectEffort
+              }
               reasoningSupported={reasoningSupported}
               onResolvedAlwaysThinkingChange={onResolvedAlwaysThinkingChange}
               attachments={attachedImages}
               hasContextAttachment={intentCanvasAttachments.length > 0}
-              onAddAttachment={onPickImages}
-              onAttachImages={onAttachImages}
+              onAddAttachment={
+                onPickImages || !imageInputSupported
+                  ? handlePickImagesGuarded
+                  : undefined
+              }
+              onAttachImages={
+                onAttachImages ? handleAttachImagesGuarded : undefined
+              }
               onRemoveAttachment={onRemoveImage}
               textareaHeight={textareaHeight}
               onHeightChange={onTextareaHeightChange}
@@ -2412,6 +2829,7 @@ function ComposerImpl({
               onOpenAgentSettings={onOpenAgentSettings}
               onOpenPromptSettings={onOpenPromptSettings}
               onOpenModelSettings={onOpenModelSettings}
+              onOpenCliSettings={onOpenCliSettings}
               onOpenFileReference={onOpenDiffPath}
               onRefreshModelConfig={onRefreshModelConfig}
               isModelConfigRefreshing={isModelConfigRefreshing}

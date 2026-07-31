@@ -14,47 +14,39 @@
   align-self: stretch;
 }
 
-.settings-header {
-  display: flex;
-  align-items: center;
-  height: var(--main-topbar-height,44px);
-  justify-content: flex-start;
-  padding: 0 24px 0 calc(128px + var(--titlebar-inset-left, 0px));
-  border-bottom: 1px solid var(--border-muted);
-  background: var(--surface-topbar, var(--card));
-  flex-shrink: 0;
+/* Page head lives inside the content column (no top header bar): the global
+ * drag-strip covers macOS, and the head itself is a drag region for Windows.
+ * The head mirrors the scroll viewport's structure — full-width box with the
+ * same horizontal padding, plus a centered inner column — so the title aligns
+ * exactly with .settings-section below (centering the fixed-width box in the
+ * wrap while the section centers in the narrower viewport content box would
+ * drift the title right by (pad-x - pad-right)/2 + pad-x). */
+.settings-page-head {
+  flex: 0 0 auto;
+  padding: 44px var(--settings-content-pad-right) 18px
+    var(--settings-content-pad-x);
+  user-select: none;
 }
 
-.settings-header-copy {
-  display: flex;
-  align-items: baseline;
-  min-width: 0;
-  gap: 18px;
+.settings-page-head-inner {
+  width: min(100%, var(--settings-content-fixed-width));
+  margin-inline: auto;
+}
+
+.settings-page-title {
+  margin: 0;
+  font-size: 27px;
+  font-weight: 680;
+  line-height: 1.22;
+  letter-spacing: -0.02em;
   color: var(--text-strong);
 }
 
-.settings-header-title {
-  margin: 0;
-  min-width: 0;
-  flex: 0 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 16px;
-  font-weight: 650;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
-}
-
-.settings-header-description {
-  margin: 0;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.settings-page-description {
+  margin: 7px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
   color: var(--text-subtle);
-  font-size: 12px;
-  line-height: 1.35;
 }
 
 /* Legacy overlay styles (kept for reference, no longer used) */
@@ -123,7 +115,7 @@
   flex: 1;
   height: 100%;
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
+  grid-template-columns: 200px minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
 }
@@ -131,12 +123,45 @@
 .settings-sidebar {
   height: 100%;
   min-height: 0;
-  padding: 12px 10px;
+  padding: 0 12px 12px;
   border-right: 1px solid var(--border-muted);
   background: var(--desktop-sidebar-background, var(--surface-sidebar));
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
+}
+
+/* Light themes use a near-white settings sidebar (#f9f9f9); dark themes keep
+ * the theme-provided desktop sidebar background. */
+:root[data-theme="light"] .settings-sidebar {
+  background: #f9f9f9;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .settings-sidebar {
+    background: #f9f9f9;
+  }
+}
+
+/* Top spacer: keeps the nav clear of the macOS traffic lights and the global
+ * 44px drag-strip, and doubles as the window drag surface on Windows (the
+ * global drag-strip is click-through there). */
+.settings-sidebar-drag {
+  flex: 0 0 auto;
+  height: 44px;
+}
+
+.settings-content-wrap {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-messages, var(--background));
+}
+
+.settings-content-wrap > .settings-content {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .settings-nav {
@@ -150,7 +175,7 @@
   font-weight: 400;
   color: var(--text-muted);
   padding: 8px 12px;
-  border-radius: 4px;
+  border-radius: 8px;
   background: transparent;
   border: none;
   line-height: 1.15;
@@ -158,24 +183,22 @@
 }
 
 .settings-nav svg {
-  width: 18px;
-  height: 18px;
-  stroke-width: 1.9;
+  width: 17px;
+  height: 17px;
+  stroke-width: 1.7;
   flex-shrink: 0;
 }
 
 .settings-nav .codicon {
-  width: 18px;
-  font-size: 18px;
+  width: 17px;
+  font-size: 17px;
   line-height: 1;
   flex-shrink: 0;
 }
 
 .settings-nav-return {
-  margin-top: 20px;
-  margin-bottom: 6px;
+  margin-bottom: 14px;
   margin-left: -4px;
-  border-radius: 10px;
   color: color-mix(in srgb, var(--text-muted) 92%, var(--text-strong) 8%);
   font-weight: 400;
   font-size: 13px;
@@ -187,13 +210,13 @@
 }
 
 .settings-nav.active {
-  background: color-mix(in srgb, var(--surface-card) 64%, transparent);
+  background: var(--surface-control);
   color: var(--text-strong);
-  font-weight: 400;
+  font-weight: 500;
 }
 
-.settings-nav:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--surface-card) 40%, transparent);
+.settings-nav:hover:not(:disabled):not(.active) {
+  background: color-mix(in srgb, var(--surface-control) 55%, transparent);
 }
 
 .settings-nav-return:hover {
@@ -683,11 +706,6 @@
 .settings-input--range {
   width: 160px;
   accent-color: var(--border-accent);
-}
-
-.settings-input--shortcut {
-  font-family: "SF Mono", "Fira Mono", "Menlo", monospace;
-  letter-spacing: 0.02em;
 }
 
 

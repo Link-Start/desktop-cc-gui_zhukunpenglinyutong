@@ -4,24 +4,26 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   addClaudeProvider,
   addCodexProvider,
-  addKimiProvider,
   listCcSwitchProviders,
+  listCcSwitchProvidersFromPath,
+  updateClaudeProvider,
+  updateCodexProvider,
 } from "../../../services/tauri";
 import type { CcSwitchProvider } from "../../../services/tauri";
 import {
   buildClaudeProviderFromCcSwitch,
   buildCodexProviderFromCcSwitch,
-  buildKimiProviderFromCcSwitch,
   extractCodexTomlBaseUrl,
-  normalizeDedupKey,
   useCcSwitchImport,
 } from "./useCcSwitchImport";
 
 vi.mock("../../../services/tauri", () => ({
   listCcSwitchProviders: vi.fn(),
+  listCcSwitchProvidersFromPath: vi.fn(),
   addClaudeProvider: vi.fn(),
   addCodexProvider: vi.fn(),
-  addKimiProvider: vi.fn(),
+  updateClaudeProvider: vi.fn(),
+  updateCodexProvider: vi.fn(),
 }));
 
 function ccSwitchItem(
@@ -46,18 +48,6 @@ function ccSwitchItem(
   };
 }
 
-describe("normalizeDedupKey", () => {
-  it("normalizes case, whitespace and trailing slashes", () => {
-    expect(normalizeDedupKey(" DeepSeek ", "https://a.com/")).toBe(
-      normalizeDedupKey("deepseek", "https://A.com"),
-    );
-  });
-
-  it("treats missing baseUrl as empty", () => {
-    expect(normalizeDedupKey("a", null)).toBe(normalizeDedupKey("a", ""));
-  });
-});
-
 describe("extractCodexTomlBaseUrl", () => {
   it("extracts first base_url from toml text", () => {
     const toml = 'model_provider = "mimo"\n[model_providers.mimo]\nbase_url = "https://ai.17nas.com/v1"\n';
@@ -71,13 +61,13 @@ describe("extractCodexTomlBaseUrl", () => {
 });
 
 describe("provider builders", () => {
-  it("maps claude provider with cc-switch source", () => {
+  it("maps claude provider with cc-switch source and preserved id", () => {
     const built = buildClaudeProviderFromCcSwitch(ccSwitchItem("p1"));
+    expect(built.id).toBe("p1");
     expect(built.name).toBe("Provider p1");
     expect(built.source).toBe("cc-switch");
     expect(built.category).toBe("aggregator");
     expect(built.settingsConfig).toEqual(ccSwitchItem("p1").settingsConfig);
-    expect(built.id).toBeTruthy();
   });
 
   it("drops unknown category", () => {
@@ -87,7 +77,7 @@ describe("provider builders", () => {
     expect(built.category).toBeUndefined();
   });
 
-  it("maps codex provider to configToml and authJson", () => {
+  it("maps codex provider to configToml and authJson with preserved id", () => {
     const item = ccSwitchItem("c1", {
       settingsConfig: {
         auth: { OPENAI_API_KEY: "sk-codex" },
@@ -95,15 +85,10 @@ describe("provider builders", () => {
       },
     });
     const built = buildCodexProviderFromCcSwitch(item);
+    expect(built.id).toBe("c1");
+    expect(built.source).toBe("cc-switch");
     expect(built.configToml).toBe('base_url = "https://x/v1"');
     expect(JSON.parse(built.authJson)).toEqual({ OPENAI_API_KEY: "sk-codex" });
-  });
-
-  it("maps kimi provider from anthropic env", () => {
-    const built = buildKimiProviderFromCcSwitch(ccSwitchItem("k1"));
-    expect(built.baseUrl).toBe("https://api.example.com/k1");
-    expect(built.apiKey).toBe("sk-k1");
-    expect(built.model).toBe("model-k1");
   });
 });
 
@@ -112,17 +97,18 @@ describe("useCcSwitchImport", () => {
     vi.resetAllMocks();
     vi.mocked(addClaudeProvider).mockResolvedValue(undefined);
     vi.mocked(addCodexProvider).mockResolvedValue(undefined);
-    vi.mocked(addKimiProvider).mockResolvedValue(undefined);
+    vi.mocked(updateClaudeProvider).mockResolvedValue(undefined);
+    vi.mocked(updateCodexProvider).mockResolvedValue(undefined);
   });
 
   it("does not load while closed", () => {
     renderHook(() =>
-      useCcSwitchImport({ target: "claude", existingProviders: [], isOpen: false }),
+      useCcSwitchImport({ target: "claude", existingProviderIds: [], isOpen: false }),
     );
     expect(listCcSwitchProviders).not.toHaveBeenCalled();
   });
 
-  it("marks existing providers as imported via name + baseUrl", async () => {
+  it("marks items as update when the id already exists, new otherwise", async () => {
     vi.mocked(listCcSwitchProviders).mockResolvedValue({
       available: true,
       providers: [ccSwitchItem("a"), ccSwitchItem("b")],
@@ -130,17 +116,30 @@ describe("useCcSwitchImport", () => {
     const { result } = renderHook(() =>
       useCcSwitchImport({
         target: "claude",
-        existingProviders: [
-          { name: "Provider a", baseUrl: "https://api.example.com/a/" },
-        ],
+        existingProviderIds: ["a"],
         isOpen: true,
       }),
     );
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.items.find((item) => item.id === "a")?.imported).toBe(true);
-    expect(result.current.items.find((item) => item.id === "b")?.imported).toBe(false);
+    expect(result.current.items.find((item) => item.id === "a")?.status).toBe("update");
+    expect(result.current.items.find((item) => item.id === "b")?.status).toBe("new");
     expect(listCcSwitchProviders).toHaveBeenCalledWith("claude");
+  });
+
+  it("selects all items by default after loading", async () => {
+    vi.mocked(listCcSwitchProviders).mockResolvedValue({
+      available: true,
+      providers: [ccSwitchItem("a"), ccSwitchItem("b")],
+    });
+    const { result } = renderHook(() =>
+      useCcSwitchImport({ target: "claude", existingProviderIds: [], isOpen: true }),
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect([...result.current.selectedIds].sort()).toEqual(["a", "b"]);
+
+    act(() => result.current.toggleAll());
+    expect(result.current.selectedIds.size).toBe(0);
   });
 
   it("uses codex appType for codex target", async () => {
@@ -149,14 +148,36 @@ describe("useCcSwitchImport", () => {
       providers: [],
     });
     renderHook(() =>
-      useCcSwitchImport({ target: "codex", existingProviders: [], isOpen: true }),
+      useCcSwitchImport({ target: "codex", existingProviderIds: [], isOpen: true }),
     );
     await waitFor(() =>
       expect(listCcSwitchProviders).toHaveBeenCalledWith("codex"),
     );
   });
 
-  it("toggleAll only selects non-imported items", async () => {
+  it("loads from a picked file when sourcePath is provided", async () => {
+    vi.mocked(listCcSwitchProvidersFromPath).mockResolvedValue({
+      available: true,
+      providers: [ccSwitchItem("f1")],
+    });
+    const { result } = renderHook(() =>
+      useCcSwitchImport({
+        target: "claude",
+        existingProviderIds: [],
+        isOpen: true,
+        sourcePath: "/tmp/cc-switch.db",
+      }),
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(listCcSwitchProvidersFromPath).toHaveBeenCalledWith(
+      "/tmp/cc-switch.db",
+      "claude",
+    );
+    expect(listCcSwitchProviders).not.toHaveBeenCalled();
+    expect(result.current.items).toHaveLength(1);
+  });
+
+  it("adds new claude items and updates existing ones by id", async () => {
     vi.mocked(listCcSwitchProviders).mockResolvedValue({
       available: true,
       providers: [ccSwitchItem("a"), ccSwitchItem("b")],
@@ -164,43 +185,64 @@ describe("useCcSwitchImport", () => {
     const { result } = renderHook(() =>
       useCcSwitchImport({
         target: "claude",
-        existingProviders: [{ name: "Provider a", baseUrl: "https://api.example.com/a" }],
+        existingProviderIds: ["a"],
         isOpen: true,
       }),
     );
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    act(() => result.current.toggleAll());
-    expect([...result.current.selectedIds]).toEqual(["b"]);
-
-    act(() => result.current.toggleAll());
-    expect(result.current.selectedIds.size).toBe(0);
-  });
-
-  it("imports selected claude items and marks them imported", async () => {
-    vi.mocked(listCcSwitchProviders).mockResolvedValue({
-      available: true,
-      providers: [ccSwitchItem("a"), ccSwitchItem("b")],
-    });
-    const { result } = renderHook(() =>
-      useCcSwitchImport({ target: "claude", existingProviders: [], isOpen: true }),
-    );
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    act(() => result.current.toggleItem("a"));
     let summary: Awaited<ReturnType<typeof result.current.importSelected>>;
     await act(async () => {
       summary = await result.current.importSelected();
     });
 
-    expect(summary!.importedCount).toBe(1);
+    expect(summary!.addedCount).toBe(1);
+    expect(summary!.updatedCount).toBe(1);
     expect(summary!.failures).toEqual([]);
-    expect(addClaudeProvider).toHaveBeenCalledTimes(1);
-    expect(addClaudeProvider).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "Provider a", source: "cc-switch" }),
+    expect(updateClaudeProvider).toHaveBeenCalledWith(
+      "a",
+      expect.objectContaining({ id: "a", name: "Provider a", source: "cc-switch" }),
     );
-    expect(result.current.items.find((item) => item.id === "a")?.imported).toBe(true);
+    expect(addClaudeProvider).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "b", name: "Provider b", source: "cc-switch" }),
+    );
     expect(result.current.selectedIds.size).toBe(0);
+  });
+
+  it("updates codex providers by id with configToml payload", async () => {
+    vi.mocked(listCcSwitchProviders).mockResolvedValue({
+      available: true,
+      providers: [
+        ccSwitchItem("c1", {
+          settingsConfig: {
+            auth: { OPENAI_API_KEY: "sk-codex" },
+            config: 'base_url = "https://x/v1"',
+          },
+        }),
+      ],
+    });
+    const { result } = renderHook(() =>
+      useCcSwitchImport({
+        target: "codex",
+        existingProviderIds: ["c1"],
+        isOpen: true,
+      }),
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.importSelected();
+    });
+
+    expect(updateCodexProvider).toHaveBeenCalledWith(
+      "c1",
+      expect.objectContaining({
+        id: "c1",
+        source: "cc-switch",
+        configToml: 'base_url = "https://x/v1"',
+      }),
+    );
+    expect(addCodexProvider).not.toHaveBeenCalled();
   });
 
   it("collects failures without aborting remaining imports", async () => {
@@ -208,27 +250,24 @@ describe("useCcSwitchImport", () => {
       available: true,
       providers: [ccSwitchItem("a"), ccSwitchItem("b")],
     });
-    vi.mocked(addKimiProvider)
+    vi.mocked(addClaudeProvider)
       .mockRejectedValueOnce(new Error("disk full"))
       .mockResolvedValueOnce(undefined);
     const { result } = renderHook(() =>
-      useCcSwitchImport({ target: "kimi", existingProviders: [], isOpen: true }),
+      useCcSwitchImport({ target: "claude", existingProviderIds: [], isOpen: true }),
     );
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    act(() => result.current.toggleAll());
     let summary: Awaited<ReturnType<typeof result.current.importSelected>>;
     await act(async () => {
       summary = await result.current.importSelected();
     });
 
-    expect(summary!.importedCount).toBe(1);
+    expect(summary!.addedCount).toBe(1);
     expect(summary!.failures).toEqual([
       { name: "Provider a", message: "disk full" },
     ]);
-    expect(addKimiProvider).toHaveBeenCalledTimes(2);
-    expect(result.current.items.find((item) => item.id === "b")?.imported).toBe(true);
-    expect(result.current.items.find((item) => item.id === "a")?.imported).toBe(false);
+    expect(addClaudeProvider).toHaveBeenCalledTimes(2);
   });
 
   it("handles unavailable source without throwing", async () => {
@@ -237,7 +276,7 @@ describe("useCcSwitchImport", () => {
       providers: [],
     });
     const { result } = renderHook(() =>
-      useCcSwitchImport({ target: "claude", existingProviders: [], isOpen: true }),
+      useCcSwitchImport({ target: "claude", existingProviderIds: [], isOpen: true }),
     );
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.available).toBe(false);

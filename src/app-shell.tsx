@@ -297,7 +297,7 @@ export function AppShell() {
     t,
   });
 
-  const handleOpenModelSettings = useAppShellModelSettingsAction(openSettings);
+  const handleOpenModelSettings = useAppShellModelSettingsAction();
 
   const {
     globalSearchFilesByWorkspace, isSearchPaletteOpen, searchContentFilters,
@@ -772,7 +772,6 @@ export function AppShell() {
     startLsp,
     startShare,
     startSharedSessionForWorkspace,
-    updateSharedSessionEngineSelection,
     updateThreadParent,
     resolveCanonicalThreadId,
     reviewPrompt,
@@ -1160,9 +1159,13 @@ export function AppShell() {
     activeWorkspace,
     isProcessing,
     isReviewing,
+    isContextCompacting: activeThreadId
+      ? (threadStatusById[activeThreadId]?.isContextCompacting ?? false)
+      : false,
     hasPendingUserInput,
     steerEnabled: appSettings.experimentalSteerEnabled,
     activeEngine,
+    isSharedSession: activeThreadSummary?.threadKind === "shared",
     resolveCanonicalThreadId,
     connectWorkspace,
     startThreadForWorkspace,
@@ -1588,7 +1591,6 @@ export function AppShell() {
     threadsByWorkspace,
     tokenUsageByThread,
     toggleCompletionEmailIntent,
-    updateSharedSessionEngineSelection,
   });
   const runtimeActions = defineAppShellRuntimeActions({
     handleToggleRuntimeConsole,
@@ -2227,7 +2229,6 @@ export function AppShell() {
       updateCloneCopyName,
       updateCustomInstructions,
       updatePrompt,
-      updateSharedSessionEngineSelection,
       updateWorkspaceCodexBin,
       updateWorkspaceSettings,
       updateWorktreeBaseRef,

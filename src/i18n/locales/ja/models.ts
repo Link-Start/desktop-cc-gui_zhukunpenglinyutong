@@ -5,11 +5,49 @@
 const models = {
   "models": {
     "selectModel": "モデルを選択",
+    "engineHeader": "{{name}} エンジン",
     "addModel": "モデルを追加",
+
+    "openCliSettings": "CLI 設定",
+    "switchChannel": "チャネルを切り替え",
+    "selectChannel": "チャネルを選択",
     "refreshConfig": "設定を更新",
     "refreshingConfig": "更新中...",
+    "reloadConfig": "設定を再読み込み",
+    "reloadingConfig": "設定を再読み込み中...",
+    "discoverModels": "CLI からモデルを検出",
+    "discoveringModels": "モデルを検出中...",
     "refreshConfigFailed": "更新に失敗しました: {{message}}",
-    "claude": {},
+        "claude": {
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · Most powerful · Mythos-class"
+      },
+      "opus5": {
+        "label": "Opus 5",
+        "description": "Opus 5 · Latest Opus upgrade"
+      },
+      "opus48": {
+        "label": "Opus 4.8",
+        "description": "Opus 4.8 · Previous Opus generation"
+      },
+      "sonnet5": {
+        "label": "Sonnet 5",
+        "description": "Sonnet 5 · Upgraded Sonnet model"
+      },
+      "sonnet47": {
+        "label": "Sonnet 4.7",
+        "description": "Sonnet 4.7 · Default recommended model"
+      },
+      "sonnet46": {
+        "label": "Sonnet 4.6",
+        "description": "Sonnet 4.6 · Default recommended model"
+      },
+      "haiku45": {
+        "label": "Haiku 4.5",
+        "description": "Haiku · Fastest for quick answers"
+      }
+    },
     "codex": {
       "gpt56sol": {
         "label": "gpt-5.6-sol",
@@ -26,10 +64,6 @@ const models = {
       "gpt55": {
         "label": "gpt-5.5",
         "description": "複雑なコーディング、研究、実務向けのフロンティアモデル。"
-      },
-      "gpt54": {
-        "label": "gpt-5.4",
-        "description": "日常のコーディングに強力なモデル。"
       }
     }
   }

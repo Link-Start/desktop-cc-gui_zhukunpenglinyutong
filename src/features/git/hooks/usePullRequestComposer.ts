@@ -38,7 +38,7 @@ type UsePullRequestComposerOptions = {
     text: string,
     images?: string[],
     options?: { model?: string | null; effort?: string | null } & MessageSendOptions,
-  ) => Promise<void>;
+  ) => Promise<unknown>;
   clearActiveImages: () => void;
   handleSend: (
     text: string,

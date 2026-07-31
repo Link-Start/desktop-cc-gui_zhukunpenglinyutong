@@ -23,6 +23,7 @@ export {
 export type { TtCliStatus, TtInstallResult, TtServerStatus } from "../types";
 export {
   cancelCodexLogin,
+  discoverCodexModels,
   generateRunMetadata,
   getAccountInfo,
   getAccountRateLimits,
@@ -148,12 +149,19 @@ export type {
   WorkspaceSessionFolderMutation,
   WorkspaceSessionAssignmentResponse,
   AutoSessionMetadata,
+  NativeHistorySourceInput,
+  ProviderContinuationTargetInput,
+  NativeProviderContinuationInput,
+  NativeProviderContinuationResponse,
 } from "./tauri/sessionManagement";
 export {
   assignWorkspaceSessionFolders,
   assignWorkspaceSessionFolder,
   archiveWorkspaceSessions,
   createWorkspaceSessionFolder,
+  createNativeProviderContinuation,
+  prepareNativeProviderContinuation,
+  discardPreparedNativeProviderContinuation,
   deleteWorkspaceSessionFolder,
   deleteWorkspaceSessions,
   getWorkspaceSessionProjectionSummary,
@@ -374,7 +382,9 @@ export {
   getKimiProviders,
   getOpenCodeProviders,
   listCcSwitchProviders,
+  listCcSwitchProvidersFromPath,
   reorderClaudeProviders,
+  reorderCodexProviders,
   saveGeminiVendorSettings,
   saveClaudeSettingsJson,
   setClaudeAlwaysThinkingEnabled,

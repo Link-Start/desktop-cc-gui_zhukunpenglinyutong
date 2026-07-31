@@ -170,13 +170,16 @@
   color: var(--text-muted);
 }
 
+/* Match engine glyph tone with the adjacent model label (and the model
+   picker menu). EngineIcon uses currentColor — do not paint these with
+   --button-primary blue, or Codex/Grok look "selected/accent" vs the menu. */
 .composer-readiness-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 18px;
   height: 18px;
-  color: var(--button-primary);
+  color: var(--text-primary);
   flex: 0 0 auto;
 }
 

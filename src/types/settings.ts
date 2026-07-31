@@ -86,8 +86,8 @@ export type AppSettings = {
   codexBin: string | null;
   codexArgs: string | null;
   terminalShellPath: string | null;
-  geminiEnabled: boolean;
-  opencodeEnabled: boolean;
+  /** 用户在「CLI配置管理」停用的 supported CLI engine id 列表；默认 [] = 全部启用 */
+  disabledCliEngines: string[];
   sessionAttributionMode?: WorkspaceSessionAttributionMode;
   backendMode: BackendMode;
   remoteBackendHost: string;

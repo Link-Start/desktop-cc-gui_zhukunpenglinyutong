@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
 import { ProviderSelect } from './ProviderSelect';
+import { seedCliEngineVisibility } from '../../../hooks/cliEngineVisibilityStore';
 
 vi.mock('../../../../../assets/model-icons/openai.svg', () => ({
   default: 'mock-openai-icon.svg',
@@ -121,5 +122,51 @@ describe('ProviderSelect', () => {
       expect(container.querySelector('.selector-toast')?.textContent).toContain('检测中...');
     });
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  describe('CLI visibility toggle', () => {
+    afterEach(() => {
+      seedCliEngineVisibility([]);
+    });
+
+    it('hides user-disabled CLI engines from the dropdown', () => {
+      seedCliEngineVisibility(['opencode']);
+
+      const { container } = render(
+        <ProviderSelect
+          value="claude"
+          onChange={vi.fn()}
+          iconOnly
+          providerAvailability={{ opencode: true }}
+        />,
+      );
+
+      const trigger = container.querySelector('.selector-provider-button') as HTMLElement;
+      fireEvent.click(trigger);
+
+      const dropdown = container.querySelector('.selector-dropdown');
+      // 测试环境不翻译 label,断言 i18n key 是否出现。
+      expect(dropdown?.textContent).not.toContain('opencode');
+      expect(dropdown?.textContent).toContain('claude');
+      expect(dropdown?.textContent).toContain('codex');
+    });
+
+    it('keeps the current provider visible even when user-disabled', () => {
+      seedCliEngineVisibility(['codex']);
+
+      const { container } = render(
+        <ProviderSelect
+          value="codex"
+          onChange={vi.fn()}
+          iconOnly
+          providerAvailability={{ codex: true }}
+        />,
+      );
+
+      const trigger = container.querySelector('.selector-provider-button') as HTMLElement;
+      fireEvent.click(trigger);
+
+      expect(container.querySelector('.selector-option.selected')).toBeTruthy();
+    });
   });
 });

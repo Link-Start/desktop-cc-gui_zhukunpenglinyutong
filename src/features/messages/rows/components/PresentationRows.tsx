@@ -134,9 +134,14 @@ export const GeneratedImageRow = memo(function GeneratedImageRow({
       ) : null}
       {lightboxIndex !== null && imageItems.length > 0 ? (
         <ImageLightbox
-          images={imageItems.map(({ src, label }) => ({ src, label }))}
+          images={imageItems.map(({ src, label, localPath }) => ({
+            src,
+            label,
+            localPath,
+          }))}
           activeIndex={lightboxIndex}
           onClose={() => setLightboxIndex(null)}
+          workspaceId={workspaceId}
         />
       ) : null}
     </div>

@@ -1293,6 +1293,9 @@ mod tests {
                 crate::claude_commands_watch::CommandsWatchRegistry::default(),
             ),
             runtime_manager: std::sync::Arc::new(crate::runtime::RuntimeManager::new(&data_dir)),
+            shared_event_writer: None,
+            shared_runtime_coordinator:
+                crate::shared_runtime_coordinator::SharedRuntimeCoordinator::default(),
             renderer_heartbeats: tokio::sync::Mutex::new(
                 crate::renderer_stability::RendererHeartbeatStore::default(),
             ),

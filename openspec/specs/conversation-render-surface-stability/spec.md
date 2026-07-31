@@ -76,7 +76,7 @@ Claude render-safe behavior MUST protect live assistant text visibility in addit
 
 ### Requirement: Live Conversation Rendering MUST Derive From A Bounded Tail Working Set
 
-When history is collapsed for an active live conversation, message rendering MUST perform expensive presentation derivation on a bounded tail working set instead of the complete thread history.
+When history is collapsed for an active live conversation, message rendering MUST perform expensive presentation derivation on a bounded tail working set instead of the complete thread history. When the user explicitly expands history, the renderer MUST leave the bounded collapsed window and derive the full history even while the conversation remains active.
 
 #### Scenario: live collapsed history uses bounded working set
 - **WHEN** a live conversation is processing
@@ -99,6 +99,12 @@ When history is collapsed for an active live conversation, message rendering MUS
 - **WHEN** the user enables full history display
 - **THEN** the renderer MUST keep using the full conversation item list for presentation derivation
 - **AND** working-set trimming MUST NOT hide or reorder history
+
+#### Scenario: live history reveal exits bounded trimming immediately
+- **WHEN** an active live conversation displays the collapsed-history control
+- **AND** the user activates “show previous N messages”
+- **THEN** the renderer MUST expose the previously omitted history during the active turn
+- **AND** the collapsed-history control MUST disappear after the full-history window is active
 
 ### Requirement: Three-Engine Live Rendering MUST Preserve Progressive Visible Text
 Live rendering for Codex, Claude Code, and Gemini MUST preserve progressive visible assistant text while allowing bounded throttling and safe degradation.

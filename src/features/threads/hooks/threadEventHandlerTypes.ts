@@ -6,6 +6,7 @@ import type {
 } from "../../../types";
 import type { ThreadAction } from "./useThreadsReducer";
 import type { DomainEventRuntimeController } from "../domain-events";
+import type { TurnExecutionSnapshot } from "../../shared-session/target/types";
 
 export type ThreadEventHandlersOptions = {
   activeThreadId: string | null;
@@ -31,6 +32,7 @@ export type ThreadEventHandlersOptions = {
     workspaceId: string,
     threadId: string,
     message: string,
+    executionTargetSnapshot?: TurnExecutionSnapshot,
   ) => void;
   onDebug?: (entry: DebugEntry) => void;
   onWorkspaceConnected: (workspaceId: string) => void;
@@ -98,6 +100,9 @@ export type ThreadEventHandlersOptions = {
   }) => void;
   onThreadTransientCleanupReady?: (
     cleanup: (workspaceId: string | null | undefined, threadId: string) => number,
+  ) => () => void;
+  onDurableRealtimeTurnSettlementReady?: (
+    settle: (threadId: string, runtimeTurnId: string) => void,
   ) => () => void;
   onCollaborationModeResolved?: (
     event: CollaborationModeResolvedRequest,

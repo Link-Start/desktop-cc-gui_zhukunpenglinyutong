@@ -39,7 +39,7 @@ type UseAppShellPromptActionsSectionOptions = {
     threadId: string,
     message: string,
     images: string[],
-  ) => Promise<void>;
+  ) => Promise<unknown>;
   startThreadForWorkspace: (
     workspaceId: string,
     options?: { activate?: boolean },

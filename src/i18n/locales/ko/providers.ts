@@ -4,6 +4,7 @@
 // Machine translation of src/i18n/locales/en/providers.ts; keys mirror the English source.
 const providers = {
   "providers": {
+    "localConfig": "로컬 설정",
     "claude": {
       "label": "Claude Code"
     },

@@ -15,9 +15,6 @@ const CODEX_FALLBACK_MODEL_IDS = [
   'gpt-5.6-terra',
   'gpt-5.6-luna',
   'gpt-5.5',
-  'gpt-5.4',
-  'gpt-5.4-mini',
-  'gpt-5.3-codex-spark',
 ];
 
 describe('ChatInputBox model options', () => {
@@ -203,13 +200,15 @@ describe('ChatInputBox model options', () => {
     expect(modelList).toContain('gpt-5.5:gpt-5.5:settings-override:gpt-5.5 (config)');
     expect(modelList).toContain('demo:demo:custom:Demo Override');
     expect(modelList).toContain('gpt-5.6-luna:gpt-5.6-luna:catalog:gpt-5.6-luna');
-    expect(modelList).toContain('user-custom-codex:::User Custom Codex');
+    expect(modelList).toContain('user-custom-codex::custom:User Custom Codex');
     expect(modelEntries.filter((entry) => entry.startsWith('gpt-5.5:'))).toHaveLength(1);
     expect(modelEntries.filter((entry) => entry.startsWith('demo:'))).toHaveLength(1);
     expect(modelEntries.filter((entry) => entry.startsWith('user-custom-codex:'))).toHaveLength(1);
-    expect(modelList).toContain('gpt-5.4::fallback:gpt-5.4');
-    expect(modelList).toContain('gpt-5.4-mini::fallback:gpt-5.4-mini');
-    expect(modelList).toContain(
+    expect(modelList).toContain('gpt-5.6-sol::fallback:gpt-5.6-sol');
+    expect(modelList).toContain('gpt-5.6-terra::fallback:gpt-5.6-terra');
+    expect(modelList).not.toContain('gpt-5.4::fallback:gpt-5.4');
+    expect(modelList).not.toContain('gpt-5.4-mini::fallback:gpt-5.4-mini');
+    expect(modelList).not.toContain(
       'gpt-5.3-codex-spark::fallback:gpt-5.3-codex-spark',
     );
   });
@@ -223,22 +222,22 @@ describe('ChatInputBox model options', () => {
     }));
     const modelEntries = modelList.split(',').filter(Boolean);
 
+    expect(modelList).toContain('gpt-5.6-sol::fallback:gpt-5.6-sol');
+    expect(modelList).toContain('gpt-5.6-terra::fallback:gpt-5.6-terra');
+    expect(modelList).toContain('gpt-5.6-luna::fallback:gpt-5.6-luna');
     expect(modelList).toContain('gpt-5.5::fallback:gpt-5.5');
-    expect(modelList).toContain('gpt-5.4::fallback:gpt-5.4');
-    expect(modelList).toContain('gpt-5.4-mini::fallback:gpt-5.4-mini');
+    expect(modelList).not.toContain('gpt-5.4::fallback:gpt-5.4');
+    expect(modelList).not.toContain('gpt-5.4-mini::fallback:gpt-5.4-mini');
     expect(
-      modelEntries.some((entry) => entry.startsWith('gpt-5.3-codex:')),
+      modelEntries.some((entry) => entry.startsWith('gpt-5.3-codex')),
     ).toBe(false);
-    expect(modelList).toContain(
-      'gpt-5.3-codex-spark::fallback:gpt-5.3-codex-spark',
-    );
     expect(modelList).not.toContain('gpt-5.2');
   });
 
   it('keeps custom Codex model labels while deduplicating built-in matches', () => {
     window.localStorage.setItem(
       STORAGE_KEYS.CODEX_CUSTOM_MODELS,
-      JSON.stringify([{ id: 'gpt-5.4', label: 'My GPT 5.4' }]),
+      JSON.stringify([{ id: 'gpt-5.5', label: 'My GPT 5.5' }]),
     );
 
     const modelList = serializeModels(resolveAvailableModels({
@@ -248,9 +247,9 @@ describe('ChatInputBox model options', () => {
       modelStorageSnapshot: readModelStorageSnapshot(),
     }));
 
-    expect(modelList).toContain('gpt-5.4:::My GPT 5.4');
-    expect(modelList.match(/gpt-5\.4:/g)).toHaveLength(1);
-    expect(modelList).toContain('gpt-5.5::fallback:gpt-5.5');
+    expect(modelList).toContain('gpt-5.5::custom:My GPT 5.5');
+    expect(modelList.match(/gpt-5\.5:/g)).toHaveLength(1);
+    expect(modelList).toContain('gpt-5.6-sol::fallback:gpt-5.6-sol');
   });
 
   it('does not apply legacy Claude mapping to dynamic backend models', () => {
@@ -278,8 +277,8 @@ describe('ChatInputBox model options', () => {
   it('builds compact provider groups from current runtime models and provider fallbacks', () => {
     const groups = resolveProviderModelGroups({
       currentProvider: 'codex',
-      models: [{ id: 'gpt-5.4', label: 'GPT-5.4 runtime' }],
-      selectedModel: 'gpt-5.4',
+      models: [{ id: 'gpt-5.5', label: 'GPT-5.5 runtime' }],
+      selectedModel: 'gpt-5.5',
       modelStorageSnapshot: readModelStorageSnapshot(),
       providerAvailability: { claude: true, codex: true, gemini: false, opencode: true },
       resolveProviderLabel: (_providerId, fallbackLabel) => fallbackLabel,
@@ -289,16 +288,16 @@ describe('ChatInputBox model options', () => {
     expect(
       groups.find((group) => group.providerId === 'codex')?.models.map((model) => model.id),
     ).toEqual([
-      'gpt-5.4',
-      ...CODEX_FALLBACK_MODEL_IDS.filter((id) => id !== 'gpt-5.4'),
+      'gpt-5.5',
+      ...CODEX_FALLBACK_MODEL_IDS.filter((id) => id !== 'gpt-5.5'),
     ]);
   });
 
   it('does not synthesize Claude provider group when settings and custom models are empty', () => {
     const groups = resolveProviderModelGroups({
       currentProvider: 'codex',
-      models: [{ id: 'gpt-5.4', label: 'GPT-5.4 runtime' }],
-      selectedModel: 'gpt-5.4',
+      models: [{ id: 'gpt-5.5', label: 'GPT-5.5 runtime' }],
+      selectedModel: 'gpt-5.5',
       modelStorageSnapshot: readModelStorageSnapshot(),
       providerAvailability: { claude: true, codex: true, gemini: false, opencode: true },
       resolveProviderLabel: (_providerId, fallbackLabel) => fallbackLabel,
@@ -310,8 +309,8 @@ describe('ChatInputBox model options', () => {
   it('includes detected Gemini with fallback models when runtime models are unavailable', () => {
     const groups = resolveProviderModelGroups({
       currentProvider: 'codex',
-      models: [{ id: 'gpt-5.4', label: 'GPT-5.4 runtime' }],
-      selectedModel: 'gpt-5.4',
+      models: [{ id: 'gpt-5.5', label: 'GPT-5.5 runtime' }],
+      selectedModel: 'gpt-5.5',
       modelStorageSnapshot: readModelStorageSnapshot(),
       providerAvailability: { claude: true, codex: true, gemini: true, opencode: true },
       resolveProviderLabel: (_providerId, fallbackLabel) => fallbackLabel,

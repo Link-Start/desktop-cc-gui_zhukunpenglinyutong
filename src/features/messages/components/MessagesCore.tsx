@@ -55,6 +55,11 @@ import { usePromptDistillation } from "../../prompt-distill/hooks/usePromptDisti
 import { PromptDistillDialog } from "../../prompt-distill/components/PromptDistillDialog";
 import { dedupeExitPlanItemsKeepFirst } from "../utils/messagesExitPlan";
 import {
+  filterContextProtocolConversationItems,
+  hasContextProtocolControlTail,
+  isContextProtocolConversationItem,
+} from "../../../utils/contextProtocol";
+import {
   findLastAssistantMessageIndex,
   findLastUserMessageIndex,
   isMessagesPerfDebugEnabled,
@@ -64,6 +69,7 @@ import {
   MESSAGES_SLOW_ANCHOR_WARN_MS,
   MESSAGES_SLOW_RENDER_WARN_MS,
   resolveWorkingActivityLabel,
+  SCROLL_THRESHOLD_PX,
   shouldDisplayWorkingActivityLabel,
   shouldHideClaudeReasoningModule,
   STREAMING_VISIBLE_WINDOW,
@@ -79,8 +85,11 @@ import {
 } from "../orchestration/presentation/messagesViewModel";
 import {
   INITIAL_BOTTOM_PIN_BUDGET_MS,
-  SETTLE_REPIN_WINDOW_MS,
 } from "../constants/messagesConstants";
+import {
+  isProgrammaticScrollEcho,
+  PROGRAMMATIC_SCROLL_ECHO_TOLERANCE_PX,
+} from "../orchestration/scrolling/messagesScrollEcho";
 import {
   DEFAULT_RENDER_LOOP_GUARD_BUDGET,
   resolveIdempotentRenderLoopGuard,
@@ -104,28 +113,42 @@ import { MessagesLinkedRunBanner } from "../orchestration/components/MessagesLin
 const EMPTY_TASK_RUNS: NonNullable<MessagesCoreProps["runtime"]["taskRuns"]> = [];
 
 const ANCHOR_TITLE_MAX_LENGTH = 60;
-const PROGRAMMATIC_SCROLL_ECHO_TOLERANCE_PX = 2;
+const ANCHOR_DESCRIPTION_MAX_LENGTH = 160;
 
 function isAgentTaskNotificationText(text: string) {
   return Boolean(parseAgentTaskNotification(text));
 }
 
 /**
- * Derive a short, human-readable label for an anchor dot from the raw
- * user message text: take the first non-empty line, collapse inner
- * whitespace, and truncate. Used for the hover tooltip + outline label
- * on the messages anchor rail.
+ * Derive bounded, plain-text copy for the anchor preview from the user
+ * message only. Assistant rows remain outside this model so streaming output
+ * cannot turn the navigation rail into another live render surface.
  */
-function deriveAnchorTitle(text: string): string {
-  const firstLine =
-    text
-      .split("\n")
-      .map((line) => line.trim())
-      .find((line) => line.length > 0) ?? "";
-  const normalized = firstLine.replace(/\s+/g, " ");
-  return normalized.length > ANCHOR_TITLE_MAX_LENGTH
-    ? `${normalized.slice(0, ANCHOR_TITLE_MAX_LENGTH)}…`
-    : normalized;
+function deriveAnchorPreviewCopy(text: string): {
+  description?: string;
+  title: string;
+} {
+  const normalizedLines = text
+    .split("\n")
+    .map((line) => line.trim().replace(/\s+/g, " "))
+    .filter(Boolean);
+  const firstLine = normalizedLines[0] ?? "";
+  const title =
+    firstLine.length > ANCHOR_TITLE_MAX_LENGTH
+      ? `${firstLine.slice(0, ANCHOR_TITLE_MAX_LENGTH)}…`
+      : firstLine;
+  const descriptionSource =
+    normalizedLines.length > 1
+      ? normalizedLines.slice(1).join(" ")
+      : firstLine.slice(ANCHOR_TITLE_MAX_LENGTH).trim();
+  const description =
+    descriptionSource.length > ANCHOR_DESCRIPTION_MAX_LENGTH
+      ? `${descriptionSource.slice(0, ANCHOR_DESCRIPTION_MAX_LENGTH)}…`
+      : descriptionSource;
+  return {
+    title,
+    ...(description ? { description } : {}),
+  };
 }
 
 // 流式期间每个 token 都会替换 items 数组引用,但通常只有最后一条正在流式输出的
@@ -212,6 +235,8 @@ export const MessagesCore = memo(function MessagesCore({
     isPlanProcessing: _isPlanProcessing = false,
     presentationProfile = null,
     agentTaskScrollRequest = null,
+    timelineLeadingNode = null,
+    isProviderContinuation = false,
   } = presentation;
   const { t } = useTranslation();
   const isWindowsDesktop = useMemo(() => isWindowsPlatform(), []);
@@ -220,8 +245,11 @@ export const MessagesCore = memo(function MessagesCore({
   const userInputRequests = conversationState.userInputQueue;
   const workspaceId = conversationState.meta.workspaceId || null;
   const threadId = conversationState.meta.threadId || null;
+  const nativeRuntimeRecoveryEnabled = !threadId?.startsWith("shared:");
   const activeTurnId = conversationState.meta.activeTurnId ?? null;
   const activeEngine = conversationState.meta.engine;
+  const hideLeadingContinuationBootstrap =
+    activeEngine === "codex" && isProviderContinuation;
   const renderScopeKey = `${workspaceId ?? ""}\u0000${threadId ?? ""}`;
   const conversationRenderModeKey =
     workspaceId && threadId ? `${workspaceId}\u0000${threadId}` : null;
@@ -242,7 +270,6 @@ export const MessagesCore = memo(function MessagesCore({
   } = useMessagesHistoryWindow({ firstItemId: items[0]?.id ?? null });
   const renderStartedAt =
     typeof performance === "undefined" ? 0 : performance.now();
-  const settleRepinPrevThinkingRef = useRef(isThinking);
   const messageNodeByIdRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const agentTaskNodeByTaskIdRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const agentTaskNodeByToolUseIdRef = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -329,30 +356,61 @@ export const MessagesCore = memo(function MessagesCore({
   const exitPlanDedupeCacheRef = useRef<{
     baseItems: ConversationItem[];
     result: ConversationItem[];
+    hideLeadingContinuationBootstrap: boolean;
   } | null>(null);
   const effectiveItems = useMemo(() => {
     const baseItems = isSelectionFrozen
       ? frozenItemsRef.current ?? items
       : items;
     const cache = exitPlanDedupeCacheRef.current;
-    if (cache && isTrailingMessageTextOnlyUpdate(cache.baseItems, baseItems)) {
+    if (
+      cache &&
+      cache.hideLeadingContinuationBootstrap ===
+        hideLeadingContinuationBootstrap &&
+      isTrailingMessageTextOnlyUpdate(cache.baseItems, baseItems)
+    ) {
       // dedupe 只会移除 exit-plan 工具条目,末尾的 "message" 条目必然原样透传,
       // 因此只需把结果数组的最后一项替换为最新引用,无需重新扫描整段历史。
       // 尾项引用未变时(如选区冻结触发的引用级重算)必须原样返回缓存:此时尾项
       // 可能是被去重掉的 exit-plan 条目,写回结果末尾会丢真尾项、复活重复项。
       const nextLast = baseItems[baseItems.length - 1];
+      if (
+        isContextProtocolConversationItem(nextLast) ||
+        hasContextProtocolControlTail(baseItems, {
+          hideLeadingContinuationBootstrap,
+        })
+      ) {
+        exitPlanDedupeCacheRef.current = {
+          baseItems,
+          result: cache.result,
+          hideLeadingContinuationBootstrap,
+        };
+        return cache.result;
+      }
       const result =
         cache.baseItems[cache.baseItems.length - 1] === nextLast ||
         cache.result[cache.result.length - 1] === nextLast
           ? cache.result
           : [...cache.result.slice(0, -1), nextLast];
-      exitPlanDedupeCacheRef.current = { baseItems, result };
+      exitPlanDedupeCacheRef.current = {
+        baseItems,
+        result,
+        hideLeadingContinuationBootstrap,
+      };
       return result;
     }
-    const result = dedupeExitPlanItemsKeepFirst(baseItems);
-    exitPlanDedupeCacheRef.current = { baseItems, result };
+    const result = dedupeExitPlanItemsKeepFirst(
+      filterContextProtocolConversationItems(baseItems, {
+        hideLeadingContinuationBootstrap,
+      }),
+    );
+    exitPlanDedupeCacheRef.current = {
+      baseItems,
+      result,
+      hideLeadingContinuationBootstrap,
+    };
     return result;
-  }, [isSelectionFrozen, items]);
+  }, [hideLeadingContinuationBootstrap, isSelectionFrozen, items]);
   const messageActionTargetsCacheRef = useRef<{
     baseItems: ConversationItem[];
     result: MessageActionTargets;
@@ -367,13 +425,20 @@ export const MessagesCore = memo(function MessagesCore({
     messageActionTargetsCacheRef.current = { baseItems: effectiveItems, result };
     return result;
   }, [effectiveItems]);
+  const turnBoundaryStateRef = useRef({
+    isHistoryLoading,
+    isWorking,
+    pendingWorkingStartCovered: false,
+    renderScopeKey,
+    userMessageCount: messageActionTargets.userMessageCount,
+  });
   const liveTailWorkingSet = useMemo(
     () =>
       buildLiveTailWorkingSet(effectiveItems, {
         isThinking,
         showAllHistoryItems,
         // 流式期裁到 live 尾窗（buildLiveTailWorkingSet 仅在 isThinking 时裁剪）；
-        // show all 只在 idle 恢复全量，避免展开历史后每个 token 都重跑完整 timeline。
+        // 用户显式 show all 后恢复全量；默认折叠态仍限制每个 token 的 timeline 工作集。
         visibleWindow: STREAMING_VISIBLE_WINDOW,
         enableCollaborationBadge,
       }),
@@ -441,6 +506,7 @@ export const MessagesCore = memo(function MessagesCore({
       codexWaitingForFirstText: t("messages.codexWaitingForFirstText"),
       contextCompacting: t("chat.contextDualViewCompacting"),
     },
+    nativeRuntimeRecoveryEnabled,
     renderScopeKey,
     reportVisibleTextRendered: noteThreadVisibleTextRendered,
     renderSourceItems,
@@ -462,20 +528,21 @@ export const MessagesCore = memo(function MessagesCore({
     activeProgrammaticScrollEdgeRef,
     activeProgrammaticScrollMotionRef,
     autoScrollRef,
-    bottomRef,
+    beginTurnBoundaryBottomConvergence,
     cancelFocusFollowConvergence,
     cancelScrollConvergence,
+    clearUserScrollIntent,
     containerRef,
     getPendingScrollResourceCount,
     handleScrollControlRequest,
+    hasRecentUserScrollIntent,
     initialBottomPinScopeRef,
     isNearBottom,
     programmaticScrollTopEchoRef,
     rearmAutoFollowToBottom,
-    recordProgrammaticScrollObservation,
+    recordCurrentScrollGeometry,
     requestAutoScroll,
     requestHistoryBottomConvergence,
-    requestSettleBottomConvergence,
     requestTimelineLayoutBottomConvergence,
     scrollKey,
     stickToBottomDeadlineRef,
@@ -724,13 +791,6 @@ export const MessagesCore = memo(function MessagesCore({
       window.removeEventListener("storage", handleStorage);
     };
   }, [cancelFocusFollowConvergence, isWorking, rearmAutoFollowToBottom]);
-  useEffect(() => {
-    if (!liveAutoFollowEnabled || !isWorking) {
-      return;
-    }
-    autoScrollRef.current = true;
-    requestAutoScroll();
-  }, [autoScrollRef, isWorking, liveAutoFollowEnabled, requestAutoScroll]);
   const reasoningMetaById = useMemo(() => {
     const meta = new Map<string, ReturnType<typeof parseReasoning>>();
     deferredRenderSourceItems.forEach((item) => {
@@ -1151,7 +1211,7 @@ export const MessagesCore = memo(function MessagesCore({
     return messageItems.map((item) => ({
       id: item.id,
       role: item.role,
-      title: deriveAnchorTitle(item.text),
+      ...deriveAnchorPreviewCopy(item.text),
     }));
   }, [timelinePresentationItems]);
   const hasAnchorRail = showMessageAnchors && messageAnchors.length > 0;
@@ -1266,34 +1326,76 @@ export const MessagesCore = memo(function MessagesCore({
     if (!container) {
       return;
     }
+    const now = performance.now();
+    const userOwnsScroll = hasRecentUserScrollIntent();
+    const previousGeometry = {
+      scrollTop: container.scrollTop,
+      maxScrollTop: Math.max(0, container.scrollHeight - container.clientHeight),
+    };
+    recordCurrentScrollGeometry(container);
     const activeProgrammaticEdge = activeProgrammaticScrollEdgeRef.current;
     const activeProgrammaticMotion = activeProgrammaticScrollMotionRef.current;
-    if (activeProgrammaticEdge && activeProgrammaticMotion === "smooth") {
+    if (
+      !userOwnsScroll &&
+      activeProgrammaticEdge &&
+      activeProgrammaticMotion === "smooth"
+    ) {
       autoScrollRef.current = activeProgrammaticEdge === "bottom";
       scheduleAnchorUpdate("scroll");
       return;
     }
-    if (activeProgrammaticEdge) {
-      // instant 自动钉底期间，scroll 事件可能是程序化回声：WebKit 异步派发下，钳位
-      // /收敛写入产生的事件常在几何继续变化（迟到测高回填）之后才送达，此刻按
-      // near-bottom 判定会把布局噪声误判成用户上滚，解除跟随并杀掉收敛 run（发送
-      // 消息后跳顶滞留的根因）。只有事件位置命中 run 的读/写指纹才按回声豁免；
-      // 未命中说明是真实用户滚动（拖滚动条/触摸等），走下方正常释放语义。
-      const eventScrollTop = container.scrollTop;
-      const isProgrammaticEcho = programmaticScrollTopEchoRef.current.some(
-        (value) =>
-          Math.abs(value - eventScrollTop) <= PROGRAMMATIC_SCROLL_ECHO_TOLERANCE_PX,
-      );
-      if (isProgrammaticEcho) {
+    // instant 自动钉底期间或写入后 grace 窗口内，scroll 事件可能是程序化回声：WebKit
+    // 异步派发下，钳位/收敛写入产生的事件常在几何继续变化（迟到测高回填）之后才送达，
+    // 此刻按 near-bottom 判定会把布局噪声误判成用户上滚，解除跟随并杀掉收敛 run（发送
+    // 消息后跳顶滞留的根因）。命中指纹（含 run 结束后 grace 窗口内的迟到回声）才豁免；
+    // 未命中说明是真实用户滚动（拖滚动条/触摸等），走下方正常释放语义。
+    const isEcho = isProgrammaticScrollEcho({
+      hasActiveProgrammaticRun: activeProgrammaticEdge !== null,
+      hasRecentUserScrollIntent: userOwnsScroll,
+      eventScrollTop: container.scrollTop,
+      echoFingerprints: programmaticScrollTopEchoRef.current,
+      tolerancePx: PROGRAMMATIC_SCROLL_ECHO_TOLERANCE_PX,
+      now,
+    });
+    if (isEcho) {
+      if (activeProgrammaticEdge) {
         autoScrollRef.current = activeProgrammaticEdge === "bottom";
-        scheduleAnchorUpdate("scroll");
-        return;
+      } else if (isNearBottom(container)) {
+        // 回声落在底部（含用户主动滚回底部撞中预录的钳位指纹）：视口已在底部，
+        // 武装跟随在两种情形下都正确。
+        autoScrollRef.current = true;
       }
+      scheduleAnchorUpdate("scroll");
+      return;
+    }
+    const nearBottom = isNearBottom(container);
+    // 回合结束 / 打开历史 settle 窗口：live 尾窗→全量、static→virtual 会让
+    // scrollHeight 暴涨而 scrollTop 尚未追上，nearBottom 瞬时 false。不得因此解除
+    // autoScroll。若用户已主动上滚离开底部（scrollTop 明显低于 max），仍释放跟随。
+    const settleIntent = stickToBottomIntentRef.current;
+    const settleWindowOpen =
+      settleIntent !== null && Date.now() <= stickToBottomDeadlineRef.current;
+    const userLeftBottom =
+      !nearBottom &&
+      previousGeometry.maxScrollTop - previousGeometry.scrollTop >
+        SCROLL_THRESHOLD_PX;
+    const settleArmed =
+      settleWindowOpen &&
+      !userOwnsScroll &&
+      (autoScrollRef.current || activeProgrammaticEdge === "bottom") &&
+      !userLeftBottom;
+    if (settleArmed) {
+      autoScrollRef.current = true;
+      scheduleAnchorUpdate("scroll");
+      return;
     }
     // Auto-follow tracks the user's real scroll position: stick to the bottom
     // only while the viewport is actually near the bottom. Scrolling up cancels
     // the follow; scrolling back to the bottom re-enables it.
-    const nearBottom = isNearBottom(container);
+    if (nearBottom && userOwnsScroll) {
+      // 用户已明确回到底部，输入租约完成；后续同 tick 的 content resize 可立即恢复跟随。
+      clearUserScrollIntent();
+    }
     autoScrollRef.current = nearBottom;
     if (!nearBottom) {
       cancelScrollConvergence();
@@ -1304,10 +1406,15 @@ export const MessagesCore = memo(function MessagesCore({
     activeProgrammaticScrollMotionRef,
     autoScrollRef,
     cancelScrollConvergence,
+    clearUserScrollIntent,
     containerRef,
+    hasRecentUserScrollIntent,
     isNearBottom,
     programmaticScrollTopEchoRef,
+    recordCurrentScrollGeometry,
     scheduleAnchorUpdate,
+    stickToBottomDeadlineRef,
+    stickToBottomIntentRef,
   ]);
   const clearTransientUiState = useCallback(() => {
     if (anchorUpdateRafRef.current !== null) {
@@ -1486,101 +1593,61 @@ export const MessagesCore = memo(function MessagesCore({
     workspaceId,
   ]);
 
-  // 对话结束（isThinking true→false）后开一个收尾跟随窗口：live 尾窗回刷成全量
-  // timeline 时几百条历史带着估算高度插进列表，scrollHeight 暴涨；且全量渲染源经
-  // useDeferredValue 延后数帧才落地。窗口内的高度变化都由观察器钉回底部。
+  // send/settle 是确定性 boundary placement，不属于可中断的 continuous live-follow：
+  // 边沿发生前的滚动 ownership 失效，边沿后的新输入仍可取消后续 convergence。
+  // scope switch 只刷新 baseline，避免把旧会话的 working 状态投射到新会话。
   useLayoutEffect(() => {
-    const wasThinking = settleRepinPrevThinkingRef.current;
-    settleRepinPrevThinkingRef.current = isThinking;
-    if (wasThinking && !isThinking) {
-      if (!liveAutoFollowEnabledRef.current || !autoScrollRef.current) {
-        return;
-      }
-      stickToBottomIntentRef.current = "turn-settle";
-      stickToBottomDeadlineRef.current = Date.now() + SETTLE_REPIN_WINDOW_MS;
-      requestSettleBottomConvergence();
+    const previous = turnBoundaryStateRef.current;
+    if (previous.renderScopeKey !== renderScopeKey) {
+      turnBoundaryStateRef.current = {
+        isHistoryLoading,
+        isWorking,
+        pendingWorkingStartCovered: false,
+        renderScopeKey,
+        userMessageCount: messageActionTargets.userMessageCount,
+      };
+      return;
     }
-  }, [
-    autoScrollRef,
-    isThinking,
-    requestSettleBottomConvergence,
-    stickToBottomDeadlineRef,
-    stickToBottomIntentRef,
-  ]);
+    const userMessageAdded =
+      !previous.isHistoryLoading &&
+      messageActionTargets.hasPendingUserTurn &&
+      messageActionTargets.userMessageCount > previous.userMessageCount;
+    const enteredWorking = !previous.isWorking && isWorking;
+    const exitedWorking = previous.isWorking && !isWorking;
+    let pendingWorkingStartCovered = previous.pendingWorkingStartCovered;
+    let sendBoundaryStarted = false;
 
-  // ── 底部跟随的真正驱动：内容高度变化 ───────────────────────────────────
-  // 曾经唯一的驱动是依赖 scrollKey 的 auto-follow effect，而 scrollKey 由 items 末条的
-  // text.length 算出。正文外部化（liveAssistantTextChannel）之后流式 delta 不再进
-  // reducer，items 不变 → scrollKey 不变 → 整个流式期一次都不触发，视口被越长越高的
-  // 正文甩在半空，用户每轮都得手动滚到底。虚拟化行的迟到测量、content-visibility 屏外
-  // 行进视口才布局也一样：只改高度，不改 items。
-  //
-  // 所以改由 ResizeObserver 盯住内容盒的真实高度：只要跟随仍 armed（用户 parked 在
-  // 底部）且处于跟随窗口（流式中 / 收尾中 / 打开会话的钉底窗口内），就把视口按在底部。
-  // 命令式写 scrollTop，不进 state / 不重渲染；空闲期内容不变 → 回调不触发，零开销。
-  //
-  // 交还控制权走 wheel 而不是只等 scroll：流式期观察器每帧都在写 scrollTop，而 scroll
-  // 事件是异步派发的。只靠 updateAutoScroll 的话，一旦某帧的高度变化抢在 scroll 送达
-  // 之前，用户刚滚上去就被当场拽回底部——表现是「滚不走」。wheel 在滚动生效前同步到达，
-  // 向上滚立即解除跟随；向下滚回底部时由 scroll 的 isNearBottom 重新武装。
-  // ponytail: 只覆盖 wheel（桌面主场景）。键盘 PageUp / 触屏拖拽仍靠 scroll 事件滞后一帧
-  // 解除，它们不是每帧连续的，不会和高度变化持续抢跑；真要根治得改成 scrollend 语义。
-  useEffect(() => {
-    const container = containerRef.current;
-    const content = container?.querySelector<HTMLElement>(".messages-timeline-root");
-    if (!container) {
-      return undefined;
+    if (userMessageAdded) {
+      beginTurnBoundaryBottomConvergence("turn-send");
+      sendBoundaryStarted = true;
+      pendingWorkingStartCovered = !isWorking;
     }
-    const handleWheel = (event: WheelEvent) => {
-      cancelScrollConvergence();
-      if (event.deltaY < 0) {
-        autoScrollRef.current = false;
+    if (enteredWorking) {
+      if (!sendBoundaryStarted && !pendingWorkingStartCovered) {
+        beginTurnBoundaryBottomConvergence("turn-send");
       }
-    };
-    container.addEventListener("wheel", handleWheel, { passive: true });
-    if (!content || typeof ResizeObserver === "undefined") {
-      return () => container.removeEventListener("wheel", handleWheel);
+      pendingWorkingStartCovered = false;
+    } else if (exitedWorking) {
+      beginTurnBoundaryBottomConvergence("turn-settle");
+      pendingWorkingStartCovered = false;
     }
-    const observer = new ResizeObserver(() => {
-      // 高度塌缩（虚拟化翻开/live 尾窗裁剪）会让浏览器钳位 scrollTop，这里是钳位后
-      // 最早的程序化观察点：先把当前位置吸进指纹环，迟到的钳位 scroll 事件才不会被
-      // 误判成用户上滚。
-      recordProgrammaticScrollObservation(container.scrollTop);
-      if (!autoScrollRef.current) {
-        return;
-      }
-      if (isWorkingRef.current || isAssistantFinalizingRef.current) {
-        requestAutoScroll();
-        return;
-      }
-      if (Date.now() > stickToBottomDeadlineRef.current) {
-        return;
-      }
-      if (stickToBottomIntentRef.current === "history-open") {
-        requestHistoryBottomConvergence();
-      } else if (stickToBottomIntentRef.current === "turn-settle") {
-        requestSettleBottomConvergence();
-      }
-    });
-    observer.observe(content);
-    return () => {
-      observer.disconnect();
-      container.removeEventListener("wheel", handleWheel);
+    if (!messageActionTargets.hasPendingUserTurn && !isWorking) {
+      pendingWorkingStartCovered = false;
+    }
+    turnBoundaryStateRef.current = {
+      isHistoryLoading,
+      isWorking,
+      pendingWorkingStartCovered,
+      renderScopeKey,
+      userMessageCount: messageActionTargets.userMessageCount,
     };
-    // threadId：切会话时重新绑定，避免时间线根节点被换掉后观察到已脱离文档的旧节点。
   }, [
-    autoScrollRef,
-    cancelScrollConvergence,
-    containerRef,
-    isAssistantFinalizingRef,
-    isWorkingRef,
-    recordProgrammaticScrollObservation,
-    requestAutoScroll,
-    requestHistoryBottomConvergence,
-    requestSettleBottomConvergence,
-    stickToBottomDeadlineRef,
-    stickToBottomIntentRef,
-    threadId,
+    beginTurnBoundaryBottomConvergence,
+    isHistoryLoading,
+    isWorking,
+    messageActionTargets.hasPendingUserTurn,
+    messageActionTargets.userMessageCount,
+    renderScopeKey,
   ]);
 
   useEffect(() => {
@@ -1700,10 +1767,13 @@ export const MessagesCore = memo(function MessagesCore({
       activeUserInputRequestId,
       claudeHistoryTranscriptFallbackActive,
       hasVisibleUserInputRequest,
-      historyRecoveryFailureReason,
+      historyRecoveryFailureReason: nativeRuntimeRecoveryEnabled
+        ? historyRecoveryFailureReason
+        : null,
       isHistoryLoading,
       latestRetryMessage,
       latestRuntimeReconnectItemId,
+      nativeRuntimeRecoveryEnabled,
       proxyEnabled,
       proxyUrl,
       threadId,
@@ -1712,7 +1782,6 @@ export const MessagesCore = memo(function MessagesCore({
     navigation: {
       agentTaskNodeByTaskIdRef,
       agentTaskNodeByToolUseIdRef,
-      bottomRef,
       messageNodeByIdRef,
       onPendingJumpTargetReady: handlePendingJumpTargetReady,
       pendingJumpMessageId,
@@ -1779,6 +1848,7 @@ export const MessagesCore = memo(function MessagesCore({
           threadId={threadId}
           workspaceId={workspaceId}
         />
+        {timelineLeadingNode}
         <MessagesTimeline {...timelineModels} />
       </div>
       <ScrollControl

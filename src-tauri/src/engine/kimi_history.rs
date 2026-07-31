@@ -332,8 +332,15 @@ async fn build_summary_from_entry(entry: &KimiSessionIndexEntry) -> KimiSessionS
             if first_prompt_text.is_none() {
                 if let Ok(value) = serde_json::from_str::<Value>(line) {
                     let text = extract_input_text(value.get("input"));
-                    if !text.trim().is_empty() {
-                        first_prompt_text = Some(text);
+                    let (display_text, image_paths) =
+                        crate::engine::cli_image_input::split_kimi_prompt_for_display(&text);
+                    let preview = if display_text.trim().is_empty() && !image_paths.is_empty() {
+                        format!("[{} image(s)]", image_paths.len())
+                    } else {
+                        display_text
+                    };
+                    if !preview.trim().is_empty() {
+                        first_prompt_text = Some(preview);
                     }
                 }
             }
@@ -397,12 +404,24 @@ fn parse_messages_from_wire(raw: &str) -> KimiSessionLoadResult {
                 if text.trim().is_empty() {
                     continue;
                 }
+                // Wire prompt may include mossx CLI-only image injection. Split so
+                // the canvas shows user text + image thumbnails, never the
+                // ReadMediaFile instruction block.
+                let (display_text, image_paths) =
+                    crate::engine::cli_image_input::split_kimi_prompt_for_display(&text);
+                if display_text.trim().is_empty() && image_paths.is_empty() {
+                    continue;
+                }
                 counter += 1;
                 messages.push(KimiSessionMessage {
                     id: format!("kimi-user-{}", counter),
                     role: "user".to_string(),
-                    text,
-                    images: None,
+                    text: display_text,
+                    images: if image_paths.is_empty() {
+                        None
+                    } else {
+                        Some(image_paths)
+                    },
                     timestamp,
                     kind: "message".to_string(),
                     tool_type: None,
@@ -646,6 +665,15 @@ async fn find_workspace_index_entry(
         .ok_or_else(|| format!("Kimi session not found: {}", normalized_session_id))
 }
 
+pub(crate) async fn resolve_kimi_session_history_path(
+    workspace_path: &Path,
+    session_id: &str,
+    custom_home: Option<&str>,
+) -> Result<PathBuf, String> {
+    let entry = find_workspace_index_entry(workspace_path, session_id, custom_home).await?;
+    Ok(wire_log_path(Path::new(entry.session_dir.trim())))
+}
+
 /// Load full Kimi session messages by session id.
 pub async fn load_kimi_session(
     workspace_path: &Path,
@@ -742,6 +770,7 @@ mod tests {
         assert_eq!(result.messages.len(), 5);
         assert_eq!(result.messages[0].role, "user");
         assert_eq!(result.messages[0].text, "你好");
+        assert_eq!(result.messages[0].images, None);
         assert_eq!(result.messages[0].kind, "message");
         assert_eq!(result.messages[1].kind, "reasoning");
         assert_eq!(result.messages[1].text, "用户在打招呼");
@@ -762,6 +791,23 @@ mod tests {
         assert_eq!(usage.output_tokens, Some(40));
         assert_eq!(usage.cache_read_input_tokens, Some(20));
         assert_eq!(usage.cache_creation_input_tokens, Some(5));
+    }
+
+    #[test]
+    fn strips_mossx_image_injection_into_display_text_and_images() {
+        let wire = concat!(
+            r#"{"type":"turn.prompt","input":[{"type":"text","text":"请看截图\n\n<!-- mossx:kimi-image-attachments -->\nThe user attached the following image file(s). You MUST call ReadMediaFile on each path below before answering any question about visual content.\n1. /tmp/shot.png\n<image path=\"/tmp/shot.png\"></image>\n"}],"origin":{"kind":"user"},"time":1784340688097}"#,
+            "\n",
+        );
+        let result = parse_messages_from_wire(wire);
+        assert_eq!(result.messages.len(), 1);
+        assert_eq!(result.messages[0].role, "user");
+        assert_eq!(result.messages[0].text, "请看截图");
+        assert_eq!(
+            result.messages[0].images.as_deref(),
+            Some(&["/tmp/shot.png".to_string()][..])
+        );
+        assert!(!result.messages[0].text.contains("ReadMediaFile"));
     }
 
     #[test]

@@ -326,7 +326,7 @@ pub(crate) fn resolve_kimi_provider_launch_profile(
         return Ok(KimiProviderLaunchProfile {
             binding: None,
             home_dir: None,
-            runtime_key: workspace_id.to_string(),
+            runtime_key: kimi_runtime_key(workspace_id, KIMI_LOCAL_PROVIDER_PROFILE_ID),
         });
     }
 
@@ -405,6 +405,17 @@ mod tests {
         assert_ne!(
             kimi_runtime_key("ws-1", "provider-a"),
             kimi_runtime_key("ws-1", "provider-b")
+        );
+    }
+
+    #[test]
+    fn local_launch_profile_uses_canonical_runtime_key() {
+        let profile =
+            resolve_kimi_provider_launch_profile("ws-1", None).expect("local launch profile");
+
+        assert_eq!(
+            profile.runtime_key,
+            kimi_runtime_key("ws-1", KIMI_LOCAL_PROVIDER_PROFILE_ID)
         );
     }
 

@@ -7,6 +7,8 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -25,6 +27,7 @@ const mockState = vi.hoisted(() => ({
     currentConfig: null,
     currentConfigLoading: false,
     providers: [],
+    localProvider: null,
     loading: false,
     handleSwitchProvider: vi.fn(),
     handleAddProvider: vi.fn(),
@@ -140,6 +143,12 @@ vi.mock("../modelManagerRequest", () => ({
 
 vi.mock("./ProviderList", () => ({
   ProviderList: () => <div data-testid="provider-list-stub" />,
+}));
+
+vi.mock("./ClaudeLocalSettingsCard", () => ({
+  ClaudeLocalSettingsCard: () => (
+    <div data-testid="claude-local-settings-stub" />
+  ),
 }));
 
 vi.mock("./CodexProviderList", () => ({
@@ -263,13 +272,21 @@ function renderPanel(
   };
 }
 
+/** 取某 CLI 行的「...」更多操作触发器(与行主按钮同名前缀,须 within 行容器)。 */
+function getCliRowMoreButton(cliName: string): HTMLElement {
+  const row = screen
+    .getByRole("button", { name: cliName })
+    .closest(".vendor-engine-tab") as HTMLElement;
+  return within(row).getByRole("button", { name: "更多操作" });
+}
+
 async function openCodexTab() {
   fireEvent.click(screen.getByRole("button", { name: "Codex CLI" }));
   await waitFor(() => {
     expect(getCodexUnifiedExecExternalStatusMock).toHaveBeenCalled();
   });
   return (await screen.findByText("Background terminal")).closest(
-    ".vendor-codex-compact-setting",
+    ".vendor-group-row",
   ) as HTMLElement;
 }
 
@@ -360,9 +377,9 @@ describe("VendorSettingsPanel", () => {
       "Claude Code CLI",
       "Codex CLI",
       "Kimi CLI",
-      "Gemini CLI",
       "Grok CLI",
       "OpenCode CLI",
+      "Gemini CLI",
       "GLM CLI",
       "Trae CLI",
       "Cursor CLI",
@@ -567,9 +584,12 @@ describe("VendorSettingsPanel", () => {
       expect(readGlobalCodexAuthJsonMock).toHaveBeenCalled();
     });
 
-    expect(screen.getByLabelText("settings.vendorsTitle").className).toContain(
-      "vendor-engine-nav-scroll",
-    );
+    const nav = screen.getByLabelText("settings.vendorsTitle");
+    expect(nav.className).toContain("vendor-engine-nav");
+    expect(nav.className).not.toContain("vendor-engine-nav-scroll");
+    expect(
+      nav.querySelector(":scope > .vendor-engine-nav-scroll"),
+    ).toBeTruthy();
   });
 
   it("keeps the Codex runtime refresh action hidden from the brand header", async () => {
@@ -580,9 +600,9 @@ describe("VendorSettingsPanel", () => {
     const brandHeader = screen
       .getByRole("heading", { name: "Codex CLI" })
       .closest(".vendor-brand-header") as HTMLElement;
-    const officialConfigHeader = screen
-      .getByText("Official Config")
-      .closest(".vendor-list-header") as HTMLElement;
+    const codexGroupCard = document.querySelector(
+      ".vendor-group-card",
+    ) as HTMLElement;
 
     expect(brandHeader).toBeTruthy();
     expect(
@@ -590,9 +610,11 @@ describe("VendorSettingsPanel", () => {
         name: "settings.codexRuntimeReload",
       }),
     ).toBeNull();
-    expect(officialConfigHeader).toBeTruthy();
+    expect(codexGroupCard).toBeTruthy();
     expect(
-      within(officialConfigHeader).queryByRole("button"),
+      within(codexGroupCard).queryByRole("button", {
+        name: "settings.codexRuntimeReload",
+      }),
     ).toBeNull();
     expect(document.querySelector(".vendor-codex-runtime-reload-row")).toBeNull();
   });
@@ -629,6 +651,9 @@ describe("VendorSettingsPanel", () => {
         "Configure Claude Code CLI providers and local settings used by ccgui.",
       ),
     ).toBeNull();
+    expect(screen.getByTestId("claude-local-settings-stub")).toBeTruthy();
+    expect(screen.getByTestId("provider-list-stub")).toBeTruthy();
+    expect(screen.queryByTestId("current-codex-config-stub")).toBeNull();
   });
 
   it("renders a Codex brand header above the config sections", async () => {
@@ -818,5 +843,203 @@ describe("VendorSettingsPanel", () => {
       screen.queryByRole("button", { name: "settings.codexRuntimeReload" }),
     ).toBeNull();
     expect(screen.queryByText("settings.codexRuntimeReloadHint")).toBeNull();
+  });
+
+  it("groups supported CLIs under 已启用 and keeps 未启用 hidden when empty", async () => {
+    renderPanel();
+
+    await waitFor(() => {
+      expect(readGlobalCodexConfigTomlMock).toHaveBeenCalled();
+    });
+
+    const enabledHeader = screen.getByRole("button", { name: "已启用" });
+    const upcomingHeader = screen.getByRole("button", { name: "暂未开放" });
+    expect(enabledHeader.getAttribute("aria-expanded")).toBe("true");
+    expect(upcomingHeader.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("button", { name: "未启用" })).toBeNull();
+
+    const enabledGroup = enabledHeader.closest(
+      ".vendor-engine-group",
+    ) as HTMLElement;
+    expect(enabledGroup.className).not.toContain(
+      "vendor-engine-group-collapsed",
+    );
+    expect(
+      within(enabledGroup).getByRole("button", { name: /OpenCode CLI/ }),
+    ).toBeTruthy();
+
+    // jsdom 不应用 CSS,折叠仅体现在 class 与 aria-expanded 上,行仍在 DOM 中。
+    const upcomingGroup = upcomingHeader.closest(
+      ".vendor-engine-group",
+    ) as HTMLElement;
+    expect(upcomingGroup.className).toContain("vendor-engine-group-collapsed");
+    expect(
+      within(upcomingGroup).getByRole("button", { name: /Gemini CLI/ }),
+    ).toBeTruthy();
+    // 暂未开放行没有「...」启停菜单。
+    expect(
+      within(upcomingGroup).queryByRole("button", { name: /更多操作/ }),
+    ).toBeNull();
+  });
+
+  it("disables a CLI from its hover actions menu", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const { onUpdateAppSettings } = renderPanel();
+
+    await waitFor(() => {
+      expect(readGlobalCodexConfigTomlMock).toHaveBeenCalled();
+    });
+
+    await user.click(getCliRowMoreButton("OpenCode CLI"));
+    await user.click(await screen.findByRole("menuitem", { name: "关闭启用" }));
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ disabledCliEngines: ["opencode"] }),
+      );
+    });
+  });
+
+  it("lands a disabled CLI in 未启用(collapsed by default) with config still reachable", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const { onUpdateAppSettings } = renderPanel({
+      appSettings: { disabledCliEngines: ["opencode"] },
+    });
+
+    await waitFor(() => {
+      expect(readGlobalCodexConfigTomlMock).toHaveBeenCalled();
+    });
+
+    // 首次挂载即使已有停用项也保持默认折叠(不自动展开)。
+    const disabledHeader = screen.getByRole("button", { name: "未启用" });
+    expect(disabledHeader.getAttribute("aria-expanded")).toBe("false");
+    const disabledGroup = disabledHeader.closest(
+      ".vendor-engine-group",
+    ) as HTMLElement;
+    expect(
+      within(disabledGroup).getByRole("button", { name: /OpenCode CLI/ }),
+    ).toBeTruthy();
+
+    const enabledGroup = screen
+      .getByRole("button", { name: "已启用" })
+      .closest(".vendor-engine-group") as HTMLElement;
+    expect(
+      within(enabledGroup).queryByRole("button", { name: /OpenCode CLI/ }),
+    ).toBeNull();
+
+    // 停用不删除配置:点击行仍打开该 CLI 的配置页。
+    fireEvent.click(
+      within(disabledGroup).getByRole("button", { name: /OpenCode CLI/ }),
+    );
+    expect(screen.getByTestId("opencode-provider-list-stub")).toBeTruthy();
+
+    await user.click(getCliRowMoreButton("OpenCode CLI"));
+    await user.click(await screen.findByRole("menuitem", { name: "启用" }));
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ disabledCliEngines: [] }),
+      );
+    });
+  });
+
+  it("moves a freshly disabled CLI into 未启用 and auto-expands the group", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    function StatefulPanel() {
+      const [settings, setSettings] = useState<AppSettings>({
+        showSidebarProviderLabels: false,
+        disabledCliEngines: [],
+      } as unknown as AppSettings);
+      return (
+        <VendorSettingsPanel
+          appSettings={settings}
+          codexReloadStatus="idle"
+          codexReloadMessage={null}
+          handleReloadCodexRuntimeConfig={vi.fn().mockResolvedValue(undefined)}
+          onUpdateAppSettings={async (next) => setSettings(next)}
+        />
+      );
+    }
+    render(<StatefulPanel />);
+
+    await waitFor(() => {
+      expect(readGlobalCodexConfigTomlMock).toHaveBeenCalled();
+    });
+    expect(screen.queryByRole("button", { name: "未启用" })).toBeNull();
+
+    await user.click(getCliRowMoreButton("OpenCode CLI"));
+    await user.click(await screen.findByRole("menuitem", { name: "关闭启用" }));
+
+    // 新停用的 CLI 落入「未启用」且组自动展开一次,给出可见归宿。
+    await waitFor(() => {
+      expect(
+        screen
+          .getByRole("button", { name: "未启用" })
+          .getAttribute("aria-expanded"),
+      ).toBe("true");
+    });
+    const disabledGroup = screen
+      .getByRole("button", { name: "未启用" })
+      .closest(".vendor-engine-group") as HTMLElement;
+    expect(
+      within(disabledGroup).getByRole("button", { name: /OpenCode CLI/ }),
+    ).toBeTruthy();
+    const enabledGroup = screen
+      .getByRole("button", { name: "已启用" })
+      .closest(".vendor-engine-group") as HTMLElement;
+    expect(
+      within(enabledGroup).queryByRole("button", { name: /OpenCode CLI/ }),
+    ).toBeNull();
+  });
+
+  it("expands and collapses groups from their headers", async () => {
+    renderPanel();
+
+    await waitFor(() => {
+      expect(readGlobalCodexConfigTomlMock).toHaveBeenCalled();
+    });
+
+    const upcomingHeader = screen.getByRole("button", { name: "暂未开放" });
+    expect(upcomingHeader.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(upcomingHeader);
+    expect(upcomingHeader.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(upcomingHeader);
+    expect(upcomingHeader.getAttribute("aria-expanded")).toBe("false");
+
+    const enabledHeader = screen.getByRole("button", { name: "已启用" });
+    expect(enabledHeader.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(enabledHeader);
+    expect(enabledHeader.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("hides group headers while searching", async () => {
+    renderPanel();
+
+    await waitFor(() => {
+      expect(readGlobalCodexConfigTomlMock).toHaveBeenCalled();
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("搜索CLI"), {
+      target: { value: "qwen" },
+    });
+
+    expect(screen.queryByRole("button", { name: "已启用" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "暂未开放" })).toBeNull();
+    expect(screen.getByRole("button", { name: /Qwen CLI/ })).toBeTruthy();
+  });
+
+  it("shows the empty hint when every supported CLI is disabled", async () => {
+    renderPanel({
+      appSettings: {
+        disabledCliEngines: ["claude", "codex", "kimi", "grok", "opencode"],
+      },
+    });
+
+    await waitFor(() => {
+      expect(readGlobalCodexConfigTomlMock).toHaveBeenCalled();
+    });
+
+    expect(screen.getByText("没有已启用的 CLI")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "未启用" })).toBeTruthy();
   });
 });

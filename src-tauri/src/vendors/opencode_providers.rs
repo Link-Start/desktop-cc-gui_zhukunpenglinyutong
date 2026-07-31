@@ -468,12 +468,9 @@ mod tests {
 
     #[test]
     fn provider_value_tolerates_missing_optional_fields() {
-        let parsed = value_to_opencode_provider(
-            "demo",
-            &serde_json::json!({ "name": "Demo" }),
-            false,
-        )
-        .expect("minimal value parses");
+        let parsed =
+            value_to_opencode_provider("demo", &serde_json::json!({ "name": "Demo" }), false)
+                .expect("minimal value parses");
         assert_eq!(parsed.id, "demo");
         assert_eq!(parsed.name, "Demo");
         assert!(parsed.models.is_empty());

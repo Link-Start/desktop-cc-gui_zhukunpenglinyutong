@@ -6,10 +6,13 @@ import {
   createOwnedObjectUrl,
   revokeOwnedObjectUrl,
 } from "../../../../services/mediaResourceOwners";
+import { LocalImage } from "../../../../components/common/LocalImage";
 
 export type MessageImage = {
   src: string;
   label: string;
+  /** Absolute filesystem path for LocalImage fallback when asset protocol fails. */
+  localPath?: string | null;
 };
 
 function shouldUseTransientObjectUrl(src: string) {
@@ -67,12 +70,29 @@ const ManagedMessageImage = memo(function ManagedMessageImage({
   src,
   alt,
   loading,
+  localPath = null,
+  workspaceId = null,
 }: {
   src: string;
   alt: string;
   loading?: "eager" | "lazy";
+  localPath?: string | null;
+  workspaceId?: string | null;
 }) {
   const renderSrc = useTransientImageSrc(src);
+  // Filesystem paths (esp. non-ASCII) often fail under asset://; LocalImage
+  // falls back to read_local_image_data_url via localPath + workspaceId.
+  if (localPath || (workspaceId && !src.toLowerCase().startsWith("data:"))) {
+    return (
+      <LocalImage
+        src={renderSrc}
+        localPath={localPath}
+        workspaceId={workspaceId}
+        alt={alt}
+        loading={loading}
+      />
+    );
+  }
   return <img src={renderSrc} alt={alt} loading={loading} />;
 });
 
@@ -80,10 +100,12 @@ export const MessageImageGrid = memo(function MessageImageGrid({
   images,
   onOpen,
   hasText,
+  workspaceId = null,
 }: {
   images: MessageImage[];
   onOpen: (index: number) => void;
   hasText: boolean;
+  workspaceId?: string | null;
 }) {
   return (
     <div
@@ -98,7 +120,13 @@ export const MessageImageGrid = memo(function MessageImageGrid({
           onClick={() => onOpen(index)}
           aria-label={`Open image ${index + 1}`}
         >
-          <ManagedMessageImage src={image.src} alt={image.label} loading="lazy" />
+          <ManagedMessageImage
+            src={image.src}
+            alt={image.label}
+            loading="lazy"
+            localPath={image.localPath}
+            workspaceId={workspaceId}
+          />
         </button>
       ))}
     </div>
@@ -109,10 +137,12 @@ export const ImageLightbox = memo(function ImageLightbox({
   images,
   activeIndex,
   onClose,
+  workspaceId = null,
 }: {
   images: MessageImage[];
   activeIndex: number;
   onClose: () => void;
+  workspaceId?: string | null;
 }) {
   const { t } = useTranslation();
   const activeImage = images[activeIndex];
@@ -160,7 +190,12 @@ export const ImageLightbox = memo(function ImageLightbox({
         >
           <X size={16} aria-hidden />
         </button>
-        <ManagedMessageImage src={activeImage.src} alt={activeImage.label} />
+        <ManagedMessageImage
+          src={activeImage.src}
+          alt={activeImage.label}
+          localPath={activeImage.localPath}
+          workspaceId={workspaceId}
+        />
       </div>
     </div>,
     document.body,

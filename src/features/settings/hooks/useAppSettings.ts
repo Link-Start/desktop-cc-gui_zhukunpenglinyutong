@@ -189,6 +189,26 @@ function normalizeEnabledBuiltInAgentIds(value: unknown): string[] {
   ).sort();
 }
 
+function normalizeDisabledCliEngines(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") {
+      continue;
+    }
+    const normalized = item.trim();
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    ids.push(normalized);
+  }
+  return ids;
+}
+
 const defaultSettings: AppSettings = {
   claudeBin: null,
   kimiBin: null,
@@ -197,8 +217,7 @@ const defaultSettings: AppSettings = {
   codexBin: null,
   codexArgs: null,
   terminalShellPath: null,
-  geminiEnabled: false,
-  opencodeEnabled: true,
+  disabledCliEngines: [],
   sessionAttributionMode: "related",
   backendMode: "local",
   remoteBackendHost: "127.0.0.1:4732",
@@ -394,8 +413,9 @@ function normalizeAppSettings(
     terminalShellPath: settings.terminalShellPath?.trim()
       ? settings.terminalShellPath.trim()
       : null,
-    geminiEnabled: false,
-    opencodeEnabled: true,
+    disabledCliEngines: normalizeDisabledCliEngines(
+      settings.disabledCliEngines,
+    ),
     sessionAttributionMode:
       settings.sessionAttributionMode === "workspace-only"
         ? "workspace-only"

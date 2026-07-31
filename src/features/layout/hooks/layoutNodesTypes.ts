@@ -22,6 +22,7 @@ import type {
   ReviewPromptStep,
 } from "../../threads/hooks/useReviewPrompt";
 import type { WorkspaceLaunchScriptsState } from "../../app/hooks/useWorkspaceLaunchScripts";
+import type { SharedSessionSupportedEngine } from "../../shared-session/utils/sharedSessionEngines";
 import type { OpenAppMenuExtraAction } from "../../app/components/OpenAppMenu";
 import type {
   AccessMode,
@@ -209,6 +210,7 @@ export type LayoutNodesFlatOptions = {
     mode: Extract<AccessMode, "default" | "full-access">,
   ) => Promise<void> | void;
   onOpenSettings: () => void;
+  onOpenShortcutsSettings?: () => void;
   onOpenExperimentalSettings: () => void;
   onOpenDictationSettings?: () => void;
   onOpenSkillsSettings?: () => void;
@@ -231,7 +233,10 @@ export type LayoutNodesFlatOptions = {
       >
     | import("../../engine/hooks/useEngineController").EngineRefreshResult
     | void;
-  onAddSharedAgent: (workspace: WorkspaceInfo) => Promise<string | null>;
+  onAddSharedAgent: (
+    workspace: WorkspaceInfo,
+    engine: SharedSessionSupportedEngine,
+  ) => Promise<string | null>;
   onAddWorktreeAgent: (workspace: WorkspaceInfo) => Promise<void>;
   onAddCloneAgent: (workspace: WorkspaceInfo) => Promise<void>;
   onToggleWorkspaceCollapse: (workspaceId: string, collapsed: boolean) => void;
@@ -261,8 +266,12 @@ export type LayoutNodesFlatOptions = {
   onDeleteWorktree: (workspaceId: string) => void;
   onRenameWorkspaceAlias: (workspace: WorkspaceInfo) => void;
   onLoadOlderThreads: (workspaceId: string) => void;
-  onReloadWorkspaceThreads: (workspaceId: string) => void;
-  onQuickReloadWorkspaceThreads?: (workspaceId: string) => void;
+  onReloadWorkspaceThreads: (
+    workspaceId: string,
+  ) => Promise<void> | void;
+  onQuickReloadWorkspaceThreads?: (
+    workspaceId: string,
+  ) => Promise<void> | void;
   onRequestRootSessionFolderDraft?: (workspaceId: string) => void;
   isExitedSessionsHidden?: (workspacePath: string) => boolean;
   onToggleExitedSessionsHidden?: (workspacePath: string) => void;
@@ -667,6 +676,7 @@ export type LayoutNodesFlatOptions = {
   onOpenAgentSettings: () => void;
   onOpenPromptSettings: () => void;
   onOpenModelSettings: (providerId?: string) => void;
+  onOpenCliSettings: () => void;
   onRefreshModelConfig?: (providerId?: string) => Promise<void> | void;
   isModelConfigRefreshing?: boolean;
   opencodeVariantOptions: string[];
@@ -807,9 +817,11 @@ export type RuntimeLayoutNodesOptions = Pick<
 export type ChromeLayoutNodesOptions = Pick<
   LayoutNodesFlatOptions,
   | "onOpenSettings"
+  | "onOpenShortcutsSettings"
   | "onOpenAgentSettings"
   | "onOpenPromptSettings"
   | "onOpenModelSettings"
+  | "onOpenCliSettings"
   | "onRefreshModelConfig"
   | "isModelConfigRefreshing"
   | "onOpenDictationSettings"

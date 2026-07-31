@@ -1,9 +1,38 @@
-import { Fragment, memo, useCallback, useMemo, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import CheckIcon from 'lucide-react/dist/esm/icons/check';
+import ChevronDownIcon from 'lucide-react/dist/esm/icons/chevron-down';
+import Settings2Icon from 'lucide-react/dist/esm/icons/settings-2';
 import type { ModelInfo, ProviderId } from '../types';
 import type { ProviderModelGroup } from '../modelOptions';
+import type { ProviderTargetGroup } from '../hooks/useProviderTargetCatalogOwners';
+import type { ExecutionTarget } from '../../../../shared-session/target/types';
+import {
+  CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
+  CODEX_DISK_PROVIDER_PROFILE_ID,
+  GROK_LOCAL_PROVIDER_PROFILE_ID,
+  KIMI_LOCAL_PROVIDER_PROFILE_ID,
+  OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
+} from '../../../../threads/constants/codexProviderProfiles';
 import { EngineIcon } from '../../../../engine/components/EngineIcon';
+import { ProviderBrandIconImg } from '../../../../vendors/components/ProviderBrandIconImg';
+import {
+  PROVIDER_BRAND_ICON_SRC,
+  resolveProviderBrandIcon,
+} from '../../../../vendors/providerBrandIcon';
+import {
+  STORAGE_KEYS as MODEL_MAPPING_STORAGE_KEYS,
+  getModelMapping,
+  resolveModelMappingValue,
+  type ModelMapping,
+} from '../../../../models/constants';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -16,6 +45,9 @@ import {
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
 
+const SUBMENU_FOOTER_BUTTON_CLASS =
+  'flex min-h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-md border border-border/70 bg-muted/45 px-2 py-1.5 text-xs font-medium text-foreground hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50';
+
 interface ModelSelectProps {
   value: string;
   onChange: (modelId: string) => void;
@@ -25,32 +57,282 @@ interface ModelSelectProps {
   triggerVariant?: 'default' | 'readiness';
   modelGroups?: ProviderModelGroup[];
   onProviderModelChange?: (providerId: ProviderId, modelId: string) => void;
-  onAddModel?: () => void;  // Navigate to model management
+  /** Navigate to model management; optional providerId = the engine submenu opened */
+  onAddModel?: (providerId?: string) => void;
   onRefreshConfig?: () => Promise<void> | void; // Refresh current provider config
   isRefreshingConfig?: boolean;
+  /** Jump to CLI / provider settings management page */
+  onOpenCliSettings?: () => void;
+  // 共享会话(atomic)目标选择:与 legacy 相同的「引擎子菜单 → 平铺模型」
+  // 交互,数据来自 target catalog,选中产出完整 ExecutionTarget。
+  targetGroups?: ProviderTargetGroup[];
+  executionTarget?: ExecutionTarget | null;
+  onExecutionTargetChange?: (target: ExecutionTarget) => void;
+  onOpenTargetCatalog?: () => Promise<void> | void;
+  onOpenProviderProfile?: (
+    providerId: ProviderId,
+    providerProfileId: string,
+  ) => Promise<void> | void;
+  targetCatalogError?: string | null;
+  onReloadProviderConfig?: (
+    providerId: ProviderId,
+    providerProfileId: string,
+  ) => Promise<void> | void;
 }
 
 const MODEL_LABEL_KEYS: Record<string, string> = {
+  'claude-fable-5': 'models.claude.fable5.label',
+  'claude-opus-5': 'models.claude.opus5.label',
+  'claude-opus-4-8': 'models.claude.opus48.label',
+  'claude-sonnet-5': 'models.claude.sonnet5.label',
+  'claude-sonnet-4-7': 'models.claude.sonnet47.label',
+  'claude-sonnet-4-6': 'models.claude.sonnet46.label',
+  'claude-haiku-4-5': 'models.claude.haiku45.label',
+  'claude-haiku-4-5-20251001': 'models.claude.haiku45.label',
   'gpt-5.6-sol': 'models.codex.gpt56sol.label',
   'gpt-5.6-terra': 'models.codex.gpt56terra.label',
   'gpt-5.6-luna': 'models.codex.gpt56luna.label',
   'gpt-5.5': 'models.codex.gpt55.label',
-  'gpt-5.4': 'models.codex.gpt54.label',
 };
 
 const MODEL_DESCRIPTION_KEYS: Record<string, string> = {
+  'claude-fable-5': 'models.claude.fable5.description',
+  'claude-opus-5': 'models.claude.opus5.description',
+  'claude-opus-4-8': 'models.claude.opus48.description',
+  'claude-sonnet-5': 'models.claude.sonnet5.description',
+  'claude-sonnet-4-7': 'models.claude.sonnet47.description',
+  'claude-sonnet-4-6': 'models.claude.sonnet46.description',
+  'claude-haiku-4-5': 'models.claude.haiku45.description',
+  'claude-haiku-4-5-20251001': 'models.claude.haiku45.description',
   'gpt-5.6-sol': 'models.codex.gpt56sol.description',
   'gpt-5.6-terra': 'models.codex.gpt56terra.description',
   'gpt-5.6-luna': 'models.codex.gpt56luna.description',
   'gpt-5.5': 'models.codex.gpt55.description',
-  'gpt-5.4': 'models.codex.gpt54.description',
+};
+
+const LOCAL_PROVIDER_PROFILE_IDS: Partial<Record<ProviderId, string>> = {
+  claude: CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
+  codex: CODEX_DISK_PROVIDER_PROFILE_ID,
+  kimi: KIMI_LOCAL_PROVIDER_PROFILE_ID,
+  grok: GROK_LOCAL_PROVIDER_PROFILE_ID,
+  opencode: OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
+};
+
+export function normalizeExecutionProviderProfileId(
+  providerId: ProviderId,
+  providerProfileId: string | null | undefined,
+): string | null {
+  const normalizedProviderProfileId = providerProfileId?.trim();
+  return !normalizedProviderProfileId ||
+    LOCAL_PROVIDER_PROFILE_IDS[providerId] === normalizedProviderProfileId
+    ? null
+    : normalizedProviderProfileId;
+}
+
+/**
+ * 每个 CLI 只投影一个活跃渠道:当前 CLI 取 executionTarget 所选渠道
+ * (空 = 本地默认),其余 CLI 一律取本地默认渠道。
+ */
+export function resolveActiveProviderProfileId(
+  providerId: ProviderId,
+  executionTarget: Pick<
+    ExecutionTarget,
+    'engine' | 'providerProfileId'
+  > | null | undefined,
+): string | null {
+  const targetProfileId =
+    executionTarget?.engine === providerId
+      ? normalizeExecutionProviderProfileId(
+          providerId,
+          executionTarget.providerProfileId,
+        )
+      : null;
+  return targetProfileId ?? LOCAL_PROVIDER_PROFILE_IDS[providerId] ?? null;
+}
+
+export function isSameProviderExecutionProfile(
+  currentProvider: ProviderId,
+  currentProviderProfileId: string | null | undefined,
+  target: Pick<ExecutionTarget, 'engine' | 'providerProfileId'>,
+): boolean {
+  return (
+    target.engine === currentProvider &&
+    normalizeExecutionProviderProfileId(
+      currentProvider,
+      target.providerProfileId,
+    ) ===
+      normalizeExecutionProviderProfileId(
+        currentProvider,
+        currentProviderProfileId,
+      )
+  );
+}
+
+export function buildProviderExecutionTarget(
+  current: ExecutionTarget | null | undefined,
+  providerId: ProviderId,
+  providerProfileId: string,
+  modelCatalogEntryId: string,
+  providerProfileNameSnapshot?: string,
+  providerProfileSource?: 'disk' | 'managed',
+  normalizeProviderProfile = true,
+  runtimeModel?: string,
+): ExecutionTarget {
+  const normalizedProviderProfileId = normalizeProviderProfile
+    ? normalizeExecutionProviderProfileId(providerId, providerProfileId)
+    : providerProfileId;
+  const normalizedRuntimeModel = runtimeModel?.trim() || null;
+  return {
+    engine: providerId,
+    providerProfileId: normalizedProviderProfileId,
+    modelCatalogEntryId,
+    model: normalizedRuntimeModel,
+    providerProfileNameSnapshot:
+      providerProfileNameSnapshot?.trim() || null,
+    providerProfileSource: providerProfileSource ?? null,
+    reasoning:
+      current?.engine === providerId &&
+      current.providerProfileId === normalizedProviderProfileId
+        ? current.reasoning ?? null
+        : null,
+  };
+}
+
+function resolveRuntimeModel(model: ModelInfo): string | undefined {
+  return model.model?.trim() || model.id.trim() || undefined;
+}
+
+/**
+ * Resolve the model id used for brand-icon matching.
+ * Prefer the mapped runtime model (e.g. kimi-k3) so third-party providers show
+ * their own logo instead of the Claude glyph.
+ */
+function resolveModelIdForIcon(
+  model: ModelInfo | null | undefined,
+  mapping: ModelMapping,
+): string | null {
+  if (!model) {
+    return null;
+  }
+  const mapped = resolveModelMappingValue(model.id, mapping);
+  if (mapped) {
+    return mapped;
+  }
+  return resolveRuntimeModel(model) ?? model.id;
+}
+
+function isSelectedExecutionModel(
+  executionTarget: ExecutionTarget | null | undefined,
+  model: ModelInfo,
+): boolean {
+  const selectedCatalogEntryId = executionTarget?.modelCatalogEntryId?.trim();
+  if (selectedCatalogEntryId) {
+    return selectedCatalogEntryId === model.id;
+  }
+  const selectedRuntimeModel = executionTarget?.model?.trim();
+  return Boolean(
+    selectedRuntimeModel &&
+      selectedRuntimeModel === resolveRuntimeModel(model),
+  );
+}
+
+/**
+ * 分组子菜单的统一投影:legacy(modelGroups)与 atomic(targetGroups)
+ * 共用同一套「引擎子菜单 → 平铺模型」渲染,差异只在选择/刷新行为。
+ */
+type PickerProfileOption = {
+  id: string;
+  label: string;
+  source: 'disk' | 'managed';
+  models: ModelInfo[];
+  loading: boolean;
+  reloading: boolean;
+  error: string | null;
+};
+
+type PickerModelGroup = {
+  providerId: ProviderId;
+  providerLabel: string;
+  models: ModelInfo[];
+  enabled: boolean;
+  disabledReason?: string;
+  loading: boolean;
+  reloading: boolean;
+  error: string | null;
+  targetProfileId: string | null;
+  targetProfileLabel?: string;
+  targetProfileSource?: 'disk' | 'managed';
+  /** Atomic 目标组的全部渠道,用于子菜单底栏渠道选择弹窗 */
+  profiles: PickerProfileOption[];
 };
 
 /**
- * Model icon component - displays different icons based on provider type
+ * Each CLI's native brand mark (when it has a lobehub SVG). Used to detect
+ * true cross-vendor remaps (e.g. Claude tier → kimi-k3) vs native models that
+ * should keep the engine-canonical icon for visual consistency.
  */
-const ModelIcon = ({ provider, size = 16 }: { provider?: string; size?: number }) => {
+const ENGINE_NATIVE_BRAND_SRC: Partial<Record<string, string>> = {
+  claude: PROVIDER_BRAND_ICON_SRC.claude,
+  codex: PROVIDER_BRAND_ICON_SRC.openai,
+  kimi: PROVIDER_BRAND_ICON_SRC.kimi,
+  opencode: PROVIDER_BRAND_ICON_SRC.opencode,
+};
+
+function renderBrandIcon(src: string, size: number) {
   const imgStyle = { width: size, height: size, flexShrink: 0 } as const;
+  return (
+    <span style={imgStyle} className="selector-model-brand-icon" aria-hidden>
+      <ProviderBrandIconImg src={src} />
+    </span>
+  );
+}
+
+/**
+ * Model icon: keep provider row / model rows / composer trigger consistent per CLI.
+ *
+ * - Kimi → lobehub brand tile (dark pad + white K + blue dot)
+ * - Codex / Grok / Claude / … → EngineIcon monochrome / asset
+ * - Only show a foreign brand when a mapped runtime model points at another
+ *   vendor (e.g. Claude slot remapped to kimi-k3)
+ */
+const ModelIcon = ({
+  provider,
+  model,
+  modelIdForIcon,
+  size = 16,
+}: {
+  provider?: string;
+  model?: ModelInfo | null;
+  /** Pre-resolved id for brand matching (mapped runtime name preferred). */
+  modelIdForIcon?: string | null;
+  size?: number;
+}) => {
+  const imgStyle = { width: size, height: size, flexShrink: 0 } as const;
+  const resolvedModelId =
+    modelIdForIcon?.trim() ||
+    (model ? resolveRuntimeModel(model) ?? model.id : null);
+
+  // Cross-vendor remap only — do not pass presetId, otherwise every Kimi model
+  // without "kimi" in its id would short-circuit through brand while the
+  // provider row still used EngineIcon (or vice versa).
+  if (resolvedModelId) {
+    const brandIconSrc = resolveProviderBrandIcon({
+      modelId: resolvedModelId,
+    });
+    const nativeBrandSrc = provider
+      ? ENGINE_NATIVE_BRAND_SRC[provider]
+      : undefined;
+    if (brandIconSrc && brandIconSrc !== nativeBrandSrc) {
+      return renderBrandIcon(brandIconSrc, size);
+    }
+  }
+
+  // Kimi's product mark is the brand tile; monochrome EngineIcon is the wrong
+  // glyph for this CLI (provider row + model list + trigger must match).
+  if (provider === 'kimi') {
+    return renderBrandIcon(PROVIDER_BRAND_ICON_SRC.kimi, size);
+  }
+
   switch (provider) {
     case 'codex':
       return <EngineIcon engine="codex" size={size} style={imgStyle} />;
@@ -58,8 +340,6 @@ const ModelIcon = ({ provider, size = 16 }: { provider?: string; size?: number }
       return <EngineIcon engine="gemini" size={size} style={imgStyle} />;
     case 'grok':
       return <EngineIcon engine="grok" size={size} style={imgStyle} />;
-    case 'kimi':
-      return <EngineIcon engine="kimi" size={size} style={imgStyle} />;
     case 'opencode':
       return <EngineIcon engine="opencode" size={size} style={imgStyle} />;
     case 'claude':
@@ -83,10 +363,114 @@ export const ModelSelect = memo(({
   onAddModel,
   onRefreshConfig,
   isRefreshingConfig = false,
+  onOpenCliSettings,
+  targetGroups,
+  executionTarget,
+  onExecutionTargetChange,
+  onOpenTargetCatalog,
+  onOpenProviderProfile,
+  targetCatalogError,
+  onReloadProviderConfig,
 }: ModelSelectProps) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [refreshConfigError, setRefreshConfigError] = useState<string | null>(null);
+  const [modelMappingVersion, setModelMappingVersion] = useState(0);
+  /** 底栏渠道按钮打开的全屏选择弹窗所绑定的引擎 */
+  const [channelPickerProviderId, setChannelPickerProviderId] =
+    useState<ProviderId | null>(null);
+  /**
+   * 各 CLI 渠道预览覆盖:浏览非当前引擎时切换渠道不立刻改 executionTarget,
+   * 仅投影模型列表;当前引擎切换则实时写回 target。
+   */
+  const [profileOverrides, setProfileOverrides] = useState<
+    Partial<Record<ProviderId, string>>
+  >({});
+
+  // Keep label/icon mapping in sync when the active provider rewrites
+  // claude-model-mapping (same-tab custom event + cross-tab storage).
+  useEffect(() => {
+    const isRelevant = (key: string | null | undefined) =>
+      key === MODEL_MAPPING_STORAGE_KEYS.CLAUDE_MODEL_MAPPING;
+    const onStorage = (event: StorageEvent) => {
+      if (isRelevant(event.key)) {
+        setModelMappingVersion((version) => version + 1);
+      }
+    };
+    const onCustom = (event: Event) => {
+      const detail = (event as CustomEvent<{ key?: string }>).detail;
+      if (isRelevant(detail?.key)) {
+        setModelMappingVersion((version) => version + 1);
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('localStorageChange', onCustom);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('localStorageChange', onCustom);
+    };
+  }, []);
+
+  const modelMapping = useMemo(() => {
+    void modelMappingVersion;
+    return getModelMapping();
+  }, [modelMappingVersion]);
+
+  const hasTargetGroups = Boolean(targetGroups && targetGroups.length > 0);
+
+  const pickerGroups = useMemo<PickerModelGroup[]>(() => {
+    if (targetGroups && targetGroups.length > 0) {
+      return targetGroups.map((group) => {
+        const defaultProfileId = resolveActiveProviderProfileId(
+          group.providerId,
+          executionTarget,
+        );
+        const overrideProfileId = profileOverrides[group.providerId];
+        const activeProfileId = overrideProfileId ?? defaultProfileId;
+        const profiles: PickerProfileOption[] = group.profiles
+          .filter((profile) => profile.enabled !== false)
+          .map((profile) => ({
+            id: profile.id,
+            label: profile.label,
+            source: profile.source,
+            models: profile.models,
+            loading: profile.loading,
+            reloading: profile.reloadingConfig ?? profile.loading,
+            error: profile.error,
+          }));
+        const activeProfile =
+          profiles.find((profile) => profile.id === activeProfileId) ??
+          profiles[0];
+        return {
+          providerId: group.providerId,
+          providerLabel: group.providerLabel,
+          models: activeProfile?.models ?? [],
+          enabled: group.enabled && Boolean(activeProfile),
+          disabledReason: group.disabledReason,
+          loading: activeProfile?.loading ?? false,
+          reloading: activeProfile?.reloading ?? false,
+          error: activeProfile?.error ?? null,
+          targetProfileId: activeProfile?.id ?? null,
+          targetProfileLabel: activeProfile?.label,
+          targetProfileSource: activeProfile?.source,
+          profiles,
+        };
+      });
+    }
+    return (modelGroups ?? []).map((group) => ({
+      providerId: group.providerId,
+      providerLabel: group.providerLabel,
+      models: group.models,
+      enabled: true,
+      loading: false,
+      reloading: false,
+      error: null,
+      targetProfileId: null,
+      profiles: [],
+    }));
+  }, [executionTarget, modelGroups, profileOverrides, targetGroups]);
+
+  const hasPickerGroups = pickerGroups.length > 0;
 
   const effectiveModels = useMemo(() => {
     if (models.length > 0) {
@@ -99,33 +483,69 @@ export const ModelSelect = memo(({
   }, [currentProvider, models, value]);
 
   const selectedModelValue = value.trim();
-  const currentModel =
-    selectedModelValue.length > 0
-      ? effectiveModels.find(m => m.id === selectedModelValue) ?? null
+  const targetCurrentModel =
+    executionTarget && selectedModelValue.length > 0
+      ? pickerGroups
+          .find((group) => group.providerId === executionTarget.engine)
+          ?.models.find((model) => model.id === selectedModelValue) ?? null
       : null;
+  const currentModel =
+    targetCurrentModel ??
+    (selectedModelValue.length > 0
+      ? effectiveModels.find(m => m.id === selectedModelValue) ?? null
+      : null);
 
   const getModelLabel = (model: ModelInfo): string => {
-    // The parent owns refreshed provider/model mapping. Keep this selector
-    // presentational so manual config refreshes can update labels immediately.
-    const labelKey = MODEL_LABEL_KEYS[model.id];
+    // Prefer active provider mapping (e.g. kimi-k3) so every tier row shows the
+    // real runtime model — mirrors jetbrains-cc-gui ModelSelect behaviour.
+    const mappedName = resolveModelMappingValue(model.id, modelMapping);
+    if (mappedName) {
+      return mappedName;
+    }
 
+    const parentLabel = model.label?.trim() || "";
+    // Parent/backend already rewrote the label (mapped runtime name, or a
+    // curated tier title). Prefer it over static i18n so refresh paths work.
+    if (parentLabel) {
+      return parentLabel;
+    }
+
+    const labelKey = MODEL_LABEL_KEYS[model.id];
     if (labelKey) {
       return t(labelKey);
     }
 
-    return model.label;
+    return model.id;
   };
 
   const getModelDescription = (model: ModelInfo): string | undefined => {
+    // Always prefer the localized tier subtitle when available, so mapped
+    // labels (kimi-k3) still explain which Claude family slot they occupy.
     const descriptionKey = MODEL_DESCRIPTION_KEYS[model.id];
     if (descriptionKey) {
       return t(descriptionKey);
     }
     return model.description;
   };
+
+  const getModelIconId = (model?: ModelInfo | null): string | null =>
+    resolveModelIdForIcon(model, modelMapping);
   const currentModelLabel = currentModel ? getModelLabel(currentModel) : t('models.selectModel');
-  const hasGroupedModels = Boolean(modelGroups && modelGroups.length > 0);
   const hasConfigActions = Boolean(onAddModel || onRefreshConfig);
+
+  const isGroupCurrent = (group: PickerModelGroup): boolean =>
+    hasTargetGroups
+      ? group.providerId === executionTarget?.engine
+      : group.providerId === currentProvider;
+
+  const isGroupModelSelected = (
+    group: PickerModelGroup,
+    model: ModelInfo,
+  ): boolean =>
+    hasTargetGroups
+      ? group.providerId === executionTarget?.engine &&
+        isSelectedExecutionModel(executionTarget, model)
+      : group.providerId === currentProvider && model.id === value;
 
   /**
    * Select model
@@ -144,10 +564,55 @@ export const ModelSelect = memo(({
     setIsOpen(false);
   }, [onChange, onProviderModelChange]);
 
-  const handleAddModel = useCallback(() => {
-    onAddModel?.();
+  const handleTargetModelSelect = useCallback(
+    (group: PickerModelGroup, model: ModelInfo) => {
+      if (!group.targetProfileId) {
+        return;
+      }
+      const runtimeModel = resolveRuntimeModel(model);
+      if (!runtimeModel) {
+        return;
+      }
+      onExecutionTargetChange?.(
+        buildProviderExecutionTarget(
+          executionTarget,
+          group.providerId,
+          group.targetProfileId,
+          model.id,
+          group.targetProfileLabel,
+          group.targetProfileSource,
+          true,
+          runtimeModel,
+        ),
+      );
+      setIsOpen(false);
+    },
+    [executionTarget, onExecutionTargetChange],
+  );
+
+  const handlePickerSelect = useCallback(
+    (group: PickerModelGroup, model: ModelInfo) => {
+      if (hasTargetGroups) {
+        handleTargetModelSelect(group, model);
+        return;
+      }
+      handleGroupedSelect(group.providerId, model.id);
+    },
+    [handleGroupedSelect, handleTargetModelSelect, hasTargetGroups],
+  );
+
+  const handleAddModel = useCallback(
+    (providerId?: string) => {
+      onAddModel?.(providerId);
+      setIsOpen(false);
+    },
+    [onAddModel],
+  );
+
+  const handleOpenCliSettings = useCallback(() => {
+    onOpenCliSettings?.();
     setIsOpen(false);
-  }, [onAddModel]);
+  }, [onOpenCliSettings]);
 
   // Refresh keeps the menu open so the spinner / error stay visible.
   const handleRefreshConfig = useCallback(() => {
@@ -161,6 +626,156 @@ export const ModelSelect = memo(({
     });
   }, [isRefreshingConfig, onRefreshConfig]);
 
+  /**
+   * 切换 CLI 渠道:立即投影模型列表;若是当前引擎则实时写回 ExecutionTarget。
+   */
+  const handleChannelSwitch = useCallback(
+    (group: PickerModelGroup, profileId: string) => {
+      const profile = group.profiles.find((item) => item.id === profileId);
+      if (!profile || profile.id === group.targetProfileId) {
+        return;
+      }
+      setProfileOverrides((current) => ({
+        ...current,
+        [group.providerId]: profileId,
+      }));
+      void onOpenProviderProfile?.(group.providerId, profileId);
+
+      if (!hasTargetGroups || !onExecutionTargetChange) {
+        return;
+      }
+      // 当前引擎:渠道切换立刻生效(保留同 catalog/runtime 模型,否则回退首个可用)
+      if (group.providerId !== executionTarget?.engine) {
+        return;
+      }
+      const keptModel =
+        profile.models.find((model) =>
+          isSelectedExecutionModel(executionTarget, model),
+        ) ??
+        profile.models.find(
+          (model) =>
+            resolveRuntimeModel(model) ===
+            (executionTarget.model?.trim() || undefined),
+        ) ??
+        profile.models[0];
+      const runtimeModel = keptModel
+        ? resolveRuntimeModel(keptModel)
+        : executionTarget.model?.trim() || undefined;
+      const catalogEntryId =
+        keptModel?.id ??
+        executionTarget.modelCatalogEntryId ??
+        runtimeModel ??
+        '';
+      if (!catalogEntryId && !runtimeModel) {
+        return;
+      }
+      onExecutionTargetChange(
+        buildProviderExecutionTarget(
+          executionTarget,
+          group.providerId,
+          profileId,
+          catalogEntryId || runtimeModel || '',
+          profile.label,
+          profile.source,
+          true,
+          runtimeModel,
+        ),
+      );
+    },
+    [
+      executionTarget,
+      hasTargetGroups,
+      onExecutionTargetChange,
+      onOpenProviderProfile,
+    ],
+  );
+
+  const openChannelPicker = useCallback((group: PickerModelGroup) => {
+    if (group.profiles.length <= 1) {
+      return;
+    }
+    // 关闭下拉，避免与 Dialog 焦点层打架；渠道写入后仍可通过底栏再次进入。
+    setIsOpen(false);
+    setChannelPickerProviderId(group.providerId);
+  }, []);
+
+  const closeChannelPicker = useCallback(() => {
+    setChannelPickerProviderId(null);
+  }, []);
+
+  const handleChannelPickerSelect = useCallback(
+    (profileId: string) => {
+      if (!channelPickerProviderId) {
+        return;
+      }
+      const group = pickerGroups.find(
+        (item) => item.providerId === channelPickerProviderId,
+      );
+      if (!group) {
+        setChannelPickerProviderId(null);
+        return;
+      }
+      handleChannelSwitch(group, profileId);
+      setChannelPickerProviderId(null);
+    },
+    [channelPickerProviderId, handleChannelSwitch, pickerGroups],
+  );
+
+  const channelPickerGroup = useMemo(
+    () =>
+      channelPickerProviderId
+        ? pickerGroups.find(
+            (group) => group.providerId === channelPickerProviderId,
+          ) ?? null
+        : null,
+    [channelPickerProviderId, pickerGroups],
+  );
+
+  const resolveGroupRefresh = (
+    group: PickerModelGroup,
+  ): { run: () => void; spinning: boolean } | null => {
+    if (hasTargetGroups) {
+      // Atomic:每个 CLI 都可刷新其当前活跃渠道配置
+      if (!onReloadProviderConfig || !group.targetProfileId) {
+        return null;
+      }
+      const profileId = group.targetProfileId;
+      return {
+        run: () => {
+          void onReloadProviderConfig(group.providerId, profileId);
+        },
+        spinning: group.reloading,
+      };
+    }
+    // Legacy:仅当前 provider 暴露刷新
+    if (group.providerId !== currentProvider || !onRefreshConfig) {
+      return null;
+    }
+    return { run: handleRefreshConfig, spinning: isRefreshingConfig };
+  };
+
+  // 菜单打开时预取各引擎活跃渠道的模型,保证未展开子菜单前数据已在路上。
+  const handleMenuOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      setIsOpen(nextOpen);
+      if (!nextOpen || !hasTargetGroups) {
+        return;
+      }
+      void onOpenTargetCatalog?.();
+      pickerGroups.forEach((group) => {
+        if (group.enabled && group.targetProfileId) {
+          void onOpenProviderProfile?.(group.providerId, group.targetProfileId);
+        }
+      });
+    },
+    [
+      hasTargetGroups,
+      onOpenTargetCatalog,
+      onOpenProviderProfile,
+      pickerGroups,
+    ],
+  );
+
   const trigger = (
     <button
       className={triggerVariant === 'readiness' ? 'composer-readiness-target composer-readiness-target-button' : 'selector-button'}
@@ -170,7 +785,12 @@ export const ModelSelect = memo(({
       {triggerVariant === 'readiness' ? (
         <>
           <span className="composer-readiness-icon" aria-hidden="true">
-            <ModelIcon provider={currentProvider} size={16} />
+            <ModelIcon
+              provider={currentProvider}
+              model={currentModel}
+              modelIdForIcon={getModelIconId(currentModel)}
+              size={16}
+            />
           </span>
           <span className="composer-readiness-model">
             {currentModelLabel}
@@ -178,7 +798,12 @@ export const ModelSelect = memo(({
         </>
       ) : (
         <>
-          <ModelIcon provider={currentProvider} size={12} />
+          <ModelIcon
+            provider={currentProvider}
+            model={currentModel}
+            modelIdForIcon={getModelIconId(currentModel)}
+            size={12}
+          />
           <span className="selector-button-text">{currentModelLabel}</span>
           <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={{ fontSize: '10px', marginLeft: '2px' }} />
         </>
@@ -187,7 +812,7 @@ export const ModelSelect = memo(({
   );
 
   const menu = (
-    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+    <DropdownMenu open={isOpen} onOpenChange={handleMenuOpenChange}>
       <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
@@ -195,136 +820,289 @@ export const ModelSelect = memo(({
         sideOffset={4}
         className="max-h-[380px] w-64 overflow-y-auto"
       >
-        {hasGroupedModels ? (
-          modelGroups!.map((group, groupIndex) => (
-            <Fragment key={group.providerId}>
-              {groupIndex > 0 && <DropdownMenuSeparator />}
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger
-                  data-provider-id={group.providerId}
-                  data-selected={group.providerId === currentProvider ? 'true' : undefined}
-                  className="gap-2"
-                >
-                  <ModelIcon provider={group.providerId} size={18} />
-                  <span className="min-w-0 flex-1 truncate">{group.providerLabel}</span>
-                  {group.providerId === currentProvider && (
-                    <CheckIcon className="size-4 shrink-0" aria-hidden />
-                  )}
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent
-                  sideOffset={8}
-                  alignOffset={-4}
-                  className="max-h-[380px] w-64 overflow-y-auto"
-                >
-                  <DropdownMenuLabel className="flex items-center justify-between gap-2 text-muted-foreground">
-                    <span className="min-w-0 truncate">{group.providerLabel}</span>
-                    {onRefreshConfig && group.providerId === currentProvider && (
-                      <button
-                        type="button"
-                        disabled={isRefreshingConfig}
-                        onPointerDown={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                        }}
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                        }}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          handleRefreshConfig();
-                        }}
-                        aria-label={t(isRefreshingConfig ? 'models.refreshingConfig' : 'models.refreshConfig')}
-                        title={t(isRefreshingConfig ? 'models.refreshingConfig' : 'models.refreshConfig')}
-                        className="inline-flex size-8 shrink-0 items-center justify-center rounded-sm text-foreground hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
-                      >
+        {hasPickerGroups ? (
+          <>
+            {hasTargetGroups && targetCatalogError && (
+              <div className="px-2 py-1 text-xs text-destructive" role="status">
+                {targetCatalogError}
+              </div>
+            )}
+            {pickerGroups.map((group, groupIndex) => {
+              const groupRefresh = resolveGroupRefresh(group);
+              const hasChannelSwitcher =
+                hasTargetGroups && group.profiles.length > 0;
+              return (
+                <Fragment key={group.providerId}>
+                  {groupIndex > 0 && <DropdownMenuSeparator />}
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger
+                      data-provider-id={group.providerId}
+                      data-selected={isGroupCurrent(group) ? 'true' : undefined}
+                      disabled={!group.enabled}
+                      title={group.disabledReason}
+                      className="gap-2"
+                    >
+                      <ModelIcon provider={group.providerId} size={18} />
+                      <span className="min-w-0 flex-1 truncate">{group.providerLabel}</span>
+                      {isGroupCurrent(group) && (
                         <span
-                          className={`codicon codicon-refresh${isRefreshingConfig ? ' selector-refresh-icon-spinning' : ''}`}
+                          className="size-1.5 shrink-0 rounded-full bg-emerald-500"
                           aria-hidden
                         />
-                      </button>
-                    )}
-                  </DropdownMenuLabel>
-                  {group.models.map((model) => {
-                    const isSelected = group.providerId === currentProvider && model.id === value;
-                    return (
-                      <DropdownMenuItem
-                        key={`${group.providerId}:${model.id}`}
-                        data-model-id={model.id}
-                        data-selected={isSelected ? 'true' : undefined}
-                        onSelect={(event) => {
-                          event.preventDefault();
-                          handleGroupedSelect(group.providerId, model.id);
-                        }}
-                        className="gap-2"
-                      >
-                        <ModelIcon provider={group.providerId} size={18} />
-                        <span className="min-w-0 flex-1 truncate">{getModelLabel(model)}</span>
-                        {isSelected && <CheckIcon className="size-4 shrink-0" aria-hidden />}
-                      </DropdownMenuItem>
-                    );
-                  })}
-                  {onAddModel && group.providerId === currentProvider && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onSelect={(event) => {
-                          event.preventDefault();
-                          handleAddModel();
-                        }}
-                      >
-                        {t('models.addModel')}
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                  {refreshConfigError && group.providerId === currentProvider && (
-                    <div className="px-2 py-1 text-xs text-destructive" role="status">
-                      {t('models.refreshConfigFailed', { message: refreshConfigError })}
-                    </div>
-                  )}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            </Fragment>
-          ))
+                      )}
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent
+                      sideOffset={8}
+                      alignOffset={-4}
+                      className="max-h-[380px] w-72 overflow-y-auto"
+                    >
+                      <DropdownMenuLabel className="flex items-center gap-1.5 text-muted-foreground">
+                        <span className="min-w-0 flex-1 truncate">
+                          {t('models.engineHeader', {
+                            name: group.providerLabel,
+                            defaultValue: `${group.providerLabel} 引擎`,
+                          })}
+                        </span>
+                        {groupRefresh && (
+                          <button
+                            type="button"
+                            disabled={groupRefresh.spinning}
+                            onPointerDown={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                            }}
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                            }}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              groupRefresh.run();
+                            }}
+                            aria-label={t(groupRefresh.spinning ? 'models.refreshingConfig' : 'models.refreshConfig')}
+                            title={t(groupRefresh.spinning ? 'models.refreshingConfig' : 'models.refreshConfig')}
+                            className="inline-flex size-7 shrink-0 items-center justify-center rounded-sm text-foreground hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+                          >
+                            <span
+                              className={`codicon codicon-refresh${groupRefresh.spinning ? ' selector-refresh-icon-spinning' : ''}`}
+                              aria-hidden
+                            />
+                          </button>
+                        )}
+                      </DropdownMenuLabel>
+                      {group.loading && (
+                        <DropdownMenuItem disabled>
+                          <span
+                            className="codicon codicon-loading selector-refresh-icon-spinning"
+                            aria-hidden
+                          />
+                          {t('models.refreshingConfig')}
+                        </DropdownMenuItem>
+                      )}
+                      {!group.loading && group.error && (
+                        <DropdownMenuItem disabled className="items-start">
+                          <span className="min-w-0 whitespace-normal text-xs text-destructive">
+                            {group.error}
+                          </span>
+                        </DropdownMenuItem>
+                      )}
+                      {!group.loading &&
+                        !group.error &&
+                        group.models.length === 0 && (
+                          <DropdownMenuItem disabled>
+                            {t('models.noModels', {
+                              defaultValue: '暂无可用模型',
+                            })}
+                          </DropdownMenuItem>
+                        )}
+                      {group.models.map((model) => {
+                        const isSelected = isGroupModelSelected(group, model);
+                        const description = getModelDescription(model);
+                        return (
+                          <DropdownMenuItem
+                            key={`${group.providerId}:${model.id}`}
+                            data-model-id={model.id}
+                            data-selected={isSelected ? 'true' : undefined}
+                            onSelect={(event) => {
+                              event.preventDefault();
+                              handlePickerSelect(group, model);
+                            }}
+                            className="items-start gap-2"
+                          >
+                            <ModelIcon
+                              provider={group.providerId}
+                              model={model}
+                              modelIdForIcon={getModelIconId(model)}
+                              size={18}
+                            />
+                            <div className="flex min-w-0 flex-1 flex-col">
+                              <span className="truncate text-sm">{getModelLabel(model)}</span>
+                              {description && (
+                                <span className="text-xs text-muted-foreground whitespace-normal">
+                                  {description}
+                                </span>
+                              )}
+                            </div>
+                            {isSelected && (
+                              <CheckIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
+                            )}
+                          </DropdownMenuItem>
+                        );
+                      })}
+                      {(hasChannelSwitcher || onAddModel) && (
+                        <>
+                          <DropdownMenuSeparator />
+                          {hasChannelSwitcher ? (
+                            <div
+                              className="flex items-stretch gap-1.5 p-1.5"
+                              data-submenu-footer={group.providerId}
+                              data-channel-select={group.providerId}
+                            >
+                              <button
+                                type="button"
+                                data-provider-profile-id={
+                                  group.targetProfileId ?? undefined
+                                }
+                                data-channel-select-trigger={group.providerId}
+                                disabled={group.profiles.length <= 1}
+                                aria-label={t('models.switchChannel', {
+                                  defaultValue: '切换渠道',
+                                })}
+                                title={
+                                  group.targetProfileLabel
+                                    ? `${t('models.switchChannel', {
+                                        defaultValue: '切换渠道',
+                                      })}: ${group.targetProfileLabel}`
+                                    : t('models.switchChannel', {
+                                        defaultValue: '切换渠道',
+                                      })
+                                }
+                                className={SUBMENU_FOOTER_BUTTON_CLASS}
+                                onPointerDown={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                }}
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                }}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  openChannelPicker(group);
+                                }}
+                              >
+                                <span className="min-w-0 truncate">
+                                  {group.targetProfileLabel ||
+                                    t('models.selectChannel', {
+                                      defaultValue: '选择渠道',
+                                    })}
+                                </span>
+                                {group.profiles.length > 1 && (
+                                  <ChevronDownIcon
+                                    className="size-3.5 shrink-0 opacity-70"
+                                    aria-hidden
+                                  />
+                                )}
+                              </button>
+                              {onAddModel && (
+                                <button
+                                  type="button"
+                                  className={SUBMENU_FOOTER_BUTTON_CLASS}
+                                  onPointerDown={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                  }}
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                  }}
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    handleAddModel(group.providerId);
+                                  }}
+                                >
+                                  <span className="min-w-0 truncate">
+                                    {t('models.addModel')}
+                                  </span>
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <DropdownMenuItem
+                              onSelect={(event) => {
+                                event.preventDefault();
+                                handleAddModel(group.providerId);
+                              }}
+                            >
+                              {t('models.addModel')}
+                            </DropdownMenuItem>
+                          )}
+                        </>
+                      )}
+                      {refreshConfigError &&
+                        !hasTargetGroups &&
+                        group.providerId === currentProvider && (
+                          <div className="px-2 py-1 text-xs text-destructive" role="status">
+                            {t('models.refreshConfigFailed', { message: refreshConfigError })}
+                          </div>
+                        )}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                </Fragment>
+              );
+            })}
+          </>
         ) : (
           <>
             <DropdownMenuLabel className="text-muted-foreground">
               {t('models.selectModel')}
             </DropdownMenuLabel>
-            {effectiveModels.map((model) => (
-              <DropdownMenuItem
-                key={model.id}
-                data-model-id={model.id}
-                data-selected={model.id === value ? 'true' : undefined}
-                onSelect={(event) => {
-                  event.preventDefault();
-                  handleSelect(model.id);
-                }}
-                className="items-start gap-2"
-              >
-                <ModelIcon provider={currentProvider} size={20} />
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-sm">{getModelLabel(model)}</span>
-                  {getModelDescription(model) && (
-                    <span className="text-xs text-muted-foreground whitespace-normal">
-                      {getModelDescription(model)}
-                    </span>
+            {effectiveModels.map((model) => {
+              const description = getModelDescription(model);
+              return (
+                <DropdownMenuItem
+                  key={model.id}
+                  data-model-id={model.id}
+                  data-selected={model.id === value ? 'true' : undefined}
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    handleSelect(model.id);
+                  }}
+                  className="items-start gap-2"
+                >
+                  <ModelIcon
+                    provider={currentProvider}
+                    model={model}
+                    modelIdForIcon={getModelIconId(model)}
+                    size={20}
+                  />
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="text-sm">{getModelLabel(model)}</span>
+                    {description && (
+                      <span className="text-xs text-muted-foreground whitespace-normal">
+                        {description}
+                      </span>
+                    )}
+                  </div>
+                  {model.id === value && (
+                    <CheckIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
                   )}
-                </div>
-                {model.id === value && <CheckIcon className="mt-0.5 size-4 shrink-0" aria-hidden />}
-              </DropdownMenuItem>
-            ))}
+                </DropdownMenuItem>
+              );
+            })}
           </>
         )}
-        {hasConfigActions && !hasGroupedModels && (
+        {hasConfigActions && !hasPickerGroups && (
           <>
             <DropdownMenuSeparator />
             {onAddModel && (
               <DropdownMenuItem
                 onSelect={(event) => {
                   event.preventDefault();
-                  handleAddModel();
+                  handleAddModel(currentProvider);
                 }}
               >
                 {t('models.addModel')}
@@ -354,14 +1132,96 @@ export const ModelSelect = memo(({
             )}
           </>
         )}
+        {onOpenCliSettings && (
+          <>
+            <DropdownMenuSeparator />
+            <div className="p-1.5 pt-1">
+              <DropdownMenuItem
+                onSelect={(event) => {
+                  event.preventDefault();
+                  handleOpenCliSettings();
+                }}
+                className="justify-center gap-2 rounded-md border border-border/70 bg-muted/45 font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
+              >
+                <Settings2Icon className="size-3.5 shrink-0 opacity-80" aria-hidden />
+                <span>{t('models.openCliSettings')}</span>
+              </DropdownMenuItem>
+            </div>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
 
-  return triggerVariant === 'readiness' ? (
-    <div className="composer-readiness-model-select">{menu}</div>
-  ) : (
-    menu
+  const channelDialog = (
+    <Dialog
+      open={channelPickerGroup != null}
+      onOpenChange={(open) => {
+        if (!open) {
+          closeChannelPicker();
+        }
+      }}
+    >
+      <DialogContent
+        className="flex max-h-[min(80vh,32rem)] w-[min(100vw-2rem,24rem)] flex-col gap-3 sm:max-w-md"
+        data-channel-picker-dialog={
+          channelPickerGroup?.providerId ?? undefined
+        }
+      >
+        <DialogHeader>
+          <DialogTitle>
+            {t('models.switchChannel', { defaultValue: '切换渠道' })}
+          </DialogTitle>
+          <DialogDescription>
+            {t('models.selectChannelForEngine', {
+              name: channelPickerGroup?.providerLabel ?? '',
+              defaultValue: `选择 ${channelPickerGroup?.providerLabel ?? ''} 的配置渠道`,
+            })}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
+          {channelPickerGroup?.profiles.map((profile) => {
+            const isActive = profile.id === channelPickerGroup.targetProfileId;
+            return (
+              <button
+                key={profile.id}
+                type="button"
+                data-provider-profile-id={profile.id}
+                data-channel-option={channelPickerGroup.providerId}
+                data-selected={isActive ? 'true' : undefined}
+                className="flex w-full items-center gap-2 rounded-md border border-transparent px-3 py-2.5 text-left text-sm hover:bg-accent hover:text-accent-foreground data-[selected=true]:border-border data-[selected=true]:bg-muted/60"
+                onClick={() => {
+                  handleChannelPickerSelect(profile.id);
+                }}
+              >
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {profile.label}
+                </span>
+                {isActive && (
+                  <CheckIcon className="size-4 shrink-0" aria-hidden />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
+  if (triggerVariant === 'readiness') {
+    return (
+      <div className="composer-readiness-model-select">
+        {menu}
+        {channelDialog}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {menu}
+      {channelDialog}
+    </>
   );
 });
 

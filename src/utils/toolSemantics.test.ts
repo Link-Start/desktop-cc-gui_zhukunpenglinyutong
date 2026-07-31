@@ -4,6 +4,9 @@ import {
   extractToolName,
   getFirstStringField,
   isBashTool,
+  isEditTool,
+  isReadTool,
+  isSearchTool,
   parseToolArgs,
   resolveToolStatus,
 } from "./toolSemantics";
@@ -48,7 +51,16 @@ describe("toolSemantics", () => {
   it("treats shared command tools as bash-like", () => {
     expect(isBashTool("exec_command")).toBe(true);
     expect(isBashTool("write_stdin")).toBe(true);
+    expect(isBashTool("run_terminal_command")).toBe(true);
     expect(isBashTool("search")).toBe(false);
+  });
+
+  it("classifies Grok-style agent tool names for canvas grouping", () => {
+    expect(isReadTool("read_file")).toBe(true);
+    expect(isReadTool("list_dir")).toBe(true);
+    expect(isSearchTool("grep")).toBe(true);
+    expect(isEditTool("search_replace")).toBe(true);
+    expect(isEditTool("todo_write")).toBe(false);
   });
 
   it("builds command summaries from structured arguments while ignoring path-only detail", () => {

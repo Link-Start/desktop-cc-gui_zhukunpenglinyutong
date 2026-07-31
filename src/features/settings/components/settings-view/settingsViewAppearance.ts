@@ -4,6 +4,7 @@ import { applyUserMessageBubbleCssVars } from "../../../../utils/userMessageBubb
 export type SettingsSection =
   | "basic"
   | "providers"
+  | "shortcuts"
   | "project-management"
   | "mcp"
   | "permissions"

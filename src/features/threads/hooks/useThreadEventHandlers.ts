@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from "react";
 import {
   workspaceScopedDelete,
   workspaceScopedHas,
@@ -33,6 +39,7 @@ import {
 import { buildCodexLivenessDiagnostic } from "../utils/codexConversationLiveness";
 import { domainEventFactories } from "../domain-events";
 import type { ThreadEventHandlersOptions } from "./threadEventHandlerTypes";
+import type { TurnExecutionSnapshot } from "../../shared-session/target/types";
 import { handleThreadAppServerEventDiagnostics } from "./threadAppServerEventDiagnostics";
 import {
   TURN_FIRST_DELTA_WARNING_MS,
@@ -97,6 +104,7 @@ export function useThreadEventHandlers({
   onTurnCompletedExternal,
   onTurnTerminalExternal,
   onThreadTransientCleanupReady,
+  onDurableRealtimeTurnSettlementReady,
   onCollaborationModeResolved,
   onExitPlanModeToolCompleted,
   domainEventController = null,
@@ -1140,11 +1148,13 @@ export function useThreadEventHandlers({
     (request: RequestUserInputRequest) => {
       enqueueUserInputRequest(request);
       const threadId =
+        request.shared_runtime_owner?.sharedThreadId ??
         resolveClaudeContinuationThreadId?.(
           request.workspace_id,
           request.params.thread_id,
           request.params.turn_id,
-        ) ?? request.params.thread_id;
+        ) ??
+        request.params.thread_id;
       if (!threadId) {
         return;
       }
@@ -1160,7 +1170,9 @@ export function useThreadEventHandlers({
     (event: CollaborationModeBlockedRequest) => {
       const rawThreadId = event.params.thread_id;
       const threadId =
-        resolveClaudeContinuationThreadId?.(event.workspace_id, rawThreadId) ?? rawThreadId;
+        event.shared_runtime_owner?.sharedThreadId ??
+        resolveClaudeContinuationThreadId?.(event.workspace_id, rawThreadId) ??
+        rawThreadId;
       if (!threadId) {
         return;
       }
@@ -1171,6 +1183,9 @@ export function useThreadEventHandlers({
           type: "removeUserInputRequest",
           requestId,
           workspaceId: event.workspace_id,
+          ...(event.shared_runtime_owner
+            ? { sharedRuntimeOwner: event.shared_runtime_owner }
+            : {}),
         });
       }
       if (requestUserInputBlocked) {
@@ -1251,6 +1266,37 @@ export function useThreadEventHandlers({
     onAgentMessageCompletedExternal,
     onExitPlanModeToolCompleted,
   });
+
+  const settleDurableRealtimeTurn = useCallback(
+    (threadId: string, runtimeTurnId: string) => {
+      const normalizedThreadId = threadId.trim();
+      const normalizedRuntimeTurnId = runtimeTurnId.trim();
+      if (!normalizedThreadId || !normalizedRuntimeTurnId) {
+        return;
+      }
+      // Durable Shared commit 是 control authority。先收敛已排队内容，再建立
+      // exact-turn barrier，后续迟到 event 只能被丢弃，不能复燃 processing。
+      flushPendingRealtimeEvents();
+      markRealtimeTurnTerminal(normalizedThreadId, normalizedRuntimeTurnId);
+      onDebug?.({
+        id: `${Date.now()}-shared-durable-terminal-barrier-installed`,
+        timestamp: Date.now(),
+        source: "event",
+        label: "thread/session:shared-durable-terminal-barrier-installed",
+        payload: {
+          threadId: normalizedThreadId,
+          runtimeTurnId: normalizedRuntimeTurnId,
+        },
+      });
+    },
+    [flushPendingRealtimeEvents, markRealtimeTurnTerminal, onDebug],
+  );
+  useLayoutEffect(() => {
+    return onDurableRealtimeTurnSettlementReady?.(settleDurableRealtimeTurn);
+  }, [
+    onDurableRealtimeTurnSettlementReady,
+    settleDurableRealtimeTurn,
+  ]);
 
   const {
     onThreadStarted,
@@ -1440,6 +1486,13 @@ export function useThreadEventHandlers({
       clearAssistantSnapshotIngressForThread,
       findQuarantinedCodexTurn,
     ],
+  );
+
+  const onSharedRuntimeTurnStarted = useCallback(
+    (threadId: string, runtimeTurnId: string) => {
+      noteRealtimeTurnStarted(threadId, runtimeTurnId);
+    },
+    [noteRealtimeTurnStarted],
   );
 
   const onAgentMessageDeltaTracked = useCallback(
@@ -1656,6 +1709,18 @@ export function useThreadEventHandlers({
         event.turnId &&
         isRealtimeTurnTerminalExact(event.threadId, event.turnId)
       ) {
+        onDebug?.({
+          id: `${Date.now()}-realtime-terminal-exact-drop`,
+          timestamp: Date.now(),
+          source: "event",
+          label: "thread/session:realtime-terminal-exact-drop",
+          payload: {
+            threadId: event.threadId,
+            turnId: event.turnId,
+            operation: event.operation,
+            sourceMethod: event.sourceMethod,
+          },
+        });
         return;
       }
       if (shouldSkipLateCodexNormalizedEvent(event)) {
@@ -1739,6 +1804,7 @@ export function useThreadEventHandlers({
       maybeRecordAgentMessageSnapshotIngress,
       noteCodexTurnProgressEvidence,
       noteNonTextRuntimeProgress,
+      onDebug,
       onNormalizedRealtimeEvent,
       recordAssistantCompletionEvidence,
       recordAssistantStreamIngress,
@@ -2373,7 +2439,9 @@ export function useThreadEventHandlers({
       payload: {
         message: string;
         willRetry: boolean;
+        suppressMessage?: boolean;
         engine?: ConversationEngine | null;
+        executionTargetSnapshot?: TurnExecutionSnapshot;
       },
     ) => {
       const normalizedTurnId = resolveTerminalSettlementTurnId(threadId, turnId);
@@ -2529,6 +2597,7 @@ export function useThreadEventHandlers({
       onFileChangeOutputDelta: onFileChangeOutputDeltaTracked,
       onThreadStarted,
       onTurnStarted: onTurnStartedTracked,
+      onSharedRuntimeTurnStarted,
       onTurnCompleted: onTurnCompletedTracked,
       onProcessingHeartbeat,
       onTurnPlanUpdated,
@@ -2563,6 +2632,7 @@ export function useThreadEventHandlers({
       onFileChangeOutputDeltaTracked,
       onThreadStarted,
       onTurnStartedTracked,
+      onSharedRuntimeTurnStarted,
       onTurnCompletedTracked,
       onProcessingHeartbeat,
       onTurnPlanUpdated,

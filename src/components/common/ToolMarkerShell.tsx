@@ -4,7 +4,7 @@
  * 定稿口径：对齐 shadcn 官方 Marker 默认尺寸（text-sm + 图标 size-4 + gap-2），
  * 无边框、muted —— 灰色 lucide 描边图标 + 内容 + 靠右状态图标 + 折叠体。
  */
-import type { ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import CircleAlert from 'lucide-react/dist/esm/icons/circle-alert';
 import ChevronRight from 'lucide-react/dist/esm/icons/chevron-right';
 import Loader2 from 'lucide-react/dist/esm/icons/loader-2';
@@ -64,6 +64,7 @@ interface ToolMarkerShellProps {
 /**
  * 工具块折叠行外壳。头部恒为一行 Marker，展开体由调方自带容器，
  * 仅在 expanded 时渲染。
+ * clickable 时：可聚焦、Enter/Space 切换，并暴露 aria-expanded。
  */
 export function ToolMarkerShell({
   icon,
@@ -82,16 +83,34 @@ export function ToolMarkerShell({
   body,
 }: ToolMarkerShellProps) {
   const clickable = interactive && Boolean(onToggle);
+  // 仅在未显式指定 role 时默认 button；显式 role="group" 不伪装成 button（避免全站 a11y 拧巴）。
+  const resolvedRole = role ?? (clickable ? 'button' : undefined);
+  const isButtonLike = clickable && resolvedRole === 'button';
 
   return (
     <div className={wrapperClassName}>
       <Marker
         {...(ariaLabel ? { 'aria-label': ariaLabel } : {})}
-        {...(role ? { role } : {})}
+        {...(resolvedRole ? { role: resolvedRole } : {})}
         {...(clickable ? { onClick: onToggle } : {})}
+        {...(isButtonLike
+          ? {
+              tabIndex: 0,
+              'aria-expanded': body != null ? expanded : undefined,
+              onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+                if (event.key !== 'Enter' && event.key !== ' ') {
+                  return;
+                }
+                event.preventDefault();
+                onToggle?.();
+              },
+            }
+          : {})}
         className={cn(
           'gap-2 rounded-md pr-3 py-1.5 text-sm transition-colors',
           clickable && 'cursor-pointer select-none',
+          // 折叠 chevron 过渡；尊重 prefers-reduced-motion
+          'motion-reduce:transition-none [&_svg]:transition-transform [&_svg]:duration-150 [&_svg]:ease-out motion-reduce:[&_svg]:transition-none',
           className,
         )}
       >
@@ -111,7 +130,7 @@ export function ToolMarkerShell({
           <ChevronRight
             aria-hidden
             className={cn(
-              'size-4 shrink-0 text-muted-foreground transition-transform',
+              'size-4 shrink-0 text-muted-foreground transition-transform duration-150 ease-out motion-reduce:transition-none',
               // trailing 自带 ml-auto 已把右侧组顶到最右；无 trailing 时 chevron 自己贴右。
               // 避免双 ml-auto 平分空白导致状态图标被顶到中间。
               trailing == null && 'ml-auto',

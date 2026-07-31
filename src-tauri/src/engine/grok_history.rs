@@ -188,9 +188,7 @@ fn matches_workspace_path(work_dir: &str, workspace_variants: &[String]) -> bool
     // grok canonicalizes the session cwd (e.g. macOS `/tmp` → `/private/tmp`);
     // match canonical forms on both sides to tolerate symlink variants.
     if let Ok(canonical_work_dir) = std::fs::canonicalize(work_dir) {
-        work_dir_variants.extend(build_path_variants(
-            &canonical_work_dir.to_string_lossy(),
-        ));
+        work_dir_variants.extend(build_path_variants(&canonical_work_dir.to_string_lossy()));
         work_dir_variants.sort();
         work_dir_variants.dedup();
     }
@@ -309,11 +307,100 @@ fn extract_reasoning_summary(summary: Option<&Value>) -> String {
 
 fn strip_user_query_wrapper(text: &str) -> String {
     let trimmed = text.trim();
+    // Prefer extracting the last <user_query>…</user_query> body when present
+    // (Grok multimodal history prefixes an <image_files> block).
+    if let Some(start) = trimmed.rfind("<user_query>") {
+        let after = &trimmed[start + "<user_query>".len()..];
+        if let Some(end) = after.find("</user_query>") {
+            return after[..end].trim().to_string();
+        }
+    }
     let inner = trimmed
         .strip_prefix("<user_query>")
         .and_then(|rest| rest.strip_suffix("</user_query>"))
         .unwrap_or(trimmed);
     inner.trim().to_string()
+}
+
+/// Parse Grok wire user text into display text + image absolute paths.
+///
+/// Multimodal turns are stored as:
+/// ```text
+/// <image_files>
+/// ...
+/// 1. /path/to/assets/image-....png
+/// ...
+/// </image_files>
+///
+/// <user_query>
+/// user text
+/// </user_query>
+/// ```
+pub(crate) fn parse_grok_user_prompt_for_display(text: &str) -> (String, Vec<String>) {
+    let images = extract_grok_image_files_paths(text);
+    let display = strip_user_query_wrapper(text);
+    // If strip left residual image_files markup (no closing user_query), drop it.
+    let display = if display.contains("<image_files>") {
+        display
+            .split("</image_files>")
+            .nth(1)
+            .unwrap_or("")
+            .trim()
+            .to_string()
+    } else {
+        display
+    };
+    (display, images)
+}
+
+fn extract_grok_image_files_paths(text: &str) -> Vec<String> {
+    let Some(start) = text.find("<image_files>") else {
+        return Vec::new();
+    };
+    let after = &text[start + "<image_files>".len()..];
+    let block = after.split("</image_files>").next().unwrap_or(after);
+    let mut paths = Vec::new();
+    for line in block.lines() {
+        let trimmed = line.trim();
+        // Numbered list: `1. /abs/path.png`
+        let candidate = if let Some((_idx, rest)) = trimmed.split_once(". ") {
+            rest.trim()
+        } else {
+            trimmed
+        };
+        if candidate.is_empty() {
+            continue;
+        }
+        let looks_absolute = candidate.starts_with('/')
+            || candidate.starts_with("%2F")
+            || candidate.starts_with("%2f")
+            || (candidate.len() >= 3
+                && candidate.as_bytes()[0].is_ascii_alphabetic()
+                && (candidate.as_bytes()[1] == b':' || candidate.as_bytes()[1] == b'|')
+                && (candidate.as_bytes()[2] == b'/' || candidate.as_bytes()[2] == b'\\'))
+            || candidate.starts_with("\\\\");
+        if !looks_absolute {
+            continue;
+        }
+        let lower = candidate.to_ascii_lowercase();
+        let looks_image = lower.contains(".png")
+            || lower.contains(".jpg")
+            || lower.contains(".jpeg")
+            || lower.contains(".gif")
+            || lower.contains(".webp")
+            || lower.contains(".bmp")
+            || lower.contains("/assets/image-")
+            || lower.contains("\\assets\\image-")
+            || lower.contains("/assets/")
+            || lower.contains("\\assets\\");
+        if !looks_image {
+            continue;
+        }
+        if !paths.iter().any(|existing: &String| existing == candidate) {
+            paths.push(candidate.to_string());
+        }
+    }
+    paths
 }
 
 fn stringify_tool_result_content(content: Option<&Value>) -> String {
@@ -322,6 +409,46 @@ fn stringify_tool_result_content(content: Option<&Value>) -> String {
         Some(other) => serde_json::to_string(other).unwrap_or_default(),
         None => String::new(),
     }
+}
+
+/// Resolve tool name from Grok 4.5 flat calls (`name`) or OpenAI-style nested
+/// (`function.name`). Only fall back to `"tool"` when both are missing.
+fn resolve_tool_call_name(call: &Value) -> String {
+    if let Some(name) = call
+        .get("name")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+    {
+        return name.to_string();
+    }
+    if let Some(name) = call
+        .get("function")
+        .and_then(|function| function.get("name"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+    {
+        return name.to_string();
+    }
+    "tool".to_string()
+}
+
+/// Resolve tool arguments from flat `arguments` or nested `function.arguments`.
+/// JSON strings are parsed into objects when possible.
+fn resolve_tool_call_arguments(call: &Value) -> Option<Value> {
+    let arguments = call
+        .get("arguments")
+        .or_else(|| {
+            call.get("function")
+                .and_then(|function| function.get("arguments"))
+        })?;
+    if let Some(raw) = arguments.as_str() {
+        return serde_json::from_str::<Value>(raw)
+            .ok()
+            .or_else(|| Some(Value::String(raw.to_string())));
+    }
+    Some(arguments.clone())
 }
 
 /// Parse `chat_history.jsonl` content into normalized messages.
@@ -347,16 +474,21 @@ fn parse_messages_from_chat_history(raw: &str) -> GrokSessionLoadResult {
                 if value.get("synthetic_reason").is_some() {
                     continue;
                 }
-                let text = strip_user_query_wrapper(&extract_content_text(value.get("content")));
-                if text.is_empty() {
+                let raw_text = extract_content_text(value.get("content"));
+                let (display_text, image_paths) = parse_grok_user_prompt_for_display(&raw_text);
+                if display_text.is_empty() && image_paths.is_empty() {
                     continue;
                 }
                 counter += 1;
                 messages.push(GrokSessionMessage {
                     id: format!("grok-user-{}", counter),
                     role: "user".to_string(),
-                    text,
-                    images: None,
+                    text: display_text,
+                    images: if image_paths.is_empty() {
+                        None
+                    } else {
+                        Some(image_paths)
+                    },
                     timestamp,
                     kind: "message".to_string(),
                     tool_type: None,
@@ -410,12 +542,7 @@ fn parse_messages_from_chat_history(raw: &str) -> GrokSessionLoadResult {
                 }
                 if let Some(tool_calls) = value.get("tool_calls").and_then(|v| v.as_array()) {
                     for call in tool_calls {
-                        let function = call.get("function");
-                        let tool_name = function
-                            .and_then(|f| f.get("name"))
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("tool")
-                            .to_string();
+                        let tool_name = resolve_tool_call_name(call);
                         let call_id = call
                             .get("id")
                             .and_then(|v| v.as_str())
@@ -424,17 +551,7 @@ fn parse_messages_from_chat_history(raw: &str) -> GrokSessionLoadResult {
                                 counter += 1;
                                 format!("grok-tool-{}", counter)
                             });
-                        let input_value = function
-                            .and_then(|f| f.get("arguments"))
-                            .and_then(|arguments| {
-                                if let Some(raw) = arguments.as_str() {
-                                    serde_json::from_str::<Value>(raw)
-                                        .ok()
-                                        .or(Some(Value::String(raw.to_string())))
-                                } else {
-                                    Some(arguments.clone())
-                                }
-                            });
+                        let input_value = resolve_tool_call_arguments(call);
                         let input_text = input_value
                             .as_ref()
                             .and_then(|v| serde_json::to_string_pretty(v).ok())
@@ -503,9 +620,15 @@ fn first_user_prompt_text(raw: &str) -> Option<String> {
         if value.get("synthetic_reason").is_some() {
             continue;
         }
-        let text = strip_user_query_wrapper(&extract_content_text(value.get("content")));
-        if !text.is_empty() {
-            return Some(text);
+        let raw = extract_content_text(value.get("content"));
+        let (display_text, image_paths) = parse_grok_user_prompt_for_display(&raw);
+        let preview = if display_text.is_empty() && !image_paths.is_empty() {
+            format!("[{} image(s)]", image_paths.len())
+        } else {
+            display_text
+        };
+        if !preview.is_empty() {
+            return Some(preview);
         }
     }
     None
@@ -514,7 +637,10 @@ fn first_user_prompt_text(raw: &str) -> Option<String> {
 /// Build a sidebar summary from one session directory. Best-effort: missing
 /// or malformed `summary.json` degrades individual fields instead of dropping
 /// the session.
-async fn build_summary_from_session_dir(session_id: &str, session_dir: &Path) -> GrokSessionSummary {
+async fn build_summary_from_session_dir(
+    session_id: &str,
+    session_dir: &Path,
+) -> GrokSessionSummary {
     let summary_path = session_dir.join("summary.json");
     let chat_history_path = session_dir.join("chat_history.jsonl");
 
@@ -629,7 +755,8 @@ async fn resolve_workspace_session_dirs(
             continue;
         };
         let decoded_cwd = url_decode_dir_name(encoded_name);
-        if decoded_cwd.trim().is_empty() || !matches_workspace_path(&decoded_cwd, &workspace_variants)
+        if decoded_cwd.trim().is_empty()
+            || !matches_workspace_path(&decoded_cwd, &workspace_variants)
         {
             continue;
         }
@@ -701,13 +828,15 @@ pub async fn load_grok_session(
 ) -> Result<GrokSessionLoadResult, String> {
     let session_dir = find_workspace_session_dir(workspace_path, session_id, custom_home).await?;
     let chat_history_path = session_dir.join("chat_history.jsonl");
-    let raw = fs::read_to_string(&chat_history_path).await.map_err(|error| {
-        format!(
-            "Failed to read Grok session chat history {}: {}",
-            chat_history_path.display(),
-            error
-        )
-    })?;
+    let raw = fs::read_to_string(&chat_history_path)
+        .await
+        .map_err(|error| {
+            format!(
+                "Failed to read Grok session chat history {}: {}",
+                chat_history_path.display(),
+                error
+            )
+        })?;
     Ok(parse_messages_from_chat_history(&raw))
 }
 
@@ -737,8 +866,9 @@ pub async fn delete_grok_session(
 #[cfg(test)]
 mod tests {
     use super::{
-        matches_workspace_path, parse_messages_from_chat_history, parse_timestamp_millis,
-        strip_user_query_wrapper, url_decode_dir_name,
+        matches_workspace_path, parse_grok_user_prompt_for_display,
+        parse_messages_from_chat_history, parse_timestamp_millis, strip_user_query_wrapper,
+        url_decode_dir_name,
     };
     use std::path::Path;
 
@@ -779,6 +909,60 @@ mod tests {
     }
 
     #[test]
+    fn parses_flat_tool_calls_with_top_level_name_and_arguments() {
+        // Grok 4.5 / agent sessions use flat tool_calls (no nested `function`).
+        let chat_history = concat!(
+            "{\"type\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"call-flat-1\",\"name\":\"read_file\",\"arguments\":\"{\\\"target_file\\\":\\\"src/a.ts\\\"}\"},{\"id\":\"call-flat-2\",\"name\":\"grep\",\"arguments\":{\"pattern\":\"foo\",\"path\":\"src\"}},{\"id\":\"call-flat-3\",\"name\":\"run_terminal_command\",\"arguments\":\"{\\\"command\\\":\\\"ls\\\"}\"}]}\n",
+            "{\"type\":\"tool_result\",\"tool_call_id\":\"call-flat-1\",\"content\":\"file body\"}\n",
+            "{\"type\":\"tool_result\",\"tool_call_id\":\"call-flat-2\",\"content\":\"match\"}\n"
+        );
+
+        let result = parse_messages_from_chat_history(chat_history);
+        assert_eq!(result.messages.len(), 5);
+
+        assert_eq!(result.messages[0].kind, "tool");
+        assert_eq!(result.messages[0].id, "call-flat-1");
+        assert_eq!(result.messages[0].tool_type.as_deref(), Some("read_file"));
+        assert_eq!(result.messages[0].title.as_deref(), Some("read_file"));
+        assert_eq!(
+            result.messages[0].tool_input,
+            Some(serde_json::json!({"target_file": "src/a.ts"}))
+        );
+
+        assert_eq!(result.messages[1].tool_type.as_deref(), Some("grep"));
+        assert_eq!(result.messages[1].title.as_deref(), Some("grep"));
+        assert_eq!(
+            result.messages[1].tool_input,
+            Some(serde_json::json!({"pattern": "foo", "path": "src"}))
+        );
+
+        assert_eq!(
+            result.messages[2].tool_type.as_deref(),
+            Some("run_terminal_command")
+        );
+        assert_eq!(
+            result.messages[2].title.as_deref(),
+            Some("run_terminal_command")
+        );
+
+        assert_eq!(result.messages[3].id, "call-flat-1-result");
+        assert_eq!(result.messages[3].text, "file body");
+        assert_eq!(result.messages[4].id, "call-flat-2-result");
+        assert_eq!(result.messages[4].text, "match");
+    }
+
+    #[test]
+    fn flat_tool_call_prefers_top_level_name_over_missing_function() {
+        let chat_history = concat!(
+            "{\"type\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"call-x\",\"arguments\":\"{}\"}]}\n"
+        );
+        let result = parse_messages_from_chat_history(chat_history);
+        assert_eq!(result.messages.len(), 1);
+        assert_eq!(result.messages[0].tool_type.as_deref(), Some("tool"));
+        assert_eq!(result.messages[0].title.as_deref(), Some("tool"));
+    }
+
+    #[test]
     fn skips_system_synthetic_and_unknown_lines() {
         let chat_history = concat!(
             "{\"type\":\"system\",\"content\":\"sys\"}\n",
@@ -804,6 +988,44 @@ mod tests {
         );
         assert_eq!(strip_user_query_wrapper("plain text"), "plain text");
         assert_eq!(strip_user_query_wrapper("  padded  "), "padded");
+    }
+
+    #[test]
+    fn parses_multimodal_image_files_and_user_query() {
+        let raw = concat!(
+            "<image_files>\n",
+            "The following images were provided by the user and saved to the workspace for future use:\n",
+            "1. /Users/me/.grok/sessions/%2Fcode%2Fcontent/abc/assets/image-1.png\n",
+            "\n",
+            "These images can be copied for use in other locations.\n",
+            "</image_files>\n",
+            "\n",
+            "<user_query>\n",
+            "你看这是啥\n",
+            "</user_query>",
+        );
+        let (display, images) = parse_grok_user_prompt_for_display(raw);
+        assert_eq!(display, "你看这是啥");
+        assert_eq!(
+            images,
+            vec!["/Users/me/.grok/sessions/%2Fcode%2Fcontent/abc/assets/image-1.png".to_string()]
+        );
+    }
+
+    #[test]
+    fn history_loader_extracts_images_from_image_files_block() {
+        let chat_history = concat!(
+            r#"{"type":"user","content":[{"type":"text","text":"<image_files>\nThe following images were provided by the user and saved to the workspace for future use:\n1. /tmp/assets/image-abc.png\n\nThese images can be copied for use in other locations.\n</image_files>\n\n<user_query>\n看图\n</user_query>"}],"prompt_index":0}"#,
+            "\n",
+        );
+        let result = parse_messages_from_chat_history(chat_history);
+        assert_eq!(result.messages.len(), 1);
+        assert_eq!(result.messages[0].role, "user");
+        assert_eq!(result.messages[0].text, "看图");
+        assert_eq!(
+            result.messages[0].images.as_deref(),
+            Some(&["/tmp/assets/image-abc.png".to_string()][..])
+        );
     }
 
     #[test]
@@ -864,9 +1086,7 @@ mod tests {
             let raw = canonical_workspace.to_string_lossy().to_string();
             raw.chars()
                 .map(|ch| match ch {
-                    'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => {
-                        ch.to_string()
-                    }
+                    'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => ch.to_string(),
                     _ => format!("%{:02X}", ch as u32),
                 })
                 .collect::<String>()
@@ -890,13 +1110,10 @@ mod tests {
         )
         .expect("write chat history");
 
-        let listed = super::list_grok_sessions(
-            &workspace,
-            None,
-            Some(grok_home.to_string_lossy().as_ref()),
-        )
-        .await
-        .expect("list sessions");
+        let listed =
+            super::list_grok_sessions(&workspace, None, Some(grok_home.to_string_lossy().as_ref()))
+                .await
+                .expect("list sessions");
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].session_id, "019fa245-0000-4000-8000-000000000001");
         assert_eq!(listed[0].first_message, "Fixture title");
@@ -922,13 +1139,10 @@ mod tests {
         .await
         .expect("delete session");
         assert!(!session_dir.exists());
-        let remaining = super::list_grok_sessions(
-            &workspace,
-            None,
-            Some(grok_home.to_string_lossy().as_ref()),
-        )
-        .await
-        .expect("list after delete");
+        let remaining =
+            super::list_grok_sessions(&workspace, None, Some(grok_home.to_string_lossy().as_ref()))
+                .await
+                .expect("list after delete");
         assert!(remaining.is_empty());
 
         let _ = std::fs::remove_dir_all(&fixture_root);

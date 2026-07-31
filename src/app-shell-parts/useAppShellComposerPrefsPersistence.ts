@@ -4,6 +4,7 @@ import {
   seedComposerEnginePrefs,
   setComposerEnginePref,
 } from "../features/composer/hooks/composerEnginePrefsStore";
+import { seedCliEngineVisibility } from "../features/composer/hooks/cliEngineVisibilityStore";
 import { updateAppSettings } from "../services/tauri";
 import type { AppSettings, ComposerEnginePrefs, EngineType } from "../types";
 
@@ -78,6 +79,15 @@ export function useAppShellComposerPrefsPersistence({
     seedComposerEnginePrefs(appSettings.lastComposerPrefsByEngine);
     prefsSeededRef.current = true;
   }, [appSettingsLoading, appSettings.lastComposerPrefsByEngine]);
+
+  // CLI 可见性跟随设置响应式同步(与 prefs 的一次性播种不同,写入口在
+  // VendorSettingsPanel → onUpdateAppSettings,必须随设置变化重推)。
+  useEffect(() => {
+    if (appSettingsLoading) {
+      return;
+    }
+    seedCliEngineVisibility(appSettings.disabledCliEngines);
+  }, [appSettingsLoading, appSettings.disabledCliEngines]);
 
   return {
     activeEngineRef,

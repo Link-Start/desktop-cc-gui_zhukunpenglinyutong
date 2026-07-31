@@ -18,6 +18,77 @@ import {
 } from "./useThreadActions.helpers";
 
 describe("useThreadActions.helpers", () => {
+  it("projects provider continuation at the top level without parentThreadId", () => {
+    const [continuation] = mergeCodexCatalogSessionSummaries(
+      [],
+      [
+        {
+          sessionId: "target-1",
+          workspaceId: "ws-1",
+          title: "Continued session",
+          updatedAt: 1,
+          engine: "codex",
+          originKind: "provider-continuation",
+          sourceSessionId: "claude:source-1",
+          familyId: "claude:ws-1:source-1",
+          familyRootSessionId: "claude:ws-1:source-1",
+          lineageParentSessionId: "claude:source-1",
+          lineageKind: "provider-continuation",
+          lineageDepth: 1,
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+
+    expect(continuation).toMatchObject({
+      id: "target-1",
+      parentThreadId: null,
+      originKind: "provider-continuation",
+      sourceSessionId: "claude:source-1",
+      lineageParentSessionId: "claude:source-1",
+    });
+  });
+
+  it("replaces a continuation protocol title with readable source lineage", () => {
+    const summaries = mergeCodexCatalogSessionSummaries(
+      [
+        {
+          id: "claude:source-1",
+          name: "修复登录问题",
+          updatedAt: 1,
+          engineSource: "claude",
+        },
+      ],
+      [
+        {
+          sessionId: "codex:target-1",
+          workspaceId: "ws-1",
+          title:
+            `MOSSX_CONTEXT_PACKAGE:sha256:${"a".repeat(64)}:` +
+            `sha256:${"b".repeat(64)}`,
+          updatedAt: 2,
+          engine: "codex",
+          originKind: "provider-continuation",
+          sourceSessionId: "claude:source-1",
+          providerProfileName: "Provider B",
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+
+    const source = summaries.find((thread) => thread.id === "claude:source-1");
+    const continuation = summaries.find(
+      (thread) => thread.id === "codex:target-1",
+    );
+    expect(source?.name).toBe("修复登录问题");
+    expect(continuation?.name).toBe("继续：修复登录问题");
+    expect(continuation?.name).not.toContain("MOSSX_");
+  });
+
   it("maps Codex local fallback parentSessionId into parentThreadId", () => {
     expect(
       resolveThreadSourceMeta({

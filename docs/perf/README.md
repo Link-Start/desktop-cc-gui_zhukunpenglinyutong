@@ -14,6 +14,7 @@
 - [Parallel Conversation Jank Handbook](parallel-conversation-jank-handbook.md) — 复现、测量与诊断手册
 - [Render Jank Knife Experiments (2026-07-08)](render-jank-knife-experiments-2026-07-08.md) — 有日期的实验记录；其中数值不是永久基线
 - [A4 Live Text Externalization Plan](a4-live-text-externalization-plan.md) — 方案与阶段性验证计划
+- [Streaming Render Stall Design (2026-07-30)](streaming-render-stall-design-2026-07-30.md) — 幕布流式"卡顿→最后一次性输出"诊断与上下限双约束设计
 
 ## 阶段性快照
 

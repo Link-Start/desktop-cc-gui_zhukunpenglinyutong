@@ -2,6 +2,82 @@
 
 ---
 
+##### **2026年7月30日（v0.7.12）**
+
+中文：
+
+这一版的主菜是「跨 CLI 续接」：对话不再被单个引擎锁死，聊了一半可以换家接着聊。
+
+✨ Features
+- 对话可以跨 CLI 续接了：Claude 里聊了一半的会话，能交给 Kimi、Grok 或 OpenCode 接着聊；续接卡片会捎上来源会话的最后一轮，上下文不断片
+- 原生续接更靠谱：用原供应商继续旧会话时，历史消息会完整「搬家」；实在搬不全的，会明确列出降级了哪些内容，不再悄悄丢
+- 新建会话一个入口：三种 CLI 的创建、校验、选择一次到位，不用再猜哪个能用
+- 侧栏更清爽：同一条续接链上的会话自动归拢成一组；续接信息围挡、工作区操作菜单默认折叠，不再满屏按钮
+- 底层打地基：重建了会话数据的存储与投递底座，为后续更多跨 CLI 能力铺路（本期无感知，但很重要）
+
+🐛 Fixes
+- 修复 Grok / OpenCode 切换模型不生效的问题
+- 修复跨 CLI 切换后「历史恢复」和「原生续接」串线，消息不再张冠李戴
+- 修复会话结束后偶发「复活」（状态回跳）的问题
+- 修复 Codex 供应商续接走不完全程的问题
+- 供应商与模型选择更稳定，选中状态不再飘
+
+English:
+
+The headline of this release is cross-CLI continuation: a conversation is no longer locked to one engine — hand it off mid-way and keep going.
+
+✨ Features
+- Continue conversations across CLIs: take a chat started in Claude and let Kimi, Grok, or OpenCode pick it up; the continuation card carries the source session's last turn so context isn't lost
+- More trustworthy native continuation: resuming an old session with its original vendor now migrates the full history, and anything that couldn't come along is listed explicitly instead of being silently dropped
+- One entry point for new sessions: creation, validation, and selection for all three CLIs in a single flow — no more guessing which one works
+- A tidier sidebar: sessions on the same continuation chain are grouped automatically, and the continuation banner and workspace action menu are collapsed by default
+- Foundation work: rebuilt the session storage and delivery base to pave the way for more cross-CLI capabilities (invisible today, but important)
+
+🐛 Fixes
+- Fixed model switching not taking effect for Grok / OpenCode
+- Fixed cross-talk between "history restore" and "native resume" after switching CLIs — messages no longer get mixed up
+- Fixed finished sessions occasionally "coming back to life"
+- Fixed Codex vendor continuation failing to complete
+- Vendor and model selection is more stable, with no more drifting selections
+
+---
+
+##### **2026年7月28日（v0.7.11）**
+
+中文：
+
+✨ Features
+- 新引擎上岗：Grok 现在可以直接在 App 里开聊了
+- OpenCode 引擎回归，可用的运行时又多一个
+
+🔧 Improvements
+- 危险操作确认弹窗的按钮在窄窗口下会自动换行，不再挤成一团
+- 设置页诊断标签不再加粗，页面更清爽
+
+🐛 Fixes
+- 手动重命名过的会话标题能正常显示了（含 Grok 会话）
+- 浅色主题下，下拉框等系统原生控件不再冒出深色「补丁」
+- 关闭的终端会被安全清理，不再留下「僵尸终端」
+- 字体渲染在各桌面平台上表现更一致
+
+English:
+
+✨ Features
+- A new engine joins: you can now chat with Grok directly in the app
+- The OpenCode engine is back, adding one more runtime to choose from
+
+🔧 Improvements
+- Buttons in danger-confirmation dialogs now wrap on narrow windows instead of cramming together
+- Diagnostic labels in Settings are no longer bold, making the page cleaner
+
+🐛 Fixes
+- Manually renamed session titles now display correctly (including Grok sessions)
+- Under light themes, native controls like dropdowns no longer show up as dark patches
+- Closed terminals are cleaned up safely — no more zombie sessions
+- Font rendering is more consistent across desktop platforms
+
+---
+
 ##### **2026年7月27日（v0.7.10）**
 
 中文：

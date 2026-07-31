@@ -42,10 +42,43 @@ describe("model mapping", () => {
     ).toBe("glm-4.7");
 
     expect(
+      applyModelMapping("Opus 4.8", "claude-opus-4-8", {
+        opus: "kimi-k3",
+      }),
+    ).toBe("kimi-k3");
+
+    expect(
       applyModelMapping("Cxn[1m]", "Cxn[1m]", {
         opus: "glm-4.7",
       }),
     ).toBe("Cxn[1m]");
+  });
+
+  it("maps fable / sonnet 5 / haiku current ids and falls back to main", () => {
+    expect(
+      applyModelMapping("Fable 5", "claude-fable-5", {
+        fable: "kimi-k3",
+      }),
+    ).toBe("kimi-k3");
+
+    expect(
+      applyModelMapping("Sonnet 5", "claude-sonnet-5", {
+        sonnet: "kimi-k3",
+      }),
+    ).toBe("kimi-k3");
+
+    expect(
+      applyModelMapping("Haiku 4.5", "claude-haiku-4-5-20251001", {
+        haiku: "kimi-k3",
+      }),
+    ).toBe("kimi-k3");
+
+    // Tier-specific empty → main fallback
+    expect(
+      resolveModelMappingValue("claude-opus-4-8", {
+        main: "kimi-k3",
+      }),
+    ).toBe("kimi-k3");
   });
 
   it("resolves mapped runtime model values separately from display fallback", () => {

@@ -83,6 +83,10 @@ type UseThreadMessagingSessionToolingOptions = {
     workspaceId: string,
     threadId: string,
   ) => "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
+  resolveThreadKind: (
+    workspaceId: string,
+    threadId: string,
+  ) => "native" | "shared";
   isThreadIdCompatibleWithEngine: (
     engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode",
     threadId: string,
@@ -94,7 +98,7 @@ type UseThreadMessagingSessionToolingOptions = {
     text: string,
     images?: string[],
     options?: ToolingSendMessageOptions,
-  ) => Promise<void>;
+  ) => Promise<unknown>;
   sessionSpecLinkByThreadRef: MutableRefObject<Map<string, SessionSpecLinkContext>>;
   t: (key: string, options?: Record<string, unknown>) => string;
   onDebug?: (entry: {
@@ -126,6 +130,7 @@ export function useThreadMessagingSessionTooling({
   resolveCollaborationRuntimeMode,
   resolveComposerSelection,
   resolveThreadEngine,
+  resolveThreadKind,
   safeMessageActivity,
   sendMessageToThread,
   sessionSpecLinkByThreadRef,
@@ -484,13 +489,16 @@ export function useThreadMessagingSessionTooling({
       }
 
       const threadEngine = resolveThreadEngine(activeWorkspace.id, threadId);
+      const isSharedThread =
+        resolveThreadKind(activeWorkspace.id, threadId) === "shared";
       const isClaudeThread =
         threadEngine === "claude" &&
-        isThreadIdCompatibleWithEngine("claude", threadId) &&
-        isConcreteClaudeThread;
+        (isSharedThread ||
+          (isThreadIdCompatibleWithEngine("claude", threadId) &&
+            isConcreteClaudeThread));
       const isCodexThread =
         threadEngine === "codex" &&
-        isThreadIdCompatibleWithEngine("codex", threadId);
+        (isSharedThread || isThreadIdCompatibleWithEngine("codex", threadId));
       if (!isClaudeThread && !isCodexThread) {
         onDebug?.({
           id: `${Date.now()}-client-compact-thread-unavailable`,
@@ -503,6 +511,7 @@ export function useThreadMessagingSessionTooling({
             threadEngine,
             isClaudeThread,
             isCodexThread,
+            isSharedThread,
             isConcreteClaudeThread,
           },
         });
@@ -627,6 +636,7 @@ export function useThreadMessagingSessionTooling({
       pushThreadErrorMessage,
       recordThreadActivity,
       resolveThreadEngine,
+      resolveThreadKind,
       safeMessageActivity,
       t,
       codexCompactionInFlightByThreadRef,

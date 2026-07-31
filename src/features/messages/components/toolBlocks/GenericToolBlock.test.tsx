@@ -1,9 +1,21 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConversationItem } from "../../../../types";
 import * as diffParser from "../../../../utils/diff";
 import { GenericToolBlock } from "./GenericToolBlock";
+
+/** 展开 fileChange 场景级折叠壳，返回场景 header */
+function expandFileEditScene(container: HTMLElement = document.body) {
+  const header =
+    within(container).queryByRole("button", {
+      name: /tools\.fileEditSceneToggle|File changes|文件修改/i,
+    }) ??
+    (container.querySelector('[data-slot="marker"][aria-expanded="false"]') as HTMLElement | null);
+  expect(header).toBeTruthy();
+  fireEvent.click(header!);
+  return header!;
+}
 
 const askUserItem: Extract<ConversationItem, { kind: "tool" }> = {
   id: "tool-1",
@@ -339,9 +351,10 @@ describe("GenericToolBlock", () => {
       />,
     );
 
-    // 每文件一行（共享 FileChangeRow），无聚合「N files」计数、无 A/M/D 徽标
-    expect(view.container.querySelectorAll('[data-slot="marker"]').length).toBe(2);
-    expect(screen.queryByText("2 files")).toBeNull();
+    // 场景默认折叠；展开后每文件一行（共享 FileChangeRow）
+    expandFileEditScene(view.container);
+    // 1 场景头 + 2 文件行
+    expect(view.container.querySelectorAll('[data-slot="marker"]').length).toBe(3);
     expect(view.container.querySelector(".tool-change-kind-badge")).toBeNull();
     expect(screen.getByText("App.tsx")).toBeTruthy();
     expect(screen.getByText("New.tsx")).toBeTruthy();
@@ -370,10 +383,12 @@ describe("GenericToolBlock", () => {
       />,
     );
 
+    expandFileEditScene(view.container);
     const rows = view.container.querySelectorAll('[data-slot="marker"]');
-    expect(rows).toHaveLength(2);
-    fireEvent.click(rows[0] as HTMLElement);
+    // scene + 2 file rows
+    expect(rows.length).toBeGreaterThanOrEqual(3);
     fireEvent.click(rows[1] as HTMLElement);
+    fireEvent.click(rows[2] as HTMLElement);
 
     expect(onOpenDiffPath).toHaveBeenCalledOnce();
     expect(onOpenDiffPath).toHaveBeenCalledWith("src/New.tsx");
@@ -397,7 +412,9 @@ describe("GenericToolBlock", () => {
       />,
     );
 
-    fireEvent.click(view.container.querySelector('[data-slot="marker"]') as HTMLElement);
+    expandFileEditScene(view.container);
+    const markers = view.container.querySelectorAll('[data-slot="marker"]');
+    fireEvent.click(markers[markers.length - 1] as HTMLElement);
 
     expect(onOpenDiffPath).not.toHaveBeenCalled();
     expect(screen.getByText("const x = 1;")).toBeTruthy();
@@ -428,13 +445,15 @@ describe("GenericToolBlock", () => {
       />,
     );
 
-    fireEvent.click(view.container.querySelector('[data-slot="marker"]') as HTMLElement);
+    expandFileEditScene(view.container);
+    const markers = view.container.querySelectorAll('[data-slot="marker"]');
+    fireEvent.click(markers[markers.length - 1] as HTMLElement);
 
     expect(onOpenDiffPath).not.toHaveBeenCalled();
     expect(screen.getByText("const value = 1;")).toBeTruthy();
   });
 
-  it("omits file-count label for single file changes", () => {
+  it("shows scene summary for single file changes until expanded", () => {
     render(
       <GenericToolBlock
         item={fileChangeWithOutputItem}
@@ -443,8 +462,9 @@ describe("GenericToolBlock", () => {
       />,
     );
 
+    expect(screen.queryByText("App.tsx")).toBeNull();
+    expandFileEditScene();
     expect(screen.getByText("App.tsx")).toBeTruthy();
-    expect(screen.queryByText(/\d+\s+files?/i)).toBeNull();
   });
 
   it("shows each changed file as its own collapsed row without overflow summary", () => {
@@ -457,6 +477,7 @@ describe("GenericToolBlock", () => {
       />,
     );
 
+    expandFileEditScene(view.container);
     expect(screen.getByText("App.tsx")).toBeTruthy();
     expect(screen.getByText("New.tsx")).toBeTruthy();
     expect(screen.getByText("Home.tsx")).toBeTruthy();
@@ -466,7 +487,8 @@ describe("GenericToolBlock", () => {
     expect(screen.getByText("app.css")).toBeTruthy();
     expect(screen.getByText("package.json")).toBeTruthy();
     expect(screen.queryByText(/\+\d+\s+more files/i)).toBeNull();
-    expect(view.container.querySelectorAll('[data-slot="marker"]').length).toBe(8);
+    // scene header + 8 file rows
+    expect(view.container.querySelectorAll('[data-slot="marker"]').length).toBe(9);
     expect(parseDiffSpy).not.toHaveBeenCalled();
     parseDiffSpy.mockRestore();
   });
@@ -480,19 +502,21 @@ describe("GenericToolBlock", () => {
       />,
     );
 
+    expandFileEditScene(view.container);
     const headers = Array.from(
       view.container.querySelectorAll('[data-slot="marker"]'),
     );
-    expect(headers.length).toBe(8);
+    // scene + 8 files
+    expect(headers.length).toBe(9);
     expect(view.container.querySelectorAll(".tool-change-inline-diff").length).toBe(0);
 
-    fireEvent.click(headers[0]!);
+    fireEvent.click(headers[1]!);
     expect(view.container.querySelectorAll(".tool-change-inline-diff").length).toBe(1);
 
-    fireEvent.click(headers[1]!);
+    fireEvent.click(headers[2]!);
     expect(view.container.querySelectorAll(".tool-change-inline-diff").length).toBe(2);
 
-    fireEvent.click(headers[0]!);
+    fireEvent.click(headers[1]!);
     expect(view.container.querySelectorAll(".tool-change-inline-diff").length).toBe(1);
   });
 
@@ -505,14 +529,15 @@ describe("GenericToolBlock", () => {
       />,
     );
 
+    expandFileEditScene(view.container);
     const headers = Array.from(
       view.container.querySelectorAll('[data-slot="marker"]'),
     );
-    expect(headers.length).toBe(2);
+    expect(headers.length).toBe(3);
     // 折叠态不渲染 diff，逐行展开后每行各自一个 inline diff 卡片
     expect(view.container.querySelector(".tool-change-inline-diff")).toBeNull();
-    fireEvent.click(headers[0]!);
     fireEvent.click(headers[1]!);
+    fireEvent.click(headers[2]!);
     expect(view.container.querySelectorAll(".tool-change-inline-diff").length).toBe(2);
   });
 
@@ -525,11 +550,13 @@ describe("GenericToolBlock", () => {
       />,
     );
 
+    expandFileEditScene(view.container);
     expect(screen.getByText("App.tsx")).toBeTruthy();
     expect(document.querySelector(".tool-output-raw-pre")).toBeNull();
     // diff 仅在展开该行后出现，且不回退到原始输出面板
     expect(document.querySelector(".tool-change-inline-diff")).toBeNull();
-    fireEvent.click(view.container.querySelector('[data-slot="marker"]')!);
+    const markers = view.container.querySelectorAll('[data-slot="marker"]');
+    fireEvent.click(markers[markers.length - 1]!);
     expect(screen.getByText("old")).toBeTruthy();
     expect(screen.getByText("new")).toBeTruthy();
     expect(document.querySelector(".tool-change-inline-diff")).toBeTruthy();
@@ -545,15 +572,17 @@ describe("GenericToolBlock", () => {
       />,
     );
 
-    // 8 行折叠紧凑行，折叠态不渲染任何 diff（天然延迟）
-    expect(view.container.querySelectorAll('[data-slot="marker"]').length).toBe(8);
+    expandFileEditScene(view.container);
+    // scene + 8 行折叠紧凑行，折叠态不渲染任何 diff（天然延迟）
+    expect(view.container.querySelectorAll('[data-slot="marker"]').length).toBe(9);
     expect(view.container.querySelector(".tool-change-inline-diff")).toBeNull();
 
     // 文件名为纯文本，不再是可点跳转链接
     expect(screen.queryByRole("button", { name: "heavy-0.ts" })).toBeNull();
 
-    // 点击行头展开后才渲染该行 diff
-    fireEvent.click(view.container.querySelector('[data-slot="marker"]')!);
+    // 点击文件行头展开后才渲染该行 diff（跳过场景头）
+    const markers = view.container.querySelectorAll('[data-slot="marker"]');
+    fireEvent.click(markers[1]!);
     expect(view.container.querySelector(".tool-change-inline-diff")).toBeTruthy();
   });
 
@@ -566,17 +595,19 @@ describe("GenericToolBlock", () => {
       />,
     );
 
+    expandFileEditScene(view.container);
     // 折叠行即显示来自输出回退的统计，不显示原始输出面板
     expect(screen.getAllByText("+1").length).toBeGreaterThan(0);
     expect(screen.getAllByText("-1").length).toBeGreaterThan(0);
     expect(document.querySelector(".tool-output-raw-pre")).toBeNull();
-    fireEvent.click(view.container.querySelector('[data-slot="marker"]')!);
+    const markers = view.container.querySelectorAll('[data-slot="marker"]');
+    fireEvent.click(markers[markers.length - 1]!);
     expect(screen.getByText("old")).toBeTruthy();
     expect(screen.getByText("new")).toBeTruthy();
   });
 
   it("matches path hints with absolute/relative compatibility for stats fallback", () => {
-    render(
+    const view = render(
       <GenericToolBlock
         item={fileChangePathHintCompatItem}
         isExpanded
@@ -584,6 +615,7 @@ describe("GenericToolBlock", () => {
       />,
     );
 
+    expandFileEditScene(view.container);
     expect(screen.getAllByText("+1").length).toBeGreaterThan(0);
     expect(screen.getAllByText("-1").length).toBeGreaterThan(0);
   });

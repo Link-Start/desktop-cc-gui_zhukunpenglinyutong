@@ -11,9 +11,10 @@ use super::{
     should_block_request_user_input, should_skip_codex_stderr_line,
     visible_console_fallback_enabled_from_env, wrapper_kind_for_binary, AutoCompactionThreadState,
     DeferredStartupEventSink, PlanTurnState, RuntimeShutdownSource, TimedOutRequest,
-    WorkspaceSession, AUTO_COMPACTION_THRESHOLD_PERCENT, MODE_BLOCKED_PLAN_REASON,
-    MODE_BLOCKED_PLAN_SUGGESTION, MODE_BLOCKED_REASON, MODE_BLOCKED_REASON_CODE_PLAN_READONLY,
-    MODE_BLOCKED_REASON_CODE_REQUEST_USER_INPUT, MODE_BLOCKED_SUGGESTION,
+    WorkspaceSession, AUTO_COMPACTION_INFLIGHT_TIMEOUT_MS, AUTO_COMPACTION_THRESHOLD_PERCENT,
+    MODE_BLOCKED_PLAN_REASON, MODE_BLOCKED_PLAN_SUGGESTION, MODE_BLOCKED_REASON,
+    MODE_BLOCKED_REASON_CODE_PLAN_READONLY, MODE_BLOCKED_REASON_CODE_REQUEST_USER_INPUT,
+    MODE_BLOCKED_SUGGESTION,
 };
 use crate::backend::events::{AppServerEvent, EventSink, TerminalOutput};
 use crate::runtime::RuntimeManager;
@@ -24,9 +25,9 @@ use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, BufReader, Lines};
 use tokio::process::Command;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{mpsc, oneshot, Mutex, Notify};
 
 #[derive(Clone, Default)]
 struct TestEventSink {
@@ -154,11 +155,19 @@ fn spawn_test_runtime_process() -> (tokio::process::Child, String) {
 }
 
 async fn make_workspace_session(id: &str) -> Arc<WorkspaceSession> {
+    make_workspace_session_with_runtime_key(id, id).await
+}
+
+async fn make_workspace_session_with_runtime_key(
+    id: &str,
+    provider_runtime_key: &str,
+) -> Arc<WorkspaceSession> {
     let (mut child, resolved_bin) = spawn_test_runtime_process();
     let process_id = child.id();
     let stdin = child.stdin.take().expect("test child stdin");
     Arc::new(WorkspaceSession {
         entry: workspace_entry(id),
+        provider_runtime_key: provider_runtime_key.to_string(),
         child: Mutex::new(child),
         stdin: Mutex::new(stdin),
         wrapper_kind: "direct".to_string(),
@@ -176,6 +185,7 @@ async fn make_workspace_session(id: &str) -> Arc<WorkspaceSession> {
         auto_compaction_threshold_percent: AUTO_COMPACTION_THRESHOLD_PERCENT,
         auto_compaction_enabled: true,
         auto_compaction_thread_state: Mutex::new(HashMap::new()),
+        auto_compaction_state_changed: Notify::new(),
         plan_turn_state: Mutex::new(HashMap::new()),
         local_user_input_requests: Mutex::new(HashMap::new()),
         local_request_seq: AtomicU64::new(1),
@@ -208,6 +218,62 @@ async fn settle_echoed_test_request(session: &WorkspaceSession, request: &Value,
         .remove(&request_id)
         .expect("pending request sender");
     sender.send(Ok(result)).expect("settle request");
+}
+
+#[cfg(not(windows))]
+async fn send_provider_turn_and_capture(
+    sessions: &Arc<Mutex<HashMap<String, Arc<WorkspaceSession>>>>,
+    session: &Arc<WorkspaceSession>,
+    lines: &mut Lines<BufReader<tokio::process::ChildStdout>>,
+    workspace_id: &str,
+    provider_profile_id: &str,
+    model: &str,
+    effort: &str,
+    runtime_turn_id: &str,
+) -> (Value, Value) {
+    let send_task = tokio::spawn({
+        let sessions = Arc::clone(sessions);
+        let workspace_id = workspace_id.to_string();
+        let provider_profile_id = provider_profile_id.to_string();
+        let model = model.to_string();
+        let effort = effort.to_string();
+        async move {
+            crate::shared::codex_core::send_user_message_core(
+                sessions.as_ref(),
+                workspace_id,
+                Some(provider_profile_id),
+                "shared-native-1".to_string(),
+                "hello".to_string(),
+                Some(model),
+                Some(effort),
+                None,
+                None,
+                None,
+                None,
+                None,
+                false,
+                None,
+            )
+            .await
+        }
+    });
+    let line = tokio::time::timeout(Duration::from_secs(2), lines.next_line())
+        .await
+        .expect("request reached expected provider runtime before timeout")
+        .expect("read provider request")
+        .expect("provider request line");
+    let request: Value = serde_json::from_str(&line).expect("valid provider request");
+    settle_echoed_test_request(
+        session,
+        &request,
+        json!({ "result": { "turn": { "id": runtime_turn_id } } }),
+    )
+    .await;
+    let response = send_task
+        .await
+        .expect("provider send task")
+        .expect("provider send succeeds");
+    (request, response)
 }
 
 #[cfg(not(windows))]
@@ -285,6 +351,148 @@ async fn explicit_model_list_owner_still_sends_model_list() {
         .expect("model list task")
         .expect("model list succeeds");
     dispose_workspace_session(&session).await;
+}
+
+#[cfg(not(windows))]
+#[tokio::test]
+async fn provider_scoped_model_list_uses_matching_runtime_session() {
+    let workspace_id = "provider-model-list";
+    let provider_profile_id = "managed-provider";
+    let session = make_workspace_session(workspace_id).await;
+    let stdout = session
+        .child
+        .lock()
+        .await
+        .stdout
+        .take()
+        .expect("test child stdout");
+    let session_key =
+        crate::codex::provider_profile::codex_runtime_key(workspace_id, provider_profile_id);
+    let sessions = Arc::new(Mutex::new(HashMap::from([(
+        session_key,
+        Arc::clone(&session),
+    )])));
+    let model_list_task = tokio::spawn({
+        let sessions = Arc::clone(&sessions);
+        async move {
+            crate::shared::codex_core::model_list_for_provider_core(
+                sessions.as_ref(),
+                workspace_id.to_string(),
+                Some(provider_profile_id.to_string()),
+            )
+            .await
+        }
+    });
+
+    let mut lines = BufReader::new(stdout).lines();
+    let line = lines
+        .next_line()
+        .await
+        .expect("read provider model request")
+        .expect("provider model request line");
+    let request: Value = serde_json::from_str(&line).expect("valid provider model request");
+    assert_eq!(request["method"], "model/list");
+    settle_echoed_test_request(&session, &request, json!({ "data": [] })).await;
+
+    model_list_task
+        .await
+        .expect("provider model list task")
+        .expect("provider model list succeeds");
+    dispose_workspace_session(&session).await;
+}
+
+#[cfg(not(windows))]
+#[tokio::test]
+async fn provider_scoped_turn_start_routes_a_b_a_to_real_runtime_sessions() {
+    let workspace_id = "provider-turn-routing";
+    let runtime_key_a =
+        crate::codex::provider_profile::codex_runtime_key(workspace_id, "provider-a");
+    let runtime_key_b =
+        crate::codex::provider_profile::codex_runtime_key(workspace_id, "provider-b");
+    let session_a = make_workspace_session_with_runtime_key(workspace_id, &runtime_key_a).await;
+    let session_b = make_workspace_session_with_runtime_key(workspace_id, &runtime_key_b).await;
+    let stdout_a = session_a
+        .child
+        .lock()
+        .await
+        .stdout
+        .take()
+        .expect("provider A stdout");
+    let stdout_b = session_b
+        .child
+        .lock()
+        .await
+        .stdout
+        .take()
+        .expect("provider B stdout");
+    let mut lines_a = BufReader::new(stdout_a).lines();
+    let mut lines_b = BufReader::new(stdout_b).lines();
+    let sessions = Arc::new(Mutex::new(HashMap::from([
+        (runtime_key_a.clone(), Arc::clone(&session_a)),
+        (runtime_key_b.clone(), Arc::clone(&session_b)),
+    ])));
+
+    let (request_a1, response_a1) = send_provider_turn_and_capture(
+        &sessions,
+        &session_a,
+        &mut lines_a,
+        workspace_id,
+        "provider-a",
+        "model-a1",
+        "high",
+        "turn-a1",
+    )
+    .await;
+    let (request_b, response_b) = send_provider_turn_and_capture(
+        &sessions,
+        &session_b,
+        &mut lines_b,
+        workspace_id,
+        "provider-b",
+        "model-b",
+        "low",
+        "turn-b",
+    )
+    .await;
+    let (request_a2, response_a2) = send_provider_turn_and_capture(
+        &sessions,
+        &session_a,
+        &mut lines_a,
+        workspace_id,
+        "provider-a",
+        "model-a2",
+        "medium",
+        "turn-a2",
+    )
+    .await;
+
+    for (request, model, effort) in [
+        (&request_a1, "model-a1", "high"),
+        (&request_b, "model-b", "low"),
+        (&request_a2, "model-a2", "medium"),
+    ] {
+        assert_eq!(request["method"], "turn/start");
+        assert_eq!(request["params"]["threadId"], "shared-native-1");
+        assert_eq!(request["params"]["model"], model);
+        assert_eq!(request["params"]["effort"], effort);
+    }
+    for (response, provider, runtime_key) in [
+        (&response_a1, "provider-a", runtime_key_a.as_str()),
+        (&response_b, "provider-b", runtime_key_b.as_str()),
+        (&response_a2, "provider-a", runtime_key_a.as_str()),
+    ] {
+        assert_eq!(
+            response["mossxDispatchReceipt"]["providerProfileId"],
+            provider
+        );
+        assert_eq!(
+            response["mossxDispatchReceipt"]["providerRuntimeKey"],
+            runtime_key
+        );
+    }
+
+    dispose_workspace_session(&session_a).await;
+    dispose_workspace_session(&session_b).await;
 }
 
 #[test]
@@ -556,6 +764,220 @@ fn evaluate_auto_compaction_state_respects_disabled_setting() {
         100_000,
     ));
     assert!(!state.in_flight);
+}
+
+#[test]
+fn evaluate_auto_compaction_state_latches_high_watermark_until_terminal() {
+    let mut state = AutoCompactionThreadState::default();
+
+    assert!(!evaluate_auto_compaction_state(
+        &mut state,
+        "turn/started",
+        None,
+        AUTO_COMPACTION_THRESHOLD_PERCENT,
+        true,
+        100_000,
+    ));
+    assert!(!evaluate_auto_compaction_state(
+        &mut state,
+        "thread/tokenUsage/updated",
+        Some(95.0),
+        AUTO_COMPACTION_THRESHOLD_PERCENT,
+        true,
+        110_000,
+    ));
+    assert!(evaluate_auto_compaction_state(
+        &mut state,
+        "turn/completed",
+        None,
+        AUTO_COMPACTION_THRESHOLD_PERCENT,
+        true,
+        120_000,
+    ));
+    assert!(state.in_flight);
+}
+
+#[test]
+fn pending_user_dispatch_survives_stale_predecessor_terminal() {
+    let mut state = AutoCompactionThreadState::default();
+    assert!(state.reserve_user_dispatch(100_000));
+    assert!(!evaluate_auto_compaction_state(
+        &mut state,
+        "thread/tokenUsage/updated",
+        Some(95.0),
+        AUTO_COMPACTION_THRESHOLD_PERCENT,
+        true,
+        110_000,
+    ));
+
+    assert!(!evaluate_auto_compaction_state(
+        &mut state,
+        "turn/completed",
+        None,
+        AUTO_COMPACTION_THRESHOLD_PERCENT,
+        true,
+        120_000,
+    ));
+    assert!(state.pending_user_dispatch);
+    assert!(state.is_processing);
+
+    assert!(!evaluate_auto_compaction_state(
+        &mut state,
+        "turn/started",
+        None,
+        AUTO_COMPACTION_THRESHOLD_PERCENT,
+        true,
+        130_000,
+    ));
+    assert!(evaluate_auto_compaction_state(
+        &mut state,
+        "turn/completed",
+        None,
+        AUTO_COMPACTION_THRESHOLD_PERCENT,
+        true,
+        140_000,
+    ));
+}
+
+#[test]
+fn compaction_reservation_blocks_user_dispatch_until_released() {
+    let mut state = AutoCompactionThreadState::default();
+    assert!(state.try_reserve_manual_compaction(100_000));
+    assert!(!state.reserve_user_dispatch(100_001));
+
+    state.release_compaction();
+    assert!(state.reserve_user_dispatch(100_002));
+}
+
+#[test]
+fn stale_compaction_reservation_is_bounded() {
+    let mut state = AutoCompactionThreadState::default();
+    assert!(state.try_reserve_manual_compaction(100_000));
+
+    assert!(state.reserve_user_dispatch(100_000 + AUTO_COMPACTION_INFLIGHT_TIMEOUT_MS + 1));
+    assert!(!state.in_flight);
+    assert!(state.pending_user_dispatch);
+}
+
+#[test]
+fn stale_user_dispatch_reservation_is_bounded_and_exclusive() {
+    let mut state = AutoCompactionThreadState::default();
+    assert!(state.reserve_user_dispatch(100_000));
+    assert!(!state.reserve_user_dispatch(100_001));
+
+    assert!(state.reserve_user_dispatch(100_000 + AUTO_COMPACTION_INFLIGHT_TIMEOUT_MS + 1));
+    assert!(state.pending_user_dispatch);
+    assert!(!state.in_flight);
+}
+
+#[tokio::test]
+async fn compaction_first_holds_prompt_until_lifecycle_release() {
+    let session = make_workspace_session("compaction-first").await;
+    session
+        .try_reserve_codex_manual_compaction("thread-1")
+        .await
+        .expect("reserve compaction");
+
+    let waiting_session = Arc::clone(&session);
+    let mut waiting_prompt = tokio::spawn(async move {
+        waiting_session
+            .reserve_codex_user_dispatch("thread-1")
+            .await
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(25), &mut waiting_prompt)
+            .await
+            .is_err(),
+        "prompt must remain blocked while compaction owns the native thread"
+    );
+
+    session
+        .release_codex_compaction_reservation("thread-1")
+        .await;
+    tokio::time::timeout(Duration::from_secs(1), waiting_prompt)
+        .await
+        .expect("prompt reservation wake")
+        .expect("prompt task")
+        .expect("prompt reservation");
+
+    session
+        .release_codex_user_dispatch_reservation("thread-1")
+        .await;
+    dispose_workspace_session(&session).await;
+}
+
+#[tokio::test]
+async fn second_prompt_waits_until_first_start_evidence() {
+    let session = make_workspace_session("prompt-start-order").await;
+    session
+        .reserve_codex_user_dispatch("thread-1")
+        .await
+        .expect("reserve first prompt");
+
+    let waiting_session = Arc::clone(&session);
+    let mut waiting_prompt = tokio::spawn(async move {
+        waiting_session
+            .reserve_codex_user_dispatch("thread-1")
+            .await
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(25), &mut waiting_prompt)
+            .await
+            .is_err(),
+        "a second prompt must not share the pending start reservation"
+    );
+
+    {
+        let mut states = session.auto_compaction_thread_state.lock().await;
+        let state = states.get_mut("thread-1").expect("thread barrier state");
+        assert!(!evaluate_auto_compaction_state(
+            state,
+            "turn/started",
+            None,
+            AUTO_COMPACTION_THRESHOLD_PERCENT,
+            true,
+            100_000,
+        ));
+    }
+    session.notify_codex_compaction_state_changed();
+
+    tokio::time::timeout(Duration::from_secs(1), waiting_prompt)
+        .await
+        .expect("second prompt reservation wake")
+        .expect("second prompt task")
+        .expect("second prompt reservation");
+
+    session
+        .release_codex_user_dispatch_reservation("thread-1")
+        .await;
+    dispose_workspace_session(&session).await;
+}
+
+#[tokio::test]
+async fn prompt_first_rejects_manual_compaction_without_replacing_turn() {
+    let session = make_workspace_session("prompt-first").await;
+    session
+        .reserve_codex_user_dispatch("thread-1")
+        .await
+        .expect("reserve prompt");
+
+    let error = session
+        .try_reserve_codex_manual_compaction("thread-1")
+        .await
+        .expect_err("manual compaction must not cross an accepted prompt");
+    assert!(error.contains("context compaction is busy"));
+
+    session
+        .release_codex_user_dispatch_reservation("thread-1")
+        .await;
+    session
+        .try_reserve_codex_manual_compaction("thread-1")
+        .await
+        .expect("reserve compaction after prompt settles");
+    session
+        .release_codex_compaction_reservation("thread-1")
+        .await;
+    dispose_workspace_session(&session).await;
 }
 
 #[test]

@@ -50,19 +50,32 @@ function canMergeExploreItems(previous: ExploreItem, next: ExploreItem): boolean
 }
 
 /**
- * 将分类映射到 GroupedEntry 的 kind
+ * 将分类映射到 GroupedEntry 的 kind。
+ * `fileEdit` 是场景桶：连续的 edit + fileChange 合并为同一「文件修改」场景。
+ * （裸 `edit` 不会进入 buffer——resolveSceneCategory 已归一为 fileEdit。）
  */
-type GroupableCategory = 'read' | 'edit' | 'bash' | 'search';
+type GroupableCategory = 'read' | 'fileEdit' | 'bash' | 'search';
 
 const CATEGORY_TO_GROUP_KIND: Record<GroupableCategory, GroupedEntry['kind']> = {
   read: 'readGroup',
-  edit: 'editGroup',
+  fileEdit: 'editGroup',
   bash: 'bashGroup',
   search: 'searchGroup',
 };
 
 function isGroupableCategory(cat: string): cat is GroupableCategory {
   return cat in CATEGORY_TO_GROUP_KIND;
+}
+
+/**
+ * 场景归并桶：Codex 的 fileChange 与 Claude/通用 edit/write 在幕布上同属「文件修改」。
+ * 若不归并，会出现连续多个「文件修改（1 个）」标题。
+ */
+function resolveSceneCategory(category: string): string {
+  if (category === 'edit' || category === 'fileChange') {
+    return 'fileEdit';
+  }
+  return category;
 }
 
 export function shouldHideToolItemForRender(item: ToolItem): boolean {
@@ -79,8 +92,8 @@ function shouldUngroupSearchTools(item: ToolItem): boolean {
 }
 
 /**
- * 对 ConversationItem[] 进行分组，连续 2+ 个同类工具合并为 group entry。
- * 保留 explore 合并逻辑。
+ * 对 ConversationItem[] 进行分组，连续同类工具合并为 group entry。
+ * 保留 explore 合并逻辑；edit/fileChange 归并为 fileEdit → editGroup。
  */
 export function groupToolItems(items: ConversationItem[]): GroupedEntry[] {
   const entries: GroupedEntry[] = [];
@@ -107,10 +120,13 @@ export function groupToolItems(items: ConversationItem[]): GroupedEntry[] {
     const hasUngroupedSearchTool =
       currentCategory === 'search' && toolBuffer.some(shouldUngroupSearchTools);
     // Keep only codex mcp search_query tools line-by-line so each search record can expand.
+    // 文件修改场景：edit + fileChange 归并桶，即使 1 个 tool 也走 editGroup。
+    const shouldGroupFileEditScene =
+      currentCategory === 'fileEdit' && toolBuffer.length >= 1;
     if (
-      toolBuffer.length >= 2 &&
+      !hasUngroupedSearchTool &&
       isGroupableCategory(currentCategory) &&
-      !hasUngroupedSearchTool
+      (shouldGroupFileEditScene || toolBuffer.length >= 2)
     ) {
       entries.push({
         kind: CATEGORY_TO_GROUP_KIND[currentCategory],
@@ -143,13 +159,13 @@ export function groupToolItems(items: ConversationItem[]): GroupedEntry[] {
         flushTools();
         continue;
       }
-      const cat = classifyToolCategory(item);
-      if (toolBuffer.length > 0 && cat === currentCategory) {
+      const sceneCategory = resolveSceneCategory(classifyToolCategory(item));
+      if (toolBuffer.length > 0 && sceneCategory === currentCategory) {
         toolBuffer.push(item);
       } else {
         flushTools();
         toolBuffer = [item];
-        currentCategory = cat;
+        currentCategory = sceneCategory;
       }
       continue;
     }

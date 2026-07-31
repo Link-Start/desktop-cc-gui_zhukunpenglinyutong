@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ChatInputBox } from "./ChatInputBox";
@@ -51,5 +51,53 @@ describe("ChatInputBox submit button", () => {
     fireEvent.input(editable);
 
     expect(sendButton.disabled).toBe(false);
+  });
+
+  it("submits and clears an editable draft when submission is allowed", async () => {
+    const onSubmit = vi.fn();
+    render(<ChatInputBox showHeader={false} onSubmit={onSubmit} />);
+
+    const editable = document.querySelector(".input-editable") as HTMLDivElement | null;
+    expect(editable).toBeTruthy();
+    if (!editable) {
+      return;
+    }
+
+    setEditableText(editable, "可以发送");
+    fireEvent.input(editable);
+    fireEvent.keyDown(editable, { key: "Enter", code: "Enter", keyCode: 13 });
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith("可以发送", undefined);
+    });
+    expect(editable.textContent).toBe("");
+  });
+
+  it("keeps draft editable but blocks submit while submission is disabled", () => {
+    const onSubmit = vi.fn();
+    render(
+      <ChatInputBox
+        showHeader={false}
+        submitDisabled
+        onSubmit={onSubmit}
+      />,
+    );
+
+    const editable = document.querySelector(".input-editable") as HTMLDivElement | null;
+    expect(editable).toBeTruthy();
+    expect(editable?.getAttribute("contenteditable")).toBe("true");
+    if (!editable) {
+      return;
+    }
+
+    setEditableText(editable, "下一条草稿");
+    fireEvent.input(editable);
+    fireEvent.keyDown(editable, { key: "Enter", code: "Enter", keyCode: 13 });
+
+    expect(
+      (screen.getByTitle("chat.sendMessageEnter") as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(editable.textContent).toBe("下一条草稿");
   });
 });

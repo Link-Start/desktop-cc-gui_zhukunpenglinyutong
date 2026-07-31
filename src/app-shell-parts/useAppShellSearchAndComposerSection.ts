@@ -186,7 +186,7 @@ export type ComposerSendBoundary = {
     text: string,
     images?: string[],
     options?: MessageSendOptions,
-  ) => Promise<void>;
+  ) => Promise<unknown>;
   startThreadForWorkspace: (
     workspaceId: string,
     options?: { activate?: boolean },

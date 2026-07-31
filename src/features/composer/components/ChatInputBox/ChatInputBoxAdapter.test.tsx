@@ -913,7 +913,7 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     mockState.getClaudeProviders.mockResolvedValue([
       {
         id: '__local_settings_json__',
-        name: 'Local settings.json',
+        name: '本地配置',
         isActive: true,
         isLocalProvider: true,
         settingsConfig: {},
@@ -935,7 +935,7 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     mockState.getClaudeProviders.mockResolvedValue([
       {
         id: '__local_settings_json__',
-        name: 'Local settings.json',
+        name: '本地配置',
         isActive: true,
         isLocalProvider: true,
         settingsConfig: {},
@@ -2007,7 +2007,7 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     expect(latest.selectedModel).toBe('');
   });
 
-  it('disables gemini and opencode provider options inside shared sessions', async () => {
+  it('enables the five supported provider options inside shared sessions', async () => {
     renderAdapter({
       isSharedSession: true,
       engines: [
@@ -2015,6 +2015,8 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
         { type: 'codex', installed: true, version: '1.0.0' },
         { type: 'gemini', installed: true, version: '1.0.0' },
         { type: 'opencode', installed: true, version: '1.0.0' },
+        { type: 'kimi', installed: true, version: '1.0.0' },
+        { type: 'grok', installed: true, version: '1.0.0' },
       ],
     });
 
@@ -2028,7 +2030,9 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
       claude: true,
       codex: true,
       gemini: false,
-      opencode: false,
+      opencode: true,
+      kimi: true,
+      grok: true,
     });
   });
 
@@ -2055,6 +2059,48 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
       gemini: true,
       opencode: true,
     });
+  });
+
+  it('does not expose legacy engine/model callbacks inside shared sessions', async () => {
+    renderAdapter({
+      isSharedSession: true,
+      onSelectEngine: vi.fn(),
+      onSelectModel: vi.fn(),
+    });
+
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+
+    const latest = mockState.latestProps as {
+      onProviderSelect?: (providerId: string) => void;
+      onModelSelect?: (modelId: string) => void;
+      providerTargetPickerMode?: string;
+    };
+    expect(latest.onProviderSelect).toBeUndefined();
+    expect(latest.onModelSelect).toBeUndefined();
+    expect(latest.providerTargetPickerMode).toBe('shared');
+  });
+
+  it('uses the atomic double-column picker without shared session semantics on Home', async () => {
+    renderAdapter({
+      isSharedSession: false,
+      providerTargetPickerMode: 'create-session',
+      onSelectEngine: vi.fn(),
+      onSelectModel: vi.fn(),
+      onExecutionTargetChange: vi.fn(),
+    });
+
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+
+    const latest = mockState.latestProps as {
+      providerTargetPickerMode?: string;
+      onProviderSelect?: (providerId: string) => void;
+      onModelSelect?: (modelId: string) => void;
+      onExecutionTargetChange?: (target: unknown) => void;
+    };
+    expect(latest.providerTargetPickerMode).toBe('create-session');
+    expect(latest.onProviderSelect).toBeUndefined();
+    expect(latest.onModelSelect).toBeUndefined();
+    expect(latest.onExecutionTargetChange).toEqual(expect.any(Function));
   });
 
   it('routes kimi provider selection to the kimi engine', async () => {

@@ -16,7 +16,14 @@ import {
   sendUserMessage,
 } from "../../../services/tauri";
 import { getClientStoreSync } from "../../../services/clientStorage";
-import { sendSharedSessionTurn } from "../../shared-session/runtime/sendSharedSessionTurn";
+import {
+  sendSharedSessionTurn,
+  sendSharedSessionTurnRouted,
+} from "../../shared-session/runtime/sendSharedSessionTurn";
+import {
+  sharedSessionV2AwaitTurnTerminal,
+  sharedSessionV2InterruptTurn,
+} from "../../shared-session/services/sharedSessions";
 import type { CodexAcceptedTurnRecord } from "../utils/codexConversationLiveness";
 import { useThreadMessaging } from "./useThreadMessaging";
 import type { ThreadState } from "./useThreadsReducer";
@@ -60,8 +67,18 @@ vi.mock("../../../services/clientStorage", () => ({
   writeClientStoreValue: vi.fn(),
 }));
 
-vi.mock("../../shared-session/runtime/sendSharedSessionTurn", () => ({
-  sendSharedSessionTurn: vi.fn(),
+vi.mock("../../shared-session/runtime/sendSharedSessionTurn", () => {
+  const sendSharedSessionTurn = vi.fn();
+  const sendSharedSessionTurnRouted = vi.fn();
+  return {
+    sendSharedSessionTurn,
+    sendSharedSessionTurnRouted,
+  };
+});
+
+vi.mock("../../shared-session/services/sharedSessions", () => ({
+  sharedSessionV2AwaitTurnTerminal: vi.fn(),
+  sharedSessionV2InterruptTurn: vi.fn(),
 }));
 
 export const workspace: WorkspaceInfo = {
@@ -105,7 +122,29 @@ export function resetThreadMessagingTestMocks() {
   vi.mocked(engineInterrupt).mockResolvedValue();
   vi.mocked(engineInterruptTurn).mockResolvedValue();
   vi.mocked(interruptTurn).mockResolvedValue({});
+  vi.mocked(sharedSessionV2InterruptTurn).mockResolvedValue({
+    status: "interrupted",
+    attemptId: "attempt-1",
+    engine: "claude",
+    bindingKey: "claude:provider-a",
+    nativeThreadId: "native-1",
+    runtimeTurnId: "turn-1",
+  });
+  vi.mocked(sharedSessionV2AwaitTurnTerminal).mockResolvedValue({
+    status: "committed",
+    duplicate: false,
+    sequence: 1,
+    bindingKey: "codex:provider-a",
+    terminal: {
+      type: "run.settled",
+      outcome: "completed",
+      recoveryReason: null,
+    },
+  });
   vi.mocked(sendSharedSessionTurn).mockResolvedValue({
+    result: { turn: { id: "shared-turn-1" } },
+  });
+  vi.mocked(sendSharedSessionTurnRouted).mockResolvedValue({
     result: { turn: { id: "shared-turn-1" } },
   });
 }
@@ -139,6 +178,7 @@ export function makeThreadMessagingHook(
       collaborationMode: Record<string, unknown> | null;
     };
     claudeThinkingVisible?: boolean;
+    onSharedDurableTurnCommitted?: ReturnType<typeof vi.fn>;
   } = {},
 ) {
   const activeThreadId =
@@ -212,6 +252,8 @@ export function makeThreadMessagingHook(
       startThreadForWorkspace,
       onDebug,
       runWithCreateSessionLoading: overrides.runWithCreateSessionLoading,
+      onSharedDurableTurnCommitted:
+        overrides.onSharedDurableTurnCommitted,
     }),
   );
 

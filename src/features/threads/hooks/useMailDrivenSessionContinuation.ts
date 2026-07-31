@@ -15,7 +15,7 @@ type UseMailDrivenSessionContinuationOptions = {
     text: string,
     images?: string[],
     options?: { skipPromptExpansion?: boolean },
-  ) => Promise<void>;
+  ) => Promise<unknown>;
   armMailDrivenCompletionEmail: (threadId: string, turnId?: string | null) => void;
 };
 

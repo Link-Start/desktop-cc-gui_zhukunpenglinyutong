@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ConversationItem } from "../../../types";
 import { engineInterrupt, engineInterruptTurn, interruptTurn } from "../../../services/tauri";
 import {
   clearGlobalRuntimeNotices,
@@ -17,7 +18,14 @@ import {
   resetCodexPendingPrewarmForTests,
   settleCodexPrewarm,
 } from "../utils/codexPendingPrewarm";
+import {
+  appendLiveAssistantText,
+  getLiveAssistantTextSnapshot,
+  resetLiveAssistantTextChannelForTests,
+} from "../utils/liveAssistantTextChannel";
 import { useThreadTurnEvents } from "./useThreadTurnEvents";
+import { initialState, threadReducer } from "./useThreadsReducer";
+import type { ThreadAction, ThreadState } from "./useThreadsReducer";
 import { workspaceScopedHas } from "./workspaceScopedMap";
 
 vi.mock("../../../services/tauri", () => ({
@@ -158,6 +166,7 @@ describe("useThreadTurnEvents", () => {
     vi.clearAllMocks();
     clearGlobalRuntimeNotices();
     resetCodexPendingPrewarmForTests();
+    resetLiveAssistantTextChannelForTests();
     vi.mocked(engineInterrupt).mockResolvedValue();
     vi.mocked(engineInterruptTurn).mockResolvedValue();
   });
@@ -617,6 +626,71 @@ describe("useThreadTurnEvents", () => {
     expect(markProcessing).toHaveBeenCalledWith("thread-1", false);
     expect(setActiveTurnId).toHaveBeenCalledWith("thread-1", null);
     expect(workspaceScopedHas(pendingInterruptsRef.current, "ws-1", "thread-1")).toBe(false);
+  });
+
+  it("drains externalized Grok text before marking the assistant message final", () => {
+    const threadId = "grok:session-1";
+    const itemId = "assistant-1";
+    const shellText = "直接";
+    const tailText = "说我眼睛里扫到的东西";
+    const { result, dispatch } = makeOptions({
+      activeTurnIdByThread: { [threadId]: "turn-1" },
+    });
+    appendLiveAssistantText(threadId, itemId, shellText);
+    appendLiveAssistantText(threadId, itemId, tailText);
+
+    act(() => {
+      result.current.onTurnCompleted("ws-1", threadId, "turn-1");
+    });
+
+    const actions = dispatch.mock.calls.map(
+      ([action]) => action as ThreadAction,
+    );
+    const drainIndex = actions.findIndex(
+      (action) => action.type === "appendAgentDelta",
+    );
+    const finalIndex = actions.findIndex(
+      (action) => action.type === "markLatestAssistantMessageFinal",
+    );
+    expect(actions[drainIndex]).toEqual({
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId,
+      itemId,
+      delta: tailText,
+      hasCustomName: true,
+    });
+    expect(drainIndex).toBeLessThan(finalIndex);
+    expect(getLiveAssistantTextSnapshot(threadId)).toBeNull();
+
+    const shellItem: ConversationItem = {
+      id: itemId,
+      kind: "message",
+      role: "assistant",
+      text: shellText,
+      isFinal: false,
+    };
+    const baseState: ThreadState = {
+      ...initialState,
+      itemsByThread: { [threadId]: [shellItem] },
+    };
+    const textSettlementActions = actions.filter(
+      (action) =>
+        action.type === "appendAgentDelta" ||
+        action.type === "markLatestAssistantMessageFinal",
+    );
+    const settledState = textSettlementActions.reduce<ThreadState>(
+      (state, action) => threadReducer(state, action),
+      baseState,
+    );
+    const settledItem = settledState.itemsByThread[threadId]?.[0];
+    expect(settledItem).toMatchObject({
+      id: itemId,
+      kind: "message",
+      role: "assistant",
+      text: `${shellText}${tailText}`,
+      isFinal: true,
+    });
   });
 
   it("also settles pending alias thread on completed event", () => {
@@ -1833,6 +1907,34 @@ describe("useThreadTurnEvents", () => {
       }),
     ]);
     expect(safeMessageActivity).toHaveBeenCalled();
+  });
+
+  it("keeps the Shared attempt target on the realtime error row", () => {
+    const { result, pushThreadErrorMessage } = makeOptions();
+    const executionTargetSnapshot = {
+      engine: "claude" as const,
+      providerProfileId: "provider-a",
+      modelCatalogEntryId: "catalog-a",
+      model: "runtime-a",
+      reasoning: { effort: "medium" },
+      providerProfileNameSnapshot: "Provider A",
+      providerProfileSource: "managed" as const,
+    };
+
+    act(() => {
+      result.current.onTurnError("ws-1", "shared:thread-1", "turn-1", {
+        message: "provider rejected",
+        willRetry: false,
+        executionTargetSnapshot,
+      });
+    });
+
+    expect(pushThreadErrorMessage).toHaveBeenCalledWith(
+      "ws-1",
+      "shared:thread-1",
+      "会话失败：provider rejected",
+      executionTargetSnapshot,
+    );
   });
 
   it("does not settle pending alias thread on error when turn id is empty", () => {

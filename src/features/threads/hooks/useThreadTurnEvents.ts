@@ -28,9 +28,13 @@ import {
 } from "../utils/threadNormalize";
 import { previewThreadName } from "../../../utils/threadItems";
 import { resolveThreadStabilityDiagnostic } from "../utils/stabilityDiagnostics";
+import type { TurnExecutionSnapshot } from "../../shared-session/target/types";
 import { hasCodexBackgroundHelperPreview } from "../utils/codexBackgroundHelpers";
 import { isCodexPrewarmThreadStart } from "../utils/codexPendingPrewarm";
-import { renameLiveAssistantTextThread } from "../utils/liveAssistantTextChannel";
+import {
+  drainLiveAssistantTextTail,
+  renameLiveAssistantTextThread,
+} from "../utils/liveAssistantTextChannel";
 import { resolveCodexSubagentIdentity } from "../utils/codexSubagentIdentity";
 import {
   inferEngineFromLegacyThreadId,
@@ -152,6 +156,7 @@ type UseThreadTurnEventsOptions = {
     workspaceId: string,
     threadId: string,
     message: string,
+    executionTargetSnapshot?: TurnExecutionSnapshot,
   ) => void;
   safeMessageActivity: () => void;
   recordThreadActivity: (workspaceId: string, threadId: string, timestamp?: number) => void;
@@ -494,6 +499,19 @@ export function useThreadTurnEvents({
         return false;
       }
       safeTargets.forEach(({ threadId: targetThreadId }) => {
+        // A4 live-text 外部化：terminal settlement 前把尚未落入 reducer 的尾段
+        // 回灌到同一 assistant item。否则 isStreaming 关闭后只能读到建壳首段。
+        const liveTextTail = drainLiveAssistantTextTail(targetThreadId);
+        if (liveTextTail) {
+          dispatch({
+            type: "appendAgentDelta",
+            workspaceId,
+            threadId: targetThreadId,
+            itemId: liveTextTail.itemId,
+            delta: liveTextTail.tailDelta,
+            hasCustomName: true,
+          });
+        }
         dispatch({
           type: "clearProcessingGeneratedImages",
           threadId: targetThreadId,
@@ -597,7 +615,12 @@ export function useThreadTurnEvents({
       workspaceId: string,
       threadId: string,
       turnId: string,
-      payload: { message: string; willRetry: boolean },
+      payload: {
+        message: string;
+        willRetry: boolean;
+        suppressMessage?: boolean;
+        executionTargetSnapshot?: TurnExecutionSnapshot;
+      },
     ) => {
       if (payload.willRetry) {
         return;
@@ -688,7 +711,7 @@ export function useThreadTurnEvents({
         workspaceScopedDelete(interruptedThreadsRef.current, workspaceId, aliasThreadId);
       }
 
-      if (!wasInterrupted) {
+      if (!wasInterrupted && !payload.suppressMessage) {
         const stabilityDiagnostic = payload.message
           ? resolveThreadStabilityDiagnostic(payload.message)
           : null;
@@ -711,7 +734,16 @@ export function useThreadTurnEvents({
         const message = payload.message
           ? t("threads.turnFailedWithMessage", { message: payload.message })
           : t("threads.turnFailed");
-        pushThreadErrorMessage(workspaceId, threadId, message);
+        if (payload.executionTargetSnapshot) {
+          pushThreadErrorMessage(
+            workspaceId,
+            threadId,
+            message,
+            payload.executionTargetSnapshot,
+          );
+        } else {
+          pushThreadErrorMessage(workspaceId, threadId, message);
+        }
         pushThreadFailureRuntimeNotice({
           workspaceId,
           threadId,

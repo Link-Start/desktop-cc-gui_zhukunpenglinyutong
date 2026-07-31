@@ -60,56 +60,6 @@
   object-fit: contain;
 }
 
-/* Sidebar collapse support */
-.settings-sidebar.is-collapsed {
-  width: 50px;
-  min-width: 50px;
-  padding: 12px 6px;
-  align-items: center;
-}
-
-.settings-body.is-sidebar-collapsed {
-  grid-template-columns: 50px minmax(0, 1fr);
-}
-
-.settings-sidebar.is-collapsed .settings-nav {
-  justify-content: center;
-  padding: 8px;
-  gap: 0;
-}
-
-.settings-sidebar.is-collapsed .settings-nav svg,
-.settings-sidebar.is-collapsed .settings-nav .codicon {
-  margin: 0;
-}
-
-.settings-sidebar-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  align-self: center;
-  width: 28px;
-  height: 28px;
-  margin-top: auto;
-  padding: 0;
-  border-radius: 999px;
-  color: var(--text-muted);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: background-color 120ms ease, color 120ms ease;
-}
-
-.settings-sidebar-toggle:hover {
-  background: var(--surface-hover);
-  color: var(--text-strong);
-}
-
-.settings-sidebar-toggle:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
 /* Basic settings sub-tabs */
 .settings-basic-tabs {
   display: flex;
@@ -1492,16 +1442,16 @@
   overflow: auto;
 }
 
-/* Responsive sidebar collapse threshold */
+/* Responsive sidebar threshold */
 @media (max-width: 900px) {
-  .settings-sidebar:not(.is-collapsed) {
+  .settings-sidebar {
     width: 50px;
     min-width: 50px;
     padding: 12px 6px;
     align-items: center;
   }
 
-  .settings-sidebar:not(.is-collapsed) .settings-nav {
+  .settings-sidebar .settings-nav {
     justify-content: center;
     padding: 8px;
     gap: 0;
@@ -1509,18 +1459,29 @@
 }
 
 /* === Settings UI refresh (fixed-width centered content) === */
-.settings-content {
-  --settings-content-fixed-width: 1080px;
-  --settings-content-pad-top: 18px;
+/* The variables live on the wrap so both the fixed page head and the scrolling
+ * content share the same centered column metrics. */
+.settings-content-wrap {
+  --settings-content-fixed-width: 980px;
+  --settings-content-pad-top: 12px;
   --settings-content-pad-x: 30px;
   --settings-content-pad-right: 12px;
   --settings-content-pad-bottom: 44px;
 }
 
-.settings-content.settings-content--providers {
+.settings-content-wrap:has(> .settings-content--providers) {
+  /* Keep the same left/right gutters as every other settings page; only the
+   * vertical padding stays zero because the vendor panel is a full-height
+   * pane that scrolls internally. */
   --settings-content-pad-top: 0px;
-  --settings-content-pad-right: 0px;
   --settings-content-pad-bottom: 0px;
+}
+
+.settings-content-wrap:has(> .settings-content--shortcuts) {
+  /* The shortcuts panes fill the viewport height, so pull the layout closer
+   * to the page head and the bottom edge: the freed space goes to the panes. */
+  --settings-content-pad-top: 8px;
+  --settings-content-pad-bottom: 16px;
 }
 
 .settings-content.settings-content--providers
@@ -1535,6 +1496,20 @@
 .settings-content [data-slot="scroll-area-viewport"] {
   padding: var(--settings-content-pad-top) var(--settings-content-pad-right)
     var(--settings-content-pad-bottom) var(--settings-content-pad-x);
+}
+
+.settings-content > [data-slot="scroll-area-viewport"] {
+  /* The settings column never scrolls sideways — wide children scroll inside
+   * their own overflow box (see the wrapper pin below). Clipping x here also
+   * guarantees no native horizontal scrollbar can appear. */
+  overflow-x: hidden !important;
+}
+
+.settings-content
+  > [data-slot="scroll-area-scrollbar"][data-orientation="horizontal"] {
+  /* Horizontal scrolling is disabled on the page viewport, so the overlay
+   * indicator would be dead weight. */
+  display: none !important;
 }
 
 .settings-content
@@ -1571,7 +1546,8 @@
 }
 
 .settings-section,
-.settings-workspace-picker {
+.settings-workspace-picker,
+.vendor-settings-panel {
   width: min(100%, var(--settings-content-fixed-width));
   margin-inline: auto;
 }
@@ -1740,167 +1716,361 @@
 }
 
 /*
- * Shortcuts: compact left/right rows (shadcn-like) instead of tall cards.
- * Left = icon + label + default hint; right = shortcut input + clear icon.
- * Uses the basic-section tokens so it matches the rest of the Basic panel,
- * and the clear button is a bare icon button that fully overrides the global
- * `button` defaults (radius/padding/weight) instead of the `.ghost` chip.
+ * Shortcuts: two-pane recorder layout.
+ * Left = search + grouped rows (label + key caps); right = detail panel with
+ * a large click-to-record box. Uses the basic-section tokens so it matches
+ * the rest of the Basic panel, and the row/reset buttons fully override the
+ * global `button` defaults (radius/padding/weight).
  */
-.settings-shortcuts-groups {
+.settings-shortcuts-section {
+  /* The scroll-area viewport wrapper is already height:100%; pin the section
+   * to it so the panes below track the window height instead of a fixed cap. */
+  height: 100%;
+}
+
+.settings-shortcuts-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: 24px;
+  /* The section is a flex column pinned to the viewport height; take all of
+   * it so both panes stretch with the window. */
+  flex: 1 1 auto;
+  min-height: 0;
+  /* Both panes stretch to the same row height so the detail card always
+   * matches the list column. */
+  align-items: stretch;
+}
+
+.settings-shortcuts-list {
+  min-width: 0;
+  /* Height comes from the viewport chain above; the groups area scrolls. */
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px;
+}
+
+.settings-shortcuts-search {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--settings-basic-control-border);
+  border-radius: 8px;
+  color: var(--settings-basic-text-muted);
+}
+
+.settings-shortcuts-search input.settings-shortcuts-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 34px;
+  padding: 6px 0;
+  border: none;
+  background: transparent;
+  font-size: 12.5px;
+}
+
+.settings-shortcuts-groups {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  /* Leave room for the scrollbar without clipping row hover states. */
+  padding-right: 4px;
 }
 
 .settings-shortcuts-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
 }
 
-.settings-shortcuts-group-header .settings-subsection-title {
-  margin-top: 0;
+.settings-shortcuts-group-title {
+  padding: 0 10px 6px;
+  color: var(--settings-basic-text-muted);
+  font-size: 11px;
+  font-weight: 600;
 }
 
-.settings-shortcuts-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px 16px;
-}
-
-.settings-shortcuts-item {
+.settings-shortcuts-row {
   min-width: 0;
+  width: 100%;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 6px 8px 6px 4px;
-  border-radius: 8px;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--settings-basic-text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
   transition: background-color 130ms ease;
 }
 
-.settings-shortcuts-item:hover {
+.settings-shortcuts-row:hover {
   background: color-mix(in srgb, var(--settings-basic-control) 55%, transparent);
 }
 
-.settings-shortcuts-item-main {
-  min-width: 0;
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.settings-shortcuts-row--selected,
+.settings-shortcuts-row--selected:hover {
+  background: var(--settings-basic-control-hover);
 }
 
-.settings-shortcuts-item-icon {
-  flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 7px;
-  color: var(--settings-basic-text-muted);
-  background: color-mix(in srgb, var(--settings-basic-control) 68%, transparent);
+/* Light theme: flattened fills per design request (#f2f2f2). */
+:root[data-theme="light"] .settings-shortcuts-row--selected,
+:root[data-theme="light"] .settings-shortcuts-row--selected:hover {
+  background: #f2f2f2;
 }
 
-.settings-shortcuts-item-text {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .settings-shortcuts-row--selected,
+  :root:not([data-theme]) .settings-shortcuts-row--selected:hover {
+    background: #f2f2f2;
+  }
 }
 
-.settings-shortcuts-item-title {
+.settings-shortcuts-row-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--settings-basic-text);
-  font-size: 12.5px;
-  font-weight: 500;
-  line-height: 1.35;
 }
 
-.settings-shortcuts-item-default {
-  min-width: 0;
-  color: var(--settings-basic-text-muted);
-  font-size: 11px;
-  line-height: 1.3;
-}
-
-.settings-shortcuts-item-control {
+/* Key caps */
+.settings-shortcuts-kbd-group {
   flex: 0 0 auto;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
 }
 
-/*
- * `input.` bumps specificity so it beats `.settings-section-basic .settings-input`.
- * The box is read-only but click-to-record, so it reads as interactive: pointer
- * cursor, hover tint, and a focus ring that signals "recording, press keys now".
- */
-.settings-shortcuts-item input.settings-shortcuts-item-input {
-  flex: 0 0 auto;
-  width: 116px;
-  min-width: 0;
-  min-height: 30px;
-  padding: 5px 8px;
-  border-radius: 8px;
-  text-align: center;
-  font-size: 11.5px;
-  cursor: pointer;
-  transition: border-color 120ms ease, background-color 120ms ease,
-    box-shadow 120ms ease;
-}
-
-.settings-shortcuts-item input.settings-shortcuts-item-input:hover {
-  border-color: var(--settings-basic-control-border);
-  background: var(--settings-basic-control-hover);
-}
-
-.settings-shortcuts-item input.settings-shortcuts-item-input:focus {
-  cursor: text;
-  border-color: var(--settings-basic-text);
-  background: var(--settings-basic-control);
-  box-shadow: 0 0 0 2px
-    color-mix(in srgb, var(--settings-basic-text) 14%, transparent);
-}
-
-.settings-shortcuts-item-reset {
-  flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
-  padding: 0;
+.settings-shortcuts-kbd {
+  min-width: 24px;
+  padding: 3px 7px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--settings-basic-text-muted);
-  opacity: 0.55;
-  cursor: pointer;
-  transition: opacity 120ms ease, background-color 120ms ease, color 120ms ease;
-}
-
-.settings-shortcuts-item:hover .settings-shortcuts-item-reset:not(:disabled) {
-  opacity: 1;
-}
-
-.settings-shortcuts-item-reset:not(:disabled):hover {
+  border-radius: 5px;
+  background: var(--settings-basic-control);
   color: var(--settings-basic-text);
-  background: color-mix(in srgb, var(--settings-basic-control-hover) 80%, transparent);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
 }
 
-/* Already on default: reset is a no-op, so fade it out and drop the affordance. */
-.settings-shortcuts-item-reset:disabled {
-  opacity: 0.28;
+.settings-shortcuts-kbd-group--large {
+  gap: 6px;
+}
+
+.settings-shortcuts-kbd-group--large .settings-shortcuts-kbd {
+  min-width: 38px;
+  padding: 8px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 7px;
+  background: #2c2c2e;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 15px;
+}
+
+:root[data-theme="light"] .settings-shortcuts-kbd-group--large .settings-shortcuts-kbd {
+  border: none;
+  background: var(--settings-basic-control);
+  color: var(--settings-basic-text);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .settings-shortcuts-kbd-group--large .settings-shortcuts-kbd {
+    border: none;
+    background: var(--settings-basic-control);
+    color: var(--settings-basic-text);
+  }
+}
+
+.settings-shortcuts-kbd-empty {
+  flex: 0 0 auto;
+  color: var(--settings-basic-text-muted);
+  font-size: 11px;
+}
+
+.settings-shortcuts-kbd-empty--large {
+  font-size: 14px;
+}
+
+.settings-shortcuts-kbd-raw {
+  flex: 0 0 auto;
+  color: var(--settings-basic-text);
+  font-size: 11.5px;
+}
+
+/* Detail panel */
+.settings-shortcuts-detail {
+  min-width: 0;
+  min-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  border: 1px solid color-mix(in srgb, var(--settings-basic-control-border) 55%, transparent);
+  border-radius: 16px;
+  background: #191919;
+}
+
+:root[data-theme="light"] .settings-shortcuts-detail {
+  background: #f9f9f9;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .settings-shortcuts-detail {
+    background: #f9f9f9;
+  }
+}
+
+.settings-shortcuts-detail-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.settings-shortcuts-detail-title {
+  color: var(--settings-basic-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/*
+ * The recorder is a focusable div (not an input) so it can render key caps;
+ * focus = recording, signaled by an accent ring instead of the green border
+ * from the reference design so it follows the app theme.
+ */
+.settings-shortcuts-recorder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 200px;
+  min-height: 58px;
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: #202020;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 130ms ease, box-shadow 130ms ease;
+}
+
+:root[data-theme="light"] .settings-shortcuts-recorder {
+  border-color: var(--settings-basic-control-border);
+  background: var(--settings-basic-surface-strong);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .settings-shortcuts-recorder {
+    border-color: var(--settings-basic-control-border);
+    background: var(--settings-basic-surface-strong);
+  }
+}
+
+.settings-shortcuts-recorder:hover {
+  border-color: var(--settings-basic-text-muted);
+}
+
+.settings-shortcuts-recorder--recording {
+  border-color: var(--text-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--text-accent) 22%, transparent);
+}
+
+.settings-shortcuts-recorder-prompt {
+  color: var(--settings-basic-text-muted);
+  font-size: 14px;
+}
+
+.settings-shortcuts-detail-hint {
+  color: var(--settings-basic-text-muted);
+  font-size: 12px;
+}
+
+.settings-shortcuts-detail-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border: 1px solid var(--settings-basic-control-border);
+  border-radius: 9px;
+  background: var(--settings-basic-control);
+  color: var(--settings-basic-text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 130ms ease;
+}
+
+.settings-shortcuts-detail-reset:not(:disabled):hover {
+  background: var(--settings-basic-control-hover);
+}
+
+/* Already on default: reset is a no-op, so fade it out. */
+.settings-shortcuts-detail-reset:disabled {
+  opacity: 0.55;
   cursor: default;
 }
 
-@media (max-width: 720px) {
-  .settings-shortcuts-grid {
+.settings-shortcuts-detail-empty,
+.settings-shortcuts-empty {
+  padding: 24px 8px;
+  color: var(--settings-basic-text-muted);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+/* Reset-all footer under the list column (mirrors the reference design). */
+.settings-shortcuts-reset-all {
+  flex: 0 0 auto;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--settings-basic-text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 130ms ease, color 130ms ease;
+}
+
+.settings-shortcuts-reset-all:not(:disabled):hover {
+  background: color-mix(in srgb, var(--settings-basic-control) 55%, transparent);
+  color: var(--settings-basic-text);
+}
+
+.settings-shortcuts-reset-all:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+@media (max-width: 860px) {
+  .settings-shortcuts-layout {
     grid-template-columns: 1fr;
+  }
+
+  /* Stacked: the panes flow in the page scroll again, so re-cap the list. */
+  .settings-shortcuts-list {
+    max-height: 520px;
   }
 }
 
@@ -2130,14 +2300,12 @@
   margin-top: 2px;
 }
 
-@media (max-width: 1360px) {
-  .settings-content {
-    --settings-content-fixed-width: 980px;
-  }
-}
-
+/* Width overrides must live on the wrap (same layer as the base variables):
+ * the page head is a sibling of .settings-content and inherits the column
+ * metrics from the wrap, so overriding them on .settings-content would
+ * desync the head from the content column. */
 @media (max-width: 1100px) {
-  .settings-content {
+  .settings-content-wrap {
     --settings-content-fixed-width: 100%;
     --settings-content-pad-x: 20px;
   }

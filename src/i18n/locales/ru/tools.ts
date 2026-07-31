@@ -32,6 +32,8 @@ const tools = {
     "batchSearch": "Пакетный поиск",
     "batchSearchMatch": "Пакетный поиск/совпадение",
     "batchEditFile": "Пакетное редактирование файлов",
+    "fileEditSceneCount": "Изменения файлов ({{count}})",
+    "fileEditSceneToggle": "Изменения файлов, {{count}} шт., развернуть или свернуть",
     "bashGroupBatchRun": "Пакетный запуск команд",
     "bashGroupCompleted": "завершено",
     "bashGroupAllCompleted": "Все завершены",

@@ -264,7 +264,9 @@ export const ButtonArea = ({
               <ConfigSelect
                 inline
                 currentProvider={currentProvider}
-                onProviderChange={handleProviderSelect}
+                onProviderChange={
+                  onProviderSelect ? handleProviderSelect : undefined
+                }
                 providerAvailability={providerAvailability}
                 providerVersions={providerVersions}
                 alwaysThinkingEnabled={alwaysThinkingEnabled}

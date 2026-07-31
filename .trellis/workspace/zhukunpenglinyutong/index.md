@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 64
-- **Last Active**: 2026-07-28
+- **Total Sessions**: 71
+- **Last Active**: 2026-07-31
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~668 | Active |
+| `journal-2.md` | ~972 | Active |
 | `journal-1.md` | ~1997 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,13 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 71 | 2026-07-31 | 完善模型选择器渠道切换与自定义模型弹窗 | `2f6ffb247` | `chore/bump-version-0.7.12` |
+| 70 | 2026-07-31 | Grok 图片输入与 Claude 模型目录 | `78a09bb6a3b2c73b173b7b856b92280cc1bc2e19` | `chore/bump-version-0.7.12` |
+| 69 | 2026-07-30 | 重做供应商设置面板并支持 CC Switch 文件导入 | `d7a657f5a` | `chore/bump-version-0.7.12` |
+| 68 | 2026-07-30 | 统一设置页内容列宽为 980px | `75b9ee299` | `chore/bump-version-0.7.12` |
+| 67 | 2026-07-30 | 设置页重构为无顶栏居中窄列布局 | `cc6ae1007` | `chore/bump-version-0.7.12` |
+| 66 | 2026-07-30 | 快捷键设置页对齐参考样式并补全部重置 | `15a30e24f` | `chore/bump-version-0.7.12` |
+| 65 | 2026-07-30 | 重构快捷键设置页为双栏录制布局 | `eb4ed9027` | `chore/bump-version-0.7.12` |
 | 64 | 2026-07-28 | 修复 CI 编译失败：grok entry 缺 native_title | `d5b6f42ca` | `chore/bump-version-0.7.11` |
 | 63 | 2026-07-28 | 修复浅色主题原生控件配色并优化危险确认对话框按钮布局 | `9f9ce10c6`, `781d5cb47` | `chore/bump-version-0.7.11` |
 | 62 | 2026-07-22 | 合并远端 bump-version-0.7.6 并修复 Git history 测试契约 | `0a5a68d1`, `8ff3834c` | `bump-version-0.7.6` |

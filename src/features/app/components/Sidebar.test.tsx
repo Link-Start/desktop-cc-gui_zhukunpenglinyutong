@@ -29,7 +29,13 @@ function openWorkspaceActionsMenu(workspaceCard: HTMLElement) {
   act(() => {
     fireEvent.click(within(workspaceCard).getByRole("button", { name: "New Session" }));
   });
-  return screen.getByRole("menu", { name: "Workspace actions" });
+  const menu = screen.getByRole("menu", { name: "Workspace actions" });
+  act(() => {
+    fireEvent.click(
+      within(menu).getByRole("button", { name: "Workspace actions" }),
+    );
+  });
+  return menu;
 }
 
 describe("sidebarInternals", () => {
@@ -952,7 +958,11 @@ describe("Sidebar", () => {
       fireEvent.click(screen.getByRole("button", { name: "New Session" }));
       await Promise.resolve();
     });
-    fireEvent.click(screen.getByRole("menuitem", { name: "Set alias" }));
+    const menu = screen.getByRole("menu", { name: "Workspace actions" });
+    fireEvent.click(
+      within(menu).getByRole("button", { name: "Workspace actions" }),
+    );
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Set alias" }));
 
     expect(onRenameWorkspaceAlias).toHaveBeenCalledTimes(1);
     expect(onRenameWorkspaceAlias).toHaveBeenCalledWith(workspace);
@@ -1999,7 +2009,7 @@ describe("Sidebar", () => {
         providerProfileId: "__disk__",
         providerProfile: {
           id: "__disk__",
-          name: "codex-tui/default-config",
+          name: "本地配置",
           source: "disk",
         },
       });
@@ -2643,7 +2653,7 @@ describe("Sidebar", () => {
         providerProfileId: "__disk__",
         providerProfile: {
           id: "__disk__",
-          name: "codex-tui/default-config",
+          name: "本地配置",
           source: "disk",
         },
       });
@@ -2750,6 +2760,18 @@ describe("Sidebar", () => {
         }}
         hydratedThreadListWorkspaceIds={new Set(["ws-1"])}
         onAddSharedAgent={onAddSharedAgent}
+        engineOptions={[
+          {
+            type: "claude",
+            displayName: "Claude Code",
+            shortName: "Claude Code",
+            installed: true,
+            version: "1.0.0",
+            error: null,
+            availabilityState: "ready",
+            availabilityLabelKey: null,
+          },
+        ]}
       />,
     );
 
@@ -2760,9 +2782,14 @@ describe("Sidebar", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("menuitem", { name: "sidebar.newSharedSession" }));
     });
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("menuitemradio", { name: "Claude Code" }),
+      );
+    });
 
     await vi.waitFor(() => {
-      expect(onAddSharedAgent).toHaveBeenCalledWith(workspace);
+      expect(onAddSharedAgent).toHaveBeenCalledWith(workspace, "claude");
     });
     expect(assignWorkspaceSessionFolder).not.toHaveBeenCalled();
     expect(pushErrorToast).not.toHaveBeenCalledWith(

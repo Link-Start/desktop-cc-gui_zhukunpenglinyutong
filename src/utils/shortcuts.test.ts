@@ -2,8 +2,40 @@ import { describe, expect, it } from "vitest";
 import {
   formatShortcutForPlatform,
   matchesShortcutForPlatform,
+  splitShortcutForPlatform,
   toMenuAccelerator,
 } from "./shortcuts";
+
+describe("splitShortcutForPlatform", () => {
+  it("splits shortcuts into key-cap segments on mac", () => {
+    expect(splitShortcutForPlatform("cmd+,", true)).toEqual(["⌘", ","]);
+    expect(splitShortcutForPlatform("cmd+shift+arrowdown", true)).toEqual([
+      "⌘",
+      "⇧",
+      "↓",
+    ]);
+    expect(splitShortcutForPlatform("cmd+ctrl+down", true)).toEqual([
+      "⌘",
+      "⌃",
+      "↓",
+    ]);
+  });
+
+  it("splits shortcuts into text segments on non-mac platforms", () => {
+    expect(splitShortcutForPlatform("cmd+o", false)).toEqual(["Ctrl", "O"]);
+    expect(splitShortcutForPlatform("cmd+ctrl+a", false)).toEqual([
+      "Meta",
+      "Ctrl",
+      "A",
+    ]);
+  });
+
+  it("returns null for empty or unparseable values", () => {
+    expect(splitShortcutForPlatform(null, true)).toBeNull();
+    expect(splitShortcutForPlatform("", true)).toBeNull();
+    expect(splitShortcutForPlatform("shift", true)).toBeNull();
+  });
+});
 
 describe("formatShortcutForPlatform", () => {
   it("formats shortcuts with symbols on mac", () => {

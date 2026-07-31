@@ -42,10 +42,6 @@ export function DictationSection({
 
   return (
     <section className="settings-section">
-      <div className="settings-section-title">{t("settings.dictationTitle")}</div>
-      <div className="settings-section-subtitle">
-        {t("settings.dictationDescription")}
-      </div>
       <div className="settings-toggle-row">
         <div>
           <div className="settings-toggle-title">{t("settings.enableDictation")}</div>

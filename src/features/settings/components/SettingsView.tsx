@@ -203,7 +203,6 @@ export type SettingsViewProps = {
   initialSection?: SettingsViewSection;
   initialHighlightTarget?:
     | "experimental-collaboration-modes"
-    | "basic-shortcuts"
     | "basic-open-apps"
     | "basic-web-service"
     | "basic-email"
@@ -362,7 +361,6 @@ export function SettingsView({
   const [basicSubTab, setBasicSubTab] = useState<
     | "appearance"
     | "behavior"
-    | "shortcuts"
     | "open-apps"
     | "web-service"
     | "email"
@@ -377,7 +375,6 @@ export function SettingsView({
     "runtime-pool" | "cli-validation"
   >("runtime-pool");
   const [commitPrompt, setCommitPrompt] = useState("");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const [claudePathDraft, setClaudePathDraft] = useState(
     appSettings.claudeBin ?? "",
@@ -889,10 +886,6 @@ export function SettingsView({
 
   useEffect(() => {
     switch (initialHighlightTarget) {
-      case "basic-shortcuts":
-        setActiveSection("basic");
-        setBasicSubTab("shortcuts");
-        return;
       case "basic-open-apps":
         setActiveSection("basic");
         setBasicSubTab("open-apps");
@@ -1701,7 +1694,7 @@ export function SettingsView({
   };
 
   const handleShortcutKeyDown = (
-    event: React.KeyboardEvent<HTMLInputElement>,
+    event: React.KeyboardEvent<HTMLElement>,
     key: ShortcutSettingKey,
   ) => {
     if (event.key === "Tab" && key !== "composerCollaborationShortcut") {
@@ -1719,11 +1712,11 @@ export function SettingsView({
     if (!value) {
       return;
     }
-    // Blur after a successful capture so the recorded value shows immediately
-    // (the input renders blank while focused to surface the "press shortcut" prompt).
-    const input = event.currentTarget;
+    // Blur after a successful capture so the recorder exits recording mode
+    // and the recorded value shows immediately.
+    const target = event.currentTarget;
     void updateShortcut(key, value);
-    input.blur();
+    target.blur();
   };
 
   const trimmedGroupName = newGroupName.trim();
@@ -1863,6 +1856,11 @@ export function SettingsView({
           title: t("settings.sidebarBasic"),
           description: t("settings.basicDescription"),
         };
+      case "shortcuts":
+        return {
+          title: t("settings.sidebarShortcuts"),
+          description: t("settings.shortcutsDescription"),
+        };
       case "project-management":
         return {
           title: t("settings.sidebarProjectManagement"),
@@ -1934,58 +1932,52 @@ export function SettingsView({
 
   return (
     <div className="settings-embedded">
-      <div className="settings-header" data-tauri-drag-region="true">
-        <div className="settings-header-copy">
-          <h1 className="settings-header-title">{activeSectionHeader.title}</h1>
-          <p className="settings-header-description">
-            {activeSectionHeader.description}
-          </p>
-        </div>
-      </div>
-      <div
-        className={`settings-body${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}
-      >
-        <aside
-          className={`settings-sidebar${sidebarCollapsed ? " is-collapsed" : ""}`}
-        >
+      <div className="settings-body">
+        <aside className="settings-sidebar">
+          <div
+            className="settings-sidebar-drag"
+            data-tauri-drag-region="true"
+          />
           <button
             type="button"
             className="settings-nav settings-nav-return"
             onClick={onClose}
             aria-label={t("settings.backToApp")}
-            title={sidebarCollapsed ? t("settings.backToApp") : ""}
           >
             <ArrowLeft aria-hidden />
-            {!sidebarCollapsed && t("settings.backToApp")}
+            {t("settings.backToApp")}
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "basic" ? "active" : ""}`}
             onClick={() => setActiveSection("basic")}
-            title={sidebarCollapsed ? t("settings.sidebarBasic") : ""}
           >
             <Settings aria-hidden />
-            {!sidebarCollapsed && t("settings.sidebarBasic")}
+            {t("settings.sidebarBasic")}
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "providers" || activeSection === "vendors" ? "active" : ""}`}
             onClick={() => setActiveSection("providers")}
-            title={sidebarCollapsed ? t("settings.sidebarProviders") : ""}
           >
             <span className="codicon codicon-vm-connect" />
-            {!sidebarCollapsed && t("settings.sidebarProviders")}
+            {t("settings.sidebarProviders")}
+          </button>
+          <button
+            type="button"
+            className={`settings-nav ${activeSection === "shortcuts" ? "active" : ""}`}
+            onClick={() => setActiveSection("shortcuts")}
+          >
+            <Keyboard aria-hidden />
+            {t("settings.sidebarShortcuts")}
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "project-management" ? "active" : ""}`}
             onClick={() => setActiveSection("project-management")}
-            title={
-              sidebarCollapsed ? t("settings.sidebarProjectManagement") : ""
-            }
           >
             <LayoutGrid aria-hidden />
-            {!sidebarCollapsed && t("settings.sidebarProjectManagement")}
+            {t("settings.sidebarProjectManagement")}
           </button>
           <button
             type="button"
@@ -1996,10 +1988,9 @@ export function SettingsView({
               }
             }}
             disabled={mcpSectionDisabled}
-            title={sidebarCollapsed ? t("settings.sidebarMcpSkills") : ""}
           >
             <Server aria-hidden />
-            {!sidebarCollapsed && t("settings.sidebarMcpSkills")}
+            {t("settings.sidebarMcpSkills")}
           </button>
           <button
             type="button"
@@ -2010,78 +2001,63 @@ export function SettingsView({
               }
             }}
             disabled={permissionsSectionDisabled}
-            title={sidebarCollapsed ? t("settings.sidebarPermissions") : ""}
           >
             <Shield aria-hidden />
-            {!sidebarCollapsed && t("settings.sidebarPermissions")}
+            {t("settings.sidebarPermissions")}
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "agent-prompt-management" ? "active" : ""}`}
             onClick={() => setActiveSection("agent-prompt-management")}
-            title={
-              sidebarCollapsed ? t("settings.sidebarAgentPromptManagement") : ""
-            }
           >
             <span className="codicon codicon-robot" />
-            {!sidebarCollapsed && t("settings.sidebarAgentPromptManagement")}
+            {t("settings.sidebarAgentPromptManagement")}
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "runtime-environment" ? "active" : ""}`}
             onClick={() => setActiveSection("runtime-environment")}
-            title={
-              sidebarCollapsed ? t("settings.sidebarRuntimeEnvironment") : ""
-            }
           >
             <TerminalSquare aria-hidden />
-            {!sidebarCollapsed && t("settings.sidebarRuntimeEnvironment")}
+            {t("settings.sidebarRuntimeEnvironment")}
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "other" ? "active" : ""}`}
             onClick={() => setActiveSection("other")}
-            title={sidebarCollapsed ? t("settings.sidebarOther") : ""}
           >
             <MoreHorizontalIcon aria-hidden />
-            {!sidebarCollapsed && t("settings.sidebarOther")}
+            {t("settings.sidebarOther")}
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "community" ? "active" : ""}`}
             onClick={() => setActiveSection("community")}
-            title={sidebarCollapsed ? t("settings.sidebarCommunity") : ""}
           >
             <Users aria-hidden />
-            {!sidebarCollapsed && t("settings.sidebarCommunity")}
-          </button>
-          <button
-            type="button"
-            className="settings-sidebar-toggle"
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            aria-label={
-              sidebarCollapsed
-                ? t("settings.sidebarExpand")
-                : t("settings.sidebarCollapse")
-            }
-            title={
-              sidebarCollapsed
-                ? t("settings.sidebarExpand")
-                : t("settings.sidebarCollapse")
-            }
-          >
-            <span
-              className={`codicon ${sidebarCollapsed ? "codicon-chevron-right" : "codicon-chevron-left"}`}
-            />
+            {t("settings.sidebarCommunity")}
           </button>
         </aside>
-        <ScrollArea
-          className={`settings-content ${
-            activeSection === "providers" || activeSection === "vendors"
-              ? "settings-content--providers"
-              : ""
-          }`}
-        >
+        <div className="settings-content-wrap">
+          <div className="settings-page-head" data-tauri-drag-region="true">
+            <div className="settings-page-head-inner">
+              <h1 className="settings-page-title">
+                {activeSectionHeader.title}
+              </h1>
+              {activeSection !== "community" && activeSection !== "about" && (
+                <p className="settings-page-description">
+                  {activeSectionHeader.description}
+                </p>
+              )}
+            </div>
+          </div>
+          <ScrollArea
+            className={`settings-content ${
+              activeSection === "providers" || activeSection === "vendors"
+                ? "settings-content--providers"
+                : ""
+            }${activeSection === "shortcuts" ? " settings-content--shortcuts" : ""}`}
+          >
           {shouldShowWorkspaceSelector && (
             <div className="settings-workspace-picker">
               <div className="settings-workspace-picker-label">
@@ -2131,14 +2107,6 @@ export function SettingsView({
                 >
                   <Cog className="settings-basic-tab-icon" aria-hidden />
                   {t("settings.basicBehavior")}
-                </button>
-                <button
-                  type="button"
-                  className={`settings-basic-tab ${basicSubTab === "shortcuts" ? "active" : ""}`}
-                  onClick={() => setBasicSubTab("shortcuts")}
-                >
-                  <Keyboard className="settings-basic-tab-icon" aria-hidden />
-                  {t("settings.basicShortcutsTab")}
                 </button>
                 <button
                   type="button"
@@ -2258,13 +2226,6 @@ export function SettingsView({
                   handleCommitCodeFontSize={handleCommitCodeFontSize}
                 />
               )}
-              <ShortcutsSection
-                active={basicSubTab === "shortcuts"}
-                t={t}
-                shortcutDrafts={shortcutDrafts}
-                handleShortcutKeyDown={handleShortcutKeyDown}
-                updateShortcut={updateShortcut}
-              />
               <OpenAppsSection
                 active={basicSubTab === "open-apps"}
                 t={t}
@@ -2295,6 +2256,15 @@ export function SettingsView({
                 />
               )}
             </section>
+          )}
+          {activeSection === "shortcuts" && (
+            <ShortcutsSection
+              active
+              t={t}
+              shortcutDrafts={shortcutDrafts}
+              handleShortcutKeyDown={handleShortcutKeyDown}
+              updateShortcut={updateShortcut}
+            />
           )}
           {activeSection === "project-management" && (
             <section
@@ -2682,7 +2652,8 @@ export function SettingsView({
               />
             </section>
           )}
-        </ScrollArea>
+          </ScrollArea>
+        </div>
       </div>
     </div>
   );

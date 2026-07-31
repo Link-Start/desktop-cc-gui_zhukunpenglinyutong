@@ -96,6 +96,25 @@ describe("resolveUserMessagePresentation", () => {
     expect(result.stickyCandidateText).toBe("你好");
   });
 
+  it("preserves engine-like markers in ordinary user-authored text", () => {
+    const text = [
+      "请解释以下协议文本",
+      "",
+      "<!-- mossx:kimi-image-attachments -->",
+      "<image_files>example</image_files>",
+      "<user_query>literal sample</user_query>",
+    ].join("\n");
+    const result = resolveUserMessagePresentation({
+      text,
+      selectedAgentName: null,
+      selectedAgentIcon: null,
+      enableCollaborationBadge: false,
+    });
+
+    expect(result.displayText).toBe(text);
+    expect(result.stickyCandidateText).toBe(text);
+  });
+
   it("excludes memory-only user payloads from conversation summaries", () => {
     const result = resolveUserConversationSummary({
       text: "<project-memory>\n[项目上下文] 已记录会话摘要\n</project-memory>\n",

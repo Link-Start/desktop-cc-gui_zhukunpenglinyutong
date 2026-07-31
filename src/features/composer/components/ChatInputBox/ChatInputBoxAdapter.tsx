@@ -26,6 +26,7 @@ import type {
   ModelInfo,
   PermissionMode,
   ProviderModelCatalogs,
+  ProviderTargetPickerMode,
   ReasoningEffort,
   SelectedAgent,
   StreamActivityPhase,
@@ -35,6 +36,7 @@ import type {
   SkillItem,
   NoteCardItem,
 } from './types';
+import type { ExecutionTarget } from '../../../shared-session/target/types';
 import type { QueuedMessage as ComposerQueuedMessage } from '../../../../types';
 import type { CustomCommandOption, CustomPromptOption } from '../../../../types';
 import type { EngineType } from '../../../../types';
@@ -446,6 +448,7 @@ export interface ChatInputBoxAdapterProps {
   // Core state
   text: string;
   disabled?: boolean;
+  submitDisabled?: boolean;
   isProcessing: boolean;
   streamActivityPhase?: StreamActivityPhase;
   canStop: boolean;
@@ -463,11 +466,17 @@ export interface ChatInputBoxAdapterProps {
   selectedModelId: string | null;
   selectedEngine?: EngineType;
   isSharedSession?: boolean;
+  providerTargetPickerMode?: ProviderTargetPickerMode;
+  /** Shared Thread id（Wave 4 / B.6：send 状态条/状态机的 store key 组成）。 */
+  threadId?: string | null;
   engines?: AdapterEngineInfo[];
   onSelectEngine?: (engine: EngineType) => void;
   models?: AdapterModelOption[];
   providerModelCatalogs?: Partial<Record<EngineType, AdapterModelOption[]>>;
   providerProfileId?: string | null;
+  executionTarget?: ExecutionTarget | null;
+  onExecutionTargetChange?: (target: ExecutionTarget) => void;
+  onNativeProviderTargetChange?: (target: ExecutionTarget) => void;
   onSelectModel?: (id: string) => void;
 
   // Reasoning
@@ -550,6 +559,7 @@ export interface ChatInputBoxAdapterProps {
   onOpenAgentSettings?: () => void;
   onOpenPromptSettings?: () => void;
   onOpenModelSettings?: (providerId?: string) => void;
+  onOpenCliSettings?: () => void;
   onOpenFileReference?: (path: string) => void;
   onRefreshModelConfig?: (providerId?: string) => Promise<void> | void;
   isModelConfigRefreshing?: boolean;
@@ -1027,6 +1037,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
     const {
       text,
       disabled,
+      submitDisabled,
       isProcessing,
       streamActivityPhase = 'idle',
       onTextChange,
@@ -1037,11 +1048,15 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       selectedModelId,
       selectedEngine,
       isSharedSession = false,
+      providerTargetPickerMode,
       engines,
       onSelectEngine,
       models,
       providerModelCatalogs,
       providerProfileId,
+      executionTarget,
+      onExecutionTargetChange,
+      onNativeProviderTargetChange,
       onSelectModel,
       reasoningOptions,
       selectedEffort,
@@ -1100,6 +1115,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       onOpenAgentSettings,
       onOpenPromptSettings,
       onOpenModelSettings,
+      onOpenCliSettings,
       onOpenFileReference,
       onRefreshModelConfig,
       isModelConfigRefreshing,
@@ -1114,6 +1130,10 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       completionEmailDisabled,
       onToggleCompletionEmail,
     } = props;
+    const effectiveProviderTargetPickerMode =
+      providerTargetPickerMode ?? (isSharedSession ? 'shared' : 'native');
+    const usesAtomicProviderTargetPicker =
+      effectiveProviderTargetPickerMode !== 'native';
     const { t } = useTranslation();
     const chatInputRef = useRef<ChatInputBoxHandle>(null);
     const renderCountRef = useRef(0);
@@ -2106,6 +2126,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         isLoading={isProcessing}
         streamActivityPhase={streamActivityPhase}
         disabled={disabled}
+        submitDisabled={submitDisabled}
         value={text}
         workspaceId={workspaceId}
         placeholder={placeholder ?? t('chat.inputPlaceholder')}
@@ -2116,6 +2137,10 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         permissionMode={permissionMode}
         currentProvider={engineToProvider(selectedEngine)}
         currentProviderProfileId={providerProfileId}
+        executionTarget={executionTarget}
+        onExecutionTargetChange={onExecutionTargetChange}
+        onNativeProviderTargetChange={onNativeProviderTargetChange}
+        providerTargetPickerMode={effectiveProviderTargetPickerMode}
         providerAvailability={providerAvailability}
         providerVersions={providerVersions}
         providerStatusLabels={providerStatusLabels}
@@ -2134,8 +2159,16 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         } : undefined}
         onRemoveAttachment={handleRemoveAttachment}
         onModeSelect={onModeSelect}
-        onModelSelect={handleModelSelect}
-        onProviderSelect={onSelectEngine ? handleProviderSelect : undefined}
+        onModelSelect={
+          !usesAtomicProviderTargetPicker && onSelectModel
+            ? handleModelSelect
+            : undefined
+        }
+        onProviderSelect={
+          !usesAtomicProviderTargetPicker && onSelectEngine
+            ? handleProviderSelect
+            : undefined
+        }
         reasoningEffort={effortToOptionalReasoning(selectedEffort)}
         reasoningOptions={normalizeReasoningOptions(reasoningOptions)}
         onReasoningChange={onSelectEffort ? handleReasoningChange : undefined}
@@ -2153,6 +2186,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         onOpenAgentSettings={onOpenAgentSettings}
         onOpenPromptSettings={onOpenPromptSettings}
         onOpenModelSettings={onOpenModelSettings}
+        onOpenCliSettings={onOpenCliSettings}
         onOpenFileReference={onOpenFileReference}
         onRefreshModelConfig={onRefreshModelConfig}
         isModelConfigRefreshing={isModelConfigRefreshing}

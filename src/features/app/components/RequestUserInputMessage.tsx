@@ -6,6 +6,7 @@ import type {
   RequestUserInputSettlementResult,
   RequestUserInputSettlementOptions,
 } from "../../../types";
+import { requestUserInputIdentityKey } from "../../../utils/requestUserInputIdentity";
 import {
   getUserInputOptionKey,
   getUserInputOptionValue,
@@ -42,7 +43,7 @@ const REQUEST_STALE_TIMEOUT_SECONDS = 300;
 const REQUEST_STALE_WARNING_SECONDS = 30;
 
 function getRequestDraftKey(request: RequestUserInputRequest) {
-  return `${request.workspace_id}:${String(request.request_id)}`;
+  return requestUserInputIdentityKey(request);
 }
 
 function formatRequestCountdown(seconds: number) {

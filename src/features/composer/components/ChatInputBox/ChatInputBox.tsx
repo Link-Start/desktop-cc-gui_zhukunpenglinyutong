@@ -50,6 +50,8 @@ import {
   useInlineHistoryCompletion,
   useUndoRedoHistory,
 } from './hooks/index.js';
+import { useAtomicProviderTargetCatalog } from './hooks/useProviderTargetCatalogOwners';
+import { isSameProviderExecutionProfile } from './selectors/ModelSelect';
 import {
   commandToDropdownItem,
   fileReferenceProvider,
@@ -184,6 +186,10 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       permissionMode = 'bypassPermissions',
       currentProvider = 'claude',
       currentProviderProfileId,
+      executionTarget,
+      onExecutionTargetChange,
+      onNativeProviderTargetChange,
+      providerTargetPickerMode = 'native',
       providerAvailability,
       providerVersions,
       providerStatusLabels,
@@ -203,6 +209,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       hasContextAttachment = false,
       placeholder = '', // Will be passed from parent via t('chat.inputPlaceholder')
       disabled = false,
+      submitDisabled = false,
       value,
       onSubmit,
       onStop,
@@ -232,6 +239,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       onOpenAgentSettings,
       onOpenPromptSettings,
       onOpenModelSettings,
+      onOpenCliSettings,
       onOpenFileReference,
       onRefreshModelConfig,
       isModelConfigRefreshing,
@@ -272,6 +280,8 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     ref: React.ForwardedRef<ChatInputBoxHandle>
   ) => {
     const { t } = useTranslation();
+    const usesAtomicProviderTargetPicker =
+      providerTargetPickerMode !== 'native';
 
     // Open source banner state (show once, dismiss permanently)
     const BANNER_DISMISSED_KEY = 'openSourceBannerDismissed';
@@ -361,6 +371,30 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         t,
       ],
     );
+    const atomicPluginCustomModels = useMemo(
+      () => ({
+        claude: modelStorageSnapshot.claudeCustomModels,
+        codex: modelStorageSnapshot.codexCustomModels,
+        gemini: modelStorageSnapshot.geminiCustomModels,
+      }),
+      [modelStorageSnapshot],
+    );
+    const atomicProviderTargetCatalog = useAtomicProviderTargetCatalog({
+      enabled: usesAtomicProviderTargetPicker,
+      workspaceId,
+      mode:
+        providerTargetPickerMode === 'create-session'
+          ? 'create-session'
+          : 'shared',
+      currentProvider: currentProvider as ProviderId,
+      currentProviderProfileId,
+      pluginCustomModels: atomicPluginCustomModels,
+      resolveProviderLabel: (providerId) =>
+        t(`providers.${providerId}.label`, { defaultValue: providerId }),
+      kimiDisabledReason: t('sharedSession.kimiTargetUnavailable', {
+        defaultValue: '可作为来源；目标续接尚未验证',
+      }),
+    });
 
     // Records the exact text of the latest programmatic (external) write.
     // Programmatic innerText assignment fires no input event, so this must NOT
@@ -1088,6 +1122,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     );
 
     const handleSubmit = useSubmitHandler({
+      submitDisabled: disabled || submitDisabled,
       getTextContent,
       invalidateCache,
       attachments,
@@ -1317,12 +1352,49 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       },
       [currentProvider, onModelSelect, onProviderSelect]
     );
-    const handleOpenCurrentProviderModelSettings = useCallback(() => {
-      onOpenModelSettings?.(resolveModelConfigProvider(currentProvider));
-    }, [currentProvider, onOpenModelSettings]);
+    const handleProviderTargetSelect = useCallback(
+      (target: NonNullable<ChatInputBoxProps['executionTarget']>) => {
+        if (usesAtomicProviderTargetPicker) {
+          onExecutionTargetChange?.(target);
+          return;
+        }
+        if (
+          isSameProviderExecutionProfile(
+            currentProvider as ProviderId,
+            currentProviderProfileId,
+            target,
+          )
+        ) {
+          const selectedModelId =
+            target.modelCatalogEntryId ?? target.model;
+          if (selectedModelId) {
+            onModelSelect?.(selectedModelId);
+          }
+          return;
+        }
+        onNativeProviderTargetChange?.(target);
+      },
+      [
+        currentProvider,
+        currentProviderProfileId,
+        onExecutionTargetChange,
+        onModelSelect,
+        onNativeProviderTargetChange,
+        usesAtomicProviderTargetPicker,
+      ],
+    );
+    const handleOpenProviderModelSettings = useCallback(
+      (providerId?: string) => {
+        onOpenModelSettings?.(
+          resolveModelConfigProvider(providerId ?? currentProvider),
+        );
+      },
+      [currentProvider, onOpenModelSettings],
+    );
     const handleRefreshCurrentProviderModelConfig = useCallback(() => {
       return onRefreshModelConfig?.(resolveModelConfigProvider(currentProvider));
     }, [currentProvider, onRefreshModelConfig]);
+    // 刷新仍跟当前引擎走;「添加模型」只要设置页可达就应在各引擎子菜单常驻
     const supportsModelConfigActions = MODEL_CONFIG_PROVIDERS.has(currentProvider);
 
     /**
@@ -1458,16 +1530,35 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         contextSourcesExpanded={contextSourcesExpanded}
         selectedModel={selectedModel}
         models={availableModels}
-        modelGroups={onProviderSelect ? providerModelGroups : undefined}
+        modelGroups={
+          !usesAtomicProviderTargetPicker && onProviderSelect
+            ? providerModelGroups
+            : undefined
+        }
+        targetGroups={
+          usesAtomicProviderTargetPicker
+            ? atomicProviderTargetCatalog.groups
+            : undefined
+        }
+        executionTarget={executionTarget}
+        onExecutionTargetChange={handleProviderTargetSelect}
+        onOpenTargetCatalog={atomicProviderTargetCatalog.ensureProfiles}
+        onOpenProviderProfile={atomicProviderTargetCatalog.ensureModels}
+        onReloadProviderConfig={atomicProviderTargetCatalog.reloadConfig}
+        targetCatalogError={atomicProviderTargetCatalog.profileLoadError}
         currentProvider={currentProvider}
-        onModelSelect={onModelSelect ? handleModelSelect : undefined}
+        onModelSelect={
+          !usesAtomicProviderTargetPicker && onModelSelect
+            ? handleModelSelect
+            : undefined
+        }
         onProviderModelSelect={
-          onModelSelect && onProviderSelect ? handleProviderModelSelect : undefined
+          !usesAtomicProviderTargetPicker && onModelSelect && onProviderSelect
+            ? handleProviderModelSelect
+            : undefined
         }
         onAddModel={
-          onOpenModelSettings && supportsModelConfigActions
-            ? handleOpenCurrentProviderModelSettings
-            : undefined
+          onOpenModelSettings ? handleOpenProviderModelSettings : undefined
         }
         onRefreshModelConfig={
           onRefreshModelConfig && supportsModelConfigActions
@@ -1475,6 +1566,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
             : undefined
         }
         isModelConfigRefreshing={isModelConfigRefreshing}
+        onOpenCliSettings={onOpenCliSettings}
       />
     ) : null;
     const contextToolbarSurface = (
@@ -1672,7 +1764,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
 
           {!isInputBoxCollapsed && (
             <ChatInputBoxFooter
-              disabled={disabled}
+              disabled={disabled || submitDisabled}
               hasInputContent={hasContent || attachments.length > 0 || hasContextAttachment}
               isLoading={isLoading}
               streamActivityPhase={streamActivityPhase}
@@ -1702,8 +1794,12 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
               onSubmit={handleSubmit}
               onStop={onStop}
               onModeSelect={handleModeSelect}
-              onModelSelect={handleModelSelect}
-              onProviderSelect={onProviderSelect}
+              onModelSelect={
+                usesAtomicProviderTargetPicker ? undefined : handleModelSelect
+              }
+              onProviderSelect={
+                usesAtomicProviderTargetPicker ? undefined : onProviderSelect
+              }
               onReasoningChange={onReasoningChange}
               onEnhancePrompt={handleEnhancePrompt}
               alwaysThinkingEnabled={alwaysThinkingEnabled}

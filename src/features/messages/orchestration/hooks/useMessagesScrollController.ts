@@ -10,6 +10,7 @@ import {
 import {
   SETTLE_REPIN_WINDOW_MS,
 } from "../../constants/messagesConstants";
+import { isEditableShortcutTarget } from "../../../../utils/shortcuts";
 import { SCROLL_THRESHOLD_PX } from "../../utils/messagesRenderUtils";
 import { isMessagesScrollNearBottom } from "../presentation/messagesViewModel";
 import {
@@ -18,18 +19,33 @@ import {
   type ConversationScrollEdge,
   type ConversationScrollMotion,
 } from "../scrolling/messagesScrollConvergence";
+import {
+  isRecentUserScrollIntent,
+  isScrollIntentKey,
+  PROGRAMMATIC_SCROLL_ECHO_TOLERANCE_PX,
+  readScrollGeometrySnapshot,
+  recordProgrammaticScrollFingerprint,
+  resolveClampedScrollTop,
+  type ProgrammaticScrollFingerprint,
+  type ScrollGeometrySnapshot,
+} from "../scrolling/messagesScrollEcho";
 
 const AUTOMATIC_BOTTOM_RECHECK_DELAYS_MS = [100, 300, 1_000, 2_000] as const;
-const PROGRAMMATIC_SCROLL_ECHO_LIMIT = 16;
+const PROGRAMMATIC_SCROLL_ECHO_LIMIT = 32;
 
 type ConversationScrollIntent =
   | "history-open"
   | "live-follow"
+  | "turn-send"
   | "turn-settle"
   | "explicit-control";
 
 function isFocusFollowScrollIntent(intent: ConversationScrollIntent | null) {
-  return intent === "live-follow" || intent === "turn-settle";
+  return intent === "live-follow";
+}
+
+function isTurnBoundaryScrollIntent(intent: ConversationScrollIntent | null) {
+  return intent === "turn-send" || intent === "turn-settle";
 }
 
 type UseMessagesScrollControllerInput = {
@@ -51,16 +67,19 @@ export function useMessagesScrollController({
   rawScrollKey,
   renderScopeKey,
 }: UseMessagesScrollControllerInput) {
-  const bottomRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stickToBottomDeadlineRef = useRef(0);
-  const stickToBottomIntentRef = useRef<"history-open" | "turn-settle" | null>(null);
+  const stickToBottomIntentRef = useRef<
+    "history-open" | "turn-send" | "turn-settle" | null
+  >(null);
   const autoScrollRef = useRef(true);
   const activeScrollConvergenceCancelRef = useRef<(() => void) | null>(null);
   const activeProgrammaticScrollEdgeRef = useRef<ConversationScrollEdge | null>(null);
   const activeProgrammaticScrollMotionRef = useRef<ConversationScrollMotion | null>(null);
   const activeScrollIntentRef = useRef<ConversationScrollIntent | null>(null);
-  const programmaticScrollTopEchoRef = useRef<number[]>([]);
+  const programmaticScrollTopEchoRef = useRef<ProgrammaticScrollFingerprint[]>([]);
+  const lastUserScrollIntentAtRef = useRef<number | null>(null);
+  const scrollGeometrySnapshotRef = useRef<ScrollGeometrySnapshot | null>(null);
   const initialBottomPinScopeRef = useRef<string | null>(null);
   const [scrollKey, setScrollKey] = useState(rawScrollKey);
   const [, startScrollKeyTransition] = useTransition();
@@ -96,16 +115,30 @@ export function useMessagesScrollController({
     (node: HTMLDivElement) => isMessagesScrollNearBottom(node, SCROLL_THRESHOLD_PX),
     [],
   );
-  const recordProgrammaticScrollObservation = useCallback((value: number) => {
-    const echoes = programmaticScrollTopEchoRef.current;
-    if (echoes[echoes.length - 1] === value) {
-      return;
-    }
-    echoes.push(value);
-    if (echoes.length > PROGRAMMATIC_SCROLL_ECHO_LIMIT) {
-      echoes.splice(0, echoes.length - PROGRAMMATIC_SCROLL_ECHO_LIMIT);
-    }
+  const hasRecentUserScrollIntent = useCallback(
+    () =>
+      isRecentUserScrollIntent(
+        lastUserScrollIntentAtRef.current,
+        performance.now(),
+      ),
+    [],
+  );
+  const clearUserScrollIntent = useCallback(() => {
+    lastUserScrollIntentAtRef.current = null;
   }, []);
+  const recordCurrentScrollGeometry = useCallback((container: HTMLDivElement) => {
+    scrollGeometrySnapshotRef.current = readScrollGeometrySnapshot(container);
+  }, []);
+  const recordProgrammaticScrollEcho = useCallback(
+    (fingerprint: ProgrammaticScrollFingerprint) => {
+      recordProgrammaticScrollFingerprint(
+        programmaticScrollTopEchoRef.current,
+        fingerprint,
+        PROGRAMMATIC_SCROLL_ECHO_LIMIT,
+      );
+    },
+    [],
+  );
   const cancelScrollConvergence = useCallback(() => {
     activeScrollConvergenceCancelRef.current?.();
     activeScrollConvergenceCancelRef.current = null;
@@ -134,12 +167,17 @@ export function useMessagesScrollController({
       }
       if (
         intent !== "explicit-control" &&
+        !isTurnBoundaryScrollIntent(intent) &&
         activeScrollIntentRef.current === "explicit-control" &&
         activeProgrammaticScrollMotionRef.current === "smooth"
       ) {
         return;
       }
-      recordProgrammaticScrollObservation(container.scrollTop);
+      // shouldContinue 可能在首个同步 frame 就失败（例如 user-intent lease 已建立）。
+      // start 后再失败会让同步 onComplete 早于 cancel handle 赋值，留下 stale owner。
+      if (options?.shouldContinue && !options.shouldContinue()) {
+        return;
+      }
       if (
         activeScrollIntentRef.current === intent &&
         activeProgrammaticScrollEdgeRef.current === edge &&
@@ -159,8 +197,14 @@ export function useMessagesScrollController({
         recheckDelaysMs: options?.recheckDelaysMs,
         shouldContinue: options?.shouldContinue,
         onFrameObservation: (observedScrollTop, appliedScrollTop) => {
-          recordProgrammaticScrollObservation(observedScrollTop);
-          recordProgrammaticScrollObservation(appliedScrollTop);
+          if (appliedScrollTop === observedScrollTop) {
+            return;
+          }
+          recordProgrammaticScrollEcho({
+            recordedAt: performance.now(),
+            scrollTop: appliedScrollTop,
+            source: "write",
+          });
         },
         onComplete: () => {
           if (activeScrollConvergenceCancelRef.current !== cancelCurrentRun) {
@@ -174,13 +218,17 @@ export function useMessagesScrollController({
       });
       activeScrollConvergenceCancelRef.current = cancelCurrentRun;
     },
-    [cancelScrollConvergence, recordProgrammaticScrollObservation],
+    [cancelScrollConvergence, recordProgrammaticScrollEcho],
   );
 
   useLayoutEffect(() => {
     cancelScrollConvergence();
     initialBottomPinScopeRef.current = null;
     autoScrollRef.current = true;
+    // fingerprint 属于 render scope；旧会话位置不得被新会话 write 重新续活。
+    programmaticScrollTopEchoRef.current = [];
+    lastUserScrollIntentAtRef.current = null;
+    scrollGeometrySnapshotRef.current = null;
     stickToBottomDeadlineRef.current = 0;
     stickToBottomIntentRef.current = null;
   }, [cancelScrollConvergence, renderScopeKey]);
@@ -191,6 +239,7 @@ export function useMessagesScrollController({
       !liveAutoFollowEnabledRef.current ||
       !autoScrollRef.current ||
       !containerRef.current ||
+      hasRecentUserScrollIntent() ||
       (!isWorkingRef.current && !isAssistantFinalizingRef.current)
     ) {
       return;
@@ -200,9 +249,16 @@ export function useMessagesScrollController({
       shouldContinue: () =>
         liveAutoFollowEnabledRef.current &&
         autoScrollRef.current &&
+        !hasRecentUserScrollIntent() &&
         (isWorkingRef.current || isAssistantFinalizingRef.current),
     });
-  }, [isAssistantFinalizingRef, isWorkingRef, liveAutoFollowEnabledRef, requestScrollConvergence]);
+  }, [
+    hasRecentUserScrollIntent,
+    isAssistantFinalizingRef,
+    isWorkingRef,
+    liveAutoFollowEnabledRef,
+    requestScrollConvergence,
+  ]);
   const rearmAutoFollowToBottom = useCallback(() => {
     autoScrollRef.current = true;
     requestScrollConvergence("bottom", "instant", "live-follow", {
@@ -210,33 +266,228 @@ export function useMessagesScrollController({
       shouldContinue: () =>
         liveAutoFollowEnabledRef.current &&
         autoScrollRef.current &&
+        !hasRecentUserScrollIntent() &&
         (isWorkingRef.current || isAssistantFinalizingRef.current),
     });
-  }, [isAssistantFinalizingRef, isWorkingRef, liveAutoFollowEnabledRef, requestScrollConvergence]);
+  }, [
+    hasRecentUserScrollIntent,
+    isAssistantFinalizingRef,
+    isWorkingRef,
+    liveAutoFollowEnabledRef,
+    requestScrollConvergence,
+  ]);
   const requestHistoryBottomConvergence = useCallback(() => {
     requestScrollConvergence("bottom", "instant", "history-open", {
       recheckDelaysMs: AUTOMATIC_BOTTOM_RECHECK_DELAYS_MS,
       shouldContinue: () =>
-        autoScrollRef.current && Date.now() <= stickToBottomDeadlineRef.current,
-    });
-  }, [requestScrollConvergence]);
-  const requestTimelineLayoutBottomConvergence = useCallback(() => {
-    if (!autoScrollRef.current) {
-      return;
-    }
-    stickToBottomIntentRef.current = "history-open";
-    stickToBottomDeadlineRef.current = Date.now() + SETTLE_REPIN_WINDOW_MS;
-    requestHistoryBottomConvergence();
-  }, [requestHistoryBottomConvergence]);
-  const requestSettleBottomConvergence = useCallback(() => {
-    requestScrollConvergence("bottom", "instant", "turn-settle", {
-      recheckDelaysMs: AUTOMATIC_BOTTOM_RECHECK_DELAYS_MS,
-      shouldContinue: () =>
-        liveAutoFollowEnabledRef.current &&
         autoScrollRef.current &&
+        !hasRecentUserScrollIntent() &&
         Date.now() <= stickToBottomDeadlineRef.current,
     });
-  }, [liveAutoFollowEnabledRef, requestScrollConvergence]);
+  }, [hasRecentUserScrollIntent, requestScrollConvergence]);
+  const requestTurnBoundaryBottomConvergence = useCallback(() => {
+    const intent = stickToBottomIntentRef.current;
+    if (!isTurnBoundaryScrollIntent(intent)) {
+      return;
+    }
+    requestScrollConvergence("bottom", "instant", intent, {
+      recheckDelaysMs: AUTOMATIC_BOTTOM_RECHECK_DELAYS_MS,
+      shouldContinue: () =>
+        stickToBottomIntentRef.current === intent &&
+        autoScrollRef.current &&
+        !hasRecentUserScrollIntent() &&
+        Date.now() <= stickToBottomDeadlineRef.current,
+    });
+  }, [hasRecentUserScrollIntent, requestScrollConvergence]);
+  const requestTimelineLayoutBottomConvergence = useCallback(() => {
+    // Virtualization/static layout flips may call this while autoScroll was briefly
+    // disarmed by a nearBottom false-negative during scrollHeight growth. If the
+    // user is not actively scrolling, re-arm and pin so turn-settle still lands
+    // on the latest messages.
+    if (hasRecentUserScrollIntent()) {
+      return;
+    }
+    if (!autoScrollRef.current) {
+      // Only re-arm when a settle/open pin window is already active.
+      // Mid-history readers who scrolled up stay put.
+      const settleActive =
+        stickToBottomIntentRef.current !== null &&
+        Date.now() <= stickToBottomDeadlineRef.current;
+      if (!settleActive) {
+        return;
+      }
+      autoScrollRef.current = true;
+    }
+    // Preserve an active turn boundary intent; only default to history-open.
+    if (!isTurnBoundaryScrollIntent(stickToBottomIntentRef.current)) {
+      stickToBottomIntentRef.current = "history-open";
+    }
+    stickToBottomDeadlineRef.current = Date.now() + SETTLE_REPIN_WINDOW_MS;
+    if (isTurnBoundaryScrollIntent(stickToBottomIntentRef.current)) {
+      requestTurnBoundaryBottomConvergence();
+      return;
+    }
+    requestHistoryBottomConvergence();
+  }, [
+    hasRecentUserScrollIntent,
+    requestHistoryBottomConvergence,
+    requestTurnBoundaryBottomConvergence,
+  ]);
+  const beginTurnBoundaryBottomConvergence = useCallback(
+    (intent: "turn-send" | "turn-settle") => {
+      clearUserScrollIntent();
+      autoScrollRef.current = true;
+      stickToBottomIntentRef.current = intent;
+      stickToBottomDeadlineRef.current = Date.now() + SETTLE_REPIN_WINDOW_MS;
+      requestTurnBoundaryBottomConvergence();
+    },
+    [clearUserScrollIntent, requestTurnBoundaryBottomConvergence],
+  );
+  // 内容高度与输入事件共同决定 follow ownership。所有 listener/observer 由 controller
+  // 持有，避免 component 再维护第二套 convergence side effect。
+  useEffect(() => {
+    const container = containerRef.current;
+    const content = container?.querySelector<HTMLElement>(".messages-timeline-root");
+    if (!container) {
+      return undefined;
+    }
+    let activePointerId: number | null = null;
+    let pointerInside = container.matches(":hover");
+    const markUserScrollIntent = () => {
+      lastUserScrollIntentAtRef.current = performance.now();
+      cancelScrollConvergence();
+    };
+    const handleWheel = (event: WheelEvent) => {
+      if (event.deltaY === 0) {
+        return;
+      }
+      markUserScrollIntent();
+      if (event.deltaY < 0) {
+        autoScrollRef.current = false;
+      }
+    };
+    const handleTouchIntent = () => {
+      markUserScrollIntent();
+    };
+    const handlePointerEnter = () => {
+      pointerInside = true;
+    };
+    const handlePointerLeave = () => {
+      pointerInside = false;
+    };
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.button !== 0 || event.target !== container) {
+        return;
+      }
+      activePointerId = event.pointerId;
+      markUserScrollIntent();
+    };
+    const handlePointerMove = (event: PointerEvent) => {
+      if (event.pointerId === activePointerId) {
+        markUserScrollIntent();
+      }
+    };
+    const handlePointerEnd = (event: PointerEvent) => {
+      if (event.pointerId === activePointerId) {
+        activePointerId = null;
+      }
+    };
+    const handleScrollKey = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        !isScrollIntentKey(event.key) ||
+        isEditableShortcutTarget(event.target) ||
+        isEditableShortcutTarget(document.activeElement)
+      ) {
+        return;
+      }
+      const eventTargetInside =
+        event.target instanceof Node && container.contains(event.target);
+      const activeElementInside =
+        document.activeElement instanceof Node &&
+        container.contains(document.activeElement);
+      if (!eventTargetInside && !activeElementInside && !pointerInside) {
+        return;
+      }
+      markUserScrollIntent();
+    };
+    const removeInputListeners = () => {
+      container.removeEventListener("wheel", handleWheel);
+      container.removeEventListener("touchstart", handleTouchIntent);
+      container.removeEventListener("touchmove", handleTouchIntent);
+      container.removeEventListener("pointerenter", handlePointerEnter);
+      container.removeEventListener("pointerleave", handlePointerLeave);
+      container.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerEnd);
+      window.removeEventListener("pointercancel", handlePointerEnd);
+      window.removeEventListener("keydown", handleScrollKey);
+      activePointerId = null;
+    };
+    container.addEventListener("wheel", handleWheel, { passive: true });
+    container.addEventListener("touchstart", handleTouchIntent, { passive: true });
+    container.addEventListener("touchmove", handleTouchIntent, { passive: true });
+    container.addEventListener("pointerenter", handlePointerEnter);
+    container.addEventListener("pointerleave", handlePointerLeave);
+    container.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerEnd);
+    window.addEventListener("pointercancel", handlePointerEnd);
+    window.addEventListener("keydown", handleScrollKey);
+    recordCurrentScrollGeometry(container);
+    if (!content || typeof ResizeObserver === "undefined") {
+      return removeInputListeners;
+    }
+    const observer = new ResizeObserver(() => {
+      const currentGeometry = readScrollGeometrySnapshot(container);
+      const clampedScrollTop = resolveClampedScrollTop(
+        scrollGeometrySnapshotRef.current,
+        currentGeometry,
+        PROGRAMMATIC_SCROLL_ECHO_TOLERANCE_PX,
+      );
+      if (clampedScrollTop !== null) {
+        recordProgrammaticScrollEcho({
+          recordedAt: performance.now(),
+          scrollTop: clampedScrollTop,
+          source: "clamp",
+        });
+      }
+      scrollGeometrySnapshotRef.current = currentGeometry;
+      if (autoScrollRef.current) {
+        if (isWorkingRef.current || isAssistantFinalizingRef.current) {
+          requestAutoScroll();
+        } else if (Date.now() <= stickToBottomDeadlineRef.current) {
+          if (stickToBottomIntentRef.current === "history-open") {
+            requestHistoryBottomConvergence();
+          } else if (isTurnBoundaryScrollIntent(stickToBottomIntentRef.current)) {
+            requestTurnBoundaryBottomConvergence();
+          }
+        }
+      }
+      // convergence 首次 pulse 同步写 scrollTop；snapshot 必须反映写后的真实位置。
+      recordCurrentScrollGeometry(container);
+    });
+    observer.observe(content);
+    return () => {
+      observer.disconnect();
+      removeInputListeners();
+      scrollGeometrySnapshotRef.current = null;
+      lastUserScrollIntentAtRef.current = null;
+    };
+  }, [
+    cancelScrollConvergence,
+    isAssistantFinalizingRef,
+    isWorkingRef,
+    recordCurrentScrollGeometry,
+    recordProgrammaticScrollEcho,
+    renderScopeKey,
+    requestAutoScroll,
+    requestHistoryBottomConvergence,
+    requestTurnBoundaryBottomConvergence,
+  ]);
   const handleScrollControlRequest = useCallback(
     (edge: ConversationScrollEdge) => {
       autoScrollRef.current = edge === "bottom";
@@ -254,20 +505,21 @@ export function useMessagesScrollController({
     activeProgrammaticScrollEdgeRef,
     activeProgrammaticScrollMotionRef,
     autoScrollRef,
-    bottomRef,
+    beginTurnBoundaryBottomConvergence,
     cancelFocusFollowConvergence,
     cancelScrollConvergence,
+    clearUserScrollIntent,
     containerRef,
     getPendingScrollResourceCount,
     handleScrollControlRequest,
+    hasRecentUserScrollIntent,
     initialBottomPinScopeRef,
     isNearBottom,
     programmaticScrollTopEchoRef,
     rearmAutoFollowToBottom,
-    recordProgrammaticScrollObservation,
+    recordCurrentScrollGeometry,
     requestAutoScroll,
     requestHistoryBottomConvergence,
-    requestSettleBottomConvergence,
     requestTimelineLayoutBottomConvergence,
     scrollKey,
     stickToBottomDeadlineRef,

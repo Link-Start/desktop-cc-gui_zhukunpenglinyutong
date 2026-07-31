@@ -152,7 +152,8 @@ impl EngineManager {
 
     /// Detect a single engine's status
     async fn detect_single_engine(&self, engine_type: EngineType) -> EngineStatus {
-        self.detect_single_engine_with_gates(engine_type, true).await
+        self.detect_single_engine_with_gates(engine_type, true)
+            .await
     }
 
     async fn detect_single_engine_with_gates(
@@ -401,6 +402,17 @@ impl EngineManager {
         sessions
             .values()
             .find(|entry| entry.workspace_id == workspace_id)
+            .map(|entry| entry.session.clone())
+    }
+
+    pub async fn get_opencode_session_for_runtime(
+        &self,
+        runtime_key: &str,
+    ) -> Option<Arc<OpenCodeSession>> {
+        self.opencode_sessions
+            .lock()
+            .await
+            .get(runtime_key)
             .map(|entry| entry.session.clone())
     }
 
@@ -670,6 +682,17 @@ impl EngineManager {
             .map(|entry| entry.session.clone())
     }
 
+    pub async fn get_kimi_session_for_runtime(
+        &self,
+        runtime_key: &str,
+    ) -> Option<Arc<KimiSession>> {
+        self.kimi_sessions
+            .lock()
+            .await
+            .get(runtime_key)
+            .map(|entry| entry.session.clone())
+    }
+
     /// Snapshot all Kimi sessions owned by a workspace.
     pub async fn get_kimi_sessions(&self, workspace_id: &str) -> Vec<Arc<KimiSession>> {
         let sessions = self.kimi_sessions.lock().await;
@@ -780,8 +803,13 @@ impl EngineManager {
         workspace_id: &str,
         workspace_path: &Path,
     ) -> Arc<GrokSession> {
-        self.get_or_create_grok_session_for_runtime(workspace_id, workspace_path, workspace_id, None)
-            .await
+        self.get_or_create_grok_session_for_runtime(
+            workspace_id,
+            workspace_path,
+            workspace_id,
+            None,
+        )
+        .await
     }
 
     /// Get or create a Grok session isolated by provider runtime key.
@@ -826,6 +854,17 @@ impl EngineManager {
         sessions
             .values()
             .find(|entry| entry.workspace_id == workspace_id)
+            .map(|entry| entry.session.clone())
+    }
+
+    pub async fn get_grok_session_for_runtime(
+        &self,
+        runtime_key: &str,
+    ) -> Option<Arc<GrokSession>> {
+        self.grok_sessions
+            .lock()
+            .await
+            .get(runtime_key)
             .map(|entry| entry.session.clone())
     }
 

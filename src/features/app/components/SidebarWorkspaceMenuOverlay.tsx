@@ -3,17 +3,16 @@ import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import type { WorkspaceMenuAction } from "../hooks/useSidebarMenus";
+import type {
+  WorkspaceMenuAction,
+  WorkspaceMenuGroup,
+} from "../hooks/useSidebarMenus";
 
 type SidebarWorkspaceMenuOverlayProps = {
   menu: {
     x: number;
     y: number;
-    groups: Array<{
-      id: string;
-      label: string;
-      actions: WorkspaceMenuAction[];
-    }>;
+    groups: WorkspaceMenuGroup[];
   };
   t: (key: string) => string;
   onClose: () => void;
@@ -83,6 +82,14 @@ export function SidebarWorkspaceMenuOverlay({
   const [submenuPosition, setSubmenuPosition] =
     useState<SidebarWorkspaceSubmenuPosition | null>(null);
   const [showSelectionHint, setShowSelectionHint] = useState(false);
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(
+    () =>
+      new Set(
+        menu.groups
+          .filter((group) => group.collapsible && group.defaultCollapsed)
+          .map((group) => group.id),
+      ),
+  );
 
   const openSubmenuAction = useMemo(
     () =>
@@ -120,17 +127,35 @@ export function SidebarWorkspaceMenuOverlay({
     setOpenSubmenuId(action.id);
   }, [closeSubmenu, openSubmenuId]);
 
-  // Clicking a parent with children runs its default action directly;
-  // the submenu stays reachable via hover (onMouseEnter).
   const handleAction = useCallback(
-    (action: WorkspaceMenuAction) => {
+    (action: WorkspaceMenuAction, trigger: HTMLElement) => {
       if (action.unavailable) {
+        return;
+      }
+      if (action.submenuOnly && action.children?.length) {
+        openSubmenu(action, trigger);
         return;
       }
       closeSubmenu();
       onAction(action);
     },
-    [closeSubmenu, onAction],
+    [closeSubmenu, onAction, openSubmenu],
+  );
+
+  const toggleGroup = useCallback(
+    (groupId: string) => {
+      closeSubmenu();
+      setCollapsedGroupIds((currentGroupIds) => {
+        const nextGroupIds = new Set(currentGroupIds);
+        if (nextGroupIds.has(groupId)) {
+          nextGroupIds.delete(groupId);
+        } else {
+          nextGroupIds.add(groupId);
+        }
+        return nextGroupIds;
+      });
+    },
+    [closeSubmenu],
   );
 
   return (
@@ -161,136 +186,174 @@ export function SidebarWorkspaceMenuOverlay({
         onClick={(event) => event.stopPropagation()}
         onContextMenu={(event) => event.preventDefault()}
       >
-        {menu.groups.map((group, groupIndex) => (
-          <div className="sidebar-workspace-menu-group" key={group.id}>
-            <div className="sidebar-workspace-menu-group-title">
-              {group.label}
-            </div>
-            {group.actions.map((action) => (
-              <div className="sidebar-workspace-menu-item-row" key={action.id}>
+        {menu.groups.map((group, groupIndex) => {
+          const isCollapsed =
+            Boolean(group.collapsible) && collapsedGroupIds.has(group.id);
+          const groupContentId = `sidebar-workspace-menu-group-${group.id}`;
+
+          return (
+            <div className="sidebar-workspace-menu-group" key={group.id}>
+              {group.collapsible ? (
                 <button
                   type="button"
-                  role="menuitem"
-                  className={`sidebar-workspace-menu-item${
-                    action.tone === "danger" ? " is-danger" : ""
-                  }${action.deprecated ? " is-deprecated" : ""}${
-                    action.unavailable ? " is-unavailable" : ""
-                  }`}
-                  disabled={action.unavailable}
-                  aria-haspopup={action.children?.length ? "menu" : undefined}
-                  aria-expanded={
-                    action.children?.length ? openSubmenuId === action.id : undefined
-                  }
-                  onMouseEnter={(event) => {
-                    if (action.children?.length && !action.unavailable) {
-                      openSubmenu(action, event.currentTarget);
-                      return;
-                    }
-                    closeSubmenu();
-                  }}
-                  onKeyDown={(event) => {
-                    // Keyboard path to the submenu the aria-haspopup promises;
-                    // hover remains the pointer path.
-                    if (
-                      event.key === "ArrowRight" &&
-                      action.children?.length &&
-                      !action.unavailable
-                    ) {
-                      event.preventDefault();
-                      openSubmenu(action, event.currentTarget);
-                    }
-                  }}
-                  onClick={() => handleAction(action)}
+                  className="sidebar-workspace-menu-group-title sidebar-workspace-menu-group-toggle"
+                  aria-expanded={!isCollapsed}
+                  aria-controls={groupContentId}
+                  onClick={() => toggleGroup(group.id)}
                 >
-                  <span
-                    className={`sidebar-workspace-menu-item-icon sidebar-workspace-menu-item-icon-${action.iconKind}${
-                      action.unavailable ? " is-unavailable" : ""
+                  <span>{group.label}</span>
+                  <ChevronRight
+                    className={`sidebar-workspace-menu-group-chevron${
+                      isCollapsed ? "" : " is-expanded"
                     }`}
+                    size={13}
                     aria-hidden
-                  >
-                    {renderIcon(action.iconKind)}
-                  </span>
-                  <span className="sidebar-workspace-menu-item-label">
-                    {action.label}
-                  </span>
-                  {action.deprecated ? (
-                    <span className="sidebar-workspace-menu-item-deprecated">
-                      ({t("sidebar.deprecatedTag")})
-                    </span>
-                  ) : null}
-                  {action.unavailable ? (
-                    <span className="sidebar-workspace-menu-item-unavailable">
-                      ({action.statusLabel ?? t("sidebar.unavailableTag")})
-                    </span>
-                  ) : null}
-                  {action.children?.length ? (
-                    <ChevronRight
-                      className="sidebar-workspace-menu-item-submenu-icon"
-                      size={13}
-                      aria-hidden
-                    />
-                  ) : null}
-                </button>
-                {action.refreshable ? (
-                  <button
-                    type="button"
-                    className={`sidebar-workspace-menu-item-refresh${
-                      action.refreshing ? " is-refreshing" : ""
-                    }`}
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                    onPointerDown={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      void action.onRefresh?.();
-                    }}
-                    onDoubleClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                    aria-label={t("common.refresh")}
-                    title={t("common.refresh")}
-                    data-tauri-drag-region="false"
-                    disabled={action.refreshing}
-                  >
-                    <RefreshCw size={13} aria-hidden />
-                  </button>
-                ) : null}
-                {action.pinnable && action.onTogglePinned ? (
-                  <input
-                    type="checkbox"
-                    className="sidebar-workspace-menu-item-pin"
-                    checked={action.pinned ?? false}
-                    onMouseDown={(event) => {
-                      event.stopPropagation();
-                    }}
-                    onPointerDown={(event) => {
-                      event.stopPropagation();
-                    }}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                    }}
-                    onChange={() => {
-                      action.onTogglePinned?.();
-                    }}
-                    aria-label={t("common.showOnWorkspaceRow")}
-                    title={t("common.showOnWorkspaceRow")}
-                    data-tauri-drag-region="false"
                   />
-                ) : null}
+                </button>
+              ) : (
+                <div className="sidebar-workspace-menu-group-title">
+                  {group.label}
+                </div>
+              )}
+              <div id={groupContentId} hidden={isCollapsed}>
+                {!isCollapsed
+                  ? group.actions.map((action) => (
+                    <div
+                      className="sidebar-workspace-menu-item-row"
+                      key={action.id}
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={`sidebar-workspace-menu-item${
+                          action.tone === "danger" ? " is-danger" : ""
+                        }${action.deprecated ? " is-deprecated" : ""}${
+                          action.unavailable ? " is-unavailable" : ""
+                        }`}
+                        disabled={action.unavailable}
+                        aria-haspopup={
+                          action.children?.length ? "menu" : undefined
+                        }
+                        aria-expanded={
+                          action.children?.length
+                            ? openSubmenuId === action.id
+                            : undefined
+                        }
+                        onMouseEnter={(event) => {
+                          if (action.children?.length && !action.unavailable) {
+                            openSubmenu(action, event.currentTarget);
+                            return;
+                          }
+                          closeSubmenu();
+                        }}
+                        onKeyDown={(event) => {
+                          // Keyboard path to the submenu the aria-haspopup promises;
+                          // hover remains the pointer path.
+                          if (
+                            event.key === "ArrowRight" &&
+                            action.children?.length &&
+                            !action.unavailable
+                          ) {
+                            event.preventDefault();
+                            openSubmenu(action, event.currentTarget);
+                          }
+                        }}
+                        onClick={(event) =>
+                          handleAction(action, event.currentTarget)
+                        }
+                      >
+                        <span
+                          className={`sidebar-workspace-menu-item-icon sidebar-workspace-menu-item-icon-${action.iconKind}${
+                            action.unavailable ? " is-unavailable" : ""
+                          }`}
+                          aria-hidden
+                        >
+                          {renderIcon(action.iconKind)}
+                        </span>
+                        <span className="sidebar-workspace-menu-item-label">
+                          {action.label}
+                        </span>
+                        {action.deprecated ? (
+                          <span className="sidebar-workspace-menu-item-deprecated">
+                            ({t("sidebar.deprecatedTag")})
+                          </span>
+                        ) : null}
+                        {action.unavailable ? (
+                          <span className="sidebar-workspace-menu-item-unavailable">
+                            ({action.statusLabel ?? t("sidebar.unavailableTag")})
+                          </span>
+                        ) : null}
+                        {action.children?.length ? (
+                          <ChevronRight
+                            className="sidebar-workspace-menu-item-submenu-icon"
+                            size={13}
+                            aria-hidden
+                          />
+                        ) : null}
+                      </button>
+                      {action.refreshable ? (
+                        <button
+                          type="button"
+                          className={`sidebar-workspace-menu-item-refresh${
+                            action.refreshing ? " is-refreshing" : ""
+                          }`}
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                          }}
+                          onPointerDown={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                          }}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void action.onRefresh?.();
+                          }}
+                          onDoubleClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                          }}
+                          aria-label={t("common.refresh")}
+                          title={t("common.refresh")}
+                          data-tauri-drag-region="false"
+                          disabled={action.refreshing}
+                        >
+                          <RefreshCw size={13} aria-hidden />
+                        </button>
+                      ) : null}
+                      {action.pinnable && action.onTogglePinned ? (
+                        <input
+                          type="checkbox"
+                          className="sidebar-workspace-menu-item-pin"
+                          checked={action.pinned ?? false}
+                          onMouseDown={(event) => {
+                            event.stopPropagation();
+                          }}
+                          onPointerDown={(event) => {
+                            event.stopPropagation();
+                          }}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                          }}
+                          onChange={() => {
+                            action.onTogglePinned?.();
+                          }}
+                          aria-label={t("common.showOnWorkspaceRow")}
+                          title={t("common.showOnWorkspaceRow")}
+                          data-tauri-drag-region="false"
+                        />
+                      ) : null}
+                    </div>
+                  ))
+                  : null}
               </div>
-            ))}
-            {groupIndex < menu.groups.length - 1 ? (
-              <div className="sidebar-workspace-menu-divider" aria-hidden />
-            ) : null}
-          </div>
-        ))}
+              {groupIndex < menu.groups.length - 1 ? (
+                <div className="sidebar-workspace-menu-divider" aria-hidden />
+              ) : null}
+            </div>
+          );
+        })}
       </div>
       {openSubmenuAction?.children?.length && submenuPosition ? (
         <div

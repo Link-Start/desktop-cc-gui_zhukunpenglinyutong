@@ -666,3 +666,307 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 65: 重构快捷键设置页为双栏录制布局
+
+**Date**: 2026-07-30
+**Task**: 重构快捷键设置页为双栏录制布局
+**Branch**: `chore/bump-version-0.7.12`
+
+### Summary
+
+快捷键设置页从输入框列表重构为双栏布局：左侧搜索+分组快捷键行(kbd 键帽)，右侧详情面板(大号点击录制框 focusable div + 重置为默认按钮)；handleShortcutKeyDown 事件类型放宽为 HTMLElement；Escape 取消录制不冒泡；中英 i18n 各补 4 key；ShortcutsSection 测试 +4 交互用例、shortcuts.test.ts +3 splitShortcutForPlatform 用例；清理预览残留并 gitignore .playwright-mcp/。验证：tsc/eslint/settings 233+9 测试全绿。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `eb4ed9027` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 66: 快捷键设置页对齐参考样式并补全部重置
+
+**Date**: 2026-07-30
+**Task**: 快捷键设置页对齐参考样式并补全部重置
+**Branch**: `chore/bump-version-0.7.12`
+
+### Summary
+
+在上一会话双栏布局基础上对齐参考样式：删除与顶部 header 重复的区内标题；列表列 520px 最大高度+分组区内部滚动(搜索框固定)；右侧详情面板改 stretch 与列表严格等高、16px 圆角+浅描边；新增「全部重置为默认」按钮(仅重置被改过项,执行期禁用)+中英 i18n key；reset-all 测试用例+1。验证：tsc + settings 全域 18 文件 234 测试全绿。注意：上一会话(Session 65)记录的双栏布局工作当时未提交,本次一并包含在 15a30e24f 中。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `15a30e24f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+---
+
+## Session 67: 快捷键面板随视口伸缩并移除侧边栏手动折叠
+
+**Date**: 2026-07-30
+**Task**: 快捷键面板随视口伸缩并移除侧边栏手动折叠
+**Branch**: `chore/bump-version-0.7.12`
+
+### Summary
+
+延续快捷键设置页改造：双栏面板从固定 `max-height: 520px` 改为随视口高度伸缩(`.settings-shortcuts-section` `height:100%` 承接 scroll-area viewport,布局 `flex: 1 1 auto` + `min-height: 0`,堆叠断点下恢复 520px 上限);内容区 padding 收紧(top 8px / bottom 16px);light 主题选中行与详情卡扁平化为 `#f9f9f9`(含 `data-theme` 与 `prefers-color-scheme` 双通道)。同时移除设置侧边栏手动折叠功能(`sidebarCollapsed` 状态、底部 toggle 按钮、`.is-collapsed` 样式),收窄改为纯响应式 ≤900px 媒体查询;10 个 locale 清理失效的 `sidebarExpand`/`sidebarCollapse` key。
+
+### Main Changes
+
+- `SettingsView.tsx`: 删除 sidebarCollapsed 状态与 toggle 按钮,导航按钮恢复常驻文案;ScrollArea 增加 `settings-content--shortcuts` 修饰类
+- `settings.part2.css`: 快捷键面板视口高度链 + light 主题扁平化填充 + 折叠样式删除
+- `settings.part2.scroll-area.test.ts`: 新增视口高度钉住的 CSS 契约断言
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5931b5cfc` | feat(settings): 快捷键面板随视口伸缩并移除侧边栏手动折叠 |
+
+### Testing
+
+- [OK] `npx vitest run src/styles/settings.part2.scroll-area.test.ts` 4/4 通过
+- [OK] `npx tsc --noEmit` 无错误
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 67: 设置页重构为无顶栏居中窄列布局
+
+**Date**: 2026-07-30
+**Task**: 设置页重构为无顶栏居中窄列布局
+**Branch**: `chore/bump-version-0.7.12`
+
+### Summary
+
+删顶部标题栏,大标题+描述移入内容区(.settings-page-head,兼作Windows拖拽面);侧边栏加44px拖拽spacer避让红绿灯/全局drag-strip;内容列1080→860px居中,变量上移到settings-content-wrap供页头与滚动区共用;providers页无页头改渲染44px拖拽条防macOS全局drag-strip遮挡搜索框;侧边栏精修(200px宽/32px行高/6px圆角/16px图标/选中500字重);快捷键页键帽去边框、行13px、选中#f2f2f2;删除Dictation/Composer/Commit/Placeholder四处与新页头重复的section-title;同步SettingsView.test与scroll-area契约测试;tsc+72测试+vite build全绿
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cc6ae1007` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 68: 统一设置页内容列宽为 980px
+
+**Date**: 2026-07-30
+**Task**: 统一设置页内容列宽为 980px
+**Branch**: `chore/bump-version-0.7.12`
+
+### Summary
+
+设置页列宽原为双事实源：wrap 变量 860px（页头/CLI配置管理/普通 section）与 basic-redesign 980px 覆盖（基础/快捷键/项目管理/智能体/运行环境）。本次将 --settings-content-fixed-width 提为 980px、删除冗余的 1360px 媒体查询与 basic/tabbed 的 980 覆盖（并发会话已提交 8b60dafd8），全部页面与页头共用 min(100%, 980px) 居中列，≤1100px 视口仍回落 100%。另发现 2 个 HEAD 上预存失败测试（sidebar-compact 180 vs 200、file-view-panel-visual-contract）未修。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `75b9ee299` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 69: 重做供应商设置面板并支持 CC Switch 文件导入
+
+**Date**: 2026-07-30
+**Task**: 重做供应商设置面板并支持 CC Switch 文件导入
+**Branch**: `chore/bump-version-0.7.12`
+
+### Summary
+
+供应商设置页重做: CC Switch 手动选文件导入(按 id 匹配去重)、取消授权伪供应商、官方直连预设、品牌图标、预设模型更新(fable/glm-5.2/kimi-k3/deepseek-v4)、Codex sortOrder 排序, 46 文件 +4419/-1315
+
+### Main Changes
+
+### Main Changes
+
+- CC Switch 导入: 新增 `vendor_list_cc_switch_providers_from_path` 命令, 支持用户手动选择 `.json`(legacy) / SQLite `.db` 文件导入, 解析失败按不可用空态处理; 前端去重从 name+baseUrl 改为按 id 匹配新增/更新, 面板入口改 DropdownMenu 选择导入源
+- 取消授权: 新增 `__disabled__` 伪供应商(前后端 `DISABLED_PROVIDER_ID`), 仅用于清空 current 标记, 不出现在列表
+- 官方直连: 新增 `OFFICIAL_DIRECT_PRESET_ID` 预设(锁定 Anthropic 官方端点) 与 `VendorOfficialConfigCard` / `ClaudeLocalSettingsCard` 组件
+- 品牌图标: 新增 `providerBrandIcon.ts` 映射与 `ProviderBrandIconImg` 组件
+- 预设模型更新: 新增 `ANTHROPIC_DEFAULT_FABLE_MODEL` env; glm-5.2 / kimi-k3 / 新增 kimi-coding 预设(262144 上下文) / deepseek-v4-pro / MiniMax 50 分钟超时注释
+- Codex 供应商: 支持 `sortOrder` 排序(后端排序键从 created_at 改为 sort_order + created_at 兜底) 与 `source` 字段
+- 重构 ProviderList / ProviderDialog / CodexProviderList / CodexProviderDialog / VendorSettingsPanel / CcSwitchImportDialog
+- 补齐 10 语言 i18n 与供应商面板/对话框/滚动条样式
+
+### Testing
+
+- [OK] `npx vitest run src/features/vendors src/styles/settings.part1.vendor-panels.test.ts src/styles/settings.part2.scroll-area.test.ts` — 24 文件 114 测试全部通过
+- [OK] `npm run typecheck` — 通过
+- [OK] `cargo test --lib vendors` — 40 测试全部通过(含新增 list_from_file 3 个用例)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d7a657f5a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 70: Grok 图片输入与 Claude 模型目录
+
+**Date**: 2026-07-31
+**Task**: Grok 图片输入与 Claude 模型目录
+**Branch**: `chore/bump-version-0.7.12`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 领域 | 变更 |
+|------|------|
+| Grok engine | 多模态从 `--prompt-json` 改为 `--prompt-file` 暂存 ACP blocks，避免 ARG_MAX；RAII 清理 staging 文件 |
+| Claude 模型 | 内置目录同步 Fable 5 / Opus 4.8 / Sonnet 5 等；支持 `ANTHROPIC_DEFAULT_FABLE_MODEL` 与 fable 映射 |
+| Composer UI | ModelSelect 展示映射后品牌图标、CLI 设置入口；i18n 与 ModelMappingSettings 同步 |
+| OpenSpec | 更新 grok-cli-image-input-capability-gap 与 capability gap 报告 |
+
+**主要文件**:
+- `src-tauri/src/engine/grok.rs`
+- `src-tauri/src/engine/status.rs`
+- `src/features/models/constants.ts`
+- `src/features/composer/components/ChatInputBox/selectors/ModelSelect.tsx`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `78a09bb6a3b2c73b173b7b856b92280cc1bc2e19` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 71: 完善模型选择器渠道切换与自定义模型弹窗
+
+**Date**: 2026-07-31
+**Task**: 完善模型选择器渠道切换与自定义模型弹窗
+**Branch**: `chore/bump-version-0.7.12`
+
+### Summary
+
+模型管理改为当前页 overlay；Atomic catalog 注入 plugin 自定义模型；统一本地渠道展示名；修正跨厂商 remap 与 Kimi 品牌图标；补齐多语言与测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2f6ffb247` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

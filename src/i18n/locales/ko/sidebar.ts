@@ -54,7 +54,7 @@ const sidebar = {
     "clearSearch": "검색 지우기",
     "pinned": "고정됨",
     "newAgent": "새 Agent",
-    "newSharedSession": "Claude Code + Codex",
+    "newSharedSession": "Shared CLI",
     "newWorktreeAgent": "새 Worktree Agent",
     "newCloneAgent": "새 클론 Agent",
     "codexProviderChoiceTitle": "제공자 선택",

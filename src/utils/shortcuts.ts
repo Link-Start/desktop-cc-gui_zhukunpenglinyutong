@@ -199,6 +199,50 @@ export function formatShortcutForPlatform(
   return [...modifiers, keyLabel].join("+");
 }
 
+export function splitShortcutForPlatform(
+  value: string | null | undefined,
+  isMac: boolean = isMacPlatform(),
+): string[] | null {
+  const parsed = parseShortcut(value);
+  if (!parsed) {
+    return null;
+  }
+  if (isMac) {
+    const modifiers = MODIFIER_ORDER.flatMap((modifier) => {
+      if (modifier === "cmd" && parsed.meta) {
+        return MODIFIER_LABELS.cmd;
+      }
+      if (modifier === "ctrl" && parsed.ctrl) {
+        return MODIFIER_LABELS.ctrl;
+      }
+      if (modifier === "alt" && parsed.alt) {
+        return MODIFIER_LABELS.alt;
+      }
+      if (modifier === "shift" && parsed.shift) {
+        return MODIFIER_LABELS.shift;
+      }
+      return [];
+    });
+    return [...modifiers, formatShortcutKeyLabel(parsed.key, KEY_LABELS)];
+  }
+  const modifiers: string[] = [];
+  if (parsed.meta && parsed.ctrl) {
+    modifiers.push("Meta");
+  } else if (parsed.meta) {
+    modifiers.push(MODIFIER_TEXT_LABELS.ctrl);
+  }
+  if (parsed.ctrl) {
+    modifiers.push(MODIFIER_TEXT_LABELS.ctrl);
+  }
+  if (parsed.alt) {
+    modifiers.push(MODIFIER_TEXT_LABELS.alt);
+  }
+  if (parsed.shift) {
+    modifiers.push(MODIFIER_TEXT_LABELS.shift);
+  }
+  return [...modifiers, formatShortcutKeyLabel(parsed.key, ACCELERATOR_KEYS)];
+}
+
 export function buildShortcutValue(event: KeyboardEvent): string | null {
   const key = normalizeKey(event.key);
   if (!key) {

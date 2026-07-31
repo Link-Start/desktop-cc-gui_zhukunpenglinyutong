@@ -18,7 +18,6 @@ import type {
   IntentCanvasDocument,
   IntentCanvasOpenRequest,
 } from "../features/intent-canvas/types";
-import { normalizeSharedSessionEngine } from "../features/shared-session/utils/sharedSessionEngines";
 import {
   recoverThreadBindingAndResendForManualRecovery,
   recoverThreadBindingForManualRecovery,
@@ -590,7 +589,6 @@ export function useAppShellLayoutNodesSection(
     triggerAutoThreadTitle,
     unpinThread,
     updateCustomInstructions,
-    updateSharedSessionEngineSelection,
     updateWorkspaceSettings,
     updaterState,
     userInputRequests,
@@ -753,20 +751,15 @@ export function useAppShellLayoutNodesSection(
               (entry: any) => entry.id === activeThreadId,
             )
           : null;
-      const nextEngine =
-        thread?.threadKind === "shared"
-          ? normalizeSharedSessionEngine(engine)
-          : engine;
-      await setActiveEngine(nextEngine);
-      if (!activeWorkspaceId || !activeThreadId) {
+      // Shared 的 CLI 切换只能由完整 ExecutionTarget picker 完成。这个 legacy
+      // engine-only callback 属于 Native control surface；即使被快捷键或旧调用方
+      // 触发，也不能改写 Shared 的全局 Engine 或 durable selectedTarget。
+      if (thread?.threadKind === "shared") {
         return;
       }
-      if (thread?.threadKind === "shared") {
-        updateSharedSessionEngineSelection(
-          activeWorkspaceId,
-          activeThreadId,
-          nextEngine,
-        );
+      await setActiveEngine(engine);
+      if (!activeWorkspaceId || !activeThreadId) {
+        return;
       }
     },
     [
@@ -774,7 +767,6 @@ export function useAppShellLayoutNodesSection(
       activeWorkspaceId,
       setActiveEngine,
       threadsByWorkspace,
-      updateSharedSessionEngineSelection,
     ],
   );
   const mainFileExternalChangeAwarenessEnabled =
@@ -1166,11 +1158,17 @@ export function useAppShellLayoutNodesSection(
     await startFork("/fork");
   });
   const handleOpenSettings = useEventCallback(() => openSettings());
+  const handleOpenShortcutsSettings = useEventCallback(() =>
+    openSettings("shortcuts"),
+  );
   const handleOpenAgentSettings = useEventCallback(() =>
     openSettings("agent-prompt-management", "agent-management"),
   );
   const handleOpenPromptSettings = useEventCallback(() =>
     openSettings("agent-prompt-management", "prompt-library"),
+  );
+  const handleOpenCliSettings = useEventCallback(() =>
+    openSettings("providers"),
   );
   const handleOpenDictationSettings = useEventCallback(() =>
     openSettings("dictation"),
@@ -1355,7 +1353,7 @@ export function useAppShellLayoutNodesSection(
     void loadOlderThreadsForWorkspace(workspace);
   });
   const handleQuickReloadWorkspaceThreads = useEventCallback(
-    (workspaceId: string) => {
+    async (workspaceId: string) => {
       const workspace = workspacesById.get(workspaceId);
       if (!workspace) {
         return;
@@ -1370,7 +1368,7 @@ export function useAppShellLayoutNodesSection(
               ),
             ]
           : [workspace];
-      void Promise.allSettled(
+      await Promise.allSettled(
         targets.map((target) => listThreadsForWorkspaceTracked(target)),
       );
     },
@@ -1870,9 +1868,11 @@ export function useAppShellLayoutNodesSection(
     },
     chrome: {
       onOpenSettings: handleOpenSettings,
+      onOpenShortcutsSettings: handleOpenShortcutsSettings,
       onOpenAgentSettings: handleOpenAgentSettings,
       onOpenPromptSettings: handleOpenPromptSettings,
       onOpenModelSettings: handleOpenModelSettings,
+      onOpenCliSettings: handleOpenCliSettings,
       onRefreshModelConfig: handleRefreshModelConfig,
       isModelConfigRefreshing,
       onOpenDictationSettings: handleOpenDictationSettings,

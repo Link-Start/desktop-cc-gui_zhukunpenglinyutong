@@ -216,10 +216,7 @@ pub(crate) fn render_grok_provider_config(
         .or_insert_with(|| toml::Value::Table(toml::Table::new()))
         .as_table_mut()
         .ok_or_else(|| "`models` in Grok config.toml is not a table".to_string())?
-        .insert(
-            "default".to_string(),
-            toml::Value::String(model_toml_alias),
-        );
+        .insert("default".to_string(), toml::Value::String(model_toml_alias));
     toml::to_string_pretty(&doc)
         .map_err(|error| format!("failed to serialize Grok config: {error}"))
 }
@@ -325,7 +322,7 @@ pub(crate) fn resolve_grok_provider_launch_profile(
         return Ok(GrokProviderLaunchProfile {
             binding: None,
             home_dir: None,
-            runtime_key: workspace_id.to_string(),
+            runtime_key: grok_runtime_key(workspace_id, GROK_LOCAL_PROVIDER_PROFILE_ID),
         });
     }
 
@@ -409,6 +406,17 @@ mod tests {
     }
 
     #[test]
+    fn local_launch_profile_uses_canonical_runtime_key() {
+        let profile =
+            resolve_grok_provider_launch_profile("ws-1", None).expect("local launch profile");
+
+        assert_eq!(
+            profile.runtime_key,
+            grok_runtime_key("ws-1", GROK_LOCAL_PROVIDER_PROFILE_ID)
+        );
+    }
+
+    #[test]
     fn provider_path_rejects_traversal_and_reserved_names() {
         for invalid in ["../escape", "a/b", "CON", "name."] {
             assert!(
@@ -478,7 +486,9 @@ name = "Official"
             Some("responses")
         );
         assert_eq!(
-            managed.get("context_window").and_then(toml::Value::as_integer),
+            managed
+                .get("context_window")
+                .and_then(toml::Value::as_integer),
             Some(128_000)
         );
     }

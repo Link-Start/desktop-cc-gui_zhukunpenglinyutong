@@ -803,7 +803,6 @@ vi.mock("./features/threads/hooks/useThreads", () => ({
       startLsp: createNoopFunction(),
       startShare: createNoopFunction(),
       startSharedSessionForWorkspace: createNoopFunction(),
-      updateSharedSessionEngineSelection: createNoopFunction(),
       resolveCanonicalThreadId: (value: string) =>
         startupState.canonicalThreadId ?? value,
       reviewPrompt: null,

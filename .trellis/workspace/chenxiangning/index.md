@@ -7,9 +7,9 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-28.md`
-- **Total Sessions**: 1181
-- **Last Active**: 2026-07-27
+- **Active File**: `journal-29.md`
+- **Total Sessions**: 1247
+- **Last Active**: 2026-07-31
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-28.md` | ~1450 | Active |
+| `journal-29.md` | ~1746 | Active |
+| `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
 | `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
@@ -56,6 +57,72 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1247 | 2026-07-31 | 修复 Grok 历史工具投影信息损失 | `ad2cceff8` | `bump-version-0.7.12` |
+| 1246 | 2026-07-31 | 修复对话结束滚动乱跳未贴底 | `d38d0f9b9` | `bump-version-0.7.12` |
+| 1245 | 2026-07-31 | 长幕布 idle 虚拟化缓解滚动阻滞 | `4e932e672` | `bump-version-0.7.12` |
+| 1244 | 2026-07-31 | 修复 Grok 历史 tool 扁平解析 | `0d4765346` | `bump-version-0.7.12` |
+| 1243 | 2026-07-31 | 幕布文件修改场景默认折叠 | `63461ec54` | `bump-version-0.7.12` |
+| 1242 | 2026-07-31 | 补齐多引擎图片输入能力 | `2bdaa4db6` | `bump-version-0.7.12` |
+| 1241 | 2026-07-30 | 修复实时历史展开点击 | `422d49f1c` | `bump-version-0.7.12` |
+| 1240 | 2026-07-30 | 移除会话右键菜单的跨 Provider 续接入口 | `4ad92f021` | `bump-version-0.7.12` |
+| 1239 | 2026-07-30 | 修复消息回合边界吸底 | `5aeb5e597` | `bump-version-0.7.12` |
+| 1238 | 2026-07-30 | 修复 Grok 终稿尾段丢失 | `bedfc5a73` | `bump-version-0.7.12` |
+| 1237 | 2026-07-30 | 修复流式渲染卡顿与终止事件乱序 | `1537211a1` | `bump-version-0.7.12` |
+| 1236 | 2026-07-30 | 修复幕布锚点预览与局部凸起 | `c4498f6b1` | `bump-version-0.7.12` |
+| 1235 | 2026-07-30 | 修复消息滚动回声并禁用轻量渲染 | `770a943a1` | `bump-version-0.7.12` |
+| 1234 | 2026-07-30 | 合入上游 v0.7.12 Settings 更新 | `9a2b205fb6ad5a0f63b5bfdbc44265db493ddedf` | `bump-version-0.7.12` |
+| 1233 | 2026-07-30 | 修复 Shared 长时回合超时与恢复断链 | `0447a18a7` | `bump-version-0.7.12` |
+| 1232 | 2026-07-30 | 合并 v0.7.12 上游分支 | `21b5c4b99` | `bump-version-0.7.12` |
+| 1231 | 2026-07-30 | 同步并归档 Shared 连续性 OpenSpec | `8de5f121d` | `bump-version-0.7.12` |
+| 1230 | 2026-07-30 | 恢复 Shared Queue/Fusion 与 Compaction 连续性 | `67da2905e`, `aec470983` | `bump-version-0.7.12` |
+| 1229 | 2026-07-30 | 修复 Shared Session 终态偶发复燃 | `80b764a74` | `bump-version-0.7.12` |
+| 1228 | 2026-07-30 | Shared CLI 接入人工验收通过 | `a8fb1c45c`, `800bc2466` | `bump-version-0.7.12` |
+| 1227 | 2026-07-30 | 统一 Shared CLI 模型与运行时契约 | `800bc2466` | `bump-version-0.7.12` |
+| 1226 | 2026-07-30 | 补全 Shared CLI 创建入口 | `a8fb1c45c` | `bump-version-0.7.12` |
+| 1225 | 2026-07-30 | 补全 Shared CLI 创建与运行时修复设计 | `62e7f668b` | `bump-version-0.7.12` |
+| 1224 | 2026-07-29 | 补齐 Shared Session 三种 CLI 创建校验 | `f951796da` | `bump-version-0.7.12` |
+| 1223 | 2026-07-29 | 修复 Grok 与 OpenCode 双栏模型切换 | `d5dec54a2` | `bump-version-0.7.12` |
+| 1222 | 2026-07-29 | Shared Session 接入 Kimi、Grok 与 OpenCode CLI | `7bde1c4a0` | `bump-version-0.7.12` |
+| 1221 | 2026-07-29 | 精准优化 Shared CLI 菜单显示 | `e6556d9d9` | `bump-version-0.7.12` |
+| 1220 | 2026-07-29 | 默认折叠工作区操作菜单 | `c66bdf9c9`, `9483fc39f` | `bump-version-0.7.12` |
+| 1219 | 2026-07-29 | 融合 CLI 基石与 OpenCode/Grok | `9c0075ab1` | `bump-version-0.7.12` |
+| 1218 | 2026-07-29 | 完善多 CLI 会话目标选择 | `e582d1819` | `feature/v-0710` |
+| 1217 | 2026-07-29 | 修复 Shared Session canonical 历史恢复 | `5ec8dc0de` | `feature/v-0710` |
+| 1216 | 2026-07-29 | 修复 Shared Session 跨 CLI 切换与终态收口 | `994007b31` | `feature/v-0710` |
+| 1215 | 2026-07-29 | 续接会话围挡默认折叠 | `53759006f` | `feature/v-0710` |
+| 1214 | 2026-07-29 | 闭环 Codex CLI 供应商续接 | `d528fc91c` | `feature/v-0710` |
+| 1213 | 2026-07-29 | 优化普通 CLI 供应商续接 | `93ce0a709` | `feature/v-0710` |
+| 1212 | 2026-07-29 | 闭环共享会话多 CLI Provider 基石 | `29bcf6c65`, `6e08a700e`, `94c1795ac` | `feature/v-0710` |
+| 1211 | 2026-07-29 | 聚合 Provider 续接会话家族 | `ea73d6007` | `feature/v-0710` |
+| 1210 | 2026-07-28 | 稳定供应商与模型选择 | `f0c5c5e3a` | `feature/v-0710` |
+| 1209 | 2026-07-28 | 展示 Provider Continuation 来源最后一轮 | `f610a74d7`, `dedcc7894` | `feature/v-0710` |
+| 1208 | 2026-07-28 | 修复 Provider Continuation 幕布头部交互 | `0cb29cdc8`, `7583cadcb` | `feature/v-0710` |
+| 1207 | 2026-07-28 | 校准 Provider 续接稳定性与 Shared 身份展示 | `fa6113bf1` | `feature/v-0710` |
+| 1206 | 2026-07-28 | 补齐多 Provider 切换 UX | `687b951c0` | `feature/v-0710` |
+| 1205 | 2026-07-28 | 校准多 CLI 会话基石 A-D | `b5a2aba34` | `feature/v-0710` |
+| 1204 | 2026-07-28 | 完成并归档 Change D | `c5a1eb838` | `feature/v-0710` |
+| 1203 | 2026-07-28 | 收口续接回归测试格式 | `6b5aa9d63` | `feature/v-0710` |
+| 1202 | 2026-07-28 | 补齐续接来源缺失回归测试 | `1e86de202` | `feature/v-0710` |
+| 1201 | 2026-07-28 | 清退跨供应商原生分叉残留 | `548e61c5f` | `feature/v-0710` |
+| 1200 | 2026-07-28 | 补齐续接降级确认信息 | `5e2dea219` | `feature/v-0710` |
+| 1199 | 2026-07-28 | 完成 Change D 原生供应商续接实现 | `fef31ae23` | `feature/v-0710` |
+| 1198 | 2026-07-28 | Change D 原生历史物化基础 | `17a1d9594` | `feature/v-0710` |
+| 1197 | 2026-07-28 | 建立 Change D 续接契约 | `7ecfcba52` | `feature/v-0710` |
+| 1196 | 2026-07-28 | 归档 Change C 并开放 Change D | `c5cd28958` | `feature/v-0710` |
+| 1195 | 2026-07-28 | 完成 Change C Shared Context Compiler | `bd5208f39` | `feature/v-0710` |
+| 1194 | 2026-07-28 | 收口 Change B 总任务清单 | `c97bcfcf6` | `feature/v-0710` |
+| 1193 | 2026-07-28 | 完成 Change B Execution Target 闭环 | `428ae19d2`, `7974e3d41` | `feature/v-0710` |
+| 1192 | 2026-07-28 | 校准 Change B 发送与恢复语义 | `1b8aac983` | `feature/v-0710` |
+| 1191 | 2026-07-27 | Wave 4 Change B：Execution Target + V2 Send 写路径全量落地 | `fe81e9212` | `feature/v-0710` |
+| 1190 | 2026-07-27 | 调研 Headroom 并将压缩模式契约沉淀进会话基石设计 | `3824f36ae` | `feature/v-0710` |
+| 1189 | 2026-07-27 | 暴露 Shared Projection 动态测试入口 | `85f9c59a3`, `c90c1c939` | `feature/v-0710` |
+| 1188 | 2026-07-27 | 归档 Change A OpenSpec | `83833a540` | `feature/v-0710` |
+| 1187 | 2026-07-27 | 收口 Change A 暗发布链路 | `60d68c6e1` | `feature/v-0710` |
+| 1186 | 2026-07-27 | 明确 Change A 收口路径与 Change B 准入条件 | `e3562c9d5` | `feature/v-0710` |
+| 1185 | 2026-07-27 | 校准 Wave 2-3 Canonical Session | `5c3073f71` | `feature/v-0710` |
+| 1184 | 2026-07-27 | Wave 3 A3：canonical 投影、checkpoint/rebuild、dual-read 与 Gate 3 | `f403ce879` | `feature/v-0710` |
+| 1183 | 2026-07-27 | Wave 2 A2 canonical fact 装配闭环 | `68fcd078b` | `feature/v-0710` |
+| 1182 | 2026-07-27 | 校准 Session Foundation 与 Shared Event Storage | `b743c4f8a` | `feature/v-0710` |
 | 1181 | 2026-07-27 | 多 CLI 会话基石文档链落地 | `189a1281c` | `feature/v-0710` |
 | 1180 | 2026-07-27 | 修复运行时卡顿与模型目录竞态 | `35a72b395` | `feature/v-0710` |
 | 1179 | 2026-07-27 | 完善多 CLI 与多供应商会话架构设计 | `9feb2520e` | `feature/v-0710` |

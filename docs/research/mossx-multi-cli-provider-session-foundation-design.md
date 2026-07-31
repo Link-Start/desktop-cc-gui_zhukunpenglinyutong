@@ -1,8 +1,9 @@
 # mossx 多 CLI × 多 Provider 会话基石设计
 
-> 状态：Architecture Decision Draft  
-> 日期：2026-07-27  
-> 适用范围：Native Session、Shared Session、Provider Runtime、Session Catalog、Sidebar Projection、未来 Plugin / Orchestration  
+> 状态：Architecture Decision Record（持续校准）
+> 初始日期：2026-07-27
+> 最近校准：2026-07-29
+> 适用范围：Native Session、Shared Session、Provider Runtime、Session Catalog、Sidebar Projection、未来 Plugin / Orchestration
 > 核心决策：Native Session 保持原生身份；Shared Session 承担跨 CLI、跨 Provider 的逐 Turn 切换
 
 ---
@@ -35,6 +36,11 @@ Shared Session
 5. Subagent、User Fork、Provider Continuation、Shared Binding 是四种不同关系，不共用一种 Parent/Child 语义。
 6. `parentThreadId` 只表达 Engine/runtime 权威的 Subagent ownership；用户血缘关系使用独立的 Conversation Family contract。
 7. V1 持久化 Conversation Family 血缘，但 Sidebar 仍可先按带标签的顶层 Session 展示；数据模型与 UI Projection 解耦。
+8. Shared Session 使用 Adapter 声明并经 Spike 证明的 authoritative logical terminal evidence；Provider typed final/result 到达时必须立即归一，process exit 仅在它被证明是该 CLI 唯一逻辑终态时可用，stdio、hook、MCP child 与 usage cleanup 不得阻塞 `run.settled`。
+9. Canonical Fact 只能通过统一 Writer 生成 tagged envelope；业务模块不得手工构造另一套 payload serialization。
+10. Shared history recovery 与 Native runtime recovery 分属不同 owner；Shared 不得回退到 Native resume，也不得显示 Native recovery card。
+11. Shared durable identity 固定为 `session UUID`，前端 thread key 固定为 `shared:<UUID>`；标题只属于 presentation metadata。
+12. 旧 canonical row 可以在 Projection decode boundary 做无损兼容，但不得改写 immutable payload 或 checksum。
 
 一句话概括：
 
@@ -450,6 +456,8 @@ Shared Session
 interface ExecutionTarget {
   engine: EngineType;
   providerProfileId?: string;
+  modelCatalogEntryId?: string;
+  /** 传给 CLI/API 的 runtime model；不得写 UI-only catalog id。 */
   model?: string;
   reasoning?: ReasoningSelection;
 }
@@ -465,8 +473,11 @@ interface ExecutionTarget {
 interface TurnExecutionSnapshot {
   engine: EngineType;
   providerProfileId?: string;
+  /** 选择时的 catalog identity；用于 provenance 与 exact pair validation。 */
+  modelCatalogEntryId?: string;
   providerProfileNameSnapshot?: string;
   providerProfileSource?: ProviderProfileSource;
+  /** 该 Attempt 实际执行的 runtime model。 */
   model?: string;
   reasoning?: ReasoningSelection;
   runtimeCapabilityFingerprint?: string;
@@ -477,6 +488,9 @@ interface TurnExecutionSnapshot {
 
 - 每个 Turn Attempt 创建一次后不可变。
 - Provider 显示名保存 Snapshot，避免 Provider 删除后历史不可解释。
+- Model catalog entry identity 与 runtime model 必须分域；immutable Turn fact 同时冻结
+  `modelCatalogEntryId` 与 runtime `model`，用于 provenance 与 exact pair validation；
+  CLI/API actual-send 只消费 runtime `model`。
 - Usage、Error、Retry、Recovery 全部绑定 Snapshot。
 - `nativeSessionId` 属于 `NativeSessionBinding` / `SharedTargetBinding`，不属于 Target Snapshot；Lazy Create 在 Tx 2b 获得 Identity 后只更新 Binding，不 backfill Snapshot。
 - UI 不能用“当前 Picker 值”解释历史 Turn。
@@ -675,7 +689,21 @@ interface ContextPackage {
   portableTurns: PortableTurn[];
   atomicToolExchanges: AtomicToolExchange[];
   artifactRefs: ArtifactRef[];
+  compression: ContextCompressionReport;
   projection: ProjectionManifest;
+}
+
+// 压缩可观测性：为 degraded-context UI 与编译审计提供量化依据
+//（参考 Headroom 的 before/after token 统计；只记录实测值，不引入其反事实估计模型）。
+interface ContextCompressionReport {
+  sourceTokens: number;
+  packageTokens: number;
+  perType: Array<{
+    category: string; // tool-outcome | code | log | image | portable-turn | ...
+    sourceTokens: number;
+    packageTokens: number;
+    strategy: "passthrough" | "deterministic-fold" | "artifact-ref" | "omitted";
+  }>;
 }
 
 interface ProjectionManifest {
@@ -700,6 +728,11 @@ interface ProjectionManifest {
   sourceChecksum: string;
 }
 ```
+
+`packageId` 必须覆盖 compiler version、destination identity、runtime capabilities、
+effective budget、Binding 与 source range/checksum；任一会改变 projection/delivery 语义的
+输入变化都必须产生新 identity。Artifact checksum 绑定 deterministic serialized
+`ContextPackage` payload，读取时重算，不能复用 source checksum 代替 payload integrity。
 
 `AtomicToolExchange` 必须把 tool call 与对应 result 当成不可拆分单元。`ArtifactRef` 指向文件、附件、长 Tool Result 或外部产物；优先传稳定引用，需要时再按权限读取内容。
 
@@ -931,6 +964,33 @@ selectedExecutionTarget
 
 不创建 Binding，不发送消息。
 
+#### 8.1.1 Picker 的产品可达性与加载契约
+
+四级 Target 不能只存在于 domain type，必须在 Shared Composer 中可实际操作：
+
+```text
+打开模型菜单
+  → 显示所有已知 CLI（支持 / 不支持都可解释）
+展开某个 CLI
+  → 显示该 CLI 的 Provider Profiles
+  → 按 engine + providerProfileId 懒加载各自 Model Catalog
+选择 Model
+  → 原子写入 engine + providerProfileId + model
+  → Reasoning 仅在同一 Binding 下保留，否则清空
+```
+
+硬约束：
+
+- 根菜单打开不得预取所有 Provider 的全部 Model；只允许 user-driven、binding-scoped
+  lazy load，并按 `engine + providerProfileId` cache / dedupe。
+- local/disk sentinel 只属于配置查询边界；写入 `ExecutionTarget` 前必须归一为
+  `providerProfileId = null`，避免与 canonical `engine:default` 形成双 Binding。
+- 当前按钮的 Model label 必须从完整 Target 对应 catalog 解析，不能继续读取切换前
+  Engine 的 model list。
+- 已知但未验证 target acceptance 的 CLI 必须显示 disabled reason；禁止静默隐藏，
+  也禁止点击后 fallback 到其他 CLI。
+- Provider catalog 部分失败只影响该 binding；不能清空其他 CLI/Profile 的可用目录。
+
 ### 8.2 Send
 
 ```text
@@ -975,12 +1035,17 @@ Binding B = Codex/OpenAI
 
 - Provider 不存在：阻止发送，保留 Picker 选择并显示 unavailable。
 - Model 不属于 Provider Catalog：阻止发送，不改用默认 Model。
+- Model catalog `id != model` 时，Target 必须同时冻结两种 identity，execution 只使用
+  runtime `model`；backend 在 Target side effect 前 fail closed 校验。
 - Native Binding 恢复失败：显示 recoverable error，允许显式重建 Binding。
 - Turn 失败：保留原 Target Snapshot，不自动重路由。
 - Context compile 失败：不写 `pendingDelivery`，不推进任何 Cursor；以 failed outcome Commit 当前 Attempt，Retry 创建新 Attempt。
 - 投递前失败：清理 `pendingDelivery`，不推进 `accepted`。
 - acceptance ACK 明确成功：推进 `accepted`；后续 Turn 失败也不回退，避免重复 Prompt。
 - acceptance ACK 不确定：保留 `pendingDelivery`，先探测 Native History/run identity，再决定 Retry。
+- Probe 发现与当前 delivery/bootstrapping 对应的结构化 Provider/API rejection 时，强负
+  evidence 必须覆盖 marker、已落盘 user entry、process error 与无关 stderr warning；
+  operation 不得进入 ready。
 - acceptance ACK 不确定期间锁定整个 Shared Session Composer；不得通过切换 Target 绕过线性顺序。
 - Canonical Commit 失败：不推进 `committed`，进入可恢复状态；不得丢弃已接受的 Native Run。
 - 降级 Context：只有用户能看到 fidelity/omissions 时才允许发送，不得假装完成无损同步。
@@ -1157,9 +1222,15 @@ Contract：
 - 输出是 canonical-shaped `ContextSourceEntry`，只用于 `ContextCompiler`；它不是 `SharedCanonicalEntry`，不分配 Shared sequence，也不写 Shared Event Log。
 - Reader 必须保持 source order、stable cursor、source fingerprint、Tool Call/Result pairing 与 provenance；无法保真的内容进入 omissions。
 - Provider Continuation 只接受 `stableCursor = true` 且存在 `currentThroughCursor` 的 Reader。缺少稳定快照边界时 typed unsupported、fail closed；第一阶段不做“边读边增长”或猜测式 materialization。
+- Reader 必须在分配 source-sized buffer 前检查 byte limit；当前实现单文件上限为
+  `64 MiB`，超限返回 typed `source-too-large`。probe/read 与 recovery file scan 在
+  blocking worker 执行，禁止阻塞 async runtime worker。
+- portable projection 使用 allowlist：只允许 text 与完整 Tool Call/Result pair。
+  private reasoning/signature、encrypted/redacted、unknown 与不完整 Tool exchange 进入
+  typed omissions，不得透传 vendor private payload。
 - 系统先以 Probe 得到 `currentThroughCursor`，再按该上界读取。编译完成后、创建目标 Native Session 或发送任何 Context 前，必须先把 normalized entries 与完整 Context Package 写入 Artifact Store（temp file + atomic rename），再在同一 preparation transaction 中 Durable Commit immutable `NativeHistoryMaterialization` refs/checksums；Retry 从 Artifact Ref 重放，不重新读取漂移中的来源。
 - Materialization 后若来源 History 继续增长，不影响本次 Continuation；用户需要更新内容时创建新的 Continuation operation。
-- 来源 Session 删除、权限变化或 Reader 升级不影响已 prepared operation。Artifact 在 Continuation terminal settlement 与 retention window 结束前不得 GC；启动恢复发现 ref 缺失/checksum 不符时进入 explicit recovery error，禁止重读来源后假装是同一 operation。
+- 来源 Session 删除、权限变化或 Reader 升级不影响已 prepared operation。Artifact 在 Continuation terminal settlement 与 retention window 结束前不得 GC；启动恢复发现 ref 缺失/checksum 不符时，若 operation 已触发 target side effect，进入 explicit recovery error，禁止重读来源后假装是同一 operation。仅对 `prepared` 且没有 result Session/target side effect 的旧版本 artifact，允许删除该 prepared record，并用同一 validated request 重新冻结。
 - Reader 不修改 vendor history file，不伪造 Tool ID、Reasoning Signature 或 Runtime ACK。
 - source 不存在、损坏、版本不支持、权限不足必须返回 typed error；不得静默生成“看似完整”的 transcript。
 - `ContextPackage.source.kind = "native-history"` 时，checksum 覆盖 Reader identity、source fingerprint、cursor range 与 normalized entries。
@@ -1226,6 +1297,12 @@ Compatibility Transformer
 14. 目标 CLI 明确接受后推进 `acceptedThroughSequence`，即使 `checkpoint` omit 了部分 Entries 或后续 Run 失败也不回退；遗漏内容只允许按 Manifest progressive retrieval，不进入后续自动 delta。
 15. Terminal Fact 成功 Commit 后推进 `committedThroughSequence`。
 16. ACK 不确定时先探测 Native History/run identity，再决定重试，禁止盲目重复注入。
+
+编译产物还必须满足一条格式不变量（参考 Headroom CacheAligner 的 live-zone 思路）：
+
+> **Context Package 前缀稳定性**：对同一 Conversation、同一目标 Binding 的连续编译，Package 头部（checkpoint 的 Goal / Constraints / Key Decisions 与 deterministic facts）必须保持字节级稳定；新增事实只允许追加到尾部 delta 区，不得重排或改写已稳定前缀。这让目标 CLI 的 Provider Prompt Cache 能跨 Turn 命中，避免每次增量 handoff 都触发全量前缀重算。
+
+`native-delta` 排在原则链首位，除信息保真外还有这层缓存经济学原因；前缀稳定性把它从排序偏好升级为格式约束。
 
 推荐把兼容判断建模成显式结果，而不是一个 boolean：
 
@@ -1309,6 +1386,7 @@ Compact Context Package
 检索结果必须标记为 reference context：
 
 - 不把历史里的 `/stop`、`/compact`、Approval 或其他 control message 当作当前命令；
+- 检索必须由目标 CLI 通过 Host Tool 显式发起（同 Headroom `headroom_retrieve` 的按需取回模型）；ContextCompiler 不得在后续 Package 中自动内联回填 omitted 内容；
 - 保留 source session、entry id、author 与 timestamp；
 - 查询结果受 Workspace/Conversation 权限边界约束；
 - 检索失败不影响 Canonical Log，也不推进 sync cursor。
@@ -1336,6 +1414,18 @@ Compatibility Handoff V0
 - Atomic tool exchange；
 - Artifact retrieval；
 - Projection manifest 与 source checksum。
+
+V1 的方向不是把 4000 字符上限放大，而是换成**分类型确定性压缩**（规则参考 Headroom ContentRouter / SmartCrusher / CodeCompressor，不引入其 ML 压缩模型）：
+
+| 内容类型 | V1 压缩策略 |
+|---|---|
+| Tool outcome（JSON / 数组） | 保留 schema、首尾样本行与 count，折叠中间重复结构 |
+| 代码块 / diff | 保留签名、路径与 hunk header，折叠函数体实现 |
+| 日志 / 命令输出 | 保留 error / warning 行与首尾行，折叠重复行 |
+| 图片 / 附件 | 不内联，只携带 `ArtifactRef` |
+| Portable turns | 保留 user / assistant 语义骨架，裁剪 provider-private block 并显式记录 |
+
+全部为确定性规则压缩，可逆路径由 §9.4 Progressive Retrieval 兜底；任何折叠都必须进入 `ProjectionManifest.omitted` 与 checkpoint 的 `## Omissions`。
 
 ---
 
@@ -1378,6 +1468,21 @@ Available Models
 - Provider Catalog 加载失败后静默显示 local/default；
 - 仅凭 Model ID 反推 Provider；
 - 把 Provider ID 与 API Protocol 混为同一个字段。
+
+### 10.4 Control-plane 信息的 UI 投影边界
+
+`MOSSX_CONTEXT_PACKAGE:*`、`MOSSX_CONTEXT_ACCEPTED:*`、package checksum 与
+native context prompt 是 ACK/recovery 证据，不是用户消息。Renderer 必须使用严格、
+版本化的 classifier 隐藏已知完整 marker；不得用 `includes("MOSSX")` 之类宽泛规则，
+否则会吞掉用户正常讨论协议的内容。
+
+Provider Continuation 的用户投影必须至少包含：
+
+- 可读标题：优先“继续：来源会话标题”，不得把 package hash 当标题。
+- 来源与目标：Engine + Provider snapshot。
+- 来源导航：来源存在时可直接打开；缺失时显示不可用，不跳错 Session。
+- 产品内确认：创建 side effect 前显示来源/目标；degraded 时在同一 domain Dialog
+  展示 mode/token/omissions 后再次确认。禁止 native `alert/window.alert`。
 
 ### 10.3 Credential Resolution
 
@@ -1473,7 +1578,9 @@ bindingsByEngine[engine]
 → bindingsByTarget[key(engine, default-provider)]
 ```
 
-旧 Session 继续按 local/default 语义恢复，不猜测 managed Provider。
+旧 `bindingsByEngine[engine]` 仅在 Binding migration 时映射为该 Engine 的
+local/default Binding；这不构成历史 Turn 的 Provider/Model 证据。Legacy Turn 或
+`selectedTarget` 缺少完整 identity 时继续显示“历史配置未知”，不得伪造成 local。
 
 ### 12.2 Native Session Origin Metadata
 
@@ -1528,9 +1635,11 @@ Shared Session V2
 
 ---
 
-## 十三、当前能力与缺口
+## 十三、实施基线与当前状态
 
-### 13.1 已有资产
+本章的 P0/P1 清单记录 2026-07-27 开工前基线，用于解释 A–D 为什么拆分，不代表 2026-07-29 仍未实现。当前状态以 §13.6 为准。
+
+### 13.1 2026-07-27 已有资产
 
 mossx 已具备：
 
@@ -1550,7 +1659,7 @@ mossx 已具备：
 - Provider Profile unavailable/fail-closed 语义；
 - App-server compatible frontend event contract。
 
-### 13.2 P0 缺口
+### 13.2 2026-07-27 P0 缺口（已由 A–D 与校准任务收口）
 
 - 当前 Shared snapshot 是前端 Presentation Model，不是 authoritative Canonical Log。
 - 缺少可靠的 `conversation.turnCommitted` 与 Run/Turn Assembler。
@@ -1566,7 +1675,7 @@ mossx 已具备：
 - Provider Continuation 缺少独立 Origin 类型与标签。
 - Conversation Family 尚无 authoritative persistence contract。
 
-### 13.3 P1 缺口
+### 13.3 2026-07-27 P1 缺口（已实现或按 capability 明确降级）
 
 - 当前 Context Sync 只有 bounded text delta。
 - 缺少 versioned Context Package 与 Projection Manifest。
@@ -1579,7 +1688,7 @@ mossx 已具备：
 - Runtime Capability 不一致：Codex 已提供 `thread/inject_items`，Claude/Kimi 当前 Adapter 仍只能采用 native resume、transcript/checkpoint。
 - 缺少 Legacy snapshot dual-read 与 fidelity 标记。
 
-### 13.4 P2 缺口
+### 13.4 当前 P2 缺口
 
 - 外部 RPC/SDK。
 - Plugin Agent Hook。
@@ -1600,6 +1709,22 @@ Shared Session V2 采用“保留壳，重建核”：
 | Provider Runtime / Model Catalog 基础 | engine-only owner routing |
 
 不建议在 V0 上继续追加 Provider 字段后直接发布。那会让“多 Provider”建立在不可靠 Canonical History 和错误 Cursor 语义之上，后续迁移成本更高。
+
+### 13.6 2026-07-29 实现校准
+
+A1–A3、B、C、D 的代码与自动化已完成；2026-07-29 又依据真实 Shared Session 回归完成两组修复：
+
+1. 跨 CLI logical terminal 统一由 backend exact-Attempt settlement 收口，并与 Runtime cleanup 分域
+2. Canonical delivery 使用统一 tagged envelope，旧 type-less row 可兼容 Projection
+3. Shared/Native recovery owner 隔离，Shared failure 不再进入 Native recovery card
+4. Shared history identity 固定为 `shared:<UUID>`，标题变化不影响恢复
+
+当前仍保留以下边界：
+
+- Kimi target acceptance 不能证明时 typed unsupported，不伪装成可用
+- Native Provider Continuation 仍需真实 Desktop Provider smoke
+- Event Log Inspector、Conversation Family Sidebar Projection、自动 Context policy 与 Plugin/Orchestration 属于后续阶段
+- legacy type-less compatibility 是只读 decode 策略，不代表允许新 writer 继续生成无 tag payload
 
 ---
 
@@ -1846,6 +1971,40 @@ Tx 5
   advance committedThroughSequence
   clear pendingDelivery
 ```
+
+#### 14.2.2.1 Logical Settlement 与 Runtime Cleanup 必须分离
+
+`run.settled` 表达的是 Agent 业务回合已经产生最终结果，不等于 CLI process、hook、
+MCP child、stdout/stderr pipe 或 usage probe 已清理完成。Adapter 必须把两类时刻分开：
+
+```text
+provider typed final/result
+  → logical run.settled
+  → Shared Attempt assembler + canonical commit
+  → Composer idle
+
+process exit / pipe EOF / stderr drain / post-turn usage
+  → runtime cleanup / supplemental usage
+  → 不得重新打开或延迟已 settled 的 Shared Attempt
+```
+
+硬约束：
+
+1. Shared-owned Runtime 收到 Provider 明确的 typed final/result 后，必须立即形成
+   Attempt-owned terminal evidence；不得等待仅用于清理的 process exit、stdio EOF、
+   hook/MCP descendant 退出或 usage grace。
+2. 同一个 Adapter 可以为 Native Session 保留既有 cleanup 后 `TurnCompleted` 行为；
+   Shared coordinator 对 typed final 的提升只作用于已验证 owner 的 Shared Attempt，
+   禁止改写普通单一 Session 的生命周期。
+3. cleanup 后迟到的 `TurnCompleted`、usage 或 duplicate final 必须按
+   `attemptId + runtimeTurnId` 幂等吸收，不能生成第二个 `run.settled`、第二次
+   `conversation.turnCommitted` 或重复 Assistant Final。
+4. 只有 Provider typed final/result 才能提前 settlement。正文 delta、reasoning、
+   process spawn、stdin write、first token、提示音或“进程仍存活/已退出”都不是
+   terminal authority。
+5. 新增 CLI Adapter 时必须在 capability contract 中分别声明
+   `logicalTerminalEvidence` 与 `cleanupCompletionEvidence`；若二者来自同一事件可以合并，
+   若不同则 Shared 控制流只等待前者，cleanup 独立收尾。
 
 事务规则：
 
@@ -2216,6 +2375,44 @@ Artifact：
 - Artifact 写入必须先落临时文件并原子 rename，再允许 Canonical Fact 引用。
 - 缺失 Artifact 不删除 Fact；标记 unavailable/corrupt。
 
+#### 14.4.4.1 Canonical envelope 只有一个序列化权威
+
+`shared_event_log.fact_type` 与 `payload_json.type` 表达同一个 Canonical Fact discriminator，但承担不同职责：
+
+| 字段 | 职责 | 约束 |
+|---|---|---|
+| `fact_type` | SQLite index、幂等键、兼容 decode discriminator | 必须由 typed fact 派生，业务调用方不得单独指定另一种类型 |
+| `payload_json.type` | tagged enum decode 与跨层 payload contract | 新写入必须存在，并与 `fact_type` 完全一致 |
+| `payload_checksum` | immutable payload 完整性 | checksum 对应已落盘 payload；兼容读取不得改写 |
+
+所有新 Fact 必须通过 `SharedEventWriter::append_canonical_fact*` 系列入口写入。需要同时更新 Binding state 时，也必须调用 Writer 提供的原子组合入口。业务模块不得手工构造 `NewCanonicalEvent`、删除 tagged `type`，或复制一套 event id、schema version、attempt identity 与 serialization 规则。
+
+这条边界的原因不是减少重复代码，而是保证四个属性同时成立：
+
+1. typed fact 与 durable row 使用同一个 discriminator
+2. Event 与 Binding state 保持同一 SQLite transaction
+3. event id、attempt id 与 logical turn id 使用统一推导规则
+4. 新 CLI、新 Fact 或 schema version 不会绕开 canonical validator
+
+旧版本可能已经写入缺少 `payload_json.type` 的 row。Projection 允许在 decode boundary 做以下兼容：
+
+```text
+payload 是 JSON object
+  ├─ 已有 type：必须与 row.fact_type 相等
+  └─ 缺少 type：仅在内存副本中注入 row.fact_type，再做 typed decode
+
+payload 非 object，或 embedded type 与 row.fact_type 冲突
+  └─ typed projection error，fail closed
+```
+
+兼容读取不得更新旧 row、重算 checksum 或伪造 migration completion。`fact_type` 与 payload/checksum 同属 immutable row，适合作为缺失 tag 的 decode discriminator；它不能覆盖显式冲突。
+
+Projection error 与合法空会话是两个状态：
+
+- 成功返回空 Projection：表示新建但尚无消息的 Shared Session，可以标记 history loaded
+- Projection error 且 Legacy snapshot 非空：允许降级显示 Legacy presentation，并保留诊断
+- Projection error 且 Legacy snapshot 为空：必须传播错误并保持可重试，不能伪装成“历史为空”
+
 #### 14.4.5 Security 与 Privacy
 
 - DB 文件权限使用 `0600`，父目录使用 `0700`；Windows 使用等价 ACL。
@@ -2271,6 +2468,36 @@ Legacy：
 - Import 完成写 `shared_legacy_import.status = completed`。
 - Legacy 文件继续只读保留，直到用户显式清理。
 
+#### 14.4.7.1 Shared history recovery ownership 与稳定身份
+
+Shared history loader 只能使用两类来源：
+
+```text
+Canonical Shared Projection
+  → Legacy Shared presentation snapshot（仅在存在可展示内容时降级）
+```
+
+它不得继续调用 Claude/Codex/Kimi Native history resume RPC，也不得读取 Hidden Binding 的 vendor history 来“补” Shared Canvas。Native Session 的 runtime reconnect、rebind/fork recovery 与对应恢复卡片只服务 Native thread。
+
+Shared loader 失败时：
+
+- 保持 `loaded = false`，让后续选择或显式刷新可以重试
+- 记录 Shared projection diagnostic
+- 不写入 Native automatic-recovery failure scope
+- 不生成 Native recovery card，也不提供会操作 Native Session 的恢复按钮
+
+隐藏卡片只能修正 presentation，不能修复 recovery ownership。实现必须同时阻止 Shared thread 进入 Native recovery state。
+
+Shared identity 使用以下稳定映射：
+
+```text
+durable session id = UUID
+frontend thread id = shared:<UUID>
+title = presentation metadata
+```
+
+创建、改名、首条消息推导标题、Sidebar 排序或标题重复都不得改变 durable lookup key、Projection checkpoint key、loader cache scope 或 recovery scope。禁止按标题、更新时间或当前 Picker 反推 Shared Session identity。
+
 #### 14.4.8 Acceptance Tests
 
 - SQLite transaction 任意语句失败时，Event、Sequence、Cursor 全部回滚。
@@ -2281,6 +2508,11 @@ Legacy：
 - WAL 增长可观测；长时间 reader 不导致无界增长而无诊断。
 - Legacy Import 重复运行结果一致。
 - Artifact rename 前 crash 不产生悬空可用引用；rename 后 Event Commit 失败可被 GC 识别。
+- 新写入 Canonical Fact 的 `payload_json.type` 与 row `fact_type` 一致。
+- 旧 type-less object payload 可重建；显式 type 冲突和非 object payload 必须 fail closed。
+- Projection error + 空 Legacy 不得返回成功空历史；合法空 Projection 必须正常完成加载。
+- Shared history failure 不得调用 Native resume，不得写 Native recovery scope，也不得显示 Native recovery card。
+- Shared title 更新前后，loader 与 Projection 始终使用同一个 `shared:<UUID>`。
 
 ### 14.5 Shared Session UI 状态机
 
@@ -2345,7 +2577,7 @@ Cancel intent 不单独持久化；App 在 `CancelPending` 崩溃后由 `pending
 | `cancel-pending` | “正在确认取消结果” + pending phase | 锁定 | 锁定 | Probe；不展示普通 Retry |
 | `running` | Assistant Placeholder 固定显示 Active Target | V1 锁定 | Stop/Steer 按 capability | Stop |
 | `settling` | “正在保存结果” | 锁定 | 锁定 | 无；短时状态 |
-| `recovery-required` | 恢复卡片：Pending phase、Target、last probe | 锁定 | 锁定 | Probe、查看 Native Session、显式重建 |
+| `recovery-required` | Shared 状态条：Pending phase、Target、last probe | 锁定 | 锁定 | Probe、查看技术详情、显式重建当前 Binding |
 | `target-unavailable` | Provider/Runtime unavailable 原因 | 可更换 | Send disabled | 修复配置、选择其他 Target |
 
 第一阶段 Picker 在非 Idle 状态锁定。后续若需要“运行中预选 Next Target”，必须增加独立 Queue contract，不能让一个 Picker 同时表示 Active 与 Next。
@@ -2843,6 +3075,8 @@ S3: spike-kimi-acp-session-lifecycle
 - Two-phase Cursor / Pending Delivery
 - Binding Provisioning Probe
 - Checkpoint/Compaction
+- Context Package 前缀稳定性与分类型确定性压缩（§9.2 / §9.5，模式参考 Headroom，不引入其 proxy/wrap 与 ML 模型）
+- `ContextCompressionReport` 压缩实测指标（§5.6）
 
 ### 后续 Change D：add-native-provider-continuation
 
@@ -2944,6 +3178,7 @@ OpenSpec 验收不得只检查字段存在。必须同时验证：
 | Canonical Entry 原生属于目标 Binding | 从 `native-delta` 排除，不重复注入 |
 | Provider Continuation 读取 Native 来源 | `NativeHistoryReader` 只读输出 canonical-shaped entries，不写 Shared Log |
 | checkpoint ACK 后再切回目标 | omitted Entries 不自动补发；仅按 `retrievableRef` 检索 |
+| 同一 Binding 连续 handoff | Package 前缀字节级稳定，仅尾部追加 delta；分类型折叠全部计入 `omitted` |
 | 目标需要被省略细节 | 通过 retrievable ref 按需读取 |
 | Codex 支持 `thread/inject_items` | Capability probe 后使用 `native-history-import`，JSON-RPC success 才推进 Context accepted |
 | Codex 版本不支持 Import | 自动降级为 transcript/checkpoint，并在 Manifest 记录原因 |
@@ -2968,6 +3203,10 @@ OpenSpec 验收不得只检查字段存在。必须同时验证：
 | Legacy snapshot 打开 | 以 presentation-only fidelity 读取，不伪造缺失协议事实 |
 | SQLite Projection 被删除 | 从 Event Log 重建，不读取 frontend snapshot 反向修复 |
 | SQLite Integrity 失败 | 进入 read-only recovery，不创建空库覆盖 |
+| Canonical row 缺少 payload type | 仅在 decode 内存副本中使用 row `fact_type` 补齐；不改写 row/checksum |
+| Canonical row type 冲突 | Projection fail closed，不用 Legacy empty 伪装成功 |
+| Shared Projection 加载失败 | 保持可重试，不调用 Native resume，不显示 Native recovery card |
+| Shared 首条消息更新标题 | thread key、checkpoint 与 recovery scope 仍为同一 `shared:<UUID>` |
 
 ### 17.5 Source × Target 实施前验收矩阵
 
@@ -3019,6 +3258,9 @@ Codex / Provider A
 | Shared Live | delta → terminal commit | Live Text 平滑收束，只有一个 Assistant Final |
 | Shared Target Switch | Claude → Codex → Claude | 幕布不 remount；既有 item 不重建或闪烁 |
 | Shared Projection | 删除 cache 后 rebuild | item count/order/type/checksum 一致 |
+| Shared Projection | 旧 type-less delivery row 后继续包含 requested/committed facts | 完整 user/assistant items 可重建；冲突类型拒绝读取 |
+| Shared History | 成功空 Projection / Projection error + 空 Legacy | 前者正常 loaded；后者保持 retryable error，不进入 Native recovery |
+| Shared Identity | 首条消息改名、手动改名、重复标题 | 始终按 `shared:<UUID>` 恢复同一幕布历史 |
 | Shared Background | Binding 运行、幕布关闭 | 无持续 Canvas/AppShell render storm |
 | Sidebar | Shared 创建/恢复 Hidden Binding | 始终一个 Shared Row，不出现 Native Child |
 | Legacy Shared | dual-read 后继续 | 不重写旧 snapshot；新 Turn 按 V2 边界追加 |
@@ -3092,6 +3334,22 @@ Codex / Provider A
 38. `native-delta` 必须排除目标 Binding 原生拥有的 Entries；Cursor 不能替代 provenance/attempt-to-binding ownership 判断。
 39. checkpoint ACK 后遗漏内容不得通过回退 Cursor 自动重放；只能按 `ProjectionManifest.omitted` 的 retrieval contract 获取。
 40. Shared Session 保持 strictly linear；第一阶段不得从历史 Turn fork，也不得在 ambiguous ACK 未决时放行其他 Target。
+41. Model catalog entry `id` 与 CLI/API runtime `model` 必须分域；UI-only id 不得越过
+    Execution Target boundary 进入 runtime。
+42. 与当前 delivery/bootstrapping 绑定的 structured Provider/API rejection 是强负
+    evidence；不得被 prompt/marker persistence 或 warning 覆盖为 ACK success。
+43. Provider typed final/result 与 CLI process cleanup 必须分域；Shared Attempt 必须由
+    前者立即 settle，后者只能补充 cleanup/usage，不能延迟或复活 Composer。
+44. Canonical Fact 新写入必须通过统一 Writer 生成完整 tagged envelope；业务模块不得手工删除
+    `payload_json.type` 或维护第二套 serialization authority。
+45. 旧 type-less Canonical row 只允许在 Projection decode boundary 使用 row
+    `fact_type` 补齐；显式冲突必须 fail closed，兼容读取不得改写 payload/checksum。
+46. Shared history recovery 不得调用 Native resume/rebind/fork，也不得写入 Native recovery
+    scope 或显示 Native recovery card。
+47. 成功空 Shared Projection 与 Projection error 必须分开表达；Legacy 为空不能把错误伪装成
+    正常空历史。
+48. Shared durable identity 只能来自 session UUID；标题、排序时间、当前 Target 与 Provider
+    label 都不得参与 storage lookup、Projection checkpoint、cache 或 recovery key。
 
 ---
 
@@ -3185,3 +3443,4 @@ User Fork / Provider Continuation
 - [LangGraph: Handoffs](https://docs.langchain.com/oss/python/langchain/multi-agent/handoffs)
 - [AutoGen: Model Context](https://microsoft.github.io/autogen/stable/reference/python/autogen_core.model_context.html)
 - [Anthropic: How we built our multi-agent research system](https://www.anthropic.com/engineering/multi-agent-research-system)
+- [Headroom: context compression layer for AI agents](https://github.com/headroomlabs-ai/headroom)（CCR 可逆压缩、CacheAligner 前缀稳定、ContentRouter 分类型压缩的模式参考；不引入其 proxy/wrap 部署形态与 ML 压缩模型）

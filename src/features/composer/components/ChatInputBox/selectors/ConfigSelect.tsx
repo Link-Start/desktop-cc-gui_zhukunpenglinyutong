@@ -16,7 +16,7 @@ import { formatRateLimitWindowLabel } from '../../../../../utils/rateLimitLabels
 
 interface ConfigSelectProps {
   currentProvider: string;
-  onProviderChange: (providerId: string) => void;
+  onProviderChange?: (providerId: string) => void;
   providerAvailability?: Partial<Record<ProviderId, boolean>>;
   providerVersions?: Partial<Record<ProviderId, string | null>>;
   alwaysThinkingEnabled?: boolean;

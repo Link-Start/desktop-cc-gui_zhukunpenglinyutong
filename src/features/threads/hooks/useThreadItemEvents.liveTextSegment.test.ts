@@ -7,10 +7,11 @@
 // 后续正文改落新的 assistant item——若不在分段前把通道尾段灌回，本段正文会被
 // 下一段的首 delta 顶掉而永久丢失，界面表现为「整轮正文挤成一坨排在所有工具之前」。
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildConversationItem } from "../../../utils/threadItems";
 import {
   getLiveAssistantTextSnapshot,
+  LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS,
   resetLiveAssistantTextChannelForTests,
 } from "../utils/liveAssistantTextChannel";
 import { useThreadItemEvents } from "./useThreadItemEvents";
@@ -67,6 +68,11 @@ describe("useThreadItemEvents live-text segmentation", () => {
       id: "tool-1",
       kind: "tool",
     } as unknown as ReturnType<typeof buildConversationItem>);
+  });
+
+  afterEach(() => {
+    resetLiveAssistantTextChannelForTests();
+    vi.useRealTimers();
   });
 
   it("drains the live-text tail into the current segment before a tool boundary", () => {
@@ -151,6 +157,7 @@ describe("useThreadItemEvents live-text segmentation", () => {
   });
 
   it("keeps growing agent snapshots in the row-local channel after the shell", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     const { result, dispatch } = makeHook();
 
     act(() => {
@@ -169,6 +176,10 @@ describe("useThreadItemEvents live-text segmentation", () => {
     expect(agentDeltaCalls(dispatch).map((action) => action.delta)).toEqual([
       "第一段",
     ]);
+    expect(getLiveAssistantTextSnapshot(THREAD_ID)?.text).toBe("第一段");
+    act(() => {
+      vi.advanceTimersByTime(LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS);
+    });
     expect(getLiveAssistantTextSnapshot(THREAD_ID)?.text).toBe(
       "第一段\n第二段",
     );

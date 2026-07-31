@@ -256,7 +256,7 @@ fn build_reasoning_config(effort: Option<&str>) -> Value {
     })
 }
 
-fn extract_error_message_from_response(value: &Value) -> Option<String> {
+pub(crate) fn extract_error_message_from_response(value: &Value) -> Option<String> {
     value
         .get("error")
         .and_then(|error| {
@@ -291,6 +291,9 @@ pub(crate) async fn thread_compact_core(
     }
     let session_key = session_key_for_provider(&workspace_id, provider_profile_id.as_deref());
     let session = get_session_clone(sessions, &session_key).await?;
+    session
+        .try_reserve_codex_manual_compaction(&normalized_thread_id)
+        .await?;
 
     let mut attempts = Vec::new();
     for method in THREAD_COMPACTION_METHOD_CANDIDATES {
@@ -312,6 +315,9 @@ pub(crate) async fn thread_compact_core(
         }
     }
 
+    session
+        .release_codex_compaction_reservation(&normalized_thread_id)
+        .await;
     Err(format!(
         "all compaction methods failed for thread {}: {}",
         normalized_thread_id,
@@ -326,6 +332,21 @@ fn is_collaboration_mode_capability_error(value: &Value) -> bool {
     message.contains("turn/start.collaborationmode")
         && message.contains("experimentalapi")
         && message.contains("capability")
+}
+
+fn is_method_not_found_response(value: &Value) -> bool {
+    value
+        .pointer("/error/code")
+        .and_then(Value::as_i64)
+        .is_some_and(|code| code == -32601)
+        || value
+            .pointer("/error/message")
+            .and_then(Value::as_str)
+            .is_some_and(|message| {
+                let normalized = message.to_ascii_lowercase();
+                normalized.contains("method not found")
+                    || normalized.contains("unsupported server request")
+            })
 }
 
 fn is_thread_not_found_error_message(message: &str) -> bool {
@@ -816,6 +837,29 @@ pub(crate) async fn archive_thread_best_effort_core(
     Ok(response)
 }
 
+fn attach_codex_dispatch_receipt(
+    mut response: Value,
+    provider_profile_id: Option<&str>,
+    provider_runtime_key: &str,
+    model: Option<&str>,
+    reasoning_effort: Option<&str>,
+) -> Value {
+    if let Some(root) = response.as_object_mut() {
+        root.insert(
+            "mossxDispatchReceipt".to_string(),
+            json!({
+                "engine": "codex",
+                "providerProfileId": provider_profile_id,
+                "providerProfileSource": if provider_profile_id.is_some() { "managed" } else { "local" },
+                "providerRuntimeKey": provider_runtime_key,
+                "model": model,
+                "reasoningEffort": reasoning_effort,
+            }),
+        );
+    }
+    response
+}
+
 pub(crate) async fn send_user_message_core(
     sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
     workspace_id: String,
@@ -944,6 +988,10 @@ pub(crate) async fn send_user_message_core(
         params.insert("preferredLanguage".to_string(), json!(language));
     }
     let timeout_duration = session.initial_turn_start_timeout();
+    // Close the auto-compaction race before the first runtime side effect. If
+    // compaction already owns this native thread, preserve the original prompt
+    // and wait; otherwise this reservation prevents compaction from replacing it.
+    session.reserve_codex_user_dispatch(&thread_id).await?;
     session
         .note_codex_turn_start_pending(&thread_id, timeout_duration)
         .await;
@@ -1017,7 +1065,23 @@ pub(crate) async fn send_user_message_core(
                 )
                 .await
                 {
-                    Ok(retry_response) => return Ok(retry_response),
+                    Ok(retry_response) => {
+                        if extract_error_message_from_response(&retry_response).is_some() {
+                            session
+                                .clear_codex_foreground_work(Some(&thread_id), None)
+                                .await;
+                            session
+                                .release_codex_user_dispatch_reservation(&thread_id)
+                                .await;
+                        }
+                        return Ok(attach_codex_dispatch_receipt(
+                            retry_response,
+                            provider_profile_id.as_deref(),
+                            &session_key,
+                            model.as_deref(),
+                            effort.as_deref(),
+                        ));
+                    }
                     Err(retry_error) => {
                         log::warn!(
                             "[turn/start][thread_resume_retry] workspace_id={} thread_id={} outcome=failed error={}",
@@ -1031,6 +1095,9 @@ pub(crate) async fn send_user_message_core(
                     }
                 }
             }
+            session
+                .release_codex_user_dispatch_reservation(&thread_id)
+                .await;
             return Err(if error == "request timed out" {
                 build_first_packet_timeout_error(timeout_duration)
             } else {
@@ -1057,35 +1124,202 @@ pub(crate) async fn send_user_message_core(
         session
             .start_codex_turn_timing(&thread_id, crate::backend::app_server::now_millis())
             .await;
-        let fallback_response = session
+        let fallback_response = match session
             .send_request("turn/start", Value::Object(params))
-            .await?;
+            .await
+        {
+            Ok(response) => response,
+            Err(error) => {
+                session
+                    .release_codex_user_dispatch_reservation(&thread_id)
+                    .await;
+                return Err(error);
+            }
+        };
         session
             .record_codex_turn_start_response(&thread_id, crate::backend::app_server::now_millis())
             .await;
-        if fallback_response.get("error").is_some() {
+        if extract_error_message_from_response(&fallback_response).is_some() {
             session
                 .clear_codex_foreground_work(Some(&thread_id), None)
                 .await;
+            session
+                .release_codex_user_dispatch_reservation(&thread_id)
+                .await;
         }
-        return Ok(fallback_response);
+        return Ok(attach_codex_dispatch_receipt(
+            fallback_response,
+            provider_profile_id.as_deref(),
+            &session_key,
+            model.as_deref(),
+            effort.as_deref(),
+        ));
     }
-    Ok(response)
+    if extract_error_message_from_response(&response).is_some() {
+        session
+            .release_codex_user_dispatch_reservation(&thread_id)
+            .await;
+    }
+    Ok(attach_codex_dispatch_receipt(
+        response,
+        provider_profile_id.as_deref(),
+        &session_key,
+        model.as_deref(),
+        effort.as_deref(),
+    ))
+}
+
+/// Change C：向已建立的 Codex thread 注入 Responses API history items。
+///
+/// `thread/inject_items` 不去重；调用方必须先用 durable pendingDelivery 保证同一
+/// package 只调用一次。只有 JSON-RPC success 才返回 Ok，error response 显式拒绝。
+pub(crate) async fn inject_thread_items_core(
+    sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
+    workspace_id: &str,
+    provider_profile_id: Option<&str>,
+    thread_id: &str,
+    items: Vec<Value>,
+) -> Result<Value, String> {
+    if thread_id.trim().is_empty() {
+        return Err("context import missing Codex thread identity".to_string());
+    }
+    if items.is_empty() {
+        return Ok(json!({ "skipped": true, "reason": "empty-package" }));
+    }
+    let session_key = session_key_for_provider(workspace_id, provider_profile_id);
+    let session = get_session_clone(sessions, &session_key).await?;
+    let response = session
+        .send_request(
+            "thread/inject_items",
+            json!({ "threadId": thread_id, "items": items }),
+        )
+        .await?;
+    classify_context_import_response(response)
+}
+
+/// 无副作用探测 `thread/inject_items` 是否存在。
+///
+/// 使用必然无效的 thread id 与空 items；除 method-not-found 外的 JSON-RPC
+/// response 都证明 method 已注册。调用发生在目标 Thread 创建之前。
+pub(crate) async fn probe_thread_inject_items_core(
+    sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
+    workspace_id: &str,
+    provider_profile_id: Option<&str>,
+) -> Result<bool, String> {
+    let session_key = session_key_for_provider(workspace_id, provider_profile_id);
+    let session = get_session_clone(sessions, &session_key).await?;
+    let response = session
+        .send_request(
+            "thread/inject_items",
+            json!({
+                "threadId": "mossx-capability-probe-no-thread",
+                "items": [],
+            }),
+        )
+        .await?;
+    Ok(!is_method_not_found_response(&response))
+}
+
+fn classify_context_import_response(response: Value) -> Result<Value, String> {
+    if let Some(error) = response.get("error").filter(|value| !value.is_null()) {
+        return Err(format!("context-import-rejected: {error}"));
+    }
+    Ok(response.get("result").cloned().unwrap_or(response))
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        build_reasoning_config, build_writable_roots, ensure_collaboration_mode_defaults,
-        extract_parent_thread_id_from_response, extract_thread_id_from_response,
-        inject_code_mode_fallback_prompt, inject_plan_mode_fallback_prompt,
-        is_collaboration_mode_capability_error, is_thread_not_found_error_message,
+        attach_codex_dispatch_receipt, build_reasoning_config, build_writable_roots,
+        ensure_collaboration_mode_defaults, extract_parent_thread_id_from_response,
+        extract_thread_id_from_response, inject_code_mode_fallback_prompt,
+        inject_plan_mode_fallback_prompt, is_collaboration_mode_capability_error,
+        is_method_not_found_response, is_thread_not_found_error_message,
         is_thread_not_found_response, is_thread_resume_rollout_pending_error_message,
         normalize_custom_spec_root, normalize_preferred_language, resolve_execution_policy,
         should_soft_ready_for_not_ready_reason, validate_thread_resume_ready_response,
         validate_thread_start_response, INVALID_THREAD_START_RESPONSE_ERROR_PREFIX,
     };
     use serde_json::{json, Value};
+
+    #[test]
+    fn codex_dispatch_receipt_records_the_provider_scoped_request() {
+        let response = attach_codex_dispatch_receipt(
+            json!({ "result": { "turn": { "id": "turn-1" } } }),
+            Some("provider-kimi"),
+            "workspace::provider-kimi",
+            Some("kimi-for-coding"),
+            Some("high"),
+        );
+
+        assert_eq!(response["mossxDispatchReceipt"]["engine"], "codex");
+        assert_eq!(
+            response["mossxDispatchReceipt"]["providerProfileId"],
+            "provider-kimi"
+        );
+        assert_eq!(
+            response["mossxDispatchReceipt"]["providerRuntimeKey"],
+            "workspace::provider-kimi"
+        );
+        assert_eq!(
+            response["mossxDispatchReceipt"]["providerProfileSource"],
+            "managed"
+        );
+        assert_eq!(response["mossxDispatchReceipt"]["model"], "kimi-for-coding");
+        assert_eq!(response["mossxDispatchReceipt"]["reasoningEffort"], "high");
+    }
+
+    #[test]
+    fn codex_dispatch_receipt_records_local_runtime_identity() {
+        let response = attach_codex_dispatch_receipt(
+            json!({ "result": { "turn": { "id": "turn-local" } } }),
+            None,
+            "workspace-local",
+            Some("gpt-5.3-codex-spark"),
+            None,
+        );
+
+        assert!(response["mossxDispatchReceipt"]["providerProfileId"].is_null());
+        assert_eq!(
+            response["mossxDispatchReceipt"]["providerProfileSource"],
+            "local"
+        );
+        assert_eq!(
+            response["mossxDispatchReceipt"]["providerRuntimeKey"],
+            "workspace-local"
+        );
+        assert_eq!(
+            response["mossxDispatchReceipt"]["model"],
+            "gpt-5.3-codex-spark"
+        );
+        assert!(response["mossxDispatchReceipt"]["reasoningEffort"].is_null());
+    }
+
+    #[test]
+    fn context_import_requires_jsonrpc_success() {
+        assert_eq!(
+            super::classify_context_import_response(json!({"result": {}})).expect("success"),
+            json!({})
+        );
+        assert!(super::classify_context_import_response(json!({
+            "error": {"code": -32601, "message": "unsupported"}
+        }))
+        .expect_err("explicit rejection")
+        .contains("context-import-rejected"));
+    }
+
+    #[test]
+    fn import_method_probe_only_rejects_method_not_found() {
+        assert!(is_method_not_found_response(&json!({
+            "error": {"code": -32601, "message": "Method not found"}
+        })));
+        assert!(is_method_not_found_response(&json!({
+            "error": {"message": "Unsupported server request: thread/inject_items"}
+        })));
+        assert!(!is_method_not_found_response(&json!({
+            "error": {"code": -32602, "message": "invalid thread id"}
+        })));
+    }
 
     #[test]
     fn normalize_preferred_language_maps_supported_values() {
@@ -1496,7 +1730,16 @@ pub(crate) async fn model_list_core(
     sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
     workspace_id: String,
 ) -> Result<Value, String> {
-    let session = get_session_clone(sessions, &legacy_codex_runtime_key(&workspace_id)).await?;
+    model_list_for_provider_core(sessions, workspace_id, None).await
+}
+
+pub(crate) async fn model_list_for_provider_core(
+    sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
+    workspace_id: String,
+    provider_profile_id: Option<String>,
+) -> Result<Value, String> {
+    let session_key = session_key_for_provider(&workspace_id, provider_profile_id.as_deref());
+    let session = get_session_clone(sessions, &session_key).await?;
     session.send_request("model/list", json!({})).await
 }
 
@@ -1704,10 +1947,21 @@ pub(crate) async fn skills_list_core(
 pub(crate) async fn respond_to_server_request_core(
     sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
     workspace_id: String,
+    provider_profile_id: Option<String>,
     request_id: Value,
     result: Value,
 ) -> Result<(), String> {
-    let session = get_session_clone(sessions, &workspace_id).await?;
+    let session_key = session_key_for_provider(&workspace_id, provider_profile_id.as_deref());
+    respond_to_server_request_for_runtime_core(sessions, session_key, request_id, result).await
+}
+
+pub(crate) async fn respond_to_server_request_for_runtime_core(
+    sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
+    provider_runtime_key: String,
+    request_id: Value,
+    result: Value,
+) -> Result<(), String> {
+    let session = get_session_clone(sessions, provider_runtime_key.trim()).await?;
     if let Some(local_request_id) = request_id.as_str() {
         if session
             .consume_local_user_input_request(local_request_id)

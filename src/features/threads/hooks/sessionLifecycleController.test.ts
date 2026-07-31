@@ -56,7 +56,7 @@ describe("sessionLifecycleController", () => {
       providerBindingFromSelectedProfile(null, "__disk__"),
     ).toMatchObject({
       providerProfileId: "__disk__",
-      providerProfileName: "codex-tui/default-config",
+      providerProfileName: "本地配置",
       providerProfileSource: "disk",
       providerAvailability: "available",
     });
