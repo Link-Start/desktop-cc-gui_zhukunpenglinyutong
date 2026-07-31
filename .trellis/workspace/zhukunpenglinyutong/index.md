@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 71
+- **Total Sessions**: 72
 - **Last Active**: 2026-07-31
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~972 | Active |
+| `journal-2.md` | ~1005 | Active |
 | `journal-1.md` | ~1997 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 72 | 2026-07-31 | 修复 mac-arm64 构建 TS2367 | `3e2c60863` | `chore/bump-version-0.7.12` |
 | 71 | 2026-07-31 | 完善模型选择器渠道切换与自定义模型弹窗 | `2f6ffb247` | `chore/bump-version-0.7.12` |
 | 70 | 2026-07-31 | Grok 图片输入与 Claude 模型目录 | `78a09bb6a3b2c73b173b7b856b92280cc1bc2e19` | `chore/bump-version-0.7.12` |
 | 69 | 2026-07-30 | 重做供应商设置面板并支持 CC Switch 文件导入 | `d7a657f5a` | `chore/bump-version-0.7.12` |
