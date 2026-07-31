@@ -391,6 +391,11 @@ export const ModelSelect = memo(({
     Partial<Record<ProviderId, string>>
   >({});
 
+  // 切会话 / 目标渠道变化时丢弃底栏预览覆盖，避免仍显示上一会话的 DeepSeek 等旧渠道名
+  useEffect(() => {
+    setProfileOverrides({});
+  }, [executionTarget?.engine, executionTarget?.providerProfileId]);
+
   // Keep label/icon mapping in sync when the active provider rewrites
   // claude-model-mapping (same-tab custom event + cross-tab storage).
   useEffect(() => {
@@ -442,13 +447,35 @@ export const ModelSelect = memo(({
             reloading: profile.reloadingConfig ?? profile.loading,
             error: profile.error,
           }));
+        const matchedProfile = profiles.find(
+          (profile) => profile.id === activeProfileId,
+        );
+        // 切到老会话时 catalog 可能尚未含该 id：用 executionTarget 快照补 label，
+        // 禁止静默回退 profiles[0]（常见为 DeepSeek 等列表第一项）。
+        const snapshotLabel =
+          group.providerId === executionTarget?.engine
+            ? executionTarget?.providerProfileNameSnapshot?.trim() || null
+            : null;
         const activeProfile =
-          profiles.find((profile) => profile.id === activeProfileId) ??
-          profiles[0];
+          matchedProfile ??
+          (activeProfileId
+            ? {
+                id: activeProfileId,
+                label: snapshotLabel || activeProfileId,
+                source: "managed" as const,
+                models: [],
+                loading: true,
+                reloading: true,
+                error: null,
+              }
+            : profiles.find((profile) => profile.source === "disk") ??
+              profiles[0]);
         return {
           providerId: group.providerId,
           providerLabel: group.providerLabel,
-          models: activeProfile?.models ?? [],
+          models:
+            matchedProfile?.models ??
+            (activeProfile?.models?.length ? activeProfile.models : []),
           enabled: group.enabled && Boolean(activeProfile),
           disabledReason: group.disabledReason,
           loading: activeProfile?.loading ?? false,

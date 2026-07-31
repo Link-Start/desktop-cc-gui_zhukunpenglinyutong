@@ -8,6 +8,11 @@ import {
   discardPreparedNativeProviderContinuation,
   getOpenCodeProviderHealth,
   prepareNativeProviderContinuation,
+  switchClaudeProvider,
+  switchCodexProvider,
+  switchGrokProvider,
+  switchKimiProvider,
+  switchOpenCodeProvider,
 } from "../../../services/tauri";
 import { pushGlobalRuntimeNotice } from "../../../services/globalRuntimeNotices";
 import type {
@@ -95,8 +100,14 @@ vi.mock("react-i18next", () => ({
 vi.mock("../../../services/tauri", () => ({
   createNativeProviderContinuation: vi.fn(),
   discardPreparedNativeProviderContinuation: vi.fn(),
+  getClaudeProviders: vi.fn().mockResolvedValue([]),
   getOpenCodeProviderHealth: vi.fn(),
   prepareNativeProviderContinuation: vi.fn(),
+  switchClaudeProvider: vi.fn().mockResolvedValue(undefined),
+  switchCodexProvider: vi.fn().mockResolvedValue(undefined),
+  switchKimiProvider: vi.fn().mockResolvedValue(undefined),
+  switchGrokProvider: vi.fn().mockResolvedValue(undefined),
+  switchOpenCodeProvider: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../../../services/events", () => ({
   subscribeNativeProviderContinuationProgress: vi.fn(
@@ -271,6 +282,11 @@ describe("useSidebarMenus", () => {
     createNativeProviderContinuationMock.mockReset();
     prepareNativeProviderContinuationMock.mockReset();
     discardPreparedNativeProviderContinuationMock.mockReset();
+    vi.mocked(switchClaudeProvider).mockReset();
+    vi.mocked(switchCodexProvider).mockReset();
+    vi.mocked(switchKimiProvider).mockReset();
+    vi.mocked(switchGrokProvider).mockReset();
+    vi.mocked(switchOpenCodeProvider).mockReset();
     prepareNativeProviderContinuationMock.mockResolvedValue({
       status: "prepared",
       fidelity: "strong",
@@ -780,6 +796,9 @@ describe("useSidebarMenus", () => {
       "codex",
       expect.objectContaining({ providerProfileId: "provider-openai" }),
     );
+    await waitFor(() => {
+      expect(switchCodexProvider).toHaveBeenCalledWith("provider-openai");
+    });
   });
 
   it.each([
@@ -808,32 +827,37 @@ describe("useSidebarMenus", () => {
     async ({ engine, localId, storageKey }) => {
       window.localStorage.removeItem(storageKey);
       const handlers = createHandlers();
+      const managedProfile = {
+        id: "provider-a",
+        name: "Provider A",
+        source: "managed" as const,
+      };
       const profileProp =
         engine === "claude"
           ? {
               claudeProviderProfiles: [
                 { id: localId, name: "Local", source: "managed" as const },
-                { id: "provider-a", name: "Provider A", source: "managed" as const },
+                managedProfile,
               ],
             }
           : engine === "kimi"
             ? {
                 kimiProviderProfiles: [
                   { id: localId, name: "Local", source: "managed" as const },
-                  { id: "provider-a", name: "Provider A", source: "managed" as const },
+                  managedProfile,
                 ],
               }
             : engine === "opencode"
               ? {
                   opencodeProviderProfiles: [
                     { id: localId, name: "Local", source: "managed" as const },
-                    { id: "provider-a", name: "Provider A", source: "managed" as const },
+                    managedProfile,
                   ],
                 }
             : {
                 grokProviderProfiles: [
                   { id: localId, name: "Local", source: "managed" as const },
-                  { id: "provider-a", name: "Provider A", source: "managed" as const },
+                  managedProfile,
                 ],
               };
       const { result } = renderHook(() =>
@@ -869,6 +893,19 @@ describe("useSidebarMenus", () => {
       expect(handlers.onAddAgent).not.toHaveBeenCalled();
       expect(window.localStorage.getItem(storageKey)).toBe("provider-a");
 
+      // 产品语义：菜单选供应商 = 启用启动（L1 switch + L2 记忆）
+      await waitFor(() => {
+        if (engine === "claude") {
+          expect(switchClaudeProvider).toHaveBeenCalledWith("provider-a");
+        } else if (engine === "kimi") {
+          expect(switchKimiProvider).toHaveBeenCalledWith("provider-a");
+        } else if (engine === "grok") {
+          expect(switchGrokProvider).toHaveBeenCalledWith("provider-a");
+        } else if (engine === "opencode") {
+          expect(switchOpenCodeProvider).toHaveBeenCalledWith("provider-a");
+        }
+      });
+
       const reopened = await openMenu();
       await act(async () => {
         await reopened?.onSelect();
@@ -876,10 +913,60 @@ describe("useSidebarMenus", () => {
       expect(handlers.onAddAgent).toHaveBeenCalledWith(
         workspace,
         engine,
-        expect.objectContaining({ providerProfileId: "provider-a" }),
+        expect.objectContaining({
+          providerProfileId: "provider-a",
+          providerProfile: expect.objectContaining({
+            id: "provider-a",
+            name: "Provider A",
+            source: "managed",
+          }),
+        }),
       );
     },
   );
+
+  it("enables the selected Claude managed provider for settings isActive sync", async () => {
+    window.localStorage.removeItem("claudeLastProviderProfileId");
+    const handlers = createHandlers();
+    const { result } = renderHook(() =>
+      useSidebarMenus({
+        ...handlers,
+        claudeProviderProfiles: [
+          {
+            id: "xm-provider",
+            name: "Xm",
+            source: "managed",
+          },
+        ],
+      }),
+    );
+
+    await act(async () => {
+      result.current.showWorkspaceMenu(
+        {
+          clientX: 160,
+          clientY: 120,
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+        } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0],
+        workspace,
+      );
+    });
+
+    const action = result.current.workspaceMenuState?.groups
+      .find((group) => group.id === "new-session")
+      ?.actions.find((entry) => entry.id === "new-session-claude");
+
+    await act(async () => {
+      await action?.children
+        ?.find((child) => child.id === "new-session-claude-provider-xm-provider")
+        ?.onSelect();
+    });
+
+    await waitFor(() => {
+      expect(switchClaudeProvider).toHaveBeenCalledWith("xm-provider");
+    });
+  });
 
   it("keeps a missing remembered managed provider unavailable instead of falling back local", async () => {
     window.localStorage.setItem("kimiLastProviderProfileId", "provider-missing");

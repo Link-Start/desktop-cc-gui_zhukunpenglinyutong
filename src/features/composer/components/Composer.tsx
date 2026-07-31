@@ -231,6 +231,8 @@ type ComposerProps = {
   models: { id: string; displayName: string; model: string }[];
   providerModelCatalogs?: Partial<Record<EngineType, ModelOption[]>>;
   providerProfileId?: string | null;
+  /** 当前会话创建时的供应商显示名（切老会话时底栏渠道芯片用，避免回落到列表首项 DeepSeek） */
+  providerProfileName?: string | null;
   selectedModelId: string | null;
   onSelectModel: (id: string) => void;
   reasoningOptions: string[];
@@ -511,6 +513,7 @@ function ComposerImpl({
   models,
   providerModelCatalogs,
   providerProfileId,
+  providerProfileName,
   selectedModelId,
   onSelectModel,
   reasoningOptions,
@@ -753,14 +756,16 @@ function ComposerImpl({
     }
     const modelId = selectedModelId?.trim() || null;
     const profileId = providerProfileId?.trim() || null;
+    const profileName = providerProfileName?.trim() || null;
     return {
       engine: selectedEngine,
       providerProfileId: profileId,
       modelCatalogEntryId: modelId,
       model: modelId,
       reasoning: selectedEffort ? { effort: selectedEffort } : null,
+      // managed 必须带上创建时供应商名，底栏渠道芯片才能显示 kimi/m3 而非回落 DeepSeek
       providerProfileNameSnapshot: profileId
-        ? null
+        ? profileName || profileId
         : LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
       providerProfileSource: profileId ? "managed" : "disk",
     };
@@ -768,6 +773,7 @@ function ComposerImpl({
     createSessionTargetPicker,
     isSharedSession,
     providerProfileId,
+    providerProfileName,
     selectedEffort,
     selectedEngine,
     selectedModelId,

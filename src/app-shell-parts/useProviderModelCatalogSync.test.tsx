@@ -1,11 +1,24 @@
 // @vitest-environment jsdom
-import { renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { renderHook, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { EngineType } from "../types";
 import { useProviderModelCatalogSync } from "./useProviderModelCatalogSync";
 
+const activateMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+
+vi.mock("../features/vendors/activateEngineProviderProfile", () => ({
+  activateEngineProviderProfileAndNotify: activateMock,
+  isActivatableProviderEngine: (engine: string) =>
+    ["claude", "codex", "kimi", "grok", "opencode"].includes(engine),
+}));
+
 describe("useProviderModelCatalogSync", () => {
-  it("refreshes when the active provider scope changes", () => {
+  beforeEach(() => {
+    activateMock.mockClear();
+    activateMock.mockResolvedValue(undefined);
+  });
+
+  it("refreshes catalog and activates provider when the active scope changes", async () => {
     const addDebugEntry = vi.fn();
     const refreshEngineModels = vi.fn().mockResolvedValue(undefined);
     const view = renderHook(
@@ -25,6 +38,11 @@ describe("useProviderModelCatalogSync", () => {
     expect(refreshEngineModels).toHaveBeenCalledTimes(1);
     expect(refreshEngineModels).toHaveBeenCalledWith("claude", {
       providerProfileId: "provider-a",
+      forceRefresh: true,
+      phase: "on-demand",
+    });
+    await waitFor(() => {
+      expect(activateMock).toHaveBeenCalledWith("claude", "provider-a");
     });
     expect(addDebugEntry).toHaveBeenCalledTimes(1);
 
@@ -35,11 +53,16 @@ describe("useProviderModelCatalogSync", () => {
     expect(refreshEngineModels).toHaveBeenCalledTimes(2);
     expect(refreshEngineModels).toHaveBeenLastCalledWith("claude", {
       providerProfileId: "provider-b",
+      forceRefresh: true,
+      phase: "on-demand",
+    });
+    await waitFor(() => {
+      expect(activateMock).toHaveBeenLastCalledWith("claude", "provider-b");
     });
     expect(addDebugEntry).toHaveBeenCalledTimes(2);
   });
 
-  it("supports Codex, Grok and Kimi but ignores engines without provider profiles", () => {
+  it("supports Codex, Grok and Kimi but ignores engines without provider profiles", async () => {
     const refreshEngineModels = vi.fn().mockResolvedValue(undefined);
     const addDebugEntry = vi.fn();
     type HookProps = {
@@ -65,14 +88,23 @@ describe("useProviderModelCatalogSync", () => {
 
     expect(refreshEngineModels).toHaveBeenCalledWith("codex", {
       providerProfileId: "provider-a",
+      forceRefresh: true,
+      phase: "on-demand",
+    });
+    await waitFor(() => {
+      expect(activateMock).toHaveBeenCalledWith("codex", "provider-a");
     });
     view.rerender({ activeEngine: "grok" });
     expect(refreshEngineModels).toHaveBeenLastCalledWith("grok", {
       providerProfileId: "provider-a",
+      forceRefresh: true,
+      phase: "on-demand",
     });
     view.rerender({ activeEngine: "kimi" });
     expect(refreshEngineModels).toHaveBeenLastCalledWith("kimi", {
       providerProfileId: "provider-a",
+      forceRefresh: true,
+      phase: "on-demand",
     });
     view.rerender({ activeEngine: "gemini" });
 
@@ -102,6 +134,8 @@ describe("useProviderModelCatalogSync", () => {
     expect(refreshEngineModels).toHaveBeenCalledTimes(1);
     expect(refreshEngineModels).toHaveBeenCalledWith("codex", {
       providerProfileId: "__disk__",
+      forceRefresh: true,
+      phase: "on-demand",
     });
 
     view.rerender({ activeEngine: "codex" });
@@ -124,5 +158,27 @@ describe("useProviderModelCatalogSync", () => {
     );
 
     expect(refreshEngineModels).not.toHaveBeenCalled();
+    expect(activateMock).not.toHaveBeenCalled();
+  });
+
+  it("does not activate L1 when the session has no providerProfileId", () => {
+    const refreshEngineModels = vi.fn().mockResolvedValue(undefined);
+    renderHook(() =>
+      useProviderModelCatalogSync({
+        activeEngine: "claude",
+        activeThreadEngineSource: "claude",
+        activeThreadId: "claude:legacy",
+        activeWorkspaceId: "ws-1",
+        providerProfileId: null,
+        addDebugEntry: vi.fn(),
+        refreshEngineModels,
+      }),
+    );
+    expect(refreshEngineModels).toHaveBeenCalledWith("claude", {
+      providerProfileId: null,
+      forceRefresh: true,
+      phase: "on-demand",
+    });
+    expect(activateMock).not.toHaveBeenCalled();
   });
 });

@@ -2279,6 +2279,7 @@ export function AppShell() {
       providerModelCatalogs,
       reasoningOptions: effectiveReasoningOptions,
       reasoningSupported: effectiveReasoningSupported,
+      refreshEngineModels,
       resolvedEffort,
       resolvedModel,
       selectedEffort: effectiveSelectedEffort,

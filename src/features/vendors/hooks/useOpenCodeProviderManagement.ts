@@ -8,6 +8,7 @@ import {
   deleteOpenCodeProvider,
   switchOpenCodeProvider,
 } from "../../../services/tauri";
+import { VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT } from "../vendorActiveProviderEvents";
 
 export interface OpenCodeProviderDialogState {
   isOpen: boolean;
@@ -87,6 +88,26 @@ export function useOpenCodeProviderManagement() {
 
   useEffect(() => {
     void loadOpenCodeProviders();
+  }, [loadOpenCodeProviders]);
+
+  useEffect(() => {
+    const onActiveProviderChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ engine?: string }>).detail;
+      if (detail?.engine && detail.engine !== "opencode") {
+        return;
+      }
+      void loadOpenCodeProviders();
+    };
+    window.addEventListener(
+      VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT,
+      onActiveProviderChanged,
+    );
+    return () => {
+      window.removeEventListener(
+        VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT,
+        onActiveProviderChanged,
+      );
+    };
   }, [loadOpenCodeProviders]);
 
   const handleAddOpenCodeProvider = useCallback(() => {
