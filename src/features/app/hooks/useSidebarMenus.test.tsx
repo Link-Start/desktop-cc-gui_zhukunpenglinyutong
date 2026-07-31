@@ -1226,6 +1226,159 @@ describe("useSidebarMenus", () => {
     expect(handlers.onSelectThread).not.toHaveBeenCalled();
   });
 
+  it("allows cancel while running and ignores late create success", async () => {
+    const createDeferredResult = createDeferred<{
+      status: string;
+      fidelity: string;
+      operation: { phase: string; resultSessionId: string };
+    }>();
+    createNativeProviderContinuationMock.mockImplementationOnce(
+      () => createDeferredResult.promise,
+    );
+    const handlers = {
+      ...createHandlers(),
+      codexProviderProfiles: [
+        {
+          id: "provider-b",
+          name: "Provider B",
+          source: "managed" as const,
+          availability: "available" as const,
+        },
+      ],
+      getThreadSummary: () => ({
+        id: "claude:source-1",
+        name: "Source",
+        updatedAt: 1,
+        threadKind: "native" as const,
+        engineSource: "claude" as const,
+        providerProfileId: "provider-a",
+      }),
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    act(() => {
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "claude:source-1",
+        destination: {
+          engine: "codex",
+          providerProfileId: "provider-b",
+          providerProfileNameSnapshot: "Provider B",
+          providerProfileSource: "managed",
+          runtimeCapabilityFingerprint: null,
+        },
+      });
+    });
+    await waitFor(() => {
+      expect(result.current.providerContinuationDialogState?.stage).toBe(
+        "confirm",
+      );
+    });
+
+    let confirmationPromise!: Promise<void>;
+    act(() => {
+      confirmationPromise = result.current.confirmProviderContinuation();
+    });
+    await waitFor(() => {
+      expect(result.current.providerContinuationDialogState?.stage).toBe(
+        "running",
+      );
+    });
+
+    act(() => {
+      result.current.closeProviderContinuationDialog();
+    });
+    expect(result.current.providerContinuationDialogState).toBeNull();
+    expect(discardPreparedNativeProviderContinuationMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      createDeferredResult.resolve({
+        status: "ready",
+        fidelity: "strong",
+        operation: {
+          phase: "ready",
+          resultSessionId: "target-late",
+        },
+      });
+      await confirmationPromise;
+    });
+
+    expect(handlers.onSelectThread).not.toHaveBeenCalled();
+    expect(result.current.providerContinuationDialogState).toBeNull();
+  });
+
+  it("does not reopen dialog when create fails after running cancel", async () => {
+    let rejectCreate!: (reason?: unknown) => void;
+    createNativeProviderContinuationMock.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectCreate = reject;
+        }),
+    );
+    const handlers = {
+      ...createHandlers(),
+      codexProviderProfiles: [
+        {
+          id: "provider-b",
+          name: "Provider B",
+          source: "managed" as const,
+          availability: "available" as const,
+        },
+      ],
+      getThreadSummary: () => ({
+        id: "claude:source-1",
+        name: "Source",
+        updatedAt: 1,
+        threadKind: "native" as const,
+        engineSource: "claude" as const,
+        providerProfileId: "provider-a",
+      }),
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    act(() => {
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "claude:source-1",
+        destination: {
+          engine: "codex",
+          providerProfileId: "provider-b",
+          providerProfileNameSnapshot: "Provider B",
+          providerProfileSource: "managed",
+          runtimeCapabilityFingerprint: null,
+        },
+      });
+    });
+    await waitFor(() => {
+      expect(result.current.providerContinuationDialogState?.stage).toBe(
+        "confirm",
+      );
+    });
+
+    let confirmationPromise!: Promise<void>;
+    act(() => {
+      confirmationPromise = result.current.confirmProviderContinuation();
+    });
+    await waitFor(() => {
+      expect(result.current.providerContinuationDialogState?.stage).toBe(
+        "running",
+      );
+    });
+
+    act(() => {
+      result.current.closeProviderContinuationDialog();
+    });
+    expect(result.current.providerContinuationDialogState).toBeNull();
+
+    await act(async () => {
+      rejectCreate(new Error("delivery stalled"));
+      await confirmationPromise;
+    });
+
+    expect(result.current.providerContinuationDialogState).toBeNull();
+    expect(handlers.onSelectThread).not.toHaveBeenCalled();
+  });
+
   it("does not reopen when a cancelled preview finishes late", async () => {
     let resolvePreview:
       | ((

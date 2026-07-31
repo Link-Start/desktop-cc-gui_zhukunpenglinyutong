@@ -710,18 +710,20 @@ export function useSidebarMenus({
 
   const closeProviderContinuationDialog = useCallback(() => {
     const current = providerContinuationDialogStateRef.current;
-    if (!current || current.stage === "running") {
+    if (!current) {
       return;
     }
+    const operationId = current.request.operationId;
+    // 任意 stage（含 running）都可关闭：放弃本次续接 UI 接管。
+    // running 时不 hard-abort 后端；late success 靠 canceled set 忽略。
+    canceledProviderContinuationOperationsRef.current.add(operationId);
+    providerContinuationOperationIdsRef.current.delete(current.operationKey);
     replaceProviderContinuationDialog(null);
     if (
       current.stage === "preparing" ||
       current.stage === "confirm" ||
       current.retryAction === "prepare"
     ) {
-      const operationId = current.request.operationId;
-      canceledProviderContinuationOperationsRef.current.add(operationId);
-      providerContinuationOperationIdsRef.current.delete(current.operationKey);
       void discardPreparedProviderContinuation(current).finally(() => {
         if (
           !providerContinuationPreviewOperationsRef.current.has(operationId)
@@ -729,6 +731,15 @@ export function useSidebarMenus({
           canceledProviderContinuationOperationsRef.current.delete(operationId);
         }
       });
+      return;
+    }
+    // running / error(execute)：不 discard 可能已进入 creating 的 operation。
+    // preview 未在途时即可清掉 canceled 标记；running 时保留至 confirm 收尾清理。
+    if (
+      current.stage !== "running" &&
+      !providerContinuationPreviewOperationsRef.current.has(operationId)
+    ) {
+      canceledProviderContinuationOperationsRef.current.delete(operationId);
     }
   }, [
     discardPreparedProviderContinuation,
@@ -755,6 +766,15 @@ export function useSidebarMenus({
       return;
     }
     providerContinuationOperationsRef.current.add(guardKey);
+    const operationId = dialog.request.operationId;
+    const abandonIfCanceled = (): boolean => {
+      if (!canceledProviderContinuationOperationsRef.current.has(operationId)) {
+        return false;
+      }
+      canceledProviderContinuationOperationsRef.current.delete(operationId);
+      providerContinuationOperationIdsRef.current.delete(dialog.operationKey);
+      return true;
+    };
     replaceProviderContinuationDialog({
       ...dialog,
       stage: "running",
@@ -769,6 +789,10 @@ export function useSidebarMenus({
         ...dialog.request,
         confirmDegraded: true,
       });
+      // 用户已在 running 中取消：忽略 late success/failure 对 UI 的接管。
+      if (abandonIfCanceled()) {
+        return;
+      }
       if (result.status === "ready" && result.operation.resultSessionId) {
         providerContinuationOperationIdsRef.current.delete(dialog.operationKey);
         // 单一会话「换 Provider 续接」成功：同步目标供应商的启动设置
@@ -861,6 +885,9 @@ export function useSidebarMenus({
         technicalDetail: errorCode.trim() || null,
       });
     } catch (error) {
+      if (abandonIfCanceled()) {
+        return;
+      }
       const message = error instanceof Error ? error.message : String(error);
       const latest = providerContinuationDialogStateRef.current;
       if (latest?.request.operationId === dialog.request.operationId) {
