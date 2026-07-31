@@ -1935,3 +1935,36 @@ OpenSpec + 实现：running 阶段允许取消续接；canceled set 忽略 late 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1253: Shared Session 供应商切换后模型列表收口
+
+**Date**: 2026-08-01
+**Task**: Shared Session 供应商切换后模型列表收口
+**Branch**: `bump-version-0.7.14`
+
+### Summary
+
+Shared Picker 切 Claude 供应商时 await ensureModels 再写 selectedNextTarget；禁止旧 model id；OpenSpec shared-execution-target 与分析文档同步。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fb6083584` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
