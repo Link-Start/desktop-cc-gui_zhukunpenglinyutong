@@ -40,6 +40,8 @@ function applyAssistantCompletionMetadata(
     next[index] = withAssistantTurnTokenCounts(
       {
         ...candidate,
+        // Spread loses control-flow narrowing of role; re-assert for AssistantMessageItem.
+        role: "assistant",
         isFinal: true,
         finalCompletedAt: Math.max(candidate.finalCompletedAt ?? 0, completedAt) || completedAt,
         ...(typeof candidate.finalDurationMs === "number"
