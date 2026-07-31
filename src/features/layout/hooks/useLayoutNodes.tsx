@@ -691,6 +691,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       onExpand={globalRuntimeNoticeDock.expand}
       onMinimize={globalRuntimeNoticeDock.minimize}
       onClear={globalRuntimeNoticeDock.clear}
+      // 桌面侧栏：不外显气泡，入口在设置二级菜单；手机端仍用底部气泡。
+      hideMinimizedTrigger={!options.isPhone}
     />
   ) : null;
   const sidebarRuntimeNoticeDockNode = options.isPhone ? null : globalRuntimeNoticeDockNode;
@@ -799,6 +801,12 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         isTerminalOpen={options.terminalOpen}
         onToggleTerminal={options.onToggleTerminal}
         runtimeNoticeDockNode={sidebarRuntimeNoticeDockNode}
+        onOpenRuntimeNotice={
+          showGlobalRuntimeNoticeDock ? globalRuntimeNoticeDock.expand : undefined
+        }
+        showRuntimeNoticeMenuItem={
+          Boolean(showGlobalRuntimeNoticeDock && !options.isPhone)
+        }
       />
     </Profiler>
   );
@@ -1698,21 +1706,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     options.workspaces,
   );
 
-  // D3 只读派生：右侧面板收起时，为顶栏 right-panel 展开按钮附加 running 会话
-  // 计数徽章数据；复用既有 sessionRadarRunningSessions，不新增订阅/定时器。
-  const sessionRadarRunningCount = options.sessionRadarRunningSessions.length;
-  const mainHeaderActionsWithRadarBadge = useMemo(() => {
-    const actions = options.mainHeaderActions;
-    if (!actions || sessionRadarRunningCount === 0) {
-      return actions;
-    }
-    return actions.map((action) =>
-      action.id === "right-panel" && action.rightPanelExpandAffordance
-        ? { ...action, badgeCount: sessionRadarRunningCount }
-        : action,
-    );
-  }, [options.mainHeaderActions, sessionRadarRunningCount]);
-
   const homeNode = (
     <HomeChat
       workspaces={homeWorkspaceOptions}
@@ -1756,7 +1749,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       launchScriptsState={options.launchScriptsState}
       showLaunchScriptControls={showTopRunControls}
       showOpenAppMenu={showOpenWorkspaceAppControl}
-      openAppExtraActions={mainHeaderActionsWithRadarBadge}
+      openAppExtraActions={options.mainHeaderActions}
       groupedWorkspaces={groupedWorkspacesForHeader}
       activeWorkspaceId={options.activeWorkspaceId}
       onSelectWorkspace={options.onSelectWorkspace}

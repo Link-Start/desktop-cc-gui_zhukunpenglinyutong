@@ -72,7 +72,7 @@ export function buildDefaultClaudeProviderSettingsConfig(): ClaudeProviderSettin
       ANTHROPIC_BASE_URL: "",
       ANTHROPIC_BETAS: "context-1m-2025-08-07",
       ANTHROPIC_DEFAULT_HAIKU_MODEL: "claude-haiku-4-5-20251001",
-      ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-4-8",
+      ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-5",
       ANTHROPIC_DEFAULT_SONNET_MODEL: "claude-sonnet-4-6",
       ANTHROPIC_SMALL_FAST_MODEL: "claude-haiku-4-5-20251001",
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
@@ -492,12 +492,6 @@ export function ProviderDialog({
                   ? t("settings.vendor.dialog.apiUrlLockedHint")
                   : t("settings.vendor.dialog.apiUrlHint")}
               </small>
-              {!isOfficialAnthropicEndpoint(apiUrl) && (
-                <div className="vendor-security-notice vendor-proxy-warning">
-                  <Cloud size={14} />
-                  <span>{t("settings.vendor.dialog.proxyEndpointWarning")}</span>
-                </div>
-              )}
             </div>
 
             <div className="vendor-form-group">
@@ -532,6 +526,13 @@ export function ProviderDialog({
               </small>
             </div>
           </div>
+
+          {!isOfficialAnthropicEndpoint(apiUrl) && (
+            <div className="vendor-security-notice vendor-proxy-warning">
+              <Cloud size={14} />
+              <span>{t("settings.vendor.dialog.proxyEndpointWarning")}</span>
+            </div>
+          )}
 
           <div className="vendor-form-group">
             <label>{t("settings.vendor.dialog.modelMapping")}</label>

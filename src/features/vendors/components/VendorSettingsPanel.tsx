@@ -29,6 +29,12 @@ import { GrokProviderDialog } from "./GrokProviderDialog";
 import { OpenCodeProviderDialog } from "./OpenCodeProviderDialog";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { CustomModelDialog } from "./CustomModelDialog";
+import {
+  CliCustomPathDialog,
+  CliCustomPathEntry,
+  type CliCustomPathEngine,
+  type CliCustomPathSavePayload,
+} from "./CliCustomPathDialog";
 import { CcSwitchImportDialog } from "./CcSwitchImportDialog";
 import { type CcSwitchImportTarget } from "../hooks/useCcSwitchImport";
 import { CurrentCodexGlobalConfigCard } from "./CurrentCodexGlobalConfigCard";
@@ -192,6 +198,8 @@ export function VendorSettingsPanel({
   const [dialogTarget, setDialogTarget] = useState<ModelDialogTarget>("claude");
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const [modelDialogAddMode, setModelDialogAddMode] = useState(false);
+  const [customPathDialogEngine, setCustomPathDialogEngine] =
+    useState<CliCustomPathEngine | null>(null);
   const [codexGlobalConfigContent, setCodexGlobalConfigContent] = useState("");
   const [codexGlobalConfigExists, setCodexGlobalConfigExists] = useState(false);
   const [codexGlobalConfigTruncated, setCodexGlobalConfigTruncated] = useState(false);
@@ -322,6 +330,77 @@ export function VendorSettingsPanel({
       </button>
     </div>
   );
+
+  const resolveCustomPathValue = (
+    engine: CliCustomPathEngine,
+  ): { path: string | null; args: string | null } => {
+    switch (engine) {
+      case "claude":
+        return { path: appSettings.claudeBin ?? null, args: null };
+      case "kimi":
+        return { path: appSettings.kimiBin ?? null, args: null };
+      case "grok":
+        return { path: appSettings.grokBin ?? null, args: null };
+      case "opencode":
+        return { path: appSettings.opencodeBin ?? null, args: null };
+      case "codex":
+        return {
+          path: appSettings.codexBin ?? null,
+          args: appSettings.codexArgs ?? null,
+        };
+    }
+  };
+
+  const handleSaveCustomPath = useCallback(
+    async (engine: CliCustomPathEngine, payload: CliCustomPathSavePayload) => {
+      switch (engine) {
+        case "claude":
+          await onUpdateAppSettings({
+            ...appSettings,
+            claudeBin: payload.path,
+          });
+          break;
+        case "kimi":
+          await onUpdateAppSettings({
+            ...appSettings,
+            kimiBin: payload.path,
+          });
+          break;
+        case "grok":
+          await onUpdateAppSettings({
+            ...appSettings,
+            grokBin: payload.path,
+          });
+          break;
+        case "opencode":
+          await onUpdateAppSettings({
+            ...appSettings,
+            opencodeBin: payload.path,
+          });
+          break;
+        case "codex":
+          await onUpdateAppSettings({
+            ...appSettings,
+            codexBin: payload.path,
+            codexArgs: payload.args ?? null,
+          });
+          break;
+      }
+    },
+    [appSettings, onUpdateAppSettings],
+  );
+
+  const renderCustomPathEntry = (engine: CliCustomPathEngine) => {
+    const { path, args } = resolveCustomPathValue(engine);
+    return (
+      <CliCustomPathEntry
+        path={path}
+        args={args}
+        showArgsSummary={engine === "codex"}
+        onConfigure={() => setCustomPathDialogEngine(engine)}
+      />
+    );
+  };
 
   const closeModelDialog = useCallback(() => {
     setModelDialogOpen(false);
@@ -803,6 +882,7 @@ export function VendorSettingsPanel({
                 onSwitch={claude.handleSwitchProvider}
                 onEdit={claude.handleOpenClaudeSettingsJsonDialog}
               />
+              {renderCustomPathEntry("claude")}
               {renderPluginModelsEntry("claude", claudeModels.models.length)}
             </div>
             <ProviderList
@@ -979,6 +1059,7 @@ export function VendorSettingsPanel({
                 />
               </div>
 
+              {renderCustomPathEntry("codex")}
               {renderPluginModelsEntry("codex", codexModels.models.length)}
             </div>
             <CodexProviderList
@@ -1028,6 +1109,9 @@ export function VendorSettingsPanel({
                 {kimi.kimiProviderError}
               </div>
             )}
+            <div className="vendor-group-card">
+              {renderCustomPathEntry("kimi")}
+            </div>
             <div className="vendor-provider-list vendor-summary-card">
               <div className="vendor-list-header">
                 <span className="vendor-list-title">
@@ -1103,6 +1187,9 @@ export function VendorSettingsPanel({
                 {grok.grokProviderError}
               </div>
             )}
+            <div className="vendor-group-card">
+              {renderCustomPathEntry("grok")}
+            </div>
             <div className="vendor-provider-list vendor-summary-card">
               <div className="vendor-list-header">
                 <span className="vendor-list-title">
@@ -1178,6 +1265,9 @@ export function VendorSettingsPanel({
                 {openCode.openCodeProviderError}
               </div>
             )}
+            <div className="vendor-group-card">
+              {renderCustomPathEntry("opencode")}
+            </div>
             <div className="vendor-provider-list vendor-summary-card">
               <div className="vendor-list-header">
                 <span className="vendor-list-title">
@@ -1267,6 +1357,18 @@ export function VendorSettingsPanel({
         initialAddMode={modelDialogAddMode}
         modelValidation={dialogTarget === "claude" ? "shape-only" : "model-id"}
       />
+      {customPathDialogEngine ? (
+        <CliCustomPathDialog
+          isOpen
+          engine={customPathDialogEngine}
+          initialPath={resolveCustomPathValue(customPathDialogEngine).path}
+          initialArgs={resolveCustomPathValue(customPathDialogEngine).args}
+          onSave={(payload) =>
+            handleSaveCustomPath(customPathDialogEngine, payload)
+          }
+          onClose={() => setCustomPathDialogEngine(null)}
+        />
+      ) : null}
       <CcSwitchImportDialog
         isOpen={ccSwitchImportSource !== null}
         target={ccSwitchImportSource?.target ?? "claude"}

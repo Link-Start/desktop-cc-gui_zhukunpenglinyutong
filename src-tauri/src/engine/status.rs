@@ -1275,12 +1275,12 @@ fn get_builtin_claude_models() -> Vec<ModelInfo> {
             .with_provenance("curated:claude-builtin")
             .with_description("Fable 5 · Most powerful · Mythos-class")
             .with_source("builtin"),
-        ModelInfo::new("claude-opus-4-8", "Opus 4.8")
+        ModelInfo::new("claude-opus-5", "Opus 5")
             .as_default()
             .with_provider("anthropic")
             .with_protocol("anthropic-messages")
             .with_provenance("curated:claude-builtin")
-            .with_description("Opus 4.8 · Previous Opus generation")
+            .with_description("Opus 5 · Latest Opus upgrade")
             .with_source("builtin"),
         ModelInfo::new("claude-sonnet-5", "Sonnet 5")
             .with_provider("anthropic")
@@ -1441,7 +1441,7 @@ fn resolve_override_for_family<'a>(
 
 /// Apply settings/env model mapping onto the builtin tier catalog.
 ///
-/// Keeps stable catalog ids (claude-opus-4-8, …) so the UI can still present
+/// Keeps stable catalog ids (claude-opus-5, …) so the UI can still present
 /// one row per family with the original tier description, while rewriting:
 /// - `model` (runtime id sent to CLI)
 /// - `name` / displayName (what the picker shows when mapping is active)
@@ -1904,7 +1904,7 @@ mod tests {
         assert_eq!(fable.name, "kimi-k3");
         assert!(fable.description.contains("Fable 5"));
 
-        let opus = models.iter().find(|m| m.id == "claude-opus-4-8").unwrap();
+        let opus = models.iter().find(|m| m.id == "claude-opus-5").unwrap();
         assert_eq!(opus.model, "MiniMax-M4[1m]");
         assert_eq!(opus.name, "MiniMax-M4[1m]");
 
@@ -1930,7 +1930,7 @@ mod tests {
         // Builtin tier catalog ids always remain, even when settings rewrite the
         // runtime model (e.g. all tiers → kimi-k3).
         for catalog_id in [
-            "claude-opus-4-8",
+            "claude-opus-5",
             "claude-fable-5",
             "claude-sonnet-5",
             "claude-haiku-4-5-20251001",
@@ -1968,7 +1968,7 @@ mod tests {
         assert!(models.iter().all(|model| model.model == "kimi-k3"));
         assert!(models.iter().all(|model| model.name == "kimi-k3"));
         assert!(models.iter().any(|model| model.id == "claude-fable-5"));
-        assert!(models.iter().any(|model| model.id == "claude-opus-4-8"));
+        assert!(models.iter().any(|model| model.id == "claude-opus-5"));
         assert!(models.iter().any(|model| model.id == "claude-sonnet-5"));
         assert!(models
             .iter()
@@ -1995,7 +1995,8 @@ mod tests {
             .all(|model| model.provider.as_deref() == Some("anthropic")));
         assert!(models.iter().all(|model| model.source == "builtin"));
         let default_model = models.iter().find(|model| model.default).unwrap();
-        assert_eq!(default_model.id, "claude-opus-4-8");
+        assert_eq!(default_model.id, "claude-opus-5");
+        assert_eq!(default_model.name, "Opus 5");
     }
 
     #[test]
@@ -2015,7 +2016,7 @@ mod tests {
         // Different catalog ids with the same runtime model stay distinct
         // (required when ANTHROPIC_DEFAULT_* map every tier to one model).
         let shared_runtime = dedupe_models_preserve_order(vec![
-            ModelInfo::new("claude-opus-4-8", "kimi-k3")
+            ModelInfo::new("claude-opus-5", "kimi-k3")
                 .with_runtime_model("kimi-k3")
                 .with_source("settings-mapped"),
             ModelInfo::new("claude-sonnet-5", "kimi-k3")
@@ -2029,7 +2030,7 @@ mod tests {
     fn claude_provider_catalog_precedes_and_appends_public_models() {
         let env = std::collections::BTreeMap::from([(
             "ANTHROPIC_MODEL".to_string(),
-            "claude-opus-4-8".to_string(),
+            "claude-opus-5".to_string(),
         )]);
         let models = merge_provider_models_with_public(
             claude_provider_models_from_env("provider-a", &env),
@@ -2046,12 +2047,12 @@ mod tests {
                 >= 4
         );
         assert_eq!(models[0].provider_profile_id.as_deref(), Some("provider-a"));
-        assert!(models.iter().any(|model| model.id == "claude-opus-4-8"));
+        assert!(models.iter().any(|model| model.id == "claude-opus-5"));
         assert!(models.iter().any(|model| model.id == "claude-sonnet-5"));
         assert!(models
             .iter()
             .filter(|model| model.provider_profile_id.as_deref() == Some("provider-a"))
-            .all(|model| model.model == "claude-opus-4-8"));
+            .all(|model| model.model == "claude-opus-5"));
     }
 
     #[test]

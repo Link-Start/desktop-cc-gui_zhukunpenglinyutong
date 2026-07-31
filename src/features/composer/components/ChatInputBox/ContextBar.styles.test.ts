@@ -46,4 +46,20 @@ describe("Codex footer context indicator styles", () => {
       "bottom: calc(100% + 2px);",
     );
   });
+
+  it("uses theme-aware tooltip surface fallbacks outside .chat-input-box", () => {
+    const dualRule = getCssRule(".context-dual-tooltip");
+    const itemRule = getCssRule(".context-item.has-tooltip:hover::after");
+    const popupRule = getCssRule(".tooltip-popup");
+
+    // Footer dual-view mounts under .composer-branch-row-usage, not
+    // .chat-input-box, so background must not hard-depend on scoped vars only.
+    for (const tooltipRule of [dualRule, itemRule, popupRule]) {
+      expect(tooltipRule).toContain("--tooltip-bg");
+      expect(tooltipRule).toContain("--surface-popover");
+      expect(tooltipRule).not.toMatch(
+        /background:\s*var\(--tooltip-bg,\s*#1a1c24\)/,
+      );
+    }
+  });
 });

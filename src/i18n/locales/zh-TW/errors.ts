@@ -25,7 +25,25 @@ const errors = {
     "cliNotFoundHint": "安裝 Claude Code：curl -fsSL https://claude.ai/install.sh | bash\n安裝 Codex：npm install -g @openai/codex",
     "codexCliNotFound": "找不到 Codex CLI。請安裝 Codex 並確認 `codex` 已加入你的 PATH。",
     "couldntOpenWorkspace": "無法開啟工作區",
-    "dismissError": "關閉錯誤"
+    "dismissError": "關閉錯誤",
+    "applicationErrorTitle": "應用錯誤",
+    "applicationErrorDescription": "介面因意外錯誤無法繼續顯示。請先複製下方診斷資訊回饋給開發者，再嘗試重新載入應用。",
+    "applicationErrorReload": "重新載入",
+    "applicationErrorCopyReport": "一鍵複製診斷資訊",
+    "applicationErrorCopyDone": "診斷資訊已複製，請貼到回饋裡發給開發者。",
+    "applicationErrorCopyDownloaded": "目前環境無法寫入剪貼簿，已改為下載診斷檔。回饋時請附上該檔案。",
+    "applicationErrorCopyFailed": "複製與下載都失敗了。請手動選取下方文字複製後回饋。",
+    "applicationErrorDetails": "錯誤詳情",
+    "applicationErrorFeedbackTitle": "如何回饋給開發者",
+    "applicationErrorFeedbackStep1": "點擊「一鍵複製診斷資訊」。",
+    "applicationErrorFeedbackStep2": "開啟回饋頁新建 Issue，把診斷資訊貼進去。",
+    "applicationErrorFeedbackStep3": "補充你當時在做什麼（冷啟動 / 串流輸出 / 切換工作區等），以及重新載入是否恢復。",
+    "applicationErrorOpenFeedback": "開啟回饋頁面",
+    "applicationErrorMeta": "版本: {{version}} · 類型: {{errorClass}} · 平台: {{platform}}",
+    "applicationErrorMessageLabel": "錯誤訊息",
+    "applicationErrorDecodedLabel": "React #{{code}} 完整含義",
+    "applicationErrorComponentStackLabel": "元件堆疊",
+    "applicationErrorStackLabel": "JavaScript 堆疊"
   }
 };
 

@@ -152,6 +152,77 @@ export function extractFinalDurationMs(
   return undefined;
 }
 
+function readNonNegativeTokenCount(value: unknown): number | undefined {
+  const parsed = asNumber(value);
+  if (parsed === null || parsed < 0) {
+    return undefined;
+  }
+  return parsed;
+}
+
+/**
+ * Extract whole-turn input/output token counts stamped on an assistant message.
+ * Input prefers an explicit total, otherwise sums non-cache + cache write + cache read
+ * (same aggregation jetbrains MessageItem uses for the footer chip).
+ */
+export function extractFinalTurnTokenCounts(
+  item: Record<string, unknown>,
+): { inputTokens: number; outputTokens: number } | null {
+  const metadata = asRecord(item.metadata);
+  const usage = asRecord(
+    item.turnUsage ??
+      item.usage ??
+      metadata?.turnUsage ??
+      metadata?.usage ??
+      null,
+  );
+  const explicitInput = readNonNegativeTokenCount(
+    item.finalInputTokens ??
+      item.final_input_tokens ??
+      metadata?.finalInputTokens ??
+      metadata?.final_input_tokens,
+  );
+  const explicitOutput = readNonNegativeTokenCount(
+    item.finalOutputTokens ??
+      item.final_output_tokens ??
+      metadata?.finalOutputTokens ??
+      metadata?.final_output_tokens,
+  );
+  if (typeof explicitInput === "number" || typeof explicitOutput === "number") {
+    return {
+      inputTokens: explicitInput ?? 0,
+      outputTokens: explicitOutput ?? 0,
+    };
+  }
+  if (!usage) {
+    return null;
+  }
+  const nonCacheInput =
+    readNonNegativeTokenCount(
+      usage.input_tokens ?? usage.inputTokens,
+    ) ?? 0;
+  const cacheCreation =
+    readNonNegativeTokenCount(
+      usage.cache_creation_input_tokens ?? usage.cacheCreationInputTokens,
+    ) ?? 0;
+  const cacheRead =
+    readNonNegativeTokenCount(
+      usage.cache_read_input_tokens ??
+        usage.cached_input_tokens ??
+        usage.cachedInputTokens ??
+        usage.cacheReadInputTokens,
+    ) ?? 0;
+  const output =
+    readNonNegativeTokenCount(
+      usage.output_tokens ?? usage.outputTokens,
+    ) ?? 0;
+  const input = nonCacheInput + cacheCreation + cacheRead;
+  if (input <= 0 && output <= 0) {
+    return null;
+  }
+  return { inputTokens: input, outputTokens: output };
+}
+
 export function extractHistoryItemTimestampMs(
   item: Record<string, unknown>,
 ): number | undefined {

@@ -155,6 +155,9 @@ export type RenderAppShellFlattenedContext = {
   releaseNotesError: any;
   releaseNotesLoading: any;
   releaseNotesOpen: any;
+  checkForUpdates: any;
+  startUpdate: any;
+  updaterState: any;
   removeWorkspace: any;
   renamePrompt: any;
   renameWorkspaceGroup: any;

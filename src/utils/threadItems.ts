@@ -46,6 +46,7 @@ import {
   extractAssistantFinalFlag,
   extractFinalCompletedAtMs,
   extractFinalDurationMs,
+  extractFinalTurnTokenCounts,
   extractHistoryItemTimestampMs,
   parseTimestampLikeMs,
 } from "./threadItemsTiming";
@@ -1297,6 +1298,7 @@ export function buildConversationItemFromThreadItem(
     const isFinal = extractAssistantFinalFlag(item);
     const finalCompletedAt = extractFinalCompletedAtMs(item);
     const finalDurationMs = extractFinalDurationMs(item);
+    const turnTokens = extractFinalTurnTokenCounts(item);
     return {
       id,
       kind: "message",
@@ -1305,6 +1307,12 @@ export function buildConversationItemFromThreadItem(
       ...(typeof isFinal === "boolean" ? { isFinal } : {}),
       ...(typeof finalCompletedAt === "number" ? { finalCompletedAt } : {}),
       ...(typeof finalDurationMs === "number" ? { finalDurationMs } : {}),
+      ...(turnTokens
+        ? {
+            finalInputTokens: turnTokens.inputTokens,
+            finalOutputTokens: turnTokens.outputTokens,
+          }
+        : {}),
     };
   }
   if (type === "reasoning") {
@@ -1492,10 +1500,26 @@ function chooseRicherItem(remote: ConversationItem, local: ConversationItem) {
       ].filter((value): value is number => typeof value === "number" && value >= 0);
       const mergedDurationMs =
         durationCandidates.length > 0 ? Math.max(...durationCandidates) : undefined;
+      const inputTokenCandidates = [
+        candidate.finalInputTokens,
+        remote.finalInputTokens,
+        local.finalInputTokens,
+      ].filter((value): value is number => typeof value === "number" && value >= 0);
+      const mergedInputTokens =
+        inputTokenCandidates.length > 0 ? Math.max(...inputTokenCandidates) : undefined;
+      const outputTokenCandidates = [
+        candidate.finalOutputTokens,
+        remote.finalOutputTokens,
+        local.finalOutputTokens,
+      ].filter((value): value is number => typeof value === "number" && value >= 0);
+      const mergedOutputTokens =
+        outputTokenCandidates.length > 0 ? Math.max(...outputTokenCandidates) : undefined;
       if (
         (candidate.isFinal ?? false) === isFinal &&
         candidate.finalCompletedAt === mergedCompletedAt &&
-        candidate.finalDurationMs === mergedDurationMs
+        candidate.finalDurationMs === mergedDurationMs &&
+        candidate.finalInputTokens === mergedInputTokens &&
+        candidate.finalOutputTokens === mergedOutputTokens
       ) {
         return candidate;
       }
@@ -1504,6 +1528,8 @@ function chooseRicherItem(remote: ConversationItem, local: ConversationItem) {
         isFinal,
         ...(mergedCompletedAt !== undefined ? { finalCompletedAt: mergedCompletedAt } : {}),
         ...(mergedDurationMs !== undefined ? { finalDurationMs: mergedDurationMs } : {}),
+        ...(mergedInputTokens !== undefined ? { finalInputTokens: mergedInputTokens } : {}),
+        ...(mergedOutputTokens !== undefined ? { finalOutputTokens: mergedOutputTokens } : {}),
       };
     };
     if (remote.role !== "assistant") {

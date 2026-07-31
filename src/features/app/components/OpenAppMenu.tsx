@@ -29,10 +29,6 @@ export type OpenAppMenuExtraAction = {
   active?: boolean;
   /** false 时该行不显示「在顶栏显示」勾选框（如启动脚本子条目） */
   pinnable?: boolean;
-  /** 该动作当前是否为「右侧面板已收起」的展开 affordance（仅 right-panel 动作设置） */
-  rightPanelExpandAffordance?: boolean;
-  /** 顶栏外显按钮上的纯展示计数徽章；>0 时由 MainHeader 渲染，菜单行不展示 */
-  badgeCount?: number;
 };
 
 type OpenAppMenuProps = {

@@ -18,9 +18,9 @@
 .thinking-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
-  width: 100%;
+  width: fit-content;
+  max-width: 100%;
   padding: 0;
   border: none;
   cursor: pointer;
@@ -59,13 +59,6 @@
   opacity: 0.8;
 }
 
-.thinking-icon {
-  flex: 0 0 auto;
-  font-size: 10px;
-  color: var(--color-thinking-text, rgb(115, 115, 115));
-  opacity: 0.9;
-}
-
 .thinking-content {
   margin-top: 8px;
   color: var(--color-thinking-text, rgb(115, 115, 115));
@@ -88,13 +81,7 @@
   box-shadow: none;
 }
 
-.thinking-block.is-live .reasoning-markdown-surface {
-  border-left-color: color-mix(
-    in srgb,
-    var(--status-success, #57d18c) 44%,
-    var(--color-thinking-border, var(--border-subtle))
-  );
-}
+/* live / 折叠完成态共用灰色左边线，不单独用 success 绿强调「思考中」 */
 
 .reasoning-markdown {
   font-size: var(--message-thinking-font-size, 11px);

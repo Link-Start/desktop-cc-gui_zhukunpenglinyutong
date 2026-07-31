@@ -12,8 +12,10 @@ import {
   setPerfDiagnosticsEnabled,
 } from "@/services/perfBaseline/perfDiagnosticsController";
 import { buildDiagnosticsReportText } from "@/services/perfBaseline/diagnosticsReport";
+import { CuratedSection } from "../../../../curated-skills";
 import { HistoryCompletionSettings } from "../../HistoryCompletionSettings";
 import { SessionRadarHistoryManagementSection } from "../../SessionRadarHistoryManagementSection";
+import type { AppSettings } from "../../../../../types";
 import type { SessionRadarEntry } from "../../../../session-activity/hooks/useSessionRadarFeed";
 import type { SessionRadarHistoryDeleteResult } from "../../../../session-activity/utils/sessionRadarHistoryManagement";
 import {
@@ -35,6 +37,8 @@ import {
 type OtherSectionProps = {
   title: string | null;
   description: string | null;
+  appSettings: Pick<AppSettings, "enabledCuratedSkillIds">;
+  onUpdateAppSettings: (next: AppSettings) => Promise<void>;
   sessionRadarRecentCompletedSessions: SessionRadarEntry[];
   onDeleteSessionRadarHistory: (
     entries: SessionRadarEntry[],
@@ -44,6 +48,8 @@ type OtherSectionProps = {
 export function OtherSection({
   title,
   description,
+  appSettings,
+  onUpdateAppSettings,
   sessionRadarRecentCompletedSessions,
   onDeleteSessionRadarHistory,
 }: OtherSectionProps) {
@@ -130,6 +136,12 @@ export function OtherSection({
       {description ? (
         <div className="settings-section-subtitle">{description}</div>
       ) : null}
+      {/* 内置精选 Skills：原独立侧栏入口已合并到其他设置 */}
+      <CuratedSection
+        appSettings={appSettings}
+        onUpdateAppSettings={onUpdateAppSettings}
+      />
+      <Separator className="my-4" />
       <HistoryCompletionSettings />
       <Separator className="my-4" />
       <div className="settings-subsection-title">

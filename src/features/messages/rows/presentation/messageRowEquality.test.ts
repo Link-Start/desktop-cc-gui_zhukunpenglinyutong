@@ -82,6 +82,8 @@ describe("areMessageItemsEqual", () => {
     ["final flag", { isFinal: false }],
     ["final timestamp", { finalCompletedAt: 11 }],
     ["final duration", { finalDurationMs: 21 }],
+    ["final input tokens", { finalInputTokens: 100 }],
+    ["final output tokens", { finalOutputTokens: 50 }],
     ["agent name", { selectedAgentName: "Builder" }],
     ["agent icon", { selectedAgentIcon: "codicon-tools" }],
     ["images", { images: ["data:image/png;base64,BBBB"] }],

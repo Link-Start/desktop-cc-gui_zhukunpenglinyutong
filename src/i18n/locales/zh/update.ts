@@ -4,6 +4,7 @@ const update = {
     title: "更新",
     checkingForUpdates: "正在检查更新...",
     updateAvailable: "有新版本可用！",
+    availableAction: "可更新",
     upToDate: "已是最新版本。",
     downloading: "正在下载更新…",
     installing: "正在安装更新…",

@@ -553,90 +553,18 @@ describe("Messages live behavior", () => {
     expect(container.textContent ?? "").not.toContain("echo done");
   });
 
-  it.each(["claude", "gemini"] as const)(
-    "switches %s working spinner between waiting and ingress phases",
+  it.each(["claude", "gemini", "codex"] as const)(
+    "uses a unified simple working indicator for %s (no phase glow FX)",
     (activeEngine) => {
-      vi.useFakeTimers();
-      try {
-        const baseItems: ConversationItem[] = [
-          {
-            id: "user-stream-phase",
-            kind: "message",
-            role: "user",
-            text: "继续输出",
-          },
-          {
-            id: "assistant-stream-phase",
-            kind: "message",
-            role: "assistant",
-            text: "",
-          },
-        ];
-
-        const { container, rerender } = render(
-          <Messages
-            items={baseItems}
-            threadId="thread-1"
-            workspaceId="ws-1"
-            isThinking
-            processingStartedAt={Date.now() - 1_000}
-            activeEngine={activeEngine}
-            openTargets={[]}
-            selectedOpenAppId=""
-          />,
-        );
-
-        const waitingNode = container.querySelector(".working");
-        expect(waitingNode?.className ?? "").toContain("is-waiting");
-
-        rerender(
-          <Messages
-            items={[
-              baseItems[0]!,
-              {
-                id: "assistant-stream-phase",
-                kind: "message",
-                role: "assistant",
-                text: "增量片段",
-              },
-            ]}
-            threadId="thread-1"
-            workspaceId="ws-1"
-            isThinking
-            processingStartedAt={Date.now() - 1_000}
-            activeEngine={activeEngine}
-            openTargets={[]}
-            selectedOpenAppId=""
-          />,
-        );
-
-        const ingressNode = container.querySelector(".working");
-        expect(ingressNode?.className ?? "").toContain("is-ingress");
-
-        act(() => {
-          vi.advanceTimersByTime(1_200);
-        });
-
-        const backToWaitingNode = container.querySelector(".working");
-        expect(backToWaitingNode?.className ?? "").toContain("is-waiting");
-      } finally {
-        vi.useRealTimers();
-      }
-    },
-  );
-
-  it("keeps Codex working spinner visually aligned with Claude Code baseline", () => {
-    vi.useFakeTimers();
-    try {
       const baseItems: ConversationItem[] = [
         {
-          id: "user-codex-stream-phase",
+          id: "user-stream-phase",
           kind: "message",
           role: "user",
           text: "继续输出",
         },
         {
-          id: "assistant-codex-stream-phase",
+          id: "assistant-stream-phase",
           kind: "message",
           role: "assistant",
           text: "",
@@ -650,21 +578,25 @@ describe("Messages live behavior", () => {
           workspaceId="ws-1"
           isThinking
           processingStartedAt={Date.now() - 1_000}
-          activeEngine="codex"
+          activeEngine={activeEngine}
           openTargets={[]}
           selectedOpenAppId=""
         />,
       );
 
       const waitingNode = container.querySelector(".working");
-      expect(waitingNode?.className ?? "").toContain("is-waiting");
+      expect(waitingNode).toBeTruthy();
+      expect(waitingNode?.className ?? "").toBe("working");
+      expect(waitingNode?.querySelector(".working-spinner")).toBeTruthy();
+      expect(waitingNode?.className ?? "").not.toContain("is-waiting");
+      expect(waitingNode?.className ?? "").not.toContain("is-ingress");
 
       rerender(
         <Messages
           items={[
             baseItems[0]!,
             {
-              id: "assistant-codex-stream-phase",
+              id: "assistant-stream-phase",
               kind: "message",
               role: "assistant",
               text: "增量片段",
@@ -674,19 +606,18 @@ describe("Messages live behavior", () => {
           workspaceId="ws-1"
           isThinking
           processingStartedAt={Date.now() - 1_000}
-          activeEngine="codex"
+          activeEngine={activeEngine}
           openTargets={[]}
           selectedOpenAppId=""
         />,
       );
 
-      const stillWaitingNode = container.querySelector(".working");
-      expect(stillWaitingNode?.className ?? "").toContain("is-waiting");
-      expect(stillWaitingNode?.className ?? "").not.toContain("is-ingress");
-    } finally {
-      vi.useRealTimers();
-    }
-  });
+      const streamingNode = container.querySelector(".working");
+      expect(streamingNode?.className ?? "").toBe("working");
+      expect(streamingNode?.className ?? "").not.toContain("is-ingress");
+      expect(streamingNode?.className ?? "").not.toContain("is-waiting");
+    },
+  );
 
   it("shows a working indicator while context compaction is in progress", () => {
     const { container } = render(
@@ -880,70 +811,66 @@ describe("Messages live behavior", () => {
   });
 
   it.each(["claude", "gemini"] as const)(
-    "detects ingress for %s even when chunk length is unchanged",
+    "keeps %s working indicator simple when chunk content changes at same length",
     (activeEngine) => {
-      vi.useFakeTimers();
-      try {
-        const { container, rerender } = render(
-          <Messages
-            items={[
-              {
-                id: "user-stream-same-length",
-                kind: "message",
-                role: "user",
-                text: "继续输出",
-              },
-              {
-                id: "assistant-stream-same-length",
-                kind: "message",
-                role: "assistant",
-                text: "aaaa",
-              },
-            ]}
-            threadId="thread-1"
-            workspaceId="ws-1"
-            isThinking
-            processingStartedAt={Date.now() - 1_000}
-            activeEngine={activeEngine}
-            openTargets={[]}
-            selectedOpenAppId=""
-          />,
-        );
+      const { container, rerender } = render(
+        <Messages
+          items={[
+            {
+              id: "user-stream-same-length",
+              kind: "message",
+              role: "user",
+              text: "继续输出",
+            },
+            {
+              id: "assistant-stream-same-length",
+              kind: "message",
+              role: "assistant",
+              text: "aaaa",
+            },
+          ]}
+          threadId="thread-1"
+          workspaceId="ws-1"
+          isThinking
+          processingStartedAt={Date.now() - 1_000}
+          activeEngine={activeEngine}
+          openTargets={[]}
+          selectedOpenAppId=""
+        />,
+      );
 
-        const baselineNode = container.querySelector(".working");
-        expect(baselineNode?.className ?? "").toContain("is-waiting");
+      const baselineNode = container.querySelector(".working");
+      expect(baselineNode?.className ?? "").toBe("working");
 
-        rerender(
-          <Messages
-            items={[
-              {
-                id: "user-stream-same-length",
-                kind: "message",
-                role: "user",
-                text: "继续输出",
-              },
-              {
-                id: "assistant-stream-same-length",
-                kind: "message",
-                role: "assistant",
-                text: "bbbb",
-              },
-            ]}
-            threadId="thread-1"
-            workspaceId="ws-1"
-            isThinking
-            processingStartedAt={Date.now() - 1_000}
-            activeEngine={activeEngine}
-            openTargets={[]}
-            selectedOpenAppId=""
-          />,
-        );
+      rerender(
+        <Messages
+          items={[
+            {
+              id: "user-stream-same-length",
+              kind: "message",
+              role: "user",
+              text: "继续输出",
+            },
+            {
+              id: "assistant-stream-same-length",
+              kind: "message",
+              role: "assistant",
+              text: "bbbb",
+            },
+          ]}
+          threadId="thread-1"
+          workspaceId="ws-1"
+          isThinking
+          processingStartedAt={Date.now() - 1_000}
+          activeEngine={activeEngine}
+          openTargets={[]}
+          selectedOpenAppId=""
+        />,
+      );
 
-        const ingressNode = container.querySelector(".working");
-        expect(ingressNode?.className ?? "").toContain("is-ingress");
-      } finally {
-        vi.useRealTimers();
-      }
+      const afterNode = container.querySelector(".working");
+      expect(afterNode?.className ?? "").toBe("working");
+      expect(afterNode?.className ?? "").not.toContain("is-ingress");
     },
   );
 

@@ -184,8 +184,6 @@ export function useMainHeaderActionItems({
           <PanelRightClose size={18} aria-hidden />
         ),
         onSelect: isCollapsed ? onExpandRightPanel : onCollapseRightPanel,
-        // 标记「收起态展开 affordance」，供根链叠加 running 会话计数徽章（D3）
-        rightPanelExpandAffordance: isCollapsed,
       });
     }
 

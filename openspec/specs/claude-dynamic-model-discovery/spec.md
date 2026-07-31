@@ -22,7 +22,7 @@ The system MUST build the Claude Code model catalog from a hardcoded built-in ca
 #### Scenario: builtin catalog is provided when overrides are empty
 - **WHEN** Claude settings/env overrides are empty
 - **AND** no user custom Claude models exist
-- **THEN** the Claude selector MUST show the built-in catalog entries with full runtime model ids (e.g. `claude-opus-4-8`)
+- **THEN** the Claude selector MUST show the built-in catalog entries with full runtime model ids (e.g. `claude-opus-5`)
 - **AND** the entry source MUST be diagnosable as `builtin`
 - **AND** it MUST NOT synthesize bare alias entries such as `sonnet`, `opus`, or `haiku`
 - **AND** it MUST NOT synthesize an option from the current selected value for Claude

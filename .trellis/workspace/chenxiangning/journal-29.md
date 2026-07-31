@@ -1803,3 +1803,36 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1249: 对话幕布结构分析文档
+
+**Date**: 2026-07-31
+**Task**: 对话幕布结构分析文档
+**Branch**: `bump-version-0.7.13`
+
+### Summary
+
+补充共享会话与各 CLI 对话幕布结构分析；二次校准默认运行态；给出 Wave A–D 后续计划
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8f85693ed` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -11,11 +11,20 @@
 //!   fields may evolve — parsed defensively).
 //! - `chat_history.jsonl`: one JSON object per line. Relevant line types:
 //!   - `user` — prompt (`content: [{type:"text", text:"<user_query>…</user_query>"}]`);
-//!     lines carrying `synthetic_reason` are synthetic reminders and skipped
+//!     lines carrying `synthetic_reason` are synthetic reminders and skipped.
+//!     Runtime context envelopes Grok injects without `synthetic_reason`
+//!     (`<user_info>`, `<git_status>`, bare `<system-reminder>`, …) are also
+//!     skipped so they do not appear as user bubbles or drive sidebar titles.
 //!   - `reasoning` — `{id, summary}` (summary string or parts array)
 //!   - `assistant` — `{content, tool_calls:[{id, function:{name, arguments}}]}`
 //!   - `tool_result` — `{tool_call_id, content}`
 //!   Other types (`system`, unknown) are skipped. Lines carry no usage data.
+//! - Sidebar `first_message` prefers the first real user prompt text; Grok's
+//!   `generated_title` / `session_summary` is only a fallback.
+//! - Sidebar `updated_at` prefers `chat_history.jsonl` mtime over
+//!   `summary.json`'s `updated_at`. Grok CLI may bulk-rewrite summary metadata
+//!   (including `updated_at`) without new conversation activity; trusting the
+//!   summary stamp alone makes every row look like "刚刚".
 
 use chrono::DateTime;
 use serde::{Deserialize, Serialize};
@@ -103,6 +112,32 @@ fn parse_timestamp_millis(value: &str) -> Option<i64> {
     DateTime::parse_from_rfc3339(value)
         .ok()
         .map(|dt| dt.timestamp_millis())
+}
+
+fn file_mtime_millis(path: &Path) -> Option<i64> {
+    std::fs::metadata(path)
+        .ok()
+        .and_then(|metadata| metadata.modified().ok())
+        .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis() as i64)
+}
+
+/// Resolve the activity timestamp shown in the sidebar.
+///
+/// Prefer the conversation file mtime (`chat_history.jsonl`) over
+/// `summary.json`'s `updated_at`. Grok CLI has been observed bulk-rewriting
+/// summary metadata for many sessions at once without appending chat lines;
+/// using those stamps makes every visible row collapse to "刚刚".
+fn resolve_session_activity_millis(
+    chat_history_mtime_millis: Option<i64>,
+    summary_updated_at_millis: Option<i64>,
+    summary_mtime_millis: Option<i64>,
+    created_at_millis: i64,
+) -> i64 {
+    chat_history_mtime_millis
+        .or(summary_updated_at_millis)
+        .or(summary_mtime_millis)
+        .unwrap_or(created_at_millis)
 }
 
 fn truncate_chars(value: &str, max_chars: usize) -> String {
@@ -322,6 +357,72 @@ fn strip_user_query_wrapper(text: &str) -> String {
     inner.trim().to_string()
 }
 
+/// Known Grok runtime envelopes that are stored as `type:"user"` but are not
+/// human prompts. Grok only marks some of these with `synthetic_reason`.
+const GROK_RUNTIME_CONTEXT_TAGS: &[&str] = &[
+    "user_info",
+    "git_status",
+    "system-reminder",
+    "open_and_recently_viewed_files",
+    "agent_skills",
+    "mcp_servers",
+    "image_compression_notice",
+];
+
+fn remove_xml_block_case_insensitive(text: &str, tag: &str) -> String {
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
+    let lower = text.to_ascii_lowercase();
+    let open_lower = open.to_ascii_lowercase();
+    let close_lower = close.to_ascii_lowercase();
+    let Some(start) = lower.find(&open_lower) else {
+        return text.to_string();
+    };
+    let after_open = start + open.len();
+    let Some(rel_end) = lower[after_open..].find(&close_lower) else {
+        // Unclosed envelope: drop from the open tag to end.
+        return text[..start].to_string();
+    };
+    let end = after_open + rel_end + close.len();
+    let mut out = String::with_capacity(text.len().saturating_sub(end - start));
+    out.push_str(&text[..start]);
+    out.push_str(&text[end..]);
+    out
+}
+
+fn strip_grok_runtime_context_envelopes(text: &str) -> String {
+    let mut rest = text.to_string();
+    for _ in 0..12 {
+        let before = rest.clone();
+        for tag in GROK_RUNTIME_CONTEXT_TAGS {
+            rest = remove_xml_block_case_insensitive(&rest, tag);
+        }
+        if rest == before {
+            break;
+        }
+    }
+    rest
+}
+
+/// True when a Grok `user` history line is runtime-injected context rather than
+/// a real human prompt. Covers envelopes Grok writes without `synthetic_reason`
+/// (notably `<user_info>` / `<git_status>`).
+fn is_grok_runtime_context_user_text(raw: &str) -> bool {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return true;
+    }
+    // Explicit user prompts (including multimodal) are never treated as context.
+    if trimmed.contains("<user_query>") || trimmed.contains("<image_files>") {
+        return false;
+    }
+    // After stripping known envelopes, pure context leaves nothing behind.
+    // Free-text prompts (legacy / plain) remain and are kept.
+    strip_grok_runtime_context_envelopes(trimmed)
+        .trim()
+        .is_empty()
+}
+
 /// Parse Grok wire user text into display text + image absolute paths.
 ///
 /// Multimodal turns are stored as:
@@ -475,6 +576,11 @@ fn parse_messages_from_chat_history(raw: &str) -> GrokSessionLoadResult {
                     continue;
                 }
                 let raw_text = extract_content_text(value.get("content"));
+                // Grok also injects `<user_info>` / `<git_status>` as plain user
+                // lines without `synthetic_reason` — hide those from the UI.
+                if is_grok_runtime_context_user_text(&raw_text) {
+                    continue;
+                }
                 let (display_text, image_paths) = parse_grok_user_prompt_for_display(&raw_text);
                 if display_text.is_empty() && image_paths.is_empty() {
                     continue;
@@ -621,6 +727,9 @@ fn first_user_prompt_text(raw: &str) -> Option<String> {
             continue;
         }
         let raw = extract_content_text(value.get("content"));
+        if is_grok_runtime_context_user_text(&raw) {
+            continue;
+        }
         let (display_text, image_paths) = parse_grok_user_prompt_for_display(&raw);
         let preview = if display_text.is_empty() && !image_paths.is_empty() {
             format!("[{} image(s)]", image_paths.len())
@@ -650,27 +759,28 @@ async fn build_summary_from_session_dir(
         .and_then(|raw| serde_json::from_str::<Value>(&raw).ok());
     let chat_history_raw = fs::read_to_string(&chat_history_path).await.ok();
 
-    let file_mtime_millis = std::fs::metadata(&chat_history_path)
-        .or_else(|_| std::fs::metadata(&summary_path))
-        .ok()
-        .and_then(|metadata| metadata.modified().ok())
-        .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|duration| duration.as_millis() as i64);
+    let chat_history_mtime_millis = file_mtime_millis(&chat_history_path);
+    let summary_mtime_millis = file_mtime_millis(&summary_path);
+    let fallback_file_mtime_millis = chat_history_mtime_millis.or(summary_mtime_millis);
 
     let created_at = summary_value
         .as_ref()
         .and_then(|summary| summary.get("created_at"))
         .and_then(|v| v.as_str())
         .and_then(parse_timestamp_millis)
-        .or(file_mtime_millis)
+        .or(fallback_file_mtime_millis)
         .unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
-    let updated_at = summary_value
+    let summary_updated_at = summary_value
         .as_ref()
         .and_then(|summary| summary.get("updated_at"))
         .and_then(|v| v.as_str())
-        .and_then(parse_timestamp_millis)
-        .or(file_mtime_millis)
-        .unwrap_or(created_at);
+        .and_then(parse_timestamp_millis);
+    let updated_at = resolve_session_activity_millis(
+        chat_history_mtime_millis,
+        summary_updated_at,
+        summary_mtime_millis,
+        created_at,
+    );
 
     let title = summary_value
         .as_ref()
@@ -709,8 +819,12 @@ async fn build_summary_from_session_dir(
         })
         .unwrap_or(0);
 
-    let first_message = title
-        .or_else(|| chat_history_raw.as_deref().and_then(first_user_prompt_text))
+    // Prefer the human's first real prompt over Grok's AI `generated_title`
+    // so the sidebar shows e.g. "你好" instead of "Chinese Hello Greeting Session".
+    let first_message = chat_history_raw
+        .as_deref()
+        .and_then(first_user_prompt_text)
+        .or(title)
         .map(|text| truncate_chars(&text, 60))
         .unwrap_or_else(|| session_id.to_string());
 
@@ -866,8 +980,9 @@ pub async fn delete_grok_session(
 #[cfg(test)]
 mod tests {
     use super::{
-        matches_workspace_path, parse_grok_user_prompt_for_display,
-        parse_messages_from_chat_history, parse_timestamp_millis, strip_user_query_wrapper,
+        file_mtime_millis, first_user_prompt_text, is_grok_runtime_context_user_text,
+        matches_workspace_path, parse_grok_user_prompt_for_display, parse_messages_from_chat_history,
+        parse_timestamp_millis, resolve_session_activity_millis, strip_user_query_wrapper,
         url_decode_dir_name,
     };
     use std::path::Path;
@@ -981,6 +1096,50 @@ mod tests {
     }
 
     #[test]
+    fn skips_user_info_git_status_envelopes_without_synthetic_reason() {
+        let chat_history = concat!(
+            r#"{"type":"user","content":[{"type":"text","text":"<user_info>\nOS Version: macos\nShell: /bin/zsh\nWorkspace Path: /tmp/repo\nToday's date: 2026-07-31\n</user_info>"}]}"#,
+            "\n",
+            r#"{"type":"user","content":[{"type":"text","text":"<user_info>\nOS Version: macos\n</user_info>\n\n<git_status>\n## main\n M src/a.ts\n</git_status>"}]}"#,
+            "\n",
+            r#"{"type":"user","content":[{"type":"text","text":"<system-reminder>\nAs you answer...\n</system-reminder>"}],"synthetic_reason":"project_instructions"}"#,
+            "\n",
+            r#"{"type":"user","content":[{"type":"text","text":"<user_query>\n你好\n</user_query>"}],"prompt_index":0}"#,
+            "\n",
+            r#"{"type":"assistant","content":"你好。我是 Grok。","model_id":"grok-build"}"#,
+            "\n",
+        );
+
+        let result = parse_messages_from_chat_history(chat_history);
+        assert_eq!(result.messages.len(), 2);
+        assert_eq!(result.messages[0].role, "user");
+        assert_eq!(result.messages[0].text, "你好");
+        assert_eq!(result.messages[1].role, "assistant");
+        assert_eq!(result.messages[1].text, "你好。我是 Grok。");
+    }
+
+    #[test]
+    fn first_user_prompt_skips_runtime_context_and_returns_real_query() {
+        let chat_history = concat!(
+            r#"{"type":"user","content":[{"type":"text","text":"<user_info>\nOS Version: macos\n</user_info>"}]}"#,
+            "\n",
+            r#"{"type":"user","content":[{"type":"text","text":"<user_query>\n你好\n</user_query>"}],"prompt_index":0}"#,
+            "\n",
+        );
+        assert_eq!(
+            first_user_prompt_text(chat_history).as_deref(),
+            Some("你好")
+        );
+        assert!(is_grok_runtime_context_user_text(
+            "<user_info>\nOS Version: macos\n</user_info>"
+        ));
+        assert!(!is_grok_runtime_context_user_text(
+            "<user_query>\n你好\n</user_query>"
+        ));
+        assert!(!is_grok_runtime_context_user_text("plain hello"));
+    }
+
+    #[test]
     fn strips_user_query_wrapper() {
         assert_eq!(
             strip_user_query_wrapper("<user_query>\nhello world\n</user_query>"),
@@ -1063,6 +1222,49 @@ mod tests {
     }
 
     #[test]
+    fn session_activity_prefers_chat_mtime_over_bulk_summary_updated_at() {
+        // Grok CLI bulk-rewrote summary.updated_at for many idle sessions at the
+        // same instant. Chat history mtime still reflects real last activity.
+        let chat_mtime = 1_785_400_000_000;
+        let bulk_summary_updated_at = 1_785_488_000_000;
+        let summary_mtime = bulk_summary_updated_at;
+        let created_at = 1_785_300_000_000;
+        assert_eq!(
+            resolve_session_activity_millis(
+                Some(chat_mtime),
+                Some(bulk_summary_updated_at),
+                Some(summary_mtime),
+                created_at,
+            ),
+            chat_mtime,
+        );
+    }
+
+    #[test]
+    fn session_activity_falls_back_to_summary_when_chat_missing() {
+        let summary_updated_at = 1_785_400_000_000;
+        let summary_mtime = 1_785_400_000_100;
+        let created_at = 1_785_300_000_000;
+        assert_eq!(
+            resolve_session_activity_millis(
+                None,
+                Some(summary_updated_at),
+                Some(summary_mtime),
+                created_at,
+            ),
+            summary_updated_at,
+        );
+        assert_eq!(
+            resolve_session_activity_millis(None, None, Some(summary_mtime), created_at),
+            summary_mtime,
+        );
+        assert_eq!(
+            resolve_session_activity_millis(None, None, None, created_at),
+            created_at,
+        );
+    }
+
+    #[test]
     fn workspace_match_requires_variants() {
         assert!(!matches_workspace_path("/tmp", &[]));
         let _ = Path::new("/tmp");
@@ -1116,9 +1318,14 @@ mod tests {
                 .expect("list sessions");
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].session_id, "019fa245-0000-4000-8000-000000000001");
-        assert_eq!(listed[0].first_message, "Fixture title");
+        // Prefer first real user prompt over Grok generated_title / session_summary.
+        assert_eq!(listed[0].first_message, "hello");
         assert_eq!(listed[0].message_count, 2);
         assert_eq!(listed[0].engine.as_deref(), Some("grok"));
+        // Activity time follows chat_history mtime, not a stale/bulk summary stamp.
+        let chat_mtime = file_mtime_millis(&session_dir.join("chat_history.jsonl"))
+            .expect("chat history mtime");
+        assert_eq!(listed[0].updated_at, chat_mtime);
 
         let loaded = super::load_grok_session(
             &workspace,

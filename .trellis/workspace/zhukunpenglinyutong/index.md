@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 72
+- **Total Sessions**: 74
 - **Last Active**: 2026-07-31
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~1005 | Active |
+| `journal-2.md` | ~1071 | Active |
 | `journal-1.md` | ~1997 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,8 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 74 | 2026-07-31 | 统一 Atomic 选模、侧栏运行时入口与 Grok 会话时间 | `5a4d9da81` | `chore/bump-version-0.7.13` |
+| 73 | 2026-07-31 | 完善 CLI 路径设置、错误边界与流式正文切换 | `c03f9b1f8` | `chore/bump-version-0.7.13` |
 | 72 | 2026-07-31 | 修复 mac-arm64 构建 TS2367 | `3e2c60863` | `chore/bump-version-0.7.12` |
 | 71 | 2026-07-31 | 完善模型选择器渠道切换与自定义模型弹窗 | `2f6ffb247` | `chore/bump-version-0.7.12` |
 | 70 | 2026-07-31 | Grok 图片输入与 Claude 模型目录 | `78a09bb6a3b2c73b173b7b856b92280cc1bc2e19` | `chore/bump-version-0.7.12` |

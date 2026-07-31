@@ -240,6 +240,9 @@ type SidebarProps = {
   hideLoadingProgressDialog?: LoadingProgressController["hideLoadingProgressDialog"];
   topbarNode?: ReactNode;
   runtimeNoticeDockNode?: ReactNode;
+  /** 打开运行时提示（入口在设置二级菜单，不在侧栏底部外显） */
+  onOpenRuntimeNotice?: () => void;
+  showRuntimeNoticeMenuItem?: boolean;
 };
 
 function SidebarImpl({
@@ -333,6 +336,8 @@ function SidebarImpl({
   hideLoadingProgressDialog,
   topbarNode,
   runtimeNoticeDockNode = null,
+  onOpenRuntimeNotice,
+  showRuntimeNoticeMenuItem = false,
 }: SidebarProps) {
   const { t } = useTranslation();
   const quickSearchLabel = t("sidebar.quickSearch");
@@ -2272,7 +2277,10 @@ function SidebarImpl({
               onOpenProjectMemory={onOpenProjectMemory}
               onOpenSettings={onOpenSettings}
               onAppModeChange={onAppModeChange}
+              onOpenRuntimeNotice={onOpenRuntimeNotice}
+              showRuntimeNotice={showRuntimeNoticeMenuItem}
             />
+            {/* 锚点保留在侧栏底部供展开面板定位；外显气泡入口已收入设置二级菜单 */}
             {runtimeNoticeDockNode}
             <SidebarVersionTag t={t} onOpenReleaseNotes={onOpenReleaseNotes} />
           </div>

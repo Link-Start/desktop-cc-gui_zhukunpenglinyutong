@@ -194,6 +194,7 @@ const git = {
     "generateCommitMessageEngineOpenCode": "Usar el motor OpenCode",
     "generateCommitMessageLastConfig": "Usar la última configuración",
     "commitMessageRequiresCodex": "La generación de mensajes de commit con IA requiere el CLI de Codex. Instálalo con: npm install -g @openai/codex",
+    "commitMessageRuntimeRecovering": "El runtime de Codex se desconectó. La aplicación intentó recuperarse automáticamente; vuelve a generar el mensaje de commit.",
     "noMessage": "Sin mensaje",
     "unknown": "desconocido",
     "commitSingle": "commit",

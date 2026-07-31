@@ -97,6 +97,7 @@ vi.mock("react-i18next", () => ({
         "update.releaseNotesPage": "{{current}} / {{total}}",
         "update.releaseNotesEnglish": "English:",
         "update.releaseNotesChinese": "中文：",
+        "update.availableAction": "Update available",
         "common.later": "Later",
         "common.dismiss": "Dismiss",
         "common.retry": "Retry",
@@ -230,6 +231,10 @@ vi.mock("react-i18next", () => ({
         "home.addWorkspace": "Add Workspace",
         "home.usageSnapshot": "Usage snapshot",
         "home.refreshUsage": "Refresh usage",
+        "messages.totalDuration": "本次耗时",
+        "messages.durationSeconds": "耗时{{seconds}}s",
+        "messages.tokenUsage": "输入 {{input}} / 输出 {{output}}",
+        "messages.tokenUsageTooltip": "输入 {{input}} token / 输出 {{output}} token",
         "messages.finalMessageBoundary": "Final Message",
         "messages.rowRenderFailedTitle": "This message could not be rendered.",
         "messages.rowRenderFailedDescription":

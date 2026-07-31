@@ -580,6 +580,13 @@
   transition: all 0.15s;
 }
 
+.vendor-custom-path-summary {
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .vendor-plugin-models-manage-btn:hover {
   background: var(--settings-basic-control-hover);
   color: var(--text-primary);

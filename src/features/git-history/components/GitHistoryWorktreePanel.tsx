@@ -37,7 +37,10 @@ import {
 import type { GitFileStatus } from "../../../types";
 import { subscribeDetachedExternalFileChangeBatch } from "../../../services/events";
 import { setVisibilityGatedInterval } from "../../../services/visibilityGatedInterval";
-import { sanitizeGeneratedCommitMessage } from "../../../utils/commitMessage";
+import {
+  resolveCommitMessageGenerationErrorKey,
+  sanitizeGeneratedCommitMessage,
+} from "../../../utils/commitMessage";
 import { localizeGitErrorMessage } from "../gitErrorI18n";
 import { runScopedCommitOperation } from "../../git/utils/commitScope";
 import {
@@ -543,12 +546,13 @@ export function GitHistoryWorktreePanel({
         setCommitMessage(sanitizeGeneratedCommitMessage(generated));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        setCommitMessageError(message);
+        const errorKey = resolveCommitMessageGenerationErrorKey(message, engine);
+        setCommitMessageError(errorKey ? t(errorKey) : message);
       } finally {
         setCommitMessageLoading(false);
       }
     },
-    [commitLoading, commitMessageLoading, repositoryRoot, status.files, workspaceId],
+    [commitLoading, commitMessageLoading, repositoryRoot, status.files, t, workspaceId],
   );
 
   const selectedPathsForGeneration = useMemo(

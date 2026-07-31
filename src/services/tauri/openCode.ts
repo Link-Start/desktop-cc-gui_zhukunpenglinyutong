@@ -13,6 +13,25 @@ function traceStartupInvoke<T>(
   return traceStartupCommand(commandLabel, scope, run);
 }
 
+/**
+ * Expected OpenCode CLI unavailability for discovery / catalog prewarm.
+ * Missing / disabled / unsafe CLI must resolve as empty data — not as a
+ * failed startup command ("内部命令失败") in the runtime notice dock.
+ * Aligns with catalog projection treating "OpenCode CLI not found" as empty.
+ */
+export function isOpenCodeCliUnavailableError(error: unknown): boolean {
+  const message = String(error);
+  return (
+    message.includes("OpenCode CLI not found") ||
+    message.includes("OpenCode CLI is disabled in CLI validation settings") ||
+    message.includes("Engine is disabled in CLI validation settings") ||
+    message.includes("[OPENCODE_CLI_UNSAFE]")
+  );
+}
+
+/** @deprecated Use {@link isOpenCodeCliUnavailableError}. */
+export const isOpenCodeSessionListUnavailableError = isOpenCodeCliUnavailableError;
+
 export async function getOpenCodeSessionList(workspaceId: string) {
   return traceStartupInvoke(
     "opencode_session_list",
@@ -28,11 +47,7 @@ export async function getOpenCodeSessionList(workspaceId: string) {
           }>
         >("opencode_session_list", { workspaceId });
       } catch (error) {
-        if (
-          String(error).includes(
-            "OpenCode CLI is disabled in CLI validation settings",
-          )
-        ) {
+        if (isOpenCodeCliUnavailableError(error)) {
           return [];
         }
         throw error;

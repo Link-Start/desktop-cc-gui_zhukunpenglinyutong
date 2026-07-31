@@ -65,6 +65,7 @@
 }
 
 .sidebar-primary-nav-item-bottom {
+  position: relative;
   width: 32px;
   height: 32px;
   min-height: 32px;
@@ -103,7 +104,6 @@
   background: var(--surface-hover);
   color: var(--text-strong);
 }
-
 
 .sidebar-primary-nav-item-collapse {
   margin-top: 2px;

@@ -1311,7 +1311,7 @@ const settings = {
         "baseUrlPlaceholder": "https://opencode.ai/zen/v1",
         "apiKeyPlaceholder": "sk-...",
         "models": "模型",
-        "modelsPlaceholder": "例如：gpt-5.1, claude-opus-4-8",
+        "modelsPlaceholder": "例如：gpt-5.1, claude-opus-5",
         "modelsHint": "多個模型以逗號分隔；留空則不限制。"
       },
       "gemini": {

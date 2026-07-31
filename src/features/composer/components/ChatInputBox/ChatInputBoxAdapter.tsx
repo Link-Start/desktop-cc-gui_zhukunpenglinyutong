@@ -470,14 +470,11 @@ export interface ChatInputBoxAdapterProps {
   /** Shared Thread id（Wave 4 / B.6：send 状态条/状态机的 store key 组成）。 */
   threadId?: string | null;
   engines?: AdapterEngineInfo[];
-  onSelectEngine?: (engine: EngineType) => void;
   models?: AdapterModelOption[];
   providerModelCatalogs?: Partial<Record<EngineType, AdapterModelOption[]>>;
   providerProfileId?: string | null;
   executionTarget?: ExecutionTarget | null;
   onExecutionTargetChange?: (target: ExecutionTarget) => void;
-  onNativeProviderTargetChange?: (target: ExecutionTarget) => void;
-  onSelectModel?: (id: string) => void;
 
   // Reasoning
   reasoningOptions?: string[];
@@ -745,24 +742,6 @@ type ChatInputProvider = 'claude' | 'codex' | 'gemini' | 'grok' | 'kimi' | 'open
 
 function engineToProvider(engine?: EngineType): ChatInputProvider {
   switch (engine) {
-    case 'codex':
-      return 'codex';
-    case 'opencode':
-      return 'opencode';
-    case 'gemini':
-      return 'gemini';
-    case 'grok':
-      return 'grok';
-    case 'kimi':
-      return 'kimi';
-    case 'claude':
-    default:
-      return 'claude';
-  }
-}
-
-function providerToEngine(providerId: string): EngineType {
-  switch (providerId) {
     case 'codex':
       return 'codex';
     case 'opencode':
@@ -1050,14 +1029,11 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       isSharedSession = false,
       providerTargetPickerMode,
       engines,
-      onSelectEngine,
       models,
       providerModelCatalogs,
       providerProfileId,
       executionTarget,
       onExecutionTargetChange,
-      onNativeProviderTargetChange,
-      onSelectModel,
       reasoningOptions,
       selectedEffort,
       onSelectEffort,
@@ -1130,10 +1106,9 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       completionEmailDisabled,
       onToggleCompletionEmail,
     } = props;
+    // 统一 Atomic 双栏；Shared Session 用 shared catalog，其余 create-session。
     const effectiveProviderTargetPickerMode =
-      providerTargetPickerMode ?? (isSharedSession ? 'shared' : 'native');
-    const usesAtomicProviderTargetPicker =
-      effectiveProviderTargetPickerMode !== 'native';
+      providerTargetPickerMode ?? (isSharedSession ? 'shared' : 'create-session');
     const { t } = useTranslation();
     const chatInputRef = useRef<ChatInputBoxHandle>(null);
     const renderCountRef = useRef(0);
@@ -1282,11 +1257,6 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       onRemoveAttachment?.(path);
     }, [onRemoveAttachment]);
 
-    // Handle model selection (ChatInputBox sends model ID directly)
-    const handleModelSelect = useCallback((modelId: string) => {
-      onSelectModel?.(modelId);
-    }, [onSelectModel]);
-
     // Handle reasoning effort change
     const handleReasoningChange = useCallback((effort: ReasoningEffort | null) => {
       onSelectEffort?.(effort);
@@ -1342,14 +1312,6 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       },
       [isCodexEngine, onStreamingEnabledChange],
     );
-
-    const handleProviderSelect = useCallback((providerId: string) => {
-      const targetEngine = providerToEngine(providerId);
-      if (targetEngine === selectedEngine) {
-        return;
-      }
-      onSelectEngine?.(targetEngine);
-    }, [onSelectEngine, selectedEngine]);
 
     const handleCodexSpeedModeChange = useCallback(
       (mode: Exclude<CodexSpeedMode, 'unknown'>) => {
@@ -2139,7 +2101,6 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         currentProviderProfileId={providerProfileId}
         executionTarget={executionTarget}
         onExecutionTargetChange={onExecutionTargetChange}
-        onNativeProviderTargetChange={onNativeProviderTargetChange}
         providerTargetPickerMode={effectiveProviderTargetPickerMode}
         providerAvailability={providerAvailability}
         providerVersions={providerVersions}
@@ -2159,16 +2120,9 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         } : undefined}
         onRemoveAttachment={handleRemoveAttachment}
         onModeSelect={onModeSelect}
-        onModelSelect={
-          !usesAtomicProviderTargetPicker && onSelectModel
-            ? handleModelSelect
-            : undefined
-        }
-        onProviderSelect={
-          !usesAtomicProviderTargetPicker && onSelectEngine
-            ? handleProviderSelect
-            : undefined
-        }
+        // Atomic 双栏唯一选择入口：engine/model 改动走 onExecutionTargetChange。
+        onModelSelect={undefined}
+        onProviderSelect={undefined}
         reasoningEffort={effortToOptionalReasoning(selectedEffort)}
         reasoningOptions={normalizeReasoningOptions(reasoningOptions)}
         onReasoningChange={onSelectEffort ? handleReasoningChange : undefined}

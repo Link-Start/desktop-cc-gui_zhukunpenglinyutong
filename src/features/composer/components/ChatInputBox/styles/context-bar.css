@@ -572,9 +572,9 @@
   transform: translateX(-50%);
   margin-bottom: 4px;
 
-  background: var(--tooltip-bg, #1a1c24);
-  color: var(--text-primary);
-  border: 1px solid var(--dropdown-border);
+  background: var(--tooltip-bg, var(--surface-popover, var(--popover, #1a1c24)));
+  color: var(--text-primary, var(--popover-foreground, inherit));
+  border: 1px solid var(--dropdown-border, var(--border-strong, transparent));
   border-radius: 6px;
   padding: 6px 12px;
   font-size: 12px;
@@ -611,9 +611,9 @@
   /* Remove translateY from transform, use margin-top for fine-tuning instead to avoid animation conflicts */
   transform: translateX(-50%);
 
-  background: var(--tooltip-bg, #1a1c24);
-  color: var(--text-primary);
-  border: 1px solid var(--dropdown-border);
+  background: var(--tooltip-bg, var(--surface-popover, var(--popover, #1a1c24)));
+  color: var(--text-primary, var(--popover-foreground, inherit));
+  border: 1px solid var(--dropdown-border, var(--border-strong, transparent));
   border-radius: 6px;
   padding: 6px 12px;
   font-size: 12px;
@@ -729,9 +729,12 @@
   transform: translate(0, 8px);
   min-width: 248px;
   max-width: 320px;
-  background: var(--tooltip-bg, #1a1c24);
-  color: var(--text-primary);
-  border: 1px solid var(--dropdown-border);
+  /* Prefer --tooltip-bg; fall back to popover surface so system-light
+     (and other scopes outside .chat-input-box) never paints a dark card
+     against dark text. */
+  background: var(--tooltip-bg, var(--surface-popover, var(--popover, #1a1c24)));
+  color: var(--text-primary, var(--popover-foreground, inherit));
+  border: 1px solid var(--dropdown-border, var(--border-strong, transparent));
   border-radius: 10px;
   padding: 10px 12px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);

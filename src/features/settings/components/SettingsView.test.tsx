@@ -754,15 +754,16 @@ describe("SettingsView Display", () => {
         projectManagementEntry,
       ),
     );
+    // 内置精选已并入「其他设置」，侧栏不再有独立 Skills 入口。
     expect(
-      sidebarQueries.getByRole("button", { name: "Skills" }),
-    ).toBeTruthy();
+      sidebarQueries.queryByRole("button", { name: "Skills" }),
+    ).toBeNull();
     expect(
       sidebarQueries.getByRole("button", { name: "Agents / Prompts" }),
     ).toBeTruthy();
     expect(
-      sidebarQueries.getByRole("button", { name: "Runtime Environment" }),
-    ).toBeTruthy();
+      sidebarQueries.queryByRole("button", { name: "Runtime Environment" }),
+    ).toBeNull();
     expect(
       sidebarQueries.queryByRole("button", { name: "Experimental" }),
     ).toBeNull();
@@ -2314,23 +2315,15 @@ describe("SettingsView Shortcuts", () => {
     await flushSettingsViewEffects();
     expect(screen.getByText("settings.prompt.title")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Skills" }));
+    fireEvent.click(screen.getByRole("button", { name: "Other" }));
     await flushSettingsViewEffects();
-    // MCP 服务器清单已迁移到「拓展 → Mcps」；设置侧该页只保留内置精选 Skills。
+    // 内置精选 Skills 已并入「其他设置」。
     expect(screen.getByTestId("curated-section-stub")).toBeTruthy();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Runtime Environment" }),
-    );
-    await flushSettingsViewEffects();
-    expect(screen.getByRole("button", { name: "Runtime Pool" })).toBeTruthy();
-    expectTabButtonHasIcon("Runtime Pool");
-    expectTabButtonHasIcon("CLI Validation");
-    fireEvent.click(screen.getByRole("button", { name: "CLI Validation" }));
-    await flushSettingsViewEffects();
-    expect(screen.getAllByText("CLI Validation").length).toBeGreaterThanOrEqual(
-      2,
-    );
+    // 运行环境入口已从侧栏隐藏；内容逻辑仍保留，可通过 initialSection 验证。
+    expect(
+      screen.queryByRole("button", { name: "Runtime Environment" }),
+    ).toBeNull();
   });
 
   it("closes when clicking back to app", async () => {

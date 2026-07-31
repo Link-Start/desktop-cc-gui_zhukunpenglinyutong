@@ -1,4 +1,5 @@
 import Brain from "lucide-react/dist/esm/icons/brain";
+import CircleCheck from "lucide-react/dist/esm/icons/circle-check";
 import GitCommitHorizontal from "lucide-react/dist/esm/icons/git-commit-horizontal";
 import LayoutDashboard from "lucide-react/dist/esm/icons/layout-dashboard";
 import Lock from "lucide-react/dist/esm/icons/lock";
@@ -19,6 +20,10 @@ type SidebarSettingsMenuProps = {
   onOpenProjectMemory: () => void;
   onOpenSettings: () => void;
   onAppModeChange: (mode: AppMode) => void;
+  /** 打开侧栏运行时提示面板（入口已收入设置二级菜单，不再外显） */
+  onOpenRuntimeNotice?: () => void;
+  /** 是否展示运行时提示菜单项（受 clientUiVisibility 控制） */
+  showRuntimeNotice?: boolean;
 };
 
 export function SidebarSettingsMenu({
@@ -34,6 +39,8 @@ export function SidebarSettingsMenu({
   onOpenProjectMemory,
   onOpenSettings,
   onAppModeChange,
+  onOpenRuntimeNotice,
+  showRuntimeNotice = false,
 }: SidebarSettingsMenuProps) {
   return (
     <div className="sidebar-settings-dropdown-wrapper">
@@ -91,6 +98,20 @@ export function SidebarSettingsMenu({
             <GitCommitHorizontal size={14} aria-hidden />
             <span>{t("git.historyQuickAction")}</span>
           </button>
+          {showRuntimeNotice && onOpenRuntimeNotice ? (
+            <button
+              type="button"
+              role="menuitem"
+              className="sidebar-settings-dropdown-item"
+              onClick={() => {
+                onClose();
+                onOpenRuntimeNotice();
+              }}
+            >
+              <CircleCheck size={14} aria-hidden />
+              <span>{t("runtimeNotice.title")}</span>
+            </button>
+          ) : null}
           <button
             type="button"
             role="menuitem"

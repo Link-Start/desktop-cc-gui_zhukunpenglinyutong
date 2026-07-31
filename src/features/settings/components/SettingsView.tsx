@@ -47,16 +47,12 @@ import { DEFAULT_OPEN_APP_ID } from "../../app/constants";
 import { writeClientStoreValue } from "../../../services/clientStorage";
 import { VendorSettingsPanel } from "../../vendors/components/VendorSettingsPanel";
 import { AgentSettingsSection } from "./AgentSettingsSection";
-import { PlaceholderSection } from "./PlaceholderSection";
 import { CommitSection } from "./CommitSection";
 import { PromptSection } from "./PromptSection";
 import { UsageSection } from "./UsageSection";
-import { CuratedSection } from "../../curated-skills";
 import type { SessionRadarEntry } from "../../session-activity/hooks/useSessionRadarFeed";
 import { deleteSessionRadarHistoryEntries } from "../../session-activity/utils/sessionRadarHistoryManagement";
 import Settings from "lucide-react/dist/esm/icons/settings";
-import Server from "lucide-react/dist/esm/icons/server";
-import Shield from "lucide-react/dist/esm/icons/shield";
 import BarChart3 from "lucide-react/dist/esm/icons/bar-chart-3";
 import MoreHorizontalIcon from "lucide-react/dist/esm/icons/more-horizontal";
 import Users from "lucide-react/dist/esm/icons/users";
@@ -376,24 +372,6 @@ export function SettingsView({
   >("runtime-pool");
   const [commitPrompt, setCommitPrompt] = useState("");
   const [appVersion, setAppVersion] = useState<string | null>(null);
-  const [claudePathDraft, setClaudePathDraft] = useState(
-    appSettings.claudeBin ?? "",
-  );
-  const [kimiPathDraft, setKimiPathDraft] = useState(
-    appSettings.kimiBin ?? "",
-  );
-  const [grokPathDraft, setGrokPathDraft] = useState(
-    appSettings.grokBin ?? "",
-  );
-  const [openCodePathDraft, setOpenCodePathDraft] = useState(
-    appSettings.opencodeBin ?? "",
-  );
-  const [codexPathDraft, setCodexPathDraft] = useState(
-    appSettings.codexBin ?? "",
-  );
-  const [codexArgsDraft, setCodexArgsDraft] = useState(
-    appSettings.codexArgs ?? "",
-  );
   const [terminalShellPathDraft, setTerminalShellPathDraft] = useState(
     appSettings.terminalShellPath ?? "",
   );
@@ -502,7 +480,7 @@ export function SettingsView({
     }>({ status: "idle", message: null });
   const diagnosticsBundleRequestIdRef = useRef(0);
   const diagnosticsBundleMountedRef = useRef(true);
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
   const [shortcutDrafts, setShortcutDrafts] = useState<ShortcutDrafts>(() =>
     buildShortcutDrafts(appSettings),
   );
@@ -718,9 +696,6 @@ export function SettingsView({
     [],
   );
   const shouldShowWorkspaceSelector = false;
-  const mcpSectionDisabled = TEMPORARILY_DISABLED_SIDEBAR_SECTIONS.has("mcp");
-  const permissionsSectionDisabled =
-    TEMPORARILY_DISABLED_SIDEBAR_SECTIONS.has("permissions");
   const hasCodexHomeOverrides = useMemo(
     () => projects.some((workspace) => workspace.settings.codexHome != null),
     [projects],
@@ -763,29 +738,6 @@ export function SettingsView({
     };
   }, []);
 
-  useEffect(() => {
-    setClaudePathDraft(appSettings.claudeBin ?? "");
-  }, [appSettings.claudeBin]);
-
-  useEffect(() => {
-    setKimiPathDraft(appSettings.kimiBin ?? "");
-  }, [appSettings.kimiBin]);
-
-  useEffect(() => {
-    setGrokPathDraft(appSettings.grokBin ?? "");
-  }, [appSettings.grokBin]);
-
-  useEffect(() => {
-    setOpenCodePathDraft(appSettings.opencodeBin ?? "");
-  }, [appSettings.opencodeBin]);
-
-  useEffect(() => {
-    setCodexPathDraft(appSettings.codexBin ?? "");
-  }, [appSettings.codexBin]);
-
-  useEffect(() => {
-    setCodexArgsDraft(appSettings.codexArgs ?? "");
-  }, [appSettings.codexArgs]);
 
   useEffect(() => {
     setTerminalShellPathDraft(appSettings.terminalShellPath ?? "");
@@ -876,6 +828,11 @@ export function SettingsView({
 
   useEffect(() => {
     if (initialSection) {
+      // 「内置精选」已并入其他设置；遗留 mcp 深链统一落到 other。
+      if (initialSection === "mcp") {
+        setActiveSection("other");
+        return;
+      }
       setActiveSection(
         TEMPORARILY_DISABLED_SIDEBAR_SECTIONS.has(initialSection)
           ? "providers"
@@ -920,7 +877,8 @@ export function SettingsView({
         return;
       case "mcp-servers":
       case "mcp-skills":
-        setActiveSection("mcp");
+        // 内置精选入口已取消，深链落到其他设置。
+        setActiveSection("other");
         return;
       case "runtime-pool":
         setActiveSection("runtime-environment");
@@ -993,87 +951,11 @@ export function SettingsView({
     return () => window.clearTimeout(timer);
   }, [activeSection, initialHighlightTarget]);
 
-  const nextClaudeBin = claudePathDraft.trim() ? claudePathDraft.trim() : null;
-  const nextKimiBin = kimiPathDraft.trim() ? kimiPathDraft.trim() : null;
-  const nextGrokBin = grokPathDraft.trim() ? grokPathDraft.trim() : null;
-  const nextOpenCodeBin = openCodePathDraft.trim()
-    ? openCodePathDraft.trim()
-    : null;
-  const nextCodexBin = codexPathDraft.trim() ? codexPathDraft.trim() : null;
-  const nextCodexArgs = codexArgsDraft.trim() ? codexArgsDraft.trim() : null;
   const nextTerminalShellPath = terminalShellPathDraft.trim()
     ? terminalShellPathDraft.trim()
     : null;
-  const claudeDirty = nextClaudeBin !== (appSettings.claudeBin ?? null);
-  const kimiDirty = nextKimiBin !== (appSettings.kimiBin ?? null);
-  const grokDirty = nextGrokBin !== (appSettings.grokBin ?? null);
-  const openCodeDirty = nextOpenCodeBin !== (appSettings.opencodeBin ?? null);
-  const codexDirty =
-    nextCodexBin !== (appSettings.codexBin ?? null) ||
-    nextCodexArgs !== (appSettings.codexArgs ?? null);
   const terminalShellPathDirty =
     nextTerminalShellPath !== (appSettings.terminalShellPath ?? null);
-
-  const handleSaveClaudeSettings = async () => {
-    setIsSavingSettings(true);
-    try {
-      await onUpdateAppSettings({
-        ...appSettings,
-        claudeBin: nextClaudeBin,
-      });
-    } finally {
-      setIsSavingSettings(false);
-    }
-  };
-
-  const handleSaveKimiSettings = async () => {
-    setIsSavingSettings(true);
-    try {
-      await onUpdateAppSettings({
-        ...appSettings,
-        kimiBin: nextKimiBin,
-      });
-    } finally {
-      setIsSavingSettings(false);
-    }
-  };
-
-  const handleSaveGrokSettings = async () => {
-    setIsSavingSettings(true);
-    try {
-      await onUpdateAppSettings({
-        ...appSettings,
-        grokBin: nextGrokBin,
-      });
-    } finally {
-      setIsSavingSettings(false);
-    }
-  };
-
-  const handleSaveOpenCodeSettings = async () => {
-    setIsSavingSettings(true);
-    try {
-      await onUpdateAppSettings({
-        ...appSettings,
-        opencodeBin: nextOpenCodeBin,
-      });
-    } finally {
-      setIsSavingSettings(false);
-    }
-  };
-
-  const handleSaveCodexSettings = async () => {
-    setIsSavingSettings(true);
-    try {
-      await onUpdateAppSettings({
-        ...appSettings,
-        codexBin: nextCodexBin,
-        codexArgs: nextCodexArgs,
-      });
-    } finally {
-      setIsSavingSettings(false);
-    }
-  };
 
   const handleSaveTerminalShellPath = async () => {
     await onUpdateAppSettings({
@@ -1453,60 +1335,22 @@ export function SettingsView({
     });
   };
 
-  const handleBrowseCodex = async () => {
-    const selection = await open({ multiple: false, directory: false });
-    if (!selection || Array.isArray(selection)) {
-      return;
-    }
-    setCodexPathDraft(selection);
-  };
-
-  const handleBrowseClaude = async () => {
-    const selection = await open({ multiple: false, directory: false });
-    if (!selection || Array.isArray(selection)) {
-      return;
-    }
-    setClaudePathDraft(selection);
-  };
-
-  const handleBrowseKimi = async () => {
-    const selection = await open({ multiple: false, directory: false });
-    if (!selection || Array.isArray(selection)) {
-      return;
-    }
-    setKimiPathDraft(selection);
-  };
-
-  const handleBrowseGrok = async () => {
-    const selection = await open({ multiple: false, directory: false });
-    if (!selection || Array.isArray(selection)) {
-      return;
-    }
-    setGrokPathDraft(selection);
-  };
-
-  const handleBrowseOpenCode = async () => {
-    const selection = await open({ multiple: false, directory: false });
-    if (!selection || Array.isArray(selection)) {
-      return;
-    }
-    setOpenCodePathDraft(selection);
-  };
-
   const handleRunDoctor = async () => {
+    const codexBin = appSettings.codexBin ?? null;
+    const codexArgs = appSettings.codexArgs ?? null;
     setDoctorState({ status: "running", result: null });
     try {
       if (!runCodexDoctor) {
         throw new Error("Codex doctor is not available.");
       }
-      const result = await runCodexDoctor(nextCodexBin, nextCodexArgs);
+      const result = await runCodexDoctor(codexBin, codexArgs);
       setDoctorState({ status: "done", result });
     } catch (error) {
       setDoctorState({
         status: "done",
         result: {
           ok: false,
-          codexBin: nextCodexBin,
+          codexBin,
           version: null,
           appServerOk: false,
           details: error instanceof Error ? error.message : String(error),
@@ -1520,19 +1364,20 @@ export function SettingsView({
   };
 
   const handleRunClaudeDoctor = async () => {
+    const claudeBin = appSettings.claudeBin ?? null;
     setClaudeDoctorState({ status: "running", result: null });
     try {
       if (!onRunClaudeDoctor) {
         throw new Error("Claude doctor is not available.");
       }
-      const result = await onRunClaudeDoctor(nextClaudeBin);
+      const result = await onRunClaudeDoctor(claudeBin);
       setClaudeDoctorState({ status: "done", result });
     } catch (error) {
       setClaudeDoctorState({
         status: "done",
         result: {
           ok: false,
-          codexBin: nextClaudeBin,
+          codexBin: claudeBin,
           version: null,
           appServerOk: false,
           details: error instanceof Error ? error.message : String(error),
@@ -1546,19 +1391,20 @@ export function SettingsView({
   };
 
   const handleRunKimiDoctor = async () => {
+    const kimiBin = appSettings.kimiBin ?? null;
     setKimiDoctorState({ status: "running", result: null });
     try {
       if (!onRunKimiDoctor) {
         throw new Error("Kimi doctor is not available.");
       }
-      const result = await onRunKimiDoctor(nextKimiBin);
+      const result = await onRunKimiDoctor(kimiBin);
       setKimiDoctorState({ status: "done", result });
     } catch (error) {
       setKimiDoctorState({
         status: "done",
         result: {
           ok: false,
-          codexBin: nextKimiBin,
+          codexBin: kimiBin,
           version: null,
           appServerOk: false,
           details: error instanceof Error ? error.message : String(error),
@@ -1572,19 +1418,20 @@ export function SettingsView({
   };
 
   const handleRunGrokDoctor = async () => {
+    const grokBin = appSettings.grokBin ?? null;
     setGrokDoctorState({ status: "running", result: null });
     try {
       if (!onRunGrokDoctor) {
         throw new Error("Grok doctor is not available.");
       }
-      const result = await onRunGrokDoctor(nextGrokBin);
+      const result = await onRunGrokDoctor(grokBin);
       setGrokDoctorState({ status: "done", result });
     } catch (error) {
       setGrokDoctorState({
         status: "done",
         result: {
           ok: false,
-          codexBin: nextGrokBin,
+          codexBin: grokBin,
           version: null,
           appServerOk: false,
           details: error instanceof Error ? error.message : String(error),
@@ -1598,19 +1445,20 @@ export function SettingsView({
   };
 
   const handleRunOpenCodeDoctor = async () => {
+    const openCodeBin = appSettings.opencodeBin ?? null;
     setOpenCodeDoctorState({ status: "running", result: null });
     try {
       if (!onRunOpenCodeDoctor) {
         throw new Error("OpenCode doctor is not available.");
       }
-      const result = await onRunOpenCodeDoctor(nextOpenCodeBin);
+      const result = await onRunOpenCodeDoctor(openCodeBin);
       setOpenCodeDoctorState({ status: "done", result });
     } catch (error) {
       setOpenCodeDoctorState({
         status: "done",
         result: {
           ok: false,
-          codexBin: nextOpenCodeBin,
+          codexBin: openCodeBin,
           version: null,
           appServerOk: false,
           details: error instanceof Error ? error.message : String(error),
@@ -1866,11 +1714,6 @@ export function SettingsView({
           title: t("settings.sidebarProjectManagement"),
           description: t("settings.projectManagementDescription"),
         };
-      case "mcp":
-        return {
-          title: t("settings.sidebarMcpSkills"),
-          description: t("settings.mcpSkillsDescription"),
-        };
       case "permissions":
         return {
           title: t("settings.placeholder.permissions.title"),
@@ -1981,45 +1824,11 @@ export function SettingsView({
           </button>
           <button
             type="button"
-            className={`settings-nav ${!mcpSectionDisabled && activeSection === "mcp" ? "active" : ""}${mcpSectionDisabled ? " is-disabled" : ""}`}
-            onClick={() => {
-              if (!mcpSectionDisabled) {
-                setActiveSection("mcp");
-              }
-            }}
-            disabled={mcpSectionDisabled}
-          >
-            <Server aria-hidden />
-            {t("settings.sidebarMcpSkills")}
-          </button>
-          <button
-            type="button"
-            className={`settings-nav ${!permissionsSectionDisabled && activeSection === "permissions" ? "active" : ""}${permissionsSectionDisabled ? " is-disabled" : ""}`}
-            onClick={() => {
-              if (!permissionsSectionDisabled) {
-                setActiveSection("permissions");
-              }
-            }}
-            disabled={permissionsSectionDisabled}
-          >
-            <Shield aria-hidden />
-            {t("settings.sidebarPermissions")}
-          </button>
-          <button
-            type="button"
             className={`settings-nav ${activeSection === "agent-prompt-management" ? "active" : ""}`}
             onClick={() => setActiveSection("agent-prompt-management")}
           >
             <span className="codicon codicon-robot" />
             {t("settings.sidebarAgentPromptManagement")}
-          </button>
-          <button
-            type="button"
-            className={`settings-nav ${activeSection === "runtime-environment" ? "active" : ""}`}
-            onClick={() => setActiveSection("runtime-environment")}
-          >
-            <TerminalSquare aria-hidden />
-            {t("settings.sidebarRuntimeEnvironment")}
           </button>
           <button
             type="button"
@@ -2358,19 +2167,6 @@ export function SettingsView({
               onUpdateAppSettings={onUpdateAppSettings}
             />
           )}
-          {activeSection === "mcp" && (
-            // MCP 服务器清单已整体迁移到「拓展 → Mcps」；设置侧只保留
-            // 随包发布的内置精选 Skills 开关。
-            <section className="settings-section">
-              <CuratedSection
-                appSettings={appSettings}
-                onUpdateAppSettings={onUpdateAppSettings}
-              />
-            </section>
-          )}
-          {activeSection === "permissions" && (
-            <PlaceholderSection type="permissions" />
-          )}
           {activeSection === "commit" && (
             <CommitSection
               commitPrompt={commitPrompt}
@@ -2429,6 +2225,8 @@ export function SettingsView({
             <OtherSection
               title={null}
               description={null}
+              appSettings={appSettings}
+              onUpdateAppSettings={onUpdateAppSettings}
               sessionRadarRecentCompletedSessions={
                 sessionRadarRecentCompletedSessions
               }
@@ -2477,42 +2275,14 @@ export function SettingsView({
                 t={t}
                 appSettings={appSettings}
                 onUpdateAppSettings={onUpdateAppSettings}
-                claudePathDraft={claudePathDraft}
-                setClaudePathDraft={setClaudePathDraft}
-                claudeDirty={claudeDirty}
-                handleBrowseClaude={handleBrowseClaude}
-                handleSaveClaudeSettings={handleSaveClaudeSettings}
                 handleRunClaudeDoctor={handleRunClaudeDoctor}
                 claudeDoctorState={claudeDoctorState}
-                kimiPathDraft={kimiPathDraft}
-                setKimiPathDraft={setKimiPathDraft}
-                kimiDirty={kimiDirty}
-                handleBrowseKimi={handleBrowseKimi}
-                handleSaveKimiSettings={handleSaveKimiSettings}
                 handleRunKimiDoctor={handleRunKimiDoctor}
                 kimiDoctorState={kimiDoctorState}
-                grokPathDraft={grokPathDraft}
-                setGrokPathDraft={setGrokPathDraft}
-                grokDirty={grokDirty}
-                handleBrowseGrok={handleBrowseGrok}
-                handleSaveGrokSettings={handleSaveGrokSettings}
                 handleRunGrokDoctor={handleRunGrokDoctor}
                 grokDoctorState={grokDoctorState}
-                openCodePathDraft={openCodePathDraft}
-                setOpenCodePathDraft={setOpenCodePathDraft}
-                openCodeDirty={openCodeDirty}
-                handleBrowseOpenCode={handleBrowseOpenCode}
-                handleSaveOpenCodeSettings={handleSaveOpenCodeSettings}
                 handleRunOpenCodeDoctor={handleRunOpenCodeDoctor}
                 openCodeDoctorState={openCodeDoctorState}
-                codexPathDraft={codexPathDraft}
-                setCodexPathDraft={setCodexPathDraft}
-                codexArgsDraft={codexArgsDraft}
-                setCodexArgsDraft={setCodexArgsDraft}
-                codexDirty={codexDirty}
-                handleBrowseCodex={handleBrowseCodex}
-                handleSaveCodexSettings={handleSaveCodexSettings}
-                isSavingSettings={isSavingSettings}
                 handleRunDoctor={handleRunDoctor}
                 doctorState={doctorState}
                 remoteHostDraft={remoteHostDraft}

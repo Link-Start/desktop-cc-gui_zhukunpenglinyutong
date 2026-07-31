@@ -19,6 +19,11 @@ type GlobalRuntimeNoticeDockProps = {
   onExpand: () => void;
   onMinimize: () => void;
   onClear: () => void;
+  /**
+   * 侧栏底部不再外显气泡入口时使用：最小化状态只保留定位锚点，
+   * 展开入口改由设置二级菜单触发。
+   */
+  hideMinimizedTrigger?: boolean;
 };
 
 type MinimizedIndicatorState = "idle" | "has-error";
@@ -107,6 +112,7 @@ export function GlobalRuntimeNoticeDock({
   onExpand,
   onMinimize,
   onClear,
+  hideMinimizedTrigger = false,
 }: GlobalRuntimeNoticeDockProps) {
   const { t } = useTranslation();
   const shellRef = useRef<HTMLDivElement | null>(null);
@@ -245,23 +251,31 @@ export function GlobalRuntimeNoticeDock({
     !isMinimized && isSidebarPlacement && typeof document !== "undefined";
 
   return (
-    <div className="global-runtime-notice-dock-shell" ref={shellRef}>
+    <div
+      className={`global-runtime-notice-dock-shell${hideMinimizedTrigger ? " is-menu-anchored" : ""}`}
+      ref={shellRef}
+    >
       {isMinimized ? (
-        <button
-          type="button"
-          className={`global-runtime-notice-dock-bubble is-${minimizedIndicatorState}`}
-          onClick={onExpand}
-          aria-label={t("runtimeNotice.open")}
-          title={t("runtimeNotice.open")}
-        >
-          <span className="global-runtime-notice-dock-indicator" aria-hidden="true">
-            {minimizedIndicatorState === "has-error" ? (
-              <CircleAlert className="global-runtime-notice-dock-indicator-icon" strokeWidth={2} />
-            ) : (
-              <CircleCheck className="global-runtime-notice-dock-indicator-icon" strokeWidth={2} />
-            )}
-          </span>
-        </button>
+        hideMinimizedTrigger ? (
+          // 仅保留侧栏定位锚点，外显气泡入口已收入设置二级菜单。
+          <span className="global-runtime-notice-dock-anchor" aria-hidden="true" />
+        ) : (
+          <button
+            type="button"
+            className={`global-runtime-notice-dock-bubble is-${minimizedIndicatorState}`}
+            onClick={onExpand}
+            aria-label={t("runtimeNotice.open")}
+            title={t("runtimeNotice.open")}
+          >
+            <span className="global-runtime-notice-dock-indicator" aria-hidden="true">
+              {minimizedIndicatorState === "has-error" ? (
+                <CircleAlert className="global-runtime-notice-dock-indicator-icon" strokeWidth={2} />
+              ) : (
+                <CircleCheck className="global-runtime-notice-dock-indicator-icon" strokeWidth={2} />
+              )}
+            </span>
+          </button>
+        )
       ) : shouldPortalSidebarPanel ? (
         createPortal(
           <div className="global-runtime-notice-dock-portal-layer">

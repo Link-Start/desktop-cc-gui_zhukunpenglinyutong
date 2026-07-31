@@ -10,8 +10,6 @@ const activityPanel = {
     eventsCount: "{{count}} 条",
     sessionsCount: "{{count}} 会话",
     liveNow: "实时中",
-    collapsedLiveBadge: "{{count}} 个会话进行中",
-    collapsedLiveBadge_other: "{{count}} 个会话进行中",
     command: "命令",
     commandPendingSummary: "正在执行命令",
     commandCategories: {

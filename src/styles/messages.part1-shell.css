@@ -413,8 +413,9 @@
   margin-bottom: 12px;
 }
 
+/* 兼容旧选择器：最终消息不再使用分割线，改为正文下方 action footer */
 .messages-final-boundary {
-  margin-top: 25px;
+  margin-top: 0;
 }
 
 .main .messages {

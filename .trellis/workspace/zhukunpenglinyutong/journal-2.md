@@ -1003,3 +1003,69 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 73: 完善 CLI 路径设置、错误边界与流式正文切换
+
+**Date**: 2026-07-31
+**Task**: 完善 CLI 路径设置、错误边界与流式正文切换
+**Branch**: `chore/bump-version-0.7.13`
+
+### Summary
+
+提交 CLI 自定义路径弹窗、ErrorBoundary 报告能力、live text itemId 切换 drain、Grok 历史 runtime context 过滤、OpenCode 不可用降级，以及 header 角标/主题样式调整。74 files, +2223/-1382。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c03f9b1f8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 74: 统一 Atomic 选模、侧栏运行时入口与 Grok 会话时间
+
+**Date**: 2026-07-31
+**Task**: 统一 Atomic 选模、侧栏运行时入口与 Grok 会话时间
+**Branch**: `chore/bump-version-0.7.13`
+
+### Summary
+
+Native 会话复用 Atomic 双栏 picker；桌面运行时提示收入设置二级菜单（错误角标）；Grok 侧栏 updated_at 优先 chat_history mtime 避免 bulk summary 显示刚刚。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5a4d9da81` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

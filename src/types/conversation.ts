@@ -132,6 +132,10 @@ export type ConversationItem =
       isFinal?: boolean;
       finalCompletedAt?: number;
       finalDurationMs?: number;
+      /** Whole-turn input-side tokens (non-cache + cache write + cache read). */
+      finalInputTokens?: number;
+      /** Whole-turn output tokens. */
+      finalOutputTokens?: number;
       recoveredFromLiveShadow?: boolean;
       recoveryStatus?: "interrupted" | "recovered";
       recoverySourceId?: string;

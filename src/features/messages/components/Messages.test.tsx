@@ -503,13 +503,13 @@ describe("Messages", () => {
     expect(writeTextMock).toHaveBeenCalledWith("first answer part 1\n\nfirst answer part 2");
     const forkButtons = screen.getAllByRole("button", { name: "messages.forkMessage" });
     expect(forkButtons).toHaveLength(1);
-    expect(forkButtons[0].querySelector(".codicon-git-branch-create")).toBeTruthy();
+    expect(forkButtons[0].querySelector(".message-fork-icon")).toBeTruthy();
     fireEvent.click(forkButtons[0]);
     expect(handleForkFromMessage).toHaveBeenCalledWith("user-tail-actions-2");
 
     const rewindButtons = screen.getAllByRole("button", { name: "messages.rewindMessage" });
     expect(rewindButtons).toHaveLength(1);
-    expect(rewindButtons[0].querySelector(".codicon-history")).toBeTruthy();
+    expect(rewindButtons[0].querySelector(".message-history-icon")).toBeTruthy();
     fireEvent.click(rewindButtons[0]);
     expect(handleRewindFromMessage).toHaveBeenCalledWith("user-tail-actions-2");
   });

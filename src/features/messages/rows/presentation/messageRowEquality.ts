@@ -125,6 +125,8 @@ export function areMessageItemsEqual(previous: MessageItem, next: MessageItem) {
       previous.isFinal === next.isFinal &&
       previous.finalCompletedAt === next.finalCompletedAt &&
       previous.finalDurationMs === next.finalDurationMs &&
+      previous.finalInputTokens === next.finalInputTokens &&
+      previous.finalOutputTokens === next.finalOutputTokens &&
       previous.selectedAgentName === next.selectedAgentName &&
       previous.selectedAgentIcon === next.selectedAgentIcon &&
       previous.browserContextAttachment === next.browserContextAttachment &&

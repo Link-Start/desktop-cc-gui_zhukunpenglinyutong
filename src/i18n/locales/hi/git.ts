@@ -194,6 +194,7 @@ const git = {
     "generateCommitMessageEngineOpenCode": "OpenCode इंजन का उपयोग करें",
     "generateCommitMessageLastConfig": "अंतिम कॉन्फ़िगरेशन का उपयोग करें",
     "commitMessageRequiresCodex": "AI कमिट संदेश निर्माण के लिए Codex CLI आवश्यक है। इसे इससे इंस्टॉल करें: npm install -g @openai/codex",
+    "commitMessageRuntimeRecovering": "Codex रनटाइम डिस्कनेक्ट हो गया। ऐप ने स्वतः रिकवरी का प्रयास किया — कृपया कमिट संदेश फिर से जनरेट करें।",
     "noMessage": "कोई संदेश नहीं",
     "unknown": "अज्ञात",
     "commitSingle": "कमिट",

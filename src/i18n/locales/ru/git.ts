@@ -194,6 +194,7 @@ const git = {
     "generateCommitMessageEngineOpenCode": "Использовать движок OpenCode",
     "generateCommitMessageLastConfig": "Использовать последнюю конфигурацию",
     "commitMessageRequiresCodex": "Генерация сообщения коммита ИИ требует Codex CLI. Установите его командой: npm install -g @openai/codex",
+    "commitMessageRuntimeRecovering": "Runtime Codex отключился. Приложение попыталось восстановиться автоматически — сгенерируйте сообщение коммита ещё раз.",
     "noMessage": "Нет сообщения",
     "unknown": "неизвестно",
     "commitSingle": "коммит",
