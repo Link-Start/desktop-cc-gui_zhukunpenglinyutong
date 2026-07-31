@@ -101,3 +101,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1256: 修复当前页添加模型弹窗样式丢失
+
+**Date**: 2026-08-01
+**Task**: 修复当前页添加模型弹窗样式丢失
+**Branch**: `bump-version-0.7.14`
+
+### Summary
+
+VendorModelManagerDialogHost 在 AppShell 打开时未加载 settings.css，导致 vendor-dialog 样式整块丢失。open 时 useFeatureStylesReady(loadSettingsStyles) 并 gate isOpen，补源码契约测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8d75e7a6a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
