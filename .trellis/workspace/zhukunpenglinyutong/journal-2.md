@@ -937,3 +937,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 71: 完善模型选择器渠道切换与自定义模型弹窗
+
+**Date**: 2026-07-31
+**Task**: 完善模型选择器渠道切换与自定义模型弹窗
+**Branch**: `chore/bump-version-0.7.12`
+
+### Summary
+
+模型管理改为当前页 overlay；Atomic catalog 注入 plugin 自定义模型；统一本地渠道展示名；修正跨厂商 remap 与 Kimi 品牌图标；补齐多语言与测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2f6ffb247` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
