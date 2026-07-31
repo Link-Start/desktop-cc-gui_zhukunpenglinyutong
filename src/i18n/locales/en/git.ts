@@ -219,6 +219,7 @@ const git = {
     commitComposerPlacementTop: "Top",
     commitMessageRequiresCodex:
       "AI commit message generation requires the Codex CLI. Install it with: npm install -g @openai/codex",
+    commitMessageRuntimeRecovering: "Codex runtime disconnected. The app tried to recover automatically — please retry generating the commit message.",
     noMessage: "No message",
     unknown: "unknown",
     commitSingle: "commit",

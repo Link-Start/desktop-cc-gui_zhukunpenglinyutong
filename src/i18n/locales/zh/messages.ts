@@ -63,9 +63,9 @@ const messages = {
     doneIn: "完成，用时 {{duration}}",
     messageActions: "消息操作",
     copyMessage: "复制消息",
-    copyUserMessage: "复制用户信息",
-    forkMessage: "Fork 消息",
-    rewindMessage: "回溯到此消息",
+    copyUserMessage: "复制用户消息",
+    forkMessage: "分叉新对话（保留当前线程，从此处开新线程）",
+    rewindMessage: "回溯到此消息（可重新编辑并发送）",
     forkConfirmTitle: "确认 Fork",
     forkConfirmDescription:
       "Fork 会基于这条消息创建一个新线程，当前线程会保持不变。",

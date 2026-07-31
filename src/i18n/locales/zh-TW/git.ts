@@ -194,6 +194,7 @@ const git = {
     "generateCommitMessageEngineOpenCode": "使用 OpenCode 引擎",
     "generateCommitMessageLastConfig": "使用上次的設定",
     "commitMessageRequiresCodex": "AI 提交訊息產生功能需要 Codex CLI。請以下列指令安裝：npm install -g @openai/codex",
+    "commitMessageRuntimeRecovering": "Codex 執行環境已中斷，應用已嘗試自動復原，請重新產生提交訊息。",
     "noMessage": "沒有訊息",
     "unknown": "未知",
     "commitSingle": "個提交",

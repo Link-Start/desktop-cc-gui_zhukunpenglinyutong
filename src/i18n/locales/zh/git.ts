@@ -205,6 +205,7 @@ const git = {
     commitComposerPlacementTop: "上方",
     commitMessageRequiresCodex:
       "AI 生成提交信息需要 Codex CLI，请先安装: npm install -g @openai/codex",
+    commitMessageRuntimeRecovering: "Codex 运行时已断开，应用已尝试自动恢复，请重新生成提交信息。",
     noMessage: "无消息",
     unknown: "未知",
     commitSingle: "个提交",

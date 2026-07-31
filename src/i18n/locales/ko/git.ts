@@ -194,6 +194,7 @@ const git = {
     "generateCommitMessageEngineOpenCode": "OpenCode 엔진 사용",
     "generateCommitMessageLastConfig": "마지막 구성 사용",
     "commitMessageRequiresCodex": "AI 커밋 메시지 생성에는 Codex CLI가 필요합니다. 다음 명령으로 설치하세요: npm install -g @openai/codex",
+    "commitMessageRuntimeRecovering": "Codex 런타임 연결이 끊겼습니다. 자동 복구를 시도했습니다. 커밋 메시지를 다시 생성해 주세요.",
     "noMessage": "메시지 없음",
     "unknown": "알 수 없음",
     "commitSingle": "커밋",

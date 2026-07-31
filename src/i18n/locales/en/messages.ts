@@ -72,8 +72,8 @@ const messages = {
     messageActions: "Message actions",
     copyMessage: "Copy message",
     copyUserMessage: "Copy user message",
-    forkMessage: "Fork from message",
-    rewindMessage: "Rewind to this message",
+    forkMessage: "Fork new thread (keeps current, branches from here)",
+    rewindMessage: "Rewind to this message (edit and resend)",
     forkConfirmTitle: "Confirm fork",
     forkConfirmDescription:
       "Fork creates a new thread from this message and keeps the current thread unchanged.",

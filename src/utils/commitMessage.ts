@@ -153,3 +153,44 @@ export function sanitizeGeneratedCommitMessage(raw: string): string {
   }
   return extractCommitFromText(trimmed) ?? trimmed;
 }
+
+const CREATE_SESSION_RUNTIME_RECOVERING_ERROR_PREFIX =
+  "[SESSION_CREATE_RUNTIME_RECOVERING]";
+
+/**
+ * Maps backend commit-message generation failures to i18n keys.
+ * Returns null when the raw message should be shown as-is.
+ */
+export function resolveCommitMessageGenerationErrorKey(
+  message: string,
+  engine?: CommitMessageEngine,
+): "git.commitMessageRequiresCodex" | "git.commitMessageRuntimeRecovering" | null {
+  const raw = message.trim();
+  if (!raw) {
+    return null;
+  }
+  const normalized = raw.toLowerCase();
+  const isCodexEngine = !engine || engine === "codex";
+  if (
+    isCodexEngine &&
+    (raw.includes("requires the Codex CLI") ||
+      normalized.includes("workspace not connected"))
+  ) {
+    return "git.commitMessageRequiresCodex";
+  }
+  if (
+    raw.startsWith(CREATE_SESSION_RUNTIME_RECOVERING_ERROR_PREFIX) ||
+    normalized.includes("broken pipe") ||
+    normalized.includes("the pipe is being closed") ||
+    normalized.includes("the pipe has been ended") ||
+    normalized.includes("os error 32") ||
+    normalized.includes("os error 109") ||
+    normalized.includes("os error 232") ||
+    (normalized.includes("[runtime_ended]") && normalized.includes("stopped after")) ||
+    normalized.includes("manual shutdown") ||
+    normalized.includes("manual_shutdown")
+  ) {
+    return "git.commitMessageRuntimeRecovering";
+  }
+  return null;
+}

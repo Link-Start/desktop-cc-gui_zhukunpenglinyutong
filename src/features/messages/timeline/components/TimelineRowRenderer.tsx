@@ -7,6 +7,7 @@ import Terminal from "lucide-react/dist/esm/icons/terminal";
 import type { ConversationItem } from "../../../../types";
 import { Marker } from "../../../../components/ui/marker";
 import { Button } from "../../../../components/ui/button";
+import { TooltipIconButton } from "../../../../components/ui/tooltip-icon-button";
 import { parseReasoning } from "../../presentation/messagesReasoning";
 import { resolveUserMessagePresentation } from "../../presentation/messagesUserPresentation";
 import {
@@ -225,52 +226,48 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
             aria-label={t("messages.messageActions")}
           >
             {isLatestFinalAssistant && onOpenNoteCaptureMenu ? (
-              <button
-                type="button"
+              <TooltipIconButton
                 className="ghost message-action-button"
                 onClick={(event) => onOpenNoteCaptureMenu(event.currentTarget)}
-                aria-label={t("noteCards.captureMenu")}
-                title={t("noteCards.captureMenu")}
+                label={t("noteCards.captureMenu")}
+                tooltipSide="top"
               >
                 <NotebookPen size={9} strokeWidth={1.75} aria-hidden />
-              </button>
+              </TooltipIconButton>
             ) : null}
-            <button
-              type="button"
+            <TooltipIconButton
               className={`ghost message-action-button message-copy-button${isCopied ? " is-copied" : ""}`}
               onClick={() => handleCopyMessage(renderItem, assistantCopyText)}
-              aria-label={t("messages.copyMessage")}
-              title={t("messages.copyMessage")}
+              label={t("messages.copyMessage")}
+              tooltipSide="top"
             >
               <span className="message-copy-icon" aria-hidden>
                 <Copy className="message-copy-icon-copy" size={12} />
                 <Check className="message-copy-icon-check" size={12} />
               </span>
-            </button>
+            </TooltipIconButton>
             {shouldRenderForkAction && actionTargetUserMessageId ? (
-              <button
-                type="button"
+              <TooltipIconButton
                 className="ghost message-action-button"
                 onClick={() => onForkFromMessage(actionTargetUserMessageId)}
-                aria-label={t("messages.forkMessage")}
-                title={t("messages.forkMessage")}
+                label={t("messages.forkMessage")}
+                tooltipSide="top"
               >
                 <span className="codicon codicon-git-branch-create" aria-hidden />
-              </button>
+              </TooltipIconButton>
             ) : null}
             {shouldRenderRewindAction && actionTargetUserMessageId ? (
-              <button
-                type="button"
+              <TooltipIconButton
                 className="ghost message-action-button"
                 onClick={() => onRewindFromMessage(actionTargetUserMessageId)}
-                aria-label={t("messages.rewindMessage")}
-                title={t("messages.rewindMessage")}
+                label={t("messages.rewindMessage")}
+                tooltipSide="top"
               >
                 <span
                   className="codicon codicon-history message-history-icon"
                   aria-hidden
                 />
-              </button>
+              </TooltipIconButton>
             ) : null}
           </div>
         );
@@ -295,18 +292,17 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
             className="message-action-bar message-user-bubble-actions"
             aria-label={t("messages.messageActions")}
           >
-            <button
-              type="button"
+            <TooltipIconButton
               className={`ghost message-action-button message-copy-button${isCopied ? " is-copied" : ""}`}
               onClick={() => handleCopyMessage(renderItem, userCopyText)}
-              aria-label={t("messages.copyUserMessage")}
-              title={t("messages.copyUserMessage")}
+              label={t("messages.copyUserMessage")}
+              tooltipSide="top"
             >
               <span className="message-copy-icon" aria-hidden>
                 <Copy className="message-copy-icon-copy" size={12} />
                 <Check className="message-copy-icon-check" size={12} />
               </span>
-            </button>
+            </TooltipIconButton>
           </div>
         );
         if (cache.size >= USER_ACTION_NODE_CACHE_LIMIT) {
@@ -603,26 +599,24 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
         </div>
         <div className="messages-lightweight-row-summary-actions">
           {shouldRenderForkAction && actionTargetUserMessageId ? (
-            <button
-              type="button"
+            <TooltipIconButton
               className="ghost message-action-button"
               onClick={() => onForkFromMessage(actionTargetUserMessageId)}
-              aria-label={t("messages.forkMessage")}
-              title={t("messages.forkMessage")}
+              label={t("messages.forkMessage")}
+              tooltipSide="top"
             >
               <span className="codicon codicon-git-branch-create" aria-hidden />
-            </button>
+            </TooltipIconButton>
           ) : null}
           {shouldRenderRewindAction && actionTargetUserMessageId ? (
-            <button
-              type="button"
+            <TooltipIconButton
               className="ghost message-action-button"
               onClick={() => onRewindFromMessage(actionTargetUserMessageId)}
-              aria-label={t("messages.rewindMessage")}
-              title={t("messages.rewindMessage")}
+              label={t("messages.rewindMessage")}
+              tooltipSide="top"
             >
               <span className="codicon codicon-history" aria-hidden />
-            </button>
+            </TooltipIconButton>
           ) : null}
           <button
             type="button"
