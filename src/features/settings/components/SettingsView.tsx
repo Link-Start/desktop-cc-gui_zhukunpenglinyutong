@@ -647,7 +647,6 @@ export function SettingsView({
     [t],
   );
   const clampedUiScale = clampUiScale(appSettings.uiScale);
-  const uiScaleDraftPercentLabel = `${Math.round(uiScaleDraft * 100)}%`;
   const projects = useMemo(
     () => groupedWorkspaces.flatMap((group) => group.workspaces),
     [groupedWorkspaces],
@@ -999,20 +998,24 @@ export function SettingsView({
     });
   };
 
-  const handleSaveUiScale = useCallback(() => {
-    const nextScale = clampUiScale(uiScaleDraft);
-    if (nextScale === clampedUiScale) {
-      return;
-    }
-    void onUpdateAppSettings({
-      ...appSettings,
-      uiScale: nextScale,
-    });
-  }, [appSettings, clampedUiScale, onUpdateAppSettings, uiScaleDraft]);
+  const handleCommitUiScale = useCallback(
+    (next: number) => {
+      const nextScale = clampUiScale(next);
+      setUiScaleDraft(nextScale);
+      if (nextScale === clampedUiScale) {
+        return;
+      }
+      void onUpdateAppSettings({
+        ...appSettings,
+        uiScale: nextScale,
+      });
+    },
+    [appSettings, clampedUiScale, onUpdateAppSettings],
+  );
 
-  const handleResetUiScaleDraft = useCallback(() => {
-    setUiScaleDraft(1);
-  }, []);
+  const handleResetUiScale = useCallback(() => {
+    handleCommitUiScale(1);
+  }, [handleCommitUiScale]);
 
   const handleCommitUiFont = useCallback(
     async (selectedFontName: string) => {
@@ -1786,65 +1789,90 @@ export function SettingsView({
             className="settings-nav settings-nav-return"
             onClick={onClose}
             aria-label={t("settings.backToApp")}
+            title={t("settings.backToApp")}
           >
             <ArrowLeft aria-hidden />
-            {t("settings.backToApp")}
+            <span className="settings-nav-label">{t("settings.backToApp")}</span>
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "basic" ? "active" : ""}`}
             onClick={() => setActiveSection("basic")}
+            aria-label={t("settings.sidebarBasic")}
+            title={t("settings.sidebarBasic")}
           >
             <Settings aria-hidden />
-            {t("settings.sidebarBasic")}
+            <span className="settings-nav-label">{t("settings.sidebarBasic")}</span>
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "providers" || activeSection === "vendors" ? "active" : ""}`}
             onClick={() => setActiveSection("providers")}
+            aria-label={t("settings.sidebarProviders")}
+            title={t("settings.sidebarProviders")}
           >
-            <span className="codicon codicon-vm-connect" />
-            {t("settings.sidebarProviders")}
+            <span className="codicon codicon-vm-connect" aria-hidden />
+            <span className="settings-nav-label">
+              {t("settings.sidebarProviders")}
+            </span>
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "shortcuts" ? "active" : ""}`}
             onClick={() => setActiveSection("shortcuts")}
+            aria-label={t("settings.sidebarShortcuts")}
+            title={t("settings.sidebarShortcuts")}
           >
             <Keyboard aria-hidden />
-            {t("settings.sidebarShortcuts")}
+            <span className="settings-nav-label">
+              {t("settings.sidebarShortcuts")}
+            </span>
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "project-management" ? "active" : ""}`}
             onClick={() => setActiveSection("project-management")}
+            aria-label={t("settings.sidebarProjectManagement")}
+            title={t("settings.sidebarProjectManagement")}
           >
             <LayoutGrid aria-hidden />
-            {t("settings.sidebarProjectManagement")}
+            <span className="settings-nav-label">
+              {t("settings.sidebarProjectManagement")}
+            </span>
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "agent-prompt-management" ? "active" : ""}`}
             onClick={() => setActiveSection("agent-prompt-management")}
+            aria-label={t("settings.sidebarAgentPromptManagement")}
+            title={t("settings.sidebarAgentPromptManagement")}
           >
-            <span className="codicon codicon-robot" />
-            {t("settings.sidebarAgentPromptManagement")}
+            <span className="codicon codicon-robot" aria-hidden />
+            <span className="settings-nav-label">
+              {t("settings.sidebarAgentPromptManagement")}
+            </span>
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "other" ? "active" : ""}`}
             onClick={() => setActiveSection("other")}
+            aria-label={t("settings.sidebarOther")}
+            title={t("settings.sidebarOther")}
           >
             <MoreHorizontalIcon aria-hidden />
-            {t("settings.sidebarOther")}
+            <span className="settings-nav-label">{t("settings.sidebarOther")}</span>
           </button>
           <button
             type="button"
             className={`settings-nav ${activeSection === "community" ? "active" : ""}`}
             onClick={() => setActiveSection("community")}
+            aria-label={t("settings.sidebarCommunity")}
+            title={t("settings.sidebarCommunity")}
           >
             <Users aria-hidden />
-            {t("settings.sidebarCommunity")}
+            <span className="settings-nav-label">
+              {t("settings.sidebarCommunity")}
+            </span>
           </button>
         </aside>
         <div className="settings-content-wrap">
@@ -2002,11 +2030,8 @@ export function SettingsView({
                   themePresetOptions={themePresetOptions}
                   onThemePresetChange={handleThemePresetChange}
                   uiScaleDraft={uiScaleDraft}
-                  clampedUiScale={clampedUiScale}
-                  uiScaleDraftPercentLabel={uiScaleDraftPercentLabel}
-                  setUiScaleDraft={setUiScaleDraft}
-                  handleResetUiScaleDraft={handleResetUiScaleDraft}
-                  handleSaveUiScale={handleSaveUiScale}
+                  handleCommitUiScale={handleCommitUiScale}
+                  handleResetUiScale={handleResetUiScale}
                   scaleShortcutTitle={scaleShortcutTitle}
                   scaleShortcutText={scaleShortcutText}
                   userMsgPresets={userMsgPresets}

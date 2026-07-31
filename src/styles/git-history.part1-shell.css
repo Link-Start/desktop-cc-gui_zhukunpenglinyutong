@@ -9,8 +9,8 @@
   max-height: calc(100vh - var(--main-topbar-height, 44px));
   display: flex;
   flex-direction: column;
-  border-top: 1px solid var(--border-default);
-  background: color-mix(in srgb, var(--surface-messages, #0d0f14) 94%, transparent);
+  border-top: 1px solid var(--border, var(--border-default));
+  background: var(--background, var(--surface-messages, #ffffff));
   box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -111,9 +111,9 @@ body[data-git-history-resizing="true"] .git-history-dock-resizer::after {
 
 .git-history-document-tab[aria-selected="true"],
 .git-history-document-tab-shell.is-active {
-  color: var(--text-stronger);
-  background: color-mix(in srgb, var(--accent-primary, #2563eb) 8%, transparent);
-  box-shadow: inset 0 -2px 0 var(--accent-primary, #2563eb);
+  color: var(--foreground, var(--text-stronger));
+  background: var(--accent, color-mix(in srgb, var(--primary, var(--accent-primary, #2563eb)) 6%, transparent));
+  box-shadow: inset 0 -2px 0 var(--primary, var(--accent-primary, #2563eb));
 }
 
 .git-history-document-tab-shell.is-active .git-history-document-tab {
@@ -166,31 +166,37 @@ body[data-git-history-resizing="true"] .git-history-dock-resizer::after {
 }
 
 .git-history-workbench {
-  --git-history-pane-bg: color-mix(
-    in srgb,
-    var(--surface-messages, #0d0f14) 92%,
-    var(--surface-card-muted, #111725)
-  );
+  /* Align with shadcn tokens: flat surface, soft borders, md radius */
+  --git-history-pane-bg: var(--background, var(--surface-messages, #ffffff));
+  --git-history-muted-bg: var(--muted, var(--surface-control, rgba(24, 24, 27, 0.06)));
+  --git-history-border: var(--border, var(--border-default, rgba(24, 24, 27, 0.1)));
+  --git-history-radius: var(--radius, 0.625rem);
+  --git-history-radius-sm: calc(var(--git-history-radius) - 2px);
+  --git-history-radius-xs: calc(var(--git-history-radius) - 4px);
   --git-filetree-section-gap: 2px;
-  --git-filetree-section-padding: 6px;
-  --git-filetree-section-radius: 12px;
-  --git-filetree-section-border: color-mix(in srgb, var(--border-default) 48%, transparent);
-  --git-filetree-section-bg: color-mix(in srgb, var(--surface-control, #1a2230) 40%, transparent);
+  --git-filetree-section-padding: 4px;
+  --git-filetree-section-radius: var(--git-history-radius-sm);
+  --git-filetree-section-border: color-mix(in srgb, var(--git-history-border) 70%, transparent);
+  --git-filetree-section-bg: transparent;
   --git-filetree-row-min-height: 28px;
   --git-filetree-row-gap: 8px;
-  --git-filetree-row-pad-y: 3px;
+  --git-filetree-row-pad-y: 4px;
   --git-filetree-row-pad-x: 8px;
-  --git-filetree-row-radius: 7px;
-  --git-filetree-indent-step: 16px;
+  --git-filetree-row-radius: var(--git-history-radius-xs);
+  --git-filetree-indent-step: 14px;
   --git-filetree-icon-size: 12px;
-  --git-filetree-tree-line-color: color-mix(in srgb, var(--text-muted, #64748b) 34%, transparent);
-  --git-filetree-row-hover-bg: color-mix(in srgb, var(--surface-control-hover, #263044) 56%, transparent);
-  --git-filetree-row-active-bg: color-mix(in srgb, var(--accent-primary, #2563eb) 17%, transparent);
+  --git-filetree-tree-line-color: color-mix(in srgb, var(--muted-foreground, var(--text-muted, #64748b)) 28%, transparent);
+  --git-filetree-row-hover-bg: var(--accent, var(--surface-hover, rgba(24, 24, 27, 0.05)));
+  --git-filetree-row-active-bg: color-mix(
+    in srgb,
+    var(--primary, var(--accent-primary, #2563eb)) 8%,
+    transparent
+  );
   --git-filetree-badge-font-size: var(--client-caption-font-size, 10px);
   --git-filetree-badge-gap: 2px;
   --git-filetree-badge-pad-y: 1px;
-  --git-filetree-badge-pad-x: 8px;
-  --git-filetree-badge-radius: 999px;
+  --git-filetree-badge-pad-x: 6px;
+  --git-filetree-badge-radius: calc(var(--git-history-radius) - 2px);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -198,12 +204,12 @@ body[data-git-history-resizing="true"] .git-history-dock-resizer::after {
   height: 100%;
   min-width: 0;
   min-height: 0;
-  color: var(--text-primary);
+  color: var(--foreground, var(--text-primary));
   background: var(--git-history-pane-bg);
 }
 
 .git-history-workbench:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent-primary, #2563eb) 52%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--ring, var(--accent-primary, #2563eb)) 55%, transparent);
   outline-offset: -2px;
 }
 
@@ -212,15 +218,11 @@ body[data-git-history-resizing="true"] .git-history-dock-resizer::after {
   align-items: center;
   justify-content: space-between;
   min-width: 0;
-  gap: 10px;
-  padding: 2px 8px;
-  border-bottom: 1px solid var(--border-strong, rgba(127, 127, 127, 0.28));
-  background: color-mix(
-    in srgb,
-    var(--surface-card-muted, #111725) 92%,
-    var(--git-history-pane-bg)
-  );
-  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 4%, transparent);
+  gap: 12px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--git-history-border);
+  background: var(--git-history-pane-bg);
+  box-shadow: none;
 }
 
 .git-history-toolbar-left {
@@ -229,14 +231,15 @@ body[data-git-history-resizing="true"] .git-history-dock-resizer::after {
   min-width: 0;
   flex: 1;
   flex-wrap: nowrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .git-history-toolbar h2 {
   margin: 0;
-  font-size: var(--client-title-font-size, 14px);
+  font-size: var(--client-title-font-size, 13px);
   font-weight: 600;
-  color: var(--text-stronger);
+  letter-spacing: -0.01em;
+  color: var(--foreground, var(--text-stronger));
 }
 
 .git-history-empty-inline-text {

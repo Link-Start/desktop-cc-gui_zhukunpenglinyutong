@@ -1442,11 +1442,19 @@
   overflow: auto;
 }
 
-/* Responsive sidebar threshold */
+/* Responsive sidebar: icon-only rail under 900px.
+ * Keep the body grid track in sync with the rail width — otherwise the first
+ * track stays 200px while the aside is 50px and leaves a dead left gutter.
+ * Labels are hidden visually; buttons keep aria-label / title for a11y + hover. */
 @media (max-width: 900px) {
+  .settings-body {
+    grid-template-columns: 50px minmax(0, 1fr);
+  }
+
   .settings-sidebar {
     width: 50px;
     min-width: 50px;
+    max-width: 50px;
     padding: 12px 6px;
     align-items: center;
   }
@@ -1455,6 +1463,14 @@
     justify-content: center;
     padding: 8px;
     gap: 0;
+  }
+
+  .settings-sidebar .settings-nav-return {
+    margin-left: 0;
+  }
+
+  .settings-sidebar .settings-nav-label {
+    display: none;
   }
 }
 
@@ -1466,7 +1482,7 @@
   --settings-content-pad-top: 12px;
   --settings-content-pad-x: 30px;
   --settings-content-pad-right: 12px;
-  --settings-content-pad-bottom: 44px;
+  --settings-content-pad-bottom: 40px;
 }
 
 .settings-content-wrap:has(> .settings-content--providers) {
@@ -1537,10 +1553,15 @@
  * keeps growing. Pin the width to the viewport so it can never exceed 100%;
  * genuinely wide content (e.g. the Codex config <pre>) then scrolls inside its
  * own overflow box instead of dragging the whole page sideways.
+ *
+ * Use min-height (not height) so tall content can grow past the viewport. A
+ * fixed height:100% makes overflow paint past the padding box, which eats the
+ * bottom pad and leaves the last settings card flush with the window edge.
  */
 .settings-content [data-slot="scroll-area-viewport"] > div {
   display: block !important;
-  height: 100% !important;
+  min-height: 100% !important;
+  height: auto !important;
   width: 100% !important;
   max-width: 100% !important;
 }
@@ -1918,12 +1939,34 @@
   min-width: 0;
   min-height: 320px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 32px 24px;
   border: 1px solid color-mix(in srgb, var(--settings-basic-control-border) 55%, transparent);
   border-radius: 16px;
   background: #191919;
+}
+
+/* Mobile back control: only visible in the detail pane under 900px. */
+.settings-shortcuts-mobile-back {
+  display: none;
+  align-items: center;
+  align-self: stretch;
+  gap: 6px;
+  margin: 0 0 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--settings-basic-text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.settings-shortcuts-mobile-back:hover {
+  color: var(--settings-basic-text);
 }
 
 :root[data-theme="light"] .settings-shortcuts-detail {
@@ -2063,14 +2106,49 @@
   cursor: default;
 }
 
-@media (max-width: 860px) {
+/*
+ * Master–detail under 900px: show list OR detail, never both stacked.
+ * data-mobile-pane is set by ShortcutsSection; desktop ignores it.
+ */
+@media (max-width: 900px) {
   .settings-shortcuts-layout {
     grid-template-columns: 1fr;
+    min-height: 0;
+    height: 100%;
   }
 
-  /* Stacked: the panes flow in the page scroll again, so re-cap the list. */
+  .settings-shortcuts-layout[data-mobile-pane="list"]
+    .settings-shortcuts-detail {
+    display: none;
+  }
+
+  .settings-shortcuts-layout[data-mobile-pane="detail"]
+    .settings-shortcuts-list {
+    display: none;
+  }
+
+  .settings-shortcuts-layout[data-mobile-pane="detail"]
+    .settings-shortcuts-mobile-back {
+    display: inline-flex;
+  }
+
   .settings-shortcuts-list {
-    max-height: 520px;
+    max-height: none;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .settings-shortcuts-detail {
+    min-height: 0;
+    height: 100%;
+    justify-content: flex-start;
+    padding: 20px 16px;
+  }
+
+  .settings-shortcuts-detail-body {
+    flex: 1 1 auto;
+    justify-content: center;
+    width: 100%;
   }
 }
 

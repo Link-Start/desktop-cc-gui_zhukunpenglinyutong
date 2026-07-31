@@ -517,11 +517,13 @@ export function EmailSenderSettings({
   }, []);
 
   return (
-    <div className="settings-email-section">
-      <div className="settings-section-title">{t("settings.emailTitle")}</div>
-      <div className="settings-section-subtitle">{t("settings.emailDescription")}</div>
+    <div className="settings-basic-email settings-basic-surface settings-email-section">
+      <div className="settings-pref-card-head settings-email-section-head">
+        <div className="settings-pref-title">{t("settings.emailTitle")}</div>
+        <div className="settings-pref-desc">{t("settings.emailDescription")}</div>
+      </div>
 
-      <div className="settings-basic-tabs" role="tablist" aria-label={t("settings.emailTitle")}>
+      <div className="settings-basic-tabs settings-email-inner-tabs" role="tablist" aria-label={t("settings.emailTitle")}>
         <button
           type="button"
           role="tab"

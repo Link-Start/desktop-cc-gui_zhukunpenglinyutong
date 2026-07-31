@@ -36,8 +36,15 @@ describe("vendor settings panel compact layout", () => {
     );
     const mobileContentRule =
       vendorPanelsCss.match(
-        /@media \(max-width: 900px\)[\s\S]*?\.vendor-settings-content\s*\{([^}]*)\}/,
+        /@media \(max-width: 900px\)[\s\S]*?^\s*\.vendor-settings-content\s*\{([^}]*)\}/m,
       )?.[1] ?? "";
+    const mobileMasterDetailListHide =
+      vendorPanelsCss.includes(
+        '.vendor-settings-panel[data-mobile-pane="list"] .vendor-settings-content',
+      ) &&
+      vendorPanelsCss.includes(
+        '.vendor-settings-panel[data-mobile-pane="detail"] .vendor-engine-nav',
+      );
     const headingRule = getCssRuleBlock(
       vendorPanelsCss,
       ".vendor-section-heading",
@@ -146,6 +153,8 @@ describe("vendor settings panel compact layout", () => {
     expect(contentRule).toContain("padding-right: 24px;");
     expect(mobileContentRule).toContain("padding-left: 0;");
     expect(mobileContentRule).toContain("padding-right: 0;");
+    expect(mobileMasterDetailListHide).toBe(true);
+    expect(vendorPanelsCss).toContain(".vendor-settings-mobile-back");
     expect(contentRule).toContain(
       "border-left: 1px solid var(--settings-basic-border);",
     );

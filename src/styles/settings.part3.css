@@ -201,36 +201,17 @@
   }
 }
 
-/* ── 主题 preset 代码 / diff 实时预览 ── */
-/*
- * 该 field 内容是一个宽幅双列预览,不适合默认的
- * "label control / help control" 两列行布局(control 列仅 ~45% 宽)。
- * 覆盖为纵向单列:label / help 占整行,预览 grid 在下方占满整行。
- */
-.settings-section-basic .settings-field.settings-basic-item.settings-theme-preview-item {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-areas:
-    "label"
-    "help"
-    "preview";
-}
-
-.settings-section-basic .settings-theme-preview-item > .theme-preview-grid {
-  grid-area: preview;
-}
-
+/* ── 主题 preset 代码 / diff 实时预览（可折叠 preference 行） ── */
 .theme-preview-grid {
-  margin-top: 8px;
+  margin-top: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(300px, 0.92fr);
+  grid-template-columns: minmax(0, 1.08fr) minmax(260px, 0.92fr);
   gap: 8px;
   padding: 8px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--surface-card) 64%, transparent);
+  background: color-mix(in srgb, var(--surface-card) 58%, transparent);
 }
-
-.theme-preview-help { margin-top: 2px; }
 
 @media (max-width: 900px) {
   .theme-preview-grid {

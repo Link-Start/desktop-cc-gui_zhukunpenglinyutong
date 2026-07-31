@@ -78,6 +78,9 @@ describe("ShortcutsSection", () => {
   it("shows the selected action in the detail panel when a row is clicked", () => {
     const { container } = renderSection();
 
+    const layout = container.querySelector(".settings-shortcuts-layout");
+    expect(layout?.getAttribute("data-mobile-pane")).toBe("list");
+
     const rows = Array.from(
       container.querySelectorAll<HTMLButtonElement>(".settings-shortcuts-row"),
     );
@@ -91,6 +94,14 @@ describe("ShortcutsSection", () => {
       container.querySelector(".settings-shortcuts-detail-title")?.textContent,
     ).toBe("settings.openSettings");
     expect(target?.className).toContain("settings-shortcuts-row--selected");
+    expect(layout?.getAttribute("data-mobile-pane")).toBe("detail");
+
+    const back = container.querySelector<HTMLButtonElement>(
+      ".settings-shortcuts-mobile-back",
+    );
+    expect(back).toBeTruthy();
+    fireEvent.click(back!);
+    expect(layout?.getAttribute("data-mobile-pane")).toBe("list");
   });
 
   it("filters rows by search query and shows an empty state when nothing matches", () => {

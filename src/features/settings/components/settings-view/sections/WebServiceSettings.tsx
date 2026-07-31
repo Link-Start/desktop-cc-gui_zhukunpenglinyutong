@@ -521,11 +521,17 @@ export function WebServiceSettings({
   const isBusy = action != null;
 
   return (
-    <div className="settings-field">
-      <div className="settings-field-label">
-        {t("settings.webServiceTitle")}
+    <div className="settings-basic-web-service settings-basic-surface">
+    <div className="settings-basic-group-card settings-pref-card settings-web-service-card">
+      <div className="settings-pref-card-head">
+        <div className="settings-pref-title">
+          {t("settings.webServiceTitle")}
+        </div>
+        <div className="settings-pref-desc">
+          {t("settings.webServiceDescription")}
+        </div>
       </div>
-      <div className="settings-help">{t("settings.webServiceDescription")}</div>
+      <div className="settings-web-service-body">
 
       <WebAssetsPackageSection
         t={t}
@@ -834,6 +840,8 @@ export function WebServiceSettings({
           .replace("{{rpc}}", rpcEndpoint)
           .replace("{{port}}", String(webPort))}
       </div>
+    </div>
+    </div>
     </div>
   );
 }

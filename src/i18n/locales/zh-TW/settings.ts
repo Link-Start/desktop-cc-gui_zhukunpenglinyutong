@@ -435,7 +435,7 @@ const settings = {
     "terminalShellPathDesc": "選擇開啟內建終端機時所使用的執行檔。",
     "terminalShellPathLabel": "終端機 shell 路徑",
     "terminalShellPathPlaceholder": "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
-    "terminalShellPathHint": "Windows 範例：C:\\Program Files\\PowerShell\\7\\pwsh.exe；macOS 範例：/bin/zsh 或 /opt/homebrew/bin/fish。留空則在 Windows 使用 COMSPEC，或在 macOS／Linux 使用 SHELL。",
+    "terminalShellPathHint": "Windows 範例：C:\\Program Files\\PowerShell\\7\\pwsh.exe；\nmacOS 範例：/bin/zsh 或 /opt/homebrew/bin/fish。留空則在 Windows 使用 COMSPEC，或在 macOS／Linux 使用 SHELL。",
     "terminalShellPathSave": "儲存終端機 shell 路徑",
     "terminalShellPathClear": "清除終端機 shell 路徑",
     "behaviorProxyTitle": "網路代理",
