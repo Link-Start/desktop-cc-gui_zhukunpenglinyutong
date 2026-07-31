@@ -128,3 +128,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: 调整提示词库排版
+
+**Date**: 2026-07-31
+**Task**: 调整提示词库排版
+**Branch**: `feat/from-main-20260729`
+
+### Summary
+
+调整设置页提示词库的 workspace picker 和编辑表单排版：统一 prompt scope select 的 wrapper 和 compact 宽度，收敛顶部选择器与编辑区下拉控件的视觉节奏，并同步更新 OpenSpec 任务记录。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bc732d3eb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
