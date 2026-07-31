@@ -254,9 +254,18 @@ pub fn resolve_grok_session_id_for_engine_send(
     explicit_session_id: Option<String>,
     tracked_session_id: Option<String>,
 ) -> Option<String> {
-    continue_session
-        .then(|| explicit_session_id.or(tracked_session_id))
-        .flatten()
+    let normalize = |value: Option<String>| {
+        value
+            .map(|entry| entry.trim().to_string())
+            .filter(|entry| !entry.is_empty())
+    };
+    if continue_session {
+        return normalize(explicit_session_id).or_else(|| normalize(tracked_session_id));
+    }
+    // 新会话：仅用 explicit 预分配 id（Shared Binding / 调用方指定），
+    // 不得回退 tracked——否则会把「新建」误 steers 到已有 session 并触发 `-s` 冲突。
+    // 与 Claude resolve_claude_session_id_for_engine_send 对齐。
+    Some(normalize(explicit_session_id).unwrap_or_else(|| uuid::Uuid::new_v4().to_string()))
 }
 
 #[derive(Debug, Clone)]
@@ -529,28 +538,35 @@ impl GrokSession {
             .map(|value| value.trim())
             .filter(|value| !value.is_empty())
             .unwrap_or("<auto>");
-        let resume_session_id = if params.continue_session {
-            params
-                .session_id
-                .as_ref()
-                .map(|value| value.trim())
-                .filter(|value| !value.is_empty())
+        let explicit_session_id = params
+            .session_id
+            .as_ref()
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+        // Canonical session identity is known up front:
+        // - continue=true → resume via `-r` with existing id
+        // - continue=false → create via `-s` with caller-chosen or new UUID
+        //   (Shared Binding 预分配 id 必须走后者，不能被忽略)
+        let (canonical_session_id, resume_session) = if params.continue_session {
+            match explicit_session_id {
+                Some(session_id) => (session_id, true),
+                None => (uuid::Uuid::new_v4().to_string(), false),
+            }
         } else {
-            None
-        };
-        // Canonical session identity is known up front: resume uses the existing
-        // id, new sessions get a backend-generated UUID passed via `-s`.
-        let (canonical_session_id, resume_session) = match resume_session_id {
-            Some(session_id) => (session_id.to_string(), true),
-            None => (uuid::Uuid::new_v4().to_string(), false),
+            (
+                explicit_session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+                false,
+            )
         };
         log::info!(
-            "[grok/send] turn={} workspace={} model={} continue_session={} resume_session_id_len={}",
+            "[grok/send] turn={} workspace={} model={} continue_session={} resume_session={} session_id_len={}",
             turn_id,
             self.workspace_id,
             requested_model,
             params.continue_session,
-            resume_session_id.map(|value| value.len()).unwrap_or(0),
+            resume_session,
+            canonical_session_id.len(),
         );
 
         let built = match self.build_command(&params, &canonical_session_id, resume_session) {
@@ -1001,7 +1017,7 @@ mod tests {
     }
 
     #[test]
-    fn resolves_session_id_only_when_continuing() {
+    fn resolves_session_id_for_continue_and_preassigned_create() {
         assert_eq!(
             resolve_grok_session_id_for_engine_send(
                 true,
@@ -1014,14 +1030,26 @@ mod tests {
             resolve_grok_session_id_for_engine_send(true, None, Some("session-b".to_string())),
             Some("session-b".to_string())
         );
+        // Shared Binding 预分配：continue=false 仍使用 explicit id（走 `-s`）。
         assert_eq!(
             resolve_grok_session_id_for_engine_send(
                 false,
                 Some("session-a".to_string()),
                 Some("session-b".to_string())
             ),
-            None
+            Some("session-a".to_string())
         );
+        // continue=false 不得回退 tracked（新建必须新 id）。
+        let generated_ignoring_tracked = resolve_grok_session_id_for_engine_send(
+            false,
+            None,
+            Some("session-tracked".to_string()),
+        );
+        assert!(generated_ignoring_tracked.is_some_and(|value| {
+            !value.is_empty() && value != "session-tracked"
+        }));
+        let generated = resolve_grok_session_id_for_engine_send(false, None, None);
+        assert!(generated.is_some_and(|value| !value.is_empty()));
     }
 
     #[test]

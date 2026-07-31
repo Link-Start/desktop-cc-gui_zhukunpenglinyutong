@@ -2996,13 +2996,44 @@ async fn materialize_attempt_binding(
                 .unwrap_or_else(|| Uuid::new_v4().to_string());
             format!("claude:{raw_session_id}")
         }
-        EngineType::Kimi | EngineType::Grok | EngineType::OpenCode => {
-            existing.unwrap_or_else(|| {
+        // Grok 支持 `-s` 预分配：与 Claude 一样 materialize 时写入 established
+        // `grok:{uuid}`，首轮 create 复用该 id，避免 pending 与落盘 id 分叉导致
+        // Hidden Binding 无法从 sidebar hide set 匹配。
+        EngineType::Grok => {
+            let raw_session_id = existing
+                .as_deref()
+                .filter(|value| {
+                    crate::shared_sessions::binding_uses_established_native_thread(
+                        EngineType::Grok,
+                        value,
+                    )
+                })
+                .and_then(|value| raw_engine_session_id(EngineType::Grok, value))
+                .map(str::to_string)
+                .unwrap_or_else(|| Uuid::new_v4().to_string());
+            format!("grok:{raw_session_id}")
+        }
+        // Kimi / OpenCode 真实 id 由 CLI 事后回写；首轮可暂存 pending，settlement
+        // 后 rebind 到 `engine:{raw}`。若已有 established 前缀 id 则复用。
+        EngineType::Kimi | EngineType::OpenCode => {
+            if let Some(existing_id) = existing.as_deref().filter(|value| {
+                crate::shared_sessions::binding_uses_established_native_thread(owner.engine, value)
+            }) {
+                existing_id.to_string()
+            } else if let Some(existing_id) = existing.as_deref().filter(|value| {
+                !crate::shared_sessions::is_pending_shared_binding_thread_id(owner.engine, value)
+            }) {
+                // 兼容历史 raw id：规范化为 engine 前缀。
+                let raw = raw_engine_session_id(owner.engine, existing_id)
+                    .unwrap_or(existing_id)
+                    .to_string();
+                format!("{}:{raw}", owner.engine.icon())
+            } else {
                 crate::shared_sessions::engine_binding_thread_id(
                     owner.engine,
                     Uuid::new_v4().to_string().as_str(),
                 )
-            })
+            }
         }
         _ => {
             return Err(format!(
@@ -3744,10 +3775,22 @@ pub async fn shared_session_v2_dispatch_turn(
                     .to_string(),
                 )
             });
-            let runtime_session_id = had_native_binding
-                .then(|| raw_engine_session_id(owner.engine, &native_session_id))
-                .flatten()
+            // 对齐 Claude：established identity 始终把 raw session id 传给 runtime。
+            // Grok 首轮 continue=false 仍带 pre-assigned id（`-s`）；Kimi/OpenCode
+            // pending 时 raw 可能是 pending 占位，runtime 自行忽略/新建。
+            let established = crate::shared_sessions::binding_uses_established_native_thread(
+                owner.engine,
+                &native_session_id,
+            );
+            let runtime_session_id = raw_engine_session_id(owner.engine, &native_session_id)
+                .filter(|raw| {
+                    !crate::shared_sessions::is_pending_shared_binding_thread_id(
+                        owner.engine,
+                        raw,
+                    )
+                })
                 .map(str::to_string);
+            let continue_session = had_native_binding && established;
             crate::engine::engine_send_message(
                 workspace_id.clone(),
                 outbound_text,
@@ -3757,9 +3800,15 @@ pub async fn shared_session_v2_dispatch_turn(
                 disable_thinking,
                 access_mode,
                 images,
-                had_native_binding,
+                continue_session,
                 Some(native_session_id.clone()),
-                runtime_session_id,
+                // Grok materialize 已预分配 `grok:{uuid}`：首轮 continue=false 仍传 raw 走 `-s`。
+                // 禁止把 pending 占位塞给 runtime。Kimi/OpenCode 仅 established 后 resume。
+                if owner.engine == EngineType::Grok {
+                    runtime_session_id
+                } else {
+                    runtime_session_id.filter(|_| established)
+                },
                 None,
                 None,
                 None,

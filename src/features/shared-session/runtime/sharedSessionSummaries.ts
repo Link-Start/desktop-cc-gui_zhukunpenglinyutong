@@ -10,6 +10,15 @@ const UNSUPPORTED_SHARED_ENGINE_PREFIXES = [
   "gemini-pending-",
 ] as const;
 
+/** Shared-supported engines whose native list ids use `engine:{raw}` form. */
+const SHARED_HIDE_ENGINE_PREFIXES = [
+  "claude",
+  "codex",
+  "kimi",
+  "grok",
+  "opencode",
+] as const;
+
 type SharedSessionSummary = {
   id: string;
   threadId: string;
@@ -91,6 +100,42 @@ export function normalizeSharedSessionSummaries(value: unknown): SharedSessionSu
     }
   });
   return summaries;
+}
+
+/**
+ * Expand Shared Hidden Binding ids so hide filters match both raw and
+ * `engine:{raw}` forms (catalog uses prefixes; some bindings historically
+ * stored raw session ids).
+ */
+export function expandHiddenSharedBindingIds(
+  nativeThreadIds: Iterable<string>,
+): Set<string> {
+  const expanded = new Set<string>();
+  for (const raw of nativeThreadIds) {
+    const id = asString(raw).trim();
+    if (!id) {
+      continue;
+    }
+    expanded.add(id);
+    const lower = id.toLowerCase();
+    for (const engine of SHARED_HIDE_ENGINE_PREFIXES) {
+      const prefix = `${engine}:`;
+      if (lower.startsWith(prefix)) {
+        const stripped = id.slice(prefix.length).trim();
+        if (stripped) {
+          expanded.add(stripped);
+        }
+      } else if (
+        !id.includes(":") ||
+        lower.startsWith(`${engine}-pending-`) ||
+        lower.startsWith(`${engine}-pending-shared-`)
+      ) {
+        // raw / pending placeholder → also match catalog form
+        expanded.add(`${engine}:${id}`);
+      }
+    }
+  }
+  return expanded;
 }
 
 export function toSharedThreadSummary(summary: SharedSessionSummary): ThreadSummary {

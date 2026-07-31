@@ -2383,14 +2383,30 @@ fn normalize_identity(value: Option<&str>) -> Option<&str> {
 
 fn normalize_native_session_identity(engine: EngineType, value: Option<&str>) -> Option<String> {
     let normalized = normalize_identity(value)?;
-    if engine != EngineType::Claude {
-        return Some(normalized.to_string());
+    // Claude / Kimi / Grok / OpenCode：catalog 与 FE hide 使用 `engine:{raw}`。
+    // Codex 保持 raw thread id（无前缀）。pending 占位原样保留，避免误写成
+    // `grok:grok-pending-shared-*`。
+    match engine {
+        EngineType::Claude | EngineType::Kimi | EngineType::Grok | EngineType::OpenCode => {
+            let token = engine_token(engine);
+            let prefix = format!("{token}:");
+            if crate::shared_sessions::is_pending_shared_binding_thread_id(engine, normalized) {
+                return Some(normalized.to_string());
+            }
+            let raw = normalized
+                .strip_prefix(prefix.as_str())
+                .unwrap_or(normalized)
+                .trim();
+            if raw.is_empty() {
+                return None;
+            }
+            if crate::shared_sessions::is_pending_shared_binding_thread_id(engine, raw) {
+                return Some(raw.to_string());
+            }
+            Some(format!("{prefix}{raw}"))
+        }
+        EngineType::Codex | EngineType::Gemini => Some(normalized.to_string()),
     }
-    let raw = normalized
-        .strip_prefix("claude:")
-        .unwrap_or(normalized)
-        .trim();
-    (!raw.is_empty()).then(|| format!("claude:{raw}"))
 }
 
 pub(crate) fn is_missing_native_session_error(error: &str) -> bool {
@@ -2518,9 +2534,11 @@ mod tests {
                 .expect("provider engine terminal settles owner");
 
             assert_eq!(settled.owner.engine, engine);
+            // local CLIs normalize to `engine:{raw}` so hide set / catalog match.
+            let expected_native = format!("{}:{}", engine_token(engine), native_session_id);
             assert_eq!(
                 settled.owner.native_session_id.as_deref(),
-                Some(native_session_id.as_str()),
+                Some(expected_native.as_str()),
             );
             assert_eq!(settled.final_snapshot.outcome, OutcomeStatus::Completed);
         }
