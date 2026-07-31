@@ -32,6 +32,10 @@ describe("VendorModelManagerDialogHost", () => {
         "settings.vendor.modelManager.modelIdPlaceholder",
       ),
     ).toBeTruthy();
+    // 弹窗壳层 class 保留，样式由 loadVendorModelManagerStyles 按需注入
+    // （测试环境 useFeatureStylesReady 会直接放行）。
+    expect(document.querySelector(".vendor-dialog-overlay")).toBeTruthy();
+    expect(document.querySelector(".vendor-model-manager-dialog")).toBeTruthy();
   });
 
   it("persists a newly added model into provider storage without settings navigation", async () => {

@@ -58,6 +58,18 @@ export function loadSettingsStyles() {
   ]);
 }
 
+/**
+ * Composer 入口「添加模型」会在未打开设置页时直接挂载 CustomModelDialog。
+ * 其壳层/表单样式原先只随 settings.css 懒加载，导致弹窗退化为裸文本布局。
+ * 这里只拉 dialog + model-manager 所需切片，避免为了弹窗整包 settings。
+ */
+export function loadVendorModelManagerStyles() {
+  return loadStyles([
+    () => import("./settings.vendor-dialog.css"),
+    () => import("./settings.part2.vendor-models.css"),
+  ]);
+}
+
 export function loadReleaseNotesStyles() {
   return loadStyles([
     () => import("./release-notes.css"),

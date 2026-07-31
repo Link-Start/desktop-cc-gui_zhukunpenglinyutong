@@ -7,6 +7,8 @@ import {
   type VendorModelManagerTarget,
 } from "../modelManagerRequest";
 import { usePluginModels } from "../hooks/usePluginModels";
+import { loadVendorModelManagerStyles } from "../../../styles/featureStyleLoaders";
+import { useFeatureStylesReady } from "../../../styles/useFeatureStylesReady";
 import { CustomModelDialog } from "./CustomModelDialog";
 
 function storageKeyForTarget(target: VendorModelManagerTarget): string {
@@ -28,6 +30,8 @@ export function VendorModelManagerDialogHost() {
   const [open, setOpen] = useState(false);
   const [addMode, setAddMode] = useState(false);
   const [target, setTarget] = useState<VendorModelManagerTarget>("claude");
+  // 未打开设置页时 settings.css 不会加载；弹窗打开时按需注入 dialog 样式。
+  const stylesReady = useFeatureStylesReady(loadVendorModelManagerStyles, open);
 
   const storageKey = useMemo(() => storageKeyForTarget(target), [target]);
   const { models, updateModels } = usePluginModels(storageKey);
@@ -68,7 +72,7 @@ export function VendorModelManagerDialogHost() {
 
   return (
     <CustomModelDialog
-      isOpen={open}
+      isOpen={open && stylesReady}
       models={models}
       onModelsChange={handleModelsChange}
       onClose={handleClose}

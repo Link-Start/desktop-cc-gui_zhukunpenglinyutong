@@ -38,9 +38,17 @@ export function useUiScaleShortcuts({
     if (typeof window === "undefined") {
       return;
     }
-    getCurrentWebview()
-      .setZoom(uiScale)
-      .catch(() => undefined);
+    try {
+      // getCurrentWebview() itself reads window.__TAURI_INTERNALS__.metadata
+      // synchronously. In pure Vite/browser previews that object is missing, so
+      // the call throws before setZoom()'s promise rejection path can run.
+      // React 19 surfaces passive-effect throws through ErrorBoundary.
+      void getCurrentWebview()
+        .setZoom(uiScale)
+        .catch(() => undefined);
+    } catch {
+      // Non-Tauri runtimes (browser dev server, vitest) skip native zoom.
+    }
   }, [uiScale]);
 
   const scaleShortcutTitle = useMemo(() => {
