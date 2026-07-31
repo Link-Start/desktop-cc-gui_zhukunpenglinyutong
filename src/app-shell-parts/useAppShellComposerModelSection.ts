@@ -99,9 +99,10 @@ export function useAppShellComposerModelSection({
       selectedModelId,
       activeThreadSelectedModelId: selectedComposerSelection?.modelId ?? null,
       hasActiveThread: hasActiveComposerThread,
+      // Codex/Claude：允许会话级自由/自定义模型名（含本地配置、catalog 未登记项），
+      // 避免 Atomic picker 选中后被 repair 静默回退。
       allowUnknownActiveThreadModel:
-        (activeEngine === "codex" || activeEngine === "claude") &&
-        Boolean(activeProviderProfileId?.trim()),
+        activeEngine === "codex" || activeEngine === "claude",
       codexModels: effectiveModels,
       engineModelsAsOptions,
       engineSelectedModelIdByType,
@@ -206,7 +207,22 @@ export function useAppShellComposerModelSection({
         }
       }
       if (!nextSelectedModel) {
-        return;
+        // Atomic picker / 自定义模型：不因 effectiveModels 未收录而静默丢弃。
+        // 单一会话点选时 catalog 与 picker 可能分叉（尤其 Codex 本地配置）。
+        const freeformId = id.trim();
+        if (!freeformId) {
+          return;
+        }
+        nextSelectedModel = {
+          id: freeformId,
+          model: freeformId,
+          displayName: freeformId,
+          description: "",
+          source: "custom",
+          supportedReasoningEfforts: [],
+          defaultReasoningEffort: null,
+          isDefault: false,
+        };
       }
       const isCrossEngineSelection = targetEngine !== activeEngine;
       const nextSelectedEffort =
