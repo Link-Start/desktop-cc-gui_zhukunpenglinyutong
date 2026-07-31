@@ -575,8 +575,13 @@ describe("SettingsView prompts workspace routing", () => {
       />,
     );
 
-    const picker = await screen.findByDisplayValue("Workspace B");
-    expect(picker).toBeTruthy();
+    await waitFor(() => {
+      expect(
+        screen
+          .getAllByRole("combobox", { name: "settings.workspacePickerLabel" })
+          .some((picker) => picker.textContent?.includes("Workspace B")),
+      ).toBe(true);
+    });
   });
 });
 
@@ -1496,112 +1501,13 @@ describe("SettingsView Display", () => {
     });
   });
 
-  it("persists client UI visibility panel and control toggles", async () => {
+  it("keeps hidden client UI visibility controls out of the display settings", async () => {
     renderDisplaySection();
 
-    expect(screen.getByText("Client UI visibility")).toBeTruthy();
-    expect(screen.getByText("Conversation canvas")).toBeTruthy();
-    expect(screen.getByText("Runtime notice dock")).toBeTruthy();
-    expect(screen.getByText("Context sources card")).toBeTruthy();
-
-    const topSessionTabsRow = screen
-      .getByText("Top session tabs")
-      .closest(".settings-toggle-row") as HTMLElement | null;
-    const terminalRow = screen
-      .getByText("Terminal shortcut")
-      .closest(".settings-toggle-row") as HTMLElement | null;
-    const contextSourcesCardRow = screen
-      .getByText("Context sources card")
-      .closest(".settings-toggle-row") as HTMLElement | null;
-    const runtimeNoticeDockRow = screen
-      .getByText("Runtime notice dock")
-      .closest(".settings-toggle-row") as HTMLElement | null;
-    if (
-      !topSessionTabsRow ||
-      !terminalRow ||
-      !contextSourcesCardRow ||
-      !runtimeNoticeDockRow
-    ) {
-      throw new Error("Expected client UI visibility rows");
-    }
-    expect(
-      topSessionTabsRow.querySelector(
-        ".settings-client-ui-visibility-row-icon svg",
-      ),
-    ).toBeTruthy();
-    expect(
-      terminalRow.querySelector(".settings-client-ui-visibility-row-icon svg"),
-    ).toBeTruthy();
-    expect(
-      contextSourcesCardRow.querySelector(
-        ".settings-client-ui-visibility-row-icon svg",
-      ),
-    ).toBeTruthy();
-    expect(
-      runtimeNoticeDockRow.querySelector(
-        ".settings-client-ui-visibility-row-icon svg",
-      ),
-    ).toBeTruthy();
-
-    fireEvent.click(within(topSessionTabsRow).getByRole("switch"));
-    await waitFor(() => {
-      expect(writeClientStoreValue).toHaveBeenCalledWith(
-        "app",
-        "clientUiVisibility",
-        expect.objectContaining({
-          panels: expect.objectContaining({ topSessionTabs: false }),
-        }),
-        { immediate: true },
-      );
-    });
-
-    fireEvent.click(within(terminalRow).getByRole("switch"));
-    await waitFor(() => {
-      expect(writeClientStoreValue).toHaveBeenCalledWith(
-        "app",
-        "clientUiVisibility",
-        expect.objectContaining({
-          controls: expect.objectContaining({ "topTool.terminal": false }),
-        }),
-        { immediate: true },
-      );
-    });
-
-    fireEvent.click(within(contextSourcesCardRow).getByRole("switch"));
-    await waitFor(() => {
-      expect(writeClientStoreValue).toHaveBeenCalledWith(
-        "app",
-        "clientUiVisibility",
-        expect.objectContaining({
-          controls: expect.objectContaining({ "curtain.contextLedger": false }),
-        }),
-        { immediate: true },
-      );
-    });
-
-    fireEvent.click(within(runtimeNoticeDockRow).getByRole("switch"));
-    await waitFor(() => {
-      expect(writeClientStoreValue).toHaveBeenCalledWith(
-        "app",
-        "clientUiVisibility",
-        expect.objectContaining({
-          panels: expect.objectContaining({ globalRuntimeNoticeDock: false }),
-        }),
-        { immediate: true },
-      );
-    });
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Restore default visibility" }),
-    );
-    await waitFor(() => {
-      expect(writeClientStoreValue).toHaveBeenLastCalledWith(
-        "app",
-        "clientUiVisibility",
-        { panels: {}, controls: { "topTool.clientDocumentation": false } },
-        { immediate: true },
-      );
-    });
+    expect(screen.queryByText("Client UI visibility")).toBeNull();
+    expect(screen.queryByText("Conversation canvas")).toBeNull();
+    expect(screen.queryByText("Runtime notice dock")).toBeNull();
+    expect(screen.queryByText("Context sources card")).toBeNull();
   });
 
   it("updates user message color using reference-compatible format", async () => {

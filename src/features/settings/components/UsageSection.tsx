@@ -9,6 +9,13 @@ import type {
 } from "../../../types";
 import { localUsageStatistics } from "../../../services/tauri";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type UsageSectionProps = {
   activeWorkspace: WorkspaceInfo | null;
@@ -257,17 +264,21 @@ export function UsageSection({
       <div className="settings-usage-workspace-picker">
         {workspaces.length > 0 ? (
           <div className="settings-select-wrap">
-            <select
-              className="settings-select"
+            <Select
               value={selectedWorkspaceId}
-              onChange={(event) => onWorkspaceChange(event.target.value)}
+              onValueChange={(value) => onWorkspaceChange(value)}
             >
-              {workspaces.map((workspace) => (
-                <option key={workspace.id} value={workspace.id}>
-                  {workspace.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger aria-label={t("settings.workspacePickerLabel")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {workspaces.map((workspace) => (
+                  <SelectItem key={workspace.id} value={workspace.id}>
+                    {workspace.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         ) : (
           <div className="settings-inline-muted">{t("settings.workspacePickerEmpty")}</div>

@@ -9,7 +9,6 @@ import Trash2 from "lucide-react/dist/esm/icons/trash-2";
 import Copy from "lucide-react/dist/esm/icons/copy";
 import Download from "lucide-react/dist/esm/icons/download";
 import Upload from "lucide-react/dist/esm/icons/upload";
-import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import type { CustomPromptOption, WorkspaceInfo } from "../../../../types";
 import { useCustomPrompts } from "../../../prompts/hooks/useCustomPrompts";
 import {
@@ -20,6 +19,13 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type PromptSectionProps = {
   activeWorkspace: WorkspaceInfo | null;
@@ -342,20 +348,24 @@ export function PromptSection({
           {t("settings.workspacePickerLabel")}
         </div>
         {workspaces.length > 0 ? (
-          <div className="settings-select-wrap settings-prompt-select-wrap">
-            <select
-              className="settings-select"
-              value={selectedWorkspaceId ?? ""}
-              onChange={(event) => onWorkspaceChange(event.target.value || null)}
+          <Select
+            value={selectedWorkspaceId ?? ""}
+            onValueChange={(value) => onWorkspaceChange(value || null)}
+          >
+            <SelectTrigger
+              aria-label={t("settings.workspacePickerLabel")}
+              className="settings-prompt-select-trigger"
             >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
               {workspaces.map((workspace) => (
-                <option key={workspace.id} value={workspace.id}>
+                <SelectItem key={workspace.id} value={workspace.id}>
                   {workspace.name}
-                </option>
+                </SelectItem>
               ))}
-            </select>
-            <ChevronDown className="settings-prompt-select-icon" aria-hidden />
-          </div>
+            </SelectContent>
+          </Select>
         ) : (
           <div className="settings-inline-muted">
             {t("settings.workspacePickerEmpty")}
@@ -376,20 +386,24 @@ export function PromptSection({
           </div>
 
           <div className="settings-prompt-toolbar settings-prompt-toolbar--primary">
-            <div className="settings-select-wrap settings-prompt-filter-wrap settings-prompt-select-wrap">
-              <select
-                className="settings-select"
-                value={scopeFilter}
-                onChange={(event) =>
-                  setScopeFilter(event.target.value as "all" | "workspace" | "global")
-                }
+            <Select
+              value={scopeFilter}
+              onValueChange={(value) =>
+                setScopeFilter(value as "all" | "workspace" | "global")
+              }
+            >
+              <SelectTrigger
+                aria-label={t("settings.prompt.scope")}
+                className="settings-prompt-filter-trigger"
               >
-                <option value="all">{t("settings.prompt.scopeAll")}</option>
-                <option value="workspace">{t("settings.prompt.scopeWorkspace")}</option>
-                <option value="global">{t("settings.prompt.scopeGlobal")}</option>
-              </select>
-              <ChevronDown className="settings-prompt-select-icon" aria-hidden />
-            </div>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("settings.prompt.scopeAll")}</SelectItem>
+                <SelectItem value="workspace">{t("settings.prompt.scopeWorkspace")}</SelectItem>
+                <SelectItem value="global">{t("settings.prompt.scopeGlobal")}</SelectItem>
+              </SelectContent>
+            </Select>
             <Button
               type="button"
               variant="outline"
@@ -503,26 +517,24 @@ export function PromptSection({
                 </label>
                 <label className="settings-field">
                   <span>{t("settings.prompt.scope")}</span>
-                  <div className="settings-select-wrap settings-prompt-select-wrap">
-                    <select
-                      className="settings-select"
-                      value={editor.scope}
-                      onChange={(event) =>
-                        setEditor((prev) =>
-                          prev
-                            ? {
-                                ...prev,
-                                scope: event.target.value as "workspace" | "global",
-                              }
-                            : prev,
-                        )
-                      }
-                    >
-                      <option value="workspace">{t("settings.prompt.scopeWorkspace")}</option>
-                      <option value="global">{t("settings.prompt.scopeGlobal")}</option>
-                    </select>
-                    <ChevronDown className="settings-prompt-select-icon" aria-hidden />
-                  </div>
+                  <Select
+                    value={editor.scope}
+                    onValueChange={(value) =>
+                      setEditor((prev) =>
+                        prev ? { ...prev, scope: value as "workspace" | "global" } : prev,
+                      )
+                    }
+                  >
+                    <SelectTrigger className="settings-prompt-select-trigger">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="workspace">
+                        {t("settings.prompt.scopeWorkspace")}
+                      </SelectItem>
+                      <SelectItem value="global">{t("settings.prompt.scopeGlobal")}</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </label>
                 <label className="settings-field">
                   <span>{t("settings.prompt.descriptionLabel")}</span>
