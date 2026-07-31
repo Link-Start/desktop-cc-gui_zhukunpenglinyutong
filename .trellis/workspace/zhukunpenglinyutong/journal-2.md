@@ -1003,3 +1003,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 73: 完善 CLI 路径设置、错误边界与流式正文切换
+
+**Date**: 2026-07-31
+**Task**: 完善 CLI 路径设置、错误边界与流式正文切换
+**Branch**: `chore/bump-version-0.7.13`
+
+### Summary
+
+提交 CLI 自定义路径弹窗、ErrorBoundary 报告能力、live text itemId 切换 drain、Grok 历史 runtime context 过滤、OpenCode 不可用降级，以及 header 角标/主题样式调整。74 files, +2223/-1382。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c03f9b1f8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
