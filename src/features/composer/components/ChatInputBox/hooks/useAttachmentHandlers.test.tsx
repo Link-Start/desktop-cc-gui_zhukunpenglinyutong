@@ -115,5 +115,26 @@ describe("useAttachmentHandlers pickFiles bridge", () => {
     expect(onAddAttachment).toHaveBeenCalledTimes(1);
     hook.unmount();
   });
+
+  it("does not open a second picker when the user cancels the native dialog", async () => {
+    mockPickFiles.mockResolvedValueOnce([]);
+    const onAttachPaths = vi.fn(() => true);
+    const onAddAttachment = vi.fn();
+    const hook = renderHook({
+      externalAttachments: undefined,
+      onAttachPaths,
+      onAddAttachment,
+    });
+
+    await act(async () => {
+      hook.result.handleAddAttachment(undefined);
+      await Promise.resolve();
+    });
+
+    expect(mockPickFiles).toHaveBeenCalledTimes(1);
+    expect(onAttachPaths).not.toHaveBeenCalled();
+    expect(onAddAttachment).not.toHaveBeenCalled();
+    hook.unmount();
+  });
 });
 

@@ -36,12 +36,18 @@ export function useAttachmentHandlers({
       if (!files || files.length === 0) {
         void pickFiles()
           .then((pickedPaths) => {
-            if (pickedPaths.length > 0 && onAttachPaths?.(pickedPaths)) {
+            // User canceled the native dialog — do not fall back to another picker.
+            if (pickedPaths.length === 0) {
               return;
             }
+            if (onAttachPaths?.(pickedPaths)) {
+              return;
+            }
+            // Paths were selected but the path handler did not consume them.
             onAddAttachment?.();
           })
           .catch(() => {
+            // Native picker unavailable (e.g. non-Tauri); allow legacy add path.
             onAddAttachment?.();
           });
         return;
