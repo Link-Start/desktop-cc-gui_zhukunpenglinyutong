@@ -50,15 +50,8 @@ import {
   useInlineHistoryCompletion,
   useUndoRedoHistory,
 } from './hooks/index.js';
-import {
-  isProviderProfileEngine,
-  useAtomicProviderTargetCatalog,
-  useNativeProviderTargetCatalog,
-} from './hooks/useProviderTargetCatalogOwners';
-import {
-  isSameProviderExecutionProfile,
-  normalizeExecutionProviderProfileId,
-} from './selectors/ModelSelect';
+import { useAtomicProviderTargetCatalog } from './hooks/useProviderTargetCatalogOwners';
+import { isSameProviderExecutionProfile } from './selectors/ModelSelect';
 import {
   commandToDropdownItem,
   fileReferenceProvider,
@@ -377,9 +370,6 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         t,
       ],
     );
-    const nativeProviderTargetPicker =
-      !usesAtomicProviderTargetPicker &&
-      isProviderProfileEngine(currentProvider);
     const atomicProviderTargetCatalog = useAtomicProviderTargetCatalog({
       enabled: usesAtomicProviderTargetPicker,
       workspaceId,
@@ -395,44 +385,6 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         defaultValue: '可作为来源；目标续接尚未验证',
       }),
     });
-    const nativeProviderTargetCatalog = useNativeProviderTargetCatalog({
-      enabled: nativeProviderTargetPicker,
-      workspaceId,
-      currentProvider: currentProvider as ProviderId,
-      currentProviderProfileId,
-      currentModels: availableModels,
-      resolveProviderLabel: (providerId) =>
-        t(`providers.${providerId}.label`, { defaultValue: providerId }),
-      kimiDisabledReason: t('sharedSession.kimiTargetUnavailable', {
-        defaultValue: '可作为来源；目标续接尚未验证',
-      }),
-    });
-    const providerTargetCatalog = usesAtomicProviderTargetPicker
-      ? atomicProviderTargetCatalog
-      : nativeProviderTargetCatalog;
-    const pickerExecutionTarget = useMemo(
-      () =>
-        executionTarget ??
-        (nativeProviderTargetPicker
-          ? {
-              engine: currentProvider as ProviderId,
-              providerProfileId:
-                normalizeExecutionProviderProfileId(
-                  currentProvider as ProviderId,
-                  currentProviderProfileId,
-                ),
-              model: selectedModel || null,
-              reasoning: null,
-            }
-          : null),
-      [
-        currentProvider,
-        currentProviderProfileId,
-        executionTarget,
-        nativeProviderTargetPicker,
-        selectedModel,
-      ],
-    );
 
     // Records the exact text of the latest programmatic (external) write.
     // Programmatic innerText assignment fires no input event, so this must NOT
@@ -1391,7 +1343,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       [currentProvider, onModelSelect, onProviderSelect]
     );
     const handleProviderTargetSelect = useCallback(
-      (target: NonNullable<typeof pickerExecutionTarget>) => {
+      (target: NonNullable<ChatInputBoxProps['executionTarget']>) => {
         if (usesAtomicProviderTargetPicker) {
           onExecutionTargetChange?.(target);
           return;
@@ -1563,23 +1515,21 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         selectedModel={selectedModel}
         models={availableModels}
         modelGroups={
-          !usesAtomicProviderTargetPicker &&
-          !nativeProviderTargetPicker &&
-          onProviderSelect
+          !usesAtomicProviderTargetPicker && onProviderSelect
             ? providerModelGroups
             : undefined
         }
-        targetGroups={providerTargetCatalog.groups}
-        targetGroupDisplayMode={
-          nativeProviderTargetPicker ? 'profiles' : 'cli'
+        targetGroups={
+          usesAtomicProviderTargetPicker
+            ? atomicProviderTargetCatalog.groups
+            : undefined
         }
-        executionTarget={pickerExecutionTarget}
+        executionTarget={executionTarget}
         onExecutionTargetChange={handleProviderTargetSelect}
-        onOpenTargetCatalog={providerTargetCatalog.ensureProfiles}
-        onOpenProviderProfile={providerTargetCatalog.ensureModels}
-        onReloadProviderConfig={providerTargetCatalog.reloadConfig}
-        onDiscoverProviderModels={providerTargetCatalog.discoverModels}
-        targetCatalogError={providerTargetCatalog.profileLoadError}
+        onOpenTargetCatalog={atomicProviderTargetCatalog.ensureProfiles}
+        onOpenProviderProfile={atomicProviderTargetCatalog.ensureModels}
+        onReloadProviderConfig={atomicProviderTargetCatalog.reloadConfig}
+        targetCatalogError={atomicProviderTargetCatalog.profileLoadError}
         currentProvider={currentProvider}
         onModelSelect={
           !usesAtomicProviderTargetPicker && onModelSelect
@@ -1587,7 +1537,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
             : undefined
         }
         onProviderModelSelect={
-          !nativeProviderTargetPicker && onModelSelect && onProviderSelect
+          !usesAtomicProviderTargetPicker && onModelSelect && onProviderSelect
             ? handleProviderModelSelect
             : undefined
         }

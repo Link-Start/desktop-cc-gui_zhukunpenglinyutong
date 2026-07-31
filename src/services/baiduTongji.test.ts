@@ -1,6 +1,17 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { installBaiduTongji } from "./baiduTongji";
+
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: vi.fn(() => ({ label: "main" })),
+}));
+
+const mockWindowLabel = (label: string) => {
+  vi.mocked(getCurrentWindow).mockReturnValue({ label } as ReturnType<
+    typeof getCurrentWindow
+  >);
+};
 
 describe("installBaiduTongji", () => {
   afterEach(() => {
@@ -28,5 +39,12 @@ describe("installBaiduTongji", () => {
     );
     expect(script?.async).toBe(true);
     expect(window._hmt).toEqual([]);
+  });
+
+  it("非主窗口不注入统计脚本，避免开窗虚增 PV", () => {
+    vi.stubEnv("PROD", true);
+    mockWindowLabel("about");
+    installBaiduTongji();
+    expect(document.querySelector('script[src*="hm.baidu.com"]')).toBeNull();
   });
 });

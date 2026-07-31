@@ -9,6 +9,7 @@ import {
   useNativeProviderTargetCatalog,
 } from "./useProviderTargetCatalogOwners";
 import { buildProviderExecutionTarget } from "../selectors/ModelSelect";
+import { seedCliEngineVisibility } from "../../../hooks/cliEngineVisibilityStore";
 import { isResolvedExecutionTarget } from "../../../../shared-session/target/types";
 import {
   discoverCodexModels,
@@ -41,6 +42,7 @@ const discoverCodexModelsMock = vi.mocked(discoverCodexModels);
 describe("Provider target catalog owners", () => {
   beforeEach(() => {
     resetProviderTargetCatalogForTests();
+    seedCliEngineVisibility([]);
     vi.clearAllMocks();
     getClaudeProvidersMock.mockResolvedValue([
       { id: "claude-a", name: "Claude A" },
@@ -972,5 +974,77 @@ describe("Provider target catalog owners", () => {
       expect.objectContaining({ id: "custom-model" }),
       expect.objectContaining({ id: "runtime-model", source: "runtime" }),
     ]);
+  });
+
+  describe("CLI engine visibility", () => {
+    it("hides user-disabled engines from the shared picker groups", () => {
+      seedCliEngineVisibility(["grok", "opencode"]);
+
+      const { result } = renderHook(() =>
+        useAtomicProviderTargetCatalog({
+          enabled: true,
+          mode: "shared",
+          currentProvider: "claude",
+          currentProviderProfileId: null,
+          resolveProviderLabel: (provider) => provider,
+          kimiDisabledReason: "source only",
+        }),
+      );
+
+      expect(result.current.groups.map((group) => group.providerId)).toEqual([
+        "claude",
+        "codex",
+        "kimi",
+      ]);
+    });
+
+    it("keeps the current provider visible even when user-disabled", () => {
+      seedCliEngineVisibility(["grok"]);
+
+      const { result } = renderHook(() =>
+        useAtomicProviderTargetCatalog({
+          enabled: true,
+          mode: "shared",
+          currentProvider: "grok",
+          currentProviderProfileId: "grok-d",
+          resolveProviderLabel: (provider) => provider,
+          kimiDisabledReason: "source only",
+        }),
+      );
+
+      expect(result.current.groups.map((group) => group.providerId)).toEqual([
+        "claude",
+        "codex",
+        "grok",
+        "kimi",
+        "opencode",
+      ]);
+    });
+
+    it("updates groups when the visibility setting changes at runtime", () => {
+      const { result } = renderHook(() =>
+        useAtomicProviderTargetCatalog({
+          enabled: true,
+          mode: "shared",
+          currentProvider: "claude",
+          currentProviderProfileId: null,
+          resolveProviderLabel: (provider) => provider,
+          kimiDisabledReason: "source only",
+        }),
+      );
+
+      expect(result.current.groups).toHaveLength(5);
+
+      act(() => {
+        seedCliEngineVisibility(["opencode"]);
+      });
+
+      expect(result.current.groups.map((group) => group.providerId)).toEqual([
+        "claude",
+        "codex",
+        "grok",
+        "kimi",
+      ]);
+    });
   });
 });

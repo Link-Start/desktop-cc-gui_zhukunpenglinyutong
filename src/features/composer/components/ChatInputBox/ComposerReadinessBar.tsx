@@ -25,7 +25,6 @@ type ComposerReadinessBarProps = {
   models?: ModelInfo[];
   modelGroups?: ProviderModelGroup[];
   targetGroups?: ProviderTargetGroup[];
-  targetGroupDisplayMode?: 'cli' | 'profiles';
   executionTarget?: ExecutionTarget | null;
   onExecutionTargetChange?: (target: ExecutionTarget) => void;
   onOpenTargetCatalog?: () => Promise<void> | void;
@@ -44,10 +43,6 @@ type ComposerReadinessBarProps = {
     providerId: ProviderId,
     providerProfileId: string,
   ) => Promise<void> | void;
-  onDiscoverProviderModels?: (
-    providerId: ProviderId,
-    providerProfileId: string,
-  ) => Promise<void> | void;
   rightAccessory?: ReactNode;
 };
 
@@ -60,7 +55,6 @@ export function ComposerReadinessBar({
   models,
   modelGroups,
   targetGroups,
-  targetGroupDisplayMode,
   executionTarget,
   onExecutionTargetChange,
   onOpenTargetCatalog,
@@ -73,7 +67,6 @@ export function ComposerReadinessBar({
   onRefreshModelConfig,
   isModelConfigRefreshing,
   onReloadProviderConfig,
-  onDiscoverProviderModels,
   rightAccessory,
 }: ComposerReadinessBarProps) {
   const { t } = useTranslation();
@@ -131,7 +124,6 @@ export function ComposerReadinessBar({
             models={models}
             modelGroups={modelGroups}
             targetGroups={targetGroups}
-            targetGroupDisplayMode={targetGroupDisplayMode}
             executionTarget={executionTarget}
             onExecutionTargetChange={onExecutionTargetChange}
             onOpenTargetCatalog={onOpenTargetCatalog}
@@ -145,7 +137,6 @@ export function ComposerReadinessBar({
             onRefreshConfig={onRefreshModelConfig}
             isRefreshingConfig={Boolean(isModelConfigRefreshing)}
             onReloadProviderConfig={onReloadProviderConfig}
-            onDiscoverProviderModels={onDiscoverProviderModels}
           />
         ) : (
           <div className="composer-readiness-target">

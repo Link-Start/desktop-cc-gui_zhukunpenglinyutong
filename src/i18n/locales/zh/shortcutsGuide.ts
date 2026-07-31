@@ -2,7 +2,7 @@
 const shortcutsGuide = {
   shortcutsGuide: {
     title: "快捷键指引",
-    description: "常用快捷键可帮助你快速创建会话、搜索、切换面板和发送消息。",
+    description: "从新建会话、切换代理、打开各类面板到编辑文件，高频操作均有快捷键，可在下方查阅与自定义。",
     sendMessage: "发送消息",
     insertNewline: "插入换行",
     openSettings: "设置快捷键",

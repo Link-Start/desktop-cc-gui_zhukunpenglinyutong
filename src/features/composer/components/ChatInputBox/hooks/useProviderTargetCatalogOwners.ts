@@ -24,6 +24,7 @@ import {
   type EngineProviderProfileOption,
 } from "../../../../threads/constants/codexProviderProfiles";
 import type { ModelInfo, ProviderId } from "../types";
+import { useCliEngineVisibility } from "../../../hooks/cliEngineVisibilityStore";
 
 // Native 单栏与 Atomic 双栏共享不可变 cache primitives，但拥有独立 hook state/input contract。
 export type ProviderProfileModelGroup = {
@@ -415,6 +416,9 @@ function useProviderTargetCatalogOwner({
   const [loadedModels, setLoadedModels] = useState<Record<string, ModelInfo[]>>(
     () => initialLoadedModels(mode),
   );
+  // 用户在「CLI配置管理」停用的引擎不进 target picker;当前选中引擎兜底保留,
+  // 与 ProviderSelect 的可见性规则保持一致(进行中的会话不受开关影响)。
+  const disabledCliEngineIds = useCliEngineVisibility();
 
   const ensureProfiles = useCallback(async () => {
     if (!enabled) {
@@ -588,7 +592,10 @@ function useProviderTargetCatalogOwner({
         ? isProviderProfileEngine(currentProvider)
           ? [currentProvider]
           : []
-        : PROVIDER_PROFILE_ENGINES;
+        : PROVIDER_PROFILE_ENGINES.filter(
+            (engine) =>
+              engine === currentProvider || !disabledCliEngineIds.has(engine),
+          );
     return engines.map((engine) => ({
       providerId: engine,
       providerLabel: resolveProviderLabel(engine),
@@ -651,6 +658,7 @@ function useProviderTargetCatalogOwner({
     currentProvider,
     currentProviderProfileId,
     catalogActions,
+    disabledCliEngineIds,
     enabled,
     kimiDisabledReason,
     loadedModels,

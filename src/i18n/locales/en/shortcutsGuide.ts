@@ -3,7 +3,7 @@ const shortcutsGuide = {
   shortcutsGuide: {
     title: "Keyboard Shortcuts",
     description:
-      "Common shortcuts help you create sessions, search, switch panels, and send messages faster.",
+      "From creating sessions and switching agents to opening panels and editing files — every frequent action has a shortcut you can browse and customize below.",
     sendMessage: "Send message",
     insertNewline: "Insert newline",
     openSettings: "Customize shortcuts",

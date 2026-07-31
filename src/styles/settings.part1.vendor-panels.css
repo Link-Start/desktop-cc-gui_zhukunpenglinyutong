@@ -108,6 +108,15 @@
   overscroll-behavior: contain;
 }
 
+/*
+ * 隐藏 CLI 列表的纵向滚动条使其不占用内容宽度：展开「暂未开放」等内容增多、
+ * 列表超出可视高度时，不再因原生滚动条出现而把 CLI 行挤窄，保持与无滚动条时
+ * 一致的满宽。只置 width:0 —— 仅隐藏纵向滚动条，移动端横向滚动条的 height 不受影响。
+ */
+.vendor-engine-nav-scroll::-webkit-scrollbar {
+  width: 0;
+}
+
 .vendor-engine-search {
   min-height: 32px;
   display: flex;
@@ -145,9 +154,9 @@
 }
 
 .vendor-engine-tab {
-  min-height: 36px;
+  min-height: 40px;
   gap: 7px;
-  padding: 4px 7px;
+  padding: 6px 8px;
   border-radius: 8px;
   font-size: 13px;
   font-weight: 400;
@@ -224,6 +233,16 @@
 
 .vendor-engine-group-chevron-collapsed {
   transform: rotate(-90deg);
+}
+
+/*
+ * 分组内的 CLI 行纵向铺排,留 2px 行间空隙:既给上下呼吸感,又让每行
+ * hover / active 的圆角高亮块视觉上彼此分离,不粘连成片。
+ */
+.vendor-engine-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .vendor-engine-group-collapsed .vendor-engine-group-items {
