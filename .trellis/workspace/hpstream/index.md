@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-0.md`
-- **Total Sessions**: 5
+- **Total Sessions**: 6
 - **Last Active**: 2026-07-31
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-0.md` | ~196 | Active |
+| `journal-0.md` | ~229 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 6 | 2026-07-31 | 统一设置页选择器样式 | `ce8030b4f` | `feat/from-main-20260729` |
 | 5 | 2026-07-31 | 统一提示词库 select 外壳 | `6e9ef2211` | `feat/from-main-20260729` |
 | 4 | 2026-07-31 | 调整提示词库排版 | `bc732d3eb` | `feat/from-main-20260729` |
 | 3 | 2026-07-31 | 修正隔离开发端口配置 | `b95167e26` | `feat/from-main-20260729` |

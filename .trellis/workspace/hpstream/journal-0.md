@@ -194,3 +194,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: 统一设置页选择器样式
+
+**Date**: 2026-07-31
+**Task**: 统一设置页选择器样式
+**Branch**: `feat/from-main-20260729`
+
+### Summary
+
+统一设置页 workspace picker 与提示词库筛选器使用组件库 Select，移除提示词库 workspace picker 420px 宽度上限，并同步相关测试断言。验证 lint、typecheck、diff check、large-file report、SettingsView/StatusPanel focused tests 与默认测试覆盖的前半段和剩余测试集。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ce8030b4f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
