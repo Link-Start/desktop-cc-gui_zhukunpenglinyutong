@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-30.md`
-- **Total Sessions**: 1258
+- **Total Sessions**: 1259
 - **Last Active**: 2026-08-01
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-30.md` | ~209 | Active |
+| `journal-30.md` | ~254 | Active |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
@@ -58,6 +58,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1259 | 2026-08-01 | 修复焦点跟随吸底偏差与快流抖动 | `b3cbfaa8c` | `bump-version-0.7.14` |
 | 1258 | 2026-08-01 | 修复冷启动 React #185 useModels effort 双写 | `4c5e97c8e` | `bump-version-0.7.14` |
 | 1257 | 2026-08-01 | fix-native-codex-local-model-select-freeform | `44fcf26a6` | `bump-version-0.7.14` |
 | 1256 | 2026-08-01 | 修复当前页添加模型弹窗样式丢失 | `8d75e7a6a` | `bump-version-0.7.14` |

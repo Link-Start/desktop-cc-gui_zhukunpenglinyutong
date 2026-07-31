@@ -207,3 +207,48 @@ VendorModelManagerDialogHost 在 AppShell 打开时未加载 settings.css，导�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1259: 修复焦点跟随吸底偏差与快流抖动
+
+**Date**: 2026-08-01
+**Task**: 修复焦点跟随吸底偏差与快流抖动
+**Branch**: `bump-version-0.7.14`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 内容 |
+|----|------|
+| 问题 | 焦点跟随吸底不准（会话结束差一点）；快流时幕布抖动 |
+| 根因 | stick 绑 working/finalizing；同 run 反复 cancel/restart 收敛 |
+| 修复 | stick=liveAutoFollow+autoScroll；复用活跃 run+nudge；rAF 合并 |
+| 范围 | 全引擎共用滚动层 |
+| 验证 | live-behavior 67 + scroll convergence 7 全绿 |
+
+**Updated Files**:
+- `src/features/messages/orchestration/hooks/useMessagesScrollController.ts`
+- `src/features/messages/components/MessagesCore.tsx`
+- `src/features/messages/components/Messages.live-behavior.test.tsx`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b3cbfaa8c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
