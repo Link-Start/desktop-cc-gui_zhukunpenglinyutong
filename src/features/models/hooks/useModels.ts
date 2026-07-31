@@ -255,6 +255,116 @@ const pickDefaultModel = (models: ModelOption[], configModel: string | null) =>
   models[0] ??
   null;
 
+/**
+ * 纯函数：统一 model effort 解析语义（唯一事实源）。
+ * 优先级：用户当前选择 → preferred → model default。
+ * supported 为空时仍允许 preferred / default，避免与 UI backfill 语义分裂。
+ */
+export const resolveModelEffort = (
+  model: ModelOption,
+  options: {
+    preferCurrent: boolean;
+    currentEffort: string | null;
+    preferredEffort: string | null;
+  },
+): string | null => {
+  const supportedEfforts = model.supportedReasoningEfforts.map(
+    (effort) => effort.reasoningEffort,
+  );
+  const currentEffort = normalizeEffort(options.currentEffort);
+  if (options.preferCurrent && currentEffort) {
+    return currentEffort;
+  }
+  const preferred = normalizeEffort(options.preferredEffort);
+  const modelDefault = normalizeEffort(model.defaultReasoningEffort);
+  if (supportedEfforts.length === 0) {
+    return preferred ?? modelDefault;
+  }
+  if (preferred && supportedEfforts.includes(preferred)) {
+    return preferred;
+  }
+  return modelDefault;
+};
+
+type ComposerSelectionPlan = {
+  nextModelId: string | null;
+  nextEffort: string | null;
+  clearUserSelectedModel: boolean;
+};
+
+/**
+ * 纯函数：从 catalog + preferred + 用户意图计算下一次应提交的 selection。
+ * layout / refresh 共用，保证只有一套收敛规则。
+ */
+export const planComposerModelSelection = (input: {
+  models: ModelOption[];
+  configModel: string | null;
+  preferredModelId: string | null;
+  preferredEffort: string | null;
+  preferredSelectionReady: boolean;
+  selectedModelId: string | null;
+  selectedEffort: string | null;
+  hasUserSelectedModel: boolean;
+  hasUserSelectedEffort: boolean;
+}): ComposerSelectionPlan | null => {
+  const {
+    models,
+    configModel,
+    preferredModelId,
+    preferredEffort,
+    preferredSelectionReady,
+    selectedModelId,
+    selectedEffort,
+    hasUserSelectedModel,
+    hasUserSelectedEffort,
+  } = input;
+
+  if (models.length === 0) {
+    return null;
+  }
+  if (!preferredSelectionReady && !hasUserSelectedModel) {
+    return null;
+  }
+
+  const existingSelection = findModelByIdOrModel(models, selectedModelId);
+  let clearUserSelectedModel = false;
+  let keepUserModel = hasUserSelectedModel;
+  if (selectedModelId && !existingSelection) {
+    clearUserSelectedModel = true;
+    keepUserModel = false;
+  }
+
+  const preferredSelection = findModelByIdOrModel(models, preferredModelId);
+  const defaultModel = pickDefaultModel(models, configModel);
+  const nextModel =
+    (keepUserModel && existingSelection ? existingSelection : null) ??
+    preferredSelection ??
+    defaultModel ??
+    existingSelection ??
+    null;
+  if (!nextModel) {
+    return null;
+  }
+
+  // effort 锁定策略（兼容旧行为，避免业务漂移）：
+  // 1) 用户显式选过 effort → 始终 preferCurrent
+  // 2) 用户锁住 model 且已有非空 effort → 不随 preferred 漂移（旧 layout early-return）
+  // 3) effort 仍为空 → 走 preferred/default 单源解析（替代旧 backfill effect）
+  const currentEffort = normalizeEffort(selectedEffort);
+  const preferCurrentEffort =
+    hasUserSelectedEffort || (keepUserModel && currentEffort !== null);
+
+  return {
+    nextModelId: nextModel.id,
+    nextEffort: resolveModelEffort(nextModel, {
+      preferCurrent: preferCurrentEffort,
+      currentEffort: selectedEffort,
+      preferredEffort,
+    }),
+    clearUserSelectedModel,
+  };
+};
+
 export function useModels({
   activeWorkspace,
   onDebug,
@@ -277,6 +387,21 @@ export function useModels({
   const catalogCacheByWorkspace = useRef(
     new Map<string, ReturnType<typeof createModelCatalogCache>>(),
   );
+  // 供 async refresh 读取最新 selection，避免把 state 塞进 refresh deps 形成反馈环
+  const selectionSnapshotRef = useRef({
+    selectedModelId: null as string | null,
+    selectedEffort: null as string | null,
+    preferredModelId,
+    preferredEffort,
+    preferredSelectionReady,
+  });
+  selectionSnapshotRef.current = {
+    selectedModelId,
+    selectedEffort,
+    preferredModelId,
+    preferredEffort,
+    preferredSelectionReady,
+  };
 
   const workspaceId = activeWorkspace?.id ?? null;
   const isConnected = Boolean(activeWorkspace?.connected);
@@ -288,6 +413,29 @@ export function useModels({
     void modelMappingVersion;
     return mergeCodexSelectableModels(rawModels);
   }, [rawModels, modelMappingVersion]);
+
+  // 幂等写入：语义相等则保持同一 reference，切断 setState → layout → setState 环
+  const commitSelectedModelId = useCallback((next: string | null) => {
+    setSelectedModelIdState((prev) => (prev === next ? prev : next));
+  }, []);
+
+  const commitSelectedEffort = useCallback((next: string | null) => {
+    const normalized = normalizeEffort(next);
+    setSelectedEffortState((prev) =>
+      normalizeEffort(prev) === normalized ? prev : normalized,
+    );
+  }, []);
+
+  const applySelectionPlan = useCallback(
+    (plan: ComposerSelectionPlan) => {
+      if (plan.clearUserSelectedModel) {
+        hasUserSelectedModel.current = false;
+      }
+      commitSelectedModelId(plan.nextModelId);
+      commitSelectedEffort(plan.nextEffort);
+    },
+    [commitSelectedEffort, commitSelectedModelId],
+  );
 
   // Listen for localStorage changes (cross-tab sync + custom events)
   useEffect(() => {
@@ -336,26 +484,21 @@ export function useModels({
     setCatalogReadyForWorkspace(false);
   }, [workspaceId]);
 
-  useEffect(() => {
-    if (selectedEffort === null) {
-      return;
-    }
-    if (selectedEffort.trim().length > 0) {
-      return;
-    }
-    hasUserSelectedEffort.current = false;
-    setSelectedEffortState(null);
-  }, [selectedEffort]);
+  const setSelectedModelId = useCallback(
+    (next: string | null) => {
+      hasUserSelectedModel.current = true;
+      commitSelectedModelId(next);
+    },
+    [commitSelectedModelId],
+  );
 
-  const setSelectedModelId = useCallback((next: string | null) => {
-    hasUserSelectedModel.current = true;
-    setSelectedModelIdState(next);
-  }, []);
-
-  const setSelectedEffort = useCallback((next: string | null) => {
-    hasUserSelectedEffort.current = true;
-    setSelectedEffortState(next);
-  }, []);
+  const setSelectedEffort = useCallback(
+    (next: string | null) => {
+      hasUserSelectedEffort.current = true;
+      commitSelectedEffort(next);
+    },
+    [commitSelectedEffort],
+  );
 
   const selectedModel = useMemo(
     () => models.find((model) => model.id === selectedModelId) ?? null,
@@ -382,27 +525,6 @@ export function useModels({
     const defaultEffort = normalizeEffort(selectedModel?.defaultReasoningEffort);
     return defaultEffort ? [defaultEffort] : [];
   }, [selectedModel]);
-
-  const resolveEffort = useCallback(
-    (model: ModelOption, preferCurrent: boolean) => {
-      const supportedEfforts = model.supportedReasoningEfforts.map(
-        (effort) => effort.reasoningEffort,
-      );
-      const currentEffort = normalizeEffort(selectedEffort);
-      if (preferCurrent && currentEffort) {
-        return currentEffort;
-      }
-      if (supportedEfforts.length === 0) {
-        return normalizeEffort(preferredEffort);
-      }
-      const preferred = normalizeEffort(preferredEffort);
-      if (preferred && supportedEfforts.includes(preferred)) {
-        return preferred;
-      }
-      return normalizeEffort(model.defaultReasoningEffort);
-    },
-    [preferredEffort, selectedEffort],
-  );
 
   const refreshModels = useCallback(async (phase: ModelRefreshPhase = "on-demand") => {
     if (!workspaceId || !isConnected) {
@@ -613,49 +735,27 @@ export function useModels({
       setCatalogReadyForWorkspace(
         modelListResult.status === "fulfilled" && Array.isArray(rawData),
       );
-      if (!preferredSelectionReady && !hasUserSelectedModel.current) {
-        return;
-      }
-      const defaultModel = pickDefaultModel(selectableData, configModelFromConfig);
-      const existingSelection = findModelByIdOrModel(selectableData, selectedModelId);
-      if (selectedModelId && !existingSelection) {
-        hasUserSelectedModel.current = false;
-      }
-      const preferredSelection = findModelByIdOrModel(selectableData, preferredModelId);
-      const shouldKeepExisting =
-        hasUserSelectedModel.current && existingSelection !== null;
-      const nextSelection =
-        (shouldKeepExisting ? existingSelection : null) ??
-        preferredSelection ??
-        defaultModel ??
-        existingSelection;
-      if (nextSelection) {
-        if (nextSelection.id !== selectedModelId) {
-          setSelectedModelIdState(nextSelection.id);
-        }
-        const nextEffort = resolveEffort(
-          nextSelection,
-          hasUserSelectedEffort.current,
-        );
-        if (nextEffort !== selectedEffort) {
-          setSelectedEffortState(nextEffort);
-        }
+      const snapshot = selectionSnapshotRef.current;
+      const plan = planComposerModelSelection({
+        models: selectableData,
+        configModel: configModelFromConfig,
+        preferredModelId: snapshot.preferredModelId,
+        preferredEffort: snapshot.preferredEffort,
+        preferredSelectionReady: snapshot.preferredSelectionReady,
+        selectedModelId: snapshot.selectedModelId,
+        selectedEffort: snapshot.selectedEffort,
+        hasUserSelectedModel: hasUserSelectedModel.current,
+        hasUserSelectedEffort: hasUserSelectedEffort.current,
+      });
+      if (plan) {
+        applySelectionPlan(plan);
       }
     } finally {
       if (inFlightWorkspaceId.current === requestedWorkspaceId) {
         inFlightWorkspaceId.current = null;
       }
     }
-  }, [
-    isConnected,
-    onDebug,
-    preferredModelId,
-    preferredSelectionReady,
-    selectedEffort,
-    selectedModelId,
-    resolveEffort,
-    workspaceId,
-  ]);
+  }, [applySelectionPlan, isConnected, onDebug, workspaceId]);
 
   useEffect(() => {
     if (!workspaceId || !isConnected) {
@@ -667,60 +767,33 @@ export function useModels({
     refreshModels("active-workspace");
   }, [isConnected, refreshModels, workspaceId]);
 
-  useEffect(() => {
-    if (!selectedModel) {
-      return;
-    }
-    const currentEffort = normalizeEffort(selectedEffort);
-    if (currentEffort) {
-      return;
-    }
-    const nextEffort = normalizeEffort(selectedModel.defaultReasoningEffort);
-    if (nextEffort === null) {
-      return;
-    }
-    hasUserSelectedEffort.current = false;
-    setSelectedEffortState(nextEffort);
-  }, [selectedEffort, selectedModel]);
-
+  // 唯一同步收敛入口：catalog / preferred 变化时规划并幂等提交。
+  // 不再另设 effort backfill effect，避免双写对打（React #185）。
   useLayoutEffect(() => {
-    if (!models.length) {
+    const plan = planComposerModelSelection({
+      models,
+      configModel,
+      preferredModelId,
+      preferredEffort,
+      preferredSelectionReady,
+      selectedModelId,
+      selectedEffort,
+      hasUserSelectedModel: hasUserSelectedModel.current,
+      hasUserSelectedEffort: hasUserSelectedEffort.current,
+    });
+    if (!plan) {
       return;
     }
-    if (!preferredSelectionReady && !hasUserSelectedModel.current) {
-      return;
-    }
-    const preferredSelection = findModelByIdOrModel(models, preferredModelId);
-    const defaultModel = pickDefaultModel(models, configModel);
-    const existingSelection = findModelByIdOrModel(models, selectedModelId);
-    if (selectedModelId && !existingSelection) {
-      hasUserSelectedModel.current = false;
-    }
-    const shouldKeepUserSelection =
-      hasUserSelectedModel.current && existingSelection !== null;
-    if (shouldKeepUserSelection) {
-      return;
-    }
-    const nextSelection =
-      preferredSelection ?? defaultModel ?? existingSelection ?? null;
-    if (!nextSelection) {
-      return;
-    }
-    if (nextSelection.id !== selectedModelId) {
-      setSelectedModelIdState(nextSelection.id);
-    }
-    const nextEffort = resolveEffort(nextSelection, hasUserSelectedEffort.current);
-    if (nextEffort !== selectedEffort) {
-      setSelectedEffortState(nextEffort);
-    }
+    applySelectionPlan(plan);
   }, [
+    applySelectionPlan,
     configModel,
     models,
+    preferredEffort,
     preferredModelId,
     preferredSelectionReady,
     selectedEffort,
     selectedModelId,
-    resolveEffort,
   ]);
 
   return {
