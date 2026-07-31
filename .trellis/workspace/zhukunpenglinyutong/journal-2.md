@@ -970,3 +970,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 72: 修复 mac-arm64 构建 TS2367
+
+**Date**: 2026-07-31
+**Task**: 修复 mac-arm64 构建 TS2367
+**Branch**: `chore/bump-version-0.7.12`
+
+### Summary
+
+修复 useProviderTargetCatalogOwners 中 ProviderProfileEngine 与 gemini 无重叠比较导致的 tsc 失败，恢复 npm run build:mac-arm64。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3e2c60863` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
