@@ -677,93 +677,104 @@ export function VendorSettingsPanel({
     >
       <nav
         className={cn(
-          "vendor-engine-nav vendor-engine-nav-scroll sticky top-0 flex min-h-0 shrink-0 flex-col self-stretch",
-          "max-md:static max-md:w-full max-md:flex-row max-md:px-0",
+          "vendor-engine-nav sticky top-0 flex min-h-0 shrink-0 flex-col self-stretch",
+          "max-md:static max-md:w-full max-md:px-0",
         )}
         aria-label={t("settings.vendorsTitle")}
       >
-        <label className="vendor-engine-search">
-          <Search size={16} aria-hidden="true" />
-          <input
-            type="search"
-            value={cliSearchQuery}
-            placeholder={t("settings.vendor.cliSearchPlaceholder", {
-              defaultValue: "搜索CLI",
-            })}
-            aria-label={t("settings.vendor.cliSearchPlaceholder", {
-              defaultValue: "搜索CLI",
-            })}
-            onChange={(event) => setCliSearchQuery(event.currentTarget.value)}
-          />
-        </label>
-        {isCliSearchActive ? (
-          filteredEngineNavItems.map((item) => (
-            <CliEngineNavRow
-              key={item.key}
-              item={item}
-              active={activeCli === item.key}
-              disabledIds={disabledCliEngineIdSet}
-              moreLabel={cliMoreActionsLabel}
-              disableLabel={cliDisableLabel}
-              enableLabel={cliEnableLabel}
-              onSelectCli={setActiveCli}
-              onToggleCliEnabled={handleToggleCliEngine}
-            />
-          ))
-        ) : (
-          <>
-            <CliEngineNavGroupSection
-              label={t("settings.vendor.cliGroupEnabled", {
-                defaultValue: "已启用",
+        {/*
+          滚动层与外壳分离：外壳 overflow:hidden 裁掉任何残留滚动条 gutter，
+          避免展开「暂未开放」后 CLI 行被挤窄 1–2px。
+        */}
+        <div
+          className={cn(
+            "vendor-engine-nav-scroll flex min-h-0 flex-1 flex-col",
+            "max-md:flex-row",
+          )}
+        >
+          <label className="vendor-engine-search">
+            <Search size={16} aria-hidden="true" />
+            <input
+              type="search"
+              value={cliSearchQuery}
+              placeholder={t("settings.vendor.cliSearchPlaceholder", {
+                defaultValue: "搜索CLI",
               })}
-              items={cliEngineNavGroups.enabled}
-              collapsed={collapsedCliGroups.enabled}
-              activeCli={activeCli}
-              disabledIds={disabledCliEngineIdSet}
-              moreLabel={cliMoreActionsLabel}
-              disableLabel={cliDisableLabel}
-              enableLabel={cliEnableLabel}
-              emptyHint={t("settings.vendor.cliGroupEnabledEmpty", {
-                defaultValue: "没有已启用的 CLI",
+              aria-label={t("settings.vendor.cliSearchPlaceholder", {
+                defaultValue: "搜索CLI",
               })}
-              onToggleGroup={() => toggleCliGroup("enabled")}
-              onSelectCli={setActiveCli}
-              onToggleCliEnabled={handleToggleCliEngine}
+              onChange={(event) => setCliSearchQuery(event.currentTarget.value)}
             />
-            {cliEngineNavGroups.disabled.length > 0 ? (
+          </label>
+          {isCliSearchActive ? (
+            filteredEngineNavItems.map((item) => (
+              <CliEngineNavRow
+                key={item.key}
+                item={item}
+                active={activeCli === item.key}
+                disabledIds={disabledCliEngineIdSet}
+                moreLabel={cliMoreActionsLabel}
+                disableLabel={cliDisableLabel}
+                enableLabel={cliEnableLabel}
+                onSelectCli={setActiveCli}
+                onToggleCliEnabled={handleToggleCliEngine}
+              />
+            ))
+          ) : (
+            <>
               <CliEngineNavGroupSection
-                label={t("settings.vendor.cliGroupDisabled", {
-                  defaultValue: "未启用",
+                label={t("settings.vendor.cliGroupEnabled", {
+                  defaultValue: "已启用",
                 })}
-                items={cliEngineNavGroups.disabled}
-                collapsed={collapsedCliGroups.disabled}
+                items={cliEngineNavGroups.enabled}
+                collapsed={collapsedCliGroups.enabled}
                 activeCli={activeCli}
                 disabledIds={disabledCliEngineIdSet}
                 moreLabel={cliMoreActionsLabel}
                 disableLabel={cliDisableLabel}
                 enableLabel={cliEnableLabel}
-                onToggleGroup={() => toggleCliGroup("disabled")}
+                emptyHint={t("settings.vendor.cliGroupEnabledEmpty", {
+                  defaultValue: "没有已启用的 CLI",
+                })}
+                onToggleGroup={() => toggleCliGroup("enabled")}
                 onSelectCli={setActiveCli}
                 onToggleCliEnabled={handleToggleCliEngine}
               />
-            ) : null}
-            <CliEngineNavGroupSection
-              label={t("settings.vendor.cliGroupUpcoming", {
-                defaultValue: "暂未开放",
-              })}
-              items={cliEngineNavGroups.upcoming}
-              collapsed={collapsedCliGroups.upcoming}
-              activeCli={activeCli}
-              disabledIds={disabledCliEngineIdSet}
-              moreLabel={cliMoreActionsLabel}
-              disableLabel={cliDisableLabel}
-              enableLabel={cliEnableLabel}
-              onToggleGroup={() => toggleCliGroup("upcoming")}
-              onSelectCli={setActiveCli}
-              onToggleCliEnabled={handleToggleCliEngine}
-            />
-          </>
-        )}
+              {cliEngineNavGroups.disabled.length > 0 ? (
+                <CliEngineNavGroupSection
+                  label={t("settings.vendor.cliGroupDisabled", {
+                    defaultValue: "未启用",
+                  })}
+                  items={cliEngineNavGroups.disabled}
+                  collapsed={collapsedCliGroups.disabled}
+                  activeCli={activeCli}
+                  disabledIds={disabledCliEngineIdSet}
+                  moreLabel={cliMoreActionsLabel}
+                  disableLabel={cliDisableLabel}
+                  enableLabel={cliEnableLabel}
+                  onToggleGroup={() => toggleCliGroup("disabled")}
+                  onSelectCli={setActiveCli}
+                  onToggleCliEnabled={handleToggleCliEngine}
+                />
+              ) : null}
+              <CliEngineNavGroupSection
+                label={t("settings.vendor.cliGroupUpcoming", {
+                  defaultValue: "暂未开放",
+                })}
+                items={cliEngineNavGroups.upcoming}
+                collapsed={collapsedCliGroups.upcoming}
+                activeCli={activeCli}
+                disabledIds={disabledCliEngineIdSet}
+                moreLabel={cliMoreActionsLabel}
+                disableLabel={cliDisableLabel}
+                enableLabel={cliEnableLabel}
+                onToggleGroup={() => toggleCliGroup("upcoming")}
+                onSelectCli={setActiveCli}
+                onToggleCliEnabled={handleToggleCliEngine}
+              />
+            </>
+          )}
+        </div>
       </nav>
 
       <div className="vendor-settings-content min-w-0 flex-1 min-h-0">

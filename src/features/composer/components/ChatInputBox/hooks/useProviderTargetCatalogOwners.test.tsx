@@ -232,7 +232,7 @@ describe("Provider target catalog owners", () => {
     getClaudeProvidersMock.mockResolvedValueOnce([
       {
         id: "__local_settings_json__",
-        name: "Local settings.json",
+        name: "本地配置",
         isLocalProvider: true,
       },
       { id: "minimax-m3", name: "Minimax-m3" },
@@ -261,7 +261,7 @@ describe("Provider target catalog owners", () => {
     expect(
       localProfile,
     ).toMatchObject({
-      label: "Local settings.json",
+      label: "本地配置",
       source: "disk",
     });
     expect(
@@ -857,6 +857,36 @@ describe("Provider target catalog owners", () => {
       ).toEqual([currentModel]);
     },
   );
+
+  it("merges plugin custom models into atomic engine groups without session currentModels", async () => {
+    const { result } = renderHook(() =>
+      useAtomicProviderTargetCatalog({
+        enabled: true,
+        mode: "shared",
+        currentProvider: "claude",
+        currentProviderProfileId: null,
+        pluginCustomModels: {
+          claude: [
+            { id: "my-custom", label: "My Custom", source: "custom" },
+          ],
+        },
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "source only",
+      }),
+    );
+
+    await act(async () => {
+      await result.current.ensureProfiles();
+      await result.current.ensureModels("claude", "__local_settings_json__");
+    });
+
+    const claudeLocal = result.current.groups
+      .find((group) => group.providerId === "claude")
+      ?.profiles.find((profile) => profile.id === "__local_settings_json__");
+    expect(claudeLocal?.models.some((model) => model.id === "my-custom")).toBe(
+      true,
+    );
+  });
 
   it("reloads only the configured slice and preserves current custom models", async () => {
     const { result } = renderHook(() =>

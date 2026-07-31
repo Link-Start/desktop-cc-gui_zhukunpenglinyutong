@@ -32,8 +32,24 @@ vi.mock("../../../../engine/components/EngineIcon", () => ({
 
 vi.mock("../../../../vendors/providerBrandIcon", () => ({
   providerBrandIconNeedsDarkTile: () => false,
-  resolveProviderBrandIcon: ({ modelId }: { modelId?: string | null }) =>
-    modelId === "kimi-k3" ? "/icons/kimi.svg" : null,
+  PROVIDER_BRAND_ICON_SRC: {
+    claude: "/icons/claude.svg",
+    openai: "/icons/openai.svg",
+    kimi: "/icons/kimi.svg",
+    opencode: "/icons/opencode.svg",
+  },
+  resolveProviderBrandIcon: ({ modelId }: { modelId?: string | null }) => {
+    if (modelId === "kimi-k3" || modelId?.includes("kimi")) {
+      return "/icons/kimi.svg";
+    }
+    if (modelId?.startsWith("gpt-") || modelId?.includes("openai")) {
+      return "/icons/openai.svg";
+    }
+    if (modelId?.includes("claude")) {
+      return "/icons/claude.svg";
+    }
+    return null;
+  },
 }));
 
 describe("ModelSelect", () => {
@@ -189,6 +205,149 @@ describe("ModelSelect", () => {
     expect(opusItem.textContent).toMatch(/Opus 4\.8|models\.claude\.opus48/);
   });
 
+  it("uses the Kimi brand tile for provider row, model rows, and trigger", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    render(
+      <ModelSelect
+        value="k3"
+        currentProvider="kimi"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        models={[{ id: "k3", label: "K3" }]}
+        modelGroups={[
+          {
+            providerId: "kimi",
+            providerLabel: "Kimi CLI",
+            enabled: true,
+            models: [
+              { id: "k3", label: "K3" },
+              { id: "k3-256k", label: "K3-256k" },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: "chat.currentModel:K3",
+    });
+    expect(trigger.querySelector("img")?.getAttribute("src")).toBe(
+      "/icons/kimi.svg",
+    );
+    expect(within(trigger).queryByTestId("kimi-icon")).toBeNull();
+
+    await user.click(trigger);
+    const kimiProviderItem = await screen.findByRole("menuitem", {
+      name: /Kimi CLI/,
+    });
+    expect(kimiProviderItem.querySelector("img")?.getAttribute("src")).toBe(
+      "/icons/kimi.svg",
+    );
+    expect(within(kimiProviderItem).queryByTestId("kimi-icon")).toBeNull();
+
+    await user.hover(kimiProviderItem);
+    const k3Item = await screen.findByRole("menuitem", { name: /^K3$/ });
+    const k3256Item = await screen.findByRole("menuitem", { name: /K3-256k/ });
+    expect(k3Item.querySelector("img")?.getAttribute("src")).toBe(
+      "/icons/kimi.svg",
+    );
+    expect(k3256Item.querySelector("img")?.getAttribute("src")).toBe(
+      "/icons/kimi.svg",
+    );
+  });
+
+  it("uses the Codex EngineIcon for provider row, native gpt models, and trigger", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    render(
+      <ModelSelect
+        value="gpt-5.6-sol"
+        currentProvider="codex"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        models={[{ id: "gpt-5.6-sol", label: "gpt-5.6-sol" }]}
+        modelGroups={[
+          {
+            providerId: "codex",
+            providerLabel: "Codex CLI",
+            enabled: true,
+            models: [
+              { id: "gpt-5.6-sol", label: "gpt-5.6-sol" },
+              { id: "gpt-5.6-terra", label: "gpt-5.6-terra" },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: "chat.currentModel:gpt-5.6-sol",
+    });
+    // Native Codex models must not flip to the lobehub openai brand SVG —
+    // the provider glyph (EngineIcon) is the single source of truth.
+    expect(within(trigger).getByTestId("codex-icon")).toBeTruthy();
+    expect(trigger.querySelector("img")).toBeNull();
+
+    await user.click(trigger);
+    const codexProviderItem = await screen.findByRole("menuitem", {
+      name: /Codex CLI/,
+    });
+    expect(within(codexProviderItem).getByTestId("codex-icon")).toBeTruthy();
+    expect(codexProviderItem.querySelector("img")).toBeNull();
+
+    await user.hover(codexProviderItem);
+    const solItem = await screen.findByRole("menuitem", {
+      name: /gpt-5\.6-sol/,
+    });
+    const terraItem = await screen.findByRole("menuitem", {
+      name: /gpt-5\.6-terra/,
+    });
+    expect(within(solItem).getByTestId("codex-icon")).toBeTruthy();
+    expect(solItem.querySelector("img")).toBeNull();
+    expect(within(terraItem).getByTestId("codex-icon")).toBeTruthy();
+    expect(terraItem.querySelector("img")).toBeNull();
+  });
+
+  it("uses the Grok EngineIcon for provider row, model rows, and trigger", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    render(
+      <ModelSelect
+        value="grok-4.5"
+        currentProvider="grok"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        models={[{ id: "grok-4.5", label: "Grok 4.5" }]}
+        modelGroups={[
+          {
+            providerId: "grok",
+            providerLabel: "Grok CLI",
+            enabled: true,
+            models: [{ id: "grok-4.5", label: "Grok 4.5" }],
+          },
+        ]}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: "chat.currentModel:Grok 4.5",
+    });
+    expect(within(trigger).getByTestId("grok-icon")).toBeTruthy();
+    expect(trigger.querySelector("img")).toBeNull();
+
+    await user.click(trigger);
+    const grokProviderItem = await screen.findByRole("menuitem", {
+      name: /Grok CLI/,
+    });
+    expect(within(grokProviderItem).getByTestId("grok-icon")).toBeTruthy();
+
+    await user.hover(grokProviderItem);
+    const modelItem = await screen.findByRole("menuitem", { name: /Grok 4\.5/ });
+    expect(within(modelItem).getByTestId("grok-icon")).toBeTruthy();
+    expect(modelItem.querySelector("img")).toBeNull();
+  });
+
   it("shows mapped labels and tier descriptions for every Claude family slot", async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     window.localStorage.setItem(
@@ -316,6 +475,7 @@ describe("ModelSelect", () => {
     await user.click(screen.getByRole("menuitem", { name: "models.addModel" }));
 
     expect(onAddModel).toHaveBeenCalledTimes(1);
+    expect(onAddModel).toHaveBeenCalledWith("codex");
     expect(onRefreshConfig).toHaveBeenCalledTimes(1);
   });
 
@@ -378,6 +538,7 @@ describe("ModelSelect", () => {
 
     fireEvent.click(addItem);
     expect(onAddModel).toHaveBeenCalledTimes(1);
+    expect(onAddModel).toHaveBeenCalledWith("claude");
 
     await user.click(screen.getByRole("button", { name: "chat.currentModel:Opus 4.8" }));
     await user.hover(await screen.findByRole("menuitem", { name: /Claude Code/ }));
@@ -385,6 +546,48 @@ describe("ModelSelect", () => {
 
     expect(onRefreshConfig).toHaveBeenCalledTimes(1);
     expect(onAddModel).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows add model in every provider submenu, not only the current engine", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onAddModel = vi.fn();
+
+    render(
+      <ModelSelect
+        value="claude-opus-4-8"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        onAddModel={onAddModel}
+        models={[
+          { id: "claude-opus-4-8", label: "Opus 4.8" },
+          { id: "gpt-5.4", label: "GPT-5.4" },
+        ]}
+        modelGroups={[
+          {
+            providerId: "claude",
+            providerLabel: "Claude Code",
+            enabled: true,
+            models: [{ id: "claude-opus-4-8", label: "Opus 4.8" }],
+          },
+          {
+            providerId: "codex",
+            providerLabel: "Codex",
+            enabled: true,
+            models: [{ id: "gpt-5.4", label: "GPT-5.4" }],
+          },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "chat.currentModel:Opus 4.8" }));
+    await user.hover(await screen.findByRole("menuitem", { name: /Codex/ }));
+
+    const addItem = await screen.findByRole("menuitem", { name: "models.addModel" });
+    fireEvent.click(addItem);
+
+    expect(onAddModel).toHaveBeenCalledTimes(1);
+    expect(onAddModel).toHaveBeenCalledWith("codex");
   });
 
   it("renders a root footer action that opens CLI settings", async () => {
@@ -541,7 +744,7 @@ const atomicExecutionTarget: ExecutionTarget = {
   providerProfileId: null,
   modelCatalogEntryId: "claude-opus-4-8",
   model: "claude-opus-4-8",
-  providerProfileNameSnapshot: "Local settings.json",
+  providerProfileNameSnapshot: "本地配置",
   providerProfileSource: "disk",
 };
 
@@ -554,7 +757,7 @@ function buildAtomicGroups(): ProviderTargetGroup[] {
       profiles: [
         {
           id: "__local_settings_json__",
-          label: "Local settings.json",
+          label: "本地配置",
           source: "disk" as const,
           loading: false,
           error: null,
@@ -602,7 +805,7 @@ describe("ModelSelect atomic target groups", () => {
     return trigger;
   }
 
-  it("opens the active channel models directly without channel rows", async () => {
+  it("opens the active channel models with footer channel switcher and no profile list rows", async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
 
     render(
@@ -623,9 +826,7 @@ describe("ModelSelect atomic target groups", () => {
 
     await screen.findByRole("menuitem", { name: /Claude Code/ });
     expect(screen.getByRole("menuitem", { name: /Codex CLI/ })).toBeTruthy();
-    // No channel/profile rows anywhere in the menu.
-    expect(document.querySelector("[data-provider-profile-id]")).toBeNull();
-    expect(screen.queryByText("Local settings.json")).toBeNull();
+    // Channel options stay out of the model list until the dialog opens.
     expect(screen.queryByText("k3")).toBeNull();
 
     openPickerSubmenu(/Claude Code/);
@@ -633,9 +834,67 @@ describe("ModelSelect atomic target groups", () => {
     expect(screen.getByRole("menuitem", { name: /Sonnet 5/ })).toBeTruthy();
     // The inactive channel's models stay hidden.
     expect(screen.queryByText("Kimi K3")).toBeNull();
+    // Footer exposes equal-width channel / add-model buttons.
+    const claudeChannel = document.querySelector(
+      "[data-submenu-footer='claude'] [data-channel-select-trigger='claude'][data-provider-profile-id='__local_settings_json__']",
+    );
+    expect(claudeChannel).toBeTruthy();
+    expect(claudeChannel?.textContent).toContain("本地配置");
 
     openPickerSubmenu(/Codex CLI/);
     expect(await screen.findByText("GPT-5.7")).toBeTruthy();
+    const codexChannel = document.querySelector(
+      "[data-submenu-footer='codex'] [data-channel-select-trigger='codex'][data-provider-profile-id='__disk__']",
+    );
+    expect(codexChannel).toBeTruthy();
+  });
+
+  it("places equal channel and add-model buttons on the same footer row", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onAddModel = vi.fn();
+
+    render(
+      <ModelSelect
+        value="claude-opus-4-8"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        onAddModel={onAddModel}
+        onExecutionTargetChange={vi.fn()}
+        executionTarget={atomicExecutionTarget}
+        targetGroups={buildAtomicGroups()}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "chat.currentModel:Opus 4.8" }),
+    );
+    await screen.findByRole("menuitem", { name: /Claude Code/ });
+    openPickerSubmenu(/Claude Code/);
+
+    const footer = document.querySelector(
+      "[data-submenu-footer='claude']",
+    ) as HTMLElement;
+    expect(footer).toBeTruthy();
+    const channelButton = footer.querySelector(
+      "[data-channel-select-trigger='claude']",
+    ) as HTMLButtonElement;
+    const addButton = within(footer).getByRole("button", {
+      name: "models.addModel",
+    });
+    expect(channelButton).toBeTruthy();
+    expect(channelButton.className).toContain("flex-1");
+    expect(addButton.className).toContain("flex-1");
+
+    const opusItem = screen.getByRole("menuitem", { name: /Opus 4.8/ });
+    // Footer sits after model rows.
+    expect(
+      opusItem.compareDocumentPosition(footer) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    fireEvent.click(addButton);
+    expect(onAddModel).toHaveBeenCalledWith("claude");
   });
 
   it("emits a complete execution target when picking a model", async () => {
@@ -666,7 +925,7 @@ describe("ModelSelect atomic target groups", () => {
       providerProfileId: null,
       modelCatalogEntryId: "claude-sonnet-5",
       model: "claude-sonnet-5",
-      providerProfileNameSnapshot: "Local settings.json",
+      providerProfileNameSnapshot: "本地配置",
       providerProfileSource: "disk",
       reasoning: null,
     });
@@ -779,7 +1038,7 @@ describe("ModelSelect atomic target groups", () => {
     );
   });
 
-  it("reloads only the current engine active channel from the submenu header", async () => {
+  it("reloads each CLI active channel from the submenu header", async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const onReloadProviderConfig = vi.fn();
 
@@ -816,11 +1075,131 @@ describe("ModelSelect atomic target groups", () => {
       "[data-slot='dropdown-menu-sub-content']",
     );
     expect(codexSubContent).toBeTruthy();
-    expect(
-      codexSubContent!.querySelector(
-        "button[aria-label='models.refreshConfig']",
-      ),
-    ).toBeNull();
+    const codexRefresh = codexSubContent!.querySelector(
+      "button[aria-label='models.refreshConfig']",
+    );
+    expect(codexRefresh).toBeTruthy();
+    fireEvent.click(codexRefresh!);
+    expect(onReloadProviderConfig).toHaveBeenCalledWith("codex", "__disk__");
+  });
+
+  it("switches the current engine channel immediately via the channel dialog", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onExecutionTargetChange = vi.fn();
+    const onOpenProviderProfile = vi.fn();
+
+    render(
+      <ModelSelect
+        value="claude-opus-4-8"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        onExecutionTargetChange={onExecutionTargetChange}
+        onOpenProviderProfile={onOpenProviderProfile}
+        executionTarget={atomicExecutionTarget}
+        targetGroups={buildAtomicGroups()}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "chat.currentModel:Opus 4.8" }),
+    );
+    await screen.findByRole("menuitem", { name: /Claude Code/ });
+    openPickerSubmenu(/Claude Code/);
+
+    const channelTrigger = document.querySelector(
+      "[data-channel-select-trigger='claude']",
+    ) as HTMLButtonElement;
+    expect(channelTrigger).toBeTruthy();
+    fireEvent.click(channelTrigger);
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toBeTruthy();
+    const k3Option = await within(dialog).findByRole("button", {
+      name: /^k3$/,
+    });
+    fireEvent.click(k3Option);
+
+    expect(onOpenProviderProfile).toHaveBeenCalledWith("claude", "k3");
+    expect(onExecutionTargetChange).toHaveBeenCalledWith({
+      engine: "claude",
+      providerProfileId: "k3",
+      modelCatalogEntryId: "kimi-k3",
+      model: "kimi-k3",
+      providerProfileNameSnapshot: "k3",
+      providerProfileSource: "managed",
+      reasoning: null,
+    });
+  });
+
+  it("previews another engine channel without rewriting the active target until a model is picked", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onExecutionTargetChange = vi.fn();
+    const onOpenProviderProfile = vi.fn();
+    const groups = buildAtomicGroups();
+    groups[1].profiles.push({
+      id: "provider-b",
+      label: "Provider B",
+      source: "managed" as const,
+      loading: false,
+      error: null,
+      models: [{ id: "gpt-provider-b", label: "GPT Provider B" }],
+    });
+
+    render(
+      <ModelSelect
+        value="claude-opus-4-8"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        onExecutionTargetChange={onExecutionTargetChange}
+        onOpenProviderProfile={onOpenProviderProfile}
+        executionTarget={atomicExecutionTarget}
+        targetGroups={groups}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "chat.currentModel:Opus 4.8" }),
+    );
+    await screen.findByRole("menuitem", { name: /Codex CLI/ });
+    openPickerSubmenu(/Codex CLI/);
+
+    const channelTrigger = document.querySelector(
+      "[data-channel-select-trigger='codex']",
+    ) as HTMLButtonElement;
+    expect(channelTrigger).toBeTruthy();
+    fireEvent.click(channelTrigger);
+
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(
+      await within(dialog).findByRole("button", { name: /Provider B/ }),
+    );
+
+    expect(onOpenProviderProfile).toHaveBeenCalledWith("codex", "provider-b");
+    // Preview only: does not rewrite Claude execution target.
+    expect(onExecutionTargetChange).not.toHaveBeenCalled();
+
+    // Channel dialog closes the model menu; reopen to pick from the previewed catalog.
+    await user.click(
+      screen.getByRole("button", { name: "chat.currentModel:Opus 4.8" }),
+    );
+    await screen.findByRole("menuitem", { name: /Codex CLI/ });
+    openPickerSubmenu(/Codex CLI/);
+
+    expect(await screen.findByText("GPT Provider B")).toBeTruthy();
+    expect(screen.queryByText("GPT-5.7")).toBeNull();
+
+    fireEvent.click(screen.getByText("GPT Provider B"));
+    expect(onExecutionTargetChange).toHaveBeenCalledWith({
+      engine: "codex",
+      providerProfileId: "provider-b",
+      modelCatalogEntryId: "gpt-provider-b",
+      model: "gpt-provider-b",
+      providerProfileNameSnapshot: "Provider B",
+      providerProfileSource: "managed",
+      reasoning: null,
+    });
   });
 
   it("disables unavailable engine groups with the disabled reason", async () => {
@@ -834,7 +1213,7 @@ describe("ModelSelect atomic target groups", () => {
       profiles: [
         {
           id: "__local_config_toml__",
-          label: "Local config.toml",
+          label: "本地配置",
           source: "disk" as const,
           loading: false,
           error: null,

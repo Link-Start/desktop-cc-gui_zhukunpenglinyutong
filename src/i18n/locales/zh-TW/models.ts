@@ -9,6 +9,8 @@ const models = {
     "addModel": "新增模型",
 
     "openCliSettings": "CLI 設定",
+    "switchChannel": "切換渠道",
+    "selectChannel": "選擇渠道",
     "refreshConfig": "重新整理設定",
     "refreshingConfig": "重新整理中…",
     "reloadConfig": "重新讀取設定",

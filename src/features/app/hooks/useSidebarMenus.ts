@@ -40,15 +40,11 @@ import {
 } from "./useSidebarWorkspacePinnedActions";
 import {
   CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
-  CLAUDE_LOCAL_PROVIDER_PROFILE_NAME,
   CODEX_DISK_PROVIDER_PROFILE_ID,
-  CODEX_DISK_PROVIDER_PROFILE_NAME,
   GROK_LOCAL_PROVIDER_PROFILE_ID,
-  GROK_LOCAL_PROVIDER_PROFILE_NAME,
   KIMI_LOCAL_PROVIDER_PROFILE_ID,
-  KIMI_LOCAL_PROVIDER_PROFILE_NAME,
+  LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
   OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
-  OPENCODE_LOCAL_PROVIDER_PROFILE_NAME,
   type EngineProviderProfileSelection,
   type EngineProviderProfileOption,
 } from "../../threads/constants/codexProviderProfiles";
@@ -1202,33 +1198,36 @@ export function useSidebarMenus({
               statusLabel: t("sidebar.providerUnavailableLabel"),
             }
           : engineMeta;
+      const localProviderName = t("providers.localConfig", {
+        defaultValue: LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
+      });
       const claudeProfiles = buildProviderProfiles(
         CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
-        CLAUDE_LOCAL_PROVIDER_PROFILE_NAME,
+        localProviderName,
         claudeProviderProfiles,
         claudeSelectedProfileId,
       );
       const codexProfiles = buildProviderProfiles(
         CODEX_DISK_PROVIDER_PROFILE_ID,
-        CODEX_DISK_PROVIDER_PROFILE_NAME,
+        localProviderName,
         codexProviderProfiles,
         codexSelectedProfileId,
       );
       const kimiProfiles = buildProviderProfiles(
         KIMI_LOCAL_PROVIDER_PROFILE_ID,
-        KIMI_LOCAL_PROVIDER_PROFILE_NAME,
+        localProviderName,
         kimiProviderProfiles,
         kimiSelectedProfileId,
       );
       const grokProfiles = buildProviderProfiles(
         GROK_LOCAL_PROVIDER_PROFILE_ID,
-        GROK_LOCAL_PROVIDER_PROFILE_NAME,
+        localProviderName,
         grokProviderProfiles,
         grokSelectedProfileId,
       );
       const opencodeProfiles = buildProviderProfiles(
         OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
-        OPENCODE_LOCAL_PROVIDER_PROFILE_NAME,
+        localProviderName,
         opencodeProviderProfiles,
         opencodeSelectedProfileId,
       );

@@ -5,6 +5,8 @@ const models = {
     engineHeader: "{{name}} 引擎",
     addModel: "添加模型",
     openCliSettings: "CLI配置管理",
+    switchChannel: "切换渠道",
+    selectChannel: "选择渠道",
     refreshConfig: "刷新配置",
     refreshingConfig: "刷新中…",
     reloadConfig: "重读配置",

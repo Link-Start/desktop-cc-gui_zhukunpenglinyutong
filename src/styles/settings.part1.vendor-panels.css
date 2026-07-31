@@ -93,28 +93,46 @@
  * the panel's left edge — which shares the same centered fixed-width column
  * as the page-head title above it. The right padding keeps the rows off the
  * content divider instead of kissing it.
+ *
+ * 外壳与滚动层分离：外壳 overflow:hidden 负责裁切；滚动条 gutter 永远
+ * 落不到 CLI 行内容盒上（见 .vendor-engine-nav-scroll）。
  */
 .vendor-engine-nav {
   width: 200px;
   height: 100%;
   min-height: 0;
-  gap: 2px;
   padding: 16px 10px 0 0;
-}
-
-.vendor-engine-nav-scroll {
-  max-height: 100%;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 /*
- * 隐藏 CLI 列表的纵向滚动条使其不占用内容宽度：展开「暂未开放」等内容增多、
- * 列表超出可视高度时，不再因原生滚动条出现而把 CLI 行挤窄，保持与无滚动条时
- * 一致的满宽。只置 width:0 —— 仅隐藏纵向滚动条，移动端横向滚动条的 height 不受影响。
+ * 隐藏 CLI 列表纵向滚动条占位，并隔离残余 gutter：
+ * 仅靠 scrollbar-width:none 在部分 WebKit/macOS 上仍会在 scrollport 激活时
+ * 挤掉 1–2px，导致「Claude Code CLI」与折叠态对不齐。
+ * 做法：滚动层加宽 + 等量 padding-right，内容盒宽度恒等于外壳 content box；
+ * 若仍画出经典滚动条，落在右侧 phantom 区，被外壳 overflow:hidden 裁掉。
+ * 滚轮 / 触控板仍可滚动。
  */
+.vendor-engine-nav-scroll {
+  height: 100%;
+  min-height: 0;
+  gap: 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  width: calc(100% + 24px);
+  padding-right: 24px;
+  box-sizing: border-box;
+}
+
 .vendor-engine-nav-scroll::-webkit-scrollbar {
+  display: none;
   width: 0;
+  height: 0;
+  background: transparent;
 }
 
 .vendor-engine-search {
@@ -1286,9 +1304,16 @@
   .vendor-engine-nav {
     width: 100%;
     max-height: none;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .vendor-engine-nav-scroll {
+    width: 100%;
+    max-height: none;
+    padding-right: 0;
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 0;
   }
 
   .vendor-engine-search {

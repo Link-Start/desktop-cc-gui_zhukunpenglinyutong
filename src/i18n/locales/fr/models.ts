@@ -9,6 +9,8 @@ const models = {
     "addModel": "Ajouter un modèle",
 
     "openCliSettings": "Paramètres CLI",
+    "switchChannel": "Changer de canal",
+    "selectChannel": "Sélectionner un canal",
     "refreshConfig": "Actualiser la configuration",
     "refreshingConfig": "Actualisation...",
     "reloadConfig": "Recharger la configuration",

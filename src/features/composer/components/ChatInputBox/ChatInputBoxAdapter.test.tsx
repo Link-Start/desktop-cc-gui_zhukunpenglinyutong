@@ -913,7 +913,7 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     mockState.getClaudeProviders.mockResolvedValue([
       {
         id: '__local_settings_json__',
-        name: 'Local settings.json',
+        name: '本地配置',
         isActive: true,
         isLocalProvider: true,
         settingsConfig: {},
@@ -935,7 +935,7 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     mockState.getClaudeProviders.mockResolvedValue([
       {
         id: '__local_settings_json__',
-        name: 'Local settings.json',
+        name: '本地配置',
         isActive: true,
         isLocalProvider: true,
         settingsConfig: {},

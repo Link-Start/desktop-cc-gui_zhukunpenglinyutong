@@ -1,6 +1,7 @@
 // providers — English UI strings
 const providers = {
   providers: {
+    localConfig: "Local config",
     claude: {
       label: "Claude Code",
     },

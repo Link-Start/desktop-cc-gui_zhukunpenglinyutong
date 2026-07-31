@@ -9,6 +9,8 @@ const models = {
     "addModel": "मॉडल जोड़ें",
 
     "openCliSettings": "CLI सेटिंग्स",
+    "switchChannel": "चैनल बदलें",
+    "selectChannel": "चैनल चुनें",
     "refreshConfig": "कॉन्फ़िग रीफ़्रेश करें",
     "refreshingConfig": "रीफ़्रेश हो रहा है...",
     "reloadConfig": "कॉन्फ़िग फिर से लोड करें",

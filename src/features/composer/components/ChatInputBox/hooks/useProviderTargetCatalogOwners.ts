@@ -129,9 +129,16 @@ type ProviderTargetCatalogCommonOptions = {
   kimiDisabledReason: string;
 };
 
+/** 自定义模型按引擎注入(localStorage plugin models),与 session currentModels 解耦 */
+export type PluginCustomModelsByEngine = Partial<
+  Record<"claude" | "codex" | "gemini", ModelInfo[]>
+>;
+
 type AtomicProviderTargetCatalogOptions =
   ProviderTargetCatalogCommonOptions & {
     mode: AtomicProviderTargetCatalogMode;
+    /** 各引擎 localStorage 自定义模型;添加后立即出现在 atomic 选择器 */
+    pluginCustomModels?: PluginCustomModelsByEngine;
   };
 
 type NativeProviderTargetCatalogOptions =
@@ -161,20 +168,28 @@ function normalizeProfiles(
     isLocalProvider?: boolean;
   }>,
 ): EngineProviderProfileOption[] {
+  const defaults = DEFAULT_PROFILES[engine] ?? [];
+  const defaultNameById = new Map(
+    defaults.map((profile) => [profile.id, profile.name]),
+  );
   const normalized = providers
     .map((provider) => {
       const id = provider.id.trim();
+      const isLocal =
+        provider.isLocalProvider || isLocalProviderProfile(engine, id);
+      // 本地渠道统一展示「本地配置」，避免暴露 settings.json / codex-tui 等内部路径
+      const name = isLocal
+        ? (defaultNameById.get(id) ??
+          defaults[0]?.name ??
+          (provider.name.trim() || id))
+        : provider.name.trim() || id;
       return {
         id,
-        name: provider.name.trim() || id,
-        source:
-          provider.isLocalProvider || isLocalProviderProfile(engine, id)
-            ? ("disk" as const)
-            : ("managed" as const),
+        name,
+        source: isLocal ? ("disk" as const) : ("managed" as const),
       };
     })
     .filter((provider) => provider.id.length > 0);
-  const defaults = DEFAULT_PROFILES[engine] ?? [];
   return [
     ...defaults.filter(
       (defaultProfile) =>
@@ -401,6 +416,7 @@ function useProviderTargetCatalogOwner({
   currentProvider,
   currentProviderProfileId,
   currentModels,
+  pluginCustomModels,
   resolveProviderLabel,
   kimiDisabledReason,
 }: {
@@ -410,6 +426,7 @@ function useProviderTargetCatalogOwner({
   currentProvider: ProviderId;
   currentProviderProfileId?: string | null;
   currentModels: ModelInfo[];
+  pluginCustomModels?: PluginCustomModelsByEngine;
   resolveProviderLabel: (providerId: ProviderId) => string;
   kimiDisabledReason: string;
 }) {
@@ -625,9 +642,14 @@ function useProviderTargetCatalogOwner({
           );
         const canUseCurrentModels =
           mode === "native" && isCurrentBinding;
+        const pluginModelsForEngine =
+          engine === "claude" || engine === "codex" || engine === "gemini"
+            ? (pluginCustomModels?.[engine] ?? EMPTY_MODELS)
+            : EMPTY_MODELS;
+        // native:会话当前列表里的 custom;atomic:localStorage 插件自定义模型
         const customModels = canUseCurrentModels
           ? currentModels.filter((model) => model.source === "custom")
-          : [];
+          : pluginModelsForEngine;
         const configuredModels =
           loadedModels[key] ??
           (mode === "shared" &&
@@ -678,6 +700,7 @@ function useProviderTargetCatalogOwner({
     loadingBindings,
     modelErrors,
     mode,
+    pluginCustomModels,
     profiles,
     resolveProviderLabel,
     workspaceId,
@@ -696,17 +719,20 @@ function useProviderTargetCatalogOwner({
 /**
  * Atomic 双栏 catalog owner。
  *
- * 参数层刻意不接收 Native `currentModels`，确保任何 Profile 的 Models 都只能
- * 由 `engine + providerProfileId` scoped catalog 产生。
+ * 不接收 Native session `currentModels`；引擎/渠道 catalog 仍按
+ * `engine + providerProfileId` 拉取。自定义模型单独经 `pluginCustomModels`
+ * 注入,保证「添加模型」后当前页选择器立刻可见。
  */
 export function useAtomicProviderTargetCatalog({
   mode,
+  pluginCustomModels,
   ...options
 }: AtomicProviderTargetCatalogOptions) {
   return useProviderTargetCatalogOwner({
     ...options,
     mode,
     currentModels: EMPTY_MODELS,
+    pluginCustomModels,
   });
 }
 

@@ -5,6 +5,8 @@ const models = {
     engineHeader: "{{name}} Engine",
     addModel: "Add Model",
     openCliSettings: "CLI Settings",
+    switchChannel: "Switch channel",
+    selectChannel: "Select channel",
     refreshConfig: "Refresh Config",
     refreshingConfig: "Refreshing...",
     reloadConfig: "Reload Config",

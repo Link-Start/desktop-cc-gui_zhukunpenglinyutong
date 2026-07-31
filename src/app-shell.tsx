@@ -297,7 +297,7 @@ export function AppShell() {
     t,
   });
 
-  const handleOpenModelSettings = useAppShellModelSettingsAction(openSettings);
+  const handleOpenModelSettings = useAppShellModelSettingsAction();
 
   const {
     globalSearchFilesByWorkspace, isSearchPaletteOpen, searchContentFilters,

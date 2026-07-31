@@ -371,6 +371,14 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         t,
       ],
     );
+    const atomicPluginCustomModels = useMemo(
+      () => ({
+        claude: modelStorageSnapshot.claudeCustomModels,
+        codex: modelStorageSnapshot.codexCustomModels,
+        gemini: modelStorageSnapshot.geminiCustomModels,
+      }),
+      [modelStorageSnapshot],
+    );
     const atomicProviderTargetCatalog = useAtomicProviderTargetCatalog({
       enabled: usesAtomicProviderTargetPicker,
       workspaceId,
@@ -380,6 +388,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           : 'shared',
       currentProvider: currentProvider as ProviderId,
       currentProviderProfileId,
+      pluginCustomModels: atomicPluginCustomModels,
       resolveProviderLabel: (providerId) =>
         t(`providers.${providerId}.label`, { defaultValue: providerId }),
       kimiDisabledReason: t('sharedSession.kimiTargetUnavailable', {
@@ -1374,12 +1383,18 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         usesAtomicProviderTargetPicker,
       ],
     );
-    const handleOpenCurrentProviderModelSettings = useCallback(() => {
-      onOpenModelSettings?.(resolveModelConfigProvider(currentProvider));
-    }, [currentProvider, onOpenModelSettings]);
+    const handleOpenProviderModelSettings = useCallback(
+      (providerId?: string) => {
+        onOpenModelSettings?.(
+          resolveModelConfigProvider(providerId ?? currentProvider),
+        );
+      },
+      [currentProvider, onOpenModelSettings],
+    );
     const handleRefreshCurrentProviderModelConfig = useCallback(() => {
       return onRefreshModelConfig?.(resolveModelConfigProvider(currentProvider));
     }, [currentProvider, onRefreshModelConfig]);
+    // 刷新仍跟当前引擎走;「添加模型」只要设置页可达就应在各引擎子菜单常驻
     const supportsModelConfigActions = MODEL_CONFIG_PROVIDERS.has(currentProvider);
 
     /**
@@ -1543,9 +1558,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
             : undefined
         }
         onAddModel={
-          onOpenModelSettings && supportsModelConfigActions
-            ? handleOpenCurrentProviderModelSettings
-            : undefined
+          onOpenModelSettings ? handleOpenProviderModelSettings : undefined
         }
         onRefreshModelConfig={
           onRefreshModelConfig && supportsModelConfigActions

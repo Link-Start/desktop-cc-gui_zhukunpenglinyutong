@@ -2479,9 +2479,10 @@
   color: #f59e0b;
 }
 
+/* Running state is indicated by the runtime badge text ("运行中"), not icon color.
+   Do not recolor/opacity-boost the engine icon while processing — otherwise
+   selecting another thread changes the icon tone (active rule vs processing blue). */
 .thread-engine-badge.is-processing {
-  color: #7db7ff;
-  opacity: 1;
   filter: none;
 }
 

@@ -36,7 +36,7 @@ type ComposerReadinessBarProps = {
   currentProvider?: string;
   onModelSelect?: (modelId: string) => void;
   onProviderModelSelect?: (providerId: ProviderId, modelId: string) => void;
-  onAddModel?: () => void;
+  onAddModel?: (providerId?: string) => void;
   onRefreshModelConfig?: () => Promise<void> | void;
   isModelConfigRefreshing?: boolean;
   onOpenCliSettings?: () => void;

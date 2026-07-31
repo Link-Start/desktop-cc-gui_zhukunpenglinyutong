@@ -117,11 +117,25 @@ describe("vendor settings panel compact layout", () => {
     expect(navRule).toContain("height: 100%;");
     expect(navRule).toContain("min-height: 0;");
     expect(navRule).toContain("padding: 16px 10px 0 0;");
+    expect(navRule).toContain("overflow: hidden;");
     expect(vendorPanelsCss).not.toContain("scrollbar-gutter: stable;");
+    const navScrollRule = getCssRuleBlock(
+      vendorPanelsCss,
+      ".vendor-engine-nav-scroll",
+    );
+    // 展开「暂未开放」后列表会 overflow：必须彻底隐藏滚动条占位，
+    // 并用 phantom 右侧垫宽隔离 WebKit 残余 1–2px gutter。
+    expect(navScrollRule).toContain("scrollbar-width: none;");
+    expect(navScrollRule).toContain("-ms-overflow-style: none;");
+    expect(navScrollRule).toContain("width: calc(100% + 24px);");
+    expect(navScrollRule).toContain("padding-right: 24px;");
+    expect(vendorPanelsCss).toMatch(
+      /\.vendor-engine-nav-scroll::-webkit-scrollbar\s*\{[^}]*display:\s*none/s,
+    );
     expect(searchRule).toContain("min-height: 32px;");
     expect(searchRule).toContain("margin-bottom: 10px;");
     expect(searchRule).toContain("border-radius: 8px;");
-    expect(tabRule).toContain("min-height: 36px;");
+    expect(tabRule).toContain("min-height: 40px;");
     expect(tabRule).toContain("font-size: 13px;");
     expect(tabRule).toContain("gap: 7px;");
     expect(panelRule).toContain("height: 100%;");

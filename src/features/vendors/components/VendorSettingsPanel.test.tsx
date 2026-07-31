@@ -584,9 +584,12 @@ describe("VendorSettingsPanel", () => {
       expect(readGlobalCodexAuthJsonMock).toHaveBeenCalled();
     });
 
-    expect(screen.getByLabelText("settings.vendorsTitle").className).toContain(
-      "vendor-engine-nav-scroll",
-    );
+    const nav = screen.getByLabelText("settings.vendorsTitle");
+    expect(nav.className).toContain("vendor-engine-nav");
+    expect(nav.className).not.toContain("vendor-engine-nav-scroll");
+    expect(
+      nav.querySelector(":scope > .vendor-engine-nav-scroll"),
+    ).toBeTruthy();
   });
 
   it("keeps the Codex runtime refresh action hidden from the brand header", async () => {

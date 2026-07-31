@@ -178,7 +178,7 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
             modelCatalogEntryId: "settings-main",
             model: "kimi-for-coding",
             reasoning: null,
-            providerProfileNameSnapshot: "Local settings.json",
+            providerProfileNameSnapshot: "本地配置",
             providerProfileSource: "disk",
           })
         }
@@ -380,7 +380,7 @@ describe("Composer file reference token", () => {
         createSessionTarget: {
           engine: "claude",
           providerProfileId: null,
-          providerProfileName: "Local settings.json",
+          providerProfileName: "本地配置",
           providerProfileSource: "disk",
           modelCatalogEntryId: "settings-main",
           model: "kimi-for-coding",
