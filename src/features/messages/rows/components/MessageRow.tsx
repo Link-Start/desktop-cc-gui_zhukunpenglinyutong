@@ -199,6 +199,7 @@ export const MessageRow = memo(function MessageRow({
   onAssistantVisibleTextRender,
   suppressMemorySummaryCard = false,
   suppressNoteCardSummaryCard = false,
+  showTurnTargetBadge = true,
   onOutlineReady,
 }: MessageRowProps) {
   const renderStartedAtMs = readHighResolutionNowMs();
@@ -539,13 +540,14 @@ export const MessageRow = memo(function MessageRow({
   if (runtimeReconnectHint && !showActiveRuntimeReconnectCard) {
     return null;
   }
-  const turnBadge = item.executionTargetSnapshot
-    ? resolveTurnBadge(item.executionTargetSnapshot, {
-        providerExists: item.executionTargetSnapshot.providerAvailable !== false,
-        providerAvailable: item.executionTargetSnapshot.providerAvailable !== false,
-        runtimeAvailable: true,
-      })
-    : null;
+  const turnBadge =
+    item.executionTargetSnapshot && showTurnTargetBadge
+      ? resolveTurnBadge(item.executionTargetSnapshot, {
+          providerExists: item.executionTargetSnapshot.providerAvailable !== false,
+          providerAvailable: item.executionTargetSnapshot.providerAvailable !== false,
+          runtimeAvailable: true,
+        })
+      : null;
 
   const bubbleNode = (
     <div className={`bubble message-bubble${agentTaskNotification ? " message-bubble-agent-task" : ""}`}>

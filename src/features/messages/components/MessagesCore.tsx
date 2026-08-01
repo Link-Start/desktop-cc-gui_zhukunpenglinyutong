@@ -1109,6 +1109,7 @@ export const MessagesCore = memo(function MessagesCore({
     suppressedUserNoteCardContextMessageIds,
     timelinePresentationItems,
     turnFileChangesByBoundaryId,
+    turnTargetBadgeVisibleItemIds,
   } = useMessagesPresentationState({
     activeEngine,
     claudeDockedReasoningItemCount: claudeDockedReasoningItems.length,
@@ -1755,6 +1756,7 @@ export const MessagesCore = memo(function MessagesCore({
       suppressedUserMemoryContextMessageIds,
       suppressedUserNoteCardContextMessageIds,
       turnFileChangesByBoundaryId,
+      turnTargetBadgeVisibleItemIds,
       visibleCollapsedHistoryItemCount: presentationCollapsedHistoryItemCount,
     },
     live: {

@@ -54,6 +54,8 @@ export type TimelineSnapshotModel = {
   suppressedUserMemoryContextMessageIds: Set<string>;
   suppressedUserNoteCardContextMessageIds: Set<string>;
   turnFileChangesByBoundaryId: Map<string, TurnFileChangesSummary>;
+  /** Assistant item ids that should render the Shared turn-target badge. */
+  turnTargetBadgeVisibleItemIds: Set<string>;
   visibleCollapsedHistoryItemCount: number;
 };
 

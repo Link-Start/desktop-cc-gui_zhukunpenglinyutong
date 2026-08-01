@@ -83,6 +83,7 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     suppressedUserMemoryContextMessageIds,
     suppressedUserNoteCardContextMessageIds,
     turnFileChangesByBoundaryId,
+    turnTargetBadgeVisibleItemIds,
   } = snapshot;
   const {
     heartbeatPulse,
@@ -389,6 +390,10 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
               onAssistantVisibleTextRender={onAssistantVisibleTextRender}
               suppressMemorySummaryCard={suppressedUserMemoryContextMessageIds.has(renderItem.id)}
               suppressNoteCardSummaryCard={suppressedUserNoteCardContextMessageIds.has(renderItem.id)}
+              showTurnTargetBadge={
+                !renderItem.executionTargetSnapshot ||
+                turnTargetBadgeVisibleItemIds.has(renderItem.id)
+              }
               onOutlineReady={
                 renderItem.role === "assistant" && renderItem.id === liveAssistantMessageId
                   ? liveAssistantOutlineReady
