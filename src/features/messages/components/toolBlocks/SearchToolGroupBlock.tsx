@@ -1,9 +1,9 @@
 /**
  * 批量搜索分组组件
  * Groups multiple consecutive Search/Grep/Glob tool calls
- * 统一 Marker 风格折叠行：灰色描边图标 + 计数 + 靠右状态图标；展开体为搜索列表
+ * 与「批量读取文件」共用 ExploreInlineToolGroup 壳层与 rail 列表样式
  */
-import { memo, useMemo, useRef, useEffect, useState } from 'react';
+import { memo, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import SearchIcon from 'lucide-react/dist/esm/icons/search';
@@ -12,11 +12,10 @@ import {
   parseToolArgs,
   getFirstStringField,
   truncateText,
-  resolveToolStatus,
   extractToolName,
-  type ToolStatusTone,
 } from './toolConstants';
-import { ToolMarkerShell, ToolStatusIcon } from './ToolMarkerShell';
+import { resolveSearchInlinePresentation } from './searchToolPresentation';
+import { ExploreInlineItemRow, ExploreInlineToolGroup } from './ExploreInlineToolGroup';
 
 type ToolItem = Extract<ConversationItem, { kind: 'tool' }>;
 
@@ -26,65 +25,12 @@ interface SearchToolGroupBlockProps {
 
 interface ParsedSearchItem {
   id: string;
+  kind: string;
   pattern: string;
   summary: string;
-  status: ToolStatusTone;
 }
 
-const MAX_VISIBLE_ITEMS = 6;
-const ITEM_HEIGHT = 30;
 const URL_GLOBAL_REGEX = /(https?:\/\/[^\s"'<>]+)/g;
-const QUERY_KEYS = ['query', 'q', 'searchQuery', 'search_query', 'text', 'pattern'];
-
-function extractQueryLikeText(value: unknown): string | null {
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    return trimmed || null;
-  }
-
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      const found = extractQueryLikeText(entry);
-      if (found) return found;
-    }
-    return null;
-  }
-
-  if (value && typeof value === 'object') {
-    const record = value as Record<string, unknown>;
-    for (const key of QUERY_KEYS) {
-      if (key in record) {
-        const found = extractQueryLikeText(record[key]);
-        if (found) return found;
-      }
-    }
-  }
-
-  return null;
-}
-
-function normalizeSummaryText(raw: string, args: unknown): string {
-  const trimmedRaw = raw.trim();
-  if (trimmedRaw) {
-    try {
-      const parsed = JSON.parse(trimmedRaw);
-      const fromParsed = extractQueryLikeText(parsed);
-      if (fromParsed) return fromParsed;
-    } catch {
-      // raw 不是 JSON，继续按普通文本处理
-    }
-
-    // 非 JSON/解析失败时，优先保留原始输出文本，避免被 query 覆盖
-    if (!(trimmedRaw.startsWith('{') || trimmedRaw.startsWith('['))) {
-      return trimmedRaw;
-    }
-  }
-
-  const fromArgs = extractQueryLikeText(args);
-  if (fromArgs) return fromArgs;
-
-  return trimmedRaw;
-}
 
 function renderTextWithLinks(text: string): Array<{ type: 'text' | 'link'; value: string; href?: string }> {
   const parts: Array<{ type: 'text' | 'link'; value: string; href?: string }> = [];
@@ -110,47 +56,78 @@ function renderTextWithLinks(text: string): Array<{ type: 'text' | 'link'; value
   return parts.length > 0 ? parts : [{ type: 'text', value: text }];
 }
 
+function resolveSearchKind(item: ToolItem): string {
+  const name = extractToolName(item.title).toLowerCase();
+  if (name.includes('glob') || name.includes('find')) return 'Match';
+  if (name.includes('web') || item.toolType === 'webSearch') return 'Web';
+  return 'Search';
+}
+
 function parseSearchItem(item: ToolItem): ParsedSearchItem {
   const args = parseToolArgs(item.detail);
   const pattern = getFirstStringField(args, ['pattern', 'query', 'q', 'search_term', 'searchQuery', 'text']);
   const path = getFirstStringField(args, ['path', 'directory', 'dir']);
-  const status = resolveToolStatus(item.status, Boolean(item.output));
   const detail = item.detail?.trim() ?? '';
   const output = item.output?.trim() ?? '';
   const summaryRaw = output || detail || path;
-  const normalizedSummary = normalizeSummaryText(summaryRaw, args);
-  const summary = truncateText(normalizedSummary.replace(/\s+/g, ' ').trim(), 90);
+  const presentation = resolveSearchInlinePresentation(summaryRaw, args, {
+    maxLength: 90,
+    pattern,
+  });
+
+  let patternDisplay = truncateText(pattern, 50);
+  let summary = presentation.resultHint;
+
+  // pattern 本身就是 URL 时，改放到 summary 以便渲染可点击链接，并去掉重复
+  if (summary && (summary === pattern || summary === patternDisplay)) {
+    patternDisplay = '';
+  } else if (!summary && patternDisplay && /^https?:\/\//i.test(patternDisplay)) {
+    summary = patternDisplay;
+    patternDisplay = '';
+  }
 
   return {
     id: item.id,
-    pattern: truncateText(pattern, 50),
+    kind: resolveSearchKind(item),
+    pattern: patternDisplay,
     summary,
-    status,
   };
 }
 
-function groupStatus(items: ToolItem[]): ToolStatusTone {
-  const hasProcessing = items.some(
-    (item) => resolveToolStatus(item.status, Boolean(item.output)) === 'processing',
+function SearchDetailWithLinks({ text }: { text: string }) {
+  return (
+    <>
+      {renderTextWithLinks(text).map((segment, idx) =>
+        segment.type === 'link' && segment.href ? (
+          <a
+            key={`${segment.href}-${idx}`}
+            className="search-inline-link"
+            href={segment.href}
+            target="_blank"
+            rel="noreferrer noopener"
+            onClick={(event) => {
+              event.preventDefault();
+              void openUrl(segment.href!);
+            }}
+          >
+            {segment.value}
+          </a>
+        ) : (
+          <span key={`${segment.value}-${idx}`}>{segment.value}</span>
+        ),
+      )}
+    </>
   );
-  if (hasProcessing) return 'processing';
-  const hasFailed = items.some(
-    (item) => resolveToolStatus(item.status, Boolean(item.output)) === 'failed',
-  );
-  if (hasFailed) return 'failed';
-  return 'completed';
 }
 
 export const SearchToolGroupBlock = memo(function SearchToolGroupBlock({
   items,
 }: SearchToolGroupBlockProps) {
   const { t } = useTranslation();
-  const [isExpanded, setIsExpanded] = useState(true);
   const listRef = useRef<HTMLDivElement | null>(null);
   const prevCountRef = useRef(items.length);
 
   const parsed = useMemo(() => items.map(parseSearchItem), [items]);
-  const status = groupStatus(items);
 
   useEffect(() => {
     if (items.length > prevCountRef.current && listRef.current) {
@@ -159,83 +136,47 @@ export const SearchToolGroupBlock = memo(function SearchToolGroupBlock({
     prevCountRef.current = items.length;
   }, [items.length]);
 
-  const listHeight = Math.min(parsed.length, MAX_VISIBLE_ITEMS) * ITEM_HEIGHT;
-  const needsScroll = parsed.length > MAX_VISIBLE_ITEMS;
+  if (parsed.length === 0) return null;
 
-  // 检查是否有 glob 类型
   const hasGlob = items.some((item) => {
     const name = extractToolName(item.title).toLowerCase();
     return name.includes('glob') || name.includes('find');
   });
-  const groupLabel = hasGlob ? t("tools.batchSearchMatch") : t("tools.batchSearch");
+  const groupLabel = hasGlob ? t('tools.batchSearchMatch') : t('tools.batchSearch');
+  const title = `${groupLabel} (${items.length})`;
 
   return (
-    <ToolMarkerShell
-      icon={<SearchIcon />}
-      label={groupLabel}
-      labelHidden
-      ariaLabel={groupLabel}
-      expanded={isExpanded}
-      onToggle={() => setIsExpanded((prev) => !prev)}
-      trailing={<ToolStatusIcon status={status} />}
-      body={
-        <div
-          className="file-list-container mt-1 overflow-hidden rounded-md"
-          ref={listRef}
-          style={{
-            padding: '4px 8px',
-            maxHeight: needsScroll ? `${listHeight + 12}px` : undefined,
-            overflowY: needsScroll ? 'auto' : 'hidden',
-            overflowX: 'hidden',
-          }}
-        >
-          {parsed.map((entry) => (
-            <div
-              key={entry.id}
-              className="file-list-item search-list-item"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                padding: '3px 8px',
-                borderRadius: '4px',
-                minHeight: `${ITEM_HEIGHT}px`,
-              }}
-            >
-              <span className="search-item-pattern">{entry.pattern || '...'}</span>
-              {entry.summary && (
-                <span className="search-item-inline-output" title={entry.summary}>
-                  {renderTextWithLinks(entry.summary).map((segment, idx) => (
-                    segment.type === 'link' && segment.href ? (
-                      <a
-                        key={`${segment.href}-${idx}`}
-                        className="search-inline-link"
-                        href={segment.href}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          void openUrl(segment.href!);
-                        }}
-                      >
-                        {segment.value}
-                      </a>
-                    ) : (
-                      <span key={`${segment.value}-${idx}`}>{segment.value}</span>
-                    )
-                  ))}
-                </span>
-              )}
-              <div
-                className={`tool-status-indicator ${entry.status === 'failed' ? 'error' : entry.status === 'completed' ? 'completed' : 'pending'}`}
-                style={{ marginLeft: '8px', marginRight: 0 }}
-              />
-            </div>
-          ))}
-        </div>
-      }
+    <ExploreInlineToolGroup
+      icon={<SearchIcon size={14} aria-hidden />}
+      title={title}
+      listRef={listRef}
     >
-      <span className="shrink-0 text-muted-foreground">({items.length})</span>
-    </ToolMarkerShell>
+      {parsed.map((entry) => {
+        const hasPattern = Boolean(entry.pattern);
+        const titleAttr = [entry.pattern, entry.summary].filter(Boolean).join(' · ');
+        // URL-only：pattern 已清空，summary 作 label 并保持可点击
+        const label =
+          !hasPattern && entry.summary
+            ? <SearchDetailWithLinks text={entry.summary} />
+            : (entry.pattern || entry.summary || '...');
+        const detailText =
+          hasPattern && entry.summary && entry.summary !== entry.pattern
+            ? entry.summary
+            : undefined;
+
+        return (
+          <ExploreInlineItemRow
+            key={entry.id}
+            kind={entry.kind}
+            label={label}
+            detail={
+              detailText ? <SearchDetailWithLinks text={detailText} /> : undefined
+            }
+            title={titleAttr || undefined}
+          />
+        );
+      })}
+    </ExploreInlineToolGroup>
   );
 });
 

@@ -1,9 +1,9 @@
 /**
  * 搜索工具块组件 - 用于展示 Grep、Glob 等搜索操作
- * Search Tool Block Component - for displaying grep, glob and other search operations
- * 统一 Marker 风格折叠行：灰色描边图标 + 查询/摘要（含链接）+ 靠右状态图标
+ * 与批量搜索共用 explore-inline 精简行：图标 + kind + 短 query + matches
+ * 展开后在左侧 rail 下列出 query / path / summary
  */
-import { memo, useMemo } from 'react';
+import { memo, useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import SearchIcon from 'lucide-react/dist/esm/icons/search';
@@ -12,11 +12,12 @@ import type { ConversationItem } from '../../../../types';
 import {
   parseToolArgs,
   getFirstStringField,
-  truncateText,
   extractToolName,
   resolveToolStatus,
+  truncateText,
 } from './toolConstants';
-import { TOOL_MARKER_BODY_CLASS, ToolMarkerShell, ToolStatusIcon } from './ToolMarkerShell';
+import { resolveSearchInlinePresentation } from './searchToolPresentation';
+import { cn } from '@/lib/utils';
 
 interface SearchToolBlockProps {
   item: Extract<ConversationItem, { kind: 'tool' }>;
@@ -25,57 +26,7 @@ interface SearchToolBlockProps {
 }
 
 const URL_GLOBAL_REGEX = /(https?:\/\/[^\s"'<>]+)/g;
-const QUERY_KEYS = ['query', 'q', 'searchQuery', 'search_query', 'text', 'pattern'];
-
-function extractQueryLikeText(value: unknown): string | null {
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    return trimmed || null;
-  }
-
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      const found = extractQueryLikeText(entry);
-      if (found) return found;
-    }
-    return null;
-  }
-
-  if (value && typeof value === 'object') {
-    const record = value as Record<string, unknown>;
-    for (const key of QUERY_KEYS) {
-      if (key in record) {
-        const found = extractQueryLikeText(record[key]);
-        if (found) return found;
-      }
-    }
-  }
-
-  return null;
-}
-
-function normalizeSummaryText(raw: string, args: unknown): string {
-  const trimmedRaw = raw.trim();
-  if (trimmedRaw) {
-    try {
-      const parsed = JSON.parse(trimmedRaw);
-      const fromParsed = extractQueryLikeText(parsed);
-      if (fromParsed) return fromParsed;
-    } catch {
-      // raw 不是 JSON，继续按普通文本处理
-    }
-
-    // 非 JSON/解析失败时，优先保留原始输出文本，避免被 query 覆盖
-    if (!(trimmedRaw.startsWith('{') || trimmedRaw.startsWith('['))) {
-      return trimmedRaw;
-    }
-  }
-
-  const fromArgs = extractQueryLikeText(args);
-  if (fromArgs) return fromArgs;
-
-  return trimmedRaw;
-}
+const PRIMARY_MAX_CHARS = 48;
 
 function renderTextWithLinks(text: string): Array<{ type: 'text' | 'link'; value: string; href?: string }> {
   const parts: Array<{ type: 'text' | 'link'; value: string; href?: string }> = [];
@@ -101,17 +52,45 @@ function renderTextWithLinks(text: string): Array<{ type: 'text' | 'link'; value
   return parts.length > 0 ? parts : [{ type: 'text', value: text }];
 }
 
-/**
- * 获取状态
- */
-function getStatus(item: Extract<ConversationItem, { kind: 'tool' }>): 'completed' | 'processing' | 'failed' {
-  return resolveToolStatus(item.status, Boolean(item.output));
+function LinkedText({
+  text,
+  className,
+  title,
+}: {
+  text: string;
+  className?: string;
+  title?: string;
+}) {
+  return (
+    <span className={className} title={title}>
+      {renderTextWithLinks(text).map((segment, idx) =>
+        segment.type === 'link' && segment.href ? (
+          <a
+            key={`${segment.href}-${idx}`}
+            className="search-inline-link"
+            href={segment.href}
+            target="_blank"
+            rel="noreferrer noopener"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              void openUrl(segment.href!);
+            }}
+          >
+            {segment.value}
+          </a>
+        ) : (
+          <span key={`${segment.value}-${idx}`}>{segment.value}</span>
+        ),
+      )}
+    </span>
+  );
 }
 
 function formatSearchDetailValue(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) {
-    return "";
+    return '';
   }
   try {
     const parsed = JSON.parse(trimmed);
@@ -119,6 +98,45 @@ function formatSearchDetailValue(value: string): string {
   } catch {
     return trimmed;
   }
+}
+
+function resolveSearchKindLabel(item: Extract<ConversationItem, { kind: 'tool' }>, isGlob: boolean): string {
+  if (isGlob) return 'Match';
+  const name = extractToolName(item.title).toLowerCase();
+  if (name.includes('web') || item.toolType === 'webSearch') return 'Web';
+  return 'Search';
+}
+
+/**
+ * 折叠行主文案：短 pattern / URL / 摘要，与 match 分离（对齐批量搜索行）
+ */
+function resolvePrimaryLabel(
+  pattern: string,
+  presentation: ReturnType<typeof resolveSearchInlinePresentation>,
+): string {
+  if (pattern.trim()) {
+    return truncateText(pattern, PRIMARY_MAX_CHARS);
+  }
+  const header = presentation.headerSummary.trim();
+  const hint = presentation.resultHint.trim();
+  if (hint && header.endsWith(` · ${hint}`)) {
+    return truncateText(header.slice(0, header.length - ` · ${hint}`.length), PRIMARY_MAX_CHARS);
+  }
+  if (hint && header === hint) {
+    return truncateText(header, PRIMARY_MAX_CHARS);
+  }
+  return truncateText(header || hint, PRIMARY_MAX_CHARS);
+}
+
+function DetailField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="explore-inline-item">
+      <span className="explore-inline-kind">{label}</span>
+      <span className="explore-inline-label" style={{ flex: '1 1 auto' }}>
+        {children}
+      </span>
+    </div>
+  );
 }
 
 export const SearchToolBlock = memo(function SearchToolBlock({
@@ -133,25 +151,35 @@ export const SearchToolBlock = memo(function SearchToolBlock({
   const args = useMemo(() => parseToolArgs(item.detail), [item.detail]);
 
   const pattern = getFirstStringField(args, ['pattern', 'query', 'q', 'search_term', 'searchQuery', 'text']);
-  const displayPattern = truncateText(pattern, 60);
   const path = getFirstStringField(args, ['path', 'directory', 'dir']);
   const fallbackDetail = item.detail?.trim() ?? '';
   const inlineRaw = item.output || fallbackDetail || path || '';
-  const normalizedInline = normalizeSummaryText(inlineRaw, args);
-  const inlineSummary = truncateText(
-    normalizedInline.replace(/\s+/g, ' ').trim(),
-    120,
+  const presentation = useMemo(
+    () =>
+      resolveSearchInlinePresentation(inlineRaw, args, {
+        maxLength: 120,
+        pattern,
+      }),
+    [inlineRaw, args, pattern],
   );
-  const inlineSegments = renderTextWithLinks(inlineSummary);
 
-  const status = getStatus(item);
-  const displayName = isGlob ? t("tools.fileMatch") : t("tools.search");
+  const kindLabel = resolveSearchKindLabel(item, isGlob);
+  const primaryLabel = resolvePrimaryLabel(pattern, presentation);
+  const matchHint =
+    presentation.resultHint &&
+    presentation.resultHint !== primaryLabel &&
+    // 分组行里 resultHint 可能是 URL；折叠行若 primary 已是 URL 则不重复
+    !(primaryLabel && presentation.resultHint.startsWith('http') && primaryLabel.startsWith('http'))
+      ? presentation.resultHint
+      : '';
+
+  const displayName = isGlob ? t('tools.fileMatch') : t('tools.search');
   const expandedOutput = useMemo(
-    () => formatSearchDetailValue(item.output ?? ""),
+    () => formatSearchDetailValue(item.output ?? ''),
     [item.output],
   );
   const expandedDetail = useMemo(
-    () => formatSearchDetailValue(item.detail ?? ""),
+    () => formatSearchDetailValue(item.detail ?? ''),
     [item.detail],
   );
   const shouldShowExpandedOutput = expandedOutput.length > 0;
@@ -159,34 +187,72 @@ export const SearchToolBlock = memo(function SearchToolBlock({
   const hasExpandedDetails =
     Boolean(pattern) || Boolean(path) || shouldShowExpandedOutput || shouldShowExpandedDetail;
 
+  const status = resolveToolStatus(item.status, Boolean(item.output));
+  const headerTitle = presentation.headerTitle || primaryLabel;
+
   return (
-    <ToolMarkerShell
-      icon={isGlob ? <FolderSearch /> : <SearchIcon />}
-      label={displayName}
-      labelHidden
-      ariaLabel={displayName}
-      interactive={hasExpandedDetails}
-      expanded={isExpanded && hasExpandedDetails}
-      onToggle={() => onToggle(item.id)}
-      trailing={<ToolStatusIcon status={status} />}
-      body={
-        <div className={TOOL_MARKER_BODY_CLASS}>
-          {pattern && (
-            <div className="task-field">
-              <div className="task-field-label">query</div>
-              <div className="task-field-content">{pattern}</div>
-            </div>
-          )}
-          {path && (
-            <div className="task-field">
-              <div className="task-field-label">path</div>
-              <div className="task-field-content">{path}</div>
-            </div>
-          )}
-          {shouldShowExpandedOutput && (
-            <div className="task-field">
-              <div className="task-field-label">summary</div>
-              <div className="task-field-content">
+    <div
+      className={cn(
+        'tool-inline explore-inline is-collapsible',
+        !(isExpanded && hasExpandedDetails) && 'is-collapsed',
+      )}
+    >
+      <div className="tool-inline-content">
+        <div className="explore-inline-header">
+          <button
+            type="button"
+            className="explore-inline-header-toggle"
+            onClick={() => {
+              if (hasExpandedDetails) onToggle(item.id);
+            }}
+            aria-expanded={hasExpandedDetails ? isExpanded : undefined}
+            aria-label={displayName}
+            disabled={!hasExpandedDetails}
+            style={!hasExpandedDetails ? { cursor: 'default' } : undefined}
+          >
+            {isGlob ? (
+              <FolderSearch className="explore-inline-icon" size={14} aria-hidden />
+            ) : (
+              <SearchIcon className="explore-inline-icon" size={14} aria-hidden />
+            )}
+            {/* 与批量搜索行同构：kind + 短 query + matches */}
+            <span className="explore-inline-title search-tool-inline-title" title={headerTitle}>
+              <span className="explore-inline-kind">{kindLabel}</span>
+              {primaryLabel ? (
+                <LinkedText text={primaryLabel} className="explore-inline-label" title={headerTitle} />
+              ) : null}
+              {matchHint ? (
+                /^https?:\/\//i.test(matchHint) ? (
+                  <LinkedText text={matchHint} className="explore-inline-detail" />
+                ) : (
+                  <span className="explore-inline-detail">{matchHint}</span>
+                )
+              ) : null}
+              {status === 'failed' ? (
+                <span className="explore-inline-detail" style={{ color: 'var(--destructive, #dc2626)' }}>
+                  failed
+                </span>
+              ) : null}
+              {status === 'processing' ? (
+                <span className="explore-inline-detail">…</span>
+              ) : null}
+            </span>
+          </button>
+        </div>
+        {isExpanded && hasExpandedDetails ? (
+          <div className="explore-inline-list">
+            {pattern ? (
+              <DetailField label="query">
+                <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{pattern}</span>
+              </DetailField>
+            ) : null}
+            {path ? (
+              <DetailField label="path">
+                <span style={{ wordBreak: 'break-all' }}>{path}</span>
+              </DetailField>
+            ) : null}
+            {shouldShowExpandedOutput ? (
+              <DetailField label="summary">
                 <pre
                   style={{
                     margin: 0,
@@ -194,17 +260,15 @@ export const SearchToolBlock = memo(function SearchToolBlock({
                     wordBreak: 'break-word',
                     maxHeight: '300px',
                     overflowY: 'auto',
+                    font: 'inherit',
                   }}
                 >
                   {expandedOutput}
                 </pre>
-              </div>
-            </div>
-          )}
-          {shouldShowExpandedDetail && (
-            <div className="task-field">
-              <div className="task-field-label">detail</div>
-              <div className="task-field-content">
+              </DetailField>
+            ) : null}
+            {shouldShowExpandedDetail ? (
+              <DetailField label="detail">
                 <pre
                   style={{
                     margin: 0,
@@ -212,46 +276,17 @@ export const SearchToolBlock = memo(function SearchToolBlock({
                     wordBreak: 'break-word',
                     maxHeight: '300px',
                     overflowY: 'auto',
+                    font: 'inherit',
                   }}
                 >
                   {expandedDetail}
                 </pre>
-              </div>
-            </div>
-          )}
-        </div>
-      }
-    >
-      {displayPattern && !inlineSummary && (
-        <span className="truncate" title={pattern}>
-          {displayPattern}
-        </span>
-      )}
-      {inlineSummary && (
-        <span className="search-inline-summary truncate" title={normalizedInline}>
-          {inlineSegments.map((segment, idx) => (
-            segment.type === 'link' && segment.href ? (
-              <a
-                key={`${segment.href}-${idx}`}
-                className="search-inline-link"
-                href={segment.href}
-                target="_blank"
-                rel="noreferrer noopener"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  void openUrl(segment.href!);
-                }}
-              >
-                {segment.value}
-              </a>
-            ) : (
-              <span key={`${segment.value}-${idx}`}>{segment.value}</span>
-            )
-          ))}
-        </span>
-      )}
-    </ToolMarkerShell>
+              </DetailField>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 });
 

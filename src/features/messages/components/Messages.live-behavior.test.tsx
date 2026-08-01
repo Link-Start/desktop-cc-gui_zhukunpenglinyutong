@@ -1370,6 +1370,60 @@ describe("Messages live behavior", () => {
     }
   });
 
+  it("keeps follow armed when settle height jumps and a layout scroll fires without user intent", () => {
+    // 回归：尾窗回全量 / 虚拟化 remeasure 让 scrollHeight 暴涨后，浏览器会派发 scroll，
+    // 此时 distanceToBottom 已远超 120px。旧逻辑把「假离底」当成用户离开，解除 autoScroll
+    // 并 cancel 收敛 → 回合结束瞬间视口停在中上段（用户体感「飞到上面」）。
+    window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
+    vi.useFakeTimers();
+    try {
+      const renderWith = (thinking: boolean) => (
+        <Messages
+          items={[
+            {
+              id: "fake-leave-user",
+              kind: "message",
+              role: "user",
+              text: "go",
+            },
+            {
+              id: "fake-leave-assistant",
+              kind: "message",
+              role: "assistant",
+              text: thinking ? "streaming tail" : "final tall answer after full history restore",
+            },
+          ]}
+          threadId="thread-settle-fake-leave"
+          workspaceId="ws-1"
+          isThinking={thinking}
+          processingStartedAt={thinking ? Date.now() - 1_000 : null}
+          openTargets={[]}
+          selectedOpenAppId=""
+        />
+      );
+      const { container, rerender } = render(renderWith(true));
+      const scroller = getMessagesScroller(container);
+      let scrollHeight = 2_400;
+      setScrollerMetrics(scroller, 2_400 - 720, () => scrollHeight);
+      fireEvent.scroll(scroller);
+      notifyContentResized();
+      expect(scroller.scrollTop).toBe(2_400 - 720);
+
+      // settle：先钉到当时的底
+      rerender(renderWith(false));
+      expect(scroller.scrollTop).toBe(scrollHeight - 720);
+
+      // 高度阶跃：scrollTop 仍停在旧底（距新底 2880px ≫ 120），只派发 scroll、无 wheel
+      scrollHeight = 5_280;
+      fireEvent.scroll(scroller);
+      // 保护路径必须仍武装；随后 Resize 才能把视口追到真底
+      notifyContentResized();
+      expect(scroller.scrollTop).toBe(5_280 - 720);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not chase late idle growth when the user has scrolled away from the bottom", () => {
     window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
     vi.useFakeTimers();

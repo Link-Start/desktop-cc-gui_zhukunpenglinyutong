@@ -1,13 +1,13 @@
 /*
  * 工具调用块外壳已迁移至共享 ToolMarkerShell（无边框 Marker 折叠行），
  * 与其它工具块统一；这里仅保留标题文本、按钮与展开体内容的专属样式。
- * 间距对齐 .markdown 段落留白：单向上 margin。
+ * 外层 margin 与 thinking / explore 同为 4px 恒定；连续块不叠加大段留白。
  */
 .tcb-marker {
-  margin-top: 1.5em;
+  margin: 4px 0;
 }
 
-/* 连续工具块并排时彼此紧贴，不插入段落级留白 */
+/* 连续工具块并排时彼此紧贴：margin collapse 后仍是 4px 行距 */
 .tcb-marker + .tcb-marker {
   margin-top: 0;
 }

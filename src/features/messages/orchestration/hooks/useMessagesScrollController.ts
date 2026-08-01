@@ -922,6 +922,60 @@ export function useMessagesScrollController({
     [],
   );
 
+  /**
+   * 内容高度阶跃导致的「假离底」：用户仍停在原 scrollTop，maxScrollTop 暴涨，
+   * distance 瞬时 > 阈值，但 scrollTop 几乎没动。不得据此解除 autoScroll。
+   *
+   * 与用户真上滚（scrollTop 明显下移）区分开。
+   */
+  const isContentGrowthLagFromSnapshot = useCallback(
+    (previous: ScrollGeometrySnapshot | null, current: ScrollGeometrySnapshot) => {
+      if (!previous) {
+        return false;
+      }
+      const previousDistance = previous.maxScrollTop - previous.scrollTop;
+      const wasNearBottom = previousDistance <= SCROLL_THRESHOLD_PX;
+      const scrollTopStable =
+        Math.abs(current.scrollTop - previous.scrollTop) <=
+        PROGRAMMATIC_SCROLL_ECHO_TOLERANCE_PX + 1;
+      const maxGrew =
+        current.maxScrollTop > previous.maxScrollTop + SCROLL_THRESHOLD_PX;
+      return wasNearBottom && scrollTopStable && maxGrew;
+    },
+    [],
+  );
+
+  /**
+   * scroll 事件到来时：仅在「回合结束 settle / 打开会话」所有权下，
+   * 若判定为内容长高假离底，则保护跟随。
+   *
+   * 故意不覆盖 turn-send 流式 forced：流式中用户拖滚动条读历史必须能立刻松手；
+   * 流式贴底仍靠 ResizeObserver + autoScroll，不靠假离底保护。
+   * 用户真上滚（scrollTop 变化或 wheel 租约）不保护。
+   */
+  const shouldProtectFollowOnScrollEvent = useCallback(
+    (previous: ScrollGeometrySnapshot | null, current: ScrollGeometrySnapshot) => {
+      const boundary = stickToBottomIntentRef.current;
+      // 仅 turn-settle：AI 回复结束后尾窗→全量 / idle 虚拟化 remeasure 的主战场。
+      // 不覆盖 history-open（开会话迟到测高走 RO 追底）与 turn-send（流式中拖条须能松手）。
+      if (boundary !== "turn-settle") {
+        return false;
+      }
+      const mode = scrollAuthorityRef.current.mode;
+      const inSettleDeadline = Date.now() <= stickToBottomDeadlineRef.current;
+      // forced 最短保持可长于 2.4s settle 预算（Codex finalizing 6s）；两者任一有效都保护
+      if (mode !== "forced-bottom" && !inSettleDeadline) {
+        return false;
+      }
+      if (!autoScrollRef.current && activeProgrammaticScrollEdgeRef.current !== "bottom") {
+        // 跟随已解除：不再用假离底把用户拽回
+        return false;
+      }
+      return isContentGrowthLagFromSnapshot(previous, current);
+    },
+    [isContentGrowthLagFromSnapshot],
+  );
+
   return {
     activeProgrammaticScrollEdgeRef,
     activeProgrammaticScrollMotionRef,
@@ -942,7 +996,9 @@ export function useMessagesScrollController({
     requestAutoScroll,
     requestHistoryBottomConvergence,
     requestTimelineLayoutBottomConvergence,
+    scrollGeometrySnapshotRef,
     scrollKey,
+    shouldProtectFollowOnScrollEvent,
     stickToBottomDeadlineRef,
     stickToBottomIntentRef,
   };

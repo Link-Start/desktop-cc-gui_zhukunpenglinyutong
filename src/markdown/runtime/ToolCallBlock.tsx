@@ -61,7 +61,7 @@ export const ToolCallBlock = memo(function ToolCallBlock({
 
   return (
     <ToolMarkerShell
-      icon={<Wrench />}
+      icon={<Wrench size={14} aria-hidden />}
       ariaLabel={t("messages.toolCallCard.title")}
       role="group"
       wrapperClassName="tcb-marker"

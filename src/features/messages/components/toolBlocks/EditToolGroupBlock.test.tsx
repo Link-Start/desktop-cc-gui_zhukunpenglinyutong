@@ -194,7 +194,7 @@ describe("EditToolGroupBlock", () => {
     expect(screen.getAllByText("-1").length).toBeGreaterThan(0);
   });
 
-  it("expands an individual grouped row to reveal its diff after scene expand", () => {
+  it("renders a single file as a flat FileChangeRow without the group header", () => {
     const view = render(
       <EditToolGroupBlock
         items={[
@@ -207,12 +207,19 @@ describe("EditToolGroupBlock", () => {
       />,
     );
 
+    // 单文件不套「文件修改（1 个）」组头，直接露出文件名
+    expect(
+      screen.queryByRole("button", {
+        name: /tools\.fileEditSceneToggle|File changes|文件修改/i,
+      }),
+    ).toBeNull();
+    expect(screen.queryByTestId("file-edit-scene-list")).toBeNull();
+    expect(screen.getByText("App.tsx")).toBeTruthy();
     expect(view.container.querySelector(".tool-change-inline-diff")).toBeNull();
 
-    fireEvent.click(sceneHeader());
-    // markers[0] = 场景头，最后一个 marker = 文件行
     const markers = view.container.querySelectorAll('[data-slot="marker"]');
-    fireEvent.click(markers[markers.length - 1]!);
+    expect(markers.length).toBe(1);
+    fireEvent.click(markers[0]!);
 
     expect(view.container.querySelector(".tool-change-inline-diff")).toBeTruthy();
     expect(screen.getByText("line-b")).toBeTruthy();
@@ -233,8 +240,32 @@ describe("EditToolGroupBlock", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("respects defaultCollapsed=false for expanded initial state", () => {
+  it("respects defaultCollapsed=false for multi-file expanded initial state", () => {
     render(
+      <EditToolGroupBlock
+        defaultCollapsed={false}
+        items={[
+          createEditToolItem("tool-1", {
+            file_path: "src/open.ts",
+            old_string: "a",
+            new_string: "b",
+          }),
+          createEditToolItem("tool-2", {
+            file_path: "src/other.ts",
+            old_string: "c",
+            new_string: "d",
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("open.ts")).toBeTruthy();
+    expect(screen.getByText("other.ts")).toBeTruthy();
+    expect(sceneHeader().getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("respects defaultCollapsed=false for single-file flat row expanded initial state", () => {
+    const view = render(
       <EditToolGroupBlock
         defaultCollapsed={false}
         items={[
@@ -248,7 +279,12 @@ describe("EditToolGroupBlock", () => {
     );
 
     expect(screen.getByText("open.ts")).toBeTruthy();
-    expect(sceneHeader().getAttribute("aria-expanded")).toBe("true");
+    expect(
+      screen.queryByRole("button", {
+        name: /tools\.fileEditSceneToggle|File changes|文件修改/i,
+      }),
+    ).toBeNull();
+    expect(view.container.querySelector(".tool-change-inline-diff")).toBeTruthy();
   });
 
   it("expands multi-file fileChange tools and merges unique paths into one scene count", () => {

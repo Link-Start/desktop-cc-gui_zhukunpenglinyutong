@@ -2286,28 +2286,38 @@
 
 /* 归组块：无边框极简（参考 AI SDK Task），标题行整行可点、内容沿左侧 rail 缩进展开 */
 /* 根层级不画竖线：覆盖 .tool-inline 的 border-left / padding-left，rail 只在展开列表上 */
+/* 外层 margin 折叠/展开恒定（与 thinking-block 同 4px），收起只卸列表高度、不改行距 */
 .explore-inline {
   margin: 4px 0;
   box-sizing: border-box;
   max-width: 100%;
   min-width: 0;
   border-left: none;
-  padding-left: 0;
+  /* 覆盖 .tool-inline 的 padding: 2px 0 2px 12px，折叠行更贴齐 */
+  padding: 0;
 }
 
 .explore-inline .tool-inline-content {
   flex: 1;
   min-width: 0;
   width: 100%;
+  /* 覆盖 .tool-inline-content 的 gap: 6px，折叠时 header 下不留幽灵空隙 */
+  gap: 0;
+}
+
+.explore-inline.is-collapsible:not(.is-collapsed) .tool-inline-content {
+  gap: 2px;
 }
 
 .explore-inline-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 2px 0;
+  gap: 6px;
+  padding: 1px 0;
+  min-height: 20px;
   background: transparent;
-  font-size: 13px;
+  font-size: var(--message-meta-font-size, 12px);
+  line-height: 20px;
   color: var(--text-muted);
   width: 100%;
   box-sizing: border-box;
@@ -2316,7 +2326,8 @@
 .explore-inline-header-toggle {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  min-height: 20px;
   padding: 0;
   margin: 0;
   border: none;
@@ -2333,15 +2344,33 @@
   border-radius: 6px;
 }
 
-/* 放大镜：统一 muted 灰，标识「探索 / 搜索」语义 */
+/*
+ * meta 行图标：与 thinking Brain / ToolMarkerShell 统一 14×14。
+ * 只靠 Lucide size={14} 属性不够——Marker 默认 size-4 会盖成 16px。
+ * 容器与 svg 双锁；class 直接挂在 svg 上（PresentationRows）也能命中。
+ */
 .explore-inline-icon {
-  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 14px;
+  width: 14px !important;
+  height: 14px !important;
   color: var(--muted-foreground);
+}
+
+.explore-inline-icon svg,
+svg.explore-inline-icon {
+  width: 14px !important;
+  height: 14px !important;
+  max-width: 14px;
+  max-height: 14px;
+  flex: 0 0 14px;
 }
 
 .explore-inline-title {
   flex: 1 1 auto;
-  font-weight: 500;
+  font-weight: 400;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2349,13 +2378,34 @@
   color: var(--text-muted);
 }
 
-/* 内容：仅在展开的列表上画左侧竖线 rail，条目缩进对齐到标题文字起始处（放大镜 14 + gap 8） */
+/* 单条搜索折叠行：kind / query / matches 横向排布，与批量搜索 item 同构 */
+.search-tool-inline-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.search-tool-inline-title .explore-inline-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 0 1 auto;
+}
+
+.search-tool-inline-title .explore-inline-detail {
+  flex: 0 0 auto;
+}
+
+/* 内容：仅在展开时挂载；内边距负责展开态呼吸，不改外层 .explore-inline margin */
+/* 条目缩进对齐到标题文字起始处（图标 14 + gap 6） */
 .explore-inline-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin: 2px 0 4px 0;
-  padding: 2px 0 2px 20px;
+  gap: 4px;
+  margin: 2px 0 6px 0;
+  padding: 0 0 2px 20px;
   border-left: 2px solid var(--border-subtle);
 }
 

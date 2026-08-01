@@ -168,13 +168,11 @@ export function useAppShellLayoutNodesSection(
   const [focusedProjectMemoryId, setFocusedProjectMemoryId] = useState<
     string | null
   >(null);
-  const [focusedProjectMemoryRequestKey, setFocusedProjectMemoryRequestKey] =
-    useState(0);
+  const [focusedProjectMemoryRequestKey] = useState(0);
   const [focusedWorkspaceNoteId, setFocusedWorkspaceNoteId] = useState<
     string | null
   >(null);
-  const [focusedWorkspaceNoteRequestKey, setFocusedWorkspaceNoteRequestKey] =
-    useState(0);
+  const [focusedWorkspaceNoteRequestKey] = useState(0);
   const [intentCanvasOpenRequest, setIntentCanvasOpenRequest] =
     useState<IntentCanvasOpenRequest | null>(null);
   const [

@@ -1,10 +1,23 @@
 /**
  * 工具块共享外壳 - 统一 Marker 风格的折叠行
  * Shared shell for tool blocks rendered as shadcn Marker rows.
- * 定稿口径：对齐 shadcn 官方 Marker 默认尺寸（text-sm + 图标 size-4 + gap-2），
+ * 定稿口径：对齐 thinking / explore meta 行 ——
+ * --message-meta-font-size(12px) + 图标 14px + gap-1.5 + 行高 20px，
  * 无边框、muted —— 灰色 lucide 描边图标 + 内容 + 靠右状态图标 + 折叠体。
+ *
+ * 图标尺寸硬约束（勿再只靠调用方 size prop）：
+ * Marker 默认 `[&_svg:not([class*='size-'])]:size-4`（16px）。若 icon 只有
+ * Lucide `size={14}` 属性、没有 class 含 `size-`，该 CSS 仍会把 svg 盖成 16px，
+ * 看起来比 explore Search / thinking Brain 的 14px 更大。壳层统一 normalize 为
+ * size=14 + class size-3.5，并 `!size-3.5` 覆盖 Marker 默认。
  */
-import type { KeyboardEvent, ReactNode } from 'react';
+import {
+  cloneElement,
+  isValidElement,
+  type KeyboardEvent,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import CircleAlert from 'lucide-react/dist/esm/icons/circle-alert';
 import ChevronRight from 'lucide-react/dist/esm/icons/chevron-right';
 import Loader2 from 'lucide-react/dist/esm/icons/loader-2';
@@ -12,9 +25,29 @@ import { cn } from '@/lib/utils';
 import { Marker, MarkerContent, MarkerIcon } from '../ui/marker';
 import type { ToolStatusTone } from '../../utils/toolSemantics';
 
+/** 与 thinking Brain / explore Search 同为 14px */
+export const TOOL_META_ICON_PX = 14;
+const META_ICON_CLASS = 'size-3.5 shrink-0';
+
 /** 单块统一折叠体容器类：淡边框 + 2px 圆角 + muted/30 底、与头部小间距 */
 export const TOOL_MARKER_BODY_CLASS =
   'mt-1 overflow-hidden rounded-[2px] border border-border bg-muted/30';
+
+/**
+ * 把传入的 lucide icon 归一到 meta 14px。
+ * 必须带 class `size-3.5`：Marker 的 size-4 选择器会跳过含 size- 的 svg。
+ */
+function normalizeMetaIcon(icon: ReactNode): ReactNode {
+  if (!isValidElement(icon)) {
+    return icon;
+  }
+  const el = icon as ReactElement<{ className?: string; size?: number | string }>;
+  return cloneElement(el, {
+    size: TOOL_META_ICON_PX,
+    className: cn(META_ICON_CLASS, el.props.className),
+    'aria-hidden': true,
+  } as Partial<typeof el.props> & { 'aria-hidden': true });
+}
 
 /**
  * 靠右状态图标：失败=警示、完成=不显示、处理中=转圈。
@@ -22,18 +55,18 @@ export const TOOL_MARKER_BODY_CLASS =
  */
 export function ToolStatusIcon({ status }: { status: ToolStatusTone }) {
   if (status === 'failed') {
-    return <CircleAlert className="ml-auto size-4 shrink-0 text-destructive" />;
+    return <CircleAlert className={cn('ml-auto text-destructive', META_ICON_CLASS)} />;
   }
   if (status === 'completed') {
     return null;
   }
   return (
-    <Loader2 className="ml-auto size-4 shrink-0 animate-spin text-muted-foreground" />
+    <Loader2 className={cn('ml-auto animate-spin text-muted-foreground', META_ICON_CLASS)} />
   );
 }
 
 interface ToolMarkerShellProps {
-  /** 前置 lucide 描边图标（不写 size 时由 MarkerIcon 容器自动 size-4），继承 muted 色 */
+  /** 前置 lucide 描边图标；壳层会强制归一到 14px（与 thinking/explore 一致） */
   icon: ReactNode;
   /** 类型标识：sr-only 时仅作无障碍/测试锚点；可见时作分组/工具标题 */
   label: ReactNode;
@@ -107,20 +140,25 @@ export function ToolMarkerShell({
             }
           : {})}
         className={cn(
-          'gap-2 rounded-md pr-3 py-1.5 text-sm transition-colors',
+          // 覆盖 Marker 默认 text-sm/size-4，对齐 thinking / explore 的 meta 尺度
+          'min-h-5 gap-1.5 rounded-md py-0 pr-1 text-[length:var(--message-meta-font-size,12px)] leading-5 transition-colors',
+          // ! 强制压过 Marker 的 size-4；选择器不依赖 :not(size-) 以免 merge/引号踩坑
+          '[&_svg]:!size-3.5',
           clickable && 'cursor-pointer select-none',
           // 折叠 chevron 过渡；尊重 prefers-reduced-motion
           'motion-reduce:transition-none [&_svg]:transition-transform [&_svg]:duration-150 [&_svg]:ease-out motion-reduce:[&_svg]:transition-none',
           className,
         )}
       >
-        <MarkerIcon>{icon}</MarkerIcon>
-        <span className={labelHidden ? 'sr-only' : 'min-w-0 truncate'}>
+        <MarkerIcon className={cn(META_ICON_CLASS, '[&_svg]:!size-3.5')}>
+          {normalizeMetaIcon(icon)}
+        </MarkerIcon>
+        <span className={labelHidden ? 'sr-only' : 'min-w-0 truncate font-normal'}>
           {label}
         </span>
         {children != null && (
           <MarkerContent
-            className={cn('flex min-w-0 items-center gap-2', contentClassName)}
+            className={cn('flex min-w-0 items-center gap-1.5 font-normal', contentClassName)}
           >
             {children}
           </MarkerContent>
@@ -130,7 +168,7 @@ export function ToolMarkerShell({
           <ChevronRight
             aria-hidden
             className={cn(
-              'size-4 shrink-0 text-muted-foreground transition-transform duration-150 ease-out motion-reduce:transition-none',
+              'size-3.5 shrink-0 text-muted-foreground transition-transform duration-150 ease-out motion-reduce:transition-none',
               // trailing 自带 ml-auto 已把右侧组顶到最右；无 trailing 时 chevron 自己贴右。
               // 避免双 ml-auto 平分空白导致状态图标被顶到中间。
               trailing == null && 'ml-auto',
