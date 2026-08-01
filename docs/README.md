@@ -17,6 +17,7 @@
 - [研究与运行证据](research/README.md)
 - [性能文档](perf/README.md)
 - [性能历史基线](perf/history/README.md)
+- [UI / UX 指南](ui-ux/preference-settings-ui-guide.md)
 
 ## 对话与渲染
 
@@ -31,6 +32,10 @@
 - [Codex Collaboration Mode Enforcement Runbook](codex-collaboration-mode-enforcement-runbook.md)
 - [Curated Skill Onboarding](curated-skill-onboarding.md)
 - [OpenSpec + Trellis Team Playbook](openspec-trellis-playbook.md)
+
+## UI / UX
+
+- [Preference Settings UI / UX Guide（设置/偏好面板基线，供后续 AI 对照）](ui-ux/preference-settings-ui-guide.md)
 
 ## 专项材料
 
