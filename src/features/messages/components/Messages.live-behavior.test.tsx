@@ -2624,7 +2624,9 @@ describe("Messages live behavior", () => {
     const chip = container.querySelector(".messages-process-phase-toggle");
     expect(chip).toBeTruthy();
     expect(chip?.classList.contains("is-collapsed")).toBe(true);
-    expect(container.querySelectorAll('[data-process-phase-collapsed="true"]').length).toBeGreaterThan(0);
+    // Hard-unmount: process body is not in the tree while collapsed.
+    expect(container.querySelector(".thinking-block")).toBeNull();
+    expect(container.textContent ?? "").not.toContain("Read causal.ts");
     expect(container.textContent ?? "").toContain("最终输出");
     expect(container.textContent ?? "").toContain("已处理");
   });
@@ -2725,7 +2727,8 @@ describe("Messages live behavior", () => {
     );
 
     expect(container.querySelector(".messages-process-phase-toggle")).toBeTruthy();
-    expect(container.querySelectorAll('[data-process-phase-collapsed="true"]').length).toBeGreaterThan(0);
+    expect(container.querySelector(".thinking-block")).toBeNull();
+    expect(container.textContent ?? "").not.toContain("Read done.ts");
     expect(container.textContent ?? "").toContain("Read running.ts");
     expect(container.textContent ?? "").toContain("第一段输出");
   });
@@ -2824,12 +2827,13 @@ describe("Messages live behavior", () => {
       />,
     );
 
-    expect(container.querySelectorAll('[data-process-phase-collapsed="true"]').length).toBeGreaterThan(0);
+    expect(container.querySelector(".thinking-block")).toBeNull();
+    expect(container.textContent ?? "").not.toContain("Read Messages.tsx");
     expect(container.textContent ?? "").toContain("历史最终输出");
     const indicator = container.querySelector(".messages-process-phase-toggle");
     expect(indicator).toBeTruthy();
     expect(indicator?.textContent ?? "").toContain("已处理");
-    expect(indicator?.textContent ?? "").toContain("1m 3s");
+    expect(indicator?.textContent ?? "").not.toMatch(/\d+m\s*\d+s|\d+s/);
   });
 
   it("expands one causal phase when its process chip is clicked", async () => {
@@ -2874,15 +2878,23 @@ describe("Messages live behavior", () => {
       />,
     );
 
-    expect(container.querySelectorAll('[data-process-phase-collapsed="true"]').length).toBeGreaterThan(0);
-    const chip = screen.getByRole("button", { name: /过程摘要/ });
-    expect(chip.getAttribute("aria-expanded")).toBe("false");
-    fireEvent.click(chip);
+    expect(container.querySelector(".thinking-block")).toBeNull();
+    const chip = container.querySelector(
+      ".messages-process-phase-toggle",
+    ) as HTMLButtonElement | null;
+    expect(chip).toBeTruthy();
+    expect(chip?.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(chip!);
 
     await waitFor(() => {
-      expect(container.querySelectorAll('[data-process-phase-collapsed="false"]').length).toBeGreaterThan(0);
-      expect(chip.getAttribute("aria-expanded")).toBe("true");
-      expect(chip.classList.contains("is-expanded")).toBe(true);
+      // Remount on expand (hard-unmount model).
+      const expandedChip = container.querySelector(
+        ".messages-process-phase-toggle.is-expanded",
+      );
+      expect(expandedChip).toBeTruthy();
+      expect(expandedChip?.getAttribute("aria-expanded")).toBe("true");
+      expect(container.querySelector(".thinking-block")).toBeTruthy();
+      expect(container.textContent ?? "").toMatch(/expand-me/);
     });
   });
 
@@ -2958,7 +2970,9 @@ describe("Messages live behavior", () => {
     expect(container.textContent ?? "").toContain("第一轮答案");
     expect(container.textContent ?? "").toContain("第二轮答案");
     expect(container.querySelectorAll(".messages-process-phase-toggle")).toHaveLength(2);
-    expect(container.querySelectorAll('[data-process-phase-collapsed="true"]').length).toBeGreaterThan(0);
+    expect(container.querySelector(".thinking-block")).toBeNull();
+    expect(container.textContent ?? "").not.toContain("Read turn1.ts");
+    expect(container.textContent ?? "").not.toContain("Read turn2.ts");
   });
 
   it("shows non-streaming hint for opencode when waiting long for first chunk", () => {

@@ -1,7 +1,6 @@
 import { memo, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
-import { formatDurationCompact } from "../../utils/messagesRenderUtils";
 
 type ProcessPhaseBreakdown = {
   reasoningCount: number;
@@ -11,7 +10,6 @@ type ProcessPhaseBreakdown = {
 
 type MiddleStepsCollapsedChipProps = {
   count: number;
-  durationMs: number | null;
   expanded: boolean;
   breakdown: ProcessPhaseBreakdown;
   onToggle: () => void;
@@ -19,26 +17,19 @@ type MiddleStepsCollapsedChipProps = {
 
 /**
  * Flat process-phase control:
- *   已处理 1m 3s · 思考 2 · 工具 5 ›
+ *   已处理 · 思考 2 · 工具 5 ›
  *   ────────────────────────────────
  */
 export const MiddleStepsCollapsedChip = memo(function MiddleStepsCollapsedChip({
   count,
-  durationMs,
   expanded,
   breakdown,
   onToggle,
 }: MiddleStepsCollapsedChipProps) {
   const { t } = useTranslation();
-  const durationLabel =
-    typeof durationMs === "number" && durationMs >= 0
-      ? formatDurationCompact(durationMs)
-      : null;
 
   const label = useMemo(() => {
-    const head = durationLabel
-      ? t("messages.middleStepsProcessedWithDuration", { duration: durationLabel })
-      : t("messages.middleStepsProcessed");
+    const head = t("messages.middleStepsProcessed");
     const stats: string[] = [];
     if (breakdown.reasoningCount > 0) {
       stats.push(
@@ -57,11 +48,11 @@ export const MiddleStepsCollapsedChip = memo(function MiddleStepsCollapsedChip({
     }
     // e.g. 已处理 · 思考 4 次 工具调用 23 次
     return stats.length > 0 ? `${head} · ${stats.join(" ")}` : head;
-  }, [breakdown, count, durationLabel, t]);
+  }, [breakdown, count, t]);
 
   const ariaLabel = t("messages.middleStepsProcessedAria", {
     count,
-    duration: durationLabel ?? "",
+    duration: "",
     detail: label,
     state: expanded
       ? t("messages.middleStepsCollapseAction")

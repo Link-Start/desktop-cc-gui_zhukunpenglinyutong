@@ -412,10 +412,6 @@ export function buildTimelineRenderWeightDiagnosticPayload(input: {
 export function estimateTimelineProjectionRowSize(row: TimelineProjectionRow) {
   switch (row.kind) {
     case "entry":
-      // Soft-collapsed causal process rows keep DOM for animation but need zero layout budget.
-      if (row.processPhaseCollapsed) {
-        return 0;
-      }
       if (row.entry.kind !== "item") {
         if (row.entry.kind === "bashGroup" || row.entry.kind === "readGroup") {
           return 128;
@@ -502,10 +498,6 @@ export function isEmptyVirtualProjectionRow(
     case "tailUserInput":
       return !input.hasTailUserInputNode;
     case "entry": {
-      // Soft-collapsed causal process rows animate to zero height.
-      if (row.processPhaseCollapsed) {
-        return true;
-      }
       if (row.entry.kind === "bashGroup") {
         return (
           input.activeEngine === "codex" ||

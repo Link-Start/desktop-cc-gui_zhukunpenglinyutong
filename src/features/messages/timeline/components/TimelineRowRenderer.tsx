@@ -668,23 +668,15 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
       if (!entryNode) {
         return null;
       }
-      if (row.processPhaseKey) {
-        const revealDelayMs = Math.min(120, (row.processPhaseRevealIndex ?? 0) * 28);
+      // Remount fade-in when a phase is expanded (hard-unmount model: no soft hide).
+      if (row.processPhaseKey && !row.processPhaseCollapsed) {
+        const revealDelayMs = Math.min(140, (row.processPhaseRevealIndex ?? 0) * 32);
         return (
           <div
-            className={`messages-process-phase-slot${
-              row.processPhaseCollapsed ? " is-collapsed" : " is-expanded"
-            }`}
+            className="messages-process-phase-slot is-expanded"
             data-process-phase-key={row.processPhaseKey}
-            data-process-phase-collapsed={row.processPhaseCollapsed ? "true" : "false"}
-            style={
-              row.processPhaseCollapsed
-                ? undefined
-                : ({
-                    animationDelay: `${revealDelayMs}ms`,
-                  } satisfies CSSProperties)
-            }
-            aria-hidden={row.processPhaseCollapsed || undefined}
+            data-process-phase-collapsed="false"
+            style={{ animationDelay: `${revealDelayMs}ms` } satisfies CSSProperties}
           >
             <div className="messages-process-phase-slot-inner">{entryNode}</div>
           </div>
@@ -721,7 +713,6 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
       return (
         <MiddleStepsCollapsedChip
           count={row.count}
-          durationMs={row.durationMs}
           expanded={row.expanded}
           breakdown={row.breakdown}
           onToggle={() => onToggleProcessPhaseExpanded(row.phaseKey)}

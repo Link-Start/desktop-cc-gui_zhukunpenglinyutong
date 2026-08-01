@@ -138,23 +138,24 @@
   align-items: center;
   justify-content: flex-start;
   flex-wrap: wrap;
-  /* 操作图标与左侧 meta 紧贴，避免把 meta 挤到行尾 */
-  gap: 6px 8px;
-  margin: 4px 0 2px;
+  /* 图标行与 meta 之间略留白，避免挤成一团 */
+  gap: 6px 12px;
+  /* 正文 → footer → 下一段（思考/工具）呼吸间距 */
+  margin: 12px 0 10px;
   min-height: 28px;
 }
 
 .message-assistant-action-footer .message-action-bar-row {
   flex-shrink: 0;
-  /* 图标之间留白更接近参考图：轻量、匀称 */
-  gap: 2px;
+  /* 图标之间略加大，避免 30px 按钮视觉粘连 */
+  gap: 4px;
 }
 
 /* 贴在操作图标右侧（左对齐），不推到行尾 */
 .message-assistant-action-meta {
   display: inline-flex;
   align-items: center;
-  margin-left: 2px;
+  margin-left: 4px;
   letter-spacing: 0.01em;
   font-size: var(--message-meta-font-size);
   line-height: 1.2;

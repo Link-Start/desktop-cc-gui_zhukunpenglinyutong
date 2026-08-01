@@ -423,10 +423,8 @@
   margin-top: 6px;
 }
 
-/* 兼容旧选择器：最终消息不再使用分割线，改为正文下方 action footer */
-.messages-final-boundary {
-  margin-top: 0;
-}
+/* 兼容旧选择器：最终消息不再使用分割线，改为正文下方 action footer。
+   垂直间距由 .message-assistant-action-footer 统一控制（见 messages.part1.css）。 */
 
 .main .messages {
   margin-top: calc(-1 * var(--main-topbar-height));

@@ -40,6 +40,7 @@ export type TimelineSnapshotModel = {
       exploreCount: number;
     };
     insertBeforeItemId: string;
+    assistantItemId: string;
     hiddenItemIds: readonly string[];
   }>;
   effectiveItemsCount: number;

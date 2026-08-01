@@ -374,41 +374,19 @@
   border-top-color: color-mix(in srgb, var(--border-strong) 28%, var(--border-subtle));
 }
 
-/* Drawer body rows under the header */
-.messages-process-phase-slot {
-  display: grid;
-  grid-template-rows: 1fr;
-  opacity: 1;
-  transform-origin: top center;
-  transition:
-    grid-template-rows 300ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 240ms ease,
-    margin 240ms ease;
+/* Remount fade-in when a collapsed phase is expanded (hard unmount model). */
+.messages-process-phase-slot.is-expanded {
+  animation: messages-process-drawer-open 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .messages-process-phase-slot > .messages-process-phase-slot-inner {
   min-height: 0;
-  overflow: hidden;
-}
-
-.messages-process-phase-slot.is-collapsed {
-  grid-template-rows: 0fr;
-  opacity: 0;
-  margin-top: 0 !important;
-  margin-bottom: 0 !important;
-  pointer-events: none;
-}
-
-.messages-process-phase-slot.is-expanded {
-  grid-template-rows: 1fr;
-  opacity: 1;
-  animation: messages-process-drawer-open 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes messages-process-drawer-open {
   from {
     opacity: 0;
-    transform: translateY(-8px);
+    transform: translateY(-6px);
   }
   to {
     opacity: 1;

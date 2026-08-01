@@ -105,8 +105,10 @@ export type TimelineProcessPhaseChip = {
     toolCount: number;
     exploreCount: number;
   };
-  /** Drawer header sits immediately before this process item (top of the phase). */
+  /** First process item of the phase (present only when expanded / remounted). */
   insertBeforeItemId: string;
+  /** Assistant prose this phase produced — used to place header when collapsed. */
+  assistantItemId: string;
   hiddenItemIds: readonly string[];
 };
 
@@ -125,22 +127,28 @@ export function buildTimelineProjectionRows(input: {
   shouldRenderUserInputAtTail: boolean;
 }): TimelineProjectionRow[] {
   const phaseByFirstItemId = new Map<string, TimelineProcessPhaseChip>();
-  const collapsedItemMeta = new Map<
+  const phaseByAssistantId = new Map<string, TimelineProcessPhaseChip>();
+  /** Process rows only exist when expanded — tag them for remount fade-in. */
+  const expandedProcessMeta = new Map<
     string,
-    { phaseKey: string; collapsed: boolean; revealIndex: number }
+    { phaseKey: string; revealIndex: number }
   >();
   for (const phase of input.processPhaseChips ?? []) {
     if (phase.count <= 1) {
       continue;
     }
-    phaseByFirstItemId.set(phase.insertBeforeItemId, phase);
-    phase.hiddenItemIds.forEach((itemId, revealIndex) => {
-      collapsedItemMeta.set(itemId, {
-        phaseKey: phase.phaseKey,
-        collapsed: !phase.expanded,
-        revealIndex,
+    if (phase.expanded) {
+      phaseByFirstItemId.set(phase.insertBeforeItemId, phase);
+      phase.hiddenItemIds.forEach((itemId, revealIndex) => {
+        expandedProcessMeta.set(itemId, {
+          phaseKey: phase.phaseKey,
+          revealIndex,
+        });
       });
-    });
+    } else {
+      // Collapsed: process rows are hard-unmounted; park the header above prose.
+      phaseByAssistantId.set(phase.assistantItemId, phase);
+    }
   }
   const insertedPhaseKeys = new Set<string>();
 
@@ -165,7 +173,8 @@ export function buildTimelineProjectionRows(input: {
 
   for (const entry of input.groupedEntries) {
     const entryItemIds = getGroupedEntryItemIds(entry);
-    // Drawer header sits at the TOP of the process body (before first process row).
+
+    // Expanded: header before first process row (drawer top).
     for (const itemId of entryItemIds) {
       const phase = phaseByFirstItemId.get(itemId);
       if (phase) {
@@ -173,9 +182,20 @@ export function buildTimelineProjectionRows(input: {
         break;
       }
     }
+    // Collapsed: header before assistant prose (process body unmounted).
+    if (
+      entry.kind === "item" &&
+      entry.item.kind === "message" &&
+      entry.item.role === "assistant"
+    ) {
+      const phase = phaseByAssistantId.get(entry.item.id);
+      if (phase) {
+        pushPhaseHeader(phase);
+      }
+    }
 
-    const phaseMeta = entryItemIds
-      .map((itemId) => collapsedItemMeta.get(itemId))
+    const revealMeta = entryItemIds
+      .map((itemId) => expandedProcessMeta.get(itemId))
       .find((meta) => meta != null);
     rows.push({
       kind: "entry",
@@ -186,9 +206,10 @@ export function buildTimelineProjectionRows(input: {
         input.activeUserInputAnchorItemId &&
           groupedEntryContainsItemId(entry, input.activeUserInputAnchorItemId),
       ),
-      processPhaseCollapsed: phaseMeta?.collapsed ?? false,
-      processPhaseKey: phaseMeta?.phaseKey ?? null,
-      processPhaseRevealIndex: phaseMeta?.revealIndex,
+      // Hard-unmounted when collapsed — mounted process rows are always expanded.
+      processPhaseCollapsed: false,
+      processPhaseKey: revealMeta?.phaseKey ?? null,
+      processPhaseRevealIndex: revealMeta?.revealIndex,
     });
   }
 
@@ -204,7 +225,7 @@ export function buildTimelineProjectionRows(input: {
     rows.push({ kind: "tailUserInput", key: "user-input-tail" });
   }
 
-  // Fallback for phases whose process entry is outside the current window.
+  // Fallback for phases whose anchor entry is outside the current window.
   for (const phase of input.processPhaseChips ?? []) {
     if (phase.count > 1 && !insertedPhaseKeys.has(phase.phaseKey)) {
       pushPhaseHeader(phase);

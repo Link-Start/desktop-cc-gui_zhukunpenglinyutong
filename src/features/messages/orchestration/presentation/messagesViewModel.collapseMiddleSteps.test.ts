@@ -55,12 +55,13 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
       timelineSourceItems: items,
     });
 
-    // Soft-collapse keeps items in the tree for animation.
-    expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "r1", "t1", "a1"]);
+    // Hard-unmount: process rows leave the timeline when collapsed.
+    expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "a1"]);
     expect(result.phases).toHaveLength(1);
     expect(result.phases[0]).toMatchObject({
       phaseKey: "a1",
       insertBeforeItemId: "r1",
+      assistantItemId: "a1",
       expanded: false,
       durationMs: 1_000,
       breakdown: { reasoningCount: 1, toolCount: 1, exploreCount: 0 },
@@ -110,17 +111,14 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
       timelineSourceItems: items,
     });
 
-    // Soft-collapse keeps all items; phases only mark multi-step runs.
+    // t1 alone above a1 is a single step → no phase; t2+t3 above a2 → collapsed phase.
     expect(result.timelineItems.map((item) => item.id)).toEqual([
       "u1",
       "t1",
       "a1",
-      "t2",
-      "t3",
       "a2",
       "t4",
     ]);
-    // t1 alone above a1 is a single step → no phase; t2+t3 above a2 → phase.
     expect(result.phases.map((phase) => phase.phaseKey)).toEqual(["a2"]);
     expect(result.phases[0]!.count).toBeGreaterThanOrEqual(2);
   });
@@ -136,7 +134,7 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
     expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "t1", "a1"]);
   });
 
-  it("marks one phase expanded when that phase key is expanded", () => {
+  it("remounts only the expanded phase process rows", () => {
     const items: ConversationItem[] = [
       user("u1"),
       reasoning("r1"),
@@ -152,13 +150,12 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
       timelineSourceItems: items,
     });
 
+    // a1 expanded → r1/t1 remounted; a2 collapsed → r2/t2 unmounted.
     expect(result.timelineItems.map((item) => item.id)).toEqual([
       "u1",
       "r1",
       "t1",
       "a1",
-      "r2",
-      "t2",
       "a2",
     ]);
     expect(result.phases.find((phase) => phase.phaseKey === "a1")?.expanded).toBe(true);

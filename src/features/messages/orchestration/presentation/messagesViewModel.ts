@@ -354,9 +354,11 @@ export function resolveVisibleMessageItems(options: {
  * Collapse only the process run that immediately precedes each assistant prose
  * message. Trailing process without following text stays fully expanded.
  *
- * This is causal grouping, not whole-conversation aggregation:
- * tools above text A collapse into a chip above A; tools above text B into a
- * separate chip above B.
+ * Performance model (hard unmount):
+ * - Live open process (no following prose yet): fully mounted.
+ * - After prose lands and phase collapses: process rows are removed from the
+ *   timeline (summary chip only) so React trees are freed.
+ * - User expands a phase: process rows remount (no long-lived instance cache).
  */
 export function resolveCollapsedTimelineItems(options: {
   activeEngine: MessagesEngine;
@@ -381,6 +383,7 @@ export function resolveCollapsedTimelineItems(options: {
   }
 
   const phases: ProcessPhaseCollapse[] = [];
+  const unmountedItemIds = new Set<string>();
 
   for (let index = 0; index < timelineSourceItems.length; index += 1) {
     const item = timelineSourceItems[index];
@@ -421,6 +424,13 @@ export function resolveCollapsedTimelineItems(options: {
     if (!firstProcessItem) {
       continue;
     }
+    const hiddenItemIds = phaseItems.map((phaseItem) => phaseItem.id);
+    // Hard unmount when collapsed: drop process rows so tool/reasoning trees free.
+    if (!expanded) {
+      for (const hiddenId of hiddenItemIds) {
+        unmountedItemIds.add(hiddenId);
+      }
+    }
     phases.push({
       phaseKey,
       assistantItemId: item.id,
@@ -429,13 +439,23 @@ export function resolveCollapsedTimelineItems(options: {
       breakdown: resolvePhaseBreakdown(phaseItems),
       durationMs: resolvePhaseDurationMs(phaseItems),
       expanded,
-      hiddenItemIds: phaseItems.map((phaseItem) => phaseItem.id),
+      hiddenItemIds,
     });
   }
 
-  // Always keep full timeline source so phase body can animate open/closed.
+  if (phases.length === 0) {
+    return emptyCollapsedTimelineResult(timelineSourceItems);
+  }
+
+  if (unmountedItemIds.size === 0) {
+    return {
+      timelineItems: timelineSourceItems,
+      phases,
+    };
+  }
+
   return {
-    timelineItems: timelineSourceItems,
+    timelineItems: timelineSourceItems.filter((item) => !unmountedItemIds.has(item.id)),
     phases,
   };
 }

@@ -87,7 +87,61 @@ describe("messagesTimelineProjection", () => {
     expect(rows.map((row) => row.kind)).toContain("approval");
   });
 
-  it("inserts the drawer header immediately before the first process item", () => {
+  it("parks the drawer header above assistant prose when process rows are unmounted", () => {
+    // Collapsed hard-unmount: only user + assistant remain in grouped entries.
+    const entries = groupToolItems([
+      {
+        id: "user-anchor",
+        kind: "message",
+        role: "user",
+        text: "你好",
+      },
+      {
+        id: "assistant-after",
+        kind: "message",
+        role: "assistant",
+        text: "回复",
+      },
+    ]);
+    const rows = buildTimelineProjectionRows({
+      activeUserInputAnchorItemId: null,
+      approvalVisible: false,
+      claudeDockedReasoningItemIds: [],
+      processPhaseChips: [
+        {
+          phaseKey: "assistant-after",
+          count: 2,
+          expanded: false,
+          durationMs: 63_000,
+          breakdown: { reasoningCount: 0, toolCount: 2, exploreCount: 0 },
+          insertBeforeItemId: "tool-a",
+          assistantItemId: "assistant-after",
+          hiddenItemIds: ["tool-a", "tool-b"],
+        },
+      ],
+      effectiveItemsCount: 2,
+      groupedEntries: entries,
+      hasVisibleUserInputRequest: false,
+      hiddenClaudeReasoningOnly: false,
+      historyRecoveryFailureVisible: false,
+      isHistoryLoading: false,
+      isThinking: false,
+      shouldRenderUserInputAtTail: false,
+    });
+
+    const chipIndex = rows.findIndex((row) => row.kind === "liveMiddleCollapsed");
+    const assistantIndex = rows.findIndex(
+      (row) => row.kind === "entry" && row.itemIds.includes("assistant-after"),
+    );
+    expect(chipIndex).toBe(assistantIndex - 1);
+    expect(rows[chipIndex]).toMatchObject({
+      kind: "liveMiddleCollapsed",
+      phaseKey: "assistant-after",
+      expanded: false,
+    });
+  });
+
+  it("places the drawer header above remounted process rows when expanded", () => {
     const entries = groupToolItems([
       {
         id: "user-anchor",
@@ -128,10 +182,11 @@ describe("messagesTimelineProjection", () => {
         {
           phaseKey: "assistant-after",
           count: 2,
-          expanded: false,
+          expanded: true,
           durationMs: 63_000,
           breakdown: { reasoningCount: 0, toolCount: 2, exploreCount: 0 },
           insertBeforeItemId: "tool-a",
+          assistantItemId: "assistant-after",
           hiddenItemIds: ["tool-a", "tool-b"],
         },
       ],
@@ -149,20 +204,10 @@ describe("messagesTimelineProjection", () => {
     const firstToolIndex = rows.findIndex(
       (row) => row.kind === "entry" && row.itemIds.includes("tool-a"),
     );
-    const assistantIndex = rows.findIndex(
-      (row) => row.kind === "entry" && row.itemIds.includes("assistant-after"),
-    );
-    // Drawer header is above process body, not below it.
-    expect(chipIndex).toBeGreaterThanOrEqual(0);
     expect(chipIndex).toBe(firstToolIndex - 1);
-    expect(chipIndex).toBeLessThan(assistantIndex);
-    expect(rows[chipIndex]).toMatchObject({
-      kind: "liveMiddleCollapsed",
-      phaseKey: "assistant-after",
-      count: 2,
-      durationMs: 63_000,
-      expanded: false,
-      insertBeforeItemId: "tool-a",
+    expect(rows[firstToolIndex]).toMatchObject({
+      kind: "entry",
+      processPhaseKey: "assistant-after",
     });
   });
 
