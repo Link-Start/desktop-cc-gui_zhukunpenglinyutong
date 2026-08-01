@@ -1049,3 +1049,51 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1278: fix React #185 Composer file-ref 引用环
+
+**Date**: 2026-08-02
+**Task**: fix React #185 Composer file-ref 引用环
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+加固 Composer file-ref / merge 引用稳定与 plan 收敛，切断 #185 更新深度自反馈；补回归与 playbook C-20260801-03
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 问题 | prod App-Bn4fZysL React #185，栈落 Composer / ActiveCanvasComposer |
+| 主修 | mergeInlineFileReferences / mergeUniqueNames 无新增保引用 |
+| 辅修 | plan 已收敛返回 null；creation engine 等价不 publish |
+| 回归 | composerFileReferences.test / Composer.file-reference-token / useModels / app-shell.startup（64 tests） |
+| Playbook | C-20260801-03（AP-02 主因 + defense-in-depth 措辞校准） |
+
+**Updated Files**:
+- `src/features/composer/utils/composerFileReferences.ts`
+- `src/features/composer/utils/composerFileReferences.test.ts`
+- `src/features/composer/components/Composer.tsx`
+- `src/features/composer/utils/inlineSelections.ts`
+- `src/features/models/hooks/useModels.ts`
+- `docs/analysis/react-185-maximum-update-depth-playbook.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `637cb3561` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
