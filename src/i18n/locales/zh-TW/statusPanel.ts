@@ -7,7 +7,7 @@ const statusPanel = {
     "tabTodos": "任務",
     "tabSubagents": "子 Agent",
     "tabAgents": "Agent",
-    "tabCheckpoint": "結果",
+    "tabCheckpoint": "概覽",
     "tabPlan": "計畫",
     "tabCommands": "指令",
     "files": "檔案",

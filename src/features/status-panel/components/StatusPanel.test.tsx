@@ -47,7 +47,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(screen.getByText("README.md"));
 
     expect(onOpenFilePath).toHaveBeenCalledWith("README.md");
@@ -79,7 +79,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(screen.queryByText("README.md")).toBeNull();
     expect(screen.queryByText("docs/EXECUTION_PLAN.md")).toBeNull();
@@ -111,7 +111,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     expect(screen.getByText("WorkspaceOnly.tsx")).toBeTruthy();
 
     rerender(
@@ -156,7 +156,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(
       screen.getByLabelText("statusPanel.checkpoint.actions.reviewDiff"),
     );
@@ -203,7 +203,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(screen.queryByText("OldTurn.tsx")).toBeNull();
     expect(
@@ -245,7 +245,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(
       screen.queryByText("statusPanel.checkpoint.headline.blocked"),
@@ -310,7 +310,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(screen.getByText("statusPanel.checkpoint.actions.commit"));
 
     expect(
@@ -318,7 +318,7 @@ describe("StatusPanel", () => {
         name: "statusPanel.checkpoint.commitDialog.title",
       }),
     ).toBeTruthy();
-    expect(screen.getByText("/tmp/workspace")).toBeTruthy();
+    expect(screen.getAllByText("/tmp/workspace").length).toBeGreaterThan(0);
     expect(screen.getByDisplayValue("feat: ready commit")).toBeTruthy();
     fireEvent.change(screen.getByDisplayValue("feat: ready commit"), {
       target: { value: "feat: updated commit" },
@@ -383,7 +383,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(screen.getByText("statusPanel.checkpoint.actions.commit"));
 
     const toggleAllFiles = screen.getByRole("checkbox", {
@@ -448,7 +448,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(screen.getByText("statusPanel.checkpoint.actions.commit"));
 
     const toggleAllFiles = screen.getByRole("checkbox", {
@@ -511,7 +511,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(screen.getByText("statusPanel.checkpoint.actions.commit"));
     fireEvent.click(
       screen.getByRole("button", { name: "git.generateCommitMessage" }),
@@ -569,7 +569,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     const nextActionSection = screen
       .getByText("statusPanel.checkpoint.sections.suggestedActions")
@@ -607,7 +607,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(
       screen.getByText("statusPanel.checkpoint.headline.needs_review"),
@@ -652,7 +652,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(
       screen.getByText("statusPanel.checkpoint.actions.hint.needs_review"),
@@ -678,7 +678,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     const auditDetails = screen
       .getByText("statusPanel.audit.title")
@@ -724,7 +724,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(mockUseGovernanceEvidence).toHaveBeenCalledWith("ws-1", true);
     expect(screen.getByText("statusPanel.governance.title")).toBeTruthy();
@@ -758,12 +758,12 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(mockUseGovernanceEvidence).toHaveBeenCalledWith("ws-1", false);
     expect(screen.queryByText("statusPanel.governance.title")).toBeNull();
     expect(screen.queryByText("OpenSpec tasks")).toBeNull();
-    expect(screen.getByText("Session overview")).toBeTruthy();
+    expect(screen.getByLabelText("Overview")).toBeTruthy();
   });
 
   it("keeps governance evidence out of the checkpoint verdict by default", () => {
@@ -792,7 +792,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(screen.queryByText("openspecGovernancePolicy")).toBeNull();
     expect(
@@ -814,9 +814,9 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
-    expect(screen.getByText("Session overview")).toBeTruthy();
+    expect(screen.getByLabelText("Overview")).toBeTruthy();
     expect(screen.queryByText("statusPanel.cost.title")).toBeNull();
     expect(screen.queryByText("README.md")).toBeNull();
     expect(
@@ -835,9 +835,9 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
-    expect(screen.getByText("Session overview")).toBeTruthy();
+    expect(screen.getByLabelText("Overview")).toBeTruthy();
     expect(screen.getByText("README.md")).toBeTruthy();
     expect(
       screen.getByText("statusPanel.checkpoint.sections.suggestedActions"),
@@ -871,7 +871,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(screen.getByText("statusPanel.audit.title"));
 
     expect(
@@ -922,7 +922,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     const nextActionSection = screen
       .getByText("statusPanel.checkpoint.sections.suggestedActions")
@@ -1007,7 +1007,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(
       screen.queryByText("statusPanel.checkpoint.sections.evidenceTrail"),
@@ -1051,7 +1051,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(
       screen.getByText("statusPanel.checkpoint.sections.advisorySignals"),
@@ -1096,7 +1096,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(screen.getByLabelText("git.previewModalAction"));
 
     expect(onOpenDiffPath).toHaveBeenCalledWith("src/One.tsx");
@@ -1130,7 +1130,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(
       screen.getByLabelText("statusPanel.checkpoint.actions.reviewDiff"),
     );
@@ -1171,7 +1171,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     const evidenceSection = screen
       .getByText("statusPanel.checkpoint.evidence.validations")
@@ -1218,7 +1218,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     expect(screen.queryByText('*Login*.java"}')).toBeNull();
     expect(screen.getByText("SecurityConfig.java")).toBeTruthy();
   });
@@ -1260,7 +1260,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     expect(screen.queryByText("LoginResponse.java")).toBeNull();
     expect(screen.queryByText("AppLoginResponse.java")).toBeNull();
     expect(screen.getByText("JwtUtil.java")).toBeTruthy();
@@ -1295,7 +1295,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(screen.queryByText("mvn test")).toBeNull();
     expect(screen.queryByText("mvn package")).toBeNull();
@@ -1309,7 +1309,7 @@ describe("StatusPanel", () => {
   it("gives visible feedback when opening risks from checkpoint actions", () => {
     render(<StatusPanel items={[editToolItem]} isProcessing={false} />);
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     expect(
       screen.queryByText("statusPanel.checkpoint.actions.openRisk"),
     ).toBeNull();
@@ -1358,7 +1358,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(
       screen.getByLabelText("statusPanel.checkpoint.actions.reviewDiff"),
     );
@@ -1414,7 +1414,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(
       screen.getByLabelText("statusPanel.checkpoint.actions.reviewDiff"),
     );
@@ -1463,7 +1463,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(
       screen.getByLabelText("statusPanel.checkpoint.actions.reviewDiff"),
     );
@@ -1498,7 +1498,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(
       screen.getByLabelText("statusPanel.checkpoint.actions.reviewDiff"),
     );
@@ -1523,7 +1523,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(screen.getByText("README.md")).toBeTruthy();
     expect(screen.getByText("App.tsx")).toBeTruthy();
@@ -1539,7 +1539,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(
       screen
@@ -1598,7 +1598,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(
       screen.queryByText(
@@ -1622,7 +1622,7 @@ describe("StatusPanel", () => {
   it("closes opened popover by Escape key", () => {
     render(<StatusPanel items={[editToolItem]} isProcessing={false} />);
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     expect(
       screen.getByText("statusPanel.checkpoint.headline.needs_review"),
     ).toBeTruthy();
@@ -1643,7 +1643,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(screen.getByText("statusPanel.checkpoint.expandToDock"));
 
     expect(onExpandToDock).toHaveBeenCalledTimes(1);
@@ -1661,7 +1661,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(screen.queryByText("statusPanel.audit.title")).toBeNull();
     expect(
@@ -1679,7 +1679,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(mockUseGovernanceEvidence).toHaveBeenCalledWith("ws-1", false);
     expect(screen.queryByText("statusPanel.governance.title")).toBeNull();
@@ -1714,10 +1714,10 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(mockUseGovernanceEvidence).toHaveBeenCalledWith("ws-1", false);
-    expect(screen.getByText("Session overview")).toBeTruthy();
+    expect(screen.getByLabelText("Overview")).toBeTruthy();
     expect(screen.queryByText("statusPanel.governance.title")).toBeNull();
     expect(screen.queryByText("OpenSpec tasks")).toBeNull();
   });
@@ -1735,7 +1735,7 @@ describe("StatusPanel", () => {
 
   it("shows only edits tab when expanded without status data", () => {
     render(<StatusPanel items={[]} isProcessing={false} />);
-    expect(screen.getByText("Result")).toBeTruthy();
+    expect(screen.getByText("Overview")).toBeTruthy();
     expect(screen.queryByText("statusPanel.tabTodos")).toBeNull();
     expect(screen.queryByText("statusPanel.tabSubagents")).toBeNull();
   });
@@ -1752,12 +1752,12 @@ describe("StatusPanel", () => {
     );
     expect(screen.queryByText("statusPanel.tabTodos")).toBeNull();
     expect(screen.queryByText("statusPanel.tabSubagents")).toBeNull();
-    const editTab = screen.getByText("Result").closest("button");
+    const editTab = screen.getByText("Overview").closest("button");
     const planTab = screen.getByText("Plan").closest("button");
     expect(editTab?.className).not.toContain("sp-tab-half");
     expect(planTab?.className).not.toContain("sp-tab-half");
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     expect(screen.getByText("README.md")).toBeTruthy();
     fireEvent.click(screen.getByText("Plan"));
     expect(screen.queryByText("README.md")).toBeNull();
@@ -1777,7 +1777,7 @@ describe("StatusPanel", () => {
     expect(screen.getByText("statusPanel.tabTodos")).toBeTruthy();
     expect(screen.getByText("1/2")).toBeTruthy();
     expect(screen.getByText("statusPanel.tabAgents")).toBeTruthy();
-    expect(screen.getByText("Result")).toBeTruthy();
+    expect(screen.getByText("Overview")).toBeTruthy();
     expect(screen.queryByText("Plan")).toBeNull();
     const allTabs = document.querySelectorAll(".sp-tab-half");
     expect(allTabs.length).toBe(0);
@@ -1817,14 +1817,14 @@ describe("StatusPanel", () => {
     );
 
     expect(container.querySelector(".sp-root--dock-collapsed")).toBeTruthy();
-    expect(screen.getByText("Result")).toBeTruthy();
+    expect(screen.getByText("Overview")).toBeTruthy();
     expect(screen.queryByText("README.md")).toBeNull();
 
     fireEvent.click(screen.getByTitle("Show status panel"));
     expect(onExpandDock).toHaveBeenCalledTimes(1);
     expect(onCollapseDock).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     expect(onExpandDock).toHaveBeenCalledTimes(2);
   });
 
@@ -1863,7 +1863,7 @@ describe("StatusPanel", () => {
     ).map((node) => node.textContent);
     expect(labels).toEqual([]);
     expect(container.querySelector(".sp-root--dock")).toBeNull();
-    expect(screen.queryByText("Result")).toBeNull();
+    expect(screen.queryByText("Overview")).toBeNull();
   });
 
   it("renders cost budget section in checkpoint panel when token usage is available", () => {
@@ -1895,7 +1895,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(screen.getByText("statusPanel.cost.title")).toBeTruthy();
     expect(screen.getByText("statusPanel.cost.session: $0.01")).toBeTruthy();
@@ -1936,7 +1936,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(screen.getByText("statusPanel.cost.session: —")).toBeTruthy();
     expect(screen.getByText("statusPanel.cost.tokens: 2.0k")).toBeTruthy();
@@ -1978,7 +1978,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(
       screen.getByLabelText("statusPanel.cost.tokenBreakdownLabel"),
@@ -2014,7 +2014,7 @@ describe("StatusPanel", () => {
     expect(labels).toEqual([
       "statusPanel.tabTodos",
       "statusPanel.tabAgents",
-      "Result",
+      "Overview",
     ]);
     expect(screen.getByText("1/1")).toBeTruthy();
     expect(screen.getByText("0/1")).toBeTruthy();
@@ -2029,8 +2029,8 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
-    expect(screen.getByText("Result").closest("button")?.className).toContain(
+    fireEvent.click(screen.getByText("Overview"));
+    expect(screen.getByText("Overview").closest("button")?.className).toContain(
       "sp-tab-active",
     );
 
@@ -2050,7 +2050,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Result").closest("button")?.className).toContain(
+    expect(screen.getByText("Overview").closest("button")?.className).toContain(
       "sp-tab-active",
     );
     expect(screen.queryByText("新的问题")).toBeNull();
@@ -2119,9 +2119,9 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     expect(screen.getByText("README.md")).toBeTruthy();
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     expect(screen.getByText("README.md")).toBeTruthy();
   });
 
@@ -2156,7 +2156,7 @@ describe("StatusPanel", () => {
     );
 
     expect(screen.getByText("statusPanel.tabTodos")).toBeTruthy();
-    expect(screen.getByText("Result")).toBeTruthy();
+    expect(screen.getByText("Overview")).toBeTruthy();
     expect(screen.queryByText("statusPanel.tabAgents")).toBeNull();
     expect(screen.queryByText("Plan")).toBeNull();
   });
@@ -2180,7 +2180,7 @@ describe("StatusPanel", () => {
   it("hides zero-state tabs when there is no status data", () => {
     render(<StatusPanel items={[]} isProcessing={false} isCodexEngine />);
 
-    expect(screen.getByText("Result")).toBeTruthy();
+    expect(screen.getByText("Overview")).toBeTruthy();
     expect(screen.queryByText("statusPanel.tabTodos")).toBeNull();
     expect(screen.queryByText("statusPanel.tabAgents")).toBeNull();
     expect(screen.queryByText("0/0")).toBeNull();

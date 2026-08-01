@@ -71,6 +71,7 @@ export type ProjectCatalogSessionSummary = {
   updatedAt: number;
   archivedAt?: number | null;
   sizeBytes?: number;
+  physicalPath?: string | null;
   parentSessionId?: string | null;
   engine?: ThreadSummary["engineSource"] | string | null;
   source?: string | null;
@@ -230,6 +231,7 @@ export function normalizeProjectCatalogSession(
     updatedAt?: unknown;
     archivedAt?: unknown;
     sizeBytes?: unknown;
+    physicalPath?: unknown;
     parentSessionId?: unknown;
     engine?: unknown;
     source?: unknown;
@@ -281,6 +283,7 @@ export function normalizeProjectCatalogSession(
       Number.isFinite(session.sizeBytes)
         ? session.sizeBytes
         : undefined,
+    physicalPath: normalizeOptionalCatalogString(session.physicalPath),
     parentSessionId: normalizeOptionalCatalogString(session.parentSessionId),
     engine: normalizeOptionalCatalogString(session.engine),
     source: normalizeOptionalCatalogString(session.source),

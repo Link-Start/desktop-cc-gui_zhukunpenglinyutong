@@ -742,8 +742,8 @@ export const CLIENT_DOCUMENTATION_TREE: ClientDocumentationNode[] = [
       ),
       uiControlFeature(
         "bottomActivity.checkpoint",
-        "结果 Tab",
-        "显示 checkpoint、计划结果或编辑反馈。",
+        "概览 Tab",
+        "显示当前会话基础信息与可选的 checkpoint 详情。",
         "底部活动面板；Result checkpoint tab。",
         "把长任务中的阶段性结果和验证事实集中展示出来。",
         ["checkpoint facts", "plan/result", "编辑反馈", "latest verification"],

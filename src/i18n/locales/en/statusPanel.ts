@@ -4,7 +4,7 @@ const statusPanel = {
     tabTodos: "Tasks",
     tabSubagents: "Subagents",
     tabAgents: "Agents",
-    tabCheckpoint: "Result",
+    tabCheckpoint: "Overview",
     tabPlan: "Plan",
     tabCommands: "Commands",
     files: "files",
@@ -132,7 +132,7 @@ const statusPanel = {
       },
     },
     sessionOverview: {
-      title: "Session overview",
+      title: "Overview",
       empty: "No active session yet",
       status: {
         running: "Running",
@@ -144,10 +144,31 @@ const statusPanel = {
         last: "Last turn {{duration}}",
       },
       turns: "{{turns}} turns · {{messages}} messages",
-      context: "Context {{percent}}%",
-      rateLimit: "Rate limit used {{percent}}%",
-      pendingApprovals: "{{count}} approval(s) pending",
-      pendingUserInputs: "{{count}} question(s) pending",
+      contextLabel: "Context",
+      rateLimitLabel: "Rate limit",
+      percent: "{{percent}}%",
+      sessionDiskPathUnknown: "Session file path not resolved",
+      fields: {
+        sessionId: "Session",
+        workspace: "Workspace",
+        workspacePath: "Path",
+        sessionDiskPath: "On disk",
+        engine: "Engine",
+        engines: "Providers",
+      },
+      quota: {
+        codexTitle: "Codex account limits",
+        codingPlanTitle: "{{provider}} plan limits",
+        genericTitle: "Account limits",
+        loading: "Loading limits…",
+        codexEmpty:
+          "Codex is connected, but no limit windows are available yet (refresh usage from the config menu).",
+        codingPlanEmpty:
+          "Coding-plan provider recognized, but no limit windows were returned.",
+        error: "Limit query failed: {{message}}",
+        unsupported:
+          "{{engine}} base_url is not a known coding-plan host (Kimi / MiniMax / Zhipu).",
+      },
     },
     cost: {
       title: "Cost / Budget",
