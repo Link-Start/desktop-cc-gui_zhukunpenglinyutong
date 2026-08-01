@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { RefObject } from "react";
+import type { Ref } from "react";
 import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import type { SearchAddon } from "@xterm/addon-search";
@@ -75,7 +75,12 @@ type TerminalAppearance = {
 export type TerminalSessionState = {
   status: TerminalStatus;
   message: string;
-  containerRef: RefObject<HTMLDivElement | null>;
+  /**
+   * Callback/object ref for the xterm host node.
+   * Must be a callback (or equivalent remount signal) so that route switches
+   * which unmount the dock (e.g. settings) can dispose and reattach xterm.
+   */
+  containerRef: Ref<HTMLDivElement>;
   hasSession: boolean;
   readyKey: string | null;
   cleanupTerminalSession: (workspaceId: string, terminalId: string) => void;
@@ -148,13 +153,45 @@ function getTerminalAppearance(container: HTMLElement | null): TerminalAppearanc
   };
 }
 
+function disposeFrontendTerminalInstance(refs: {
+  terminalRef: { current: Terminal | null };
+  fitAddonRef: { current: FitAddon | null };
+  searchAddonRef: { current: SearchAddon | null };
+  webLinksAddonRef: { current: WebLinksAddon | null };
+  inputDisposableRef: { current: { dispose: () => void } | null };
+  renderedKeyRef: { current: string | null };
+}) {
+  refs.inputDisposableRef.current?.dispose();
+  refs.inputDisposableRef.current = null;
+  if (refs.terminalRef.current) {
+    refs.terminalRef.current.dispose();
+    refs.terminalRef.current = null;
+  }
+  refs.fitAddonRef.current = null;
+  refs.searchAddonRef.current = null;
+  refs.webLinksAddonRef.current = null;
+  refs.renderedKeyRef.current = null;
+}
+
 export function useTerminalSession({
   activeWorkspace,
   activeTerminalId,
   isVisible,
   onDebug,
 }: UseTerminalSessionOptions): TerminalSessionState {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  // Object ref holds the live host node; callback ref drives remount detection.
+  // Settings / memory / home transitions unmount the dock while terminalOpen
+  // stays true — without a remount signal, xterm stays attached to a detached
+  // node and the remounted panel is blank (white).
+  const containerNodeRef = useRef<HTMLDivElement | null>(null);
+  const [containerEpoch, setContainerEpoch] = useState(0);
+  const setContainerRef = useCallback((node: HTMLDivElement | null) => {
+    if (containerNodeRef.current === node) {
+      return;
+    }
+    containerNodeRef.current = node;
+    setContainerEpoch((prev) => prev + 1);
+  }, []);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const searchAddonRef = useRef<SearchAddon | null>(null);
@@ -247,7 +284,7 @@ export function useTerminalSession({
     if (!terminal) {
       return;
     }
-    const appearance = getTerminalAppearance(containerRef.current);
+    const appearance = getTerminalAppearance(containerNodeRef.current);
     terminal.options.fontFamily = appearance.fontFamily;
     terminal.options.theme = appearance.theme;
     refreshTerminal();
@@ -307,30 +344,30 @@ export function useTerminalSession({
   }, [onDebug, writeToTerminal]);
 
   useEffect(() => {
-    if (!isVisible) {
-      inputDisposableRef.current?.dispose();
-      inputDisposableRef.current = null;
-      if (terminalRef.current) {
-        terminalRef.current.dispose();
-        terminalRef.current = null;
-      }
-      fitAddonRef.current = null;
-      searchAddonRef.current = null;
-      webLinksAddonRef.current = null;
-      renderedKeyRef.current = null;
+    // Host node gone (settings/memory/home unmount the dock) or panel closed:
+    // always drop the frontend xterm instance so a later remount can reattach.
+    if (!isVisible || !containerNodeRef.current) {
+      disposeFrontendTerminalInstance({
+        terminalRef,
+        fitAddonRef,
+        searchAddonRef,
+        webLinksAddonRef,
+        inputDisposableRef,
+        renderedKeyRef,
+      });
       return;
     }
 
-    if (terminalRef.current || !containerRef.current) {
+    if (terminalRef.current) {
       return;
     }
     let cancelled = false;
     void loadXtermModules()
       .then(({ Terminal, FitAddon, SearchAddon, WebLinksAddon }) => {
-        if (cancelled || terminalRef.current || !containerRef.current) {
+        if (cancelled || terminalRef.current || !containerNodeRef.current) {
           return;
         }
-        const appearance = getTerminalAppearance(containerRef.current);
+        const appearance = getTerminalAppearance(containerNodeRef.current);
         const terminal = new Terminal({
           cursorBlink: true,
           fontSize: 12,
@@ -359,7 +396,7 @@ export function useTerminalSession({
         if (webLinksAddon) {
           terminal.loadAddon(webLinksAddon);
         }
-        terminal.open(containerRef.current);
+        terminal.open(containerNodeRef.current);
         fitAddon.fit();
         terminalRef.current = terminal;
         fitAddonRef.current = fitAddon;
@@ -397,19 +434,18 @@ export function useTerminalSession({
     return () => {
       cancelled = true;
     };
-  }, [applyTerminalAppearance, isVisible, onDebug]);
+  }, [applyTerminalAppearance, containerEpoch, isVisible, onDebug]);
 
   useEffect(() => {
     return () => {
-      inputDisposableRef.current?.dispose();
-      inputDisposableRef.current = null;
-      if (terminalRef.current) {
-        terminalRef.current.dispose();
-        terminalRef.current = null;
-      }
-      fitAddonRef.current = null;
-      searchAddonRef.current = null;
-      webLinksAddonRef.current = null;
+      disposeFrontendTerminalInstance({
+        terminalRef,
+        fitAddonRef,
+        searchAddonRef,
+        webLinksAddonRef,
+        inputDisposableRef,
+        renderedKeyRef,
+      });
     };
   }, []);
 
@@ -539,20 +575,27 @@ export function useTerminalSession({
       resize();
     });
 
-    if (containerRef.current) {
-      observer.observe(containerRef.current);
+    if (containerNodeRef.current) {
+      observer.observe(containerNodeRef.current);
     }
     resize();
 
     return () => {
       observer.disconnect();
     };
-  }, [activeTerminalId, activeWorkspace, hasSession, isVisible, onDebug]);
+  }, [
+    activeTerminalId,
+    activeWorkspace,
+    containerEpoch,
+    hasSession,
+    isVisible,
+    onDebug,
+  ]);
 
   return {
     status,
     message,
-    containerRef,
+    containerRef: setContainerRef,
     hasSession,
     readyKey,
     cleanupTerminalSession,
