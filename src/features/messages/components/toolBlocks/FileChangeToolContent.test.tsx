@@ -47,4 +47,20 @@ describe("FileChangeToolContent", () => {
     );
     expect(container.firstChild).toBeNull();
   });
+
+  it("renders a single file as a flat row without the group header", () => {
+    render(
+      <FileChangeToolContent status="completed" changes={[change("docs/only.md", 2, 1)]} />,
+    );
+
+    expect(
+      screen.queryByRole("button", {
+        name: /tools\.fileEditSceneToggle|File changes|文件修改/i,
+      }),
+    ).toBeNull();
+    expect(screen.queryByTestId("file-edit-scene-list")).toBeNull();
+    expect(screen.getByText("only.md")).toBeTruthy();
+    expect(screen.getByText("+2")).toBeTruthy();
+    expect(screen.getByText("-1")).toBeTruthy();
+  });
 });

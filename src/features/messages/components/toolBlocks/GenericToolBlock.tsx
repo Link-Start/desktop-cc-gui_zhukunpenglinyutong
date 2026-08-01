@@ -151,39 +151,45 @@ function getCodiconClass(toolName: string, title: string): string {
  * 将 codicon 类名映射为灰色 lucide 描边图标（marker 风格前置图标）
  */
 function resolveToolMarkerIcon(codiconClass: string) {
+  // 必须带 size-3.5 class：仅 size={14} 属性挡不住 Marker 默认 size-4（16px）
+  const iconProps = {
+    size: 14 as const,
+    className: 'size-3.5 shrink-0',
+    'aria-hidden': true as const,
+  };
   switch (codiconClass) {
     case 'codicon-eye':
-      return <FileText />;
+      return <FileText {...iconProps} />;
     case 'codicon-edit':
-      return <FilePen />;
+      return <FilePen {...iconProps} />;
     case 'codicon-pencil':
-      return <FilePlus />;
+      return <FilePlus {...iconProps} />;
     case 'codicon-terminal':
-      return <Terminal />;
+      return <Terminal {...iconProps} />;
     case 'codicon-search':
-      return <Search />;
+      return <Search {...iconProps} />;
     case 'codicon-folder':
-      return <FolderSearch />;
+      return <FolderSearch {...iconProps} />;
     case 'codicon-globe':
-      return <Globe />;
+      return <Globe {...iconProps} />;
     case 'codicon-diff':
-      return <FileDiff />;
+      return <FileDiff {...iconProps} />;
     case 'codicon-checklist':
-      return <ListChecks />;
+      return <ListChecks {...iconProps} />;
     case 'codicon-zap':
-      return <Zap />;
+      return <Zap {...iconProps} />;
     case 'codicon-notebook':
-      return <NotebookPen />;
+      return <NotebookPen {...iconProps} />;
     case 'codicon-database':
-      return <Database />;
+      return <Database {...iconProps} />;
     case 'codicon-comment-discussion':
-      return <MessagesSquare />;
+      return <MessagesSquare {...iconProps} />;
     case 'codicon-check-all':
-      return <CheckCheck />;
+      return <CheckCheck {...iconProps} />;
     case 'codicon-trash':
-      return <Trash2 />;
+      return <Trash2 {...iconProps} />;
     default:
-      return <Wrench />;
+      return <Wrench {...iconProps} />;
   }
 }
 
@@ -376,13 +382,15 @@ export const GenericToolBlock = memo(function GenericToolBlock({
       <Marker
         {...(isInteractive ? { onClick: handleClick } : {})}
         className={cn(
-          // pr-3 与 ToolMarkerShell 一致：左侧不留内边距，图标才能和上下相邻的
-          // 文件行 / Explore 行在同一条竖直基线上。
-          'gap-2 rounded-md pr-3 py-1.5 text-sm transition-colors',
+          // 与 ToolMarkerShell 同 meta 尺度：12px 字 + 14px 图标 + 20px 行高
+          'min-h-5 gap-1.5 rounded-md py-0 pr-1 text-[length:var(--message-meta-font-size,12px)] leading-5 transition-colors',
+          '[&_svg]:!size-3.5',
           isInteractive && 'cursor-pointer select-none hover:bg-accent/50',
         )}
       >
-        <MarkerIcon>{resolveToolMarkerIcon(codiconClass)}</MarkerIcon>
+        <MarkerIcon className="size-3.5 shrink-0 [&_svg]:!size-3.5">
+          {resolveToolMarkerIcon(codiconClass)}
+        </MarkerIcon>
         <span className="shrink-0">{displayName}</span>
         <MarkerContent className="flex min-w-0 items-center gap-2">
           {summary && (

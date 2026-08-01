@@ -409,8 +409,18 @@
 .message-tool-block-shell {
   display: flex;
   flex-direction: column;
-  /* 工具块与下方文字/相邻块之间留白，对齐正文段落间距，避免混排时下间距偏挤 */
-  margin-bottom: 12px;
+  /* 与 thinking / explore 同 4px 外层节奏；展开体内部自带留白，不在 shell 上随展开加减 margin */
+  margin: 4px 0;
+}
+
+/* meta 活动栈结束后接正文：给黑字段落一点呼吸 */
+:is(.thinking-block, .explore-inline, .message-tool-block-shell, .tcb-marker) + .message {
+  margin-top: 10px;
+}
+
+/* 正文后进入活动栈：略拉开 */
+.message + :is(.thinking-block, .explore-inline, .message-tool-block-shell, .tcb-marker) {
+  margin-top: 6px;
 }
 
 /* 兼容旧选择器：最终消息不再使用分割线，改为正文下方 action footer */

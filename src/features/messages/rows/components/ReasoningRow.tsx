@@ -72,7 +72,7 @@ export const ReasoningRow = memo(function ReasoningRow({
         onClick={() => onToggle(item.id)}
       >
         <span className="thinking-header-copy">
-          <Brain className="thinking-brain-icon" size={15} aria-hidden />
+          <Brain className="thinking-brain-icon" size={14} aria-hidden />
           <span className="thinking-title">{title}</span>
         </span>
       </button>

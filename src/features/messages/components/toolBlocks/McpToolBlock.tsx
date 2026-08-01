@@ -46,21 +46,23 @@ function formatMcpToolName(title: string): string {
  */
 function getMcpIcon(title: string) {
   const lower = title.toLowerCase();
+  // 与 thinking / explore 一致：Lucide size={14}，不依赖 Marker CSS 覆盖
+  const iconProps = { size: 14 as const, 'aria-hidden': true as const };
 
   if (lower.includes('search') || lower.includes('context') || lower.includes('query')) {
-    return <SearchIcon />;
+    return <SearchIcon {...iconProps} />;
   }
   if (lower.includes('database') || lower.includes('sql') || lower.includes('db')) {
-    return <Database />;
+    return <Database {...iconProps} />;
   }
   if (lower.includes('web') || lower.includes('fetch') || lower.includes('http')) {
-    return <Globe />;
+    return <Globe {...iconProps} />;
   }
   if (lower.includes('read') || lower.includes('file') || lower.includes('doc')) {
-    return <FileText />;
+    return <FileText {...iconProps} />;
   }
 
-  return <Wrench />;
+  return <Wrench {...iconProps} />;
 }
 
 /**

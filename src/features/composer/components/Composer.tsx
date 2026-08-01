@@ -1050,7 +1050,7 @@ function ComposerImpl({
   const [carryOverNoteCardIds, setCarryOverNoteCardIds] = useState<string[]>([]);
   const [retainedNoteCardIds, setRetainedNoteCardIds] = useState<string[]>([]);
   const [carryOverContextChipKeys, setCarryOverContextChipKeys] = useState<string[]>([]);
-  const [retainedContextChipKeys, setRetainedContextChipKeys] = useState<string[]>([]);
+  const [, setRetainedContextChipKeys] = useState<string[]>([]);
   const [selectedInlineFileReferences, setSelectedInlineFileReferences] = useState<InlineFileReferenceSelection[]>([]);
   const browserContext = useBrowserContextAttachment(activeWorkspaceId);
   const onClearCodeAnnotationsRef = useRef(onClearCodeAnnotations);

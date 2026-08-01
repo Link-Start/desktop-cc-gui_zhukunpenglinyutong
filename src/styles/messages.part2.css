@@ -1,15 +1,18 @@
-/* Thinking Block - Minimalist (synced with idea-claude-code-gui) */
+/* Thinking Block - Minimalist (synced with idea-claude-code-gui)
+ * 外层 margin 折叠/展开恒定：收起时只卸掉正文高度，不改行间距（避免「每收起一个间距少一截」）。
+ * 展开留白交给 .thinking-content 内部，不在根节点上加减 margin。 */
 .thinking-block {
-  margin-bottom: 18px;
+  margin: 4px 0;
   font-size: var(--message-meta-font-size);
   /* 屏幕外的思考块跳过渲染/绘制；折叠态约为一行 header 高度，
      渲染过后由 auto 缓存真实高度（与 .message 的策略一致）。 */
   content-visibility: auto;
-  contain-intrinsic-block-size: auto 40px;
+  contain-intrinsic-block-size: auto 28px;
 }
 
 /* 正在流式的思考块保持渲染，避免 live 行被跳过导致的闪烁/测量抖动
-   （与 .message.assistant.is-live-streaming 同策略）。 */
+   （与 .message.assistant.is-live-streaming 同策略）。
+   外层 margin 与折叠态相同：展开留白只靠 .thinking-content。 */
 .thinking-block.is-live {
   content-visibility: visible;
   contain-intrinsic-block-size: auto;
@@ -18,35 +21,40 @@
 .thinking-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   width: fit-content;
   max-width: 100%;
-  padding: 0;
+  min-height: 20px;
+  padding: 1px 0;
   border: none;
   cursor: pointer;
   user-select: none;
   color: var(--text-tertiary);
   transition: opacity 0.2s;
   background: transparent;
-  font-weight: 500;
+  font-weight: 400;
   font-size: var(--message-meta-font-size);
+  line-height: 20px;
 }
 
 .thinking-header-copy {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   min-width: 0;
 }
 
 .thinking-brain-icon {
-  flex: 0 0 auto;
+  display: block;
+  flex: 0 0 14px;
+  width: 14px !important;
+  height: 14px !important;
   color: var(--color-thinking-text, rgb(115, 115, 115));
 }
 
 .thinking-title {
   flex: 0 0 auto;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--color-thinking-text, rgb(115, 115, 115));
 }
 
@@ -177,12 +185,12 @@
   font-size: 0.875em;
 }
 
-/* shadcn typography inline code: bg-muted（thinking 紧凑版） */
+/* shadcn typography inline code: bg-muted（thinking 紧凑版，不加粗） */
 .reasoning-markdown :where(:not(pre) > code) {
   background: var(--muted);
   border-radius: 0.25rem;
   padding: 0.15rem 0.3rem;
-  font-weight: 600;
+  font-weight: 400;
 }
 
 /* shadcn typography link: 统一为文件链接绿 + 点线下划线 */
@@ -343,7 +351,7 @@
   line-height: var(--code-line-height, 1.28);
 }
 
-/* shadcn typography inline code: rounded bg-muted px-[0.3rem] py-[0.2rem] text-sm font-semibold */
+/* shadcn typography inline code: rounded bg-muted，字重与正文一致（不加粗） */
 :is(.message, .thinking-block) .markdown :not(pre) > code {
   color: var(--text-stronger);
   background: var(--muted);
@@ -351,7 +359,7 @@
   padding: 0.2rem 0.3rem;
   border-radius: 0.25rem;
   font-size: 0.875em;
-  font-weight: 600;
+  font-weight: 400;
 }
 
 :is(.message, .thinking-block) .markdown .katex {

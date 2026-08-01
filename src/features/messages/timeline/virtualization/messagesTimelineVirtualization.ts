@@ -420,11 +420,14 @@ export function estimateTimelineProjectionRowSize(row: TimelineProjectionRow) {
       }
       switch (row.entry.item.kind) {
         case "explore":
-          return row.entry.item.status === "exploring" ? 52 : 36;
+          // 折叠 explore 行约 20px 行高 + 上下 4px margin
+          return row.entry.item.status === "exploring" ? 48 : 32;
         case "tool":
-          return 58;
+          // 折叠 Marker 行 + 4px 外层 margin（展开体另由 measure 纠正）
+          return 40;
         case "reasoning":
-          return 72;
+          // 折叠思考头 + 4px 外层 margin；展开/流式由 measure 纠正
+          return 36;
         case "message": {
           const textLength = row.entry.item.text.length;
           if (row.entry.item.role === "user") {

@@ -69,7 +69,6 @@ import {
   MESSAGES_SLOW_ANCHOR_WARN_MS,
   MESSAGES_SLOW_RENDER_WARN_MS,
   resolveWorkingActivityLabel,
-  SCROLL_THRESHOLD_PX,
   shouldDisplayWorkingActivityLabel,
   shouldHideClaudeReasoningModule,
   STREAMING_VISIBLE_WINDOW,
@@ -542,7 +541,9 @@ export const MessagesCore = memo(function MessagesCore({
     requestAutoScroll,
     requestHistoryBottomConvergence,
     requestTimelineLayoutBottomConvergence,
+    scrollGeometrySnapshotRef,
     scrollKey,
+    shouldProtectFollowOnScrollEvent,
     stickToBottomDeadlineRef,
     stickToBottomIntentRef,
   } = useMessagesScrollController({
@@ -1328,11 +1329,10 @@ export const MessagesCore = memo(function MessagesCore({
     }
     const now = performance.now();
     const userOwnsScroll = hasRecentUserScrollIntent();
-    const previousGeometry = {
-      scrollTop: container.scrollTop,
-      maxScrollTop: Math.max(0, container.scrollHeight - container.clientHeight),
-    };
+    // 先读上一帧几何，再写入当前快照——用于识别「高度暴涨、scrollTop 未动」的假离底。
+    const previousGeometry = scrollGeometrySnapshotRef.current;
     recordCurrentScrollGeometry(container);
+    const currentGeometry = scrollGeometrySnapshotRef.current;
     const activeProgrammaticEdge = activeProgrammaticScrollEdgeRef.current;
     const activeProgrammaticMotion = activeProgrammaticScrollMotionRef.current;
     if (
@@ -1369,22 +1369,17 @@ export const MessagesCore = memo(function MessagesCore({
       return;
     }
     const nearBottom = isNearBottom(container);
-    // 回合结束 / 打开历史 settle 窗口：live 尾窗→全量、static→virtual 会让
-    // scrollHeight 暴涨而 scrollTop 尚未追上，nearBottom 瞬时 false。不得因此解除
-    // autoScroll。若用户已主动上滚离开底部（scrollTop 明显低于 max），仍释放跟随。
-    const settleIntent = stickToBottomIntentRef.current;
-    const settleWindowOpen =
-      settleIntent !== null && Date.now() <= stickToBottomDeadlineRef.current;
-    const userLeftBottom =
-      !nearBottom &&
-      previousGeometry.maxScrollTop - previousGeometry.scrollTop >
-        SCROLL_THRESHOLD_PX;
-    const settleArmed =
-      settleWindowOpen &&
+    // forced/settle 窗口内：尾窗→全量 / virtual remeasure 让 maxScrollTop 暴涨，
+    // scrollTop 仍停在旧底 → 假离底。绝不能解除 autoScroll 或 cancel 收敛，
+    // 否则回合结束瞬间视口停在中上段（用户体感「飞到上面」）。
+    // 用户真上滚会改 scrollTop，假离底判定为 false，走下方正常释放。
+    if (
       !userOwnsScroll &&
-      (autoScrollRef.current || activeProgrammaticEdge === "bottom") &&
-      !userLeftBottom;
-    if (settleArmed) {
+      shouldProtectFollowOnScrollEvent(previousGeometry, currentGeometry ?? {
+        maxScrollTop: Math.max(0, container.scrollHeight - container.clientHeight),
+        scrollTop: container.scrollTop,
+      })
+    ) {
       autoScrollRef.current = true;
       scheduleAnchorUpdate("scroll");
       return;
@@ -1413,8 +1408,8 @@ export const MessagesCore = memo(function MessagesCore({
     programmaticScrollTopEchoRef,
     recordCurrentScrollGeometry,
     scheduleAnchorUpdate,
-    stickToBottomDeadlineRef,
-    stickToBottomIntentRef,
+    scrollGeometrySnapshotRef,
+    shouldProtectFollowOnScrollEvent,
   ]);
   const clearTransientUiState = useCallback(() => {
     if (anchorUpdateRafRef.current !== null) {
