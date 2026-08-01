@@ -4,6 +4,7 @@
 > **范围**：中心对话区（幕布 / Messages 时间线）  
 > **用途**：后续 **统一幕布** 与 **幕布功能修复/优化** 的工作底稿  
 > **任务 PLAN**：`docs/plans/2026-08-01-unified-conversation-canvas-architecture.md`（砍轻量 / 锚点 / 多 CLI 统一）  
+> **滚动重构 DESIGN**：`docs/plans/2026-08-01-conversation-canvas-scroll-ownership-architecture.md`（层级权限 / Single Writer / **A 飞顶 + F 结束离真底** / 间歇性非长短；非止血）  
 > **实现 Review**：`docs/analysis/unify-conversation-canvas-review-2026-08-01.md`  
 > **过程投影矩阵**：`docs/analysis/canvas-live-tool-projection-matrix-2026-08-01.md`  
 > **不在本文**：Intent 画板、底部 Status Panel 内部实现、Composer 输入框细节、完整 realtime 事件字典、perf 绝对数字（见 `docs/perf/**`）  

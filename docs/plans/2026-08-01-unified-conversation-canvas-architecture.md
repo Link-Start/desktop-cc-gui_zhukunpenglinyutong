@@ -30,7 +30,8 @@
 | 用户痛点 | 文档锚点 | 根因分层 | 本任务包 |
 |----------|----------|----------|----------|
 | 多 CLI 幕布不统一 | §1 L1/L2/L3、§5、§5.1 | L1 水管（Grok live 无 tool）+ L2 硬分支 + L3 profile 休眠 | **P0-A / P1-B** |
-| 对话结束锚点不准 | §7 settle-repin、§7.1/§7.2 高度阶跃 | 尾窗回全量、remeasure、autoScroll 竞态 | **P0-C** |
+| 对话结束锚点不准 | §7 settle-repin、§7.1/§7.2 高度阶跃 | 尾窗回全量、remeasure、autoScroll 竞态 | **P0-C**（架构级见 [Scroll Ownership DESIGN](2026-08-01-conversation-canvas-scroll-ownership-architecture.md)） |
+| 发送飞顶 / 跟丢最新（A 类） | 滚动多层抢权 + 几何塌缩 | Owner 碎片、echo 启发式、尾窗 shrink | **Scroll Ownership 重构**（不再路径止血） |
 | 莫名其妙极简化、要点渲染详情 | §7.2 | lightweight + hydration `summary` + 块级延迟 | **P0-D（砍）** |
 | 工具「有时有、有时无」 | §5 藏 bash、§5.1 Grok | 产品藏卡 vs 无事件两套逻辑混谈 | **P0-A 矩阵 + 文案** |
 | 长历史滚动卡 | §7 | 误用 summary 顶性能 | **P1-E 保留尾窗/虚拟化** |

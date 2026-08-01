@@ -548,6 +548,7 @@ export const MessagesCore = memo(function MessagesCore({
   } = useMessagesScrollController({
     clearPendingJumpMessage,
     isThinking,
+    isAssistantFinalizing,
     liveAutoFollowEnabledRef,
     rawScrollKey,
     renderScopeKey,
@@ -1647,6 +1648,31 @@ export const MessagesCore = memo(function MessagesCore({
     messageActionTargets.hasPendingUserTurn,
     messageActionTargets.userMessageCount,
     renderScopeKey,
+  ]);
+
+  // useDeferredValue 使尾窗→全量在 isThinking 结束后延迟才落到 DOM。
+  // 流式中仅当「焦点跟随开 + autoScroll 武装」才对 item 增长 pin；
+  // 结束后（回刷）走 history-restore 守卫（turn-settle forced / 武装贴底）。
+  const deferredRenderItemCount = deferredRenderSourceItems.length;
+  const previousDeferredRenderItemCountRef = useRef(deferredRenderItemCount);
+  useLayoutEffect(() => {
+    const previousCount = previousDeferredRenderItemCountRef.current;
+    previousDeferredRenderItemCountRef.current = deferredRenderItemCount;
+    if (deferredRenderItemCount <= previousCount) {
+      return;
+    }
+    if (isThinking) {
+      if (!liveAutoFollowEnabled || !autoScrollRef.current) {
+        return;
+      }
+    }
+    requestTimelineLayoutBottomConvergence();
+  }, [
+    autoScrollRef,
+    deferredRenderItemCount,
+    isThinking,
+    liveAutoFollowEnabled,
+    requestTimelineLayoutBottomConvergence,
   ]);
 
   useEffect(() => {
