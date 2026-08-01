@@ -433,8 +433,11 @@ impl AttemptAccumulator {
             if let Some(tool_name) = tool_name.filter(|name| !name.trim().is_empty()) {
                 existing.tool_name = tool_name;
             }
-            if arguments_summary.is_some() {
-                existing.arguments_summary = arguments_summary;
+            if let Some(incoming) = arguments_summary {
+                existing.arguments_summary = Some(merge_tool_arguments_summary(
+                    existing.arguments_summary.as_deref(),
+                    &incoming,
+                ));
             }
             return;
         }
@@ -1809,9 +1812,14 @@ fn normalize_codex_item_event(
     }
     let tool_id = value_string_by_aliases(Some(item), &["id", "toolId", "tool_id"])
         .unwrap_or_else(|| "unknown-tool".to_string());
+    // Prefer explicit tool name; fall back to item type (e.g. "fileChange") so
+    // canvas classifiers still route file-edit scenes after history projection.
     let tool_name = value_string_by_aliases(Some(item), &["tool", "toolName", "tool_name", "name"])
+        .or_else(|| value_string_by_aliases(Some(item), &["title"]))
         .unwrap_or_else(|| item_type.clone());
-    let input = value_by_aliases(item, &["arguments", "input"]).cloned();
+    // Codex fileChange puts paths/diffs on `changes[]`, not `arguments`/`input`.
+    // Pack both so SharedProjector can rebuild ConversationItem.changes.
+    let input = extract_codex_tool_payload(item);
     if method == "item/started" {
         actions.push(AccumulatorAction::ToolStarted {
             tool_id: tool_id.clone(),
@@ -1839,6 +1847,14 @@ fn normalize_codex_item_event(
         });
     }
 
+    // Completed snapshots often carry the final `changes[]` only at this step.
+    if let Some(payload) = input.clone() {
+        actions.push(AccumulatorAction::ToolInputUpdated {
+            tool_id: tool_id.clone(),
+            tool_name: Some(tool_name.clone()),
+            input: Some(payload),
+        });
+    }
     let output = value_by_aliases(item, &["result", "output", "aggregatedOutput"])
         .or_else(|| value_by_aliases(params, &["result", "output"]))
         .cloned();
@@ -1857,6 +1873,67 @@ fn normalize_codex_item_event(
         output,
         error,
     })
+}
+
+/// Build a portable tool payload for Shared canonical storage.
+///
+/// Codex `fileChange` items put path/diff on `changes[]` (not `arguments`). Without
+/// packing that array, history projection cannot rebuild the canvas file-edit scene.
+fn extract_codex_tool_payload(item: &Value) -> Option<Value> {
+    let mut object = serde_json::Map::new();
+
+    match value_by_aliases(item, &["arguments", "input"]) {
+        Some(Value::Object(map)) => {
+            for (key, value) in map {
+                object.insert(key.clone(), value.clone());
+            }
+        }
+        Some(value) if !value.is_null() => {
+            object.insert("input".to_string(), value.clone());
+        }
+        _ => {}
+    }
+
+    if let Some(changes) = item.get("changes") {
+        if changes.as_array().is_some_and(|rows| !rows.is_empty()) {
+            object.insert("changes".to_string(), changes.clone());
+        }
+    }
+
+    if let Some(title) = item.get("title").and_then(Value::as_str) {
+        let trimmed = title.trim();
+        if !trimmed.is_empty() {
+            object.insert("title".to_string(), Value::String(trimmed.to_string()));
+        }
+    }
+
+    if object.is_empty() {
+        None
+    } else {
+        Some(Value::Object(object))
+    }
+}
+
+/// Merge tool argument JSON summaries. Object keys from `incoming` win; non-JSON
+/// strings fall back to last-write-wins (preserves prior string when incoming empty).
+fn merge_tool_arguments_summary(existing: Option<&str>, incoming: &str) -> String {
+    let incoming = incoming.trim();
+    if incoming.is_empty() {
+        return existing.unwrap_or("").to_string();
+    }
+    let Some(existing) = existing.map(str::trim).filter(|text| !text.is_empty()) else {
+        return incoming.to_string();
+    };
+    let Ok(Value::Object(mut base)) = serde_json::from_str::<Value>(existing) else {
+        return incoming.to_string();
+    };
+    let Ok(Value::Object(patch)) = serde_json::from_str::<Value>(incoming) else {
+        return incoming.to_string();
+    };
+    for (key, value) in patch {
+        base.insert(key, value);
+    }
+    serde_json::to_string(&Value::Object(base)).unwrap_or_else(|_| incoming.to_string())
 }
 
 fn terminal_evidence_from_value(
@@ -2773,6 +2850,83 @@ mod tests {
         assert_eq!(
             settled.final_snapshot.error_message.as_deref(),
             Some("provider rejected request")
+        );
+    }
+
+    #[test]
+    #[test]
+    fn codex_file_change_item_preserves_changes_in_tool_arguments_summary() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        coordinator
+            .register_attempt(owner("attempt-fc", Some("run-fc"), Some("native-fc")))
+            .expect("register");
+
+        let events = [
+            json!({
+                "method": "item/started",
+                "params": {
+                    "threadId": "native-fc",
+                    "turnId": "run-fc",
+                    "item": {
+                        "id": "fc-1",
+                        "type": "fileChange",
+                        "status": "inProgress",
+                        "changes": [{
+                            "path": "src/keep.ts",
+                            "kind": "update",
+                            "diff": "--- a\n+++ b\n@@\n-old\n+new"
+                        }]
+                    }
+                }
+            }),
+            json!({
+                "method": "item/completed",
+                "params": {
+                    "threadId": "native-fc",
+                    "turnId": "run-fc",
+                    "item": {
+                        "id": "fc-1",
+                        "type": "fileChange",
+                        "status": "completed",
+                        "changes": [{
+                            "path": "src/keep.ts",
+                            "kind": "update",
+                            "diff": "--- a\n+++ b\n@@\n-old\n+new"
+                        }]
+                    }
+                }
+            }),
+            json!({
+                "method": "item/agentMessage/delta",
+                "params": {"threadId": "native-fc", "turnId": "run-fc", "delta": "done"}
+            }),
+            json!({
+                "method": "turn/completed",
+                "params": {
+                    "threadId": "native-fc",
+                    "turnId": "run-fc",
+                    "status": "completed"
+                }
+            }),
+        ];
+        let mut settled = None;
+        for event in events {
+            let observation = coordinator.ingest_codex_event("ws-1", &event);
+            settled = settled.or(observation.settled);
+        }
+        let settled = settled.expect("settled");
+        assert_eq!(settled.final_snapshot.tool_calls.len(), 1);
+        let summary = settled.final_snapshot.tool_calls[0]
+            .arguments_summary
+            .as_deref()
+            .unwrap_or("");
+        assert!(
+            summary.contains("src/keep.ts") && summary.contains("changes"),
+            "fileChange changes[] must be packed into arguments_summary for history projection, got: {summary}"
+        );
+        assert_eq!(
+            settled.final_snapshot.tool_calls[0].tool_name.to_ascii_lowercase(),
+            "filechange"
         );
     }
 

@@ -162,7 +162,7 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
     expect(result.phases.find((phase) => phase.phaseKey === "a2")?.expanded).toBe(false);
   });
 
-  it("skips command-only phases that the canvas already hides", () => {
+  it("does not collapse a single command tool (same as any single process step)", () => {
     const items = [
       user("u1"),
       {
@@ -181,8 +181,46 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
       timelineSourceItems: items,
     });
 
-    // bash/command cards are not renderable on Claude canvas, so no phase chip.
+    // Single process step stays expanded; command cards are canvas-visible.
     expect(result.phases).toEqual([]);
     expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "cmd-1", "a1"]);
+  });
+
+  it("collapses multi-step command process phases so expand can remount them", () => {
+    const items = [
+      user("u1"),
+      {
+        id: "cmd-1",
+        kind: "tool" as const,
+        toolType: "commandExecution" as const,
+        title: "Command: rg --files",
+        detail: "/tmp",
+        status: "completed" as const,
+        output: "",
+      },
+      {
+        id: "cmd-2",
+        kind: "tool" as const,
+        toolType: "commandExecution" as const,
+        title: "Command: ls -la",
+        detail: "/tmp",
+        status: "completed" as const,
+        output: "",
+      },
+      assistant("a1", "最终输出"),
+    ];
+    const result = resolveCollapsedTimelineItems({
+      activeEngine: "codex",
+      timelineSourceItems: items,
+    });
+
+    expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "a1"]);
+    expect(result.phases).toHaveLength(1);
+    expect(result.phases[0]).toMatchObject({
+      phaseKey: "a1",
+      count: 2, // underlying command rows (even if UI groups them)
+      expanded: false,
+      hiddenItemIds: ["cmd-1", "cmd-2"],
+    });
   });
 });

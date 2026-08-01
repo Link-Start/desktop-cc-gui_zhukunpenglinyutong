@@ -498,16 +498,7 @@ export function isEmptyVirtualProjectionRow(
     case "tailUserInput":
       return !input.hasTailUserInputNode;
     case "entry": {
-      if (row.entry.kind === "bashGroup") {
-        return (
-          input.activeEngine === "codex" ||
-          input.activeEngine === "grok" ||
-          input.activeEngine === "kimi" ||
-          input.activeEngine === "opencode" ||
-          (input.activeEngine === "claude" &&
-            !input.claudeHistoryTranscriptFallbackActive)
-        );
-      }
+      // bash/command cards are visible; only skip when the legacy hide helper says so.
       if (row.entry.kind === "item" && row.entry.item.kind === "tool") {
         return shouldHideCodexCanvasCommandCard(row.entry.item, input.activeEngine);
       }

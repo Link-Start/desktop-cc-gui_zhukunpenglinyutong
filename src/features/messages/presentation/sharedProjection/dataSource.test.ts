@@ -99,6 +99,56 @@ describe("toSharedConversationItems", () => {
     });
   });
 
+  it("maps final footer meta and fileChange changes for Shared history parity", () => {
+    const [assistant, tool] = toSharedConversationItems([
+      makeItem({
+        id: "2:assistant:0",
+        kind: "message",
+        content: {
+          role: "assistant",
+          text: "done",
+          turnId: "turn-1",
+          engineSource: "claude",
+          isFinal: true,
+          finalCompletedAt: 1_700_000_000_001,
+          finalDurationMs: 13_000,
+          finalInputTokens: 41_100,
+          finalOutputTokens: 105,
+        },
+      }),
+      makeItem({
+        id: "2:tool:0",
+        kind: "tool",
+        content: {
+          toolType: "fileChange",
+          turnId: "turn-1",
+          title: "Write",
+          detail: '{"path":"docs/note.md"}',
+          status: "completed",
+          output: "wrote",
+          engineSource: "claude",
+          changes: [{ path: "docs/note.md", kind: "modified" }],
+        },
+      }),
+    ]);
+
+    expect(assistant).toMatchObject({
+      kind: "message",
+      role: "assistant",
+      isFinal: true,
+      finalCompletedAt: 1_700_000_000_001,
+      finalDurationMs: 13_000,
+      finalInputTokens: 41_100,
+      finalOutputTokens: 105,
+    });
+    expect(tool).toMatchObject({
+      kind: "tool",
+      toolType: "fileChange",
+      title: "Write",
+      changes: [{ path: "docs/note.md", kind: "modified" }],
+    });
+  });
+
   it("drops systemNotice and metadata items (shadow 观测面不属于渲染面)", () => {
     const items: SharedProjectionItem[] = [
       makeItem({ id: "1:control", kind: "systemNotice", content: { text: "Control: cancel" } }),

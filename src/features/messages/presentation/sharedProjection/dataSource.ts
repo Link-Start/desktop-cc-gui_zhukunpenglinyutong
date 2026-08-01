@@ -100,6 +100,32 @@ function readString(content: Record<string, unknown>, key: string) {
   return typeof value === "string" ? value : "";
 }
 
+function readToolChanges(
+  value: unknown,
+): { path: string; kind?: string; diff?: string }[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) {
+    return undefined;
+  }
+  const changes = value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+      const record = entry as Record<string, unknown>;
+      const path = typeof record.path === "string" ? record.path.trim() : "";
+      if (!path) {
+        return null;
+      }
+      return {
+        path,
+        ...(typeof record.kind === "string" ? { kind: record.kind } : {}),
+        ...(typeof record.diff === "string" ? { diff: record.diff } : {}),
+      };
+    })
+    .filter((entry): entry is { path: string; kind?: string; diff?: string } => entry !== null);
+  return changes.length > 0 ? changes : undefined;
+}
+
 function readEngineSource(content: Record<string, unknown>): EngineType | undefined {
   const value = content.engineSource;
   return typeof value === "string" &&
@@ -215,7 +241,8 @@ function toConversationItem(item: SharedProjectionItem): ConversationItem | null
         content: readString(content, "content"),
         engineSource,
       };
-    case "tool":
+    case "tool": {
+      const changes = readToolChanges(content.changes);
       return {
         id,
         kind: "tool",
@@ -226,7 +253,10 @@ function toConversationItem(item: SharedProjectionItem): ConversationItem | null
         detail: readString(content, "detail"),
         ...(typeof content.status === "string" ? { status: content.status } : {}),
         ...(typeof content.output === "string" ? { output: content.output } : {}),
+        ...(typeof content.durationMs === "number" ? { durationMs: content.durationMs } : {}),
+        ...(changes ? { changes } : {}),
       };
+    }
     case "generatedImage": {
       const rawImages = Array.isArray(content.images) ? content.images : [];
       const images = rawImages

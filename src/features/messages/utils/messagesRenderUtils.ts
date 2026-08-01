@@ -356,37 +356,20 @@ export function resolveCodexCommandActivityLabel(item: Extract<ConversationItem,
 }
 
 /**
- * Hide bash/command tool cards on the conversation canvas (Claude-polished surface).
- * Applies to Claude/Codex and, after unify-conversation-canvas, also Grok/Kimi/OpenCode
- * so multi-CLI process chrome matches: narrative on canvas, shell noise in Status Panel.
- * ExitPlanMode remains visible.
+ * Formerly hid bash/commandExecution cards on the polished multi-CLI canvas
+ * (Status Panel only). That made process-phase collapse "fake": chip counts
+ * tools that never remounted on expand (Codex 178× shell especially).
+ *
+ * Process-phase collapse is the noise control now — keep command/bash on the
+ * canvas so expand is real. ExitPlanMode / TodoWrite still use other filters.
+ *
+ * Kept as a named API so call sites and older tests stay stable; always false.
  */
 export function shouldHideCodexCanvasCommandCard(
-  item: Extract<ConversationItem, { kind: "tool" }>,
-  activeEngine: MessagesEngine,
+  _item: Extract<ConversationItem, { kind: "tool" }>,
+  _activeEngine: MessagesEngine,
 ) {
-  if (
-    activeEngine !== "codex" &&
-    activeEngine !== "claude" &&
-    activeEngine !== "grok" &&
-    activeEngine !== "kimi" &&
-    activeEngine !== "opencode"
-  ) {
-    return false;
-  }
-  const normalizedToolName = extractToolName(item.title)
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-  if (
-    normalizedToolName === "exitplanmode" ||
-    normalizedToolName.endsWith("exitplanmode")
-  ) {
-    return false;
-  }
-  if (item.toolType === "commandExecution") {
-    return true;
-  }
-  return isBashTool(extractToolName(item.title).toLowerCase());
+  return false;
 }
 
 export function isClaudeHistoryTranscriptHeavy(items: ConversationItem[]) {
@@ -419,25 +402,23 @@ export function countRenderableCollapsedEntries(
     return 0;
   }
   return groupToolItems(items).reduce((count, entry) => {
-    if (entry.kind === "bashGroup") {
-      // Hidden on polished multi-CLI canvas (Claude/Codex/Grok/Kimi/OpenCode).
-      if (
-        activeEngine === "codex" ||
-        activeEngine === "claude" ||
-        activeEngine === "grok" ||
-        activeEngine === "kimi" ||
-        activeEngine === "opencode"
-      ) {
-        return count;
-      }
-      return count + 1;
-    }
+    // bash/command cards are visible again so process-phase expand is truthful.
     if (
       entry.kind === "item" &&
       entry.item.kind === "tool" &&
       shouldHideCodexCanvasCommandCard(entry.item, activeEngine)
     ) {
       return count;
+    }
+    // Count underlying tool rows inside groups — a single bashGroup of 178 commands
+    // must still qualify as a multi-step phase (Codex shell-heavy turns).
+    if (
+      entry.kind === "bashGroup" ||
+      entry.kind === "readGroup" ||
+      entry.kind === "editGroup" ||
+      entry.kind === "searchGroup"
+    ) {
+      return count + Math.max(1, entry.items.length);
     }
     return count + 1;
   }, 0);

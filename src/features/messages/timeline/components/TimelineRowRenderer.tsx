@@ -104,7 +104,8 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     activeEngine,
     activeUserInputAnchorItemId,
     activeUserInputRequestId,
-    claudeHistoryTranscriptFallbackActive,
+    // Reserved for future transcript-only chrome; bash/command cards stay visible.
+    claudeHistoryTranscriptFallbackActive: _claudeHistoryTranscriptFallbackActive,
     latestRetryMessage,
     latestRuntimeReconnectItemId,
     nativeRuntimeRecoveryEnabled,
@@ -545,17 +546,8 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
       );
     }
     if (entry.kind === "bashGroup") {
-      // Align Grok/Kimi/OpenCode with Claude-polished canvas: shell batches stay off
-      // the narrative surface (Status Panel / Diff remain the operational trail).
-      if (
-        activeEngine === "codex" ||
-        activeEngine === "grok" ||
-        activeEngine === "kimi" ||
-        activeEngine === "opencode" ||
-        (activeEngine === "claude" && !claudeHistoryTranscriptFallbackActive)
-      ) {
-        return null;
-      }
+      // Shell batches stay on the canvas so process-phase collapse/expand is real.
+      // (Previously hidden for polished multi-CLI; noise is controlled by the phase chip.)
       const firstItem = entry.items[0];
       return renderWithAnchoredUserInput(
         <BashToolGroupBlock

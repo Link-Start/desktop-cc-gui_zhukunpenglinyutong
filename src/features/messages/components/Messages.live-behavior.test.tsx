@@ -446,7 +446,7 @@ describe("Messages live behavior", () => {
     expect(container.textContent ?? "").toContain("这里是实时正文。");
   });
 
-  it("hides command cards in codex canvas while keeping non-command tool cards", () => {
+  it("shows command cards on codex canvas alongside non-command tool cards", () => {
     const items: ConversationItem[] = [
       {
         id: "tool-codex-command-1",
@@ -492,9 +492,9 @@ describe("Messages live behavior", () => {
       />,
     );
 
-    expect(container.querySelector(".bash-group-container")).toBeNull();
-    expect(container.textContent ?? "").not.toContain("pwd && ls -la");
-    expect(container.textContent ?? "").not.toContain("echo done");
+    expect(container.textContent ?? "").toMatch(/bashGroupBatchRun|批量/);
+    expect(container.textContent ?? "").toContain("pwd && ls -la");
+    expect(container.textContent ?? "").toContain("echo done");
     // File edits render in a default-collapsed scene shell; expand to assert path.
     const editScene = container.querySelector(
       '[data-testid="file-edit-scene-list"]',
@@ -514,7 +514,7 @@ describe("Messages live behavior", () => {
     void editScene;
   });
 
-  it("hides command cards in claude canvas", () => {
+  it("shows command cards on claude canvas", () => {
     const items: ConversationItem[] = [
       {
         id: "tool-claude-command-1",
@@ -548,9 +548,9 @@ describe("Messages live behavior", () => {
       />,
     );
 
-    expect(container.querySelector(".bash-group-container")).toBeNull();
-    expect(container.textContent ?? "").not.toContain("pwd && ls -la");
-    expect(container.textContent ?? "").not.toContain("echo done");
+    expect(container.textContent ?? "").toMatch(/bashGroupBatchRun|批量/);
+    expect(container.textContent ?? "").toContain("pwd && ls -la");
+    expect(container.textContent ?? "").toContain("echo done");
   });
 
   it.each(["claude", "gemini", "codex"] as const)(
@@ -2733,7 +2733,7 @@ describe("Messages live behavior", () => {
     expect(container.textContent ?? "").toContain("第一段输出");
   });
 
-  it("does not show a phase chip when only canvas-hidden commands precede prose", () => {
+  it("collapses multi-step command process so expand can remount shell cards", () => {
     const items: ConversationItem[] = [
       {
         id: "user-live-collapse-commands-only",
@@ -2780,8 +2780,11 @@ describe("Messages live behavior", () => {
       />,
     );
 
-    expect(container.querySelector(".messages-live-middle-collapsed-indicator")).toBeNull();
+    // Command cards participate in process-phase collapse (no longer canvas-hidden).
+    expect(container.querySelector(".messages-live-middle-collapsed-indicator")).toBeTruthy();
     expect(container.textContent ?? "").toContain("最终输出");
+    // Hard-unmounted while collapsed.
+    expect(container.textContent ?? "").not.toContain("rg --files");
   });
 
   it("collapses the process phase above historical assistant prose", () => {

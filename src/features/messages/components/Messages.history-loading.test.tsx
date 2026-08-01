@@ -295,7 +295,8 @@ describe("Messages history loading", () => {
       />,
     );
 
-    expect(screen.queryByText(/tools\.bashGroupBatchRun/)).toBeNull();
+    // Bash groups are canvas-visible (process-phase collapse owns noise control).
+    expect(screen.getByText(/tools\.bashGroupBatchRun/)).toBeTruthy();
   });
 
   // jsdom drops scrollTop writes on unlaid-out elements, so back the scroller
