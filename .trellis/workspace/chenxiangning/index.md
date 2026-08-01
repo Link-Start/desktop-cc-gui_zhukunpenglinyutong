@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-30.md`
-- **Total Sessions**: 1276
+- **Total Sessions**: 1277
 - **Last Active**: 2026-08-02
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-30.md` | ~1007 | Active |
+| `journal-30.md` | ~1051 | Active |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
@@ -58,6 +58,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1277 | 2026-08-02 | Shared 历史恢复 loading 阶段与进度条 | `75bce0166` | `cxn-version-0.7.15` |
 | 1276 | 2026-08-02 | 结果 Tab 降噪:会话概览取代治理证据与结果详情 | `5f52710f7`, `8a53489cf` | `cxn-version-0.7.15` |
 | 1275 | 2026-08-02 | 折叠 Shared turn-target badge 噪音 | `50db10f0d` | `cxn-version-0.7.15` |
 | 1274 | 2026-08-02 | 修复过程折叠展开 bashGroup 空壳 | `2510b3957` | `cxn-version-0.7.15` |

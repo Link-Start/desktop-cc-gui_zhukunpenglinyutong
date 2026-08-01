@@ -1005,3 +1005,47 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1277: Shared 历史恢复 loading 阶段与进度条
+
+**Date**: 2026-08-02
+**Task**: Shared 历史恢复 loading 阶段与进度条
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 问题 | 打开历史 Shared session 先闪空态「今天想构建什么」 |
+| 根因 | `shouldShowHistoryLoadingForSelectionThread` 排除了 `shared:` |
+| 方案 | 启用 shared gate + loader 阶段进度上报 + 画布进度条与真实文案 |
+| 阶段 | prepare → session 快照 → projection transcript → merge → finalize |
+
+**Updated core**:
+- `claudeThreadContinuity.ts` / `sharedHistoryLoader.ts` / `historyLoadingProgress.ts`
+- progress 经 useThreadHistoryLoadingState → layout → Messages Timeline
+- 文案 zh/en + `.messages-history-loading-bar`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `75bce0166` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
