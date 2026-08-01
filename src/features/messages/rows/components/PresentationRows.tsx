@@ -2,6 +2,7 @@ import { memo, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Search from "lucide-react/dist/esm/icons/search";
 import type { ConversationItem } from "../../../../types";
+import { CollapsibleReveal } from "../../../../components/common/CollapsibleReveal";
 import { DiffBlock } from "../../../git/components/DiffBlock";
 import { languageFromPath } from "../../../../utils/syntax";
 import { ImageLightbox } from "../../components/media/MessageMediaBlocks";
@@ -255,17 +256,19 @@ export const ExploreRow = memo(function ExploreRow({
             </>
           )}
         </div>
-        <div className={`explore-inline-list${listCollapsed ? " is-collapsed" : ""}`}>
-          {item.entries.map((entry, index) => (
-            <div key={`${entry.kind}-${entry.label}-${index}`} className="explore-inline-item">
-              <span className="explore-inline-kind">{exploreKindLabel(entry.kind)}</span>
-              <span className="explore-inline-label">{entry.label}</span>
-              {entry.detail && entry.detail !== entry.label && (
-                <span className="explore-inline-detail">{entry.detail}</span>
-              )}
-            </div>
-          ))}
-        </div>
+        <CollapsibleReveal open={!listCollapsed}>
+          <div className="explore-inline-list">
+            {item.entries.map((entry, index) => (
+              <div key={`${entry.kind}-${entry.label}-${index}`} className="explore-inline-item">
+                <span className="explore-inline-kind">{exploreKindLabel(entry.kind)}</span>
+                <span className="explore-inline-label">{entry.label}</span>
+                {entry.detail && entry.detail !== entry.label && (
+                  <span className="explore-inline-detail">{entry.detail}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </CollapsibleReveal>
       </div>
     </div>
   );

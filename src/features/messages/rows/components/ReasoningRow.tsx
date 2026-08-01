@@ -2,6 +2,7 @@ import { memo, useDeferredValue, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import Brain from "lucide-react/dist/esm/icons/brain";
 import type { ConversationItem } from "../../../../types";
+import { CollapsibleReveal } from "../../../../components/common/CollapsibleReveal";
 import { useRenderHotspot } from "../../../../services/perfBaseline/useRenderHotspot";
 import type { PresentationProfile } from "../../../../conversation-presentation/presentationProfile";
 import { parseReasoning } from "../../presentation/messagesReasoning";
@@ -78,16 +79,21 @@ export const ReasoningRow = memo(function ReasoningRow({
           <span className="thinking-title">{title}</span>
         </span>
       </button>
-      <div
-        className="thinking-content"
-        style={{ display: isExpanded ? "block" : "none" }}
+      {/*
+        始终 keepMounted：对齐旧 display:none 语义（折叠仍保留 Markdown DOM，
+        避免 live delta / 合并正文 / 测试与搜索锚点丢失），仅用动画开合。
+      */}
+      <CollapsibleReveal
+        open={isExpanded}
+        keepMounted
+        className="thinking-content-reveal"
+        innerClassName="thinking-content"
       >
         {thinkingText ? (
           <div className="reasoning-markdown-surface">
             {/*
-              live 阶段走 lightweight markdown：reasoning delta 更新频繁，即使
-              折叠（display: none）也会执行完整 react-markdown 重解析，是流式
-              期间的隐藏 CPU 大头；settle 后切回 full markdown 渲染最终内容。
+              live 阶段走 lightweight markdown：reasoning delta 更新频繁；
+              settle 后切回 full markdown 渲染最终内容。
             */}
             <Markdown
               value={renderThinkingText}
@@ -107,7 +113,7 @@ export const ReasoningRow = memo(function ReasoningRow({
         ) : (
           <span>{t("messages.noThinkingContent")}</span>
         )}
-      </div>
+      </CollapsibleReveal>
     </div>
   );
 });

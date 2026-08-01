@@ -56,11 +56,14 @@ describe("Messages explore rows", () => {
       expect(container.querySelector(".explore-inline")).toBeTruthy();
     });
     expect(screen.queryByText(/tool calls/i)).toBeNull();
-    const exploreItems = container.querySelectorAll(".explore-inline-item");
-    expect(exploreItems.length).toBe(2);
     expect(container.querySelector(".explore-inline-title")?.textContent ?? "").toContain(
       "Explored",
     );
+    // 折叠态 list 卸载；展开后校验合并后的 2 条 entry
+    fireEvent.click(container.querySelector(".explore-inline-header-toggle") as HTMLElement);
+    await waitFor(() => {
+      expect(container.querySelectorAll(".explore-inline-item").length).toBe(2);
+    });
   });
 
   it("auto-enables collapse for completed multi-step explore blocks", async () => {
@@ -89,14 +92,13 @@ describe("Messages explore rows", () => {
 
     const block = container.querySelector(".explore-inline");
     expect(block?.className ?? "").toContain("is-collapsible");
-    expect(container.querySelector(".explore-inline-list")?.className ?? "").toContain(
-      "is-collapsed",
-    );
+    expect(block?.className ?? "").toContain("is-collapsed");
+    // 折叠体经 CollapsibleReveal 卸载，不再用 list 上的 is-collapsed 标记
+    expect(container.querySelector(".explore-inline-list")).toBeNull();
 
     fireEvent.click(container.querySelector(".explore-inline-header-toggle") as HTMLElement);
-    expect(container.querySelector(".explore-inline-list")?.className ?? "").not.toContain(
-      "is-collapsed",
-    );
+    expect(block?.className ?? "").not.toContain("is-collapsed");
+    expect(container.querySelector(".explore-inline-list")).toBeTruthy();
   });
 
   it("uses the same collapsed summary and expand path for a single-step explored block", async () => {
@@ -126,9 +128,8 @@ describe("Messages explore rows", () => {
     expect(container.querySelector(".explore-inline-title")?.textContent ?? "").toBe(
       "Explored · Read package.json",
     );
-    expect(container.querySelector(".explore-inline-list")?.className ?? "").toContain(
-      "is-collapsed",
-    );
+    expect(block?.className ?? "").toContain("is-collapsed");
+    expect(container.querySelector(".explore-inline-list")).toBeNull();
 
     const toggle = screen.getByRole("button", {
       name: /Explored · Read package\.json · messages\.toggleDetails/i,
@@ -137,9 +138,7 @@ describe("Messages explore rows", () => {
 
     expect(block?.className ?? "").not.toContain("is-inline-summary");
     expect(container.querySelector(".explore-inline-title")?.textContent ?? "").toBe("Explored");
-    expect(container.querySelector(".explore-inline-list")?.className ?? "").not.toContain(
-      "is-collapsed",
-    );
+    expect(container.querySelector(".explore-inline-list")).toBeTruthy();
     expect(screen.getByText("package.json")).toBeTruthy();
   });
 
@@ -168,7 +167,8 @@ describe("Messages explore rows", () => {
       />,
     );
 
-    expect(container.querySelector(".explore-inline-list")?.className ?? "").not.toContain(
+    expect(container.querySelector(".explore-inline-list")).toBeTruthy();
+    expect(container.querySelector(".explore-inline")?.className ?? "").not.toContain(
       "is-collapsed",
     );
 
@@ -185,9 +185,10 @@ describe("Messages explore rows", () => {
     );
 
     await waitFor(() => {
-      expect(container.querySelector(".explore-inline-list")?.className ?? "").toContain(
+      expect(container.querySelector(".explore-inline")?.className ?? "").toContain(
         "is-collapsed",
       );
+      expect(container.querySelector(".explore-inline-list")).toBeNull();
     });
   });
 
@@ -220,7 +221,8 @@ describe("Messages explore rows", () => {
       />,
     );
 
-    expect(container.querySelector(".explore-inline-list")?.className ?? "").not.toContain(
+    expect(container.querySelector(".explore-inline-list")).toBeTruthy();
+    expect(container.querySelector(".explore-inline")?.className ?? "").not.toContain(
       "is-collapsed",
     );
 
@@ -237,9 +239,10 @@ describe("Messages explore rows", () => {
     );
 
     await waitFor(() => {
-      expect(container.querySelector(".explore-inline-list")?.className ?? "").toContain(
+      expect(container.querySelector(".explore-inline")?.className ?? "").toContain(
         "is-collapsed",
       );
+      expect(container.querySelector(".explore-inline-list")).toBeNull();
     });
     expect(screen.getByText("Continuing with the implementation.")).toBeTruthy();
   });
@@ -376,7 +379,8 @@ describe("Messages explore rows", () => {
     await waitFor(() => {
       expect(container.querySelector(".explore-inline")).toBeTruthy();
     });
-    expect(screen.getByText("history SKILL.md")).toBeTruthy();
+    // 折叠态列表卸载；摘要标题仍包含 entry label
+    expect(screen.getByText(/history SKILL\.md/)).toBeTruthy();
   });
 
   it("renders spec-root explore card as collapsible and toggles details", async () => {
@@ -409,8 +413,7 @@ describe("Messages explore rows", () => {
     const exploreBlock = container.querySelector(".explore-inline.is-collapsible");
     expect(exploreBlock).toBeTruthy();
     expect(exploreBlock?.className ?? "").toContain("is-collapsed");
-    const list = container.querySelector(".explore-inline-list");
-    expect(list?.className ?? "").toContain("is-collapsed");
+    expect(container.querySelector(".explore-inline-list")).toBeNull();
 
     const toggle = container.querySelector(
       ".explore-inline.is-collapsible .explore-inline-header-toggle",
@@ -418,9 +421,7 @@ describe("Messages explore rows", () => {
     expect(toggle).toBeTruthy();
     fireEvent.click(toggle as HTMLElement);
     expect(exploreBlock?.className ?? "").not.toContain("is-collapsed");
-    expect(container.querySelector(".explore-inline-list")?.className ?? "").not.toContain(
-      "is-collapsed",
-    );
+    expect(container.querySelector(".explore-inline-list")).toBeTruthy();
   });
 
   it("uses the latest explore status when merging a consecutive run", async () => {
@@ -599,8 +600,15 @@ describe("Messages explore rows", () => {
       const exploreBlocks = container.querySelectorAll(".explore-inline");
       expect(exploreBlocks.length).toBe(2);
     });
-    const exploreItems = container.querySelectorAll(".explore-inline-item");
-    expect(exploreItems.length).toBe(2);
+    // 折叠态不挂载 list；展开后断言 entry 行
+    for (const toggle of container.querySelectorAll(
+      ".explore-inline-header-toggle",
+    )) {
+      fireEvent.click(toggle);
+    }
+    await waitFor(() => {
+      expect(container.querySelectorAll(".explore-inline-item").length).toBe(2);
+    });
     expect(screen.getByText(/reducers\.ts/i)).toBeTruthy();
   });
 
@@ -747,8 +755,16 @@ describe("Messages explore rows", () => {
     );
 
     await waitFor(() => {
-      const exploreRows = container.querySelectorAll(".explore-inline-item");
-      expect(exploreRows.length).toBe(3);
+      expect(container.querySelector(".explore-inline")).toBeTruthy();
+    });
+    for (const toggle of container.querySelectorAll(
+      ".explore-inline-header-toggle",
+    )) {
+      fireEvent.click(toggle);
+    }
+    await waitFor(() => {
+      // 折叠态 list 卸载；展开后 entry 仍是 explore 步骤行，而非 tool-group 摘要
+      expect(container.querySelectorAll(".explore-inline-item").length).toBe(3);
     });
     expect(screen.queryByText("5 tool calls")).toBeNull();
   });

@@ -782,9 +782,15 @@ describe("Messages reasoning render", () => {
       );
 
       expect(container.querySelectorAll(".thinking-block")).toHaveLength(2);
-      const liveReasoningContents = container.querySelectorAll(".thinking-content");
-      expect(liveReasoningContents[0]?.getAttribute("style") ?? "").toContain("display: none");
-      expect(liveReasoningContents[1]?.getAttribute("style") ?? "").toContain("display: block");
+      const liveReasoningPanels = container.querySelectorAll(".thinking-content-reveal");
+      // keepMounted：两块正文都在；仅最新 live 为 open
+      expect(liveReasoningPanels).toHaveLength(2);
+      expect(liveReasoningPanels[0]?.getAttribute("data-state")).toBe("closed");
+      expect(liveReasoningPanels[1]?.getAttribute("data-state")).toBe("open");
+      expect(liveReasoningPanels[0]?.textContent ?? "").toContain("读取配置，再检查事件链路");
+      expect(liveReasoningPanels[1]?.textContent ?? "").toContain(
+        "定位线程事件顺序，核对状态同步",
+      );
 
       rerender(
         <Messages
@@ -799,12 +805,15 @@ describe("Messages reasoning render", () => {
       );
 
       const thinkingBlocks = container.querySelectorAll(".thinking-block");
-      const reasoningDetails = container.querySelectorAll(".thinking-content");
+      const reasoningPanels = container.querySelectorAll(".thinking-content-reveal");
       expect(thinkingBlocks).toHaveLength(2);
-      expect(reasoningDetails[0]?.textContent ?? "").toContain("读取配置，再检查事件链路");
-      expect(reasoningDetails[1]?.textContent ?? "").toContain("定位线程事件顺序，核对状态同步");
-      expect(reasoningDetails[0]?.getAttribute("style") ?? "").toContain("display: none");
-      expect(reasoningDetails[1]?.getAttribute("style") ?? "").toContain("display: none");
+      expect(reasoningPanels).toHaveLength(2);
+      expect(reasoningPanels[0]?.getAttribute("data-state")).toBe("closed");
+      expect(reasoningPanels[1]?.getAttribute("data-state")).toBe("closed");
+      expect(reasoningPanels[0]?.textContent ?? "").toContain("读取配置，再检查事件链路");
+      expect(reasoningPanels[1]?.textContent ?? "").toContain(
+        "定位线程事件顺序，核对状态同步",
+      );
     } finally {
       window.localStorage.removeItem("ccgui.claude.hideReasoningModule");
     }

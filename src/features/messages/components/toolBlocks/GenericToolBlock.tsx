@@ -18,6 +18,7 @@ import {
 import { FileIcon } from './FileIcon';
 import { cn } from '@/lib/utils';
 import { Marker, MarkerContent, MarkerIcon } from '../../../../components/ui/marker';
+import { CollapsibleReveal } from '../../../../components/common/CollapsibleReveal';
 import { ToolStatusIcon } from './ToolMarkerShell';
 import { ExitPlanToolContent, type ExitPlanToolCopy } from './ExitPlanToolContent';
 import { FileChangeToolContent } from './FileChangeToolContent';
@@ -424,7 +425,11 @@ export const GenericToolBlock = memo(function GenericToolBlock({
         </div>
       )}
 
-      {isExpanded && item.output && !hasChanges && (!isImageViewTool || !imageViewPreviewSrc) && (
+      <CollapsibleReveal
+        open={Boolean(
+          isExpanded && item.output && !hasChanges && (!isImageViewTool || !imageViewPreviewSrc),
+        )}
+      >
         <div className="task-details" style={{ padding: '12px', border: 'none' }}>
           <div className="task-field-content tool-output-raw-shell" style={{ maxHeight: '300px', overflowY: 'auto', overflowX: 'auto' }}>
             <div className="tool-output-toolbar">
@@ -453,7 +458,7 @@ export const GenericToolBlock = memo(function GenericToolBlock({
               : <pre className="tool-output-raw-pre">{item.output}</pre>}
           </div>
         </div>
-      )}
+      </CollapsibleReveal>
 
       {isImageViewTool && imageViewPreviewSrc && (
         <ImageViewToolContent
@@ -464,11 +469,15 @@ export const GenericToolBlock = memo(function GenericToolBlock({
         />
       )}
 
-      {isExpanded && !shouldShowDetails && !item.output && !hasChanges && item.detail && (
+      <CollapsibleReveal
+        open={Boolean(
+          isExpanded && !shouldShowDetails && !item.output && !hasChanges && item.detail,
+        )}
+      >
         <div className="task-details" style={{ padding: '12px', border: 'none' }}>
           <pre style={{ margin: 0, fontSize: '12px', whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: 'var(--text-secondary)' }}>{item.detail}</pre>
         </div>
-      )}
+      </CollapsibleReveal>
 
       {showPlanModeHint && (
         <div className="task-details" style={{ border: 'none' }}>
