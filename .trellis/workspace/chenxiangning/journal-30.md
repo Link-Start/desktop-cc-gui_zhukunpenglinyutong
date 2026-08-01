@@ -955,3 +955,53 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1276: 结果 Tab 降噪:会话概览取代治理证据与结果详情
+
+**Date**: 2026-08-02
+**Task**: 结果 Tab 降噪:会话概览取代治理证据与结果详情
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Feature | Description |
+|---------|-------------|
+| 会话概览 section | 结果 Tab 头部常驻 SessionOverviewSection(engine/model/workspace/运行状态/时长/轮次/上下文/rate limit/待处理计数),数据全部来自 activeCanvasStore snapshot,无新增 tauri command |
+| 治理证据默认关闭 | 新增 bottomActivity.governanceEvidence 可见性开关(默认 off),关闭时不读 workspace 文件、不渲染 section、governanceSnapshot 为 null,checkpoint verdict 与仓库 CI 状态解耦 |
+| 结果详情默认关闭 | 新增 bottomActivity.checkpointDetails 开关(默认 off),门控 CostBudgetSection + CheckpointPanel;默认只剩会话概览,开关打开恢复完整 checkpoint 表面 |
+| OpenSpec change | replace-checkpoint-governance-with-session-overview:proposal/design/tasks + status-panel-session-overview 新 capability delta,modified dynamic-project-governance-evidence / governance-evidence-bridge / status-panel-checkpoint-module |
+
+**Updated Files**:
+- `src/features/status-panel/components/StatusPanel.tsx`(门控 + 会话概览装配)
+- `src/features/status-panel/components/SessionOverviewSection.tsx` / `utils/sessionOverviewViewModel.ts`(新增)
+- `src/features/client-ui-visibility/utils/clientUiVisibility.ts`(两个新开关)
+- `src/features/layout/hooks/useLayoutNodes.tsx` / `activeCanvasStatusPanelNode.tsx`(接线)
+- `src/i18n/locales/{zh,en}/{settings,statusPanel}.ts`、`src/styles/status-panel.css`、`src/test/vitest.setup.ts`
+- 测试:StatusPanel / SessionOverviewSection / sessionOverviewViewModel / clientUiVisibility,264+ 用例全绿,tsc 干净
+
+**备注**:顺带修复并行 session 遗留的 Messages.history-loading.test.tsx 缺 ConversationItem import(随 5f52710f7 入库)。手工验收与 spec archive 待后续。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5f52710f7` | (see git log) |
+| `8a53489cf` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
