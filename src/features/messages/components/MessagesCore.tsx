@@ -192,6 +192,7 @@ export const MessagesCore = memo(function MessagesCore({
   const { state: conversationState, workspacePath = null } = conversation;
   const {
     isHistoryLoading = false,
+    historyLoadingProgress = null,
     historyRecoveryFailureReason = null,
     isContextCompacting = false,
     proxyEnabled = false,
@@ -1787,6 +1788,7 @@ export const MessagesCore = memo(function MessagesCore({
         ? historyRecoveryFailureReason
         : null,
       isHistoryLoading,
+      historyLoadingProgress,
       latestRetryMessage,
       latestRuntimeReconnectItemId,
       nativeRuntimeRecoveryEnabled,

@@ -978,7 +978,9 @@ export function useThreads({
     deleteThreadForWorkspace,
     renameThreadTitleMapping,
     setThreadHistoryLoading,
+    setThreadHistoryLoadingProgress,
     historyLoadingByThreadId,
+    historyLoadingProgressByThreadId,
   } = useThreadActions({
     dispatch,
     itemsByThread: state.itemsByThread,
@@ -2127,6 +2129,14 @@ export function useThreads({
           setThreadHistoryLoading(canonicalThreadId, true);
           historyLoadingThreadByWorkspaceRef.current[targetId] =
             canonicalThreadId;
+          if (canonicalThreadId.startsWith("shared:")) {
+            setThreadHistoryLoadingProgress(canonicalThreadId, {
+              phase: "prepare",
+              percent: 8,
+              titleKey: "restoringSharedHistory",
+              detailKey: "restoringSharedHistoryPrepare",
+            });
+          }
         } else {
           clearHistoryLoadingForThread(canonicalThreadId);
         }
@@ -2279,6 +2289,7 @@ export function useThreads({
       resolveCanonicalThreadId,
       resumeThreadForWorkspace,
       setThreadHistoryLoading,
+      setThreadHistoryLoadingProgress,
     ],
   );
 
@@ -2957,6 +2968,7 @@ export function useThreads({
     threadParentById: state.threadParentById,
     threadStatusById: state.threadStatusById,
     historyLoadingByThreadId,
+    historyLoadingProgressByThreadId,
     threadListLoadingByWorkspace: state.threadListLoadingByWorkspace,
     threadListPagingByWorkspace: state.threadListPagingByWorkspace,
     threadListCursorByWorkspace: state.threadListCursorByWorkspace,

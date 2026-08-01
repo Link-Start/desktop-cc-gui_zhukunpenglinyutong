@@ -140,7 +140,9 @@ export function useThreadActions({
 }: UseThreadActionsOptions) {
   const {
     historyLoadingByThreadId,
+    historyLoadingProgressByThreadId,
     setThreadHistoryLoading,
+    setThreadHistoryLoadingProgress,
     setThreadHistoryRecoveryFailed,
   } = useThreadHistoryLoadingState();
   // Map workspaceId → filesystem path, populated in listThreadsForWorkspace
@@ -248,6 +250,7 @@ export function useThreadActions({
     previousThreadsByWorkspaceRef,
     threadListCursorByWorkspace,
     setThreadHistoryRecoveryFailed,
+    setThreadHistoryLoadingProgress,
   });
 
   const {
@@ -1666,6 +1669,8 @@ export function useThreadActions({
     deleteThreadForWorkspace,
     renameThreadTitleMapping,
     setThreadHistoryLoading,
+    setThreadHistoryLoadingProgress,
     historyLoadingByThreadId,
+    historyLoadingProgressByThreadId,
   };
 }

@@ -112,6 +112,8 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     nativeRuntimeRecoveryEnabled,
     proxyEnabled,
     proxyUrl,
+    isHistoryLoading: _isHistoryLoading,
+    historyLoadingProgress,
     threadId,
     workspaceId,
   } = runtime;
@@ -778,16 +780,41 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     }
     if (row.kind === "emptyState") {
       if (row.state === "historyLoading") {
+        const progress = historyLoadingProgress ?? null;
+        const title = progress
+          ? t(`messages.${progress.titleKey}`, progress.detailParams)
+          : t("messages.restoringHistory");
+        const detail = progress
+          ? t(`messages.${progress.detailKey}`, progress.detailParams)
+          : t("messages.restoringHistoryHint");
+        const percent = progress?.percent ?? null;
         return (
           <div
             className="empty messages-empty messages-history-loading"
             role="status"
             aria-live="polite"
+            aria-busy="true"
           >
             <span className="working-spinner" aria-hidden="true" />
             <div className="messages-history-loading-copy">
-              <strong>{t("messages.restoringHistory")}</strong>
-              <span>{t("messages.restoringHistoryHint")}</span>
+              <strong>{title}</strong>
+              <span>{detail}</span>
+              <div
+                className={`messages-history-loading-bar${percent == null ? " is-indeterminate" : ""}`}
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={percent ?? undefined}
+                aria-label={title}
+              >
+                <div
+                  className="messages-history-loading-bar-fill"
+                  style={percent == null ? undefined : { width: `${percent}%` }}
+                />
+              </div>
+              {percent != null ? (
+                <span className="messages-history-loading-percent">{percent}%</span>
+              ) : null}
             </div>
           </div>
         );

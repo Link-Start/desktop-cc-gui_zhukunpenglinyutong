@@ -10,6 +10,7 @@ export type RuntimeThreadShellBoundary = Pick<
   | "completionEmailIntentByThread"
   | "handleFusionStalled"
   | "historyLoadingByThreadId"
+  | "historyLoadingProgressByThreadId"
   | "historyRestoredAtMsByThread"
   | "interruptTurn"
   | "listThreadsForWorkspace"

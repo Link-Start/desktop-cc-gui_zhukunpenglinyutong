@@ -17,23 +17,27 @@ import {
   loadSharedProjection as loadSharedProjectionService,
   loadSharedSession as loadSharedSessionService,
 } from "../../shared-session/services/sharedSessions";
+import type { HistoryLoadingProgressListener } from "../utils/historyLoadingProgress";
 
 export function createThreadHistoryLoaderForThread({
   targetThreadId,
   workspaceId,
   workspacePath,
   preferLocalCodexHistory,
+  onHistoryProgress,
 }: {
   targetThreadId: string;
   workspaceId: string;
   workspacePath: string | null;
   preferLocalCodexHistory: boolean;
+  onHistoryProgress?: HistoryLoadingProgressListener;
 }) {
   if (targetThreadId.startsWith("shared:")) {
     return createSharedHistoryLoader({
       workspaceId,
       loadSharedSession: loadSharedSessionService,
       loadSharedProjection: loadSharedProjectionService,
+      onProgress: onHistoryProgress,
     });
   }
   if (targetThreadId.startsWith("claude:")) {

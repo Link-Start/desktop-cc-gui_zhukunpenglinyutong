@@ -48,6 +48,39 @@ describe("Messages history loading", () => {
     expect(screen.getByRole("status")).toBeTruthy();
     expect(screen.getByText("messages.restoringHistory")).toBeTruthy();
     expect(screen.getByText("messages.restoringHistoryHint")).toBeTruthy();
+    expect(screen.getByRole("progressbar")).toBeTruthy();
+    expect(screen.queryByText("messages.emptyThread")).toBeNull();
+  });
+
+  it("shows Shared restore phase copy and determinate progress", () => {
+    render(
+      <Messages
+        items={[]}
+        threadId="shared:session-history-loading"
+        workspaceId="ws-1"
+        isThinking={false}
+        isHistoryLoading
+        historyLoadingProgress={{
+          phase: "projection",
+          percent: 58,
+          titleKey: "restoringSharedHistory",
+          detailKey: "restoringSharedHistoryProjection",
+        }}
+        activeEngine="claude"
+        onUserInputSubmit={vi.fn()}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(screen.getByText("messages.restoringSharedHistory")).toBeTruthy();
+    expect(
+      screen.getByText("messages.restoringSharedHistoryProjection"),
+    ).toBeTruthy();
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe(
+      "58",
+    );
+    expect(screen.getByText("58%")).toBeTruthy();
     expect(screen.queryByText("messages.emptyThread")).toBeNull();
   });
 

@@ -67,6 +67,7 @@ import {
   THREAD_RECOVERY_MAX_PAGES,
 } from "./useThreadActions.threadList";
 import { type UseThreadActionsOptions } from "./useThreadActions.types";
+import type { HistoryLoadingProgress } from "../utils/historyLoadingProgress";
 
 export type ResumeThreadForWorkspaceOptions = {
   preferLocalCodexHistory?: boolean;
@@ -85,6 +86,10 @@ type ResumeThreadForWorkspaceContext = UseThreadActionsOptions & {
     Record<string, ThreadSummary[]>
   >;
   setThreadHistoryRecoveryFailed: (threadId: string, failed: boolean) => void;
+  setThreadHistoryLoadingProgress?: (
+    threadId: string,
+    progress: HistoryLoadingProgress | null,
+  ) => void;
 };
 
 type ResumeThreadForWorkspaceCallback = (
@@ -123,6 +128,7 @@ export function useThreadActionsResumeThreadForWorkspace(
     latestThreadsByWorkspaceRef,
     previousThreadsByWorkspaceRef,
     setThreadHistoryRecoveryFailed: rawSetThreadHistoryRecoveryFailed,
+    setThreadHistoryLoadingProgress,
   } = deps;
   const resumeRequestGenerationByScopeRef = useRef<Record<string, number>>({});
   const automaticRecoveryFailedByScopeRef = useRef<Record<string, true>>({});
@@ -321,6 +327,14 @@ export function useThreadActionsResumeThreadForWorkspace(
               resolveWorkspacePath?.(workspaceId) ??
               null,
             preferLocalCodexHistory: options?.preferLocalCodexHistory === true,
+            onHistoryProgress: setThreadHistoryLoadingProgress
+              ? (progress) => {
+                  if (!isCurrentResumeRequest()) {
+                    return;
+                  }
+                  setThreadHistoryLoadingProgress(targetThreadId, progress);
+                }
+              : undefined,
           });
         const hydrateHistorySnapshot = async (
           effectiveThreadId: string,
@@ -1487,6 +1501,7 @@ export function useThreadActionsResumeThreadForWorkspace(
       useUnifiedHistoryLoader,
       workspacePathsByIdRef,
       rawSetThreadHistoryRecoveryFailed,
+      setThreadHistoryLoadingProgress,
     ],
   );
   return resumeThreadForWorkspace;

@@ -12,7 +12,7 @@ describe("claudeThreadContinuity", () => {
     expect(isClaudeThreadId("thread-1")).toBe(false);
   });
 
-  it("shows history loading for Claude history selections but not pending threads", () => {
+  it("shows history loading for Claude and Shared history selections but not pending threads", () => {
     expect(shouldShowHistoryLoadingForSelectionThread("claude:session-1")).toBe(
       true,
     );
@@ -20,6 +20,9 @@ describe("claudeThreadContinuity", () => {
       shouldShowHistoryLoadingForSelectionThread("claude-pending-1"),
     ).toBe(false);
     expect(shouldShowHistoryLoadingForSelectionThread("shared:session-1")).toBe(
+      true,
+    );
+    expect(shouldShowHistoryLoadingForSelectionThread("gemini:session-1")).toBe(
       false,
     );
   });

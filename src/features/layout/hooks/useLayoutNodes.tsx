@@ -289,8 +289,15 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   >([]);
   const [noteCardSelectionRequest, setNoteCardSelectionRequest] =
     useState<ComposerNoteCardSelectionRequest | null>(null);
-  const [homeCreationTargetEngine, setHomeCreationTargetEngine] =
+  const [homeCreationTargetEngine, setHomeCreationTargetEngineState] =
     useState<EngineType | null>(null);
+  // 幂等：Composer 创建态会在 effect 中回写 engine，等价值禁止触发父树重渲染
+  const setHomeCreationTargetEngine = useCallback(
+    (next: EngineType | null) => {
+      setHomeCreationTargetEngineState((prev) => (prev === next ? prev : next));
+    },
+    [],
+  );
   const [gitModalPreviewRequest, setGitModalPreviewRequest] =
     useState<GitModalPreviewRequest | null>(null);
   const [gitModeControlsTarget, setGitModeControlsTarget] =
@@ -358,6 +365,11 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const activeThreadHistoryLoading = options.activeThreadId
     ? options.historyLoadingByThreadId[options.activeThreadId] === true
     : false;
+  const activeThreadHistoryLoadingProgress =
+    options.activeThreadId && activeThreadHistoryLoading
+      ? options.historyLoadingProgressByThreadId?.[options.activeThreadId] ??
+        null
+      : null;
   const activeThreadHistoryRecoveryFailureReason =
     options.activeThreadId &&
     options.historyLoadingByThreadId[options.activeThreadId] === "failed"
@@ -1013,6 +1025,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       plan: options.plan,
       isThinking: isThreadThinking,
       isHistoryLoading: activeThreadHistoryLoading,
+      historyLoadingProgress: activeThreadHistoryLoadingProgress,
       historyRecoveryFailureReason: activeThreadHistoryRecoveryFailureReason,
       isContextCompacting: activeThreadStatus?.isContextCompacting ?? false,
       processingStartedAt: activeThreadStatus?.processingStartedAt ?? null,
@@ -1040,6 +1053,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       options.plan,
       isThreadThinking,
       activeThreadHistoryLoading,
+      activeThreadHistoryLoadingProgress,
       activeThreadHistoryRecoveryFailureReason,
       activeThreadStatus,
       taskRunStore.runs,
