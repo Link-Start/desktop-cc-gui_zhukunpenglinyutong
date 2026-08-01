@@ -143,4 +143,65 @@ describe("SessionOverviewSection", () => {
     expect(screen.queryByText("5h limit")).toBeNull();
     expect(screen.queryByText(/90%/)).toBeNull();
   });
+
+  it("renders multiple provider quota cards for shared-session history", () => {
+    const overview = buildSessionOverview({
+      sessionId: "shared:abc",
+      engine: "claude",
+      model: "MiniMax-M3",
+      workspaceName: "demo",
+      workspacePath: "/tmp/demo",
+      sessionDiskPath: null,
+      isProcessing: false,
+      threadStatus: null,
+      items: [],
+      tokenUsage: null,
+      rateLimits: null,
+      usageShowRemaining: false,
+      nowMs: NOW,
+      quotaEntries: [
+        {
+          key: "claude::local",
+          title: "Claude · 本地配置",
+          subtitle: "k3",
+          engine: "claude",
+          providerProfileId: "local",
+          codingPlanQuota: {
+            source: "kimi",
+            success: true,
+            windows: [
+              { id: "five_hour", usedPercent: 24, remainingPercent: 76 },
+            ],
+          },
+        },
+        {
+          key: "claude::minimax",
+          title: "Claude · Minimax-m3",
+          subtitle: "MiniMax-M3",
+          engine: "claude",
+          providerProfileId: "minimax",
+          codingPlanQuota: {
+            source: "minimax",
+            success: true,
+            windows: [
+              { id: "five_hour", usedPercent: 1, remainingPercent: 99 },
+              { id: "weekly_limit", usedPercent: 11, remainingPercent: 89 },
+            ],
+          },
+        },
+      ],
+    });
+
+    render(<SessionOverviewSection overview={overview} />);
+
+    expect(screen.getByText("Providers")).toBeTruthy();
+    // 供应商行 + 各额度卡标题都会出现
+    expect(screen.getAllByText(/Claude · 本地配置/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Claude · Minimax-m3/).length).toBeGreaterThan(0);
+    expect(screen.getByText("kimi plan limits")).toBeTruthy();
+    expect(screen.getByText("minimax plan limits")).toBeTruthy();
+    expect(screen.getByText("24% used")).toBeTruthy();
+    expect(screen.getByText("1% used")).toBeTruthy();
+    expect(screen.getByText("11% used")).toBeTruthy();
+  });
 });

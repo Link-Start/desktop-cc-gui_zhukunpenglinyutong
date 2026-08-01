@@ -67,6 +67,26 @@ export type CodingPlanQuotaInput = {
   }>;
 } | null;
 
+/** 共享会话多供应商：每条目独立查额度。 */
+export type SessionOverviewQuotaEntryInput = {
+  key: string;
+  title: string;
+  subtitle: string | null;
+  engine: EngineType;
+  providerProfileId: string | null;
+  codingPlanQuota: CodingPlanQuotaInput;
+  codingPlanQuotaLoading?: boolean;
+};
+
+export type SessionOverviewQuotaEntryView = {
+  key: string;
+  title: string;
+  subtitle: string | null;
+  engine: EngineType;
+  providerProfileId: string | null;
+  quota: SessionOverviewQuotaView;
+};
+
 export type SessionOverviewInput = {
   sessionId: string | null;
   engine: EngineType | null;
@@ -80,9 +100,14 @@ export type SessionOverviewInput = {
   items: readonly ConversationItem[];
   tokenUsage: ThreadTokenUsage | null;
   rateLimits: RateLimitSnapshot | null;
-  /** Coding Plan 额度（Kimi/MiniMax/智谱）；codex 会话可传 null。 */
-  codingPlanQuota: CodingPlanQuotaInput;
+  /**
+   * 单供应商兼容输入；当 quotaEntries 有值时以 entries 为准。
+   * @deprecated 优先传 quotaEntries
+   */
+  codingPlanQuota?: CodingPlanQuotaInput;
   codingPlanQuotaLoading?: boolean;
+  /** 多供应商额度列表（共享会话）；空则回退 codingPlanQuota 单条。 */
+  quotaEntries?: SessionOverviewQuotaEntryInput[];
   /** 与设置 usageShowRemaining 对齐：true 显示剩余，false 显示已用。 */
   usageShowRemaining: boolean;
   /** 注入时钟便于测试;运行中时长以该值减 processingStartedAt。 */
@@ -93,6 +118,8 @@ export type SessionOverviewViewModel = {
   sessionId: string | null;
   engine: EngineType | null;
   model: string | null;
+  /** 引擎/供应商展示行：多供应商时为「Claude · A · Claude · B」 */
+  engineLine: string | null;
   workspaceLabel: string | null;
   workspacePath: string | null;
   sessionDiskPath: string | null;
@@ -103,7 +130,10 @@ export type SessionOverviewViewModel = {
   contextUsedPercent: number | null;
   contextUsedTokens: number | null;
   modelContextWindow: number | null;
+  /** 兼容单条访问；等同 quotaEntries[0]?.quota 或空 none */
   quota: SessionOverviewQuotaView;
+  /** 供应商额度列表（共享会话可多条） */
+  quotaEntries: SessionOverviewQuotaEntryView[];
   hasAnyContent: boolean;
 };
 
@@ -481,23 +511,85 @@ export function buildSessionOverview(
     workspacePath,
   );
   const durationMs = resolveDurationMs(input, status);
-  const quota = buildSessionOverviewQuota(
-    input.engine,
-    input.rateLimits,
-    input.usageShowRemaining,
-    input.codingPlanQuota,
-    input.codingPlanQuotaLoading === true,
+
+  const entryInputs: SessionOverviewQuotaEntryInput[] =
+    input.quotaEntries && input.quotaEntries.length > 0
+      ? input.quotaEntries
+      : input.engine
+        ? [
+            {
+              key: `${input.engine}::fallback`,
+              title: input.engine,
+              subtitle: input.model,
+              engine: input.engine,
+              providerProfileId: null,
+              codingPlanQuota: input.codingPlanQuota ?? null,
+              codingPlanQuotaLoading: input.codingPlanQuotaLoading === true,
+            },
+          ]
+        : [];
+
+  const quotaEntries: SessionOverviewQuotaEntryView[] = entryInputs.map(
+    (entry) => ({
+      key: entry.key,
+      title: entry.title,
+      subtitle: entry.subtitle,
+      engine: entry.engine,
+      providerProfileId: entry.providerProfileId,
+      quota: buildSessionOverviewQuota(
+        entry.engine,
+        // 官方 Codex 额度是账号级：任一 official 条目可共享 rateLimits
+        input.rateLimits,
+        input.usageShowRemaining,
+        entry.codingPlanQuota,
+        entry.codingPlanQuotaLoading === true,
+      ),
+    }),
   );
 
-  const hasQuotaSurface =
-    quota.windows.length > 0 ||
-    quota.hasCredits ||
-    quota.planType != null ||
-    quota.loading ||
-    // unsupported/error 才占位；none/empty 不占内容高度
-    quota.source === "unsupported" ||
-    quota.source === "error" ||
-    (quota.source === "coding_plan" && quota.loading);
+  // 仅展示有表面的条目；none/empty 且不 loading 的跳过（官方 Claude）
+  const visibleQuotaEntries = quotaEntries.filter((entry) => {
+    const q = entry.quota;
+    return (
+      q.windows.length > 0 ||
+      q.hasCredits ||
+      q.planType != null ||
+      q.loading ||
+      q.source === "unsupported" ||
+      q.source === "error" ||
+      q.source === "official_cli" ||
+      q.source === "coding_plan"
+    );
+  });
+
+  const quota: SessionOverviewQuotaView =
+    visibleQuotaEntries[0]?.quota ??
+    buildSessionOverviewQuota(
+      input.engine,
+      input.rateLimits,
+      input.usageShowRemaining,
+      input.codingPlanQuota ?? null,
+      input.codingPlanQuotaLoading === true,
+    );
+
+  const engineLine =
+    entryInputs.length > 1
+      ? entryInputs
+          .map((e) =>
+            e.subtitle ? `${e.title} · ${e.subtitle}` : e.title,
+          )
+          .join(" · ")
+      : entryInputs.length === 1
+        ? entryInputs[0]!.subtitle
+          ? `${entryInputs[0]!.title} · ${entryInputs[0]!.subtitle}`
+          : entryInputs[0]!.title
+        : input.engine
+          ? input.model
+            ? `${input.engine} · ${input.model}`
+            : input.engine
+          : input.model;
+
+  const hasQuotaSurface = visibleQuotaEntries.length > 0;
 
   const hasAnyContent =
     sessionId !== null ||
@@ -507,12 +599,14 @@ export function buildSessionOverview(
     sessionDiskPath !== null ||
     messageCount > 0 ||
     contextUsedPercent !== null ||
-    hasQuotaSurface;
+    hasQuotaSurface ||
+    entryInputs.length > 0;
 
   return {
     sessionId,
     engine: input.engine,
     model: input.model,
+    engineLine,
     workspaceLabel,
     workspacePath,
     sessionDiskPath,
@@ -524,6 +618,7 @@ export function buildSessionOverview(
     contextUsedTokens,
     modelContextWindow,
     quota,
+    quotaEntries: visibleQuotaEntries,
     hasAnyContent,
   };
 }

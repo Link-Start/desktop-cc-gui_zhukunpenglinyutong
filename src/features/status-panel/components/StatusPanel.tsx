@@ -43,7 +43,11 @@ import { CostBudgetSection } from "./CostBudgetSection";
 import { GovernanceEvidenceSection } from "./GovernanceEvidenceSection";
 import { SessionOverviewSection } from "./SessionOverviewSection";
 import { buildSessionOverview } from "../utils/sessionOverviewViewModel";
-import { useCodingPlanQuota } from "../hooks/useCodingPlanQuota";
+import { useSessionQuotaList } from "../hooks/useSessionQuotaList";
+import {
+  collectSessionQuotaTargets,
+  formatSessionQuotaTargetTitle,
+} from "../utils/sessionQuotaTargets";
 import { projectCostRecord } from "../../context-ledger/cost-budget";
 import { EngineTaskOutputInspector } from "../../engine-task-output/components/EngineTaskOutputInspector";
 import { useEngineTaskOutputSnapshot } from "../../engine-task-output/hooks/useEngineTaskOutputSnapshot";
@@ -562,11 +566,19 @@ export const StatusPanel = memo(function StatusPanel({
         : null,
     [governanceEnabled, costGovernanceEvidence, governanceEvidenceState.evidence],
   );
-  const codingPlanQuota = useCodingPlanQuota({
-    engine: statusPanelEngine,
-    providerProfileId,
-    // 含 codex：后端按 official vs 第三方 provider 路由
-    enabled: statusPanelEngine != null,
+  const sessionQuotaTargets = useMemo(
+    () =>
+      collectSessionQuotaTargets(effectiveItems, {
+        engine: statusPanelEngine,
+        providerProfileId,
+        model: selectedModelId,
+      }),
+    [effectiveItems, statusPanelEngine, providerProfileId, selectedModelId],
+  );
+
+  const sessionQuotaList = useSessionQuotaList({
+    targets: sessionQuotaTargets,
+    enabled: sessionQuotaTargets.length > 0,
   });
 
   const sessionOverview = useMemo(
@@ -585,8 +597,15 @@ export const StatusPanel = memo(function StatusPanel({
         items: effectiveItems,
         tokenUsage: activeTokenUsage,
         rateLimits: activeRateLimits,
-        codingPlanQuota: codingPlanQuota.snapshot,
-        codingPlanQuotaLoading: codingPlanQuota.loading,
+        quotaEntries: sessionQuotaList.entries.map((entry) => ({
+          key: entry.target.key,
+          title: formatSessionQuotaTargetTitle(entry.target),
+          subtitle: entry.target.model,
+          engine: entry.target.engine,
+          providerProfileId: entry.target.providerProfileId,
+          codingPlanQuota: entry.snapshot,
+          codingPlanQuotaLoading: entry.loading,
+        })),
         usageShowRemaining,
         nowMs: Date.now(),
       }),
@@ -602,8 +621,7 @@ export const StatusPanel = memo(function StatusPanel({
       effectiveItems,
       activeTokenUsage,
       activeRateLimits,
-      codingPlanQuota.snapshot,
-      codingPlanQuota.loading,
+      sessionQuotaList.entries,
       usageShowRemaining,
     ],
   );

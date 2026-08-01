@@ -154,6 +154,7 @@ const statusPanel = {
         workspacePath: "Path",
         sessionDiskPath: "On disk",
         engine: "Engine",
+        engines: "Providers",
       },
       quota: {
         codexTitle: "Codex account limits",

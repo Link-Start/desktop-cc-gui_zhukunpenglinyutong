@@ -153,6 +153,7 @@ const statusPanel = {
         workspacePath: "路径",
         sessionDiskPath: "落盘",
         engine: "引擎",
+        engines: "供应商",
       },
       quota: {
         codexTitle: "Codex 账号额度",

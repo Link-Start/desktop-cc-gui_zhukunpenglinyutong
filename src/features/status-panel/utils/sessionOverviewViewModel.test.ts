@@ -158,6 +158,66 @@ describe("buildSessionOverviewQuota", () => {
   });
 });
 
+describe("buildSessionOverview multi quota entries", () => {
+  it("keeps separate quota cards for shared-session providers", () => {
+    const overview = buildSessionOverview({
+      sessionId: "shared:1",
+      engine: "claude",
+      model: "MiniMax-M3",
+      workspaceName: "demo",
+      workspacePath: "/tmp/demo",
+      sessionDiskPath: null,
+      isProcessing: false,
+      threadStatus: null,
+      items: [],
+      tokenUsage: null,
+      rateLimits: null,
+      usageShowRemaining: false,
+      nowMs: 0,
+      quotaEntries: [
+        {
+          key: "claude::local",
+          title: "Claude · 本地配置",
+          subtitle: "k3",
+          engine: "claude",
+          providerProfileId: "local",
+          codingPlanQuota: { source: "none", success: true, windows: [] },
+        },
+        {
+          key: "claude::minimax",
+          title: "Claude · Minimax-m3",
+          subtitle: "MiniMax-M3",
+          engine: "claude",
+          providerProfileId: "minimax",
+          codingPlanQuota: {
+            source: "minimax",
+            success: true,
+            windows: [
+              {
+                id: "five_hour",
+                usedPercent: 1,
+                remainingPercent: 99,
+              },
+              {
+                id: "weekly_limit",
+                usedPercent: 11,
+                remainingPercent: 89,
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(overview.engineLine).toContain("本地配置");
+    expect(overview.engineLine).toContain("Minimax-m3");
+    // 官方 Claude none 被过滤，仅保留 minimax 套餐卡
+    expect(overview.quotaEntries).toHaveLength(1);
+    expect(overview.quotaEntries[0]?.title).toBe("Claude · Minimax-m3");
+    expect(overview.quotaEntries[0]?.quota.windows).toHaveLength(2);
+  });
+});
+
 describe("buildSessionOverview", () => {
   it("derives status, identity, path and codex quota fields", () => {
     const overview = buildSessionOverview({

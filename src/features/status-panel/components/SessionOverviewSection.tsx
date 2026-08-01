@@ -167,11 +167,7 @@ export const SessionOverviewSection = memo(function SessionOverviewSection({
           })
       : null;
 
-  const engineModelValue = overview.engine
-    ? overview.model
-      ? `${overview.engine} · ${overview.model}`
-      : overview.engine
-    : overview.model;
+  const engineLineValue = overview.engineLine;
 
   const contextTokenLabel =
     overview.contextUsedTokens != null && overview.modelContextWindow != null
@@ -226,33 +222,23 @@ export const SessionOverviewSection = memo(function SessionOverviewSection({
       />,
     );
   }
-  if (engineModelValue) {
+  if (engineLineValue) {
     propertyRows.push(
       <OverviewProp
         key="engine"
-        label={t("statusPanel.sessionOverview.fields.engine")}
-        value={engineModelValue}
+        label={
+          overview.quotaEntries.length > 1
+            ? t("statusPanel.sessionOverview.fields.engines")
+            : t("statusPanel.sessionOverview.fields.engine")
+        }
+        value={engineLineValue}
       />,
     );
   }
 
-  const { quota } = overview;
-  const showQuotaSection =
-    quota.source === "official_cli" ||
-    quota.source === "coding_plan" ||
-    quota.source === "unsupported" ||
-    quota.source === "error" ||
-    quota.loading;
+  const quotaEntries = overview.quotaEntries;
   const hasContextMeter = overview.contextUsedPercent != null;
-
-  const quotaTitle =
-    quota.source === "official_cli"
-      ? t("statusPanel.sessionOverview.quota.codexTitle")
-      : quota.source === "coding_plan" && quota.providerLabel
-        ? t("statusPanel.sessionOverview.quota.codingPlanTitle", {
-            provider: quota.providerLabel,
-          })
-        : t("statusPanel.sessionOverview.quota.genericTitle");
+  const showQuotaSection = quotaEntries.length > 0;
 
   return (
     <section
@@ -280,57 +266,98 @@ export const SessionOverviewSection = memo(function SessionOverviewSection({
             />
           ) : null}
 
-          {quota.source === "official_cli" || quota.source === "coding_plan" ? (
-            <div className="sp-session-overview-quota">
-              <div className="sp-session-overview-quota-header">
-                <span>{quotaTitle}</span>
-                {quota.planType ? (
-                  <span className="sp-session-overview-quota-plan">
-                    {quota.planType}
-                  </span>
+          {quotaEntries.map((entry) => {
+            const { quota } = entry;
+            const quotaTitle =
+              quota.source === "official_cli"
+                ? t("statusPanel.sessionOverview.quota.codexTitle")
+                : quota.source === "coding_plan" && quota.providerLabel
+                  ? t("statusPanel.sessionOverview.quota.codingPlanTitle", {
+                      provider: quota.providerLabel,
+                    })
+                  : t("statusPanel.sessionOverview.quota.genericTitle");
+            const cardTitle =
+              quotaEntries.length > 1
+                ? entry.subtitle
+                  ? `${entry.title} · ${entry.subtitle}`
+                  : entry.title
+                : quotaTitle;
+
+            if (quota.source === "unsupported" || quota.source === "error") {
+              return (
+                <div key={entry.key} className="sp-session-overview-quota">
+                  {quotaEntries.length > 1 ? (
+                    <div className="sp-session-overview-quota-header">
+                      <span>{cardTitle}</span>
+                    </div>
+                  ) : null}
+                  <p className="sp-session-overview-quota-empty">
+                    {quota.error
+                      ? t("statusPanel.sessionOverview.quota.error", {
+                          message: quota.error,
+                        })
+                      : t("statusPanel.sessionOverview.quota.unsupported", {
+                          engine: entry.engine,
+                        })}
+                  </p>
+                </div>
+              );
+            }
+
+            if (
+              quota.source !== "official_cli" &&
+              quota.source !== "coding_plan"
+            ) {
+              return null;
+            }
+
+            return (
+              <div key={entry.key} className="sp-session-overview-quota">
+                <div className="sp-session-overview-quota-header">
+                  <span>{cardTitle}</span>
+                  {quota.planType ? (
+                    <span className="sp-session-overview-quota-plan">
+                      {quota.planType}
+                    </span>
+                  ) : null}
+                </div>
+                {quotaEntries.length > 1 &&
+                (quota.source === "coding_plan" ||
+                  quota.source === "official_cli") ? (
+                  <div className="sp-session-overview-quota-subhead">
+                    {quotaTitle}
+                  </div>
+                ) : null}
+                {quota.loading ? (
+                  <p className="sp-session-overview-quota-empty">
+                    {t("statusPanel.sessionOverview.quota.loading")}
+                  </p>
+                ) : quota.windows.length > 0 ? (
+                  <QuotaWindows
+                    windows={quota.windows}
+                    showRemaining={quota.showRemaining}
+                    t={t}
+                  />
+                ) : (
+                  <p className="sp-session-overview-quota-empty">
+                    {quota.source === "official_cli"
+                      ? t("statusPanel.sessionOverview.quota.codexEmpty")
+                      : t("statusPanel.sessionOverview.quota.codingPlanEmpty")}
+                  </p>
+                )}
+                {quota.hasCredits ? (
+                  <div className="sp-session-overview-quota-credits">
+                    <span>{t("usage.credits")}</span>
+                    <span>
+                      {quota.creditsUnlimited
+                        ? t("usage.unlimited")
+                        : (quota.creditsBalance ?? "—")}
+                    </span>
+                  </div>
                 ) : null}
               </div>
-              {quota.loading ? (
-                <p className="sp-session-overview-quota-empty">
-                  {t("statusPanel.sessionOverview.quota.loading")}
-                </p>
-              ) : quota.windows.length > 0 ? (
-                <QuotaWindows
-                  windows={quota.windows}
-                  showRemaining={quota.showRemaining}
-                  t={t}
-                />
-              ) : (
-                <p className="sp-session-overview-quota-empty">
-                  {quota.source === "official_cli"
-                    ? t("statusPanel.sessionOverview.quota.codexEmpty")
-                    : t("statusPanel.sessionOverview.quota.codingPlanEmpty")}
-                </p>
-              )}
-              {quota.hasCredits ? (
-                <div className="sp-session-overview-quota-credits">
-                  <span>{t("usage.credits")}</span>
-                  <span>
-                    {quota.creditsUnlimited
-                      ? t("usage.unlimited")
-                      : (quota.creditsBalance ?? "—")}
-                  </span>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          {quota.source === "unsupported" || quota.source === "error" ? (
-            <p className="sp-session-overview-quota-empty">
-              {quota.error
-                ? t("statusPanel.sessionOverview.quota.error", {
-                    message: quota.error,
-                  })
-                : t("statusPanel.sessionOverview.quota.unsupported", {
-                    engine: overview.engine ?? "—",
-                  })}
-            </p>
-          ) : null}
+            );
+          })}
         </div>
       ) : null}
 

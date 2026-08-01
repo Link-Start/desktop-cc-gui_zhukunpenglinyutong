@@ -2355,6 +2355,19 @@ button.sp-subagent-main:focus-visible,
   color: var(--text-faint);
 }
 
+.sp-session-overview-quota-subhead {
+  font-size: 10.5px;
+  line-height: 1.3;
+  color: var(--text-faint);
+  opacity: 0.9;
+}
+
+.sp-session-overview-quota + .sp-session-overview-quota {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed color-mix(in srgb, var(--border-subtle) 80%, transparent);
+}
+
 .sp-session-overview-quota-plan {
   font-weight: 500;
   color: var(--text-muted);

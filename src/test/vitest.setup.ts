@@ -1059,6 +1059,7 @@ vi.mock("react-i18next", () => ({
         "statusPanel.sessionOverview.fields.workspacePath": "Path",
         "statusPanel.sessionOverview.fields.sessionDiskPath": "On disk",
         "statusPanel.sessionOverview.fields.engine": "Engine",
+        "statusPanel.sessionOverview.fields.engines": "Providers",
         "statusPanel.sessionOverview.quota.codexTitle": "Codex account limits",
         "statusPanel.sessionOverview.quota.codingPlanTitle":
           "{{provider}} plan limits",
