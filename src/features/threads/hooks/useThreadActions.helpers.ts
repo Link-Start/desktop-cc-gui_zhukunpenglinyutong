@@ -71,6 +71,7 @@ export type CodexCatalogSessionSummary = {
   updatedAt: number;
   archivedAt?: number | null;
   sizeBytes?: number;
+  physicalPath?: string | null;
   parentSessionId?: string | null;
   engine?: ThreadSummary["engineSource"] | string | null;
   source?: string | null;
