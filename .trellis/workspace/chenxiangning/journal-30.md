@@ -724,3 +724,36 @@ B1 切断 useModels layout self-deps；会话 selection 幂等；freeform 只修
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1270: Shared Codex command argv/apply_patch 投影修复
+
+**Date**: 2026-08-02
+**Task**: Shared Codex command argv/apply_patch 投影修复
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+join command argv[]; promote apply_patch in commandExecution; v8
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a2f3e50ca` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
