@@ -16,10 +16,10 @@ describe("VendorModelManagerDialogHost", () => {
     window.localStorage.clear();
   });
 
-  it("loads settings styles before showing the dialog outside SettingsView", () => {
-    // vendor-dialog CSS 挂在 settings.css 懒加载 chunk；当前页 host 必须显式拉取，
-    // 否则冷启动从未进设置时弹窗会完全无样式。test mode 下 hook 不真调 loader，
-    // 用源码契约锁住接线，防止回归。
+  it("loads dialog styles before showing the dialog outside SettingsView", () => {
+    // 未打开设置页时 settings.css 不会加载；当前页 host 必须显式拉取 dialog 样式
+    // 切片，否则冷启动从未进设置时弹窗会完全无样式。test mode 下 hook 不真调
+    // loader，用源码契约锁住接线，防止回归。
     const hostSource = readFileSync(
       path.join(
         process.cwd(),
@@ -27,7 +27,7 @@ describe("VendorModelManagerDialogHost", () => {
       ),
       "utf8",
     );
-    expect(hostSource).toContain("loadSettingsStyles");
+    expect(hostSource).toContain("loadVendorModelManagerStyles");
     expect(hostSource).toContain("useFeatureStylesReady");
     expect(hostSource).toContain("open && stylesReady");
   });
@@ -50,6 +50,10 @@ describe("VendorModelManagerDialogHost", () => {
         "settings.vendor.modelManager.modelIdPlaceholder",
       ),
     ).toBeTruthy();
+    // 弹窗壳层 class 保留，样式由 loadVendorModelManagerStyles 按需注入
+    // （测试环境 useFeatureStylesReady 会直接放行）。
+    expect(document.querySelector(".vendor-dialog-overlay")).toBeTruthy();
+    expect(document.querySelector(".vendor-model-manager-dialog")).toBeTruthy();
   });
 
   it("persists a newly added model into provider storage without settings navigation", async () => {

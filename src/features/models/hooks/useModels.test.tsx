@@ -163,6 +163,57 @@ describe("useModels", () => {
     expect(result.current.selectedEffort).toBe("medium");
   });
 
+  it("uses model-specific reasoning fallbacks when runtime hydration is degraded", async () => {
+    vi.mocked(getModelList).mockResolvedValueOnce({
+      data: [],
+      degraded: true,
+      runtimeAvailable: false,
+    });
+    vi.mocked(getConfigModel).mockResolvedValueOnce("gpt-5.6-sol");
+
+    const { result } = renderHook(() =>
+      useModels({ activeWorkspace: workspace }),
+    );
+
+    await waitFor(() => expect(result.current.selectedModelId).toBe("gpt-5.6-sol"));
+    expect(result.current.reasoningOptions).toEqual([
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+      "ultra",
+    ]);
+    expect(result.current.selectedEffort).toBe("low");
+
+    act(() => result.current.setSelectedModelId("gpt-5.6-terra"));
+    expect(result.current.reasoningOptions).toEqual([
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+      "ultra",
+    ]);
+
+    act(() => result.current.setSelectedModelId("gpt-5.6-luna"));
+    expect(result.current.reasoningOptions).toEqual([
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+    ]);
+
+    act(() => result.current.setSelectedModelId("gpt-5.5"));
+    expect(result.current.reasoningOptions).toEqual([
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+    ]);
+  });
+
   it("replaces the startup fallback after runtime reasoning metadata arrives", async () => {
     const modelListRequest = createDeferred<{
       result: {
@@ -177,7 +228,14 @@ describe("useModels", () => {
     );
 
     await waitFor(() => expect(result.current.selectedModelId).toBe("gpt-5.6-sol"));
-    expect(result.current.reasoningOptions).toEqual(["low", "medium", "high", "xhigh"]);
+    expect(result.current.reasoningOptions).toEqual([
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+      "ultra",
+    ]);
 
     modelListRequest.resolve({
       result: {

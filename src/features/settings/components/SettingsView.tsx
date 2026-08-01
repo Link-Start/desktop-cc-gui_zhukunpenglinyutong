@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import type { DropResult } from "@hello-pangea/dnd";
 import LayoutGrid from "lucide-react/dist/esm/icons/layout-grid";
@@ -1895,19 +1902,21 @@ export function SettingsView({
               </div>
               {projects.length > 0 ? (
                 <div className="settings-select-wrap">
-                  <select
-                    className="settings-select"
+                  <Select
                     value={selectedSettingsWorkspace?.id ?? ""}
-                    onChange={(event) =>
-                      setSettingsWorkspaceId(event.target.value || null)
-                    }
+                    onValueChange={(value) => setSettingsWorkspaceId(value || null)}
                   >
-                    {projects.map((workspace) => (
-                      <option key={workspace.id} value={workspace.id}>
-                        {workspace.name}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger aria-label={t("settings.workspacePickerLabel")}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {projects.map((workspace) => (
+                        <SelectItem key={workspace.id} value={workspace.id}>
+                          {workspace.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               ) : (
                 <div className="settings-inline-muted">

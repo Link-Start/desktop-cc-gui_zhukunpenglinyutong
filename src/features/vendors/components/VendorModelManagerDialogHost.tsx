@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { loadSettingsStyles } from "../../../styles/featureStyleLoaders";
+import { loadVendorModelManagerStyles } from "../../../styles/featureStyleLoaders";
 import { useFeatureStylesReady } from "../../../styles/useFeatureStylesReady";
 import type { CodexCustomModel } from "../types";
 import { STORAGE_KEYS } from "../types";
@@ -33,8 +33,9 @@ export function VendorModelManagerDialogHost() {
   const [open, setOpen] = useState(false);
   const [addMode, setAddMode] = useState(false);
   const [target, setTarget] = useState<VendorModelManagerTarget>("claude");
-  // 仅在 open 时拉取 settings 样式，避免冷启动无意义加载整包 settings.css
-  const stylesReady = useFeatureStylesReady(loadSettingsStyles, open);
+  // 未打开设置页时 settings.css 不会加载；弹窗打开时按需注入 dialog 样式切片，
+  // 避免为弹窗整包加载 settings.css。
+  const stylesReady = useFeatureStylesReady(loadVendorModelManagerStyles, open);
 
   const storageKey = useMemo(() => storageKeyForTarget(target), [target]);
   const { models, updateModels } = usePluginModels(storageKey);

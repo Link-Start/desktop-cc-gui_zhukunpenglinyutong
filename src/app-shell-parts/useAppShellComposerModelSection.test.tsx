@@ -139,6 +139,53 @@ describe("useAppShellComposerModelSection handleSelectModel", () => {
     expect(result.current.effectiveSelectedEffort).toBe("high");
   });
 
+  it("projects model-specific reasoning metadata into a Native Codex session", () => {
+    const supportedReasoningEfforts = [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+      "ultra",
+    ].map((reasoningEffort) => ({
+      reasoningEffort,
+      description: reasoningEffort,
+    }));
+    const composerSelectionResolverRef: { current: unknown } = { current: null };
+    const { result } = renderSection({
+      activeEngine: "codex",
+      activeThreadId: "codex-thread-native",
+      activeProviderProfileId: null,
+      composerSelectionResolverRef,
+      models: [
+        makeModel("gpt-5.6-sol", {
+          supportedReasoningEfforts,
+          defaultReasoningEffort: "low",
+          isDefault: true,
+        }),
+      ],
+      selectedComposerSelection: {
+        modelId: "gpt-5.6-sol",
+        effort: "ultra",
+      },
+    });
+
+    expect(result.current.effectiveReasoningOptions).toEqual([
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+      "ultra",
+    ]);
+    expect(result.current.effectiveSelectedEffort).toBe("ultra");
+    expect(composerSelectionResolverRef.current).toMatchObject({
+      id: "gpt-5.6-sol",
+      model: "gpt-5.6-sol",
+      effort: "ultra",
+    });
+  });
+
   it("keeps explicit provider reasoning metadata authoritative", () => {
     const providerReasoning = [
       { reasoningEffort: "medium", description: "Provider medium" },
@@ -354,5 +401,32 @@ describe("useAppShellComposerModelSection handleSelectModel", () => {
     });
     // Active codex thread keeps global selectedModelId for draft-less path only.
     expect(setSelectedModelId).not.toHaveBeenCalled();
+  });
+
+  it("keeps a Native custom Codex model capability-neutral", () => {
+    const composerSelectionResolverRef: { current: unknown } = { current: null };
+    const { result } = renderSection({
+      activeEngine: "codex",
+      activeThreadId: "codex-thread-native-custom",
+      activeProviderProfileId: null,
+      composerSelectionResolverRef,
+      models: [makeModel("gpt-5.6-sol", { isDefault: true })],
+      selectedComposerSelection: {
+        modelId: "gpt-5.3-codex-spark",
+        effort: null,
+      },
+    });
+
+    expect(result.current.effectiveSelectedModelId).toBe("gpt-5.3-codex-spark");
+    expect(result.current.effectiveSelectedModel).toBeNull();
+    expect(result.current.effectiveReasoningOptions).toEqual([]);
+    expect(result.current.effectiveReasoningSupported).toBe(false);
+    expect(result.current.effectiveSelectedEffort).toBeNull();
+    expect(result.current.resolvedModel).toBe("gpt-5.3-codex-spark");
+    expect(composerSelectionResolverRef.current).toMatchObject({
+      id: "gpt-5.3-codex-spark",
+      model: "gpt-5.3-codex-spark",
+      effort: null,
+    });
   });
 });

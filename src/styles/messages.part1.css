@@ -336,6 +336,7 @@
   display: grid;
   gap: 8px;
   justify-items: stretch;
+  padding-right: 36px;
   background: var(--color-message-user-bg, var(--surface-bubble-user));
   color: var(--color-message-user-text, #ffffff);
   border-radius: 12px;

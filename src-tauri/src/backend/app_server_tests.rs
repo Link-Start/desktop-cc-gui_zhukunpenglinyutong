@@ -278,6 +278,79 @@ async fn send_provider_turn_and_capture(
 
 #[cfg(not(windows))]
 #[tokio::test]
+async fn native_custom_model_without_effort_uses_transport_compatibility_fallback() {
+    let workspace_id = "native-custom-reasoning-default";
+    let runtime_key = crate::codex::provider_profile::legacy_codex_runtime_key(workspace_id);
+    let session = make_workspace_session_with_runtime_key(workspace_id, &runtime_key).await;
+    let stdout = session
+        .child
+        .lock()
+        .await
+        .stdout
+        .take()
+        .expect("native Codex stdout");
+    let mut lines = BufReader::new(stdout).lines();
+    let sessions = Arc::new(Mutex::new(HashMap::from([(
+        runtime_key.clone(),
+        Arc::clone(&session),
+    )])));
+
+    let send_task = tokio::spawn({
+        let sessions = Arc::clone(&sessions);
+        let workspace_id = workspace_id.to_string();
+        async move {
+            crate::shared::codex_core::send_user_message_core(
+                sessions.as_ref(),
+                workspace_id,
+                None,
+                "native-custom-1".to_string(),
+                "hello".to_string(),
+                Some("gpt-5.3-codex-spark".to_string()),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                false,
+                None,
+            )
+            .await
+        }
+    });
+    let line = tokio::time::timeout(Duration::from_secs(2), lines.next_line())
+        .await
+        .expect("request reached native Codex runtime before timeout")
+        .expect("read native Codex request")
+        .expect("native Codex request line");
+    let request: Value = serde_json::from_str(&line).expect("valid native Codex request");
+    settle_echoed_test_request(
+        &session,
+        &request,
+        json!({ "result": { "turn": { "id": "turn-native-custom" } } }),
+    )
+    .await;
+    let response = send_task
+        .await
+        .expect("native Codex send task")
+        .expect("native Codex send succeeds");
+
+    assert_eq!(request["method"], "turn/start");
+    assert_eq!(request["params"]["model"], "gpt-5.3-codex-spark");
+    assert!(request["params"]["effort"].is_null());
+    assert_eq!(request["params"]["reasoning"]["effort"], "low");
+    assert!(response["mossxDispatchReceipt"]["providerProfileId"].is_null());
+    assert_eq!(
+        response["mossxDispatchReceipt"]["model"],
+        "gpt-5.3-codex-spark"
+    );
+    assert!(response["mossxDispatchReceipt"]["reasoningEffort"].is_null());
+
+    dispose_workspace_session(&session).await;
+}
+
+#[cfg(not(windows))]
+#[tokio::test]
 async fn workspace_health_probe_uses_non_model_static_rpc() {
     let session = make_workspace_session("health-probe").await;
     let stdout = session
