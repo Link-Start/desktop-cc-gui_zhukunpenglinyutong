@@ -124,7 +124,10 @@
   scrollbar-width: none;
   -ms-overflow-style: none;
   width: calc(100% + 24px);
+  /* Right: phantom gutter for scrollbar isolation; bottom: end inset so the
+   * last CLI row is not flush with the window edge when scrolled to end. */
   padding-right: 24px;
+  padding-bottom: 28px;
   box-sizing: border-box;
 }
 
@@ -1362,6 +1365,7 @@
     height: 100%;
     min-height: 0;
     padding-right: 0;
+    padding-bottom: 28px;
     overflow-x: hidden;
     overflow-y: auto;
   }

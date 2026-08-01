@@ -5,8 +5,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Composer } from "./Composer";
 import type { ComposerSendReadiness } from "../utils/composerSendReadiness";
 
-let forceLedgerProjectionVisible = false;
-
 vi.mock("../../../services/dragDrop", () => ({
   subscribeWindowDragDrop: vi.fn(() => () => {}),
 }));
@@ -20,65 +18,16 @@ vi.mock("../../engine/components/EngineSelector", () => ({
   EngineSelector: () => null,
 }));
 
-vi.mock("../../context-ledger/utils/contextLedgerProjection", async () => {
-  const actual =
-    await vi.importActual<typeof import("../../context-ledger/utils/contextLedgerProjection")>(
-      "../../context-ledger/utils/contextLedgerProjection",
-    );
-  return {
-    ...actual,
-    buildContextLedgerProjection: (input: Parameters<typeof actual.buildContextLedgerProjection>[0]) => {
-      if (!forceLedgerProjectionVisible) {
-        return actual.buildContextLedgerProjection(input);
-      }
-      return {
-        visible: true,
-        totalBlockCount: 1,
-        totalGroupCount: 1,
-        totalUsageTokens: null,
-        contextWindowTokens: null,
-        groups: [
-          {
-            kind: "helper_selection",
-            blocks: [
-              {
-                id: "helper-skill-doc-backup",
-                kind: "helper_selection",
-                title: "doc-backup",
-                detail: "backup docs",
-                sourceRef: "skill:doc-backup",
-                sourcePath: null,
-                backendSource: "global_claude",
-                attributionKind: "engine_injected",
-                attributionConfidence: "coarse",
-                participationState: "selected",
-                carryOverReason: null,
-                freshness: "fresh",
-                estimate: { kind: "unknown", value: null },
-              },
-            ],
-          },
-        ],
-      };
-    },
-  };
-});
-
-
 vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
   ChatInputBoxAdapter: ({
     onTextChange,
     onSend,
     onManualMemorySelect,
     sendReadiness,
-    onToggleContextSources,
-    contextSourcesExpanded,
   }: {
     onTextChange: (next: string, cursor: number | null) => void;
     onSend: () => void;
     sendReadiness?: ComposerSendReadiness | null;
-    onToggleContextSources?: () => void;
-    contextSourcesExpanded?: boolean;
     onManualMemorySelect?: (memory: {
       id: string;
       title: string;
@@ -122,13 +71,6 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
       <div data-testid="readiness-context-summary">
         {sendReadiness?.contextSummary.compactLabel ?? ""}
       </div>
-      {onToggleContextSources ? (
-        <button type="button" onClick={onToggleContextSources}>
-          {contextSourcesExpanded
-            ? "composer.contextLedgerCollapse"
-            : "composer.contextLedgerExpand"}
-        </button>
-      ) : null}
     </div>
   ),
 }));
@@ -172,13 +114,12 @@ function renderComposer(
   );
 }
 
-describe("Composer context ledger governance", () => {
+describe("Composer context selection (ledger surface removed)", () => {
   afterEach(() => {
     cleanup();
-    forceLedgerProjectionVisible = false;
   });
 
-  it("projects context ledger summary into the chat input header", async () => {
+  it("summarizes selected memory without context ledger surface", async () => {
     const onSend = vi.fn(() => Promise.resolve());
     const view = renderComposer(onSend);
 
@@ -188,21 +129,12 @@ describe("Composer context ledger governance", () => {
     });
 
     expect(screen.getByTestId("readiness-context-summary").textContent).toBe(
-      "items:1 · groups:1",
+      "memory:1",
     );
     expect(view.container.querySelector(".composer-context-stack")).toBeTruthy();
-    expect(screen.queryByTestId("context-ledger-mock")).toBeNull();
     expect(view.container.querySelector(".composer-context-ledger")).toBeNull();
     expect(screen.queryByRole("region", { name: "composer.contextLedgerTitle" })).toBeNull();
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "composer.contextLedgerExpand" }));
-    });
-
-    expect(view.container.querySelector(".composer-context-ledger")).toBeTruthy();
-    expect(screen.queryByText("composer.contextLedgerTitle")).toBeNull();
-    expect(screen.queryByText("composer.contextLedgerCollapse")).toBeTruthy();
-    expect(screen.getByRole("region", { name: "composer.contextLedgerTitle" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "composer.contextLedgerExpand" })).toBeNull();
 
     await act(async () => {
       fireEvent.click(screen.getByTestId("send-message"));
@@ -211,16 +143,6 @@ describe("Composer context ledger governance", () => {
     expect(onSend).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId("readiness-context-summary").textContent).toBe(
       "no-extra-context",
-    );
-  });
-
-  it("keeps context source summary in the input header", async () => {
-    forceLedgerProjectionVisible = true;
-    renderComposer();
-
-    expect(screen.queryByTestId("context-ledger-mock")).toBeNull();
-    expect(screen.getByTestId("readiness-context-summary").textContent).toBe(
-      "items:1 · groups:1",
     );
   });
 

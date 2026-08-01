@@ -743,6 +743,23 @@
   max-width: 100% !important;
 }
 
+/*
+ * Full-height panes (shortcuts master–detail, providers vendor panel) resolve
+ * child `height: 100%` against this wrapper. The general rule above uses
+ * height:auto so normal pages can grow past the viewport; pin these pages
+ * back to 100% so nested overflow regions (list scroll, vendor nav) get a
+ * definite height instead of stretching with content.
+ */
+.settings-content.settings-content--shortcuts
+  [data-slot="scroll-area-viewport"]
+  > div,
+.settings-content.settings-content--providers
+  [data-slot="scroll-area-viewport"]
+  > div {
+  height: 100% !important;
+  min-height: 0 !important;
+}
+
 .settings-section,
 .settings-workspace-picker,
 .vendor-settings-panel {
@@ -921,9 +938,11 @@
  * global `button` defaults (radius/padding/weight).
  */
 .settings-shortcuts-section {
-  /* The scroll-area viewport wrapper is already height:100%; pin the section
-   * to it so the panes below track the window height instead of a fixed cap. */
+  /* Pin to the shortcuts viewport wrapper (height:100%) so panes track the
+   * window instead of growing with the full shortcut list. */
   height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .settings-shortcuts-layout {
@@ -934,6 +953,7 @@
    * it so both panes stretch with the window. */
   flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
   /* Both panes stretch to the same row height so the detail card always
    * matches the list column. */
   align-items: stretch;
@@ -943,6 +963,8 @@
   min-width: 0;
   /* Height comes from the viewport chain above; the groups area scrolls. */
   min-height: 0;
+  height: 100%;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1114,7 +1136,11 @@
 /* Detail panel */
 .settings-shortcuts-detail {
   min-width: 0;
-  min-height: 320px;
+  /* Stretch with the list column (grid align-items:stretch); keep a floor so
+   * an empty pane still looks like a card on short windows. */
+  min-height: min(320px, 100%);
+  height: 100%;
+  overflow: auto;
   display: flex;
   flex-direction: column;
   align-items: center;

@@ -136,6 +136,7 @@ describe("vendor settings panel compact layout", () => {
     expect(navScrollRule).toContain("-ms-overflow-style: none;");
     expect(navScrollRule).toContain("width: calc(100% + 24px);");
     expect(navScrollRule).toContain("padding-right: 24px;");
+    expect(navScrollRule).toContain("padding-bottom: 28px;");
     expect(vendorPanelsCss).toMatch(
       /\.vendor-engine-nav-scroll::-webkit-scrollbar\s*\{[^}]*display:\s*none/s,
     );

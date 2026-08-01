@@ -298,8 +298,6 @@ export type LayoutNodesFlatOptions = {
   onOpenHomeChat: () => void;
   onOpenMemory: () => void;
   onOpenProjectMemory: () => void;
-  onOpenContextLedgerMemory?: (memoryId: string) => void;
-  onOpenContextLedgerNote?: (noteId: string) => void;
   onOpenReleaseNotes: () => void;
   onOpenGlobalSearch: () => void;
   globalSearchShortcut: string | null;
@@ -1249,8 +1247,6 @@ export type PanelsLayoutNodesOptions = Pick<
   | "onOpenHomeChat"
   | "onOpenMemory"
   | "onOpenProjectMemory"
-  | "onOpenContextLedgerMemory"
-  | "onOpenContextLedgerNote"
   | "onOpenReleaseNotes"
   | "focusedProjectMemoryId"
   | "focusedProjectMemoryRequestKey"

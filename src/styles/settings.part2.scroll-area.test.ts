@@ -89,16 +89,37 @@ describe("settings scroll area contract", () => {
     expect(overlayCornerRule).toContain("display: none !important;");
   });
 
-  it("keeps the scroll-area viewport wrapper full-height so nested full-height panels can scroll", () => {
+  it("lets normal settings pages grow past the viewport while pinning full-height panes", () => {
     const viewportWrapperRule = getCssRuleBlock(
       settingsCss,
       '.settings-content [data-slot="scroll-area-viewport"] > div',
     );
 
     expect(viewportWrapperRule).toContain("display: block !important;");
-    expect(viewportWrapperRule).toContain("height: 100% !important;");
+    // Prefer min-height so tall preference lists can scroll the page; do not
+    // reintroduce a blanket height:100% (that eats bottom padding).
+    expect(viewportWrapperRule).toContain("min-height: 100% !important;");
+    expect(viewportWrapperRule).toMatch(/(?:^|[^-])height:\s*auto\s*!important;/);
     expect(viewportWrapperRule).toContain("width: 100% !important;");
     expect(viewportWrapperRule).toContain("max-width: 100% !important;");
+
+    // Nested full-height panels need a definite wrapper height again.
+    expect(settingsCss).toMatch(
+      /\.settings-content\.settings-content--shortcuts\s+\[data-slot="scroll-area-viewport"\]\s*>\s*div/,
+    );
+    expect(settingsCss).toMatch(
+      /\.settings-content\.settings-content--providers\s+\[data-slot="scroll-area-viewport"\]\s*>\s*div/,
+    );
+    // The shared override block must pin height:100% (not auto).
+    const fullHeightPaneOverride = settingsCss.slice(
+      settingsCss.indexOf(
+        ".settings-content.settings-content--shortcuts",
+      ),
+      settingsCss.indexOf(
+        ".settings-content.settings-content--shortcuts",
+      ) + 500,
+    );
+    expect(fullHeightPaneOverride).toContain("height: 100% !important;");
   });
 
   it("pins the shortcuts panes to the viewport height instead of a fixed cap", () => {
@@ -118,14 +139,29 @@ describe("settings scroll area contract", () => {
       settingsCss,
       ".settings-shortcuts-list",
     );
+    const shortcutsDetailRule = getCssRuleBlock(
+      settingsCss,
+      ".settings-shortcuts-detail",
+    );
 
     expect(shortcutsPaddingRule).toContain("--settings-content-pad-top: 8px;");
     expect(shortcutsPaddingRule).toContain(
       "--settings-content-pad-bottom: 16px;",
     );
     expect(shortcutsSectionRule).toContain("height: 100%;");
+    expect(shortcutsSectionRule).toContain("min-height: 0;");
+    expect(shortcutsSectionRule).toContain("overflow: hidden;");
     expect(shortcutsLayoutRule).toContain("flex: 1 1 auto;");
     expect(shortcutsLayoutRule).toContain("min-height: 0;");
+    expect(shortcutsLayoutRule).toContain("height: 100%;");
+    // Original desktop proportions: list capped, detail fills remaining space.
+    expect(shortcutsLayoutRule).toContain(
+      "grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);",
+    );
+    expect(shortcutsListRule).toContain("height: 100%;");
+    expect(shortcutsListRule).toContain("min-height: 0;");
     expect(shortcutsListRule).not.toContain("max-height");
+    expect(shortcutsDetailRule).toContain("height: 100%;");
+    expect(shortcutsDetailRule).toContain("min-height: min(320px, 100%);");
   });
 });

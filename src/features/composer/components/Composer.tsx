@@ -137,16 +137,7 @@ import {
   filterRetainedChipNames,
   filterRetainedEntries,
 } from "../../context-ledger/utils/contextLedgerGovernance";
-import { useContextLedgerGovernance } from "../hooks/useContextLedgerGovernance";
-import { ContextLedgerPanel } from "../../context-ledger/components/ContextLedgerPanel";
-import {
-  buildContextLedgerProjection,
-  resolveDualContextUsageModel,
-} from "../../context-ledger/utils/contextLedgerProjection";
-import type {
-  ContextLedgerSourceNavigationTarget,
-  ContextLedgerProjection,
-} from "../../context-ledger/types";
+import { resolveDualContextUsageModel } from "../../context-ledger/utils/contextLedgerProjection";
 import {
   BrowserContextPreview,
   useBrowserContextAttachment,
@@ -354,8 +345,6 @@ type ComposerProps = {
   selectedLinkedKanbanPanelId?: string | null;
   onSelectLinkedKanbanPanel?: (panelId: string | null) => void;
   onOpenLinkedKanbanPanel?: (panelId: string) => void;
-  onOpenContextLedgerMemory?: (memoryId: string) => void;
-  onOpenContextLedgerNote?: (noteId: string) => void;
   activeFilePath?: string | null;
   activeFileLineRange?: { startLine: number; endLine: number } | null;
   fileReferenceMode?: "path" | "none";
@@ -619,8 +608,6 @@ function ComposerImpl({
   selectedLinkedKanbanPanelId: _selectedLinkedKanbanPanelId = null,
   onSelectLinkedKanbanPanel: _onSelectLinkedKanbanPanel,
   onOpenLinkedKanbanPanel: _onOpenLinkedKanbanPanel,
-  onOpenContextLedgerMemory: _onOpenContextLedgerMemory,
-  onOpenContextLedgerNote: _onOpenContextLedgerNote,
   activeFilePath = null,
   activeFileLineRange = null,
   fileReferenceMode = "path",
@@ -1066,10 +1053,6 @@ function ComposerImpl({
   const [retainedContextChipKeys, setRetainedContextChipKeys] = useState<string[]>([]);
   const [selectedInlineFileReferences, setSelectedInlineFileReferences] = useState<InlineFileReferenceSelection[]>([]);
   const browserContext = useBrowserContextAttachment(activeWorkspaceId);
-  const [contextLedgerExpanded, setContextLedgerExpanded] = useState(false);
-  const currentContextLedgerProjectionRef = useRef<ContextLedgerProjection | null>(null);
-  const previousContextLedgerSessionKeyRef = useRef("");
-  const contextLedgerSessionKey = `${activeWorkspaceId ?? "__no_workspace__"}::${activeThreadId ?? "__no_thread__"}`;
   const onClearCodeAnnotationsRef = useRef(onClearCodeAnnotations);
   const [isComposerCollapsed, setIsComposerCollapsed] = useState(false);
   const [dismissedActiveFileReference, setDismissedActiveFileReference] =
@@ -1256,12 +1239,6 @@ function ComposerImpl({
     setRetainedContextChipKeys(keepArrayWhenEmpty);
     setMemoryReferenceMode("off");
   }, []);
-  const resetContextLedgerSessionState = useCallback(() => {
-    clearComposerContextSelections();
-    setContextLedgerExpanded((current) => (current ? false : current));
-    currentContextLedgerProjectionRef.current = null; previousContextLedgerSessionKeyRef.current = contextLedgerSessionKey;
-  }, [clearComposerContextSelections, contextLedgerSessionKey]);
-
   useEffect(() => {
     if (textareaHeight > COMPOSER_MIN_HEIGHT) {
       lastExpandedHeightRef.current = textareaHeight;
@@ -1282,8 +1259,8 @@ function ComposerImpl({
   }, [hasStatusPanelActivity, statusPanelExpandedOverride]);
 
   useEffect(() => {
-    resetContextLedgerSessionState();
-  }, [activeThreadId, activeWorkspaceId, resetContextLedgerSessionState]);
+    clearComposerContextSelections();
+  }, [activeThreadId, activeWorkspaceId, clearComposerContextSelections]);
 
   useEffect(() => {
     if (!pendingCodeAnnotation) {
@@ -2223,40 +2200,6 @@ function ComposerImpl({
     isProcessing && isComposerInputInteractionActive
       ? deferredAccountRateLimits
       : accountRateLimits;
-  const {
-    handleToggleLedgerPin,
-    handleExcludeLedgerBlock,
-    handleClearCarryOverLedgerBlock,
-    handleBatchKeepLedgerBlocks,
-    handleBatchExcludeLedgerBlocks,
-    handleBatchClearCarryOverLedgerBlocks,
-  } = useContextLedgerGovernance({
-    activeFilePath,
-    activeFileReferenceSignature,
-    setDismissedActiveFileReference,
-    setCarryOverManualMemoryIds,
-    setRetainedManualMemoryIds,
-    setSelectedManualMemories,
-    setCarryOverNoteCardIds,
-    setRetainedNoteCardIds,
-    setSelectedNoteCards,
-    setCarryOverContextChipKeys,
-    setRetainedContextChipKeys,
-    setSelectedSkillNames,
-    setSelectedCommonsNames,
-    setSelectedInlineFileReferences,
-  });
-  const handleOpenLedgerSource = useCallback((target: ContextLedgerSourceNavigationTarget) => {
-    if (target.kind === "manual_memory") {
-      _onOpenContextLedgerMemory?.(target.memoryId);
-      return;
-    }
-    if (target.kind === "note_card") {
-      _onOpenContextLedgerNote?.(target.noteId);
-      return;
-    }
-    onOpenDiffPath?.(target.path);
-  }, [_onOpenContextLedgerMemory, _onOpenContextLedgerNote, onOpenDiffPath]);
   const selectedEngineInfo = useMemo(
     () => engines?.find((engine) => engine.type === selectedEngine),
     [engines, selectedEngine],
@@ -2285,9 +2228,6 @@ function ComposerImpl({
     }
     onJumpToUserInputRequest?.(activeUserInputRequest);
   }, [activeUserInputRequest, onJumpToUserInputRequest]);
-  const handleToggleContextSources = useCallback(() => {
-    setContextLedgerExpanded((current) => !current);
-  }, []);
   const codexContextDualViewEnabled = contextDualViewEnabled && isCodexEngine;
   // 所有 provider 的上下文占用入口统一渲染在输入框下方分支行右侧；
   // Codex 继续使用 dual-view ContextBar，保留 tooltip 与 compaction controls。
@@ -2298,55 +2238,6 @@ function ComposerImpl({
         (resolvedLegacyContextUsage.used / resolvedLegacyContextUsage.total) * 100,
       )
       : null;
-  const contextLedgerProjection = useMemo(
-    () =>
-      buildContextLedgerProjection({
-        engine: selectedEngine,
-        contextUsage,
-        contextDualViewEnabled: codexContextDualViewEnabled,
-        dualContextUsage: codexContextDualViewEnabled
-          ? resolvedDualContextUsage
-          : null,
-        manualMemoryInjectionMode: getManualMemoryInjectionMode(),
-        selectedManualMemories,
-        selectedNoteCards,
-        selectedInlineFileReferences,
-        selectedCodeAnnotations,
-        activeFileReference: hasActiveFileReference && activeFilePath
-          ? {
-              path: activeFilePath,
-              lineRange: activeFileLineRange,
-            }
-          : null,
-        selectedContextChips: contextSelectionChips,
-        carryOverManualMemoryIds,
-        carryOverNoteCardIds,
-        carryOverContextChipKeys,
-        retainedManualMemoryIds,
-        retainedNoteCardIds,
-        retainedContextChipKeys,
-      }),
-    [
-      activeFileLineRange,
-      activeFilePath,
-      carryOverContextChipKeys,
-      carryOverManualMemoryIds,
-      carryOverNoteCardIds,
-      codexContextDualViewEnabled,
-      contextSelectionChips,
-      contextUsage,
-      hasActiveFileReference,
-      retainedContextChipKeys,
-      retainedManualMemoryIds,
-      retainedNoteCardIds,
-      resolvedDualContextUsage,
-      selectedEngine,
-      selectedCodeAnnotations,
-      selectedInlineFileReferences,
-      selectedManualMemories,
-      selectedNoteCards,
-    ],
-  );
   const composerReadinessAccessMode =
     selectedEngine === "codex" && _selectedCollaborationModeId === "plan"
       ? "read-only"
@@ -2389,12 +2280,6 @@ function ComposerImpl({
             selectedInlineFileReferences.length + (hasActiveFileReference ? 1 : 0),
           imageCount: attachedImages.length,
           selectedAgentName: selectedChatInputAgent?.name ?? null,
-          ledgerBlockCount: contextLedgerProjection.visible
-            ? contextLedgerProjection.totalBlockCount
-            : null,
-          ledgerGroupCount: contextLedgerProjection.visible
-            ? contextLedgerProjection.totalGroupCount
-            : null,
         },
       }),
     [
@@ -2402,9 +2287,6 @@ function ComposerImpl({
       attachedImages.length,
       canStop,
       composerReadinessAccessMode,
-      contextLedgerProjection.totalBlockCount,
-      contextLedgerProjection.totalGroupCount,
-      contextLedgerProjection.visible,
       fusingQueuedMessageId,
       hasActiveFileReference,
       isModelConfigRefreshing,
@@ -2429,14 +2311,6 @@ function ComposerImpl({
       text,
     ],
   );
-  useEffect(() => {
-    if (previousContextLedgerSessionKeyRef.current !== contextLedgerSessionKey) {
-      previousContextLedgerSessionKeyRef.current = contextLedgerSessionKey;
-      currentContextLedgerProjectionRef.current = contextLedgerProjection;
-      return;
-    }
-    currentContextLedgerProjectionRef.current = contextLedgerProjection;
-  }, [contextLedgerProjection, contextLedgerSessionKey]);
   const selectedManualMemoryIds = useMemo(
     () => selectedManualMemories.map((entry) => entry.id),
     [selectedManualMemories],
@@ -2481,7 +2355,6 @@ function ComposerImpl({
     selectedManualMemories.length > 0 ||
     selectedNoteCards.length > 0 ||
     selectedCodeAnnotations.length > 0 ||
-    (contextLedgerExpanded && contextLedgerProjection.visible) ||
     shouldRenderReviewInlinePrompt;
 
   return (
@@ -2725,23 +2598,6 @@ function ComposerImpl({
                   </div>
                 )}
 
-                {contextLedgerExpanded && contextLedgerProjection.visible ? (
-                  <ContextLedgerPanel
-                    projection={contextLedgerProjection}
-                    comparison={null}
-                    expanded={contextLedgerExpanded}
-                    hideHeader
-                    onToggle={() => setContextLedgerExpanded((prev) => !prev)}
-                    onExcludeBlock={handleExcludeLedgerBlock}
-                    onClearCarryOverBlock={handleClearCarryOverLedgerBlock}
-                    onBatchKeepBlocks={handleBatchKeepLedgerBlocks}
-                    onBatchExcludeBlocks={handleBatchExcludeLedgerBlocks}
-                    onBatchClearCarryOverBlocks={handleBatchClearCarryOverLedgerBlocks}
-                    onTogglePinBlock={handleToggleLedgerPin}
-                    onOpenBlockSource={handleOpenLedgerSource}
-                  />
-                ) : null}
-
                 {shouldRenderReviewInlinePrompt && reviewPrompt && (
                   <div
                     className="composer-suggestions popover-surface review-inline-suggestions"
@@ -2956,9 +2812,7 @@ function ComposerImpl({
               onModeSelect={handleModeSelect}
               sendReadiness={composerSendReadiness}
               onJumpToRequest={activeUserInputRequest ? handleJumpToUserInputRequest : undefined}
-              onToggleContextSources={contextLedgerProjection.visible ? handleToggleContextSources : undefined}
               onOpenSkillsSettings={_onOpenSkillsSettings}
-              contextSourcesExpanded={contextLedgerExpanded}
               selectedCollaborationModeId={_selectedCollaborationModeId}
               onSelectCollaborationMode={_onSelectCollaborationMode}
               accountRateLimits={resolvedAccountRateLimits}

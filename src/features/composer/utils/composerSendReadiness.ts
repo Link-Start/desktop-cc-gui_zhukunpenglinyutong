@@ -29,8 +29,6 @@ export type ComposerContextSummaryInput = {
   fileReferenceCount?: number;
   imageCount?: number;
   selectedAgentName?: string | null;
-  ledgerBlockCount?: number | null;
-  ledgerGroupCount?: number | null;
 };
 
 export type ComposerSendReadinessInput = {
@@ -102,22 +100,6 @@ function sanitizeContextCount(value: number | null | undefined) {
 
 export function buildComposerContextSummary(input: ComposerContextSummaryInput = {}) {
   const chips: string[] = [];
-  const ledgerBlockCount = sanitizeContextCount(input.ledgerBlockCount);
-  const ledgerGroupCount = sanitizeContextCount(input.ledgerGroupCount);
-  if (ledgerBlockCount > 0 || ledgerGroupCount > 0) {
-    const ledgerChips: string[] = [];
-    if (ledgerBlockCount > 0) {
-      ledgerChips.push(`items:${ledgerBlockCount}`);
-    }
-    if (ledgerGroupCount > 0) {
-      ledgerChips.push(`groups:${ledgerGroupCount}`);
-    }
-    return {
-      chips: ledgerChips,
-      compactLabel: ledgerChips.join(" · "),
-      detailLabel: `Context ledger: ${ledgerChips.join(", ")}`,
-    };
-  }
   const selectedMemoryCount = sanitizeContextCount(input.selectedMemoryCount);
   const selectedNoteCardCount = sanitizeContextCount(input.selectedNoteCardCount);
   const fileReferenceCount = sanitizeContextCount(input.fileReferenceCount);

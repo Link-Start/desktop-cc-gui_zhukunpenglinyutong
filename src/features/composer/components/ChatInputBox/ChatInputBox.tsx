@@ -257,9 +257,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       messageQueue,
       sendReadiness,
       onJumpToRequest,
-      onToggleContextSources,
       onOpenSkillsSettings,
-      contextSourcesExpanded,
       onRemoveFromQueue,
       onFuseFromQueue,
       canFuseFromQueue,
@@ -1475,8 +1473,6 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       <ComposerReadinessBar
         readiness={sendReadiness}
         onJumpToRequest={onJumpToRequest}
-        onToggleContextSources={onToggleContextSources}
-        contextSourcesExpanded={contextSourcesExpanded}
         selectedModel={selectedModel}
         models={availableModels}
         targetGroups={atomicProviderTargetCatalog.groups}

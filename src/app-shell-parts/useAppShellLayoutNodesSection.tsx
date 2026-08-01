@@ -1777,34 +1777,6 @@ export function useAppShellLayoutNodesSection(
       setActiveTab("git");
     }
   });
-  const handleOpenContextLedgerMemory = useEventCallback(
-    (memoryId: string) => {
-      setFocusedWorkspaceNoteId(null);
-      setFocusedProjectMemoryId(memoryId);
-      setFocusedProjectMemoryRequestKey((value) => value + 1);
-      closeSettings();
-      setAppMode("chat");
-      setCenterMode("chat");
-      setFilePanelMode("memory");
-      expandRightPanel();
-      if (isCompact) {
-        setActiveTab("git");
-      }
-    },
-  );
-  const handleOpenContextLedgerNote = useEventCallback((noteId: string) => {
-    setFocusedProjectMemoryId(null);
-    setFocusedWorkspaceNoteId(noteId);
-    setFocusedWorkspaceNoteRequestKey((value) => value + 1);
-    closeSettings();
-    setAppMode("chat");
-    setCenterMode("notes");
-    setFilePanelMode("notes");
-    expandRightPanel();
-    if (isCompact) {
-      setActiveTab("git");
-    }
-  });
   const handleOpenReleaseNotes = useEventCallback(() => {
     void openReleaseNotes();
   });
@@ -2342,8 +2314,7 @@ export function useAppShellLayoutNodesSection(
       onOpenHomeChat: handleOpenHomeChat,
       onOpenMemory: handleOpenMemory,
       onOpenProjectMemory: handleOpenProjectMemory,
-      onOpenContextLedgerMemory: handleOpenContextLedgerMemory,
-      onOpenContextLedgerNote: handleOpenContextLedgerNote,
+
       onOpenReleaseNotes: handleOpenReleaseNotes,
       focusedProjectMemoryId,
       focusedProjectMemoryRequestKey,

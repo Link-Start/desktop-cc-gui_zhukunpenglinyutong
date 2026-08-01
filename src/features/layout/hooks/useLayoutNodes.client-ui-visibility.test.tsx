@@ -960,8 +960,6 @@ function createLayoutOptions(
     onOpenClaudeTui: noop,
     onRenameWorkspaceAlias: noop,
     onQuickReloadWorkspaceThreads: noop,
-    onOpenContextLedgerMemory: noop,
-    onOpenContextLedgerNote: noop,
     showLoadingProgressDialog: noop,
     hideLoadingProgressDialog: noop,
     closeCurrentSessionShortcut: null,

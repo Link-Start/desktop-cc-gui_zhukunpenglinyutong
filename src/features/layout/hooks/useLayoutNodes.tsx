@@ -1632,8 +1632,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           kanbanContextMode={options.composerKanbanContextMode}
           onKanbanContextModeChange={options.onComposerKanbanContextModeChange}
           onOpenLinkedKanbanPanel={options.onOpenComposerKanbanPanel}
-          onOpenContextLedgerMemory={options.onOpenContextLedgerMemory}
-          onOpenContextLedgerNote={options.onOpenContextLedgerNote}
           activeFilePath={options.activeComposerFilePath}
           activeFileLineRange={options.activeComposerFileLineRange}
           fileReferenceMode={options.fileReferenceMode}

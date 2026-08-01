@@ -46,7 +46,6 @@ export const CLIENT_DOCUMENTATION_REQUIRED_UI_CONTROL_IDS = [
   "bottomActivity.tasks",
   "bottomActivity.agents",
   "bottomActivity.checkpoint",
-  "curtain.contextLedger",
   "cornerStatus.messageAnchors",
 ] as const;
 
@@ -756,21 +755,6 @@ export const CLIENT_DOCUMENTATION_TREE: ClientDocumentationNode[] = [
         ],
         ["结果展示不等于最终 CI 通过，仍需看具体验证命令。"],
         ["任务与状态面板", "Spec Hub 与规范工作流"],
-      ),
-      uiControlFeature(
-        "curtain.contextLedger",
-        "本轮上下文来源卡片",
-        "展示当前回答使用过的上下文来源。",
-        "对话幕布区域；context ledger/source card。",
-        "帮助用户理解 AI 当前读取了哪些文件、记忆或来源。",
-        ["context source", "source attribution", "ledger card", "跳回来源"],
-        [
-          "在对话中查看上下文来源卡片。",
-          "检查本轮上下文是否包含目标文件或记忆。",
-          "需要追溯时点击来源跳回对应 surface。",
-        ],
-        ["隐藏卡片不会删除上下文记录。"],
-        ["项目记忆与上下文", "文件与代码阅读"],
       ),
       uiControlFeature(
         "cornerStatus.messageAnchors",

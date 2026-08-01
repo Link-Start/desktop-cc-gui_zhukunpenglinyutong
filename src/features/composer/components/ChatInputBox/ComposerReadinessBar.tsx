@@ -19,8 +19,6 @@ function parseContextChipCount(chip: string, prefix: string) {
 type ComposerReadinessBarProps = {
   readiness: ComposerSendReadiness;
   onJumpToRequest?: () => void;
-  onToggleContextSources?: () => void;
-  contextSourcesExpanded?: boolean;
   selectedModel?: string;
   models?: ModelInfo[];
   modelGroups?: ProviderModelGroup[];
@@ -50,8 +48,6 @@ type ComposerReadinessBarProps = {
 export function ComposerReadinessBar({
   readiness,
   onJumpToRequest,
-  onToggleContextSources,
-  contextSourcesExpanded = false,
   selectedModel,
   models,
   modelGroups,
@@ -72,7 +68,6 @@ export function ComposerReadinessBar({
   rightAccessory,
 }: ComposerReadinessBarProps) {
   const { t } = useTranslation();
-  const hasContext = readiness.contextSummary.chips.length > 0;
   const contextLabels = readiness.contextSummary.chips.map((chip) => {
     const memoryCount = parseContextChipCount(chip, 'memory:');
     if (memoryCount !== null) {
@@ -90,14 +85,6 @@ export function ComposerReadinessBar({
     if (imageCount !== null) {
       return t('composer.readinessContextImage', { count: imageCount });
     }
-    const ledgerItemCount = parseContextChipCount(chip, 'items:');
-    if (ledgerItemCount !== null) {
-      return t('composer.contextLedgerSummaryBlocks', { count: ledgerItemCount });
-    }
-    const ledgerGroupCount = parseContextChipCount(chip, 'groups:');
-    if (ledgerGroupCount !== null) {
-      return t('composer.contextLedgerSummaryGroups', { count: ledgerGroupCount });
-    }
     if (chip.startsWith('agent:')) {
       return t('composer.readinessContextAgent', { name: chip.slice('agent:'.length) });
     }
@@ -105,7 +92,6 @@ export function ComposerReadinessBar({
   });
   const canJumpToRequest =
     Boolean(onJumpToRequest) && readiness.requestPointer?.canJumpToRequest === true;
-  const canToggleContextSources = hasContext && Boolean(onToggleContextSources);
 
   return (
     <div
@@ -180,18 +166,6 @@ export function ComposerReadinessBar({
             onClick={onJumpToRequest}
           >
             {t('composer.readinessJumpToRequest')}
-          </button>
-        ) : null}
-        {canToggleContextSources ? (
-          <button
-            type="button"
-            className="composer-readiness-expand"
-            onClick={onToggleContextSources}
-            aria-expanded={contextSourcesExpanded}
-          >
-            {contextSourcesExpanded
-              ? t('composer.contextLedgerCollapse')
-              : t('composer.contextLedgerExpand')}
           </button>
         ) : null}
       </div>

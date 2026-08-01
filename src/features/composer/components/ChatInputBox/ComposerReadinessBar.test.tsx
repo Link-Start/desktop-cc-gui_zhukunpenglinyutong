@@ -15,8 +15,7 @@ describe('ComposerReadinessBar', () => {
     cleanup();
   });
 
-  it('renders target and top-right context source toggle', () => {
-    const onToggleContextSources = vi.fn();
+  it('renders target and context summary without ledger toggle', () => {
     const readiness = buildComposerSendReadiness({
       engine: 'codex',
       providerLabel: 'Codex',
@@ -31,11 +30,8 @@ describe('ComposerReadinessBar', () => {
       },
     });
 
-    const { container, rerender } = render(
-      <ComposerReadinessBar
-        readiness={readiness}
-        onToggleContextSources={onToggleContextSources}
-      />,
+    const { container } = render(
+      <ComposerReadinessBar readiness={readiness} />,
     );
 
     // The read-only always-on indicator is optional. Without a rightAccessory
@@ -53,17 +49,8 @@ describe('ComposerReadinessBar', () => {
         'composer.manualMemorySelection · composer.readinessContextFileReference · composer.readinessContextAgent',
       ),
     ).toBeTruthy();
-    screen.getByRole('button', { name: 'composer.contextLedgerExpand' }).click();
-    expect(onToggleContextSources).toHaveBeenCalledTimes(1);
-    rerender(
-      <ComposerReadinessBar
-        readiness={readiness}
-        onToggleContextSources={onToggleContextSources}
-        contextSourcesExpanded
-      />,
-    );
-    screen.getByRole('button', { name: 'composer.contextLedgerCollapse' }).click();
-    expect(onToggleContextSources).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('button', { name: 'composer.contextLedgerExpand' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'composer.contextLedgerCollapse' })).toBeNull();
     expect(container.querySelector('.composer-readiness-icon svg')).toBeTruthy();
     expect(getComputedStyle(container.querySelector('.composer-readiness-icon')!).backgroundColor).toBe(
       'rgba(0, 0, 0, 0)',
