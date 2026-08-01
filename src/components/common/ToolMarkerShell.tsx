@@ -24,6 +24,7 @@ import Loader2 from 'lucide-react/dist/esm/icons/loader-2';
 import { cn } from '@/lib/utils';
 import { Marker, MarkerContent, MarkerIcon } from '../ui/marker';
 import type { ToolStatusTone } from '../../utils/toolSemantics';
+import { CollapsibleReveal } from './CollapsibleReveal';
 
 /** 与 thinking Brain / explore Search 同为 14px */
 export const TOOL_META_ICON_PX = 14;
@@ -96,7 +97,7 @@ interface ToolMarkerShellProps {
 
 /**
  * 工具块折叠行外壳。头部恒为一行 Marker，展开体由调方自带容器，
- * 仅在 expanded 时渲染。
+ * 经 CollapsibleReveal 做统一开合动画（关合后卸载 DOM）。
  * clickable 时：可聚焦、Enter/Space 切换，并暴露 aria-expanded。
  */
 export function ToolMarkerShell({
@@ -141,7 +142,8 @@ export function ToolMarkerShell({
           : {})}
         className={cn(
           // 覆盖 Marker 默认 text-sm/size-4，对齐 thinking / explore 的 meta 尺度
-          'min-h-5 gap-1.5 rounded-md py-0 pr-1 text-[length:var(--message-meta-font-size,12px)] leading-5 transition-colors',
+          // py-0.5 给折叠行一点纵向呼吸，与 thinking/explore header 的 2px padding 对齐
+          'min-h-5 gap-1.5 rounded-md py-0.5 pr-1 text-[length:var(--message-meta-font-size,12px)] leading-5 transition-colors',
           // ! 强制压过 Marker 的 size-4；选择器不依赖 :not(size-) 以免 merge/引号踩坑
           '[&_svg]:!size-3.5',
           clickable && 'cursor-pointer select-none',
@@ -177,7 +179,9 @@ export function ToolMarkerShell({
           />
         )}
       </Marker>
-      {expanded && body != null ? body : null}
+      {body != null ? (
+        <CollapsibleReveal open={expanded}>{body}</CollapsibleReveal>
+      ) : null}
     </div>
   );
 }

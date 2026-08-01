@@ -277,7 +277,7 @@
 .messages-process-phase-drawer {
   display: block;
   width: 100%;
-  margin: 2px 0 10px;
+  margin: 4px 0 12px;
 }
 
 .messages-live-middle-collapsed-indicator,
@@ -326,7 +326,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 0 8px;
+  padding: 2px 0 10px;
   width: fit-content;
   max-width: 100%;
 }
@@ -374,24 +374,18 @@
   border-top-color: color-mix(in srgb, var(--border-strong) 28%, var(--border-subtle));
 }
 
-/* Remount fade-in when a collapsed phase is expanded (hard unmount model). */
+/* Remount fade-in when a collapsed phase is expanded (hard unmount model).
+ * 与 CollapsibleReveal / collapsible-reveal-enter 共用同一套进入动效 token。
+ * slot 自带少量纵向 margin：展开过程栈时相邻步骤更疏，折叠态仍只靠子块 6px 节奏。
+ * animation 的 transform 会阻断 margin 折叠，slot margin 成为步骤间稳定间隙的一部分。 */
 .messages-process-phase-slot.is-expanded {
-  animation: messages-process-drawer-open 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  margin: 2px 0;
+  animation: collapsible-reveal-enter var(--collapsible-reveal-duration, 240ms)
+    var(--collapsible-reveal-ease, cubic-bezier(0.22, 1, 0.36, 1)) both;
 }
 
 .messages-process-phase-slot > .messages-process-phase-slot-inner {
   min-height: 0;
-}
-
-@keyframes messages-process-drawer-open {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

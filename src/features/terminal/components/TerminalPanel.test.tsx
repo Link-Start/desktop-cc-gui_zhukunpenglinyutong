@@ -19,7 +19,7 @@ function renderPanel(
 ) {
   render(
     <TerminalPanel
-      containerRef={createRef<HTMLDivElement>()}
+      containerRef={createRef<HTMLDivElement | null>()}
       status="ready"
       message=""
       getSelection={getSelection}

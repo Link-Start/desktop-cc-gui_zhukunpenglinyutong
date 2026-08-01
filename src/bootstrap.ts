@@ -10,6 +10,7 @@ import "./styles/main.css";
 import "./styles/extensions.css";
 import "./styles/tokentracker-dashboard.css";
 import "./styles/messages.css";
+import "./styles/collapsible-reveal.css";
 import "./styles/approval-toasts.css";
 import "./styles/error-toasts.css";
 import "./styles/global-runtime-notice-dock.css";

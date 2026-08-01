@@ -23,7 +23,7 @@
   width: min(520px, calc(100vw - 48px));
   max-height: calc(100vh - 48px);
   overflow-y: auto;
-  background: color-mix(in srgb, var(--surface-popover), transparent 2%);
+  background: var(--surface-popover);
   color: var(--text-primary);
   border: 1px solid color-mix(in srgb, var(--border-stronger), transparent 20%);
   border-radius: 16px;

@@ -41,6 +41,7 @@ vi.mock("react-i18next", () => ({
         "threads.subagentTreeCollapse": "Collapse subagent tree",
         "threads.runtimeProcessing": "Processing",
         "threads.runtimeReviewing": "Reviewing",
+        "threads.runtimeCompleted": "Completed",
         "threads.deleteThreadTitle": "Delete conversation",
         "threads.deleteThreadMessage":
           "Are you sure you want to delete this thread?",
@@ -803,7 +804,18 @@ describe("ThreadList", () => {
   });
 
   it("renders only relative time inline when size is available", () => {
-    const { container } = render(<ThreadList {...baseProps} />);
+    const { container } = render(
+      <ThreadList
+        {...baseProps}
+        threadStatusById={{
+          "thread-1": {
+            isProcessing: false,
+            hasUnread: false,
+            isReviewing: false,
+          },
+        }}
+      />,
+    );
 
     const meta = container.querySelector(".thread-meta");
     expect(meta).toBeTruthy();
@@ -814,9 +826,10 @@ describe("ThreadList", () => {
     const time = meta.querySelector(".thread-time");
     expect(size).toBeNull();
     expect(time?.textContent).toBe("2m");
+    expect(meta.querySelector(".thread-runtime-dot")).toBeNull();
   });
 
-  it("hides relative time while thread is running", () => {
+  it("shows a breathing status dot and hides relative time while thread is running", () => {
     const { container } = render(
       <ThreadList
         {...baseProps}
@@ -832,8 +845,81 @@ describe("ThreadList", () => {
 
     const meta = container.querySelector(".thread-meta");
     expect(meta).toBeTruthy();
-    expect(meta?.querySelector(".thread-runtime-badge")).toBeTruthy();
+    const dot = meta?.querySelector(".thread-runtime-dot");
+    expect(dot).toBeTruthy();
+    expect(dot?.classList.contains("thread-runtime-dot--processing")).toBe(
+      true,
+    );
+    expect(dot?.getAttribute("aria-label")).toBe("Processing");
+    expect(dot?.getAttribute("title")).toBe("Processing");
     expect(meta?.querySelector(".thread-time")).toBeNull();
+    expect(meta?.querySelector(".thread-runtime-badge")).toBeNull();
+  });
+
+  it("shows a static reviewing status dot while thread is reviewing", () => {
+    const { container } = render(
+      <ThreadList
+        {...baseProps}
+        threadStatusById={{
+          "thread-1": {
+            isProcessing: false,
+            hasUnread: false,
+            isReviewing: true,
+          },
+        }}
+      />,
+    );
+
+    const meta = container.querySelector(".thread-meta");
+    const dot = meta?.querySelector(".thread-runtime-dot");
+    expect(dot?.classList.contains("thread-runtime-dot--reviewing")).toBe(true);
+    expect(dot?.getAttribute("aria-label")).toBe("Reviewing");
+    expect(meta?.querySelector(".thread-time")).toBeNull();
+  });
+
+  it("shows a green completed dot when finished while away (hasUnread)", () => {
+    const { container } = render(
+      <ThreadList
+        {...baseProps}
+        threadStatusById={{
+          "thread-1": {
+            isProcessing: false,
+            hasUnread: true,
+            isReviewing: false,
+          },
+        }}
+      />,
+    );
+
+    const meta = container.querySelector(".thread-meta");
+    const dot = meta?.querySelector(".thread-runtime-dot");
+    expect(dot?.classList.contains("thread-runtime-dot--completed")).toBe(true);
+    expect(dot?.getAttribute("aria-label")).toBe("Completed");
+    expect(dot?.getAttribute("title")).toBe("Completed");
+    expect(meta?.querySelector(".thread-time")).toBeNull();
+  });
+
+  it("prefers processing breath over completed unread while still running", () => {
+    const { container } = render(
+      <ThreadList
+        {...baseProps}
+        threadStatusById={{
+          "thread-1": {
+            isProcessing: true,
+            hasUnread: true,
+            isReviewing: false,
+          },
+        }}
+      />,
+    );
+
+    const dot = container.querySelector(".thread-runtime-dot");
+    expect(dot?.classList.contains("thread-runtime-dot--processing")).toBe(
+      true,
+    );
+    expect(dot?.classList.contains("thread-runtime-dot--completed")).toBe(
+      false,
+    );
   });
 
   it("marks engine badge as processing when thread is running", () => {
@@ -1178,10 +1264,11 @@ it("marks the list as virtualized when 200 threads are present", () => {
   const spacer = container.querySelector(".thread-list-virtual-spacer");
   expect(spacer).toBeTruthy();
   // The whole point of virtualization: with 200 rows, the DOM MUST NOT
-  // mount all 200 .thread-row elements at once. With estimateSize=36 and
-  // overscan=8 and no measured scroll element in jsdom, the virtualizer
-  // may report zero items; in that case the bound is "fewer than 200"
-  // rows in the DOM. Either way, the count must stay bounded.
+  // mount all 200 .thread-row elements at once. With the sidebar thread
+  // row estimate (32) and overscan=8 and no measured scroll element in
+  // jsdom, the virtualizer may report zero items; in that case the bound
+  // is "fewer than 200" rows in the DOM. Either way, the count must stay
+  // bounded.
   const mountedRows = container.querySelectorAll(".thread-row").length;
   expect(mountedRows).toBeLessThan(200);
 });

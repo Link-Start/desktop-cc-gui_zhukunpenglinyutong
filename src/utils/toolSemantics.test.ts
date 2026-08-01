@@ -84,4 +84,28 @@ describe("toolSemantics", () => {
       }),
     ).toBe("git status");
   });
+
+  it("builds command summaries for bash toolType (Claude-style)", () => {
+    expect(
+      buildCommandSummary(
+        {
+          title: "Bash",
+          toolType: "bash",
+          detail: JSON.stringify({ command: "wc -l $(find src -type f)" }),
+        },
+        { includeDetail: false },
+      ),
+    ).toBe("wc -l $(find src -type f)");
+
+    expect(
+      buildCommandSummary(
+        {
+          title: "Bash: find . -name package.json",
+          toolType: "bash",
+          detail: "",
+        },
+        { includeDetail: false },
+      ),
+    ).toBe("find . -name package.json");
+  });
 });

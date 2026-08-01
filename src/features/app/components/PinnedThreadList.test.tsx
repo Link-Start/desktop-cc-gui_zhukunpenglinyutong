@@ -22,6 +22,7 @@ vi.mock("react-i18next", () => ({
         "threads.subagentTreeCollapse": "Collapse subagent tree",
         "threads.runtimeProcessing": "Processing",
         "threads.runtimeReviewing": "Reviewing",
+        "threads.runtimeCompleted": "Completed",
       };
       const template = translations[key] ?? key;
       return template.replace(/\{\{(\w+)\}\}/g, (_, token: string) =>

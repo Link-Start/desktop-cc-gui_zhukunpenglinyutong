@@ -19,6 +19,7 @@ import type {
   EngineDisplayInfo,
   EngineRefreshResult,
 } from "../../engine/hooks/useEngineController";
+import { seedCliEngineVisibility } from "../../composer/hooks/cliEngineVisibilityStore";
 import { requestProviderContinuationDialog } from "../../threads/services/providerContinuationRequests";
 
 const clientStoreMock = vi.hoisted(() => ({
@@ -272,6 +273,8 @@ describe("useSidebarMenus", () => {
     clientStoreMock.data = {};
     clientStoreMock.getClientStoreSync.mockClear();
     clientStoreMock.writeClientStoreValue.mockClear();
+    // 默认全部 CLI 启用，避免用例互相污染。
+    seedCliEngineVisibility([]);
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: {
@@ -565,6 +568,69 @@ describe("useSidebarMenus", () => {
 
     expect(sessionActions.map((action) => action.id)).not.toContain("new-session-gemini");
     expect(sessionActions.map((action) => action.id)).toContain("new-session-opencode");
+  });
+
+  it("hides CLI engines disabled in CLI configuration management from new session menu", async () => {
+    seedCliEngineVisibility(["opencode", "kimi", "grok"]);
+    const handlers = createHandlers();
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    await act(async () => {
+      const event = {
+        clientX: 160,
+        clientY: 120,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0];
+      result.current.showWorkspaceMenu(event, workspace);
+    });
+
+    const sessionActions =
+      result.current.workspaceMenuState?.groups.find(
+        (group) => group.id === "new-session",
+      )?.actions ?? [];
+    const sessionActionIds = sessionActions.map((action) => action.id);
+
+    expect(sessionActionIds).toContain("new-session-claude");
+    expect(sessionActionIds).toContain("new-session-codex");
+    expect(sessionActionIds).not.toContain("new-session-opencode");
+    expect(sessionActionIds).not.toContain("new-session-kimi");
+    expect(sessionActionIds).not.toContain("new-session-grok");
+    expect(sessionActionIds).not.toContain("new-session-gemini");
+
+    const sharedAction = sessionActions.find(
+      (action) => action.id === "new-session-shared",
+    );
+    expect(sharedAction).toBeDefined();
+    expect(sharedAction?.children?.map((child) => child.id)).toEqual([
+      "new-session-shared-claude",
+      "new-session-shared-codex",
+    ]);
+  });
+
+  it("hides Shared CLI entry when all shared engines are disabled", async () => {
+    seedCliEngineVisibility(["claude", "codex", "opencode", "kimi", "grok"]);
+    const handlers = createHandlers();
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    await act(async () => {
+      const event = {
+        clientX: 160,
+        clientY: 120,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0];
+      result.current.showWorkspaceMenu(event, workspace);
+    });
+
+    const sessionActionIds =
+      result.current.workspaceMenuState?.groups
+        .find((group) => group.id === "new-session")
+        ?.actions.map((action) => action.id) ?? [];
+
+    expect(sessionActionIds).not.toContain("new-session-shared");
+    expect(sessionActionIds).not.toContain("new-session-claude");
+    expect(sessionActionIds).not.toContain("new-session-codex");
   });
 
   it("moves workspace quick actions into the workspace actions menu group", async () => {

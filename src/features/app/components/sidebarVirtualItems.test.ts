@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   SIDEBAR_LIST_VIRTUALIZATION_MIN_ROWS,
+  SIDEBAR_THREAD_ROW_ESTIMATED_HEIGHT_PX,
   emptyItem,
   flattenSidebarWorkspaceItems,
   loadMoreItem,
@@ -17,6 +18,12 @@ describe("Sidebar virtual item model", () => {
     expect(SIDEBAR_LIST_VIRTUALIZATION_MIN_ROWS).toBe(100);
     expect(shouldVirtualizeSidebarList(99)).toBe(false);
     expect(shouldVirtualizeSidebarList(100)).toBe(true);
+  });
+
+  // Regression: expanded "更多" lists virtualize and used to estimate 36px
+  // while non-virtualized rows pitch at 30+2=32, making gaps look larger.
+  it("estimates thread row pitch as non-virtualized row height + list gap", () => {
+    expect(SIDEBAR_THREAD_ROW_ESTIMATED_HEIGHT_PX).toBe(32);
   });
 
   it("derives stable domain keys, never index keys", () => {

@@ -9,6 +9,7 @@ const threads = {
     "autoNaming": "自動命名中...",
     "runtimeProcessing": "実行中",
     "runtimeReviewing": "レビュー中",
+    "runtimeCompleted": "完了",
     "archive": "アーカイブ",
     "delete": "削除",
     "deleteThreadTitle": "会話を削除",

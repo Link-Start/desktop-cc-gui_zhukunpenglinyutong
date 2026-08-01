@@ -303,4 +303,36 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
     expect(expandedIds).not.toContain("noise-1");
     expect(expandedIds).toContain("a1");
   });
+
+  it("collapses multi-step phases that include command tools and counts them in breakdown", () => {
+    const items = [
+      user("u1"),
+      reasoning("r1"),
+      {
+        id: "cmd-1",
+        kind: "tool" as const,
+        toolType: "commandExecution" as const,
+        title: "Command: rg --files",
+        detail: "/tmp",
+        status: "completed" as const,
+        output: "",
+        durationMs: 400,
+      },
+      assistant("a1", "最终输出"),
+    ];
+    const result = resolveCollapsedTimelineItems({
+      activeEngine: "claude",
+      timelineSourceItems: items,
+    });
+
+    expect(result.phases).toHaveLength(1);
+    expect(result.phases[0]).toMatchObject({
+      phaseKey: "a1",
+      expanded: false,
+      breakdown: { reasoningCount: 1, toolCount: 1, exploreCount: 0 },
+      durationMs: 400,
+    });
+    expect(result.phases[0]!.hiddenItemIds).toEqual(["r1", "cmd-1"]);
+    expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "a1"]);
+  });
 });

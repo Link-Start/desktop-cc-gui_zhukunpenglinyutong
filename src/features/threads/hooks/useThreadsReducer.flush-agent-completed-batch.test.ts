@@ -104,9 +104,9 @@ describe("threadReducer flushAgentCompletedBatch", () => {
     );
   });
 
-  it("isActiveThread=false sets hasUnread true", () => {
+  it("marks hasUnread when completed thread is not the active selection", () => {
     const seed = withSeed();
-    const next = threadReducer(
+    const ensured = threadReducer(
       {
         ...seed,
         threadsByWorkspace: {
@@ -122,7 +122,13 @@ describe("threadReducer flushAgentCompletedBatch", () => {
         engine: "codex",
       },
     );
-    const after = threadReducer(next, {
+    // User switched away before completion settles.
+    const switched = threadReducer(ensured, {
+      type: "setActiveThreadId",
+      workspaceId: WORKSPACE,
+      threadId: "other-thread",
+    });
+    const after = threadReducer(switched, {
       type: "flushAgentCompletedBatch",
       workspaceId: WORKSPACE,
       threadId: THREAD,
@@ -130,15 +136,16 @@ describe("threadReducer flushAgentCompletedBatch", () => {
       text: "background turn",
       hasCustomName: false,
       timestamp: LATER,
-      isActiveThread: false,
+      // Stale handler flag must not win over reducer active selection.
+      isActiveThread: true,
     });
 
     expect(after.threadStatusById[THREAD]?.hasUnread).toBe(true);
   });
 
-  it("isActiveThread=true keeps hasUnread falsy", () => {
+  it("keeps hasUnread falsy when completed thread is still active", () => {
     const seed = withSeed();
-    const after = threadReducer(
+    const ensured = threadReducer(
       {
         ...seed,
         threadsByWorkspace: {
@@ -154,7 +161,13 @@ describe("threadReducer flushAgentCompletedBatch", () => {
         engine: "codex",
       },
     );
-    const after2 = threadReducer(after, {
+    // Existing seed threads do not auto-activate; pin selection explicitly.
+    const active = threadReducer(ensured, {
+      type: "setActiveThreadId",
+      workspaceId: WORKSPACE,
+      threadId: THREAD,
+    });
+    const after2 = threadReducer(active, {
       type: "flushAgentCompletedBatch",
       workspaceId: WORKSPACE,
       threadId: THREAD,
@@ -162,7 +175,8 @@ describe("threadReducer flushAgentCompletedBatch", () => {
       text: "active turn",
       hasCustomName: false,
       timestamp: LATER,
-      isActiveThread: true,
+      // Stale handler flag must not mark unread while still viewing.
+      isActiveThread: false,
     });
 
     expect(after2.threadStatusById[THREAD]?.hasUnread).toBeFalsy();

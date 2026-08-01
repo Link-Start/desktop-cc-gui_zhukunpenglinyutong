@@ -3,10 +3,16 @@
   --sidebar-space-1: 4px;
   --sidebar-space-2: 8px;
   --sidebar-space-3: 12px;
-  --sidebar-row-radius: 8px;
+  /* Match workspace-row radius so project / session selection pills feel consistent */
+  --sidebar-row-radius: 6px;
   --sidebar-row-height-workspace: 28px;
   --sidebar-row-height-thread: 30px;
-  --sidebar-color-active-primary: var(--surface-hover);
+  /* Soft neutral fill — same recipe as .workspace-row.active (not full surface-hover) */
+  --sidebar-color-active-primary: color-mix(
+    in srgb,
+    var(--surface-hover) 72%,
+    transparent
+  );
   --sidebar-color-active-secondary: color-mix(
     in srgb,
     var(--surface-active) 35%,

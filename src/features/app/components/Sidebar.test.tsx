@@ -1390,7 +1390,7 @@ describe("Sidebar", () => {
     expect(within(menu).getByRole("menuitem", { name: "threads.reloadThreads" })).toBeTruthy();
   });
 
-  it("keeps group collapse on double click only", async () => {
+  it("toggles group collapse on whole header row click", async () => {
     const workspace = {
       id: "ws-1",
       name: "codemoss",
@@ -1427,12 +1427,12 @@ describe("Sidebar", () => {
     await act(async () => {
       fireEvent.click(groupHeader);
     });
-    expect(screen.getByText("codemoss")).toBeTruthy();
+    expect(screen.queryByText("codemoss")).toBeNull();
 
     await act(async () => {
-      fireEvent.doubleClick(groupHeader);
+      fireEvent.click(groupHeader);
     });
-    expect(screen.queryByText("codemoss")).toBeNull();
+    expect(screen.getByText("codemoss")).toBeTruthy();
   });
 
   it("renders ungrouped projects without showing an ungrouped section header", () => {

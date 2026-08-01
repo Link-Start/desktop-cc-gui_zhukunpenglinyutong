@@ -76,7 +76,7 @@ describe("Messages turn boundaries", () => {
     expect(container.querySelector(".messages-final-boundary")).toBeTruthy();
   });
 
-  it("does not show reasoning boundary when only hidden command cards exist before final message", () => {
+  it("does not show reasoning boundary when only a single command card exists before final message", () => {
     window.localStorage.setItem("ccgui.messages.live.collapseMiddleSteps", "1");
     const items: ConversationItem[] = [
       {

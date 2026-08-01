@@ -17,6 +17,7 @@ import {
   truncateText,
 } from './toolConstants';
 import { resolveSearchInlinePresentation } from './searchToolPresentation';
+import { CollapsibleReveal } from '../../../../components/common/CollapsibleReveal';
 import { cn } from '@/lib/utils';
 
 interface SearchToolBlockProps {
@@ -239,7 +240,7 @@ export const SearchToolBlock = memo(function SearchToolBlock({
             </span>
           </button>
         </div>
-        {isExpanded && hasExpandedDetails ? (
+        <CollapsibleReveal open={isExpanded && hasExpandedDetails}>
           <div className="explore-inline-list">
             {pattern ? (
               <DetailField label="query">
@@ -284,7 +285,7 @@ export const SearchToolBlock = memo(function SearchToolBlock({
               </DetailField>
             ) : null}
           </div>
-        ) : null}
+        </CollapsibleReveal>
       </div>
     </div>
   );

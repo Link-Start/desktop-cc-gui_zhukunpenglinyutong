@@ -5,31 +5,32 @@
 const reasoning = {
   "reasoning": {
     "title": "選擇推理深度",
-    "default": "預設",
-    "claudeDefault": "預設",
+    "default": "預設 (Default)",
+    "claudeDefault": "預設 (Default)",
+    "grokDefault": "預設 (Default)",
     "defaultDescription": "使用引擎預設的推理行為",
     "low": {
-      "label": "低",
+      "label": "低 (Low)",
       "description": "以基本推理快速回應"
     },
     "medium": {
-      "label": "中",
+      "label": "中 (Medium)",
       "description": "均衡思考（預設）"
     },
     "high": {
-      "label": "高",
+      "label": "高 (High)",
       "description": "為複雜任務進行深度推理"
     },
     "xhigh": {
-      "label": "超高",
+      "label": "超高 (Extra High)",
       "description": "超高推理深度"
     },
     "max": {
-      "label": "最高",
+      "label": "最高 (Max)",
       "description": "最高推理深度"
     },
     "ultra": {
-      "label": "超強",
+      "label": "超強 (Ultra)",
       "description": "最高推理強度，並自動委派任務"
     }
   }

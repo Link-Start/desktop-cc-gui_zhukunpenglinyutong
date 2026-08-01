@@ -6,6 +6,7 @@ const threads = {
     autoNaming: "Auto naming...",
     runtimeProcessing: "Running",
     runtimeReviewing: "Reviewing",
+    runtimeCompleted: "Completed",
     archive: "Archive",
     delete: "Delete",
     deleteThreadTitle: "Delete conversation",
@@ -31,8 +32,13 @@ const threads = {
     providerContinuationTitle: "Continue with another Provider",
     providerContinuationDescription:
       "The source stays intact while a new conversation continues the work.",
+    providerContinuationFailedTitle: "Continuation did not finish",
+    providerContinuationFailedDescription:
+      "The source conversation is unchanged. You can safely retry.",
     providerContinuationSourcePreserved:
       "The source conversation will not be changed. You can return to it from the new conversation.",
+    providerContinuationFromLabel: "From",
+    providerContinuationToLabel: "To",
     providerContinuationStagePrepare: "Prepare context",
     providerContinuationStageDeliver: "Deliver context",
     providerContinuationStageVerify: "Verify target",
@@ -65,9 +71,10 @@ const threads = {
     providerContinuationSourceExcerptUnavailable: "No source excerpt available",
     providerContinuationOpenSourceTitle: "Open source conversation",
     providerContinuationOpenSource: "Open source",
-    providerContinuationEstimatedTokens:
-      "Portable history tokens → continuation package tokens",
+    providerContinuationEstimatedTokens: "Context tokens",
+    providerContinuationTokensEstimating: "Estimating context…",
     providerContinuationErrorCode: "Error code: {{code}}",
+
     openClaudeTui: "Open in Claude TUI",
     claudeResumeCommandHelp:
       "If the Claude TUI /resume picker misses this GUI session, run claude --resume <session_id> or /resume <session_id> explicitly.",

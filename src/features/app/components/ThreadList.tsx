@@ -27,6 +27,7 @@ import {
 import {
   flattenSidebarWorkspaceItems,
   resolveSidebarItemKey,
+  SIDEBAR_THREAD_ROW_ESTIMATED_HEIGHT_PX,
   shouldVirtualizeSidebarList,
   type SidebarVirtualItem,
 } from "./sidebarVirtualItems";
@@ -228,14 +229,25 @@ const ThreadRowItem = memo(function ThreadRowItem({
       : rowProjection.hasUnread
         ? "unread"
         : "ready";
-  const runtimeBadge = status?.isReviewing
+  // Live / completion status uses a compact meta-area dot (not a text pill):
+  // - processing: blue breathe
+  // - reviewing: static light blue
+  // - unread (finished while away): green; cleared on select via setActiveThreadId
+  const runtimeIndicator = status?.isReviewing
     ? { label: t("threads.runtimeReviewing"), severity: "reviewing" as const }
     : status?.isProcessing
       ? {
           label: t("threads.runtimeProcessing"),
           severity: "processing" as const,
         }
-      : null;
+      : status?.hasUnread
+        ? {
+            label: t("threads.runtimeCompleted", {
+              defaultValue: "Completed",
+            }),
+            severity: "completed" as const,
+          }
+        : null;
   const isProcessing = rowProjection.isProcessing;
   const showProxyBadge = systemProxyEnabled && isProcessing;
   const indentStyle =
@@ -376,10 +388,17 @@ const ThreadRowItem = memo(function ThreadRowItem({
             {providerLabel}
           </span>
         ) : null}
-        {runtimeBadge ? <span className={`thread-runtime-badge thread-runtime-badge--${runtimeBadge.severity}`}>
-          {runtimeBadge.label}
-        </span> : null}
-        {relativeTime && !runtimeBadge ? <span className="thread-time">{relativeTime}</span> : null}
+        {runtimeIndicator ? (
+          <span
+            className={`thread-runtime-dot thread-runtime-dot--${runtimeIndicator.severity}`}
+            title={runtimeIndicator.label}
+            aria-label={runtimeIndicator.label}
+            role="status"
+          />
+        ) : null}
+        {relativeTime && !runtimeIndicator ? (
+          <span className="thread-time">{relativeTime}</span>
+        ) : null}
       </div>
     </FloatingTooltipButton>
   );
@@ -582,7 +601,11 @@ export function ThreadList({
   const threadRowVirtualizer = useVirtualizer({
     count: shouldVirtualizeThreads ? sidebarVirtualItems.length : 0,
     getScrollElement: () => threadListRef.current,
-    estimateSize: () => 36,
+    // Match non-virtualized pitch (row min-height 30 + list gap 2). A larger
+    // estimate leaves visible gaps after expanding "更多" past the
+    // virtualization threshold; measureElement cannot shrink below the CSS
+    // min-height on `.thread-list-virtual-row`.
+    estimateSize: () => SIDEBAR_THREAD_ROW_ESTIMATED_HEIGHT_PX,
     overscan: 8,
     getItemKey: (index) => resolveSidebarItemKey(sidebarVirtualItems, index),
   });

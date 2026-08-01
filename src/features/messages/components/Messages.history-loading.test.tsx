@@ -260,7 +260,7 @@ describe("Messages history loading", () => {
     expect(screen.getByText(/README\.md/)).toBeTruthy();
   });
 
-  it("does not enable Claude transcript fallback outside history restore", () => {
+  it("keeps file-inspection bash rows on Claude canvas outside history restore", () => {
     render(
       <Messages
         items={[
@@ -302,7 +302,52 @@ describe("Messages history loading", () => {
       />,
     );
 
-    // Outside history-transcript fallback, bash groups stay off the canvas.
+    // find/cat are file-inspection → stay on canvas; pure ls noise is filtered out of the group.
+    expect(screen.getByText(/tools\.bashGroupBatchRun/)).toBeTruthy();
+  });
+
+  it("hides pure shell noise bash groups on Claude canvas outside history restore", () => {
+    render(
+      <Messages
+        items={[
+          {
+            id: "tool-noise-1",
+            kind: "tool",
+            toolType: "bash",
+            title: "Bash",
+            detail: "{\"command\":\"pwd\"}",
+            status: "completed",
+            output: "/repo",
+          },
+          {
+            id: "tool-noise-2",
+            kind: "tool",
+            toolType: "bash",
+            title: "Bash",
+            detail: "{\"command\":\"ls -la\"}",
+            status: "completed",
+            output: "README.md\n",
+          },
+          {
+            id: "tool-noise-3",
+            kind: "tool",
+            toolType: "bash",
+            title: "Bash",
+            detail: "{\"command\":\"echo done\"}",
+            status: "completed",
+            output: "done\n",
+          },
+        ]}
+        threadId="claude:idle-pure-shell"
+        workspaceId="ws-1"
+        isThinking={false}
+        activeEngine="claude"
+        onUserInputSubmit={vi.fn()}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
     expect(screen.queryByText(/tools\.bashGroupBatchRun/)).toBeNull();
   });
 

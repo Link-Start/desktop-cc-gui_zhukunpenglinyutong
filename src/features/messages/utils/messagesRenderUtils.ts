@@ -504,6 +504,9 @@ export function promoteCanvasFileIoToolItem(
  *
  * ExitPlanMode remains visible. TodoWrite still uses other filters.
  * deepseek-v4 via Codex does not change this — tool wire shape is still Codex.
+ *
+ * Note: upstream once flipped this gate to always-show for count parity; local
+ * policy keeps selective hide so process chips match visible file-IO rows only.
  */
 export function shouldHideCodexCanvasCommandCard(
   item: Extract<ConversationItem, { kind: "tool" }>,

@@ -15,6 +15,20 @@ import type { ThreadSummary } from "../../../types";
 
 export const SIDEBAR_LIST_VIRTUALIZATION_MIN_ROWS = 100;
 
+/**
+ * Virtualized thread-row pitch in CSS pixels.
+ *
+ * Must stay in sync with non-virtualized layout:
+ *   `.thread-row` min-height `--sidebar-row-height-thread` (30px)
+ *   + `.thread-list` flex `gap` (2px)
+ * and with `.thread-list-virtual-row` min-height in sidebar.css.
+ *
+ * Using a larger value (historically 36) makes expanded "更多" lists look
+ * airier than the collapsed preview, because expand can cross the
+ * virtualization threshold while collapse stays in plain flex layout.
+ */
+export const SIDEBAR_THREAD_ROW_ESTIMATED_HEIGHT_PX = 32;
+
 export type SidebarVirtualItemKind =
   | "thread"
   | "pinned"

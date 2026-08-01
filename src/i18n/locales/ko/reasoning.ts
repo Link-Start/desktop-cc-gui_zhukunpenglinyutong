@@ -7,6 +7,7 @@ const reasoning = {
     "title": "추론 깊이 선택",
     "default": "기본값",
     "claudeDefault": "기본값",
+    "grokDefault": "기본값",
     "defaultDescription": "엔진 기본 추론 동작 사용",
     "low": {
       "label": "낮음",

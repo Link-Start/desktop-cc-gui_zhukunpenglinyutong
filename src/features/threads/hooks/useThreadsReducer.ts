@@ -86,6 +86,7 @@ import {
   findAssistantMessageIndexById,
   findAssistantMessageIndexByPrefix,
   isAssistantMessageItem,
+  isThreadActiveInState,
   isThreadScopedCodexCompactionMessage,
   isThreadTokenUsageEqual,
   isToolConversationItem,
@@ -891,13 +892,23 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         wasProcessing && startedAt
           ? Math.max(0, action.timestamp - startedAt)
           : lastDurationMs ?? null;
+      // Background completion: when a live turn settles while the user is not
+      // viewing this thread, mark unread so the sidebar can show the green "done"
+      // dot. Active-thread settles stay clean (no green). Rely on reducer state
+      // rather than agent-message paths, which often miss this transition.
+      const settledWhileAway =
+        wasProcessing &&
+        !isThreadActiveInState(state.activeThreadIdByWorkspace, action.threadId);
+      const nextHasUnread = settledWhileAway
+        ? true
+        : (previous?.hasUnread ?? false);
       return {
         ...state,
         threadStatusById: {
           ...state.threadStatusById,
           [action.threadId]: {
             isProcessing: false,
-            hasUnread: previous?.hasUnread ?? false,
+            hasUnread: nextHasUnread,
             isReviewing: previous?.isReviewing ?? false,
             isContextCompacting: previous?.isContextCompacting ?? false,
             processingStartedAt: null,
@@ -1468,10 +1479,16 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         };
       }
 
-      // 3) \u6761\u4ef6 markUnread
+      // 3) \u6761\u4ef6 markUnread — reducer active selection is SSOT.
+      // Handler isActiveThread can lag after the user switches threads.
       let threadStatusChanged = false;
       let nextThreadStatusById = state.threadStatusById;
-      if (!action.isActiveThread) {
+      const isActiveInState = isThreadActiveInState(
+        state.activeThreadIdByWorkspace,
+        action.threadId,
+        action.workspaceId,
+      );
+      if (!isActiveInState) {
         const currentStatus = state.threadStatusById[action.threadId];
         const baseStatus = withThreadStatusDefaults(currentStatus);
         if (!baseStatus.hasUnread) {

@@ -7,6 +7,7 @@ const reasoning = {
     "title": "Выберите глубину рассуждений",
     "default": "По умолчанию",
     "claudeDefault": "По умолчанию",
+    "grokDefault": "По умолчанию",
     "defaultDescription": "Использовать поведение рассуждений движка по умолчанию",
     "low": {
       "label": "Низкая",

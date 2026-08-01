@@ -9,6 +9,7 @@ const threads = {
     "autoNaming": "Nomeando automaticamente...",
     "runtimeProcessing": "Em execução",
     "runtimeReviewing": "Revisando",
+    "runtimeCompleted": "Concluído",
     "archive": "Arquivar",
     "delete": "Excluir",
     "deleteThreadTitle": "Excluir conversa",

@@ -21,7 +21,7 @@ export function WorkspaceGroup({
       {showHeader && (
         <div
           className={`workspace-group-header${isToggleable ? " is-toggleable" : ""}`}
-          onDoubleClick={
+          onClick={
             toggleId
               ? (event) => {
                   if (event.button !== 0) {
@@ -47,28 +47,13 @@ export function WorkspaceGroup({
           tabIndex={isToggleable ? 0 : undefined}
         >
           <div className="workspace-group-title">
+            {isToggleable && (
+              <span className={`group-toggle ${isCollapsed ? "" : "expanded"}`} aria-hidden>
+                <span className="group-toggle-icon">›</span>
+              </span>
+            )}
             <div className="workspace-group-label">{name}</div>
           </div>
-          {isToggleable && (
-            <button
-              className={`group-toggle ${isCollapsed ? "" : "expanded"}`}
-              onClick={(event) => {
-                event.stopPropagation();
-                if (!toggleId) {
-                  return;
-                }
-                onToggleCollapse(toggleId);
-              }}
-              onDoubleClick={(event) => {
-                event.stopPropagation();
-              }}
-              aria-label={isCollapsed ? "Expand group" : "Collapse group"}
-              aria-expanded={!isCollapsed}
-              type="button"
-            >
-              <span className="group-toggle-icon">›</span>
-            </button>
-          )}
         </div>
       )}
       <div className={`workspace-group-list ${isCollapsed ? "collapsed" : ""}`}>

@@ -105,8 +105,6 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     activeEngine,
     activeUserInputAnchorItemId,
     activeUserInputRequestId,
-    // Reserved for future transcript-only chrome; bash/command cards stay visible.
-    claudeHistoryTranscriptFallbackActive: _claudeHistoryTranscriptFallbackActive,
     latestRetryMessage,
     latestRuntimeReconnectItemId,
     nativeRuntimeRecoveryEnabled,
@@ -478,9 +476,6 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
       return <DiffRow key={`diff:${renderItem.id}`} item={renderItem} />;
     }
     if (renderKind === "tool" && renderItem.kind === "tool") {
-      if (shouldHideCodexCanvasCommandCard(renderItem, activeEngine)) {
-        return null;
-      }
       const isExpanded = expandedItems.has(renderItem.id);
       const selectedExitPlanExecutionMode =
         selectedExitPlanExecutionByItemKey[`${threadId ?? "no-thread"}:${renderItem.id}`] ?? null;
