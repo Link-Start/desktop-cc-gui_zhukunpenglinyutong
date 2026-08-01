@@ -1,7 +1,6 @@
 import React, { useRef, useCallback, useMemo, useState, useEffect, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import Crosshair from 'lucide-react/dist/esm/icons/crosshair';
-import ListCollapse from 'lucide-react/dist/esm/icons/list-collapse';
 import Mail from 'lucide-react/dist/esm/icons/mail';
 import { AgentIcon } from '../../../../components/AgentIcon';
 import { ContextUsageIcon } from '@/components/ai-elements/context';
@@ -16,7 +15,6 @@ import type {
 import { sanitizeSvg } from './utils/sanitize';
 import {
   MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY,
-  MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY,
   MESSAGES_LIVE_CONTROLS_UPDATED_EVENT,
   readLocalBooleanFlag,
   writeLocalBooleanFlag,
@@ -115,13 +113,9 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
   const [liveAutoFollowEnabled, setLiveAutoFollowEnabled] = useState(() =>
     readLocalBooleanFlag(MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY, true),
   );
-  const [collapseLiveMiddleStepsEnabled, setCollapseLiveMiddleStepsEnabled] = useState(() =>
-    readLocalBooleanFlag(MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY, false),
-  );
   const manualCompactionMinSpinMs = 1200;
   const showLiveAutoFollowControl = Boolean(isLoading && showStatusPanelToggle);
-  const showCollapseMiddleStepsControl = Boolean((isLoading || hasMessages) && showStatusPanelToggle);
-  const showLiveCanvasControls = showLiveAutoFollowControl || showCollapseMiddleStepsControl;
+  const showLiveCanvasControls = showLiveAutoFollowControl;
   const rewindDisabled = !hasMessages || isLoading;
 
   const handleAttachClick = useCallback((e: React.MouseEvent) => {
@@ -314,12 +308,6 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
       }
       if (event.key === MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY) {
         setLiveAutoFollowEnabled(readLocalBooleanFlag(MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY, true));
-        return;
-      }
-      if (event.key === MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY) {
-        setCollapseLiveMiddleStepsEnabled(
-          readLocalBooleanFlag(MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY, false),
-        );
       }
     };
     window.addEventListener('storage', handleStorage);
@@ -329,7 +317,7 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
   }, []);
 
   const emitLiveCanvasControlsUpdate = useCallback(
-    (detail: { liveAutoFollowEnabled?: boolean; collapseLiveMiddleStepsEnabled?: boolean }) => {
+    (detail: { liveAutoFollowEnabled?: boolean }) => {
       window.dispatchEvent(
         new CustomEvent(MESSAGES_LIVE_CONTROLS_UPDATED_EVENT, {
           detail,
@@ -344,15 +332,6 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
       const next = !previous;
       writeLocalBooleanFlag(MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY, next);
       emitLiveCanvasControlsUpdate({ liveAutoFollowEnabled: next });
-      return next;
-    });
-  }, [emitLiveCanvasControlsUpdate]);
-
-  const handleToggleCollapseLiveMiddleSteps = useCallback(() => {
-    setCollapseLiveMiddleStepsEnabled((previous) => {
-      const next = !previous;
-      writeLocalBooleanFlag(MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY, next);
-      emitLiveCanvasControlsUpdate({ collapseLiveMiddleStepsEnabled: next });
       return next;
     });
   }, [emitLiveCanvasControlsUpdate]);
@@ -690,29 +669,6 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
                   <span className="context-live-canvas-dot" />
                 </span>
                 <span className="context-tool-label">{t('messages.liveAutoFollowToggle')}</span>
-              </button>
-            )}
-            {showCollapseMiddleStepsControl && (
-              <button
-                type="button"
-                className={`context-tool-btn context-live-canvas-btn has-tooltip${collapseLiveMiddleStepsEnabled ? ' is-active' : ''}`}
-                onClick={handleToggleCollapseLiveMiddleSteps}
-                data-tooltip={
-                  collapseLiveMiddleStepsEnabled
-                    ? t('messages.collapseMiddleStepsDisable')
-                    : t('messages.collapseMiddleStepsEnable')
-                }
-                aria-label={
-                  collapseLiveMiddleStepsEnabled
-                    ? t('messages.collapseMiddleStepsDisable')
-                    : t('messages.collapseMiddleStepsEnable')
-                }
-                aria-pressed={collapseLiveMiddleStepsEnabled}
-              >
-                <span className="context-live-canvas-icon" aria-hidden>
-                  <ListCollapse size={13} />
-                  <span className="context-live-canvas-dot" />
-                </span>
               </button>
             )}
           </div>

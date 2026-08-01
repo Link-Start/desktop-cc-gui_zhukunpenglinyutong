@@ -1,4 +1,11 @@
-import { Fragment, memo, useMemo, useRef, type ReactNode } from "react";
+import {
+  Fragment,
+  memo,
+  useMemo,
+  useRef,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
 import Check from "lucide-react/dist/esm/icons/check";
 import Copy from "lucide-react/dist/esm/icons/copy";
@@ -42,6 +49,7 @@ import {
 } from "../../components/MessagesRows";
 import { ConversationRowErrorBoundary } from "../../components/conversation/ConversationRowErrorBoundary";
 import { TurnFilesChangedCard } from "../../components/conversation/TurnFilesChangedCard";
+import { MiddleStepsCollapsedChip } from "./MiddleStepsCollapsedChip";
 import type {
   TimelineRowRendererProps,
   TimelineUserActionNodeCacheEntry,
@@ -125,6 +133,7 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     onRetryHistory,
     onRewindFromMessage,
     onThreadRecoveryFork,
+    onToggleProcessPhaseExpanded,
     openFileLink,
     showFileLinkMenu,
     toggleExpanded,
@@ -655,7 +664,33 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
       return null;
     }
     if (row.kind === "entry") {
-      return renderEntry(row.entry);
+      const entryNode = renderEntry(row.entry);
+      if (!entryNode) {
+        return null;
+      }
+      if (row.processPhaseKey) {
+        const revealDelayMs = Math.min(120, (row.processPhaseRevealIndex ?? 0) * 28);
+        return (
+          <div
+            className={`messages-process-phase-slot${
+              row.processPhaseCollapsed ? " is-collapsed" : " is-expanded"
+            }`}
+            data-process-phase-key={row.processPhaseKey}
+            data-process-phase-collapsed={row.processPhaseCollapsed ? "true" : "false"}
+            style={
+              row.processPhaseCollapsed
+                ? undefined
+                : ({
+                    animationDelay: `${revealDelayMs}ms`,
+                  } satisfies CSSProperties)
+            }
+            aria-hidden={row.processPhaseCollapsed || undefined}
+          >
+            <div className="messages-process-phase-slot-inner">{entryNode}</div>
+          </div>
+        );
+      }
+      return entryNode;
     }
     if (row.kind === "dockedReasoning") {
       const dockedReasoning = dockedReasoningById.get(row.itemId);
@@ -684,9 +719,13 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     }
     if (row.kind === "liveMiddleCollapsed") {
       return (
-        <div className="messages-live-middle-collapsed-indicator" role="status">
-          {t("messages.middleStepsCollapsedHint", { count: row.count })}
-        </div>
+        <MiddleStepsCollapsedChip
+          count={row.count}
+          durationMs={row.durationMs}
+          expanded={row.expanded}
+          breakdown={row.breakdown}
+          onToggle={() => onToggleProcessPhaseExpanded(row.phaseKey)}
+        />
       );
     }
     if (row.kind === "workingIndicator") {

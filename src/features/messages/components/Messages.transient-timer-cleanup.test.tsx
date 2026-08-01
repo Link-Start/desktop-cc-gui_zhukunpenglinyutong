@@ -44,8 +44,6 @@ const baseProps = {
   setPendingJumpMessageId: () => {},
   liveAutoFollowEnabled: true,
   setLiveAutoFollowEnabled: () => {},
-  collapseLiveMiddleStepsEnabled: true,
-  setCollapseLiveMiddleStepsEnabled: () => {},
   isMacDesktop: false,
   isWindowsDesktop: false,
   showFileLinkMenu: undefined,
@@ -69,7 +67,7 @@ describe("Messages transient timer cleanup on threadId change", () => {
     vi.useFakeTimers();
     appendRendererDiagnosticMock.mockClear();
     window.localStorage.removeItem("ccgui.messages.live.autoFollow");
-    window.localStorage.removeItem("ccgui.messages.live.collapseMiddleSteps");
+    window.localStorage.setItem("ccgui.messages.live.collapseMiddleSteps", "0");
   });
   afterEach(() => {
     vi.useRealTimers();

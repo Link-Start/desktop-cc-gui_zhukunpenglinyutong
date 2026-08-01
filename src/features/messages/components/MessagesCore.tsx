@@ -22,7 +22,6 @@ import type { AgentTaskScrollRequest } from "../types";
 import { getVisibleApprovalsForThread } from "../../../utils/approvalBatching";
 import {
   MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY,
-  MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY,
   MESSAGES_LIVE_CONTROLS_UPDATED_EVENT,
   readLocalBooleanFlag,
   writeLocalBooleanFlag,
@@ -326,13 +325,11 @@ export const MessagesCore = memo(function MessagesCore({
   const [liveAutoFollowEnabled, setLiveAutoFollowEnabled] = useState(() =>
     readLocalBooleanFlag(MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY, true),
   );
-  const [collapseLiveMiddleStepsEnabled, setCollapseLiveMiddleStepsEnabled] = useState(() =>
-    readLocalBooleanFlag(MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY, false),
+  const [expandedProcessPhaseKeys, setExpandedProcessPhaseKeys] = useState<Set<string>>(
+    () => new Set(),
   );
   const liveAutoFollowEnabledRef = useRef(liveAutoFollowEnabled);
   liveAutoFollowEnabledRef.current = liveAutoFollowEnabled;
-  const collapseLiveMiddleStepsEnabledRef = useRef(collapseLiveMiddleStepsEnabled);
-  collapseLiveMiddleStepsEnabledRef.current = collapseLiveMiddleStepsEnabled;
   const legacyClaudeReasoningDockEnabled =
     activeEngine === "claude" &&
     typeof claudeThinkingVisible !== "boolean" &&
@@ -703,12 +700,6 @@ export const MessagesCore = memo(function MessagesCore({
   }, [liveAutoFollowEnabled]);
 
   useEffect(() => {
-    writeLocalBooleanFlag(
-      MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY,
-      collapseLiveMiddleStepsEnabled,
-    );
-  }, [collapseLiveMiddleStepsEnabled]);
-  useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
@@ -717,7 +708,6 @@ export const MessagesCore = memo(function MessagesCore({
     ) => {
       const customEvent = event as CustomEvent<{
         liveAutoFollowEnabled?: boolean;
-        collapseLiveMiddleStepsEnabled?: boolean;
       }>;
       const detail = customEvent.detail;
       if (!detail) {
@@ -736,13 +726,6 @@ export const MessagesCore = memo(function MessagesCore({
         // 重新打开焦点跟随：仅 false→true 边沿 re-arm（流式/闲时均可一键归位）。
         if (!wasLiveAutoFollowEnabled && nextLiveAutoFollowEnabled) {
           rearmAutoFollowToBottom();
-        }
-      }
-      if (typeof detail.collapseLiveMiddleStepsEnabled === "boolean") {
-        const nextCollapseLiveMiddleStepsEnabled = detail.collapseLiveMiddleStepsEnabled;
-        if (collapseLiveMiddleStepsEnabledRef.current !== nextCollapseLiveMiddleStepsEnabled) {
-          collapseLiveMiddleStepsEnabledRef.current = nextCollapseLiveMiddleStepsEnabled;
-          setCollapseLiveMiddleStepsEnabled(nextCollapseLiveMiddleStepsEnabled);
         }
       }
     };
@@ -765,17 +748,6 @@ export const MessagesCore = memo(function MessagesCore({
         } else if (!wasLiveAutoFollowEnabled && nextLiveAutoFollowEnabled) {
           // 与 CustomEvent 一致：只在边沿 re-arm，避免跨 tab 重复 setItem 拽回底部。
           rearmAutoFollowToBottom();
-        }
-        return;
-      }
-      if (event.key === MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY) {
-        const nextCollapseLiveMiddleStepsEnabled = readLocalBooleanFlag(
-          MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY,
-          false,
-        );
-        if (collapseLiveMiddleStepsEnabledRef.current !== nextCollapseLiveMiddleStepsEnabled) {
-          collapseLiveMiddleStepsEnabledRef.current = nextCollapseLiveMiddleStepsEnabled;
-          setCollapseLiveMiddleStepsEnabled(nextCollapseLiveMiddleStepsEnabled);
         }
       }
     };
@@ -1009,25 +981,46 @@ export const MessagesCore = memo(function MessagesCore({
       enableCollaborationBadge,
     });
   }, [activeEngine, enableCollaborationBadge, isThinking, visibleItems]);
-  const { timelineItems, collapsedMiddleStepCount } = useMemo(
+  const { timelineItems, phases: processPhases } = useMemo(
     () =>
       resolveCollapsedTimelineItems({
         activeEngine,
-        collapseLiveMiddleStepsEnabled,
-        isThinking,
-        latestAssistantMessageId,
-        latestReasoningId,
+        expandedPhaseKeys: expandedProcessPhaseKeys,
         timelineSourceItems,
       }),
-    [
-      activeEngine,
-      collapseLiveMiddleStepsEnabled,
-      isThinking,
-      latestAssistantMessageId,
-      latestReasoningId,
-      timelineSourceItems,
-    ],
+    [activeEngine, expandedProcessPhaseKeys, timelineSourceItems],
   );
+  const processPhaseChips = useMemo(
+    () =>
+      processPhases.map((phase) => ({
+        phaseKey: phase.phaseKey,
+        count: phase.count,
+        expanded: phase.expanded,
+        breakdown: phase.breakdown,
+        // Prefer per-tool duration; fall back to turn duration so the header matches
+        // the reference "已处理 1m 3s" control when tool timing is missing.
+        durationMs:
+          phase.durationMs ??
+          (typeof lastDurationMs === "number" && lastDurationMs >= 0 ? lastDurationMs : null),
+        insertBeforeItemId: phase.insertBeforeItemId,
+        hiddenItemIds: phase.hiddenItemIds,
+      })),
+    [lastDurationMs, processPhases],
+  );
+  const handleToggleProcessPhaseExpanded = useCallback((phaseKey: string) => {
+    setExpandedProcessPhaseKeys((previous) => {
+      const next = new Set(previous);
+      if (next.has(phaseKey)) {
+        next.delete(phaseKey);
+      } else {
+        next.add(phaseKey);
+      }
+      return next;
+    });
+  }, []);
+  useEffect(() => {
+    setExpandedProcessPhaseKeys(new Set());
+  }, [threadId]);
   const latestReasoningVisibleInTimeline = useMemo(() => {
     if (!latestReasoningId) {
       return false;
@@ -1749,7 +1742,7 @@ export const MessagesCore = memo(function MessagesCore({
       assistantFinalBoundarySet,
       assistantLiveTurnFinalBoundarySuppressedSet,
       claudeDockedReasoningItems,
-      collapsedMiddleStepCount,
+      processPhaseChips,
       effectiveItemsCount: timelinePresentationItems.length,
       groupedEntries,
       hasPendingUserTurn: messageActionTargets.hasPendingUserTurn,
@@ -1825,13 +1818,13 @@ export const MessagesCore = memo(function MessagesCore({
       onRewindFromMessage,
       onShowAllHistoryItems: handleShowAllHistoryItems,
       onThreadRecoveryFork,
+      onToggleProcessPhaseExpanded: handleToggleProcessPhaseExpanded,
       openFileLink,
       showFileLinkMenu,
       toggleExpanded,
     },
     presentation: {
       codeBlockCopyUseModifier,
-      collapseLiveMiddleStepsEnabled,
       conversationDetailHydrationRequested,
       conversationLightweightModeEnabled,
       copiedMessageId,

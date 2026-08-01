@@ -29,7 +29,19 @@ export type TimelineSnapshotModel = {
     item: ReasoningItem;
     parsed: ReturnType<typeof parseReasoning>;
   }>;
-  collapsedMiddleStepCount: number;
+  processPhaseChips: Array<{
+    phaseKey: string;
+    count: number;
+    expanded: boolean;
+    durationMs: number | null;
+    breakdown: {
+      reasoningCount: number;
+      toolCount: number;
+      exploreCount: number;
+    };
+    insertBeforeItemId: string;
+    hiddenItemIds: readonly string[];
+  }>;
   effectiveItemsCount: number;
   groupedEntries: GroupedEntry[];
   hasPendingUserTurn: boolean;
@@ -120,6 +132,7 @@ export type TimelineInteractionModel = {
   onRewindFromMessage?: (messageId: string) => void;
   onShowAllHistoryItems: () => void;
   onThreadRecoveryFork?: () => Promise<void> | void;
+  onToggleProcessPhaseExpanded: (phaseKey: string) => void;
   openFileLink?: (path: string) => void;
   showFileLinkMenu?: (event: React.MouseEvent, path: string) => void;
   toggleExpanded: (id: string) => void;
@@ -127,7 +140,6 @@ export type TimelineInteractionModel = {
 
 export type TimelinePresentationModel = {
   codeBlockCopyUseModifier: boolean;
-  collapseLiveMiddleStepsEnabled: boolean;
   conversationDetailHydrationRequested: boolean;
   conversationLightweightModeEnabled: boolean;
   copiedMessageId: string | null;

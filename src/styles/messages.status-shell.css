@@ -268,14 +268,161 @@
     0 0 8px color-mix(in srgb, var(--accent) 54%, transparent);
 }
 
-.messages-live-middle-collapsed-indicator {
-  margin: 4px 0 10px;
-  padding: 7px 10px;
-  border-radius: 10px;
-  border: 1px dashed color-mix(in srgb, var(--border-subtle) 86%, transparent);
-  background: color-mix(in srgb, var(--surface-card-muted) 78%, transparent);
+/* ── Process phase drawer header ─────────────────────────────────
+ * Not a pill/button: label + chevron over a full-width hairline.
+ *   已处理 1m 3s ›
+ *   ────────────────────────────
+ */
+
+.messages-process-phase-drawer {
+  display: block;
+  width: 100%;
+  margin: 2px 0 10px;
+}
+
+.messages-live-middle-collapsed-indicator,
+.messages-process-phase-toggle {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: none;
+  text-align: left;
+  transition: color 160ms ease;
+}
+
+.messages-process-phase-toggle:hover {
+  color: var(--text-secondary);
+  background: transparent;
+}
+
+.messages-process-phase-toggle:active {
+  color: var(--text-secondary);
+}
+
+.messages-process-phase-toggle:focus-visible {
+  outline: none;
+}
+
+.messages-process-phase-toggle:focus-visible .messages-process-phase-toggle-copy {
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.messages-process-phase-toggle-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0 8px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.messages-process-phase-toggle-label {
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.messages-process-phase-toggle-chevron {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  opacity: 0.7;
+  color: currentColor;
+  transition:
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 160ms ease;
+}
+
+.messages-process-phase-toggle.is-collapsed .messages-process-phase-toggle-chevron {
+  transform: rotate(0deg);
+}
+
+.messages-process-phase-toggle.is-expanded .messages-process-phase-toggle-chevron {
+  transform: rotate(90deg);
+  opacity: 0.75;
+}
+
+.messages-process-phase-toggle:hover .messages-process-phase-toggle-chevron {
+  opacity: 0.9;
+}
+
+/* Full-width hairline under the label (reference fig.2) */
+.messages-process-phase-toggle-rule {
+  display: block;
+  width: 100%;
+  height: 0;
+  border: none;
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
+  transition: border-color 160ms ease;
+}
+
+.messages-process-phase-toggle:hover .messages-process-phase-toggle-rule {
+  border-top-color: color-mix(in srgb, var(--border-strong) 28%, var(--border-subtle));
+}
+
+/* Drawer body rows under the header */
+.messages-process-phase-slot {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform-origin: top center;
+  transition:
+    grid-template-rows 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 240ms ease,
+    margin 240ms ease;
+}
+
+.messages-process-phase-slot > .messages-process-phase-slot-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.messages-process-phase-slot.is-collapsed {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  pointer-events: none;
+}
+
+.messages-process-phase-slot.is-expanded {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  animation: messages-process-drawer-open 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes messages-process-drawer-open {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .messages-process-phase-toggle,
+  .messages-process-phase-toggle-chevron,
+  .messages-process-phase-slot {
+    transition: none !important;
+    animation: none !important;
+  }
 }
 
 @media (max-width: 900px) {

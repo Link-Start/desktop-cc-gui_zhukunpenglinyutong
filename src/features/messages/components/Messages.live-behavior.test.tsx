@@ -44,7 +44,7 @@ describe("Messages live behavior", () => {
   beforeEach(() => {
     window.localStorage.setItem("ccgui.claude.hideReasoningModule", "0");
     window.localStorage.removeItem("ccgui.messages.live.autoFollow");
-    window.localStorage.removeItem("ccgui.messages.live.collapseMiddleSteps");
+    window.localStorage.setItem("ccgui.messages.live.collapseMiddleSteps", "0");
     vi.stubGlobal(
       "ResizeObserver",
       class {
@@ -2578,8 +2578,7 @@ describe("Messages live behavior", () => {
     });
   });
 
-  it("collapses live middle steps when enabled", () => {
-    window.localStorage.setItem("ccgui.messages.live.collapseMiddleSteps", "1");
+  it("collapses only the causal process run above assistant prose", () => {
     const items: ConversationItem[] = [
       {
         id: "user-live-collapse",
@@ -2591,15 +2590,15 @@ describe("Messages live behavior", () => {
         id: "reasoning-live-collapse",
         kind: "reasoning",
         summary: "分析中",
-        content: "",
+        content: "thinking body",
       },
       {
         id: "tool-live-collapse",
         kind: "tool",
-        toolType: "commandExecution",
-        title: "Command: rg --files",
-        detail: "/tmp",
-        status: "running",
+        toolType: "fileRead",
+        title: "Read causal.ts",
+        detail: "causal.ts",
+        status: "completed",
         output: "",
       },
       {
@@ -2622,50 +2621,93 @@ describe("Messages live behavior", () => {
       />,
     );
 
-    expect(container.querySelector(".messages-live-middle-collapsed-indicator")).toBeTruthy();
-    expect(container.querySelector(".thinking-block")).toBeNull();
+    const chip = container.querySelector(".messages-process-phase-toggle");
+    expect(chip).toBeTruthy();
+    expect(chip?.classList.contains("is-collapsed")).toBe(true);
+    expect(container.querySelectorAll('[data-process-phase-collapsed="true"]').length).toBeGreaterThan(0);
     expect(container.textContent ?? "").toContain("最终输出");
-    expect(container.textContent ?? "").not.toContain("Command: rg --files");
+    expect(container.textContent ?? "").toContain("已处理");
   });
 
-  it("excludes hidden commands and batch commands from the live collapsed count", () => {
-    window.localStorage.setItem("ccgui.messages.live.collapseMiddleSteps", "1");
+  it("does not collapse a single process step above prose", () => {
     const items: ConversationItem[] = [
       {
-        id: "user-live-collapse-count",
+        id: "user-single-step",
         kind: "message",
         role: "user",
         text: "请继续",
       },
       {
-        id: "reasoning-live-collapse-count",
-        kind: "reasoning",
-        summary: "分析中",
-        content: "",
-      },
-      {
-        id: "tool-live-collapse-count-1",
+        id: "tool-single",
         kind: "tool",
-        toolType: "commandExecution",
-        title: "Command: rg --files",
-        detail: "/tmp",
-        status: "running",
+        toolType: "fileRead",
+        title: "Read single.ts",
+        detail: "single.ts",
+        status: "completed",
         output: "",
       },
       {
-        id: "tool-live-collapse-count-2",
-        kind: "tool",
-        toolType: "commandExecution",
-        title: "Command: ls -la",
-        detail: "/tmp",
-        status: "running",
-        output: "",
-      },
-      {
-        id: "assistant-live-collapse-count",
+        id: "assistant-single",
         kind: "message",
         role: "assistant",
-        text: "最终输出",
+        text: "单步输出",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.querySelector(".messages-process-phase-toggle")).toBeNull();
+    // Single-step process stays on the narrative surface (no phase chip).
+    expect(container.querySelector(".message-tool-block-shell, .tool-block, .task-container")).toBeTruthy();
+    expect(container.textContent ?? "").toContain("单步输出");
+  });
+
+  it("keeps trailing open process expanded after earlier multi-step phase collapsed", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "user-live-trailing",
+        kind: "message",
+        role: "user",
+        text: "请继续",
+      },
+      {
+        id: "reasoning-done",
+        kind: "reasoning",
+        summary: "done",
+        content: "done-thinking",
+      },
+      {
+        id: "tool-done",
+        kind: "tool",
+        toolType: "fileRead",
+        title: "Read done.ts",
+        detail: "done.ts",
+        status: "completed",
+        output: "",
+      },
+      {
+        id: "assistant-done",
+        kind: "message",
+        role: "assistant",
+        text: "第一段输出",
+      },
+      {
+        id: "tool-running",
+        kind: "tool",
+        toolType: "fileRead",
+        title: "Read running.ts",
+        detail: "running.ts",
+        status: "running",
+        output: "",
       },
     ];
 
@@ -2682,14 +2724,13 @@ describe("Messages live behavior", () => {
       />,
     );
 
-    const indicator = container.querySelector(".messages-live-middle-collapsed-indicator");
-    expect(indicator?.textContent ?? "").toContain("已折叠 1 条中间步骤（实时中）");
-    expect(container.textContent ?? "").not.toContain("Command: rg --files");
-    expect(container.textContent ?? "").not.toContain("Command: ls -la");
+    expect(container.querySelector(".messages-process-phase-toggle")).toBeTruthy();
+    expect(container.querySelectorAll('[data-process-phase-collapsed="true"]').length).toBeGreaterThan(0);
+    expect(container.textContent ?? "").toContain("Read running.ts");
+    expect(container.textContent ?? "").toContain("第一段输出");
   });
 
-  it("does not show a live collapsed indicator when only hidden commands were skipped", () => {
-    window.localStorage.setItem("ccgui.messages.live.collapseMiddleSteps", "1");
+  it("does not show a phase chip when only canvas-hidden commands precede prose", () => {
     const items: ConversationItem[] = [
       {
         id: "user-live-collapse-commands-only",
@@ -2703,7 +2744,7 @@ describe("Messages live behavior", () => {
         toolType: "commandExecution",
         title: "Command: rg --files",
         detail: "/tmp",
-        status: "running",
+        status: "completed",
         output: "",
       },
       {
@@ -2712,7 +2753,7 @@ describe("Messages live behavior", () => {
         toolType: "commandExecution",
         title: "Command: ls -la",
         detail: "/tmp",
-        status: "running",
+        status: "completed",
         output: "",
       },
       {
@@ -2740,8 +2781,7 @@ describe("Messages live behavior", () => {
     expect(container.textContent ?? "").toContain("最终输出");
   });
 
-  it("collapses middle steps in history mode when enabled", () => {
-    window.localStorage.setItem("ccgui.messages.live.collapseMiddleSteps", "1");
+  it("collapses the process phase above historical assistant prose", () => {
     const items: ConversationItem[] = [
       {
         id: "user-history-collapse",
@@ -2753,16 +2793,17 @@ describe("Messages live behavior", () => {
         id: "reasoning-history-collapse",
         kind: "reasoning",
         summary: "分析中",
-        content: "",
+        content: "thinking",
       },
       {
         id: "tool-history-collapse",
         kind: "tool",
-        toolType: "commandExecution",
-        title: "Command: rg --files",
-        detail: "/tmp",
+        toolType: "fileRead",
+        title: "Read Messages.tsx",
+        detail: "Messages.tsx",
         status: "completed",
         output: "",
+        durationMs: 63_000,
       },
       {
         id: "assistant-history-collapse",
@@ -2783,13 +2824,69 @@ describe("Messages live behavior", () => {
       />,
     );
 
-    expect(container.querySelector(".thinking-block")).toBeNull();
+    expect(container.querySelectorAll('[data-process-phase-collapsed="true"]').length).toBeGreaterThan(0);
     expect(container.textContent ?? "").toContain("历史最终输出");
-    expect(container.textContent ?? "").not.toContain("Command: rg --files");
+    const indicator = container.querySelector(".messages-process-phase-toggle");
+    expect(indicator).toBeTruthy();
+    expect(indicator?.textContent ?? "").toContain("已处理");
+    expect(indicator?.textContent ?? "").toContain("1m 3s");
   });
 
-  it("collapses middle steps for all previous turns in history mode", () => {
-    window.localStorage.setItem("ccgui.messages.live.collapseMiddleSteps", "1");
+  it("expands one causal phase when its process chip is clicked", async () => {
+    const items: ConversationItem[] = [
+      {
+        id: "user-history-expand",
+        kind: "message",
+        role: "user",
+        text: "请继续",
+      },
+      {
+        id: "reasoning-history-expand",
+        kind: "reasoning",
+        summary: "expand-me-reasoning",
+        content: "expand-me-reasoning-body",
+      },
+      {
+        id: "tool-history-expand",
+        kind: "tool",
+        toolType: "fileRead",
+        title: "Read expand-me.ts",
+        detail: "expand-me.ts",
+        status: "completed",
+        output: "",
+      },
+      {
+        id: "assistant-history-expand",
+        kind: "message",
+        role: "assistant",
+        text: "展开后可见过程",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.querySelectorAll('[data-process-phase-collapsed="true"]').length).toBeGreaterThan(0);
+    const chip = screen.getByRole("button", { name: /过程摘要/ });
+    expect(chip.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(chip);
+
+    await waitFor(() => {
+      expect(container.querySelectorAll('[data-process-phase-collapsed="false"]').length).toBeGreaterThan(0);
+      expect(chip.getAttribute("aria-expanded")).toBe("true");
+      expect(chip.classList.contains("is-expanded")).toBe(true);
+    });
+  });
+
+  it("collapses each historical turn phase independently", () => {
     const items: ConversationItem[] = [
       {
         id: "user-history-turn-1",
@@ -2801,14 +2898,14 @@ describe("Messages live behavior", () => {
         id: "reasoning-history-turn-1",
         kind: "reasoning",
         summary: "第一轮分析",
-        content: "",
+        content: "turn-1-thinking",
       },
       {
         id: "tool-history-turn-1",
         kind: "tool",
-        toolType: "commandExecution",
-        title: "Command: ls",
-        detail: "/tmp",
+        toolType: "fileRead",
+        title: "Read turn1.ts",
+        detail: "turn1.ts",
         status: "completed",
         output: "",
       },
@@ -2828,14 +2925,14 @@ describe("Messages live behavior", () => {
         id: "reasoning-history-turn-2",
         kind: "reasoning",
         summary: "第二轮分析",
-        content: "",
+        content: "turn-2-thinking",
       },
       {
         id: "tool-history-turn-2",
         kind: "tool",
-        toolType: "commandExecution",
-        title: "Command: rg --files",
-        detail: "/tmp",
+        toolType: "fileRead",
+        title: "Read turn2.ts",
+        detail: "turn2.ts",
         status: "completed",
         output: "",
       },
@@ -2860,9 +2957,8 @@ describe("Messages live behavior", () => {
 
     expect(container.textContent ?? "").toContain("第一轮答案");
     expect(container.textContent ?? "").toContain("第二轮答案");
-    expect(container.textContent ?? "").not.toContain("Command: ls");
-    expect(container.textContent ?? "").not.toContain("Command: rg --files");
-    expect(container.querySelector(".thinking-block")).toBeNull();
+    expect(container.querySelectorAll(".messages-process-phase-toggle")).toHaveLength(2);
+    expect(container.querySelectorAll('[data-process-phase-collapsed="true"]').length).toBeGreaterThan(0);
   });
 
   it("shows non-streaming hint for opencode when waiting long for first chunk", () => {

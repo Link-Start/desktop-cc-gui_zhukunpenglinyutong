@@ -14,8 +14,7 @@ describe("messagesTimelineProjection", () => {
       activeUserInputAnchorItemId: null,
       approvalVisible: false,
       claudeDockedReasoningItemIds: [],
-      collapsedMiddleStepCount: 0,
-      collapseLiveMiddleStepsEnabled: false,
+      processPhaseChips: [],
       effectiveItemsCount: 1000,
       groupedEntries: entries,
       hasVisibleUserInputRequest: false,
@@ -66,8 +65,7 @@ describe("messagesTimelineProjection", () => {
       activeUserInputAnchorItemId: "message-6",
       approvalVisible: true,
       claudeDockedReasoningItemIds: ["reasoning-live"],
-      collapsedMiddleStepCount: 2,
-      collapseLiveMiddleStepsEnabled: true,
+      processPhaseChips: [],
       effectiveItemsCount: 9,
       groupedEntries: entries,
       hasVisibleUserInputRequest: false,
@@ -85,8 +83,87 @@ describe("messagesTimelineProjection", () => {
       itemIds: expect.arrayContaining(["message-6"]),
     });
     expect(rows.map((row) => row.kind)).toContain("dockedReasoning");
-    expect(rows.map((row) => row.kind)).toContain("liveMiddleCollapsed");
+    expect(rows.map((row) => row.kind)).not.toContain("liveMiddleCollapsed");
     expect(rows.map((row) => row.kind)).toContain("approval");
+  });
+
+  it("inserts the drawer header immediately before the first process item", () => {
+    const entries = groupToolItems([
+      {
+        id: "user-anchor",
+        kind: "message",
+        role: "user",
+        text: "你好",
+      },
+      {
+        id: "tool-a",
+        kind: "tool",
+        toolType: "fileRead",
+        title: "Read a.ts",
+        detail: "a.ts",
+        status: "completed",
+        output: "",
+      },
+      {
+        id: "tool-b",
+        kind: "tool",
+        toolType: "toolCall",
+        title: "Tool: Grep",
+        detail: "pattern",
+        status: "completed",
+        output: "",
+      },
+      {
+        id: "assistant-after",
+        kind: "message",
+        role: "assistant",
+        text: "回复",
+      },
+    ]);
+    const rows = buildTimelineProjectionRows({
+      activeUserInputAnchorItemId: null,
+      approvalVisible: false,
+      claudeDockedReasoningItemIds: [],
+      processPhaseChips: [
+        {
+          phaseKey: "assistant-after",
+          count: 2,
+          expanded: false,
+          durationMs: 63_000,
+          breakdown: { reasoningCount: 0, toolCount: 2, exploreCount: 0 },
+          insertBeforeItemId: "tool-a",
+          hiddenItemIds: ["tool-a", "tool-b"],
+        },
+      ],
+      effectiveItemsCount: 4,
+      groupedEntries: entries,
+      hasVisibleUserInputRequest: false,
+      hiddenClaudeReasoningOnly: false,
+      historyRecoveryFailureVisible: false,
+      isHistoryLoading: false,
+      isThinking: false,
+      shouldRenderUserInputAtTail: false,
+    });
+
+    const chipIndex = rows.findIndex((row) => row.kind === "liveMiddleCollapsed");
+    const firstToolIndex = rows.findIndex(
+      (row) => row.kind === "entry" && row.itemIds.includes("tool-a"),
+    );
+    const assistantIndex = rows.findIndex(
+      (row) => row.kind === "entry" && row.itemIds.includes("assistant-after"),
+    );
+    // Drawer header is above process body, not below it.
+    expect(chipIndex).toBeGreaterThanOrEqual(0);
+    expect(chipIndex).toBe(firstToolIndex - 1);
+    expect(chipIndex).toBeLessThan(assistantIndex);
+    expect(rows[chipIndex]).toMatchObject({
+      kind: "liveMiddleCollapsed",
+      phaseKey: "assistant-after",
+      count: 2,
+      durationMs: 63_000,
+      expanded: false,
+      insertBeforeItemId: "tool-a",
+    });
   });
 
   it("resolves the projection row index for a message id", () => {
@@ -95,8 +172,7 @@ describe("messagesTimelineProjection", () => {
       activeUserInputAnchorItemId: null,
       approvalVisible: true,
       claudeDockedReasoningItemIds: ["reasoning-live"],
-      collapsedMiddleStepCount: 0,
-      collapseLiveMiddleStepsEnabled: false,
+      processPhaseChips: [],
       effectiveItemsCount: 12,
       groupedEntries: entries,
       hasVisibleUserInputRequest: false,
@@ -124,8 +200,7 @@ describe("messagesTimelineProjection", () => {
       activeUserInputAnchorItemId: null,
       approvalVisible: false,
       claudeDockedReasoningItemIds: [],
-      collapsedMiddleStepCount: 0,
-      collapseLiveMiddleStepsEnabled: false,
+      processPhaseChips: [],
       effectiveItemsCount: 3,
       groupedEntries: entries,
       hasVisibleUserInputRequest: false,
@@ -146,8 +221,7 @@ describe("messagesTimelineProjection", () => {
       activeUserInputAnchorItemId: null,
       approvalVisible: false,
       claudeDockedReasoningItemIds: [],
-      collapsedMiddleStepCount: 0,
-      collapseLiveMiddleStepsEnabled: false,
+      processPhaseChips: [],
       effectiveItemsCount: 0,
       groupedEntries: [],
       hasVisibleUserInputRequest: false,

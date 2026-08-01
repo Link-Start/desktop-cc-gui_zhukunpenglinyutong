@@ -1,0 +1,97 @@
+import { memo, useMemo } from "react";
+import { useTranslation } from "react-i18next";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
+import { formatDurationCompact } from "../../utils/messagesRenderUtils";
+
+type ProcessPhaseBreakdown = {
+  reasoningCount: number;
+  toolCount: number;
+  exploreCount: number;
+};
+
+type MiddleStepsCollapsedChipProps = {
+  count: number;
+  durationMs: number | null;
+  expanded: boolean;
+  breakdown: ProcessPhaseBreakdown;
+  onToggle: () => void;
+};
+
+/**
+ * Flat process-phase control:
+ *   已处理 1m 3s · 思考 2 · 工具 5 ›
+ *   ────────────────────────────────
+ */
+export const MiddleStepsCollapsedChip = memo(function MiddleStepsCollapsedChip({
+  count,
+  durationMs,
+  expanded,
+  breakdown,
+  onToggle,
+}: MiddleStepsCollapsedChipProps) {
+  const { t } = useTranslation();
+  const durationLabel =
+    typeof durationMs === "number" && durationMs >= 0
+      ? formatDurationCompact(durationMs)
+      : null;
+
+  const label = useMemo(() => {
+    const head = durationLabel
+      ? t("messages.middleStepsProcessedWithDuration", { duration: durationLabel })
+      : t("messages.middleStepsProcessed");
+    const stats: string[] = [];
+    if (breakdown.reasoningCount > 0) {
+      stats.push(
+        t("messages.middleStepsStatReasoning", { count: breakdown.reasoningCount }),
+      );
+    }
+    if (breakdown.toolCount > 0) {
+      stats.push(t("messages.middleStepsStatTool", { count: breakdown.toolCount }));
+    }
+    if (breakdown.exploreCount > 0) {
+      stats.push(t("messages.middleStepsStatExplore", { count: breakdown.exploreCount }));
+    }
+    // Fallback when kinds were filtered but a phase still exists.
+    if (stats.length === 0 && count > 0) {
+      stats.push(t("messages.middleStepsProcessedSteps", { count }));
+    }
+    // e.g. 已处理 · 思考 4 次 工具调用 23 次
+    return stats.length > 0 ? `${head} · ${stats.join(" ")}` : head;
+  }, [breakdown, count, durationLabel, t]);
+
+  const ariaLabel = t("messages.middleStepsProcessedAria", {
+    count,
+    duration: durationLabel ?? "",
+    detail: label,
+    state: expanded
+      ? t("messages.middleStepsCollapseAction")
+      : t("messages.middleStepsExpandAction"),
+  });
+
+  return (
+    <div
+      className={`messages-process-phase-drawer${expanded ? " is-expanded" : " is-collapsed"}`}
+    >
+      <button
+        type="button"
+        className={`messages-live-middle-collapsed-indicator messages-process-phase-toggle${
+          expanded ? " is-expanded" : " is-collapsed"
+        }`}
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-label={ariaLabel}
+      >
+        <span className="messages-process-phase-toggle-copy">
+          <span className="messages-process-phase-toggle-label">{label}</span>
+          <ChevronRight
+            className="messages-process-phase-toggle-chevron"
+            size={14}
+            strokeWidth={2}
+            aria-hidden
+          />
+        </span>
+        <span className="messages-process-phase-toggle-rule" aria-hidden />
+      </button>
+    </div>
+  );
+});

@@ -8,6 +8,10 @@ export type TimelineProjectionRow =
       entry: GroupedEntry;
       itemIds: readonly string[];
       hasActiveUserInputAnchor: boolean;
+      /** Soft-collapsed causal process phase (animates open/closed in place). */
+      processPhaseCollapsed?: boolean;
+      processPhaseKey?: string | null;
+      processPhaseRevealIndex?: number;
     }
   | {
       kind: "dockedReasoning";
@@ -21,7 +25,17 @@ export type TimelineProjectionRow =
   | {
       kind: "liveMiddleCollapsed";
       key: string;
+      phaseKey: string;
       count: number;
+      expanded: boolean;
+      durationMs: number | null;
+      breakdown: {
+        reasoningCount: number;
+        toolCount: number;
+        exploreCount: number;
+      };
+      /** Insert drawer header immediately before this process item. */
+      insertBeforeItemId: string;
     }
   | {
       kind: "workingIndicator";
@@ -81,12 +95,25 @@ export function getGroupedEntryProjectionKey(entry: GroupedEntry): string {
   return `${entry.kind}:${firstId}:${lastId}:${entry.items.length}`;
 }
 
+export type TimelineProcessPhaseChip = {
+  phaseKey: string;
+  count: number;
+  expanded: boolean;
+  durationMs: number | null;
+  breakdown: {
+    reasoningCount: number;
+    toolCount: number;
+    exploreCount: number;
+  };
+  /** Drawer header sits immediately before this process item (top of the phase). */
+  insertBeforeItemId: string;
+  hiddenItemIds: readonly string[];
+};
+
 export function buildTimelineProjectionRows(input: {
   activeUserInputAnchorItemId: string | null;
   approvalVisible: boolean;
   claudeDockedReasoningItemIds: readonly string[];
-  collapsedMiddleStepCount: number;
-  collapseLiveMiddleStepsEnabled: boolean;
   effectiveItemsCount: number;
   groupedEntries: readonly GroupedEntry[];
   hasVisibleUserInputRequest: boolean;
@@ -94,18 +121,76 @@ export function buildTimelineProjectionRows(input: {
   historyRecoveryFailureVisible: boolean;
   isHistoryLoading: boolean;
   isThinking: boolean;
+  processPhaseChips?: readonly TimelineProcessPhaseChip[];
   shouldRenderUserInputAtTail: boolean;
 }): TimelineProjectionRow[] {
-  const rows: TimelineProjectionRow[] = input.groupedEntries.map((entry) => ({
-    kind: "entry",
-    key: getGroupedEntryProjectionKey(entry),
-    entry,
-    itemIds: getGroupedEntryItemIds(entry),
-    hasActiveUserInputAnchor: Boolean(
-      input.activeUserInputAnchorItemId &&
-        groupedEntryContainsItemId(entry, input.activeUserInputAnchorItemId),
-    ),
-  }));
+  const phaseByFirstItemId = new Map<string, TimelineProcessPhaseChip>();
+  const collapsedItemMeta = new Map<
+    string,
+    { phaseKey: string; collapsed: boolean; revealIndex: number }
+  >();
+  for (const phase of input.processPhaseChips ?? []) {
+    if (phase.count <= 1) {
+      continue;
+    }
+    phaseByFirstItemId.set(phase.insertBeforeItemId, phase);
+    phase.hiddenItemIds.forEach((itemId, revealIndex) => {
+      collapsedItemMeta.set(itemId, {
+        phaseKey: phase.phaseKey,
+        collapsed: !phase.expanded,
+        revealIndex,
+      });
+    });
+  }
+  const insertedPhaseKeys = new Set<string>();
+
+  const rows: TimelineProjectionRow[] = [];
+
+  const pushPhaseHeader = (phase: TimelineProcessPhaseChip) => {
+    if (insertedPhaseKeys.has(phase.phaseKey)) {
+      return;
+    }
+    rows.push({
+      kind: "liveMiddleCollapsed",
+      key: `process-phase:${phase.phaseKey}`,
+      phaseKey: phase.phaseKey,
+      count: phase.count,
+      expanded: phase.expanded,
+      durationMs: phase.durationMs,
+      breakdown: phase.breakdown,
+      insertBeforeItemId: phase.insertBeforeItemId,
+    });
+    insertedPhaseKeys.add(phase.phaseKey);
+  };
+
+  for (const entry of input.groupedEntries) {
+    const entryItemIds = getGroupedEntryItemIds(entry);
+    // Drawer header sits at the TOP of the process body (before first process row).
+    for (const itemId of entryItemIds) {
+      const phase = phaseByFirstItemId.get(itemId);
+      if (phase) {
+        pushPhaseHeader(phase);
+        break;
+      }
+    }
+
+    const phaseMeta = entryItemIds
+      .map((itemId) => collapsedItemMeta.get(itemId))
+      .find((meta) => meta != null);
+    rows.push({
+      kind: "entry",
+      key: getGroupedEntryProjectionKey(entry),
+      entry,
+      itemIds: entryItemIds,
+      hasActiveUserInputAnchor: Boolean(
+        input.activeUserInputAnchorItemId &&
+          groupedEntryContainsItemId(entry, input.activeUserInputAnchorItemId),
+      ),
+      processPhaseCollapsed: phaseMeta?.collapsed ?? false,
+      processPhaseKey: phaseMeta?.phaseKey ?? null,
+      processPhaseRevealIndex: phaseMeta?.revealIndex,
+    });
+  }
 
   for (const itemId of input.claudeDockedReasoningItemIds) {
     rows.push({
@@ -119,16 +204,11 @@ export function buildTimelineProjectionRows(input: {
     rows.push({ kind: "tailUserInput", key: "user-input-tail" });
   }
 
-  if (
-    input.isThinking &&
-    input.collapseLiveMiddleStepsEnabled &&
-    input.collapsedMiddleStepCount > 0
-  ) {
-    rows.push({
-      kind: "liveMiddleCollapsed",
-      key: "live-middle-collapsed",
-      count: input.collapsedMiddleStepCount,
-    });
+  // Fallback for phases whose process entry is outside the current window.
+  for (const phase of input.processPhaseChips ?? []) {
+    if (phase.count > 1 && !insertedPhaseKeys.has(phase.phaseKey)) {
+      pushPhaseHeader(phase);
+    }
   }
 
   rows.push({ kind: "workingIndicator", key: "working-indicator" });
