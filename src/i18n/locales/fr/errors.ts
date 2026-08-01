@@ -15,6 +15,8 @@ const errors = {
     "failedToCreateSession": "Échec de la création de la session.",
     "failedToCreateSessionNoThreadId": "Le runtime n'a pas renvoyé de nouvel identifiant de session.",
     "failedToCreateSessionRuntimeRecovering": "Le runtime redémarrait lors de la création de cette session. L'application a déjà réessayé une fois. Reconnectez l'espace de travail et réessayez.",
+    "codexProviderWireApiUnsupported": "La version actuelle de Codex CLI ne prend pas en charge wire_api = \"chat\". Si ce fournisseur prend en charge Responses API, utilisez wire_api = \"responses\". S'il ne prend en charge que Chat Completions, configurez d'abord un service de conversion de protocole ou un router.",
+    "codexProviderConfigInvalid": "La configuration de ce fournisseur Codex n'est pas un TOML valide. Vérifiez la syntaxe et utilisez des guillemets droits anglais (\") plutôt que des guillemets typographiques.",
     "reconnectAndRetryCreateSession": "Reconnecter et réessayer la création",
     "reconnectingAndRetryingCreateSession": "Reconnexion et nouvelle tentative de création...",
     "runtimeRecovered": "Runtime récupéré.",
@@ -23,7 +25,25 @@ const errors = {
     "cliNotFoundHint": "Installer Claude Code : curl -fsSL https://claude.ai/install.sh | bash\nInstaller Codex : npm install -g @openai/codex",
     "codexCliNotFound": "CLI Codex introuvable. Installez Codex et assurez-vous que `codex` est dans votre PATH.",
     "couldntOpenWorkspace": "Impossible d'ouvrir l'espace de travail",
-    "dismissError": "Ignorer l'erreur"
+    "dismissError": "Ignorer l'erreur",
+    "applicationErrorTitle": "Application Error",
+    "applicationErrorDescription": "An unexpected error stopped the UI. Copy the diagnostic report below, send it to the developers, then reload the app.",
+    "applicationErrorReload": "Reload",
+    "applicationErrorCopyReport": "Copy error report",
+    "applicationErrorCopyDone": "Error report copied. Paste it into your feedback.",
+    "applicationErrorCopyDownloaded": "Clipboard unavailable. A report file was downloaded instead — attach it when you report the issue.",
+    "applicationErrorCopyFailed": "Could not copy or download the report. Select the text below and copy it manually.",
+    "applicationErrorDetails": "Error details",
+    "applicationErrorFeedbackTitle": "How to report this to developers",
+    "applicationErrorFeedbackStep1": "Click “Copy error report”.",
+    "applicationErrorFeedbackStep2": "Open the feedback page and create a new issue, then paste the report.",
+    "applicationErrorFeedbackStep3": "Add what you were doing (cold start / streaming / switching workspace, etc.) and whether Reload recovers it.",
+    "applicationErrorOpenFeedback": "Open feedback page",
+    "applicationErrorMeta": "version: {{version}} · class: {{errorClass}} · platform: {{platform}}",
+    "applicationErrorMessageLabel": "Error message",
+    "applicationErrorDecodedLabel": "Decoded React #{{code}}",
+    "applicationErrorComponentStackLabel": "Component stack",
+    "applicationErrorStackLabel": "JavaScript stack"
   }
 };
 

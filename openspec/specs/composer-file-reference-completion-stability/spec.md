@@ -52,7 +52,7 @@ The composer slash command completion provider MUST ignore malformed project cus
 
 ### Requirement: Shared completion dropdown mapping MUST fail per item
 
-The shared composer completion dropdown MUST isolate failures while mapping provider results into dropdown items.
+The shared composer completion dropdown MUST isolate failures while mapping provider results into dropdown items and MUST preserve identity alignment between every visible selectable item and its raw provider item.
 
 #### Scenario: malformed dropdown item does not drop valid items
 - **WHEN** a completion provider returns multiple results and mapping one result to a dropdown item fails
@@ -65,3 +65,23 @@ The shared composer completion dropdown MUST isolate failures while mapping prov
 - **THEN** the dropdown MUST log the invalid provider result
 - **AND** it MUST show an empty completion list rather than crashing the composer
 
+#### Scenario: presentation-only items do not shift mouse selection
+- **WHEN** a completion result list contains section headers or separators before selectable items
+- **AND** the user clicks a visible selectable item
+- **THEN** the completion selection handler MUST receive the raw provider item represented by the clicked row
+- **AND** presentation-only items MUST NOT consume a selectable index
+
+#### Scenario: presentation-only items do not shift keyboard selection
+- **WHEN** a completion result list contains section headers or separators before selectable items
+- **AND** the user confirms the active item with Enter or Tab
+- **THEN** the completion selection handler MUST receive the raw provider item represented by the active selectable row
+- **AND** the handler MUST NOT receive a section header or separator
+
+### Requirement: Slash completion fallback MUST NOT wait for an absent runtime producer
+
+When the Tauri build has no runtime slash-command refresh producer, the composer slash completion provider MUST return its local commands immediately and MUST NOT register or await legacy JCEF global callbacks.
+
+#### Scenario: local slash completion resolves without bridge data
+- **WHEN** the user opens slash completion and no runtime callback producer exists
+- **THEN** the provider MUST return the local command set without a loading timeout
+- **AND** it MUST NOT read or write `window.updateSlashCommands` or `window.__pendingSlashCommands`

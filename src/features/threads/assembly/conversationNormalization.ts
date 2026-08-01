@@ -2,6 +2,13 @@ import type { ConversationItem } from "../../../types";
 import { mergeNearDuplicateParagraphVariants } from "../../../utils/assistantDuplicateParagraphs";
 import type { ConversationFact } from "../contracts/conversationFactContract";
 
+export {
+  buildMessagePresentationMetadata,
+  getPresentationContext,
+  getPresentationContexts,
+  withMessagePresentationMetadata,
+} from "../../../conversation-presentation/normalizeConversationPresentation";
+
 type MessageConversationItem = Extract<ConversationItem, { kind: "message" }>;
 type UserConversationMessage = MessageConversationItem & { role: "user" };
 type ReasoningConversationItem = Extract<ConversationItem, { kind: "reasoning" }>;

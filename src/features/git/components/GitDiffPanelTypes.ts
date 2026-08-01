@@ -89,7 +89,7 @@ export type GitDiffPanelProps = CodeAnnotationBridgeProps & {
   onClearGitRoot?: () => void;
   onPickGitRoot?: () => void | Promise<void>;
   selectedPath?: string | null;
-  onSelectFile?: (path: string | null) => void;
+  onSelectFile?: (path: string | null, repositoryRoot?: string | null) => void;
   onOpenFile?: (path: string, repositoryRoot?: string | null) => void;
   onOpenFileHistory?: (target: FileHistoryTarget) => void;
   modalPreviewRequest?: GitModalPreviewRequest | null;
@@ -126,6 +126,7 @@ export type GitDiffPanelProps = CodeAnnotationBridgeProps & {
   commitsAhead?: number;
   onRefreshGitStatus?: () => void;
   onRefreshGitDiffs?: () => void;
+  onRefreshGitLog?: () => void;
   multiRepositoryMode?: boolean;
   repositoryStatuses?: RepositoryGitStatus[];
   repositoryStatusesLoading?: boolean;

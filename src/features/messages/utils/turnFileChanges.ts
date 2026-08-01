@@ -19,7 +19,7 @@ import {
   EDIT_PATH_KEYS,
   type ToolStatusTone,
 } from "../components/toolBlocks/toolConstants";
-import { computeDiffFromUnifiedPatch, computeDiffStats } from "./diffUtils";
+import { computeDiffFromUnifiedPatch, computeDiffStats } from "../../../utils/diff";
 
 type ToolItem = Extract<ConversationItem, { kind: "tool" }>;
 

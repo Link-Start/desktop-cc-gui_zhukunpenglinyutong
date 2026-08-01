@@ -15,6 +15,7 @@ export interface WorkspaceSessionCatalogEntry {
   workspaceLabel?: string | null;
   engine: string;
   title: string;
+  nativeTitle?: string | null;
   updatedAt: number;
   archivedAt?: number | null;
   threadKind: string;
@@ -46,7 +47,60 @@ export interface WorkspaceSessionCatalogEntry {
   deleteMode?: "physical" | "metadata-cleanup" | "unsupported" | string | null;
   physicalPath?: string | null;
   childrenCount?: number | null;
+  originKind?: string | null;
+  sourceSessionId?: string | null;
+  sourceProviderProfileId?: string | null;
+  familyId?: string | null;
+  familyRootSessionId?: string | null;
+  lineageParentSessionId?: string | null;
+  lineageKind?: string | null;
+  lineageDepth?: number | null;
 }
+
+export type NativeHistorySourceInput = {
+  sessionId: string;
+  nativeSessionId: string;
+  engine: "claude" | "codex" | "kimi";
+  providerProfileId?: string | null;
+};
+
+export type ProviderContinuationTargetInput = {
+  engine: "claude" | "codex";
+  providerProfileId: string;
+  modelCatalogEntryId?: string | null;
+  model?: string | null;
+  reasoningEffort?: string | null;
+  providerProfileNameSnapshot?: string | null;
+  providerProfileSource?: "local" | "managed" | null;
+  runtimeCapabilityFingerprint?: string | null;
+};
+
+export type NativeProviderContinuationInput = {
+  workspaceId: string;
+  operationId: string;
+  source: NativeHistorySourceInput;
+  destination: ProviderContinuationTargetInput;
+};
+
+export type NativeProviderContinuationResponse = {
+  status:
+    | "prepared"
+    | "confirmation-required"
+    | "ready"
+    | "recovery-required"
+    | string;
+  fidelity: "strong" | "degraded";
+  operation: {
+    phase: string;
+    resultSessionId?: string | null;
+    errorCode?: string | null;
+  };
+  omissions?: Array<{ category?: string; reason?: string }>;
+  adapterDroppedEntries?: number;
+  projectionMode?: string;
+  sourceEstimatedTokens?: number;
+  packageEstimatedTokens?: number;
+};
 
 export type {
   AutoSessionCreatedBy,
@@ -375,4 +429,47 @@ export async function assignWorkspaceSessionFolders(
     sessionIds,
     folderId: folderId ?? null,
   });
+}
+
+export async function createNativeProviderContinuation(input: NativeProviderContinuationInput & {
+  confirmDegraded?: boolean;
+}): Promise<NativeProviderContinuationResponse> {
+  return invoke<NativeProviderContinuationResponse>(
+    "create_native_provider_continuation",
+    {
+      workspaceId: input.workspaceId,
+      operationId: input.operationId,
+      source: input.source,
+      destination: input.destination,
+      confirmDegraded: input.confirmDegraded ?? false,
+    },
+  );
+}
+
+export async function prepareNativeProviderContinuation(
+  input: NativeProviderContinuationInput,
+): Promise<NativeProviderContinuationResponse> {
+  return invoke<NativeProviderContinuationResponse>(
+    "prepare_native_provider_continuation",
+    {
+      workspaceId: input.workspaceId,
+      operationId: input.operationId,
+      source: input.source,
+      destination: input.destination,
+    },
+  );
+}
+
+export async function discardPreparedNativeProviderContinuation(
+  input: NativeProviderContinuationInput,
+): Promise<boolean> {
+  return invoke<boolean>(
+    "discard_prepared_native_provider_continuation",
+    {
+      workspaceId: input.workspaceId,
+      operationId: input.operationId,
+      source: input.source,
+      destination: input.destination,
+    },
+  );
 }

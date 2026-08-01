@@ -48,7 +48,9 @@ describe("useKimiProviderManagement", () => {
     vi.mocked(getKimiProviders).mockResolvedValue([]);
     vi.mocked(getCurrentKimiConfig).mockResolvedValue(currentConfig);
     vi.mocked(addKimiProvider).mockResolvedValue(undefined);
-    vi.mocked(deleteKimiProvider).mockResolvedValue(undefined);
+    vi.mocked(deleteKimiProvider).mockResolvedValue({
+      status: "success",
+    });
     vi.mocked(switchKimiProvider).mockResolvedValue(undefined);
   });
 
@@ -76,7 +78,7 @@ describe("useKimiProviderManagement", () => {
       expect(result.current.kimiProviders).toEqual(providers);
     });
     expect(result.current.currentKimiConfig).toBeNull();
-    expect(result.current.kimiProviderError).toBeNull();
+    expect(result.current.kimiProviderError).toBe("no config");
   });
 
   it("adds a provider and reloads the list", async () => {
@@ -151,5 +153,23 @@ describe("useKimiProviderManagement", () => {
       isOpen: false,
       provider: null,
     });
+  });
+
+  it("surfaces partial cleanup warning after durable provider deletion", async () => {
+    const providers = [kimiProvider("a")];
+    vi.mocked(getKimiProviders).mockResolvedValue(providers);
+    vi.mocked(deleteKimiProvider).mockResolvedValueOnce({
+      status: "partial-warning",
+      warning: "residual config remains",
+    });
+
+    const { result } = renderHook(() => useKimiProviderManagement());
+    await waitFor(() => expect(result.current.kimiProviders).toEqual(providers));
+    act(() => result.current.handleDeleteKimiProvider(providers[0]));
+    await act(async () => {
+      await result.current.confirmDeleteKimiProvider();
+    });
+
+    expect(result.current.kimiProviderError).toBe("residual config remains");
   });
 });

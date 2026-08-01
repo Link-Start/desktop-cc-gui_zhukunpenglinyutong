@@ -132,6 +132,7 @@ describe("useThreadUserInput", () => {
       type: "removeUserInputRequest",
       requestId: "req-1",
       workspaceId: "ws-1",
+      request,
     });
   });
 
@@ -212,6 +213,7 @@ describe("useThreadUserInput", () => {
       type: "removeUserInputRequest",
       requestId: "req-1",
       workspaceId: "ws-1",
+      request,
     });
     expect(dispatch).not.toHaveBeenCalledWith(
       expect.objectContaining({
@@ -252,6 +254,7 @@ describe("useThreadUserInput", () => {
       type: "removeUserInputRequest",
       requestId: "req-1",
       workspaceId: "ws-1",
+      request,
     });
   });
 
@@ -292,6 +295,7 @@ describe("useThreadUserInput", () => {
       type: "removeUserInputRequest",
       requestId: "req-1",
       workspaceId: "ws-1",
+      request,
     });
     expect(dispatch).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: "upsertItem" }),
@@ -349,6 +353,7 @@ describe("useThreadUserInput", () => {
       type: "removeUserInputRequest",
       requestId: "req-1",
       workspaceId: "ws-1",
+      request,
     });
     expect(dispatch).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: "upsertItem" }),
@@ -468,25 +473,36 @@ describe("useThreadUserInput", () => {
 
   it("submits shared Codex user input with native thread id for resume watching", async () => {
     const dispatch = vi.fn();
+    const resolveClaudeContinuationThreadId = vi.fn();
     vi.mocked(respondToUserInputRequest).mockResolvedValue(undefined as never);
+    const sharedRuntimeOwner = {
+      attemptId: "attempt-1",
+      providerRuntimeKey: "codex::profile-kimi",
+      sharedThreadId: "shared:codex-thread-1",
+      nativeThreadId: "codex-native-thread-1",
+      runtimeTurnId: "turn-1",
+      engine: "codex" as const,
+      providerProfileId: "profile-kimi",
+    };
+    const sharedRequest: RequestUserInputRequest = {
+      ...request,
+      params: {
+        ...request.params,
+        thread_id: sharedRuntimeOwner.sharedThreadId,
+      },
+      shared_runtime_owner: sharedRuntimeOwner,
+    };
 
     const { result } = renderHook(() =>
       useThreadUserInput({
         dispatch,
-        resolveClaudeContinuationThreadId: (_workspaceId, threadId) =>
-          threadId === "shared:codex-thread-1" ? "codex-native-thread-1" : threadId,
+        resolveClaudeContinuationThreadId,
       }),
     );
 
     await act(async () => {
       await result.current.handleUserInputSubmit(
-        {
-          ...request,
-          params: {
-            ...request.params,
-            thread_id: "shared:codex-thread-1",
-          },
-        },
+        sharedRequest,
         { answers: {} },
       );
     });
@@ -498,13 +514,57 @@ describe("useThreadUserInput", () => {
       {
         threadId: "codex-native-thread-1",
         turnId: "turn-1",
+        sharedOwner: sharedRuntimeOwner,
       },
     );
+    expect(resolveClaudeContinuationThreadId).not.toHaveBeenCalled();
     expect(dispatch).toHaveBeenNthCalledWith(1, {
       type: "markProcessing",
       threadId: "shared:codex-thread-1",
       isProcessing: true,
       timestamp: expect.any(Number),
     });
+    expect(dispatch).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        type: "upsertItem",
+        item: expect.objectContaining({
+          id: "user-input-answer-attempt-1-req-1",
+        }),
+      }),
+    );
+    expect(dispatch).toHaveBeenNthCalledWith(4, {
+      type: "removeUserInputRequest",
+      requestId: "req-1",
+      workspaceId: "ws-1",
+      request: sharedRequest,
+    });
+  });
+
+  it("fails closed before side effects when Shared user input has no Runtime owner", async () => {
+    const dispatch = vi.fn();
+    const resolveClaudeContinuationThreadId = vi.fn(
+      () => "codex-native-thread-1",
+    );
+    const { result } = renderHook(() =>
+      useThreadUserInput({ dispatch, resolveClaudeContinuationThreadId }),
+    );
+
+    await expect(
+      result.current.handleUserInputSubmit(
+        {
+          ...request,
+          params: {
+            ...request.params,
+            thread_id: "shared:codex-thread-1",
+          },
+        },
+        { answers: {} },
+      ),
+    ).rejects.toThrow("missing its Runtime owner");
+
+    expect(resolveClaudeContinuationThreadId).not.toHaveBeenCalled();
+    expect(respondToUserInputRequest).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });

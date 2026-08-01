@@ -27,7 +27,7 @@ type CheckpointCommitDialogProps = {
   onCommitMessageChange?: (value: string) => void;
   onGenerateCommitMessage?: (
     language?: "zh" | "en",
-    engine?: "codex" | "claude" | "gemini" | "kimi" | "opencode",
+    engine?: "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode",
     selectedPaths?: string[],
   ) => void | Promise<void>;
   onCommit?: (selectedPaths?: string[]) => void | Promise<void>;
@@ -37,12 +37,13 @@ type CheckpointCommitDialogProps = {
 type CommitDialogFile = FileChangeSummary & {
   commitPath: string;
 };
-type CommitMessageEngine = "codex" | "claude" | "gemini" | "kimi" | "opencode";
+type CommitMessageEngine = "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode";
 type CommitMessageLanguage = "zh" | "en";
 
 const COMMIT_MESSAGE_ENGINES: CommitMessageEngine[] = [
   "codex",
   "claude",
+  "grok",
   "kimi",
   "opencode",
 ];
@@ -383,6 +384,10 @@ function getCommitMessageEngineLabel(
       return t("git.generateCommitMessageEngineGemini");
     case "opencode":
       return t("git.generateCommitMessageEngineOpenCode");
+    case "grok":
+      return t("git.generateCommitMessageEngineGrok");
+    case "kimi":
+      return t("git.generateCommitMessageEngineKimi");
     case "claude":
     default:
       return t("git.generateCommitMessageEngineClaude");

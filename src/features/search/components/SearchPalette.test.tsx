@@ -240,7 +240,7 @@ describe("SearchPalette", () => {
     expect(onQueryChange).toHaveBeenCalledWith("你好");
   });
 
-  it("forces empty-state rendering when query is empty even if stale results are passed", () => {
+  it("renders recent results when query is empty", () => {
     const onSelect = vi.fn();
     const stale = makeResult();
 
@@ -262,14 +262,13 @@ describe("SearchPalette", () => {
       />,
     );
 
-    expect(screen.queryByText(stale.title)).toBeNull();
-    expect(screen.getByText("searchPalette.noResults")).toBeTruthy();
+    expect(screen.getByText(stale.title)).toBeTruthy();
 
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    expect(onSelect).not.toHaveBeenCalled();
+    expect(onSelect).toHaveBeenCalledWith(stale);
   });
 
-  it("treats invisible-only query as empty and hides stale results", () => {
+  it("treats invisible-only query as empty and renders supplied recent results", () => {
     const stale = makeResult();
 
     render(
@@ -290,8 +289,7 @@ describe("SearchPalette", () => {
       />,
     );
 
-    expect(screen.queryByText(stale.title)).toBeNull();
-    expect(screen.getByText("searchPalette.noResults")).toBeTruthy();
+    expect(screen.getByText(stale.title)).toBeTruthy();
   });
 
   it("keeps updating results across multiple composition rounds", () => {

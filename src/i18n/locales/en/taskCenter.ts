@@ -24,7 +24,6 @@ const taskCenter = {
     browserEvidenceCandidates: "candidates",
     source: {
       kanban: "kanban",
-      orchestration: "orchestration",
     },
     browserEvidenceState: {
       available: "available",
@@ -46,7 +45,6 @@ const taskCenter = {
     },
     action: {
       openConversation: "Open conversation",
-      openOrchestrationTask: "Open orchestration task",
       retry: "Retry",
       resume: "Resume",
       cancel: "Cancel",

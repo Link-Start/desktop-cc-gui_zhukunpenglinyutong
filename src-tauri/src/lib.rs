@@ -124,10 +124,12 @@ mod backend;
 mod backend_budget;
 mod browser_agent;
 mod claude_commands;
+mod claude_commands_watch;
 mod claude_home;
 mod client_error_log;
 mod client_storage;
 mod code_intel;
+mod code_intel_lsp;
 mod codex;
 mod command_registry;
 mod computer_use;
@@ -145,6 +147,9 @@ mod input_history;
 mod linux_startup_guard;
 mod local_usage;
 mod menu;
+mod mermaid_export;
+mod native_continuation;
+mod native_history;
 mod note_cards;
 mod project_canvas;
 mod project_identity;
@@ -161,14 +166,21 @@ mod runtime_log;
 mod session_management;
 mod settings;
 mod shared;
+pub mod shared_context;
+pub mod shared_event_log;
+pub mod shared_projection;
+mod shared_runtime_coordinator;
+pub mod shared_session_v2;
 mod shared_sessions;
 mod skills;
+mod skills_hub;
 mod snapshot_throttle;
 mod startup_guard;
 mod state;
 mod storage;
 mod terminal;
 mod text_encoding;
+mod tokentracker;
 mod types;
 mod utils;
 mod vendors;
@@ -275,6 +287,14 @@ pub fn run() {
                         }
                         let settings = state.app_settings.lock().await.clone();
                         crate::runtime::commands::run_reconcile_cycle(&state, &settings).await;
+                        // 差量发布 runtime 池快照：仅变化时 emit，前端 dock
+                        // 由 5s 常驻轮询改为事件订阅 + 慢速兜底。
+                        let snapshot = state.runtime_manager.snapshot(&settings).await;
+                        crate::runtime::commands::publish_runtime_pool_snapshot_if_changed(
+                            &app_handle,
+                            &snapshot,
+                        )
+                        .await;
                     }
                 });
             }
@@ -432,6 +452,12 @@ pub fn run() {
                 manager.claude_manager.interrupt_all().await;
                 if let Err(error) = manager.shutdown_gemini_sessions().await {
                     log::error!("[app_exit] Gemini shutdown failed: {error}");
+                }
+                if let Err(error) = manager.shutdown_kimi_sessions().await {
+                    log::error!("[app_exit] Kimi shutdown failed: {error}");
+                }
+                if let Err(error) = manager.shutdown_grok_sessions().await {
+                    log::error!("[app_exit] Grok shutdown failed: {error}");
                 }
                 if state
                     .app_settings

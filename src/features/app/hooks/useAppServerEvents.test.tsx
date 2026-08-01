@@ -10,7 +10,14 @@ import {
 import {
   clearSharedSessionBindingsForSharedThread,
   registerSharedSessionNativeBinding,
+  resolveSharedSessionBindingByNativeThread,
 } from "../../shared-session/runtime/sharedSessionBridge";
+import { setSharedV2SendOverride } from "../../shared-session/runtime/sharedV2SendFlag";
+import {
+  beginTurn,
+  resetSharedTargetStoreForTests,
+} from "../../shared-session/target/targetStore";
+import { freezeTurnSnapshot } from "../../shared-session/target/types";
 import { updateSharedSessionNativeBinding as updateSharedSessionNativeBindingService } from "../../shared-session/services/sharedSessions";
 import { useAppServerEvents } from "./useAppServerEvents";
 
@@ -47,6 +54,8 @@ const unlisten = vi.fn();
 beforeEach(() => {
   listener = null;
   unlisten.mockReset();
+  resetSharedTargetStoreForTests();
+  setSharedV2SendOverride(null);
   vi.mocked(subscribeAppServerEvents).mockImplementation((cb) => {
     listener = cb;
     return unlisten;
@@ -58,6 +67,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  setSharedV2SendOverride(null);
   vi.clearAllMocks();
 });
 
@@ -71,6 +81,39 @@ async function mount(handlers: Handlers, options?: HookOptions) {
 }
 
 describe("useAppServerEvents", () => {
+  it("quarantines provider continuation bootstrap events from conversation handlers", async () => {
+    const handlers: Handlers = {
+      onAppServerEvent: vi.fn(),
+      onTurnStarted: vi.fn(),
+      onAgentMessageDelta: vi.fn(),
+      onReasoningTextDelta: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "turn/started",
+          params: {
+            threadId: "claude:target-1",
+            turnId: "provider-continuation-operation-1",
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onAppServerEvent).not.toHaveBeenCalled();
+    expect(handlers.onTurnStarted).not.toHaveBeenCalled();
+    expect(handlers.onAgentMessageDelta).not.toHaveBeenCalled();
+    expect(handlers.onReasoningTextDelta).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("falls back to the unique processing Codex thread for reasoning events without threadId", async () => {
     const handlers: Handlers = {
       onAppServerEvent: vi.fn(),
@@ -826,7 +869,7 @@ describe("useAppServerEvents", () => {
     });
   });
 
-  it("rebinds pending codex shared-session native ids on first thread/started", async () => {
+  it("rebinds the V2 frontend bridge without writing legacy binding meta", async () => {
     const handlers: Handlers = {
       onThreadStarted: vi.fn(),
       onTurnCompleted: vi.fn(),
@@ -866,13 +909,16 @@ describe("useAppServerEvents", () => {
     });
 
     expect(handlers.onThreadStarted).not.toHaveBeenCalled();
-    expect(updateSharedSessionNativeBindingService).toHaveBeenCalledWith(
-      "ws-shared-codex-pending",
-      "shared:thread-codex-pending",
-      "codex",
-      "codex-pending-shared-1",
-      "550e8400-e29b-41d4-a716-446655440000",
-    );
+    expect(updateSharedSessionNativeBindingService).not.toHaveBeenCalled();
+    expect(
+      resolveSharedSessionBindingByNativeThread(
+        "ws-shared-codex-pending",
+        "550e8400-e29b-41d4-a716-446655440000",
+      ),
+    ).toMatchObject({
+      sharedThreadId: "shared:thread-codex-pending",
+      engine: "codex",
+    });
     expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
       "ws-shared-codex-pending",
       "shared:thread-codex-pending",
@@ -888,7 +934,8 @@ describe("useAppServerEvents", () => {
     });
   });
 
-  it("rebinds non-codex shared-session native thread ids on thread/started", async () => {
+  it("keeps V0 legacy binding persistence behind the explicit rollback flag", async () => {
+    setSharedV2SendOverride(false);
     const handlers: Handlers = {
       onTurnCompleted: vi.fn(),
     };
@@ -932,6 +979,7 @@ describe("useAppServerEvents", () => {
       "claude",
       "claude-pending-shared-1",
       "claude:ses_123",
+      null,
     );
     expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
       "ws-shared-claude",
@@ -1146,6 +1194,87 @@ describe("useAppServerEvents", () => {
     });
   });
 
+  it("does not synthesize a Grok completion after a pending delta is promoted to its canonical session", async () => {
+    const handlers: Handlers = {
+      onAgentMessageDelta: vi.fn(),
+      onAgentMessageCompleted: vi.fn(),
+      onThreadSessionIdUpdated: vi.fn(),
+      onTurnCompleted: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-grok",
+        message: {
+          method: "item/agentMessage/delta",
+          params: {
+            threadId: "grok-pending-1",
+            itemId: "grok-item-1",
+            delta: "你好！有什么可以帮你的吗？",
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-grok",
+        message: {
+          method: "thread/started",
+          params: {
+            threadId: "grok-pending-1",
+            sessionId: "session-real-1",
+            turnId: "grok-turn-1",
+            engine: "grok",
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-grok",
+        message: {
+          method: "turn/completed",
+          params: {
+            threadId: "grok:session-real-1",
+            turnId: "grok-turn-1",
+            result: { text: "你好！有什么可以帮你的吗？" },
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onThreadSessionIdUpdated).toHaveBeenCalledWith(
+      "ws-grok",
+      "grok-pending-1",
+      "session-real-1",
+      "grok",
+      "grok-turn-1",
+    );
+    expect(handlers.onAgentMessageDelta).toHaveBeenCalledTimes(1);
+    expect(handlers.onAgentMessageDelta).toHaveBeenCalledWith({
+      workspaceId: "ws-grok",
+      threadId: "grok-pending-1",
+      itemId: "grok-item-1",
+      delta: "你好！有什么可以帮你的吗？",
+    });
+    expect(handlers.onAgentMessageCompleted).not.toHaveBeenCalled();
+    expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
+      "ws-grok",
+      "grok:session-real-1",
+      "grok-turn-1",
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("does not emit duplicated completion when item/completed already delivered agent text", async () => {
     const handlers: Handlers = {
       onAgentMessageCompleted: vi.fn(),
@@ -1304,7 +1433,7 @@ describe("useAppServerEvents", () => {
     });
   });
 
-  it("does not emit fallback completion in shared session when agentMessage snapshot already has text", async () => {
+  it("settles shared terminal final onto the existing Codex assistant item", async () => {
     const handlers: Handlers = {
       onAgentMessageCompleted: vi.fn(),
       onTurnCompleted: vi.fn(),
@@ -1353,7 +1482,14 @@ describe("useAppServerEvents", () => {
         text: "shared final response",
       }),
     );
-    expect(handlers.onAgentMessageCompleted).not.toHaveBeenCalled();
+    expect(handlers.onAgentMessageCompleted).toHaveBeenCalledTimes(1);
+    expect(handlers.onAgentMessageCompleted).toHaveBeenCalledWith({
+      workspaceId: "ws-shared-codex-turn",
+      threadId: "shared:thread-codex-turn",
+      itemId: "item-1",
+      text: "shared final response",
+      turnId: "turn-shared-1",
+    });
     expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
       "ws-shared-codex-turn",
       "shared:thread-codex-turn",
@@ -1363,6 +1499,303 @@ describe("useAppServerEvents", () => {
     clearSharedSessionBindingsForSharedThread(
       "ws-shared-codex-turn",
       "shared:thread-codex-turn",
+    );
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("routes first delta, reasoning, and terminal from Rust sharedOwner without a frontend binding", async () => {
+    const handlers: Handlers = {
+      onAgentMessageDelta: vi.fn(),
+      onReasoningTextDelta: vi.fn(),
+      onTurnCompleted: vi.fn(),
+    };
+    const { root } = await mount(handlers, {
+      useNormalizedRealtimeAdapters: true,
+    });
+    const sharedOwner = {
+      sharedSessionId: "owner-session",
+      sharedThreadId: "shared:owner-session",
+      nativeThreadId: "claude:native-owner",
+      runtimeTurnId: "run-owner",
+      attemptId: "attempt-owner",
+      engine: "claude",
+    };
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-runtime-owner",
+        message: {
+          method: "item/agentMessage/delta",
+          params: {
+            threadId: "shared:owner-session",
+            nativeThreadId: "claude:native-owner",
+            turnId: "run-owner",
+            itemId: "assistant-owner",
+            delta: "first",
+            sharedOwner,
+          },
+        },
+      });
+      listener?.({
+        workspace_id: "ws-runtime-owner",
+        message: {
+          method: "item/reasoning/textDelta",
+          params: {
+            threadId: "shared:owner-session",
+            nativeThreadId: "claude:native-owner",
+            turnId: "run-owner",
+            itemId: "reasoning-owner",
+            delta: "thinking",
+            sharedOwner,
+          },
+        },
+      });
+      listener?.({
+        workspace_id: "ws-runtime-owner",
+        message: {
+          method: "turn/completed",
+          params: {
+            threadId: "shared:owner-session",
+            nativeThreadId: "claude:native-owner",
+            turnId: "run-owner",
+            result: { text: "first" },
+            sharedOwner,
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onAgentMessageDelta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "ws-runtime-owner",
+        threadId: "shared:owner-session",
+        delta: "first",
+      }),
+    );
+    expect(handlers.onReasoningTextDelta).toHaveBeenCalledWith(
+      "ws-runtime-owner",
+      "shared:owner-session",
+      "reasoning-owner",
+      "thinking",
+      null,
+      "run-owner",
+    );
+    expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
+      "ws-runtime-owner",
+      "shared:owner-session",
+      "run-owner",
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("does not restart generic Native lifecycle for a Shared V2 projected turn", async () => {
+    const handlers: Handlers = {
+      onTurnStarted: vi.fn(),
+      onSharedRuntimeTurnStarted: vi.fn(),
+      onAgentMessageDelta: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+    const sharedOwner = {
+      sharedSessionId: "owner-session-start",
+      sharedThreadId: "shared:owner-session-start",
+      nativeThreadId: "claude:native-owner-start",
+      runtimeTurnId: "run-owner-start",
+      attemptId: "attempt-owner-start",
+      engine: "claude",
+      executionTargetSnapshot: {
+        engine: "claude",
+        providerProfileId: "provider-owner-start",
+        modelCatalogEntryId: "catalog-owner-start",
+        model: "claude-owner-start",
+        reasoning: null,
+        providerProfileNameSnapshot: "Provider Owner Start",
+        providerProfileSource: "managed",
+        runtimeCapabilityFingerprint: null,
+      },
+    };
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-runtime-owner-start",
+        message: {
+          method: "turn/started",
+          params: {
+            threadId: "shared:owner-session-start",
+            nativeThreadId: "claude:native-owner-start",
+            turnId: "run-owner-start",
+            sharedOwner,
+          },
+        },
+      });
+      listener?.({
+        workspace_id: "ws-runtime-owner-start",
+        message: {
+          method: "item/agentMessage/delta",
+          params: {
+            threadId: "shared:owner-session-start",
+            nativeThreadId: "claude:native-owner-start",
+            turnId: "run-owner-start",
+            itemId: "assistant-owner-start",
+            delta: "content remains projected",
+            sharedOwner,
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onTurnStarted).not.toHaveBeenCalled();
+    expect(handlers.onSharedRuntimeTurnStarted).toHaveBeenCalledWith(
+      "shared:owner-session-start",
+      "run-owner-start",
+    );
+    expect(handlers.onAgentMessageDelta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "ws-runtime-owner-start",
+        threadId: "shared:owner-session-start",
+        delta: "content remains projected",
+      }),
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("forces a durable Shared owner through normalized routing when the global flag is off", async () => {
+    const handlers: Handlers = {
+      onNormalizedRealtimeEvent: vi.fn(),
+      onAgentMessageDelta: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+    const executionTargetSnapshot = {
+      engine: "codex",
+      providerProfileId: "provider-live",
+      modelCatalogEntryId: "catalog-live",
+      model: "runtime-live",
+      reasoning: { effort: "high" },
+      providerProfileNameSnapshot: "Provider Live",
+      providerProfileSource: "managed",
+      runtimeCapabilityFingerprint: null,
+    };
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-shared-live",
+        message: {
+          method: "item/agentMessage/delta",
+          params: {
+            threadId: "shared:thread-live",
+            nativeThreadId: "native-live",
+            turnId: "runtime-live",
+            itemId: "assistant-live",
+            delta: "live",
+            sharedOwner: {
+              sharedSessionId: "thread-live",
+              sharedThreadId: "shared:thread-live",
+              nativeThreadId: "native-live",
+              runtimeTurnId: "runtime-live",
+              attemptId: "attempt-live",
+              bindingKey: "codex:provider-live",
+              engine: "codex",
+              executionTargetSnapshot,
+            },
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onNormalizedRealtimeEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: "shared:thread-live",
+        operation: "appendAgentMessageDelta",
+        item: expect.objectContaining({
+          text: "live",
+          executionTargetSnapshot,
+        }),
+      }),
+    );
+    expect(handlers.onAgentMessageDelta).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("settles a complete Claude final over a streamed prefix in Shared Session", async () => {
+    const handlers: Handlers = {
+      onAgentMessageCompleted: vi.fn(),
+      onItemUpdated: vi.fn(),
+      onTurnCompleted: vi.fn(),
+    };
+    registerSharedSessionNativeBinding({
+      workspaceId: "ws-shared-claude-prefix",
+      sharedThreadId: "shared:thread-claude-prefix",
+      nativeThreadId: "claude-native-thread-prefix",
+      engine: "claude",
+    });
+    const { root } = await mount(handlers);
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-shared-claude-prefix",
+        message: {
+          method: "item/updated",
+          params: {
+            threadId: "claude-native-thread-prefix",
+            item: { type: "agentMessage", id: "claude-item-1", text: "Cl" },
+          },
+        },
+      });
+      listener?.({
+        workspace_id: "ws-shared-claude-prefix",
+        message: {
+          method: "turn/completed",
+          params: {
+            threadId: "claude-native-thread-prefix",
+            turnId: "turn-shared-claude-1",
+            result: {
+              text: "Claude，Anthropic 出品。当前会话使用完整 terminal final。",
+            },
+          },
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onItemUpdated).toHaveBeenCalledWith(
+      "ws-shared-claude-prefix",
+      "shared:thread-claude-prefix",
+      expect.objectContaining({
+        id: "claude-item-1",
+        text: "Cl",
+      }),
+    );
+    expect(handlers.onAgentMessageCompleted).toHaveBeenCalledTimes(1);
+    expect(handlers.onAgentMessageCompleted).toHaveBeenCalledWith({
+      workspaceId: "ws-shared-claude-prefix",
+      threadId: "shared:thread-claude-prefix",
+      itemId: "claude-item-1",
+      text: "Claude，Anthropic 出品。当前会话使用完整 terminal final。",
+      turnId: "turn-shared-claude-1",
+    });
+    expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
+      "ws-shared-claude-prefix",
+      "shared:thread-claude-prefix",
+      "turn-shared-claude-1",
+    );
+
+    clearSharedSessionBindingsForSharedThread(
+      "ws-shared-claude-prefix",
+      "shared:thread-claude-prefix",
     );
     await act(async () => {
       root.unmount();
@@ -2511,6 +2944,428 @@ describe("useAppServerEvents", () => {
     });
   });
 
+  it("attaches the frozen target to shared normalized assistant items", async () => {
+    const workspaceId = "ws-shared-target";
+    const sharedThreadId = "shared:thread-target";
+    const nativeThreadId = "codex-native-thread-target";
+    registerSharedSessionNativeBinding({
+      workspaceId,
+      sharedThreadId,
+      nativeThreadId,
+      engine: "codex",
+      attemptId: "attempt-shared-target",
+    });
+    beginTurn(
+      workspaceId,
+      sharedThreadId,
+      freezeTurnSnapshot({
+        engine: "codex",
+        providerProfileId: "provider-b",
+        providerProfileNameSnapshot: "Provider B",
+        providerProfileSource: "managed",
+        model: "gpt-provider-b",
+        reasoning: { effort: "medium" },
+      }),
+      "attempt-shared-target",
+    );
+    const handlers: Handlers = {
+      onNormalizedRealtimeEvent: vi.fn(),
+    };
+    const { root } = await mount(handlers, {
+      useNormalizedRealtimeAdapters: true,
+    });
+
+    await act(async () => {
+      listener?.({
+        workspace_id: workspaceId,
+        message: {
+          method: "item/updated",
+          params: {
+            threadId: nativeThreadId,
+            item: {
+              id: "assistant-shared-target",
+              type: "agentMessage",
+              text: "shared snapshot",
+            },
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onNormalizedRealtimeEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: sharedThreadId,
+        item: expect.objectContaining({
+          id: "assistant-shared-target",
+          executionTargetSnapshot: expect.objectContaining({
+            engine: "codex",
+            providerProfileNameSnapshot: "Provider B",
+            model: "gpt-provider-b",
+            reasoning: { effort: "medium" },
+          }),
+        }),
+      }),
+    );
+
+    clearSharedSessionBindingsForSharedThread(workspaceId, sharedThreadId);
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("carries the exact Shared Runtime owner into approval and user-input control requests", async () => {
+    const handlers: Handlers = {
+      onApprovalRequest: vi.fn(),
+      onRequestUserInput: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+    const sharedOwner = {
+      sharedSessionId: "control-owner",
+      sharedThreadId: "shared:control-owner",
+      nativeThreadId: "codex-native-control",
+      runtimeTurnId: "runtime-turn-control",
+      attemptId: "attempt-control",
+      providerRuntimeKey: "codex::ws-control::provider-a",
+      bindingKey: "codex:provider-a",
+      engine: "codex",
+      executionTargetSnapshot: {
+        engine: "codex",
+        providerProfileId: "provider-a",
+        modelCatalogEntryId: "catalog-a",
+        model: "runtime-a",
+        reasoning: { effort: "high" },
+        providerProfileNameSnapshot: "Provider A",
+        providerProfileSource: "managed",
+      },
+    };
+    const expectedOwner = {
+      attemptId: "attempt-control",
+      providerRuntimeKey: "codex::ws-control::provider-a",
+      sharedThreadId: "shared:control-owner",
+      nativeThreadId: "codex-native-control",
+      runtimeTurnId: "runtime-turn-control",
+      engine: "codex",
+      providerProfileId: "provider-a",
+    };
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-control",
+        message: {
+          id: 41,
+          method: "item/commandExecution/requestApproval",
+          params: {
+            threadId: "shared:control-owner",
+            nativeThreadId: "codex-native-control",
+            turnId: "runtime-turn-control",
+            sharedOwner,
+          },
+        },
+      });
+      listener?.({
+        workspace_id: "ws-control",
+        message: {
+          id: 42,
+          method: "item/tool/requestUserInput",
+          params: {
+            threadId: "shared:control-owner",
+            nativeThreadId: "codex-native-control",
+            turnId: "runtime-turn-control",
+            itemId: "ask-control",
+            sharedOwner,
+            questions: [
+              {
+                id: "confirm",
+                header: "Confirm",
+                question: "Continue?",
+              },
+            ],
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onApprovalRequest).toHaveBeenCalledWith({
+      workspace_id: "ws-control",
+      request_id: 41,
+      method: "item/commandExecution/requestApproval",
+      params: expect.any(Object),
+      shared_runtime_owner: expectedOwner,
+    });
+    expect(handlers.onRequestUserInput).toHaveBeenCalledWith({
+      workspace_id: "ws-control",
+      request_id: 42,
+      shared_runtime_owner: expectedOwner,
+      params: expect.objectContaining({
+        thread_id: "shared:control-owner",
+        turn_id: "runtime-turn-control",
+        item_id: "ask-control",
+      }),
+    });
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("fails closed instead of inferring a Shared control owner from thread identity", async () => {
+    const handlers: Handlers = {
+      onApprovalRequest: vi.fn(),
+      onRequestUserInput: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-control",
+        message: {
+          id: 51,
+          method: "approval/request",
+          params: {
+            threadId: "shared:missing-owner",
+            turnId: "runtime-turn-missing",
+          },
+        },
+      });
+      listener?.({
+        workspace_id: "ws-control",
+        message: {
+          id: 52,
+          method: "item/tool/requestUserInput",
+          params: {
+            threadId: "shared:missing-owner",
+            turnId: "runtime-turn-missing",
+            itemId: "ask-missing",
+            questions: [],
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onApprovalRequest).not.toHaveBeenCalled();
+    expect(handlers.onRequestUserInput).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("attaches the frozen target when Rust already projected the raw owner to Shared", async () => {
+    const workspaceId = "ws-shared-rust-owner";
+    const sharedThreadId = "shared:thread-rust-owner";
+    beginTurn(
+      workspaceId,
+      sharedThreadId,
+      freezeTurnSnapshot({
+        engine: "codex",
+        providerProfileId: "poisoned-current-picker",
+        providerProfileNameSnapshot: "Poisoned Current Picker",
+        providerProfileSource: "managed",
+        model: "poisoned-runtime-model",
+      }),
+      "attempt-kimi",
+    );
+    const handlers: Handlers = {
+      onNormalizedRealtimeEvent: vi.fn(),
+    };
+    const { root } = await mount(handlers, {
+      useNormalizedRealtimeAdapters: true,
+    });
+
+    await act(async () => {
+      listener?.({
+        workspace_id: workspaceId,
+        message: {
+          method: "item/updated",
+          params: {
+            threadId: sharedThreadId,
+            nativeThreadId: "codex-native-kimi",
+            sharedOwner: {
+              sharedSessionId: "thread-rust-owner",
+              sharedThreadId,
+              nativeThreadId: "codex-native-kimi",
+              runtimeTurnId: "run-kimi",
+              attemptId: "attempt-kimi",
+              bindingKey: "codex:provider-kimi",
+              engine: "codex",
+              executionTargetSnapshot: {
+                engine: "codex",
+                providerProfileId: "provider-kimi",
+                modelCatalogEntryId: "catalog-kimi",
+                model: "kimi-for-coding",
+                reasoning: { effort: "high" },
+                providerProfileNameSnapshot: "Kimi Coding",
+                providerProfileSource: "managed",
+                runtimeCapabilityFingerprint: "capability-kimi",
+              },
+            },
+            item: {
+              id: "assistant-shared-rust-owner",
+              type: "agentMessage",
+              text: "owned before dispatch RPC returned",
+            },
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onNormalizedRealtimeEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: sharedThreadId,
+        item: expect.objectContaining({
+          executionTargetSnapshot: expect.objectContaining({
+            engine: "codex",
+            providerProfileId: "provider-kimi",
+            providerProfileNameSnapshot: "Kimi Coding",
+            modelCatalogEntryId: "catalog-kimi",
+            model: "kimi-for-coding",
+            reasoning: { effort: "high" },
+            runtimeCapabilityFingerprint: "capability-kimi",
+          }),
+        }),
+      }),
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("labels the first Shared delta from the embedded durable target without reading the picker", async () => {
+    const handlers: Handlers = {
+      onNormalizedRealtimeEvent: vi.fn(),
+    };
+    const { root } = await mount(handlers, {
+      useNormalizedRealtimeAdapters: true,
+    });
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-first-owned-delta",
+        message: {
+          method: "item/agentMessage/delta",
+          params: {
+            threadId: "shared:first-owned-delta",
+            nativeThreadId: "claude-native-first-owned-delta",
+            turnId: "run-first-owned-delta",
+            itemId: "assistant-first-owned-delta",
+            delta: "first",
+            sharedOwner: {
+              sharedSessionId: "first-owned-delta",
+              sharedThreadId: "shared:first-owned-delta",
+              nativeThreadId: "claude-native-first-owned-delta",
+              runtimeTurnId: "run-first-owned-delta",
+              logicalTurnId: "logical-first-owned-delta",
+              attemptId: "attempt-first-owned-delta",
+              bindingKey: "claude:provider-first",
+              engine: "claude",
+              executionTargetSnapshot: {
+                engine: "claude",
+                providerProfileId: "provider-first",
+                modelCatalogEntryId: "catalog-first",
+                model: "runtime-first",
+                reasoning: { effort: "medium" },
+                providerProfileNameSnapshot: "First Provider",
+                providerProfileSource: "managed",
+                runtimeCapabilityFingerprint: "capability-first",
+              },
+            },
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onNormalizedRealtimeEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: "shared:first-owned-delta",
+        delta: "first",
+        item: expect.objectContaining({
+          role: "assistant",
+          text: "first",
+          executionTargetSnapshot: {
+            engine: "claude",
+            providerProfileId: "provider-first",
+            modelCatalogEntryId: "catalog-first",
+            model: "runtime-first",
+            reasoning: { effort: "medium" },
+            providerProfileNameSnapshot: "First Provider",
+            providerProfileSource: "managed",
+            runtimeCapabilityFingerprint: "capability-first",
+          },
+        }),
+      }),
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("does not attach an active snapshot to a different runtime attempt", async () => {
+    const workspaceId = "ws-attempt-isolation";
+    const sharedThreadId = "shared:attempt-isolation";
+    beginTurn(
+      workspaceId,
+      sharedThreadId,
+      freezeTurnSnapshot({
+        engine: "codex",
+        providerProfileId: "provider-attempt-a",
+        model: "model-attempt-a",
+      }),
+      "attempt-a",
+    );
+    const handlers: Handlers = {
+      onNormalizedRealtimeEvent: vi.fn(),
+    };
+    const { root } = await mount(handlers, {
+      useNormalizedRealtimeAdapters: true,
+    });
+
+    await act(async () => {
+      listener?.({
+        workspace_id: workspaceId,
+        message: {
+          method: "item/updated",
+          params: {
+            threadId: sharedThreadId,
+            nativeThreadId: "codex-native-attempt-b",
+            sharedOwner: {
+              sharedSessionId: "attempt-isolation",
+              sharedThreadId,
+              nativeThreadId: "codex-native-attempt-b",
+              attemptId: "attempt-b",
+              bindingKey: "codex:provider-attempt-b",
+              engine: "codex",
+            },
+            item: {
+              id: "assistant-attempt-b",
+              type: "agentMessage",
+              text: "attempt b",
+            },
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onNormalizedRealtimeEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        item: expect.not.objectContaining({
+          executionTargetSnapshot: expect.anything(),
+        }),
+      }),
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("does not route codex completed agentMessage snapshots through legacy itemCompleted when normalized handler is provided", async () => {
     const handlers: Handlers = {
       onNormalizedRealtimeEvent: vi.fn(),
@@ -2878,6 +3733,244 @@ describe("useAppServerEvents", () => {
         aggregatedOutput: "stdout-line-1\nstdout-line-2",
         output: "stdout-line-1\nstdout-line-2",
       }),
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("routes a Shared turn error with the durable attempt target", async () => {
+    const handlers: Handlers = {
+      onTurnError: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+    const executionTargetSnapshot = {
+      engine: "codex",
+      providerProfileId: "provider-error",
+      modelCatalogEntryId: "catalog-error",
+      model: "runtime-error",
+      reasoning: { effort: "high" },
+      providerProfileNameSnapshot: "Provider Error",
+      providerProfileSource: "managed",
+      runtimeCapabilityFingerprint: "capability-error",
+    };
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-shared-error",
+        message: {
+          method: "turn/error",
+          params: {
+            threadId: "shared:thread-error",
+            nativeThreadId: "codex-native-error",
+            turnId: "runtime-turn-error",
+            error: { message: "provider rejected" },
+            sharedOwner: {
+              sharedSessionId: "thread-error",
+              sharedThreadId: "shared:thread-error",
+              nativeThreadId: "codex-native-error",
+              runtimeTurnId: "runtime-turn-error",
+              attemptId: "attempt-error",
+              bindingKey: "codex:provider-error",
+              engine: "codex",
+              executionTargetSnapshot,
+            },
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onTurnError).toHaveBeenCalledWith(
+      "ws-shared-error",
+      "shared:thread-error",
+      "runtime-turn-error",
+      {
+        message: "provider rejected",
+        willRetry: false,
+        engine: "codex",
+        executionTargetSnapshot,
+      },
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("settles a stale Shared Binding without projecting its raw provider error row", async () => {
+    const handlers: Handlers = {
+      onTurnError: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-shared-stale",
+        message: {
+          method: "turn/error",
+          params: {
+            threadId: "shared:thread-stale",
+            nativeThreadId: "claude:session-stale",
+            turnId: "runtime-turn-stale",
+            sharedRecoveryReason: "native-session-not-found",
+            error: {
+              message: "No conversation found with session ID: session-stale",
+            },
+            sharedOwner: {
+              sharedSessionId: "thread-stale",
+              sharedThreadId: "shared:thread-stale",
+              nativeThreadId: "claude:session-stale",
+              runtimeTurnId: "runtime-turn-stale",
+              attemptId: "attempt-stale",
+              bindingKey: "claude:provider-stale",
+              engine: "claude",
+            },
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onTurnError).toHaveBeenCalledWith(
+      "ws-shared-stale",
+      "shared:thread-stale",
+      "runtime-turn-stale",
+      expect.objectContaining({
+        suppressMessage: true,
+        engine: "claude",
+      }),
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("projects a terminal-only Shared assistant with its durable target", async () => {
+    const handlers: Handlers = {
+      onNormalizedRealtimeEvent: vi.fn(),
+      onAgentMessageCompleted: vi.fn(),
+      onTurnCompleted: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+    const executionTargetSnapshot = {
+      engine: "codex",
+      providerProfileId: "provider-terminal",
+      modelCatalogEntryId: "catalog-terminal",
+      model: "runtime-terminal",
+      reasoning: { effort: "medium" },
+      providerProfileNameSnapshot: "Provider Terminal",
+      providerProfileSource: "managed",
+      runtimeCapabilityFingerprint: null,
+    };
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-shared-terminal",
+        message: {
+          method: "turn/completed",
+          params: {
+            threadId: "shared:thread-terminal",
+            nativeThreadId: "native-terminal",
+            turnId: "runtime-terminal",
+            result: { text: "terminal response" },
+            sharedOwner: {
+              sharedSessionId: "thread-terminal",
+              sharedThreadId: "shared:thread-terminal",
+              nativeThreadId: "native-terminal",
+              runtimeTurnId: "runtime-terminal",
+              attemptId: "attempt-terminal",
+              bindingKey: "codex:provider-terminal",
+              engine: "codex",
+              executionTargetSnapshot,
+            },
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onNormalizedRealtimeEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "completeAgentMessage",
+        threadId: "shared:thread-terminal",
+        turnId: "runtime-terminal",
+        item: expect.objectContaining({
+          text: "terminal response",
+          executionTargetSnapshot,
+        }),
+      }),
+    );
+    expect(handlers.onAgentMessageCompleted).not.toHaveBeenCalled();
+    expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
+      "ws-shared-terminal",
+      "shared:thread-terminal",
+      "runtime-terminal",
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("projects an empty provenance anchor for a reasoning-only Shared turn", async () => {
+    const handlers: Handlers = {
+      onNormalizedRealtimeEvent: vi.fn(),
+      onTurnCompleted: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+    const executionTargetSnapshot = {
+      engine: "claude",
+      providerProfileId: null,
+      modelCatalogEntryId: "claude-local",
+      model: "claude-sonnet",
+      reasoning: null,
+      providerProfileNameSnapshot: "本地配置",
+      providerProfileSource: "local",
+      runtimeCapabilityFingerprint: null,
+    };
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-shared-reasoning-only",
+        message: {
+          method: "turn/completed",
+          params: {
+            threadId: "shared:thread-reasoning-only",
+            nativeThreadId: "claude:native-reasoning-only",
+            turnId: "runtime-reasoning-only",
+            sharedOwner: {
+              sharedSessionId: "thread-reasoning-only",
+              sharedThreadId: "shared:thread-reasoning-only",
+              nativeThreadId: "claude:native-reasoning-only",
+              runtimeTurnId: "runtime-reasoning-only",
+              attemptId: "attempt-reasoning-only",
+              bindingKey: "claude:default",
+              engine: "claude",
+              executionTargetSnapshot,
+            },
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onNormalizedRealtimeEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "completeAgentMessage",
+        threadId: "shared:thread-reasoning-only",
+        item: expect.objectContaining({
+          text: "",
+          executionTargetSnapshot,
+        }),
+      }),
+    );
+    expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
+      "ws-shared-reasoning-only",
+      "shared:thread-reasoning-only",
+      "runtime-reasoning-only",
     );
 
     await act(async () => {

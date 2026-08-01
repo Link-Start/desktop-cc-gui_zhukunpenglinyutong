@@ -638,18 +638,32 @@ async fn emit_workspace_event<E: EventSink>(
     value: Value,
 ) {
     let thread_id = extract_thread_id(&value);
-    let mut sent_to_background = false;
-    if let Some(ref tid) = thread_id {
+    let background_sender = if let Some(ref tid) = thread_id {
         let callbacks = session.background_thread_callbacks.lock().await;
-        if let Some(tx) = callbacks.get(tid) {
-            let _ = tx.send(value.clone());
-            sent_to_background = true;
-        }
+        callbacks.get(tid).cloned()
+    } else {
+        None
+    };
+    let mut event = AppServerEvent {
+        workspace_id: workspace_id.to_string(),
+        message: value,
+    };
+    let background_message = background_sender.as_ref().map(|_| event.message.clone());
+
+    // Shared canonical assembler 与 owner projection 必须先看到 authoritative
+    // Runtime event；普通 UI throttle/drop 不能影响 durable terminal snapshot。
+    if event_sink.observe_app_server_event(&session.provider_runtime_key, &mut event)
+        == AppServerEventDisposition::DeferredBySharedOwner
+    {
+        return;
     }
-    if !sent_to_background {
+
+    if let (Some(sender), Some(message)) = (background_sender, background_message) {
+        let _ = sender.send(message);
+    } else {
         let events = {
             let mut throttle = session.snapshot_throttle.lock().await;
-            throttle.filter_event(workspace_id, value)
+            throttle.filter_event(workspace_id, event.message)
         };
         for message in events {
             event_sink.emit_app_server_event(AppServerEvent {
@@ -817,6 +831,12 @@ async fn maybe_trigger_auto_compaction<E: EventSink>(
             now_millis(),
         )
     };
+    if matches!(
+        method,
+        "turn/started" | "thread/compacted" | "thread/compactionFailed"
+    ) {
+        session.notify_codex_compaction_state_changed();
+    }
     if !should_trigger {
         return;
     }
@@ -846,12 +866,9 @@ async fn maybe_trigger_auto_compaction<E: EventSink>(
             .await;
         }
         Err(error) => {
-            {
-                let mut states = session.auto_compaction_thread_state.lock().await;
-                if let Some(state) = states.get_mut(thread_id) {
-                    state.in_flight = false;
-                }
-            }
+            session
+                .release_codex_compaction_reservation(thread_id)
+                .await;
             eprintln!(
                 "[codex] auto compaction dispatch failed workspace={} thread={}: {}",
                 workspace_id, thread_id, error

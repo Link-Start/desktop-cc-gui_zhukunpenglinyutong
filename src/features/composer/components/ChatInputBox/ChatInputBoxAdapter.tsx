@@ -2,8 +2,7 @@
  * ChatInputBoxAdapter - Bridge between Composer.tsx props and ChatInputBox props
  *
  * This adapter translates the Composer's prop interface to ChatInputBox's interface,
- * enabling drop-in replacement of ComposerInput while maintaining 100% visual and
- * interaction consistency with idea-claude-code-gui's input box.
+ * keeping visual and interaction consistency with idea-claude-code-gui's input box.
  */
 import {
   forwardRef,
@@ -27,6 +26,7 @@ import type {
   ModelInfo,
   PermissionMode,
   ProviderModelCatalogs,
+  ProviderTargetPickerMode,
   ReasoningEffort,
   SelectedAgent,
   StreamActivityPhase,
@@ -36,6 +36,7 @@ import type {
   SkillItem,
   NoteCardItem,
 } from './types';
+import type { ExecutionTarget } from '../../../shared-session/target/types';
 import type { QueuedMessage as ComposerQueuedMessage } from '../../../../types';
 import type { CustomCommandOption, CustomPromptOption } from '../../../../types';
 import type { EngineType } from '../../../../types';
@@ -49,7 +50,6 @@ import {
   getClaudeProviders,
   getClaudeAlwaysThinkingEnabled,
   setClaudeAlwaysThinkingEnabled,
-  switchClaudeProvider,
   updateClaudeProvider,
   getWorkspaceFiles,
   getWorkspaceDirectoryChildren,
@@ -448,6 +448,7 @@ export interface ChatInputBoxAdapterProps {
   // Core state
   text: string;
   disabled?: boolean;
+  submitDisabled?: boolean;
   isProcessing: boolean;
   streamActivityPhase?: StreamActivityPhase;
   canStop: boolean;
@@ -465,11 +466,15 @@ export interface ChatInputBoxAdapterProps {
   selectedModelId: string | null;
   selectedEngine?: EngineType;
   isSharedSession?: boolean;
+  providerTargetPickerMode?: ProviderTargetPickerMode;
+  /** Shared Thread id（Wave 4 / B.6：send 状态条/状态机的 store key 组成）。 */
+  threadId?: string | null;
   engines?: AdapterEngineInfo[];
-  onSelectEngine?: (engine: EngineType) => void;
   models?: AdapterModelOption[];
   providerModelCatalogs?: Partial<Record<EngineType, AdapterModelOption[]>>;
-  onSelectModel?: (id: string) => void;
+  providerProfileId?: string | null;
+  executionTarget?: ExecutionTarget | null;
+  onExecutionTargetChange?: (target: ExecutionTarget) => void;
 
   // Reasoning
   reasoningOptions?: string[];
@@ -551,6 +556,7 @@ export interface ChatInputBoxAdapterProps {
   onOpenAgentSettings?: () => void;
   onOpenPromptSettings?: () => void;
   onOpenModelSettings?: (providerId?: string) => void;
+  onOpenCliSettings?: () => void;
   onOpenFileReference?: (path: string) => void;
   onRefreshModelConfig?: (providerId?: string) => Promise<void> | void;
   isModelConfigRefreshing?: boolean;
@@ -712,7 +718,7 @@ function attachmentToGeminiImageInput(attachment: Attachment): string | null {
 
 function attachmentsToImageInputs(
   attachments: Attachment[] | undefined,
-  provider: 'claude' | 'codex' | 'gemini' | 'kimi' | 'opencode' = 'claude',
+  provider: 'claude' | 'codex' | 'gemini' | 'grok' | 'kimi' | 'opencode' = 'claude',
 ): string[] | undefined {
   if (!attachments || attachments.length === 0) {
     return undefined;
@@ -732,7 +738,7 @@ function attachmentsToImageInputs(
 /**
  * Maps Composer engine types to ChatInputBox provider IDs
  */
-type ChatInputProvider = 'claude' | 'codex' | 'gemini' | 'kimi' | 'opencode';
+type ChatInputProvider = 'claude' | 'codex' | 'gemini' | 'grok' | 'kimi' | 'opencode';
 
 function engineToProvider(engine?: EngineType): ChatInputProvider {
   switch (engine) {
@@ -742,22 +748,8 @@ function engineToProvider(engine?: EngineType): ChatInputProvider {
       return 'opencode';
     case 'gemini':
       return 'gemini';
-    case 'kimi':
-      return 'kimi';
-    case 'claude':
-    default:
-      return 'claude';
-  }
-}
-
-function providerToEngine(providerId: string): EngineType {
-  switch (providerId) {
-    case 'codex':
-      return 'codex';
-    case 'opencode':
-      return 'opencode';
-    case 'gemini':
-      return 'gemini';
+    case 'grok':
+      return 'grok';
     case 'kimi':
       return 'kimi';
     case 'claude':
@@ -1024,6 +1016,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
     const {
       text,
       disabled,
+      submitDisabled,
       isProcessing,
       streamActivityPhase = 'idle',
       onTextChange,
@@ -1034,11 +1027,13 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       selectedModelId,
       selectedEngine,
       isSharedSession = false,
+      providerTargetPickerMode,
       engines,
-      onSelectEngine,
       models,
       providerModelCatalogs,
-      onSelectModel,
+      providerProfileId,
+      executionTarget,
+      onExecutionTargetChange,
       reasoningOptions,
       selectedEffort,
       onSelectEffort,
@@ -1096,6 +1091,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       onOpenAgentSettings,
       onOpenPromptSettings,
       onOpenModelSettings,
+      onOpenCliSettings,
       onOpenFileReference,
       onRefreshModelConfig,
       isModelConfigRefreshing,
@@ -1110,6 +1106,9 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       completionEmailDisabled,
       onToggleCompletionEmail,
     } = props;
+    // 统一 Atomic 双栏；Shared Session 用 shared catalog，其余 create-session。
+    const effectiveProviderTargetPickerMode =
+      providerTargetPickerMode ?? (isSharedSession ? 'shared' : 'create-session');
     const { t } = useTranslation();
     const chatInputRef = useRef<ChatInputBoxHandle>(null);
     const renderCountRef = useRef(0);
@@ -1258,11 +1257,6 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       onRemoveAttachment?.(path);
     }, [onRemoveAttachment]);
 
-    // Handle model selection (ChatInputBox sends model ID directly)
-    const handleModelSelect = useCallback((modelId: string) => {
-      onSelectModel?.(modelId);
-    }, [onSelectModel]);
-
     // Handle reasoning effort change
     const handleReasoningChange = useCallback((effort: ReasoningEffort | null) => {
       onSelectEffort?.(effort);
@@ -1295,13 +1289,8 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
             },
           };
           await updateClaudeProvider(activeProvider.id, nextProvider);
-          await switchClaudeProvider(activeProvider.id);
         } catch {
-          try {
-            await setClaudeAlwaysThinkingEnabled(enabled);
-          } catch {
-            setLocalAlwaysThinkingEnabled(rollbackValue);
-          }
+          setLocalAlwaysThinkingEnabled(rollbackValue);
         }
       },
       [isCodexEngine, localAlwaysThinkingEnabled, onToggleThinking],
@@ -1323,14 +1312,6 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       },
       [isCodexEngine, onStreamingEnabledChange],
     );
-
-    const handleProviderSelect = useCallback((providerId: string) => {
-      const targetEngine = providerToEngine(providerId);
-      if (targetEngine === selectedEngine) {
-        return;
-      }
-      onSelectEngine?.(targetEngine);
-    }, [onSelectEngine, selectedEngine]);
 
     const handleCodexSpeedModeChange = useCallback(
       (mode: Exclude<CodexSpeedMode, 'unknown'>) => {
@@ -1853,6 +1834,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         codex: isEngineEnabled('codex'),
         opencode: isEngineEnabled('opencode'),
         gemini: isEngineEnabled('gemini'),
+        grok: isEngineEnabled('grok'),
         kimi: isEngineEnabled('kimi'),
       } as const;
     }, [engines, isSharedSession]);
@@ -1876,6 +1858,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         codex: resolveStatusLabel('codex'),
         opencode: resolveStatusLabel('opencode'),
         gemini: resolveStatusLabel('gemini'),
+        grok: resolveStatusLabel('grok'),
         kimi: resolveStatusLabel('kimi'),
       } as const;
     }, [engines, t]);
@@ -1889,6 +1872,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         claude: 'Claude Code',
         codex: 'Codex CLI',
         gemini: 'Gemini CLI',
+        grok: 'Grok CLI',
         kimi: 'Kimi CLI',
         opencode: 'OpenCode',
       };
@@ -1914,6 +1898,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         codex: resolveVersion('codex'),
         opencode: resolveVersion('opencode'),
         gemini: resolveVersion('gemini'),
+        grok: resolveVersion('grok'),
         kimi: resolveVersion('kimi'),
       } as const;
     }, [engines]);
@@ -2103,6 +2088,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         isLoading={isProcessing}
         streamActivityPhase={streamActivityPhase}
         disabled={disabled}
+        submitDisabled={submitDisabled}
         value={text}
         workspaceId={workspaceId}
         placeholder={placeholder ?? t('chat.inputPlaceholder')}
@@ -2112,6 +2098,10 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         providerModelCatalogs={normalizedProviderModelCatalogs}
         permissionMode={permissionMode}
         currentProvider={engineToProvider(selectedEngine)}
+        currentProviderProfileId={providerProfileId}
+        executionTarget={executionTarget}
+        onExecutionTargetChange={onExecutionTargetChange}
+        providerTargetPickerMode={effectiveProviderTargetPickerMode}
         providerAvailability={providerAvailability}
         providerVersions={providerVersions}
         providerStatusLabels={providerStatusLabels}
@@ -2130,8 +2120,9 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         } : undefined}
         onRemoveAttachment={handleRemoveAttachment}
         onModeSelect={onModeSelect}
-        onModelSelect={handleModelSelect}
-        onProviderSelect={onSelectEngine ? handleProviderSelect : undefined}
+        // Atomic 双栏唯一选择入口：engine/model 改动走 onExecutionTargetChange。
+        onModelSelect={undefined}
+        onProviderSelect={undefined}
         reasoningEffort={effortToOptionalReasoning(selectedEffort)}
         reasoningOptions={normalizeReasoningOptions(reasoningOptions)}
         onReasoningChange={onSelectEffort ? handleReasoningChange : undefined}
@@ -2149,6 +2140,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         onOpenAgentSettings={onOpenAgentSettings}
         onOpenPromptSettings={onOpenPromptSettings}
         onOpenModelSettings={onOpenModelSettings}
+        onOpenCliSettings={onOpenCliSettings}
         onOpenFileReference={onOpenFileReference}
         onRefreshModelConfig={onRefreshModelConfig}
         isModelConfigRefreshing={isModelConfigRefreshing}

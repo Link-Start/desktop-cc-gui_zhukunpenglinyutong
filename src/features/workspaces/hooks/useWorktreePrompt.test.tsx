@@ -112,9 +112,11 @@ describe("useWorktreePrompt", () => {
       expect(result.current.worktreePrompt?.baseRefOptions.length).toBe(3);
     });
     expect(result.current.worktreePrompt?.baseRef).toBe("");
+    expect(result.current.worktreePrompt?.branch).toBe("");
 
     act(() => {
       result.current.updateBaseRef("upstream/main");
+      result.current.updateBranch("feat/demo");
     });
 
     const branch = result.current.worktreePrompt?.branch ?? "";
@@ -166,6 +168,9 @@ describe("useWorktreePrompt", () => {
     await waitFor(() => {
       expect(result.current.worktreePrompt?.baseRef).toBe("");
     });
+    act(() => {
+      result.current.updateBranch("feat/demo");
+    });
 
     await act(async () => {
       await result.current.confirmPrompt();
@@ -175,6 +180,52 @@ describe("useWorktreePrompt", () => {
     expect(result.current.worktreePrompt?.error).toBe(
       "Please choose a base branch from the dropdown first.",
     );
+  });
+
+  it("requires an explicit branch and resets it when reopened", async () => {
+    listGitBranchesMock.mockResolvedValue({
+      currentBranch: "main",
+      localBranches: [{ name: "main", headSha: "11111111" }],
+      remoteBranches: [],
+    });
+    const addWorktreeAgent = vi.fn();
+    const updateWorkspaceSettings = vi.fn().mockResolvedValue(workspace);
+    const connectWorkspace = vi.fn().mockResolvedValue(undefined);
+    const onSelectWorkspace = vi.fn();
+
+    const { result } = renderHook(() =>
+      useWorktreePrompt({
+        addWorktreeAgent,
+        updateWorkspaceSettings,
+        connectWorkspace,
+        onSelectWorkspace,
+      }),
+    );
+
+    act(() => {
+      result.current.openPrompt(workspace);
+    });
+    await waitFor(() => {
+      expect(result.current.worktreePrompt?.baseRefOptions.length).toBe(1);
+    });
+    act(() => {
+      result.current.updateBaseRef("main");
+    });
+
+    await act(async () => {
+      await result.current.confirmPrompt();
+    });
+
+    expect(addWorktreeAgent).not.toHaveBeenCalled();
+    expect(result.current.worktreePrompt?.error).toBe(
+      "Cannot create worktree: branch name is required.",
+    );
+
+    act(() => {
+      result.current.updateBranch("feat/temporary");
+      result.current.openPrompt(workspace);
+    });
+    expect(result.current.worktreePrompt?.branch).toBe("");
   });
 
   it("maps non-git repository error to friendly i18n message", async () => {
@@ -243,6 +294,7 @@ describe("useWorktreePrompt", () => {
 
     act(() => {
       result.current.updateBaseRef("main");
+      result.current.updateBranch("feat/demo");
     });
 
     await act(async () => {
@@ -298,6 +350,7 @@ describe("useWorktreePrompt", () => {
 
     act(() => {
       result.current.updateBaseRef("main");
+      result.current.updateBranch("feat/demo");
     });
 
     await act(async () => {
@@ -349,6 +402,7 @@ describe("useWorktreePrompt", () => {
 
     act(() => {
       result.current.updateBaseRef("main");
+      result.current.updateBranch("feat/demo");
     });
 
     await act(async () => {

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import X from "lucide-react/dist/esm/icons/x";
 import {
   clampRendererContextMenuPosition,
   RendererContextMenu,
@@ -98,6 +99,55 @@ describe("RendererContextMenu", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Open" }));
 
     expect(events).toEqual(["close", "select"]);
+  });
+
+  it("renders optional decorative icons without changing accessible labels", () => {
+    render(
+      <RendererContextMenu
+        menu={createMenu({
+          items: [
+            {
+              type: "item",
+              id: "close",
+              label: "Close tab",
+              icon: <X data-testid="close-tab-icon" />,
+              onSelect: vi.fn(),
+            },
+          ],
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const item = screen.getByRole("menuitem", { name: "Close tab" });
+    expect(within(item).getByTestId("close-tab-icon")).toBeTruthy();
+    expect(item.querySelector(".renderer-context-menu-item-icon")?.getAttribute("aria-hidden"))
+      .toBe("true");
+  });
+
+  it("renders an optional shortcut hint without changing the accessible label", () => {
+    const onSelect = vi.fn();
+    render(
+      <RendererContextMenu
+        menu={createMenu({
+          items: [
+            {
+              type: "item",
+              id: "expand-selection",
+              label: "Expand selection",
+              shortcut: "⌘W",
+              onSelect,
+            },
+          ],
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const item = screen.getByRole("menuitem", { name: "Expand selection" });
+    expect(item.querySelector(".renderer-context-menu-item-shortcut")?.textContent).toBe("⌘W");
+    fireEvent.click(item);
+    expect(onSelect).toHaveBeenCalledOnce();
   });
 
   it("opens submenu items in a flyout and activates leaf actions", () => {

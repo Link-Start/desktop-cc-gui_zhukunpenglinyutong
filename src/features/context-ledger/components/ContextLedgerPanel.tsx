@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Markdown } from "../../messages/components/Markdown";
+import { Markdown } from "../../../markdown/components/Markdown";
 import type {
   ContextLedgerAttributionConfidence,
   ContextLedgerBlock,

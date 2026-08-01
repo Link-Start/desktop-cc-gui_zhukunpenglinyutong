@@ -4,6 +4,7 @@
 // Machine translation of src/i18n/locales/en/providers.ts; keys mirror the English source.
 const providers = {
   "providers": {
+    "localConfig": "本地配置",
     "claude": {
       "label": "Claude Code"
     },
@@ -15,6 +16,9 @@ const providers = {
     },
     "kimi": {
       "label": "Kimi CLI"
+    },
+    "grok": {
+      "label": "Grok CLI"
     },
     "opencode": {
       "label": "OpenCode"

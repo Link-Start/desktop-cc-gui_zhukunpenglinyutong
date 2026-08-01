@@ -25,6 +25,7 @@ const common = {
     "curatedLoading": "क्यूरेटेड स्किल लोड हो रहे हैं…",
     "curatedError": "क्यूरेटेड स्किल लोड नहीं हो सके।",
     "curatedSubtitle": "क्लाइंट-बंडल्ड, संस्करण-पिन किए गए, डेस्कटॉप क्लाइंट के साथ शिप किए गए। कोई नेटवर्क नहीं।",
+    "curatedDetailHint": "सक्षम होने पर, चुनी गई स्किल हर बातचीत के दौरान सिस्टम प्रॉम्प्ट में स्वचालित रूप से इंजेक्ट हो जाती है और AI की प्रतिक्रिया शैली और व्यवहार को लगातार प्रभावित करती है, बिना मैन्युअल रूप से बुलाए। अक्षम होने पर यह बिल्कुल इंजेक्ट नहीं होती। यह उपयोगकर्ता द्वारा इंस्टॉल की गई स्किल से अलग है, जो केवल स्पष्ट रूप से कॉल करने या विवरण से मेल खाने पर ही काम करती है।",
     "curatedBundledBadge": "अंतर्निहित",
     "curatedCategoryCodeStyle": "कोड शैली",
     "curatedCategoryUiDesign": "UI डिज़ाइन",
@@ -61,6 +62,9 @@ const common = {
     "showInHeader": "टूलबार में दिखाएँ",
     "markdownMermaidFullscreen": "पूर्ण स्क्रीन",
     "markdownMermaidFullscreenHint": "डायग्राम पूर्ण स्क्रीन में खोलें",
+    "markdownMermaidDownloadPng": "PNG डाउनलोड करें",
+    "markdownMermaidDownloadingPng": "PNG डाउनलोड हो रहा है…",
+    "markdownMermaidDownloadFailed": "PNG डाउनलोड विफल रहा।",
     "markdownImageFullscreen": "पूर्ण स्क्रीन",
     "markdownImageFullscreenHint": "छवि पूर्ण स्क्रीन में खोलें"
   }

@@ -45,6 +45,7 @@ type GitMultiRepositoryChangesProps = {
   onStageFile?: (repositoryRoot: string, path: string) => Promise<void>;
   onUnstageFile?: (repositoryRoot: string, path: string) => Promise<void>;
   onDiscardFile?: (repositoryRoot: string, path: string) => Promise<void> | void;
+  onDiscardFiles?: (repositoryRoot: string, paths: string[]) => Promise<void> | void;
   onStageAll?: (repositoryRoot: string) => Promise<void>;
   onOpenFile?: (repositoryRoot: string, path: string) => void;
   onOpenFilePreview?: (
@@ -52,6 +53,7 @@ type GitMultiRepositoryChangesProps = {
     file: DiffFile,
     section: "staged" | "unstaged",
   ) => void;
+  onOpenInlinePreview?: (repositoryRoot: string, path: string) => void;
   onShowFileMenu?: (
     event: ReactMouseEvent<HTMLDivElement>,
     repositoryRoot: string,
@@ -95,9 +97,11 @@ export function GitMultiRepositoryChanges({
   onStageFile,
   onUnstageFile,
   onDiscardFile,
+  onDiscardFiles,
   onStageAll,
   onOpenFile,
   onOpenFilePreview,
+  onOpenInlinePreview,
   onShowFileMenu,
   onRefresh,
 }: GitMultiRepositoryChangesProps) {
@@ -170,7 +174,7 @@ export function GitMultiRepositoryChanges({
   const canGenerateCommitMessage = selectedCount > 0 && !commitMessageLoading && !commitLoading;
   const commitComposer = (
     <div className={`commit-message-section git-commit-composer git-commit-composer--${commitComposerPlacement}`}>
-      <div className="commit-message-input-wrapper">
+      <div className="commit-message-composer-row">
         <textarea
           className="commit-message-input"
           placeholder={t("git.commitMessage")}
@@ -179,38 +183,59 @@ export function GitMultiRepositoryChanges({
           disabled={commitLoading || commitMessageLoading}
           rows={2}
         />
-        {onOpenGenerateMenu ? (
+        <div className="commit-message-actions">
+          {onOpenGenerateMenu ? (
+            <button
+              type="button"
+              className={`commit-message-generate-button${commitMessageLoading ? " commit-message-generate-button--loading" : ""}`}
+              onClick={(event) => onOpenGenerateMenu(event, selections)}
+              disabled={!canGenerateCommitMessage}
+              aria-haspopup="menu"
+              title={t("git.generateCommitMessage")}
+              aria-label={t("git.generateCommitMessage")}
+            >
+              <CommitMessageEngineIcon
+                engine={commitMessageEngine}
+                size={14}
+                className={`commit-message-engine-icon${commitMessageLoading ? " commit-message-engine-icon--spinning" : ""}`}
+              />
+            </button>
+          ) : null}
           <button
             type="button"
-            className={`commit-message-generate-button${commitMessageLoading ? " commit-message-generate-button--loading" : ""}`}
-            onClick={(event) => onOpenGenerateMenu(event, selections)}
-            disabled={!canGenerateCommitMessage}
-            aria-haspopup="menu"
-            title={t("git.generateCommitMessage")}
-            aria-label={t("git.generateCommitMessage")}
+            className="commit-message-commit-button"
+            disabled={!canCommit}
+            onClick={() => canCommit && void onCommitRepositories?.(selections)}
+            title={!commitMessage.trim()
+              ? t("git.enterCommitMessage")
+              : selectedCount === 0
+                ? t("git.selectFilesToCommit")
+                : t("git.commitSelectedChanges")}
+            aria-label={commitLoading ? t("git.committing") : t("git.commit")}
           >
-            <CommitMessageEngineIcon
-              engine={commitMessageEngine}
-              size={14}
-              className={`commit-message-engine-icon${commitMessageLoading ? " commit-message-engine-icon--spinning" : ""}`}
-            />
+            {commitLoading ? (
+              <span className="commit-button-spinner" aria-hidden />
+            ) : (
+              <svg
+                width={14}
+                height={14}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            )}
           </button>
-        ) : null}
+        </div>
       </div>
       {commitMessageError ? <div className="commit-message-error">{commitMessageError}</div> : null}
       {commitError ? <div className="commit-message-error">{commitError}</div> : null}
       {commitSummary ? <div className="git-repository-commit-summary" aria-live="polite">{commitSummary}</div> : null}
-      <div className="commit-button-container">
-        <button
-          type="button"
-          className="commit-button"
-          disabled={!canCommit}
-          onClick={() => canCommit && void onCommitRepositories?.(selections)}
-        >
-          {commitLoading ? <span className="commit-button-spinner" aria-hidden /> : null}
-          <span>{commitLoading ? t("git.committing") : t("git.commit")}</span>
-        </button>
-      </div>
       <div className="commit-message-hint" aria-live="polite">
         {t("git.filesChanged", { count: selectedCount })}
       </div>
@@ -300,6 +325,16 @@ export function GitMultiRepositoryChanges({
               </span>
             ) : null}
             <span className="git-repository-change-group__count">
+              {status.totalAdditions > 0 || status.totalDeletions > 0 ? (
+                <span
+                  className="diff-counts-inline git-filetree-badge"
+                  aria-label={`+${status.totalAdditions} -${status.totalDeletions}`}
+                >
+                  <span className="is-add">+{status.totalAdditions}</span>
+                  <span className="is-sep" aria-hidden>/</span>
+                  <span className="is-del">-{status.totalDeletions}</span>
+                </span>
+              ) : null}
               {t("git.filesChanged", { count: orderedPaths.length })}
             </span>
             <span className="git-repository-change-group__branch">{status.branchName}</span>
@@ -334,6 +369,7 @@ export function GitMultiRepositoryChanges({
                 file,
                 section,
               )}
+              onOpenInlinePreview={onOpenInlinePreview ? (path) => onOpenInlinePreview(status.repositoryRoot, path) : undefined}
               onShowFileMenu={(event, path, section) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -372,6 +408,7 @@ export function GitMultiRepositoryChanges({
                 await onRefresh?.();
               } : undefined}
               onDiscardFile={onDiscardFile ? (path) => onDiscardFile(status.repositoryRoot, path) : undefined}
+              onDiscardFiles={onDiscardFiles ? (paths) => onDiscardFiles(status.repositoryRoot, paths) : undefined}
               isCommitPathLocked={isCommitPathLocked}
               onSetCommitSelection={(paths, selected) => setGroupSelection(status.repositoryRoot, paths, selected, stagedPaths)}
               onFileClick={(_event, path) => activateRepositoryFile(status, path, "unstaged")}
@@ -380,6 +417,7 @@ export function GitMultiRepositoryChanges({
                 file,
                 section,
               )}
+              onOpenInlinePreview={onOpenInlinePreview ? (path) => onOpenInlinePreview(status.repositoryRoot, path) : undefined}
               onShowFileMenu={(event, path, section) => {
                 event.preventDefault();
                 event.stopPropagation();

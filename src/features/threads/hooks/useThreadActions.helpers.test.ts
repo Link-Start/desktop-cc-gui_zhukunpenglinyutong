@@ -7,6 +7,7 @@ import {
   mergeDegradedClaudeContinuitySummaries,
   mergeDegradedCodexContinuitySummaries,
   mergeGeminiSessionSummaries,
+  mergeThreadSummaryPreservingStableIdentity,
   resolveThreadSourceMeta,
   seedLastGoodEngineIntoMerged,
   selectRecoveredNewThreadDecision,
@@ -17,6 +18,77 @@ import {
 } from "./useThreadActions.helpers";
 
 describe("useThreadActions.helpers", () => {
+  it("projects provider continuation at the top level without parentThreadId", () => {
+    const [continuation] = mergeCodexCatalogSessionSummaries(
+      [],
+      [
+        {
+          sessionId: "target-1",
+          workspaceId: "ws-1",
+          title: "Continued session",
+          updatedAt: 1,
+          engine: "codex",
+          originKind: "provider-continuation",
+          sourceSessionId: "claude:source-1",
+          familyId: "claude:ws-1:source-1",
+          familyRootSessionId: "claude:ws-1:source-1",
+          lineageParentSessionId: "claude:source-1",
+          lineageKind: "provider-continuation",
+          lineageDepth: 1,
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+
+    expect(continuation).toMatchObject({
+      id: "target-1",
+      parentThreadId: null,
+      originKind: "provider-continuation",
+      sourceSessionId: "claude:source-1",
+      lineageParentSessionId: "claude:source-1",
+    });
+  });
+
+  it("replaces a continuation protocol title with readable source lineage", () => {
+    const summaries = mergeCodexCatalogSessionSummaries(
+      [
+        {
+          id: "claude:source-1",
+          name: "修复登录问题",
+          updatedAt: 1,
+          engineSource: "claude",
+        },
+      ],
+      [
+        {
+          sessionId: "codex:target-1",
+          workspaceId: "ws-1",
+          title:
+            `MOSSX_CONTEXT_PACKAGE:sha256:${"a".repeat(64)}:` +
+            `sha256:${"b".repeat(64)}`,
+          updatedAt: 2,
+          engine: "codex",
+          originKind: "provider-continuation",
+          sourceSessionId: "claude:source-1",
+          providerProfileName: "Provider B",
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+
+    const source = summaries.find((thread) => thread.id === "claude:source-1");
+    const continuation = summaries.find(
+      (thread) => thread.id === "codex:target-1",
+    );
+    expect(source?.name).toBe("修复登录问题");
+    expect(continuation?.name).toBe("继续：修复登录问题");
+    expect(continuation?.name).not.toContain("MOSSX_");
+  });
+
   it("maps Codex local fallback parentSessionId into parentThreadId", () => {
     expect(
       resolveThreadSourceMeta({
@@ -381,6 +453,53 @@ describe("useThreadActions.helpers", () => {
     );
   });
 
+  it("lets weak-looking native catalog titles replace first-message titles", () => {
+    const merged = mergeCodexCatalogSessionSummaries(
+      [
+        {
+          id: "codex:session-1",
+          name: "First prompt fallback",
+          updatedAt: 100,
+          engineSource: "codex",
+          threadKind: "native",
+        },
+      ],
+      [
+        {
+          sessionId: "codex:session-1",
+          title: "Agent 12",
+          nativeTitle: "Agent 12",
+          updatedAt: 120,
+          engine: "codex",
+        },
+      ],
+      "workspace-1",
+      {},
+      () => undefined,
+    );
+
+    expect(merged.find((thread) => thread.id === "codex:session-1")?.name).toBe(
+      "Agent 12",
+    );
+  });
+
+  it("preserves weak-looking native titles in direct native-session merges", () => {
+    const previous: ThreadSummary = {
+      id: "claude:session-1",
+      name: "First prompt fallback",
+      updatedAt: 100,
+      engineSource: "claude",
+      threadKind: "native",
+    };
+    const next = { ...previous, name: "Claude Session", updatedAt: 120 };
+
+    expect(
+      mergeThreadSummaryPreservingStableIdentity(previous, next, {
+        nativeTitle: "Claude Session",
+      }).name,
+    ).toBe("Claude Session");
+  });
+
   it("lets custom titles override mapped titles in catalog and Gemini merges", () => {
     const catalogMerged = mergeCodexCatalogSessionSummaries(
       [],
@@ -475,6 +594,40 @@ describe("useThreadActions.helpers", () => {
       sourceLabel: "AskUs",
     });
   });
+
+  it.each(["claude", "kimi"] as const)(
+    "hydrates provider metadata for %s catalog rows",
+    (engine) => {
+      const merged = mergeCodexCatalogSessionSummaries(
+        [],
+        [
+          {
+            sessionId: `${engine}:session-1`,
+            workspaceId: "workspace-1",
+            title: "Provider restored session",
+            updatedAt: 120,
+            engine,
+            providerProfileId: "provider-a",
+            providerProfileSource: "managed",
+            providerProfileName: "Provider A",
+            providerAvailability: "available",
+          },
+        ],
+        "workspace-1",
+        {},
+        () => undefined,
+      );
+
+      expect(merged[0]).toMatchObject({
+        id: `${engine}:session-1`,
+        engineSource: engine,
+        providerProfileId: "provider-a",
+        providerProfileSource: "managed",
+        providerProfileName: "Provider A",
+        providerAvailability: "available",
+      });
+    },
+  );
 
   it("preserves provider-backed Codex rows during degraded continuity", () => {
     const merged = mergeDegradedCodexContinuitySummaries(

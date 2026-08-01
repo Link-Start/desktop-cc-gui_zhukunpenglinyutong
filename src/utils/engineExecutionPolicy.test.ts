@@ -7,16 +7,23 @@ import {
 } from "./engineExecutionPolicy";
 
 describe("engineExecutionPolicy", () => {
-  it("keeps Gemini history-compatible while rejecting it for new execution", () => {
+  it("keeps retired Gemini history-compatible while rejecting new execution", () => {
     expect(isEngineExecutionEnabled("gemini")).toBe(false);
     expect(normalizeEngineForExecution("gemini")).toBe("codex");
     expect(() => assertEngineExecutionEnabled("gemini")).toThrow(
-      "Gemini CLI is disabled in this client",
+      "Selected CLI engine is disabled by product policy",
     );
   });
 
   it("preserves supported execution engines", () => {
     expect(normalizeEngineForExecution("claude")).toBe("claude");
+    expect(normalizeEngineForExecution("codex")).toBe("codex");
+    expect(normalizeEngineForExecution("kimi")).toBe("kimi");
     expect(normalizeEngineForExecution("opencode")).toBe("opencode");
+  });
+
+  it("treats OpenCode as an executable engine", () => {
+    expect(isEngineExecutionEnabled("opencode")).toBe(true);
+    expect(() => assertEngineExecutionEnabled("opencode")).not.toThrow();
   });
 });

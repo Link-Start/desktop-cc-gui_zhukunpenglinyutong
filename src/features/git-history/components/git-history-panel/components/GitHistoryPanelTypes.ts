@@ -28,6 +28,9 @@ export type GitHistoryPanelProps = CodeAnnotationBridgeProps & {
   onSelectWorkspacePath?: (path: string) => Promise<void> | void;
   onOpenDiffPath?: (path: string) => void;
   onRequestClose?: () => void;
+  toolbarTabsNode?: ReactNode;
+  documentContentNode?: ReactNode;
+  activeDocumentTabId?: string;
 };
 
 export type BranchGroup = {
@@ -93,6 +96,7 @@ export type BranchContextAction = {
 
 export type WorktreeBranchDiffState = {
   mode: "worktree";
+  requestToken: number;
   branch: string;
   compareBranch: string;
   files: Pick<GitCommitDiff, "path" | "status">[];
@@ -108,6 +112,7 @@ export type BranchCompareDirection = "targetOnly" | "currentOnly";
 
 export type BranchCompareState = {
   mode: "branch";
+  requestToken: number;
   branch: string;
   compareBranch: string;
   targetOnlyCommits: GitHistoryCommit[];

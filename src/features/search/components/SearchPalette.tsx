@@ -16,14 +16,15 @@ const INVISIBLE_QUERY_CHARS_REGEX = /[\u200B-\u200D\uFEFF]/g;
 // Debounce before the typed query reaches the app-shell root (see commitQuery below).
 const SEARCH_QUERY_DEBOUNCE_MS = 150;
 const SEARCH_RESULT_KIND_ORDER: SearchResult["kind"][] = [
+  "action",
   "file",
+  "thread",
   "api",
   "kanban",
-  "thread",
-  "message",
-  "history",
   "skill",
   "command",
+  "message",
+  "history",
 ];
 
 type SearchResultGroup = {
@@ -142,6 +143,7 @@ export function SearchPalette({
     }
   }, [isOpen]);
   const badgeLabelByKind: Record<SearchResult["kind"], string> = {
+    action: t("searchPalette.typeAction"),
     file: t("searchPalette.typeFile"),
     api: t("searchPalette.typeApi"),
     kanban: t("searchPalette.typeKanban"),
@@ -153,6 +155,7 @@ export function SearchPalette({
   };
 
   const sourceLabelByKind: Record<NonNullable<SearchResult["sourceKind"]>, string> = {
+    actions: t("searchPalette.sourceActions"),
     files: t("searchPalette.sourceFiles"),
     apis: t("searchPalette.sourceApis"),
     kanban: t("searchPalette.sourceKanban"),
@@ -167,6 +170,7 @@ export function SearchPalette({
     label: string;
   }> = [
     { value: "all", label: t("searchPalette.contentAll") },
+    { value: "actions", label: t("searchPalette.contentActions") },
     { value: "files", label: t("searchPalette.contentFiles") },
     { value: "apis", label: t("searchPalette.contentApis") },
     { value: "kanban", label: t("searchPalette.contentKanban") },
@@ -183,11 +187,8 @@ export function SearchPalette({
     ? t("searchPalette.placeholderFiltered", { content: selectedContentLabels.join(" / ") })
     : t("searchPalette.placeholder");
   const normalizedVisibleQuery = sanitizeSearchQueryInput(query);
-  const shouldShowResults = normalizedVisibleQuery.trim().length > 0;
-  const visibleResults = useMemo(
-    () => (shouldShowResults ? results : []),
-    [results, shouldShowResults],
-  );
+  const hasVisibleQuery = normalizedVisibleQuery.trim().length > 0;
+  const visibleResults = results;
   const resultGroups = useMemo(() => groupSearchResults(visibleResults), [visibleResults]);
   const fileHydrationMessage =
     fileHydrationStatus === "loading"
@@ -325,12 +326,12 @@ export function SearchPalette({
           </div>
         </div>
         <div className="search-palette-results">
-          {shouldShowResults && fileHydrationMessage ? (
+          {hasVisibleQuery && fileHydrationMessage ? (
             <div className="search-palette-file-index-status" role="status">
               {fileHydrationMessage}
             </div>
           ) : null}
-          {shouldShowResults && apiHydrationMessage ? (
+          {hasVisibleQuery && apiHydrationMessage ? (
             <div className="search-palette-file-index-status" role="status">
               {apiHydrationMessage}
             </div>

@@ -6,6 +6,7 @@
 import type { ReactNode } from 'react';
 import { CODEX_MODEL_CATALOG } from "../../../models/codexModelCatalog";
 import type { ComposerSendReadiness } from '../../utils/composerSendReadiness';
+import type { ExecutionTarget } from '../../../shared-session/target/types';
 
 // ============================================================
 // Core Entity Types
@@ -347,8 +348,10 @@ export interface ProviderInfo {
   enabled: boolean;
 }
 
-export type ProviderId = 'claude' | 'codex' | 'gemini' | 'kimi' | 'opencode';
+export type ProviderId = 'claude' | 'codex' | 'gemini' | 'grok' | 'kimi' | 'opencode';
 export type ProviderModelCatalogs = Partial<Record<ProviderId, ModelInfo[]>>;
+/** Atomic 双栏 catalog 语义：Shared 持久化 vs 首页/会话 create-session 投影。 */
+export type ProviderTargetPickerMode = 'shared' | 'create-session';
 export type CodexSpeedMode = 'standard' | 'fast' | 'unknown';
 export type StreamActivityPhase = 'idle' | 'waiting' | 'ingress';
 
@@ -359,6 +362,7 @@ export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
   { id: 'claude', label: 'Claude Code', icon: 'codicon-terminal', enabled: true },
   { id: 'codex', label: 'Codex CLI', icon: 'codicon-terminal', enabled: true },
   { id: 'gemini', label: 'Gemini CLI', icon: 'codicon-terminal', enabled: false },
+  { id: 'grok', label: 'Grok CLI', icon: 'codicon-terminal', enabled: false },
   { id: 'kimi', label: 'Kimi CLI', icon: 'codicon-terminal', enabled: false },
   { id: 'opencode', label: 'OpenCode', icon: 'codicon-terminal', enabled: true },
 ];
@@ -536,6 +540,14 @@ export interface ChatInputBoxProps {
   permissionMode?: PermissionMode;
   /** Current provider */
   currentProvider?: string;
+  /** Active thread provider profile used to scope managed model catalogs */
+  currentProviderProfileId?: string | null;
+  /** 当前完整执行目标（Shared / create-session draft / 合成的会话 target）。 */
+  executionTarget?: ExecutionTarget | null;
+  /** Atomic 双栏选中完整目标；写路径由 Composer 按 Session Kind 分流。 */
+  onExecutionTargetChange?: (target: ExecutionTarget) => void;
+  /** catalog 语义：shared 持久化 vs create-session 投影；不得用它推断 Session Kind。 */
+  providerTargetPickerMode?: ProviderTargetPickerMode;
   /** Provider availability override (installed state from host app) */
   providerAvailability?: Partial<Record<ProviderId, boolean>>;
   /** Provider CLI versions (from host app detection) */
@@ -586,6 +598,8 @@ export interface ChatInputBoxProps {
   placeholder?: string;
   /** Whether disabled */
   disabled?: boolean;
+  /** Block submission without disabling draft editing. */
+  submitDisabled?: boolean;
   /** Controlled mode: input content */
   value?: string;
   /** Current workspace id for prompt enhancer and local providers */
@@ -654,6 +668,8 @@ export interface ChatInputBoxProps {
   onOpenPromptSettings?: () => void;
   /** Open model settings (navigate to provider management to add models) */
   onOpenModelSettings?: (providerId?: string) => void;
+  /** Open CLI / provider settings management page */
+  onOpenCliSettings?: () => void;
   /** Open a selected @ file reference via the host file surface */
   onOpenFileReference?: (path: string) => void;
   /** Refresh current provider model/config snapshot */

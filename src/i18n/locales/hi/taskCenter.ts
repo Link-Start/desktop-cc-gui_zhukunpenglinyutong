@@ -25,8 +25,7 @@ const taskCenter = {
     "noBrowserEvidence": "कोई ब्राउज़र साक्ष्य लिंक नहीं किया गया",
     "browserEvidenceCandidates": "उम्मीदवार",
     "source": {
-      "kanban": "kanban",
-      "orchestration": "ऑर्केस्ट्रेशन"
+      "kanban": "kanban"
     },
     "browserEvidenceState": {
       "available": "उपलब्ध",
@@ -48,7 +47,6 @@ const taskCenter = {
     },
     "action": {
       "openConversation": "बातचीत खोलें",
-      "openOrchestrationTask": "ऑर्केस्ट्रेशन कार्य खोलें",
       "retry": "पुनः प्रयास करें",
       "resume": "फिर से शुरू करें",
       "cancel": "रद्द करें",

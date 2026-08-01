@@ -60,6 +60,8 @@ Source kinds 与 payload fields：
 ### 3. Contracts
 
 - `FileViewBody` MUST 从 CodeMirror canonical selection 或 preview logical line selection 生成 fenced Markdown；不得解析 syntax DOM。
+- `FileViewBody` MUST 只冻结 canonical selection draft，并通过 `onFileContextMenu(event, noteCaptureDraft)` 交给 `FileViewPanel`；不得再维护或 render 独立 note-only `RendererContextMenu`。
+- `FileViewPanel` MUST own file content menu composition。存在 selection draft 时优先 capture selection；无 selection 且 source 未 truncated/blank 时，edit mode MUST 从当前 CodeMirror document、preview mode MUST 从完整 loaded source 构造 line 1 到 final line 的 whole-file draft。
 - conversation local selection MUST 在 menu 打开时冻结 text/item ids；Copy 与 note capture MUST 使用同一 snapshot。
 - whole conversation MUST 从 canonical `ConversationItem[]` 生成，只保留 visible user text、final assistant、completed/legacy-final diff 与 completed review；排除 reasoning/tool/explore/live assistant。
 - layout owner MUST 用 monotonic request 路由到 notes center；request 不得进入 streaming/root conversation store。
@@ -87,6 +89,7 @@ Source kinds 与 payload fields：
 | 输入/状态 | 必须行为 | 错误/降级 |
 |---|---|---|
 | code path 非空且 `1 <= startLine <= endLine` | normalize 后保存 | path 空或 range 非法返回 explicit `Err` |
+| file content context menu | selection draft 优先；无 selection 保存完整 canonical source；只 render 一个 shared menu | truncated/blank/non-text 不得伪装成完整文件；不得叠加 note-only popover |
 | conversation selection | trim thread id；item ids 去空、去重、最多 128 | thread id/item ids 为空返回 explicit `Err` |
 | conversation thread | thread id 非空；count/time 为正 | metadata 非法返回 explicit `Err` |
 | `source` 缺失 | 按 legacy note 正常创建/读取 | 不要求 migration |
@@ -127,6 +130,7 @@ Source kinds 与 payload fields：
 - `src/features/messages/utils/conversationSelection.test.ts`：single/multi-row、outside/collapsed。
 - `Messages.note-capture.test.tsx`：Copy + frozen selection、whole semantic action、interactive ownership。
 - `FileViewPanel.capture-note.test.tsx` + `FileViewPanel.test.tsx`：edit/preview capture 与 annotation regression。
+- `FileViewPanel.capture-note.test.tsx` MUST 覆盖 edit selection、unsaved whole document、preview logical selection、whole-source fallback、blank/truncated rejection 与 single-menu ownership。
 - `WorkspaceNoteCardPanel.test.tsx`：default-no-form、view-first、capture consume/reject、save failure retry。
 - `WorkspaceNoteCardPanel.test.tsx`：code source read-only navigation callback、conversation source non-navigation、Markdown `codeBlockStyle/workspaceId` contract。
 - `useLayoutNodes.client-ui-visibility.test.tsx`：code source path/location/range routing。

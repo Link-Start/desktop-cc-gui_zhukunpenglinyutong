@@ -2,7 +2,6 @@
 // Machine translation of src/i18n/locales/en/index.ts; keys mirror the English source.
 import about from "./about";
 import activityPanel from "./activityPanel";
-import agentOrchestration from "./agentOrchestration";
 import app from "./app";
 import approval from "./approval";
 import askUserQuestion from "./askUserQuestion";
@@ -35,6 +34,7 @@ import panels from "./panels";
 import plan from "./plan";
 import projectMap from "./projectMap";
 import promptEnhancer from "./promptEnhancer";
+import promptDistill from "./promptDistill";
 import prompts from "./prompts";
 import providers from "./providers";
 import reasoning from "./reasoning";
@@ -42,6 +42,7 @@ import rewind from "./rewind";
 import runtimeNotice from "./runtimeNotice";
 import searchPalette from "./searchPalette";
 import settings from "./settings";
+import sharedSend from "./sharedSend";
 import sidebar from "./sidebar";
 import specHub from "./specHub";
 import statusPanel from "./statusPanel";
@@ -59,7 +60,6 @@ import workspace from "./workspace";
 const locale = {
   ...about,
   ...activityPanel,
-  ...agentOrchestration,
   ...app,
   ...approval,
   ...askUserQuestion,
@@ -92,6 +92,7 @@ const locale = {
   ...plan,
   ...projectMap,
   ...promptEnhancer,
+  ...promptDistill,
   ...prompts,
   ...providers,
   ...reasoning,
@@ -99,6 +100,7 @@ const locale = {
   ...runtimeNotice,
   ...searchPalette,
   ...settings,
+  ...sharedSend,
   ...sidebar,
   ...specHub,
   ...statusPanel,

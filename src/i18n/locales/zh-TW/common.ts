@@ -25,6 +25,7 @@ const common = {
     "curatedLoading": "正在載入精選技能…",
     "curatedError": "無法載入精選技能。",
     "curatedSubtitle": "隨桌面用戶端封裝、版本鎖定、內建隨附。無需網路。",
+    "curatedDetailHint": "開啟後，對應 Skill 會在每次發起對話時自動注入到系統提示詞中，持續影響 AI 的回覆風格與行為，無須手動引用；關閉則完全不注入。這與「拓展 → Skills」中由使用者自行安裝的技能不同：後者需要主動呼叫或按描述配對才會生效，而此處是隨桌面用戶端內建且版本固定的精選能力。",
     "curatedBundledBadge": "內建",
     "curatedCategoryCodeStyle": "程式碼風格",
     "curatedCategoryUiDesign": "UI 設計",
@@ -61,6 +62,9 @@ const common = {
     "showInHeader": "顯示於工具列",
     "markdownMermaidFullscreen": "全螢幕",
     "markdownMermaidFullscreenHint": "以全螢幕開啟圖表",
+    "markdownMermaidDownloadPng": "下載 PNG",
+    "markdownMermaidDownloadingPng": "正在下載 PNG…",
+    "markdownMermaidDownloadFailed": "PNG 下載失敗。",
     "markdownImageFullscreen": "全螢幕",
     "markdownImageFullscreenHint": "以全螢幕開啟圖片"
   }

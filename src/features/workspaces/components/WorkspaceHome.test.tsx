@@ -5,9 +5,15 @@ import type { WorkspaceInfo } from "../../../types";
 import { WorkspaceHome } from "./WorkspaceHome";
 import { loadTaskRunStore } from "../../tasks/utils/taskRunStorage";
 
-vi.mock("../../tasks/utils/taskRunStorage", () => ({
-  loadTaskRunStore: vi.fn(),
-}));
+vi.mock("../../tasks/utils/taskRunStorage", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("../../tasks/utils/taskRunStorage")
+  >();
+  return {
+    ...actual,
+    loadTaskRunStore: vi.fn(),
+  };
+});
 
 vi.mock("../../browser-agent/components/BrowserDock", () => ({
   BrowserDock: () => null,

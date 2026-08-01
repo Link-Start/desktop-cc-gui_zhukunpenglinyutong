@@ -1,9 +1,19 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useGlobalSearchShortcut } from "../features/app/hooks/useGlobalSearchShortcut";
 import { useInterruptShortcut } from "../features/app/hooks/useInterruptShortcut";
 import { usePullRequestComposer } from "../features/git/hooks/usePullRequestComposer";
 import type { CenterMode } from "../features/app/hooks/useGitPanelController";
 import { recordSearchResultOpen } from "../features/search/ranking/recencyStore";
+import {
+  loadRecentSearchActions,
+  recordRecentSearchAction,
+} from "../features/search/ranking/recentActions";
+import {
+  searchActions,
+  type SearchActionDescriptor,
+} from "../features/search/providers/actionsProvider";
+import { projectRecentDiscoveryResults } from "../features/search/providers/recentDiscoveryProvider";
 import type { KanbanTask } from "../features/kanban/types";
 import type {
   SearchContentFilter,
@@ -12,6 +22,7 @@ import type {
 } from "../features/search/types";
 import { resolveSearchScopeOnOpen } from "../features/search/utils/scope";
 import { toggleSearchContentFilters } from "../features/search/utils/contentFilters";
+import { useEventCallback } from "../utils/useEventCallback";
 import type {
   AppSettings,
   GitHubPullRequest,
@@ -19,6 +30,12 @@ import type {
   MessageSendOptions,
   WorkspaceInfo,
 } from "../types";
+import type {
+  QuickSwitcherNavigationId,
+  QuickSwitcherRecentFileGroup,
+  QuickSwitcherRunningSession,
+  QuickSwitcherSessionGroup,
+} from "../features/quick-switcher/types";
 import {
   getThreadSelectDiffCleanupAction,
   shouldPreserveEditorOnThreadSelect,
@@ -56,6 +73,7 @@ export const COMPOSER_SEARCH_BOUNDARY_FIELD_GROUPS = {
     "isCompact",
     "isSearchPaletteOpen",
     "searchPaletteQuery",
+    "searchContentFilters",
     "searchResults",
     "searchScope",
     "selectWorkspace",
@@ -124,6 +142,7 @@ export type SearchPaletteBoundary = {
   isCompact: boolean;
   isSearchPaletteOpen: boolean;
   searchPaletteQuery: string;
+  searchContentFilters: SearchContentFilter[];
   searchResults: SearchResult[];
   searchScope: SearchScope;
   selectWorkspace: (workspaceId: string) => void;
@@ -167,7 +186,7 @@ export type ComposerSendBoundary = {
     text: string,
     images?: string[],
     options?: MessageSendOptions,
-  ) => Promise<void>;
+  ) => Promise<unknown>;
   startThreadForWorkspace: (
     workspaceId: string,
     options?: { activate?: boolean },
@@ -201,11 +220,29 @@ export type KanbanComposerBridgeBoundary = {
 export type ComposerSearchShellBoundary = SearchPaletteBoundary &
   ComposerSendBoundary &
   GitSearchOpenBoundary &
-  KanbanComposerBridgeBoundary;
+  KanbanComposerBridgeBoundary & {
+    closeQuickSwitcher: () => void;
+    handleOpenQuickSwitcher: () => void;
+    handleAddAgent: (workspace: WorkspaceInfo) => Promise<unknown>;
+    handleQuickSwitcherNavigate: (target: QuickSwitcherNavigationId) => void;
+    handleQuickSwitcherSelectFile: (workspaceId: string, path: string) => void;
+    handleQuickSwitcherSelectSession: (
+      workspaceId: string,
+      threadId: string,
+    ) => void;
+    isQuickSwitcherOpen: boolean;
+    quickSwitcherRecentFileGroups: QuickSwitcherRecentFileGroup[];
+    quickSwitcherRunningSessions: QuickSwitcherRunningSession[];
+    quickSwitcherSessionGroups: QuickSwitcherSessionGroup[];
+    increaseUiScale: () => void;
+    decreaseUiScale: () => void;
+    resetUiScale: () => void;
+  };
 
 export function useAppShellSearchAndComposerSection(
   input: ComposerSearchShellBoundary,
 ) {
+  const { t } = useTranslation();
   const {
     activeEditorFilePath,
     activeWorkspace,
@@ -214,20 +251,34 @@ export function useAppShellSearchAndComposerSection(
     canInterrupt,
     centerMode,
     clearActiveImages,
+    closeQuickSwitcher,
     connectWorkspace,
+    decreaseUiScale,
     exitDiffView,
     filePanelMode,
     getActiveDraft,
     gitPanelMode,
     gitPullRequestDiffs,
     handleDraftChange,
+    handleAddAgent,
     handleOpenFile,
+    handleOpenQuickSwitcher,
+    handleQuickSwitcherNavigate,
+    handleQuickSwitcherSelectFile,
+    handleQuickSwitcherSelectSession,
     handleSend,
     interruptTurn,
+    increaseUiScale,
     isCompact,
     isSearchPaletteOpen,
+    isQuickSwitcherOpen,
     kanbanTasks,
     queueMessage,
+    quickSwitcherRecentFileGroups,
+    quickSwitcherRunningSessions,
+    quickSwitcherSessionGroups,
+    resetUiScale,
+    searchContentFilters,
     searchPaletteQuery,
     searchResults,
     searchScope,
@@ -255,6 +306,127 @@ export function useAppShellSearchAndComposerSection(
     workspacesById,
     workspacesByPath,
   } = input;
+
+  const searchActionsRegistry = useMemo<SearchActionDescriptor[]>(
+    () => [
+      {
+        id: "open-settings",
+        title: t("settings.openSettings"),
+        keywords: ["设置", "偏好设置", "settings", "preferences"],
+        execute: () => handleQuickSwitcherNavigate("settings"),
+      },
+      {
+        id: "open-terminal",
+        title: t("menu.toggleTerminal"),
+        keywords: ["终端", "命令行", "terminal", "shell"],
+        execute: () => handleQuickSwitcherNavigate("terminal"),
+      },
+      {
+        id: "open-git",
+        title: t("panels.git"),
+        keywords: ["版本控制", "代码变更", "git", "changes"],
+        execute: () => handleQuickSwitcherNavigate("git"),
+      },
+      {
+        id: "new-session",
+        title: t("settings.newAgent"),
+        keywords: ["新建会话", "新会话", "new session", "new agent"],
+        execute: async () => {
+          if (!activeWorkspace) {
+            return;
+          }
+          setAppMode("chat");
+          setActiveTab("codex");
+          await handleAddAgent(activeWorkspace);
+        },
+      },
+      {
+        id: "open-recent-activity",
+        title: t("quickSwitcher.open"),
+        keywords: ["最近文件", "最近会话", "最近活动", "recent files", "recent sessions"],
+        execute: handleOpenQuickSwitcher,
+      },
+      {
+        id: "increase-ui-scale",
+        title: t("settings.increaseUiScale"),
+        keywords: ["放大界面", "放大", "zoom in", "increase ui scale"],
+        execute: increaseUiScale,
+      },
+      {
+        id: "decrease-ui-scale",
+        title: t("settings.decreaseUiScale"),
+        keywords: ["缩小界面", "缩小", "zoom out", "decrease ui scale"],
+        execute: decreaseUiScale,
+      },
+      {
+        id: "reset-ui-scale",
+        title: t("settings.resetUiScale"),
+        keywords: ["重置界面", "实际大小", "reset zoom", "reset ui scale"],
+        execute: resetUiScale,
+      },
+    ],
+    [
+      activeWorkspace,
+      decreaseUiScale,
+      handleAddAgent,
+      handleOpenQuickSwitcher,
+      handleQuickSwitcherNavigate,
+      increaseUiScale,
+      resetUiScale,
+      setActiveTab,
+      setAppMode,
+      t,
+    ],
+  );
+  const actionById = useMemo(
+    () => new Map(searchActionsRegistry.map((action) => [action.id, action])),
+    [searchActionsRegistry],
+  );
+  const normalizedSearchQuery = searchPaletteQuery.trim();
+  const includesActions = searchContentFilters.includes("all")
+    || searchContentFilters.includes("actions");
+  const actionSearchResults = useMemo(
+    () => includesActions ? searchActions(normalizedSearchQuery, searchActionsRegistry) : [],
+    [includesActions, normalizedSearchQuery, searchActionsRegistry],
+  );
+  const recentSearchResults = useMemo(
+    () => {
+      if (!isSearchPaletteOpen || normalizedSearchQuery) {
+        return [];
+      }
+      return projectRecentDiscoveryResults({
+        actions: includesActions ? searchActionsRegistry : [],
+        recentActions: loadRecentSearchActions(),
+        recentFileGroups: searchContentFilters.includes("all")
+          || searchContentFilters.includes("files")
+          ? quickSwitcherRecentFileGroups
+          : [],
+        sessionGroups: searchContentFilters.includes("all")
+          || searchContentFilters.includes("threads")
+          ? quickSwitcherSessionGroups
+          : [],
+        scope: searchScope,
+        activeWorkspaceId,
+      });
+    },
+    [
+      activeWorkspaceId,
+      includesActions,
+      isSearchPaletteOpen,
+      normalizedSearchQuery,
+      quickSwitcherRecentFileGroups,
+      quickSwitcherSessionGroups,
+      searchActionsRegistry,
+      searchContentFilters,
+      searchScope,
+    ],
+  );
+  const visibleSearchResults = useMemo(
+    () => normalizedSearchQuery
+      ? [...actionSearchResults, ...searchResults]
+      : recentSearchResults,
+    [actionSearchResults, normalizedSearchQuery, recentSearchResults, searchResults],
+  );
 
   const closeSearchPalette = useCallback(() => {
     setIsSearchPaletteOpen(false);
@@ -304,17 +476,17 @@ export function useAppShellSearchAndComposerSection(
 
   const handleSearchPaletteMoveSelection = useCallback(
     (direction: "up" | "down") => {
-      if (!searchResults.length) {
+      if (!visibleSearchResults.length) {
         return;
       }
       setSearchPaletteSelectedIndex((prev) => {
         if (direction === "down") {
-          return (prev + 1) % searchResults.length;
+          return (prev + 1) % visibleSearchResults.length;
         }
-        return (prev - 1 + searchResults.length) % searchResults.length;
+        return (prev - 1 + visibleSearchResults.length) % visibleSearchResults.length;
       });
     },
-    [searchResults.length, setSearchPaletteSelectedIndex],
+    [visibleSearchResults.length, setSearchPaletteSelectedIndex],
   );
 
   const handleToggleSearchContentFilter = useCallback(
@@ -327,9 +499,17 @@ export function useAppShellSearchAndComposerSection(
     [setSearchContentFilters, setSearchPaletteSelectedIndex],
   );
 
-  const handleSelectSearchResult = useCallback(
+  const handleSelectSearchResult = useEventCallback(
     (result: SearchResult) => {
       switch (result.kind) {
+        case "action": {
+          const action = result.actionId ? actionById.get(result.actionId) : undefined;
+          if (action) {
+            void action.execute();
+            recordRecentSearchAction(action.id);
+          }
+          break;
+        }
         case "api":
           if (result.workspaceId) {
             if (result.workspaceId !== activeWorkspaceId) {
@@ -352,7 +532,11 @@ export function useAppShellSearchAndComposerSection(
           break;
         case "file":
           if (result.filePath) {
-            handleOpenFile(result.filePath);
+            handleOpenFile(result.filePath, undefined, {
+              targetWorkspace: result.workspaceId
+                ? workspacesById.get(result.workspaceId) ?? null
+                : null,
+            });
           }
           break;
         case "thread":
@@ -468,30 +652,6 @@ export function useAppShellSearchAndComposerSection(
       recordSearchResultOpen(result.id);
       closeSearchPalette();
     },
-    [
-      activeEditorFilePath,
-      activeWorkspaceId,
-      centerMode,
-      closeSearchPalette,
-      exitDiffView,
-      getActiveDraft,
-      handleDraftChange,
-      handleOpenFile,
-      isCompact,
-      kanbanTasks,
-      workspacesByPath,
-      workspacesById,
-      selectWorkspace,
-      setActiveTab,
-      setAppMode,
-      setDiffSource,
-      setActiveThreadId,
-      setKanbanViewState,
-      setSelectedCommitSha,
-      setSelectedDiffPath,
-      setSelectedKanbanTaskId,
-      setSelectedPullRequest,
-    ],
   );
 
   useInterruptShortcut({
@@ -533,8 +693,13 @@ export function useAppShellSearchAndComposerSection(
   });
 
   return {
+    closeQuickSwitcher,
     closeSearchPalette,
     handleOpenSearchPalette,
+    handleOpenQuickSwitcher,
+    handleQuickSwitcherNavigate,
+    handleQuickSwitcherSelectFile,
+    handleQuickSwitcherSelectSession,
     handleToggleSearchPalette,
     handleSearchPaletteMoveSelection,
     handleToggleSearchContentFilter,
@@ -542,6 +707,10 @@ export function useAppShellSearchAndComposerSection(
     handleSelectPullRequest,
     resetPullRequestSelection,
     isPullRequestComposer,
+    isQuickSwitcherOpen,
+    quickSwitcherRunningSessions,
+    quickSwitcherSessionGroups,
+    searchResults: visibleSearchResults,
     composerSendLabel,
     handleComposerSend,
     handleComposerQueue,

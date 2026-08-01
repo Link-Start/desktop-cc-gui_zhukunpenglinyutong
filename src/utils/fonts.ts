@@ -1,10 +1,16 @@
-export const DEFAULT_UI_FONT_FAMILY =
+export const LEGACY_SYSTEM_UI_FONT_FAMILY =
   "\"SF Pro Text\", \"SF Pro Display\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Helvetica Neue\", sans-serif";
+
+export const DEFAULT_UI_FONT_FAMILY =
+  "\"SF Pro Text\", \"SF Pro Display\", -apple-system, BlinkMacSystemFont, \"Segoe UI Variable\", \"Segoe UI\", \"Microsoft YaHei UI\", \"Microsoft YaHei\", \"Helvetica Neue\", Arial, sans-serif";
 
 export const LEGACY_MONACO_UI_FONT_FAMILY =
   "Monaco, \"SF Pro Text\", \"SF Pro Display\", -apple-system, \"Helvetica Neue\", sans-serif";
 
 export const DEFAULT_CODE_FONT_FAMILY =
+  "\"Cascadia Mono\", \"Cascadia Code\", Consolas, \"SF Mono\", \"SFMono-Regular\", Menlo, Monaco, monospace";
+
+export const LEGACY_CODE_FONT_FAMILY =
   "Monaco, \"SF Mono\", \"SFMono-Regular\", Menlo, monospace";
 
 export const CODE_FONT_SIZE_DEFAULT = 11;
@@ -21,8 +27,16 @@ export function normalizeFontFamily(
 
 export function normalizeUiFontFamily(value: string | null | undefined) {
   const normalized = normalizeFontFamily(value, DEFAULT_UI_FONT_FAMILY);
-  return normalized === LEGACY_MONACO_UI_FONT_FAMILY
+  return normalized === LEGACY_MONACO_UI_FONT_FAMILY ||
+    normalized === LEGACY_SYSTEM_UI_FONT_FAMILY
     ? DEFAULT_UI_FONT_FAMILY
+    : normalized;
+}
+
+export function normalizeCodeFontFamily(value: string | null | undefined) {
+  const normalized = normalizeFontFamily(value, DEFAULT_CODE_FONT_FAMILY);
+  return normalized === LEGACY_CODE_FONT_FAMILY
+    ? DEFAULT_CODE_FONT_FAMILY
     : normalized;
 }
 

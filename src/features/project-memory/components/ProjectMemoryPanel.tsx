@@ -14,7 +14,7 @@ import Copy from "lucide-react/dist/esm/icons/copy";
 import ShieldCheck from "lucide-react/dist/esm/icons/shield-check";
 import Wrench from "lucide-react/dist/esm/icons/wrench";
 import type { PanelTabId } from "../../layout/components/PanelTabs";
-import { Markdown } from "../../messages/components/Markdown";
+import { Markdown } from "../../../markdown/components/Markdown";
 import { useProjectMemory } from "../hooks/useProjectMemory";
 import { projectMemoryFacade } from "../services/projectMemoryFacade";
 import type {

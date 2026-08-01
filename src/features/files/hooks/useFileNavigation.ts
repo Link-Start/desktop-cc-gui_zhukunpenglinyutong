@@ -8,29 +8,121 @@ import {
 } from "react";
 import type { EditorView } from "@codemirror/view";
 import type { FileCodeMirrorEditorHandle } from "../components/FileCodeMirrorEditor";
-import { getCodeIntelDefinition, getCodeIntelReferences } from "../../../services/tauri";
+import {
+  getCodeIntelDefinition,
+  getCodeIntelImplementations,
+  getCodeIntelReferences,
+  prepareCodeIntel,
+} from "../../../services/tauri";
+import type { CodeNavigationResponse } from "../../../services/tauri/openCode";
 import {
   isAbsoluteFsPath,
   normalizeFsPath,
   resolveWorkspaceRelativePath,
 } from "../../../utils/workspacePaths";
 import { lspPositionToEditorLocation, offsetToLspPosition } from "../utils/lspPosition";
+import { useFileNavigationHistory } from "./useFileNavigationHistory";
 import {
   areFileUrisEquivalent,
   CODE_INTEL_CACHE_TTL_MS,
   CODE_INTEL_REPEAT_DEBOUNCE_MS,
-  errorMessageFromUnknown,
   extractLocations,
   makeLocationQueryKey,
   NAVIGATION_REQUEST_TIMEOUT_MS,
   readFreshCache,
   relativePathFromFileUri,
+  resolveCodeNavigationErrorMessage,
   toFileUri,
+  type CodeNavigationQueryStatus,
+  type CodeNavigationResultSnapshot,
   type LocationCacheEntry,
   type LspLocationLike,
   type RecentTrigger,
   withTimeout,
 } from "../utils/fileViewNavigationUtils";
+
+function snapshotFromResponse(
+  response: CodeNavigationResponse,
+): CodeNavigationResultSnapshot {
+  return {
+    locations: extractLocations(response.result),
+    mode: response.mode,
+    provider: response.provider,
+    language: response.language,
+    fallbackReasonCode: response.fallbackReasonCode,
+    lifecycle: response.lifecycle,
+  };
+}
+
+function navigationLanguageFromPath(filePath: string) {
+  const extension = filePath.split(".").pop()?.toLowerCase();
+  if (extension === "java") {
+    return "Java";
+  }
+  if (extension === "ts" || extension === "tsx") {
+    return "TypeScript";
+  }
+  if (extension === "js" || extension === "jsx" || extension === "mjs" || extension === "cjs") {
+    return "JavaScript";
+  }
+  if (extension === "rs") {
+    return "Rust";
+  }
+  if (extension === "py" || extension === "pyi") {
+    return "Python";
+  }
+  if (extension === "go") {
+    return "Go";
+  }
+  return null;
+}
+
+function loadingStatus(
+  action: CodeNavigationQueryStatus["action"],
+  filePath: string,
+): CodeNavigationQueryStatus {
+  return {
+    action,
+    phase: "loading",
+    locations: [],
+    mode: "fast-search",
+    provider: "heuristic",
+    language: navigationLanguageFromPath(filePath),
+    fallbackReasonCode: null,
+    lifecycle: "starting",
+  };
+}
+
+function settledStatus(
+  action: CodeNavigationQueryStatus["action"],
+  snapshot: CodeNavigationResultSnapshot,
+): CodeNavigationQueryStatus {
+  return {
+    action,
+    phase: isProviderStillPreparing(snapshot)
+      ? "indexing"
+      : snapshot.mode === "semantic"
+        ? "success"
+        : "fallback",
+    ...snapshot,
+  };
+}
+
+function isProviderStillPreparing(snapshot: CodeNavigationResultSnapshot) {
+  return snapshot.locations.length === 0
+    && (
+      snapshot.lifecycle === "starting"
+      || snapshot.lifecycle === "indexing"
+      || (
+        snapshot.lifecycle === "degraded"
+        && snapshot.fallbackReasonCode === "request-timeout"
+      )
+    );
+}
+
+function shouldPresentProviderRecovery(snapshot: CodeNavigationResultSnapshot) {
+  return snapshot.fallbackReasonCode === "provider-unavailable";
+}
 
 type UseFileNavigationArgs = {
   workspaceId: string;
@@ -73,18 +165,63 @@ export function useFileNavigation({
 }: UseFileNavigationArgs) {
   const [isDefinitionLoading, setIsDefinitionLoading] = useState(false);
   const [isReferencesLoading, setIsReferencesLoading] = useState(false);
+  const [isImplementationsLoading, setIsImplementationsLoading] = useState(false);
   const [navigationError, setNavigationError] = useState<string | null>(null);
   const [definitionCandidates, setDefinitionCandidates] = useState<LspLocationLike[]>([]);
   const [referenceResults, setReferenceResults] = useState<LspLocationLike[] | null>(null);
+  const [implementationCandidates, setImplementationCandidates] = useState<LspLocationLike[]>([]);
+  const [navigationStatus, setNavigationStatus] =
+    useState<CodeNavigationQueryStatus | null>(null);
   const lspRequestIdRef = useRef(0);
   const definitionCacheRef = useRef<Map<string, LocationCacheEntry>>(new Map());
   const referencesCacheRef = useRef<Map<string, LocationCacheEntry>>(new Map());
+  const implementationsCacheRef = useRef<Map<string, LocationCacheEntry>>(new Map());
   const recentDefinitionTriggerRef = useRef<RecentTrigger | null>(null);
   const recentReferencesTriggerRef = useRef<RecentTrigger | null>(null);
+  const recentImplementationsTriggerRef = useRef<RecentTrigger | null>(null);
   const appliedNavigationRequestRef = useRef(0);
   const navigationFocusTimerRef = useRef<number | null>(null);
   const navigationFlashTimerRef = useRef<number | null>(null);
+  const prewarmScopeRef = useRef<string | null>(null);
   const currentFileUri = useMemo(() => toFileUri(absolutePath), [absolutePath]);
+  const {
+    recordCrossFileNavigation,
+    canNavigateBack,
+    canNavigateForward,
+    navigateBack,
+    navigateForward,
+    restoreHistoryViewport,
+  } = useFileNavigationHistory({
+    workspaceId,
+    filePath,
+    isSameWorkspacePath,
+    onNavigateToLocation,
+    cmRef,
+  });
+
+  useEffect(() => {
+    const language = navigationLanguageFromPath(filePath);
+    if (!workspaceId || !language) {
+      return;
+    }
+    const scope = `${workspaceId}\0${language}`;
+    if (prewarmScopeRef.current === scope) {
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      prewarmScopeRef.current = scope;
+      void prepareCodeIntel(workspaceId, filePath).catch((error) => {
+        if (!cancelled) {
+          console.debug("[file-navigation] semantic prewarm unavailable:", error);
+        }
+      });
+    }, 750);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [filePath, workspaceId]);
 
   const clearNavigationFocusTimer = useCallback(() => {
     if (navigationFocusTimerRef.current !== null) {
@@ -185,6 +322,13 @@ export function useFileNavigation({
       });
 
       if (relativePath && onNavigateToLocation) {
+        if (!isSameWorkspacePath(relativePath, filePath)) {
+          recordCrossFileNavigation({
+            path: relativePath,
+            line,
+            column,
+          });
+        }
         onNavigateToLocation(relativePath, { line, column });
         return;
       }
@@ -211,6 +355,7 @@ export function useFileNavigation({
       focusEditorAtLocationWithRetry,
       isSameWorkspacePath,
       onNavigateToLocation,
+      recordCrossFileNavigation,
       setMode,
       workspacePath,
     ],
@@ -244,21 +389,29 @@ export function useFileNavigation({
       setDefinitionCandidates([]);
       const cachedLocations = readFreshCache(definitionCacheRef.current, queryKey);
       if (cachedLocations) {
+        setNavigationStatus(settledStatus("definition", cachedLocations));
         setIsDefinitionLoading(false);
-        if (cachedLocations.length === 0) {
+        if (cachedLocations.locations.length === 0) {
+          if (isProviderStillPreparing(cachedLocations)) {
+            return;
+          }
           setNavigationError(t("files.navigationNoDefinition"));
           return;
         }
-        if (cachedLocations.length === 1) {
-          const onlyLocation = cachedLocations[0];
+        if (
+          cachedLocations.locations.length === 1
+          && !shouldPresentProviderRecovery(cachedLocations)
+        ) {
+          const onlyLocation = cachedLocations.locations[0];
           if (onlyLocation) {
             navigateToLocation(onlyLocation);
           }
           return;
         }
-        setDefinitionCandidates(cachedLocations);
+        setDefinitionCandidates(cachedLocations.locations);
         return;
       }
+      setNavigationStatus(loadingStatus("definition", filePath));
       setIsDefinitionLoading(true);
       try {
         const response = await withTimeout(
@@ -266,6 +419,7 @@ export function useFileNavigation({
             filePath,
             line: position.line,
             character: position.character,
+            documentText: editorView.state.doc.toString(),
           }),
           NAVIGATION_REQUEST_TIMEOUT_MS,
           t("files.navigationTimeout"),
@@ -273,16 +427,21 @@ export function useFileNavigation({
         if (requestId !== lspRequestIdRef.current) {
           return;
         }
-        const locations = extractLocations(response.result);
+        const snapshot = snapshotFromResponse(response);
+        const locations = snapshot.locations;
         definitionCacheRef.current.set(queryKey, {
           expiresAt: Date.now() + CODE_INTEL_CACHE_TTL_MS,
-          value: locations,
+          value: snapshot,
         });
+        setNavigationStatus(settledStatus("definition", snapshot));
         if (locations.length === 0) {
+          if (isProviderStillPreparing(snapshot)) {
+            return;
+          }
           setNavigationError(t("files.navigationNoDefinition"));
           return;
         }
-        if (locations.length === 1) {
+        if (locations.length === 1 && !shouldPresentProviderRecovery(snapshot)) {
           const onlyLocation = locations[0];
           if (onlyLocation) {
             navigateToLocation(onlyLocation);
@@ -294,7 +453,9 @@ export function useFileNavigation({
         if (requestId !== lspRequestIdRef.current) {
           return;
         }
-        setNavigationError(errorMessageFromUnknown(error, t("files.navigationError")));
+        console.error("[file-navigation] definition query failed:", error);
+        setNavigationError(resolveCodeNavigationErrorMessage(error, "definition", t));
+        setNavigationStatus({ ...loadingStatus("definition", filePath), phase: "error" });
       } finally {
         if (requestId === lspRequestIdRef.current) {
           setIsDefinitionLoading(false);
@@ -333,10 +494,14 @@ export function useFileNavigation({
       setReferenceResults(null);
       const cachedLocations = readFreshCache(referencesCacheRef.current, queryKey);
       if (cachedLocations) {
+        setNavigationStatus(settledStatus("references", cachedLocations));
         setIsReferencesLoading(false);
-        setReferenceResults(cachedLocations);
+        if (!isProviderStillPreparing(cachedLocations)) {
+          setReferenceResults(cachedLocations.locations);
+        }
         return;
       }
+      setNavigationStatus(loadingStatus("references", filePath));
       setIsReferencesLoading(true);
       try {
         const response = await withTimeout(
@@ -344,6 +509,7 @@ export function useFileNavigation({
             filePath,
             line: position.line,
             character: position.character,
+            documentText: editorView.state.doc.toString(),
           }),
           NAVIGATION_REQUEST_TIMEOUT_MS,
           t("files.navigationTimeout"),
@@ -351,17 +517,23 @@ export function useFileNavigation({
         if (requestId !== lspRequestIdRef.current) {
           return;
         }
-        const locations = extractLocations(response.result);
+        const snapshot = snapshotFromResponse(response);
+        const locations = snapshot.locations;
         referencesCacheRef.current.set(queryKey, {
           expiresAt: Date.now() + CODE_INTEL_CACHE_TTL_MS,
-          value: locations,
+          value: snapshot,
         });
-        setReferenceResults(locations);
+        setNavigationStatus(settledStatus("references", snapshot));
+        if (!isProviderStillPreparing(snapshot)) {
+          setReferenceResults(locations);
+        }
       } catch (error) {
         if (requestId !== lspRequestIdRef.current) {
           return;
         }
-        setNavigationError(errorMessageFromUnknown(error, t("files.navigationError")));
+        console.error("[file-navigation] references query failed:", error);
+        setNavigationError(resolveCodeNavigationErrorMessage(error, "references", t));
+        setNavigationStatus({ ...loadingStatus("references", filePath), phase: "error" });
       } finally {
         if (requestId === lspRequestIdRef.current) {
           setIsReferencesLoading(false);
@@ -387,15 +559,124 @@ export function useFileNavigation({
     void findReferencesAtOffset(view.state.selection.main.head);
   }, [cmRef, findReferencesAtOffset]);
 
+  const findImplementationsAtOffset = useCallback(
+    async (offset: number) => {
+      const editorView = cmRef.current?.view;
+      if (!editorView) {
+        return;
+      }
+      const position = offsetToLspPosition(editorView.state.doc, offset);
+      const queryKey = makeLocationQueryKey(filePath, position.line, position.character);
+      const now = Date.now();
+      const recentTrigger = recentImplementationsTriggerRef.current;
+      if (
+        recentTrigger
+        && recentTrigger.key === queryKey
+        && now - recentTrigger.at < CODE_INTEL_REPEAT_DEBOUNCE_MS
+      ) {
+        return;
+      }
+      recentImplementationsTriggerRef.current = { key: queryKey, at: now };
+      const requestId = lspRequestIdRef.current + 1;
+      lspRequestIdRef.current = requestId;
+      setNavigationError(null);
+      setImplementationCandidates([]);
+      const cachedLocations = readFreshCache(
+        implementationsCacheRef.current,
+        queryKey,
+      );
+      if (cachedLocations) {
+        setNavigationStatus(settledStatus("implementation", cachedLocations));
+        setIsImplementationsLoading(false);
+        if (cachedLocations.locations.length === 0) {
+          if (isProviderStillPreparing(cachedLocations)) {
+            return;
+          }
+          setNavigationError(t("files.navigationNoImplementation"));
+          return;
+        }
+        if (
+          cachedLocations.locations.length === 1
+          && !shouldPresentProviderRecovery(cachedLocations)
+        ) {
+          navigateToLocation(cachedLocations.locations[0]!);
+          return;
+        }
+        setImplementationCandidates(cachedLocations.locations);
+        return;
+      }
+      setNavigationStatus(loadingStatus("implementation", filePath));
+      setIsImplementationsLoading(true);
+      try {
+        const response = await withTimeout(
+          getCodeIntelImplementations(workspaceId, {
+            filePath,
+            line: position.line,
+            character: position.character,
+            documentText: editorView.state.doc.toString(),
+          }),
+          NAVIGATION_REQUEST_TIMEOUT_MS,
+          t("files.navigationTimeout"),
+        );
+        if (requestId !== lspRequestIdRef.current) {
+          return;
+        }
+        const snapshot = snapshotFromResponse(response);
+        const locations = snapshot.locations;
+        implementationsCacheRef.current.set(queryKey, {
+          expiresAt: Date.now() + CODE_INTEL_CACHE_TTL_MS,
+          value: snapshot,
+        });
+        setNavigationStatus(settledStatus("implementation", snapshot));
+        if (locations.length === 0) {
+          if (isProviderStillPreparing(snapshot)) {
+            return;
+          }
+          setNavigationError(t("files.navigationNoImplementation"));
+          return;
+        }
+        if (locations.length === 1 && !shouldPresentProviderRecovery(snapshot)) {
+          navigateToLocation(locations[0]!);
+          return;
+        }
+        setImplementationCandidates(locations);
+      } catch (error) {
+        if (requestId !== lspRequestIdRef.current) {
+          return;
+        }
+        console.error("[file-navigation] implementation query failed:", error);
+        setNavigationError(resolveCodeNavigationErrorMessage(error, "implementation", t));
+        setNavigationStatus({ ...loadingStatus("implementation", filePath), phase: "error" });
+      } finally {
+        if (requestId === lspRequestIdRef.current) {
+          setIsImplementationsLoading(false);
+        }
+      }
+    },
+    [cmRef, filePath, navigateToLocation, t, workspaceId],
+  );
+
+  const runImplementationsFromCursor = useCallback(() => {
+    const view = cmRef.current?.view;
+    if (!view) {
+      return;
+    }
+    void findImplementationsAtOffset(view.state.selection.main.head);
+  }, [cmRef, findImplementationsAtOffset]);
+
   useEffect(() => {
     lspRequestIdRef.current += 1;
     recentDefinitionTriggerRef.current = null;
     recentReferencesTriggerRef.current = null;
+    recentImplementationsTriggerRef.current = null;
     setIsDefinitionLoading(false);
     setIsReferencesLoading(false);
+    setIsImplementationsLoading(false);
     setNavigationError(null);
     setDefinitionCandidates([]);
     setReferenceResults(null);
+    setImplementationCandidates([]);
+    setNavigationStatus(null);
   }, [filePath]);
 
   useEffect(() => {
@@ -429,6 +710,11 @@ export function useFileNavigation({
       0,
       () => {
         appliedNavigationRequestRef.current = navigationTarget.requestId;
+        restoreHistoryViewport(
+          navigationTarget.path,
+          navigationTarget.line,
+          navigationTarget.column,
+        );
       },
     );
   }, [
@@ -437,6 +723,7 @@ export function useFileNavigation({
     isLoading,
     isSameWorkspacePath,
     navigationTarget,
+    restoreHistoryViewport,
     setMode,
   ]);
 
@@ -448,19 +735,54 @@ export function useFileNavigation({
     return cmRef.current?.toggleFindPanel() ?? false;
   }, [cmRef]);
 
+  const retryNavigation = useCallback(() => {
+    switch (navigationStatus?.action) {
+      case "definition":
+        recentDefinitionTriggerRef.current = null;
+        definitionCacheRef.current.clear();
+        runDefinitionFromCursor();
+        break;
+      case "references":
+        recentReferencesTriggerRef.current = null;
+        referencesCacheRef.current.clear();
+        runReferencesFromCursor();
+        break;
+      case "implementation":
+        recentImplementationsTriggerRef.current = null;
+        implementationsCacheRef.current.clear();
+        runImplementationsFromCursor();
+        break;
+    }
+  }, [
+    navigationStatus?.action,
+    runDefinitionFromCursor,
+    runImplementationsFromCursor,
+    runReferencesFromCursor,
+  ]);
+
   return {
     isDefinitionLoading,
     isReferencesLoading,
+    isImplementationsLoading,
     navigationError,
     definitionCandidates,
     setDefinitionCandidates,
     referenceResults,
     setReferenceResults,
+    implementationCandidates,
+    setImplementationCandidates,
     navigateToLocation,
     runDefinitionFromCursor,
     runReferencesFromCursor,
+    runImplementationsFromCursor,
+    navigationStatus,
+    retryNavigation,
     resolveDefinitionAtOffset,
     openFindPanelInEditor,
     toggleFindPanelInEditor,
+    canNavigateBack,
+    canNavigateForward,
+    navigateBack,
+    navigateForward,
   };
 }

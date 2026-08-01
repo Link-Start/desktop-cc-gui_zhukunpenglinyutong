@@ -10,7 +10,7 @@ const common = {
 };
 
 describe("domain event factories", () => {
-  it("exports exactly the documented ten event types", () => {
+  it("exports exactly the documented eleven event types", () => {
     expect(DOMAIN_EVENT_TYPES).toEqual([
       "session.started",
       "session.ended",
@@ -22,6 +22,7 @@ describe("domain event factories", () => {
       "tool.started",
       "tool.completed",
       "usage.updated",
+      "run.settled",
     ]);
   });
 
@@ -37,6 +38,31 @@ describe("domain event factories", () => {
       workspaceId: common.workspaceId,
       sessionId: common.sessionId,
       engine: common.engine,
+      logicalSessionId: common.sessionId,
+      runId: "turn-1",
+      engineId: common.engine,
+      provenance: {
+        source: "legacy-domain-event-adapter",
+        rawEventType: "turn.started",
+      },
+    });
+  });
+
+  it("creates explicit run settlement evidence", () => {
+    expect(
+      domainEventFactories.runSettled({
+        ...common,
+        logicalSessionId: "logical-1",
+        runId: "run-1",
+        engineId: "codex",
+        provenance: { source: "codex-adapter", rawEventType: "turn/completed" },
+        status: "completed",
+      }),
+    ).toMatchObject({
+      type: "run.settled",
+      logicalSessionId: "logical-1",
+      runId: "run-1",
+      status: "completed",
     });
   });
 

@@ -30,6 +30,7 @@ vi.mock("../../../services/tauri", () => ({
   listClaudeSessions: vi.fn(),
   listGeminiSessions: vi.fn(),
   listKimiSessions: vi.fn(),
+  listGrokSessions: vi.fn(),
   getOpenCodeSessionList: vi.fn(),
   listWorkspaceSessions: vi.fn(),
   loadClaudeSession: vi.fn(),
@@ -133,7 +134,7 @@ describe("useThreadActions start/fork", () => {
 
     await expect(
       result.current.startThreadForWorkspace("ws-1", { engine: "gemini" }),
-    ).rejects.toThrow("Gemini CLI is disabled in this client");
+    ).rejects.toThrow("Selected CLI engine is disabled by product policy");
 
     expect(startThread).not.toHaveBeenCalled();
     expect(dispatch).not.toHaveBeenCalled();
@@ -230,6 +231,37 @@ describe("useThreadActions start/fork", () => {
       }),
     );
   });
+
+  it.each(["claude", "kimi"] as const)(
+    "keeps the selected provider on optimistic %s threads",
+    async (engine) => {
+      const { result, dispatch } = renderActions();
+
+      let threadId: string | null = null;
+      await act(async () => {
+        threadId = await result.current.startThreadForWorkspace("ws-1", {
+          engine,
+          providerProfileId: "provider-a",
+          providerProfile: {
+            id: "provider-a",
+            name: "Provider A",
+            source: "managed",
+          },
+        });
+      });
+
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "ensureThread",
+          threadId,
+          engine,
+          providerProfileId: "provider-a",
+          providerProfileName: "Provider A",
+          providerProfileSource: "managed",
+        }),
+      );
+    },
+  );
 
   it("creates distinct pending threads for rapid consecutive codex creates", async () => {
     vi.mocked(startThread)
@@ -576,7 +608,7 @@ describe("useThreadActions start/fork", () => {
     ]);
   });
 
-  it("starts an opencode pending thread locally", async () => {
+  it("allows opencode thread creation past the execution policy gate", async () => {
     const { result, dispatch, loadedThreadsRef } = renderActions();
 
     let threadId: string | null = null;
@@ -586,19 +618,14 @@ describe("useThreadActions start/fork", () => {
       });
     });
 
-    expect(threadId).toMatch(/^opencode-pending-/);
-    expect(startThread).not.toHaveBeenCalled();
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "ensureThread",
-      workspaceId: "ws-1",
-      threadId,
-      engine: "opencode",
-    });
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "setActiveThreadId",
-      workspaceId: "ws-1",
-      threadId,
-    });
+    expect(threadId).toEqual(expect.any(String));
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "ensureThread",
+        workspaceId: "ws-1",
+        threadId,
+      }),
+    );
     expect(threadId ? loadedThreadsRef.current[threadId] : false).toBe(true);
   });
 
@@ -697,6 +724,43 @@ describe("useThreadActions start/fork", () => {
       providerProfileName: "老朱2号",
       providerAvailability: "available",
     });
+  });
+
+  it("inherits the parent provider when forking a Claude thread", async () => {
+    const { result, dispatch } = renderActions({
+      threadsByWorkspace: {
+        "ws-1": [
+          {
+            id: "claude:session-parent",
+            name: "Parent",
+            updatedAt: 1,
+            engineSource: "claude",
+            providerProfileId: "provider-a",
+            providerProfileSource: "managed",
+            providerProfileName: "Provider A",
+            providerAvailability: "available",
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      await result.current.forkThreadForWorkspace(
+        "ws-1",
+        "claude:session-parent",
+      );
+    });
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "ensureThread",
+        workspaceId: "ws-1",
+        engine: "claude",
+        providerProfileId: "provider-a",
+        providerProfileSource: "managed",
+        providerProfileName: "Provider A",
+      }),
+    );
   });
 
   it("forks a thread without activating when requested", async () => {

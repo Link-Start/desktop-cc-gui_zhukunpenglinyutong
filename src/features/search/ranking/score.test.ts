@@ -11,4 +11,15 @@ describe("compareSearchResults", () => {
     const sorted = [a, b].sort((left, right) => compareSearchResults(left, right, recency));
     expect(sorted[0]?.id).toBe("b");
   });
+
+  it("keeps actions and navigation ahead of message content", () => {
+    const results: SearchResult[] = [
+      { id: "message", kind: "message", title: "Git", score: 0 },
+      { id: "file", kind: "file", title: "git.ts", score: 500 },
+      { id: "action", kind: "action", title: "Git", score: 500, actionId: "open-git" },
+    ];
+
+    results.sort((left, right) => compareSearchResults(left, right, {}));
+    expect(results.map((result) => result.id)).toEqual(["action", "file", "message"]);
+  });
 });

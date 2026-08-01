@@ -2,6 +2,400 @@
 
 ---
 
+##### **2026年7月31日（v0.7.13）**
+
+中文：
+
+这一版的主菜是「回复更透明、设置更干净」：助手回复底下能看到用时与 token，设置侧栏瘦身，选模与 CLI 路径也更顺手。
+
+✨ Features
+- 回复底栏更完整：助手消息完成后，在操作行旁展示完成时间、本轮耗时，以及输入/输出 token（有数据才显示）
+- 选模统一体验：Native 会话也走 Atomic 双栏选模，不再分两套路
+- 自定义 CLI 路径集中管理：各引擎路径配置收到统一对话框与供应商设置面板，改路径更省事
+- 设置侧栏收口：精选 Skills 迁入「其他」设置；独立的 Skills / 权限侧栏入口去掉，旧深链仍会落到可用位置
+- 桌面运行时提示进设置菜单：从侧栏齿轮二级入口查看，不再在顶栏/角标里抢注意力
+- 版本记录可直接升级：打开版本记录时会检查更新，有新版本时在标题旁出角标，一点就能开始更新
+- Grok 会话时间更准：侧栏优先用 chat_history 修改时间，避免 bulk summary 把时间刷成「刚刚」
+
+🐛 Fixes
+- 修复流式正文在消息 id 切换时丢尾巴的问题
+- 修复取消附件选择后再次弹出文件框
+- 修复 AI 生成 commit message 时遇 Codex 运行时断开（如 Broken pipe）只会裸报系统错误：可恢复则自动重试，否则给出可重试的本地化提示
+- 过滤 Grok 历史里的 runtime context 信封，不再污染对话
+- OpenCode CLI 不可用时按空目录处理，避免冒出内部命令失败提示
+- 增强 ErrorBoundary：错误分类、报告复制与多语言文案更完整
+- 去掉 header 折叠雷达角标，并微调 composer / 主题相关样式
+
+English:
+
+The headline of this release is clearer replies and a leaner Settings: assistant turns show timing and tokens, the sidebar is quieter, and model / CLI path setup is easier.
+
+✨ Features
+- Richer message footer: when an assistant turn finishes, the action row shows completion time, elapsed duration, and input/output tokens when available
+- One model picker path: Native sessions reuse the Atomic dual-pane picker instead of a separate flow
+- Centralized custom CLI paths: engine path settings live in a shared dialog and vendor settings panel
+- Settings sidebar cleanup: curated Skills move into Other settings; standalone Skills / Permissions entries are gone, while legacy deep links still land somewhere useful
+- Desktop runtime notices live under the Settings menu: less noise in the chrome, same info when you need it
+- Upgrade from release notes: opening the modal checks for updates and shows a compact badge when a new version is available
+- More accurate Grok session times: the sidebar prefers chat_history mtime so bulk summaries don't rewrite everything to “just now”
+
+🐛 Fixes
+- Fixed live assistant text dropping its tail when the item id switches mid-stream
+- Fixed canceling an attachment pick reopening the file dialog
+- Fixed AI commit-message generation surfacing raw OS errors (e.g. Broken pipe) on Codex runtime disconnects — recover when possible, otherwise show a localized retryable message
+- Filtered Grok history runtime-context envelopes so they no longer clutter the transcript
+- Treat an unavailable OpenCode CLI as an empty directory instead of showing internal command failures
+- Stronger ErrorBoundary: better error classification, report copy, and localized copy
+- Removed the collapsed-header radar badge and polished related composer / theme styles
+
+---
+
+##### **2026年7月30日（v0.7.12）**
+
+中文：
+
+这一版的主菜是「跨 CLI 续接」：对话不再被单个引擎锁死，聊了一半可以换家接着聊。
+
+✨ Features
+- 对话可以跨 CLI 续接了：Claude 里聊了一半的会话，能交给 Kimi、Grok 或 OpenCode 接着聊；续接卡片会捎上来源会话的最后一轮，上下文不断片
+- 原生续接更靠谱：用原供应商继续旧会话时，历史消息会完整「搬家」；实在搬不全的，会明确列出降级了哪些内容，不再悄悄丢
+- 新建会话一个入口：三种 CLI 的创建、校验、选择一次到位，不用再猜哪个能用
+- 侧栏更清爽：同一条续接链上的会话自动归拢成一组；续接信息围挡、工作区操作菜单默认折叠，不再满屏按钮
+- 底层打地基：重建了会话数据的存储与投递底座，为后续更多跨 CLI 能力铺路（本期无感知，但很重要）
+
+🐛 Fixes
+- 修复 Grok / OpenCode 切换模型不生效的问题
+- 修复跨 CLI 切换后「历史恢复」和「原生续接」串线，消息不再张冠李戴
+- 修复会话结束后偶发「复活」（状态回跳）的问题
+- 修复 Codex 供应商续接走不完全程的问题
+- 供应商与模型选择更稳定，选中状态不再飘
+
+English:
+
+The headline of this release is cross-CLI continuation: a conversation is no longer locked to one engine — hand it off mid-way and keep going.
+
+✨ Features
+- Continue conversations across CLIs: take a chat started in Claude and let Kimi, Grok, or OpenCode pick it up; the continuation card carries the source session's last turn so context isn't lost
+- More trustworthy native continuation: resuming an old session with its original vendor now migrates the full history, and anything that couldn't come along is listed explicitly instead of being silently dropped
+- One entry point for new sessions: creation, validation, and selection for all three CLIs in a single flow — no more guessing which one works
+- A tidier sidebar: sessions on the same continuation chain are grouped automatically, and the continuation banner and workspace action menu are collapsed by default
+- Foundation work: rebuilt the session storage and delivery base to pave the way for more cross-CLI capabilities (invisible today, but important)
+
+🐛 Fixes
+- Fixed model switching not taking effect for Grok / OpenCode
+- Fixed cross-talk between "history restore" and "native resume" after switching CLIs — messages no longer get mixed up
+- Fixed finished sessions occasionally "coming back to life"
+- Fixed Codex vendor continuation failing to complete
+- Vendor and model selection is more stable, with no more drifting selections
+
+---
+
+##### **2026年7月28日（v0.7.11）**
+
+中文：
+
+✨ Features
+- 新引擎上岗：Grok 现在可以直接在 App 里开聊了
+- OpenCode 引擎回归，可用的运行时又多一个
+
+🔧 Improvements
+- 危险操作确认弹窗的按钮在窄窗口下会自动换行，不再挤成一团
+- 设置页诊断标签不再加粗，页面更清爽
+
+🐛 Fixes
+- 手动重命名过的会话标题能正常显示了（含 Grok 会话）
+- 浅色主题下，下拉框等系统原生控件不再冒出深色「补丁」
+- 关闭的终端会被安全清理，不再留下「僵尸终端」
+- 字体渲染在各桌面平台上表现更一致
+
+English:
+
+✨ Features
+- A new engine joins: you can now chat with Grok directly in the app
+- The OpenCode engine is back, adding one more runtime to choose from
+
+🔧 Improvements
+- Buttons in danger-confirmation dialogs now wrap on narrow windows instead of cramming together
+- Diagnostic labels in Settings are no longer bold, making the page cleaner
+
+🐛 Fixes
+- Manually renamed session titles now display correctly (including Grok sessions)
+- Under light themes, native controls like dropdowns no longer show up as dark patches
+- Closed terminals are cleaned up safely — no more zombie sessions
+- Font rendering is more consistent across desktop platforms
+
+---
+
+##### **2026年7月27日（v0.7.10）**
+
+中文：
+
+✨ Features
+- 升级应用版本号到 `0.7.10`，同步前端包配置、lockfile 与 Tauri 打包配置
+- `feat(composer)`: 沉淀技能调用契约与对话命令，润色器接入本地化缓存，curated skills 变更改为事件化刷新，技能链路响应更及时
+- `feat(git)`: AI commit message 支持一键按上次配置生成，无需重复选择引擎与参数
+- `feat(git)`: 重设计提交区域为右侧操作列，差异面板推送入口收敛为工具栏角标按钮
+- `feat(terminal)`: 终端新增搜索与安全链接能力，输出内容可检索、链接可安全打开
+- `feat(annotation)`: 稳定代码标注锚点，文件标注锚点组装复用统一逻辑，定位不再漂移
+- `feat(tokentracker)`: Token 用量支持中文数字格式展示
+- `feat(engine)`: 建立统一运行时事件总线，统一消息投递与会话注册，奠定引擎接入重构基础
+- `feat(threads)`: 收敛会话供应商绑定；sidebar 支持会话级供应商选择，Claude / Kimi 支持会话级供应商运行环境隔离
+- `feat(vendors)`: 支持从 CC Switch 导入供应商配置
+- `feat(curated-skills)`: 设置侧 Skills 更名为内置精选并补充行为说明
+
+🔧 Improvements
+- `refactor(markdown)`: 收敛文件预览渲染边界并遵循渲染器大文件基线，清理旧渲染器路径
+- `refactor(git)`: 拆分文件与差异高频入口；worktree 面板收敛共享 AI commit 配置事实源，消除多处重复定义
+- `refactor(git-history)`: 恢复核心面板类型保护，摘除 `GitHistoryPanelPickers` 的 `@ts-nocheck`
+- `refactor(files)`: 合并 fileViewPanel 重复纯函数并治理兜底轮询，降低空闲开销
+- `refactor(composer)`: 统一输入历史存储、事件化命令目录刷新，裁剪补全死路径与 ComposerInput 残留
+- `refactor(engine)`: 统一能力契约与会话身份，建立适配器协议注册表，收薄引擎控制器门面并收紧 CLI 兼容治理边界
+- `refactor(models)`: 收敛模型供应商目录
+- `refactor(claude)`: 建立供应商会话隔离基础
+
+🐛 Fixes
+- `fix(composer)`: 修复提交生成与命令执行的并发边界，避免并发操作互相干扰
+- `fix(navigation)`: 缓存消息索引并移除随机分支名，导航跳转更稳定
+- `fix(files)`: 修复文件读取失败导致的加载卡死
+- `fix(opencode)`: 停止启动期会话探测，避免无谓开销
+- `fix(engine)`: 加固会话供应商运行边界，隔离供应商模型目录与会话配置
+- `fix(sidebar)`: 阻止供应商选择静默回退
+- `fix(styles)`: 修复 diff.css 中丢失的 `.commit-message-generate-menu` 选择器
+- `fix(codex)`: 优化供应商协议错误提示
+- `fix(error)`: 统一错误提示并禁用原生 Alert
+- `fix(vendors)`: 修复 CLI 版本状态与头部重叠
+
+English:
+
+✨ Features
+- Bump the app version to `0.7.10` across frontend package metadata, the lockfile, and Tauri bundle configuration
+- `feat(composer)`: formalize the skill-invocation contract and conversation commands, add localized caching for the prompt polisher, and switch curated-skill updates to event-driven refresh
+- `feat(git)`: allow AI commit messages to be regenerated with one click using the last-used configuration, without reselecting the engine and options
+- `feat(git)`: redesign the commit area as a right-side action column and collapse the diff-panel push entry into a toolbar badge button
+- `feat(terminal)`: add search and safe-link handling to the terminal so output is searchable and links open securely
+- `feat(annotation)`: stabilize code annotation anchors by reusing a unified anchor-assembly path, eliminating position drift
+- `feat(tokentracker)`: support Chinese numeral formatting for token usage displays
+- `feat(engine)`: establish a unified runtime event bus and unify message delivery with session registration, laying the groundwork for the engine-integration refactor
+- `feat(threads)`: converge session vendor binding; the sidebar now supports per-session vendor selection, and Claude / Kimi support isolated per-session vendor runtime environments
+- `feat(vendors)`: support importing vendor configurations from CC Switch
+- `feat(curated-skills)`: rename the settings-side Skills entry to built-in curated skills and add behavior documentation
+
+🔧 Improvements
+- `refactor(markdown)`: consolidate file-preview rendering boundaries under the large-file renderer baseline and remove the legacy renderer path
+- `refactor(git)`: split high-frequency file and diff entry points; converge the worktree panel on a single shared source of truth for AI commit configuration
+- `refactor(git-history)`: restore type safety in the core panel and remove `@ts-nocheck` from `GitHistoryPanelPickers`
+- `refactor(files)`: merge duplicated pure functions in fileViewPanel and rein in fallback polling to reduce idle overhead
+- `refactor(composer)`: unify input-history storage, make the command catalog refresh event-driven, and prune dead completion paths and ComposerInput remnants
+- `refactor(engine)`: unify the capability contract and session identity, establish an adapter protocol registry, slim down the engine controller facade, and tighten the CLI compatibility governance boundary
+- `refactor(models)`: converge the model vendor catalog
+- `refactor(claude)`: lay the foundation for vendor session isolation
+
+🐛 Fixes
+- `fix(composer)`: fix the concurrency boundary between commit generation and command execution so concurrent actions no longer interfere
+- `fix(navigation)`: cache the message index and remove random branch names, making navigation jumps stable
+- `fix(files)`: fix the loading deadlock caused by file-read failures
+- `fix(opencode)`: stop session probing at startup to avoid unnecessary overhead
+- `fix(engine)`: harden the session vendor runtime boundary and isolate vendor model catalogs from session configuration
+- `fix(sidebar)`: prevent silent fallback of the vendor selection
+- `fix(styles)`: restore the missing `.commit-message-generate-menu` selector in diff.css
+- `fix(codex)`: improve vendor protocol error messages
+- `fix(error)`: unify error prompts and disable native Alert dialogs
+- `fix(vendors)`: fix the CLI version status overlapping the header
+
+---
+
+##### **2026年7月25日（v0.7.9）**
+
+中文：
+
+✨ Features
+- 升级应用版本号到 `0.7.9`，同步前端包配置、lockfile 与 Tauri 打包配置
+- `feat(extensions)`: 新增 Skills Hub 与 MCP inventory 视图，集中管理技能与 MCP 服务清单
+- `feat(session-activity)`: 接线语义 diff AI review 按需生产者，会话活动支持按需触发 AI 审查
+
+🔧 Improvements
+- `perf(client)`: 降低 worktree / kanban / output / dock 常驻轮询开销；录音电平事件降频至 100ms 并跳过相同值
+- `perf(skills)`: 大技能列表保持响应，避免加载卡顿
+- `refactor`: 清理波次收敛——删除响应式布局死分支、JCEF bridge no-op 桩、app-shell 死链、notice dock streaming 死分支与 orchestration 残留死字段
+- `refactor(settings)`: 摘除 SettingsView 的 `@ts-nocheck`，恢复类型检查保护
+- 优化文件 tab 当前打开标识
+
+🐛 Fixes
+- `fix(settings)`: 损坏的设置文件先隔离备份再回退默认值，加载成功后提示恢复结果并补齐错误日志与 i18n 文案
+- `fix(workspaces)`: 损坏的 workspaces.json 同样先隔离备份再回退，前端挂载后提示工作区损坏恢复
+- `fix(engine-task-output)`: 修复引擎二元假设并透传真实引擎归因，任务输出不再误判来源
+- `fix(vendors)`: 收敛 `isValidModelId` 为 composer 单一实现，消除多处分歧校验
+- `fix(cleanup)`: 收口清理波次遗留链路
+
+English:
+
+✨ Features
+- Bump the app version to `0.7.9` across frontend package metadata, the lockfile, and Tauri bundle configuration
+- `feat(extensions)`: add a Skills Hub and an MCP inventory view to centrally manage skills and MCP server listings
+- `feat(session-activity)`: wire an on-demand semantic-diff AI review producer so session activity can trigger AI review when needed
+
+🔧 Improvements
+- `perf(client)`: reduce standing polling overhead across worktree, kanban, output, and dock surfaces; throttle dictation level events to 100ms and skip unchanged values
+- `perf(skills)`: keep large skill lists responsive without load-time stalls
+- `refactor`: cleanup-wave convergence — remove dead responsive-layout branches, the JCEF bridge no-op stub, dead app-shell links, dead notice-dock streaming branches, and leftover orchestration fields
+- `refactor(settings)`: remove `@ts-nocheck` from SettingsView and restore type-check protection
+- refine the currently-open indicator on file tabs
+
+🐛 Fixes
+- `fix(settings)`: quarantine and back up a corrupted settings file before falling back to defaults, surface the recovery after a successful load, and add error logging plus i18n copy
+- `fix(workspaces)`: apply the same quarantine-then-fallback flow to a corrupted workspaces.json and notify about workspace recovery after the frontend mounts
+- `fix(engine-task-output)`: fix the binary engine assumption and propagate true engine attribution so task output is no longer misattributed
+- `fix(vendors)`: converge `isValidModelId` on the single composer implementation, eliminating divergent validation
+- `fix(cleanup)`: close out leftover paths from the cleanup wave
+
+---
+
+##### **2026年7月24日（v0.7.8）**
+
+中文：
+
+✨ Features
+- 升级应用版本号到 `0.7.8`，同步前端包配置、lockfile 与 Tauri 打包配置
+- `feat(extensions)`: 扩展管理独立隔离，形成自包含的 extensions 模块边界
+- `feat`: 接入 tokenpacker CLI，扩展 Token 处理能力
+- `feat(session-activity)`: 增强最近活动面板与快速切换器交互
+- `feat(theme)`: 增加主题感知代码与差异配色，代码块与 diff 随主题自动适配
+
+🔧 Improvements
+- `refactor(orchestration)`: 移除编排中心本体、装配与派发接线，open-task-run 事件总线迁移至 tasks 模块，精简应用骨架
+- `refactor(client)`: 清理未使用的客户端模块
+
+🐛 Fixes
+- `fix(quick-switcher)`: 修复文件激活时主区路由错误
+- `fix(styles)`: 修复扩展页签 sticky 布局间隙
+
+English:
+
+✨ Features
+- Bump the app version to `0.7.8` across frontend package metadata, the lockfile, and Tauri bundle configuration
+- `feat(extensions)`: isolate extension management into a self-contained module boundary
+- `feat`: connect to the tokenpacker CLI to extend token-processing capabilities
+- `feat(session-activity)`: enhance recent-activity panel and quick-switcher interactions
+- `feat(theme)`: add theme-aware code and diff colors so code blocks and diffs adapt to the active theme
+
+🔧 Improvements
+- `refactor(orchestration)`: remove the orchestration center along with its assembly and dispatch wiring, migrate the open-task-run event bus to the tasks module, and slim down the app shell
+- `refactor(client)`: remove unused client modules
+
+🐛 Fixes
+- `fix(quick-switcher)`: fix incorrect main-area routing when activating a file
+- `fix(styles)`: fix the sticky layout gap on extension tabs
+
+---
+
+##### **2026年7月23日（v0.7.7）**
+
+中文：
+
+✨ Features
+- 升级应用版本号到 `0.7.7`，同步前端包配置、lockfile 与 Tauri 打包配置
+- `feat(composer)`: 完善提示词增强入口，将增强操作收敛到 Composer 主操作区，并统一按钮状态、提示文案与主题样式
+- `feat(files)`: 文件编辑器新增 workspace-scoped 语义导航历史，支持 Back / Forward 快捷返回跳转前后的文件、光标与滚动视口
+- `feat(lsp)`: 为 Python / Pyright 与 Go / gopls 接入 definition、references、implementation 语义导航；语言服务保持用户独立安装，缺失时显示安装指引并安全降级
+- `feat(git)`: Git changed-file 分区与多仓库摘要新增 additions / deletions 统计，提交前即可快速判断每组改动规模
+- `feat(git-history)`: File History 支持调整 commit rail 与 previous/source 栏宽度，拖拽采用平滑帧更新并保留长行横向滚动；Git 中间区域 split preview 复用同一 aligned CodeMirror renderer，同时保留双栏/单栏与全文/区域 controls
+- `feat(vendors)`: Vendor Settings 增加 Grok CLI 文档入口与 unsupported 状态占位，不误导为已完成集成
+
+🔧 Improvements
+- `fix(app)`: workspace Home 复用共享 Composer，pinned threads 复用统一 ThreadList 行为；session title 会过滤 AGENTS、environment 与 SessionStart bootstrap 内容，避免内部上下文成为会话标题
+- `fix(ui)`: Git Update / Commit / Push 收敛为 branch header 快捷操作，recent branches 默认展开；文件树支持单击打开或折叠，Markdown 增加明确的编辑/预览切换
+- `fix(ui)`: 统一 workspace project dropdown、Home、message anchors 与 Market 导航的布局、token、图标和文案；窄对话容器会自动隐藏 anchor rail，长会话折叠态限制 marker 数量
+
+🐛 Fixes
+- `fix(composer)`: 修复 `#` 智能体补全菜单包含 section header 或 separator 时的选择索引错位；鼠标点击以及 Enter / Tab 键确认现在都会选中界面高亮的真实智能体，不再误选相邻项
+- `fix(code-intel)`: 稳定 LSP request timeout、cancellation、session eviction 与 provider failure 生命周期，避免软超时误杀可复用会话或影响其他 workspace / language server
+- `fix(files)`: 修复文件编辑器快捷键映射与 context menu shortcut 展示，保持 macOS / Windows / Linux 的平台语义一致
+- `fix(theme)`: 修复深色主题下侧栏折叠按钮的背景与边界色，避免控件融入背景或出现错误亮色
+- `fix(quick-switcher)`: 修复冷启动 hydration 中等价 workspace 引用反复读取 storage 并发布状态的问题，避免触发 React maximum update depth
+- `fix(git)`: 修复多仓库 changed-file 的 inline preview、Discard 与刷新操作丢失 repository identity 的问题，确保同名相对路径始终作用于正确仓库
+- `fix(git)`: 手动刷新现在统一更新 status、diff、log 与 repository summaries；文件树会保留用户对自动展开 gitignored 路径的手动折叠选择
+
+English:
+
+✨ Features
+- Bump the app version to `0.7.7` across frontend package metadata, the lockfile, and Tauri bundle configuration
+- `feat(composer)`: complete the prompt-enhancer entry point by consolidating the action in the Composer primary controls and aligning button state, guidance, and theme styling
+- `feat(files)`: add workspace-scoped semantic navigation history to the file editor, with Back / Forward restoring the target file, cursor, and scroll viewport
+- `feat(lsp)`: add definition, references, and implementation navigation for Python / Pyright and Go / gopls; language servers remain user-installed, with installation guidance and safe fallback when unavailable
+- `feat(git)`: show addition and deletion totals in Git changed-file sections and multi-repository summaries so the size of each change group is visible before commit
+- `feat(git-history)`: make the File History commit rail and previous/source columns resizable with frame-coalesced dragging and per-pane horizontal scrolling; reuse the same aligned CodeMirror renderer for center-area split previews while retaining split/unified and full/focused controls
+- `feat(vendors)`: add a Grok CLI documentation entry and explicit unsupported placeholder to Vendor Settings without implying a completed integration
+
+🔧 Improvements
+- `fix(app)`: reuse the shared Composer on workspace Home and unified ThreadList behavior for pinned threads; filter AGENTS, environment, and SessionStart bootstrap content out of generated session titles
+- `fix(ui)`: expose Git Update, Commit, and Push as branch-header quick actions, expand recent branches by default, support single-click file opening and folder toggling, and add an explicit Markdown edit/preview switch
+- `fix(ui)`: align the workspace project dropdown, Home, message anchors, and Market navigation across layout, tokens, icons, and copy; hide the anchor rail in narrow conversation containers and cap collapsed markers for long sessions
+
+🐛 Fixes
+- `fix(composer)`: fix selection index drift in the `#` agent completion menu when section headers or separators are present; mouse selection and Enter / Tab confirmation now choose the actual highlighted agent instead of an adjacent item
+- `fix(code-intel)`: stabilize LSP request timeout, cancellation, session eviction, and provider-failure lifecycles so soft timeouts do not kill reusable sessions or affect unrelated workspaces and language servers
+- `fix(files)`: correct file-editor shortcut mappings and context-menu shortcut labels while preserving native semantics across macOS, Windows, and Linux
+- `fix(theme)`: correct the collapsed-sidebar control background and border colors in dark themes so the control remains visible without an incorrect light accent
+- `fix(quick-switcher)`: stop equivalent workspace references during cold-start hydration from repeatedly reading storage and publishing state, preventing React maximum-update-depth failures
+- `fix(git)`: preserve repository identity for multi-repository changed-file inline previews, Discard actions, and refreshes so identical relative paths always target the correct repository
+- `fix(git)`: make manual refresh update status, diffs, logs, and repository summaries together, and preserve manual collapse choices for folders auto-expanded to reveal gitignored paths
+
+---
+
+##### **2026年7月22日（v0.7.6）**
+
+中文：
+
+✨ Features
+- 升级应用版本号到 `0.7.6`，同步前端包配置、lockfile 与 Tauri 打包配置
+- `feat(curated-skills)`: 内置 Caveman 精选技能，补齐资源注册、设置入口、provider 支持状态与 Desktop / remote daemon 持久化链路，可直接启用简洁技术沟通模式
+- `feat(git)`: 为多仓库工作区增加全局 branch 操作，并统一单仓与多仓 Git History branch tree；各 repository 保持独立 branch catalog、状态与操作 scope
+- `feat(files)`: 文件编辑器新增行列跳转，统一文件图标，并支持从已打开文件反向定位到文件树；文件标签与文件树右键菜单整合 Open、Reveal、Copy、Git、History 等常用操作
+- `feat(git-history)`: File History 支持多页签，可同时保留多个文件的历史上下文并在页签间切换
+- `feat(quick-switcher)`: 新增最近活动快速切换面板，支持文件、会话与操作的缩写模糊匹配、优先级排序和跨平台快捷键导航
+- `feat(workbench)`: 完善全局搜索与代码导航，新增 LSP definition、reference、implementation 跳转及 Rust 支持；语言服务不可用时提供明确的安装指引与降级路径
+- `feat(mermaid)`: Mermaid 全屏预览支持将图表保存为 PNG，并接入 native file save 流程
+
+🔧 Improvements
+- `refactor(messages)`: 重组消息展示架构，将 row、timeline、orchestration、Markdown、tool presentation 与共享 domain helpers 拆分到明确边界，同时保持 streaming、virtualization 与公共输入 contract 不变
+- `style(composer)`: 压缩多仓库 Git 操作菜单的信息密度，并统一 pinned session 与 workspace row 的视觉对齐
+
+🐛 Fixes
+- `fix(messages)`: 修复消息行 context 与延迟图片 hydration 的 stale state，使用 workspace / thread / message scope 和 generation guard 阻止旧异步结果覆盖当前内容，并正确释放 object URL
+- `fix(status-panel)`: 正确区分 Kimi 提交信息引擎，避免状态面板将其投影为其他 provider
+- `fix(git)`: 稳定跨平台 branch tree 排序并恢复历史分支树的细节交互，避免多仓切换后 branch 信息或操作入口缺失
+- `fix(settings)`: 修复快捷键持久化，并补齐常用功能模块的快捷键配置
+- `fix(files)`: Git 行标记改为按需加载并增加异步竞态保护，避免快速切换文件时旧请求污染当前编辑器
+- `fix(threads)`: 从 live notification、subagent activity 与 catalog payload 统一 Codex subagent identity 和 parent relationship，使子智能体首次出现时即归入正确父会话，避免短暂显示为重复顶层会话
+- `fix(quick-switcher)`: 最近文件数据过滤非文件活动记录，避免会话或操作事件混入文件列表
+
+English:
+
+✨ Features
+- Bump the app version to `0.7.6` across frontend package metadata, the lockfile, and Tauri bundle configuration
+- `feat(curated-skills)`: bundle the Caveman curated skill with resource registration, settings entry points, provider support state, and Desktop / remote-daemon persistence, making concise technical communication available out of the box
+- `feat(git)`: add global branch operations for multi-repository workspaces and unify the Git History branch tree across single- and multi-repository modes, while keeping each repository's branch catalog, state, and action scope isolated
+- `feat(files)`: add line-and-column navigation to the file editor, unify file icons, and reveal open files in the file tree; consolidate common Open, Reveal, Copy, Git, and History actions across file-tab and file-tree context menus
+- `feat(git-history)`: add tabs to File History so multiple files can retain independent history context and remain open for quick switching
+- `feat(quick-switcher)`: add a recent-activity quick switcher with abbreviation-aware fuzzy matching, prioritized files, sessions, and actions, plus cross-platform keyboard navigation
+- `feat(workbench)`: expand global search and code navigation with LSP definition, reference, and implementation jumps plus Rust support; provide explicit installation guidance and fallback behavior when a language server is unavailable
+- `feat(mermaid)`: allow fullscreen Mermaid diagrams to be saved as PNG files through the native file-save flow
+
+🔧 Improvements
+- `refactor(messages)`: reorganize message presentation into explicit row, timeline, orchestration, Markdown, tool-presentation, and shared-domain boundaries while preserving streaming, virtualization, and public-input contracts
+- `style(composer)`: tighten the multi-repository Git action menu and align pinned session rows visually with workspace rows
+
+🐛 Fixes
+- `fix(messages)`: prevent stale message-row context and deferred image hydration from overwriting current content by scoping results to workspace, thread, message, and generation identity, while releasing owned object URLs correctly
+- `fix(status-panel)`: distinguish the Kimi commit-message engine correctly instead of projecting it as another provider in the status panel
+- `fix(git)`: stabilize cross-platform branch-tree ordering and restore detailed Git History branch interactions so branch information and actions remain available after repository switches
+- `fix(settings)`: persist keyboard shortcuts correctly and add shortcut configuration for commonly used modules
+- `fix(files)`: load Git line markers on demand with asynchronous race guards so stale requests cannot contaminate the currently open editor
+- `fix(threads)`: unify Codex subagent identity and parent relationships from live notifications, subagent activity, and catalog payloads, placing child agents under the correct parent on first render instead of briefly duplicating them at the top level
+- `fix(quick-switcher)`: filter non-file activity out of recent files so session and action events do not leak into the file list
+
+---
+
 ##### **2026年7月20日（v0.7.5）**
 
 中文：

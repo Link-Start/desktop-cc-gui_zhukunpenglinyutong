@@ -97,7 +97,13 @@ const activityPanel = {
       "unreadMark": "未讀",
       "readMark": "已讀",
       "deleteHistoryEntry": "刪除 {{name}}",
-      "deleteDateGroupEntries": "刪除 {{date}} 的全部 {{count}} 筆項目"
+      "deleteDateGroupEntries": "刪除 {{date}} 的全部 {{count}} 筆項目",
+      "confirmDeleteDateGroup": "確定刪除 {{date}} 的全部 {{count}} 筆記錄？",
+      "confirmDeleteDateGroup_other": "確定刪除 {{date}} 的全部 {{count}} 筆記錄？",
+      "deleteFailedTitle": "刪除失敗",
+      "deleteFailedBody": "{{count}} 筆記錄刪除失敗，請再試一次。",
+      "deleteFailedBody_other": "{{count}} 筆記錄刪除失敗，請再試一次。",
+      "deleteFailedDismiss": "關閉"
     },
     "status": {
       "running": "執行中",

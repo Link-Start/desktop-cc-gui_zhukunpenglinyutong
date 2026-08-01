@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ChatInputBoxFooter } from './ChatInputBoxFooter';
 import type { DropdownItemData } from './types';
 
-vi.mock('../../../messages/components/Markdown', () => ({
+vi.mock('../../../../markdown/components/Markdown', () => ({
   Markdown: ({ value, className }: { value: string; className?: string }) => (
     <div className={className}>{value}</div>
   ),

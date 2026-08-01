@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { getWorkspaceFiles } from "../services/tauri";
+import {
+  getEngineModels,
+  getWorkspaceFiles,
+} from "../services/tauri";
 import { pushErrorToast } from "../services/toasts";
 import { useSoloMode } from "../features/layout/hooks/useSoloMode";
 import { useLiveEditPreview } from "../features/live-edit-preview/hooks/useLiveEditPreview";
@@ -13,7 +16,8 @@ import { useAppMenuEvents } from "../features/app/hooks/useAppMenuEvents";
 import { useMenuAcceleratorController } from "../features/app/hooks/useMenuAcceleratorController";
 import { useMenuLocalization } from "../features/app/hooks/useMenuLocalization";
 import { runWithLoadingProgress } from "../features/app/utils/loadingProgressActions";
-import { normalizeSharedSessionEngine } from "../features/shared-session/utils/sharedSessionEngines";
+import { buildLocalSharedSessionInitialTarget } from "../features/shared-session/target/initialTarget";
+import type { SharedSessionSupportedEngine } from "../features/shared-session/utils/sharedSessionEngines";
 import {
   buildDetachedSpecHubSession,
   openOrFocusDetachedSpecHub,
@@ -81,7 +85,6 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     activeWorkspace,
     workspaces,
     setAppMode,
-    activeEngine,
     activeWorkspaceId,
     activeThreadId,
     addWorkspaceFromPath,
@@ -107,7 +110,6 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     recentThreads,
     collapseRightPanel,
     setActiveEngine,
-    updateSharedSessionEngineSelection,
     removeThread,
     removeThreads,
     clearDraftForThread,
@@ -137,6 +139,7 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     handleOpenFile,
     handleActivateFileTab,
     handleCloseFileTab,
+    handleCloseOtherFileTabs,
     handleCloseAllFileTabs,
     handleReorderFileTabs,
     handleExitEditor,
@@ -332,19 +335,10 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
   );
 
   const handleStartSharedConversation = useCallback(
-    async (engineOrWorkspace: EngineType | WorkspaceInfo = "claude") => {
-      const targetWorkspace =
-        typeof engineOrWorkspace === "object" && engineOrWorkspace !== null
-          ? engineOrWorkspace
-          : activeWorkspace;
-      if (!targetWorkspace) {
-        return;
-      }
-      const engine: EngineType =
-        typeof engineOrWorkspace === "string"
-          ? engineOrWorkspace
-          : activeEngine;
-      const sharedEngine = normalizeSharedSessionEngine(engine);
+    async (
+      targetWorkspace: WorkspaceInfo,
+      sharedEngine: SharedSessionSupportedEngine,
+    ) => {
       try {
         return await runWithLoadingProgress(
           { showLoadingProgressDialog, hideLoadingProgressDialog },
@@ -361,22 +355,35 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
             if (!targetWorkspace.connected) {
               await connectWorkspace(targetWorkspace);
             }
-            await setActiveEngine(sharedEngine);
+            const localProviderName = t("providers.localConfig", {
+              defaultValue: "本地配置",
+            });
+            const engineLabelKey = {
+              claude: "workspace.engineClaudeCode",
+              codex: "workspace.engineCodex",
+              opencode: "workspace.engineOpenCode",
+              kimi: "workspace.engineKimi",
+              grok: "workspace.engineGrok",
+            }[sharedEngine];
+            const initialTarget = buildLocalSharedSessionInitialTarget(
+              sharedEngine,
+              await getEngineModels(sharedEngine),
+              localProviderName,
+              t("workspace.sharedSessionLocalModelUnavailable", {
+                engine: t(engineLabelKey),
+              }),
+            );
             const threadId = await startSharedSessionForWorkspace(
               targetWorkspace.id,
               {
                 activate: true,
                 initialEngine: sharedEngine,
+                initialTarget,
               },
             );
             if (!threadId) {
               return null;
             }
-            updateSharedSessionEngineSelection(
-              targetWorkspace.id,
-              threadId,
-              sharedEngine,
-            );
             setActiveThreadId(threadId, targetWorkspace.id);
             collapseRightPanel();
             if (isCompact) {
@@ -391,22 +398,18 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
       }
     },
     [
-      activeEngine,
-      activeWorkspace,
       alertError,
       collapseRightPanel,
       connectWorkspace,
       hideLoadingProgressDialog,
       isCompact,
       selectWorkspace,
-      setActiveEngine,
       setActiveThreadId,
       setActiveTab,
       setWorkspaceHomeWorkspaceId,
       startSharedSessionForWorkspace,
       showLoadingProgressDialog,
       t,
-      updateSharedSessionEngineSelection,
     ],
   );
 
@@ -583,7 +586,6 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     handleForkTaskRun,
     handleCloseTaskConversation,
     handleKanbanCreateTask,
-    handleDispatchOrchestrationTask,
     taskProcessingMap,
     handleDragToInProgress,
   } = useAppShellKanbanExecutionSection(ctx);
@@ -739,6 +741,14 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     handleCloseAllFileTabs();
   }, [handleCloseAllFileTabs, markLiveEditPreviewManualNavigation]);
 
+  const handleCloseOtherWorkspaceFileTabs = useCallback(
+    (path: string) => {
+      markLiveEditPreviewManualNavigation();
+      handleCloseOtherFileTabs(path);
+    },
+    [handleCloseOtherFileTabs, markLiveEditPreviewManualNavigation],
+  );
+
   const handleExitWorkspaceEditor = useCallback(() => {
     markLiveEditPreviewManualNavigation();
     handleExitEditor();
@@ -746,6 +756,7 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
 
   const showComposer =
     Boolean(selectedKanbanTaskId) ||
+    showWorkspaceHome ||
     (!isCompact
       ? (centerMode === "chat" ||
           centerMode === "diff" ||
@@ -757,13 +768,13 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
   const showGitDetail = Boolean(selectedDiffPath) && isPhone;
   const isThreadOpen = Boolean(activeThreadId && showComposer);
   const handleSelectDiffForPanel = useCallback(
-    (path: string | null) => {
+    (path: string | null, repositoryRoot?: string | null) => {
       markLiveEditPreviewManualNavigation();
       if (!path) {
         setSelectedDiffPath(null);
         return;
       }
-      handleSelectDiff(path);
+      handleSelectDiff(path, repositoryRoot);
     },
     [
       handleSelectDiff,
@@ -918,19 +929,31 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
 
   const handleOpenWorkspaceHome = useCallback((workspaceId?: string) => {
     const targetWorkspaceId = workspaceId ?? activeWorkspaceId;
-    handleOpenHomeChat();
     if (!targetWorkspaceId) {
+      handleOpenHomeChat();
       return;
     }
+    exitDiffView();
+    resetPullRequestSelection();
+    setWorkspaceHomeWorkspaceId(targetWorkspaceId);
+    setAppMode("chat");
+    setCenterMode("chat");
+    setHomeOpen(false);
     setActiveTab("codex");
     setActiveWorkspaceId(targetWorkspaceId);
     setActiveThreadId(null, targetWorkspaceId);
   }, [
     activeWorkspaceId,
+    exitDiffView,
     handleOpenHomeChat,
+    resetPullRequestSelection,
+    setAppMode,
     setActiveTab,
     setActiveThreadId,
     setActiveWorkspaceId,
+    setCenterMode,
+    setHomeOpen,
+    setWorkspaceHomeWorkspaceId,
   ]);
 
   const handleSelectHomeWorkspace = useCallback(
@@ -1105,7 +1128,6 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     handleForkTaskRun,
     handleCloseTaskConversation,
     handleKanbanCreateTask,
-    handleDispatchOrchestrationTask,
     handleDragToInProgress,
   });
   const navigationActions = defineAppShellNavigationActions({
@@ -1126,6 +1148,7 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     handleOpenWorkspaceFile,
     handleActivateWorkspaceFileTab,
     handleCloseWorkspaceFileTab,
+    handleCloseOtherWorkspaceFileTabs,
     handleCloseAllWorkspaceFileTabs,
     handleExitWorkspaceEditor,
     handleSelectDiffForPanel,

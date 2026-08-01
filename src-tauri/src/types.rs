@@ -2,6 +2,17 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::backend_budget::PayloadBudgetMetadata;
 
+/// 结构化技能调用契约（composer 选中 skill/common 发送时随消息下发）。
+/// 当前仅在 `engine_send_message` 边界接收并记录日志；引擎侧解析与参数
+/// 校验属后续协议演进。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SkillInvocation {
+    pub(crate) name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) args: Option<std::collections::HashMap<String, String>>,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum WorkspaceSessionAttributionMode {
@@ -525,6 +536,8 @@ pub(crate) struct LocalUsageSessionSummary {
     pub(crate) cost: f64,
     #[serde(default)]
     pub(crate) summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) native_title: Option<String>,
     #[serde(default)]
     pub(crate) source: Option<String>,
     #[serde(default)]
@@ -954,7 +967,9 @@ fn default_gemini_enabled() -> bool {
 }
 
 fn default_opencode_enabled() -> bool {
-    false
+    // Legacy field: OpenCode is always enabled at runtime (see engine::engine_enabled_in_settings);
+    // the persisted flag no longer gates anything and defaults to true.
+    true
 }
 
 fn default_email_sender_smtp_port() -> u16 {
@@ -989,6 +1004,10 @@ pub(crate) struct AppSettings {
     pub(crate) claude_bin: Option<String>,
     #[serde(default, rename = "kimiBin")]
     pub(crate) kimi_bin: Option<String>,
+    #[serde(default, rename = "grokBin")]
+    pub(crate) grok_bin: Option<String>,
+    #[serde(default, rename = "opencodeBin")]
+    pub(crate) opencode_bin: Option<String>,
     #[serde(default, rename = "codexArgs")]
     pub(crate) codex_args: Option<String>,
     #[serde(default, rename = "terminalShellPath")]
@@ -997,6 +1016,8 @@ pub(crate) struct AppSettings {
     pub(crate) gemini_enabled: bool,
     #[serde(default = "default_opencode_enabled", rename = "opencodeEnabled")]
     pub(crate) opencode_enabled: bool,
+    #[serde(default, rename = "disabledCliEngines")]
+    pub(crate) disabled_cli_engines: Vec<String>,
     #[serde(default, rename = "sessionAttributionMode")]
     pub(crate) session_attribution_mode: WorkspaceSessionAttributionMode,
     #[serde(default, rename = "backendMode")]
@@ -1037,6 +1058,96 @@ pub(crate) struct AppSettings {
         rename = "composerCollaborationShortcut"
     )]
     pub(crate) composer_collaboration_shortcut: Option<String>,
+    #[serde(
+        default = "default_open_settings_shortcut",
+        rename = "openSettingsShortcut"
+    )]
+    pub(crate) open_settings_shortcut: Option<String>,
+    #[serde(default = "default_new_window_shortcut", rename = "newWindowShortcut")]
+    pub(crate) new_window_shortcut: Option<String>,
+    #[serde(default = "default_open_chat_shortcut", rename = "openChatShortcut")]
+    pub(crate) open_chat_shortcut: Option<String>,
+    #[serde(
+        default = "default_open_kanban_shortcut",
+        rename = "openKanbanShortcut"
+    )]
+    pub(crate) open_kanban_shortcut: Option<String>,
+    #[serde(
+        default = "default_cycle_open_session_prev_shortcut",
+        rename = "cycleOpenSessionPrevShortcut"
+    )]
+    pub(crate) cycle_open_session_prev_shortcut: Option<String>,
+    #[serde(
+        default = "default_cycle_open_session_next_shortcut",
+        rename = "cycleOpenSessionNextShortcut"
+    )]
+    pub(crate) cycle_open_session_next_shortcut: Option<String>,
+    #[serde(
+        default = "default_toggle_left_conversation_sidebar_shortcut",
+        rename = "toggleLeftConversationSidebarShortcut"
+    )]
+    pub(crate) toggle_left_conversation_sidebar_shortcut: Option<String>,
+    #[serde(
+        default = "default_toggle_right_conversation_sidebar_shortcut",
+        rename = "toggleRightConversationSidebarShortcut"
+    )]
+    pub(crate) toggle_right_conversation_sidebar_shortcut: Option<String>,
+    #[serde(
+        default = "default_toggle_runtime_console_shortcut",
+        rename = "toggleRuntimeConsoleShortcut"
+    )]
+    pub(crate) toggle_runtime_console_shortcut: Option<String>,
+    #[serde(
+        default = "default_toggle_files_surface_shortcut",
+        rename = "toggleFilesSurfaceShortcut"
+    )]
+    pub(crate) toggle_files_surface_shortcut: Option<String>,
+    #[serde(default = "default_save_file_shortcut", rename = "saveFileShortcut")]
+    pub(crate) save_file_shortcut: Option<String>,
+    #[serde(
+        default = "default_find_in_file_shortcut",
+        rename = "findInFileShortcut"
+    )]
+    pub(crate) find_in_file_shortcut: Option<String>,
+    #[serde(
+        default = "default_expand_selection_shortcut",
+        rename = "expandSelectionShortcut"
+    )]
+    pub(crate) expand_selection_shortcut: Option<String>,
+    #[serde(
+        default = "default_toggle_git_diff_list_view_shortcut",
+        rename = "toggleGitDiffListViewShortcut"
+    )]
+    pub(crate) toggle_git_diff_list_view_shortcut: Option<String>,
+    #[serde(default, rename = "toggleGitGraphShortcut")]
+    pub(crate) toggle_git_graph_shortcut: Option<String>,
+    #[serde(default, rename = "openNotesShortcut")]
+    pub(crate) open_notes_shortcut: Option<String>,
+    #[serde(default, rename = "openIntentCanvasShortcut")]
+    pub(crate) open_intent_canvas_shortcut: Option<String>,
+    #[serde(default, rename = "openRadarShortcut")]
+    pub(crate) open_radar_shortcut: Option<String>,
+    #[serde(default, rename = "openProjectMapShortcut")]
+    pub(crate) open_project_map_shortcut: Option<String>,
+    #[serde(default, rename = "openBrowserDockShortcut")]
+    pub(crate) open_browser_dock_shortcut: Option<String>,
+    #[serde(default, rename = "openFileCompareShortcut")]
+    pub(crate) open_file_compare_shortcut: Option<String>,
+    #[serde(
+        default = "default_increase_ui_scale_shortcut",
+        rename = "increaseUiScaleShortcut"
+    )]
+    pub(crate) increase_ui_scale_shortcut: Option<String>,
+    #[serde(
+        default = "default_decrease_ui_scale_shortcut",
+        rename = "decreaseUiScaleShortcut"
+    )]
+    pub(crate) decrease_ui_scale_shortcut: Option<String>,
+    #[serde(
+        default = "default_reset_ui_scale_shortcut",
+        rename = "resetUiScaleShortcut"
+    )]
+    pub(crate) reset_ui_scale_shortcut: Option<String>,
     #[serde(default = "default_new_agent_shortcut", rename = "newAgentShortcut")]
     pub(crate) new_agent_shortcut: Option<String>,
     #[serde(
@@ -1370,6 +1481,10 @@ pub(crate) struct AppSettings {
         rename = "enabledCuratedSkillIds"
     )]
     pub(crate) enabled_curated_skill_ids: Vec<String>,
+    /// One-shot version marker for newly introduced default curated skills.
+    /// Legacy settings omit this field and deserialize as 0.
+    #[serde(default, rename = "curatedSkillDefaultsVersion")]
+    pub(crate) curated_skill_defaults_version: u8,
     /// Built-in Agent Catalog ids the user explicitly enabled for discovery in
     /// the Composer `#` picker. Enablement never injects a prompt by itself.
     #[serde(
@@ -1492,6 +1607,74 @@ fn default_interrupt_shortcut() -> Option<String> {
 
 fn default_composer_collaboration_shortcut() -> Option<String> {
     Some("shift+tab".to_string())
+}
+
+fn default_open_settings_shortcut() -> Option<String> {
+    Some("cmd+,".to_string())
+}
+
+fn default_new_window_shortcut() -> Option<String> {
+    Some("cmd+shift+n".to_string())
+}
+
+fn default_open_chat_shortcut() -> Option<String> {
+    Some("cmd+j".to_string())
+}
+
+fn default_open_kanban_shortcut() -> Option<String> {
+    Some("cmd+k".to_string())
+}
+
+fn default_cycle_open_session_prev_shortcut() -> Option<String> {
+    Some("cmd+shift+[".to_string())
+}
+
+fn default_cycle_open_session_next_shortcut() -> Option<String> {
+    Some("cmd+shift+]".to_string())
+}
+
+fn default_toggle_left_conversation_sidebar_shortcut() -> Option<String> {
+    Some("cmd+alt+[".to_string())
+}
+
+fn default_toggle_right_conversation_sidebar_shortcut() -> Option<String> {
+    Some("cmd+alt+]".to_string())
+}
+
+fn default_toggle_runtime_console_shortcut() -> Option<String> {
+    Some("cmd+shift+`".to_string())
+}
+
+fn default_toggle_files_surface_shortcut() -> Option<String> {
+    Some("cmd+shift+e".to_string())
+}
+
+fn default_save_file_shortcut() -> Option<String> {
+    Some("cmd+s".to_string())
+}
+
+fn default_find_in_file_shortcut() -> Option<String> {
+    Some("cmd+f".to_string())
+}
+
+fn default_expand_selection_shortcut() -> Option<String> {
+    Some("cmd+w".to_string())
+}
+
+fn default_toggle_git_diff_list_view_shortcut() -> Option<String> {
+    Some("alt+shift+v".to_string())
+}
+
+fn default_increase_ui_scale_shortcut() -> Option<String> {
+    Some("cmd+=".to_string())
+}
+
+fn default_decrease_ui_scale_shortcut() -> Option<String> {
+    Some("cmd+-".to_string())
+}
+
+fn default_reset_ui_scale_shortcut() -> Option<String> {
+    Some("cmd+0".to_string())
 }
 
 fn default_new_agent_shortcut() -> Option<String> {
@@ -1764,7 +1947,13 @@ fn default_browser_agent_allow_external_provider_fallback() -> bool {
 }
 
 pub(crate) fn default_enabled_curated_skill_ids() -> Vec<String> {
-    vec!["lazy-senior-dev".to_string()]
+    vec!["lazy-senior-dev".to_string(), "caveman".to_string()]
+}
+
+const CURRENT_CURATED_SKILL_DEFAULTS_VERSION: u8 = 1;
+
+fn default_curated_skill_defaults_version() -> u8 {
+    CURRENT_CURATED_SKILL_DEFAULTS_VERSION
 }
 
 pub(crate) fn default_enabled_builtin_agent_ids() -> Vec<String> {
@@ -1804,6 +1993,21 @@ impl AppSettings {
             .max(default_codex_warm_ttl_seconds());
     }
 
+    pub(crate) fn upgrade_curated_skill_defaults_for_startup(&mut self) {
+        if self.curated_skill_defaults_version >= CURRENT_CURATED_SKILL_DEFAULTS_VERSION {
+            return;
+        }
+        if !self.enabled_curated_skill_ids.is_empty()
+            && !self
+                .enabled_curated_skill_ids
+                .iter()
+                .any(|id| id == "caveman")
+        {
+            self.enabled_curated_skill_ids.push("caveman".to_string());
+        }
+        self.curated_skill_defaults_version = CURRENT_CURATED_SKILL_DEFAULTS_VERSION;
+    }
+
     pub(crate) fn sanitize_engine_gates(&mut self) {
         self.gemini_enabled = crate::engine_policy::GEMINI_RUNTIME_ENABLED;
         if self
@@ -1813,7 +2017,6 @@ impl AppSettings {
         {
             self.default_engine = None;
         }
-        self.opencode_enabled = self.opencode_enabled != false;
     }
 }
 
@@ -1823,10 +2026,13 @@ impl Default for AppSettings {
             codex_bin: None,
             claude_bin: None,
             kimi_bin: None,
+            grok_bin: None,
+            opencode_bin: None,
             codex_args: None,
             terminal_shell_path: None,
             gemini_enabled: default_gemini_enabled(),
             opencode_enabled: default_opencode_enabled(),
+            disabled_cli_engines: Vec::new(),
             session_attribution_mode: WorkspaceSessionAttributionMode::Related,
             backend_mode: BackendMode::Local,
             remote_backend_host: default_remote_backend_host(),
@@ -1842,6 +2048,32 @@ impl Default for AppSettings {
             composer_reasoning_shortcut: default_composer_reasoning_shortcut(),
             interrupt_shortcut: default_interrupt_shortcut(),
             composer_collaboration_shortcut: default_composer_collaboration_shortcut(),
+            open_settings_shortcut: default_open_settings_shortcut(),
+            new_window_shortcut: default_new_window_shortcut(),
+            open_chat_shortcut: default_open_chat_shortcut(),
+            open_kanban_shortcut: default_open_kanban_shortcut(),
+            cycle_open_session_prev_shortcut: default_cycle_open_session_prev_shortcut(),
+            cycle_open_session_next_shortcut: default_cycle_open_session_next_shortcut(),
+            toggle_left_conversation_sidebar_shortcut:
+                default_toggle_left_conversation_sidebar_shortcut(),
+            toggle_right_conversation_sidebar_shortcut:
+                default_toggle_right_conversation_sidebar_shortcut(),
+            toggle_runtime_console_shortcut: default_toggle_runtime_console_shortcut(),
+            toggle_files_surface_shortcut: default_toggle_files_surface_shortcut(),
+            save_file_shortcut: default_save_file_shortcut(),
+            find_in_file_shortcut: default_find_in_file_shortcut(),
+            expand_selection_shortcut: default_expand_selection_shortcut(),
+            toggle_git_diff_list_view_shortcut: default_toggle_git_diff_list_view_shortcut(),
+            toggle_git_graph_shortcut: None,
+            open_notes_shortcut: None,
+            open_intent_canvas_shortcut: None,
+            open_radar_shortcut: None,
+            open_project_map_shortcut: None,
+            open_browser_dock_shortcut: None,
+            open_file_compare_shortcut: None,
+            increase_ui_scale_shortcut: default_increase_ui_scale_shortcut(),
+            decrease_ui_scale_shortcut: default_decrease_ui_scale_shortcut(),
+            reset_ui_scale_shortcut: default_reset_ui_scale_shortcut(),
             new_agent_shortcut: default_new_agent_shortcut(),
             new_worktree_agent_shortcut: default_new_worktree_agent_shortcut(),
             new_clone_agent_shortcut: default_new_clone_agent_shortcut(),
@@ -1930,6 +2162,7 @@ impl Default for AppSettings {
             browser_agent_allow_external_provider_fallback:
                 default_browser_agent_allow_external_provider_fallback(),
             enabled_curated_skill_ids: default_enabled_curated_skill_ids(),
+            curated_skill_defaults_version: default_curated_skill_defaults_version(),
             enabled_builtin_agent_ids: default_enabled_builtin_agent_ids(),
         }
     }
@@ -1980,8 +2213,12 @@ pub(crate) struct CodexProviderConfig {
     pub(crate) remark: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) created_at: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) sort_order: Option<i64>,
     #[serde(default)]
     pub(crate) is_active: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) source: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) config_toml: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2019,6 +2256,66 @@ pub(crate) struct KimiProviderConfig {
     pub(crate) max_context_size: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) display_name: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GrokProviderConfig {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) remark: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) website_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) created_at: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) sort_order: Option<i64>,
+    #[serde(default)]
+    pub(crate) is_active: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) is_local_provider: Option<bool>,
+    #[serde(default)]
+    pub(crate) base_url: String,
+    #[serde(default)]
+    pub(crate) api_key: String,
+    #[serde(default)]
+    pub(crate) model: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) provider_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) max_context_size: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) display_name: Option<String>,
+    /// API/wire backend: "chat_completions" | "responses" | "messages".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) api_backend: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct OpenCodeProviderConfig {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) remark: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) website_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) created_at: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) sort_order: Option<i64>,
+    #[serde(default)]
+    pub(crate) is_active: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) is_local_provider: Option<bool>,
+    #[serde(default)]
+    pub(crate) base_url: String,
+    #[serde(default)]
+    pub(crate) api_key: String,
+    /// Model ids exposed by this provider (e.g. `provider/model` slugs).
+    #[serde(default)]
+    pub(crate) models: Vec<String>,
 }
 
 #[cfg(test)]
@@ -2084,6 +2381,67 @@ mod tests {
     }
 
     #[test]
+    fn app_settings_round_trips_all_frontend_shortcut_fields() {
+        let shortcut_payload = serde_json::json!({
+            "openSettingsShortcut": "cmd+alt+,",
+            "newWindowShortcut": "cmd+alt+w",
+            "openChatShortcut": "cmd+alt+j",
+            "openKanbanShortcut": "cmd+alt+k",
+            "cycleOpenSessionPrevShortcut": "cmd+alt+left",
+            "cycleOpenSessionNextShortcut": "cmd+alt+right",
+            "toggleLeftConversationSidebarShortcut": "cmd+ctrl+[",
+            "toggleRightConversationSidebarShortcut": "cmd+ctrl+]",
+            "toggleRuntimeConsoleShortcut": "cmd+alt+`",
+            "toggleFilesSurfaceShortcut": "cmd+alt+e",
+            "saveFileShortcut": "cmd+alt+s",
+            "findInFileShortcut": "cmd+alt+f",
+            "expandSelectionShortcut": "ctrl+alt+w",
+            "toggleGitDiffListViewShortcut": "cmd+alt+v",
+            "toggleGitGraphShortcut": "cmd+alt+g",
+            "openNotesShortcut": null,
+            "openIntentCanvasShortcut": "cmd+alt+i",
+            "openRadarShortcut": "cmd+alt+r",
+            "openProjectMapShortcut": "cmd+alt+m",
+            "openBrowserDockShortcut": "cmd+alt+b",
+            "openFileCompareShortcut": "cmd+alt+c",
+            "increaseUiScaleShortcut": "cmd+alt+=",
+            "decreaseUiScaleShortcut": "cmd+alt+-",
+            "resetUiScaleShortcut": "cmd+alt+0"
+        });
+        let settings: AppSettings =
+            serde_json::from_value(shortcut_payload.clone()).expect("settings deserialize");
+        let echoed = serde_json::to_value(settings).expect("settings serialize");
+
+        for (key, expected) in shortcut_payload
+            .as_object()
+            .expect("shortcut payload object")
+        {
+            assert_eq!(echoed.get(key), Some(expected), "shortcut field {key}");
+        }
+    }
+
+    #[test]
+    fn app_settings_round_trips_disabled_cli_engines() {
+        // 前端 CLI 可见性开关的持久化链路:serde 未知字段默认被丢弃,
+        // 此测试锁定 disabledCliEngines 必须完整往返,防止再次静默丢字段。
+        let payload = serde_json::json!({
+            "disabledCliEngines": ["opencode", "kimi"],
+        });
+        let settings: AppSettings =
+            serde_json::from_value(payload).expect("settings deserialize");
+        assert_eq!(
+            settings.disabled_cli_engines,
+            vec!["opencode".to_string(), "kimi".to_string()]
+        );
+
+        let echoed = serde_json::to_value(settings).expect("settings serialize");
+        assert_eq!(
+            echoed.get("disabledCliEngines"),
+            Some(&serde_json::json!(["opencode", "kimi"]))
+        );
+    }
+
+    #[test]
     fn app_settings_defaults_from_empty_json() {
         let settings: AppSettings = serde_json::from_str("{}").expect("settings deserialize");
         assert!(settings.codex_bin.is_none());
@@ -2095,7 +2453,8 @@ mod tests {
         assert!(settings.custom_skill_directories.is_empty());
         assert!(!settings.system_proxy_enabled);
         assert!(!settings.gemini_enabled);
-        assert!(!settings.opencode_enabled);
+        assert!(settings.opencode_enabled);
+        assert!(settings.disabled_cli_engines.is_empty());
         assert_eq!(
             settings.session_attribution_mode,
             WorkspaceSessionAttributionMode::Related
@@ -2135,6 +2494,7 @@ mod tests {
             settings.close_current_session_shortcut.as_deref(),
             Some("cmd+w")
         );
+        assert_eq!(settings.expand_selection_shortcut.as_deref(), Some("cmd+w"));
         assert_eq!(
             settings.toggle_debug_panel_shortcut.as_deref(),
             Some("cmd+shift+d")
@@ -2315,7 +2675,9 @@ mod tests {
     fn app_settings_defaults_disable_retired_optional_engines() {
         let settings = AppSettings::default();
         assert!(!settings.gemini_enabled);
-        assert!(!settings.opencode_enabled);
+        // OpenCode is an always-enabled engine again; the legacy flag defaults to true
+        // and no longer gates runtime policy.
+        assert!(settings.opencode_enabled);
     }
 
     #[test]
@@ -2333,17 +2695,33 @@ mod tests {
     }
 
     #[test]
-    fn app_settings_defaults_enable_lazy_senior_curated_skill() {
+    fn app_settings_sanitizer_preserves_legacy_opencode_values() {
+        let mut settings: AppSettings =
+            serde_json::from_str(r#"{"opencodeEnabled":true,"defaultEngine":"opencode"}"#)
+                .expect("deserialize legacy settings");
+        assert!(settings.opencode_enabled);
+        assert_eq!(settings.default_engine.as_deref(), Some("opencode"));
+
+        settings.sanitize_engine_gates();
+
+        // OpenCode is always enabled at runtime; the sanitizer must not clear
+        // the legacy flag or a persisted opencode default engine.
+        assert!(settings.opencode_enabled);
+        assert_eq!(settings.default_engine.as_deref(), Some("opencode"));
+    }
+
+    #[test]
+    fn app_settings_defaults_enable_core_curated_skills() {
         let settings = AppSettings::default();
         assert_eq!(
             settings.enabled_curated_skill_ids,
-            vec!["lazy-senior-dev".to_string()]
+            vec!["lazy-senior-dev".to_string(), "caveman".to_string()]
         );
 
         let decoded: AppSettings = serde_json::from_str("{}").expect("deserialize settings");
         assert_eq!(
             decoded.enabled_curated_skill_ids,
-            vec!["lazy-senior-dev".to_string()]
+            vec!["lazy-senior-dev".to_string(), "caveman".to_string()]
         );
     }
 

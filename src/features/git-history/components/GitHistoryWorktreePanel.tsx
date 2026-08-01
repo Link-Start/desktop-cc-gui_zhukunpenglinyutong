@@ -35,7 +35,12 @@ import {
   unstageGitFile,
 } from "../../../services/tauri";
 import type { GitFileStatus } from "../../../types";
-import { sanitizeGeneratedCommitMessage } from "../../../utils/commitMessage";
+import { subscribeDetachedExternalFileChangeBatch } from "../../../services/events";
+import { setVisibilityGatedInterval } from "../../../services/visibilityGatedInterval";
+import {
+  resolveCommitMessageGenerationErrorKey,
+  sanitizeGeneratedCommitMessage,
+} from "../../../utils/commitMessage";
 import { localizeGitErrorMessage } from "../gitErrorI18n";
 import { runScopedCommitOperation } from "../../git/utils/commitScope";
 import {
@@ -48,8 +53,9 @@ import {
   RendererContextMenu,
   type RendererContextMenuState,
 } from "../../../components/ui/RendererContextMenu";
+import { useCommitMessageGenerationMenu } from "../../git/hooks/useCommitMessageGenerationMenu";
 
-type GitHistoryWorktreePanelProps = {
+export type GitHistoryWorktreePanelProps = {
   workspaceId: string;
   repositoryRoot?: string | null;
   listView: "flat" | "tree";
@@ -92,6 +98,10 @@ const EMPTY_STATUS: GitStatusState = {
   totalAdditions: 0,
   totalDeletions: 0,
 };
+
+// watcher 事件触发的最小刷新间隔；30s 门控轮询兜底 .git/index 盲区。
+const WATCHER_REFRESH_THROTTLE_MS = 1_000;
+const STATUS_BACKSTOP_INTERVAL_MS = 30_000;
 
 function getPathLeafName(path: string | null | undefined): string {
   if (!path) {
@@ -260,7 +270,6 @@ export function GitHistoryWorktreePanel({
   const [commitMessageMenuEngine, setCommitMessageMenuEngine] = useState<CommitMessageEngine>("claude");
   const [commitMessageContextMenu, setCommitMessageContextMenu] =
     useState<RendererContextMenuState | null>(null);
-  const deferredCommitLanguageMenuTimerRef = useRef<number | null>(null);
 
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
 
@@ -314,22 +323,48 @@ export function GitHistoryWorktreePanel({
     setCollapsedFolders(new Set());
     setDiscardAllDialogOpen(false);
     void refreshStatus();
-    const timer = window.setInterval(() => {
-      void refreshStatus();
-    }, 3000);
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [onSummaryChange, refreshStatus]);
 
-  useEffect(() => {
+    // 主通道：watcher 批次事件（Rust 侧已按 100ms 窗口合并）驱动刷新，
+    // 前端再做 1s 节流，避免构建类连续写入刷爆 IPC。
+    let trailingTimer: number | null = null;
+    let lastWatcherRefreshAt = 0;
+    const unsubscribeWatcher = subscribeDetachedExternalFileChangeBatch(
+      (batch) => {
+        if (!batch.some((event) => event.workspaceId === workspaceId)) {
+          return;
+        }
+        const now = Date.now();
+        const elapsed = now - lastWatcherRefreshAt;
+        if (elapsed >= WATCHER_REFRESH_THROTTLE_MS) {
+          lastWatcherRefreshAt = now;
+          void refreshStatus();
+          return;
+        }
+        if (trailingTimer !== null) {
+          return;
+        }
+        trailingTimer = window.setTimeout(() => {
+          trailingTimer = null;
+          lastWatcherRefreshAt = Date.now();
+          void refreshStatus();
+        }, WATCHER_REFRESH_THROTTLE_MS - elapsed);
+      },
+    );
+
+    // 兜底：外部 `git add` 只改 .git/index，watcher 未必覆盖；
+    // 门控慢速轮询保证 staging 状态最终收敛，窗口隐藏时归零。
+    const cleanupBackstop = setVisibilityGatedInterval(() => {
+      void refreshStatus();
+    }, STATUS_BACKSTOP_INTERVAL_MS);
+
     return () => {
-      if (deferredCommitLanguageMenuTimerRef.current !== null) {
-        window.clearTimeout(deferredCommitLanguageMenuTimerRef.current);
-        deferredCommitLanguageMenuTimerRef.current = null;
+      unsubscribeWatcher();
+      cleanupBackstop();
+      if (trailingTimer !== null) {
+        window.clearTimeout(trailingTimer);
       }
     };
-  }, []);
+  }, [onSummaryChange, refreshStatus, workspaceId]);
 
   const handleMutation = useCallback(
     async (operation: () => Promise<unknown> | void) => {
@@ -511,97 +546,43 @@ export function GitHistoryWorktreePanel({
         setCommitMessage(sanitizeGeneratedCommitMessage(generated));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        setCommitMessageError(message);
+        const errorKey = resolveCommitMessageGenerationErrorKey(message, engine);
+        setCommitMessageError(errorKey ? t(errorKey) : message);
       } finally {
         setCommitMessageLoading(false);
       }
     },
-    [commitLoading, commitMessageLoading, repositoryRoot, status.files, workspaceId],
+    [commitLoading, commitMessageLoading, repositoryRoot, status.files, t, workspaceId],
   );
 
-  const showCommitMessageLanguageMenu = useCallback(
-    (engine: CommitMessageEngine, position: { x: number; y: number }) => {
-      if (commitMessageLoading || commitLoading || operationLoading) {
-        return;
-      }
-      const selectedPathsForGeneration =
-        selectedCommitCount > 0
-          ? selectedCommitPaths
-          : hasExplicitCommitSelection
-            ? []
-            : undefined;
-      setCommitMessageContextMenu({
-        ...position,
-        label: t("git.generateCommitMessage"),
-        items: [
-          {
-            type: "item",
-            id: "commit-message-zh",
-            label: t("git.generateCommitMessageChinese"),
-            onSelect: async () => {
-              setCommitMessageMenuEngine(engine);
-              await handleGenerateCommitMessage("zh", engine, selectedPathsForGeneration);
-            },
-          },
-          {
-            type: "item",
-            id: "commit-message-en",
-            label: t("git.generateCommitMessageEnglish"),
-            onSelect: async () => {
-              setCommitMessageMenuEngine(engine);
-              await handleGenerateCommitMessage("en", engine, selectedPathsForGeneration);
-            },
-          },
-        ],
-      });
-    },
-    [
-      commitLoading,
-      commitMessageLoading,
-      handleGenerateCommitMessage,
-      operationLoading,
-      selectedCommitCount,
-      selectedCommitPaths,
-      hasExplicitCommitSelection,
-      t,
-    ],
+  const selectedPathsForGeneration = useMemo(
+    () =>
+      selectedCommitCount > 0
+        ? selectedCommitPaths
+        : hasExplicitCommitSelection
+          ? []
+          : undefined,
+    [hasExplicitCommitSelection, selectedCommitCount, selectedCommitPaths],
   );
-  const showCommitMessageEngineMenu = useCallback(
-    (event: ReactMouseEvent<HTMLButtonElement>) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (commitMessageLoading || commitLoading || operationLoading) {
-        return;
-      }
-      const position = clampRendererContextMenuPosition(event.clientX, event.clientY, {
+  const resolveCommitMessageMenuPosition = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) =>
+      clampRendererContextMenuPosition(event.clientX, event.clientY, {
         width: 260,
-        height: 180,
-      });
-      const engineItems: Array<{ engine: CommitMessageEngine; label: string }> = [
-        { engine: "codex", label: t("git.generateCommitMessageEngineCodex") },
-        { engine: "claude", label: t("git.generateCommitMessageEngineClaude") },
-      ];
-      setCommitMessageContextMenu({
-        ...position,
-        label: t("git.generateCommitMessage"),
-        items: engineItems.map(({ engine, label }) => ({
-          type: "item",
-          id: `commit-message-engine-${engine}`,
-          label,
-          onSelect: () => {
-            if (deferredCommitLanguageMenuTimerRef.current !== null) {
-              window.clearTimeout(deferredCommitLanguageMenuTimerRef.current);
-            }
-            deferredCommitLanguageMenuTimerRef.current = window.setTimeout(() => {
-              deferredCommitLanguageMenuTimerRef.current = null;
-              showCommitMessageLanguageMenu(engine, position);
-            }, 0);
-          },
-        })),
-      });
-    },
-    [commitLoading, commitMessageLoading, operationLoading, showCommitMessageLanguageMenu, t],
+        height: 240,
+      }),
+    [],
   );
+  const { showEngineMenu: showCommitMessageEngineMenu } =
+    useCommitMessageGenerationMenu<string[]>({
+      t,
+      busy: commitMessageLoading || commitLoading || Boolean(operationLoading),
+      canGenerate: () => true,
+      generate: (language, engine, selectedPaths) =>
+        handleGenerateCommitMessage(language, engine, selectedPaths),
+      resolvePosition: resolveCommitMessageMenuPosition,
+      setEngine: setCommitMessageMenuEngine,
+      setMenu: setCommitMessageContextMenu,
+    });
   const handleCommit = useCallback(
     async (selectedPaths?: string[]) => {
       if (
@@ -871,7 +852,10 @@ export function GitHistoryWorktreePanel({
                 commitMessageLoading ? " git-history-worktree-generate--loading commit-message-generate-button--loading" : ""
               }`}
               onClick={(event) => {
-                void showCommitMessageEngineMenu(event);
+                void showCommitMessageEngineMenu(
+                  event,
+                  selectedPathsForGeneration,
+                );
               }}
               disabled={commitMessageLoading || commitLoading || operationLoading || !hasWorktreeChanges}
               aria-haspopup="menu"

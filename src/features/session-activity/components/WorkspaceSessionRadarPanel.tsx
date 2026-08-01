@@ -5,15 +5,18 @@ import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2";
 import type { MouseEvent } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import type { SessionRadarEntry } from "../hooks/useSessionRadarFeed";
 import { getClientStoreSync, writeClientStoreValue } from "../../../services/clientStorage";
+import { formatRelativeTimeShort } from "../../../utils/time";
 import { EngineIcon } from "../../engine/components/EngineIcon";
 import { deleteSessionRadarHistoryEntries } from "../utils/sessionRadarHistoryManagement";
 import {
   RADAR_STORE_NAME,
   SESSION_RADAR_COLLAPSED_DATE_GROUPS_KEY,
+  SESSION_RADAR_HISTORY_UPDATED_EVENT,
   SESSION_RADAR_READ_STATE_KEY,
 } from "../utils/sessionRadarPersistence";
 
@@ -45,8 +48,11 @@ const WORKSPACE_ACCENT_PALETTE = [
   "#78350f",
 ];
 
-function formatActivityTime(timestamp: number) {
+function formatActivityAbsoluteTime(timestamp: number) {
   return new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -157,6 +163,56 @@ export function WorkspaceSessionRadarPanel({
       ) ??
       {},
   );
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  // 日期组整体删除的待确认快照；非空时展示 ConfirmDialog（替代 WKWebView 下静默返回 false 的 window.confirm）
+  const [pendingDeleteDateGroup, setPendingDeleteDateGroup] = useState<{
+    dateKey: string;
+    entries: SessionRadarEntry[];
+  } | null>(null);
+  // 设置页历史管理等外部入口改动 radar 历史后会派发该事件，面板收到后重读未读态与折叠态
+  useEffect(() => {
+    const syncFromStore = () => {
+      setReadStateById(
+        getClientStoreSync<Record<string, number>>(RADAR_STORE_NAME, SESSION_RADAR_READ_STATE_KEY) ??
+          {},
+      );
+      setCollapsedDateGroups(
+        getClientStoreSync<Record<string, boolean>>(
+          RADAR_STORE_NAME,
+          SESSION_RADAR_COLLAPSED_DATE_GROUPS_KEY,
+        ) ?? {},
+      );
+    };
+    window.addEventListener(SESSION_RADAR_HISTORY_UPDATED_EVENT, syncFromStore);
+    return () => window.removeEventListener(SESSION_RADAR_HISTORY_UPDATED_EVENT, syncFromStore);
+  }, []);
+  // 完成条目按本地日期分组；dateKey 字典序即时间序
+  const recentDateKeysDesc = useMemo(() => {
+    const keys = new Set<string>();
+    for (const entry of recentCompletedSessions) {
+      keys.add(formatDateKey(entry.completedAt ?? entry.updatedAt));
+    }
+    return Array.from(keys).sort((left, right) => right.localeCompare(left));
+  }, [recentCompletedSessions]);
+  // 修剪 collapsedDateGroups 中已不存在 dateKey 的陈旧记录，避免持久化状态只增不减；
+  // 列表为空时跳过（可能是 feed 尚未加载完成），避免误清用户手动折叠态；
+  // 写盘与 setState 按顺序调用，不在 updater 内做副作用
+  useEffect(() => {
+    if (recentDateKeysDesc.length === 0) {
+      return;
+    }
+    const validKeys = new Set(recentDateKeysDesc);
+    const next = Object.fromEntries(
+      Object.entries(collapsedDateGroups).filter(([dateKey]) => validKeys.has(dateKey)),
+    );
+    if (Object.keys(next).length === Object.keys(collapsedDateGroups).length) {
+      return;
+    }
+    writeClientStoreValue(RADAR_STORE_NAME, SESSION_RADAR_COLLAPSED_DATE_GROUPS_KEY, next, {
+      immediate: true,
+    });
+    setCollapsedDateGroups(next);
+  }, [recentDateKeysDesc, collapsedDateGroups]);
   const headerSummary = useMemo(
     () =>
       [
@@ -179,13 +235,16 @@ export function WorkspaceSessionRadarPanel({
     });
   };
 
-  const resolveEngine = (entry: SessionRadarEntry): "codex" | "claude" | "gemini" | "kimi" | "opencode" => {
+  const resolveEngine = (entry: SessionRadarEntry): "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode" => {
     const normalizedEngine = entry.engine.toUpperCase();
     if (normalizedEngine === "CLAUDE") {
       return "claude";
     }
     if (normalizedEngine === "GEMINI") {
       return "gemini";
+    }
+    if (normalizedEngine === "GROK") {
+      return "grok";
     }
     if (normalizedEngine === "KIMI") {
       return "kimi";
@@ -205,12 +264,16 @@ export function WorkspaceSessionRadarPanel({
       {
         id: string;
         completedAt: number;
+        liveUpdatedAt: number;
       }
     >();
     for (const entry of entries) {
       dedupedTargets.set(entry.id, {
         id: entry.id,
         completedAt: entry.completedAt ?? entry.updatedAt,
+        // UI 展示的 updatedAt 已是 live 刷新值；带上它可消除
+        // 「thread 刚更新、feed 未回写、用户立即删除」的复活窗口
+        liveUpdatedAt: entry.updatedAt,
       });
     }
     if (dedupedTargets.size === 0) {
@@ -242,6 +305,12 @@ export function WorkspaceSessionRadarPanel({
           ),
         );
       }
+      // 删除失败不再静默：复用 follow 错误气泡的视觉模式展示可恢复错误提示
+      setDeleteError(
+        result.failed.length > 0
+          ? t("activityPanel.radar.deleteFailedBody", { count: result.failed.length })
+          : null,
+      );
     } finally {
       setDeletingEntryIds((current) => {
         const next = { ...current };
@@ -270,11 +339,25 @@ export function WorkspaceSessionRadarPanel({
 
   const handleDeleteDateGroupEntries = (
     event: MouseEvent<HTMLButtonElement>,
+    dateKey: string,
     groupEntries: SessionRadarEntry[],
   ) => {
     event.preventDefault();
     event.stopPropagation();
-    deleteRecentEntries(groupEntries);
+    if (groupEntries.length === 0) {
+      return;
+    }
+    // 日期组整体删除影响面大，先弹 ConfirmDialog 二次确认
+    // （window.confirm 在 macOS Tauri WKWebView 下静默返回 false，不可使用）
+    setPendingDeleteDateGroup({ dateKey, entries: groupEntries });
+  };
+
+  const handleConfirmDeleteDateGroup = () => {
+    const pending = pendingDeleteDateGroup;
+    setPendingDeleteDateGroup(null);
+    if (pending) {
+      deleteRecentEntries(pending.entries);
+    }
   };
 
   const handleRecentRowActionsClick = (event: MouseEvent<HTMLSpanElement>, entry: SessionRadarEntry) => {
@@ -351,15 +434,23 @@ export function WorkspaceSessionRadarPanel({
                     >
                       {entry.workspaceName}
                     </span>
-                    <span>
+                    <span
+                      title={
+                        entry.startedAt ? formatActivityAbsoluteTime(entry.startedAt) : undefined
+                      }
+                    >
                       {t("activityPanel.radar.startedAt")}{" "}
-                      {entry.startedAt ? formatActivityTime(entry.startedAt) : t("activityPanel.radar.timeUnknown")}
+                      {entry.startedAt ? formatRelativeTimeShort(entry.startedAt) : t("activityPanel.radar.timeUnknown")}
                     </span>
                     {!entry.isProcessing ? (
                       <>
-                        <span>
+                        <span
+                          title={
+                            entry.completedAt ? formatActivityAbsoluteTime(entry.completedAt) : undefined
+                          }
+                        >
                           {t("activityPanel.radar.endedAt")}{" "}
-                          {entry.completedAt ? formatActivityTime(entry.completedAt) : t("activityPanel.status.running")}
+                          {entry.completedAt ? formatRelativeTimeShort(entry.completedAt) : t("activityPanel.status.running")}
                         </span>
                         <span>
                           {t("activityPanel.radar.totalDuration")}{" "}
@@ -401,6 +492,8 @@ export function WorkspaceSessionRadarPanel({
     const groupEntries = Array.from(groups.entries()).sort((left, right) =>
       right[0].localeCompare(left[0]),
     );
+    // 仅最新日期组默认展开，其余维持用户手动折叠态
+    const latestDateKey = groupEntries.length > 0 ? groupEntries[0][0] : null;
 
     return (
       <section className="session-activity-radar-section">
@@ -412,7 +505,7 @@ export function WorkspaceSessionRadarPanel({
         ) : (
           <div className="session-activity-radar-list">
             {groupEntries.map(([dateKey, group]) => {
-              const isCollapsed = collapsedDateGroups[dateKey] ?? true;
+              const isCollapsed = collapsedDateGroups[dateKey] ?? dateKey !== latestDateKey;
               const isDeletingDateGroup = group.some((entry) => Boolean(deletingEntryIds[entry.id]));
               const deleteDateGroupLabel = t("activityPanel.radar.deleteDateGroupEntries", {
                 date: dateKey,
@@ -425,26 +518,26 @@ export function WorkspaceSessionRadarPanel({
                       type="button"
                       className="session-activity-radar-date-toggle"
                       onClick={() => {
-                        setCollapsedDateGroups((current) => {
-                          const next = { ...current, [dateKey]: !isCollapsed };
-                          writeClientStoreValue(
-                            RADAR_STORE_NAME,
-                            SESSION_RADAR_COLLAPSED_DATE_GROUPS_KEY,
-                            next,
-                            { immediate: true },
-                          );
-                          if (!isCollapsed) {
-                            setPreviewExpandedById((expandedCurrent) => {
-                              const expandedNext = { ...expandedCurrent };
-                              for (const entry of group) {
-                                delete expandedNext[entry.id];
-                              }
-                              return expandedNext;
-                            });
-                          }
-                          return next;
-                        })
+                        // 先算 next，再按顺序写盘 + setState；updater 内不做副作用、不嵌套 setState
+                        const next = { ...collapsedDateGroups, [dateKey]: !isCollapsed };
+                        writeClientStoreValue(
+                          RADAR_STORE_NAME,
+                          SESSION_RADAR_COLLAPSED_DATE_GROUPS_KEY,
+                          next,
+                          { immediate: true },
+                        );
+                        setCollapsedDateGroups(next);
+                        if (!isCollapsed) {
+                          setPreviewExpandedById((expandedCurrent) => {
+                            const expandedNext = { ...expandedCurrent };
+                            for (const entry of group) {
+                              delete expandedNext[entry.id];
+                            }
+                            return expandedNext;
+                          });
+                        }
                       }}
+                      aria-expanded={!isCollapsed}
                     >
                       <span className="session-activity-radar-date-toggle-left">
                         <CalendarDays size={14} aria-hidden />
@@ -455,7 +548,7 @@ export function WorkspaceSessionRadarPanel({
                     </button>
                     <RadarDeleteIconButton
                       className="session-activity-radar-date-group-delete-button is-date-group"
-                      onClick={(event) => handleDeleteDateGroupEntries(event, group)}
+                      onClick={(event) => handleDeleteDateGroupEntries(event, dateKey, group)}
                       ariaLabel={deleteDateGroupLabel}
                       title={deleteDateGroupLabel}
                       disabled={isDeletingDateGroup}
@@ -468,13 +561,12 @@ export function WorkspaceSessionRadarPanel({
                         const completedAt = entry.completedAt ?? entry.updatedAt;
                         const readAt = readStateById[entry.id] ?? 0;
                         const isUnreadRecent = completedAt > readAt;
-                        const showDeleteAction = !isUnreadRecent;
                         const isDeletingRecentEntry = Boolean(deletingEntryIds[entry.id]);
                         return (
                           <div key={entry.id} className="session-activity-radar-row-shell">
                             <button
                               type="button"
-                              className={`session-activity-radar-row${showDeleteAction ? " has-delete-action" : ""}${isUnreadRecent ? " is-unread" : ""}${
+                              className={`session-activity-radar-row has-delete-action${isUnreadRecent ? " is-unread" : ""}${
                                 previewExpandedById[entry.id] ? " is-preview-expanded" : ""
                               }`}
                               onClick={() => togglePreviewAndSelectThread(entry)}
@@ -496,16 +588,28 @@ export function WorkspaceSessionRadarPanel({
                                   >
                                     {entry.workspaceName}
                                   </span>
-                                  <span>
+                                  <span
+                                    title={
+                                      entry.startedAt
+                                        ? formatActivityAbsoluteTime(entry.startedAt)
+                                        : undefined
+                                    }
+                                  >
                                     {t("activityPanel.radar.startedAt")}{" "}
                                     {entry.startedAt
-                                      ? formatActivityTime(entry.startedAt)
+                                      ? formatRelativeTimeShort(entry.startedAt)
                                       : t("activityPanel.radar.timeUnknown")}
                                   </span>
-                                  <span>
+                                  <span
+                                    title={
+                                      entry.completedAt
+                                        ? formatActivityAbsoluteTime(entry.completedAt)
+                                        : undefined
+                                    }
+                                  >
                                     {t("activityPanel.radar.endedAt")}{" "}
                                     {entry.completedAt
-                                      ? formatActivityTime(entry.completedAt)
+                                      ? formatRelativeTimeShort(entry.completedAt)
                                       : t("activityPanel.status.running")}
                                   </span>
                                   <span>
@@ -543,16 +647,15 @@ export function WorkspaceSessionRadarPanel({
                               >
                                 {renderReadMarkerIcon(isUnreadRecent)}
                               </span>
-                              {showDeleteAction ? (
-                                <RadarDeleteIconButton
-                                  className="session-activity-radar-delete-button is-entry"
-                                  onClick={(event) => handleDeleteRecentEntry(event, entry)}
-                                  ariaLabel={t("activityPanel.radar.deleteHistoryEntry", { name: entry.threadName })}
-                                  title={t("activityPanel.radar.deleteHistoryEntry", { name: entry.threadName })}
-                                  disabled={isDeletingRecentEntry}
-                                  iconSize={11}
-                                />
-                              ) : null}
+                              {/* 未读条目同样展示删除按钮，行点击仍触发跳转 + 标已读 */}
+                              <RadarDeleteIconButton
+                                className="session-activity-radar-delete-button is-entry"
+                                onClick={(event) => handleDeleteRecentEntry(event, entry)}
+                                ariaLabel={t("activityPanel.radar.deleteHistoryEntry", { name: entry.threadName })}
+                                title={t("activityPanel.radar.deleteHistoryEntry", { name: entry.threadName })}
+                                disabled={isDeletingRecentEntry}
+                                iconSize={11}
+                              />
                             </span>
                           </div>
                         );
@@ -580,6 +683,27 @@ export function WorkspaceSessionRadarPanel({
         </div>
         <div className="session-activity-summary">{headerSummary}</div>
       </div>
+      {deleteError ? (
+        <div
+          className="session-activity-follow-bubble is-error"
+          role="alert"
+          style={{ position: "static", width: "auto", overflow: "hidden" }}
+        >
+          <div className="session-activity-follow-bubble-title">
+            {t("activityPanel.radar.deleteFailedTitle")}
+          </div>
+          <p className="session-activity-follow-bubble-copy">{deleteError}</p>
+          <div className="session-activity-follow-bubble-actions">
+            <button
+              type="button"
+              className="session-activity-follow-bubble-secondary"
+              onClick={() => setDeleteError(null)}
+            >
+              {t("activityPanel.radar.deleteFailedDismiss")}
+            </button>
+          </div>
+        </div>
+      ) : null}
       <div className="session-activity-radar">
         {renderSection(
           t("activityPanel.radar.runningSection", { count: runningSessions.length }),
@@ -591,6 +715,29 @@ export function WorkspaceSessionRadarPanel({
           recentCompletedSessions,
         )}
       </div>
+      <ConfirmDialog
+        open={pendingDeleteDateGroup != null}
+        danger
+        title={
+          pendingDeleteDateGroup
+            ? t("activityPanel.radar.deleteDateGroupEntries", {
+                date: pendingDeleteDateGroup.dateKey,
+                count: pendingDeleteDateGroup.entries.length,
+              })
+            : ""
+        }
+        body={
+          pendingDeleteDateGroup
+            ? t("activityPanel.radar.confirmDeleteDateGroup", {
+                date: pendingDeleteDateGroup.dateKey,
+                count: pendingDeleteDateGroup.entries.length,
+              })
+            : ""
+        }
+        confirmText={t("common.delete")}
+        onConfirm={handleConfirmDeleteDateGroup}
+        onCancel={() => setPendingDeleteDateGroup(null)}
+      />
     </div>
   );
 }

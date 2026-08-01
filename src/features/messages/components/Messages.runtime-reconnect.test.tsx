@@ -8,7 +8,7 @@ import { Messages } from "./Messages";
 import {
   TRANSIENT_RUNTIME_RECONNECT_AUTO_DISMISS_MS,
   type RuntimeReconnectRecoveryCallbackResult,
-} from "./runtimeReconnect";
+} from "../../../runtime-recovery/runtimeReconnect";
 
 vi.mock("../../../services/tauri", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../services/tauri")>();
@@ -120,6 +120,23 @@ describe("Messages runtime reconnect", () => {
       expect(screen.getByText("messages.runtimeReconnectRestored")).toBeTruthy();
       expect(screen.getByText("messages.runtimeReconnectRestoredDetail")).toBeTruthy();
     });
+  });
+
+  it("suppresses Native runtime recovery diagnostics for Shared Session threads", () => {
+    renderMessages([
+      {
+        id: "assistant-shared-broken-pipe",
+        kind: "message",
+        role: "assistant",
+        text: "Broken pipe (os error 32)",
+      },
+    ], {
+      threadId: "shared:session-1",
+    });
+
+    expect(screen.queryByRole("group", { name: "messages.runtimeReconnectTitle" })).toBeNull();
+    expect(screen.queryByText("Broken pipe (os error 32)")).toBeNull();
+    expect(screen.queryByText("messages.runtimeReconnectAction")).toBeNull();
   });
 
   it("shows a recover-specific error when runtime resumes but thread recovery returns null", async () => {

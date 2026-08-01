@@ -8,13 +8,25 @@ import type {
   RefObject,
   SyntheticEvent,
 } from "react";
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { EditorView } from "@codemirror/view";
 import type { ReactCodeMirrorProps } from "@uiw/react-codemirror";
-import { FileCodeMirrorEditor, type FileCodeMirrorEditorHandle } from "./FileCodeMirrorEditor";
+import {
+  FileCodeMirrorEditor,
+  type FileCodeMirrorEditorHandle,
+} from "./FileCodeMirrorEditor";
 import { FileDocumentPreview } from "./FileDocumentPreview";
-import { FileMarkdownPreviewFast } from "./FileMarkdownPreviewFast";
+import { FileMarkdownPreview } from "./FileMarkdownPreviewRouter";
 import { FileStructuredPreview } from "./FileStructuredPreview";
 import { FileTabularPreview } from "./FileTabularPreview";
 import type { FilePreviewPayload } from "../hooks/useFilePreviewPayload";
@@ -37,12 +49,6 @@ import type {
 import type { GitLineMarkers } from "../utils/gitLineMarkers";
 import type { GitFileBlameResponse } from "../../../types";
 import type { FileGitBlameStatus } from "../hooks/useFileGitBlame";
-import {
-  RendererContextMenu,
-  clampRendererContextMenuPosition,
-  estimateRendererContextMenuHeight,
-  type RendererContextMenuState,
-} from "../../../components/ui/RendererContextMenu";
 import type { NoteCaptureDraft } from "../../note-cards/types";
 import { buildCodeSelectionNoteDraft } from "../../note-cards/utils/noteCapture";
 
@@ -70,28 +76,33 @@ type FileViewBodyProps = {
   previewPayloadLoading: boolean;
   previewPayloadError: string | null;
   viewSurface: FileViewSurface;
-    documentSnapshot: FileDocumentSnapshot;
-    content: string;
-    setContent: (value: string) => void;
-    onEditorContentDraftChange?: (value: string) => void;
-    onEditorContentPublished?: () => void;
-    onEditorTypingInput?: (durationMs: number) => void;
-    fileRenderPressure: FileRenderPressure;
-    markdownPreviewSnapshotMode: "stable" | "live";
-    markdownPreviewRefreshKey?: number | null;
-    markdownPreviewContentOverride?: string | null;
-    markdownRendererProfile?: FastMarkdownRendererProfileId;
-    markdownFastFeatureFlags?: FastMarkdownFeatureFlags;
-    onFastMarkdownRendererFallback?: (reason: string) => void;
+  documentSnapshot: FileDocumentSnapshot;
+  content: string;
+  setContent: (value: string) => void;
+  onEditorContentDraftChange?: (value: string) => void;
+  onEditorContentPublished?: () => void;
+  onEditorTypingInput?: (durationMs: number) => void;
+  fileRenderPressure: FileRenderPressure;
+  markdownPreviewSnapshotMode: "stable" | "live";
+  markdownPreviewRefreshKey?: number | null;
+  markdownPreviewContentOverride?: string | null;
+  markdownRendererProfile?: FastMarkdownRendererProfileId;
+  markdownFastFeatureFlags?: FastMarkdownFeatureFlags;
+  onFastMarkdownRendererFallback?: (reason: string) => void;
   cmRef: RefObject<FileCodeMirrorEditorHandle | null>;
-  onActiveFileLineRangeChange?: (range: { startLine: number; endLine: number } | null) => void;
+  onActiveFileLineRangeChange?: (
+    range: { startLine: number; endLine: number } | null,
+  ) => void;
   languageExtensions: ReactCodeMirrorProps["extensions"];
   gitLineMarkers: GitLineMarkers;
   gitBlameEnabled: boolean;
   gitBlameStatus: FileGitBlameStatus;
   gitBlameResponse: GitFileBlameResponse | null;
   onGitBlameContextMenu?: (position: { x: number; y: number }) => void;
-  onCaptureNote?: (draft: NoteCaptureDraft) => void;
+  onFileContextMenu?: (
+    event: MouseEvent<HTMLDivElement>,
+    noteCaptureDraft?: NoteCaptureDraft,
+  ) => void;
   editorCodeAnnotations: CodeAnnotationSelection[];
   editorAnnotationDraft: FileAnnotationDraftState | null;
   annotationWidgetLabels: {
@@ -103,8 +114,12 @@ type FileViewBodyProps = {
   };
   annotationWidgetCallbacks: AnnotationWidgetCallbacks;
   runDefinitionFromCursor: () => void;
+  runImplementationsFromCursor: () => void;
   runReferencesFromCursor: () => void;
-  resolveDefinitionAtOffset: (offset: number, view?: EditorView) => void | Promise<void>;
+  resolveDefinitionAtOffset: (
+    offset: number,
+    view?: EditorView,
+  ) => void | Promise<void>;
   onPreviewAnnotationStart?: (lineRange: CodeAnnotationLineRange) => void;
   annotationDraft?: {
     lineRange: CodeAnnotationLineRange;
@@ -118,6 +133,7 @@ type FileViewBodyProps = {
   onAnnotationDraftConfirm?: (bodyOverride?: string) => void;
   lastReportedLineRangeRef: MutableRefObject<string>;
   saveFileShortcut: string | null | undefined;
+  expandSelectionShortcut: string | null | undefined;
   handleSave: () => void;
   editorTheme: "light" | "dark";
   previewLanguage: string | null;
@@ -247,10 +263,10 @@ function InlineAnnotationDraft({
     const nextSelection =
       selectionRef.current?.draftKey === draftKey
         ? selectionRef.current
-        : snapshotForDraft ?? {
-          start: textarea.value.length,
-      end: textarea.value.length,
-        };
+        : (snapshotForDraft ?? {
+            start: textarea.value.length,
+            end: textarea.value.length,
+          });
     textarea.setSelectionRange(nextSelection.start, nextSelection.end);
     updateSubmitDisabled(textarea.value);
   }, [draftKey, selectionSnapshot, updateSubmitDisabled]);
@@ -323,7 +339,11 @@ function InlineAnnotationDraft({
         placeholder={t("files.annotationPlaceholder")}
       />
       <div className="fvp-annotation-draft-actions">
-        <button type="button" className="ghost fvp-action-btn" onClick={onCancel}>
+        <button
+          type="button"
+          className="ghost fvp-action-btn"
+          onClick={onCancel}
+        >
           {t("common.cancel")}
         </button>
         <button
@@ -395,8 +415,14 @@ type CodePreviewVirtualListProps = {
   gitAddedLineNumberSet: Set<number>;
   gitModifiedLineNumberSet: Set<number>;
   onPreviewAnnotationStart?: (lineRange: CodeAnnotationLineRange) => void;
-  onPreviewLineClick: (lineNumber: number, event: MouseEvent<HTMLDivElement>) => void;
-  onPreviewLineMouseDown: (lineNumber: number, event: MouseEvent<HTMLDivElement>) => void;
+  onPreviewLineClick: (
+    lineNumber: number,
+    event: MouseEvent<HTMLDivElement>,
+  ) => void;
+  onPreviewLineMouseDown: (
+    lineNumber: number,
+    event: MouseEvent<HTMLDivElement>,
+  ) => void;
   onPreviewLineMouseEnter: (lineNumber: number) => void;
   onPreviewLineMouseUp: () => void;
   renderAnnotationDraft: (draft: {
@@ -456,20 +482,22 @@ function CodePreviewVirtualList({
     (lineIndex: number) => {
       const lineText = documentSnapshot.getLineText(lineIndex);
       if (useLowCostPreview) {
-        return lineText ? lineText.replace(/[&<>"']/g, (char) => {
-          switch (char) {
-            case "&":
-              return "&amp;";
-            case "<":
-              return "&lt;";
-            case ">":
-              return "&gt;";
-            case '"':
-              return "&quot;";
-            default:
-              return "&#39;";
-          }
-        }) : "&nbsp;";
+        return lineText
+          ? lineText.replace(/[&<>"']/g, (char) => {
+              switch (char) {
+                case "&":
+                  return "&amp;";
+                case "<":
+                  return "&lt;";
+                case ">":
+                  return "&gt;";
+                case '"':
+                  return "&quot;";
+                default:
+                  return "&#39;";
+              }
+            })
+          : "&nbsp;";
       }
       const cacheKey = `${lineIndex}:${lineText}`;
       const cached = highlightedLineCacheRef.current.get(cacheKey);
@@ -502,11 +530,13 @@ function CodePreviewVirtualList({
           const isGitModifiedLine = gitModifiedLineNumberSet.has(lineNumber);
           const isSelected = Boolean(
             previewLineSelection &&
-              lineNumber >= previewLineSelection.start &&
-              lineNumber <= previewLineSelection.end,
+            lineNumber >= previewLineSelection.start &&
+            lineNumber <= previewLineSelection.end,
           );
-          const lineAnnotations = annotationBucketsByEndLine.get(lineNumber) ?? [];
-          const shouldRenderDraft = previewDraft?.lineRange.endLine === lineNumber;
+          const lineAnnotations =
+            annotationBucketsByEndLine.get(lineNumber) ?? [];
+          const shouldRenderDraft =
+            previewDraft?.lineRange.endLine === lineNumber;
           return (
             <div
               key={virtualRow.key}
@@ -549,7 +579,9 @@ function CodePreviewVirtualList({
                 dangerouslySetInnerHTML={{ __html: html }}
               />
               {lineAnnotations.map(renderAnnotationMarker)}
-              {shouldRenderDraft && previewDraft ? renderAnnotationDraft(previewDraft) : null}
+              {shouldRenderDraft && previewDraft
+                ? renderAnnotationDraft(previewDraft)
+                : null}
             </div>
           );
         })}
@@ -574,19 +606,19 @@ export function FileViewBody({
   previewPayloadLoading,
   previewPayloadError,
   viewSurface,
-    documentSnapshot,
-    content,
-    setContent,
-    onEditorContentDraftChange,
-    onEditorContentPublished,
-    onEditorTypingInput,
-    fileRenderPressure,
-    markdownPreviewSnapshotMode,
-    markdownPreviewRefreshKey,
-    markdownPreviewContentOverride,
-    markdownRendererProfile,
-    markdownFastFeatureFlags,
-    onFastMarkdownRendererFallback,
+  documentSnapshot,
+  content,
+  setContent,
+  onEditorContentDraftChange,
+  onEditorContentPublished,
+  onEditorTypingInput,
+  fileRenderPressure,
+  markdownPreviewSnapshotMode,
+  markdownPreviewRefreshKey,
+  markdownPreviewContentOverride,
+  markdownRendererProfile,
+  markdownFastFeatureFlags,
+  onFastMarkdownRendererFallback,
   cmRef,
   onActiveFileLineRangeChange,
   languageExtensions,
@@ -595,12 +627,13 @@ export function FileViewBody({
   gitBlameStatus,
   gitBlameResponse,
   onGitBlameContextMenu,
-  onCaptureNote,
+  onFileContextMenu,
   editorCodeAnnotations,
   editorAnnotationDraft,
   annotationWidgetLabels,
   annotationWidgetCallbacks,
   runDefinitionFromCursor,
+  runImplementationsFromCursor,
   runReferencesFromCursor,
   resolveDefinitionAtOffset,
   onPreviewAnnotationStart,
@@ -612,6 +645,7 @@ export function FileViewBody({
   onAnnotationDraftConfirm,
   lastReportedLineRangeRef,
   saveFileShortcut,
+  expandSelectionShortcut,
   handleSave,
   editorTheme,
   previewLanguage,
@@ -624,12 +658,12 @@ export function FileViewBody({
 }: FileViewBodyProps) {
   const [previewLineSelection, setPreviewLineSelection] =
     useState<PreviewLineSelection | null>(null);
-  const [noteCaptureMenu, setNoteCaptureMenu] =
-    useState<RendererContextMenuState | null>(null);
   const [isPreviewDragSelecting, setIsPreviewDragSelecting] = useState(false);
   const previewDragAnchorRef = useRef<number | null>(null);
   const previewDragMovedRef = useRef(false);
-  const annotationDraftSelectionRef = useRef<AnnotationDraftSelection | null>(null);
+  const annotationDraftSelectionRef = useRef<AnnotationDraftSelection | null>(
+    null,
+  );
   const previewAnnotations = codeAnnotations.filter(
     (annotation) => annotation.source === "file-preview-mode",
   );
@@ -646,38 +680,10 @@ export function FileViewBody({
       content,
     }));
 
-  const openNoteCaptureMenu = useCallback(
-    (event: MouseEvent<HTMLElement>, draft: NoteCaptureDraft | null) => {
-      if (!draft || !onCaptureNote || event.defaultPrevented) {
-        return;
-      }
-      event.preventDefault();
-      const items: RendererContextMenuState["items"] = [
-        {
-          type: "item",
-          id: "capture-code-selection-note",
-          label: t("noteCards.captureSelection"),
-          onSelect: () => onCaptureNote(draft),
-        },
-      ];
-      const position = clampRendererContextMenuPosition(
-        event.clientX,
-        event.clientY,
-        { height: estimateRendererContextMenuHeight(items) },
-      );
-      setNoteCaptureMenu({
-        ...position,
-        label: t("noteCards.captureMenu"),
-        items,
-      });
-    },
-    [onCaptureNote, t],
-  );
-
   const handleEditorNoteCaptureContextMenu = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
       const view = cmRef.current?.view;
-      if (!view || !onCaptureNote || event.defaultPrevented) {
+      if (!view || !onFileContextMenu || event.defaultPrevented) {
         return;
       }
       const selection = view.state.selection.main;
@@ -690,43 +696,46 @@ export function FileViewBody({
         selection.to > selection.from && rawEndLine.from === selection.to
           ? Math.max(startLine, rawEndLine.number - 1)
           : rawEndLine.number;
-      openNoteCaptureMenu(
-        event,
-        buildCodeSelectionNoteDraft({
-          path: filePath,
-          content: view.state.doc.sliceString(selection.from, selection.to),
-          startLine,
-          endLine,
-          language: previewLanguage,
-        }),
-      );
+      const draft = buildCodeSelectionNoteDraft({
+        path: filePath,
+        content: view.state.doc.sliceString(selection.from, selection.to),
+        startLine,
+        endLine,
+        language: previewLanguage,
+      });
+      if (draft) {
+        onFileContextMenu(event, draft);
+      }
     },
-    [cmRef, filePath, onCaptureNote, openNoteCaptureMenu, previewLanguage],
+    [cmRef, filePath, onFileContextMenu, previewLanguage],
   );
 
   const handlePreviewNoteCaptureContextMenu = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
-      if (!previewLineSelection || !onCaptureNote || event.defaultPrevented) {
+      if (
+        !previewLineSelection ||
+        !onFileContextMenu ||
+        event.defaultPrevented
+      ) {
         return;
       }
-      openNoteCaptureMenu(
-        event,
-        buildCodeSelectionNoteDraft({
-          path: filePath,
-          content: documentSnapshot
-            .getLines(previewLineSelection.start - 1, previewLineSelection.end)
-            .join("\n"),
-          startLine: previewLineSelection.start,
-          endLine: previewLineSelection.end,
-          language: previewLanguage,
-        }),
-      );
+      const draft = buildCodeSelectionNoteDraft({
+        path: filePath,
+        content: documentSnapshot
+          .getLines(previewLineSelection.start - 1, previewLineSelection.end)
+          .join("\n"),
+        startLine: previewLineSelection.start,
+        endLine: previewLineSelection.end,
+        language: previewLanguage,
+      });
+      if (draft) {
+        onFileContextMenu(event, draft);
+      }
     },
     [
       documentSnapshot,
       filePath,
-      onCaptureNote,
-      openNoteCaptureMenu,
+      onFileContextMenu,
       previewLanguage,
       previewLineSelection,
     ],
@@ -762,14 +771,16 @@ export function FileViewBody({
   const handleEditorContentChange = useCallback(
     (nextContent: string) => {
       const startedAt =
-        typeof performance !== "undefined" && typeof performance.now === "function"
+        typeof performance !== "undefined" &&
+        typeof performance.now === "function"
           ? performance.now()
           : Date.now();
       latestEditorContentRef.current = nextContent;
       onEditorContentDraftChange?.(nextContent);
       scheduleEditorContentPublish();
       const endedAt =
-        typeof performance !== "undefined" && typeof performance.now === "function"
+        typeof performance !== "undefined" &&
+        typeof performance.now === "function"
           ? performance.now()
           : Date.now();
       onEditorTypingInput?.(Math.max(0, endedAt - startedAt));
@@ -810,17 +821,18 @@ export function FileViewBody({
     setStableMarkdownPreviewSnapshot((currentSnapshot) => {
       const documentChanged = currentSnapshot.documentKey !== documentKey;
       const enteringMarkdownPreview =
-        previousKind !== "markdown-preview" && viewSurface.kind === "markdown-preview";
+        previousKind !== "markdown-preview" &&
+        viewSurface.kind === "markdown-preview";
       const needsInitialSnapshot =
         viewSurface.kind === "markdown-preview" &&
         currentSnapshot.content.length === 0 &&
         content.length > 0;
-        const shouldUseLatestContent =
-          documentChanged ||
-          markdownPreviewSnapshotMode === "live" ||
-          Boolean(markdownPreviewRefreshKey) ||
-          enteringMarkdownPreview ||
-          needsInitialSnapshot;
+      const shouldUseLatestContent =
+        documentChanged ||
+        markdownPreviewSnapshotMode === "live" ||
+        Boolean(markdownPreviewRefreshKey) ||
+        enteringMarkdownPreview ||
+        needsInitialSnapshot;
       if (!shouldUseLatestContent) {
         return currentSnapshot;
       }
@@ -838,18 +850,21 @@ export function FileViewBody({
   }, [
     content,
     documentKey,
-      isLoading,
-      markdownPreviewRefreshKey,
-      markdownPreviewSnapshotMode,
+    isLoading,
+    markdownPreviewRefreshKey,
+    markdownPreviewSnapshotMode,
     viewSurface.kind,
   ]);
 
-  const selectPreviewLineRange = useCallback((anchor: number, lineNumber: number) => {
-    setPreviewLineSelection({
-      start: Math.min(anchor, lineNumber),
-      end: Math.max(anchor, lineNumber),
-    });
-  }, []);
+  const selectPreviewLineRange = useCallback(
+    (anchor: number, lineNumber: number) => {
+      setPreviewLineSelection({
+        start: Math.min(anchor, lineNumber),
+        end: Math.max(anchor, lineNumber),
+      });
+    },
+    [],
+  );
 
   const handlePreviewLineMouseDown = useCallback(
     (lineNumber: number, event: MouseEvent<HTMLDivElement>) => {
@@ -859,7 +874,9 @@ export function FileViewBody({
       event.preventDefault();
       setIsPreviewDragSelecting(true);
       const anchor =
-        event.shiftKey && previewLineSelection ? previewLineSelection.start : lineNumber;
+        event.shiftKey && previewLineSelection
+          ? previewLineSelection.start
+          : lineNumber;
       previewDragAnchorRef.current = anchor;
       previewDragMovedRef.current = false;
       selectPreviewLineRange(anchor, lineNumber);
@@ -924,7 +941,6 @@ export function FileViewBody({
 
   useEffect(() => {
     setPreviewLineSelection(null);
-    setNoteCaptureMenu(null);
     setIsPreviewDragSelecting(false);
     previewDragAnchorRef.current = null;
     previewDragMovedRef.current = false;
@@ -954,9 +970,12 @@ export function FileViewBody({
               <span className="fvp-image-info fvp-error">{imageLoadError}</span>
             ) : imageInfo ? (
               <span className="fvp-image-info">
-                {imageInfo.width > 0 && `${imageInfo.width} × ${imageInfo.height}`}
+                {imageInfo.width > 0 &&
+                  `${imageInfo.width} × ${imageInfo.height}`}
                 {imageInfo.width > 0 && imageInfo.sizeBytes != null && " · "}
-                {imageInfo.sizeBytes != null ? formatFileSize(imageInfo.sizeBytes) : null}
+                {imageInfo.sizeBytes != null
+                  ? formatFileSize(imageInfo.sizeBytes)
+                  : null}
               </span>
             ) : null}
           </div>
@@ -973,10 +992,13 @@ export function FileViewBody({
 
   if (viewSurface.kind === "pdf-preview") {
     return (
-      <Suspense fallback={<div className="fvp-status">{t("files.loadingFile")}</div>}>
+      <Suspense
+        fallback={<div className="fvp-status">{t("files.loadingFile")}</div>}
+      >
         <FilePdfPreview
           assetUrl={
-            previewPayload?.kind === "file-handle" || previewPayload?.kind === "asset-url"
+            previewPayload?.kind === "file-handle" ||
+            previewPayload?.kind === "asset-url"
               ? previewPayload.assetUrl
               : null
           }
@@ -1034,20 +1056,24 @@ export function FileViewBody({
           annotationWidgetLabels={annotationWidgetLabels}
           annotationWidgetCallbacks={annotationWidgetCallbacks}
           runDefinitionFromCursor={runDefinitionFromCursor}
+          runImplementationsFromCursor={runImplementationsFromCursor}
           runReferencesFromCursor={runReferencesFromCursor}
           resolveDefinitionAtOffset={resolveDefinitionAtOffset}
           className="fvp-cm"
           lastReportedLineRangeRef={lastReportedLineRangeRef}
           saveFileShortcut={saveFileShortcut}
+          expandSelectionShortcut={expandSelectionShortcut}
           handleSave={handleSave}
+          gotoLineLabels={{
+            title: t("files.gotoLine.title"),
+            inputLabel: t("files.gotoLine.inputLabel"),
+            placeholder: t("files.gotoLine.placeholder"),
+            cancel: t("files.gotoLine.cancel"),
+            confirm: t("files.gotoLine.confirm"),
+            invalid: t("files.gotoLine.invalid"),
+          }}
           fallback={<div className="fvp-status">{t("files.loadingFile")}</div>}
         />
-        {noteCaptureMenu ? (
-          <RendererContextMenu
-            menu={noteCaptureMenu}
-            onClose={() => setNoteCaptureMenu(null)}
-          />
-        ) : null}
       </div>
     );
   }
@@ -1063,7 +1089,7 @@ export function FileViewBody({
           : content);
     return (
       <div className="fvp-markdown-preview-frame">
-        <FileMarkdownPreviewFast
+        <FileMarkdownPreview
           key={filePath}
           workspaceId={workspaceId}
           sourceFilePath={sourceFilePath}
@@ -1124,7 +1150,9 @@ export function FileViewBody({
       : `L${previewLineSelection.start}-L${previewLineSelection.end}`
     : null;
   const shouldUseVirtualCodePreview =
-    viewSurface.kind === "code-preview" && lines.length === 0 && documentSnapshot.lineCount > 0;
+    viewSurface.kind === "code-preview" &&
+    lines.length === 0 &&
+    documentSnapshot.lineCount > 0;
   const renderPreviewAnnotationDraft = (draft: {
     lineRange: CodeAnnotationLineRange;
     body: string;
@@ -1141,7 +1169,9 @@ export function FileViewBody({
       onConfirm={onAnnotationDraftConfirm}
     />
   );
-  const renderPreviewAnnotationMarker = (annotation: CodeAnnotationSelection) => (
+  const renderPreviewAnnotationMarker = (
+    annotation: CodeAnnotationSelection,
+  ) => (
     <InlineAnnotationMarker
       key={annotation.id}
       annotation={annotation}
@@ -1156,7 +1186,11 @@ export function FileViewBody({
       onContextMenu={handlePreviewNoteCaptureContextMenu}
     >
       {previewLineSelection && onPreviewAnnotationStart ? (
-        <div className="fvp-preview-selection-toolbar" role="group" aria-label={t("files.annotationSelectionToolbar")}>
+        <div
+          className="fvp-preview-selection-toolbar"
+          role="group"
+          aria-label={t("files.annotationSelectionToolbar")}
+        >
           <span>{previewSelectionLabel}</span>
           <button
             type="button"
@@ -1201,74 +1235,71 @@ export function FileViewBody({
       ) : (
         <div className="fvp-code-preview" role="list">
           {lines.map((_, index) => {
-        const html = highlightedLines[index] ?? "&nbsp;";
-        const lineNumber = index + 1;
-        const isGitAddedLine = gitAddedLineNumberSet.has(lineNumber);
-        const isGitModifiedLine = gitModifiedLineNumberSet.has(lineNumber);
-        const isSelected = Boolean(
-          previewLineSelection &&
-            lineNumber >= previewLineSelection.start &&
-            lineNumber <= previewLineSelection.end,
-        );
-        const lineAnnotations = previewAnnotations.filter(
-          (annotation) => annotation.lineRange.endLine === lineNumber,
-        );
-        const shouldRenderDraft = previewDraft?.lineRange.endLine === lineNumber;
-        return (
-          <div
-            key={`line-${index}`}
-            className={`fvp-code-line${isGitModifiedLine ? " is-git-modified" : isGitAddedLine ? " is-git-added" : ""}${
-              isSelected ? " is-selected" : ""
-            }`}
-            role={onPreviewAnnotationStart ? "button" : undefined}
-            tabIndex={onPreviewAnnotationStart ? 0 : undefined}
-            aria-pressed={onPreviewAnnotationStart ? isSelected : undefined}
-            onClick={(event) => handlePreviewLineClick(lineNumber, event)}
-            onMouseDown={(event) => handlePreviewLineMouseDown(lineNumber, event)}
-            onMouseEnter={() => handlePreviewLineMouseEnter(lineNumber)}
-            onMouseUp={handlePreviewLineMouseUp}
-          >
-            <span className="fvp-line-number">
-              {lineNumber}
-              {onPreviewAnnotationStart ? (
-                <button
-                  type="button"
-                  className="fvp-line-annotation-button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onPreviewAnnotationStart({
-                      startLine: lineNumber,
-                      endLine: lineNumber,
-                    });
-                  }}
-                  aria-label={`${t("files.annotateForAi")} L${lineNumber}`}
-                  title={t("files.annotateForAi")}
-                >
-                  +
-                </button>
-              ) : null}
-            </span>
-            <span
-              className="fvp-line-text"
-              dangerouslySetInnerHTML={{ __html: html }}
-            />
-            {lineAnnotations.map((annotation) => (
-              renderPreviewAnnotationMarker(annotation)
-            ))}
-            {shouldRenderDraft ? (
-              renderPreviewAnnotationDraft(previewDraft)
-            ) : null}
-          </div>
-        );
+            const html = highlightedLines[index] ?? "&nbsp;";
+            const lineNumber = index + 1;
+            const isGitAddedLine = gitAddedLineNumberSet.has(lineNumber);
+            const isGitModifiedLine = gitModifiedLineNumberSet.has(lineNumber);
+            const isSelected = Boolean(
+              previewLineSelection &&
+              lineNumber >= previewLineSelection.start &&
+              lineNumber <= previewLineSelection.end,
+            );
+            const lineAnnotations = previewAnnotations.filter(
+              (annotation) => annotation.lineRange.endLine === lineNumber,
+            );
+            const shouldRenderDraft =
+              previewDraft?.lineRange.endLine === lineNumber;
+            return (
+              <div
+                key={`line-${index}`}
+                className={`fvp-code-line${isGitModifiedLine ? " is-git-modified" : isGitAddedLine ? " is-git-added" : ""}${
+                  isSelected ? " is-selected" : ""
+                }`}
+                role={onPreviewAnnotationStart ? "button" : undefined}
+                tabIndex={onPreviewAnnotationStart ? 0 : undefined}
+                aria-pressed={onPreviewAnnotationStart ? isSelected : undefined}
+                onClick={(event) => handlePreviewLineClick(lineNumber, event)}
+                onMouseDown={(event) =>
+                  handlePreviewLineMouseDown(lineNumber, event)
+                }
+                onMouseEnter={() => handlePreviewLineMouseEnter(lineNumber)}
+                onMouseUp={handlePreviewLineMouseUp}
+              >
+                <span className="fvp-line-number">
+                  {lineNumber}
+                  {onPreviewAnnotationStart ? (
+                    <button
+                      type="button"
+                      className="fvp-line-annotation-button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onPreviewAnnotationStart({
+                          startLine: lineNumber,
+                          endLine: lineNumber,
+                        });
+                      }}
+                      aria-label={`${t("files.annotateForAi")} L${lineNumber}`}
+                      title={t("files.annotateForAi")}
+                    >
+                      +
+                    </button>
+                  ) : null}
+                </span>
+                <span
+                  className="fvp-line-text"
+                  dangerouslySetInnerHTML={{ __html: html }}
+                />
+                {lineAnnotations.map((annotation) =>
+                  renderPreviewAnnotationMarker(annotation),
+                )}
+                {shouldRenderDraft
+                  ? renderPreviewAnnotationDraft(previewDraft)
+                  : null}
+              </div>
+            );
           })}
         </div>
       )}
-      {noteCaptureMenu ? (
-        <RendererContextMenu
-          menu={noteCaptureMenu}
-          onClose={() => setNoteCaptureMenu(null)}
-        />
-      ) : null}
     </div>
   );
 }

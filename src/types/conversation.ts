@@ -34,6 +34,82 @@ export type ClaudeHydratedImage = {
   byteSize: number;
 };
 
+export type MemoryPresentationRecord = {
+  displayIndex: string;
+  index: string;
+  memoryId: string;
+  source: string;
+  title: string;
+};
+
+export type MemoryPresentationPack = {
+  source: string;
+  count: number;
+  cleanedContext: string;
+  rawPayload: string;
+};
+
+export type NoteCardPresentationAttachment = {
+  fileName: string;
+  absolutePath: string;
+};
+
+export type NoteCardPresentationNote = {
+  title: string;
+  archived: boolean;
+  bodyMarkdown: string;
+  attachments: NoteCardPresentationAttachment[];
+};
+
+export type BrowserPresentationContextView = Pick<
+  BrowserContextSendAttachment,
+  "title" | "url" | "capturedAt" | "stale" | "summary"
+> &
+  Partial<
+    Omit<
+      BrowserContextSendAttachment,
+      "kind" | "title" | "url" | "capturedAt" | "stale" | "summary"
+    >
+  >;
+
+export type ConversationPresentationContext =
+  | {
+      kind: "browser";
+      title: string;
+      summary: string;
+      evidenceCount: number;
+      view: BrowserPresentationContextView;
+    }
+  | {
+      kind: "intent-canvas";
+      title: string;
+      summary: string;
+      view: Omit<IntentCanvasContextSendAttachment, "kind">;
+    }
+  | {
+      kind: "memory";
+      preview: string;
+      lines: string[];
+      markdown?: string;
+      rawPayload?: string;
+      source?: string;
+      records: MemoryPresentationRecord[];
+      packs: MemoryPresentationPack[];
+    }
+  | {
+      kind: "note-card";
+      title: string;
+      summary: string;
+      notes: NoteCardPresentationNote[];
+      imagePaths: string[];
+    };
+
+export type MessagePresentationMetadata = {
+  displayText: string;
+  stickyCandidateText: string;
+  contexts: ConversationPresentationContext[];
+};
+
 export type ConversationItem =
   | {
       id: string;
@@ -42,9 +118,24 @@ export type ConversationItem =
       text: string;
       turnId?: string | null;
       engineSource?: EngineType;
+      executionTargetSnapshot?: {
+        engine: EngineType;
+        providerProfileId?: string | null;
+        modelCatalogEntryId?: string | null;
+        model?: string | null;
+        reasoning?: { effort: string } | null;
+        providerProfileNameSnapshot?: string | null;
+        providerProfileSource?: string | null;
+        runtimeCapabilityFingerprint?: string | null;
+        providerAvailable?: boolean;
+      };
       isFinal?: boolean;
       finalCompletedAt?: number;
       finalDurationMs?: number;
+      /** Whole-turn input-side tokens (non-cache + cache write + cache read). */
+      finalInputTokens?: number;
+      /** Whole-turn output tokens. */
+      finalOutputTokens?: number;
       recoveredFromLiveShadow?: boolean;
       recoveryStatus?: "interrupted" | "recovered";
       recoverySourceId?: string;
@@ -55,6 +146,7 @@ export type ConversationItem =
       selectedAgentIcon?: string | null;
       browserContextAttachment?: BrowserContextSendAttachment | null;
       intentCanvasContextAttachments?: IntentCanvasContextSendAttachment[];
+      presentationMetadata?: MessagePresentationMetadata;
     }
   | {
       id: string;
@@ -142,8 +234,8 @@ export type ThreadSummary = {
   archivedAt?: number;
   threadKind?: "native" | "shared";
   sizeBytes?: number;
-  engineSource?: "codex" | "claude" | "gemini" | "kimi" | "opencode";
-  selectedEngine?: "codex" | "claude" | "gemini" | "kimi" | "opencode";
+  engineSource?: "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode";
+  selectedEngine?: "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode";
   source?: string;
   provider?: string;
   sourceLabel?: string;
@@ -158,6 +250,14 @@ export type ThreadSummary = {
   autoSession?: AutoSessionMetadata | null;
   nativeThreadIds?: string[];
   parentThreadId?: string | null;
+  originKind?: "provider-continuation" | string;
+  sourceSessionId?: string;
+  sourceProviderProfileId?: string;
+  familyId?: string;
+  familyRootSessionId?: string;
+  lineageParentSessionId?: string;
+  lineageKind?: "provider-continuation" | string;
+  lineageDepth?: number;
 };
 
 export type ReviewTarget =
@@ -180,12 +280,32 @@ export type ComposerEnginePrefs = {
   collaborationModeId: string | null;
 };
 
+/**
+ * Shared follow-up 入队时冻结的可执行目标。
+ *
+ * 该结构刻意放在通用 conversation contract 中，避免 queue 层反向依赖
+ * shared-session feature；字段与 ResolvedExecutionTarget 保持结构兼容。
+ */
+export type SharedQueuedExecutionTarget = {
+  engine: EngineType;
+  providerProfileId: string | null;
+  modelCatalogEntryId: string;
+  model: string;
+  reasoning: { effort: string } | null;
+  providerProfileNameSnapshot: string;
+  providerProfileSource: "disk" | "managed";
+};
+
 export type QueuedMessage = {
   id: string;
   text: string;
   createdAt: number;
   images?: string[];
   sendOptions?: MessageSendOptions;
+  sharedExecutionTarget?: SharedQueuedExecutionTarget;
+  sharedPredecessorAttemptId?: string | null;
+  /** 已开始 Shared V2 handoff、但尚未拿到 canonical commit ACK。 */
+  sharedDispatchState?: "pending-ack";
 };
 
 export type IntentCanvasContextCount = {
@@ -344,7 +464,31 @@ export type BrowserContextSendAttachment = {
   };
 };
 
+export type SkillInvocation = {
+  /** 归一化后的 skill/common 名（无 `/` 前缀，空白转 `-`）。 */
+  name: string;
+  /** 预留的结构化参数通道；当前恒为空，引擎侧解析属后续协议演进。 */
+  args?: Record<string, string>;
+};
+
+/**
+ * New Home 创建会话时冻结的一次性目标。
+ *
+ * 创建完成后必须消费；后续 Turn 继续以 thread binding 与 thread-scoped
+ * Composer selection 为准。
+ */
+export type ComposerCreateSessionTarget = {
+  engine: EngineType;
+  providerProfileId: string | null;
+  providerProfileName: string | null;
+  providerProfileSource: "disk" | "managed";
+  modelCatalogEntryId: string;
+  model: string;
+  effort: string | null;
+};
+
 export type MessageSendOptions = {
+  skillInvocations?: SkillInvocation[];
   selectedMemoryIds?: string[];
   selectedMemoryInjectionMode?: MemoryContextInjectionMode;
   memoryReferenceEnabled?: boolean;
@@ -361,6 +505,9 @@ export type MessageSendOptions = {
   autoSession?: AutoSessionMetadata | null;
   browserContextAttachment?: BrowserContextSendAttachment | null;
   intentCanvasContextAttachments?: IntentCanvasContextSendAttachment[];
+  createSessionTarget?: ComposerCreateSessionTarget;
+  /** Queue/Fusion 专用：发送边界必须优先使用该冻结目标，禁止重读 Picker。 */
+  sharedExecutionTarget?: SharedQueuedExecutionTarget;
 };
 
 export type SelectedAgentOption = {

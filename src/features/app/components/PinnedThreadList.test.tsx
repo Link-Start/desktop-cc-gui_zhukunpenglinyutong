@@ -8,13 +8,25 @@ import { ScrollArea } from "../../../components/ui/scroll-area";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string) => {
+    t: (key: string, options?: Record<string, unknown>) => {
       const translations: Record<string, string> = {
         "threads.autoNaming": "Auto naming...",
         "threads.pin": "Pin",
         "threads.unpin": "Unpin",
+        "threads.subagentTag": "Subagent",
+        "threads.providerContinuationShort": "Continued",
+        "threads.providerContinuationHint": "Provider continuation",
+        "threads.providerContinuationFamilyGroup":
+          "Continued sessions · {{count}}",
+        "threads.subagentTreeExpand": "Expand subagent tree",
+        "threads.subagentTreeCollapse": "Collapse subagent tree",
+        "threads.runtimeProcessing": "Processing",
+        "threads.runtimeReviewing": "Reviewing",
       };
-      return translations[key] ?? key;
+      const template = translations[key] ?? key;
+      return template.replace(/\{\{(\w+)\}\}/g, (_, token: string) =>
+        String(options?.[token] ?? ""),
+      );
     },
     i18n: { language: "en", changeLanguage: vi.fn() },
   }),
@@ -132,6 +144,54 @@ describe("PinnedThreadList", () => {
       true,
       "/tmp/ws-1",
     );
+  });
+
+  it("defaults pinned continuation family members to collapsed", () => {
+    const onSelectThread = vi.fn();
+    const { container } = render(
+      <PinnedThreadList
+        {...baseProps}
+        onSelectThread={onSelectThread}
+        rows={[
+          {
+            thread: {
+              ...thread,
+              id: "continuation",
+              familyId: "family-1",
+              originKind: "provider-continuation",
+              sourceSessionId: "source",
+            },
+            depth: 0,
+            workspaceId: "ws-1",
+            workspacePath: "/tmp/ws-1",
+          },
+          {
+            thread: {
+              ...otherThread,
+              id: "source",
+            },
+            depth: 0,
+            workspaceId: "ws-1",
+            workspacePath: "/tmp/ws-1",
+          },
+        ]}
+      />,
+    );
+
+    const familyToggle = screen.getByRole("button", {
+      name: "Continued sessions · 2",
+    });
+    expect(familyToggle.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      container.querySelectorAll('[data-continuation-family-id="family-1"]'),
+    ).toHaveLength(1);
+
+    fireEvent.click(familyToggle);
+    expect(onSelectThread).not.toHaveBeenCalled();
+    expect(familyToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      container.querySelectorAll('[data-continuation-family-id="family-1"]'),
+    ).toHaveLength(2);
   });
 
   it("marks shared pinned rows as not archivable for the context menu", () => {
@@ -290,6 +350,66 @@ describe("PinnedThreadList", () => {
     expect(badge?.classList.contains("proxy-status-badge--animated")).toBe(
       false,
     );
+  });
+
+  it("reuses workspace subagent row rendering for pinned children", () => {
+    const onSelectThread = vi.fn();
+    const parentThread: ThreadSummary = {
+      ...thread,
+      id: "claude:parent",
+      name: "Pinned parent",
+      engineSource: "claude",
+    };
+    const pendingChildThread: ThreadSummary = {
+      id: "claude-pending-subagent:claude:parent:toolu_agent_1",
+      name: "Pasteur",
+      updatedAt: 900,
+      parentThreadId: "claude:parent",
+      engineSource: "claude",
+    };
+
+    render(
+      <PinnedThreadList
+        {...baseProps}
+        activeThreadId="claude:parent"
+        rows={[
+          {
+            thread: parentThread,
+            depth: 0,
+            hasChildren: true,
+            workspaceId: "ws-1",
+            workspacePath: "/tmp/ws-1",
+          },
+          {
+            thread: pendingChildThread,
+            depth: 1,
+            workspaceId: "ws-1",
+            workspacePath: "/tmp/ws-1",
+          },
+        ]}
+        onSelectThread={onSelectThread}
+      />,
+    );
+
+    const parentRow = screen.getByText("Pinned parent").closest(".thread-row");
+    expect(parentRow?.classList.contains("is-subagent-parent")).toBe(true);
+    fireEvent.click(
+      parentRow?.querySelector(".thread-tree-expander") as HTMLElement,
+    );
+
+    const childRow = screen.getByText("Pasteur").closest(".thread-row");
+    expect(childRow?.classList.contains("is-subagent")).toBe(true);
+    expect(childRow?.classList.contains("is-pending-subagent")).toBe(true);
+    expect(childRow?.querySelector(".thread-engine-badge")).toBeNull();
+    expect(childRow?.querySelector(".thread-subagent-tag")?.textContent).toBe(
+      "Subagent",
+    );
+    if (!childRow) {
+      throw new Error("Missing pinned subagent row");
+    }
+
+    fireEvent.click(childRow);
+    expect(onSelectThread).toHaveBeenCalledWith("ws-1", "claude:parent");
   });
 
   it("keeps an unchanged pinned row stable across unrelated status updates", () => {

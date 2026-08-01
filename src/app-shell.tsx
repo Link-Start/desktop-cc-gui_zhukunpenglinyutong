@@ -56,8 +56,6 @@ import { useAppShellSearchAndComposerSection } from "./app-shell-parts/useAppShe
 import { useAppShellSections } from "./app-shell-parts/useAppShellSections";
 import { useAppShellLayoutNodesSection } from "./app-shell-parts/useAppShellLayoutNodesSection";
 import { renderAppShell } from "./app-shell-parts/renderAppShell";
-import { useOpenCodeSelection } from "./app-shell-parts/useOpenCodeSelection";
-import { useOpenCodeThreadBinding } from "./app-shell-parts/useOpenCodeThreadBinding";
 import { useGitStatusRefreshOnTurnSettle } from "./app-shell-parts/useGitStatusRefreshOnTurnSettle";
 import { useAppShellGitWorkspaceOpsSection } from "./app-shell-parts/useAppShellGitWorkspaceOpsSection";
 import { useSelectedAgentSession } from "./app-shell-parts/useSelectedAgentSession";
@@ -68,7 +66,7 @@ import { usePlanApplyHandlers } from "./app-shell-parts/usePlanApplyHandlers";
 import { useThreadScopedCollaborationMode } from "./app-shell-parts/useThreadScopedCollaborationMode";
 import { GitHubPanelData, SettingsView } from "./app-shell-parts/lazyViews";
 import { useCreateSessionLoading } from "./app-shell-parts/useCreateSessionLoading";
-import type { AgentTaskScrollRequest } from "./features/messages/types";
+import type { AgentTaskScrollRequest } from "./features/messages";
 import { useAppShellWorkspaceFlowsSection } from "./app-shell-parts/useAppShellWorkspaceFlowsSection";
 import { defineRuntimeThreadShellBoundary } from "./app-shell-parts/runtimeThreadBoundary";
 import { useAppShellWorkspaceHomeState } from "./app-shell-parts/useAppShellWorkspaceHomeState";
@@ -76,7 +74,7 @@ import { useModelConfigRefresh } from "./app-shell-parts/useModelConfigRefresh";
 import { useWorkspacePathsIntake } from "./app-shell-parts/useWorkspacePathsIntake";
 import { useAppShellWorktreeChromeSection } from "./app-shell-parts/useAppShellWorktreeChromeSection";
 import { useCollaborationModeThreadSync } from "./app-shell-parts/useCollaborationModeThreadSync";
-import { useClaudeModelRefreshOnNewThread } from "./app-shell-parts/useClaudeModelRefreshOnNewThread";
+import { useProviderModelCatalogSync } from "./app-shell-parts/useProviderModelCatalogSync";
 import { useAppShellComposerModelSection } from "./app-shell-parts/useAppShellComposerModelSection";
 import { useAppShellViewStateSection } from "./app-shell-parts/useAppShellViewStateSection";
 import { defineAppShellRuntimeActions } from "./app-shell-parts/appShellActionBoundaries";
@@ -85,20 +83,24 @@ import {
   reuseStableAppShellDomainContexts,
   type AppShellDomainContexts,
 } from "./app-shell-parts/appShellDomainContexts";
+
+const RETIRED_OPENCODE_AGENTS = Object.freeze([]);
+const resolveRetiredOpenCodeSelection = () => null;
+const ignoreRetiredOpenCodeSelection = () => {};
 import { useAppShellComposerPrefsPersistence } from "./app-shell-parts/useAppShellComposerPrefsPersistence";
 import { useAppShellAccessModeSection } from "./app-shell-parts/useAppShellAccessModeSection";
 import { useAppShellDesktopChrome } from "./app-shell-parts/useAppShellDesktopChrome";
 import { useAppShellModelSettingsAction } from "./app-shell-parts/useAppShellModelSettingsAction";
 import { useAppShellEditorLayoutSection } from "./app-shell-parts/useAppShellEditorLayoutSection";
 import { useAppShellSearchPaletteSection } from "./app-shell-parts/useAppShellSearchPaletteSection";
+import { useAppShellQuickSwitcherSection } from "./app-shell-parts/useAppShellQuickSwitcherSection";
 import { useAppShellClaudeThinkingSection } from "./app-shell-parts/useAppShellClaudeThinkingSection";
-import {
-  buildLatestAgentRuns,
-  resolveLatestAgentFeedLoading,
-} from "./app-shell-parts/latestAgentRuns";
-
 export function AppShell() {
   const { t } = useTranslation();
+  const handleOpenGitHistoryFromFileHistory = useCallback(() => {
+    setAppMode("gitHistory");
+  }, []);
+
   const {
     claudeThinkingVisible,
     handleResolvedClaudeThinkingVisibleChange,
@@ -110,6 +112,8 @@ export function AppShell() {
     doctor,
     claudeDoctor,
     kimiDoctor,
+    grokDoctor,
+    opencodeDoctor,
     appSettingsLoading,
     reduceTransparency,
     setReduceTransparency,
@@ -120,6 +124,9 @@ export function AppShell() {
     scaleShortcutTitle,
     scaleShortcutText,
     queueSaveSettings,
+    increaseUiScale,
+    decreaseUiScale,
+    resetUiScale,
   } = useAppSettingsController();
   useCodeCssVars(appSettings);
   const {
@@ -290,7 +297,7 @@ export function AppShell() {
     t,
   });
 
-  const handleOpenModelSettings = useAppShellModelSettingsAction(openSettings);
+  const handleOpenModelSettings = useAppShellModelSettingsAction();
 
   const {
     globalSearchFilesByWorkspace, isSearchPaletteOpen, searchContentFilters,
@@ -312,6 +319,7 @@ export function AppShell() {
   const {
     updaterState,
     startUpdate,
+    checkForUpdates,
     dismissUpdate,
     handleTestNotificationSound,
   } = useUpdaterController({
@@ -412,16 +420,21 @@ export function AppShell() {
     editorNavigationTarget,
     editorHighlightTarget,
     fileCompareSession,
-    fileHistoryTarget,
+    fileHistoryTabs,
+    activeGitHistoryTabId,
     openFileTabs,
     handleOpenFile,
     handleOpenWorkspaceFileCompare,
     handleOpenScratchFileCompare,
     handleCloseFileCompare,
     handleOpenFileHistory,
+    handleActivateGitHistoryTab,
     handleCloseFileHistory,
+    handleCloseOtherFileHistories,
+    handleCloseAllFileHistories,
     handleActivateFileTab,
     handleCloseFileTab,
+    handleCloseOtherFileTabs,
     handleCloseAllFileTabs,
     handleReorderFileTabs,
     handleExitEditor,
@@ -440,6 +453,7 @@ export function AppShell() {
     prDiffsLoading: gitPullRequestDiffsLoading,
     prDiffsError: gitPullRequestDiffsError,
     onOpenEditorLayoutRequest: requestEditorOpenLayout,
+    onOpenGitHistoryRequest: handleOpenGitHistoryFromFileHistory,
   });
 
   useEffect(() => {
@@ -535,10 +549,6 @@ export function AppShell() {
     refreshEngines,
   } = useEngineController({
     activeWorkspace,
-    enabledEngines: {
-      gemini: appSettings.geminiEnabled !== false,
-      opencode: appSettings.opencodeEnabled !== false,
-    },
     onDebug: addDebugEntry,
   });
   activeEngineRef.current = activeEngine;
@@ -553,26 +563,9 @@ export function AppShell() {
     defaultAccessMode: appSettings.defaultAccessMode,
     persistComposerEnginePref,
   });
-  const { handleRefreshModelConfig, isModelConfigRefreshing } =
-    useModelConfigRefresh({
-      activeEngine,
-      addDebugEntry,
-      refreshEngineModels,
-      refreshModels,
-    });
-  const {
-    openCodeAgents,
-    resolveOpenCodeAgentForThread,
-    resolveOpenCodeVariantForThread,
-    selectOpenCodeAgentForThread,
-    selectOpenCodeVariantForThread,
-    syncActiveOpenCodeThread,
-  } = useOpenCodeSelection({
-    activeEngine,
-    enabled: appSettings.opencodeEnabled !== false,
-    activeWorkspaceId,
-    onDebug: addDebugEntry,
-  });
+  const openCodeAgents = RETIRED_OPENCODE_AGENTS;
+  const resolveOpenCodeAgentForThread = resolveRetiredOpenCodeSelection;
+  const resolveOpenCodeVariantForThread = resolveRetiredOpenCodeSelection;
 
   const handleAppModeChange = useCallback(
     (mode: AppMode) => {
@@ -649,6 +642,9 @@ export function AppShell() {
     handleCheckoutBranch,
     handleCreateBranch,
     handleUpdateBranch,
+    handleUpdateAllRepositories,
+    handleCheckoutAllRepositories,
+    handleLoadCommonRepositoryBranches,
     handleOpenDetachedFileExplorer,
     handlePickGitRoot,
     handleRevertAllGitChanges,
@@ -777,7 +773,6 @@ export function AppShell() {
     startLsp,
     startShare,
     startSharedSessionForWorkspace,
-    updateSharedSessionEngineSelection,
     updateThreadParent,
     resolveCanonicalThreadId,
     reviewPrompt,
@@ -830,19 +825,10 @@ export function AppShell() {
     runWithCreateSessionLoading,
   });
 
-  const {
-    handleSelectOpenCodeAgent,
-    handleSelectOpenCodeVariant,
-    selectedOpenCodeAgent,
-    selectedOpenCodeVariant,
-  } = useOpenCodeThreadBinding({
-    activeThreadId,
-    resolveOpenCodeAgentForThread,
-    resolveOpenCodeVariantForThread,
-    selectOpenCodeAgentForThread,
-    selectOpenCodeVariantForThread,
-    syncActiveOpenCodeThread,
-  });
+  const handleSelectOpenCodeAgent = ignoreRetiredOpenCodeSelection;
+  const handleSelectOpenCodeVariant = ignoreRetiredOpenCodeSelection;
+  const selectedOpenCodeAgent = null;
+  const selectedOpenCodeVariant = null;
 
   useGitStatusRefreshOnTurnSettle({
     queueGitStatusRefresh,
@@ -861,6 +847,13 @@ export function AppShell() {
     resolveEngineDefaultComposerSelection,
     onDebug: addDebugEntry,
   });
+  const activeThreadSummary = activeWorkspaceId
+    ? threadsByWorkspace[activeWorkspaceId]?.find(
+        (thread) => thread.id === activeThreadId,
+      )
+    : null;
+  const activeThreadProviderProfileId =
+    activeThreadSummary?.providerProfileId ?? null;
   const {
     collaborationModePayload,
     effectiveModels,
@@ -881,6 +874,7 @@ export function AppShell() {
     accessMode,
     activeEngine,
     activeThreadId,
+    activeProviderProfileId: activeThreadProviderProfileId,
     activeWorkspaceId,
     appSettings,
     appSettingsLoading,
@@ -920,13 +914,24 @@ export function AppShell() {
     onDebug: addDebugEntry,
   });
 
-  useClaudeModelRefreshOnNewThread({
+  useProviderModelCatalogSync({
     activeEngine,
+    activeThreadEngineSource:
+      activeThreadSummary?.engineSource ?? activeThreadSummary?.selectedEngine,
     activeThreadId,
     activeWorkspaceId,
+    providerProfileId: activeThreadProviderProfileId,
     addDebugEntry,
     refreshEngineModels,
   });
+  const { handleRefreshModelConfig, isModelConfigRefreshing } =
+    useModelConfigRefresh({
+      activeEngine,
+      activeProviderProfileId: activeThreadProviderProfileId,
+      addDebugEntry,
+      refreshEngineModels,
+      refreshModels,
+    });
 
   const { handleUserInputSubmitWithPlanApply, handleExitPlanModeExecute } =
     usePlanApplyHandlers({
@@ -1032,29 +1037,6 @@ export function AppShell() {
     setSelectedDiffPath,
   });
 
-  const latestAgentRuns = useMemo(
-    () =>
-      buildLatestAgentRuns({
-        getWorkspaceGroupName,
-        lastAgentMessageByThread,
-        threadStatusById,
-        threadsByWorkspace,
-        workspaces,
-      }),
-    [
-      getWorkspaceGroupName,
-      lastAgentMessageByThread,
-      threadStatusById,
-      threadsByWorkspace,
-      workspaces,
-    ],
-  );
-  const isLoadingLatestAgents = useMemo(
-    () =>
-      resolveLatestAgentFeedLoading({ hasLoaded, threadListLoadingByWorkspace, workspaces }),
-    [hasLoaded, threadListLoadingByWorkspace, workspaces],
-  );
-
   const activeRateLimits = activeWorkspaceId
     ? (rateLimitsByWorkspace[activeWorkspaceId] ?? null)
     : null;
@@ -1091,6 +1073,7 @@ export function AppShell() {
     setSelectedKanbanTaskId,
     setWorkspaceHomeWorkspaceId,
     showGitHistory,
+    showExtensions,
     showHome,
     showKanban,
     showWorkspaceHome,
@@ -1177,9 +1160,13 @@ export function AppShell() {
     activeWorkspace,
     isProcessing,
     isReviewing,
+    isContextCompacting: activeThreadId
+      ? (threadStatusById[activeThreadId]?.isContextCompacting ?? false)
+      : false,
     hasPendingUserInput,
     steerEnabled: appSettings.experimentalSteerEnabled,
     activeEngine,
+    isSharedSession: activeThreadSummary?.threadKind === "shared",
     resolveCanonicalThreadId,
     connectWorkspace,
     startThreadForWorkspace,
@@ -1605,7 +1592,6 @@ export function AppShell() {
     threadsByWorkspace,
     tokenUsageByThread,
     toggleCompletionEmailIntent,
-    updateSharedSessionEngineSelection,
   });
   const runtimeActions = defineAppShellRuntimeActions({
     handleToggleRuntimeConsole,
@@ -1638,7 +1624,8 @@ export function AppShell() {
       activeImages,
       activeFusingMessageId,
       fileCompareSession,
-      fileHistoryTarget,
+      fileHistoryTabs,
+      activeGitHistoryTabId,
       activeItems,
       activeParentWorkspace,
       activePath,
@@ -1714,6 +1701,7 @@ export function AppShell() {
       clearDictationTranscript,
       clearDraftForThread,
       clearGitRootCandidates,
+      checkForUpdates,
       clonePrompt,
       closePlanPanel,
       closeReleaseNotes,
@@ -1769,6 +1757,8 @@ export function AppShell() {
       doctor,
       claudeDoctor,
       kimiDoctor,
+      grokDoctor,
+      opencodeDoctor,
       editorHighlightTarget,
       editorNavigationTarget,
       editorSplitCompanion,
@@ -1857,6 +1847,7 @@ export function AppShell() {
       handleCheckoutBranch,
       handleCloseAllFileTabs,
       handleCloseFileTab,
+      handleCloseOtherFileTabs,
       handleCommit,
       handleCommitAndPush,
       handleCommitAndSync,
@@ -1865,6 +1856,9 @@ export function AppShell() {
       handleCopyThread,
       handleCreateBranch,
       handleUpdateBranch,
+      handleUpdateAllRepositories,
+      handleCheckoutAllRepositories,
+      handleLoadCommonRepositoryBranches,
       handleCreatePrompt,
       handleDebugClick,
       handleDeletePrompt,
@@ -1891,7 +1885,10 @@ export function AppShell() {
       handleOpenScratchFileCompare,
       handleCloseFileCompare,
       handleOpenFileHistory,
+      handleActivateGitHistoryTab,
       handleCloseFileHistory,
+      handleCloseOtherFileHistories,
+      handleCloseAllFileHistories,
       handleOpenMailSession,
       handleOpenModelSettings,
       handleRefreshModelConfig,
@@ -1961,7 +1958,6 @@ export function AppShell() {
       isDeleteThreadPromptBusy,
       isEditorFileMaximized,
       isFilesLoading,
-      isLoadingLatestAgents,
       isMacDesktop,
       isModelConfigRefreshing,
       isPanelLocked,
@@ -1992,7 +1988,6 @@ export function AppShell() {
       kanbanViewState,
       lastAgentMessageByThread,
       lastCodexModeSyncThreadRef,
-      latestAgentRuns,
       launchScriptState,
       launchScriptsState,
       listThreadsForWorkspace,
@@ -2181,6 +2176,7 @@ export function AppShell() {
       hideLoadingProgressDialog,
       showDebugButton,
       showGitHistory,
+      showExtensions,
       showHome,
       showKanban,
       showNextReleaseNotes,
@@ -2235,7 +2231,6 @@ export function AppShell() {
       updateCloneCopyName,
       updateCustomInstructions,
       updatePrompt,
-      updateSharedSessionEngineSelection,
       updateWorkspaceCodexBin,
       updateWorkspaceSettings,
       updateWorktreeBaseRef,
@@ -2317,6 +2312,30 @@ export function AppShell() {
     appShellDomainContextsRef.current = appShellDomainContexts;
   }, [appShellDomainContexts]);
 
+  const quickSwitcherSection = useAppShellQuickSwitcherSection({
+    activeWorkspaceId,
+    activityTimeline: workspaceActivity.timeline,
+    expandRightPanel,
+    handleOpenFile,
+    handleToggleTerminalPanel,
+    isCompact,
+    isSearchPaletteOpen,
+    openSettings,
+    runningSessions: sessionRadarFeed.runningSessions,
+    selectWorkspace,
+    setActiveTab,
+    setActiveThreadId,
+    setAppMode,
+    setCenterMode,
+    setFilePanelMode,
+    setGitPanelMode,
+    setHomeOpen,
+    setIsSearchPaletteOpen,
+    setWorkspaceHomeWorkspaceId,
+    threadsByWorkspace,
+    workspaces,
+  });
+
   const searchAndComposerSection = useAppShellSearchAndComposerSection({
     activeEditorFilePath,
     activeWorkspace,
@@ -2325,6 +2344,7 @@ export function AppShell() {
     canInterrupt,
     centerMode,
     clearActiveImages,
+    closeQuickSwitcher: quickSwitcherSection.closeQuickSwitcher,
     connectWorkspace,
     exitDiffView,
     filePanelMode,
@@ -2332,13 +2352,28 @@ export function AppShell() {
     gitPanelMode,
     gitPullRequestDiffs,
     handleDraftChange,
+    handleAddAgent,
     handleOpenFile,
+    handleOpenQuickSwitcher: quickSwitcherSection.handleOpenQuickSwitcher,
+    handleQuickSwitcherNavigate: quickSwitcherSection.handleQuickSwitcherNavigate,
+    handleQuickSwitcherSelectFile:
+      quickSwitcherSection.handleQuickSwitcherSelectFile,
+    handleQuickSwitcherSelectSession:
+      quickSwitcherSection.handleQuickSwitcherSelectSession,
     handleSend,
     interruptTurn,
     isCompact,
     isSearchPaletteOpen,
+    isQuickSwitcherOpen: quickSwitcherSection.isQuickSwitcherOpen,
     kanbanTasks,
     queueMessage,
+    quickSwitcherSessionGroups: quickSwitcherSection.quickSwitcherSessionGroups,
+    quickSwitcherRecentFileGroups: quickSwitcherSection.quickSwitcherRecentFileGroups,
+    quickSwitcherRunningSessions: quickSwitcherSection.quickSwitcherRunningSessions,
+    increaseUiScale,
+    decreaseUiScale,
+    resetUiScale,
+    searchContentFilters,
     searchPaletteQuery,
     searchResults,
     searchScope,

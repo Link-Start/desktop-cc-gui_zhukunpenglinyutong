@@ -30,6 +30,39 @@ describe("threadReducer engine/source behavior", () => {
     expect(next.threadStatusById["session-xyz"]).toBeUndefined();
   });
 
+  it("keeps an explicit engine while enriching a thread through its alias", () => {
+    const next = threadReducer(
+      {
+        ...initialState,
+        threadsByWorkspace: {
+          "ws-1": [
+            {
+              id: "opencode:session-xyz",
+              name: "Agent 1",
+              updatedAt: 1,
+              engineSource: "opencode",
+            },
+          ],
+        },
+      },
+      {
+        type: "ensureThread",
+        workspaceId: "ws-1",
+        threadId: "session-xyz",
+        engine: "codex",
+        name: "Herschel",
+        parentThreadId: "parent-thread",
+      },
+    );
+
+    expect(next.threadsByWorkspace["ws-1"]?.[0]).toMatchObject({
+      id: "opencode:session-xyz",
+      name: "Herschel",
+      parentThreadId: "parent-thread",
+      engineSource: "opencode",
+    });
+  });
+
   it("updates thread engine source when requested", () => {
     const threads: ThreadSummary[] = [
       { id: "thread-1", name: "Agent 1", updatedAt: 1, engineSource: "codex" },

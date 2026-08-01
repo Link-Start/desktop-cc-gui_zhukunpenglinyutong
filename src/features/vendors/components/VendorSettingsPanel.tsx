@@ -1,31 +1,52 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
-import LayoutList from "lucide-react/dist/esm/icons/layout-list";
-import PackagePlus from "lucide-react/dist/esm/icons/package-plus";
+import ArrowLeftRight from "lucide-react/dist/esm/icons/arrow-left-right";
+import File from "lucide-react/dist/esm/icons/file";
+import Import from "lucide-react/dist/esm/icons/import";
 import Search from "lucide-react/dist/esm/icons/search";
-import type { CodexCustomModel, CodexProviderConfig } from "../types";
-import { LOCAL_KIMI_PROVIDER_ID, STORAGE_KEYS, validateCodexCustomModels } from "../types";
+import type { CodexCustomModel, CodexProviderConfig, VendorTab } from "../types";
+import { LOCAL_GROK_PROVIDER_ID, LOCAL_KIMI_PROVIDER_ID, LOCAL_OPENCODE_PROVIDER_ID, STORAGE_KEYS, validateCodexCustomModels } from "../types";
 import type { AppSettings, CodexUnifiedExecExternalStatus } from "../../../types";
 import { useProviderManagement } from "../hooks/useProviderManagement";
 import { useCodexProviderManagement } from "../hooks/useCodexProviderManagement";
 import { useKimiProviderManagement } from "../hooks/useKimiProviderManagement";
+import { useGrokProviderManagement } from "../hooks/useGrokProviderManagement";
+import { useOpenCodeProviderManagement } from "../hooks/useOpenCodeProviderManagement";
 import { usePluginModels } from "../hooks/usePluginModels";
 import { ProviderList } from "./ProviderList";
+import { ClaudeLocalSettingsCard } from "./ClaudeLocalSettingsCard";
 import { CodexProviderList } from "./CodexProviderList";
 import { KimiProviderList } from "./KimiProviderList";
+import { GrokProviderList } from "./GrokProviderList";
+import { OpenCodeProviderList } from "./OpenCodeProviderList";
 import { ClaudeSettingsJsonDialog } from "./ClaudeSettingsJsonDialog";
 import { ProviderDialog } from "./ProviderDialog";
 import { CodexProviderDialog } from "./CodexProviderDialog";
 import { KimiProviderDialog } from "./KimiProviderDialog";
+import { GrokProviderDialog } from "./GrokProviderDialog";
+import { OpenCodeProviderDialog } from "./OpenCodeProviderDialog";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { CustomModelDialog } from "./CustomModelDialog";
+import {
+  CliCustomPathDialog,
+  CliCustomPathEntry,
+  type CliCustomPathEngine,
+  type CliCustomPathSavePayload,
+} from "./CliCustomPathDialog";
+import { CcSwitchImportDialog } from "./CcSwitchImportDialog";
+import { type CcSwitchImportTarget } from "../hooks/useCcSwitchImport";
 import { CurrentCodexGlobalConfigCard } from "./CurrentCodexGlobalConfigCard";
 import {
   CLI_DOCS_HREF_BY_ID,
   buildCliEngineNavItems,
+  CliEngineNavGroupSection,
+  CliEngineNavRow,
   CliIcon,
+  groupCliEngineNavItems,
   type CliEngineId,
+  type CliEngineNavGroupKey,
   type CliEngineNavItem,
 } from "./cliEngineNav";
 import {
@@ -46,13 +67,15 @@ import {
 } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
-const LEGACY_CLAUDE_MAPPING_KEYS = [
-  "mossx-claude-model-mapping",
-  "codemoss-claude-model-mapping",
-];
 const CODEX_PLUGIN_MODELS_MIGRATION_MARKER =
   "codemoss-codex-plugin-models-migrated-v1";
 type ModelDialogTarget = "claude" | "codex";
@@ -165,9 +188,18 @@ export function VendorSettingsPanel({
   const { t } = useTranslation();
   const [activeCli, setActiveCli] = useState<CliEngineId>("claude");
   const [cliSearchQuery, setCliSearchQuery] = useState("");
+  const [collapsedCliGroups, setCollapsedCliGroups] = useState<
+    Record<CliEngineNavGroupKey, boolean>
+  >({
+    enabled: false,
+    disabled: true,
+    upcoming: true,
+  });
   const [dialogTarget, setDialogTarget] = useState<ModelDialogTarget>("claude");
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const [modelDialogAddMode, setModelDialogAddMode] = useState(false);
+  const [customPathDialogEngine, setCustomPathDialogEngine] =
+    useState<CliCustomPathEngine | null>(null);
   const [codexGlobalConfigContent, setCodexGlobalConfigContent] = useState("");
   const [codexGlobalConfigExists, setCodexGlobalConfigExists] = useState(false);
   const [codexGlobalConfigTruncated, setCodexGlobalConfigTruncated] = useState(false);
@@ -187,12 +219,74 @@ export function VendorSettingsPanel({
   const [unifiedExecActionBusy, setUnifiedExecActionBusy] = useState(false);
   const [unifiedExecActionNotice, setUnifiedExecActionNotice] =
     useState<InlineNoticeState>(null);
-  const didRunLegacyMigrationRef = useRef(false);
   const didSeedCodexPluginModelsRef = useRef(false);
 
   const claude = useProviderManagement();
   const codex = useCodexProviderManagement();
   const kimi = useKimiProviderManagement();
+  const grok = useGrokProviderManagement();
+  const openCode = useOpenCodeProviderManagement();
+  const [ccSwitchImportSource, setCcSwitchImportSource] = useState<{
+    target: CcSwitchImportTarget;
+    sourcePath: string | null;
+  } | null>(null);
+
+  // CC Switch 导入按 id 匹配 新增/更新
+  const ccSwitchExistingProviderIds = useMemo<string[]>(
+    () =>
+      ccSwitchImportSource?.target === "codex"
+        ? codex.codexProviders.map((provider) => provider.id)
+        : claude.providers.map((provider) => provider.id),
+    [ccSwitchImportSource?.target, codex.codexProviders, claude.providers],
+  );
+
+  const handleCcSwitchImported = useCallback(() => {
+    if (ccSwitchImportSource?.target === "claude") {
+      void claude.loadProviders();
+    } else if (ccSwitchImportSource?.target === "codex") {
+      void codex.loadCodexProviders();
+    }
+  }, [ccSwitchImportSource?.target, claude, codex]);
+
+  const handlePickCcSwitchFile = useCallback(
+    async (target: CcSwitchImportTarget) => {
+      const selection = await openFileDialog({
+        multiple: false,
+        directory: false,
+        filters: [{ name: "cc-switch", extensions: ["db", "json"] }],
+      });
+      if (!selection || Array.isArray(selection)) {
+        return;
+      }
+      setCcSwitchImportSource({ target, sourcePath: selection });
+    },
+    [],
+  );
+
+  const renderCcSwitchImportButton = (target: CcSwitchImportTarget) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" variant="outline">
+          <Import size={14} />
+          {t("settings.vendor.ccSwitchImport.entry")}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem
+          onSelect={() => setCcSwitchImportSource({ target, sourcePath: null })}
+        >
+          <ArrowLeftRight size={14} />
+          {t("settings.vendor.importMenu.fromCcSwitchUpdate")}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => void handlePickCcSwitchFile(target)}
+        >
+          <File size={14} />
+          {t("settings.vendor.importMenu.fromCcSwitchFile")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
   const claudeModels = usePluginModels(STORAGE_KEYS.CLAUDE_CUSTOM_MODELS);
   const codexModels = usePluginModels(STORAGE_KEYS.CODEX_CUSTOM_MODELS);
   const codexModelCount = codexModels.models.length;
@@ -203,6 +297,110 @@ export function VendorSettingsPanel({
     setModelDialogAddMode(addMode);
     setModelDialogOpen(true);
   }, []);
+
+  const renderPluginModelsEntry = (target: ModelDialogTarget, count: number) => (
+    <div
+      className="vendor-group-row vendor-group-row-clickable vendor-plugin-models-row"
+      onClick={() => openModelDialog(target)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          openModelDialog(target);
+        }
+      }}
+    >
+      <div className="vendor-group-row-copy">
+        <span className="vendor-group-row-title">
+          {t("settings.vendor.pluginModels")}
+        </span>
+      </div>
+      {count > 0 ? (
+        <span className="vendor-plugin-model-entry-count">{count}</span>
+      ) : null}
+      <button
+        type="button"
+        className="vendor-plugin-models-manage-btn"
+        onClick={(event) => {
+          event.stopPropagation();
+          openModelDialog(target);
+        }}
+      >
+        {t("settings.vendor.manageModels")}
+      </button>
+    </div>
+  );
+
+  const resolveCustomPathValue = (
+    engine: CliCustomPathEngine,
+  ): { path: string | null; args: string | null } => {
+    switch (engine) {
+      case "claude":
+        return { path: appSettings.claudeBin ?? null, args: null };
+      case "kimi":
+        return { path: appSettings.kimiBin ?? null, args: null };
+      case "grok":
+        return { path: appSettings.grokBin ?? null, args: null };
+      case "opencode":
+        return { path: appSettings.opencodeBin ?? null, args: null };
+      case "codex":
+        return {
+          path: appSettings.codexBin ?? null,
+          args: appSettings.codexArgs ?? null,
+        };
+    }
+  };
+
+  const handleSaveCustomPath = useCallback(
+    async (engine: CliCustomPathEngine, payload: CliCustomPathSavePayload) => {
+      switch (engine) {
+        case "claude":
+          await onUpdateAppSettings({
+            ...appSettings,
+            claudeBin: payload.path,
+          });
+          break;
+        case "kimi":
+          await onUpdateAppSettings({
+            ...appSettings,
+            kimiBin: payload.path,
+          });
+          break;
+        case "grok":
+          await onUpdateAppSettings({
+            ...appSettings,
+            grokBin: payload.path,
+          });
+          break;
+        case "opencode":
+          await onUpdateAppSettings({
+            ...appSettings,
+            opencodeBin: payload.path,
+          });
+          break;
+        case "codex":
+          await onUpdateAppSettings({
+            ...appSettings,
+            codexBin: payload.path,
+            codexArgs: payload.args ?? null,
+          });
+          break;
+      }
+    },
+    [appSettings, onUpdateAppSettings],
+  );
+
+  const renderCustomPathEntry = (engine: CliCustomPathEngine) => {
+    const { path, args } = resolveCustomPathValue(engine);
+    return (
+      <CliCustomPathEntry
+        path={path}
+        args={args}
+        showArgsSummary={engine === "codex"}
+        onConfigure={() => setCustomPathDialogEngine(engine)}
+      />
+    );
+  };
 
   const closeModelDialog = useCallback(() => {
     setModelDialogOpen(false);
@@ -303,40 +501,6 @@ export function VendorSettingsPanel({
     }
     void refreshUnifiedExecExternalStatus();
   }, [activeCli, refreshUnifiedExecExternalStatus]);
-
-  useEffect(() => {
-    if (didRunLegacyMigrationRef.current) {
-      return;
-    }
-    if (typeof window === "undefined" || !window.localStorage) {
-      return;
-    }
-    const canonicalKey = STORAGE_KEYS.CLAUDE_MODEL_MAPPING;
-    const hasCanonical = Boolean(window.localStorage.getItem(canonicalKey));
-    if (hasCanonical) {
-      didRunLegacyMigrationRef.current = true;
-      return;
-    }
-
-    for (const legacyKey of LEGACY_CLAUDE_MAPPING_KEYS) {
-      const value = window.localStorage.getItem(legacyKey);
-      if (!value) {
-        continue;
-      }
-      try {
-        window.localStorage.setItem(canonicalKey, value);
-        window.dispatchEvent(
-          new CustomEvent("localStorageChange", {
-            detail: { key: canonicalKey },
-          }),
-        );
-      } catch {
-        // ignore migration write errors
-      }
-      break;
-    }
-    didRunLegacyMigrationRef.current = true;
-  }, []);
 
   useEffect(() => {
     if (didSeedCodexPluginModelsRef.current) {
@@ -497,14 +661,28 @@ export function VendorSettingsPanel({
       (provider) =>
         provider.id !== LOCAL_KIMI_PROVIDER_ID && !provider.isLocalProvider,
     );
+  const grokHasConfig =
+    Boolean(grok.currentGrokConfig?.baseUrl) ||
+    grok.grokProviders.some(
+      (provider) =>
+        provider.id !== LOCAL_GROK_PROVIDER_ID && !provider.isLocalProvider,
+    );
+  const openCodeHasConfig =
+    Boolean(openCode.currentOpenCodeConfig?.baseUrl) ||
+    openCode.openCodeProviders.some(
+      (provider) =>
+        provider.id !== LOCAL_OPENCODE_PROVIDER_ID && !provider.isLocalProvider,
+    );
   const engineNavItems: CliEngineNavItem[] = useMemo(
     () =>
       buildCliEngineNavItems({
         claudeHasConfig,
         codexHasConfig: codexGlobalConfigExists,
         kimiHasConfig,
+        grokHasConfig,
+        openCodeHasConfig,
       }),
-    [claudeHasConfig, codexGlobalConfigExists, kimiHasConfig],
+    [claudeHasConfig, codexGlobalConfigExists, kimiHasConfig, grokHasConfig, openCodeHasConfig],
   );
   const filteredEngineNavItems = useMemo(() => {
     const normalizedQuery = cliSearchQuery.trim().toLowerCase();
@@ -516,65 +694,166 @@ export function VendorSettingsPanel({
     );
   }, [cliSearchQuery, engineNavItems]);
 
+  const isCliSearchActive = cliSearchQuery.trim().length > 0;
+  const disabledCliEngineIds = useMemo(
+    () => appSettings.disabledCliEngines ?? [],
+    [appSettings.disabledCliEngines],
+  );
+  const disabledCliEngineIdSet = useMemo(
+    () => new Set(disabledCliEngineIds),
+    [disabledCliEngineIds],
+  );
+  const cliEngineNavGroups = useMemo(
+    () => groupCliEngineNavItems(engineNavItems, disabledCliEngineIds),
+    [engineNavItems, disabledCliEngineIds],
+  );
+  // 「未启用」默认折叠,但当用户刚停用一个 CLI(组内数量增加)时自动展开一次,
+  // 让被停用的行有可见归宿;首次挂载(含重启后)只记录基线,不自动展开。
+  const prevDisabledCliCountRef = useRef<number | null>(null);
+  useEffect(() => {
+    const count = cliEngineNavGroups.disabled.length;
+    if (prevDisabledCliCountRef.current === null) {
+      prevDisabledCliCountRef.current = count;
+      return;
+    }
+    if (count > prevDisabledCliCountRef.current) {
+      setCollapsedCliGroups((prev) => ({ ...prev, disabled: false }));
+    }
+    prevDisabledCliCountRef.current = count;
+  }, [cliEngineNavGroups.disabled.length]);
+  const toggleCliGroup = useCallback((key: CliEngineNavGroupKey) => {
+    setCollapsedCliGroups((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+  const handleToggleCliEngine = useCallback(
+    (engineId: VendorTab, enabled: boolean) => {
+      const current = appSettings.disabledCliEngines ?? [];
+      const next = enabled
+        ? current.filter((id) => id !== engineId)
+        : current.includes(engineId)
+          ? current
+          : [...current, engineId];
+      void onUpdateAppSettings({ ...appSettings, disabledCliEngines: next });
+    },
+    [appSettings, onUpdateAppSettings],
+  );
+  const cliMoreActionsLabel = t("settings.vendor.cliMoreActions", {
+    defaultValue: "更多操作",
+  });
+  const cliDisableLabel = t("settings.vendor.cliDisableEngine", {
+    defaultValue: "关闭启用",
+  });
+  const cliEnableLabel = t("settings.vendor.cliEnableEngine", {
+    defaultValue: "启用",
+  });
+
   return (
     <div
       className={cn(
         "vendor-settings-panel",
         "flex items-stretch",
-        "-ml-[var(--settings-content-pad-x)]",
-        "max-md:ml-0 max-md:flex-col",
+        "max-md:flex-col",
       )}
     >
       <nav
         className={cn(
-          "vendor-engine-nav vendor-engine-nav-scroll sticky top-0 flex min-h-0 shrink-0 flex-col self-stretch",
-          "max-md:static max-md:w-full max-md:flex-row max-md:px-0",
+          "vendor-engine-nav sticky top-0 flex min-h-0 shrink-0 flex-col self-stretch",
+          "max-md:static max-md:w-full max-md:px-0",
         )}
         aria-label={t("settings.vendorsTitle")}
       >
-        <label className="vendor-engine-search">
-          <Search size={16} aria-hidden="true" />
-          <input
-            type="search"
-            value={cliSearchQuery}
-            placeholder={t("settings.vendor.cliSearchPlaceholder", {
-              defaultValue: "搜索CLI",
-            })}
-            aria-label={t("settings.vendor.cliSearchPlaceholder", {
-              defaultValue: "搜索CLI",
-            })}
-            onChange={(event) => setCliSearchQuery(event.currentTarget.value)}
-          />
-        </label>
-        {filteredEngineNavItems.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            className={cn(
-              "vendor-engine-tab flex w-full items-center text-left text-foreground transition-colors",
-              "max-md:flex-1",
-              activeCli === item.key && "vendor-engine-tab-active",
-              !item.supported && "vendor-engine-tab-upcoming",
-            )}
-            aria-current={activeCli === item.key ? "true" : undefined}
-            onClick={() => setActiveCli(item.key)}
-          >
-            <span className="vendor-engine-icon flex shrink-0 items-center justify-center border bg-background">
-              <CliIcon
-                id={item.key}
-                label={item.label}
-                monochrome={!item.supported}
+        {/*
+          滚动层与外壳分离：外壳 overflow:hidden 裁掉任何残留滚动条 gutter，
+          避免展开「暂未开放」后 CLI 行被挤窄 1–2px。
+        */}
+        <div
+          className={cn(
+            "vendor-engine-nav-scroll flex min-h-0 flex-1 flex-col",
+            "max-md:flex-row",
+          )}
+        >
+          <label className="vendor-engine-search">
+            <Search size={16} aria-hidden="true" />
+            <input
+              type="search"
+              value={cliSearchQuery}
+              placeholder={t("settings.vendor.cliSearchPlaceholder", {
+                defaultValue: "搜索CLI",
+              })}
+              aria-label={t("settings.vendor.cliSearchPlaceholder", {
+                defaultValue: "搜索CLI",
+              })}
+              onChange={(event) => setCliSearchQuery(event.currentTarget.value)}
+            />
+          </label>
+          {isCliSearchActive ? (
+            filteredEngineNavItems.map((item) => (
+              <CliEngineNavRow
+                key={item.key}
+                item={item}
+                active={activeCli === item.key}
+                disabledIds={disabledCliEngineIdSet}
+                moreLabel={cliMoreActionsLabel}
+                disableLabel={cliDisableLabel}
+                enableLabel={cliEnableLabel}
+                onSelectCli={setActiveCli}
+                onToggleCliEnabled={handleToggleCliEngine}
               />
-            </span>
-            <span className="min-w-0 flex-1 truncate">{item.label}</span>
-            {item.supported && item.hasConfig ? (
-              <span
-                className="size-1.5 shrink-0 rounded-full bg-emerald-500"
-                aria-hidden="true"
+            ))
+          ) : (
+            <>
+              <CliEngineNavGroupSection
+                label={t("settings.vendor.cliGroupEnabled", {
+                  defaultValue: "已启用",
+                })}
+                items={cliEngineNavGroups.enabled}
+                collapsed={collapsedCliGroups.enabled}
+                activeCli={activeCli}
+                disabledIds={disabledCliEngineIdSet}
+                moreLabel={cliMoreActionsLabel}
+                disableLabel={cliDisableLabel}
+                enableLabel={cliEnableLabel}
+                emptyHint={t("settings.vendor.cliGroupEnabledEmpty", {
+                  defaultValue: "没有已启用的 CLI",
+                })}
+                onToggleGroup={() => toggleCliGroup("enabled")}
+                onSelectCli={setActiveCli}
+                onToggleCliEnabled={handleToggleCliEngine}
               />
-            ) : null}
-          </button>
-        ))}
+              {cliEngineNavGroups.disabled.length > 0 ? (
+                <CliEngineNavGroupSection
+                  label={t("settings.vendor.cliGroupDisabled", {
+                    defaultValue: "未启用",
+                  })}
+                  items={cliEngineNavGroups.disabled}
+                  collapsed={collapsedCliGroups.disabled}
+                  activeCli={activeCli}
+                  disabledIds={disabledCliEngineIdSet}
+                  moreLabel={cliMoreActionsLabel}
+                  disableLabel={cliDisableLabel}
+                  enableLabel={cliEnableLabel}
+                  onToggleGroup={() => toggleCliGroup("disabled")}
+                  onSelectCli={setActiveCli}
+                  onToggleCliEnabled={handleToggleCliEngine}
+                />
+              ) : null}
+              <CliEngineNavGroupSection
+                label={t("settings.vendor.cliGroupUpcoming", {
+                  defaultValue: "暂未开放",
+                })}
+                items={cliEngineNavGroups.upcoming}
+                collapsed={collapsedCliGroups.upcoming}
+                activeCli={activeCli}
+                disabledIds={disabledCliEngineIdSet}
+                moreLabel={cliMoreActionsLabel}
+                disableLabel={cliDisableLabel}
+                enableLabel={cliEnableLabel}
+                onToggleGroup={() => toggleCliGroup("upcoming")}
+                onSelectCli={setActiveCli}
+                onToggleCliEnabled={handleToggleCliEngine}
+              />
+            </>
+          )}
+        </div>
       </nav>
 
       <div className="vendor-settings-content min-w-0 flex-1 min-h-0">
@@ -592,36 +871,36 @@ export function VendorSettingsPanel({
               actions={<CliLifecycleHeaderActions />}
             />
             <CliLifecycleInstallerPanel />
+            {claude.providerError ? (
+              <div className="settings-help" role="alert">
+                {claude.providerError.message}
+              </div>
+            ) : null}
+            <div className="vendor-group-card">
+              <ClaudeLocalSettingsCard
+                localProvider={claude.localProvider}
+                onSwitch={claude.handleSwitchProvider}
+                onEdit={claude.handleOpenClaudeSettingsJsonDialog}
+              />
+              {renderCustomPathEntry("claude")}
+              {renderPluginModelsEntry("claude", claudeModels.models.length)}
+            </div>
             <ProviderList
               providers={claude.providers}
               loading={claude.loading}
-              headerActions={
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => openModelDialog("claude")}
-                >
-                  <PackagePlus size={14} />
-                  {t("settings.vendor.pluginModels")}
-                  {claudeModels.models.length > 0 ? (
-                    <span className="vendor-plugin-model-entry-count">
-                      {claudeModels.models.length}
-                    </span>
-                  ) : null}
-                </Button>
-              }
+              headerActions={renderCcSwitchImportButton("claude")}
               onAdd={claude.handleAddProvider}
-              onEditLocalSettings={claude.handleOpenClaudeSettingsJsonDialog}
               onEdit={claude.handleEditProvider}
               onDelete={claude.handleDeleteProvider}
-              onSwitch={claude.handleSwitchProvider}
               onReorder={claude.handleReorderProviders}
+              onSwitch={claude.handleSwitchProvider}
             />
             <ProviderDialog
               isOpen={claude.providerDialog.isOpen}
               provider={claude.providerDialog.provider}
               onClose={claude.handleCloseProviderDialog}
               onSave={claude.handleSaveProvider}
+              actionError={claude.providerError?.message}
             />
             <ClaudeSettingsJsonDialog
               isOpen={claude.claudeSettingsJsonDialogOpen}
@@ -665,13 +944,7 @@ export function VendorSettingsPanel({
                 {codex.codexProviderError}
               </div>
             )}
-            <div className="vendor-provider-list vendor-codex-official-config-list">
-              <div className="vendor-list-header">
-                <span className="vendor-list-title">
-                  {t("settings.vendor.officialConfig")}
-                </span>
-              </div>
-
+            <div className="vendor-group-card">
               <CurrentCodexGlobalConfigCard
                 configLoading={codexGlobalConfigLoading}
                 configContent={codexGlobalConfigContent}
@@ -686,42 +959,38 @@ export function VendorSettingsPanel({
                 onSaved={refreshUnifiedExecConfigViews}
               />
 
-              <div className="settings-toggle-row vendor-codex-compact-setting">
-                <div className="vendor-codex-compact-setting-copy">
-                  <div className="vendor-plugin-model-entry-main">
-                    <div>
-                      <span className="vendor-plugin-model-entry-title">
-                        {t("settings.backgroundTerminal")}
-                      </span>
-                      {unifiedExecOfficialConfigDetail ? (
-                        <div className="settings-help">
-                          {unifiedExecOfficialConfigDetail}
-                        </div>
-                      ) : (
-                        <div className="settings-help">
-                          {t("settings.backgroundTerminalDesc")}
-                        </div>
-                      )}
-                      {unifiedExecOfficialDefaultDetail ? (
-                        <div className="settings-help">
-                          {unifiedExecOfficialDefaultDetail}
-                        </div>
-                      ) : null}
-                      {unifiedExecExternalStatusLoading ? (
-                        <div className="settings-help">{t("settings.loading")}</div>
-                      ) : null}
-                      {unifiedExecExternalStatusError ? (
-                        <div className="settings-help">
-                          {unifiedExecExternalStatusError}
-                        </div>
-                      ) : null}
-                      {unifiedExecActionNotice ? (
-                        <div className="settings-help">
-                          {unifiedExecActionNotice.message}
-                        </div>
-                      ) : null}
+              <div className="settings-toggle-row vendor-group-row">
+                <div className="vendor-group-row-copy">
+                  <span className="vendor-group-row-title">
+                    {t("settings.backgroundTerminal")}
+                  </span>
+                  {unifiedExecOfficialConfigDetail ? (
+                    <div className="settings-help">
+                      {unifiedExecOfficialConfigDetail}
                     </div>
-                  </div>
+                  ) : (
+                    <div className="settings-help">
+                      {t("settings.backgroundTerminalDesc")}
+                    </div>
+                  )}
+                  {unifiedExecOfficialDefaultDetail ? (
+                    <div className="settings-help">
+                      {unifiedExecOfficialDefaultDetail}
+                    </div>
+                  ) : null}
+                  {unifiedExecExternalStatusLoading ? (
+                    <div className="settings-help">{t("settings.loading")}</div>
+                  ) : null}
+                  {unifiedExecExternalStatusError ? (
+                    <div className="settings-help">
+                      {unifiedExecExternalStatusError}
+                    </div>
+                  ) : null}
+                  {unifiedExecActionNotice ? (
+                    <div className="settings-help">
+                      {unifiedExecActionNotice.message}
+                    </div>
+                  ) : null}
                 </div>
                 <div
                   className="settings-segmented vendor-codex-runtime-segmented"
@@ -769,18 +1038,13 @@ export function VendorSettingsPanel({
                 </div>
               </div>
 
-              <div className="settings-toggle-row vendor-codex-compact-setting">
-                <div className="vendor-codex-compact-setting-copy">
-                  <div className="vendor-plugin-model-entry-main">
-                    <LayoutList size={16} />
-                    <div>
-                      <span className="vendor-plugin-model-entry-title">
-                        {t("settings.sidebarProviderLabels")}
-                      </span>
-                      <div className="settings-help">
-                        {t("settings.sidebarProviderLabelsDesc")}
-                      </div>
-                    </div>
+              <div className="settings-toggle-row vendor-group-row">
+                <div className="vendor-group-row-copy">
+                  <span className="vendor-group-row-title">
+                    {t("settings.sidebarProviderLabels")}
+                  </span>
+                  <div className="settings-help">
+                    {t("settings.sidebarProviderLabelsDesc")}
                   </div>
                 </div>
                 <Switch
@@ -794,28 +1058,19 @@ export function VendorSettingsPanel({
                   }
                 />
               </div>
+
+              {renderCustomPathEntry("codex")}
+              {renderPluginModelsEntry("codex", codexModels.models.length)}
             </div>
             <CodexProviderList
               providers={codex.codexProviders}
               loading={codex.codexLoading}
-              headerActions={
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => openModelDialog("codex")}
-                >
-                  <PackagePlus size={14} />
-                  {t("settings.vendor.pluginModels")}
-                  {codexModels.models.length > 0 ? (
-                    <span className="vendor-plugin-model-entry-count">
-                      {codexModels.models.length}
-                    </span>
-                  ) : null}
-                </Button>
-              }
+              headerActions={renderCcSwitchImportButton("codex")}
               onAdd={codex.handleAddCodexProvider}
               onEdit={codex.handleEditCodexProvider}
               onDelete={codex.handleDeleteCodexProvider}
+              onReorder={codex.handleReorderCodexProviders}
+              onSwitch={codex.handleSwitchCodexProvider}
             />
             <CodexProviderDialog
               isOpen={codex.codexProviderDialog.isOpen}
@@ -854,7 +1109,10 @@ export function VendorSettingsPanel({
                 {kimi.kimiProviderError}
               </div>
             )}
-            <div className="vendor-provider-list">
+            <div className="vendor-group-card">
+              {renderCustomPathEntry("kimi")}
+            </div>
+            <div className="vendor-provider-list vendor-summary-card">
               <div className="vendor-list-header">
                 <span className="vendor-list-title">
                   {t("settings.vendor.kimiCurrentConfig")}
@@ -906,6 +1164,162 @@ export function VendorSettingsPanel({
             />
           </div>
           </CliLifecycleProvider>
+        ) : activeCli === "grok" ? (
+          <CliLifecycleProvider engine="grok" active>
+          <div className="vendor-tab-content">
+            <CliBrandHeader
+              id="grok"
+              title="Grok CLI"
+              description={t("settings.grokDescription", {
+                defaultValue:
+                  "Configure the Grok CLI providers used by ccgui.",
+              })}
+              helpLabel={t("settings.vendor.openCliDocs", {
+                defaultValue: "Open docs",
+              })}
+              href={CLI_DOCS_HREF_BY_ID.grok}
+              actions={<CliLifecycleHeaderActions />}
+            />
+            <CliLifecycleInstallerPanel />
+            {grok.grokProviderError && (
+              <div className="settings-help">
+                {t("settings.vendor.grokProviderActionFailed")}:{" "}
+                {grok.grokProviderError}
+              </div>
+            )}
+            <div className="vendor-group-card">
+              {renderCustomPathEntry("grok")}
+            </div>
+            <div className="vendor-provider-list vendor-summary-card">
+              <div className="vendor-list-header">
+                <span className="vendor-list-title">
+                  {t("settings.vendor.grokCurrentConfig")}
+                </span>
+              </div>
+              {grok.currentGrokConfig ? (
+                <>
+                  <div className="settings-help">
+                    {t("settings.vendor.grokDefaultModel")}:{" "}
+                    {grok.currentGrokConfig.defaultModel ||
+                      t("settings.vendor.notConfigured")}
+                  </div>
+                  <div className="settings-help">
+                    {t("settings.vendor.grokBaseUrl")}:{" "}
+                    {grok.currentGrokConfig.baseUrl ||
+                      t("settings.vendor.notConfigured")}
+                  </div>
+                  <div className="settings-help">
+                    {t("settings.vendor.grokProvider")}:{" "}
+                    {grok.currentGrokConfig.providerName ||
+                      t("settings.vendor.notConfigured")}
+                  </div>
+                </>
+              ) : (
+                <div className="settings-help">
+                  {t("settings.vendor.grokNoConfig")}
+                </div>
+              )}
+            </div>
+            <GrokProviderList
+              providers={grok.grokProviders}
+              loading={grok.grokLoading}
+              onAdd={grok.handleAddGrokProvider}
+              onEdit={grok.handleEditGrokProvider}
+              onDelete={grok.handleDeleteGrokProvider}
+              onSwitch={grok.handleSwitchGrokProvider}
+            />
+            <GrokProviderDialog
+              isOpen={grok.grokProviderDialog.isOpen}
+              provider={grok.grokProviderDialog.provider}
+              onClose={grok.handleCloseGrokProviderDialog}
+              onSave={grok.handleSaveGrokProvider}
+            />
+            <DeleteConfirmDialog
+              isOpen={grok.deleteGrokConfirm.isOpen}
+              providerName={grok.deleteGrokConfirm.provider?.name ?? ""}
+              onConfirm={grok.confirmDeleteGrokProvider}
+              onCancel={grok.cancelDeleteGrokProvider}
+            />
+          </div>
+          </CliLifecycleProvider>
+        ) : activeCli === "opencode" ? (
+          <CliLifecycleProvider engine="opencode" active>
+          <div className="vendor-tab-content">
+            <CliBrandHeader
+              id="opencode"
+              title="OpenCode CLI"
+              description={t("settings.opencodeDescription", {
+                defaultValue:
+                  "Configure the OpenCode CLI providers used by ccgui.",
+              })}
+              helpLabel={t("settings.vendor.openCliDocs", {
+                defaultValue: "Open docs",
+              })}
+              href={CLI_DOCS_HREF_BY_ID.opencode}
+              actions={<CliLifecycleHeaderActions />}
+            />
+            <CliLifecycleInstallerPanel />
+            {openCode.openCodeProviderError && (
+              <div className="settings-help">
+                {t("settings.vendor.opencodeProviderActionFailed")}:{" "}
+                {openCode.openCodeProviderError}
+              </div>
+            )}
+            <div className="vendor-group-card">
+              {renderCustomPathEntry("opencode")}
+            </div>
+            <div className="vendor-provider-list vendor-summary-card">
+              <div className="vendor-list-header">
+                <span className="vendor-list-title">
+                  {t("settings.vendor.opencodeCurrentConfig")}
+                </span>
+              </div>
+              {openCode.currentOpenCodeConfig ? (
+                <>
+                  <div className="settings-help">
+                    {t("settings.vendor.opencodeDefaultModel")}:{" "}
+                    {openCode.currentOpenCodeConfig.defaultModel ||
+                      t("settings.vendor.notConfigured")}
+                  </div>
+                  <div className="settings-help">
+                    {t("settings.vendor.opencodeBaseUrl")}:{" "}
+                    {openCode.currentOpenCodeConfig.baseUrl ||
+                      t("settings.vendor.notConfigured")}
+                  </div>
+                  <div className="settings-help">
+                    {t("settings.vendor.opencodeProvider")}:{" "}
+                    {openCode.currentOpenCodeConfig.providerName ||
+                      t("settings.vendor.notConfigured")}
+                  </div>
+                </>
+              ) : (
+                <div className="settings-help">
+                  {t("settings.vendor.opencodeNoConfig")}
+                </div>
+              )}
+            </div>
+            <OpenCodeProviderList
+              providers={openCode.openCodeProviders}
+              loading={openCode.openCodeLoading}
+              onAdd={openCode.handleAddOpenCodeProvider}
+              onEdit={openCode.handleEditOpenCodeProvider}
+              onDelete={openCode.handleDeleteOpenCodeProvider}
+              onSwitch={openCode.handleSwitchOpenCodeProvider}
+            />
+            <OpenCodeProviderDialog
+              isOpen={openCode.openCodeProviderDialog.isOpen}
+              provider={openCode.openCodeProviderDialog.provider}
+              onClose={openCode.handleCloseOpenCodeProviderDialog}
+              onSave={openCode.handleSaveOpenCodeProvider}
+            />
+            <DeleteConfirmDialog
+              isOpen={openCode.deleteOpenCodeConfirm.isOpen}
+              providerName={openCode.deleteOpenCodeConfirm.provider?.name ?? ""}
+              onConfirm={openCode.confirmDeleteOpenCodeProvider}
+              onCancel={openCode.cancelDeleteOpenCodeProvider}
+            />
+          </div>
+          </CliLifecycleProvider>
         ) : (
           <div className="vendor-tab-content">
             <CliBrandHeader
@@ -942,6 +1356,26 @@ export function VendorSettingsPanel({
         onClose={closeModelDialog}
         initialAddMode={modelDialogAddMode}
         modelValidation={dialogTarget === "claude" ? "shape-only" : "model-id"}
+      />
+      {customPathDialogEngine ? (
+        <CliCustomPathDialog
+          isOpen
+          engine={customPathDialogEngine}
+          initialPath={resolveCustomPathValue(customPathDialogEngine).path}
+          initialArgs={resolveCustomPathValue(customPathDialogEngine).args}
+          onSave={(payload) =>
+            handleSaveCustomPath(customPathDialogEngine, payload)
+          }
+          onClose={() => setCustomPathDialogEngine(null)}
+        />
+      ) : null}
+      <CcSwitchImportDialog
+        isOpen={ccSwitchImportSource !== null}
+        target={ccSwitchImportSource?.target ?? "claude"}
+        existingProviderIds={ccSwitchExistingProviderIds}
+        sourcePath={ccSwitchImportSource?.sourcePath ?? null}
+        onClose={() => setCcSwitchImportSource(null)}
+        onImported={handleCcSwitchImported}
       />
     </div>
   );

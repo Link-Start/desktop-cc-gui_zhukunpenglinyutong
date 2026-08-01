@@ -49,6 +49,9 @@ use crate::codex::spawn_workspace_session;
 use crate::engine::{resolve_engine_type, EngineType};
 use crate::git_utils::resolve_git_root;
 use crate::remote_backend;
+use crate::shared::settings_core::{
+    take_workspaces_recovery_notice_core, WorkspacesRecoveryNotice,
+};
 use crate::shared::workspaces_core;
 use crate::state::AppState;
 use crate::storage::write_workspaces_preserving_existing;
@@ -391,6 +394,15 @@ async fn allowed_image_preview_roots(
     roots.push(app_data_dir_for_state(state)?.join("workspaces"));
     roots.extend(app_paths::workspace_root_candidates()?);
     roots.push(app_paths::note_card_dir()?);
+    // Grok CLI persists multimodal attachments under ~/.grok/sessions/.../assets/
+    // (or $GROK_HOME/sessions/...). Allow preview of those saved images.
+    if let Some(grok_home) = std::env::var_os("GROK_HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|home| home.join(".grok")))
+    {
+        roots.push(grok_home.join("sessions"));
+    }
 
     let mut canonical_roots = roots
         .into_iter()
@@ -620,8 +632,31 @@ async fn cleanup_engine_sessions_for_workspace(
         .engine_manager
         .remove_opencode_session(workspace_id)
         .await;
-    gemini_cleanup_result
-        .map_err(|error| format!("Gemini cleanup failed for workspace {workspace_id}: {error}"))
+    let kimi_cleanup_result = state.engine_manager.remove_kimi_session(workspace_id).await;
+    let grok_cleanup_result = state.engine_manager.remove_grok_session(workspace_id).await;
+    match (
+        gemini_cleanup_result,
+        kimi_cleanup_result,
+        grok_cleanup_result,
+    ) {
+        (Ok(()), Ok(()), Ok(())) => Ok(()),
+        (gemini, kimi, grok) => {
+            let mut errors = Vec::new();
+            if let Err(error) = gemini {
+                errors.push(format!("Gemini cleanup failed: {error}"));
+            }
+            if let Err(error) = kimi {
+                errors.push(format!("Kimi cleanup failed: {error}"));
+            }
+            if let Err(error) = grok {
+                errors.push(format!("Grok cleanup failed: {error}"));
+            }
+            Err(format!(
+                "Engine cleanup failed for workspace {workspace_id}: {}",
+                errors.join("; ")
+            ))
+        }
+    }
 }
 
 #[tauri::command]
@@ -1180,6 +1215,13 @@ pub(crate) async fn list_workspaces(
 }
 
 #[tauri::command]
+pub(crate) async fn take_workspaces_recovery_notice(
+    state: State<'_, AppState>,
+) -> Result<Option<WorkspacesRecoveryNotice>, String> {
+    Ok(take_workspaces_recovery_notice_core(&state.workspaces_recovery_notice).await)
+}
+
+#[tauri::command]
 pub(crate) async fn is_workspace_path_dir(
     path: String,
     state: State<'_, AppState>,
@@ -1255,6 +1297,7 @@ pub(crate) async fn add_workspace(
         None,
         None,
         None,
+        None,
     )
     .await;
 
@@ -1290,11 +1333,15 @@ pub(crate) async fn add_workspace(
             // Kimi follows local CLI session model (no persistent daemon session).
             add_workspace_for_cli_engine(EngineType::Kimi, path, codex_bin, &state).await
         }
+        EngineType::Grok => {
+            // Grok follows local CLI session model (no persistent daemon session).
+            add_workspace_for_cli_engine(EngineType::Grok, path, codex_bin, &state).await
+        }
     }
 }
 
 /// Add workspace for a CLI-based engine (no persistent session needed).
-/// Supports Claude, Gemini and OpenCode engines.
+/// Supports Claude, Gemini, OpenCode, Kimi and Grok engines.
 async fn add_workspace_for_cli_engine(
     engine_type: EngineType,
     path: String,
@@ -1302,7 +1349,7 @@ async fn add_workspace_for_cli_engine(
     state: &AppState,
 ) -> Result<WorkspaceInfo, String> {
     use crate::engine::status::{
-        detect_claude_status, detect_kimi_status, detect_opencode_status,
+        detect_claude_status, detect_grok_status, detect_kimi_status, detect_opencode_status,
     };
     use std::path::PathBuf;
 
@@ -1315,6 +1362,7 @@ async fn add_workspace_for_cli_engine(
         EngineType::Gemini => "gemini",
         EngineType::OpenCode => "opencode",
         EngineType::Kimi => "kimi",
+        EngineType::Grok => "grok",
         _ => return Err(format!("Unsupported CLI engine: {:?}", engine_type)),
     };
 
@@ -1337,13 +1385,28 @@ async fn add_workspace_for_cli_engine(
             detect_claude_status(claude_bin.as_deref()).await.installed
         }
         EngineType::Gemini => false,
-        EngineType::OpenCode => detect_opencode_status(None).await.installed,
+        EngineType::OpenCode => {
+            let opencode_bin = {
+                let settings = state.app_settings.lock().await;
+                settings.opencode_bin.clone()
+            };
+            detect_opencode_status(opencode_bin.as_deref())
+                .await
+                .installed
+        }
         EngineType::Kimi => {
             let kimi_bin = {
                 let settings = state.app_settings.lock().await;
                 settings.kimi_bin.clone()
             };
             detect_kimi_status(kimi_bin.as_deref()).await.installed
+        }
+        EngineType::Grok => {
+            let grok_bin = {
+                let settings = state.app_settings.lock().await;
+                settings.grok_bin.clone()
+            };
+            detect_grok_status(grok_bin.as_deref()).await.installed
         }
         _ => false,
     };

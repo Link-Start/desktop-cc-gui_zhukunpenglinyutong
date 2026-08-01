@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { withoutMessagePresentationMetadata } from "./threadReducerTestProjection";
 import type { ThreadState } from "./useThreadsReducer";
 import { initialState, threadReducer } from "./useThreadsReducer";
 
@@ -41,7 +42,7 @@ describe("threadReducer generated image placeholders", () => {
       hasCustomName: false,
     });
 
-    expect(next.itemsByThread["thread-1"]).toEqual([
+    expect(withoutMessagePresentationMetadata(next.itemsByThread["thread-1"])).toEqual([
       {
         id: "assistant-1",
         kind: "message",
@@ -106,7 +107,7 @@ describe("threadReducer generated image placeholders", () => {
       ],
     });
 
-    expect(next.itemsByThread["thread-1"]).toEqual([
+    expect(withoutMessagePresentationMetadata(next.itemsByThread["thread-1"])).toEqual([
       {
         id: "assistant-1",
         kind: "message",
@@ -172,7 +173,7 @@ describe("threadReducer generated image placeholders", () => {
       ],
     });
 
-    expect(next.itemsByThread["thread-1"]).toEqual([
+    expect(withoutMessagePresentationMetadata(next.itemsByThread["thread-1"])).toEqual([
       {
         id: "real-user-1",
         kind: "message",
@@ -228,7 +229,7 @@ describe("threadReducer generated image placeholders", () => {
       hasCustomName: false,
     });
 
-    expect(next.itemsByThread["thread-1"]).toEqual([
+    expect(withoutMessagePresentationMetadata(next.itemsByThread["thread-1"])).toEqual([
       {
         id: "real-user-1",
         kind: "message",
@@ -277,7 +278,7 @@ describe("threadReducer generated image placeholders", () => {
       threadId: "thread-1",
     });
 
-    expect(next.itemsByThread["thread-1"]).toEqual([
+    expect(withoutMessagePresentationMetadata(next.itemsByThread["thread-1"])).toEqual([
       {
         id: "generated-image-1",
         kind: "generatedImage",
@@ -355,7 +356,7 @@ describe("threadReducer generated image placeholders", () => {
       ],
     });
 
-    expect(next.itemsByThread["thread-1"]).toEqual([
+    expect(withoutMessagePresentationMetadata(next.itemsByThread["thread-1"])).toEqual([
       {
         id: "generated-image-old",
         kind: "generatedImage",

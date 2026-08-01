@@ -10,6 +10,7 @@ import ExternalLink from "lucide-react/dist/esm/icons/external-link";
 import {
   CATEGORY_DEFAULTS,
   resolveCategoryLabel,
+  resolveCuratedSkillDescription,
   translateOrFallback,
 } from "../i18n/categoryLabels";
 import { resolveLucideIcon } from "../utils/resolveLucideIcon";
@@ -17,12 +18,11 @@ import { resolveLucideIcon } from "../utils/resolveLucideIcon";
 /**
  * Settings panel for client-bundled curated skills (V0.5.14+).
  *
- * Visual contract: curated is rendered **above** `SkillsSection` and
- * wears a "Built-in" badge so the user can tell at a glance that it
- * ships with the desktop client (vs. `SkillsSection`, which renders
- * user-installed global / project / custom skills with source
- * badges). The two surfaces never share data and never share CSS
- * class names.
+ * Visual contract: curated wears a "Built-in" badge so the user can
+ * tell at a glance that it ships with the desktop client. User-installed
+ * skills are managed in the Extensions → Skills surface (TokenTracker
+ * SkillsPage), not here; the two surfaces never share data and never
+ * share CSS class names.
  *
  * Renders an empty-state placeholder when 0 curated skills are
  * loaded, so first-time users can see the concept exists; in the MVP
@@ -92,6 +92,16 @@ export function CuratedSection({
     [t],
   );
 
+  const hintLabel = useMemo(
+    () =>
+      translateOrFallback(
+        t,
+        "common.curatedDetailHint",
+        "When enabled, the selected skill is automatically injected into the system prompt for every conversation.",
+      ),
+    [t],
+  );
+
   const handleToggle = useCallback(
     async (entry: CuratedSkillOption, enabled: boolean) => {
       try {
@@ -144,6 +154,7 @@ export function CuratedSection({
         builtInLabel={builtInLabel}
         sectionTitleLabel={sectionTitleLabel}
       />
+      <div className="curated-section-hint" role="note">{hintLabel}</div>
       <div className="curated-section-subtitle">{subtitleLabel}</div>
       {toggleError ? (
         <div className="curated-section-error" role="alert">
@@ -207,6 +218,10 @@ function CuratedRow({ entry, isPending, onToggle }: CuratedRowProps) {
   const categoryLabel = useMemo(
     () => resolveCategoryLabel(t, entry.category),
     [t, entry.category],
+  );
+  const description = useMemo(
+    () => resolveCuratedSkillDescription(t, entry.name, entry.description),
+    [t, entry.name, entry.description],
   );
   const tokenLabel = useMemo(() => {
     // Round to 0.1K granularity for display (1100 -> 1.1K).
@@ -295,7 +310,7 @@ function CuratedRow({ entry, isPending, onToggle }: CuratedRowProps) {
             </a>
           ) : null}
         </div>
-        <div className="curated-section-row-description">{entry.description}</div>
+        <div className="curated-section-row-description">{description}</div>
         <div className="curated-section-row-meta">
           <span
             className="curated-section-row-token"

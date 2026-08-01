@@ -12,6 +12,17 @@ function createEvent<T extends DomainEventType>(
   assertIsoTimestamp(input.occurredAt);
   const event = {
     ...input,
+    logicalSessionId: input.logicalSessionId ?? input.sessionId,
+    runId:
+      input.runId ??
+      ("turnId" in input && typeof input.turnId === "string"
+        ? input.turnId
+        : input.sessionId),
+    engineId: input.engineId ?? input.engine,
+    provenance: input.provenance ?? {
+      source: "legacy-domain-event-adapter",
+      rawEventType: type,
+    },
     type,
   } as Extract<DomainEvent, { type: T }>;
   return freezeDomainEvent(event) as Extract<DomainEvent, { type: T }>;
@@ -47,6 +58,9 @@ export const domainEventFactories = {
   },
   usageUpdated(input: FactoryInput<"usage.updated">) {
     return createEvent("usage.updated", input);
+  },
+  runSettled(input: FactoryInput<"run.settled">) {
+    return createEvent("run.settled", input);
   },
 };
 

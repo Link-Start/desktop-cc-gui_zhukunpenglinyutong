@@ -50,6 +50,7 @@ import {
   useInlineHistoryCompletion,
   useUndoRedoHistory,
 } from './hooks/index.js';
+import { useAtomicProviderTargetCatalog } from './hooks/useProviderTargetCatalogOwners';
 import {
   commandToDropdownItem,
   fileReferenceProvider,
@@ -59,7 +60,6 @@ import {
   agentToDropdownItem,
   promptProvider,
   promptToDropdownItem,
-  preloadSlashCommands,
   type AgentItem,
 } from './providers/index.js';
 import { debounce } from './utils/debounce.js';
@@ -184,6 +184,11 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       providerModelCatalogs,
       permissionMode = 'bypassPermissions',
       currentProvider = 'claude',
+      currentProviderProfileId,
+      executionTarget,
+      onExecutionTargetChange,
+      // Atomic 双栏：shared catalog 或 create-session 投影。
+      providerTargetPickerMode = 'create-session',
       providerAvailability,
       providerVersions,
       providerStatusLabels,
@@ -203,6 +208,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       hasContextAttachment = false,
       placeholder = '', // Will be passed from parent via t('chat.inputPlaceholder')
       disabled = false,
+      submitDisabled = false,
       value,
       onSubmit,
       onStop,
@@ -210,8 +216,6 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       onAddAttachment,
       onRemoveAttachment,
       onModeSelect,
-      onModelSelect,
-      onProviderSelect,
       reasoningEffort = null,
       reasoningOptions,
       onReasoningChange,
@@ -232,6 +236,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       onOpenAgentSettings,
       onOpenPromptSettings,
       onOpenModelSettings,
+      onOpenCliSettings,
       onOpenFileReference,
       onRefreshModelConfig,
       isModelConfigRefreshing,
@@ -325,15 +330,23 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     const availableModels = useMemo(
       () => resolveAvailableModels({
         currentProvider,
+        currentProviderProfileId,
         models,
         selectedModel,
         modelStorageSnapshot,
       }),
-      [currentProvider, modelStorageSnapshot, models, selectedModel],
+      [
+        currentProvider,
+        currentProviderProfileId,
+        modelStorageSnapshot,
+        models,
+        selectedModel,
+      ],
     );
     const providerModelGroups = useMemo(
       () => resolveProviderModelGroups({
         currentProvider,
+        currentProviderProfileId,
         models,
         selectedModel,
         modelStorageSnapshot,
@@ -344,6 +357,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       }),
       [
         currentProvider,
+        currentProviderProfileId,
         modelStorageSnapshot,
         models,
         providerAvailability,
@@ -352,6 +366,27 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         t,
       ],
     );
+    const atomicPluginCustomModels = useMemo(
+      () => ({
+        claude: modelStorageSnapshot.claudeCustomModels,
+        codex: modelStorageSnapshot.codexCustomModels,
+        gemini: modelStorageSnapshot.geminiCustomModels,
+      }),
+      [modelStorageSnapshot],
+    );
+    const atomicProviderTargetCatalog = useAtomicProviderTargetCatalog({
+      enabled: true,
+      workspaceId,
+      mode: providerTargetPickerMode,
+      currentProvider: currentProvider as ProviderId,
+      currentProviderProfileId,
+      pluginCustomModels: atomicPluginCustomModels,
+      resolveProviderLabel: (providerId) =>
+        t(`providers.${providerId}.label`, { defaultValue: providerId }),
+      kimiDisabledReason: t('sharedSession.kimiTargetUnavailable', {
+        defaultValue: '可作为来源；目标续接尚未验证',
+      }),
+    });
 
     // Records the exact text of the latest programmatic (external) write.
     // Programmatic innerText assignment fires no input event, so this must NOT
@@ -1079,6 +1114,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     );
 
     const handleSubmit = useSubmitHandler({
+      submitDisabled: disabled || submitDisabled,
       getTextContent,
       invalidateCache,
       attachments,
@@ -1290,30 +1326,24 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       [onModeSelect]
     );
 
-    /**
-     * Handle model select
-     */
-    const handleModelSelect = useCallback(
-      (modelId: string) => {
-        onModelSelect?.(modelId);
+    const handleProviderTargetSelect = useCallback(
+      (target: NonNullable<ChatInputBoxProps['executionTarget']>) => {
+        onExecutionTargetChange?.(target);
       },
-      [onModelSelect]
+      [onExecutionTargetChange],
     );
-    const handleProviderModelSelect = useCallback(
-      (providerId: ProviderId, modelId: string) => {
-        if (providerId !== currentProvider) {
-          onProviderSelect?.(providerId);
-        }
-        onModelSelect?.(modelId);
+    const handleOpenProviderModelSettings = useCallback(
+      (providerId?: string) => {
+        onOpenModelSettings?.(
+          resolveModelConfigProvider(providerId ?? currentProvider),
+        );
       },
-      [currentProvider, onModelSelect, onProviderSelect]
+      [currentProvider, onOpenModelSettings],
     );
-    const handleOpenCurrentProviderModelSettings = useCallback(() => {
-      onOpenModelSettings?.(resolveModelConfigProvider(currentProvider));
-    }, [currentProvider, onOpenModelSettings]);
     const handleRefreshCurrentProviderModelConfig = useCallback(() => {
       return onRefreshModelConfig?.(resolveModelConfigProvider(currentProvider));
     }, [currentProvider, onRefreshModelConfig]);
+    // 刷新仍跟当前引擎走;「添加模型」只要设置页可达就应在各引擎子菜单常驻
     const supportsModelConfigActions = MODEL_CONFIG_PROVIDERS.has(currentProvider);
 
     /**
@@ -1352,14 +1382,6 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       commandCompletion,
       focusInput,
     });
-
-    // Preload slash commands on mount to improve perceived performance
-    // Load command data before user types "/" so it's immediately available
-    useEffect(() => {
-      if (!commandCompletionProvider) {
-        preloadSlashCommands();
-      }
-    }, [commandCompletionProvider]);
 
     useSpaceKeyListener({ editableRef, onKeyDown: handleKeyDownForTagRendering });
 
@@ -1457,16 +1479,16 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         contextSourcesExpanded={contextSourcesExpanded}
         selectedModel={selectedModel}
         models={availableModels}
-        modelGroups={onProviderSelect ? providerModelGroups : undefined}
+        targetGroups={atomicProviderTargetCatalog.groups}
+        executionTarget={executionTarget}
+        onExecutionTargetChange={handleProviderTargetSelect}
+        onOpenTargetCatalog={atomicProviderTargetCatalog.ensureProfiles}
+        onOpenProviderProfile={atomicProviderTargetCatalog.ensureModels}
+        onReloadProviderConfig={atomicProviderTargetCatalog.reloadConfig}
+        targetCatalogError={atomicProviderTargetCatalog.profileLoadError}
         currentProvider={currentProvider}
-        onModelSelect={onModelSelect ? handleModelSelect : undefined}
-        onProviderModelSelect={
-          onModelSelect && onProviderSelect ? handleProviderModelSelect : undefined
-        }
         onAddModel={
-          onOpenModelSettings && supportsModelConfigActions
-            ? handleOpenCurrentProviderModelSettings
-            : undefined
+          onOpenModelSettings ? handleOpenProviderModelSettings : undefined
         }
         onRefreshModelConfig={
           onRefreshModelConfig && supportsModelConfigActions
@@ -1474,6 +1496,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
             : undefined
         }
         isModelConfigRefreshing={isModelConfigRefreshing}
+        onOpenCliSettings={onOpenCliSettings}
       />
     ) : null;
     const contextToolbarSurface = (
@@ -1671,7 +1694,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
 
           {!isInputBoxCollapsed && (
             <ChatInputBoxFooter
-              disabled={disabled}
+              disabled={disabled || submitDisabled}
               hasInputContent={hasContent || attachments.length > 0 || hasContextAttachment}
               isLoading={isLoading}
               streamActivityPhase={streamActivityPhase}
@@ -1701,8 +1724,9 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
               onSubmit={handleSubmit}
               onStop={onStop}
               onModeSelect={handleModeSelect}
-              onModelSelect={handleModelSelect}
-              onProviderSelect={onProviderSelect}
+              // 模型/CLI 选择统一由 readiness Atomic 双栏 + executionTarget 承担。
+              onModelSelect={undefined}
+              onProviderSelect={undefined}
               onReasoningChange={onReasoningChange}
               onEnhancePrompt={handleEnhancePrompt}
               alwaysThinkingEnabled={alwaysThinkingEnabled}

@@ -5,7 +5,9 @@ import {
   SESSION_RADAR_DISMISSED_COMPLETED_AT_BY_ID_KEY,
   SESSION_RADAR_HISTORY_UPDATED_EVENT,
   SESSION_RADAR_RECENT_STORAGE_KEY,
+  applyRadarRecentBounds,
   parsePersistedRadarRecentEntry,
+  readDismissedCompletedAtById,
 } from "./sessionRadarPersistence";
 
 export type SessionRadarHistoryDeleteFailure = {
@@ -17,26 +19,15 @@ export type SessionRadarHistoryDeleteFailure = {
 export type SessionRadarHistoryDeleteTarget = {
   id: string;
   completedAt: number;
+  // 调用方展示的 entry.updatedAt（merge 时已用 live thread / lastAgent 刷新）。
+  // 删除 cutoff 必须覆盖它，否则 updatedAt 领先 completedAt 的 reconcile 条目会复活。
+  liveUpdatedAt?: number;
 };
 
 export type SessionRadarHistoryDeleteResult = {
   succeededEntryIds: string[];
   failed: SessionRadarHistoryDeleteFailure[];
 };
-
-function readDismissedCompletedAtById() {
-  const raw = getClientStoreSync<unknown>(
-    RADAR_STORE_NAME,
-    SESSION_RADAR_DISMISSED_COMPLETED_AT_BY_ID_KEY,
-  );
-  if (!raw || typeof raw !== "object") {
-    return {} as Record<string, number>;
-  }
-  const entries = Object.entries(raw as Record<string, unknown>).filter(
-    ([id, value]) => typeof id === "string" && typeof value === "number" && Number.isFinite(value),
-  );
-  return Object.fromEntries(entries) as Record<string, number>;
-}
 
 export function deleteSessionRadarHistoryEntries(
   targets: SessionRadarHistoryDeleteTarget[],
@@ -71,7 +62,19 @@ export function deleteSessionRadarHistoryEntries(
     }
     const persisted = recentById.get(normalizedId);
     const targetCompletedAt = Number.isFinite(target.completedAt) ? target.completedAt : 0;
-    const cutoff = Math.max(persisted?.completedAt ?? 0, targetCompletedAt, nextDismissedById[normalizedId] ?? 0);
+    const targetLiveUpdatedAt = Number.isFinite(target.liveUpdatedAt)
+      ? (target.liveUpdatedAt as number)
+      : 0;
+    // cutoff 覆盖四方：persisted completedAt / persisted updatedAt（merge 已用 live
+    // thread 刷新并回写）/ 调用方展示的 live updatedAt / 既有 cutoff。否则 reconcile
+    // 以 thread.updatedAt 补写时会绕过只覆盖 completedAt 的 cutoff，删除条目复活。
+    const cutoff = Math.max(
+      persisted?.completedAt ?? 0,
+      persisted?.updatedAt ?? 0,
+      targetCompletedAt,
+      targetLiveUpdatedAt,
+      nextDismissedById[normalizedId] ?? 0,
+    );
     if (cutoff <= 0) {
       failed.push({
         id: normalizedId,
@@ -86,11 +89,28 @@ export function deleteSessionRadarHistoryEntries(
     succeededEntryIds.push(normalizedId);
   }
 
-  const nextRecent = Array.from(recentById.values()).sort((a, b) => b.completedAt - a.completedAt);
+  // 删除同样是惰性修剪的 merge 点：超限/过期的旧数据在此收敛；被 bounds 物理
+  // 修剪条目的 dismissed 记录一并清除（本次用户删除的 cutoff 不在 prunedEntryIds
+  // 内，不受影响）。此处的候选集只来自 persisted 快照（纯物理条目），不混入
+  // reconcile 合成条目，不会误销用户 cutoff。
+  const { entries: nextRecent, prunedEntryIds } = applyRadarRecentBounds(
+    Array.from(recentById.values()).sort((a, b) => b.completedAt - a.completedAt),
+  );
+  if (prunedEntryIds.length > 0) {
+    for (const prunedId of prunedEntryIds) {
+      delete nextDismissedById[prunedId];
+    }
+  }
   const activeIds = new Set(nextRecent.map((entry) => entry.id));
-  writeClientStoreValue(RADAR_STORE_NAME, SESSION_RADAR_RECENT_STORAGE_KEY, nextRecent, {
-    immediate: true,
-  });
+  // 写盘顺序：先落 dismissed cutoff 再落 recent。若崩溃发生在两次写之间，
+  // recent 中的残留条目会被已落盘的 cutoff 过滤（isRecentEntryDismissed），
+  // reconcile 也不会补写；反向顺序则会留下「条目已删、cutoff 未写」的复活窗口。
+  writeClientStoreValue(
+    RADAR_STORE_NAME,
+    SESSION_RADAR_DISMISSED_COMPLETED_AT_BY_ID_KEY,
+    nextDismissedById,
+    { immediate: true },
+  );
   const currentReadState =
     getClientStoreSync<Record<string, number>>(RADAR_STORE_NAME, SESSION_RADAR_READ_STATE_KEY) ?? {};
   const nextReadState = Object.fromEntries(
@@ -101,12 +121,9 @@ export function deleteSessionRadarHistoryEntries(
   writeClientStoreValue(RADAR_STORE_NAME, SESSION_RADAR_READ_STATE_KEY, nextReadState, {
     immediate: true,
   });
-  writeClientStoreValue(
-    RADAR_STORE_NAME,
-    SESSION_RADAR_DISMISSED_COMPLETED_AT_BY_ID_KEY,
-    nextDismissedById,
-    { immediate: true },
-  );
+  writeClientStoreValue(RADAR_STORE_NAME, SESSION_RADAR_RECENT_STORAGE_KEY, nextRecent, {
+    immediate: true,
+  });
 
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(SESSION_RADAR_HISTORY_UPDATED_EVENT));

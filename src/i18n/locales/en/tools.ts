@@ -29,6 +29,8 @@ const tools = {
     batchSearch: "Batch search",
     batchSearchMatch: "Batch search/match",
     batchEditFile: "Batch edit files",
+    fileEditSceneCount: "File changes ({{count}})",
+    fileEditSceneToggle: "File changes, {{count}} files, toggle details",
     bashGroupBatchRun: "Batch Run Commands",
     bashGroupCompleted: "completed",
     bashGroupAllCompleted: "All completed",

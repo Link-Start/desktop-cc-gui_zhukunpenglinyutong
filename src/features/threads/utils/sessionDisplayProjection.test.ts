@@ -18,6 +18,25 @@ describe("sessionDisplayProjection", () => {
     expect(isWeakSessionDisplayTitle("<local-command-stdout>")).toBe(true);
   });
 
+  it("treats context protocol titles as weak and ignores mapped protocol titles", () => {
+    const protocolTitle =
+      `MOSSX_CONTEXT_PACKAGE:sha256:${"a".repeat(64)}:` +
+      `sha256:${"b".repeat(64)}`;
+    expect(isWeakSessionDisplayTitle(protocolTitle)).toBe(true);
+    expect(
+      mergeSessionDisplaySummary(
+        undefined,
+        {
+          id: "claude:target",
+          name: "继续：来源会话",
+          updatedAt: 1,
+          engineSource: "claude",
+        },
+        { mappedTitle: protocolTitle },
+      ).name,
+    ).toBe("继续：来源会话");
+  });
+
   it("keeps a meaningful title when a later candidate only has Agent N", () => {
     const previous: ThreadSummary = {
       id: "claude:session-1",
@@ -104,6 +123,52 @@ describe("sessionDisplayProjection", () => {
         { customTitle: "Agent 103" },
       ).name,
     ).toBe("Agent 103");
+  });
+
+  it.each(["Agent 12", "Claude Session", "deadbeef"])(
+    "preserves weak-looking native title %s",
+    (nativeTitle) => {
+      const previous: ThreadSummary = {
+        id: "claude:session-1",
+        name: "First prompt fallback",
+        updatedAt: 100,
+        engineSource: "claude",
+        threadKind: "native",
+      };
+
+      expect(
+        mergeSessionDisplaySummary(
+          previous,
+          { ...previous, name: nativeTitle, updatedAt: 120 },
+          { nativeTitle },
+        ).name,
+      ).toBe(nativeTitle);
+    },
+  );
+
+  it("keeps GUI custom and mapped titles above native titles", () => {
+    const previous: ThreadSummary = {
+      id: "codex:session-1",
+      name: "First prompt fallback",
+      updatedAt: 100,
+      engineSource: "codex",
+      threadKind: "native",
+    };
+    const next = { ...previous, name: "Agent 12", updatedAt: 120 };
+
+    expect(
+      mergeSessionDisplaySummary(previous, next, {
+        nativeTitle: "Agent 12",
+        mappedTitle: "Mapped title",
+      }).name,
+    ).toBe("Mapped title");
+    expect(
+      mergeSessionDisplaySummary(previous, next, {
+        nativeTitle: "Agent 12",
+        mappedTitle: "Mapped title",
+        customTitle: "Custom title",
+      }).name,
+    ).toBe("Custom title");
   });
 
   it("preserves parent relationship metadata during degraded continuity merges", () => {

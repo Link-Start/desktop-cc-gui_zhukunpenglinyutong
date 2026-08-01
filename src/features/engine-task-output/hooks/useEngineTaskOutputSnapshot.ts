@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { setVisibilityGatedInterval } from "../../../services/visibilityGatedInterval";
 import { readEngineTaskOutputArtifact } from "../../../services/tauri";
 import type {
   EngineTaskOutputArtifactRefreshState,
@@ -111,11 +112,16 @@ export function useEngineTaskOutputSnapshot({
       };
     }
 
-    const intervalId = window.setInterval(runRefresh, RUNNING_REFRESH_INTERVAL_MS);
+    // running 期间周期性拉取产物文件；窗口隐藏时暂停，恢复可见时 gated 版
+    // 会先立即补一次 tick，语义与"始终最新"一致。
+    const cleanupInterval = setVisibilityGatedInterval(
+      runRefresh,
+      RUNNING_REFRESH_INTERVAL_MS,
+    );
     return () => {
       cancelled = true;
       requestIdRef.current += 1;
-      window.clearInterval(intervalId);
+      cleanupInterval();
     };
   }, [artifactPath, refresh, snapshot, workspaceIdValue]);
 

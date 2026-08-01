@@ -18,7 +18,7 @@ import type { CenterMode } from "../features/app/hooks/useGitPanelController";
 import { useWorktreeSetupScript } from "../features/app/hooks/useWorktreeSetupScript";
 import { buildClaudeResumeTerminalCommand } from "../features/app/utils/claudeResumeCommand";
 import { writeTerminalSession } from "../services/tauri";
-import type { AgentTaskScrollRequest } from "../features/messages/types";
+import type { AgentTaskScrollRequest } from "../features/messages";
 import type {
   AppMode,
   AppSettings,
@@ -56,7 +56,7 @@ type WorkspaceShellTab = "projects" | "codex" | "spec" | "git" | "log";
 type WorkspaceShellCenterMode = CenterMode;
 
 function isEngineType(value: unknown): value is EngineType {
-  return value === "claude" || value === "codex" || value === "gemini" || value === "kimi" || value === "opencode";
+  return value === "claude" || value === "codex" || value === "gemini" || value === "grok" || value === "kimi" || value === "opencode";
 }
 
 export type WorkspaceShellBoundary = {

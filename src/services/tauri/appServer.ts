@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { EngineModelInfo, EngineStatus, EngineType } from "../../types";
+import type { EngineModelInfo, EngineStatus, EngineType, SkillInvocation } from "../../types";
 import type { AutoSessionMetadata } from "./sessionManagement";
 import {
   isEngineRpcFallbackMode,
@@ -233,16 +233,24 @@ export async function getEngineActiveProcessDiagnostics(): Promise<EngineActiveP
  */
 export async function getEngineModels(
   engineType: EngineType,
-  options: { forceRefresh?: boolean } = {},
+  options: { forceRefresh?: boolean; providerProfileId?: string | null } = {},
 ): Promise<EngineModelInfo[]> {
   assertEngineExecutionEnabled(engineType);
   if (isEngineRpcFallbackMode() && engineType !== "codex") {
     return [];
   }
   try {
-    const params: { engineType: EngineType; forceRefresh?: boolean } = {
+    const params: {
+      engineType: EngineType;
+      forceRefresh?: boolean;
+      providerProfileId?: string;
+    } = {
       engineType,
     };
+    const providerProfileId = options.providerProfileId?.trim();
+    if (providerProfileId) {
+      params.providerProfileId = providerProfileId;
+    }
     if (options.forceRefresh) {
       params.forceRefresh = true;
     }
@@ -282,8 +290,10 @@ export async function engineSendMessage(
     threadId?: string | null;
     agent?: string | null;
     variant?: string | null;
+    providerProfileId?: string | null;
     customSpecRoot?: string | null;
     autoSession?: AutoSessionMetadata | null;
+    skillInvocations?: SkillInvocation[] | null;
   },
 ): Promise<Record<string, unknown>> {
   if (params.engine) {
@@ -312,8 +322,10 @@ export async function engineSendMessage(
       forkSessionId: params.forkSessionId ?? null,
       agent: params.agent ?? null,
       variant: params.variant ?? null,
+      providerProfileId: params.providerProfileId ?? null,
       customSpecRoot: params.customSpecRoot ?? null,
       autoSession: params.autoSession ?? null,
+      skillInvocations: params.skillInvocations ?? null,
     });
   } catch (error) {
     if (isUnknownMethodError(error, "engine_send_message")) {

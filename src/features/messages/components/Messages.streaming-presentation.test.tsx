@@ -4,6 +4,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import type { ConversationItem } from "../../../types";
 import type { GroupedEntry } from "../utils/groupToolItems";
 import type { TurnFileChangesSummary } from "../utils/turnFileChanges";
+import type { MessagesTimelineProps } from "../orchestration/models/messagesTimelineModels";
 
 const timelineSnapshots = vi.hoisted(() => ({
   entries: [] as Array<{
@@ -30,28 +31,18 @@ function collectGroupedEntryTexts(entries: GroupedEntry[]) {
 }
 
 vi.mock("./MessagesTimeline", () => ({
-  MessagesTimeline: (props: {
-    assistantFinalBoundarySet: Set<string>;
-    groupedEntries: GroupedEntry[];
-    threadId: string | null;
-    liveAssistantItem: Extract<ConversationItem, { kind: "message" }> | null;
-    liveReasoningItem: Extract<ConversationItem, { kind: "reasoning" }> | null;
-    latestReasoningId: string | null;
-    presentationMode: string;
-    sessionFileChangesSummary: TurnFileChangesSummary | null;
-    isWorking: boolean;
-  }) => {
+  MessagesTimeline: (props: MessagesTimelineProps) => {
     timelineSnapshots.entries.push({
-      assistantFinalBoundaryIds: Array.from(props.assistantFinalBoundarySet),
-      renderedTexts: collectGroupedEntryTexts(props.groupedEntries),
-      threadId: props.threadId,
-      liveAssistantIsFinal: props.liveAssistantItem?.isFinal ?? null,
-      liveAssistantText: props.liveAssistantItem?.text ?? null,
-      liveReasoningItemId: props.liveReasoningItem?.id ?? null,
-      latestReasoningId: props.latestReasoningId,
-      presentationMode: props.presentationMode,
-      sessionFileChangesSummary: props.sessionFileChangesSummary,
-      isWorking: props.isWorking,
+      assistantFinalBoundaryIds: Array.from(props.snapshot.assistantFinalBoundarySet),
+      renderedTexts: collectGroupedEntryTexts(props.snapshot.groupedEntries),
+      threadId: props.runtime.threadId,
+      liveAssistantIsFinal: props.live.liveAssistantItem?.isFinal ?? null,
+      liveAssistantText: props.live.liveAssistantItem?.text ?? null,
+      liveReasoningItemId: props.live.liveReasoningItem?.id ?? null,
+      latestReasoningId: props.live.latestReasoningId,
+      presentationMode: props.presentation.presentationMode,
+      sessionFileChangesSummary: props.snapshot.sessionFileChangesSummary,
+      isWorking: props.live.isWorking,
     });
     return <div data-testid="messages-timeline-probe" />;
   },

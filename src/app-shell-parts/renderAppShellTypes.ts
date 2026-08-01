@@ -53,6 +53,8 @@ export type RenderAppShellFlattenedContext = {
   doctor: any;
   claudeDoctor: any;
   kimiDoctor: any;
+  grokDoctor: any;
+  opencodeDoctor: any;
   editorSplitCompanion: any;
   editorSplitLayout: any;
   engineStatuses: any;
@@ -153,6 +155,9 @@ export type RenderAppShellFlattenedContext = {
   releaseNotesError: any;
   releaseNotesLoading: any;
   releaseNotesOpen: any;
+  checkForUpdates: any;
+  startUpdate: any;
+  updaterState: any;
   removeWorkspace: any;
   renamePrompt: any;
   renameWorkspaceGroup: any;
@@ -188,6 +193,7 @@ export type RenderAppShellFlattenedContext = {
   shouldMountSpecHub: any;
   showGitDetail: any;
   showGitHistory: any;
+  showExtensions: any;
   showHome: any;
   showKanban: any;
   showNextReleaseNotes: any;

@@ -9,7 +9,7 @@ import { memo, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import FilePen from 'lucide-react/dist/esm/icons/file-pen';
 import { parseDiff } from '../../../../utils/diff';
-import type { DiffLine } from '../../utils/diffUtils';
+import type { DiffLine } from '../../../../utils/diff';
 import { getFileName, type ToolStatusTone } from './toolConstants';
 import {
   ToolMarkerShell,

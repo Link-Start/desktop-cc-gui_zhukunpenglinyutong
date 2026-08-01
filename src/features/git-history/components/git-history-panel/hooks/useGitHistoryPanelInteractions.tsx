@@ -1,20 +1,274 @@
-// @ts-nocheck
-import { useCallback, useEffect, useMemo, type MouseEvent } from "react";
+import { type MouseEvent } from "react";
 import type { GitPrWorkflowDefaults } from "../../../../../types";
 import { useGitHistoryPanelBranchCompareHandlers } from "./useGitHistoryPanelBranchCompareHandlers";
 import { useGitHistoryPanelBranchContextMenu } from "./useGitHistoryPanelBranchContextMenu";
+import type { GitHistoryPanelInteractionScope } from "../components/GitHistoryPanelImpl";
+import type { CommitActionId } from "../components/GitHistoryPanelImplHelpers";
+import type { CommitActionDescriptor } from "../components/GitHistoryPanelTypes";
 
-type CommitActionId =
-  | "checkout"
-  | "create-branch"
-  | "revert"
-  | "cherry-pick"
-  | "copy-sha"
-  | "copy-message"
-  | "reset";
-
-export function useGitHistoryPanelInteractions(scope: any) {
-  const {BRANCHES_MIN_WIDTH,COMMITS_MIN_WIDTH,COMMIT_ROW_ESTIMATED_HEIGHT,COMPACT_LAYOUT_BREAKPOINT,CREATE_PR_PREVIEW_COMMIT_LIMIT,DETAILS_MIN_WIDTH,DETAILS_SPLIT_MAX,DETAILS_SPLIT_MIN,DISABLE_HISTORY_COMMIT_ACTIONS,Download,FileText,FolderTree,GitBranch,GitMerge,OVERVIEW_MIN_WIDTH,Pencil,Plus,RefreshCw,Repeat,Trash2,Upload,VERTICAL_SPLITTER_SIZE,ask,branchCompareDetailsCacheRef,branchContextMenu,branchContextMenuRef,branchDiffCacheRef,branchesWidth,buildCreatePrInitialStages,checkoutGitBranch,cherryPickCommit,clamp,clearOperationNotice,closeBranchContextMenu,commitContextMenu,commitListRef,commits,commitsWidth,createBranchName,createBranchSource,createBranchSourceOptions,createGitBranchFromBranch,createGitBranchFromCommit,createGitPrWorkflow,createOperationErrorState,createPrCanConfirm,createPrCanOpen,createPrDefaultsLoadTokenRef,createPrDefaultsLoading,createPrDialogOpen,createPrForm,createPrPreviewBaseRef,createPrPreviewBaseRemoteName,createPrPreviewDetailsCacheRef,createPrPreviewDetailsLoadTokenRef,createPrPreviewHeadRef,createPrPreviewLoadTokenRef,createPrPreviewSelectedSha,createPrProgressTimerRef,createPrResult,createPrSubmitting,currentBranch,currentLocalBranchEntry,deleteGitBranch,desktopSplitLayout,details,detailsBodyRef,extractWorktreePathFromDeleteError,fallbackGitRoots,fallbackGitRootsLoading,fallbackSelectingRoot,fetchGit,getDefaultColumnWidths,getGitBranchCompareCommits,getGitCommitDetails,getGitDiffs,getGitPrWorkflowDefaults,getGitPushPreview,getGitStatus,getGitWorktreeDiffAgainstBranch,getGitWorktreeDiffFileAgainstBranch,getOperationDisplayName,historyHasMore,historyLoading,historyLoadingMore,isBranchDeleteNotFullyMergedError,isBranchDeleteUsedByWorktreeError,listGitRoots,loadHistory,localBranches,localizeKnownGitError,mainGridRef,mapCreatePrStagesFromResult,mergeGitBranch,onOpenDiffPath,onSelectWorkspace,onSelectWorkspacePath,operationLoading,overviewWidth,owner,projectOptions,promptForceDeleteDialog,pullGit,pullNoCommit,pullNoVerify,pullRemote,pullRemoteOptions,pullStrategy,pullTargetBranch,pushCanConfirm,pushCc,pushDialogOpen,pushForceWithLease,pushGit,pushPreviewDetailsLoadTokenRef,pushPreviewLoadTokenRef,pushPreviewSelectedSha,pushRemoteOptions,pushRemoteTrimmed,pushReviewers,pushRunHooks,pushTags,pushTargetBranchTrimmed,pushToGerrit,pushTopic,rebaseGitBranch,refreshAll,renameBranchCanConfirm,renameBranchNameTrimmed,renameBranchSource,renameBranchSubmitting,renameGitBranch,repositoryUnavailable,resetGitCommit,resetMode,resetTargetSha,resolveGitRootPath,resolvePushTargetBranchOptions,resolveUpstreamTarget,revertCommit,runOperation,selectedBranch,selectedCommitSha,setBranchContextMenu,setBranchDiffState,setBranchesWidth,setCommitContextMenu,setCommitContextMoreOpen,setCommitsWidth,setComparePreviewFileKey,setCreateBranchDialogOpen,setCreateBranchName,setCreateBranchSource,setCreatePrCopiedPrUrl,setCreatePrCopiedRetryCommand,setCreatePrDefaults,setCreatePrDefaultsError,setCreatePrDefaultsLoading,setCreatePrDialogOpen,setCreatePrForm,setCreatePrPreviewBaseOnlyCount,setCreatePrPreviewCommits,setCreatePrPreviewDetails,setCreatePrPreviewDetailsError,setCreatePrPreviewDetailsLoading,setCreatePrPreviewError,setCreatePrPreviewExpanded,setCreatePrPreviewLoading,setCreatePrPreviewSelectedSha,setCreatePrResult,setCreatePrStages,setDesktopSplitLayout,setDetailsSplitRatio,setExpandedDirs,setExpandedLocalScopes,setExpandedRemoteScopes,setFallbackGitRoots,setFallbackGitRootsError,setFallbackGitRootsLoading,setFallbackSelectingRoot,setFetchDialogOpen,setIsCreatePrDialogMaximized,setOperationLoading,setOverviewWidth,setPullDialogOpen,setPullNoCommit,setPullNoVerify,setPullOptionsMenuOpen,setPullRemote,setPullRemoteMenuOpen,setPullRemoteMenuPlacement,setPullStrategy,setPullTargetBranch,setPullTargetBranchMenuOpen,setPullTargetBranchMenuPlacement,setPullTargetBranchQuery,setPushCc,setPushDialogOpen,setPushForceWithLease,setPushPreviewCommits,setPushPreviewDetails,setPushPreviewDetailsError,setPushPreviewDetailsLoading,setPushPreviewError,setPushPreviewExpandedDirs,setPushPreviewHasMore,setPushPreviewLoading,setPushPreviewSelectedSha,setPushPreviewTargetFound,setPushRemote,setPushRemoteMenuOpen,setPushReviewers,setPushRunHooks,setPushTags,setPushTargetBranch,setPushTargetBranchMenuOpen,setPushTargetBranchMenuPlacement,setPushTargetBranchQuery,setPushToGerrit,setPushTopic,setRefreshDialogOpen,setRenameBranchDialogOpen,setRenameBranchName,setRenameBranchSource,setResetDialogOpen,setResetMode,setResetTargetSha,setSelectedBranch,setSelectedCommitSha,setSyncDialogOpen,setSyncPreviewCommits,setSyncPreviewError,setSyncPreviewLoading,setSyncPreviewTargetBranch,setSyncPreviewTargetFound,setSyncPreviewTargetRemote,setWorkingTreeChangedFiles,setWorkingTreeTotalAdditions,setWorkingTreeTotalDeletions,setWorkspaceSelectingId,setWorktreePreviewError,setWorktreePreviewFile,setWorktreePreviewLoading,showOperationNotice,splitGitHubRepo,syncDialogOpen,syncGit,syncPreviewTargetBranch,syncPreviewTargetRemote,t,trimmed,updateGitBranch,useCallback,useEffect,useMemo,useVirtualizer,workbenchGridRef,workspace,workspaceId,workspaceSelectingId,workspaces} = scope;
+export function useGitHistoryPanelInteractions(
+  scope: GitHistoryPanelInteractionScope,
+) {
+  const {
+    BRANCHES_MIN_WIDTH,
+    COMMITS_MIN_WIDTH,
+    COMMIT_ROW_ESTIMATED_HEIGHT,
+    COMPACT_LAYOUT_BREAKPOINT,
+    CREATE_PR_PREVIEW_COMMIT_LIMIT,
+    DETAILS_MIN_WIDTH,
+    DETAILS_SPLIT_MAX,
+    DETAILS_SPLIT_MIN,
+    DISABLE_HISTORY_COMMIT_ACTIONS,
+    Download,
+    FileText,
+    FolderTree,
+    GitBranch,
+    GitMerge,
+    OVERVIEW_MIN_WIDTH,
+    Pencil,
+    Plus,
+    RefreshCw,
+    Repeat,
+    Trash2,
+    Upload,
+    VERTICAL_SPLITTER_SIZE,
+    ask,
+    branchCompareDetailsCacheRef,
+    branchContextMenu,
+    branchContextMenuRef,
+    branchDiffCacheRef,
+    branchesWidth,
+    buildCreatePrInitialStages,
+    checkoutGitBranch,
+    cherryPickCommit,
+    clamp,
+    clearOperationNotice,
+    closeBranchContextMenu,
+    commitContextMenu,
+    commitListRef,
+    commits,
+    commitsWidth,
+    createBranchName,
+    createBranchSource,
+    createBranchSourceOptions,
+    createGitBranchFromBranch,
+    createGitBranchFromCommit,
+    createGitPrWorkflow,
+    createOperationErrorState,
+    createPrCanConfirm,
+    createPrCanOpen,
+    createPrDefaultsLoadTokenRef,
+    createPrDialogOpen,
+    createPrForm,
+    createPrPreviewBaseRef,
+    createPrPreviewBaseRemoteName,
+    createPrPreviewDetailsCacheRef,
+    createPrPreviewDetailsLoadTokenRef,
+    createPrPreviewHeadRef,
+    createPrPreviewLoadTokenRef,
+    createPrPreviewSelectedSha,
+    createPrProgressTimerRef,
+    createPrResult,
+    createPrSubmitting,
+    currentBranch,
+    currentLocalBranchEntry,
+    deleteGitBranch,
+    desktopSplitLayout,
+    details,
+    detailsBodyRef,
+    extractWorktreePathFromDeleteError,
+    fallbackGitRoots,
+    fallbackGitRootsLoading,
+    fallbackSelectingRoot,
+    fetchGit,
+    getDefaultColumnWidths,
+    getGitBranchCompareCommits,
+    getGitCommitDetails,
+    getGitDiffs,
+    getGitPrWorkflowDefaults,
+    getGitPushPreview,
+    getGitStatus,
+    getGitWorktreeDiffAgainstBranch,
+    getGitWorktreeDiffFileAgainstBranch,
+    getOperationDisplayName,
+    historyHasMore,
+    historyLoading,
+    historyLoadingMore,
+    isBranchDeleteNotFullyMergedError,
+    isBranchDeleteUsedByWorktreeError,
+    listGitRoots,
+    loadHistory,
+    localBranches,
+    localizeKnownGitError,
+    mainGridRef,
+    mapCreatePrStagesFromResult,
+    mergeGitBranch,
+    onOpenDiffPath,
+    onSelectWorkspace,
+    onSelectWorkspacePath,
+    operationLoading,
+    overviewWidth,
+    projectOptions,
+    promptForceDeleteDialog,
+    pullGit,
+    pullNoCommit,
+    pullNoVerify,
+    pullRemote,
+    pullRemoteOptions,
+    pullStrategy,
+    pullTargetBranch,
+    pushCanConfirm,
+    pushCc,
+    pushDialogOpen,
+    pushForceWithLease,
+    pushGit,
+    pushPreviewDetailsLoadTokenRef,
+    pushPreviewLoadTokenRef,
+    pushPreviewSelectedSha,
+    pushRemoteOptions,
+    pushRemoteTrimmed,
+    pushReviewers,
+    pushRunHooks,
+    pushTags,
+    pushTargetBranchTrimmed,
+    pushToGerrit,
+    pushTopic,
+    rebaseGitBranch,
+    refreshAll,
+    renameBranchCanConfirm,
+    renameBranchNameTrimmed,
+    renameBranchSource,
+    renameBranchSubmitting,
+    renameGitBranch,
+    repositoryUnavailable,
+    resetGitCommit,
+    resetMode,
+    resetTargetSha,
+    resolveGitRootPath,
+    resolvePushTargetBranchOptions,
+    resolveUpstreamTarget,
+    revertCommit,
+    runOperation,
+    selectedBranch,
+    selectedCommitSha,
+    setBranchContextMenu,
+    setBranchDiffState,
+    setBranchesWidth,
+    setCommitContextMenu,
+    setCommitContextMoreOpen,
+    setCommitsWidth,
+    setComparePreviewFileKey,
+    setCreateBranchDialogOpen,
+    setCreateBranchName,
+    setCreateBranchSource,
+    setCreatePrCopiedPrUrl,
+    setCreatePrCopiedRetryCommand,
+    setCreatePrDefaults,
+    setCreatePrDefaultsError,
+    setCreatePrDefaultsLoading,
+    setCreatePrDialogOpen,
+    setCreatePrForm,
+    setCreatePrPreviewBaseOnlyCount,
+    setCreatePrPreviewCommits,
+    setCreatePrPreviewDetails,
+    setCreatePrPreviewDetailsError,
+    setCreatePrPreviewDetailsLoading,
+    setCreatePrPreviewError,
+    setCreatePrPreviewExpanded,
+    setCreatePrPreviewLoading,
+    setCreatePrPreviewSelectedSha,
+    setCreatePrResult,
+    setCreatePrStages,
+    setDesktopSplitLayout,
+    setDetailsSplitRatio,
+    setExpandedDirs,
+    setExpandedLocalScopes,
+    setExpandedRemoteScopes,
+    setFallbackGitRoots,
+    setFallbackGitRootsError,
+    setFallbackGitRootsLoading,
+    setFallbackSelectingRoot,
+    setFetchDialogOpen,
+    setIsCreatePrDialogMaximized,
+    setOperationLoading,
+    setOverviewWidth,
+    setPullDialogOpen,
+    setPullNoCommit,
+    setPullNoVerify,
+    setPullOptionsMenuOpen,
+    setPullRemote,
+    setPullRemoteMenuOpen,
+    setPullRemoteMenuPlacement,
+    setPullStrategy,
+    setPullTargetBranch,
+    setPullTargetBranchMenuOpen,
+    setPullTargetBranchMenuPlacement,
+    setPullTargetBranchQuery,
+    setPushCc,
+    setPushDialogOpen,
+    setPushForceWithLease,
+    setPushPreviewCommits,
+    setPushPreviewDetails,
+    setPushPreviewDetailsError,
+    setPushPreviewDetailsLoading,
+    setPushPreviewError,
+    setPushPreviewExpandedDirs,
+    setPushPreviewHasMore,
+    setPushPreviewLoading,
+    setPushPreviewSelectedSha,
+    setPushPreviewTargetFound,
+    setPushRemote,
+    setPushRemoteMenuOpen,
+    setPushReviewers,
+    setPushRunHooks,
+    setPushTags,
+    setPushTargetBranch,
+    setPushTargetBranchMenuOpen,
+    setPushTargetBranchMenuPlacement,
+    setPushTargetBranchQuery,
+    setPushToGerrit,
+    setPushTopic,
+    setRefreshDialogOpen,
+    setRenameBranchDialogOpen,
+    setRenameBranchName,
+    setRenameBranchSource,
+    setResetDialogOpen,
+    setResetMode,
+    setResetTargetSha,
+    setSelectedBranch,
+    setSelectedCommitSha,
+    setSyncDialogOpen,
+    setSyncPreviewCommits,
+    setSyncPreviewError,
+    setSyncPreviewLoading,
+    setSyncPreviewTargetBranch,
+    setSyncPreviewTargetFound,
+    setSyncPreviewTargetRemote,
+    setWorkingTreeChangedFiles,
+    setWorkingTreeTotalAdditions,
+    setWorkingTreeTotalDeletions,
+    setWorkspaceSelectingId,
+    setWorktreePreviewError,
+    setWorktreePreviewFile,
+    setWorktreePreviewLoading,
+    showOperationNotice,
+    splitGitHubRepo,
+    syncDialogOpen,
+    syncGit,
+    syncPreviewTargetBranch,
+    syncPreviewTargetRemote,
+    t,
+    updateGitBranch,
+    useCallback,
+    useEffect,
+    useMemo,
+    useVirtualizer,
+    workbenchGridRef,
+    workspace,
+    workspaceId,
+    workspaceSelectingId,
+    workspaces,
+  } = scope;
   const refreshFallbackGitRoots = useCallback(async () => {
     if (!repositoryUnavailable || !workspace) {
       setFallbackGitRoots([]);
@@ -31,7 +285,9 @@ export function useGitHistoryPanelInteractions(scope: any) {
     } catch (error) {
       setFallbackGitRoots([]);
       setFallbackGitRootsLoading(false);
-      setFallbackGitRootsError(error instanceof Error ? error.message : String(error));
+      setFallbackGitRootsError(
+        error instanceof Error ? error.message : String(error),
+      );
     }
   }, [
     listGitRoots,
@@ -72,15 +328,25 @@ export function useGitHistoryPanelInteractions(scope: any) {
       if (!onSelectWorkspace) {
         return;
       }
-      const normalizedTarget = absolutePath.replace(/\\/g, "/").replace(/\/+$/, "");
+      const normalizedTarget = absolutePath
+        .replace(/\\/g, "/")
+        .replace(/\/+$/, "");
       const matched = workspaces.find(
-        (entry) => entry.path.replace(/\\/g, "/").replace(/\/+$/, "") === normalizedTarget,
+        (entry) =>
+          entry.path.replace(/\\/g, "/").replace(/\/+$/, "") ===
+          normalizedTarget,
       );
       if (matched) {
         onSelectWorkspace(matched.id);
       }
     },
-    [onSelectWorkspace, onSelectWorkspacePath, resolveGitRootPath, workspace, workspaces],
+    [
+      onSelectWorkspace,
+      onSelectWorkspacePath,
+      resolveGitRootPath,
+      workspace,
+      workspaces,
+    ],
   );
 
   useEffect(() => {
@@ -105,7 +371,9 @@ export function useGitHistoryPanelInteractions(scope: any) {
 
   const emptyStateStatusText = useMemo(() => {
     if (fallbackSelectingRoot) {
-      return t("git.historyWorkspacePickerStatusSwitchRepo", { repo: fallbackSelectingRoot });
+      return t("git.historyWorkspacePickerStatusSwitchRepo", {
+        repo: fallbackSelectingRoot,
+      });
     }
     if (workspaceSelectingId) {
       return t("git.historyWorkspacePickerStatusSwitchWorkspace", {
@@ -116,7 +384,9 @@ export function useGitHistoryPanelInteractions(scope: any) {
       return t("git.historyWorkspacePickerStatusScanning");
     }
     if (fallbackGitRoots.length > 0) {
-      return t("git.historyWorkspacePickerStatusReady", { count: fallbackGitRoots.length });
+      return t("git.historyWorkspacePickerStatusReady", {
+        count: fallbackGitRoots.length,
+      });
     }
     return t("git.historyWorkspacePickerStatusNoRepo");
   }, [
@@ -143,29 +413,35 @@ export function useGitHistoryPanelInteractions(scope: any) {
       setWorkingTreeTotalDeletions,
     ],
   );
-  const handleToggleLocalScope = useCallback((scope: string) => {
-    setExpandedLocalScopes((prev) => {
-      const next = new Set(prev);
-      if (next.has(scope)) {
-        next.delete(scope);
-      } else {
-        next.add(scope);
-      }
-      return next;
-    });
-  }, [setExpandedLocalScopes]);
+  const handleToggleLocalScope = useCallback(
+    (scope: string) => {
+      setExpandedLocalScopes((prev) => {
+        const next = new Set(prev);
+        if (next.has(scope)) {
+          next.delete(scope);
+        } else {
+          next.add(scope);
+        }
+        return next;
+      });
+    },
+    [setExpandedLocalScopes],
+  );
 
-  const handleToggleRemoteScope = useCallback((scope: string) => {
-    setExpandedRemoteScopes((prev) => {
-      const next = new Set(prev);
-      if (next.has(scope)) {
-        next.delete(scope);
-      } else {
-        next.add(scope);
-      }
-      return next;
-    });
-  }, [setExpandedRemoteScopes]);
+  const handleToggleRemoteScope = useCallback(
+    (scope: string) => {
+      setExpandedRemoteScopes((prev) => {
+        const next = new Set(prev);
+        if (next.has(scope)) {
+          next.delete(scope);
+        } else {
+          next.add(scope);
+        }
+        return next;
+      });
+    },
+    [setExpandedRemoteScopes],
+  );
 
   const handleCheckoutBranch = useCallback(
     async (name: string) => {
@@ -180,30 +456,36 @@ export function useGitHistoryPanelInteractions(scope: any) {
     [checkoutGitBranch, runOperation, setSelectedBranch, workspaceId],
   );
 
-  const handleCreateBranch = useCallback((sourceBranch?: string | null) => {
-    if (!workspaceId || operationLoading) {
-      return;
-    }
-    const source = sourceBranch?.trim() ?? "";
-    const defaultSource = source
-      || (currentBranch && createBranchSourceOptions.includes(currentBranch) ? currentBranch : null)
-      || createBranchSourceOptions[0]
-      || "";
-    setCreateBranchSource(defaultSource);
-    setCreateBranchName(t("git.historyPromptNewBranchDefault"));
-    closeBranchContextMenu();
-    setCreateBranchDialogOpen(true);
-  }, [
-    closeBranchContextMenu,
-    createBranchSourceOptions,
-    currentBranch,
-    operationLoading,
-    setCreateBranchDialogOpen,
-    setCreateBranchName,
-    setCreateBranchSource,
-    t,
-    workspaceId,
-  ]);
+  const handleCreateBranch = useCallback(
+    (sourceBranch?: string | null) => {
+      if (!workspaceId || operationLoading) {
+        return;
+      }
+      const source = sourceBranch?.trim() ?? "";
+      const defaultSource =
+        source ||
+        (currentBranch && createBranchSourceOptions.includes(currentBranch)
+          ? currentBranch
+          : null) ||
+        createBranchSourceOptions[0] ||
+        "";
+      setCreateBranchSource(defaultSource);
+      setCreateBranchName(t("git.historyPromptNewBranchDefault"));
+      closeBranchContextMenu();
+      setCreateBranchDialogOpen(true);
+    },
+    [
+      closeBranchContextMenu,
+      createBranchSourceOptions,
+      currentBranch,
+      operationLoading,
+      setCreateBranchDialogOpen,
+      setCreateBranchName,
+      setCreateBranchSource,
+      t,
+      workspaceId,
+    ],
+  );
 
   const handleCreateBranchConfirm = useCallback(async () => {
     if (!workspaceId) {
@@ -234,19 +516,22 @@ export function useGitHistoryPanelInteractions(scope: any) {
     workspaceId,
   ]);
 
-  const applyCreatePrDefaults = useCallback((defaults: GitPrWorkflowDefaults) => {
-    setCreatePrDefaults(defaults);
-    setCreatePrForm({
-      upstreamRepo: defaults.upstreamRepo,
-      baseBranch: defaults.baseBranch,
-      headOwner: defaults.headOwner,
-      headBranch: defaults.headBranch,
-      title: defaults.title,
-      body: defaults.body,
-      commentAfterCreate: true,
-      commentBody: defaults.commentBody,
-    });
-  }, [setCreatePrDefaults, setCreatePrForm]);
+  const applyCreatePrDefaults = useCallback(
+    (defaults: GitPrWorkflowDefaults) => {
+      setCreatePrDefaults(defaults);
+      setCreatePrForm({
+        upstreamRepo: defaults.upstreamRepo,
+        baseBranch: defaults.baseBranch,
+        headOwner: defaults.headOwner,
+        headBranch: defaults.headBranch,
+        title: defaults.title,
+        body: defaults.body,
+        commentAfterCreate: true,
+        commentBody: defaults.commentBody,
+      });
+    },
+    [setCreatePrDefaults, setCreatePrForm],
+  );
 
   const closeCreatePrDialog = useCallback(() => {
     if (createPrSubmitting) {
@@ -279,13 +564,16 @@ export function useGitHistoryPanelInteractions(scope: any) {
     setIsCreatePrDialogMaximized,
   ]);
 
-  const handleCreatePrHeadRepositoryChange = useCallback((nextRepository: string) => {
-    const { owner } = splitGitHubRepo(nextRepository);
-    setCreatePrForm((previous) => ({
-      ...previous,
-      headOwner: owner || nextRepository.trim(),
-    }));
-  }, [setCreatePrForm, splitGitHubRepo]);
+  const handleCreatePrHeadRepositoryChange = useCallback(
+    (nextRepository: string) => {
+      const { owner } = splitGitHubRepo(nextRepository);
+      setCreatePrForm((previous) => ({
+        ...previous,
+        headOwner: owner || nextRepository.trim(),
+      }));
+    },
+    [setCreatePrForm, splitGitHubRepo],
+  );
 
   const loadCreatePrCommitPreview = useCallback(async () => {
     if (!workspaceId || !createPrDialogOpen) {
@@ -321,7 +609,10 @@ export function useGitHistoryPanelInteractions(scope: any) {
       setCreatePrPreviewCommits(commitSets.targetOnlyCommits);
       setCreatePrPreviewBaseOnlyCount(commitSets.currentOnlyCommits.length);
       setCreatePrPreviewSelectedSha((previous) => {
-        if (previous && commitSets.targetOnlyCommits.some((entry) => entry.sha === previous)) {
+        if (
+          previous &&
+          commitSets.targetOnlyCommits.some((entry) => entry.sha === previous)
+        ) {
           return previous;
         }
         return commitSets.targetOnlyCommits[0]?.sha ?? null;
@@ -390,7 +681,9 @@ export function useGitHistoryPanelInteractions(scope: any) {
       setCreatePrPreviewDetailsError(null);
       return;
     }
-    const cached = createPrPreviewDetailsCacheRef.current.get(createPrPreviewSelectedSha);
+    const cached = createPrPreviewDetailsCacheRef.current.get(
+      createPrPreviewSelectedSha,
+    );
     if (cached) {
       setCreatePrPreviewDetails(cached);
       setCreatePrPreviewDetailsLoading(false);
@@ -406,7 +699,10 @@ export function useGitHistoryPanelInteractions(scope: any) {
         if (loadToken !== createPrPreviewDetailsLoadTokenRef.current) {
           return;
         }
-        createPrPreviewDetailsCacheRef.current.set(createPrPreviewSelectedSha, response);
+        createPrPreviewDetailsCacheRef.current.set(
+          createPrPreviewSelectedSha,
+          response,
+        );
         setCreatePrPreviewDetails(response);
       })
       .catch((error) => {
@@ -476,7 +772,9 @@ export function useGitHistoryPanelInteractions(scope: any) {
         if (defaultsRequestToken !== createPrDefaultsLoadTokenRef.current) {
           return;
         }
-        setCreatePrDefaultsError(error instanceof Error ? error.message : String(error));
+        setCreatePrDefaultsError(
+          error instanceof Error ? error.message : String(error),
+        );
       })
       .finally(() => {
         if (defaultsRequestToken === createPrDefaultsLoadTokenRef.current) {
@@ -553,7 +851,11 @@ export function useGitHistoryPanelInteractions(scope: any) {
     setCreatePrStages(
       initialStages.map((stage, index) =>
         index === 0
-          ? { ...stage, status: "running", detail: t("git.historyCreatePrStageRunning") }
+          ? {
+              ...stage,
+              status: "running",
+              detail: t("git.historyCreatePrStageRunning"),
+            }
           : stage,
       ),
     );
@@ -562,7 +864,9 @@ export function useGitHistoryPanelInteractions(scope: any) {
     }
     createPrProgressTimerRef.current = window.setInterval(() => {
       setCreatePrStages((previous) => {
-        const runningIndex = previous.findIndex((stage) => stage.status === "running");
+        const runningIndex = previous.findIndex(
+          (stage) => stage.status === "running",
+        );
         if (runningIndex < 0 || runningIndex >= previous.length - 1) {
           return previous;
         }
@@ -572,7 +876,11 @@ export function useGitHistoryPanelInteractions(scope: any) {
         if (following.status !== "pending") {
           return previous;
         }
-        next[runningIndex] = { ...current, status: "success", detail: t("git.historyCreatePrStagePending") };
+        next[runningIndex] = {
+          ...current,
+          status: "success",
+          detail: t("git.historyCreatePrStagePending"),
+        };
         next[runningIndex + 1] = {
           ...following,
           status: "running",
@@ -595,7 +903,10 @@ export function useGitHistoryPanelInteractions(scope: any) {
         commentAfterCreate: createPrForm.commentAfterCreate,
         commentBody: createPrForm.commentBody.trim(),
       };
-      let workflowResult = await createGitPrWorkflow(workspaceId, workflowOptions);
+      let workflowResult = await createGitPrWorkflow(
+        workspaceId,
+        workflowOptions,
+      );
       while (
         workflowResult.errorCategory === "range-confirmation-required" &&
         workflowResult.rangeGate?.requiresConfirmation &&
@@ -631,7 +942,11 @@ export function useGitHistoryPanelInteractions(scope: any) {
         setCreatePrStages(
           initialStages.map((stage, index) =>
             index === 0
-              ? { ...stage, status: "running", detail: t("git.historyCreatePrStageRunning") }
+              ? {
+                  ...stage,
+                  status: "running",
+                  detail: t("git.historyCreatePrStageRunning"),
+                }
               : stage,
           ),
         );
@@ -723,10 +1038,12 @@ export function useGitHistoryPanelInteractions(scope: any) {
     }
     const defaultRemote = pullRemoteOptions.includes("origin")
       ? "origin"
-      : pullRemoteOptions[0] ?? "origin";
+      : (pullRemoteOptions[0] ?? "origin");
     const defaultTargetOptions = resolvePushTargetBranchOptions(defaultRemote);
     const defaultTargetBranch =
-      (currentBranch && defaultTargetOptions.includes(currentBranch) ? currentBranch : null) ??
+      (currentBranch && defaultTargetOptions.includes(currentBranch)
+        ? currentBranch
+        : null) ??
       defaultTargetOptions[0] ??
       currentBranch ??
       "";
@@ -761,11 +1078,18 @@ export function useGitHistoryPanelInteractions(scope: any) {
     setPullTargetBranchQuery,
   ]);
 
-  const handleSelectPullTargetBranch = useCallback((branchName: string) => {
-    setPullTargetBranch(branchName);
-    setPullTargetBranchQuery("");
-    setPullTargetBranchMenuOpen(false);
-  }, [setPullTargetBranch, setPullTargetBranchMenuOpen, setPullTargetBranchQuery]);
+  const handleSelectPullTargetBranch = useCallback(
+    (branchName: string) => {
+      setPullTargetBranch(branchName);
+      setPullTargetBranchQuery("");
+      setPullTargetBranchMenuOpen(false);
+    },
+    [
+      setPullTargetBranch,
+      setPullTargetBranchMenuOpen,
+      setPullTargetBranchQuery,
+    ],
+  );
 
   const handleSelectPullRemote = useCallback(
     (remoteName: string) => {
@@ -780,7 +1104,10 @@ export function useGitHistoryPanelInteractions(scope: any) {
       const targetOptions = resolvePushTargetBranchOptions(normalizedRemote);
       setPullTargetBranch((previousValue) => {
         const normalizedPrevious = previousValue.trim();
-        if (!targetOptions.length || targetOptions.includes(normalizedPrevious)) {
+        if (
+          !targetOptions.length ||
+          targetOptions.includes(normalizedPrevious)
+        ) {
           return normalizedPrevious;
         }
         return targetOptions[0] ?? normalizedPrevious;
@@ -869,7 +1196,13 @@ export function useGitHistoryPanelInteractions(scope: any) {
     }
     setFetchDialogOpen(false);
     await runOperation("fetch", () => fetchGit(workspaceId));
-  }, [fetchGit, operationLoading, runOperation, setFetchDialogOpen, workspaceId]);
+  }, [
+    fetchGit,
+    operationLoading,
+    runOperation,
+    setFetchDialogOpen,
+    workspaceId,
+  ]);
 
   const handleOpenRefreshDialog = useCallback(() => {
     if (operationLoading || historyLoading) {
@@ -884,7 +1217,13 @@ export function useGitHistoryPanelInteractions(scope: any) {
     }
     setRefreshDialogOpen(false);
     await runOperation("refresh", refreshAll);
-  }, [historyLoading, operationLoading, refreshAll, runOperation, setRefreshDialogOpen]);
+  }, [
+    historyLoading,
+    operationLoading,
+    refreshAll,
+    runOperation,
+    setRefreshDialogOpen,
+  ]);
 
   const handleSelectPushRemote = useCallback(
     (remoteName: string) => {
@@ -899,7 +1238,10 @@ export function useGitHistoryPanelInteractions(scope: any) {
       const targetOptions = resolvePushTargetBranchOptions(normalizedRemote);
       setPushTargetBranch((previousValue) => {
         const normalizedPrevious = previousValue.trim();
-        if (normalizedPrevious && (targetOptions.includes(normalizedPrevious) || !targetOptions.length)) {
+        if (
+          normalizedPrevious &&
+          (targetOptions.includes(normalizedPrevious) || !targetOptions.length)
+        ) {
           return normalizedPrevious;
         }
         if (currentBranch && targetOptions.includes(currentBranch)) {
@@ -919,11 +1261,18 @@ export function useGitHistoryPanelInteractions(scope: any) {
     ],
   );
 
-  const handleSelectPushTargetBranch = useCallback((branchName: string) => {
-    setPushTargetBranch(branchName);
-    setPushTargetBranchQuery("");
-    setPushTargetBranchMenuOpen(false);
-  }, [setPushTargetBranch, setPushTargetBranchMenuOpen, setPushTargetBranchQuery]);
+  const handleSelectPushTargetBranch = useCallback(
+    (branchName: string) => {
+      setPushTargetBranch(branchName);
+      setPushTargetBranchQuery("");
+      setPushTargetBranchMenuOpen(false);
+    },
+    [
+      setPushTargetBranch,
+      setPushTargetBranchMenuOpen,
+      setPushTargetBranchQuery,
+    ],
+  );
 
   const handleOpenPushDialog = useCallback(() => {
     if (operationLoading) {
@@ -931,10 +1280,12 @@ export function useGitHistoryPanelInteractions(scope: any) {
     }
     const defaultRemote = pushRemoteOptions.includes("origin")
       ? "origin"
-      : pushRemoteOptions[0] ?? "origin";
+      : (pushRemoteOptions[0] ?? "origin");
     const defaultTargetOptions = resolvePushTargetBranchOptions(defaultRemote);
     const defaultTargetBranch =
-      (currentBranch && defaultTargetOptions.includes(currentBranch) ? currentBranch : null) ??
+      (currentBranch && defaultTargetOptions.includes(currentBranch)
+        ? currentBranch
+        : null) ??
       defaultTargetOptions[0] ??
       currentBranch ??
       "";
@@ -998,7 +1349,10 @@ export function useGitHistoryPanelInteractions(scope: any) {
           if (!response.targetFound) {
             return null;
           }
-          if (previousSha && response.commits.some((entry) => entry.sha === previousSha)) {
+          if (
+            previousSha &&
+            response.commits.some((entry) => entry.sha === previousSha)
+          ) {
             return previousSha;
           }
           return response.commits[0]?.sha ?? null;
@@ -1021,7 +1375,9 @@ export function useGitHistoryPanelInteractions(scope: any) {
         setPushPreviewDetails(null);
         setPushPreviewDetailsLoading(false);
         setPushPreviewDetailsError(null);
-        setPushPreviewError(error instanceof Error ? error.message : String(error));
+        setPushPreviewError(
+          error instanceof Error ? error.message : String(error),
+        );
       } finally {
         if (requestToken === pushPreviewLoadTokenRef.current) {
           setPushPreviewLoading(false);
@@ -1110,7 +1466,9 @@ export function useGitHistoryPanelInteractions(scope: any) {
           return;
         }
         setPushPreviewDetails(null);
-        setPushPreviewDetailsError(error instanceof Error ? error.message : String(error));
+        setPushPreviewDetailsError(
+          error instanceof Error ? error.message : String(error),
+        );
       })
       .finally(() => {
         if (requestToken === pushPreviewDetailsLoadTokenRef.current) {
@@ -1159,7 +1517,9 @@ export function useGitHistoryPanelInteractions(scope: any) {
         }
         setSyncPreviewTargetFound(true);
         setSyncPreviewCommits([]);
-        setSyncPreviewError(error instanceof Error ? error.message : String(error));
+        setSyncPreviewError(
+          error instanceof Error ? error.message : String(error),
+        );
       })
       .finally(() => {
         if (!isCancelled) {
@@ -1220,161 +1580,192 @@ export function useGitHistoryPanelInteractions(scope: any) {
     workspaceId,
   ]);
 
-  const handleCreateBranchFromCommit = useCallback(async (commitSha?: string | null) => {
-    const targetSha = commitSha ?? selectedCommitSha;
-    if (!workspaceId || !targetSha) {
-      return;
-    }
-    const suggested = `feature/commit-${targetSha.slice(0, 7)}`;
-    const name = window.prompt(t("git.historyPromptBranchFromCommitName"), suggested);
-    if (!name || !name.trim()) {
-      return;
-    }
-    await runOperation("createFromCommit", async () => {
-      const trimmed = name.trim();
-      await createGitBranchFromCommit(workspaceId, trimmed, targetSha);
-      setSelectedBranch(trimmed);
-    });
-  }, [createGitBranchFromCommit, runOperation, selectedCommitSha, setSelectedBranch, t, workspaceId]);
-
-  const handleDeleteBranch = useCallback(async (targetBranch?: string | null) => {
-    const branchName = targetBranch ?? selectedBranch;
-    if (!workspaceId || !branchName || branchName === "all") {
-      return;
-    }
-    const confirmed = await ask(t("git.historyConfirmDeleteBranch", { branch: branchName }), {
-      title: t("git.historyTitleDeleteBranch"),
-      kind: "warning",
-    });
-    if (!confirmed) {
-      return;
-    }
-    closeBranchContextMenu();
-    const operationName = "deleteBranch";
-    const showDeleteFailure = (rawMessage: string) => {
-      const operationState = createOperationErrorState(rawMessage);
-      showOperationNotice({
-        kind: "error",
-        message: `${t("git.historyOperationFailed", {
-          operation: getOperationDisplayName(operationName),
-        })} ${operationState.userMessage}${
-          operationState.retryable ? ` ${t("git.historyOperationRetryHint")}` : ""
-        }`,
-        debugMessage: operationState.debugMessage,
-      });
-    };
-    const runForceDelete = async () => {
-      await deleteGitBranch(workspaceId, branchName, {
-        force: true,
-        removeOccupiedWorktree: true,
-      });
-      setSelectedBranch(currentBranch ?? "all");
-      await refreshAll();
-      showOperationNotice({
-        kind: "success",
-        message: t("git.historyOperationSucceeded", {
-          operation: getOperationDisplayName(operationName),
-        }),
-      });
-    };
-    clearOperationNotice();
-    setOperationLoading(operationName);
-    try {
-      await deleteGitBranch(workspaceId, branchName);
-      setSelectedBranch(currentBranch ?? "all");
-      await refreshAll();
-      showOperationNotice({
-        kind: "success",
-        message: t("git.historyOperationSucceeded", {
-          operation: getOperationDisplayName(operationName),
-        }),
-      });
-    } catch (error) {
-      const rawMessage = error instanceof Error ? error.message : String(error);
-      if (isBranchDeleteNotFullyMergedError(rawMessage)) {
-        const forceConfirmed = await promptForceDeleteDialog(
-          "notMerged",
-          branchName,
-          null,
-        );
-        if (forceConfirmed) {
-          try {
-            await runForceDelete();
-            return;
-          } catch (forceError) {
-            showDeleteFailure(
-              forceError instanceof Error ? forceError.message : String(forceError),
-            );
-            return;
-          }
-        }
-      } else if (isBranchDeleteUsedByWorktreeError(rawMessage)) {
-        const forceConfirmed = await promptForceDeleteDialog(
-          "worktreeOccupied",
-          branchName,
-          extractWorktreePathFromDeleteError(rawMessage),
-        );
-        if (forceConfirmed) {
-          try {
-            await runForceDelete();
-            return;
-          } catch (forceError) {
-            showDeleteFailure(
-              forceError instanceof Error ? forceError.message : String(forceError),
-            );
-            return;
-          }
-        }
+  const handleCreateBranchFromCommit = useCallback(
+    async (commitSha?: string | null) => {
+      const targetSha = commitSha ?? selectedCommitSha;
+      if (!workspaceId || !targetSha) {
+        return;
       }
-      showDeleteFailure(rawMessage);
-    } finally {
-      setOperationLoading(null);
-    }
-  }, [
-    ask,
-    clearOperationNotice,
-    closeBranchContextMenu,
-    createOperationErrorState,
-    currentBranch,
-    deleteGitBranch,
-    getOperationDisplayName,
-    isBranchDeleteNotFullyMergedError,
-    isBranchDeleteUsedByWorktreeError,
-    extractWorktreePathFromDeleteError,
-    promptForceDeleteDialog,
-    refreshAll,
-    selectedBranch,
-    setOperationLoading,
-    setSelectedBranch,
-    showOperationNotice,
-    t,
-    workspaceId,
-  ]);
+      const suggested = `feature/commit-${targetSha.slice(0, 7)}`;
+      const name = window.prompt(
+        t("git.historyPromptBranchFromCommitName"),
+        suggested,
+      );
+      if (!name || !name.trim()) {
+        return;
+      }
+      await runOperation("createFromCommit", async () => {
+        const trimmed = name.trim();
+        await createGitBranchFromCommit(workspaceId, trimmed, targetSha);
+        setSelectedBranch(trimmed);
+      });
+    },
+    [
+      createGitBranchFromCommit,
+      runOperation,
+      selectedCommitSha,
+      setSelectedBranch,
+      t,
+      workspaceId,
+    ],
+  );
 
-  const handleOpenRenameBranchDialog = useCallback((targetBranch?: string | null) => {
-    const branchNameCandidate = targetBranch ?? (selectedBranch === "all" ? currentBranch : selectedBranch);
-    const branchName = branchNameCandidate?.trim();
-    if (!workspaceId || operationLoading || !branchName) {
-      return;
-    }
-    if (!localBranches.some((entry) => entry.name === branchName)) {
-      return;
-    }
-    setRenameBranchSource(branchName);
-    setRenameBranchName(branchName);
-    closeBranchContextMenu();
-    setRenameBranchDialogOpen(true);
-  }, [
-    closeBranchContextMenu,
-    currentBranch,
-    localBranches,
-    operationLoading,
-    selectedBranch,
-    setRenameBranchDialogOpen,
-    setRenameBranchName,
-    setRenameBranchSource,
-    workspaceId,
-  ]);
+  const handleDeleteBranch = useCallback(
+    async (targetBranch?: string | null) => {
+      const branchName = targetBranch ?? selectedBranch;
+      if (!workspaceId || !branchName || branchName === "all") {
+        return;
+      }
+      const confirmed = await ask(
+        t("git.historyConfirmDeleteBranch", { branch: branchName }),
+        {
+          title: t("git.historyTitleDeleteBranch"),
+          kind: "warning",
+        },
+      );
+      if (!confirmed) {
+        return;
+      }
+      closeBranchContextMenu();
+      const operationName = "deleteBranch";
+      const showDeleteFailure = (rawMessage: string) => {
+        const operationState = createOperationErrorState(rawMessage);
+        showOperationNotice({
+          kind: "error",
+          message: `${t("git.historyOperationFailed", {
+            operation: getOperationDisplayName(operationName),
+          })} ${operationState.userMessage}${
+            operationState.retryable
+              ? ` ${t("git.historyOperationRetryHint")}`
+              : ""
+          }`,
+          debugMessage: operationState.debugMessage,
+        });
+      };
+      const runForceDelete = async () => {
+        await deleteGitBranch(workspaceId, branchName, {
+          force: true,
+          removeOccupiedWorktree: true,
+        });
+        setSelectedBranch(currentBranch ?? "all");
+        await refreshAll();
+        showOperationNotice({
+          kind: "success",
+          message: t("git.historyOperationSucceeded", {
+            operation: getOperationDisplayName(operationName),
+          }),
+        });
+      };
+      clearOperationNotice();
+      setOperationLoading(operationName);
+      try {
+        await deleteGitBranch(workspaceId, branchName);
+        setSelectedBranch(currentBranch ?? "all");
+        await refreshAll();
+        showOperationNotice({
+          kind: "success",
+          message: t("git.historyOperationSucceeded", {
+            operation: getOperationDisplayName(operationName),
+          }),
+        });
+      } catch (error) {
+        const rawMessage =
+          error instanceof Error ? error.message : String(error);
+        if (isBranchDeleteNotFullyMergedError(rawMessage)) {
+          const forceConfirmed = await promptForceDeleteDialog(
+            "notMerged",
+            branchName,
+            null,
+          );
+          if (forceConfirmed) {
+            try {
+              await runForceDelete();
+              return;
+            } catch (forceError) {
+              showDeleteFailure(
+                forceError instanceof Error
+                  ? forceError.message
+                  : String(forceError),
+              );
+              return;
+            }
+          }
+        } else if (isBranchDeleteUsedByWorktreeError(rawMessage)) {
+          const forceConfirmed = await promptForceDeleteDialog(
+            "worktreeOccupied",
+            branchName,
+            extractWorktreePathFromDeleteError(rawMessage),
+          );
+          if (forceConfirmed) {
+            try {
+              await runForceDelete();
+              return;
+            } catch (forceError) {
+              showDeleteFailure(
+                forceError instanceof Error
+                  ? forceError.message
+                  : String(forceError),
+              );
+              return;
+            }
+          }
+        }
+        showDeleteFailure(rawMessage);
+      } finally {
+        setOperationLoading(null);
+      }
+    },
+    [
+      ask,
+      clearOperationNotice,
+      closeBranchContextMenu,
+      createOperationErrorState,
+      currentBranch,
+      deleteGitBranch,
+      getOperationDisplayName,
+      isBranchDeleteNotFullyMergedError,
+      isBranchDeleteUsedByWorktreeError,
+      extractWorktreePathFromDeleteError,
+      promptForceDeleteDialog,
+      refreshAll,
+      selectedBranch,
+      setOperationLoading,
+      setSelectedBranch,
+      showOperationNotice,
+      t,
+      workspaceId,
+    ],
+  );
+
+  const handleOpenRenameBranchDialog = useCallback(
+    (targetBranch?: string | null) => {
+      const branchNameCandidate =
+        targetBranch ??
+        (selectedBranch === "all" ? currentBranch : selectedBranch);
+      const branchName = branchNameCandidate?.trim();
+      if (!workspaceId || operationLoading || !branchName) {
+        return;
+      }
+      if (!localBranches.some((entry) => entry.name === branchName)) {
+        return;
+      }
+      setRenameBranchSource(branchName);
+      setRenameBranchName(branchName);
+      closeBranchContextMenu();
+      setRenameBranchDialogOpen(true);
+    },
+    [
+      closeBranchContextMenu,
+      currentBranch,
+      localBranches,
+      operationLoading,
+      selectedBranch,
+      setRenameBranchDialogOpen,
+      setRenameBranchName,
+      setRenameBranchSource,
+      workspaceId,
+    ],
+  );
 
   const closeRenameBranchDialog = useCallback(() => {
     if (renameBranchSubmitting) {
@@ -1412,92 +1803,117 @@ export function useGitHistoryPanelInteractions(scope: any) {
     workspaceId,
   ]);
 
-  const handleMergeBranch = useCallback(async (targetBranch?: string | null) => {
-    const branchName = targetBranch ?? selectedBranch;
-    if (!workspaceId || !branchName || branchName === "all") {
-      return;
-    }
-    const confirmed = await ask(
-      t("git.historyConfirmMergeBranchIntoCurrent", { branch: branchName }),
-      {
-        title: t("git.historyTitleMergeBranch"),
-        kind: "warning",
-      },
-    );
-    if (!confirmed) {
-      return;
-    }
-    closeBranchContextMenu();
-    await runOperation("mergeBranch", async () => {
-      await mergeGitBranch(workspaceId, branchName);
-    });
-  }, [ask, closeBranchContextMenu, mergeGitBranch, runOperation, selectedBranch, t, workspaceId]);
+  const handleMergeBranch = useCallback(
+    async (targetBranch?: string | null) => {
+      const branchName = targetBranch ?? selectedBranch;
+      if (!workspaceId || !branchName || branchName === "all") {
+        return;
+      }
+      const confirmed = await ask(
+        t("git.historyConfirmMergeBranchIntoCurrent", { branch: branchName }),
+        {
+          title: t("git.historyTitleMergeBranch"),
+          kind: "warning",
+        },
+      );
+      if (!confirmed) {
+        return;
+      }
+      closeBranchContextMenu();
+      await runOperation("mergeBranch", async () => {
+        await mergeGitBranch(workspaceId, branchName);
+      });
+    },
+    [
+      ask,
+      closeBranchContextMenu,
+      mergeGitBranch,
+      runOperation,
+      selectedBranch,
+      t,
+      workspaceId,
+    ],
+  );
 
-  const handleCheckoutAndRebaseCurrent = useCallback(async (targetBranch: string) => {
-    if (!workspaceId) {
-      return;
-    }
-    const current = currentBranch;
-    if (!current || !targetBranch || targetBranch === current) {
-      return;
-    }
-    const confirmed = await ask(
-      t("git.historyConfirmCheckoutAndRebaseCurrent", {
-        branch: targetBranch,
-        current,
-      }),
-      {
-        title: t("git.historyTitleCheckoutAndRebaseCurrent"),
-        kind: "warning",
-      },
-    );
-    if (!confirmed) {
-      return;
-    }
-    closeBranchContextMenu();
-    await runOperation("checkoutRebase", async () => {
-      await checkoutGitBranch(workspaceId, targetBranch);
-      await rebaseGitBranch(workspaceId, current);
-      setSelectedBranch(targetBranch);
-    });
-  }, [
-    ask,
-    checkoutGitBranch,
-    closeBranchContextMenu,
-    currentBranch,
-    rebaseGitBranch,
-    runOperation,
-    setSelectedBranch,
-    t,
-    workspaceId,
-  ]);
+  const handleCheckoutAndRebaseCurrent = useCallback(
+    async (targetBranch: string) => {
+      if (!workspaceId) {
+        return;
+      }
+      const current = currentBranch;
+      if (!current || !targetBranch || targetBranch === current) {
+        return;
+      }
+      const confirmed = await ask(
+        t("git.historyConfirmCheckoutAndRebaseCurrent", {
+          branch: targetBranch,
+          current,
+        }),
+        {
+          title: t("git.historyTitleCheckoutAndRebaseCurrent"),
+          kind: "warning",
+        },
+      );
+      if (!confirmed) {
+        return;
+      }
+      closeBranchContextMenu();
+      await runOperation("checkoutRebase", async () => {
+        await checkoutGitBranch(workspaceId, targetBranch);
+        await rebaseGitBranch(workspaceId, current);
+        setSelectedBranch(targetBranch);
+      });
+    },
+    [
+      ask,
+      checkoutGitBranch,
+      closeBranchContextMenu,
+      currentBranch,
+      rebaseGitBranch,
+      runOperation,
+      setSelectedBranch,
+      t,
+      workspaceId,
+    ],
+  );
 
-  const handleRebaseCurrentOntoBranch = useCallback(async (targetBranch: string) => {
-    if (!workspaceId) {
-      return;
-    }
-    const current = currentBranch;
-    if (!current || !targetBranch || targetBranch === current) {
-      return;
-    }
-    const confirmed = await ask(
-      t("git.historyConfirmRebaseCurrentOntoBranch", {
-        current,
-        branch: targetBranch,
-      }),
-      {
-        title: t("git.historyTitleRebaseCurrentOntoBranch"),
-        kind: "warning",
-      },
-    );
-    if (!confirmed) {
-      return;
-    }
-    closeBranchContextMenu();
-    await runOperation("rebaseBranch", async () => {
-      await rebaseGitBranch(workspaceId, targetBranch);
-    });
-  }, [ask, closeBranchContextMenu, currentBranch, rebaseGitBranch, runOperation, t, workspaceId]);
+  const handleRebaseCurrentOntoBranch = useCallback(
+    async (targetBranch: string) => {
+      if (!workspaceId) {
+        return;
+      }
+      const current = currentBranch;
+      if (!current || !targetBranch || targetBranch === current) {
+        return;
+      }
+      const confirmed = await ask(
+        t("git.historyConfirmRebaseCurrentOntoBranch", {
+          current,
+          branch: targetBranch,
+        }),
+        {
+          title: t("git.historyTitleRebaseCurrentOntoBranch"),
+          kind: "warning",
+        },
+      );
+      if (!confirmed) {
+        return;
+      }
+      closeBranchContextMenu();
+      await runOperation("rebaseBranch", async () => {
+        await rebaseGitBranch(workspaceId, targetBranch);
+      });
+    },
+    [
+      ask,
+      closeBranchContextMenu,
+      currentBranch,
+      rebaseGitBranch,
+      runOperation,
+      t,
+      workspaceId,
+    ],
+  );
 
   const {
     handleShowDiffWithWorktree,
@@ -1516,35 +1932,42 @@ export function useGitHistoryPanelInteractions(scope: any) {
     localizeKnownGitError,
     setBranchDiffState,
     setComparePreviewFileKey,
-    useCallback,
     workspaceId,
   });
 
-  const handleRevertSelectedCommit = useCallback(async (commitSha?: string | null) => {
-    const targetSha = commitSha ?? selectedCommitSha;
-    if (!workspaceId || !targetSha) {
-      return;
-    }
-    const confirmed = await ask(
-      t("git.historyConfirmRevertCommit", { sha: targetSha.slice(0, 10) }),
-      {
-        title: t("git.historyTitleRevertCommit"),
-        kind: "warning",
-      },
-    );
-    if (!confirmed) {
-      return;
-    }
-    await runOperation("revert", () => revertCommit(workspaceId, targetSha));
-  }, [ask, revertCommit, runOperation, selectedCommitSha, t, workspaceId]);
+  const handleRevertSelectedCommit = useCallback(
+    async (commitSha?: string | null) => {
+      const targetSha = commitSha ?? selectedCommitSha;
+      if (!workspaceId || !targetSha) {
+        return;
+      }
+      const confirmed = await ask(
+        t("git.historyConfirmRevertCommit", { sha: targetSha.slice(0, 10) }),
+        {
+          title: t("git.historyTitleRevertCommit"),
+          kind: "warning",
+        },
+      );
+      if (!confirmed) {
+        return;
+      }
+      await runOperation("revert", () => revertCommit(workspaceId, targetSha));
+    },
+    [ask, revertCommit, runOperation, selectedCommitSha, t, workspaceId],
+  );
 
-  const handleCherryPickCommit = useCallback(async (commitSha?: string | null) => {
-    const targetSha = commitSha ?? selectedCommitSha;
-    if (!workspaceId || !targetSha) {
-      return;
-    }
-    await runOperation("cherry-pick", () => cherryPickCommit(workspaceId, targetSha));
-  }, [cherryPickCommit, runOperation, selectedCommitSha, workspaceId]);
+  const handleCherryPickCommit = useCallback(
+    async (commitSha?: string | null) => {
+      const targetSha = commitSha ?? selectedCommitSha;
+      if (!workspaceId || !targetSha) {
+        return;
+      }
+      await runOperation("cherry-pick", () =>
+        cherryPickCommit(workspaceId, targetSha),
+      );
+    },
+    [cherryPickCommit, runOperation, selectedCommitSha, workspaceId],
+  );
 
   const handleCopyCommitRevision = useCallback(
     async (commitSha?: string | null) => {
@@ -1561,7 +1984,8 @@ export function useGitHistoryPanelInteractions(scope: any) {
           }),
         });
       } catch (error) {
-        const rawMessage = error instanceof Error ? error.message : String(error);
+        const rawMessage =
+          error instanceof Error ? error.message : String(error);
         showOperationNotice({
           kind: "error",
           message: `${t("git.historyOperationFailed", {
@@ -1582,10 +2006,10 @@ export function useGitHistoryPanelInteractions(scope: any) {
       }
       const targetCommit = commits.find((entry) => entry.sha === targetSha);
       const targetMessage =
-        targetCommit?.message
-        || (details?.sha === targetSha ? details.message : "")
-        || targetCommit?.summary
-        || "";
+        targetCommit?.message ||
+        (details?.sha === targetSha ? details.message : "") ||
+        targetCommit?.summary ||
+        "";
       if (!targetMessage.trim()) {
         return;
       }
@@ -1598,7 +2022,8 @@ export function useGitHistoryPanelInteractions(scope: any) {
           }),
         });
       } catch (error) {
-        const rawMessage = error instanceof Error ? error.message : String(error);
+        const rawMessage =
+          error instanceof Error ? error.message : String(error);
         showOperationNotice({
           kind: "error",
           message: `${t("git.historyOperationFailed", {
@@ -1611,15 +2036,18 @@ export function useGitHistoryPanelInteractions(scope: any) {
     [commits, details, selectedCommitSha, showOperationNotice, t],
   );
 
-  const openResetDialog = useCallback((commitSha?: string | null) => {
-    const targetSha = commitSha ?? selectedCommitSha;
-    if (!targetSha) {
-      return;
-    }
-    setResetTargetSha(targetSha);
-    setResetMode("mixed");
-    setResetDialogOpen(true);
-  }, [selectedCommitSha, setResetDialogOpen, setResetMode, setResetTargetSha]);
+  const openResetDialog = useCallback(
+    (commitSha?: string | null) => {
+      const targetSha = commitSha ?? selectedCommitSha;
+      if (!targetSha) {
+        return;
+      }
+      setResetTargetSha(targetSha);
+      setResetMode("mixed");
+      setResetDialogOpen(true);
+    },
+    [selectedCommitSha, setResetDialogOpen, setResetMode, setResetTargetSha],
+  );
 
   const handleConfirmResetCommit = useCallback(async () => {
     if (!workspaceId || !resetTargetSha) {
@@ -1638,38 +2066,59 @@ export function useGitHistoryPanelInteractions(scope: any) {
       }
     }
     setResetDialogOpen(false);
-    await runOperation("reset", () => resetGitCommit(workspaceId, resetTargetSha, resetMode));
-  }, [ask, resetGitCommit, resetMode, resetTargetSha, runOperation, setResetDialogOpen, t, workspaceId]);
+    await runOperation("reset", () =>
+      resetGitCommit(workspaceId, resetTargetSha, resetMode),
+    );
+  }, [
+    ask,
+    resetGitCommit,
+    resetMode,
+    resetTargetSha,
+    runOperation,
+    setResetDialogOpen,
+    t,
+    workspaceId,
+  ]);
 
-  const handleFileTreeDirToggle = useCallback((path: string) => {
-    setExpandedDirs((prev) => {
-      const next = new Set(prev);
-      if (next.has(path)) {
-        next.delete(path);
-      } else {
-        next.add(path);
-      }
-      return next;
-    });
-  }, [setExpandedDirs]);
+  const handleFileTreeDirToggle = useCallback(
+    (path: string) => {
+      setExpandedDirs((prev) => {
+        const next = new Set(prev);
+        if (next.has(path)) {
+          next.delete(path);
+        } else {
+          next.add(path);
+        }
+        return next;
+      });
+    },
+    [setExpandedDirs],
+  );
 
-  const handlePushPreviewDirToggle = useCallback((path: string) => {
-    setPushPreviewExpandedDirs((prev) => {
-      const next = new Set(prev);
-      if (next.has(path)) {
-        next.delete(path);
-      } else {
-        next.add(path);
-      }
-      return next;
-    });
-  }, [setPushPreviewExpandedDirs]);
+  const handlePushPreviewDirToggle = useCallback(
+    (path: string) => {
+      setPushPreviewExpandedDirs((prev) => {
+        const next = new Set(prev);
+        if (next.has(path)) {
+          next.delete(path);
+        } else {
+          next.add(path);
+        }
+        return next;
+      });
+    },
+    [setPushPreviewExpandedDirs],
+  );
 
   const closeWorktreePreview = useCallback(() => {
     setWorktreePreviewFile(null);
     setWorktreePreviewError(null);
     setWorktreePreviewLoading(false);
-  }, [setWorktreePreviewError, setWorktreePreviewFile, setWorktreePreviewLoading]);
+  }, [
+    setWorktreePreviewError,
+    setWorktreePreviewFile,
+    setWorktreePreviewLoading,
+  ]);
 
   const handleOpenWorktreePreview = useCallback(
     async (path: string) => {
@@ -1696,9 +2145,9 @@ export function useGitHistoryPanelInteractions(scope: any) {
           getGitDiffs(workspaceId),
         ]);
         const statusFile =
-          statusResponse.files.find((entry) => entry.path === path)
-          ?? statusResponse.unstagedFiles.find((entry) => entry.path === path)
-          ?? statusResponse.stagedFiles.find((entry) => entry.path === path);
+          statusResponse.files.find((entry) => entry.path === path) ??
+          statusResponse.unstagedFiles.find((entry) => entry.path === path) ??
+          statusResponse.stagedFiles.find((entry) => entry.path === path);
         const diffEntry = diffEntries.find((entry) => entry.path === path);
         setWorktreePreviewFile({
           path,
@@ -1714,7 +2163,8 @@ export function useGitHistoryPanelInteractions(scope: any) {
           newImageMime: diffEntry?.newImageMime ?? null,
         });
       } catch (error) {
-        const rawMessage = error instanceof Error ? error.message : String(error);
+        const rawMessage =
+          error instanceof Error ? error.message : String(error);
         setWorktreePreviewError(rawMessage);
         onOpenDiffPath?.(path);
       } finally {
@@ -1752,7 +2202,14 @@ export function useGitHistoryPanelInteractions(scope: any) {
       summary: entry.summary || t("git.historyNoMessage"),
       author: entry.author || t("git.unknown"),
     };
-  }, [commits, details?.author, details?.sha, details?.summary, resetTargetSha, t]);
+  }, [
+    commits,
+    details?.author,
+    details?.sha,
+    details?.summary,
+    resetTargetSha,
+    t,
+  ]);
 
   const {
     branchContextTrackingSummary,
@@ -1831,14 +2288,22 @@ export function useGitHistoryPanelInteractions(scope: any) {
           label: t("git.historyBranchFromCommit"),
           group: "branch",
           disabled: !hasTarget || busy,
-          disabledReason: !hasTarget ? noCommitReason : busy ? busyReason : undefined,
+          disabledReason: !hasTarget
+            ? noCommitReason
+            : busy
+              ? busyReason
+              : undefined,
         },
         {
           id: "reset",
           label: t("git.historyResetCurrentBranchToHere"),
           group: "branch",
           disabled: !hasTarget || busy,
-          disabledReason: !hasTarget ? noCommitReason : busy ? busyReason : undefined,
+          disabledReason: !hasTarget
+            ? noCommitReason
+            : busy
+              ? busyReason
+              : undefined,
         },
         {
           id: "cherryPick",
@@ -1899,7 +2364,8 @@ export function useGitHistoryPanelInteractions(scope: any) {
     if (!contextWriteActions.every((action) => action.disabled)) {
       return undefined;
     }
-    return contextWriteActions.find((action) => action.disabledReason)?.disabledReason;
+    return contextWriteActions.find((action) => action.disabledReason)
+      ?.disabledReason;
   }, [contextWriteActions]);
 
   const runCommitAction = useCallback(
@@ -1951,7 +2417,12 @@ export function useGitHistoryPanelInteractions(scope: any) {
         commitSha,
       });
     },
-    [setBranchContextMenu, setCommitContextMenu, setCommitContextMoreOpen, setSelectedCommitSha],
+    [
+      setBranchContextMenu,
+      setCommitContextMenu,
+      setCommitContextMoreOpen,
+      setSelectedCommitSha,
+    ],
   );
 
   useEffect(() => {
@@ -1988,7 +2459,10 @@ export function useGitHistoryPanelInteractions(scope: any) {
   ]);
 
   const beginVerticalResize = useCallback(
-    (event: MouseEvent<HTMLDivElement>, onDeltaChange: (deltaX: number) => void) => {
+    (
+      event: MouseEvent<HTMLDivElement>,
+      onDeltaChange: (deltaX: number) => void,
+    ) => {
       event.preventDefault();
       const startX = event.clientX;
 
@@ -2075,7 +2549,17 @@ export function useGitHistoryPanelInteractions(scope: any) {
         setCommitsWidth(pairWidth - nextBranchesWidth);
       });
     },
-    [BRANCHES_MIN_WIDTH, COMMITS_MIN_WIDTH, beginVerticalResize, branchesWidth, clamp, commitsWidth, desktopSplitLayout, setBranchesWidth, setCommitsWidth],
+    [
+      BRANCHES_MIN_WIDTH,
+      COMMITS_MIN_WIDTH,
+      beginVerticalResize,
+      branchesWidth,
+      clamp,
+      commitsWidth,
+      desktopSplitLayout,
+      setBranchesWidth,
+      setCommitsWidth,
+    ],
   );
 
   const handleCommitsSplitResizeStart = useCallback(
@@ -2104,38 +2588,60 @@ export function useGitHistoryPanelInteractions(scope: any) {
         setCommitsWidth(nextCommitsWidth);
       });
     },
-    [COMMITS_MIN_WIDTH, DETAILS_MIN_WIDTH, VERTICAL_SPLITTER_SIZE, beginVerticalResize, branchesWidth, clamp, commitsWidth, desktopSplitLayout, mainGridRef, setCommitsWidth],
+    [
+      COMMITS_MIN_WIDTH,
+      DETAILS_MIN_WIDTH,
+      VERTICAL_SPLITTER_SIZE,
+      beginVerticalResize,
+      branchesWidth,
+      clamp,
+      commitsWidth,
+      desktopSplitLayout,
+      mainGridRef,
+      setCommitsWidth,
+    ],
   );
 
-  const handleDetailsSplitResizeStart = useCallback((event: MouseEvent<HTMLDivElement>) => {
-    event.preventDefault();
+  const handleDetailsSplitResizeStart = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      event.preventDefault();
 
-    const onMouseMove = (moveEvent: globalThis.MouseEvent) => {
-      const host = detailsBodyRef.current;
-      if (!host) {
-        return;
-      }
-      const rect = host.getBoundingClientRect();
-      if (rect.height <= 0) {
-        return;
-      }
-      const nextRatio = ((moveEvent.clientY - rect.top) / rect.height) * 100;
-      const clamped = Math.max(DETAILS_SPLIT_MIN, Math.min(DETAILS_SPLIT_MAX, nextRatio));
-      setDetailsSplitRatio(clamped);
-    };
+      const onMouseMove = (moveEvent: globalThis.MouseEvent) => {
+        const host = detailsBodyRef.current;
+        if (!host) {
+          return;
+        }
+        const rect = host.getBoundingClientRect();
+        if (rect.height <= 0) {
+          return;
+        }
+        const nextRatio = ((moveEvent.clientY - rect.top) / rect.height) * 100;
+        const clamped = Math.max(
+          DETAILS_SPLIT_MIN,
+          Math.min(DETAILS_SPLIT_MAX, nextRatio),
+        );
+        setDetailsSplitRatio(clamped);
+      };
 
-    const onMouseUp = () => {
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
+      const onMouseUp = () => {
+        window.removeEventListener("mousemove", onMouseMove);
+        window.removeEventListener("mouseup", onMouseUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
 
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-    document.body.style.cursor = "row-resize";
-    document.body.style.userSelect = "none";
-  }, [DETAILS_SPLIT_MAX, DETAILS_SPLIT_MIN, detailsBodyRef, setDetailsSplitRatio]);
+      window.addEventListener("mousemove", onMouseMove);
+      window.addEventListener("mouseup", onMouseUp);
+      document.body.style.cursor = "row-resize";
+      document.body.style.userSelect = "none";
+    },
+    [
+      DETAILS_SPLIT_MAX,
+      DETAILS_SPLIT_MIN,
+      detailsBodyRef,
+      setDetailsSplitRatio,
+    ],
+  );
 
   // ponytail: overview 仍挂载为顶部统计的数据源，但不再占用可见 grid column。
   const workbenchGridStyle = undefined;
@@ -2160,14 +2666,21 @@ export function useGitHistoryPanelInteractions(scope: any) {
     if (!selectedCommitSha || !commits.length) {
       return;
     }
-    const selectedIndex = commits.findIndex((entry) => entry.sha === selectedCommitSha);
+    const selectedIndex = commits.findIndex(
+      (entry) => entry.sha === selectedCommitSha,
+    );
     if (selectedIndex >= 0) {
       commitRowVirtualizer.scrollToIndex(selectedIndex, { align: "center" });
     }
   }, [commitRowVirtualizer, commits, selectedCommitSha]);
 
   useEffect(() => {
-    if (!historyHasMore || historyLoading || historyLoadingMore || !virtualCommitRows.length) {
+    if (
+      !historyHasMore ||
+      historyLoading ||
+      historyLoadingMore ||
+      !virtualCommitRows.length
+    ) {
       return;
     }
     const lastVisible = virtualCommitRows[virtualCommitRows.length - 1];
@@ -2183,6 +2696,83 @@ export function useGitHistoryPanelInteractions(scope: any) {
     virtualCommitRows,
   ]);
 
-
-  return {refreshFallbackGitRoots,handleFallbackGitRootSelect,workspaceSelectingName,emptyStateStatusText,handleWorktreeSummaryChange,handleToggleLocalScope,handleToggleRemoteScope,handleCheckoutBranch,handleCreateBranch,handleCreateBranchConfirm,applyCreatePrDefaults,handleCreatePrHeadRepositoryChange,loadCreatePrCommitPreview,handleOpenCreatePrDialog,closeCreatePrDialog,handleCopyCreatePrUrl,handleCopyCreatePrRetryCommand,handleConfirmCreatePr,handleOpenPullDialog,handleSelectPullTargetBranch,handleSelectPullRemote,handleConfirmPull,handleOpenSyncDialog,handleConfirmSync,handleOpenFetchDialog,handleConfirmFetch,handleOpenRefreshDialog,handleConfirmRefresh,handleSelectPushRemote,handleSelectPushTargetBranch,handleOpenPushDialog,loadPushPreview,handleConfirmPush,handleCreateBranchFromCommit,handleDeleteBranch,handleOpenRenameBranchDialog,closeRenameBranchDialog,handleRenameBranchConfirm,handleMergeBranch,handleCheckoutAndRebaseCurrent,handleRebaseCurrentOntoBranch,handleShowDiffWithWorktree,handleCompareWithCurrentBranch,handleSelectWorktreeDiffFile,handleSelectBranchCompareCommit,handleRevertSelectedCommit,handleCherryPickCommit,handleCopyCommitRevision,handleCopyCommitMessage,openResetDialog,handleConfirmResetCommit,handleFileTreeDirToggle,handlePushPreviewDirToggle,closeWorktreePreview,handleOpenWorktreePreview,resetTargetCommit,branchContextTrackingSummary,branchContextActions,handleBranchContextMenuKeyDown,branchContextMenuStyle,buildCommitActions,contextCommitActions,contextPrimaryActionGroups,contextWriteActions,contextMoreDisabledReason,runCommitAction,handleOpenCommitContextMenu,getCurrentDefaultColumnWidths,beginVerticalResize,handleOverviewSplitResizeStart,handleBranchesSplitResizeStart,handleCommitsSplitResizeStart,handleDetailsSplitResizeStart,workbenchGridStyle,mainGridStyle,commitRowVirtualizer,virtualCommitRows};
+  return {
+    refreshFallbackGitRoots,
+    handleFallbackGitRootSelect,
+    workspaceSelectingName,
+    emptyStateStatusText,
+    handleWorktreeSummaryChange,
+    handleToggleLocalScope,
+    handleToggleRemoteScope,
+    handleCheckoutBranch,
+    handleCreateBranch,
+    handleCreateBranchConfirm,
+    applyCreatePrDefaults,
+    handleCreatePrHeadRepositoryChange,
+    loadCreatePrCommitPreview,
+    handleOpenCreatePrDialog,
+    closeCreatePrDialog,
+    handleCopyCreatePrUrl,
+    handleCopyCreatePrRetryCommand,
+    handleConfirmCreatePr,
+    handleOpenPullDialog,
+    handleSelectPullTargetBranch,
+    handleSelectPullRemote,
+    handleConfirmPull,
+    handleOpenSyncDialog,
+    handleConfirmSync,
+    handleOpenFetchDialog,
+    handleConfirmFetch,
+    handleOpenRefreshDialog,
+    handleConfirmRefresh,
+    handleSelectPushRemote,
+    handleSelectPushTargetBranch,
+    handleOpenPushDialog,
+    loadPushPreview,
+    handleConfirmPush,
+    handleCreateBranchFromCommit,
+    handleDeleteBranch,
+    handleOpenRenameBranchDialog,
+    closeRenameBranchDialog,
+    handleRenameBranchConfirm,
+    handleMergeBranch,
+    handleCheckoutAndRebaseCurrent,
+    handleRebaseCurrentOntoBranch,
+    handleShowDiffWithWorktree,
+    handleCompareWithCurrentBranch,
+    handleSelectWorktreeDiffFile,
+    handleSelectBranchCompareCommit,
+    handleRevertSelectedCommit,
+    handleCherryPickCommit,
+    handleCopyCommitRevision,
+    handleCopyCommitMessage,
+    openResetDialog,
+    handleConfirmResetCommit,
+    handleFileTreeDirToggle,
+    handlePushPreviewDirToggle,
+    closeWorktreePreview,
+    handleOpenWorktreePreview,
+    resetTargetCommit,
+    branchContextTrackingSummary,
+    branchContextActions,
+    handleBranchContextMenuKeyDown,
+    branchContextMenuStyle,
+    buildCommitActions,
+    contextCommitActions,
+    contextPrimaryActionGroups,
+    contextWriteActions,
+    contextMoreDisabledReason,
+    runCommitAction,
+    handleOpenCommitContextMenu,
+    getCurrentDefaultColumnWidths,
+    beginVerticalResize,
+    handleOverviewSplitResizeStart,
+    handleBranchesSplitResizeStart,
+    handleCommitsSplitResizeStart,
+    handleDetailsSplitResizeStart,
+    workbenchGridStyle,
+    mainGridStyle,
+    commitRowVirtualizer,
+    virtualCommitRows,
+  };
 }

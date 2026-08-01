@@ -29,8 +29,9 @@ const noteCards = {
     titlePlaceholder: "Optional title, fallback comes from the first body line",
     bodyPlaceholder:
       "Drop an idea, command snippet, or temporary context here…",
-    captureMenu: "Save to notes",
+    captureMenu: "Save to notes (conversation body)",
     captureSelection: "Save selected code to notes…",
+    captureWholeFile: "Save entire file to notes…",
     captureConversationSelection: "Save selected text to notes…",
     captureConversationThread: "Save semantic conversation to notes…",
     captureConversationSelectionTitle: "Conversation selection",

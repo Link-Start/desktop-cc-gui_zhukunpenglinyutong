@@ -30,6 +30,7 @@ const noteCards = {
     "bodyPlaceholder": "यहाँ कोई विचार, कमांड स्निपेट या अस्थायी संदर्भ छोड़ें…",
     "captureMenu": "नोट्स में सहेजें",
     "captureSelection": "चुना हुआ code नोट्स में सहेजें…",
+    "captureWholeFile": "पूरी फ़ाइल नोट्स में सहेजें…",
     "captureConversationSelection": "चुना हुआ text नोट्स में सहेजें…",
     "captureConversationThread": "Semantic conversation नोट्स में सहेजें…",
     "captureConversationSelectionTitle": "Conversation selection",

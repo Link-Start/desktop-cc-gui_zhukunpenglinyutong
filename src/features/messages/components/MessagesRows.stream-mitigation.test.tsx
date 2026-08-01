@@ -1,8 +1,18 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type {
+  BrowserContextSendAttachment,
+  ConversationItem,
+  IntentCanvasContextSendAttachment,
+} from "../../../types";
+import {
+  resetSharedTargetStoreForTests,
+  selectNextTarget,
+} from "../../shared-session/target/targetStore";
 import { MessageRow, ReasoningRow } from "./MessagesRows";
-import { parseReasoning } from "./messagesReasoning";
+import { parseReasoning } from "../presentation/messagesReasoning";
+import { toSharedConversationItems } from "../presentation/sharedProjection/dataSource";
 
 const markdownCalls = vi.hoisted(() => ({
   calls: [] as Array<{
@@ -65,6 +75,256 @@ describe("MessagesRows stream mitigation", () => {
 
   afterEach(() => {
     cleanup();
+    resetSharedTargetStoreForTests();
+  });
+
+  it("renders the immutable Shared turn target snapshot as a badge", () => {
+    render(
+      <MessageRow
+        item={{
+          id: "shared-assistant-1",
+          kind: "message",
+          role: "assistant",
+          text: "answer",
+          executionTargetSnapshot: {
+            engine: "claude",
+            providerProfileId: "openrouter",
+            providerProfileNameSnapshot: "OpenRouter",
+            model: "claude-sonnet-4-5",
+            reasoning: { effort: "high" },
+          },
+        }}
+      />,
+    );
+
+    const badge = screen.getByTestId("message-turn-target-badge");
+    expect(badge.textContent).toContain("Claude Code");
+    expect(badge.textContent).toContain("OpenRouter");
+    expect(badge.textContent).toContain("claude-sonnet-4-5");
+    expect(badge.textContent).toContain("high");
+  });
+
+  it("renders a target badge for a reasoning-only provenance anchor", () => {
+    render(
+      <MessageRow
+        item={{
+          id: "shared-reasoning-only-provenance",
+          kind: "message",
+          role: "assistant",
+          text: "",
+          executionTargetSnapshot: {
+            engine: "codex",
+            providerProfileId: "provider-kimi",
+            providerProfileNameSnapshot: "Kimi Coding",
+            model: "kimi-for-coding",
+          },
+        }}
+      />,
+    );
+
+    const badge = screen.getByTestId("message-turn-target-badge");
+    expect(badge.textContent).toContain("Codex CLI");
+    expect(badge.textContent).toContain("Kimi Coding");
+    expect(badge.textContent).toContain("kimi-for-coding");
+    expect(screen.queryByTestId("markdown")).toBeNull();
+  });
+
+  it("keeps canonical A/B badges and reasoning stable after the picker moves to C", () => {
+    const projectedItems = toSharedConversationItems([
+      {
+        id: "turn-a:reasoning",
+        kind: "reasoning",
+        content: {
+          summary: "历史思考",
+          content: "历史思考",
+          engineSource: "claude",
+        },
+        fidelity: "canonical",
+        checksum: "reasoning-a",
+      },
+      {
+        id: "turn-a:assistant",
+        kind: "message",
+        content: {
+          role: "assistant",
+          text: "answer-a",
+          executionTargetSnapshot: {
+            engine: "claude",
+            providerProfileId: "provider-a",
+            modelCatalogEntryId: "catalog-a",
+            model: "sonnet-a",
+            reasoning: { effort: "high" },
+            providerProfileNameSnapshot: "Provider A",
+            providerProfileSource: "managed",
+          },
+        },
+        fidelity: "canonical",
+        checksum: "assistant-a",
+      },
+      {
+        id: "turn-b:assistant",
+        kind: "message",
+        content: {
+          role: "assistant",
+          text: "answer-b",
+          executionTargetSnapshot: {
+            engine: "codex",
+            providerProfileId: "provider-b",
+            modelCatalogEntryId: "catalog-b",
+            model: "gpt-b",
+            reasoning: { effort: "medium" },
+            providerProfileNameSnapshot: "Provider B",
+            providerProfileSource: "managed",
+          },
+        },
+        fidelity: "canonical",
+        checksum: "assistant-b",
+      },
+    ]);
+    const assistantItems = projectedItems.filter(
+      (
+        item,
+      ): item is Extract<ConversationItem, { kind: "message" }> =>
+        item.kind === "message" && item.role === "assistant",
+    );
+    const reasoningItem = projectedItems.find(
+      (
+        item,
+      ): item is Extract<ConversationItem, { kind: "reasoning" }> =>
+        item.kind === "reasoning",
+    );
+    if (!reasoningItem) {
+      throw new Error("expected canonical reasoning item");
+    }
+    const renderHistory = () => (
+      <>
+        <ReasoningRow
+          item={reasoningItem}
+          parsed={parseReasoning(reasoningItem)}
+          isExpanded
+          isLive={false}
+          onToggle={vi.fn()}
+        />
+        {assistantItems.map((item) => (
+          <MessageRow key={item.id} item={item} />
+        ))}
+      </>
+    );
+    const readBadges = () =>
+      screen.getAllByTestId("message-turn-target-badge").map((badge) =>
+        Array.from(badge.querySelectorAll("span"), (part) => part.textContent)
+      );
+    const expectedHistoricalBadges = [
+      ["Claude Code", "Provider A", "sonnet-a", "high"],
+      ["Codex CLI", "Provider B", "gpt-b", "medium"],
+    ];
+    const { rerender } = render(renderHistory());
+
+    expect(readBadges()).toEqual(expectedHistoricalBadges);
+    expect(screen.getByText("历史思考")).toBeTruthy();
+
+    selectNextTarget("workspace-1", "shared:thread-1", {
+      engine: "codex",
+      providerProfileId: "provider-c",
+      modelCatalogEntryId: "catalog-c",
+      model: "gpt-c",
+      reasoning: null,
+      providerProfileNameSnapshot: "Provider C",
+      providerProfileSource: "managed",
+    });
+    rerender(renderHistory());
+
+    expect(readBadges()).toEqual(expectedHistoricalBadges);
+    expect(screen.queryByText("Provider C")).toBeNull();
+    expect(screen.getByText("历史思考")).toBeTruthy();
+  });
+
+  it("rerenders a memoized row when browser context attachment changes", () => {
+    const baseItem = {
+      id: "user-browser-attachment",
+      kind: "message" as const,
+      role: "user" as const,
+      text: "same user message",
+    };
+    const attachment = (summary: string): BrowserContextSendAttachment => ({
+      kind: "browser_snapshot",
+      attachmentId: `browser-${summary}`,
+      browserSessionId: "browser-session-1",
+      snapshotId: "snapshot-1",
+      workspaceId: "workspace-1",
+      title: "Browser context",
+      url: "https://example.com/docs",
+      capturedAt: 1,
+      stale: false,
+      summary,
+      privacy: {
+        redactionApplied: false,
+        redactedKinds: [],
+        omittedKinds: [],
+      },
+    });
+    const { rerender } = render(
+      <MessageRow
+        item={{ ...baseItem, browserContextAttachment: attachment("first browser summary") }}
+      />,
+    );
+
+    expect(screen.getByText("first browser summary")).toBeTruthy();
+
+    rerender(
+      <MessageRow
+        item={{ ...baseItem, browserContextAttachment: attachment("second browser summary") }}
+      />,
+    );
+
+    expect(screen.getByText("second browser summary")).toBeTruthy();
+    expect(screen.queryByText("first browser summary")).toBeNull();
+  });
+
+  it("rerenders a memoized row when intent canvas attachments change", () => {
+    const baseItem = {
+      id: "user-intent-attachment",
+      kind: "message" as const,
+      role: "user" as const,
+      text: "same user message",
+    };
+    const attachment = (title: string): IntentCanvasContextSendAttachment => ({
+      kind: "intent_canvas_context",
+      attachmentId: `intent-${title}`,
+      canvasId: "canvas-1",
+      title,
+      mode: "focused",
+      compressionMode: "none",
+      truncated: false,
+      payloadCharacters: 10,
+      rawPayload: "{}",
+      semanticNodes: { total: 1, sent: 1, omitted: 0 },
+      semanticEdges: { total: 1, sent: 1, omitted: 0 },
+      evidence: { total: 1, sent: 1, omitted: 0 },
+      visualTextBlocks: { total: 1, sent: 1, omitted: 0 },
+    });
+    const { rerender } = render(
+      <MessageRow
+        item={{
+          ...baseItem,
+          intentCanvasContextAttachments: [attachment("First canvas context")],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("First canvas context")).toBeTruthy();
+
+    rerender(
+      <MessageRow
+        item={{
+          ...baseItem,
+          intentCanvasContextAttachments: [attachment("Second canvas context")],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Second canvas context")).toBeTruthy();
+    expect(screen.queryByText("First canvas context")).toBeNull();
   });
 
   it("raises assistant markdown throttle only when mitigation is active", () => {

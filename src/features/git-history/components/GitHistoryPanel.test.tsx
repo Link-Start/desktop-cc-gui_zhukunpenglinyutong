@@ -72,6 +72,10 @@ const mockI18n = {
 };
 
 vi.mock("react-i18next", () => ({
+  initReactI18next: {
+    type: "3rdParty",
+    init: vi.fn(),
+  },
   useTranslation: () => ({
     t: mockTranslate,
     i18n: mockI18n,
@@ -462,7 +466,27 @@ describe("GitHistoryPanel interactions", () => {
     expect(bobRow?.classList.contains(`git-history-author-color-${bobSlot}`)).toBe(true);
   });
 
-  it("switches a multi-repository history target through the repository picker", async () => {
+  it("switches a multi-repository history target through the repository branch tree", async () => {
+    const branchResponse = (repositoryRoot: string | null | undefined) => ({
+      branches: [],
+      localBranches: [{
+        name: repositoryRoot === "services/b" ? "release" : "main",
+        isCurrent: true,
+        isRemote: false,
+        remote: null,
+        upstream: null,
+        lastCommit: 1739300000,
+        ahead: 0,
+        behind: 0,
+      }],
+      remoteBranches: [],
+      currentBranch: repositoryRoot === "services/b" ? "release" : "main",
+    });
+    for (let call = 0; call < 4; call += 1) {
+      vi.mocked(tauriService.listGitBranches).mockImplementationOnce(
+        async (_workspaceId, repositoryRoot) => branchResponse(repositoryRoot),
+      );
+    }
     const onSelectRepository = vi.fn();
     const onSelectWorkspace = vi.fn();
     function HistoryHarness() {
@@ -491,8 +515,10 @@ describe("GitHistoryPanel interactions", () => {
     render(<HistoryHarness />);
 
     expect(screen.getByRole("button", { name: "git.historyProject" })).toBeTruthy();
-    fireEvent.click(await screen.findByRole("button", { name: "git.chooseRepo" }));
-    fireEvent.click(screen.getByRole("option", { name: /service-b/ }));
+    expect(screen.queryByRole("button", { name: "git.chooseRepo" })).toBeNull();
+    const [serviceBRow] = await screen.findAllByText("service-b");
+    fireEvent.click(serviceBRow.closest("[role=button]") as HTMLElement);
+    fireEvent.click(await screen.findByRole("button", { name: /release/ }));
 
     expect(onSelectRepository).toHaveBeenCalledWith("services/b");
     await waitFor(() => {
@@ -509,7 +535,7 @@ describe("GitHistoryPanel interactions", () => {
       expect(tauriService.getGitStatus).toHaveBeenCalledWith("w1", "services/b");
       expect(tauriService.getGitCommitHistory).toHaveBeenCalledWith(
         "w1",
-        expect.objectContaining({ repositoryRoot: "services/b" }),
+        expect.objectContaining({ repositoryRoot: "services/b", branch: "release" }),
       );
     });
     fireEvent.click(screen.getByText("feat: one"));
@@ -523,7 +549,65 @@ describe("GitHistoryPanel interactions", () => {
     });
   });
 
-  it("keeps the legacy project picker without a redundant repository level for one repository", async () => {
+  it("waits for a cross-repository selection before opening the branch context menu", async () => {
+    let resolveRepositorySelection: () => void = () => undefined;
+    const repositorySelection = new Promise<void>((resolve) => {
+      resolveRepositorySelection = resolve;
+    });
+    const branchResponse = async (_workspaceId: string, repositoryRoot?: string | null) => ({
+      branches: [],
+      localBranches: [{
+        name: repositoryRoot === "services/b" ? "release" : "main",
+        isCurrent: true,
+        isRemote: false,
+        remote: null,
+        upstream: null,
+        lastCommit: 1739300000,
+        ahead: 0,
+        behind: 0,
+      }],
+      remoteBranches: [],
+      currentBranch: repositoryRoot === "services/b" ? "release" : "main",
+    });
+    for (let call = 0; call < 4; call += 1) {
+      vi.mocked(tauriService.listGitBranches).mockImplementationOnce(branchResponse);
+    }
+
+    function HistoryHarness() {
+      const [repositoryRoot, setRepositoryRoot] = useState("services/a");
+      return (
+        <GitHistoryPanel
+          workspace={workspace as never}
+          repositories={[
+            { repositoryRoot: "services/a", displayName: "service-a" },
+            { repositoryRoot: "services/b", displayName: "service-b" },
+          ] as never}
+          selectedRepositoryRoot={repositoryRoot}
+          onSelectRepository={async (nextRoot) => {
+            await repositorySelection;
+            setRepositoryRoot(nextRoot);
+          }}
+        />
+      );
+    }
+
+    render(<HistoryHarness />);
+    const [serviceBRow] = await screen.findAllByText("service-b");
+    fireEvent.click(serviceBRow.closest("[role=button]") as HTMLElement);
+    const releaseBranch = await screen.findByRole("button", { name: /release/ });
+    fireEvent.contextMenu(releaseBranch, { clientX: 160, clientY: 180 });
+
+    expect(screen.queryByRole("menu")).toBeNull();
+    await act(async () => {
+      resolveRepositorySelection();
+      await repositorySelection;
+    });
+    expect(await screen.findByRole("menu")).toBeTruthy();
+    expect(screen.getByText(/release ->/)).toBeTruthy();
+  });
+
+  it("renders one repository with the shared repository branch tree", async () => {
+    const onSelectRepository = vi.fn();
     render(
       <GitHistoryPanel
         workspace={workspace as never}
@@ -533,15 +617,19 @@ describe("GitHistoryPanel interactions", () => {
           { repositoryRoot: "", displayName: workspace.name },
         ] as never}
         onSelectWorkspace={vi.fn()}
-        onSelectRepository={vi.fn()}
+        onSelectRepository={onSelectRepository}
       />,
     );
 
     expect(screen.getByRole("button", { name: "git.historyProject" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "git.chooseRepo" })).toBeNull();
-    await waitFor(() => {
-      expect(screen.getByText("feat: one")).toBeTruthy();
+    expect(await screen.findByText("feat: one")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /git.historyToggleRepositoryBranches/ })).toHaveLength(2);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "git.historyAllBranches" }));
     });
+    expect(onSelectRepository).toHaveBeenCalledWith("");
+    expect(screen.getAllByText("main").length).toBeGreaterThan(0);
   });
 
   it("opens the existing push dialog from a repository action intent", async () => {

@@ -17,6 +17,10 @@ import type {
   LayoutNodesOptions,
 } from "./layoutNodesTypes";
 import { getCodexProviders } from "../../../services/tauri";
+import {
+  dispatchSharedSendEvent,
+  resetSharedSendStateStoreForTests,
+} from "../../shared-session/runtime/sharedSendStateStore";
 
 const clientUiVisibilityMock = vi.hoisted(() => ({
   visiblePanels: new Set<string>(),
@@ -163,20 +167,27 @@ vi.mock("../../app/components/Sidebar", () => ({
   ),
 }));
 
-vi.mock("../../messages/components/Messages", () => ({
-  Messages: ({
+vi.mock("../../messages", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../messages")>();
+  return {
+    ...actual,
+    Messages: ({
     showMessageAnchors,
     conversationState,
     activeEngine,
     isHistoryLoading,
     onForkFromMessage,
     onCaptureNote,
+    timelineLeadingNode,
+    isProviderContinuation,
   }: {
     showMessageAnchors: boolean;
     activeEngine?: string;
     isHistoryLoading?: boolean;
     onForkFromMessage?: (messageId: string) => void;
     onCaptureNote?: typeof capturedMessagesNoteCapture;
+    timelineLeadingNode?: ReactNode;
+    isProviderContinuation?: boolean;
     conversationState?: {
       meta?: {
         engine?: string;
@@ -195,7 +206,9 @@ vi.mock("../../messages/components/Messages", () => ({
       data-history-restored-at={String(
         conversationState?.meta?.historyRestoredAtMs ?? "",
       )}
+      data-provider-continuation={String(Boolean(isProviderContinuation))}
     >
+      {timelineLeadingNode}
       {onForkFromMessage ? (
         <button
           type="button"
@@ -206,8 +219,9 @@ vi.mock("../../messages/components/Messages", () => ({
       ) : null}
       </section>
     );
-  },
-}));
+    },
+  };
+});
 
 vi.mock("../../composer/components/Composer", async () => {
   // 真实 Composer 已改为从 composerDraftStore 订阅草稿(不再有 draftText prop),
@@ -222,6 +236,13 @@ vi.mock("../../composer/components/Composer", async () => {
     onOpenDiffPath,
     showStatusPanelToggleOverride,
     onResolvedAlwaysThinkingChange,
+    createSessionTargetPicker = false,
+    onCreationTargetEngineChange,
+    isSharedSession = false,
+    submitDisabled = false,
+    isContextCompacting = false,
+    codexCompactionLifecycleState = "idle",
+    codexCompactionSource = null,
   }: {
     activeThreadId?: string | null;
     onDraftChange: (next: string) => void;
@@ -230,6 +251,15 @@ vi.mock("../../composer/components/Composer", async () => {
     onOpenDiffPath?: (path: string) => void;
     showStatusPanelToggleOverride?: boolean;
     onResolvedAlwaysThinkingChange?: (enabled: boolean) => void;
+    createSessionTargetPicker?: boolean;
+    onCreationTargetEngineChange?: (
+      engine: "claude" | "codex" | "gemini" | "kimi" | "opencode" | null,
+    ) => void;
+    isSharedSession?: boolean;
+    submitDisabled?: boolean;
+    isContextCompacting?: boolean;
+    codexCompactionLifecycleState?: string;
+    codexCompactionSource?: string | null;
   }) => {
     const draftText = useComposerDraft(activeThreadId ?? null);
     composerMockState.thinkingCallbacks.push(onResolvedAlwaysThinkingChange);
@@ -239,6 +269,12 @@ vi.mock("../../composer/components/Composer", async () => {
         data-show-status-panel-toggle-override={String(
           showStatusPanelToggleOverride,
         )}
+        data-create-session-target-picker={String(createSessionTargetPicker)}
+        data-is-shared-session={String(isSharedSession)}
+        data-submit-disabled={String(submitDisabled)}
+        data-is-context-compacting={String(isContextCompacting)}
+        data-codex-compaction-lifecycle={codexCompactionLifecycleState}
+        data-codex-compaction-source={codexCompactionSource ?? ""}
       >
         <textarea
           aria-label="composer input"
@@ -259,6 +295,14 @@ vi.mock("../../composer/components/Composer", async () => {
         >
           report thinking disabled
         </button>
+        {createSessionTargetPicker ? (
+          <button
+            type="button"
+            onClick={() => onCreationTargetEngineChange?.("codex")}
+          >
+            select Codex creation target
+          </button>
+        ) : null}
       </form>
     );
   },
@@ -285,8 +329,16 @@ vi.mock("../../app/components/TopbarSessionTabs", () => ({
 }));
 
 vi.mock("../../home/components/HomeChat", () => ({
-  HomeChat: ({ composerNode }: { composerNode?: ReactNode }) => (
-    <section data-testid="home-chat">{composerNode}</section>
+  HomeChat: ({
+    composerNode,
+    selectedEngine,
+  }: {
+    composerNode?: ReactNode;
+    selectedEngine?: string;
+  }) => (
+    <section data-testid="home-chat" data-selected-engine={selectedEngine}>
+      {composerNode}
+    </section>
   ),
 }));
 
@@ -323,6 +375,15 @@ let capturedFileTreePanelProps: {
     action: "stage-all";
     repositoryRoot: string;
   }) => Promise<void>;
+  revealRequest?: {
+    workspaceId: string;
+    path: string;
+    requestId: number;
+  } | null;
+} | null = null;
+let capturedFileViewPanelProps: {
+  filePath?: string;
+  onRevealInFileTree?: (path: string) => void;
 } | null = null;
 
 vi.mock("../../files/components/FileTreePanel", () => ({
@@ -337,7 +398,10 @@ vi.mock("../../search/components/WorkspaceSearchPanel", () => ({
 }));
 
 vi.mock("../../files/components/FileViewPanel", () => ({
-  FileViewPanel: () => <div data-testid="file-view-panel" />,
+  FileViewPanel: (props: typeof capturedFileViewPanelProps) => {
+    capturedFileViewPanelProps = props;
+    return <div data-testid="file-view-panel" />;
+  },
 }));
 
 vi.mock("../../note-cards/components/WorkspaceNoteCardPanel", () => ({
@@ -597,6 +661,7 @@ function createLayoutOptions(
     cycleOpenSessionNextShortcut: null,
     saveFileShortcut: null,
     findInFileShortcut: null,
+    expandSelectionShortcut: null,
     toggleGitDiffListViewShortcut: null,
     onOpenSpecHub: noop,
     onOpenWorkspaceHome: noop,
@@ -605,9 +670,6 @@ function createLayoutOptions(
     onDismissUpdate: noop,
     errorToasts: [],
     onDismissErrorToast: noop,
-    latestAgentRuns: [],
-    isLoadingLatestAgents: false,
-    onSelectHomeThread: noop,
     onSelectHomeWorkspace: noop,
     activeWorkspace: workspace,
     activeParentWorkspace: null,
@@ -645,6 +707,7 @@ function createLayoutOptions(
     openEditorTabs: [],
     onActivateEditorTab: noop,
     onCloseEditorTab: noop,
+    onCloseOtherEditorTabs: noop,
     onCloseAllEditorTabs: noop,
     onReorderEditorTabs: noop,
     onActiveEditorLineRangeChange: noop,
@@ -809,6 +872,7 @@ function createLayoutOptions(
     onOpenAgentSettings: noop,
     onOpenPromptSettings: noop,
     onOpenModelSettings: noop,
+    onOpenCliSettings: noop,
     opencodeVariantOptions: [],
     selectedOpenCodeVariant: null,
     onSelectOpenCodeVariant: noop,
@@ -887,7 +951,6 @@ function createLayoutOptions(
     handleExitPlanModeExecute: noop,
     onOpenDictationSettings: noop,
     engineOptions: [],
-    enabledEngines: {},
     onRefreshEngineOptions: asyncNoop,
     deleteConfirmThreadId: null,
     deleteConfirmWorkspaceId: null,
@@ -955,6 +1018,7 @@ function createLayoutOptions(
     focusedWorkspaceNoteRequestKey: 0,
     onRefreshFiles: noop,
     onOpenDetachedFileExplorer: noop,
+    refreshGitLog: noop,
     refreshGitDiffs: asyncNoop,
     queueGitStatusRefresh: noop,
     onDiffActivePathChange: noop,
@@ -984,7 +1048,6 @@ function createLayoutOptions(
     usePresentationProfile: false,
     onSelectEngine: noop,
     projectMapDatasetController: undefined,
-    onDispatchOrchestrationTask: async () => ({ ok: false }),
     claudeThinkingVisible: false,
     onResolvedClaudeThinkingVisibleChange: noop,
     onRefreshModelConfig: asyncNoop,
@@ -1017,6 +1080,14 @@ function LayoutNodesHarness({
   );
 }
 
+function HomeLayoutNodesHarness({
+  options,
+}: {
+  options: Parameters<typeof useLayoutNodes>[0];
+}) {
+  return useLayoutNodes(options).homeNode;
+}
+
 async function renderUseLayoutNodes(
   options: Parameters<typeof useLayoutNodes>[0],
 ) {
@@ -1029,6 +1100,7 @@ async function renderUseLayoutNodes(
 
 describe("useLayoutNodes client UI visibility", () => {
   afterEach(() => {
+    resetSharedSendStateStoreForTests();
     capturedGitDiffPanelProps = null;
     capturedFileTreePanelProps = null;
     clientUiVisibilityMock.visiblePanels.clear();
@@ -1037,6 +1109,161 @@ describe("useLayoutNodes client UI visibility", () => {
     capturedMessagesNoteCapture = undefined;
     capturedWorkspaceNotePanelProps = null;
     vi.clearAllMocks();
+  });
+
+  it("enables the create-session target picker only for Home composer", async () => {
+    const options = createLayoutOptions({
+      activeThreadId: "shared-thread",
+      threadsByWorkspace: {
+        [workspace.id]: [
+          {
+            id: "shared-thread",
+            name: "Shared",
+            updatedAt: 1,
+            engineSource: "claude",
+            threadKind: "shared",
+          },
+        ],
+      },
+    });
+    const { result } = await renderUseLayoutNodes(options);
+
+    const normalComposer = render(<>{result.current.composerNode}</>);
+    expect(
+      normalComposer.getByTestId("composer").dataset
+        .createSessionTargetPicker,
+    ).toBe("false");
+    expect(
+      normalComposer.getByTestId("composer").dataset.isSharedSession,
+    ).toBe("true");
+    normalComposer.unmount();
+
+    const homeComposer = render(<>{result.current.homeNode}</>);
+    expect(
+      homeComposer.getByTestId("composer").dataset.createSessionTargetPicker,
+    ).toBe("true");
+    expect(
+      homeComposer.getByTestId("composer").dataset.isSharedSession,
+    ).toBe("false");
+  });
+
+  it("allows Shared running follow-up queue and projects compaction lifecycle", async () => {
+    const threadId = "shared-thread";
+    dispatchSharedSendEvent(workspace.id, threadId, { type: "send" });
+    dispatchSharedSendEvent(workspace.id, threadId, {
+      type: "packagePrepared",
+    });
+    dispatchSharedSendEvent(workspace.id, threadId, { type: "runtimeAck" });
+    const options = createLayoutOptions({
+      activeThreadId: threadId,
+      isProcessing: true,
+      composerSendLabel: undefined,
+      threadStatusById: {
+        [threadId]: {
+          isProcessing: true,
+          hasUnread: false,
+          isReviewing: false,
+          isContextCompacting: true,
+          processingStartedAt: 1,
+          lastDurationMs: null,
+          codexCompactionLifecycleState: "compacting",
+          codexCompactionSource: "auto",
+        },
+      },
+      threadsByWorkspace: {
+        [workspace.id]: [
+          {
+            id: threadId,
+            name: "Shared",
+            updatedAt: 1,
+            engineSource: "codex",
+            threadKind: "shared",
+          },
+        ],
+      },
+    });
+    const { result } = await renderUseLayoutNodes(options);
+
+    const rendered = render(<>{result.current.composerNode}</>);
+    const composer = rendered.getByTestId("composer");
+    expect(composer.dataset.submitDisabled).toBe("false");
+    expect(composer.dataset.isContextCompacting).toBe("true");
+    expect(composer.dataset.codexCompactionLifecycle).toBe("compacting");
+    expect(composer.dataset.codexCompactionSource).toBe("auto");
+    expect(
+      rendered.getByRole("button", { name: "messages.queue" }),
+    ).toBeTruthy();
+  });
+
+  it("projects the Home creation target Engine into the hero icon owner", async () => {
+    render(
+      <HomeLayoutNodesHarness
+        options={createLayoutOptions({ selectedEngine: "claude" })}
+      />,
+    );
+
+    expect(screen.getByTestId("home-chat").dataset.selectedEngine).toBe(
+      "claude",
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "select Codex creation target",
+      }),
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("home-chat").dataset.selectedEngine).toBe(
+        "codex",
+      );
+    });
+  });
+
+  it("projects the loaded source turn into Provider Continuation metadata", async () => {
+    const { result } = await renderUseLayoutNodes(
+      createLayoutOptions({
+        activeThreadId: "codex:target",
+        threadsByWorkspace: {
+          [workspace.id]: [
+            {
+              id: "claude:source",
+              name: "Source",
+              updatedAt: 1,
+              engineSource: "claude",
+            },
+            {
+              id: "codex:target",
+              name: "Target",
+              updatedAt: 2,
+              engineSource: "codex",
+              originKind: "provider-continuation",
+              sourceSessionId: "claude:source",
+            },
+          ],
+        },
+        threadItemsByThread: {
+          "claude:source": [
+            {
+              id: "source-user",
+              kind: "message",
+              role: "user",
+              text: "来源最后一个问题",
+            },
+            {
+              id: "source-assistant",
+              kind: "message",
+              role: "assistant",
+              text: "来源最后一个回答",
+            },
+          ],
+        },
+      }),
+    );
+    render(<>{result.current.messagesNode}</>);
+
+    expect(screen.getByText("来源最后一个问题")).toBeTruthy();
+    expect(screen.getByText("来源最后一个回答")).toBeTruthy();
+    expect(screen.getByTestId("messages").dataset.providerContinuation).toBe(
+      "true",
+    );
   });
 
   it("selects the exact repository before staging from the file-tree Git menu", async () => {
@@ -1220,7 +1447,7 @@ describe("useLayoutNodes client UI visibility", () => {
         providerProfileId: "__disk__",
         providerProfile: {
           id: "__disk__",
-          name: "codex-tui/default-config",
+          name: "本地配置",
           source: "disk",
         },
       });
@@ -1228,7 +1455,7 @@ describe("useLayoutNodes client UI visibility", () => {
   });
 
   it(
-    "passes selected codex provider when confirming message-tail fork",
+    "keeps message-tail fork on the active codex provider",
     async () => {
       vi.mocked(getCodexProviders).mockResolvedValueOnce([
         { id: "provider-a", name: "Provider A" },
@@ -1261,24 +1488,17 @@ describe("useLayoutNodes client UI visibility", () => {
 
       const selector = await screen.findByLabelText("messages.forkProviderLabel");
       expect((selector as HTMLSelectElement).value).toBe("provider-a");
-      await screen.findByRole("option", { name: "Provider B" });
-      await act(async () => {
-        fireEvent.change(selector, { target: { value: "provider-b" } });
-        await Promise.resolve();
-      });
-      await waitFor(() => {
-        expect((selector as HTMLSelectElement).value).toBe("provider-b");
-      });
+      expect(screen.queryByRole("option", { name: "Provider B" })).toBeNull();
       fireEvent.click(
         screen.getByRole("button", { name: "messages.forkConfirmAction" }),
       );
 
       await waitFor(() => {
         expect(onForkFromMessage).toHaveBeenCalledWith("user-fork-anchor", {
-          providerProfileId: "provider-b",
+          providerProfileId: "provider-a",
           providerProfile: {
-            id: "provider-b",
-            name: "Provider B",
+            id: "provider-a",
+            name: "Provider A",
             source: "managed",
           },
         });
@@ -1704,5 +1924,52 @@ describe("useLayoutNodes client UI visibility", () => {
     expect(
       screen.getByTestId("composer").dataset.showStatusPanelToggleOverride,
     ).toBe("false");
+  });
+
+  it("routes file reveal intents to the main Files tree with a monotonic request", async () => {
+    const onFilePanelModeChange = vi.fn();
+    const rendered = await renderUseLayoutNodes(
+      createLayoutOptions({
+        editorFilePath: "src/features/Main.tsx",
+        openEditorTabs: ["src/features/Main.tsx"],
+        filePanelMode: "files",
+        onFilePanelModeChange,
+      }),
+    );
+    const surfaces = render(
+      <>
+        {rendered.result.current.gitDiffPanelNode}
+        {rendered.result.current.fileViewPanelNode}
+      </>,
+    );
+    await screen.findByTestId("file-view-panel");
+
+    act(() => {
+      capturedFileViewPanelProps?.onRevealInFileTree?.("src/features/Main.tsx");
+    });
+    surfaces.rerender(
+      <>
+        {rendered.result.current.gitDiffPanelNode}
+        {rendered.result.current.fileViewPanelNode}
+      </>,
+    );
+
+    expect(onFilePanelModeChange).toHaveBeenCalledWith("files");
+    expect(capturedFileTreePanelProps?.revealRequest).toEqual({
+      workspaceId: "workspace-1",
+      path: "src/features/Main.tsx",
+      requestId: 1,
+    });
+
+    act(() => {
+      capturedFileViewPanelProps?.onRevealInFileTree?.("src/features/Main.tsx");
+    });
+    surfaces.rerender(
+      <>
+        {rendered.result.current.gitDiffPanelNode}
+        {rendered.result.current.fileViewPanelNode}
+      </>,
+    );
+    expect(capturedFileTreePanelProps?.revealRequest?.requestId).toBe(2);
   });
 });

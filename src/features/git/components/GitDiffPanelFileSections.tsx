@@ -489,6 +489,22 @@ export function renderSectionCountBadge(count: number) {
     </Badge>
   );
 }
+export function renderSectionLineStatsBadge(additions: number, deletions: number) {
+  if (additions <= 0 && deletions <= 0) {
+    return null;
+  }
+  return (
+    <span
+      className="diff-counts-inline git-filetree-badge diff-section-line-stats-badge"
+      aria-label={`+${additions} -${deletions}`}
+    >
+      <span className="is-add">+{additions}</span>
+      <span className="is-sep" aria-hidden>/</span>
+      <span className="is-del">-{deletions}</span>
+    </span>
+  );
+}
+
 
 export function DiffSection({
   title,
@@ -577,6 +593,13 @@ export function DiffSection({
     }
     return "partial";
   }, [excludedPathSet, files, includedPathSet, partialPathSet]);
+  const sectionLineStats = useMemo(() => files.reduce(
+    (acc, file) => ({
+      additions: acc.additions + (file.additions ?? 0),
+      deletions: acc.deletions + (file.deletions ?? 0),
+    }),
+    { additions: 0, deletions: 0 },
+  ), [files]);
   const showSectionActions =
     toggleableFilePaths.length > 0 || actionFilePaths.length > 0;
 
@@ -622,6 +645,7 @@ export function DiffSection({
             onDiscardFiles={onDiscardFiles}
           />
         )}
+        {renderSectionLineStatsBadge(sectionLineStats.additions, sectionLineStats.deletions)}
         {renderSectionCountBadge(files.length)}
       </div>
       {!isCollapsed ? (

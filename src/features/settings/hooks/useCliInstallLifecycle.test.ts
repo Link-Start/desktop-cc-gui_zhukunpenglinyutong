@@ -23,4 +23,20 @@ describe("resolveCliInstallStrategy", () => {
     );
     expect(resolveCliInstallStrategy("kimi", "updateLatest")).toBe("npmGlobal");
   });
+
+  it("keeps npm global for Grok", () => {
+    expect(resolveCliInstallStrategy("grok", "installLatest")).toBe(
+      "npmGlobal",
+    );
+    expect(resolveCliInstallStrategy("grok", "updateLatest")).toBe("npmGlobal");
+  });
+
+  it("keeps npm global for OpenCode", () => {
+    expect(resolveCliInstallStrategy("opencode", "installLatest")).toBe(
+      "npmGlobal",
+    );
+    expect(resolveCliInstallStrategy("opencode", "updateLatest")).toBe(
+      "npmGlobal",
+    );
+  });
 });

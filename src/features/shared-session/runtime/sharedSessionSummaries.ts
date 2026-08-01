@@ -1,14 +1,13 @@
 import type { SharedSessionSupportedEngine } from "../utils/sharedSessionEngines";
-import type { ThreadSummary } from "../../../types";
-import { normalizeSharedSessionEngine } from "../utils/sharedSessionEngines";
+import type { EngineType, ThreadSummary } from "../../../types";
+import {
+  isSharedSessionSupportedEngine,
+  normalizeSharedSessionEngine,
+} from "../utils/sharedSessionEngines";
 
-const NATIVE_OTHER_ENGINE_PREFIXES = [
+const UNSUPPORTED_SHARED_ENGINE_PREFIXES = [
   "gemini:",
   "gemini-pending-",
-  "kimi:",
-  "kimi-pending-",
-  "opencode:",
-  "opencode-pending-",
 ] as const;
 
 type SharedSessionSummary = {
@@ -43,7 +42,9 @@ function shouldKeepSharedNativeThreadId(value: unknown) {
     return false;
   }
   const normalized = threadId.toLowerCase();
-  return !NATIVE_OTHER_ENGINE_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+  return !UNSUPPORTED_SHARED_ENGINE_PREFIXES.some((prefix) =>
+    normalized.startsWith(prefix),
+  );
 }
 
 export function normalizeSharedSessionSummary(value: unknown): SharedSessionSummary | null {
@@ -58,9 +59,10 @@ export function normalizeSharedSessionSummary(value: unknown): SharedSessionSumm
   const selectedEngine = asString(record.selectedEngine ?? record.selected_engine)
     .trim()
     .toLowerCase();
+  const selectedEngineCandidate = selectedEngine as EngineType;
   const normalizedSelectedEngine = normalizeSharedSessionEngine(
-    selectedEngine === "codex" || selectedEngine === "claude"
-      ? selectedEngine
+    isSharedSessionSupportedEngine(selectedEngineCandidate)
+      ? selectedEngineCandidate
       : undefined,
   );
   return {

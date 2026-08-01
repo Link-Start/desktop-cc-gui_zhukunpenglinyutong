@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ConversationItem } from "../../../types";
+import { withoutMessagePresentationMetadata } from "./threadReducerTestProjection";
 import { initialState, threadReducer } from "./useThreadsReducer";
 import type { ThreadState } from "./useThreadsReducer";
 
@@ -326,7 +327,7 @@ describe("threadReducer context compaction lifecycle", () => {
       ],
     });
 
-    expect(next.itemsByThread["thread-1"]).toEqual([
+    expect(withoutMessagePresentationMetadata(next.itemsByThread["thread-1"])).toEqual([
       {
         id: "context-compacted-codex-compact-thread-1-latest",
         kind: "message",
@@ -389,7 +390,7 @@ describe("threadReducer context compaction lifecycle", () => {
       ],
     });
 
-    expect(next.itemsByThread["thread-1"]).toEqual([
+    expect(withoutMessagePresentationMetadata(next.itemsByThread["thread-1"])).toEqual([
       {
         id: "assistant-history-1",
         kind: "message",

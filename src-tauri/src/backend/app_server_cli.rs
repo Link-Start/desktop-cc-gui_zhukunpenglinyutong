@@ -45,7 +45,10 @@ fn build_seed_search_paths(custom_bin: Option<&str>, extra_paths: &[PathBuf]) ->
     let mut all_paths: Vec<PathBuf> = Vec::new();
 
     if let Some(bin_path) = custom_bin.filter(|v| !v.trim().is_empty()) {
-        if let Some(parent) = Path::new(bin_path).parent() {
+        if let Some(parent) = Path::new(bin_path)
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
             push_unique_path(&mut all_paths, parent.to_path_buf());
         }
     }
@@ -96,13 +99,15 @@ fn discover_npm_global_bin_dir_from_npm(
     seed_paths: &[PathBuf],
     npm_bin_override: Option<&Path>,
 ) -> Option<PathBuf> {
-    let joined_paths = env::join_paths(seed_paths.iter()).ok()?;
-    let cwd = env::current_dir().ok()?;
     let npm_bin = npm_bin_override.map(PathBuf::from).or_else(|| {
+        let joined_paths = env::join_paths(seed_paths.iter()).ok()?;
+        let cwd = env::current_dir().ok()?;
         which::which_in("npm", Some(&joined_paths), &cwd)
             .ok()
             .or_else(|| which::which("npm").ok())
     })?;
+    let probe_paths = build_npm_probe_paths(seed_paths, &npm_bin);
+    let joined_paths = env::join_paths(probe_paths.iter()).ok()?;
 
     let mut command = build_std_command_for_binary(&npm_bin);
     command.env("PATH", &joined_paths);
@@ -119,6 +124,71 @@ fn discover_npm_global_bin_dir_from_npm(
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     resolve_npm_global_bin_dir_from_prefix(stdout.as_ref())
+}
+
+fn build_npm_probe_paths(seed_paths: &[PathBuf], npm_bin: &Path) -> Vec<PathBuf> {
+    let mut probe_paths = npm_launcher_search_paths(npm_bin);
+    for seed_path in seed_paths {
+        push_unique_path(&mut probe_paths, seed_path.clone());
+    }
+    probe_paths
+}
+
+const MAX_NPM_SYMLINK_HOPS: usize = 8;
+
+fn npm_launcher_file_names(windows: bool) -> &'static [&'static str] {
+    if windows {
+        &["npm.cmd", "npm.exe", "npm.bat", "npm.ps1", "npm"]
+    } else {
+        &["npm"]
+    }
+}
+
+fn npm_launcher_search_paths(npm_bin: &Path) -> Vec<PathBuf> {
+    let mut search_paths = Vec::new();
+    let mut current_launcher = npm_bin.to_path_buf();
+
+    for _ in 0..=MAX_NPM_SYMLINK_HOPS {
+        let Some(parent) = current_launcher.parent() else {
+            break;
+        };
+        push_unique_path(&mut search_paths, parent.to_path_buf());
+
+        let Ok(metadata) = std::fs::symlink_metadata(&current_launcher) else {
+            break;
+        };
+        if !metadata.file_type().is_symlink() {
+            break;
+        }
+        let Ok(target) = std::fs::read_link(&current_launcher) else {
+            break;
+        };
+        current_launcher = if target.is_absolute() {
+            target
+        } else {
+            parent.join(target)
+        };
+    }
+
+    search_paths
+}
+
+fn discover_npm_launcher_search_paths(seed_paths: &[PathBuf]) -> Vec<PathBuf> {
+    let mut discovered_paths = Vec::new();
+    for seed_path in seed_paths {
+        for file_name in npm_launcher_file_names(cfg!(windows)) {
+            let launcher = seed_path.join(file_name);
+            if std::fs::symlink_metadata(&launcher).is_err() {
+                continue;
+            }
+            for search_path in npm_launcher_search_paths(&launcher) {
+                if search_path.is_dir() {
+                    push_unique_path(&mut discovered_paths, search_path);
+                }
+            }
+        }
+    }
+    discovered_paths
 }
 
 fn build_std_command_for_binary(bin: &Path) -> std::process::Command {
@@ -146,13 +216,6 @@ fn build_std_command_for_binary(bin: &Path) -> std::process::Command {
 }
 
 fn discover_npm_global_bin_dir(seed_paths: &[PathBuf]) -> Option<PathBuf> {
-    if let Some(env_prefix) = env::var_os("NPM_CONFIG_PREFIX")
-        .and_then(|value| value.into_string().ok())
-        .and_then(|value| resolve_npm_global_bin_dir_from_prefix(&value))
-    {
-        return Some(env_prefix);
-    }
-
     discover_npm_global_bin_dir_from_npm(seed_paths, None)
 }
 
@@ -292,6 +355,19 @@ fn get_extra_search_paths() -> Vec<PathBuf> {
     }
 
     let seed_paths = build_seed_search_paths(None, &paths);
+    for npm_search_path in discover_npm_launcher_search_paths(&seed_paths) {
+        push_unique_path(&mut paths, npm_search_path);
+    }
+    for prefix_key in ["NPM_CONFIG_PREFIX", "npm_config_prefix"] {
+        if let Some(env_prefix) = env::var_os(prefix_key)
+            .and_then(|value| value.into_string().ok())
+            .and_then(|value| resolve_npm_global_bin_dir_from_prefix(&value))
+        {
+            push_unique_path(&mut paths, env_prefix);
+        }
+    }
+
+    let seed_paths = build_seed_search_paths(None, &paths);
     if let Some(npm_global_bin) = discover_npm_global_bin_dir(&seed_paths) {
         push_unique_path(&mut paths, npm_global_bin);
     }
@@ -387,7 +463,10 @@ fn push_unique_claude_candidate(candidates: &mut Vec<PathBuf>, path: PathBuf) {
     if !path.exists() {
         return;
     }
-    if candidates.iter().any(|existing| paths_equal(existing, &path)) {
+    if candidates
+        .iter()
+        .any(|existing| paths_equal(existing, &path))
+    {
         return;
     }
     candidates.push(path);
@@ -448,11 +527,7 @@ fn collect_claude_code_candidates(custom_bin: Option<&str>) -> Vec<PathBuf> {
         }
     }
 
-    for dir in [
-        "/opt/homebrew/bin",
-        "/usr/local/bin",
-        "/usr/bin",
-    ] {
+    for dir in ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"] {
         push_unique_claude_candidate(&mut candidates, PathBuf::from(dir).join("claude"));
     }
 
@@ -664,7 +739,11 @@ fn prefer_windows_executable_variant(path: PathBuf) -> PathBuf {
 }
 
 pub(crate) fn build_codex_path_env(codex_bin: Option<&str>) -> Option<String> {
-    let paths = build_search_paths(codex_bin);
+    build_cli_path_env(codex_bin)
+}
+
+pub(crate) fn build_cli_path_env(custom_bin: Option<&str>) -> Option<String> {
+    let paths = build_search_paths(custom_bin);
     let path_str = paths.to_string_lossy().to_string();
     if path_str.is_empty() {
         None
@@ -968,15 +1047,28 @@ fn codex_curated_skills_developer_instructions_block(
 ) -> Option<String> {
     use crate::curated_skills;
     let enabled = curated_skills::list_enabled_curated_skill_bodies(app_settings);
-    if enabled.is_empty() {
-        return None;
+    let enabled_label = if enabled.is_empty() {
+        "none".to_string()
+    } else {
+        enabled
+            .iter()
+            .map(|(id, _)| format!("`{id}`"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let mut snapshot = format!(
+        "## Curated Skills\n\nThis section is the authoritative state for ccgui bundled curated skills in the current runtime or turn. Only `<skill>` blocks listed in this section are active. Any ccgui bundled curated-skill instructions from earlier turns whose id is not listed here are inactive and MUST NOT be followed. This state does not change user-supplied developer instructions, system instructions, or skills provided through other mechanisms.\n\nEnabled: {enabled_label}."
+    );
+    if !enabled.is_empty() {
+        let bodies = enabled
+            .into_iter()
+            .map(|(id, body)| format!("<skill id=\"{}\">\n{}\n</skill>", id, body))
+            .collect::<Vec<_>>()
+            .join("\n");
+        snapshot.push_str("\n\n");
+        snapshot.push_str(&bodies);
     }
-    let body = enabled
-        .into_iter()
-        .map(|(id, body)| format!("<skill id=\"{}\">\n{}\n</skill>", id, body))
-        .collect::<Vec<_>>()
-        .join("\n");
-    Some(format!("## Curated Skills\n\n{body}"))
+    Some(snapshot)
 }
 
 fn build_generated_developer_instructions(
@@ -995,7 +1087,6 @@ fn build_generated_developer_instructions(
     crate::codex::collaboration_policy::merge_developer_instructions(None, &directives)
 }
 
-#[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn codex_generated_developer_instructions_for_turn(
     app_settings: &crate::types::AppSettings,
 ) -> Option<String> {
@@ -1018,7 +1109,9 @@ pub(crate) fn build_codex_app_server_args(
 ///   * `app_settings` is `Some`
 ///   * the user-supplied `codex_args` does NOT already contain a
 ///     `developer_instructions=` / `instructions=` override
-///   * at least one curated skill is enabled
+///
+/// The generated block is also present when no curated skill is enabled so a
+/// resumed Codex thread receives an authoritative deactivation snapshot.
 /// Existing developer instructions are preserved and the curated block is
 /// appended under a `## Curated Skills` heading via the same merge policy
 /// used by `merge_developer_instructions`.
@@ -1871,30 +1964,36 @@ mod curated_skill_injection_tests {
     }
 
     #[test]
-    fn codex_curated_skills_config_arg_returns_none_when_empty() {
+    fn codex_curated_skills_config_arg_emits_authoritative_snapshot_when_empty() {
         let s = settings_with(vec![]);
-        let out = codex_curated_skills_config_arg(&s, None);
-        assert!(out.is_none());
+        let out = codex_curated_skills_config_arg(&s, None).expect("disabled snapshot");
+        assert!(out.contains("authoritative state"));
+        assert!(out.contains("Enabled: none."));
+        assert!(!out.contains("<skill id="));
     }
 
     #[test]
-    fn codex_curated_skills_config_arg_includes_curated_section_header_when_no_existing() {
-        // Empty enabled set -> None
-        let s = settings_with(vec![]);
-        assert!(codex_curated_skills_config_arg(&s, None).is_none());
+    fn codex_curated_skills_config_arg_marks_unlisted_skills_inactive() {
+        let s = settings_with(vec!["lazy-senior-dev"]);
+        let out = codex_curated_skills_config_arg(&s, None).expect("enabled snapshot");
+        assert!(out.contains("Enabled: `lazy-senior-dev`."));
+        assert!(out.contains("whose id is not listed here are inactive"));
+        assert!(out.contains("<skill id=\"lazy-senior-dev\">"));
+        assert!(!out.contains("<skill id=\"caveman\">"));
     }
 
     #[test]
-    fn build_codex_app_server_args_with_settings_does_not_inject_when_disabled() {
+    fn build_codex_app_server_args_with_settings_injects_deactivation_when_disabled() {
         let s = settings_with(vec![]);
         let args =
             build_codex_app_server_args_with_settings(None, primary_no_hint(), Some(&s)).unwrap();
-        // Should not contain any developer_instructions arg.
-        let any_dev = args.iter().any(|a| a.contains("developer_instructions="));
-        assert!(
-            !any_dev,
-            "no developer_instructions should be injected when no curated is enabled"
-        );
+        let developer_instructions = args
+            .iter()
+            .find_map(|arg| arg.strip_prefix("developer_instructions="))
+            .map(decode_toml_string)
+            .expect("deactivation developer instructions");
+        assert!(developer_instructions.contains("Enabled: none."));
+        assert!(!developer_instructions.contains("<skill id="));
         // Final arg is "app-server".
         assert_eq!(args.last().map(String::as_str), Some("app-server"));
     }
@@ -1997,6 +2096,43 @@ mod curated_skill_injection_tests {
     }
 
     #[test]
+    fn codex_generated_developer_instructions_for_turn_includes_all_reenabled_skills() {
+        let s = settings_with(vec!["lazy-senior-dev", "caveman"]);
+        let instructions =
+            codex_generated_developer_instructions_for_turn(&s).expect("turn instructions");
+
+        assert!(
+            instructions.contains("Enabled: `lazy-senior-dev`, `caveman`."),
+            "got: {instructions}"
+        );
+        assert!(
+            instructions.contains("<skill id=\"lazy-senior-dev\">"),
+            "got: {instructions}"
+        );
+        assert!(
+            instructions.contains("<skill id=\"caveman\">"),
+            "got: {instructions}"
+        );
+    }
+
+    #[test]
+    fn codex_generated_developer_instructions_for_turn_deactivates_empty_snapshot() {
+        let s = settings_with(vec![]);
+        let instructions =
+            codex_generated_developer_instructions_for_turn(&s).expect("turn instructions");
+
+        assert!(
+            instructions.contains("writableRoots"),
+            "got: {instructions}"
+        );
+        assert!(
+            instructions.contains("Enabled: none."),
+            "got: {instructions}"
+        );
+        assert!(!instructions.contains("<skill id="), "got: {instructions}");
+    }
+
+    #[test]
     fn wrapper_retry_omits_generated_instructions_without_profile_transport() {
         let root = std::env::temp_dir().join(format!(
             "ccgui-codex-no-generated-profile-{}",
@@ -2092,7 +2228,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[cfg(unix)]
-    use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::fs::{symlink, PermissionsExt};
 
     #[test]
     fn npm_prefix_resolution_uses_bin_on_unix() {
@@ -2339,6 +2475,25 @@ mod tests {
             wrapper_kind_for_binary(r"C:\Users\demo\AppData\Roaming\npm\codex.ps1"),
             "ps1-wrapper"
         );
+    }
+
+    #[test]
+    fn generic_cli_path_env_keeps_custom_parent_and_codex_compatibility() {
+        let custom_bin = "/Users/demo/.npm-global/bin/jdtls";
+        let generic_path = build_cli_path_env(Some(custom_bin)).expect("generic PATH");
+        let paths = env::split_paths(&OsString::from(&generic_path)).collect::<Vec<_>>();
+
+        assert!(paths
+            .iter()
+            .any(|path| path == Path::new("/Users/demo/.npm-global/bin")));
+        assert_eq!(build_codex_path_env(Some(custom_bin)), Some(generic_path));
+    }
+
+    #[test]
+    fn bare_cli_name_does_not_add_an_empty_path_entry() {
+        let paths = build_seed_search_paths(Some("jdtls"), &[]);
+
+        assert!(paths.iter().all(|path| !path.as_os_str().is_empty()));
     }
 
     #[test]
@@ -2596,5 +2751,144 @@ mod tests {
         let _ = fs::remove_file(&fake_npm);
         let _ = fs::remove_file(&codex_path);
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn discover_npm_global_bin_dir_prefers_symlinked_npm_runtime() {
+        let unique = format!(
+            "ccgui-symlinked-npm-test-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        );
+        let root = env::temp_dir().join(unique);
+        let launcher_bin = root.join("launcher-bin");
+        let runtime_bin = root.join("runtime-bin");
+        let competing_bin = root.join("competing-bin");
+        let expected_prefix = root.join("expected-prefix");
+        let competing_prefix = root.join("competing-prefix");
+        let runtime_npm = runtime_bin.join("npm");
+        let linked_npm = launcher_bin.join("npm");
+        let runtime_node = runtime_bin.join("node");
+        let competing_node = competing_bin.join("node");
+        let npm_cli = runtime_bin.join("../lib/node_modules/npm/bin/npm-cli.js");
+
+        for directory in [
+            launcher_bin.as_path(),
+            runtime_bin.as_path(),
+            competing_bin.as_path(),
+            npm_cli.parent().expect("npm cli parent"),
+        ] {
+            fs::create_dir_all(directory).expect("create test bin directory");
+        }
+        fs::write(&npm_cli, "#!/usr/bin/env node\n").expect("write npm cli");
+        fs::write(
+            &runtime_node,
+            format!("#!/bin/sh\nprintf '{}\\n'\n", expected_prefix.display()),
+        )
+        .expect("write matching node runtime");
+        fs::write(
+            &competing_node,
+            format!("#!/bin/sh\nprintf '{}\\n'\n", competing_prefix.display()),
+        )
+        .expect("write competing node runtime");
+
+        for executable in [&npm_cli, &runtime_node, &competing_node] {
+            let mut permissions = fs::metadata(executable)
+                .expect("stat test executable")
+                .permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(executable, permissions).expect("chmod test executable");
+        }
+        symlink("../lib/node_modules/npm/bin/npm-cli.js", &runtime_npm)
+            .expect("create runtime npm symlink");
+        symlink(&runtime_npm, &linked_npm).expect("create launcher npm symlink");
+
+        let resolved = discover_npm_global_bin_dir_from_npm(
+            std::slice::from_ref(&competing_bin),
+            Some(linked_npm.as_path()),
+        )
+        .expect("resolve symlinked npm prefix");
+
+        assert_eq!(resolved, expected_prefix.join("bin"));
+        let probe_paths = build_npm_probe_paths(&[competing_bin], &linked_npm);
+        assert_eq!(probe_paths.first(), Some(&launcher_bin));
+        assert!(probe_paths.iter().any(|path| path == &runtime_bin));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn npm_launcher_discovery_includes_secondary_runtime_provider() {
+        let unique = format!(
+            "ccgui-multi-npm-test-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        );
+        let root = env::temp_dir().join(unique);
+        let primary_bin = root.join("primary/bin");
+        let secondary_launcher_bin = root.join("secondary-launcher");
+        let secondary_runtime_bin = root.join("secondary-runtime/bin");
+        let secondary_npm_cli = root.join("secondary-runtime/lib/npm/npm-cli.js");
+        let secondary_runtime_npm = secondary_runtime_bin.join("npm");
+        let secondary_launcher_npm = secondary_launcher_bin.join("npm");
+        let pyright = secondary_runtime_bin.join("pyright-langserver");
+
+        for directory in [
+            primary_bin.as_path(),
+            secondary_launcher_bin.as_path(),
+            secondary_runtime_bin.as_path(),
+            secondary_npm_cli
+                .parent()
+                .expect("secondary npm cli parent"),
+        ] {
+            fs::create_dir_all(directory).expect("create multi-runtime test directory");
+        }
+        fs::write(primary_bin.join("npm"), "#!/bin/sh\nexit 0\n").expect("write primary npm");
+        fs::write(&secondary_npm_cli, "#!/usr/bin/env node\n").expect("write secondary npm cli");
+        fs::write(&pyright, "#!/bin/sh\nexit 0\n").expect("write secondary provider");
+        symlink("../lib/npm/npm-cli.js", &secondary_runtime_npm)
+            .expect("create secondary runtime npm symlink");
+        symlink(&secondary_runtime_npm, &secondary_launcher_npm)
+            .expect("create secondary launcher npm symlink");
+
+        for executable in [primary_bin.join("npm"), secondary_npm_cli, pyright.clone()] {
+            let mut permissions = fs::metadata(&executable)
+                .expect("stat multi-runtime executable")
+                .permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(&executable, permissions).expect("chmod multi-runtime executable");
+        }
+
+        let discovered = discover_npm_launcher_search_paths(&[
+            primary_bin.clone(),
+            secondary_launcher_bin.clone(),
+        ]);
+        assert!(discovered.iter().any(|path| path == &primary_bin));
+        assert!(discovered.iter().any(|path| path == &secondary_runtime_bin));
+
+        let joined_paths = env::join_paths(&discovered).expect("join discovered npm paths");
+        let cwd = env::current_dir().expect("current dir");
+        let found = which::which_in("pyright-langserver", Some(&joined_paths), &cwd)
+            .expect("find provider from secondary runtime");
+        assert_eq!(found, pyright);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn npm_launcher_names_cover_unix_and_windows_wrappers() {
+        assert_eq!(npm_launcher_file_names(false), &["npm"]);
+        assert_eq!(
+            npm_launcher_file_names(true),
+            &["npm.cmd", "npm.exe", "npm.bat", "npm.ps1", "npm"]
+        );
     }
 }

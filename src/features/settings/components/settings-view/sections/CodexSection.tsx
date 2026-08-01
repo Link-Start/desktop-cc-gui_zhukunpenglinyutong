@@ -29,28 +29,14 @@ type CodexSectionProps = {
   t: (key: string) => string;
   appSettings: AppSettings;
   onUpdateAppSettings: (next: AppSettings) => Promise<void>;
-  claudePathDraft: string;
-  setClaudePathDraft: (value: string) => void;
-  claudeDirty: boolean;
-  handleBrowseClaude: () => Promise<void>;
-  handleSaveClaudeSettings: () => Promise<void>;
   handleRunClaudeDoctor: () => Promise<void>;
   claudeDoctorState: DoctorState;
-  kimiPathDraft: string;
-  setKimiPathDraft: (value: string) => void;
-  kimiDirty: boolean;
-  handleBrowseKimi: () => Promise<void>;
-  handleSaveKimiSettings: () => Promise<void>;
   handleRunKimiDoctor: () => Promise<void>;
   kimiDoctorState: DoctorState;
-  codexPathDraft: string;
-  setCodexPathDraft: (value: string) => void;
-  codexArgsDraft: string;
-  setCodexArgsDraft: (value: string) => void;
-  codexDirty: boolean;
-  handleBrowseCodex: () => Promise<void>;
-  handleSaveCodexSettings: () => Promise<void>;
-  isSavingSettings: boolean;
+  handleRunGrokDoctor: () => Promise<void>;
+  grokDoctorState: DoctorState;
+  handleRunOpenCodeDoctor: () => Promise<void>;
+  openCodeDoctorState: DoctorState;
   handleRunDoctor: () => Promise<void>;
   doctorState: DoctorState;
   remoteHostDraft: string;
@@ -81,10 +67,10 @@ type PreviewState = {
   error: string | null;
 };
 
-type CliValidationTab = "codex" | "claude" | "kimi";
+type CliValidationTab = "codex" | "claude" | "kimi" | "grok" | "opencode";
 
-// Deprecated: Gemini CLI and OpenCode CLI validation entries are intentionally hidden.
-const DEPRECATED_CLI_VALIDATION_ENGINES = new Set(["gemini", "opencode"]);
+// Deprecated: Gemini CLI validation entry is intentionally hidden.
+const DEPRECATED_CLI_VALIDATION_ENGINES = new Set(["gemini"]);
 
 type DoctorResultCardProps = {
   t: (key: string) => string;
@@ -221,62 +207,62 @@ function DoctorResultCard({
               }}
             >
               <div>
-                <strong>{t("settings.doctorPlatform")}:</strong>{" "}
+                <span>{t("settings.doctorPlatform")}:</span>{" "}
                 {state.result.debug.platform} ({state.result.debug.arch})
               </div>
               <div>
-                <strong>{t("settings.doctorResolvedBinary")}:</strong>{" "}
+                <span>{t("settings.doctorResolvedBinary")}:</span>{" "}
                 {state.result.debug.resolvedBinaryPath ??
                   t("settings.notFound")}
               </div>
               <div>
-                <strong>{t("settings.doctorWrapperKind")}:</strong>{" "}
+                <span>{t("settings.doctorWrapperKind")}:</span>{" "}
                 {state.result.debug.wrapperKind ?? t("settings.statusUnknown")}
               </div>
               <div>
-                <strong>{t("settings.doctorPathUsed")}:</strong>{" "}
+                <span>{t("settings.doctorPathUsed")}:</span>{" "}
                 {state.result.debug.pathEnvUsed ?? t("settings.notSet")}
               </div>
               <div>
-                <strong>{t("settings.doctorClaudeFound")}:</strong>{" "}
+                <span>{t("settings.doctorClaudeFound")}:</span>{" "}
                 {state.result.debug.claudeFound ?? t("settings.notFound")}
               </div>
               <div>
-                <strong>{t("settings.doctorCodexFound")}:</strong>{" "}
+                <span>{t("settings.doctorCodexFound")}:</span>{" "}
                 {state.result.debug.codexFound ?? t("settings.notFound")}
               </div>
               <div>
-                <strong>{t("settings.doctorClaudeStandardWhich")}:</strong>{" "}
+                <span>{t("settings.doctorClaudeStandardWhich")}:</span>{" "}
                 {state.result.debug.claudeStandardWhich ??
                   t("settings.notFound")}
               </div>
               <div>
-                <strong>{t("settings.doctorCodexStandardWhich")}:</strong>{" "}
+                <span>{t("settings.doctorCodexStandardWhich")}:</span>{" "}
                 {state.result.debug.codexStandardWhich ??
                   t("settings.notFound")}
               </div>
               {debugProxySnapshot ? (
                 <>
                   <div style={{ marginTop: "8px" }}>
-                    <strong>{t("settings.doctorProxyEnvironment")}:</strong>
+                    <span>{t("settings.doctorProxyEnvironment")}:</span>
                   </div>
                   {Object.entries(debugProxySnapshot).map(([key, value]) => (
                     <div key={key} style={{ marginLeft: "12px" }}>
-                      <strong>{key}:</strong> {value ?? t("settings.notSet")}
+                      <span>{key}:</span> {value ?? t("settings.notSet")}
                     </div>
                   ))}
                 </>
               ) : null}
               <div style={{ marginTop: "8px" }}>
-                <strong>{t("settings.doctorEnvironmentVariables")}:</strong>
+                <span>{t("settings.doctorEnvironmentVariables")}:</span>
               </div>
               {Object.entries(debugEnvVars).map(([key, value]) => (
                 <div key={key} style={{ marginLeft: "12px" }}>
-                  <strong>{key}:</strong> {value ?? t("settings.notSet")}
+                  <span>{key}:</span> {value ?? t("settings.notSet")}
                 </div>
               ))}
               <div style={{ marginTop: "8px" }}>
-                <strong>{t("settings.doctorExtraSearchPaths")}:</strong>
+                <span>{t("settings.doctorExtraSearchPaths")}:</span>
               </div>
               {debugExtraSearchPaths.map((pathEntry, index) => (
                 <div key={index} style={{ marginLeft: "12px" }}>
@@ -381,23 +367,23 @@ function LaunchPreviewCard({ t, state }: LaunchPreviewCardProps) {
       </div>
       <div className="settings-doctor-body">
         <div>
-          <strong>{t("settings.codexLaunchResolvedExecutable")}:</strong>{" "}
+          <span>{t("settings.codexLaunchResolvedExecutable")}:</span>{" "}
           {state.result.resolvedExecutable}
         </div>
         <div>
-          <strong>{t("settings.codexLaunchWrapperKind")}:</strong>{" "}
+          <span>{t("settings.codexLaunchWrapperKind")}:</span>{" "}
           {state.result.wrapperKind}
         </div>
         <div>
-          <strong>{t("settings.codexLaunchUserArguments")}:</strong>{" "}
+          <span>{t("settings.codexLaunchUserArguments")}:</span>{" "}
           {formatArgumentList(t, state.result.userArguments)}
         </div>
         <div>
-          <strong>{t("settings.codexLaunchInjectedArguments")}:</strong>{" "}
+          <span>{t("settings.codexLaunchInjectedArguments")}:</span>{" "}
           {formatArgumentList(t, state.result.injectedArguments)}
         </div>
         <div>
-          <strong>{t("settings.codexWorkspaceSourceLabel")}:</strong>{" "}
+          <span>{t("settings.codexWorkspaceSourceLabel")}:</span>{" "}
           {formatExecutableSource(t, state.result.executableSource)} /{" "}
           {formatArgumentsSource(t, state.result.argumentsSource)}
         </div>
@@ -429,28 +415,14 @@ export function CodexSection({
   t,
   appSettings,
   onUpdateAppSettings,
-  claudePathDraft,
-  setClaudePathDraft,
-  claudeDirty,
-  handleBrowseClaude,
-  handleSaveClaudeSettings,
   handleRunClaudeDoctor,
   claudeDoctorState,
-  kimiPathDraft,
-  setKimiPathDraft,
-  kimiDirty,
-  handleBrowseKimi,
-  handleSaveKimiSettings,
   handleRunKimiDoctor,
   kimiDoctorState,
-  codexPathDraft,
-  setCodexPathDraft,
-  codexArgsDraft,
-  setCodexArgsDraft,
-  codexDirty,
-  handleBrowseCodex,
-  handleSaveCodexSettings,
-  isSavingSettings,
+  handleRunGrokDoctor,
+  grokDoctorState,
+  handleRunOpenCodeDoctor,
+  openCodeDoctorState,
   handleRunDoctor,
   doctorState,
   remoteHostDraft,
@@ -519,16 +491,6 @@ export function CodexSection({
   }, [selectedWorkspace?.parentId, workspaces]);
   const nextWorkspaceCodexBin = normalizeDraftValue(workspaceCodexPathDraft);
   const nextWorkspaceCodexArgs = normalizeDraftValue(workspaceCodexArgsDraft);
-  const nextGlobalCodexBin = normalizeDraftValue(codexPathDraft);
-  const nextGlobalCodexArgs = normalizeDraftValue(codexArgsDraft);
-  const globalCodexBinPreviewDraft =
-    nextGlobalCodexBin !== (appSettings.codexBin ?? null)
-      ? codexPathDraft.trim()
-      : null;
-  const globalCodexArgsPreviewDraft =
-    nextGlobalCodexArgs !== (appSettings.codexArgs ?? null)
-      ? codexArgsDraft.trim()
-      : null;
   const workspaceLaunchDirty =
     !!selectedWorkspace &&
     (nextWorkspaceCodexBin !== (selectedWorkspace.codex_bin ?? null) ||
@@ -579,9 +541,10 @@ export function CodexSection({
   const handlePreviewGlobalLaunch = async () => {
     setGlobalPreviewState({ status: "running", result: null, error: null });
     try {
+      // Path/args are edited in CLI config management; preview uses saved settings.
       const result = await previewCodexLaunchProfile({
-        codexBin: globalCodexBinPreviewDraft,
-        codexArgs: globalCodexArgsPreviewDraft,
+        codexBin: null,
+        codexArgs: null,
         workspaceId: null,
         useWorkspaceDraft: false,
       });
@@ -744,7 +707,15 @@ export function CodexSection({
             return;
           }
           setActiveTab(
-            value === "claude" ? "claude" : value === "kimi" ? "kimi" : "codex",
+            value === "claude"
+              ? "claude"
+              : value === "kimi"
+                ? "kimi"
+                : value === "grok"
+                  ? "grok"
+                  : value === "opencode"
+                    ? "opencode"
+                    : "codex",
           );
         }}
       >
@@ -754,6 +725,10 @@ export function CodexSection({
             {t("settings.cliValidationTabClaudeCode")}
           </TabsTab>
           <TabsTab value="kimi">{t("settings.cliValidationTabKimiCli")}</TabsTab>
+          <TabsTab value="grok">{t("settings.cliValidationTabGrokCli")}</TabsTab>
+          <TabsTab value="opencode">
+            {t("settings.cliValidationTabOpenCodeCli")}
+          </TabsTab>
         </TabsList>
 
         <TabsPanel value="codex">
@@ -762,61 +737,10 @@ export function CodexSection({
               {t("settings.codexLaunchConfigurationTitle")}
             </div>
             <div className="settings-help">
+              {t("settings.cliPathManagedInVendors")}
+            </div>
+            <div className="settings-help">
               {t("settings.codexLaunchConfigurationDescription")}
-            </div>
-            <label className="settings-field-label" htmlFor="codex-path">
-              {t("settings.defaultCodexPath")}
-            </label>
-            <div className="settings-field-row">
-              <input
-                id="codex-path"
-                className="settings-input"
-                value={codexPathDraft}
-                placeholder={t("settings.codexPlaceholder")}
-                onChange={(event) => setCodexPathDraft(event.target.value)}
-              />
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => void handleBrowseCodex()}
-              >
-                {t("settings.browse")}
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => setCodexPathDraft("")}
-              >
-                {t("settings.usePath")}
-              </button>
-            </div>
-            <div className="settings-help">
-              {t("settings.pathResolutionDesc")}
-            </div>
-
-            <label className="settings-field-label" htmlFor="codex-args">
-              {t("settings.defaultCodexArgs")}
-            </label>
-            <div className="settings-field-row">
-              <input
-                id="codex-args"
-                className="settings-input"
-                value={codexArgsDraft}
-                placeholder={t("settings.codexArgsPlaceholder")}
-                onChange={(event) => setCodexArgsDraft(event.target.value)}
-              />
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => setCodexArgsDraft("")}
-              >
-                {t("settings.clear")}
-              </button>
-            </div>
-            <div className="settings-help">
-              {t("settings.codexArgsDesc")}{" "}
-              <code>{t("settings.appServer")}</code>
-              {t("settings.codexArgsDescSuffix")}
             </div>
             <div className="settings-help">
               {t("settings.codexLaunchNextLaunchOnly")}
@@ -835,18 +759,6 @@ export function CodexSection({
                   ? t("settings.previewingLaunch")
                   : t("settings.previewLaunch")}
               </button>
-              {codexDirty ? (
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => {
-                    void handleSaveCodexSettings();
-                  }}
-                  disabled={isSavingSettings}
-                >
-                  {isSavingSettings ? t("settings.saving") : t("common.save")}
-                </button>
-              ) : null}
               <button
                 type="button"
                 className="ghost settings-button-compact"
@@ -1001,48 +913,10 @@ export function CodexSection({
 
         <TabsPanel value="claude">
           <div className="settings-field">
-            <label className="settings-field-label" htmlFor="claude-path">
-              {t("settings.defaultClaudePath")}
-            </label>
-            <div className="settings-field-row">
-              <input
-                id="claude-path"
-                className="settings-input"
-                value={claudePathDraft}
-                placeholder={t("settings.claudePlaceholder")}
-                onChange={(event) => setClaudePathDraft(event.target.value)}
-              />
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => void handleBrowseClaude()}
-              >
-                {t("settings.browse")}
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => setClaudePathDraft("")}
-              >
-                {t("settings.usePath")}
-              </button>
-            </div>
             <div className="settings-help">
-              {t("settings.pathResolutionDesc")}
+              {t("settings.cliPathManagedInVendors")}
             </div>
             <div className="settings-field-actions">
-              {claudeDirty ? (
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => {
-                    void handleSaveClaudeSettings();
-                  }}
-                  disabled={isSavingSettings}
-                >
-                  {isSavingSettings ? t("settings.saving") : t("common.save")}
-                </button>
-              ) : null}
               <button
                 type="button"
                 className="ghost settings-button-compact"
@@ -1083,48 +957,10 @@ export function CodexSection({
 
         <TabsPanel value="kimi">
           <div className="settings-field">
-            <label className="settings-field-label" htmlFor="kimi-path">
-              {t("settings.defaultKimiPath")}
-            </label>
-            <div className="settings-field-row">
-              <input
-                id="kimi-path"
-                className="settings-input"
-                value={kimiPathDraft}
-                placeholder={t("settings.kimiPlaceholder")}
-                onChange={(event) => setKimiPathDraft(event.target.value)}
-              />
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => void handleBrowseKimi()}
-              >
-                {t("settings.browse")}
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => setKimiPathDraft("")}
-              >
-                {t("settings.usePath")}
-              </button>
-            </div>
             <div className="settings-help">
-              {t("settings.pathResolutionDesc")}
+              {t("settings.cliPathManagedInVendors")}
             </div>
             <div className="settings-field-actions">
-              {kimiDirty ? (
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => {
-                    void handleSaveKimiSettings();
-                  }}
-                  disabled={isSavingSettings}
-                >
-                  {isSavingSettings ? t("settings.saving") : t("common.save")}
-                </button>
-              ) : null}
               <button
                 type="button"
                 className="ghost settings-button-compact"
@@ -1158,6 +994,94 @@ export function CodexSection({
               state={kimiDoctorState}
               successTitleKey="settings.kimiLooksGood"
               errorTitleKey="settings.kimiIssueDetected"
+              showAppServer={false}
+            />
+          </div>
+        </TabsPanel>
+
+        <TabsPanel value="grok">
+          <div className="settings-field">
+            <div className="settings-help">
+              {t("settings.cliPathManagedInVendors")}
+            </div>
+            <div className="settings-field-actions">
+              <button
+                type="button"
+                className="ghost settings-button-compact"
+                onClick={() => {
+                  void handleRunGrokDoctor();
+                }}
+                disabled={grokDoctorState.status === "running"}
+              >
+                <Stethoscope aria-hidden />
+                {grokDoctorState.status === "running"
+                  ? t("settings.running")
+                  : t("settings.runGrokDoctor")}
+              </button>
+              <button
+                type="button"
+                className="ghost settings-button-compact"
+                onClick={() => {
+                  void requestInstallPlan("grok", grokDoctorState.result);
+                }}
+                disabled={installerBusy}
+              >
+                {resolveInstallerAction(grokDoctorState.result) ===
+                "installLatest"
+                  ? t("settings.cliInstallLatest")
+                  : t("settings.cliUpdateLatest")}
+              </button>
+            </div>
+
+            <DoctorResultCard
+              t={t}
+              state={grokDoctorState}
+              successTitleKey="settings.grokLooksGood"
+              errorTitleKey="settings.grokIssueDetected"
+              showAppServer={false}
+            />
+          </div>
+        </TabsPanel>
+
+        <TabsPanel value="opencode">
+          <div className="settings-field">
+            <div className="settings-help">
+              {t("settings.cliPathManagedInVendors")}
+            </div>
+            <div className="settings-field-actions">
+              <button
+                type="button"
+                className="ghost settings-button-compact"
+                onClick={() => {
+                  void handleRunOpenCodeDoctor();
+                }}
+                disabled={openCodeDoctorState.status === "running"}
+              >
+                <Stethoscope aria-hidden />
+                {openCodeDoctorState.status === "running"
+                  ? t("settings.running")
+                  : t("settings.runOpenCodeDoctor")}
+              </button>
+              <button
+                type="button"
+                className="ghost settings-button-compact"
+                onClick={() => {
+                  void requestInstallPlan("opencode", openCodeDoctorState.result);
+                }}
+                disabled={installerBusy}
+              >
+                {resolveInstallerAction(openCodeDoctorState.result) ===
+                "installLatest"
+                  ? t("settings.cliInstallLatest")
+                  : t("settings.cliUpdateLatest")}
+              </button>
+            </div>
+
+            <DoctorResultCard
+              t={t}
+              state={openCodeDoctorState}
+              successTitleKey="settings.openCodeLooksGood"
+              errorTitleKey="settings.openCodeIssueDetected"
               showAppServer={false}
             />
           </div>

@@ -149,7 +149,7 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     });
 
     expect(mockState.updateClaudeProvider).toHaveBeenCalledTimes(1);
-    expect(mockState.switchClaudeProvider).toHaveBeenCalledWith('provider-1');
+    expect(mockState.switchClaudeProvider).not.toHaveBeenCalled();
     expect(mockState.updateClaudeProvider).toHaveBeenCalledWith(
       'provider-1',
       expect.objectContaining({
@@ -913,7 +913,7 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     mockState.getClaudeProviders.mockResolvedValue([
       {
         id: '__local_settings_json__',
-        name: 'Local settings.json',
+        name: '本地配置',
         isActive: true,
         isLocalProvider: true,
         settingsConfig: {},
@@ -935,7 +935,7 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     mockState.getClaudeProviders.mockResolvedValue([
       {
         id: '__local_settings_json__',
-        name: 'Local settings.json',
+        name: '本地配置',
         isActive: true,
         isLocalProvider: true,
         settingsConfig: {},
@@ -956,6 +956,26 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     expect(mockState.setClaudeAlwaysThinkingEnabled).toHaveBeenCalledWith(true);
     expect(mockState.updateClaudeProvider).not.toHaveBeenCalled();
     expect(mockState.switchClaudeProvider).not.toHaveBeenCalled();
+  });
+
+  it('rolls back a failed managed-provider update without writing global settings', async () => {
+    mockState.updateClaudeProvider.mockRejectedValueOnce(new Error('write failed'));
+
+    renderAdapter();
+
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+    const getLatest = () => mockState.latestProps as {
+      alwaysThinkingEnabled?: boolean;
+      onToggleThinking?: (enabled: boolean) => void | Promise<void>;
+    };
+
+    await act(async () => {
+      await Promise.resolve(getLatest().onToggleThinking?.(true));
+    });
+
+    expect(mockState.updateClaudeProvider).toHaveBeenCalledTimes(1);
+    expect(mockState.setClaudeAlwaysThinkingEnabled).not.toHaveBeenCalled();
+    expect(getLatest().alwaysThinkingEnabled).toBe(false);
   });
 
   it('forwards send shortcut to ChatInputBox', async () => {
@@ -1987,7 +2007,7 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     expect(latest.selectedModel).toBe('');
   });
 
-  it('disables gemini and opencode provider options inside shared sessions', async () => {
+  it('enables the five supported provider options inside shared sessions', async () => {
     renderAdapter({
       isSharedSession: true,
       engines: [
@@ -1995,6 +2015,8 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
         { type: 'codex', installed: true, version: '1.0.0' },
         { type: 'gemini', installed: true, version: '1.0.0' },
         { type: 'opencode', installed: true, version: '1.0.0' },
+        { type: 'kimi', installed: true, version: '1.0.0' },
+        { type: 'grok', installed: true, version: '1.0.0' },
       ],
     });
 
@@ -2008,11 +2030,13 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
       claude: true,
       codex: true,
       gemini: false,
-      opencode: false,
+      opencode: true,
+      kimi: true,
+      grok: true,
     });
   });
 
-  it('keeps gemini and opencode provider options enabled in native sessions', async () => {
+  it('keeps gemini and opencode provider options enabled outside shared sessions', async () => {
     renderAdapter({
       isSharedSession: false,
       engines: [
@@ -2037,20 +2061,61 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     });
   });
 
-  it('routes kimi provider selection to the kimi engine', async () => {
-    const onSelectEngine = vi.fn();
-    renderAdapter({ selectedEngine: 'claude', onSelectEngine });
+  it('does not expose legacy engine/model callbacks inside shared sessions', async () => {
+    renderAdapter({
+      isSharedSession: true,
+      onExecutionTargetChange: vi.fn(),
+    });
 
     await waitFor(() => expect(mockState.latestProps).toBeTruthy());
 
     const latest = mockState.latestProps as {
       onProviderSelect?: (providerId: string) => void;
+      onModelSelect?: (modelId: string) => void;
+      providerTargetPickerMode?: string;
     };
-    act(() => {
-      latest.onProviderSelect?.('kimi');
+    expect(latest.onProviderSelect).toBeUndefined();
+    expect(latest.onModelSelect).toBeUndefined();
+    expect(latest.providerTargetPickerMode).toBe('shared');
+  });
+
+  it('uses the atomic double-column picker without shared session semantics on Home', async () => {
+    renderAdapter({
+      isSharedSession: false,
+      providerTargetPickerMode: 'create-session',
+      onExecutionTargetChange: vi.fn(),
     });
 
-    expect(onSelectEngine).toHaveBeenCalledWith('kimi');
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+
+    const latest = mockState.latestProps as {
+      providerTargetPickerMode?: string;
+      onProviderSelect?: (providerId: string) => void;
+      onModelSelect?: (modelId: string) => void;
+      onExecutionTargetChange?: (target: unknown) => void;
+    };
+    expect(latest.providerTargetPickerMode).toBe('create-session');
+    expect(latest.onProviderSelect).toBeUndefined();
+    expect(latest.onModelSelect).toBeUndefined();
+    expect(latest.onExecutionTargetChange).toEqual(expect.any(Function));
+  });
+
+  it('defaults conversation sessions to the home-style atomic create-session picker', async () => {
+    renderAdapter({
+      isSharedSession: false,
+      onExecutionTargetChange: vi.fn(),
+    });
+
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+
+    const latest = mockState.latestProps as {
+      providerTargetPickerMode?: string;
+      onProviderSelect?: (providerId: string) => void;
+      onModelSelect?: (modelId: string) => void;
+    };
+    expect(latest.providerTargetPickerMode).toBe('create-session');
+    expect(latest.onProviderSelect).toBeUndefined();
+    expect(latest.onModelSelect).toBeUndefined();
   });
 
   it('reports kimi as the current provider when the kimi engine is selected', async () => {

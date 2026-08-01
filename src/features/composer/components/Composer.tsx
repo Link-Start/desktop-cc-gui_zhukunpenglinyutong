@@ -31,17 +31,38 @@ import type {
   ReviewPromptStep,
 } from "../../threads/hooks/useReviewPrompt";
 import type { EngineDisplayInfo } from "../../engine/hooks/useEngineController";
+import {
+  hydrateSharedTargetState,
+  useSharedTargetState,
+} from "../../shared-session/target/targetStore";
+import {
+  freezeTurnSnapshot,
+  isResolvedExecutionTarget,
+  resolveBackendAuthoritativeExecutionTarget,
+  type ExecutionTarget,
+} from "../../shared-session/target/types";
+import { persistSharedSessionSelectedTarget } from "../../shared-session/services/sharedSessions";
+import { dispatchSharedSendEvent } from "../../shared-session/runtime/sharedSendStateStore";
+import { requestProviderContinuationDialog } from "../../threads/services/providerContinuationRequests";
+import {
+  CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
+  CLAUDE_LOCAL_PROVIDER_PROFILE_NAME,
+  CODEX_DISK_PROVIDER_PROFILE_ID,
+  CODEX_DISK_PROVIDER_PROFILE_NAME,
+  LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
+} from "../../threads/constants/codexProviderProfiles";
 import { computeDictationInsertion } from "../../../utils/dictation";
 import { useComposerAutocompleteState } from "../hooks/useComposerAutocompleteState";
 import { useComposerDraft } from "../hooks/composerDraftStore";
-import { usePromptHistory } from "../hooks/usePromptHistory";
-import { useInlineHistoryCompletion } from "../hooks/useInlineHistoryCompletion";
-import { recordHistory as recordInputHistory } from "../hooks/useInputHistoryStore";
 import { ChatInputBoxAdapter } from "./ChatInputBox/ChatInputBoxAdapter";
 import type { ChatInputBoxHandle } from "./ChatInputBox/ChatInputBoxAdapter";
 import {
+  isSameProviderExecutionProfile,
+} from "./ChatInputBox/selectors/ModelSelect";
+import {
   accessModeToPermissionMode,
   permissionModeToAccessMode,
+  type ProviderId,
 } from "./ChatInputBox/types";
 import {
   ClaudeRewindConfirmDialog,
@@ -62,6 +83,8 @@ import type {
 import { useStatusPanelData } from "../../status-panel/hooks/useStatusPanelData";
 import {
   assembleSinglePrompt,
+  expandLeadingManagedCommand,
+  assembleSkillInvocations,
   shouldAssemblePrompt,
 } from "../utils/promptAssembler";
 import { buildComposerSendReadiness } from "../utils/composerSendReadiness";
@@ -100,6 +123,12 @@ import {
 import { useStreamActivityPhase } from "../../threads/hooks/useStreamActivityPhase";
 import { exportRewindFiles } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
+import {
+  engineSupportsImageInput,
+  formatEngineImageInputUnsupportedMessage,
+  getEngineImageInputLabel,
+  sanitizeImageAttachmentPaths,
+} from "../../engine/utils/engineImageInput";
 import { getManualMemoryInjectionMode } from "../../project-memory/utils/manualInjectionMode";
 import { estimateClaudeContextWindow } from "../../models/claudeContextWindow";
 import type { RewindMode } from "../../threads/utils/rewindMode";
@@ -179,6 +208,8 @@ type ComposerProps = {
   onStop: () => void;
   canStop: boolean;
   disabled?: boolean;
+  /** 禁止提交但保留文本编辑；Shared non-idle 用于维持 Turn 线性顺序。 */
+  submitDisabled?: boolean;
   isProcessing: boolean;
   steerEnabled: boolean;
   collaborationModes: { id: string; label: string }[];
@@ -186,6 +217,12 @@ type ComposerProps = {
   selectedCollaborationModeId: string | null;
   onSelectCollaborationMode: (id: string | null) => void;
   isSharedSession?: boolean;
+  /** New Home 仅复用双栏 picker，不启用 Shared Session durable semantics。 */
+  createSessionTargetPicker?: boolean;
+  /** New Home 标题只接收 creation target 的 Engine projection；完整 Target 仍由 Composer 持有。 */
+  onCreationTargetEngineChange?: (engine: EngineType | null) => void;
+  /** Wave 4 / B.6：Shared Send 状态机非 idle 时锁定四级 Picker（§14.5.3）。 */
+  sharedTargetPickerLocked?: boolean;
   // Engine props
   engines?: EngineDisplayInfo[];
   selectedEngine?: EngineType;
@@ -193,6 +230,7 @@ type ComposerProps = {
   // Model props
   models: { id: string; displayName: string; model: string }[];
   providerModelCatalogs?: Partial<Record<EngineType, ModelOption[]>>;
+  providerProfileId?: string | null;
   selectedModelId: string | null;
   onSelectModel: (id: string) => void;
   reasoningOptions: string[];
@@ -208,6 +246,7 @@ type ComposerProps = {
   onOpenAgentSettings?: () => void;
   onOpenPromptSettings?: () => void;
   onOpenModelSettings?: (providerId?: string) => void;
+  onOpenCliSettings?: () => void;
   onRefreshModelConfig?: (providerId?: string) => Promise<void> | void;
   isModelConfigRefreshing?: boolean;
   onForkQuickStart?: () => void;
@@ -224,8 +263,6 @@ type ComposerProps = {
   commands?: CustomCommandOption[];
   files: string[];
   directories?: string[];
-  gitignoredFiles?: Set<string>;
-  gitignoredDirectories?: Set<string>;
   contextUsage?: ThreadTokenUsage | null;
   contextDualViewEnabled?: boolean;
   isContextCompacting?: boolean;
@@ -253,7 +290,6 @@ type ComposerProps = {
   runtimeLifecycleState?: RuntimeLifecycleState | null;
   sendLabel?: string;
   onDraftChange?: (text: string) => void;
-  historyKey?: string | null;
   attachedImages?: string[];
   onPickImages?: () => void;
   onAttachImages?: (paths: string[]) => void;
@@ -458,6 +494,7 @@ function ComposerImpl({
   onStop,
   canStop,
   disabled = false,
+  submitDisabled = false,
   isProcessing,
   steerEnabled: _steerEnabled,
   collaborationModes: _collaborationModes,
@@ -465,11 +502,15 @@ function ComposerImpl({
   selectedCollaborationModeId: _selectedCollaborationModeId,
   onSelectCollaborationMode: _onSelectCollaborationMode,
   isSharedSession = false,
+  createSessionTargetPicker = false,
+  onCreationTargetEngineChange,
+  sharedTargetPickerLocked = false,
   engines,
   selectedEngine,
   onSelectEngine,
   models,
   providerModelCatalogs,
+  providerProfileId,
   selectedModelId,
   onSelectModel,
   reasoningOptions,
@@ -485,6 +526,7 @@ function ComposerImpl({
   onOpenAgentSettings,
   onOpenPromptSettings,
   onOpenModelSettings,
+  onOpenCliSettings,
   onRefreshModelConfig,
   isModelConfigRefreshing,
   onForkQuickStart,
@@ -499,8 +541,6 @@ function ComposerImpl({
   commands = [],
   files,
   directories = [],
-  gitignoredFiles,
-  gitignoredDirectories,
   contextUsage = null,
   contextDualViewEnabled = false,
   isContextCompacting = false,
@@ -524,7 +564,6 @@ function ComposerImpl({
   runtimeLifecycleState = null,
   sendLabel: _sendLabel = "Send",
   onDraftChange,
-  historyKey = null,
   attachedImages = [],
   onPickImages,
   onAttachImages,
@@ -619,6 +658,7 @@ function ComposerImpl({
     selectedEngine === "codex" ||
     selectedEngine === "claude" ||
     selectedEngine === "gemini" ||
+    selectedEngine === "grok" ||
     selectedEngine === "kimi";
   const streamActivityPhase = useStreamActivityPhase({
     isProcessing: Boolean(isProcessing && supportsStreamActivityPhaseFx),
@@ -630,7 +670,337 @@ function ComposerImpl({
     selectedEngine === "claude" ||
     selectedEngine === "codex" ||
     selectedEngine === "gemini" ||
+    selectedEngine === "grok" ||
     selectedEngine === "kimi";
+  const sharedTargetState = useSharedTargetState(
+    activeWorkspaceId ?? "",
+    activeThreadId ?? "",
+  );
+  const selectedSharedTarget = sharedTargetState.selectedNextTarget;
+  const [selectedCreationTarget, setSelectedCreationTarget] =
+    useState<ExecutionTarget | null>(null);
+  const defaultCreationTarget = useMemo<ExecutionTarget | null>(() => {
+    if (
+      !createSessionTargetPicker ||
+      (selectedEngine !== "claude" && selectedEngine !== "codex") ||
+      !selectedModelId?.trim()
+    ) {
+      return null;
+    }
+    const selectedModel =
+      models.find((candidate) => candidate.id === selectedModelId) ?? null;
+    const runtimeModel = selectedModel?.model?.trim() || null;
+    if (!selectedModel || !runtimeModel) {
+      return null;
+    }
+    const rawProviderProfileId = providerProfileId?.trim() || null;
+    const localProviderProfileId =
+      selectedEngine === "claude"
+        ? CLAUDE_LOCAL_PROVIDER_PROFILE_ID
+        : CODEX_DISK_PROVIDER_PROFILE_ID;
+    const normalizedProviderProfileId =
+      rawProviderProfileId === localProviderProfileId
+        ? null
+        : rawProviderProfileId;
+    return {
+      engine: selectedEngine,
+      providerProfileId: normalizedProviderProfileId,
+      modelCatalogEntryId: selectedModel.id,
+      model: runtimeModel,
+      reasoning: selectedEffort ? { effort: selectedEffort } : null,
+      providerProfileNameSnapshot:
+        normalizedProviderProfileId ??
+        (selectedEngine === "claude"
+          ? CLAUDE_LOCAL_PROVIDER_PROFILE_NAME
+          : CODEX_DISK_PROVIDER_PROFILE_NAME),
+      providerProfileSource: normalizedProviderProfileId ? "managed" : "disk",
+    };
+  }, [
+    createSessionTargetPicker,
+    models,
+    providerProfileId,
+    selectedEffort,
+    selectedEngine,
+    selectedModelId,
+  ]);
+  const effectiveCreationTarget =
+    selectedCreationTarget ?? defaultCreationTarget;
+  useEffect(() => {
+    if (!createSessionTargetPicker) {
+      return;
+    }
+    onCreationTargetEngineChange?.(
+      effectiveCreationTarget?.engine ?? selectedEngine ?? null,
+    );
+  }, [
+    createSessionTargetPicker,
+    effectiveCreationTarget?.engine,
+    onCreationTargetEngineChange,
+    selectedEngine,
+  ]);
+  useEffect(() => {
+    if (!createSessionTargetPicker) {
+      return;
+    }
+    return () => {
+      onCreationTargetEngineChange?.(null);
+    };
+  }, [createSessionTargetPicker, onCreationTargetEngineChange]);
+  // Native 会话合成 ExecutionTarget，驱动与首页相同的 Atomic 双栏选中态（含渠道）。
+  const nativeSessionTarget = useMemo((): ExecutionTarget | null => {
+    if (isSharedSession || createSessionTargetPicker || !selectedEngine) {
+      return null;
+    }
+    const modelId = selectedModelId?.trim() || null;
+    const profileId = providerProfileId?.trim() || null;
+    return {
+      engine: selectedEngine,
+      providerProfileId: profileId,
+      modelCatalogEntryId: modelId,
+      model: modelId,
+      reasoning: selectedEffort ? { effort: selectedEffort } : null,
+      providerProfileNameSnapshot: profileId
+        ? null
+        : LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
+      providerProfileSource: profileId ? "managed" : "disk",
+    };
+  }, [
+    createSessionTargetPicker,
+    isSharedSession,
+    providerProfileId,
+    selectedEffort,
+    selectedEngine,
+    selectedModelId,
+  ]);
+  const selectedAtomicTarget = isSharedSession
+    ? selectedSharedTarget
+    : createSessionTargetPicker
+      ? effectiveCreationTarget
+      : nativeSessionTarget;
+  const imageAttachEngine = useMemo((): EngineType | null => {
+    if (
+      isSharedSession &&
+      isResolvedExecutionTarget(selectedSharedTarget)
+    ) {
+      return selectedSharedTarget.engine;
+    }
+    if (
+      createSessionTargetPicker &&
+      isResolvedExecutionTarget(effectiveCreationTarget)
+    ) {
+      return effectiveCreationTarget.engine;
+    }
+    return selectedEngine ?? null;
+  }, [
+    createSessionTargetPicker,
+    effectiveCreationTarget,
+    isSharedSession,
+    selectedEngine,
+    selectedSharedTarget,
+  ]);
+  const imageInputSupported = engineSupportsImageInput(imageAttachEngine);
+  const notifyImageInputUnsupported = useCallback(() => {
+    if (!imageAttachEngine) {
+      return;
+    }
+    pushErrorToast({
+      title: t("composer.imageInputUnsupportedTitle", {
+        defaultValue: "Image not supported",
+      }),
+      message: t("composer.imageAttachUnsupported", {
+        engine: getEngineImageInputLabel(imageAttachEngine),
+        defaultValue:
+          "{{engine}} does not support image attachments in this release",
+      }),
+      durationMs: 3600,
+    });
+  }, [imageAttachEngine, t]);
+  const handleAttachImagesGuarded = useCallback(
+    (paths: string[]) => {
+      if (!imageInputSupported) {
+        notifyImageInputUnsupported();
+        return;
+      }
+      onAttachImages?.(paths);
+    },
+    [imageInputSupported, notifyImageInputUnsupported, onAttachImages],
+  );
+  const handlePickImagesGuarded = useCallback(() => {
+    if (!imageInputSupported) {
+      notifyImageInputUnsupported();
+      return;
+    }
+    onPickImages?.();
+  }, [imageInputSupported, notifyImageInputUnsupported, onPickImages]);
+  const sharedTargetResolved =
+    !isSharedSession || isResolvedExecutionTarget(selectedSharedTarget);
+  const effectiveSubmitDisabled = submitDisabled || !sharedTargetResolved;
+  const sharedTargetPersistenceByThreadRef = useRef(
+    new Map<string, Promise<void>>(),
+  );
+  const handleSharedTargetChange = useCallback(
+    (target: ExecutionTarget) => {
+      if (
+        !activeWorkspaceId ||
+        !activeThreadId ||
+        sharedTargetPickerLocked
+      ) {
+        return;
+      }
+      if (!isResolvedExecutionTarget(target)) {
+        // CLI / Provider 菜单导航属于 Picker 内部过渡态，不是一次持久化失败。
+        // 只有完整 Model row 形成 ResolvedExecutionTarget 后才允许跨过该边界。
+        return;
+      }
+      const workspaceId = activeWorkspaceId;
+      const threadId = activeThreadId;
+      const persistenceKey = `${workspaceId}::${threadId}`;
+      const previousPersistence =
+        sharedTargetPersistenceByThreadRef.current.get(persistenceKey) ??
+        Promise.resolve();
+      const currentPersistence = previousPersistence
+        .catch(() => undefined)
+        .then(async () => {
+          const response = await persistSharedSessionSelectedTarget(
+            workspaceId,
+            threadId,
+            target,
+          );
+          const persistedTarget =
+            resolveBackendAuthoritativeExecutionTarget(response, target);
+          hydrateSharedTargetState(workspaceId, threadId, persistedTarget);
+          dispatchSharedSendEvent(workspaceId, threadId, {
+            type: "targetRepaired",
+          });
+        })
+        .catch((error) => {
+          pushErrorToast({
+            title: t("sharedSend.selectionPersistFailedTitle"),
+            message: t("sharedSend.selectionPersistFailedMessage", {
+              reason: error instanceof Error ? error.message : String(error),
+            }),
+          });
+        });
+      sharedTargetPersistenceByThreadRef.current.set(
+        persistenceKey,
+        currentPersistence,
+      );
+      void currentPersistence.finally(() => {
+        if (
+          sharedTargetPersistenceByThreadRef.current.get(persistenceKey) ===
+          currentPersistence
+        ) {
+          sharedTargetPersistenceByThreadRef.current.delete(persistenceKey);
+        }
+      });
+    },
+    [
+      activeThreadId,
+      activeWorkspaceId,
+      sharedTargetPickerLocked,
+      t,
+    ],
+  );
+  const handleNativeProviderTargetChange = useCallback(
+    (target: ExecutionTarget) => {
+      if (
+        isSharedSession ||
+        !activeWorkspaceId ||
+        !activeThreadId ||
+        (target.engine !== "claude" && target.engine !== "codex") ||
+        !target.providerProfileId?.trim()
+      ) {
+        return;
+      }
+      const snapshot = freezeTurnSnapshot(target);
+      requestProviderContinuationDialog({
+        workspaceId: activeWorkspaceId,
+        sourceSessionId: activeThreadId,
+        destination: {
+          engine: target.engine,
+          providerProfileId: target.providerProfileId,
+          modelCatalogEntryId: target.modelCatalogEntryId ?? null,
+          model: target.model ?? null,
+          reasoningEffort: target.reasoning?.effort ?? null,
+          providerProfileNameSnapshot:
+            target.providerProfileNameSnapshot ?? null,
+          providerProfileSource: snapshot.providerProfileSource ?? null,
+          runtimeCapabilityFingerprint:
+            target.engine === "claude" ? "echo-checksum" : null,
+        },
+      });
+    },
+    [activeThreadId, activeWorkspaceId, isSharedSession],
+  );
+  /**
+   * Native 会话也走首页同款 Atomic 双栏 picker（含「本地配置」渠道）。
+   * 同 engine+profile 只切模型；跨 managed profile 走续接；其余走 engine/model 切换。
+   */
+  const handleNativeAtomicTargetChange = useCallback(
+    (target: ExecutionTarget) => {
+      if (isSharedSession || createSessionTargetPicker || !selectedEngine) {
+        return;
+      }
+      const currentProvider = selectedEngine as ProviderId;
+      const sameProfile = isSameProviderExecutionProfile(
+        currentProvider,
+        providerProfileId,
+        target,
+      );
+      if (sameProfile) {
+        const modelId =
+          target.modelCatalogEntryId?.trim() || target.model?.trim() || null;
+        if (modelId) {
+          onSelectModel(modelId);
+        }
+        const nextEffort = target.reasoning?.effort ?? null;
+        if (nextEffort !== selectedEffort) {
+          onSelectEffort(nextEffort);
+        }
+        return;
+      }
+      // Claude/Codex 切到 managed 渠道 → Native Provider Continuation
+      if (
+        (target.engine === "claude" || target.engine === "codex") &&
+        target.providerProfileId?.trim()
+      ) {
+        handleNativeProviderTargetChange(target);
+        return;
+      }
+      if (target.engine !== selectedEngine) {
+        onSelectEngine?.(target.engine);
+      }
+      const modelId =
+        target.modelCatalogEntryId?.trim() || target.model?.trim() || null;
+      if (modelId) {
+        onSelectModel(modelId);
+      }
+      const nextEffort = target.reasoning?.effort ?? null;
+      if (nextEffort !== selectedEffort) {
+        onSelectEffort(nextEffort);
+      }
+    },
+    [
+      createSessionTargetPicker,
+      handleNativeProviderTargetChange,
+      isSharedSession,
+      onSelectEffort,
+      onSelectEngine,
+      onSelectModel,
+      providerProfileId,
+      selectedEffort,
+      selectedEngine,
+    ],
+  );
+  const handleCreationTargetChange = useCallback(
+    (target: ExecutionTarget) => {
+      if (!createSessionTargetPicker || !isResolvedExecutionTarget(target)) {
+        return;
+      }
+      setSelectedCreationTarget(target);
+    },
+    [createSessionTargetPicker],
+  );
   // 草稿值直接订阅模块级 store(而非经 app-shell 根 prop 灌入):按键写 store 时
   // 只有 Composer 自身重渲染,不再把整个 app-shell 拖下水。
   const draftText = useComposerDraft(activeThreadId);
@@ -1023,74 +1393,23 @@ function ComposerImpl({
 
   const {
     isAutocompleteOpen,
-    activeAutocompleteTrigger: _activeAutocompleteTrigger,
-    autocompleteMatches: _autocompleteMatches,
-    highlightIndex: _highlightIndex,
-    setHighlightIndex: _setHighlightIndex,
-    applyAutocomplete: _applyAutocomplete,
-    handleInputKeyDown: _handleInputKeyDown,
     handleTextChange,
     handleSelectionChange,
   } = useComposerAutocompleteState({
     text,
     selectionStart,
-    disabled,
-    skills,
-    prompts,
-    commands,
-    files,
-    directories,
-    gitignoredFiles,
-    gitignoredDirectories,
-    workspaceId: activeWorkspaceId,
-    workspaceName: activeWorkspaceName,
-    workspacePath: activeWorkspacePath,
-    onManualMemorySelect: handleSelectManualMemory,
-    onNoteCardSelect: handleSelectNoteCard,
-    textareaRef,
     setText: setComposerText,
     setSelectionStart,
   });
   const reviewPromptOpen = Boolean(reviewPrompt);
   const suggestionsOpen = reviewPromptOpen || isAutocompleteOpen;
 
-  const {
-    handleHistoryKeyDown: _handleHistoryKeyDown,
-    handleHistoryTextChange,
-    recordHistory,
-    resetHistoryNavigation,
-  } = usePromptHistory({
-    historyKey,
-    text,
-    hasAttachments: attachedImages.length > 0,
-    disabled,
-    isAutocompleteOpen: suggestionsOpen,
-    textareaRef,
-    setText: setComposerText,
-    setSelectionStart,
-  });
-
-  const inlineCompletion = useInlineHistoryCompletion();
-
   const handleTextChangeWithHistory = useCallback(
     (next: string, cursor: number | null) => {
       markComposerInputInteraction();
-      handleHistoryTextChange(next);
       handleTextChange(next, cursor);
-      // Update inline history completion
-      if (!suggestionsOpen) {
-        inlineCompletion.updateQuery(next);
-      } else {
-        inlineCompletion.clear();
-      }
     },
-    [
-      handleHistoryTextChange,
-      handleTextChange,
-      markComposerInputInteraction,
-      suggestionsOpen,
-      inlineCompletion,
-    ],
+    [handleTextChange, markComposerInputInteraction],
   );
 
   const applyActiveFileReference = useCallback(
@@ -1371,7 +1690,7 @@ function ComposerImpl({
 
   const handleCodexQuickCommand = useCallback(
     (command: string) => {
-      if (disabled) {
+      if (disabled || effectiveSubmitDisabled) {
         return;
       }
       const normalized = command.trim().toLowerCase();
@@ -1388,11 +1707,17 @@ function ComposerImpl({
       }
       void onSend(command, []);
     },
-    [disabled, isReviewQuickActionEngine, onSend, selectedEngine],
+    [
+      disabled,
+      effectiveSubmitDisabled,
+      isReviewQuickActionEngine,
+      onSend,
+      selectedEngine,
+    ],
   );
 
   const handleForkQuickStart = useCallback(() => {
-    if (disabled) {
+    if (disabled || effectiveSubmitDisabled) {
       return;
     }
     if (onForkQuickStart) {
@@ -1403,11 +1728,17 @@ function ComposerImpl({
       return;
     }
     void onSend("/fork", []);
-  }, [disabled, onForkQuickStart, onSend, selectedEngine]);
+  }, [
+    disabled,
+    effectiveSubmitDisabled,
+    onForkQuickStart,
+    onSend,
+    selectedEngine,
+  ]);
 
   const handleSend = useCallback(
     (submittedText?: string, submittedImages?: string[]) => {
-      if (disabled) {
+      if (disabled || effectiveSubmitDisabled) {
         return;
       }
       if (opencodeDisconnected) {
@@ -1420,9 +1751,10 @@ function ComposerImpl({
       }
       const trimmed = (submittedText ?? text).trim();
       // Merge images from Composer state (file picker) and ChatInputBox (paste/drop)
-      const mergedImages = Array.from(
-        new Set([...attachedImages, ...(submittedImages ?? [])]),
-      );
+      const mergedImages = sanitizeImageAttachmentPaths([
+        ...attachedImages,
+        ...(submittedImages ?? []),
+      ]);
       const hasIntentCanvasAttachments = intentCanvasAttachments.length > 0;
       if (
         !trimmed &&
@@ -1430,6 +1762,29 @@ function ComposerImpl({
         !selectedOpenCodeDirectCommand &&
         !hasIntentCanvasAttachments
       ) {
+        return;
+      }
+      // Composer-side capability gate: keep draft when engine cannot accept images.
+      // Current engines are all image-capable; retained for future unsupported engines.
+      if (
+        mergedImages.length > 0 &&
+        imageAttachEngine &&
+        !engineSupportsImageInput(imageAttachEngine)
+      ) {
+        pushErrorToast({
+          title: t("composer.imageInputUnsupportedTitle", {
+            defaultValue: "Image not supported",
+          }),
+          message: formatEngineImageInputUnsupportedMessage(
+            imageAttachEngine,
+            // i18next TFunction is wider than our helper; keep runtime options intact.
+            t as (key: string, options?: Record<string, unknown>) => string,
+          ),
+          durationMs: 4200,
+        });
+        // ChatInputBox clears before onSubmit; restore Composer-owned draft + images.
+        setComposerText(submittedText ?? text);
+        onAttachImages?.(mergedImages);
         return;
       }
       const browserNavigationUrl =
@@ -1444,39 +1799,38 @@ function ComposerImpl({
             detail: { url: browserNavigationUrl },
           }),
         );
-        recordHistory(trimmed);
-        recordInputHistory(trimmed);
         clearComposerContextSelections();
-        inlineCompletion.clear();
-        resetHistoryNavigation();
         setComposerText("");
         return;
       }
       if (selectedOpenCodeDirectCommand) {
         onSend(`/${selectedOpenCodeDirectCommand}`, []);
         clearComposerContextSelections();
-        inlineCompletion.clear();
-        resetHistoryNavigation();
         setComposerText("");
         return;
       }
-      if (trimmed) {
-        recordHistory(trimmed);
-        recordInputHistory(trimmed);
-      }
-      inlineCompletion.clear();
-      const finalText = shouldAssemblePrompt({
+      const shouldAssembleSelectedSkills = shouldAssemblePrompt({
         userInput: trimmed,
         selectedSkillCount: selectedSkills.length,
         selectedCommonsCount: selectedCommons.length,
-      })
+      });
+      const finalText = shouldAssembleSelectedSkills
         ? assembleSinglePrompt({
             userInput: trimmed,
             skills: selectedSkills,
             commons: selectedCommons.map((item) => ({ name: item.name })),
           })
         : trimmed;
-      const finalTextWithReference = applyActiveFileReference(finalText);
+      // 结构化契约与降级文本同源于一次组装：仅在真正发生拼接时下发。
+      const skillInvocations = shouldAssembleSelectedSkills
+        ? assembleSkillInvocations({
+            skills: selectedSkills,
+            commons: selectedCommons.map((item) => ({ name: item.name })),
+          })
+        : [];
+      // managed 目录命令引擎不可见，发送前在客户端展开为正文。
+      const expandedFinalText = expandLeadingManagedCommand(finalText, commands);
+      const finalTextWithReference = applyActiveFileReference(expandedFinalText);
       const resolvedFinalText = replaceVisibleFileReferenceLabels(
         normalizeInlineFileReferenceTokens(finalTextWithReference),
         selectedInlineFileReferences,
@@ -1491,18 +1845,39 @@ function ComposerImpl({
       const shouldReferenceMemory = memoryReferenceMode !== "off";
       const browserContextAttachment = browserContext.attachment;
       const hasBrowserContextAttachment = Boolean(browserContextAttachment);
-      const sendOptions =
+      const createSessionTarget =
+        createSessionTargetPicker &&
+        isResolvedExecutionTarget(effectiveCreationTarget)
+          ? {
+              engine: effectiveCreationTarget.engine,
+              providerProfileId:
+                effectiveCreationTarget.providerProfileId?.trim() || null,
+              providerProfileName:
+                effectiveCreationTarget.providerProfileNameSnapshot,
+              providerProfileSource:
+                effectiveCreationTarget.providerProfileSource,
+              modelCatalogEntryId:
+                effectiveCreationTarget.modelCatalogEntryId,
+              model: effectiveCreationTarget.model,
+              effort: effectiveCreationTarget.reasoning?.effort ?? null,
+            }
+          : null;
+      const sendOptions: MessageSendOptions | undefined =
+        skillInvocations.length > 0 ||
         selectedMemoryIds.length > 0 ||
         selectedNoteCardIds.length > 0 ||
         shouldReferenceMemory ||
-        hasBrowserContextAttachment
+        hasBrowserContextAttachment ||
+        createSessionTarget !== null
           ? {
+              ...(skillInvocations.length > 0 ? { skillInvocations } : {}),
               ...(shouldReferenceMemory ? { memoryReferenceEnabled: true } : {}),
               ...(selectedMemoryIds.length > 0
                 ? { selectedMemoryIds, selectedMemoryInjectionMode }
                 : {}),
               ...(selectedNoteCardIds.length > 0 ? { selectedNoteCardIds } : {}),
               ...(browserContextAttachment ? { browserContextAttachment } : {}),
+              ...(createSessionTarget ? { createSessionTarget } : {}),
             }
           : undefined;
       const sendResult = onSend(
@@ -1556,34 +1931,37 @@ function ComposerImpl({
           currentMode === "single" ? "off" : currentMode,
         );
       });
-      resetHistoryNavigation();
       setComposerText("");
     },
     [
       attachedImages,
       activeWorkspaceId,
       browserContext,
+      createSessionTargetPicker,
+      effectiveCreationTarget,
       disabled,
+      effectiveSubmitDisabled,
+      imageAttachEngine,
       intentCanvasAttachments.length,
       applyActiveFileReference,
+      commands,
       opencodeDisconnected,
       selectedOpenCodeDirectCommand,
       selectedCommons,
       selectedSkills,
       selectedInlineFileReferences,
       selectedCodeAnnotations,
+      onAttachImages,
       onClearCodeAnnotations,
       selectedManualMemories,
       selectedNoteCards,
       memoryReferenceMode,
       onSend,
-      inlineCompletion,
-      recordHistory,
-      resetHistoryNavigation,
       setComposerText,
       selectedCommonsNames,
       selectedSkillNames,
       setSelectedManualMemories,
+      t,
       text,
       carryOverContextChipKeys,
       carryOverManualMemoryIds,
@@ -1644,18 +2022,16 @@ function ComposerImpl({
       return;
     }
     setComposerText(prefillDraft.text);
-    resetHistoryNavigation();
     onPrefillHandled?.(prefillDraft.id);
-  }, [onPrefillHandled, prefillDraft, resetHistoryNavigation, setComposerText]);
+  }, [onPrefillHandled, prefillDraft, setComposerText]);
 
   useEffect(() => {
     if (!insertText) {
       return;
     }
     setComposerText(insertText.text);
-    resetHistoryNavigation();
     onInsertHandled?.(insertText.id);
-  }, [insertText, onInsertHandled, resetHistoryNavigation, setComposerText]);
+  }, [insertText, onInsertHandled, setComposerText]);
 
   useEffect(() => {
     if (!dictationTranscript) {
@@ -1676,7 +2052,6 @@ function ComposerImpl({
       end,
     );
     setComposerText(nextText);
-    resetHistoryNavigation();
     requestAnimationFrame(() => {
       if (!textareaRef.current) {
         return;
@@ -1690,7 +2065,6 @@ function ComposerImpl({
     dictationTranscript,
     handleSelectionChange,
     onDictationTranscriptHandled,
-    resetHistoryNavigation,
     selectionStart,
     setComposerText,
     text,
@@ -2400,29 +2774,85 @@ function ComposerImpl({
               ref={chatInputRef}
               text={text}
               disabled={disabled}
+              submitDisabled={effectiveSubmitDisabled}
               isProcessing={isProcessing}
               streamActivityPhase={resolvedComposerStreamActivityPhase}
               canStop={canStop}
               onSend={handleSend}
               onStop={onStop}
               onTextChange={handleTextChangeWithHistory}
-              selectedModelId={selectedModelId}
-              selectedEngine={selectedEngine}
+              selectedModelId={
+                selectedAtomicTarget
+                  ? selectedAtomicTarget.modelCatalogEntryId ??
+                    selectedAtomicTarget.model ??
+                    ""
+                  : selectedModelId
+              }
+              selectedEngine={
+                selectedAtomicTarget?.engine ?? selectedEngine
+              }
               isSharedSession={isSharedSession}
+              // 全场景统一首页 Atomic 双栏 picker（含「本地配置」渠道），
+              // 不再维护 conversation native 单栏/无渠道分叉。
+              providerTargetPickerMode={
+                isSharedSession && !createSessionTargetPicker
+                  ? "shared"
+                  : "create-session"
+              }
+              threadId={activeThreadId}
               engines={engines}
-              onSelectEngine={onSelectEngine}
               models={models}
               providerModelCatalogs={providerModelCatalogs}
-              onSelectModel={onSelectModel}
+              providerProfileId={
+                selectedAtomicTarget
+                  ? selectedAtomicTarget.providerProfileId ?? null
+                  : providerProfileId
+              }
+              executionTarget={selectedAtomicTarget}
+              onExecutionTargetChange={
+                isSharedSession && !sharedTargetPickerLocked
+                  ? handleSharedTargetChange
+                  : createSessionTargetPicker
+                    ? handleCreationTargetChange
+                    : handleNativeAtomicTargetChange
+              }
               reasoningOptions={reasoningOptions}
-              selectedEffort={selectedEffort}
-              onSelectEffort={onSelectEffort}
+              selectedEffort={
+                selectedAtomicTarget
+                  ? selectedAtomicTarget.reasoning?.effort ?? null
+                  : selectedEffort
+              }
+              onSelectEffort={
+                sharedTargetPickerLocked
+                  ? undefined
+                  : isSharedSession &&
+                      isResolvedExecutionTarget(selectedSharedTarget)
+                    ? (effort) =>
+                        handleSharedTargetChange({
+                          ...selectedSharedTarget,
+                          reasoning: effort ? { effort } : null,
+                        })
+                    : createSessionTargetPicker &&
+                        isResolvedExecutionTarget(effectiveCreationTarget)
+                      ? (effort) =>
+                          setSelectedCreationTarget({
+                            ...effectiveCreationTarget,
+                            reasoning: effort ? { effort } : null,
+                          })
+                    : onSelectEffort
+              }
               reasoningSupported={reasoningSupported}
               onResolvedAlwaysThinkingChange={onResolvedAlwaysThinkingChange}
               attachments={attachedImages}
               hasContextAttachment={intentCanvasAttachments.length > 0}
-              onAddAttachment={onPickImages}
-              onAttachImages={onAttachImages}
+              onAddAttachment={
+                onPickImages || !imageInputSupported
+                  ? handlePickImagesGuarded
+                  : undefined
+              }
+              onAttachImages={
+                onAttachImages ? handleAttachImagesGuarded : undefined
+              }
               onRemoveAttachment={onRemoveImage}
               textareaHeight={textareaHeight}
               onHeightChange={onTextareaHeightChange}
@@ -2471,6 +2901,7 @@ function ComposerImpl({
               onOpenAgentSettings={onOpenAgentSettings}
               onOpenPromptSettings={onOpenPromptSettings}
               onOpenModelSettings={onOpenModelSettings}
+              onOpenCliSettings={onOpenCliSettings}
               onOpenFileReference={onOpenDiffPath}
               onRefreshModelConfig={onRefreshModelConfig}
               isModelConfigRefreshing={isModelConfigRefreshing}

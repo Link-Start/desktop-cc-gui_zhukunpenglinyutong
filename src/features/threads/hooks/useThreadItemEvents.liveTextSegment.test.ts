@@ -7,9 +7,13 @@
 // 后续正文改落新的 assistant item——若不在分段前把通道尾段灌回，本段正文会被
 // 下一段的首 delta 顶掉而永久丢失，界面表现为「整轮正文挤成一坨排在所有工具之前」。
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildConversationItem } from "../../../utils/threadItems";
-import { resetLiveAssistantTextChannelForTests } from "../utils/liveAssistantTextChannel";
+import {
+  getLiveAssistantTextSnapshot,
+  LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS,
+  resetLiveAssistantTextChannelForTests,
+} from "../utils/liveAssistantTextChannel";
 import { useThreadItemEvents } from "./useThreadItemEvents";
 
 vi.mock("../../../utils/threadItems", () => ({
@@ -64,6 +68,11 @@ describe("useThreadItemEvents live-text segmentation", () => {
       id: "tool-1",
       kind: "tool",
     } as unknown as ReturnType<typeof buildConversationItem>);
+  });
+
+  afterEach(() => {
+    resetLiveAssistantTextChannelForTests();
+    vi.useRealTimers();
   });
 
   it("drains the live-text tail into the current segment before a tool boundary", () => {
@@ -144,6 +153,120 @@ describe("useThreadItemEvents live-text segmentation", () => {
     const types = dispatchedTypes(dispatch);
     expect(types.indexOf("incrementAgentSegment")).toBeLessThan(
       types.lastIndexOf("appendAgentDelta"),
+    );
+  });
+
+  it("keeps growing agent snapshots in the row-local channel after the shell", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    const { result, dispatch } = makeHook();
+
+    act(() => {
+      result.current.onItemUpdated(WORKSPACE_ID, THREAD_ID, {
+        type: "agentMessage",
+        id: ITEM_ID,
+        text: "第一段",
+      });
+      result.current.onItemUpdated(WORKSPACE_ID, THREAD_ID, {
+        type: "agentMessage",
+        id: ITEM_ID,
+        text: "第一段\n第二段",
+      });
+    });
+
+    expect(agentDeltaCalls(dispatch).map((action) => action.delta)).toEqual([
+      "第一段",
+    ]);
+    expect(getLiveAssistantTextSnapshot(THREAD_ID)?.text).toBe("第一段");
+    act(() => {
+      vi.advanceTimersByTime(LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS);
+    });
+    expect(getLiveAssistantTextSnapshot(THREAD_ID)?.text).toBe(
+      "第一段\n第二段",
+    );
+  });
+
+  it("routes snapshot replacement and completion through durable state", () => {
+    const { result, dispatch } = makeHook();
+
+    act(() => {
+      result.current.onItemUpdated(WORKSPACE_ID, THREAD_ID, {
+        type: "agentMessage",
+        id: ITEM_ID,
+        text: "第一段",
+      });
+      result.current.onItemUpdated(WORKSPACE_ID, THREAD_ID, {
+        type: "agentMessage",
+        id: ITEM_ID,
+        text: "替换正文",
+      });
+      result.current.onItemCompleted(WORKSPACE_ID, THREAD_ID, {
+        type: "agentMessage",
+        id: ITEM_ID,
+        text: "最终正文",
+      });
+    });
+
+    expect(agentDeltaCalls(dispatch).map((action) => action.delta)).toEqual([
+      "第一段",
+      "替换正文",
+      "最终正文",
+    ]);
+    expect(getLiveAssistantTextSnapshot(THREAD_ID)).toBeNull();
+  });
+
+  it("drains the previous text-run tail when a new interleaved itemId starts", () => {
+    // 回归：对话中 Reasoning 交错产生多个 text run（item / item:text-2）。
+    // live 通道按 thread 单槽；若不在 itemId 切换时 drain，上一段只剩建壳首字
+    // （用户看到「先」「截」），历史重载才恢复完整正文。
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    const { result, dispatch } = makeHook();
+    const secondItemId = `${ITEM_ID}:text-2`;
+
+    act(() => {
+      result.current.onAgentMessageDelta({
+        workspaceId: WORKSPACE_ID,
+        threadId: THREAD_ID,
+        itemId: ITEM_ID,
+        delta: "先",
+      });
+      result.current.onAgentMessageDelta({
+        workspaceId: WORKSPACE_ID,
+        threadId: THREAD_ID,
+        itemId: ITEM_ID,
+        delta: "查看相关组件。",
+      });
+      // 新 text run（中间穿插过 reasoning，前端只看到 itemId 变化）。
+      result.current.onAgentMessageDelta({
+        workspaceId: WORKSPACE_ID,
+        threadId: THREAD_ID,
+        itemId: secondItemId,
+        delta: "截",
+      });
+      result.current.onAgentMessageDelta({
+        workspaceId: WORKSPACE_ID,
+        threadId: THREAD_ID,
+        itemId: secondItemId,
+        delta: "图右侧黑卡片。",
+      });
+    });
+
+    expect(agentDeltaCalls(dispatch)).toEqual([
+      expect.objectContaining({ itemId: ITEM_ID, delta: "先" }),
+      expect.objectContaining({
+        itemId: ITEM_ID,
+        delta: "查看相关组件。",
+      }),
+      expect.objectContaining({ itemId: secondItemId, delta: "截" }),
+    ]);
+    expect(getLiveAssistantTextSnapshot(THREAD_ID)?.itemId).toBe(secondItemId);
+    // 首条立即 publish；后续 delta 在 cadence 后才刷新 published 快照。
+    expect(getLiveAssistantTextSnapshot(THREAD_ID)?.text).toBe("截");
+
+    act(() => {
+      vi.advanceTimersByTime(LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS);
+    });
+    expect(getLiveAssistantTextSnapshot(THREAD_ID)?.text).toBe(
+      "截图右侧黑卡片。",
     );
   });
 });

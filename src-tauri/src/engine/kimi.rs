@@ -9,18 +9,22 @@
 //! - `{"role":"tool","tool_call_id":"...","content":"..."}` — tool result
 //! - `{"role":"meta","type":"session.resume_hint","session_id":"session_<uuid>",...}`
 //!
+//! Image input (headless): Kimi `-p` only accepts a text prompt. Interactive paste
+//! expands to `image_url` parts via TUI store; headless injects absolute paths as
+//! `<image path="...">` tags and instructs the agent to call `ReadMediaFile`
+//! (print mode uses `permission: auto`, and ReadMediaFile is auto-approved).
+//!
 //! In `-p` mode Kimi always runs under the `auto` permission policy, so no
 //! approval events exist. Thinking content is not written to the JSONL stream.
 
-use serde_json::{Value, json};
-use std::collections::HashMap;
+use serde_json::{json, Value};
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::process::Stdio;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
-use tokio::sync::{Mutex, RwLock, broadcast};
+use tokio::sync::{broadcast, Mutex, RwLock};
 
 use super::events::EngineEvent;
 use super::{EngineConfig, EngineType, SendMessageParams};
@@ -51,7 +55,7 @@ pub struct KimiSession {
     home_dir: Option<String>,
     custom_args: Option<String>,
     active_processes: Mutex<HashMap<String, ActiveKimiChildProcess>>,
-    interrupted: AtomicBool,
+    interrupted_turns: Mutex<HashSet<String>>,
 }
 
 #[allow(dead_code)]
@@ -85,6 +89,18 @@ impl ActiveKimiChildProcess {
             registered_age_ms: sampled_at_ms.saturating_sub(self.started_at_ms),
         })
     }
+}
+
+fn apply_interrupt_result(
+    active_processes: &mut HashMap<String, ActiveKimiChildProcess>,
+    interrupted_turns: &mut HashSet<String>,
+    turn_id: &str,
+    kill_result: Result<(), String>,
+) -> Result<(), String> {
+    kill_result?;
+    interrupted_turns.insert(turn_id.to_string());
+    active_processes.remove(turn_id);
+    Ok(())
 }
 
 fn unix_timestamp_ms_for_process_diagnostics() -> u64 {
@@ -242,7 +258,7 @@ impl KimiSession {
             home_dir: config.home_dir,
             custom_args: config.custom_args,
             active_processes: Mutex::new(HashMap::new()),
-            interrupted: AtomicBool::new(false),
+            interrupted_turns: Mutex::new(HashSet::new()),
         }
     }
 
@@ -276,7 +292,7 @@ impl KimiSession {
         );
     }
 
-    fn build_command(&self, params: &SendMessageParams) -> Command {
+    fn build_command(&self, params: &SendMessageParams) -> Result<Command, String> {
         let bin = if let Some(ref custom) = self.bin_path {
             custom.clone()
         } else {
@@ -318,10 +334,18 @@ impl KimiSession {
             }
         }
 
-        let safe_text = if params.text.starts_with('-') {
-            format!(" {}", params.text)
+        let image_files = crate::engine::cli_image_input::resolve_existing_image_files(
+            params.images.as_deref(),
+            &self.workspace_path,
+        )?;
+        let prompt_text = crate::engine::cli_image_input::build_kimi_prompt_with_images(
+            &params.text,
+            &image_files,
+        );
+        let safe_text = if prompt_text.starts_with('-') {
+            format!(" {}", prompt_text)
         } else {
-            params.text.clone()
+            prompt_text
         };
         cmd.arg("--prompt");
         cmd.arg(&safe_text);
@@ -333,7 +357,7 @@ impl KimiSession {
         cmd.stdin(Stdio::null());
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
-        cmd
+        Ok(cmd)
     }
 
     pub async fn send_message(
@@ -362,7 +386,14 @@ impl KimiSession {
             resume_session_id_len,
         );
 
-        let mut command = self.build_command(&params);
+        let mut command = match self.build_command(&params) {
+            Ok(command) => command,
+            Err(error) => {
+                let error_msg = format!("Failed to build kimi command: {}", error);
+                self.emit_error(turn_id, error_msg.clone());
+                return Err(error_msg);
+            }
+        };
         let mut child = match command.spawn() {
             Ok(child) => child,
             Err(error) => {
@@ -544,9 +575,10 @@ impl KimiSession {
             error_output.chars().count(),
         );
 
+        let was_interrupted = self.interrupted_turns.lock().await.remove(turn_id);
         if let Some(status) = status {
             if !status.success() {
-                let error_msg = if self.interrupted.swap(false, Ordering::SeqCst) {
+                let error_msg = if was_interrupted {
                     "Session stopped.".to_string()
                 } else if !error_output.trim().is_empty() {
                     error_output.trim().to_string()
@@ -556,7 +588,7 @@ impl KimiSession {
                 self.emit_error(turn_id, error_msg.clone());
                 return Err(error_msg);
             }
-        } else if self.interrupted.swap(false, Ordering::SeqCst) {
+        } else if was_interrupted {
             let error_msg = "Session stopped.".to_string();
             self.emit_error(turn_id, error_msg.clone());
             return Err(error_msg);
@@ -592,34 +624,31 @@ impl KimiSession {
     }
 
     pub async fn interrupt(&self) -> Result<(), String> {
-        self.interrupted.store(true, Ordering::SeqCst);
         let mut active = self.active_processes.lock().await;
-        for process in active.values_mut() {
+        for (turn_id, process) in active.iter_mut() {
             let child = &mut process.child;
             child
                 .kill()
                 .await
                 .map_err(|e| format!("Failed to kill process: {}", e))?;
+            self.interrupted_turns.lock().await.insert(turn_id.clone());
         }
         active.clear();
         Ok(())
     }
 
     pub async fn interrupt_turn(&self, turn_id: &str) -> Result<(), String> {
-        self.interrupted.store(true, Ordering::SeqCst);
-        let mut child = {
-            let mut active = self.active_processes.lock().await;
-            active
-                .remove(turn_id)
-                .map(ActiveKimiChildProcess::into_child)
+        let mut active = self.active_processes.lock().await;
+        let Some(process) = active.get_mut(turn_id) else {
+            return Ok(());
         };
-        if let Some(child_proc) = child.as_mut() {
-            child_proc
-                .kill()
-                .await
-                .map_err(|e| format!("Failed to kill process: {}", e))?;
-        }
-        Ok(())
+        let kill_result = process
+            .child
+            .kill()
+            .await
+            .map_err(|e| format!("Failed to kill process: {}", e));
+        let mut interrupted_turns = self.interrupted_turns.lock().await;
+        apply_interrupt_result(&mut active, &mut interrupted_turns, turn_id, kill_result)
     }
 
     #[cfg(test)]
@@ -686,6 +715,57 @@ impl Drop for KimiSession {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[tokio::test]
+    async fn interrupt_unknown_turn_does_not_mark_another_runtime_interrupted() {
+        let session = KimiSession::new("workspace-1".to_string(), std::env::temp_dir(), None);
+
+        session
+            .interrupt_turn("turn-owned-by-another-provider")
+            .await
+            .expect("unknown turn interrupt is idempotent");
+
+        assert!(session.interrupted_turns.lock().await.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn failed_interrupt_result_keeps_turn_owner_registered() {
+        let session = KimiSession::new("workspace-1".to_string(), std::env::temp_dir(), None);
+        let child = Command::new("sh")
+            .arg("-c")
+            .arg("sleep 30")
+            .spawn()
+            .expect("spawn child");
+        session
+            .active_processes
+            .lock()
+            .await
+            .insert("turn-owned".to_string(), ActiveKimiChildProcess::new(child));
+
+        {
+            let mut active = session.active_processes.lock().await;
+            let mut interrupted = session.interrupted_turns.lock().await;
+            apply_interrupt_result(
+                &mut active,
+                &mut interrupted,
+                "turn-owned",
+                Err("kill failed".to_string()),
+            )
+            .expect_err("failed kill result must propagate");
+        }
+
+        assert!(session
+            .active_processes
+            .lock()
+            .await
+            .contains_key("turn-owned"));
+        assert!(session.interrupted_turns.lock().await.is_empty());
+        session
+            .interrupt_turn("turn-owned")
+            .await
+            .expect("cleanup child");
+    }
 
     #[test]
     fn parses_assistant_text_line() {

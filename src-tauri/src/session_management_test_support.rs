@@ -48,6 +48,7 @@
             workspace_label: workspace_label.map(ToString::to_string),
             engine: "codex".to_string(),
             title: "Example session".to_string(),
+            native_title: None,
             updated_at: 1,
             archived_at: None,
             thread_kind: "native".to_string(),
@@ -73,6 +74,7 @@
             delete_mode: Some(SESSION_DELETE_MODE_PHYSICAL.to_string()),
             physical_path: None,
             children_count: None,
+            continuation: ProviderContinuationProjection::default(),
         }
     }
 

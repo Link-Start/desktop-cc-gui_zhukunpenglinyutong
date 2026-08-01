@@ -8,7 +8,7 @@ import X from "lucide-react/dist/esm/icons/x";
 import type { GitHubPullRequest, GitHubPullRequestComment } from "../../../types";
 import { getGitFileFullDiff } from "../../../services/tauri";
 import { formatRelativeTime } from "../../../utils/time";
-import { Markdown } from "../../messages/components/Markdown";
+import { Markdown } from "../../../markdown/components/Markdown";
 import { ImageDiffCard } from "./ImageDiffCard";
 import {
   DiffBlock,
@@ -24,9 +24,11 @@ import type {
   CodeAnnotationSelection,
 } from "../../code-annotations/types";
 import {
+  createCodeAnnotationAnchorFromSnapshot,
   formatCodeAnnotationLineRange,
   isSameCodeAnnotationPath,
 } from "../../code-annotations/utils/codeAnnotations";
+import { WorkspaceReadOnlyDiffCompare } from "./WorkspaceReadOnlyDiffCompare";
 
 type GitDiffViewerItem = {
   path: string;
@@ -39,7 +41,7 @@ type GitDiffViewerItem = {
   newImageMime?: string | null;
 };
 
-type GitDiffViewerProps = {
+export type GitDiffViewerProps = {
   workspaceId?: string | null;
   diffs: GitDiffViewerItem[];
   listView?: "flat" | "tree";
@@ -48,6 +50,7 @@ type GitDiffViewerProps = {
   showContentModeControls?: boolean;
   showAllContentControl?: boolean;
   toolbarOnly?: boolean;
+  alignedTextPreview?: boolean;
   headerControlsTarget?: HTMLElement | null;
   onRequestClose?: (() => void) | null;
   fullDiffLoader?: ((path: string) => Promise<string>) | null;
@@ -159,6 +162,23 @@ const DiffCard = memo(function DiffCard({
       : `L${selectedAnnotationLineRange.startLine}-L${selectedAnnotationLineRange.endLine}`
     : null;
   const canCreateCodeAnnotation = Boolean(onCreateCodeAnnotation);
+  const annotationDraftAnchor = useMemo(() => {
+    if (!annotationDraft) {
+      return undefined;
+    }
+    return createCodeAnnotationAnchorFromSnapshot(
+      parsedLines
+        .filter(
+          (line) =>
+            (line.type === "add" || line.type === "context") &&
+            typeof line.newLine === "number" &&
+            line.newLine >= annotationDraft.lineRange.startLine &&
+            line.newLine <= annotationDraft.lineRange.endLine,
+        )
+        .map((line) => line.text)
+        .join("\n"),
+    );
+  }, [annotationDraft, parsedLines]);
 
   // Stable prop identities for the (now memoized) DiffBlock. Previously these
   // were inline closures recreated every render, so a status poll or mount-time
@@ -271,6 +291,7 @@ const DiffCard = memo(function DiffCard({
                       lineRange: annotationDraft.lineRange,
                       body,
                       source: codeAnnotationSurface,
+                      anchor: annotationDraftAnchor,
                     });
                     setAnnotationDraft(null);
                   }}
@@ -286,6 +307,7 @@ const DiffCard = memo(function DiffCard({
     },
     [
       annotationDraft,
+      annotationDraftAnchor,
       codeAnnotationSurface,
       normalizedEntryPath,
       onCreateCodeAnnotation,
@@ -562,6 +584,7 @@ export function GitDiffViewer({
   showContentModeControls,
   showAllContentControl = true,
   toolbarOnly = false,
+  alignedTextPreview = false,
   headerControlsTarget = null,
   onRequestClose = null,
   fullDiffLoader = null,
@@ -1081,13 +1104,40 @@ export function GitDiffViewer({
     };
   }, [fullDiffLoader, fullDiffTargetPath, loadFullDiff, workspaceId]);
 
+  const alignedPreviewCandidate =
+    alignedTextPreview
+    && !toolbarOnly
+    && !pullRequest
+    && diffStyle === "split"
+    && stickyEntry
+    && !stickyEntry.isImage
+      ? stickyEntry
+      : null;
+  const alignedPreviewContentMode = alignedPreviewCandidate
+    ? controlledContentMode
+      ?? fileContentModes[alignedPreviewCandidate.path]
+      ?? initialContentMode
+    : null;
+  const alignedPreviewDiff = alignedPreviewCandidate
+    ? alignedPreviewContentMode === "all"
+      && fullDiffByPath[alignedPreviewCandidate.path]?.trim()
+        ? fullDiffByPath[alignedPreviewCandidate.path]
+        : alignedPreviewCandidate.diff
+    : null;
+  const alignedPreviewEntry = alignedPreviewDiff?.trim()
+    ? alignedPreviewCandidate
+    : null;
+
   return (
       <div
         className={`diff-viewer-frame ${showEmbeddedAnchorBar ? "has-embedded-anchor" : ""} ${
           embeddedAnchorVariant === "modal-pager" ? "is-anchor-modal-pager" : ""
         }`}
       >
-        <div className="diff-viewer" ref={containerRef}>
+        <div
+          className={`diff-viewer${alignedPreviewEntry ? " has-aligned-text-preview" : ""}`}
+          ref={containerRef}
+        >
           {stickyEntry && effectiveHeaderControlsTarget
             ? createPortal(
                 <div className="diff-viewer-header-controls is-external">
@@ -1273,7 +1323,7 @@ export function GitDiffViewer({
             </div>
           </div>
         )}
-        {!toolbarOnly && showAnchorBar && stickyEntry && !showEmbeddedAnchorBar && (
+        {!toolbarOnly && !alignedPreviewEntry && showAnchorBar && stickyEntry && !showEmbeddedAnchorBar && (
           <div
             className="diff-viewer-anchor-floating"
             role="group"
@@ -1293,7 +1343,16 @@ export function GitDiffViewer({
             {listView === "tree" ? t("git.selectFileToViewDiff") : t("git.noChangesDetected")}
           </div>
         )}
-        {!toolbarOnly && !error && effectiveDiffs.length > 0 && (
+        {!toolbarOnly && !error && alignedPreviewEntry && alignedPreviewDiff ? (
+          <div className="diff-viewer-aligned-text-preview">
+            <WorkspaceReadOnlyDiffCompare
+              filePath={alignedPreviewEntry.path}
+              diff={alignedPreviewDiff}
+              resizableColumns
+            />
+          </div>
+        ) : null}
+        {!toolbarOnly && !error && !alignedPreviewEntry && effectiveDiffs.length > 0 && (
           <div
             className="diff-viewer-list"
             ref={listRef}
@@ -1354,7 +1413,7 @@ export function GitDiffViewer({
           </div>
         )}
         </div>
-        {!toolbarOnly && showEmbeddedAnchorBar && stickyEntry && (
+        {!toolbarOnly && !alignedPreviewEntry && showEmbeddedAnchorBar && stickyEntry && (
           <div className="diff-viewer-anchor-dock" role="group" aria-label="Change anchors">
             {anchorControls}
           </div>

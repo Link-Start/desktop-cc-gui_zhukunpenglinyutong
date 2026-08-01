@@ -4,7 +4,9 @@
 //! streaming JSON output.
 
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -46,6 +48,8 @@ mod lifecycle;
 mod manager;
 #[path = "claude/native_skill_mirror.rs"]
 mod native_skill_mirror;
+#[path = "claude/provider_profile.rs"]
+pub(crate) mod provider_profile;
 #[path = "claude_stream_helpers.rs"]
 mod stream_helpers;
 mod user_input;
@@ -69,6 +73,9 @@ pub use askuser_mcp::{global as askuser_mcp_global, AskUserMcpServer};
 #[allow(unused_imports)]
 pub use askuser_mcp::init_global as init_askuser_mcp_global;
 pub use manager::ClaudeSessionManager;
+pub(crate) use provider_profile::{
+    resolve_claude_provider_launch_profile, CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
+};
 #[cfg(test)]
 use stream_helpers::extract_text_from_content;
 #[cfg(test)]
@@ -78,6 +85,108 @@ use stream_helpers::{
     is_claude_stream_control_line, looks_like_claude_runtime_error, merge_text_chunks,
     parse_claude_stream_json_line, tool_input_signature,
 };
+
+const CLAUDE_PROVIDER_ROUTING_ENV_KEYS: &[&str] = &[
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_MODEL",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME",
+    "ANTHROPIC_REASONING_MODEL",
+    "CLAUDE_CODE_SUBAGENT_MODEL",
+    "CLAUDE_CODE_USE_BEDROCK",
+    "CLAUDE_CODE_USE_FOUNDRY",
+    "CLAUDE_CODE_USE_MANTLE",
+    "CLAUDE_CODE_USE_VERTEX",
+];
+
+struct ClaudeProviderSettingsOverride {
+    directory: PathBuf,
+    settings_path: PathBuf,
+}
+
+impl ClaudeProviderSettingsOverride {
+    fn create(provider_env: Option<&BTreeMap<String, String>>) -> Result<Option<Self>, String> {
+        let Some(provider_env) = provider_env else {
+            return Ok(None);
+        };
+        let directory = std::env::temp_dir().join(format!(
+            "ccgui-claude-provider-settings-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let mut directory_builder = fs::DirBuilder::new();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            directory_builder.mode(0o700);
+        }
+        directory_builder.create(&directory).map_err(|error| {
+            format!("Failed to create private Claude provider settings directory: {error}")
+        })?;
+
+        let settings_path = directory.join("settings.json");
+        let write_result = (|| -> Result<(), String> {
+            let mut settings_env = provider_env.clone();
+            for key in CLAUDE_PROVIDER_ROUTING_ENV_KEYS {
+                settings_env
+                    .entry((*key).to_string())
+                    .or_insert_with(String::new);
+            }
+            let payload = serde_json::to_vec(&json!({ "env": settings_env })).map_err(|error| {
+                format!("Failed to serialize Claude provider settings: {error}")
+            })?;
+            let mut options = fs::OpenOptions::new();
+            options.create_new(true).write(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+            let mut settings_file = options.open(&settings_path).map_err(|error| {
+                format!("Failed to create private Claude provider settings file: {error}")
+            })?;
+            settings_file.write_all(&payload).map_err(|error| {
+                format!("Failed to write private Claude provider settings file: {error}")
+            })?;
+            settings_file.sync_all().map_err(|error| {
+                format!("Failed to sync private Claude provider settings file: {error}")
+            })
+        })();
+        if let Err(error) = write_result {
+            let _ = fs::remove_dir_all(&directory);
+            return Err(error);
+        }
+
+        Ok(Some(Self {
+            directory,
+            settings_path,
+        }))
+    }
+
+    fn path(&self) -> &Path {
+        &self.settings_path
+    }
+}
+
+impl Drop for ClaudeProviderSettingsOverride {
+    fn drop(&mut self) {
+        if let Err(error) = fs::remove_dir_all(&self.directory) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                log::warn!(
+                    "[claude] failed to clean private provider settings directory: {}",
+                    error
+                );
+            }
+        }
+    }
+}
 
 impl Drop for ClaudeSession {
     fn drop(&mut self) {
@@ -188,6 +297,8 @@ const RETRYABLE_PROMPT_TOO_LONG_PREFIX: &str = "__claude_retryable_prompt_too_lo
 const AUTO_COMPACT_SIGNAL_SOURCE: &str = "auto_compact_retry";
 const CLAUDE_TEXT_DELTA_COALESCE_WINDOW_MS: u64 = 32;
 const CLAUDE_NON_INTERACTIVE_ENV: &str = "CLAUDE_NON_INTERACTIVE";
+const CLAUDE_CONTEXT_BOOTSTRAP_SYSTEM_PROMPT: &str =
+    "Import the supplied prior context into this session. Do not use tools. Follow the user's acceptance instruction exactly.";
 #[cfg(not(test))]
 const CLAUDE_STREAM_FIRST_EVENT_TIMEOUT: Duration = Duration::from_secs(90);
 #[cfg(test)]
@@ -209,6 +320,18 @@ const CLAUDE_POST_RESULT_GRACE: Duration = Duration::from_secs(5);
 // stderr handling.
 const CLAUDE_POST_RESULT_STDERR_DRAIN: Duration = Duration::from_secs(2);
 const CLAUDE_REASONING_EFFORTS: &[&str] = &["low", "medium", "high", "xhigh", "max"];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClaudeCommandProfile {
+    Standard,
+    ContextBootstrap,
+}
+
+impl ClaudeCommandProfile {
+    fn is_context_bootstrap(self) -> bool {
+        self == Self::ContextBootstrap
+    }
+}
 
 #[derive(Debug, Default)]
 struct BufferedClaudeTextDelta {
@@ -296,6 +419,8 @@ fn unix_timestamp_ms() -> u64 {
 pub struct ClaudeSession {
     /// Workspace identifier
     pub workspace_id: String,
+    /// Opaque in-process locator used by the AskUserQuestion MCP bridge.
+    runtime_locator: String,
     /// Workspace directory path
     pub workspace_path: PathBuf,
     /// Current Claude session ID (for --resume)
@@ -359,6 +484,9 @@ pub struct ClaudeSession {
     /// `send_message_with_app_settings`. The in-process MCP server reads this to
     /// route a mid-turn AskUserQuestion to the live turn's event subscriber.
     active_turn_id: StdMutex<Option<String>>,
+    /// Provider environment captured for the lifetime of a turn, including
+    /// approval/AskUserQuestion resume subprocesses.
+    provider_env_by_turn: StdMutex<HashMap<String, BTreeMap<String, String>>>,
 }
 
 /// Clears the session's active turn on drop, covering every exit path of
@@ -608,6 +736,7 @@ impl ClaudeSession {
 
         Self {
             workspace_id,
+            runtime_locator: uuid::Uuid::new_v4().simple().to_string(),
             workspace_path,
             session_id: RwLock::new(None),
             event_sender,
@@ -636,7 +765,16 @@ impl ClaudeSession {
             ask_user_question_resume_diagnostic_sink: StdMutex::new(None),
             mcp_answer_waiters: StdMutex::new(HashMap::new()),
             active_turn_id: StdMutex::new(None),
+            provider_env_by_turn: StdMutex::new(HashMap::new()),
         }
+    }
+
+    pub(crate) fn runtime_locator(&self) -> &str {
+        &self.runtime_locator
+    }
+
+    pub(crate) async fn has_active_turn(&self, turn_id: &str) -> bool {
+        self.active_processes.lock().await.contains_key(turn_id)
     }
 
     pub(crate) fn register_turn_thread_id(&self, turn_id: &str, thread_id: &str) {
@@ -858,13 +996,58 @@ impl ClaudeSession {
         app_settings: Option<&crate::types::AppSettings>,
         activation_hint_file: Option<&Path>,
     ) -> Command {
+        self.build_command_with_provider_env(
+            params,
+            use_stream_json_input,
+            include_hook_events,
+            app_settings,
+            activation_hint_file,
+            None,
+            None,
+        )
+    }
+
+    fn build_command_with_provider_env(
+        &self,
+        params: &SendMessageParams,
+        use_stream_json_input: bool,
+        include_hook_events: bool,
+        app_settings: Option<&crate::types::AppSettings>,
+        activation_hint_file: Option<&Path>,
+        provider_env: Option<&BTreeMap<String, String>>,
+        provider_settings_path: Option<&Path>,
+    ) -> Command {
+        self.build_command_with_profile(
+            params,
+            use_stream_json_input,
+            include_hook_events,
+            app_settings,
+            activation_hint_file,
+            provider_env,
+            provider_settings_path,
+            ClaudeCommandProfile::Standard,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn build_command_with_profile(
+        &self,
+        params: &SendMessageParams,
+        use_stream_json_input: bool,
+        include_hook_events: bool,
+        app_settings: Option<&crate::types::AppSettings>,
+        activation_hint_file: Option<&Path>,
+        provider_env: Option<&BTreeMap<String, String>>,
+        provider_settings_path: Option<&Path>,
+        profile: ClaudeCommandProfile,
+    ) -> Command {
         // Resolve the Claude CLI binary path:
         // 1. Use custom bin_path if configured
         // 2. Otherwise use find_cli_binary() to search npm global, cargo, etc.
         // 3. Fall back to bare "claude" as last resort
         let bin = self.resolve_cli_binary();
-        let skip_curated_skill_append =
-            Self::should_skip_curated_skill_append_for_binary(&bin, cfg!(windows));
+        let skip_curated_skill_append = profile.is_context_bootstrap()
+            || Self::should_skip_curated_skill_append_for_binary(&bin, cfg!(windows));
 
         // Use build_command_for_binary to properly handle .cmd/.bat files on Windows
         let mut cmd = crate::backend::app_server::build_command_for_binary(&bin);
@@ -874,6 +1057,19 @@ impl ClaudeSession {
 
         // Print mode (non-interactive)
         cmd.arg("-p");
+
+        if profile.is_context_bootstrap() {
+            // ponytail: bootstrap 只需一次无工具 ACK。若未来 CLI 移除这些 flags，
+            // 在这里升级兼容策略，不污染普通 turn 的 command contract。
+            cmd.arg("--safe-mode");
+            cmd.arg("--tools");
+            cmd.arg("");
+            cmd.arg("--disable-slash-commands");
+            cmd.arg("--prompt-suggestions");
+            cmd.arg("false");
+            cmd.arg("--system-prompt");
+            cmd.arg(CLAUDE_CONTEXT_BOOTSTRAP_SYSTEM_PROMPT);
+        }
 
         // Append curated skills (if any) via --append-system-prompt. The
         // flag is added immediately after `-p` and **before** any other
@@ -895,6 +1091,11 @@ impl ClaudeSession {
             // placeholder after `-p` breaks Windows .cmd wrapper parsing.
             cmd.arg("--input-format");
             cmd.arg("stream-json");
+            if params.text.contains("MOSSX_CONTEXT_PACKAGE:") {
+                // Change C：只为 Context Package 开 echo，避免改变普通 Claude turn。
+                // 旧 CLI 不支持时显式失败，不能降格为首 token ACK。
+                cmd.arg("--replay-user-messages");
+            }
         } else {
             // Compatibility fallback only. Production sends user prompts through
             // stream-json stdin so shell wrappers never parse prompt text.
@@ -915,8 +1116,14 @@ impl ClaudeSession {
             cmd.arg("--include-hook-events");
         }
 
-        if let Some(path) = activation_hint_file {
-            cmd.arg("--append-system-prompt-file");
+        if !profile.is_context_bootstrap() {
+            if let Some(path) = activation_hint_file {
+                cmd.arg("--append-system-prompt-file");
+                cmd.arg(path);
+            }
+        }
+        if let Some(path) = provider_settings_path {
+            cmd.arg("--settings");
             cmd.arg(path);
         }
 
@@ -956,10 +1163,10 @@ impl ClaudeSession {
         // already covers it, but allowing it is harmless and keeps modes uniform.
         // We intentionally do NOT pass `--strict-mcp-config` so the user's own
         // MCP servers (from ~/.claude.json) keep working — this is purely additive.
-        if !is_plan_mode {
+        if !is_plan_mode && !profile.is_context_bootstrap() {
             if let Some(server) = crate::engine::claude::askuser_mcp_global() {
                 cmd.arg("--mcp-config");
-                cmd.arg(server.mcp_config_json(&self.workspace_id));
+                cmd.arg(server.mcp_config_json(&self.workspace_id, &self.runtime_locator));
                 cmd.arg("--allowedTools");
                 cmd.arg(crate::engine::claude::AskUserMcpServer::allowed_tool_name());
                 // The CLI's per-request MCP tool-call fetch timeout defaults to 60s
@@ -1022,23 +1229,25 @@ impl ClaudeSession {
             Err(_) => {}
         }
 
-        if let Some(spec_root) = params
-            .custom_spec_root
-            .as_ref()
-            .map(|value| value.trim())
-            .filter(|value| !value.is_empty())
-        {
-            let spec_path = Path::new(spec_root);
-            if spec_path.is_absolute() && spec_path != self.workspace_path.as_path() {
-                cmd.arg("--add-dir");
-                cmd.arg(spec_root);
+        if !profile.is_context_bootstrap() {
+            if let Some(spec_root) = params
+                .custom_spec_root
+                .as_ref()
+                .map(|value| value.trim())
+                .filter(|value| !value.is_empty())
+            {
+                let spec_path = Path::new(spec_root);
+                if spec_path.is_absolute() && spec_path != self.workspace_path.as_path() {
+                    cmd.arg("--add-dir");
+                    cmd.arg(spec_root);
+                }
             }
-        }
 
-        // Custom arguments
-        if let Some(ref args) = self.custom_args {
-            for arg in args.split_whitespace() {
-                cmd.arg(arg);
+            // Custom arguments
+            if let Some(ref args) = self.custom_args {
+                for arg in args.split_whitespace() {
+                    cmd.arg(arg);
+                }
             }
         }
 
@@ -1055,6 +1264,9 @@ impl ClaudeSession {
         }
         if params.disable_thinking {
             cmd.env("CLAUDE_CODE_DISABLE_THINKING", "1");
+        }
+        if let Some(provider_env) = provider_env {
+            cmd.envs(provider_env);
         }
 
         cmd
@@ -1080,22 +1292,85 @@ impl ClaudeSession {
         turn_id: &str,
         app_settings: Option<&crate::types::AppSettings>,
     ) -> Result<String, String> {
+        self.send_message_with_app_settings_and_provider_env(params, turn_id, app_settings, None)
+            .await
+    }
+
+    pub async fn send_message_with_app_settings_and_provider_env(
+        &self,
+        params: SendMessageParams,
+        turn_id: &str,
+        app_settings: Option<&crate::types::AppSettings>,
+        provider_env: Option<&BTreeMap<String, String>>,
+    ) -> Result<String, String> {
+        self.send_message_with_profile(
+            params,
+            turn_id,
+            app_settings,
+            provider_env,
+            ClaudeCommandProfile::Standard,
+        )
+        .await
+    }
+
+    pub async fn send_context_bootstrap_with_provider_env(
+        &self,
+        params: SendMessageParams,
+        turn_id: &str,
+        provider_env: Option<&BTreeMap<String, String>>,
+    ) -> Result<String, String> {
+        self.send_message_with_profile(
+            params,
+            turn_id,
+            None,
+            provider_env,
+            ClaudeCommandProfile::ContextBootstrap,
+        )
+        .await
+    }
+
+    async fn send_message_with_profile(
+        &self,
+        params: SendMessageParams,
+        turn_id: &str,
+        app_settings: Option<&crate::types::AppSettings>,
+        provider_env: Option<&BTreeMap<String, String>>,
+        profile: ClaudeCommandProfile,
+    ) -> Result<String, String> {
+        self.remember_provider_env_for_turn(turn_id, provider_env);
         // Mark this as the active turn so a mid-turn MCP AskUserQuestion can find
         // the live event subscriber. Cleared on any exit path via the guard.
         self.set_active_turn(Some(turn_id));
         let _active_turn_guard = ActiveTurnGuard { session: self };
 
+        let include_hook_events = !profile.is_context_bootstrap();
         match self
-            .send_message_attempt(params.clone(), turn_id, true, app_settings)
+            .send_message_attempt(
+                params.clone(),
+                turn_id,
+                include_hook_events,
+                app_settings,
+                provider_env,
+                profile,
+            )
             .await
         {
-            Err(error) if Self::is_unknown_include_hook_events_error(&error) => {
+            Err(error)
+                if include_hook_events && Self::is_unknown_include_hook_events_error(&error) =>
+            {
                 log::warn!(
                     "[claude] --include-hook-events unsupported, retrying without hook events: {}",
                     error
                 );
-                self.send_message_attempt(params, turn_id, false, app_settings)
-                    .await
+                self.send_message_attempt(
+                    params,
+                    turn_id,
+                    false,
+                    app_settings,
+                    provider_env,
+                    profile,
+                )
+                .await
             }
             result => result,
         }
@@ -1105,6 +1380,30 @@ impl ClaudeSession {
         if let Ok(mut active) = self.active_turn_id.lock() {
             *active = turn_id.map(ToOwned::to_owned);
         }
+    }
+
+    fn remember_provider_env_for_turn(
+        &self,
+        turn_id: &str,
+        provider_env: Option<&BTreeMap<String, String>>,
+    ) {
+        if let Ok(mut environments) = self.provider_env_by_turn.lock() {
+            match provider_env {
+                Some(environment) => {
+                    environments.insert(turn_id.to_string(), environment.clone());
+                }
+                None => {
+                    environments.remove(turn_id);
+                }
+            }
+        }
+    }
+
+    fn provider_env_for_turn(&self, turn_id: &str) -> Option<BTreeMap<String, String>> {
+        self.provider_env_by_turn
+            .lock()
+            .ok()
+            .and_then(|environments| environments.get(turn_id).cloned())
     }
 
     /// The turn currently being processed, if any. Used by the in-process MCP
@@ -1122,6 +1421,8 @@ impl ClaudeSession {
         turn_id: &str,
         include_hook_events: bool,
         app_settings: Option<&crate::types::AppSettings>,
+        provider_env: Option<&BTreeMap<String, String>>,
+        profile: ClaudeCommandProfile,
     ) -> Result<String, String> {
         if self.is_disposed() {
             let error_msg = "Claude session disposed; refusing to start new process".to_string();
@@ -1156,32 +1457,58 @@ impl ClaudeSession {
         }
 
         let use_stream_json_input = Self::should_use_stream_json_input(&params);
-        let activation_hint_file = match native_skill_mirror::sync_windows_curated_skill_mirror(
-            self.home_dir.as_deref(),
-            app_settings,
-            cfg!(windows),
-        ) {
-            Ok(path) => path,
+        let activation_hint_file = if profile.is_context_bootstrap() {
+            None
+        } else {
+            match native_skill_mirror::sync_windows_curated_skill_mirror(
+                self.home_dir.as_deref(),
+                app_settings,
+                cfg!(windows),
+            ) {
+                Ok(path) => path,
+                Err(error_msg) => {
+                    self.emit_turn_event(
+                        turn_id,
+                        EngineEvent::TurnError {
+                            workspace_id: self.workspace_id.clone(),
+                            error: error_msg.clone(),
+                            code: Some("claude_curated_skill_mirror_failed".to_string()),
+                        },
+                    );
+                    self.clear_turn_ephemeral_state(turn_id);
+                    return Err(error_msg);
+                }
+            }
+        };
+
+        let provider_settings_override = match ClaudeProviderSettingsOverride::create(provider_env)
+        {
+            Ok(settings_override) => settings_override,
             Err(error_msg) => {
                 self.emit_turn_event(
                     turn_id,
                     EngineEvent::TurnError {
                         workspace_id: self.workspace_id.clone(),
                         error: error_msg.clone(),
-                        code: Some("claude_curated_skill_mirror_failed".to_string()),
+                        code: Some("claude_provider_settings_override_failed".to_string()),
                     },
                 );
                 self.clear_turn_ephemeral_state(turn_id);
                 return Err(error_msg);
             }
         };
-
-        let mut cmd = self.build_command(
+        let provider_settings_path = provider_settings_override
+            .as_ref()
+            .map(ClaudeProviderSettingsOverride::path);
+        let mut cmd = self.build_command_with_profile(
             &params,
             use_stream_json_input,
             include_hook_events,
             app_settings,
             activation_hint_file.as_deref(),
+            provider_env,
+            provider_settings_path,
+            profile,
         );
         Self::configure_spawn_command(&mut cmd);
 
@@ -1619,6 +1946,7 @@ impl ClaudeSession {
                                     &params,
                                     &new_session_id,
                                     include_hook_events,
+                                    provider_settings_path,
                                 )
                                 .await
                             {
@@ -1652,6 +1980,7 @@ impl ClaudeSession {
                                     &params,
                                     &new_session_id,
                                     include_hook_events,
+                                    provider_settings_path,
                                 )
                                 .await
                             {
@@ -2024,6 +2353,7 @@ impl ClaudeSession {
             active.drain().collect()
         };
         let mut first_terminate_error: Option<String> = None;
+        let mut failed_children = Vec::new();
         for (turn_id, mut child) in children {
             if let Err(error) = self.terminate_child_process(&turn_id, &mut child).await {
                 log::warn!(
@@ -2032,9 +2362,18 @@ impl ClaudeSession {
                     error
                 );
                 if first_terminate_error.is_none() {
-                    first_terminate_error = Some(error);
+                    first_terminate_error = Some(error.clone());
                 }
+                failed_children.push((turn_id, child));
+            } else {
+                self.clear_turn_ephemeral_state(&turn_id);
             }
+        }
+        if !failed_children.is_empty() {
+            let mut active = self.active_processes.lock().await;
+            active.extend(failed_children);
+            return Err(first_terminate_error
+                .unwrap_or_else(|| "Failed to terminate Claude child process".to_string()));
         }
         // Clean up tool tracking state that would otherwise leak from interrupted turns.
         // Use unwrap_or_else to still clear even if the mutex was poisoned by a panic.
@@ -2082,9 +2421,10 @@ impl ClaudeSession {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clear();
-        if let Some(error) = first_terminate_error {
-            return Err(error);
-        }
+        self.provider_env_by_turn
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
         Ok(())
     }
 
@@ -2096,7 +2436,15 @@ impl ClaudeSession {
             active.remove(turn_id)
         };
         if let Some(child_proc) = child.as_mut() {
-            self.terminate_child_process(turn_id, child_proc).await?;
+            if let Err(error) = self.terminate_child_process(turn_id, child_proc).await {
+                if let Some(child) = child {
+                    self.active_processes
+                        .lock()
+                        .await
+                        .insert(turn_id.to_string(), child);
+                }
+                return Err(error);
+            }
         }
         self.clear_turn_ephemeral_state(turn_id);
         Ok(())

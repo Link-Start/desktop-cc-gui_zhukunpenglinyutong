@@ -52,8 +52,8 @@ describe("Messages conversationState routing", () => {
     render(
       <Messages
         items={[]}
-        threadId="legacy-thread"
-        workspaceId="legacy-ws"
+        threadId="thread-from-state"
+        workspaceId="ws-state"
         isThinking={false}
         userInputRequests={[]}
         onUserInputSubmit={vi.fn()}
@@ -192,8 +192,8 @@ describe("Messages conversationState routing", () => {
     render(
       <Messages
         items={[]}
-        threadId="legacy-thread"
-        workspaceId="legacy-ws"
+        threadId="thread-state"
+        workspaceId="ws-state"
         isThinking={false}
         plan={legacyPlan}
         conversationState={{
@@ -443,5 +443,51 @@ describe("Messages conversationState routing", () => {
     expect(container.textContent ?? "").toContain("STATE-GEMINI-DEFAULT");
     expect(container.textContent ?? "").not.toContain("LEGACY-GEMINI-DEFAULT");
     expect(container.querySelector(".markdown-codex-canvas")).toBeNull();
+  });
+
+  it("does not leak canonical items from a mismatched workspace and thread", () => {
+    render(
+      <Messages
+        items={[{ id: "current", kind: "message", role: "assistant", text: "CURRENT-SCOPE" }]}
+        threadId="thread-current"
+        workspaceId="workspace-current"
+        isThinking={false}
+        conversationState={{
+          items: [{ id: "stale", kind: "message", role: "assistant", text: "STALE-SCOPE" }],
+          plan: null,
+          userInputQueue: [],
+          meta: {
+            workspaceId: "workspace-stale",
+            threadId: "thread-stale",
+            engine: "codex",
+            activeTurnId: null,
+            isThinking: false,
+            heartbeatPulse: null,
+            historyRestoredAtMs: null,
+          },
+        }}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(screen.getByText("CURRENT-SCOPE")).toBeTruthy();
+    expect(screen.queryByText("STALE-SCOPE")).toBeNull();
+  });
+
+  it("keeps a legacy-only caller rendering unchanged", () => {
+    render(
+      <Messages
+        items={[{ id: "legacy-only", kind: "message", role: "assistant", text: "LEGACY-ONLY" }]}
+        threadId="legacy-thread"
+        workspaceId="legacy-workspace"
+        isThinking={false}
+        activeEngine="claude"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(screen.getByText("LEGACY-ONLY")).toBeTruthy();
   });
 });

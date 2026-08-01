@@ -38,7 +38,7 @@ export type DarkThemePresetId =
 
 export type ThemePresetId = LightThemePresetId | DarkThemePresetId;
 
-export type AppMode = "chat" | "kanban" | "gitHistory";
+export type AppMode = "chat" | "kanban" | "gitHistory" | "extensions";
 
 export type ComposerEditorPreset = "default" | "helpful" | "smart";
 
@@ -69,9 +69,7 @@ export type OpenAppTarget = {
 };
 
 export type CodexUnifiedExecPolicy =
-  | "inherit"
-  | "forceEnabled"
-  | "forceDisabled";
+  "inherit" | "forceEnabled" | "forceDisabled";
 
 export type CodexUnifiedExecExternalStatus = {
   configPath: string | null;
@@ -83,11 +81,13 @@ export type CodexUnifiedExecExternalStatus = {
 export type AppSettings = {
   claudeBin: string | null;
   kimiBin: string | null;
+  grokBin: string | null;
+  opencodeBin: string | null;
   codexBin: string | null;
   codexArgs: string | null;
   terminalShellPath: string | null;
-  geminiEnabled: boolean;
-  opencodeEnabled: boolean;
+  /** 用户在「CLI配置管理」停用的 supported CLI engine id 列表；默认 [] = 全部启用 */
+  disabledCliEngines: string[];
   sessionAttributionMode?: WorkspaceSessionAttributionMode;
   backendMode: BackendMode;
   remoteBackendHost: string;
@@ -124,7 +124,15 @@ export type AppSettings = {
   toggleFilesSurfaceShortcut: string | null;
   saveFileShortcut: string | null;
   findInFileShortcut: string | null;
+  expandSelectionShortcut: string | null;
   toggleGitDiffListViewShortcut: string | null;
+  toggleGitGraphShortcut: string | null;
+  openNotesShortcut: string | null;
+  openIntentCanvasShortcut: string | null;
+  openRadarShortcut: string | null;
+  openProjectMapShortcut: string | null;
+  openBrowserDockShortcut: string | null;
+  openFileCompareShortcut: string | null;
   increaseUiScaleShortcut: string | null;
   decreaseUiScaleShortcut: string | null;
   resetUiScaleShortcut: string | null;
@@ -203,5 +211,6 @@ export type AppSettings = {
   commitPrompt?: string;
   sendShortcut?: "enter" | "cmdEnter";
   enabledCuratedSkillIds?: string[];
+  curatedSkillDefaultsVersion: number;
   enabledBuiltInAgentIds?: string[];
 };

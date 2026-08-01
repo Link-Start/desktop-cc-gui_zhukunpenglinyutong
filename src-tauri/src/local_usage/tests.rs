@@ -50,6 +50,15 @@ fn write_named_session_file(
     path
 }
 
+fn write_codex_session_index(codex_home: &Path, lines: &[String]) {
+    fs::create_dir_all(codex_home).expect("create codex home");
+    let mut file =
+        File::create(codex_home.join("session_index.jsonl")).expect("create codex session index");
+    for line in lines {
+        writeln!(file, "{line}").expect("write codex session index line");
+    }
+}
+
 fn make_temp_gemini_home() -> PathBuf {
     let mut root = std::env::temp_dir();
     root.push(format!("ccgui-local-usage-gemini-{}", Uuid::new_v4()));
@@ -425,6 +434,170 @@ fn scan_codex_summaries_merges_disk_and_multiple_provider_homes_for_workspace() 
         by_id["provider-b-session"].provider_profile_id.as_deref(),
         Some("provider-b")
     );
+
+    fs::remove_dir_all(base).ok();
+}
+
+#[test]
+fn scan_codex_summaries_prefers_latest_valid_native_thread_name() {
+    let base = std::env::temp_dir().join(format!("ccgui-codex-native-title-{}", Uuid::new_v4()));
+    let codex_home = base.join("codex-home");
+    let sessions_root = codex_home.join("sessions");
+    let session_id = "native-title-session";
+    write_named_session_file(
+        &sessions_root,
+        "2026-01-19",
+        session_id,
+        &[
+            format!(
+                r#"{{"timestamp":"2026-01-19T12:00:00.000Z","type":"session_meta","payload":{{"id":"{session_id}","cwd":"/tmp/project-alpha"}}}}"#
+            ),
+            r#"{"timestamp":"2026-01-19T12:00:01.000Z","type":"event_msg","payload":{"type":"user_message","message":"First prompt fallback"}}"#
+                .to_string(),
+        ],
+    );
+    write_codex_session_index(
+        &codex_home,
+        &[
+            "{not-json}".to_string(),
+            serde_json::json!({
+                "id": session_id,
+                "thread_name": "Earlier native title",
+                "updated_at": "2026-01-19T12:01:00Z"
+            })
+            .to_string(),
+            serde_json::json!({
+                "id": session_id,
+                "thread_name": "Latest native title",
+                "updated_at": "2026-01-19T12:02:00Z"
+            })
+            .to_string(),
+            serde_json::json!({
+                "id": session_id,
+                "thread_name": "   ",
+                "updated_at": "2026-01-19T12:03:00Z"
+            })
+            .to_string(),
+        ],
+    );
+
+    let summaries = scan_codex_session_summaries(
+        Some(Path::new("/tmp/project-alpha")),
+        std::slice::from_ref(&sessions_root),
+    )
+    .expect("scan summaries");
+
+    assert_eq!(summaries.len(), 1);
+    assert_eq!(summaries[0].summary.as_deref(), Some("Latest native title"));
+    assert_eq!(
+        summaries[0].native_title.as_deref(),
+        Some("Latest native title")
+    );
+
+    fs::remove_dir_all(base).ok();
+}
+
+#[test]
+fn scan_codex_summaries_keep_native_thread_names_scoped_to_each_home() {
+    let base = std::env::temp_dir().join(format!("ccgui-codex-title-homes-{}", Uuid::new_v4()));
+    let home_a = base.join("home-a");
+    let home_b = base.join("home-b");
+    let root_a = home_a.join("sessions");
+    let root_b = home_b.join("sessions");
+    for (root, session_id, timestamp) in [
+        (&root_a, "session-a", "2026-01-19T12:00:00.000Z"),
+        (&root_b, "session-b", "2026-01-19T12:01:00.000Z"),
+    ] {
+        write_named_session_file(
+            root,
+            "2026-01-19",
+            session_id,
+            &[format!(
+                r#"{{"timestamp":"{timestamp}","type":"session_meta","payload":{{"id":"{session_id}","cwd":"/tmp/project-alpha"}}}}"#
+            )],
+        );
+    }
+    write_codex_session_index(
+        &home_a,
+        &[
+            serde_json::json!({"id": "session-a", "thread_name": "Home A title"}).to_string(),
+            serde_json::json!({"id": "session-b", "thread_name": "Wrong title from A"}).to_string(),
+        ],
+    );
+    write_codex_session_index(
+        &home_b,
+        &[
+            serde_json::json!({"id": "session-a", "thread_name": "Wrong title from B"}).to_string(),
+            serde_json::json!({"id": "session-b", "thread_name": "Home B title"}).to_string(),
+        ],
+    );
+
+    let summaries =
+        scan_codex_session_summaries(Some(Path::new("/tmp/project-alpha")), &[root_a, root_b])
+            .expect("scan summaries");
+    let by_id = summaries
+        .into_iter()
+        .map(|summary| (summary.session_id.clone(), summary))
+        .collect::<HashMap<_, _>>();
+
+    assert_eq!(by_id["session-a"].summary.as_deref(), Some("Home A title"));
+    assert_eq!(by_id["session-b"].summary.as_deref(), Some("Home B title"));
+    assert_eq!(
+        by_id["session-a"].native_title.as_deref(),
+        Some("Home A title")
+    );
+    assert_eq!(
+        by_id["session-b"].native_title.as_deref(),
+        Some("Home B title")
+    );
+
+    fs::remove_dir_all(base).ok();
+}
+
+#[test]
+fn scan_codex_summaries_do_not_copy_native_title_across_homes_during_dedupe() {
+    let base = std::env::temp_dir().join(format!("ccgui-codex-title-dedupe-{}", Uuid::new_v4()));
+    let home_a = base.join("home-a");
+    let home_b = base.join("home-b");
+    let root_a = home_a.join("sessions");
+    let root_b = home_b.join("sessions");
+    let session_id = "shared-session";
+    write_named_session_file(
+        &root_a,
+        "2026-01-19",
+        session_id,
+        &[
+            format!(
+                r#"{{"timestamp":"2026-01-19T12:00:00.000Z","type":"session_meta","payload":{{"id":"{session_id}","cwd":"/tmp/project-alpha"}}}}"#
+            ),
+            r#"{"timestamp":"2026-01-19T12:00:01.000Z","type":"event_msg","payload":{"type":"user_message","message":"Older fallback"}}"#
+                .to_string(),
+        ],
+    );
+    write_named_session_file(
+        &root_b,
+        "2026-01-19",
+        session_id,
+        &[
+            format!(
+                r#"{{"timestamp":"2026-01-19T13:00:00.000Z","type":"session_meta","payload":{{"id":"{session_id}","cwd":"/tmp/project-alpha"}}}}"#
+            ),
+            r#"{"timestamp":"2026-01-19T13:00:01.000Z","type":"event_msg","payload":{"type":"user_message","message":"Newer fallback"}}"#
+                .to_string(),
+        ],
+    );
+    write_codex_session_index(
+        &home_a,
+        &[serde_json::json!({"id": session_id, "thread_name": "Home A only"}).to_string()],
+    );
+
+    let summaries =
+        scan_codex_session_summaries(Some(Path::new("/tmp/project-alpha")), &[root_a, root_b])
+            .expect("scan summaries");
+
+    assert_eq!(summaries.len(), 1);
+    assert_eq!(summaries[0].summary.as_deref(), Some("Newer fallback"));
+    assert_eq!(summaries[0].native_title, None);
 
     fs::remove_dir_all(base).ok();
 }
@@ -1807,6 +1980,64 @@ fn parse_codex_session_summary_prefers_event_msg_user_summary_over_response_item
 
     assert_eq!(summary.session_id, "session-event-user-priority");
     assert_eq!(summary.summary.as_deref(), Some("real user request"));
+}
+
+#[test]
+fn parse_codex_session_summary_skips_agents_md_bootstrap_title() {
+    let root = make_temp_sessions_root();
+    let day_key = "2026-01-19";
+    let workspace_path = Path::new("/tmp/project-alpha");
+    let session_path = write_named_session_file(
+        &root,
+        day_key,
+        "rollout-2026-01-19T12-04-00-agents-bootstrap",
+        &[
+            r#"{"timestamp":"2026-01-19T12:04:00.000Z","type":"session_meta","payload":{"id":"session-agents-bootstrap","cwd":"/tmp/project-alpha","source":"cli","provider":"openai"}}"#
+                .to_string(),
+            r###"{"timestamp":"2026-01-19T12:04:01.000Z","type":"event_msg","payload":{"type":"user_message","message":"# AGENTS.md instructions for /Users/zhukunpeng/Desktop/CC GUI 项目/desktop-cc-gui\n\n<INSTRUCTIONS>\nproject rules\n</INSTRUCTIONS>"}}"###
+                .to_string(),
+            r#"{"timestamp":"2026-01-19T12:04:02.000Z","type":"event_msg","payload":{"type":"user_message","message":"为什么我一点，展示的是标注页面？编辑功能呢？"}}"#
+                .to_string(),
+        ],
+    );
+
+    let summary = parse_codex_session_summary(session_path.as_path(), Some(workspace_path))
+        .expect("parse summary")
+        .expect("summary exists");
+
+    assert_eq!(summary.session_id, "session-agents-bootstrap");
+    assert_eq!(
+        summary.summary.as_deref(),
+        Some("为什么我一点，展示的是标注页面？编辑功能呢？")
+    );
+}
+
+#[test]
+fn parse_codex_session_summary_keeps_normal_agents_md_question() {
+    let root = make_temp_sessions_root();
+    let day_key = "2026-01-19";
+    let workspace_path = Path::new("/tmp/project-alpha");
+    let session_path = write_named_session_file(
+        &root,
+        day_key,
+        "rollout-2026-01-19T12-04-30-agents-question",
+        &[
+            r#"{"timestamp":"2026-01-19T12:04:30.000Z","type":"session_meta","payload":{"id":"session-agents-question","cwd":"/tmp/project-alpha","source":"cli","provider":"openai"}}"#
+                .to_string(),
+            r#"{"timestamp":"2026-01-19T12:04:31.000Z","type":"event_msg","payload":{"type":"user_message","message":"为什么侧边栏显示 #AGENTS.md xxx？"}}"#
+                .to_string(),
+        ],
+    );
+
+    let summary = parse_codex_session_summary(session_path.as_path(), Some(workspace_path))
+        .expect("parse summary")
+        .expect("summary exists");
+
+    assert_eq!(summary.session_id, "session-agents-question");
+    assert_eq!(
+        summary.summary.as_deref(),
+        Some("为什么侧边栏显示 #AGENTS.md xxx？")
+    );
 }
 
 #[test]

@@ -23,12 +23,14 @@ import {
   getGitFileBlame,
   getOpenAppIcon,
   getModelList,
+  discoverCodexModels,
   getPromptsList,
   getWorkspaceFiles,
   listThreadTitles,
   listThreads,
   listMcpServerStatus,
   listGlobalMcpServers,
+  setGlobalMcpServerEnabled,
   readGlobalAgentsMd,
   readGlobalCodexAuthJson,
   readGlobalCodexConfigToml,
@@ -67,7 +69,9 @@ import {
   connectOpenCodeProvider,
   getOpenCodeProviderHealth,
   getCodeIntelDefinition,
+  getCodeIntelImplementations,
   getCodeIntelReferences,
+  prepareCodeIntel,
   getOpenCodeLspDefinition,
   getOpenCodeLspReferences,
   getOpenCodeStatusSnapshot,
@@ -119,6 +123,7 @@ import {
   engineSendMessageSync,
   deleteClaudeSession,
   deleteGeminiSession,
+  deleteGrokSession,
   deleteKimiSession,
   sendConversationCompletionEmail,
   appendClientErrorLog,
@@ -400,6 +405,24 @@ describe("tauri invoke wrappers", () => {
           event.status === "completed",
       ),
     ).toBe(true);
+  });
+
+  it("maps provider-scoped Codex CLI model discovery", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({ data: [] });
+
+    await discoverCodexModels("ws-1", "  provider-b  ");
+
+    expect(invokeMock).toHaveBeenCalledWith("discover_codex_models", {
+      workspaceId: "ws-1",
+      providerProfileId: "provider-b",
+    });
+
+    await discoverCodexModels("ws-1", "   ");
+    expect(invokeMock).toHaveBeenLastCalledWith("discover_codex_models", {
+      workspaceId: "ws-1",
+      providerProfileId: null,
+    });
   });
 
   it("traces startup-heavy wrappers without changing invoke parameters", async () => {
@@ -1616,6 +1639,19 @@ describe("tauri invoke wrappers", () => {
     expect(invokeMock).toHaveBeenCalledWith("list_global_mcp_servers");
   });
 
+  it("invokes set_global_mcp_server_enabled", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce(undefined);
+
+    await setGlobalMcpServerEnabled("github", "ccgui_config", false);
+
+    expect(invokeMock).toHaveBeenCalledWith("set_global_mcp_server_enabled", {
+      name: "github",
+      source: "ccgui_config",
+      enabled: false,
+    });
+  });
+
   it("invokes stage_git_all", async () => {
     const invokeMock = vi.mocked(invoke);
     invokeMock.mockResolvedValueOnce({});
@@ -2359,6 +2395,35 @@ describe("tauri invoke wrappers", () => {
       workspaceId: "ws-6",
       requestId: 101,
       result: { decision: "accept" },
+      providerProfileId: null,
+    });
+  });
+
+  it("routes Shared approvals with the exact Runtime owner", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+    const owner = {
+      attemptId: "attempt-approval",
+      providerRuntimeKey: "codex::ws-6::provider-a",
+      sharedThreadId: "shared:thread-a",
+      nativeThreadId: "codex-native-a",
+      runtimeTurnId: "runtime-turn-a",
+      engine: "codex" as const,
+      providerProfileId: "provider-a",
+    };
+
+    await respondToServerRequest("ws-6", 102, "accept", owner);
+
+    expect(invokeMock).toHaveBeenCalledWith("respond_to_server_request", {
+      workspaceId: "ws-6",
+      requestId: 102,
+      result: { decision: "accept" },
+      providerProfileId: "provider-a",
+      threadId: "codex-native-a",
+      turnId: "runtime-turn-a",
+      sharedAttemptId: "attempt-approval",
+      sharedThreadId: "shared:thread-a",
+      providerRuntimeKey: "codex::ws-6::provider-a",
     });
   });
 
@@ -2380,6 +2445,47 @@ describe("tauri invoke wrappers", () => {
       },
       threadId: null,
       turnId: null,
+    });
+  });
+
+  it("routes Shared user input with the exact Runtime owner", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+    const owner = {
+      attemptId: "attempt-input",
+      providerRuntimeKey: "claude::ws-7::provider-b",
+      sharedThreadId: "shared:thread-b",
+      nativeThreadId: "claude-native-b",
+      runtimeTurnId: "runtime-turn-b",
+      engine: "claude" as const,
+      providerProfileId: "provider-b",
+    };
+
+    await respondToUserInputRequest(
+      "ws-7",
+      203,
+      { confirm_path: { answers: ["Yes"] } },
+      {
+        threadId: "poisoned-thread",
+        turnId: "poisoned-turn",
+        sharedOwner: owner,
+      },
+    );
+
+    expect(invokeMock).toHaveBeenCalledWith("respond_to_server_request", {
+      workspaceId: "ws-7",
+      requestId: 203,
+      result: {
+        answers: {
+          confirm_path: { answers: ["Yes"] },
+        },
+      },
+      threadId: "claude-native-b",
+      turnId: "runtime-turn-b",
+      providerProfileId: "provider-b",
+      sharedAttemptId: "attempt-input",
+      sharedThreadId: "shared:thread-b",
+      providerRuntimeKey: "claude::ws-7::provider-b",
     });
   });
 
@@ -2602,7 +2708,7 @@ describe("tauri invoke wrappers", () => {
       result: [],
     });
 
-    await getCodeIntelDefinition("ws-ci-1", {
+    const response = await getCodeIntelDefinition("ws-ci-1", {
       filePath: "src/Main.java",
       line: 10,
       character: 4,
@@ -2613,6 +2719,58 @@ describe("tauri invoke wrappers", () => {
       filePath: "src/Main.java",
       line: 10,
       character: 4,
+    });
+    expect(response).toMatchObject({
+      mode: "fast-search",
+      provider: "heuristic",
+      fallbackReasonCode: null,
+      result: [],
+    });
+  });
+
+  it("maps code intel prepare params and lifecycle", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({
+      language: "JavaScript",
+      provider: "typescript-language-server",
+      lifecycle: "starting",
+      fallbackReasonCode: null,
+    });
+
+    await expect(prepareCodeIntel("ws-ci-prepare", "src/main.js")).resolves.toEqual({
+      language: "JavaScript",
+      provider: "typescript-language-server",
+      lifecycle: "starting",
+      fallbackReasonCode: null,
+    });
+    expect(invokeMock).toHaveBeenCalledWith("code_intel_prepare", {
+      workspaceId: "ws-ci-prepare",
+      filePath: "src/main.js",
+    });
+  });
+
+  it("preserves semantic navigation metadata and rejects unknown reason codes", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({
+      filePath: "src/Main.ts",
+      line: 2,
+      character: 3,
+      language: "typescript",
+      mode: "semantic",
+      provider: "typescript-language-server",
+      fallbackReasonCode: "not-a-public-reason",
+      result: [{ uri: "file:///repo/src/Main.ts", line: 2, character: 3 }],
+    });
+
+    await expect(getCodeIntelDefinition("ws-ci-semantic", {
+      filePath: "src/Main.ts",
+      line: 2,
+      character: 3,
+    })).resolves.toMatchObject({
+      language: "typescript",
+      mode: "semantic",
+      provider: "typescript-language-server",
+      fallbackReasonCode: null,
     });
   });
 
@@ -2627,6 +2785,26 @@ describe("tauri invoke wrappers", () => {
         character: 1,
       }),
     ).rejects.toThrow("code intel unavailable");
+  });
+
+  it("maps code intel implementation params with current document text", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({ result: [] });
+
+    await getCodeIntelImplementations("ws-ci-rust", {
+      filePath: "src/lib.rs",
+      line: 4,
+      character: 9,
+      documentText: "trait Renderer {}",
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("code_intel_implementations", {
+      workspaceId: "ws-ci-rust",
+      filePath: "src/lib.rs",
+      line: 4,
+      character: 9,
+      documentText: "trait Renderer {}",
+    });
   });
 
   it("maps code intel references params", async () => {
@@ -2731,23 +2909,23 @@ describe("tauri invoke wrappers", () => {
     const invokeMock = vi.mocked(invoke);
 
     await expect(switchEngine("gemini")).rejects.toThrow(
-      "Gemini CLI is disabled in this client",
+      "Selected CLI engine is disabled by product policy",
     );
     await expect(getEngineModels("gemini")).rejects.toThrow(
-      "Gemini CLI is disabled in this client",
+      "Selected CLI engine is disabled by product policy",
     );
     await expect(
       engineSendMessage("ws-gemini", {
         text: "must not run",
         engine: "gemini",
       }),
-    ).rejects.toThrow("Gemini CLI is disabled in this client");
+    ).rejects.toThrow("Selected CLI engine is disabled by product policy");
     await expect(
       engineSendMessageSync("ws-gemini", {
         text: "must not run",
         engine: "gemini",
       }),
-    ).rejects.toThrow("Gemini CLI is disabled in this client");
+    ).rejects.toThrow("Selected CLI engine is disabled by product policy");
 
     expect(invokeMock).not.toHaveBeenCalled();
   });
@@ -2901,8 +3079,10 @@ describe("tauri invoke wrappers", () => {
       forkSessionId: null,
       agent: null,
       variant: null,
+      providerProfileId: null,
       customSpecRoot: null,
       autoSession: null,
+      skillInvocations: null,
     });
   });
 
@@ -2919,6 +3099,7 @@ describe("tauri invoke wrappers", () => {
       model: "Cxn[1m]",
       effort: "high",
       threadId: "claude:session-1",
+      providerProfileId: "claude-provider-a",
     });
 
     expect(invokeMock).toHaveBeenCalledWith("engine_send_message", {
@@ -2936,8 +3117,10 @@ describe("tauri invoke wrappers", () => {
       forkSessionId: null,
       agent: null,
       variant: null,
+      providerProfileId: "claude-provider-a",
       customSpecRoot: null,
       autoSession: null,
+      skillInvocations: null,
     });
   });
 
@@ -2967,8 +3150,42 @@ describe("tauri invoke wrappers", () => {
       forkSessionId: "parent-session-1",
       agent: null,
       variant: null,
+      providerProfileId: null,
       customSpecRoot: null,
       autoSession: null,
+      skillInvocations: null,
+    });
+  });
+
+  it("passes structured skill invocations through engine_send_message payload", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({ engine: "claude" });
+
+    await engineSendMessage("ws-claude", {
+      text: "/Code-Review 请审查这段代码",
+      engine: "claude",
+      skillInvocations: [{ name: "Code-Review" }],
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("engine_send_message", {
+      workspaceId: "ws-claude",
+      text: "/Code-Review 请审查这段代码",
+      engine: "claude",
+      model: null,
+      effort: null,
+      disableThinking: false,
+      images: null,
+      continueSession: false,
+      accessMode: null,
+      threadId: null,
+      sessionId: null,
+      forkSessionId: null,
+      agent: null,
+      variant: null,
+      providerProfileId: null,
+      customSpecRoot: null,
+      autoSession: null,
+      skillInvocations: [{ name: "Code-Review" }],
     });
   });
 
@@ -3120,6 +3337,26 @@ describe("tauri invoke wrappers", () => {
     });
   });
 
+  it("maps get_engine_models provider scope without leaking blank ids", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValue([]);
+
+    await getEngineModels("kimi", {
+      providerProfileId: "  provider-k3  ",
+      forceRefresh: true,
+    });
+    expect(invokeMock).toHaveBeenLastCalledWith("get_engine_models", {
+      engineType: "kimi",
+      providerProfileId: "provider-k3",
+      forceRefresh: true,
+    });
+
+    await getEngineModels("kimi", { providerProfileId: "   " });
+    expect(invokeMock).toHaveBeenLastCalledWith("get_engine_models", {
+      engineType: "kimi",
+    });
+  });
+
   it("maps engine_interrupt params", async () => {
     const invokeMock = vi.mocked(invoke);
     invokeMock.mockResolvedValueOnce(undefined);
@@ -3164,6 +3401,18 @@ describe("tauri invoke wrappers", () => {
     expect(invokeMock).toHaveBeenCalledWith("delete_kimi_session", {
       workspacePath: "/tmp/workspace",
       sessionId: "kimi-session-1",
+    });
+  });
+
+  it("maps delete_grok_session params", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce(undefined);
+
+    await deleteGrokSession("/tmp/workspace", "grok-session-1");
+
+    expect(invokeMock).toHaveBeenCalledWith("delete_grok_session", {
+      workspacePath: "/tmp/workspace",
+      sessionId: "grok-session-1",
     });
   });
 

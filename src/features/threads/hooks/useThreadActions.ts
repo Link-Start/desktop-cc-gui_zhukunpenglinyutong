@@ -6,6 +6,7 @@ import {
   listThreads as listThreadsService,
   listClaudeSessions as listClaudeSessionsForFallbackSeedService,
   listGeminiSessions as listGeminiSessionsService,
+  listGrokSessions as listGrokSessionsService,
   listKimiSessions as listKimiSessionsService,
   getOpenCodeSessionList as getOpenCodeSessionListService,
 } from "../../../services/tauri";
@@ -21,6 +22,7 @@ import {
 } from "../../shared-session/runtime/sharedSessionSummaries";
 import { asString } from "../utils/threadNormalize";
 import { clearLiveAssistantText } from "../utils/liveAssistantTextChannel";
+import { resolveCodexSubagentIdentity } from "../utils/codexSubagentIdentity";
 import { saveThreadActivity } from "../utils/threadStorage";
 import {
   collectKnownCodexThreadIds,
@@ -48,9 +50,11 @@ import {
   mergeDegradedCodexContinuitySummaries,
   mergeDegradedClaudeContinuitySummaries,
   mergeGeminiSessionSummaries,
+  mergeGrokSessionSummaries,
   mergeKimiSessionSummaries,
   mergeThreadSummaryPreservingStableIdentity,
   normalizeGeminiSessionSummaries,
+  normalizeGrokSessionSummaries,
   normalizeKimiSessionSummaries,
   normalizeThreadListPartialSource,
   resolveThreadSourceMeta,
@@ -61,6 +65,7 @@ import {
   shouldApplyClaudeSidebarContinuity,
   withTimeout,
   type GeminiSessionSummary,
+  type GrokSessionSummary,
   type KimiSessionSummary,
 } from "./useThreadActions.helpers";
 import { buildPartialHistoryDiagnostic } from "../utils/stabilityDiagnostics";
@@ -77,6 +82,8 @@ import { useThreadHistoryLoadingState } from "./useThreadHistoryLoadingState";
 import {
   GEMINI_SESSION_CACHE_TTL_MS,
   GEMINI_SESSION_FETCH_TIMEOUT_MS,
+  GROK_SESSION_CACHE_TTL_MS,
+  GROK_SESSION_FETCH_TIMEOUT_MS,
   KIMI_SESSION_CACHE_TTL_MS,
   KIMI_SESSION_FETCH_TIMEOUT_MS,
   NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS,
@@ -145,6 +152,10 @@ export function useThreadActions({
     Record<string, { fetchedAt: number; sessions: KimiSessionSummary[] }>
   >({});
   const kimiRefreshAttemptedRef = useRef<Record<string, boolean>>({});
+  const grokSessionCacheRef = useRef<
+    Record<string, { fetchedAt: number; sessions: GrokSessionSummary[] }>
+  >({});
+  const grokRefreshAttemptedRef = useRef<Record<string, boolean>>({});
   const threadListRequestSeqRef = useRef<Record<string, number>>({});
   const lastGoodThreadSummariesByWorkspaceEngineRef = useRef<
     Record<string, LastGoodThreadSummariesByEngine>
@@ -437,6 +448,20 @@ export function useThreadActions({
         const hasFreshKimiCache =
           !!cachedKimi &&
           Date.now() - cachedKimi.fetchedAt <= KIMI_SESSION_CACHE_TTL_MS;
+        const hasGrokSignal =
+          existingThreads.some(
+            (thread) =>
+              thread.engineSource === "grok" ||
+              thread.id.startsWith("grok:") ||
+              thread.id.startsWith("grok-pending-"),
+          ) ||
+          activeThreadId.startsWith("grok:") ||
+          activeThreadId.startsWith("grok-pending-") ||
+          Object.keys(mappedTitles).some((id) => id.startsWith("grok:"));
+        const cachedGrok = grokSessionCacheRef.current[workspace.id];
+        const hasFreshGrokCache =
+          !!cachedGrok &&
+          Date.now() - cachedGrok.fetchedAt <= GROK_SESSION_CACHE_TTL_MS;
         const knownActivityByThread =
           threadActivityRef.current[workspace.id] ?? {};
         const hasKnownActivity = Object.keys(knownActivityByThread).length > 0;
@@ -699,14 +724,18 @@ export function useThreadActions({
           .map((thread, index) => {
             const id = String(thread?.id ?? "");
             const preview = asString(thread?.preview ?? "").trim();
+            const nativeTitle = asString(thread?.nativeTitle ?? "").trim();
             const mappedTitle = mappedTitles[id];
             const customName = getCustomName(workspace.id, id) || mappedTitle;
+            const liveIdentity = resolveCodexSubagentIdentity(id, thread);
             const fallbackName = `Agent ${index + 1}`;
             const name = customName
               ? customName
-              : preview.length > 0
-                ? previewThreadName(preview, fallbackName)
-                : fallbackName;
+              : nativeTitle ||
+                (liveIdentity.name ??
+                  (preview.length > 0
+                    ? previewThreadName(preview, fallbackName)
+                    : fallbackName));
             const engineSource = engineById.get(id) ?? ("codex" as const);
             const sourceMeta = resolveThreadSourceMeta(thread);
             return {
@@ -722,6 +751,9 @@ export function useThreadActions({
                   ? thread.folderId.trim()
                   : null,
               ...sourceMeta,
+              ...(liveIdentity.parentThreadId
+                ? { parentThreadId: liveIdentity.parentThreadId }
+                : {}),
             };
           })
           .filter((entry) => entry.id && !hiddenSharedBindingIds.has(entry.id));
@@ -812,6 +844,7 @@ export function useThreadActions({
             (session: {
               sessionId: string;
               firstMessage: string;
+              nativeTitle?: string | null;
               updatedAt: number;
               fileSizeBytes?: number;
               parentSessionId?: string | null;
@@ -827,11 +860,13 @@ export function useThreadActions({
               const updatedAt = session.updatedAt;
               const mappedTitle = mappedTitles[id];
               const customTitle = getCustomName(workspace.id, id);
+              const nativeTitle = asString(session.nativeTitle).trim();
               const next: ThreadSummary = {
                 id,
                 name:
                   customTitle ||
                   mappedTitle ||
+                  nativeTitle ||
                   previewThreadName(session.firstMessage, "Claude Session"),
                 updatedAt,
                 sizeBytes: extractThreadSizeBytes(
@@ -844,7 +879,11 @@ export function useThreadActions({
               if (!prev || next.updatedAt >= prev.updatedAt) {
                 mergedById.set(
                   id,
-                  mergeThreadSummaryPreservingStableIdentity(prev, next),
+                  mergeThreadSummaryPreservingStableIdentity(prev, next, {
+                    mappedTitle,
+                    customTitle,
+                    nativeTitle,
+                  }),
                 );
               }
             },
@@ -1067,6 +1106,18 @@ export function useThreadActions({
             cachedKimi.sessions.filter(
               (session) =>
                 !hiddenSharedBindingIds.has(`kimi:${session.sessionId}`),
+            ),
+            workspace.id,
+            mappedTitles,
+            getCustomName,
+          );
+        }
+        if (hasFreshGrokCache && cachedGrok.sessions.length > 0) {
+          allSummaries = mergeGrokSessionSummaries(
+            allSummaries,
+            cachedGrok.sessions.filter(
+              (session) =>
+                !hiddenSharedBindingIds.has(`grok:${session.sessionId}`),
             ),
             workspace.id,
             mappedTitles,
@@ -1309,6 +1360,83 @@ export function useThreadActions({
           kimiRefreshAttemptedRef.current[workspace.id] === true;
         const shouldRefreshKimiSessions =
           hasKimiSignal || !!cachedKimi || !hasAttemptedKimiRefresh;
+        const hasAttemptedGrokRefresh =
+          grokRefreshAttemptedRef.current[workspace.id] === true;
+        const shouldRefreshGrokSessions =
+          hasGrokSignal || !!cachedGrok || !hasAttemptedGrokRefresh;
+        if (shouldRefreshGrokSessions) {
+          void (async () => {
+            grokRefreshAttemptedRef.current[workspace.id] = true;
+            const grokResult = await withTimeout(
+              listGrokSessionsService(workspace.path, 50),
+              GROK_SESSION_FETCH_TIMEOUT_MS,
+            );
+            if (threadListRequestSeqRef.current[workspace.id] !== requestSeq) {
+              return;
+            }
+            if (grokResult === null) {
+              onDebug?.({
+                id: `${Date.now()}-client-grok-session-timeout`,
+                timestamp: Date.now(),
+                source: "client",
+                label: "thread/list grok timeout",
+                payload: {
+                  workspaceId: workspace.id,
+                  timeoutMs: GROK_SESSION_FETCH_TIMEOUT_MS,
+                },
+              });
+              return;
+            }
+            const normalizedGrokSessions =
+              normalizeGrokSessionSummaries(grokResult);
+            grokSessionCacheRef.current[workspace.id] = {
+              fetchedAt: Date.now(),
+              sessions: normalizedGrokSessions,
+            };
+            const currentSnapshot =
+              latestThreadsByWorkspaceRef.current[workspace.id] ?? [];
+            const baselineSummaries =
+              currentSnapshot.length > 0 ? currentSnapshot : allSummaries;
+            const nextSummaries = mergeGrokSessionSummaries(
+              baselineSummaries,
+              normalizedGrokSessions.filter(
+                (session) =>
+                  !hiddenSharedBindingIds.has(`grok:${session.sessionId}`),
+              ),
+              workspace.id,
+              mappedTitles,
+              getCustomName,
+            );
+            const visibleNextSummaries = applySessionArchiveState(
+              nextSummaries,
+              await archivedSessionMapPromise,
+            );
+            const unchanged =
+              visibleNextSummaries.length === baselineSummaries.length &&
+              visibleNextSummaries.every((entry, index) => {
+                const prev = baselineSummaries[index];
+                return (
+                  !!prev &&
+                  prev.id === entry.id &&
+                  prev.name === entry.name &&
+                  prev.updatedAt === entry.updatedAt &&
+                  prev.engineSource === entry.engineSource &&
+                  prev.threadKind === entry.threadKind
+                );
+              });
+            if (!unchanged) {
+              dispatch({
+                type: "setThreads",
+                workspaceId: workspace.id,
+                threads: visibleNextSummaries,
+              });
+              latestThreadsByWorkspaceRef.current = {
+                ...latestThreadsByWorkspaceRef.current,
+                [workspace.id]: visibleNextSummaries,
+              };
+            }
+          })();
+        }
         if (shouldRefreshKimiSessions) {
           void (async () => {
             kimiRefreshAttemptedRef.current[workspace.id] = true;

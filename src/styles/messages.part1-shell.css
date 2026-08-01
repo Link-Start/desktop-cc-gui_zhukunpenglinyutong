@@ -6,6 +6,7 @@
   /* 思考正文比 meta(12px) 再小一档、比 caption(10px) 大，介于两者之间以示轻盈 */
   --message-thinking-font-size: 11px;
   position: relative;
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -206,16 +207,10 @@
 .messages-lightweight-mode-banner-eyebrow,
 .messages-lightweight-row-summary-eyebrow {
   color: var(--text-faint);
-  font-size: var(--message-caption-font-size);
-  font-weight: 750;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.messages-lightweight-mode-banner strong,
-.messages-lightweight-row-summary strong {
-  color: var(--text-strong);
-  font-size: var(--message-title-font-size);
+  font-size: var(--message-meta-font-size);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .messages-lightweight-mode-banner-eyebrow {
@@ -223,9 +218,15 @@
   white-space: nowrap;
 }
 
-.messages-lightweight-mode-banner strong {
-  flex: 0 0 auto;
+.messages-lightweight-mode-banner-title,
+.messages-lightweight-row-summary-title {
+  color: var(--text-default);
   font-size: var(--message-meta-font-size);
+  font-weight: 400;
+}
+
+.messages-lightweight-mode-banner-title {
+  flex: 0 0 auto;
   line-height: 1.2;
 }
 
@@ -295,7 +296,7 @@
   min-width: 0;
 }
 
-.messages-lightweight-row-summary-main > strong,
+.messages-lightweight-row-summary-main > .messages-lightweight-row-summary-title,
 .messages-lightweight-row-summary-main > span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -412,8 +413,9 @@
   margin-bottom: 12px;
 }
 
+/* 兼容旧选择器：最终消息不再使用分割线，改为正文下方 action footer */
 .messages-final-boundary {
-  margin-top: 25px;
+  margin-top: 0;
 }
 
 .main .messages {

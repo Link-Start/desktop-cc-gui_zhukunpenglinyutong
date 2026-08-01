@@ -27,6 +27,12 @@ describe("engineCapabilityMatrix", () => {
       "collaboration.mode",
       "session.continuation",
       "image.input",
+      "input.mid-turn",
+      "session.resume",
+      "session.fork",
+      "session.switch",
+      "session.tree",
+      "rpc.server",
     ]);
   });
 
@@ -36,21 +42,27 @@ describe("engineCapabilityMatrix", () => {
     expect(getEngineCapabilityState("opencode", "tool.mcp")).toBe("unsupported");
   });
 
-  it("projects legacy EngineFeatures into capability states without inventing unknown fields", () => {
+  it("projects legacy EngineFeatures through the compatibility aliases", () => {
     expect(projectEngineFeaturesToCapabilityStates(allFeatures)).toMatchObject({
       "streaming.text": "supported",
       "streaming.reasoning": "supported",
       "streaming.tool-output": "supported",
       "tool.use": "supported",
       "tool.mcp": "unknown",
-      "reasoning.effort": "unknown",
+      "reasoning.effort": "supported",
       "collaboration.mode": "unknown",
       "session.continuation": "supported",
       "image.input": "supported",
+      "input.mid-turn": "unknown",
+      "session.resume": "supported",
+      "session.fork": "unknown",
+      "session.switch": "unknown",
+      "session.tree": "unknown",
+      "rpc.server": "unknown",
     });
   });
 
-  it("keeps runtime projection conservative while spec support keeps capability available", () => {
+  it("uses legacy runtime evidence while old cached DTOs remain supported", () => {
     const status = resolveEngineCapabilityRuntimeStatus(
       {
         engineType: "codex" satisfies EngineType,
@@ -63,8 +75,46 @@ describe("engineCapabilityMatrix", () => {
       engine: "codex",
       capability: "reasoning.effort",
       specState: "supported",
+      runtimeState: "supported",
+      available: true,
+      reason: null,
+    });
+  });
+
+  it("projects the exact Rust DTO field names when they are present", () => {
+    expect(
+      projectEngineFeaturesToCapabilityStates({
+        streaming: true,
+        imageInput: false,
+        reasoningEffort: false,
+        collaborationMode: true,
+        sessionResume: true,
+        toolsControl: true,
+        mcp: false,
+      }),
+    ).toMatchObject({
+      "reasoning.effort": "unsupported",
+      "collaboration.mode": "supported",
+      "session.resume": "supported",
+      "tool.use": "supported",
+      "tool.mcp": "unsupported",
+    });
+  });
+
+  it("keeps unprobed runtime capabilities unknown with an explicit reason", () => {
+    expect(
+      resolveEngineCapabilityRuntimeStatus(
+        {
+          engineType: "codex",
+          features: { streaming: true, imageInput: true },
+        },
+        "rpc.server",
+      ),
+    ).toMatchObject({
+      specState: "supported",
       runtimeState: "unknown",
       available: true,
+      reason: "runtime:evidence-missing",
     });
   });
 });

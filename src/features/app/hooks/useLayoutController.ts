@@ -1,4 +1,3 @@
-import { useLayoutMode } from "../../layout/hooks/useLayoutMode";
 import { useResizablePanels } from "../../layout/hooks/useResizablePanels";
 import { useSidebarToggles } from "../../layout/hooks/useSidebarToggles";
 import { usePanelVisibility } from "../../layout/hooks/usePanelVisibility";
@@ -33,10 +32,11 @@ export function useLayoutController({
     onKanbanConversationResizeStart,
   } = useResizablePanels();
 
-  const layoutMode = useLayoutMode();
-  const isCompact = layoutMode !== "desktop";
-  const isTablet = layoutMode === "tablet";
-  const isPhone = layoutMode === "phone";
+  // Responsive layout is intentionally disabled: the app always runs in
+  // desktop mode, so compact/tablet/phone stay permanently false.
+  const isCompact = false;
+  const isTablet = false;
+  const isPhone = false;
 
   const {
     sidebarCollapsed,
@@ -68,7 +68,6 @@ export function useLayoutController({
   });
 
   return {
-    layoutMode,
     isCompact,
     isTablet,
     isPhone,

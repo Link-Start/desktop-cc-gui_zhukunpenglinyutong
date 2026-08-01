@@ -38,7 +38,10 @@ import {
   type GitRepositoryActionRequest,
 } from "../../git/types/gitRepositoryActions";
 import type { GitModalPreviewRequest } from "../../git/components/GitDiffPanelTypes";
-import { FileTreePanel } from "../../files/components/FileTreePanel";
+import {
+  FileTreePanel,
+  type FileTreeRevealRequest,
+} from "../../files/components/FileTreePanel";
 import { WorkspaceFileComparePanel } from "../../files/components/WorkspaceFileComparePanel";
 import { WorkspaceSearchPanel } from "../../search/components/WorkspaceSearchPanel";
 import { PromptPanel } from "../../prompts/components/PromptPanel";
@@ -52,34 +55,7 @@ import {
   buildGitStatusProjectMapImpactInput,
   type ProjectMapImpactInput,
 } from "../../project-map/utils/impactSources";
-import {
-  OrchestrationCenterView,
-  applyOrchestrationReviewAction,
-  archiveOrchestrationTask,
-  collectCoreOrchestrationProviderSnapshots,
-  createManualOrchestrationTaskDraft,
-  projectLinkedTaskRunsToOrchestrationStore,
-  OPEN_ORCHESTRATION_TASK_EVENT,
-  patchOrchestrationTask,
-  readOpenOrchestrationTaskEvent,
-  readSpecHubOrchestrationCandidates,
-  saveOrchestrationTaskStore,
-  upsertOrchestrationTask,
-  useOrchestrationTaskStore,
-} from "../../agent-orchestration";
-import type {
-  OrchestrationCancelRunRequest,
-  OrchestrationDispatchConfirmation,
-  OrchestrationManualTaskDraftRequest,
-  OrchestrationReviewActionRequest,
-  OrchestrationSourceRef,
-  OrchestrationTask,
-} from "../../agent-orchestration";
 import { useTaskRunStore } from "../../tasks/hooks/useTaskRunStore";
-import {
-  patchTaskRun,
-  saveTaskRunStore,
-} from "../../tasks/utils/taskRunStorage";
 import { WorkspaceNoteCardPanel } from "../../note-cards/components/WorkspaceNoteCardPanel";
 import type {
   NoteCaptureDraft,
@@ -91,8 +67,6 @@ import { TabBar } from "../../app/components/TabBar";
 import { TabletNav } from "../../app/components/TabletNav";
 import { useStatusPanelData } from "../../status-panel/hooks/useStatusPanelData";
 import { useGlobalRuntimeNoticeDock } from "../../notifications/hooks/useGlobalRuntimeNoticeDock";
-import { buildSpecWorkspaceSnapshot } from "../../../lib/spec-core/runtime";
-import type { SpecWorkspaceSnapshot } from "../../../lib/spec-core/types";
 import type { TabType } from "../../status-panel/types";
 import type {
   EditorNavigationLocation,
@@ -126,7 +100,7 @@ import type {
   ConversationState,
 } from "../../threads/contracts/conversationCurtainContracts";
 import { resolveDiffPathFromWorkspacePath } from "../../../utils/workspacePaths";
-import { resolvePresentationProfile } from "../../messages/presentation/presentationProfile";
+import { resolvePresentationProfile } from "../../../conversation-presentation/presentationProfile";
 import { appendQueuedHandoffBubbleIfNeeded } from "../../threads/utils/queuedHandoffBubble";
 import { isBackgroundRenderGatingEnabled } from "../../threads/utils/realtimePerfFlags";
 import { useWorkspaceSessionActivity } from "../../session-activity/hooks/useWorkspaceSessionActivity";
@@ -148,6 +122,16 @@ import {
   type ActiveCanvasSnapshot,
 } from "./activeCanvasStore";
 import { ActiveCanvasComposer } from "./activeCanvasComposerNode";
+import { SharedSendStatusBar } from "../../shared-session/components/SharedSendStatusBar";
+import { ProviderContinuationContextCard } from "../../shared-session/components/ProviderContinuationContextCard";
+import { buildProviderContinuationSourceExcerpt } from "../../shared-session/components/providerContinuationSourceExcerpt";
+import { useSharedSendState } from "../../shared-session/runtime/sharedSendStateStore";
+import { useSharedSendStateRestore } from "../../shared-session/runtime/useSharedSendStateRestore";
+import {
+  isComposerInputLocked,
+  isComposerSubmitLocked,
+  isPickerLocked,
+} from "../../shared-session/target/sendStateMachine";
 import { ActiveCanvasStatusPanel } from "./activeCanvasStatusPanelNode";
 import { buildShellRuntimeSummary } from "./layoutShellSummary";
 import { buildConversationCanvasNode } from "./conversationCanvasNode";
@@ -169,11 +153,6 @@ const GitDiffPanel = lazy(() =>
 const FileViewPanel = lazy(() =>
   import("../../files/components/FileViewPanel").then((m) => ({
     default: m.FileViewPanel,
-  })),
-);
-const FileHistoryView = lazy(() =>
-  import("../../git-history/components/FileHistoryView").then((m) => ({
-    default: m.FileHistoryView,
   })),
 );
 const ProjectMapPanel = lazy(() =>
@@ -206,33 +185,11 @@ const EMPTY_PROJECT_MAP_IMPACT_INPUT: ProjectMapImpactInput = {
     fileCount: 0,
   },
 };
-let lastOrchestrationProjectionSignature: string | null = null;
-
-function buildOrchestrationProjectionSignature(
-  orchestrationTaskStore: ReturnType<typeof useOrchestrationTaskStore>,
-  taskRuns: ReturnType<typeof useTaskRunStore>["runs"],
-): string {
-  return JSON.stringify({
-    tasks: orchestrationTaskStore.tasks.map((task) => ({
-      taskId: task.taskId,
-      status: task.status,
-      reviewState: task.reviewState,
-      linkedRunIds: task.linkedRunIds,
-    })),
-    runs: taskRuns.map((run) => ({
-      runId: run.runId,
-      taskId: run.task.taskId,
-      orchestrationTaskId: run.task.orchestrationTaskId,
-      status: run.status,
-      updatedAt: run.updatedAt,
-    })),
-  });
-}
 
 function toConversationEngine(
   engine: EngineType | undefined,
 ): ConversationEngine {
-  if (engine === "claude" || engine === "gemini" || engine === "kimi" || engine === "opencode") {
+  if (engine === "claude" || engine === "gemini" || engine === "grok" || engine === "kimi" || engine === "opencode") {
     return engine;
   }
   return "codex";
@@ -257,6 +214,12 @@ function inferConversationEngineFromThreadId(
     normalizedThreadId.startsWith("gemini-pending-")
   ) {
     return "gemini";
+  }
+  if (
+    normalizedThreadId.startsWith("grok:") ||
+    normalizedThreadId.startsWith("grok-pending-")
+  ) {
+    return "grok";
   }
   if (
     normalizedThreadId.startsWith("kimi:") ||
@@ -326,13 +289,34 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   >([]);
   const [noteCardSelectionRequest, setNoteCardSelectionRequest] =
     useState<ComposerNoteCardSelectionRequest | null>(null);
+  const [homeCreationTargetEngine, setHomeCreationTargetEngine] =
+    useState<EngineType | null>(null);
   const [gitModalPreviewRequest, setGitModalPreviewRequest] =
     useState<GitModalPreviewRequest | null>(null);
   const [gitModeControlsTarget, setGitModeControlsTarget] =
     useState<HTMLDivElement | null>(null);
+  const [fileTreeRevealRequest, setFileTreeRevealRequest] =
+    useState<FileTreeRevealRequest | null>(null);
   const rewindDialogRequestSerialRef = useRef(0);
   const noteCardSelectionRequestSerialRef = useRef(0);
   const gitModalPreviewRequestSerialRef = useRef(0);
+  const fileTreeRevealRequestSerialRef = useRef(0);
+  const handleRevealInFileTree = useCallback(
+    (path: string) => {
+      const workspaceId = options.activeWorkspace?.id;
+      if (!workspaceId) {
+        return;
+      }
+      onFilePanelModeChange("files");
+      fileTreeRevealRequestSerialRef.current += 1;
+      setFileTreeRevealRequest({
+        workspaceId,
+        path,
+        requestId: fileTreeRevealRequestSerialRef.current,
+      });
+    },
+    [onFilePanelModeChange, options.activeWorkspace?.id],
+  );
   const historyRetryInFlightRef = useRef<Promise<unknown> | null>(null);
   const activeThreadStatus = options.activeThreadId
     ? (options.threadStatusById[options.activeThreadId] ?? null)
@@ -707,6 +691,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       onExpand={globalRuntimeNoticeDock.expand}
       onMinimize={globalRuntimeNoticeDock.minimize}
       onClear={globalRuntimeNoticeDock.clear}
+      // 桌面侧栏：不外显气泡，入口在设置二级菜单；手机端仍用底部气泡。
+      hideMinimizedTrigger={!options.isPhone}
     />
   ) : null;
   const sidebarRuntimeNoticeDockNode = options.isPhone ? null : globalRuntimeNoticeDockNode;
@@ -755,7 +741,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         onConnectWorkspace={options.onConnectWorkspace}
         onAddAgent={options.onAddAgent}
         engineOptions={options.engineOptions}
-        enabledEngines={options.enabledEngines}
         onRefreshEngineOptions={options.onRefreshEngineOptions}
         onAddSharedAgent={options.onAddSharedAgent}
         onAddWorktreeAgent={options.onAddWorktreeAgent}
@@ -816,6 +801,12 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         isTerminalOpen={options.terminalOpen}
         onToggleTerminal={options.onToggleTerminal}
         runtimeNoticeDockNode={sidebarRuntimeNoticeDockNode}
+        onOpenRuntimeNotice={
+          showGlobalRuntimeNoticeDock ? globalRuntimeNoticeDock.expand : undefined
+        }
+        showRuntimeNoticeMenuItem={
+          Boolean(showGlobalRuntimeNoticeDock && !options.isPhone)
+        }
       />
     </Profiler>
   );
@@ -956,18 +947,14 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const codexForkProviderProfiles = useMemo<
     CodexProviderProfileOption[]
   >(() => {
-    const profilesById = new Map<string, CodexProviderProfileOption>();
-    for (const profile of codexProviderProfiles) {
-      profilesById.set(profile.id, profile);
-    }
     const activeProviderId =
       activeThreadSummary?.providerProfileId?.trim() ||
       CODEX_DISK_PROVIDER_PROFILE_ID;
-    if (
-      activeProviderId !== CODEX_DISK_PROVIDER_PROFILE_ID &&
-      !profilesById.has(activeProviderId)
-    ) {
-      profilesById.set(activeProviderId, {
+    const activeProfile = codexProviderProfiles.find(
+      (profile) => profile.id === activeProviderId,
+    );
+    return [
+      activeProfile ?? {
         id: activeProviderId,
         name:
           activeThreadSummary?.providerProfileName?.trim() || activeProviderId,
@@ -975,9 +962,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           activeThreadSummary?.providerProfileSource === "managed"
             ? "managed"
             : "disk",
-      });
-    }
-    return Array.from(profilesById.values());
+      },
+    ];
   }, [
     activeThreadSummary?.providerProfileId,
     activeThreadSummary?.providerProfileName,
@@ -1059,9 +1045,60 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     setActiveCanvasSnapshot(activeCanvasSnapshot);
   }, [activeCanvasSnapshot]);
 
+  const continuationWorkspaceId = options.activeWorkspaceId ?? "";
+  const continuationThreadsByWorkspace = options.threadsByWorkspace;
+  const selectContinuationThread = options.onSelectThread;
+  const continuationSourceItems = activeThreadSummary?.sourceSessionId
+    ? options.threadItemsByThread[activeThreadSummary.sourceSessionId]
+    : undefined;
+  const continuationContext = useMemo(() => {
+    if (
+      activeThreadSummary?.originKind !== "provider-continuation" ||
+      !activeThreadSummary.sourceSessionId
+    ) {
+      return null;
+    }
+    const sourceSessionId = activeThreadSummary.sourceSessionId;
+    const source = continuationThreadsByWorkspace[
+      continuationWorkspaceId
+    ]?.find(
+      (thread) => thread.id === sourceSessionId,
+    ) ?? null;
+    return {
+      source,
+      sourceExcerpt: buildProviderContinuationSourceExcerpt(
+        continuationSourceItems ?? EMPTY_ACTIVE_CANVAS_ITEMS,
+      ),
+      onOpenSource: source
+        ? () =>
+            selectContinuationThread(
+              continuationWorkspaceId,
+              sourceSessionId,
+            )
+        : null,
+    };
+  }, [
+    activeThreadSummary,
+    continuationThreadsByWorkspace,
+    continuationWorkspaceId,
+    continuationSourceItems,
+    selectContinuationThread,
+  ]);
+
   const messagesNode = useMemo(
     () =>
       buildConversationCanvasNode({
+        isProviderContinuation:
+          activeThreadSummary?.originKind === "provider-continuation",
+        continuationContextNode:
+          activeThreadSummary?.originKind === "provider-continuation" ? (
+            <ProviderContinuationContextCard
+              thread={activeThreadSummary}
+              source={continuationContext?.source ?? null}
+              sourceExcerpt={continuationContext?.sourceExcerpt ?? null}
+              onOpenSource={continuationContext?.onOpenSource ?? null}
+            />
+          ) : null,
         messagesProps: {
           items: EMPTY_ACTIVE_CANVAS_ITEMS,
           threadId: null,
@@ -1134,6 +1171,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       options.systemProxyEnabled,
       options.systemProxyUrl,
       options.openAppTargets,
+      activeThreadSummary,
+      continuationContext,
       options.selectedOpenAppId,
       showMessageAnchors,
       options.codeBlockCopyUseModifier,
@@ -1149,7 +1188,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       forkConfirmUserMessageId,
       handleCancelForkConfirm,
       handleConfirmForkFromMessage,
-      activeThreadSummary?.providerProfileId,
       codexForkProviderProfiles,
       options.onRewind,
       handleOpenRewindDialogFromMessage,
@@ -1190,12 +1228,14 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     options.selectedEngine === "claude" ||
     options.selectedEngine === "codex" ||
     options.selectedEngine === "gemini" ||
+    options.selectedEngine === "grok" ||
     options.selectedEngine === "kimi" ||
     options.selectedEngine === "opencode";
   const isStatusPanelCodexEngine = options.selectedEngine === "codex";
   const { todoTotal, subagentTotal, fileChanges, commandTotal } =
     useStatusPanelData(statusPanelItems, {
       isCodexEngine: isStatusPanelCodexEngine,
+      activeEngine: options.selectedEngine ?? null,
       activeThreadId: options.activeThreadId,
       itemsByThread: deferredThreadItemsByThread,
       threadParentById: options.threadParentById,
@@ -1240,6 +1280,17 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     [],
   );
   const isSharedSession = activeThreadSummary?.threadKind === "shared";
+  // Wave 4 / B.6：Shared Send UI 状态机（§14.5）。V2 flag 关闭时状态恒为 idle，不影响现有行为。
+  const sharedSendEntry = useSharedSendState(
+    options.activeWorkspaceId ?? "",
+    options.activeThreadId ?? "",
+  );
+  useSharedSendStateRestore(
+    options.activeWorkspaceId ?? null,
+    options.activeThreadId ?? null,
+    isSharedSession,
+  );
+  const sharedSendState = isSharedSession ? sharedSendEntry.state : "idle";
   const rewindWorkspaceGitState = deriveRewindWorkspaceGitState(
     options.gitStatus,
   );
@@ -1337,6 +1388,9 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
             onCheckout: options.onCheckoutBranch,
             onCreate: options.onCreateBranch,
             onUpdate: options.onUpdateBranch,
+            onUpdateAllRepositories: options.onUpdateAllRepositories,
+            onCheckoutAllRepositories: options.onCheckoutAllRepositories,
+            onLoadCommonRepositoryBranches: options.onLoadCommonRepositoryBranches,
             onCommit: handleComposerGitCommit,
             onPush: handleComposerGitPush,
             disabled: options.isWorktreeWorkspace,
@@ -1358,6 +1412,9 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       options.onCheckoutBranch,
       options.onCreateBranch,
       options.onUpdateBranch,
+      options.onUpdateAllRepositories,
+      options.onCheckoutAllRepositories,
+      options.onLoadCommonRepositoryBranches,
       handleComposerGitCommit,
       handleComposerGitPush,
       options.isWorktreeWorkspace,
@@ -1407,9 +1464,15 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     showStatusPanelToggleOverride?: boolean,
     branchControlEnabled: boolean = true,
     externalNoteCardRequest: ComposerNoteCardSelectionRequest | null = null,
+    createSessionTargetPicker: boolean = false,
   ) =>
     options.showComposer ? (
       <Profiler id="composer" onRender={handleRuntimeProfileRender}>
+        <SharedSendStatusBar
+          workspaceId={options.activeWorkspaceId ?? null}
+          threadId={options.activeThreadId ?? null}
+          isSharedSession={isSharedSession && !createSessionTargetPicker}
+        />
         <ActiveCanvasComposer
           items={EMPTY_ACTIVE_CANVAS_ITEMS}
           activeThreadId={null}
@@ -1427,7 +1490,15 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           rewindDialogRequest={rewindDialogRequest}
           onRewindDialogRequestConsumed={handleRewindDialogRequestConsumed}
           canStop={options.canStop}
-          disabled={options.isReviewing}
+          disabled={
+            options.isReviewing ||
+            (!createSessionTargetPicker &&
+              isComposerInputLocked(sharedSendState))
+          }
+          submitDisabled={
+            !createSessionTargetPicker &&
+            isComposerSubmitLocked(sharedSendState)
+          }
           contextUsage={null}
           contextDualViewEnabled={options.contextDualViewEnabled}
           codexAutoCompactionEnabled={options.codexAutoCompactionEnabled}
@@ -1437,11 +1508,19 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           onCodexAutoCompactionSettingsChange={
             options.onCodexAutoCompactionSettingsChange
           }
-          isContextCompacting={false}
-          codexCompactionLifecycleState="idle"
-          codexCompactionSource={null}
-          codexCompactionCompletedAt={null}
-          lastTokenUsageUpdatedAt={null}
+          isContextCompacting={activeThreadStatus?.isContextCompacting ?? false}
+          codexCompactionLifecycleState={
+            activeThreadStatus?.codexCompactionLifecycleState ?? "idle"
+          }
+          codexCompactionSource={
+            activeThreadStatus?.codexCompactionSource ?? null
+          }
+          codexCompactionCompletedAt={
+            activeThreadStatus?.codexCompactionCompletedAt ?? null
+          }
+          lastTokenUsageUpdatedAt={
+            activeThreadStatus?.lastTokenUsageUpdatedAt ?? null
+          }
           accountRateLimits={null}
           usageShowRemaining={options.usageShowRemaining}
           onRefreshAccountRateLimits={options.onRefreshAccountRateLimits}
@@ -1451,7 +1530,10 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           runtimeLifecycleState={composerRuntimeLifecycleState}
           sendLabel={
             options.composerSendLabel ??
-            (options.isProcessing && !options.steerEnabled
+            ((isSharedSession &&
+              (sharedSendState === "running" ||
+                sharedSendState === "settling")) ||
+            (options.isProcessing && !options.steerEnabled)
               ? t("messages.queue")
               : t("messages.send"))
           }
@@ -1477,12 +1559,22 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           collaborationModesEnabled={options.collaborationModesEnabled}
           selectedCollaborationModeId={options.selectedCollaborationModeId}
           onSelectCollaborationMode={options.onSelectCollaborationMode}
-          isSharedSession={isSharedSession}
+          isSharedSession={isSharedSession && !createSessionTargetPicker}
+          createSessionTargetPicker={createSessionTargetPicker}
+          onCreationTargetEngineChange={
+            createSessionTargetPicker
+              ? setHomeCreationTargetEngine
+              : undefined
+          }
+          sharedTargetPickerLocked={
+            !createSessionTargetPicker && isPickerLocked(sharedSendState)
+          }
           engines={options.engines}
           selectedEngine={options.selectedEngine}
           onSelectEngine={options.onSelectEngine}
           models={options.models}
           providerModelCatalogs={options.providerModelCatalogs}
+          providerProfileId={activeThreadSummary?.providerProfileId ?? null}
           selectedModelId={options.selectedModelId}
           onSelectModel={options.onSelectModel}
           reasoningOptions={options.reasoningOptions}
@@ -1498,6 +1590,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           onOpenAgentSettings={options.onOpenAgentSettings}
           onOpenPromptSettings={options.onOpenPromptSettings}
           onOpenModelSettings={options.onOpenModelSettings}
+          onOpenCliSettings={options.onOpenCliSettings}
           onRefreshModelConfig={options.onRefreshModelConfig}
           isModelConfigRefreshing={options.isModelConfigRefreshing}
           opencodeVariantOptions={options.opencodeVariantOptions}
@@ -1511,10 +1604,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           commands={composerCommands}
           files={options.files}
           directories={options.directories}
-          gitignoredFiles={options.gitignoredFiles}
-          gitignoredDirectories={options.gitignoredDirectories}
           textareaRef={options.textareaRef}
-          historyKey={options.activeWorkspace?.id ?? null}
           editorSettings={options.composerEditorSettings}
           sendShortcut={options.composerSendShortcut}
           textareaHeight={options.textareaHeight}
@@ -1594,7 +1684,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     ) : null;
   const composerNode = renderComposerNode(false, true, noteCardSelectionRequest);
   // 首页：分支徽标与工作区选择并排渲染在 HomeChat 里，故 Composer 内不再重复
-  const homeComposerNode = renderComposerNode(false, false);
+  const homeComposerNode = renderComposerNode(false, false, null, true);
   const approvalToastsNode = null;
 
   const updateToastNode = (
@@ -1618,9 +1708,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
 
   const homeNode = (
     <HomeChat
-      latestAgentRuns={options.latestAgentRuns}
-      isLoadingLatestAgents={options.isLoadingLatestAgents}
-      onSelectThread={options.onSelectHomeThread}
       workspaces={homeWorkspaceOptions}
       selectedWorkspaceId={resolveHomeWorkspaceId(
         options.activeWorkspace?.id ?? null,
@@ -1629,7 +1716,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       onSelectWorkspace={options.onSelectHomeWorkspace}
       onAddWorkspace={options.onAddWorkspace}
       composerNode={homeComposerNode}
-      selectedEngine={options.selectedEngine}
+      selectedEngine={homeCreationTargetEngine ?? options.selectedEngine}
       branchControl={composerBranchControl}
     />
   );
@@ -1666,6 +1753,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       groupedWorkspaces={groupedWorkspacesForHeader}
       activeWorkspaceId={options.activeWorkspaceId}
       onSelectWorkspace={options.onSelectWorkspace}
+      onOpenShortcutsSettings={options.onOpenShortcutsSettings}
     />
   ) : null;
 
@@ -1878,6 +1966,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         gitignoredFiles={options.gitignoredFiles}
         gitignoredDirectories={options.gitignoredDirectories}
         onRefreshFiles={options.onRefreshFiles}
+        revealRequest={fileTreeRevealRequest}
       />
     );
   } else if (options.filePanelMode === "search") {
@@ -2050,6 +2139,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           onStageRepositoryAll={options.onStageRepositoryAll}
           onCommitRepositories={options.onCommitRepositories}
           repositoryCommitSummary={options.repositoryCommitSummary}
+          onRefreshGitStatus={options.queueGitStatusRefresh}
+          onRefreshGitLog={options.refreshGitLog}
           onRefreshGitDiffs={options.refreshGitDiffs}
           onCreateCodeAnnotation={handleCreateCodeAnnotation}
           onRemoveCodeAnnotation={handleRemoveCodeAnnotation}
@@ -2069,6 +2160,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       isLoading={options.gitDiffLoading}
       error={options.gitDiffError}
       diffStyle={options.gitDiffViewStyle}
+      alignedTextPreview
       onDiffStyleChange={options.onGitDiffViewStyleChange}
       pullRequest={options.selectedPullRequest}
       pullRequestComments={options.selectedPullRequestComments}
@@ -2084,14 +2176,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     />
   );
 
-  const fileViewPanelNode = options.centerMode === "fileHistory" && options.fileHistoryTarget ? (
-    <Suspense fallback={<HeavyPanelFallback />}>
-      <FileHistoryView
-        target={options.fileHistoryTarget}
-        onClose={options.onCloseFileHistory ?? (() => undefined)}
-      />
-    </Suspense>
-  ) : options.editorFilePath && options.activeWorkspace ? (
+  const fileViewPanelNode = options.editorFilePath && options.activeWorkspace ? (
       <Suspense fallback={<HeavyPanelFallback />}>
         <FileViewPanel
           workspaceId={options.activeWorkspace.id}
@@ -2112,6 +2197,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           activeTabPath={options.editorFilePath}
           onActivateTab={options.onActivateEditorTab}
           onCloseTab={options.onCloseEditorTab}
+          onCloseOtherTabs={options.onCloseOtherEditorTabs}
           onCloseAllTabs={options.onCloseAllEditorTabs}
           onReorderTabs={options.onReorderEditorTabs}
           fileReferenceMode={options.fileReferenceMode}
@@ -2131,6 +2217,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           isEditorFileMaximized={options.isEditorFileMaximized}
           onToggleEditorFileMaximized={options.onToggleEditorFileMaximized}
           onNavigateToLocation={options.onOpenFile}
+          onOpenFileHistory={options.onOpenFileHistory}
+          onRevealInFileTree={handleRevealInFileTree}
           onClose={options.onExitEditor}
           onInsertText={options.onInsertComposerText}
           onCreateCodeAnnotation={handleCreateCodeAnnotation}
@@ -2151,6 +2239,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           fileRenderPressure={fileRenderPressure}
           saveFileShortcut={options.saveFileShortcut}
           findInFileShortcut={options.findInFileShortcut}
+          expandSelectionShortcut={options.expandSelectionShortcut}
         />
       </Suspense>
     ) : null;
@@ -2191,292 +2280,24 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         : EMPTY_PROJECT_MAP_IMPACT_INPUT,
     [isProjectMapSurfaceActive, options.gitStatus.files],
   );
-  const orchestrationTaskStore = useOrchestrationTaskStore();
-  const [isOrchestrationCenterOpen, setIsOrchestrationCenterOpen] =
-    useState(false);
-  const [selectedOrchestrationTaskId, setSelectedOrchestrationTaskId] =
-    useState<string | null>(null);
-  const [projectMapSourceFocusNodeId, setProjectMapSourceFocusNodeId] =
-    useState<string | null>(null);
-  const projectMapDataset =
-    options.projectMapDatasetController?.dataset ?? null;
-  const projectMapRelationshipContextPack =
-    options.projectMapDatasetController?.relationshipContextPack ?? null;
-  const orchestrationWorkspaceId =
-    options.activeWorkspace?.id ??
-    projectMapDataset?.manifest.storageKey ??
-    null;
-  const persistedOrchestrationTasks = orchestrationTaskStore.tasks;
-  const shouldComputeProjectMapOrchestration =
-    isProjectMapSurfaceActive || isOrchestrationCenterOpen;
-  const [specWorkspaceSnapshot, setSpecWorkspaceSnapshot] =
-    useState<SpecWorkspaceSnapshot | null>(null);
-  useEffect(() => {
-    if (!shouldComputeProjectMapOrchestration || !orchestrationWorkspaceId) {
-      setSpecWorkspaceSnapshot(null);
-      return;
-    }
-    let cancelled = false;
-    buildSpecWorkspaceSnapshot({
-      workspaceId: orchestrationWorkspaceId,
-      files: options.files,
-      directories: options.directories,
-      customSpecRoot: activeWorkspaceCustomSpecRoot,
-    })
-      .then((snapshot) => {
-        if (!cancelled) {
-          setSpecWorkspaceSnapshot(snapshot);
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          console.warn(
-            "[agent-orchestration] Failed to build SpecHub provider snapshot",
-            error,
-          );
-          setSpecWorkspaceSnapshot(null);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    activeWorkspaceCustomSpecRoot,
-    orchestrationWorkspaceId,
-    options.directories,
-    options.files,
-    shouldComputeProjectMapOrchestration,
-  ]);
-  const orchestrationProviderSnapshots = useMemo(() => {
-    if (!shouldComputeProjectMapOrchestration || !orchestrationWorkspaceId) {
-      return [];
-    }
-    const coreSnapshots = collectCoreOrchestrationProviderSnapshots({
-      workspaceId: orchestrationWorkspaceId,
-      projectMapDataset,
-      projectMapRelationshipContextPack,
-      taskRuns: taskRunStore.runs,
-    });
-    if (
-      !specWorkspaceSnapshot ||
-      (specWorkspaceSnapshot.provider === "unknown" &&
-        specWorkspaceSnapshot.specRoot?.source !== "custom")
-    ) {
-      return coreSnapshots;
-    }
-    return [
-      ...coreSnapshots,
-      readSpecHubOrchestrationCandidates({
-        workspaceId: orchestrationWorkspaceId,
-        snapshot: specWorkspaceSnapshot,
-      }),
-    ];
-  }, [
-    orchestrationWorkspaceId,
-    projectMapDataset,
-    projectMapRelationshipContextPack,
-    shouldComputeProjectMapOrchestration,
-    specWorkspaceSnapshot,
-    taskRunStore.runs,
-  ]);
-  useEffect(() => {
-    if (
-      orchestrationTaskStore.tasks.length === 0 ||
-      taskRunStore.runs.length === 0
-    ) {
-      return;
-    }
-
-    const projectionSignature = buildOrchestrationProjectionSignature(
-      orchestrationTaskStore,
-      taskRunStore.runs,
-    );
-    if (lastOrchestrationProjectionSignature === projectionSignature) {
-      return;
-    }
-    lastOrchestrationProjectionSignature = projectionSignature;
-
-    const projectedStore = projectLinkedTaskRunsToOrchestrationStore({
-      orchestrationStore: orchestrationTaskStore,
-      taskRuns: taskRunStore.runs,
-    });
-    if (projectedStore !== orchestrationTaskStore) {
-      saveOrchestrationTaskStore(projectedStore);
-    }
-  }, [orchestrationTaskStore, taskRunStore.runs]);
-  const handleOpenOrchestrationTask = useCallback((taskId: string) => {
-    setSelectedOrchestrationTaskId(taskId);
-    setIsOrchestrationCenterOpen(true);
-  }, []);
-  useEffect(() => {
-    const handleOpenOrchestrationTaskEvent = (event: Event) => {
-      const taskId = readOpenOrchestrationTaskEvent(event);
-      if (taskId) {
-        handleOpenOrchestrationTask(taskId);
-      }
-    };
-
-    window.addEventListener(
-      OPEN_ORCHESTRATION_TASK_EVENT,
-      handleOpenOrchestrationTaskEvent,
-    );
-    return () => {
-      window.removeEventListener(
-        OPEN_ORCHESTRATION_TASK_EVENT,
-        handleOpenOrchestrationTaskEvent,
-      );
-    };
-  }, [handleOpenOrchestrationTask]);
-  const handleBackToProjectMapFromOrchestration = useCallback(() => {
-    setIsOrchestrationCenterOpen(false);
-  }, []);
-  const handleOpenOrchestrationSourceRef = useCallback(
-    (input: { task: OrchestrationTask; sourceRef: OrchestrationSourceRef }) => {
-      const { sourceRef } = input;
-      if (
-        sourceRef.providerId === "project-map" &&
-        sourceRef.kind === "project_map_node"
-      ) {
-        setProjectMapSourceFocusNodeId(sourceRef.id);
-        setIsOrchestrationCenterOpen(false);
-        return;
-      }
-
-      const sourcePath = sourceRef.workspaceRelativePath ?? sourceRef.path;
-      if (sourcePath) {
-        handleOpenProjectMapEvidenceFile(sourcePath);
-      }
-    },
-    [handleOpenProjectMapEvidenceFile],
-  );
-  const handleConfirmOrchestrationDispatch = useCallback(
-    async (confirmation: OrchestrationDispatchConfirmation) => {
-      const result = await options.onDispatchOrchestrationTask?.(confirmation);
-      if (result?.taskId) {
-        setSelectedOrchestrationTaskId(result.taskId);
-      }
-    },
-    [options],
-  );
-  const handleCancelOrchestrationRun = useCallback(
-    (request: OrchestrationCancelRunRequest) => {
-      const now = Date.now();
-      const nextTaskRunStore = patchTaskRun(taskRunStore, request.run.runId, {
-        status: "canceled",
-        currentStep: "canceled_before_runtime_start",
-        latestOutputSummary: "Dispatch canceled before runtime start.",
-        availableRecoveryActions: ["retry", "fork_new_run"],
-        finishedAt: now,
-        now,
-      });
-      const nextOrchestrationTaskStore = patchOrchestrationTask(
-        orchestrationTaskStore,
-        request.task.taskId,
-        {
-          status: "planned",
-          now: new Date(now).toISOString(),
-        },
-      );
-      saveTaskRunStore(nextTaskRunStore);
-      saveOrchestrationTaskStore(nextOrchestrationTaskStore);
-      setSelectedOrchestrationTaskId(request.task.taskId);
-    },
-    [orchestrationTaskStore, taskRunStore],
-  );
-  const handleOrchestrationReviewAction = useCallback(
-    (request: OrchestrationReviewActionRequest) => {
-      const result = applyOrchestrationReviewAction(request);
-      setSelectedOrchestrationTaskId(
-        result.followUpTask?.taskId ?? result.task.taskId,
-      );
-    },
-    [],
-  );
-  const handleArchiveOrchestrationTask = useCallback(
-    (task: OrchestrationTask) => {
-      const nextStore = archiveOrchestrationTask(
-        orchestrationTaskStore,
-        task.taskId,
-      );
-      saveOrchestrationTaskStore(nextStore);
-      setSelectedOrchestrationTaskId(null);
-    },
-    [orchestrationTaskStore],
-  );
-  const handleCreateManualOrchestrationTask = useCallback(
-    (request: OrchestrationManualTaskDraftRequest) => {
-      if (!orchestrationWorkspaceId) {
-        return null;
-      }
-      const task = createManualOrchestrationTaskDraft({
-        workspaceId: orchestrationWorkspaceId,
-        title: request.title,
-        scopeSummary: request.scopeSummary,
-        acceptanceSummary: request.acceptanceSummary,
-        promptSummary: request.promptSummary || null,
-        preferredEngine: request.preferredEngine,
-      });
-      const nextStore = upsertOrchestrationTask(orchestrationTaskStore, task);
-      saveOrchestrationTaskStore(nextStore);
-      setSelectedOrchestrationTaskId(task.taskId);
-      return task;
-    },
-    [orchestrationTaskStore, orchestrationWorkspaceId],
-  );
-  const handleOpenOrchestrationSession = useCallback(
-    (_task: OrchestrationTask, sessionId: string) => {
-      if (!options.activeWorkspace) {
-        return;
-      }
-      options.onSelectThread(options.activeWorkspace.id, sessionId);
-    },
-    [options],
-  );
-
-  const shouldMountProjectMapPanel =
-    isProjectMapSurfaceActive || isOrchestrationCenterOpen;
-  const projectMapPanelNode = shouldMountProjectMapPanel ? (
-    isOrchestrationCenterOpen ? (
-      <OrchestrationCenterView
-        key={`${options.activeWorkspace?.id ?? "no-workspace"}:orchestration`}
-        workspaceId={orchestrationWorkspaceId}
+  const projectMapPanelNode = isProjectMapSurfaceActive ? (
+    <Suspense fallback={<HeavyPanelFallback />}>
+      <ProjectMapPanel
+        key={options.activeWorkspace?.id ?? "no-workspace"}
+        activeWorkspace={options.activeWorkspace ?? null}
         workspaceName={options.activeWorkspace?.name ?? null}
-        persistedTasks={persistedOrchestrationTasks}
-        providerSnapshots={orchestrationProviderSnapshots}
-        selectedTaskId={selectedOrchestrationTaskId}
-        onOpenSourceRef={handleOpenOrchestrationSourceRef}
-        onConfirmDispatch={handleConfirmOrchestrationDispatch}
-        onCreateManualTask={handleCreateManualOrchestrationTask}
-        onCancelRun={handleCancelOrchestrationRun}
-        onReviewAction={handleOrchestrationReviewAction}
-        onArchiveTask={handleArchiveOrchestrationTask}
-        onOpenSession={handleOpenOrchestrationSession}
-        taskRuns={taskRunStore.runs}
-        modelOptions={options.models}
-        defaultModelId={options.selectedModelId}
-        onBackToProjectMap={handleBackToProjectMapFromOrchestration}
+        selectedEngine={options.selectedEngine ?? null}
+        selectedModelId={options.selectedModelId}
+        models={options.models}
+        datasetController={options.projectMapDatasetController}
+        changedFilePaths={projectMapImpactInput.filePaths}
+        changedFileSource={projectMapImpactInput.source}
+        activeCodeSelectionAnchor={options.activeCodeSelectionAnchor}
+        onOpenEvidenceFile={handleOpenProjectMapEvidenceFile}
+        onOpenIntentCanvas={options.onOpenIntentCanvas}
+        onOpenIntentCanvasFromRelationship={options.onOpenIntentCanvas}
       />
-    ) : (
-      <Suspense fallback={<HeavyPanelFallback />}>
-        <ProjectMapPanel
-          key={options.activeWorkspace?.id ?? "no-workspace"}
-          activeWorkspace={options.activeWorkspace ?? null}
-          workspaceName={options.activeWorkspace?.name ?? null}
-          selectedEngine={options.selectedEngine ?? null}
-          selectedModelId={options.selectedModelId}
-          models={options.models}
-          datasetController={options.projectMapDatasetController}
-          changedFilePaths={projectMapImpactInput.filePaths}
-          changedFileSource={projectMapImpactInput.source}
-          sourceFocusNodeId={projectMapSourceFocusNodeId}
-          activeCodeSelectionAnchor={options.activeCodeSelectionAnchor}
-          onOpenEvidenceFile={handleOpenProjectMapEvidenceFile}
-          onOpenOrchestrationTask={handleOpenOrchestrationTask}
-          onOpenIntentCanvas={options.onOpenIntentCanvas}
-          onOpenIntentCanvasFromRelationship={options.onOpenIntentCanvas}
-        />
-      </Suspense>
-    )
+    </Suspense>
   ) : null;
 
   const intentCanvasPanelNode = isIntentCanvasSurfaceActive ? (

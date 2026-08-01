@@ -233,4 +233,37 @@ describe("useDetachedFileExplorerState", () => {
 
     expect(result.current.openTabs).toEqual(["src/first.ts", "src/second.ts"]);
   });
+
+  it("closes other detached tabs atomically and clears unrelated navigation", () => {
+    const { result } = renderHook(() =>
+      useDetachedFileExplorerState("ws-1", "/repo", "src/first.ts"),
+    );
+
+    act(() => {
+      result.current.openFile("src/second.ts", { line: 8, column: 2 });
+      result.current.openFile("src/third.ts");
+    });
+
+    act(() => {
+      result.current.closeOtherTabs("src/first.ts");
+    });
+
+    expect(result.current.openTabs).toEqual(["src/first.ts"]);
+    expect(result.current.activeFilePath).toBe("src/first.ts");
+    expect(result.current.navigationTarget).toBeNull();
+  });
+
+  it("ignores close-other for an unknown detached tab", () => {
+    const { result } = renderHook(() =>
+      useDetachedFileExplorerState("ws-1", "/repo", "src/first.ts"),
+    );
+
+    act(() => {
+      result.current.openFile("src/second.ts");
+      result.current.closeOtherTabs("src/unknown.ts");
+    });
+
+    expect(result.current.openTabs).toEqual(["src/first.ts", "src/second.ts"]);
+    expect(result.current.activeFilePath).toBe("src/second.ts");
+  });
 });

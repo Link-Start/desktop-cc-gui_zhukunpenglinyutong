@@ -106,6 +106,27 @@
     --sidebar-accent: oklch(0.967 0.001 286.375);
     --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
 
+    /* App dropdown/tooltip tokens — must override dark :root defaults.
+       Codex dual-view usage tooltip lives outside .chat-input-box, so it
+       inherits these :root tokens. Missing light overrides produced a black
+       card with dark text (only native checkbox/select remained visible). */
+    --dropdown-bg: #ffffff;
+    --dropdown-border: #e5e7eb;
+    --dropdown-hover: #f3f4f6;
+    --dropdown-selected: transparent;
+    --dropdown-selected-text: #0d0d0d;
+    --success-color: #26a57b;
+    --tooltip-bg: #ffffff;
+    --dropdown-hover-color: #f0f1f3;
+    --dropdown-divider-color: #e9ecf1;
+    --dropdown-title-color: #8a9096;
+    --dropdown-description-color: #8a9096;
+    --dropdown-add-bg: #edeef1;
+    --dropdown-add-hover-bg: #e2e3e6;
+    --dropdown-add-text-color: #31353a;
+    --dropdown-shadow-color: rgba(226, 226, 226, 1);
+    --dropdown-text-color: #0d0d0d;
+
     /* 滚动条颜色 - Scrollbar colors (浅色系统模式) */
     --scrollbar-track: transparent;
     --scrollbar-thumb: rgba(24, 24, 27, 0.18);

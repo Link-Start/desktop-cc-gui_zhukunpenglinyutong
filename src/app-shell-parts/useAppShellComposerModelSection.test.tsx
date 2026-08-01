@@ -77,6 +77,207 @@ function renderSection(overrides: Record<string, unknown> = {}) {
 }
 
 describe("useAppShellComposerModelSection handleSelectModel", () => {
+  it("uses the bound Codex provider catalog instead of the global model list", () => {
+    const providerModels = [
+      makeModel("provider-a-model", { providerProfileId: "provider-a" }),
+      makeModel("gpt-public"),
+    ];
+    const { result } = renderSection({
+      activeEngine: "codex",
+      activeThreadId: "codex-thread-1",
+      activeProviderProfileId: "provider-a",
+      engineModelsAsOptions: providerModels,
+      models: [makeModel("global-default-model")],
+    });
+
+    expect(result.current.effectiveModels.map((model) => model.id)).toEqual([
+      "provider-a-model",
+      "gpt-public",
+    ]);
+    expect(
+      result.current.effectiveModels.some(
+        (model) => model.id === "global-default-model",
+      ),
+    ).toBe(false);
+  });
+
+  it("inherits Codex reasoning metadata without replacing provider-owned facts", () => {
+    const supportedReasoningEfforts = [
+      { reasoningEffort: "low", description: "Low" },
+      { reasoningEffort: "high", description: "High" },
+    ];
+    const providerModel = makeModel("gpt-5.6-sol", {
+      model: " GPT-5.6-SOL ",
+      displayName: "Provider GPT",
+      providerProfileId: "provider-a",
+      source: "provider-custom",
+      isDefault: true,
+    });
+    const { result } = renderSection({
+      activeEngine: "codex",
+      activeThreadId: "codex-thread-1",
+      activeProviderProfileId: "provider-a",
+      engineModelsAsOptions: [providerModel],
+      models: [
+        makeModel("gpt-5.6-sol", {
+          supportedReasoningEfforts,
+          defaultReasoningEffort: "high",
+        }),
+      ],
+      selectedComposerSelection: {
+        modelId: "gpt-5.6-sol",
+        effort: "high",
+      },
+    });
+
+    expect(result.current.effectiveModels[0]).toEqual({
+      ...providerModel,
+      supportedReasoningEfforts,
+      defaultReasoningEffort: "high",
+    });
+    expect(result.current.effectiveReasoningOptions).toEqual(["low", "high"]);
+    expect(result.current.effectiveSelectedEffort).toBe("high");
+  });
+
+  it("keeps explicit provider reasoning metadata authoritative", () => {
+    const providerReasoning = [
+      { reasoningEffort: "medium", description: "Provider medium" },
+    ];
+    const { result } = renderSection({
+      activeEngine: "codex",
+      activeThreadId: "codex-thread-1",
+      activeProviderProfileId: "provider-a",
+      engineModelsAsOptions: [
+        makeModel("gpt-5.6-sol", {
+          providerProfileId: "provider-a",
+          supportedReasoningEfforts: providerReasoning,
+          defaultReasoningEffort: "medium",
+          isDefault: true,
+        }),
+      ],
+      models: [
+        makeModel("gpt-5.6-sol", {
+          supportedReasoningEfforts: [
+            { reasoningEffort: "high", description: "Global high" },
+          ],
+          defaultReasoningEffort: "high",
+        }),
+      ],
+    });
+
+    expect(result.current.effectiveModels[0]?.supportedReasoningEfforts).toBe(
+      providerReasoning,
+    );
+    expect(result.current.effectiveModels[0]?.defaultReasoningEffort).toBe(
+      "medium",
+    );
+  });
+
+  it("does not infer reasoning support for an unknown provider-only Codex model", () => {
+    const persistComposerSelectionForThread = vi.fn();
+    const providerModel = makeModel("provider-only-model", {
+      providerProfileId: "provider-a",
+      isDefault: true,
+    });
+    const { result } = renderSection({
+      activeEngine: "codex",
+      activeThreadId: "codex-thread-1",
+      activeProviderProfileId: "provider-a",
+      engineModelsAsOptions: [providerModel],
+      models: [makeModel("gpt-public")],
+      persistComposerSelectionForThread,
+      selectedComposerSelection: {
+        modelId: "provider-only-model",
+        effort: "high",
+      },
+    });
+
+    expect(result.current.effectiveModels[0]).toBe(providerModel);
+    expect(result.current.effectiveSelectedModelId).toBe("provider-only-model");
+    expect(result.current.effectiveReasoningOptions).toEqual([]);
+    expect(result.current.effectiveReasoningSupported).toBe(false);
+    expect(result.current.effectiveSelectedEffort).toBeNull();
+    expect(persistComposerSelectionForThread).toHaveBeenCalledOnce();
+    expect(persistComposerSelectionForThread).toHaveBeenCalledWith(
+      null,
+      "codex-thread-1",
+      {
+        modelId: "provider-only-model",
+        effort: null,
+      },
+    );
+  });
+
+  it("keeps a provider-only Codex selection without model repair", () => {
+    const persistComposerSelectionForThread = vi.fn();
+    const { result } = renderSection({
+      activeEngine: "codex",
+      activeThreadId: "codex-thread-minimax",
+      activeWorkspaceId: "workspace-1",
+      activeProviderProfileId: "minimax",
+      engineModelsAsOptions: [],
+      models: [makeModel("gpt-5.6-sol", { isDefault: true })],
+      persistComposerSelectionForThread,
+      selectedComposerSelection: {
+        modelId: "MiniMax-M3",
+        effort: null,
+      },
+    });
+
+    expect(result.current.effectiveSelectedModelId).toBe("MiniMax-M3");
+    expect(result.current.resolvedModel).toBe("MiniMax-M3");
+    expect(persistComposerSelectionForThread).not.toHaveBeenCalled();
+  });
+
+  it("keeps Claude provider-bound reasoning options independent of model metadata", () => {
+    const { result } = renderSection({
+      activeEngine: "claude",
+      activeThreadId: "claude-thread-1",
+      activeProviderProfileId: "provider-a",
+      engineModelsAsOptions: [
+        makeModel("claude-provider-model", {
+          providerProfileId: "provider-a",
+          isDefault: true,
+        }),
+      ],
+      selectedComposerSelection: {
+        modelId: "claude-provider-model",
+        effort: "xhigh",
+      },
+    });
+
+    expect(result.current.effectiveReasoningOptions).toEqual([
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+    ]);
+    expect(result.current.effectiveReasoningSupported).toBe(true);
+    expect(result.current.effectiveSelectedEffort).toBe("xhigh");
+  });
+
+  it("keeps an arbitrary Claude provider model while its catalog is unavailable", () => {
+    const persistComposerSelectionForThread = vi.fn();
+    const { result } = renderSection({
+      activeEngine: "claude",
+      activeThreadId: "claude-thread-minimax",
+      activeWorkspaceId: "workspace-1",
+      activeProviderProfileId: "minimax",
+      engineModelsAsOptions: [],
+      persistComposerSelectionForThread,
+      selectedComposerSelection: {
+        modelId: "MiniMax-M2.5",
+        effort: "high",
+      },
+    });
+
+    expect(result.current.effectiveSelectedModelId).toBe("MiniMax-M2.5");
+    expect(result.current.resolvedModel).toBe("MiniMax-M2.5");
+    expect(result.current.effectiveSelectedEffort).toBe("high");
+    expect(persistComposerSelectionForThread).not.toHaveBeenCalled();
+  });
+
   it("stores cross-engine picks under the owning engine and persists its pref", () => {
     const persistComposerEnginePref = vi.fn();
     const handleSelectComposerSelection = vi.fn();

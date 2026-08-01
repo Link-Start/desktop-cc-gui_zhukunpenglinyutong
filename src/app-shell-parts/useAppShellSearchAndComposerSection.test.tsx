@@ -21,6 +21,15 @@ vi.mock("../features/search/ranking/recencyStore", () => ({
   recordSearchResultOpen: vi.fn(),
 }));
 
+vi.mock("../features/search/ranking/recentActions", () => ({
+  loadRecentSearchActions: vi.fn(() => []),
+  recordRecentSearchAction: vi.fn(),
+}));
+
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
+
 function createWorkspace(overrides: Partial<WorkspaceInfo> = {}): WorkspaceInfo {
   return {
     id: "workspace-1",
@@ -51,17 +60,26 @@ function createBoundary(
     canInterrupt: true,
     centerMode: "editor",
     clearActiveImages: vi.fn(),
+    closeQuickSwitcher: vi.fn(),
     connectWorkspace: vi.fn(async () => undefined),
+    decreaseUiScale: vi.fn(),
     exitDiffView: vi.fn(),
     filePanelMode: "files",
     getActiveDraft: () => "draft",
     gitPanelMode: "diff",
     gitPullRequestDiffs: [],
     handleDraftChange: vi.fn(),
+    handleAddAgent: vi.fn(async () => "thread-1"),
     handleOpenFile: vi.fn(),
+    handleOpenQuickSwitcher: vi.fn(),
+    handleQuickSwitcherNavigate: vi.fn(),
+    handleQuickSwitcherSelectFile: vi.fn(),
+    handleQuickSwitcherSelectSession: vi.fn(),
     handleSend: vi.fn(async () => undefined),
     interruptTurn: vi.fn(),
+    increaseUiScale: vi.fn(),
     isCompact: false,
+    isQuickSwitcherOpen: false,
     isSearchPaletteOpen: false,
     kanbanTasks: [
       {
@@ -71,6 +89,11 @@ function createBoundary(
       } as any,
     ],
     queueMessage: vi.fn(async () => undefined),
+    quickSwitcherRecentFileGroups: [],
+    quickSwitcherRunningSessions: [],
+    quickSwitcherSessionGroups: [],
+    resetUiScale: vi.fn(),
+    searchContentFilters: ["all"],
     searchPaletteQuery: "",
     searchResults: [],
     searchScope: "active-workspace",
@@ -147,6 +170,70 @@ describe("useAppShellSearchAndComposerSection", () => {
     expect(boundary.setSearchPaletteSelectedIndex).toHaveBeenLastCalledWith(0);
   });
 
+  it("relays quick switcher running sessions to the renderer context", () => {
+    const runningSessions = [
+      {
+        workspaceId: "workspace-1",
+        workspaceName: "Alpha",
+        threadId: "thread-running",
+        threadName: "Running",
+        engine: "codex",
+        startedAt: 123,
+      },
+    ];
+    const boundary = createBoundary({ quickSwitcherRunningSessions: runningSessions });
+    const { result } = renderHook(() =>
+      useAppShellSearchAndComposerSection(boundary),
+    );
+
+    expect(result.current.quickSwitcherRunningSessions).toBe(runningSessions);
+  });
+
+  it.each([
+    ["open-settings", "settings"],
+    ["open-terminal", "terminal"],
+    ["open-git", "git"],
+  ] as const)("executes %s through the existing navigation handler", (actionId, target) => {
+    const actionResult: SearchResult = {
+      id: `action:${actionId}`,
+      kind: "action",
+      title: actionId,
+      score: 0,
+      actionId,
+    };
+    const boundary = createBoundary({
+      isSearchPaletteOpen: true,
+      searchPaletteQuery: actionId,
+    });
+    const { result } = renderHook(() => useAppShellSearchAndComposerSection(boundary));
+
+    act(() => result.current.handleSelectSearchResult(actionResult));
+
+    expect(boundary.handleQuickSwitcherNavigate).toHaveBeenCalledWith(target);
+    expect(boundary.setIsSearchPaletteOpen).toHaveBeenCalledWith(false);
+  });
+
+  it("creates a session and executes UI scale actions through existing handlers", async () => {
+    const boundary = createBoundary({ isSearchPaletteOpen: true });
+    const { result } = renderHook(() => useAppShellSearchAndComposerSection(boundary));
+
+    for (const actionId of ["new-session", "increase-ui-scale", "decrease-ui-scale", "reset-ui-scale"]) {
+      act(() => result.current.handleSelectSearchResult({
+        id: `action:${actionId}`,
+        kind: "action",
+        title: actionId,
+        score: 0,
+        actionId,
+      }));
+    }
+    await act(async () => Promise.resolve());
+
+    expect(boundary.handleAddAgent).toHaveBeenCalledWith(boundary.activeWorkspace);
+    expect(boundary.increaseUiScale).toHaveBeenCalledOnce();
+    expect(boundary.decreaseUiScale).toHaveBeenCalledOnce();
+    expect(boundary.resetUiScale).toHaveBeenCalledOnce();
+  });
+
   it("toggles search content filters through the shared filter helper", () => {
     const boundary = createBoundary();
     const { result } = renderHook(() =>
@@ -202,7 +289,11 @@ describe("useAppShellSearchAndComposerSection", () => {
       score: 1,
       filePath: "src/file.ts",
     });
-    expect(boundary.handleOpenFile).toHaveBeenCalledWith("src/file.ts");
+    expect(boundary.handleOpenFile).toHaveBeenCalledWith(
+      "src/file.ts",
+      undefined,
+      { targetWorkspace: null },
+    );
 
     openResult({
       id: "thread-result",

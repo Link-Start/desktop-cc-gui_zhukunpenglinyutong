@@ -6,6 +6,9 @@ import { baseProps, resetSidebarTestMocks } from "./Sidebar.test-utils";
 import {
   assignWorkspaceSessionFolder,
   createWorkspaceSessionFolder,
+  getClaudeProviders,
+  getCodexProviders,
+  getKimiProviders,
   listWorkspaceSessionFolders,
   renameWorkspaceSessionFolder,
 } from "../../../services/tauri";
@@ -26,7 +29,13 @@ function openWorkspaceActionsMenu(workspaceCard: HTMLElement) {
   act(() => {
     fireEvent.click(within(workspaceCard).getByRole("button", { name: "New Session" }));
   });
-  return screen.getByRole("menu", { name: "Workspace actions" });
+  const menu = screen.getByRole("menu", { name: "Workspace actions" });
+  act(() => {
+    fireEvent.click(
+      within(menu).getByRole("button", { name: "Workspace actions" }),
+    );
+  });
+  return menu;
 }
 
 describe("sidebarInternals", () => {
@@ -47,6 +56,32 @@ describe("sidebarInternals", () => {
 });
 
 describe("Sidebar", () => {
+  it("loads Claude, Codex, and Kimi provider catalogs once on mount", async () => {
+    render(<Sidebar {...baseProps} />);
+
+    await waitFor(() => {
+      expect(getClaudeProviders).toHaveBeenCalledTimes(1);
+      expect(getCodexProviders).toHaveBeenCalledTimes(1);
+      expect(getKimiProviders).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("surfaces provider catalog load failures instead of silently clearing selection", async () => {
+    vi.mocked(getKimiProviders).mockRejectedValueOnce(
+      new Error("provider catalog unavailable"),
+    );
+
+    render(<Sidebar {...baseProps} />);
+
+    await waitFor(() => {
+      expect(pushErrorToast).toHaveBeenCalledWith({
+        title: "sidebar.providerCatalogLoadFailed",
+        message: "provider catalog unavailable",
+        durationMs: 5000,
+      });
+    });
+  });
+
   it("keeps search input hidden when search toggle is not present", () => {
     render(<Sidebar {...baseProps} />);
 
@@ -107,14 +142,15 @@ describe("Sidebar", () => {
     expect(onRequestRootSessionFolderDraft).toHaveBeenCalledWith("ws-1");
   });
 
-  it("renders the runtime notice entry in the same bottom action group as settings", () => {
+  it("keeps runtime notice dock anchored in the bottom nav without an outer bubble entry", () => {
     const { container } = render(
       <Sidebar
         {...baseProps}
+        showRuntimeNoticeMenuItem
         runtimeNoticeDockNode={
-          <button type="button" className="global-runtime-notice-dock-bubble">
-            Runtime notice
-          </button>
+          <div className="global-runtime-notice-dock-shell is-menu-anchored">
+            <span className="global-runtime-notice-dock-anchor" />
+          </div>
         }
       />,
     );
@@ -122,12 +158,39 @@ describe("Sidebar", () => {
     const bottomNav = container.querySelector(".sidebar-bottom-nav");
     expect(bottomNav).toBeTruthy();
     const settingsButton = bottomNav?.querySelector(".sidebar-primary-nav-item-bottom");
-    const runtimeNoticeButton = bottomNav?.querySelector(".global-runtime-notice-dock-bubble");
+    const runtimeNoticeBubble = bottomNav?.querySelector(".global-runtime-notice-dock-bubble");
+    const runtimeNoticeAnchor = bottomNav?.querySelector(
+      ".global-runtime-notice-dock-shell.is-menu-anchored",
+    );
     expect(settingsButton).toBeTruthy();
-    expect(runtimeNoticeButton).toBeTruthy();
-    expect(
-      settingsButton?.compareDocumentPosition(runtimeNoticeButton as Node),
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(runtimeNoticeBubble).toBeNull();
+    expect(runtimeNoticeAnchor).toBeTruthy();
+  });
+
+  it("opens runtime notice from the settings secondary menu", async () => {
+    const onOpenRuntimeNotice = vi.fn();
+    const { container } = render(
+      <Sidebar
+        {...baseProps}
+        showRuntimeNoticeMenuItem
+        onOpenRuntimeNotice={onOpenRuntimeNotice}
+      />,
+    );
+
+    const settingsToggle = container.querySelector(".sidebar-primary-nav-item-bottom");
+    expect(settingsToggle).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(settingsToggle as Element);
+    });
+
+    const dropdown = container.querySelector(".sidebar-settings-dropdown");
+    expect(dropdown).toBeTruthy();
+    const runtimeNoticeItem = within(dropdown as HTMLElement).getByRole("menuitem", {
+      name: "Runtime Notice",
+    });
+    fireEvent.click(runtimeNoticeItem);
+    expect(onOpenRuntimeNotice).toHaveBeenCalledTimes(1);
+    expect(container.querySelector(".sidebar-settings-dropdown")).toBeNull();
   });
 
   it("marks the macOS sidebar titlebar placeholder as a drag region", () => {
@@ -262,6 +325,18 @@ describe("Sidebar", () => {
     fireEvent.click(gitGraphItem);
     expect(onAppModeChange).toHaveBeenCalledWith("gitHistory");
     expect(container.querySelector(".sidebar-settings-dropdown")).toBeNull();
+  });
+
+  it("keeps Market disabled and opens Extensions as a separate mode", () => {
+    const onAppModeChange = vi.fn();
+    render(<Sidebar {...baseProps} onAppModeChange={onAppModeChange} />);
+
+    expect(
+      (screen.getByRole("button", { name: "Market" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Extensions" }));
+    expect(onAppModeChange).toHaveBeenCalledWith("extensions");
   });
 
   it("shows pinned threads even when pinned version is zero", () => {
@@ -911,7 +986,11 @@ describe("Sidebar", () => {
       fireEvent.click(screen.getByRole("button", { name: "New Session" }));
       await Promise.resolve();
     });
-    fireEvent.click(screen.getByRole("menuitem", { name: "Set alias" }));
+    const menu = screen.getByRole("menu", { name: "Workspace actions" });
+    fireEvent.click(
+      within(menu).getByRole("button", { name: "Workspace actions" }),
+    );
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Set alias" }));
 
     expect(onRenameWorkspaceAlias).toHaveBeenCalledTimes(1);
     expect(onRenameWorkspaceAlias).toHaveBeenCalledWith(workspace);
@@ -1958,7 +2037,7 @@ describe("Sidebar", () => {
         providerProfileId: "__disk__",
         providerProfile: {
           id: "__disk__",
-          name: "codex-tui/default-config",
+          name: "本地配置",
           source: "disk",
         },
       });
@@ -2044,9 +2123,14 @@ describe("Sidebar", () => {
     });
 
     await vi.waitFor(() => {
-      expect(onAddAgent).toHaveBeenCalledWith(workspace, "claude", {
-        folderId: "folder-parent",
-      });
+      expect(onAddAgent).toHaveBeenCalledWith(
+        workspace,
+        "claude",
+        expect.objectContaining({
+          folderId: "folder-parent",
+          providerProfileId: "__local_settings_json__",
+        }),
+      );
     });
     expect(assignWorkspaceSessionFolder).not.toHaveBeenCalled();
     expect(pushErrorToast).not.toHaveBeenCalledWith(
@@ -2597,7 +2681,7 @@ describe("Sidebar", () => {
         providerProfileId: "__disk__",
         providerProfile: {
           id: "__disk__",
-          name: "codex-tui/default-config",
+          name: "本地配置",
           source: "disk",
         },
       });
@@ -2704,6 +2788,18 @@ describe("Sidebar", () => {
         }}
         hydratedThreadListWorkspaceIds={new Set(["ws-1"])}
         onAddSharedAgent={onAddSharedAgent}
+        engineOptions={[
+          {
+            type: "claude",
+            displayName: "Claude Code",
+            shortName: "Claude Code",
+            installed: true,
+            version: "1.0.0",
+            error: null,
+            availabilityState: "ready",
+            availabilityLabelKey: null,
+          },
+        ]}
       />,
     );
 
@@ -2714,9 +2810,14 @@ describe("Sidebar", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("menuitem", { name: "sidebar.newSharedSession" }));
     });
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("menuitemradio", { name: "Claude Code" }),
+      );
+    });
 
     await vi.waitFor(() => {
-      expect(onAddSharedAgent).toHaveBeenCalledWith(workspace);
+      expect(onAddSharedAgent).toHaveBeenCalledWith(workspace, "claude");
     });
     expect(assignWorkspaceSessionFolder).not.toHaveBeenCalled();
     expect(pushErrorToast).not.toHaveBeenCalledWith(

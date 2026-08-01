@@ -61,6 +61,8 @@ export function useCreateSessionLoading({
           ? t("workspace.engineCodex")
           : params.engine === "gemini"
             ? t("workspace.engineGemini")
+            : params.engine === "grok"
+              ? t("workspace.engineGrok")
             : params.engine === "kimi"
               ? t("workspace.engineKimi")
             : params.engine === "opencode"

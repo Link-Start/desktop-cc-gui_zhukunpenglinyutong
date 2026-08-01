@@ -27,6 +27,8 @@ export const RELATED_THREAD_LOAD_CONCURRENCY = 2;
 export { DEFAULT_CLAUDE_CONTEXT_WINDOW } from "../../models/claudeContextWindow";
 export const GEMINI_SESSION_CACHE_TTL_MS = 60_000;
 export const GEMINI_SESSION_FETCH_TIMEOUT_MS = SIDEBAR_THREAD_LIST_TIMEOUT_MS;
+export const GROK_SESSION_CACHE_TTL_MS = 60_000;
+export const GROK_SESSION_FETCH_TIMEOUT_MS = SIDEBAR_THREAD_LIST_TIMEOUT_MS;
 export const KIMI_SESSION_CACHE_TTL_MS = 60_000;
 export const KIMI_SESSION_FETCH_TIMEOUT_MS = SIDEBAR_THREAD_LIST_TIMEOUT_MS;
 export const NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS =
@@ -65,6 +67,7 @@ export type ProjectCatalogSessionSummary = {
   workspaceId?: string | null;
   matchedWorkspaceId?: string | null;
   title: string;
+  nativeTitle?: string | null;
   updatedAt: number;
   archivedAt?: number | null;
   sizeBytes?: number;
@@ -81,6 +84,14 @@ export type ProjectCatalogSessionSummary = {
   sourceStatusReason?: string | null;
   folderId?: string | null;
   autoSession?: AutoSessionMetadata | null;
+  originKind?: string | null;
+  sourceSessionId?: string | null;
+  sourceProviderProfileId?: string | null;
+  familyId?: string | null;
+  familyRootSessionId?: string | null;
+  lineageParentSessionId?: string | null;
+  lineageKind?: string | null;
+  lineageDepth?: number | null;
 };
 
 function encodeThreadListCursorState(
@@ -213,6 +224,7 @@ export function normalizeProjectCatalogSession(
     sessionId?: unknown;
     stableSessionKey?: unknown;
     title?: unknown;
+    nativeTitle?: unknown;
     workspaceId?: unknown;
     matchedWorkspaceId?: unknown;
     updatedAt?: unknown;
@@ -231,6 +243,14 @@ export function normalizeProjectCatalogSession(
     sourceStatusReason?: unknown;
     folderId?: unknown;
     autoSession?: unknown;
+    originKind?: unknown;
+    sourceSessionId?: unknown;
+    sourceProviderProfileId?: unknown;
+    familyId?: unknown;
+    familyRootSessionId?: unknown;
+    lineageParentSessionId?: unknown;
+    lineageKind?: unknown;
+    lineageDepth?: unknown;
   };
   const sessionId = String(session.sessionId ?? "").trim();
   if (!sessionId) {
@@ -244,6 +264,7 @@ export function normalizeProjectCatalogSession(
       session.matchedWorkspaceId,
     ),
     title: String(session.title ?? "").trim(),
+    nativeTitle: normalizeOptionalCatalogString(session.nativeTitle),
     updatedAt:
       typeof session.updatedAt === "number" &&
       Number.isFinite(session.updatedAt)
@@ -279,6 +300,25 @@ export function normalizeProjectCatalogSession(
     ),
     folderId: normalizeOptionalCatalogString(session.folderId),
     autoSession: normalizeAutoSessionMetadata(session.autoSession),
+    originKind: normalizeOptionalCatalogString(session.originKind),
+    sourceSessionId: normalizeOptionalCatalogString(session.sourceSessionId),
+    sourceProviderProfileId: normalizeOptionalCatalogString(
+      session.sourceProviderProfileId,
+    ),
+    familyId: normalizeOptionalCatalogString(session.familyId),
+    familyRootSessionId: normalizeOptionalCatalogString(
+      session.familyRootSessionId,
+    ),
+    lineageParentSessionId: normalizeOptionalCatalogString(
+      session.lineageParentSessionId,
+    ),
+    lineageKind: normalizeOptionalCatalogString(session.lineageKind),
+    lineageDepth:
+      typeof session.lineageDepth === "number" &&
+      Number.isInteger(session.lineageDepth) &&
+      session.lineageDepth >= 0
+        ? session.lineageDepth
+        : null,
   };
 }
 

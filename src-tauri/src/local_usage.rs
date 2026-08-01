@@ -821,15 +821,28 @@ fn scan_codex_session_summaries(
     workspace_path: Option<&Path>,
     sessions_roots: &[PathBuf],
 ) -> Result<Vec<LocalUsageSessionSummary>, String> {
-    let mut files = Vec::new();
     let mut seen_files = HashSet::new();
-    for root in sessions_roots {
-        collect_jsonl_files(root, &mut files, &mut seen_files);
-    }
-
+    let mut native_titles_by_home = HashMap::<PathBuf, HashMap<String, String>>::new();
     let mut sessions_by_id = HashMap::<String, LocalUsageSessionSummary>::new();
-    for file in files {
-        if let Some(summary) = parse_codex_session_summary(&file, workspace_path)? {
+    for root in sessions_roots {
+        let native_titles = codex_home_for_sessions_root(root).map(|codex_home| {
+            native_titles_by_home
+                .entry(codex_home.clone())
+                .or_insert_with(|| read_codex_native_session_titles(&codex_home))
+        });
+        let mut files = Vec::new();
+        collect_jsonl_files(root, &mut files, &mut seen_files);
+        for file in files {
+            let Some(mut summary) = parse_codex_session_summary(&file, workspace_path)? else {
+                continue;
+            };
+            if let Some(native_title) = native_titles
+                .as_deref()
+                .and_then(|titles| titles.get(&summary.session_id))
+            {
+                summary.summary = Some(native_title.clone());
+                summary.native_title = Some(native_title.clone());
+            }
             if let Some(existing) = sessions_by_id.get_mut(&summary.session_id) {
                 merge_duplicate_codex_session_summary(existing, summary);
             } else {
@@ -845,6 +858,50 @@ fn scan_codex_session_summaries(
             .then_with(|| left.session_id.cmp(&right.session_id))
     });
     Ok(sessions)
+}
+
+fn codex_home_for_sessions_root(root: &Path) -> Option<PathBuf> {
+    let root_name = root.file_name().and_then(|value| value.to_str())?;
+    if !matches!(root_name, "sessions" | "archived_sessions") {
+        return None;
+    }
+    root.parent().map(Path::to_path_buf)
+}
+
+fn read_codex_native_session_titles(codex_home: &Path) -> HashMap<String, String> {
+    let Ok(file) = File::open(codex_home.join("session_index.jsonl")) else {
+        return HashMap::new();
+    };
+    let mut titles = HashMap::new();
+    for line in BufReader::new(file).lines() {
+        let Ok(line) = line else {
+            continue;
+        };
+        if line.len() > 512_000 {
+            continue;
+        }
+        let Ok(entry) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        let Some(session_id) = entry
+            .get("id")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            continue;
+        };
+        let Some(thread_name) = entry
+            .get("thread_name")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            continue;
+        };
+        titles.insert(session_id.to_string(), thread_name.to_string());
+    }
+    titles
 }
 
 fn merge_duplicate_codex_session_summary(
@@ -874,15 +931,22 @@ fn merge_duplicate_codex_session_summary(
     }
 
     let latest_timestamp = existing.timestamp.max(candidate.timestamp);
+    let preferred_native_title = existing.native_title.clone();
     let relation_was_missing = existing.parent_session_id.is_none();
     if relation_was_missing && candidate.parent_session_id.is_some() {
         existing.parent_session_id = candidate.parent_session_id.clone();
-        if candidate.summary.is_some() {
+        if preferred_native_title.is_none()
+            && candidate.native_title.is_none()
+            && candidate.summary.is_some()
+        {
             existing.summary = candidate.summary.clone();
         }
     }
-    if existing.summary.is_none() {
+    if existing.summary.is_none() && candidate.native_title.is_none() {
         existing.summary = candidate.summary.clone();
+    }
+    if let Some(native_title) = preferred_native_title {
+        existing.summary = Some(native_title);
     }
     if existing.cwd.is_none() {
         existing.cwd = candidate.cwd.clone();
@@ -1013,7 +1077,9 @@ fn parse_codex_session_summary(
                         saw_session_signal = true;
                         if response_item_user_summary.is_none() {
                             if let Some(message) = extract_codex_message_text(payload) {
-                                response_item_user_summary = truncate_summary(&message);
+                                if is_codex_session_title_candidate(&message) {
+                                    response_item_user_summary = truncate_summary(&message);
+                                }
                             }
                         }
                     }
@@ -1122,7 +1188,9 @@ fn parse_codex_session_summary(
                 if matches!(payload_type, "user_message" | "userMessage") {
                     saw_session_signal = true;
                     if let Some(message) = payload.get("message").and_then(|value| value.as_str()) {
-                        summary = truncate_summary(message);
+                        if is_codex_session_title_candidate(message) {
+                            summary = truncate_summary(message);
+                        }
                     }
                 }
             }
@@ -1294,6 +1362,7 @@ fn parse_codex_session_summary(
         usage,
         cost,
         summary,
+        native_title: None,
         source,
         provider,
         provider_profile_id,
@@ -1740,6 +1809,24 @@ fn truncate_summary(text: &str) -> Option<String> {
     Some(truncated)
 }
 
+fn is_codex_session_title_candidate(text: &str) -> bool {
+    let trimmed = text.trim_start();
+    if trimmed.is_empty() {
+        return false;
+    }
+    let lowered = trimmed.to_ascii_lowercase();
+    if lowered.starts_with("# agents.md instructions for ") && trimmed.contains("<INSTRUCTIONS>") {
+        return false;
+    }
+    if lowered.starts_with("<session-context>")
+        || lowered.starts_with("<environment_context>")
+        || lowered.starts_with("omx native sessionstart detected.")
+    {
+        return false;
+    }
+    true
+}
+
 fn extract_codex_message_text(payload: &serde_json::Map<String, Value>) -> Option<String> {
     if let Some(text) = payload.get("content").and_then(Value::as_str) {
         let trimmed = text.trim();
@@ -1945,6 +2032,7 @@ fn parse_claude_session_summary(path: &Path) -> Result<Option<LocalUsageSessionS
         usage,
         cost: total_cost,
         summary,
+        native_title: None,
         source: Some("claude".to_string()),
         provider: Some("anthropic".to_string()),
         provider_profile_id: None,

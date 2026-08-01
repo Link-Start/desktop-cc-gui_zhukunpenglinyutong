@@ -1,6 +1,5 @@
 import about from "./about";
 import activityPanel from "./activityPanel";
-import agentOrchestration from "./agentOrchestration";
 import app from "./app";
 import approval from "./approval";
 import askUserQuestion from "./askUserQuestion";
@@ -33,6 +32,7 @@ import panels from "./panels";
 import plan from "./plan";
 import projectMap from "./projectMap";
 import promptEnhancer from "./promptEnhancer";
+import promptDistill from "./promptDistill";
 import prompts from "./prompts";
 import providers from "./providers";
 import reasoning from "./reasoning";
@@ -40,6 +40,8 @@ import rewind from "./rewind";
 import runtimeNotice from "./runtimeNotice";
 import searchPalette from "./searchPalette";
 import settings from "./settings";
+import sharedSend from "./sharedSend";
+import shortcutsGuide from "./shortcutsGuide";
 import sidebar from "./sidebar";
 import specHub from "./specHub";
 import statusPanel from "./statusPanel";
@@ -57,7 +59,6 @@ import workspace from "./workspace";
 const en = {
   ...about,
   ...activityPanel,
-  ...agentOrchestration,
   ...app,
   ...approval,
   ...askUserQuestion,
@@ -90,6 +91,7 @@ const en = {
   ...plan,
   ...projectMap,
   ...promptEnhancer,
+  ...promptDistill,
   ...prompts,
   ...providers,
   ...reasoning,
@@ -97,6 +99,8 @@ const en = {
   ...runtimeNotice,
   ...searchPalette,
   ...settings,
+  ...sharedSend,
+  ...shortcutsGuide,
   ...sidebar,
   ...specHub,
   ...statusPanel,

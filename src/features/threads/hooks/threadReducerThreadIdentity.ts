@@ -91,6 +91,15 @@ export function renameThreadStateIdentity({
       dedupedById.set(thread.id, {
         ...current,
         ...thread,
+        sourceLabel: thread.sourceLabel ?? current.sourceLabel,
+        providerProfileId:
+          thread.providerProfileId ?? current.providerProfileId,
+        providerProfileSource:
+          thread.providerProfileSource ?? current.providerProfileSource,
+        providerProfileName:
+          thread.providerProfileName ?? current.providerProfileName,
+        providerAvailability:
+          thread.providerAvailability ?? current.providerAvailability,
         updatedAt: Math.max(current.updatedAt, thread.updatedAt),
         nativeThreadIds: nativeThreadIds.length > 0 ? nativeThreadIds : undefined,
       });
@@ -218,6 +227,7 @@ export function renameThreadStateIdentity({
 
   const newUserInputRequests = state.userInputRequests.map((request) => {
     if (
+      request.shared_runtime_owner ||
       request.workspace_id !== workspaceId ||
       request.params.thread_id !== oldThreadId
     ) {

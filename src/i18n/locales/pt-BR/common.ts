@@ -25,6 +25,7 @@ const common = {
     "curatedLoading": "Carregando skills selecionadas…",
     "curatedError": "Não foi possível carregar as skills selecionadas.",
     "curatedSubtitle": "Empacotadas no cliente, com versão fixada, distribuídas com o cliente desktop. Sem rede.",
+    "curatedDetailHint": "Quando ativada, a skill selecionada é injetada automaticamente no prompt do sistema a cada conversa, influenciando continuamente o tom e o comportamento da IA sem necessidade de invocação manual. Quando desativada, não é injetada. Isso difere das skills instaladas pelo usuário em Extensões → Skills, que só funcionam quando chamadas explicitamente ou combinadas com sua descrição.",
     "curatedBundledBadge": "Integrada",
     "curatedCategoryCodeStyle": "Estilo de código",
     "curatedCategoryUiDesign": "Design de UI",
@@ -61,6 +62,9 @@ const common = {
     "showInHeader": "Mostrar na barra de ferramentas",
     "markdownMermaidFullscreen": "Tela cheia",
     "markdownMermaidFullscreenHint": "Abrir diagrama em tela cheia",
+    "markdownMermaidDownloadPng": "Baixar PNG",
+    "markdownMermaidDownloadingPng": "Baixando PNG…",
+    "markdownMermaidDownloadFailed": "Falha ao baixar o PNG.",
     "markdownImageFullscreen": "Tela cheia",
     "markdownImageFullscreenHint": "Abrir imagem em tela cheia"
   }

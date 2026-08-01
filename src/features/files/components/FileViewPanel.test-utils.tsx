@@ -1,9 +1,15 @@
 import { vi } from "vitest";
 
 export const mockCodeMirrorDispatch = vi.fn();
+export const mockCodeMirrorScrollDOM = { scrollTop: 0 };
 export const mockCodeMirrorExtensionsSnapshots: unknown[] = [];
 export const mockCodeMirrorExtensionTokenSnapshots: string[][] = [];
 export const mockOpenNewDetachedFileExplorerWindow = vi.fn(async () => "created" as const);
+export const mockPushErrorToast = vi.fn();
+
+vi.mock("../../../services/toasts", () => ({
+  pushErrorToast: mockPushErrorToast,
+}));
 
 function createDoc(text: string) {
   const lines = text.split("\n");
@@ -40,6 +46,7 @@ function createDoc(text: string) {
     line: lineFor,
     lineAt,
     sliceString: (from: number, to: number) => text.slice(from, to),
+    toString: () => text,
   };
 }
 
@@ -59,10 +66,20 @@ vi.mock("@uiw/react-codemirror", async () => {
     const [localValue, setLocalValue] = React.useState(props.value ?? "");
     const onCreateEditorRef = React.useRef(props.onCreateEditor);
     onCreateEditorRef.current = props.onCreateEditor;
+    const initialSelection = { from: 0, to: 0, head: 0, empty: true };
     const viewRef = React.useRef<any>({
       state: {
         doc: createDoc(props.value ?? ""),
-        selection: { main: { from: 0, to: 0, head: 0, empty: true } },
+        selection: { main: initialSelection, ranges: [initialSelection] },
+        lineBreak: "\n",
+        sliceDoc: (from: number, to: number) => viewRef.current.state.doc.sliceString(from, to),
+        replaceSelection: (insert: string) => ({
+          changes: {
+            from: viewRef.current.state.selection.main.from,
+            to: viewRef.current.state.selection.main.to,
+            insert,
+          },
+        }),
         field: () => null,
       },
       dispatch: mockCodeMirrorDispatch.mockImplementation((transaction: any) => {
@@ -71,6 +88,7 @@ vi.mock("@uiw/react-codemirror", async () => {
           viewRef.current.state.selection.main.head = anchor;
         }
       }),
+      scrollDOM: mockCodeMirrorScrollDOM,
       focus: vi.fn(),
       posAtCoords: vi.fn(() => 0),
     });
@@ -93,30 +111,35 @@ vi.mock("@uiw/react-codemirror", async () => {
     React.useImperativeHandle(ref, () => ({ view: viewRef.current }), []);
 
     return (
-      <textarea
-        data-testid="mock-codemirror"
-        data-editor-theme={props.theme ?? ""}
-        value={localValue}
-        onChange={(event) => {
-          const nextValue = event.target.value;
-          setLocalValue(nextValue);
-          viewRef.current.state.doc = createDoc(nextValue);
-          props.onChange?.(nextValue);
-        }}
-        onSelect={(event) => {
-          const target = event.currentTarget;
-          viewRef.current.state.selection.main = {
-            from: target.selectionStart,
-            to: target.selectionEnd,
-            head: target.selectionEnd,
-            empty: target.selectionStart === target.selectionEnd,
-          };
-          props.onUpdate?.({
-            selectionSet: true,
-            state: viewRef.current.state,
-          });
-        }}
-      />
+      <div className="cm-editor">
+        <textarea
+          className="cm-content"
+          data-testid="mock-codemirror"
+          data-editor-theme={props.theme ?? ""}
+          value={localValue}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            setLocalValue(nextValue);
+            viewRef.current.state.doc = createDoc(nextValue);
+            props.onChange?.(nextValue);
+          }}
+          onSelect={(event) => {
+            const target = event.currentTarget;
+            const selection = {
+              from: target.selectionStart,
+              to: target.selectionEnd,
+              head: target.selectionEnd,
+              empty: target.selectionStart === target.selectionEnd,
+            };
+            viewRef.current.state.selection.main = selection;
+            viewRef.current.state.selection.ranges = [selection];
+            props.onUpdate?.({
+              selectionSet: true,
+              state: viewRef.current.state,
+            });
+          }}
+        />
+      </div>
     );
   });
 
@@ -167,64 +190,67 @@ vi.mock("./FileDocumentPreview", () => ({
 }));
 
 vi.mock("../hooks/useFilePreviewPayload", () => ({
-  useFilePreviewPayload: vi.fn((args: { enabled: boolean; renderProfile: { extension: string | null } }) => {
-    if (!args.enabled) {
-      return {
-        payload: null,
-        isLoading: false,
-        error: null,
-      };
-    }
-    const extension = args.renderProfile.extension;
-    if (extension === "pdf") {
+  useFilePreviewPayload: vi.fn(
+    (args: { enabled: boolean; renderProfile: { extension: string | null } }) => {
+      if (!args.enabled) {
+        return {
+          payload: null,
+          isLoading: false,
+          error: null,
+        };
+      }
+      const extension = args.renderProfile.extension;
+      if (extension === "pdf") {
+        return {
+          payload: {
+            kind: "file-handle",
+            sourceKind: "file-handle",
+            absolutePath: "/repo/docs/report.pdf",
+            assetUrl: "asset://localhost/repo/docs/report.pdf",
+            extension,
+            byteLength: 4096,
+          },
+          isLoading: false,
+          error: null,
+        };
+      }
+      if (extension === "docx" || extension === "doc") {
+        return {
+          payload:
+            extension === "doc"
+              ? {
+                  kind: "unsupported",
+                  sourceKind: "file-handle",
+                  reason: "legacy-doc",
+                }
+              : {
+                  kind: "extracted-structure",
+                  sourceKind: "extracted-structure",
+                  absolutePath: "/repo/docs/report.docx",
+                  assetUrl: "asset://localhost/repo/docs/report.docx",
+                  extension,
+                  byteLength: 2048,
+                  html: "<p>Converted document</p>",
+                  warnings: [],
+                },
+          isLoading: false,
+          error: null,
+        };
+      }
       return {
         payload: {
-          kind: "file-handle",
-          sourceKind: "file-handle",
-          absolutePath: "/repo/docs/report.pdf",
-          assetUrl: "asset://localhost/repo/docs/report.pdf",
+          kind: "inline-bytes",
+          sourceKind: "inline-bytes",
+          text: "name,value\nalpha,1",
           extension,
-          byteLength: 4096,
+          byteLength: 18,
+          truncated: false,
         },
         isLoading: false,
         error: null,
       };
-    }
-    if (extension === "docx" || extension === "doc") {
-      return {
-        payload: extension === "doc"
-          ? {
-              kind: "unsupported",
-              sourceKind: "file-handle",
-              reason: "legacy-doc",
-            }
-          : {
-              kind: "extracted-structure",
-              sourceKind: "extracted-structure",
-              absolutePath: "/repo/docs/report.docx",
-              assetUrl: "asset://localhost/repo/docs/report.docx",
-              extension,
-              byteLength: 2048,
-              html: "<p>Converted document</p>",
-              warnings: [],
-            },
-        isLoading: false,
-        error: null,
-      };
-    }
-    return {
-      payload: {
-        kind: "inline-bytes",
-        sourceKind: "inline-bytes",
-        text: "name,value\nalpha,1",
-        extension,
-        byteLength: 18,
-        truncated: false,
-      },
-      isLoading: false,
-      error: null,
-    };
-  }),
+    },
+  ),
 }));
 
 vi.mock("../../../components/FileIcon", () => ({
@@ -233,16 +259,31 @@ vi.mock("../../../components/FileIcon", () => ({
 
 vi.mock("../../../services/tauri", () => ({
   readWorkspaceFile: vi.fn(),
-  readWorkspaceFilePreview: vi.fn(async () => ({ content: "", truncated: false })),
+  readWorkspaceFilePreview: vi.fn(async () => ({
+    content: "",
+    truncated: false,
+  })),
   readExternalSpecFile: vi.fn(),
   readExternalAbsoluteFile: vi.fn(),
   readLocalImageDataUrl: vi.fn(),
   writeWorkspaceFile: vi.fn(),
   writeExternalSpecFile: vi.fn(),
-  getGitFileFullDiff: vi.fn(),
-  getGitFileBlame: vi.fn(),
+  getGitFileFullDiff: vi.fn(async () => ""),
+  getGitFileBlame: vi.fn(async () => ({
+    path: "",
+    headSha: "",
+    lineCount: 0,
+    hunks: [],
+  })),
   getCodeIntelDefinition: vi.fn(),
+  getCodeIntelImplementations: vi.fn(),
   getCodeIntelReferences: vi.fn(),
+  prepareCodeIntel: vi.fn(async () => ({
+    language: "TypeScript",
+    provider: "typescript-language-server",
+    lifecycle: "ready",
+    fallbackReasonCode: null,
+  })),
 }));
 
 vi.mock("../detachedFileExplorer", () => {

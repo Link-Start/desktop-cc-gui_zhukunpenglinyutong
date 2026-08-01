@@ -8,10 +8,10 @@ import ShieldCheck from "lucide-react/dist/esm/icons/shield-check";
 import TriangleAlert from "lucide-react/dist/esm/icons/triangle-alert";
 import GitCommitHorizontal from "lucide-react/dist/esm/icons/git-commit-horizontal";
 import type { TFunction } from "i18next";
+import { FileIcon } from "../../../components/FileIcon";
 import { WorkspaceEditableDiffReviewSurface } from "../../git/components/WorkspaceEditableDiffReviewSurface";
 import type { EditableDiffDraftActions } from "../../git/components/WorkspaceEditableDiffCompare";
 import type { CodeAnnotationBridgeProps } from "../../code-annotations/types";
-import { FileIcon } from "../../messages/components/toolBlocks/FileIcon";
 import { resolveWorkspaceRelativePath } from "../../../utils/workspacePaths";
 import { UnsavedChangesDialog } from "../../../components/ui/UnsavedChangesDialog";
 import type { GitFileStatus } from "../../../types";
@@ -46,7 +46,7 @@ interface CheckpointPanelProps extends CodeAnnotationBridgeProps {
   onCommitMessageChange?: (value: string) => void;
   onGenerateCommitMessage?: (
     language?: "zh" | "en",
-    engine?: "codex" | "claude" | "gemini" | "kimi" | "opencode",
+    engine?: "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode",
     selectedPaths?: string[],
   ) => void | Promise<void>;
   onCommit?: (selectedPaths?: string[]) => void | Promise<void>;

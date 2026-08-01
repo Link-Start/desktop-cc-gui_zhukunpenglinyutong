@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConversationItem } from "../../../types";
 import type { ConversationState } from "../../threads/contracts/conversationCurtainContracts";
-import { CODEX_FINALIZING_LIVE_WINDOW_MS } from "./messagesConstants";
+import { CODEX_FINALIZING_LIVE_WINDOW_MS } from "../constants/messagesConstants";
 import { Messages } from "./Messages";
 
 vi.mock("./Markdown", () => ({

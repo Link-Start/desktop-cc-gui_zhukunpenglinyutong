@@ -6,8 +6,8 @@ import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import LayoutDashboard from "lucide-react/dist/esm/icons/layout-dashboard";
 import LayoutGrid from "lucide-react/dist/esm/icons/layout-grid";
 import MessageSquareMore from "lucide-react/dist/esm/icons/message-square-more";
-import Puzzle from "lucide-react/dist/esm/icons/puzzle";
 import Settings from "lucide-react/dist/esm/icons/settings";
+import Store from "lucide-react/dist/esm/icons/store";
 import SquareTerminal from "lucide-react/dist/esm/icons/square-terminal";
 import { useTranslation } from "react-i18next";
 import type { AppMode } from "../../../types";
@@ -113,7 +113,7 @@ export function SidebarMarketLinks({
           data-tauri-drag-region="false"
         >
           <span className="sidebar-market-rail-icon-shell" aria-hidden>
-            <Puzzle className="sidebar-market-rail-icon" />
+            <Store className="sidebar-market-rail-icon" />
           </span>
           <span className="sidebar-market-rail-text">{t("sidebar.pluginMarket")}</span>
         </button>

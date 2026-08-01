@@ -18,6 +18,7 @@ vi.mock("react-i18next", () => ({
         "sidebar.showThreadsSidebar": "Show threads sidebar",
         "sidebar.hideThreadsSidebar": "Hide threads sidebar",
         "sidebar.quickSearch": "Search",
+        "quickSwitcher.open": "Recent activity",
       };
       return translations[key] ?? key;
     },
@@ -34,6 +35,7 @@ vi.mock("../../../utils/platform", () => ({
 
 import {
   GlobalSearchTitlebarButton,
+  QuickSwitcherTitlebarButton,
   SidebarCollapseButton,
   TitlebarExpandControls,
   type SidebarToggleProps,
@@ -131,6 +133,28 @@ describe("GlobalSearchTitlebarButton", () => {
     );
 
     const button = screen.getByRole("button", { name: "Search (⌘O)" });
+    expect(button.textContent).toBe("");
+    expect(container.querySelector("svg")).toBeTruthy();
+
+    fireEvent.click(button);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("QuickSwitcherTitlebarButton", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("renders an icon-only recent activity button and invokes onOpen", () => {
+    const onOpen = vi.fn();
+    const { container } = render(
+      <QuickSwitcherTitlebarButton onOpen={onOpen} shortcutLabel="⌘E" />,
+    );
+
+    const button = screen.getByRole("button", {
+      name: "Recent activity (⌘E)",
+    });
     expect(button.textContent).toBe("");
     expect(container.querySelector("svg")).toBeTruthy();
 

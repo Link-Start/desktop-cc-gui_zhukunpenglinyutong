@@ -8,12 +8,20 @@ export interface CodexRuntimeReloadResult {
   message?: string | null;
 }
 
+export interface SettingsRecoveryNotice {
+  backupFileName: string | null;
+}
+
 export async function getCodexConfigPath(): Promise<string> {
   return invoke<string>("get_codex_config_path");
 }
 
 export async function getAppSettings(): Promise<AppSettings> {
   return invoke<AppSettings>("get_app_settings");
+}
+
+export async function takeSettingsRecoveryNotice(): Promise<SettingsRecoveryNotice | null> {
+  return invoke<SettingsRecoveryNotice | null>("take_settings_recovery_notice");
 }
 
 export async function updateAppSettings(settings: AppSettings): Promise<AppSettings> {

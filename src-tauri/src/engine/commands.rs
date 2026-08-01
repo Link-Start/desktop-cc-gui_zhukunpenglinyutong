@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use tokio::time::timeout;
@@ -28,12 +28,13 @@ use crate::types::WorkspaceEntry;
 
 use super::codex_prompt_service::{normalize_custom_spec_root, run_codex_prompt_sync};
 use super::events::{engine_event_to_app_server_event_with_turn_context, EngineEvent};
+use super::grok::resolve_grok_session_id_for_engine_send;
 use super::kimi::resolve_kimi_session_id_for_engine_send;
 use super::remote_bridge::{
     call_remote_typed, remote_detect_engines_request, remote_engine_interrupt_request,
     remote_engine_send_message_sync_request,
 };
-use super::status::{detect_kimi_status, load_opencode_models};
+use super::status::{detect_grok_status, detect_kimi_status, load_opencode_models};
 use super::{
     engine_disabled_diagnostic, engine_enabled_in_settings, EngineConfig, EngineStatus, EngineType,
 };
@@ -122,9 +123,6 @@ pub use commands_opencode::*;
 use opencode_helpers::*;
 use parse_helpers::*;
 
-/// Maximum lifetime for an event forwarder task. Prevents orphaned tasks from
-/// leaking memory when the underlying process hangs or is killed externally.
-const EVENT_FORWARDER_TIMEOUT_SECS: u64 = 30 * 60;
 /// Gemini may emit fallback reasoning shortly after turn/completed.
 /// Keep the forwarder alive briefly so realtime reasoning is not dropped.
 const GEMINI_POST_COMPLETION_REASONING_GRACE_MS: u64 = 8_000;
@@ -134,6 +132,42 @@ fn unix_timestamp_ms_for_diagnostics() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis() as u64)
         .unwrap_or(0)
+}
+
+fn has_non_empty_images(images: &Option<Vec<String>>) -> bool {
+    images
+        .as_ref()
+        .is_some_and(|entries| entries.iter().any(|entry| !entry.trim().is_empty()))
+}
+
+fn features_for_engine(engine: EngineType) -> super::EngineFeatures {
+    match engine {
+        EngineType::Claude => super::EngineFeatures::claude(),
+        EngineType::Codex => super::EngineFeatures::codex(),
+        EngineType::Gemini => super::EngineFeatures::gemini(),
+        EngineType::Grok => super::EngineFeatures::grok(),
+        EngineType::OpenCode => super::EngineFeatures::opencode(),
+        EngineType::Kimi => super::EngineFeatures::kimi(),
+    }
+}
+
+/// Reject non-empty image payloads when `EngineFeatures.image_input = false`.
+/// Current engines all report `image_input = true`; this remains as a guard for
+/// future unsupported engines.
+pub(crate) fn require_image_support(
+    engine: EngineType,
+    images: &Option<Vec<String>>,
+) -> Result<(), String> {
+    if features_for_engine(engine).image_input {
+        return Ok(());
+    }
+    if has_non_empty_images(images) {
+        return Err(format!(
+            "{} does not support image input in this release",
+            engine.display_name()
+        ));
+    }
+    Ok(())
 }
 
 fn build_engine_active_process_diagnostics(
@@ -180,7 +214,9 @@ fn collect_stale_child_candidates(
             }
             let progress_evidence = match workspace.engine {
                 EngineType::Claude => "timing-only",
-                EngineType::OpenCode | EngineType::Gemini | EngineType::Kimi => "unsupported",
+                EngineType::OpenCode | EngineType::Gemini | EngineType::Grok | EngineType::Kimi => {
+                    "unsupported"
+                }
                 // Codex is intentionally not part of this child-process parity
                 // path (it has its own wrapper runtime).
                 EngineType::Codex => "unsupported",
@@ -205,6 +241,7 @@ fn engine_type_label(engine: EngineType) -> &'static str {
         EngineType::OpenCode => "opencode",
         EngineType::Gemini => "gemini",
         EngineType::Codex => "codex",
+        EngineType::Grok => "grok",
         EngineType::Kimi => "kimi",
     }
 }
@@ -570,7 +607,7 @@ fn extract_turn_result_text_internal(value: &Value, depth: usize) -> Option<Stri
     None
 }
 
-fn extract_turn_result_text(result: Option<&Value>) -> Option<String> {
+pub(crate) fn extract_turn_result_text(result: Option<&Value>) -> Option<String> {
     result.and_then(|value| extract_turn_result_text_internal(value, 0))
 }
 
@@ -609,7 +646,7 @@ fn is_likely_legacy_claude_model_id(model: &str) -> bool {
     model.trim().to_ascii_lowercase().starts_with("claude-")
 }
 
-fn is_valid_claude_model_for_passthrough(model: &str) -> bool {
+pub(crate) fn is_valid_claude_model_for_passthrough(model: &str) -> bool {
     let trimmed = model.trim();
     if trimmed.is_empty() || trimmed.len() > 128 {
         return false;
@@ -1096,7 +1133,7 @@ pub async fn detect_engines(
     let manager = &state.engine_manager;
     let settings = read_app_settings_snapshot(&state).await;
     Ok(manager
-        .detect_engines_with_gates(settings.gemini_enabled, settings.opencode_enabled)
+        .detect_engines_with_gates(settings.gemini_enabled)
         .await)
 }
 
@@ -1324,6 +1361,29 @@ pub async fn get_engine_active_process_diagnostics(
             registered_active_processes,
         });
     }
+    for (workspace_id, session) in state.engine_manager.list_grok_sessions().await {
+        let active_process_snapshots = session.active_process_snapshots(sampled_at_ms).await;
+        let active_process_ids = active_process_snapshots
+            .iter()
+            .map(|process| process.pid)
+            .collect::<Vec<_>>();
+        if active_process_ids.is_empty() {
+            continue;
+        }
+        let registered_active_processes = active_process_snapshots
+            .into_iter()
+            .map(|process| RegisteredEngineActiveProcessDiagnostic {
+                pid: process.pid,
+                registered_age_ms: process.registered_age_ms,
+            })
+            .collect();
+        workspaces.push(EngineWorkspaceActiveProcessDiagnostics {
+            workspace_id,
+            engine: EngineType::Grok,
+            active_process_ids,
+            registered_active_processes,
+        });
+    }
     let stale_child_candidates = collect_stale_child_candidates(&workspaces, sampled_at_ms);
     Ok(build_engine_active_process_diagnostics(
         sampled_at_ms,
@@ -1336,6 +1396,7 @@ pub async fn get_engine_active_process_diagnostics(
 #[tauri::command]
 pub async fn get_engine_models(
     engine_type: EngineType,
+    provider_profile_id: Option<String>,
     force_refresh: Option<bool>,
     state: State<'_, AppState>,
     app: AppHandle,
@@ -1349,9 +1410,19 @@ pub async fn get_engine_models(
             &*state,
             &app,
             "get_engine_models",
-            json!({ "engineType": engine_type, "forceRefresh": force_refresh }),
+            json!({
+                "engineType": engine_type,
+                "providerProfileId": provider_profile_id,
+                "forceRefresh": force_refresh
+            }),
         )
         .await;
+    }
+    if let Some(models) = crate::engine::status::get_provider_scoped_engine_models(
+        engine_type,
+        provider_profile_id.as_deref(),
+    )? {
+        return Ok(models);
     }
     let manager = &state.engine_manager;
 
@@ -1397,14 +1468,30 @@ pub async fn get_engine_models(
 
             Ok(fresh_status.models)
         }
+        EngineType::Grok => {
+            let config = manager.get_engine_config(EngineType::Grok).await;
+            let custom_bin = config
+                .as_ref()
+                .and_then(|cfg| cfg.bin_path.as_ref())
+                .map(|s| s.as_str());
+            let fresh_status = detect_grok_status(custom_bin).await;
+
+            if !fresh_status.models.is_empty() {
+                return Ok(fresh_status.models);
+            }
+
+            if let Some(cached) = manager.get_engine_status(EngineType::Grok).await {
+                if !cached.models.is_empty() {
+                    return Ok(cached.models);
+                }
+            }
+
+            Ok(fresh_status.models)
+        }
         EngineType::Claude | EngineType::Codex => {
             if force_refresh {
                 let status = manager
-                    .refresh_engine_status_with_gates(
-                        engine_type,
-                        settings.gemini_enabled,
-                        settings.opencode_enabled,
-                    )
+                    .refresh_engine_status_with_gates(engine_type, settings.gemini_enabled)
                     .await;
                 return Ok(status.models);
             }
@@ -1416,14 +1503,104 @@ pub async fn get_engine_models(
             }
 
             let status = manager
-                .refresh_engine_status_with_gates(
-                    engine_type,
-                    settings.gemini_enabled,
-                    settings.opencode_enabled,
-                )
+                .refresh_engine_status_with_gates(engine_type, settings.gemini_enabled)
                 .await;
             Ok(status.models)
         }
+    }
+}
+
+fn build_claude_dispatch_receipt(
+    workspace_id: &str,
+    effective_provider_profile_id: Option<&str>,
+    model: Option<&str>,
+    reasoning_effort: Option<&str>,
+) -> Value {
+    let provider_profile_id = effective_provider_profile_id.filter(|profile_id| {
+        *profile_id != crate::engine::claude::CLAUDE_LOCAL_PROVIDER_PROFILE_ID
+    });
+    json!({
+        "engine": "claude",
+        "providerProfileId": provider_profile_id,
+        "providerProfileSource": if provider_profile_id.is_some() { "managed" } else { "local" },
+        "providerRuntimeKey": crate::engine::claude::provider_profile::claude_runtime_key(
+            workspace_id,
+            effective_provider_profile_id,
+        ),
+        "model": model,
+        "reasoningEffort": reasoning_effort,
+    })
+}
+
+fn build_provider_engine_dispatch_receipt(
+    engine: EngineType,
+    provider_profile_id: Option<&str>,
+    provider_runtime_key: &str,
+    model: Option<&str>,
+    reasoning_effort: Option<&str>,
+) -> Value {
+    let canonical_provider_profile_id = provider_profile_id.filter(|profile_id| {
+        !matches!(
+            (engine, *profile_id),
+            (
+                EngineType::Kimi,
+                super::kimi_provider_profile::KIMI_LOCAL_PROVIDER_PROFILE_ID
+            ) | (
+                EngineType::Grok,
+                super::grok_provider_profile::GROK_LOCAL_PROVIDER_PROFILE_ID
+            ) | (
+                EngineType::OpenCode,
+                super::opencode_provider_profile::OPENCODE_LOCAL_PROVIDER_PROFILE_ID
+            )
+        )
+    });
+    json!({
+        "engine": engine.icon(),
+        "providerProfileId": canonical_provider_profile_id,
+        "providerProfileSource": if canonical_provider_profile_id.is_some() { "managed" } else { "local" },
+        "providerRuntimeKey": provider_runtime_key,
+        "model": model,
+        "reasoningEffort": reasoning_effort,
+    })
+}
+
+fn fan_out_provider_engine_event(
+    app: &AppHandle,
+    provider_runtime_key: &str,
+    engine: EngineType,
+    runtime_turn_id: &str,
+    native_session_id: Option<&str>,
+    event: &EngineEvent,
+    app_server_events: Vec<AppServerEvent>,
+) {
+    let shared_observation = app
+        .try_state::<AppState>()
+        .map(|app_state| {
+            let observation = app_state
+                .shared_runtime_coordinator
+                .ingest_engine_event_with_replay_scoped(
+                    provider_runtime_key,
+                    engine,
+                    Some(runtime_turn_id),
+                    native_session_id,
+                    event,
+                    app_server_events.clone(),
+                );
+            crate::event_sink::publish_shared_runtime_observation(&app_state, &observation);
+            observation
+        })
+        .unwrap_or_default();
+    if shared_observation.ui_fanout_deferred {
+        return;
+    }
+    for mut payload in app_server_events {
+        if let Some(owner) = shared_observation.owner.as_ref() {
+            crate::shared_runtime_coordinator::project_app_server_event_to_shared_owner(
+                &mut payload,
+                owner,
+            );
+        }
+        let _ = app.emit("app-server-event", payload);
     }
 }
 
@@ -1446,12 +1623,25 @@ pub async fn engine_send_message(
     fork_session_id: Option<String>,
     agent: Option<String>,
     variant: Option<String>,
+    provider_profile_id: Option<String>,
     custom_spec_root: Option<String>,
     auto_session: Option<AutoSessionMetadata>,
+    skill_invocations: Option<Vec<crate::types::SkillInvocation>>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
     let requested_engine = engine;
+    if let Some(invocations) = skill_invocations.as_ref().filter(|list| !list.is_empty()) {
+        // 契约通道已落地：接收并记录，引擎侧消费属后续协议演进。
+        log::debug!(
+            "[engine_send_message] skill_invocations received: count={} names={:?}",
+            invocations.len(),
+            invocations
+                .iter()
+                .map(|invocation| invocation.name.as_str())
+                .collect::<Vec<_>>()
+        );
+    }
     let settings = read_app_settings_snapshot(&state).await;
 
     if remote_backend::is_remote_mode(&*state).await {
@@ -1481,8 +1671,10 @@ pub async fn engine_send_message(
                 "forkSessionId": fork_session_id,
                 "agent": agent,
                 "variant": variant,
+                "providerProfileId": provider_profile_id,
                 "customSpecRoot": custom_spec_root,
                 "autoSession": auto_session,
+                "skillInvocations": skill_invocations,
             }),
         )
         .await;
@@ -1492,8 +1684,10 @@ pub async fn engine_send_message(
     let active_engine = manager.get_active_engine().await;
     let effective_engine =
         resolve_enabled_engine_for_send(&settings, requested_engine, active_engine)?;
+    // Capability gate follows EngineFeatures; all current engines allow images.
+    require_image_support(effective_engine, &images)?;
     log::info!(
-        "[engine_send_message] engine={:?} active_engine={:?} workspace_id={} model={:?} continue_session={} thread_id={:?} session_id={:?} fork_session_id={:?} agent={:?} variant={:?}",
+        "[engine_send_message] engine={:?} active_engine={:?} workspace_id={} model={:?} continue_session={} thread_id={:?} session_id={:?} fork_session_id={:?} agent={:?} variant={:?} provider_profile_id={:?}",
         effective_engine,
         active_engine,
         workspace_id,
@@ -1503,7 +1697,8 @@ pub async fn engine_send_message(
         session_id,
         fork_session_id,
         agent,
-        variant
+        variant,
+        provider_profile_id
     );
     if let Some(explicit_engine) = requested_engine {
         if explicit_engine != active_engine {
@@ -1525,6 +1720,22 @@ pub async fn engine_send_message(
                     .cloned()
                     .ok_or_else(|| "Workspace not found".to_string())?
             };
+            let provider_binding_lookup_session_id = session_id
+                .as_deref()
+                .or(thread_id.as_deref())
+                .map(str::to_string);
+            let effective_provider_profile_id =
+                crate::session_management::resolve_engine_provider_profile_id(
+                    state.storage_path.as_path(),
+                    &workspace_id,
+                    provider_binding_lookup_session_id.as_deref(),
+                    "claude",
+                    provider_profile_id.as_deref(),
+                )?;
+            let provider_launch_profile =
+                crate::engine::claude::resolve_claude_provider_launch_profile(
+                    effective_provider_profile_id.as_deref(),
+                )?;
             let workspace_path = std::path::PathBuf::from(&workspace_entry.path);
             state
                 .runtime_manager
@@ -1532,7 +1743,11 @@ pub async fn engine_send_message(
                 .await;
 
             let session = manager
-                .get_claude_session(&workspace_id, &workspace_path)
+                .get_claude_session_for_provider(
+                    &workspace_id,
+                    &workspace_path,
+                    effective_provider_profile_id.as_deref(),
+                )
                 .await;
 
             let has_images = images
@@ -1581,6 +1796,12 @@ pub async fn engine_send_message(
                     model
                 );
             }
+            let dispatch_receipt = build_claude_dispatch_receipt(
+                &workspace_id,
+                effective_provider_profile_id.as_deref(),
+                sanitized_model.as_deref(),
+                effort.as_deref(),
+            );
             let model_resolution = json!({
                 "requestedModel": model.as_deref(),
                 "runtimeModel": sanitized_model.as_deref(),
@@ -1595,6 +1816,23 @@ pub async fn engine_send_message(
             });
 
             let response_session_id = resolved_session_id.clone();
+            if let Some(provider_launch_profile) = provider_launch_profile.as_ref() {
+                let binding_session_id = response_session_id
+                    .as_deref()
+                    .or(provider_binding_lookup_session_id.as_deref())
+                    .ok_or_else(|| {
+                        "Claude provider binding requires a session identity".to_string()
+                    })?;
+                crate::session_management::record_engine_provider_binding_core(
+                    &state.workspaces,
+                    state.storage_path.as_path(),
+                    workspace_id.clone(),
+                    binding_session_id.to_string(),
+                    "claude".to_string(),
+                    provider_launch_profile.binding.clone(),
+                )
+                .await?;
+            }
             let auto_session_for_record = auto_session.clone();
             let params = super::SendMessageParams {
                 text,
@@ -1629,6 +1867,19 @@ pub async fn engine_send_message(
             let runtime_manager = state.runtime_manager.clone();
             let workspace_entry_for_forwarder = workspace_entry.clone();
             let session_for_forwarder = session.clone();
+            let provider_binding_for_forwarder = provider_launch_profile
+                .as_ref()
+                .map(|profile| profile.binding.clone());
+            let provider_binding_storage_path = state.storage_path.clone();
+            let provider_binding_workspace_id = workspace_id.clone();
+            let native_session_id_for_forwarder = response_session_id
+                .clone()
+                .or_else(|| provider_binding_lookup_session_id.clone());
+            let provider_runtime_key_for_forwarder =
+                crate::engine::claude::provider_profile::claude_runtime_key(
+                    &workspace_id,
+                    effective_provider_profile_id.as_deref(),
+                );
 
             // Spawn event forwarder: reads from broadcast channel and emits Tauri events.
             tokio::spawn(async move {
@@ -1647,15 +1898,13 @@ pub async fn engine_send_message(
                     reasoning_item_id,
                     turn_id_for_forwarder.clone(),
                 );
-                let deadline = tokio::time::Instant::now()
-                    + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
                 let mut post_completion_grace_deadline: Option<tokio::time::Instant> = None;
                 loop {
-                    let active_deadline = post_completion_grace_deadline
-                        .map(|grace| std::cmp::min(grace, deadline))
-                        .unwrap_or(deadline);
-                    let recv_result =
-                        tokio::time::timeout_at(active_deadline, receiver.recv()).await;
+                    let recv_result = if let Some(grace_deadline) = post_completion_grace_deadline {
+                        tokio::time::timeout_at(grace_deadline, receiver.recv()).await
+                    } else {
+                        Ok(receiver.recv().await)
+                    };
                     let turn_event = match recv_result {
                         Ok(Ok(event)) => event,
                         Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
@@ -1667,7 +1916,7 @@ pub async fn engine_send_message(
                             );
                             continue;
                         }
-                        Err(_) => break, // timeout reached
+                        Err(_) => break, // post-completion grace reached
                     };
                     if turn_event.turn_id != turn_id_for_forwarder {
                         continue;
@@ -1684,17 +1933,86 @@ pub async fn engine_send_message(
                     let is_turn_completed =
                         matches!(turn_event.event, EngineEvent::TurnCompleted { .. });
                     let event = turn_event.event;
+                    if let (
+                        Some(binding),
+                        EngineEvent::SessionStarted {
+                            session_id,
+                            engine: EngineType::Claude,
+                            ..
+                        },
+                    ) = (provider_binding_for_forwarder.as_ref(), &event)
+                    {
+                        if !session_id.is_empty() && session_id != "pending" {
+                            session_management::schedule_engine_provider_binding_record(
+                                provider_binding_storage_path.clone(),
+                                provider_binding_workspace_id.clone(),
+                                session_id.clone(),
+                                "claude".to_string(),
+                                binding.clone(),
+                            );
+                        }
+                    }
                     let stream_timing = turn_event.stream_timing;
+                    if crate::shared_runtime_coordinator::is_internal_shared_context_replay_event(
+                        &event,
+                    ) {
+                        // Shared context replay 是 checksum ACK transport，不是可见用户消息。
+                        // coordinator 消费后禁止继续生成 claude/raw UI/history event。
+                        if let Some(app_state) = app_clone.try_state::<AppState>() {
+                            let observation = app_state
+                                .shared_runtime_coordinator
+                                .ingest_engine_event_scoped(
+                                    &provider_runtime_key_for_forwarder,
+                                    EngineType::Claude,
+                                    Some(&turn_id_for_forwarder),
+                                    native_session_id_for_forwarder.as_deref(),
+                                    &event,
+                                );
+                            crate::event_sink::publish_shared_runtime_observation(
+                                &app_state,
+                                &observation,
+                            );
+                        }
+                        continue;
+                    }
+                    let mut app_server_events = Vec::new();
                     let did_finish = handle_claude_forwarder_event(
-                        event,
+                        event.clone(),
                         stream_timing.as_ref(),
                         &mut forwarder_state,
                         &runtime_context,
-                        &mut |payload| {
-                            let _ = app_clone.emit("app-server-event", payload);
-                        },
+                        &mut |payload| app_server_events.push(payload),
                     )
                     .await;
+                    let shared_observation = app_clone
+                        .try_state::<AppState>()
+                        .map(|app_state| {
+                            let observation = app_state
+                                .shared_runtime_coordinator
+                                .ingest_engine_event_with_replay_scoped(
+                                    &provider_runtime_key_for_forwarder,
+                                    EngineType::Claude,
+                                    Some(&turn_id_for_forwarder),
+                                    native_session_id_for_forwarder.as_deref(),
+                                    &event,
+                                    app_server_events.clone(),
+                                );
+                            crate::event_sink::publish_shared_runtime_observation(
+                                &app_state,
+                                &observation,
+                            );
+                            observation
+                        })
+                        .unwrap_or_default();
+                    if !shared_observation.ui_fanout_deferred {
+                        for mut payload in app_server_events {
+                            if let Some(owner) = shared_observation.owner.as_ref() {
+                                crate::shared_runtime_coordinator::
+                                    project_app_server_event_to_shared_owner(&mut payload, owner);
+                            }
+                            let _ = app_clone.emit("app-server-event", payload);
+                        }
+                    }
                     if did_finish {
                         if is_turn_completed {
                             post_completion_grace_deadline = Some(
@@ -1731,21 +2049,24 @@ pub async fn engine_send_message(
             let runtime_manager_for_sender = state.runtime_manager.clone();
             let workspace_entry_for_sender = workspace_entry.clone();
             let app_settings_snapshot = state.app_settings.lock().await.clone();
+            let provider_env = provider_launch_profile.map(|profile| profile.env);
             tokio::spawn(async move {
                 let send_result = if has_images {
                     session_clone
-                        .send_message_with_app_settings(
+                        .send_message_with_app_settings_and_provider_env(
                             params,
                             &turn_id_clone,
                             Some(&app_settings_snapshot),
+                            provider_env.as_ref(),
                         )
                         .await
                 } else {
                     session_clone
-                        .send_message_with_app_settings(
+                        .send_message_with_app_settings_and_provider_env(
                             params,
                             &turn_id_clone,
                             Some(&app_settings_snapshot),
+                            provider_env.as_ref(),
                         )
                         .await
                 };
@@ -1775,6 +2096,7 @@ pub async fn engine_send_message(
                     },
                 },
                 "modelResolution": model_resolution,
+                "mossxDispatchReceipt": dispatch_receipt,
                 "turn": {
                     "id": turn_id,
                     "status": "started"
@@ -1798,8 +2120,30 @@ pub async fn engine_send_message(
                     .ok_or_else(|| "Workspace not found".to_string())?
             };
 
+            let provider_binding_lookup_session_id = session_id
+                .as_deref()
+                .or(thread_id.as_deref())
+                .map(str::to_string);
+            let effective_provider_profile_id =
+                crate::session_management::resolve_engine_provider_profile_id(
+                    state.storage_path.as_path(),
+                    &workspace_id,
+                    provider_binding_lookup_session_id.as_deref(),
+                    "opencode",
+                    provider_profile_id.as_deref(),
+                )?;
+            let provider_launch_profile =
+                crate::engine::opencode_provider_profile::resolve_opencode_provider_launch_profile(
+                    &workspace_id,
+                    effective_provider_profile_id.as_deref(),
+                )?;
             let session = manager
-                .get_or_create_opencode_session(&workspace_id, &workspace_path)
+                .get_or_create_opencode_session_for_runtime(
+                    &workspace_id,
+                    &workspace_path,
+                    &provider_launch_profile.runtime_key,
+                    provider_launch_profile.config_content.clone(),
+                )
                 .await;
 
             let resolved_session_id = if continue_session {
@@ -1830,12 +2174,29 @@ pub async fn engine_send_message(
                     model
                 );
             }
-            let model_for_send =
-                sanitized_model.or_else(|| Some("openai/gpt-5.3-codex".to_string()));
+            // Always pass an explicit --model: a broken default model in the
+            // user's opencode.json must not fail GUI turns. Managed providers
+            // resolve through the injected `ccgui/<model>` refs.
+            let model_for_send = if provider_launch_profile.binding.is_some() {
+                sanitized_model
+                    .or_else(|| provider_launch_profile.default_model.clone())
+                    .map(|value| {
+                        crate::engine::opencode_provider_profile::qualify_managed_model_ref(&value)
+                    })
+            } else {
+                sanitized_model.or_else(|| Some("opencode/big-pickle".to_string()))
+            };
+            let dispatch_receipt = build_provider_engine_dispatch_receipt(
+                EngineType::OpenCode,
+                effective_provider_profile_id.as_deref(),
+                &provider_launch_profile.runtime_key,
+                model_for_send.as_deref(),
+                effort.as_deref(),
+            );
 
             let params = super::SendMessageParams {
                 text,
-                model: model_for_send,
+                model: model_for_send.clone(),
                 effort,
                 disable_thinking: false,
                 access_mode,
@@ -1851,6 +2212,21 @@ pub async fn engine_send_message(
 
             let turn_id = format!("opencode-turn-{}", uuid::Uuid::new_v4());
             let thread_id = thread_id.unwrap_or_else(|| turn_id.clone());
+            let binding_session_id = response_session_id
+                .as_deref()
+                .or(provider_binding_lookup_session_id.as_deref())
+                .unwrap_or(thread_id.as_str());
+            if let Some(binding) = provider_launch_profile.binding.as_ref() {
+                crate::session_management::record_engine_provider_binding_core(
+                    &state.workspaces,
+                    state.storage_path.as_path(),
+                    workspace_id.clone(),
+                    binding_session_id.to_string(),
+                    "opencode".to_string(),
+                    binding.clone(),
+                )
+                .await?;
+            }
             let item_id = format!("opencode-item-{}", uuid::Uuid::new_v4());
 
             let mut receiver = session.subscribe();
@@ -1858,16 +2234,17 @@ pub async fn engine_send_message(
             let mut current_thread_id = thread_id.clone();
             let item_id_clone = item_id.clone();
             let turn_id_for_forwarder = turn_id.clone();
+            let provider_runtime_key_for_forwarder = provider_launch_profile.runtime_key.clone();
+            let mut native_session_id_for_forwarder = response_session_id
+                .clone()
+                .or_else(|| provider_binding_lookup_session_id.clone());
             // Spawn event forwarder (same pattern as Claude forwarder above).
             tokio::spawn(async move {
-                let deadline = tokio::time::Instant::now()
-                    + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
                 loop {
-                    let recv_result = tokio::time::timeout_at(deadline, receiver.recv()).await;
-                    let turn_event = match recv_result {
-                        Ok(Ok(event)) => event,
-                        Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
-                        Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped))) => {
+                    let turn_event = match receiver.recv().await {
+                        Ok(event) => event,
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
                             log::warn!(
                                 "OpenCode event forwarder lagged; skipped {} events for turn {}",
                                 skipped,
@@ -1875,7 +2252,6 @@ pub async fn engine_send_message(
                             );
                             continue;
                         }
-                        Err(_) => break,
                     };
                     if turn_event.turn_id != turn_id_for_forwarder {
                         continue;
@@ -1884,14 +2260,24 @@ pub async fn engine_send_message(
                     let event = turn_event.event;
                     let is_terminal = event.is_terminal();
 
+                    let mut app_server_events = Vec::new();
                     if let Some(payload) = engine_event_to_app_server_event_with_turn_context(
                         &event,
                         &current_thread_id,
                         &item_id_clone,
                         Some(&turn_id_for_forwarder),
                     ) {
-                        let _ = app_clone.emit("app-server-event", payload);
+                        app_server_events.push(payload);
                     }
+                    fan_out_provider_engine_event(
+                        &app_clone,
+                        &provider_runtime_key_for_forwarder,
+                        EngineType::OpenCode,
+                        &turn_id_for_forwarder,
+                        native_session_id_for_forwarder.as_deref(),
+                        &event,
+                        app_server_events,
+                    );
 
                     if let EngineEvent::SessionStarted {
                         session_id, engine, ..
@@ -1900,6 +2286,7 @@ pub async fn engine_send_message(
                         if !session_id.is_empty() && session_id != "pending" {
                             if matches!(engine, EngineType::OpenCode) {
                                 current_thread_id = format!("opencode:{}", session_id);
+                                native_session_id_for_forwarder = Some(session_id.clone());
                             }
                         }
                     }
@@ -1940,6 +2327,7 @@ pub async fn engine_send_message(
                         "status": "started"
                     },
                 },
+                "mossxDispatchReceipt": dispatch_receipt,
                 "turn": {
                     "id": turn_id,
                     "status": "started"
@@ -2015,16 +2403,14 @@ pub async fn engine_send_message(
             let turn_id_for_forwarder = turn_id.clone();
             let mut accumulated_agent_text = String::new();
             tokio::spawn(async move {
-                let deadline = tokio::time::Instant::now()
-                    + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
                 let mut render_state = GeminiRenderRoutingState::default();
                 let mut post_completion_grace_deadline: Option<tokio::time::Instant> = None;
                 loop {
-                    let active_deadline = post_completion_grace_deadline
-                        .map(|grace| std::cmp::min(grace, deadline))
-                        .unwrap_or(deadline);
-                    let recv_result =
-                        tokio::time::timeout_at(active_deadline, receiver.recv()).await;
+                    let recv_result = if let Some(grace_deadline) = post_completion_grace_deadline {
+                        tokio::time::timeout_at(grace_deadline, receiver.recv()).await
+                    } else {
+                        Ok(receiver.recv().await)
+                    };
                     let turn_event = match recv_result {
                         Ok(Ok(event)) => event,
                         Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
@@ -2172,9 +2558,30 @@ pub async fn engine_send_message(
                     .map(|w| std::path::PathBuf::from(&w.path))
                     .ok_or_else(|| "Workspace not found".to_string())?
             };
-
+            let provider_binding_lookup_session_id = session_id
+                .as_deref()
+                .or(thread_id.as_deref())
+                .map(str::to_string);
+            let effective_provider_profile_id =
+                crate::session_management::resolve_engine_provider_profile_id(
+                    state.storage_path.as_path(),
+                    &workspace_id,
+                    provider_binding_lookup_session_id.as_deref(),
+                    "kimi",
+                    provider_profile_id.as_deref(),
+                )?;
+            let provider_launch_profile =
+                crate::engine::kimi_provider_profile::resolve_kimi_provider_launch_profile(
+                    &workspace_id,
+                    effective_provider_profile_id.as_deref(),
+                )?;
             let session = manager
-                .get_or_create_kimi_session(&workspace_id, &workspace_path)
+                .get_or_create_kimi_session_for_runtime(
+                    &workspace_id,
+                    &workspace_path,
+                    &provider_launch_profile.runtime_key,
+                    provider_launch_profile.home_dir.as_deref(),
+                )
                 .await;
 
             let resolved_session_id = resolve_kimi_session_id_for_engine_send(
@@ -2183,14 +2590,22 @@ pub async fn engine_send_message(
                 session.get_session_id().await,
             );
             let response_session_id = resolved_session_id.clone();
+            let runtime_model = model
+                .as_ref()
+                .map(|value| value.trim())
+                .filter(|value| !value.is_empty())
+                .map(str::to_string);
+            let dispatch_receipt = build_provider_engine_dispatch_receipt(
+                EngineType::Kimi,
+                effective_provider_profile_id.as_deref(),
+                &provider_launch_profile.runtime_key,
+                runtime_model.as_deref(),
+                effort.as_deref(),
+            );
 
             let params = super::SendMessageParams {
                 text,
-                model: model
-                    .as_ref()
-                    .map(|value| value.trim())
-                    .filter(|value| !value.is_empty())
-                    .map(|value| value.to_string()),
+                model: runtime_model,
                 effort,
                 disable_thinking: false,
                 access_mode,
@@ -2206,6 +2621,21 @@ pub async fn engine_send_message(
 
             let turn_id = format!("kimi-turn-{}", uuid::Uuid::new_v4());
             let thread_id = thread_id.unwrap_or_else(|| turn_id.clone());
+            let binding_session_id = response_session_id
+                .as_deref()
+                .or(provider_binding_lookup_session_id.as_deref())
+                .unwrap_or(thread_id.as_str());
+            if let Some(binding) = provider_launch_profile.binding.as_ref() {
+                crate::session_management::record_engine_provider_binding_core(
+                    &state.workspaces,
+                    state.storage_path.as_path(),
+                    workspace_id.clone(),
+                    binding_session_id.to_string(),
+                    "kimi".to_string(),
+                    binding.clone(),
+                )
+                .await?;
+            }
             let item_id = format!("kimi-item-{}", uuid::Uuid::new_v4());
 
             let mut receiver = session.subscribe();
@@ -2214,16 +2644,20 @@ pub async fn engine_send_message(
             let item_id_clone = item_id.clone();
             let turn_id_for_forwarder = turn_id.clone();
             let mut accumulated_agent_text = String::new();
+            let provider_binding_for_forwarder = provider_launch_profile.binding.clone();
+            let provider_binding_storage_path = state.storage_path.clone();
+            let provider_binding_workspace_id = workspace_id.clone();
+            let provider_runtime_key_for_forwarder = provider_launch_profile.runtime_key.clone();
+            let mut native_session_id_for_forwarder = response_session_id
+                .clone()
+                .or_else(|| provider_binding_lookup_session_id.clone());
             tokio::spawn(async move {
-                let deadline = tokio::time::Instant::now()
-                    + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
                 let mut render_state = GeminiRenderRoutingState::default();
                 loop {
-                    let recv_result = tokio::time::timeout_at(deadline, receiver.recv()).await;
-                    let turn_event = match recv_result {
-                        Ok(Ok(event)) => event,
-                        Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
-                        Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped))) => {
+                    let turn_event = match receiver.recv().await {
+                        Ok(event) => event,
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
                             log::warn!(
                                 "Kimi event forwarder lagged; skipped {} events for turn {}",
                                 skipped,
@@ -2231,13 +2665,31 @@ pub async fn engine_send_message(
                             );
                             continue;
                         }
-                        Err(_) => break,
                     };
                     if turn_event.turn_id != turn_id_for_forwarder {
                         continue;
                     }
 
                     let event = turn_event.event;
+                    if let (
+                        Some(binding),
+                        EngineEvent::SessionStarted {
+                            session_id,
+                            engine: EngineType::Kimi,
+                            ..
+                        },
+                    ) = (provider_binding_for_forwarder.as_ref(), &event)
+                    {
+                        if !session_id.is_empty() && session_id != "pending" {
+                            session_management::schedule_engine_provider_binding_record(
+                                provider_binding_storage_path.clone(),
+                                provider_binding_workspace_id.clone(),
+                                session_id.clone(),
+                                "kimi".to_string(),
+                                binding.clone(),
+                            );
+                        }
+                    }
                     let is_terminal = event.is_terminal();
                     let render_lane = match &event {
                         EngineEvent::TextDelta { .. } => GeminiRenderLane::Text,
@@ -2256,6 +2708,7 @@ pub async fn engine_send_message(
                         accumulated_agent_text.push_str(text);
                     }
 
+                    let mut app_server_events = Vec::new();
                     if let EngineEvent::TurnCompleted { result, .. } = &event {
                         let fallback_text =
                             extract_turn_result_text(result.as_ref()).unwrap_or_default();
@@ -2284,7 +2737,7 @@ pub async fn engine_send_message(
                                     }
                                 }),
                             };
-                            let _ = app_clone.emit("app-server-event", synthetic);
+                            app_server_events.push(synthetic);
                         }
                     }
 
@@ -2294,8 +2747,17 @@ pub async fn engine_send_message(
                         &routed_item_id,
                         Some(&turn_id_for_forwarder),
                     ) {
-                        let _ = app_clone.emit("app-server-event", payload);
+                        app_server_events.push(payload);
                     }
+                    fan_out_provider_engine_event(
+                        &app_clone,
+                        &provider_runtime_key_for_forwarder,
+                        EngineType::Kimi,
+                        &turn_id_for_forwarder,
+                        native_session_id_for_forwarder.as_deref(),
+                        &event,
+                        app_server_events,
+                    );
 
                     if let EngineEvent::SessionStarted {
                         session_id, engine, ..
@@ -2304,6 +2766,7 @@ pub async fn engine_send_message(
                         if !session_id.is_empty() && session_id != "pending" {
                             if matches!(engine, EngineType::Kimi) {
                                 current_thread_id = format!("kimi:{}", session_id);
+                                native_session_id_for_forwarder = Some(session_id.clone());
                             }
                         }
                     }
@@ -2343,6 +2806,270 @@ pub async fn engine_send_message(
                         "status": "started"
                     },
                 },
+                "mossxDispatchReceipt": dispatch_receipt,
+                "turn": {
+                    "id": turn_id,
+                    "status": "started"
+                }
+            }))
+        }
+        EngineType::Grok => {
+            let workspace_path = {
+                let workspaces = state.workspaces.lock().await;
+                workspaces
+                    .get(&workspace_id)
+                    .map(|w| std::path::PathBuf::from(&w.path))
+                    .ok_or_else(|| "Workspace not found".to_string())?
+            };
+            let provider_binding_lookup_session_id = session_id
+                .as_deref()
+                .or(thread_id.as_deref())
+                .map(str::to_string);
+            let effective_provider_profile_id =
+                crate::session_management::resolve_engine_provider_profile_id(
+                    state.storage_path.as_path(),
+                    &workspace_id,
+                    provider_binding_lookup_session_id.as_deref(),
+                    "grok",
+                    provider_profile_id.as_deref(),
+                )?;
+            let provider_launch_profile =
+                crate::engine::grok_provider_profile::resolve_grok_provider_launch_profile(
+                    &workspace_id,
+                    effective_provider_profile_id.as_deref(),
+                )?;
+            let session = manager
+                .get_or_create_grok_session_for_runtime(
+                    &workspace_id,
+                    &workspace_path,
+                    &provider_launch_profile.runtime_key,
+                    provider_launch_profile.home_dir.as_deref(),
+                )
+                .await;
+
+            let resolved_session_id = resolve_grok_session_id_for_engine_send(
+                continue_session,
+                session_id,
+                session.get_session_id().await,
+            );
+            let response_session_id = resolved_session_id.clone();
+            let runtime_model = model
+                .as_ref()
+                .map(|value| value.trim())
+                .filter(|value| !value.is_empty())
+                .map(str::to_string);
+            let dispatch_receipt = build_provider_engine_dispatch_receipt(
+                EngineType::Grok,
+                effective_provider_profile_id.as_deref(),
+                &provider_launch_profile.runtime_key,
+                runtime_model.as_deref(),
+                effort.as_deref(),
+            );
+
+            let params = super::SendMessageParams {
+                text,
+                model: runtime_model,
+                effort,
+                disable_thinking: false,
+                access_mode,
+                images,
+                continue_session,
+                session_id: resolved_session_id,
+                fork_session_id: None,
+                agent: None,
+                variant: None,
+                collaboration_mode: None,
+                custom_spec_root: normalized_custom_spec_root.clone(),
+            };
+
+            let turn_id = format!("grok-turn-{}", uuid::Uuid::new_v4());
+            let thread_id = thread_id.unwrap_or_else(|| turn_id.clone());
+            let binding_session_id = response_session_id
+                .as_deref()
+                .or(provider_binding_lookup_session_id.as_deref())
+                .unwrap_or(thread_id.as_str());
+            if let Some(binding) = provider_launch_profile.binding.as_ref() {
+                crate::session_management::record_engine_provider_binding_core(
+                    &state.workspaces,
+                    state.storage_path.as_path(),
+                    workspace_id.clone(),
+                    binding_session_id.to_string(),
+                    "grok".to_string(),
+                    binding.clone(),
+                )
+                .await?;
+            }
+            let item_id = format!("grok-item-{}", uuid::Uuid::new_v4());
+
+            let mut receiver = session.subscribe();
+            let app_clone = app.clone();
+            let mut current_thread_id = thread_id.clone();
+            let item_id_clone = item_id.clone();
+            let turn_id_for_forwarder = turn_id.clone();
+            let mut accumulated_agent_text = String::new();
+            let provider_binding_for_forwarder = provider_launch_profile.binding.clone();
+            let provider_binding_storage_path = state.storage_path.clone();
+            let provider_binding_workspace_id = workspace_id.clone();
+            let provider_runtime_key_for_forwarder = provider_launch_profile.runtime_key.clone();
+            let mut native_session_id_for_forwarder = response_session_id
+                .clone()
+                .or_else(|| provider_binding_lookup_session_id.clone());
+            tokio::spawn(async move {
+                let mut render_state = GeminiRenderRoutingState::default();
+                loop {
+                    let turn_event = match receiver.recv().await {
+                        Ok(event) => event,
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                            log::warn!(
+                                "Grok event forwarder lagged; skipped {} events for turn {}",
+                                skipped,
+                                turn_id_for_forwarder
+                            );
+                            continue;
+                        }
+                    };
+                    if turn_event.turn_id != turn_id_for_forwarder {
+                        continue;
+                    }
+
+                    let event = turn_event.event;
+                    if let (
+                        Some(binding),
+                        EngineEvent::SessionStarted {
+                            session_id,
+                            engine: EngineType::Grok,
+                            ..
+                        },
+                    ) = (provider_binding_for_forwarder.as_ref(), &event)
+                    {
+                        if !session_id.is_empty() && session_id != "pending" {
+                            session_management::schedule_engine_provider_binding_record(
+                                provider_binding_storage_path.clone(),
+                                provider_binding_workspace_id.clone(),
+                                session_id.clone(),
+                                "grok".to_string(),
+                                binding.clone(),
+                            );
+                        }
+                    }
+                    let is_terminal = event.is_terminal();
+                    let render_lane = match &event {
+                        EngineEvent::TextDelta { .. } => GeminiRenderLane::Text,
+                        EngineEvent::ReasoningDelta { .. } => GeminiRenderLane::Reasoning,
+                        EngineEvent::ToolStarted { .. }
+                        | EngineEvent::ToolCompleted { .. }
+                        | EngineEvent::ToolInputUpdated { .. }
+                        | EngineEvent::ToolOutputDelta { .. } => GeminiRenderLane::Tool,
+                        _ => GeminiRenderLane::Other,
+                    };
+                    let routed_item_id =
+                        next_gemini_routed_item_id(&mut render_state, render_lane, &item_id_clone);
+
+                    if let EngineEvent::TextDelta { text, .. } = &event {
+                        render_state.saw_text_delta = true;
+                        accumulated_agent_text.push_str(text);
+                    }
+
+                    let mut app_server_events = Vec::new();
+                    if let EngineEvent::TurnCompleted { result, .. } = &event {
+                        let fallback_text =
+                            extract_turn_result_text(result.as_ref()).unwrap_or_default();
+                        let completed_text = if should_prefer_turn_result_text(result.as_ref()) {
+                            fallback_text
+                        } else if accumulated_agent_text.trim().is_empty() {
+                            fallback_text
+                        } else {
+                            accumulated_agent_text.clone()
+                        };
+                        // Grok text blocks always arrive as TextDelta, so this
+                        // synthetic completion only fires as a safety net.
+                        if !completed_text.trim().is_empty() && !render_state.saw_text_delta {
+                            let synthetic = AppServerEvent {
+                                workspace_id: event.workspace_id().to_string(),
+                                message: json!({
+                                    "method": "item/completed",
+                                    "params": {
+                                        "threadId": &current_thread_id,
+                                        "item": {
+                                            "id": &routed_item_id,
+                                            "type": "agentMessage",
+                                            "text": completed_text,
+                                            "status": "completed",
+                                        }
+                                    }
+                                }),
+                            };
+                            app_server_events.push(synthetic);
+                        }
+                    }
+
+                    if let Some(payload) = engine_event_to_app_server_event_with_turn_context(
+                        &event,
+                        &current_thread_id,
+                        &routed_item_id,
+                        Some(&turn_id_for_forwarder),
+                    ) {
+                        app_server_events.push(payload);
+                    }
+                    fan_out_provider_engine_event(
+                        &app_clone,
+                        &provider_runtime_key_for_forwarder,
+                        EngineType::Grok,
+                        &turn_id_for_forwarder,
+                        native_session_id_for_forwarder.as_deref(),
+                        &event,
+                        app_server_events,
+                    );
+
+                    if let EngineEvent::SessionStarted {
+                        session_id, engine, ..
+                    } = &event
+                    {
+                        if !session_id.is_empty() && session_id != "pending" {
+                            if matches!(engine, EngineType::Grok) {
+                                current_thread_id = format!("grok:{}", session_id);
+                                native_session_id_for_forwarder = Some(session_id.clone());
+                            }
+                        }
+                    }
+
+                    if is_terminal {
+                        break;
+                    }
+                }
+            });
+
+            let session_clone = session.clone();
+            let turn_id_clone = turn_id.clone();
+            tokio::spawn(async move {
+                if let Err(e) = session_clone.send_message(params, &turn_id_clone).await {
+                    log::error!("Grok send_message failed: {}", e);
+                }
+            });
+            if let (Some(session_id), Some(metadata)) =
+                (response_session_id.as_deref(), auto_session.clone())
+            {
+                record_auto_session_metadata_if_present(
+                    &state,
+                    &workspace_id,
+                    Some(session_id),
+                    Some(metadata),
+                    "grok",
+                )
+                .await;
+            }
+
+            Ok(json!({
+                "engine": "grok",
+                "sessionId": response_session_id,
+                "result": {
+                    "turn": {
+                        "id": turn_id,
+                        "status": "started"
+                    },
+                },
+                "mossxDispatchReceipt": dispatch_receipt,
                 "turn": {
                     "id": turn_id,
                     "status": "started"
@@ -2403,6 +3130,8 @@ pub async fn engine_send_message_sync(
     let manager = &state.engine_manager;
     let active_engine = manager.get_active_engine().await;
     let effective_engine = resolve_enabled_engine_for_send(&settings, engine, active_engine)?;
+    // Capability gate follows EngineFeatures; all current engines allow images.
+    require_image_support(effective_engine, &images)?;
     let normalized_custom_spec_root = normalize_custom_spec_root(custom_spec_root.as_deref());
 
     match effective_engine {
@@ -2418,9 +3147,7 @@ pub async fn engine_send_message_sync(
                 .get_claude_session(&workspace_id, &workspace_path)
                 .await;
 
-            let has_images = images
-                .as_ref()
-                .is_some_and(|entries| entries.iter().any(|entry| !entry.trim().is_empty()));
+            let has_images = has_non_empty_images(&images);
             let normalized_fork_session_id = fork_session_id
                 .as_ref()
                 .map(|value| value.trim())
@@ -2538,7 +3265,7 @@ pub async fn engine_send_message_sync(
                     }
                 });
             let model_for_send =
-                sanitized_model.or_else(|| Some("openai/gpt-5.3-codex".to_string()));
+                sanitized_model.or_else(|| Some("opencode/big-pickle".to_string()));
 
             let params = super::SendMessageParams {
                 text,
@@ -2585,6 +3312,7 @@ pub async fn engine_send_message_sync(
                 model,
                 effort,
                 access_mode,
+                images,
                 normalized_custom_spec_root.clone(),
                 auto_session.clone(),
                 &app,
@@ -2728,6 +3456,67 @@ pub async fn engine_send_message_sync(
                 "text": response
             }))
         }
+        EngineType::Grok => {
+            let workspace_path = {
+                let workspaces = state.workspaces.lock().await;
+                workspaces
+                    .get(&workspace_id)
+                    .map(|w| std::path::PathBuf::from(&w.path))
+                    .ok_or_else(|| "Workspace not found".to_string())?
+            };
+
+            let session = manager
+                .get_or_create_grok_session(&workspace_id, &workspace_path)
+                .await;
+            let resolved_session_id = resolve_grok_session_id_for_engine_send(
+                continue_session,
+                session_id,
+                session.get_session_id().await,
+            );
+
+            let params = super::SendMessageParams {
+                text,
+                model: model
+                    .as_ref()
+                    .map(|value| value.trim())
+                    .filter(|value| !value.is_empty())
+                    .map(|value| value.to_string()),
+                effort,
+                disable_thinking: false,
+                access_mode,
+                images,
+                continue_session,
+                session_id: resolved_session_id,
+                fork_session_id: None,
+                agent: None,
+                variant: None,
+                collaboration_mode: None,
+                custom_spec_root: normalized_custom_spec_root.clone(),
+            };
+
+            let turn_id = format!("grok-sync-{}", uuid::Uuid::new_v4());
+            let response = timeout(
+                Duration::from_secs(900),
+                session.send_message(params, &turn_id),
+            )
+            .await
+            .map_err(|_| "Grok response timed out".to_string())??;
+            let response_session_id = session.get_session_id().await;
+            record_auto_session_metadata_if_present(
+                &state,
+                &workspace_id,
+                response_session_id.as_deref(),
+                auto_session,
+                "grok",
+            )
+            .await;
+
+            Ok(json!({
+                "engine": "grok",
+                "sessionId": response_session_id,
+                "text": response
+            }))
+        }
     }
 }
 
@@ -2748,10 +3537,10 @@ pub async fn engine_interrupt(
 
     match active_engine {
         EngineType::Claude => {
-            if let Some(session) = manager.claude_manager.get_session(&workspace_id).await {
-                session.interrupt().await?;
-            }
-            Ok(())
+            manager
+                .claude_manager
+                .interrupt_workspace_sessions(&workspace_id)
+                .await
         }
         EngineType::Codex => {
             // Codex interrupts are handled via turn_interrupt RPC from the frontend.
@@ -2763,10 +3552,9 @@ pub async fn engine_interrupt(
             Ok(())
         }
         EngineType::OpenCode => {
-            if let Some(session) = manager.get_opencode_session(&workspace_id).await {
-                session.interrupt().await?;
-            }
-            Ok(())
+            manager
+                .interrupt_opencode_sessions(&workspace_id, None)
+                .await
         }
         EngineType::Gemini => {
             if let Some(session) = manager.get_gemini_session(&workspace_id).await {
@@ -2774,12 +3562,8 @@ pub async fn engine_interrupt(
             }
             Ok(())
         }
-        EngineType::Kimi => {
-            if let Some(session) = manager.get_kimi_session(&workspace_id).await {
-                session.interrupt().await?;
-            }
-            Ok(())
-        }
+        EngineType::Kimi => manager.interrupt_kimi_sessions(&workspace_id, None).await,
+        EngineType::Grok => manager.interrupt_grok_sessions(&workspace_id, None).await,
     }
 }
 
@@ -2789,6 +3573,7 @@ pub async fn engine_interrupt_turn(
     workspace_id: String,
     turn_id: String,
     engine: Option<EngineType>,
+    provider_profile_id: Option<String>,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
@@ -2801,6 +3586,7 @@ pub async fn engine_interrupt_turn(
                 "workspaceId": workspace_id,
                 "turnId": turn_id,
                 "engine": engine,
+                "providerProfileId": provider_profile_id,
             }),
         )
         .await?;
@@ -2812,7 +3598,26 @@ pub async fn engine_interrupt_turn(
 
     match target_engine {
         EngineType::Claude => {
-            if let Some(session) = manager.claude_manager.get_session(&workspace_id).await {
+            let provider_profile_id = provider_profile_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty());
+            let session = if provider_profile_id.is_some() {
+                let provider_session = manager
+                    .claude_manager
+                    .get_session_for_provider(&workspace_id, provider_profile_id)
+                    .await;
+                match provider_session {
+                    Some(session) if session.has_active_turn(&turn_id).await => Some(session),
+                    _ => None,
+                }
+            } else {
+                manager
+                    .claude_manager
+                    .session_for_turn(&workspace_id, &turn_id)
+                    .await
+            };
+            if let Some(session) = session {
                 session.interrupt_turn(&turn_id).await?;
             }
             Ok(())
@@ -2822,10 +3627,9 @@ pub async fn engine_interrupt_turn(
             Ok(())
         }
         EngineType::OpenCode => {
-            if let Some(session) = manager.get_opencode_session(&workspace_id).await {
-                session.interrupt_turn(&turn_id).await?;
-            }
-            Ok(())
+            manager
+                .interrupt_opencode_sessions(&workspace_id, Some(&turn_id))
+                .await
         }
         EngineType::Gemini => {
             if let Some(session) = manager.get_gemini_session(&workspace_id).await {
@@ -2834,10 +3638,14 @@ pub async fn engine_interrupt_turn(
             Ok(())
         }
         EngineType::Kimi => {
-            if let Some(session) = manager.get_kimi_session(&workspace_id).await {
-                session.interrupt_turn(&turn_id).await?;
-            }
-            Ok(())
+            manager
+                .interrupt_kimi_sessions(&workspace_id, Some(&turn_id))
+                .await
+        }
+        EngineType::Grok => {
+            manager
+                .interrupt_grok_sessions(&workspace_id, Some(&turn_id))
+                .await
         }
     }
 }

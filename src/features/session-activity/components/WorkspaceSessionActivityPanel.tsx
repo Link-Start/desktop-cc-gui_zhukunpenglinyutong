@@ -20,13 +20,15 @@ import { WorkspaceEditableDiffReviewSurface } from "../../git/components/Workspa
 import type { EditableDiffDraftActions } from "../../git/components/WorkspaceEditableDiffCompare";
 import {
   buildSemanticDiffSummary,
+  type SemanticDiffEntry,
   type SemanticEvidenceRef,
   type SemanticDiffSummary,
   type SemanticDiffSummaryItem,
   type TurnValidationEvidence,
 } from "../../git/utils/semanticDiffSummary";
+import { useTurnSemanticReview } from "../hooks/useTurnSemanticReview";
 import type { CodeAnnotationBridgeProps } from "../../code-annotations/types";
-import { Markdown } from "../../messages/components/Markdown";
+import { Markdown } from "../../../markdown/components/Markdown";
 import {
   inferCommandOutputRenderMeta,
   normalizeCommandMarkdownOutput,
@@ -74,6 +76,10 @@ type SessionActivityTurnGroup = {
   events: SessionActivityEvent[];
 };
 type TurnArtifactTab = "artifacts" | "semantic";
+type SemanticSummarySectionKey = keyof Pick<
+  SemanticDiffSummary,
+  "intent" | "behavior" | "risks" | "validation"
+>;
 type TurnArtifactSummary = {
   files: SessionActivityFileChangeEntry[];
   semanticSummary: SemanticDiffSummary;
@@ -96,7 +102,8 @@ type FollowBubbleGeometry = {
 };
 
 const RUNNING_CARD_MIN_EXPANDED_MS = 2000;
-const FOLLOW_BUBBLE_AUTO_DISMISS_MS = 1000;
+const FOLLOW_BUBBLE_AUTO_DISMISS_MS = 8000;
+const REASONING_FOLLOW_PAUSE_THRESHOLD_PX = 48;
 const MAX_STICKY_CHILD_SESSION_COUNT = 24;
 const SOLO_FOLLOW_COACH_DISMISSED_BY_WORKSPACE_STORAGE_KEY =
   "ccgui.sessionActivity.soloFollowCoachDismissedByWorkspace";
@@ -228,6 +235,11 @@ function formatSignedCount(value: number | undefined, positivePrefix: "+" | "-")
     return null;
   }
   return `${positivePrefix}${value}`;
+}
+
+function focusRovingTab(tablistElement: HTMLElement, tabIndex: number) {
+  const tabs = tablistElement.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+  tabs[tabIndex]?.focus();
 }
 
 function formatActivityTime(timestamp: number) {
@@ -654,6 +666,249 @@ function countVisibleActivityItems(events: SessionActivityEvent[], activeTab: Ac
   return events.length;
 }
 
+function TurnGroupSummaryBadges({ events }: { events: SessionActivityEvent[] }) {
+  const { t } = useTranslation();
+  const artifactSummary = useMemo(() => buildTurnArtifactSummary(events), [events]);
+  const signedAdditions = formatSignedCount(artifactSummary?.additions, "+");
+  const signedDeletions = formatSignedCount(artifactSummary?.deletions, "-");
+  return (
+    <span className="session-activity-turn-artifacts-stats session-activity-turn-group-summary-badges">
+      <span>{t("activityPanel.eventsCount", { count: events.length })}</span>
+      {signedAdditions ? <span className="is-add">{signedAdditions}</span> : null}
+      {signedDeletions ? <span className="is-del">{signedDeletions}</span> : null}
+    </span>
+  );
+}
+
+type TurnArtifactsSectionProps = {
+  group: SessionActivityTurnGroup;
+  activeArtifactTab: TurnArtifactTab;
+  onSelectArtifactTab: (groupId: string, tab: TurnArtifactTab) => void;
+  onOpenActivityFile: (entry: SessionActivityFileChangeEntry) => void;
+  onOpenDiffPreview: (entry: SessionActivityFileChangeEntry) => void;
+  workspaceId: string | null;
+  renderSemanticSummaryList: (
+    summary: SemanticDiffSummary,
+    sectionKey: SemanticSummarySectionKey,
+  ) => ReactNode;
+};
+
+// 与 TurnGroupSummaryBadges 同构：buildTurnArtifactSummary 开销大（diff 解析 + 语义摘要），
+// 独立组件内按 group.events 引用 useMemo 缓存，避免面板每次重渲染都全量重算
+function TurnArtifactsSection({
+  group,
+  activeArtifactTab,
+  onSelectArtifactTab,
+  onOpenActivityFile,
+  onOpenDiffPreview,
+  workspaceId,
+  renderSemanticSummaryList,
+}: TurnArtifactsSectionProps) {
+  const { t, i18n } = useTranslation();
+  const baseSummary = useMemo(() => buildTurnArtifactSummary(group.events), [group.events]);
+  const reviewEntries = useMemo<SemanticDiffEntry[]>(
+    () =>
+      baseSummary?.files.map((file) => ({
+        path: file.filePath,
+        status: file.statusLetter,
+        diff: file.diff ?? "",
+      })) ?? [],
+    [baseSummary],
+  );
+  // AI review 只在用户点开 semantic tab 时按需生成,按 turn 缓存;失败静默降级为纯规则事实
+  const { review: aiReview } = useTurnSemanticReview({
+    enabled: activeArtifactTab === "semantic",
+    workspaceId,
+    turnKey: group.id,
+    entries: reviewEntries,
+    language: i18n.language,
+  });
+  const artifactSummary = useMemo(() => {
+    if (!baseSummary || !aiReview || aiReview.facts.length === 0) {
+      return baseSummary;
+    }
+    return {
+      ...baseSummary,
+      semanticSummary: buildSemanticDiffSummary({
+        entries: reviewEntries,
+        validationEvidence: buildTurnValidationEvidence(group.events),
+        aiReview,
+      }),
+    };
+  }, [baseSummary, aiReview, reviewEntries, group.events]);
+  if (!artifactSummary) {
+    return null;
+  }
+  const signedAdditions = formatSignedCount(artifactSummary.additions, "+");
+  const signedDeletions = formatSignedCount(artifactSummary.deletions, "-");
+  return (
+    <article className="session-activity-turn-artifacts">
+      <div className="session-activity-turn-artifacts-header">
+        <div className="session-activity-turn-artifacts-title">
+          <div className="session-activity-turn-artifacts-kicker">
+            {t("activityPanel.artifacts.kicker")}
+          </div>
+          <h4>{t("activityPanel.artifacts.title")}</h4>
+        </div>
+        <div className="session-activity-turn-artifacts-stats">
+          <span>{t("activityPanel.artifacts.fileCount", { count: artifactSummary.files.length })}</span>
+          {signedAdditions ? <span className="is-add">{signedAdditions}</span> : null}
+          {signedDeletions ? <span className="is-del">{signedDeletions}</span> : null}
+        </div>
+        <div
+          className="session-activity-turn-artifacts-tabs"
+          role="tablist"
+          aria-label={t("activityPanel.artifacts.tabsAriaLabel")}
+          onKeyDown={(keyEvent) => {
+            if (keyEvent.key !== "ArrowLeft" && keyEvent.key !== "ArrowRight") {
+              return;
+            }
+            keyEvent.preventDefault();
+            const artifactTabs: TurnArtifactTab[] = ["artifacts", "semantic"];
+            const currentIndex = artifactTabs.indexOf(activeArtifactTab);
+            const direction = keyEvent.key === "ArrowRight" ? 1 : -1;
+            const nextIndex =
+              (currentIndex + direction + artifactTabs.length) % artifactTabs.length;
+            const nextTab = artifactTabs[nextIndex];
+            if (!nextTab) {
+              return;
+            }
+            onSelectArtifactTab(group.id, nextTab);
+            focusRovingTab(keyEvent.currentTarget, nextIndex);
+          }}
+        >
+          {(["artifacts", "semantic"] as const).map((tab) => (
+            <button
+              key={tab}
+              id={`session-activity-artifact-tab-${group.id}-${tab}`}
+              type="button"
+              role="tab"
+              aria-selected={activeArtifactTab === tab}
+              aria-controls={`session-activity-artifact-panel-${group.id}-${tab}`}
+              tabIndex={activeArtifactTab === tab ? 0 : -1}
+              className={`session-activity-turn-artifacts-tab${activeArtifactTab === tab ? " is-active" : ""}`}
+              onClick={() => onSelectArtifactTab(group.id, tab)}
+            >
+              <span className="session-activity-turn-artifacts-tab-icon" aria-hidden>
+                {turnArtifactTabIconMap[tab]}
+              </span>
+              <span>
+                {tab === "artifacts"
+                  ? t("activityPanel.artifacts.tabs.artifacts")
+                  : t("activityPanel.artifacts.tabs.semantic")}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+      {activeArtifactTab === "artifacts" ? (
+        <div
+          className="session-activity-file-list is-turn-artifacts"
+          role="tabpanel"
+          id={`session-activity-artifact-panel-${group.id}-artifacts`}
+          aria-labelledby={`session-activity-artifact-tab-${group.id}-artifacts`}
+        >
+          {artifactSummary.files.map((fileChangeEntry) => {
+            const fileSignedAdditions = formatSignedCount(fileChangeEntry.additions, "+");
+            const fileSignedDeletions = formatSignedCount(fileChangeEntry.deletions, "-");
+            return (
+              <div
+                key={`${group.id}:${fileChangeEntry.filePath}`}
+                className="session-activity-file-row"
+              >
+                <button
+                  type="button"
+                  className="session-activity-file-row-main"
+                  title={fileChangeEntry.filePath}
+                  onClick={(clickEvent) => {
+                    clickEvent.stopPropagation();
+                    onOpenActivityFile(fileChangeEntry);
+                  }}
+                >
+                  <span
+                    className={`session-activity-file-kind-badge is-${fileChangeEntry.statusLetter.toLowerCase()}`}
+                    aria-hidden
+                  >
+                    {fileChangeEntry.statusLetter}
+                  </span>
+                  <span className="session-activity-file-row-icon" aria-hidden>
+                    <FileIcon filePath={fileChangeEntry.filePath} />
+                  </span>
+                  <span className="session-activity-file-row-copy">
+                    <span className="session-activity-file-row-name">
+                      {fileChangeEntry.fileName}
+                    </span>
+                  </span>
+                  {fileSignedAdditions || fileSignedDeletions ? (
+                    <span className="session-activity-file-row-stats">
+                      {fileSignedAdditions ? (
+                        <span className="is-add">{fileSignedAdditions}</span>
+                      ) : null}
+                      {fileSignedDeletions ? (
+                        <span className="is-del">{fileSignedDeletions}</span>
+                      ) : null}
+                    </span>
+                  ) : null}
+                </button>
+                <button
+                  type="button"
+                  className="session-activity-file-row-action"
+                  aria-label={t("git.previewModalAction")}
+                  title={t("git.previewModalAction")}
+                  disabled={!fileChangeEntry.diff?.trim() && !workspaceId}
+                  onClick={(clickEvent) => {
+                    clickEvent.stopPropagation();
+                    onOpenDiffPreview(fileChangeEntry);
+                  }}
+                >
+                  <GitCompareArrows
+                    size={18}
+                    strokeWidth={2.25}
+                    aria-hidden
+                    className="session-activity-file-row-action-icon"
+                  />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div
+          className="session-activity-turn-semantic"
+          role="tabpanel"
+          id={`session-activity-artifact-panel-${group.id}-semantic`}
+          aria-labelledby={`session-activity-artifact-tab-${group.id}-semantic`}
+        >
+          {artifactSummary.turnSemantic ? (
+            <div className="session-activity-turn-semantic-section is-turn-meaning">
+              <h5>{t("activityPanel.artifacts.turnSemanticTitle")}</h5>
+              <p className="session-activity-turn-semantic-text">
+                {artifactSummary.turnSemantic}
+              </p>
+            </div>
+          ) : null}
+          <div className="session-activity-turn-semantic-section is-intent">
+            <h5>{t("git.semanticDiff.intentTitle")}</h5>
+            {renderSemanticSummaryList(artifactSummary.semanticSummary, "intent")}
+          </div>
+          <div className="session-activity-turn-semantic-section is-behavior">
+            <h5>{t("git.semanticDiff.behaviorTitle")}</h5>
+            {renderSemanticSummaryList(artifactSummary.semanticSummary, "behavior")}
+          </div>
+          <div className="session-activity-turn-semantic-section is-risk">
+            <h5>{t("git.semanticDiff.riskTitle")}</h5>
+            {renderSemanticSummaryList(artifactSummary.semanticSummary, "risks")}
+          </div>
+          <div className="session-activity-turn-semantic-section is-validation">
+            <h5>{t("git.semanticDiff.validationTitle")}</h5>
+            {renderSemanticSummaryList(artifactSummary.semanticSummary, "validation")}
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
+
 function confidenceLabelKey(confidence: SemanticDiffSummaryItem["confidence"]) {
   switch (confidence) {
     case "high":
@@ -743,6 +998,11 @@ export function WorkspaceSessionActivityPanel({
   const [diffPreviewHeaderControlsTarget, setDiffPreviewHeaderControlsTarget] =
     useState<HTMLDivElement | null>(null);
   const diffPreviewDraftActionsRef = useRef<EditableDiffDraftActions | null>(null);
+  const diffPreviewDialogRef = useRef<HTMLDivElement | null>(null);
+  const diffPreviewTriggerRef = useRef<HTMLElement | null>(null);
+  const [pausedReasoningFollowEventIds, setPausedReasoningFollowEventIds] = useState<
+    Record<string, true>
+  >({});
   const selectedDiffPreviewGitPath = selectedDiffPreviewEntry
     ? resolveWorkspaceRelativePath(workspacePath, selectedDiffPreviewEntry.filePath)
     : null;
@@ -1258,10 +1518,22 @@ export function WorkspaceSessionActivityPanel({
         )
         .map((event) => event.eventId),
     );
+    // 仅保留仍在流式展开的事件的暂停标记，completed/折叠后自动清理
+    setPausedReasoningFollowEventIds((current) => {
+      const activeIds = Object.keys(current).filter((eventId) => activeReasoningIds.has(eventId));
+      if (activeIds.length === Object.keys(current).length) {
+        return current;
+      }
+      return Object.fromEntries(activeIds.map((eventId) => [eventId, true as const]));
+    });
     for (const [eventId, container] of Object.entries(
       reasoningPreviewScrollContainerByEventIdRef.current,
     )) {
       if (!activeReasoningIds.has(eventId)) {
+        continue;
+      }
+      // 用户上滚超过阈值后暂停自动跟随，直到回到底部
+      if (pausedReasoningFollowEventIds[eventId]) {
         continue;
       }
       if (typeof container.scrollTo === "function") {
@@ -1270,7 +1542,46 @@ export function WorkspaceSessionActivityPanel({
         container.scrollTop = container.scrollHeight;
       }
     }
-  }, [expandedExpandableIds, viewModel.timeline]);
+  }, [expandedExpandableIds, pausedReasoningFollowEventIds, viewModel.timeline]);
+
+  const handleReasoningPreviewScroll = (eventId: string, container: HTMLDivElement) => {
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    const isPaused = distanceFromBottom > REASONING_FOLLOW_PAUSE_THRESHOLD_PX;
+    setPausedReasoningFollowEventIds((current) => {
+      const currentlyPaused = Boolean(current[eventId]);
+      if (currentlyPaused === isPaused) {
+        return current;
+      }
+      const next = { ...current };
+      if (isPaused) {
+        next[eventId] = true;
+      } else {
+        delete next[eventId];
+      }
+      return next;
+    });
+  };
+
+  const handleResumeReasoningFollow = (eventId: string) => {
+    setPausedReasoningFollowEventIds((current) => {
+      if (!current[eventId]) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[eventId];
+      return next;
+    });
+    const container = reasoningPreviewScrollContainerByEventIdRef.current[eventId];
+    if (!container) {
+      return;
+    }
+    if (typeof container.scrollTo === "function") {
+      container.scrollTo({ top: container.scrollHeight, behavior: "auto" });
+    } else {
+      container.scrollTop = container.scrollHeight;
+    }
+  };
 
   const handleToggleExpand = (
     eventId: string,
@@ -1398,6 +1709,8 @@ export function WorkspaceSessionActivityPanel({
     if (!entry.diff?.trim() && !workspaceId) {
       return;
     }
+    diffPreviewTriggerRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setIsDiffPreviewDirty(false);
     setSelectedDiffPreviewEntry(entry);
     setIsDiffPreviewMaximized(false);
@@ -1407,6 +1720,11 @@ export function WorkspaceSessionActivityPanel({
     setIsUnsavedCloseDialogOpen(false);
     setSelectedDiffPreviewEntry(null);
     setIsDiffPreviewMaximized(false);
+    const trigger = diffPreviewTriggerRef.current;
+    diffPreviewTriggerRef.current = null;
+    if (trigger?.isConnected) {
+      trigger.focus();
+    }
   }, []);
   const discardAndCloseDiffPreview = useCallback(() => {
     diffPreviewDraftActionsRef.current?.discard();
@@ -1434,6 +1752,17 @@ export function WorkspaceSessionActivityPanel({
     closeDiffPreviewNow();
     return true;
   }, [closeDiffPreviewNow]);
+
+  // diff 预览打开时焦点移入容器；关闭后的焦点归还在 closeDiffPreviewNow 中处理
+  useEffect(() => {
+    if (!selectedDiffPreviewEntry) {
+      return;
+    }
+    const dialog = diffPreviewDialogRef.current;
+    if (dialog && !dialog.contains(document.activeElement)) {
+      dialog.focus();
+    }
+  }, [selectedDiffPreviewEntry]);
 
   const handleToggleTurnGroup = (groupId: string) => {
     setCollapsedTurnGroupIds((current) => {
@@ -1553,15 +1882,8 @@ export function WorkspaceSessionActivityPanel({
     }
     const timeoutId = window.setTimeout(() => {
       if (showFollowCoachBubble) {
-        if (!workspaceId) {
-          setShowFollowCoach(false);
-          return;
-        }
-        const nextDismissedByWorkspace = {
-          ...readSoloFollowCoachDismissedByWorkspace(),
-          [workspaceId]: Date.now(),
-        };
-        writeSoloFollowCoachDismissedByWorkspace(nextDismissedByWorkspace);
+        // 自动消失仅隐藏当次，不写入 soloFollowCoachDismissedByWorkspace；
+        // 仅用户显式点击 dismiss 才永久记录，同 workspace 后续仍可再次触发。
         setShowFollowCoach(false);
         return;
       }
@@ -1575,7 +1897,7 @@ export function WorkspaceSessionActivityPanel({
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [followNudgeContext, showFollowCoachBubble, showFollowNudgeBubble, workspaceId]);
+  }, [followNudgeContext, showFollowCoachBubble, showFollowNudgeBubble]);
 
   useLayoutEffect(() => {
     if (!shouldShowFollowBubble || typeof window === "undefined") {
@@ -1728,7 +2050,7 @@ export function WorkspaceSessionActivityPanel({
 
   const renderSemanticSummaryList = (
     summary: SemanticDiffSummary,
-    sectionKey: keyof Pick<SemanticDiffSummary, "intent" | "behavior" | "risks" | "validation">,
+    sectionKey: SemanticSummarySectionKey,
   ) => (
     <ul className="session-activity-semantic-list">
       {summary[sectionKey].map((item) => {
@@ -1785,156 +2107,26 @@ export function WorkspaceSessionActivityPanel({
     </ul>
   );
 
-  const renderTurnArtifacts = (group: SessionActivityTurnGroup) => {
-    const artifactSummary = buildTurnArtifactSummary(group.events);
-    if (!artifactSummary) {
-      return null;
-    }
-    const activeArtifactTab = artifactTabByTurnGroupId[group.id] ?? "artifacts";
-    const signedAdditions = formatSignedCount(artifactSummary.additions, "+");
-    const signedDeletions = formatSignedCount(artifactSummary.deletions, "-");
-    return (
-      <article className="session-activity-turn-artifacts">
-        <div className="session-activity-turn-artifacts-header">
-          <div className="session-activity-turn-artifacts-title">
-            <div className="session-activity-turn-artifacts-kicker">
-              {t("activityPanel.artifacts.kicker")}
-            </div>
-            <h4>{t("activityPanel.artifacts.title")}</h4>
-          </div>
-          <div className="session-activity-turn-artifacts-stats">
-            <span>{t("activityPanel.artifacts.fileCount", { count: artifactSummary.files.length })}</span>
-            {signedAdditions ? <span className="is-add">{signedAdditions}</span> : null}
-            {signedDeletions ? <span className="is-del">{signedDeletions}</span> : null}
-          </div>
-          <div
-            className="session-activity-turn-artifacts-tabs"
-            role="tablist"
-            aria-label={t("activityPanel.artifacts.tabsAriaLabel")}
-          >
-            {(["artifacts", "semantic"] as const).map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                role="tab"
-                aria-selected={activeArtifactTab === tab}
-                className={`session-activity-turn-artifacts-tab${activeArtifactTab === tab ? " is-active" : ""}`}
-                onClick={() =>
-                  setArtifactTabByTurnGroupId((current) => ({
-                    ...current,
-                    [group.id]: tab,
-                  }))
-                }
-              >
-                <span className="session-activity-turn-artifacts-tab-icon" aria-hidden>
-                  {turnArtifactTabIconMap[tab]}
-                </span>
-                <span>
-                  {tab === "artifacts"
-                    ? t("activityPanel.artifacts.tabs.artifacts")
-                    : t("activityPanel.artifacts.tabs.semantic")}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-        {activeArtifactTab === "artifacts" ? (
-          <div className="session-activity-file-list is-turn-artifacts">
-            {artifactSummary.files.map((fileChangeEntry) => {
-              const fileSignedAdditions = formatSignedCount(fileChangeEntry.additions, "+");
-              const fileSignedDeletions = formatSignedCount(fileChangeEntry.deletions, "-");
-              return (
-                <div
-                  key={`${group.id}:${fileChangeEntry.filePath}`}
-                  className="session-activity-file-row"
-                >
-                  <button
-                    type="button"
-                    className="session-activity-file-row-main"
-                    title={fileChangeEntry.filePath}
-                    onClick={(clickEvent) => {
-                      clickEvent.stopPropagation();
-                      openActivityFile(fileChangeEntry);
-                    }}
-                  >
-                    <span
-                      className={`session-activity-file-kind-badge is-${fileChangeEntry.statusLetter.toLowerCase()}`}
-                      aria-hidden
-                    >
-                      {fileChangeEntry.statusLetter}
-                    </span>
-                    <span className="session-activity-file-row-icon" aria-hidden>
-                      <FileIcon filePath={fileChangeEntry.filePath} />
-                    </span>
-                    <span className="session-activity-file-row-copy">
-                      <span className="session-activity-file-row-name">
-                        {fileChangeEntry.fileName}
-                      </span>
-                    </span>
-                    {fileSignedAdditions || fileSignedDeletions ? (
-                      <span className="session-activity-file-row-stats">
-                        {fileSignedAdditions ? (
-                          <span className="is-add">{fileSignedAdditions}</span>
-                        ) : null}
-                        {fileSignedDeletions ? (
-                          <span className="is-del">{fileSignedDeletions}</span>
-                        ) : null}
-                      </span>
-                    ) : null}
-                  </button>
-                  <button
-                    type="button"
-                    className="session-activity-file-row-action"
-                    aria-label={t("git.previewModalAction")}
-                    title={t("git.previewModalAction")}
-                    disabled={!fileChangeEntry.diff?.trim() && !workspaceId}
-                    onClick={(clickEvent) => {
-                      clickEvent.stopPropagation();
-                      handleOpenDiffPreview(fileChangeEntry);
-                    }}
-                  >
-                    <GitCompareArrows
-                      size={18}
-                      strokeWidth={2.25}
-                      aria-hidden
-                      className="session-activity-file-row-action-icon"
-                    />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="session-activity-turn-semantic" role="tabpanel">
-            {artifactSummary.turnSemantic ? (
-              <div className="session-activity-turn-semantic-section is-turn-meaning">
-                <h5>{t("activityPanel.artifacts.turnSemanticTitle")}</h5>
-                <p className="session-activity-turn-semantic-text">
-                  {artifactSummary.turnSemantic}
-                </p>
-              </div>
-            ) : null}
-            <div className="session-activity-turn-semantic-section is-intent">
-              <h5>{t("git.semanticDiff.intentTitle")}</h5>
-              {renderSemanticSummaryList(artifactSummary.semanticSummary, "intent")}
-            </div>
-            <div className="session-activity-turn-semantic-section is-behavior">
-              <h5>{t("git.semanticDiff.behaviorTitle")}</h5>
-              {renderSemanticSummaryList(artifactSummary.semanticSummary, "behavior")}
-            </div>
-            <div className="session-activity-turn-semantic-section is-risk">
-              <h5>{t("git.semanticDiff.riskTitle")}</h5>
-              {renderSemanticSummaryList(artifactSummary.semanticSummary, "risks")}
-            </div>
-            <div className="session-activity-turn-semantic-section is-validation">
-              <h5>{t("git.semanticDiff.validationTitle")}</h5>
-              {renderSemanticSummaryList(artifactSummary.semanticSummary, "validation")}
-            </div>
-          </div>
-        )}
-      </article>
-    );
+  const handleSelectArtifactTab = (groupId: string, tab: TurnArtifactTab) => {
+    setArtifactTabByTurnGroupId((current) => ({
+      ...current,
+      [groupId]: tab,
+    }));
   };
+
+  // 语义摘要构建下沉到 TurnArtifactsSection（useMemo 按 group.events 引用缓存），
+  // 这里只负责组装当前 tab 与回调
+  const renderTurnArtifacts = (group: SessionActivityTurnGroup) => (
+    <TurnArtifactsSection
+      group={group}
+      activeArtifactTab={artifactTabByTurnGroupId[group.id] ?? "artifacts"}
+      onSelectArtifactTab={handleSelectArtifactTab}
+      onOpenActivityFile={openActivityFile}
+      onOpenDiffPreview={handleOpenDiffPreview}
+      workspaceId={workspaceId}
+      renderSemanticSummaryList={renderSemanticSummaryList}
+    />
+  );
 
   const renderTimelineEvent = (event: SessionActivityEvent) => {
     if (event.kind === "fileChange") {
@@ -2078,6 +2270,9 @@ export function WorkspaceSessionActivityPanel({
                     }
                     reasoningPreviewScrollContainerByEventIdRef.current[event.eventId] = node;
                   }}
+                  onScroll={(scrollEvent) =>
+                    handleReasoningPreviewScroll(event.eventId, scrollEvent.currentTarget)
+                  }
                 >
                   <div className="session-activity-reasoning-surface">
                     <Markdown
@@ -2090,6 +2285,30 @@ export function WorkspaceSessionActivityPanel({
                       softBreaks
                     />
                   </div>
+                  {pausedReasoningFollowEventIds[event.eventId] ? (
+                    <div
+                      className="session-activity-scroll-bottom-anchor"
+                      style={{
+                        position: "sticky",
+                        bottom: 6,
+                        display: "flex",
+                        justifyContent: "flex-end",
+                        pointerEvents: "none",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="session-activity-follow-bubble-primary"
+                        style={{ pointerEvents: "auto" }}
+                        onClick={(clickEvent) => {
+                          clickEvent.stopPropagation();
+                          handleResumeReasoningFollow(event.eventId);
+                        }}
+                      >
+                        {t("messages.backToBottom")}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ) : event.kind === "command" ? (
                 event.commandPreview && commandRenderMeta?.mode === "markdown" ? (
@@ -2173,13 +2392,35 @@ export function WorkspaceSessionActivityPanel({
               className="session-activity-tabs"
               role="tablist"
               aria-label={t("activityPanel.tabs.ariaLabel")}
+              onKeyDown={(keyEvent) => {
+                if (keyEvent.key !== "ArrowLeft" && keyEvent.key !== "ArrowRight") {
+                  return;
+                }
+                keyEvent.preventDefault();
+                const currentIndex = visibleTabItems.findIndex((tab) => tab.id === activeTab);
+                if (currentIndex < 0) {
+                  return;
+                }
+                const direction = keyEvent.key === "ArrowRight" ? 1 : -1;
+                const nextIndex =
+                  (currentIndex + direction + visibleTabItems.length) % visibleTabItems.length;
+                const nextTab = visibleTabItems[nextIndex];
+                if (!nextTab) {
+                  return;
+                }
+                setActiveTab(nextTab.id);
+                focusRovingTab(keyEvent.currentTarget, nextIndex);
+              }}
             >
               {visibleTabItems.map((tab) => (
                 <button
                   key={tab.id}
+                  id={`session-activity-tab-${workspaceId}-${tab.id}`}
                   type="button"
                   role="tab"
                   aria-selected={activeTab === tab.id}
+                  aria-controls={`session-activity-tabpanel-${workspaceId}`}
+                  tabIndex={activeTab === tab.id ? 0 : -1}
                   className={`session-activity-tab${activeTab === tab.id ? " is-active" : ""}`}
                   onClick={() => setActiveTab(tab.id)}
                 >
@@ -2202,8 +2443,19 @@ export function WorkspaceSessionActivityPanel({
               className="git-history-diff-modal-overlay is-popup"
               role="presentation"
               onClick={closeDiffPreview}
+              onKeyDown={(keyEvent) => {
+                if (keyEvent.key !== "Escape") {
+                  return;
+                }
+                keyEvent.preventDefault();
+                keyEvent.stopPropagation();
+                // 脏状态保留既有 UnsavedChangesDialog 拦截链
+                closeDiffPreview();
+              }}
             >
               <div
+                ref={diffPreviewDialogRef}
+                tabIndex={-1}
                 className={`git-history-diff-modal ${isDiffPreviewMaximized ? "is-maximized" : ""}`}
                 role="dialog"
                 aria-modal="true"
@@ -2349,9 +2601,21 @@ export function WorkspaceSessionActivityPanel({
       ) : null}
 
       {filteredTimeline.length === 0 ? (
-        <div className="session-activity-empty">{emptyCopy}</div>
+        <div
+          className="session-activity-empty"
+          role="tabpanel"
+          id={`session-activity-tabpanel-${workspaceId}`}
+          aria-labelledby={`session-activity-tab-${workspaceId}-${activeTab}`}
+        >
+          {emptyCopy}
+        </div>
       ) : (
-        <div className="session-activity-timeline">
+        <div
+          className="session-activity-timeline"
+          role="tabpanel"
+          id={`session-activity-tabpanel-${workspaceId}`}
+          aria-labelledby={`session-activity-tab-${workspaceId}-${activeTab}`}
+        >
           {groupedTimeline.map((group) => (
             <section key={group.id} className="session-activity-turn-group">
               <button
@@ -2380,6 +2644,9 @@ export function WorkspaceSessionActivityPanel({
                     : t("activityPanel.turnGroupFallback")}
                 </span>
                 <span className="session-activity-turn-group-header-tail">
+                  {collapsedTurnGroupIds[group.id] ? (
+                    <TurnGroupSummaryBadges events={group.events} />
+                  ) : null}
                   {group.sessionRole === "child" ? (
                     <span className="session-activity-turn-group-meta" title={group.threadName}>
                       {group.threadName}

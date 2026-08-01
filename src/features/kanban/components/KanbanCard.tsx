@@ -48,6 +48,7 @@ const ENGINE_NAMES: Record<EngineType, string> = {
   claude: "Claude Code",
   codex: "Codex",
   gemini: "Gemini",
+  grok: "Grok CLI",
   kimi: "Kimi",
   opencode: "OpenCode",
 };

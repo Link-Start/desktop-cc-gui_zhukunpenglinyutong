@@ -1,4 +1,4 @@
-import { computeDiff } from "../features/messages/utils/diffUtils";
+import { computeDiff } from "./diff";
 import type { ConversationItem } from "../types";
 
 const FILE_CHANGE_PATH_KEYS = [

@@ -2,16 +2,21 @@ import {
   loadCodexSession as loadCodexSessionService,
   loadClaudeSession as loadClaudeSessionService,
   loadGeminiSession as loadGeminiSessionService,
+  loadGrokSession as loadGrokSessionService,
   loadKimiSession as loadKimiSessionService,
   resumeThread as resumeThreadService,
 } from "../../../services/tauri";
 import { createClaudeHistoryLoader } from "../loaders/claudeHistoryLoader";
 import { createCodexHistoryLoader } from "../loaders/codexHistoryLoader";
 import { createGeminiHistoryLoader } from "../loaders/geminiHistoryLoader";
+import { createGrokHistoryLoader } from "../loaders/grokHistoryLoader";
 import { createKimiHistoryLoader } from "../loaders/kimiHistoryLoader";
 import { createOpenCodeHistoryLoader } from "../loaders/opencodeHistoryLoader";
 import { createSharedHistoryLoader } from "../loaders/sharedHistoryLoader";
-import { loadSharedSession as loadSharedSessionService } from "../../shared-session/services/sharedSessions";
+import {
+  loadSharedProjection as loadSharedProjectionService,
+  loadSharedSession as loadSharedSessionService,
+} from "../../shared-session/services/sharedSessions";
 
 export function createThreadHistoryLoaderForThread({
   targetThreadId,
@@ -28,6 +33,7 @@ export function createThreadHistoryLoaderForThread({
     return createSharedHistoryLoader({
       workspaceId,
       loadSharedSession: loadSharedSessionService,
+      loadSharedProjection: loadSharedProjectionService,
     });
   }
   if (targetThreadId.startsWith("claude:")) {
@@ -42,6 +48,13 @@ export function createThreadHistoryLoaderForThread({
       workspaceId,
       workspacePath,
       loadGeminiSession: loadGeminiSessionService,
+    });
+  }
+  if (targetThreadId.startsWith("grok:")) {
+    return createGrokHistoryLoader({
+      workspaceId,
+      workspacePath,
+      loadGrokSession: loadGrokSessionService,
     });
   }
   if (targetThreadId.startsWith("kimi:")) {

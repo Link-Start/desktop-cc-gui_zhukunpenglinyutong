@@ -30,6 +30,7 @@ const noteCards = {
     "bodyPlaceholder": "Оставьте здесь идею, фрагмент команды или временный контекст…",
     "captureMenu": "Сохранить в заметки",
     "captureSelection": "Сохранить выбранный код в заметки…",
+    "captureWholeFile": "Сохранить весь файл в заметки…",
     "captureConversationSelection": "Сохранить выбранный текст в заметки…",
     "captureConversationThread": "Сохранить смысловой текст диалога в заметки…",
     "captureConversationSelectionTitle": "Фрагмент диалога",

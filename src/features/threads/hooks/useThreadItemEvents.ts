@@ -2,6 +2,7 @@ import { startTransition, useCallback, useEffect, useMemo, useRef } from "react"
 import { workspaceScopedHas, type WorkspaceScopedMap } from "./workspaceScopedMap";
 import type { Dispatch, MutableRefObject } from "react";
 import { buildConversationItem } from "../../../utils/threadItems";
+import { isCodexSubagentActivityItem } from "../utils/codexSubagentIdentity";
 import type { NormalizedThreadEvent } from "../contracts/conversationCurtainContracts";
 import {
   createRealtimeEventBatcher,
@@ -34,6 +35,8 @@ import {
   appendLiveAssistantText,
   clearLiveAssistantText,
   drainLiveAssistantTextTail,
+  drainLiveAssistantTextTailIfItemChanged,
+  updateLiveAssistantTextSnapshot,
 } from "../utils/liveAssistantTextChannel";
 import { isLiveTextExternalizationEnabled } from "../utils/realtimePerfFlags";
 import {
@@ -41,6 +44,7 @@ import {
   noteThreadReducerWorkMeasured,
 } from "../utils/streamLatencyDiagnostics";
 import { recordHotspotSample } from "../../../services/perfBaseline/hotspotTracker";
+import { inferEngineFromLegacyThreadId } from "../contracts/engineRuntimeIdentity";
 
 const CLAUDE_STREAM_DEBUG_FLAG_KEY = "ccgui.debug.claude.stream";
 // A4 流式正文外部化（docs/perf/a4-live-text-externalization-plan.md）：
@@ -51,24 +55,10 @@ const LIVE_TEXT_EXTERNALIZATION_ENABLED = isLiveTextExternalizationEnabled();
  * Infer engine type from thread ID.
  * Claude/Gemini/Kimi/OpenCode threads use "<engine>:" or "<engine>-pending-" prefixes.
  */
-function inferEngineFromThreadId(threadId: string): "claude" | "codex" | "gemini" | "kimi" | "opencode" {
-  if (threadId.startsWith("claude:") || threadId.startsWith("claude-pending-")) {
-    return "claude";
-  }
-  if (threadId.startsWith("gemini:") || threadId.startsWith("gemini-pending-")) {
-    return "gemini";
-  }
-  if (threadId.startsWith("kimi:") || threadId.startsWith("kimi-pending-")) {
-    return "kimi";
-  }
-  if (threadId.startsWith("opencode:") || threadId.startsWith("opencode-pending-")) {
-    return "opencode";
-  }
-  return "codex";
-}
+const inferEngineFromThreadId = inferEngineFromLegacyThreadId;
 
 export function canProgressEventStartProcessing(
-  engine: "claude" | "codex" | "gemini" | "kimi" | "opencode",
+  engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode",
 ) {
   return engine !== "codex";
 }
@@ -81,6 +71,10 @@ function isGeminiThread(threadId: string) {
   return threadId.startsWith("gemini:") || threadId.startsWith("gemini-pending-");
 }
 
+function isGrokThread(threadId: string) {
+  return threadId.startsWith("grok:") || threadId.startsWith("grok-pending-");
+}
+
 function isKimiThread(threadId: string) {
   return threadId.startsWith("kimi:") || threadId.startsWith("kimi-pending-");
 }
@@ -89,13 +83,20 @@ function readHighResolutionNowMs() {
   return typeof performance !== "undefined" ? performance.now() : Date.now();
 }
 
-type ReasoningEngineHint = "gemini" | "kimi" | null;
+type ReasoningEngineHint = "gemini" | "grok" | "kimi" | null;
 
 function isGeminiEventThread(
   threadId: string,
   engineHint?: ReasoningEngineHint,
 ) {
   return engineHint === "gemini" || isGeminiThread(threadId);
+}
+
+function isGrokEventThread(
+  threadId: string,
+  engineHint?: ReasoningEngineHint,
+) {
+  return engineHint === "grok" || isGrokThread(threadId);
 }
 
 function isKimiEventThread(
@@ -108,7 +109,7 @@ function isKimiEventThread(
 function inferItemEngineSource(
   item: Record<string, unknown>,
   threadId: string,
-): "claude" | "codex" | "gemini" | "kimi" | "opencode" {
+): "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" {
   const rawEngineSource = asString(item.engineSource ?? item.engine_source ?? "")
     .trim()
     .toLowerCase();
@@ -116,6 +117,7 @@ function inferItemEngineSource(
     rawEngineSource === "claude" ||
     rawEngineSource === "codex" ||
     rawEngineSource === "gemini" ||
+    rawEngineSource === "grok" ||
     rawEngineSource === "kimi" ||
     rawEngineSource === "opencode"
   ) {
@@ -177,6 +179,7 @@ type UseThreadItemEventsOptions = {
   applyCollabThreadLinks: (
     threadId: string,
     item: Record<string, unknown>,
+    workspaceId?: string,
   ) => void;
   interruptedThreadsRef: MutableRefObject<WorkspaceScopedMap<true>>;
   onDebug?: (entry: DebugEntry) => void;
@@ -565,6 +568,7 @@ export function useThreadItemEvents({
         "engineHint" in operation ? operation.engineHint : undefined;
       const isGeminiReasoningDelta =
         (isGeminiEventThread(threadId, reasoningEngineHint) ||
+          isGrokEventThread(threadId, reasoningEngineHint) ||
           isKimiEventThread(threadId, reasoningEngineHint)) &&
         (operation.kind === "reasoningSummaryDelta" ||
           operation.kind === "reasoningSummaryBoundary" ||
@@ -814,7 +818,15 @@ export function useThreadItemEvents({
       } = {},
     ) => {
       if (normalizedEvent.rawItem) {
-        applyCollabThreadLinks(normalizedEvent.threadId, normalizedEvent.rawItem);
+        if (isCodexSubagentActivityItem(normalizedEvent.rawItem)) {
+          applyCollabThreadLinks(
+            normalizedEvent.threadId,
+            normalizedEvent.rawItem,
+            normalizedEvent.workspaceId,
+          );
+        } else {
+          applyCollabThreadLinks(normalizedEvent.threadId, normalizedEvent.rawItem);
+        }
       }
       if (
         normalizedEvent.operation === "completeAgentMessage" &&
@@ -1040,10 +1052,20 @@ export function useThreadItemEvents({
     ],
   );
 
+  const flushRealtimeDeltaOpsForUnmountRef = useRef(flushRealtimeDeltaOps);
+  const flushNormalizedRealtimeOpsForUnmountRef = useRef(
+    flushNormalizedRealtimeOps,
+  );
+  useEffect(() => {
+    flushRealtimeDeltaOpsForUnmountRef.current = flushRealtimeDeltaOps;
+    flushNormalizedRealtimeOpsForUnmountRef.current =
+      flushNormalizedRealtimeOps;
+  }, [flushNormalizedRealtimeOps, flushRealtimeDeltaOps]);
+
   useEffect(
     () => () => {
-      flushRealtimeDeltaOps();
-      flushNormalizedRealtimeOps();
+      flushRealtimeDeltaOpsForUnmountRef.current();
+      flushNormalizedRealtimeOpsForUnmountRef.current();
       if (realtimeFlushTimerRef.current !== null) {
         window.clearTimeout(realtimeFlushTimerRef.current);
         realtimeFlushTimerRef.current = null;
@@ -1058,7 +1080,7 @@ export function useThreadItemEvents({
       terminalRealtimeTurnIdsRef.current.clear();
       settledRealtimeThreadsRef.current.clear();
     },
-    [flushNormalizedRealtimeOps, flushRealtimeDeltaOps],
+    [],
   );
 
   const flushPendingRealtimeEvents = useCallback(() => {
@@ -1186,7 +1208,11 @@ export function useThreadItemEvents({
       ) {
         markProcessing(threadId, true);
       }
-      applyCollabThreadLinks(threadId, item);
+      if (isCodexSubagentActivityItem(item)) {
+        applyCollabThreadLinks(threadId, item, workspaceId);
+      } else {
+        applyCollabThreadLinks(threadId, item);
+      }
       const agentMessageSnapshotText = asString(
         item?.text ?? item?.content ?? item?.output_text ?? item?.outputText ?? "",
       );
@@ -1257,22 +1283,56 @@ export function useThreadItemEvents({
             text: agentMessageSnapshotText,
             turnId,
           });
-          const dispatchStartedAt = readHighResolutionNowMs();
-          dispatch({
-            type: "appendAgentDelta",
-            workspaceId,
-            threadId,
-            itemId,
-            delta: agentMessageSnapshotText,
-            hasCustomName: Boolean(getCustomName(workspaceId, threadId)),
-          });
-          const dispatchCostMs = readHighResolutionNowMs() - dispatchStartedAt;
-          noteThreadReducerWorkMeasured(threadId, {
-            itemId,
-            textLength: agentMessageSnapshotText.length,
-            mergeCostMs: dispatchCostMs,
-            normalizationCostMs: dispatchCostMs,
-          });
+          // 同 delta 路径：snapshot 换 itemId 时先 drain 上一段，避免只剩建壳首字。
+          if (LIVE_TEXT_EXTERNALIZATION_ENABLED && shouldMarkProcessing) {
+            const previousTail = drainLiveAssistantTextTailIfItemChanged(
+              threadId,
+              itemId,
+            );
+            if (previousTail) {
+              dispatch({
+                type: "appendAgentDelta",
+                workspaceId,
+                threadId,
+                itemId: previousTail.itemId,
+                delta: previousTail.tailDelta,
+                hasCustomName: true,
+              });
+            }
+          }
+          const liveSnapshotUpdate =
+            LIVE_TEXT_EXTERNALIZATION_ENABLED && shouldMarkProcessing
+              ? updateLiveAssistantTextSnapshot(
+                  threadId,
+                  itemId,
+                  agentMessageSnapshotText,
+                )
+              : "replacement";
+          const shouldDispatchSnapshot =
+            liveSnapshotUpdate === "first" ||
+            liveSnapshotUpdate === "replacement";
+          if (shouldDispatchSnapshot) {
+            const dispatchStartedAt = readHighResolutionNowMs();
+            dispatch({
+              type: "appendAgentDelta",
+              workspaceId,
+              threadId,
+              itemId,
+              delta: agentMessageSnapshotText,
+              hasCustomName: Boolean(getCustomName(workspaceId, threadId)),
+            });
+            const dispatchCostMs =
+              readHighResolutionNowMs() - dispatchStartedAt;
+            noteThreadReducerWorkMeasured(threadId, {
+              itemId,
+              textLength: agentMessageSnapshotText.length,
+              mergeCostMs: dispatchCostMs,
+              normalizationCostMs: dispatchCostMs,
+            });
+          }
+          if (liveSnapshotUpdate === "replacement") {
+            clearLiveAssistantText(threadId);
+          }
           logClaudeStream("agent-snapshot-routed", {
             workspaceId,
             threadId,
@@ -1296,12 +1356,13 @@ export function useThreadItemEvents({
         const normalizedConverted =
           itemEngineSource === "claude" ||
           itemEngineSource === "gemini" ||
+          itemEngineSource === "grok" ||
           itemEngineSource === "kimi" ||
           itemEngineSource === "opencode" ||
           itemEngineSource === "codex"
             ? {
                 ...converted,
-                engineSource: itemEngineSource as "claude" | "codex" | "gemini" | "kimi" | "opencode",
+                engineSource: itemEngineSource as "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode",
               }
             : converted;
         const threadEngine = inferEngineFromThreadId(threadId);
@@ -1533,6 +1594,25 @@ export function useThreadItemEvents({
       // A4：flag 开启时，首条 delta（或 itemId 变化）仍走 reducer 建壳；
       // 后续 delta 只累计进 live 通道（订阅的 MessageRow 小树渲染），
       // 不再逐条 dispatch 打根。终稿由 completed 全量落地。
+      //
+      // Text↔Reasoning 交错会换 itemId（Gemini/Grok/Kimi 的 text-N run）。
+      // 换 id 前必须先 drain 上一段尾部；否则上段只剩建壳首字，历史重载才完整。
+      if (LIVE_TEXT_EXTERNALIZATION_ENABLED) {
+        const previousTail = drainLiveAssistantTextTailIfItemChanged(
+          threadId,
+          itemId,
+        );
+        if (previousTail) {
+          enqueueRealtimeDeltaOperation({
+            kind: "agentDelta",
+            workspaceId,
+            threadId,
+            itemId: previousTail.itemId,
+            delta: previousTail.tailDelta,
+            turnId,
+          });
+        }
+      }
       const liveTextResult = LIVE_TEXT_EXTERNALIZATION_ENABLED
         ? appendLiveAssistantText(threadId, itemId, resolvedDelta)
         : null;

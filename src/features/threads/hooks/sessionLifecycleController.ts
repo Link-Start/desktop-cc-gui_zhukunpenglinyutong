@@ -4,9 +4,12 @@ import type { AutoSessionMetadata } from "../../../services/tauri";
 import { pushGlobalRuntimeNotice } from "../../../services/globalRuntimeNotices";
 import { previewThreadName } from "../../../utils/threadItems";
 import {
+  CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
   CODEX_DISK_PROVIDER_PROFILE_ID,
   CODEX_DISK_PROVIDER_PROFILE_NAME,
-  type CodexProviderProfileOption,
+  KIMI_LOCAL_PROVIDER_PROFILE_ID,
+  OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
+  type EngineProviderProfileOption,
 } from "../constants/codexProviderProfiles";
 import type { ThreadAction, ThreadState } from "./useThreadsReducer";
 
@@ -167,12 +170,19 @@ export function extractProviderBindingFromStartedThread(
 }
 
 export function providerBindingFromSelectedProfile(
-  providerProfile?: CodexProviderProfileOption | null,
+  providerProfile?: EngineProviderProfileOption | null,
   fallbackProviderProfileId?: string | null,
 ): ProviderProfileSelection {
   const selectedProfileId = normalizeResponseString(providerProfile?.id);
   const providerProfileId =
     selectedProfileId ?? normalizeResponseString(fallbackProviderProfileId);
+  if (
+    providerProfileId === CLAUDE_LOCAL_PROVIDER_PROFILE_ID ||
+    providerProfileId === KIMI_LOCAL_PROVIDER_PROFILE_ID ||
+    providerProfileId === OPENCODE_LOCAL_PROVIDER_PROFILE_ID
+  ) {
+    return {};
+  }
   const isDiskProvider = providerProfileId === CODEX_DISK_PROVIDER_PROFILE_ID;
   const providerProfileSource = selectedProfileId
     ? normalizeResponseString(providerProfile?.source)

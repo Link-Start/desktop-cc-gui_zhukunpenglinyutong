@@ -29,6 +29,8 @@ const tools = {
     batchSearch: "批量搜索",
     batchSearchMatch: "批量搜索/匹配",
     batchEditFile: "批量编辑文件",
+    fileEditSceneCount: "文件修改（{{count}} 个）",
+    fileEditSceneToggle: "文件修改，共 {{count}} 个，展开或折叠详情",
     bashGroupBatchRun: "批量运行命令",
     bashGroupCompleted: "完成",
     bashGroupAllCompleted: "全部完成",

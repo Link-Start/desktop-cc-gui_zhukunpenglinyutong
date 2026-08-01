@@ -12,10 +12,17 @@ const workspace = {
     addWorkspaceOpenNewWindow: "Open in New Window",
     addWorkspaceRemotePathPrompt:
       "Enter the absolute project path on the daemon machine.",
+    workspacesRecoveredTitle: "Workspaces recovered",
+    workspacesRecoveredMessage:
+      "The workspaces file was corrupted. The original file was backed up as {{backupFileName}} and an empty workspace list has been restored.",
+    workspacesRecoveredNoBackupMessage:
+      "The workspaces file was corrupted and could not be backed up. An empty workspace list has been restored.",
     loadingProgressRunInBackground: "Run in background",
     loadingProgressCreateSessionTitle: "Creating session...",
     loadingProgressCreateSessionMessage:
       "Preparing a {{engine}} session for {{workspace}}.",
+    sharedSessionLocalModelUnavailable:
+      "{{engine}} has no local model available for Shared Session. Refresh the CLI status and try again.",
     loadingProgressAddProjectTitle: "Adding project...",
     loadingProgressAddProjectMessage:
       "Adding {{project}} to the current window.",
@@ -62,6 +69,7 @@ const workspace = {
     engineCodex: "Codex",
     engineGemini: "Gemini",
     engineKimi: "Kimi CLI",
+    engineGrok: "Grok CLI",
     engineOpenCode: "OpenCode",
     engineStatusLoading: "Checking...",
     engineStatusRequiresLogin: "Sign in required",

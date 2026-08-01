@@ -21,6 +21,16 @@ export function isSameApprovalRequest(
   left: ApprovalRequest,
   right: ApprovalRequest,
 ) {
+  const leftOwner = left.shared_runtime_owner;
+  const rightOwner = right.shared_runtime_owner;
+  if (leftOwner || rightOwner) {
+    return (
+      left.workspace_id === right.workspace_id &&
+      left.request_id === right.request_id &&
+      leftOwner?.providerRuntimeKey === rightOwner?.providerRuntimeKey &&
+      leftOwner?.attemptId === rightOwner?.attemptId
+    );
+  }
   return (
     left.workspace_id === right.workspace_id &&
     left.request_id === right.request_id &&
@@ -28,4 +38,11 @@ export function isSameApprovalRequest(
     stableSerializeApprovalValue(left.params ?? {}) ===
       stableSerializeApprovalValue(right.params ?? {})
   );
+}
+
+export function approvalConversationItemId(request: ApprovalRequest): string {
+  const attemptId = request.shared_runtime_owner?.attemptId;
+  return attemptId
+    ? `shared-approval-${attemptId}-${String(request.request_id)}`
+    : String(request.request_id);
 }

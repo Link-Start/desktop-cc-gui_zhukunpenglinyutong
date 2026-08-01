@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import enSettings from "../../../i18n/locales/en/settings";
+import zhSettings from "../../../i18n/locales/zh/settings";
 import { defaultConfigJson } from "./ProviderDialog";
 
 describe("ProviderDialog defaultConfigJson", () => {
@@ -34,7 +36,7 @@ describe("ProviderDialog defaultConfigJson", () => {
       ANTHROPIC_BASE_URL: "",
       ANTHROPIC_BETAS: "context-1m-2025-08-07",
       ANTHROPIC_DEFAULT_HAIKU_MODEL: "claude-haiku-4-5-20251001",
-      ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-4-8",
+      ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-5",
       ANTHROPIC_DEFAULT_SONNET_MODEL: "claude-sonnet-4-6",
       ANTHROPIC_SMALL_FAST_MODEL: "claude-haiku-4-5-20251001",
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
@@ -46,5 +48,19 @@ describe("ProviderDialog defaultConfigJson", () => {
       MAX_THINKING_TOKENS: "31999",
       MCP_TIMEOUT: "60000",
     });
+  });
+
+  it("describes managed providers as isolated from the global Claude settings", () => {
+    const enDialog = enSettings.settings.vendor.dialog;
+    const zhDialog = zhSettings.settings.vendor.dialog;
+
+    expect(enDialog.addDescription).toContain("stored separately in desktop-cc-gui");
+    expect(enDialog.editDescription).toContain(
+      "~/.claude/settings.json is not modified",
+    );
+    expect(zhDialog.addDescription).toContain("独立存储在 desktop-cc-gui");
+    expect(zhDialog.editDescription).toContain(
+      "不会修改 ~/.claude/settings.json",
+    );
   });
 });

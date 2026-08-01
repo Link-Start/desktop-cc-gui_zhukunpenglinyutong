@@ -60,7 +60,7 @@ function renderMarkdownMock(content: string) {
   return <div className="spec-hub-markdown">{nodes}</div>;
 }
 
-vi.mock("../../messages/components/Markdown", () => ({
+vi.mock("../../../markdown/components/Markdown", () => ({
   Markdown: ({
     content,
     value,

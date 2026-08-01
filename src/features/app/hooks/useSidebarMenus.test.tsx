@@ -3,12 +3,18 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { EngineType, WorkspaceInfo } from "../../../types";
 import { useSidebarMenus } from "./useSidebarMenus";
-import { getOpenCodeProviderHealth } from "../../../services/tauri";
+import {
+  createNativeProviderContinuation,
+  discardPreparedNativeProviderContinuation,
+  getOpenCodeProviderHealth,
+  prepareNativeProviderContinuation,
+} from "../../../services/tauri";
 import { pushGlobalRuntimeNotice } from "../../../services/globalRuntimeNotices";
 import type {
   EngineDisplayInfo,
   EngineRefreshResult,
 } from "../../engine/hooks/useEngineController";
+import { requestProviderContinuationDialog } from "../../threads/services/providerContinuationRequests";
 
 const clientStoreMock = vi.hoisted(() => ({
   data: {} as Record<string, Record<string, unknown>>,
@@ -21,6 +27,17 @@ const clientStoreMock = vi.hoisted(() => ({
       [key]: value,
     };
   }),
+}));
+
+const providerContinuationEventsMock = vi.hoisted(() => ({
+  progressListener: null as
+    | ((event: {
+        workspaceId: string;
+        operationId: string;
+        phase: string;
+        percent: number;
+      }) => void)
+    | null,
 }));
 
 vi.mock("react-i18next", () => ({
@@ -44,11 +61,13 @@ vi.mock("react-i18next", () => ({
         "threads.pin": "Pin",
         "threads.unpin": "Unpin",
         "threads.delete": "Delete",
+        "threads.continuationSourceUnavailable": "来源不可用",
         "sidebar.sessionActionsGroup": "New session",
         "sidebar.newSharedSession": "Shared Session",
         "sidebar.codexProviderChoiceTitle": "Provider selection",
-        "sidebar.codexProviderDiskConfigLabel": "Disk config",
-        "sidebar.codexProviderCustomConfigLabel": "Custom config",
+        "sidebar.providerFollowsGlobalLabel": "Follows global config",
+        "sidebar.providerIsolatedConfigLabel": "Isolated config",
+        "sidebar.providerUnavailableLabel": "Provider unavailable",
         "sidebar.workspaceActionsGroup": "Workspace actions",
         "sidebar.activateWorkspace": "Open in main panel",
         "sidebar.setWorkspaceAlias": "Set alias",
@@ -58,6 +77,7 @@ vi.mock("react-i18next", () => ({
         "workspace.engineOpenCode": "OpenCode",
         "workspace.engineGemini": "Gemini",
         "workspace.engineKimi": "Kimi CLI",
+        "workspace.engineGrok": "Grok CLI",
         "workspace.engineStatusLoading": "Checking...",
         "workspace.engineStatusRequiresLogin": "Sign in required",
         "threads.reloadThreads": "Reload threads",
@@ -73,7 +93,26 @@ vi.mock("react-i18next", () => ({
 }));
 
 vi.mock("../../../services/tauri", () => ({
+  createNativeProviderContinuation: vi.fn(),
+  discardPreparedNativeProviderContinuation: vi.fn(),
   getOpenCodeProviderHealth: vi.fn(),
+  prepareNativeProviderContinuation: vi.fn(),
+}));
+vi.mock("../../../services/events", () => ({
+  subscribeNativeProviderContinuationProgress: vi.fn(
+    (
+      listener: NonNullable<
+        typeof providerContinuationEventsMock.progressListener
+      >,
+    ) => {
+      providerContinuationEventsMock.progressListener = listener;
+      return () => {
+        if (providerContinuationEventsMock.progressListener === listener) {
+          providerContinuationEventsMock.progressListener = null;
+        }
+      };
+    },
+  ),
 }));
 vi.mock("../../../services/globalRuntimeNotices", () => ({
   pushGlobalRuntimeNotice: vi.fn(),
@@ -84,6 +123,15 @@ vi.mock("../../../services/clientStorage", () => ({
 }));
 
 const getOpenCodeProviderHealthMock = vi.mocked(getOpenCodeProviderHealth);
+const createNativeProviderContinuationMock = vi.mocked(
+  createNativeProviderContinuation,
+);
+const prepareNativeProviderContinuationMock = vi.mocked(
+  prepareNativeProviderContinuation,
+);
+const discardPreparedNativeProviderContinuationMock = vi.mocked(
+  discardPreparedNativeProviderContinuation,
+);
 const pushGlobalRuntimeNoticeMock = vi.mocked(pushGlobalRuntimeNotice);
 
 const workspace: WorkspaceInfo = {
@@ -97,6 +145,14 @@ const workspace: WorkspaceInfo = {
     worktreeSetupScript: null,
   },
 };
+
+function createDeferred<T>() {
+  let resolvePromise!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((resolve) => {
+    resolvePromise = resolve;
+  });
+  return { promise, resolve: resolvePromise };
+}
 
 function createHandlers() {
   const engineOptions: EngineDisplayInfo[] = [
@@ -126,6 +182,26 @@ function createHandlers() {
       shortName: "OpenCode",
       installed: true,
       version: "1.4.4",
+      error: null,
+      availabilityState: "ready",
+      availabilityLabelKey: null,
+    },
+    {
+      type: "kimi",
+      displayName: "Kimi CLI",
+      shortName: "Kimi CLI",
+      installed: true,
+      version: "1.0.0",
+      error: null,
+      availabilityState: "ready",
+      availabilityLabelKey: null,
+    },
+    {
+      type: "grok",
+      displayName: "Grok CLI",
+      shortName: "Grok CLI",
+      installed: true,
+      version: "1.0.0",
       error: null,
       availabilityState: "ready",
       availabilityLabelKey: null,
@@ -166,6 +242,7 @@ function createHandlers() {
     onOpenThreadFolderPicker: vi.fn(),
     onOpenClaudeTui: vi.fn(),
     onReloadWorkspaceThreads: vi.fn(),
+    onSelectThread: vi.fn(),
     onActivateWorkspace: vi.fn(),
     onCreateSessionFolder: vi.fn(),
     onToggleExitedSessions: vi.fn(),
@@ -191,6 +268,18 @@ describe("useSidebarMenus", () => {
       },
     });
     pushGlobalRuntimeNoticeMock.mockReset();
+    createNativeProviderContinuationMock.mockReset();
+    prepareNativeProviderContinuationMock.mockReset();
+    discardPreparedNativeProviderContinuationMock.mockReset();
+    prepareNativeProviderContinuationMock.mockResolvedValue({
+      status: "prepared",
+      fidelity: "strong",
+      sourceEstimatedTokens: 1200,
+      packageEstimatedTokens: 600,
+      operation: { phase: "prepared" },
+    });
+    discardPreparedNativeProviderContinuationMock.mockResolvedValue(true);
+    providerContinuationEventsMock.progressListener = null;
     getOpenCodeProviderHealthMock.mockReset();
     getOpenCodeProviderHealthMock.mockResolvedValue({
       provider: "openai",
@@ -381,7 +470,7 @@ describe("useSidebarMenus", () => {
     },
   );
 
-  it("does not auto-probe opencode login state when the menu opens or rerenders", async () => {
+  it("shows OpenCode in the session menu without probing health on open", async () => {
     const handlers = createHandlers();
     handlers.engineOptions = [];
 
@@ -406,8 +495,8 @@ describe("useSidebarMenus", () => {
       .find((group) => group.id === "new-session")
       ?.actions.find((action) => action.id === "new-session-opencode");
 
+    expect(opencodeAction).toBeDefined();
     expect(opencodeAction?.unavailable).toBe(false);
-    expect(opencodeAction?.statusLabel).toBeNull();
     expect(getOpenCodeProviderHealthMock).not.toHaveBeenCalled();
   });
 
@@ -436,7 +525,7 @@ describe("useSidebarMenus", () => {
     expect(geminiAction).toBeUndefined();
   });
 
-  it("hides Gemini and OpenCode session entries when they are disabled in settings", async () => {
+  it("hides Gemini while keeping OpenCode visible despite legacy settings flags", async () => {
     const handlers = createHandlers();
     handlers.enabledEngines = {
       gemini: false,
@@ -459,7 +548,7 @@ describe("useSidebarMenus", () => {
         ?.actions ?? [];
 
     expect(sessionActions.map((action) => action.id)).not.toContain("new-session-gemini");
-    expect(sessionActions.map((action) => action.id)).not.toContain("new-session-opencode");
+    expect(sessionActions.map((action) => action.id)).toContain("new-session-opencode");
   });
 
   it("moves workspace quick actions into the workspace actions menu group", async () => {
@@ -477,10 +566,15 @@ describe("useSidebarMenus", () => {
     });
 
     const workspaceActions =
-      result.current.workspaceMenuState?.groups.find((group) => group.id === "workspace-actions")
-        ?.actions ?? [];
+      result.current.workspaceMenuState?.groups.find(
+        (group) => group.id === "workspace-actions",
+      );
 
-    expect(workspaceActions.map((action) => action.id)).toEqual([
+    expect(workspaceActions).toMatchObject({
+      collapsible: true,
+      defaultCollapsed: true,
+    });
+    expect(workspaceActions?.actions.map((action) => action.id)).toEqual([
       "activate-workspace",
       "reload-threads",
       "toggle-exited-sessions",
@@ -492,10 +586,18 @@ describe("useSidebarMenus", () => {
     ]);
 
     act(() => {
-      workspaceActions.find((action) => action.id === "activate-workspace")?.onSelect();
-      workspaceActions.find((action) => action.id === "reload-threads")?.onSelect();
-      workspaceActions.find((action) => action.id === "toggle-exited-sessions")?.onSelect();
-      workspaceActions.find((action) => action.id === "create-session-folder")?.onSelect();
+      workspaceActions?.actions
+        .find((action) => action.id === "activate-workspace")
+        ?.onSelect();
+      workspaceActions?.actions
+        .find((action) => action.id === "reload-threads")
+        ?.onSelect();
+      workspaceActions?.actions
+        .find((action) => action.id === "toggle-exited-sessions")
+        ?.onSelect();
+      workspaceActions?.actions
+        .find((action) => action.id === "create-session-folder")
+        ?.onSelect();
     });
 
     expect(handlers.onActivateWorkspace).toHaveBeenCalledWith("ws-1");
@@ -592,11 +694,11 @@ describe("useSidebarMenus", () => {
     ).toEqual([
       {
         id: "new-session-codex-provider-__disk__",
-        badgeLabel: "Disk config",
+        badgeLabel: "Follows global config",
       },
       {
         id: "new-session-codex-provider-provider-openai",
-        badgeLabel: "Custom config",
+        badgeLabel: "Isolated config",
       },
     ]);
   });
@@ -680,6 +782,141 @@ describe("useSidebarMenus", () => {
     );
   });
 
+  it.each([
+    {
+      engine: "claude" as const,
+      localId: "__local_settings_json__",
+      storageKey: "claudeLastProviderProfileId",
+    },
+    {
+      engine: "kimi" as const,
+      localId: "__local_config_toml__",
+      storageKey: "kimiLastProviderProfileId",
+    },
+    {
+      engine: "grok" as const,
+      localId: "__local_config_toml__",
+      storageKey: "grokLastProviderProfileId",
+    },
+    {
+      engine: "opencode" as const,
+      localId: "__local_opencode_json__",
+      storageKey: "opencodeLastProviderProfileId",
+    },
+  ])(
+    "selects and remembers $engine provider without creating from the submenu",
+    async ({ engine, localId, storageKey }) => {
+      window.localStorage.removeItem(storageKey);
+      const handlers = createHandlers();
+      const profileProp =
+        engine === "claude"
+          ? {
+              claudeProviderProfiles: [
+                { id: localId, name: "Local", source: "managed" as const },
+                { id: "provider-a", name: "Provider A", source: "managed" as const },
+              ],
+            }
+          : engine === "kimi"
+            ? {
+                kimiProviderProfiles: [
+                  { id: localId, name: "Local", source: "managed" as const },
+                  { id: "provider-a", name: "Provider A", source: "managed" as const },
+                ],
+              }
+            : engine === "opencode"
+              ? {
+                  opencodeProviderProfiles: [
+                    { id: localId, name: "Local", source: "managed" as const },
+                    { id: "provider-a", name: "Provider A", source: "managed" as const },
+                  ],
+                }
+            : {
+                grokProviderProfiles: [
+                  { id: localId, name: "Local", source: "managed" as const },
+                  { id: "provider-a", name: "Provider A", source: "managed" as const },
+                ],
+              };
+      const { result } = renderHook(() =>
+        useSidebarMenus({ ...handlers, ...profileProp }),
+      );
+      const openMenu = async () => {
+        await act(async () => {
+          result.current.showWorkspaceMenu(
+            {
+              clientX: 160,
+              clientY: 120,
+              preventDefault: vi.fn(),
+              stopPropagation: vi.fn(),
+            } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0],
+            workspace,
+          );
+        });
+        return result.current.workspaceMenuState?.groups
+          .find((group) => group.id === "new-session")
+          ?.actions.find((action) => action.id === `new-session-${engine}`);
+      };
+
+      const action = await openMenu();
+      expect(action?.children).toHaveLength(2);
+      expect(action?.children?.find((child) => child.selected)?.id).toBe(
+        `new-session-${engine}-provider-${localId}`,
+      );
+      await act(async () => {
+        await action?.children
+          ?.find((child) => child.id === `new-session-${engine}-provider-provider-a`)
+          ?.onSelect();
+      });
+      expect(handlers.onAddAgent).not.toHaveBeenCalled();
+      expect(window.localStorage.getItem(storageKey)).toBe("provider-a");
+
+      const reopened = await openMenu();
+      await act(async () => {
+        await reopened?.onSelect();
+      });
+      expect(handlers.onAddAgent).toHaveBeenCalledWith(
+        workspace,
+        engine,
+        expect.objectContaining({ providerProfileId: "provider-a" }),
+      );
+    },
+  );
+
+  it("keeps a missing remembered managed provider unavailable instead of falling back local", async () => {
+    window.localStorage.setItem("kimiLastProviderProfileId", "provider-missing");
+    const handlers = createHandlers();
+    const { result } = renderHook(() =>
+      useSidebarMenus({ ...handlers, kimiProviderProfiles: [] }),
+    );
+
+    await act(async () => {
+      result.current.showWorkspaceMenu(
+        {
+          clientX: 160,
+          clientY: 120,
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+        } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0],
+        workspace,
+      );
+    });
+
+    const action = result.current.workspaceMenuState?.groups
+      .find((group) => group.id === "new-session")
+      ?.actions.find((entry) => entry.id === "new-session-kimi");
+    const selected = action?.children?.find((child) => child.selected);
+
+    expect(action?.unavailable).toBe(true);
+    expect(selected).toMatchObject({
+      id: "new-session-kimi-provider-provider-missing",
+      unavailable: true,
+      badgeLabel: "Provider unavailable",
+    });
+    await act(async () => {
+      await action?.onSelect();
+    });
+    expect(handlers.onAddAgent).not.toHaveBeenCalled();
+  });
+
   it("cannot trigger session creation through a hidden Gemini entry", async () => {
     const handlers = createHandlers();
     const { result } = renderHook(() => useSidebarMenus(handlers));
@@ -737,6 +974,581 @@ describe("useSidebarMenus", () => {
       "Delete",
     ]);
     expect(items[6]?.type).toBe("label");
+  });
+
+  it("creates a provider continuation from a native thread", async () => {
+    const catalogRefresh = createDeferred<void>();
+    prepareNativeProviderContinuationMock.mockResolvedValueOnce({
+      status: "prepared",
+      fidelity: "degraded",
+      sourceEstimatedTokens: 1200,
+      packageEstimatedTokens: 600,
+      operation: { phase: "prepared" },
+    });
+    createNativeProviderContinuationMock.mockResolvedValueOnce({
+      status: "ready",
+      fidelity: "degraded",
+      operation: {
+        phase: "ready",
+        resultSessionId: "target-1",
+      },
+    });
+    const handlers = {
+      ...createHandlers(),
+      onReloadWorkspaceThreads: vi.fn(() => catalogRefresh.promise),
+      codexProviderProfiles: [
+        {
+          id: "provider-b",
+          name: "Provider B",
+          source: "managed" as const,
+          availability: "available" as const,
+        },
+      ],
+      getThreadSummary: () => ({
+        id: "claude:source-1",
+        name: "Source",
+        updatedAt: 1,
+        threadKind: "native" as const,
+        engineSource: "claude" as const,
+        providerProfileId: "provider-a",
+      }),
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    act(() => {
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "claude:source-1",
+        destination: {
+          engine: "codex",
+          providerProfileId: "provider-b",
+          providerProfileNameSnapshot: "Provider B",
+          providerProfileSource: "managed",
+          runtimeCapabilityFingerprint: null,
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.providerContinuationDialogState?.stage).toBe(
+        "confirm",
+      );
+    });
+    expect(prepareNativeProviderContinuationMock).toHaveBeenCalledOnce();
+    expect(result.current.providerContinuationDialogState).toMatchObject({
+      sourceEstimatedTokens: 1200,
+      packageEstimatedTokens: 600,
+      detail: null,
+      progressPhase: "prepared",
+      progressPercent: 32,
+    });
+    expect(createNativeProviderContinuationMock).not.toHaveBeenCalled();
+    let confirmationPromise!: Promise<void>;
+    act(() => {
+      confirmationPromise = result.current.confirmProviderContinuation();
+    });
+
+    await waitFor(() => {
+      expect(createNativeProviderContinuationMock).toHaveBeenCalledOnce();
+    });
+    expect(createNativeProviderContinuationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "ws-1",
+        source: expect.objectContaining({
+          sessionId: "claude:source-1",
+          nativeSessionId: "source-1",
+          providerProfileId: "provider-a",
+        }),
+        destination: expect.objectContaining({
+          engine: "codex",
+          providerProfileId: "provider-b",
+        }),
+      }),
+    );
+    expect(createNativeProviderContinuationMock).toHaveBeenCalledWith(
+      expect.objectContaining({ confirmDegraded: true }),
+    );
+    expect(handlers.onReloadWorkspaceThreads).toHaveBeenCalledWith("ws-1");
+    expect(handlers.onSelectThread).not.toHaveBeenCalled();
+    expect(result.current.providerContinuationDialogState?.stage).toBe(
+      "running",
+    );
+
+    await act(async () => {
+      catalogRefresh.resolve();
+      await confirmationPromise;
+    });
+
+    expect(handlers.onSelectThread).toHaveBeenCalledWith(
+      "ws-1",
+      "target-1",
+    );
+  });
+
+  it("does not create a continuation after the product dialog is cancelled", async () => {
+    const handlers = {
+      ...createHandlers(),
+      codexProviderProfiles: [
+        {
+          id: "provider-b",
+          name: "Provider B",
+          source: "managed" as const,
+          availability: "available" as const,
+        },
+      ],
+      getThreadSummary: () => ({
+        id: "claude:source-1",
+        name: "Source",
+        updatedAt: 1,
+        threadKind: "native" as const,
+        engineSource: "claude" as const,
+        providerProfileId: "provider-a",
+      }),
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+    act(() => {
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "claude:source-1",
+        destination: {
+          engine: "codex",
+          providerProfileId: "provider-b",
+          providerProfileNameSnapshot: "Provider B",
+          providerProfileSource: "managed",
+          runtimeCapabilityFingerprint: null,
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.providerContinuationDialogState?.stage).toBe(
+        "confirm",
+      );
+    });
+    expect(createNativeProviderContinuationMock).not.toHaveBeenCalled();
+    act(() => {
+      result.current.closeProviderContinuationDialog();
+    });
+    expect(result.current.providerContinuationDialogState).toBeNull();
+    expect(createNativeProviderContinuationMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(
+        discardPreparedNativeProviderContinuationMock,
+      ).toHaveBeenCalledOnce();
+    });
+    expect(handlers.onSelectThread).not.toHaveBeenCalled();
+  });
+
+  it("does not reopen when a cancelled preview finishes late", async () => {
+    let resolvePreview:
+      | ((
+          value: Awaited<
+            ReturnType<typeof prepareNativeProviderContinuation>
+          >,
+        ) => void)
+      | null = null;
+    prepareNativeProviderContinuationMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolvePreview = resolve;
+        }),
+    );
+    const handlers = {
+      ...createHandlers(),
+      codexProviderProfiles: [
+        {
+          id: "provider-b",
+          name: "Provider B",
+          source: "managed" as const,
+          availability: "available" as const,
+        },
+      ],
+      getThreadSummary: () => ({
+        id: "claude:source-1",
+        name: "Source",
+        updatedAt: 1,
+        threadKind: "native" as const,
+        engineSource: "claude" as const,
+        providerProfileId: "provider-a",
+      }),
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    act(() => {
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "claude:source-1",
+        destination: {
+          engine: "codex",
+          providerProfileId: "provider-b",
+          providerProfileNameSnapshot: "Provider B",
+          providerProfileSource: "managed",
+          runtimeCapabilityFingerprint: null,
+        },
+      });
+    });
+    expect(result.current.providerContinuationDialogState?.stage).toBe(
+      "preparing",
+    );
+    act(() => {
+      result.current.closeProviderContinuationDialog();
+    });
+    expect(result.current.providerContinuationDialogState).toBeNull();
+
+    await act(async () => {
+      resolvePreview?.({
+        status: "prepared",
+        fidelity: "strong",
+        sourceEstimatedTokens: 100,
+        packageEstimatedTokens: 80,
+        operation: { phase: "prepared" },
+      });
+      await Promise.resolve();
+    });
+
+    expect(result.current.providerContinuationDialogState).toBeNull();
+    expect(createNativeProviderContinuationMock).not.toHaveBeenCalled();
+    expect(
+      discardPreparedNativeProviderContinuationMock.mock.calls.length,
+    ).toBeGreaterThanOrEqual(2);
+  });
+
+  it("applies only progress events for the active operation", async () => {
+    const handlers = {
+      ...createHandlers(),
+      getThreadSummary: () => ({
+        id: "claude:source-1",
+        name: "Source",
+        updatedAt: 1,
+        threadKind: "native" as const,
+        engineSource: "claude" as const,
+        providerProfileId: "provider-a",
+      }),
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    act(() => {
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "claude:source-1",
+        destination: {
+          engine: "codex",
+          providerProfileId: "provider-b",
+        },
+      });
+    });
+    await waitFor(() => {
+      expect(result.current.providerContinuationDialogState?.stage).toBe(
+        "confirm",
+      );
+    });
+    const operationId =
+      result.current.providerContinuationDialogState?.request.operationId;
+
+    act(() => {
+      providerContinuationEventsMock.progressListener?.({
+        workspaceId: "ws-1",
+        operationId: "other-operation",
+        phase: "delivering-context",
+        percent: 68,
+      });
+    });
+    expect(
+      result.current.providerContinuationDialogState?.progressPercent,
+    ).toBe(32);
+
+    act(() => {
+      providerContinuationEventsMock.progressListener?.({
+        workspaceId: "ws-1",
+        operationId: operationId ?? "",
+        phase: "delivering-context",
+        percent: 68,
+      });
+    });
+    expect(result.current.providerContinuationDialogState).toMatchObject({
+      progressPhase: "delivering-context",
+      progressPercent: 68,
+    });
+  });
+
+  it("routes Composer provider requests through the existing continuation dialog", async () => {
+    const handlers = {
+      ...createHandlers(),
+      getThreadSummary: () => ({
+        id: "claude:source-1",
+        name:
+          `MOSSX_CONTEXT_PACKAGE:sha256:${"a".repeat(64)}:` +
+          `sha256:${"b".repeat(64)}`,
+        updatedAt: 1,
+        threadKind: "native" as const,
+        engineSource: "claude" as const,
+        providerProfileId: "provider-a",
+        providerProfileName: "Provider A",
+      }),
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    act(() => {
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "claude:source-1",
+        destination: {
+          engine: "codex",
+          providerProfileId: "provider-b",
+          providerProfileNameSnapshot: "Provider B",
+          providerProfileSource: "managed",
+          model: "gpt-target",
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.providerContinuationDialogState).toMatchObject({
+        sourceSessionId: "claude:source-1",
+        sourceTitle: "threads.untitled",
+        sourceLabel: "Claude Code · Provider A",
+        destinationLabel: "Codex CLI · Provider B · gpt-target",
+        stage: "confirm",
+        request: {
+          source: {
+            nativeSessionId: "source-1",
+            providerProfileId: "provider-a",
+          },
+          destination: {
+            engine: "codex",
+            providerProfileId: "provider-b",
+            model: "gpt-target",
+          },
+        },
+      });
+    });
+    expect(createNativeProviderContinuationMock).not.toHaveBeenCalled();
+    const firstOperationId =
+      result.current.providerContinuationDialogState?.request.operationId;
+    act(() => {
+      result.current.closeProviderContinuationDialog();
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "claude:source-1",
+        destination: {
+          engine: "codex",
+          providerProfileId: "provider-b",
+          providerProfileNameSnapshot: "Provider B",
+          providerProfileSource: "managed",
+          model: "gpt-other",
+        },
+      });
+    });
+    await waitFor(() => {
+      expect(
+        result.current.providerContinuationDialogState?.request.operationId,
+      ).not.toBe(firstOperationId);
+      expect(result.current.providerContinuationDialogState?.stage).toBe(
+        "confirm",
+      );
+    });
+  });
+
+  it("retries recovery without a second confirmation", async () => {
+    createNativeProviderContinuationMock
+      .mockResolvedValueOnce({
+        status: "recovery-required",
+        fidelity: "degraded",
+        operation: {
+          phase: "recovery-required",
+          errorCode: "acceptance-ambiguous",
+        },
+      })
+      .mockResolvedValueOnce({
+        status: "ready",
+        fidelity: "degraded",
+        operation: {
+          phase: "ready",
+          resultSessionId: "target-recovered",
+        },
+      });
+    const handlers = {
+      ...createHandlers(),
+      codexProviderProfiles: [
+        {
+          id: "provider-b",
+          name: "Provider B",
+          source: "managed" as const,
+          availability: "available" as const,
+        },
+      ],
+      getThreadSummary: () => ({
+        id: "claude:source-1",
+        name: "Source",
+        updatedAt: 1,
+        threadKind: "native" as const,
+        engineSource: "claude" as const,
+        providerProfileId: "provider-a",
+      }),
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    act(() => {
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "claude:source-1",
+        destination: {
+          engine: "codex",
+          providerProfileId: "provider-b",
+          providerProfileNameSnapshot: "Provider B",
+          providerProfileSource: "managed",
+          runtimeCapabilityFingerprint: null,
+        },
+      });
+    });
+    await waitFor(() => {
+      expect(result.current.providerContinuationDialogState?.stage).toBe(
+        "confirm",
+      );
+    });
+    await act(async () => {
+      await result.current.confirmProviderContinuation();
+    });
+
+    expect(result.current.providerContinuationDialogState).toMatchObject({
+      stage: "error",
+      retryAction: "execute",
+      detail: expect.stringContaining("不会重复创建"),
+      technicalDetail: "acceptance-ambiguous",
+    });
+    await act(async () => {
+      await result.current.confirmProviderContinuation();
+    });
+    expect(createNativeProviderContinuationMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ confirmDegraded: true }),
+    );
+    expect(handlers.onSelectThread).toHaveBeenCalledWith(
+      "ws-1",
+      "target-recovered",
+    );
+  });
+
+  it("can continue a Codex thread back to a Claude provider", async () => {
+    createNativeProviderContinuationMock.mockResolvedValue({
+      status: "ready",
+      fidelity: "strong",
+      operation: {
+        phase: "ready",
+        resultSessionId: "claude:target-2",
+      },
+    });
+    const handlers = {
+      ...createHandlers(),
+      claudeProviderProfiles: [
+        {
+          id: "provider-a",
+          name: "Provider A",
+          source: "managed" as const,
+          availability: "available" as const,
+        },
+      ],
+      getThreadSummary: () => ({
+        id: "codex-history-1",
+        name: "Source",
+        updatedAt: 1,
+        threadKind: "native" as const,
+        engineSource: "codex" as const,
+        providerProfileId: "provider-b",
+      }),
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    act(() => {
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "codex-history-1",
+        destination: {
+          engine: "claude",
+          providerProfileId: "provider-a",
+          providerProfileNameSnapshot: "Provider A",
+          providerProfileSource: "managed",
+          runtimeCapabilityFingerprint: "echo-checksum",
+        },
+      });
+    });
+    await waitFor(() => {
+      expect(result.current.providerContinuationDialogState?.stage).toBe(
+        "confirm",
+      );
+    });
+    expect(prepareNativeProviderContinuationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: expect.objectContaining({
+          sessionId: "codex-history-1",
+          nativeSessionId: "codex-history-1",
+          providerProfileId: "provider-b",
+        }),
+      }),
+    );
+    await act(async () => {
+      await result.current.confirmProviderContinuation();
+    });
+
+    expect(createNativeProviderContinuationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: expect.objectContaining({
+          sessionId: "codex-history-1",
+          nativeSessionId: "codex-history-1",
+          providerProfileId: "provider-b",
+        }),
+        destination: expect.objectContaining({
+          engine: "claude",
+          providerProfileId: "provider-a",
+          runtimeCapabilityFingerprint: "echo-checksum",
+        }),
+      }),
+    );
+    expect(handlers.onSelectThread).toHaveBeenCalledWith(
+      "ws-1",
+      "claude:target-2",
+    );
+  });
+
+  it("keeps a continuation visible while disabling a missing source link", () => {
+    const handlers = {
+      ...createHandlers(),
+      getThreadSummary: () => ({
+        id: "codex:target-1",
+        name: "Continuation",
+        updatedAt: 1,
+        threadKind: "native" as const,
+        engineSource: "codex" as const,
+        originKind: "provider-continuation",
+        sourceSessionId: "claude:deleted-source",
+      }),
+      isThreadAvailable: () => false,
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    act(() => {
+      result.current.showThreadMenu(
+        {
+          clientX: 1,
+          clientY: 1,
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+        } as unknown as Parameters<typeof result.current.showThreadMenu>[0],
+        "ws-1",
+        "codex:target-1",
+        true,
+      );
+    });
+
+    const sourceAction = result.current.sidebarContextMenuState?.items.find(
+      (item) => item.type === "item" && item.id === "open-continuation-source",
+    );
+    expect(sourceAction).toEqual(
+      expect.objectContaining({
+        type: "item",
+        label: "来源不可用",
+        disabled: true,
+      }),
+    );
   });
 
   it("archives a thread from the thread context menu", async () => {
@@ -1106,7 +1918,7 @@ describe("useSidebarMenus", () => {
     );
   });
 
-  it("triggers create action when Shared Session entry is clicked", async () => {
+  it("exposes Shared Session CLI children and passes the selected engine", async () => {
     const handlers = createHandlers();
     const { result } = renderHook(() => useSidebarMenus(handlers));
 
@@ -1125,12 +1937,26 @@ describe("useSidebarMenus", () => {
       ?.actions.find((action) => action.id === "new-session-shared");
 
     expect(sharedAction).toBeTruthy();
-    act(() => {
-      result.current.onWorkspaceMenuAction(sharedAction!);
+    expect(sharedAction?.submenuOnly).toBe(true);
+    expect(sharedAction?.children?.map((action) => action.id)).toEqual([
+      "new-session-shared-claude",
+      "new-session-shared-codex",
+      "new-session-shared-opencode",
+      "new-session-shared-kimi",
+      "new-session-shared-grok",
+    ]);
+
+    const grokAction = sharedAction?.children?.find(
+      (action) => action.id === "new-session-shared-grok",
+    );
+    expect(grokAction).toBeTruthy();
+
+    await act(async () => {
+      result.current.onWorkspaceMenuAction(grokAction!);
     });
 
     expect(handlers.onAddSharedAgent).toHaveBeenCalledTimes(1);
-    expect(handlers.onAddSharedAgent).toHaveBeenCalledWith(workspace);
+    expect(handlers.onAddSharedAgent).toHaveBeenCalledWith(workspace, "grok");
   });
 
   it("triggers workspace alias action from the workspace menu", async () => {
@@ -1160,214 +1986,6 @@ describe("useSidebarMenus", () => {
     expect(handlers.onRenameWorkspaceAlias).toHaveBeenCalledWith(workspace);
   });
 
-  it("marks opencode as sign-in required only after manual refresh detects disconnection", async () => {
-    getOpenCodeProviderHealthMock.mockResolvedValueOnce({
-      provider: "openai",
-      connected: false,
-      credentialCount: 0,
-      matched: false,
-      authenticatedProviders: [],
-      error: null,
-    });
-    const handlers = createHandlers();
-    const { result } = renderHook(() => useSidebarMenus(handlers));
-
-    await act(async () => {
-      const event = {
-        clientX: 180,
-        clientY: 180,
-        preventDefault: vi.fn(),
-        stopPropagation: vi.fn(),
-      } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0];
-      result.current.showWorkspaceMenu(event, workspace);
-    });
-
-    const opencodeAction = result.current.workspaceMenuState?.groups
-      .find((group) => group.id === "new-session")
-      ?.actions.find((action) => action.id === "new-session-opencode");
-
-    expect(opencodeAction?.unavailable).toBe(false);
-    expect(opencodeAction?.statusLabel).toBeNull();
-
-    await act(async () => {
-      await opencodeAction?.onRefresh?.();
-    });
-
-    await waitFor(() => {
-      const refreshedAction = result.current.workspaceMenuState?.groups
-        .find((group) => group.id === "new-session")
-        ?.actions.find((action) => action.id === "new-session-opencode");
-      expect(refreshedAction?.unavailable).toBe(true);
-      expect(refreshedAction?.statusLabel).toBe("Sign in required");
-    });
-  });
-
-  it("manual opencode refresh probes login state once engine refresh reports it installed", async () => {
-    getOpenCodeProviderHealthMock.mockResolvedValueOnce({
-      provider: "openai",
-      connected: false,
-      credentialCount: 0,
-      matched: false,
-      authenticatedProviders: [],
-      error: null,
-    });
-    const handlers = createHandlers();
-    handlers.engineOptions = [];
-    let rerenderHook:
-      | ((nextHandlers: ReturnType<typeof createHandlers>) => void)
-      | null = null;
-    handlers.onRefreshEngineOptions = vi.fn(async () => {
-      rerenderHook?.(createHandlers());
-    });
-
-    const { result, rerender } = renderHook(
-      (nextHandlers: ReturnType<typeof createHandlers>) => useSidebarMenus(nextHandlers),
-      { initialProps: handlers },
-    );
-    rerenderHook = rerender;
-
-    act(() => {
-      const event = {
-        clientX: 160,
-        clientY: 120,
-        preventDefault: vi.fn(),
-        stopPropagation: vi.fn(),
-      } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0];
-      result.current.showWorkspaceMenu(event, workspace);
-    });
-
-    const opencodeAction = result.current.workspaceMenuState?.groups
-      .find((group) => group.id === "new-session")
-      ?.actions.find((action) => action.id === "new-session-opencode");
-
-    await act(async () => {
-      await opencodeAction?.onRefresh?.();
-    });
-
-    await waitFor(() => {
-      const refreshedAction = result.current.workspaceMenuState?.groups
-        .find((group) => group.id === "new-session")
-        ?.actions.find((action) => action.id === "new-session-opencode");
-      expect(refreshedAction?.unavailable).toBe(true);
-      expect(refreshedAction?.statusLabel).toBe("Sign in required");
-    });
-
-    expect(getOpenCodeProviderHealthMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not leave opencode stuck in loading when manual provider health lookup fails", async () => {
-    getOpenCodeProviderHealthMock.mockRejectedValueOnce(new Error("probe failed"));
-    const handlers = createHandlers();
-    const { result } = renderHook(() => useSidebarMenus(handlers));
-
-    await act(async () => {
-      const event = {
-        clientX: 180,
-        clientY: 180,
-        preventDefault: vi.fn(),
-        stopPropagation: vi.fn(),
-      } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0];
-      result.current.showWorkspaceMenu(event, workspace);
-    });
-
-    const opencodeAction = result.current.workspaceMenuState?.groups
-      .find((group) => group.id === "new-session")
-      ?.actions.find((action) => action.id === "new-session-opencode");
-
-    await act(async () => {
-      await opencodeAction?.onRefresh?.();
-    });
-
-    await waitFor(() => {
-      const refreshedAction = result.current.workspaceMenuState?.groups
-        .find((group) => group.id === "new-session")
-        ?.actions.find((action) => action.id === "new-session-opencode");
-      expect(refreshedAction?.unavailable).toBe(false);
-      expect(refreshedAction?.statusLabel).toBeNull();
-    });
-  });
-
-  it("does not let stale opencode health keep disconnected workspaces blocked", async () => {
-    getOpenCodeProviderHealthMock.mockResolvedValueOnce({
-      provider: "openai",
-      connected: false,
-      credentialCount: 0,
-      matched: false,
-      authenticatedProviders: [],
-      error: null,
-    });
-    const handlers = createHandlers();
-    const { result } = renderHook(() => useSidebarMenus(handlers));
-
-    await act(async () => {
-      const event = {
-        clientX: 180,
-        clientY: 180,
-        preventDefault: vi.fn(),
-        stopPropagation: vi.fn(),
-      } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0];
-      result.current.showWorkspaceMenu(event, workspace);
-    });
-
-    const opencodeAction = result.current.workspaceMenuState?.groups
-      .find((group) => group.id === "new-session")
-      ?.actions.find((action) => action.id === "new-session-opencode");
-
-    await act(async () => {
-      await opencodeAction?.onRefresh?.();
-    });
-
-    await waitFor(() => {
-      const refreshedAction = result.current.workspaceMenuState?.groups
-        .find((group) => group.id === "new-session")
-        ?.actions.find((action) => action.id === "new-session-opencode");
-      expect(refreshedAction?.unavailable).toBe(true);
-    });
-
-    act(() => {
-      const event = {
-        clientX: 200,
-        clientY: 200,
-        preventDefault: vi.fn(),
-        stopPropagation: vi.fn(),
-      } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0];
-      result.current.showWorkspaceMenu(event, {
-        ...workspace,
-        connected: false,
-      });
-    });
-
-    const disconnectedAction = result.current.workspaceMenuState?.groups
-      .find((group) => group.id === "new-session")
-      ?.actions.find((action) => action.id === "new-session-opencode");
-
-    expect(disconnectedAction?.unavailable).toBe(false);
-    expect(disconnectedAction?.statusLabel).toBeNull();
-  });
-
-  it("opens workspace menu without auto-probing opencode health", async () => {
-    const handlers = createHandlers();
-    const { result } = renderHook(() => useSidebarMenus(handlers));
-
-    await act(async () => {
-      const event = {
-        clientX: 180,
-        clientY: 180,
-        preventDefault: vi.fn(),
-        stopPropagation: vi.fn(),
-      } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0];
-      result.current.showWorkspaceMenu(event, workspace);
-    });
-
-    const opencodeAction = result.current.workspaceMenuState?.groups
-      .find((group) => group.id === "new-session")
-      ?.actions.find((action) => action.id === "new-session-opencode");
-
-    expect(opencodeAction?.unavailable).toBe(false);
-    expect(opencodeAction?.statusLabel).toBeNull();
-    expect(getOpenCodeProviderHealthMock).not.toHaveBeenCalled();
-  });
-
   it("shows session-only menu for worktree plus entry", async () => {
     const handlers = createHandlers();
     const { result } = renderHook(() => useSidebarMenus(handlers));
@@ -1393,6 +2011,7 @@ describe("useSidebarMenus", () => {
       "new-session-codex",
       "new-session-opencode",
       "new-session-kimi",
+      "new-session-grok",
     ]);
   });
 });

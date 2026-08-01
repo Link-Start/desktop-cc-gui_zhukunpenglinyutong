@@ -17,4 +17,13 @@ describe("feature style loader contracts", () => {
     expect(gitHistoryLoader).toContain('import("./git-history.css")');
     expect(gitHistoryLoader).toContain("Promise.all");
   });
+
+  it("loads the shared CodeMirror compare styles with the Git diff surface", () => {
+    const diffLoader = loaderSource.slice(
+      loaderSource.indexOf("export function loadDiffStyles"),
+      loaderSource.indexOf("export function loadRuntimeConsoleStyles"),
+    );
+
+    expect(diffLoader).toContain('import("./file-view-panel.css")');
+  });
 });

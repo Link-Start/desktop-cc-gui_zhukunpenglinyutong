@@ -1,19 +1,23 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import Cloud from "lucide-react/dist/esm/icons/cloud";
 import Eye from "lucide-react/dist/esm/icons/eye";
 import EyeOff from "lucide-react/dist/esm/icons/eye-off";
+import Info from "lucide-react/dist/esm/icons/info";
 import Shield from "lucide-react/dist/esm/icons/shield";
 import SlidersHorizontal from "lucide-react/dist/esm/icons/sliders-horizontal";
-import deepseekIcon from "@lobehub/icons-static-svg/icons/deepseek-color.svg";
-import minimaxIcon from "@lobehub/icons-static-svg/icons/minimax-color.svg";
-import moonshotIcon from "@lobehub/icons-static-svg/icons/moonshot.svg";
-import openrouterIcon from "@lobehub/icons-static-svg/icons/openrouter-color.svg";
-import qwenIcon from "@lobehub/icons-static-svg/icons/qwen-color.svg";
-import xiaomimimoIcon from "@lobehub/icons-static-svg/icons/xiaomimimo.svg";
-import zhipuIcon from "@lobehub/icons-static-svg/icons/zhipu-color.svg";
 import { fetchClaudeProviderModels } from "../../../services/tauri";
 import type { ProviderConfig } from "../types";
-import { CLAUDE_PROVIDER_PRESETS } from "../types";
+import {
+  CLAUDE_PROVIDER_PRESETS,
+  OFFICIAL_ANTHROPIC_BASE_URL,
+  OFFICIAL_DIRECT_PRESET_ID,
+} from "../types";
+import {
+  ANTHROPIC_BRAND_ICON_SRC,
+  resolveProviderBrandIcon,
+} from "../providerBrandIcon";
+import { ProviderBrandIconImg } from "./ProviderBrandIconImg";
 
 type ClaudeProviderSettingsTemplate = {
   alwaysThinkingEnabled: boolean;
@@ -40,18 +44,22 @@ interface ProviderDialogProps {
     apiUrl: string;
     jsonConfig: string;
   }) => void;
+  actionError?: string | null;
 }
 
-const presetIconById = {
-  custom: { kind: "lucide", icon: SlidersHorizontal },
-  zhipu: { kind: "brand", src: zhipuIcon },
-  kimi: { kind: "brand", src: moonshotIcon },
-  deepseek: { kind: "brand", src: deepseekIcon },
-  minimax: { kind: "brand", src: minimaxIcon },
-  xiaomi: { kind: "brand", src: xiaomimimoIcon },
-  qwen: { kind: "brand", src: qwenIcon },
-  openrouter: { kind: "brand", src: openrouterIcon },
-} as const;
+/** 手输 URL 无法匹配任何预设时的占位 preset 状态(非 custom,保持模型映射可用) */
+const CUSTOM_PROXY_PRESET_ID = "custom_proxy";
+
+function isOfficialAnthropicEndpoint(baseUrl?: string): boolean {
+  const normalized = (baseUrl || "").trim().toLowerCase();
+  if (normalized === "") return true;
+  try {
+    const url = new URL(normalized);
+    return url.hostname === "api.anthropic.com";
+  } catch {
+    return false;
+  }
+}
 
 export function buildDefaultClaudeProviderSettingsConfig(): ClaudeProviderSettingsTemplate {
   return {
@@ -64,7 +72,7 @@ export function buildDefaultClaudeProviderSettingsConfig(): ClaudeProviderSettin
       ANTHROPIC_BASE_URL: "",
       ANTHROPIC_BETAS: "context-1m-2025-08-07",
       ANTHROPIC_DEFAULT_HAIKU_MODEL: "claude-haiku-4-5-20251001",
-      ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-4-8",
+      ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-5",
       ANTHROPIC_DEFAULT_SONNET_MODEL: "claude-sonnet-4-6",
       ANTHROPIC_SMALL_FAST_MODEL: "claude-haiku-4-5-20251001",
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
@@ -89,11 +97,19 @@ export function defaultConfigJson() {
   return JSON.stringify(buildDefaultClaudeProviderSettingsConfig(), null, 2);
 }
 
+/** 官方直连:完整模板 + 固定官方端点 */
+function officialDirectConfigJson() {
+  const config = buildDefaultClaudeProviderSettingsConfig();
+  config.env.ANTHROPIC_BASE_URL = OFFICIAL_ANTHROPIC_BASE_URL;
+  return JSON.stringify(config, null, 2);
+}
+
 export function ProviderDialog({
   isOpen,
   provider,
   onClose,
   onSave,
+  actionError = null,
 }: ProviderDialogProps) {
   const { t } = useTranslation();
   const isAdding = !provider;
@@ -102,16 +118,19 @@ export function ProviderDialog({
   const [remark, setRemark] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [apiUrl, setApiUrl] = useState("");
+  const [fableModel, setFableModel] = useState("");
   const [haikuModel, setHaikuModel] = useState("");
   const [sonnetModel, setSonnetModel] = useState("");
   const [opusModel, setOpusModel] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
   const [jsonConfig, setJsonConfig] = useState("");
   const [jsonError, setJsonError] = useState("");
-  const [activePreset, setActivePreset] = useState("custom");
+  const [activePreset, setActivePreset] = useState(OFFICIAL_DIRECT_PRESET_ID);
   const [fetchedModels, setFetchedModels] = useState<string[]>([]);
   const [isFetchingModels, setIsFetchingModels] = useState(false);
   const [modelFetchError, setModelFetchError] = useState("");
+
+  const isOfficialDirectMode = activePreset === OFFICIAL_DIRECT_PRESET_ID;
 
   const resetFetchedModels = () => {
     setFetchedModels([]);
@@ -145,28 +164,41 @@ export function ProviderDialog({
   };
 
   const detectMatchingPreset = (env: Record<string, string | undefined>) => {
+    const baseUrl = env.ANTHROPIC_BASE_URL || "";
+    if (isOfficialAnthropicEndpoint(baseUrl)) {
+      return OFFICIAL_DIRECT_PRESET_ID;
+    }
     for (const preset of CLAUDE_PROVIDER_PRESETS) {
       if (preset.id === "custom") continue;
-      const baseUrl = env.ANTHROPIC_BASE_URL || "";
       const presetBaseUrl = preset.env.ANTHROPIC_BASE_URL || "";
       if (baseUrl && presetBaseUrl && baseUrl === presetBaseUrl) {
         return preset.id;
       }
     }
-    return "custom";
+    // 未识别的 URL 视为自定义第三方代理
+    return CUSTOM_PROXY_PRESET_ID;
   };
 
   const handlePresetClick = (presetId: string) => {
-    const preset = CLAUDE_PROVIDER_PRESETS.find((item) => item.id === presetId);
-    if (!preset) {
-      return;
-    }
     setActivePreset(presetId);
     resetFetchedModels();
+
+    if (presetId === OFFICIAL_DIRECT_PRESET_ID) {
+      setJsonConfig(officialDirectConfigJson());
+      setApiKey("");
+      setApiUrl(OFFICIAL_ANTHROPIC_BASE_URL);
+      setFableModel("");
+      setHaikuModel("");
+      setSonnetModel("");
+      setOpusModel("");
+      setJsonError("");
+      return;
+    }
 
     if (presetId === "custom") {
       setApiKey("");
       setApiUrl("");
+      setFableModel("");
       setHaikuModel("");
       setSonnetModel("");
       setOpusModel("");
@@ -175,10 +207,16 @@ export function ProviderDialog({
       return;
     }
 
+    const preset = CLAUDE_PROVIDER_PRESETS.find((item) => item.id === presetId);
+    if (!preset) {
+      return;
+    }
+
     const config = { env: { ...preset.env } };
     setJsonConfig(JSON.stringify(config, null, 2));
     setApiUrl(preset.env.ANTHROPIC_BASE_URL || "");
     setApiKey(preset.env.ANTHROPIC_AUTH_TOKEN || "");
+    setFableModel(preset.env.ANTHROPIC_DEFAULT_FABLE_MODEL || "");
     setHaikuModel(preset.env.ANTHROPIC_DEFAULT_HAIKU_MODEL || "");
     setSonnetModel(preset.env.ANTHROPIC_DEFAULT_SONNET_MODEL || "");
     setOpusModel(preset.env.ANTHROPIC_DEFAULT_OPUS_MODEL || "");
@@ -199,6 +237,7 @@ export function ProviderDialog({
       );
       setApiUrl(provider.settingsConfig?.env?.ANTHROPIC_BASE_URL || "");
       const env = provider.settingsConfig?.env || {};
+      setFableModel(env.ANTHROPIC_DEFAULT_FABLE_MODEL || "");
       setHaikuModel(env.ANTHROPIC_DEFAULT_HAIKU_MODEL || "");
       setSonnetModel(env.ANTHROPIC_DEFAULT_SONNET_MODEL || "");
       setOpusModel(env.ANTHROPIC_DEFAULT_OPUS_MODEL || "");
@@ -208,12 +247,13 @@ export function ProviderDialog({
       setProviderName("");
       setRemark("");
       setApiKey("");
-      setApiUrl("");
+      setApiUrl(OFFICIAL_ANTHROPIC_BASE_URL);
+      setFableModel("");
       setHaikuModel("");
       setSonnetModel("");
       setOpusModel("");
-      setActivePreset("custom");
-      setJsonConfig(defaultConfigJson());
+      setActivePreset(OFFICIAL_DIRECT_PRESET_ID);
+      setJsonConfig(officialDirectConfigJson());
     }
     setShowApiKey(false);
     setJsonError("");
@@ -243,6 +283,7 @@ export function ProviderDialog({
       const env = parsed.env || {};
       setApiKey(env.ANTHROPIC_AUTH_TOKEN || env.ANTHROPIC_API_KEY || "");
       setApiUrl(env.ANTHROPIC_BASE_URL || "");
+      setFableModel(env.ANTHROPIC_DEFAULT_FABLE_MODEL || "");
       setHaikuModel(env.ANTHROPIC_DEFAULT_HAIKU_MODEL || "");
       setSonnetModel(env.ANTHROPIC_DEFAULT_SONNET_MODEL || "");
       setOpusModel(env.ANTHROPIC_DEFAULT_OPUS_MODEL || "");
@@ -294,7 +335,13 @@ export function ProviderDialog({
   };
 
   const handleSave = () => {
-    onSave({ providerName, remark, apiKey, apiUrl, jsonConfig });
+    onSave({
+      providerName,
+      remark,
+      apiKey,
+      apiUrl: isOfficialDirectMode ? OFFICIAL_ANTHROPIC_BASE_URL : apiUrl,
+      jsonConfig,
+    });
   };
 
   if (!isOpen) return null;
@@ -309,7 +356,7 @@ export function ProviderDialog({
           <h3>
             {isAdding
               ? t("settings.vendor.dialog.addTitle")
-              : t("settings.vendor.dialog.editTitle")}
+              : t("settings.vendor.dialog.editTitle", { name: provider?.name })}
           </h3>
           <button type="button" className="vendor-dialog-close" onClick={onClose}>
             &times;
@@ -330,14 +377,37 @@ export function ProviderDialog({
 
           <div className="vendor-preset-group">
             <div className="vendor-preset-title">
-              {t("settings.vendor.dialog.presetGroup")}
+              {t("settings.vendor.dialog.officialSectionTitle")}
+            </div>
+            <div className="vendor-preset-buttons">
+              <button
+                type="button"
+                className={`vendor-preset-btn ${
+                  isOfficialDirectMode ? "active" : ""
+                }`}
+                onClick={() => handlePresetClick(OFFICIAL_DIRECT_PRESET_ID)}
+              >
+                <span className="vendor-preset-btn-icon" aria-hidden>
+                  <ProviderBrandIconImg src={ANTHROPIC_BRAND_ICON_SRC} />
+                </span>
+                {t("settings.vendor.dialog.officialPreset")}
+              </button>
+            </div>
+            <small className="vendor-hint">
+              {t("settings.vendor.dialog.officialSectionHint")}
+            </small>
+          </div>
+
+          <div className="vendor-preset-group">
+            <div className="vendor-preset-title">
+              {t("settings.vendor.dialog.proxySectionTitle")}
             </div>
             <div className="vendor-preset-buttons">
               {CLAUDE_PROVIDER_PRESETS.map((preset) => {
-                const presetIcon =
-                  presetIconById[preset.id as keyof typeof presetIconById] ??
-                  presetIconById.custom;
-                const PresetIcon = presetIcon.kind === "lucide" ? presetIcon.icon : null;
+                const brandIconSrc =
+                  preset.id === "custom"
+                    ? null
+                    : resolveProviderBrandIcon({ presetId: preset.id });
                 return (
                   <button
                     key={preset.id}
@@ -348,10 +418,10 @@ export function ProviderDialog({
                     onClick={() => handlePresetClick(preset.id)}
                   >
                     <span className="vendor-preset-btn-icon" aria-hidden>
-                      {presetIcon.kind === "brand" ? (
-                        <img src={presetIcon.src} alt="" />
+                      {brandIconSrc ? (
+                        <ProviderBrandIconImg src={brandIconSrc} />
                       ) : (
-                        PresetIcon ? <PresetIcon size={14} strokeWidth={2.1} /> : null
+                        <SlidersHorizontal size={14} strokeWidth={2.1} />
                       )}
                     </span>
                     {t(preset.nameKey)}
@@ -359,6 +429,9 @@ export function ProviderDialog({
                 );
               })}
             </div>
+            <small className="vendor-hint">
+              {t("settings.vendor.dialog.proxySectionHint")}
+            </small>
           </div>
 
           <div className="vendor-form-grid vendor-form-grid-provider-meta">
@@ -403,13 +476,21 @@ export function ProviderDialog({
                 className="vendor-input"
                 placeholder={t("settings.vendor.dialog.apiUrlPlaceholder")}
                 value={apiUrl}
+                readOnly={isOfficialDirectMode}
                 onChange={(event) => {
-                  setApiUrl(event.target.value);
-                  updateEnvField("ANTHROPIC_BASE_URL", event.target.value);
+                  const nextApiUrl = event.target.value;
+                  setApiUrl(nextApiUrl);
+                  updateEnvField("ANTHROPIC_BASE_URL", nextApiUrl);
+                  setActivePreset(
+                    detectMatchingPreset({ ANTHROPIC_BASE_URL: nextApiUrl }),
+                  );
                 }}
               />
               <small className="vendor-hint">
-                {t("settings.vendor.dialog.apiUrlHint")}
+                <Info size={12} aria-hidden />{" "}
+                {isOfficialDirectMode
+                  ? t("settings.vendor.dialog.apiUrlLockedHint")
+                  : t("settings.vendor.dialog.apiUrlHint")}
               </small>
             </div>
 
@@ -446,6 +527,13 @@ export function ProviderDialog({
             </div>
           </div>
 
+          {!isOfficialAnthropicEndpoint(apiUrl) && (
+            <div className="vendor-security-notice vendor-proxy-warning">
+              <Cloud size={14} />
+              <span>{t("settings.vendor.dialog.proxyEndpointWarning")}</span>
+            </div>
+          )}
+
           <div className="vendor-form-group">
             <label>{t("settings.vendor.dialog.modelMapping")}</label>
             <div className="vendor-model-fetch">
@@ -474,6 +562,23 @@ export function ProviderDialog({
               ))}
             </datalist>
             <div className="vendor-model-grid">
+              <div>
+                <label>{t("settings.vendor.dialog.fableModel")}</label>
+                <input
+                  type="text"
+                  list="vendor-fetched-models"
+                  className="vendor-input"
+                  placeholder={t("settings.vendor.dialog.fableModelPlaceholder")}
+                  value={fableModel}
+                  onChange={(event) => {
+                    setFableModel(event.target.value);
+                    updateEnvField(
+                      "ANTHROPIC_DEFAULT_FABLE_MODEL",
+                      event.target.value,
+                    );
+                  }}
+                />
+              </div>
               <div>
                 <label>{t("settings.vendor.dialog.sonnetModel")}</label>
                 <input
@@ -550,6 +655,11 @@ export function ProviderDialog({
               />
               {jsonError && (
                 <div className="vendor-json-error">{jsonError}</div>
+              )}
+              {actionError && (
+                <div className="vendor-json-error" role="alert">
+                  {actionError}
+                </div>
               )}
             </div>
           </details>

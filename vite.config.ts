@@ -61,6 +61,20 @@ export default defineConfig(({ command }) => ({
       "@codemirror/search",
     ],
   },
+  optimizeDeps: {
+    include: [
+      // vendored TokenTracker 页面（usage / skills）全部经 React.lazy 异步
+      // 加载，vite 的 entry 扫描发现不了这些只出现在 lazy chunk 里的依赖；
+      // 首次点击进入页面时才被发现会触发 re-optimize + 整页 reload，这里
+      // 显式预 bundling。
+      "@base-ui/react/checkbox",
+      "@base-ui/react/dialog",
+      "@base-ui/react/popover",
+      "@base-ui/react/select",
+      "@base-ui/react/toast",
+      "motion/react",
+    ],
+  },
   worker: {
     format: "es",
     plugins: () => [
@@ -133,6 +147,16 @@ export default defineConfig(({ command }) => ({
     port: devPort,
     strictPort: true,
     host: host || false,
+    proxy: {
+      // 纯 vite dev（非 Tauri webview）下预览 TokenTracker dashboard 用：
+      // tt-transport 在非 Tauri 环境把请求打到 /tt-dev<path>，这里转发到本地
+      // `tokentracker` CLI server。不影响 tauri dev / build。
+      "/tt-dev": {
+        target: "http://127.0.0.1:7680",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/tt-dev/, ""),
+      },
+    },
     hmr: host
       ? {
           protocol: "ws",

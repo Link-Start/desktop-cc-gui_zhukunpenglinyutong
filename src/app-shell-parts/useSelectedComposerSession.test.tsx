@@ -224,6 +224,101 @@ describe("useSelectedComposerSession", () => {
     });
   });
 
+  it("publishes an active-thread repair immediately and keeps equal writes render-stable", async () => {
+    composerStore["selectedModelByThread.ws-a:codex:session-1"] = {
+      modelId: "MiniMax-M3",
+      effort: "high",
+    };
+    let renderCount = 0;
+    const { result } = renderHook(() => {
+      renderCount += 1;
+      return useSelectedComposerSession({
+        activeThreadId: "codex:session-1",
+        activeWorkspaceId: "ws-a",
+        resolveCanonicalThreadId: (threadId) => threadId,
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.selectedComposerSelection).toEqual({
+        modelId: "MiniMax-M3",
+        effort: "high",
+      });
+    });
+
+    act(() => {
+      result.current.persistComposerSelectionForThread(
+        "ws-a",
+        "codex:session-1",
+        {
+          modelId: "MiniMax-M3",
+          effort: null,
+        },
+      );
+    });
+
+    expect(result.current.selectedComposerSelection).toEqual({
+      modelId: "MiniMax-M3",
+      effort: null,
+    });
+    const repairedSelection = result.current.selectedComposerSelection;
+    const rendersAfterRepair = renderCount;
+
+    act(() => {
+      result.current.persistComposerSelectionForThread(
+        "ws-a",
+        "codex:session-1",
+        repairedSelection,
+      );
+    });
+
+    expect(result.current.selectedComposerSelection).toBe(repairedSelection);
+    expect(renderCount).toBe(rendersAfterRepair);
+  });
+
+  it("does not publish an inactive-thread persistence into the active selection", async () => {
+    composerStore["selectedModelByThread.ws-a:codex:active"] = {
+      modelId: "gpt-5.5",
+      effort: "medium",
+    };
+    const { result } = renderHook(() =>
+      useSelectedComposerSession({
+        activeThreadId: "codex:active",
+        activeWorkspaceId: "ws-a",
+        resolveCanonicalThreadId: (threadId) => threadId,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.selectedComposerSelection).toEqual({
+        modelId: "gpt-5.5",
+        effort: "medium",
+      });
+    });
+
+    act(() => {
+      result.current.persistComposerSelectionForThread(
+        "ws-a",
+        "codex:inactive",
+        {
+          modelId: "MiniMax-M3",
+          effort: null,
+        },
+      );
+    });
+
+    expect(result.current.selectedComposerSelection).toEqual({
+      modelId: "gpt-5.5",
+      effort: "medium",
+    });
+    expect(
+      composerStore["selectedModelByThread.ws-a:codex:inactive"],
+    ).toEqual({
+      modelId: "MiniMax-M3",
+      effort: null,
+    });
+  });
+
   it("does not rewrite an equivalent stored thread selection during startup reload", async () => {
     composerStore["selectedModelByThread.ws-a:codex:session-1"] = {
       modelId: "gpt-5.5",

@@ -4,6 +4,38 @@
 
 定义内置 Codex model families 在 catalog、selector 与 fallback 场景中的覆盖一致性。
 ## Requirements
+
+### Requirement: Codex Provider Discovery MUST Use The Scoped Runtime Model List
+
+Codex `Discover Models` MUST 通过目标 Provider binding 对应的 app-server session 执行
+`model/list`，并与 configured/custom/fallback catalog 合并。
+
+#### Scenario: Discover managed Provider models
+
+- **WHEN** 用户为 Codex managed Provider B 执行 discovery
+- **THEN** backend MUST acquire/reuse Provider B 的 app-server session
+- **AND** MUST 向 Provider B session 发送 `model/list`
+- **AND** MUST NOT 使用 legacy/default Codex session 的响应
+
+#### Scenario: Discover local Codex models
+
+- **WHEN** 用户为 Codex disk profile 执行 discovery
+- **THEN** backend MUST 使用 canonical local Codex session identity
+- **AND** MUST 返回 runtime model metadata
+
+#### Scenario: Runtime unavailable
+
+- **WHEN** Provider-scoped Codex app-server 无法启动或 `model/list` 失败
+- **THEN** discovery MUST fail with binding-scoped diagnostics
+- **AND** selector MUST 保留 last-good/configured/custom catalog
+
+#### Scenario: Daemon does not support a managed runtime
+
+- **WHEN** daemon mode 收到 managed Provider 的 discovery request
+- **AND** daemon 尚未支持该 Provider runtime
+- **THEN** command MUST 返回明确的 unsupported diagnostic
+- **AND** MUST NOT 回退 disk/global Codex session
+
 ### Requirement: Built-in Codex model families remain selectable
 
 内置 Codex model catalog MUST 为产品声明支持的 model family 提供稳定 id、display label 与 degraded reasoning fallback，Composer selector MUST 优先采用 runtime `model/list` 为每个模型返回的 reasoning metadata。
@@ -44,3 +76,48 @@
 - **WHEN** runtime model metadata 包含 `ultra`
 - **THEN** typed Composer reasoning selector MUST 展示并允许选择 `ultra`
 - **AND** 选择结果 MUST 沿既有 Codex effort payload 发送
+
+### Requirement: Kanban Codex Selector MUST Reuse The Hydrated Catalog
+
+Kanban 任务创建与编辑 selector 在 engine 为 Codex 时，MUST 使用 Composer catalog owner 已 hydrate 的 Codex model facts，而不得以 engine detection status 中的硬编码 fallback list 覆盖该 catalog。非 Codex engine MUST 保持其既有 model source。
+
+#### Scenario: Kanban shows the same Codex catalog facts
+
+- **WHEN** 同一 workspace 的 Composer catalog owner 已组合 runtime、config、custom 或 built-in Codex models
+- **AND** 用户在 Kanban 创建或编辑任务时选择 Codex
+- **THEN** Kanban model selector MUST 按共享 catalog 的顺序展示相同 model ids 与 display labels
+- **AND** engine detection status 中独有的 stale fallback model MUST NOT 额外出现
+
+#### Scenario: Valid selection survives catalog refresh
+
+- **WHEN** Kanban 当前选择的 Codex model 在 refreshed catalog 中仍然存在
+- **THEN** selector MUST 保留当前 model id
+- **AND** catalog refresh MUST NOT 无条件重置 draft 或 edit selection
+
+#### Scenario: Missing selection falls back deterministically
+
+- **WHEN** 当前 Codex model 不存在于 refreshed catalog
+- **THEN** selector MUST 选择 catalog default model
+- **AND** 若无 default model，则 MUST 选择首个 model
+- **AND** 若 catalog 为空，则 MUST 将 selection 设为 empty
+
+#### Scenario: Selected model reaches task payload
+
+- **WHEN** 用户从共享 Codex catalog 选择 model 并创建或更新 Kanban task
+- **THEN** task payload MUST 保留所选 model id
+- **AND** 现有 `KanbanTask.modelId` storage 与 execution contract MUST 保持兼容
+
+### Requirement: Codex Catalog MUST Use Shared Source Precedence And Last-Good Cache
+
+Codex model discovery MUST participate in the shared `runtime > configured > cached > generated fallback` contract and MUST NOT maintain divergent frontend/backend fallback rosters.
+
+#### Scenario: Codex model/list succeeds
+
+- **WHEN** runtime `model/list` returns a valid catalog
+- **THEN** runtime facts MUST override generated fallback metadata
+- **AND** the validated result MUST become last-good cache
+
+#### Scenario: Codex model/list fails
+
+- **WHEN** runtime refresh fails after a successful catalog
+- **THEN** last-good catalog MUST remain available with stale/error metadata

@@ -24,6 +24,12 @@ export const GitHistoryPanel = lazy(() =>
   })),
 );
 
+export const ExtensionsView = lazy(() =>
+  import("../features/extensions/components/ExtensionsView").then((module) => ({
+    default: module.ExtensionsView,
+  })),
+);
+
 export const WorkspaceHome = lazy(() =>
   import("../features/workspaces/components/WorkspaceHome").then((module) => ({
     default: module.WorkspaceHome,
@@ -39,6 +45,12 @@ export const SpecHub = lazy(() =>
 export const SearchPalette = lazy(() =>
   import("../features/search/components/SearchPalette").then((module) => ({
     default: module.SearchPalette,
+  })),
+);
+
+export const QuickSwitcher = lazy(() =>
+  import("../features/quick-switcher/components/QuickSwitcher").then((module) => ({
+    default: module.QuickSwitcher,
   })),
 );
 

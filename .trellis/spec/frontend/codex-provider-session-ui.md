@@ -26,6 +26,7 @@
 - `ensureThread` reducer MUST merge provider metadata without erasing existing metadata when a later action omits provider fields.
 - Thread list, pinned list, sidebar snapshot, live turn events, and loaded catalog rows MUST preserve provider metadata fields.
 - Provider label display MUST derive from thread metadata: `providerProfileName`, then `sourceLabel`, then non-disk `providerProfileId`. Non-Codex threads return no Codex provider label.
+- When sidebar provider labels are enabled, Codex `__disk__` and Claude Code `__local_settings_json__` MUST render the stable technical tag `local`; internal profile names such as `codex-tui/default-config` MUST remain hidden.
 - Composer footer/button area MAY show the active Codex provider label, but the label MUST come from active thread metadata and not from supplier-management active state.
 - Codex stale recovery fresh continuation and fork continuation MUST inherit the source thread's non-empty `providerProfileId` from thread metadata. Blank/whitespace provider ids MUST be normalized away so legacy disk/default behavior remains intentional.
 - Provider metadata resolvers passed into stable messaging/AppShell context paths MUST use ref-backed latest state or another identity-stable mechanism. They MUST NOT depend directly on `threadsByWorkspace` if that would recreate send/recovery callbacks on each thread list update.
@@ -50,7 +51,7 @@
 ### 5. Good / Base / Bad Cases
 
 - Good: `startThreadForWorkspace` 使用 `providerBindingFromSelectedProfile`，以 `providerProfileId ?? "__disk__"` 参与 in-flight key，并把 backend response/provider fallback 写入 `ensureThread`。
-- Good: `resolveCodexProviderLabel` 对 Codex thread 使用 metadata label，disk id 无 name 时不强行显示 raw `__disk__`。
+- Good: `resolveCodexProviderLabel` 对 managed Codex thread 使用 metadata label，对 Codex disk 与 Claude local thread 显示 `local`，且不暴露 raw sentinel/internal profile name。
 - Base: 非交互式 Codex start 未传 provider 时视为 disk default，并由 backend 记录 disk binding。
 - Bad: reducer 更新 thread 时只保留新 action 字段，导致 catalog provider metadata 被 undefined 覆盖。
 - Bad: composer 从 vendor settings 读取当前 provider label，而不是 active thread metadata。

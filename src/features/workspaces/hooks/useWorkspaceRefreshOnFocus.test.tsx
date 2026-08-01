@@ -87,7 +87,6 @@ describe("useWorkspaceRefreshOnFocus", () => {
       activeWorkspace,
       {
         preserveState: true,
-        includeOpenCodeSessions: false,
         recoverySource: "focus-refresh",
         allowRuntimeReconnect: false,
       },
@@ -97,7 +96,6 @@ describe("useWorkspaceRefreshOnFocus", () => {
       visibleWorkspace,
       {
         preserveState: true,
-        includeOpenCodeSessions: false,
         recoverySource: "focus-refresh",
         allowRuntimeReconnect: false,
       },

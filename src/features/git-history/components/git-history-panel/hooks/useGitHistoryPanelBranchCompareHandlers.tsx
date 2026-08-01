@@ -3,42 +3,11 @@ import type {
   GitBranchCompareCommitSets,
   GitCommitDetails,
   GitCommitDiff,
-  GitHistoryCommit,
 } from "../../../../../types";
-
-type WorktreeBranchDiffState = {
-  mode: "worktree";
-  requestToken: number;
-  branch: string;
-  compareBranch: string;
-  files: Pick<GitCommitDiff, "path" | "status">[];
-  selectedPath: string | null;
-  loading: boolean;
-  error: string | null;
-  selectedDiff: GitCommitDiff | null;
-  selectedDiffLoading: boolean;
-  selectedDiffError: string | null;
-};
-
-type BranchCompareDirection = "targetOnly" | "currentOnly";
-
-type BranchCompareState = {
-  mode: "branch";
-  requestToken: number;
-  branch: string;
-  compareBranch: string;
-  targetOnlyCommits: GitHistoryCommit[];
-  currentOnlyCommits: GitHistoryCommit[];
-  loading: boolean;
-  error: string | null;
-  selectedDirection: BranchCompareDirection | null;
-  selectedCommitSha: string | null;
-  selectedCommitDetails: GitCommitDetails | null;
-  selectedCommitLoading: boolean;
-  selectedCommitError: string | null;
-};
-
-type BranchDiffState = WorktreeBranchDiffState | BranchCompareState;
+import type {
+  BranchCompareDirection,
+  BranchDiffState,
+} from "../components/GitHistoryPanelTypes";
 
 type BranchCompareHandlersScope = {
   branchCompareDetailsCacheRef: MutableRefObject<Map<string, GitCommitDetails>>;

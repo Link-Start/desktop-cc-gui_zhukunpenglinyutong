@@ -23,6 +23,8 @@ const common = {
     curatedError: "Couldn't load curated skills.",
     curatedSubtitle:
       "Client-bundled, version-pinned, shipped with the desktop client. No network.",
+    curatedDetailHint:
+      "When enabled, the selected skill is automatically injected into the system prompt for every conversation, shaping the AI's tone and behavior without any manual invocation. When disabled, it is not injected at all. This differs from user-installed skills under Extensions → Skills, which only take effect when explicitly called or matched.",
     curatedBundledBadge: "Built-in",
     curatedCategoryCodeStyle: "Code style",
     curatedCategoryUiDesign: "UI design",
@@ -37,6 +39,10 @@ const common = {
     curatedViewOnGithub: "View on GitHub",
     curatedViewOnGithubAria:
       "Open the upstream source for {{name}} in your browser",
+    curatedSkillDescriptionCaveman:
+      "Concise communication with safe review and commit guidance while preserving technical substance and exact code or commands.",
+    curatedSkillDescriptionLazySeniorDev:
+      "Ponytail's 7-level ladder: prefer YAGNI, reuse existing code, use the standard library, platform, or installed dependencies, and write the smallest reliable diff.",
     later: "Later",
     yes: "Yes",
     no: "No",
@@ -61,6 +67,9 @@ const common = {
     showOnWorkspaceRow: "Show on project row",
     markdownMermaidFullscreen: "Fullscreen",
     markdownMermaidFullscreenHint: "Open diagram fullscreen",
+    markdownMermaidDownloadPng: "Download PNG",
+    markdownMermaidDownloadingPng: "Downloading PNG…",
+    markdownMermaidDownloadFailed: "PNG download failed.",
     markdownImageFullscreen: "Fullscreen",
     markdownImageFullscreenHint: "Open image fullscreen",
   },

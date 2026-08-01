@@ -39,10 +39,6 @@ export function ComposerSection({
 
   return (
     <section className="settings-section">
-      <div className="settings-section-title">{t("settings.composerTitle")}</div>
-      <div className="settings-section-subtitle">
-        {t("settings.composerDescription")}
-      </div>
       <div className="settings-subsection-title">{t("settings.sendShortcutSubtitle")}</div>
       <div className="settings-subsection-subtitle">
         {t("settings.sendShortcutSubDescription")}

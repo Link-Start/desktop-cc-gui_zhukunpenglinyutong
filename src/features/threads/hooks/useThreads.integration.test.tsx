@@ -14,6 +14,13 @@ import {
   startThread,
 } from "../../../services/tauri";
 import { appendRendererDiagnostic } from "../../../services/rendererDiagnostics";
+import { sendSharedSessionTurnRouted } from "../../shared-session/runtime/sendSharedSessionTurn";
+import { resetSharedSendStateStoreForTests } from "../../shared-session/runtime/sharedSendStateStore";
+import { startSharedSession } from "../../shared-session/services/sharedSessions";
+import {
+  resetSharedTargetStoreForTests,
+  selectNextTarget,
+} from "../../shared-session/target/targetStore";
 import { computeThreadItemCacheMax, useThreads } from "./useThreads";
 
 type AppServerHandlers = Parameters<typeof useAppServerEvents>[0];
@@ -77,6 +84,22 @@ vi.mock("../../../services/rendererDiagnostics", async (importOriginal) => {
   };
 });
 
+vi.mock("../../shared-session/runtime/sendSharedSessionTurn", () => ({
+  sendSharedSessionTurn: vi.fn(),
+  sendSharedSessionTurnRouted: vi.fn(),
+}));
+
+vi.mock("../../shared-session/services/sharedSessions", async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import("../../shared-session/services/sharedSessions")
+    >();
+  return {
+    ...actual,
+    startSharedSession: vi.fn(),
+  };
+});
+
 const workspace: WorkspaceInfo = {
   id: "ws-1",
   name: "ccgui",
@@ -93,6 +116,8 @@ describe("useThreads UX integration", () => {
     handlers = null;
     vi.clearAllMocks();
     window.localStorage.clear();
+    resetSharedTargetStoreForTests();
+    resetSharedSendStateStoreForTests();
     now = 1000;
     nowSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
   });
@@ -631,6 +656,184 @@ describe("useThreads UX integration", () => {
       vi.useRealTimers();
     }
   });
+
+  it.each([
+    ["Kimi", "kimi-for-coding"],
+    ["MiniMax", "MiniMax-M2.1"],
+  ])(
+    "keeps a durable Shared Claude + %s turn settled when late realtime events arrive",
+    async (_providerLabel, runtimeModel) => {
+      const sharedThreadId = `shared:durable-${runtimeModel.toLowerCase()}`;
+      const runtimeTurnId = `runtime-${runtimeModel}`;
+      const executionTarget = {
+        engine: "claude",
+        providerProfileId: "provider-shared",
+        modelCatalogEntryId: `provider-shared:${runtimeModel}`,
+        providerProfileNameSnapshot: "Shared Provider",
+        providerProfileSource: "managed",
+        model: runtimeModel,
+        reasoning: null,
+      } as const;
+      vi.mocked(startSharedSession).mockResolvedValueOnce({
+        result: {
+          thread: {
+            id: sharedThreadId,
+            name: "Shared durable barrier",
+            updatedAt: 1000,
+            selectedTarget: executionTarget,
+          },
+        },
+      });
+      vi.mocked(sendSharedSessionTurnRouted).mockResolvedValueOnce({
+        result: { turn: { id: runtimeTurnId } },
+        nativeThreadId: "claude:native-shared",
+        runtimeTurnId,
+        v2: {
+          attemptId: `attempt-${runtimeModel}`,
+          logicalTurnId: `logical-${runtimeModel}`,
+          committed: true,
+          duplicate: false,
+        },
+      });
+      const onDebug = vi.fn();
+      const { result } = renderHook(() =>
+        useThreads({
+          activeWorkspace: workspace,
+          onWorkspaceConnected: vi.fn(),
+          activeEngine: "claude",
+          onDebug,
+        }),
+      );
+
+      await act(async () => {
+        await result.current.startSharedSessionForWorkspace("ws-1", {
+          initialTarget: executionTarget,
+        });
+      });
+      selectNextTarget("ws-1", sharedThreadId, executionTarget);
+
+      await act(async () => {
+        await result.current.sendUserMessageToThread(
+          workspace,
+          sharedThreadId,
+          "验证 durable terminal barrier",
+        );
+      });
+
+      expect(
+        result.current.threadStatusById[sharedThreadId]?.isProcessing,
+      ).toBe(false);
+      expect(onDebug).toHaveBeenCalledWith(
+        expect.objectContaining({
+          label: "thread/session:shared-durable-terminal-barrier-installed",
+          payload: {
+            threadId: sharedThreadId,
+            runtimeTurnId,
+          },
+        }),
+      );
+
+      act(() => {
+        handlers?.onSharedRuntimeTurnStarted?.(
+          sharedThreadId,
+          runtimeTurnId,
+        );
+      });
+      expect(
+        result.current.threadStatusById[sharedThreadId]?.isProcessing,
+      ).toBe(false);
+
+      await act(async () => {
+        handlers?.onNormalizedRealtimeEvent?.({
+          engine: "claude",
+          workspaceId: "ws-1",
+          threadId: sharedThreadId,
+          turnId: runtimeTurnId,
+          eventId: `late-${runtimeModel}`,
+          itemKind: "message",
+          timestampMs: 2,
+          operation: "itemUpdated",
+          sourceMethod: "item/updated",
+          item: {
+            id: `assistant-${runtimeModel}`,
+            kind: "message",
+            role: "assistant",
+            text: "late snapshot",
+          },
+        });
+      });
+      expect(onDebug).toHaveBeenCalledWith(
+        expect.objectContaining({
+          label: "thread/session:realtime-terminal-exact-drop",
+        }),
+      );
+      expect(
+        result.current.threadStatusById[sharedThreadId]?.isProcessing,
+      ).toBe(false);
+
+      await act(async () => {
+        handlers?.onReasoningTextDelta?.(
+          "ws-1",
+          sharedThreadId,
+          `reasoning-${runtimeModel}`,
+          "late reasoning",
+          null,
+          runtimeTurnId,
+        );
+      });
+      expect(
+        result.current.threadStatusById[sharedThreadId]?.isProcessing,
+      ).toBe(false);
+
+      await act(async () => {
+        handlers?.onItemUpdated?.("ws-1", sharedThreadId, {
+          id: `assistant-${runtimeModel}`,
+          type: "agentMessage",
+          text: "late raw snapshot",
+          turnId: runtimeTurnId,
+        });
+      });
+
+      expect(
+        result.current.threadStatusById[sharedThreadId]?.isProcessing,
+      ).toBe(false);
+      expect(result.current.activeTurnIdByThread[sharedThreadId]).toBeNull();
+
+      const nextRuntimeTurnId = `${runtimeTurnId}-next`;
+      act(() => {
+        handlers?.onSharedRuntimeTurnStarted?.(
+          sharedThreadId,
+          nextRuntimeTurnId,
+        );
+      });
+      expect(
+        result.current.threadStatusById[sharedThreadId]?.isProcessing,
+      ).toBe(false);
+
+      await act(async () => {
+        handlers?.onNormalizedRealtimeEvent?.({
+          engine: "claude",
+          workspaceId: "ws-1",
+          threadId: sharedThreadId,
+          turnId: nextRuntimeTurnId,
+          eventId: `next-${runtimeModel}`,
+          itemKind: "message",
+          timestampMs: 3,
+          operation: "itemUpdated",
+          sourceMethod: "item/updated",
+          item: {
+            id: `assistant-next-${runtimeModel}`,
+            kind: "message",
+            role: "assistant",
+            text: "next turn snapshot",
+          },
+        });
+      });
+      expect(
+        result.current.threadStatusById[sharedThreadId]?.isProcessing,
+      ).toBe(true);
+    },
+  );
 
   it("does not revive processing from late raw item updates after turn completion", async () => {
     const { result } = renderHook(() =>

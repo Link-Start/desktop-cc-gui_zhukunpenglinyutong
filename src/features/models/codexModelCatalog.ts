@@ -1,7 +1,17 @@
+import generatedCatalog from "./generatedModelCatalog.json";
+import { getGeneratedModelFallbacks } from "./generatedModelFallbacks";
+import type { ModelCatalogEntry } from "./modelProviderCatalog";
+
 export type CodexModelCatalogEntry = {
   id: string;
   label: string;
   description: string;
+  provider: string;
+  protocol: string;
+  source: "fallback";
+  provenance: string;
+  lifecycle: string;
+  lastVerifiedAt: string;
   supportedReasoningEfforts?: { reasoningEffort: string; description: string }[];
   defaultReasoningEffort?: string | null;
 };
@@ -13,40 +23,21 @@ const STANDARD_CODEX_REASONING_EFFORTS = [
   { reasoningEffort: "xhigh", description: "Extra high reasoning depth" },
 ];
 
-export const CODEX_MODEL_CATALOG: CodexModelCatalogEntry[] = [
-  {
-    id: "gpt-5.6-sol",
-    label: "gpt-5.6-sol",
-    description: "Latest frontier agentic coding model.",
+export const CODEX_MODEL_CATALOG: CodexModelCatalogEntry[] =
+  getGeneratedModelFallbacks("codex").map((model) => ({
+    ...model,
+    source: "fallback",
+    provenance: "generated:model-catalog",
+    lastVerifiedAt: generatedCatalog.lastVerifiedAt,
     supportedReasoningEfforts: STANDARD_CODEX_REASONING_EFFORTS,
-    defaultReasoningEffort: "medium",
-  },
-  {
-    id: "gpt-5.6-terra",
-    label: "gpt-5.6-terra",
-    description: "Balanced agentic coding model for everyday work.",
-    supportedReasoningEfforts: STANDARD_CODEX_REASONING_EFFORTS,
-    defaultReasoningEffort: "medium",
-  },
-  {
-    id: "gpt-5.6-luna",
-    label: "gpt-5.6-luna",
-    description: "Fast and affordable agentic coding model.",
-    supportedReasoningEfforts: STANDARD_CODEX_REASONING_EFFORTS,
-    defaultReasoningEffort: "medium",
-  },
-  {
-    id: "gpt-5.5",
-    label: "gpt-5.5",
-    description: "Frontier model for complex coding, research, and real-world work.",
-    supportedReasoningEfforts: STANDARD_CODEX_REASONING_EFFORTS,
-    defaultReasoningEffort: "medium",
-  },
-  {
-    id: "gpt-5.4",
-    label: "gpt-5.4",
-    description: "Strong model for everyday coding.",
-    supportedReasoningEfforts: STANDARD_CODEX_REASONING_EFFORTS,
-    defaultReasoningEffort: "medium",
-  },
-];
+  }));
+
+export const CODEX_MODEL_FALLBACK_ENTRIES: readonly ModelCatalogEntry[] =
+  Object.freeze(
+    CODEX_MODEL_CATALOG.map((model) =>
+      Object.freeze({
+        ...model,
+        engine: "codex" as const,
+      }),
+    ),
+  );

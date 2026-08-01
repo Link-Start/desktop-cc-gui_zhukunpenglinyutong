@@ -2,19 +2,54 @@ import { describe, expect, it } from "vitest";
 import {
   formatShortcutForPlatform,
   matchesShortcutForPlatform,
+  splitShortcutForPlatform,
   toMenuAccelerator,
 } from "./shortcuts";
+
+describe("splitShortcutForPlatform", () => {
+  it("splits shortcuts into key-cap segments on mac", () => {
+    expect(splitShortcutForPlatform("cmd+,", true)).toEqual(["⌘", ","]);
+    expect(splitShortcutForPlatform("cmd+shift+arrowdown", true)).toEqual([
+      "⌘",
+      "⇧",
+      "↓",
+    ]);
+    expect(splitShortcutForPlatform("cmd+ctrl+down", true)).toEqual([
+      "⌘",
+      "⌃",
+      "↓",
+    ]);
+  });
+
+  it("splits shortcuts into text segments on non-mac platforms", () => {
+    expect(splitShortcutForPlatform("cmd+o", false)).toEqual(["Ctrl", "O"]);
+    expect(splitShortcutForPlatform("cmd+ctrl+a", false)).toEqual([
+      "Meta",
+      "Ctrl",
+      "A",
+    ]);
+  });
+
+  it("returns null for empty or unparseable values", () => {
+    expect(splitShortcutForPlatform(null, true)).toBeNull();
+    expect(splitShortcutForPlatform("", true)).toBeNull();
+    expect(splitShortcutForPlatform("shift", true)).toBeNull();
+  });
+});
 
 describe("formatShortcutForPlatform", () => {
   it("formats shortcuts with symbols on mac", () => {
     expect(formatShortcutForPlatform("cmd+o", true)).toBe("⌘O");
     expect(formatShortcutForPlatform("cmd+shift+arrowdown", true)).toBe("⌘⇧↓");
+    expect(formatShortcutForPlatform("alt+f1", true)).toBe("⌥F1");
+    expect(formatShortcutForPlatform("alt+f7", true)).toBe("⌥F7");
   });
 
   it("formats shortcuts with text labels on non-mac platforms", () => {
     expect(formatShortcutForPlatform("cmd+o", false)).toBe("Ctrl+O");
     expect(formatShortcutForPlatform("cmd+shift+arrowdown", false)).toBe("Ctrl+Shift+Down");
     expect(formatShortcutForPlatform("cmd+ctrl+a", false)).toBe("Meta+Ctrl+A");
+    expect(formatShortcutForPlatform("alt+f7", false)).toBe("Alt+F7");
   });
 
   it("normalizes legacy arrow aliases in configured shortcut labels", () => {

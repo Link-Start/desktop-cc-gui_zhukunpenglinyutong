@@ -7,9 +7,9 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-1.md`
-- **Total Sessions**: 37
-- **Last Active**: 2026-07-19
+- **Active File**: `journal-2.md`
+- **Total Sessions**: 74
+- **Last Active**: 2026-07-31
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1733 | Active |
+| `journal-2.md` | ~1071 | Active |
+| `journal-1.md` | ~1997 | Archived |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +30,43 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 74 | 2026-07-31 | 统一 Atomic 选模、侧栏运行时入口与 Grok 会话时间 | `5a4d9da81` | `chore/bump-version-0.7.13` |
+| 73 | 2026-07-31 | 完善 CLI 路径设置、错误边界与流式正文切换 | `c03f9b1f8` | `chore/bump-version-0.7.13` |
+| 72 | 2026-07-31 | 修复 mac-arm64 构建 TS2367 | `3e2c60863` | `chore/bump-version-0.7.12` |
+| 71 | 2026-07-31 | 完善模型选择器渠道切换与自定义模型弹窗 | `2f6ffb247` | `chore/bump-version-0.7.12` |
+| 70 | 2026-07-31 | Grok 图片输入与 Claude 模型目录 | `78a09bb6a3b2c73b173b7b856b92280cc1bc2e19` | `chore/bump-version-0.7.12` |
+| 69 | 2026-07-30 | 重做供应商设置面板并支持 CC Switch 文件导入 | `d7a657f5a` | `chore/bump-version-0.7.12` |
+| 68 | 2026-07-30 | 统一设置页内容列宽为 980px | `75b9ee299` | `chore/bump-version-0.7.12` |
+| 67 | 2026-07-30 | 设置页重构为无顶栏居中窄列布局 | `cc6ae1007` | `chore/bump-version-0.7.12` |
+| 66 | 2026-07-30 | 快捷键设置页对齐参考样式并补全部重置 | `15a30e24f` | `chore/bump-version-0.7.12` |
+| 65 | 2026-07-30 | 重构快捷键设置页为双栏录制布局 | `eb4ed9027` | `chore/bump-version-0.7.12` |
+| 64 | 2026-07-28 | 修复 CI 编译失败：grok entry 缺 native_title | `d5b6f42ca` | `chore/bump-version-0.7.11` |
+| 63 | 2026-07-28 | 修复浅色主题原生控件配色并优化危险确认对话框按钮布局 | `9f9ce10c6`, `781d5cb47` | `chore/bump-version-0.7.11` |
+| 62 | 2026-07-22 | 合并远端 bump-version-0.7.6 并修复 Git history 测试契约 | `0a5a68d1`, `8ff3834c` | `bump-version-0.7.6` |
+| 61 | 2026-07-21 | 归档 messages 最终模块边界契约 | `26e2e84b` | `bump-version-0.7.6` |
+| 60 | 2026-07-21 | 锁定 messages 最终模块边界 | `ecf1e80f`, `bcd2970c` | `bump-version-0.7.6` |
+| 59 | 2026-07-21 | 归档 conversation presentation context OpenSpec | `87fc179b` | `bump-version-0.7.6` |
+| 58 | 2026-07-21 | 统一 messages 对话展示上下文 | `21bf0975`, `6daca4aa` | `bump-version-0.7.6` |
+| 57 | 2026-07-21 | 归档 messages 编排控制器 OpenSpec | `00c762ab` | `bump-version-0.7.6` |
+| 56 | 2026-07-21 | 隔离 messages 编排控制器职责 | `90991c6a` | `bump-version-0.7.6` |
+| 55 | 2026-07-21 | 固化消息时间线职责规格 | `263c1808` | `bump-version-0.7.6` |
+| 54 | 2026-07-21 | 隔离消息时间线控制器 | `2c76b28c`, `b7b39746` | `bump-version-0.7.6` |
+| 53 | 2026-07-21 | 区分 Kimi 提交信息引擎 | `0ff12ea3` | `bump-version-0.7.6` |
+| 52 | 2026-07-21 | 对齐界面回归契约 | `badba108` | `bump-version-0.7.6` |
+| 51 | 2026-07-21 | 归档 message row ownership 规范 | `fc948b1a` | `bump-version-0.7.6` |
+| 50 | 2026-07-21 | 隔离 messages row ownership | `2666d664`, `8d4581e1` | `bump-version-0.7.6` |
+| 49 | 2026-07-21 | 归档 Messages 公共输入契约 | `87bca291` | `bump-version-0.7.6` |
+| 48 | 2026-07-21 | 稳定 Messages 公共输入边界 | `1af4995e` | `bump-version-0.7.6` |
+| 47 | 2026-07-21 | 归档共享 Markdown renderer 规范 | `94a4b5eb` | `bump-version-0.7.6` |
+| 46 | 2026-07-21 | 提升共享 Markdown renderer 所有权 | `980db5f9`, `d1737fd7` | `bump-version-0.7.6` |
+| 45 | 2026-07-21 | 归档通用工具展示契约 | `527bb410` | `bump-version-0.7.6` |
+| 44 | 2026-07-21 | 分离 GenericToolBlock 展示职责 | `d9c8f125` | `bump-version-0.7.6` |
+| 43 | 2026-07-21 | 归档 messages 共享领域能力规范 | `b24ff0f9` | `bump-version-0.7.6` |
+| 42 | 2026-07-21 | 归还 messages 共享领域能力所有权 | `3715b87e` | `bump-version-0.7.6` |
+| 41 | 2026-07-21 | 归档 MessageRow correctness change | `824b4c58` | `bump-version-0.7.6` |
+| 40 | 2026-07-21 | 修复 MessageRow context 与 media scope | `fac1ccc5` | `bump-version-0.7.6` |
+| 39 | 2026-07-21 | 归档 Messages 模块边界 change | `05baf51a` | `bump-version-0.7.6` |
+| 38 | 2026-07-21 | 建立 Messages 模块边界基线 | `2bd4a398` | `bump-version-0.7.6` |
 | 37 | 2026-07-19 | 解决 Kimi 集成分支同步冲突 | `e33dcaa6` | `chore/bump-version-0.7.5` |
 | 36 | 2026-07-16 | 合并远端 0.7.4 分支并保留本地设置改动 | `eaae4011` | `chore/bump-version-0.7.4` |
 | 35 | 2026-07-16 | 合并 PR 752 到 0.7.3 分支 | `4b972f87` | `chore/bump-version-0.7.3` |

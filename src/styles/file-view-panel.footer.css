@@ -47,6 +47,112 @@
   padding: 8px 12px;
 }
 
+.fvp-navigation-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--surface-control) 68%, transparent);
+  font-size: 11px;
+}
+
+.fvp-navigation-status.is-fallback,
+.fvp-navigation-fallback-note {
+  border-color: color-mix(in srgb, var(--status-warning) 54%, var(--border-subtle));
+  background: color-mix(in srgb, var(--status-warning) 9%, transparent);
+}
+
+.fvp-navigation-status-action {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.fvp-navigation-status-detail {
+  min-width: 0;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fvp-navigation-retry {
+  margin-left: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: var(--text-strong);
+}
+
+.fvp-navigation-fallback-note {
+  border: 1px solid color-mix(in srgb, var(--status-warning) 54%, var(--border-subtle));
+  border-radius: 7px;
+  padding: 6px 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.fvp-navigation-install-hint {
+  display: grid;
+  gap: 4px;
+}
+
+.fvp-navigation-install-provider {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.fvp-navigation-install-label {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.fvp-navigation-install-command-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.fvp-navigation-install-command {
+  min-width: 0;
+  flex: 1;
+  overflow-x: auto;
+  padding: 4px 6px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 82%, transparent);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--surface-control) 74%, transparent);
+  color: var(--text-strong);
+  font-family: var(--code-font-family);
+  font-size: 10px;
+  white-space: nowrap;
+  user-select: text;
+}
+
+.fvp-navigation-install-copy {
+  flex: 0 0 auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  padding: 3px 7px;
+  color: var(--text-strong);
+  font-size: 10px;
+}
+
+.fvp-navigation-install-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.fvp-navigation-install-retry {
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  padding: 3px 7px;
+  color: var(--text-strong);
+  font-size: 10px;
+}
+
 .fvp-navigation-section {
   border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
   border-radius: 8px;
@@ -149,6 +255,23 @@
   flex-shrink: 0;
   background: var(--surface-messages);
   min-height: 20px;
+}
+
+.fvp-navigation-mode {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 1px 7px;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--surface-control) 72%, transparent);
+  white-space: nowrap;
+}
+
+.fvp-navigation-mode.is-fallback {
+  border-color: color-mix(in srgb, var(--status-warning) 52%, var(--border-subtle));
+  color: color-mix(in srgb, var(--status-warning) 70%, var(--text-strong));
 }
 
 .fvp-footer-left {

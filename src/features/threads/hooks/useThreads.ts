@@ -37,6 +37,7 @@ import { useThreadEventHandlers } from "./useThreadEventHandlers";
 import { useThreadActions } from "./useThreadActions";
 import { useThreadMessaging } from "./useThreadMessaging";
 import { useThreadApprovals } from "./useThreadApprovals";
+import type { TurnExecutionSnapshot } from "../../shared-session/target/types";
 import {
   cleanupThreadScopedRefs,
   createWorkspaceScopedMap,
@@ -106,9 +107,9 @@ import { buildItemsFromThread } from "../../../utils/threadItems";
 import i18n from "../../../i18n";
 import { clearSharedSessionBindingsForSharedThread } from "../../shared-session/runtime/sharedSessionBridge";
 import {
-  setSharedSessionSelectedEngine as setSharedSessionSelectedEngineService,
   syncSharedSessionSnapshot as syncSharedSessionSnapshotService,
 } from "../../shared-session/services/sharedSessions";
+import { isSharedV2SendEnabled } from "../../shared-session/runtime/sharedV2SendFlag";
 import { normalizeSharedSessionEngine } from "../../shared-session/utils/sharedSessionEngines";
 import { type ConversationCompletionEmailMetadata } from "../utils/conversationCompletionEmail";
 import {
@@ -159,7 +160,7 @@ type UseThreadsOptions = {
   steerEnabled?: boolean;
   customPrompts?: CustomPromptOption[];
   onMessageActivity?: () => void;
-  activeEngine?: "claude" | "codex" | "gemini" | "kimi" | "opencode";
+  activeEngine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
   useNormalizedRealtimeAdapters?: boolean;
   useUnifiedHistoryLoader?: boolean;
   sessionAttributionMode?: WorkspaceSessionAttributionMode;
@@ -180,7 +181,7 @@ type UseThreadsOptions = {
   runWithCreateSessionLoading?: <T>(
     params: {
       workspace: WorkspaceInfo;
-      engine: "claude" | "codex" | "gemini" | "kimi" | "opencode";
+      engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
     },
     action: () => Promise<T>,
   ) => Promise<T>;
@@ -302,6 +303,26 @@ export function useThreads({
   const cleanupThreadTransientStateRef = useRef<
     (workspaceId: string | null | undefined, threadId: string) => number
   >(() => 0);
+  const settleSharedDurableTurnRef = useRef<
+    (threadId: string, runtimeTurnId: string) => void
+  >(() => {});
+  const settleSharedDurableTurn = useCallback(
+    (threadId: string, runtimeTurnId: string) => {
+      settleSharedDurableTurnRef.current(threadId, runtimeTurnId);
+    },
+    [],
+  );
+  const registerSharedDurableTurnSettlement = useCallback(
+    (settle: (threadId: string, runtimeTurnId: string) => void) => {
+      settleSharedDurableTurnRef.current = settle;
+      return () => {
+        if (settleSharedDurableTurnRef.current === settle) {
+          settleSharedDurableTurnRef.current = () => {};
+        }
+      };
+    },
+    [],
+  );
   const sharedSessionSyncTimerByThreadRef = useRef<
     Record<string, ReturnType<typeof setTimeout> | null>
   >({});
@@ -463,7 +484,12 @@ export function useThreads({
   );
 
   const pushThreadErrorMessage = useCallback(
-    (workspaceId: string, threadId: string, message: string) => {
+    (
+      workspaceId: string,
+      threadId: string,
+      message: string,
+      executionTargetSnapshot?: TurnExecutionSnapshot,
+    ) => {
       const normalized = message.trim();
       if (normalized) {
         const now = Date.now();
@@ -490,6 +516,7 @@ export function useThreads({
         type: "addAssistantMessage",
         threadId,
         text: message,
+        ...(executionTargetSnapshot ? { executionTargetSnapshot } : {}),
       });
       if (threadId !== activeThreadId) {
         dispatch({ type: "markUnread", threadId, hasUnread: true });
@@ -661,7 +688,7 @@ export function useThreads({
   );
 
   const getThreadEngine = useCallback(
-    (workspaceId: string, threadId: string): "claude" | "codex" | "gemini" | "kimi" | "opencode" | undefined => {
+    (workspaceId: string, threadId: string): "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | undefined => {
       const threads = state.threadsByWorkspace[workspaceId] ?? [];
       const thread = threads.find((t) => t.id === threadId);
       return thread?.engineSource;
@@ -687,43 +714,10 @@ export function useThreads({
     [],
   );
 
-  const updateSharedSessionEngineSelection = useCallback(
-    (
-      workspaceId: string,
-      threadId: string,
-      engine: "claude" | "codex" | "gemini" | "kimi" | "opencode",
-    ) => {
-      const sharedEngine = normalizeSharedSessionEngine(engine);
-      dispatch({
-        type: "setThreadEngine",
-        workspaceId,
-        threadId,
-        engine: sharedEngine,
-      });
-      if (!threadId.startsWith("shared:")) {
-        return;
-      }
-      void setSharedSessionSelectedEngineService(
-        workspaceId,
-        threadId,
-        sharedEngine,
-      ).catch((error) => {
-        onDebug?.({
-          id: `${Date.now()}-shared-session-select-engine-error`,
-          timestamp: Date.now(),
-          source: "error",
-          label: "shared-session/select-engine error",
-          payload: error instanceof Error ? error.message : String(error),
-        });
-      });
-    },
-    [dispatch, onDebug],
-  );
-
   const resolvePendingThreadForSession = useCallback(
     (
       workspaceId: string,
-      engine: "claude" | "gemini" | "kimi" | "opencode",
+      engine: "claude" | "gemini" | "grok" | "kimi" | "opencode",
     ): string | null => {
       const resolved = resolvePendingThreadIdForSession({
         workspaceId,
@@ -774,7 +768,7 @@ export function useThreads({
   const resolvePendingThreadForTurn = useCallback(
     (
       workspaceId: string,
-      engine: "claude" | "gemini" | "kimi" | "opencode",
+      engine: "claude" | "gemini" | "grok" | "kimi" | "opencode",
       turnId: string | null | undefined,
     ): string | null =>
       resolvePendingThreadIdForTurn({
@@ -2019,6 +2013,7 @@ export function useThreads({
     onInputMemoryCaptured: handleInputMemoryCaptured,
     resolveCollaborationRuntimeMode,
     runWithCreateSessionLoading,
+    onSharedDurableTurnCommitted: settleSharedDurableTurn,
   });
 
   useMailDrivenSessionContinuation({
@@ -2461,6 +2456,7 @@ export function useThreads({
                 thread.id,
                 items,
                 selectedEngine,
+                !isSharedV2SendEnabled(),
               ).catch((error) => {
                 onDebug?.({
                   id: `${Date.now()}-shared-session-sync-error`,
@@ -2812,6 +2808,8 @@ export function useThreads({
         cleanupThreadTransientStateRef.current = () => 0;
       };
     },
+    onDurableRealtimeTurnSettlementReady:
+      registerSharedDurableTurnSettlement,
     onCollaborationModeResolved: onCollaborationModeResolved
       ? (event) => {
           onCollaborationModeResolved({
@@ -2866,6 +2864,7 @@ export function useThreads({
               thread.engineSource === "codex" ||
               thread.engineSource === "claude" ||
               thread.engineSource === "gemini" ||
+              thread.engineSource === "grok" ||
               thread.engineSource === "kimi" ||
               thread.engineSource === "opencode"
                 ? thread.engineSource
@@ -2874,6 +2873,7 @@ export function useThreads({
               thread.selectedEngine === "codex" ||
               thread.selectedEngine === "claude" ||
               thread.selectedEngine === "gemini" ||
+              thread.selectedEngine === "grok" ||
               thread.selectedEngine === "kimi" ||
               thread.selectedEngine === "opencode"
                 ? thread.selectedEngine
@@ -2908,7 +2908,9 @@ export function useThreads({
         payload: {
           message: string;
           willRetry: boolean;
-          engine?: "claude" | "codex" | "gemini" | "kimi" | "opencode" | null;
+          suppressMessage?: boolean;
+          engine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | null;
+          executionTargetSnapshot?: TurnExecutionSnapshot;
         },
       ) => {
         handlers.onTurnError?.(workspaceId, threadId, turnId, payload);
@@ -2924,7 +2926,7 @@ export function useThreads({
           source: string;
           startedAtMs: number | null;
           timeoutMs: number | null;
-          engine?: "claude" | "codex" | "gemini" | "kimi" | "opencode" | null;
+          engine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | null;
         },
       ) => {
         handlers.onTurnStalled?.(workspaceId, threadId, turnId, payload);
@@ -3009,7 +3011,6 @@ export function useThreads({
     startLsp,
     startShare,
     getThreadKind,
-    updateSharedSessionEngineSelection,
     updateThreadParent,
     resolveCanonicalThreadId,
     reviewPrompt,

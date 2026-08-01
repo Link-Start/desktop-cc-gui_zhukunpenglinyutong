@@ -139,6 +139,23 @@ export function useDetachedFileExplorerState(
     setNavigationTarget(null);
   };
 
+  const closeOtherTabs = (path: string) => {
+    const normalizedPath = normalizeDetachedPath(path);
+    if (!normalizedPath) {
+      return;
+    }
+    setOpenTabs((current) => {
+      if (!current.includes(normalizedPath) || current.length <= 1) {
+        return current;
+      }
+      setActiveFilePath(normalizedPath);
+      setNavigationTarget((currentTarget) =>
+        currentTarget?.path === normalizedPath ? currentTarget : null,
+      );
+      return [normalizedPath];
+    });
+  };
+
   const reorderTabs = (nextOrder: string[]) => {
     setOpenTabs((current) => {
       // Only accept a permutation of the current tabs; never add/drop paths.
@@ -156,6 +173,7 @@ export function useDetachedFileExplorerState(
     openFile,
     activateTab,
     closeTab,
+    closeOtherTabs,
     closeAllTabs,
     reorderTabs,
   };

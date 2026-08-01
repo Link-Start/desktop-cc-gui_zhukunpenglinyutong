@@ -32,6 +32,8 @@ const tools = {
     "batchSearch": "批次搜尋",
     "batchSearchMatch": "批次搜尋/比對",
     "batchEditFile": "批次編輯檔案",
+    "fileEditSceneCount": "檔案修改（{{count}} 個）",
+    "fileEditSceneToggle": "檔案修改，共 {{count}} 個，展開或摺疊詳情",
     "bashGroupBatchRun": "批次執行指令",
     "bashGroupCompleted": "已完成",
     "bashGroupAllCompleted": "全部完成",

@@ -7,6 +7,7 @@ import PanelLeftOpen from "lucide-react/dist/esm/icons/panel-left-open";
 import PanelRightClose from "lucide-react/dist/esm/icons/panel-right-close";
 import PanelRightOpen from "lucide-react/dist/esm/icons/panel-right-open";
 import Search from "lucide-react/dist/esm/icons/search";
+import GalleryVerticalEnd from "lucide-react/dist/esm/icons/gallery-vertical-end";
 import { TooltipIconButton } from "../../../components/ui/tooltip-icon-button";
 
 export type SidebarToggleProps = {
@@ -69,6 +70,27 @@ export function GlobalSearchTitlebarButton({
       label={tooltip}
     >
       <Search size={14} aria-hidden strokeWidth={1.8} />
+    </TooltipIconButton>
+  );
+}
+
+export function QuickSwitcherTitlebarButton({
+  onOpen,
+  shortcutLabel,
+}: {
+  onOpen: () => void;
+  shortcutLabel: string;
+}) {
+  const { t } = useTranslation();
+  const label = t("quickSwitcher.open");
+  return (
+    <TooltipIconButton
+      className="ghost main-header-action"
+      onClick={onOpen}
+      data-tauri-drag-region="false"
+      label={`${label} (${shortcutLabel})`}
+    >
+      <GalleryVerticalEnd size={14} aria-hidden strokeWidth={1.8} />
     </TooltipIconButton>
   );
 }

@@ -48,10 +48,13 @@ const PROVIDER_MANAGED_FIELDS: &[&str] = &[
 
 const LOCAL_SETTINGS_PROVIDER_ID: &str = "__local_settings_json__";
 const LOCAL_SETTINGS_PROVIDER_NAME: &str = "Local settings.json";
+/// 「取消授权」伪供应商 id: 仅用于清空 current 标记, 不会出现在供应商列表中
+const DISABLED_PROVIDER_ID: &str = "__disabled__";
 const LOCAL_SETTINGS_PROVIDER_REMARK: &str =
     "Use configuration directly from ~/.claude/settings.json";
 const LOCAL_PROVIDER_MODEL_MAPPING_KEYS: &[&str] = &[
     "ANTHROPIC_MODEL",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL",
     "ANTHROPIC_DEFAULT_SONNET_MODEL",
     "ANTHROPIC_DEFAULT_OPUS_MODEL",
@@ -252,6 +255,10 @@ pub(crate) struct CodemossConfig {
     gemini: GeminiSection,
     #[serde(default)]
     pub(crate) kimi: KimiSection,
+    #[serde(default)]
+    pub(crate) grok: GrokSection,
+    #[serde(default)]
+    pub(crate) opencode: OpenCodeSection,
     /// Preserve all other top-level fields (mcpServers, agents, ui, etc.)
     #[serde(flatten)]
     extra: HashMap<String, Value>,
@@ -285,6 +292,22 @@ struct GeminiSection {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub(crate) struct KimiSection {
+    #[serde(default)]
+    pub(crate) providers: HashMap<String, Value>,
+    #[serde(default)]
+    pub(crate) current: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub(crate) struct GrokSection {
+    #[serde(default)]
+    pub(crate) providers: HashMap<String, Value>,
+    #[serde(default)]
+    pub(crate) current: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub(crate) struct OpenCodeSection {
     #[serde(default)]
     pub(crate) providers: HashMap<String, Value>,
     #[serde(default)]
@@ -501,11 +524,12 @@ fn sort_claude_providers_by_order(providers: &mut [ProviderConfig]) {
     });
 }
 
-fn sort_codex_providers_by_created_at(providers: &mut [CodexProviderConfig]) {
+fn sort_codex_providers_by_order(providers: &mut [CodexProviderConfig]) {
     providers.sort_by(|a, b| {
-        a.created_at
-            .unwrap_or(0)
-            .cmp(&b.created_at.unwrap_or(0))
+        a.sort_order
+            .unwrap_or(i64::MAX)
+            .cmp(&b.sort_order.unwrap_or(i64::MAX))
+            .then_with(|| a.created_at.unwrap_or(0).cmp(&b.created_at.unwrap_or(0)))
             .then_with(|| a.id.cmp(&b.id))
     });
 }
@@ -617,6 +641,11 @@ fn value_to_codex_provider(
         .and_then(|v| v.as_str())
         .map(String::from);
     let created_at = value.get("createdAt").and_then(|v| v.as_i64());
+    let sort_order = value.get("sortOrder").and_then(|v| v.as_i64());
+    let source = value
+        .get("source")
+        .and_then(|v| v.as_str())
+        .map(String::from);
     let config_toml = value
         .get("configToml")
         .and_then(|v| v.as_str())
@@ -634,7 +663,9 @@ fn value_to_codex_provider(
         name,
         remark,
         created_at,
+        sort_order,
         is_active,
+        source,
         config_toml,
         auth_json,
         custom_models,
@@ -650,6 +681,12 @@ fn codex_provider_to_value(provider: &CodexProviderConfig) -> Value {
     }
     if let Some(ts) = provider.created_at {
         map.insert("createdAt".into(), Value::Number(ts.into()));
+    }
+    if let Some(order) = provider.sort_order {
+        map.insert("sortOrder".into(), Value::Number(order.into()));
+    }
+    if let Some(ref src) = provider.source {
+        map.insert("source".into(), Value::String(src.clone()));
     }
     if let Some(ref toml) = provider.config_toml {
         map.insert("configToml".into(), Value::String(toml.clone()));
@@ -933,6 +970,12 @@ pub(crate) async fn vendor_delete_claude_provider(id: String) -> Result<(), Stri
 #[tauri::command]
 pub(crate) async fn vendor_switch_claude_provider(id: String) -> Result<(), String> {
     let mut config = read_config()?;
+    // 「取消授权」语义: 清空 current 标记, 不触碰 ~/.claude/settings.json
+    if id == DISABLED_PROVIDER_ID {
+        config.claude.current = None;
+        write_config(&config)?;
+        return Ok(());
+    }
     if id == LOCAL_SETTINGS_PROVIDER_ID {
         ensure_local_claude_settings_ready()?;
         config.claude.current = Some(id);
@@ -1053,7 +1096,7 @@ pub(crate) async fn vendor_get_codex_providers() -> Result<Vec<CodexProviderConf
             value_to_codex_provider(id, value, is_active).ok()
         })
         .collect();
-    sort_codex_providers_by_created_at(&mut providers);
+    sort_codex_providers_by_order(&mut providers);
     Ok(providers)
 }
 
@@ -1117,6 +1160,24 @@ pub(crate) async fn vendor_switch_codex_provider(id: String) -> Result<(), Strin
     }
     config.codex.current = Some(id);
     write_config(&config)
+}
+
+#[tauri::command]
+pub(crate) async fn vendor_reorder_codex_providers(
+    ordered_ids: Vec<String>,
+) -> Result<(), String> {
+    let mut config = read_config()?;
+    apply_codex_provider_sort_order(&mut config, &ordered_ids);
+    write_config(&config)
+}
+
+fn apply_codex_provider_sort_order(config: &mut CodemossConfig, ordered_ids: &[String]) {
+    for (index, id) in ordered_ids.iter().enumerate() {
+        let Some(Value::Object(provider)) = config.codex.providers.get_mut(id) else {
+            continue;
+        };
+        provider.insert("sortOrder".into(), Value::Number((index as i64).into()));
+    }
 }
 
 // ==================== Gemini Vendor Commands ====================
@@ -1218,7 +1279,9 @@ mod tests {
             name: id.to_string(),
             remark: None,
             created_at,
+            sort_order: None,
             is_active: false,
+            source: None,
             config_toml: None,
             auth_json: None,
             custom_models: None,
@@ -1318,7 +1381,7 @@ mod tests {
             codex_provider("provider-b", None),
         ];
 
-        sort_codex_providers_by_created_at(&mut providers);
+        sort_codex_providers_by_order(&mut providers);
 
         let ordered_ids: Vec<&str> = providers
             .iter()
@@ -1335,13 +1398,72 @@ mod tests {
             codex_provider("provider-a", Some(10)),
         ];
 
-        sort_codex_providers_by_created_at(&mut providers);
+        sort_codex_providers_by_order(&mut providers);
 
         let ordered_ids: Vec<&str> = providers
             .iter()
             .map(|provider| provider.id.as_str())
             .collect();
         assert_eq!(ordered_ids, vec!["provider-a", "provider-b", "provider-c"]);
+    }
+
+    #[test]
+    fn codex_provider_order_prefers_sort_order_over_created_at() {
+        let mut providers = vec![
+            CodexProviderConfig {
+                sort_order: Some(1),
+                ..codex_provider("provider-created-first", Some(10))
+            },
+            CodexProviderConfig {
+                sort_order: Some(0),
+                ..codex_provider("provider-sort-first", Some(30))
+            },
+            codex_provider("provider-unordered", Some(20)),
+        ];
+
+        sort_codex_providers_by_order(&mut providers);
+
+        let ordered_ids: Vec<&str> = providers
+            .iter()
+            .map(|provider| provider.id.as_str())
+            .collect();
+        assert_eq!(
+            ordered_ids,
+            vec![
+                "provider-sort-first",
+                "provider-created-first",
+                "provider-unordered",
+            ]
+        );
+    }
+
+    #[test]
+    fn apply_codex_provider_sort_order_writes_index_per_id() {
+        let mut config = CodemossConfig::default();
+        config.codex.providers.insert(
+            "a".to_string(),
+            json!({ "id": "a", "name": "A", "createdAt": 10 }),
+        );
+        config.codex.providers.insert(
+            "b".to_string(),
+            json!({ "id": "b", "name": "B", "createdAt": 20 }),
+        );
+
+        apply_codex_provider_sort_order(
+            &mut config,
+            &["b".to_string(), "a".to_string(), "missing".to_string()],
+        );
+
+        assert_eq!(
+            config.codex.providers["b"].get("sortOrder"),
+            Some(&json!(0))
+        );
+        assert_eq!(
+            config.codex.providers["a"].get("sortOrder"),
+            Some(&json!(1))
+        );
+        // 未命中 id 静默跳过, 不新建条目
+        assert!(!config.codex.providers.contains_key("missing"));
     }
 
     #[test]

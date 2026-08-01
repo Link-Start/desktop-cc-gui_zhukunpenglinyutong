@@ -12,11 +12,13 @@ import { useTranslation } from "react-i18next";
 import ClipboardCopy from "lucide-react/dist/esm/icons/clipboard-copy";
 import Folder from "lucide-react/dist/esm/icons/folder";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
+import Keyboard from "lucide-react/dist/esm/icons/keyboard";
 import Play from "lucide-react/dist/esm/icons/play";
 import Search from "lucide-react/dist/esm/icons/search";
 import type { OpenAppTarget, WorkspaceInfo } from "../../../types";
 import type { ReactElement, ReactNode } from "react";
 import { OpenAppMenu, type OpenAppMenuExtraAction } from "./OpenAppMenu";
+import { ShortcutsGuideModal } from "./ShortcutsGuideModal";
 import { TooltipIconButton } from "../../../components/ui/tooltip-icon-button";
 import { LaunchScriptButton } from "./LaunchScriptButton";
 import { LaunchScriptEntryButton } from "./LaunchScriptEntryButton";
@@ -68,6 +70,7 @@ type MainHeaderProps = {
   groupedWorkspaces?: WorkspaceGroupSection[];
   activeWorkspaceId?: string | null;
   onSelectWorkspace?: (workspaceId: string) => void;
+  onOpenShortcutsSettings?: () => void;
 };
 
 const EMPTY_OPEN_APP_EXTRA_ACTIONS: OpenAppMenuExtraAction[] = [];
@@ -125,10 +128,12 @@ function MainHeaderImpl({
   groupedWorkspaces,
   activeWorkspaceId,
   onSelectWorkspace,
+  onOpenShortcutsSettings,
 }: MainHeaderProps) {
   const { t } = useTranslation();
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [projectQuery, setProjectQuery] = useState("");
+  const [shortcutsGuideOpen, setShortcutsGuideOpen] = useState(false);
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
 
   // 判断是否显示项目选择菜单
@@ -234,13 +239,23 @@ function MainHeaderImpl({
     onRunLaunchScript,
     t,
   ]);
+  const shortcutsGuideAction: OpenAppMenuExtraAction = useMemo(
+    () => ({
+      id: "shortcuts-guide",
+      label: t("shortcutsGuide.title"),
+      icon: <Keyboard size={18} aria-hidden />,
+      onSelect: () => setShortcutsGuideOpen(true),
+    }),
+    [t],
+  );
   const openAppMenuActions = useMemo(
     () => [
       ...launchScriptMenuActions,
       ...openAppExtraActions.filter((action) => action.id !== "right-panel"),
+      shortcutsGuideAction,
       copyPathAction,
     ],
-    [copyPathAction, launchScriptMenuActions, openAppExtraActions],
+    [copyPathAction, launchScriptMenuActions, openAppExtraActions, shortcutsGuideAction],
   );
   const pinnedOpenTargets = useMemo(() => {
     if (!showOpenAppMenu) {
@@ -333,7 +348,7 @@ function MainHeaderImpl({
               </button>
               {projectMenuOpen && (
                 <div
-                  className="workspace-project-dropdown popover-surface"
+                  className="workspace-project-dropdown"
                   role="menu"
                   data-tauri-drag-region="false"
                 >
@@ -536,6 +551,11 @@ function MainHeaderImpl({
           </TooltipIconButton>
         ) : null}
       </div>
+      <ShortcutsGuideModal
+        open={shortcutsGuideOpen}
+        onOpenChange={setShortcutsGuideOpen}
+        onOpenShortcutsSettings={onOpenShortcutsSettings}
+      />
     </header>
   );
 }

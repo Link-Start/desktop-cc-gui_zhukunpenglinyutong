@@ -96,6 +96,8 @@ jobs:
         run: npm ci
       - name: Runtime contracts
         run: npm run check:runtime-contracts
+      - name: Messages boundaries
+        run: npm run check:messages-boundaries
       - name: Engine capability matrix
         run: npm run check:engine-capability-matrix
       - name: Context ledger cost budget

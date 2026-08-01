@@ -14,7 +14,8 @@ use crate::shared::settings_core::{
     get_codex_unified_exec_external_status_core, resolve_window_theme_preference,
     restart_codex_sessions_for_app_settings_change_core, restore_app_settings_core,
     restore_codex_unified_exec_official_default_core,
-    set_codex_unified_exec_official_override_core, update_app_settings_core,
+    set_codex_unified_exec_official_override_core, take_settings_recovery_notice_core,
+    update_app_settings_core, SettingsRecoveryNotice,
 };
 use crate::state::AppState;
 use crate::types::{AppSettings, CodexUnifiedExecExternalStatus, WorkspaceEntry};
@@ -107,6 +108,13 @@ pub(crate) async fn get_app_settings(
     let window_theme = resolve_window_theme_preference(&settings);
     let _ = window::apply_window_appearance(&window, window_theme.as_str());
     Ok(settings)
+}
+
+#[tauri::command]
+pub(crate) async fn take_settings_recovery_notice(
+    state: State<'_, AppState>,
+) -> Result<Option<SettingsRecoveryNotice>, String> {
+    Ok(take_settings_recovery_notice_core(&state.settings_recovery_notice).await)
 }
 
 #[tauri::command]

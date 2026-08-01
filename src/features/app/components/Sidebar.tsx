@@ -7,8 +7,15 @@ import type {
   ThreadSummary,
   WorkspaceInfo,
 } from "../../../types";
+import type { SharedSessionSupportedEngine } from "../../shared-session/utils/sharedSessionEngines";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent as ReactMouseEvent, ReactNode, RefObject } from "react";
+import type {
+  Dispatch,
+  MouseEvent as ReactMouseEvent,
+  ReactNode,
+  RefObject,
+  SetStateAction,
+} from "react";
 import { useTranslation } from "react-i18next";
 
 import { ThreadList } from "./ThreadList";
@@ -27,6 +34,7 @@ import { SidebarTopbarSlot } from "./SidebarTopbarSlot";
 import { SidebarVersionTag } from "./SidebarVersionTag";
 import { SidebarWorkspaceDropOverlay } from "./SidebarWorkspaceDropOverlay";
 import { SidebarWorkspaceMenuOverlay } from "./SidebarWorkspaceMenuOverlay";
+import { ProviderContinuationDialog } from "./ProviderContinuationDialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RendererContextMenu } from "../../../components/ui/RendererContextMenu";
 import { useCollapsedGroups } from "../hooks/useCollapsedGroups";
@@ -78,9 +86,10 @@ import EyeOff from "lucide-react/dist/esm/icons/eye-off";
 import FolderTree from "lucide-react/dist/esm/icons/folder-tree";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import House from "lucide-react/dist/esm/icons/house";
+import Blocks from "lucide-react/dist/esm/icons/blocks";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import Pencil from "lucide-react/dist/esm/icons/pencil";
-import Puzzle from "lucide-react/dist/esm/icons/puzzle";
+import Store from "lucide-react/dist/esm/icons/store";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2";
 import {
   getWorkspaceSidebarAlias,
@@ -102,11 +111,15 @@ import {
   listWorkspaceSessionFolders,
   renameWorkspaceSessionFolder,
   type WorkspaceSessionFolder,
+  getClaudeProviders,
   getCodexProviders,
+  getGrokProviders,
+  getKimiProviders,
+  getOpenCodeProviders,
 } from "../../../services/tauri";
 import type {
-  CodexProviderProfileOption,
-  CodexProviderProfileSelection,
+  EngineProviderProfileOption,
+  EngineProviderProfileSelection,
 } from "../../threads/constants/codexProviderProfiles";
 import {
   runWithLoadingProgress,
@@ -154,15 +167,17 @@ type SidebarProps = {
   onAddAgent: (
     workspace: WorkspaceInfo,
     engine?: EngineType,
-    options?: { folderId?: string | null } & CodexProviderProfileSelection,
+    options?: { folderId?: string | null } & EngineProviderProfileSelection,
   ) => Promise<string | null> | string | null | void;
   engineOptions?: EngineDisplayInfo[];
-  enabledEngines?: Partial<Record<EngineType, boolean>>;
   onRefreshEngineOptions?: () =>
     | Promise<EngineRefreshResult | void>
     | EngineRefreshResult
     | void;
-  onAddSharedAgent?: (workspace: WorkspaceInfo) => Promise<string | null> | string | null | void;
+  onAddSharedAgent?: (
+    workspace: WorkspaceInfo,
+    engine: SharedSessionSupportedEngine,
+  ) => Promise<string | null> | string | null | void;
   onAddWorktreeAgent: (workspace: WorkspaceInfo) => void;
   onAddCloneAgent: (workspace: WorkspaceInfo) => void;
   onOpenClaudeTui?: (input: {
@@ -192,8 +207,12 @@ type SidebarProps = {
   onDeleteWorktree: (workspaceId: string) => void;
   onRenameWorkspaceAlias: (workspace: WorkspaceInfo) => void;
   onLoadOlderThreads: (workspaceId: string) => void;
-  onReloadWorkspaceThreads: (workspaceId: string) => void;
-  onQuickReloadWorkspaceThreads?: (workspaceId: string) => void;
+  onReloadWorkspaceThreads: (
+    workspaceId: string,
+  ) => Promise<void> | void;
+  onQuickReloadWorkspaceThreads?: (
+    workspaceId: string,
+  ) => Promise<void> | void;
   onRequestRootSessionFolderDraft?: (workspaceId: string) => void;
   workspaceDropTargetRef: RefObject<HTMLElement | null>;
   isWorkspaceDropActive: boolean;
@@ -221,6 +240,9 @@ type SidebarProps = {
   hideLoadingProgressDialog?: LoadingProgressController["hideLoadingProgressDialog"];
   topbarNode?: ReactNode;
   runtimeNoticeDockNode?: ReactNode;
+  /** 打开运行时提示（入口在设置二级菜单，不在侧栏底部外显） */
+  onOpenRuntimeNotice?: () => void;
+  showRuntimeNoticeMenuItem?: boolean;
 };
 
 function SidebarImpl({
@@ -258,7 +280,6 @@ function SidebarImpl({
   onConnectWorkspace,
   onAddAgent,
   engineOptions = [],
-  enabledEngines,
   onRefreshEngineOptions,
   onAddSharedAgent,
   onAddWorktreeAgent,
@@ -315,6 +336,8 @@ function SidebarImpl({
   hideLoadingProgressDialog,
   topbarNode,
   runtimeNoticeDockNode = null,
+  onOpenRuntimeNotice,
+  showRuntimeNoticeMenuItem = false,
 }: SidebarProps) {
   const { t } = useTranslation();
   const quickSearchLabel = t("sidebar.quickSearch");
@@ -356,9 +379,38 @@ function SidebarImpl({
     pendingSessionFolderIntentByWorkspaceId,
     setPendingSessionFolderIntentByWorkspaceId,
   ] = useState<Record<string, Record<string, string>>>(() => ({}));
-  const [codexProviderProfiles, setCodexProviderProfiles] = useState<
-    CodexProviderProfileOption[]
+  const [claudeProviderProfiles, setClaudeProviderProfiles] = useState<
+    EngineProviderProfileOption[]
   >([]);
+  const [codexProviderProfiles, setCodexProviderProfiles] = useState<
+    EngineProviderProfileOption[]
+  >([]);
+  const [kimiProviderProfiles, setKimiProviderProfiles] = useState<
+    EngineProviderProfileOption[]
+  >([]);
+  const [grokProviderProfiles, setGrokProviderProfiles] = useState<
+    EngineProviderProfileOption[]
+  >([]);
+  const [openCodeProviderProfiles, setOpenCodeProviderProfiles] = useState<
+    EngineProviderProfileOption[]
+  >([]);
+  const providerCatalogLoadErrorTitlesRef = useRef({
+    claude: t("sidebar.providerCatalogLoadFailed", {
+      engine: t("workspace.engineClaudeCode"),
+    }),
+    codex: t("sidebar.providerCatalogLoadFailed", {
+      engine: t("workspace.engineCodex"),
+    }),
+    kimi: t("sidebar.providerCatalogLoadFailed", {
+      engine: t("workspace.engineKimi"),
+    }),
+    grok: t("sidebar.providerCatalogLoadFailed", {
+      engine: t("workspace.engineGrok"),
+    }),
+    opencode: t("sidebar.providerCatalogLoadFailed", {
+      engine: t("workspace.engineOpenCode"),
+    }),
+  });
   const [localRootSessionFolderDraftRequestByWorkspaceId, setLocalRootSessionFolderDraftRequestByWorkspaceId] = useState<
     Record<string, number>
   >(() => ({}));
@@ -760,19 +812,24 @@ function SidebarImpl({
 
   useEffect(() => {
     let cancelled = false;
-    getCodexProviders()
-      .then((providers) => {
+    const loadProfiles = async (
+      engine: "claude" | "codex" | "kimi" | "grok" | "opencode",
+      load: () => Promise<Array<{ id: string; name: string }>>,
+      setProfiles: Dispatch<SetStateAction<EngineProviderProfileOption[]>>,
+    ) => {
+      try {
+        const providers = await load();
         if (cancelled) {
           return;
         }
         const nextProfiles = providers
-            .map((provider) => ({
-              id: provider.id.trim(),
-              name: provider.name.trim() || provider.id.trim(),
-              source: "managed" as const,
-            }))
-            .filter((provider) => provider.id.length > 0);
-        setCodexProviderProfiles((currentProfiles) => {
+          .filter((provider) => provider.id.trim().length > 0)
+          .map((provider) => ({
+            id: provider.id.trim(),
+            name: provider.name.trim() || provider.id.trim(),
+            source: "managed" as const,
+          }));
+        setProfiles((currentProfiles) => {
           if (
             currentProfiles.length === nextProfiles.length &&
             currentProfiles.every((currentProfile, index) => {
@@ -788,14 +845,21 @@ function SidebarImpl({
           }
           return nextProfiles;
         });
-      })
-      .catch(() => {
+      } catch (error: unknown) {
         if (!cancelled) {
-          setCodexProviderProfiles((currentProfiles) =>
-            currentProfiles.length === 0 ? currentProfiles : [],
-          );
+          pushErrorToast({
+            title: providerCatalogLoadErrorTitlesRef.current[engine],
+            message: error instanceof Error ? error.message : String(error),
+            durationMs: 5000,
+          });
         }
-      });
+      }
+    };
+    void loadProfiles("claude", getClaudeProviders, setClaudeProviderProfiles);
+    void loadProfiles("codex", getCodexProviders, setCodexProviderProfiles);
+    void loadProfiles("kimi", getKimiProviders, setKimiProviderProfiles);
+    void loadProfiles("grok", getGrokProviders, setGrokProviderProfiles);
+    void loadProfiles("opencode", getOpenCodeProviders, setOpenCodeProviderProfiles);
     return () => {
       cancelled = true;
     };
@@ -896,15 +960,21 @@ function SidebarImpl({
     showWorktreeMenu,
     workspaceMenuState,
     sidebarContextMenuState,
+    providerContinuationDialogState,
     closeWorkspaceMenu,
     closeSidebarContextMenu,
+    closeProviderContinuationDialog,
+    confirmProviderContinuation,
     onWorkspaceMenuAction,
   } =
     useSidebarMenus({
       onAddAgent,
+      claudeProviderProfiles,
       codexProviderProfiles,
+      kimiProviderProfiles,
+      grokProviderProfiles,
+      opencodeProviderProfiles: openCodeProviderProfiles,
       engineOptions,
-      enabledEngines,
       onRefreshEngineOptions,
       onAddSharedAgent,
       onAssignNewSessionToFolder: assignNewSessionToFolder,
@@ -939,6 +1009,15 @@ function SidebarImpl({
       },
       onOpenClaudeTui,
       onReloadWorkspaceThreads: onQuickReloadWorkspaceThreads ?? onReloadWorkspaceThreads,
+      onSelectThread,
+      isThreadAvailable: (workspaceId, threadId) =>
+        getProjectedThreads(workspaceId).some(
+          (thread) => thread.id === threadId,
+        ),
+      getThreadSummary: (workspaceId, threadId) =>
+        getProjectedThreads(workspaceId).find(
+          (thread) => thread.id === threadId,
+        ),
       onActivateWorkspace: onSelectWorkspace,
       onCreateSessionFolder: handleOpenRootSessionFolderDraft,
       onToggleExitedSessions: toggleExitedSessionsHidden,
@@ -972,11 +1051,13 @@ function SidebarImpl({
       case "engine-codex":
         return <EngineIcon engine="codex" size={14} />;
       case "engine-opencode":
-        return <EngineIcon engine="opencode" size={14} style={{ color: "#3b82f6" }} />;
+        return <EngineIcon engine="opencode" size={14} />;
       case "engine-gemini":
         return <EngineIcon engine="gemini" size={14} />;
       case "engine-kimi":
         return <EngineIcon engine="kimi" size={14} />;
+      case "engine-grok":
+        return <EngineIcon engine="grok" size={14} />;
       case "reload":
         return <RefreshCw size={13} />;
       case "activate":
@@ -1045,7 +1126,7 @@ function SidebarImpl({
   );
 
   const pinnedThreadRows = useMemo(() => {
-    type ThreadRow = { thread: ThreadSummary; depth: number };
+    type ThreadRow = { thread: ThreadSummary; depth: number; hasChildren?: boolean };
     const groups: Array<{
       pinTime: number;
       workspaceId: string;
@@ -1476,14 +1557,6 @@ function SidebarImpl({
     }, 150);
     return () => window.clearTimeout(handle);
   }, [debouncedQuery, searchQuery]);
-
-  const handleOpenSkillsComingSoon = useCallback(() => {
-    pushErrorToast({
-      title: t("sidebar.comingSoon"),
-      message: t("sidebar.comingSoonMessage"),
-      durationMs: 3000,
-    });
-  }, [t]);
 
   const handleToggleThreadPin = useCallback((workspaceId: string, threadId: string) => {
     if (isThreadPinned(workspaceId, threadId)) {
@@ -2050,13 +2123,24 @@ function SidebarImpl({
             <button
               type="button"
               className="sidebar-primary-nav-item sidebar-primary-nav-subitem is-disabled"
-              onClick={handleOpenSkillsComingSoon}
               title={t("sidebar.plugins")}
               aria-label={t("sidebar.plugins")}
               data-tauri-drag-region="false"
+              disabled
             >
-              <Puzzle className="sidebar-primary-nav-icon" aria-hidden size={20} strokeWidth={1.8} />
+              <Store className="sidebar-primary-nav-icon" aria-hidden size={20} strokeWidth={1.8} />
               <span className="sidebar-primary-nav-text">{t("sidebar.plugins")}</span>
+            </button>
+            <button
+              type="button"
+              className={`sidebar-primary-nav-item sidebar-primary-nav-subitem ${appMode === "extensions" ? "is-active" : ""}`}
+              onClick={() => onAppModeChange("extensions")}
+              title={t("sidebar.extensions")}
+              aria-label={t("sidebar.extensions")}
+              data-tauri-drag-region="false"
+            >
+              <Blocks className="sidebar-primary-nav-icon" aria-hidden size={20} strokeWidth={1.8} />
+              <span className="sidebar-primary-nav-text">{t("sidebar.extensions")}</span>
             </button>
             {showPrimaryNavGlobalSearch ? (
               <button
@@ -2193,7 +2277,10 @@ function SidebarImpl({
               onOpenProjectMemory={onOpenProjectMemory}
               onOpenSettings={onOpenSettings}
               onAppModeChange={onAppModeChange}
+              onOpenRuntimeNotice={onOpenRuntimeNotice}
+              showRuntimeNotice={showRuntimeNoticeMenuItem}
             />
+            {/* 锚点保留在侧栏底部供展开面板定位；外显气泡入口已收入设置二级菜单 */}
             {runtimeNoticeDockNode}
             <SidebarVersionTag t={t} onOpenReleaseNotes={onOpenReleaseNotes} />
           </div>
@@ -2226,6 +2313,11 @@ function SidebarImpl({
           className="renderer-context-menu sidebar-renderer-context-menu"
         />
       ) : null}
+      <ProviderContinuationDialog
+        state={providerContinuationDialogState}
+        onCancel={closeProviderContinuationDialog}
+        onConfirm={confirmProviderContinuation}
+      />
     </aside>
   );
 }

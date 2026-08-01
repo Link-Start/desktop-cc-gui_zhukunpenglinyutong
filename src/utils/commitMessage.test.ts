@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   readLastCommitMessageConfig,
+  resolveCommitMessageGenerationErrorKey,
   sanitizeGeneratedCommitMessage,
   saveLastCommitMessageConfig,
   shouldApplyCommitMessage,
@@ -45,6 +46,44 @@ describe("shouldApplyCommitMessage", () => {
 
   it("returns false when active workspace is null", () => {
     expect(shouldApplyCommitMessage(null, "workspace-1")).toBe(false);
+  });
+});
+
+describe("resolveCommitMessageGenerationErrorKey", () => {
+  it("maps raw broken pipe to runtime recovering key", () => {
+    expect(
+      resolveCommitMessageGenerationErrorKey("Broken pipe (os error 32)", "codex"),
+    ).toBe("git.commitMessageRuntimeRecovering");
+  });
+
+  it("maps stable recovering prefix to runtime recovering key", () => {
+    expect(
+      resolveCommitMessageGenerationErrorKey(
+        "[SESSION_CREATE_RUNTIME_RECOVERING] Managed runtime was restarting while creating this session.",
+        "codex",
+      ),
+    ).toBe("git.commitMessageRuntimeRecovering");
+  });
+
+  it("maps missing codex session errors to requires-codex key", () => {
+    expect(
+      resolveCommitMessageGenerationErrorKey(
+        "AI commit message generation requires the Codex CLI. Please install it first: npm install -g @openai/codex",
+        "codex",
+      ),
+    ).toBe("git.commitMessageRequiresCodex");
+    expect(
+      resolveCommitMessageGenerationErrorKey(
+        "Workspace not connected. Please ensure the Codex CLI is installed and reconnect the workspace.",
+        "codex",
+      ),
+    ).toBe("git.commitMessageRequiresCodex");
+  });
+
+  it("returns null for unrelated errors", () => {
+    expect(
+      resolveCommitMessageGenerationErrorKey("No changes to generate commit message for", "codex"),
+    ).toBeNull();
   });
 });
 

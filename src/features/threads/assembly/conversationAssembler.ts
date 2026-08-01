@@ -286,6 +286,8 @@ function mergeAssistantSnapshot(
   existing: AssistantMessageItem,
   incoming: AssistantMessageItem,
 ) {
+  const executionTargetSnapshot =
+    existing.executionTargetSnapshot ?? incoming.executionTargetSnapshot;
   // Codex itemUpdated 每次 flush 都投递整段增长中的快照；典型形态是
   // 「existing 全文 + 无边界短追加」。与 reducer delta 快路同一前提：无
   // 句末/换行边界的低风险追加不会产生新的可折叠结构，直接采纳 incoming，
@@ -302,17 +304,24 @@ function mergeAssistantSnapshot(
     return {
       ...existing,
       ...incoming,
+      executionTargetSnapshot,
     } satisfies AssistantMessageItem;
   }
   const normalizedIncomingText = normalizeAssistantSnapshotText(incoming.text);
   if (!normalizedIncomingText) {
-    return existing;
+    return executionTargetSnapshot === existing.executionTargetSnapshot
+      ? existing
+      : {
+          ...existing,
+          executionTargetSnapshot,
+        };
   }
   const nextImages = incoming.images ?? existing.images;
   if (!existing.text) {
     return {
       ...existing,
       ...incoming,
+      executionTargetSnapshot,
       text: normalizedIncomingText,
     } satisfies AssistantMessageItem;
   }
@@ -326,13 +335,15 @@ function mergeAssistantSnapshot(
     if (
       incoming.id === existing.id &&
       existing.text === normalizedIncomingText &&
-      areConversationImageListsEqual(existing.images, nextImages)
+      areConversationImageListsEqual(existing.images, nextImages) &&
+      executionTargetSnapshot === existing.executionTargetSnapshot
     ) {
       return existing;
     }
     return {
       ...existing,
       ...incoming,
+      executionTargetSnapshot,
       text: normalizedIncomingText,
     } satisfies AssistantMessageItem;
   }
@@ -340,13 +351,15 @@ function mergeAssistantSnapshot(
   if (
     incoming.id === existing.id &&
     mergedText === existing.text &&
-    areConversationImageListsEqual(existing.images, nextImages)
+    areConversationImageListsEqual(existing.images, nextImages) &&
+    executionTargetSnapshot === existing.executionTargetSnapshot
   ) {
     return existing;
   }
   return {
     ...existing,
     ...incoming,
+    executionTargetSnapshot,
     text: mergedText,
   } satisfies AssistantMessageItem;
 }
@@ -553,7 +566,10 @@ function appendMessageDelta(
   items: ConversationItem[],
   event: NormalizedThreadEvent,
 ): ConversationItem[] {
-  const delta = event.delta ?? (event.item.kind === "message" ? event.item.text : "");
+  if (event.item.kind !== "message") {
+    return items;
+  }
+  const delta = event.delta ?? event.item.text;
   if (!delta) {
     return items;
   }
@@ -563,14 +579,21 @@ function appendMessageDelta(
   const existing = existingIndex >= 0 ? items[existingIndex] : undefined;
   if (!isAssistantMessageItem(existing)) {
     return replaceItemAtIndex(items, -1, {
-      id: event.item.id,
-      kind: "message",
+      ...event.item,
       role: "assistant",
       text: delta,
+      turnId: event.item.turnId ?? event.turnId ?? null,
+      engineSource: event.item.engineSource ?? event.engine,
     });
   }
   return replaceItemAtIndex(items, existingIndex, {
     ...existing,
+    turnId: existing.turnId ?? event.item.turnId ?? event.turnId ?? null,
+    engineSource:
+      existing.engineSource ?? event.item.engineSource ?? event.engine,
+    executionTargetSnapshot:
+      existing.executionTargetSnapshot ??
+      event.item.executionTargetSnapshot,
     text: mergeAgentMessageText(existing.text, delta),
   });
 }
@@ -773,13 +796,221 @@ export function hydrateHistory(snapshot: NormalizedHistorySnapshot): Conversatio
   };
 }
 
+function findAssistantPrefixMatchIndex(
+  items: readonly ConversationItem[],
+  incomingText: string,
+): number {
+  const incomingComparable = compactComparableConversationText(incomingText);
+  if (!incomingComparable) {
+    return -1;
+  }
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const candidate = items[index];
+    if (!isAssistantMessageItem(candidate)) {
+      continue;
+    }
+    const candidateComparable = compactComparableConversationText(candidate.text);
+    if (
+      candidateComparable &&
+      (candidateComparable.startsWith(incomingComparable) ||
+        incomingComparable.startsWith(candidateComparable))
+    ) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function preserveMoreCompleteAssistantText(
+  existingText: string,
+  incomingText: string,
+): string {
+  const existingComparable = compactComparableConversationText(existingText);
+  const incomingComparable = compactComparableConversationText(incomingText);
+  return existingComparable.length > incomingComparable.length
+    ? existingText
+    : incomingText;
+}
+
+function targetSnapshotCompleteness(
+  snapshot: MessageConversationItem["executionTargetSnapshot"],
+) {
+  if (!snapshot) {
+    return 0;
+  }
+  return [
+    snapshot.engine,
+    snapshot.providerProfileId,
+    snapshot.providerProfileSource,
+    snapshot.providerProfileNameSnapshot,
+    snapshot.modelCatalogEntryId,
+    snapshot.model,
+    snapshot.reasoning?.effort,
+    snapshot.runtimeCapabilityFingerprint,
+  ].filter((value) => value !== null && value !== undefined && value !== "").length;
+}
+
+function isResolvedCanonicalTargetSnapshot(
+  snapshot: MessageConversationItem["executionTargetSnapshot"],
+) {
+  if (!snapshot) {
+    return false;
+  }
+  const providerProfileId = snapshot.providerProfileId?.trim() || null;
+  const providerSource = snapshot.providerProfileSource;
+  const providerIdentityResolved =
+    providerSource === "managed"
+      ? providerProfileId !== null
+      : providerSource === "local" && providerProfileId === null;
+  return (
+    providerIdentityResolved &&
+    Boolean(snapshot.modelCatalogEntryId?.trim()) &&
+    Boolean(snapshot.model?.trim()) &&
+    Boolean(snapshot.providerProfileNameSnapshot?.trim())
+  );
+}
+
+function preserveMoreCompleteTargetSnapshot(
+  existing: MessageConversationItem["executionTargetSnapshot"],
+  incoming: MessageConversationItem["executionTargetSnapshot"],
+) {
+  // V2 canonical Turn snapshot 是历史 Target 的唯一权威。Legacy snapshot 可能字段更多，
+  // 但它属于 presentation evidence，不能覆盖本轮 attempt 已冻结的 Provider/Model。
+  // presentation-only shadow 本身不完整时，仍保留 Legacy 可读信息，避免降级旧会话。
+  if (isResolvedCanonicalTargetSnapshot(incoming)) {
+    return incoming;
+  }
+  return targetSnapshotCompleteness(existing) > targetSnapshotCompleteness(incoming)
+    ? existing
+    : incoming ?? existing;
+}
+
+/**
+ * 将第二个 history projection 按 Turn scope 合并到已有 transcript。
+ *
+ * Shared Session dual-read 使用 Legacy snapshot 保留 presentation 顺序，
+ * 再用 canonical projection 覆盖 frozen identity。每个 Turn 仍复用
+ * `upsertSnapshotItem`，避免另写一套 message/reasoning dedupe 规则。
+ */
+export function mergeHistoryProjectionItems(
+  baseItems: ConversationItem[],
+  overlayItems: readonly ConversationItem[],
+  meta: Pick<ConversationState["meta"], "workspaceId" | "threadId" | "engine">,
+): ConversationItem[] {
+  let items = [...baseItems];
+  let activeTurnStart = 0;
+  let activeTurnEnd = items.length;
+  let lastMatchedUserIndex = -1;
+
+  for (const overlayItem of overlayItems) {
+    const engine = overlayItem.engineSource ?? meta.engine;
+    const turnId =
+      overlayItem.kind === "message" || overlayItem.kind === "tool"
+        ? overlayItem.turnId ?? null
+        : null;
+    const event = {
+      engine,
+      threadId: meta.threadId,
+      turnId,
+      source: "history" as const,
+    };
+
+    if (isUserMessageItem(overlayItem)) {
+      const matchedUserIndex = items.findIndex(
+        (item, index) =>
+          index > lastMatchedUserIndex &&
+          isUserMessageItem(item) &&
+          isEquivalentUserObservation(item, overlayItem),
+      );
+      if (matchedUserIndex < 0) {
+        items = upsertSnapshotItem(items, overlayItem, event);
+        const appendedUserIndex = items.findIndex(
+          (item) =>
+            isUserMessageItem(item) &&
+            item.id === overlayItem.id,
+        );
+        lastMatchedUserIndex =
+          appendedUserIndex >= 0 ? appendedUserIndex : items.length - 1;
+      } else {
+        const existingUser = items[matchedUserIndex];
+        const [mergedUser] = upsertSnapshotItem(
+          [existingUser],
+          { ...overlayItem, id: existingUser.id },
+          event,
+        );
+        items[matchedUserIndex] = mergedUser;
+        lastMatchedUserIndex = matchedUserIndex;
+      }
+      activeTurnStart = lastMatchedUserIndex + 1;
+      const nextUserOffset = items
+        .slice(activeTurnStart)
+        .findIndex(isUserMessageItem);
+      activeTurnEnd =
+        nextUserOffset >= 0
+          ? activeTurnStart + nextUserOffset
+          : items.length;
+      continue;
+    }
+
+    const currentTurnItems = items.slice(activeTurnStart, activeTurnEnd);
+    let mergedTurnItems: ConversationItem[] | null = null;
+    if (isAssistantMessageItem(overlayItem)) {
+      const assistantIndex = findAssistantPrefixMatchIndex(
+        currentTurnItems,
+        overlayItem.text,
+      );
+      const existingAssistant =
+        assistantIndex >= 0 ? currentTurnItems[assistantIndex] : undefined;
+      if (isAssistantMessageItem(existingAssistant)) {
+        mergedTurnItems = replaceItemAtIndex(
+          currentTurnItems,
+          assistantIndex,
+          normalizeAssistantSnapshotItem({
+            ...existingAssistant,
+            ...overlayItem,
+            executionTargetSnapshot: preserveMoreCompleteTargetSnapshot(
+              existingAssistant.executionTargetSnapshot,
+              overlayItem.executionTargetSnapshot,
+            ),
+            text: preserveMoreCompleteAssistantText(
+              existingAssistant.text,
+              overlayItem.text,
+            ),
+          }),
+        );
+      }
+    }
+    if (!mergedTurnItems) {
+      mergedTurnItems = upsertSnapshotItem(
+        currentTurnItems,
+        overlayItem,
+        event,
+      );
+    }
+    items = [
+      ...items.slice(0, activeTurnStart),
+      ...mergedTurnItems,
+      ...items.slice(activeTurnEnd),
+    ];
+    activeTurnEnd += mergedTurnItems.length - currentTurnItems.length;
+  }
+
+  return items;
+}
+
 function flattenComparablePaths(
   prefix: string,
   value: unknown,
   output: Map<string, string>,
 ): void {
   if (Array.isArray(value)) {
-    output.set(prefix, JSON.stringify(value));
+    if (value.length === 0) {
+      output.set(prefix, "[]");
+      return;
+    }
+    value.forEach((entry, index) => {
+      flattenComparablePaths(`${prefix}.${index}`, entry, output);
+    });
     return;
   }
   if (value && typeof value === "object") {

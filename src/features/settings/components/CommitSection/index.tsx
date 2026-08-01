@@ -27,13 +27,6 @@ export function CommitSection({
 
   return (
     <section className="settings-section">
-      <div className="settings-section-title">
-        {t("settings.commit.title")}
-      </div>
-      <div className="settings-section-subtitle">
-        {t("settings.commit.description")}
-      </div>
-
       <div className="settings-subsection-title">
         <span className="codicon codicon-edit" style={{ marginRight: 6 }} />
         {t("settings.commit.promptLabel")}

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApprovalRequest, ConversationItem } from "../../../types";
 import {
@@ -305,6 +305,226 @@ describe("Messages rich content", () => {
       expect(revokeSpy).toHaveBeenCalledWith("blob:late-hydrated-image");
     });
     createObjectUrlSpy.mockRestore();
+  });
+
+  it("ignores stale deferred image hydration after the workspace scope changes", async () => {
+    const revokeSpy = vi.spyOn(URL, "revokeObjectURL");
+    const createObjectUrlSpy = vi
+      .spyOn(URL, "createObjectURL")
+      .mockReturnValueOnce("blob:workspace-b-image")
+      .mockReturnValueOnce("blob:workspace-a-image");
+    let resolveWorkspaceA: (
+      value: Awaited<ReturnType<typeof hydrateClaudeDeferredImage>>,
+    ) => void = () => {};
+    let resolveWorkspaceB: (
+      value: Awaited<ReturnType<typeof hydrateClaudeDeferredImage>>,
+    ) => void = () => {};
+    vi.mocked(hydrateClaudeDeferredImage).mockImplementation((workspacePath) => {
+      if (workspacePath === "/workspace-a") {
+        return new Promise((resolve) => {
+          resolveWorkspaceA = resolve;
+        });
+      }
+      return new Promise((resolve) => {
+        resolveWorkspaceB = resolve;
+      });
+    });
+    const locator = {
+      sessionId: "session-race",
+      lineIndex: 2,
+      blockIndex: 1,
+      mediaType: "image/png",
+    };
+    const deferredImage = (workspacePath: string) => ({
+      workspacePath,
+      mediaType: "image/png",
+      estimatedByteSize: 700000,
+      reason: "large-inline-image",
+      locator,
+    });
+    const item = {
+      id: "msg-deferred-race",
+      kind: "message" as const,
+      role: "user" as const,
+      text: "",
+      deferredImages: [deferredImage("/workspace-a")],
+    };
+    const rendered = render(
+      <Messages
+        items={[item]}
+        threadId="thread-race"
+        workspaceId="workspace-a"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Load image" }));
+    await waitFor(() => {
+      expect(hydrateClaudeDeferredImage).toHaveBeenCalledWith("/workspace-a", locator);
+    });
+
+    const nextItem = {
+      ...item,
+      deferredImages: [deferredImage("/workspace-b")],
+    };
+    rendered.rerender(
+      <Messages
+        items={[nextItem]}
+        threadId="thread-race"
+        workspaceId="workspace-b"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Load image" }));
+    await waitFor(() => {
+      expect(hydrateClaudeDeferredImage).toHaveBeenCalledWith("/workspace-b", locator);
+    });
+
+    await act(async () => {
+      resolveWorkspaceB({
+        src: "data:image/png;base64,BBBB",
+        mediaType: "image/png",
+        byteSize: 3,
+        locator,
+      });
+    });
+    await waitFor(() => {
+      expect(rendered.container.querySelector(".message-deferred-image-preview img")?.getAttribute("src"))
+        .toBe("blob:workspace-b-image");
+    });
+
+    await act(async () => {
+      resolveWorkspaceA({
+        src: "data:image/png;base64,AAAA",
+        mediaType: "image/png",
+        byteSize: 3,
+        locator,
+      });
+    });
+    await waitFor(() => {
+      expect(rendered.container.querySelector(".message-deferred-image-preview img")?.getAttribute("src"))
+        .toBe("blob:workspace-b-image");
+      expect(revokeSpy).toHaveBeenCalledWith("blob:workspace-a-image");
+    });
+
+    createObjectUrlSpy.mockRestore();
+  });
+
+  it("ignores an older deferred image hydration generation in the same scope", async () => {
+    const revokeSpy = vi.spyOn(URL, "revokeObjectURL");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      blob: async () => new Blob(["image"], { type: "image/png" }),
+    } as Response);
+    const createObjectUrlSpy = vi
+      .spyOn(URL, "createObjectURL")
+      .mockReturnValueOnce("blob:newer-image")
+      .mockReturnValueOnce("blob:older-image");
+    const resolvers: Array<(
+      value: Awaited<ReturnType<typeof hydrateClaudeDeferredImage>>,
+    ) => void> = [];
+    vi.mocked(hydrateClaudeDeferredImage).mockImplementation(
+      () => new Promise((resolve) => {
+        resolvers.push(resolve);
+      }),
+    );
+    const locator = {
+      sessionId: "session-generation-race",
+      lineIndex: 3,
+      blockIndex: 2,
+      mediaType: "image/png",
+    };
+    const deferredImage = {
+      workspacePath: "/workspace-generation",
+      mediaType: "image/png",
+      estimatedByteSize: 700000,
+      reason: "large-inline-image",
+      locator,
+    };
+    const item = {
+      id: "msg-generation-race",
+      kind: "message" as const,
+      role: "user" as const,
+      text: "",
+      deferredImages: [deferredImage],
+    };
+    const rendered = render(
+      <Messages
+        items={[item]}
+        threadId="thread-generation-race"
+        workspaceId="workspace-generation"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Load image" }));
+    await waitFor(() => {
+      expect(hydrateClaudeDeferredImage).toHaveBeenCalledTimes(1);
+    });
+
+    rendered.rerender(
+      <Messages
+        items={[{ ...item, deferredImages: [] }]}
+        threadId="thread-generation-race"
+        workspaceId="workspace-generation"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Load image" })).toBeNull();
+    });
+    rendered.rerender(
+      <Messages
+        items={[item]}
+        threadId="thread-generation-race"
+        workspaceId="workspace-generation"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Load image" }));
+    await waitFor(() => {
+      expect(hydrateClaudeDeferredImage).toHaveBeenCalledTimes(2);
+    });
+
+    resolvers[1]?.({
+      src: "data:image/png;base64,BBBB",
+      mediaType: "image/png",
+      byteSize: 3,
+      locator,
+    });
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(createObjectUrlSpy).toHaveBeenCalledTimes(1);
+    }, { timeout: 500 });
+    await waitFor(() => {
+      expect(screen.getByRole("img", { name: "Deferred Claude image 1" }).getAttribute("src"))
+        .toBe("blob:newer-image");
+    }, { timeout: 500 });
+
+    resolvers[0]?.({
+      src: "data:image/png;base64,AAAA",
+      mediaType: "image/png",
+      byteSize: 3,
+      locator,
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("img", { name: "Deferred Claude image 1" }).getAttribute("src"))
+        .toBe("blob:newer-image");
+      expect(revokeSpy).toHaveBeenCalledWith("blob:older-image");
+    }, { timeout: 500 });
+
+    createObjectUrlSpy.mockRestore();
+    fetchSpy.mockRestore();
   });
 
   it("renders deferred Claude image placeholder added to an existing message", () => {
@@ -941,6 +1161,12 @@ describe("Messages rich content", () => {
         onOpenDiffPath={onOpenDiffPath}
       />,
     );
+
+    // 场景默认折叠，先展开再断言文件名
+    const sceneHeader = screen.getByRole("button", {
+      name: /tools\.fileEditSceneToggle|File changes|文件修改/i,
+    });
+    fireEvent.click(sceneHeader);
 
     // 文件名统一为纯文本：不再存在可点跳转的 diff 链接按钮
     expect(screen.queryByRole("button", { name: "App.tsx" })).toBeNull();

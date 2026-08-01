@@ -15,7 +15,6 @@ export type AppShellTaskRunActions = {
   handleForkTaskRun: AppShellBoundaryAction;
   handleCloseTaskConversation: AppShellBoundaryAction;
   handleKanbanCreateTask: AppShellBoundaryAction;
-  handleDispatchOrchestrationTask: AppShellBoundaryAction;
   handleDragToInProgress: AppShellBoundaryAction;
 };
 
@@ -38,6 +37,7 @@ export type AppShellContextActions = {
   handleOpenWorkspaceFile: AppShellBoundaryAction;
   handleActivateWorkspaceFileTab: AppShellBoundaryAction;
   handleCloseWorkspaceFileTab: AppShellBoundaryAction;
+  handleCloseOtherWorkspaceFileTabs: AppShellBoundaryAction;
   handleCloseAllWorkspaceFileTabs: AppShellBoundaryAction;
   handleExitWorkspaceEditor: AppShellBoundaryAction;
   handleSelectDiffForPanel: AppShellBoundaryAction;

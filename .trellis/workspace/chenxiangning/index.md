@@ -7,9 +7,9 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-26.md`
-- **Total Sessions**: 1046
-- **Last Active**: 2026-07-20
+- **Active File**: `journal-29.md`
+- **Total Sessions**: 1249
+- **Last Active**: 2026-07-31
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,10 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-26.md` | ~729 | Active |
+| `journal-29.md` | ~1838 | Active |
+| `journal-28.md` | ~1984 | Archived |
+| `journal-27.md` | ~1974 | Archived |
+| `journal-26.md` | ~1970 | Archived |
 | `journal-25.md` | ~1976 | Archived |
 | `journal-24.md` | ~1994 | Archived |
 | `journal-23.md` | ~1965 | Archived |
@@ -54,6 +57,209 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1249 | 2026-07-31 | 对话幕布结构分析文档 | `8f85693ed` | `bump-version-0.7.13` |
+| 1248 | 2026-07-31 | 隔离 Claude 模型映射跨 CLI 污染 | `ac91bfa48` | `bump-version-0.7.12` |
+| 1247 | 2026-07-31 | 修复 Grok 历史工具投影信息损失 | `ad2cceff8` | `bump-version-0.7.12` |
+| 1246 | 2026-07-31 | 修复对话结束滚动乱跳未贴底 | `d38d0f9b9` | `bump-version-0.7.12` |
+| 1245 | 2026-07-31 | 长幕布 idle 虚拟化缓解滚动阻滞 | `4e932e672` | `bump-version-0.7.12` |
+| 1244 | 2026-07-31 | 修复 Grok 历史 tool 扁平解析 | `0d4765346` | `bump-version-0.7.12` |
+| 1243 | 2026-07-31 | 幕布文件修改场景默认折叠 | `63461ec54` | `bump-version-0.7.12` |
+| 1242 | 2026-07-31 | 补齐多引擎图片输入能力 | `2bdaa4db6` | `bump-version-0.7.12` |
+| 1241 | 2026-07-30 | 修复实时历史展开点击 | `422d49f1c` | `bump-version-0.7.12` |
+| 1240 | 2026-07-30 | 移除会话右键菜单的跨 Provider 续接入口 | `4ad92f021` | `bump-version-0.7.12` |
+| 1239 | 2026-07-30 | 修复消息回合边界吸底 | `5aeb5e597` | `bump-version-0.7.12` |
+| 1238 | 2026-07-30 | 修复 Grok 终稿尾段丢失 | `bedfc5a73` | `bump-version-0.7.12` |
+| 1237 | 2026-07-30 | 修复流式渲染卡顿与终止事件乱序 | `1537211a1` | `bump-version-0.7.12` |
+| 1236 | 2026-07-30 | 修复幕布锚点预览与局部凸起 | `c4498f6b1` | `bump-version-0.7.12` |
+| 1235 | 2026-07-30 | 修复消息滚动回声并禁用轻量渲染 | `770a943a1` | `bump-version-0.7.12` |
+| 1234 | 2026-07-30 | 合入上游 v0.7.12 Settings 更新 | `9a2b205fb6ad5a0f63b5bfdbc44265db493ddedf` | `bump-version-0.7.12` |
+| 1233 | 2026-07-30 | 修复 Shared 长时回合超时与恢复断链 | `0447a18a7` | `bump-version-0.7.12` |
+| 1232 | 2026-07-30 | 合并 v0.7.12 上游分支 | `21b5c4b99` | `bump-version-0.7.12` |
+| 1231 | 2026-07-30 | 同步并归档 Shared 连续性 OpenSpec | `8de5f121d` | `bump-version-0.7.12` |
+| 1230 | 2026-07-30 | 恢复 Shared Queue/Fusion 与 Compaction 连续性 | `67da2905e`, `aec470983` | `bump-version-0.7.12` |
+| 1229 | 2026-07-30 | 修复 Shared Session 终态偶发复燃 | `80b764a74` | `bump-version-0.7.12` |
+| 1228 | 2026-07-30 | Shared CLI 接入人工验收通过 | `a8fb1c45c`, `800bc2466` | `bump-version-0.7.12` |
+| 1227 | 2026-07-30 | 统一 Shared CLI 模型与运行时契约 | `800bc2466` | `bump-version-0.7.12` |
+| 1226 | 2026-07-30 | 补全 Shared CLI 创建入口 | `a8fb1c45c` | `bump-version-0.7.12` |
+| 1225 | 2026-07-30 | 补全 Shared CLI 创建与运行时修复设计 | `62e7f668b` | `bump-version-0.7.12` |
+| 1224 | 2026-07-29 | 补齐 Shared Session 三种 CLI 创建校验 | `f951796da` | `bump-version-0.7.12` |
+| 1223 | 2026-07-29 | 修复 Grok 与 OpenCode 双栏模型切换 | `d5dec54a2` | `bump-version-0.7.12` |
+| 1222 | 2026-07-29 | Shared Session 接入 Kimi、Grok 与 OpenCode CLI | `7bde1c4a0` | `bump-version-0.7.12` |
+| 1221 | 2026-07-29 | 精准优化 Shared CLI 菜单显示 | `e6556d9d9` | `bump-version-0.7.12` |
+| 1220 | 2026-07-29 | 默认折叠工作区操作菜单 | `c66bdf9c9`, `9483fc39f` | `bump-version-0.7.12` |
+| 1219 | 2026-07-29 | 融合 CLI 基石与 OpenCode/Grok | `9c0075ab1` | `bump-version-0.7.12` |
+| 1218 | 2026-07-29 | 完善多 CLI 会话目标选择 | `e582d1819` | `feature/v-0710` |
+| 1217 | 2026-07-29 | 修复 Shared Session canonical 历史恢复 | `5ec8dc0de` | `feature/v-0710` |
+| 1216 | 2026-07-29 | 修复 Shared Session 跨 CLI 切换与终态收口 | `994007b31` | `feature/v-0710` |
+| 1215 | 2026-07-29 | 续接会话围挡默认折叠 | `53759006f` | `feature/v-0710` |
+| 1214 | 2026-07-29 | 闭环 Codex CLI 供应商续接 | `d528fc91c` | `feature/v-0710` |
+| 1213 | 2026-07-29 | 优化普通 CLI 供应商续接 | `93ce0a709` | `feature/v-0710` |
+| 1212 | 2026-07-29 | 闭环共享会话多 CLI Provider 基石 | `29bcf6c65`, `6e08a700e`, `94c1795ac` | `feature/v-0710` |
+| 1211 | 2026-07-29 | 聚合 Provider 续接会话家族 | `ea73d6007` | `feature/v-0710` |
+| 1210 | 2026-07-28 | 稳定供应商与模型选择 | `f0c5c5e3a` | `feature/v-0710` |
+| 1209 | 2026-07-28 | 展示 Provider Continuation 来源最后一轮 | `f610a74d7`, `dedcc7894` | `feature/v-0710` |
+| 1208 | 2026-07-28 | 修复 Provider Continuation 幕布头部交互 | `0cb29cdc8`, `7583cadcb` | `feature/v-0710` |
+| 1207 | 2026-07-28 | 校准 Provider 续接稳定性与 Shared 身份展示 | `fa6113bf1` | `feature/v-0710` |
+| 1206 | 2026-07-28 | 补齐多 Provider 切换 UX | `687b951c0` | `feature/v-0710` |
+| 1205 | 2026-07-28 | 校准多 CLI 会话基石 A-D | `b5a2aba34` | `feature/v-0710` |
+| 1204 | 2026-07-28 | 完成并归档 Change D | `c5a1eb838` | `feature/v-0710` |
+| 1203 | 2026-07-28 | 收口续接回归测试格式 | `6b5aa9d63` | `feature/v-0710` |
+| 1202 | 2026-07-28 | 补齐续接来源缺失回归测试 | `1e86de202` | `feature/v-0710` |
+| 1201 | 2026-07-28 | 清退跨供应商原生分叉残留 | `548e61c5f` | `feature/v-0710` |
+| 1200 | 2026-07-28 | 补齐续接降级确认信息 | `5e2dea219` | `feature/v-0710` |
+| 1199 | 2026-07-28 | 完成 Change D 原生供应商续接实现 | `fef31ae23` | `feature/v-0710` |
+| 1198 | 2026-07-28 | Change D 原生历史物化基础 | `17a1d9594` | `feature/v-0710` |
+| 1197 | 2026-07-28 | 建立 Change D 续接契约 | `7ecfcba52` | `feature/v-0710` |
+| 1196 | 2026-07-28 | 归档 Change C 并开放 Change D | `c5cd28958` | `feature/v-0710` |
+| 1195 | 2026-07-28 | 完成 Change C Shared Context Compiler | `bd5208f39` | `feature/v-0710` |
+| 1194 | 2026-07-28 | 收口 Change B 总任务清单 | `c97bcfcf6` | `feature/v-0710` |
+| 1193 | 2026-07-28 | 完成 Change B Execution Target 闭环 | `428ae19d2`, `7974e3d41` | `feature/v-0710` |
+| 1192 | 2026-07-28 | 校准 Change B 发送与恢复语义 | `1b8aac983` | `feature/v-0710` |
+| 1191 | 2026-07-27 | Wave 4 Change B：Execution Target + V2 Send 写路径全量落地 | `fe81e9212` | `feature/v-0710` |
+| 1190 | 2026-07-27 | 调研 Headroom 并将压缩模式契约沉淀进会话基石设计 | `3824f36ae` | `feature/v-0710` |
+| 1189 | 2026-07-27 | 暴露 Shared Projection 动态测试入口 | `85f9c59a3`, `c90c1c939` | `feature/v-0710` |
+| 1188 | 2026-07-27 | 归档 Change A OpenSpec | `83833a540` | `feature/v-0710` |
+| 1187 | 2026-07-27 | 收口 Change A 暗发布链路 | `60d68c6e1` | `feature/v-0710` |
+| 1186 | 2026-07-27 | 明确 Change A 收口路径与 Change B 准入条件 | `e3562c9d5` | `feature/v-0710` |
+| 1185 | 2026-07-27 | 校准 Wave 2-3 Canonical Session | `5c3073f71` | `feature/v-0710` |
+| 1184 | 2026-07-27 | Wave 3 A3：canonical 投影、checkpoint/rebuild、dual-read 与 Gate 3 | `f403ce879` | `feature/v-0710` |
+| 1183 | 2026-07-27 | Wave 2 A2 canonical fact 装配闭环 | `68fcd078b` | `feature/v-0710` |
+| 1182 | 2026-07-27 | 校准 Session Foundation 与 Shared Event Storage | `b743c4f8a` | `feature/v-0710` |
+| 1181 | 2026-07-27 | 多 CLI 会话基石文档链落地 | `189a1281c` | `feature/v-0710` |
+| 1180 | 2026-07-27 | 修复运行时卡顿与模型目录竞态 | `35a72b395` | `feature/v-0710` |
+| 1179 | 2026-07-27 | 完善多 CLI 与多供应商会话架构设计 | `9feb2520e` | `feature/v-0710` |
+| 1178 | 2026-07-27 | 补全 Codex 模型与本地标签 | `816d4ac06` | `feature/v-0710` |
+| 1177 | 2026-07-27 | 修复 Composer 启动期选择状态循环更新 | `66e503fab` | `feature/v-0710` |
+| 1176 | 2026-07-27 | 修复供应商会话模型选择与推理强度 | `715c09e4a` | `feature/v-0710` |
+| 1175 | 2026-07-27 | 安全合入 upstream 0.7.10 数字格式修复 | `6f2533ec7` | `feature/v-0710` |
+| 1174 | 2026-07-27 | 闭环修复 Claude 多供应商运行时隔离 | `099391845`, `1427b37b8` | `feature/v-0710` |
+| 1173 | 2026-07-27 | 补充 0.7.10 变更记录 | `1cccac7e7` | `feature/v-0710` |
+| 1172 | 2026-07-27 | 建立 Claude 供应商会话隔离基础 | `dcebf6a1a` | `feature/v-0710` |
+| 1171 | 2026-07-27 | 修复 CLI 版本状态与供应商页头重叠 | `01010d4e5` | `feature/v-0710` |
+| 1170 | 2026-07-27 | 设置侧 Skills 改文案为内置精选并补充行为说明 | `c1636a880` | `feature/v-0710` |
+| 1169 | 2026-07-27 | 归档错误提示 OpenSpec 变更 | `f8a9a1f86` | `feature/v-0710` |
+| 1168 | 2026-07-27 | vendors: CC Switch 供应商导入 | `90d1b1e5e` | `feature/v-0710` |
+| 1167 | 2026-07-27 | 完成错误提示 OpenSpec 状态 | `b8a38771e` | `feature/v-0710` |
+| 1166 | 2026-07-27 | 统一错误提示并禁用原生 Alert | `4d0f2eaee` | `feature/v-0710` |
+| 1165 | 2026-07-27 | 优化 Codex 供应商协议错误提示 | `db3e06af27b887dc629bbbc9fff51782b15bbd68` | `feature/v-0710` |
+| 1164 | 2026-07-27 | 隔离供应商模型目录与会话配置 | `34b758e33` | `feature/v-0710` |
+| 1163 | 2026-07-26 | 补充截图消息单次投递回归测试 | `27d18bda0` | `feature/v-0710` |
+| 1162 | 2026-07-26 | 提交工作区遗留改动：rustfmt 格式化与治理闭环报告 | `ea8f60ad0`, `ca744e4e4` | `feature/v-0710` |
+| 1161 | 2026-07-26 | 修复 diff.css 选择器断裂 | `97de96d5d` | `feature/v-0710` |
+| 1160 | 2026-07-26 | 归档供应商绑定复审修复 | `9dd236a8f` | `feature/v-0710` |
+| 1159 | 2026-07-26 | 同步供应商绑定复审证据 | `b86a31bab` | `feature/v-0710` |
+| 1158 | 2026-07-26 | 阻止供应商选择静默回退 | `4934c8f39` | `feature/v-0710` |
+| 1157 | 2026-07-26 | 加固会话供应商运行边界 | `c39b3e537` | `feature/v-0710` |
+| 1156 | 2026-07-26 | 归档：重设计 Git 提交区域为右侧操作列 | `3b233e473` | `feature/v-0710` |
+| 1155 | 2026-07-26 | 重设计 Git 提交区域为右侧操作列（含多仓统一） | `aeee0744b` | `feature/v-0710` |
+| 1154 | 2026-07-26 | 建立供应商绑定复审修复提案 | `0921e8ac2` | `feature/v-0710` |
+| 1153 | 2026-07-26 | 收敛差异面板推送入口为工具栏角标按钮 | `926cc86f2` | `feature/v-0710` |
+| 1152 | 2026-07-26 | 归档会话级供应商绑定变更 | `825b49f67` | `feature/v-0710` |
+| 1151 | 2026-07-26 | 验证会话级供应商绑定实现 | `d9c54418e` | `feature/v-0710` |
+| 1150 | 2026-07-26 | 收敛会话供应商绑定链路 | `9e40ad7e0` | `feature/v-0710` |
+| 1149 | 2026-07-26 | 完成三引擎会话供应商选择 | `1a7f90a3c` | `feature/v-0710` |
+| 1148 | 2026-07-26 | 完成会话级 Kimi 供应商隔离 | `206395691` | `feature/v-0710` |
+| 1147 | 2026-07-26 | 修复 retired OpenCode 启动会话探测 | `23c0c1e93` | `feature/v-0710` |
+| 1146 | 2026-07-26 | 支持 Claude 会话级供应商环境 | `81c62b0da` | `feature/v-0710` |
+| 1145 | 2026-07-26 | 统一会话供应商绑定契约 | `2f09d9256` | `feature/v-0710` |
+| 1144 | 2026-07-26 | 校准会话级供应商绑定提案 | `ffa804434` | `feature/v-0710` |
+| 1143 | 2026-07-26 | 归档引擎接入重构提案 | `65a174d26` | `feature/v-0710` |
+| 1142 | 2026-07-26 | 收薄引擎控制器门面 | `1dfdfb47d` | `feature/v-0710` |
+| 1141 | 2026-07-26 | 收紧 Kimi Claude OpenCode 治理边界 | `d4fbdcd7b` | `feature/v-0710` |
+| 1140 | 2026-07-26 | 收敛模型与供应商目录 | `8695ca7eb` | `feature/v-0710` |
+| 1139 | 2026-07-26 | 统一消息投递与可执行会话注册 | `43e5d0f7c` | `feature/v-0710` |
+| 1138 | 2026-07-26 | 建立引擎适配器协议注册表 | `4825b8a50` | `feature/v-0710` |
+| 1137 | 2026-07-26 | 建立统一引擎运行时事件总线 | `edf325f58` | `feature/v-0710` |
+| 1136 | 2026-07-26 | 统一引擎能力契约与会话身份 | `d8e4e177a` | `feature/v-0710` |
+| 1135 | 2026-07-26 | 修复文件读取失败加载卡死 | `574b056cb` | `feature/v-0710` |
+| 1134 | 2026-07-26 | 更新工程工具链优化影响报告 | `1d4834097` | `feature/v-0710` |
+| 1133 | 2026-07-26 | 清理 Markdown 旧 renderer path | `35740d89a` | `feature/v-0710` |
+| 1132 | 2026-07-26 | 校正 Markdown renderer large-file baseline | `380d1c016` | `feature/v-0710` |
+| 1131 | 2026-07-26 | 消除 annotation 跨批次 large-file 回退 | `68e5c2e3c` | `feature/v-0710` |
+| 1130 | 2026-07-26 | 收敛 Markdown 文件预览渲染边界 | `dbd17d55c` | `feature/v-0710` |
+| 1129 | 2026-07-26 | 稳定代码标注锚点 | `175edc732` | `feature/v-0710` |
+| 1128 | 2026-07-26 | 增加 Terminal 搜索与安全链接 | `d8b592095` | `feature/v-0710` |
+| 1127 | 2026-07-26 | 模块化 Git 与 File 高频入口 | `26cbce638` | `feature/v-0710` |
+| 1126 | 2026-07-26 | 恢复 Git History 核心类型保护 | `38b5134b1` | `feature/v-0710` |
+| 1125 | 2026-07-26 | 修复 Composer 与命令并发边界并更新工具链报告 | `296fad4a5`, `c3cbbf0ad` | `feature/v-0710` |
+| 1124 | 2026-07-26 | 缓存消息搜索索引并规范 Worktree 分支命名 | `d077890b8` | `feature/v-0710` |
+| 1123 | 2026-07-26 | 工程工具链修复批次4: worktree 面板收敛共享 AI commit 实现 | `9fb13076e` | `feature/v-0710` |
+| 1122 | 2026-07-26 | 工程工具链修复批次3: AI commit message 一键生成 | `55f18aa24` | `feature/v-0710` |
+| 1121 | 2026-07-26 | 工程工具链修复批次2: GitHistoryPanelPickers 摘除 @ts-nocheck | `dbcd943eb` | `feature/v-0710` |
+| 1120 | 2026-07-26 | 工程工具链修复批次1: files 重复符号合并与兜底轮询治理 | `04764a654` | `feature/v-0710` |
+| 1119 | 2026-07-26 | 批次4：技能调用契约与对话提示词沉淀 | `bee87c4f8` | `feature/v-0710` |
+| 1118 | 2026-07-26 | 润色器本地化缓存与 curated skills 事件化刷新（批次3） | `5a76671b3` | `feature/v-0710` |
+| 1117 | 2026-07-25 | 统一输入历史存储并事件化命令目录刷新（批次2） | `81d9a47f9` | `feature/v-0710` |
+| 1116 | 2026-07-25 | 批次1: Composer 层补全死路径裁剪 | `9f969c0a5` | `feature/v-0710` |
+| 1115 | 2026-07-25 | 补录 skills-hub 与 mcp-inventory 追溯 OpenSpec 提案 | `27c47acb9` | `feature/v-799` |
+| 1114 | 2026-07-25 | 更新轮询盘点文档执行状态 | `33f21674d` | `feature/v-799` |
+| 1113 | 2026-07-25 | 更新 P0 决策看板记录轮询优化 | `1e1e5f2db` | `feature/v-799` |
+| 1112 | 2026-07-25 | 录音电平事件降频 | `9ca8d2b19` | `feature/v-799` |
+| 1111 | 2026-07-25 | 降低客户端常驻轮询开销 | `d042e5018`, `f4a81691b` | `feature/v-799` |
+| 1110 | 2026-07-25 | 合并 upstream 0.7.9 README 更新 | `f7ad30eac` | `feature/v-799` |
+| 1109 | 2026-07-25 | 汇总 Mossx 插件与 CLI 基石设计 | `ca697ef51` | `feature/v-799` |
+| 1108 | 2026-07-25 | 整理 Pi 插件与编排调研 | `32b52cf76` | `feature/v-799` |
+| 1107 | 2026-07-25 | 整理 Obsidian 插件生态调研 | `365d8cb33` | `feature/v-799` |
+| 1106 | 2026-07-25 | 归档清理复核 OpenSpec | `77040b143` | `feature/v-799` |
+| 1105 | 2026-07-25 | 收口清理波次遗留链路 | `140963bc1` | `feature/v-799` |
+| 1104 | 2026-07-25 | 修复 workspaces.json 损坏静默回退与覆盖写回风险并完成 OpenSpec 闭环 | `42aac995f`, `d51c7dee0`, `d87d62165`, `9cdd61c15`, `41ca6300e` | `feature/v-799` |
+| 1103 | 2026-07-24 | 归档 8 个并行清理 change 并提交 layout 死分支删除 | `43b6e8187`, `ba0e0a6d5` | `feature/v-799` |
+| 1102 | 2026-07-24 | 移除 JCEF bridge no-op 桩与死链调用点 (remove-jcef-bridge-noop-stubs) | `e20e5d147`, `51ecca64a` | `feature/v-799` |
+| 1101 | 2026-07-24 | 删除 latestAgentRuns 死链与 refreshCodexModelConfig 透传层 | `651b8d5e0` | `feature/v-799` |
+| 1100 | 2026-07-24 | 删除 dock streaming 死分支 | `f91ab9a4a` | `feature/v-799` |
+| 1099 | 2026-07-24 | 删除响应式布局死分支 (remove-responsive-layout-dead-branches) | `d723d5d4a` | `feature/v-799` |
+| 1098 | 2026-07-24 | 接线语义 diff AI review 按需生产者 (add-ai-review-producer-wiring) | `053cfbc04` | `feature/v-799` |
+| 1097 | 2026-07-24 | 删除 SettingsView 恒 false 入口开关与死分支 | `44a32c392` | `feature/v-799` |
+| 1096 | 2026-07-24 | 删除 orchestration 残留死字段 | `35c44d292` | `feature/v-799` |
+| 1095 | 2026-07-24 | P0 治理:修复 quarantine 前端通知缺口与 openspec 索引终态校准,更新决策看板 | `ae0927a17`, `615733516`, `9c395fa2d`, `6bb5fc5f0`, `db9d01978` | `feature/v-078` |
+| 1094 | 2026-07-24 | OpenSpec 索引终态校准 | `6bb5fc5f0` | `feature/v-078` |
+| 1093 | 2026-07-24 | settings 损坏恢复通知链路打通（后端 recovery notice + 前端 toast + i18n） | `ae0927a17`, `615733516`, `9c395fa2d` | `feature/v-078` |
+| 1092 | 2026-07-24 | P0-1 settings 加载失败静默修复（损坏隔离备份 + 前端可见提示） | `a1dd0795b`, `c3d472a34` | `feature/v-078` |
+| 1091 | 2026-07-24 | SettingsView 摘除 ts-nocheck 并清理 skills 死分支 | `71ab03f58`, `29ef72543`, `37d545f4f`, `b1a2ea4a5`, `27ab8b906` | `feature/v-078` |
+| 1090 | 2026-07-24 | 修复引擎二元假设并收敛 isValidModelId 校验 | `38e139b37`, `bfb61b9e2` | `feature/v-078` |
+| 1089 | 2026-07-24 | P0-4 openspec specs 索引补登与计数校准 | `0a723b7ec` | `feature/v-078` |
+| 1088 | 2026-07-24 | 移除并归档 Project Map 编排中心 | `929acbd75`, `b83efeb9b`, `fdf925f98`, `49fdb2b4f`, `165758fe8` | `feature/v-078` |
+| 1087 | 2026-07-24 | 移除 Project Map 编排中心 S1-S4 | `929acbd75`, `b83efeb9b`, `fdf925f98`, `49fdb2b4f` | `feature/v-078` |
+| 1086 | 2026-07-24 | 清理未使用客户端模块 | `d1a90dddd7` | `feature/v-078` |
+| 1085 | 2026-07-24 | OpenSpec 批量归档 19 个已验证提案 | `af472a2c4` | `feature/v-078` |
+| 1084 | 2026-07-24 | 增强最近活动面板与快速切换器交互 | `c18a3a694` | `feature/v-078` |
+| 1083 | 2026-07-24 | 归档并提交主题感知代码与 Diff 配色 | `e14684cee` | `feature/v-078` |
+| 1082 | 2026-07-23 | 修复 Quick Switcher 文件激活主区路由 | `bde99f767` | `feature/v-078` |
+| 1081 | 2026-07-23 | 合并 0.7.7 上游分支 | `11a249e04` | `feature/v-0.7.7` |
+| 1080 | 2026-07-23 | 完善 Git Diff 统计与历史预览 | `18e0fbb18` | `feature/v-0.7.7` |
+| 1079 | 2026-07-23 | 合并 0.7.7 上游更新 | `9fd0ad211` | `feature/v-0.7.7` |
+| 1078 | 2026-07-23 | 修复多仓 Git 差异作用域 | `ec2f29e7e` | `feature/v-0.7.7` |
+| 1077 | 2026-07-23 | 修复 Quick Switcher 冷启动状态反馈循环 | `99dff6a97` | `feature/v-0.7.7` |
+| 1076 | 2026-07-23 | 修复 Quick Switcher 等价状态渲染闭环 | `64482fb39` | `feature/v-0.7.7` |
+| 1075 | 2026-07-23 | 接入 Python 与 Go LSP 语义导航 | `f249f31e9` | `feature/v-0.7.7` |
+| 1074 | 2026-07-23 | 修复文件编辑器快捷键映射 | `3dbbf083c` | `feature/v-0.7.7` |
+| 1073 | 2026-07-23 | 文件语义导航历史与视口恢复 | `da6fa9786` | `feature/v-0.7.7` |
+| 1072 | 2026-07-23 | 归档语义导航 OpenSpec | `b9121bd54` | `feature/v-0.7.7` |
+| 1071 | 2026-07-23 | 稳定语义导航生命周期 | `706ca2e78` | `feature/v-0.7.7` |
+| 1070 | 2026-07-23 | 修复深色侧栏折叠配色 | `88a501df0` | `feature/v-0.7.7` |
+| 1069 | 2026-07-23 | 完善 Composer 提示词增强入口 | `1618ee32e` | `feature/v-0.7.7` |
+| 1068 | 2026-07-22 | 修复智能体 completion 选择错位 | `853090af7` | `feature/v-076` |
+| 1067 | 2026-07-22 | 完善语言服务安装引导与语义导航 | `c75fee5b6`, `ce695e500` | `feature/v-076` |
+| 1066 | 2026-07-22 | 完善搜索与代码导航体验 | `7497f1c70` | `feature/v-076` |
+| 1065 | 2026-07-22 | 过滤 Quick Switcher 非文件活动 | `e7d8629cd` | `feature/v-076` |
+| 1064 | 2026-07-22 | 完成 Quick Switcher 最近活动面板 | `b9624384e` | `feature/v-076` |
+| 1063 | 2026-07-22 | 打开文件定位到文件树 | `24bdf7388` | `feature/v-076` |
+| 1062 | 2026-07-22 | Git Graph 文件历史多页签 | `d368fc9c5` | `feature/v-076` |
+| 1061 | 2026-07-22 | 整合文件右键操作 | `a0b3600a2` | `feature/v-076` |
+| 1060 | 2026-07-22 | 归档文件内容右键菜单任务 | `82494f630` | `feature/v-076` |
+| 1059 | 2026-07-22 | 重构文件标签右键菜单 | `1764941de` | `feature/v-076` |
+| 1058 | 2026-07-22 | 归档 Git 行标记 OpenSpec | `604c39c95` | `feature/v-076` |
+| 1057 | 2026-07-22 | Git Blame 按需加载 Git 行标记 | `591abfe17` | `feature/v-076` |
+| 1056 | 2026-07-22 | 恢复 Git History 分支树细节功能 | `2965cf065` | `feature/v-076` |
+| 1055 | 2026-07-22 | 文件编辑器行列跳转与标签页视觉统一 | `636e4f4a2` | `feature/v-076` |
+| 1054 | 2026-07-22 | 修复快捷键持久化并增加常用模块 | `d498bf187`, `365b1e2af` | `feature/v-076` |
+| 1053 | 2026-07-22 | 稳定 Git History 跨平台排序 | `effde1683` | `feature/v-076` |
+| 1052 | 2026-07-22 | 统一 Git History 单多仓分支树 | `c54d6ac26` | `feature/v-076` |
+| 1051 | 2026-07-21 | 压缩多仓操作菜单 | `c0c7be65e` | `feature/v-076` |
+| 1050 | 2026-07-21 | 多仓全局 Git 操作闭环 | `bf44df641293a6a06e82cf5cbf7744f6455bd0e2`, `6ef31cc93021c684d40c3843074aa219e9bc84f8` | `feature/v-076` |
+| 1049 | 2026-07-21 | 合并 bump-version-0.7.6 | `f03c644a9` | `feature/v-076` |
+| 1048 | 2026-07-21 | Mermaid 全屏 PNG 下载 | `9eeb82a1e` | `feature/v-076` |
+| 1047 | 2026-07-21 | 内置 Caveman 精选技能 | `f3c8f8f9` | `feature/v-076` |
 | 1046 | 2026-07-20 | commit:feat(git)-增加PR标题与正文AI生成功能 | HEAD | `feature/v-0.7.4` |
 | 1045 | 2026-07-20 | 统一并收紧 Composer 发送按钮尺寸 | `ed921d22` | `feature/v-0.7.4` |
 | 1044 | 2026-07-20 | 修复冷启更新循环与 Project Map 过期模型断言 | `7d7d072e` | `feature/v-0.7.4` |

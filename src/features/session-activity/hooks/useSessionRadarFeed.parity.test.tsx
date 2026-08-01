@@ -44,6 +44,7 @@ describe("useSessionRadarFeed parity", () => {
 
   it("prefers current thread summary names over persisted recent titles", () => {
     const workspace = createWorkspace("ws-main", "Workspace Main");
+    const now = Date.now();
     clientStoreCache.set(`leida:${SESSION_RADAR_RECENT_STORAGE_KEY}`, [
       {
         id: "ws-main:thread-archived",
@@ -52,9 +53,9 @@ describe("useSessionRadarFeed parity", () => {
         threadId: "thread-archived",
         threadName: "Agent 19",
         preview: "persisted preview",
-        completedAt: 50_000,
-        updatedAt: 50_000,
-        startedAt: 48_000,
+        completedAt: now - 10_000,
+        updatedAt: now - 10_000,
+        startedAt: now - 12_000,
         durationMs: 2_000,
       },
     ]);
@@ -63,7 +64,7 @@ describe("useSessionRadarFeed parity", () => {
       useSessionRadarFeed({
         workspaces: [workspace],
         threadsByWorkspace: {
-          "ws-main": [createThread("thread-archived", "项目分析", 60_000)],
+          "ws-main": [createThread("thread-archived", "项目分析", now - 5_000)],
         },
         threadStatusById: {},
         threadItemsByThread: {},

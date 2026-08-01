@@ -2,9 +2,12 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  addClaudeProvider,
+  deleteClaudeProvider,
   getClaudeProviders,
   getCurrentClaudeConfig,
   reorderClaudeProviders,
+  updateClaudeProvider,
 } from "../../../services/tauri";
 import type { ProviderConfig } from "../types";
 import { LOCAL_SETTINGS_PROVIDER_ID } from "../types";
@@ -16,7 +19,6 @@ vi.mock("../../../services/tauri", () => ({
   addClaudeProvider: vi.fn(),
   updateClaudeProvider: vi.fn(),
   deleteClaudeProvider: vi.fn(),
-  switchClaudeProvider: vi.fn(),
   reorderClaudeProviders: vi.fn(),
 }));
 
@@ -117,5 +119,84 @@ describe("useProviderManagement reorder", () => {
       "b",
       "c",
     ]);
+    expect(result.current.providerError).toMatchObject({
+      action: "reorder",
+      message: expect.stringContaining("write failed"),
+    });
+  });
+
+  it("propagates typed save errors", async () => {
+    vi.mocked(getClaudeProviders).mockResolvedValue(initialProviders);
+    vi.mocked(addClaudeProvider).mockRejectedValueOnce(new Error("save failed"));
+    const { result } = renderHook(() => useProviderManagement());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.handleSaveProvider({
+        providerName: "Broken",
+        remark: "",
+        apiKey: "",
+        apiUrl: "",
+        jsonConfig: "{}",
+      });
+    });
+
+    expect(result.current.providerError).toMatchObject({
+      action: "save",
+      message: expect.stringContaining("save failed"),
+    });
+  });
+
+  it("updates a managed provider without changing the global Claude provider", async () => {
+    vi.mocked(getClaudeProviders).mockResolvedValue(initialProviders);
+    vi.mocked(updateClaudeProvider).mockResolvedValueOnce(undefined);
+    const { result } = renderHook(() => useProviderManagement());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => result.current.handleEditProvider(initialProviders[2]!));
+    await act(async () => {
+      await result.current.handleSaveProvider({
+        providerName: "DeepSeek",
+        remark: "isolated",
+        apiKey: "",
+        apiUrl: "",
+        jsonConfig: JSON.stringify({
+          env: { ANTHROPIC_MODEL: "deepseek-v4-pro" },
+        }),
+      });
+    });
+
+    expect(updateClaudeProvider).toHaveBeenCalledWith(
+      "b",
+      expect.objectContaining({
+        name: "DeepSeek",
+        settingsConfig: {
+          env: { ANTHROPIC_MODEL: "deepseek-v4-pro" },
+        },
+      }),
+    );
+  });
+
+  it("propagates delete failure and never reports success", async () => {
+    vi.mocked(getClaudeProviders).mockResolvedValue(initialProviders);
+    vi.mocked(deleteClaudeProvider).mockRejectedValueOnce(
+      new Error("delete failed"),
+    );
+    const { result } = renderHook(() => useProviderManagement());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => result.current.handleDeleteProvider(initialProviders[1]!));
+    let outcome: Awaited<
+      ReturnType<typeof result.current.confirmDeleteProvider>
+    >;
+    await act(async () => {
+      outcome = await result.current.confirmDeleteProvider();
+    });
+
+    expect(outcome!).toMatchObject({ ok: false });
+    expect(result.current.providerError).toMatchObject({
+      action: "delete",
+      message: expect.stringContaining("delete failed"),
+    });
   });
 });

@@ -18,6 +18,7 @@ vi.mock("react-i18next", () => ({
         "update.releaseNotesPrev": "Previous",
         "update.releaseNotesNext": "Next",
         "update.releaseNotesPage": `${params?.current} / ${params?.total}`,
+        "update.availableAction": "Update available",
         "common.retry": "Retry",
       };
       return translations[key] ?? key;
@@ -29,7 +30,7 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("../../messages/components/Markdown", () => ({
+vi.mock("../../../markdown/components/Markdown", () => ({
   Markdown: ({ value }: { value: string }) => <div data-testid="release-markdown">{value}</div>,
 }));
 
@@ -182,5 +183,95 @@ describe("ReleaseNotesModal", () => {
     expect(screen.getByText("Failed to load release notes.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("checks for updates when opened and starts update from badge", () => {
+    const onCheckForUpdates = vi.fn();
+    const onStartUpdate = vi.fn();
+
+    const { rerender } = render(
+      <ReleaseNotesModal
+        isOpen={false}
+        entries={entries}
+        activeIndex={0}
+        loading={false}
+        error={null}
+        updaterState={{ stage: "idle" }}
+        onClose={vi.fn()}
+        onPrev={vi.fn()}
+        onNext={vi.fn()}
+        onRetry={vi.fn()}
+        onCheckForUpdates={onCheckForUpdates}
+        onStartUpdate={onStartUpdate}
+      />,
+    );
+
+    expect(onCheckForUpdates).not.toHaveBeenCalled();
+
+    rerender(
+      <ReleaseNotesModal
+        isOpen
+        entries={entries}
+        activeIndex={0}
+        loading={false}
+        error={null}
+        updaterState={{ stage: "idle" }}
+        onClose={vi.fn()}
+        onPrev={vi.fn()}
+        onNext={vi.fn()}
+        onRetry={vi.fn()}
+        onCheckForUpdates={onCheckForUpdates}
+        onStartUpdate={onStartUpdate}
+      />,
+    );
+
+    expect(onCheckForUpdates).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: /Update available/i })).toBeNull();
+
+    rerender(
+      <ReleaseNotesModal
+        isOpen
+        entries={entries}
+        activeIndex={0}
+        loading={false}
+        error={null}
+        updaterState={{ stage: "available", version: "0.7.13" }}
+        onClose={vi.fn()}
+        onPrev={vi.fn()}
+        onNext={vi.fn()}
+        onRetry={vi.fn()}
+        onCheckForUpdates={onCheckForUpdates}
+        onStartUpdate={onStartUpdate}
+      />,
+    );
+
+    const badge = screen.getByRole("button", { name: /Update available/i });
+    expect(badge.textContent).toContain("v0.7.13");
+    fireEvent.click(badge);
+    expect(onStartUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not re-check when an update is already available", () => {
+    const onCheckForUpdates = vi.fn();
+
+    render(
+      <ReleaseNotesModal
+        isOpen
+        entries={entries}
+        activeIndex={0}
+        loading={false}
+        error={null}
+        updaterState={{ stage: "available", version: "0.8.0" }}
+        onClose={vi.fn()}
+        onPrev={vi.fn()}
+        onNext={vi.fn()}
+        onRetry={vi.fn()}
+        onCheckForUpdates={onCheckForUpdates}
+        onStartUpdate={vi.fn()}
+      />,
+    );
+
+    expect(onCheckForUpdates).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /Update available/i })).toBeTruthy();
   });
 });

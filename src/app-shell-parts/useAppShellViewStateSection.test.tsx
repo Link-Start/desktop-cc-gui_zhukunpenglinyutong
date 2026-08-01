@@ -98,4 +98,31 @@ describe("useAppShellViewStateSection", () => {
     expect(nextSetActiveThreadId).toHaveBeenCalledTimes(1);
     expect(nextSetActiveThreadId).toHaveBeenCalledWith(null, "workspace-default");
   });
+
+  it("shows workspace home inside the active workspace instead of global home", () => {
+    const activeWorkspace = { id: "ws-1" };
+    const view = renderHook((params) => useAppShellViewStateSection(params), {
+      initialProps: createParams({
+        activeWorkspace,
+        activeWorkspaceId: "ws-1",
+        homeOpen: false,
+      }),
+    });
+
+    act(() => {
+      view.result.current.setWorkspaceHomeWorkspaceId("ws-1");
+    });
+
+    expect(view.result.current.showHome).toBe(false);
+    expect(view.result.current.showWorkspaceHome).toBe(true);
+
+    view.rerender(createParams({
+      activeWorkspace,
+      activeWorkspaceId: "ws-1",
+      homeOpen: true,
+    }));
+
+    expect(view.result.current.showHome).toBe(true);
+    expect(view.result.current.showWorkspaceHome).toBe(false);
+  });
 });

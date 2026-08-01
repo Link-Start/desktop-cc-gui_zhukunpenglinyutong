@@ -1,13 +1,27 @@
 export const CODEX_DISK_PROVIDER_PROFILE_ID = "__disk__";
-export const CODEX_DISK_PROVIDER_PROFILE_NAME = "codex-tui/default-config";
+/** 本地/磁盘默认渠道的统一展示名（对用户隐藏底层文件名） */
+export const LOCAL_PROVIDER_PROFILE_DISPLAY_NAME = "本地配置";
+export const CODEX_DISK_PROVIDER_PROFILE_NAME = LOCAL_PROVIDER_PROFILE_DISPLAY_NAME;
+export const CLAUDE_LOCAL_PROVIDER_PROFILE_ID = "__local_settings_json__";
+export const CLAUDE_LOCAL_PROVIDER_PROFILE_NAME = LOCAL_PROVIDER_PROFILE_DISPLAY_NAME;
+export const KIMI_LOCAL_PROVIDER_PROFILE_ID = "__local_config_toml__";
+export const KIMI_LOCAL_PROVIDER_PROFILE_NAME = LOCAL_PROVIDER_PROFILE_DISPLAY_NAME;
+export const GROK_LOCAL_PROVIDER_PROFILE_ID = "__local_config_toml__";
+export const GROK_LOCAL_PROVIDER_PROFILE_NAME = LOCAL_PROVIDER_PROFILE_DISPLAY_NAME;
+export const OPENCODE_LOCAL_PROVIDER_PROFILE_ID = "__local_opencode_json__";
+export const OPENCODE_LOCAL_PROVIDER_PROFILE_NAME = LOCAL_PROVIDER_PROFILE_DISPLAY_NAME;
 
-export type CodexProviderProfileOption = {
+export type EngineProviderProfileOption = {
   id: string;
   name: string;
   source: "disk" | "managed";
+  availability?: "available" | "unavailable";
 };
 
-export type CodexProviderProfileSelection = {
+export type EngineProviderProfileSelection = {
   providerProfileId?: string | null;
-  providerProfile?: CodexProviderProfileOption | null;
+  providerProfile?: EngineProviderProfileOption | null;
 };
+
+export type CodexProviderProfileOption = EngineProviderProfileOption;
+export type CodexProviderProfileSelection = EngineProviderProfileSelection;

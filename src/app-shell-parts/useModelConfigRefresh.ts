@@ -1,20 +1,21 @@
 import { useCallback, useRef, useState } from "react";
 import type { DebugEntry, EngineType } from "../types";
-import { refreshCodexModelConfig } from "../features/models/refreshCodexModelConfig";
 import { resolveModelConfigEngine } from "./modelConfigEngine";
 
 type UseModelConfigRefreshParams = {
   activeEngine: EngineType;
+  activeProviderProfileId?: string | null;
   addDebugEntry: (entry: DebugEntry) => void;
   refreshEngineModels: (
     engineType: EngineType,
-    options?: { forceRefresh?: boolean },
+    options?: { forceRefresh?: boolean; providerProfileId?: string | null },
   ) => Promise<void> | void;
   refreshModels: () => Promise<void> | void;
 };
 
 export function useModelConfigRefresh({
   activeEngine,
+  activeProviderProfileId,
   addDebugEntry,
   refreshEngineModels,
   refreshModels,
@@ -46,8 +47,17 @@ export function useModelConfigRefresh({
         payload: { engine: targetEngine },
       });
       try {
-        if (targetEngine === "codex") {
-          await refreshCodexModelConfig({ refreshModels });
+        const providerProfileId =
+          targetEngine === activeEngine
+            ? activeProviderProfileId?.trim() || null
+            : null;
+        if (targetEngine === "codex" && !providerProfileId) {
+          await refreshModels();
+        } else if (providerProfileId) {
+          await refreshEngineModels(targetEngine, {
+            forceRefresh: true,
+            providerProfileId,
+          });
         } else {
           await refreshEngineModels(targetEngine, { forceRefresh: true });
         }
@@ -72,7 +82,13 @@ export function useModelConfigRefresh({
         }));
       }
     },
-    [activeEngine, addDebugEntry, refreshEngineModels, refreshModels],
+    [
+      activeEngine,
+      activeProviderProfileId,
+      addDebugEntry,
+      refreshEngineModels,
+      refreshModels,
+    ],
   );
 
   return {

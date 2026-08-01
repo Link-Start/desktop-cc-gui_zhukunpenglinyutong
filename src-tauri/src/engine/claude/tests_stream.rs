@@ -676,7 +676,7 @@ async fn ask_user_question_resume_fails_explicitly_without_session_id() {
 
     let params = SendMessageParams::default();
     let error = session
-        .handle_ask_user_question_resume("turn-missing-session", &params, &None, true)
+        .handle_ask_user_question_resume("turn-missing-session", &params, &None, true, None)
         .await
         .expect_err("missing session id should fail explicitly");
 
@@ -739,6 +739,7 @@ async fn ask_user_question_resume_spawn_failure_includes_wrapper_context() {
             &params,
             &Some("33333333-3333-4333-8333-333333333333".to_string()),
             true,
+            None,
         )
         .await
         .expect_err("missing resume binary should fail spawn");

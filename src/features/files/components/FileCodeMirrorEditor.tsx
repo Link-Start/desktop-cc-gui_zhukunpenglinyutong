@@ -3,6 +3,7 @@ import type { ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import type { FileCodeMirrorEditorProps } from "./FileCodeMirrorEditorImpl";
 
 export type FileCodeMirrorEditorHandle = ReactCodeMirrorRef & {
+  expandSelection: () => boolean;
   openFindPanel: () => boolean;
   toggleFindPanel: () => boolean;
   focusLocation: (

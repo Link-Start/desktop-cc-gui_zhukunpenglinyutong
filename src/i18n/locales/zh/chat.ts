@@ -16,7 +16,7 @@ const chat = {
     shortcutActionSkill: "选择技能",
     shortcutActionAgent: "唤起智能体",
     shortcutActionPrompt: "插入提示词",
-    shortcutActionEnhance: "提示词增强",
+    shortcutActionEnhance: "输入框提示词增强",
     skillScopeProject: "项目技能",
     skillScopeGlobal: "全局技能",
     sendMessageEnter: "发送消息 (Enter)",
@@ -100,6 +100,9 @@ const chat = {
     loadingFailed: "加载失败",
     pleaseCloseAndReopen: "请关闭并重新打开窗口",
     loadingSlashCommands: "正在加载斜杠指令...",
+    commandsListUnavailableTitle: "命令列表不可用",
+    commandsListUnavailableMessage:
+      "加载斜杠指令失败：{{reason}}。命令补全可能不完整，稍后将自动重试。",
     pleaseWait: "请稍候...",
     retrying: "正在重试 ({{count}}/{{max}})...",
     removeAgent: "移除智能体",

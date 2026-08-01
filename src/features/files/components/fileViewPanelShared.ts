@@ -22,7 +22,9 @@ export function isSameEditorLineRange(
   return formatEditorLineRangeKey(left) === formatEditorLineRangeKey(right);
 }
 
-export const EXTERNAL_CHANGE_POLL_INTERVAL_MS = 2_000;
+// 外部变更 watcher 不可用时的兜底轮询间隔。仓库红线：事件驱动 + ≥30s 兜底，
+// 禁秒级轮询；调度侧在 useFileExternalSync 内做 visibility 门控（后台窗口暂停）。
+export const EXTERNAL_CHANGE_POLL_INTERVAL_MS = 30_000;
 export type EditorTheme = "light" | "dark";
 
 const CODE_MIRROR_KEY_LABELS: Record<string, string> = {
@@ -60,7 +62,9 @@ export function toCodeMirrorShortcut(value: string | null | undefined): string |
   }
   const keyLabel =
     CODE_MIRROR_KEY_LABELS[parsed.key] ??
-    (parsed.key.length === 1 ? parsed.key : parsed.key);
+    (/^f(?:[1-9]|1[0-2])$/.test(parsed.key)
+      ? parsed.key.toUpperCase()
+      : parsed.key);
   return [...modifiers, keyLabel].join("-");
 }
 

@@ -13,6 +13,25 @@ function traceStartupInvoke<T>(
   return traceStartupCommand(commandLabel, scope, run);
 }
 
+/**
+ * Expected OpenCode CLI unavailability for discovery / catalog prewarm.
+ * Missing / disabled / unsafe CLI must resolve as empty data — not as a
+ * failed startup command ("内部命令失败") in the runtime notice dock.
+ * Aligns with catalog projection treating "OpenCode CLI not found" as empty.
+ */
+export function isOpenCodeCliUnavailableError(error: unknown): boolean {
+  const message = String(error);
+  return (
+    message.includes("OpenCode CLI not found") ||
+    message.includes("OpenCode CLI is disabled in CLI validation settings") ||
+    message.includes("Engine is disabled in CLI validation settings") ||
+    message.includes("[OPENCODE_CLI_UNSAFE]")
+  );
+}
+
+/** @deprecated Use {@link isOpenCodeCliUnavailableError}. */
+export const isOpenCodeSessionListUnavailableError = isOpenCodeCliUnavailableError;
+
 export async function getOpenCodeSessionList(workspaceId: string) {
   return traceStartupInvoke(
     "opencode_session_list",
@@ -28,11 +47,7 @@ export async function getOpenCodeSessionList(workspaceId: string) {
           }>
         >("opencode_session_list", { workspaceId });
       } catch (error) {
-        if (
-          String(error).includes(
-            "OpenCode CLI is disabled in CLI validation settings",
-          )
-        ) {
+        if (isOpenCodeCliUnavailableError(error)) {
           return [];
         }
         throw error;
@@ -188,25 +203,119 @@ export async function getOpenCodeLspDocumentSymbols(workspaceId: string, fileUri
   });
 }
 
+export type CodeNavigationMode = "semantic" | "fast-search";
+export type CodeNavigationLifecycle = "starting" | "indexing" | "ready" | "degraded";
+
+export type CodeNavigationFallbackReason =
+  | "provider-unavailable"
+  | "initialize-timeout"
+  | "request-timeout"
+  | "provider-exited"
+  | "invalid-response"
+  | "provider-failed";
+
+export type CodeNavigationResponse = {
+  filePath: string;
+  line: number;
+  character: number;
+  language: string | null;
+  mode: CodeNavigationMode;
+  provider: string;
+  lifecycle: CodeNavigationLifecycle;
+  fallbackReasonCode: CodeNavigationFallbackReason | null;
+  result: unknown;
+};
+
+function normalizeCodeNavigationResponse(value: unknown): CodeNavigationResponse {
+  const payload = value && typeof value === "object"
+    ? value as Record<string, unknown>
+    : {};
+  const provider = typeof payload.provider === "string" && payload.provider.trim()
+    ? payload.provider.trim()
+    : "heuristic";
+  const mode: CodeNavigationMode = payload.mode === "semantic"
+    ? "semantic"
+    : "fast-search";
+  const knownFallbackReasons = new Set<CodeNavigationFallbackReason>([
+    "provider-unavailable",
+    "initialize-timeout",
+    "request-timeout",
+    "provider-exited",
+    "invalid-response",
+    "provider-failed",
+  ]);
+  const fallbackReasonCode =
+    typeof payload.fallbackReasonCode === "string"
+    && knownFallbackReasons.has(payload.fallbackReasonCode as CodeNavigationFallbackReason)
+      ? payload.fallbackReasonCode as CodeNavigationFallbackReason
+      : null;
+  const knownLifecycles = new Set<CodeNavigationLifecycle>([
+    "starting",
+    "indexing",
+    "ready",
+    "degraded",
+  ]);
+  const lifecycle = typeof payload.lifecycle === "string"
+    && knownLifecycles.has(payload.lifecycle as CodeNavigationLifecycle)
+    ? payload.lifecycle as CodeNavigationLifecycle
+    : mode === "semantic"
+      ? "ready"
+      : "degraded";
+
+  return {
+    filePath: typeof payload.filePath === "string" ? payload.filePath : "",
+    line: typeof payload.line === "number" && Number.isFinite(payload.line)
+      ? payload.line
+      : 0,
+    character:
+      typeof payload.character === "number" && Number.isFinite(payload.character)
+        ? payload.character
+        : 0,
+    language: typeof payload.language === "string" ? payload.language : null,
+    mode,
+    provider,
+    lifecycle,
+    fallbackReasonCode,
+    result: payload.result,
+  };
+}
+
+export type CodeNavigationPrepareResponse = Pick<
+  CodeNavigationResponse,
+  "language" | "provider" | "lifecycle" | "fallbackReasonCode"
+>;
+
+export async function prepareCodeIntel(workspaceId: string, filePath: string) {
+  const response = await invoke<unknown>("code_intel_prepare", {
+    workspaceId,
+    filePath,
+  });
+  const normalized = normalizeCodeNavigationResponse(response);
+  return {
+    language: normalized.language,
+    provider: normalized.provider,
+    lifecycle: normalized.lifecycle,
+    fallbackReasonCode: normalized.fallbackReasonCode,
+  } satisfies CodeNavigationPrepareResponse;
+}
+
 export async function getCodeIntelDefinition(
   workspaceId: string,
   input: {
     filePath: string;
     line: number;
     character: number;
+    documentText?: string;
   },
 ) {
-  return invoke<{
-    filePath: string;
-    line: number;
-    character: number;
-    result: unknown;
-  }>("code_intel_definition", {
+  const response = await invoke<unknown>("code_intel_definition", {
     workspaceId,
     filePath: input.filePath,
     line: input.line,
     character: input.character,
+    ...(input.documentText === undefined ? {} : { documentText: input.documentText }),
   });
+  return normalizeCodeNavigationResponse(response);
 }
 
 export async function getCodeIntelReferences(
@@ -216,21 +325,37 @@ export async function getCodeIntelReferences(
     line: number;
     character: number;
     includeDeclaration?: boolean;
+    documentText?: string;
   },
 ) {
-  return invoke<{
-    filePath: string;
-    line: number;
-    character: number;
-    includeDeclaration: boolean;
-    result: unknown;
-  }>("code_intel_references", {
+  const response = await invoke<unknown>("code_intel_references", {
     workspaceId,
     filePath: input.filePath,
     line: input.line,
     character: input.character,
     includeDeclaration: input.includeDeclaration ?? false,
+    ...(input.documentText === undefined ? {} : { documentText: input.documentText }),
   });
+  return normalizeCodeNavigationResponse(response);
+}
+
+export async function getCodeIntelImplementations(
+  workspaceId: string,
+  input: {
+    filePath: string;
+    line: number;
+    character: number;
+    documentText?: string;
+  },
+) {
+  const response = await invoke<unknown>("code_intel_implementations", {
+    workspaceId,
+    filePath: input.filePath,
+    line: input.line,
+    character: input.character,
+    ...(input.documentText === undefined ? {} : { documentText: input.documentText }),
+  });
+  return normalizeCodeNavigationResponse(response);
 }
 
 export type LspPosition = {

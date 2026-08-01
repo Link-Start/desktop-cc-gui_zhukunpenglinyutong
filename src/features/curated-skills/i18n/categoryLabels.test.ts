@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   resolveCategoryLabel,
+  resolveCuratedSkillDescription,
   translateOrFallback,
   CATEGORY_DEFAULTS,
   CATEGORY_LABELS_I18N,
@@ -85,6 +86,25 @@ describe("translateOrFallback", () => {
       { count: 1100 },
     );
     expect(out).toBe("1100 tokens");
+  });
+});
+
+describe("resolveCuratedSkillDescription", () => {
+  it("uses the localized Caveman description when available", () => {
+    const t = makeT(["common.curatedSkillDescriptionCaveman"]);
+    expect(resolveCuratedSkillDescription(t, "caveman", "fallback")).toBe(
+      "translated:common.curatedSkillDescriptionCaveman",
+    );
+  });
+
+  it("keeps metadata text for unknown or untranslated skills", () => {
+    const t = makeT([]);
+    expect(resolveCuratedSkillDescription(t, "caveman", "fallback")).toBe(
+      "fallback",
+    );
+    expect(resolveCuratedSkillDescription(t, "custom", "metadata")).toBe(
+      "metadata",
+    );
   });
 });
 

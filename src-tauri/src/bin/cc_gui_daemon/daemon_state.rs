@@ -1,4 +1,5 @@
 use super::*;
+use engine::grok::resolve_grok_session_id_for_engine_send;
 use engine::kimi::resolve_kimi_session_id_for_engine_send;
 use tokio::time::Duration;
 mod file_access;
@@ -11,18 +12,8 @@ const DELETE_ARCHIVE_TIMEOUT_MS: u64 = 2_000;
 const LIST_THREADS_LIVE_TIMEOUT_MS: u64 = 1_500;
 const CLAUDE_POST_COMPLETION_USAGE_GRACE_MS: u64 = 35_000;
 
-#[cfg(windows)]
-fn codex_windows_turn_developer_instructions(
-    settings: &crate::types::AppSettings,
-) -> Option<String> {
+fn codex_turn_developer_instructions(settings: &crate::types::AppSettings) -> Option<String> {
     crate::backend::app_server_cli::codex_generated_developer_instructions_for_turn(settings)
-}
-
-#[cfg(not(windows))]
-fn codex_windows_turn_developer_instructions(
-    _settings: &crate::types::AppSettings,
-) -> Option<String> {
-    None
 }
 
 fn normalize_daemon_disk_provider_profile(
@@ -76,18 +67,18 @@ where
     let first_attempt = start_thread().await;
     let response = match first_attempt {
         Ok(response) => Ok(response),
-        Err(error) if is_stopping_runtime_race_error(&error) => {
+        Err(error) if is_create_session_runtime_recovery_error(&error) => {
             log::warn!(
-                "[daemon.start_thread] retrying after stopping runtime race for workspace {}: {}",
+                "[daemon.start_thread] retrying after runtime disconnect for workspace {}: {}",
                 workspace_id,
                 error
             );
             ensure_runtime().await?;
             match start_thread().await {
                 Ok(response) => Ok(response),
-                Err(retry_error) if is_stopping_runtime_race_error(&retry_error) => {
+                Err(retry_error) if is_create_session_runtime_recovery_error(&retry_error) => {
                     log::warn!(
-                        "[daemon.start_thread] stopping runtime race retry exhausted for workspace {}: {}",
+                        "[daemon.start_thread] runtime disconnect retry exhausted for workspace {}: {}",
                         workspace_id,
                         retry_error
                     );
@@ -112,7 +103,7 @@ use codex_local_threads::{
     CODEX_DAEMON_LOCAL_THREAD_LIST_PARTIAL_SOURCE, CODEX_DAEMON_LOCAL_THREAD_LIST_TIMEOUT_MS,
 };
 use runtime_helpers::{
-    create_session_runtime_recovering_error, is_stopping_runtime_race_error,
+    create_session_runtime_recovering_error, is_create_session_runtime_recovery_error,
     is_valid_claude_model_for_passthrough,
 };
 
@@ -172,8 +163,17 @@ impl DaemonState {
     pub(super) fn load(config: &DaemonConfig, event_sink: DaemonEventSink) -> Self {
         let storage_path = config.data_dir.join("workspaces.json");
         let settings_path = config.data_dir.join("settings.json");
-        let workspaces = read_workspaces(&storage_path).unwrap_or_default();
-        let app_settings = read_settings(&settings_path).unwrap_or_default();
+        let workspaces = read_workspaces(&storage_path).unwrap_or_else(|error| {
+            // Quarantine the corrupted file first so a later save never destroys it.
+            let _ = backup_corrupted_file(&storage_path, &error);
+            HashMap::new()
+        });
+        let app_settings = read_settings(&settings_path).unwrap_or_else(|error| {
+            // Quarantine the corrupted file first so a later save never destroys it.
+            // The daemon has no UI surface, so no recovery notice is recorded here.
+            let _ = backup_corrupted_file(&settings_path, &error);
+            AppSettings::default()
+        });
         let active_engine = resolve_supported_daemon_active_engine(
             &app_settings,
             app_settings.default_engine.as_deref(),
@@ -652,6 +652,19 @@ impl DaemonState {
         crate::codex::run_kimi_doctor_with_settings(kimi_bin, &settings).await
     }
 
+    pub(super) async fn grok_doctor(&self, grok_bin: Option<String>) -> Result<Value, String> {
+        let settings = self.app_settings.lock().await.clone();
+        crate::codex::run_grok_doctor_with_settings(grok_bin, &settings).await
+    }
+
+    pub(super) async fn opencode_doctor(
+        &self,
+        opencode_bin: Option<String>,
+    ) -> Result<Value, String> {
+        let settings = self.app_settings.lock().await.clone();
+        crate::codex::run_opencode_doctor_with_settings(opencode_bin, &settings).await
+    }
+
     pub(super) async fn cli_install_plan(
         &self,
         engine: crate::codex_installer::CliInstallEngine,
@@ -863,13 +876,24 @@ impl DaemonState {
                 },
             )
             .await;
+        self.engine_manager
+            .set_engine_config(
+                engine::EngineType::OpenCode,
+                engine::EngineConfig {
+                    bin_path: settings.opencode_bin.clone(),
+                    home_dir: None,
+                    custom_args: None,
+                    default_model: None,
+                },
+            )
+            .await;
     }
 
     pub(super) async fn detect_engines(&self) -> Vec<engine::EngineStatus> {
         self.sync_engine_configs().await;
         let settings = self.app_settings.lock().await.clone();
         self.engine_manager
-            .detect_engines_with_gates(settings.gemini_enabled, settings.opencode_enabled)
+            .detect_engines_with_gates(settings.gemini_enabled)
             .await
     }
 
@@ -890,7 +914,7 @@ impl DaemonState {
         }
         let statuses = self
             .engine_manager
-            .detect_engines_with_gates(settings.gemini_enabled, settings.opencode_enabled)
+            .detect_engines_with_gates(settings.gemini_enabled)
             .await;
         let installed = statuses
             .iter()
@@ -916,7 +940,7 @@ impl DaemonState {
         let settings = self.app_settings.lock().await.clone();
         let statuses = self
             .engine_manager
-            .detect_engines_with_gates(settings.gemini_enabled, settings.opencode_enabled)
+            .detect_engines_with_gates(settings.gemini_enabled)
             .await;
         statuses
             .into_iter()
@@ -926,10 +950,16 @@ impl DaemonState {
     pub(super) async fn get_engine_models(
         &self,
         engine_type: engine::EngineType,
-    ) -> Vec<engine::ModelInfo> {
+        provider_profile_id: Option<&str>,
+    ) -> Result<Vec<engine::ModelInfo>, String> {
         let settings = self.app_settings.lock().await.clone();
         if !engine::engine_enabled_in_settings(&settings, engine_type) {
-            return Vec::new();
+            return Ok(Vec::new());
+        }
+        if let Some(models) =
+            engine::status::get_provider_scoped_engine_models(engine_type, provider_profile_id)?
+        {
+            return Ok(models);
         }
         match engine_type {
             engine::EngineType::OpenCode => {
@@ -946,19 +976,20 @@ impl DaemonState {
                     .unwrap_or_default();
 
                 if !fresh_models.is_empty() {
-                    return fresh_models;
+                    return Ok(fresh_models);
                 }
 
-                self.get_engine_status(engine_type)
+                Ok(self
+                    .get_engine_status(engine_type)
                     .await
                     .map(|status| status.models)
-                    .unwrap_or_default()
+                    .unwrap_or_default())
             }
-            _ => self
+            _ => Ok(self
                 .get_engine_status(engine_type)
                 .await
                 .map(|status| status.models)
-                .unwrap_or_default(),
+                .unwrap_or_default()),
         }
     }
 
@@ -1017,6 +1048,7 @@ impl DaemonState {
         fork_session_id: Option<String>,
         agent: Option<String>,
         variant: Option<String>,
+        provider_profile_id: Option<String>,
         custom_spec_root: Option<String>,
         auto_session: Option<session_management::AutoSessionMetadata>,
     ) -> Result<Value, String> {
@@ -1047,10 +1079,30 @@ impl DaemonState {
                 .await
             }
             engine::EngineType::Claude => {
+                let provider_binding_lookup_session_id = session_id
+                    .as_deref()
+                    .or(thread_id.as_deref())
+                    .map(str::to_string);
+                let effective_provider_profile_id =
+                    session_management::resolve_engine_provider_profile_id(
+                        self.storage_path.as_path(),
+                        &workspace_id,
+                        provider_binding_lookup_session_id.as_deref(),
+                        "claude",
+                        provider_profile_id.as_deref(),
+                    )?;
+                let provider_launch_profile =
+                    engine::claude::resolve_claude_provider_launch_profile(
+                        effective_provider_profile_id.as_deref(),
+                    )?;
                 let workspace_path = self.workspace_path_for_engine(&workspace_id).await?;
                 let session = self
                     .engine_manager
-                    .get_claude_session(&workspace_id, &workspace_path)
+                    .get_claude_session_for_provider(
+                        &workspace_id,
+                        &workspace_path,
+                        effective_provider_profile_id.as_deref(),
+                    )
                     .await;
                 let has_images = images
                     .as_ref()
@@ -1107,6 +1159,23 @@ impl DaemonState {
                 });
 
                 let response_session_id = resolved_session_id.clone();
+                if let Some(provider_launch_profile) = provider_launch_profile.as_ref() {
+                    let binding_session_id = response_session_id
+                        .as_deref()
+                        .or(provider_binding_lookup_session_id.as_deref())
+                        .ok_or_else(|| {
+                            "Claude provider binding requires a session identity".to_string()
+                        })?;
+                    session_management::record_engine_provider_binding_core(
+                        &self.workspaces,
+                        self.storage_path.as_path(),
+                        workspace_id.clone(),
+                        binding_session_id.to_string(),
+                        "claude".to_string(),
+                        provider_launch_profile.binding.clone(),
+                    )
+                    .await?;
+                }
                 let params = engine::SendMessageParams {
                     text,
                     model: sanitized_model,
@@ -1130,21 +1199,26 @@ impl DaemonState {
 
                 let mut receiver = session.subscribe();
                 let event_sink = self.event_sink.clone();
+                let agent_event_bus = self.engine_manager.agent_event_bus();
                 let mut current_thread_id = thread_id.clone();
                 let assistant_item_id_clone = assistant_item_id.clone();
                 let reasoning_item_id_clone = reasoning_item_id.clone();
                 let turn_id_for_forwarder = turn_id.clone();
                 let mut accumulated_agent_text = String::new();
+                let provider_binding_for_forwarder = provider_launch_profile
+                    .as_ref()
+                    .map(|profile| profile.binding.clone());
+                let provider_binding_storage_path = self.storage_path.clone();
+                let provider_binding_workspace_id = workspace_id.clone();
                 tokio::spawn(async move {
-                    let deadline = tokio::time::Instant::now()
-                        + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
                     let mut post_completion_grace_deadline: Option<tokio::time::Instant> = None;
                     loop {
-                        let active_deadline = post_completion_grace_deadline
-                            .map(|grace| if grace < deadline { grace } else { deadline })
-                            .unwrap_or(deadline);
                         let recv_result =
-                            tokio::time::timeout_at(active_deadline, receiver.recv()).await;
+                            if let Some(grace_deadline) = post_completion_grace_deadline {
+                                tokio::time::timeout_at(grace_deadline, receiver.recv()).await
+                            } else {
+                                Ok(receiver.recv().await)
+                            };
                         let turn_event = match recv_result {
                             Ok(Ok(event)) => event,
                             Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
@@ -1167,9 +1241,36 @@ impl DaemonState {
                                 } if context_usage_source.as_deref() == Some("context_command")
                             );
                         let event = turn_event.event;
+                        agent_event_bus.publish_engine_event(
+                            engine::EngineType::Claude,
+                            &current_thread_id,
+                            None,
+                            &turn_id_for_forwarder,
+                            Some(&turn_id_for_forwarder),
+                            &event,
+                        );
                         let is_terminal = event.is_terminal();
                         let is_turn_completed =
                             matches!(event, engine::events::EngineEvent::TurnCompleted { .. });
+                        if let (
+                            Some(binding),
+                            engine::events::EngineEvent::SessionStarted {
+                                session_id,
+                                engine: engine::EngineType::Claude,
+                                ..
+                            },
+                        ) = (provider_binding_for_forwarder.as_ref(), &event)
+                        {
+                            if !session_id.is_empty() && session_id != "pending" {
+                                session_management::schedule_engine_provider_binding_record(
+                                    provider_binding_storage_path.clone(),
+                                    provider_binding_workspace_id.clone(),
+                                    session_id.clone(),
+                                    "claude".to_string(),
+                                    binding.clone(),
+                                );
+                            }
+                        }
 
                         if let engine::events::EngineEvent::TextDelta { text, .. } = &event {
                             accumulated_agent_text.push_str(text);
@@ -1202,6 +1303,7 @@ impl DaemonState {
                             }
                         }
 
+                        // Frontend compatibility sink: projection happens only after private bus ingress.
                         if let Some(payload) =
                             engine::events::engine_event_to_app_server_event_with_turn_context(
                                 &event,
@@ -1237,6 +1339,9 @@ impl DaemonState {
                                     engine::EngineType::Kimi => {
                                         current_thread_id = format!("kimi:{}", session_id);
                                     }
+                                    engine::EngineType::Grok => {
+                                        current_thread_id = format!("grok:{}", session_id);
+                                    }
                                     engine::EngineType::Codex => {}
                                 }
                             }
@@ -1263,21 +1368,24 @@ impl DaemonState {
                 let session_clone = session.clone();
                 let turn_id_clone = turn_id.clone();
                 let settings_for_send = settings.clone();
+                let provider_env = provider_launch_profile.map(|profile| profile.env);
                 tokio::spawn(async move {
                     let send_result = if has_images {
                         session_clone
-                            .send_message_with_app_settings(
+                            .send_message_with_app_settings_and_provider_env(
                                 params,
                                 &turn_id_clone,
                                 Some(&settings_for_send),
+                                provider_env.as_ref(),
                             )
                             .await
                     } else {
                         session_clone
-                            .send_message_with_auto_compact_retry_with_app_settings(
+                            .send_message_with_auto_compact_retry_with_launch_context(
                                 params,
                                 &turn_id_clone,
                                 Some(&settings_for_send),
+                                provider_env.as_ref(),
                             )
                             .await
                     };
@@ -1313,9 +1421,31 @@ impl DaemonState {
             }
             engine::EngineType::OpenCode => {
                 let workspace_path = self.workspace_path_for_engine(&workspace_id).await?;
+                let provider_binding_lookup_session_id = session_id
+                    .as_deref()
+                    .or(thread_id.as_deref())
+                    .map(str::to_string);
+                let effective_provider_profile_id =
+                    session_management::resolve_engine_provider_profile_id(
+                        self.storage_path.as_path(),
+                        &workspace_id,
+                        provider_binding_lookup_session_id.as_deref(),
+                        "opencode",
+                        provider_profile_id.as_deref(),
+                    )?;
+                let provider_launch_profile =
+                    engine::opencode_provider_profile::resolve_opencode_provider_launch_profile(
+                        &workspace_id,
+                        effective_provider_profile_id.as_deref(),
+                    )?;
                 let session = self
                     .engine_manager
-                    .get_or_create_opencode_session(&workspace_id, &workspace_path)
+                    .get_or_create_opencode_session_for_runtime(
+                        &workspace_id,
+                        &workspace_path,
+                        &provider_launch_profile.runtime_key,
+                        provider_launch_profile.config_content.clone(),
+                    )
                     .await;
                 let resolved_session_id = if continue_session {
                     if session_id.is_some() {
@@ -1344,8 +1474,18 @@ impl DaemonState {
                         model
                     );
                 }
-                let model_for_send =
-                    sanitized_model.or_else(|| Some("openai/gpt-5.3-codex".to_string()));
+                // Always pass an explicit --model: a broken default model in
+                // the user's opencode.json must not fail GUI turns. Managed
+                // providers resolve through the injected `ccgui/<model>` refs.
+                let model_for_send = if provider_launch_profile.binding.is_some() {
+                    sanitized_model
+                        .or_else(|| provider_launch_profile.default_model.clone())
+                        .map(|value| {
+                            engine::opencode_provider_profile::qualify_managed_model_ref(&value)
+                        })
+                } else {
+                    sanitized_model.or_else(|| Some("opencode/big-pickle".to_string()))
+                };
                 let params = engine::SendMessageParams {
                     text,
                     model: model_for_send,
@@ -1364,31 +1504,51 @@ impl DaemonState {
 
                 let turn_id = format!("opencode-turn-{}", uuid::Uuid::new_v4());
                 let thread_id = thread_id.unwrap_or_else(|| turn_id.clone());
+                let binding_session_id = response_session_id
+                    .as_deref()
+                    .or(provider_binding_lookup_session_id.as_deref())
+                    .unwrap_or(thread_id.as_str());
+                if let Some(binding) = provider_launch_profile.binding.as_ref() {
+                    session_management::record_engine_provider_binding_core(
+                        &self.workspaces,
+                        self.storage_path.as_path(),
+                        workspace_id.clone(),
+                        binding_session_id.to_string(),
+                        "opencode".to_string(),
+                        binding.clone(),
+                    )
+                    .await?;
+                }
                 let item_id = format!("opencode-item-{}", uuid::Uuid::new_v4());
 
                 let mut receiver = session.subscribe();
                 let event_sink = self.event_sink.clone();
+                let agent_event_bus = self.engine_manager.agent_event_bus();
                 let mut current_thread_id = thread_id.clone();
                 let item_id_clone = item_id.clone();
                 let turn_id_for_forwarder = turn_id.clone();
                 tokio::spawn(async move {
-                    let deadline = tokio::time::Instant::now()
-                        + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
                     loop {
-                        let recv_result = tokio::time::timeout_at(deadline, receiver.recv()).await;
-                        let turn_event = match recv_result {
-                            Ok(Ok(event)) => event,
-                            Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
-                            Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(_))) => {
+                        let turn_event = match receiver.recv().await {
+                            Ok(event) => event,
+                            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
                                 continue;
                             }
-                            Err(_) => break,
                         };
                         if turn_event.turn_id != turn_id_for_forwarder {
                             continue;
                         }
 
                         let event = turn_event.event;
+                        agent_event_bus.publish_engine_event(
+                            engine::EngineType::OpenCode,
+                            &current_thread_id,
+                            None,
+                            &turn_id_for_forwarder,
+                            Some(&turn_id_for_forwarder),
+                            &event,
+                        );
                         let is_terminal = event.is_terminal();
 
                         if let Some(payload) =
@@ -1509,21 +1669,21 @@ impl DaemonState {
 
                 let mut receiver = session.subscribe();
                 let event_sink = self.event_sink.clone();
+                let agent_event_bus = self.engine_manager.agent_event_bus();
                 let mut current_thread_id = thread_id.clone();
                 let item_id_clone = item_id.clone();
                 let turn_id_for_forwarder = turn_id.clone();
                 let mut accumulated_agent_text = String::new();
                 tokio::spawn(async move {
-                    let deadline = tokio::time::Instant::now()
-                        + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
                     let mut render_state = GeminiRenderRoutingState::default();
                     let mut post_completion_grace_deadline: Option<tokio::time::Instant> = None;
                     loop {
-                        let active_deadline = post_completion_grace_deadline
-                            .map(|grace| if grace < deadline { grace } else { deadline })
-                            .unwrap_or(deadline);
                         let recv_result =
-                            tokio::time::timeout_at(active_deadline, receiver.recv()).await;
+                            if let Some(grace_deadline) = post_completion_grace_deadline {
+                                tokio::time::timeout_at(grace_deadline, receiver.recv()).await
+                            } else {
+                                Ok(receiver.recv().await)
+                            };
                         let turn_event = match recv_result {
                             Ok(Ok(event)) => event,
                             Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
@@ -1537,6 +1697,14 @@ impl DaemonState {
                         }
 
                         let event = turn_event.event;
+                        agent_event_bus.publish_engine_event(
+                            engine::EngineType::Gemini,
+                            &current_thread_id,
+                            None,
+                            &turn_id_for_forwarder,
+                            Some(&turn_id_for_forwarder),
+                            &event,
+                        );
                         let is_terminal = event.is_terminal();
                         let render_lane = match &event {
                             engine::events::EngineEvent::TextDelta { .. } => GeminiRenderLane::Text,
@@ -1661,9 +1829,31 @@ impl DaemonState {
             }
             engine::EngineType::Kimi => {
                 let workspace_path = self.workspace_path_for_engine(&workspace_id).await?;
+                let provider_binding_lookup_session_id = session_id
+                    .as_deref()
+                    .or(thread_id.as_deref())
+                    .map(str::to_string);
+                let effective_provider_profile_id =
+                    session_management::resolve_engine_provider_profile_id(
+                        self.storage_path.as_path(),
+                        &workspace_id,
+                        provider_binding_lookup_session_id.as_deref(),
+                        "kimi",
+                        provider_profile_id.as_deref(),
+                    )?;
+                let provider_launch_profile =
+                    engine::kimi_provider_profile::resolve_kimi_provider_launch_profile(
+                        &workspace_id,
+                        effective_provider_profile_id.as_deref(),
+                    )?;
                 let session = self
                     .engine_manager
-                    .get_or_create_kimi_session(&workspace_id, &workspace_path)
+                    .get_or_create_kimi_session_for_runtime(
+                        &workspace_id,
+                        &workspace_path,
+                        &provider_launch_profile.runtime_key,
+                        provider_launch_profile.home_dir.as_deref(),
+                    )
                     .await;
                 let resolved_session_id = resolve_kimi_session_id_for_engine_send(
                     continue_session,
@@ -1695,34 +1885,76 @@ impl DaemonState {
 
                 let turn_id = format!("kimi-turn-{}", uuid::Uuid::new_v4());
                 let thread_id = thread_id.unwrap_or_else(|| turn_id.clone());
+                let binding_session_id = response_session_id
+                    .as_deref()
+                    .or(provider_binding_lookup_session_id.as_deref())
+                    .unwrap_or(thread_id.as_str());
+                if let Some(binding) = provider_launch_profile.binding.as_ref() {
+                    session_management::record_engine_provider_binding_core(
+                        &self.workspaces,
+                        self.storage_path.as_path(),
+                        workspace_id.clone(),
+                        binding_session_id.to_string(),
+                        "kimi".to_string(),
+                        binding.clone(),
+                    )
+                    .await?;
+                }
                 let item_id = format!("kimi-item-{}", uuid::Uuid::new_v4());
 
                 let mut receiver = session.subscribe();
                 let event_sink = self.event_sink.clone();
+                let agent_event_bus = self.engine_manager.agent_event_bus();
                 let mut current_thread_id = thread_id.clone();
                 let item_id_clone = item_id.clone();
                 let turn_id_for_forwarder = turn_id.clone();
                 let mut accumulated_agent_text = String::new();
+                let provider_binding_for_forwarder = provider_launch_profile.binding.clone();
+                let provider_binding_storage_path = self.storage_path.clone();
+                let provider_binding_workspace_id = workspace_id.clone();
                 tokio::spawn(async move {
-                    let deadline = tokio::time::Instant::now()
-                        + std::time::Duration::from_secs(EVENT_FORWARDER_TIMEOUT_SECS);
                     let mut render_state = GeminiRenderRoutingState::default();
                     loop {
-                        let recv_result = tokio::time::timeout_at(deadline, receiver.recv()).await;
-                        let turn_event = match recv_result {
-                            Ok(Ok(event)) => event,
-                            Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
-                            Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(_))) => {
+                        let turn_event = match receiver.recv().await {
+                            Ok(event) => event,
+                            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
                                 continue;
                             }
-                            Err(_) => break,
                         };
                         if turn_event.turn_id != turn_id_for_forwarder {
                             continue;
                         }
 
                         let event = turn_event.event;
+                        agent_event_bus.publish_engine_event(
+                            engine::EngineType::Kimi,
+                            &current_thread_id,
+                            None,
+                            &turn_id_for_forwarder,
+                            Some(&turn_id_for_forwarder),
+                            &event,
+                        );
                         let is_terminal = event.is_terminal();
+                        if let (
+                            Some(binding),
+                            engine::events::EngineEvent::SessionStarted {
+                                session_id,
+                                engine: engine::EngineType::Kimi,
+                                ..
+                            },
+                        ) = (provider_binding_for_forwarder.as_ref(), &event)
+                        {
+                            if !session_id.is_empty() && session_id != "pending" {
+                                session_management::schedule_engine_provider_binding_record(
+                                    provider_binding_storage_path.clone(),
+                                    provider_binding_workspace_id.clone(),
+                                    session_id.clone(),
+                                    "kimi".to_string(),
+                                    binding.clone(),
+                                );
+                            }
+                        }
                         let render_lane = match &event {
                             engine::events::EngineEvent::TextDelta { .. } => GeminiRenderLane::Text,
                             engine::events::EngineEvent::ReasoningDelta { .. } => {
@@ -1822,6 +2054,246 @@ impl DaemonState {
 
                 Ok(json!({
                     "engine": "kimi",
+                    "sessionId": response_session_id,
+                    "result": {
+                        "turn": {
+                            "id": turn_id,
+                            "status": "started",
+                        }
+                    },
+                    "turn": {
+                        "id": turn_id,
+                        "status": "started",
+                    }
+                }))
+            }
+            engine::EngineType::Grok => {
+                let workspace_path = self.workspace_path_for_engine(&workspace_id).await?;
+                let provider_binding_lookup_session_id = session_id
+                    .as_deref()
+                    .or(thread_id.as_deref())
+                    .map(str::to_string);
+                let effective_provider_profile_id =
+                    session_management::resolve_engine_provider_profile_id(
+                        self.storage_path.as_path(),
+                        &workspace_id,
+                        provider_binding_lookup_session_id.as_deref(),
+                        "grok",
+                        provider_profile_id.as_deref(),
+                    )?;
+                let provider_launch_profile =
+                    engine::grok_provider_profile::resolve_grok_provider_launch_profile(
+                        &workspace_id,
+                        effective_provider_profile_id.as_deref(),
+                    )?;
+                let session = self
+                    .engine_manager
+                    .get_or_create_grok_session_for_runtime(
+                        &workspace_id,
+                        &workspace_path,
+                        &provider_launch_profile.runtime_key,
+                        provider_launch_profile.home_dir.as_deref(),
+                    )
+                    .await;
+                let resolved_session_id = resolve_grok_session_id_for_engine_send(
+                    continue_session,
+                    session_id,
+                    session.get_session_id().await,
+                );
+                let response_session_id = resolved_session_id.clone();
+                let sanitized_model = model
+                    .as_ref()
+                    .map(|value| value.trim())
+                    .filter(|value| !value.is_empty())
+                    .map(|value| value.to_string());
+
+                let params = engine::SendMessageParams {
+                    text,
+                    model: sanitized_model,
+                    effort,
+                    disable_thinking: false,
+                    access_mode,
+                    images,
+                    continue_session,
+                    session_id: resolved_session_id,
+                    fork_session_id: None,
+                    agent: None,
+                    variant: None,
+                    collaboration_mode: None,
+                    custom_spec_root: normalized_custom_spec_root.clone(),
+                };
+
+                let turn_id = format!("grok-turn-{}", uuid::Uuid::new_v4());
+                let thread_id = thread_id.unwrap_or_else(|| turn_id.clone());
+                let binding_session_id = response_session_id
+                    .as_deref()
+                    .or(provider_binding_lookup_session_id.as_deref())
+                    .unwrap_or(thread_id.as_str());
+                if let Some(binding) = provider_launch_profile.binding.as_ref() {
+                    session_management::record_engine_provider_binding_core(
+                        &self.workspaces,
+                        self.storage_path.as_path(),
+                        workspace_id.clone(),
+                        binding_session_id.to_string(),
+                        "grok".to_string(),
+                        binding.clone(),
+                    )
+                    .await?;
+                }
+                let item_id = format!("grok-item-{}", uuid::Uuid::new_v4());
+
+                let mut receiver = session.subscribe();
+                let event_sink = self.event_sink.clone();
+                let agent_event_bus = self.engine_manager.agent_event_bus();
+                let mut current_thread_id = thread_id.clone();
+                let item_id_clone = item_id.clone();
+                let turn_id_for_forwarder = turn_id.clone();
+                let mut accumulated_agent_text = String::new();
+                let provider_binding_for_forwarder = provider_launch_profile.binding.clone();
+                let provider_binding_storage_path = self.storage_path.clone();
+                let provider_binding_workspace_id = workspace_id.clone();
+                tokio::spawn(async move {
+                    let mut render_state = GeminiRenderRoutingState::default();
+                    loop {
+                        let turn_event = match receiver.recv().await {
+                            Ok(event) => event,
+                            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                                continue;
+                            }
+                        };
+                        if turn_event.turn_id != turn_id_for_forwarder {
+                            continue;
+                        }
+
+                        let event = turn_event.event;
+                        agent_event_bus.publish_engine_event(
+                            engine::EngineType::Grok,
+                            &current_thread_id,
+                            None,
+                            &turn_id_for_forwarder,
+                            Some(&turn_id_for_forwarder),
+                            &event,
+                        );
+                        let is_terminal = event.is_terminal();
+                        if let (
+                            Some(binding),
+                            engine::events::EngineEvent::SessionStarted {
+                                session_id,
+                                engine: engine::EngineType::Grok,
+                                ..
+                            },
+                        ) = (provider_binding_for_forwarder.as_ref(), &event)
+                        {
+                            if !session_id.is_empty() && session_id != "pending" {
+                                session_management::schedule_engine_provider_binding_record(
+                                    provider_binding_storage_path.clone(),
+                                    provider_binding_workspace_id.clone(),
+                                    session_id.clone(),
+                                    "grok".to_string(),
+                                    binding.clone(),
+                                );
+                            }
+                        }
+                        let render_lane = match &event {
+                            engine::events::EngineEvent::TextDelta { .. } => GeminiRenderLane::Text,
+                            engine::events::EngineEvent::ReasoningDelta { .. } => {
+                                GeminiRenderLane::Reasoning
+                            }
+                            engine::events::EngineEvent::ToolStarted { .. }
+                            | engine::events::EngineEvent::ToolCompleted { .. }
+                            | engine::events::EngineEvent::ToolInputUpdated { .. }
+                            | engine::events::EngineEvent::ToolOutputDelta { .. } => {
+                                GeminiRenderLane::Tool
+                            }
+                            _ => GeminiRenderLane::Other,
+                        };
+                        let routed_item_id = next_gemini_routed_item_id(
+                            &mut render_state,
+                            render_lane,
+                            &item_id_clone,
+                        );
+
+                        if let engine::events::EngineEvent::TextDelta { text, .. } = &event {
+                            render_state.saw_text_delta = true;
+                            accumulated_agent_text.push_str(text);
+                        }
+
+                        if let engine::events::EngineEvent::TurnCompleted { result, .. } = &event {
+                            let fallback_text =
+                                extract_turn_result_text(result.as_ref()).unwrap_or_default();
+                            let completed_text = if accumulated_agent_text.trim().is_empty() {
+                                fallback_text
+                            } else {
+                                accumulated_agent_text.clone()
+                            };
+                            if !completed_text.trim().is_empty() && !render_state.saw_text_delta {
+                                event_sink.emit_app_server_event(AppServerEvent {
+                                    workspace_id: event.workspace_id().to_string(),
+                                    message: json!({
+                                        "method": "item/completed",
+                                        "params": {
+                                            "threadId": &current_thread_id,
+                                            "item": {
+                                                "id": &routed_item_id,
+                                                "type": "agentMessage",
+                                                "text": completed_text,
+                                                "status": "completed",
+                                            }
+                                        }
+                                    }),
+                                });
+                            }
+                        }
+
+                        if let Some(payload) =
+                            engine::events::engine_event_to_app_server_event_with_turn_context(
+                                &event,
+                                &current_thread_id,
+                                &routed_item_id,
+                                Some(&turn_id_for_forwarder),
+                            )
+                        {
+                            event_sink.emit_app_server_event(payload);
+                        }
+
+                        if let engine::events::EngineEvent::SessionStarted {
+                            session_id,
+                            engine,
+                            ..
+                        } = &event
+                        {
+                            if !session_id.is_empty()
+                                && session_id != "pending"
+                                && matches!(engine, engine::EngineType::Grok)
+                            {
+                                current_thread_id = format!("grok:{}", session_id);
+                            }
+                        }
+
+                        if is_terminal {
+                            break;
+                        }
+                    }
+                });
+
+                let session_clone = session.clone();
+                let turn_id_clone = turn_id.clone();
+                tokio::spawn(async move {
+                    if let Err(error) = session_clone.send_message(params, &turn_id_clone).await {
+                        eprintln!("Grok send_message failed: {error}");
+                    }
+                });
+                self.record_auto_session_metadata_if_present(
+                    &workspace_id,
+                    response_session_id.as_deref(),
+                    auto_session,
+                    "grok",
+                )
+                .await;
+
+                Ok(json!({
+                    "engine": "grok",
                     "sessionId": response_session_id,
                     "result": {
                         "turn": {
@@ -1986,7 +2458,7 @@ impl DaemonState {
                         }
                     });
                 let model_for_send =
-                    sanitized_model.or_else(|| Some("openai/gpt-5.3-codex".to_string()));
+                    sanitized_model.or_else(|| Some("opencode/big-pickle".to_string()));
                 let params = engine::SendMessageParams {
                     text,
                     model: model_for_send,
@@ -2137,6 +2609,59 @@ impl DaemonState {
                     "text": response,
                 }))
             }
+            engine::EngineType::Grok => {
+                let workspace_path = self.workspace_path_for_engine(&workspace_id).await?;
+                let session = self
+                    .engine_manager
+                    .get_or_create_grok_session(&workspace_id, &workspace_path)
+                    .await;
+                let resolved_session_id = resolve_grok_session_id_for_engine_send(
+                    continue_session,
+                    session_id,
+                    session.get_session_id().await,
+                );
+                let sanitized_model = model
+                    .as_ref()
+                    .map(|value| value.trim())
+                    .filter(|value| !value.is_empty())
+                    .map(|value| value.to_string());
+
+                let params = engine::SendMessageParams {
+                    text,
+                    model: sanitized_model,
+                    effort,
+                    disable_thinking: false,
+                    access_mode,
+                    images,
+                    continue_session,
+                    session_id: resolved_session_id,
+                    fork_session_id: None,
+                    agent: None,
+                    variant: None,
+                    collaboration_mode: None,
+                    custom_spec_root: normalized_custom_spec_root.clone(),
+                };
+                let turn_id = format!("grok-sync-{}", uuid::Uuid::new_v4());
+                let response = tokio::time::timeout(
+                    std::time::Duration::from_secs(900),
+                    session.send_message(params, &turn_id),
+                )
+                .await
+                .map_err(|_| "Grok response timed out".to_string())??;
+                let response_session_id = session.get_session_id().await;
+                self.record_auto_session_metadata_if_present(
+                    &workspace_id,
+                    response_session_id.as_deref(),
+                    auto_session,
+                    "grok",
+                )
+                .await;
+                Ok(json!({
+                    "engine": "grok",
+                    "sessionId": response_session_id,
+                    "text": response,
+                }))
+            }
         }
     }
 
@@ -2145,26 +2670,16 @@ impl DaemonState {
         let active_engine = self.get_active_engine().await;
         match active_engine {
             engine::EngineType::Claude => {
-                if let Some(session) = self
-                    .engine_manager
+                self.engine_manager
                     .claude_manager
-                    .get_session(&workspace_id)
+                    .interrupt_workspace_sessions(&workspace_id)
                     .await
-                {
-                    session.interrupt().await?;
-                }
-                Ok(())
             }
             engine::EngineType::Codex => Ok(()),
             engine::EngineType::OpenCode => {
-                if let Some(session) = self
-                    .engine_manager
-                    .get_opencode_session(&workspace_id)
+                self.engine_manager
+                    .interrupt_opencode_sessions(&workspace_id, None)
                     .await
-                {
-                    session.interrupt().await?;
-                }
-                Ok(())
             }
             engine::EngineType::Gemini => {
                 if let Some(session) = self.engine_manager.get_gemini_session(&workspace_id).await {
@@ -2173,10 +2688,14 @@ impl DaemonState {
                 Ok(())
             }
             engine::EngineType::Kimi => {
-                if let Some(session) = self.engine_manager.get_kimi_session(&workspace_id).await {
-                    session.interrupt().await?;
-                }
-                Ok(())
+                self.engine_manager
+                    .interrupt_kimi_sessions(&workspace_id, None)
+                    .await
+            }
+            engine::EngineType::Grok => {
+                self.engine_manager
+                    .interrupt_grok_sessions(&workspace_id, None)
+                    .await
             }
         }
     }
@@ -2186,32 +2705,43 @@ impl DaemonState {
         workspace_id: String,
         turn_id: String,
         engine: Option<engine::EngineType>,
+        provider_profile_id: Option<String>,
     ) -> Result<(), String> {
         self.sync_engine_configs().await;
         let active_engine = self.get_active_engine().await;
         let target_engine = engine.unwrap_or(active_engine);
         match target_engine {
             engine::EngineType::Claude => {
-                if let Some(session) = self
-                    .engine_manager
-                    .claude_manager
-                    .get_session(&workspace_id)
-                    .await
-                {
+                let provider_profile_id = provider_profile_id
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty());
+                let session = if provider_profile_id.is_some() {
+                    let provider_session = self
+                        .engine_manager
+                        .claude_manager
+                        .get_session_for_provider(&workspace_id, provider_profile_id)
+                        .await;
+                    match provider_session {
+                        Some(session) if session.has_active_turn(&turn_id).await => Some(session),
+                        _ => None,
+                    }
+                } else {
+                    self.engine_manager
+                        .claude_manager
+                        .session_for_turn(&workspace_id, &turn_id)
+                        .await
+                };
+                if let Some(session) = session {
                     session.interrupt_turn(&turn_id).await?;
                 }
                 Ok(())
             }
             engine::EngineType::Codex => Ok(()),
             engine::EngineType::OpenCode => {
-                if let Some(session) = self
-                    .engine_manager
-                    .get_opencode_session(&workspace_id)
+                self.engine_manager
+                    .interrupt_opencode_sessions(&workspace_id, Some(&turn_id))
                     .await
-                {
-                    session.interrupt_turn(&turn_id).await?;
-                }
-                Ok(())
             }
             engine::EngineType::Gemini => {
                 if let Some(session) = self.engine_manager.get_gemini_session(&workspace_id).await {
@@ -2220,10 +2750,14 @@ impl DaemonState {
                 Ok(())
             }
             engine::EngineType::Kimi => {
-                if let Some(session) = self.engine_manager.get_kimi_session(&workspace_id).await {
-                    session.interrupt_turn(&turn_id).await?;
-                }
-                Ok(())
+                self.engine_manager
+                    .interrupt_kimi_sessions(&workspace_id, Some(&turn_id))
+                    .await
+            }
+            engine::EngineType::Grok => {
+                self.engine_manager
+                    .interrupt_grok_sessions(&workspace_id, Some(&turn_id))
+                    .await
             }
         }
     }
@@ -2756,6 +3290,62 @@ impl DaemonState {
         .await
     }
 
+    pub(super) async fn list_grok_sessions(
+        &self,
+        workspace_path: String,
+        limit: Option<usize>,
+    ) -> Result<Value, String> {
+        let path = PathBuf::from(workspace_path);
+        let config = self
+            .engine_manager
+            .get_engine_config(engine::EngineType::Grok)
+            .await;
+        let sessions = engine::grok_history::list_grok_sessions(
+            &path,
+            limit,
+            config.as_ref().and_then(|item| item.home_dir.as_deref()),
+        )
+        .await?;
+        serde_json::to_value(sessions).map_err(|error| error.to_string())
+    }
+
+    pub(super) async fn load_grok_session(
+        &self,
+        workspace_path: String,
+        session_id: String,
+    ) -> Result<Value, String> {
+        let path = PathBuf::from(workspace_path);
+        let config = self
+            .engine_manager
+            .get_engine_config(engine::EngineType::Grok)
+            .await;
+        let result = engine::grok_history::load_grok_session(
+            &path,
+            &session_id,
+            config.as_ref().and_then(|item| item.home_dir.as_deref()),
+        )
+        .await?;
+        serde_json::to_value(result).map_err(|error| error.to_string())
+    }
+
+    pub(super) async fn delete_grok_session(
+        &self,
+        workspace_path: String,
+        session_id: String,
+    ) -> Result<(), String> {
+        let path = PathBuf::from(workspace_path);
+        let config = self
+            .engine_manager
+            .get_engine_config(engine::EngineType::Grok)
+            .await;
+        engine::grok_history::delete_grok_session(
+            &path,
+            &session_id,
+            config.as_ref().and_then(|item| item.home_dir.as_deref()),
+        )
+        .await
+    }
+
     pub(super) async fn list_mcp_server_status(
         &self,
         workspace_id: String,
@@ -2927,7 +3517,7 @@ impl DaemonState {
             let settings = self.app_settings.lock().await;
             (
                 settings.codex_mode_enforcement_enabled,
-                codex_windows_turn_developer_instructions(&settings),
+                codex_turn_developer_instructions(&settings),
             )
         };
         codex_core::send_user_message_core(
@@ -2954,9 +3544,16 @@ impl DaemonState {
         workspace_id: String,
         thread_id: String,
         turn_id: String,
+        provider_profile_id: Option<String>,
     ) -> Result<Value, String> {
-        codex_core::turn_interrupt_core(&self.sessions, workspace_id, None, thread_id, turn_id)
-            .await
+        codex_core::turn_interrupt_core(
+            &self.sessions,
+            workspace_id,
+            provider_profile_id,
+            thread_id,
+            turn_id,
+        )
+        .await
     }
 
     pub(super) async fn thread_compact(
@@ -2964,6 +3561,12 @@ impl DaemonState {
         workspace_id: String,
         thread_id: String,
     ) -> Result<Value, String> {
+        if thread_id.trim().starts_with("shared:") {
+            return Err(
+                "shared-compaction-route-required: daemon refuses unresolved Shared logical ids"
+                    .to_string(),
+            );
+        }
         if thread_id.trim().starts_with("claude:") {
             return self.compact_claude_thread(workspace_id, thread_id).await;
         }
@@ -3006,6 +3609,18 @@ impl DaemonState {
             }
             Err(error) => Err(error),
         }
+    }
+
+    pub(super) async fn discover_codex_models(
+        &self,
+        workspace_id: String,
+        provider_profile_id: Option<String>,
+    ) -> Result<Value, String> {
+        let provider_profile_id = normalize_daemon_disk_provider_profile(provider_profile_id)?;
+        self.ensure_codex_session_for_workspace(&workspace_id)
+            .await?;
+        codex_core::model_list_for_provider_core(&self.sessions, workspace_id, provider_profile_id)
+            .await
     }
 
     pub(super) async fn collaboration_mode_list(
@@ -3298,10 +3913,31 @@ impl DaemonState {
         workspace_id: String,
         request_id: Value,
         result: Value,
+        provider_profile_id: Option<String>,
     ) -> Result<Value, String> {
+        if request_id.is_string() {
+            for session in self
+                .engine_manager
+                .claude_manager
+                .sessions_for_workspace(&workspace_id)
+                .await
+            {
+                if session.has_pending_user_input(&request_id) {
+                    session.respond_to_user_input(request_id, result).await?;
+                    return Ok(json!({ "ok": true }));
+                }
+                if session.has_pending_approval_request(&request_id) {
+                    session
+                        .respond_to_approval_request(request_id, result)
+                        .await?;
+                    return Ok(json!({ "ok": true }));
+                }
+            }
+        }
         codex_core::respond_to_server_request_core(
             &self.sessions,
             workspace_id,
+            provider_profile_id,
             request_id,
             result,
         )

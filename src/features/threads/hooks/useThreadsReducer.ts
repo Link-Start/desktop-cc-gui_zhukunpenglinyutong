@@ -44,6 +44,7 @@ import {
 import { isOptimisticUserMessageId } from "../utils/queuedHandoffBubble";
 import { isClaudeForkThreadId } from "../utils/claudeForkThread";
 import { resolvePendingThreadIdForSession } from "../utils/threadPendingResolution";
+import { isSameRequestUserInput } from "../../../utils/requestUserInputIdentity";
 import {
   isProcessingGeneratedImageItem,
 } from "../utils/generatedImagePlaceholder";
@@ -59,6 +60,8 @@ import { isSameApprovalRequest } from "./threadReducerApprovalRequests";
 import {
   clearAssistantFinalMetadata,
   shouldPreserveAssistantFinalMetadata,
+  stampLatestFinalAssistantTurnTokens,
+  withAssistantTurnTokenCounts,
 } from "./threadReducerAssistantFinalMetadata";
 import { mergeThreadItemsPreservingOptimisticUsers } from "./threadReducerOptimisticItemMerge";
 import {
@@ -158,22 +161,37 @@ type ThreadProviderBindingFields = Pick<
   | "providerAvailability"
 >;
 
-function normalizeProviderBindingValue(value: string | null | undefined) {
+function normalizeEnsureThreadMetadataValue(value: string | null | undefined) {
   return typeof value === "string" && value.trim().length > 0
     ? value.trim()
+    : undefined;
+}
+
+function parentThreadIdFromEnsureThreadAction(
+  action: Extract<ThreadAction, { type: "ensureThread" }>,
+) {
+  const parentThreadId = normalizeEnsureThreadMetadataValue(action.parentThreadId);
+  return parentThreadId && parentThreadId !== action.threadId
+    ? parentThreadId
     : undefined;
 }
 
 function providerBindingFromEnsureThreadAction(
   action: Extract<ThreadAction, { type: "ensureThread" }>,
 ): Partial<ThreadProviderBindingFields> {
-  const sourceLabel = normalizeProviderBindingValue(action.sourceLabel);
-  const providerProfileId = normalizeProviderBindingValue(action.providerProfileId);
-  const providerProfileSource = normalizeProviderBindingValue(
+  const sourceLabel = normalizeEnsureThreadMetadataValue(action.sourceLabel);
+  const providerProfileId = normalizeEnsureThreadMetadataValue(
+    action.providerProfileId,
+  );
+  const providerProfileSource = normalizeEnsureThreadMetadataValue(
     action.providerProfileSource,
   );
-  const providerProfileName = normalizeProviderBindingValue(action.providerProfileName);
-  const providerAvailability = normalizeProviderBindingValue(action.providerAvailability);
+  const providerProfileName = normalizeEnsureThreadMetadataValue(
+    action.providerProfileName,
+  );
+  const providerAvailability = normalizeEnsureThreadMetadataValue(
+    action.providerAvailability,
+  );
   return {
     ...(sourceLabel ? { sourceLabel } : {}),
     ...(providerProfileId ? { providerProfileId } : {}),
@@ -216,6 +234,17 @@ function conversationItemsShallowEqual(
   left: ConversationItem,
   right: ConversationItem,
 ) {
+  if (left.kind === "message" && right.kind === "message") {
+    const {
+      presentationMetadata: _leftPresentationMetadata,
+      ...leftSourceFields
+    } = left;
+    const {
+      presentationMetadata: _rightPresentationMetadata,
+      ...rightSourceFields
+    } = right;
+    return shallowRecordEqual(leftSourceFields, rightSourceFields);
+  }
   return shallowRecordEqual(
     left as unknown as Record<string, unknown>,
     right as unknown as Record<string, unknown>,
@@ -468,6 +497,8 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         // overwriting explicitly set engines.
         if (
           (!action.engine || existing.engineSource) &&
+          action.name === undefined &&
+          action.parentThreadId === undefined &&
           action.folderId === undefined &&
           action.autoSession === undefined &&
           action.sourceLabel === undefined &&
@@ -478,16 +509,25 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         ) {
           return state;
         }
+        const ensuredName = normalizeEnsureThreadMetadataValue(action.name);
+        const ensuredParentThreadId = parentThreadIdFromEnsureThreadAction(action);
         const providerBindingPatch = providerBindingFromEnsureThreadAction(action);
         const updated = {
           ...existing,
-          engineSource: action.engine ?? existing.engineSource,
+          engineSource: existing.engineSource ?? action.engine,
+          name: ensuredName ?? existing.name,
+          parentThreadId:
+            ensuredParentThreadId && ensuredParentThreadId !== existing.id
+              ? ensuredParentThreadId
+              : existing.parentThreadId,
           folderId: action.folderId ?? existing.folderId,
           autoSession: action.autoSession ?? existing.autoSession ?? null,
           ...providerBindingPatch,
         };
         if (
           updated.engineSource === existing.engineSource &&
+          updated.name === existing.name &&
+          (updated.parentThreadId ?? null) === (existing.parentThreadId ?? null) &&
           updated.folderId === existing.folderId &&
           updated.autoSession === existing.autoSession &&
           providerBindingFieldsEqual(updated, existing)
@@ -511,6 +551,8 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         ? "claude"
         : action.threadId.startsWith("gemini:")
           ? "gemini"
+        : action.threadId.startsWith("grok:")
+          ? "grok"
         : action.threadId.startsWith("kimi:")
           ? "kimi"
         : action.threadId.startsWith("opencode:")
@@ -544,6 +586,10 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
             {
               ...pendingThread,
               id: newThreadId,
+              name:
+                normalizeEnsureThreadMetadataValue(action.name) ?? pendingThread.name,
+              parentThreadId:
+                parentThreadIdFromEnsureThreadAction(action) ?? pendingThread.parentThreadId,
               ...providerBindingFromEnsureThreadAction(action),
             },
             oldThreadId,
@@ -643,14 +689,16 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       const fallbackName = action.threadId.startsWith("claude:")
         ? "Claude Session"
         : `Agent ${list.length + 1}`;
+      const parentThreadId = parentThreadIdFromEnsureThreadAction(action);
       const thread: ThreadSummary = {
         id: action.threadId,
-        name: fallbackName,
+        name: normalizeEnsureThreadMetadataValue(action.name) ?? fallbackName,
         // 新建会话以当前时间戳排序，使其出现在列表顶部而非底部（updatedAt: 0 会被排到最旧）
         updatedAt: Date.now(),
         engineSource: action.engine,
         folderId: action.folderId ?? null,
         autoSession: action.autoSession ?? null,
+        ...(parentThreadId ? { parentThreadId } : {}),
         ...providerBindingFromEnsureThreadAction(action),
       };
       return {
@@ -1141,6 +1189,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         kind: "message",
         role: "assistant",
         text: action.text,
+        ...(action.executionTargetSnapshot
+          ? { executionTargetSnapshot: action.executionTargetSnapshot }
+          : {}),
       };
       return {
         ...state,
@@ -1821,20 +1872,26 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         typeof latestAssistant.finalDurationMs === "number"
           ? Math.max(0, latestAssistant.finalDurationMs)
           : derivedDuration;
+      const withTokens = withAssistantTurnTokenCounts(
+        {
+          ...latestAssistant,
+          isFinal: true,
+          finalCompletedAt: completedAt,
+          ...(durationMs !== null ? { finalDurationMs: durationMs } : {}),
+        },
+        state.tokenUsageByThread[action.threadId],
+      );
       const shouldUpdate =
         latestAssistant.isFinal !== true ||
         latestAssistant.finalCompletedAt !== completedAt ||
-        latestAssistant.finalDurationMs !== durationMs;
+        latestAssistant.finalDurationMs !== durationMs ||
+        latestAssistant.finalInputTokens !== withTokens.finalInputTokens ||
+        latestAssistant.finalOutputTokens !== withTokens.finalOutputTokens;
       if (!shouldUpdate) {
         return state;
       }
       const next = [...list];
-      next[latestAssistantIndex] = {
-        ...latestAssistant,
-        isFinal: true,
-        finalCompletedAt: completedAt,
-        ...(durationMs !== null ? { finalDurationMs: durationMs } : {}),
-      };
+      next[latestAssistantIndex] = withTokens;
       return {
         ...state,
         itemsByThread: {
@@ -2278,9 +2335,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       };
     case "addUserInputRequest": {
       const exists = state.userInputRequests.some(
-        (item) =>
-          item.request_id === action.request.request_id &&
-          item.workspace_id === action.request.workspace_id,
+        (item) => isSameRequestUserInput(item, action.request),
       );
       if (exists) {
         return state;
@@ -2295,8 +2350,17 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         ...state,
         userInputRequests: state.userInputRequests.filter(
           (item) =>
-            item.request_id !== action.requestId ||
-            item.workspace_id !== action.workspaceId,
+            action.request
+              ? !isSameRequestUserInput(item, action.request)
+              : action.sharedRuntimeOwner
+                ? item.request_id !== action.requestId ||
+                  item.workspace_id !== action.workspaceId ||
+                  item.shared_runtime_owner?.providerRuntimeKey !==
+                    action.sharedRuntimeOwner.providerRuntimeKey ||
+                  item.shared_runtime_owner?.attemptId !==
+                    action.sharedRuntimeOwner.attemptId
+              : item.request_id !== action.requestId ||
+                item.workspace_id !== action.workspaceId,
         ),
       };
     case "clearUserInputRequestsForThread":
@@ -2370,13 +2434,26 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
             const selectedEngine = thread.selectedEngine || existing.selectedEngine;
             const nativeThreadIds = thread.nativeThreadIds || existing.nativeThreadIds;
             const autoSession = thread.autoSession ?? existing.autoSession ?? null;
-            const name = shouldPreferExistingThreadName(existing.name, thread.name)
+            const incomingParentThreadId =
+              thread.parentThreadId && thread.parentThreadId !== thread.id
+                ? thread.parentThreadId
+                : null;
+            const existingParentThreadId =
+              existing.parentThreadId && existing.parentThreadId !== existing.id
+                ? existing.parentThreadId
+                : null;
+            const name = shouldPreferExistingThreadName(
+              existing.name,
+              thread.name,
+            )
               ? existing.name
               : thread.name;
             return mergeProviderBindingFields(
               {
                 ...thread,
                 name,
+                parentThreadId:
+                  incomingParentThreadId ?? existingParentThreadId ?? null,
                 engineSource,
                 threadKind,
                 selectedEngine,
@@ -2554,7 +2631,13 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       const shouldClearCompletedCompaction =
         existingStatus.codexCompactionLifecycleState === "completed" &&
         usageSnapshotChanged;
-      if (!usageSnapshotChanged && !shouldClearCompletedCompaction) {
+      const existingItems = state.itemsByThread[action.threadId] ?? [];
+      const nextItems = stampLatestFinalAssistantTurnTokens(
+        existingItems,
+        action.tokenUsage,
+      );
+      const itemsChanged = nextItems !== existingItems;
+      if (!usageSnapshotChanged && !shouldClearCompletedCompaction && !itemsChanged) {
         return state;
       }
       const tokenUsageUpdatedAt = usageSnapshotChanged
@@ -2566,6 +2649,14 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           ...state.tokenUsageByThread,
           [action.threadId]: action.tokenUsage,
         },
+        ...(itemsChanged
+          ? {
+              itemsByThread: {
+                ...state.itemsByThread,
+                [action.threadId]: nextItems,
+              },
+            }
+          : {}),
         threadStatusById: {
           ...state.threadStatusById,
           [action.threadId]: {
@@ -2738,32 +2829,38 @@ function applyCompleteAgentMessageToState(
     const nextBase = keepFinalMetadata
       ? existingItem
       : clearAssistantFinalMetadata(existingItem);
-    computedCompletedItem = {
-      ...nextBase,
-      id: targetItemId,
-      text: mergeCompletedAgentText(
-        existingItem.text,
-        params.text,
-        true,
-      ),
-      isFinal: true,
-      finalCompletedAt: nextBase.finalCompletedAt ?? completedAt,
-      ...(typeof nextBase.finalDurationMs === "number"
-        ? { finalDurationMs: nextBase.finalDurationMs }
-        : derivedDuration !== null
-          ? { finalDurationMs: derivedDuration }
-          : {}),
-    };
+    computedCompletedItem = withAssistantTurnTokenCounts(
+      {
+        ...nextBase,
+        id: targetItemId,
+        text: mergeCompletedAgentText(
+          existingItem.text,
+          params.text,
+          true,
+        ),
+        isFinal: true,
+        finalCompletedAt: nextBase.finalCompletedAt ?? completedAt,
+        ...(typeof nextBase.finalDurationMs === "number"
+          ? { finalDurationMs: nextBase.finalDurationMs }
+          : derivedDuration !== null
+            ? { finalDurationMs: derivedDuration }
+            : {}),
+      },
+      state.tokenUsageByThread[params.threadId],
+    );
   } else {
-    computedCompletedItem = {
-      id: targetItemId,
-      kind: "message",
-      role: "assistant",
-      text: params.text,
-      isFinal: true,
-      finalCompletedAt: completedAt,
-      ...(derivedDuration !== null ? { finalDurationMs: derivedDuration } : {}),
-    };
+    computedCompletedItem = withAssistantTurnTokenCounts(
+      {
+        id: targetItemId,
+        kind: "message",
+        role: "assistant",
+        text: params.text,
+        isFinal: true,
+        finalCompletedAt: completedAt,
+        ...(derivedDuration !== null ? { finalDurationMs: derivedDuration } : {}),
+      },
+      state.tokenUsageByThread[params.threadId],
+    );
   }
   if (
     INCREMENTAL_DERIVATION_ENABLED &&

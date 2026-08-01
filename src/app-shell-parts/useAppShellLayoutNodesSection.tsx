@@ -4,6 +4,8 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { useLayoutNodes } from "../features/layout/hooks/useLayoutNodes";
 import { useMainHeaderActionItems } from "../features/app/components/MainHeaderActions";
 import { useExitedSessionVisibility } from "../features/app/hooks/useExitedSessionVisibility";
+import { useModuleViewShortcuts } from "../features/app/hooks/useModuleViewShortcuts";
+import { GIT_GRAPH_TAB_ID } from "../features/git-history/types";
 import { WorkspaceAliasPrompt } from "../features/workspaces/components/WorkspaceAliasPrompt";
 import { useClientUiVisibility } from "../features/client-ui-visibility/hooks/useClientUiVisibility";
 import { useProjectMapDataset } from "../features/project-map/hooks/useProjectMapDataset";
@@ -16,7 +18,6 @@ import type {
   IntentCanvasDocument,
   IntentCanvasOpenRequest,
 } from "../features/intent-canvas/types";
-import { normalizeSharedSessionEngine } from "../features/shared-session/utils/sharedSessionEngines";
 import {
   recoverThreadBindingAndResendForManualRecovery,
   recoverThreadBindingForManualRecovery,
@@ -29,6 +30,21 @@ import type {
   GitHubPullRequest,
   GitLogEntry,
 } from "../types";
+import type { QuickSwitcherNavigationId } from "../features/quick-switcher/types";
+import {
+  computeQuickSwitcherActiveNavigationIds,
+  isQuickSwitcherFilesActive,
+  isQuickSwitcherGitActive,
+  isQuickSwitcherGlobalSearchActive,
+  isQuickSwitcherIntentCanvasActive,
+  isQuickSwitcherKanbanActive,
+  isQuickSwitcherMemoryActive,
+  isQuickSwitcherNotesActive,
+  isQuickSwitcherProjectMapActive,
+  isQuickSwitcherSettingsActive,
+  pushQuickSwitcherSelectWorkspaceToast,
+  type QuickSwitcherNavigationState,
+} from "./quickSwitcherNavigationState";
 import {
   archiveWorkspaceSessions,
   clearDetachedExternalChangeMonitor,
@@ -180,7 +196,6 @@ export function useAppShellLayoutNodesSection(
     activeEngine,
     activeFusingMessageId,
     fileCompareSession,
-    fileHistoryTarget,
     activeGitRoot,
     activeImages,
     activeItems,
@@ -232,11 +247,13 @@ export function useAppShellLayoutNodesSection(
     clearDictationError,
     clearDictationHint,
     clearDictationTranscript,
+    closeQuickSwitcher,
     closePlanPanel,
     closeReviewPrompt,
     closeSettings,
     collaborationModes,
     collaborationModesEnabled,
+    collapseRightPanel,
     collapseSidebar,
     commands,
     commitError,
@@ -342,6 +359,7 @@ export function useAppShellLayoutNodesSection(
     handleCheckoutBranch,
     handleCloseAllWorkspaceFileTabs,
     handleCloseWorkspaceFileTab,
+    handleCloseOtherWorkspaceFileTabs,
     handleReorderWorkspaceFileTabs,
     handleCommit,
     handleCommitAndPush,
@@ -353,6 +371,9 @@ export function useAppShellLayoutNodesSection(
     handleCopyThread,
     handleCreateBranch,
     handleUpdateBranch,
+    handleUpdateAllRepositories,
+    handleCheckoutAllRepositories,
+    handleLoadCommonRepositoryBranches,
     handleCreatePrompt,
     handleDebugClick,
     handleDeletePrompt,
@@ -365,7 +386,6 @@ export function useAppShellLayoutNodesSection(
     handleGenerateCommitMessage,
     handleGitPanelModeChange,
     handleInsertComposerText,
-    handleDispatchOrchestrationTask,
     handleLockPanel,
     handleMovePrompt,
     handleOpenComposerKanbanPanel,
@@ -374,12 +394,13 @@ export function useAppShellLayoutNodesSection(
     handleOpenScratchFileCompare,
     handleCloseFileCompare,
     handleOpenFileHistory,
-    handleCloseFileHistory,
+    handleActivateGitHistoryTab,
     handleOpenHomeChat,
     handleOpenModelSettings,
     handleRefreshModelConfig,
     handleOpenSearchPalette,
     handleOpenSpecHub,
+    handleQuickSwitcherNavigate: handleBaseQuickSwitcherNavigate,
     handleOpenClientDocumentation,
     handleResolvedClaudeThinkingVisibleChange,
     handleOpenWorkspaceFile,
@@ -403,7 +424,6 @@ export function useAppShellLayoutNodesSection(
     handleSelectOpenCodeAgent,
     handleSelectOpenCodeVariant,
     handleSelectPullRequest,
-    handleSelectWorkspaceInstance,
     handleSendPrompt,
     handleSendPromptToNewAgent,
     handleSelectStatusPanelSubagent,
@@ -417,6 +437,7 @@ export function useAppShellLayoutNodesSection(
     handleSync,
     handleToggleDictation,
     handleToggleRuntimeConsole,
+    handleToggleSearchPalette,
     handleToggleTerminalPanel,
     handleUnstageGitFile,
     handleUpdatePrompt,
@@ -437,19 +458,18 @@ export function useAppShellLayoutNodesSection(
     isDeleteThreadPromptBusy,
     isEditorFileMaximized,
     isFilesLoading,
-    isLoadingLatestAgents,
     isModelConfigRefreshing,
     isPhone,
     isPlanMode,
     isPlanPanelDismissed,
     isProcessing,
     isReviewing,
+    isSearchPaletteOpen,
     isSoloMode,
     isTablet,
     isThreadAutoNaming,
     isThreadPinned,
     isWorktreeWorkspace,
-    latestAgentRuns,
     launchScriptState,
     launchScriptsState,
     listThreadsForWorkspaceTracked,
@@ -482,6 +502,7 @@ export function useAppShellLayoutNodesSection(
     refreshEngines,
     refreshFiles,
     refreshGitDiffs,
+    refreshGitLog,
     refreshThread,
     removeImage,
     removeWorkspace,
@@ -533,6 +554,7 @@ export function useAppShellLayoutNodesSection(
     setSelectedEffort,
     setHomeOpen,
     setWorkspaceHomeWorkspaceId,
+    settingsOpen,
     showComposer,
     showLoadingProgressDialog,
     hideLoadingProgressDialog,
@@ -567,7 +589,6 @@ export function useAppShellLayoutNodesSection(
     triggerAutoThreadTitle,
     unpinThread,
     updateCustomInstructions,
-    updateSharedSessionEngineSelection,
     updateWorkspaceSettings,
     updaterState,
     userInputRequests,
@@ -723,27 +744,22 @@ export function useAppShellLayoutNodesSection(
   );
 
   const handleSelectConversationEngine = useCallback(
-    async (engine: "claude" | "codex" | "gemini" | "kimi" | "opencode") => {
+    async (engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode") => {
       const thread =
         activeWorkspaceId && activeThreadId
           ? (threadsByWorkspace[activeWorkspaceId] ?? []).find(
               (entry: any) => entry.id === activeThreadId,
             )
           : null;
-      const nextEngine =
-        thread?.threadKind === "shared"
-          ? normalizeSharedSessionEngine(engine)
-          : engine;
-      await setActiveEngine(nextEngine);
-      if (!activeWorkspaceId || !activeThreadId) {
+      // Shared 的 CLI 切换只能由完整 ExecutionTarget picker 完成。这个 legacy
+      // engine-only callback 属于 Native control surface；即使被快捷键或旧调用方
+      // 触发，也不能改写 Shared 的全局 Engine 或 durable selectedTarget。
+      if (thread?.threadKind === "shared") {
         return;
       }
-      if (thread?.threadKind === "shared") {
-        updateSharedSessionEngineSelection(
-          activeWorkspaceId,
-          activeThreadId,
-          nextEngine,
-        );
+      await setActiveEngine(engine);
+      if (!activeWorkspaceId || !activeThreadId) {
+        return;
       }
     },
     [
@@ -751,7 +767,6 @@ export function useAppShellLayoutNodesSection(
       activeWorkspaceId,
       setActiveEngine,
       threadsByWorkspace,
-      updateSharedSessionEngineSelection,
     ],
   );
   const mainFileExternalChangeAwarenessEnabled =
@@ -967,7 +982,8 @@ export function useAppShellLayoutNodesSection(
   const handleOpenIntentCanvas = useCallback(
     (request?: Omit<IntentCanvasOpenRequest, "requestId">) => {
       if (!activeWorkspace) {
-        alertError(t("intentCanvas.errors.noWorkspace"));
+        // 无效打开提示（D2）：info toast 代替旧 window.alert 阻塞弹窗。
+        pushQuickSwitcherSelectWorkspaceToast(t, "intentCanvas");
         return;
       }
       closeSettings();
@@ -994,7 +1010,6 @@ export function useAppShellLayoutNodesSection(
     },
     [
       activeWorkspace,
-      alertError,
       closeSettings,
       collapseSidebar,
       expandRightPanel,
@@ -1143,17 +1158,23 @@ export function useAppShellLayoutNodesSection(
     await startFork("/fork");
   });
   const handleOpenSettings = useEventCallback(() => openSettings());
+  const handleOpenShortcutsSettings = useEventCallback(() =>
+    openSettings("shortcuts"),
+  );
   const handleOpenAgentSettings = useEventCallback(() =>
     openSettings("agent-prompt-management", "agent-management"),
   );
   const handleOpenPromptSettings = useEventCallback(() =>
     openSettings("agent-prompt-management", "prompt-library"),
   );
+  const handleOpenCliSettings = useEventCallback(() =>
+    openSettings("providers"),
+  );
   const handleOpenDictationSettings = useEventCallback(() =>
     openSettings("dictation"),
   );
   const handleOpenSkillsSettings = useEventCallback(() =>
-    openSettings("mcp", "mcp-skills"),
+    openSettings("other", "mcp-skills"),
   );
   const handleSelectHome = useEventCallback(() => {
     closeSettings();
@@ -1181,13 +1202,6 @@ export function useAppShellLayoutNodesSection(
         setActiveTab("codex");
       }
     },
-  );
-  const enabledEngines = useMemo(
-    () => ({
-      gemini: appSettings.geminiEnabled !== false,
-      opencode: appSettings.opencodeEnabled !== false,
-    }),
-    [appSettings.geminiEnabled, appSettings.opencodeEnabled],
   );
   const handleToggleWorkspaceCollapse = useEventCallback(
     (workspaceId: string, collapsed: boolean) => {
@@ -1339,7 +1353,7 @@ export function useAppShellLayoutNodesSection(
     void loadOlderThreadsForWorkspace(workspace);
   });
   const handleQuickReloadWorkspaceThreads = useEventCallback(
-    (workspaceId: string) => {
+    async (workspaceId: string) => {
       const workspace = workspacesById.get(workspaceId);
       if (!workspace) {
         return;
@@ -1354,7 +1368,7 @@ export function useAppShellLayoutNodesSection(
               ),
             ]
           : [workspace];
-      void Promise.allSettled(
+      await Promise.allSettled(
         targets.map((target) => listThreadsForWorkspaceTracked(target)),
       );
     },
@@ -1416,6 +1430,7 @@ export function useAppShellLayoutNodesSection(
     handleSelectDiffForPanel(null);
   });
   const handleOpenGitHistoryPanel = useEventCallback(() => {
+    handleActivateGitHistoryTab(GIT_GRAPH_TAB_ID);
     setAppMode((current: string) =>
       current === "gitHistory" ? "chat" : "gitHistory",
     );
@@ -1427,6 +1442,175 @@ export function useAppShellLayoutNodesSection(
     setCenterMode("projectMap");
     expandRightPanel();
   });
+  // Quick Switcher「状态感知路由」的判定快照（design.md D1）。useMemo 与
+  // handleQuickSwitcherNavigate 各自内联构造，保持 predicates 纯函数化、
+  // 且不引入跨渲染的引用依赖。
+  const quickSwitcherActiveNavigationIds = useMemo<QuickSwitcherNavigationId[]>(
+    () =>
+      computeQuickSwitcherActiveNavigationIds({
+        activeTab,
+        appMode,
+        centerMode,
+        filePanelMode,
+        isCompact,
+        isSearchPaletteOpen,
+        rightPanelCollapsed,
+        settingsOpen,
+      }),
+    [
+      activeTab,
+      appMode,
+      centerMode,
+      filePanelMode,
+      isCompact,
+      isSearchPaletteOpen,
+      rightPanelCollapsed,
+      settingsOpen,
+    ],
+  );
+  const handleQuickSwitcherNavigate = useEventCallback(
+    (target: QuickSwitcherNavigationId) => {
+      const navigationState: QuickSwitcherNavigationState = {
+        activeTab,
+        appMode,
+        centerMode,
+        filePanelMode,
+        isCompact,
+        isSearchPaletteOpen,
+        rightPanelCollapsed,
+        settingsOpen,
+      };
+      // 首页表面关闭 helper：拦截 action（含回切分支）执行前统一调用，
+      // 与 base 的 file/session/navigate 激活路径对齐，避免 action 在 home
+      // 遮罩后执行、用户看不到反馈。纯提示分支（无 workspace toast）不打开
+      // 模块，toast 在 home 之上可见，故不关 home。委托 base 的分支由 base
+      // handler 入口统一关闭，这里不重复调用。
+      const closeHomeSurface = () => {
+        setHomeOpen(false);
+        setWorkspaceHomeWorkspaceId(null);
+      };
+      // spec 保持 open-or-focus（独立窗口，不做 toggle）。
+      if (target === "spec") {
+        closeQuickSwitcher();
+        closeHomeSurface();
+        handleOpenSpecHub();
+        return;
+      }
+      if (target === "intentCanvas") {
+        closeQuickSwitcher();
+        if (!activeWorkspace) {
+          pushQuickSwitcherSelectWorkspaceToast(t, "intentCanvas");
+          return;
+        }
+        closeHomeSurface();
+        if (isQuickSwitcherIntentCanvasActive(navigationState)) {
+          setCenterMode("chat");
+          return;
+        }
+        handleOpenIntentCanvas();
+        return;
+      }
+      if (target === "projectMap") {
+        closeQuickSwitcher();
+        if (!activeWorkspace) {
+          pushQuickSwitcherSelectWorkspaceToast(t, "projectMap");
+          return;
+        }
+        closeHomeSurface();
+        if (isQuickSwitcherProjectMapActive(navigationState)) {
+          setCenterMode("chat");
+          return;
+        }
+        handleOpenProjectMap();
+        return;
+      }
+      if (target === "globalSearch") {
+        closeQuickSwitcher();
+        closeHomeSurface();
+        if (isQuickSwitcherGlobalSearchActive(navigationState)) {
+          // 已打开 → 回切关闭（现成 toggle，内部走 closeSearchPalette）。
+          handleToggleSearchPalette();
+        } else {
+          handleOpenSearchPalette();
+        }
+        return;
+      }
+      if (target === "notes") {
+        closeQuickSwitcher();
+        if (!activeWorkspace) {
+          pushQuickSwitcherSelectWorkspaceToast(t, "notes");
+          return;
+        }
+        closeHomeSurface();
+        if (isQuickSwitcherNotesActive(navigationState)) {
+          // 便签回切连带把 center mode 复位到 chat（不留残留态）。
+          collapseRightPanel();
+          setCenterMode("chat");
+          return;
+        }
+        handleOpenNotes();
+        return;
+      }
+      if (target === "memory") {
+        closeQuickSwitcher();
+        if (!activeWorkspace) {
+          pushQuickSwitcherSelectWorkspaceToast(t, "memory");
+          return;
+        }
+        closeHomeSurface();
+        if (isQuickSwitcherMemoryActive(navigationState)) {
+          collapseRightPanel();
+          return;
+        }
+        handleOpenProjectMemory();
+        return;
+      }
+      if (target === "history") {
+        closeQuickSwitcher();
+        closeHomeSurface();
+        // handleOpenGitHistoryPanel 本身是现成 toggle（gitHistory ↔ chat）。
+        handleOpenGitHistoryPanel();
+        return;
+      }
+      // files/git/kanban/settings：wrapper 只拦截「已开 → 回切」分支；
+      // 未开时委托 base handler 执行既有 open action（base 保留兜底 case）。
+      if (target === "files" || target === "git") {
+        const isActive =
+          target === "files"
+            ? isQuickSwitcherFilesActive(navigationState)
+            : isQuickSwitcherGitActive(navigationState);
+        if (isActive) {
+          closeQuickSwitcher();
+          closeHomeSurface();
+          collapseRightPanel();
+          return;
+        }
+        handleBaseQuickSwitcherNavigate(target);
+        return;
+      }
+      if (target === "kanban") {
+        if (isQuickSwitcherKanbanActive(navigationState)) {
+          closeQuickSwitcher();
+          closeHomeSurface();
+          setAppMode("chat");
+          return;
+        }
+        handleBaseQuickSwitcherNavigate(target);
+        return;
+      }
+      if (target === "settings") {
+        if (isQuickSwitcherSettingsActive(navigationState)) {
+          closeQuickSwitcher();
+          closeHomeSurface();
+          closeSettings();
+          return;
+        }
+        handleBaseQuickSwitcherNavigate(target);
+        return;
+      }
+      handleBaseQuickSwitcherNavigate(target);
+    },
+  );
   const handleGitSelectPullRequest = useEventCallback(
     (pullRequest: GitHubPullRequest) => {
       setSelectedCommitSha(null);
@@ -1524,6 +1708,28 @@ export function useAppShellLayoutNodesSection(
       setActiveTab("git");
     }
   });
+  const handleOpenNotes = useEventCallback(() => {
+    setFocusedProjectMemoryId(null);
+    setFocusedWorkspaceNoteId(null);
+    closeSettings();
+    setAppMode("chat");
+    setCenterMode("notes");
+    setFilePanelMode("notes");
+    expandRightPanel();
+    if (isCompact) {
+      setActiveTab("git");
+    }
+  });
+  const handleOpenRadar = useEventCallback(() => {
+    closeSettings();
+    setAppMode("chat");
+    setCenterMode("chat");
+    setFilePanelMode("radar");
+    expandRightPanel();
+    if (isCompact) {
+      setActiveTab("git");
+    }
+  });
   const handleOpenContextLedgerMemory = useEventCallback(
     (memoryId: string) => {
       setFocusedWorkspaceNoteId(null);
@@ -1554,6 +1760,23 @@ export function useAppShellLayoutNodesSection(
   });
   const handleOpenReleaseNotes = useEventCallback(() => {
     void openReleaseNotes();
+  });
+
+  useModuleViewShortcuts({
+    toggleGitGraphShortcut: appSettings.toggleGitGraphShortcut,
+    openNotesShortcut: appSettings.openNotesShortcut,
+    openIntentCanvasShortcut: appSettings.openIntentCanvasShortcut,
+    openRadarShortcut: appSettings.openRadarShortcut,
+    openProjectMapShortcut: appSettings.openProjectMapShortcut,
+    openBrowserDockShortcut: appSettings.openBrowserDockShortcut,
+    openFileCompareShortcut: appSettings.openFileCompareShortcut,
+    onToggleGitGraph: handleOpenGitHistoryPanel,
+    onOpenNotes: handleOpenNotes,
+    onOpenIntentCanvas: handleOpenIntentCanvas,
+    onOpenRadar: handleOpenRadar,
+    onOpenProjectMap: handleOpenProjectMap,
+    onOpenBrowserDock: handleToggleBrowserDock,
+    onOpenFileCompare: handleOpenScratchFileCompare,
   });
 
   const {
@@ -1645,9 +1868,11 @@ export function useAppShellLayoutNodesSection(
     },
     chrome: {
       onOpenSettings: handleOpenSettings,
+      onOpenShortcutsSettings: handleOpenShortcutsSettings,
       onOpenAgentSettings: handleOpenAgentSettings,
       onOpenPromptSettings: handleOpenPromptSettings,
       onOpenModelSettings: handleOpenModelSettings,
+      onOpenCliSettings: handleOpenCliSettings,
       onRefreshModelConfig: handleRefreshModelConfig,
       isModelConfigRefreshing,
       onOpenDictationSettings: handleOpenDictationSettings,
@@ -1660,7 +1885,6 @@ export function useAppShellLayoutNodesSection(
       onConnectWorkspace: handleConnectWorkspace,
       onAddAgent: handleAddAgent,
       engineOptions: availableEngines,
-      enabledEngines,
       onRefreshEngineOptions: refreshEngines,
       onAddSharedAgent: handleStartSharedConversation,
       onAddWorktreeAgent: handleAddWorktreeAgent,
@@ -1700,9 +1924,6 @@ export function useAppShellLayoutNodesSection(
       onDismissUpdate: dismissUpdate,
       errorToasts,
       onDismissErrorToast: dismissErrorToast,
-      latestAgentRuns,
-      isLoadingLatestAgents,
-      onSelectHomeThread: handleSelectWorkspaceInstance,
       onOpenSpecHub: handleOpenSpecHub,
       showLoadingProgressDialog,
       hideLoadingProgressDialog,
@@ -1725,6 +1946,9 @@ export function useAppShellLayoutNodesSection(
       onCheckoutBranch: handleCheckoutBranch,
       onCreateBranch: handleCreateBranch,
       onUpdateBranch: handleUpdateBranch,
+      onUpdateAllRepositories: handleUpdateAllRepositories,
+      onCheckoutAllRepositories: handleCheckoutAllRepositories,
+      onLoadCommonRepositoryBranches: handleLoadCommonRepositoryBranches,
       onCopyThread: handleCopyThread,
       onLockPanel: handleLockPanel,
       onToggleTerminal: handleToggleTerminalPanel,
@@ -1758,9 +1982,7 @@ export function useAppShellLayoutNodesSection(
       centerMode,
       setCenterMode,
       fileCompareSession,
-      fileHistoryTarget,
       onOpenFileHistory: handleOpenFileHistory,
-      onCloseFileHistory: handleCloseFileHistory,
       editorSplitCompanion,
       setEditorSplitCompanion,
       editorSplitLayout,
@@ -1773,6 +1995,7 @@ export function useAppShellLayoutNodesSection(
       openEditorTabs: openFileTabs,
       onActivateEditorTab: handleActivateWorkspaceFileTab,
       onCloseEditorTab: handleCloseWorkspaceFileTab,
+      onCloseOtherEditorTabs: handleCloseOtherWorkspaceFileTabs,
       onCloseAllEditorTabs: handleCloseAllWorkspaceFileTabs,
       onReorderEditorTabs: handleReorderWorkspaceFileTabs,
       onActiveEditorLineRangeChange: setActiveEditorLineRange,
@@ -1858,6 +2081,7 @@ export function useAppShellLayoutNodesSection(
       gitDiffs: activeDiffs,
       gitDiffLoading: activeDiffLoading,
       gitDiffError: activeDiffError,
+      refreshGitLog,
       refreshGitDiffs,
       queueGitStatusRefresh,
       onDiffActivePathChange: handleActiveDiffPath,
@@ -1969,7 +2193,6 @@ export function useAppShellLayoutNodesSection(
       selectedModelId: effectiveSelectedModelId,
       projectMapDatasetController,
       onSelectModel: handleSelectModel,
-      onDispatchOrchestrationTask: handleDispatchOrchestrationTask,
       intentCanvasOpenRequest,
       onOpenIntentCanvas: handleOpenIntentCanvas,
       onIntentCanvasOpenRequestConsumed: handleIntentCanvasOpenRequestConsumed,
@@ -2087,6 +2310,7 @@ export function useAppShellLayoutNodesSection(
       closeCurrentSessionShortcut: appSettings.closeCurrentSessionShortcut,
       saveFileShortcut: appSettings.saveFileShortcut,
       findInFileShortcut: appSettings.findInFileShortcut,
+      expandSelectionShortcut: appSettings.expandSelectionShortcut,
       toggleGitDiffListViewShortcut: appSettings.toggleGitDiffListViewShortcut,
       onOpenWorkspaceHome: handleOpenWorkspaceHome,
     },
@@ -2124,5 +2348,7 @@ export function useAppShellLayoutNodesSection(
     compactGitBackNode,
     codeAnnotationBridgeProps,
     workspaceAliasPromptNode,
+    handleQuickSwitcherNavigate,
+    quickSwitcherActiveNavigationIds,
   };
 }

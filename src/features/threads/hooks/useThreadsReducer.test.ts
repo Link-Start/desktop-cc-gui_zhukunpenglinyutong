@@ -1,13 +1,76 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ConversationItem, ThreadSummary } from "../../../types";
+import type {
+  ConversationItem,
+  RequestUserInputRequest,
+  ThreadSummary,
+} from "../../../types";
 import {
   __getPrepareThreadItemsCallCountForTests,
   __resetPrepareThreadItemsCallCountForTests,
 } from "../../../utils/threadItems";
+import { withoutMessagePresentationMetadata } from "./threadReducerTestProjection";
 import { initialState, threadReducer } from "./useThreadsReducer";
 import type { ThreadState } from "./useThreadsReducer";
 
 describe("threadReducer", () => {
+  it("keeps a Shared attempt target on an assistant error message", () => {
+    const executionTargetSnapshot = {
+      engine: "codex" as const,
+      providerProfileId: "provider-a",
+      modelCatalogEntryId: "catalog-a",
+      model: "runtime-a",
+      providerProfileNameSnapshot: "Provider A",
+      providerProfileSource: "managed" as const,
+    };
+    const next = threadReducer(initialState, {
+      type: "addAssistantMessage",
+      threadId: "shared:thread-1",
+      text: "会话失败：provider rejected",
+      executionTargetSnapshot,
+    });
+
+    expect(next.itemsByThread["shared:thread-1"]?.[0]).toMatchObject({
+      kind: "message",
+      role: "assistant",
+      text: "会话失败：provider rejected",
+      executionTargetSnapshot,
+    });
+  });
+
+  it("preserves Kimi provider binding when pending identity converges to canonical", () => {
+    const withPending = threadReducer(initialState, {
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "kimi-pending-1",
+      engine: "kimi",
+      providerProfileId: "provider-a",
+      providerProfileSource: "managed",
+      providerProfileName: "Provider A",
+      providerAvailability: "available",
+    });
+    const withCanonical = threadReducer(withPending, {
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "kimi:session-1",
+      engine: "kimi",
+    });
+    const renamed = threadReducer(withCanonical, {
+      type: "renameThreadId",
+      workspaceId: "ws-1",
+      oldThreadId: "kimi-pending-1",
+      newThreadId: "kimi:session-1",
+    });
+
+    expect(renamed.threadsByWorkspace["ws-1"]).toHaveLength(1);
+    expect(renamed.threadsByWorkspace["ws-1"]?.[0]).toMatchObject({
+      id: "kimi:session-1",
+      providerProfileId: "provider-a",
+      providerProfileSource: "managed",
+      providerProfileName: "Provider A",
+      providerAvailability: "available",
+    });
+  });
+
   it("ensures thread with default name and active selection", () => {
     const next = threadReducer(initialState, {
       type: "ensureThread",
@@ -19,6 +82,88 @@ describe("threadReducer", () => {
     expect(threads[0]?.name).toBe("Agent 1");
     expect(next.activeThreadIdByWorkspace["ws-1"]).toBe("thread-1");
     expect(next.threadStatusById["thread-1"]?.isProcessing).toBe(false);
+  });
+
+  it("creates a live subagent summary with its parent and nickname atomically", () => {
+    const next = threadReducer(initialState, {
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "child-thread",
+      engine: "codex",
+      parentThreadId: "parent-thread",
+      name: "Herschel",
+    });
+
+    expect(next.threadsByWorkspace["ws-1"]?.[0]).toMatchObject({
+      id: "child-thread",
+      name: "Herschel",
+      parentThreadId: "parent-thread",
+      engineSource: "codex",
+    });
+
+    const repeated = threadReducer(next, {
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "child-thread",
+      engine: "codex",
+      parentThreadId: "parent-thread",
+      name: "Herschel",
+    });
+    expect(repeated).toBe(next);
+  });
+
+  it("enriches an existing provisional subagent summary in one update", () => {
+    const provisional = threadReducer(initialState, {
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "child-thread",
+      engine: "codex",
+    });
+
+    const enriched = threadReducer(provisional, {
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "child-thread",
+      parentThreadId: "parent-thread",
+      name: "Herschel",
+    });
+
+    expect(enriched).not.toBe(provisional);
+    expect(enriched.threadsByWorkspace["ws-1"]?.[0]).toMatchObject({
+      id: "child-thread",
+      name: "Herschel",
+      parentThreadId: "parent-thread",
+    });
+  });
+
+  it("keeps the live parent while accepting a stronger refreshed name", () => {
+    const live = threadReducer(initialState, {
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "child-thread",
+      engine: "codex",
+      parentThreadId: "parent-thread",
+      name: "Herschel",
+    });
+
+    const refreshed = threadReducer(live, {
+      type: "setThreads",
+      workspaceId: "ws-1",
+      threads: [
+        {
+          id: "child-thread",
+          name: "Named child",
+          updatedAt: Date.now(),
+          engineSource: "codex",
+        },
+      ],
+    });
+
+    expect(refreshed.threadsByWorkspace["ws-1"]?.[0]).toMatchObject({
+      id: "child-thread",
+      name: "Named child",
+      parentThreadId: "parent-thread",
+    });
   });
 
   it("does not churn state when selecting an already active read thread", () => {
@@ -712,7 +857,7 @@ describe("threadReducer", () => {
       ],
     });
 
-    expect(next.itemsByThread["thread-1"]).toEqual([
+    expect(withoutMessagePresentationMetadata(next.itemsByThread["thread-1"])).toEqual([
       {
         id: "assistant-1",
         kind: "message",
@@ -773,7 +918,7 @@ describe("threadReducer", () => {
       ],
     });
 
-    expect(next.itemsByThread["thread-1"]).toEqual([
+    expect(withoutMessagePresentationMetadata(next.itemsByThread["thread-1"])).toEqual([
       {
         id: "assistant-1",
         kind: "message",
@@ -846,7 +991,7 @@ describe("threadReducer", () => {
       ],
     });
 
-    expect(next.itemsByThread["thread-1"]).toEqual([
+    expect(withoutMessagePresentationMetadata(next.itemsByThread["thread-1"])).toEqual([
       {
         id: "user-older-1",
         kind: "message",
@@ -913,7 +1058,7 @@ describe("threadReducer", () => {
       ],
     });
 
-    expect(next.itemsByThread["thread-1"]).toEqual([
+    expect(withoutMessagePresentationMetadata(next.itemsByThread["thread-1"])).toEqual([
       {
         id: "optimistic-user-1",
         kind: "message",
@@ -968,7 +1113,7 @@ describe("threadReducer", () => {
       ],
     });
 
-    expect(next.itemsByThread["thread-1"]).toEqual([
+    expect(withoutMessagePresentationMetadata(next.itemsByThread["thread-1"])).toEqual([
       {
         id: "user-1",
         kind: "message",
@@ -1020,7 +1165,7 @@ describe("threadReducer", () => {
       ],
     });
 
-    expect(next.itemsByThread["thread-1"]).toEqual([
+    expect(withoutMessagePresentationMetadata(next.itemsByThread["thread-1"])).toEqual([
       {
         id: "user-remote-1",
         kind: "message",
@@ -1063,7 +1208,7 @@ describe("threadReducer", () => {
       ],
     });
 
-    expect(next.itemsByThread["thread-1"]).toEqual([
+    expect(withoutMessagePresentationMetadata(next.itemsByThread["thread-1"])).toEqual([
       {
         id: "user-remote-1",
         kind: "message",
@@ -1119,7 +1264,7 @@ describe("threadReducer", () => {
       ],
     });
 
-    expect(next.itemsByThread["thread-1"]).toEqual([
+    expect(withoutMessagePresentationMetadata(next.itemsByThread["thread-1"])).toEqual([
       {
         id: "user-remote-1",
         kind: "message",
@@ -1195,7 +1340,7 @@ describe("threadReducer", () => {
       ],
     });
 
-    expect(next.itemsByThread["thread-1"]).toEqual([
+    expect(withoutMessagePresentationMetadata(next.itemsByThread["thread-1"])).toEqual([
       {
         id: "user-remote-1",
         kind: "message",
@@ -2526,6 +2671,53 @@ describe("threadReducer", () => {
       workspaceId: "ws-1",
     });
     expect(removed.userInputRequests).toEqual([requestB]);
+  });
+
+  it("scopes Shared user input request identity to its Runtime attempt", () => {
+    const makeSharedRequest = (
+      attemptId: string,
+      providerRuntimeKey: string,
+    ): RequestUserInputRequest => ({
+      workspace_id: "ws-1",
+      request_id: "request-1",
+      params: {
+        thread_id: "shared:thread-1",
+        turn_id: `turn-${attemptId}`,
+        item_id: `item-${attemptId}`,
+        questions: [],
+      },
+      shared_runtime_owner: {
+        attemptId,
+        providerRuntimeKey,
+        sharedThreadId: "shared:thread-1",
+        nativeThreadId: `native-${attemptId}`,
+        runtimeTurnId: `turn-${attemptId}`,
+        engine: providerRuntimeKey.startsWith("claude")
+          ? "claude"
+          : "codex",
+        providerProfileId: `profile-${attemptId}`,
+      },
+    });
+    const firstRequest = makeSharedRequest("attempt-1", "codex::profile-1");
+    const secondRequest = makeSharedRequest("attempt-2", "claude::profile-2");
+
+    const withFirst = threadReducer(initialState, {
+      type: "addUserInputRequest",
+      request: firstRequest,
+    });
+    const withBoth = threadReducer(withFirst, {
+      type: "addUserInputRequest",
+      request: secondRequest,
+    });
+    expect(withBoth.userInputRequests).toEqual([firstRequest, secondRequest]);
+
+    const withoutFirst = threadReducer(withBoth, {
+      type: "removeUserInputRequest",
+      requestId: firstRequest.request_id,
+      workspaceId: firstRequest.workspace_id,
+      request: firstRequest,
+    });
+    expect(withoutFirst.userInputRequests).toEqual([secondRequest]);
   });
 
   it("clears user input requests by thread while preserving other threads", () => {

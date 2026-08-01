@@ -23,6 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { createExecutableSessionProjectionSelector } from "@/features/threads/contracts/executableSessionProjection";
 import {
   connectWorkspace,
   getRuntimePoolSnapshot,
@@ -34,6 +35,7 @@ const RUNTIME_PANEL_BOOTSTRAP_SOURCE = "runtime-panel-bootstrap";
 const RUNTIME_POOL_FALLBACK_REFRESH_DELAY_MS = 400;
 const RUNTIME_POOL_FALLBACK_REFRESH_ATTEMPTS = 5;
 const EMPTY_RUNTIME_WORKSPACES: WorkspaceInfo[] = [];
+const EMPTY_RUNTIME_ROWS: RuntimePoolSnapshot["rows"] = [];
 const EMPTY_SESSION_ENGINE_COUNTS: RuntimeSessionEngineCount[] = [];
 const SESSION_ENGINE_ORDER: RuntimeSessionEngine[] = [
   "claude",
@@ -250,6 +252,24 @@ export function RuntimePoolSection({
   const [hotDraft, setHotDraft] = useState(String(appSettings.codexMaxHotRuntimes ?? 1));
   const [warmDraft, setWarmDraft] = useState(String(appSettings.codexMaxWarmRuntimes ?? 1));
   const [ttlDraft, setTtlDraft] = useState(String(appSettings.codexWarmTtlSeconds ?? 7200));
+  const selectExecutableSessions = useMemo(
+    createExecutableSessionProjectionSelector,
+    [],
+  );
+  const executableSessions = useMemo(
+    () => selectExecutableSessions(runtimeSnapshot?.rows ?? EMPTY_RUNTIME_ROWS),
+    [runtimeSnapshot, selectExecutableSessions],
+  );
+  const executableSessionByRuntimeKey = useMemo(
+    () =>
+      new Map(
+        executableSessions.map((session) => [
+          `${session.engine}:${session.logicalSessionId}`,
+          session,
+        ]),
+      ),
+    [executableSessions],
+  );
 
   const bootstrapEligibleWorkspaces = useMemo(
     () => buildRuntimeBootstrapWorkspaces(workspaces),
@@ -895,6 +915,9 @@ export function RuntimePoolSection({
             runtimeSnapshot.rows.map((row) => {
               const tone = getRuntimeTone(row.state);
               const StatusIcon = tone.icon;
+              const executableSession = executableSessionByRuntimeKey.get(
+                `${row.engine}:${row.workspaceId}`,
+              );
               return (
                 <div
                   key={`${row.engine}:${row.workspaceId}`}
@@ -966,8 +989,8 @@ export function RuntimePoolSection({
                           {row.pid
                             ? t("settings.runtimePidLabel", { pid: row.pid })
                             : "—"}
-                          {row.runtimeGeneration
-                            ? ` · ${t("settings.runtimeGenerationLabel")} ${row.runtimeGeneration}`
+                          {executableSession?.runtimeGeneration
+                            ? ` · ${t("settings.runtimeGenerationLabel")} ${executableSession.runtimeGeneration}`
                             : ""}
                           {row.processDiagnostics?.rootCommand ? ` · ${row.processDiagnostics.rootCommand}` : ""}
                           {row.processDiagnostics

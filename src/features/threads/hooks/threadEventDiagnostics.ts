@@ -324,7 +324,7 @@ export function extractTurnIdFromRawItem(item: Record<string, unknown>) {
 export function inferRawItemEngine(
   threadId: string,
   item: Record<string, unknown>,
-): "claude" | "codex" | "gemini" | "kimi" | "opencode" {
+): "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" {
   const rawEngine = asString(item.engineSource ?? item.engine_source)
     .trim()
     .toLowerCase();
@@ -332,6 +332,7 @@ export function inferRawItemEngine(
     rawEngine === "claude" ||
     rawEngine === "codex" ||
     rawEngine === "gemini" ||
+    rawEngine === "grok" ||
     rawEngine === "kimi" ||
     rawEngine === "opencode"
   ) {
@@ -391,12 +392,15 @@ export function createTurnDiagnosticState(
 
 export function inferThreadEngine(
   threadId: string,
-): "claude" | "codex" | "gemini" | "kimi" | "opencode" {
+): "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" {
   if (threadId.startsWith("claude:") || threadId.startsWith("claude-pending-")) {
     return "claude";
   }
   if (threadId.startsWith("gemini:") || threadId.startsWith("gemini-pending-")) {
     return "gemini";
+  }
+  if (threadId.startsWith("grok:") || threadId.startsWith("grok-pending-")) {
+    return "grok";
   }
   if (threadId.startsWith("kimi:") || threadId.startsWith("kimi-pending-")) {
     return "kimi";

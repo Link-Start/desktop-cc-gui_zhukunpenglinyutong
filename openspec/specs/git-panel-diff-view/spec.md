@@ -900,3 +900,146 @@ The Git Diff mode menu MUST expose the existing Git History panel through a sing
 - **THEN** its label SHALL use bold weight and a theme-aware accent color
 - **AND** its icon SHALL use the same accent color across normal, hover, focus, and active states
 - **AND** adjacent menu items SHALL retain their existing typography and color
+
+### Requirement: Section header line-change summary badge
+
+The single-repository Git Diff panel SHALL render a `+n-m` line-change summary
+badge inside each staged and unstaged section header (both flat and tree view),
+sitting visually adjacent to the existing file count badge. The badge MUST
+aggregate additions and deletions across every file in that section.
+
+#### Scenario: section header shows total line changes
+
+- **WHEN** a staged or unstaged section contains one or more files with
+  `additions` / `deletions` numbers
+- **THEN** the section header SHALL render a `+n-m` badge where `n` equals the
+  sum of `additions` across the section's files and `m` equals the sum of
+  `deletions` across the section's files
+- **AND** the existing file count badge SHALL continue to render unchanged.
+
+#### Scenario: zero-totals hide the line summary badge
+
+- **WHEN** a section contains files whose aggregated `additions` and
+  `deletions` are both zero
+- **THEN** the section header SHALL NOT render the `+n-m` badge.
+
+#### Scenario: badge stays visible when section is collapsed
+
+- **WHEN** the user collapses a staged or unstaged section
+- **THEN** the `+n-m` badge SHALL remain visible in the header while the file
+  rows are hidden.
+
+#### Scenario: badge uses additive and destructive color tokens
+
+- **WHEN** the `+n-m` badge renders
+- **THEN** the `+n` portion SHALL use the success accent color
+- **AND** the `-m` portion SHALL use the destructive accent color
+- **AND** the badge SHALL reuse the project's `diff-counts-inline
+  git-filetree-badge` visual token family for consistency with per-file
+  stats.
+
+### Requirement: Center preview toolbar and aligned body MUST converge without capability loss
+
+Git 面板“在中间区域预览”MUST 保留既有 diff toolbar controls；当用户选择 split text
+diff 时，body MUST 复用 File History 的 `WorkspaceReadOnlyDiffCompare` aligned
+CodeMirror renderer。
+
+#### Scenario: split text preview reuses the shared aligned compare
+
+- **WHEN** 用户在 Git changed-file row 触发“在中间区域预览”
+- **AND** 当前 entry 是 text diff 且 view style 为 `split`
+- **THEN** toolbar MUST 继续显示双栏/单栏与全文/区域 controls
+- **AND** body MUST 显示 shared previous/source CodeMirror columns
+- **AND** difference navigation、gutter labels、semantic red/green tone 与 horizontal scroll MUST 保持可用
+
+#### Scenario: toolbar mode changes still control the body
+
+- **WHEN** 用户从 split 切换到 unified
+- **THEN** body MUST 回到既有 unified patch renderer
+- **WHEN** 用户在 full/focused content mode 间切换
+- **THEN** toolbar 与 aligned body MUST 消费同一受控 mode，不得显示不同版本的 diff
+
+#### Scenario: non-text and specialized surfaces retain their renderer
+
+- **WHEN** entry 是 image、binary、PR review 或 editable modal preview
+- **THEN** existing `GitDiffViewer` / editable renderer MUST remain in use
+- **AND** renderer convergence MUST NOT remove annotation、editing、image compare 或 close behavior
+
+### Requirement: Semantic Diff AI Review Is Generated On Demand Per Turn
+
+The session activity semantic diff SHALL generate its AI review explain layer on demand when the user opens a turn's semantic diff tab, SHALL cache the result per turn, and SHALL degrade silently to deterministic rule facts when generation or parsing fails.
+
+#### Scenario: AI review is generated when the semantic tab is opened
+
+- **WHEN** the user opens a turn's semantic diff tab and that turn has no cached AI review
+- **THEN** the client SHALL request an AI review for that turn through a lightweight hidden engine session (sessionPurpose `semantic-diff-review`)
+- **AND** the request SHALL summarize the turn's changed files with bounded diff truncation
+- **AND** deterministic rule facts SHALL render immediately without waiting for the AI review.
+
+#### Scenario: AI review output is validated against the evidence contract
+
+- **WHEN** the engine returns review output for a turn
+- **THEN** the client SHALL parse it as structured JSON and validate each fact's category, confidence, text, and evidence refs
+- **AND** facts whose evidence paths do not belong to the turn's changed files SHALL be dropped
+- **AND** facts without any valid evidence ref SHALL be dropped
+- **AND** accepted facts SHALL merge into the intent, behavior, risk, and validation zones as AI-sourced review hints that augment rather than replace deterministic facts.
+
+#### Scenario: Generation or parse failure degrades silently
+
+- **WHEN** the engine request fails, times out, or returns output that cannot be parsed into the review contract
+- **THEN** the semantic diff SHALL render without AI facts
+- **AND** the UI SHALL NOT surface an error or block interaction
+- **AND** the failure SHALL be cached for that turn so the same turn is not requested repeatedly.
+
+#### Scenario: Repeated views reuse the cached review
+
+- **WHEN** the user revisits the semantic diff tab of a turn that already has a completed AI review attempt
+- **THEN** the client SHALL reuse the cached review (including a cached empty or failed result)
+- **AND** it SHALL NOT issue another engine request for that turn.
+
+### Requirement: Semantic review cache MUST track review inputs
+
+The turn semantic review cache MUST be scoped by workspace, turn, output language, and the normalized diff entries used to produce the review.
+
+#### Scenario: diff content changes after an early review
+- **WHEN** a semantic review completes and the same turn later exposes different diff content
+- **THEN** the stale cached review MUST NOT be reused
+- **AND** a new review request MUST use the latest entries
+
+#### Scenario: output language changes
+- **WHEN** the user changes the semantic review output language for the same turn and diff
+- **THEN** the prior-language cache entry MUST NOT be reused
+
+### Requirement: Semantic engine fallback MUST remain serial
+
+The client MUST NOT start a fallback semantic review engine while a previous engine request remains active and cannot be cancelled.
+
+#### Scenario: primary engine request remains unsettled
+- **WHEN** the primary hidden engine request has not settled and exposes no cancellation contract
+- **THEN** the client MUST NOT start a fallback engine based only on a frontend timer
+
+### Requirement: Compact Vertical Action Column for Commit Composer
+
+The diff panel commit composer SHALL place the AI message generation button and the commit button in a vertical action column on the right side of the commit message textarea, replacing the previous bottom-positioned commit button.
+
+#### Scenario: commit button located in right action column
+
+- **WHEN** the commit composer is visible
+- **THEN** the commit button SHALL render below the AI generate button on the right side of the textarea
+- **AND** the previous bottom-positioned commit button SHALL NOT be rendered
+
+#### Scenario: commit button states
+
+- **WHEN** there is no commit message, no selected file, or commit is in progress
+- **THEN** the commit button SHALL be disabled and show an appropriate tooltip
+
+#### Scenario: multi-repository commit composer uses same layout
+
+- **WHEN** the commit composer is rendered for multiple repositories (`GitMultiRepositoryChanges`)
+- **THEN** the AI generate button and commit button SHALL also be placed in the same right-side vertical action column
+- **AND** the previous bottom-positioned commit button SHALL NOT be rendered
+
+#### Scenario: commit execution
+
+- **WHEN** user clicks the commit button in the right action column
+- **THEN** system SHALL invoke the same `onCommit` callback with `selectedPaths` as before

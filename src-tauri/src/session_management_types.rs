@@ -15,6 +15,7 @@ pub(crate) const SESSION_CATALOG_PARTIAL_CODEX: &str = "codex-history-unavailabl
 pub(crate) const SESSION_CATALOG_PARTIAL_CLAUDE: &str = "claude-history-unavailable";
 pub(crate) const SESSION_CATALOG_PARTIAL_CLAUDE_UNCERTAIN_EMPTY: &str = "claude-uncertain-empty";
 pub(crate) const SESSION_CATALOG_PARTIAL_GEMINI: &str = "gemini-history-unavailable";
+pub(crate) const SESSION_CATALOG_PARTIAL_GROK: &str = "grok-history-unavailable";
 pub(crate) const SESSION_CATALOG_PARTIAL_KIMI: &str = "kimi-history-unavailable";
 pub(crate) const SESSION_CATALOG_PARTIAL_OPENCODE: &str = "opencode-history-unavailable";
 pub(crate) const SESSION_CATALOG_PARTIAL_ARCHIVE_METADATA: &str = "archive-metadata-unavailable";
@@ -52,6 +53,8 @@ pub(crate) struct WorkspaceSessionCatalogEntry {
     pub(crate) workspace_label: Option<String>,
     pub(crate) engine: String,
     pub(crate) title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) native_title: Option<String>,
     pub(crate) updated_at: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) archived_at: Option<i64>,
@@ -100,16 +103,70 @@ pub(crate) struct WorkspaceSessionCatalogEntry {
     pub(crate) physical_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) children_count: Option<usize>,
+    #[serde(flatten)]
+    pub(crate) continuation: ProviderContinuationProjection,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ProviderContinuationProjection {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) origin_kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) source_session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) source_provider_profile_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) family_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) family_root_session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) lineage_parent_session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) lineage_kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) lineage_depth: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct CodexProviderBinding {
+pub(crate) struct ProviderContinuationMetadata {
+    pub(crate) origin_kind: String,
+    pub(crate) source_session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) source_provider_profile_id: Option<String>,
+    pub(crate) family_id: String,
+    pub(crate) family_root_session_id: String,
+    pub(crate) lineage_parent_session_id: String,
+    pub(crate) lineage_kind: String,
+    pub(crate) lineage_depth: u32,
+}
+
+impl From<ProviderContinuationMetadata> for ProviderContinuationProjection {
+    fn from(metadata: ProviderContinuationMetadata) -> Self {
+        Self {
+            origin_kind: Some(metadata.origin_kind),
+            source_session_id: Some(metadata.source_session_id),
+            source_provider_profile_id: metadata.source_provider_profile_id,
+            family_id: Some(metadata.family_id),
+            family_root_session_id: Some(metadata.family_root_session_id),
+            lineage_parent_session_id: Some(metadata.lineage_parent_session_id),
+            lineage_kind: Some(metadata.lineage_kind),
+            lineage_depth: Some(metadata.lineage_depth),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct EngineProviderBinding {
     pub(crate) provider_profile_id: String,
     pub(crate) provider_profile_source: String,
     pub(crate) provider_profile_name: String,
     pub(crate) provider_availability: String,
 }
+
+pub(crate) type CodexProviderBinding = EngineProviderBinding;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -335,6 +392,10 @@ pub(crate) struct WorkspaceSessionCatalogMetadata {
     pub(crate) auto_session_by_session_id: HashMap<String, AutoSessionMetadata>,
     #[serde(default)]
     pub(crate) codex_provider_binding_by_session_id: HashMap<String, CodexProviderBinding>,
+    #[serde(default)]
+    pub(crate) engine_provider_binding_by_session_key: HashMap<String, EngineProviderBinding>,
+    #[serde(default)]
+    pub(crate) provider_continuation_by_session_key: HashMap<String, ProviderContinuationMetadata>,
 }
 
 #[derive(Debug, Clone)]
@@ -474,6 +535,7 @@ pub(crate) enum SessionCatalogIdentity {
     Codex { session_id: String },
     Claude { session_id: String },
     Gemini { session_id: String },
+    Grok { session_id: String },
     Kimi { session_id: String },
     OpenCode { session_id: String },
     Shared { session_id: String },
@@ -485,6 +547,7 @@ impl SessionCatalogIdentity {
             Self::Codex { .. } => "codex",
             Self::Claude { .. } => "claude",
             Self::Gemini { .. } => "gemini",
+            Self::Grok { .. } => "grok",
             Self::Kimi { .. } => "kimi",
             Self::OpenCode { .. } => "opencode",
             Self::Shared { .. } => "shared",
@@ -496,6 +559,7 @@ impl SessionCatalogIdentity {
             Self::Codex { session_id }
             | Self::Claude { session_id }
             | Self::Gemini { session_id }
+            | Self::Grok { session_id }
             | Self::Kimi { session_id }
             | Self::OpenCode { session_id }
             | Self::Shared { session_id } => session_id,
@@ -511,6 +575,11 @@ pub(crate) fn parse_catalog_identity(session_id: &str) -> SessionCatalogIdentity
     }
     if let Some(raw_id) = session_id.strip_prefix("gemini:") {
         return SessionCatalogIdentity::Gemini {
+            session_id: raw_id.to_string(),
+        };
+    }
+    if let Some(raw_id) = session_id.strip_prefix("grok:") {
+        return SessionCatalogIdentity::Grok {
             session_id: raw_id.to_string(),
         };
     }

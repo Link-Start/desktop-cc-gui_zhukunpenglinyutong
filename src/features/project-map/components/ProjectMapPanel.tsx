@@ -14,12 +14,6 @@ import Sparkles from "lucide-react/dist/esm/icons/sparkles";
 
 import { cn } from "../../../lib/utils";
 import type { EngineType, ModelOption, WorkspaceInfo } from "../../../types";
-import {
-  buildProjectMapOrchestrationTaskDraft,
-  loadOrchestrationTaskStore,
-  saveOrchestrationTaskStore,
-  upsertOrchestrationTask,
-} from "../../agent-orchestration";
 import { loadProjectMapStyles } from "../../../styles/featureStyleLoaders";
 import { useProjectMapDataset } from "../hooks/useProjectMapDataset";
 import type { ProjectMapDatasetController } from "../hooks/useProjectMapDataset";
@@ -101,7 +95,6 @@ import {
 import type { IntentCanvasOpenRequest } from "../../intent-canvas";
 import type { IntentCanvasCodeSelectionAnchor } from "../../intent-canvas/types";
 import type { ProjectMapHierarchyRelationView } from "./ProjectMapPanelSurfaces";
-import type { ProjectMapOrchestrationDraftState } from "./ProjectMapPanelSurfaces";
 import {
   MINI_MAP_SIZE,
   PROJECT_MAP_RELATION_FILTER_ALL,
@@ -112,7 +105,6 @@ import {
   getProfileSummary,
   normalizeLocalHistoryLabel,
   readCanvasControlsCollapsedPreference,
-  resolveProjectMapOrchestrationWorkspaceId,
   resolveProjectMapPreferredLanguage,
   resolveSelectedGenerationModel,
   writeCanvasControlsCollapsedPreference,
@@ -146,7 +138,6 @@ type ProjectMapPanelProps = {
   sourceFocusNodeId?: string | null;
   activeCodeSelectionAnchor?: IntentCanvasCodeSelectionAnchor | null;
   onOpenEvidenceFile?: (path: string, location?: { line: number; column: number }) => void;
-  onOpenOrchestrationTask?: (taskId: string) => void;
   onOpenIntentCanvas?: (request: Omit<IntentCanvasOpenRequest, "requestId">) => void;
   onOpenIntentCanvasFromRelationship?: (request: Omit<IntentCanvasOpenRequest, "requestId">) => void;
 };
@@ -164,7 +155,6 @@ export function ProjectMapPanel({
   sourceFocusNodeId = null,
   activeCodeSelectionAnchor = null,
   onOpenEvidenceFile,
-  onOpenOrchestrationTask,
   onOpenIntentCanvas,
 }: ProjectMapPanelProps) {
   useEffect(() => {
@@ -230,8 +220,6 @@ export function ProjectMapPanel({
   const [isDetailCollapsed, setIsDetailCollapsed] = useState(false);
   const [isTaskDrawerOpen, setIsTaskDrawerOpen] = useState(false);
   const [candidateBatchMessage, setCandidateBatchMessage] = useState<string | null>(null);
-  const [orchestrationDraftState, setOrchestrationDraftState] =
-    useState<ProjectMapOrchestrationDraftState>({ status: "idle" });
   const [graphRepairSummary, setGraphRepairSummary] =
     useState<ProjectMapGraphRepairSummary | null>(dataset.graphRepair ?? null);
   const [isConfirmingAllCandidates, setIsConfirmingAllCandidates] = useState(false);
@@ -1212,48 +1200,6 @@ export function ProjectMapPanel({
     setDeleteConfirmNodeId(selectedNode.id);
   };
 
-  const handleCreateOrchestrationTaskDraft = useCallback(() => {
-    if (!selectedNode) {
-      return;
-    }
-    const workspaceId = resolveProjectMapOrchestrationWorkspaceId({
-      activeWorkspace,
-      dataset,
-      workspaceName,
-    });
-    if (!workspaceId) {
-      setOrchestrationDraftState({
-        status: "failed",
-        nodeId: selectedNode.id,
-        reason: "missing-workspace",
-      });
-      return;
-    }
-    const draft = buildProjectMapOrchestrationTaskDraft({
-      workspaceId,
-      dataset,
-      nodeId: selectedNode.id,
-    });
-    if (!draft) {
-      setOrchestrationDraftState({
-        status: "failed",
-        nodeId: selectedNode.id,
-        reason: "missing-node",
-      });
-      return;
-    }
-    saveOrchestrationTaskStore(upsertOrchestrationTask(loadOrchestrationTaskStore(), draft));
-    setOrchestrationDraftState({
-      status: "created",
-      nodeId: selectedNode.id,
-      taskId: draft.taskId,
-      taskStatus: draft.status,
-      evidenceCount: draft.evidenceRefs.length,
-      riskCount: draft.riskMarkers.length,
-    });
-    onOpenOrchestrationTask?.(draft.taskId);
-  }, [activeWorkspace, dataset, onOpenOrchestrationTask, selectedNode, workspaceName]);
-
   const handleConfirmDeleteNode = async () => {
     if (!deleteConfirmNode) {
       setDeleteConfirmNodeId(null);
@@ -1921,7 +1867,6 @@ export function ProjectMapPanel({
               graphIntegrityIssues={graphIntegrityIssues}
               graphRepairSummary={activeGraphRepairSummary}
               isGraphHealthExpanded={isGraphHealthExpanded}
-              orchestrationDraftState={orchestrationDraftState}
               staleCount={staleCount}
               unassignedDiscoveryCount={unassignedDiscoveryCount}
               pendingReviewCandidateCount={(dataset.candidates ?? []).filter((candidate) => candidate.status === "pending").length}
@@ -1934,7 +1879,6 @@ export function ProjectMapPanel({
               onDrill={() => handleDrillIn(selectedNode)}
               onCompleteNode={() => selectedNode ? datasetController.openNodeGeneration("node", selectedNode) : undefined}
               onCalibrateNode={() => selectedNode ? datasetController.openNodeGeneration("calibrate", selectedNode) : undefined}
-              onCreateOrchestrationTask={handleCreateOrchestrationTaskDraft}
               onOrganizeUnassigned={datasetController.openUnassignedOrganizer}
               onConfirmCandidate={(candidateId) => {
                 void datasetController.confirmCandidate(candidateId);

@@ -62,10 +62,12 @@ type DesktopLayoutProps = {
   showHome: boolean;
   showWorkspace: boolean;
   showKanban: boolean;
+  showExtensions?: boolean;
   showGitHistory: boolean;
   hideRightPanel: boolean;
   isSoloMode: boolean;
   kanbanNode: ReactNode;
+  extensionsNode?: ReactNode;
   gitHistoryNode: ReactNode;
   settingsOpen: boolean;
   settingsNode: ReactNode;
@@ -106,10 +108,12 @@ export function DesktopLayout({
   showHome,
   showWorkspace,
   showKanban,
+  showExtensions = false,
   showGitHistory,
   hideRightPanel,
   isSoloMode,
   kanbanNode,
+  extensionsNode = null,
   gitHistoryNode,
   settingsOpen,
   settingsNode,
@@ -168,7 +172,7 @@ export function DesktopLayout({
     centerMode !== "projectMap" &&
     centerMode !== "intentCanvas" &&
     centerMode !== "fileCompare" &&
-    centerMode !== "fileHistory" &&
+    centerMode !== "diff" &&
     !shouldPlaceComposerInChatColumn &&
     !isEditorSplitProjectMapVisible &&
     !isEditorSplitNotesVisible &&
@@ -197,7 +201,6 @@ export function DesktopLayout({
       if (!ref) continue;
       const isInteractive =
         centerMode === mode ||
-        (mode === "editor" && centerMode === "fileHistory") ||
         ((isEditorSplitChatVisible || isNoteCardsCompanionVisible) && mode === "chat") ||
         (isEditorSplitNotesVisible && mode === "notes") ||
         (isEditorSplitProjectMapVisible && mode === "projectMap");
@@ -213,7 +216,6 @@ export function DesktopLayout({
       for (const { ref, mode } of layers) {
         const isInteractive =
           centerMode === mode ||
-          (mode === "editor" && centerMode === "fileHistory") ||
           ((isEditorSplitChatVisible || isNoteCardsCompanionVisible) && mode === "chat") ||
           (isEditorSplitNotesVisible && mode === "notes") ||
           (isEditorSplitProjectMapVisible && mode === "projectMap");
@@ -541,6 +543,28 @@ export function DesktopLayout({
     );
   }
 
+  if (showExtensions && !settingsOpen) {
+    return (
+      <>
+        {sidebarNode}
+        <div
+          className="sidebar-resizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={t("layout.resizeSidebar")}
+          onMouseDown={onSidebarResizeStart}
+        />
+        <section className="main extensions-main">
+          {errorToastsNode}
+          {globalRuntimeNoticeDockNode}
+          {extensionsNode}
+          {runtimeConsoleDockNode}
+          {terminalDockNode}
+        </section>
+      </>
+    );
+  }
+
   const isMemoryMode = centerMode === "memory";
   const gitHistoryDockNode = showGitHistory ? (
     <div className="git-history-dock-overlay">
@@ -635,9 +659,9 @@ export function DesktopLayout({
                   </div>
                   <div
                     className={`content-layer content-layer--editor ${
-                      centerMode === "editor" || centerMode === "fileHistory" ? "is-active" : "is-hidden"
+                      centerMode === "editor" ? "is-active" : "is-hidden"
                     }`}
-                    aria-hidden={centerMode !== "editor" && centerMode !== "fileHistory"}
+                    aria-hidden={centerMode !== "editor"}
                     ref={editorLayerRef}
                   >
                     {fileViewPanelNode}

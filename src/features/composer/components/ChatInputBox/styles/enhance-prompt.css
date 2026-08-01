@@ -333,3 +333,56 @@
 [data-theme="light"] .enhanced-prompt {
   background: rgba(0, 120, 212, 0.08);
 }
+
+:root[data-theme="light"] .prompt-enhancer-btn.primary {
+  background: #2563eb;
+  color: #ffffff;
+  opacity: 1;
+}
+
+:root[data-theme="light"] .prompt-enhancer-btn.primary:hover:not(:disabled) {
+  background: #1d4ed8;
+  opacity: 1;
+}
+
+:root[data-theme="light"] .prompt-enhancer-btn.primary:disabled {
+  background: #dbeafe;
+  color: #5b7db1;
+  opacity: 1;
+}
+
+/* Prompt distillation (save-as-command) dialog additions */
+.prompt-distill-description {
+  margin: 0 0 4px;
+  font-size: 12px;
+  line-height: 1.6;
+  opacity: 0.75;
+}
+
+.prompt-distill-content {
+  width: 100%;
+  min-height: 160px;
+  resize: vertical;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1.5;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: transparent;
+  color: inherit;
+  box-sizing: border-box;
+}
+
+.prompt-distill-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.prompt-distill-error {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #d64545;
+  white-space: pre-wrap;
+}

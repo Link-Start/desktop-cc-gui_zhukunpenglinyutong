@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { withoutMessagePresentationMetadata } from "./threadReducerTestProjection";
 import { initialState, threadReducer } from "./useThreadsReducer";
 
 describe("threadReducer compaction lifecycle", () => {
@@ -98,7 +99,9 @@ describe("threadReducer compaction lifecycle", () => {
       appendIfAlreadyCompleted: true,
     });
 
-    expect(secondCompleted.itemsByThread["thread-1"]).toEqual([
+    expect(withoutMessagePresentationMetadata(
+      secondCompleted.itemsByThread["thread-1"],
+    )).toEqual([
       {
         id: "context-compacted-codex-compact-thread-1-completed-turn-1",
         kind: "message",
@@ -130,7 +133,9 @@ describe("threadReducer compaction lifecycle", () => {
       appendIfAlreadyCompleted: true,
     });
 
-    expect(withCompletionFallback.itemsByThread["thread-1"]).toEqual([
+    expect(withoutMessagePresentationMetadata(
+      withCompletionFallback.itemsByThread["thread-1"],
+    )).toEqual([
       expect.objectContaining({
         kind: "message",
         role: "assistant",

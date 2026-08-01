@@ -38,6 +38,7 @@ vi.mock("../../../services/tauri", () => ({
   listClaudeSessions: vi.fn(),
   listGeminiSessions: vi.fn(),
   listKimiSessions: vi.fn(),
+  listGrokSessions: vi.fn(),
   listWorkspaceSessions: vi.fn(),
   listThreadTitles: vi.fn(),
   listThreads: vi.fn(),
@@ -185,7 +186,9 @@ describe("useThreadActions shared/native compatibility", () => {
     const { result, dispatch } = renderActions();
 
     await act(async () => {
-      await result.current.listThreadsForWorkspace(workspace);
+      await result.current.listThreadsForWorkspace(workspace, {
+        includeOpenCodeSessions: true,
+      });
     });
 
     await waitFor(() => {
@@ -252,6 +255,62 @@ describe("useThreadActions shared/native compatibility", () => {
             threadIds.includes("shared:shared-session-claude-1") &&
             threadIds.includes("claude:session-visible") &&
             !threadIds.includes("claude:session-hidden")
+          );
+        }),
+      ).toBe(true);
+    });
+  });
+
+  it("hides Codex V2 bindings returned by the Shared canonical store", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "codex-hidden",
+            preview: "Hidden Codex Binding",
+            updatedAt: 1_730_000_370_000,
+            cwd: "/tmp/codex",
+          },
+          {
+            id: "codex-visible",
+            preview: "Visible Codex Session",
+            updatedAt: 1_730_000_380_000,
+            cwd: "/tmp/codex",
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(listSharedSessions).mockResolvedValue([
+      {
+        id: "shared-session-codex-1",
+        threadId: "shared:shared-session-codex-1",
+        title: "Shared Codex",
+        updatedAt: 1_730_000_390_000,
+        selectedEngine: "codex",
+        nativeThreadIds: ["codex-hidden"],
+      },
+    ]);
+
+    const { result, dispatch } = renderActions();
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+
+    await waitFor(() => {
+      const setThreadsActions = vi.mocked(dispatch).mock.calls
+        .map(([action]) => action)
+        .filter((action) => action?.type === "setThreads");
+      expect(
+        setThreadsActions.some((action) => {
+          const threadIds = Array.isArray(action.threads)
+            ? action.threads.map((thread: { id: string }) => thread.id)
+            : [];
+          return (
+            threadIds.includes("shared:shared-session-codex-1") &&
+            threadIds.includes("codex-visible") &&
+            !threadIds.includes("codex-hidden")
           );
         }),
       ).toBe(true);

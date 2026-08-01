@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { ConversationItem } from "../../../types";
 import { Messages } from "./Messages";
-import { buildSuppressedUserNoteCardContextMessageIdSet } from "./messagesNoteCardContext";
+import { buildSuppressedUserNoteCardContextMessageIdSet } from "../utils/context/messagesNoteCardContext";
 
 vi.mock("./Markdown", () => ({
   Markdown: ({ value, className }: { value: string; className?: string }) => (

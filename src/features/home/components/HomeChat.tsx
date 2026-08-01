@@ -26,20 +26,7 @@ import {
   type ComposerBranchControl,
 } from "../../composer/components/ComposerBranchBadge";
 
-type LatestAgentRun = {
-  message: string;
-  timestamp: number;
-  projectName: string;
-  groupName?: string | null;
-  workspaceId: string;
-  threadId: string;
-  isProcessing: boolean;
-};
-
 type HomeChatProps = {
-  latestAgentRuns: LatestAgentRun[];
-  isLoadingLatestAgents: boolean;
-  onSelectThread: (workspaceId: string, threadId: string) => void;
   workspaces: Array<{
     id: string;
     name: string;
@@ -63,6 +50,8 @@ function getEngineLabel(engine: EngineType): string {
       return "Claude";
     case "gemini":
       return "Gemini";
+    case "grok":
+      return "Grok";
     case "kimi":
       return "Kimi";
     case "opencode":
@@ -128,7 +117,7 @@ export function HomeChat({
           >
             <EngineIcon
               engine={selectedEngine}
-              size={50}
+              size={32}
               className="home-chat-engine-icon"
             />
           </div>

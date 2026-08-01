@@ -21,6 +21,10 @@ const promptEnhancer = {
     "useEnhanced": "Usar aprimorado",
     "keepOriginal": "Manter original",
     "enhanceFailed": "Falha ao aprimorar o prompt",
+    "failedTimeout": "O aprimoramento do prompt expirou após {{seconds}}s. Tente novamente",
+    "failedWorkspace": "O workspace não está pronto para o aprimoramento do prompt",
+    "failedEmpty": "O motor retornou um aprimoramento vazio. Tente novamente",
+    "failedGeneric": "Falha ao aprimorar o prompt",
     "emptyPrompt": "Digite um prompt primeiro",
     "copyEnhanced": "Copiar aprimorado"
   }

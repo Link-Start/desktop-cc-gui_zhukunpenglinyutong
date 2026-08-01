@@ -34,8 +34,6 @@ import { pushErrorToast } from "../../../services/toasts";
 import { DEFAULT_UI_FONT_FAMILY } from "../../../utils/fonts";
 import { SettingsView } from "./SettingsView";
 
-const skillsSectionMock = vi.fn();
-
 vi.mock("@tauri-apps/api/app", () => ({
   getVersion: vi.fn(() => new Promise<string>(() => {})),
 }));
@@ -63,14 +61,6 @@ vi.mock("@/features/computer-use/components/ComputerUseStatusCard", () => ({
   ComputerUseStatusCard: () => <div data-testid="computer-use-status-card" />,
 }));
 
-vi.mock("./McpSection", () => ({
-  McpSection: ({ embedded }: { embedded?: boolean }) => (
-    <div data-testid={embedded ? "embedded-mcp-section" : "mcp-section"}>
-      Mock MCP Section
-    </div>
-  ),
-}));
-
 vi.mock("../../curated-skills/components/CuratedSection", () => ({
   CuratedSection: () => <div data-testid="curated-section-stub">Mock Curated Section</div>,
 }));
@@ -82,25 +72,6 @@ vi.mock("../../curated-skills/hooks/useCuratedSkills", () => ({
     error: null,
     refresh: () => Promise.resolve(),
   }),
-}));
-
-vi.mock("./SkillsSection", () => ({
-  SkillsSection: (props: {
-    embedded?: boolean;
-    appSettings?: AppSettings;
-    onUpdateAppSettings?: unknown;
-  }) => {
-    skillsSectionMock(props);
-    return (
-      <div
-        data-testid={
-          props.embedded ? "embedded-skills-section" : "skills-section"
-        }
-      >
-        Mock Skills Section
-      </div>
-    );
-  },
 }));
 
 vi.mock("../../vendors/components/VendorSettingsPanel", () => ({
@@ -148,7 +119,6 @@ const createDeferred = <T,>() => {
 };
 
 beforeEach(() => {
-  skillsSectionMock.mockClear();
   queryLocalFontsMock.mockReset();
   queryLocalFontsMock.mockImplementation(
     () => new Promise<Array<{ family: string }>>(() => {}),
@@ -229,11 +199,12 @@ const workspaceB: WorkspaceInfo = {
 const baseSettings: AppSettings = {
   claudeBin: null,
   kimiBin: null,
+  grokBin: null,
+  opencodeBin: null,
   codexBin: null,
   codexArgs: null,
   terminalShellPath: null,
-  geminiEnabled: true,
-  opencodeEnabled: true,
+  disabledCliEngines: [],
   browserAgentEnabled: true,
   browserAgentPreferBuiltIn: true,
   browserAgentAllowExternalProviderFallback: true,
@@ -272,7 +243,15 @@ const baseSettings: AppSettings = {
   toggleFilesSurfaceShortcut: null,
   saveFileShortcut: null,
   findInFileShortcut: null,
+  expandSelectionShortcut: null,
   toggleGitDiffListViewShortcut: null,
+  toggleGitGraphShortcut: null,
+  openNotesShortcut: null,
+  openIntentCanvasShortcut: null,
+  openRadarShortcut: null,
+  openProjectMapShortcut: null,
+  openBrowserDockShortcut: null,
+  openFileCompareShortcut: null,
   increaseUiScaleShortcut: null,
   decreaseUiScaleShortcut: null,
   resetUiScaleShortcut: null,
@@ -344,6 +323,7 @@ const baseSettings: AppSettings = {
   composerListContinuation: false,
   composerCodeBlockCopyUseModifier: false,
   workspaceGroups: [],
+  curatedSkillDefaultsVersion: 1,
   openAppTargets: [
     {
       id: "vscode",
@@ -649,18 +629,18 @@ describe("SettingsView projects display", () => {
 });
 
 describe("SettingsView Display", () => {
-  it("uses the titlebar for the active settings section title and description", async () => {
+  it("uses the in-content page head for the active settings section title and description", async () => {
     renderDisplaySection({ initialSection: null });
     await flushSettingsViewEffects();
 
-    const header = document.querySelector(".settings-header") as HTMLElement | null;
-    if (!header) {
-      throw new Error("Expected settings header");
+    const pageHead = document.querySelector(".settings-page-head") as HTMLElement | null;
+    if (!pageHead) {
+      throw new Error("Expected settings page head");
     }
 
-    const headerQueries = within(header);
-    expect(headerQueries.getByText("Basic Settings")).toBeTruthy();
-    expect(headerQueries.getByText("settings.basicDescription")).toBeTruthy();
+    const pageHeadQueries = within(pageHead);
+    expect(pageHeadQueries.getByText("Basic Settings")).toBeTruthy();
+    expect(pageHeadQueries.getByText("settings.basicDescription")).toBeTruthy();
     expect(
       document.querySelector(".settings-content .settings-section-title"),
     ).toBeNull();
@@ -669,8 +649,21 @@ describe("SettingsView Display", () => {
       screen.getByRole("button", { name: "settings.sidebarProviders" }),
     );
 
-    expect(headerQueries.getByText("settings.sidebarProviders")).toBeTruthy();
-    expect(headerQueries.getByText("settings.vendorsDescription")).toBeTruthy();
+    // The providers page shares the same centered-column page head as every
+    // other section; only the title and description swap.
+    const providersHead = document.querySelector(
+      ".settings-page-head",
+    ) as HTMLElement | null;
+    if (!providersHead) {
+      throw new Error("Expected providers page head");
+    }
+    const providersHeadQueries = within(providersHead);
+    expect(
+      providersHeadQueries.getByText("settings.sidebarProviders"),
+    ).toBeTruthy();
+    expect(
+      providersHeadQueries.getByText("settings.vendorsDescription"),
+    ).toBeTruthy();
   });
 
   it("opens basic settings by default when no external section is provided", async () => {
@@ -720,9 +713,6 @@ describe("SettingsView Display", () => {
       sidebarQueries.queryByRole("button", { name: "Prompts" }),
     ).toBeNull();
     expect(
-      sidebarQueries.queryByRole("button", { name: "Shortcuts" }),
-    ).toBeNull();
-    expect(
       sidebarQueries.queryByRole("button", { name: "Open in" }),
     ).toBeNull();
     expect(sidebarQueries.queryByRole("button", { name: "Usage" })).toBeNull();
@@ -736,7 +726,6 @@ describe("SettingsView Display", () => {
     expect(
       sidebarQueries.queryByRole("button", { name: "CLI Validation" }),
     ).toBeNull();
-    expect(sidebarQueries.queryByRole("button", { name: "Skills" })).toBeNull();
     const providersEntry = sidebarQueries.getByRole("button", {
       name: "settings.sidebarProviders",
     });
@@ -755,15 +744,31 @@ describe("SettingsView Display", () => {
     expect(
       sidebarQueries.getByRole("button", { name: "Project Management" }),
     ).toBeTruthy();
+    const shortcutsEntry = sidebarQueries.getByRole("button", {
+      name: "Shortcuts",
+    });
+    const projectManagementEntry = sidebarQueries.getByRole("button", {
+      name: "Project Management",
+    });
     expect(
-      sidebarQueries.getByRole("button", { name: "MCP / Skills" }),
-    ).toBeTruthy();
+      Array.from(sidebar.querySelectorAll(".settings-nav")).indexOf(
+        shortcutsEntry,
+      ),
+    ).toBeLessThan(
+      Array.from(sidebar.querySelectorAll(".settings-nav")).indexOf(
+        projectManagementEntry,
+      ),
+    );
+    // 内置精选已并入「其他设置」，侧栏不再有独立 Skills 入口。
+    expect(
+      sidebarQueries.queryByRole("button", { name: "Skills" }),
+    ).toBeNull();
     expect(
       sidebarQueries.getByRole("button", { name: "Agents / Prompts" }),
     ).toBeTruthy();
     expect(
-      sidebarQueries.getByRole("button", { name: "Runtime Environment" }),
-    ).toBeTruthy();
+      sidebarQueries.queryByRole("button", { name: "Runtime Environment" }),
+    ).toBeNull();
     expect(
       sidebarQueries.queryByRole("button", { name: "Experimental" }),
     ).toBeNull();
@@ -1117,7 +1122,7 @@ describe("SettingsView Display", () => {
     });
   });
 
-  it("hides deprecated Gemini and OpenCode entries inside CLI validation tabs", () => {
+  it("hides the deprecated Gemini entry inside CLI validation tabs", () => {
     cleanup();
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     render(
@@ -1158,8 +1163,8 @@ describe("SettingsView Display", () => {
 
     expect(screen.getByRole("tab", { name: "Codex" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Claude Code" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "OpenCode CLI" })).toBeTruthy();
     expect(screen.queryByRole("tab", { name: "Gemini CLI" })).toBeNull();
-    expect(screen.queryByRole("tab", { name: "OpenCode CLI" })).toBeNull();
     expect(screen.queryByRole("switch", { name: "Gemini CLI" })).toBeNull();
     expect(screen.queryByRole("switch", { name: "OpenCode CLI" })).toBeNull();
     expect(onUpdateAppSettings).not.toHaveBeenCalled();
@@ -1501,13 +1506,19 @@ describe("SettingsView Display", () => {
     });
   });
 
-  it("keeps hidden client UI visibility controls out of the display settings", async () => {
+  it("keeps hidden client UI visibility controls out of the display settings", () => {
     renderDisplaySection();
 
     expect(screen.queryByText("Client UI visibility")).toBeNull();
     expect(screen.queryByText("Conversation canvas")).toBeNull();
     expect(screen.queryByText("Runtime notice dock")).toBeNull();
     expect(screen.queryByText("Context sources card")).toBeNull();
+    expect(writeClientStoreValue).not.toHaveBeenCalledWith(
+      "app",
+      "clientUiVisibility",
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it("updates user message color using reference-compatible format", async () => {
@@ -2246,7 +2257,6 @@ describe("SettingsView Shortcuts", () => {
 
     expectTabButtonHasIcon("Appearance");
     expectTabButtonHasIcon("Behavior");
-    expectTabButtonHasIcon("Shortcuts");
     expectTabButtonHasIcon("Open in");
     expectTabButtonHasIcon("Web Service");
     expectTabButtonHasIcon("Email");
@@ -2255,11 +2265,13 @@ describe("SettingsView Shortcuts", () => {
     await flushSettingsViewEffects();
     expect(screen.getAllByText("Shortcuts").length).toBeGreaterThanOrEqual(2);
     expect(
-      screen.getByText(
+      screen.getAllByText(
         "Customize keyboard shortcuts for file actions, composer, panels, and navigation.",
-      ),
-    ).toBeTruthy();
+      ).length,
+    ).toBeGreaterThanOrEqual(1);
 
+    fireEvent.click(screen.getByRole("button", { name: "Basic Settings" }));
+    await flushSettingsViewEffects();
     fireEvent.click(screen.getByRole("button", { name: "Open in" }));
     await flushSettingsViewEffects();
     expect(screen.getAllByText("Open in").length).toBeGreaterThanOrEqual(2);
@@ -2308,37 +2320,15 @@ describe("SettingsView Shortcuts", () => {
     await flushSettingsViewEffects();
     expect(screen.getByText("settings.prompt.title")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "MCP / Skills" }));
+    fireEvent.click(screen.getByRole("button", { name: "Other" }));
     await flushSettingsViewEffects();
-    expect(screen.getByRole("button", { name: "MCP Servers" })).toBeTruthy();
-    expectTabButtonHasIcon("MCP Servers");
-    expectTabButtonHasIcon("Skills");
-    expect(screen.getByTestId("embedded-mcp-section")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Skills" }));
-    await flushSettingsViewEffects();
-    expect(screen.getByTestId("embedded-skills-section")).toBeTruthy();
-    expect(skillsSectionMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        embedded: true,
-        appSettings: expect.objectContaining({
-          customSkillDirectories: [],
-        }),
-        onUpdateAppSettings: expect.any(Function),
-      }),
-    );
+    // 内置精选 Skills 已并入「其他设置」。
+    expect(screen.getByTestId("curated-section-stub")).toBeTruthy();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Runtime Environment" }),
-    );
-    await flushSettingsViewEffects();
-    expect(screen.getByRole("button", { name: "Runtime Pool" })).toBeTruthy();
-    expectTabButtonHasIcon("Runtime Pool");
-    expectTabButtonHasIcon("CLI Validation");
-    fireEvent.click(screen.getByRole("button", { name: "CLI Validation" }));
-    await flushSettingsViewEffects();
-    expect(screen.getAllByText("CLI Validation").length).toBeGreaterThanOrEqual(
-      2,
-    );
+    // 运行环境入口已从侧栏隐藏；内容逻辑仍保留，可通过 initialSection 验证。
+    expect(
+      screen.queryByRole("button", { name: "Runtime Environment" }),
+    ).toBeNull();
   });
 
   it("closes when clicking back to app", async () => {

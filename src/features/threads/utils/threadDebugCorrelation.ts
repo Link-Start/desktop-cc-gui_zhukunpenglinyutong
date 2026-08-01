@@ -1,3 +1,5 @@
+import { inferEngineFromLegacyThreadId } from "../contracts/engineRuntimeIdentity";
+
 export type ThreadDebugRecoveryState =
   | "healthy"
   | "recovering"
@@ -12,26 +14,6 @@ type ThreadDebugCorrelationOptions = {
   diagnosticCategory?: string | null;
   recoveryState?: ThreadDebugRecoveryState | null;
 };
-
-function inferEngineFromThreadId(threadId: string | null | undefined): string | null {
-  const normalized = threadId?.trim().toLowerCase() ?? "";
-  if (!normalized) {
-    return null;
-  }
-  if (normalized.startsWith("claude:") || normalized.startsWith("claude-pending-")) {
-    return "claude";
-  }
-  if (normalized.startsWith("gemini:") || normalized.startsWith("gemini-pending-")) {
-    return "gemini";
-  }
-  if (normalized.startsWith("kimi:") || normalized.startsWith("kimi-pending-")) {
-    return "kimi";
-  }
-  if (normalized.startsWith("opencode:") || normalized.startsWith("opencode-pending-")) {
-    return "opencode";
-  }
-  return "codex";
-}
 
 function inferRecoveryState(
   diagnosticCategory: string | null | undefined,
@@ -59,7 +41,7 @@ export function buildThreadDebugCorrelation(
   return {
     workspaceId: workspaceId || null,
     threadId: threadId || null,
-    engine: options.engine ?? inferEngineFromThreadId(threadId) ?? null,
+    engine: options.engine ?? (threadId ? inferEngineFromLegacyThreadId(threadId) : null),
     action: options.action,
     recoveryState: inferRecoveryState(
       diagnosticCategory || null,

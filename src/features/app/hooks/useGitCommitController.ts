@@ -13,6 +13,7 @@ import {
   unstageGitFile,
 } from "../../../services/tauri";
 import {
+  resolveCommitMessageGenerationErrorKey,
   sanitizeGeneratedCommitMessage,
   shouldApplyCommitMessage,
 } from "../../../utils/commitMessage";
@@ -143,13 +144,8 @@ export function useGitCommitController({
         return;
       }
       const raw = error instanceof Error ? error.message : String(error);
-      const isCodexRequired =
-        engine === "codex" &&
-        (raw.includes("requires the Codex CLI") ||
-          raw.includes("workspace not connected"));
-      setCommitMessageError(
-        isCodexRequired ? t("git.commitMessageRequiresCodex") : raw,
-      );
+      const errorKey = resolveCommitMessageGenerationErrorKey(raw, engine);
+      setCommitMessageError(errorKey ? t(errorKey) : raw);
     } finally {
       if (shouldApplyCommitMessage(activeWorkspaceIdRef.current, workspaceId)) {
         setCommitMessageLoading(false);

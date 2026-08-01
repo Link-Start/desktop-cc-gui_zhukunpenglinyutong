@@ -17,6 +17,8 @@ interface KimiProviderListProps {
   providers: KimiProviderConfig[];
   loading: boolean;
   headerActions?: ReactNode;
+  /** 渲染在「+ 添加」按钮之后 */
+  trailingActions?: ReactNode;
   onAdd: () => void;
   onEdit: (provider: KimiProviderConfig) => void;
   onDelete: (provider: KimiProviderConfig) => void;
@@ -27,6 +29,7 @@ export function KimiProviderList({
   providers,
   loading,
   headerActions,
+  trailingActions,
   onAdd,
   onEdit,
   onDelete,
@@ -46,6 +49,7 @@ export function KimiProviderList({
           <Button size="sm" onClick={onAdd}>
             + {t("settings.vendor.add")}
           </Button>
+          {trailingActions}
         </div>
       </div>
 

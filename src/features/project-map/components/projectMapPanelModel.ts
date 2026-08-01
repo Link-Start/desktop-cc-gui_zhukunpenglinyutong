@@ -1,11 +1,10 @@
-import type { ModelOption, WorkspaceInfo } from "../../../types";
+import type { ModelOption } from "../../../types";
 import { getSortedProjectMapChildren } from "../utils/interactiveLayout";
 import type {
   ProjectMapGraphNodePosition,
   ProjectMapGraphViewport,
 } from "../utils/interactiveLayout";
 import type {
-  ProjectMapDataset,
   ProjectMapLens,
   ProjectMapNode,
   ProjectMapPreferredLanguage,
@@ -100,27 +99,6 @@ export function writeCanvasControlsCollapsedPreference(collapsed: boolean): void
   } catch {
     // UI preference persistence is best-effort.
   }
-}
-
-export function resolveProjectMapOrchestrationWorkspaceId(input: {
-  activeWorkspace: WorkspaceInfo | null;
-  dataset: ProjectMapDataset;
-  workspaceName?: string | null;
-}): string | null {
-  const ownedRunWorkspaceId =
-    input.dataset.runs.find((run) => run.ownership?.workspaceId)?.ownership?.workspaceId ?? null;
-  const candidates = [
-    input.activeWorkspace?.id,
-    ownedRunWorkspaceId,
-    input.dataset.manifest.storageKey,
-    input.workspaceName,
-  ];
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.trim().length > 0) {
-      return candidate.trim();
-    }
-  }
-  return null;
 }
 
 export function resolveSelectedGenerationModel(

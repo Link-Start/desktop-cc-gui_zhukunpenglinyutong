@@ -6,6 +6,7 @@ import type {
 } from "../../../types";
 import type { ThreadAction } from "./useThreadsReducer";
 import type { DomainEventRuntimeController } from "../domain-events";
+import type { TurnExecutionSnapshot } from "../../shared-session/target/types";
 
 export type ThreadEventHandlersOptions = {
   activeThreadId: string | null;
@@ -31,12 +32,14 @@ export type ThreadEventHandlersOptions = {
     workspaceId: string,
     threadId: string,
     message: string,
+    executionTargetSnapshot?: TurnExecutionSnapshot,
   ) => void;
   onDebug?: (entry: DebugEntry) => void;
   onWorkspaceConnected: (workspaceId: string) => void;
   applyCollabThreadLinks: (
     threadId: string,
     item: Record<string, unknown>,
+    workspaceId?: string,
   ) => void;
   approvalAllowlistRef: MutableRefObject<Record<string, string[][]>>;
   pendingInterruptsRef: MutableRefObject<WorkspaceScopedMap<true>>;
@@ -63,11 +66,11 @@ export type ThreadEventHandlersOptions = {
   ) => string | null;
   resolvePendingThreadForSession?: (
     workspaceId: string,
-    engine: "claude" | "gemini" | "kimi" | "opencode",
+    engine: "claude" | "gemini" | "grok" | "kimi" | "opencode",
   ) => string | null;
   resolvePendingThreadForTurn?: (
     workspaceId: string,
-    engine: "claude" | "gemini" | "kimi" | "opencode",
+    engine: "claude" | "gemini" | "grok" | "kimi" | "opencode",
     turnId: string | null | undefined,
   ) => string | null;
   getActiveTurnIdForThread?: (threadId: string) => string | null;
@@ -97,6 +100,9 @@ export type ThreadEventHandlersOptions = {
   }) => void;
   onThreadTransientCleanupReady?: (
     cleanup: (workspaceId: string | null | undefined, threadId: string) => number,
+  ) => () => void;
+  onDurableRealtimeTurnSettlementReady?: (
+    settle: (threadId: string, runtimeTurnId: string) => void,
   ) => () => void;
   onCollaborationModeResolved?: (
     event: CollaborationModeResolvedRequest,

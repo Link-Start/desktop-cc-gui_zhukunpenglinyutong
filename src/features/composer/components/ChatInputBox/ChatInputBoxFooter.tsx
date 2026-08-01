@@ -26,7 +26,7 @@ import { ButtonArea } from './ButtonArea.js';
 import { CompletionDropdown, Dropdown } from './Dropdown/index.js';
 import { PromptEnhancerDialog } from './PromptEnhancerDialog.js';
 import { LocalImage } from '../../../../components/common/LocalImage';
-import { Markdown } from '../../../messages/components/Markdown';
+import { Markdown } from '../../../../markdown/components/Markdown';
 import { resolveManualMemoryPreview } from '../../utils/manualMemoryPreview';
 
 interface CompletionController {

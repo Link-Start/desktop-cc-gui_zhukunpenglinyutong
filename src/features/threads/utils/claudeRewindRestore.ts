@@ -8,13 +8,13 @@ import {
   writeWorkspaceFile,
 } from "../../../services/tauri";
 import {
-  getFirstStringField,
   asRecord,
   buildCommandSummary,
   extractToolName,
+  getFirstStringField,
   isBashTool,
   parseToolArgs,
-} from "../../messages/components/toolBlocks/toolConstants";
+} from "../../../utils/toolSemantics";
 import {
   inferFileChangesFromCommandExecutionArtifacts,
   inferFileChangesFromPayload,

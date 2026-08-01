@@ -12,8 +12,10 @@ import {
   setPerfDiagnosticsEnabled,
 } from "@/services/perfBaseline/perfDiagnosticsController";
 import { buildDiagnosticsReportText } from "@/services/perfBaseline/diagnosticsReport";
+import { CuratedSection } from "../../../../curated-skills";
 import { HistoryCompletionSettings } from "../../HistoryCompletionSettings";
 import { SessionRadarHistoryManagementSection } from "../../SessionRadarHistoryManagementSection";
+import type { AppSettings } from "../../../../../types";
 import type { SessionRadarEntry } from "../../../../session-activity/hooks/useSessionRadarFeed";
 import type { SessionRadarHistoryDeleteResult } from "../../../../session-activity/utils/sessionRadarHistoryManagement";
 import {
@@ -27,10 +29,16 @@ import {
 } from "../../../../threads/utils/renderSchedulingPolicy";
 import { CostBudgetSettingsSection } from "./CostBudgetSettingsSection";
 import { PerfJankLivePanel } from "./PerfJankLivePanel";
+import {
+  isSharedProjectionDataSourceEnabled,
+  setSharedProjectionTestOverrideEnabled,
+} from "../../../../messages/presentation/sharedProjection/dataSource";
 
 type OtherSectionProps = {
   title: string | null;
   description: string | null;
+  appSettings: Pick<AppSettings, "enabledCuratedSkillIds">;
+  onUpdateAppSettings: (next: AppSettings) => Promise<void>;
   sessionRadarRecentCompletedSessions: SessionRadarEntry[];
   onDeleteSessionRadarHistory: (
     entries: SessionRadarEntry[],
@@ -40,6 +48,8 @@ type OtherSectionProps = {
 export function OtherSection({
   title,
   description,
+  appSettings,
+  onUpdateAppSettings,
   sessionRadarRecentCompletedSessions,
   onDeleteSessionRadarHistory,
 }: OtherSectionProps) {
@@ -53,6 +63,8 @@ export function OtherSection({
   );
   const [perfDiagnosticsEnabled, setPerfDiagnosticsEnabledState] =
     useState<boolean>(() => isPerfDiagnosticsFlagEnabled());
+  const [sharedProjectionTestEnabled, setSharedProjectionTestEnabled] =
+    useState<boolean>(() => isSharedProjectionDataSourceEnabled());
   const [copyReportMessage, setCopyReportMessage] = useState<string | null>(
     null,
   );
@@ -65,6 +77,14 @@ export function OtherSection({
   const handlePerfDiagnosticsToggle = (checked: boolean) => {
     setPerfDiagnosticsEnabledState(checked);
     setPerfDiagnosticsEnabled(checked);
+  };
+
+  const handleSharedProjectionTestToggle = (checked: boolean) => {
+    const changed = setSharedProjectionTestOverrideEnabled(checked);
+    setSharedProjectionTestEnabled(isSharedProjectionDataSourceEnabled());
+    if (changed) {
+      globalThis.location.reload();
+    }
   };
 
   const handleCopyPerfReport = async () => {
@@ -116,7 +136,38 @@ export function OtherSection({
       {description ? (
         <div className="settings-section-subtitle">{description}</div>
       ) : null}
+      {/* 内置精选 Skills：原独立侧栏入口已合并到其他设置 */}
+      <CuratedSection
+        appSettings={appSettings}
+        onUpdateAppSettings={onUpdateAppSettings}
+      />
+      <Separator className="my-4" />
       <HistoryCompletionSettings />
+      <Separator className="my-4" />
+      <div className="settings-subsection-title">
+        {t("settings.sharedProjectionTestTitle")}
+      </div>
+      <div className="settings-subsection-subtitle">
+        {t("settings.sharedProjectionTestDescription")}
+      </div>
+      <div className="settings-toggle-row">
+        <div>
+          <div className="settings-toggle-title">
+            {t("settings.sharedProjectionTestToggleTitle")}
+          </div>
+          <div className="settings-toggle-subtitle">
+            {t("settings.sharedProjectionTestToggleDescription")}
+          </div>
+          <div className="settings-help">
+            {t("settings.sharedProjectionTestToggleDetail")}
+          </div>
+        </div>
+        <Switch
+          aria-label={t("settings.sharedProjectionTestToggleTitle")}
+          checked={sharedProjectionTestEnabled}
+          onCheckedChange={handleSharedProjectionTestToggle}
+        />
+      </div>
       <Separator className="my-4" />
       <div className="settings-subsection-title">
         {t("settings.performanceDiagnosticsTitle")}

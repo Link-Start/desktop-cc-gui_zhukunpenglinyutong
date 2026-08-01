@@ -20,10 +20,6 @@ vi.mock("../../engine/components/EngineSelector", () => ({
   EngineSelector: () => null,
 }));
 
-vi.mock("../../opencode/components/OpenCodeControlPanel", () => ({
-  OpenCodeControlPanel: ({ visible }: { visible: boolean }) =>
-    visible ? <div data-testid="opencode-control-panel" /> : null,
-}));
 
 vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
   ChatInputBoxAdapter: ({

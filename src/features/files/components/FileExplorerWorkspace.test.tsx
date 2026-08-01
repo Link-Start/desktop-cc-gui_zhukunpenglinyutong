@@ -43,6 +43,9 @@ vi.mock("./FileViewPanel", () => ({
         <button type="button" onClick={() => props.onClose?.()}>
           close-tabs
         </button>
+        <button type="button" onClick={() => props.onRevealInFileTree?.(props.filePath)}>
+          reveal-file
+        </button>
         {props.filePath}
       </div>
     );
@@ -82,6 +85,7 @@ function WorkspaceHarness() {
       onOpenFile={(path) => setActiveFilePath(path)}
       onActivateTab={() => undefined}
       onCloseTab={() => undefined}
+      onCloseOtherTabs={() => undefined}
       onCloseAllTabs={() => setActiveFilePath(null)}
       onRefreshFiles={() => undefined}
       fileViewHeaderLayout="single-row"
@@ -114,6 +118,7 @@ function CollapsedWorkspaceHarness() {
       onOpenFile={(path) => setActiveFilePath(path)}
       onActivateTab={() => undefined}
       onCloseTab={() => undefined}
+      onCloseOtherTabs={() => undefined}
       onCloseAllTabs={() => setActiveFilePath(null)}
       fileViewHeaderLayout="single-row"
       defaultSidebarCollapsed
@@ -151,6 +156,7 @@ function AsyncCollapsedWorkspaceHarness() {
         onOpenFile={(path) => setActiveFilePath(path)}
         onActivateTab={() => undefined}
         onCloseTab={() => undefined}
+        onCloseOtherTabs={() => undefined}
         onCloseAllTabs={() => setActiveFilePath(null)}
         fileViewHeaderLayout="single-row"
         defaultSidebarCollapsed={defaultSidebarCollapsed}
@@ -244,6 +250,7 @@ describe("FileExplorerWorkspace", () => {
       onOpenFile: () => undefined,
       onActivateTab: () => undefined,
       onCloseTab: () => undefined,
+      onCloseOtherTabs: () => undefined,
       onCloseAllTabs: () => undefined,
       navigationTarget: null,
     };
@@ -273,5 +280,35 @@ describe("FileExplorerWorkspace", () => {
         }),
       );
     }
+  });
+
+  it("expands the detached sidebar and emits repeated session-local reveal requests", () => {
+    render(<CollapsedWorkspaceHarness />);
+    const workspace = screen.getByTestId("file-view-panel").closest(
+      ".detached-file-explorer-workspace",
+    );
+    expect(workspace?.classList.contains("is-sidebar-collapsed")).toBe(true);
+
+    fireEvent.click(screen.getByText("reveal-file"));
+    expect(workspace?.classList.contains("is-sidebar-collapsed")).toBe(false);
+    expect(fileTreePanelSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        revealRequest: {
+          workspaceId: "workspace-1",
+          path: "src/index.ts",
+          requestId: 1,
+        },
+      }),
+    );
+
+    fireEvent.click(screen.getByText("reveal-file"));
+    expect(fileTreePanelSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        revealRequest: expect.objectContaining({
+          path: "src/index.ts",
+          requestId: 2,
+        }),
+      }),
+    );
   });
 });

@@ -2287,6 +2287,61 @@
   max-height: min(560px, 70vh);
 }
 
+.composer-git-command-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+  padding-right: 8px;
+}
+
+.composer-git-command-header [data-slot="command-input-wrapper"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-bottom: 0;
+}
+
+.composer-git-header-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.composer-git-command-header button.composer-git-header-action {
+  display: inline-flex;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  box-shadow: none;
+  background: transparent;
+  color: var(--text-muted);
+  appearance: none;
+}
+
+.composer-git-command-header button.composer-git-header-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+.composer-git-command-header button.composer-git-header-action:hover,
+.composer-git-command-header button.composer-git-header-action:focus-visible {
+  background: transparent;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.composer-git-command-header button.composer-git-header-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .composer-git-section-toggle {
   display: flex;
   width: 100%;

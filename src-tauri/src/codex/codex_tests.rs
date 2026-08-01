@@ -5,15 +5,207 @@ use super::thread_listing::{
 };
 use super::{
     codex_provider_binding_lookup_keys, create_session_runtime_recovering_error,
-    run_start_thread_with_hook_safe_fallback,
+    resolve_shared_control_response_route, run_start_thread_with_hook_safe_fallback,
     run_start_thread_with_hook_safe_fallback_and_recovery_probe, run_start_thread_with_retry,
     run_start_thread_with_retry_and_recovery_probe,
 };
 use crate::types::{LocalUsageSessionSummary, LocalUsageUsageData};
+use crate::{
+    engine::EngineType,
+    shared_event_log::canonical::types::{CanonicalProviderProfileSource, TurnExecutionSnapshot},
+    shared_runtime_coordinator::{SharedRuntimeAttemptOwner, SharedRuntimeCoordinator},
+};
 use serde_json::json;
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+
+fn register_shared_control_owner(
+    coordinator: &SharedRuntimeCoordinator,
+    engine: EngineType,
+    provider_profile_id: Option<&str>,
+) -> String {
+    let provider_runtime_key = match engine {
+        EngineType::Claude => crate::engine::claude::provider_profile::claude_runtime_key(
+            "ws-control",
+            provider_profile_id,
+        ),
+        EngineType::Codex => {
+            crate::shared::codex_core::session_key_for_provider("ws-control", provider_profile_id)
+        }
+        _ => unreachable!("test only uses Shared engines"),
+    };
+    coordinator
+        .register_attempt(SharedRuntimeAttemptOwner {
+            workspace_id: "ws-control".to_string(),
+            provider_runtime_key: provider_runtime_key.clone(),
+            shared_session_id: "session-control".to_string(),
+            shared_thread_id: "shared:session-control".to_string(),
+            logical_turn_id: "logical-control".to_string(),
+            attempt_id: "attempt-control".to_string(),
+            binding_key: format!(
+                "{}:{}",
+                match engine {
+                    EngineType::Claude => "claude",
+                    EngineType::Codex => "codex",
+                    _ => unreachable!("test only uses Shared engines"),
+                },
+                provider_profile_id.unwrap_or("default"),
+            ),
+            binding_operation_id: "binding-operation-control".to_string(),
+            engine,
+            execution_target_snapshot: TurnExecutionSnapshot {
+                engine: match engine {
+                    EngineType::Claude => "claude",
+                    EngineType::Codex => "codex",
+                    _ => unreachable!("test only uses Shared engines"),
+                }
+                .to_string(),
+                provider_profile_id: provider_profile_id.map(str::to_string),
+                model_catalog_entry_id: Some("catalog-control".to_string()),
+                model: Some("runtime-control".to_string()),
+                reasoning: None,
+                provider_profile_name_snapshot: Some("Provider Control".to_string()),
+                provider_profile_source: Some(if provider_profile_id.is_some() {
+                    CanonicalProviderProfileSource::Managed
+                } else {
+                    CanonicalProviderProfileSource::Local
+                }),
+                runtime_capability_fingerprint: None,
+                extra: serde_json::Value::Object(Default::default()),
+            },
+            native_session_id: Some("native-control".to_string()),
+            runtime_turn_id: Some("runtime-turn-control".to_string()),
+            context_marker: None,
+        })
+        .expect("register shared control owner");
+    provider_runtime_key
+}
+
+#[test]
+fn shared_control_response_resolves_the_exact_managed_codex_runtime() {
+    let coordinator = SharedRuntimeCoordinator::default();
+    let runtime_key =
+        register_shared_control_owner(&coordinator, EngineType::Codex, Some("provider-a"));
+
+    let route = resolve_shared_control_response_route(
+        &coordinator,
+        "ws-control",
+        Some("attempt-control"),
+        Some("shared:session-control"),
+        Some(&runtime_key),
+        Some("provider-a"),
+        Some("native-control"),
+        Some("runtime-turn-control"),
+    )
+    .expect("valid route")
+    .expect("shared route");
+
+    assert_eq!(route.engine, EngineType::Codex);
+    assert_eq!(route.provider_runtime_key, runtime_key);
+    assert_eq!(route.provider_profile_id.as_deref(), Some("provider-a"));
+}
+
+#[test]
+fn shared_control_response_fails_closed_for_partial_or_mismatched_owner() {
+    let coordinator = SharedRuntimeCoordinator::default();
+    let runtime_key =
+        register_shared_control_owner(&coordinator, EngineType::Claude, Some("provider-a"));
+
+    let missing_owner = resolve_shared_control_response_route(
+        &coordinator,
+        "ws-control",
+        None,
+        None,
+        None,
+        None,
+        Some("shared:session-control"),
+        Some("runtime-turn-control"),
+    );
+    assert!(missing_owner
+        .expect_err("Shared thread claim without owner must fail")
+        .contains("missing its Runtime owner"));
+
+    let missing_key = resolve_shared_control_response_route(
+        &coordinator,
+        "ws-control",
+        Some("attempt-control"),
+        Some("shared:session-control"),
+        None,
+        Some("provider-a"),
+        Some("native-control"),
+        Some("runtime-turn-control"),
+    );
+    assert!(missing_key
+        .expect_err("partial identity must fail")
+        .contains("providerRuntimeKey"));
+
+    for (workspace_id, shared_thread_id, key, profile_id, native_id, turn_id) in [
+        (
+            "ws-other",
+            "shared:session-control",
+            runtime_key.as_str(),
+            "provider-a",
+            "native-control",
+            "runtime-turn-control",
+        ),
+        (
+            "ws-control",
+            "shared:other",
+            runtime_key.as_str(),
+            "provider-a",
+            "native-control",
+            "runtime-turn-control",
+        ),
+        (
+            "ws-control",
+            "shared:session-control",
+            "claude::ws-control::provider-b",
+            "provider-a",
+            "native-control",
+            "runtime-turn-control",
+        ),
+        (
+            "ws-control",
+            "shared:session-control",
+            runtime_key.as_str(),
+            "provider-b",
+            "native-control",
+            "runtime-turn-control",
+        ),
+        (
+            "ws-control",
+            "shared:session-control",
+            runtime_key.as_str(),
+            "provider-a",
+            "native-other",
+            "runtime-turn-control",
+        ),
+        (
+            "ws-control",
+            "shared:session-control",
+            runtime_key.as_str(),
+            "provider-a",
+            "native-control",
+            "runtime-turn-other",
+        ),
+    ] {
+        assert!(
+            resolve_shared_control_response_route(
+                &coordinator,
+                workspace_id,
+                Some("attempt-control"),
+                Some(shared_thread_id),
+                Some(key),
+                Some(profile_id),
+                Some(native_id),
+                Some(turn_id),
+            )
+            .is_err(),
+            "mismatched Shared owner must fail closed",
+        );
+    }
+}
 
 #[test]
 fn build_thread_list_empty_response_has_expected_shape() {
@@ -118,6 +310,7 @@ fn merge_unified_codex_thread_entries_dedupes_and_keeps_metadata_stable() {
             usage: LocalUsageUsageData::default(),
             cost: 0.0,
             summary: Some("local".to_string()),
+            native_title: None,
             source: Some("custom".to_string()),
             provider: Some("openai".to_string()),
             provider_profile_id: None,
@@ -138,6 +331,7 @@ fn merge_unified_codex_thread_entries_dedupes_and_keeps_metadata_stable() {
             usage: LocalUsageUsageData::default(),
             cost: 0.0,
             summary: Some("local-only".to_string()),
+            native_title: None,
             source: Some("project".to_string()),
             provider: Some("openai".to_string()),
             provider_profile_id: None,
@@ -208,6 +402,7 @@ fn merge_unified_codex_thread_entries_replaces_generic_vscode_source() {
         usage: LocalUsageUsageData::default(),
         cost: 0.0,
         summary: Some("local".to_string()),
+        native_title: None,
         source: Some("ccgui".to_string()),
         provider: Some("openai".to_string()),
         provider_profile_id: None,
@@ -254,6 +449,7 @@ fn merge_unified_codex_thread_entries_matches_session_id_aliases() {
         usage: LocalUsageUsageData::default(),
         cost: 0.0,
         summary: Some("local".to_string()),
+        native_title: None,
         source: Some("cli".to_string()),
         provider: Some("openai".to_string()),
         provider_profile_id: None,
@@ -427,6 +623,7 @@ fn merge_unified_codex_thread_entries_filters_background_helper_sessions() {
                 "## Memory Writing Agent: Phase 2 (Consolidation)\n\nConsolidate raw memories."
                     .to_string(),
             ),
+            native_title: None,
             source: Some("cli".to_string()),
             provider: Some("openai".to_string()),
             provider_profile_id: None,
@@ -447,6 +644,7 @@ fn merge_unified_codex_thread_entries_filters_background_helper_sessions() {
             usage: LocalUsageUsageData::default(),
             cost: 0.0,
             summary: Some("normal local prompt".to_string()),
+            native_title: None,
             source: Some("cli".to_string()),
             provider: Some("openai".to_string()),
             provider_profile_id: None,
@@ -542,6 +740,7 @@ fn merge_unified_codex_thread_entries_backfills_workspace_cwd_for_mapped_live_ro
         usage: LocalUsageUsageData::default(),
         cost: 0.0,
         summary: Some("local".to_string()),
+        native_title: None,
         source: Some("cli".to_string()),
         provider: Some("openai".to_string()),
         provider_profile_id: None,
@@ -607,6 +806,46 @@ async fn start_thread_retry_reacquires_after_manual_shutdown_race() {
     )
     .await
     .expect("manual shutdown race should retry once");
+
+    assert_eq!(result["result"]["threadId"], "thread-recovered");
+    assert_eq!(ensure_calls.load(Ordering::SeqCst), 2);
+    assert_eq!(start_calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn start_thread_retry_reacquires_after_broken_pipe() {
+    let ensure_calls = Arc::new(AtomicUsize::new(0));
+    let start_calls = Arc::new(AtomicUsize::new(0));
+
+    let result = run_start_thread_with_retry(
+        "ws-1",
+        {
+            let ensure_calls = Arc::clone(&ensure_calls);
+            move || {
+                let ensure_calls = Arc::clone(&ensure_calls);
+                async move {
+                    ensure_calls.fetch_add(1, Ordering::SeqCst);
+                    Ok(())
+                }
+            }
+        },
+        {
+            let start_calls = Arc::clone(&start_calls);
+            move || {
+                let start_calls = Arc::clone(&start_calls);
+                async move {
+                    let attempt = start_calls.fetch_add(1, Ordering::SeqCst);
+                    if attempt == 0 {
+                        Err("Broken pipe (os error 32)".to_string())
+                    } else {
+                        Ok(json!({ "result": { "threadId": "thread-recovered" } }))
+                    }
+                }
+            }
+        },
+    )
+    .await
+    .expect("broken pipe should reacquire and retry once");
 
     assert_eq!(result["result"]["threadId"], "thread-recovered");
     assert_eq!(ensure_calls.load(Ordering::SeqCst), 2);
@@ -686,6 +925,21 @@ async fn start_thread_retry_returns_recoverable_error_when_stopping_race_persist
     assert_eq!(error, create_session_runtime_recovering_error());
     assert_eq!(ensure_calls.load(Ordering::SeqCst), 2);
     assert_eq!(start_calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn start_thread_retry_redacts_persistent_broken_pipe() {
+    let error = run_start_thread_with_retry(
+        "ws-1",
+        || async { Ok(()) },
+        || async { Err("Broken pipe (os error 32)".to_string()) },
+    )
+    .await
+    .expect_err("persistent broken pipe should become a stable recovery error");
+
+    assert_eq!(error, create_session_runtime_recovering_error());
+    assert!(!error.to_ascii_lowercase().contains("broken pipe"));
+    assert!(!error.contains("os error 32"));
 }
 
 #[tokio::test]

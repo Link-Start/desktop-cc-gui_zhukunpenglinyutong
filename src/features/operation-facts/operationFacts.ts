@@ -11,7 +11,7 @@ import {
   isBashTool,
   parseToolArgs,
   resolveToolStatus,
-} from "../messages/components/toolBlocks/toolConstants";
+} from "../../utils/toolSemantics";
 
 export type OperationCommandSummary = {
   id: string;

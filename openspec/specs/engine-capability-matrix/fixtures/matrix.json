@@ -10,7 +10,13 @@
     "reasoning.effort",
     "collaboration.mode",
     "session.continuation",
-    "image.input"
+    "image.input",
+    "input.mid-turn",
+    "session.resume",
+    "session.fork",
+    "session.switch",
+    "session.tree",
+    "rpc.server"
   ],
   "engines": {
     "claude": {
@@ -22,7 +28,13 @@
       "reasoning.effort": "supported",
       "collaboration.mode": "unsupported",
       "session.continuation": "supported",
-      "image.input": "supported"
+      "image.input": "supported",
+      "input.mid-turn": "compat-input",
+      "session.resume": "supported",
+      "session.fork": "supported",
+      "session.switch": "unsupported",
+      "session.tree": "supported",
+      "rpc.server": "unsupported"
     },
     "codex": {
       "streaming.text": "supported",
@@ -33,7 +45,13 @@
       "reasoning.effort": "supported",
       "collaboration.mode": "supported",
       "session.continuation": "supported",
-      "image.input": "supported"
+      "image.input": "supported",
+      "input.mid-turn": "compat-input",
+      "session.resume": "supported",
+      "session.fork": "supported",
+      "session.switch": "supported",
+      "session.tree": "supported",
+      "rpc.server": "supported"
     },
     "gemini": {
       "streaming.text": "supported",
@@ -44,7 +62,30 @@
       "reasoning.effort": "unsupported",
       "collaboration.mode": "unsupported",
       "session.continuation": "supported",
-      "image.input": "supported"
+      "image.input": "supported",
+      "input.mid-turn": "unsupported",
+      "session.resume": "supported",
+      "session.fork": "unknown",
+      "session.switch": "unknown",
+      "session.tree": "unknown",
+      "rpc.server": "unsupported"
+    },
+    "grok": {
+      "streaming.text": "supported",
+      "streaming.reasoning": "supported",
+      "streaming.tool-output": "unsupported",
+      "tool.use": "supported",
+      "tool.mcp": "unsupported",
+      "reasoning.effort": "unsupported",
+      "collaboration.mode": "unsupported",
+      "session.continuation": "supported",
+      "image.input": "supported",
+      "input.mid-turn": "unsupported",
+      "session.resume": "supported",
+      "session.fork": "unknown",
+      "session.switch": "unknown",
+      "session.tree": "unknown",
+      "rpc.server": "unsupported"
     },
     "opencode": {
       "streaming.text": "supported",
@@ -55,7 +96,13 @@
       "reasoning.effort": "unsupported",
       "collaboration.mode": "unsupported",
       "session.continuation": "supported",
-      "image.input": "unsupported"
+      "image.input": "supported",
+      "input.mid-turn": "unsupported",
+      "session.resume": "supported",
+      "session.fork": "unknown",
+      "session.switch": "unknown",
+      "session.tree": "unknown",
+      "rpc.server": "unsupported"
     },
     "kimi": {
       "streaming.text": "supported",
@@ -66,7 +113,13 @@
       "reasoning.effort": "unsupported",
       "collaboration.mode": "unsupported",
       "session.continuation": "supported",
-      "image.input": "unsupported"
+      "image.input": "supported",
+      "input.mid-turn": "unsupported",
+      "session.resume": "supported",
+      "session.fork": "unknown",
+      "session.switch": "unknown",
+      "session.tree": "unknown",
+      "rpc.server": "unsupported"
     }
   }
 }

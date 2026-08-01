@@ -100,6 +100,9 @@ const chat = {
     "loadingFailed": "लोड करना विफल",
     "pleaseCloseAndReopen": "कृपया बंद करके फिर से खोलें",
     "loadingSlashCommands": "स्लैश कमांड लोड हो रही हैं...",
+    "commandsListUnavailableTitle": "कमांड अनुपलब्ध",
+    "commandsListUnavailableMessage":
+      "स्लैश कमांड लोड करने में विफल: {{reason}}। कमांड ऑटोकम्प्लीट अधूरा हो सकता है; स्वचालित रूप से पुनः प्रयास किया जाएगा।",
     "pleaseWait": "कृपया प्रतीक्षा करें...",
     "retrying": "पुनः प्रयास ({{count}}/{{max}})...",
     "removeAgent": "agent हटाएं",

@@ -110,6 +110,71 @@ function projectSemanticItem(item: ConversationItem) {
 }
 
 describe("realtime/history parity", () => {
+  it("normalizes presentation metadata identically for realtime and history items", () => {
+    const workspaceId = "ws-presentation";
+    const threadId = "thread-presentation";
+    const rawItem: ConversationItem = {
+      id: "user-context",
+      kind: "message",
+      role: "user",
+      text: [
+        "继续分析",
+        "",
+        "<note-card-context>",
+        '<note-card title="发布清单" archived="false">',
+        "先构建，再发布",
+        "</note-card>",
+        "</note-card-context>",
+      ].join("\n"),
+    };
+    const realtime = appendEvent(
+      createConversationState({
+        workspaceId,
+        threadId,
+        engine: "codex",
+        activeTurnId: null,
+        isThinking: false,
+        heartbeatPulse: null,
+        historyRestoredAtMs: null,
+      }),
+      {
+        engine: "codex",
+        workspaceId,
+        threadId,
+        eventId: "event-1",
+        itemKind: "message",
+        timestampMs: 1,
+        item: rawItem,
+        operation: "itemStarted",
+        sourceMethod: "test",
+      },
+    );
+    const history = hydrateHistory({
+      engine: "codex",
+      workspaceId,
+      threadId,
+      items: [rawItem],
+      plan: null,
+      userInputQueue: [],
+      meta: {
+        workspaceId,
+        threadId,
+        engine: "codex",
+        activeTurnId: null,
+        isThinking: false,
+        heartbeatPulse: null,
+        historyRestoredAtMs: 1,
+      },
+      fallbackWarnings: [],
+    });
+
+    const realtimeItem = realtime.items[0];
+    const historyItem = history.items[0];
+    expect(realtimeItem?.kind === "message" ? realtimeItem.presentationMetadata : null).toEqual(
+      historyItem?.kind === "message" ? historyItem.presentationMetadata : null,
+    );
+  });
+
   it("keeps codex realtime and history semantics aligned for tool/plan/userInput/reasoning", async () => {
     const workspaceId = "ws-codex";
     const threadId = "thread-codex-parity";
@@ -349,6 +414,15 @@ describe("realtime/history parity", () => {
           : item,
       ),
     };
+    expect(
+      alignedRealtime.items.map((item) =>
+        item.kind === "message" ? item.presentationMetadata : null,
+      ),
+    ).toEqual(
+      historyState.items.map((item) =>
+        item.kind === "message" ? item.presentationMetadata : null,
+      ),
+    );
     expect(findConversationStateDiffs(alignedRealtime, historyState)).toEqual([]);
     expect(
       alignedRealtime.items.map(projectSemanticItem),

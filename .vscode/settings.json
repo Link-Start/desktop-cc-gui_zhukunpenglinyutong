@@ -1,0 +1,9 @@
+{
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.expand": false,
+  "explorer.fileNesting.patterns": {
+    "Messages.tsx": "Messages.test.tsx, Messages.*.test.ts, Messages.*.test.tsx, chatCanvasSmoke.test.tsx, messagesHeavyHistoryFixture.test-support.ts",
+    "Markdown.tsx": "Markdown.*.test.ts, Markdown.*.test.tsx",
+    "MessagesRows.tsx": "MessagesRows.*.test.ts, MessagesRows.*.test.tsx"
+  }
+}

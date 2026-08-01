@@ -7,13 +7,19 @@ import {
   getAppSettings,
   runClaudeDoctor,
   runCodexDoctor,
+  runGrokDoctor,
   runKimiDoctor,
+  takeSettingsRecoveryNotice,
   updateAppSettings,
 } from "../../../services/tauri";
+import { pushErrorToast } from "../../../services/toasts";
 import { UI_SCALE_DEFAULT, UI_SCALE_MAX } from "../../../utils/uiScale";
 import {
+  DEFAULT_CODE_FONT_FAMILY,
   DEFAULT_UI_FONT_FAMILY,
+  LEGACY_CODE_FONT_FAMILY,
   LEGACY_MONACO_UI_FONT_FAMILY,
+  LEGACY_SYSTEM_UI_FONT_FAMILY,
 } from "../../../utils/fonts";
 
 vi.mock("../../../services/tauri", () => ({
@@ -21,18 +27,30 @@ vi.mock("../../../services/tauri", () => ({
   updateAppSettings: vi.fn(),
   runClaudeDoctor: vi.fn(),
   runCodexDoctor: vi.fn(),
+  runGrokDoctor: vi.fn(),
   runKimiDoctor: vi.fn(),
+  takeSettingsRecoveryNotice: vi.fn(),
+}));
+
+vi.mock("../../../services/toasts", () => ({
+  pushErrorToast: vi.fn(),
 }));
 
 const getAppSettingsMock = vi.mocked(getAppSettings);
 const runClaudeDoctorMock = vi.mocked(runClaudeDoctor);
 const runKimiDoctorMock = vi.mocked(runKimiDoctor);
+const runGrokDoctorMock = vi.mocked(runGrokDoctor);
 const updateAppSettingsMock = vi.mocked(updateAppSettings);
 const runCodexDoctorMock = vi.mocked(runCodexDoctor);
+const takeSettingsRecoveryNoticeMock = vi.mocked(takeSettingsRecoveryNotice);
+const pushErrorToastMock = vi.mocked(pushErrorToast);
 
 describe("useAppSettings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default to "no pending recovery notice" so implementations never leak
+    // across cases (clearAllMocks does not reset implementations).
+    takeSettingsRecoveryNoticeMock.mockResolvedValue(null);
     window.localStorage.clear();
   });
 
@@ -80,13 +98,14 @@ describe("useAppSettings", () => {
     expect(result.current.settings.userMsgColor).toBe("");
     expect(result.current.settings.uiFontFamily).toBe(DEFAULT_UI_FONT_FAMILY);
     expect(result.current.settings.uiFontFamily).not.toMatch(/^Monaco,/);
-    expect(result.current.settings.codeFontFamily).toMatch(/^Monaco,/);
+    expect(result.current.settings.codeFontFamily).toBe(
+      DEFAULT_CODE_FONT_FAMILY,
+    );
     expect(result.current.settings.codeFontSize).toBe(16);
     expect(result.current.settings.codexUnifiedExecPolicy).toBe("inherit");
     expect(result.current.settings.backendMode).toBe("remote");
     expect(result.current.settings.remoteBackendHost).toBe("example:1234");
-    expect(result.current.settings.geminiEnabled).toBe(false);
-    expect(result.current.settings.opencodeEnabled).toBe(false);
+    expect(result.current.settings.disabledCliEngines).toEqual([]);
     expect(result.current.settings.claudeBin).toBeNull();
     expect(result.current.settings.codexAutoCompactionEnabled).toBe(true);
     expect(result.current.settings.codexAutoCompactionThresholdPercent).toBe(
@@ -99,19 +118,119 @@ describe("useAppSettings", () => {
     expect(result.current.settings.sessionAttributionMode).toBe("related");
     expect(result.current.settings.enabledCuratedSkillIds).toEqual([
       "lazy-senior-dev",
+      "caveman",
     ]);
+    expect(result.current.settings.curatedSkillDefaultsVersion).toBe(1);
   });
 
-  it("keeps legacy Gemini enablement disabled", async () => {
+  it("normalizes persisted disabled CLI engines", async () => {
     getAppSettingsMock.mockResolvedValue({
-      geminiEnabled: true,
-    } as AppSettings);
+      disabledCliEngines: ["opencode", " opencode ", "", 42, "kimi"],
+    } as unknown as AppSettings);
 
     const { result } = renderHook(() => useAppSettings());
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(result.current.settings.geminiEnabled).toBe(false);
+    expect(result.current.settings.disabledCliEngines).toEqual([
+      "opencode",
+      "kimi",
+    ]);
+  });
+
+  it("surfaces a toast and keeps defaults when loading settings fails", async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    getAppSettingsMock.mockRejectedValue(new Error("settings read failed"));
+
+    const { result } = renderHook(() => useAppSettings());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.settings.theme).toBe("system");
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    expect(pushErrorToastMock).toHaveBeenCalledTimes(1);
+    expect(pushErrorToastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: expect.any(String),
+        message: expect.any(String),
+      }),
+    );
+    // The invoke-failure copy must not claim a backend backup that never happened.
+    const failureToast = pushErrorToastMock.mock.calls[0]?.[0];
+    expect(failureToast?.message ?? "").not.toContain(".bak");
+    // The invoke-failure path never reaches the recovery-notice command.
+    expect(takeSettingsRecoveryNoticeMock).not.toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("surfaces exactly one recovery toast when load succeeds with a quarantine notice", async () => {
+    const backupFileName = "settings.json.corrupted-20260724T000000Z.bak";
+    getAppSettingsMock.mockResolvedValue({} as AppSettings);
+    takeSettingsRecoveryNoticeMock.mockResolvedValue({ backupFileName });
+
+    const { result } = renderHook(() => useAppSettings());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() =>
+      expect(pushErrorToastMock).toHaveBeenCalledTimes(1),
+    );
+
+    expect(takeSettingsRecoveryNoticeMock).toHaveBeenCalledTimes(1);
+    expect(pushErrorToastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: expect.any(String),
+        message: expect.stringContaining(backupFileName),
+      }),
+    );
+  });
+
+  it("stays silent when load succeeds without a recovery notice", async () => {
+    getAppSettingsMock.mockResolvedValue({} as AppSettings);
+    takeSettingsRecoveryNoticeMock.mockResolvedValue(null);
+
+    const { result } = renderHook(() => useAppSettings());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(takeSettingsRecoveryNoticeMock).toHaveBeenCalledTimes(1);
+    expect(pushErrorToastMock).not.toHaveBeenCalled();
+  });
+
+  it("uses the backup-failed copy when the notice has no backup file name", async () => {
+    getAppSettingsMock.mockResolvedValue({} as AppSettings);
+    takeSettingsRecoveryNoticeMock.mockResolvedValue({ backupFileName: null });
+
+    const { result } = renderHook(() => useAppSettings());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() =>
+      expect(pushErrorToastMock).toHaveBeenCalledTimes(1),
+    );
+
+    const toast = pushErrorToastMock.mock.calls[0]?.[0];
+    expect(toast?.message).toEqual(expect.any(String));
+    expect(toast?.message ?? "").not.toContain("{{backupFileName}}");
+    expect(toast?.message ?? "").not.toContain(".bak");
+  });
+
+  it("keeps loaded settings when the recovery notice fetch itself fails", async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    getAppSettingsMock.mockResolvedValue({
+      theme: "dark",
+    } as unknown as AppSettings);
+    takeSettingsRecoveryNoticeMock.mockRejectedValue(new Error("notice fail"));
+
+    const { result } = renderHook(() => useAppSettings());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.settings.theme).toBe("dark");
+    expect(pushErrorToastMock).not.toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
   });
 
   it("keeps an explicitly cleared curated skill list disabled", async () => {
@@ -149,6 +268,22 @@ describe("useAppSettings", () => {
 
     expect(result.current.settings.uiFontFamily).toBe(DEFAULT_UI_FONT_FAMILY);
     expect(result.current.settings.uiFontFamily).not.toMatch(/^Monaco,/);
+  });
+
+  it("migrates legacy default font stacks to Windows-readable defaults", async () => {
+    getAppSettingsMock.mockResolvedValue({
+      uiFontFamily: LEGACY_SYSTEM_UI_FONT_FAMILY,
+      codeFontFamily: LEGACY_CODE_FONT_FAMILY,
+    } as AppSettings);
+
+    const { result } = renderHook(() => useAppSettings());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.settings.uiFontFamily).toBe(DEFAULT_UI_FONT_FAMILY);
+    expect(result.current.settings.codeFontFamily).toBe(
+      DEFAULT_CODE_FONT_FAMILY,
+    );
   });
 
   it("preserves workspace-only session attribution mode", async () => {
@@ -415,26 +550,16 @@ describe("useAppSettings", () => {
     expect(result.current.settings.theme).toBe("system");
     expect(result.current.settings.uiFontFamily).toBe(DEFAULT_UI_FONT_FAMILY);
     expect(result.current.settings.uiFontFamily).not.toMatch(/^Monaco,/);
-    expect(result.current.settings.codeFontFamily).toMatch(/^Monaco,/);
+    expect(result.current.settings.codeFontFamily).toBe(
+      DEFAULT_CODE_FONT_FAMILY,
+    );
     expect(result.current.settings.backendMode).toBe("local");
-    expect(result.current.settings.opencodeEnabled).toBe(false);
+    expect(result.current.settings.disabledCliEngines).toEqual([]);
     expect(result.current.settings.dictationModelId).toBe("base");
     expect(result.current.settings.interruptShortcut).toBeTruthy();
     expect(result.current.settings.performanceCompatibilityModeEnabled).toBe(
       false,
     );
-  });
-
-  it("preserves explicitly enabled OpenCode gate while loading settings", async () => {
-    getAppSettingsMock.mockResolvedValue({
-      opencodeEnabled: true,
-    } as AppSettings);
-
-    const { result } = renderHook(() => useAppSettings());
-
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-    expect(result.current.settings.opencodeEnabled).toBe(true);
   });
 
   it("persists settings via updateAppSettings and updates local state", async () => {
@@ -485,7 +610,7 @@ describe("useAppSettings", () => {
         darkThemePresetId: "vscode-dark-modern",
         uiScale: 0.8,
         uiFontFamily: DEFAULT_UI_FONT_FAMILY,
-        codeFontFamily: expect.stringMatching(/^Monaco,/),
+        codeFontFamily: DEFAULT_CODE_FONT_FAMILY,
         codeFontSize: 9,
         notificationSoundsEnabled: false,
         codexAutoCompactionEnabled: false,
@@ -615,6 +740,30 @@ describe("useAppSettings", () => {
       response,
     );
     expect(runKimiDoctorMock).toHaveBeenCalledWith("/bin/kimi");
+  });
+
+  it("returns grok doctor results", async () => {
+    getAppSettingsMock.mockResolvedValue({} as AppSettings);
+    const response: CodexDoctorResult = {
+      ok: true,
+      codexBin: "/bin/grok",
+      version: "0.1.0",
+      appServerOk: false,
+      details: null,
+      path: null,
+      nodeOk: true,
+      nodeVersion: "20.0.0",
+      nodeDetails: null,
+    };
+    runGrokDoctorMock.mockResolvedValue(response);
+    const { result } = renderHook(() => useAppSettings());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await expect(result.current.grokDoctor("/bin/grok")).resolves.toEqual(
+      response,
+    );
+    expect(runGrokDoctorMock).toHaveBeenCalledWith("/bin/grok");
   });
 
   it("uses legacy localStorage user message color when settings value is missing", async () => {

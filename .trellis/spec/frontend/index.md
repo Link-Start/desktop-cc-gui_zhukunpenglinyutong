@@ -24,6 +24,9 @@
 | [Multi-Repository Git Commit Workspace Contract](./multi-repository-git-commit-workspace.md) | repository-scoped Git identity、single/multi adaptive commit UI 与 partial success contract | Active |
 | [File History View Cross-Layer Contract](./file-history-view.md) | file-scoped history、rename-follow、snapshot identity、Desktop/daemon parity 与 stale guard | Active |
 | [Codex Provider Session UI Contract](./codex-provider-session-ui.md) | Codex provider selector、start/fork payload、thread metadata merge、sidebar/pinned/composer provider label contract | Active |
+| [Provider-Scoped Model Catalog Contract](../backend/provider-scoped-model-catalog.md) | 五 CLI provider-bound/local validation model lookup、public merge、dedupe、Shared capability propagation 与 stale catalog guard | Active |
+| [Shared Session V2 Execution Target / Send Contract](../backend/shared-session-v2-send-contract.md) | Composer Target、状态机、terminal observation、Projection Badge 与 provider-scoped owner routing | Active |
+| [Native Provider Continuation Contract](../backend/native-provider-continuation-contract.md) | Native Session 跨 Provider 续接、degraded confirmation、Origin/Family、顶层标签与来源导航 | Active |
 | [Hook Guidelines](./hook-guidelines.md) | hook 编排、async safety、bridge 调用约束 | Active |
 | [State Management](./state-management.md) | local/global/persistent/runtime state 边界 | Active |
 | [Workspace Note Context Capture](./workspace-note-context-capture.md) | code/conversation capture、workbench request 与 optional source persistence 的跨层 contract | Active |
@@ -31,6 +34,7 @@
 | [Markdown Math Normalization Idempotence](./quality-guidelines.md#markdown-math-normalization-must-preserve-container-and-math-range-idempotence) | Markdown container prefix、math-range idempotence 与回归口径 | Active |
 | [CodeMirror State-Coupled Extensions 不可跨越 Lazy Boundary](./quality-guidelines.md#codemirror-state-coupled-extensions-不可跨越-lazy-boundary) | 任何把 `@codemirror/*` state-coupled extension 拆到 lazy 边界后的硬性禁止 | Active |
 | [Type Safety](./type-safety.md) | strict TypeScript 与 boundary mapping 规则 | Active |
+| [Vendored Frontend（tokentracker-dashboard）](./tokentracker-dashboard-vendored.md) | 拓展-使用统计 vendored dashboard 的维护、数据通道、Tailwind v4 与性能边界约定 | Active |
 
 ## Pre-Development Checklist（开始开发前必读）
 
@@ -50,6 +54,7 @@
 - 涉及 Tauri window/webview builder、Browser Agent child WebView、`src/services/dragDrop.ts` 或 Composer 外部文件/文件夹拖拽时，额外读 [Desktop Drag-Drop Contract](./desktop-drag-drop.md)。
 - 涉及 `GitRepositorySummary`、多 repository status scan、file tree Git decoration 或 repository summary token 时，额外读 [Multi-Repository File Tree Git Decoration Contract](./git-repository-file-tree-decorations.md)。
 - 涉及 Codex provider selector、`startThread` / `forkThread` payload、thread provider metadata、sidebar/pinned/composer provider label 或供应商管理 Codex tab 时，额外读 [Codex Provider Session UI Contract](./codex-provider-session-ui.md)。
+- 涉及五 CLI provider binding、`getEngineModels`、Shared target validation 或 Composer 模型菜单时，额外读 [Provider-Scoped Model Catalog Contract](../backend/provider-scoped-model-catalog.md)。
 
 ## 项目事实基线（Project Facts）
 

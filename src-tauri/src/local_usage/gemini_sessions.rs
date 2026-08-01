@@ -444,6 +444,7 @@ fn parse_gemini_session_summary(path: &Path) -> Result<Option<LocalUsageSessionS
         usage,
         cost,
         summary,
+        native_title: None,
         source: Some("gemini".to_string()),
         provider: Some("google".to_string()),
         provider_profile_id: None,

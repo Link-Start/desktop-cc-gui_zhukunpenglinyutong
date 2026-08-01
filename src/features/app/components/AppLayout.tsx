@@ -1,21 +1,19 @@
 import { memo } from "react";
 import type { MouseEvent, PointerEvent, ReactNode } from "react";
 import { DesktopLayout } from "../../layout/components/DesktopLayout";
-import { TabletLayout } from "../../layout/components/TabletLayout";
-import { PhoneLayout } from "../../layout/components/PhoneLayout";
 import type {
   CenterMode,
   EditorSplitCompanion,
 } from "../hooks/useGitPanelController";
 type AppLayoutProps = {
-  isPhone: boolean;
-  isTablet: boolean;
   showHome: boolean;
   showKanban: boolean;
+  showExtensions: boolean;
   showGitHistory: boolean;
   hideRightPanel: boolean;
   isSoloMode: boolean;
   kanbanNode: ReactNode;
+  extensionsNode: ReactNode;
   gitHistoryNode: ReactNode;
   showGitDetail: boolean;
   activeTab: "projects" | "codex" | "spec" | "git" | "log";
@@ -65,18 +63,15 @@ type AppLayoutProps = {
 };
 
 export const AppLayout = memo(function AppLayout({
-  isPhone,
-  isTablet,
   showHome,
   showKanban,
+  showExtensions,
   showGitHistory,
   hideRightPanel,
   isSoloMode,
   kanbanNode,
+  extensionsNode,
   gitHistoryNode,
-  showGitDetail,
-  activeTab,
-  tabletTab,
   centerMode,
   editorSplitLayout,
   editorSplitCompanion,
@@ -91,10 +86,7 @@ export const AppLayout = memo(function AppLayout({
   errorToastsNode,
   globalRuntimeNoticeDockNode,
   homeNode,
-  mainHeaderNode,
   desktopTopbarLeftNode,
-  tabletNavNode,
-  tabBarNode,
   rightPanelToolbarNode,
   gitDiffPanelNode,
   gitDiffViewerNode,
@@ -107,12 +99,7 @@ export const AppLayout = memo(function AppLayout({
   planPanelNode,
   runtimeConsoleDockNode,
   debugPanelNode,
-  debugPanelFullNode,
   terminalDockNode,
-  compactEmptyCodexNode,
-  compactEmptySpecNode,
-  compactEmptyGitNode,
-  compactGitBackNode,
   settingsOpen,
   settingsNode,
   onSidebarResizeStart,
@@ -120,64 +107,6 @@ export const AppLayout = memo(function AppLayout({
   onPlanPanelResizeStart,
   onGitHistoryPanelResizeStart,
 }: AppLayoutProps) {
-  if (isPhone) {
-    return (
-      <PhoneLayout
-        approvalToastsNode={approvalToastsNode}
-        updateToastNode={updateToastNode}
-        errorToastsNode={errorToastsNode}
-        globalRuntimeNoticeDockNode={globalRuntimeNoticeDockNode}
-        tabBarNode={tabBarNode}
-        sidebarNode={sidebarNode}
-        activeTab={activeTab}
-        showGitHistory={showGitHistory}
-        gitHistoryNode={gitHistoryNode}
-        activeWorkspace={activeWorkspace}
-        showGitDetail={showGitDetail}
-        compactEmptyCodexNode={compactEmptyCodexNode}
-        compactEmptySpecNode={compactEmptySpecNode}
-        compactEmptyGitNode={compactEmptyGitNode}
-        compactGitBackNode={compactGitBackNode}
-        topbarLeftNode={mainHeaderNode}
-        messagesNode={messagesNode}
-        composerNode={composerNode}
-        gitDiffPanelNode={gitDiffPanelNode}
-        gitDiffViewerNode={gitDiffViewerNode}
-        debugPanelNode={debugPanelFullNode}
-        settingsOpen={settingsOpen}
-        settingsNode={settingsNode}
-      />
-    );
-  }
-
-  if (isTablet) {
-    return (
-      <TabletLayout
-        tabletNavNode={tabletNavNode}
-        approvalToastsNode={approvalToastsNode}
-        updateToastNode={updateToastNode}
-        errorToastsNode={errorToastsNode}
-        globalRuntimeNoticeDockNode={globalRuntimeNoticeDockNode}
-        showGitHistory={showGitHistory}
-        gitHistoryNode={gitHistoryNode}
-        homeNode={homeNode}
-        showHome={showHome}
-        showWorkspace={activeWorkspace && !showHome}
-        sidebarNode={sidebarNode}
-        tabletTab={tabletTab}
-        onSidebarResizeStart={onSidebarResizeStart}
-        topbarLeftNode={mainHeaderNode}
-        messagesNode={messagesNode}
-        composerNode={composerNode}
-        gitDiffPanelNode={gitDiffPanelNode}
-        gitDiffViewerNode={gitDiffViewerNode}
-        debugPanelNode={debugPanelFullNode}
-        settingsOpen={settingsOpen}
-        settingsNode={settingsNode}
-      />
-    );
-  }
-
   return (
     <DesktopLayout
       sidebarNode={sidebarNode}
@@ -187,12 +116,14 @@ export const AppLayout = memo(function AppLayout({
       globalRuntimeNoticeDockNode={globalRuntimeNoticeDockNode}
       homeNode={homeNode}
       showHome={showHome}
-      showWorkspace={activeWorkspace && !showHome && !showKanban}
+      showWorkspace={activeWorkspace && !showHome && !showKanban && !showExtensions}
       showKanban={showKanban}
+      showExtensions={showExtensions}
       showGitHistory={showGitHistory}
       hideRightPanel={hideRightPanel}
       isSoloMode={isSoloMode}
       kanbanNode={kanbanNode}
+      extensionsNode={extensionsNode}
       gitHistoryNode={gitHistoryNode}
       settingsOpen={settingsOpen}
       settingsNode={settingsNode}

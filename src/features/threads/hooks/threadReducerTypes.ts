@@ -5,6 +5,7 @@ import type {
   ConversationItem,
   RateLimitSnapshot,
   RequestUserInputRequest,
+  SharedRuntimeControlOwner,
   ThreadSummary,
   ThreadTokenUsage,
   TurnPlan,
@@ -76,7 +77,9 @@ export type ThreadAction =
       type: "ensureThread";
       workspaceId: string;
       threadId: string;
-      engine?: "codex" | "claude" | "gemini" | "kimi" | "opencode";
+      engine?: "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode";
+      name?: string | null;
+      parentThreadId?: string | null;
       folderId?: string | null;
       autoSession?: AutoSessionMetadata | null;
       sourceLabel?: string | null;
@@ -146,13 +149,21 @@ export type ThreadAction =
     }
   | { type: "markReviewing"; threadId: string; isReviewing: boolean }
   | { type: "markUnread"; threadId: string; hasUnread: boolean }
-  | { type: "addAssistantMessage"; threadId: string; text: string }
+  | {
+      type: "addAssistantMessage";
+      threadId: string;
+      text: string;
+      executionTargetSnapshot?: Extract<
+        ConversationItem,
+        { kind: "message" }
+      >["executionTargetSnapshot"];
+    }
   | { type: "setThreadName"; workspaceId: string; threadId: string; name: string }
   | {
       type: "setThreadEngine";
       workspaceId: string;
       threadId: string;
-      engine: "codex" | "claude" | "gemini" | "kimi" | "opencode";
+      engine: "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode";
     }
   | {
       type: "setThreadTimestamp";
@@ -258,6 +269,8 @@ export type ThreadAction =
       type: "removeUserInputRequest";
       requestId: number | string;
       workspaceId: string;
+      request?: RequestUserInputRequest;
+      sharedRuntimeOwner?: SharedRuntimeControlOwner;
     }
   | {
       type: "clearUserInputRequestsForThread";

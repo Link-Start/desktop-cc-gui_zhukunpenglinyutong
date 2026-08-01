@@ -19,16 +19,7 @@ import { deriveTaskRunTelemetryPatch } from "../features/tasks/utils/taskRunTele
 import {
   buildTaskRunBrowserEvidenceRef,
   loadTaskRunStore,
-  patchTaskRun,
-  saveTaskRunStore,
 } from "../features/tasks/utils/taskRunStorage";
-import {
-  beginOrchestrationTaskDispatch,
-  buildOrchestrationDispatchPrompt,
-  patchOrchestrationTask,
-  saveOrchestrationTaskStore,
-  upsertOrchestrationTask,
-} from "../features/agent-orchestration";
 import {
   buildBrowserContextAttachment,
   getActiveBrowserContext,
@@ -57,7 +48,8 @@ import {
 } from "./useAppShellSections.kanbanHelpers";
 import type { UseAppShellSectionsContext } from "./useAppShellSectionsTypes";
 
-const KANBAN_SCHEDULER_INTERVAL_MS = 20_000;
+// 到期任务的最小重查间隔：next-due 对齐定时器的下限，防止过期 nextRunAt 造成忙循环。
+const KANBAN_SCHEDULER_MIN_INTERVAL_MS = 5_000;
 const KANBAN_EXECUTION_LOCK_STALE_MS = 120_000;
 
 type CreateKanbanTaskInput = Pick<
@@ -80,7 +72,6 @@ export function useAppShellKanbanExecutionSection(
 ) {
   const {
     activeEngine,
-    activeWorkspace,
     activeWorkspaceId,
     activeThreadId,
     interruptTurn,
@@ -90,7 +81,6 @@ export function useAppShellKanbanExecutionSection(
     setActiveThreadId,
     sendUserMessageToThread,
     threadsByWorkspace,
-    workspaces,
     setActiveEngine,
     persistComposerSelectionForThread,
     resolveComposerSelectionForThread,
@@ -135,9 +125,22 @@ export function useAppShellKanbanExecutionSection(
       if (!current) {
         return;
       }
+      const currentExecution = (current.execution ?? {}) as Record<
+        string,
+        unknown
+      >;
+      // 等值短路：scheduler tick 每轮都会对 processing/locked 任务写相同值，
+      // 无变化时不产生新 store 版本——既避免本文件 scheduler effect
+      // （依赖 typedKanbanTasks）自触发无限循环，也消掉无效落盘。
+      const hasEffectiveChange = Object.entries(changes).some(
+        ([key, value]) => currentExecution[key] !== value,
+      );
+      if (!hasEffectiveChange) {
+        return;
+      }
       kanbanUpdateTask(taskId, {
         execution: {
-          ...(current.execution ?? {}),
+          ...currentExecution,
           ...changes,
         },
       });
@@ -199,176 +202,6 @@ export function useAppShellKanbanExecutionSection(
       });
     },
     [persistComposerSelectionForThread, resolveComposerSelectionForThread],
-  );
-
-  const handleDispatchOrchestrationTask = useCallback(
-    async (
-      confirmation: any,
-    ): Promise<{ ok: boolean; taskId?: string | null; reason?: string }> => {
-      const taskId = confirmation?.task?.taskId ?? null;
-      const validEngines = new Set(["codex", "claude"]);
-      const validThreadStrategies = new Set([
-        "new_thread",
-        "reuse_active_thread",
-        "choose_thread",
-      ]);
-      if (
-        !confirmation?.task ||
-        typeof confirmation.workspaceId !== "string" ||
-        !validEngines.has(confirmation.engine) ||
-        !validThreadStrategies.has(confirmation.threadStrategy)
-      ) {
-        return { ok: false, taskId, reason: "invalid_dispatch_confirmation" };
-      }
-
-      const initial = beginOrchestrationTaskDispatch({
-        ...confirmation,
-        persist: false,
-      });
-      if (!initial.ok) {
-        return { ok: false, taskId, reason: initial.reason };
-      }
-      saveTaskRunStore(initial.taskRunStore);
-      saveOrchestrationTaskStore(initial.orchestrationTaskStore);
-
-      const startedAt = Date.now();
-      let threadId: string | null = null;
-      try {
-        const workspace =
-          activeWorkspace?.id === confirmation.workspaceId
-            ? activeWorkspace
-            : (workspaces.find(
-                (entry: WorkspaceInfo) => entry.id === confirmation.workspaceId,
-              ) ?? null);
-        if (!workspace) {
-          throw new Error("workspace_not_found");
-        }
-
-        await connectWorkspace(workspace);
-        await setActiveEngine(confirmation.engine);
-        threadId =
-          confirmation.threadStrategy === "reuse_active_thread"
-            ? (confirmation.task.linkedSessionIds[0] ?? null)
-            : null;
-        if (!threadId) {
-          threadId = await startThreadForWorkspace(workspace.id, {
-            engine: confirmation.engine,
-            activate: true,
-          });
-        }
-        if (!threadId) {
-          throw new Error("thread_create_failed");
-        }
-
-        if (confirmation.model) {
-          const currentSelection = resolveComposerSelectionForThread(
-            workspace.id,
-            threadId,
-          );
-          persistComposerSelectionForThread(workspace.id, threadId, {
-            modelId: confirmation.model,
-            effort: currentSelection?.effort ?? null,
-          });
-        }
-
-        setActiveThreadId(threadId, workspace.id);
-        await sendUserMessageToThread(
-          workspace,
-          threadId,
-          buildOrchestrationDispatchPrompt(confirmation),
-          [],
-          confirmation.model ? { model: confirmation.model } : undefined,
-        );
-
-        const nextTaskRunStore = patchTaskRun(
-          initial.taskRunStore,
-          initial.run.runId,
-          {
-            status: "running",
-            model: confirmation.model ?? null,
-            linkedThreadId: threadId,
-            currentStep: "first_message_sent",
-            latestOutputSummary: "Task prompt sent to session.",
-            startedAt,
-            now: startedAt,
-          },
-        );
-        const nextOrchestrationTaskStore = patchOrchestrationTask(
-          upsertOrchestrationTask(
-            initial.orchestrationTaskStore,
-            confirmation.task,
-          ),
-          confirmation.task.taskId,
-          {
-            status: "running",
-            preferredEngine: confirmation.engine,
-            preferredModel: confirmation.model ?? null,
-            linkedSessionIds: [
-              ...new Set([...confirmation.task.linkedSessionIds, threadId]),
-            ],
-            now: new Date(startedAt).toISOString(),
-          },
-        );
-        saveTaskRunStore(nextTaskRunStore);
-        saveOrchestrationTaskStore(nextOrchestrationTaskStore);
-        return { ok: true, taskId: confirmation.task.taskId };
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error);
-        const failedAt = Date.now();
-        const linkedSessionIds = threadId
-          ? [
-              ...new Set([
-                ...(confirmation.task.linkedSessionIds ?? []),
-                threadId,
-              ]),
-            ]
-          : (confirmation.task.linkedSessionIds ?? []);
-        const nextTaskRunStore = patchTaskRun(
-          initial.taskRunStore,
-          initial.run.runId,
-          {
-            status: "failed",
-            model: confirmation.model ?? null,
-            linkedThreadId: threadId ?? initial.run.linkedThreadId ?? null,
-            currentStep: "runtime_start_failed",
-            latestOutputSummary: reason,
-            failureReason: reason,
-            availableRecoveryActions: [
-              "open_conversation",
-              "retry",
-              "fork_new_run",
-            ],
-            finishedAt: failedAt,
-            now: failedAt,
-          },
-        );
-        const nextOrchestrationTaskStore = patchOrchestrationTask(
-          initial.orchestrationTaskStore,
-          confirmation.task.taskId,
-          {
-            status: "blocked",
-            preferredEngine: confirmation.engine,
-            preferredModel: confirmation.model ?? null,
-            linkedSessionIds,
-            now: new Date(failedAt).toISOString(),
-          },
-        );
-        saveTaskRunStore(nextTaskRunStore);
-        saveOrchestrationTaskStore(nextOrchestrationTaskStore);
-        return { ok: false, taskId: confirmation.task.taskId, reason };
-      }
-    },
-    [
-      activeWorkspace,
-      connectWorkspace,
-      persistComposerSelectionForThread,
-      resolveComposerSelectionForThread,
-      sendUserMessageToThread,
-      setActiveEngine,
-      setActiveThreadId,
-      startThreadForWorkspace,
-      workspaces,
-    ],
   );
 
   const launchKanbanTaskExecution = useCallback(
@@ -1210,15 +1043,52 @@ export function useAppShellKanbanExecutionSection(
       }
     };
 
+    // 固定 20s 轮询改为 next-due 对齐：每次 tick 后按最近的 schedule.nextRunAt
+    // 自续期 setTimeout；无到期任务时完全休眠。任务增删/改 schedule 会使本
+    // effect 重跑（typedKanbanTasks 在 deps 中），立即补一次 tick 并重算唤醒点。
+    let schedulerTimer: number | null = null;
+    const scheduleNextTick = () => {
+      if (schedulerTimer !== null) {
+        window.clearTimeout(schedulerTimer);
+        schedulerTimer = null;
+      }
+      const nowTs = Date.now();
+      let nextDueAt: number | null = null;
+      for (const task of kanbanTasksRef.current) {
+        const schedule = task.schedule;
+        if (!schedule || schedule.mode === "manual" || schedule.paused) {
+          continue;
+        }
+        if (typeof schedule.nextRunAt !== "number") {
+          continue;
+        }
+        if (nextDueAt === null || schedule.nextRunAt < nextDueAt) {
+          nextDueAt = schedule.nextRunAt;
+        }
+      }
+      if (nextDueAt === null) {
+        return;
+      }
+      const delay = Math.max(
+        nextDueAt - nowTs,
+        KANBAN_SCHEDULER_MIN_INTERVAL_MS,
+      );
+      schedulerTimer = window.setTimeout(() => {
+        schedulerTimer = null;
+        runSchedulerTick();
+        scheduleNextTick();
+      }, delay);
+    };
+
     runSchedulerTick();
-    const timer = window.setInterval(
-      runSchedulerTick,
-      KANBAN_SCHEDULER_INTERVAL_MS,
-    );
+    scheduleNextTick();
     return () => {
-      window.clearInterval(timer);
+      if (schedulerTimer !== null) {
+        window.clearTimeout(schedulerTimer);
+      }
     };
   }, [
+    typedKanbanTasks,
     typedThreadStatusById,
     kanbanUpdateTask,
     updateTaskExecution,
@@ -1607,7 +1477,6 @@ export function useAppShellKanbanExecutionSection(
     handleForkTaskRun,
     handleCloseTaskConversation,
     handleKanbanCreateTask,
-    handleDispatchOrchestrationTask,
     taskProcessingMap,
     handleDragToInProgress,
   };

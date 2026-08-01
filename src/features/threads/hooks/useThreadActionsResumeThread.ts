@@ -5,6 +5,7 @@ import {
   getOpenCodeSessionList as getOpenCodeSessionListService,
   loadClaudeSession as loadClaudeSessionService,
   loadGeminiSession as loadGeminiSessionService,
+  loadGrokSession as loadGrokSessionService,
   loadKimiSession as loadKimiSessionService,
   resumeThread as resumeThreadService,
 } from "../../../services/tauri";
@@ -20,6 +21,7 @@ import {
   parseClaudeHistoryMessagesWithShadowRecovery,
 } from "../loaders/claudeHistoryLoader";
 import { parseGeminiHistoryMessages } from "../loaders/geminiHistoryParser";
+import { parseGrokHistoryMessages } from "../loaders/grokHistoryParser";
 import { parseKimiHistoryMessages } from "../loaders/kimiHistoryParser";
 import { hydrateHistory } from "../assembly/conversationAssembler";
 import { asString } from "../utils/threadNormalize";
@@ -362,6 +364,27 @@ export function useThreadActionsResumeThreadForWorkspace(
             });
           }
           if (snapshotItems.length === 0) {
+            if (effectiveThreadId.startsWith("shared:")) {
+              setThreadHistoryRecoveryFailed(effectiveThreadId, false);
+              dispatch({
+                type: "setThreadHistoryRestoredAt",
+                threadId: effectiveThreadId,
+                timestamp: assembledSnapshot.meta.historyRestoredAtMs,
+              });
+              onDebug?.(
+                createThreadHistoryReadableSurfaceDebugEntry({
+                  workspaceId,
+                  threadId: effectiveThreadId,
+                  sourceThreadId: threadId,
+                  reopenOutcome: "recovered",
+                  localItemCount: effectiveLocalItems.length,
+                  snapshotItemCount: 0,
+                  fallbackWarningCount: snapshot.fallbackWarnings.length,
+                }),
+              );
+              setThreadLoaded(effectiveThreadId, true);
+              return true;
+            }
             markHistoryRecoveryFailure(
               effectiveThreadId,
               effectiveLocalItems,
@@ -476,6 +499,9 @@ export function useThreadActionsResumeThreadForWorkspace(
             return firstSnapshot;
           }
           if (hydrateHistory(firstSnapshot).items.length > 0) {
+            return firstSnapshot;
+          }
+          if (targetThreadId.startsWith("shared:")) {
             return firstSnapshot;
           }
           onDebug?.({
@@ -867,6 +893,28 @@ export function useThreadActionsResumeThreadForWorkspace(
           if (!isCurrentResumeRequest()) {
             return threadId;
           }
+          if (threadId.startsWith("shared:")) {
+            const diagnostic =
+              error instanceof Error
+                ? resolveThreadStabilityDiagnostic(error.message)
+                : resolveThreadStabilityDiagnostic(String(error));
+            onDebug?.({
+              id: `${Date.now()}-shared-history-loader-error`,
+              timestamp: Date.now(),
+              source: "error",
+              label: "thread/shared history loader error",
+              payload: {
+                workspaceId,
+                threadId,
+                error: error instanceof Error ? error.message : String(error),
+                diagnosticCategory:
+                  diagnostic?.category ?? "shared_projection_unavailable",
+              },
+            });
+            setThreadLoaded(threadId, false);
+            setThreadHistoryRecoveryFailed(threadId, false);
+            return threadId;
+          }
           if (isThreadResumeNotFoundError(error)) {
             try {
               const recoveredThread = await recoverReplacementThread();
@@ -1178,6 +1226,38 @@ export function useThreadActionsResumeThreadForWorkspace(
           }
         }
         setThreadLoaded(threadId, true);
+        return threadId;
+      }
+      if (threadId.startsWith("grok:")) {
+        dispatch({
+          type: "ensureThread",
+          workspaceId,
+          threadId,
+          engine: "grok",
+        });
+        if (workspacePath && !loadedThreadsRef.current[threadId]) {
+          const realSessionId = threadId.slice("grok:".length);
+          try {
+            const result = await loadGrokSessionService(
+              workspacePath,
+              realSessionId,
+            );
+            const messagesData =
+              (result as { messages?: unknown }).messages ?? result;
+            const items = parseGrokHistoryMessages(messagesData);
+            if (items.length > 0) {
+              dispatch({ type: "setThreadItems", threadId, items });
+            }
+            dispatch({
+              type: "setThreadHistoryRestoredAt",
+              threadId,
+              timestamp: Date.now(),
+            });
+          } catch {
+            // Failed to load Grok session history — not fatal
+          }
+        }
+        loadedThreadsRef.current[threadId] = true;
         return threadId;
       }
       if (threadId.startsWith("kimi:")) {

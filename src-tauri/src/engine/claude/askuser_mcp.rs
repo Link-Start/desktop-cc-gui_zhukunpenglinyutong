@@ -7,12 +7,14 @@
 //! the existing `RequestUserInput` dialog machinery.
 //!
 //! # Transport
-//! Streamable-HTTP: a single `POST /mcp/:workspace_id` endpoint speaking JSON-RPC
-//! (`initialize`, `tools/list`, `tools/call`), responding `application/json`. No
-//! SSE stream is needed for request/response. Verified against CLI v2.1.201.
+//! Streamable-HTTP: provider-aware sessions use
+//! `POST /mcp/:workspace_id/:runtime_locator`; the workspace-only endpoint remains
+//! for local compatibility. Both speak JSON-RPC (`initialize`, `tools/list`,
+//! `tools/call`) and respond `application/json`. No SSE stream is needed for
+//! request/response. Verified against CLI v2.1.201.
 //!
 //! # Answer path (B2)
-//! On `tools/call`, resolve the workspace's `ClaudeSession` and call
+//! On `tools/call`, resolve the runtime's `ClaudeSession` and call
 //! `ask_via_mcp`, which emits `RequestUserInput` to the live turn's subscriber
 //! and blocks until the user answers. The answer text is returned as the MCP
 //! tool_result — the CLI turn continues natively, no kill/`--resume`.
@@ -92,7 +94,11 @@ impl AskUserMcpServer {
             token: Arc::clone(&token),
         };
         let router = Router::new()
-            .route("/mcp/:workspace_id", post(handle_mcp))
+            .route(
+                "/mcp/:workspace_id/:runtime_locator",
+                post(handle_runtime_mcp),
+            )
+            .route("/mcp/:workspace_id", post(handle_legacy_mcp))
             .with_state(state);
 
         tokio::spawn(async move {
@@ -107,12 +113,17 @@ impl AskUserMcpServer {
 
     /// The `--mcp-config` inline JSON registering this server for a given
     /// workspace. Uses http transport so no subprocess is spawned.
-    pub fn mcp_config_json(&self, workspace_id: &str) -> String {
+    pub fn mcp_config_json(&self, workspace_id: &str, runtime_locator: &str) -> String {
         json!({
             "mcpServers": {
                 MCP_SERVER_NAME: {
                     "type": "http",
-                    "url": format!("http://127.0.0.1:{}/mcp/{}", self.port, workspace_id),
+                    "url": format!(
+                        "http://127.0.0.1:{}/mcp/{}/{}",
+                        self.port,
+                        workspace_id,
+                        runtime_locator
+                    ),
                     "headers": { "Authorization": format!("Bearer {}", self.token) },
                 }
             }
@@ -201,11 +212,30 @@ fn authorized(headers: &HeaderMap, token: &str) -> bool {
         .unwrap_or(false)
 }
 
-async fn handle_mcp(
+async fn handle_runtime_mcp(
+    Path((workspace_id, runtime_locator)): Path<(String, String)>,
+    State(state): State<McpServerState>,
+    headers: HeaderMap,
+    Json(msg): Json<Value>,
+) -> McpResponse {
+    handle_mcp_request(workspace_id, Some(runtime_locator), state, headers, msg).await
+}
+
+async fn handle_legacy_mcp(
     Path(workspace_id): Path<String>,
     State(state): State<McpServerState>,
     headers: HeaderMap,
     Json(msg): Json<Value>,
+) -> McpResponse {
+    handle_mcp_request(workspace_id, None, state, headers, msg).await
+}
+
+async fn handle_mcp_request(
+    workspace_id: String,
+    runtime_locator: Option<String>,
+    state: McpServerState,
+    headers: HeaderMap,
+    msg: Value,
 ) -> McpResponse {
     // The loopback port is reachable by any local process; only our CLI spawn carries
     // the injected bearer token, so reject everything else before touching a session.
@@ -254,7 +284,16 @@ async fn handle_mcp(
                 .cloned()
                 .unwrap_or_else(|| json!({}));
 
-            let Some(session) = state.claude_manager.get_session(&workspace_id).await else {
+            let session = match runtime_locator.as_deref() {
+                Some(locator) => {
+                    state
+                        .claude_manager
+                        .get_session_by_locator(&workspace_id, locator)
+                        .await
+                }
+                None => state.claude_manager.get_session(&workspace_id).await,
+            };
+            let Some(session) = session else {
                 return McpResponse::Json(rpc_error(
                     id,
                     -32000,
@@ -296,10 +335,10 @@ mod tests {
     #[test]
     fn mcp_config_json_uses_http_transport_and_workspace_url() {
         let config: Value =
-            serde_json::from_str(&server_at(4899).mcp_config_json("ws-42")).unwrap();
+            serde_json::from_str(&server_at(4899).mcp_config_json("ws-42", "runtime-a")).unwrap();
         let server = &config["mcpServers"][MCP_SERVER_NAME];
         assert_eq!(server["type"], "http");
-        assert_eq!(server["url"], "http://127.0.0.1:4899/mcp/ws-42");
+        assert_eq!(server["url"], "http://127.0.0.1:4899/mcp/ws-42/runtime-a");
         assert_eq!(server["headers"]["Authorization"], "Bearer test-token");
         // Must NOT request strict mode — that would drop the user's own servers.
         assert!(config.get("strict").is_none());

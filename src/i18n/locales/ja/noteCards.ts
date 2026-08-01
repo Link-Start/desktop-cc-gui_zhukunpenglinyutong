@@ -30,6 +30,7 @@ const noteCards = {
     "bodyPlaceholder": "アイデア、コマンドスニペット、一時的なコンテキストをここに書き留めます…",
     "captureMenu": "ノートに保存",
     "captureSelection": "選択したコードをノートに保存…",
+    "captureWholeFile": "ファイル全体をノートに保存…",
     "captureConversationSelection": "選択したテキストをノートに保存…",
     "captureConversationThread": "意味的な会話本文をノートに保存…",
     "captureConversationSelectionTitle": "会話の選択範囲",

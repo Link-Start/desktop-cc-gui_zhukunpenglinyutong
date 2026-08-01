@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::Serialize;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
 
 use crate::backend::events::{EventSink, TerminalOutput};
@@ -61,9 +61,11 @@ fn resolve_locale() -> String {
 }
 
 fn spawn_terminal_reader(
+    app: AppHandle,
     event_sink: impl EventSink,
     workspace_id: String,
     terminal_id: String,
+    session: Arc<TerminalSession>,
     mut reader: Box<dyn Read + Send>,
 ) {
     std::thread::spawn(move || {
@@ -121,7 +123,26 @@ fn spawn_terminal_reader(
                 Err(_) => break,
             }
         }
+        let key = terminal_key(&workspace_id, &terminal_id);
+        tauri::async_runtime::block_on(async move {
+            let state = app.state::<AppState>();
+            remove_terminal_session_if_current(&state.terminal_sessions, &key, &session).await;
+        });
     });
+}
+
+async fn remove_terminal_session_if_current(
+    sessions: &Mutex<std::collections::HashMap<String, Arc<TerminalSession>>>,
+    key: &str,
+    session: &Arc<TerminalSession>,
+) {
+    let mut sessions = sessions.lock().await;
+    if sessions
+        .get(key)
+        .is_some_and(|current| Arc::ptr_eq(current, session))
+    {
+        sessions.remove(key);
+    }
 }
 
 async fn kill_terminal_session(session: Arc<TerminalSession>) {
@@ -252,10 +273,17 @@ pub(crate) async fn terminal_open(
                 id: existing.id.clone(),
             });
         }
-        sessions.insert(key, session);
+        sessions.insert(key, Arc::clone(&session));
     }
-    let event_sink = build_event_sink(app);
-    spawn_terminal_reader(event_sink, workspace_id, terminal_id, reader);
+    let event_sink = build_event_sink(app.clone());
+    spawn_terminal_reader(
+        app,
+        event_sink,
+        workspace_id,
+        terminal_id,
+        Arc::clone(&session),
+        reader,
+    );
 
     Ok(TerminalSessionInfo { id: session_id })
 }
@@ -325,8 +353,39 @@ pub(crate) async fn terminal_close(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    use super::remove_terminal_session_if_current;
+    use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+    use tokio::sync::Mutex;
+
     use super::resolve_terminal_shell_path;
     use crate::types::AppSettings;
+
+    fn build_test_terminal_session() -> Arc<super::TerminalSession> {
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize {
+                rows: 2,
+                cols: 2,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("open test pty");
+        let shell_path = super::default_shell_path();
+        let mut cmd = CommandBuilder::new(shell_path);
+        #[cfg(not(windows))]
+        cmd.arg("-i");
+        let child = pair.slave.spawn_command(cmd).expect("spawn test shell");
+        let writer = pair.master.take_writer().expect("take test writer");
+        Arc::new(super::TerminalSession {
+            id: "terminal-test".to_string(),
+            master: Mutex::new(pair.master),
+            writer: Mutex::new(writer),
+            child: Mutex::new(child),
+        })
+    }
 
     #[test]
     fn resolve_terminal_shell_path_prefers_configured_path() {
@@ -338,5 +397,20 @@ mod tests {
             resolve_terminal_shell_path(&settings),
             "C:\\Program Files\\PowerShell\\7\\pwsh.exe"
         );
+    }
+
+    #[tokio::test]
+    async fn remove_terminal_session_if_current_only_removes_matching_session() {
+        let session = build_test_terminal_session();
+        let replacement = build_test_terminal_session();
+        let sessions: Mutex<HashMap<String, Arc<super::TerminalSession>>> = Mutex::new(
+            HashMap::from([("workspace:terminal".to_string(), Arc::clone(&session))]),
+        );
+
+        remove_terminal_session_if_current(&sessions, "workspace:terminal", &replacement).await;
+        assert!(sessions.lock().await.contains_key("workspace:terminal"));
+
+        remove_terminal_session_if_current(&sessions, "workspace:terminal", &session).await;
+        assert!(!sessions.lock().await.contains_key("workspace:terminal"));
     }
 }

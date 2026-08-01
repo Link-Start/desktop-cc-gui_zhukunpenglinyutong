@@ -373,6 +373,8 @@ mod tests {
             storage_path: data_dir.join("workspaces.json"),
             settings_path: data_dir.join("settings.json"),
             app_settings: tokio::sync::Mutex::new(AppSettings::default()),
+            settings_recovery_notice: tokio::sync::Mutex::new(None),
+            workspaces_recovery_notice: tokio::sync::Mutex::new(None),
             codex_runtime_reload_lock: tokio::sync::Mutex::new(()),
             computer_use_activation_lock: tokio::sync::Mutex::new(()),
             computer_use_activation_verification: tokio::sync::Mutex::new(None),
@@ -381,9 +383,17 @@ mod tests {
             detached_external_change_runtime: tokio::sync::Mutex::new(
                 crate::workspaces::DetachedExternalChangeRuntime::default(),
             ),
+            claude_commands_watches: tokio::sync::Mutex::new(
+                crate::claude_commands_watch::CommandsWatchRegistry::default(),
+            ),
             runtime_manager: std::sync::Arc::new(crate::runtime::RuntimeManager::new(&data_dir)),
+            shared_event_writer: None,
+            shared_runtime_coordinator:
+                crate::shared_runtime_coordinator::SharedRuntimeCoordinator::default(),
             renderer_heartbeats: tokio::sync::Mutex::new(
                 crate::renderer_stability::RendererHeartbeatStore::default(),
+            ),
+            semantic_navigation_runtime: crate::code_intel_lsp::SemanticNavigationRuntime::default(
             ),
             engine_manager: crate::engine::EngineManager::new(),
         }

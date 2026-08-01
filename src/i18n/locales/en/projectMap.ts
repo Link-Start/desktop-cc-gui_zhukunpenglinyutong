@@ -761,24 +761,6 @@ const projectMap = {
         noNodes: "The canvas needs at least one node.",
       },
     },
-    orchestration: {
-      title: "Orchestration draft",
-      description:
-        "Create a local task draft from the current node with source node, evidence, and risk markers. This does not start AI execution.",
-      sourceNode: "Source node {{nodeId}}",
-      evidenceCount: "{{count}} evidence ref(s)",
-      reviewRequired: "Review required",
-      readyForDraft: "Ready for planned draft",
-      createTask: "Create task draft",
-      created:
-        "Created {{taskId}} · {{status}} · {{evidence}} evidence · {{risks}} risk(s)",
-      failure: {
-        "missing-workspace":
-          "Missing workspace identity; task draft was not created.",
-        "missing-node":
-          "Source node is no longer available; task draft was not created.",
-      },
-    },
     confirmDeleteNodeTitle: "Delete knowledge node",
     confirmDeleteNode:
       'Delete "{{title}}" and its child nodes? This is manual pruning; restoring it requires regeneration or node completion.',

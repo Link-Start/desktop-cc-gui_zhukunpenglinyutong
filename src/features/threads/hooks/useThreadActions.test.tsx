@@ -2543,7 +2543,7 @@ describe("useThreadActions", () => {
     ]);
   });
 
-  it("loads native and project catalogs during workspace hydration", async () => {
+  it("loads active catalogs including opencode during workspace hydration", async () => {
     vi.mocked(listThreads).mockResolvedValue({
       result: {
         data: [
@@ -2601,7 +2601,7 @@ describe("useThreadActions", () => {
 
     expect(listThreads).toHaveBeenCalledTimes(1);
     expect(listClaudeSessions).toHaveBeenCalled();
-    expect(getOpenCodeSessionList).toHaveBeenCalled();
+    expect(getOpenCodeSessionList).toHaveBeenCalledWith("ws-1");
     expect(listWorkspaceSessions).toHaveBeenCalledWith("ws-1", {
       query: { status: "active", sessionAttributionMode: "related" },
       cursor: null,
@@ -3073,7 +3073,9 @@ describe("useThreadActions", () => {
     const { result, dispatch } = renderActions();
 
     await act(async () => {
-      await result.current.listThreadsForWorkspace(workspace);
+      await result.current.listThreadsForWorkspace(workspace, {
+        includeOpenCodeSessions: true,
+      });
     });
 
     expectSetThreadsDispatched(dispatch, "ws-1", [

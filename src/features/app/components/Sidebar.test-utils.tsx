@@ -7,6 +7,10 @@ import {
   assignWorkspaceSessionFolders,
   createWorkspaceSessionFolder,
   deleteWorkspaceSessionFolder,
+  getClaudeProviders,
+  getCodexProviders,
+  getKimiProviders,
+  getOpenCodeProviders,
   listWorkspaceSessionFolders,
   renameWorkspaceSessionFolder,
 } from "../../../services/tauri";
@@ -57,6 +61,8 @@ vi.mock("react-i18next", () => ({
         "sidebar.quickAutomation": "Automation",
         "sidebar.quickSearch": "Search",
         "sidebar.quickSkills": "Skills",
+        "sidebar.plugins": "Market",
+        "sidebar.extensions": "Extensions",
         "lockScreen.lock": "Lock",
         "sidebar.projects": "Projects",
         "sidebar.mcpSkillsMarket": "MCP & Skills Market",
@@ -95,8 +101,10 @@ vi.mock("react-i18next", () => ({
         "workspace.engineOpenCode": "OpenCode",
         "workspace.engineGemini": "Gemini",
         "workspace.engineKimi": "Kimi CLI",
+        "workspace.engineGrok": "Grok CLI",
         "sidebar.cliNotInstalled": "CLI not installed",
         "settings.title": "Settings",
+        "runtimeNotice.title": "Runtime Notice",
         "tabbar.primaryNavigation": "Primary navigation",
       };
       return translations[key] ?? key;
@@ -116,6 +124,10 @@ vi.mock("../../../services/tauri", async (importOriginal) => {
     assignWorkspaceSessionFolders: vi.fn(),
     createWorkspaceSessionFolder: vi.fn(),
     deleteWorkspaceSessionFolder: vi.fn(),
+    getClaudeProviders: vi.fn(),
+    getCodexProviders: vi.fn(),
+    getKimiProviders: vi.fn(),
+    getOpenCodeProviders: vi.fn(),
     listWorkspaceSessionFolders: vi.fn(),
     renameWorkspaceSessionFolder: vi.fn(),
   };
@@ -195,6 +207,10 @@ export function resetSidebarTestMocks() {
     },
   });
   vi.mocked(deleteWorkspaceSessionFolder).mockResolvedValue(undefined);
+  vi.mocked(getClaudeProviders).mockResolvedValue([]);
+  vi.mocked(getCodexProviders).mockResolvedValue([]);
+  vi.mocked(getKimiProviders).mockResolvedValue([]);
+  vi.mocked(getOpenCodeProviders).mockResolvedValue([]);
 }
 
 export const baseProps = {

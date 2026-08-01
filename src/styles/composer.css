@@ -2,6 +2,7 @@
 @import "./composer.rewind-modal.css";
 @import "./composer.part2.css";
 @import "./composer.kanban-mode.css";
+@import "./shared-send-status.css";
 
 .composer-browser-context {
   display: flex;

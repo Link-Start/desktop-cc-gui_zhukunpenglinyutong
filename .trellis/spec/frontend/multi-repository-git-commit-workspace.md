@@ -271,6 +271,7 @@ onRevertRepositoryFile(repositoryRoot: string, path: string): Promise<void>
 - single mode 继续使用 `selectedPaths?: string[]`。
 - multi mode 使用 `repositorySelections?: Array<{ repositoryRoot: string; selectedPaths: string[] }>`，每个 scope MUST 经 `resolve_git_root_for_scope` 校验后收集 diff。
 - multi repository composer MUST 显示与 single mode 相同的 `CommitMessageEngineIcon`、engine/language menu、loading/error state。
+- commit message 主按钮 MUST 始终打开可见的 last-config / engine menu；persisted last config MUST NOT 将主按钮改为静默直接生成。engine 选择后 MUST 继续提供 `zh` / `en` language 选择。
 - multiple scoped diffs MUST 合并为一次 prompt 与一次 generated message；禁止只读取第一个 repository 或 fallback 到 configured root。
 
 ## Scenario: Multi-Repository Changed-File Open And Modal Preview
@@ -456,4 +457,143 @@ npm exec vitest run src/features/git/components/GitMultiRepositoryChanges.test.t
   src/features/git/hooks/useMultiRepositoryGitStatus.test.tsx \
   src/features/git/utils/multiRepositoryCommit.test.ts
 cargo test --manifest-path src-tauri/Cargo.toml scoped_git_root_is_cross_platform_and_stays_inside_workspace
+```
+
+## Scenario: Workspace-Scoped Multi-Repository Branch Actions
+
+### 1. Scope / Trigger
+
+- Trigger：Composer multi-repository root view 新增 Update All / Checkout All，或任何 frontend loop 对多个 repository 执行 Git mutation。
+- 目标：每次 mutation 保留 explicit `repositoryRoot`，单仓失败不阻断 siblings，整批只执行一次 aggregate refresh。
+- 禁止：依赖 global selected repository 推断 scope、`Promise.all` 并发 Git mutation、每仓 mutation 后重复 aggregate refresh。
+
+### 2. Signatures
+
+```ts
+type GitRepositoryBatchResult = {
+  successCount: number;
+  failedRepositories: string[];
+  skippedRepositories: string[];
+};
+
+type GitRepositoryCommonBranchesResult = {
+  localBranches: GitRepositoryBranchCoverage[];
+  remoteBranches: GitRepositoryBranchCoverage[];
+  failedRepositories: string[];
+  totalRepositoryCount: number;
+};
+
+type GitRepositoryBranchCoverage = {
+  name: string;
+  repositories: Array<{ repositoryRoot: string; displayName: string }>;
+};
+
+checkoutBranch(
+  name: string,
+  repositoryRootOverride?: string,
+  refreshAfterMutation?: boolean,
+): Promise<void>;
+
+updateBranch(
+  name: string,
+  repositoryRootOverride?: string,
+  refreshAfterMutation?: boolean,
+): Promise<GitBranchUpdateResult | null>;
+
+onUpdateAllRepositories(): Promise<GitRepositoryBatchResult | null>;
+onCheckoutAllRepositories(
+  branchName: string,
+  eligibleRepositoryRoots?: readonly string[],
+): Promise<GitRepositoryBatchResult | null>;
+onLoadCommonRepositoryBranches(): Promise<GitRepositoryCommonBranchesResult | null>;
+```
+
+### 3. Contracts
+
+- `repositoryRootOverride === undefined` MUST 保留 legacy selected/configured repository semantics。
+- `repositoryRootOverride === ""` MUST 显式 targeting workspace-root repository；禁止使用 truthy fallback。
+- batch loop MUST 使用 repository summaries 的稳定顺序与 exact `repositoryRoot`。
+- Update All MUST 使用各 repository 的 `currentBranch`；缺失 branch 的 detached/unborn/unavailable repository MUST skip，不发 mutation。
+- Checkout All MUST trim target branch once；空 target MUST 不执行。
+- Checkout All selector MUST 使用每个 repository 的 exact `repositoryRoot` 调用 existing branch-list command。
+- common local branches MUST 按 exact local name 构建 coverage；common remote branches MUST 按包含 remote prefix 的 exact ref 构建 coverage。
+- coverage 少于两个成功读取的 repository MUST 不展示；coverage row MUST 显示 eligible/total count 与 eligible display names。
+- repository branch-list 失败或返回 non-repository state 时 MUST 返回 exact failed display names 作为 warning，但不得清空其他至少覆盖两个 repository 的有效 groups。
+- Checkout All 接收 eligible roots 时 MUST 只 mutation members；non-members MUST skipped，不得尝试不存在的 branch。
+- common branch discovery 是 read-only，可并行；Git mutation 仍 MUST 串行。
+- batch 内 scoped mutation MUST 使用 `refreshAfterMutation=false`；loop settled 后统一执行 `refreshBranches + refreshRepositories + refreshGitStatus`。
+- one repository reject MUST 进入 `failedRepositories` 并继续；UI MUST 显示 success / failed / skipped summary。
+- in-flight batch MUST dedupe duplicate trigger；不得与第二批 mutation overlap。
+- repository row icon MUST 根据 exact `repositoryRoot` 使用 deterministic color slot；同屏前 16 个 repository MUST 使用不同的 theme-safe 颜色，且列表排序变化不得改变 slot assignment。
+- repository icon color MUST 仅作为 identity 辅助，不得替代 repository name 或 clean/dirty/conflict/error status token。
+
+### 4. Validation & Error Matrix
+
+| 场景 | Mutation | Result | Refresh |
+|---|---|---|---|
+| root repository `repositoryRoot=""` | 原样传空字符串 | success/failed 可归因 root | batch 后一次 |
+| nested repository | 传 normalized child root | success/failed 可归因 child | batch 后一次 |
+| Update target 无 current branch | 不调用 command | skipped | batch 后一次 |
+| Checkout target 为空 | 不启动 batch | `null` / UI disabled | 0 次 |
+| 某仓 dirty worktree 阻止 checkout | 捕获该仓 error，继续 siblings | failed name + siblings outcomes | batch 后一次 |
+| 重复点击 pending action | 不启动第二批 | `null` | 不增加 refresh |
+| repository count `<=1` | 不启动 global batch | `null` | 0 次 |
+| 任一 branch-list 读取失败 | 继续展示其余 coverage>=2 groups | failed repository warning | 仅选择后 mutation eligible members |
+| branch 仅一个仓库拥有 | 不展示，不算公共分支 | omitted | 0 次 mutation |
+| 无 coverage>=2 分支 | 展示 explicit empty state | empty local/remote arrays | 0 次 mutation |
+
+### 5. Good / Base / Bad Cases
+
+- Good：root `""`、`services/api` 依次调用 scoped checkout；api failure 后仍执行后续仓库，最终 summary 可见。
+- Good：8 仓中 7 仓有 `master`，显示 `master 7/8` 与 7 个仓库名；选择后只产生 7 次 scoped checkout，剩余 1 仓 skipped。
+- Good：一个仓 branch-list 失败，另外 3 仓中 2 仓共享 `main`；warning 与 `main 2/4` 同时可见。
+- Good：两仓 Update + 一仓 unborn，只有两次 update calls，unborn 进入 skipped，aggregate refresh 各一次。
+- Base：existing single-repository `checkoutBranch(name)` 省略 override，行为不变。
+- Bad：先 `selectRepository(root)` 再调用无 scope checkout；React state 尚未提交时可能串仓。
+- Bad：`repositories.forEach(async ...)` 或 `Promise.all(...)` 并发启动 Git process。
+- Bad：loop 内每次调用默认 `refreshAfterMutation=true`，造成 N 次 summaries/branch/status refresh。
+- Bad：用所有 repository 求严格交集，导致一个缺 branch 的仓库清空其他仓库的有效公共分支。
+- Bad：选择 coverage group 后仍向 non-member repository 发 checkout，制造可避免的 `Branch not found` failure。
+
+### 6. Tests Required
+
+- `useAppShellGitWorkspaceOpsSection.test.tsx` MUST assert ordered calls包含 `(branch, "", false)` 与 `(branch, "services/api", false)`。
+- Test MUST assert missing current branch produces skip and zero mutation for that repository。
+- Test MUST cover first operation pending 时 duplicate batch returns `null`。
+- Test MUST reject one checkout、assert remaining repository still executes、result contains exact failed display name。
+- Test MUST assert `refreshBranches`、`refreshRepositories`、`refreshGitStatus` each run once per settled batch。
+- `ComposerBranchBadge.test.tsx` MUST assert global actions share one row、pending duplicate is ignored、target branch is forwarded、partial failure renders alert feedback。
+- Tests MUST cover local/remote coverage>=2、single-member omission、explicit empty-root discovery scope、eligible-only checkout、remote exact ref selection、discovery loading/warning/empty states。
+- `ComposerBranchBadge.test.tsx` MUST assert multi-repository rows expose distinct deterministic icon color slots and no longer share the legacy fixed emerald class。
+- Gate：focused Vitest、`npm run typecheck`、`npm run lint`、`npm run check:app-shell:runtime-contract`、strict OpenSpec validation。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+await Promise.all(repositories.map(async (repository) => {
+  selectRepository(repository.repositoryRoot);
+  await checkoutBranch(branchName);
+}));
+```
+
+#### Correct
+
+```ts
+const eligibleRoots = new Set(selectedBranch.repositories.map(({ repositoryRoot }) => repositoryRoot));
+for (const repository of repositories) {
+  if (!eligibleRoots.has(repository.repositoryRoot)) {
+    result.skippedRepositories.push(repository.displayName);
+    continue;
+  }
+  try {
+    await checkoutBranch(branchName, repository.repositoryRoot, false);
+    result.successCount += 1;
+  } catch {
+    result.failedRepositories.push(repository.displayName);
+  }
+}
+await Promise.all([refreshBranches(), refreshRepositories()]);
+refreshGitStatus();
 ```

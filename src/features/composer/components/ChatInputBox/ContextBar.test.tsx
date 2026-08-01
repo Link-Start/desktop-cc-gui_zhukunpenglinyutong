@@ -101,6 +101,28 @@ describe("ContextBar live canvas controls visibility", () => {
     expect(rewindButton).toBeTruthy();
   });
 
+  it("keeps output collapse and rewind as accessible icon-only quick actions", () => {
+    const { container } = render(
+      <ContextBar
+        isLoading={false}
+        hasMessages
+        currentProvider="codex"
+        onRewind={vi.fn()}
+        showRewindEntry
+      />,
+    );
+
+    const collapseButton = screen.getByRole("button", {
+      name: "messages.collapseMiddleStepsEnable",
+    });
+    const rewindButton = screen.getByRole("button", { name: "rewind.tooltip" });
+
+    expect(collapseButton.classList.contains("context-tool-btn--labeled")).toBe(false);
+    expect(rewindButton.classList.contains("context-tool-btn--labeled")).toBe(false);
+    expect(container.querySelector(".context-live-canvas-btn .context-tool-label")).toBeNull();
+    expect(container.querySelector(".context-rewind-btn .context-tool-label")).toBeNull();
+  });
+
   it("renders the completion email toggle in the bottom context bar", () => {
     const onToggleCompletionEmail = vi.fn();
 

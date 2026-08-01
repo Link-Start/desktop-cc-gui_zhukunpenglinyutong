@@ -5,11 +5,49 @@
 const models = {
   "models": {
     "selectModel": "選擇模型",
+    "engineHeader": "{{name}} 引擎",
     "addModel": "新增模型",
+
+    "openCliSettings": "CLI 設定",
+    "switchChannel": "切換渠道",
+    "selectChannel": "選擇渠道",
     "refreshConfig": "重新整理設定",
     "refreshingConfig": "重新整理中…",
+    "reloadConfig": "重新讀取設定",
+    "reloadingConfig": "正在重新讀取設定…",
+    "discoverModels": "從 CLI 探索模型",
+    "discoveringModels": "正在探索模型…",
     "refreshConfigFailed": "重新整理失敗：{{message}}",
-    "claude": {},
+        "claude": {
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · 最強大 · Mythos 級"
+      },
+      "opus5": {
+        "label": "Opus 5",
+        "description": "Opus 5 · Opus 最新升級模型"
+      },
+      "opus48": {
+        "label": "Opus 4.8",
+        "description": "Opus 4.8 · 保留的前代 Opus 模型"
+      },
+      "sonnet5": {
+        "label": "Sonnet 5",
+        "description": "Sonnet 5 · Sonnet 4.6 升級模型"
+      },
+      "sonnet47": {
+        "label": "Sonnet 4.7",
+        "description": "Sonnet 4.7 · 預設推薦模型"
+      },
+      "sonnet46": {
+        "label": "Sonnet 4.6",
+        "description": "Sonnet 4.6 · 預設推薦模型"
+      },
+      "haiku45": {
+        "label": "Haiku 4.5",
+        "description": "Haiku 速度最快，適合快速答覆"
+      }
+    },
     "codex": {
       "gpt56sol": {
         "label": "gpt-5.6-sol",
@@ -26,10 +64,6 @@ const models = {
       "gpt55": {
         "label": "gpt-5.5",
         "description": "適用於複雜編碼、研究與實際工作的前沿模型。"
-      },
-      "gpt54": {
-        "label": "gpt-5.4",
-        "description": "適合日常編碼的強大模型。"
       }
     }
   }

@@ -139,6 +139,9 @@ impl ClaudeSession {
         if let Ok(mut summaries) = self.synthetic_approval_summaries_by_turn.lock() {
             summaries.remove(turn_id);
         }
+        if let Ok(mut environments) = self.provider_env_by_turn.lock() {
+            environments.remove(turn_id);
+        }
         self.clear_pending_user_inputs_for_turn(turn_id);
     }
 
@@ -148,6 +151,7 @@ impl ClaudeSession {
         params: &SendMessageParams,
         new_session_id: &Option<String>,
         include_hook_events: bool,
+        provider_settings_path: Option<&Path>,
     ) -> Result<Option<tokio::io::Lines<BufReader<tokio::process::ChildStdout>>>, String> {
         let notify = self.get_or_create_approval_notify(turn_id);
         log::info!("File approval detected, waiting for approval resolution (up to 5 min)...");
@@ -208,12 +212,15 @@ impl ClaudeSession {
         }
         let use_stream_json_input = Self::should_use_stream_json_input(&resume_params);
 
-        let mut cmd = self.build_command(
+        let provider_env = self.provider_env_for_turn(turn_id);
+        let mut cmd = self.build_command_with_provider_env(
             &resume_params,
             use_stream_json_input,
             include_hook_events,
             None,
             None,
+            provider_env.as_ref(),
+            provider_settings_path,
         );
         Self::configure_spawn_command(&mut cmd);
         match cmd.spawn() {
@@ -460,6 +467,7 @@ impl ClaudeSession {
         params: &SendMessageParams,
         new_session_id: &Option<String>,
         include_hook_events: bool,
+        provider_settings_path: Option<&Path>,
     ) -> Result<Option<tokio::io::Lines<BufReader<tokio::process::ChildStdout>>>, String> {
         let notify = self.get_or_create_user_input_notify(turn_id);
         log::info!("AskUserQuestion detected, waiting for user (up to 5 min)…");
@@ -584,12 +592,15 @@ impl ClaudeSession {
         }
         let use_stream_json_input = Self::should_use_stream_json_input(&resume_params);
 
-        let mut cmd = self.build_command(
+        let provider_env = self.provider_env_for_turn(turn_id);
+        let mut cmd = self.build_command_with_provider_env(
             &resume_params,
             use_stream_json_input,
             include_hook_events,
             None,
             None,
+            provider_env.as_ref(),
+            provider_settings_path,
         );
         Self::configure_spawn_command(&mut cmd);
         match cmd.spawn() {

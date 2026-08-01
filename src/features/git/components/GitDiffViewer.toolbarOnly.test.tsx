@@ -8,6 +8,26 @@ vi.mock("../../../services/tauri", () => ({
   getGitFileFullDiff: vi.fn(async () => "full diff"),
 }));
 
+vi.mock("./WorkspaceReadOnlyDiffCompare", () => ({
+  WorkspaceReadOnlyDiffCompare: ({
+    filePath,
+    diff,
+    resizableColumns,
+  }: {
+    filePath: string;
+    diff: string;
+    resizableColumns?: boolean;
+  }) => (
+    <div
+      data-testid="aligned-read-only-compare"
+      data-file-path={filePath}
+      data-resizable={String(resizableColumns)}
+    >
+      {diff}
+    </div>
+  ),
+}));
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -67,5 +87,55 @@ describe("GitDiffViewer toolbar-only mode", () => {
     });
     expect(screen.queryByRole("button", { name: /git\.viewAllContent/ })).toBeNull();
     expect(getGitFileFullDiff).not.toHaveBeenCalled();
+  });
+
+  it("keeps the center preview toolbar while using the shared aligned split renderer", async () => {
+    const { rerender } = render(
+      <GitDiffViewer
+        workspaceId="workspace-1"
+        diffs={[{
+          path: "example.ts",
+          status: "M",
+          diff: "@@ -1 +1 @@\n-before\n+after\n",
+        }]}
+        selectedPath="example.ts"
+        isLoading={false}
+        error={null}
+        alignedTextPreview
+        showContentModeControls
+        contentMode="focused"
+        diffStyle="split"
+      />,
+    );
+
+    expect(await screen.findByRole("button", { name: "git.dualPanelDiff" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "git.singleColumnDiff" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "git.viewFocusedContent" })).toBeTruthy();
+    expect(screen.getByTestId("aligned-read-only-compare").getAttribute("data-file-path"))
+      .toBe("example.ts");
+    expect(screen.getByTestId("aligned-read-only-compare").getAttribute("data-resizable"))
+      .toBe("true");
+    expect(document.querySelector(".diff-viewer-list")).toBeNull();
+
+    rerender(
+      <GitDiffViewer
+        workspaceId="workspace-1"
+        diffs={[{
+          path: "example.ts",
+          status: "M",
+          diff: "@@ -1 +1 @@\n-before\n+after\n",
+        }]}
+        selectedPath="example.ts"
+        isLoading={false}
+        error={null}
+        alignedTextPreview
+        showContentModeControls
+        contentMode="focused"
+        diffStyle="unified"
+      />,
+    );
+
+    expect(screen.queryByTestId("aligned-read-only-compare")).toBeNull();
+    expect(document.querySelector(".diff-viewer-list")).not.toBeNull();
   });
 });

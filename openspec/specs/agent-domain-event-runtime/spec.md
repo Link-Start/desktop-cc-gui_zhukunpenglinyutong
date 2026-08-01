@@ -2,32 +2,9 @@
 
 ## Purpose
 
-Defines the deferred runtime bridge contract for agent domain events.
+Defines the authoritative Rust-side runtime bus and compatibility projection contract for agent domain events.
 
 ## Requirements
-
-### Requirement: Agent Domain Event Runtime MUST Be Deferred Until A Concrete Consumer Exists
-
-This capability MUST NOT introduce a runtime EventBus in the current P0 harness governance pass.
-
-#### Scenario: current pass excludes EventBus
-
-- **WHEN** current harness governance implementation scope is selected
-- **THEN** reducer emit integration and runtime EventBus implementation MUST be excluded
-
-### Requirement: Future Runtime MUST Be In-Memory Only
-
-If revived, the runtime MUST use only an in-memory subscription model and MUST NOT persist or cross process boundaries.
-
-#### Scenario: no persistence is introduced
-
-- **WHEN** future runtime is implemented
-- **THEN** it MUST NOT write domain events to localStorage, IndexedDB, filesystem, or backend storage
-
-#### Scenario: no IPC publish is introduced
-
-- **WHEN** future runtime is implemented
-- **THEN** it MUST NOT publish domain events over Tauri IPC, WebSocket, worker channel, or cloud transport
 
 ### Requirement: Future Consumers MUST Not Publish Events
 
@@ -46,3 +23,43 @@ Future reducer integration MUST prove next-state equivalence with the current pu
 
 - **WHEN** future emit-after-mutation integration is tested
 - **THEN** the reducer next state MUST equal the pure reducer next state for the same action
+
+### Requirement: Agent Events MUST Enter One Rust-Side Runtime Bus
+
+Every active engine runtime MUST translate protocol output into `MossxAgentEvent` before frontend、diagnostic or persistence fan-out.
+
+#### Scenario: engine emits protocol-specific output
+
+- **WHEN** Codex、Claude or Kimi produces a runtime event
+- **THEN** its adapter MUST translate the event once at bus ingress
+- **AND** downstream sinks MUST consume the common envelope
+
+### Requirement: Runtime Publish MUST Remain Private And Fan-Out MUST Be Isolated
+
+Only trusted runtime adapters and lifecycle owners MUST publish; application consumers MUST be subscribe-only. A slow or failed sink MUST NOT block engine stdout/stderr readers or another sink.
+
+#### Scenario: noncritical sink stalls
+
+- **WHEN** a diagnostics or persistence sink stops consuming
+- **THEN** the engine reader and frontend critical lane MUST continue
+- **AND** backpressure/drop diagnostics MUST identify the affected sink
+
+### Requirement: Every Run MUST Settle Exactly Once
+
+The lifecycle owner MUST emit one idempotent `run.settled` after the run reaches completed、failed、cancelled or replaced terminal state.
+
+#### Scenario: duplicate terminal evidence arrives
+
+- **WHEN** an engine emits duplicate or conflicting terminal signals
+- **THEN** the bus MUST publish one `run.settled`
+- **AND** later terminal evidence MUST be recorded diagnostically without settling again
+
+### Requirement: Frontend Compatibility MUST Preserve Streaming Render Isolation
+
+The frontend sink MUST preserve existing event bridge behavior、batching、critical bypass and `liveAssistantTextChannel`.
+
+#### Scenario: high-frequency text delta arrives
+
+- **WHEN** the bus receives streaming text deltas
+- **THEN** frontend projection MUST NOT dispatch every delta into AppShell root state
+- **AND** shell/layout consumers MUST not rerender solely because of delta fan-out

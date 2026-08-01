@@ -81,6 +81,14 @@ const KEY_ALIASES: Record<string, string> = {
   up: "arrowup",
 };
 
+function formatShortcutKeyLabel(
+  key: string,
+  labels: Record<string, string>,
+): string {
+  return labels[key] ??
+    (key.length === 1 || /^f\d{1,2}$/.test(key) ? key.toUpperCase() : key);
+}
+
 function normalizeKey(key: string) {
   const normalized = key.toLowerCase();
   if (MODIFIER_KEYS.has(normalized)) {
@@ -154,9 +162,7 @@ export function formatShortcut(value: string | null | undefined): string {
     }
     return [];
   });
-  const keyLabel =
-    KEY_LABELS[parsed.key] ??
-    (parsed.key.length === 1 ? parsed.key.toUpperCase() : parsed.key);
+  const keyLabel = formatShortcutKeyLabel(parsed.key, KEY_LABELS);
   return [...modifiers, keyLabel].join("");
 }
 
@@ -189,10 +195,52 @@ export function formatShortcutForPlatform(
   if (parsed.shift) {
     modifiers.push(MODIFIER_TEXT_LABELS.shift);
   }
-  const keyLabel =
-    ACCELERATOR_KEYS[parsed.key] ??
-    (parsed.key.length === 1 ? parsed.key.toUpperCase() : parsed.key);
+  const keyLabel = formatShortcutKeyLabel(parsed.key, ACCELERATOR_KEYS);
   return [...modifiers, keyLabel].join("+");
+}
+
+export function splitShortcutForPlatform(
+  value: string | null | undefined,
+  isMac: boolean = isMacPlatform(),
+): string[] | null {
+  const parsed = parseShortcut(value);
+  if (!parsed) {
+    return null;
+  }
+  if (isMac) {
+    const modifiers = MODIFIER_ORDER.flatMap((modifier) => {
+      if (modifier === "cmd" && parsed.meta) {
+        return MODIFIER_LABELS.cmd;
+      }
+      if (modifier === "ctrl" && parsed.ctrl) {
+        return MODIFIER_LABELS.ctrl;
+      }
+      if (modifier === "alt" && parsed.alt) {
+        return MODIFIER_LABELS.alt;
+      }
+      if (modifier === "shift" && parsed.shift) {
+        return MODIFIER_LABELS.shift;
+      }
+      return [];
+    });
+    return [...modifiers, formatShortcutKeyLabel(parsed.key, KEY_LABELS)];
+  }
+  const modifiers: string[] = [];
+  if (parsed.meta && parsed.ctrl) {
+    modifiers.push("Meta");
+  } else if (parsed.meta) {
+    modifiers.push(MODIFIER_TEXT_LABELS.ctrl);
+  }
+  if (parsed.ctrl) {
+    modifiers.push(MODIFIER_TEXT_LABELS.ctrl);
+  }
+  if (parsed.alt) {
+    modifiers.push(MODIFIER_TEXT_LABELS.alt);
+  }
+  if (parsed.shift) {
+    modifiers.push(MODIFIER_TEXT_LABELS.shift);
+  }
+  return [...modifiers, formatShortcutKeyLabel(parsed.key, ACCELERATOR_KEYS)];
 }
 
 export function buildShortcutValue(event: KeyboardEvent): string | null {

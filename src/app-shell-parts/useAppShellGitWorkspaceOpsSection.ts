@@ -11,6 +11,11 @@ import { useEventCallback } from "../utils/useEventCallback";
 import { resolveWorkspaceRelativePath } from "../utils/workspacePaths";
 import { pushErrorToast } from "../services/toasts";
 import { getGitBranchUpdateFeedback } from "../features/git/utils/gitBranchUpdateFeedback";
+import { buildGitBranchCoverage } from "../features/git/utils/gitRepositoryCommonBranches";
+import type {
+  GitRepositoryBatchResult,
+  GitRepositoryCommonBranchesResult,
+} from "../features/git/types/gitRepositoryActions";
 import type {
   DebugEntry,
   WorkspaceInfo,
@@ -58,6 +63,7 @@ export function useAppShellGitWorkspaceOpsSection({
   });
   const [selectedRepositoryRoot, setSelectedRepositoryRoot] = useState<string | null>(null);
   const updatingRepositoryBranchesRef = useRef(new Set<string>());
+  const batchRepositoryActionPendingRef = useRef(false);
   const {
     branches,
     localBranches,
@@ -67,6 +73,8 @@ export function useAppShellGitWorkspaceOpsSection({
     checkoutBranch,
     createBranch,
     updateBranch,
+    refreshBranches,
+    loadBranchesForRepository,
   } = useGitBranches({
     activeWorkspace,
     onDebug: addDebugEntry,
@@ -157,9 +165,103 @@ export function useAppShellGitWorkspaceOpsSection({
       if (updateKey) updatingRepositoryBranchesRef.current.delete(updateKey);
     }
   });
+  const runRepositoryBatch = useEventCallback(async (
+    operation: "update" | "checkout",
+    targetBranch?: string,
+    eligibleRepositoryRoots?: readonly string[],
+  ): Promise<GitRepositoryBatchResult | null> => {
+    if (batchRepositoryActionPendingRef.current || repositories.length <= 1) {
+      return null;
+    }
+    batchRepositoryActionPendingRef.current = true;
+    const result: GitRepositoryBatchResult = {
+      successCount: 0,
+      failedRepositories: [],
+      skippedRepositories: [],
+    };
+    const eligibleRoots = eligibleRepositoryRoots
+      ? new Set(eligibleRepositoryRoots)
+      : null;
+    const normalizedTargetBranch = targetBranch?.trim();
+    try {
+      for (const repository of repositories) {
+        if (eligibleRoots && !eligibleRoots.has(repository.repositoryRoot)) {
+          result.skippedRepositories.push(repository.displayName);
+          continue;
+        }
+        const branchName = operation === "update"
+          ? repository.currentBranch
+          : normalizedTargetBranch;
+        if (!branchName) {
+          result.skippedRepositories.push(repository.displayName);
+          continue;
+        }
+        try {
+          if (operation === "update") {
+            await updateBranch(branchName, repository.repositoryRoot, false);
+          } else {
+            await checkoutBranch(branchName, repository.repositoryRoot, false);
+          }
+          result.successCount += 1;
+        } catch {
+          result.failedRepositories.push(repository.displayName);
+        }
+      }
+      await Promise.all([
+        refreshBranches(),
+        refreshRepositories(),
+      ]);
+      refreshGitStatus();
+      return result;
+    } finally {
+      batchRepositoryActionPendingRef.current = false;
+    }
+  });
+  const handleUpdateAllRepositories = useEventCallback(
+    () => runRepositoryBatch("update"),
+  );
+  const handleCheckoutAllRepositories = useEventCallback(
+    (branchName: string, eligibleRepositoryRoots?: readonly string[]) =>
+      runRepositoryBatch("checkout", branchName, eligibleRepositoryRoots),
+  );
+  const handleLoadCommonRepositoryBranches = useEventCallback(async (): Promise<GitRepositoryCommonBranchesResult | null> => {
+    if (repositories.length <= 1) return null;
+    const loadedRepositories = await Promise.all(repositories.map(async (repository) => {
+      try {
+        const branchList = await loadBranchesForRepository(repository.repositoryRoot);
+        return branchList?.repositoryState === "git_repository"
+          ? { repository, branchList }
+          : { repository, branchList: null };
+      } catch {
+        return { repository, branchList: null };
+      }
+    }));
+    const failedRepositories = loadedRepositories
+      .filter(({ branchList }) => branchList === null)
+      .map(({ repository }) => repository.displayName);
+    const branchLists = loadedRepositories.flatMap(({ repository, branchList }) =>
+      branchList ? [{ repository, branchList }] : []);
+    return {
+      localBranches: buildGitBranchCoverage(branchLists.map(({ repository, branchList }) => ({
+        repositoryRoot: repository.repositoryRoot,
+        displayName: repository.displayName,
+        branches: branchList.localBranches,
+      }))),
+      remoteBranches: buildGitBranchCoverage(branchLists.map(({ repository, branchList }) => ({
+        repositoryRoot: repository.repositoryRoot,
+        displayName: repository.displayName,
+        branches: branchList.remoteBranches,
+      }))),
+      failedRepositories,
+      totalRepositoryCount: repositories.length,
+    };
+  });
   const alertError = useCallback((error: unknown) => {
-    alert(error instanceof Error ? error.message : String(error));
-  }, []);
+    pushErrorToast({
+      title: t("errors.requestFailed"),
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }, [t]);
   const handleOpenDetachedFileExplorer = useCallback(
     async (initialFilePath?: string | null) => {
       if (!activeWorkspace) {
@@ -264,6 +366,9 @@ export function useAppShellGitWorkspaceOpsSection({
     handleCheckoutBranch,
     handleCreateBranch,
     handleUpdateBranch,
+    handleUpdateAllRepositories,
+    handleCheckoutAllRepositories,
+    handleLoadCommonRepositoryBranches,
     handleOpenDetachedFileExplorer,
     handlePickGitRoot,
     handleRevertAllGitChanges,

@@ -77,6 +77,28 @@
 - **WHEN** 页面渲染顶部导航
 - **THEN** 项目标题入口 MUST 回到主 topbar 原位置
 
+### Requirement: Desktop Sidebar Collapsed Surfaces MUST Follow Active Appearance
+
+系统 MUST 在 desktop sidebar collapsed 状态下使用 active appearance 的 theme tokens 渲染 app shell、main surface 与被继承的 sidebar surface，不得让 light-only fallback 泄漏到 dark 或 system-dark appearance。
+
+#### Scenario: Explicit dark sidebar collapse keeps dark surfaces
+
+- **WHEN** 用户在 explicit dark appearance 下折叠 desktop sidebar
+- **THEN** app shell 暴露区域与嵌入 Settings sidebar MUST 使用 dark theme surface
+- **AND** 两者 MUST NOT 回退到 `#ffffff`
+
+#### Scenario: System dark sidebar collapse keeps dark surfaces
+
+- **WHEN** 用户选择 system appearance 且操作系统为 dark mode 后折叠 desktop sidebar
+- **THEN** desktop shell 与 sidebar descendants MUST 解析为 dark theme surface
+- **AND** system-light 的白色 override MUST NOT 生效
+
+#### Scenario: Light sidebar collapse preserves current contrast
+
+- **WHEN** 用户在 explicit light 或 system-light appearance 下折叠 desktop sidebar
+- **THEN** shell 与 main surface MUST 保持现有白色 collapsed contrast
+- **AND** sidebar layout、collapse control 与 titlebar placement MUST 保持不变
+
 ### Requirement: 左右 Topbar 高度与下拉可见性必须稳定
 
 系统 MUST 保证侧栏头部与主 topbar 高度一致，并确保项目下拉在侧栏头部场景不被裁剪。
@@ -433,3 +455,43 @@
 - **THEN** runtime notice expanded panel MAY render outside the sidebar DOM subtree through a portal layer
 - **AND** minimized runtime notice entry MUST remain a sibling of Settings inside `.sidebar-bottom-nav`
 
+### Requirement: Conversation Family Group MUST Use A Lightweight Non-Hierarchical Boundary
+
+Sidebar MUST render an eligible Provider Continuation Family with a low-emphasis enclosing boundary and a descriptive label. The boundary MUST communicate related continuity without resembling a Parent-Child Tree, user-created folder, or second active selection surface.
+
+#### Scenario: lightweight boundary labels visible members
+
+- **WHEN** an eligible Family presentation group contains two or more visible top-level members
+- **THEN** Sidebar MUST render one visually continuous light boundary around the group
+- **AND** the first segment MUST expose the localized label `续接会话 · {{count}} 个`
+- **AND** `count` MUST equal the visible top-level Family members in the current list partition
+
+#### Scenario: single visible member has no empty group chrome
+
+- **WHEN** filtering, deletion, archiving, pagination, or pinning leaves fewer than two visible members in a partition
+- **THEN** Sidebar MUST omit the Family boundary and label
+- **AND** the remaining Session row MUST retain its existing Origin badge and ordinary top-level layout
+
+#### Scenario: group chrome preserves row interaction states
+
+- **WHEN** a grouped member is active, hovered, keyboard-focused, processing, reviewing, unread, degraded, or awaiting a destructive-action confirmation
+- **THEN** the row's existing state indication and hit targets MUST remain visible and operable
+- **AND** the Family boundary MUST NOT become an interactive overlay or intercept pointer and keyboard events
+
+#### Scenario: boundary remains distinct from Subagent tree
+
+- **WHEN** a grouped root Session contains expanded Subagent descendants
+- **THEN** the light boundary MAY contain that existing subtree as part of the root block
+- **AND** the boundary MUST NOT add tree rails, Parent-Child indentation, expanders, or ownership labels to Family peers
+
+#### Scenario: narrow and virtualized lists preserve the boundary
+
+- **WHEN** Sidebar uses a narrow common width or activates virtualized ThreadList rendering
+- **THEN** the label, top and bottom corners, and left and right boundary MUST remain visible without clipping row content
+- **AND** virtualized and non-virtualized rendering MUST expose the same Family member order, count, selection targets, and accessible label
+
+#### Scenario: themes retain low-emphasis contrast
+
+- **WHEN** Sidebar renders in supported light, dark, or system appearance
+- **THEN** the boundary and label MUST remain perceivable against the Sidebar surface
+- **AND** they MUST remain visually weaker than the active Session highlight and workspace/folder hierarchy

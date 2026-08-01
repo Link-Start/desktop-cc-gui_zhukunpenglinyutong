@@ -1,4 +1,5 @@
 import type { ThreadSummary } from "../../../types";
+import { classifyContextProtocolText } from "../../../utils/contextProtocol";
 
 const GENERIC_SESSION_TITLE_PATTERN =
   /^(codex session|claude session|gemini session|opencode session)$/i;
@@ -8,6 +9,12 @@ const SHORT_HEX_TITLE_PATTERN = /^[a-f0-9]{4,8}$/i;
 const COMMAND_TAG_TITLE_PATTERN = /^<(?:command-|local-command-)/i;
 
 type SessionDisplayTitleStrength = 0 | 1 | 2;
+
+export type SessionDisplayTitleSources = {
+  mappedTitle?: string;
+  customTitle?: string;
+  nativeTitle?: string;
+};
 
 export function normalizeSessionDisplayTitle(value: string | null | undefined): string {
   return typeof value === "string" ? value.trim() : "";
@@ -26,6 +33,7 @@ function getSessionDisplayTitleStrength(
     || ORDINAL_AGENT_TITLE_PATTERN.test(normalized)
     || SHORT_HEX_TITLE_PATTERN.test(normalized)
     || COMMAND_TAG_TITLE_PATTERN.test(normalized)
+    || classifyContextProtocolText(normalized) !== null
   ) {
     return 0;
   }
@@ -35,12 +43,12 @@ function getSessionDisplayTitleStrength(
   return 2;
 }
 
-export function selectProjectedSessionDisplayName(params: {
-  previous?: ThreadSummary;
-  nextName: string;
-  mappedTitle?: string;
-  customTitle?: string;
-}): string {
+export function selectProjectedSessionDisplayName(
+  params: {
+    previous?: ThreadSummary;
+    nextName: string;
+  } & SessionDisplayTitleSources,
+): string {
   // Central title resolver: explicit user naming wins over mapped/native
   // evidence, and weak fallbacks cannot erase a meaningful previous title.
   const customTitle = normalizeSessionDisplayTitle(params.customTitle);
@@ -48,9 +56,18 @@ export function selectProjectedSessionDisplayName(params: {
     return customTitle;
   }
 
-  const mappedTitle = normalizeSessionDisplayTitle(params.mappedTitle);
+  const rawMappedTitle = normalizeSessionDisplayTitle(params.mappedTitle);
+  const mappedTitle =
+    classifyContextProtocolText(rawMappedTitle) === null
+      ? rawMappedTitle
+      : "";
   if (mappedTitle) {
     return mappedTitle;
+  }
+
+  const nativeTitle = normalizeSessionDisplayTitle(params.nativeTitle);
+  if (nativeTitle) {
+    return nativeTitle;
   }
 
   const nextName = normalizeSessionDisplayTitle(params.nextName);
@@ -68,16 +85,14 @@ export function selectProjectedSessionDisplayName(params: {
 export function mergeSessionDisplaySummary(
   previous: ThreadSummary | undefined,
   next: ThreadSummary,
-  options: {
-    mappedTitle?: string;
-    customTitle?: string;
-  } = {},
+  options: SessionDisplayTitleSources = {},
 ): ThreadSummary {
   if (!previous || previous.id !== next.id) {
     const projectedName = selectProjectedSessionDisplayName({
       nextName: next.name,
       mappedTitle: options.mappedTitle,
       customTitle: options.customTitle,
+      nativeTitle: options.nativeTitle,
     });
     return projectedName === next.name ? next : { ...next, name: projectedName };
   }
@@ -92,6 +107,7 @@ export function mergeSessionDisplaySummary(
       nextName: next.name,
       mappedTitle: options.mappedTitle,
       customTitle: options.customTitle,
+      nativeTitle: options.nativeTitle,
     }),
     parentThreadId: next.parentThreadId ?? previous.parentThreadId ?? null,
     folderId: next.folderId ?? previous.folderId ?? null,

@@ -1,13 +1,14 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import X from "lucide-react/dist/esm/icons/x";
 import ChevronLeft from "lucide-react/dist/esm/icons/chevron-left";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Markdown } from "../../messages/components/Markdown";
+import { Markdown } from "../../../markdown/components/Markdown";
 import { loadReleaseNotesStyles } from "../../../styles/featureStyleLoaders";
 import type { ReleaseNotesEntry } from "../hooks/useReleaseNotes";
+import type { UpdateState } from "../hooks/useUpdater";
 
 type ReleaseNotesModalProps = {
   isOpen: boolean;
@@ -15,11 +16,22 @@ type ReleaseNotesModalProps = {
   activeIndex: number;
   loading: boolean;
   error: string | null;
+  updaterState?: UpdateState | null;
   onClose: () => void;
   onPrev: () => void;
   onNext: () => void;
   onRetry: () => void;
+  onCheckForUpdates?: () => void;
+  onStartUpdate?: () => void;
 };
+
+const ACTIVE_UPDATE_STAGES = new Set([
+  "available",
+  "checking",
+  "downloading",
+  "installing",
+  "restarting",
+]);
 
 export function ReleaseNotesModal({
   isOpen,
@@ -27,17 +39,38 @@ export function ReleaseNotesModal({
   activeIndex,
   loading,
   error,
+  updaterState = null,
   onClose,
   onPrev,
   onNext,
   onRetry,
+  onCheckForUpdates,
+  onStartUpdate,
 }: ReleaseNotesModalProps) {
   const { t } = useTranslation();
+  const checkedOnOpenRef = useRef(false);
+
   useEffect(() => {
     if (isOpen) {
       void loadReleaseNotesStyles();
     }
   }, [isOpen]);
+
+  // Opening release notes also probes for app updates; keep silent when already latest.
+  useEffect(() => {
+    if (!isOpen) {
+      checkedOnOpenRef.current = false;
+      return;
+    }
+    if (!onCheckForUpdates || checkedOnOpenRef.current) {
+      return;
+    }
+    checkedOnOpenRef.current = true;
+    if (ACTIVE_UPDATE_STAGES.has(updaterState?.stage ?? "idle")) {
+      return;
+    }
+    onCheckForUpdates();
+  }, [isOpen, onCheckForUpdates, updaterState?.stage]);
 
   const currentEntry = useMemo(
     () => entries[activeIndex] ?? null,
@@ -46,6 +79,10 @@ export function ReleaseNotesModal({
   const currentPage = entries.length > 0 ? activeIndex + 1 : 0;
   const hasPrevious = activeIndex > 0;
   const hasNext = activeIndex < entries.length - 1;
+  const updateAvailable = updaterState?.stage === "available";
+  const updateVersionLabel = updaterState?.version
+    ? `v${updaterState.version.replace(/^v/i, "")}`
+    : null;
 
   useEffect(() => {
     if (!isOpen) {
@@ -98,16 +135,34 @@ export function ReleaseNotesModal({
               </>
             ) : null}
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="release-notes-modal-close"
-            aria-label={t("common.close")}
-            onClick={onClose}
-          >
-            <X />
-          </Button>
+          <div className="release-notes-modal-header-actions">
+            {updateAvailable && onStartUpdate ? (
+              <button
+                type="button"
+                className="release-notes-modal-update-badge"
+                onClick={onStartUpdate}
+              >
+                <span className="release-notes-modal-update-badge-label">
+                  {t("update.availableAction")}
+                </span>
+                {updateVersionLabel ? (
+                  <span className="release-notes-modal-update-badge-version">
+                    {updateVersionLabel}
+                  </span>
+                ) : null}
+              </button>
+            ) : null}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="release-notes-modal-close"
+              aria-label={t("common.close")}
+              onClick={onClose}
+            >
+              <X />
+            </Button>
+          </div>
         </header>
 
         <div className="release-notes-modal-body">

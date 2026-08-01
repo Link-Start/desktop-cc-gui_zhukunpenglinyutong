@@ -5,8 +5,7 @@ import type {
   IntentCanvasDocument,
   IntentCanvasOpenRequest,
 } from "../../intent-canvas/types";
-import type { OrchestrationDispatchConfirmation } from "../../agent-orchestration";
-import type { AgentTaskScrollRequest } from "../../messages/types";
+import type { AgentTaskScrollRequest } from "../../messages";
 import type { SubagentInfo } from "../../status-panel/types";
 import type {
   EditorHighlightTarget,
@@ -23,6 +22,7 @@ import type {
   ReviewPromptStep,
 } from "../../threads/hooks/useReviewPrompt";
 import type { WorkspaceLaunchScriptsState } from "../../app/hooks/useWorkspaceLaunchScripts";
+import type { SharedSessionSupportedEngine } from "../../shared-session/utils/sharedSessionEngines";
 import type { OpenAppMenuExtraAction } from "../../app/components/OpenAppMenu";
 import type {
   AccessMode,
@@ -72,12 +72,16 @@ import type { ErrorToast } from "../../../services/toasts";
 import type { LoadingProgressDialogConfig } from "../../app/hooks/useLoadingProgressDialogState";
 import type { WorkspaceDirectoryEntry } from "../../../services/tauri";
 import type { CodeAnnotationBridgeProps } from "../../code-annotations/types";
-import type { RuntimeReconnectRecoveryCallbackResult } from "../../messages/components/runtimeReconnect";
+import type { RuntimeReconnectRecoveryCallbackResult } from "../../../runtime-recovery/runtimeReconnect";
 import type { QueuedHandoffBubble } from "../../threads/utils/queuedHandoffBubble";
 import type { SessionRadarEntry } from "../../session-activity/hooks/useSessionRadarFeed";
 import type { CodexProviderProfileSelection } from "../../threads/constants/codexProviderProfiles";
 import type { RepositoryGitStatus } from "../../git/hooks/useMultiRepositoryGitStatus";
 import type { RepositoryCommitSelection } from "../../git/components/GitMultiRepositoryChanges";
+import type {
+  GitRepositoryBatchResult,
+  GitRepositoryCommonBranchesResult,
+} from "../../git/types/gitRepositoryActions";
 
 export type ThreadActivityStatus = {
   isProcessing: boolean;
@@ -206,6 +210,7 @@ export type LayoutNodesFlatOptions = {
     mode: Extract<AccessMode, "default" | "full-access">,
   ) => Promise<void> | void;
   onOpenSettings: () => void;
+  onOpenShortcutsSettings?: () => void;
   onOpenExperimentalSettings: () => void;
   onOpenDictationSettings?: () => void;
   onOpenSkillsSettings?: () => void;
@@ -221,7 +226,6 @@ export type LayoutNodesFlatOptions = {
     options?: { folderId?: string | null } & CodexProviderProfileSelection,
   ) => Promise<string | null>;
   engineOptions?: EngineDisplayInfo[];
-  enabledEngines?: Partial<Record<EngineType, boolean>>;
   onRefreshEngineOptions?: () =>
     | Promise<
         | import("../../engine/hooks/useEngineController").EngineRefreshResult
@@ -229,7 +233,10 @@ export type LayoutNodesFlatOptions = {
       >
     | import("../../engine/hooks/useEngineController").EngineRefreshResult
     | void;
-  onAddSharedAgent: (workspace: WorkspaceInfo) => Promise<string | null>;
+  onAddSharedAgent: (
+    workspace: WorkspaceInfo,
+    engine: SharedSessionSupportedEngine,
+  ) => Promise<string | null>;
   onAddWorktreeAgent: (workspace: WorkspaceInfo) => Promise<void>;
   onAddCloneAgent: (workspace: WorkspaceInfo) => Promise<void>;
   onToggleWorkspaceCollapse: (workspaceId: string, collapsed: boolean) => void;
@@ -259,8 +266,12 @@ export type LayoutNodesFlatOptions = {
   onDeleteWorktree: (workspaceId: string) => void;
   onRenameWorkspaceAlias: (workspace: WorkspaceInfo) => void;
   onLoadOlderThreads: (workspaceId: string) => void;
-  onReloadWorkspaceThreads: (workspaceId: string) => void;
-  onQuickReloadWorkspaceThreads?: (workspaceId: string) => void;
+  onReloadWorkspaceThreads: (
+    workspaceId: string,
+  ) => Promise<void> | void;
+  onQuickReloadWorkspaceThreads?: (
+    workspaceId: string,
+  ) => Promise<void> | void;
   onRequestRootSessionFolderDraft?: (workspaceId: string) => void;
   isExitedSessionsHidden?: (workspacePath: string) => boolean;
   onToggleExitedSessionsHidden?: (workspacePath: string) => void;
@@ -293,6 +304,7 @@ export type LayoutNodesFlatOptions = {
   closeCurrentSessionShortcut: string | null;
   saveFileShortcut: string | null;
   findInFileShortcut: string | null;
+  expandSelectionShortcut: string | null;
   toggleGitDiffListViewShortcut: string | null;
   onOpenSpecHub: () => void;
   onOpenWorkspaceHome: (workspaceId?: string) => void;
@@ -301,17 +313,6 @@ export type LayoutNodesFlatOptions = {
   onDismissUpdate: () => void;
   errorToasts: ErrorToast[];
   onDismissErrorToast: (id: string) => void;
-  latestAgentRuns: Array<{
-    threadId: string;
-    message: string;
-    timestamp: number;
-    projectName: string;
-    groupName?: string | null;
-    workspaceId: string;
-    isProcessing: boolean;
-  }>;
-  isLoadingLatestAgents: boolean;
-  onSelectHomeThread: (workspaceId: string, threadId: string) => void;
   onSelectHomeWorkspace: (workspaceId: string) => void;
   activeWorkspace: WorkspaceInfo | null;
   activeParentWorkspace: WorkspaceInfo | null;
@@ -335,6 +336,12 @@ export type LayoutNodesFlatOptions = {
     name: string,
     repositoryRootOverride?: string,
   ) => Promise<GitBranchUpdateResult | null>;
+  onUpdateAllRepositories?: () => Promise<GitRepositoryBatchResult | null>;
+  onCheckoutAllRepositories?: (
+    branchName: string,
+    eligibleRepositoryRoots?: readonly string[],
+  ) => Promise<GitRepositoryBatchResult | null>;
+  onLoadCommonRepositoryBranches?: () => Promise<GitRepositoryCommonBranchesResult | null>;
   onCopyThread: () => void | Promise<void>;
   onLockPanel?: () => void;
   onToggleTerminal: () => void;
@@ -356,9 +363,7 @@ export type LayoutNodesFlatOptions = {
   centerMode: CenterMode;
   setCenterMode: (mode: CenterMode) => void;
   fileCompareSession: FileCompareSession | null;
-  fileHistoryTarget?: FileHistoryTarget | null;
   onOpenFileHistory?: (target: FileHistoryTarget) => void;
-  onCloseFileHistory?: () => void;
   editorSplitCompanion: EditorSplitCompanion;
   setEditorSplitCompanion: (companion: EditorSplitCompanion) => void;
   editorSplitLayout: "vertical" | "horizontal";
@@ -371,6 +376,7 @@ export type LayoutNodesFlatOptions = {
   openEditorTabs: string[];
   onActivateEditorTab: (path: string) => void;
   onCloseEditorTab: (path: string) => void;
+  onCloseOtherEditorTabs: (path: string) => void;
   onCloseAllEditorTabs: () => void;
   onReorderEditorTabs: (nextOrder: string[]) => void;
   onActiveEditorLineRangeChange: (
@@ -459,7 +465,7 @@ export type LayoutNodesFlatOptions = {
   fileStatus: string;
   selectedDiffPath: string | null;
   diffScrollRequestId: number;
-  onSelectDiff: (path: string | null) => void;
+  onSelectDiff: (path: string | null, repositoryRoot?: string | null) => void;
   gitLogEntries: GitLogEntry[];
   gitLogTotal: number;
   gitLogAhead: number;
@@ -471,6 +477,7 @@ export type LayoutNodesFlatOptions = {
   onSelectCommit: (entry: GitLogEntry) => void;
   gitLogError: string | null;
   gitLogLoading: boolean;
+  refreshGitLog: () => void;
   refreshGitDiffs: () => void;
   queueGitStatusRefresh: () => void;
   gitIssues: GitHubIssue[];
@@ -515,7 +522,7 @@ export type LayoutNodesFlatOptions = {
   onCommitMessageChange: (value: string) => void;
   onGenerateCommitMessage: (
     language?: "zh" | "en",
-    engine?: "codex" | "claude" | "gemini" | "kimi" | "opencode",
+    engine?: "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode",
     selectedPaths?: string[],
     repositorySelections?: RepositoryCommitSelection[],
   ) => void | Promise<void>;
@@ -655,11 +662,6 @@ export type LayoutNodesFlatOptions = {
   selectedModelId: string | null;
   projectMapDatasetController?: ProjectMapDatasetController;
   onSelectModel: (id: string | null) => void;
-  onDispatchOrchestrationTask?: (
-    confirmation: OrchestrationDispatchConfirmation,
-  ) =>
-    | Promise<{ ok: boolean; taskId?: string | null; reason?: string }>
-    | { ok: boolean; taskId?: string | null; reason?: string };
   reasoningOptions: string[];
   selectedEffort: string | null;
   onSelectEffort: (effort: string | null) => void;
@@ -674,6 +676,7 @@ export type LayoutNodesFlatOptions = {
   onOpenAgentSettings: () => void;
   onOpenPromptSettings: () => void;
   onOpenModelSettings: (providerId?: string) => void;
+  onOpenCliSettings: () => void;
   onRefreshModelConfig?: (providerId?: string) => Promise<void> | void;
   isModelConfigRefreshing?: boolean;
   opencodeVariantOptions: string[];
@@ -814,9 +817,11 @@ export type RuntimeLayoutNodesOptions = Pick<
 export type ChromeLayoutNodesOptions = Pick<
   LayoutNodesFlatOptions,
   | "onOpenSettings"
+  | "onOpenShortcutsSettings"
   | "onOpenAgentSettings"
   | "onOpenPromptSettings"
   | "onOpenModelSettings"
+  | "onOpenCliSettings"
   | "onRefreshModelConfig"
   | "isModelConfigRefreshing"
   | "onOpenDictationSettings"
@@ -829,7 +834,6 @@ export type ChromeLayoutNodesOptions = Pick<
   | "onConnectWorkspace"
   | "onAddAgent"
   | "engineOptions"
-  | "enabledEngines"
   | "onRefreshEngineOptions"
   | "onAddSharedAgent"
   | "onAddWorktreeAgent"
@@ -869,9 +873,6 @@ export type ChromeLayoutNodesOptions = Pick<
   | "onDismissUpdate"
   | "errorToasts"
   | "onDismissErrorToast"
-  | "latestAgentRuns"
-  | "isLoadingLatestAgents"
-  | "onSelectHomeThread"
   | "onOpenSpecHub"
   | "showLoadingProgressDialog"
   | "hideLoadingProgressDialog"
@@ -894,6 +895,9 @@ export type ChromeLayoutNodesOptions = Pick<
   | "onCheckoutBranch"
   | "onCreateBranch"
   | "onUpdateBranch"
+  | "onUpdateAllRepositories"
+  | "onCheckoutAllRepositories"
+  | "onLoadCommonRepositoryBranches"
   | "onCopyThread"
   | "onLockPanel"
   | "onToggleTerminal"
@@ -929,9 +933,7 @@ export type EditorLayoutNodesOptions = Pick<
   | "centerMode"
   | "setCenterMode"
   | "fileCompareSession"
-  | "fileHistoryTarget"
   | "onOpenFileHistory"
-  | "onCloseFileHistory"
   | "editorSplitCompanion"
   | "setEditorSplitCompanion"
   | "editorSplitLayout"
@@ -944,6 +946,7 @@ export type EditorLayoutNodesOptions = Pick<
   | "openEditorTabs"
   | "onActivateEditorTab"
   | "onCloseEditorTab"
+  | "onCloseOtherEditorTabs"
   | "onCloseAllEditorTabs"
   | "onReorderEditorTabs"
   | "onActiveEditorLineRangeChange"
@@ -1026,6 +1029,7 @@ export type GitLayoutNodesOptions = Pick<
   | "gitDiffs"
   | "gitDiffLoading"
   | "gitDiffError"
+  | "refreshGitLog"
   | "refreshGitDiffs"
   | "queueGitStatusRefresh"
   | "onDiffActivePathChange"
@@ -1135,7 +1139,6 @@ export type ComposerLayoutNodesOptions = Pick<
   | "selectedModelId"
   | "projectMapDatasetController"
   | "onSelectModel"
-  | "onDispatchOrchestrationTask"
   | "intentCanvasOpenRequest"
   | "onOpenIntentCanvas"
   | "onIntentCanvasOpenRequestConsumed"
@@ -1253,6 +1256,7 @@ export type PanelsLayoutNodesOptions = Pick<
   | "closeCurrentSessionShortcut"
   | "saveFileShortcut"
   | "findInFileShortcut"
+  | "expandSelectionShortcut"
   | "toggleGitDiffListViewShortcut"
   | "onOpenWorkspaceHome"
 >;

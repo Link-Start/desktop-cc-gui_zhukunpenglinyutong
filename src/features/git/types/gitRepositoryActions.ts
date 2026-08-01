@@ -35,6 +35,27 @@ export type GitRepositoryActionIntent = GitRepositoryActionRequest & {
   requestId: number;
 };
 
+export type GitRepositoryBatchResult = {
+  successCount: number;
+  failedRepositories: string[];
+  skippedRepositories: string[];
+};
+
+export type GitRepositoryBranchCoverage = {
+  name: string;
+  repositories: Array<{
+    repositoryRoot: string;
+    displayName: string;
+  }>;
+};
+
+export type GitRepositoryCommonBranchesResult = {
+  localBranches: GitRepositoryBranchCoverage[];
+  remoteBranches: GitRepositoryBranchCoverage[];
+  failedRepositories: string[];
+  totalRepositoryCount: number;
+};
+
 type GitRepositoryActionListener = (intent: GitRepositoryActionIntent) => void;
 
 export const GIT_REPOSITORY_ACTION_LABEL_KEYS: Record<
@@ -87,5 +108,7 @@ export function subscribeGitRepositoryActionIntent(
     pendingIntent = null;
     listener(intent);
   }
-  return () => listeners.delete(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }

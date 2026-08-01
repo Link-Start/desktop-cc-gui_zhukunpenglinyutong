@@ -11,7 +11,6 @@ const runtimeNotice = {
     "emptyTitle": "Aucun avis d'exécution pour l'instant",
     "emptyDescription": "La progression de l'initialisation et les erreurs importantes apparaîtront ici.",
     "statusIdle": "Inactif",
-    "statusStreaming": "En cours",
     "statusError": "Erreur",
     "severityInfo": "Info",
     "severityWarning": "Avertissement",
@@ -59,6 +58,12 @@ const runtimeNotice = {
     },
     "claude": {
       "resumeCommandCopied": "Commande de reprise Claude copiée. Si le sélecteur /resume du TUI n'affiche pas cette session GUI, exécutez explicitement claude --resume {{sessionId}} ou /resume {{sessionId}}."
+    },
+    "grok": {
+      "providerSelected": "{{name}} sélectionné. Cliquez sur l'entrée Grok CLI pour créer une session."
+    },
+    "opencode": {
+      "providerSelected": "{{name}} sélectionné. Cliquez sur l'entrée OpenCode pour créer une session."
     },
     "error": {
       "createSessionRecoveryRequired": "{{workspace}} : échec de la création de session pendant la récupération du runtime en cours",

@@ -2,6 +2,10 @@ import { invoke } from "@tauri-apps/api/core";
 import type { WorkspaceInfo } from "../../types";
 import { isMissingTauriInvokeError } from "./runtimeMode";
 
+export interface WorkspacesRecoveryNotice {
+  backupFileName: string | null;
+}
+
 export async function listWorkspaces(): Promise<WorkspaceInfo[]> {
   try {
     return await invoke<WorkspaceInfo[]>("list_workspaces");
@@ -14,6 +18,10 @@ export async function listWorkspaces(): Promise<WorkspaceInfo[]> {
     }
     throw error;
   }
+}
+
+export async function takeWorkspacesRecoveryNotice(): Promise<WorkspacesRecoveryNotice | null> {
+  return invoke<WorkspacesRecoveryNotice | null>("take_workspaces_recovery_notice");
 }
 
 export async function getConfigModel(workspaceId: string): Promise<string | null> {

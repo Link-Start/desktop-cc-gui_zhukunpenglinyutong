@@ -1,20 +1,10 @@
 ## Purpose
 
 Define bounded one-click install and update behavior for Codex and Claude Code CLI tooling, including command whitelisting, user confirmation, platform boundaries, post-install doctor chaining, and structured installer output.
-
 ## Requirements
-
 ### Requirement: CLI Validation MUST Offer Bounded Installer Actions For Codex And Claude
 
-系统 MUST 在 `CLI 验证` 面板中为 Codex 与 Claude Code 提供受控安装 / 更新入口，并且该入口不得扩展到任意 shell 执行。
-
-#### Scenario: Codex install action is offered after missing doctor
-
-- **WHEN** 用户在 Codex tab 运行 doctor
-- **AND** doctor 结果显示 Codex CLI 不可用
-- **AND** installer preflight 判断 Node/npm 可用
-- **THEN** 系统 MUST 提供 “安装最新版” 操作
-- **AND** 操作 MUST 通过 backend installer command 执行，而不是 frontend 拼接 shell
+系统 MUST 在 `CLI 验证` 面板中为 Codex 与 Claude Code 提供受控安装 / 更新入口，并且该入口不得扩展到任意 shell 执行；Claude Code 的安装入口 MUST 基于官方 native installer preflight，而不是 Node/npm 检测。
 
 #### Scenario: Claude install action is offered after missing doctor
 
@@ -24,12 +14,6 @@ Define bounded one-click install and update behavior for Codex and Claude Code C
 - **THEN** 系统 MUST 提供 “安装最新版” 操作
 - **AND** 操作 MUST 通过 backend installer command 执行，而不是 frontend 拼接 shell
 - **AND** Claude install MUST NOT 将 Node/npm 缺失视为 blocker
-
-#### Scenario: unsupported engine does not expose installer
-
-- **WHEN** 用户切换到 Gemini CLI 或 OpenCode CLI tab
-- **THEN** 系统 MUST NOT 展示 Phase 1 installer 操作
-- **AND** 这些 engine 的 enable/disable runtime gate MUST 保持当前语义
 
 ### Requirement: Installer MUST Use Explicit Plan And User Confirmation
 
@@ -51,14 +35,7 @@ Define bounded one-click install and update behavior for Codex and Claude Code C
 
 ### Requirement: Installer Backend MUST Enforce Command Whitelist
 
-backend MUST 只允许枚举化安装策略，不得执行 frontend 传入的 raw command。
-
-#### Scenario: frontend cannot pass arbitrary command
-
-- **WHEN** frontend 请求执行 installer
-- **THEN** 请求 payload MUST 只包含 engine/action/strategy 等枚举字段
-- **AND** backend MUST 根据白名单构造 argv
-- **AND** backend MUST reject unknown engine、unknown action、unknown strategy 或不合法组合
+backend MUST 只允许枚举化安装策略，不得执行 frontend 传入的 raw command；Claude Code 的 install/update/uninstall MUST 走官方 native installer 路径，Codex / Kimi MUST 走 npm global 官方 package。
 
 #### Scenario: phase one command matrix is bounded
 
@@ -202,3 +179,47 @@ installer result MUST 以结构化、可脱敏、可截断的方式返回执行�
 - **WHEN** VendorSettings header 发起的 installer 成功结束
 - **THEN** 系统 MUST 刷新对应 engine 的 version status
 - **AND** header 展示的版本与按钮态 MUST 反映最新探测结果
+
+### Requirement: Vendor CLI Lifecycle Header MUST Remain Collision-Free
+
+Vendor CLI lifecycle header MUST preserve readable, reachable proxy/version/update/refresh actions across supported viewport widths and localized copy lengths.
+
+#### Scenario: current version and proxy status coexist
+
+- **WHEN** proxy status、local CLI version、latest status 与 refresh action 同时可见
+- **THEN** action group MUST use normal flow layout and wrap when horizontal space is insufficient
+- **AND** no badge or button MAY overlap provider content、header title or another action
+
+#### Scenario: update is available
+
+- **WHEN** local version、latest version、update button 与 refresh button 同时可见
+- **THEN** all actions MUST remain reachable and retain their accessible names
+- **AND** update/latest badges MUST NOT be clipped by an overflow container
+
+#### Scenario: narrow settings viewport
+
+- **WHEN** vendor settings content width cannot contain title and lifecycle actions on one row
+- **THEN** header MUST move actions to a separate row or column within normal document flow
+- **AND** action alignment MUST remain stable in light and dark themes
+
+### Requirement: CLI Version Status MUST Reject Shell Startup Noise
+
+CLI version status MUST distinguish canonical CLI version output from login shell startup banners and MUST distinguish unknown latest status from confirmed latest status.
+
+#### Scenario: proxy banner precedes Claude version
+
+- **WHEN** interactive login shell output contains proxy notice、diagnostic copy、binary path 与 canonical Claude version
+- **THEN** backend MUST select only the canonical Claude version line
+- **AND** proxy URL or IP address MUST NOT become `localVersion`
+
+#### Scenario: latest version probe is unknown
+
+- **WHEN** local version is known but registry latest version is unavailable or invalid
+- **THEN** header MUST show the local version without “已是最新”
+- **AND** update action MUST remain hidden
+
+#### Scenario: latest version is confirmed
+
+- **WHEN** local version and latest version are both valid semver
+- **THEN** header MUST show update target/action only when latest is greater than local
+- **AND** header MAY show “已是最新” only when no greater version exists

@@ -56,11 +56,24 @@ describe("sessionLifecycleController", () => {
       providerBindingFromSelectedProfile(null, "__disk__"),
     ).toMatchObject({
       providerProfileId: "__disk__",
-      providerProfileName: "codex-tui/default-config",
+      providerProfileName: "本地配置",
       providerProfileSource: "disk",
       providerAvailability: "available",
     });
   });
+
+  it.each(["__local_settings_json__", "__local_config_toml__"])(
+    "normalizes local profile %s to no managed binding",
+    (profileId) => {
+      expect(
+        providerBindingFromSelectedProfile({
+          id: profileId,
+          name: "Local config",
+          source: "disk",
+        }),
+      ).toEqual({});
+    },
+  );
 
   it("prefixes Claude fork names without duplicating the prefix", () => {
     expect(addForkThreadNamePrefix("Release plan")).toBe("fork-Release plan");

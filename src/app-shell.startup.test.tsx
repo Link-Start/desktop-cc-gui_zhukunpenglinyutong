@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModelOption, WorkspaceInfo } from "./types";
 import { getThreadComposerSelectionStorageKey } from "./app-shell-parts/selectedComposerSession";
@@ -298,12 +298,6 @@ vi.mock("./utils/platform", () => ({
   isWindowsPlatform: vi.fn(() => false),
 }));
 
-vi.mock("./features/models/refreshCodexModelConfig", () => ({
-  refreshCodexModelConfig: vi.fn(async ({ refreshModels }) => {
-    await refreshModels();
-  }),
-}));
-
 vi.mock("./services/systemNotification", () => ({
   setNotificationActionHandler: vi.fn(),
 }));
@@ -327,6 +321,8 @@ vi.mock("./features/app/hooks/useAppSettingsController", () => ({
     doctor: null,
     claudeDoctor: null,
     kimiDoctor: null,
+    grokDoctor: null,
+    opencodeDoctor: null,
     appSettingsLoading: startupState.appSettingsLoading,
     reduceTransparency: false,
     setReduceTransparency: createNoopFunction(),
@@ -433,6 +429,7 @@ vi.mock("./features/app/hooks/useUpdaterController", () => ({
   useUpdaterController: () => ({
     updaterState: null,
     startUpdate: createNoopFunction(),
+    checkForUpdates: createNoopFunction(),
     dismissUpdate: createNoopFunction(),
     handleTestNotificationSound: createNoopFunction(),
   }),
@@ -644,17 +641,6 @@ vi.mock("./features/engine/hooks/useEngineController", () => ({
   }),
 }));
 
-vi.mock("./app-shell-parts/useOpenCodeSelection", () => ({
-  useOpenCodeSelection: () => ({
-    openCodeAgents: [],
-    resolveOpenCodeAgentForThread: () => null,
-    resolveOpenCodeVariantForThread: () => null,
-    selectOpenCodeAgentForThread: createNoopFunction(),
-    selectOpenCodeVariantForThread: createNoopFunction(),
-    syncActiveOpenCodeThread: createNoopFunction(),
-  }),
-}));
-
 vi.mock("./features/kanban/hooks/useKanbanStore", () => ({
   useKanbanStore: () => ({
     panels: [],
@@ -818,7 +804,6 @@ vi.mock("./features/threads/hooks/useThreads", () => ({
       startLsp: createNoopFunction(),
       startShare: createNoopFunction(),
       startSharedSessionForWorkspace: createNoopFunction(),
-      updateSharedSessionEngineSelection: createNoopFunction(),
       resolveCanonicalThreadId: (value: string) =>
         startupState.canonicalThreadId ?? value,
       reviewPrompt: null,
@@ -1008,7 +993,7 @@ vi.mock("./app-shell-parts/useAppShellSearchRadarSection", () => ({
       runningCountByWorkspaceId: {},
       recentCountByWorkspaceId: {},
     },
-    workspaceActivity: {},
+    workspaceActivity: { timeline: [] },
     workspaceNameByPath: {},
     workspaceSearchSources: [],
   }),
@@ -1169,9 +1154,9 @@ vi.mock("./features/app/hooks/useComposerController", () => ({
   }),
 }));
 
-vi.mock("./features/app/hooks/useLiveEditPreview", () => ({
+vi.mock("./features/live-edit-preview/hooks/useLiveEditPreview", () => ({
   useLiveEditPreview: () => ({
-    enabled: false,
+    markManualNavigation: createNoopFunction(),
   }),
 }));
 
@@ -1308,6 +1293,26 @@ describe("AppShell startup", () => {
       expect(view.getByTestId("app-shell-sentinel")).toBeTruthy();
     });
     expect(agentSessionMocks.reloadAgentCatalog).toHaveBeenCalledTimes(1);
+  });
+
+  it("propagates Extensions mode to the rendered layout context", async () => {
+    render(<AppShell />);
+
+    await waitFor(() => {
+      expect(startupState.renderCtx?.handleAppModeChange).toBeTypeOf("function");
+    });
+
+    act(() => {
+      const handleAppModeChange = startupState.renderCtx?.handleAppModeChange as
+        | ((mode: "extensions") => void)
+        | undefined;
+      handleAppModeChange?.("extensions");
+    });
+
+    await waitFor(() => {
+      expect(startupState.renderCtx?.appMode).toBe("extensions");
+    });
+    expect(startupState.renderCtx?.showExtensions).toBe(true);
   });
 
   it("mounts with a stored thread-scoped codex composer selection without entering an update loop", async () => {

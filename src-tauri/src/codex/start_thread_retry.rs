@@ -5,7 +5,7 @@ use super::provider_profile::CODEX_DISK_PROVIDER_PROFILE_ID;
 use super::{
     attach_hook_safe_fallback_metadata, create_session_runtime_recovering_error,
     ensure_codex_session_for_provider, ensure_codex_session_without_session_hooks_for_provider,
-    is_hook_safe_fallback_trigger, is_stopping_runtime_race_error, normalize_model_id,
+    is_create_session_runtime_recovery_error, is_hook_safe_fallback_trigger, normalize_model_id,
 };
 use crate::shared::codex_core;
 use crate::state::AppState;
@@ -52,25 +52,57 @@ where
     FStart: Fn() -> FStartFuture,
     FStartFuture: std::future::Future<Output = Result<Value, String>>,
 {
+    run_with_runtime_recovery_retry(
+        workspace_id,
+        "start_thread",
+        ensure_runtime,
+        recovery_probe,
+        start_thread,
+    )
+    .await
+}
+
+/// Ensure a healthy Codex runtime, run `operation`, and retry once on transport
+/// disconnects (`Broken pipe`, closed pipe, stopping-runtime race, etc.).
+/// Persistent disconnects are converted to a stable recovering error without raw OS codes.
+pub(super) async fn run_with_runtime_recovery_retry<
+    FEnsure,
+    FEnsureFuture,
+    FRecoveryProbe,
+    FRecoveryProbeFuture,
+    FOp,
+    FOpFuture,
+    T,
+>(
+    workspace_id: &str,
+    log_label: &str,
+    ensure_runtime: FEnsure,
+    recovery_probe: &FRecoveryProbe,
+    operation: FOp,
+) -> Result<T, String>
+where
+    FEnsure: Fn() -> FEnsureFuture,
+    FEnsureFuture: std::future::Future<Output = Result<(), String>>,
+    FRecoveryProbe: Fn() -> FRecoveryProbeFuture,
+    FRecoveryProbeFuture: std::future::Future<Output = Result<(), String>>,
+    FOp: Fn() -> FOpFuture,
+    FOpFuture: std::future::Future<Output = Result<T, String>>,
+{
     ensure_runtime().await?;
-    let first_attempt = start_thread().await;
+    let first_attempt = operation().await;
     match first_attempt {
         Ok(response) => Ok(response),
-        Err(error) if is_stopping_runtime_race_error(&error) => {
+        Err(error) if is_create_session_runtime_recovery_error(&error) => {
             log::warn!(
-                "[start_thread] retrying after stopping runtime race for workspace {}: {}",
-                workspace_id,
-                error
+                "[{log_label}] retrying after runtime disconnect for workspace {workspace_id}: {error}"
             );
             recovery_probe().await?;
             ensure_runtime().await?;
-            match start_thread().await {
+            match operation().await {
                 Ok(response) => Ok(response),
-                Err(retry_error) if is_stopping_runtime_race_error(&retry_error) => {
+                Err(retry_error) if is_create_session_runtime_recovery_error(&retry_error) => {
                     log::warn!(
-                        "[start_thread] stopping runtime race retry exhausted for workspace {}: {}",
-                        workspace_id,
-                        retry_error
+                        "[{log_label}] runtime disconnect retry exhausted for workspace {workspace_id}: {retry_error}"
                     );
                     Err(create_session_runtime_recovering_error())
                 }
@@ -174,15 +206,6 @@ where
     })
 }
 
-pub(crate) async fn start_thread_with_runtime_retry(
-    workspace_id: &str,
-    model: Option<String>,
-    state: &AppState,
-    app: &AppHandle,
-) -> Result<Value, String> {
-    start_thread_with_runtime_retry_for_provider(workspace_id, model, None, state, app).await
-}
-
 pub(crate) async fn start_thread_with_runtime_retry_for_provider(
     workspace_id: &str,
     model: Option<String>,
@@ -202,7 +225,7 @@ pub(crate) async fn start_thread_with_runtime_retry_for_provider(
             state
                 .runtime_manager
                 .lifecycle_coordinator()
-                .record_quarantine_probe("codex", workspace_id, "create-session-stopping-race")
+                .record_quarantine_probe("codex", workspace_id, "create-session-runtime-recovery")
                 .await
         },
         || {

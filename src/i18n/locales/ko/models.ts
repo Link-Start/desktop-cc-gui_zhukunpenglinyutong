@@ -5,11 +5,49 @@
 const models = {
   "models": {
     "selectModel": "모델 선택",
+    "engineHeader": "{{name}} 엔진",
     "addModel": "모델 추가",
+
+    "openCliSettings": "CLI 설정",
+    "switchChannel": "채널 전환",
+    "selectChannel": "채널 선택",
     "refreshConfig": "설정 새로고침",
     "refreshingConfig": "새로고침 중...",
+    "reloadConfig": "설정 다시 불러오기",
+    "reloadingConfig": "설정 다시 불러오는 중...",
+    "discoverModels": "CLI에서 모델 검색",
+    "discoveringModels": "모델 검색 중...",
     "refreshConfigFailed": "새로고침 실패: {{message}}",
-    "claude": {},
+        "claude": {
+      "fable5": {
+        "label": "Fable 5",
+        "description": "Fable 5 · Most powerful · Mythos-class"
+      },
+      "opus5": {
+        "label": "Opus 5",
+        "description": "Opus 5 · Latest Opus upgrade"
+      },
+      "opus48": {
+        "label": "Opus 4.8",
+        "description": "Opus 4.8 · Previous Opus generation"
+      },
+      "sonnet5": {
+        "label": "Sonnet 5",
+        "description": "Sonnet 5 · Upgraded Sonnet model"
+      },
+      "sonnet47": {
+        "label": "Sonnet 4.7",
+        "description": "Sonnet 4.7 · Default recommended model"
+      },
+      "sonnet46": {
+        "label": "Sonnet 4.6",
+        "description": "Sonnet 4.6 · Default recommended model"
+      },
+      "haiku45": {
+        "label": "Haiku 4.5",
+        "description": "Haiku · Fastest for quick answers"
+      }
+    },
     "codex": {
       "gpt56sol": {
         "label": "gpt-5.6-sol",
@@ -26,10 +64,6 @@ const models = {
       "gpt55": {
         "label": "gpt-5.5",
         "description": "복잡한 코딩, 연구, 실무 작업을 위한 프론티어 모델."
-      },
-      "gpt54": {
-        "label": "gpt-5.4",
-        "description": "일상 코딩에 강력한 모델."
       }
     }
   }

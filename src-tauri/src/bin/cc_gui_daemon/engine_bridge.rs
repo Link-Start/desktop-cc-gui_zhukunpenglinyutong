@@ -1,6 +1,10 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+#[path = "../../engine/adapter_registry.rs"]
+pub(crate) mod adapter_registry;
+#[path = "../../engine/agent_event_bus.rs"]
+pub(crate) mod agent_event_bus;
 #[allow(dead_code)]
 #[path = "../../engine/claude.rs"]
 pub mod claude;
@@ -15,6 +19,8 @@ pub(crate) mod claude_history_subagents;
 #[allow(dead_code)]
 #[path = "../../engine/claude_message_content.rs"]
 pub(crate) mod claude_message_content;
+#[path = "../../engine/cli_image_input.rs"]
+pub(crate) mod cli_image_input;
 #[path = "../../engine/events.rs"]
 pub mod events;
 #[path = "../../engine/gemini.rs"]
@@ -23,15 +29,25 @@ pub mod gemini;
 pub mod gemini_history;
 #[path = "../../engine/gemini_proxy_guard.rs"]
 pub(crate) mod gemini_proxy_guard;
+#[path = "../../engine/grok.rs"]
+pub mod grok;
+#[path = "../../engine/grok_history.rs"]
+pub mod grok_history;
+#[path = "../../engine/grok_provider_profile.rs"]
+pub(crate) mod grok_provider_profile;
 #[path = "../../engine/kimi.rs"]
 pub mod kimi;
 #[path = "../../engine/kimi_history.rs"]
 pub mod kimi_history;
+#[path = "../../engine/kimi_provider_profile.rs"]
+pub(crate) mod kimi_provider_profile;
 #[allow(dead_code)]
 #[path = "../../engine/manager.rs"]
 pub mod manager;
 #[path = "../../engine/opencode.rs"]
 pub mod opencode;
+#[path = "../../engine/opencode_provider_profile.rs"]
+pub(crate) mod opencode_provider_profile;
 #[allow(dead_code)]
 #[path = "../../engine/status.rs"]
 pub mod status;
@@ -418,6 +434,7 @@ pub enum EngineType {
     Claude,
     Codex,
     Gemini,
+    Grok,
     OpenCode,
     Kimi,
 }
@@ -434,6 +451,7 @@ impl EngineType {
             EngineType::Claude => "Claude Code",
             EngineType::Codex => "Codex",
             EngineType::Gemini => "Gemini",
+            EngineType::Grok => "Grok CLI",
             EngineType::OpenCode => "OpenCode",
             EngineType::Kimi => "Kimi CLI",
         }
@@ -444,6 +462,7 @@ impl EngineType {
             EngineType::Claude => "claude",
             EngineType::Codex => "codex",
             EngineType::Gemini => "gemini",
+            EngineType::Grok => "grok",
             EngineType::OpenCode => "opencode",
             EngineType::Kimi => "kimi",
         }
@@ -456,25 +475,28 @@ impl std::fmt::Display for EngineType {
     }
 }
 
-pub(crate) const OPENCODE_DISABLED_DIAGNOSTIC: &str =
-    "OpenCode CLI is disabled in CLI validation settings";
-
 pub(crate) fn engine_enabled_in_settings(
-    settings: &crate::types::AppSettings,
+    _settings: &crate::types::AppSettings,
     engine_type: EngineType,
 ) -> bool {
     match engine_type {
         EngineType::Gemini => crate::engine_policy::GEMINI_RUNTIME_ENABLED,
-        EngineType::OpenCode => settings.opencode_enabled,
-        EngineType::Claude | EngineType::Codex | EngineType::Kimi => true,
+        EngineType::OpenCode
+        | EngineType::Claude
+        | EngineType::Codex
+        | EngineType::Grok
+        | EngineType::Kimi => true,
     }
 }
 
 pub(crate) fn engine_disabled_diagnostic(engine_type: EngineType) -> Option<&'static str> {
     match engine_type {
         EngineType::Gemini => Some(crate::engine_policy::GEMINI_DISABLED_DIAGNOSTIC),
-        EngineType::OpenCode => Some(OPENCODE_DISABLED_DIAGNOSTIC),
-        EngineType::Claude | EngineType::Codex | EngineType::Kimi => None,
+        EngineType::OpenCode
+        | EngineType::Claude
+        | EngineType::Codex
+        | EngineType::Grok
+        | EngineType::Kimi => None,
     }
 }
 
@@ -516,8 +538,20 @@ pub struct ModelInfo {
     pub default: bool,
     #[serde(default)]
     pub description: String,
-    #[serde(skip_serializing)]
+    #[serde(default)]
     pub provider: Option<String>,
+    #[serde(default)]
+    pub protocol: Option<String>,
+    #[serde(default)]
+    pub provenance: Option<String>,
+    #[serde(default)]
+    pub provider_profile_id: Option<String>,
+    #[serde(default)]
+    pub observed_at: Option<u64>,
+    #[serde(default)]
+    pub last_verified_at: Option<String>,
+    #[serde(default)]
+    pub lifecycle: Option<String>,
     #[serde(default = "default_model_source")]
     pub source: String,
 }
@@ -536,6 +570,12 @@ impl ModelInfo {
             default: false,
             description: String::new(),
             provider: None,
+            protocol: None,
+            provenance: None,
+            provider_profile_id: None,
+            observed_at: None,
+            last_verified_at: None,
+            lifecycle: None,
             source: default_model_source(),
         }
     }
@@ -547,6 +587,36 @@ impl ModelInfo {
 
     pub fn with_provider(mut self, provider: impl Into<String>) -> Self {
         self.provider = Some(provider.into());
+        self
+    }
+
+    pub fn with_protocol(mut self, protocol: impl Into<String>) -> Self {
+        self.protocol = Some(protocol.into());
+        self
+    }
+
+    pub fn with_provenance(mut self, provenance: impl Into<String>) -> Self {
+        self.provenance = Some(provenance.into());
+        self
+    }
+
+    pub fn with_provider_profile_id(mut self, provider_profile_id: impl Into<String>) -> Self {
+        self.provider_profile_id = Some(provider_profile_id.into());
+        self
+    }
+
+    pub fn with_observed_at(mut self, observed_at: u64) -> Self {
+        self.observed_at = Some(observed_at);
+        self
+    }
+
+    pub fn with_fallback_freshness(
+        mut self,
+        last_verified_at: impl Into<String>,
+        lifecycle: impl Into<String>,
+    ) -> Self {
+        self.last_verified_at = Some(last_verified_at.into());
+        self.lifecycle = Some(lifecycle.into());
         self
     }
 
@@ -612,7 +682,7 @@ impl EngineFeatures {
         Self {
             reasoning_effort: false,
             collaboration_mode: false,
-            image_input: false,
+            image_input: true,
             session_resume: true,
             tools_control: true,
             streaming: true,
@@ -636,7 +706,19 @@ impl EngineFeatures {
         Self {
             reasoning_effort: false,
             collaboration_mode: false,
-            image_input: false,
+            image_input: true,
+            session_resume: true,
+            tools_control: true,
+            streaming: true,
+            mcp: false,
+        }
+    }
+
+    pub fn grok() -> Self {
+        Self {
+            reasoning_effort: false,
+            collaboration_mode: false,
+            image_input: true,
             session_resume: true,
             tools_control: true,
             streaming: true,
@@ -651,6 +733,7 @@ pub(crate) fn disabled_engine_status(engine_type: EngineType) -> EngineStatus {
         EngineType::Codex => EngineFeatures::codex(),
         EngineType::Gemini => EngineFeatures::gemini(),
         EngineType::OpenCode => EngineFeatures::opencode(),
+        EngineType::Grok => EngineFeatures::grok(),
         EngineType::Kimi => EngineFeatures::kimi(),
     };
     EngineStatus {
@@ -733,5 +816,18 @@ mod runtime_policy_tests {
             engine_disabled_diagnostic(EngineType::Gemini),
             Some(crate::engine_policy::GEMINI_DISABLED_DIAGNOSTIC)
         );
+    }
+
+    #[test]
+    fn daemon_opencode_is_always_enabled_regardless_of_legacy_setting() {
+        let mut settings = crate::types::AppSettings::default();
+        settings.opencode_enabled = false;
+
+        assert!(engine_enabled_in_settings(&settings, EngineType::OpenCode));
+        assert_eq!(
+            ensure_engine_enabled(&settings, EngineType::OpenCode),
+            Ok(())
+        );
+        assert_eq!(engine_disabled_diagnostic(EngineType::OpenCode), None);
     }
 }

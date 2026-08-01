@@ -1,6 +1,12 @@
 import { normalizeComparablePath, normalizeFsPath } from "../../../utils/workspacePaths";
+import { isMacPlatform, isWindowsPlatform } from "../../../utils/platform";
+import type {
+  CodeNavigationFallbackReason,
+  CodeNavigationLifecycle,
+  CodeNavigationMode,
+} from "../../../services/tauri/openCode";
 
-export const NAVIGATION_REQUEST_TIMEOUT_MS = 8_000;
+export const NAVIGATION_REQUEST_TIMEOUT_MS = 35_000;
 export const CODE_INTEL_CACHE_TTL_MS = 3_000;
 export const CODE_INTEL_REPEAT_DEBOUNCE_MS = 120;
 
@@ -13,12 +19,115 @@ export type LspLocationLike = {
 
 export type LocationCacheEntry = {
   expiresAt: number;
-  value: LspLocationLike[];
+  value: CodeNavigationResultSnapshot;
+};
+
+export type CodeNavigationResultSnapshot = {
+  locations: LspLocationLike[];
+  mode: CodeNavigationMode;
+  provider: string;
+  language: string | null;
+  fallbackReasonCode: CodeNavigationFallbackReason | null;
+  lifecycle: CodeNavigationLifecycle;
+};
+
+export type CodeNavigationQueryStatus = CodeNavigationResultSnapshot & {
+  action: CodeNavigationAction;
+  phase: "loading" | "indexing" | "success" | "fallback" | "error";
 };
 
 export type RecentTrigger = {
   key: string;
   at: number;
+};
+
+export type CodeNavigationAction = "definition" | "references" | "implementation";
+
+export type LanguageServerInstallPlatform = "macos" | "windows" | "linux";
+
+export type LanguageServerInstallHint = {
+  command: string;
+  kind: "install" | "download-guide";
+  platform: LanguageServerInstallPlatform;
+};
+
+export function detectLanguageServerInstallPlatform(): LanguageServerInstallPlatform {
+  if (isMacPlatform()) {
+    return "macos";
+  }
+  if (isWindowsPlatform()) {
+    return "windows";
+  }
+  return "linux";
+}
+
+export function getLanguageServerInstallHint(
+  language: string | null,
+  platform: LanguageServerInstallPlatform,
+): LanguageServerInstallHint | null {
+  const normalizedLanguage = language?.trim().toLowerCase() ?? "";
+  if (normalizedLanguage === "java") {
+    if (platform === "macos") {
+      return { command: "brew install jdtls", kind: "install", platform };
+    }
+    if (platform === "windows") {
+      return {
+        command: "Start-Process \"https://download.eclipse.org/jdtls/milestones/\"",
+        kind: "download-guide",
+        platform,
+      };
+    }
+    return {
+      command: "xdg-open \"https://download.eclipse.org/jdtls/milestones/\"",
+      kind: "download-guide",
+      platform,
+    };
+  }
+  if (
+    normalizedLanguage === "ts/js"
+    || normalizedLanguage.startsWith("typescript")
+    || normalizedLanguage.startsWith("javascript")
+  ) {
+    return {
+      command: "npm install -g typescript-language-server typescript",
+      kind: "install",
+      platform,
+    };
+  }
+  if (normalizedLanguage === "rust") {
+    return {
+      command: "rustup component add rust-analyzer",
+      kind: "install",
+      platform,
+    };
+  }
+  if (normalizedLanguage === "python") {
+    return {
+      command: "npm install -g pyright",
+      kind: "install",
+      platform,
+    };
+  }
+  if (normalizedLanguage === "go") {
+    return {
+      command: "go install golang.org/x/tools/gopls@latest",
+      kind: "install",
+      platform,
+    };
+  }
+  return null;
+}
+
+const NAVIGATION_SYMBOL_GUIDANCE_KEYS: Record<CodeNavigationAction, string> = {
+  definition: "files.navigationDefinitionSymbolRequired",
+  references: "files.navigationReferencesSymbolRequired",
+  implementation: "files.navigationImplementationSymbolRequired",
+};
+
+const NAVIGATION_FAILURE_KEYS: Record<CodeNavigationAction, string> = {
+  definition: "files.navigationDefinitionError",
+  references: "files.navigationReferencesError",
+  implementation: "files.navigationImplementationError",
 };
 
 export function makeLocationQueryKey(
@@ -125,6 +234,31 @@ export function errorMessageFromUnknown(error: unknown, fallback: string) {
     }
   }
   return fallback;
+}
+
+export function resolveCodeNavigationErrorMessage(
+  error: unknown,
+  action: CodeNavigationAction,
+  translate: (key: string) => string,
+) {
+  const timeoutMessage = translate("files.navigationTimeout");
+  const rawMessage = errorMessageFromUnknown(error, "").trim();
+  if (rawMessage === timeoutMessage) {
+    return timeoutMessage;
+  }
+
+  const normalizedMessage = rawMessage.toLowerCase();
+  if (normalizedMessage.includes("no symbol under cursor")) {
+    return translate(NAVIGATION_SYMBOL_GUIDANCE_KEYS[action]);
+  }
+  if (
+    normalizedMessage.includes("unsupported")
+    || normalizedMessage.includes("currently supports")
+    || normalizedMessage.includes("not supported")
+  ) {
+    return translate("files.navigationUnsupportedLanguage");
+  }
+  return translate(NAVIGATION_FAILURE_KEYS[action]);
 }
 
 export function withTimeout<T>(

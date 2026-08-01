@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AppSettings } from "../../../types";
+import i18n from "../../../i18n";
+import { pushErrorToast } from "../../../services/toasts";
 import {
   getAppSettings,
   runClaudeDoctor,
   runCodexDoctor,
+  runGrokDoctor,
   runKimiDoctor,
+  runOpenCodeDoctor,
+  takeSettingsRecoveryNotice,
   updateAppSettings,
 } from "../../../services/tauri";
 import {
@@ -21,7 +26,7 @@ import {
   DEFAULT_UI_FONT_FAMILY,
   CODE_FONT_SIZE_DEFAULT,
   clampCodeFontSize,
-  normalizeFontFamily,
+  normalizeCodeFontFamily,
   normalizeUiFontFamily,
 } from "../../../utils/fonts";
 import {
@@ -55,7 +60,7 @@ const ALLOWED_NOTIFICATION_SOUND_IDS = new Set([
 ]);
 const allowedEmailSenderProviders = new Set(["126", "163", "qq", "custom"]);
 const allowedEmailSenderSecurity = new Set(["ssl_tls", "start_tls", "none"]);
-const DEFAULT_ENABLED_CURATED_SKILL_IDS = ["lazy-senior-dev"];
+const DEFAULT_ENABLED_CURATED_SKILL_IDS = ["lazy-senior-dev", "caveman"];
 
 function defaultEnabledCuratedSkillIds(): string[] {
   return [...DEFAULT_ENABLED_CURATED_SKILL_IDS];
@@ -184,14 +189,35 @@ function normalizeEnabledBuiltInAgentIds(value: unknown): string[] {
   ).sort();
 }
 
+function normalizeDisabledCliEngines(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") {
+      continue;
+    }
+    const normalized = item.trim();
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    ids.push(normalized);
+  }
+  return ids;
+}
+
 const defaultSettings: AppSettings = {
   claudeBin: null,
   kimiBin: null,
+  grokBin: null,
+  opencodeBin: null,
   codexBin: null,
   codexArgs: null,
   terminalShellPath: null,
-  geminiEnabled: false,
-  opencodeEnabled: false,
+  disabledCliEngines: [],
   sessionAttributionMode: "related",
   backendMode: "local",
   remoteBackendHost: "127.0.0.1:4732",
@@ -228,7 +254,15 @@ const defaultSettings: AppSettings = {
   toggleFilesSurfaceShortcut: "cmd+shift+e",
   saveFileShortcut: "cmd+s",
   findInFileShortcut: "cmd+f",
+  expandSelectionShortcut: "cmd+w",
   toggleGitDiffListViewShortcut: "alt+shift+v",
+  toggleGitGraphShortcut: null,
+  openNotesShortcut: null,
+  openIntentCanvasShortcut: null,
+  openRadarShortcut: null,
+  openProjectMapShortcut: null,
+  openBrowserDockShortcut: null,
+  openFileCompareShortcut: null,
   increaseUiScaleShortcut: "cmd+=",
   decreaseUiScaleShortcut: "cmd+-",
   resetUiScaleShortcut: "cmd+0",
@@ -246,6 +280,7 @@ const defaultSettings: AppSettings = {
   customThemePresetId: "vscode-dark-modern",
   customSkillDirectories: [],
   enabledCuratedSkillIds: defaultEnabledCuratedSkillIds(),
+  curatedSkillDefaultsVersion: 1,
   enabledBuiltInAgentIds: [],
   canvasWidthMode: "narrow",
   layoutMode: "default",
@@ -369,13 +404,18 @@ function normalizeAppSettings(
     experimentalUnifiedExecEnabled: undefined,
     claudeBin: settings.claudeBin?.trim() ? settings.claudeBin.trim() : null,
     kimiBin: settings.kimiBin?.trim() ? settings.kimiBin.trim() : null,
+    grokBin: settings.grokBin?.trim() ? settings.grokBin.trim() : null,
+    opencodeBin: settings.opencodeBin?.trim()
+      ? settings.opencodeBin.trim()
+      : null,
     codexBin: settings.codexBin?.trim() ? settings.codexBin.trim() : null,
     codexArgs: settings.codexArgs?.trim() ? settings.codexArgs.trim() : null,
     terminalShellPath: settings.terminalShellPath?.trim()
       ? settings.terminalShellPath.trim()
       : null,
-    geminiEnabled: false,
-    opencodeEnabled: settings.opencodeEnabled === true,
+    disabledCliEngines: normalizeDisabledCliEngines(
+      settings.disabledCliEngines,
+    ),
     sessionAttributionMode:
       settings.sessionAttributionMode === "workspace-only"
         ? "workspace-only"
@@ -411,10 +451,7 @@ function normalizeAppSettings(
     performanceCompatibilityModeEnabled:
       settings.performanceCompatibilityModeEnabled === true,
     uiFontFamily: normalizeUiFontFamily(settings.uiFontFamily),
-    codeFontFamily: normalizeFontFamily(
-      settings.codeFontFamily,
-      DEFAULT_CODE_FONT_FAMILY,
-    ),
+    codeFontFamily: normalizeCodeFontFamily(settings.codeFontFamily),
     runtimeRestoreThreadsOnlyOnLaunch:
       settings.runtimeRestoreThreadsOnlyOnLaunch !== false,
     runtimeForceCleanupOnExit: settings.runtimeForceCleanupOnExit !== false,
@@ -569,8 +606,57 @@ export function useAppSettings() {
             ),
           );
         }
-      } catch {
-        // Defaults stay in place if loading settings fails.
+        // Startup quarantine happens before the webview loads, so getAppSettings
+        // resolves successfully even when settings.json was corrupted. The one-shot
+        // recovery notice is the only signal for that path; take semantics keep the
+        // toast to a single display even across hook remounts.
+        try {
+          const notice = await takeSettingsRecoveryNotice();
+          if (active && notice) {
+            pushErrorToast({
+              title:
+                i18n.t("settings.settingsRecoveredTitle", {
+                  defaultValue: "设置已恢复",
+                }) || "设置已恢复",
+              message: notice.backupFileName
+                ? i18n.t("settings.settingsRecoveredMessage", {
+                    backupFileName: notice.backupFileName,
+                    defaultValue:
+                      "设置文件已损坏，原文件已备份为 {{backupFileName}}，已回退到默认设置。",
+                  }) ||
+                  `设置文件已损坏，原文件已备份为 ${notice.backupFileName}，已回退到默认设置。`
+                : i18n.t("settings.settingsRecoveredNoBackupMessage", {
+                    defaultValue:
+                      "设置文件已损坏且自动备份失败，已回退到默认设置。",
+                  }) || "设置文件已损坏且自动备份失败，已回退到默认设置。",
+            });
+          }
+        } catch (noticeError) {
+          // A failed notice fetch must never break the successful settings load.
+          console.error(
+            "[useAppSettings] failed to fetch settings recovery notice",
+            noticeError,
+          );
+        }
+      } catch (error) {
+        // Defaults stay in place if loading settings fails, but the failure must be
+        // visible: a corrupted settings file silently resets user preferences otherwise.
+        console.error(
+          "[useAppSettings] failed to load app settings; falling back to defaults",
+          error,
+        );
+        pushErrorToast({
+          title:
+            i18n.t("settings.appSettingsLoadFailedTitle", {
+              defaultValue: "设置加载失败",
+            }) || "设置加载失败",
+          message:
+            i18n.t("settings.appSettingsLoadFailedMessage", {
+              defaultValue:
+                "无法从后端读取应用设置，已临时使用默认设置。请检查客户端与后端的连接状态。",
+            }) ||
+            "无法从后端读取应用设置，已临时使用默认设置。请检查客户端与后端的连接状态。",
+        });
       } finally {
         if (active) {
           setIsLoading(false);
@@ -620,6 +706,14 @@ export function useAppSettings() {
     return runKimiDoctor(kimiBin);
   }, []);
 
+  const grokDoctor = useCallback(async (grokBin: string | null) => {
+    return runGrokDoctor(grokBin);
+  }, []);
+
+  const opencodeDoctor = useCallback(async (opencodeBin: string | null) => {
+    return runOpenCodeDoctor(opencodeBin);
+  }, []);
+
   return {
     settings,
     setSettings,
@@ -627,6 +721,8 @@ export function useAppSettings() {
     doctor,
     claudeDoctor,
     kimiDoctor,
+    grokDoctor,
+    opencodeDoctor,
     isLoading,
   };
 }

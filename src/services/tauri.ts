@@ -4,7 +4,7 @@ export {
   pickWebAssetsArchive,
   pickWorkspacePath,
 } from "./tauri/filePickers";
-export { getConfigModel, listWorkspaces } from "./tauri/workspaceConfig";
+export { getConfigModel, listWorkspaces, takeWorkspacesRecoveryNotice } from "./tauri/workspaceConfig";
 export {
   compactThreadContext,
   engineInterruptTurn,
@@ -14,7 +14,16 @@ export {
 } from "./tauri/messaging";
 export { localUsageSnapshot, localUsageStatistics } from "./tauri/usage";
 export {
+  ttDetectCli,
+  ttEnsureServer,
+  ttInstallCli,
+  ttProxyRequest,
+  ttServerStatus,
+} from "./tauri/tokentracker";
+export type { TtCliStatus, TtInstallResult, TtServerStatus } from "../types";
+export {
   cancelCodexLogin,
+  discoverCodexModels,
   generateRunMetadata,
   getAccountInfo,
   getAccountRateLimits,
@@ -31,12 +40,18 @@ export {
   getOpenCodeCommandsList,
   getSkillsList,
   setCuratedSkillEnabled,
+  startClaudeCommandsWatch,
+  stopClaudeCommandsWatch,
+  claudeCommandCreate,
 } from "./tauri/skills";
+export type { CreatedClaudeCommand } from "./tauri/skills";
 export {
   connectOpenCodeProvider,
   exportOpenCodeSession,
   getCodeIntelDefinition,
+  getCodeIntelImplementations,
   getCodeIntelReferences,
+  prepareCodeIntel,
   getOpenCodeLspDefinition,
   getOpenCodeLspDiagnostics,
   getOpenCodeLspDocumentSymbols,
@@ -115,6 +130,7 @@ export {
 } from "./tauri/threadTitles";
 export { getPendingOpenPaths } from "./tauri/openPaths";
 export { setMainWindowOpacity } from "./tauri/window";
+export { saveMermaidPngFile } from "./tauri/mermaidExport";
 export type { WindowOpacityApplyResult } from "./tauri/window";
 export type {
   WorkspaceSessionCatalogEntry,
@@ -133,12 +149,19 @@ export type {
   WorkspaceSessionFolderMutation,
   WorkspaceSessionAssignmentResponse,
   AutoSessionMetadata,
+  NativeHistorySourceInput,
+  ProviderContinuationTargetInput,
+  NativeProviderContinuationInput,
+  NativeProviderContinuationResponse,
 } from "./tauri/sessionManagement";
 export {
   assignWorkspaceSessionFolders,
   assignWorkspaceSessionFolder,
   archiveWorkspaceSessions,
   createWorkspaceSessionFolder,
+  createNativeProviderContinuation,
+  prepareNativeProviderContinuation,
+  discardPreparedNativeProviderContinuation,
   deleteWorkspaceSessionFolder,
   deleteWorkspaceSessions,
   getWorkspaceSessionProjectionSummary,
@@ -153,8 +176,8 @@ export {
   renameWorkspaceSessionFolder,
   unarchiveWorkspaceSessions,
 } from "./tauri/sessionManagement";
-export type { CodexRuntimeReloadResult } from "./tauri/settings";
-export { getAppSettings, getCodexConfigPath, getCodexUnifiedExecExternalStatus, reloadCodexRuntimeConfig, restoreCodexUnifiedExecOfficialDefault, setCodexUnifiedExecOfficialOverride, updateAppSettings } from "./tauri/settings";
+export type { CodexRuntimeReloadResult, SettingsRecoveryNotice } from "./tauri/settings";
+export { getAppSettings, getCodexConfigPath, getCodexUnifiedExecExternalStatus, reloadCodexRuntimeConfig, restoreCodexUnifiedExecOfficialDefault, setCodexUnifiedExecOfficialOverride, takeSettingsRecoveryNotice, updateAppSettings } from "./tauri/settings";
 export type {
   AgentMdResponse,
   ClaudeMdResponse,
@@ -240,7 +263,7 @@ export type {
   BrowserSnapshotBudget,
   BrowserTextNode,
 } from "../features/browser-agent/types";
-export { previewCodexLaunchProfile, runClaudeDoctor, runCodexDoctor, runKimiDoctor } from "./tauri/doctor";
+export { previewCodexLaunchProfile, runClaudeDoctor, runCodexDoctor, runGrokDoctor, runKimiDoctor, runOpenCodeDoctor } from "./tauri/doctor";
 export { getCliInstallPlan, getCliVersionStatus, runCliInstaller } from "./tauri/cliInstaller";
 export type {
   ComputerUseActivationFailureKind,
@@ -333,33 +356,53 @@ export type {
 export {
   addClaudeProvider,
   addCodexProvider,
+  addGrokProvider,
   addKimiProvider,
+  addOpenCodeProvider,
   deleteClaudeProvider,
   deleteCodexProvider,
+  deleteGrokProvider,
   deleteKimiProvider,
+  deleteOpenCodeProvider,
   fetchClaudeProviderModels,
+  fetchGrokProviderModels,
   fetchKimiProviderModels,
+  fetchOpenCodeProviderModels,
   getClaudeAlwaysThinkingEnabled,
   getClaudeProviders,
   readClaudeSettingsJson,
   getCodexProviders,
   getCurrentClaudeConfig,
+  getCurrentGrokConfig,
   getCurrentKimiConfig,
+  getCurrentOpenCodeConfig,
   getGeminiVendorPreflight,
   getGeminiVendorSettings,
+  getGrokProviders,
   getKimiProviders,
+  getOpenCodeProviders,
+  listCcSwitchProviders,
+  listCcSwitchProvidersFromPath,
   reorderClaudeProviders,
+  reorderCodexProviders,
   saveGeminiVendorSettings,
   saveClaudeSettingsJson,
   setClaudeAlwaysThinkingEnabled,
   switchClaudeProvider,
   switchCodexProvider,
+  switchGrokProvider,
   switchKimiProvider,
+  switchOpenCodeProvider,
   updateClaudeProvider,
   updateCodexProvider,
+  updateGrokProvider,
   updateKimiProvider,
+  updateOpenCodeProvider,
 } from "./tauri/vendors";
 export type {
+  CcSwitchAppType,
+  CcSwitchProvider,
+  CcSwitchProviderList,
   GeminiVendorPreflightCheck,
   GeminiVendorPreflightResult,
   GeminiVendorSettings,
@@ -546,6 +589,7 @@ export {
   deleteCodexSession,
   deleteCodexSessions,
   deleteGeminiSession,
+  deleteGrokSession,
   deleteKimiSession,
   deleteOpenCodeSession,
   forkClaudeSession,
@@ -555,12 +599,15 @@ export {
   listClaudeSessions,
   listGeminiSessions,
   listGlobalMcpServers,
+  setGlobalMcpServerEnabled,
+  listGrokSessions,
   listKimiSessions,
   listMcpServerStatus,
   listThreads,
   loadClaudeSession,
   loadCodexSession,
   loadGeminiSession,
+  loadGrokSession,
   loadKimiSession,
   resumeThread,
   rewindCodexThread,

@@ -1731,3 +1731,267 @@ Rebased chore/bump-version-0.7.5 onto origin, semantically resolved Kimi integra
 ### Next Steps
 
 - None - task complete
+
+
+## Session 38: 建立 Messages 模块边界基线
+
+**Date**: 2026-07-21
+**Task**: 建立 Messages 模块边界基线
+**Branch**: `bump-version-0.7.6`
+
+### Summary
+
+归档第一阶段 messages presentation change，建立 38 条 inbound/70 条 outbound 精确 allowlist boundary gate，并通过正负 fixture 与 OpenSpec strict validation。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2bd4a398` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 39: 归档 Messages 模块边界 change
+
+**Date**: 2026-07-21
+**Task**: 归档 Messages 模块边界 change
+**Branch**: `bump-version-0.7.6`
+
+### Summary
+
+同步 messages-module-boundaries main spec 并归档 harden-messages-module-boundaries change，完成 Phase 0 lifecycle closure。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `05baf51a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 40: 修复 MessageRow context 与 media scope
+
+**Date**: 2026-07-21
+**Task**: 修复 MessageRow context 与 media scope
+**Branch**: `bump-version-0.7.6`
+
+### Summary
+
+补齐 browser/intent-canvas memo equality，并以 committed scope + request generation 阻止 deferred image stale completion；messages suite 77 files/702 pass/7 skip。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fac1ccc5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 41: 归档 MessageRow correctness change
+
+**Date**: 2026-07-21
+**Task**: 归档 MessageRow correctness change
+**Branch**: `bump-version-0.7.6`
+
+### Summary
+
+同步 messages-row-correctness main spec 并归档 Phase 1 change，为后续 row ownership 抽取锁定 memo 与 deferred media contract。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `824b4c58` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 42: 归还 messages 共享领域能力所有权
+
+**Date**: 2026-07-21
+**Task**: 归还 messages 共享领域能力所有权
+**Branch**: `bump-version-0.7.6`
+
+### Summary
+
+完成 Phase 6B：迁移 diff、command tags、agent-task contract、neutral tool semantics 与 shared FileIcon；清理 messages private imports，更新 boundary baseline，并通过 focused/messages 测试、typecheck、lint、build、runtime/bundle/OpenSpec 验证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3715b87e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 43: 归档 messages 共享领域能力规范
+
+**Date**: 2026-07-21
+**Task**: 归档 messages 共享领域能力规范
+**Branch**: `bump-version-0.7.6`
+
+### Summary
+
+归档 relocate-shared-message-domain-helpers OpenSpec change，将 ownership 与依赖方向契约同步到 shared-message-domain-helpers 主 spec；主 spec strict validation 通过，全量校验仅保留无关 change 的既有失败。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b24ff0f9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 44: 分离 GenericToolBlock 展示职责
+
+**Date**: 2026-07-21
+**Task**: 分离 GenericToolBlock 展示职责
+**Branch**: `bump-version-0.7.6`
+
+### Summary
+
+完成 roadmap Phase 8.1-8.3：新增 pure genericToolPresentation model，拆分 ExitPlan、file-change、image-view focused components，将 GenericToolBlock 从 1553 行降至 473 行，并通过 focused/toolBlocks/messages、typecheck、lint、build 与架构 gates。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d9c8f125` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 45: 归档通用工具展示契约
+
+**Date**: 2026-07-21
+**Task**: 归档通用工具展示契约
+**Branch**: `bump-version-0.7.6`
+
+### Summary
+
+归档 decompose-generic-tool-presentation OpenSpec change，将 pure projection、specialized variants 与 common shell ownership 同步到 generic-tool-presentation 主 spec。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `527bb410` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

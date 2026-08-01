@@ -97,7 +97,13 @@ const activityPanel = {
       "unreadMark": "Не прочитано",
       "readMark": "Прочитано",
       "deleteHistoryEntry": "Удалить {{name}}",
-      "deleteDateGroupEntries": "Удалить все записи ({{count}}) за {{date}}"
+      "deleteDateGroupEntries": "Удалить все записи ({{count}}) за {{date}}",
+      "confirmDeleteDateGroup": "Удалить {{count}} запись за {{date}}?",
+      "confirmDeleteDateGroup_other": "Удалить все записи ({{count}}) за {{date}}?",
+      "deleteFailedTitle": "Не удалось удалить",
+      "deleteFailedBody": "Не удалось удалить {{count}} запись. Повторите попытку.",
+      "deleteFailedBody_other": "Не удалось удалить записи ({{count}}). Повторите попытку.",
+      "deleteFailedDismiss": "Закрыть"
     },
     "status": {
       "running": "выполняется",

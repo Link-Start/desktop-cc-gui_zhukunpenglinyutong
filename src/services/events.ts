@@ -3,6 +3,7 @@ import type {
   AppServerEvent,
   DictationEvent,
   DictationModelStatus,
+  RuntimePoolSnapshot,
 } from "../types";
 import type { CliInstallProgressEvent } from "../types";
 import type { RuntimeLogSessionSnapshot } from "./tauri";
@@ -20,6 +21,23 @@ export type TerminalOutputEvent = {
 };
 
 export type RuntimeLogLineEvent = TerminalOutputEvent;
+
+export type NativeProviderContinuationProgressPhase =
+  | "reading-source"
+  | "compiling-context"
+  | "prepared"
+  | "starting-target"
+  | "delivering-context"
+  | "verifying-target"
+  | "finalizing"
+  | "ready";
+
+export type NativeProviderContinuationProgressEvent = {
+  workspaceId: string;
+  operationId: string;
+  phase: NativeProviderContinuationProgressPhase;
+  percent: number;
+};
 
 export type DetachedExternalFileChangeEvent = {
   workspaceId: string;
@@ -183,6 +201,11 @@ const APP_SERVER_EVENT_CRITICAL_METHODS = new Set<string>([
   "collaboration/modeBlocked",
   "collaboration/modeResolved",
 ]);
+const APP_SERVER_EVENT_TERMINAL_METHODS = new Set<string>([
+  "turn/completed",
+  "turn/error",
+  "runtime/ended",
+]);
 
 function appServerEventMethod(event: AppServerEvent): string {
   return String(event.message.method ?? "");
@@ -262,6 +285,17 @@ function appServerEventCriticality(event: AppServerEvent) {
     : "non-critical";
 }
 
+function isAppServerEventCriticalPredecessor(
+  queuedEvent: AppServerEvent,
+  criticalEvent: AppServerEvent,
+) {
+  return (
+    APP_SERVER_EVENT_TERMINAL_METHODS.has(
+      appServerEventMethod(criticalEvent),
+    ) && queuedEvent.workspace_id === criticalEvent.workspace_id
+  );
+}
+
 function appServerEventBytes(event: AppServerEvent) {
   try {
     return JSON.stringify(event).length;
@@ -278,6 +312,7 @@ export const appServerEventBackpressure = createEventBackpressure<AppServerEvent
   maxQueueDepth: 4_000,
   rawRetainedLimit: 128,
   classify: appServerEventCriticality,
+  isCriticalPredecessor: isAppServerEventCriticalPredecessor,
   coalesceKey: appServerEventCoalesceKey,
   dropPolicy: appServerEventDropPolicy,
   estimateBytes: appServerEventBytes,
@@ -324,6 +359,10 @@ const runtimeLogExitedHub = createEventHub<RuntimeLogSessionSnapshot>(
 const cliInstallerHub = createEventHub<CliInstallProgressEvent>(
   "cli-installer-event",
 );
+const nativeProviderContinuationProgressHub =
+  createEventHub<NativeProviderContinuationProgressEvent>(
+    "native-provider-continuation-progress",
+  );
 const detachedExternalFileChangeHub =
   createEventHub<DetachedExternalFileChangeEvent>(
     "detached-external-file-change",
@@ -339,7 +378,15 @@ const detachedExternalFileChangeBatchHub =
   createEventHub<readonly DetachedExternalFileChangeEvent[]>(
     "detached-external-file-change-batch",
   );
+/**
+ * Rust `publish_runtime_pool_snapshot_if_changed` 差量发布的 runtime 池快照。
+ * 仅语义内容变化时 emit，订阅方替代常驻轮询。
+ */
+const runtimePoolChangedHub = createEventHub<RuntimePoolSnapshot>(
+  "runtime-pool-changed",
+);
 const updaterCheckHub = createEventHub<void>("updater-check");
+const claudeCommandsChangedHub = createEventHub<void>("claude-commands-changed");
 const menuNewAgentHub = createEventHub<void>("menu-new-agent");
 const menuNewWorktreeAgentHub = createEventHub<void>("menu-new-worktree-agent");
 const menuNewCloneAgentHub = createEventHub<void>("menu-new-clone-agent");
@@ -519,6 +566,13 @@ export function subscribeCliInstallerEvents(
   return cliInstallerHub.subscribe(onEvent, options);
 }
 
+export function subscribeNativeProviderContinuationProgress(
+  onEvent: (event: NativeProviderContinuationProgressEvent) => void,
+  options?: SubscriptionOptions,
+): Unsubscribe {
+  return nativeProviderContinuationProgressHub.subscribe(onEvent, options);
+}
+
 export function subscribeRuntimeLogExited(
   onEvent: (event: RuntimeLogSessionSnapshot) => void,
   options?: SubscriptionOptions,
@@ -545,11 +599,33 @@ export function subscribeDetachedExternalFileChangeBatch(
   return detachedExternalFileChangeBatchHub.subscribe(onBatch, options);
 }
 
+/**
+ * Subscribe to Rust-side diff-published runtime pool snapshots.
+ * Emitted after reconcile cycles and manual pool mutations, only when the
+ * snapshot signature actually changed.
+ */
+export function subscribeRuntimePoolChanged(
+  onEvent: (snapshot: RuntimePoolSnapshot) => void,
+  options?: SubscriptionOptions,
+): Unsubscribe {
+  return runtimePoolChangedHub.subscribe(onEvent, options);
+}
+
 export function subscribeUpdaterCheck(
   onEvent: () => void,
   options?: SubscriptionOptions,
 ): Unsubscribe {
   return updaterCheckHub.subscribe(() => {
+    onEvent();
+  }, options);
+}
+
+/** Rust commands watcher 去抖后 emit `claude-commands-changed`，前端据此刷新命令列表。 */
+export function subscribeClaudeCommandsChanged(
+  onEvent: () => void,
+  options?: SubscriptionOptions,
+): Unsubscribe {
+  return claudeCommandsChangedHub.subscribe(() => {
     onEvent();
   }, options);
 }

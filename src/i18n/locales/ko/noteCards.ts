@@ -30,6 +30,7 @@ const noteCards = {
     "bodyPlaceholder": "아이디어, 명령어 스니펫 또는 임시 컨텍스트를 여기에 남기세요…",
     "captureMenu": "노트에 저장",
     "captureSelection": "선택한 코드를 노트에 저장…",
+    "captureWholeFile": "전체 파일을 노트에 저장…",
     "captureConversationSelection": "선택한 텍스트를 노트에 저장…",
     "captureConversationThread": "의미 있는 대화 본문을 노트에 저장…",
     "captureConversationSelectionTitle": "대화 선택 영역",

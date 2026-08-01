@@ -15,7 +15,7 @@ import {
   EDIT_NEW_KEYS,
   EDIT_CONTENT_KEYS,
 } from './toolConstants';
-import { computeDiff } from '../../utils/diffUtils';
+import { computeDiff } from '../../../../utils/diff';
 import {
   FileChangeRow,
   structuredDiffToLines,

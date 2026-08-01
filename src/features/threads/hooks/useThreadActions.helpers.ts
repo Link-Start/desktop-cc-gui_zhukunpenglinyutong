@@ -8,8 +8,10 @@ import {
   normalizeSessionDisplayTitle,
   projectSessionDisplaySummaries,
   selectProjectedSessionDisplayName,
+  type SessionDisplayTitleSources,
 } from "../utils/sessionDisplayProjection";
 import { matchesWorkspacePath } from "./useThreadActions.workspacePath";
+import { classifyContextProtocolText } from "../../../utils/contextProtocol";
 
 const CLAUDE_HISTORY_MESSAGE_ID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -58,10 +60,14 @@ export type GeminiSessionSummary = {
 // Kimi session summaries share the Gemini summary shape (id/message/updatedAt/size).
 export type KimiSessionSummary = GeminiSessionSummary;
 
+// Grok session summaries share the Gemini summary shape (id/message/updatedAt/size).
+export type GrokSessionSummary = GeminiSessionSummary;
+
 export type CodexCatalogSessionSummary = {
   sessionId: string;
   workspaceId?: string | null;
   title: string;
+  nativeTitle?: string | null;
   updatedAt: number;
   archivedAt?: number | null;
   sizeBytes?: number;
@@ -76,6 +82,14 @@ export type CodexCatalogSessionSummary = {
   providerAvailability?: string | null;
   folderId?: string | null;
   autoSession?: ThreadSummary["autoSession"];
+  originKind?: string | null;
+  sourceSessionId?: string | null;
+  sourceProviderProfileId?: string | null;
+  familyId?: string | null;
+  familyRootSessionId?: string | null;
+  lineageParentSessionId?: string | null;
+  lineageKind?: string | null;
+  lineageDepth?: number | null;
 };
 
 export function normalizeThreadListPartialSource(
@@ -156,6 +170,12 @@ export function inferThreadEngineSource(
     return "gemini";
   }
   if (
+    normalized.startsWith("grok:") ||
+    normalized.startsWith("grok-pending-")
+  ) {
+    return "grok";
+  }
+  if (
     normalized.startsWith("kimi:") ||
     normalized.startsWith("kimi-pending-")
   ) {
@@ -175,6 +195,7 @@ export function isPendingThreadId(threadId: string): boolean {
   return (
     normalized.startsWith("claude-pending-") ||
     normalized.startsWith("gemini-pending-") ||
+    normalized.startsWith("grok-pending-") ||
     normalized.startsWith("kimi-pending-") ||
     normalized.startsWith("opencode-pending-") ||
     normalized.startsWith("codex-pending-")
@@ -1031,11 +1052,18 @@ export function normalizeKimiSessionSummaries(
   return normalizeGeminiSessionSummaries(value);
 }
 
+export function normalizeGrokSessionSummaries(
+  value: unknown,
+): GrokSessionSummary[] {
+  // Grok session summaries share the Gemini summary shape.
+  return normalizeGeminiSessionSummaries(value);
+}
+
 function mergeNativeCliSessionSummaries(params: {
   baseSummaries: ThreadSummary[];
   sessions: GeminiSessionSummary[];
-  idPrefix: "gemini" | "kimi";
-  engineSource: "gemini" | "kimi";
+  idPrefix: "gemini" | "grok" | "kimi";
+  engineSource: "gemini" | "grok" | "kimi";
   fallbackTitle: string;
   workspaceId: string;
   mappedTitles: Record<string, string>;
@@ -1127,6 +1155,25 @@ export function mergeKimiSessionSummaries(
   });
 }
 
+export function mergeGrokSessionSummaries(
+  baseSummaries: ThreadSummary[],
+  grokSessions: GrokSessionSummary[],
+  workspaceId: string,
+  mappedTitles: Record<string, string>,
+  getCustomName: (workspaceId: string, threadId: string) => string | undefined,
+): ThreadSummary[] {
+  return mergeNativeCliSessionSummaries({
+    baseSummaries,
+    sessions: grokSessions,
+    idPrefix: "grok",
+    engineSource: "grok",
+    fallbackTitle: "Grok Session",
+    workspaceId,
+    mappedTitles,
+    getCustomName,
+  });
+}
+
 function normalizeCatalogEngine(
   engine: CodexCatalogSessionSummary["engine"],
 ): ThreadSummary["engineSource"] {
@@ -1134,6 +1181,7 @@ function normalizeCatalogEngine(
     case "claude":
     case "codex":
     case "gemini":
+    case "grok":
     case "kimi":
     case "opencode":
       return engine;
@@ -1142,21 +1190,22 @@ function normalizeCatalogEngine(
   }
 }
 
-function selectStableThreadSummaryName(params: {
-  previous?: ThreadSummary;
-  nextName: string;
-  mappedTitle?: string;
-  customTitle?: string;
-  engineSource: ThreadSummary["engineSource"];
-}): string {
+function selectStableThreadSummaryName(
+  params: {
+    previous?: ThreadSummary;
+    nextName: string;
+    engineSource: ThreadSummary["engineSource"];
+  } & SessionDisplayTitleSources,
+): string {
   return selectProjectedSessionDisplayName(params);
 }
 
 export function mergeThreadSummaryPreservingStableIdentity(
   previous: ThreadSummary | undefined,
   next: ThreadSummary,
+  titleSources: SessionDisplayTitleSources = {},
 ): ThreadSummary {
-  return mergeSessionDisplaySummary(previous, next);
+  return mergeSessionDisplaySummary(previous, next, titleSources);
 }
 
 export function mergeCodexCatalogSessionSummaries(
@@ -1173,11 +1222,16 @@ export function mergeCodexCatalogSessionSummaries(
   baseSummaries.forEach((entry) => mergedById.set(entry.id, entry));
   codexSessions.forEach((session) => {
     const title = normalizeSessionDisplayTitle(session.title);
+    const nativeTitle = normalizeSessionDisplayTitle(session.nativeTitle);
     const engineSource = normalizeCatalogEngine(session.engine);
-    if (!title) {
+    if (!title && !nativeTitle) {
       return;
     }
-    if (engineSource === "codex" && hasCodexBackgroundHelperPreview([title])) {
+    if (
+      engineSource === "codex" &&
+      !nativeTitle &&
+      hasCodexBackgroundHelperPreview([title])
+    ) {
       return;
     }
     const prev = mergedById.get(session.sessionId);
@@ -1198,18 +1252,35 @@ export function mergeCodexCatalogSessionSummaries(
         ? undefined
         : getCustomName(workspaceId, session.sessionId);
     const customTitle = ownerCustomTitle || selectedWorkspaceCustomTitle;
-    const fallbackTitle = previewThreadName(
-      title,
+    const engineFallbackTitle =
       engineSource === "claude"
         ? "Claude Session"
         : engineSource === "gemini"
           ? "Gemini Session"
-          : engineSource === "kimi"
-            ? "Kimi Session"
-          : engineSource === "opencode"
-            ? "OpenCode Session"
-            : "Codex Session",
-    );
+          : engineSource === "grok"
+            ? "Grok Session"
+            : engineSource === "kimi"
+              ? "Kimi Session"
+              : engineSource === "opencode"
+                ? "OpenCode Session"
+                : "Codex Session";
+    const continuationSourceName = session.sourceSessionId
+      ? mergedById.get(session.sourceSessionId)?.name?.trim()
+      : null;
+    const continuationFallbackTitle =
+      session.originKind === "provider-continuation"
+        ? continuationSourceName
+          ? `继续：${continuationSourceName}`
+          : `Provider 续接 · ${
+              session.providerProfileName?.trim() ||
+              engineFallbackTitle.replace(/ Session$/, "")
+            }`
+        : null;
+    const fallbackTitle =
+      continuationFallbackTitle &&
+      classifyContextProtocolText(title) !== null
+        ? continuationFallbackTitle
+        : previewThreadName(title || nativeTitle, engineFallbackTitle);
     const next: ThreadSummary = {
       id: session.sessionId,
       name: selectStableThreadSummaryName({
@@ -1217,6 +1288,7 @@ export function mergeCodexCatalogSessionSummaries(
         nextName: fallbackTitle,
         mappedTitle,
         customTitle,
+        nativeTitle,
         engineSource,
       }),
       updatedAt,
@@ -1239,11 +1311,24 @@ export function mergeCodexCatalogSessionSummaries(
       folderId: session.folderId ?? null,
       autoSession: session.autoSession ?? null,
       parentThreadId,
+      originKind: session.originKind ?? undefined,
+      sourceSessionId: session.sourceSessionId ?? undefined,
+      sourceProviderProfileId: session.sourceProviderProfileId ?? undefined,
+      familyId: session.familyId ?? undefined,
+      familyRootSessionId: session.familyRootSessionId ?? undefined,
+      lineageParentSessionId:
+        session.lineageParentSessionId ?? undefined,
+      lineageKind: session.lineageKind ?? undefined,
+      lineageDepth: session.lineageDepth ?? undefined,
     };
     if (!prev || next.updatedAt >= prev.updatedAt) {
       mergedById.set(
         session.sessionId,
-        mergeSessionDisplaySummary(prev, next, { mappedTitle, customTitle }),
+        mergeSessionDisplaySummary(prev, next, {
+          mappedTitle,
+          customTitle,
+          nativeTitle,
+        }),
       );
     }
   });
@@ -1566,6 +1651,8 @@ export function resolveRewindSupportedEngine(
     normalized.startsWith("codex-pending-") ||
     normalized.startsWith("gemini:") ||
     normalized.startsWith("gemini-pending-") ||
+    normalized.startsWith("grok:") ||
+    normalized.startsWith("grok-pending-") ||
     normalized.startsWith("kimi:") ||
     normalized.startsWith("kimi-pending-") ||
     normalized.startsWith("opencode:") ||
@@ -1670,6 +1757,9 @@ export function resolveThreadSourceMeta(
 function shouldIncludeThreadEntry(thread: Record<string, unknown>): boolean {
   if (isArchivedThread(thread)) {
     return false;
+  }
+  if (normalizeThreadMetaValue(thread.nativeTitle)) {
+    return true;
   }
   const previewCandidates = [
     asString(thread.preview).trim(),

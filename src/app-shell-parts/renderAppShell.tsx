@@ -4,8 +4,10 @@ import { AppLayout } from "../features/app/components/AppLayout";
 import { AppModals } from "../features/app/components/AppModals";
 import { LockScreenOverlay } from "../features/app/components/LockScreenOverlay";
 import { RuntimeConsoleDock } from "../features/app/components/RuntimeConsoleDock";
+import { VendorModelManagerDialogHost } from "../features/vendors/components/VendorModelManagerDialogHost";
 import {
   GlobalSearchTitlebarButton,
+  QuickSwitcherTitlebarButton,
   SidebarCollapseButton,
   TitlebarExpandControls,
 } from "../features/layout/components/SidebarToggleControls";
@@ -21,12 +23,13 @@ import {
   type AppShellDomainContextName,
 } from "./appShellDomainContexts";
 import {
+  ExtensionsView,
   GitHistoryPanel,
   KanbanView,
+  QuickSwitcher,
   ReleaseNotesModal,
   SearchPalette,
   SpecHub,
-  WorkspaceHome,
 } from "./lazyViews";
 import type {
   RenderAppShellContext,
@@ -91,6 +94,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     GitHubPanelData,
     SettingsView,
     activeEngine,
+    activeEditorFilePath,
     activeTab,
     activeThreadId,
     activeWorkspace,
@@ -102,11 +106,13 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     cancelClonePrompt,
     cancelWorktreePrompt,
     centerMode,
+    checkForUpdates,
     chooseCloneCopiesFolder,
     clearCloneCopiesFolder,
     clonePrompt,
     closeReleaseNotes,
     closeSearchPalette,
+    closeQuickSwitcher,
     closeSettings,
     closeWorktreeCreateResult,
     dismissLoadingProgressDialog,
@@ -130,6 +136,8 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     doctor,
     claudeDoctor,
     kimiDoctor,
+    grokDoctor,
+    opencodeDoctor,
     editorSplitCompanion,
     editorSplitLayout,
     engineStatuses,
@@ -137,6 +145,8 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     fileViewPanelNode,
     noteCardsPanelNode,
     fileComparePanelNode,
+    fileHistoryTabs,
+    activeGitHistoryTabId,
     projectMapPanelNode,
     intentCanvasPanelNode,
     browserDockNode,
@@ -148,14 +158,15 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     gitHistoryRepositoryRoot,
     gitHistoryWorkspace,
     gitPanelMode,
-    gitStatus,
     groupedWorkspaces,
     handleAddWorkspace,
     handleAppModeChange,
     handleCloseGitHistoryPanel,
+    handleActivateGitHistoryTab,
+    handleCloseFileHistory,
+    handleCloseOtherFileHistories,
+    handleCloseAllFileHistories,
     handleCloseTaskConversation,
-    handleContinueLatestConversation,
-    handleDeleteWorkspaceConversations,
     handleDeleteWorkspaceConversationsInSettings,
     handleDragToInProgress,
     handleEnsureWorkspaceThreadsForSettings,
@@ -166,26 +177,20 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     handleKanbanCreateTask,
     handleMoveWorkspace,
     handleOpenMailSession,
-    handleOpenSpecHub,
     handleOpenTaskConversation,
-    handleRetryTaskRun,
-    handleResumeTaskRun,
-    handleCancelTaskRun,
-    handleForkTaskRun,
     handleRenamePromptCancel,
     handleRenamePromptChange,
     handleRenamePromptConfirm,
-    handleRevealActiveWorkspace,
     handleOpenSearchPalette,
+    handleOpenQuickSwitcher,
+    handleQuickSwitcherNavigate,
+    handleQuickSwitcherSelectFile,
+    handleQuickSwitcherSelectSession,
     handleSearchPaletteMoveSelection,
     handleSelectDiffForPanel,
     handleSelectSearchResult,
-    handleSelectWorkspaceInstance,
     handleSelectWorkspacePathForGitHistory,
     handleSelectRepositoryForGitHistory,
-    handleStartGuidedConversation,
-    handleStartSharedConversation,
-    handleStartWorkspaceConversation,
     handleTestNotificationSound,
     handleToggleSearchContentFilter,
     handleToggleTerminalPanel,
@@ -193,15 +198,13 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     hasActivePlan,
     homeNode,
     globalRuntimeNoticeDockNode,
-    installedEngines,
     isCompact,
     isEditorFileMaximized,
     isMacDesktop,
     isPanelLocked,
-    isPhone,
     isSearchPaletteOpen,
+    isQuickSwitcherOpen,
     isSoloMode,
-    isTablet,
     kanbanConversationWidth,
     kanbanCreatePanel,
     kanbanDeletePanel,
@@ -227,7 +230,9 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     planPanelHeight,
     planPanelNode,
     queueSaveSettings,
-    recentThreads,
+    quickSwitcherSessionGroups,
+    quickSwitcherRunningSessions,
+    quickSwitcherActiveNavigationIds,
     reduceTransparency,
     windowTransparencyEnabled,
     windowOpacity,
@@ -273,10 +278,12 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     shouldMountSpecHub,
     showGitDetail,
     showGitHistory,
+    showExtensions,
     showHome,
     showKanban,
     showNextReleaseNotes,
     showPreviousReleaseNotes,
+    startUpdate,
     showSpecHub,
     showWorkspaceHome,
     sidebarCollapsed,
@@ -296,6 +303,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     ungroupedLabel,
     updateCloneCopyName,
     updateToastNode,
+    updaterState,
     updateWorkspaceCodexBin,
     updateWorkspaceSettings,
     updateWorktreeBaseRef,
@@ -322,29 +330,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     </Suspense>
   ) : null;
 
-  const workspaceHomeNode =
-    showWorkspaceHome && activeWorkspace ? (
-      <Suspense fallback={null}>
-        <WorkspaceHome
-          workspace={activeWorkspace}
-          engines={installedEngines}
-          currentBranch={gitStatus.branchName || null}
-          recentThreads={recentThreads}
-          onSelectConversation={handleSelectWorkspaceInstance}
-          onStartConversation={handleStartWorkspaceConversation}
-          onStartSharedConversation={handleStartSharedConversation}
-          onContinueLatestConversation={handleContinueLatestConversation}
-          onStartGuidedConversation={handleStartGuidedConversation}
-          onOpenSpecHub={handleOpenSpecHub}
-          onRevealWorkspace={handleRevealActiveWorkspace}
-          onDeleteConversations={handleDeleteWorkspaceConversations}
-          onRetryTaskRun={handleRetryTaskRun}
-          onResumeTaskRun={handleResumeTaskRun}
-          onCancelTaskRun={handleCancelTaskRun}
-          onForkTaskRun={handleForkTaskRun}
-        />
-      </Suspense>
-    ) : null;
+  const workspaceHomeNode = showWorkspaceHome ? homeNode : null;
 
   const workspacePrimaryNode = showWorkspaceHome
     ? workspaceHomeNode
@@ -387,6 +373,12 @@ export function renderAppShell(ctx: RenderAppShellContext) {
         onSelectWorkspacePath={handleSelectWorkspacePathForGitHistory}
         onOpenDiffPath={handleSelectDiffForPanel}
         onRequestClose={handleCloseGitHistoryPanel}
+        fileHistoryTabs={fileHistoryTabs}
+        activeTabId={activeGitHistoryTabId}
+        onActivateTab={handleActivateGitHistoryTab}
+        onCloseFileHistoryTab={handleCloseFileHistory}
+        onCloseOtherFileHistoryTabs={handleCloseOtherFileHistories}
+        onCloseAllFileHistoryTabs={handleCloseAllFileHistories}
         {...codeAnnotationBridgeProps}
       />
     </Suspense>
@@ -426,13 +418,19 @@ export function renderAppShell(ctx: RenderAppShellContext) {
       data-tauri-drag-region="false"
     >
       {isMacDesktop ? (
-        <GlobalSearchTitlebarButton
-          onOpen={handleOpenSearchPalette}
-          shortcutLabel={formatShortcutForPlatform(
-            appSettings.toggleGlobalSearchShortcut,
-            true,
-          )}
-        />
+        <>
+          <GlobalSearchTitlebarButton
+            onOpen={handleOpenSearchPalette}
+            shortcutLabel={formatShortcutForPlatform(
+              appSettings.toggleGlobalSearchShortcut,
+              true,
+            )}
+          />
+          <QuickSwitcherTitlebarButton
+            onOpen={handleOpenQuickSwitcher}
+            shortcutLabel="⌘E"
+          />
+        </>
       ) : null}
       <SidebarCollapseButton {...sidebarToggleProps} />
     </div>
@@ -519,10 +517,9 @@ export function renderAppShell(ctx: RenderAppShellContext) {
         </Suspense>
       ) : null}
       <AppLayout
-        isPhone={isPhone}
-        isTablet={isTablet}
         showHome={showHome}
         showKanban={showKanban}
+        showExtensions={showExtensions}
         showGitHistory={showGitHistory}
         hideRightPanel={activeTab === "spec" && rightPanelCollapsed}
         isSoloMode={isSoloMode}
@@ -563,6 +560,13 @@ export function renderAppShell(ctx: RenderAppShellContext) {
             </Suspense>
           ) : null
         }
+        extensionsNode={
+          showExtensions ? (
+            <Suspense fallback={null}>
+              <ExtensionsView activeWorkspace={activeWorkspace} />
+            </Suspense>
+          ) : null
+        }
         gitHistoryNode={gitHistoryNode}
         showGitDetail={showGitDetail}
         activeTab={activeTab}
@@ -575,7 +579,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
         activeWorkspace={Boolean(activeWorkspace)}
         sidebarNode={sidebarNodeWithTopbar}
         messagesNode={mainMessagesNode}
-        composerNode={composerNode}
+        composerNode={showWorkspaceHome ? null : composerNode}
         approvalToastsNode={approvalToastsNode}
         updateToastNode={updateToastNode}
         errorToastsNode={errorToastsNode}
@@ -637,6 +641,8 @@ export function renderAppShell(ctx: RenderAppShellContext) {
                 onRunCodexDoctor={doctor}
                 onRunClaudeDoctor={claudeDoctor}
                 onRunKimiDoctor={kimiDoctor}
+                onRunGrokDoctor={grokDoctor}
+                onRunOpenCodeDoctor={opencodeDoctor}
                 activeWorkspace={activeWorkspace}
                 activeThreadId={activeThreadId}
                 activeEngine={activeEngine}
@@ -713,6 +719,23 @@ export function renderAppShell(ctx: RenderAppShellContext) {
           />
         </Suspense>
       ) : null}
+      {isQuickSwitcherOpen ? (
+        <Suspense fallback={null}>
+          <QuickSwitcher
+            activeWorkspaceId={activeWorkspace?.id ?? null}
+            activeThreadId={activeThreadId}
+            activeFilePath={activeEditorFilePath}
+            workspaces={workspaces}
+            sessionGroups={quickSwitcherSessionGroups}
+            runningSessions={quickSwitcherRunningSessions}
+            activeNavigationIds={quickSwitcherActiveNavigationIds}
+            onNavigate={handleQuickSwitcherNavigate}
+            onSelectSession={handleQuickSwitcherSelectSession}
+            onSelectFile={handleQuickSwitcherSelectFile}
+            onClose={closeQuickSwitcher}
+          />
+        </Suspense>
+      ) : null}
       {releaseNotesOpen ? (
         <Suspense fallback={null}>
           <ReleaseNotesModal
@@ -721,10 +744,13 @@ export function renderAppShell(ctx: RenderAppShellContext) {
             activeIndex={releaseNotesActiveIndex}
             loading={releaseNotesLoading}
             error={releaseNotesError}
+            updaterState={updaterState}
             onClose={closeReleaseNotes}
             onPrev={showPreviousReleaseNotes}
             onNext={showNextReleaseNotes}
             onRetry={retryReleaseNotesLoad}
+            onCheckForUpdates={checkForUpdates}
+            onStartUpdate={startUpdate}
           />
         </Suspense>
       ) : null}
@@ -753,6 +779,8 @@ export function renderAppShell(ctx: RenderAppShellContext) {
         onClonePromptCancel={cancelClonePrompt}
         onClonePromptConfirm={confirmClonePrompt}
       />
+      {/* 当前页弹「添加模型」管理弹窗,不跳设置 */}
+      <VendorModelManagerDialogHost />
     </div>
   );
 }

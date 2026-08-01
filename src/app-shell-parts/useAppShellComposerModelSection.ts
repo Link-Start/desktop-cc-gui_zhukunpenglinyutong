@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ModelOption } from "../types";
 import { useCollaborationModeSelection } from "../features/collaboration/hooks/useCollaborationModeSelection";
 import { useComposerMenuActions } from "../features/composer/hooks/useComposerMenuActions";
 import { useComposerShortcuts } from "../features/composer/hooks/useComposerShortcuts";
 import { usePersistComposerSettings } from "../features/app/hooks/usePersistComposerSettings";
 import {
+  enrichScopedCodexReasoningMetadata,
   getEffectiveModels,
   getEffectiveReasoningOptions,
   getEffectiveReasoningSupported,
@@ -18,6 +20,7 @@ export function useAppShellComposerModelSection({
   accessMode,
   activeEngine,
   activeThreadId,
+  activeProviderProfileId,
   activeWorkspaceId,
   appSettings,
   appSettingsLoading,
@@ -47,15 +50,28 @@ export function useAppShellComposerModelSection({
   const [engineSelectedModelIdByType, setEngineSelectedModelIdByType] =
     useState<Record<string, string | null>>({});
   const activeEngineSelectedModelId = engineSelectedModelIdByType[activeEngine] ?? null;
-  const effectiveModels = useMemo(() => {
+  const effectiveModels = useMemo<ModelOption[]>(() => {
+    if (
+      activeEngine === "codex" &&
+      activeThreadId !== null &&
+      activeProviderProfileId?.trim()
+    ) {
+      return enrichScopedCodexReasoningMetadata(engineModelsAsOptions, models);
+    }
     return getEffectiveModels(activeEngine, models, engineModelsAsOptions);
-  }, [activeEngine, models, engineModelsAsOptions]);
+  }, [
+    activeEngine,
+    activeProviderProfileId,
+    activeThreadId,
+    models,
+    engineModelsAsOptions,
+  ]);
   const providerModelCatalogs = useMemo(
     () => ({
       ...(engineModelCatalogsAsOptions ?? {}),
-      codex: models,
+      codex: activeEngine === "codex" ? effectiveModels : models,
     }),
-    [engineModelCatalogsAsOptions, models],
+    [activeEngine, effectiveModels, engineModelCatalogsAsOptions, models],
   );
 
   useEffect(() => {
@@ -83,13 +99,17 @@ export function useAppShellComposerModelSection({
       selectedModelId,
       activeThreadSelectedModelId: selectedComposerSelection?.modelId ?? null,
       hasActiveThread: hasActiveComposerThread,
-      codexModels: models,
+      allowUnknownActiveThreadModel:
+        (activeEngine === "codex" || activeEngine === "claude") &&
+        Boolean(activeProviderProfileId?.trim()),
+      codexModels: effectiveModels,
       engineModelsAsOptions,
       engineSelectedModelIdByType,
     });
   }, [
     activeEngine,
-    models,
+    activeProviderProfileId,
+    effectiveModels,
     engineModelsAsOptions,
     engineSelectedModelIdByType,
     hasActiveComposerThread,

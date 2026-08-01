@@ -380,14 +380,23 @@ describe("useThreadEventHandlers diagnostics", () => {
       result.current.onTurnCompleted("ws-1", "thread-1", "turn-1");
     });
 
-    expect(subscriber).toHaveBeenCalledTimes(1);
-    expect(subscriber).toHaveBeenCalledWith(
+    expect(subscriber).toHaveBeenCalledTimes(2);
+    expect(subscriber).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({
         type: "turn.completed",
         workspaceId: "ws-1",
         sessionId: "thread-1",
         turnId: "turn-1",
         durationMs: 125,
+      }),
+    );
+    expect(subscriber).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        type: "run.settled",
+        runId: "turn-1",
+        status: "completed",
       }),
     );
   });
@@ -409,14 +418,23 @@ describe("useThreadEventHandlers diagnostics", () => {
       });
     });
 
-    expect(subscriber).toHaveBeenCalledTimes(1);
-    expect(subscriber).toHaveBeenCalledWith(
+    expect(subscriber).toHaveBeenCalledTimes(2);
+    expect(subscriber).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({
         type: "turn.failed",
         workspaceId: "ws-1",
         sessionId: "thread-1",
         turnId: "turn-1",
         errorMessage: "boom",
+      }),
+    );
+    expect(subscriber).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        type: "run.settled",
+        runId: "turn-1",
+        status: "failed",
       }),
     );
   });
@@ -2209,6 +2227,45 @@ describe("useThreadEventHandlers diagnostics", () => {
     ).toBeLessThan(options.markProcessing.mock.invocationCallOrder[0]);
   });
 
+  it("registers a durable terminal barrier that flushes before quarantining the exact runtime turn", () => {
+    const cleanupRegistration = vi.fn();
+    const onDurableRealtimeTurnSettlementReady = vi.fn<
+      (
+        settle: (threadId: string, runtimeTurnId: string) => void,
+      ) => () => void
+    >(() => cleanupRegistration);
+    const options = {
+      ...makeOptions(),
+      onDurableRealtimeTurnSettlementReady,
+    };
+    const { unmount } = renderHook(() => useThreadEventHandlers(options));
+
+    expect(onDurableRealtimeTurnSettlementReady).toHaveBeenCalledTimes(1);
+    const settleDurableRealtimeTurn =
+      onDurableRealtimeTurnSettlementReady.mock.calls[0]?.[0];
+    expect(settleDurableRealtimeTurn).toEqual(expect.any(Function));
+
+    act(() => {
+      settleDurableRealtimeTurn?.("shared:thread-1", "runtime-turn-1");
+    });
+
+    const flushPendingRealtimeEvents =
+      itemHookFactory.getFlushPendingRealtimeEvents();
+    const markRealtimeTurnTerminal =
+      itemHookFactory.getMarkRealtimeTurnTerminal();
+    expect(flushPendingRealtimeEvents).toHaveBeenCalledTimes(1);
+    expect(markRealtimeTurnTerminal).toHaveBeenCalledWith(
+      "shared:thread-1",
+      "runtime-turn-1",
+    );
+    expect(
+      flushPendingRealtimeEvents.mock.invocationCallOrder[0],
+    ).toBeLessThan(markRealtimeTurnTerminal.mock.invocationCallOrder[0]);
+
+    unmount();
+    expect(cleanupRegistration).toHaveBeenCalledTimes(1);
+  });
+
   it("flushes pending realtime batches before terminal error and stalled settlement", () => {
     const options = makeOptions();
     const { result } = renderHook(() => useThreadEventHandlers(options));
@@ -2256,6 +2313,25 @@ describe("useThreadEventHandlers diagnostics", () => {
     expect(
       itemHookFactory.getNoteRealtimeTurnStarted().mock.invocationCallOrder[0],
     ).toBeLessThan(options.markProcessing.mock.invocationCallOrder[0]);
+  });
+
+  it("observes a Shared runtime turn identity without restarting Native processing", () => {
+    const options = makeOptions();
+    const { result } = renderHook(() => useThreadEventHandlers(options));
+
+    act(() => {
+      result.current.onSharedRuntimeTurnStarted(
+        "shared:thread-1",
+        "runtime-turn-2",
+      );
+    });
+
+    expect(itemHookFactory.getNoteRealtimeTurnStarted()).toHaveBeenCalledWith(
+      "shared:thread-1",
+      "runtime-turn-2",
+    );
+    expect(options.markProcessing).not.toHaveBeenCalled();
+    expect(options.setActiveTurnId).not.toHaveBeenCalled();
   });
 
   it("skips late raw item updates when the realtime turn is already terminal", () => {

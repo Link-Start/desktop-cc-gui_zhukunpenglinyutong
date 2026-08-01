@@ -69,15 +69,26 @@ describe("AppShell lazy feature boundaries", () => {
     const shellSectionSource = readSource(join(currentDir, "useAppShellLayoutNodesSection.tsx"));
 
     expect(layoutNodesSource).toContain(
-      "const shouldMountProjectMapPanel =",
-    );
-    expect(layoutNodesSource).toContain(
-      "const projectMapPanelNode = shouldMountProjectMapPanel ?",
+      "const projectMapPanelNode = isProjectMapSurfaceActive ?",
     );
     expect(layoutNodesSource).toContain(
       "const intentCanvasPanelNode = isIntentCanvasSurfaceActive ?",
     );
     expect(shellSectionSource).toContain("enabled: isProjectMapDatasetEnabled");
+  });
+
+  it("reuses the global home composer for workspace-scoped home", () => {
+    const renderSource = readSource(join(currentDir, "renderAppShell.tsx"));
+    const sectionsSource = readSource(join(currentDir, "useAppShellSections.ts"));
+
+    expect(renderSource).toContain(
+      "const workspaceHomeNode = showWorkspaceHome ? homeNode : null;",
+    );
+    expect(renderSource).toContain(
+      "composerNode={showWorkspaceHome ? null : composerNode}",
+    );
+    expect(sectionsSource).toContain("showWorkspaceHome ||");
+    expect(renderSource).not.toContain("<WorkspaceHome");
   });
 
   it("keeps sidebar props on a shell summary instead of the full realtime item stream", () => {

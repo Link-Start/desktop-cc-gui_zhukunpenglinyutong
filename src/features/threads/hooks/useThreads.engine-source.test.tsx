@@ -17,7 +17,6 @@ import {
 import type { useAppServerEvents } from "../../app/hooks/useAppServerEvents";
 import {
   listSharedSessions,
-  setSharedSessionSelectedEngine,
   startSharedSession,
   syncSharedSessionSnapshot,
 } from "../../shared-session/services/sharedSessions";
@@ -90,6 +89,7 @@ vi.mock("../../../services/tauri", () => ({
   listClaudeSessions: vi.fn(),
   listGeminiSessions: vi.fn(),
   listKimiSessions: vi.fn(),
+  listGrokSessions: vi.fn(),
   getOpenCodeSessionList: vi.fn(),
   listWorkspaceSessions: vi.fn(),
   noteWebServiceReconnected: vi.fn(async () => ({
@@ -132,7 +132,6 @@ vi.mock("../../shared-session/services/sharedSessions", () => ({
   sendSharedSessionMessage: vi.fn(),
   listSharedSessions: vi.fn(async () => []),
   loadSharedSession: vi.fn(async () => null),
-  setSharedSessionSelectedEngine: vi.fn(async () => ({})),
   updateSharedSessionNativeBinding: vi.fn(async () => ({})),
   syncSharedSessionSnapshot: vi.fn(async () => ({})),
   deleteSharedSession: vi.fn(async () => ({})),
@@ -190,7 +189,6 @@ describe("useThreads engine source", () => {
         },
       },
     });
-    vi.mocked(setSharedSessionSelectedEngine).mockResolvedValue({});
   });
 
   it("keeps thread engine source when selecting an unloaded thread", async () => {
@@ -297,42 +295,6 @@ describe("useThreads engine source", () => {
     } finally {
       vi.useRealTimers();
     }
-  });
-
-  it("persists shared session engine selection through shared command", async () => {
-    const { result } = renderHook(() =>
-      useThreads({
-        activeWorkspace: workspace,
-        activeEngine: "claude",
-        onWorkspaceConnected: vi.fn(),
-      }),
-    );
-
-    let sharedThreadId: string | null = null;
-    await act(async () => {
-      sharedThreadId = await result.current.startSharedSessionForWorkspace("ws-1", {
-        activate: true,
-        initialEngine: "claude",
-      });
-    });
-
-    expect(sharedThreadId).toBe("shared:session-1");
-
-    act(() => {
-      result.current.updateSharedSessionEngineSelection(
-        "ws-1",
-        sharedThreadId!,
-        "codex",
-      );
-    });
-
-    await waitFor(() => {
-      expect(vi.mocked(setSharedSessionSelectedEngine)).toHaveBeenCalledWith(
-        "ws-1",
-        "shared:session-1",
-        "codex",
-      );
-    });
   });
 
   it("does not sync shared snapshot for unloaded historical shared sessions", async () => {

@@ -3,9 +3,8 @@ import { useTranslation } from "react-i18next";
 import type { TaskRunRecord, TaskRunStatus } from "../types";
 import {
   OPEN_TASK_RUN_EVENT,
-  dispatchOpenOrchestrationTaskEvent,
   readOpenTaskRunEvent,
-} from "../../agent-orchestration/utils/navigationEvents";
+} from "../utils/taskRunNavigationEvents";
 import {
   compareTaskRunSurfacePriority,
   describeTaskRunSurface,
@@ -20,7 +19,6 @@ type TaskCenterViewProps = {
   onResumeRun?: (run: TaskRunRecord) => void;
   onCancelRun?: (run: TaskRunRecord) => void;
   onForkRun?: (run: TaskRunRecord) => void;
-  onOpenOrchestrationTask?: (taskId: string) => void;
 };
 
 const STATUS_ORDER: TaskRunStatus[] = [
@@ -42,7 +40,6 @@ export function TaskCenterView({
   onResumeRun,
   onCancelRun,
   onForkRun,
-  onOpenOrchestrationTask,
 }: TaskCenterViewProps) {
   const { t } = useTranslation();
   const [statusFilter, setStatusFilter] = useState<TaskRunStatus | "all">("all");
@@ -79,13 +76,6 @@ export function TaskCenterView({
     };
   }, [workspaceRuns]);
   const highlightedRuns = filteredRuns.filter((run) => describeTaskRunSurface(run).needsAttention).length;
-  const handleOpenOrchestrationRunTask = (taskId: string) => {
-    if (onOpenOrchestrationTask) {
-      onOpenOrchestrationTask(taskId);
-      return;
-    }
-    dispatchOpenOrchestrationTaskEvent(taskId);
-  };
 
   return (
     <section className="task-center" aria-label={t("taskCenter.title")}>
@@ -184,7 +174,6 @@ export function TaskCenterView({
             onResumeRun={onResumeRun}
             onCancelRun={onCancelRun}
             onForkRun={onForkRun}
-            onOpenOrchestrationTask={handleOpenOrchestrationRunTask}
           />
         ) : null}
       </div>

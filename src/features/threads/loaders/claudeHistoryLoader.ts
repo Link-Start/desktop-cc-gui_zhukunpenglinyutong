@@ -16,7 +16,7 @@ import {
   areEquivalentReasoningTexts,
   compactComparableConversationText,
 } from "../assembly/conversationNormalization";
-import { computeDiff } from "../../messages/utils/diffUtils";
+import { computeDiff } from "../../../utils/diff";
 import { findLiveAssistantShadowTranscriptForRestore } from "../utils/liveAssistantShadowTranscript";
 import { noteThreadRecoverySourceObserved } from "../utils/streamLatencyDiagnostics";
 import { asString } from "./historyLoaderUtils";

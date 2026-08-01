@@ -1,21 +1,375 @@
 /** @vitest-environment jsdom */
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createElement, createRef } from "react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { javascript } from "@codemirror/lang-javascript";
+import type { FileCodeMirrorEditorHandle } from "./FileCodeMirrorEditor";
 import {
+  FileCodeMirrorEditorImpl,
   fileGitBlameGutterExtension,
-  focusEditorViewAtLocation,
   isFileGitBlameContextMenuTarget,
+  resolveModifierNavigationSymbolRange,
   resolveFileCompareLineGapHeight,
   setGitBlameGutterEffect,
 } from "./FileCodeMirrorEditorImpl";
+import {
+  focusEditorViewAtLocation,
+  parseFileEditorLocation,
+} from "../utils/fileEditorLocation";
+import { toCodeMirrorShortcut } from "./fileViewPanelShared";
 
 let editorView: EditorView | null = null;
 
+if (!Range.prototype.getClientRects) {
+  Object.defineProperty(Range.prototype, "getClientRects", {
+    value: () => [],
+    configurable: true,
+  });
+}
+
 afterEach(() => {
+  vi.restoreAllMocks();
+  cleanup();
   editorView?.destroy();
   editorView = null;
   document.body.replaceChildren();
+});
+
+const gotoLineLabels = {
+  title: "Go to Line and Column",
+  inputLabel: "Line:Column",
+  placeholder: "For example, 2744:56",
+  cancel: "Cancel",
+  confirm: "Go",
+  invalid: "Enter a valid line number or line:column.",
+};
+
+function renderGotoLineEditor() {
+  const editorRef = createRef<FileCodeMirrorEditorHandle>();
+  const { container } = render(
+    createElement(FileCodeMirrorEditorImpl, {
+      ref: editorRef,
+      filePath: "src/example.ts",
+      value: "first\nsecond\nthird",
+      onChange: vi.fn(),
+      theme: "light",
+      languageExtensions: [],
+      gitLineMarkers: { added: [], modified: [] },
+      codeAnnotations: [],
+      annotationDraft: null,
+      annotationWidgetLabels: {
+        title: "Annotation",
+        remove: "Remove",
+        placeholder: "Note",
+        cancel: "Cancel",
+        submit: "Submit",
+      },
+      annotationWidgetCallbacks: {
+        onDraftCancel: vi.fn(),
+        onDraftConfirm: vi.fn(),
+      },
+      runDefinitionFromCursor: vi.fn(),
+      runReferencesFromCursor: vi.fn(),
+      resolveDefinitionAtOffset: vi.fn(),
+      lastReportedLineRangeRef: { current: "" },
+      saveFileShortcut: null,
+      expandSelectionShortcut: null,
+      handleSave: vi.fn(),
+      gotoLineLabels,
+    }),
+  );
+  const editorContent = container.querySelector<HTMLElement>(".cm-content");
+  expect(editorRef.current?.view).toBeDefined();
+  expect(editorContent).not.toBeNull();
+  return { editorRef, editorContent: editorContent! };
+}
+
+function openGotoLineDialog(editorContent: HTMLElement) {
+  fireEvent.keyDown(editorContent, { key: "g", code: "KeyG", metaKey: true });
+  if (!screen.queryByRole("dialog")) {
+    fireEvent.keyDown(editorContent, { key: "g", code: "KeyG", ctrlKey: true });
+  }
+  return screen.getByRole("textbox", {
+    name: gotoLineLabels.inputLabel,
+  }) as HTMLInputElement;
+}
+
+function renderExpandSelectionEditor(
+  expandSelectionShortcut: string | null,
+  resolveDefinitionAtOffset = vi.fn(),
+  runImplementationsFromCursor = vi.fn(),
+  runDefinitionFromCursor = vi.fn(),
+  runReferencesFromCursor = vi.fn(),
+  saveFileShortcut: string | null = null,
+  handleSave = vi.fn(),
+) {
+  const editorRef = createRef<FileCodeMirrorEditorHandle>();
+  const { container } = render(
+    createElement(FileCodeMirrorEditorImpl, {
+      ref: editorRef,
+      filePath: "src/example.ts",
+      value: "function hello() { return 1; }",
+      onChange: vi.fn(),
+      theme: "light",
+      languageExtensions: [javascript({ typescript: true })],
+      gitLineMarkers: { added: [], modified: [] },
+      codeAnnotations: [],
+      annotationDraft: null,
+      annotationWidgetLabels: {
+        title: "Annotation",
+        remove: "Remove",
+        placeholder: "Note",
+        cancel: "Cancel",
+        submit: "Submit",
+      },
+      annotationWidgetCallbacks: {
+        onDraftCancel: vi.fn(),
+        onDraftConfirm: vi.fn(),
+      },
+      runDefinitionFromCursor,
+      runImplementationsFromCursor,
+      runReferencesFromCursor,
+      resolveDefinitionAtOffset,
+      lastReportedLineRangeRef: { current: "" },
+      saveFileShortcut,
+      expandSelectionShortcut,
+      handleSave,
+      gotoLineLabels,
+    }),
+  );
+  const editorContent = container.querySelector<HTMLElement>(".cm-content");
+  const view = editorRef.current?.view;
+  expect(view).toBeDefined();
+  expect(editorContent).not.toBeNull();
+  view!.dispatch({ selection: { anchor: 11 } });
+  return { editorContent: editorContent!, editorRef, view: view! };
+}
+
+describe("file editor expand selection shortcut", () => {
+  it("exposes the same syntax expansion through the editor handle", () => {
+    const { editorRef, view } = renderExpandSelectionEditor("cmd+w");
+    const focusSpy = vi.spyOn(view, "focus");
+
+    expect(editorRef.current?.expandSelection()).toBe(true);
+    expect(view.state.selection.main.from).toBeLessThan(view.state.selection.main.to);
+    expect(focusSpy).toHaveBeenCalledOnce();
+  });
+
+  it("expands the syntax selection with platform-primary W", () => {
+    const { editorContent, view } = renderExpandSelectionEditor("cmd+w");
+    const observedDefaultPrevention: boolean[] = [];
+    const observeWindowEvent = (event: KeyboardEvent) => {
+      observedDefaultPrevention.push(event.defaultPrevented);
+    };
+    window.addEventListener("keydown", observeWindowEvent);
+
+    fireEvent.keyDown(editorContent, { key: "w", code: "KeyW", ctrlKey: true });
+
+    expect(view.state.selection.main.from).toBeLessThan(view.state.selection.main.to);
+    expect(observedDefaultPrevention).toEqual([true]);
+    window.removeEventListener("keydown", observeWindowEvent);
+  });
+
+  it("does not bind platform-primary W after the setting is cleared", () => {
+    const { editorContent, view } = renderExpandSelectionEditor(null);
+
+    fireEvent.keyDown(editorContent, { key: "w", code: "KeyW", ctrlKey: true });
+
+    expect(view.state.selection.main.empty).toBe(true);
+  });
+
+  it("maps the persisted cmd shortcut to CodeMirror's platform-primary modifier", () => {
+    expect(toCodeMirrorShortcut("cmd+w")).toBe("Mod-w");
+    expect(toCodeMirrorShortcut("ctrl+w")).toBe("Ctrl-w");
+    for (let functionKey = 1; functionKey <= 12; functionKey += 1) {
+      expect(toCodeMirrorShortcut(`alt+f${functionKey}`)).toBe(
+        `Alt-F${functionKey}`,
+      );
+    }
+  });
+
+  it("keeps the previous Ctrl+W default usable during transition", () => {
+    const { editorContent, view } = renderExpandSelectionEditor("ctrl+w");
+
+    fireEvent.keyDown(editorContent, { key: "w", code: "KeyW", ctrlKey: true });
+
+    expect(view.state.selection.main.empty).toBe(false);
+  });
+
+  it("runs Definition, Implementations, and References from real keydown events", () => {
+    const runDefinitionFromCursor = vi.fn();
+    const runImplementationsFromCursor = vi.fn();
+    const runReferencesFromCursor = vi.fn();
+    const { editorContent } = renderExpandSelectionEditor(
+      "cmd+w",
+      vi.fn(),
+      runImplementationsFromCursor,
+      runDefinitionFromCursor,
+      runReferencesFromCursor,
+    );
+
+    fireEvent.keyDown(editorContent, {
+      key: "b",
+      code: "KeyB",
+      ctrlKey: true,
+    });
+    fireEvent.keyDown(editorContent, {
+      key: "b",
+      code: "KeyB",
+      ctrlKey: true,
+      altKey: true,
+    });
+    fireEvent.keyDown(editorContent, {
+      key: "F7",
+      code: "F7",
+      altKey: true,
+    });
+
+    expect(runDefinitionFromCursor).toHaveBeenCalledOnce();
+    expect(runImplementationsFromCursor).toHaveBeenCalledOnce();
+    expect(runReferencesFromCursor).toHaveBeenCalledOnce();
+  });
+
+  it("runs configured Save while leaving Cut, Copy, and Paste to CodeMirror/native behavior", () => {
+    const handleSave = vi.fn();
+    const { editorContent } = renderExpandSelectionEditor(
+      "cmd+w",
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      "cmd+s",
+      handleSave,
+    );
+
+    fireEvent.keyDown(editorContent, {
+      key: "s",
+      code: "KeyS",
+      ctrlKey: true,
+    });
+
+    expect(handleSave).toHaveBeenCalledOnce();
+    for (const key of ["x", "c", "v"] as const) {
+      expect(
+        fireEvent.keyDown(editorContent, {
+          key,
+          code: `Key${key.toUpperCase()}`,
+          ctrlKey: true,
+        }),
+      ).toBe(true);
+    }
+    expect(handleSave).toHaveBeenCalledOnce();
+  });
+});
+
+describe("file editor modifier navigation affordance", () => {
+  it("recognizes identifiers but not keywords, strings, comments, or whitespace", () => {
+    const doc = 'function hello() { const value = "text"; // comment\n return value; }';
+    const state = EditorState.create({
+      doc,
+      extensions: [javascript()],
+    });
+
+    expect(resolveModifierNavigationSymbolRange(state, doc.indexOf("hello") + 1)).toEqual({
+      from: doc.indexOf("hello"),
+      to: doc.indexOf("hello") + "hello".length,
+    });
+    expect(resolveModifierNavigationSymbolRange(state, doc.indexOf("function") + 1)).toBeNull();
+    expect(resolveModifierNavigationSymbolRange(state, doc.indexOf("text") + 1)).toBeNull();
+    expect(resolveModifierNavigationSymbolRange(state, doc.indexOf("comment") + 1)).toBeNull();
+    expect(resolveModifierNavigationSymbolRange(state, doc.indexOf("{") + 1)).toBeNull();
+  });
+
+  it("underlines the hovered identifier while a modifier is held and clears on keyup", () => {
+    const resolveDefinitionAtOffset = vi.fn();
+    const { view } = renderExpandSelectionEditor("cmd+w", resolveDefinitionAtOffset);
+    vi.spyOn(view, "posAtCoords").mockReturnValue(10);
+
+    fireEvent.mouseMove(view.dom, { clientX: 10, clientY: 10, metaKey: true });
+
+    const link = view.dom.querySelector<HTMLElement>(".cm-code-navigation-link");
+    expect(link?.textContent).toBe("hello");
+    expect(resolveDefinitionAtOffset).not.toHaveBeenCalled();
+
+    fireEvent.keyUp(window, { key: "Meta" });
+    expect(view.dom.querySelector(".cm-code-navigation-link")).toBeNull();
+  });
+
+  it("clears modifier affordance on mouseleave and window blur", () => {
+    const { view } = renderExpandSelectionEditor("cmd+w");
+    vi.spyOn(view, "posAtCoords").mockReturnValue(10);
+
+    fireEvent.mouseMove(view.dom, { clientX: 10, clientY: 10, ctrlKey: true });
+    expect(view.dom.querySelector(".cm-code-navigation-link")).not.toBeNull();
+    fireEvent.mouseLeave(view.dom);
+    expect(view.dom.querySelector(".cm-code-navigation-link")).toBeNull();
+
+    fireEvent.mouseMove(view.dom, { clientX: 10, clientY: 10, ctrlKey: true });
+    window.dispatchEvent(new Event("blur"));
+    expect(view.dom.querySelector(".cm-code-navigation-link")).toBeNull();
+  });
+});
+
+describe("file editor line navigation", () => {
+  it("parses 1-based line and optional column values", () => {
+    expect(parseFileEditorLocation("2744")).toEqual({ line: 2744, column: 1 });
+    expect(parseFileEditorLocation(" 2744:56 ")).toEqual({ line: 2744, column: 56 });
+    expect(parseFileEditorLocation("0:1")).toBeNull();
+    expect(parseFileEditorLocation("1:0")).toBeNull();
+    expect(parseFileEditorLocation("line 1")).toBeNull();
+    expect(parseFileEditorLocation("999999999999999999999999")).toBeNull();
+  });
+
+  it("opens a modal with Mod+G and navigates from line:column input", () => {
+    const { editorRef, editorContent } = renderGotoLineEditor();
+    editorRef.current?.view?.focus();
+    const input = openGotoLineDialog(editorContent);
+    const dialog = screen.getByRole("dialog", { name: gotoLineLabels.title });
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(dialog.querySelector(".fvp-goto-line-title-icon")?.getAttribute("aria-hidden")).toBe(
+      "true",
+    );
+    expect(input.value).toBe("1:1");
+
+    fireEvent.change(input, { target: { value: "2:3" } });
+    fireEvent.click(screen.getByRole("button", { name: gotoLineLabels.confirm }));
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    const view = editorRef.current?.view;
+    expect(view).toBeDefined();
+    if (!view) {
+      throw new Error("Expected the editor view to be available after navigation.");
+    }
+    expect(view.state.selection.main.head).toBe(view.state.doc.line(2).from + 2);
+  });
+
+  it("keeps invalid input open and cancels without moving the cursor", () => {
+    const { editorRef, editorContent } = renderGotoLineEditor();
+    const input = openGotoLineDialog(editorContent);
+
+    fireEvent.change(input, { target: { value: "0:1" } });
+    fireEvent.click(screen.getByRole("button", { name: gotoLineLabels.confirm }));
+
+    expect(screen.getByRole("alert").textContent).toBe(gotoLineLabels.invalid);
+    expect(editorRef.current?.view?.state.selection.main.head).toBe(0);
+
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(editorRef.current?.view?.state.selection.main.head).toBe(0);
+  });
+
+  it("clamps out-of-range line and column values", () => {
+    const { editorRef, editorContent } = renderGotoLineEditor();
+    const input = openGotoLineDialog(editorContent);
+
+    fireEvent.change(input, { target: { value: "99:99" } });
+    fireEvent.click(screen.getByRole("button", { name: gotoLineLabels.confirm }));
+
+    const view = editorRef.current?.view;
+    expect(view?.state.selection.main.head).toBe(view?.state.doc.length);
+  });
 });
 
 describe("resolveFileCompareLineGapHeight", () => {

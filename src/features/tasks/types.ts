@@ -69,10 +69,9 @@ export type TaskRunRecoveryAction =
 
 export type TaskRunDefinitionRef = {
   taskId: string;
-  source: "kanban" | "orchestration";
+  source: "kanban";
   workspaceId: string;
   title?: string | null;
-  orchestrationTaskId?: string | null;
 };
 
 export type TaskRunRecord = {
@@ -123,7 +122,6 @@ export type CreateTaskRunInput = {
   workspaceId: string;
   taskTitle?: string | null;
   taskSource?: TaskRunDefinitionRef["source"];
-  orchestrationTaskId?: string | null;
   engine: EngineType;
   model?: string | null;
   trigger: TaskRunTrigger;

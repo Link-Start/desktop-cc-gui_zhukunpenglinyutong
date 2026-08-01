@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ThreadSummary } from "../../../types";
-import { resolveCodexProviderLabel } from "./codexProviderLabel";
+import {
+  resolveCodexProviderLabel,
+  resolveEngineProviderLabel,
+} from "./codexProviderLabel";
 
 const codexThread: ThreadSummary = {
   id: "codex:session-1",
@@ -27,7 +30,7 @@ describe("resolveCodexProviderLabel", () => {
     ).toBe("custom/openai");
   });
 
-  it("uses managed provider id as fallback but hides disk and empty bindings", () => {
+  it("uses managed provider id as fallback and labels disk config as local", () => {
     expect(
       resolveCodexProviderLabel({
         ...codexThread,
@@ -39,7 +42,7 @@ describe("resolveCodexProviderLabel", () => {
         ...codexThread,
         providerProfileId: "__disk__",
       }),
-    ).toBeNull();
+    ).toBe("local");
     expect(
       resolveCodexProviderLabel({
         ...codexThread,
@@ -50,12 +53,38 @@ describe("resolveCodexProviderLabel", () => {
     ).toBeNull();
   });
 
-  it("does not render labels for non-Codex threads", () => {
+  it.each(["claude", "kimi"] as const)(
+    "renders managed provider labels for %s threads",
+    (engineSource) => {
+      expect(
+        resolveEngineProviderLabel({
+          ...codexThread,
+          engineSource,
+          providerProfileId: "provider-a",
+          providerProfileName: "Provider A",
+        }),
+      ).toBe("Provider A");
+    },
+  );
+
+  it("labels Claude Code local settings as local", () => {
     expect(
-      resolveCodexProviderLabel({
+      resolveEngineProviderLabel({
         ...codexThread,
         engineSource: "claude",
-        sourceLabel: "custom/openai",
+        providerProfileId: "__local_settings_json__",
+        providerProfileName: "Local config",
+      }),
+    ).toBe("local");
+  });
+
+  it("keeps Kimi local/default labels hidden", () => {
+    expect(
+      resolveEngineProviderLabel({
+        ...codexThread,
+        engineSource: "kimi",
+        providerProfileId: "__local_config_toml__",
+        providerProfileName: "Local config",
       }),
     ).toBeNull();
   });

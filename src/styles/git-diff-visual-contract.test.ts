@@ -8,17 +8,26 @@ const diffCss = readFileSync(
 );
 
 function getCssRuleBlock(selector: string): string {
-  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = diffCss.match(new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`, "s"));
-  return match?.[1] ?? "";
+  for (const match of diffCss.matchAll(/([^{}]+)\{([^}]*)\}/gs)) {
+    const selectors = (match[1] ?? "")
+      .split(",")
+      .map((entry) => entry.trim());
+    if (selectors.includes(selector)) {
+      return match[2] ?? "";
+    }
+  }
+  return "";
 }
 
 describe("git diff visual contract", () => {
-  it("keeps the diff file list vertically scrollable without horizontal overflow", () => {
+  it("delegates vertical scrolling to the commit workspace without horizontal overflow", () => {
     const diffListRule = getCssRuleBlock(".diff-list");
+    const commitWorkspaceRule = getCssRuleBlock(".diff-commit-workspace-content");
 
     expect(diffListRule).toContain("overflow-x: hidden");
-    expect(diffListRule).toContain("overflow-y: auto");
+    expect(diffListRule).toContain("overflow-y: hidden");
+    expect(commitWorkspaceRule).toContain("overflow-x: hidden");
+    expect(commitWorkspaceRule).toContain("overflow-y: auto");
   });
 
   it("keeps the manual refresh action hidden until the section header is active", () => {

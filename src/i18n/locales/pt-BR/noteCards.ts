@@ -30,6 +30,7 @@ const noteCards = {
     "bodyPlaceholder": "Anote uma ideia, um trecho de comando ou contexto temporário aqui…",
     "captureMenu": "Salvar nas notas",
     "captureSelection": "Salvar o código selecionado nas notas…",
+    "captureWholeFile": "Salvar o arquivo inteiro nas notas…",
     "captureConversationSelection": "Salvar o texto selecionado nas notas…",
     "captureConversationThread": "Salvar a conversa semântica nas notas…",
     "captureConversationSelectionTitle": "Seleção da conversa",

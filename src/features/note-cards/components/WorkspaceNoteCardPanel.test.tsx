@@ -45,7 +45,7 @@ vi.mock("../../../components/common/LocalImage", () => ({
   LocalImage: () => null,
 }));
 
-vi.mock("../../messages/components/Markdown", () => ({
+vi.mock("../../../markdown/components/Markdown", () => ({
   Markdown: ({
     value,
     workspaceId,

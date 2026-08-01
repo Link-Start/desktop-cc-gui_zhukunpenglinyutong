@@ -97,7 +97,13 @@ const activityPanel = {
       "unreadMark": "Sin leer",
       "readMark": "Leído",
       "deleteHistoryEntry": "Eliminar {{name}}",
-      "deleteDateGroupEntries": "Eliminar las {{count}} entradas de {{date}}"
+      "deleteDateGroupEntries": "Eliminar las {{count}} entradas de {{date}}",
+      "confirmDeleteDateGroup": "¿Eliminar {{count}} entrada de {{date}}?",
+      "confirmDeleteDateGroup_other": "¿Eliminar las {{count}} entradas de {{date}}?",
+      "deleteFailedTitle": "Error al eliminar",
+      "deleteFailedBody": "No se pudo eliminar {{count}} entrada. Inténtelo de nuevo.",
+      "deleteFailedBody_other": "No se pudieron eliminar {{count}} entradas. Inténtelo de nuevo.",
+      "deleteFailedDismiss": "Cerrar"
     },
     "status": {
       "running": "en ejecución",

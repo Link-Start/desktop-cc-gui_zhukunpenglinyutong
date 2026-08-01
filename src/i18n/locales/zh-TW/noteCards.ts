@@ -30,6 +30,7 @@ const noteCards = {
     "bodyPlaceholder": "在此記下想法、指令片段或臨時脈絡…",
     "captureMenu": "儲存到筆記",
     "captureSelection": "將所選程式碼儲存到筆記…",
+    "captureWholeFile": "將整個檔案儲存到筆記…",
     "captureConversationSelection": "將所選文字儲存到筆記…",
     "captureConversationThread": "將語意對話正文儲存到筆記…",
     "captureConversationSelectionTitle": "對話選段",

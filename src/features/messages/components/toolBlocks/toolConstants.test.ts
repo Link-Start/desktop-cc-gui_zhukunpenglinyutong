@@ -1,6 +1,11 @@
 import i18n from "../../../../i18n";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { getToolDisplayName, isBashTool, resolveToolStatus } from "./toolConstants";
+import {
+  EDIT_TOOL_NAMES,
+  getToolDisplayName,
+  isBashTool,
+  resolveToolStatus,
+} from "./toolConstants";
 
 describe("resolveToolStatus", () => {
   beforeEach(async () => {
@@ -45,5 +50,9 @@ describe("resolveToolStatus", () => {
   it("treats exec_command and write_stdin as command tools", () => {
     expect(isBashTool("exec_command")).toBe(true);
     expect(isBashTool("write_stdin")).toBe(true);
+  });
+
+  it("preserves the edit tool name export surface", () => {
+    expect(EDIT_TOOL_NAMES.has("edit")).toBe(true);
   });
 });

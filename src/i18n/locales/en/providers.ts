@@ -1,6 +1,7 @@
 // providers — English UI strings
 const providers = {
   providers: {
+    localConfig: "Local config",
     claude: {
       label: "Claude Code",
     },
@@ -12,6 +13,9 @@ const providers = {
     },
     kimi: {
       label: "Kimi CLI",
+    },
+    grok: {
+      label: "Grok CLI",
     },
     opencode: {
       label: "OpenCode",

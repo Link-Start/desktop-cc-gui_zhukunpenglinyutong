@@ -213,3 +213,238 @@ The system SHALL keep open file tab identity and active file scoped to the curre
 - **THEN** 系统 SHALL continue carrying the selected paths as a drag batch
 - **AND** 新增文件对比动作 SHALL NOT alter drag payload semantics
 
+### Requirement: File tab context menu MUST target the invoked tab
+
+系统 SHALL 为文件 tab 提供目标感知的 context menu，并确保所有动作作用于触发右键的 tab，而不是隐式作用于当前 active tab。
+
+#### Scenario: background tab remains the action target
+- **GIVEN** file A is active and file B is also open
+- **WHEN** 用户在 file B 上打开 context menu 并选择 `关闭当前`
+- **THEN** 系统 MUST 关闭 file B
+- **AND** file A MUST 保持 active
+
+#### Scenario: open target tab in detached window
+- **GIVEN** 用户在任一已打开 file tab 上打开 context menu
+- **WHEN** 用户选择 `在新窗口打开标签`
+- **THEN** 系统 MUST 复用 detached file explorer 创建链路打开该目标 path
+- **AND** MUST NOT substitute the current active tab path
+
+### Requirement: File tab context menu MUST provide atomic close actions
+
+系统 SHALL 提供 `关闭当前`、`关闭其他` 与 `全部关闭`，并由拥有 tab state 的 controller 原子更新当前 workspace 或 detached session。
+
+#### Scenario: close other tabs keeps and activates the target
+- **GIVEN** 当前 session 打开 file A、file B 与 file C
+- **WHEN** 用户在 file B 的 context menu 选择 `关闭其他`
+- **THEN** open tabs MUST become exactly `[file B]`
+- **AND** file B MUST become active
+
+#### Scenario: close other is disabled for a single tab
+- **GIVEN** 当前 session 仅打开一个 file tab
+- **WHEN** 用户打开该 tab 的 context menu
+- **THEN** `关闭其他` MUST be disabled
+- **AND** selecting it MUST NOT mutate tab state
+
+#### Scenario: close all remains workspace scoped
+- **GIVEN** main window workspace A、workspace B 与 detached explorer 各有 open tabs
+- **WHEN** 用户在 workspace A 的 tab context menu 选择 `全部关闭`
+- **THEN** only workspace A tab state MUST be cleared
+- **AND** workspace B and detached explorer tab state MUST remain unchanged
+
+### Requirement: File tab context menu MUST expose read-only Git actions
+
+系统 SHALL 在 `Git 操作` submenu 中仅提供 `显示文件历史` 与 `Git Blame`，并根据目标文件的 Git scope 与 surface capability 控制可用状态。
+
+#### Scenario: file history uses target repository scope
+- **GIVEN** 目标 tab belongs to a resolved Git repository and file history callback is available
+- **WHEN** 用户选择 `显示文件历史`
+- **THEN** 系统 MUST pass the target workspace、repository root、repository-relative path and display path to the existing file history flow
+
+#### Scenario: Git Blame activates a background target first
+- **GIVEN** 用户在非 active text file tab 上打开 context menu
+- **WHEN** 用户选择 `Git Blame`
+- **THEN** 系统 MUST activate that target tab before enabling blame
+- **AND** blame MUST NOT load for the previously active file
+
+#### Scenario: unavailable Git action cannot execute
+- **GIVEN** 目标 file lacks a valid Git scope or the current surface cannot open file history
+- **WHEN** context menu renders
+- **THEN** the unavailable action MUST be disabled or omitted
+- **AND** no Git request MUST be issued for that action
+
+### Requirement: File tab context menu MUST follow shared visual and accessibility contracts
+
+菜单 SHALL 复用 shared renderer context menu 的 portal、viewport、dismiss 与 keyboard contract，并为可操作 menu item 提供左侧 icon。
+
+#### Scenario: menu remains inside viewport
+- **WHEN** 用户在 viewport 右侧或底部附近打开 file tab context menu
+- **THEN** menu position MUST be clamped inside the visible viewport
+
+#### Scenario: menu supports dismissal and focus feedback
+- **WHEN** menu is open and the user presses Escape、clicks outside、or the window loses focus
+- **THEN** menu MUST close
+- **AND** hover/focus state MUST use theme tokens in light and dark themes
+
+#### Scenario: actions expose decorative icons without changing labels
+- **WHEN** file tab context menu renders
+- **THEN** each actionable root item MUST render a left icon marked decorative
+- **AND** accessible menuitem names MUST continue to come from localized labels
+
+### Requirement: File content context menu MUST consolidate editor commands
+
+系统 SHALL 在文件内容区提供与 file tab context menu 同视觉契约的单一 context menu，并将 note capture、clipboard commands、read-only Git actions 与原 file toolbar commands 收敛到该入口。
+
+#### Scenario: edit surface exposes capture, clipboard and file commands
+- **GIVEN** active file is editable and rendered in edit mode
+- **WHEN** 用户在 CodeMirror 内容区打开 context menu
+- **THEN** exactly one renderer context menu MUST open
+- **AND** menu MUST include available note capture、`剪切`、`复制`、`粘贴`
+- **AND** menu MUST expose available Intent Canvas、definition、references、preview and save commands
+- **AND** `显示文件历史` 与 Git Blame MUST be grouped under `Git 操作`
+
+#### Scenario: preview surface keeps safe command boundaries
+- **GIVEN** active file is rendered in preview or read-only mode
+- **WHEN** 用户打开 file content context menu
+- **THEN** Copy MUST be available only when text is selected
+- **AND** Cut and Paste MUST be disabled
+- **AND** available note capture and read-only File History MAY remain available
+- **AND** unavailable editor-only commands MUST NOT execute
+
+#### Scenario: clipboard failure preserves editor content
+- **GIVEN** Clipboard API is unavailable or rejects access
+- **WHEN** 用户选择 Cut、Copy or Paste
+- **THEN** system MUST surface an explicit error
+- **AND** failed Cut MUST NOT delete the selected editor content
+
+#### Scenario: independent editable controls retain native menu
+- **GIVEN** file view contains an annotation input、textarea or non-CodeMirror contenteditable control
+- **WHEN** 用户在该 control 上打开 context menu
+- **THEN** system MUST NOT replace its native context menu with the file content menu
+
+### Requirement: File content note capture MUST prefer canonical selection and fall back to the complete file
+
+系统 SHALL 在同一 file content context menu 内生成 source-aware `NoteCaptureDraft`；canonical code selection 优先，无 selection 时使用当前完整文本文件，并继续由 note workbench 确认保存。
+
+#### Scenario: edit selection capture preserves current range
+- **GIVEN** CodeMirror has a non-empty canonical selection
+- **WHEN** 用户打开 file content context menu 并选择保存到便签
+- **THEN** draft MUST contain exactly the selected document text and source line range
+- **AND** no second note-only popover MUST render
+
+#### Scenario: edit without selection captures the current whole document
+- **GIVEN** CodeMirror has no non-empty selection and the loaded text document is not truncated or blank
+- **WHEN** 用户选择保存到便签
+- **THEN** draft MUST contain the current complete CodeMirror document from line 1 through its final line
+- **AND** unsaved editor changes MUST be included
+
+#### Scenario: preview selection and whole-source fallback remain source-aware
+- **GIVEN** a code preview has a logical line selection
+- **WHEN** 用户选择保存到便签
+- **THEN** draft MUST contain that frozen logical line range
+- **WHEN** the same preview has no logical line selection
+- **THEN** draft MUST contain the complete loaded source
+
+#### Scenario: incomplete or unsupported content is not captured as a whole file
+- **GIVEN** the file is truncated、blank or has no canonical text source
+- **WHEN** file content context menu renders without a valid selection draft
+- **THEN** system MUST NOT offer an action that labels partial or unavailable content as the complete file
+
+### Requirement: File content Git actions MUST use one repository-scoped submenu
+
+系统 SHALL 为 active file content menu 复用 `Git 操作` submenu，并 SHALL 以 owning repository scope 执行 `显示文件历史` 与 Git Blame。
+
+#### Scenario: nested repository history targets the active file
+- **GIVEN** active file belongs to a nested known Git repository and File History navigation is available
+- **WHEN** 用户选择 `Git 操作 -> 显示文件历史`
+- **THEN** callback MUST receive the owning repository root、repository-relative path and active display path
+
+#### Scenario: Git submenu exposes only available read-only actions
+- **WHEN** active file has no valid Git scope or a host capability is absent
+- **THEN** the corresponding Git leaf MUST be omitted or disabled
+- **AND** no Git mutation action MUST be introduced
+
+### Requirement: File view header MUST keep navigation and tabs on one row
+
+系统 SHALL 将 file back/leading action 放在 Tab 行最左侧，并 SHALL NOT render the legacy path/action toolbar below the Tab row。
+
+#### Scenario: main file view uses one header row
+- **WHEN** main window renders an active file with one or more tabs
+- **THEN** back action MUST appear before the tab list in the same row
+- **AND** the legacy `.fvp-topbar` MUST NOT be rendered
+
+#### Scenario: detached file view preserves leading action compatibility
+- **WHEN** detached file explorer renders its file header
+- **THEN** configured leading direction、label and callback MUST remain effective
+- **AND** file commands MUST remain available through the file content context menu instead of a persistent toolbar
+
+### Requirement: File content context menu MUST reuse shared menu behavior
+
+文件内容菜单 SHALL 复用 `RendererContextMenu` 的 portal、viewport clamp、dismiss、keyboard、icon 与 theme contract，不得复制平行 menu implementation。
+
+#### Scenario: content menu follows tab menu visual contract
+- **WHEN** file content context menu renders
+- **THEN** root menu and actionable items MUST use the same scoped radius、spacing and theme-token treatment as the file tab context menu
+- **AND** accessible menuitem names MUST come from localized labels
+
+#### Scenario: content menu remains inside viewport
+- **WHEN** 用户在 viewport 右侧或底部附近打开 file content context menu
+- **THEN** menu position MUST be clamped inside the visible viewport
+- **AND** Escape、outside click or window blur MUST close it
+
+### Requirement: File content context menu MUST reveal the active file in the workspace tree
+
+The file content context menu MUST provide a localized action that reveals the active file in the current workspace file tree without mutating editor or filesystem state.
+
+#### Scenario: Reveal a deeply nested active file
+
+- **GIVEN** the active file is nested below one or more collapsed directories
+- **WHEN** the user selects `定位到文件` from the file content context menu
+- **THEN** the system MUST switch the right panel to the Files surface when needed
+- **AND** MUST expand every ancestor directory of the active file
+- **AND** MUST make the active file the primary single selection
+- **AND** MUST scroll the target file row into the nearest visible tree position
+
+#### Scenario: Reveal through progressively loaded directories
+
+- **GIVEN** the active file has any filename or extension and one or more ancestor directories are not yet present in the current lazy tree snapshot
+- **WHEN** the user selects `定位到文件` once
+- **THEN** the system MUST progressively load and expand each available ancestor using the same reveal request
+- **AND** MUST reach, select, and scroll to the target without requiring another user action
+
+#### Scenario: Repeat reveal for the same active file
+
+- **GIVEN** the active file is already selected and visible in the file tree
+- **WHEN** the user selects `定位到文件` again
+- **THEN** the system MUST process a new reveal request
+- **AND** MUST scroll the target row again without changing open tabs or active editor state
+
+#### Scenario: Reveal does not mutate file or editor state
+
+- **WHEN** a file reveal action completes
+- **THEN** open tabs, active file, editor buffer, dirty state, and filesystem contents MUST remain unchanged
+- **AND** the action MUST NOT invoke the operating-system Finder or Explorer reveal flow
+
+### Requirement: File Content Context Menu MUST Expose Executable Shortcut Hints
+
+The file content context menu MUST display platform-aware shortcut hints for its actionable leaf commands, while submenu triggers and unavailable commands MUST NOT advertise dead shortcuts.
+
+#### Scenario: Edit menu exposes shortcut hints
+
+- **GIVEN** an editable file is rendered in edit mode
+- **WHEN** 用户打开 file content context menu
+- **THEN** available clipboard、note capture、Git leaf、reveal、Canvas、selection、navigation、preview 与 save actions MUST display their executable shortcut hints
+- **AND** `Git 操作` submenu trigger MUST remain without a shortcut hint
+
+#### Scenario: Preview menu exposes mode-appropriate shortcut hints
+
+- **GIVEN** a preview can return to edit mode
+- **WHEN** 用户打开 file content context menu
+- **THEN** Edit MUST display the shared Preview/Edit toggle shortcut
+- **AND** editor-only unavailable actions MUST remain omitted
+
+#### Scenario: Disabled command is not triggered from keyboard
+
+- **WHEN** a menu action is disabled or unavailable because of selection、dirty state、Git scope、render mode or missing callback
+- **THEN** its fixed shortcut MUST be a no-op
+- **AND** it MUST NOT invoke a stale callback from a previous file or mode
+

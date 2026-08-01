@@ -12,6 +12,8 @@ export function useAppSettingsController() {
     doctor,
     claudeDoctor,
     kimiDoctor,
+    grokDoctor,
+    opencodeDoctor,
     isLoading: appSettingsLoading,
   } = useAppSettings();
 
@@ -32,6 +34,9 @@ export function useAppSettingsController() {
     scaleShortcutTitle,
     scaleShortcutText,
     queueSaveSettings,
+    increaseUiScale,
+    decreaseUiScale,
+    resetUiScale,
   } = useUiScaleShortcuts({
     settings: appSettings,
     setSettings: setAppSettings,
@@ -43,9 +48,14 @@ export function useAppSettingsController() {
     setAppSettings,
     saveSettings,
     queueSaveSettings,
+    increaseUiScale,
+    decreaseUiScale,
+    resetUiScale,
     doctor,
     claudeDoctor,
     kimiDoctor,
+    grokDoctor,
+    opencodeDoctor,
     appSettingsLoading,
     reduceTransparency,
     setReduceTransparency,

@@ -938,6 +938,10 @@ pub(crate) async fn delete_workspace_sessions_core(
         .get_engine_config(engine::EngineType::Kimi)
         .await
         .and_then(|item| item.home_dir);
+    let grok_home_dir = engine_manager
+        .get_engine_config(engine::EngineType::Grok)
+        .await
+        .and_then(|item| item.home_dir);
     let mut async_delete_handles: Vec<(
         WorkspaceSessionMutationTarget,
         JoinHandle<Result<(), String>>,
@@ -983,6 +987,20 @@ pub(crate) async fn delete_workspace_sessions_core(
                         &workspace_path,
                         &raw_id,
                         kimi_home_dir.as_deref(),
+                    )
+                    .await
+                });
+                async_delete_handles.push((target, handle));
+            }
+            "grok" => {
+                let workspace_path = target.owner_workspace_path.clone();
+                let grok_home_dir = grok_home_dir.clone();
+                let raw_id = target.native_session_id.clone();
+                let handle = tokio::spawn(async move {
+                    engine::grok_history::delete_grok_session(
+                        &workspace_path,
+                        &raw_id,
+                        grok_home_dir.as_deref(),
                     )
                     .await
                 });
@@ -1369,6 +1387,7 @@ fn build_metadata_orphan_entry(
         workspace_label: Some(workspace.name.clone()),
         engine: identity.engine_name().to_string(),
         title: "Missing session".to_string(),
+        native_title: None,
         updated_at: archived_at.unwrap_or(0).max(0),
         archived_at,
         thread_kind: "native".to_string(),
@@ -1406,6 +1425,7 @@ fn build_metadata_orphan_entry(
         delete_mode: Some(SESSION_DELETE_MODE_METADATA_CLEANUP.to_string()),
         physical_path: None,
         children_count: None,
+        continuation: ProviderContinuationProjection::default(),
     }
 }
 
@@ -1414,7 +1434,8 @@ fn finalize_existing_catalog_entry(
     metadata_by_workspace_id: &HashMap<String, WorkspaceSessionCatalogMetadata>,
 ) -> WorkspaceSessionCatalogEntry {
     mark_entry_as_existing_on_disk(&mut entry);
-    apply_codex_provider_binding(&mut entry, metadata_by_workspace_id);
+    apply_engine_provider_binding(&mut entry, metadata_by_workspace_id);
+    apply_provider_continuation_metadata(&mut entry, metadata_by_workspace_id);
     apply_codex_provider_home_binding_fallback(&mut entry);
     apply_folder_assignment(&mut entry, metadata_by_workspace_id);
     apply_auto_session_metadata(&mut entry, metadata_by_workspace_id);
@@ -1438,6 +1459,7 @@ fn append_metadata_orphan_entries(
         .keys()
         .chain(metadata.folder_id_by_session_id.keys())
         .chain(metadata.auto_session_by_session_id.keys())
+        .chain(metadata.provider_continuation_by_session_key.keys())
         .cloned()
         .collect::<Vec<_>>();
     metadata_session_ids.sort();
@@ -1755,9 +1777,31 @@ fn is_stable_catalog_metadata_key(session_id: &str) -> bool {
     let canonical_session_id = parts.next().unwrap_or_default();
     matches!(
         engine,
-        "codex" | "claude" | "gemini" | "opencode" | "shared"
+        "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode" | "shared"
     ) && !workspace_id.trim().is_empty()
         && !canonical_session_id.trim().is_empty()
+}
+
+fn engine_provider_binding_stable_key(
+    workspace_id: &str,
+    session_id: &str,
+    engine: &str,
+) -> Option<String> {
+    let workspace_id = workspace_id.trim();
+    let session_id = session_id.trim();
+    let engine = engine.trim().to_ascii_lowercase();
+    if workspace_id.is_empty() || session_id.is_empty() || engine.is_empty() {
+        return None;
+    }
+
+    let canonical_session_id = if is_stable_catalog_metadata_key(session_id) {
+        session_id.splitn(3, ':').nth(2).unwrap_or(session_id)
+    } else {
+        session_id
+            .strip_prefix(&format!("{engine}:"))
+            .unwrap_or(session_id)
+    };
+    Some(format!("{engine}:{workspace_id}:{canonical_session_id}"))
 }
 
 fn metadata_stable_key_for_session_id(workspace_id: &str, session_id: &str) -> String {
@@ -1796,6 +1840,33 @@ fn folder_assignment_keys_for_session(session_id: &str, engine: &str) -> Vec<Str
     keys
 }
 
+fn provider_continuation_stable_key_for_session_id(workspace_id: &str, session_id: &str) -> String {
+    let identity = parse_catalog_identity(session_id);
+    if identity.engine_name() == "codex" {
+        let raw_session_id = identity
+            .raw_session_id()
+            .strip_prefix("codex:")
+            .unwrap_or(identity.raw_session_id());
+        return format!("codex:{workspace_id}:{raw_session_id}");
+    }
+    metadata_stable_key_for_session_id(workspace_id, session_id)
+}
+
+fn append_legacy_codex_continuation_key(
+    keys: &mut Vec<String>,
+    workspace_id: &str,
+    session_id: &str,
+    engine: &str,
+) {
+    if !engine.eq_ignore_ascii_case("codex") {
+        return;
+    }
+    let raw_session_id = session_id.strip_prefix("codex:").unwrap_or(session_id);
+    if !raw_session_id.is_empty() {
+        keys.push(format!("codex:{workspace_id}:codex:{raw_session_id}"));
+    }
+}
+
 fn catalog_metadata_lookup_keys_for_entry(entry: &WorkspaceSessionCatalogEntry) -> Vec<String> {
     let mut keys = Vec::new();
     if let Some(stable_key) = entry
@@ -1812,6 +1883,12 @@ fn catalog_metadata_lookup_keys_for_entry(entry: &WorkspaceSessionCatalogEntry) 
         &entry.session_id,
         &entry.engine,
     ));
+    append_legacy_codex_continuation_key(
+        &mut keys,
+        &entry.workspace_id,
+        &entry.session_id,
+        &entry.engine,
+    );
     keys.sort();
     keys.dedup();
     keys
@@ -1824,6 +1901,7 @@ fn catalog_metadata_lookup_keys_for_session(
 ) -> Vec<String> {
     let mut keys = vec![metadata_stable_key_for_session_id(workspace_id, session_id)];
     keys.extend(folder_assignment_keys_for_session(session_id, engine));
+    append_legacy_codex_continuation_key(&mut keys, workspace_id, session_id, engine);
     keys.sort();
     keys.dedup();
     keys
@@ -1844,19 +1922,76 @@ pub(crate) fn codex_provider_binding_for_session(
         })
 }
 
-fn apply_codex_provider_binding(
+pub(crate) fn engine_provider_binding_for_session(
+    metadata: &WorkspaceSessionCatalogMetadata,
+    workspace_id: &str,
+    session_id: &str,
+    engine: &str,
+) -> Option<EngineProviderBinding> {
+    engine_provider_binding_stable_key(workspace_id, session_id, engine)
+        .and_then(|key| {
+            metadata
+                .engine_provider_binding_by_session_key
+                .get(&key)
+                .cloned()
+        })
+        .or_else(|| {
+            engine
+                .eq_ignore_ascii_case("codex")
+                .then(|| codex_provider_binding_for_session(metadata, workspace_id, session_id))
+                .flatten()
+        })
+}
+
+pub(crate) fn provider_profile_id_for_session_at_path(
+    storage_path: &Path,
+    workspace_id: &str,
+    session_id: &str,
+    engine: &str,
+) -> Result<Option<String>, String> {
+    let metadata = read_catalog_metadata(storage_path, workspace_id)?;
+    Ok(
+        engine_provider_binding_for_session(&metadata, workspace_id, session_id, engine)
+            .map(|binding| binding.provider_profile_id),
+    )
+}
+
+pub(crate) fn resolve_engine_provider_profile_id(
+    storage_path: &Path,
+    workspace_id: &str,
+    session_id: Option<&str>,
+    engine: &str,
+    requested_provider_profile_id: Option<&str>,
+) -> Result<Option<String>, String> {
+    if let Some(requested) = requested_provider_profile_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return Ok(Some(requested.to_string()));
+    }
+    let Some(session_id) = session_id.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    let metadata = read_catalog_metadata(storage_path, workspace_id)?;
+    Ok(
+        engine_provider_binding_for_session(&metadata, workspace_id, session_id, engine)
+            .map(|binding| binding.provider_profile_id),
+    )
+}
+
+fn apply_engine_provider_binding(
     entry: &mut WorkspaceSessionCatalogEntry,
     metadata_by_workspace_id: &HashMap<String, WorkspaceSessionCatalogMetadata>,
 ) {
-    if !entry.engine.eq_ignore_ascii_case("codex") {
-        return;
-    }
     let Some(metadata) = metadata_by_workspace_id.get(&entry.workspace_id) else {
         return;
     };
-    let Some(binding) =
-        codex_provider_binding_for_session(metadata, &entry.workspace_id, &entry.session_id)
-    else {
+    let Some(binding) = engine_provider_binding_for_session(
+        metadata,
+        &entry.workspace_id,
+        &entry.session_id,
+        &entry.engine,
+    ) else {
         return;
     };
     entry.provider_profile_id = Some(binding.provider_profile_id);
@@ -1864,6 +1999,89 @@ fn apply_codex_provider_binding(
     entry.provider_profile_name = Some(binding.provider_profile_name.clone());
     entry.provider_availability = Some(binding.provider_availability);
     entry.source_label = Some(binding.provider_profile_name);
+}
+
+fn apply_provider_continuation_metadata(
+    entry: &mut WorkspaceSessionCatalogEntry,
+    metadata_by_workspace_id: &HashMap<String, WorkspaceSessionCatalogMetadata>,
+) {
+    let Some(metadata) = metadata_by_workspace_id.get(&entry.workspace_id) else {
+        return;
+    };
+    let continuation = resolve_provider_continuation_metadata(
+        metadata,
+        &entry.workspace_id,
+        &entry.session_id,
+        &entry.engine,
+    );
+    if let Some(continuation) = continuation {
+        entry.continuation = continuation.into();
+    }
+}
+
+fn stored_provider_continuation_metadata(
+    metadata: &WorkspaceSessionCatalogMetadata,
+    workspace_id: &str,
+    session_id: &str,
+    engine: &str,
+) -> Option<ProviderContinuationMetadata> {
+    catalog_metadata_lookup_keys_for_session(workspace_id, session_id, engine)
+        .into_iter()
+        .find_map(|key| metadata.provider_continuation_by_session_key.get(&key))
+        .cloned()
+}
+
+fn resolve_provider_continuation_metadata(
+    metadata: &WorkspaceSessionCatalogMetadata,
+    workspace_id: &str,
+    session_id: &str,
+    engine: &str,
+) -> Option<ProviderContinuationMetadata> {
+    fn resolve(
+        metadata: &WorkspaceSessionCatalogMetadata,
+        workspace_id: &str,
+        session_id: &str,
+        engine: &str,
+        visited: &mut HashSet<String>,
+    ) -> Option<ProviderContinuationMetadata> {
+        let mut continuation =
+            stored_provider_continuation_metadata(metadata, workspace_id, session_id, engine)?;
+        let visit_key = format!("{engine}:{session_id}");
+        if !visited.insert(visit_key) {
+            return Some(continuation);
+        }
+
+        let source_session_id = continuation.source_session_id.clone();
+        let source_engine = parse_catalog_identity(&source_session_id)
+            .engine_name()
+            .to_string();
+        if let Some(source_family) = resolve(
+            metadata,
+            workspace_id,
+            &source_session_id,
+            &source_engine,
+            visited,
+        ) {
+            continuation.family_id = source_family.family_id;
+            continuation.family_root_session_id = source_family.family_root_session_id;
+            continuation.lineage_depth = source_family.lineage_depth.saturating_add(1);
+        } else {
+            let source_key =
+                provider_continuation_stable_key_for_session_id(workspace_id, &source_session_id);
+            continuation.family_id = source_key.clone();
+            continuation.family_root_session_id = source_key;
+            continuation.lineage_depth = 1;
+        }
+        Some(continuation)
+    }
+
+    resolve(
+        metadata,
+        workspace_id,
+        session_id,
+        engine,
+        &mut HashSet::new(),
+    )
 }
 
 fn apply_codex_provider_home_binding_fallback(entry: &mut WorkspaceSessionCatalogEntry) {
@@ -1953,6 +2171,9 @@ fn remove_catalog_metadata_for_session(
         metadata.archived_at_by_session_id.remove(&key);
         metadata.folder_id_by_session_id.remove(&key);
         metadata.auto_session_by_session_id.remove(&key);
+        metadata.engine_provider_binding_by_session_key.remove(&key);
+        metadata.codex_provider_binding_by_session_id.remove(&key);
+        metadata.provider_continuation_by_session_key.remove(&key);
     }
 }
 
@@ -1964,6 +2185,9 @@ fn remove_catalog_metadata_for_target(
         metadata.archived_at_by_session_id.remove(key);
         metadata.folder_id_by_session_id.remove(key);
         metadata.auto_session_by_session_id.remove(key);
+        metadata.engine_provider_binding_by_session_key.remove(key);
+        metadata.codex_provider_binding_by_session_id.remove(key);
+        metadata.provider_continuation_by_session_key.remove(key);
     }
 }
 
@@ -2089,6 +2313,138 @@ pub(crate) async fn record_codex_provider_binding_core(
         }
         Ok(())
     })
+}
+
+pub(crate) async fn record_engine_provider_binding_core(
+    workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
+    storage_path: &Path,
+    workspace_id: String,
+    session_id: String,
+    engine: String,
+    binding: EngineProviderBinding,
+) -> Result<bool, String> {
+    let workspace_id = normalize_workspace_id(&workspace_id)?;
+    ensure_workspace_exists(workspaces, &workspace_id).await?;
+    record_engine_provider_binding_at_path(
+        storage_path,
+        &workspace_id,
+        &session_id,
+        &engine,
+        &binding,
+    )
+}
+
+pub(crate) async fn record_provider_continuation_metadata_core(
+    workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
+    storage_path: &Path,
+    workspace_id: String,
+    target_session_id: String,
+    source_session_id: String,
+    source_provider_profile_id: Option<String>,
+) -> Result<ProviderContinuationMetadata, String> {
+    let workspace_id = normalize_workspace_id(&workspace_id)?;
+    ensure_workspace_exists(workspaces, &workspace_id).await?;
+    let target_session_id = normalize_session_ids(vec![target_session_id])?
+        .into_iter()
+        .next()
+        .ok_or_else(|| "target_session_id is required".to_string())?;
+    let source_session_id = normalize_session_ids(vec![source_session_id])?
+        .into_iter()
+        .next()
+        .ok_or_else(|| "source_session_id is required".to_string())?;
+    let target_key =
+        provider_continuation_stable_key_for_session_id(&workspace_id, &target_session_id);
+    let source_key =
+        provider_continuation_stable_key_for_session_id(&workspace_id, &source_session_id);
+
+    with_catalog_metadata_mutation(storage_path, &workspace_id, |metadata| {
+        let source_family = resolve_provider_continuation_metadata(
+            metadata,
+            &workspace_id,
+            &source_session_id,
+            parse_catalog_identity(&source_session_id).engine_name(),
+        );
+        let continuation = ProviderContinuationMetadata {
+            origin_kind: "provider-continuation".to_string(),
+            source_session_id: source_session_id.clone(),
+            source_provider_profile_id: source_provider_profile_id.clone(),
+            family_id: source_family
+                .as_ref()
+                .map(|family| family.family_id.clone())
+                .unwrap_or_else(|| source_key.clone()),
+            family_root_session_id: source_family
+                .as_ref()
+                .map(|family| family.family_root_session_id.clone())
+                .unwrap_or_else(|| source_key.clone()),
+            lineage_parent_session_id: source_session_id.clone(),
+            lineage_kind: "provider-continuation".to_string(),
+            lineage_depth: source_family
+                .as_ref()
+                .map_or(1, |family| family.lineage_depth.saturating_add(1)),
+        };
+        metadata
+            .provider_continuation_by_session_key
+            .insert(target_key.clone(), continuation.clone());
+        Ok(continuation)
+    })
+}
+
+pub(crate) fn record_engine_provider_binding_at_path(
+    storage_path: &Path,
+    workspace_id: &str,
+    session_id: &str,
+    engine: &str,
+    binding: &EngineProviderBinding,
+) -> Result<bool, String> {
+    let workspace_id = normalize_workspace_id(workspace_id)?;
+    let session_id = normalize_session_ids(vec![session_id.to_string()])?
+        .into_iter()
+        .next()
+        .ok_or_else(|| "session_id is required".to_string())?;
+    let stable_key = engine_provider_binding_stable_key(&workspace_id, &session_id, engine)
+        .ok_or_else(|| "engine is required".to_string())?;
+    let path = catalog_metadata_path(storage_path, &workspace_id)?;
+    with_storage_lock(&path, || {
+        let mut metadata = read_catalog_metadata_from_path(&path)?;
+        if metadata
+            .engine_provider_binding_by_session_key
+            .get(&stable_key)
+            == Some(&binding)
+        {
+            return Ok(false);
+        }
+        metadata
+            .engine_provider_binding_by_session_key
+            .insert(stable_key, binding.clone());
+        write_catalog_metadata_unlocked(&path, &metadata)?;
+        Ok(true)
+    })
+}
+
+pub(crate) fn schedule_engine_provider_binding_record(
+    storage_path: PathBuf,
+    workspace_id: String,
+    session_id: String,
+    engine: String,
+    binding: EngineProviderBinding,
+) {
+    tokio::task::spawn_blocking(move || {
+        if let Err(error) = record_engine_provider_binding_at_path(
+            &storage_path,
+            &workspace_id,
+            &session_id,
+            &engine,
+            &binding,
+        ) {
+            log::error!(
+                "[engine.provider_binding] failed to persist canonical binding engine={} workspace={} session={}: {}",
+                engine,
+                workspace_id,
+                session_id,
+                error
+            );
+        }
+    });
 }
 
 pub(crate) async fn create_workspace_session_folder_core(
@@ -2481,6 +2837,9 @@ async fn build_global_engine_catalog_entries(
     let kimi_config = engine_manager
         .get_engine_config(engine::EngineType::Kimi)
         .await;
+    let grok_config = engine_manager
+        .get_engine_config(engine::EngineType::Grok)
+        .await;
     let claude_config = engine_manager
         .get_engine_config(engine::EngineType::Claude)
         .await;
@@ -2516,7 +2875,11 @@ async fn build_global_engine_catalog_entries(
                             workspace_id: workspace.id.clone(),
                             workspace_label: Some(workspace.name.clone()),
                             engine: "claude".to_string(),
-                            title: session.first_message,
+                            title: session
+                                .native_title
+                                .clone()
+                                .unwrap_or_else(|| session.first_message.clone()),
+                            native_title: session.native_title,
                             updated_at: session.updated_at.max(0),
                             archived_at,
                             thread_kind: "native".to_string(),
@@ -2548,6 +2911,7 @@ async fn build_global_engine_catalog_entries(
                             delete_mode: None,
                             physical_path: None,
                             children_count: None,
+                            continuation: ProviderContinuationProjection::default(),
                         };
                         entry = apply_strict_attribution_owner(
                             entry,
@@ -2599,6 +2963,7 @@ async fn build_global_engine_catalog_entries(
                             workspace_label: Some(workspace.name.clone()),
                             engine: session.engine.unwrap_or_else(|| "gemini".to_string()),
                             title: session.first_message,
+                            native_title: None,
                             updated_at: session.updated_at.max(0),
                             archived_at,
                             thread_kind: "native".to_string(),
@@ -2630,6 +2995,7 @@ async fn build_global_engine_catalog_entries(
                             delete_mode: None,
                             physical_path: None,
                             children_count: None,
+                            continuation: ProviderContinuationProjection::default(),
                         };
                         entries.push(finalize_existing_catalog_entry(
                             entry,
@@ -2676,6 +3042,7 @@ async fn build_global_engine_catalog_entries(
                             workspace_label: Some(workspace.name.clone()),
                             engine: session.engine.unwrap_or_else(|| "kimi".to_string()),
                             title: session.first_message,
+                            native_title: None,
                             updated_at: session.updated_at.max(0),
                             archived_at,
                             thread_kind: "native".to_string(),
@@ -2707,6 +3074,7 @@ async fn build_global_engine_catalog_entries(
                             delete_mode: None,
                             physical_path: None,
                             children_count: None,
+                            continuation: ProviderContinuationProjection::default(),
                         };
                         entries.push(finalize_existing_catalog_entry(
                             entry,
@@ -2721,6 +3089,85 @@ async fn build_global_engine_catalog_entries(
                     error
                 );
                     partial_sources.push(SESSION_CATALOG_PARTIAL_KIMI.to_string());
+                }
+            }
+        }
+
+        if include_engine("grok") {
+            match engine::grok_history::list_grok_sessions(
+                &workspace_path,
+                Some(scan_mode.limit()),
+                grok_config
+                    .as_ref()
+                    .and_then(|item| item.home_dir.as_deref()),
+            )
+            .await
+            {
+                Ok(sessions) => {
+                    for session in sessions {
+                        let session_id = format!("grok:{}", session.session_id);
+                        let archived_at =
+                            metadata_by_workspace_id
+                                .get(&workspace.id)
+                                .and_then(|metadata| {
+                                    archived_at_for_session(metadata, &workspace.id, &session_id)
+                                });
+                        let entry = WorkspaceSessionCatalogEntry {
+                            session_id,
+                            stable_session_key: None,
+                            canonical_session_id: session.canonical_session_id,
+                            parent_session_id: None,
+                            workspace_id: workspace.id.clone(),
+                            workspace_label: Some(workspace.name.clone()),
+                            engine: session.engine.unwrap_or_else(|| "grok".to_string()),
+                            title: session.first_message,
+                            native_title: None,
+                            updated_at: session.updated_at.max(0),
+                            archived_at,
+                            thread_kind: "native".to_string(),
+                            source: None,
+                            source_label: None,
+                            provider_profile_id: None,
+                            provider_profile_source: None,
+                            provider_profile_name: None,
+                            provider_availability: None,
+                            source_completeness: None,
+                            source_status_reason: None,
+                            size_bytes: session.file_size_bytes,
+                            cwd: None,
+                            attribution_status: session.attribution_status.or_else(|| {
+                                Some(
+                                    SessionCatalogAttributionStatus::StrictMatch
+                                        .as_str()
+                                        .to_string(),
+                                )
+                            }),
+                            attribution_reason: None,
+                            attribution_confidence: None,
+                            matched_workspace_id: Some(workspace.id.clone()),
+                            matched_workspace_label: Some(workspace.name.clone()),
+                            folder_id: None,
+                            auto_session: None,
+                            exists_on_disk: false,
+                            inconsistency_code: None,
+                            delete_mode: None,
+                            physical_path: None,
+                            children_count: None,
+                            continuation: ProviderContinuationProjection::default(),
+                        };
+                        entries.push(finalize_existing_catalog_entry(
+                            entry,
+                            &metadata_by_workspace_id,
+                        ));
+                    }
+                }
+                Err(error) => {
+                    log::warn!(
+                    "[session_management.list_global_codex_sessions] grok history unavailable for workspace {}: {}",
+                    workspace.id,
+                    error
+                );
+                    partial_sources.push(SESSION_CATALOG_PARTIAL_GROK.to_string());
                 }
             }
         }
@@ -2761,6 +3208,7 @@ fn build_global_codex_catalog_entry(
             .summary
             .clone()
             .unwrap_or_else(|| "Codex Session".to_string()),
+        native_title: summary.native_title.clone(),
         updated_at: summary.timestamp.max(0),
         archived_at: None,
         thread_kind: "native".to_string(),
@@ -2786,6 +3234,7 @@ fn build_global_codex_catalog_entry(
         delete_mode: Some(SESSION_DELETE_MODE_UNSUPPORTED.to_string()),
         physical_path: summary.physical_path.clone(),
         children_count: None,
+        continuation: ProviderContinuationProjection::default(),
     };
     let attribution = resolve_catalog_entry_attribution(workspaces_snapshot, &unresolved_entry);
     let mut entry = apply_attribution_to_entry(unresolved_entry, attribution);
@@ -3065,6 +3514,8 @@ mod tests {
     include!("session_management_test_support.rs");
     include!("session_management_tests.rs");
     include!("session_management_metadata_provider_tests.rs");
+    include!("session_management_provider_binding_tests.rs");
+    include!("session_management_provider_continuation_tests.rs");
     include!("session_management_folder_tests.rs");
     include!("session_management_folder_assignment_tests.rs");
     include!("session_management_archive_delete_tests.rs");

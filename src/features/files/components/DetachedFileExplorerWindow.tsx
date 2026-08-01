@@ -103,6 +103,7 @@ export function DetachedFileExplorerWindow() {
     openFile,
     activateTab,
     closeTab,
+    closeOtherTabs,
     closeAllTabs,
     reorderTabs,
   } = useDetachedFileExplorerState(
@@ -257,6 +258,7 @@ export function DetachedFileExplorerWindow() {
         onOpenFile={openFile}
         onActivateTab={activateTab}
         onCloseTab={closeTab}
+        onCloseOtherTabs={closeOtherTabs}
         onCloseAllTabs={closeAllTabs}
         onReorderTabs={reorderTabs}
         onRefreshFiles={refreshFiles}

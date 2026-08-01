@@ -43,11 +43,16 @@ const common = {
     showOnWorkspaceRow: "在项目行显示",
     markdownMermaidFullscreen: "全屏",
     markdownMermaidFullscreenHint: "放大查看图表",
+    markdownMermaidDownloadPng: "下载 PNG",
+    markdownMermaidDownloadingPng: "正在下载 PNG…",
+    markdownMermaidDownloadFailed: "PNG 下载失败。",
     markdownImageFullscreen: "全屏",
     markdownImageFullscreenHint: "放大查看图片",
     curatedLoading: "正在加载 curated skills…",
     curatedError: "无法加载 curated skills。",
     curatedSubtitle: "客户端内置、版本固定,随桌面端一起发布。无需联网。",
+    curatedDetailHint:
+      "开启后，对应 Skill 会在每次发起对话时自动注入到系统提示词中，持续影响 AI 的回复风格与行为，无需手动引用；关闭则完全不注入。这与「拓展 → Skills」中由用户自行安装的技能不同：后者需要主动调用或按描述匹配才会生效，而此处是随桌面端内置且版本固定的精选能力。",
     curatedBundledBadge: "内置",
     curatedCategoryCodeStyle: "代码风格",
     curatedCategoryUiDesign: "界面设计",
@@ -61,6 +66,10 @@ const common = {
     curatedToggleAria: "开关 {{name}}",
     curatedViewOnGithub: "在 GitHub 查看",
     curatedViewOnGithubAria: "在浏览器打开 {{name}} 的上游源码",
+    curatedSkillDescriptionCaveman:
+      "精简沟通内容，同时保留技术要点、原始代码与命令，并提供安全的代码审查和提交信息指引。",
+    curatedSkillDescriptionLazySeniorDev:
+      "遵循 Ponytail 七级阶梯：优先 YAGNI、复用现有代码，依次采用标准库、平台能力或已安装依赖，并提交最小且可靠的改动。",
   },
 };
 

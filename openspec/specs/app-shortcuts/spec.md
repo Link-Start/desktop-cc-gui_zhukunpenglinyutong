@@ -180,3 +180,174 @@ The app SHALL expose a configurable shortcut action for closing the currently op
 #### Scenario: configured shortcut is matched through shared shortcut helpers
 - **WHEN** the user presses the configured close-current-session shortcut
 - **THEN** the event SHALL be evaluated through the shared shortcut parser and platform-aware matcher
+
+### Requirement: Shortcut Settings MUST Survive Desktop Persistence Round-Trips
+
+Every configurable shortcut exposed by the frontend `AppSettings` contract MUST be preserved by the Rust settings deserialize/save/serialize round-trip, including explicit `null` values.
+
+#### Scenario: custom shortcut survives save echo
+
+- **WHEN** 用户为任一 configurable shortcut 录入非默认组合并保存
+- **THEN** Tauri settings response MUST return the same shortcut value
+- **AND** Settings UI MUST NOT restore the previous/default value after parent state reconciliation
+
+#### Scenario: cleared shortcut remains disabled
+
+- **WHEN** 用户将 configurable shortcut 清空为 `null`
+- **THEN** Rust persistence MUST retain explicit `null`
+- **AND** later settings reload MUST NOT silently restore a default for that persisted field
+
+### Requirement: Settings MUST Provide A Featured Common Modules Shortcut Group
+
+Settings → Basic → Shortcuts MUST render a topmost common-modules group backed by the same stable action metadata used by the semantic shortcut groups.
+
+#### Scenario: common modules group is complete and first
+
+- **WHEN** 用户打开快捷键设置
+- **THEN** the first shortcut group MUST contain left conversation sidebar, right conversation sidebar, Git Graph, Files, Git, Notes, Intent Canvas, Radar, Project Map, Browser Dock, File Compare, and Terminal
+
+#### Scenario: duplicated projection shares one setting
+
+- **WHEN** an existing action is shown in both the common group and its semantic group
+- **THEN** both controls MUST read and update the same persisted setting key
+- **AND** the application MUST NOT create independent shortcut values for the two rows
+
+### Requirement: Common Module View Actions MUST Be Configurable And Scoped
+
+Git Graph, Notes, Intent Canvas, Radar, Project Map, Browser Dock, and File Compare MUST expose configurable shortcut actions that reuse existing view transitions.
+
+#### Scenario: configured module shortcut opens the existing view
+
+- **WHEN** 用户在非 editable target 按下已配置的 module shortcut
+- **THEN** the app MUST invoke the corresponding existing open/toggle handler
+- **AND** the shortcut MUST NOT create a parallel module state or duplicate business side effect
+
+#### Scenario: new module shortcuts are unbound by default
+
+- **WHEN** settings are initialized without persisted values for the new module actions
+- **THEN** each new module shortcut MUST default to `null`
+- **AND** pressing an arbitrary suggested combination MUST NOT open the module
+
+#### Scenario: editable targets remain protected
+
+- **WHEN** focus is inside input, textarea, select, contenteditable, or editor textbox
+- **THEN** common module global shortcuts MUST NOT consume the keyboard event
+
+### Requirement: File Editor Expand Selection Shortcut MUST Be Configurable And Editor Scoped
+
+Application SHALL expose a stable configurable shortcut action for expanding the CodeMirror selection to its parent syntax node, and the action MUST remain editor scoped.
+
+#### Scenario: Default shortcut expands syntax selection
+- **WHEN** focus 位于 file CodeMirror editor 且用户在 macOS 按下默认 `Cmd+W`，或在 Windows/Linux 按下默认 `Ctrl+W`
+- **THEN** editor MUST invoke CodeMirror parent-syntax selection
+- **AND** repeated activation MUST expand selection through available syntax parents
+
+#### Scenario: Shortcut appears in settings
+- **WHEN** 用户打开 Settings -> Basic -> Shortcuts
+- **THEN** expand-selection action MUST 出现在 editor group
+- **AND** 用户 MUST 能修改或清空该 shortcut
+
+#### Scenario: Cleared shortcut is disabled
+- **WHEN** persisted expand-selection shortcut 为 `null`
+- **THEN** editor MUST NOT 注册该 custom binding
+- **AND** unrelated editor and application shortcuts MUST remain unchanged
+
+### Requirement: Expand Selection Shortcut MUST Respect Platform And Editable Boundaries
+
+Expand-selection shortcut SHALL 使用 shared shortcut parsing/formatting semantics，并 MUST NOT 作为 global window shortcut 劫持普通 editable targets。
+
+#### Scenario: Platform-primary W is pressed outside CodeMirror
+- **WHEN** focus 位于普通 input、textarea、select 或 contenteditable surface
+- **THEN** expand-selection action MUST NOT consume the event
+
+#### Scenario: Editor-scoped expand selection takes precedence
+- **WHEN** focus 位于 file CodeMirror editor
+- **AND** 用户按下 platform-primary `Cmd/Ctrl+W`
+- **THEN** expand-selection action MUST consume the event before close-current-session handling
+- **AND** native window menu MUST NOT close the application window
+
+#### Scenario: Close current session remains available outside the editor
+- **WHEN** focus 不在 file CodeMirror editor
+- **AND** 用户按下 configured close-current-session shortcut
+- **THEN** existing close-current-session shortcut behavior MUST remain available
+
+#### Scenario: Persisted shortcut round-trips through desktop settings
+- **WHEN** 用户保存 custom 或 explicit `null` expand-selection shortcut
+- **THEN** Rust settings deserialize/save/serialize round-trip MUST preserve the same value
+- **AND** existing shortcut customizations MUST remain unchanged
+
+#### Scenario: Previous unreleased default remains usable during transition
+- **WHEN** persisted expand-selection shortcut 仍为上一版默认 `ctrl+w`
+- **THEN** editor MUST additionally accept platform-primary `Cmd/Ctrl+W`
+- **AND** 用户改成其他 custom shortcut 或清空后 MUST NOT 注册该 compatibility binding
+
+### Requirement: Native Close Window Menu MUST Not Reserve Expand Selection Shortcut
+
+Desktop native File/Window menus SHALL keep a clickable close-window command but MUST NOT register a `Cmd/Ctrl+W` accelerator that preempts editor-scoped shortcuts.
+
+#### Scenario: User clicks Close Window menu item
+- **WHEN** 用户点击 native File 或 Window menu 的 Close Window item
+- **THEN** 当前目标窗口 MUST close through the existing menu handler
+
+#### Scenario: User presses platform-primary W inside file editor
+- **WHEN** file editor 已获得 focus 且用户按下 platform-primary `Cmd/Ctrl+W`
+- **THEN** native menu MUST NOT intercept the key event
+- **AND** CodeMirror MUST receive the event for expand-selection handling
+
+### Requirement: Expand Selection MUST Be Discoverable From The File Editor Context Menu
+
+可编辑文件的 context menu MUST 提供与 editor-scoped shortcut 等价的“扩大选择范围”操作，并 MUST 使用 shared platform formatter 显示当前配置的 shortcut。
+
+#### Scenario: context menu expands the syntax selection
+- **WHEN** 用户在可编辑文件中打开 context menu 并选择“扩大选择范围”
+- **THEN** editor MUST 使用现有 CodeMirror `selectParentSyntax` command 扩大选择
+- **AND** editor MUST 恢复 focus
+
+#### Scenario: shortcut hint follows platform and settings
+- **WHEN** context menu 显示“扩大选择范围”
+- **THEN** macOS MUST 显示 macOS shortcut notation
+- **AND** Windows/Linux MUST 显示 platform-primary `Ctrl` notation
+- **AND** 已清空 shortcut setting 时菜单 MUST 保留操作入口但不显示 shortcut hint
+
+#### Scenario: unavailable editor does not expose a dead action
+- **WHEN** 文件处于 preview、loading、truncated 或 editor view 尚未就绪状态
+- **THEN** context menu MUST NOT 暴露不可执行的“扩大选择范围”入口
+
+### Requirement: File Editor Context Shortcuts MUST Preserve Existing Bindings And Use IDEA Conventions
+
+File Editor MUST preserve all existing configurable and fixed shortcuts while adding missing context-scoped bindings using IntelliJ IDEA conventions or consistent product mnemonics.
+
+#### Scenario: Existing bindings remain unchanged
+
+- **WHEN** 用户在 File Editor 使用 Expand Selection、Definition、References 或 Save
+- **THEN** `Cmd/Ctrl+W`、`Cmd/Ctrl+B`、`Alt+F7` 与 configured `Cmd/Ctrl+S` MUST 保持原行为
+- **AND** 本变更 MUST NOT migrate、rewrite 或 clear persisted shortcut settings
+
+#### Scenario: Implementation uses IDEA navigation binding
+
+- **WHEN** focus 位于 CodeMirror 且用户在 macOS 按下 `Cmd+Alt+B`，或在 Windows/Linux 按下 `Ctrl+Alt+B`
+- **THEN** editor MUST invoke the existing Go to Implementations action
+- **AND** MUST reuse current candidate/direct-navigation behavior
+
+#### Scenario: Fixed product actions remain file-view scoped
+
+- **WHEN** 用户按下 Reveal、Preview/Edit、Canvas、Note、File History 或 Git Blame 的 fixed shortcut
+- **THEN** action MUST execute only while the corresponding File Editor action is available
+- **AND** unavailable、disabled 或 unrelated editable surfaces MUST NOT be consumed
+
+### Requirement: File Shortcut Labels MUST Share Their Executable Definitions
+
+Every shortcut hint rendered in the file content context menu MUST be derived from the same shortcut definition used by its keyboard behavior.
+
+#### Scenario: Platform label matches executable binding
+
+- **WHEN** file content context menu renders on macOS or Windows/Linux
+- **THEN** each shortcut hint MUST use the shared platform formatter
+- **AND** pressing the displayed combination MUST invoke the same action as selecting that menu item
+
+#### Scenario: Configurable shortcut is cleared
+
+- **WHEN** Save or Expand Selection shortcut setting is explicitly `null`
+- **THEN** the corresponding menu action MAY remain available
+- **AND** it MUST NOT display or register a shortcut that bypasses the cleared setting
+

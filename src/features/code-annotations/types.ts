@@ -9,12 +9,21 @@ export type CodeAnnotationLineRange = {
   endLine: number;
 };
 
+export type CodeAnnotationAnchor = {
+  version: 1;
+  selectedText: string;
+  prefixText: string;
+  suffixText: string;
+  fingerprint: string;
+};
+
 export type CodeAnnotationSelection = {
   id: string;
   path: string;
   lineRange: CodeAnnotationLineRange;
   body: string;
   source: CodeAnnotationSource;
+  anchor?: CodeAnnotationAnchor;
 };
 
 export type CodeAnnotationDraftInput = Omit<CodeAnnotationSelection, "id">;

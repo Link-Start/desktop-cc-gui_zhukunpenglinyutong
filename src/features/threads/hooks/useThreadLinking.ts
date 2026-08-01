@@ -2,6 +2,10 @@ import { useCallback } from "react";
 import type { Dispatch } from "react";
 import type { ThreadAction } from "./useThreadsReducer";
 import { asString, normalizeStringList } from "../utils/threadNormalize";
+import {
+  codexAgentPathBasename,
+  isCodexSubagentActivityItem,
+} from "../utils/codexSubagentIdentity";
 
 type UseThreadLinkingOptions = {
   dispatch: Dispatch<ThreadAction>;
@@ -54,7 +58,36 @@ export function useThreadLinking({
   );
 
   const applyCollabThreadLinks = useCallback(
-    (fallbackThreadId: string, item: Record<string, unknown>) => {
+    (
+      fallbackThreadId: string,
+      item: Record<string, unknown>,
+      workspaceId?: string,
+    ) => {
+      if (isCodexSubagentActivityItem(item)) {
+        const parentId = fallbackThreadId.trim();
+        const childId = asString(
+          item.agentThreadId ?? item.agent_thread_id ?? "",
+        ).trim();
+        if (!parentId || !childId || childId === parentId) {
+          return;
+        }
+        const kind = asString(item.kind ?? "").trim().toLowerCase();
+        if (workspaceId && kind === "started") {
+          const name = codexAgentPathBasename(
+            item.agentPath ?? item.agent_path,
+          );
+          dispatch({
+            type: "ensureThread",
+            workspaceId,
+            threadId: childId,
+            engine: "codex",
+            parentThreadId: parentId,
+            ...(name ? { name } : {}),
+          });
+        }
+        updateThreadParent(parentId, [childId]);
+        return;
+      }
       const itemType = asString(item?.type ?? "");
       if (itemType !== "collabToolCall" && itemType !== "collabAgentToolCall") {
         return;
@@ -71,7 +104,7 @@ export function useThreadLinking({
       ];
       updateThreadParent(parentId, receivers);
     },
-    [updateThreadParent],
+    [dispatch, updateThreadParent],
   );
 
   const applyCollabThreadLinksFromThread = useCallback(

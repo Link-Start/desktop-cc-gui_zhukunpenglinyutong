@@ -1,5 +1,5 @@
 import type { ThreadTokenUsage } from "../../../types";
-import type { AgentTaskNotification } from "../../messages/utils/agentTaskNotification";
+import type { AgentTaskNotification } from "../contracts/agentTaskNotification";
 import type {
   EngineTaskOutputEngine,
   EngineTaskOutputSnapshot,
@@ -9,6 +9,23 @@ import type {
 } from "../types";
 
 const MAX_RECENT_OUTPUT_CHARS = 1600;
+
+const SUPPORTED_TASK_OUTPUT_ENGINES: readonly EngineTaskOutputEngine[] = [
+  "claude",
+  "codex",
+  "gemini",
+  "grok",
+  "kimi",
+  "opencode",
+];
+
+function normalizeTaskOutputEngine(
+  value: EngineTaskOutputEngine | string | null | undefined,
+): EngineTaskOutputEngine {
+  return (SUPPORTED_TASK_OUTPUT_ENGINES as readonly string[]).includes(value ?? "")
+    ? (value as EngineTaskOutputEngine)
+    : "claude";
+}
 
 function normalizeOptionalText(value: string | null | undefined) {
   const normalized = value?.trim() ?? "";
@@ -81,7 +98,7 @@ export function buildTaskOutputSourceFromNotification(input: {
   title: string;
   notification: AgentTaskNotification;
 }): EngineTaskOutputSource {
-  const engine = input.engine === "codex" ? "codex" : "claude";
+  const engine = normalizeTaskOutputEngine(input.engine);
   const status = normalizeNotificationStatus(input.notification.status);
   return {
     id: input.itemId,

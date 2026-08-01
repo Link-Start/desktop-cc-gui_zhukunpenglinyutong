@@ -2,8 +2,8 @@ import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import FileStack from "lucide-react/dist/esm/icons/file-stack";
 import GitCompareArrows from "lucide-react/dist/esm/icons/git-compare-arrows";
+import { FileIcon } from "../../../components/FileIcon";
 import type { FileChangeSummary } from "../types";
-import { FileIcon } from "../../messages/components/toolBlocks/FileIcon";
 
 interface FileChangesListProps {
   fileChanges: FileChangeSummary[];

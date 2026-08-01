@@ -1,10 +1,26 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { SharedRuntimeControlOwner } from "../../types";
 
-export async function respondToServerRequest(workspaceId: string, requestId: number | string, decision: "accept" | "decline") {
+export async function respondToServerRequest(
+  workspaceId: string,
+  requestId: number | string,
+  decision: "accept" | "decline",
+  sharedOwner?: SharedRuntimeControlOwner | null,
+) {
   return invoke("respond_to_server_request", {
     workspaceId,
     requestId,
     result: { decision },
+    providerProfileId: sharedOwner?.providerProfileId ?? null,
+    ...(sharedOwner
+      ? {
+          threadId: sharedOwner.nativeThreadId,
+          turnId: sharedOwner.runtimeTurnId,
+          sharedAttemptId: sharedOwner.attemptId,
+          sharedThreadId: sharedOwner.sharedThreadId,
+          providerRuntimeKey: sharedOwner.providerRuntimeKey,
+        }
+      : {}),
   });
 }
 
@@ -16,6 +32,7 @@ export async function respondToUserInputRequest(
     threadId?: string | null;
     turnId?: string | null;
     skippedQuestionIds?: string[];
+    sharedOwner?: SharedRuntimeControlOwner;
   },
 ) {
   const result: Record<string, unknown> = { answers };
@@ -26,8 +43,16 @@ export async function respondToUserInputRequest(
     workspaceId,
     requestId,
     result,
-    threadId: options?.threadId ?? null,
-    turnId: options?.turnId ?? null,
+    threadId: options?.sharedOwner?.nativeThreadId ?? options?.threadId ?? null,
+    turnId: options?.sharedOwner?.runtimeTurnId ?? options?.turnId ?? null,
+    ...(options?.sharedOwner
+      ? {
+          providerProfileId: options.sharedOwner.providerProfileId,
+          sharedAttemptId: options.sharedOwner.attemptId,
+          sharedThreadId: options.sharedOwner.sharedThreadId,
+          providerRuntimeKey: options.sharedOwner.providerRuntimeKey,
+        }
+      : {}),
   });
 }
 

@@ -97,7 +97,13 @@ const activityPanel = {
       "unreadMark": "未読",
       "readMark": "既読",
       "deleteHistoryEntry": "{{name}} を削除",
-      "deleteDateGroupEntries": "{{date}} の {{count}} 件すべてを削除"
+      "deleteDateGroupEntries": "{{date}} の {{count}} 件すべてを削除",
+      "confirmDeleteDateGroup": "{{date}} の {{count}} 件の記録をすべて削除しますか？",
+      "confirmDeleteDateGroup_other": "{{date}} の {{count}} 件の記録をすべて削除しますか？",
+      "deleteFailedTitle": "削除に失敗しました",
+      "deleteFailedBody": "{{count}} 件の記録を削除できませんでした。もう一度お試しください。",
+      "deleteFailedBody_other": "{{count}} 件の記録を削除できませんでした。もう一度お試しください。",
+      "deleteFailedDismiss": "閉じる"
     },
     "status": {
       "running": "実行中",

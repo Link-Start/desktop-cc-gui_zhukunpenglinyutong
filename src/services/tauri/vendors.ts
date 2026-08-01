@@ -2,8 +2,14 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   ClaudeCurrentConfig as VendorClaudeCurrentConfig,
   CodexProviderConfig as VendorCodexProviderConfig,
+  GrokCurrentConfig as VendorGrokCurrentConfig,
+  GrokProviderDeleteResult as VendorGrokProviderDeleteResult,
+  GrokProviderConfig as VendorGrokProviderConfig,
   KimiCurrentConfig as VendorKimiCurrentConfig,
+  KimiProviderDeleteResult as VendorKimiProviderDeleteResult,
   KimiProviderConfig as VendorKimiProviderConfig,
+  OpenCodeCurrentConfig as VendorOpenCodeCurrentConfig,
+  OpenCodeProviderConfig as VendorOpenCodeProviderConfig,
   ProviderConfig as VendorProviderConfig,
 } from "../../features/vendors/types";
 
@@ -96,6 +102,10 @@ export async function switchCodexProvider(id: string): Promise<void> {
   return invoke("vendor_switch_codex_provider", { id });
 }
 
+export async function reorderCodexProviders(orderedIds: string[]): Promise<void> {
+  return invoke("vendor_reorder_codex_providers", { orderedIds });
+}
+
 export async function getKimiProviders(): Promise<VendorKimiProviderConfig[]> {
   return invoke<VendorKimiProviderConfig[]>("vendor_get_kimi_providers");
 }
@@ -115,8 +125,12 @@ export async function updateKimiProvider(
   return invoke("vendor_update_kimi_provider", { id, updates });
 }
 
-export async function deleteKimiProvider(id: string): Promise<void> {
-  return invoke("vendor_delete_kimi_provider", { id });
+export async function deleteKimiProvider(
+  id: string,
+): Promise<VendorKimiProviderDeleteResult> {
+  return invoke<VendorKimiProviderDeleteResult>("vendor_delete_kimi_provider", {
+    id,
+  });
 }
 
 export async function switchKimiProvider(id: string): Promise<void> {
@@ -130,6 +144,125 @@ export async function fetchKimiProviderModels(
   return invoke<VendorModelListResult>("vendor_fetch_kimi_models", {
     baseUrl,
     apiKey,
+  });
+}
+
+export async function getGrokProviders(): Promise<VendorGrokProviderConfig[]> {
+  return invoke<VendorGrokProviderConfig[]>("vendor_get_grok_providers");
+}
+
+export async function getCurrentGrokConfig(): Promise<VendorGrokCurrentConfig> {
+  return invoke<VendorGrokCurrentConfig>("vendor_get_current_grok_config");
+}
+
+export async function addGrokProvider(provider: unknown): Promise<void> {
+  return invoke("vendor_add_grok_provider", { provider });
+}
+
+export async function updateGrokProvider(
+  id: string,
+  updates: unknown,
+): Promise<void> {
+  return invoke("vendor_update_grok_provider", { id, updates });
+}
+
+export async function deleteGrokProvider(
+  id: string,
+): Promise<VendorGrokProviderDeleteResult> {
+  return invoke<VendorGrokProviderDeleteResult>("vendor_delete_grok_provider", {
+    id,
+  });
+}
+
+export async function switchGrokProvider(id: string): Promise<void> {
+  return invoke("vendor_switch_grok_provider", { id });
+}
+
+export async function fetchGrokProviderModels(
+  baseUrl: string,
+  apiKey: string,
+): Promise<VendorModelListResult> {
+  return invoke<VendorModelListResult>("vendor_fetch_grok_models", {
+    baseUrl,
+    apiKey,
+  });
+}
+
+export async function getOpenCodeProviders(): Promise<
+  VendorOpenCodeProviderConfig[]
+> {
+  return invoke<VendorOpenCodeProviderConfig[]>(
+    "vendor_get_opencode_providers",
+  );
+}
+
+export async function getCurrentOpenCodeConfig(): Promise<VendorOpenCodeCurrentConfig> {
+  return invoke<VendorOpenCodeCurrentConfig>(
+    "vendor_get_current_opencode_config",
+  );
+}
+
+export async function addOpenCodeProvider(provider: unknown): Promise<void> {
+  return invoke("vendor_add_opencode_provider", { provider });
+}
+
+export async function updateOpenCodeProvider(
+  id: string,
+  updates: unknown,
+): Promise<void> {
+  return invoke("vendor_update_opencode_provider", { id, updates });
+}
+
+export async function deleteOpenCodeProvider(id: string): Promise<void> {
+  return invoke("vendor_delete_opencode_provider", { id });
+}
+
+export async function switchOpenCodeProvider(id: string): Promise<void> {
+  return invoke("vendor_switch_opencode_provider", { id });
+}
+
+export async function fetchOpenCodeProviderModels(
+  baseUrl: string,
+  apiKey: string,
+): Promise<VendorModelListResult> {
+  return invoke<VendorModelListResult>("vendor_fetch_opencode_models", {
+    baseUrl,
+    apiKey,
+  });
+}
+
+export type CcSwitchAppType = "claude" | "codex";
+
+export interface CcSwitchProvider {
+  id: string;
+  name: string;
+  category: string | null;
+  websiteUrl: string | null;
+  baseUrl: string | null;
+  hasApiKey: boolean;
+  settingsConfig: Record<string, unknown>;
+}
+
+export interface CcSwitchProviderList {
+  available: boolean;
+  providers: CcSwitchProvider[];
+}
+
+export async function listCcSwitchProviders(
+  appType: CcSwitchAppType,
+): Promise<CcSwitchProviderList> {
+  return invoke<CcSwitchProviderList>("vendor_list_cc_switch_providers", {
+    appType,
+  });
+}
+
+export async function listCcSwitchProvidersFromPath(
+  path: string,
+  appType: CcSwitchAppType,
+): Promise<CcSwitchProviderList> {
+  return invoke<CcSwitchProviderList>("vendor_list_cc_switch_providers_from_path", {
+    path,
+    appType,
   });
 }
 

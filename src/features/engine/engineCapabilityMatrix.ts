@@ -1,25 +1,13 @@
 import type { EngineFeatures, EngineStatus, EngineType } from "../../types";
-import matrixFixture from "../../../openspec/specs/engine-capability-matrix/fixtures/matrix.json";
+import {
+  GENERATED_ENGINE_CAPABILITY_KEYS,
+  GENERATED_ENGINE_CAPABILITY_MATRIX,
+  type GeneratedEngineCapabilityKey,
+  type GeneratedEngineCapabilityState,
+} from "./generated/engineCapabilityMatrix.generated";
 
-const ENGINE_CAPABILITY_KEY_VALUES = [
-  "streaming.text",
-  "streaming.reasoning",
-  "streaming.tool-output",
-  "tool.use",
-  "tool.mcp",
-  "reasoning.effort",
-  "collaboration.mode",
-  "session.continuation",
-  "image.input",
-] as const;
-
-export type EngineCapabilityState =
-  | "supported"
-  | "compat-input"
-  | "unsupported"
-  | "unknown";
-
-export type EngineCapabilityKey = (typeof ENGINE_CAPABILITY_KEY_VALUES)[number];
+export type EngineCapabilityState = GeneratedEngineCapabilityState;
+export type EngineCapabilityKey = GeneratedEngineCapabilityKey;
 
 export type EngineCapabilityRuntimeStatus = {
   engine: EngineType;
@@ -27,20 +15,16 @@ export type EngineCapabilityRuntimeStatus = {
   specState: EngineCapabilityState;
   runtimeState: EngineCapabilityState;
   available: boolean;
+  reason: string | null;
 };
 
-const ENGINE_CAPABILITY_MATRIX = matrixFixture.engines as Record<
-  EngineType,
-  Record<EngineCapabilityKey, EngineCapabilityState>
->;
-
-export const ENGINE_CAPABILITY_KEYS = ENGINE_CAPABILITY_KEY_VALUES;
+export const ENGINE_CAPABILITY_KEYS = GENERATED_ENGINE_CAPABILITY_KEYS;
 
 export function getEngineCapabilityState(
   engine: EngineType,
   capability: EngineCapabilityKey,
 ): EngineCapabilityState {
-  return ENGINE_CAPABILITY_MATRIX[engine]?.[capability] ?? "unknown";
+  return GENERATED_ENGINE_CAPABILITY_MATRIX[engine]?.[capability] ?? "unknown";
 }
 
 export function isEngineCapabilityAvailable(
@@ -53,16 +37,29 @@ export function isEngineCapabilityAvailable(
 export function projectEngineFeaturesToCapabilityStates(
   features: EngineFeatures,
 ): Record<EngineCapabilityKey, EngineCapabilityState> {
+  const reasoning = features.reasoningEffort ?? features.reasoning;
+  const toolUse = features.toolsControl ?? features.toolUse;
+  const sessionResume = features.sessionResume ?? features.sessionContinuation;
+  const boolState = (value: boolean | undefined): EngineCapabilityState =>
+    value === undefined ? "unknown" : value ? "supported" : "unsupported";
   return {
-    "streaming.text": features.streaming ? "supported" : "unsupported",
-    "streaming.reasoning": features.streaming && features.reasoning ? "supported" : "unsupported",
-    "streaming.tool-output": features.streaming && features.toolUse ? "supported" : "unsupported",
-    "tool.use": features.toolUse ? "supported" : "unsupported",
-    "tool.mcp": "unknown",
-    "reasoning.effort": "unknown",
-    "collaboration.mode": "unknown",
-    "session.continuation": features.sessionContinuation ? "supported" : "unsupported",
-    "image.input": features.imageInput ? "supported" : "unsupported",
+    "streaming.text": boolState(features.streaming),
+    "streaming.reasoning":
+      features.streaming === false ? "unsupported" : boolState(reasoning),
+    "streaming.tool-output":
+      features.streaming === false ? "unsupported" : boolState(toolUse),
+    "tool.use": boolState(toolUse),
+    "tool.mcp": boolState(features.mcp),
+    "reasoning.effort": boolState(reasoning),
+    "collaboration.mode": boolState(features.collaborationMode),
+    "session.continuation": boolState(sessionResume),
+    "image.input": boolState(features.imageInput),
+    "input.mid-turn": "unknown",
+    "session.resume": boolState(sessionResume),
+    "session.fork": "unknown",
+    "session.switch": "unknown",
+    "session.tree": "unknown",
+    "rpc.server": "unknown",
   };
 }
 
@@ -72,11 +69,20 @@ export function resolveEngineCapabilityRuntimeStatus(
 ): EngineCapabilityRuntimeStatus {
   const specState = getEngineCapabilityState(status.engineType, capability);
   const runtimeState = projectEngineFeaturesToCapabilityStates(status.features)[capability];
+  const available = specState === "supported" && runtimeState !== "unsupported";
   return {
     engine: status.engineType,
     capability,
     specState,
     runtimeState,
-    available: specState === "supported" && runtimeState !== "unsupported",
+    available,
+    reason:
+      specState !== "supported"
+        ? `spec:${specState}`
+        : runtimeState === "unsupported"
+          ? "runtime:unsupported"
+          : runtimeState === "unknown"
+            ? "runtime:evidence-missing"
+            : null,
   };
 }

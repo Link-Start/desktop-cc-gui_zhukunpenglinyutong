@@ -75,8 +75,8 @@ describe("chat canvas smoke", () => {
     render(
       <Messages
         items={[]}
-        threadId="thread-legacy"
-        workspaceId="ws-legacy"
+        threadId="thread-1"
+        workspaceId="ws-1"
         isThinking={false}
         onUserInputSubmit={onSubmit}
         conversationState={{

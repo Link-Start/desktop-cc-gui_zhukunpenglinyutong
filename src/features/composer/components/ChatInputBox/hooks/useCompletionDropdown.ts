@@ -153,8 +153,11 @@ export function useCompletionDropdown<T>({
       const rawItems: unknown[] = [];
       results.forEach((result) => {
         try {
-          items.push(toDropdownItem(result));
-          rawItems.push(result);
+          const dropdownItem = toDropdownItem(result);
+          items.push(dropdownItem);
+          if (dropdownItem.type !== 'separator' && dropdownItem.type !== 'section-header') {
+            rawItems.push(result);
+          }
         } catch (error) {
           debugError('[useCompletionDropdown] Failed to map completion item:', error);
         }

@@ -2,7 +2,7 @@
 //
 // 背景：流式期间每条正文 delta 若都 dispatch 进根 reducer，就会以每秒多次的
 // 频率换 itemsByThread 引用并触发 AppShell（根组件）全树重渲染，单次端到端
-// 100ms+。本通道让「首条 delta 建壳、后续 delta 只更新此处并通知订阅的
+// 100ms+。本通道让「首条 delta 建壳、后续 delta 只更新此处并按 cadence 通知
 // MessageRow 小树、回合结束终稿一次性落 reducer」，把每回合根渲染压到 2 次。
 //
 // 设计要点：
@@ -23,8 +23,15 @@ export type LiveAssistantTextEntry = {
   shellTextLength: number;
 };
 
+export const LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS = 48;
+
+/** 每条 delta 的权威内存累积值；terminal drain 必须从这里读取。 */
 const entriesByThread = new Map<string, LiveAssistantTextEntry>();
+/** React 可观察快照；仅允许在 notify 前换引用。 */
+const publishedEntriesByThread = new Map<string, LiveAssistantTextEntry>();
 const listenersByThread = new Map<string, Set<() => void>>();
+const publishTimersByThread = new Map<string, ReturnType<typeof setTimeout>>();
+const lastPublishedAtByThread = new Map<string, number>();
 
 function notifyThread(threadId: string): void {
   const listeners = listenersByThread.get(threadId);
@@ -40,11 +47,82 @@ function notifyThread(threadId: string): void {
   }
 }
 
+function cancelPendingPublish(threadId: string): void {
+  const timer = publishTimersByThread.get(threadId);
+  if (timer !== undefined) {
+    clearTimeout(timer);
+    publishTimersByThread.delete(threadId);
+  }
+}
+
+function publishEntry(threadId: string, entry: LiveAssistantTextEntry): void {
+  cancelPendingPublish(threadId);
+  publishedEntriesByThread.set(threadId, entry);
+  lastPublishedAtByThread.set(threadId, Date.now());
+  notifyThread(threadId);
+}
+
+function publishLatestEntry(threadId: string): void {
+  publishTimersByThread.delete(threadId);
+  const entry = entriesByThread.get(threadId);
+  if (!entry) {
+    return;
+  }
+  publishEntry(threadId, entry);
+}
+
+function scheduleEntryPublish(
+  threadId: string,
+  entry: LiveAssistantTextEntry,
+): void {
+  const lastPublishedAt = lastPublishedAtByThread.get(threadId);
+  const elapsed = lastPublishedAt === undefined
+    ? LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS
+    : Date.now() - lastPublishedAt;
+  if (elapsed >= LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS) {
+    publishEntry(threadId, entry);
+    return;
+  }
+  if (publishTimersByThread.has(threadId)) {
+    return;
+  }
+  publishTimersByThread.set(
+    threadId,
+    setTimeout(
+      () => publishLatestEntry(threadId),
+      LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS - elapsed,
+    ),
+  );
+}
+
+/**
+ * 若通道内已有「不同 itemId」的正文，取走其尚未落 reducer 的尾段并清空条目。
+ *
+ * Gemini/Grok/Kimi 在 Text↔Reasoning 交错时会为每个 text run 生成新 itemId
+ *（`base:text-2`…）。live 通道按 thread 只有一条活跃正文；若不在 itemId 切换
+ * 前 drain，上一段只剩建壳首 delta，界面会变成「先」「截」这类单字碎片，
+ * 历史重载才恢复完整正文。
+ */
+export function drainLiveAssistantTextTailIfItemChanged(
+  threadId: string,
+  nextItemId: string,
+): { itemId: string; tailDelta: string } | null {
+  const existing = entriesByThread.get(threadId);
+  if (!existing || existing.itemId === nextItemId) {
+    return null;
+  }
+  return drainLiveAssistantTextTail(threadId);
+}
+
 /**
  * 累计一条正文 delta。
  * - 线程无条目或 itemId 变化（新回合/分段切换/别名 id）→ 重置条目并返回
  *   isFirst=true，调用方应照旧 dispatch 该条 delta 以便 reducer 建壳。
- * - 否则追加文本并通知订阅者，返回 isFirst=false，调用方跳过 dispatch。
+ * - 否则无损追加文本并按 publish cadence 通知订阅者，返回 isFirst=false，
+ *   调用方跳过 dispatch。
+ *
+ * 调用方在 itemId 可能变化时必须先
+ * {@link drainLiveAssistantTextTailIfItemChanged}，否则上一段尾部会丢失。
  */
 export function appendLiveAssistantText(
   threadId: string,
@@ -53,36 +131,85 @@ export function appendLiveAssistantText(
 ): { isFirst: boolean } {
   const existing = entriesByThread.get(threadId);
   if (!existing || existing.itemId !== itemId) {
-    entriesByThread.set(threadId, {
+    const nextEntry = {
       itemId,
       text: delta,
       version: 1,
       shellTextLength: delta.length,
-    });
-    notifyThread(threadId);
+    };
+    entriesByThread.set(threadId, nextEntry);
+    publishEntry(threadId, nextEntry);
     return { isFirst: true };
   }
-  entriesByThread.set(threadId, {
+  const nextEntry = {
     itemId: existing.itemId,
     text: existing.text + delta,
     version: existing.version + 1,
     shellTextLength: existing.shellTextLength,
-  });
-  notifyThread(threadId);
+  };
+  entriesByThread.set(threadId, nextEntry);
+  scheduleEntryPublish(threadId, nextEntry);
   return { isFirst: false };
+}
+
+export type LiveAssistantSnapshotUpdate =
+  | "first"
+  | "growth"
+  | "unchanged"
+  | "replacement";
+
+/**
+ * 接收 runtime 的 cumulative assistant snapshot。
+ * 只有同 item 的单调正文增长可留在通道；缩短或改写交给 durable reducer，
+ * 避免把结构性 replacement 误判成 append。
+ */
+export function updateLiveAssistantTextSnapshot(
+  threadId: string,
+  itemId: string,
+  text: string,
+): LiveAssistantSnapshotUpdate {
+  const existing = entriesByThread.get(threadId);
+  if (!existing || existing.itemId !== itemId) {
+    const nextEntry = {
+      itemId,
+      text,
+      version: 1,
+      shellTextLength: text.length,
+    };
+    entriesByThread.set(threadId, nextEntry);
+    publishEntry(threadId, nextEntry);
+    return "first";
+  }
+  if (text === existing.text) {
+    return "unchanged";
+  }
+  if (!text.startsWith(existing.text)) {
+    return "replacement";
+  }
+  const nextEntry = {
+    ...existing,
+    text,
+    version: existing.version + 1,
+  };
+  entriesByThread.set(threadId, nextEntry);
+  scheduleEntryPublish(threadId, nextEntry);
+  return "growth";
 }
 
 /** 回合结束/线程删除时清除条目（订阅行随之切回读 item.text）。 */
 export function clearLiveAssistantText(threadId: string): void {
-  if (entriesByThread.delete(threadId)) {
+  cancelPendingPublish(threadId);
+  entriesByThread.delete(threadId);
+  lastPublishedAtByThread.delete(threadId);
+  if (publishedEntriesByThread.delete(threadId)) {
     notifyThread(threadId);
   }
 }
 
 /**
- * 中断时取走「尚未落入 reducer 的尾段」并清除条目。
+ * terminal settlement / 中断时取走「尚未落入 reducer 的尾段」并清除条目。
  * 调用方应把 tailDelta 作为一条普通 delta dispatch，让被中断的部分正文
- * 落进 items（否则中断后该行会回退到壳首段）。
+ * 落进 items（否则退出 streaming 后该行会回退到壳首段）。
  */
 export function drainLiveAssistantTextTail(
   threadId: string,
@@ -91,8 +218,12 @@ export function drainLiveAssistantTextTail(
   if (!entry) {
     return null;
   }
+  cancelPendingPublish(threadId);
   entriesByThread.delete(threadId);
-  notifyThread(threadId);
+  lastPublishedAtByThread.delete(threadId);
+  if (publishedEntriesByThread.delete(threadId)) {
+    notifyThread(threadId);
+  }
   if (entry.text.length <= entry.shellTextLength) {
     return null;
   }
@@ -111,19 +242,32 @@ export function renameLiveAssistantTextThread(
     return;
   }
   const entry = entriesByThread.get(oldThreadId);
-  if (!entry) {
+  const publishedEntry = publishedEntriesByThread.get(oldThreadId);
+  if (!entry && !publishedEntry) {
     return;
   }
+  cancelPendingPublish(oldThreadId);
+  cancelPendingPublish(newThreadId);
   entriesByThread.delete(oldThreadId);
-  entriesByThread.set(newThreadId, entry);
-  notifyThread(oldThreadId);
-  notifyThread(newThreadId);
+  publishedEntriesByThread.delete(oldThreadId);
+  lastPublishedAtByThread.delete(oldThreadId);
+  if (entry) {
+    entriesByThread.set(newThreadId, entry);
+    publishEntry(newThreadId, entry);
+  } else if (publishedEntry) {
+    publishedEntriesByThread.set(newThreadId, publishedEntry);
+    lastPublishedAtByThread.set(newThreadId, Date.now());
+    notifyThread(newThreadId);
+  }
+  if (publishedEntry) {
+    notifyThread(oldThreadId);
+  }
 }
 
 export function getLiveAssistantTextSnapshot(
   threadId: string,
 ): LiveAssistantTextEntry | null {
-  return entriesByThread.get(threadId) ?? null;
+  return publishedEntriesByThread.get(threadId) ?? null;
 }
 
 export function subscribeLiveAssistantText(
@@ -149,6 +293,12 @@ export function subscribeLiveAssistantText(
 }
 
 export function resetLiveAssistantTextChannelForTests(): void {
+  for (const timer of publishTimersByThread.values()) {
+    clearTimeout(timer);
+  }
+  publishTimersByThread.clear();
   entriesByThread.clear();
+  publishedEntriesByThread.clear();
+  lastPublishedAtByThread.clear();
   listenersByThread.clear();
 }

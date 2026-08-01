@@ -68,22 +68,6 @@ function summarizeGraphRepairActions(summary: ProjectMapGraphRepairSummary | nul
   };
 }
 
-export type ProjectMapOrchestrationDraftState =
-  | { status: "idle" }
-  | {
-      status: "created";
-      nodeId: string;
-      taskId: string;
-      taskStatus: string;
-      evidenceCount: number;
-      riskCount: number;
-    }
-  | {
-      status: "failed";
-      nodeId: string;
-      reason: "missing-workspace" | "missing-node";
-    };
-
 export function DetailPanel({
   node,
   dataset,
@@ -100,7 +84,6 @@ export function DetailPanel({
   graphIntegrityIssues,
   graphRepairSummary,
   isGraphHealthExpanded,
-  orchestrationDraftState: _orchestrationDraftState,
   staleCount,
   unassignedDiscoveryCount,
   pendingReviewCandidateCount,
@@ -113,7 +96,6 @@ export function DetailPanel({
   onDrill,
   onCompleteNode,
   onCalibrateNode,
-  onCreateOrchestrationTask: _onCreateOrchestrationTask,
   onOrganizeUnassigned,
   onConfirmCandidate,
   onRejectCandidate,
@@ -144,7 +126,6 @@ export function DetailPanel({
   graphIntegrityIssues: ProjectMapGraphIntegrityIssue[];
   graphRepairSummary: ProjectMapGraphRepairSummary | null;
   isGraphHealthExpanded: boolean;
-  orchestrationDraftState: ProjectMapOrchestrationDraftState;
   staleCount: number;
   unassignedDiscoveryCount: number;
   pendingReviewCandidateCount: number;
@@ -157,7 +138,6 @@ export function DetailPanel({
   onDrill: () => void;
   onCompleteNode: () => void;
   onCalibrateNode: () => void;
-  onCreateOrchestrationTask: () => void;
   onOrganizeUnassigned: () => void;
   onConfirmCandidate: (candidateId: string) => void;
   onRejectCandidate: (candidateId: string) => void;

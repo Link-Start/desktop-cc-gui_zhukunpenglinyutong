@@ -1,17 +1,55 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   appendLiveAssistantText,
   clearLiveAssistantText,
   drainLiveAssistantTextTail,
+  drainLiveAssistantTextTailIfItemChanged,
   getLiveAssistantTextSnapshot,
+  LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS,
   renameLiveAssistantTextThread,
   resetLiveAssistantTextChannelForTests,
   subscribeLiveAssistantText,
+  updateLiveAssistantTextSnapshot,
 } from "./liveAssistantTextChannel";
 
 describe("liveAssistantTextChannel", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    vi.setSystemTime(0);
+  });
+
   afterEach(() => {
     resetLiveAssistantTextChannelForTests();
+    vi.useRealTimers();
+  });
+
+  it("publishes cumulative snapshot growth without treating replacements as append", () => {
+    expect(
+      updateLiveAssistantTextSnapshot("thread-1", "item-1", "第一段"),
+    ).toBe("first");
+    expect(
+      updateLiveAssistantTextSnapshot(
+        "thread-1",
+        "item-1",
+        "第一段\n第二段",
+      ),
+    ).toBe("growth");
+    expect(
+      updateLiveAssistantTextSnapshot(
+        "thread-1",
+        "item-1",
+        "第一段\n第二段",
+      ),
+    ).toBe("unchanged");
+    expect(
+      updateLiveAssistantTextSnapshot("thread-1", "item-1", "替换正文"),
+    ).toBe("replacement");
+    expect(getLiveAssistantTextSnapshot("thread-1")?.text).toBe("第一段");
+
+    vi.advanceTimersByTime(LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS);
+    expect(getLiveAssistantTextSnapshot("thread-1")?.text).toBe(
+      "第一段\n第二段",
+    );
   });
 
   it("marks the first delta per item as isFirst and accumulates the rest", () => {
@@ -24,8 +62,11 @@ describe("liveAssistantTextChannel", () => {
 
     const snapshot = getLiveAssistantTextSnapshot("t1");
     expect(snapshot?.itemId).toBe("item-1");
-    expect(snapshot?.text).toBe("Hello world");
+    expect(snapshot?.text).toBe("Hello");
     expect(snapshot?.shellTextLength).toBe("Hello".length);
+
+    vi.advanceTimersByTime(LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS);
+    expect(getLiveAssistantTextSnapshot("t1")?.text).toBe("Hello world");
   });
 
   it("resets the entry when the itemId changes (new turn or segment)", () => {
@@ -36,7 +77,41 @@ describe("liveAssistantTextChannel", () => {
     expect(getLiveAssistantTextSnapshot("t1")?.text).toBe("second");
   });
 
-  it("notifies subscribers on append and clear, with stable snapshots between changes", () => {
+  it("drains the previous item tail when the next text run switches itemId", () => {
+    // 模拟 Gemini/Grok/Kimi Text↔Reasoning 交错：text-1 建壳后只走通道，
+    // 随后 reasoning 打断，text-2 以新 itemId 到来。
+    appendLiveAssistantText("t1", "item-1", "先");
+    appendLiveAssistantText("t1", "item-1", "查看截图");
+    expect(
+      drainLiveAssistantTextTailIfItemChanged("t1", "item-1:text-2"),
+    ).toEqual({
+      itemId: "item-1",
+      tailDelta: "查看截图",
+    });
+    expect(getLiveAssistantTextSnapshot("t1")).toBeNull();
+    expect(
+      drainLiveAssistantTextTailIfItemChanged("t1", "item-1:text-2"),
+    ).toBeNull();
+
+    appendLiveAssistantText("t1", "item-1:text-2", "截");
+    appendLiveAssistantText("t1", "item-1:text-2", "图右侧");
+    expect(drainLiveAssistantTextTailIfItemChanged("t1", "item-1:text-2")).toBeNull();
+    expect(drainLiveAssistantTextTail("t1")).toEqual({
+      itemId: "item-1:text-2",
+      tailDelta: "图右侧",
+    });
+  });
+
+  it("does not drain when the next delta stays on the same itemId", () => {
+    appendLiveAssistantText("t1", "item-1", "shell");
+    appendLiveAssistantText("t1", "item-1", " tail");
+    expect(drainLiveAssistantTextTailIfItemChanged("t1", "item-1")).toBeNull();
+    expect(getLiveAssistantTextSnapshot("t1")?.text).toBe("shell");
+    vi.advanceTimersByTime(LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS);
+    expect(getLiveAssistantTextSnapshot("t1")?.text).toBe("shell tail");
+  });
+
+  it("publishes the first entry immediately and keeps snapshots stable until trailing flush", () => {
     const listener = vi.fn();
     const unsubscribe = subscribeLiveAssistantText("t1", listener);
 
@@ -47,16 +122,39 @@ describe("liveAssistantTextChannel", () => {
     expect(getLiveAssistantTextSnapshot("t1")).toBe(first);
 
     appendLiveAssistantText("t1", "item-1", "b");
+    appendLiveAssistantText("t1", "item-1", "c");
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(getLiveAssistantTextSnapshot("t1")).toBe(first);
+
+    vi.advanceTimersByTime(LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS - 1);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(getLiveAssistantTextSnapshot("t1")).toBe(first);
+
+    vi.advanceTimersByTime(1);
     expect(listener).toHaveBeenCalledTimes(2);
-    expect(getLiveAssistantTextSnapshot("t1")).not.toBe(first);
+    expect(getLiveAssistantTextSnapshot("t1")?.text).toBe("abc");
 
     clearLiveAssistantText("t1");
     expect(listener).toHaveBeenCalledTimes(3);
     expect(getLiveAssistantTextSnapshot("t1")).toBeNull();
 
     unsubscribe();
-    appendLiveAssistantText("t1", "item-1", "c");
+    appendLiveAssistantText("t1", "item-1", "next");
     expect(listener).toHaveBeenCalledTimes(3);
+  });
+
+  it("cancels a pending trailing publish when the entry is cleared", () => {
+    const listener = vi.fn();
+    subscribeLiveAssistantText("t1", listener);
+
+    appendLiveAssistantText("t1", "item-1", "a");
+    appendLiveAssistantText("t1", "item-1", "b");
+    clearLiveAssistantText("t1");
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    vi.advanceTimersByTime(LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS);
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(getLiveAssistantTextSnapshot("t1")).toBeNull();
   });
 
   it("drains only the tail beyond the shell text and clears the entry", () => {
@@ -97,8 +195,33 @@ describe("liveAssistantTextChannel", () => {
     expect(appendLiveAssistantText("claude:s1", "item-1", " more")).toEqual({
       isFirst: false,
     });
+    expect(getLiveAssistantTextSnapshot("claude:s1")?.text).toBe("streamed");
+    vi.advanceTimersByTime(LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS);
     expect(getLiveAssistantTextSnapshot("claude:s1")?.text).toBe(
       "streamed more",
     );
+  });
+
+  it("renames the latest accumulated text and prevents the old timer from firing", () => {
+    const oldListener = vi.fn();
+    const newListener = vi.fn();
+    subscribeLiveAssistantText("pending-1", oldListener);
+    subscribeLiveAssistantText("claude:s1", newListener);
+
+    appendLiveAssistantText("pending-1", "item-1", "shell");
+    appendLiveAssistantText("pending-1", "item-1", " pending");
+    oldListener.mockClear();
+
+    renameLiveAssistantTextThread("pending-1", "claude:s1");
+    expect(getLiveAssistantTextSnapshot("pending-1")).toBeNull();
+    expect(getLiveAssistantTextSnapshot("claude:s1")?.text).toBe(
+      "shell pending",
+    );
+    expect(oldListener).toHaveBeenCalledTimes(1);
+    expect(newListener).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS);
+    expect(oldListener).toHaveBeenCalledTimes(1);
+    expect(newListener).toHaveBeenCalledTimes(1);
   });
 });

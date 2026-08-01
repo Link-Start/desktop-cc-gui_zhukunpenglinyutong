@@ -1,17 +1,107 @@
 /** @vitest-environment jsdom */
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getClaudeCommandsList, getOpenCodeCommandsList } from "../../../services/tauri";
+import { getClaudeCommandsList, getOpenCodeCommandsList, startClaudeCommandsWatch, stopClaudeCommandsWatch } from "../../../services/tauri";
+import { subscribeErrorToasts, type ErrorToast } from "../../../services/toasts";
 import { useCustomCommands } from "./useCustomCommands";
 
 vi.mock("../../../services/tauri", () => ({
   getClaudeCommandsList: vi.fn(),
   getOpenCodeCommandsList: vi.fn(),
+  startClaudeCommandsWatch: vi.fn(async () => {}),
+  stopClaudeCommandsWatch: vi.fn(async () => {}),
 }));
+
+type TauriEventHandler = (event: { payload: unknown }) => void;
+const tauriEventHandlers = new Map<string, TauriEventHandler>();
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(async (eventName: string, handler: TauriEventHandler) => {
+    tauriEventHandlers.set(eventName, handler);
+    return () => {
+      tauriEventHandlers.delete(eventName);
+    };
+  }),
+}));
+
+function emitTauriEvent(eventName: string, payload: unknown = null) {
+  tauriEventHandlers.get(eventName)?.({ payload });
+}
 
 describe("useCustomCommands", () => {
   beforeEach(() => {
-    vi.resetAllMocks();
+    vi.mocked(getClaudeCommandsList).mockReset();
+    vi.mocked(getOpenCodeCommandsList).mockReset();
+    vi.mocked(startClaudeCommandsWatch).mockClear();
+    vi.mocked(stopClaudeCommandsWatch).mockClear();
+    tauriEventHandlers.clear();
+  });
+
+  it("starts the Rust commands watcher for the active scope and stops it on unmount", async () => {
+    vi.mocked(getClaudeCommandsList).mockResolvedValue([]);
+
+    const { unmount } = renderHook(() =>
+      useCustomCommands({
+        activeEngine: "claude",
+        workspaceId: "workspace-1",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(startClaudeCommandsWatch).toHaveBeenCalledWith("workspace-1");
+    });
+
+    unmount();
+    await waitFor(() => {
+      expect(stopClaudeCommandsWatch).toHaveBeenCalledWith("workspace-1");
+    });
+  });
+
+  it("waits for a pending watcher start before stopping on unmount", async () => {
+    vi.mocked(getClaudeCommandsList).mockResolvedValue([]);
+    let resolveStart!: () => void;
+    vi.mocked(startClaudeCommandsWatch).mockImplementationOnce(
+      () => new Promise<void>((resolve) => {
+        resolveStart = resolve;
+      }),
+    );
+
+    const { unmount } = renderHook(() =>
+      useCustomCommands({
+        activeEngine: "claude",
+        workspaceId: "workspace-1",
+      }),
+    );
+    await waitFor(() => {
+      expect(startClaudeCommandsWatch).toHaveBeenCalledWith("workspace-1");
+    });
+
+    unmount();
+    expect(stopClaudeCommandsWatch).not.toHaveBeenCalled();
+
+    resolveStart();
+    await waitFor(() => {
+      expect(stopClaudeCommandsWatch).toHaveBeenCalledWith("workspace-1");
+    });
+  });
+
+  it("does not start the commands watcher for the opencode engine", async () => {
+    vi.mocked(getOpenCodeCommandsList).mockResolvedValue([]);
+
+    const { unmount } = renderHook(() =>
+      useCustomCommands({
+        activeEngine: "opencode",
+        workspaceId: "workspace-1",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(getOpenCodeCommandsList).toHaveBeenCalled();
+    });
+    expect(startClaudeCommandsWatch).not.toHaveBeenCalled();
+
+    unmount();
+    expect(stopClaudeCommandsWatch).not.toHaveBeenCalled();
   });
 
   it("passes workspace id to claude commands and normalizes source", async () => {
@@ -41,6 +131,7 @@ describe("useCustomCommands", () => {
       name: "open-spec:apply",
       source: "project_claude",
     });
+    expect(result.current.commandsError).toBeNull();
   });
 
   it("uses opencode command list when active engine is opencode", async () => {
@@ -68,72 +159,7 @@ describe("useCustomCommands", () => {
     expect(getOpenCodeCommandsList).toHaveBeenCalled();
   });
 
-  it("retries workspace claude command list once when first response is empty", async () => {
-    vi.mocked(getClaudeCommandsList)
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
-        {
-          name: "/workflow:analyze-with-file",
-          path: "/repo/.claude/commands/workflow/analyze-with-file.md",
-          description: "analyze with file",
-          source: "project_claude",
-          content: "body",
-        },
-      ]);
-
-    const { result } = renderHook(() =>
-      useCustomCommands({
-        activeEngine: "claude",
-        workspaceId: "workspace-1",
-      }),
-    );
-
-    await waitFor(() => {
-      expect(result.current.commands.some((entry) => entry.name === "workflow:analyze-with-file")).toBe(true);
-    });
-
-    expect(getClaudeCommandsList).toHaveBeenNthCalledWith(1, "workspace-1");
-    expect(getClaudeCommandsList).toHaveBeenNthCalledWith(2, "workspace-1");
-  });
-
-  it("falls back to global claude command list when workspace responses stay empty", async () => {
-    vi.mocked(getClaudeCommandsList)
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
-        {
-          name: "/workflow:analyze-with-file",
-          path: "/Users/demo/.claude/commands/workflow/analyze-with-file.md",
-          description: "analyze with file",
-          source: "global_claude",
-          content: "body",
-        },
-      ]);
-
-    const { result } = renderHook(() =>
-      useCustomCommands({
-        activeEngine: "claude",
-        workspaceId: "workspace-1",
-      }),
-    );
-
-    await waitFor(() => {
-      expect(result.current.commands).toHaveLength(1);
-    });
-
-    expect(getClaudeCommandsList).toHaveBeenNthCalledWith(1, "workspace-1");
-    expect(getClaudeCommandsList).toHaveBeenNthCalledWith(2, "workspace-1");
-    expect(getClaudeCommandsList).toHaveBeenNthCalledWith(3, null);
-    expect(result.current.commands[0]).toMatchObject({
-      name: "workflow:analyze-with-file",
-      source: "global_claude",
-    });
-  });
-
-  it("applies cooldown to avoid repeating empty claude retry burst", async () => {
-    const nowSpy = vi.spyOn(Date, "now");
-    nowSpy.mockReturnValue(1_000_000);
-
+  it("does not retry or fall back to global list when workspace list is empty", async () => {
     vi.mocked(getClaudeCommandsList).mockResolvedValue([]);
 
     const { result } = renderHook(() =>
@@ -144,26 +170,69 @@ describe("useCustomCommands", () => {
     );
 
     await waitFor(() => {
-      expect(getClaudeCommandsList).toHaveBeenCalledTimes(3);
+      expect(getClaudeCommandsList).toHaveBeenCalledTimes(1);
     });
 
-    await act(async () => {
-      await result.current.refreshCommands();
+    expect(getClaudeCommandsList).toHaveBeenCalledWith("workspace-1");
+    expect(getClaudeCommandsList).not.toHaveBeenCalledWith(null);
+    expect(result.current.commands).toEqual([]);
+    expect(result.current.commandsError).toBeNull();
+  });
+
+  it("surfaces list failures via commandsError and an error toast", async () => {
+    const toasts: ErrorToast[] = [];
+    const unsubscribe = subscribeErrorToasts((toast) => {
+      toasts.push(toast);
+    });
+    vi.mocked(getClaudeCommandsList).mockRejectedValue(new Error("ipc down"));
+
+    const { result } = renderHook(() =>
+      useCustomCommands({
+        activeEngine: "claude",
+        workspaceId: "workspace-1",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.commandsError).toBeTruthy();
+    });
+
+    const toast = toasts.find((entry) => entry.id === "commands-list-unavailable");
+    expect(toast).toBeDefined();
+    expect(toast?.variant).toBe("error");
+    unsubscribe();
+  });
+
+  it("refreshes when the Rust watcher emits claude-commands-changed", async () => {
+    vi.mocked(getClaudeCommandsList).mockResolvedValue([]);
+
+    renderHook(() =>
+      useCustomCommands({
+        activeEngine: "claude",
+        workspaceId: "workspace-1",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(getClaudeCommandsList).toHaveBeenCalledTimes(1);
+    });
+
+    vi.mocked(getClaudeCommandsList).mockResolvedValue([
+      {
+        name: "deploy",
+        path: "/repo/.claude/commands/deploy.md",
+        description: "deploy",
+        source: "project_claude",
+        content: "body",
+      },
+    ]);
+
+    act(() => {
+      emitTauriEvent("claude-commands-changed");
     });
 
     await waitFor(() => {
-      expect(getClaudeCommandsList).toHaveBeenCalledTimes(4);
+      expect(getClaudeCommandsList).toHaveBeenCalledTimes(2);
     });
-
-    nowSpy.mockReturnValue(1_016_000);
-    await act(async () => {
-      await result.current.refreshCommands();
-    });
-
-    await waitFor(() => {
-      expect(getClaudeCommandsList).toHaveBeenCalledTimes(7);
-    });
-
-    nowSpy.mockRestore();
   });
 });

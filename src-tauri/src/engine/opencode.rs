@@ -42,6 +42,7 @@ pub struct OpenCodeSession {
     bin_path: Option<String>,
     home_dir: Option<String>,
     custom_args: Option<String>,
+    provider_config_content: Option<String>,
     active_processes: Mutex<HashMap<String, ActiveOpenCodeChildProcess>>,
     session_model_hints: Mutex<HashMap<String, String>>,
     tool_output_snapshots: Mutex<HashMap<String, String>>,
@@ -175,6 +176,7 @@ impl OpenCodeSession {
         workspace_id: String,
         workspace_path: PathBuf,
         config: Option<EngineConfig>,
+        provider_config_content: Option<String>,
     ) -> Self {
         let (event_sender, _) = broadcast::channel(1024);
         let config = config.unwrap_or_default();
@@ -186,6 +188,7 @@ impl OpenCodeSession {
             bin_path: config.bin_path,
             home_dir: config.home_dir,
             custom_args: config.custom_args,
+            provider_config_content,
             active_processes: Mutex::new(HashMap::new()),
             session_model_hints: Mutex::new(HashMap::new()),
             tool_output_snapshots: Mutex::new(HashMap::new()),
@@ -308,6 +311,17 @@ impl OpenCodeSession {
             }
         }
 
+        // Attach local image/files via `opencode run -f <path>` (multimodal).
+        // Resolve data URLs to staged workspace files so path-based CLI can read them.
+        let image_files = crate::engine::cli_image_input::resolve_existing_image_files(
+            params.images.as_deref(),
+            &self.workspace_path,
+        )?;
+        for image_path in &image_files {
+            cmd.arg("--file");
+            cmd.arg(image_path);
+        }
+
         // OpenCode 1.1.62 has a CLI regression with `-- <message>` in `run` mode:
         // it can crash with `arg.includes is not a function`.
         // Keep message positional and apply a safe leading space for dash-prefixed text.
@@ -326,6 +340,12 @@ impl OpenCodeSession {
 
         if let Some(ref home) = self.home_dir {
             cmd.env("OPENCODE_HOME", home);
+        }
+
+        // Managed vendor providers are injected inline; the user's own
+        // opencode.json is never modified by ccgui.
+        if let Some(ref content) = self.provider_config_content {
+            cmd.env("OPENCODE_CONFIG_CONTENT", content);
         }
 
         Self::configure_spawn_command(&mut cmd);
@@ -1791,6 +1811,7 @@ mod tests {
             "ws-drop-test".to_string(),
             PathBuf::from("/tmp/ws-drop-test"),
             None,
+            None,
         );
         assert!(session.active_process_ids().await.is_empty());
         drop(session);
@@ -1801,6 +1822,7 @@ mod tests {
         let session = OpenCodeSession::new(
             "ws-drop-test-2".to_string(),
             PathBuf::from("/tmp/ws-drop-test-2"),
+            None,
             None,
         );
         // Drop should be a no-op when there are no active children.

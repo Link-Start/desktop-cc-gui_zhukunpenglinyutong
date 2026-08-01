@@ -11,7 +11,6 @@ const runtimeNotice = {
     "emptyTitle": "ランタイム通知はまだありません",
     "emptyDescription": "初期化の進行状況や主要なエラーがここに表示されます。",
     "statusIdle": "アイドル",
-    "statusStreaming": "実行中",
     "statusError": "エラー",
     "severityInfo": "情報",
     "severityWarning": "警告",
@@ -59,6 +58,12 @@ const runtimeNotice = {
     },
     "claude": {
       "resumeCommandCopied": "Claude の再開コマンドをコピーしました。TUI の /resume ピッカーにこの GUI セッションが表示されない場合は、claude --resume {{sessionId}} または /resume {{sessionId}} を明示的に実行してください。"
+    },
+    "grok": {
+      "providerSelected": "{{name}} を選択しました。Grok CLI のエントリをクリックしてセッションを作成してください。"
+    },
+    "opencode": {
+      "providerSelected": "{{name}} を選択しました。OpenCode のエントリをクリックしてセッションを作成してください。"
     },
     "error": {
       "createSessionRecoveryRequired": "{{workspace}}: ランタイムの復旧中にセッション作成に失敗しました",

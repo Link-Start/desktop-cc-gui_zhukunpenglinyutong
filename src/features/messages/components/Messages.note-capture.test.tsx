@@ -148,20 +148,19 @@ describe("Messages note capture", () => {
     expect(
       latestActionButtons.map((button) => button.getAttribute("aria-label")),
     ).toEqual([
-      "noteCards.captureMenu",
       "messages.copyMessage",
       "messages.forkMessage",
       "messages.rewindMessage",
+      "noteCards.captureMenu",
     ]);
-    const noteCaptureIcon = latestActionButtons[0]?.querySelector("svg");
-    expect(noteCaptureIcon?.getAttribute("width")).toBe("9");
-    expect(noteCaptureIcon?.getAttribute("height")).toBe("9");
-    expect(noteCaptureIcon?.getAttribute("stroke-width")).toBe("1.75");
+    const noteCaptureIcon = latestActionButtons[3]?.querySelector("svg");
+    expect(noteCaptureIcon?.getAttribute("width")).toBe("16");
+    expect(noteCaptureIcon?.getAttribute("height")).toBe("16");
+    expect(noteCaptureIcon?.getAttribute("stroke-width")).toBe("1.5");
     expect(
-      latestActionButtons[3]
-        ?.querySelector(".codicon-history")
-        ?.classList.contains("message-history-icon"),
-    ).toBe(true);
+      latestActionButtons[2]
+        ?.querySelector(".message-history-icon"),
+    ).toBeTruthy();
 
     fireEvent.click(
       screen.getByRole("button", { name: "noteCards.captureMenu" }),

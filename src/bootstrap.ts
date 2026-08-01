@@ -7,6 +7,8 @@ import "./styles/sidebar.footer.css";
 import "./styles/home.css";
 import "./styles/home-chat.css";
 import "./styles/main.css";
+import "./styles/extensions.css";
+import "./styles/tokentracker-dashboard.css";
 import "./styles/messages.css";
 import "./styles/approval-toasts.css";
 import "./styles/error-toasts.css";
@@ -34,7 +36,6 @@ import "./styles/status-panel.css";
 import "./styles/engine-task-output.css";
 import "./styles/status-panel.responsive.css";
 import "./styles/status-panel.plan-list.css";
-import "./styles/opencode-panel.css";
 import "./styles/panel-lock.css";
 // 统一滚动条兜底清单（须最后加载，覆盖未登记的滚动容器）
 import "./styles/scrollbars.css";

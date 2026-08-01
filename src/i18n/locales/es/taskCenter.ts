@@ -25,8 +25,7 @@ const taskCenter = {
     "noBrowserEvidence": "No hay evidencia del navegador vinculada",
     "browserEvidenceCandidates": "candidatos",
     "source": {
-      "kanban": "kanban",
-      "orchestration": "orquestación"
+      "kanban": "kanban"
     },
     "browserEvidenceState": {
       "available": "disponible",
@@ -48,7 +47,6 @@ const taskCenter = {
     },
     "action": {
       "openConversation": "Abrir conversación",
-      "openOrchestrationTask": "Abrir tarea de orquestación",
       "retry": "Reintentar",
       "resume": "Reanudar",
       "cancel": "Cancelar",

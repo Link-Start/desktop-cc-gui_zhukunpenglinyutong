@@ -192,6 +192,7 @@ function normalizeTask(task: Record<string, unknown>): KanbanTask {
       task.engineType === "claude" ||
       task.engineType === "codex" ||
       task.engineType === "gemini" ||
+      task.engineType === "grok" ||
       task.engineType === "kimi" ||
       task.engineType === "opencode"
         ? task.engineType

@@ -8,6 +8,8 @@ import type {
   WorkspaceSettings,
 } from "../../../types";
 import { ask, message } from "@tauri-apps/plugin-dialog";
+import i18n from "../../../i18n";
+import { pushErrorToast } from "../../../services/toasts";
 import {
   addClone as addCloneService,
   addWorkspace as addWorkspaceService,
@@ -22,6 +24,7 @@ import {
   removeWorktree as removeWorktreeService,
   renameWorktree as renameWorktreeService,
   renameWorktreeUpstream as renameWorktreeUpstreamService,
+  takeWorkspacesRecoveryNotice,
   updateWorkspaceCodexBin as updateWorkspaceCodexBinService,
   updateWorkspaceSettings as updateWorkspaceSettingsService,
 } from "../../../services/tauri";
@@ -145,6 +148,47 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
   useEffect(() => {
     void refreshWorkspaces();
   }, [refreshWorkspaces]);
+
+  useEffect(() => {
+    // Startup quarantine happens before the webview loads, so listWorkspaces
+    // resolves successfully even when workspaces.json was corrupted. The one-shot
+    // recovery notice is the only signal for that path; take semantics keep the
+    // toast to a single display even across hook remounts.
+    let active = true;
+    void (async () => {
+      try {
+        const notice = await takeWorkspacesRecoveryNotice();
+        if (active && notice) {
+          pushErrorToast({
+            title:
+              i18n.t("workspace.workspacesRecoveredTitle", {
+                defaultValue: "工作区已恢复",
+              }) || "工作区已恢复",
+            message: notice.backupFileName
+              ? i18n.t("workspace.workspacesRecoveredMessage", {
+                  backupFileName: notice.backupFileName,
+                  defaultValue:
+                    "工作区文件已损坏，原文件已备份为 {{backupFileName}}，已回退到空工作区列表。",
+                }) ||
+                `工作区文件已损坏，原文件已备份为 ${notice.backupFileName}，已回退到空工作区列表。`
+              : i18n.t("workspace.workspacesRecoveredNoBackupMessage", {
+                  defaultValue:
+                    "工作区文件已损坏且自动备份失败，已回退到空工作区列表。",
+                }) || "工作区文件已损坏且自动备份失败，已回退到空工作区列表。",
+          });
+        }
+      } catch (noticeError) {
+        // A failed notice fetch must never break the workspaces list load.
+        console.error(
+          "[useWorkspaces] failed to fetch workspaces recovery notice",
+          noticeError,
+        );
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     saveSidebarSnapshotWorkspaces(workspaces);

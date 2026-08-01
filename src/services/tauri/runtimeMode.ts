@@ -1,4 +1,5 @@
 import type { EngineStatus, EngineType } from "../../types";
+import { BUILTIN_ENGINE_TYPES } from "../../features/engine/engineRegistry";
 
 export const WEB_SERVICE_CLI_ENGINE_MESSAGE =
   "Web 服务当前仅支持 Codex CLI。请切换到 Codex CLI（Web service currently supports Codex CLI only）.";
@@ -76,8 +77,7 @@ function webServiceEngineFeatures(
 }
 
 export function webServiceCodexOnlyStatuses(): EngineStatus[] {
-  const types: EngineType[] = ["claude", "codex", "gemini", "kimi", "opencode"];
-  return types.map((engineType) => ({
+  return BUILTIN_ENGINE_TYPES.map((engineType) => ({
     engineType,
     installed: engineType === "codex",
     version: engineType === "codex" ? "web-service" : null,

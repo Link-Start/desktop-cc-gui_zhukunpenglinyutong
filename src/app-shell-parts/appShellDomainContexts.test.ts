@@ -552,4 +552,35 @@ describe("appShellDomainContexts", () => {
       "useAppShellLayoutNodesSection({\n    ...appShellContext",
     );
   });
+
+  it("keeps ctx.layoutNodes as the last context spread in renderAppShell", () => {
+    const renderAppShellSource = readSourceFile("renderAppShell.tsx");
+
+    const adaptCallStart = renderAppShellSource.indexOf(
+      "adaptAppShellLegacyFlatContext<RenderAppShellFlattenedContext>({",
+    );
+    expect(adaptCallStart).toBeGreaterThanOrEqual(0);
+    const adaptCallEnd = renderAppShellSource.indexOf("});", adaptCallStart);
+    expect(adaptCallEnd).toBeGreaterThan(adaptCallStart);
+    const adaptCallBody = renderAppShellSource.slice(
+      adaptCallStart,
+      adaptCallEnd,
+    );
+
+    const flattenedSpreadIndex = adaptCallBody.indexOf(
+      "...flattenSelectedAppShellDomainContexts(",
+    );
+    const searchComposerSpreadIndex = adaptCallBody.indexOf(
+      "...ctx.searchAndComposerSection,",
+    );
+    const sectionsSpreadIndex = adaptCallBody.indexOf("...ctx.sections,");
+    const layoutNodesSpreadIndex = adaptCallBody.indexOf("...ctx.layoutNodes,");
+
+    expect(flattenedSpreadIndex).toBeGreaterThanOrEqual(0);
+    expect(searchComposerSpreadIndex).toBeGreaterThan(flattenedSpreadIndex);
+    expect(sectionsSpreadIndex).toBeGreaterThan(searchComposerSpreadIndex);
+    expect(layoutNodesSpreadIndex).toBeGreaterThan(sectionsSpreadIndex);
+    // layoutNodes 之后只允许显式覆盖字段（wrapper 拦截），禁止再出现 context spread
+    expect(adaptCallBody.lastIndexOf("...ctx.")).toBe(layoutNodesSpreadIndex);
+  });
 });

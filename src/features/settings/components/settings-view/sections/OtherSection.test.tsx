@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { OtherSection } from "./OtherSection";
 
 const TRANSLATIONS: Record<string, string> = {
+  "settings.sharedProjectionTestToggleTitle": "Use Canonical Projection",
   "settings.streamingScheduleTierTitle": "Streaming schedule tier",
   "settings.streamingScheduleTier.baseline": "Baseline",
   "settings.streamingScheduleTier.guarded": "Guarded",
@@ -30,6 +31,10 @@ vi.mock("../../HistoryCompletionSettings", () => ({
   HistoryCompletionSettings: () => <div data-testid="history-completion-settings" />,
 }));
 
+vi.mock("../../../../curated-skills", () => ({
+  CuratedSection: () => <div data-testid="curated-section-stub">Mock Curated Section</div>,
+}));
+
 vi.mock("./CostBudgetSettingsSection", () => ({
   CostBudgetSettingsSection: () => <div data-testid="cost-budget-settings" />,
 }));
@@ -45,6 +50,8 @@ function renderOtherSection() {
     <OtherSection
       title="Other"
       description="Other settings"
+      appSettings={{ enabledCuratedSkillIds: [] }}
+      onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
       sessionRadarRecentCompletedSessions={[]}
       onDeleteSessionRadarHistory={vi.fn()}
     />,
@@ -54,6 +61,35 @@ function renderOtherSection() {
 describe("OtherSection performance diagnostics", () => {
   afterEach(() => {
     window.localStorage.clear();
+    vi.unstubAllGlobals();
+  });
+
+  it("renders curated skills inside other settings", () => {
+    renderOtherSection();
+    expect(screen.getByTestId("curated-section-stub")).toBeTruthy();
+  });
+
+  it("shows default-on and persists explicit negative/positive overrides", () => {
+    const reload = vi.fn();
+    vi.stubGlobal("location", { reload });
+    renderOtherSection();
+
+    const toggle = screen.getByRole("switch", {
+      name: "Use Canonical Projection",
+    });
+    expect(toggle.getAttribute("data-state")).toBe("checked");
+
+    fireEvent.click(toggle);
+
+    expect(window.localStorage.getItem("mossx.sharedProjection")).toBe("0");
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(toggle.getAttribute("data-state")).toBe("unchecked");
+
+    fireEvent.click(toggle);
+
+    expect(window.localStorage.getItem("mossx.sharedProjection")).toBe("1");
+    expect(reload).toHaveBeenCalledTimes(2);
+    expect(toggle.getAttribute("data-state")).toBe("checked");
   });
 
   it("clears known realtime performance overrides and asks for reload", () => {

@@ -80,6 +80,50 @@
   font-size: 13px;
 }
 
+.release-notes-modal-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.release-notes-modal-update-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent-primary, #2563eb) 42%, var(--border-subtle));
+  background: color-mix(in srgb, var(--accent-primary, #2563eb) 16%, transparent);
+  color: color-mix(in srgb, var(--accent-primary, #2563eb) 88%, var(--text));
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.release-notes-modal-update-badge:hover {
+  border-color: color-mix(in srgb, var(--accent-primary, #2563eb) 62%, var(--border-subtle));
+  background: color-mix(in srgb, var(--accent-primary, #2563eb) 24%, transparent);
+}
+
+.release-notes-modal-update-badge:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-primary, #2563eb) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.release-notes-modal-update-badge-version {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.88;
+}
+
 .release-notes-modal-close {
   /* 中和 buttons.css 全局 `button { padding: 8px 14px }` 泄漏到 shadcn 图标按钮 */
   padding: 0;

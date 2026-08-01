@@ -28,7 +28,7 @@ import {
   DropdownMenuTrigger,
 } from "../../../components/ui/dropdown-menu";
 import { isWindowsPlatform } from "../../../utils/platform";
-import { Markdown } from "../../messages/components/Markdown";
+import { Markdown } from "../../../markdown/components/Markdown";
 import {
   pickImageFiles,
   type WorkspaceNoteCard,

@@ -121,6 +121,23 @@ describe("useGitCommitController", () => {
     expect(mockSyncGit).not.toHaveBeenCalled();
   });
 
+  it("maps broken pipe commit message failures to a recoverable i18n key", async () => {
+    mockGenerateCommitMessageWithEngine.mockRejectedValueOnce(
+      new Error("Broken pipe (os error 32)"),
+    );
+    const { result } = createController({
+      stagedFiles: [{ path: "src/file.ts", status: "M", additions: 1, deletions: 0 }],
+      unstagedFiles: [],
+    });
+
+    await act(async () => {
+      await result.current.onGenerateCommitMessage("zh", "codex");
+    });
+
+    expect(result.current.commitMessageError).toBe("git.commitMessageRuntimeRecovering");
+    expect(result.current.commitMessageError).not.toMatch(/broken pipe|os error 32/i);
+  });
+
   it("commits staged changes and refreshes git state", async () => {
     const { result, refreshGitLog, refreshGitStatus, onMutationComplete } = createController({
       stagedFiles: [{ path: "src/file.ts", status: "M", additions: 1, deletions: 0 }],

@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -151,5 +151,85 @@ describe("WorkspaceReadOnlyDiffCompare", () => {
     resolveFirstRequest("@@ -1 +1 @@\n-stale old\n+stale new\n");
     await Promise.resolve();
     expect(screen.getByTestId("source:second.ts").textContent).toBe("second new");
+  });
+
+  it("resizes from the drag-start ratio without accumulating mousemove deltas", () => {
+    render(createElement(WorkspaceReadOnlyDiffCompare, {
+      filePath: "example.ts",
+      diff: "@@ -1 +1 @@\n-old\n+new\n",
+      resizableColumns: true,
+    }));
+
+    const splitter = screen.getByTestId("file-history-compare-resizer");
+    const columns = splitter.parentElement;
+    if (!columns) throw new Error("compare columns not found");
+    columns.getBoundingClientRect = () => ({
+      width: 1008,
+      height: 600,
+      top: 0,
+      left: 0,
+      right: 1008,
+      bottom: 600,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.mouseDown(splitter, { clientX: 0 });
+    fireEvent.mouseMove(window, { clientX: 20 });
+    fireEvent.mouseMove(window, { clientX: 60 });
+    fireEvent.mouseMove(window, { clientX: 100 });
+    fireEvent.mouseUp(window, { clientX: 100 });
+
+    expect(columns.style.getPropertyValue("--read-only-previous-column-ratio")).toBe("0.6fr");
+    expect(columns.style.getPropertyValue("--read-only-source-column-ratio")).toBe("0.4fr");
+    expect(splitter.getAttribute("aria-valuenow")).toBe("60");
+  });
+
+  it("supports keyboard resizing, clamp boundaries, and double-click reset", () => {
+    render(createElement(WorkspaceReadOnlyDiffCompare, {
+      filePath: "example.ts",
+      diff: "@@ -1 +1 @@\n-old\n+new\n",
+      resizableColumns: true,
+    }));
+
+    const splitter = screen.getByTestId("file-history-compare-resizer");
+    const columns = splitter.parentElement;
+    if (!columns) throw new Error("compare columns not found");
+
+    fireEvent.keyDown(splitter, { key: "End" });
+    expect(columns.style.getPropertyValue("--read-only-previous-column-ratio")).toBe("0.8fr");
+    expect(columns.style.getPropertyValue("--read-only-source-column-ratio")).toBe("0.2fr");
+
+    fireEvent.doubleClick(splitter);
+    expect(columns.style.getPropertyValue("--read-only-previous-column-ratio")).toBe("0.5fr");
+    expect(columns.style.getPropertyValue("--read-only-source-column-ratio")).toBe("0.5fr");
+  });
+
+  it("cleans global drag state when the compare unmounts", () => {
+    const view = render(createElement(WorkspaceReadOnlyDiffCompare, {
+      filePath: "example.ts",
+      diff: "@@ -1 +1 @@\n-old\n+new\n",
+      resizableColumns: true,
+    }));
+    const splitter = screen.getByTestId("file-history-compare-resizer");
+    const columns = splitter.parentElement;
+    if (!columns) throw new Error("compare columns not found");
+    columns.getBoundingClientRect = () => ({
+      width: 1008,
+      height: 600,
+      top: 0,
+      left: 0,
+      right: 1008,
+      bottom: 600,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.mouseDown(splitter, { clientX: 0 });
+    expect(document.body.dataset.readOnlyCompareResizing).toBe("true");
+    view.unmount();
+    expect(document.body.dataset.readOnlyCompareResizing).toBeUndefined();
   });
 });

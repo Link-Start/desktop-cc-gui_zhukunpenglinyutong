@@ -117,9 +117,10 @@ describe("Messages turn boundaries", () => {
 
     expect(container.querySelector(".messages-reasoning-boundary")).toBeNull();
     expect(container.querySelector(".messages-final-boundary")).toBeTruthy();
-    expect(container.querySelector(".messages-final-boundary")?.textContent ?? "").toContain(
+    expect(container.querySelector(".messages-final-boundary")?.textContent ?? "").not.toContain(
       "Final Message",
     );
+    expect(container.querySelector(".message-assistant-action-footer")).toBeTruthy();
     expect(container.textContent ?? "").not.toContain("Command: rg --files");
   });
 
@@ -252,8 +253,8 @@ describe("Messages turn boundaries", () => {
     }
   });
 
-  it("shows completion time without total duration on final boundary", () => {
-    const completedAt = new Date(2026, 3, 1, 10, 20, 30).getTime();
+  it("shows completion time, duration, and token usage next to actions", () => {
+    const completedAt = new Date(2026, 6, 31, 20, 42, 26).getTime();
     const items: ConversationItem[] = [
       {
         id: "assistant-final-meta-1",
@@ -262,7 +263,41 @@ describe("Messages turn boundaries", () => {
         text: "A1",
         isFinal: true,
         finalCompletedAt: completedAt,
-        finalDurationMs: 12_000,
+        finalDurationMs: 13_000,
+        finalInputTokens: 41_100,
+        finalOutputTokens: 105,
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const finalMeta = container.querySelector(".messages-turn-boundary-meta");
+    const text = finalMeta?.textContent ?? "";
+    expect(text).toContain("07-31 20:42:26");
+    expect(text).toContain("耗时13s");
+    expect(text).toContain("输入 41.1K token / 输出 105 token");
+    expect(finalMeta?.querySelector(".message-token-usage-button")).toBeNull();
+  });
+
+  it("shows completion time without tokens when token usage is missing", () => {
+    const completedAt = new Date(2026, 3, 1, 10, 20, 30).getTime();
+    const items: ConversationItem[] = [
+      {
+        id: "assistant-final-meta-fallback-1",
+        kind: "message",
+        role: "assistant",
+        text: "A1",
+        isFinal: true,
+        finalCompletedAt: completedAt,
       },
     ];
 
@@ -279,7 +314,7 @@ describe("Messages turn boundaries", () => {
 
     const finalMeta = container.querySelector(".messages-turn-boundary-meta");
     expect(finalMeta?.textContent ?? "").toContain("04-01 10:20:30");
-    expect(finalMeta?.textContent ?? "").not.toContain("总耗时");
+    expect(finalMeta?.querySelector(".message-token-usage-button")).toBeNull();
   });
 
   it("renders final boundary without reasoning boundary when no process items exist", () => {

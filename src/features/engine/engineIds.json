@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "1.0",
+  "engineIds": ["claude", "codex", "gemini", "grok", "kimi", "opencode"],
+  "engines": [
+    {
+      "id": "claude",
+      "displayName": "Claude Code",
+      "shortName": "Claude Code",
+      "adapterId": "builtin.claude",
+      "protocolFamily": "stream-json-cli",
+      "executionModel": "one-shot",
+      "capabilityProfile": "claude"
+    },
+    {
+      "id": "codex",
+      "displayName": "Codex CLI",
+      "shortName": "Codex",
+      "adapterId": "builtin.codex",
+      "protocolFamily": "app-server-json-rpc",
+      "executionModel": "persistent",
+      "capabilityProfile": "codex"
+    },
+    {
+      "id": "gemini",
+      "displayName": "Gemini CLI",
+      "shortName": "Gemini",
+      "adapterId": "builtin.gemini",
+      "protocolFamily": "stream-json-cli",
+      "executionModel": "one-shot",
+      "capabilityProfile": "gemini"
+    },
+    {
+      "id": "grok",
+      "displayName": "Grok CLI",
+      "shortName": "Grok",
+      "adapterId": "builtin.grok",
+      "protocolFamily": "stream-json-cli",
+      "executionModel": "one-shot",
+      "capabilityProfile": "grok"
+    },
+    {
+      "id": "kimi",
+      "displayName": "Kimi CLI",
+      "shortName": "Kimi",
+      "adapterId": "builtin.kimi",
+      "protocolFamily": "stream-json-cli",
+      "executionModel": "one-shot",
+      "capabilityProfile": "kimi"
+    },
+    {
+      "id": "opencode",
+      "displayName": "OpenCode",
+      "shortName": "OpenCode",
+      "adapterId": "builtin.opencode",
+      "protocolFamily": "stream-json-cli",
+      "executionModel": "one-shot",
+      "capabilityProfile": "opencode"
+    }
+  ]
+}

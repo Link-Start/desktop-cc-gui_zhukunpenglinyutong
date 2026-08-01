@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { TaskCenterView } from "./TaskCenterView";
 import type { TaskRunRecord } from "../types";
-import { dispatchOpenTaskRunEvent } from "../../agent-orchestration/utils/navigationEvents";
+import { dispatchOpenTaskRunEvent } from "../utils/taskRunNavigationEvents";
 
 function makeRun(overrides: Partial<TaskRunRecord> = {}): TaskRunRecord {
   return {
@@ -88,30 +88,6 @@ describe("TaskCenterView", () => {
 
     expect(onOpenConversation).toHaveBeenCalledWith("thread-1");
     expect(run.status).toBe("running");
-  });
-
-  it("opens the linked orchestration task for orchestration runs", () => {
-    const onOpenOrchestrationTask = vi.fn();
-    const run = makeRun({
-      task: {
-        taskId: "orchestration-task-1",
-        source: "orchestration",
-        workspaceId: "/repo",
-        title: "Review orchestration output",
-        orchestrationTaskId: "orchestration-task-1",
-      },
-    });
-
-    render(
-      <TaskCenterView
-        runs={[run]}
-        onOpenOrchestrationTask={onOpenOrchestrationTask}
-      />,
-    );
-
-    fireEvent.click(screen.getByText("taskCenter.action.openOrchestrationTask"));
-
-    expect(onOpenOrchestrationTask).toHaveBeenCalledWith("orchestration-task-1");
   });
 
   it("selects a linked run when orchestration center dispatches an open-run event", () => {

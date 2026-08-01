@@ -266,7 +266,9 @@ describe("WorkspaceEditableDiffReviewSurface", () => {
 
     await waitFor(() => expect(mockSaveDraft).toHaveBeenCalledOnce());
     expect(screen.getByText("IDEA compare")).toBeTruthy();
-    expect(document.querySelector('[data-content-mode="focused"]')).toBeTruthy();
+    await waitFor(() => {
+      expect(document.querySelector('[data-content-mode="focused"]')).toBeTruthy();
+    });
   });
 
   it("keeps the dialog and editable compare open when save fails", async () => {

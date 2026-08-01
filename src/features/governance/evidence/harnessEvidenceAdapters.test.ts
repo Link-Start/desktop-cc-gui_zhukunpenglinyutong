@@ -81,6 +81,7 @@ describe("harness evidence adapters", () => {
       specState: "supported",
       runtimeState: "unsupported",
       available: false,
+      reason: "runtime:unsupported",
     };
 
     expect(createCapabilityGovernanceEvidence({ status })).toMatchObject({

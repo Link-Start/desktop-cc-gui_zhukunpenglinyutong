@@ -520,6 +520,7 @@ describe("StatusPanel", () => {
       .getAllByText("git.generateCommitMessageEngineClaude")[0]
       .closest(".commit-message-generate-menu-group");
     expect(claudeGroup).toBeTruthy();
+    expect(screen.getByText("git.generateCommitMessageEngineKimi")).toBeTruthy();
     expect(screen.queryByText("git.generateCommitMessageEngineGemini")).toBeNull();
     fireEvent.click(
       within(claudeGroup as HTMLElement).getByRole("menuitem", {

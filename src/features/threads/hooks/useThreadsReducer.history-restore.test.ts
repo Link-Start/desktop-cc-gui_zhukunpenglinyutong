@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { withoutMessagePresentationMetadata } from "./threadReducerTestProjection";
 import type { ThreadState } from "./useThreadsReducer";
 import { initialState, threadReducer } from "./useThreadsReducer";
 
@@ -61,7 +62,7 @@ describe("threadReducer history restore", () => {
       ],
     });
 
-    expect(next.itemsByThread["thread-1"]).toEqual([
+    expect(withoutMessagePresentationMetadata(next.itemsByThread["thread-1"])).toEqual([
       {
         id: "assistant-history-1",
         kind: "message",

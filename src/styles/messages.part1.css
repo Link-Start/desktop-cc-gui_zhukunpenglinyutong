@@ -4,15 +4,18 @@
   display: flex;
   margin-bottom: 12px;
   content-visibility: auto;
-  /* ponytail: 屏外占位兜底高度。仅在「该消息本次会话从未渲染过」(如从历史进入长对话)
-     时生效;一旦渲染过,auto 会缓存真实高度。原值 120px 对常见折叠态工具块(~40px)
-     严重高估,导致历史回放时撑出大空隙。取加权中位 64px:折叠行略高估(空隙≈24px,
-     近乎不可见)、短消息命中、长消息仍靠 auto 缓存修正。
-     ceiling: 仍是静态估值;要根治需接通 messagesTimelineVirtualization 的按类型估高。 */
-  contain-intrinsic-block-size: auto 64px;
+  /* 屏外占位兜底。static 全量路径仍依赖此估值；虚拟化 idle 路径用
+     estimateTimelineProjectionRowSize。48px 更贴近短气泡/折叠工具节奏，
+     减少 content-visibility 进视口时高度跳变导致的滚动阻滞。 */
+  contain-intrinsic-block-size: auto 48px;
 }
 
 .message.assistant.is-live-streaming {
+  content-visibility: visible;
+  contain-intrinsic-block-size: auto;
+}
+
+.message:has(.message-image-grid, .message-deferred-image-list, .message-generated-image-card) {
   content-visibility: visible;
   contain-intrinsic-block-size: auto;
 }
@@ -34,16 +37,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .working.is-waiting .working-spinner,
-  .working.is-ingress .working-spinner {
-    animation-duration: 1s;
-    filter: none;
-  }
-
-  .working.is-ingress .working-spinner::before,
-  .working.is-ingress .working-spinner::after {
+  .working-spinner {
     animation: none;
-    display: none;
   }
 
   .message,
@@ -94,11 +89,30 @@
   position: relative;
 }
 
+.message-turn-target-badge {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.message-turn-target-badge > span:not(:last-child)::after {
+  margin-left: 4px;
+  content: "·";
+}
+
+.message-turn-target-badge.is-unavailable {
+  color: var(--status-warning, #f59e0b);
+}
+
 .message-action-bar {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 1px;
+  justify-content: flex-start;
+  gap: 2px;
   padding: 0;
   color: var(--text-muted);
 }
@@ -118,11 +132,35 @@
   transform: translateY(0);
 }
 
-/* 操作按钮(复制/分支/历史)挪入「最终消息」分隔线那一行，排到右侧线条之后、贴最右端 */
-.messages-final-boundary .message-action-bar-row {
-  order: 1;
+/* 助手最终消息：操作栏贴在正文下方（ChatGPT 风格），无「最终消息」分割线 */
+.message-assistant-action-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  /* 操作图标与左侧 meta 紧贴，避免把 meta 挤到行尾 */
+  gap: 6px 8px;
+  margin: 4px 0 2px;
+  min-height: 28px;
+}
+
+.message-assistant-action-footer .message-action-bar-row {
   flex-shrink: 0;
-  margin-left: 8px;
+  /* 图标之间留白更接近参考图：轻量、匀称 */
+  gap: 2px;
+}
+
+/* 贴在操作图标右侧（左对齐），不推到行尾 */
+.message-assistant-action-meta {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 2px;
+  letter-spacing: 0.01em;
+  font-size: var(--message-meta-font-size);
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--text-muted) 92%, var(--text-strong));
 }
 
 .message-action-button {
@@ -137,7 +175,7 @@
   background: transparent;
   box-shadow: none;
   color: var(--text-muted);
-  transition: color 160ms ease, opacity 160ms ease;
+  transition: color 160ms ease, background-color 160ms ease, opacity 160ms ease;
 }
 
 .message-action-button:hover,
@@ -155,6 +193,45 @@
 
 .message-action-bar-row .message-history-icon {
   font-size: 13px;
+}
+
+/* 助手 footer：细描边 + 柔和灰 + 宽松命中区，视觉对齐参考图 */
+.message-assistant-action-footer .message-action-button {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--text-muted) 78%, transparent);
+  opacity: 1;
+}
+
+.message-assistant-action-footer .message-action-button:hover,
+.message-assistant-action-footer .message-action-button:focus-visible {
+  background: color-mix(in srgb, var(--text-muted) 10%, transparent);
+  color: color-mix(in srgb, var(--text-primary) 82%, var(--text-muted));
+}
+
+.message-assistant-action-footer .message-action-button:active {
+  background: color-mix(in srgb, var(--text-muted) 14%, transparent);
+}
+
+.message-assistant-action-footer .message-action-icon,
+.message-assistant-action-footer .message-copy-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+
+.message-assistant-action-footer .message-copy-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.message-assistant-action-footer .message-copy-icon svg {
+  stroke-width: 1.5;
 }
 
 .message-fork-confirm-dialog {
@@ -209,8 +286,7 @@
   min-width: 88px;
 }
 
-/* 复制按钮用 lucide SVG，分支/历史用 codicon 字体：lucide 默认描边偏粗、12px 方框墨迹偏大，
-   收到 11px 并减细描边，使其视觉重量与同排 codicon(font-size:12px) 对齐 */
+/* 复制按钮：双层 lucide SVG 叠放（copy ↔ check） */
 .message-copy-icon {
   position: relative;
   width: 11px;
@@ -1911,10 +1987,9 @@
   margin-bottom: 12px;
   background: var(--surface-card);
   color: var(--text-stronger);
-  /* review/diff 等卡片屏幕外跳过渲染/绘制；72px 仅为首次渲染前的
-     占位估值，渲染过后由 auto 缓存真实高度。 */
+  /* review/diff 等卡片屏幕外跳过渲染/绘制；56px 贴近折叠工具/摘要行。 */
   content-visibility: auto;
-  contain-intrinsic-block-size: auto 72px;
+  contain-intrinsic-block-size: auto 56px;
 }
 
 .item-card.review {

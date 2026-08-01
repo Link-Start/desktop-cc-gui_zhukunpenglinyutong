@@ -95,6 +95,12 @@ const activityPanel = {
       readMark: "已读",
       deleteHistoryEntry: "删除“{{name}}”",
       deleteDateGroupEntries: "删除 {{date}} 当天的全部 {{count}} 条记录",
+      confirmDeleteDateGroup: "确定删除 {{date}} 的全部 {{count}} 条记录？",
+      confirmDeleteDateGroup_other: "确定删除 {{date}} 的全部 {{count}} 条记录？",
+      deleteFailedTitle: "删除失败",
+      deleteFailedBody: "{{count}} 条记录删除失败，请重试。",
+      deleteFailedBody_other: "{{count}} 条记录删除失败，请重试。",
+      deleteFailedDismiss: "关闭",
     },
     status: {
       running: "运行中",

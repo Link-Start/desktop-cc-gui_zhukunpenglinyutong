@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConversationItem } from "../../../types";
 import type { ConversationState } from "../../threads/contracts/conversationCurtainContracts";
-import { MESSAGES_LIVE_CONTROLS_UPDATED_EVENT } from "../constants/liveCanvasControls";
+import { MESSAGES_LIVE_CONTROLS_UPDATED_EVENT } from "../../../live-canvas/liveCanvasControls";
 import { Messages } from "./Messages";
 
 vi.mock("./Markdown", () => ({
@@ -15,9 +15,9 @@ vi.mock("./Markdown", () => ({
 // History collapsing ships effectively disabled in production (window = 10000).
 // These behavior tests exercise the collapse/expand logic at its original
 // threshold; only the three >30-item cases below are affected.
-vi.mock("./messagesRenderUtils", async (importOriginal) => {
+vi.mock("../utils/messagesRenderUtils", async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import("./messagesRenderUtils")>();
+    await importOriginal<typeof import("../utils/messagesRenderUtils")>();
   return {
     ...actual,
     VISIBLE_MESSAGE_WINDOW: 30,
@@ -495,7 +495,23 @@ describe("Messages live behavior", () => {
     expect(container.querySelector(".bash-group-container")).toBeNull();
     expect(container.textContent ?? "").not.toContain("pwd && ls -la");
     expect(container.textContent ?? "").not.toContain("echo done");
+    // File edits render in a default-collapsed scene shell; expand to assert path.
+    const editScene = container.querySelector(
+      '[data-testid="file-edit-scene-list"]',
+    )?.previousElementSibling as HTMLElement | null;
+    const editToggle =
+      container.querySelector('[aria-expanded="false"]') ??
+      Array.from(container.querySelectorAll("button, [role='button']")).find(
+        (node) =>
+          (node.textContent ?? "").includes("文件修改") ||
+          (node.textContent ?? "").includes("File changes") ||
+          (node.textContent ?? "").includes("fileEditSceneCount"),
+      );
+    if (editToggle) {
+      fireEvent.click(editToggle);
+    }
     expect(container.textContent ?? "").toContain("keep.ts");
+    void editScene;
   });
 
   it("hides command cards in claude canvas", () => {
@@ -537,90 +553,18 @@ describe("Messages live behavior", () => {
     expect(container.textContent ?? "").not.toContain("echo done");
   });
 
-  it.each(["claude", "gemini"] as const)(
-    "switches %s working spinner between waiting and ingress phases",
+  it.each(["claude", "gemini", "codex"] as const)(
+    "uses a unified simple working indicator for %s (no phase glow FX)",
     (activeEngine) => {
-      vi.useFakeTimers();
-      try {
-        const baseItems: ConversationItem[] = [
-          {
-            id: "user-stream-phase",
-            kind: "message",
-            role: "user",
-            text: "继续输出",
-          },
-          {
-            id: "assistant-stream-phase",
-            kind: "message",
-            role: "assistant",
-            text: "",
-          },
-        ];
-
-        const { container, rerender } = render(
-          <Messages
-            items={baseItems}
-            threadId="thread-1"
-            workspaceId="ws-1"
-            isThinking
-            processingStartedAt={Date.now() - 1_000}
-            activeEngine={activeEngine}
-            openTargets={[]}
-            selectedOpenAppId=""
-          />,
-        );
-
-        const waitingNode = container.querySelector(".working");
-        expect(waitingNode?.className ?? "").toContain("is-waiting");
-
-        rerender(
-          <Messages
-            items={[
-              baseItems[0]!,
-              {
-                id: "assistant-stream-phase",
-                kind: "message",
-                role: "assistant",
-                text: "增量片段",
-              },
-            ]}
-            threadId="thread-1"
-            workspaceId="ws-1"
-            isThinking
-            processingStartedAt={Date.now() - 1_000}
-            activeEngine={activeEngine}
-            openTargets={[]}
-            selectedOpenAppId=""
-          />,
-        );
-
-        const ingressNode = container.querySelector(".working");
-        expect(ingressNode?.className ?? "").toContain("is-ingress");
-
-        act(() => {
-          vi.advanceTimersByTime(1_200);
-        });
-
-        const backToWaitingNode = container.querySelector(".working");
-        expect(backToWaitingNode?.className ?? "").toContain("is-waiting");
-      } finally {
-        vi.useRealTimers();
-      }
-    },
-  );
-
-  it("keeps Codex working spinner visually aligned with Claude Code baseline", () => {
-    vi.useFakeTimers();
-    try {
       const baseItems: ConversationItem[] = [
         {
-          id: "user-codex-stream-phase",
+          id: "user-stream-phase",
           kind: "message",
           role: "user",
           text: "继续输出",
         },
         {
-          id: "assistant-codex-stream-phase",
+          id: "assistant-stream-phase",
           kind: "message",
           role: "assistant",
           text: "",
@@ -634,21 +578,25 @@ describe("Messages live behavior", () => {
           workspaceId="ws-1"
           isThinking
           processingStartedAt={Date.now() - 1_000}
-          activeEngine="codex"
+          activeEngine={activeEngine}
           openTargets={[]}
           selectedOpenAppId=""
         />,
       );
 
       const waitingNode = container.querySelector(".working");
-      expect(waitingNode?.className ?? "").toContain("is-waiting");
+      expect(waitingNode).toBeTruthy();
+      expect(waitingNode?.className ?? "").toBe("working");
+      expect(waitingNode?.querySelector(".working-spinner")).toBeTruthy();
+      expect(waitingNode?.className ?? "").not.toContain("is-waiting");
+      expect(waitingNode?.className ?? "").not.toContain("is-ingress");
 
       rerender(
         <Messages
           items={[
             baseItems[0]!,
             {
-              id: "assistant-codex-stream-phase",
+              id: "assistant-stream-phase",
               kind: "message",
               role: "assistant",
               text: "增量片段",
@@ -658,19 +606,18 @@ describe("Messages live behavior", () => {
           workspaceId="ws-1"
           isThinking
           processingStartedAt={Date.now() - 1_000}
-          activeEngine="codex"
+          activeEngine={activeEngine}
           openTargets={[]}
           selectedOpenAppId=""
         />,
       );
 
-      const stillWaitingNode = container.querySelector(".working");
-      expect(stillWaitingNode?.className ?? "").toContain("is-waiting");
-      expect(stillWaitingNode?.className ?? "").not.toContain("is-ingress");
-    } finally {
-      vi.useRealTimers();
-    }
-  });
+      const streamingNode = container.querySelector(".working");
+      expect(streamingNode?.className ?? "").toBe("working");
+      expect(streamingNode?.className ?? "").not.toContain("is-ingress");
+      expect(streamingNode?.className ?? "").not.toContain("is-waiting");
+    },
+  );
 
   it("shows a working indicator while context compaction is in progress", () => {
     const { container } = render(
@@ -864,70 +811,66 @@ describe("Messages live behavior", () => {
   });
 
   it.each(["claude", "gemini"] as const)(
-    "detects ingress for %s even when chunk length is unchanged",
+    "keeps %s working indicator simple when chunk content changes at same length",
     (activeEngine) => {
-      vi.useFakeTimers();
-      try {
-        const { container, rerender } = render(
-          <Messages
-            items={[
-              {
-                id: "user-stream-same-length",
-                kind: "message",
-                role: "user",
-                text: "继续输出",
-              },
-              {
-                id: "assistant-stream-same-length",
-                kind: "message",
-                role: "assistant",
-                text: "aaaa",
-              },
-            ]}
-            threadId="thread-1"
-            workspaceId="ws-1"
-            isThinking
-            processingStartedAt={Date.now() - 1_000}
-            activeEngine={activeEngine}
-            openTargets={[]}
-            selectedOpenAppId=""
-          />,
-        );
+      const { container, rerender } = render(
+        <Messages
+          items={[
+            {
+              id: "user-stream-same-length",
+              kind: "message",
+              role: "user",
+              text: "继续输出",
+            },
+            {
+              id: "assistant-stream-same-length",
+              kind: "message",
+              role: "assistant",
+              text: "aaaa",
+            },
+          ]}
+          threadId="thread-1"
+          workspaceId="ws-1"
+          isThinking
+          processingStartedAt={Date.now() - 1_000}
+          activeEngine={activeEngine}
+          openTargets={[]}
+          selectedOpenAppId=""
+        />,
+      );
 
-        const baselineNode = container.querySelector(".working");
-        expect(baselineNode?.className ?? "").toContain("is-waiting");
+      const baselineNode = container.querySelector(".working");
+      expect(baselineNode?.className ?? "").toBe("working");
 
-        rerender(
-          <Messages
-            items={[
-              {
-                id: "user-stream-same-length",
-                kind: "message",
-                role: "user",
-                text: "继续输出",
-              },
-              {
-                id: "assistant-stream-same-length",
-                kind: "message",
-                role: "assistant",
-                text: "bbbb",
-              },
-            ]}
-            threadId="thread-1"
-            workspaceId="ws-1"
-            isThinking
-            processingStartedAt={Date.now() - 1_000}
-            activeEngine={activeEngine}
-            openTargets={[]}
-            selectedOpenAppId=""
-          />,
-        );
+      rerender(
+        <Messages
+          items={[
+            {
+              id: "user-stream-same-length",
+              kind: "message",
+              role: "user",
+              text: "继续输出",
+            },
+            {
+              id: "assistant-stream-same-length",
+              kind: "message",
+              role: "assistant",
+              text: "bbbb",
+            },
+          ]}
+          threadId="thread-1"
+          workspaceId="ws-1"
+          isThinking
+          processingStartedAt={Date.now() - 1_000}
+          activeEngine={activeEngine}
+          openTargets={[]}
+          selectedOpenAppId=""
+        />,
+      );
 
-        const ingressNode = container.querySelector(".working");
-        expect(ingressNode?.className ?? "").toContain("is-ingress");
-      } finally {
-        vi.useRealTimers();
-      }
+      const afterNode = container.querySelector(".working");
+      expect(afterNode?.className ?? "").toBe("working");
+      expect(afterNode?.className ?? "").not.toContain("is-ingress");
     },
   );
 
@@ -981,6 +924,145 @@ describe("Messages live behavior", () => {
     );
 
     expect(metrics.getScrollTopWriteCount()).toBe(baselineWrites);
+  });
+
+  it("forces send and settle boundaries to the bottom with live auto-follow off", () => {
+    window.localStorage.setItem("ccgui.messages.live.autoFollow", "0");
+    const renderWith = (thinking: boolean) => (
+      <Messages
+        items={[
+          {
+            id: "boundary-force-assistant",
+            kind: "message",
+            role: "assistant",
+            text: thinking ? "streaming" : "settled",
+          },
+        ]}
+        threadId="thread-boundary-force"
+        workspaceId="ws-1"
+        isThinking={thinking}
+        processingStartedAt={thinking ? Date.now() - 1_000 : null}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />
+    );
+    const { container, rerender } = render(renderWith(false));
+    const scroller = getMessagesScroller(container);
+    let scrollHeight = 2_400;
+    setScrollerMetrics(scroller, 400, () => scrollHeight);
+    fireEvent.wheel(scroller, { deltaY: -120 });
+    fireEvent.scroll(scroller);
+
+    // 边沿前的 user intent 与 preference 不得阻止 send placement。
+    rerender(renderWith(true));
+    expect(scroller.scrollTop).toBe(scrollHeight - 720);
+
+    // Streaming 期间仍允许用户解除 continuous follow。
+    fireEvent.wheel(scroller, { deltaY: -120 });
+    scroller.scrollTop = 400;
+    fireEvent.scroll(scroller);
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(400);
+
+    // settle 是新的 boundary，再次重置旧 ownership 并强制吸底。
+    rerender(renderWith(false));
+    expect(scroller.scrollTop).toBe(scrollHeight - 720);
+
+    // boundary 之后的新输入拥有控制权，必须能取消迟到 recheck。
+    fireEvent.wheel(scroller, { deltaY: -120 });
+    scroller.scrollTop = 400;
+    fireEvent.scroll(scroller);
+    scrollHeight = 3_200;
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(400);
+  });
+
+  it("forces a queued user message to the bottom while the current turn stays working", () => {
+    window.localStorage.setItem("ccgui.messages.live.autoFollow", "0");
+    const renderWith = (includeQueuedUser: boolean) => (
+      <Messages
+        items={[
+          { id: "queued-send-user-1", kind: "message", role: "user", text: "first" },
+          {
+            id: "queued-send-assistant-1",
+            kind: "message",
+            role: "assistant",
+            text: "streaming",
+          },
+          ...(includeQueuedUser
+            ? [
+                {
+                  id: "queued-handoff-message-2",
+                  kind: "message" as const,
+                  role: "user" as const,
+                  text: "second",
+                },
+              ]
+            : []),
+        ]}
+        threadId="thread-queued-send-boundary"
+        workspaceId="ws-1"
+        isThinking
+        processingStartedAt={Date.now() - 1_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />
+    );
+    const { container, rerender } = render(renderWith(false));
+    const scroller = getMessagesScroller(container);
+    setScrollerMetrics(scroller, 400, 2400);
+    fireEvent.wheel(scroller, { deltaY: -120 });
+    fireEvent.scroll(scroller);
+
+    rerender(renderWith(true));
+
+    expect(scroller.scrollTop).toBe(2400 - 720);
+  });
+
+  it("does not repeat send placement when working starts after the optimistic user bubble", () => {
+    const renderWith = (includeOptimisticUser: boolean, thinking: boolean) => (
+      <Messages
+        items={[
+          { id: "delayed-working-user-1", kind: "message", role: "user", text: "first" },
+          {
+            id: "delayed-working-assistant-1",
+            kind: "message",
+            role: "assistant",
+            text: "settled",
+            isFinal: true,
+          },
+          ...(includeOptimisticUser
+            ? [
+                {
+                  id: "optimistic-user-delayed-working",
+                  kind: "message" as const,
+                  role: "user" as const,
+                  text: "second",
+                },
+              ]
+            : []),
+        ]}
+        threadId="thread-delayed-working-boundary"
+        workspaceId="ws-1"
+        isThinking={thinking}
+        processingStartedAt={thinking ? Date.now() - 1_000 : null}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />
+    );
+    const { container, rerender } = render(renderWith(false, false));
+    const scroller = getMessagesScroller(container);
+    setScrollerMetrics(scroller, 400, 2400);
+
+    rerender(renderWith(true, false));
+    expect(scroller.scrollTop).toBe(2400 - 720);
+
+    // optimistic bubble 后的新用户滚动，不能被随后到达的 working 状态重复覆盖。
+    fireEvent.wheel(scroller, { deltaY: -120 });
+    scroller.scrollTop = 400;
+    fireEvent.scroll(scroller);
+    rerender(renderWith(true, true));
+    expect(scroller.scrollTop).toBe(400);
   });
 
   it("stops auto-follow after the user scrolls up, then resumes at the bottom", async () => {
@@ -1277,7 +1359,7 @@ describe("Messages live behavior", () => {
     }
   });
 
-  it("does not mistake active-first settlement for a missing history placement", () => {
+  it("uses settle placement after an active-first history load", () => {
     vi.useFakeTimers();
     try {
       const items: ConversationItem[] = [
@@ -1318,7 +1400,8 @@ describe("Messages live behavior", () => {
         vi.advanceTimersByTime(2_100);
       });
 
-      expect(scroller.scrollTop).toBe(400);
+      // 这次写入来自 turn-settle，而不是 history-open 重复初始化。
+      expect(scroller.scrollTop).toBe(4_000 - 720);
     } finally {
       vi.useRealTimers();
     }
@@ -1577,9 +1660,9 @@ describe("Messages live behavior", () => {
     const scroller = getMessagesScroller(container);
 
     let scrollHeight = 2400;
-    setScrollerMetrics(scroller, 1680, () => scrollHeight);
+    setScrollerMetrics(scroller, 1000, () => scrollHeight);
 
-    // 内容变化触发 live-follow 收敛：写入 scrollTop=1680（真实底部），进入回声指纹。
+    // 内容变化触发真实 write：1000 → 1680，applied value 进入 fingerprint ring。
     notifyContentResized();
     expect(scroller.scrollTop).toBe(1680);
 
@@ -1592,6 +1675,300 @@ describe("Messages live behavior", () => {
     notifyContentResized();
     expect(scroller.scrollTop).toBe(6000 - 720);
     scrollSpy.mockRestore();
+  });
+
+  it("keeps following when an actual write echo arrives after convergence completes", () => {
+    vi.useFakeTimers();
+    try {
+      window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
+      const scrollSpy = vi
+        .spyOn(HTMLElement.prototype, "scrollIntoView")
+        .mockImplementation(() => {});
+      const { container } = render(
+        <Messages
+          items={[
+            { id: "grace-echo-user", kind: "message", role: "user", text: "go" },
+            { id: "grace-echo-assistant", kind: "message", role: "assistant", text: "partial" },
+          ]}
+          threadId="thread-grace-echo"
+          workspaceId="ws-1"
+          isThinking
+          processingStartedAt={Date.now() - 1_000}
+          openTargets={[]}
+          selectedOpenAppId=""
+        />,
+      );
+      const scroller = getMessagesScroller(container);
+
+      let scrollHeight = 2400;
+      const metrics = setScrollerMetrics(scroller, 1000, () => scrollHeight);
+      notifyContentResized();
+      expect(scroller.scrollTop).toBe(1680);
+
+      // 在最后一个 2000ms checkpoint 制造第二次真实 write。fake rAF 也由 timer 驱动，
+      // checkpoint 后的 settle frames 会在本次 advance 内完成，active run 随即清空。
+      act(() => {
+        vi.advanceTimersByTime(1900);
+      });
+      scrollHeight = 3000;
+      const writesBeforeFinalCheckpoint = metrics.getScrollTopWriteCount();
+      act(() => {
+        vi.advanceTimersByTime(101);
+      });
+      expect(scroller.scrollTop).toBe(2280);
+      expect(metrics.getScrollTopWriteCount()).toBeGreaterThan(
+        writesBeforeFinalCheckpoint,
+      );
+
+      // run 已完成，但 2280 的独立 write fingerprint 尚在 350ms grace 内。
+      scrollHeight = 6000;
+      fireEvent.scroll(scroller);
+      notifyContentResized();
+      expect(scroller.scrollTop).toBe(6000 - 720);
+      scrollSpy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not manufacture post-write grace from no-op convergence frames", () => {
+    vi.useFakeTimers();
+    try {
+      const scrollSpy = vi
+        .spyOn(HTMLElement.prototype, "scrollIntoView")
+        .mockImplementation(() => {});
+      const { container } = render(
+        <Messages
+          items={[
+            { id: "noop-user", kind: "message", role: "user", text: "go" },
+            { id: "noop-assistant", kind: "message", role: "assistant", text: "partial" },
+          ]}
+          threadId="thread-noop-echo"
+          workspaceId="ws-1"
+          isThinking
+          processingStartedAt={Date.now() - 1_000}
+          openTargets={[]}
+          selectedOpenAppId=""
+        />,
+      );
+      const scroller = getMessagesScroller(container);
+      let scrollHeight = 2400;
+      const metrics = setScrollerMetrics(scroller, 1680, () => scrollHeight);
+
+      notifyContentResized();
+      act(() => {
+        vi.advanceTimersByTime(2100);
+      });
+      expect(metrics.getScrollTopWriteCount()).toBe(0);
+
+      scrollHeight = 6000;
+      fireEvent.scroll(scroller);
+      notifyContentResized();
+      expect(scroller.scrollTop).toBe(1680);
+      scrollSpy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    ["keyboard", (scroller: HTMLDivElement) => fireEvent.keyDown(scroller, { key: "PageUp" })],
+    ["touch", (scroller: HTMLDivElement) => fireEvent.touchStart(scroller)],
+    [
+      "pointer/scrollbar",
+      (scroller: HTMLDivElement) =>
+        fireEvent.pointerDown(scroller, { button: 0, pointerId: 7 }),
+    ],
+  ])("lets %s user intent override a matching fingerprint", (_source, signalIntent) => {
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
+    const { container } = render(
+      <Messages
+        items={[
+          { id: `intent-${_source}-user`, kind: "message", role: "user", text: "go" },
+          {
+            id: `intent-${_source}-assistant`,
+            kind: "message",
+            role: "assistant",
+            text: "partial",
+          },
+        ]}
+        threadId={`thread-intent-${_source}`}
+        workspaceId="ws-1"
+        isThinking
+        processingStartedAt={Date.now() - 1_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+    const scroller = getMessagesScroller(container);
+    let scrollHeight = 2400;
+    setScrollerMetrics(scroller, 1000, () => scrollHeight);
+
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(1680);
+    signalIntent(scroller);
+
+    // 位置仍命中刚写入的 1680 fingerprint，但 user intent 必须取得所有权。
+    scrollHeight = 6000;
+    fireEvent.scroll(scroller);
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(1680);
+    scrollSpy.mockRestore();
+  });
+
+  it("does not restart convergence between touch intent and its scroll event", () => {
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
+    const { container } = render(
+      <Messages
+        items={[
+          { id: "touch-race-user", kind: "message", role: "user", text: "go" },
+          {
+            id: "touch-race-assistant",
+            kind: "message",
+            role: "assistant",
+            text: "partial",
+          },
+        ]}
+        threadId="thread-touch-race"
+        workspaceId="ws-1"
+        isThinking
+        processingStartedAt={Date.now() - 1_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+    const scroller = getMessagesScroller(container);
+    let scrollHeight = 2400;
+    setScrollerMetrics(scroller, 1000, () => scrollHeight);
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(1680);
+
+    fireEvent.touchStart(scroller);
+    scrollHeight = 6000;
+    notifyContentResized();
+
+    // touch 已取得 owner、scroll 尚未派发：ResizeObserver 不得抢先写回新底部。
+    expect(scroller.scrollTop).toBe(1680);
+    scrollSpy.mockRestore();
+  });
+
+  it("recognizes a geometry-proven browser clamp as a programmatic echo", () => {
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
+    const { container } = render(
+      <Messages
+        items={[
+          { id: "clamp-user", kind: "message", role: "user", text: "go" },
+          { id: "clamp-assistant", kind: "message", role: "assistant", text: "partial" },
+        ]}
+        threadId="thread-clamp"
+        workspaceId="ws-1"
+        isThinking
+        processingStartedAt={Date.now() - 1_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+    const scroller = getMessagesScroller(container);
+    let scrollHeight = 6000;
+    setScrollerMetrics(scroller, 5280, () => scrollHeight);
+
+    // 建立 collapse 前 geometry，再模拟浏览器将越界位置钳位到新的 maxScrollTop。
+    notifyContentResized();
+    scrollHeight = 2400;
+    scroller.scrollTop = 1680;
+    notifyContentResized();
+
+    // 钳位事件迟到时 geometry 已回填；clamp fingerprint 必须保护 follow owner。
+    scrollHeight = 6000;
+    fireEvent.scroll(scroller);
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(5280);
+    scrollSpy.mockRestore();
+  });
+
+  it("clears echo fingerprints on thread switch so stale positions are not exempted", async () => {
+    // 回归：指纹环必须随会话切换清空。会话 A 的写入位置 1680 若残留进环，切到
+    // 会话 B 后处于 grace 窗口内的旧位置 scroll 事件会被误判为回声而保持跟随。
+    window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
+    const renderWith = (threadId: string) => (
+      <Messages
+        items={[
+          { id: `clear-${threadId}-user`, kind: "message", role: "user", text: "go" },
+          { id: `clear-${threadId}-assistant`, kind: "message", role: "assistant", text: "partial" },
+        ]}
+        threadId={threadId}
+        workspaceId="ws-1"
+        isThinking
+        processingStartedAt={Date.now() - 1_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />
+    );
+    const { container, rerender } = render(renderWith("thread-clear-A"));
+    const scroller = getMessagesScroller(container);
+
+    // 会话 A：写入 scrollTop=1680，进入回声指纹。
+    setScrollerMetrics(scroller, 1200, 2400);
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(1680);
+
+    // 切到会话 B：几何不同（底部 7280），history-open 钉底写入新指纹。
+    setScrollerMetrics(scroller, 7000, 8000);
+    rerender(renderWith("thread-clear-B"));
+    expect(scroller.scrollTop).toBe(7280);
+
+    // 旧会话的指纹位置 1680 处发生 scroll 事件：环已清空 → 不豁免 → 按真实用户
+    // 上滚解除跟随（而不是被残留指纹误判成回声）。
+    scroller.scrollTop = 1680;
+    fireEvent.scroll(scroller);
+
+    // 跟随已解除：后续内容高度信号不得把视口拽回底部。
+    notifyContentResized();
+    expect(scroller.scrollTop).toBe(1680);
+    scrollSpy.mockRestore();
+  });
+
+  it("does not synthesize a settle boundary when switching from a working thread", () => {
+    const renderWith = (threadId: string, thinking: boolean, messageId: string) => (
+      <Messages
+        items={[
+          { id: messageId, kind: "message", role: "user", text: threadId },
+        ]}
+        threadId={threadId}
+        workspaceId="ws-1"
+        isThinking={thinking}
+        processingStartedAt={thinking ? Date.now() - 1_000 : null}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />
+    );
+    const { container, rerender } = render(
+      renderWith("thread-scope-working", true, "scope-working-user"),
+    );
+    const scroller = getMessagesScroller(container);
+    setScrollerMetrics(scroller, 400, 2400);
+
+    // 预置新会话的 message jump，使 history-open 明确让位给 pending anchor。
+    act(() => {
+      document.dispatchEvent(
+        new CustomEvent<string>("ccgui:jump-to-message", {
+          detail: "scope-idle-user",
+        }),
+      );
+    });
+    rerender(renderWith("thread-scope-idle", false, "scope-idle-user"));
+
+    // working true→false 来自 scope switch，不是同一 turn 的 settle，不能写到底部。
+    expect(scroller.scrollTop).toBe(400);
   });
 
   it("re-pins to the bottom after the conversation settles and the timeline back-fills", async () => {
@@ -1653,7 +2030,7 @@ describe("Messages live behavior", () => {
     scrollSpy.mockRestore();
   });
 
-  it("does not re-pin on settle back-fill when the user has scrolled up", async () => {
+  it("re-pins on settle back-fill even when the user scrolled up during streaming", async () => {
     window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
     const scrollSpy = vi
       .spyOn(HTMLElement.prototype, "scrollIntoView")
@@ -1690,20 +2067,24 @@ describe("Messages live behavior", () => {
     // user sends a new turn and scrolls up mid-stream to read history.
     const { container, rerender } = render(renderWith(false, false));
     const scroller = getMessagesScroller(container);
+    let scrollHeight = 2400;
     rerender(renderWith(true, false));
     // User scrolls up to read history during streaming — auto-follow released.
-    setScrollerMetrics(scroller, 400, 2400); // far from the bottom
+    setScrollerMetrics(scroller, 400, () => scrollHeight); // far from the bottom
     fireEvent.scroll(scroller);
 
+    // settle boundary resets the preceding streaming ownership and snaps bottom.
     rerender(renderWith(false, false));
+    expect(scroller.scrollTop).toBe(scrollHeight - 720);
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 380));
     });
 
-    // Curtain back-fills, but the user is not at the bottom: must not yank down.
+    // Deferred curtain back-fill remains inside the settle convergence window.
+    scrollHeight = 3200;
     rerender(renderWith(false, true));
     notifyContentResized();
-    expect(scroller.scrollTop).toBe(400);
+    expect(scroller.scrollTop).toBe(scrollHeight - 720);
     scrollSpy.mockRestore();
   });
 
@@ -1923,6 +2304,40 @@ describe("Messages live behavior", () => {
       expect(container.querySelector(".messages-collapsed-indicator")).toBeNull();
       expect(screen.getByText("history reveal message 1")).toBeTruthy();
       expect(scroller.scrollTop).toBe(0);
+    });
+  });
+
+  it("reveals collapsed history when clicked during streaming", async () => {
+    const items: ConversationItem[] = Array.from({ length: 130 }, (_, index) => ({
+      id: `live-history-reveal-${index + 1}`,
+      kind: "message",
+      role: index % 2 === 0 ? "user" : "assistant",
+      text: `live history reveal message ${index + 1}`,
+    }));
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-live-history-reveal"
+        workspaceId="ws-1"
+        isThinking
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const indicator = container.querySelector(".messages-collapsed-indicator");
+    expect(indicator).toBeTruthy();
+    expect(screen.queryByText("live history reveal message 1")).toBeNull();
+    if (!indicator) {
+      return;
+    }
+
+    fireEvent.click(indicator);
+
+    await waitFor(() => {
+      expect(container.querySelector(".messages-collapsed-indicator")).toBeNull();
+      expect(screen.getByText("live history reveal message 1")).toBeTruthy();
     });
   });
 

@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
+  GitFileDiff,
   GitFileStatus,
   GitHubPullRequest,
   GitHubPullRequestDiff,
   WorkspaceInfo,
 } from "../../../types";
+import { getGitDiffs } from "../../../services/tauri";
+import { buildCanonicalGitChanges } from "../../git/utils/gitChangeModel";
 import { useGitStatus } from "../../git/hooks/useGitStatus";
 import { useGitDiffs } from "../../git/hooks/useGitDiffs";
 import { useGitLog } from "../../git/hooks/useGitLog";
@@ -19,7 +22,12 @@ import {
 import type { FileCompareSession } from "../../files/types/fileCompare";
 import { FILE_COMPARE_MAX_WORKSPACE_FILES } from "../../files/types/fileCompare";
 import { applyStrictTabPermutation } from "../../files/utils/fileTabOrder";
-import type { FileHistoryTarget } from "../../git-history/types";
+import {
+  GIT_GRAPH_TAB_ID,
+  getFileHistoryTabId,
+  type FileHistoryTarget,
+} from "../../git-history/types";
+import { recordQuickSwitcherFileOpened } from "../../quick-switcher/recentFiles";
 
 const GIT_DIFF_LIST_VIEW_BY_WORKSPACE_KEY = "gitDiffListViewByWorkspace";
 const GIT_DIFF_PRELOAD_MAX_CHANGED_FILES = 80;
@@ -130,8 +138,17 @@ export type CenterMode =
   | "memory"
   | "projectMap"
   | "intentCanvas"
-  | "fileCompare"
-  | "fileHistory";
+  | "fileCompare";
+
+type GitHistoryTabsState = {
+  activeTabId: string;
+  fileHistoryTabs: FileHistoryTarget[];
+};
+
+const EMPTY_GIT_HISTORY_TABS_STATE: GitHistoryTabsState = {
+  activeTabId: GIT_GRAPH_TAB_ID,
+  fileHistoryTabs: [],
+};
 
 export type OpenFileOptions = {
   highlightMarkers?: GitLineMarkers | null;
@@ -222,6 +239,7 @@ export function useGitPanelController({
   prDiffsLoading,
   prDiffsError,
   onOpenEditorLayoutRequest,
+  onOpenGitHistoryRequest,
 }: {
   activeWorkspace: WorkspaceInfo | null;
   gitDiffPreloadEnabled: boolean;
@@ -235,12 +253,13 @@ export function useGitPanelController({
   prDiffsLoading: boolean;
   prDiffsError: string | null;
   onOpenEditorLayoutRequest?: () => void;
+  onOpenGitHistoryRequest?: () => void;
 }) {
   const [centerMode, setCenterMode] = useState<CenterMode>("chat");
   const [fileCompareSession, setFileCompareSession] =
     useState<FileCompareSession | null>(null);
-  const [fileHistoryTarget, setFileHistoryTarget] =
-    useState<FileHistoryTarget | null>(null);
+  const [gitHistoryTabsState, setGitHistoryTabsState] =
+    useState<GitHistoryTabsState>(EMPTY_GIT_HISTORY_TABS_STATE);
   const scratchFileCompareRequestIdRef = useRef(0);
   const [fileTabsByWorkspace, setFileTabsByWorkspace] = useState<
     Record<string, WorkspaceFileTabsState>
@@ -253,6 +272,9 @@ export function useGitPanelController({
     useState<EditorHighlightTarget | null>(null);
   const navigationRequestIdRef = useRef(0);
   const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
+  const [selectedDiffRepositoryRoot, setSelectedDiffRepositoryRoot] = useState<
+    string | null
+  >(null);
   const [diffScrollRequestId, setDiffScrollRequestId] = useState(0);
   const pendingDiffScrollRef = useRef(false);
   const [gitPanelMode, setGitPanelMode] = useState<
@@ -306,6 +328,16 @@ export function useGitPanelController({
   }, [activeWorkspace?.id]);
 
   useEffect(() => {
+    setSelectedDiffRepositoryRoot(null);
+  }, [activeWorkspace?.id]);
+
+  useEffect(() => {
+    if (!selectedDiffPath) {
+      setSelectedDiffRepositoryRoot(null);
+    }
+  }, [selectedDiffPath]);
+
+  useEffect(() => {
     activeWorkspaceRef.current = activeWorkspace;
   }, [activeWorkspace]);
 
@@ -317,7 +349,6 @@ export function useGitPanelController({
     setEditorNavigationTarget(null);
     setEditorHighlightTarget(null);
     setFileCompareSession(null);
-    setFileHistoryTarget(null);
     const settledEditorSplitCompanion =
       editorSplitCompanion === "notes" ? "chat" : editorSplitCompanion;
     const nextActiveFilePath = fileTabsByWorkspace[fileTabWorkspaceKey]?.activeFilePath ?? null;
@@ -328,7 +359,7 @@ export function useGitPanelController({
       setCenterMode("editor");
       return;
     }
-    if (centerMode === "fileCompare" || centerMode === "fileHistory") {
+    if (centerMode === "fileCompare") {
       setFileCompareSession(null);
       setCenterMode("chat");
       return;
@@ -440,28 +471,84 @@ export function useGitPanelController({
     shouldLoadDiffs && diffSource === "commit",
   );
 
+  const useRepositoryScopedDiffs =
+    diffSource === "local" && Boolean(selectedDiffRepositoryRoot);
+  const [repositoryScopedDiffsState, setRepositoryScopedDiffsState] = useState<{
+    diffs: GitFileDiff[];
+    isLoading: boolean;
+    error: string | null;
+  }>({ diffs: [], isLoading: false, error: null });
+
+  useEffect(() => {
+    const workspaceId = activeWorkspace?.id;
+    if (!workspaceId || !useRepositoryScopedDiffs || !selectedDiffRepositoryRoot) {
+      setRepositoryScopedDiffsState((previous) =>
+        previous.diffs.length === 0 && !previous.isLoading && !previous.error
+          ? previous
+          : { diffs: [], isLoading: false, error: null },
+      );
+      return;
+    }
+    let cancelled = false;
+    setRepositoryScopedDiffsState({ diffs: [], isLoading: true, error: null });
+    getGitDiffs(workspaceId, selectedDiffRepositoryRoot)
+      .then((diffs) => {
+        if (!cancelled) {
+          setRepositoryScopedDiffsState({ diffs, isLoading: false, error: null });
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setRepositoryScopedDiffsState({
+            diffs: [],
+            isLoading: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWorkspace?.id, selectedDiffRepositoryRoot, useRepositoryScopedDiffs]);
+
+  const repositoryScopedViewerDiffs = useMemo(
+    () =>
+      buildCanonicalGitChanges({
+        files: [],
+        diffs: repositoryScopedDiffsState.diffs,
+      }).viewerDiffs,
+    [repositoryScopedDiffsState.diffs],
+  );
+
   const activeDiffs =
     diffSource === "commit"
       ? gitCommitDiffs
       : diffSource === "pr"
         ? prDiffs
-        : gitDiffs;
+        : useRepositoryScopedDiffs
+          ? repositoryScopedViewerDiffs
+          : gitDiffs;
   const activeDiffLoading =
     diffSource === "commit"
       ? gitCommitDiffsLoading
       : diffSource === "pr"
         ? prDiffsLoading
-        : isDiffLoading;
+        : useRepositoryScopedDiffs
+          ? repositoryScopedDiffsState.isLoading
+          : isDiffLoading;
   const activeDiffError =
     diffSource === "commit"
       ? gitCommitDiffsError
       : diffSource === "pr"
         ? prDiffsError
-        : diffError;
+        : useRepositoryScopedDiffs
+          ? repositoryScopedDiffsState.error
+          : diffError;
 
   const handleSelectDiff = useCallback(
-    (path: string) => {
+    (path: string, repositoryRoot?: string | null) => {
       setSelectedDiffPath(path);
+      setSelectedDiffRepositoryRoot(repositoryRoot ?? null);
       pendingDiffScrollRef.current = true;
       setCenterMode("diff");
       setGitPanelMode("diff");
@@ -548,6 +635,10 @@ export function useGitPanelController({
         options?.pathDomain,
         options?.repositoryRoot,
       );
+      recordQuickSwitcherFileOpened({
+        workspaceId: targetWorkspace?.id,
+        path: normalizedPath,
+      });
       setFileTabsByWorkspace((states) =>
         updateWorkspaceFileTabs(states, targetFileTabWorkspaceKey, (current) => ({
           openTabs: current.openTabs.includes(normalizedPath)
@@ -647,24 +738,84 @@ export function useGitPanelController({
   }, []);
 
   const handleOpenFileHistory = useCallback((target: FileHistoryTarget) => {
-    setFileCompareSession(null);
-    setFileHistoryTarget(target);
-    setCenterMode("fileHistory");
-    if (isCompact) setActiveTab("codex");
-  }, [isCompact, setActiveTab]);
+    const tabId = getFileHistoryTabId(target);
+    setGitHistoryTabsState((current) => {
+      const existingIndex = current.fileHistoryTabs.findIndex(
+        (entry) => getFileHistoryTabId(entry) === tabId,
+      );
+      const fileHistoryTabs = existingIndex < 0
+        ? [...current.fileHistoryTabs, target]
+        : current.fileHistoryTabs.map((entry, index) =>
+            index === existingIndex ? target : entry,
+          );
+      return { activeTabId: tabId, fileHistoryTabs };
+    });
+    onOpenGitHistoryRequest?.();
+  }, [onOpenGitHistoryRequest]);
 
-  const handleCloseFileHistory = useCallback(() => {
-    setFileHistoryTarget(null);
-    setCenterMode("chat");
+  const handleActivateGitHistoryTab = useCallback((tabId: string) => {
+    setGitHistoryTabsState((current) => {
+      const tabExists = tabId === GIT_GRAPH_TAB_ID || current.fileHistoryTabs.some(
+        (target) => getFileHistoryTabId(target) === tabId,
+      );
+      return tabExists && current.activeTabId !== tabId
+        ? { ...current, activeTabId: tabId }
+        : current;
+    });
   }, []);
 
-  useEffect(() => {
-    if (centerMode !== "fileHistory" && fileHistoryTarget) {
-      setFileHistoryTarget(null);
-    }
-  }, [centerMode, fileHistoryTarget]);
+  const handleCloseFileHistory = useCallback((tabId?: string) => {
+    setGitHistoryTabsState((current) => {
+      const closingTabId = tabId ?? current.activeTabId;
+      const closingIndex = current.fileHistoryTabs.findIndex(
+        (target) => getFileHistoryTabId(target) === closingTabId,
+      );
+      if (closingIndex < 0) {
+        return current;
+      }
+      const fileHistoryTabs = current.fileHistoryTabs.filter(
+        (target) => getFileHistoryTabId(target) !== closingTabId,
+      );
+      if (current.activeTabId !== closingTabId) {
+        return { ...current, fileHistoryTabs };
+      }
+      const fallbackTarget =
+        current.fileHistoryTabs[closingIndex + 1] ??
+        current.fileHistoryTabs[closingIndex - 1] ??
+        null;
+      return {
+        activeTabId: fallbackTarget
+          ? getFileHistoryTabId(fallbackTarget)
+          : GIT_GRAPH_TAB_ID,
+        fileHistoryTabs,
+      };
+    });
+  }, []);
+
+  const handleCloseOtherFileHistories = useCallback((tabId: string) => {
+    setGitHistoryTabsState((current) => {
+      const target = current.fileHistoryTabs.find(
+        (entry) => getFileHistoryTabId(entry) === tabId,
+      );
+      return target
+        ? { activeTabId: tabId, fileHistoryTabs: [target] }
+        : current;
+    });
+  }, []);
+
+  const handleCloseAllFileHistories = useCallback(() => {
+    setGitHistoryTabsState((current) =>
+      current.fileHistoryTabs.length > 0 || current.activeTabId !== GIT_GRAPH_TAB_ID
+        ? EMPTY_GIT_HISTORY_TABS_STATE
+        : current,
+    );
+  }, []);
 
   const handleActivateFileTab = useCallback((path: string) => {
+    recordQuickSwitcherFileOpened({
+      workspaceId: activeWorkspaceRef.current?.id,
+      path,
+    });
     setFileTabsByWorkspace((states) =>
       updateWorkspaceFileTabs(states, fileTabWorkspaceKey, (current) => ({
         openTabs: current.openTabs.includes(path)
@@ -721,6 +872,26 @@ export function useGitPanelController({
     setEditorSplitCompanion("chat");
     setCenterMode(editorSplitCompanion);
   }, [editorSplitCompanion, fileTabWorkspaceKey]);
+  const handleCloseOtherFileTabs = useCallback(
+    (path: string) => {
+      setFileTabsByWorkspace((states) =>
+        updateWorkspaceFileTabs(states, fileTabWorkspaceKey, (current) => {
+          if (!current.openTabs.includes(path) || current.openTabs.length <= 1) {
+            return current;
+          }
+          setEditorNavigationTarget((currentTarget) =>
+            currentTarget?.path === path ? currentTarget : null,
+          );
+          setEditorHighlightTarget((currentTarget) =>
+            currentTarget?.path === path ? currentTarget : null,
+          );
+          setCenterMode("editor");
+          return { openTabs: [path], activeFilePath: path };
+        }),
+      );
+    },
+    [fileTabWorkspaceKey],
+  );
   const handleReorderFileTabs = useCallback(
     (nextOrder: string[]) => {
       setFileTabsByWorkspace((states) =>
@@ -772,7 +943,8 @@ export function useGitPanelController({
     centerMode,
     setCenterMode,
     fileCompareSession,
-    fileHistoryTarget,
+    fileHistoryTabs: gitHistoryTabsState.fileHistoryTabs,
+    activeGitHistoryTabId: gitHistoryTabsState.activeTabId,
     openFileTabs,
     activeEditorFilePath,
     editorSplitCompanion,
@@ -829,9 +1001,13 @@ export function useGitPanelController({
     handleOpenScratchFileCompare,
     handleCloseFileCompare,
     handleOpenFileHistory,
+    handleActivateGitHistoryTab,
     handleCloseFileHistory,
+    handleCloseOtherFileHistories,
+    handleCloseAllFileHistories,
     handleActivateFileTab,
     handleCloseFileTab,
+    handleCloseOtherFileTabs,
     handleCloseAllFileTabs,
     handleReorderFileTabs,
     handleExitEditor,

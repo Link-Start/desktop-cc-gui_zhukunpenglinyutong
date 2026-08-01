@@ -520,6 +520,7 @@ describe("useEngineController", () => {
     expect(result.current.availableEngines.map((engine) => engine.type)).toEqual([
       "claude",
       "codex",
+      "grok",
       "kimi",
       "opencode",
     ]);
@@ -530,7 +531,24 @@ describe("useEngineController", () => {
     ).toBe(true);
   });
 
-  it("keeps opencode ready without automatic provider health probing", async () => {
+  it("keeps the facade snapshot stable across unrelated parent renders", () => {
+    detectEnginesMock.mockImplementation(
+      () => new Promise<EngineStatus[]>((_resolve) => undefined),
+    );
+    getActiveEngineMock.mockImplementation(
+      () => new Promise<"claude">((_resolve) => undefined),
+    );
+
+    const { result, rerender } = renderHook(() =>
+      useEngineController({ activeWorkspace: null }),
+    );
+    const firstSnapshot = result.current;
+    rerender();
+
+    expect(result.current).toBe(firstSnapshot);
+  });
+
+  it("shows detected OpenCode in production engine surfaces", async () => {
     detectEnginesMock.mockResolvedValue([
       {
         engineType: "claude",
@@ -617,11 +635,15 @@ describe("useEngineController", () => {
     const opencodeEngine = result.current.availableEngines.find(
       (engine) => engine.type === "opencode",
     );
+    expect(opencodeEngine).toBeDefined();
+    expect(opencodeEngine?.installed).toBe(true);
     expect(opencodeEngine?.availabilityState).toBe("ready");
-    expect(opencodeEngine?.availabilityLabelKey).toBeNull();
+    expect(
+      result.current.availableEngines.some((engine) => engine.type === "gemini"),
+    ).toBe(false);
   });
 
-  it("hides disabled Gemini and OpenCode engines from available engine surfaces", async () => {
+  it("hides disabled Gemini engine from available engine surfaces", async () => {
     detectEnginesMock.mockResolvedValue([
       {
         engineType: "claude",
@@ -675,10 +697,6 @@ describe("useEngineController", () => {
     const { result } = renderHook(() =>
       useEngineController({
         activeWorkspace: null,
-        enabledEngines: {
-          gemini: false,
-          opencode: false,
-        },
       }),
     );
 
@@ -687,9 +705,11 @@ describe("useEngineController", () => {
     expect(result.current.availableEngines.map((engine) => engine.type)).toEqual([
       "claude",
       "codex",
+      "grok",
       "kimi",
+      "opencode",
     ]);
-    expect(result.current.activeEngine).toBe("claude");
+    expect(result.current.activeEngine).toBe("opencode");
   });
 
   it("ignores a legacy persisted Gemini execution selection", async () => {
@@ -979,6 +999,294 @@ describe("useEngineController", () => {
     });
     expect(getEngineModelsMock).not.toHaveBeenCalledWith("opencode");
     expect(result.current.engineModelsAsOptions[0]?.id).toBe("glm-5.1");
+  });
+
+  it("loads and retains provider-scoped model origin metadata", async () => {
+    const claudeModels: EngineStatus["models"] = [
+      {
+        id: "claude-opus-4-8",
+        displayName: "Opus 4.8",
+        description: "public",
+        isDefault: true,
+      },
+    ];
+    detectEnginesMock.mockResolvedValue([
+      createEngineStatus("claude", true, claudeModels),
+    ]);
+    getActiveEngineMock.mockResolvedValue("claude");
+    getEngineModelsMock.mockResolvedValueOnce(claudeModels);
+
+    const { result } = renderHook(() =>
+      useEngineController({ activeWorkspace: null }),
+    );
+    await waitFor(() => expect(result.current.isInitialized).toBe(true));
+
+    getEngineModelsMock.mockClear();
+    getEngineModelsMock.mockResolvedValueOnce([
+      {
+        id: "settings-main",
+        model: "provider-a-model",
+        displayName: "Provider A",
+        description: "provider",
+        source: "settings-override",
+        providerProfileId: "provider-a",
+        isDefault: true,
+      },
+      ...claudeModels,
+    ]);
+
+    await act(async () => {
+      await result.current.refreshEngineModels("claude", {
+        providerProfileId: "provider-a",
+      });
+    });
+
+    expect(getEngineModelsMock).toHaveBeenCalledWith("claude", {
+      providerProfileId: "provider-a",
+    });
+    expect(result.current.engineModelsAsOptions[0]).toEqual(
+      expect.objectContaining({
+        id: "settings-main",
+        model: "provider-a-model",
+        providerProfileId: "provider-a",
+      }),
+    );
+  });
+
+  it("does not publish a stale provider catalog after the active scope changes", async () => {
+    const publicModels: EngineStatus["models"] = [
+      {
+        id: "claude-opus-4-8",
+        displayName: "Opus 4.8",
+        description: "public",
+        isDefault: true,
+      },
+    ];
+    detectEnginesMock.mockResolvedValue([
+      createEngineStatus("claude", true, publicModels),
+    ]);
+    getActiveEngineMock.mockResolvedValue("claude");
+    getEngineModelsMock.mockResolvedValueOnce(publicModels);
+
+    const { result } = renderHook(() =>
+      useEngineController({ activeWorkspace: null }),
+    );
+    await waitFor(() => expect(result.current.isInitialized).toBe(true));
+
+    const providerARequest = createDeferred<EngineStatus["models"]>();
+    getEngineModelsMock.mockReset();
+    getEngineModelsMock
+      .mockImplementationOnce(() => providerARequest.promise)
+      .mockResolvedValueOnce([
+        {
+          id: "provider-b-model",
+          displayName: "Provider B",
+          description: "provider",
+          providerProfileId: "provider-b",
+          isDefault: true,
+        },
+        ...publicModels,
+      ]);
+
+    let providerAPromise: Promise<unknown> = Promise.resolve();
+    let providerBPromise: Promise<unknown> = Promise.resolve();
+    act(() => {
+      providerAPromise = result.current.refreshEngineModels("claude", {
+        providerProfileId: "provider-a",
+      });
+      providerBPromise = result.current.refreshEngineModels("claude", {
+        providerProfileId: "provider-b",
+      });
+    });
+
+    providerARequest.resolve([
+      {
+        id: "provider-a-model",
+        displayName: "Provider A",
+        description: "provider",
+        providerProfileId: "provider-a",
+        isDefault: true,
+      },
+      ...publicModels,
+    ]);
+    await act(async () => {
+      await Promise.all([providerAPromise, providerBPromise]);
+    });
+
+    expect(result.current.engineModelsAsOptions[0]).toEqual(
+      expect.objectContaining({
+        id: "provider-b-model",
+        providerProfileId: "provider-b",
+      }),
+    );
+    expect(
+      result.current.engineModelsAsOptions.some(
+        (model) => model.providerProfileId === "provider-a",
+      ),
+    ).toBe(false);
+  });
+
+  it("hides the previous scope while a provider catalog is loading", async () => {
+    const publicModels: EngineStatus["models"] = [
+      {
+        id: "gpt-5.5",
+        displayName: "gpt-5.5",
+        description: "global",
+        isDefault: true,
+      },
+    ];
+    detectEnginesMock.mockResolvedValue([
+      createEngineStatus("claude", true, publicModels),
+    ]);
+    getActiveEngineMock.mockResolvedValue("claude");
+    getEngineModelsMock.mockResolvedValueOnce(publicModels);
+
+    const { result } = renderHook(() =>
+      useEngineController({ activeWorkspace: null }),
+    );
+    await waitFor(() => expect(result.current.isInitialized).toBe(true));
+    expect(result.current.engineModelsAsOptions[0]?.id).toBe("gpt-5.5");
+
+    const deepSeekRequest = createDeferred<EngineStatus["models"]>();
+    getEngineModelsMock.mockReset();
+    getEngineModelsMock.mockImplementationOnce(() => deepSeekRequest.promise);
+
+    let refreshPromise: Promise<unknown> = Promise.resolve();
+    act(() => {
+      refreshPromise = result.current.refreshEngineModels("claude", {
+        providerProfileId: "provider-deepseek",
+      });
+    });
+
+    expect(result.current.engineModelsAsOptions).toEqual([]);
+
+    deepSeekRequest.resolve([
+      {
+        id: "deepseek-v4-pro",
+        displayName: "deepseek-v4-pro",
+        description: "provider",
+        providerProfileId: "provider-deepseek",
+        isDefault: true,
+      },
+    ]);
+    await act(async () => {
+      await refreshPromise;
+    });
+
+    expect(result.current.engineModelsAsOptions).toEqual([
+      expect.objectContaining({
+        id: "deepseek-v4-pro",
+        providerProfileId: "provider-deepseek",
+        isDefault: true,
+      }),
+    ]);
+    expect(
+      result.current.engineModelsAsOptions.some(
+        (model) => model.id === "gpt-5.5",
+      ),
+    ).toBe(false);
+  });
+
+  it("retains the same provider last-good catalog when refresh fails", async () => {
+    const publicModels: EngineStatus["models"] = [
+      {
+        id: "claude-opus-4-8",
+        displayName: "Opus 4.8",
+        description: "public",
+        isDefault: true,
+      },
+    ];
+    detectEnginesMock.mockResolvedValue([
+      createEngineStatus("claude", true, publicModels),
+    ]);
+    getActiveEngineMock.mockResolvedValue("claude");
+    getEngineModelsMock.mockResolvedValueOnce(publicModels);
+    const onDebug = vi.fn();
+
+    const { result } = renderHook(() =>
+      useEngineController({ activeWorkspace: null, onDebug }),
+    );
+    await waitFor(() => expect(result.current.isInitialized).toBe(true));
+
+    getEngineModelsMock.mockResolvedValueOnce([
+      {
+        id: "provider-a-model",
+        displayName: "Provider A",
+        description: "provider",
+        providerProfileId: "provider-a",
+        isDefault: true,
+      },
+      ...publicModels,
+    ]);
+    await act(async () => {
+      await result.current.refreshEngineModels("claude", {
+        providerProfileId: "provider-a",
+      });
+    });
+
+    getEngineModelsMock.mockRejectedValueOnce(
+      new Error("provider-a config is unreadable"),
+    );
+    await act(async () => {
+      await result.current.refreshEngineModels("claude", {
+        forceRefresh: true,
+        providerProfileId: "provider-a",
+      });
+    });
+
+    expect(result.current.engineModelsAsOptions[0]).toEqual(
+      expect.objectContaining({
+        id: "provider-a-model",
+        providerProfileId: "provider-a",
+      }),
+    );
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "engine/models load error",
+        payload: expect.objectContaining({
+          engine: "claude",
+          providerProfileId: "provider-a",
+          error: "provider-a config is unreadable",
+        }),
+      }),
+    );
+  });
+
+  it("preserves model state identity when a refresh is semantically unchanged", async () => {
+    const models: EngineStatus["models"] = [
+      {
+        id: "provider-a-model",
+        displayName: "Provider A",
+        description: "provider",
+        providerProfileId: "provider-a",
+        isDefault: true,
+      },
+    ];
+    detectEnginesMock.mockResolvedValue([
+      createEngineStatus("claude", true, models),
+    ]);
+    getActiveEngineMock.mockResolvedValue("claude");
+    getEngineModelsMock.mockResolvedValue(models);
+
+    const { result } = renderHook(() =>
+      useEngineController({ activeWorkspace: null }),
+    );
+    await waitFor(() => expect(result.current.isInitialized).toBe(true));
+
+    await act(async () => {
+      await result.current.refreshEngineModels("claude", {
+        providerProfileId: "provider-a",
+      });
+    });
+    const firstCatalog = result.current.engineModels;
+
+    await act(async () => {
+      await result.current.refreshEngineModels("claude", {
+        providerProfileId: "provider-a",
+      });
+    });
+
+    expect(result.current.engineModels).toBe(firstCatalog);
   });
 
   it("preserves the default flag when a custom Claude model shadows the default runtime model", async () => {

@@ -3,13 +3,90 @@ use serde_json::Value;
 pub(super) const AUTO_COMPACTION_THRESHOLD_PERCENT: f64 = 92.0;
 const AUTO_COMPACTION_TARGET_PERCENT: f64 = 70.0;
 const AUTO_COMPACTION_COOLDOWN_MS: u64 = 90_000;
-const AUTO_COMPACTION_INFLIGHT_TIMEOUT_MS: u64 = 120_000;
+pub(super) const AUTO_COMPACTION_INFLIGHT_TIMEOUT_MS: u64 = 120_000;
 
 #[derive(Debug, Default, Clone)]
 pub(super) struct AutoCompactionThreadState {
     pub(super) is_processing: bool,
     pub(super) in_flight: bool,
-    last_triggered_at_ms: u64,
+    pub(super) pending_user_dispatch: bool,
+    pending_user_dispatch_at_ms: Option<u64>,
+    pending_high_watermark_percent: Option<f64>,
+    pub(super) last_triggered_at_ms: u64,
+}
+
+impl AutoCompactionThreadState {
+    pub(super) fn release_expired_barrier(&mut self, now: u64) -> bool {
+        let mut released = false;
+        if self.in_flight
+            && now.saturating_sub(self.last_triggered_at_ms) > AUTO_COMPACTION_INFLIGHT_TIMEOUT_MS
+        {
+            self.in_flight = false;
+            self.is_processing = false;
+            released = true;
+        }
+        if self.pending_user_dispatch
+            && self.pending_user_dispatch_at_ms.is_some_and(|reserved_at| {
+                now.saturating_sub(reserved_at) > AUTO_COMPACTION_INFLIGHT_TIMEOUT_MS
+            })
+        {
+            self.pending_user_dispatch = false;
+            self.pending_user_dispatch_at_ms = None;
+            if !self.in_flight {
+                self.is_processing = false;
+            }
+            released = true;
+        }
+        released
+    }
+
+    pub(super) fn barrier_wait_ms(&self, now: u64) -> u64 {
+        let barrier_started_at = if self.in_flight {
+            self.last_triggered_at_ms
+        } else {
+            self.pending_user_dispatch_at_ms.unwrap_or(now)
+        };
+        AUTO_COMPACTION_INFLIGHT_TIMEOUT_MS
+            .saturating_sub(now.saturating_sub(barrier_started_at))
+            .max(1)
+    }
+
+    pub(super) fn reserve_user_dispatch(&mut self, now: u64) -> bool {
+        self.release_expired_barrier(now);
+        if self.in_flight || self.pending_user_dispatch {
+            return false;
+        }
+        self.pending_user_dispatch = true;
+        self.pending_user_dispatch_at_ms = Some(now);
+        self.is_processing = true;
+        true
+    }
+
+    pub(super) fn release_user_dispatch(&mut self) {
+        if !self.pending_user_dispatch {
+            return;
+        }
+        self.pending_user_dispatch = false;
+        self.pending_user_dispatch_at_ms = None;
+        self.is_processing = false;
+    }
+
+    pub(super) fn try_reserve_manual_compaction(&mut self, now: u64) -> bool {
+        self.release_expired_barrier(now);
+        if self.in_flight || self.is_processing || self.pending_user_dispatch {
+            return false;
+        }
+        self.in_flight = true;
+        self.last_triggered_at_ms = now;
+        true
+    }
+
+    pub(super) fn release_compaction(&mut self) {
+        self.in_flight = false;
+        if !self.pending_user_dispatch {
+            self.is_processing = false;
+        }
+    }
 }
 
 fn read_number_field(obj: &Value, keys: &[&str]) -> Option<f64> {
@@ -119,43 +196,52 @@ pub(super) fn evaluate_auto_compaction_state(
     auto_compaction_enabled: bool,
     now: u64,
 ) -> bool {
+    state.release_expired_barrier(now);
+
     match method {
         "turn/started" => {
+            state.pending_user_dispatch = false;
+            state.pending_user_dispatch_at_ms = None;
             state.is_processing = true;
         }
         "turn/completed" | "turn/error" => {
-            state.is_processing = false;
+            // A new prompt may have reserved this native thread before the previous
+            // terminal reached the event loop. Preserve that reservation.
+            if !state.pending_user_dispatch {
+                state.is_processing = false;
+            }
         }
         "thread/compacted" => {
-            state.is_processing = false;
-            state.in_flight = false;
+            state.release_compaction();
+            state.pending_high_watermark_percent = None;
         }
         "thread/compactionFailed" => {
-            state.in_flight = false;
+            state.release_compaction();
         }
         _ => {}
     }
 
-    let Some(percent) = usage_percent else {
-        return false;
-    };
     if !auto_compaction_enabled {
-        return false;
-    }
-    if percent <= AUTO_COMPACTION_TARGET_PERCENT {
-        return false;
-    }
-    if percent < threshold_percent {
+        state.pending_high_watermark_percent = None;
         return false;
     }
 
-    if state.in_flight
-        && now.saturating_sub(state.last_triggered_at_ms) > AUTO_COMPACTION_INFLIGHT_TIMEOUT_MS
-    {
-        state.in_flight = false;
+    if let Some(percent) = usage_percent {
+        if percent <= AUTO_COMPACTION_TARGET_PERCENT {
+            state.pending_high_watermark_percent = None;
+        } else if percent >= threshold_percent {
+            state.pending_high_watermark_percent = Some(
+                state
+                    .pending_high_watermark_percent
+                    .map_or(percent, |pending| pending.max(percent)),
+            );
+        }
     }
 
-    if state.in_flight || state.is_processing {
+    if state.pending_high_watermark_percent.is_none() {
+        return false;
+    }
+    if state.in_flight || state.is_processing || state.pending_user_dispatch {
         return false;
     }
     if now.saturating_sub(state.last_triggered_at_ms) < AUTO_COMPACTION_COOLDOWN_MS {
@@ -164,5 +250,6 @@ pub(super) fn evaluate_auto_compaction_state(
 
     state.in_flight = true;
     state.last_triggered_at_ms = now;
+    state.pending_high_watermark_percent = None;
     true
 }

@@ -1,4 +1,4 @@
-import { extractCommandMessagePromptText } from "../features/messages/utils/commandMessageTags";
+import { extractCommandMessagePromptText } from "./commandMessageTags";
 import { normalizeAgentIcon } from "./agentIcons";
 
 export const MAX_DEFAULT_THREAD_TITLE_CHARS = 50;

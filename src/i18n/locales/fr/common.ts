@@ -25,6 +25,7 @@ const common = {
     "curatedLoading": "Chargement des compétences sélectionnées…",
     "curatedError": "Impossible de charger les compétences sélectionnées.",
     "curatedSubtitle": "Intégrées au client, versions figées, livrées avec le client de bureau. Sans réseau.",
+    "curatedDetailHint": "Lorsqu'elle est activée, la compétence sélectionnée est automatiquement injectée dans l'invite système à chaque conversation, influençant en continu le ton et le comportement de l'IA sans invocation manuelle. Désactivée, elle n'est pas injectée. Cela diffère des compétences installées par l'utilisateur dans Extensions → Skills, qui ne prennent effet qu'en cas d'appel explicite ou de correspondance avec leur description.",
     "curatedBundledBadge": "Intégré",
     "curatedCategoryCodeStyle": "Style de code",
     "curatedCategoryUiDesign": "Conception UI",
@@ -61,6 +62,9 @@ const common = {
     "showInHeader": "Afficher dans la barre d'outils",
     "markdownMermaidFullscreen": "Plein écran",
     "markdownMermaidFullscreenHint": "Ouvrir le diagramme en plein écran",
+    "markdownMermaidDownloadPng": "Télécharger le PNG",
+    "markdownMermaidDownloadingPng": "Téléchargement du PNG…",
+    "markdownMermaidDownloadFailed": "Échec du téléchargement PNG.",
     "markdownImageFullscreen": "Plein écran",
     "markdownImageFullscreenHint": "Ouvrir l'image en plein écran"
   }

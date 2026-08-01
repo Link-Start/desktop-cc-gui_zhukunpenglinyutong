@@ -141,6 +141,12 @@ export function useGitBranches({
     }
   }, [isConnected, onDebug, repositoryRoot, scopeKey, workspaceId]);
 
+  const loadBranchesForRepository = useCallback(async (repositoryRootOverride: string) => {
+    if (!workspaceId || !isConnected) return null;
+    const response = await listGitBranches(workspaceId, repositoryRootOverride);
+    return normalizeGitBranchListResponse(response);
+  }, [isConnected, workspaceId]);
+
   useEffect(() => {
     requestIdRef.current += 1;
     setBranches([]);
@@ -166,20 +172,29 @@ export function useGitBranches({
   );
 
   const checkoutBranch = useCallback(
-    async (name: string) => {
+    async (
+      name: string,
+      repositoryRootOverride?: string,
+      refreshAfterMutation = true,
+    ) => {
       if (!workspaceId || !name) {
         return;
       }
+      const targetRepositoryRoot = repositoryRootOverride === undefined
+        ? repositoryRoot
+        : repositoryRootOverride;
       onDebug?.({
         id: `${Date.now()}-client-branch-checkout`,
         timestamp: Date.now(),
         source: "client",
         label: "git/branch/checkout",
-        payload: { workspaceId, name },
+        payload: { workspaceId, name, repositoryRoot: targetRepositoryRoot },
       });
-      await checkoutGitBranch(workspaceId, name, repositoryRoot);
-      await refreshBranches();
-      await onMutationComplete?.();
+      await checkoutGitBranch(workspaceId, name, targetRepositoryRoot);
+      if (refreshAfterMutation) {
+        await refreshBranches();
+        await onMutationComplete?.();
+      }
     },
     [onDebug, onMutationComplete, refreshBranches, repositoryRoot, workspaceId],
   );
@@ -204,7 +219,11 @@ export function useGitBranches({
   );
 
   const updateBranch = useCallback(
-    async (name: string, repositoryRootOverride?: string) => {
+    async (
+      name: string,
+      repositoryRootOverride?: string,
+      refreshAfterMutation = true,
+    ) => {
       if (!workspaceId || !name) {
         return null;
       }
@@ -212,8 +231,10 @@ export function useGitBranches({
         ? repositoryRoot
         : repositoryRootOverride;
       const result = await updateGitBranch(workspaceId, name, targetRepositoryRoot);
-      await refreshBranches();
-      await onMutationComplete?.();
+      if (refreshAfterMutation) {
+        await refreshBranches();
+        await onMutationComplete?.();
+      }
       return result;
     },
     [onMutationComplete, refreshBranches, repositoryRoot, workspaceId],
@@ -226,6 +247,7 @@ export function useGitBranches({
     currentBranch,
     error,
     refreshBranches,
+    loadBranchesForRepository,
     checkoutBranch,
     createBranch,
     updateBranch,

@@ -17,4 +17,20 @@ describe("sidebar codex icon tone", () => {
     expect(sidebarStyles).toContain(".thread-engine-badge.thread-engine-codex");
     expect(sidebarStyles).toContain("color: var(--text-strong);");
   });
+
+  it("does not recolor engine icons while a session is processing", () => {
+    const sidebarStyles = readFileSync(
+      resolve(process.cwd(), "src/styles/sidebar.css"),
+      "utf8",
+    );
+
+    // Processing must not paint the badge blue — that color only applies while
+    // the row is inactive, so switching away from a running thread flips tone.
+    const processingRule = sidebarStyles.match(
+      /\.thread-engine-badge\.is-processing\s*\{[^}]*\}/,
+    )?.[0];
+    expect(processingRule).toBeTruthy();
+    expect(processingRule).not.toMatch(/color\s*:/);
+    expect(processingRule).not.toContain("#7db7ff");
+  });
 });

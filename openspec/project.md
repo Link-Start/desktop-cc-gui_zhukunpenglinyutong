@@ -1,7 +1,7 @@
 # Project Context
 
 - Type: OpenSpec Workspace
-- Updated At: 2026-07-18T21:00:00+08:00
+- Updated At: 2026-07-26T14:39:23+08:00
 - Scope: governance snapshot for the current `mossx` repository workspace
 - Product version fact: `ccgui@0.7.5` from `package.json` and `src-tauri/tauri.conf.json`
 
@@ -20,7 +20,7 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 - Change workflow artifacts: `openspec/changes/<change-id>/{proposal,design,tasks,verification}.md`
 - Archive: `openspec/changes/archive/*`
 - Implementation rules: `.trellis/spec/**`
-- Current workspace state: active changes = `4`, archive changes = `640`, main specs = `406`
+- Current workspace state: active changes = `24`, archive changes = `739`, main specs = `437`
 
 ## Entry Surfaces
 
@@ -64,21 +64,21 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 
 ## Current Inventory
 
-- Active changes: `4`
-- Archive changes: `640`
-- Main specs: `406`
-- Completed task sets still active: `1`
-- Ready-for-implementation task sets: `0`
+- Active changes: `24`
+- Archive changes: `739`
+- Main specs: `437`
+- Completed task sets still active: `8`
+- Ready-for-implementation task sets: `11`
 - Demand-pool proposal directories without `proposal.md` / `tasks.md`: `0`
 
 ## Active Changes
 
-Active OpenSpec changes in the current working tree:
+Active OpenSpec changes in the current working tree are grouped as follows:
 
-- [`add-linux-native-menu-localization`](changes/add-linux-native-menu-localization/proposal.md) — 4/5; Rust gate passed, only Linux non-default-language startup smoke remains.
-- [`derive-rate-limit-label-from-window-duration`](changes/derive-rate-limit-label-from-window-duration/proposal.md) — 5/5; implementation and verification complete, pending sync/archive.
-- [`enable-claude-lightweight-streaming-and-frame-attribution`](changes/enable-claude-lightweight-streaming-and-frame-attribution/proposal.md) — 15/18; implementation complete, blocked only on its Claude-stream trace, final-fidelity acceptance, and archive.
-- [`stabilize-client-runtime-and-diagnostics`](changes/stabilize-client-runtime-and-diagnostics/proposal.md) — 21/22; automated closure and functional smoke complete, quantified frame/first-delta trace retention remains open.
+- CLI foundation：11 个 change 已完成 proposal / design / spec deltas / tasks，按 Batch 0-6 从 capability、identity、event bus 推进到 adapter、delivery、session、catalog、compatibility 和 controller cleanup。
+- 已实现待 verify/archive：8 个 change。
+- 尚有执行/人工 gate：`add-linux-native-menu-localization`、`add-vendor-cli-lifecycle-header`、`enable-claude-lightweight-streaming-and-frame-attribution`、`reduce-client-polling-overhead`、`stabilize-client-runtime-and-diagnostics`。
+- 全工作区 strict validation 当前有两个既有 blocker：`add-tokentracker-usage-dashboard` 与 `reduce-client-polling-overhead` 缺少 spec delta；CLI foundation 11 个 change 均已单独 strict validation 通过。
 
 Calibration rule: `openspec validate --strict` proves artifact structure only. Implementation verification uses code/test/live-run evidence in each `verification.md`; manual gates may be waived only when deterministic coverage or a newer owner makes the old gate non-discriminating.
 
@@ -89,6 +89,32 @@ Complete active artifact links are maintained in the [`OpenSpec Change Index`](c
 The previous v0.5.11 performance and recovery follow-up chain has been archived. Future performance work should open a new chain instead of reusing the archived change directories.
 
 ## Recent Archive / Sync Snapshot
+
+### 2026-07-24 Verified Bulk Archive Batch
+
+Archived nineteen verified changes after syncing their delta specs into main specs (chronological order inside conflicting capability groups; two spec-delta repairs applied during the batch):
+
+- [`add-agency-agent-catalog`](changes/archive/2026-07-24-add-agency-agent-catalog/proposal.md) — synced `curated-agent-catalog` + `settings-navigation-consolidation`
+- [`align-kanban-codex-model-catalog`](changes/archive/2026-07-24-align-kanban-codex-model-catalog/proposal.md) — synced `codex-model-catalog-coverage`
+- [`derive-rate-limit-label-from-window-duration`](changes/archive/2026-07-24-derive-rate-limit-label-from-window-duration/proposal.md) — synced `codex-chat-canvas-usage-overview`
+- [`soften-git-pr-range-gate`](changes/archive/2026-07-24-soften-git-pr-range-gate/proposal.md) — synced `git-history-panel` + `git-operations` + `git-pr-submission-workflow`
+- [`add-kimi-engine`](changes/archive/2026-07-24-add-kimi-engine/proposal.md) — synced `kimi-engine-runtime`
+- [`fix-agent-catalog-startup-convergence`](changes/archive/2026-07-24-fix-agent-catalog-startup-convergence/proposal.md) — synced `agent-startup-selection-stability`
+- [`unify-source-aware-note-capture-workbench`](changes/archive/2026-07-24-unify-source-aware-note-capture-workbench/proposal.md) — synced `workspace-note-card-pool` + `workspace-note-card-storage` + `workspace-note-context-capture`
+- [`add-pr-ai-title-body-generator`](changes/archive/2026-07-24-add-pr-ai-title-body-generator/proposal.md) — synced `git-history-panel` + `git-pr-submission-workflow` + `pr-ai-content-generation`
+- [`fix-claude-cli-native-installer`](changes/archive/2026-07-24-fix-claude-cli-native-installer/proposal.md) — synced `cli-one-click-installer`（归档前补全 delta 中两个 MODIFIED requirement 的 requirement text）
+- [`add-file-editor-goto-line-shortcut`](changes/archive/2026-07-24-add-file-editor-goto-line-shortcut/proposal.md) — synced `file-editor-line-navigation` + `file-editor-tab-strip`
+- [`restore-git-history-branch-tree-capabilities`](changes/archive/2026-07-24-restore-git-history-branch-tree-capabilities/proposal.md) — synced `git-history-panel`
+- [`move-file-history-into-git-graph-tabs`](changes/archive/2026-07-24-move-file-history-into-git-graph-tabs/proposal.md) — synced `file-history-view` + `git-history-panel`
+- [`fix-codex-subagent-live-sidebar-convergence`](changes/archive/2026-07-24-fix-codex-subagent-live-sidebar-convergence/proposal.md) — synced `subagent-session-tree-navigation`
+- [`add-composer-prompt-enhancer-entry`](changes/archive/2026-07-24-add-composer-prompt-enhancer-entry/proposal.md) — synced `composer-prompt-enhancer`
+- [`add-file-context-menu-shortcuts`](changes/archive/2026-07-24-add-file-context-menu-shortcuts/proposal.md) — synced `app-shortcuts` + `filetree-multitab-open`
+- [`fix-messages-core-update-depth-loop`](changes/archive/2026-07-24-fix-messages-core-update-depth-loop/proposal.md) — synced `client-renderer-stability-under-pressure`
+- [`add-git-diff-section-line-count-badge`](changes/archive/2026-07-24-add-git-diff-section-line-count-badge/proposal.md) — synced `git-panel-diff-view` + `multi-repository-git-commit-workspace`
+- [`enable-file-history-resizable-pane-and-diff-horizontal-scroll`](changes/archive/2026-07-24-enable-file-history-resizable-pane-and-diff-horizontal-scroll/proposal.md) — synced `file-history-view` + `git-panel-diff-view`（归档前将 delta 由 MODIFIED 校正为 ADDED：目标 requirement 在 main spec 中不存在，行为为新增）
+- [`add-extensions-management-surface`](changes/archive/2026-07-24-add-extensions-management-surface/proposal.md) — synced `extensions-management-surface`
+
+Conflict groups resolved chronologically (older first, newer overrides): `git-history-panel`（soften → pr-ai → restore → move-file-history）、`git-pr-submission-workflow`（soften → pr-ai）、`git-panel-diff-view`（line-count-badge → file-history-resizable）、`file-history-view`（move-file-history → file-history-resizable）。
 
 ### 2026-07-18 Code-Calibrated Closure Batch
 
@@ -299,17 +325,17 @@ This snapshot is evidence-oriented. It does not claim full product QA for every 
 
 易漂移事实必须回到代码或 manifest，不从历史 plan / audit snapshot 反推：
 
-| Fact | Canonical source |
-|---|---|
-| Product version and npm scripts | `package.json`, `package-lock.json` |
-| Tauri product version and bundle | `src-tauri/tauri.conf.json` |
-| Rust crate metadata | `src-tauri/Cargo.toml` |
-| Runtime engine model | `src/types/engine.ts`, `src-tauri/src/engine/mod.rs`, `src-tauri/src/command_registry.rs` |
-| WebView locales | `src/i18n/index.ts`, `src/i18n/locales/*` |
-| Theme presets | `src/features/theme/constants/vscodeThemePresets.ts` |
-| CI triggers | `.github/workflows/ci.yml` |
-| Large-file gates | `scripts/check-large-files.policy.json`, `package.json`, `.github/workflows/large-file-governance.yml` |
-| Active/archive/spec inventory | `openspec/changes/*`, `openspec/changes/archive/*`, `openspec/specs/*` |
+| Fact                             | Canonical source                                                                                       |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Product version and npm scripts  | `package.json`, `package-lock.json`                                                                    |
+| Tauri product version and bundle | `src-tauri/tauri.conf.json`                                                                            |
+| Rust crate metadata              | `src-tauri/Cargo.toml`                                                                                 |
+| Runtime engine model             | `src/types/engine.ts`, `src-tauri/src/engine/mod.rs`, `src-tauri/src/command_registry.rs`              |
+| WebView locales                  | `src/i18n/index.ts`, `src/i18n/locales/*`                                                              |
+| Theme presets                    | `src/features/theme/constants/vscodeThemePresets.ts`                                                   |
+| CI triggers                      | `.github/workflows/ci.yml`                                                                             |
+| Large-file gates                 | `scripts/check-large-files.policy.json`, `package.json`, `.github/workflows/large-file-governance.yml` |
+| Active/archive/spec inventory    | `openspec/changes/*`, `openspec/changes/archive/*`, `openspec/specs/*`                                 |
 
 ## Namespace Policy
 
@@ -362,6 +388,12 @@ npm run check:large-files
 
 ## Update History
 
+- 2026-07-26: 将 engine/model 接入治理拆为 11 个 CLI foundation changes，覆盖 capability、runtime identity、`MossxAgentEvent` bus、`run.settled`、adapter/protocol registry、message delivery、executable session registry、model/provider catalog、Kimi/Claude/OpenCode compatibility 与 controller facade migration；共 96 个未执行任务。11 个 change 均完成 proposal/design/spec deltas/tasks 并单独 strict validation 通过。全工作区 strict validation 仍被既有 `add-tokentracker-usage-dashboard`、`reduce-client-polling-overhead` 缺失 spec delta 阻塞。校准当前目录计数为 active=24、archive=739、specs=437；无业务代码改动。
+- 2026-07-25: Archived `close-cleanup-review-findings` after correcting the prior cleanup wave: removed absent-producer JCEF completion waits, keyed semantic AI review cache by diff/language, kept engine fallback serial, made corrupted storage backup targets unique, and removed residual notice dock branches. Synced five requirements into four existing specs. Calibrated indexes to active=5, archive=731, specs=431 and restored the missing `add-tokentracker-usage-dashboard` active entry.
+- 2026-07-24: Implemented and archived `preserve-corrupted-workspaces-on-load-and-notify`, closing the same silent-fallback-plus-overwrite risk for `workspaces.json` that was fixed for `settings.json`: generalized `backup_corrupted_settings_file` into `backup_corrupted_file`, both GUI and daemon `load()` call sites now quarantine the corrupted file before falling back to an empty workspace map, the GUI records a one-shot `WorkspacesRecoveryNotice` consumed by the new `take_workspaces_recovery_notice` command, and `useWorkspaces` surfaces one localized toast on mount. Synced the new main capability `workspaces-corruption-recovery`. Current counts are active=4, archive=730, specs=431.
+
+- 2026-07-24: Archived eight verified changes from the parallel cleanup wave (`remove-jcef-bridge-noop-stubs`, `remove-latest-agent-runs-dead-chain`, `inline-refresh-codex-model-config-passthrough`, `remove-responsive-layout-dead-branches`, `remove-settings-view-dead-entry-switches`, `remove-orchestration-residual-dead-fields`, `remove-dock-streaming-dead-branch`, `add-ai-review-producer-wiring`); synced delta specs into existing main specs `global-runtime-notice-dock` and `git-panel-diff-view`; backfilled the eight 2026-07-24 archive index entries and calibrated the 2026-07 monthly group count 188 → 196. Current counts are active=4, archive=729, specs=430. The responsive-layout dead-branch removal was the only product-code change in this wave (committed separately).
+- 2026-07-24: Performed a terminal-state index calibration after same-day parallel archive waves drifted the indexes. Removed the `agent-task-orchestration-center` dead link from the specs index (its spec was deleted by the orchestration-center removal archive), registered `app-settings-corruption-recovery` and `settings-view-type-safety`, backfilled 45 missing 2026-07-18~24 entries in the archive index, calibrated the 2026-07 monthly group count 142 → 188, replaced the two new specs' TBD Purpose placeholders, and unified current counts to active=4, archive=721, specs=430. No product code was modified.
 - 2026-07-18: Reconciled four active change directories and added `stabilize-client-runtime-and-diagnostics` verification evidence. Current counts are active=4, archive=640, specs=406; one 21/22 performance-trace gate and two other manual acceptance backlogs remain active.
 - 2026-07-18: Archived `harden-conversation-rendering-for-large-history` under explicit product-owner acceptance and synced ten implemented requirements into five existing main specs; archived `2026-06-22-release-pipeline-cache-sccache` as a failed performance experiment without syncing its invalid success contract. Current counts are active=2, archive=640, specs=406. No product code was modified.
 - 2026-07-17: Re-audited project documentation against manifests, workflows, and current code; refreshed the working-tree inventory to active=11, archive=631, specs=403; added complete docs/OpenSpec navigation indexes; corrected runtime, locale, storage, CI, and workflow facts; and repaired project-owned documentation links. No business code was modified.

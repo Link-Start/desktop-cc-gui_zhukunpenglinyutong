@@ -83,7 +83,7 @@ interface StatusPanelProps extends CodeAnnotationBridgeProps {
   onCommitMessageChange?: (value: string) => void;
   onGenerateCommitMessage?: (
     language?: "zh" | "en",
-    engine?: "codex" | "claude" | "gemini" | "kimi" | "opencode",
+    engine?: "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode",
     selectedPaths?: string[],
   ) => void | Promise<void>;
   onCommit?: (selectedPaths?: string[]) => void | Promise<void>;
@@ -221,6 +221,7 @@ export const StatusPanel = memo(function StatusPanel({
   const { t } = useTranslation();
   const deferredItems = useDeferredValue(items);
   const effectiveItems = isProcessing ? deferredItems : items;
+  const statusPanelEngine = selectedEngine ?? (isCodexEngine ? "codex" : null);
   const {
     commands,
     fileChanges,
@@ -236,6 +237,7 @@ export const StatusPanel = memo(function StatusPanel({
     totalDeletions,
   } = useStatusPanelData(effectiveItems, {
     isCodexEngine,
+    activeEngine: statusPanelEngine,
     activeThreadId,
     activeTurnId,
     itemsByThread,
@@ -244,7 +246,6 @@ export const StatusPanel = memo(function StatusPanel({
   });
 
   const hasPlanData = isPlanMode || Boolean(plan);
-  const statusPanelEngine = selectedEngine ?? (isCodexEngine ? "codex" : null);
   const supportsCollaborationMode =
     statusPanelEngine !== null &&
     isEngineCapabilityAvailable(statusPanelEngine, "collaboration.mode");
