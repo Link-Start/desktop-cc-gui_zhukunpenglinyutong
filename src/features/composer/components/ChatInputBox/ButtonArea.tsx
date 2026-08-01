@@ -342,16 +342,22 @@ export const ButtonArea = ({
             selectedCollaborationModeId={selectedCollaborationModeId}
             onSelectCollaborationMode={onSelectCollaborationMode}
           />
-          {(currentProvider === 'codex' || currentProvider === 'claude') && (
+          {(currentProvider === 'codex' ||
+            currentProvider === 'claude' ||
+            currentProvider === 'grok') && (
             <ReasoningSelect
               value={reasoningEffort}
               onChange={onReasoningChange ?? NOOP_REASONING}
               options={reasoningOptions}
-              showDefaultOption={currentProvider === 'claude'}
+              showDefaultOption={
+                currentProvider === 'claude' || currentProvider === 'grok'
+              }
               defaultLabel={
                 currentProvider === 'claude'
                   ? t('reasoning.claudeDefault', { defaultValue: '默认' })
-                  : undefined
+                  : currentProvider === 'grok'
+                    ? t('reasoning.grokDefault', { defaultValue: '默认' })
+                    : undefined
               }
             />
           )}

@@ -6,6 +6,7 @@ import {
   getEffectiveModels,
   getEffectiveSelectedEffort,
   getEffectiveReasoningSupported,
+  GROK_REASONING_OPTIONS,
   isReasoningEffortSupportedForEngine,
   getEffectiveSelectedModelId,
   getReasoningOptionsForModel,
@@ -375,6 +376,12 @@ describe("modelSelection", () => {
     expect(getEffectiveReasoningOptions("claude", [])).toEqual(CLAUDE_REASONING_OPTIONS);
   });
 
+  it("exposes Grok reasoning support independently from model catalog", () => {
+    expect(getEffectiveReasoningSupported("grok", false)).toBe(true);
+    expect(getEffectiveReasoningOptions("grok", [])).toEqual(GROK_REASONING_OPTIONS);
+    expect(isReasoningEffortSupportedForEngine("grok", [])).toBe(true);
+  });
+
   it("keeps Claude effort empty until the user selects a thread or draft value", () => {
     expect(
       getEffectiveSelectedEffort({
@@ -411,6 +418,30 @@ describe("modelSelection", () => {
     ).toBe("high");
   });
 
+  it("keeps Grok effort empty until the user selects a thread or draft value", () => {
+    expect(
+      getEffectiveSelectedEffort({
+        activeEngine: "grok",
+        hasActiveThread: false,
+        selectedEffort: "medium",
+        activeThreadSelection: null,
+        reasoningOptions: GROK_REASONING_OPTIONS,
+      }),
+    ).toBeNull();
+    expect(
+      getEffectiveSelectedEffort({
+        activeEngine: "grok",
+        hasActiveThread: true,
+        selectedEffort: "medium",
+        activeThreadSelection: {
+          modelId: "grok-4.5",
+          effort: "high",
+        },
+        reasoningOptions: GROK_REASONING_OPTIONS,
+      }),
+    ).toBe("high");
+  });
+
   it("ignores unsupported Claude effort instead of injecting a fallback value", () => {
     expect(
       getEffectiveSelectedEffort({
@@ -422,6 +453,21 @@ describe("modelSelection", () => {
           effort: "ultra",
         },
         reasoningOptions: CLAUDE_REASONING_OPTIONS,
+      }),
+    ).toBeNull();
+  });
+
+  it("ignores unsupported Grok effort instead of injecting a fallback value", () => {
+    expect(
+      getEffectiveSelectedEffort({
+        activeEngine: "grok",
+        hasActiveThread: true,
+        selectedEffort: "medium",
+        activeThreadSelection: {
+          modelId: "grok-4.5",
+          effort: "xhigh",
+        },
+        reasoningOptions: GROK_REASONING_OPTIONS,
       }),
     ).toBeNull();
   });

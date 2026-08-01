@@ -117,6 +117,24 @@ describe("selectedComposerSession", () => {
       effort: null,
     });
     expect(
+      normalizeComposerSessionSelectionForThread("grok:session-1", {
+        modelId: "grok-4.5",
+        effort: " high ",
+      }),
+    ).toEqual({
+      modelId: "grok-4.5",
+      effort: "high",
+    });
+    expect(
+      normalizeComposerSessionSelectionForThread("grok:session-1", {
+        modelId: "grok-4.5",
+        effort: "xhigh",
+      }),
+    ).toEqual({
+      modelId: "grok-4.5",
+      effort: null,
+    });
+    expect(
       normalizeComposerSessionSelectionForThread("codex:session-1", {
         modelId: "gpt-5.4",
         effort: "high",

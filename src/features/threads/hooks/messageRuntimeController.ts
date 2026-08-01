@@ -5,6 +5,8 @@ import { extractSessionIdFromEngineSendResponse } from "./threadMessagingHelpers
 
 const MEMORY_SCOUT_TIMEOUT_MS = 1500;
 const CLAUDE_REASONING_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
+/** Keep aligned with composer / grok.rs allowlist (low|medium|high). */
+const GROK_REASONING_EFFORTS = new Set(["low", "medium", "high"]);
 
 export function buildLocalizedMemoryScoutPreviewText(brief: MemoryBrief, t: TFunction) {
   if (brief.status === "ok") {
@@ -43,6 +45,9 @@ export function normalizeEngineScopedEffort(
   }
   if (engine === "claude") {
     return CLAUDE_REASONING_EFFORTS.has(trimmed) ? trimmed : null;
+  }
+  if (engine === "grok") {
+    return GROK_REASONING_EFFORTS.has(trimmed) ? trimmed : null;
   }
   if (engine === "codex") {
     return trimmed;

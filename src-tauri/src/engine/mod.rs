@@ -399,7 +399,8 @@ impl EngineFeatures {
     /// Features for Grok CLI
     pub fn grok() -> Self {
         Self {
-            reasoning_effort: false,
+            // Grok CLI: `--reasoning-effort` / `--effort` (TUI + headless).
+            reasoning_effort: true,
             collaboration_mode: false,
             // Headless multimodal via `grok --prompt-file` ACP image blocks.
             image_input: true,
@@ -523,6 +524,11 @@ mod tests {
         let codex = EngineFeatures::codex();
         assert!(codex.reasoning_effort);
         assert!(codex.collaboration_mode);
+
+        let grok = EngineFeatures::grok();
+        assert!(grok.reasoning_effort);
+        assert!(grok.image_input);
+        assert!(!grok.mcp);
     }
 
     #[test]

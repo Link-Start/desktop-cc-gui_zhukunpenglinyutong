@@ -1,6 +1,7 @@
 # 多 CLI 图片输入能力对齐（以代码为准，2026-07-30）
 
-> **2026-08-01 生命周期校准**：implemented；OpenSpec `grok-cli-image-input-capability-gap` 为 `25/25`，仍 active，待 verify / sync / archive。当前 capability 以 generated matrix 与 `pnpm check:engine-capability-matrix` 为准。
+> **2026-08-01 生命周期校准**：implemented；OpenSpec `grok-cli-image-input-capability-gap` 为 `25/25`，仍 active，待 verify / sync / archive。当前 capability 以 generated matrix 与 `pnpm check:engine-capability-matrix` 为准。  
+> **同日补充**：`reasoning.effort` 已另案接入（见 `grok-cli-reasoning-effort-2026-08-01.md` / OpenSpec `grok-cli-reasoning-effort`）；本报告仍只覆盖 **图片输入**，勿当作 effort 能力说明。
 
 ## 一、结论
 

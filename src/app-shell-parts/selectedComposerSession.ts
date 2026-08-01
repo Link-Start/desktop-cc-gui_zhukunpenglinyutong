@@ -8,6 +8,8 @@ export type ComposerSessionSelection = {
 const THREAD_COMPOSER_SELECTION_STORAGE_KEY_PREFIX = "selectedModelByThread.";
 const CLAUDE_FORK_THREAD_PREFIX = "claude-fork:";
 const CLAUDE_REASONING_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
+/** Keep aligned with `GROK_REASONING_OPTIONS` / grok.rs allowlist. */
+const GROK_REASONING_EFFORTS = new Set(["low", "medium", "high"]);
 
 export function resolveThreadEngine(
   threadId: string,
@@ -84,7 +86,9 @@ export function normalizeComposerSessionSelectionForThread(
   let effort = normalized.effort;
   if (engine === "claude") {
     effort = effort && CLAUDE_REASONING_EFFORTS.has(effort) ? effort : null;
-  } else if (engine === "gemini" || engine === "grok" || engine === "kimi" || engine === "opencode") {
+  } else if (engine === "grok") {
+    effort = effort && GROK_REASONING_EFFORTS.has(effort) ? effort : null;
+  } else if (engine === "gemini" || engine === "kimi" || engine === "opencode") {
     effort = null;
   }
 

@@ -592,3 +592,49 @@ B1 切断 useModels layout self-deps；会话 selection 幂等；freeform 只修
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1267: Grok 思考强度接入
+
+**Date**: 2026-08-01
+**Task**: Grok 思考强度接入
+**Branch**: `feature/v-0714`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|---|---|
+| 能力 | Grok `reasoning.effort` supported；composer 选 low/medium/high；argv `--reasoning-effort` |
+| 修复 | 无 thread 选 effort 被清；三层 allowlist；matrix generated 同步 |
+| OpenSpec | `openspec/changes/grok-cli-reasoning-effort/` |
+| 报告 | `docs/reports/grok-cli-reasoning-effort-2026-08-01.md` |
+| 验证 | matrix check + vitest 64 + cargo effort 单测；用户确认外观 OK |
+
+**Updated files (highlights)**:
+- `src-tauri/src/engine/grok.rs`
+- `src/app-shell-parts/modelSelection.ts`
+- `src/features/composer/components/ChatInputBox/ButtonArea.tsx`
+- `openspec/changes/grok-cli-reasoning-effort/**`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `75a847b9d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
