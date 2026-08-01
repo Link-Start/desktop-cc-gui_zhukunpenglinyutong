@@ -32,6 +32,7 @@ import type {
   EngineDisplayInfo,
   EngineRefreshResult,
 } from "../../engine/hooks/useEngineController";
+import { useCliEngineVisibility } from "../../composer/hooks/cliEngineVisibilityStore";
 import {
   PINNABLE_WORKSPACE_ACTION_IDS,
   SIDEBAR_WORKSPACE_PINNED_ACTIONS_CHANGED_EVENT,
@@ -54,6 +55,16 @@ import {
 } from "../../threads/services/providerContinuationRequests";
 import { isWeakSessionDisplayTitle } from "../../threads/utils/sessionDisplayProjection";
 import { activateEngineProviderProfileAndNotify } from "../../vendors/activateEngineProviderProfile";
+
+/** 新建会话菜单项 id → 对应 CLI engine；用于 CLI 配置管理启停过滤。 */
+const NEW_SESSION_ENGINE_ACTION_IDS: Readonly<Record<string, EngineType>> = {
+  "new-session-claude": "claude",
+  "new-session-codex": "codex",
+  "new-session-opencode": "opencode",
+  "new-session-gemini": "gemini",
+  "new-session-kimi": "kimi",
+  "new-session-grok": "grok",
+};
 
 const LAST_PROVIDER_PROFILE_KEYS = {
   claude: "claudeLastProviderProfileId",
@@ -382,6 +393,8 @@ export function useSidebarMenus({
   opencodeProviderProfiles = [],
 }: SidebarMenuHandlers) {
   const { t } = useTranslation();
+  // 与 Composer ProviderSelect 同源：AppSettings.disabledCliEngines 的前台可见性。
+  const disabledCliEngineIds = useCliEngineVisibility();
   const [workspaceMenuState, setWorkspaceMenuState] =
     useState<WorkspaceMenuState | null>(null);
   const [sidebarContextMenuState, setSidebarContextMenuState] =
@@ -1259,8 +1272,10 @@ export function useSidebarMenus({
   );
 
   const isEngineSessionEntryVisible = useCallback(
-    (engineType: EngineType) => isEngineExecutionEnabled(engineType),
-    [],
+    (engineType: EngineType) =>
+      isEngineExecutionEnabled(engineType) &&
+      !disabledCliEngineIds.has(engineType),
+    [disabledCliEngineIds],
   );
 
   const [claudeSelectedProfileId, setClaudeSelectedProfileId] = useState<
@@ -1295,7 +1310,8 @@ export function useSidebarMenus({
         engine: EngineType,
         actionOptions?: EngineProviderProfileSelection,
       ) => {
-        if (!isEngineExecutionEnabled(engine)) {
+        // 产品策略停用 + CLI 配置管理停用：双重 gate，与菜单过滤一致。
+        if (!isEngineSessionEntryVisible(engine)) {
           return null;
         }
         if (actionOptions?.providerProfile?.availability === "unavailable") {
@@ -1415,33 +1431,45 @@ export function useSidebarMenus({
         kimi: t("workspace.engineKimi"),
         grok: t("workspace.engineGrok"),
       };
+      // Shared CLI 子引擎同样受 CLI 配置管理控制。
+      const sharedEngineEntries = (
+        [
+          ["claude", "engine-claude"],
+          ["codex", "engine-codex"],
+          ["opencode", "engine-opencode"],
+          ["kimi", "engine-kimi"],
+          ["grok", "engine-grok"],
+        ] as const
+      ).filter(([engine]) => isEngineSessionEntryVisible(engine));
       const actions = [
-        {
-          id: "new-session-shared",
-          label: t("sidebar.newSharedSession"),
-          iconKind: "new-shared",
-          unavailable: !onAddSharedAgent,
-          submenuOnly: true,
-          onSelect: () => {},
-          children: (
-            [
-              ["claude", "engine-claude"],
-              ["codex", "engine-codex"],
-              ["opencode", "engine-opencode"],
-              ["kimi", "engine-kimi"],
-              ["grok", "engine-grok"],
-            ] as const
-          ).map(([engine, iconKind]) => ({
-            id: `new-session-shared-${engine}`,
-            label: sharedEngineLabels[engine],
-            iconKind,
-            ...resolveEngineActionMeta(workspace, engine),
-            onSelect: async () => {
-              const threadId = await onAddSharedAgent?.(workspace, engine);
-              await handleCreatedSession(threadId);
-            },
-          })),
-        },
+        ...(sharedEngineEntries.length > 0
+          ? [
+              {
+                id: "new-session-shared",
+                label: t("sidebar.newSharedSession"),
+                iconKind: "new-shared" as const,
+                unavailable: !onAddSharedAgent,
+                submenuOnly: true,
+                onSelect: () => {},
+                children: sharedEngineEntries.map(([engine, iconKind]) => ({
+                  id: `new-session-shared-${engine}`,
+                  label: sharedEngineLabels[engine],
+                  iconKind,
+                  ...resolveEngineActionMeta(workspace, engine),
+                  onSelect: async () => {
+                    if (!isEngineSessionEntryVisible(engine)) {
+                      return;
+                    }
+                    const threadId = await onAddSharedAgent?.(
+                      workspace,
+                      engine,
+                    );
+                    await handleCreatedSession(threadId);
+                  },
+                })),
+              },
+            ]
+          : []),
         {
           id: "new-session-claude",
           label: t("workspace.engineClaudeCode"),
@@ -1670,14 +1698,13 @@ export function useSidebarMenus({
         },
       ] satisfies WorkspaceMenuAction[];
 
+      // CLI 配置管理停用 / 产品策略停用的引擎从「新建会话」入口隐藏。
       const visibleActions = actions.filter((action) => {
-        if (action.id === "new-session-opencode") {
-          return isEngineSessionEntryVisible("opencode");
+        const engine = NEW_SESSION_ENGINE_ACTION_IDS[action.id];
+        if (!engine) {
+          return true;
         }
-        if (action.id === "new-session-gemini") {
-          return isEngineSessionEntryVisible("gemini");
-        }
-        return true;
+        return isEngineSessionEntryVisible(engine);
       });
 
       return {

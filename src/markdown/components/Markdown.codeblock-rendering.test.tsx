@@ -114,7 +114,7 @@ describe("Markdown fenced block rendering", () => {
     ).toBe("text");
   });
 
-  it("defers heavy code blocks without changing rendered canonical value", async () => {
+  it("renders heavy code blocks immediately while defer kill-switch is off", async () => {
     const onRenderedValueChange = vi.fn();
     const value = [
       "```ts",
@@ -132,19 +132,13 @@ describe("Markdown fenced block rendering", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Heavy Markdown detail deferred")).toBeTruthy();
-    });
-    expect(container.textContent).not.toContain("heavyValue43");
-    expect(onRenderedValueChange).toHaveBeenCalledWith(value);
-
-    fireEvent.click(screen.getByRole("button", { name: "Show detail" }));
-
-    await waitFor(() => {
       expect(container.textContent).toContain("heavyValue43");
     });
+    expect(screen.queryByText("Heavy Markdown detail deferred")).toBeNull();
+    expect(onRenderedValueChange).toHaveBeenCalledWith(value);
   });
 
-  it("defers large markdown tables until explicitly expanded", async () => {
+  it("renders large markdown tables immediately while defer kill-switch is off", async () => {
     const value = [
       "| A | B | C |",
       "| - | - | - |",
@@ -160,14 +154,8 @@ describe("Markdown fenced block rendering", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Heavy Markdown detail deferred")).toBeTruthy();
-    });
-    expect(container.textContent).not.toContain("row-13");
-
-    fireEvent.click(screen.getByRole("button", { name: "Show detail" }));
-
-    await waitFor(() => {
       expect(container.textContent).toContain("row-13");
     });
+    expect(screen.queryByText("Heavy Markdown detail deferred")).toBeNull();
   });
 });
