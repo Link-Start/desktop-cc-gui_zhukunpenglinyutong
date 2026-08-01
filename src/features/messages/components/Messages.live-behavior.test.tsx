@@ -2731,7 +2731,7 @@ describe("Messages live behavior", () => {
     expect(container.textContent ?? "").toContain("第一段输出");
   });
 
-  it("does not show a phase chip for shell-only process (commands stay off canvas)", () => {
+  it("does not show a phase chip for pure shell noise (pwd/ls stay off canvas)", () => {
     const items: ConversationItem[] = [
       {
         id: "user-live-collapse-commands-only",
@@ -2743,17 +2743,17 @@ describe("Messages live behavior", () => {
         id: "tool-live-collapse-commands-only-1",
         kind: "tool",
         toolType: "commandExecution",
-        title: "Command: rg --files",
-        detail: "/tmp",
+        title: "Command: pwd",
+        detail: JSON.stringify({ command: "pwd" }),
         status: "completed",
-        output: "",
+        output: "/repo",
       },
       {
         id: "tool-live-collapse-commands-only-2",
         kind: "tool",
         toolType: "commandExecution",
         title: "Command: ls -la",
-        detail: "/tmp",
+        detail: JSON.stringify({ command: "ls -la" }),
         status: "completed",
         output: "",
       },
@@ -2780,7 +2780,8 @@ describe("Messages live behavior", () => {
 
     expect(container.querySelector(".messages-live-middle-collapsed-indicator")).toBeNull();
     expect(container.textContent ?? "").toContain("最终输出");
-    expect(container.textContent ?? "").not.toContain("rg --files");
+    expect(container.textContent ?? "").not.toContain("pwd");
+    expect(container.textContent ?? "").not.toContain("ls -la");
   });
 
   it("collapses the process phase above historical assistant prose", () => {

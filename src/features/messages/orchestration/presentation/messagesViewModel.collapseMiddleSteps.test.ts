@@ -162,24 +162,24 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
     expect(result.phases.find((phase) => phase.phaseKey === "a2")?.expanded).toBe(false);
   });
 
-  it("strips canvas-hidden command tools and skips empty shell-only phases", () => {
+  it("strips pure shell noise and skips empty noise-only phases", () => {
     const items = [
       user("u1"),
       {
         id: "cmd-1",
         kind: "tool" as const,
         toolType: "commandExecution" as const,
-        title: "Command: rg --files",
-        detail: "/tmp",
+        title: "Command: pwd",
+        detail: JSON.stringify({ command: "pwd" }),
         status: "completed" as const,
-        output: "",
+        output: "/repo",
       },
       {
         id: "cmd-2",
         kind: "tool" as const,
         toolType: "commandExecution" as const,
         title: "Command: ls -la",
-        detail: "/tmp",
+        detail: JSON.stringify({ command: "ls -la" }),
         status: "completed" as const,
         output: "",
       },
@@ -190,12 +190,12 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
       timelineSourceItems: items,
     });
 
-    // Shell tools leave the canvas entirely — no chip, no remount on expand.
+    // Pure shell noise leaves the canvas entirely — no chip, no remount on expand.
     expect(result.phases).toEqual([]);
     expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "a1"]);
   });
 
-  it("collapses file-read process only and excludes shell from chip counts", () => {
+  it("collapses file-read process only and excludes pure shell from chip counts", () => {
     const items = [
       user("u1"),
       {
@@ -203,7 +203,7 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
         kind: "tool" as const,
         toolType: "commandExecution" as const,
         title: "Command: ls -la",
-        detail: "/tmp",
+        detail: JSON.stringify({ command: "ls -la" }),
         status: "completed" as const,
         output: "",
       },
@@ -241,5 +241,56 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
     });
     expect(result.phases[0]!.hiddenItemIds).toEqual(["read-1", "read-2"]);
     expect(result.phases[0]!.hiddenItemIds).not.toContain("cmd-1");
+  });
+
+  it("keeps Codex shell-form cat/apply_patch on canvas and collapses them as file IO", () => {
+    const patch =
+      "*** Begin Patch\n*** Update File: src/a.ts\n@@\n-old\n+new\n*** End Patch\n";
+    const items = [
+      user("u1"),
+      {
+        id: "cat-1",
+        kind: "tool" as const,
+        toolType: "commandExecution" as const,
+        title: "Command: cat README.md",
+        detail: JSON.stringify({ command: ["cat", "README.md"] }),
+        status: "completed" as const,
+        output: "# Hello\n",
+      },
+      {
+        id: "patch-1",
+        kind: "tool" as const,
+        toolType: "commandExecution" as const,
+        title: "Command: apply_patch",
+        detail: JSON.stringify({ command: `apply_patch <<'EOF'\n${patch}EOF` }),
+        status: "completed" as const,
+        output: "Success. Updated the following files:\nM src/a.ts",
+      },
+      {
+        id: "noise-1",
+        kind: "tool" as const,
+        toolType: "commandExecution" as const,
+        title: "Command: pwd",
+        detail: JSON.stringify({ command: "pwd" }),
+        status: "completed" as const,
+        output: "/repo\n",
+      },
+      assistant("a1", "最终输出"),
+    ];
+    const result = resolveCollapsedTimelineItems({
+      activeEngine: "codex",
+      timelineSourceItems: items,
+    });
+
+    // pwd noise filtered; cat + apply_patch remain as collapsible process.
+    expect(result.phases).toHaveLength(1);
+    expect(result.phases[0]!.breakdown.toolCount).toBe(2);
+    expect(result.phases[0]!.hiddenItemIds).toContain("cat-1");
+    expect(result.phases[0]!.hiddenItemIds.some((id) => id === "patch-1" || id.startsWith("patch"))).toBe(
+      true,
+    );
+    expect(result.phases[0]!.hiddenItemIds).not.toContain("noise-1");
+    // When collapsed only user + assistant remain on timeline.
+    expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "a1"]);
   });
 });

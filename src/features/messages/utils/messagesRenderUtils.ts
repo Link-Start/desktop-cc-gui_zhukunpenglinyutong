@@ -13,12 +13,16 @@ import {
 import { compactComparableReasoningText, parseReasoning } from "../presentation/messagesReasoning";
 import {
   buildCommandSummary,
+  extractCommandFromTitle,
   extractToolName,
   isBashTool,
   isEditTool,
   isReadTool,
   isSearchTool,
+  parseToolArgs,
 } from "../components/toolBlocks/toolConstants";
+import { buildConversationItem } from "../../../utils/threadItems";
+import { inferMutatingFileChangesFromCommand } from "../../../utils/threadItemsFileChanges";
 
 export const SCROLL_THRESHOLD_PX = 120;
 export const OPENCODE_NON_STREAMING_HINT_DELAY_MS = 12_000;
@@ -363,16 +367,143 @@ export function resolveCodexCommandActivityLabel(item: Extract<ConversationItem,
 }
 
 /**
+ * Extract shell/command text from a tool row (title `Command: …` or detail JSON).
+ * Codex/deepseek often only expose file IO through commandExecution argv/text.
+ */
+export function extractCanvasToolCommandText(
+  item: Extract<ConversationItem, { kind: "tool" }>,
+): string {
+  const fromTitle = extractCommandFromTitle(item.title ?? "");
+  if (fromTitle) {
+    return fromTitle;
+  }
+  const args = parseToolArgs(item.detail);
+  if (args) {
+    const command = args.command ?? args.cmd ?? args.input ?? args.patch;
+    if (typeof command === "string" && command.trim()) {
+      return command.trim();
+    }
+    if (Array.isArray(command)) {
+      return command
+        .map((part) => (typeof part === "string" ? part.trim() : ""))
+        .filter(Boolean)
+        .join(" ");
+    }
+  }
+  const detail = item.detail?.trim() ?? "";
+  if (
+    detail.includes("*** Begin Patch") ||
+    detail.includes("*** Update File:") ||
+    /^(?:cat|head|tail|rg|grep|sed|apply_patch)\b/i.test(detail)
+  ) {
+    return detail;
+  }
+  return "";
+}
+
+/** apply_patch / mutators → should surface as file write narrative. */
+export function isCanvasFileWriteCommand(command: string): boolean {
+  const normalized = command.trim();
+  if (!normalized) {
+    return false;
+  }
+  if (/(?:^|[\s;&|])apply_patch(?:\s|$)/i.test(normalized)) {
+    return true;
+  }
+  if (
+    normalized.includes("*** Begin Patch") ||
+    normalized.includes("*** Update File:") ||
+    normalized.includes("*** Add File:") ||
+    normalized.includes("*** Delete File:")
+  ) {
+    return true;
+  }
+  return inferMutatingFileChangesFromCommand(normalized).length > 0;
+}
+
+/**
+ * Read-only inspection commands Codex uses instead of a dedicated Read tool.
+ * Pure noise (ls/pwd/echo/env) stays hidden.
+ */
+export function isCanvasFileReadCommand(command: string): boolean {
+  const normalized = command.trim();
+  if (!normalized || isCanvasFileWriteCommand(normalized)) {
+    return false;
+  }
+  if (
+    /^(?:ls|pwd|echo|env|printenv|which|type|true|false|clear|date|whoami|id|uname|sleep|printf)\b/i.test(
+      normalized,
+    )
+  ) {
+    return false;
+  }
+  // First-token / common file inspection tools used by Codex shell agents.
+  if (
+    /^(?:cat|head|tail|bat|less|more|nl|wc|file|stat|rg|grep|ag|ack|find|fd|sed|awk|jq|python3?|node|ruby|perl)\b/i.test(
+      normalized,
+    )
+  ) {
+    return true;
+  }
+  return /\b(?:cat|head|tail|rg|grep|find)\s+\S+/.test(normalized);
+}
+
+/**
+ * Promote commandExecution that is actually apply_patch / file mutation into
+ * fileChange so canvas edit scenes work for Shared Codex (incl. deepseek via CLI).
+ */
+export function promoteCanvasFileIoToolItem(
+  item: ConversationItem,
+): ConversationItem {
+  if (item.kind !== "tool") {
+    return item;
+  }
+  if (item.toolType === "fileChange" && (item.changes?.length ?? 0) > 0) {
+    return item;
+  }
+  const isShellRow =
+    item.toolType === "commandExecution" ||
+    isBashTool(extractToolName(item.title).toLowerCase());
+  if (!isShellRow) {
+    return item;
+  }
+  const command = extractCanvasToolCommandText(item);
+  if (!command || !isCanvasFileWriteCommand(command)) {
+    return item;
+  }
+  const converted = buildConversationItem({
+    id: item.id,
+    type: "commandExecution",
+    command,
+    status: item.status ?? "completed",
+    aggregatedOutput: item.output ?? "",
+    output: item.output ?? "",
+  });
+  if (
+    converted?.kind === "tool" &&
+    converted.toolType === "fileChange" &&
+    (converted.changes?.length ?? 0) > 0
+  ) {
+    return {
+      ...converted,
+      ...(item.engineSource ? { engineSource: item.engineSource } : {}),
+      ...(item.turnId ? { turnId: item.turnId } : {}),
+    };
+  }
+  return item;
+}
+
+/**
  * Hide bash/commandExecution on the conversation canvas for multi-CLI engines.
  *
  * Product intent (perf + narrative):
- * - Shell noise stays off the canvas (Status Panel remains the ops trail).
- * - File read / write / fileChange stay visible and still participate in
- *   process-phase collapse.
- * - Hidden tools must not remount on phase expand (expand only shows
- *   file-related process + reasoning).
+ * - Pure shell noise stays off the canvas (Status Panel remains the ops trail).
+ * - File read / write (incl. Codex shell-form cat/rg/apply_patch) stay visible
+ *   and still participate in process-phase collapse.
+ * - Hidden pure shell must not remount on phase expand.
  *
  * ExitPlanMode remains visible. TodoWrite still uses other filters.
+ * deepseek-v4 via Codex does not change this — tool wire shape is still Codex.
  */
 export function shouldHideCodexCanvasCommandCard(
   item: Extract<ConversationItem, { kind: "tool" }>,
@@ -403,18 +534,26 @@ export function shouldHideCodexCanvasCommandCard(
   ) {
     return false;
   }
-  // Read/Write/Edit agent tools stay visible (file IO narrative).
+  // Read/Write/Edit/Search agent tools stay visible (file IO narrative).
+  const toolNameLower = extractToolName(item.title).toLowerCase();
   if (
-    isReadTool(extractToolName(item.title).toLowerCase()) ||
-    isEditTool(extractToolName(item.title).toLowerCase()) ||
-    isSearchTool(extractToolName(item.title).toLowerCase())
+    isReadTool(toolNameLower) ||
+    isEditTool(toolNameLower) ||
+    isSearchTool(toolNameLower)
   ) {
     return false;
   }
+
+  const command = extractCanvasToolCommandText(item);
+  // Codex (+ deepseek) file IO often rides commandExecution — keep those rows.
+  if (command && (isCanvasFileWriteCommand(command) || isCanvasFileReadCommand(command))) {
+    return false;
+  }
+
   if (item.toolType === "commandExecution") {
     return true;
   }
-  return isBashTool(extractToolName(item.title).toLowerCase());
+  return isBashTool(toolNameLower);
 }
 
 export function isClaudeHistoryTranscriptHeavy(items: ConversationItem[]) {
@@ -480,17 +619,22 @@ export function countRenderableCollapsedEntries(
   }, 0);
 }
 
-/** Drop canvas-hidden shell tools before process-phase collapse / timeline mount. */
+/**
+ * Promote file-IO commandExecution → fileChange when possible, then drop pure
+ * shell noise before process-phase collapse / timeline mount.
+ */
 export function filterCanvasHiddenProcessTools(
   items: readonly ConversationItem[],
   activeEngine: MessagesEngine,
 ): ConversationItem[] {
-  return items.filter((item) => {
-    if (item.kind !== "tool") {
-      return true;
-    }
-    return !shouldHideCodexCanvasCommandCard(item, activeEngine);
-  });
+  return items
+    .map((item) => promoteCanvasFileIoToolItem(item))
+    .filter((item) => {
+      if (item.kind !== "tool") {
+        return true;
+      }
+      return !shouldHideCodexCanvasCommandCard(item, activeEngine);
+    });
 }
 
 export function resolveWorkingActivityLabel(
