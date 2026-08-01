@@ -354,9 +354,9 @@ export const ButtonArea = ({
               }
               defaultLabel={
                 currentProvider === 'claude'
-                  ? t('reasoning.claudeDefault', { defaultValue: '默认' })
+                  ? t('reasoning.claudeDefault', { defaultValue: 'Default' })
                   : currentProvider === 'grok'
-                    ? t('reasoning.grokDefault', { defaultValue: '默认' })
+                    ? t('reasoning.grokDefault', { defaultValue: 'Default' })
                     : undefined
               }
             />

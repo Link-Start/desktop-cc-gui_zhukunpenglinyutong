@@ -4,6 +4,7 @@ const reasoning = {
     title: "Select reasoning depth",
     default: "Default",
     claudeDefault: "Default",
+    grokDefault: "Default",
     defaultDescription: "Use the engine default reasoning behavior",
     low: {
       label: "Low",

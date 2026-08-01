@@ -7,6 +7,7 @@ const reasoning = {
     "title": "Seleccionar profundidad de razonamiento",
     "default": "Predeterminado",
     "claudeDefault": "Predeterminado",
+    "grokDefault": "Predeterminado",
     "defaultDescription": "Usar el comportamiento de razonamiento predeterminado del motor",
     "low": {
       "label": "Bajo",

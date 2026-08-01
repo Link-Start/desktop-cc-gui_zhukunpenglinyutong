@@ -7,6 +7,7 @@ const reasoning = {
     "title": "तर्क की गहराई चुनें",
     "default": "डिफ़ॉल्ट",
     "claudeDefault": "डिफ़ॉल्ट",
+    "grokDefault": "डिफ़ॉल्ट",
     "defaultDescription": "इंजन के डिफ़ॉल्ट तर्क व्यवहार का उपयोग करें",
     "low": {
       "label": "कम",
