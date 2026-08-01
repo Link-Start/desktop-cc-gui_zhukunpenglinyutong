@@ -512,6 +512,239 @@ fn stringify_tool_result_content(content: Option<&Value>) -> String {
     }
 }
 
+/// Live tool signal extracted from `chat_history.jsonl` (Grok stdout has no tool events).
+#[derive(Debug, Clone)]
+pub enum GrokHistoryToolSignal {
+    Started {
+        tool_id: String,
+        tool_name: String,
+        input: Option<Value>,
+    },
+    Completed {
+        tool_id: String,
+        output: Option<Value>,
+    },
+}
+
+/// Incremental tail state for one live Grok turn.
+///
+/// On first successful open, `byte_offset` is set to the **current file length** so
+/// tools from prior turns (resume) are never re-emitted. Subsequent polls only
+/// parse bytes after that offset (line-boundary safe).
+#[derive(Debug, Default)]
+pub struct GrokToolHistoryTailState {
+    /// Whether the baseline (skip-existing) snapshot has been taken.
+    pub baseline_set: bool,
+    /// When true (resume/continue), first open sets offset to EOF.
+    /// When false (brand-new session), first open starts at 0 so first writes are not skipped.
+    pub skip_existing_on_baseline: bool,
+    /// True if we observed the history file missing at least once this turn
+    /// (helps decide create-during-turn vs pre-existing file).
+    pub saw_missing: bool,
+    /// Byte offset of the next unread byte in `chat_history.jsonl`.
+    pub byte_offset: u64,
+    /// Incomplete trailing line kept until the next poll completes it.
+    pub carry: String,
+    pub seen_started: std::collections::HashSet<String>,
+    pub seen_completed: std::collections::HashSet<String>,
+    pub started_names: std::collections::HashMap<String, String>,
+    /// Args from ToolStarted, reattached on Completed for path/diff polish.
+    pub started_inputs: std::collections::HashMap<String, Value>,
+    synthetic_counter: usize,
+}
+
+impl GrokToolHistoryTailState {
+    /// `resume_session`: continuing an existing Grok session → skip prior-turn tools.
+    pub fn for_turn(resume_session: bool) -> Self {
+        Self {
+            skip_existing_on_baseline: resume_session,
+            ..Self::default()
+        }
+    }
+}
+
+/// Parse tool signals from a JSONL **chunk** (may be partial file tail).
+/// Idempotent via `seen_started` / `seen_completed`.
+pub fn drain_new_tool_signals_from_chat_history(
+    raw: &str,
+    seen_started: &mut std::collections::HashSet<String>,
+    seen_completed: &mut std::collections::HashSet<String>,
+) -> Vec<GrokHistoryToolSignal> {
+    let mut counter = 0usize;
+    drain_new_tool_signals_from_chat_history_with_counter(
+        raw,
+        seen_started,
+        seen_completed,
+        &mut counter,
+    )
+}
+
+fn drain_new_tool_signals_from_chat_history_with_counter(
+    raw: &str,
+    seen_started: &mut std::collections::HashSet<String>,
+    seen_completed: &mut std::collections::HashSet<String>,
+    counter: &mut usize,
+) -> Vec<GrokHistoryToolSignal> {
+    let mut out = Vec::new();
+    for line in raw.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let Ok(value) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        let line_type = value.get("type").and_then(|v| v.as_str()).unwrap_or("");
+        match line_type {
+            "assistant" => {
+                if let Some(tool_calls) = value.get("tool_calls").and_then(|v| v.as_array()) {
+                    for call in tool_calls {
+                        let tool_name = resolve_tool_call_name(call);
+                        let call_id = call
+                            .get("id")
+                            .and_then(|v| v.as_str())
+                            .map(|value| value.to_string())
+                            .unwrap_or_else(|| {
+                                *counter += 1;
+                                format!("grok-tool-{}", *counter)
+                            });
+                        if !seen_started.insert(call_id.clone()) {
+                            continue;
+                        }
+                        out.push(GrokHistoryToolSignal::Started {
+                            tool_id: call_id,
+                            tool_name,
+                            input: resolve_tool_call_arguments(call),
+                        });
+                    }
+                }
+            }
+            "tool_result" => {
+                let call_id = value
+                    .get("tool_call_id")
+                    .and_then(|v| v.as_str())
+                    .map(|value| value.to_string())
+                    .unwrap_or_else(|| {
+                        *counter += 1;
+                        format!("grok-tool-{}", *counter)
+                    });
+                if !seen_completed.insert(call_id.clone()) {
+                    continue;
+                }
+                let output_text = stringify_tool_result_content(value.get("content"));
+                let output = if output_text.trim().is_empty() {
+                    value.get("content").cloned()
+                } else {
+                    Some(Value::String(output_text))
+                };
+                out.push(GrokHistoryToolSignal::Completed {
+                    tool_id: call_id,
+                    output,
+                });
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Read only new bytes from `path` since `state.byte_offset`, update offset, return new tool signals.
+///
+/// First call with an existing file sets baseline to EOF (skip prior-turn tools).
+pub fn poll_chat_history_tool_signals(
+    path: &Path,
+    state: &mut GrokToolHistoryTailState,
+) -> std::io::Result<Vec<GrokHistoryToolSignal>> {
+    use std::io::{Read, Seek, SeekFrom};
+
+    let meta = match std::fs::metadata(path) {
+        Ok(meta) => meta,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            state.saw_missing = true;
+            return Ok(Vec::new());
+        }
+        Err(error) => return Err(error),
+    };
+    let file_len = meta.len();
+
+    // Baseline policy:
+    // - resume / continue → EOF (do not re-emit prior-turn tools)
+    // - new session, or file was missing earlier this turn → start at 0
+    //   so the first tool writes of this turn are not skipped
+    if !state.baseline_set {
+        state.baseline_set = true;
+        let skip_existing = state.skip_existing_on_baseline && !state.saw_missing;
+        if skip_existing {
+            state.byte_offset = file_len;
+            state.carry.clear();
+            return Ok(Vec::new());
+        }
+        state.byte_offset = 0;
+        state.carry.clear();
+        // fall through and read from start
+    }
+
+    // Truncation / rewrite: reset to start of file and clear carry (rare).
+    if file_len < state.byte_offset {
+        state.byte_offset = 0;
+        state.carry.clear();
+    }
+
+    if file_len == state.byte_offset && state.carry.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut file = std::fs::File::open(path)?;
+    file.seek(SeekFrom::Start(state.byte_offset))?;
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf)?;
+    state.byte_offset += buf.len() as u64;
+
+    let chunk = String::from_utf8_lossy(&buf);
+    let combined = if state.carry.is_empty() {
+        chunk.into_owned()
+    } else {
+        let mut s = std::mem::take(&mut state.carry);
+        s.push_str(&chunk);
+        s
+    };
+
+    // Keep incomplete trailing line (no final \n) for next poll.
+    let (complete, incomplete) = match combined.rfind('\n') {
+        Some(idx) => {
+            let complete = combined[..=idx].to_string();
+            let incomplete = combined[idx + 1..].to_string();
+            (complete, incomplete)
+        }
+        None => {
+            state.carry = combined;
+            return Ok(Vec::new());
+        }
+    };
+    state.carry = incomplete;
+
+    Ok(drain_new_tool_signals_from_chat_history_with_counter(
+        &complete,
+        &mut state.seen_started,
+        &mut state.seen_completed,
+        &mut state.synthetic_counter,
+    ))
+}
+
+/// Resolve on-disk `chat_history.jsonl` path for a live session (if present).
+pub async fn resolve_chat_history_path(
+    workspace_path: &Path,
+    session_id: &str,
+    custom_home: Option<&str>,
+) -> Option<PathBuf> {
+    let session_dir = find_workspace_session_dir(workspace_path, session_id, custom_home)
+        .await
+        .ok()?;
+    let path = session_dir.join("chat_history.jsonl");
+    // File may appear mid-turn; still return path so poller can wait for create.
+    Some(path)
+}
+
 /// Resolve tool name from Grok 4.5 flat calls (`name`) or OpenAI-style nested
 /// (`function.name`). Only fall back to `"tool"` when both are missing.
 fn resolve_tool_call_name(call: &Value) -> String {
@@ -1064,6 +1297,141 @@ mod tests {
         assert_eq!(result.messages[3].text, "file body");
         assert_eq!(result.messages[4].id, "call-flat-2-result");
         assert_eq!(result.messages[4].text, "match");
+    }
+
+    #[test]
+    fn drains_new_tool_signals_once_for_live_canvas_bridge() {
+        use super::{drain_new_tool_signals_from_chat_history, GrokHistoryToolSignal};
+        use std::collections::HashSet;
+        let chat_history = concat!(
+            "{\"type\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"call_1\",\"name\":\"read_file\",\"arguments\":\"{\\\"target_file\\\":\\\"a.ts\\\"}\"}]}\n",
+            "{\"type\":\"tool_result\",\"tool_call_id\":\"call_1\",\"content\":\"body\"}\n",
+            "{\"type\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"call_2\",\"name\":\"write_file\",\"arguments\":\"{\\\"path\\\":\\\"b.ts\\\"}\"}]}\n",
+        );
+        let mut seen_started = HashSet::new();
+        let mut seen_completed = HashSet::new();
+        let first = drain_new_tool_signals_from_chat_history(
+            chat_history,
+            &mut seen_started,
+            &mut seen_completed,
+        );
+        assert_eq!(first.len(), 3);
+        assert!(matches!(
+            &first[0],
+            GrokHistoryToolSignal::Started {
+                tool_id,
+                tool_name,
+                ..
+            } if tool_id == "call_1" && tool_name == "read_file"
+        ));
+        assert!(matches!(
+            &first[1],
+            GrokHistoryToolSignal::Completed { tool_id, .. } if tool_id == "call_1"
+        ));
+        assert!(matches!(
+            &first[2],
+            GrokHistoryToolSignal::Started {
+                tool_id,
+                tool_name,
+                ..
+            } if tool_id == "call_2" && tool_name == "write_file"
+        ));
+        let second = drain_new_tool_signals_from_chat_history(
+            chat_history,
+            &mut seen_started,
+            &mut seen_completed,
+        );
+        assert!(second.is_empty(), "second drain must be idempotent");
+    }
+
+    #[test]
+    fn tool_history_tail_skips_baseline_then_reads_incrementally() {
+        use super::{poll_chat_history_tool_signals, GrokHistoryToolSignal, GrokToolHistoryTailState};
+        use std::io::Write;
+
+        let dir = std::env::temp_dir().join(format!(
+            "grok-tool-tail-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let path = dir.join("chat_history.jsonl");
+
+        // Prior-turn tools already on disk.
+        std::fs::write(
+            &path,
+            concat!(
+                "{\"type\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"old_1\",\"name\":\"read_file\",\"arguments\":\"{}\"}]}\n",
+                "{\"type\":\"tool_result\",\"tool_call_id\":\"old_1\",\"content\":\"old\"}\n",
+            ),
+        )
+        .expect("seed history");
+
+        let mut state = GrokToolHistoryTailState::for_turn(true);
+        let baseline = poll_chat_history_tool_signals(&path, &mut state).expect("baseline");
+        assert!(baseline.is_empty(), "resume baseline must skip existing tools");
+        assert!(state.baseline_set);
+        assert_eq!(state.byte_offset, std::fs::metadata(&path).unwrap().len());
+
+        // New turn appends tools after baseline.
+        {
+            let mut file = std::fs::OpenOptions::new()
+                .append(true)
+                .open(&path)
+                .expect("append");
+            writeln!(
+                file,
+                "{{\"type\":\"assistant\",\"content\":\"\",\"tool_calls\":[{{\"id\":\"new_1\",\"name\":\"write_file\",\"arguments\":\"{{\\\"path\\\":\\\"x.ts\\\"}}\"}}]}}"
+            )
+            .expect("write started");
+            writeln!(
+                file,
+                "{{\"type\":\"tool_result\",\"tool_call_id\":\"new_1\",\"content\":\"ok\"}}"
+            )
+            .expect("write completed");
+        }
+
+        let next = poll_chat_history_tool_signals(&path, &mut state).expect("incremental");
+        assert_eq!(next.len(), 2);
+        assert!(matches!(
+            &next[0],
+            GrokHistoryToolSignal::Started {
+                tool_id,
+                tool_name,
+                ..
+            } if tool_id == "new_1" && tool_name == "write_file"
+        ));
+        assert!(matches!(
+            &next[1],
+            GrokHistoryToolSignal::Completed { tool_id, .. } if tool_id == "new_1"
+        ));
+
+        let again = poll_chat_history_tool_signals(&path, &mut state).expect("idle");
+        assert!(again.is_empty());
+
+        // New session path: file missing first, then appears with tools — must not EOF-skip.
+        let path_new = dir.join("chat_history_new.jsonl");
+        let mut new_state = GrokToolHistoryTailState::for_turn(false);
+        let missing = poll_chat_history_tool_signals(&path_new, &mut new_state).expect("missing");
+        assert!(missing.is_empty());
+        assert!(new_state.saw_missing);
+        assert!(!new_state.baseline_set);
+        std::fs::write(
+            &path_new,
+            "{\"type\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"born_1\",\"name\":\"read_file\",\"arguments\":\"{}\"}]}\n",
+        )
+        .expect("create with tools");
+        let born = poll_chat_history_tool_signals(&path_new, &mut new_state).expect("born");
+        assert_eq!(born.len(), 1);
+        assert!(matches!(
+            &born[0],
+            GrokHistoryToolSignal::Started { tool_id, .. } if tool_id == "born_1"
+        ));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

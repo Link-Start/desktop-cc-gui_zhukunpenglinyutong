@@ -364,7 +364,8 @@ describe("GenericToolBlock", () => {
     expect(screen.queryByText("-0")).toBeNull();
   });
 
-  it("opens canonical diff only for added files without inline diff", () => {
+  it("opens workspace editor for any row without inline diff (not only added)", () => {
+    const onOpenFilePath = vi.fn();
     const onOpenDiffPath = vi.fn();
     const view = render(
       <GenericToolBlock
@@ -379,6 +380,7 @@ describe("GenericToolBlock", () => {
         }}
         isExpanded
         onToggle={vi.fn()}
+        onOpenFilePath={onOpenFilePath}
         onOpenDiffPath={onOpenDiffPath}
       />,
     );
@@ -390,8 +392,11 @@ describe("GenericToolBlock", () => {
     fireEvent.click(rows[1] as HTMLElement);
     fireEvent.click(rows[2] as HTMLElement);
 
-    expect(onOpenDiffPath).toHaveBeenCalledOnce();
-    expect(onOpenDiffPath).toHaveBeenCalledWith("src/New.tsx");
+    // Prefer editor open; avoid broken git dual-pane for missing inline diffs.
+    expect(onOpenFilePath).toHaveBeenCalledTimes(2);
+    expect(onOpenFilePath).toHaveBeenCalledWith("src/New.tsx");
+    expect(onOpenFilePath).toHaveBeenCalledWith("src/Modified.tsx");
+    expect(onOpenDiffPath).not.toHaveBeenCalled();
     expect(screen.queryByText("-2")).toBeNull();
   });
 

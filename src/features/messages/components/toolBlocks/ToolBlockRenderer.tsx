@@ -29,6 +29,7 @@ interface ToolBlockRendererProps {
   activeCollaborationModeId?: string | null;
   activeEngine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
   hasPendingUserInputRequest?: boolean;
+  onOpenFilePath?: (path: string) => void;
   onOpenDiffPath?: (path: string) => void;
   selectedExitPlanExecutionMode?: 'default' | 'full-access' | null;
   onExitPlanModeExecute?: (
@@ -50,6 +51,7 @@ export const ToolBlockRenderer = memo(function ToolBlockRenderer({
   activeCollaborationModeId,
   activeEngine,
   hasPendingUserInputRequest = false,
+  onOpenFilePath,
   onOpenDiffPath,
   selectedExitPlanExecutionMode = null,
   onExitPlanModeExecute,
@@ -80,6 +82,7 @@ export const ToolBlockRenderer = memo(function ToolBlockRenderer({
         activeCollaborationModeId={activeCollaborationModeId}
         activeEngine={activeEngine}
         hasPendingUserInputRequest={hasPendingUserInputRequest}
+        onOpenFilePath={onOpenFilePath}
         onOpenDiffPath={onOpenDiffPath}
         selectedExitPlanExecutionMode={selectedExitPlanExecutionMode}
         onExitPlanModeExecute={onExitPlanModeExecute}
@@ -99,7 +102,7 @@ export const ToolBlockRenderer = memo(function ToolBlockRenderer({
     );
   }
 
-  // 2. 读取文件工具
+  // 2. 读取文件工具（Grok/Kimi/OpenCode Read / read_file / list_dir…）
   if (isReadTool(lower)) {
     return (
       <ReadToolBlock
@@ -110,16 +113,39 @@ export const ToolBlockRenderer = memo(function ToolBlockRenderer({
     );
   }
 
-  // 3. 编辑/写入文件工具
-  if (isEditTool(lower)) {
+  // 3. Codex / structured multi-file fileChange (changes[])
+  // MUST keep GenericToolBlock → FileChangeToolContent path: +N/-N stats, unified
+  // diff expand, and onOpenDiffPath for open-file when diff is missing.
+  // Do NOT route these through EditToolBlock (single-file arg polish only).
+  if (item.toolType === 'fileChange') {
     return (
-      <EditToolBlock
+      <GenericToolBlock
         item={item}
+        workspaceId={workspaceId}
+        isExpanded={isExpanded}
+        onToggle={onToggle}
+        activeCollaborationModeId={activeCollaborationModeId}
+        activeEngine={activeEngine}
+        hasPendingUserInputRequest={hasPendingUserInputRequest}
+        onOpenFilePath={onOpenFilePath}
+        onOpenDiffPath={onOpenDiffPath}
+        selectedExitPlanExecutionMode={selectedExitPlanExecutionMode}
+        onExitPlanModeExecute={onExitPlanModeExecute}
       />
     );
   }
 
-  // 4. 搜索工具 (grep, glob, search)
+  // 4. Claude/Grok/Kimi 单文件 write/edit（detail 里是 path/old/new JSON）
+  if (isEditTool(lower)) {
+    return (
+      <EditToolBlock
+        item={item}
+        onOpenDiffPath={onOpenFilePath ?? onOpenDiffPath}
+      />
+    );
+  }
+
+  // 5. 搜索工具 (grep, glob, search)
   if (isSearchTool(lower)) {
     return (
       <SearchToolBlock
@@ -130,8 +156,8 @@ export const ToolBlockRenderer = memo(function ToolBlockRenderer({
     );
   }
 
-  // 5. MCP 工具
-  if (item.toolType === 'mcpToolCall' || isMcpTool(item.title)) {
+  // 6. MCP 工具（仅真正 mcp__ 前缀；agent 通用 tool 名走专用块或 generic）
+  if (isMcpTool(item.title) || (item.toolType === 'mcpToolCall' && isMcpTool(item.title))) {
     return (
       <McpToolBlock
         item={item}
@@ -141,7 +167,7 @@ export const ToolBlockRenderer = memo(function ToolBlockRenderer({
     );
   }
 
-  // 6. 其他工具使用通用组件 (含 fileChange)
+  // 7. 其他工具使用通用组件（Task / Web / 未知 agent 工具）
   return (
     <GenericToolBlock
       item={item}
@@ -151,6 +177,7 @@ export const ToolBlockRenderer = memo(function ToolBlockRenderer({
       activeCollaborationModeId={activeCollaborationModeId}
       activeEngine={activeEngine}
       hasPendingUserInputRequest={hasPendingUserInputRequest}
+      onOpenFilePath={onOpenFilePath}
       onOpenDiffPath={onOpenDiffPath}
       selectedExitPlanExecutionMode={selectedExitPlanExecutionMode}
       onExitPlanModeExecute={onExitPlanModeExecute}

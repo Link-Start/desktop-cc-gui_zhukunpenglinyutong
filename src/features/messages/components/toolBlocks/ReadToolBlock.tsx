@@ -30,7 +30,19 @@ interface ReadToolBlockProps {
 }
 
 const MARKDOWN_EXTENSIONS = new Set(['md', 'markdown', 'mdx']);
-const PATH_KEYS = ['file_path', 'filePath', 'path', 'target_file', 'targetFile', 'filename', 'file'];
+const PATH_KEYS = [
+  'file_path',
+  'filePath',
+  'path',
+  'target_file',
+  'targetFile',
+  'filename',
+  'file',
+  'dir',
+  'directory',
+  'target_directory',
+  'targetDirectory',
+];
 const OUTPUT_KEYS = ['output', 'result', 'content', 'text'];
 
 function looksLikeMarkdownOutput(value: string): boolean {

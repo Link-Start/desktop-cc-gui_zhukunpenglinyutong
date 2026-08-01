@@ -476,6 +476,7 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
             activeCollaborationModeId={activeCollaborationModeId}
             activeEngine={activeEngine}
             hasPendingUserInputRequest={activeUserInputRequestId !== null}
+            onOpenFilePath={openFileLink}
             onOpenDiffPath={onOpenDiffPath}
             selectedExitPlanExecutionMode={selectedExitPlanExecutionMode}
             onExitPlanModeExecute={handleExitPlanModeExecuteForItem}
@@ -527,13 +528,19 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
         <EditToolGroupBlock
           key={`eg-${firstItem?.id ?? "edit-group"}`}
           items={entry.items}
+          onOpenFilePath={openFileLink}
           onOpenDiffPath={onOpenDiffPath}
         />,
       );
     }
     if (entry.kind === "bashGroup") {
+      // Align Grok/Kimi/OpenCode with Claude-polished canvas: shell batches stay off
+      // the narrative surface (Status Panel / Diff remain the operational trail).
       if (
         activeEngine === "codex" ||
+        activeEngine === "grok" ||
+        activeEngine === "kimi" ||
+        activeEngine === "opencode" ||
         (activeEngine === "claude" && !claudeHistoryTranscriptFallbackActive)
       ) {
         return null;

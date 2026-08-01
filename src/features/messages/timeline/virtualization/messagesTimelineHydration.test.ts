@@ -19,10 +19,14 @@ describe("messagesTimelineHydration", () => {
 
     expect(states.map((state) => state.rowKey)).toEqual(rows.map((row) => row.key));
     expect(states.every((state) => state.contentHash.length > 0)).toBe(true);
-    expect(states.some((state) => state.heavy && state.mode === "summary")).toBe(true);
+    // 行级 summary 墙已下线：off-screen heavy 也记 hydrated，仅 reason=deferred。
+    expect(states.some((state) => state.heavy && state.mode === "summary")).toBe(false);
+    expect(
+      states.some((state) => state.heavy && state.hydrationReason === "deferred"),
+    ).toBe(true);
   });
 
-  it("hydrates only visible active and anchor heavy rows while virtualized", () => {
+  it("marks all heavy rows hydrated while virtualized without row-level summary mode", () => {
     const { rows } = createHeavyHistoryFixture("heavy");
     const heavyCandidateRows = deriveTimelineRowHydrationStates({
       rows,
@@ -43,11 +47,19 @@ describe("messagesTimelineHydration", () => {
       anchorTargetRowKey: anchorHeavyRowKey,
     });
     const hydratedHeavyRows = states.filter((state) => state.heavy && state.mode === "hydrated");
+    const heavyCount = states.filter((state) => state.heavy).length;
 
-    expect(hydratedHeavyRows.map((state) => state.rowKey).sort()).toEqual(
-      [visibleHeavyRowKey, activeHeavyRowKey, anchorHeavyRowKey].sort(),
-    );
-    expect(countHydratedHeavyTimelineRows(states)).toBe(3);
+    expect(hydratedHeavyRows.length).toBe(heavyCount);
+    expect(countHydratedHeavyTimelineRows(states)).toBe(heavyCount);
+    expect(
+      states.find((state) => state.rowKey === visibleHeavyRowKey)?.hydrationReason,
+    ).toBe("visible");
+    expect(
+      states.find((state) => state.rowKey === activeHeavyRowKey)?.hydrationReason,
+    ).toBe("active");
+    expect(
+      states.find((state) => state.rowKey === anchorHeavyRowKey)?.hydrationReason,
+    ).toBe("anchor");
   });
 
   it("retains heavy row hydration after it leaves the visible set", () => {

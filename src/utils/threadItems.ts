@@ -952,6 +952,7 @@ export function buildConversationItem(
     };
   }
   if (type === "fileChange") {
+    const namedTitle = asString(item.title ?? item.tool ?? item.name ?? "").trim();
     const changes = Array.isArray(item.changes)
       ? item.changes
       : Array.isArray(item.files)
@@ -1026,7 +1027,8 @@ export function buildConversationItem(
       id,
       kind: "tool",
       toolType: type,
-      title: "File changes",
+      // Prefer runtime tool name (write_file / Edit / …) for specialized EditToolBlock polish.
+      title: namedTitle || "File changes",
       detail: paths || "Pending changes",
       status: asString(item.status ?? ""),
       output: preferExplicitOutput ? explicitOutput : diffOutput || explicitOutput,
@@ -1064,11 +1066,19 @@ export function buildConversationItem(
         images: artifact.images,
       };
     }
+    // Prefer bare tool name for canvas scene grouping (read/edit/search).
+    // Keep server prefix only when it adds identity beyond generic agent labels.
+    const serverLabel = server.trim().toLowerCase();
+    const title =
+      tool.trim().length > 0 &&
+      (serverLabel === "" || serverLabel === "agent" || serverLabel === "claude")
+        ? tool
+        : `Tool: ${server}${tool ? ` / ${tool}` : ""}`;
     return {
       id,
       kind: "tool",
       toolType: type,
-      title: `Tool: ${server}${tool ? ` / ${tool}` : ""}`,
+      title,
       detail: args,
       status: asString(item.status ?? ""),
       output,

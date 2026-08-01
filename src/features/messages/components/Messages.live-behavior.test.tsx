@@ -1272,6 +1272,152 @@ describe("Messages live behavior", () => {
     }
   });
 
+  it("does not thrash scrollTop when focus follow chases a fast-growing stream", async () => {
+    // 快流：scrollKey + 连续 Resize 不得 cancel/restart 整条收敛；应复用 active run + 有限次写底。
+    window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
+    const { container } = render(
+      <Messages
+        items={[
+          {
+            id: "fast-stream-assistant",
+            kind: "message",
+            role: "assistant",
+            text: "streaming fast",
+          },
+        ]}
+        threadId="thread-fast-stream-stick"
+        workspaceId="ws-1"
+        isThinking
+        processingStartedAt={Date.now() - 1_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+    const scroller = getMessagesScroller(container);
+    let scrollHeight = 2_000;
+    const metrics = setScrollerMetrics(scroller, 2_000 - 720, () => scrollHeight);
+    fireEvent.scroll(scroller);
+    notifyContentResized();
+    const writesAfterArm = metrics.getScrollTopWriteCount();
+
+    for (let step = 0; step < 12; step += 1) {
+      scrollHeight += 80;
+      notifyContentResized();
+    }
+    // 再冲一帧，让可能存在的 live-follow coalesce rAF 落地。
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+
+    expect(scroller.scrollTop).toBe(scrollHeight - 720);
+    // 12 次增高：理想是每次约 1 次 write。若每次 cancel/restart 整段 pulse，
+    // 会远超 12（首帧 + settle 帧 + recheck 重建）。允许 rAF 与 nudge 偶发双写的余量。
+    const writesDuringChase = metrics.getScrollTopWriteCount() - writesAfterArm;
+    expect(writesDuringChase).toBeGreaterThan(0);
+    expect(writesDuringChase).toBeLessThanOrEqual(28);
+  });
+
+  it("keeps stick-to-bottom after settle when focus follow is on and content grows late", () => {
+    // 回合结束后思考折叠 / full markdown / 虚拟化 remeasure 会继续改 scrollHeight。
+    // 焦点跟随 + 仍停在底部时，必须越过 isWorking 门槛继续追真实底部。
+    window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
+    vi.useFakeTimers();
+    try {
+      const renderWith = (thinking: boolean) => (
+        <Messages
+          items={[
+            {
+              id: "post-settle-stick-user",
+              kind: "message",
+              role: "user",
+              text: "go",
+            },
+            {
+              id: "post-settle-stick-assistant",
+              kind: "message",
+              role: "assistant",
+              text: thinking ? "streaming" : "final answer with taller layout",
+            },
+          ]}
+          threadId="thread-post-settle-stick"
+          workspaceId="ws-1"
+          isThinking={thinking}
+          processingStartedAt={thinking ? Date.now() - 1_000 : null}
+          openTargets={[]}
+          selectedOpenAppId=""
+        />
+      );
+      const { container, rerender } = render(renderWith(true));
+      const scroller = getMessagesScroller(container);
+      let scrollHeight = 2_400;
+      setScrollerMetrics(scroller, 2_400 - 720, () => scrollHeight);
+      fireEvent.scroll(scroller);
+      notifyContentResized();
+      expect(scroller.scrollTop).toBe(2_400 - 720);
+
+      // 回合结束：settle 钉底后预算窗耗尽，模拟迟到测高（思考折叠/全文回刷）。
+      rerender(renderWith(false));
+      expect(scroller.scrollTop).toBe(scrollHeight - 720);
+
+      act(() => {
+        vi.advanceTimersByTime(3_000);
+      });
+      scrollHeight = 3_600;
+      notifyContentResized();
+      expect(scroller.scrollTop).toBe(3_600 - 720);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not chase late idle growth when the user has scrolled away from the bottom", () => {
+    window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
+    vi.useFakeTimers();
+    try {
+      const { container } = render(
+        <Messages
+          items={[
+            {
+              id: "idle-away-assistant",
+              kind: "message",
+              role: "assistant",
+              text: "done",
+            },
+          ]}
+          threadId="thread-idle-away-stick"
+          workspaceId="ws-1"
+          isThinking={false}
+          openTargets={[]}
+          selectedOpenAppId=""
+        />,
+      );
+      const scroller = getMessagesScroller(container);
+      let scrollHeight = 2_400;
+      setScrollerMetrics(scroller, 2_400 - 720, () => scrollHeight);
+      notifyContentResized();
+
+      fireEvent.wheel(scroller, { deltaY: -120 });
+      scroller.scrollTop = 400;
+      fireEvent.scroll(scroller);
+
+      act(() => {
+        vi.advanceTimersByTime(3_000);
+      });
+      scrollHeight = 3_600;
+      notifyContentResized();
+      expect(scroller.scrollTop).toBe(400);
+
+      // 再滚回底部应恢复 stick。
+      scroller.scrollTop = 3_600 - 720;
+      fireEvent.scroll(scroller);
+      scrollHeight = 4_200;
+      notifyContentResized();
+      expect(scroller.scrollTop).toBe(4_200 - 720);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("chases late row measurements so opening a thread lands at the true bottom", async () => {
     const scrollSpy = vi
       .spyOn(HTMLElement.prototype, "scrollIntoView")

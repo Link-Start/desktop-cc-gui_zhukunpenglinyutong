@@ -206,11 +206,12 @@ fn validate_resolved_shared_selected_target(target: &SharedSelectedTarget) -> Re
             provider_profile_id.unwrap_or("default")
         )
     })?;
+    // 不限制用户模型名：catalog 未登记的自定义模型也允许保存为 next-send target。
     crate::engine::status::validate_model_catalog_pair(
         target.model_catalog_entry_id.as_deref(),
         target.model.as_deref(),
         &models,
-        crate::engine::status::UnlistedRuntimeModelPolicy::Reject,
+        crate::engine::status::UnlistedRuntimeModelPolicy::Allow,
     )
 }
 
