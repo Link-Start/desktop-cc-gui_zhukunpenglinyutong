@@ -252,3 +252,132 @@ VendorModelManagerDialogHost 在 AppShell 打开时未加载 settings.css，导�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1260: 幕布滚动所有权重构与权威回底收口
+
+**Date**: 2026-08-01
+**Task**: 幕布滚动所有权重构与权威回底收口
+**Branch**: `bump-version-0.7.14`
+
+### Summary
+
+引入 Scroll Ownership 状态机与 pinCanvasToBottom；覆盖 send/settle/deferred 回刷/Claude-Codex finalizing；手测可接受后提交
+
+### Main Changes
+
+| 项 | 内容 |
+|----|------|
+| OpenSpec | refactor-conversation-canvas-scroll-ownership |
+| 设计文档 | docs/plans/2026-08-01-conversation-canvas-scroll-ownership-architecture.md |
+| 核心实现 | scrollAuthorityMachine + pinCanvasToBottom + continueBottomPinIfArmed |
+| 引擎收敛 | Claude/Codex finalizing 起止 pin；MIN_FORCED_HOLD 覆盖 Codex 6s |
+| 验证 | 相关 vitest 150 绿；手测 Grok/Codex/Claude 可接受 |
+| 未纳入 | 他人 models/threads/shared-session 等无关改动 |
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b34fdaead` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1261: 修复 Shared Session 切换后的实时投影
+
+**Date**: 2026-08-01
+**Task**: 修复 Shared Session 切换后的实时投影
+**Branch**: `bump-version-0.7.14`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项目 | 内容 |
+|------|------|
+| Shared projection | 将 canonical `shared:*` 首个 assistant shell 提升为 lifecycle-critical，避免运行中切换会话后 UI 停止更新。 |
+| Activation reconciliation | Shared 激活时只提交目标 thread 的 raw/normalized structural operations，不 flush 其他会话。 |
+| Owner routing | 验证 hidden native event 仍通过 authoritative `sharedOwner` 投影到 canonical Shared thread。 |
+| Performance boundary | 后续正文继续走 `liveAssistantTextChannel`，未恢复逐 delta root reducer dispatch。 |
+| OpenSpec | 新增并完成 `fix-shared-session-live-projection-resume`，tasks 10/10。 |
+
+**验证**：
+- Shared routing/projection focused Vitest 通过。
+- Canvas/store/subscription Vitest 10/10 通过。
+- Focused ESLint 通过。
+- `pnpm typecheck` 通过。
+- 当前 OpenSpec change strict validation 通过；全局 OpenSpec validation 的两个失败来自无关既有 changes。
+- 按用户要求未运行全量测试。
+
+**主要文件**：
+- `src/features/threads/hooks/useThreadItemEvents.ts`
+- `src/features/threads/hooks/useThreadItemEvents.sharedNavigation.test.ts`
+- `src/features/shared-session/runtime/sharedSessionBridge.test.ts`
+- `src/features/app/hooks/useAppServerEvents.test.tsx`
+- `openspec/changes/fix-shared-session-live-projection-resume/`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9d8a3048c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1262: 修正 Codex 模型思考强度映射
+
+**Date**: 2026-08-01
+**Task**: 修正 Codex 模型思考强度映射
+**Branch**: `bump-version-0.7.14`
+
+### Summary
+
+按逐模型 catalog 校准 Codex degraded reasoning fallback，补齐 Native 单一会话 custom-model 的 Composer、send 与 app-server wire 回归覆盖；focused checks 与 OpenSpec strict 通过，未运行全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ca48f5458` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

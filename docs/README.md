@@ -23,6 +23,8 @@
 - [Chat Canvas Conversation Curtain Contracts](chat-canvas-conversation-curtain-contracts.md)
 - [Claude 引擎对话幕布渲染链路](markdown-doc1-claude-chat-canvas-rendering.md)
 - [Codex 引擎对话幕布渲染链路](markdown-doc2-codex-chat-canvas-rendering.md)
+- [对话幕布结构分析（多 CLI）](analysis/conversation-canvas-structure-2026-07-31.md)
+- [共同幕布滚动所有权与编排架构（DESIGN：A 飞顶 + F 结束离真底）](plans/2026-08-01-conversation-canvas-scroll-ownership-architecture.md)
 
 ## Workflow 与运行手册
 
