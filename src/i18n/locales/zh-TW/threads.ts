@@ -9,6 +9,7 @@ const threads = {
     "autoNaming": "自動命名中…",
     "runtimeProcessing": "執行中",
     "runtimeReviewing": "檢視中",
+    "runtimeCompleted": "已完成",
     "archive": "封存",
     "delete": "刪除",
     "deleteThreadTitle": "刪除對話",

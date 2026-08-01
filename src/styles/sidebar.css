@@ -1882,7 +1882,8 @@
   flex-direction: column;
   gap: 2px;
   margin-left: 0;
-  padding: 1px 0 2px;
+  /* Horizontal inset matches workspace-row (4px) so active pills align */
+  padding: 1px 4px 2px;
 }
 
 .thread-list[data-virtualized="true"] {
@@ -1911,7 +1912,15 @@
   top: 0;
   left: 0;
   width: 100%;
-  min-height: 36px;
+  /*
+   * Pitch must match non-virtualized `.thread-list` rows:
+   *   min-height 30 (--sidebar-row-height-thread) + gap 2 = 32.
+   * Keep in sync with SIDEBAR_THREAD_ROW_ESTIMATED_HEIGHT_PX.
+   * A taller min-height (e.g. 36) is sticky: measureElement cannot report
+   * smaller than this, so expanded virtualized lists look gappier than the
+   * collapsed flex list.
+   */
+  min-height: calc(var(--sidebar-row-height-thread) + 2px);
 }
 
 /*
@@ -1938,7 +1947,8 @@
 }
 
 .sidebar-pinned-section {
-  padding: 0 2px;
+  /* Align with thread-list / workspace-row horizontal inset */
+  padding: 0 4px;
 }
 
 .thread-list-nested {
@@ -2279,13 +2289,13 @@
   width: calc(100% - 4px);
 }
 
-/* Updated Thread Row Styles */
+/* Updated Thread Row Styles — selection geometry aligned with workspace-row */
 .thread-row {
   display: flex;
   align-items: center;
   gap: 6px;
   min-height: var(--sidebar-row-height-thread);
-  padding: 2px 8px 2px calc(14px + var(--thread-indent, 0px));
+  padding: 2px 6px 2px calc(10px + var(--thread-indent, 0px));
   border-radius: var(--sidebar-row-radius);
   color: var(--text-quiet);
   font-size: var(--sidebar-content-font-size);
@@ -2308,19 +2318,25 @@
    平时保持紧凑，不为按钮预留固定的一列空间 */
 .thread-row.has-pin-toggle:hover,
 .thread-row.has-pin-toggle:focus-within {
-  padding-left: calc(24px + var(--thread-indent, 0px));
+  padding-left: calc(20px + var(--thread-indent, 0px));
 }
 
 .thread-row:hover {
-  background: var(--surface-item, #1b1b20);
+  background: var(--surface-hover);
   color: var(--text-strong);
 }
 
+/* Soft neutral fill — same recipe as .workspace-row.active */
 .thread-row.active {
   background: var(--sidebar-color-active-primary);
   box-shadow: none;
   color: var(--text-strong);
-  font-weight: 340;
+  font-weight: 400;
+}
+
+/* Keep hover quiet when already selected (match workspace-row) */
+.thread-row.active:hover {
+  background: var(--sidebar-color-active-primary);
 }
 
 .thread-tree-expander {
@@ -2453,8 +2469,8 @@
 
 .thread-status.processing {
   background: #2f80ed;
-  box-shadow: 0 0 0 4px rgba(47, 128, 237, 0.18);
-  animation: sidebar-thread-status-heartbeat 0.92s ease-in-out infinite;
+  box-shadow: 0 0 0 3px rgba(47, 128, 237, 0.16);
+  animation: sidebar-thread-status-breathe 1.8s ease-in-out infinite;
 }
 
 .thread-status.unread {
@@ -2490,7 +2506,7 @@
   color: #f59e0b;
 }
 
-/* Running state is indicated by the runtime badge text ("运行中"), not icon color.
+/* Running state is indicated by the meta-area breathing status dot, not icon color.
    Do not recolor/opacity-boost the engine icon while processing — otherwise
    selecting another thread changes the icon tone (active rule vs processing blue). */
 .thread-engine-badge.is-processing {
@@ -2565,31 +2581,48 @@
   white-space: nowrap;
 }
 
-.thread-runtime-badge {
-  max-width: 68px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  border-radius: 999px;
-  padding: 1px 6px;
-  font-size: var(--sidebar-caption-font-size);
-  line-height: 1.25;
-  font-weight: 650;
+/* Compact live-status indicator in thread meta (replaces text "运行中" pill). */
+.thread-runtime-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transform-origin: center;
 }
 
-.thread-runtime-badge--processing {
-  color: #7db7ff;
-  background: rgba(47, 128, 237, 0.16);
+.thread-runtime-dot--processing {
+  background: #2f80ed;
+  box-shadow: 0 0 0 3px rgba(47, 128, 237, 0.16);
+  animation: sidebar-thread-status-breathe 1.8s ease-in-out infinite;
 }
 
-:root[data-theme="light"] .thread-runtime-badge--processing {
-  color: #1d4ed8;
-  background: #dbeafe;
+:root[data-theme="light"] .thread-runtime-dot--processing {
+  background: #1d4ed8;
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.14);
 }
 
-.thread-runtime-badge--reviewing {
-  color: #7db7ff;
-  background: rgba(84, 160, 255, 0.14);
+.thread-runtime-dot--reviewing {
+  background: #54a0ff;
+  box-shadow: 0 0 0 3px rgba(84, 160, 255, 0.14);
+  opacity: 0.92;
+}
+
+:root[data-theme="light"] .thread-runtime-dot--reviewing {
+  background: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+/* Finished in background (hasUnread) — calm green, no breathe. */
+.thread-runtime-dot--completed {
+  background: #1dd1a1;
+  box-shadow: 0 0 0 3px rgba(29, 209, 161, 0.16);
+  opacity: 0.95;
+}
+
+:root[data-theme="light"] .thread-runtime-dot--completed {
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14);
 }
 
 .thread-provider-label {
@@ -2626,6 +2659,23 @@
   }
 }
 
+/* Soft breath for live processing — opacity + glow only (no aggressive scale). */
+@keyframes sidebar-thread-status-breathe {
+  0%,
+  100% {
+    opacity: 0.42;
+    box-shadow: 0 0 0 0 transparent;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 0 3px rgba(47, 128, 237, 0.2);
+    transform: scale(1.06);
+  }
+}
+
+/* Legacy heartbeat retained for any leftover .thread-status.processing hooks. */
 @keyframes sidebar-thread-status-heartbeat {
   0%,
   100% {
@@ -2663,8 +2713,13 @@
   }
 
   .thread-status.processing,
+  .thread-runtime-dot--processing,
   .thread-engine-badge.is-processing {
     animation: none;
+  }
+
+  .thread-runtime-dot--processing {
+    opacity: 1;
   }
 
   .thread-engine-badge.is-processing > * {

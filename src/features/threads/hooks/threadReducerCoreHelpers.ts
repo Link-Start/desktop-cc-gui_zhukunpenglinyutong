@@ -137,6 +137,23 @@ export function withThreadStatusDefaults(
   };
 }
 
+/** True when any workspace currently has this thread selected. */
+export function isThreadActiveInState(
+  activeThreadIdByWorkspace: Record<string, string | null | undefined>,
+  threadId: string,
+  workspaceId?: string | null,
+): boolean {
+  if (workspaceId) {
+    return (activeThreadIdByWorkspace[workspaceId] ?? null) === threadId;
+  }
+  for (const activeId of Object.values(activeThreadIdByWorkspace)) {
+    if (activeId === threadId) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function isTokenUsageBreakdownEqual(
   left: ThreadTokenUsage["total"] | ThreadTokenUsage["last"] | undefined,
   right: ThreadTokenUsage["total"] | ThreadTokenUsage["last"] | undefined,

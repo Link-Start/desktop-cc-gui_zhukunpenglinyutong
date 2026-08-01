@@ -9,6 +9,7 @@ const threads = {
     "autoNaming": "ऑटो नामकरण...",
     "runtimeProcessing": "चल रहा है",
     "runtimeReviewing": "समीक्षा कर रहे हैं",
+    "runtimeCompleted": "पूर्ण",
     "archive": "आर्काइव करें",
     "delete": "हटाएं",
     "deleteThreadTitle": "बातचीत हटाएं",

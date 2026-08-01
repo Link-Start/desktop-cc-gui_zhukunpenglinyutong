@@ -6,6 +6,7 @@ const threads = {
     autoNaming: "自动命名中...",
     runtimeProcessing: "运行中",
     runtimeReviewing: "复核中",
+    runtimeCompleted: "已完成",
     archive: "归档",
     delete: "删除",
     deleteThreadTitle: "删除会话",

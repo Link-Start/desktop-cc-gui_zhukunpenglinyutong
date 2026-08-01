@@ -1,4 +1,5 @@
 .terminal-panel {
+  position: relative;
   border-top: 1px solid var(--border-subtle);
   background: var(--surface-debug);
   display: flex;
@@ -18,26 +19,19 @@
   --terminal-font-family: var(--theme-terminal-font-family, var(--code-font-family));
 }
 
+/* Overlay hit target only — no layout strip above the tab bar. */
 .terminal-panel-resizer {
-  height: 6px;
-  cursor: row-resize;
-  position: relative;
-  flex-shrink: 0;
-}
-
-.terminal-panel-resizer::after {
-  content: "";
   position: absolute;
+  top: -3px;
   left: 0;
   right: 0;
-  top: 0;
-  height: 1px;
-  background: var(--border-strong);
-  opacity: 0.4;
+  height: 6px;
+  cursor: row-resize;
+  z-index: 2;
 }
 
-.terminal-panel-resizer:hover::after {
-  opacity: 0.9;
+.terminal-panel-resizer:hover {
+  background: color-mix(in srgb, var(--border-strong) 35%, transparent);
 }
 
 .terminal-header {
@@ -45,7 +39,7 @@
   align-items: center;
   gap: 0;
   padding: 0;
-  min-height: 34px;
+  min-height: 28px;
   border-bottom: 1px solid var(--border-subtle);
   font-size: 12px;
 }
@@ -57,7 +51,7 @@
   flex: 0 0 42px;
   align-self: stretch;
   min-width: 42px;
-  min-height: 34px;
+  min-height: 28px;
   border: none;
   border-right: 1px solid var(--border-subtle);
   border-bottom: 2px solid transparent;
@@ -99,10 +93,10 @@
   border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--text-muted);
-  min-height: 34px;
+  min-height: 28px;
   padding: 0 2px;
   border-radius: 0;
-  font-size: 14px;
+  font-size: 13px;
   letter-spacing: 0;
   text-transform: none;
   cursor: pointer;
@@ -132,10 +126,10 @@
   border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--text-muted);
-  min-height: 34px;
+  min-height: 28px;
   padding: 0 2px;
   border-radius: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 300;
   line-height: 1;
   cursor: pointer;

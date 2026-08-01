@@ -6,6 +6,7 @@ const threads = {
     autoNaming: "Auto naming...",
     runtimeProcessing: "Running",
     runtimeReviewing: "Reviewing",
+    runtimeCompleted: "Completed",
     archive: "Archive",
     delete: "Delete",
     deleteThreadTitle: "Delete conversation",
