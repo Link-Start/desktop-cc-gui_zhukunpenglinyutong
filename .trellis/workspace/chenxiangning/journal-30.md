@@ -348,3 +348,36 @@ VendorModelManagerDialogHost 在 AppShell 打开时未加载 settings.css，导�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1262: 修正 Codex 模型思考强度映射
+
+**Date**: 2026-08-01
+**Task**: 修正 Codex 模型思考强度映射
+**Branch**: `bump-version-0.7.14`
+
+### Summary
+
+按逐模型 catalog 校准 Codex degraded reasoning fallback，补齐 Native 单一会话 custom-model 的 Composer、send 与 app-server wire 回归覆盖；focused checks 与 OpenSpec strict 通过，未运行全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ca48f5458` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
