@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-30.md`
-- **Total Sessions**: 1266
+- **Total Sessions**: 1267
 - **Last Active**: 2026-08-01
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-30.md` | ~594 | Active |
+| `journal-30.md` | ~640 | Active |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
@@ -58,6 +58,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1267 | 2026-08-01 | Grok 思考强度接入 | `75a847b9d` | `feature/v-0714` |
 | 1266 | 2026-08-01 | 加固 React #185 收敛（freeform 不回退） | `e6e964d88` | `feature/v-0714` |
 | 1265 | 2026-08-01 | 解决 PR #971 与 main 的 #185 冲突并推送 | `0fd81eede`, `4732d92ac` | `bump-version-0.7.14` |
 | 1264 | 2026-08-01 | 供应商空模型兜底与自定义模型思考强度默认档 | `b92a3c92b` | `feature/v-0714` |
