@@ -16,20 +16,15 @@ export type CodexModelCatalogEntry = {
   defaultReasoningEffort?: string | null;
 };
 
-const STANDARD_CODEX_REASONING_EFFORTS = [
-  { reasoningEffort: "low", description: "Quick responses with basic reasoning" },
-  { reasoningEffort: "medium", description: "Balanced thinking" },
-  { reasoningEffort: "high", description: "Deep reasoning for complex tasks" },
-  { reasoningEffort: "xhigh", description: "Extra high reasoning depth" },
-];
-
 export const CODEX_MODEL_CATALOG: CodexModelCatalogEntry[] =
   getGeneratedModelFallbacks("codex").map((model) => ({
     ...model,
     source: "fallback",
     provenance: "generated:model-catalog",
     lastVerifiedAt: generatedCatalog.lastVerifiedAt,
-    supportedReasoningEfforts: STANDARD_CODEX_REASONING_EFFORTS,
+    supportedReasoningEfforts: model.supportedReasoningEfforts
+      ? [...model.supportedReasoningEfforts]
+      : undefined,
   }));
 
 export const CODEX_MODEL_FALLBACK_ENTRIES: readonly ModelCatalogEntry[] =

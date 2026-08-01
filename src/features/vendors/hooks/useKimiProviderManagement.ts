@@ -8,6 +8,7 @@ import {
   deleteKimiProvider,
   switchKimiProvider,
 } from "../../../services/tauri";
+import { VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT } from "../vendorActiveProviderEvents";
 
 export interface KimiProviderDialogState {
   isOpen: boolean;
@@ -85,6 +86,26 @@ export function useKimiProviderManagement() {
 
   useEffect(() => {
     void loadKimiProviders();
+  }, [loadKimiProviders]);
+
+  useEffect(() => {
+    const onActiveProviderChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ engine?: string }>).detail;
+      if (detail?.engine && detail.engine !== "kimi") {
+        return;
+      }
+      void loadKimiProviders();
+    };
+    window.addEventListener(
+      VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT,
+      onActiveProviderChanged,
+    );
+    return () => {
+      window.removeEventListener(
+        VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT,
+        onActiveProviderChanged,
+      );
+    };
   }, [loadKimiProviders]);
 
   const handleAddKimiProvider = useCallback(() => {

@@ -160,13 +160,16 @@ export function deriveTimelineRowHydrationStates(input: {
         hydrationReason: "visible",
       };
     }
+    // 统一幕布：不再用 mode=summary 驱动「详情已延迟」行摘要。
+    // 屏外 heavy 行在虚拟化下本就不挂全文 DOM；状态记为 hydrated+deferred 供诊断，
+    // 呈现路径 must not 再画 lightweight 摘要条。
     return {
       rowKey: row.key,
       contentHash: getRowContentHash(row, rendererOptionsKey),
       rendererOptionsKey,
       renderWeight,
       heavy,
-      mode: "summary",
+      mode: "hydrated",
       hydrationReason: "deferred",
     };
   });

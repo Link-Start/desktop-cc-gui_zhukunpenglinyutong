@@ -478,8 +478,6 @@ export const MessagesCore = memo(function MessagesCore({
     getPendingRuntimeResourceCount,
     handleAssistantVisibleTextRender,
     isAssistantFinalizing,
-    isAssistantFinalizingRef,
-    isWorkingRef,
     latestAssistantMessageId,
     latestRetryMessage,
     latestRuntimeReconnectItemId,
@@ -549,9 +547,8 @@ export const MessagesCore = memo(function MessagesCore({
     stickToBottomIntentRef,
   } = useMessagesScrollController({
     clearPendingJumpMessage,
-    isAssistantFinalizingRef,
     isThinking,
-    isWorkingRef,
+    isAssistantFinalizing,
     liveAutoFollowEnabledRef,
     rawScrollKey,
     renderScopeKey,
@@ -735,7 +732,8 @@ export const MessagesCore = memo(function MessagesCore({
         if (!nextLiveAutoFollowEnabled) {
           cancelFocusFollowConvergence();
         }
-        if (!wasLiveAutoFollowEnabled && nextLiveAutoFollowEnabled && isWorking) {
+        // 重新打开焦点跟随：仅 false→true 边沿 re-arm（流式/闲时均可一键归位）。
+        if (!wasLiveAutoFollowEnabled && nextLiveAutoFollowEnabled) {
           rearmAutoFollowToBottom();
         }
       }
@@ -756,13 +754,15 @@ export const MessagesCore = memo(function MessagesCore({
           MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY,
           true,
         );
-        if (liveAutoFollowEnabledRef.current !== nextLiveAutoFollowEnabled) {
+        const wasLiveAutoFollowEnabled = liveAutoFollowEnabledRef.current;
+        if (wasLiveAutoFollowEnabled !== nextLiveAutoFollowEnabled) {
           liveAutoFollowEnabledRef.current = nextLiveAutoFollowEnabled;
           setLiveAutoFollowEnabled(nextLiveAutoFollowEnabled);
         }
         if (!nextLiveAutoFollowEnabled) {
           cancelFocusFollowConvergence();
-        } else if (isWorking) {
+        } else if (!wasLiveAutoFollowEnabled && nextLiveAutoFollowEnabled) {
+          // 与 CustomEvent 一致：只在边沿 re-arm，避免跨 tab 重复 setItem 拽回底部。
           rearmAutoFollowToBottom();
         }
         return;
@@ -790,7 +790,7 @@ export const MessagesCore = memo(function MessagesCore({
       );
       window.removeEventListener("storage", handleStorage);
     };
-  }, [cancelFocusFollowConvergence, isWorking, rearmAutoFollowToBottom]);
+  }, [cancelFocusFollowConvergence, rearmAutoFollowToBottom]);
   const reasoningMetaById = useMemo(() => {
     const meta = new Map<string, ReturnType<typeof parseReasoning>>();
     deferredRenderSourceItems.forEach((item) => {
@@ -1526,7 +1526,9 @@ export const MessagesCore = memo(function MessagesCore({
   }, [hasAnchorRail, messageAnchors, scheduleAnchorUpdate, scrollKey, threadId]);
 
   useEffect(() => {
-    if (!liveAutoFollowEnabled || (!isWorking && !isAssistantFinalizing)) {
+    // 焦点跟随 stick-to-bottom 不绑 isWorking/finalizing：消息回填、思考折叠、
+    // settle 后 full markdown 都会改高度；只要开关开着且视口仍停在底部就追底。
+    if (!liveAutoFollowEnabled) {
       return undefined;
     }
     const container = containerRef.current;
@@ -1543,9 +1545,7 @@ export const MessagesCore = memo(function MessagesCore({
   }, [
     autoScrollRef,
     containerRef,
-    isAssistantFinalizing,
     isNearBottom,
-    isWorking,
     liveAutoFollowEnabled,
     requestAutoScroll,
     scrollKey,
@@ -1648,6 +1648,31 @@ export const MessagesCore = memo(function MessagesCore({
     messageActionTargets.hasPendingUserTurn,
     messageActionTargets.userMessageCount,
     renderScopeKey,
+  ]);
+
+  // useDeferredValue 使尾窗→全量在 isThinking 结束后延迟才落到 DOM。
+  // 流式中仅当「焦点跟随开 + autoScroll 武装」才对 item 增长 pin；
+  // 结束后（回刷）走 history-restore 守卫（turn-settle forced / 武装贴底）。
+  const deferredRenderItemCount = deferredRenderSourceItems.length;
+  const previousDeferredRenderItemCountRef = useRef(deferredRenderItemCount);
+  useLayoutEffect(() => {
+    const previousCount = previousDeferredRenderItemCountRef.current;
+    previousDeferredRenderItemCountRef.current = deferredRenderItemCount;
+    if (deferredRenderItemCount <= previousCount) {
+      return;
+    }
+    if (isThinking) {
+      if (!liveAutoFollowEnabled || !autoScrollRef.current) {
+        return;
+      }
+    }
+    requestTimelineLayoutBottomConvergence();
+  }, [
+    autoScrollRef,
+    deferredRenderItemCount,
+    isThinking,
+    liveAutoFollowEnabled,
+    requestTimelineLayoutBottomConvergence,
   ]);
 
   useEffect(() => {

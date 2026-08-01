@@ -103,7 +103,8 @@ export function ProviderContinuationDialog({
     <AlertDialog
       open={Boolean(state)}
       onOpenChange={(open) => {
-        if (!open && !isRunning) {
+        // running 阶段也允许关闭：放弃本次续接 UI 接管，不硬中止后端。
+        if (!open) {
           onCancel();
         }
       }}
@@ -279,7 +280,6 @@ export function ProviderContinuationDialog({
               type="button"
               className="ghost"
               onClick={onCancel}
-              disabled={isRunning}
             >
               {hasError ? t("common.close") : t("common.cancel")}
             </button>

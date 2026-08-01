@@ -31,7 +31,7 @@ type ComposerReadinessBarProps = {
   onOpenProviderProfile?: (
     providerId: ProviderId,
     providerProfileId: string,
-  ) => Promise<void> | void;
+  ) => Promise<import("./types").ModelInfo[] | void> | import("./types").ModelInfo[] | void;
   targetCatalogError?: string | null;
   currentProvider?: string;
   onModelSelect?: (modelId: string) => void;

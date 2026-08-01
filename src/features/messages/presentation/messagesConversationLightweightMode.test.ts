@@ -10,70 +10,46 @@ import {
 } from "./messagesConversationLightweightMode";
 
 describe("messagesConversationLightweightMode", () => {
-  it("suggests lightweight mode for render-heavy timelines", () => {
-    const policy = resolveConversationLightweightPolicy({
-      rowCount: 24,
-      renderWeight: CONVERSATION_LIGHTWEIGHT_SUGGEST_RENDER_WEIGHT,
-      heavyRowCount: 1,
-    });
-
-    expect(policy).toEqual({ suggested: true, oversized: false });
-  });
-
-  it("suggests lightweight mode for repeated heavy rows", () => {
-    const policy = resolveConversationLightweightPolicy({
-      rowCount: 24,
-      renderWeight: 64,
-      heavyRowCount: CONVERSATION_LIGHTWEIGHT_SUGGEST_HEAVY_ROWS,
-    });
-
-    expect(policy).toEqual({ suggested: true, oversized: false });
-  });
-
-  it("marks oversized policy by row count or render weight", () => {
+  it("never suggests conversation-level lightweight summary walls", () => {
+    expect(
+      resolveConversationLightweightPolicy({
+        rowCount: 24,
+        renderWeight: CONVERSATION_LIGHTWEIGHT_SUGGEST_RENDER_WEIGHT,
+        heavyRowCount: 1,
+      }),
+    ).toEqual({ suggested: false, oversized: false });
+    expect(
+      resolveConversationLightweightPolicy({
+        rowCount: 24,
+        renderWeight: 64,
+        heavyRowCount: CONVERSATION_LIGHTWEIGHT_SUGGEST_HEAVY_ROWS,
+      }),
+    ).toEqual({ suggested: false, oversized: false });
     expect(
       resolveConversationLightweightPolicy({
         rowCount: CONVERSATION_OVERSIZED_HISTORY_ROWS,
-        renderWeight: 1,
-        heavyRowCount: 0,
-      }),
-    ).toEqual({ suggested: true, oversized: true });
-    expect(
-      resolveConversationLightweightPolicy({
-        rowCount: 1,
         renderWeight: CONVERSATION_OVERSIZED_HISTORY_RENDER_WEIGHT,
-        heavyRowCount: 0,
+        heavyRowCount: 99,
       }),
-    ).toEqual({ suggested: true, oversized: true });
+    ).toEqual({ suggested: false, oversized: false });
   });
 
-  it("activates oversized policy until detail hydration is requested", () => {
+  it("never activates conversation-level lightweight mode", () => {
     const policy = { suggested: true, oversized: true };
-
     expect(
       resolveConversationLightweightModeState({
         policy,
         manualEnabled: false,
         detailHydrationRequested: false,
       }),
-    ).toEqual({ active: true, reason: "oversized" });
-    expect(
-      resolveConversationLightweightModeState({
-        policy,
-        manualEnabled: false,
-        detailHydrationRequested: true,
-      }),
     ).toEqual({ active: false, reason: "inactive" });
-  });
-
-  it("honors manual lightweight mode", () => {
     expect(
       resolveConversationLightweightModeState({
         policy: { suggested: false, oversized: false },
         manualEnabled: true,
         detailHydrationRequested: true,
       }),
-    ).toEqual({ active: true, reason: "manual" });
+    ).toEqual({ active: false, reason: "inactive" });
   });
 
   it("bounds remembered conversation render mode keys", () => {

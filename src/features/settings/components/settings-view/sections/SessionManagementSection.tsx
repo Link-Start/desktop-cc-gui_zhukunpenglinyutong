@@ -465,7 +465,6 @@ function areWorkspaceSessionCatalogFiltersEqual(
 
 export function SessionManagementSection({
   title,
-  description,
   appSettings,
   workspaces,
   groupedWorkspaces,
@@ -1683,136 +1682,138 @@ export function SessionManagementSection({
   );
 
   return (
-    <div className={`settings-project-sessions${expanded ? " is-open" : ""}`}>
-      <button
-        type="button"
-        className={`settings-project-sessions-expand-btn${expanded ? " is-open" : ""}`}
-        onClick={() => setExpanded((current) => !current)}
-        data-testid="settings-project-sessions-expand-toggle"
-      >
+    <div
+      className={`settings-project-sessions settings-project-sessions--redesign${
+        expanded ? " is-open" : ""
+      }`}
+    >
+      <div className="settings-project-sessions-topbar">
+        <button
+          type="button"
+          className={`settings-project-sessions-expand-btn${expanded ? " is-open" : ""}`}
+          onClick={() => setExpanded((current) => !current)}
+          data-testid="settings-project-sessions-expand-toggle"
+        >
+          {expanded ? (
+            <ChevronDown
+              className="settings-project-sessions-expand-icon"
+              size={14}
+              aria-hidden
+            />
+          ) : (
+            <ChevronRight
+              className="settings-project-sessions-expand-icon"
+              size={14}
+              aria-hidden
+            />
+          )}
+          <span className="settings-project-sessions-expand-label">{title}</span>
+          <span className="settings-project-sessions-expand-count">
+            {expandCount}
+          </span>
+        </button>
         {expanded ? (
-          <ChevronDown
-            className="settings-project-sessions-expand-icon"
-            size={14}
-            aria-hidden
-          />
-        ) : (
-          <ChevronRight
-            className="settings-project-sessions-expand-icon"
-            size={14}
-            aria-hidden
-          />
-        )}
-        <span className="settings-project-sessions-expand-label">{title}</span>
-        <span className="settings-project-sessions-expand-count">
-          ({expandCount})
-        </span>
-      </button>
+          <div className="settings-project-sessions-header-actions">
+            <div
+              className="settings-project-sessions-mode-toggle"
+              role="group"
+              aria-label={t("settings.sessionManagementModeProject")}
+            >
+              <button
+                type="button"
+                aria-pressed={mode === "project"}
+                className={`settings-project-sessions-mode-btn${
+                  mode === "project" ? " is-active" : ""
+                }`}
+                onClick={() => handleModeChange("project")}
+              >
+                <FolderTree size={14} aria-hidden />
+                {t("settings.sessionManagementModeProject")}
+              </button>
+              <button
+                type="button"
+                aria-pressed={mode === "global"}
+                className={`settings-project-sessions-mode-btn${
+                  mode === "global" ? " is-active" : ""
+                }`}
+                onClick={() => handleModeChange("global")}
+              >
+                <Archive size={14} aria-hidden />
+                {t("settings.sessionManagementModeGlobal")}
+              </button>
+            </div>
+            <button
+              type="button"
+              className="settings-project-sessions-ghost-btn"
+              onClick={() => void handleRefresh()}
+              disabled={
+                (mode === "project" && !workspaceId) ||
+                primaryIsLoading ||
+                isMutating
+              }
+            >
+              <RotateCw size={14} aria-hidden />
+              {t("settings.projectSessionRefresh")}
+            </button>
+          </div>
+        ) : null}
+      </div>
 
       {expanded ? (
         <div className="settings-project-sessions-body">
-          <div className="settings-project-sessions-header">
-            <div className="settings-project-sessions-title-wrap">
-              <h3 className="text-sm font-semibold">{title}</h3>
-              <p>{description}</p>
-            </div>
-            <div className="settings-project-sessions-header-actions">
-              <div className="settings-project-sessions-mode-toggle">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={mode === "project" ? "default" : "outline"}
-                  onClick={() => handleModeChange("project")}
-                >
-                  <FolderTree size={14} aria-hidden />
-                  {t("settings.sessionManagementModeProject")}
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={mode === "global" ? "default" : "outline"}
-                  onClick={() => handleModeChange("global")}
-                >
-                  <Archive size={14} aria-hidden />
-                  {t("settings.sessionManagementModeGlobal")}
-                </Button>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void handleRefresh()}
-                disabled={
-                  (mode === "project" && !workspaceId) ||
-                  primaryIsLoading ||
-                  isMutating
-                }
-              >
-                <RotateCw size={14} aria-hidden />
-                {t("settings.projectSessionRefresh")}
-              </Button>
-            </div>
-          </div>
-
-          <div className="settings-project-sessions-attribution-panel">
-            <div className="settings-project-sessions-attribution-copy">
-              <div className="settings-project-sessions-attribution-title-row">
-                <div className="settings-project-sessions-attribution-title">
+          <details className="settings-project-sessions-attribution-details">
+            <summary className="settings-project-sessions-attribution-summary">
+              <span className="settings-project-sessions-attribution-summary-main">
+                <span className="settings-project-sessions-attribution-title">
                   {t("settings.sessionAttributionModeTitle")}
-                </div>
+                </span>
                 <span className="settings-project-sessions-attribution-current">
                   {t("settings.sessionAttributionModeCurrent", {
                     mode: effectiveAttributionModeLabel,
                   })}
                 </span>
-              </div>
-              <p>{t("settings.sessionAttributionModeDescription")}</p>
-            </div>
-            <div
-              className="settings-project-sessions-attribution-toggle"
-              role="radiogroup"
-              aria-label={t("settings.sessionAttributionModeTitle")}
-            >
-              <Button
-                type="button"
-                size="sm"
-                variant={
-                  effectiveAttributionMode === "related"
-                    ? "default"
-                    : "outline"
-                }
-                role="radio"
-                aria-checked={effectiveAttributionMode === "related"}
-                disabled={isSavingAttributionMode}
-                onClick={() => void handleAttributionModeChange("related")}
+              </span>
+              <span className="settings-project-sessions-attribution-summary-hint">
+                {t("settings.sessionAttributionModeDescription")}
+              </span>
+            </summary>
+            <div className="settings-project-sessions-attribution-panel">
+              <div
+                className="settings-project-sessions-attribution-toggle"
+                role="radiogroup"
+                aria-label={t("settings.sessionAttributionModeTitle")}
               >
-                <span className="settings-project-sessions-attribution-radio" aria-hidden />
-                <span className="settings-project-sessions-attribution-option-copy">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={effectiveAttributionMode === "related"}
+                  className={`settings-project-sessions-attribution-option${
+                    effectiveAttributionMode === "related" ? " is-active" : ""
+                  }`}
+                  disabled={isSavingAttributionMode}
+                  onClick={() => void handleAttributionModeChange("related")}
+                >
                   <span className="settings-project-sessions-attribution-option-title">
                     {t("settings.sessionAttributionModeRelated")}
                   </span>
                   <span className="settings-project-sessions-attribution-option-description">
                     {t("settings.sessionAttributionModeRelatedDescription")}
                   </span>
-                </span>
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={
-                  effectiveAttributionMode === "workspace-only"
-                    ? "default"
-                    : "outline"
-                }
-                role="radio"
-                aria-checked={effectiveAttributionMode === "workspace-only"}
-                disabled={isSavingAttributionMode}
-                onClick={() =>
-                  void handleAttributionModeChange("workspace-only")
-                }
-              >
-                <span className="settings-project-sessions-attribution-radio" aria-hidden />
-                <span className="settings-project-sessions-attribution-option-copy">
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={effectiveAttributionMode === "workspace-only"}
+                  className={`settings-project-sessions-attribution-option${
+                    effectiveAttributionMode === "workspace-only"
+                      ? " is-active"
+                      : ""
+                  }`}
+                  disabled={isSavingAttributionMode}
+                  onClick={() =>
+                    void handleAttributionModeChange("workspace-only")
+                  }
+                >
                   <span className="settings-project-sessions-attribution-option-title">
                     {t("settings.sessionAttributionModeWorkspaceOnly")}
                   </span>
@@ -1821,10 +1822,10 @@ export function SessionManagementSection({
                       "settings.sessionAttributionModeWorkspaceOnlyDescription",
                     )}
                   </span>
-                </span>
-              </Button>
+                </button>
+              </div>
             </div>
-          </div>
+          </details>
 
           <div className="settings-project-sessions-shell">
             {mode === "project" ? (
@@ -2043,7 +2044,11 @@ export function SessionManagementSection({
                 </div>
               </div>
 
-              <div className="settings-project-sessions-toolbar">
+              <div
+                className={`settings-project-sessions-toolbar${
+                  selectedCount > 0 ? " has-selection" : ""
+                }`}
+              >
                 <div className="settings-project-sessions-stats">
                   <span className="settings-project-sessions-selected">
                     {t("settings.projectSessionSelectedCount", {
@@ -2075,103 +2080,120 @@ export function SessionManagementSection({
                     <CheckSquare2 size={14} aria-hidden />
                     {t("settings.projectSessionSelectAll")}
                   </button>
-                  <button
-                    type="button"
-                    className="settings-project-sessions-btn"
-                    onClick={resetSelection}
-                    disabled={selectedCount === 0}
-                  >
-                    <CircleX size={14} aria-hidden />
-                    {t("settings.projectSessionClearSelection")}
-                  </button>
-                  {mode === "project" ? (
-                    <div className="settings-project-sessions-move-control">
-                      <Select
-                        value={moveTargetFolderId}
-                        onValueChange={(value) =>
-                          setMoveTargetFolderId(
-                            value ?? SESSION_FOLDER_FILTER_ROOT,
-                          )
-                        }
-                      >
-                        <SelectTrigger
-                          className="settings-project-sessions-move-select"
-                          aria-label={t(
-                            "settings.sessionManagementMoveTargetLabel",
-                          )}
-                        >
-                          <SelectValue>
-                            {moveTargetFolderId === SESSION_FOLDER_FILTER_ROOT
-                              ? t("settings.sessionManagementFolderUnassigned")
-                              : (sessionFolders.find(
-                                  (folder) => folder.id === moveTargetFolderId,
-                                )?.name ??
-                                t("settings.sessionManagementMoveTargetLabel"))}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={SESSION_FOLDER_FILTER_ROOT}>
-                            {t("settings.sessionManagementFolderUnassigned")}
-                          </SelectItem>
-                          {folderNavItems.map((folder) => (
-                            <SelectItem key={folder.id} value={folder.id}>
-                              {" ".repeat(Math.max(0, folder.depth - 1) * 2)}
-                              {folder.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                  {selectedCount > 0 ? (
+                    <>
                       <button
                         type="button"
                         className="settings-project-sessions-btn"
-                        onClick={() =>
-                          void handleMoveSelectedSessions(
-                            moveTargetFolderId === SESSION_FOLDER_FILTER_ROOT
-                              ? null
-                              : moveTargetFolderId,
-                          )
-                        }
-                        disabled={selectedCount === 0 || isMutating}
+                        onClick={resetSelection}
                       >
-                        <FolderInput size={14} aria-hidden />
-                        {moveTargetFolderId === SESSION_FOLDER_FILTER_ROOT
-                          ? t("settings.sessionManagementMoveToUnfiled")
-                          : t("settings.sessionManagementMoveSelected")}
+                        <CircleX size={14} aria-hidden />
+                        {t("settings.projectSessionClearSelection")}
                       </button>
-                    </div>
+                      {mode === "project" ? (
+                        <div className="settings-project-sessions-move-control">
+                          <Select
+                            value={moveTargetFolderId}
+                            onValueChange={(value) =>
+                              setMoveTargetFolderId(
+                                value ?? SESSION_FOLDER_FILTER_ROOT,
+                              )
+                            }
+                          >
+                            <SelectTrigger
+                              className="settings-project-sessions-move-select"
+                              aria-label={t(
+                                "settings.sessionManagementMoveTargetLabel",
+                              )}
+                            >
+                              <SelectValue>
+                                {moveTargetFolderId ===
+                                SESSION_FOLDER_FILTER_ROOT
+                                  ? t(
+                                      "settings.sessionManagementFolderUnassigned",
+                                    )
+                                  : (sessionFolders.find(
+                                      (folder) =>
+                                        folder.id === moveTargetFolderId,
+                                    )?.name ??
+                                    t(
+                                      "settings.sessionManagementMoveTargetLabel",
+                                    ))}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={SESSION_FOLDER_FILTER_ROOT}>
+                                {t(
+                                  "settings.sessionManagementFolderUnassigned",
+                                )}
+                              </SelectItem>
+                              {folderNavItems.map((folder) => (
+                                <SelectItem key={folder.id} value={folder.id}>
+                                  {" ".repeat(
+                                    Math.max(0, folder.depth - 1) * 2,
+                                  )}
+                                  {folder.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <button
+                            type="button"
+                            className="settings-project-sessions-btn"
+                            onClick={() =>
+                              void handleMoveSelectedSessions(
+                                moveTargetFolderId ===
+                                  SESSION_FOLDER_FILTER_ROOT
+                                  ? null
+                                  : moveTargetFolderId,
+                              )
+                            }
+                            disabled={isMutating}
+                          >
+                            <FolderInput size={14} aria-hidden />
+                            {moveTargetFolderId === SESSION_FOLDER_FILTER_ROOT
+                              ? t("settings.sessionManagementMoveToUnfiled")
+                              : t("settings.sessionManagementMoveSelected")}
+                          </button>
+                        </div>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="settings-project-sessions-btn"
+                        onClick={() => void handleMutation("archive")}
+                        disabled={isMutating}
+                      >
+                        <Archive size={14} aria-hidden />
+                        {t("settings.sessionManagementArchiveSelected")}
+                      </button>
+                      <button
+                        type="button"
+                        className="settings-project-sessions-btn"
+                        onClick={() => void handleMutation("unarchive")}
+                        disabled={isMutating}
+                      >
+                        <Undo2 size={14} aria-hidden />
+                        {t("settings.sessionManagementUnarchiveSelected")}
+                      </button>
+                      <button
+                        type="button"
+                        className="settings-project-sessions-btn is-danger"
+                        onClick={() => void handleMutation("delete")}
+                        disabled={isMutating}
+                        data-testid="settings-project-sessions-delete-selected"
+                      >
+                        <Trash2 size={14} aria-hidden />
+                        {deleteArmed
+                          ? t(
+                              "settings.projectSessionConfirmDeleteSelected",
+                              {
+                                count: selectedCount,
+                              },
+                            )
+                          : t("settings.projectSessionDeleteSelected")}
+                      </button>
+                    </>
                   ) : null}
-                  <button
-                    type="button"
-                    className="settings-project-sessions-btn"
-                    onClick={() => void handleMutation("archive")}
-                    disabled={selectedCount === 0 || isMutating}
-                  >
-                    <Archive size={14} aria-hidden />
-                    {t("settings.sessionManagementArchiveSelected")}
-                  </button>
-                  <button
-                    type="button"
-                    className="settings-project-sessions-btn"
-                    onClick={() => void handleMutation("unarchive")}
-                    disabled={selectedCount === 0 || isMutating}
-                  >
-                    <Undo2 size={14} aria-hidden />
-                    {t("settings.sessionManagementUnarchiveSelected")}
-                  </button>
-                  <button
-                    type="button"
-                    className="settings-project-sessions-btn is-danger"
-                    onClick={() => void handleMutation("delete")}
-                    disabled={selectedCount === 0 || isMutating}
-                    data-testid="settings-project-sessions-delete-selected"
-                  >
-                    <Trash2 size={14} aria-hidden />
-                    {deleteArmed
-                      ? t("settings.projectSessionConfirmDeleteSelected", {
-                          count: selectedCount,
-                        })
-                      : t("settings.projectSessionDeleteSelected")}
-                  </button>
                 </div>
               </div>
 

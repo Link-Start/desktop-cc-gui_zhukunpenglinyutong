@@ -1,5 +1,3 @@
-import { useTranslation } from "react-i18next";
-
 type ConversationLightweightPromptProps = {
   active: boolean;
   heavyRowCount: number;
@@ -11,62 +9,14 @@ type ConversationLightweightPromptProps = {
   visible: boolean;
 };
 
-export function ConversationLightweightPrompt({
-  active,
-  heavyRowCount,
-  onEnable,
-  onHydrateVisible,
-  oversized,
-  renderWeight,
-  rowCount,
-  visible,
-}: ConversationLightweightPromptProps) {
-  const { t } = useTranslation();
-
-  if (!visible) {
-    return null;
-  }
-
-  const titleKey = oversized
-    ? "messages.conversationOversizedHistoryTitle"
-    : active
-      ? "messages.conversationLightweightModeTitle"
-      : "messages.conversationLightweightSuggestionTitle";
-  const descriptionKey = oversized
-    ? "messages.conversationOversizedHistoryDescription"
-    : active
-      ? "messages.conversationLightweightModeDescription"
-      : "messages.conversationLightweightSuggestionDescription";
-
-  return (
-    <div
-      className="messages-lightweight-mode-banner"
-      data-conversation-lightweight-mode={active ? "active" : "suggested"}
-      role="status"
-    >
-      <div className="messages-lightweight-mode-banner-copy">
-        <span className="messages-lightweight-mode-banner-eyebrow">
-          {t("messages.conversationLightweightModeEyebrow")}
-        </span>
-        <span className="messages-lightweight-mode-banner-title">{t(titleKey)}</span>
-        <span>
-          {t(descriptionKey, {
-            heavyRows: heavyRowCount,
-            renderWeight,
-            rows: rowCount,
-          })}
-        </span>
-      </div>
-      <div className="messages-lightweight-mode-banner-actions">
-        {!active ? (
-          <button type="button" onClick={onEnable}>
-            {t("messages.conversationLightweightUse")}
-          </button>
-        ) : null}
-        <button type="button" onClick={onHydrateVisible}>
-          {t("messages.conversationLightweightHydrateVisible")}
-        </button>
-      </div>
-    </div>
-  );
+/**
+ * Conversation-level lightweight banner — permanently disabled
+ * (unify-conversation-canvas). Call sites may still pass props; block-level
+ * 「显示详情」 for heavy markdown/tools is unchanged elsewhere.
+ */
+export function ConversationLightweightPrompt(
+  _props: ConversationLightweightPromptProps,
+) {
+  void _props;
+  return null;
 }

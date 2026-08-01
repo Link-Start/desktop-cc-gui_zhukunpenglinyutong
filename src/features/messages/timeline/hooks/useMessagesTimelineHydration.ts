@@ -164,28 +164,18 @@ export function useMessagesTimelineHydration(input: {
     () => new Map(timelineRowHydrationStates.map((state) => [state.rowKey, state])),
     [timelineRowHydrationStates],
   );
+  // 统一幕布：行级「详情已延迟」摘要条永久关闭（块级显示详情仍保留在 Markdown/工具块内）。
   const shouldRenderLightweightProjectionRow = useCallback((
-    row: TimelineProjectionRow,
-    hydrationState: TimelineRowHydrationState | undefined,
+    _row: TimelineProjectionRow,
+    _hydrationState: TimelineRowHydrationState | undefined,
   ) => {
-    if (row.kind !== "entry" || !hydrationState?.heavy) {
-      return false;
-    }
-    if (
-      hydrationState.hydrationReason === "active" ||
-      hydrationState.hydrationReason === "anchor" ||
-      isThinking ||
-      isWorking
-    ) {
-      return false;
-    }
-    if (effectiveConversationLightweightMode && !conversationDetailHydrationRequested) {
-      return true;
-    }
-    if (hydrationState.mode === "hydrated") {
-      return false;
-    }
-    return effectiveConversationLightweightMode || hydrationState.mode === "summary";
+    void _row;
+    void _hydrationState;
+    void conversationDetailHydrationRequested;
+    void effectiveConversationLightweightMode;
+    void isThinking;
+    void isWorking;
+    return false;
   }, [
     conversationDetailHydrationRequested,
     effectiveConversationLightweightMode,

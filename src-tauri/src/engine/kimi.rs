@@ -456,6 +456,8 @@ impl KimiSession {
 
         let mut response_text = String::new();
         let mut saw_tool_activity = false;
+        let mut tool_names_by_id: HashMap<String, String> = HashMap::new();
+        let mut tool_inputs_by_id: HashMap<String, Option<Value>> = HashMap::new();
         let mut error_output = String::new();
         let mut session_started_emitted = false;
         let mut new_session_id: Option<String> = None;
@@ -492,6 +494,8 @@ impl KimiSession {
                     KimiStreamLine::ToolCalls(calls) => {
                         saw_tool_activity = true;
                         for call in calls {
+                            tool_names_by_id.insert(call.id.clone(), call.name.clone());
+                            tool_inputs_by_id.insert(call.id.clone(), call.arguments.clone());
                             self.emit_turn_event(
                                 turn_id,
                                 EngineEvent::ToolStarted {
@@ -508,13 +512,21 @@ impl KimiSession {
                         content,
                     } => {
                         saw_tool_activity = true;
+                        let tool_name = tool_names_by_id.get(&tool_call_id).cloned();
+                        let wrapped_output = match tool_inputs_by_id.get(&tool_call_id).cloned() {
+                            Some(Some(input_value)) => Some(json!({
+                                "_input": input_value,
+                                "_output": content,
+                            })),
+                            _ => Some(Value::String(content)),
+                        };
                         self.emit_turn_event(
                             turn_id,
                             EngineEvent::ToolCompleted {
                                 workspace_id: self.workspace_id.clone(),
                                 tool_id: tool_call_id,
-                                tool_name: None,
-                                output: Some(Value::String(content)),
+                                tool_name,
+                                output: wrapped_output,
                                 error: None,
                             },
                         );
