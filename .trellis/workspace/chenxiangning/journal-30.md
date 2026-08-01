@@ -1137,3 +1137,44 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1280: status-panel 概览与供应商套餐额度
+
+**Date**: 2026-08-02
+**Task**: status-panel 概览与供应商套餐额度
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+将结果 Tab 改为会话概览；接入 Coding Plan 额度路由（官方 runtime / 供应商 API），支持 Kimi/MiniMax/智谱与 Codex 官方分流。
+
+### Main Changes
+
+## 完成内容
+- 概览 Tab：会话 id、工作区路径、落盘路径、引擎/模型、运行态与上下文
+- Coding Plan 查询：`coding_plan_quota.rs`（Kimi/MiniMax/智谱）
+- 路由：官方 Codex → account/rateLimits；第三方 base_url → 供应商 API；Kimi CLI oauth 优先
+- Claude 官方不展示假额度；第三方 MiniMax/Kimi 展示套餐双窗口
+
+## 后续
+- 共享会话多供应商额度列表（下一项）
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `215640267` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
