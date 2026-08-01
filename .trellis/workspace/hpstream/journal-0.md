@@ -227,3 +227,50 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: 合并远程 main 分支
+
+**Date**: 2026-08-01
+**Task**: 合并远程 main 分支
+**Branch**: `feat/from-main-20260729`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+合并远程 origin/main 到 feat/from-main-20260729。
+
+主要处理：
+- fetch origin/main 到 d359fa4dd。
+- 执行 git merge origin/main，解决 src/features/settings/components/SettingsView.test.tsx 冲突。
+- semantic merge 保留当前分支 hidden client UI visibility 测试命名，并加入 origin/main 的 writeClientStoreValue negative assertion。
+- npm install 同步 main 新增依赖到本地 node_modules；未提交 install 产生的无关 package-lock pruning。
+
+验证：
+- npm exec vitest run src/features/settings/components/SettingsView.test.tsx：通过，52 tests passed。
+- npm run typecheck：通过。
+- npm run lint：通过，0 errors，8 warnings。
+- npm run check:large-files：退出码 0，报告 main 合入后的 44 个 large-file entries。
+- git diff --check：通过。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7d4586a54` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
