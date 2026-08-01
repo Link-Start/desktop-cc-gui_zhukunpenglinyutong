@@ -790,3 +790,36 @@ hide commandExecution/bash; chip counts only visible file IO process; no remount
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1272: Codex 文件读写类 command 可见、纯 shell 仍隐藏
+
+**Date**: 2026-08-02
+**Task**: Codex 文件读写类 command 可见、纯 shell 仍隐藏
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+unhide file-IO commandExecution; promote apply_patch; hide pwd/ls noise; chip counts visible only
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1e9ed803a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
