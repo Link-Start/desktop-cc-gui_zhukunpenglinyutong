@@ -282,11 +282,11 @@
   }
 }
 
-/* Sidebar pointer policy: keep the left rail on the normal arrow cursor. */
+/* Sidebar pointer policy: keep the left rail on the normal arrow cursor.
+   Exception: workspace group headers are whole-row clickable toggles → pointer. */
 .sidebar-search-clear,
 .subtitle-button,
 .sidebar-quick-icon-button,
-.workspace-group-header.is-toggleable,
 .workspace-row,
 .workspace-tree-toggle,
 .workspace-exited-toggle,
@@ -301,4 +301,8 @@
 .sidebar-settings-button,
 .sidebar-terminal-button {
   cursor: default !important;
+}
+
+.workspace-group-header.is-toggleable {
+  cursor: pointer !important;
 }

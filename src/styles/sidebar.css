@@ -287,26 +287,24 @@
 }
 
 .workspace-group + .workspace-group {
-  margin-top: 2px;
+  margin-top: 6px;
 }
 
 .workspace-group-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  min-height: var(--sidebar-row-height-workspace);
-  gap: 6px;
-  padding: 2px 8px;
+  justify-content: flex-start;
+  min-height: 22px;
+  gap: 4px;
+  padding: 2px 8px 2px 4px;
   border-radius: var(--sidebar-row-radius);
-  color: var(--text-muted);
-  transition:
-    background-color 0.16s ease,
-    color 0.16s ease;
+  color: var(--text-faint);
+  transition: color 0.15s ease;
 }
 
 .workspace-group-header:hover {
-  background: var(--surface-hover);
-  color: var(--text-strong);
+  background: transparent;
+  color: var(--text-muted);
 }
 
 .workspace-group-header.is-toggleable {
@@ -315,24 +313,24 @@
 
 .workspace-group-header.is-toggleable:focus-visible {
   outline: 1px solid var(--border-subtle);
-  outline-offset: 4px;
+  outline-offset: 2px;
   border-radius: 6px;
 }
 
 .workspace-group-title {
   display: inline-flex;
   align-items: center;
-  gap: 0;
+  gap: 2px;
   min-width: 0;
 }
 
 .workspace-group-label {
   text-transform: none;
-  font-size: var(--sidebar-title-font-size);
-  letter-spacing: 0;
+  font-size: var(--sidebar-meta-font-size);
+  letter-spacing: 0.01em;
   color: inherit;
-  font-weight: 340;
-  line-height: 1.15;
+  font-weight: 400;
+  line-height: 1.2;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -342,7 +340,7 @@
 .workspace-group-list {
   display: grid;
   grid-template-rows: 1fr;
-  margin-top: 2px;
+  margin-top: 1px;
   opacity: 1;
   transform: translateY(0);
   transition:
@@ -358,6 +356,8 @@
   gap: 0;
   overflow: hidden;
   min-height: 0;
+  /* Indent projects under group caption so hierarchy is clearer */
+  padding-left: 4px;
 }
 
 .workspace-group-list.collapsed {
@@ -370,27 +370,24 @@
 .group-toggle {
   border: none;
   background: transparent;
-  color: var(--text-muted);
+  color: inherit;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  font-size: 11px;
   line-height: 1;
-  padding: 0 2px;
+  padding: 0;
   -webkit-app-region: no-drag;
-  opacity: 0;
+  opacity: 0.55;
   pointer-events: none;
   transition: opacity 0.15s ease, color 0.15s ease;
 }
 
-.group-toggle:hover {
-  color: var(--text-strong);
-}
-
-.workspace-group-header:hover .group-toggle,
-.group-toggle:focus-visible {
-  opacity: 1;
-  pointer-events: auto;
+.workspace-group-header:hover .group-toggle {
+  opacity: 0.85;
 }
 
 .group-toggle-icon {
@@ -450,13 +447,14 @@
   content: none;
 }
 
-/* Updated Workspace Row Styles */
+/* Updated Workspace Row Styles — monochrome / minimal selected state */
 .workspace-row {
   display: flex;
   flex-direction: column;
-  width: calc(100% - 4px);
+  width: calc(100% - 8px);
   margin-left: 4px;
-  border-radius: var(--sidebar-row-radius);
+  margin-right: 4px;
+  border-radius: 6px;
   border: none;
   background: transparent;
   color: inherit;
@@ -476,17 +474,15 @@
   content: none;
 }
 
+/* Soft neutral fill only — no accent color */
 .workspace-row.active {
-  background: var(--sidebar-color-active-primary);
+  background: color-mix(in srgb, var(--surface-hover) 72%, transparent);
   color: var(--text-strong);
 }
 
-.workspace-row.active::before {
-  content: none;
-}
-
+/* Workspace is current context while a session row is the primary selection */
 .workspace-row.context-active {
-  background: transparent;
+  background: color-mix(in srgb, var(--surface-hover) 40%, transparent);
   color: var(--text-strong);
 }
 
@@ -499,14 +495,29 @@
   align-items: center;
   min-height: var(--sidebar-row-height-workspace);
   width: 100%;
-  padding: 2px 8px 2px 2px;
+  /* Keep horizontal inset symmetric so selected pill padding matches left/right */
+  padding: 2px 6px;
   gap: 6px;
   color: var(--text-muted);
-  border-radius: var(--sidebar-row-radius);
+  border-radius: 6px;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
 }
 
 .workspace-header-content:hover {
   background: var(--surface-hover);
+  color: var(--text-strong);
+}
+
+/* Keep hover quiet when already selected */
+.workspace-row.active .workspace-header-content:hover,
+.workspace-row.context-active .workspace-header-content:hover {
+  background: transparent;
+}
+
+.workspace-row.active .workspace-name-text,
+.workspace-row.context-active .workspace-name-text {
   color: var(--text-strong);
 }
 
