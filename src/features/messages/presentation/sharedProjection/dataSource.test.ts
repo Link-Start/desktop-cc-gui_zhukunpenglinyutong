@@ -99,6 +99,35 @@ describe("toSharedConversationItems", () => {
     });
   });
 
+  it("rebuilds Codex apply_patch summary into fileChange changes via buildConversationItem", () => {
+    const patch =
+      "*** Begin Patch\n*** Update File: src/keep.ts\n@@\n-old\n+new\n*** End Patch\n";
+    const [tool] = toSharedConversationItems([
+      makeItem({
+        id: "2:tool:patch",
+        kind: "tool",
+        content: {
+          toolType: "apply_patch",
+          title: "apply_patch",
+          detail: JSON.stringify({ name: "apply_patch", input: patch, patch }),
+          status: "completed",
+          output: "Success. Updated the following files:\nM src/keep.ts",
+          engineSource: "codex",
+          turnId: "turn-1",
+        },
+      }),
+    ]);
+    expect(tool).toMatchObject({
+      kind: "tool",
+      toolType: "fileChange",
+      engineSource: "codex",
+      turnId: "turn-1",
+    });
+    expect(
+      tool && tool.kind === "tool" ? tool.changes?.[0]?.path : null,
+    ).toBe("src/keep.ts");
+  });
+
   it("maps final footer meta and fileChange changes for Shared history parity", () => {
     const [assistant, tool] = toSharedConversationItems([
       makeItem({

@@ -23,4 +23,5 @@ pub const CANVAS_PROJECTION_NAME: &str = "canvas";
 // v5: process-before-prose order (reasoning/tools → final Text) so Messages
 //     process-phase collapse matches Native; forces checkpoint rebuild.
 // v6: Codex fileChange changes[] preserved through Shared history projection.
-pub const CANVAS_PROJECTION_VERSION: i64 = 6;
+// v7: custom_tool_call/apply_patch + apply_patch text → changes[]; FE enricher.
+pub const CANVAS_PROJECTION_VERSION: i64 = 7;

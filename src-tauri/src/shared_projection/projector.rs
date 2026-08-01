@@ -414,18 +414,21 @@ impl SharedProjector {
             let mut title = canvas_tool_title(&exchange.tool_name, &detail);
             let has_native_changes_array = detail_has_changes_array(&detail);
             let changes = extract_changes_for_canvas_tool(&detail, &tool_type, &exchange.tool_name);
-            // Only coerce toolType to fileChange for Codex-shaped payloads (type/name
-            // fileChange or packed changes[]). Keep "Write"/"Edit" toolType so FE still
-            // routes Claude/Grok single-file cards through EditToolBlock polish.
-            if has_native_changes_array
-                || is_codex_file_change_name(&exchange.tool_name)
-                || tool_type == "fileChange"
-            {
-                if changes.as_ref().is_some_and(|rows| !rows.is_empty()) {
-                    tool_type = "fileChange".to_string();
-                }
+            // Promote to fileChange when we have structured changes (native changes[]
+            // or parsed apply_patch). Keep plain Write/Edit names without changes so
+            // Claude/Grok still use EditToolBlock polish.
+            let should_promote_file_change = changes.as_ref().is_some_and(|rows| !rows.is_empty())
+                && (has_native_changes_array
+                    || is_codex_file_change_name(&exchange.tool_name)
+                    || is_apply_patch_tool_name(&exchange.tool_name)
+                    || tool_type == "fileChange"
+                    || detail.contains("*** Begin Patch")
+                    || detail.contains("*** Update File:"));
+            if should_promote_file_change {
+                tool_type = "fileChange".to_string();
                 if title.eq_ignore_ascii_case("filechange")
                     || title.eq_ignore_ascii_case("file_change")
+                    || is_apply_patch_tool_name(&title)
                 {
                     title = "File changes".to_string();
                 }
@@ -691,6 +694,15 @@ fn is_codex_file_change_name(tool_name: &str) -> bool {
     compact == "filechange"
 }
 
+fn is_apply_patch_tool_name(tool_name: &str) -> bool {
+    let compact = tool_name
+        .trim()
+        .to_ascii_lowercase()
+        .replace('_', "")
+        .replace('-', "");
+    compact == "applypatch" || compact.contains("applypatch")
+}
+
 fn detail_has_changes_array(detail: &str) -> bool {
     let trimmed = detail.trim();
     if trimmed.is_empty() {
@@ -784,6 +796,13 @@ fn extract_changes_for_canvas_tool(
         }
     }
 
+    // apply_patch / custom_tool_call: patch text lives in input/patch string fields.
+    if let Some(patch) = extract_apply_patch_text(&parsed, trimmed) {
+        if let Some(from_patch) = extract_changes_from_apply_patch(&patch) {
+            return Some(from_patch);
+        }
+    }
+
     // Fallback: single-file write/edit args (Claude/Grok style).
     if !is_edit_like_tool_name(tool_name) && tool_type != "fileChange" {
         return None;
@@ -796,6 +815,129 @@ fn extract_changes_for_canvas_tool(
         "path": path,
         "kind": "modified",
     })])
+}
+
+fn extract_apply_patch_text(parsed: &Value, raw_detail: &str) -> Option<String> {
+    for key in ["patch", "input", "command", "cmd"] {
+        if let Some(Value::String(text)) = parsed.get(key) {
+            let trimmed = text.trim();
+            if trimmed.contains("*** Begin Patch") || trimmed.contains("*** Update File:") {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    let trimmed = raw_detail.trim();
+    if trimmed.contains("*** Begin Patch") || trimmed.contains("*** Update File:") {
+        return Some(trimmed.to_string());
+    }
+    None
+}
+
+/// Minimal Codex apply_patch parser for Shared history (aligned with FE
+/// `inferFileChangesFromPayload` / `*** Update|Add|Delete File:` markers).
+fn extract_changes_from_apply_patch(patch: &str) -> Option<Vec<Value>> {
+    let mut changes = Vec::new();
+    let mut current_path = String::new();
+    let mut current_kind = String::from("update");
+    let mut current_diff: Vec<String> = Vec::new();
+
+    let flush = |path: &mut String,
+                 kind: &mut String,
+                 diff_lines: &mut Vec<String>,
+                 out: &mut Vec<Value>| {
+        let trimmed_path = path.trim().to_string();
+        if trimmed_path.is_empty() {
+            diff_lines.clear();
+            return;
+        }
+        let diff = diff_lines.join("\n").trim().to_string();
+        let mut change = json!({
+            "path": trimmed_path,
+            "kind": kind.clone(),
+        });
+        if !diff.is_empty() {
+            if let Some(object) = change.as_object_mut() {
+                object.insert("diff".to_string(), Value::String(diff));
+            }
+        }
+        out.push(change);
+        path.clear();
+        *kind = "update".to_string();
+        diff_lines.clear();
+    };
+
+    for line in patch.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("*** Update File:") {
+            flush(
+                &mut current_path,
+                &mut current_kind,
+                &mut current_diff,
+                &mut changes,
+            );
+            current_path = rest.trim().to_string();
+            current_kind = "update".to_string();
+            current_diff.push(line.to_string());
+            continue;
+        }
+        if let Some(rest) = trimmed.strip_prefix("*** Add File:") {
+            flush(
+                &mut current_path,
+                &mut current_kind,
+                &mut current_diff,
+                &mut changes,
+            );
+            current_path = rest.trim().to_string();
+            current_kind = "add".to_string();
+            current_diff.push(line.to_string());
+            continue;
+        }
+        if let Some(rest) = trimmed.strip_prefix("*** Delete File:") {
+            flush(
+                &mut current_path,
+                &mut current_kind,
+                &mut current_diff,
+                &mut changes,
+            );
+            current_path = rest.trim().to_string();
+            current_kind = "delete".to_string();
+            current_diff.push(line.to_string());
+            continue;
+        }
+        if let Some(rest) = trimmed.strip_prefix("*** Move to:") {
+            let moved = rest.trim();
+            if !moved.is_empty() {
+                current_path = moved.to_string();
+            }
+            current_diff.push(line.to_string());
+            continue;
+        }
+        if trimmed == "*** End Patch" {
+            current_diff.push(line.to_string());
+            flush(
+                &mut current_path,
+                &mut current_kind,
+                &mut current_diff,
+                &mut changes,
+            );
+            break;
+        }
+        if !current_path.is_empty() {
+            current_diff.push(line.to_string());
+        }
+    }
+    flush(
+        &mut current_path,
+        &mut current_kind,
+        &mut current_diff,
+        &mut changes,
+    );
+
+    if changes.is_empty() {
+        None
+    } else {
+        Some(changes)
+    }
 }
 
 fn extract_path_from_change_row(value: &Value) -> Option<String> {

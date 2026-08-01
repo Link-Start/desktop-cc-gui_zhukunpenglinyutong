@@ -1812,11 +1812,13 @@ fn normalize_codex_item_event(
     }
     let tool_id = value_string_by_aliases(Some(item), &["id", "toolId", "tool_id"])
         .unwrap_or_else(|| "unknown-tool".to_string());
-    // Prefer explicit tool name; fall back to item type (e.g. "fileChange") so
-    // canvas classifiers still route file-edit scenes after history projection.
-    let tool_name = value_string_by_aliases(Some(item), &["tool", "toolName", "tool_name", "name"])
-        .or_else(|| value_string_by_aliases(Some(item), &["title"]))
-        .unwrap_or_else(|| item_type.clone());
+    // Prefer explicit tool name; custom_tool_call uses `name` (e.g. apply_patch).
+    // Fall back to item type (e.g. "fileChange") for canvas classifiers.
+    let tool_name = value_string_by_aliases(
+        Some(item),
+        &["tool", "toolName", "tool_name", "name", "title"],
+    )
+    .unwrap_or_else(|| item_type.clone());
     // Codex fileChange puts paths/diffs on `changes[]`, not `arguments`/`input`.
     // Pack both so SharedProjector can rebuild ConversationItem.changes.
     let input = extract_codex_tool_payload(item);
@@ -1877,8 +1879,9 @@ fn normalize_codex_item_event(
 
 /// Build a portable tool payload for Shared canonical storage.
 ///
-/// Codex `fileChange` items put path/diff on `changes[]` (not `arguments`). Without
-/// packing that array, history projection cannot rebuild the canvas file-edit scene.
+/// Codex `fileChange` items put path/diff on `changes[]` (not `arguments`).
+/// Codex `apply_patch` often arrives as `custom_tool_call` with a raw patch string
+/// in `input`. Both must be packed or history cannot rebuild the file-edit scene.
 fn extract_codex_tool_payload(item: &Value) -> Option<Value> {
     let mut object = serde_json::Map::new();
 
@@ -1886,6 +1889,16 @@ fn extract_codex_tool_payload(item: &Value) -> Option<Value> {
         Some(Value::Object(map)) => {
             for (key, value) in map {
                 object.insert(key.clone(), value.clone());
+            }
+        }
+        Some(Value::String(text)) => {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                object.insert("input".to_string(), Value::String(trimmed.to_string()));
+                // Preserve patch-shaped strings under an explicit key for projection.
+                if trimmed.contains("*** Begin Patch") || trimmed.contains("*** Update File:") {
+                    object.insert("patch".to_string(), Value::String(trimmed.to_string()));
+                }
             }
         }
         Some(value) if !value.is_null() => {
@@ -1900,10 +1913,29 @@ fn extract_codex_tool_payload(item: &Value) -> Option<Value> {
         }
     }
 
+    // custom_tool_call / function_call name (apply_patch, shell, …)
+    if let Some(name) = value_string_by_aliases(Some(item), &["name", "tool", "toolName", "tool_name"])
+    {
+        let trimmed = name.trim();
+        if !trimmed.is_empty() {
+            object.insert("name".to_string(), Value::String(trimmed.to_string()));
+        }
+    }
+
     if let Some(title) = item.get("title").and_then(Value::as_str) {
         let trimmed = title.trim();
         if !trimmed.is_empty() {
             object.insert("title".to_string(), Value::String(trimmed.to_string()));
+        }
+    }
+
+    // commandExecution-shaped fields
+    for key in ["command", "cmd", "cwd", "description"] {
+        if let Some(Value::String(text)) = item.get(key) {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                object.insert(key.to_string(), Value::String(trimmed.to_string()));
+            }
         }
     }
 
@@ -2355,6 +2387,13 @@ fn is_tool_item_type(item_type: &str) -> bool {
             | "tool_call"
             | "dynamictoolcall"
             | "dynamic_tool_call"
+            // Codex Responses often emits apply_patch as custom_tool_call (not fileChange).
+            | "customtoolcall"
+            | "custom_tool_call"
+            | "function_call"
+            | "functioncall"
+            | "apply_patch"
+            | "applypatch"
     )
 }
 
@@ -2854,6 +2893,78 @@ mod tests {
     }
 
     #[test]
+    #[test]
+    fn codex_apply_patch_custom_tool_call_is_captured_as_tool_exchange() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        coordinator
+            .register_attempt(owner("attempt-ap", Some("run-ap"), Some("native-ap")))
+            .expect("register");
+        let patch =
+            "*** Begin Patch\n*** Update File: src/a.ts\n@@\n-old\n+new\n*** End Patch\n";
+        let events = [
+            json!({
+                "method": "item/started",
+                "params": {
+                    "threadId": "native-ap",
+                    "turnId": "run-ap",
+                    "item": {
+                        "id": "call-ap",
+                        "type": "custom_tool_call",
+                        "name": "apply_patch",
+                        "input": patch,
+                        "status": "inProgress"
+                    }
+                }
+            }),
+            json!({
+                "method": "item/completed",
+                "params": {
+                    "threadId": "native-ap",
+                    "turnId": "run-ap",
+                    "item": {
+                        "id": "call-ap",
+                        "type": "custom_tool_call",
+                        "name": "apply_patch",
+                        "input": patch,
+                        "status": "completed",
+                        "output": "Success. Updated the following files:\nM src/a.ts"
+                    }
+                }
+            }),
+            json!({
+                "method": "item/agentMessage/delta",
+                "params": {"threadId": "native-ap", "turnId": "run-ap", "delta": "ok"}
+            }),
+            json!({
+                "method": "turn/completed",
+                "params": {
+                    "threadId": "native-ap",
+                    "turnId": "run-ap",
+                    "status": "completed"
+                }
+            }),
+        ];
+        let mut settled = None;
+        for event in events {
+            let observation = coordinator.ingest_codex_event("ws-1", &event);
+            settled = settled.or(observation.settled);
+        }
+        let settled = settled.expect("settled");
+        assert_eq!(settled.final_snapshot.tool_calls.len(), 1);
+        assert_eq!(
+            settled.final_snapshot.tool_calls[0].tool_name,
+            "apply_patch"
+        );
+        let summary = settled.final_snapshot.tool_calls[0]
+            .arguments_summary
+            .as_deref()
+            .unwrap_or("");
+        assert!(
+            summary.contains("Begin Patch") && summary.contains("src/a.ts"),
+            "apply_patch input must be packed for history, got: {summary}"
+        );
+    }
+
     #[test]
     fn codex_file_change_item_preserves_changes_in_tool_arguments_summary() {
         let coordinator = SharedRuntimeCoordinator::default();

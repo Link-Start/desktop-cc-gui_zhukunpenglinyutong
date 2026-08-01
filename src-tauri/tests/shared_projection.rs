@@ -1052,6 +1052,55 @@ fn turn_committed_projects_file_change_changes_array() {
     writer.shutdown().unwrap();
 }
 
+/// Scenario: Codex apply_patch custom_tool_call summary rebuilds fileChange changes[].
+#[test]
+fn turn_committed_projects_apply_patch_input_as_file_change() {
+    let temp = TempStoreDir::new("apply-patch-file-change");
+    let writer = open_writer(&temp);
+    let mut committed = match make_turn_committed("attempt-apply-patch") {
+        CanonicalFact::TurnCommitted(fact) => fact,
+        _ => unreachable!(),
+    };
+    committed.assistant.blocks = vec![CanonicalBlock::Text {
+        text: "done".to_string(),
+    }];
+    let patch = "*** Begin Patch\n*** Update File: src/keep.ts\n@@\n-old\n+new\n*** End Patch\n";
+    committed.atomic_tool_exchanges = vec![AtomicToolExchange {
+        tool_call_id: "call-patch".to_string(),
+        tool_name: "apply_patch".to_string(),
+        call: ToolCall {
+            arguments_summary: Some(
+                serde_json::json!({ "name": "apply_patch", "input": patch, "patch": patch })
+                    .to_string(),
+            ),
+            arguments_artifact_ref: None,
+            extra: serde_json::Value::Object(Default::default()),
+        },
+        result: ToolResult {
+            status: ToolResultStatus::Completed,
+            output_summary: Some("Success. Updated the following files:\nM src/keep.ts".to_string()),
+            output_artifact_ref: None,
+            error_message: None,
+            extra: serde_json::Value::Object(Default::default()),
+        },
+        extra: serde_json::Value::Object(Default::default()),
+    }];
+    writer
+        .append_canonical_fact(SESSION, CanonicalFact::TurnCommitted(committed))
+        .expect("append");
+
+    let projected = SharedProjector::new()
+        .project_events(&writer.events_for_session(SESSION).expect("events"))
+        .expect("project");
+    let tool = projected
+        .iter()
+        .find(|item| item.kind == ProjectionItemKind::Tool)
+        .expect("tool");
+    assert_eq!(tool.content["toolType"], "fileChange");
+    assert_eq!(tool.content["changes"][0]["path"], "src/keep.ts");
+    writer.shutdown().unwrap();
+}
+
 /// Scenario: Shared history emits process before final prose so Messages collapse works.
 #[test]
 fn turn_committed_emits_process_before_final_assistant_prose() {
