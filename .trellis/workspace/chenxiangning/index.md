@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-30.md`
-- **Total Sessions**: 1270
+- **Total Sessions**: 1271
 - **Last Active**: 2026-08-02
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-30.md` | ~759 | Active |
+| `journal-30.md` | ~792 | Active |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
@@ -58,6 +58,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1271 | 2026-08-02 | 幕布恢复隐藏 shell 且折叠只计文件读写 | `9a2e35797` | `cxn-version-0.7.15` |
 | 1270 | 2026-08-02 | Shared Codex command argv/apply_patch 投影修复 | `a2f3e50ca` | `cxn-version-0.7.15` |
 | 1269 | 2026-08-02 | Shared Codex apply_patch/文件修改投影二次修复 | `b42626c1e` | `cxn-version-0.7.15` |
 | 1268 | 2026-08-01 | Shared 历史幕布过程折叠与 Codex 文件修改投影对齐 | `ef6dc9dbb` | `cxn-version-0.7.15` |

@@ -757,3 +757,36 @@ join command argv[]; promote apply_patch in commandExecution; v8
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1271: 幕布恢复隐藏 shell 且折叠只计文件读写
+
+**Date**: 2026-08-02
+**Task**: 幕布恢复隐藏 shell 且折叠只计文件读写
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+hide commandExecution/bash; chip counts only visible file IO process; no remount of shell on expand
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9a2e35797` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
