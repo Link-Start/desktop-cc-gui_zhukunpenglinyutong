@@ -102,6 +102,13 @@
 
 - [Preference Settings UI / UX Guide（设置/偏好面板基线，供后续 AI 对照）](ui-ux/preference-settings-ui-guide.md)
 
+### 专项材料（历史快照）
+
+- [v0.7.3 后续执行建议（时间快照）](analysis/client-shortcuts-and-priorities-2026-07.md)
+- [Browser Dock Phase 3 跨平台降级能力矩阵](browser-agent/phase3-cross-platform-degraded-capability-matrix.md)
+- [Sidebar Cache Implementation Plan（历史计划）](superpowers/plans/2026-04-16-sidebar-cache-implementation.md)
+- [Sidebar Cache Design（历史设计）](superpowers/specs/2026-04-16-sidebar-cache-design.md)
+
 ### 稳定性
 
 - [React #185 Playbook](analysis/react-185-maximum-update-depth-playbook.md)
