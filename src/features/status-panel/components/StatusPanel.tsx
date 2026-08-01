@@ -92,6 +92,7 @@ interface StatusPanelProps extends CodeAnnotationBridgeProps {
   variant?: "popover" | "dock";
   visibleDockTabs?: Partial<Record<TabType, boolean>>;
   showGovernanceEvidence?: boolean;
+  showCheckpointDetails?: boolean;
   workspaceName?: string | null;
   activeRateLimits?: RateLimitSnapshot | null;
   pendingApprovals?: number;
@@ -220,6 +221,7 @@ export const StatusPanel = memo(function StatusPanel({
   variant = "popover",
   visibleDockTabs,
   showGovernanceEvidence = false,
+  showCheckpointDetails = true,
   workspaceName = null,
   activeRateLimits = null,
   pendingApprovals = 0,
@@ -795,53 +797,57 @@ export const StatusPanel = memo(function StatusPanel({
               isLoading={governanceEvidenceState.isLoading}
             />
           ) : null}
-          <CostBudgetSection
-            compact={variant !== "dock"}
-            engine={selectedEngine}
-            model={selectedModelId}
-            usage={activeTokenUsage}
-            sessionId={activeThreadId}
-          />
-          <CheckpointPanel
-            checkpoint={checkpoint}
-            compact={variant !== "dock"}
-            fileChanges={displayedFileChanges}
-            totalAdditions={displayedTotalAdditions}
-            totalDeletions={displayedTotalDeletions}
-            onOpenDiffPath={onOpenDiffPath}
-            onOpenFilePath={onOpenFilePath}
-            workspaceId={workspaceId}
-            workspacePath={workspacePath}
-            onRefreshGitStatus={onRefreshGitStatus}
-            commitMessage={commitMessage}
-            commitMessageLoading={commitMessageLoading}
-            commitMessageError={commitMessageError}
-            onCommitMessageChange={onCommitMessageChange}
-            onGenerateCommitMessage={onGenerateCommitMessage}
-            onCommit={onCommit}
-            commitLoading={commitLoading}
-            commitError={commitError}
-            stagedFiles={workspaceGitStagedFiles}
-            unstagedFiles={workspaceGitUnstagedFiles}
-            onCreateCodeAnnotation={onCreateCodeAnnotation}
-            onRemoveCodeAnnotation={onRemoveCodeAnnotation}
-            codeAnnotations={codeAnnotations}
-            onExpandToDock={
-              onExpandToDock
-                ? () => {
-                    onExpandToDock();
-                    if (variant !== "dock") {
-                      setOpenTab(null);
-                    }
+          {showCheckpointDetails ? (
+            <>
+              <CostBudgetSection
+                compact={variant !== "dock"}
+                engine={selectedEngine}
+                model={selectedModelId}
+                usage={activeTokenUsage}
+                sessionId={activeThreadId}
+              />
+              <CheckpointPanel
+                checkpoint={checkpoint}
+                compact={variant !== "dock"}
+                fileChanges={displayedFileChanges}
+                totalAdditions={displayedTotalAdditions}
+                totalDeletions={displayedTotalDeletions}
+                onOpenDiffPath={onOpenDiffPath}
+                onOpenFilePath={onOpenFilePath}
+                workspaceId={workspaceId}
+                workspacePath={workspacePath}
+                onRefreshGitStatus={onRefreshGitStatus}
+                commitMessage={commitMessage}
+                commitMessageLoading={commitMessageLoading}
+                commitMessageError={commitMessageError}
+                onCommitMessageChange={onCommitMessageChange}
+                onGenerateCommitMessage={onGenerateCommitMessage}
+                onCommit={onCommit}
+                commitLoading={commitLoading}
+                commitError={commitError}
+                stagedFiles={workspaceGitStagedFiles}
+                unstagedFiles={workspaceGitUnstagedFiles}
+                onCreateCodeAnnotation={onCreateCodeAnnotation}
+                onRemoveCodeAnnotation={onRemoveCodeAnnotation}
+                codeAnnotations={codeAnnotations}
+                onExpandToDock={
+                  onExpandToDock
+                    ? () => {
+                        onExpandToDock();
+                        if (variant !== "dock") {
+                          setOpenTab(null);
+                        }
+                      }
+                    : undefined
+                }
+                onAfterSelect={() => {
+                  if (variant !== "dock") {
+                    setOpenTab(null);
                   }
-                : undefined
-            }
-            onAfterSelect={() => {
-              if (variant !== "dock") {
-                setOpenTab(null);
-              }
-            }}
-          />
+                }}
+              />
+            </>
+          ) : null}
         </>
       )}
       {activeTab === "plan" && (

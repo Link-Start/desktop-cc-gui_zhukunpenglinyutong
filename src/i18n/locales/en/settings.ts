@@ -767,6 +767,7 @@ const settings = {
         bottomActivityTasks: "Tasks tab",
         bottomActivityAgents: "Agents tab",
         bottomActivityCheckpoint: "Result tab",
+        bottomActivityCheckpointDetails: "Result details",
         bottomActivityGovernanceEvidence: "Governance evidence (developer)",
         curtainContextLedger: "Context sources card",
         cornerStatusMessageAnchors: "Message anchors",
@@ -803,6 +804,8 @@ const settings = {
         bottomActivityTasks: "Hides the task status tab.",
         bottomActivityAgents: "Hides the agent status tab.",
         bottomActivityCheckpoint: "Hides the result checkpoint tab.",
+        bottomActivityCheckpointDetails:
+          "Shows summary, validations, file changes, and commit actions in the Result tab. When off, only the session overview remains.",
         bottomActivityGovernanceEvidence:
           "Shows repository governance evidence at the top of the Result tab (aimed at mossx development). Off by default.",
         curtainContextLedger:

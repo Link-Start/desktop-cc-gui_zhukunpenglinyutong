@@ -427,6 +427,9 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const showGovernanceEvidence = clientUiVisibility.isControlVisible(
     "bottomActivity.governanceEvidence",
   );
+  const showCheckpointDetails = clientUiVisibility.isControlVisible(
+    "bottomActivity.checkpointDetails",
+  );
   const shellRuntimeSummary = useMemo(
     () =>
       buildShellRuntimeSummary({
@@ -2351,6 +2354,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       variant="dock"
       visibleDockTabs={bottomActivityVisibleTabs}
       showGovernanceEvidence={showGovernanceEvidence}
+      showCheckpointDetails={showCheckpointDetails}
       workspaceName={options.activeWorkspace?.name ?? null}
       onRefreshGitStatus={options.queueGitStatusRefresh}
       commitMessage={options.commitMessage}

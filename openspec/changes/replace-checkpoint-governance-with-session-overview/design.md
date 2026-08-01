@@ -27,9 +27,13 @@
 ├── SessionOverviewSection        ← 新增,常驻
 │   └── buildSessionOverview(props) → SessionOverviewViewModel
 ├── GovernanceEvidenceSection     ← 保留,仅 showGovernanceEvidence 时渲染
-├── CostBudgetSection             ← 不动
-└── CheckpointPanel               ← 不动(governanceSnapshot 入参变为可空来源)
+├── CostBudgetSection             ← 保留,仅 showCheckpointDetails 时渲染(默认隐藏)
+└── CheckpointPanel               ← 保留,仅 showCheckpointDetails 时渲染(默认隐藏)
+                                    (governanceSnapshot 入参变为可空来源;
+                                     buildCheckpointViewModel 仍照常计算以驱动 tab badge)
 ```
+
+`showCheckpointDetails` 与治理证据同理:新增 client UI visibility control `bottomActivity.checkpointDetails`,默认 `false`,由 `useLayoutNodes` 传入 dock 生产链路。`StatusPanel` prop 默认 `true`,保证 popover 变体与既有直渲染测试行为不变;只有生产 dock 默认收起详情。默认隐藏时「结果」tab 只剩会话概览,噪音消失;需要 diff 审查 / 提交 / 成本明细的用户在设置里打开一次即可,选择持久化。
 
 `SessionOverviewViewModel` 字段(全部确定性派生,无 model 参与):
 

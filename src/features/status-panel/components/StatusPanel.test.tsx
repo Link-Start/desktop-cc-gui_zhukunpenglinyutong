@@ -803,6 +803,47 @@ describe("StatusPanel", () => {
     ).toBeNull();
   });
 
+  it("shows only the session overview when checkpoint details are hidden", () => {
+    render(
+      <StatusPanel
+        workspaceId="ws-1"
+        items={[editToolItem]}
+        isProcessing={false}
+        variant="dock"
+        showCheckpointDetails={false}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Result"));
+
+    expect(screen.getByText("Session overview")).toBeTruthy();
+    expect(screen.queryByText("statusPanel.cost.title")).toBeNull();
+    expect(screen.queryByText("README.md")).toBeNull();
+    expect(
+      screen.queryByText("statusPanel.checkpoint.sections.suggestedActions"),
+    ).toBeNull();
+  });
+
+  it("renders checkpoint details when the details switch is enabled", () => {
+    render(
+      <StatusPanel
+        workspaceId="ws-1"
+        items={[editToolItem]}
+        isProcessing={false}
+        variant="dock"
+        showCheckpointDetails
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Result"));
+
+    expect(screen.getByText("Session overview")).toBeTruthy();
+    expect(screen.getByText("README.md")).toBeTruthy();
+    expect(
+      screen.getByText("statusPanel.checkpoint.sections.suggestedActions"),
+    ).toBeTruthy();
+  });
+
   it("feeds dock governance evidence into checkpoint policy audit", () => {
     mockUseGovernanceEvidence.mockReturnValue({
       evidence: [

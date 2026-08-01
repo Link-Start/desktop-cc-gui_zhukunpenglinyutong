@@ -693,6 +693,7 @@ vi.mock("react-i18next", () => ({
         "settings.clientUiVisibility.controls.bottomActivityTasks": "Tasks tab",
         "settings.clientUiVisibility.controls.bottomActivityAgents": "Agents tab",
         "settings.clientUiVisibility.controls.bottomActivityCheckpoint": "Result tab",
+        "settings.clientUiVisibility.controls.bottomActivityCheckpointDetails": "Result details",
         "settings.clientUiVisibility.controls.bottomActivityGovernanceEvidence": "Governance evidence (developer)",
         "settings.clientUiVisibility.controls.curtainContextLedger": "Context sources card",
         "settings.clientUiVisibility.controls.cornerStatusMessageAnchors": "Message anchors",
@@ -712,6 +713,8 @@ vi.mock("react-i18next", () => ({
         "settings.clientUiVisibility.controlDescriptions.bottomActivityAgents": "Hides the agent status tab.",
         "settings.clientUiVisibility.controlDescriptions.bottomActivityCheckpoint":
           "Hides the result checkpoint tab.",
+        "settings.clientUiVisibility.controlDescriptions.bottomActivityCheckpointDetails":
+          "Shows summary, validations, file changes, and commit actions in the Result tab. When off, only the session overview remains.",
         "settings.clientUiVisibility.controlDescriptions.bottomActivityGovernanceEvidence":
           "Shows repository governance evidence at the top of the Result tab (aimed at mossx development). Off by default.",
         "settings.clientUiVisibility.controlDescriptions.curtainContextLedger": "Hides the context sources card above the composer without disabling ledger calculations.",

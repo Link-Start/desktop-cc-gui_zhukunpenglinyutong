@@ -31,7 +31,13 @@
 - [x] 5.3 `SessionOverviewSection` 组件测试
 - [x] 5.4 `StatusPanel.test.tsx` 更新:默认无治理证据渲染、verdict 不受治理 fixture 影响;`showGovernanceEvidence` 开启后恢复治理断言
 
-## 6. Verify
+## 6. 结果详情默认隐藏(第二轮追加)
 
-- [x] 6.1 `tsc --noEmit` 仅剩 2 个 HEAD 既有错误(`messagesRenderUtils.ts` 未使用 import,与本 change 无关);status-panel / client-ui-visibility / layout / governance / settings 相关 300+ 用例全绿;eslint 干净
-- [ ] 6.2 手工:默认打开「结果」tab 无治理证据、verdict 不受 `.artifacts` 影响;设置里打开开关后恢复
+- [x] 6.1 `clientUiVisibility.ts`:新增 control `bottomActivity.checkpointDetails`,默认 `false`,注册表 + panel controls 列表补登记;i18n zh / en + vitest.setup.ts 测试字典
+- [x] 6.2 `useLayoutNodes.tsx` 计算并传 `showCheckpointDetails`;`StatusPanel` 新增同名 prop(默认 `true`,保证 popover 与直渲染测试不变),门控 `CostBudgetSection` + `CheckpointPanel` 渲染
+- [x] 6.3 tab badge verdict 保持照常计算(`buildCheckpointViewModel` 不受详情开关影响)
+
+## 7. Verify
+
+- [x] 7.1 `tsc --noEmit` 干净;status-panel / client-ui-visibility / layout / governance / settings 相关测试全绿;eslint 干净
+- [ ] 7.2 手工:默认打开「结果」tab 只剩会话概览;设置里打开「结果详情」后恢复完整 checkpoint 表面

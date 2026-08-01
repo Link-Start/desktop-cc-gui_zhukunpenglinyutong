@@ -108,6 +108,7 @@ describe("useClientUiVisibility", () => {
         panels: {},
         controls: {
           "topTool.clientDocumentation": false,
+          "bottomActivity.checkpointDetails": false,
           "bottomActivity.governanceEvidence": false,
         },
       },

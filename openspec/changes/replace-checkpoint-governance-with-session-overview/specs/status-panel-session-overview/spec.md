@@ -4,7 +4,20 @@
 
 ### Requirement: 结果 Tab MUST 默认展示会话概览 Section
 
-dock status panel 的「结果」tab MUST 在顶部常驻渲染会话概览 section(`SessionOverviewSection`),其全部字段 MUST 来自既有前端 store / props 的确定性派生,MUST NOT 新增 tauri command、MUST NOT 引入轮询、MUST NOT 依赖大模型生成。
+dock status panel 的「结果」tab MUST 在顶部常驻渲染会话概览 section(`SessionOverviewSection`),其全部字段 MUST 来自既有前端 store / props 的确定性派生,MUST NOT 新增 tauri command、MUST NOT 引入轮询、MUST NOT 依赖大模型生成。默认状态下「结果」tab MUST 只渲染会话概览:总结 hero、提示信号、验证 chips、文件变化、风险、建议动作、提交弹窗、Policy 审计与成本区 MUST 仅在用户通过 client UI visibility control `bottomActivity.checkpointDetails` 显式 opt-in 后渲染;无论开关状态如何,tab badge 的 checkpoint verdict MUST 照常计算。
+
+#### Scenario: 详情区默认隐藏
+
+- **WHEN** 用户从未启用 `bottomActivity.checkpointDetails` 可见性开关
+- **THEN** 「结果」tab MUST 只渲染会话概览
+- **AND** MUST NOT 渲染总结 hero、提示信号、验证 chips、文件变化、成本区、建议动作、提交弹窗或 Policy 审计
+- **AND** tab badge verdict MUST 仍由 `buildCheckpointViewModel` 照常计算
+
+#### Scenario: 开启后恢复完整结果表面
+
+- **WHEN** 用户在设置中启用 `bottomActivity.checkpointDetails`
+- **THEN** 「结果」tab MUST 恢复渲染成本区与完整 checkpoint 详情(含文件变化与提交流程)
+- **AND** 开关状态 MUST 经 client UI visibility store 持久化
 
 #### Scenario: 概览字段来源固定
 

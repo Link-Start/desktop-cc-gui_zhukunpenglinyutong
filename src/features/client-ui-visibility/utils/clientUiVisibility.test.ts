@@ -65,6 +65,33 @@ describe("clientUiVisibility", () => {
     ).toBe(false);
   });
 
+  it("keeps checkpoint details hidden by default and round-trips visibility", () => {
+    expect(
+      isClientUiControlVisible(
+        DEFAULT_CLIENT_UI_VISIBILITY_PREFERENCE,
+        "bottomActivity.checkpointDetails",
+      ),
+    ).toBe(false);
+
+    const enabled = setClientUiControlVisibility(
+      DEFAULT_CLIENT_UI_VISIBILITY_PREFERENCE,
+      "bottomActivity.checkpointDetails",
+      true,
+    );
+    expect(
+      isClientUiControlVisible(enabled, "bottomActivity.checkpointDetails"),
+    ).toBe(true);
+
+    const disabled = setClientUiControlVisibility(
+      enabled,
+      "bottomActivity.checkpointDetails",
+      false,
+    );
+    expect(
+      isClientUiControlVisible(disabled, "bottomActivity.checkpointDetails"),
+    ).toBe(false);
+  });
+
   it("ignores unknown keys while applying known booleans", () => {
     const preference = normalizeClientUiVisibilityPreference({
       panels: {
@@ -86,6 +113,7 @@ describe("clientUiVisibility", () => {
         "topTool.terminal": false,
         "topTool.clientDocumentation": true,
         "rightToolbar.projectMap": false,
+        "bottomActivity.checkpointDetails": false,
         "bottomActivity.governanceEvidence": false,
       },
     });
@@ -117,11 +145,15 @@ describe("clientUiVisibility", () => {
     expect(preference.controls).toEqual({
       "topTool.clientDocumentation": false,
       "topTool.terminal": false,
+      "bottomActivity.checkpointDetails": false,
       "bottomActivity.governanceEvidence": false,
     });
     expect(isClientUiControlVisible(preference, "topTool.clientDocumentation")).toBe(false);
     expect(
       isClientUiControlVisible(preference, "bottomActivity.governanceEvidence"),
+    ).toBe(false);
+    expect(
+      isClientUiControlVisible(preference, "bottomActivity.checkpointDetails"),
     ).toBe(false);
   });
 
@@ -136,6 +168,7 @@ describe("clientUiVisibility", () => {
     expect(preference.controls).toEqual({
       "topTool.clientDocumentation": false,
       "bottomActivity.checkpoint": false,
+      "bottomActivity.checkpointDetails": false,
       "bottomActivity.governanceEvidence": false,
     });
     expect(isClientUiControlVisible(preference, "bottomActivity.checkpoint")).toBe(false);
