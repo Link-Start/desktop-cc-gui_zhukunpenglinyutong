@@ -1022,12 +1022,20 @@ describe("resolveModelEffort / planComposerModelSelection", () => {
       clearUserSelectedModel: false,
     });
 
+    // 已收敛：再次规划必须返回 null，禁止等价 commit 叠满 update depth
     const second = planComposerModelSelection({
       ...input,
       selectedModelId: first?.nextModelId ?? null,
       selectedEffort: first?.nextEffort ?? null,
     });
-    expect(second).toEqual(first);
+    expect(second).toBeNull();
+
+    const third = planComposerModelSelection({
+      ...input,
+      selectedModelId: first?.nextModelId ?? null,
+      selectedEffort: first?.nextEffort ?? null,
+    });
+    expect(third).toBeNull();
   });
 });
 

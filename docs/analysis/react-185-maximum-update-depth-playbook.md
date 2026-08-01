@@ -141,6 +141,21 @@
 | **回归** | `useModels.test.tsx`；`app-shell.startup.test.tsx`（freeform + effort 修复且无 #185）；`useSelectedComposerSession.test.tsx`；`modelSelection.test.ts` |
 | **业务不变量** | Atomic picker / 自定义模型名 freeform **不得**被 repair 静默回退到 catalog default |
 
+### C-20260801-03 — Composer 栈残余：file-ref / merge 引用环 + plan 收敛卫生
+
+| 字段 | 内容 |
+|------|------|
+| **状态** | fixed（结构加固；**非** production 栈 1:1 红绿复现结案） |
+| **现象** | prod `errorClass: react-maximum-update-depth`；`appVersion: unknown`；全局 ErrorBoundary |
+| **Bundle / 栈** | `App-Bn4fZysL.js`；componentStack `s4t`=Composer、`c4t`=ActiveCanvasComposer、`u$t`/`_Wt`=AppShell 布局 |
+| **Owner** | **主：`mergeInlineFileReferences` / `mergeUniqueNames` + Composer file-ref effect**；辅：`planComposerModelSelection` null 收敛、creation engine publish 门闩 |
+| **触发条件** | 主会话画布 Composer 热路径；内联文件 token settle 后父树高频 rerender，或 extract 仍吐出已选 id 时 effect 换数组引用自反馈 |
+| **根因（AP-02 主 / 加固辅）** | **主因（可测）**：file-ref effect deps 含 `selectedInlineFileReferences`，旧逻辑无新增仍 `return [...prev]` / `mergeUniqueNames` 换引用 → effect 再入。**辅（defense-in-depth）**：已收敛 plan 仍返回对象（commit 本已幂等，单独通常不致 #185）；Home creation engine 等价回写 |
+| **修复** | 抽出 `mergeInlineFileReferences` 无新增保引用；`mergeUniqueNames` 同；plan 已收敛 → `null`；creation engine ref 门闩；status panel expand 函数式等价值（收益低） |
+| **回归** | `composerFileReferences.test.ts`（含 30 次 extract→merge 同引用）；`inlineSelections.test.ts`；`Composer.file-reference-token.test.tsx`（token settle + 20 次 rerender 无 #185；engine 不重复 publish）；`useModels.test.tsx`（plan 二次 null） |
+| **关联历史** | C-20260801-01/02 之后仍在含修复的 `App-Bn4fZysL` 上复现 → Composer 侧 AP-02 残余，**不是** effort 双写回退 |
+| **Review 要点** | 勿把 plan null 说成已证实的唯一根因；production 栈仍缺 1:1 复现 fixture，靠 AP-02 路径回归 + 手测 |
+
 ---
 
 ## 6. 新 Case 追加模板
@@ -197,3 +212,4 @@ OpenSpec / 代码中已出现的 #185 类修复（便于对照，**不等于本 
 | 2026-08-01 | 初版：协议 + AP 目录 + C-20260801-01（useModels）+ backlog |
 | 2026-08-01 | 校准：C-20260801-01 补 fix commit `4c5e97c8e`；挂 analysis 索引 |
 | 2026-08-01 | C-20260801-02：B1 layout self-deps 关闭；freeform repair 语义钉死；Collapsible 测量加固 |
+| 2026-08-02 | C-20260801-03：`App-Bn4fZysL` Composer 栈残余——plan null 收敛 + Composer 引用稳定 setState |

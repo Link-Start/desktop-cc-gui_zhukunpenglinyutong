@@ -57,14 +57,17 @@ export function mergeUniqueNames(previous: string[], incoming: string[]) {
   }
   const seen = new Set(previous);
   const merged = [...previous];
+  let didAppend = false;
   for (const name of incoming) {
     if (seen.has(name)) {
       continue;
     }
     seen.add(name);
     merged.push(name);
+    didAppend = true;
   }
-  return merged;
+  // 无新名时保持原引用，避免 setState(新数组) → effect 再跑 → #185
+  return didAppend ? merged : previous;
 }
 
 export function extractInlineSelections(
