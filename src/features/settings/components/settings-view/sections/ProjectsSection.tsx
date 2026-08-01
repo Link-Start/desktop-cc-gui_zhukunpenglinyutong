@@ -105,10 +105,6 @@ export function ProjectsSection({
 
   return (
     <section className="settings-section">
-      <div className="settings-section-title">{t("settings.projectsTitle")}</div>
-      <div className="settings-section-subtitle">
-        {t("settings.projectsDescription")}
-      </div>
       <div className="settings-subsection-header">
         <div className="settings-subsection-title">{t("settings.groupsTitle")}</div>
         <Popover open={createGroupOpen} onOpenChange={setCreateGroupOpen}>
