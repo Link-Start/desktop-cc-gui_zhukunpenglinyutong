@@ -441,3 +441,55 @@ VendorModelManagerDialogHost 在 AppShell 打开时未加载 settings.css，导�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1264: 供应商空模型兜底与自定义模型思考强度默认档
+
+**Date**: 2026-08-01
+**Task**: 供应商空模型兜底与自定义模型思考强度默认档
+**Branch**: `feature/v-0714`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Feature | Description |
+|---------|-------------|
+| Catalog 刷新 | 供应商 add/update/delete/switch/settings-json-saved/cc-switch import 后失效模块级 catalog 缓存，picker 监听事件重置投影并重拉 provider list，无需重启见新渠道 |
+| 空模型兜底 | managed 渠道空 catalog 回退读取供应商配置默认模型（Claude ANTHROPIC_*/DEFAULT_*、Kimi/Grok model、OpenCode models[0]），兜底 row 不写模块级 cache |
+| 空态引导 | 子菜单空模型渠道两行引导文案 + 保留「添加模型」入口，全 10 locale 补齐 |
+| Reasoning 默认档 | 自定义 Codex 模型暴露 low/medium/high/xhigh（默认 medium），选择/切渠道播种 reasoning，用户已选 effort 不覆盖 |
+
+**OpenSpec**:
+- `enhance-provider-empty-model-and-custom-reasoning`（proposal/design/tasks/specs，`openspec validate --strict` 通过）
+
+**关键文件**:
+- `src/features/models/customModelReasoning.ts`（新增）
+- `src/features/composer/components/ChatInputBox/hooks/useProviderTargetCatalogOwners.ts`
+- `src/features/composer/components/ChatInputBox/selectors/ModelSelect.tsx`
+- `src/features/models/hooks/useModels.ts`
+- 五个 vendor management hooks + `VendorSettingsPanel.tsx`
+- i18n：10 个 locale 的 `models.ts`
+
+**验证**: ChatInputBox/models/vendors/i18n 631 个测试全绿；tsc 仅剩 3 个既有错误（useAppShellLayoutNodesSection 171/176、Composer 1053）；ESLint 与 diff-check 干净。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b92a3c92b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

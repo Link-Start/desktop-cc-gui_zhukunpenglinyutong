@@ -3,7 +3,7 @@
 本页是 `mossx` OpenSpec proposal 的当前入口。它只维护 active change 的执行状态，并把 archived change 路由到完整历史索引；详细治理快照仍以 [`../project.md`](../project.md) 为准。
 
 - Updated At: `2026-07-31`
-- Active proposals: `28`
+- Active proposals: `29`
 - Archived proposals: `741`
 - Main capability specs: `438`
 
@@ -38,6 +38,7 @@
 | [`move-mcp-inventory-to-extensions`](move-mcp-inventory-to-extensions/proposal.md)                                                   |    12/12 | 追溯提案（已随 `101a19abb` 合入）；archive 决策                   | [tasks](move-mcp-inventory-to-extensions/tasks.md) · [specs](move-mcp-inventory-to-extensions/specs/)                                                                                                                                                                                                                               |
 | [`reduce-client-polling-overhead`](reduce-client-polling-overhead/proposal.md)                                                       |    10/11 | 实机 smoke：worktree/kanban/output/dock 四条路径                  | [design](reduce-client-polling-overhead/design.md) · [tasks](reduce-client-polling-overhead/tasks.md) · [specs](reduce-client-polling-overhead/specs/) · [verification](reduce-client-polling-overhead/verification.md)                                                                                                             |
 | [`stabilize-client-runtime-and-diagnostics`](stabilize-client-runtime-and-diagnostics/proposal.md)                                   |    21/22 | Quantified frame / first-delta trace retention                    | [design](stabilize-client-runtime-and-diagnostics/design.md) · [tasks](stabilize-client-runtime-and-diagnostics/tasks.md) · [specs](stabilize-client-runtime-and-diagnostics/specs/) · [verification](stabilize-client-runtime-and-diagnostics/verification.md)                                                                     |
+| [`enhance-provider-empty-model-and-custom-reasoning`](enhance-provider-empty-model-and-custom-reasoning/proposal.md)                       |      9/9 | implemented，待人工 review / verify                              | [proposal](enhance-provider-empty-model-and-custom-reasoning/proposal.md) · [design](enhance-provider-empty-model-and-custom-reasoning/design.md) · [tasks](enhance-provider-empty-model-and-custom-reasoning/tasks.md) · [specs](enhance-provider-empty-model-and-custom-reasoning/specs/)                                           |
 | [`add-message-file-edit-scene-collapse`](add-message-file-edit-scene-collapse/proposal.md)                                           |      4/4 | implemented；待人工幕布 smoke / verify / archive                  | [proposal](add-message-file-edit-scene-collapse/proposal.md) · [design](add-message-file-edit-scene-collapse/design.md) · [tasks](add-message-file-edit-scene-collapse/tasks.md) · [specs](add-message-file-edit-scene-collapse/specs/)                                                                                             |
 
 ## Archived Proposals

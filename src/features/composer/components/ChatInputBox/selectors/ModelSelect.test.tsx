@@ -1576,3 +1576,151 @@ describe("resolveActiveProviderProfileId", () => {
     expect(resolveActiveProviderProfileId("gemini", null)).toBeNull();
   });
 });
+
+describe("ModelSelect empty channel models and custom reasoning defaults", () => {
+  function openPickerSubmenu(name: RegExp) {
+    const trigger = screen.getByRole("menuitem", { name });
+    fireEvent.click(trigger);
+    return trigger;
+  }
+
+  function buildGroupsWithEmptyCodex(): ProviderTargetGroup[] {
+    const groups = buildAtomicGroups();
+    groups[1].profiles[0].models = [];
+    return groups;
+  }
+
+  it("shows two-line guidance and keeps the add-model entry when a channel has no models", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onAddModel = vi.fn();
+
+    render(
+      <ModelSelect
+        value="claude-opus-4-8"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        onAddModel={onAddModel}
+        onExecutionTargetChange={vi.fn()}
+        executionTarget={atomicExecutionTarget}
+        targetGroups={buildGroupsWithEmptyCodex()}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "chat.currentModel:Opus 4.8" }),
+    );
+    await screen.findByRole("menuitem", { name: /Claude Code/ });
+    openPickerSubmenu(/Codex CLI/);
+
+    const emptyRow = document.querySelector(
+      "[data-empty-channel-models='codex']",
+    );
+    expect(emptyRow).toBeTruthy();
+    expect(emptyRow?.textContent).toContain("models.emptyChannelModelsTitle");
+    expect(emptyRow?.textContent).toContain("models.emptyChannelModelsHint");
+    expect(emptyRow?.getAttribute("aria-disabled")).toBe("true");
+
+    // 「添加模型」入口仍在底栏，引导文案指向它。
+    const footer = document.querySelector(
+      "[data-submenu-footer='codex']",
+    ) as HTMLElement;
+    expect(footer).toBeTruthy();
+    expect(within(footer).getByRole("button", { name: "models.addModel" })).toBeTruthy();
+  });
+
+  it("seeds default medium reasoning when a custom Codex model is picked", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onExecutionTargetChange = vi.fn();
+    const groups = buildAtomicGroups();
+    groups[1].profiles[0].models = [
+      {
+        id: "my-custom-model",
+        label: "My Custom Model",
+        source: "custom",
+      },
+    ];
+
+    render(
+      <ModelSelect
+        value="claude-opus-4-8"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        onExecutionTargetChange={onExecutionTargetChange}
+        executionTarget={atomicExecutionTarget}
+        targetGroups={groups}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "chat.currentModel:Opus 4.8" }),
+    );
+    await screen.findByRole("menuitem", { name: /Codex CLI/ });
+    openPickerSubmenu(/Codex CLI/);
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: /My Custom Model/ }),
+    );
+
+    expect(onExecutionTargetChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        engine: "codex",
+        providerProfileId: null,
+        modelCatalogEntryId: "my-custom-model",
+        model: "my-custom-model",
+        providerProfileNameSnapshot: "Local disk",
+        reasoning: { effort: "medium" },
+      }),
+    );
+  });
+
+  it("keeps the user-selected effort when switching to a custom Codex model", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onExecutionTargetChange = vi.fn();
+    const groups = buildAtomicGroups();
+    groups[1].profiles[0].models = [
+      {
+        id: "my-custom-model",
+        label: "My Custom Model",
+        source: "custom",
+      },
+    ];
+
+    render(
+      <ModelSelect
+        value="my-custom-model"
+        currentProvider="codex"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        onExecutionTargetChange={onExecutionTargetChange}
+        executionTarget={{
+          engine: "codex",
+          providerProfileId: null,
+          modelCatalogEntryId: "gpt-5.7",
+          model: "gpt-5.7",
+          providerProfileNameSnapshot: "Local disk",
+          providerProfileSource: "disk",
+          reasoning: { effort: "high" },
+        }}
+        targetGroups={groups}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "chat.currentModel:My Custom Model" }),
+    );
+    await screen.findByRole("menuitem", { name: /Codex CLI/ });
+    openPickerSubmenu(/Codex CLI/);
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: /My Custom Model/ }),
+    );
+
+    expect(onExecutionTargetChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        engine: "codex",
+        providerProfileId: null,
+        reasoning: { effort: "high" },
+      }),
+    );
+  });
+});

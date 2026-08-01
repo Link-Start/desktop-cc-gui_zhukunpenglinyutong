@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   isProviderProfileEngine,
+  notifyProviderTargetCatalogChanged,
   resetProviderTargetCatalogForTests,
   useAtomicProviderTargetCatalog,
 } from "./useProviderTargetCatalogOwners";
@@ -991,4 +992,134 @@ describe("Provider target catalog owners", () => {
       ]);
     });
   });
+
+  it("falls back to the configured default model when a managed catalog is empty", async () => {
+    getKimiProvidersMock.mockResolvedValue([
+      {
+        id: "kimi-c",
+        name: "Kimi C",
+        baseUrl: "",
+        apiKey: "",
+        model: "kimi-k3",
+      },
+    ]);
+    getEngineModelsMock.mockResolvedValueOnce([]);
+    const { result } = renderHook(() =>
+      useAtomicProviderTargetCatalog({
+        enabled: true,
+        mode: "shared",
+        currentProvider: "kimi",
+        currentProviderProfileId: "kimi-c",
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "source only",
+      }),
+    );
+
+    await act(async () => {
+      await result.current.ensureProfiles();
+      await result.current.ensureModels("kimi", "kimi-c");
+    });
+
+    expect(getEngineModelsMock).toHaveBeenCalledWith("kimi", {
+      providerProfileId: "kimi-c",
+    });
+    expect(
+      result.current.groups
+        .find((group) => group.providerId === "kimi")
+        ?.profiles.find((profile) => profile.id === "kimi-c")?.models,
+    ).toEqual([
+      expect.objectContaining({
+        id: "kimi-k3",
+        model: "kimi-k3",
+        source: "provider-config",
+        providerProfileId: "kimi-c",
+      }),
+    ]);
+  });
+
+  it("does not fall back when the managed catalog is non-empty", async () => {
+    getKimiProvidersMock.mockResolvedValueOnce([
+      {
+        id: "kimi-c",
+        name: "Kimi C",
+        baseUrl: "",
+        apiKey: "",
+        model: "kimi-k3",
+      },
+    ]);
+    getEngineModelsMock.mockResolvedValueOnce([
+      {
+        id: "kimi-real",
+        model: "kimi-real-runtime",
+        displayName: "Kimi real",
+        description: "",
+        isDefault: true,
+        providerProfileId: "kimi-c",
+      },
+    ]);
+    const { result } = renderHook(() =>
+      useAtomicProviderTargetCatalog({
+        enabled: true,
+        mode: "shared",
+        currentProvider: "kimi",
+        currentProviderProfileId: "kimi-c",
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "source only",
+      }),
+    );
+
+    await act(async () => {
+      await result.current.ensureProfiles();
+      await result.current.ensureModels("kimi", "kimi-c");
+    });
+
+    expect(
+      result.current.groups
+        .find((group) => group.providerId === "kimi")
+        ?.profiles.find((profile) => profile.id === "kimi-c")?.models,
+    ).toEqual([
+      expect.objectContaining({ id: "kimi-real", model: "kimi-real-runtime" }),
+    ]);
+    expect(getKimiProvidersMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes profiles and resets loaded models after provider catalog invalidation", async () => {
+    const { result } = renderHook(() =>
+      useAtomicProviderTargetCatalog({
+        enabled: true,
+        mode: "shared",
+        currentProvider: "codex",
+        currentProviderProfileId: "codex-b",
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "source only",
+      }),
+    );
+
+    await act(async () => {
+      await result.current.ensureProfiles();
+      await result.current.ensureModels("codex", "codex-b");
+    });
+    expect(getClaudeProvidersMock).toHaveBeenCalledTimes(1);
+    expect(
+      result.current.groups
+        .find((group) => group.providerId === "codex")
+        ?.profiles.find((profile) => profile.id === "codex-b")?.models,
+    ).toEqual([
+      expect.objectContaining({ id: "same-model", label: "Scoped model" }),
+    ]);
+
+    await act(async () => {
+      notifyProviderTargetCatalogChanged();
+      await result.current.ensureProfiles();
+    });
+
+    expect(getClaudeProvidersMock).toHaveBeenCalledTimes(2);
+    // 失效后模型投影被清空，重新 ensureModels 前为空。
+    expect(
+      result.current.groups
+        .find((group) => group.providerId === "codex")
+        ?.profiles.find((profile) => profile.id === "codex-b")?.models,
+    ).toEqual([]);
+  });
+
 });

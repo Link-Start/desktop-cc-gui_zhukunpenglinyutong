@@ -9,6 +9,7 @@ import {
   switchGrokProvider,
 } from "../../../services/tauri";
 import { VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT } from "../vendorActiveProviderEvents";
+import { notifyProviderTargetCatalogChanged } from "../../composer/components/ChatInputBox/hooks/useProviderTargetCatalogOwners";
 
 export interface GrokProviderDialogState {
   isOpen: boolean;
@@ -137,6 +138,7 @@ export function useGrokProviderManagement() {
         setGrokProviderDialog({ isOpen: false, provider: null });
         setGrokProviderError(null);
         await loadGrokProviders();
+        notifyProviderTargetCatalogChanged();
       } catch (error) {
         setGrokProviderError(
           getErrorMessage(error, "Failed to save Grok provider."),
@@ -152,6 +154,7 @@ export function useGrokProviderManagement() {
         await switchGrokProvider(id);
         setGrokProviderError(null);
         await loadGrokProviders();
+        notifyProviderTargetCatalogChanged();
       } catch (error) {
         setGrokProviderError(
           getErrorMessage(error, "Failed to switch Grok provider."),
@@ -175,6 +178,7 @@ export function useGrokProviderManagement() {
     try {
       const result = await deleteGrokProvider(provider.id);
       await loadGrokProviders();
+      notifyProviderTargetCatalogChanged();
       setGrokProviderError(
         result.status === "partial-warning"
           ? result.warning ?? "Grok provider deleted with residual config."

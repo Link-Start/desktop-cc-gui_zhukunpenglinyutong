@@ -9,6 +9,7 @@ import {
   switchKimiProvider,
 } from "../../../services/tauri";
 import { VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT } from "../vendorActiveProviderEvents";
+import { notifyProviderTargetCatalogChanged } from "../../composer/components/ChatInputBox/hooks/useProviderTargetCatalogOwners";
 
 export interface KimiProviderDialogState {
   isOpen: boolean;
@@ -137,6 +138,7 @@ export function useKimiProviderManagement() {
         setKimiProviderDialog({ isOpen: false, provider: null });
         setKimiProviderError(null);
         await loadKimiProviders();
+        notifyProviderTargetCatalogChanged();
       } catch (error) {
         setKimiProviderError(
           getErrorMessage(error, "Failed to save Kimi provider."),
@@ -152,6 +154,7 @@ export function useKimiProviderManagement() {
         await switchKimiProvider(id);
         setKimiProviderError(null);
         await loadKimiProviders();
+        notifyProviderTargetCatalogChanged();
       } catch (error) {
         setKimiProviderError(
           getErrorMessage(error, "Failed to switch Kimi provider."),
@@ -175,6 +178,7 @@ export function useKimiProviderManagement() {
     try {
       const result = await deleteKimiProvider(provider.id);
       await loadKimiProviders();
+      notifyProviderTargetCatalogChanged();
       setKimiProviderError(
         result.status === "partial-warning"
           ? result.warning ?? "Kimi provider deleted with residual config."

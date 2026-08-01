@@ -17,6 +17,8 @@ const models = {
     "reloadingConfig": "कॉन्फ़िग फिर से लोड हो रहा है...",
     "discoverModels": "CLI से मॉडल खोजें",
     "discoveringModels": "मॉडल खोजे जा रहे हैं...",
+    "emptyChannelModelsTitle": "इस प्रदाता के पास अभी कोई मॉडल नहीं है",
+    "emptyChannelModelsHint": "नीचे «मॉडल जोड़ें» पर क्लिक करके कस्टम मॉडल जोड़ें",
     "refreshConfigFailed": "रीफ़्रेश विफल: {{message}}",
         "claude": {
       "fable5": {

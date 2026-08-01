@@ -14,6 +14,7 @@ import {
   reorderCodexProviders,
 } from "../../../services/tauri";
 import { VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT } from "../vendorActiveProviderEvents";
+import { notifyProviderTargetCatalogChanged } from "../../composer/components/ChatInputBox/hooks/useProviderTargetCatalogOwners";
 
 export interface CodexProviderDialogState {
   isOpen: boolean;
@@ -254,6 +255,7 @@ export function useCodexProviderManagement() {
         setCodexProviderDialog({ isOpen: false, provider: null });
         setCodexProviderError(null);
         await loadCodexProviders();
+        notifyProviderTargetCatalogChanged();
       } catch (error) {
         setCodexProviderError(
           getErrorMessage(error, "Failed to save Codex provider."),
@@ -269,6 +271,7 @@ export function useCodexProviderManagement() {
         await switchCodexProvider(id);
         setCodexProviderError(null);
         await loadCodexProviders();
+        notifyProviderTargetCatalogChanged();
       } catch (error) {
         setCodexProviderError(
           getErrorMessage(error, "Failed to switch Codex provider."),
@@ -326,6 +329,7 @@ export function useCodexProviderManagement() {
       await deleteCodexProvider(provider.id);
       setCodexProviderError(null);
       await loadCodexProviders();
+      notifyProviderTargetCatalogChanged();
     } catch (error) {
       setCodexProviderError(
         getErrorMessage(error, "Failed to delete Codex provider."),

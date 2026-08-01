@@ -15,6 +15,10 @@ import {
   validateCodexCustomModels,
 } from "../../composer/types/provider";
 import { startupOrchestrator } from "../../startup-orchestration/utils/startupOrchestrator";
+import {
+  CUSTOM_MODEL_DEFAULT_REASONING_EFFORT,
+  CUSTOM_MODEL_SUPPORTED_REASONING_OPTIONS,
+} from "../customModelReasoning";
 
 type UseModelsOptions = {
   activeWorkspace: WorkspaceInfo | null;
@@ -127,7 +131,16 @@ const readCustomCodexModelOptions = (): ModelOption[] => {
       return [];
     }
     return validateCodexCustomModels(JSON.parse(stored)).map((model) =>
-      createModelOption(model.id, model.label, model.description ?? "", "custom"),
+      // 用户管理自定义模型：无 runtime capability 来源，统一暴露主流默认档
+      // （enrichScopedCodexReasoningMetadata 的 authoritative 匹配仍优先覆盖）。
+      createModelOption(
+        model.id,
+        model.label,
+        model.description ?? "",
+        "custom",
+        CUSTOM_MODEL_SUPPORTED_REASONING_OPTIONS,
+        CUSTOM_MODEL_DEFAULT_REASONING_EFFORT,
+      ),
     );
   } catch {
     return [];

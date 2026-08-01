@@ -15,6 +15,7 @@ import {
   syncModelMappingFromProviderEnv,
 } from "../../models/constants";
 import { VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT } from "../vendorActiveProviderEvents";
+import { notifyProviderTargetCatalogChanged } from "../../composer/components/ChatInputBox/hooks/useProviderTargetCatalogOwners";
 
 export interface ProviderDialogState {
   isOpen: boolean;
@@ -200,7 +201,9 @@ export function useProviderManagement() {
   }, []);
 
   const handleClaudeSettingsJsonSaved = useCallback(() => {
-    void Promise.all([loadProviders(), loadCurrentConfig()]);
+    void Promise.all([loadProviders(), loadCurrentConfig()]).then(() => {
+      notifyProviderTargetCatalogChanged();
+    });
   }, [loadProviders, loadCurrentConfig]);
 
   const handleSaveProvider = useCallback(
@@ -259,6 +262,7 @@ export function useProviderManagement() {
         setProviderDialog({ isOpen: false, provider: null });
         await Promise.all([loadProviders(), loadCurrentConfig()]);
         setProviderError(null);
+        notifyProviderTargetCatalogChanged();
         return { ok: true } as const;
       } catch (cause) {
         const error =
@@ -333,6 +337,7 @@ export function useProviderManagement() {
         await switchClaudeProvider(id);
         await Promise.all([loadProviders(), loadCurrentConfig()]);
         setProviderError(null);
+        notifyProviderTargetCatalogChanged();
         return { ok: true } as const;
       } catch (cause) {
         const error = providerActionError("switch", cause);
@@ -351,6 +356,7 @@ export function useProviderManagement() {
       await deleteClaudeProvider(provider.id);
       await Promise.all([loadProviders(), loadCurrentConfig()]);
       setProviderError(null);
+      notifyProviderTargetCatalogChanged();
       setDeleteConfirm({ isOpen: false, provider: null });
       return { ok: true } as const;
     } catch (cause) {
