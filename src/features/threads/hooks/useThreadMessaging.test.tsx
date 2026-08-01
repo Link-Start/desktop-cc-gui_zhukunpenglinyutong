@@ -146,6 +146,42 @@ describe("useThreadMessaging", () => {
     expect(engineSendMessage).not.toHaveBeenCalled();
   });
 
+  it("sends a Native custom Codex model with null effort through sendUserMessage", async () => {
+    const threadId = "thread-native-custom-codex";
+    const { result } = makeThreadMessagingHook("codex", {
+      activeThreadId: threadId,
+      threadEngineById: { [threadId]: "codex" },
+      resolveComposerSelection: () => ({
+        id: "gpt-5.3-codex-spark",
+        model: "gpt-5.3-codex-spark",
+        source: "custom",
+        providerProfileId: null,
+        effort: null,
+        collaborationMode: null,
+      }),
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        threadId,
+        "hello native custom model",
+      );
+    });
+
+    expect(sendUserMessage).toHaveBeenCalledWith(
+      workspace.id,
+      threadId,
+      "hello native custom model",
+      expect.objectContaining({
+        model: "gpt-5.3-codex-spark",
+        effort: null,
+      }),
+    );
+    expect(sendSharedSessionTurnRouted).not.toHaveBeenCalled();
+    expect(engineSendMessage).not.toHaveBeenCalled();
+  });
+
   it("treats only non-empty image entries as attachment content for grok", async () => {
     const { result } = makeThreadMessagingHook("grok", {
       activeThreadId: "grok:session-1",

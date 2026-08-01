@@ -24,16 +24,24 @@ import {
 
 interface EditToolBlockProps {
   item: Extract<ConversationItem, { kind: 'tool' }>;
+  onOpenDiffPath?: (path: string) => void;
 }
 
 export const EditToolBlock = memo(function EditToolBlock({
   item,
+  onOpenDiffPath,
 }: EditToolBlockProps) {
   const args = useMemo(() => parseToolArgs(item.detail), [item.detail]);
   const nestedInput = useMemo(() => asRecord(args?.input), [args]);
   const nestedArgs = useMemo(() => asRecord(args?.arguments), [args]);
 
-  const filePath = pickStringField(args, nestedInput, nestedArgs, EDIT_PATH_KEYS);
+  // Prefer structured changes[0] path when present (should be rare for this block;
+  // multi-file fileChange is owned by GenericToolBlock / EditToolGroupBlock).
+  const changePath =
+    item.changes?.find((change) => Boolean(change.path?.trim()))?.path?.trim() ?? "";
+
+  const filePath =
+    pickStringField(args, nestedInput, nestedArgs, EDIT_PATH_KEYS) || changePath;
 
   const { diff, hasStructuredDiff } = useMemo(() => {
     if (!args && !nestedInput && !nestedArgs) {
@@ -63,6 +71,10 @@ export const EditToolBlock = memo(function EditToolBlock({
     [diff.lines],
   );
 
+  if (!filePath) {
+    return null;
+  }
+
   return (
     <FileChangeRow
       filePath={filePath}
@@ -71,6 +83,7 @@ export const EditToolBlock = memo(function EditToolBlock({
       status={status}
       canExpand={canExpand}
       loadDiff={hasInlineDiff ? loadDiff : undefined}
+      onOpenDiffPath={onOpenDiffPath}
       fallbackBody={
         !hasInlineDiff && item.output ? (
           <pre className="scrollable m-0 max-h-[300px] overflow-auto whitespace-pre-wrap break-words p-2.5 font-mono text-xs text-muted-foreground">

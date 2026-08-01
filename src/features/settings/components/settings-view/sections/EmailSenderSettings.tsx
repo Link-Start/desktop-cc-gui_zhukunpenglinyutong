@@ -28,16 +28,6 @@ import {
   updateEmailInboundSettings,
   updateEmailSenderSettings,
 } from "@/services/tauri";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 
 type EmailSenderSettingsProps = {
@@ -517,606 +507,739 @@ export function EmailSenderSettings({
   }, []);
 
   return (
-    <div className="settings-email-section">
-      <div className="settings-section-title">{t("settings.emailTitle")}</div>
-      <div className="settings-section-subtitle">{t("settings.emailDescription")}</div>
+    <div className="settings-basic-email settings-basic-surface settings-email-section">
+      <div className="settings-pref-card-head settings-email-section-head">
+        <div className="settings-pref-title">{t("settings.emailTitle")}</div>
+        <div className="settings-pref-desc">{t("settings.emailDescription")}</div>
+      </div>
 
-      <div className="settings-basic-tabs" role="tablist" aria-label={t("settings.emailTitle")}>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "docs"}
-          className={`settings-basic-tab ${activeTab === "docs" ? "active" : ""}`}
-          onClick={() => setActiveTab("docs")}
-        >
-          <BookOpen className="settings-basic-tab-icon" aria-hidden />
-          {t("settings.emailDocsTab")}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "send"}
-          className={`settings-basic-tab ${activeTab === "send" ? "active" : ""}`}
-          onClick={() => setActiveTab("send")}
-        >
-          <Send className="settings-basic-tab-icon" aria-hidden />
-          {t("settings.emailSendConfigTab")}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "inbound"}
-          className={`settings-basic-tab ${activeTab === "inbound" ? "active" : ""}`}
-          onClick={() => setActiveTab("inbound")}
-        >
-          <Inbox className="settings-basic-tab-icon" aria-hidden />
-          {t("settings.emailInboundTab")}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "sessions"}
-          className={`settings-basic-tab ${activeTab === "sessions" ? "active" : ""}`}
-          onClick={() => setActiveTab("sessions")}
-        >
-          <Mail className="settings-basic-tab-icon" aria-hidden />
-          {t("settings.emailMailSessionsTab")}
-        </button>
+      <div
+        className="settings-email-seg-tabs"
+        role="tablist"
+        aria-label={t("settings.emailTitle")}
+      >
+        {(
+          [
+            ["docs", BookOpen, t("settings.emailDocsTab")],
+            ["send", Send, t("settings.emailSendConfigTab")],
+            ["inbound", Inbox, t("settings.emailInboundTab")],
+            ["sessions", Mail, t("settings.emailMailSessionsTab")],
+          ] as const
+        ).map(([id, Icon, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === id}
+            className={`settings-email-seg-tab${activeTab === id ? " is-active" : ""}`}
+            onClick={() => setActiveTab(id)}
+          >
+            <Icon className="settings-email-seg-tab-icon" size={14} aria-hidden />
+            {label}
+          </button>
+        ))}
       </div>
 
       {activeTab === "docs" ? (
-        <Card className="settings-basic-group-card settings-basic-shadcn-card settings-email-card">
-          <CardHeader>
-            <CardTitle className="settings-toggle-title">{t("settings.emailDocsTitle")}</CardTitle>
-            <CardDescription>{t("settings.emailDocsDesc")}</CardDescription>
-          </CardHeader>
-          <CardContent className="settings-basic-sounds-card-content">
-            <div className="settings-form-grid">
-              <div className="settings-field">
-                <div className="settings-toggle-title">{t("settings.emailDocsPurposeTitle")}</div>
-                <div className="settings-help">{t("settings.emailDocsPurposeBody")}</div>
-              </div>
-              <div className="settings-field">
-                <div className="settings-toggle-title">{t("settings.emailDocsPrepTitle")}</div>
-                <ol className="settings-help">
-                  {EMAIL_DOCS_PREP_STEP_KEYS.map((key) => (
-                    <li key={key}>{t(key)}</li>
-                  ))}
-                </ol>
-              </div>
-              <div className="settings-field">
-                <div className="settings-toggle-title">{t("settings.emailDocsSendTitle")}</div>
-                <ol className="settings-help">
-                  {EMAIL_DOCS_SEND_STEP_KEYS.map((key) => (
-                    <li key={key}>{t(key)}</li>
-                  ))}
-                </ol>
-              </div>
-              <div className="settings-field">
-                <div className="settings-toggle-title">{t("settings.emailDocsInboundTitle")}</div>
-                <ol className="settings-help">
-                  {EMAIL_DOCS_INBOUND_STEP_KEYS.map((key) => (
-                    <li key={key}>{t(key)}</li>
-                  ))}
-                </ol>
-              </div>
-              <div className="settings-field">
-                <div className="settings-toggle-title">{t("settings.emailDocsAfterSetupTitle")}</div>
-                <ol className="settings-help">
-                  {EMAIL_DOCS_USAGE_STEP_KEYS.map((key) => (
-                    <li key={key}>{t(key)}</li>
-                  ))}
-                </ol>
-              </div>
-              <div className="settings-field">
-                <div className="settings-toggle-title">{t("settings.emailDocsExamplesTitle")}</div>
-                <pre className="settings-help settings-sound-hint settings-sound-hint-shadcn">
-                  <code>{t("settings.emailDocsExampleNext")}</code>
-                </pre>
-                <pre className="settings-help settings-sound-hint settings-sound-hint-shadcn">
-                  <code>{t("settings.emailDocsExampleChange")}</code>
-                </pre>
-                <pre className="settings-help settings-sound-hint settings-sound-hint-shadcn">
-                  <code>{t("settings.emailDocsExampleStatus")}</code>
-                </pre>
-                <div className="settings-help">{t("settings.emailDocsExamplesBody")}</div>
-              </div>
-              <div className="settings-field">
-                <div className="settings-toggle-title">{t("settings.emailDocsSafetyTitle")}</div>
-                <ol className="settings-help">
-                  {EMAIL_DOCS_SAFETY_STEP_KEYS.map((key) => (
-                    <li key={key}>{t(key)}</li>
-                  ))}
-                </ol>
+        <div className="settings-basic-group-card settings-basic-group-card--list settings-pref-card settings-email-docs-card">
+          <div className="settings-pref-card-head">
+            <div className="settings-pref-title">{t("settings.emailDocsTitle")}</div>
+            <div className="settings-pref-desc">{t("settings.emailDocsDesc")}</div>
+          </div>
+          {(
+            [
+              ["settings.emailDocsPurposeTitle", "settings.emailDocsPurposeBody", null],
+              ["settings.emailDocsPrepTitle", null, EMAIL_DOCS_PREP_STEP_KEYS],
+              ["settings.emailDocsSendTitle", null, EMAIL_DOCS_SEND_STEP_KEYS],
+              ["settings.emailDocsInboundTitle", null, EMAIL_DOCS_INBOUND_STEP_KEYS],
+              ["settings.emailDocsAfterSetupTitle", null, EMAIL_DOCS_USAGE_STEP_KEYS],
+              ["settings.emailDocsSafetyTitle", null, EMAIL_DOCS_SAFETY_STEP_KEYS],
+            ] as const
+          ).map(([titleKey, bodyKey, steps]) => (
+            <div className="settings-pref-row settings-pref-row--stack" key={titleKey}>
+              <div className="settings-pref-meta">
+                <div className="settings-pref-title">{t(titleKey)}</div>
+                {bodyKey ? (
+                  <div className="settings-pref-desc">{t(bodyKey)}</div>
+                ) : null}
+                {steps ? (
+                  <ol className="settings-email-doc-list">
+                    {steps.map((key) => (
+                      <li key={key}>{t(key)}</li>
+                    ))}
+                  </ol>
+                ) : null}
               </div>
             </div>
-            <div className="settings-help settings-sound-hint settings-sound-hint-shadcn">
-              {t("settings.emailDocsSafetyHint")}
+          ))}
+          <div className="settings-pref-row settings-pref-row--stack">
+            <div className="settings-pref-meta">
+              <div className="settings-pref-title">
+                {t("settings.emailDocsExamplesTitle")}
+              </div>
+              <pre className="settings-email-code">
+                <code>{t("settings.emailDocsExampleNext")}</code>
+              </pre>
+              <pre className="settings-email-code">
+                <code>{t("settings.emailDocsExampleChange")}</code>
+              </pre>
+              <pre className="settings-email-code">
+                <code>{t("settings.emailDocsExampleStatus")}</code>
+              </pre>
+              <div className="settings-pref-desc">
+                {t("settings.emailDocsExamplesBody")}
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+          <div className="settings-pref-row settings-pref-row--hint">
+            <div className="settings-pref-hint">
+              <span className="settings-pref-hint-copy">
+                {t("settings.emailDocsSafetyHint")}
+              </span>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {activeTab === "send" ? (
-      <Card className={`settings-basic-group-card settings-basic-shadcn-card settings-email-card${draft.enabled ? " is-enabled" : ""}`}>
-        <CardHeader className="settings-card-switch-header">
-          <div className="settings-card-switch-meta">
-            <CardTitle className="settings-toggle-title">
-              <span className="settings-proxy-card-title">
-                <Mail size={16} aria-hidden />
-                {t("settings.emailEnableTitle")}
-              </span>
-            </CardTitle>
-            <CardDescription className="settings-toggle-subtitle">
-              {t("settings.emailEnableDesc")}
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent className="settings-basic-sounds-card-content">
-          <div className="settings-form-grid">
-            <div className="settings-field">
-              <Label htmlFor="email-enabled">{t("settings.emailEnableTitle")}</Label>
-              <div className="settings-proxy-input-row">
-                <Switch
-                  id="email-enabled"
-                  checked={draft.enabled}
-                  onCheckedChange={(enabled) => updateDraft({ enabled })}
-                  aria-label={t("settings.emailEnableTitle")}
-                />
-              </div>
+        <div
+          className={`settings-basic-group-card settings-basic-group-card--list settings-pref-card settings-email-form-card${
+            draft.enabled ? " is-enabled" : ""
+          }`}
+        >
+          <div className="settings-pref-row">
+            <div className="settings-pref-meta">
+              <div className="settings-pref-title">{t("settings.emailEnableTitle")}</div>
+              <div className="settings-pref-desc">{t("settings.emailEnableDesc")}</div>
             </div>
-            <div className="settings-field">
-              <Label htmlFor="email-provider">{t("settings.emailProvider")}</Label>
+            <div className="settings-pref-control">
+              <Switch
+                id="email-enabled"
+                checked={draft.enabled}
+                onCheckedChange={(enabled) => updateDraft({ enabled })}
+                aria-label={t("settings.emailEnableTitle")}
+              />
+            </div>
+          </div>
+
+          <div className="settings-email-form-grid">
+            <label className="settings-email-field" htmlFor="email-provider">
+              <span className="settings-email-field-label">{t("settings.emailProvider")}</span>
               <select
                 id="email-provider"
-                className="settings-select"
+                className="settings-email-control"
                 value={draft.provider}
-                onChange={(event) => updateDraft({ provider: event.target.value as EmailSenderProvider })}
+                onChange={(event) =>
+                  updateDraft({ provider: event.target.value as EmailSenderProvider })
+                }
               >
                 <option value="126">126</option>
                 <option value="163">163</option>
                 <option value="qq">QQ</option>
                 <option value="custom">{t("settings.emailProviderCustom")}</option>
               </select>
-            </div>
-            <div className="settings-field">
-              <Label htmlFor="email-sender-address">{t("settings.emailSenderAddress")}</Label>
-              <Input
+            </label>
+            <label className="settings-email-field" htmlFor="email-sender-address">
+              <span className="settings-email-field-label">
+                {t("settings.emailSenderAddress")}
+              </span>
+              <input
                 id="email-sender-address"
+                className="settings-email-control"
                 value={draft.senderEmail}
                 onChange={(event) => updateDraft({ senderEmail: event.target.value })}
                 placeholder="name@example.com"
               />
-            </div>
-            <div className="settings-field">
-              <Label htmlFor="email-sender-name">{t("settings.emailSenderName")}</Label>
-              <Input
+            </label>
+            <label className="settings-email-field" htmlFor="email-sender-name">
+              <span className="settings-email-field-label">
+                {t("settings.emailSenderName")}
+              </span>
+              <input
                 id="email-sender-name"
+                className="settings-email-control"
                 value={draft.senderName}
                 onChange={(event) => updateDraft({ senderName: event.target.value })}
                 placeholder="Moss"
               />
-            </div>
-            <div className="settings-field">
-              <Label htmlFor="email-username">{t("settings.emailUsername")}</Label>
-              <Input
+            </label>
+            <label className="settings-email-field" htmlFor="email-username">
+              <span className="settings-email-field-label">
+                {t("settings.emailUsername")}
+              </span>
+              <input
                 id="email-username"
+                className="settings-email-control"
                 value={draft.username}
                 onChange={(event) => updateDraft({ username: event.target.value })}
                 placeholder="name@example.com"
               />
-            </div>
-            <div className="settings-field">
-              <Label htmlFor="email-smtp-host">{t("settings.emailSmtpHost")}</Label>
-              <Input
+            </label>
+            <label className="settings-email-field" htmlFor="email-smtp-host">
+              <span className="settings-email-field-label">
+                {t("settings.emailSmtpHost")}
+              </span>
+              <input
                 id="email-smtp-host"
+                className="settings-email-control"
                 value={draft.smtpHost}
                 onChange={(event) => updateDraft({ smtpHost: event.target.value })}
                 disabled={smtpFieldsDisabled}
               />
-            </div>
-            <div className="settings-field">
-              <Label htmlFor="email-smtp-port">{t("settings.emailSmtpPort")}</Label>
-              <Input
+            </label>
+            <label className="settings-email-field" htmlFor="email-smtp-port">
+              <span className="settings-email-field-label">
+                {t("settings.emailSmtpPort")}
+              </span>
+              <input
                 id="email-smtp-port"
+                className="settings-email-control"
                 value={String(draft.smtpPort)}
-                onChange={(event) => updateDraft({ smtpPort: Number.parseInt(event.target.value, 10) || 0 })}
+                onChange={(event) =>
+                  updateDraft({
+                    smtpPort: Number.parseInt(event.target.value, 10) || 0,
+                  })
+                }
                 disabled={smtpFieldsDisabled}
                 inputMode="numeric"
               />
-            </div>
-            <div className="settings-field">
-              <Label htmlFor="email-security">{t("settings.emailSecurity")}</Label>
+            </label>
+            <label className="settings-email-field" htmlFor="email-security">
+              <span className="settings-email-field-label">
+                {t("settings.emailSecurity")}
+              </span>
               <select
                 id="email-security"
-                className="settings-select"
+                className="settings-email-control"
                 value={draft.security}
-                onChange={(event) => updateDraft({ security: event.target.value as EmailSenderSettingsModel["security"] })}
+                onChange={(event) =>
+                  updateDraft({
+                    security: event.target
+                      .value as EmailSenderSettingsModel["security"],
+                  })
+                }
                 disabled={smtpFieldsDisabled}
               >
                 <option value="ssl_tls">SSL/TLS</option>
                 <option value="start_tls">STARTTLS</option>
                 <option value="none">{t("settings.emailSecurityNone")}</option>
               </select>
-            </div>
-            <div className="settings-field">
-              <Label htmlFor="email-secret">{t("settings.emailSecret")}</Label>
-              <div className="settings-secret-input-wrap">
-                <Input
+            </label>
+            <label className="settings-email-field" htmlFor="email-secret">
+              <span className="settings-email-field-label">
+                {t("settings.emailSecret")}
+              </span>
+              <div className="settings-email-secret-wrap">
+                <input
                   id="email-secret"
-                  className="settings-secret-input"
+                  className="settings-email-control settings-email-secret-input"
                   type={secretVisible ? "text" : "password"}
                   value={secretDraft}
                   onChange={(event) => updateSecretDraft(event.target.value)}
-                  placeholder={secretConfigured ? t("settings.emailSecretConfigured") : t("settings.emailSecretPlaceholder")}
+                  placeholder={
+                    secretConfigured
+                      ? t("settings.emailSecretConfigured")
+                      : t("settings.emailSecretPlaceholder")
+                  }
                   autoComplete="off"
                 />
                 <button
                   type="button"
-                  className="settings-secret-toggle"
+                  className="settings-email-secret-toggle"
                   onClick={() => setSecretVisible((current) => !current)}
-                  aria-label={secretVisible ? t("settings.emailHideSecret") : t("settings.emailShowSecret")}
-                  title={secretVisible ? t("settings.emailHideSecret") : t("settings.emailShowSecret")}
+                  aria-label={
+                    secretVisible
+                      ? t("settings.emailHideSecret")
+                      : t("settings.emailShowSecret")
+                  }
+                  title={
+                    secretVisible
+                      ? t("settings.emailHideSecret")
+                      : t("settings.emailShowSecret")
+                  }
                 >
-                  {secretVisible ? <EyeOff size={16} aria-hidden /> : <Eye size={16} aria-hidden />}
+                  {secretVisible ? (
+                    <EyeOff size={16} aria-hidden />
+                  ) : (
+                    <Eye size={16} aria-hidden />
+                  )}
                 </button>
               </div>
-            </div>
-            <div className="settings-field">
-              <Label htmlFor="email-recipient-inbox">{t("settings.emailTestRecipient")}</Label>
-              <Input
+            </label>
+            <label className="settings-email-field" htmlFor="email-recipient-inbox">
+              <span className="settings-email-field-label">
+                {t("settings.emailTestRecipient")}
+              </span>
+              <input
                 id="email-recipient-inbox"
+                className="settings-email-control"
                 value={draft.recipientEmail}
-                onChange={(event) => updateDraft({ recipientEmail: event.target.value })}
+                onChange={(event) =>
+                  updateDraft({ recipientEmail: event.target.value })
+                }
                 placeholder="to@example.com"
                 inputMode="email"
               />
-            </div>
+            </label>
           </div>
 
-          <div className="settings-help settings-sound-hint settings-sound-hint-shadcn">
-            {secretConfigured ? t("settings.emailSecretConfigured") : t("settings.emailSecretMissing")}
+          <div className="settings-email-status-banner">
+            {secretConfigured
+              ? t("settings.emailSecretConfigured")
+              : t("settings.emailSecretMissing")}
           </div>
 
-          <div className="settings-button-row">
-            <Button type="button" onClick={() => void handleSave()} disabled={!canSave}>
-              {action === "save" ? t("settings.emailSaving") : t("common.save")}
-            </Button>
-            <Button
+          <div className="settings-email-actions">
+            <button
               type="button"
-              variant="outline"
+              className="settings-web-btn settings-web-btn--primary"
+              onClick={() => void handleSave()}
+              disabled={!canSave}
+            >
+              {action === "save" ? t("settings.emailSaving") : t("common.save")}
+            </button>
+            <button
+              type="button"
+              className="settings-web-btn"
               onClick={() => void handleClearSecret()}
               disabled={action !== null || !secretConfigured}
             >
               <Trash2 size={14} aria-hidden />
               {t("settings.emailClearSecret")}
-            </Button>
-          </div>
-
-          <div className="settings-divider" />
-
-          <div className="settings-field">
+            </button>
             {!draft.enabled ? (
-              <div className="settings-button-row">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void handleEnableAndSave()}
-                  disabled={action !== null || !canSave}
-                >
-                  <Mail size={14} aria-hidden />
-                  {action === "save" ? t("settings.emailSaving") : t("settings.emailEnableAndSave")}
-                </Button>
-              </div>
-            ) : null}
-            <div className="settings-button-row">
-              <Button
+              <button
                 type="button"
-                variant="outline"
-                onClick={() => void handleTestSend()}
-                disabled={!canSendTest}
-                title={testSendDisabledReason ?? undefined}
+                className="settings-web-btn"
+                onClick={() => void handleEnableAndSave()}
+                disabled={action !== null || !canSave}
               >
-                <Send size={14} aria-hidden />
-                {action === "test" ? t("settings.emailTesting") : t("settings.emailSendTest")}
-              </Button>
-            </div>
-            <div className="settings-help settings-sound-hint settings-sound-hint-shadcn">
+                <Mail size={14} aria-hidden />
+                {action === "save"
+                  ? t("settings.emailSaving")
+                  : t("settings.emailEnableAndSave")}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="settings-web-btn"
+              onClick={() => void handleTestSend()}
+              disabled={!canSendTest}
+              title={testSendDisabledReason ?? undefined}
+            >
+              <Send size={14} aria-hidden />
+              {action === "test"
+                ? t("settings.emailTesting")
+                : t("settings.emailSendTest")}
+            </button>
+          </div>
+          <div className="settings-pref-hint settings-email-action-hint">
+            <span className="settings-pref-hint-copy">
               {testSendDisabledReason ?? t("settings.emailTestReady")}
-            </div>
+            </span>
           </div>
 
-          {notice ? <div className="settings-inline-success" role="status">{notice}</div> : null}
-          {error ? <div className="settings-inline-error" role="alert">{error}</div> : null}
-        </CardContent>
-      </Card>
+          {notice ? (
+            <div className="settings-inline-success" role="status">
+              {notice}
+            </div>
+          ) : null}
+          {error ? (
+            <div className="settings-inline-error" role="alert">
+              {error}
+            </div>
+          ) : null}
+        </div>
       ) : null}
 
       {activeTab === "inbound" ? (
-        <Card className="settings-basic-group-card settings-basic-shadcn-card settings-email-card">
-          <CardHeader className="settings-card-switch-header">
-            <div className="settings-card-switch-meta">
-              <CardTitle className="settings-toggle-title">
-                <span className="settings-proxy-card-title">
-                  <Inbox size={16} aria-hidden />
-                  {t("settings.emailInboundTitle")}
-                </span>
-              </CardTitle>
-              <CardDescription className="settings-toggle-subtitle">
+        <div className="settings-basic-group-card settings-basic-group-card--list settings-pref-card settings-email-form-card">
+          <div className="settings-pref-row">
+            <div className="settings-pref-meta">
+              <div className="settings-pref-title">
+                {t("settings.emailInboundTitle")}
+              </div>
+              <div className="settings-pref-desc">
                 {t("settings.emailInboundDesc")}
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="settings-basic-sounds-card-content">
-            <div className="settings-form-grid">
-              <div className="settings-field">
-                <Label htmlFor="email-inbound-enabled">{t("settings.emailInboundEnabled")}</Label>
-                <div className="settings-proxy-input-row">
-                  <Switch
-                    id="email-inbound-enabled"
-                    checked={inboundDraft.enabled}
-                    onCheckedChange={(enabled) => updateInboundDraft({ enabled })}
-                    aria-label={t("settings.emailInboundEnabled")}
-                  />
-                </div>
-              </div>
-              <div className="settings-field">
-                <Label htmlFor="email-inbound-provider">{t("settings.emailProvider")}</Label>
-                <select
-                  id="email-inbound-provider"
-                  className="settings-select"
-                  value={inboundDraft.provider}
-                  onChange={(event) => updateInboundDraft({ provider: event.target.value as EmailSenderProvider })}
-                >
-                  <option value="126">126</option>
-                  <option value="163">163</option>
-                  <option value="qq">QQ</option>
-                  <option value="custom">{t("settings.emailProviderCustom")}</option>
-                </select>
-              </div>
-              <div className="settings-field">
-                <Label htmlFor="email-imap-host">{t("settings.emailImapHost")}</Label>
-                <Input
-                  id="email-imap-host"
-                  value={inboundDraft.imapHost}
-                  onChange={(event) => updateInboundDraft({ imapHost: event.target.value })}
-                  disabled={inboundDraft.provider !== "custom"}
-                />
-              </div>
-              <div className="settings-field">
-                <Label htmlFor="email-imap-port">{t("settings.emailImapPort")}</Label>
-                <Input
-                  id="email-imap-port"
-                  value={String(inboundDraft.imapPort)}
-                  onChange={(event) => updateInboundDraft({ imapPort: Number.parseInt(event.target.value, 10) || 0 })}
-                  disabled={inboundDraft.provider !== "custom"}
-                  inputMode="numeric"
-                />
-              </div>
-              <div className="settings-field">
-                <Label htmlFor="email-inbound-username">{t("settings.emailUsername")}</Label>
-                <Input
-                  id="email-inbound-username"
-                  value={inboundDraft.username}
-                  onChange={(event) => updateInboundDraft({ username: event.target.value })}
-                  placeholder="name@example.com"
-                />
-              </div>
-              <div className="settings-field">
-                <Label htmlFor="email-mailbox-folder">{t("settings.emailMailboxFolder")}</Label>
-                <Input
-                  id="email-mailbox-folder"
-                  value={inboundDraft.mailboxFolder}
-                  onChange={(event) => updateInboundDraft({ mailboxFolder: event.target.value })}
-                />
-              </div>
-              <div className="settings-field">
-                <Label htmlFor="email-allowed-senders">{t("settings.emailAllowedSenders")}</Label>
-                <Input
-                  id="email-allowed-senders"
-                  value={inboundDraft.allowedSenders.join(", ")}
-                  onChange={(event) => updateInboundDraft({
-                    allowedSenders: event.target.value.split(",").map((value) => value.trim()).filter(Boolean),
-                  })}
-                  placeholder="you@example.com"
-                />
-              </div>
-              <div className="settings-field">
-                <Label htmlFor="email-poll-interval">{t("settings.emailPollInterval")}</Label>
-                <Input
-                  id="email-poll-interval"
-                  value={String(inboundDraft.pollIntervalSeconds)}
-                  onChange={(event) => updateInboundDraft({ pollIntervalSeconds: Number.parseInt(event.target.value, 10) || 300 })}
-                  inputMode="numeric"
-                  min={10}
-                />
               </div>
             </div>
-            <div className="settings-help settings-sound-hint settings-sound-hint-shadcn">
+            <div className="settings-pref-control">
+              <Switch
+                id="email-inbound-enabled"
+                checked={inboundDraft.enabled}
+                onCheckedChange={(enabled) => updateInboundDraft({ enabled })}
+                aria-label={t("settings.emailInboundEnabled")}
+              />
+            </div>
+          </div>
+
+          <div className="settings-email-form-grid">
+            <label className="settings-email-field" htmlFor="email-inbound-provider">
+              <span className="settings-email-field-label">
+                {t("settings.emailProvider")}
+              </span>
+              <select
+                id="email-inbound-provider"
+                className="settings-email-control"
+                value={inboundDraft.provider}
+                onChange={(event) =>
+                  updateInboundDraft({
+                    provider: event.target.value as EmailSenderProvider,
+                  })
+                }
+              >
+                <option value="126">126</option>
+                <option value="163">163</option>
+                <option value="qq">QQ</option>
+                <option value="custom">{t("settings.emailProviderCustom")}</option>
+              </select>
+            </label>
+            <label className="settings-email-field" htmlFor="email-imap-host">
+              <span className="settings-email-field-label">
+                {t("settings.emailImapHost")}
+              </span>
+              <input
+                id="email-imap-host"
+                className="settings-email-control"
+                value={inboundDraft.imapHost}
+                onChange={(event) =>
+                  updateInboundDraft({ imapHost: event.target.value })
+                }
+                disabled={inboundDraft.provider !== "custom"}
+              />
+            </label>
+            <label className="settings-email-field" htmlFor="email-imap-port">
+              <span className="settings-email-field-label">
+                {t("settings.emailImapPort")}
+              </span>
+              <input
+                id="email-imap-port"
+                className="settings-email-control"
+                value={String(inboundDraft.imapPort)}
+                onChange={(event) =>
+                  updateInboundDraft({
+                    imapPort: Number.parseInt(event.target.value, 10) || 0,
+                  })
+                }
+                disabled={inboundDraft.provider !== "custom"}
+                inputMode="numeric"
+              />
+            </label>
+            <label className="settings-email-field" htmlFor="email-inbound-username">
+              <span className="settings-email-field-label">
+                {t("settings.emailUsername")}
+              </span>
+              <input
+                id="email-inbound-username"
+                className="settings-email-control"
+                value={inboundDraft.username}
+                onChange={(event) =>
+                  updateInboundDraft({ username: event.target.value })
+                }
+                placeholder="name@example.com"
+              />
+            </label>
+            <label className="settings-email-field" htmlFor="email-mailbox-folder">
+              <span className="settings-email-field-label">
+                {t("settings.emailMailboxFolder")}
+              </span>
+              <input
+                id="email-mailbox-folder"
+                className="settings-email-control"
+                value={inboundDraft.mailboxFolder}
+                onChange={(event) =>
+                  updateInboundDraft({ mailboxFolder: event.target.value })
+                }
+              />
+            </label>
+            <label className="settings-email-field" htmlFor="email-allowed-senders">
+              <span className="settings-email-field-label">
+                {t("settings.emailAllowedSenders")}
+              </span>
+              <input
+                id="email-allowed-senders"
+                className="settings-email-control"
+                value={inboundDraft.allowedSenders.join(", ")}
+                onChange={(event) =>
+                  updateInboundDraft({
+                    allowedSenders: event.target.value
+                      .split(",")
+                      .map((value) => value.trim())
+                      .filter(Boolean),
+                  })
+                }
+                placeholder="you@example.com"
+              />
+            </label>
+            <label className="settings-email-field" htmlFor="email-poll-interval">
+              <span className="settings-email-field-label">
+                {t("settings.emailPollInterval")}
+              </span>
+              <input
+                id="email-poll-interval"
+                className="settings-email-control"
+                value={String(inboundDraft.pollIntervalSeconds)}
+                onChange={(event) =>
+                  updateInboundDraft({
+                    pollIntervalSeconds:
+                      Number.parseInt(event.target.value, 10) || 300,
+                  })
+                }
+                inputMode="numeric"
+                min={10}
+              />
+            </label>
+          </div>
+
+          <div className="settings-pref-hint settings-email-action-hint">
+            <span className="settings-pref-hint-copy">
               {t("settings.emailReadOnlyHint")}
-            </div>
-            <div className="settings-button-row">
-              <Button
-                type="button"
-                onClick={() => void handleInboundSave()}
-                disabled={inboundAction !== null}
-              >
-                {inboundAction === "save" ? t("settings.emailSaving") : t("common.save")}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void handleManualCheck()}
-                disabled={inboundAction !== null || !inboundDraft.enabled}
-              >
-                <RefreshCw size={14} aria-hidden />
-                {inboundAction === "check" ? t("settings.emailInboundChecking") : t("settings.emailInboundCheckNow")}
-              </Button>
-            </div>
-            {mailSessions ? (
-              <div className="settings-help settings-sound-hint settings-sound-hint-shadcn">
+            </span>
+          </div>
+
+          <div className="settings-email-actions">
+            <button
+              type="button"
+              className="settings-web-btn settings-web-btn--primary"
+              onClick={() => void handleInboundSave()}
+              disabled={inboundAction !== null}
+            >
+              {inboundAction === "save"
+                ? t("settings.emailSaving")
+                : t("common.save")}
+            </button>
+            <button
+              type="button"
+              className="settings-web-btn"
+              onClick={() => void handleManualCheck()}
+              disabled={inboundAction !== null || !inboundDraft.enabled}
+            >
+              <RefreshCw size={14} aria-hidden />
+              {inboundAction === "check"
+                ? t("settings.emailInboundChecking")
+                : t("settings.emailInboundCheckNow")}
+            </button>
+          </div>
+
+          {mailSessions ? (
+            <div className="settings-pref-hint settings-email-action-hint">
+              <span className="settings-pref-hint-copy">
                 {t("settings.emailInboundStatus")
                   .replace("{{state}}", mailSessions.listener.connectionState)
-                  .replace("{{queued}}", String(mailSessions.listener.queuedCount))
-                  .replace("{{confirm}}", String(mailSessions.listener.needsConfirmationCount))
-                  .replace("{{rejected}}", String(mailSessions.listener.rejectedCount))}
-              </div>
-            ) : null}
-            {notice ? <div className="settings-inline-success" role="status">{notice}</div> : null}
-            {error ? <div className="settings-inline-error" role="alert">{error}</div> : null}
-          </CardContent>
-        </Card>
+                  .replace(
+                    "{{queued}}",
+                    String(mailSessions.listener.queuedCount),
+                  )
+                  .replace(
+                    "{{confirm}}",
+                    String(mailSessions.listener.needsConfirmationCount),
+                  )
+                  .replace(
+                    "{{rejected}}",
+                    String(mailSessions.listener.rejectedCount),
+                  )}
+              </span>
+            </div>
+          ) : null}
+          {notice ? (
+            <div className="settings-inline-success" role="status">
+              {notice}
+            </div>
+          ) : null}
+          {error ? (
+            <div className="settings-inline-error" role="alert">
+              {error}
+            </div>
+          ) : null}
+        </div>
       ) : null}
 
       {activeTab === "sessions" ? (
-        <Card className="settings-basic-group-card settings-basic-shadcn-card settings-email-card">
-          <CardHeader>
-            <CardTitle className="settings-toggle-title">{t("settings.emailMailSessionsTitle")}</CardTitle>
-            <CardDescription>{t("settings.emailMailSessionsDesc")}</CardDescription>
-          </CardHeader>
-          <CardContent className="settings-basic-sounds-card-content">
-            <div className="settings-button-row">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void handleRefreshMailSessions()}
-                disabled={refreshingMailSessions}
-              >
-                <RefreshCw
-                  size={14}
-                  aria-hidden
-                  className={refreshingMailSessions ? "is-spin" : undefined}
-                />
-                {refreshingMailSessions
-                  ? t("settings.emailRefreshingSessions")
-                  : t("settings.emailRefreshSessions")}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void handleCleanupMailSessions()}
-                disabled={cleaningMailSessions}
-              >
-                <Trash2 size={14} aria-hidden />
-                {cleaningMailSessions
-                  ? t("settings.emailCleaningProcessed")
-                  : t("settings.emailCleanupProcessed")}
-              </Button>
+        <div className="settings-basic-group-card settings-basic-group-card--list settings-pref-card settings-email-sessions-card">
+          <div className="settings-pref-card-head">
+            <div className="settings-pref-title">
+              {t("settings.emailMailSessionsTitle")}
             </div>
-            {selectedSessionId ? (
-              <div className="settings-mail-detail-panel" data-testid="mail-session-detail-panel">
-                <div className="settings-mail-detail-header">
-                  <div>
-                    <div className="settings-section-title">{t("settings.emailTimelineTitle")}</div>
-                    <div className="settings-help">
-                      {selectedSession ? sessionTitle(selectedSession) : selectedSessionId}
-                    </div>
+            <div className="settings-pref-desc">
+              {t("settings.emailMailSessionsDesc")}
+            </div>
+          </div>
+
+          <div className="settings-email-actions settings-email-actions--pad">
+            <button
+              type="button"
+              className="settings-web-btn"
+              onClick={() => void handleRefreshMailSessions()}
+              disabled={refreshingMailSessions}
+            >
+              <RefreshCw
+                size={14}
+                aria-hidden
+                className={refreshingMailSessions ? "is-spin" : undefined}
+              />
+              {refreshingMailSessions
+                ? t("settings.emailRefreshingSessions")
+                : t("settings.emailRefreshSessions")}
+            </button>
+            <button
+              type="button"
+              className="settings-web-btn"
+              onClick={() => void handleCleanupMailSessions()}
+              disabled={cleaningMailSessions}
+            >
+              <Trash2 size={14} aria-hidden />
+              {cleaningMailSessions
+                ? t("settings.emailCleaningProcessed")
+                : t("settings.emailCleanupProcessed")}
+            </button>
+          </div>
+
+          {selectedSessionId ? (
+            <div
+              className="settings-mail-detail-panel"
+              data-testid="mail-session-detail-panel"
+            >
+              <div className="settings-mail-detail-header">
+                <div>
+                  <div className="settings-pref-title">
+                    {t("settings.emailTimelineTitle")}
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setSelectedSessionId(null)}
-                    aria-label={t("settings.emailCloseTimeline")}
-                    title={t("settings.emailCloseTimeline")}
-                  >
-                    <X size={14} aria-hidden />
-                  </Button>
+                  <div className="settings-pref-desc">
+                    {selectedSession
+                      ? sessionTitle(selectedSession)
+                      : selectedSessionId}
+                  </div>
                 </div>
-                <div className="settings-mail-detail-scroll scrollable">
-                  {selectedTimeline.length === 0 ? (
-                    <div className="settings-help">{t("settings.emailTimelineEmpty")}</div>
-                  ) : (
-                    selectedTimeline.map((event) => (
-                      <div key={event.id} className="settings-mail-timeline-row">
-                        <div className="settings-mail-session-main">
-                          <strong>
-                            {event.direction === "outbound"
-                              ? t("settings.emailTimelineOutbound")
-                              : t("settings.emailTimelineInbound")}
-                          </strong>
-                          <div className="settings-help">
-                            {event.action ?? event.subject ?? event.status} · {event.status} ·{" "}
-                            {formatDateTime(event.occurredAt)}
-                          </div>
-                          {event.detail ? <div className="settings-help">{event.detail}</div> : null}
-                          {event.rejectReason ? (
-                            <div className="settings-inline-error">{event.rejectReason}</div>
-                          ) : null}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                <button
+                  type="button"
+                  className="settings-open-app-icon-btn"
+                  onClick={() => setSelectedSessionId(null)}
+                  aria-label={t("settings.emailCloseTimeline")}
+                  title={t("settings.emailCloseTimeline")}
+                >
+                  <X size={14} aria-hidden />
+                </button>
               </div>
-            ) : null}
-            <div className="settings-session-table" role="table" aria-label={t("settings.emailMailSessionsTitle")}>
-              {(mailSessions?.sessions ?? []).length === 0 ? (
-                <div className="settings-help settings-sound-hint settings-sound-hint-shadcn">
-                  {t("settings.emailNoMailSessions")}
-                </div>
-              ) : (
-                (mailSessions?.sessions ?? []).map((session) => (
-                  <div
-                    key={session.sessionId}
-                    className={`settings-mail-session-row ${
-                      selectedSessionId === session.sessionId ? "is-selected" : ""
-                    }`}
-                    role="row"
-                    aria-selected={selectedSessionId === session.sessionId}
-                  >
-                    <div className="settings-mail-session-main" role="cell">
-                      <strong>{sessionTitle(session)}</strong>
-                      <div className="settings-help">
-                        {session.workspaceName ?? session.workspaceId} · {session.state} · {formatDateTime(session.lastEventAt)}
-                      </div>
-                      <div className="settings-help">
-                        {t("settings.emailSessionCounts")
-                          .replace("{{outbound}}", String(session.outboundCount))
-                          .replace("{{inbound}}", String(session.inboundCount))
-                          .replace("{{queued}}", String(session.queuedCount))
-                          .replace("{{confirm}}", String(session.needsConfirmationCount))}
+              <div className="settings-mail-detail-scroll scrollable">
+                {selectedTimeline.length === 0 ? (
+                  <div className="settings-pref-desc">
+                    {t("settings.emailTimelineEmpty")}
+                  </div>
+                ) : (
+                  selectedTimeline.map((event) => (
+                    <div key={event.id} className="settings-mail-timeline-row">
+                      <div className="settings-mail-session-main">
+                        <strong>
+                          {event.direction === "outbound"
+                            ? t("settings.emailTimelineOutbound")
+                            : t("settings.emailTimelineInbound")}
+                        </strong>
+                        <div className="settings-pref-desc">
+                          {event.action ?? event.subject ?? event.status} ·{" "}
+                          {event.status} · {formatDateTime(event.occurredAt)}
+                        </div>
+                        {event.detail ? (
+                          <div className="settings-pref-desc">{event.detail}</div>
+                        ) : null}
+                        {event.rejectReason ? (
+                          <div className="settings-inline-error">
+                            {event.rejectReason}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
-                    <div className="settings-mail-session-actions" role="cell">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setSelectedSessionId(session.sessionId)}
-                      >
-                        <Mail size={14} aria-hidden />
-                        {t("settings.emailViewTimeline")}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="settings-mail-danger-action"
-                        title={t("settings.emailDeleteMailRecordsHint")}
-                        onClick={() => void handleDeleteMailRecords(session.sessionId)}
-                        disabled={deletingMailSessionId !== null}
-                      >
-                        <Trash2 size={14} aria-hidden />
-                        {deletingMailSessionId === session.sessionId
-                          ? t("settings.emailDeletingMailRecords")
-                          : t("settings.emailDeleteMailRecords")}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        title={session.threadId || undefined}
-                        onClick={() => handleOpenMailSession(session)}
-                      >
-                        <ExternalLink size={14} aria-hidden />
-                        {t("settings.emailOpenSession")}
-                      </Button>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          <div
+            className="settings-session-table"
+            role="table"
+            aria-label={t("settings.emailMailSessionsTitle")}
+          >
+            {(mailSessions?.sessions ?? []).length === 0 ? (
+              <div className="settings-pref-desc settings-email-empty">
+                {t("settings.emailNoMailSessions")}
+              </div>
+            ) : (
+              (mailSessions?.sessions ?? []).map((session) => (
+                <div
+                  key={session.sessionId}
+                  className={`settings-mail-session-row${
+                    selectedSessionId === session.sessionId
+                      ? " is-selected"
+                      : ""
+                  }`}
+                  role="row"
+                  aria-selected={selectedSessionId === session.sessionId}
+                >
+                  <div className="settings-mail-session-main" role="cell">
+                    <strong>{sessionTitle(session)}</strong>
+                    <div className="settings-pref-desc">
+                      {session.workspaceName ?? session.workspaceId} ·{" "}
+                      {session.state} · {formatDateTime(session.lastEventAt)}
+                    </div>
+                    <div className="settings-pref-desc">
+                      {t("settings.emailSessionCounts")
+                        .replace("{{outbound}}", String(session.outboundCount))
+                        .replace("{{inbound}}", String(session.inboundCount))
+                        .replace("{{queued}}", String(session.queuedCount))
+                        .replace(
+                          "{{confirm}}",
+                          String(session.needsConfirmationCount),
+                        )}
                     </div>
                   </div>
-                ))
-              )}
+                  <div className="settings-mail-session-actions" role="cell">
+                    <button
+                      type="button"
+                      className="settings-web-btn"
+                      onClick={() => setSelectedSessionId(session.sessionId)}
+                    >
+                      <Mail size={14} aria-hidden />
+                      {t("settings.emailViewTimeline")}
+                    </button>
+                    <button
+                      type="button"
+                      className="settings-web-btn settings-mail-danger-action"
+                      title={t("settings.emailDeleteMailRecordsHint")}
+                      onClick={() =>
+                        void handleDeleteMailRecords(session.sessionId)
+                      }
+                      disabled={deletingMailSessionId !== null}
+                    >
+                      <Trash2 size={14} aria-hidden />
+                      {deletingMailSessionId === session.sessionId
+                        ? t("settings.emailDeletingMailRecords")
+                        : t("settings.emailDeleteMailRecords")}
+                    </button>
+                    <button
+                      type="button"
+                      className="settings-web-btn"
+                      title={session.threadId || undefined}
+                      onClick={() => handleOpenMailSession(session)}
+                    >
+                      <ExternalLink size={14} aria-hidden />
+                      {t("settings.emailOpenSession")}
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          {notice ? (
+            <div className="settings-inline-success" role="status">
+              {notice}
             </div>
-            {notice ? <div className="settings-inline-success" role="status">{notice}</div> : null}
-            {error ? <div className="settings-inline-error" role="alert">{error}</div> : null}
-          </CardContent>
-        </Card>
+          ) : null}
+          {error ? (
+            <div className="settings-inline-error" role="alert">
+              {error}
+            </div>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

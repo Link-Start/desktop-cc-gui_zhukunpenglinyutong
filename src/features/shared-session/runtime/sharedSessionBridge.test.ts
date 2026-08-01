@@ -53,6 +53,27 @@ describe("sharedSessionBridge", () => {
     });
   });
 
+  it("routes a hidden native event through its canonical Runtime owner", () => {
+    expect(
+      resolveSharedSessionBindingFromRuntimeOwner("ws-native-owner", {
+        threadId: "claude:hidden-native-owner",
+        nativeThreadId: "claude:hidden-native-owner",
+        sharedOwner: {
+          sharedThreadId: "shared:native-owner",
+          nativeThreadId: "claude:hidden-native-owner",
+          engine: "claude",
+          attemptId: "attempt-native-owner",
+        },
+      }),
+    ).toMatchObject({
+      workspaceId: "ws-native-owner",
+      sharedThreadId: "shared:native-owner",
+      nativeThreadId: "claude:hidden-native-owner",
+      engine: "claude",
+      attemptId: "attempt-native-owner",
+    });
+  });
+
   it("rejects a runtime owner whose embedded snapshot has a different engine", () => {
     const binding = resolveSharedSessionBindingFromRuntimeOwner("ws-owner", {
       threadId: "shared:thread-owner",

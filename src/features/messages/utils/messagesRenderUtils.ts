@@ -334,11 +334,23 @@ export function resolveCodexCommandActivityLabel(item: Extract<ConversationItem,
   return buildCommandSummary(item, { includeDetail: false });
 }
 
+/**
+ * Hide bash/command tool cards on the conversation canvas (Claude-polished surface).
+ * Applies to Claude/Codex and, after unify-conversation-canvas, also Grok/Kimi/OpenCode
+ * so multi-CLI process chrome matches: narrative on canvas, shell noise in Status Panel.
+ * ExitPlanMode remains visible.
+ */
 export function shouldHideCodexCanvasCommandCard(
   item: Extract<ConversationItem, { kind: "tool" }>,
   activeEngine: MessagesEngine,
 ) {
-  if (activeEngine !== "codex" && activeEngine !== "claude") {
+  if (
+    activeEngine !== "codex" &&
+    activeEngine !== "claude" &&
+    activeEngine !== "grok" &&
+    activeEngine !== "kimi" &&
+    activeEngine !== "opencode"
+  ) {
     return false;
   }
   const normalizedToolName = extractToolName(item.title)
@@ -387,7 +399,17 @@ export function countRenderableCollapsedEntries(
   }
   return groupToolItems(items).reduce((count, entry) => {
     if (entry.kind === "bashGroup") {
-      return activeEngine === "codex" || activeEngine === "claude" ? count : count + 1;
+      // Hidden on polished multi-CLI canvas (Claude/Codex/Grok/Kimi/OpenCode).
+      if (
+        activeEngine === "codex" ||
+        activeEngine === "claude" ||
+        activeEngine === "grok" ||
+        activeEngine === "kimi" ||
+        activeEngine === "opencode"
+      ) {
+        return count;
+      }
+      return count + 1;
     }
     if (
       entry.kind === "item" &&

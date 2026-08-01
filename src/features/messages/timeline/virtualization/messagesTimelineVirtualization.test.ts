@@ -506,7 +506,7 @@ describe("messagesTimelineVirtualization", () => {
     });
   });
 
-  it("remeasures without resetting scroll when the same history thread changes weight", () => {
+  it("remeasures and pins when the same history thread changes weight (deferred backfill)", () => {
     expect(resolveVirtualizedTimelineScopeReset({
       previousScopeKey: "ws-1\u0000thread-1\u0000200\u0000120\u0000virtualized",
       nextScopeKey: "ws-1\u0000thread-1\u0000205\u0000135\u0000virtualized",
@@ -517,7 +517,8 @@ describe("messagesTimelineVirtualization", () => {
     })).toEqual({
       nextScopeKey: "ws-1\u0000thread-1\u0000205\u0000135\u0000virtualized",
       shouldMeasure: true,
-      shouldPinBottomWhenArmed: false,
+      // 同 thread 呈现 scope 变化后必须能再 pin，否则回刷后停在假底
+      shouldPinBottomWhenArmed: true,
     });
   });
 

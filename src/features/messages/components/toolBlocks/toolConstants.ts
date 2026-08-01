@@ -245,23 +245,24 @@ export function classifyToolCategory(item: {
   title: unknown;
 }): ToolCategory {
   const toolType = normalizeRuntimeString(item.toolType);
-  // 优先级1：toolType 分类
+  const toolName = extractToolName(item.title);
+  const lower = toolName.toLowerCase();
+
+  // 优先级1：明确 toolType（但 fileChange 仍可用 title 名做 edit 场景）
   if (toolType === 'commandExecution') return 'bash';
   if (toolType === 'fileChange') return 'fileChange';
   if (toolType === 'webSearch') return 'web';
 
-  // 优先级2：工具名称分类
-  const toolName = extractToolName(item.title);
-  const lower = toolName.toLowerCase();
-
+  // 优先级2：工具名称分类（agent 工具常以 mcpToolCall + 裸 title 到达）
   if (isBashTool(lower)) return 'bash';
   if (isReadTool(lower)) return 'read';
   if (isEditTool(lower)) return 'edit';
   if (isSearchTool(lower)) return 'search';
   if (isWebTool(lower)) return 'web';
 
-  // 优先级3：MCP 和兜底
-  if (toolType === 'mcpToolCall' || isMcpTool(item.title)) return 'mcp';
+  // 优先级3：真正 MCP 前缀；裸 agent 名不要误判成 MCP 桶
+  if (isMcpTool(item.title)) return 'mcp';
+  if (toolType === 'mcpToolCall') return 'other';
 
   return 'other';
 }

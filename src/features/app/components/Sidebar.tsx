@@ -187,6 +187,14 @@ type SidebarProps = {
   }) => void;
   onToggleWorkspaceCollapse: (workspaceId: string, collapsed: boolean) => void;
   onSelectThread: (workspaceId: string, threadId: string) => void;
+  onProviderContinuationTargetReady?: (input: {
+    workspaceId: string;
+    threadId: string;
+    engine: string;
+    providerProfileId: string | null;
+    modelId: string | null;
+    effort: string | null;
+  }) => void | Promise<void>;
   onDeleteThread: (workspaceId: string, threadId: string) => void;
   onArchiveThread: (workspaceId: string, threadId: string) => void;
   deleteConfirmThreadId?: string | null;
@@ -287,6 +295,7 @@ function SidebarImpl({
   onOpenClaudeTui,
   onToggleWorkspaceCollapse,
   onSelectThread,
+  onProviderContinuationTargetReady,
   onDeleteThread,
   onArchiveThread,
   deleteConfirmThreadId = null,
@@ -1010,6 +1019,7 @@ function SidebarImpl({
       onOpenClaudeTui,
       onReloadWorkspaceThreads: onQuickReloadWorkspaceThreads ?? onReloadWorkspaceThreads,
       onSelectThread,
+      onProviderContinuationTargetReady,
       isThreadAvailable: (workspaceId, threadId) =>
         getProjectedThreads(workspaceId).some(
           (thread) => thread.id === threadId,

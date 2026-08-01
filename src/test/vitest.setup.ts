@@ -359,7 +359,6 @@ vi.mock("react-i18next", () => ({
         "settings.basicEmailTab": "Email",
         "settings.mcpSkillsDescription":
           "Manage the curated Skills bundled with this app.",
-        "settings.sidebarUsage": "Usage",
         "settings.sidebarWebService": "Web Service",
         "settings.sidebarEmail": "Email",
         "settings.agentPromptAgentsTab": "Agents",
@@ -526,8 +525,6 @@ vi.mock("react-i18next", () => ({
         "settings.projectManagementDescription": "Manage project groups and real workspace sessions from one place.",
         "settings.projectManagementGroupsTab": "Groups",
         "settings.projectManagementSessionsTab": "Session Management",
-        "settings.projectManagementUsageTab": "Usage",
-        "settings.usagePanel.title": "Usage",
         "settings.webServiceTitle": "Web Service",
         "settings.webServiceFixedToken": "Fixed access token",
         "settings.webServiceFixedTokenAriaLabel": "Fixed Web service access token",
@@ -572,7 +569,7 @@ vi.mock("react-i18next", () => ({
         "settings.terminalShellPathLabel": "Terminal shell path",
         "settings.terminalShellPathPlaceholder": "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
         "settings.terminalShellPathHint":
-          "Windows example: C:\\Program Files\\PowerShell\\7\\pwsh.exe; macOS example: /bin/zsh or /opt/homebrew/bin/fish. Leave empty to use COMSPEC on Windows or SHELL on macOS/Linux.",
+          "Windows example: C:\\Program Files\\PowerShell\\7\\pwsh.exe;\nmacOS example: /bin/zsh or /opt/homebrew/bin/fish. Leave empty to use COMSPEC on Windows or SHELL on macOS/Linux.",
         "settings.terminalShellPathSave": "Save terminal shell path",
         "settings.terminalShellPathClear": "Clear terminal shell path",
         "settings.showRemainingLimits": "Show remaining Codex limits",

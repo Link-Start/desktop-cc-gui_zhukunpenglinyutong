@@ -13,7 +13,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   AppSettings,
   DiagnosticsBundleExportResult,
-  LocalUsageStatistics,
   WorkspaceInfo,
 } from "../../../types";
 import {
@@ -26,12 +25,14 @@ import {
   getWebServerStatus,
   listWorkspaceSessionFolders,
   listWorkspaceSessions,
-  localUsageStatistics,
   unarchiveWorkspaceSessions,
 } from "../../../services/tauri";
 import { writeClientStoreValue } from "../../../services/clientStorage";
 import { pushErrorToast } from "../../../services/toasts";
-import { DEFAULT_UI_FONT_FAMILY } from "../../../utils/fonts";
+import {
+  DEFAULT_CODE_FONT_FAMILY,
+  DEFAULT_UI_FONT_FAMILY,
+} from "../../../utils/fonts";
 import { SettingsView } from "./SettingsView";
 
 vi.mock("@tauri-apps/api/app", () => ({
@@ -91,7 +92,6 @@ vi.mock("../../../services/tauri", async () => {
     unarchiveWorkspaceSessions: vi.fn(),
     deleteWorkspaceSessions: vi.fn(),
     exportDiagnosticsBundle: vi.fn(),
-    localUsageStatistics: vi.fn(),
     getWebServerStatus: vi.fn(),
     getDaemonStatus: vi.fn(),
     getEmailSenderSettings: vi.fn(),
@@ -151,9 +151,6 @@ beforeEach(() => {
     filePath: "/tmp/diagnostics.json",
     generatedAt: "123",
   });
-  vi.mocked(localUsageStatistics).mockResolvedValue(
-    createLocalUsageStatistics(),
-  );
   vi.mocked(getWebServerStatus).mockResolvedValue({
     running: false,
     rpcEndpoint: "127.0.0.1:4732",
@@ -355,33 +352,6 @@ const createDoctorResult = () => ({
   fallbackRetried: false,
 });
 
-const createLocalUsageStatistics = (): LocalUsageStatistics => ({
-  projectPath: "/tmp/ws-a",
-  projectName: "Workspace A",
-  totalSessions: 1,
-  totalUsage: {
-    inputTokens: 12,
-    outputTokens: 34,
-    cacheWriteTokens: 0,
-    cacheReadTokens: 0,
-    totalTokens: 46,
-  },
-  estimatedCost: 0.0123,
-  sessions: [],
-  dailyUsage: [],
-  weeklyComparison: {
-    currentWeek: { sessions: 1, cost: 0.0123, tokens: 46 },
-    lastWeek: { sessions: 0, cost: 0, tokens: 0 },
-    trends: { sessions: 0, cost: 0, tokens: 0 },
-  },
-  byModel: [],
-  totalEngineUsageCount: 1,
-  engineUsage: [{ engine: "codex", count: 1 }],
-  aiCodeModifiedLines: 0,
-  dailyCodeChanges: [],
-  lastUpdated: Date.now(),
-});
-
 const renderDisplaySection = (
   options: {
     appSettings?: Partial<AppSettings>;
@@ -555,8 +525,13 @@ describe("SettingsView prompts workspace routing", () => {
       />,
     );
 
-    const picker = await screen.findByDisplayValue("Workspace B");
-    expect(picker).toBeTruthy();
+    await waitFor(() => {
+      expect(
+        screen
+          .getAllByRole("combobox", { name: "settings.workspacePickerLabel" })
+          .some((picker) => picker.textContent?.includes("Workspace B")),
+      ).toBe(true);
+    });
   });
 });
 
@@ -1501,7 +1476,7 @@ describe("SettingsView Display", () => {
     });
   });
 
-  it("keeps client UI visibility controls hidden from basic settings", () => {
+  it("keeps hidden client UI visibility controls out of the display settings", () => {
     renderDisplaySection();
 
     expect(screen.queryByText("Client UI visibility")).toBeNull();
@@ -1608,23 +1583,28 @@ describe("SettingsView Display", () => {
     expect(onWindowOpacityChange).toHaveBeenCalledWith(72);
   });
 
-  it("updates ui scale from slider and save action", async () => {
+  it("commits ui scale from preset dropdown options", async () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     renderDisplaySection({ onUpdateAppSettings });
 
-    const fontSizeSlider = screen.getByLabelText("Interface scale");
+    const scaleSelect = screen.getByTestId(
+      "settings-ui-scale-select",
+    ) as HTMLSelectElement;
 
-    fireEvent.change(fontSizeSlider, { target: { value: "1.36" } });
-    fireEvent.click(screen.getByTestId("settings-ui-scale-save"));
+    expect(within(scaleSelect).getByRole("option", { name: "80%" })).toBeTruthy();
+    expect(within(scaleSelect).getByRole("option", { name: "150%" })).toBeTruthy();
+    expect(within(scaleSelect).queryByRole("option", { name: "160%" })).toBeNull();
+    expect(screen.queryByTestId("settings-ui-scale-save")).toBeNull();
+
+    fireEvent.change(scaleSelect, { target: { value: "1.2" } });
 
     await waitFor(() => {
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
-        expect.objectContaining({ uiScale: 1.36 }),
+        expect.objectContaining({ uiScale: 1.2 }),
       );
     });
 
-    fireEvent.change(fontSizeSlider, { target: { value: "0.8" } });
-    fireEvent.click(screen.getByTestId("settings-ui-scale-save"));
+    fireEvent.change(scaleSelect, { target: { value: "0.8" } });
 
     await waitFor(() => {
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
@@ -1633,21 +1613,25 @@ describe("SettingsView Display", () => {
     });
   });
 
-  it("resets ui scale to 100% from settings", async () => {
+  it("resets ui scale to 100% from settings when dirty", async () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     renderDisplaySection({
       onUpdateAppSettings,
-      appSettings: { uiScale: 1.25 },
+      appSettings: { uiScale: 1.2 },
     });
 
     fireEvent.click(screen.getByTestId("settings-ui-scale-reset"));
-    fireEvent.click(screen.getByTestId("settings-ui-scale-save"));
 
     await waitFor(() => {
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
         expect.objectContaining({ uiScale: 1 }),
       );
     });
+  });
+
+  it("hides ui scale reset when scale is already 100%", () => {
+    renderDisplaySection({ appSettings: { uiScale: 1 } });
+    expect(screen.queryByTestId("settings-ui-scale-reset")).toBeNull();
   });
 
   it("commits ui font selection and code font dropdown changes", async () => {
@@ -1701,24 +1685,46 @@ describe("SettingsView Display", () => {
     });
   });
 
-  it("resets font families to defaults", async () => {
+  it("shows font reset only when dirty and restores defaults", async () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    queryLocalFontsMock.mockResolvedValue([...mockedLocalFonts]);
     renderDisplaySection({ onUpdateAppSettings });
 
-    const uiFontInput = screen.getByLabelText("UI font family");
-    const uiFontRow = uiFontInput.closest(".settings-field-row");
-    if (!uiFontRow) {
-      throw new Error("Expected UI font row");
+    const uiFontSelect = screen.getByTestId("settings-ui-font-select");
+    const codeFontSelect = screen.getByTestId("settings-code-font-select");
+
+    // Default state: no reset affordance
+    expect(
+      within(uiFontSelect.closest(".settings-pref-control") as HTMLElement).queryByRole(
+        "button",
+        { name: "Reset" },
+      ),
+    ).toBeNull();
+
+    await waitFor(() => {
+      expect(
+        within(uiFontSelect).getByRole("option", { name: "Avenir" }),
+      ).toBeTruthy();
+    });
+
+    fireEvent.change(uiFontSelect, { target: { value: "Avenir" } });
+    fireEvent.change(codeFontSelect, { target: { value: "Avenir" } });
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ uiFontFamily: "Avenir" }),
+      );
+    });
+
+    const uiFontRow = uiFontSelect.closest(".settings-pref-control");
+    const codeFontRow = codeFontSelect.closest(".settings-pref-control");
+    if (!uiFontRow || !codeFontRow) {
+      throw new Error("Expected font control rows");
     }
+
     fireEvent.click(
       within(uiFontRow as HTMLElement).getByRole("button", { name: "Reset" }),
     );
-
-    const codeFontInput = screen.getByLabelText("Code font family");
-    const codeFontRow = codeFontInput.closest(".settings-field-row");
-    if (!codeFontRow) {
-      throw new Error("Expected code font row");
-    }
     fireEvent.click(
       within(codeFontRow as HTMLElement).getByRole("button", { name: "Reset" }),
     );
@@ -1731,18 +1737,26 @@ describe("SettingsView Display", () => {
       );
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
         expect.objectContaining({
-          codeFontFamily: expect.stringMatching(/^Monaco,/),
+          codeFontFamily: DEFAULT_CODE_FONT_FAMILY,
         }),
       );
     });
   });
 
-  it("updates code font size from the slider", async () => {
+  it("updates code font size from preset dropdown options", async () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     renderDisplaySection({ onUpdateAppSettings });
 
-    const slider = screen.getByLabelText("Code font size");
-    fireEvent.change(slider, { target: { value: "14" } });
+    const sizeSelect = screen.getByTestId(
+      "settings-code-font-size-select",
+    ) as HTMLSelectElement;
+
+    expect(within(sizeSelect).getByRole("option", { name: "10px" })).toBeTruthy();
+    expect(within(sizeSelect).getByRole("option", { name: "15px" })).toBeTruthy();
+    expect(within(sizeSelect).queryByRole("option", { name: "9px" })).toBeNull();
+    expect(within(sizeSelect).queryByRole("option", { name: "16px" })).toBeNull();
+
+    fireEvent.change(sizeSelect, { target: { value: "14" } });
 
     await waitFor(() => {
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
@@ -1762,7 +1776,7 @@ describe("SettingsView Display", () => {
 
     const row = screen
       .getByText("Notification sounds")
-      .closest(".settings-sound-toggle-row") as HTMLElement | null;
+      .closest(".settings-pref-row") as HTMLElement | null;
     if (!row) {
       throw new Error("Expected notification sounds row");
     }
@@ -2270,7 +2284,15 @@ describe("SettingsView Shortcuts", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open in" }));
     await flushSettingsViewEffects();
     expect(screen.getAllByText("Open in").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByDisplayValue("VS Code")).toBeTruthy();
+    // Summary list shows app names; open dialog to edit fields.
+    expect(
+      screen.getByRole("button", { name: /VS Code/i }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /VS Code/i }));
+    expect(await screen.findByDisplayValue("VS Code")).toBeTruthy();
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await flushSettingsViewEffects();
 
     fireEvent.click(screen.getByRole("button", { name: "Web Service" }));
     await flushSettingsViewEffects();
@@ -2296,15 +2318,12 @@ describe("SettingsView Shortcuts", () => {
     expect(screen.getByRole("button", { name: "Groups" })).toBeTruthy();
     expectTabButtonHasIcon("Groups");
     expectTabButtonHasIcon("Session Management");
-    expectTabButtonHasIcon("Usage");
+    expect(screen.queryByRole("button", { name: "Usage" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Session Management" }));
     await flushSettingsViewEffects();
     expect(
       screen.getByTestId("settings-project-sessions-expand-toggle"),
     ).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Usage" }));
-    await flushSettingsViewEffects();
-    expect(screen.getAllByText("Usage").length).toBeGreaterThanOrEqual(1);
 
     fireEvent.click(screen.getByRole("button", { name: "Agents / Prompts" }));
     await flushSettingsViewEffects();

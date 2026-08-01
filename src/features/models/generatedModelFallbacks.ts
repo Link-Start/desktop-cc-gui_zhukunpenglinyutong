@@ -10,6 +10,10 @@ export type GeneratedModelFallback = Readonly<{
   lifecycle: string;
   default?: boolean;
   defaultReasoningEffort?: string;
+  supportedReasoningEfforts?: readonly {
+    reasoningEffort: string;
+    description: string;
+  }[];
 }>;
 
 export const GENERATED_MODEL_FALLBACKS = generatedCatalog.engines as Readonly<

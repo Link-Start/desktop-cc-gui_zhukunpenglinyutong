@@ -498,6 +498,9 @@ export function isEmptyVirtualProjectionRow(
       if (row.entry.kind === "bashGroup") {
         return (
           input.activeEngine === "codex" ||
+          input.activeEngine === "grok" ||
+          input.activeEngine === "kimi" ||
+          input.activeEngine === "opencode" ||
           (input.activeEngine === "claude" &&
             !input.claudeHistoryTranscriptFallbackActive)
         );
@@ -673,10 +676,13 @@ export function resolveVirtualizedTimelineScopeReset(input: {
     resolveVirtualizedTimelineScopeIdentity(input.previousScopeKey) ===
     resolveVirtualizedTimelineScopeIdentity(input.nextScopeKey)
   ) {
+    const keyChanged = input.previousScopeKey !== input.nextScopeKey;
     return {
       nextScopeKey: input.nextScopeKey,
-      shouldMeasure: input.previousScopeKey !== input.nextScopeKey,
-      shouldPinBottomWhenArmed: false,
+      shouldMeasure: keyChanged,
+      // 同 thread 内 deferred 回刷 / 呈现 scope 变化会改 key 并 remeasure；
+      // 此前不 pin 会导致估高→真高后视口停在假底（结束后 1–2s 丢底）。
+      shouldPinBottomWhenArmed: keyChanged && input.stableHistoryView,
     };
   }
   return {

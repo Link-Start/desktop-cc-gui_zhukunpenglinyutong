@@ -231,6 +231,8 @@ type ComposerProps = {
   models: { id: string; displayName: string; model: string }[];
   providerModelCatalogs?: Partial<Record<EngineType, ModelOption[]>>;
   providerProfileId?: string | null;
+  /** 当前会话创建时的供应商显示名（切老会话时底栏渠道芯片用，避免回落到列表首项 DeepSeek） */
+  providerProfileName?: string | null;
   selectedModelId: string | null;
   onSelectModel: (id: string) => void;
   reasoningOptions: string[];
@@ -511,6 +513,7 @@ function ComposerImpl({
   models,
   providerModelCatalogs,
   providerProfileId,
+  providerProfileName,
   selectedModelId,
   onSelectModel,
   reasoningOptions,
@@ -746,28 +749,59 @@ function ComposerImpl({
       onCreationTargetEngineChange?.(null);
     };
   }, [createSessionTargetPicker, onCreationTargetEngineChange]);
+  /**
+   * Native Atomic 点选的即时投影。
+   * Shared 写 selectedNextTarget 即可立刻刷新勾选；Native 若只走 onSelectModel
+   * 长链，catalog 分叉时勾选/触发器不更新。用本状态对齐 Shared 的「target 即 UI」。
+   * 只覆盖 model 身份；effort 仍跟 selectedEffort prop，避免抢走推理档位选择器。
+   */
+  const [nativeAtomicSelection, setNativeAtomicSelection] = useState<{
+    modelCatalogEntryId: string;
+    model: string;
+  } | null>(null);
+  // 切会话 / 引擎 / 渠道时丢弃点选覆盖，避免串台
+  useEffect(() => {
+    setNativeAtomicSelection(null);
+  }, [activeThreadId, selectedEngine, providerProfileId]);
   // Native 会话合成 ExecutionTarget，驱动与首页相同的 Atomic 双栏选中态（含渠道）。
   const nativeSessionTarget = useMemo((): ExecutionTarget | null => {
     if (isSharedSession || createSessionTargetPicker || !selectedEngine) {
       return null;
     }
-    const modelId = selectedModelId?.trim() || null;
-    const profileId = providerProfileId?.trim() || null;
+    const rawProfileId = providerProfileId?.trim() || null;
+    // 本地 sentinel 与 Shared 一致：对外投影为 null + disk，避免 __disk__ 被当成 managed
+    const isLocalCodexDisk =
+      selectedEngine === "codex" &&
+      rawProfileId === CODEX_DISK_PROVIDER_PROFILE_ID;
+    const isLocalClaude =
+      selectedEngine === "claude" &&
+      rawProfileId === CLAUDE_LOCAL_PROVIDER_PROFILE_ID;
+    const profileId =
+      isLocalCodexDisk || isLocalClaude ? null : rawProfileId;
+    const profileName = providerProfileName?.trim() || null;
+    const propModelId = selectedModelId?.trim() || null;
+    const modelCatalogEntryId =
+      nativeAtomicSelection?.modelCatalogEntryId ?? propModelId;
+    const runtimeModel =
+      nativeAtomicSelection?.model ?? propModelId;
     return {
       engine: selectedEngine,
       providerProfileId: profileId,
-      modelCatalogEntryId: modelId,
-      model: modelId,
+      modelCatalogEntryId,
+      model: runtimeModel,
       reasoning: selectedEffort ? { effort: selectedEffort } : null,
+      // managed 必须带上创建时供应商名，底栏渠道芯片才能显示 kimi/m3 而非回落 DeepSeek
       providerProfileNameSnapshot: profileId
-        ? null
+        ? profileName || profileId
         : LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
       providerProfileSource: profileId ? "managed" : "disk",
     };
   }, [
     createSessionTargetPicker,
     isSharedSession,
+    nativeAtomicSelection,
     providerProfileId,
+    providerProfileName,
     selectedEffort,
     selectedEngine,
     selectedModelId,
@@ -935,6 +969,9 @@ function ComposerImpl({
   /**
    * Native 会话也走首页同款 Atomic 双栏 picker（含「本地配置」渠道）。
    * 同 engine+profile 只切模型；跨 managed profile 走续接；其余走 engine/model 切换。
+   *
+   * 同 profile 切模型：先写 nativeAtomicSelection（勾选即时反馈），再 onSelectModel
+   * 持久化；不依赖 parent catalog 是否收录该 id（catalog 外自定义名同样生效）。
    */
   const handleNativeAtomicTargetChange = useCallback(
     (target: ExecutionTarget) => {
@@ -947,18 +984,27 @@ function ComposerImpl({
         providerProfileId,
         target,
       );
+      const catalogEntryId =
+        target.modelCatalogEntryId?.trim() || target.model?.trim() || null;
+      const runtimeModel =
+        target.model?.trim() || catalogEntryId;
+      const nextEffort = target.reasoning?.effort ?? null;
       if (sameProfile) {
-        const modelId =
-          target.modelCatalogEntryId?.trim() || target.model?.trim() || null;
-        if (modelId) {
-          onSelectModel(modelId);
+        if (catalogEntryId && runtimeModel) {
+          setNativeAtomicSelection({
+            modelCatalogEntryId: catalogEntryId,
+            model: runtimeModel,
+          });
+          // 持久化用 catalog entry id；自由名与 runtime 通常相同
+          onSelectModel(catalogEntryId);
         }
-        const nextEffort = target.reasoning?.effort ?? null;
         if (nextEffort !== selectedEffort) {
           onSelectEffort(nextEffort);
         }
         return;
       }
+      // 跨渠道时清掉本会话点选覆盖，避免沿用旧模型 id
+      setNativeAtomicSelection(null);
       // Claude/Codex 切到 managed 渠道 → Native Provider Continuation
       if (
         (target.engine === "claude" || target.engine === "codex") &&
@@ -970,12 +1016,13 @@ function ComposerImpl({
       if (target.engine !== selectedEngine) {
         onSelectEngine?.(target.engine);
       }
-      const modelId =
-        target.modelCatalogEntryId?.trim() || target.model?.trim() || null;
-      if (modelId) {
-        onSelectModel(modelId);
+      if (catalogEntryId && runtimeModel) {
+        setNativeAtomicSelection({
+          modelCatalogEntryId: catalogEntryId,
+          model: runtimeModel,
+        });
+        onSelectModel(catalogEntryId);
       }
-      const nextEffort = target.reasoning?.effort ?? null;
       if (nextEffort !== selectedEffort) {
         onSelectEffort(nextEffort);
       }

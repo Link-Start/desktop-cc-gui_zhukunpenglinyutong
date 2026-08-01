@@ -18,22 +18,30 @@
 //! - `{"type":"error","message":"..."}` — error
 //!
 //! In headless mode Grok runs with `--always-approve`, so no approval events exist.
-//! The protocol exposes no tool-call events. Session identity is decided by the
-//! backend up front: new sessions get a caller-generated UUID via `-s`, existing
-//! sessions resume via `-r`.
+//! Stdout exposes **no** tool-call events. Live canvas tool projection is bridged by
+//! polling `chat_history.jsonl` (same file history loader reads) and emitting
+//! `ToolStarted` / `ToolCompleted` for new `tool_calls` / `tool_result` lines.
+//! Session identity is decided by the backend up front: new sessions get a
+//! caller-generated UUID via `-s`, existing sessions resume via `-r`.
 
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::{broadcast, Mutex, RwLock};
 
 use super::cli_image_input::{collect_non_empty_image_paths, normalize_local_image_path};
 use super::events::EngineEvent;
+use super::grok_history::{
+    poll_chat_history_tool_signals, resolve_chat_history_path, GrokHistoryToolSignal,
+    GrokToolHistoryTailState,
+};
 use super::{EngineConfig, EngineType, SendMessageParams};
 
 /// Soft per-image cap for attachments materialised into ACP image blocks.
@@ -254,9 +262,18 @@ pub fn resolve_grok_session_id_for_engine_send(
     explicit_session_id: Option<String>,
     tracked_session_id: Option<String>,
 ) -> Option<String> {
-    continue_session
-        .then(|| explicit_session_id.or(tracked_session_id))
-        .flatten()
+    let normalize = |value: Option<String>| {
+        value
+            .map(|entry| entry.trim().to_string())
+            .filter(|entry| !entry.is_empty())
+    };
+    if continue_session {
+        return normalize(explicit_session_id).or_else(|| normalize(tracked_session_id));
+    }
+    // 新会话：仅用 explicit 预分配 id（Shared Binding / 调用方指定），
+    // 不得回退 tracked——否则会把「新建」误 steers 到已有 session 并触发 `-s` 冲突。
+    // 与 Claude resolve_claude_session_id_for_engine_send 对齐。
+    Some(normalize(explicit_session_id).unwrap_or_else(|| uuid::Uuid::new_v4().to_string()))
 }
 
 #[derive(Debug, Clone)]
@@ -529,28 +546,35 @@ impl GrokSession {
             .map(|value| value.trim())
             .filter(|value| !value.is_empty())
             .unwrap_or("<auto>");
-        let resume_session_id = if params.continue_session {
-            params
-                .session_id
-                .as_ref()
-                .map(|value| value.trim())
-                .filter(|value| !value.is_empty())
+        let explicit_session_id = params
+            .session_id
+            .as_ref()
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+        // Canonical session identity is known up front:
+        // - continue=true → resume via `-r` with existing id
+        // - continue=false → create via `-s` with caller-chosen or new UUID
+        //   (Shared Binding 预分配 id 必须走后者，不能被忽略)
+        let (canonical_session_id, resume_session) = if params.continue_session {
+            match explicit_session_id {
+                Some(session_id) => (session_id, true),
+                None => (uuid::Uuid::new_v4().to_string(), false),
+            }
         } else {
-            None
-        };
-        // Canonical session identity is known up front: resume uses the existing
-        // id, new sessions get a backend-generated UUID passed via `-s`.
-        let (canonical_session_id, resume_session) = match resume_session_id {
-            Some(session_id) => (session_id.to_string(), true),
-            None => (uuid::Uuid::new_v4().to_string(), false),
+            (
+                explicit_session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+                false,
+            )
         };
         log::info!(
-            "[grok/send] turn={} workspace={} model={} continue_session={} resume_session_id_len={}",
+            "[grok/send] turn={} workspace={} model={} continue_session={} resume_session={} session_id_len={}",
             turn_id,
             self.workspace_id,
             requested_model,
             params.continue_session,
-            resume_session_id.map(|value| value.len()).unwrap_or(0),
+            resume_session,
+            canonical_session_id.len(),
         );
 
         let built = match self.build_command(&params, &canonical_session_id, resume_session) {
@@ -614,6 +638,122 @@ impl GrokSession {
                 turn_id: turn_id.to_string(),
             },
         );
+
+        // Live tool bridge: poll chat_history.jsonl while the process runs.
+        let stop_tool_poll = Arc::new(AtomicBool::new(false));
+        let tool_poll_task = {
+            let stop = stop_tool_poll.clone();
+            let workspace_path = self.workspace_path.clone();
+            let session_id = canonical_session_id.clone();
+            let custom_home = self.home_dir.clone();
+            let workspace_id = self.workspace_id.clone();
+            let turn_id_owned = turn_id.to_string();
+            let event_sender = self.event_sender.clone();
+            // resume → skip prior jsonl tools; brand-new session → read from 0
+            let resume_for_tool_bridge = resume_session;
+            tokio::spawn(async move {
+                let mut tail = GrokToolHistoryTailState::for_turn(resume_for_tool_bridge);
+                let mut cached_path: Option<std::path::PathBuf> = None;
+                let emit = |event: EngineEvent| {
+                    let _ = event_sender.send(GrokTurnEvent {
+                        turn_id: turn_id_owned.clone(),
+                        event,
+                    });
+                };
+                let emit_signals = |signals: Vec<GrokHistoryToolSignal>,
+                                   tail: &mut GrokToolHistoryTailState| {
+                    for signal in signals {
+                        match signal {
+                            GrokHistoryToolSignal::Started {
+                                tool_id,
+                                tool_name,
+                                input,
+                            } => {
+                                tail.started_names
+                                    .insert(tool_id.clone(), tool_name.clone());
+                                if let Some(input_value) = input.clone() {
+                                    tail.started_inputs
+                                        .insert(tool_id.clone(), input_value);
+                                }
+                                emit(EngineEvent::ToolStarted {
+                                    workspace_id: workspace_id.clone(),
+                                    tool_id,
+                                    tool_name,
+                                    input,
+                                });
+                            }
+                            GrokHistoryToolSignal::Completed { tool_id, output } => {
+                                let tool_name = tail.started_names.get(&tool_id).cloned();
+                                // Preserve start-time args so completed fileChange can still
+                                // resolve path for EditToolBlock / fileEdit scene polish.
+                                let wrapped_output = match (
+                                    tail.started_inputs.get(&tool_id).cloned(),
+                                    output,
+                                ) {
+                                    (Some(input_value), Some(out)) => Some(json!({
+                                        "_input": input_value,
+                                        "_output": out,
+                                    })),
+                                    (Some(input_value), None) => Some(json!({
+                                        "_input": input_value,
+                                    })),
+                                    (None, other) => other,
+                                };
+                                emit(EngineEvent::ToolCompleted {
+                                    workspace_id: workspace_id.clone(),
+                                    tool_id,
+                                    tool_name,
+                                    output: wrapped_output,
+                                    error: None,
+                                });
+                            }
+                        }
+                    }
+                };
+                loop {
+                    if cached_path.is_none() {
+                        cached_path = resolve_chat_history_path(
+                            &workspace_path,
+                            &session_id,
+                            custom_home.as_deref(),
+                        )
+                        .await
+                        .filter(|path| path.exists());
+                    }
+                    if let Some(path) = cached_path.as_ref() {
+                        match poll_chat_history_tool_signals(path, &mut tail) {
+                            Ok(signals) => emit_signals(signals, &mut tail),
+                            Err(error) => {
+                                log::debug!(
+                                    "[grok/tool-bridge] poll {}: {}",
+                                    path.display(),
+                                    error
+                                );
+                            }
+                        }
+                    }
+                    if stop.load(Ordering::Relaxed) {
+                        // Final poll after process exit so late tool_result lines are not missed.
+                        if cached_path.is_none() {
+                            cached_path = resolve_chat_history_path(
+                                &workspace_path,
+                                &session_id,
+                                custom_home.as_deref(),
+                            )
+                            .await
+                            .filter(|path| path.exists());
+                        }
+                        if let Some(path) = cached_path.as_ref() {
+                            if let Ok(signals) = poll_chat_history_tool_signals(path, &mut tail) {
+                                emit_signals(signals, &mut tail);
+                            }
+                        }
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(200)).await;
+                }
+            })
+        };
 
         let stderr_reader = BufReader::new(stderr);
         let stderr_task = tokio::spawn(async move {
@@ -707,6 +847,8 @@ impl GrokSession {
         } else {
             None
         };
+        stop_tool_poll.store(true, Ordering::Relaxed);
+        let _ = tool_poll_task.await;
         let stderr_text = stderr_task.await.unwrap_or_default();
         if !stderr_text.trim().is_empty() {
             error_output.push_str(&stderr_text);
@@ -1001,7 +1143,7 @@ mod tests {
     }
 
     #[test]
-    fn resolves_session_id_only_when_continuing() {
+    fn resolves_session_id_for_continue_and_preassigned_create() {
         assert_eq!(
             resolve_grok_session_id_for_engine_send(
                 true,
@@ -1014,14 +1156,26 @@ mod tests {
             resolve_grok_session_id_for_engine_send(true, None, Some("session-b".to_string())),
             Some("session-b".to_string())
         );
+        // Shared Binding 预分配：continue=false 仍使用 explicit id（走 `-s`）。
         assert_eq!(
             resolve_grok_session_id_for_engine_send(
                 false,
                 Some("session-a".to_string()),
                 Some("session-b".to_string())
             ),
-            None
+            Some("session-a".to_string())
         );
+        // continue=false 不得回退 tracked（新建必须新 id）。
+        let generated_ignoring_tracked = resolve_grok_session_id_for_engine_send(
+            false,
+            None,
+            Some("session-tracked".to_string()),
+        );
+        assert!(generated_ignoring_tracked.is_some_and(|value| {
+            !value.is_empty() && value != "session-tracked"
+        }));
+        let generated = resolve_grok_session_id_for_engine_send(false, None, None);
+        assert!(generated.is_some_and(|value| !value.is_empty()));
     }
 
     #[test]

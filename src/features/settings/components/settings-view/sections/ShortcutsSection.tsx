@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
 import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw";
 import Search from "lucide-react/dist/esm/icons/search";
 import {
@@ -98,6 +99,8 @@ export function ShortcutsSection({
   const [query, setQuery] = useState("");
   const [selectedSetting, setSelectedSetting] =
     useState<ShortcutSettingKey | null>(null);
+  /** Narrow layout: list-only vs detail-only master–detail (ignored above 900px). */
+  const [mobilePane, setMobilePane] = useState<"list" | "detail">("list");
   const [recording, setRecording] = useState(false);
   const [resettingAll, setResettingAll] = useState(false);
 
@@ -247,7 +250,10 @@ export function ShortcutsSection({
 
   return (
     <section className="settings-section settings-section-tabbed settings-shortcuts-section">
-      <div className="settings-shortcuts-layout">
+      <div
+        className="settings-shortcuts-layout"
+        data-mobile-pane={mobilePane}
+      >
         <div className="settings-shortcuts-list">
           <div className="settings-shortcuts-search">
             <Search size={14} strokeWidth={2.1} aria-hidden="true" />
@@ -272,7 +278,10 @@ export function ShortcutsSection({
                       type="button"
                       className={`settings-shortcuts-row${isSelected ? " settings-shortcuts-row--selected" : ""}`}
                       key={`${group.id}-${item.setting}`}
-                      onClick={() => setSelectedSetting(item.setting)}
+                      onClick={() => {
+                        setSelectedSetting(item.setting);
+                        setMobilePane("detail");
+                      }}
                     >
                       <span className="settings-shortcuts-row-label">
                         {resolveActionLabel(item, group.id, t)}
@@ -302,7 +311,19 @@ export function ShortcutsSection({
             <span>{t("settings.resetAllShortcuts")}</span>
           </button>
         </div>
-        <div className="settings-shortcuts-detail">{renderDetail()}</div>
+        <div className="settings-shortcuts-detail">
+          <button
+            type="button"
+            className="settings-shortcuts-mobile-back"
+            onClick={() => setMobilePane("list")}
+          >
+            <ArrowLeft size={14} strokeWidth={2.2} aria-hidden="true" />
+            <span>
+              {t("settings.backToShortcutList")}
+            </span>
+          </button>
+          {renderDetail()}
+        </div>
       </div>
     </section>
   );

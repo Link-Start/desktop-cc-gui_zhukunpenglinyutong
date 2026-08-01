@@ -7,6 +7,7 @@ import {
   CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
   CODEX_DISK_PROVIDER_PROFILE_ID,
   CODEX_DISK_PROVIDER_PROFILE_NAME,
+  GROK_LOCAL_PROVIDER_PROFILE_ID,
   KIMI_LOCAL_PROVIDER_PROFILE_ID,
   OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
   type EngineProviderProfileOption,
@@ -176,9 +177,12 @@ export function providerBindingFromSelectedProfile(
   const selectedProfileId = normalizeResponseString(providerProfile?.id);
   const providerProfileId =
     selectedProfileId ?? normalizeResponseString(fallbackProviderProfileId);
+  // Local/disk sentinels: no managed L2 override (follow global/disk config).
+  // Grok shares Kimi's local id string; keep GROK_LOCAL explicit for readers.
   if (
     providerProfileId === CLAUDE_LOCAL_PROVIDER_PROFILE_ID ||
     providerProfileId === KIMI_LOCAL_PROVIDER_PROFILE_ID ||
+    providerProfileId === GROK_LOCAL_PROVIDER_PROFILE_ID ||
     providerProfileId === OPENCODE_LOCAL_PROVIDER_PROFILE_ID
   ) {
     return {};

@@ -1,7 +1,7 @@
 {
   "name": "ccgui",
   "private": true,
-  "version": "0.7.13",
+  "version": "0.7.14",
   "type": "module",
   "scripts": {
     "preinstall": "node scripts/enforce-package-manager.mjs npm",
@@ -79,6 +79,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev:hot": "tauri dev",
+    "tauri:dev:isolated": "npm run doctor:strict && node scripts/tauri-dev-isolated.mjs",
     "tauri:dev": "npm run doctor:strict && tauri dev",
     "tauri:build": "npm run doctor:strict && tauri build",
     "tauri:dev:win": "npm run doctor:win && tauri dev --config src-tauri/tauri.windows.conf.json",

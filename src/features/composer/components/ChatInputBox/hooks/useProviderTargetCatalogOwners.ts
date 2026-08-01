@@ -442,12 +442,15 @@ function useProviderTargetCatalogOwner({
   }, [enabled]);
 
   const ensureModels = useCallback(
-    async (engine: EngineType, providerProfileId: string) => {
+    async (
+      engine: EngineType,
+      providerProfileId: string,
+    ): Promise<ModelInfo[]> => {
       if (
         !enabled ||
         !["claude", "codex", "kimi", "grok", "opencode"].includes(engine)
       ) {
-        return;
+        return [];
       }
       const key = modelCatalogKey(engine, providerProfileId);
       const requiresAuthoritativeRefresh =
@@ -459,7 +462,7 @@ function useProviderTargetCatalogOwner({
         setLoadedModels((current) =>
           current[key] ? current : { ...current, [key]: cachedModels },
         );
-        return;
+        return cachedModels;
       }
       if (requiresAuthoritativeRefresh) {
         setLoadedModels((current) => {
@@ -501,11 +504,13 @@ function useProviderTargetCatalogOwner({
           authoritativeRefreshCompletedBindingsRef.current.add(key);
         }
         setLoadedModels((current) => ({ ...current, [key]: models }));
+        return models;
       } catch (error) {
         setModelErrors((current) => ({
           ...current,
           [key]: error instanceof Error ? error.message : String(error),
         }));
+        return [];
       } finally {
         setLoadingBindings((current) => {
           const next = new Set(current);

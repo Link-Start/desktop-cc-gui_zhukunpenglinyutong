@@ -1836,3 +1836,135 @@ OpenCode Shared 校验复用 runtime-discovered last-known-good model catalog；
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1250: 分析文档：对话幕布收敛与同CLI多供应商实现指导
+
+**Date**: 2026-07-31
+**Task**: 分析文档：对话幕布收敛与同CLI多供应商实现指导
+**Branch**: `bump-version-0.7.14`
+
+### Summary
+
+提交两份 docs/analysis：幕布结构重写压缩；新建会话供应商选择/并行隔离实现指导（复用已有 isolation、创建启动漏点、UI 外观冻结）。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d18436989` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1251: Native Session 供应商与模型切换收口
+
+**Date**: 2026-08-01
+**Task**: Native Session 供应商与模型切换收口
+**Branch**: `bump-version-0.7.14`
+
+### Summary
+
+提交 close-native-session-provider-create-binding：Claude 启用不盖盘；新建菜单/续接/切老会话适配供应商与模型；底栏渠道芯片跟会话 binding；发送仍用创建时 providerProfileId。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e2ac4a1a6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1252: Provider Continuation running 可取消
+
+**Date**: 2026-08-01
+**Task**: Provider Continuation running 可取消
+**Branch**: `bump-version-0.7.14`
+
+### Summary
+
+OpenSpec + 实现：running 阶段允许取消续接；canceled set 忽略 late create 成功/失败侧效应；不 hard-abort 后端；Vitest 46 通过。提交范围仅 Dialog/hook/OpenSpec，未混入 ModelSelect 等无关改动。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b2b418500` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1253: Shared Session 供应商切换后模型列表收口
+
+**Date**: 2026-08-01
+**Task**: Shared Session 供应商切换后模型列表收口
+**Branch**: `bump-version-0.7.14`
+
+### Summary
+
+Shared Picker 切 Claude 供应商时 await ensureModels 再写 selectedNextTarget；禁止旧 model id；OpenSpec shared-execution-target 与分析文档同步。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fb6083584` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
