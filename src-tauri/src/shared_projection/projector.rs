@@ -722,10 +722,31 @@ fn canvas_tool_title(tool_name: &str, detail: &str) -> String {
                 return trimmed.to_string();
             }
         }
+        if let Some(description) = parsed.get("description").and_then(Value::as_str) {
+            let trimmed = description.trim();
+            if !trimmed.is_empty() {
+                return trimmed.to_string();
+            }
+        }
+        if let Some(command) = parsed.get("command").and_then(Value::as_str) {
+            let trimmed = command.trim();
+            if !trimmed.is_empty() {
+                // Short label for shell / apply_patch commands (full text stays in detail).
+                let first_line = trimmed.lines().next().unwrap_or(trimmed).trim();
+                if first_line.chars().count() > 80 {
+                    let shortened: String = first_line.chars().take(77).collect();
+                    return format!("{shortened}…");
+                }
+                return first_line.to_string();
+            }
+        }
     }
     let trimmed = tool_name.trim();
-    if trimmed.is_empty() {
-        "Tool".to_string()
+    if trimmed.is_empty()
+        || trimmed.eq_ignore_ascii_case("commandexecution")
+        || trimmed.eq_ignore_ascii_case("command_execution")
+    {
+        "Command".to_string()
     } else {
         trimmed.to_string()
     }
@@ -741,13 +762,12 @@ fn extract_changes_for_canvas_tool(
     tool_type: &str,
     tool_name: &str,
 ) -> Option<Vec<Value>> {
-    if tool_type == "commandExecution" {
-        return None;
-    }
     let trimmed = detail.trim();
     if trimmed.is_empty() {
         return None;
     }
+    // commandExecution may still carry apply_patch body in `command` — try that first.
+    // Pure shell (cat/rg/ls) correctly yields None and stays commandExecution.
     let parsed: Value = serde_json::from_str(trimmed).ok()?;
 
     if let Some(rows) = parsed.get("changes").and_then(Value::as_array) {
@@ -796,11 +816,16 @@ fn extract_changes_for_canvas_tool(
         }
     }
 
-    // apply_patch / custom_tool_call: patch text lives in input/patch string fields.
+    // apply_patch / custom_tool_call / commandExecution wrapping a patch body.
     if let Some(patch) = extract_apply_patch_text(&parsed, trimmed) {
         if let Some(from_patch) = extract_changes_from_apply_patch(&patch) {
             return Some(from_patch);
         }
+    }
+
+    // Do not invent file paths from arbitrary shell commands (cat/rg/ls…).
+    if tool_type == "commandExecution" {
+        return None;
     }
 
     // Fallback: single-file write/edit args (Claude/Grok style).

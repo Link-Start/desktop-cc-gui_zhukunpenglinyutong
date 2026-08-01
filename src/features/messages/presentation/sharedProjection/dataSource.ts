@@ -194,10 +194,22 @@ function enrichSharedToolConversationItem(input: {
     return attachMeta(base);
   }
 
-  const commandFromDetail =
-    (typeof parsedDetail?.command === "string" && parsedDetail.command) ||
-    (typeof parsedDetail?.cmd === "string" && parsedDetail.cmd) ||
-    "";
+  const commandFromDetail = (() => {
+    if (typeof parsedDetail?.command === "string" && parsedDetail.command.trim()) {
+      return parsedDetail.command.trim();
+    }
+    if (typeof parsedDetail?.cmd === "string" && parsedDetail.cmd.trim()) {
+      return parsedDetail.cmd.trim();
+    }
+    // Codex often sends argv as string[] — same shape as live item.command arrays.
+    if (Array.isArray(parsedDetail?.command)) {
+      return parsedDetail.command
+        .map((part) => (typeof part === "string" ? part.trim() : ""))
+        .filter(Boolean)
+        .join(" ");
+    }
+    return "";
+  })();
   const patchCandidate =
     (typeof parsedDetail?.patch === "string" && parsedDetail.patch) ||
     (typeof parsedDetail?.input === "string" && parsedDetail.input) ||

@@ -1929,8 +1929,11 @@ fn extract_codex_tool_payload(item: &Value) -> Option<Value> {
         }
     }
 
-    // commandExecution-shaped fields
-    for key in ["command", "cmd", "cwd", "description"] {
+    // commandExecution-shaped fields. Codex often sends `command` as a string[] argv
+    // (e.g. ["cat","README.md"] or apply_patch + patch body). We must join argv into a
+    // single string or Shared history loses the command text and cannot promote
+    // apply_patch → fileChange.
+    for key in ["cwd", "description"] {
         if let Some(Value::String(text)) = item.get(key) {
             let trimmed = text.trim();
             if !trimmed.is_empty() {
@@ -1938,11 +1941,48 @@ fn extract_codex_tool_payload(item: &Value) -> Option<Value> {
             }
         }
     }
+    if let Some(command) = coerce_command_field(item.get("command").or_else(|| item.get("cmd"))) {
+        let looks_like_patch = command.contains("*** Begin Patch")
+            || command.contains("*** Update File:")
+            || command.to_ascii_lowercase().contains("apply_patch");
+        object.insert("command".to_string(), Value::String(command.clone()));
+        if looks_like_patch {
+            object.insert("patch".to_string(), Value::String(command));
+        }
+    }
 
     if object.is_empty() {
         None
     } else {
         Some(Value::Object(object))
+    }
+}
+
+/// Normalize Codex command field: string as-is, string[] joined with spaces.
+fn coerce_command_field(value: Option<&Value>) -> Option<String> {
+    match value {
+        Some(Value::String(text)) => {
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        Some(Value::Array(parts)) => {
+            let joined = parts
+                .iter()
+                .filter_map(|part| part.as_str().map(str::trim))
+                .filter(|part| !part.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ");
+            if joined.is_empty() {
+                None
+            } else {
+                Some(joined)
+            }
+        }
+        _ => None,
     }
 }
 
@@ -2893,6 +2933,72 @@ mod tests {
     }
 
     #[test]
+    #[test]
+    fn codex_command_execution_argv_array_is_joined_into_summary() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        coordinator
+            .register_attempt(owner("attempt-argv", Some("run-argv"), Some("native-argv")))
+            .expect("register");
+        let events = [
+            json!({
+                "method": "item/started",
+                "params": {
+                    "threadId": "native-argv",
+                    "turnId": "run-argv",
+                    "item": {
+                        "id": "cmd-1",
+                        "type": "commandExecution",
+                        "command": ["cat", "README.md"],
+                        "cwd": "/repo",
+                        "status": "inProgress"
+                    }
+                }
+            }),
+            json!({
+                "method": "item/completed",
+                "params": {
+                    "threadId": "native-argv",
+                    "turnId": "run-argv",
+                    "item": {
+                        "id": "cmd-1",
+                        "type": "commandExecution",
+                        "command": ["cat", "README.md"],
+                        "cwd": "/repo",
+                        "status": "completed",
+                        "aggregatedOutput": "# Title\n"
+                    }
+                }
+            }),
+            json!({
+                "method": "item/agentMessage/delta",
+                "params": {"threadId": "native-argv", "turnId": "run-argv", "delta": "ok"}
+            }),
+            json!({
+                "method": "turn/completed",
+                "params": {
+                    "threadId": "native-argv",
+                    "turnId": "run-argv",
+                    "status": "completed"
+                }
+            }),
+        ];
+        let mut settled = None;
+        for event in events {
+            let observation = coordinator.ingest_codex_event("ws-1", &event);
+            settled = settled.or(observation.settled);
+        }
+        let settled = settled.expect("settled");
+        assert_eq!(settled.final_snapshot.tool_calls.len(), 1);
+        let summary = settled.final_snapshot.tool_calls[0]
+            .arguments_summary
+            .as_deref()
+            .unwrap_or("");
+        assert!(
+            summary.contains("cat") && summary.contains("README.md"),
+            "argv[] command must be joined into summary, got: {summary}"
+        );
+    }
+
     #[test]
     fn codex_apply_patch_custom_tool_call_is_captured_as_tool_exchange() {
         let coordinator = SharedRuntimeCoordinator::default();

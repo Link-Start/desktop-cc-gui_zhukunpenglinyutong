@@ -991,7 +991,8 @@ fn tool_exchanges_map_to_canvas_tool_types() {
     assert_eq!(tools[0].content["title"], "Write");
     assert_eq!(tools[0].content["changes"][0]["path"], "docs/note.md");
     assert_eq!(tools[1].content["toolType"], "commandExecution");
-    assert_eq!(tools[1].content["title"], "Bash");
+    // Prefer command text as title when present (Codex shell history readability).
+    assert_eq!(tools[1].content["title"], "ls");
     assert_eq!(tools[2].content["toolType"], "Read");
     assert_eq!(tools[2].content["title"], "Read");
     writer.shutdown().unwrap();
@@ -1049,6 +1050,61 @@ fn turn_committed_projects_file_change_changes_array() {
             .is_some_and(|diff| diff.contains("+new")),
         "diff should be preserved for canvas file-edit scene"
     );
+    writer.shutdown().unwrap();
+}
+
+/// Scenario: commandExecution with apply_patch in command text promotes to fileChange.
+#[test]
+fn turn_committed_promotes_command_execution_apply_patch_to_file_change() {
+    let temp = TempStoreDir::new("cmd-apply-patch");
+    let writer = open_writer(&temp);
+    let mut committed = match make_turn_committed("attempt-cmd-patch") {
+        CanonicalFact::TurnCommitted(fact) => fact,
+        _ => unreachable!(),
+    };
+    committed.assistant.blocks = vec![CanonicalBlock::Text {
+        text: "done".to_string(),
+    }];
+    let patch = "*** Begin Patch\n*** Update File: docs/a.md\n@@\n-a\n+b\n*** End Patch\n";
+    let command = format!("apply_patch <<'EOF'\n{patch}EOF");
+    committed.atomic_tool_exchanges = vec![AtomicToolExchange {
+        tool_call_id: "call-cmd-patch".to_string(),
+        tool_name: "commandExecution".to_string(),
+        call: ToolCall {
+            arguments_summary: Some(
+                serde_json::json!({
+                    "command": command,
+                    "cwd": "/repo"
+                })
+                .to_string(),
+            ),
+            arguments_artifact_ref: None,
+            extra: serde_json::Value::Object(Default::default()),
+        },
+        result: ToolResult {
+            status: ToolResultStatus::Completed,
+            output_summary: Some(
+                "Success. Updated the following files:\nM docs/a.md".to_string(),
+            ),
+            output_artifact_ref: None,
+            error_message: None,
+            extra: serde_json::Value::Object(Default::default()),
+        },
+        extra: serde_json::Value::Object(Default::default()),
+    }];
+    writer
+        .append_canonical_fact(SESSION, CanonicalFact::TurnCommitted(committed))
+        .expect("append");
+
+    let projected = SharedProjector::new()
+        .project_events(&writer.events_for_session(SESSION).expect("events"))
+        .expect("project");
+    let tool = projected
+        .iter()
+        .find(|item| item.kind == ProjectionItemKind::Tool)
+        .expect("tool");
+    assert_eq!(tool.content["toolType"], "fileChange");
+    assert_eq!(tool.content["changes"][0]["path"], "docs/a.md");
     writer.shutdown().unwrap();
 }
 
