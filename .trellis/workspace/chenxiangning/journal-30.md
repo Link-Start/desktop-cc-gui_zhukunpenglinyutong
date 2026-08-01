@@ -906,3 +906,52 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1275: 折叠 Shared turn-target badge 噪音
+
+**Date**: 2026-08-02
+**Task**: 折叠 Shared turn-target badge 噪音
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 问题 | Shared session 每条 assistant 都渲染 `CLI · Provider · model` badge，连续同 target 刷屏 |
+| 策略 | Policy B：每个 user 后首条 assistant 显示；同 turn 连续相同 target 折叠；target 变更再显示 |
+| 实现 | `buildTurnTargetBadgeVisibleItemIds` 预计算 → presentation state → Timeline → MessageRow `showTurnTargetBadge` |
+| 测试 | `turnBadge.test.ts` + stream-mitigation UI 用例 |
+
+**Updated Files**:
+- `src/utils/turnBadge.ts` / `src/utils/turnBadge.test.ts`
+- `src/features/messages/orchestration/hooks/useMessagesPresentationState.ts`
+- `src/features/messages/orchestration/models/messagesTimelineModels.ts`
+- `src/features/messages/components/MessagesCore.tsx`
+- `src/features/messages/timeline/components/TimelineRowRenderer.tsx`
+- `src/features/messages/rows/components/MessageRow.tsx`
+- `src/features/messages/rows/presentation/messageRowEquality.ts`
+- `src/features/messages/components/MessagesRows.stream-mitigation.test.tsx`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `50db10f0d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
