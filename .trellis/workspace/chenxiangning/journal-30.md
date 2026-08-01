@@ -873,3 +873,36 @@ unhide file-IO commandExecution; promote apply_patch; hide pwd/ls noise; chip co
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1274: 修复过程折叠展开 bashGroup 空壳
+
+**Date**: 2026-08-02
+**Task**: 修复过程折叠展开 bashGroup 空壳
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+render/count file-IO bash groups; pure shell still hidden
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2510b3957` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
