@@ -17,6 +17,7 @@ import {
 } from "../../../utils/threadItems";
 import { listSharedSessions as listSharedSessionsService } from "../../shared-session/services/sharedSessions";
 import {
+  expandHiddenSharedBindingIds,
   normalizeSharedSessionSummaries,
   toSharedThreadSummary,
 } from "../../shared-session/runtime/sharedSessionSummaries";
@@ -406,7 +407,7 @@ export function useThreadActions({
         const sharedSessions = normalizeSharedSessionSummaries(
           await listSharedSessionsService(workspace.id).catch(() => []),
         );
-        const hiddenSharedBindingIds = new Set(
+        const hiddenSharedBindingIds = expandHiddenSharedBindingIds(
           sharedSessions.flatMap((session) => session.nativeThreadIds),
         );
         const existingThreads = filterDeletedSummaries(

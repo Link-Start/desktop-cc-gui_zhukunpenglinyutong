@@ -46,7 +46,8 @@ ccgui 当前支持 Claude Code / Codex / Kimi 三个可用 CLI 引擎（Gemini /
 ## 非目标
 
 - 不实现 Grok 的 shared session（仅 Claude/Codex 支持）。
-- 不实现 uninstall（保护 `~/.grok` 登录态与会话）；不做 MCP 管理面、slash commands、image input、reasoning effort UI（协议/范围外，后续单独补）。
+- 不实现 uninstall（保护 `~/.grok` 登录态与会话）；不做 MCP 管理面、slash commands（协议/范围外，后续单独补）。
+- image input 与 reasoning effort UI **不在本 change 范围**；后续分别由 `grok-cli-image-input-capability-gap`、`grok-cli-reasoning-effort` 收口（勿再把本 proposal 当「至今未做」的事实源）。
 - 不解析 `chat_history.jsonl` 中的 system / prompt_context / events.jsonl；history 只还原 user / assistant / reasoning / tool 主线。
 - 不接入 grok ACP（`grok agent stdio`）模式；本期只用 one-shot headless。
 

@@ -17,6 +17,8 @@ const models = {
     "reloadingConfig": "設定を再読み込み中...",
     "discoverModels": "CLI からモデルを検出",
     "discoveringModels": "モデルを検出中...",
+    "emptyChannelModelsTitle": "このプロバイダーにはまだモデルがありません",
+    "emptyChannelModelsHint": "下の「モデルを追加」をクリックして、カスタムモデルを追加してください",
     "refreshConfigFailed": "更新に失敗しました: {{message}}",
         "claude": {
       "fable5": {

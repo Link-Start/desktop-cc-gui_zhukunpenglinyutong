@@ -103,6 +103,14 @@ mod tests {
     }
 
     #[test]
+    fn grok_supports_reasoning_effort() {
+        assert_eq!(
+            capability_state(EngineType::Grok, "reasoning.effort"),
+            "supported"
+        );
+    }
+
+    #[test]
     fn opencode_does_not_support_mcp_but_supports_image_input() {
         assert_eq!(
             capability_state(EngineType::OpenCode, "tool.mcp"),

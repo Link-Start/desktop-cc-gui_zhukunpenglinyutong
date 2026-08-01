@@ -23,7 +23,7 @@ describe("Messages history loading", () => {
   beforeEach(() => {
     window.localStorage.setItem("ccgui.claude.hideReasoningModule", "0");
     window.localStorage.removeItem("ccgui.messages.live.autoFollow");
-    window.localStorage.removeItem("ccgui.messages.live.collapseMiddleSteps");
+    window.localStorage.setItem("ccgui.messages.live.collapseMiddleSteps", "0");
   });
 
   afterEach(() => {

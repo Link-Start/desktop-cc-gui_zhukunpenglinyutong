@@ -1,7 +1,8 @@
 /**
  * 批量编辑文件分组组件（文件修改场景）
- * 默认折叠：极简 header（icon + 文件修改（N 个）+ 聚合 status）；展开体为无边框文件列表。
- * 入参可混排 edit / write / fileChange；折叠态不解析 diff 正文，仅在展开后按行懒加载。
+ * - 唯一文件：直接 FileChangeRow，不套「文件修改（1 个）」组头
+ * - 多文件：默认折叠 header（icon + 文件修改（N 个）+ 聚合 status）；展开体为文件列表
+ * 入参可混排 edit / write / fileChange；多文件折叠态不解析 diff 正文，仅在展开后按行懒加载。
  */
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -28,6 +29,7 @@ import {
   type FileChangeDiffPreview,
 } from './FileChangeRow';
 import {
+  extractUnifiedDiffForPath,
   mergeEditSceneStatus,
   normalizeEditScenePath,
 } from './fileEditSceneUtils';
@@ -38,6 +40,9 @@ type ToolItem = Extract<ConversationItem, { kind: 'tool' }>;
 
 interface EditToolGroupBlockProps {
   items: ToolItem[];
+  /** Prefer in-app editor when a row has no expandable inline diff. */
+  onOpenFilePath?: (path: string) => void;
+  /** Legacy git dual-pane open (only when onOpenFilePath is absent). */
   onOpenDiffPath?: (path: string) => void;
   /** 默认折叠；测试或未来设置可覆盖 */
   defaultCollapsed?: boolean;
@@ -70,12 +75,16 @@ function parseEditSceneItems(item: ToolItem): ParsedEditSceneItem[] {
 
   if (item.toolType === 'fileChange' && item.changes?.length) {
     const rows: ParsedEditSceneItem[] = [];
+    const sharedOutput = item.output ?? '';
     item.changes.forEach((change, index) => {
       const filePath = normalizeEditScenePath(change.path ?? '');
       if (!filePath) {
         return;
       }
-      const diffText = change.diff ?? '';
+      // Prefer per-file diff; fall back to carving a slice from shared tool output.
+      const diffText =
+        (change.diff ?? '').trim() ||
+        extractUnifiedDiffForPath(sharedOutput, filePath);
       rows.push({
         id: `${item.id}::${filePath}::${index}`,
         filePath,
@@ -144,9 +153,13 @@ function parseEditSceneItems(item: ToolItem): ParsedEditSceneItem[] {
 
 export const EditToolGroupBlock = memo(function EditToolGroupBlock({
   items,
+  onOpenFilePath,
   onOpenDiffPath,
   defaultCollapsed = true,
 }: EditToolGroupBlockProps) {
+  // Missing inline diff → open workspace editor (friendly). Avoid git dual-pane
+  // which shows broken "Asrc/..." chrome for brand-new files without a baseline.
+  const openMissingDiffPath = onOpenFilePath ?? onOpenDiffPath;
   const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(!defaultCollapsed);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -196,6 +209,24 @@ export const EditToolGroupBlock = memo(function EditToolGroupBlock({
     return null;
   }
 
+  // 单文件不走组模式：与 EditToolBlock 同款 FileChangeRow，避免「文件修改（1 个）→ 再缩进一行」
+  if (sceneItems.length === 1) {
+    const entry = sceneItems[0]!;
+    const stats = entry.resolveStats();
+    return (
+      <FileChangeRow
+        filePath={entry.filePath}
+        additions={stats.additions}
+        deletions={stats.deletions}
+        status={entry.status}
+        canExpand={Boolean(entry.loadDiff)}
+        loadDiff={entry.loadDiff}
+        onOpenDiffPath={entry.loadDiff ? onOpenDiffPath : openMissingDiffPath}
+        defaultExpanded={!defaultCollapsed}
+      />
+    );
+  }
+
   const fileCount = sceneItems.length;
   const needsScroll = expandedRows.length > MAX_VISIBLE_ITEMS;
   const listHeight = Math.min(expandedRows.length, MAX_VISIBLE_ITEMS) * ITEM_HEIGHT;
@@ -204,7 +235,7 @@ export const EditToolGroupBlock = memo(function EditToolGroupBlock({
 
   return (
     <ToolMarkerShell
-      icon={<FilePen />}
+      icon={<FilePen size={14} aria-hidden />}
       label={sceneLabel}
       ariaLabel={sceneAriaLabel}
       expanded={isExpanded}
@@ -230,7 +261,9 @@ export const EditToolGroupBlock = memo(function EditToolGroupBlock({
               status={entry.status}
               canExpand={Boolean(entry.loadDiff)}
               loadDiff={entry.loadDiff}
-              onOpenDiffPath={onOpenDiffPath}
+              onOpenDiffPath={
+                entry.loadDiff ? onOpenDiffPath : openMissingDiffPath
+              }
             />
           ))}
         </div>

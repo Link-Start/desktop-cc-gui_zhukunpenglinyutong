@@ -685,8 +685,57 @@ export function useThreadItemEvents({
     }
   }, [applyRealtimeDeltaOperation, safeMessageActivity]);
 
+  const flushRealtimeDeltaOpsForThread = useCallback(
+    (threadId: string) => {
+      if (isFlushingRealtimeDeltaOpsRef.current) {
+        return;
+      }
+      const matchingOperations: RealtimeDeltaOperation[] = [];
+      const deferredOperations: RealtimeDeltaOperation[] = [];
+      for (const operation of pendingRealtimeDeltaOpsRef.current) {
+        if (operation.threadId === threadId) {
+          matchingOperations.push(operation);
+        } else {
+          deferredOperations.push(operation);
+        }
+      }
+      if (matchingOperations.length === 0) {
+        return;
+      }
+      pendingRealtimeDeltaOpsRef.current = deferredOperations;
+      if (
+        deferredOperations.length === 0 &&
+        realtimeFlushTimerRef.current !== null
+      ) {
+        window.clearTimeout(realtimeFlushTimerRef.current);
+        realtimeFlushTimerRef.current = null;
+      }
+      const ensuredThreads = new Set<string>();
+      const markedProcessingThreads = new Set<string>();
+      for (const operation of matchingOperations) {
+        applyRealtimeDeltaOperation(operation, {
+          ensuredThreads,
+          markedProcessingThreads,
+        });
+      }
+      safeMessageActivity();
+    },
+    [applyRealtimeDeltaOperation, safeMessageActivity],
+  );
+
   const enqueueRealtimeDeltaOperation = useCallback(
-    (operation: RealtimeDeltaOperation) => {
+    (
+      operation: RealtimeDeltaOperation,
+      options: { urgent?: boolean } = {},
+    ) => {
+      if (options.urgent) {
+        // 首个 assistant shell 是结构性 lifecycle 事件。先提交已排队的前一段
+        // tail，再同步建壳；其它 thread 的队列保持原 cadence。
+        flushRealtimeDeltaOpsForThread(operation.threadId);
+        applyRealtimeDeltaOperation(operation);
+        safeMessageActivity();
+        return;
+      }
       if (!enableRealtimeBatchingRef.current) {
         applyRealtimeDeltaOperation(operation);
         safeMessageActivity();
@@ -700,7 +749,12 @@ export function useThreadItemEvents({
         flushRealtimeDeltaOps();
       }, REALTIME_DELTA_BATCH_FLUSH_MS);
     },
-    [applyRealtimeDeltaOperation, flushRealtimeDeltaOps, safeMessageActivity],
+    [
+      applyRealtimeDeltaOperation,
+      flushRealtimeDeltaOps,
+      flushRealtimeDeltaOpsForThread,
+      safeMessageActivity,
+    ],
   );
 
   const dispatchNormalizedRealtimeEvent = useCallback(
@@ -1051,6 +1105,47 @@ export function useThreadItemEvents({
       flushNormalizedRealtimeOps,
     ],
   );
+
+  const flushNormalizedRealtimeOpsForThread = useCallback(
+    (threadId: string) => {
+      const matchingOperations: PendingNormalizedRealtimeOperation[] = [];
+      for (const [operationKey, operation] of pendingNormalizedRealtimeOpsRef.current) {
+        if (operation.event.threadId !== threadId) {
+          continue;
+        }
+        pendingNormalizedRealtimeOpsRef.current.delete(operationKey);
+        matchingOperations.push(operation);
+      }
+      if (matchingOperations.length === 0) {
+        return;
+      }
+      if (
+        pendingNormalizedRealtimeOpsRef.current.size === 0 &&
+        normalizedRealtimeFlushTimerRef.current !== null
+      ) {
+        window.clearTimeout(normalizedRealtimeFlushTimerRef.current);
+        normalizedRealtimeFlushTimerRef.current = null;
+      }
+      for (const operation of matchingOperations) {
+        applyNormalizedRealtimeEventNow(operation, {
+          useTransitionForDispatch: false,
+        });
+      }
+    },
+    [applyNormalizedRealtimeEventNow],
+  );
+
+  useEffect(() => {
+    if (!activeThreadId?.startsWith("shared:")) {
+      return;
+    }
+    flushRealtimeDeltaOpsForThread(activeThreadId);
+    flushNormalizedRealtimeOpsForThread(activeThreadId);
+  }, [
+    activeThreadId,
+    flushNormalizedRealtimeOpsForThread,
+    flushRealtimeDeltaOpsForThread,
+  ]);
 
   const flushRealtimeDeltaOpsForUnmountRef = useRef(flushRealtimeDeltaOps);
   const flushNormalizedRealtimeOpsForUnmountRef = useRef(
@@ -1617,14 +1712,20 @@ export function useThreadItemEvents({
         ? appendLiveAssistantText(threadId, itemId, resolvedDelta)
         : null;
       if (!liveTextResult || liveTextResult.isFirst) {
-        enqueueRealtimeDeltaOperation({
-          kind: "agentDelta",
-          workspaceId,
-          threadId,
-          itemId,
-          delta: resolvedDelta,
-          turnId,
-        });
+        enqueueRealtimeDeltaOperation(
+          {
+            kind: "agentDelta",
+            workspaceId,
+            threadId,
+            itemId,
+            delta: resolvedDelta,
+            turnId,
+          },
+          {
+            urgent:
+              threadId.startsWith("shared:") && liveTextResult?.isFirst === true,
+          },
+        );
       }
       logClaudeStream("agent-delta", {
         workspaceId,

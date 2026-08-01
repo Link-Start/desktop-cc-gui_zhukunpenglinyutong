@@ -4,6 +4,7 @@ import CheckIcon from 'lucide-react/dist/esm/icons/check';
 import ChevronDownIcon from 'lucide-react/dist/esm/icons/chevron-down';
 import Settings2Icon from 'lucide-react/dist/esm/icons/settings-2';
 import type { ModelInfo, ProviderId } from '../types';
+import { resolveCustomModelDefaultReasoningEffort } from '../../../../models/customModelReasoning';
 import type { ProviderModelGroup } from '../modelOptions';
 import type { ProviderTargetGroup } from '../hooks/useProviderTargetCatalogOwners';
 import type { ExecutionTarget } from '../../../../shared-session/target/types';
@@ -72,7 +73,7 @@ interface ModelSelectProps {
   onOpenProviderProfile?: (
     providerId: ProviderId,
     providerProfileId: string,
-  ) => Promise<void> | void;
+  ) => Promise<ModelInfo[] | void> | ModelInfo[] | void;
   targetCatalogError?: string | null;
   onReloadProviderConfig?: (
     providerId: ProviderId,
@@ -177,11 +178,19 @@ export function buildProviderExecutionTarget(
   providerProfileSource?: 'disk' | 'managed',
   normalizeProviderProfile = true,
   runtimeModel?: string,
+  /** 自定义模型等无 capability 来源时播种的默认 effort；仅当结果为 null 时生效。 */
+  defaultReasoningEffort?: string | null,
 ): ExecutionTarget {
   const normalizedProviderProfileId = normalizeProviderProfile
     ? normalizeExecutionProviderProfileId(providerId, providerProfileId)
     : providerProfileId;
   const normalizedRuntimeModel = runtimeModel?.trim() || null;
+  const inheritedReasoning =
+    current?.engine === providerId &&
+    current.providerProfileId === normalizedProviderProfileId
+      ? current.reasoning ?? null
+      : null;
+  const normalizedDefaultEffort = defaultReasoningEffort?.trim() || null;
   return {
     engine: providerId,
     providerProfileId: normalizedProviderProfileId,
@@ -191,10 +200,8 @@ export function buildProviderExecutionTarget(
       providerProfileNameSnapshot?.trim() || null,
     providerProfileSource: providerProfileSource ?? null,
     reasoning:
-      current?.engine === providerId &&
-      current.providerProfileId === normalizedProviderProfileId
-        ? current.reasoning ?? null
-        : null,
+      inheritedReasoning ??
+      (normalizedDefaultEffort ? { effort: normalizedDefaultEffort } : null),
   };
 }
 
@@ -391,6 +398,11 @@ export const ModelSelect = memo(({
     Partial<Record<ProviderId, string>>
   >({});
 
+  // 切会话 / 目标渠道变化时丢弃底栏预览覆盖，避免仍显示上一会话的 DeepSeek 等旧渠道名
+  useEffect(() => {
+    setProfileOverrides({});
+  }, [executionTarget?.engine, executionTarget?.providerProfileId]);
+
   // Keep label/icon mapping in sync when the active provider rewrites
   // claude-model-mapping (same-tab custom event + cross-tab storage).
   useEffect(() => {
@@ -442,13 +454,35 @@ export const ModelSelect = memo(({
             reloading: profile.reloadingConfig ?? profile.loading,
             error: profile.error,
           }));
+        const matchedProfile = profiles.find(
+          (profile) => profile.id === activeProfileId,
+        );
+        // 切到老会话时 catalog 可能尚未含该 id：用 executionTarget 快照补 label，
+        // 禁止静默回退 profiles[0]（常见为 DeepSeek 等列表第一项）。
+        const snapshotLabel =
+          group.providerId === executionTarget?.engine
+            ? executionTarget?.providerProfileNameSnapshot?.trim() || null
+            : null;
         const activeProfile =
-          profiles.find((profile) => profile.id === activeProfileId) ??
-          profiles[0];
+          matchedProfile ??
+          (activeProfileId
+            ? {
+                id: activeProfileId,
+                label: snapshotLabel || activeProfileId,
+                source: "managed" as const,
+                models: [],
+                loading: true,
+                reloading: true,
+                error: null,
+              }
+            : profiles.find((profile) => profile.source === "disk") ??
+              profiles[0]);
         return {
           providerId: group.providerId,
           providerLabel: group.providerLabel,
-          models: activeProfile?.models ?? [],
+          models:
+            matchedProfile?.models ??
+            (activeProfile?.models?.length ? activeProfile.models : []),
           enabled: group.enabled && Boolean(activeProfile),
           disabledReason: group.disabledReason,
           loading: activeProfile?.loading ?? false,
@@ -503,10 +537,25 @@ export const ModelSelect = memo(({
     model: ModelInfo,
     providerId?: string | null,
   ): string => {
+    // Provider-scoped catalog（Shared 按渠道拉取）已把 runtime 写到 model.model；
+    // 优先展示它，避免全局 localStorage 映射仍停留在上一渠道（Native 切会话也会同步 mapping，
+    // 但 Shared 只改 next target 时 mapping 可能滞后）。
+    if (
+      (!providerId || providerId === "claude") &&
+      model.providerProfileId?.trim()
+    ) {
+      const scopedRuntime =
+        model.model?.trim() ||
+        (model.label && model.label.trim() !== model.id
+          ? model.label.trim()
+          : "");
+      if (scopedRuntime) {
+        return scopedRuntime;
+      }
+    }
+
     // Claude ANTHROPIC_* mapping only — never rewrite Codex/Grok/Kimi labels.
-    // Prefer active provider mapping (e.g. kimi-k3) so every Claude tier row
-    // shows the real runtime model — mirrors jetbrains-cc-gui behaviour.
-    if (!providerId || providerId === 'claude') {
+    if (!providerId || providerId === "claude") {
       const mappedName = resolveModelMappingValue(model.id, modelMapping);
       if (mappedName) {
         return mappedName;
@@ -514,8 +563,6 @@ export const ModelSelect = memo(({
     }
 
     const parentLabel = model.label?.trim() || "";
-    // Parent/backend already rewrote the label (mapped runtime name, or a
-    // curated tier title). Prefer it over static i18n so refresh paths work.
     if (parentLabel) {
       return parentLabel;
     }
@@ -603,6 +650,10 @@ export const ModelSelect = memo(({
           group.targetProfileSource,
           true,
           runtimeModel,
+          resolveCustomModelDefaultReasoningEffort(
+            group.providerId,
+            model.source,
+          ),
         ),
       );
       setIsOpen(false);
@@ -647,7 +698,11 @@ export const ModelSelect = memo(({
   }, [isRefreshingConfig, onRefreshConfig]);
 
   /**
-   * 切换 CLI 渠道:立即投影模型列表;若是当前引擎则实时写回 ExecutionTarget。
+   * 切换 CLI 渠道（Shared / create-session Atomic 共用）。
+   *
+   * Shared 与 Native 不同：只改 selectedNextTarget，不新建会话、不走续接。
+   * 必须先 await 目标 provider 的 model catalog，再用新 catalog 选模型写回
+   * ExecutionTarget；禁止在 models 未加载时沿用上一供应商的 model id。
    */
   const handleChannelSwitch = useCallback(
     (group: PickerModelGroup, profileId: string) => {
@@ -659,48 +714,75 @@ export const ModelSelect = memo(({
         ...current,
         [group.providerId]: profileId,
       }));
-      void onOpenProviderProfile?.(group.providerId, profileId);
 
-      if (!hasTargetGroups || !onExecutionTargetChange) {
-        return;
-      }
-      // 当前引擎:渠道切换立刻生效(保留同 catalog/runtime 模型,否则回退首个可用)
-      if (group.providerId !== executionTarget?.engine) {
-        return;
-      }
-      const keptModel =
-        profile.models.find((model) =>
-          isSelectedExecutionModel(executionTarget, model),
-        ) ??
-        profile.models.find(
-          (model) =>
-            resolveRuntimeModel(model) ===
-            (executionTarget.model?.trim() || undefined),
-        ) ??
-        profile.models[0];
-      const runtimeModel = keptModel
-        ? resolveRuntimeModel(keptModel)
-        : executionTarget.model?.trim() || undefined;
-      const catalogEntryId =
-        keptModel?.id ??
-        executionTarget.modelCatalogEntryId ??
-        runtimeModel ??
-        '';
-      if (!catalogEntryId && !runtimeModel) {
-        return;
-      }
-      onExecutionTargetChange(
-        buildProviderExecutionTarget(
-          executionTarget,
-          group.providerId,
-          profileId,
-          catalogEntryId || runtimeModel || '',
-          profile.label,
-          profile.source,
-          true,
-          runtimeModel,
-        ),
-      );
+      void (async () => {
+        let profileModels = profile.models;
+        try {
+          const loaded = await onOpenProviderProfile?.(
+            group.providerId,
+            profileId,
+          );
+          if (Array.isArray(loaded) && loaded.length > 0) {
+            profileModels = loaded;
+          }
+        } catch {
+          // ensureModels 失败时仍尽量用已有 projection
+        }
+
+        // Claude：按目标渠道 env 刷新映射，避免 Shared 选供应商后仍显示上一渠道名
+        if (group.providerId === "claude") {
+          try {
+            const { syncClaudeModelMappingForProfile } = await import(
+              "../../../../vendors/activateEngineProviderProfile"
+            );
+            await syncClaudeModelMappingForProfile(profileId);
+          } catch {
+            // mapping 同步失败不阻断渠道切换
+          }
+        }
+
+        if (!hasTargetGroups || !onExecutionTargetChange) {
+          return;
+        }
+        if (group.providerId !== executionTarget?.engine) {
+          return;
+        }
+        const keptModel =
+          profileModels.find((model) =>
+            isSelectedExecutionModel(executionTarget, model),
+          ) ??
+          profileModels.find(
+            (model) =>
+              resolveRuntimeModel(model) ===
+              (executionTarget.model?.trim() || undefined),
+          ) ??
+          profileModels[0];
+        // Shared 关键：不得回落到旧渠道的 modelCatalogEntryId
+        if (!keptModel) {
+          return;
+        }
+        const runtimeModel = resolveRuntimeModel(keptModel);
+        const catalogEntryId = keptModel.id || runtimeModel || "";
+        if (!catalogEntryId && !runtimeModel) {
+          return;
+        }
+        onExecutionTargetChange(
+          buildProviderExecutionTarget(
+            executionTarget,
+            group.providerId,
+            profileId,
+            catalogEntryId || runtimeModel || "",
+            profile.label,
+            profile.source,
+            true,
+            runtimeModel,
+            resolveCustomModelDefaultReasoningEffort(
+              group.providerId,
+              keptModel.source,
+            ),
+          ),
+        );
+      })();
     },
     [
       executionTarget,
@@ -936,10 +1018,24 @@ export const ModelSelect = memo(({
                       {!group.loading &&
                         !group.error &&
                         group.models.length === 0 && (
-                          <DropdownMenuItem disabled>
-                            {t('models.noModels', {
-                              defaultValue: '暂无可用模型',
-                            })}
+                          <DropdownMenuItem
+                            disabled
+                            className="items-start gap-2"
+                            data-empty-channel-models={group.providerId}
+                          >
+                            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                              <span className="text-sm">
+                                {t('models.emptyChannelModelsTitle', {
+                                  defaultValue: '该供应商暂无可用模型',
+                                })}
+                              </span>
+                              <span className="text-xs text-muted-foreground whitespace-normal">
+                                {t('models.emptyChannelModelsHint', {
+                                  defaultValue:
+                                    '可点击下方「添加模型」，在自定义模型中添加后使用',
+                                })}
+                              </span>
+                            </div>
                           </DropdownMenuItem>
                         )}
                       {group.models.map((model) => {

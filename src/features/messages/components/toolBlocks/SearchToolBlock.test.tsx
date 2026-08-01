@@ -174,4 +174,43 @@ describe("SearchToolBlock", () => {
     expect(screen.getByText("detail")).toBeTruthy();
     expect(screen.getByText(/find_in_page/)).toBeTruthy();
   });
+
+  it("renders compact explore-inline row with pattern and match count separated", () => {
+    const pattern = "scroll|Scroll|stick|bottom|pin|jump|anchor";
+    const output = `<workspace_result workspace_path="/Users/zhukunpeng/Desktop/CC GUI 项目/desktop-cc-gui">
+Found at least 65 matching lines
+/Users/zhukunpeng/Desktop/CC GUI 项目/desktop-cc-gui/src/features/messages/presentation/messagesUserPresentation.ts
+25: stickyCandidateText: string;
+</workspace_result>`;
+
+    const { container } = render(
+      <SearchToolBlock
+        item={{
+          id: "search-grep-1",
+          kind: "tool",
+          toolType: "mcpToolCall",
+          title: "Tool: Grep",
+          detail: JSON.stringify({
+            pattern,
+            path: "/Users/zhukunpeng/Desktop/CC GUI 项目/desktop-cc-gui/src/features/messages",
+          }),
+          status: "completed",
+          output,
+        }}
+        isExpanded={false}
+        onToggle={() => {}}
+      />,
+    );
+
+    expect(container.querySelector(".explore-inline")).toBeTruthy();
+    expect(screen.getByText("Search")).toBeTruthy();
+    expect(screen.getByText(pattern)).toBeTruthy();
+    expect(screen.getByText("≥65 matches")).toBeTruthy();
+    // 不再把整段 header 糊成一长串
+    expect(
+      screen.queryByText("scroll|Scroll|stick|bottom|pin|jump|anchor · ≥65 matches"),
+    ).toBeNull();
+    expect(screen.queryByText(/workspace_result/)).toBeNull();
+    expect(screen.queryByText(/workspace_path=/)).toBeNull();
+  });
 });

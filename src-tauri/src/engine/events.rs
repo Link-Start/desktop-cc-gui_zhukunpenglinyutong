@@ -272,18 +272,38 @@ fn resolve_tool_item_kind(tool_name: Option<&str>) -> ToolItemKind {
         || lower.contains("terminal")
         || lower.contains("command")
         || lower.contains("stdin")
+        || lower == "run"
+        || lower.starts_with("run_")
     {
         return ToolItemKind::CommandExecution;
     }
+    // Delete/remove file tools → fileChange (deleted) for canvas file-edit scene.
+    if lower == "delete"
+        || lower == "delete_file"
+        || lower == "remove_file"
+        || lower == "rm"
+        || lower.contains("delete_file")
+        || lower.contains("remove_file")
+    {
+        return ToolItemKind::FileChange;
+    }
+    // Grok/Kimi/OpenCode/Claude write/edit variants → fileChange for fileEdit scene.
     if lower.contains("apply")
         || lower.contains("patch")
         || lower.contains("write")
         || lower.contains("edit")
+        || lower.contains("search_replace")
+        || lower.contains("replace_string")
         || lower.starts_with("replace-")
         || lower.contains("replace-")
+        || lower == "create_file"
+        || lower == "str_replace"
+        || lower == "multiedit"
+        || lower == "multi_edit"
     {
         return ToolItemKind::FileChange;
     }
+    // Read/list/search/web stay mcpToolCall with tool=name for FE specialized blocks.
     ToolItemKind::MpcToolCall
 }
 
@@ -455,6 +475,8 @@ pub fn engine_event_to_app_server_event_with_turn_context(
                 ToolItemKind::CommandExecution => json!({
                     "id": tool_id,
                     "type": item_kind.item_type(),
+                    "title": tool_name,
+                    "tool": tool_name,
                     "input": input,
                     "arguments": input,
                     "status": "started",
@@ -462,15 +484,20 @@ pub fn engine_event_to_app_server_event_with_turn_context(
                 ToolItemKind::FileChange => json!({
                     "id": tool_id,
                     "type": item_kind.item_type(),
+                    // Keep tool name so FE edit/read polish + scene grouping stay name-aware.
+                    "title": tool_name,
+                    "tool": tool_name,
                     "input": input,
                     "arguments": input,
                     "status": "started",
                 }),
                 ToolItemKind::MpcToolCall => json!({
                     "id": tool_id,
+                    // Prefer engine-neutral server label so FE titles are not Claude-hardcoded.
                     "type": item_kind.item_type(),
-                    "server": "claude",
+                    "server": "agent",
                     "tool": tool_name,
+                    "title": tool_name,
                     "arguments": input,
                     "status": "started",
                 }),
@@ -501,10 +528,16 @@ pub fn engine_event_to_app_server_event_with_turn_context(
                 .or_else(|| output.clone());
             let normalized_output_text = normalized_output.as_ref().map(stringify_value);
             let item_kind = resolve_tool_item_kind(tool_name.as_deref());
+            let resolved_title = tool_name
+                .clone()
+                .filter(|name| !name.trim().is_empty())
+                .unwrap_or_else(|| tool_id.clone());
             let item = match item_kind {
                 ToolItemKind::CommandExecution => json!({
                     "id": tool_id,
                     "type": item_kind.item_type(),
+                    "title": resolved_title,
+                    "tool": resolved_title,
                     "input": embedded_args,
                     "arguments": embedded_args,
                     "aggregatedOutput": normalized_output_text.clone(),
@@ -515,22 +548,27 @@ pub fn engine_event_to_app_server_event_with_turn_context(
                 ToolItemKind::FileChange => json!({
                     "id": tool_id,
                     "type": item_kind.item_type(),
+                    "title": resolved_title,
+                    "tool": resolved_title,
                     "input": embedded_args,
                     "arguments": embedded_args,
                     "output": normalized_output_text.clone(),
                     "error": error.clone(),
                     "status": if error.is_some() { "failed" } else { "completed" },
                 }),
-                ToolItemKind::MpcToolCall => json!({
-                    "id": tool_id,
-                    "type": item_kind.item_type(),
-                    "server": "claude",
-                    "tool": tool_name.clone().unwrap_or_else(|| tool_id.clone()),
-                    "arguments": embedded_args,
-                    "result": normalized_output_text.clone(),
-                    "error": error.clone(),
-                    "status": if error.is_some() { "failed" } else { "completed" },
-                }),
+                ToolItemKind::MpcToolCall => {
+                    json!({
+                        "id": tool_id,
+                        "type": item_kind.item_type(),
+                        "server": "agent",
+                        "tool": resolved_title,
+                        "title": resolved_title,
+                        "arguments": embedded_args,
+                        "result": normalized_output_text.clone(),
+                        "error": error.clone(),
+                        "status": if error.is_some() { "failed" } else { "completed" },
+                    })
+                }
             };
             json!({
                 "method": "item/completed",

@@ -15,6 +15,10 @@ import {
   validateCodexCustomModels,
 } from "../../composer/types/provider";
 import { startupOrchestrator } from "../../startup-orchestration/utils/startupOrchestrator";
+import {
+  CUSTOM_MODEL_DEFAULT_REASONING_EFFORT,
+  CUSTOM_MODEL_SUPPORTED_REASONING_OPTIONS,
+} from "../customModelReasoning";
 
 type UseModelsOptions = {
   activeWorkspace: WorkspaceInfo | null;
@@ -127,7 +131,16 @@ const readCustomCodexModelOptions = (): ModelOption[] => {
       return [];
     }
     return validateCodexCustomModels(JSON.parse(stored)).map((model) =>
-      createModelOption(model.id, model.label, model.description ?? "", "custom"),
+      // 用户管理自定义模型：无 runtime capability 来源，统一暴露主流默认档
+      // （enrichScopedCodexReasoningMetadata 的 authoritative 匹配仍优先覆盖）。
+      createModelOption(
+        model.id,
+        model.label,
+        model.description ?? "",
+        "custom",
+        CUSTOM_MODEL_SUPPORTED_REASONING_OPTIONS,
+        CUSTOM_MODEL_DEFAULT_REASONING_EFFORT,
+      ),
     );
   } catch {
     return [];
@@ -769,15 +782,18 @@ export function useModels({
 
   // 唯一同步收敛入口：catalog / preferred 变化时规划并幂等提交。
   // 不再另设 effort backfill effect，避免双写对打（React #185）。
+  // selection 经 snapshot ref 读取，不把 selected* 放进 deps——切断「commit → layout 再 commit」自反馈
+  // （B1）；用户 setSelected* 已直接写入，无需 layout 回声。
   useLayoutEffect(() => {
+    const snapshot = selectionSnapshotRef.current;
     const plan = planComposerModelSelection({
       models,
       configModel,
       preferredModelId,
       preferredEffort,
       preferredSelectionReady,
-      selectedModelId,
-      selectedEffort,
+      selectedModelId: snapshot.selectedModelId,
+      selectedEffort: snapshot.selectedEffort,
       hasUserSelectedModel: hasUserSelectedModel.current,
       hasUserSelectedEffort: hasUserSelectedEffort.current,
     });
@@ -792,8 +808,6 @@ export function useModels({
     preferredEffort,
     preferredModelId,
     preferredSelectionReady,
-    selectedEffort,
-    selectedModelId,
   ]);
 
   return {

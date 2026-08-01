@@ -39,6 +39,7 @@ describe("engineCapabilityMatrix", () => {
   it("resolves spec-owned capability states by engine", () => {
     expect(getEngineCapabilityState("codex", "reasoning.effort")).toBe("supported");
     expect(getEngineCapabilityState("claude", "reasoning.effort")).toBe("supported");
+    expect(getEngineCapabilityState("grok", "reasoning.effort")).toBe("supported");
     expect(getEngineCapabilityState("opencode", "tool.mcp")).toBe("unsupported");
   });
 

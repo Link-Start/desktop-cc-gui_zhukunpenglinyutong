@@ -135,4 +135,27 @@ describe("ProviderContinuationDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "重试校验" }));
     expect(onConfirm).toHaveBeenCalledOnce();
   });
+
+  it("keeps cancel enabled while delivering context so a stuck run can be abandoned", () => {
+    const onCancel = vi.fn();
+    render(
+      <ProviderContinuationDialog
+        state={{
+          ...STATE,
+          stage: "running",
+          progressPhase: "delivering-context",
+          progressPercent: 68,
+        }}
+        onCancel={onCancel}
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    const cancelButton = screen.getByRole("button", {
+      name: "common.cancel",
+    }) as HTMLButtonElement;
+    expect(cancelButton.disabled).toBe(false);
+    fireEvent.click(cancelButton);
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
 });

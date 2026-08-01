@@ -95,6 +95,7 @@ import { useAppShellEditorLayoutSection } from "./app-shell-parts/useAppShellEdi
 import { useAppShellSearchPaletteSection } from "./app-shell-parts/useAppShellSearchPaletteSection";
 import { useAppShellQuickSwitcherSection } from "./app-shell-parts/useAppShellQuickSwitcherSection";
 import { useAppShellClaudeThinkingSection } from "./app-shell-parts/useAppShellClaudeThinkingSection";
+import { useAutoMigrateDisabledActiveEngine } from "./app-shell-parts/useAutoMigrateDisabledActiveEngine";
 export function AppShell() {
   const { t } = useTranslation();
   const handleOpenGitHistoryFromFileHistory = useCallback(() => {
@@ -852,6 +853,19 @@ export function AppShell() {
         (thread) => thread.id === activeThreadId,
       )
     : null;
+  const activeThreadEngine =
+    activeThreadSummary?.engineSource ??
+    activeThreadSummary?.selectedEngine ??
+    null;
+  useAutoMigrateDisabledActiveEngine({
+    activeEngine,
+    activeThreadEngine,
+    activeThreadId,
+    appSettingsLoading,
+    disabledCliEngineIds: appSettings.disabledCliEngines,
+    installedEngines,
+    setActiveEngine,
+  });
   const activeThreadProviderProfileId =
     activeThreadSummary?.providerProfileId ?? null;
   const {
@@ -2279,6 +2293,7 @@ export function AppShell() {
       providerModelCatalogs,
       reasoningOptions: effectiveReasoningOptions,
       reasoningSupported: effectiveReasoningSupported,
+      refreshEngineModels,
       resolvedEffort,
       resolvedModel,
       selectedEffort: effectiveSelectedEffort,

@@ -897,3 +897,579 @@
     max-width: 100%;
   }
 }
+
+/* ============================================================
+ * Session management redesign (clean topbar + soft panels)
+ * ============================================================ */
+
+.settings-project-sessions--redesign {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+  padding: 2px 0 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-muted) 88%, transparent);
+  margin-bottom: 12px;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 4px 2px;
+  border: none;
+  background: transparent;
+  color: var(--text-strong, var(--text-primary));
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-expand-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border-muted) 90%, transparent);
+  background: color-mix(in srgb, var(--surface-control) 35%, transparent);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-header-actions {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-mode-toggle {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border-muted) 88%, transparent);
+  background: color-mix(in srgb, var(--surface-control) 32%, transparent);
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-mode-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  margin: 0;
+  padding: 0 11px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-mode-btn:hover {
+  color: var(--text-strong, var(--text-primary));
+  background: color-mix(in srgb, var(--surface-card) 70%, transparent);
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-mode-btn.is-active {
+  color: var(--text-strong, var(--text-primary));
+  background: var(--surface-card, #fff);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.05),
+    0 0 0 1px color-mix(in srgb, var(--border-muted) 70%, transparent);
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-ghost-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  margin: 0;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--border-muted) 90%, transparent);
+  background: var(--surface-card, transparent);
+  color: var(--text-strong, var(--text-primary));
+  font-size: 12.5px;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-ghost-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--surface-control) 40%, transparent);
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-ghost-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-body {
+  margin-top: 0;
+  gap: 12px;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-lead {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* Attribution: soft segmented pair, no heavy black fill */
+.settings-project-sessions--redesign .settings-project-sessions-attribution-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 1fr);
+  gap: 14px 18px;
+  align-items: start;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--border-muted) 88%, transparent);
+  background: color-mix(in srgb, var(--surface-card) 92%, transparent);
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-attribution-title {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-attribution-current {
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border-muted) 88%, transparent);
+  background: color-mix(in srgb, var(--surface-control) 30%, transparent);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-attribution-copy p {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-attribution-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--border-muted) 88%, transparent);
+  background: color-mix(in srgb, var(--surface-control) 34%, transparent);
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-attribution-option {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 0;
+  margin: 0;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
+  text-align: left;
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-attribution-option:hover:not(:disabled) {
+  color: var(--text-strong, var(--text-primary));
+  background: color-mix(in srgb, var(--surface-card) 55%, transparent);
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-attribution-option.is-active {
+  color: var(--text-strong, var(--text-primary));
+  background: var(--surface-card, #fff);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.05),
+    0 0 0 1px color-mix(in srgb, var(--border-muted) 72%, transparent);
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-attribution-option:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-attribution-option-title {
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-attribution-option-description {
+  max-width: none;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: color-mix(in srgb, currentColor 72%, var(--text-muted));
+}
+
+/* Shell */
+.settings-project-sessions--redesign .settings-project-sessions-shell {
+  gap: 12px;
+  grid-template-columns: minmax(200px, 250px) minmax(0, 1fr);
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-nav {
+  padding: 10px 8px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--border-muted) 88%, transparent);
+  background: color-mix(in srgb, var(--surface-card) 94%, transparent);
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-nav-item {
+  border-radius: 9px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-nav-item.is-active {
+  background: color-mix(in srgb, var(--surface-control) 48%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-muted) 70%, transparent);
+  color: var(--text-strong, var(--text-primary));
+  font-weight: 600;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-main {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-control-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 12px 10px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--border-muted) 88%, transparent);
+  background: color-mix(in srgb, var(--surface-card) 96%, transparent);
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-filterbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 150px) minmax(120px, 150px);
+  gap: 8px;
+  align-items: center;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-filterbar input,
+.settings-project-sessions--redesign .settings-project-sessions-filterbar [data-slot="select-trigger"] {
+  min-height: 34px;
+  height: 34px;
+  border-radius: 9px;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 2px 0;
+  border-top: 1px solid color-mix(in srgb, var(--border-muted) 80%, transparent);
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-stats {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-btn {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--border-muted) 88%, transparent);
+  background: transparent;
+  color: var(--text-strong, var(--text-primary));
+  font-size: 12px;
+  font-weight: 550;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--surface-control) 40%, transparent);
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-btn.is-danger {
+  color: var(--destructive, #dc2626);
+  border-color: color-mix(in srgb, var(--destructive, #dc2626) 28%, var(--border-muted));
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-list {
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--border-muted) 88%, transparent);
+  background: color-mix(in srgb, var(--surface-card) 98%, transparent);
+  overflow: hidden;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-item {
+  padding: 10px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-muted) 80%, transparent);
+  gap: 10px;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-item:last-child {
+  border-bottom: none;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-item:hover {
+  background: color-mix(in srgb, var(--surface-control) 28%, transparent);
+}
+
+@media (max-width: 980px) {
+  .settings-project-sessions--redesign .settings-project-sessions-attribution-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-project-sessions--redesign .settings-project-sessions-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-project-sessions--redesign .settings-project-sessions-filterbar {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-project-sessions--redesign .settings-project-sessions-attribution-toggle {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Workbench v2: quieter hierarchy ── */
+
+.settings-project-sessions--redesign .settings-project-sessions-topbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 0 0 12px;
+  margin-bottom: 0;
+  border-bottom: none;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-expand-btn {
+  justify-self: start;
+  min-width: 0;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-header-actions {
+  justify-self: end;
+}
+
+/* Attribution collapsed by default into one quiet row */
+.settings-project-sessions--redesign .settings-project-sessions-attribution-details {
+  border: 1px solid color-mix(in srgb, var(--border-muted) 88%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-card) 96%, transparent);
+  overflow: hidden;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-attribution-summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+  user-select: none;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-attribution-summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-attribution-summary-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-attribution-summary-hint {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-attribution-details[open]
+  .settings-project-sessions-attribution-summary-hint {
+  -webkit-line-clamp: 3;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-attribution-details[open]
+  .settings-project-sessions-attribution-summary {
+  border-bottom: 1px solid color-mix(in srgb, var(--border-muted) 82%, transparent);
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-attribution-panel {
+  display: block;
+  padding: 12px 14px 14px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-attribution-toggle {
+  width: 100%;
+}
+
+/* Unified workbench shell (one frame, internal split) */
+.settings-project-sessions--redesign .settings-project-sessions-shell {
+  display: grid;
+  grid-template-columns: minmax(210px, 248px) minmax(0, 1fr);
+  gap: 0;
+  border: 1px solid color-mix(in srgb, var(--border-muted) 88%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-card) 98%, transparent);
+  overflow: hidden;
+  min-height: 420px;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-nav {
+  position: sticky;
+  top: 0;
+  height: 100%;
+  min-height: 420px;
+  border: none;
+  border-right: 1px solid color-mix(in srgb, var(--border-muted) 88%, transparent);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--surface-control) 18%, transparent);
+  padding: 12px 10px;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-main {
+  gap: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-control-panel {
+  gap: 10px;
+  padding: 12px 14px;
+  border: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-muted) 82%, transparent);
+  border-radius: 0;
+  background: transparent;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-control-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-scope-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border-muted) 85%, transparent);
+  background: color-mix(in srgb, var(--surface-control) 26%, transparent);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-toolbar {
+  padding: 8px 14px 10px;
+  margin: 0;
+  border-top: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-muted) 78%, transparent);
+  background: color-mix(in srgb, var(--surface-control) 12%, transparent);
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-toolbar.has-selection {
+  background: color-mix(in srgb, var(--primary, #18181b) 5%, transparent);
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-list,
+.settings-project-sessions--redesign .settings-project-sessions-main > .space-y-3,
+.settings-project-sessions--redesign .settings-project-sessions-main > div:last-child {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-main .settings-project-sessions-empty,
+.settings-project-sessions--redesign .settings-project-sessions-main .settings-project-sessions-notice {
+  margin: 10px 14px;
+}
+
+.settings-project-sessions--redesign .settings-project-sessions-lead {
+  display: none; /* description already on page head; reduce noise */
+}
+
+@media (max-width: 980px) {
+  .settings-project-sessions--redesign .settings-project-sessions-topbar {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-project-sessions--redesign .settings-project-sessions-header-actions {
+    justify-self: start;
+  }
+
+  .settings-project-sessions--redesign .settings-project-sessions-shell {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .settings-project-sessions--redesign .settings-project-sessions-nav {
+    position: static;
+    min-height: 0;
+    border-right: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-muted) 88%, transparent);
+  }
+}

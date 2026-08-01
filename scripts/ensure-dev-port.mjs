@@ -165,7 +165,13 @@ async function releasePort(port) {
 }
 
 async function main() {
-  const port = Number.parseInt(process.env.MOSS_DEV_PORT ?? "", 10) || DEFAULT_PORT;
+  const rawPort = Number(process.env.MOSS_DEV_PORT ?? "");
+  const port =
+    process.env.MOSS_DEV_PORT_ISOLATED === "1"
+      ? Number.isInteger(rawPort) && rawPort > 0 && rawPort <= 65535
+        ? rawPort
+        : DEFAULT_PORT
+      : DEFAULT_PORT;
   if (await isPortFree(port)) {
     return;
   }

@@ -14,6 +14,7 @@
 |---|---|---|
 | [Directory Structure](./directory-structure.md) | 模块目录与文件落位规则 | Active |
 | [Component Guidelines](./component-guidelines.md) | 组件设计、props、样式与 i18n 规范 | Active |
+| [Preference Settings UI / UX Guide](../../../docs/ui-ux/preference-settings-ui-guide.md) | 设置/偏好面板视觉与交互基线（克制 preference list） | Active |
 | [Parallel Conversation Runtime Residuals](./parallel-conversation-runtime-residuals.md) | 多 session 并行实时对话的 7 条根因诊断 + 修复 + 回归契约 | Active |
 | [Messages Streaming Render Contract](./messages-streaming-render-contract.md) | 固化 live conversation streaming 的 stable snapshot + live row override render contract | Active |
 | [Computer Use Bridge](./computer-use-bridge.md) | Computer Use 状态面板、hook 与 bridge service contract | Active |
@@ -40,6 +41,7 @@
 
 - 若任务同时涉及项目规则入口或文档治理边界，先读 `../guides/project-instruction-layering-guide.md`。
 - 先读 [Directory Structure](./directory-structure.md)，确认文件放在哪个 feature slice。
+- 涉及设置页 / 偏好列表 / 表单型管理 UI 时，先读 [Preference Settings UI / UX Guide](../../../docs/ui-ux/preference-settings-ui-guide.md)。
 - 涉及 `useEffect`、polling、listener 时先读 [Hook Guidelines](./hook-guidelines.md)。
 - 涉及 refactor 或大文件修改时先读 [Quality Guidelines](./quality-guidelines.md)。
 - 涉及 CodeMirror / `@uiw/react-codemirror` 拆分 lazy 边界、压缩 startup bundle 时，先读 [CodeMirror State-Coupled Extensions 不可跨越 Lazy Boundary](./quality-guidelines.md#codemirror-state-coupled-extensions-不可跨越-lazy-boundary)。

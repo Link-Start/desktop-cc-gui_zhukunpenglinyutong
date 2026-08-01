@@ -30,3 +30,4 @@
 - [x] 5.2 [P0, deps: 1-5 implementation] 运行 Catalog integrity check、focused Vitest、`npm run typecheck`、Rust focused tests、`cargo test --manifest-path src-tauri/Cargo.toml`；修复所有本变更引入的失败并记录结果。
 - [x] 5.3 [P0, deps: 5.2] 执行 `openspec validate --all --strict --no-interactive`、cross-layer/reuse 检查与 `git diff --check`；更新 tasks 勾选和 verification evidence；保留工作区改动且不执行 Git commit。
 - [x] 5.4 [P1, deps: 5.3] 闭环用户验收 Review：将 Catalog `sourceUrl` 渲染为可访问 upstream link，精修 `#` non-selectable 分组标题并展示可见数量，增加 Catalog hook/provider request generation guard 与回归测试，修正 send 前错误提示时态；保持不提交。
+- [x] 5.5 [P2, deps: 3.2] 统一 `智能体/提示词 -> 提示词库` 与设置页 workspace picker、筛选器和编辑表单的选择器实现，改用组件库 `Select` + 统一宽度约束，消除原生 `select` 与组件 `Select` 的样式差异。

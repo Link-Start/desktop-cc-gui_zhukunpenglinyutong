@@ -23,8 +23,8 @@ describe("SearchToolGroupBlock", () => {
     cleanup();
   });
 
-  it("shows grouped search output by default without click", () => {
-    render(
+  it("shows batch title and explore-inline rows like batch read", () => {
+    const { container } = render(
       <SearchToolGroupBlock
         items={[
           makeSearchToolItem("search-1", "openclaw", "first search output"),
@@ -33,8 +33,13 @@ describe("SearchToolGroupBlock", () => {
       />,
     );
 
+    expect(container.querySelector(".explore-inline")).toBeTruthy();
+    expect(screen.getByText(/tools\.batchSearch \(2\)/i)).toBeTruthy();
+    expect(screen.getByText("openclaw")).toBeTruthy();
     expect(screen.getByText("first search output")).toBeTruthy();
     expect(screen.getByText("second search output")).toBeTruthy();
+    // kind 标签与批量读取的 Read/List 同构
+    expect(screen.getAllByText("Web").length).toBeGreaterThanOrEqual(1);
   });
 
   it("renders grouped url summary as clickable link", () => {
@@ -70,5 +75,35 @@ describe("SearchToolGroupBlock", () => {
     expect(screen.queryByText(/\{"query"/)).toBeNull();
     const link = screen.getByRole("link");
     expect(link.getAttribute("href")).toBe("https://openclaw.ai/");
+  });
+
+  it("renders compact match count in explore-inline detail", () => {
+    const pattern = "scroll|stick";
+    const output = `<workspace_result workspace_path="/tmp/repo">
+Found at least 21 matching lines
+/tmp/repo/a.ts
+1: scroll
+</workspace_result>`;
+
+    render(
+      <SearchToolGroupBlock
+        items={[
+          {
+            id: "grep-1",
+            kind: "tool",
+            toolType: "mcpToolCall",
+            title: "Tool: Grep",
+            detail: JSON.stringify({ pattern }),
+            status: "completed",
+            output,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Search")).toBeTruthy();
+    expect(screen.getByText(pattern)).toBeTruthy();
+    expect(screen.getByText("≥21 matches")).toBeTruthy();
+    expect(screen.queryByText(/workspace_result/)).toBeNull();
   });
 });

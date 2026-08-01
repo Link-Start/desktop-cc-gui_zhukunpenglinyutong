@@ -17,6 +17,8 @@ const models = {
     "reloadingConfig": "설정 다시 불러오는 중...",
     "discoverModels": "CLI에서 모델 검색",
     "discoveringModels": "모델 검색 중...",
+    "emptyChannelModelsTitle": "이 공급자에는 아직 모델이 없습니다",
+    "emptyChannelModelsHint": "아래의 「모델 추가」를 클릭하여 사용자 지정 모델을 추가하세요",
     "refreshConfigFailed": "새로고침 실패: {{message}}",
         "claude": {
       "fable5": {

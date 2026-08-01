@@ -11,10 +11,10 @@ describe("ContextBar live canvas controls visibility", () => {
 
   beforeEach(() => {
     window.localStorage.removeItem("ccgui.messages.live.autoFollow");
-    window.localStorage.removeItem("ccgui.messages.live.collapseMiddleSteps");
+    window.localStorage.setItem("ccgui.messages.live.collapseMiddleSteps", "0");
   });
 
-  it("shows output collapse controls in history mode when there are messages", () => {
+  it("hides live canvas controls in history mode (phase collapse is automatic)", () => {
     const { container } = render(
       <ContextBar
         isLoading={false}
@@ -23,12 +23,12 @@ describe("ContextBar live canvas controls visibility", () => {
       />,
     );
 
-    expect(container.querySelector(".context-live-canvas-controls")).toBeTruthy();
+    // Focus-follow only appears while loading; output-collapse toggle was removed.
+    expect(container.querySelector(".context-live-canvas-controls")).toBeNull();
     expect(container.querySelector(".context-live-canvas-btn--focus-follow")).toBeNull();
-    expect(container.querySelector(".context-live-canvas-btn")).toBeTruthy();
   });
 
-  it("hides output collapse controls when idle and no messages", () => {
+  it("hides live canvas controls when idle and no messages", () => {
     const { container } = render(
       <ContextBar
         isLoading={false}
@@ -101,7 +101,7 @@ describe("ContextBar live canvas controls visibility", () => {
     expect(rewindButton).toBeTruthy();
   });
 
-  it("keeps output collapse and rewind as accessible icon-only quick actions", () => {
+  it("keeps rewind as an accessible icon-only quick action", () => {
     const { container } = render(
       <ContextBar
         isLoading={false}
@@ -112,15 +112,12 @@ describe("ContextBar live canvas controls visibility", () => {
       />,
     );
 
-    const collapseButton = screen.getByRole("button", {
-      name: "messages.collapseMiddleStepsEnable",
-    });
     const rewindButton = screen.getByRole("button", { name: "rewind.tooltip" });
 
-    expect(collapseButton.classList.contains("context-tool-btn--labeled")).toBe(false);
     expect(rewindButton.classList.contains("context-tool-btn--labeled")).toBe(false);
-    expect(container.querySelector(".context-live-canvas-btn .context-tool-label")).toBeNull();
     expect(container.querySelector(".context-rewind-btn .context-tool-label")).toBeNull();
+    // Global "输出折叠" control removed — phase collapse is automatic and causal.
+    expect(screen.queryByRole("button", { name: /收起中间过程|展开中间过程/ })).toBeNull();
   });
 
   it("renders the completion email toggle in the bottom context bar", () => {

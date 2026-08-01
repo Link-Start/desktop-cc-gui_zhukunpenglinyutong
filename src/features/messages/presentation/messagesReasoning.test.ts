@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ConversationItem } from "../../../types";
 import {
   appendReasoningRunText,
+  collapseConsecutiveReasoningRuns,
   compactComparableReasoningText,
   parseReasoning,
 } from "./messagesReasoning";
@@ -94,5 +95,64 @@ describe("parseReasoning cache", () => {
     const second = parseReasoning(updated);
     expect(second).not.toBe(first);
     expect(second.bodyText).toContain("补充一段新的推理");
+  });
+});
+
+describe("collapseConsecutiveReasoningRuns", () => {
+  it("merges adjacent reasoning even when segment numbers differ", () => {
+    const items: ConversationItem[] = [
+      makeReasoningItem({
+        id: "reasoning-a-seg-1",
+        summary: "Let me verify the specific file typechecks and re-run tests.",
+        content: "Let me verify the specific file typechecks and re-run tests.",
+      }),
+      makeReasoningItem({
+        id: "reasoning-b-seg-2",
+        summary: "Wait for completion",
+        content: "Wait for completion",
+      }),
+    ];
+
+    const collapsed = collapseConsecutiveReasoningRuns(items, true, true);
+    expect(collapsed).toHaveLength(1);
+    expect(collapsed[0]).toMatchObject({
+      kind: "reasoning",
+      id: "reasoning-b-seg-2",
+    });
+    if (collapsed[0]?.kind === "reasoning") {
+      expect(collapsed[0].content).toContain("typechecks");
+      expect(collapsed[0].content).toContain("Wait for completion");
+      expect(collapsed[0].content).toContain("\n\n");
+    }
+  });
+
+  it("does not merge reasoning runs interrupted by a tool", () => {
+    const items: ConversationItem[] = [
+      makeReasoningItem({
+        id: "reasoning-before",
+        summary: "先思考",
+        content: "先思考",
+      }),
+      {
+        id: "tool-1",
+        kind: "tool",
+        toolType: "toolCall",
+        title: "Tool: read",
+        detail: "{}",
+        status: "completed",
+      },
+      makeReasoningItem({
+        id: "reasoning-after",
+        summary: "再思考",
+        content: "再思考",
+      }),
+    ];
+
+    const collapsed = collapseConsecutiveReasoningRuns(items, true, true);
+    expect(collapsed.map((item) => item.kind)).toEqual([
+      "reasoning",
+      "tool",
+      "reasoning",
+    ]);
   });
 });

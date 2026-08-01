@@ -2,7 +2,6 @@ import type React from "react";
 import { useTranslation } from "react-i18next";
 import Activity from "lucide-react/dist/esm/icons/activity";
 import AppWindow from "lucide-react/dist/esm/icons/app-window";
-import ArrowLeftRight from "lucide-react/dist/esm/icons/arrow-left-right";
 import Bot from "lucide-react/dist/esm/icons/bot";
 import BookOpen from "lucide-react/dist/esm/icons/book-open";
 import Construction from "lucide-react/dist/esm/icons/construction";
@@ -15,7 +14,6 @@ import Globe2 from "lucide-react/dist/esm/icons/globe-2";
 import Info from "lucide-react/dist/esm/icons/info";
 import LayoutList from "lucide-react/dist/esm/icons/layout-list";
 import ListChecks from "lucide-react/dist/esm/icons/list-checks";
-import MessageCircle from "lucide-react/dist/esm/icons/message-circle";
 import MessageSquareQuote from "lucide-react/dist/esm/icons/message-square-quote";
 import MessageSquareText from "lucide-react/dist/esm/icons/message-square-text";
 import Monitor from "lucide-react/dist/esm/icons/monitor";
@@ -25,14 +23,11 @@ import Palette from "lucide-react/dist/esm/icons/palette";
 import PanelBottom from "lucide-react/dist/esm/icons/panel-bottom";
 import PanelRightOpen from "lucide-react/dist/esm/icons/panel-right-open";
 import PanelTop from "lucide-react/dist/esm/icons/panel-top";
-import PanelsLeftRight from "lucide-react/dist/esm/icons/panels-left-right";
 import Play from "lucide-react/dist/esm/icons/play";
 import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw";
 import Search from "lucide-react/dist/esm/icons/search";
-import Sparkles from "lucide-react/dist/esm/icons/sparkles";
 import Sun from "lucide-react/dist/esm/icons/sun";
 import TerminalSquare from "lucide-react/dist/esm/icons/terminal-square";
-import Type from "lucide-react/dist/esm/icons/type";
 import type { LucideIcon } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -50,14 +45,17 @@ import {
   type ClientUiVisibilityIconKey,
 } from "@/features/client-ui-visibility/utils/clientUiVisibility";
 import type { AppSettings, ThemePresetId } from "../../../../../types";
-import { clampUiScale } from "../../../../../utils/uiScale";
 import {
   CODE_FONT_SIZE_DEFAULT,
-  CODE_FONT_SIZE_MAX,
-  CODE_FONT_SIZE_MIN,
   DEFAULT_CODE_FONT_FAMILY,
   DEFAULT_UI_FONT_FAMILY,
+  listCodeFontSizeSelectOptions,
 } from "../../../../../utils/fonts";
+import {
+  formatUiScalePercentLabel,
+  listUiScaleSelectOptions,
+  UI_SCALE_DEFAULT,
+} from "../../../../../utils/uiScale";
 import { LanguageSelector } from "../../LanguageSelector";
 import { SyntaxAndDiffPreview } from "./SyntaxAndDiffPreview";
 
@@ -73,11 +71,8 @@ type BasicAppearanceSectionProps = {
   themePresetOptions: ReadonlyArray<{ id: ThemePresetId; label: string }>;
   onThemePresetChange: (presetId: ThemePresetId) => Promise<void>;
   uiScaleDraft: number;
-  clampedUiScale: number;
-  uiScaleDraftPercentLabel: string;
-  setUiScaleDraft: (next: number) => void;
-  handleResetUiScaleDraft: () => void;
-  handleSaveUiScale: () => void;
+  handleCommitUiScale: (next: number) => void;
+  handleResetUiScale: () => void;
   scaleShortcutTitle: string;
   scaleShortcutText: string;
   userMsgPresets: ReadonlyArray<{ color: string; label: string }>;
@@ -175,11 +170,8 @@ export function BasicAppearanceSection({
   themePresetOptions,
   onThemePresetChange,
   uiScaleDraft,
-  clampedUiScale,
-  uiScaleDraftPercentLabel,
-  setUiScaleDraft,
-  handleResetUiScaleDraft,
-  handleSaveUiScale,
+  handleCommitUiScale,
+  handleResetUiScale,
   scaleShortcutTitle,
   scaleShortcutText,
   userMsgPresets,
@@ -220,23 +212,23 @@ export function BasicAppearanceSection({
 
   return (
     <div className="settings-basic-appearance settings-basic-surface">
-      <div className="settings-basic-group-card settings-basic-group-card--list">
-        <div className="settings-subsection-title">{t("settings.displaySubtitle")}</div>
-        <div className="settings-subsection-subtitle">
-          {t("settings.displaySubDescription")}
-        </div>
-        <div className="settings-field settings-basic-theme-field settings-basic-item">
-          <div className="settings-basic-field-header">
-            <Palette className="settings-basic-field-icon" aria-hidden />
-            <span className="settings-basic-field-label">{t("settings.theme")}</span>
+      <div className="settings-basic-group-card settings-basic-group-card--list settings-pref-card">
+        <div className="settings-pref-row settings-pref-row--theme">
+          <div className="settings-pref-meta">
+            <div className="settings-pref-title">{t("settings.theme")}</div>
+            <div className="settings-pref-desc">{themeModeHint}</div>
           </div>
-          <div className="settings-basic-theme-selector" role="radiogroup" aria-label={t("settings.theme")}>
+          <div
+            className="settings-pref-control settings-pref-segmented"
+            role="radiogroup"
+            aria-label={t("settings.theme")}
+          >
             <button
               type="button"
               role="radio"
               aria-checked={appSettings.theme === "system"}
-              className={`settings-basic-theme-option ${
-                appSettings.theme === "system" ? "active" : ""
+              className={`settings-pref-segment ${
+                appSettings.theme === "system" ? "is-active" : ""
               }`}
               onClick={() =>
                 void onUpdateAppSettings({
@@ -245,17 +237,15 @@ export function BasicAppearanceSection({
                 })
               }
             >
-              <span className="settings-basic-theme-icon settings-basic-theme-icon-system">
-                <Monitor size={14} />
-              </span>
+              <Monitor size={14} aria-hidden />
               <span>{t("settings.themeSystem")}</span>
             </button>
             <button
               type="button"
               role="radio"
               aria-checked={appSettings.theme === "light"}
-              className={`settings-basic-theme-option ${
-                appSettings.theme === "light" ? "active" : ""
+              className={`settings-pref-segment ${
+                appSettings.theme === "light" ? "is-active" : ""
               }`}
               onClick={() =>
                 void onUpdateAppSettings({
@@ -264,17 +254,15 @@ export function BasicAppearanceSection({
                 })
               }
             >
-              <span className="settings-basic-theme-icon settings-basic-theme-icon-light">
-                <Sun size={14} />
-              </span>
+              <Sun size={14} aria-hidden />
               <span>{t("settings.themeLight")}</span>
             </button>
             <button
               type="button"
               role="radio"
               aria-checked={appSettings.theme === "dark"}
-              className={`settings-basic-theme-option ${
-                appSettings.theme === "dark" ? "active" : ""
+              className={`settings-pref-segment ${
+                appSettings.theme === "dark" ? "is-active" : ""
               }`}
               onClick={() =>
                 void onUpdateAppSettings({
@@ -283,17 +271,15 @@ export function BasicAppearanceSection({
                 })
               }
             >
-              <span className="settings-basic-theme-icon settings-basic-theme-icon-dark">
-                <Moon size={14} />
-              </span>
+              <Moon size={14} aria-hidden />
               <span>{t("settings.themeDark")}</span>
             </button>
             <button
               type="button"
               role="radio"
               aria-checked={appSettings.theme === "custom"}
-              className={`settings-basic-theme-option ${
-                appSettings.theme === "custom" ? "active" : ""
+              className={`settings-pref-segment ${
+                appSettings.theme === "custom" ? "is-active" : ""
               }`}
               onClick={() =>
                 void onUpdateAppSettings({
@@ -303,24 +289,26 @@ export function BasicAppearanceSection({
                 })
               }
             >
-              <span className="settings-basic-theme-icon settings-basic-theme-icon-custom">
-                <Palette size={14} />
-              </span>
+              <Palette size={14} aria-hidden />
               <span>{t("settings.themeCustom")}</span>
             </button>
           </div>
-          <div className="settings-help">{themeModeHint}</div>
         </div>
+
         {appSettings.theme === "custom" ? (
-          <div className="settings-field settings-basic-item">
-            <div className="settings-basic-field-header">
-              <Palette className="settings-basic-field-icon" aria-hidden />
-              <span className="settings-basic-field-label">{t("settings.themePreset")}</span>
+          <div className="settings-pref-row">
+            <div className="settings-pref-meta">
+              <div className="settings-pref-title">{t("settings.themePreset")}</div>
+              <div className="settings-pref-desc">
+                {t("settings.themePresetDescription", {
+                  appearance: resolvedAppearanceLabel,
+                })}
+              </div>
             </div>
-            <div className="settings-control settings-basic-theme-preset-control">
-              <div className="settings-select-wrap settings-basic-theme-preset-select-wrap">
+            <div className="settings-pref-control">
+              <div className="settings-pref-select-wrap">
                 <select
-                  className="settings-select settings-basic-theme-preset-select"
+                  className="settings-pref-select"
                   aria-label={t("settings.themePreset")}
                   value={activeThemePresetId}
                   onChange={(event) =>
@@ -335,35 +323,35 @@ export function BasicAppearanceSection({
                 </select>
               </div>
             </div>
-            <div className="settings-help">
-              {t("settings.themePresetDescription", {
-                appearance: resolvedAppearanceLabel,
-              })}
-            </div>
           </div>
         ) : null}
+
         <SyntaxAndDiffPreview appearance={resolvedAppearanceTheme} />
-        <div className="settings-field settings-basic-item settings-window-transparency-item">
-          <div className="settings-toggle-row settings-window-transparency-toggle">
-            <div className="settings-basic-field-header">
-              <Sparkles className="settings-basic-field-icon" aria-hidden />
-              <div>
-                <span className="settings-basic-field-label">
-                  {t("settings.windowTransparency")}
-                </span>
-                <div className="settings-help settings-window-transparency-help">
-                  {t("settings.windowTransparencyDesc")}
-                </div>
+
+        <div
+          className={`settings-pref-row settings-pref-row--stack${
+            windowTransparencyEnabled ? " is-expanded" : ""
+          }`}
+        >
+          <div className="settings-pref-row-main">
+            <div className="settings-pref-meta">
+              <div className="settings-pref-title">
+                {t("settings.windowTransparency")}
+              </div>
+              <div className="settings-pref-desc">
+                {t("settings.windowTransparencyDesc")}
               </div>
             </div>
-            <Switch
-              checked={windowTransparencyEnabled}
-              aria-label={t("settings.windowTransparency")}
-              onCheckedChange={(checked) => onToggleWindowTransparency(checked)}
-            />
+            <div className="settings-pref-control">
+              <Switch
+                checked={windowTransparencyEnabled}
+                aria-label={t("settings.windowTransparency")}
+                onCheckedChange={(checked) => onToggleWindowTransparency(checked)}
+              />
+            </div>
           </div>
           {windowTransparencyEnabled ? (
-            <div className="settings-control settings-window-transparency-control">
+            <div className="settings-pref-inline-control">
               <input
                 type="range"
                 min={55}
@@ -376,7 +364,7 @@ export function BasicAppearanceSection({
                   onWindowOpacityChange(Number(event.target.value))
                 }
               />
-              <span className="settings-scale-value">
+              <span className="settings-pref-value">
                 {t("settings.windowOpacityValue", {
                   value: windowOpacity,
                 })}
@@ -384,19 +372,25 @@ export function BasicAppearanceSection({
             </div>
           ) : null}
         </div>
+
         <LanguageSelector />
-        <div className="settings-field settings-basic-item">
-          <div className="settings-basic-field-header">
-            <ArrowLeftRight className="settings-basic-field-icon" aria-hidden />
-            <span className="settings-basic-field-label">{t("settings.canvasWidth")}</span>
+
+        <div className="settings-pref-row">
+          <div className="settings-pref-meta">
+            <div className="settings-pref-title">{t("settings.canvasWidth")}</div>
+            <div className="settings-pref-desc">{t("settings.canvasWidthDesc")}</div>
           </div>
-          <div className="settings-basic-theme-selector" role="radiogroup" aria-label={t("settings.canvasWidth")}>
+          <div
+            className="settings-pref-control settings-pref-segmented settings-pref-segmented--pair"
+            role="radiogroup"
+            aria-label={t("settings.canvasWidth")}
+          >
             <button
               type="button"
               role="radio"
               aria-checked={appSettings.canvasWidthMode !== "wide"}
-              className={`settings-basic-theme-option ${
-                appSettings.canvasWidthMode !== "wide" ? "active" : ""
+              className={`settings-pref-segment ${
+                appSettings.canvasWidthMode !== "wide" ? "is-active" : ""
               }`}
               onClick={() =>
                 void onUpdateAppSettings({
@@ -411,8 +405,8 @@ export function BasicAppearanceSection({
               type="button"
               role="radio"
               aria-checked={appSettings.canvasWidthMode === "wide"}
-              className={`settings-basic-theme-option ${
-                appSettings.canvasWidthMode === "wide" ? "active" : ""
+              className={`settings-pref-segment ${
+                appSettings.canvasWidthMode === "wide" ? "is-active" : ""
               }`}
               onClick={() =>
                 void onUpdateAppSettings({
@@ -424,20 +418,24 @@ export function BasicAppearanceSection({
               <span>{t("settings.canvasWidthWide")}</span>
             </button>
           </div>
-          <div className="settings-help">{t("settings.canvasWidthDesc")}</div>
         </div>
-        <div className="settings-field settings-basic-item">
-          <div className="settings-basic-field-header">
-            <PanelsLeftRight className="settings-basic-field-icon" aria-hidden />
-            <span className="settings-basic-field-label">{t("settings.layoutMode")}</span>
+
+        <div className="settings-pref-row">
+          <div className="settings-pref-meta">
+            <div className="settings-pref-title">{t("settings.layoutMode")}</div>
+            <div className="settings-pref-desc">{t("settings.layoutModeDesc")}</div>
           </div>
-          <div className="settings-basic-theme-selector" role="radiogroup" aria-label={t("settings.layoutMode")}>
+          <div
+            className="settings-pref-control settings-pref-segmented settings-pref-segmented--pair"
+            role="radiogroup"
+            aria-label={t("settings.layoutMode")}
+          >
             <button
               type="button"
               role="radio"
               aria-checked={appSettings.layoutMode !== "swapped"}
-              className={`settings-basic-theme-option ${
-                appSettings.layoutMode !== "swapped" ? "active" : ""
+              className={`settings-pref-segment ${
+                appSettings.layoutMode !== "swapped" ? "is-active" : ""
               }`}
               onClick={() =>
                 void onUpdateAppSettings({
@@ -452,8 +450,8 @@ export function BasicAppearanceSection({
               type="button"
               role="radio"
               aria-checked={appSettings.layoutMode === "swapped"}
-              className={`settings-basic-theme-option ${
-                appSettings.layoutMode === "swapped" ? "active" : ""
+              className={`settings-pref-segment ${
+                appSettings.layoutMode === "swapped" ? "is-active" : ""
               }`}
               onClick={() =>
                 void onUpdateAppSettings({
@@ -465,54 +463,51 @@ export function BasicAppearanceSection({
               <span>{t("settings.layoutModeSwapped")}</span>
             </button>
           </div>
-          <div className="settings-help">{t("settings.layoutModeDesc")}</div>
         </div>
-        <div className="settings-field settings-basic-item settings-scale-item">
-          <div className="settings-basic-field-header">
-            <Type className="settings-basic-field-icon" aria-hidden />
-            <span className="settings-basic-field-label">{t("settings.interfaceScale")}</span>
+
+        <div className="settings-pref-row">
+          <div className="settings-pref-meta">
+            <div className="settings-pref-title">{t("settings.interfaceScale")}</div>
+            <div className="settings-pref-desc" title={scaleShortcutTitle}>
+              {scaleShortcutText}
+            </div>
           </div>
-          <div className="settings-control settings-scale-control">
-            <input
-              type="range"
-              min={0.8}
-              max={2.6}
-              step={0.01}
-              className="settings-input settings-input--range"
-              aria-label={t("settings.interfaceScaleAriaLabel")}
-              value={uiScaleDraft}
-              onChange={(event) => {
-                const parsed = Number(event.target.value);
-                if (!Number.isFinite(parsed)) {
-                  return;
-                }
-                setUiScaleDraft(clampUiScale(parsed));
-              }}
-            />
-            <span className="settings-scale-value">{uiScaleDraftPercentLabel}</span>
-            <button
-              type="button"
-              className="primary settings-button-compact settings-scale-save"
-              onClick={handleSaveUiScale}
-              disabled={uiScaleDraft === clampedUiScale}
-              data-testid="settings-ui-scale-save"
-            >
-              {t("common.save")}
-            </button>
-            <button
-              type="button"
-              className="ghost settings-button-compact settings-scale-reset"
-              onClick={handleResetUiScaleDraft}
-              data-testid="settings-ui-scale-reset"
-            >
-              {t("settings.uiScaleReset")}
-            </button>
-          </div>
-          <div className="settings-help" title={scaleShortcutTitle}>
-            {scaleShortcutText}
+          <div className="settings-pref-control settings-pref-font-control">
+            <div className="settings-pref-select-wrap">
+              <select
+                className="settings-pref-select"
+                aria-label={t("settings.interfaceScaleAriaLabel")}
+                data-testid="settings-ui-scale-select"
+                value={String(uiScaleDraft)}
+                onChange={(event) => {
+                  const parsed = Number(event.target.value);
+                  if (!Number.isFinite(parsed)) {
+                    return;
+                  }
+                  handleCommitUiScale(parsed);
+                }}
+              >
+                {listUiScaleSelectOptions(uiScaleDraft).map((scale) => (
+                  <option key={scale} value={String(scale)}>
+                    {formatUiScalePercentLabel(scale)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {Math.abs(uiScaleDraft - UI_SCALE_DEFAULT) > 0.001 ? (
+              <button
+                type="button"
+                className="settings-pref-reset"
+                onClick={handleResetUiScale}
+                data-testid="settings-ui-scale-reset"
+              >
+                {t("settings.reset")}
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
+
       {/* 界面显示面板已隐藏，仅隐藏 UI，底层可见性逻辑保留 */}
       {false && (
       <div className="settings-basic-group-card settings-basic-group-card--list settings-client-ui-visibility-card">
@@ -608,89 +603,90 @@ export function BasicAppearanceSection({
         })}
       </div>
       )}
-      <div className="settings-color-config-card settings-basic-group-card">
-        <div className="settings-color-config-head">
-          <MessageCircle className="settings-color-config-icon" aria-hidden />
-          <span className="settings-color-config-title">
-            {t("settings.userMsgColorLabel")}
-          </span>
-        </div>
-        <div className="settings-color-preset-grid" role="list">
-          {userMsgPresets.map((preset) => (
-            <button
-              key={preset.color}
-              type="button"
-              role="listitem"
-              className={`settings-color-swatch${isUserMsgPresetActive(preset.color) ? " is-active" : ""}`}
-              onClick={() => handleUserMsgPresetClick(preset.color)}
-              title={preset.label}
-              aria-label={`${t("settings.userMsgColorLabel")} ${preset.color}`}
-              data-testid={`settings-user-msg-color-preset-${preset.color.slice(1)}`}
-            >
-              <span
-                className="settings-color-swatch-inner"
-                style={{ backgroundColor: preset.color }}
-              />
-            </button>
-          ))}
-        </div>
-        <div className="settings-color-custom-row">
-          <span className="settings-color-custom-label">
-            {t("settings.userMsgColorCustom")}
-          </span>
-          <label className="settings-color-picker" aria-label={t("settings.userMsgColorLabel")}>
-            <span
-              className="settings-color-picker-preview"
-              style={{
-                backgroundColor: normalizedUserMsgColor || defaultUserMsgColor,
-              }}
-            />
+
+      <div className="settings-basic-group-card settings-basic-group-card--list settings-pref-card settings-pref-card--typography">
+        <div className="settings-pref-row settings-pref-row--color">
+          <div className="settings-pref-meta">
+            <div className="settings-pref-title">{t("settings.userMsgColorLabel")}</div>
+            <div className="settings-pref-desc">{t("settings.userMsgColorHint")}</div>
+          </div>
+          <div className="settings-pref-control settings-pref-color">
+            <div className="settings-color-swatch-list" role="list">
+              {userMsgPresets.map((preset) => (
+                <button
+                  key={preset.color}
+                  type="button"
+                  role="listitem"
+                  className={`settings-color-dot${isUserMsgPresetActive(preset.color) ? " is-active" : ""}`}
+                  onClick={() => handleUserMsgPresetClick(preset.color)}
+                  title={preset.label}
+                  aria-label={`${t("settings.userMsgColorLabel")} ${preset.color}`}
+                  data-testid={`settings-user-msg-color-preset-${preset.color.slice(1)}`}
+                >
+                  <span style={{ backgroundColor: preset.color }} />
+                </button>
+              ))}
+              <label
+                className={`settings-color-dot settings-color-dot--custom${
+                  normalizedUserMsgColor &&
+                  !userMsgPresets.some((preset) =>
+                    isUserMsgPresetActive(preset.color),
+                  )
+                    ? " is-active"
+                    : ""
+                }`}
+                title={t("settings.userMsgColorCustom")}
+              >
+                <span
+                  style={{
+                    backgroundColor: normalizedUserMsgColor || defaultUserMsgColor,
+                  }}
+                />
+                <input
+                  type="color"
+                  className="settings-color-picker-input"
+                  value={normalizedUserMsgColor || defaultUserMsgColor}
+                  onChange={handleUserMsgColorPickerChange}
+                  aria-label={t("settings.userMsgColorCustom")}
+                />
+              </label>
+            </div>
             <input
-              type="color"
-              className="settings-color-picker-input"
-              value={normalizedUserMsgColor || defaultUserMsgColor}
-              onChange={handleUserMsgColorPickerChange}
+              type="text"
+              className="settings-pref-hex-input"
+              value={userMsgHexDraft}
+              onChange={handleUserMsgHexInputChange}
+              placeholder="#6e40c9"
+              maxLength={7}
+              spellCheck={false}
               aria-label={t("settings.userMsgColorLabel")}
+              data-testid="settings-user-msg-color-hex-input"
             />
-          </label>
-          <input
-            type="text"
-            className="settings-input settings-color-hex-input"
-            value={userMsgHexDraft}
-            onChange={handleUserMsgHexInputChange}
-            placeholder="#6e40c9"
-            maxLength={7}
-            spellCheck={false}
-            aria-label={t("settings.userMsgColorLabel")}
-            data-testid="settings-user-msg-color-hex-input"
-          />
-          {normalizedUserMsgColor ? (
-            <button
-              type="button"
-              className="ghost settings-color-reset"
-              onClick={handleResetUserMsgColor}
-              data-testid="settings-user-msg-color-reset"
-            >
-              <RotateCcw size={14} aria-hidden />
-              {t("settings.userMsgColorReset")}
-            </button>
-          ) : null}
+            {normalizedUserMsgColor ? (
+              <button
+                type="button"
+                className="settings-pref-reset"
+                onClick={handleResetUserMsgColor}
+                data-testid="settings-user-msg-color-reset"
+              >
+                {t("settings.reset")}
+              </button>
+            ) : null}
+          </div>
         </div>
-        <div className="settings-help settings-color-hint">
-          <Info size={14} aria-hidden />
-          <span>{t("settings.userMsgColorHint")}</span>
-        </div>
-      </div>
-      <div className="settings-basic-group-card settings-basic-group-card--list">
-        <div className="settings-field settings-basic-item settings-basic-font-field">
-          <label className="settings-field-label" htmlFor="ui-font-family">
-            {t("settings.uiFontFamily")}
-          </label>
-          <div className="settings-field-row settings-field-row--font">
-            <div className="settings-select-wrap settings-select-wrap--font">
+
+        <div className="settings-pref-row">
+          <div className="settings-pref-meta">
+            <label className="settings-pref-title" htmlFor="ui-font-family">
+              {t("settings.uiFontFamily")}
+            </label>
+            <div className="settings-pref-desc">{t("settings.uiFontFamilyDesc")}</div>
+          </div>
+          <div className="settings-pref-control settings-pref-font-control">
+            <div className="settings-pref-select-wrap settings-pref-select-wrap--grow">
               <select
                 id="ui-font-family"
-                className="settings-select"
+                className="settings-pref-select"
                 value={uiFontDraft}
                 onChange={handleUiFontSelectChange}
                 data-testid="settings-ui-font-select"
@@ -702,33 +698,36 @@ export function BasicAppearanceSection({
                 ))}
               </select>
             </div>
-            <button
-              type="button"
-              className="ghost settings-button-compact settings-ui-font-reset settings-font-reset"
-              onClick={() => {
-                setUiFontDraft(defaultUiPrimaryFont);
-                void onUpdateAppSettings({
-                  ...appSettings,
-                  uiFontFamily: DEFAULT_UI_FONT_FAMILY,
-                });
-              }}
-            >
-              {t("settings.reset")}
-            </button>
-          </div>
-          <div className="settings-help">
-            {t("settings.uiFontFamilyDesc")}
+            {uiFontDraft !== defaultUiPrimaryFont ? (
+              <button
+                type="button"
+                className="settings-pref-reset"
+                onClick={() => {
+                  setUiFontDraft(defaultUiPrimaryFont);
+                  void onUpdateAppSettings({
+                    ...appSettings,
+                    uiFontFamily: DEFAULT_UI_FONT_FAMILY,
+                  });
+                }}
+              >
+                {t("settings.reset")}
+              </button>
+            ) : null}
           </div>
         </div>
-        <div className="settings-field settings-basic-item settings-basic-font-field">
-          <label className="settings-field-label" htmlFor="code-font-family">
-            {t("settings.codeFontFamily")}
-          </label>
-          <div className="settings-field-row settings-field-row--font">
-            <div className="settings-select-wrap settings-select-wrap--font">
+
+        <div className="settings-pref-row">
+          <div className="settings-pref-meta">
+            <label className="settings-pref-title" htmlFor="code-font-family">
+              {t("settings.codeFontFamily")}
+            </label>
+            <div className="settings-pref-desc">{t("settings.codeFontFamilyDesc")}</div>
+          </div>
+          <div className="settings-pref-control settings-pref-font-control">
+            <div className="settings-pref-select-wrap settings-pref-select-wrap--grow">
               <select
                 id="code-font-family"
-                className="settings-select"
+                className="settings-pref-select"
                 value={codeFontDraft}
                 onChange={handleCodeFontSelectChange}
                 data-testid="settings-code-font-select"
@@ -740,57 +739,67 @@ export function BasicAppearanceSection({
                 ))}
               </select>
             </div>
-            <button
-              type="button"
-              className="ghost settings-button-compact settings-font-reset"
-              onClick={() => {
-                setCodeFontDraft(defaultCodePrimaryFont);
-                void onUpdateAppSettings({
-                  ...appSettings,
-                  codeFontFamily: DEFAULT_CODE_FONT_FAMILY,
-                });
-              }}
-            >
-              {t("settings.reset")}
-            </button>
-          </div>
-          <div className="settings-help">
-            {t("settings.codeFontFamilyDesc")}
+            {codeFontDraft !== defaultCodePrimaryFont ? (
+              <button
+                type="button"
+                className="settings-pref-reset"
+                onClick={() => {
+                  setCodeFontDraft(defaultCodePrimaryFont);
+                  void onUpdateAppSettings({
+                    ...appSettings,
+                    codeFontFamily: DEFAULT_CODE_FONT_FAMILY,
+                  });
+                }}
+              >
+                {t("settings.reset")}
+              </button>
+            ) : null}
           </div>
         </div>
-        <div className="settings-field settings-basic-item">
-          <label className="settings-field-label" htmlFor="code-font-size">
-            {t("settings.codeFontSize")}
-          </label>
-          <div className="settings-field-row">
-            <input
-              id="code-font-size"
-              type="range"
-              min={CODE_FONT_SIZE_MIN}
-              max={CODE_FONT_SIZE_MAX}
-              step={1}
-              className="settings-input settings-input--range"
-              value={codeFontSizeDraft}
-              onChange={(event) => {
-                const nextValue = Number(event.target.value);
-                setCodeFontSizeDraft(nextValue);
-                void handleCommitCodeFontSize(nextValue);
-              }}
-            />
-            <div className="settings-scale-value">{codeFontSizeDraft}px</div>
-            <button
-              type="button"
-              className="ghost settings-button-compact"
-              onClick={() => {
-                setCodeFontSizeDraft(CODE_FONT_SIZE_DEFAULT);
-                void handleCommitCodeFontSize(CODE_FONT_SIZE_DEFAULT);
-              }}
-            >
-              {t("settings.reset")}
-            </button>
+
+        <div className="settings-pref-row">
+          <div className="settings-pref-meta">
+            <label className="settings-pref-title" htmlFor="code-font-size">
+              {t("settings.codeFontSize")}
+            </label>
+            <div className="settings-pref-desc">{t("settings.codeFontSizeDesc")}</div>
           </div>
-          <div className="settings-help">
-            {t("settings.codeFontSizeDesc")}
+          <div className="settings-pref-control settings-pref-font-control">
+            <div className="settings-pref-select-wrap">
+              <select
+                id="code-font-size"
+                className="settings-pref-select"
+                data-testid="settings-code-font-size-select"
+                aria-label={t("settings.codeFontSize")}
+                value={String(codeFontSizeDraft)}
+                onChange={(event) => {
+                  const nextValue = Number(event.target.value);
+                  if (!Number.isFinite(nextValue)) {
+                    return;
+                  }
+                  setCodeFontSizeDraft(nextValue);
+                  void handleCommitCodeFontSize(nextValue);
+                }}
+              >
+                {listCodeFontSizeSelectOptions(codeFontSizeDraft).map((size) => (
+                  <option key={size} value={String(size)}>
+                    {size}px
+                  </option>
+                ))}
+              </select>
+            </div>
+            {codeFontSizeDraft !== CODE_FONT_SIZE_DEFAULT ? (
+              <button
+                type="button"
+                className="settings-pref-reset"
+                onClick={() => {
+                  setCodeFontSizeDraft(CODE_FONT_SIZE_DEFAULT);
+                  void handleCommitCodeFontSize(CODE_FONT_SIZE_DEFAULT);
+                }}
+              >
+                {t("settings.reset")}
+              </button>
+            ) : null}
           </div>
         </div>
       </div>

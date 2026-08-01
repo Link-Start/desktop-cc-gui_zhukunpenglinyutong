@@ -124,7 +124,7 @@ export const BashToolBlock = memo(function BashToolBlock({
 
   return (
     <ToolMarkerShell
-      icon={<Terminal />}
+      icon={<Terminal size={14} aria-hidden />}
       label={t("tools.runCommand")}
       labelHidden
       expanded={showOutput}

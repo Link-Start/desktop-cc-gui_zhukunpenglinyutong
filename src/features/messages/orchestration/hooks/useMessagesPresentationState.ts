@@ -166,9 +166,17 @@ export function useMessagesPresentationState({
     () => buildAssistantFinalBoundarySet(timelinePresentationItems),
     [timelinePresentationItems],
   );
+  // File-change summary must read the uncollapsed process stream. Causal phase
+  // collapse hides tool rows from the timeline, but the turn summary card still
+  // needs those fileChange/edit tools as its data source.
   const turnFileChangesByBoundaryId = useMemo(
-    () => buildTurnFileChangesByBoundaryId(timelinePresentationItems),
-    [timelinePresentationItems],
+    () =>
+      buildTurnFileChangesByBoundaryId(
+        deferredRenderSourceItems.length > 0
+          ? deferredRenderSourceItems
+          : timelinePresentationItems,
+      ),
+    [deferredRenderSourceItems, timelinePresentationItems],
   );
   const sessionFileChangesSummary = useMemo(
     () => mergeTurnFileChangesSummaries(turnFileChangesByBoundaryId.values()),

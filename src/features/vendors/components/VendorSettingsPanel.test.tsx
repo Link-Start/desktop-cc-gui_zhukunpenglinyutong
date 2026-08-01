@@ -592,6 +592,31 @@ describe("VendorSettingsPanel", () => {
     ).toBeTruthy();
   });
 
+  it("switches mobile master–detail pane when selecting a CLI and going back", async () => {
+    renderPanel();
+
+    await waitFor(() => {
+      expect(readGlobalCodexConfigTomlMock).toHaveBeenCalled();
+    });
+
+    const panel = document.querySelector(".vendor-settings-panel");
+    expect(panel?.getAttribute("data-mobile-pane")).toBe("list");
+
+    fireEvent.click(screen.getByRole("button", { name: "Codex CLI" }));
+    expect(panel?.getAttribute("data-mobile-pane")).toBe("detail");
+    expect(
+      screen.getByRole("heading", { name: "Codex CLI" }),
+    ).toBeTruthy();
+
+    const back = document.querySelector<HTMLButtonElement>(
+      ".vendor-settings-mobile-back",
+    );
+    expect(back).toBeTruthy();
+    expect(back?.textContent).toContain("返回 CLI 列表");
+    fireEvent.click(back!);
+    expect(panel?.getAttribute("data-mobile-pane")).toBe("list");
+  });
+
   it("keeps the Codex runtime refresh action hidden from the brand header", async () => {
     renderPanel();
 

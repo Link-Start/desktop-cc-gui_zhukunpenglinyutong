@@ -13,6 +13,8 @@ import {
   switchCodexProvider,
   reorderCodexProviders,
 } from "../../../services/tauri";
+import { VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT } from "../vendorActiveProviderEvents";
+import { notifyProviderTargetCatalogChanged } from "../../composer/components/ChatInputBox/hooks/useProviderTargetCatalogOwners";
 
 export interface CodexProviderDialogState {
   isOpen: boolean;
@@ -204,6 +206,26 @@ export function useCodexProviderManagement() {
     void loadCodexProviders();
   }, [loadCodexProviders]);
 
+  useEffect(() => {
+    const onActiveProviderChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ engine?: string }>).detail;
+      if (detail?.engine && detail.engine !== "codex") {
+        return;
+      }
+      void loadCodexProviders();
+    };
+    window.addEventListener(
+      VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT,
+      onActiveProviderChanged,
+    );
+    return () => {
+      window.removeEventListener(
+        VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT,
+        onActiveProviderChanged,
+      );
+    };
+  }, [loadCodexProviders]);
+
   const handleAddCodexProvider = useCallback(() => {
     setCodexProviderDialog({ isOpen: true, provider: null });
   }, []);
@@ -233,6 +255,7 @@ export function useCodexProviderManagement() {
         setCodexProviderDialog({ isOpen: false, provider: null });
         setCodexProviderError(null);
         await loadCodexProviders();
+        notifyProviderTargetCatalogChanged();
       } catch (error) {
         setCodexProviderError(
           getErrorMessage(error, "Failed to save Codex provider."),
@@ -248,6 +271,7 @@ export function useCodexProviderManagement() {
         await switchCodexProvider(id);
         setCodexProviderError(null);
         await loadCodexProviders();
+        notifyProviderTargetCatalogChanged();
       } catch (error) {
         setCodexProviderError(
           getErrorMessage(error, "Failed to switch Codex provider."),
@@ -305,6 +329,7 @@ export function useCodexProviderManagement() {
       await deleteCodexProvider(provider.id);
       setCodexProviderError(null);
       await loadCodexProviders();
+      notifyProviderTargetCatalogChanged();
     } catch (error) {
       setCodexProviderError(
         getErrorMessage(error, "Failed to delete Codex provider."),

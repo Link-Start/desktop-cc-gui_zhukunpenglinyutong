@@ -49,7 +49,6 @@ describe("clientUiVisibility", () => {
         "topTool.terminal": false,
         "topTool.clientDocumentation": true,
         "rightToolbar.projectMap": false,
-        "curtain.contextLedger": false,
         "future.control": false,
       },
     });
@@ -60,14 +59,12 @@ describe("clientUiVisibility", () => {
         "topTool.terminal": false,
         "topTool.clientDocumentation": true,
         "rightToolbar.projectMap": false,
-        "curtain.contextLedger": false,
       },
     });
     expect(isClientUiPanelVisible(preference, "topSessionTabs")).toBe(false);
     expect(isClientUiPanelVisible(preference, "globalRuntimeNoticeDock")).toBe(false);
     expect(isClientUiControlVisible(preference, "topTool.terminal")).toBe(false);
     expect(isClientUiControlVisible(preference, "rightToolbar.projectMap")).toBe(false);
-    expect(isClientUiControlVisible(preference, "curtain.contextLedger")).toBe(false);
   });
 
   it("registers Project Map as a default-visible right toolbar control", () => {

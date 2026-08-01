@@ -1,7 +1,7 @@
 # React #185 Maximum Update Depth Playbook
 
-> **文档性质**：可追加 living playbook（依据文档），不是一次性事故报告。  
-> **用途**：冷启动 / 渲染过程中再次出现 React `#185`（`Maximum update depth exceeded`）时，按本文件诊断、归类、修复与归档。  
+> **文档性质**：可追加 living playbook（依据文档），不是一次性事故报告。
+> **用途**：冷启动 / 渲染过程中再次出现 React `#185`（`Maximum update depth exceeded`）时，按本文件诊断、归类、修复与归档。
 > **事实边界**：行为以当前代码 + OpenSpec main specs 为准；本文件记录诊断协议与历史 case，不自动证明 `HEAD` 已全部收敛。
 
 ---
@@ -35,8 +35,8 @@
 
 ### 2.2 反查 minified stack
 
-1. 用 `function XXX(` 在对应 chunk 中定位 mangled 组件名  
-2. 用栈帧 `file:line:col` 截取附近代码，优先找 `useLayoutEffect` / `useEffect` + `setState`  
+1. 用 `function XXX(` 在对应 chunk 中定位 mangled 组件名
+2. 用栈帧 `file:line:col` 截取附近代码，优先找 `useLayoutEffect` / `useEffect` + `setState`
 3. componentStack 最内层通常是真正在循环写 state 的组件；外层多为 AppShell / router
 
 ### 2.3 复现门禁
@@ -92,6 +92,7 @@
 | 字段 | 内容 |
 |------|------|
 | **状态** | fixed（结构加固） |
+| **Fix commit** | `4c5e97c8e` — `fix(models): 结构性修复冷启动 React #185 effort 双写死循环` |
 | **现象** | 冷启动全局 Application Error；`errorClass: react-maximum-update-depth`；`appVersion` 可能为 `unknown` |
 | **Bundle / 栈** | `App-BhVHLEiP.js`；componentStack `GWt`=AppShell；栈帧落在 `useModels` 的 selection `useLayoutEffect` |
 | **Owner** | `src/features/models/hooks/useModels.ts` |
@@ -101,6 +102,7 @@
 | **结构加固** | 见下表 |
 | **回归** | `src/features/models/hooks/useModels.test.tsx`（#185 场景 + pure plan 稳定性 + 用户锁定 effort） |
 | **关联历史** | 仓库曾多次修冷启动 #185（Tooltip / ScrollArea / Quick Switcher / Agent selection / Composer cache）；**本 case 是独立 owner，不是 Quick Switcher 复发** |
+| **索引** | [`docs/analysis/README.md`](./README.md) |
 
 **结构加固要点（C-20260801-01）**
 
@@ -120,10 +122,24 @@
 |----|------|
 | 根因是否切断 | 是：双 writer 合并为 plan→apply；empty-supported 与 default 同语义 |
 | 业务是否易漂 | 中低风险：刻意保留用户锁 model/effort 行为；需靠测试钉死 |
-| 残余风险 R1 | layout 仍把 `selectedModelId`/`selectedEffort` 列入 deps，依赖幂等 commit 停环；若未来 commit 被旁路 raw setState，可能复发 |
+| 残余风险 R1 | ~~layout 仍把 selected* 列入 deps~~ → **已关闭（B1）**：selection 经 `selectionSnapshotRef` 读取 |
 | 残余风险 R2 | runtime-only 模型若 empty supported 且 **无** default，effort 仍可为 null（正确）；UI 需能接受 |
 | 残余风险 R3 | `mergeCodexSelectableModels` 对 catalog 外模型不会 hydrate STANDARD efforts；与 #185 无关，但是 effort 元数据质量债 |
 | 建议后续 | 见 §7 backlog；新 #185 勿直接改 limit，先按 §2 归因 |
+
+### C-20260801-02 — freeform 会话选择 + layout self-deps / 测量翻转加固
+
+| 字段 | 内容 |
+|------|------|
+| **状态** | fixed（结构加固） |
+| **现象** | 多份 `#185` 报告：dev 栈 `useModels` / AppShell；prod `App-ey-y8N2U` 下 Composer 与 Messages 树 |
+| **Bundle / 栈** | `App-ey-y8N2U.js`；dev `useModels.ts` layout；Messages 侧 collapsible / scroll 树 |
+| **Owner** | `useModels.ts`；`useSelectedComposerSession.ts`；`useAppShellComposerModelSection.ts`；`CollapsibleUserTextBlock.tsx` |
+| **触发条件** | 冷启动 / 会话选择修复 / 用户气泡折叠测量；catalog 外 freeform modelId 与 invalid effort 并存 |
+| **根因** | ① layout 将 `selected*` 列入 deps 形成 commit 自反馈（R1）；② reload/select 路径偶发无 equality 的 setState；③ freeform 业务保留 catalog 外 model 后，旧「整选择回退 catalog」测试与语义冲突；④ Collapsible 用外层 scrollHeight 测量可能与 maxHeight class 互踩 |
+| **修复** | B1：layout 仅依赖 catalog/preferred，selection 读 snapshot ref；会话 selection 全路径幂等 commit；thread repair 只写 effective 投影且 freeform **不静默丢 model**；Collapsible 测内层内容高度 + boolean equality |
+| **回归** | `useModels.test.tsx`；`app-shell.startup.test.tsx`（freeform + effort 修复且无 #185）；`useSelectedComposerSession.test.tsx`；`modelSelection.test.ts` |
+| **业务不变量** | Atomic picker / 自定义模型名 freeform **不得**被 repair 静默回退到 catalog default |
 
 ---
 
@@ -151,13 +167,12 @@
 
 ## 7. 后续加固 Backlog（可勾选推进）
 
-- [ ] **B1** layout 收敛仅依赖 catalog/preferred；selection 经 ref 读取，进一步降低 self-deps（验证用户 setSelection 后仍能补齐空 effort）
-- [ ] **B2** AppShell `usePersistComposerSettings` 与 thread repair：审计是否与 `useModels` 形成跨 hook 反馈（preferred ↔ selected 往返）
+- [x] **B1** layout 收敛仅依赖 catalog/preferred；selection 经 ref 读取（C-20260801-02）
+- [x] **B2** thread repair / freeform：只收敛 effective 投影；catalog 外 modelId 保留（C-20260801-02）
 - [ ] **B3** runtime 空 reasoning metadata 的 hydrate 策略产品化（catalog 内 merge vs catalog 外 STANDARD fallback）
 - [ ] **B4** ErrorBoundary 报告稳定注入 `appVersion`（避免 `unknown` 干扰归因）
 - [ ] **B5** 将本 playbook 关键到 `openspec/specs/client-renderer-stability-under-pressure` 的诊断入口（仅文档指针，不扩 scope）
-- [ ] **B6** 冷启动 fixture：真实 persisted shape（跨引擎 lastComposerModelId + null effort）进 `app-shell.startup.test.tsx`
-
+- [x] **B6** 冷启动 fixture：freeform + invalid effort（`app-shell.startup.test.tsx`）
 ---
 
 ## 8. 历史相关入口（索引，非完整列表）
@@ -180,3 +195,5 @@ OpenSpec / 代码中已出现的 #185 类修复（便于对照，**不等于本 
 | 日期 | 说明 |
 |------|------|
 | 2026-08-01 | 初版：协议 + AP 目录 + C-20260801-01（useModels）+ backlog |
+| 2026-08-01 | 校准：C-20260801-01 补 fix commit `4c5e97c8e`；挂 analysis 索引 |
+| 2026-08-01 | C-20260801-02：B1 layout self-deps 关闭；freeform repair 语义钉死；Collapsible 测量加固 |

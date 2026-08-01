@@ -23,8 +23,9 @@ const HIDE_DELAY = 1500;
  * 「显示」只由用户主动 wheel 触发，scroll 事件只负责「到底了就藏起来」——
  * 这样程序化的自动跟随滚动不会误触发浮标。
  *
- * 按钮只上报 top/bottom intent；逐帧 convergence、取消与 auto-follow re-arm 统一由
- * Messages owner 管理，避免按钮和自动路径各自成为 scroll writer。
+ * 按钮只上报 top/bottom intent；真正回底走 Messages owner 的 pinCanvasToBottom
+ * （与 turn-send / turn-settle / history-restore 同一权威通道），避免按钮和自动路径
+ * 各自成为 scroll writer。
  *
  * ponytail: 定位从原项目的 position:fixed + inputAreaRef + getAppViewport()
  * zoom 补偿，简化为相对 .messages-shell(已 position:relative) 的 absolute 固定

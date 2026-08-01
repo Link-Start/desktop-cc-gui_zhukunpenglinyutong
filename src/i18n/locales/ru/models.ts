@@ -17,6 +17,8 @@ const models = {
     "reloadingConfig": "Перезагрузка конфигурации...",
     "discoverModels": "Найти модели через CLI",
     "discoveringModels": "Поиск моделей...",
+    "emptyChannelModelsTitle": "У этого провайдера пока нет моделей",
+    "emptyChannelModelsHint": "Нажмите «Добавить модель» ниже, чтобы добавить пользовательскую модель",
     "refreshConfigFailed": "Не удалось обновить: {{message}}",
         "claude": {
       "fable5": {

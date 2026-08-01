@@ -12,7 +12,7 @@ export {
   sendUserMessage,
   startReview,
 } from "./tauri/messaging";
-export { localUsageSnapshot, localUsageStatistics } from "./tauri/usage";
+export { localUsageSnapshot } from "./tauri/usage";
 export {
   ttDetectCli,
   ttEnsureServer,

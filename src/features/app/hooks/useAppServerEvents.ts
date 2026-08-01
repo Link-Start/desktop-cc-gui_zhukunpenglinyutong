@@ -787,7 +787,14 @@ function isCodexRawGeneratedImageEvent(
 function shouldRebindSharedNativeThreadOnStartedEvent(
   engine: "claude" | "opencode" | "codex" | "gemini" | "grok" | "kimi",
 ): boolean {
-  return engine === "claude";
+  // Claude 与 local CLIs 在 thread/started 上可能从 pending 占位收敛到
+  // `engine:{sessionId}`；Codex 使用 raw thread id，不在此路径做前缀 rebind。
+  return (
+    engine === "claude" ||
+    engine === "kimi" ||
+    engine === "grok" ||
+    engine === "opencode"
+  );
 }
 
 function isAgentMessageSnapshotMethod(method: string): boolean {
@@ -1878,7 +1885,11 @@ export function dispatchAppServerEvent(
       !sharedBridge &&
       threadId &&
       eventEngine &&
-      (eventEngine === "codex" || eventEngine === "claude")
+      (eventEngine === "codex" ||
+        eventEngine === "claude" ||
+        eventEngine === "kimi" ||
+        eventEngine === "grok" ||
+        eventEngine === "opencode")
     ) {
       const pendingBinding = resolvePendingSharedSessionBindingForEngine(
         workspace_id,

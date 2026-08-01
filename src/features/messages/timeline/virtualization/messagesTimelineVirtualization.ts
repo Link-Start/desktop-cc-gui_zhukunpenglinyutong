@@ -420,11 +420,14 @@ export function estimateTimelineProjectionRowSize(row: TimelineProjectionRow) {
       }
       switch (row.entry.item.kind) {
         case "explore":
-          return row.entry.item.status === "exploring" ? 52 : 36;
+          // 折叠 explore 行约 20px 行高 + 上下 4px margin
+          return row.entry.item.status === "exploring" ? 48 : 32;
         case "tool":
-          return 58;
+          // 折叠 Marker 行 + 4px 外层 margin（展开体另由 measure 纠正）
+          return 40;
         case "reasoning":
-          return 72;
+          // 折叠思考头 + 4px 外层 margin；展开/流式由 measure 纠正
+          return 36;
         case "message": {
           const textLength = row.entry.item.text.length;
           if (row.entry.item.role === "user") {
@@ -445,7 +448,7 @@ export function estimateTimelineProjectionRowSize(row: TimelineProjectionRow) {
     case "tailUserInput":
       return 132;
     case "liveMiddleCollapsed":
-      return 44;
+      return 36;
     case "workingIndicator":
       return 52;
     case "emptyState":
@@ -498,6 +501,9 @@ export function isEmptyVirtualProjectionRow(
       if (row.entry.kind === "bashGroup") {
         return (
           input.activeEngine === "codex" ||
+          input.activeEngine === "grok" ||
+          input.activeEngine === "kimi" ||
+          input.activeEngine === "opencode" ||
           (input.activeEngine === "claude" &&
             !input.claudeHistoryTranscriptFallbackActive)
         );
@@ -673,10 +679,13 @@ export function resolveVirtualizedTimelineScopeReset(input: {
     resolveVirtualizedTimelineScopeIdentity(input.previousScopeKey) ===
     resolveVirtualizedTimelineScopeIdentity(input.nextScopeKey)
   ) {
+    const keyChanged = input.previousScopeKey !== input.nextScopeKey;
     return {
       nextScopeKey: input.nextScopeKey,
-      shouldMeasure: input.previousScopeKey !== input.nextScopeKey,
-      shouldPinBottomWhenArmed: false,
+      shouldMeasure: keyChanged,
+      // 同 thread 内 deferred 回刷 / 呈现 scope 变化会改 key 并 remeasure；
+      // 此前不 pin 会导致估高→真高后视口停在假底（结束后 1–2s 丢底）。
+      shouldPinBottomWhenArmed: keyChanged && input.stableHistoryView,
     };
   }
   return {

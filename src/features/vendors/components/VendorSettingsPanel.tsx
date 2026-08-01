@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
+import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
 import ArrowLeftRight from "lucide-react/dist/esm/icons/arrow-left-right";
 import File from "lucide-react/dist/esm/icons/file";
 import Import from "lucide-react/dist/esm/icons/import";
@@ -9,6 +10,7 @@ import Search from "lucide-react/dist/esm/icons/search";
 import type { CodexCustomModel, CodexProviderConfig, VendorTab } from "../types";
 import { LOCAL_GROK_PROVIDER_ID, LOCAL_KIMI_PROVIDER_ID, LOCAL_OPENCODE_PROVIDER_ID, STORAGE_KEYS, validateCodexCustomModels } from "../types";
 import type { AppSettings, CodexUnifiedExecExternalStatus } from "../../../types";
+import { notifyProviderTargetCatalogChanged } from "../../composer/components/ChatInputBox/hooks/useProviderTargetCatalogOwners";
 import { useProviderManagement } from "../hooks/useProviderManagement";
 import { useCodexProviderManagement } from "../hooks/useCodexProviderManagement";
 import { useKimiProviderManagement } from "../hooks/useKimiProviderManagement";
@@ -187,6 +189,8 @@ export function VendorSettingsPanel({
 }: VendorSettingsPanelProps) {
   const { t } = useTranslation();
   const [activeCli, setActiveCli] = useState<CliEngineId>("claude");
+  /** Narrow layout: list-only vs detail-only master–detail (ignored above 900px). */
+  const [mobilePane, setMobilePane] = useState<"list" | "detail">("list");
   const [cliSearchQuery, setCliSearchQuery] = useState("");
   const [collapsedCliGroups, setCollapsedCliGroups] = useState<
     Record<CliEngineNavGroupKey, boolean>
@@ -242,9 +246,13 @@ export function VendorSettingsPanel({
 
   const handleCcSwitchImported = useCallback(() => {
     if (ccSwitchImportSource?.target === "claude") {
-      void claude.loadProviders();
+      void claude.loadProviders().then(() => {
+        notifyProviderTargetCatalogChanged();
+      });
     } else if (ccSwitchImportSource?.target === "codex") {
-      void codex.loadCodexProviders();
+      void codex.loadCodexProviders().then(() => {
+        notifyProviderTargetCatalogChanged();
+      });
     }
   }, [ccSwitchImportSource?.target, claude, codex]);
 
@@ -466,6 +474,11 @@ export function VendorSettingsPanel({
     await Promise.all([loadCodexGlobalConfig(), refreshUnifiedExecExternalStatus()]);
   }, [loadCodexGlobalConfig, refreshUnifiedExecExternalStatus]);
 
+  const selectCli = useCallback((id: CliEngineId) => {
+    setActiveCli(id);
+    setMobilePane("detail");
+  }, []);
+
   const applyPendingModelManagerRequest = useCallback(() => {
     const request = consumeVendorModelManagerRequest();
     if (!request) {
@@ -475,9 +488,9 @@ export function VendorSettingsPanel({
       request.target === "codex"
         ? "codex"
         : "claude";
-    setActiveCli(target);
+    selectCli(target);
     openModelDialog(target, Boolean(request.addMode));
-  }, [openModelDialog]);
+  }, [openModelDialog, selectCli]);
 
   useEffect(() => {
     applyPendingModelManagerRequest();
@@ -748,29 +761,18 @@ export function VendorSettingsPanel({
 
   return (
     <div
-      className={cn(
-        "vendor-settings-panel",
-        "flex items-stretch",
-        "max-md:flex-col",
-      )}
+      className="vendor-settings-panel flex items-stretch"
+      data-mobile-pane={mobilePane}
     >
       <nav
-        className={cn(
-          "vendor-engine-nav sticky top-0 flex min-h-0 shrink-0 flex-col self-stretch",
-          "max-md:static max-md:w-full max-md:px-0",
-        )}
+        className="vendor-engine-nav sticky top-0 flex min-h-0 shrink-0 flex-col self-stretch"
         aria-label={t("settings.vendorsTitle")}
       >
         {/*
           滚动层与外壳分离：外壳 overflow:hidden 裁掉任何残留滚动条 gutter，
           避免展开「暂未开放」后 CLI 行被挤窄 1–2px。
         */}
-        <div
-          className={cn(
-            "vendor-engine-nav-scroll flex min-h-0 flex-1 flex-col",
-            "max-md:flex-row",
-          )}
-        >
+        <div className="vendor-engine-nav-scroll flex min-h-0 flex-1 flex-col">
           <label className="vendor-engine-search">
             <Search size={16} aria-hidden="true" />
             <input
@@ -795,7 +797,7 @@ export function VendorSettingsPanel({
                 moreLabel={cliMoreActionsLabel}
                 disableLabel={cliDisableLabel}
                 enableLabel={cliEnableLabel}
-                onSelectCli={setActiveCli}
+                onSelectCli={selectCli}
                 onToggleCliEnabled={handleToggleCliEngine}
               />
             ))
@@ -816,7 +818,7 @@ export function VendorSettingsPanel({
                   defaultValue: "没有已启用的 CLI",
                 })}
                 onToggleGroup={() => toggleCliGroup("enabled")}
-                onSelectCli={setActiveCli}
+                onSelectCli={selectCli}
                 onToggleCliEnabled={handleToggleCliEngine}
               />
               {cliEngineNavGroups.disabled.length > 0 ? (
@@ -832,7 +834,7 @@ export function VendorSettingsPanel({
                   disableLabel={cliDisableLabel}
                   enableLabel={cliEnableLabel}
                   onToggleGroup={() => toggleCliGroup("disabled")}
-                  onSelectCli={setActiveCli}
+                  onSelectCli={selectCli}
                   onToggleCliEnabled={handleToggleCliEngine}
                 />
               ) : null}
@@ -848,7 +850,7 @@ export function VendorSettingsPanel({
                 disableLabel={cliDisableLabel}
                 enableLabel={cliEnableLabel}
                 onToggleGroup={() => toggleCliGroup("upcoming")}
-                onSelectCli={setActiveCli}
+                onSelectCli={selectCli}
                 onToggleCliEnabled={handleToggleCliEngine}
               />
             </>
@@ -857,6 +859,16 @@ export function VendorSettingsPanel({
       </nav>
 
       <div className="vendor-settings-content min-w-0 flex-1 min-h-0">
+        <button
+          type="button"
+          className="vendor-settings-mobile-back"
+          onClick={() => setMobilePane("list")}
+        >
+          <ArrowLeft size={14} strokeWidth={2.2} aria-hidden="true" />
+          <span>
+            {t("settings.backToCliList", { defaultValue: "返回 CLI 列表" })}
+          </span>
+        </button>
         {activeCli === "claude" ? (
           <CliLifecycleProvider engine="claude" active>
             <div className="vendor-tab-content">

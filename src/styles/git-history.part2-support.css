@@ -116,19 +116,24 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 12px;
 }
 
 .git-history-commit-context-menu {
   position: fixed;
   z-index: 60;
-  min-width: 240px;
-  max-width: min(88vw, 380px);
-  border-radius: 12px;
-  border: 1px solid color-mix(in srgb, var(--border-default) 76%, transparent);
-  background: color-mix(in srgb, var(--surface-popover, #111725) 94%, #0b1220);
-  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.34);
-  padding: 6px;
+  min-width: 220px;
+  max-width: min(88vw, 320px);
+  border-radius: var(--git-history-radius, 10px);
+  border: 1px solid var(--border, var(--git-history-border, var(--border-default)));
+  background: var(--popover, var(--surface-popover, var(--background, #fff)));
+  color: var(--popover-foreground, var(--text-primary));
+  box-shadow:
+    0 4px 6px -1px color-mix(in srgb, #000 8%, transparent),
+    0 10px 24px -4px color-mix(in srgb, #000 12%, transparent);
+  padding: 4px;
 }
 
 .git-history-commit-context-group {

@@ -183,9 +183,13 @@ export function useSelectedComposerSession({
     (selection: ComposerSessionSelection | null) => {
       const normalized = normalizeComposerSessionSelection(selection);
       selectedComposerSelectionRef.current = normalized;
-      setSelectedComposerSelection(normalized);
+      setSelectedComposerSelection((current) =>
+        selectionsEqual(current, normalized) ? current : normalized,
+      );
       if (!activeThreadId) {
-        setDraftComposerSelection(normalized);
+        setDraftComposerSelection((current) =>
+          selectionsEqual(current, normalized) ? current : normalized,
+        );
         draftComposerSelectionWorkspaceIdRef.current = activeWorkspaceId ?? null;
         shouldApplyDraftToNextThreadRef.current = Boolean(normalized);
         return;
@@ -216,21 +220,29 @@ export function useSelectedComposerSession({
     [resolveSelectedComposerSessionKey, selectedComposerSelectionBySessionKey],
   );
 
+  const commitSelectedComposerSelection = useCallback(
+    (next: ComposerSessionSelection | null) => {
+      selectedComposerSelectionRef.current = next;
+      setSelectedComposerSelection((current) =>
+        selectionsEqual(current, next) ? current : next,
+      );
+    },
+    [],
+  );
+
   const reloadSelectedComposerSelection = useCallback(() => {
     if (!activeThreadId) {
       const draftForActiveWorkspace =
         draftComposerSelectionWorkspaceIdRef.current === (activeWorkspaceId ?? null)
           ? draftComposerSelection
           : null;
-      selectedComposerSelectionRef.current = draftForActiveWorkspace;
-      setSelectedComposerSelection(draftForActiveWorkspace);
+      commitSelectedComposerSelection(draftForActiveWorkspace);
       return;
     }
 
     const sessionKey = resolveSelectedComposerSessionKey(activeWorkspaceId, activeThreadId);
     if (!sessionKey) {
-      selectedComposerSelectionRef.current = null;
-      setSelectedComposerSelection(null);
+      commitSelectedComposerSelection(null);
       return;
     }
 
@@ -307,13 +319,11 @@ export function useSelectedComposerSession({
       }
     }
 
-    selectedComposerSelectionRef.current = candidate;
-    setSelectedComposerSelection((currentSelection) =>
-      selectionsEqual(currentSelection, candidate) ? currentSelection : candidate
-    );
+    commitSelectedComposerSelection(candidate);
   }, [
     activeThreadId,
     activeWorkspaceId,
+    commitSelectedComposerSelection,
     draftComposerSelection,
     engineDefaultSelectionReady,
     cacheSelectionForSessionKey,

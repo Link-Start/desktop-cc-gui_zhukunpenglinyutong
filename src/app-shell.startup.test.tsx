@@ -1463,11 +1463,13 @@ describe("AppShell startup", () => {
     expect(startupState.renderCtx?.effectiveSelectedModelId).toBe("codex-alt");
   });
 
-  it("repairs an invalid stored thread composer selection to the effective model and effort", async () => {
+  it("keeps freeform thread model and repairs unsupported effort without update loop", async () => {
     const sessionKey = getThreadComposerSelectionStorageKey(
       startupState.workspace.id,
       "codex:thread-1",
     );
+    // catalog 外 modelId：会话 freeform 能力必须保留（Atomic picker / 本地自定义名），
+    // 不得静默回退到 gpt-5.5；仅 unsupported effort 收敛到 effective（无 metadata → null）。
     startupState.clientStore.composer[sessionKey] = {
       modelId: "missing-model",
       effort: "ultra",
@@ -1477,15 +1479,19 @@ describe("AppShell startup", () => {
 
     await waitFor(() => {
       const sentinel = view.getByTestId("app-shell-sentinel");
-      expect(sentinel.getAttribute("data-model")).toBe("gpt-5.5");
-      expect(sentinel.getAttribute("data-effort")).toBe("medium");
+      expect(sentinel.getAttribute("data-model")).toBe("missing-model");
     });
 
     await waitFor(() => {
       expect(startupState.clientStore.composer[sessionKey]).toEqual({
-        modelId: "gpt-5.5",
-        effort: "medium",
+        modelId: "missing-model",
+        effort: null,
       });
     });
+
+    expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Maximum update depth exceeded"),
+    );
+    expect(startupState.renderCtx?.effectiveSelectedModelId).toBe("missing-model");
   });
 });

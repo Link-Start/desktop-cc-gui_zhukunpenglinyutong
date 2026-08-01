@@ -92,10 +92,10 @@ export const MessagesTimeline = memo(function MessagesTimeline({
 }: MessagesTimelineProps) {
   const {
     claudeDockedReasoningItems,
-    collapsedMiddleStepCount,
     effectiveItemsCount,
     groupedEntries,
     hasPendingUserTurn,
+    processPhaseChips,
     sessionFileChangesSummary,
     visibleCollapsedHistoryItemCount,
   } = snapshot;
@@ -134,7 +134,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   } = interactions;
   const {
     codeBlockCopyUseModifier,
-    collapseLiveMiddleStepsEnabled,
     conversationDetailHydrationRequested,
     conversationLightweightModeEnabled,
     historyExpansionActive,
@@ -189,8 +188,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         activeUserInputAnchorItemId,
         approvalVisible,
         claudeDockedReasoningItemIds,
-        collapsedMiddleStepCount,
-        collapseLiveMiddleStepsEnabled,
         effectiveItemsCount,
         groupedEntries,
         hasVisibleUserInputRequest,
@@ -198,14 +195,13 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         historyRecoveryFailureVisible,
         isHistoryLoading,
         isThinking,
+        processPhaseChips,
         shouldRenderUserInputAtTail,
       }),
     [
       activeUserInputAnchorItemId,
       approvalVisible,
       claudeDockedReasoningItemIds,
-      collapsedMiddleStepCount,
-      collapseLiveMiddleStepsEnabled,
       effectiveItemsCount,
       groupedEntries,
       hasVisibleUserInputRequest,
@@ -213,6 +209,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       historyRecoveryFailureVisible,
       isHistoryLoading,
       isThinking,
+      processPhaseChips,
       shouldRenderUserInputAtTail,
     ],
   );

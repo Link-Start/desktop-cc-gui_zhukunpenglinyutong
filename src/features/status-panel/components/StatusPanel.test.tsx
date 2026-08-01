@@ -517,7 +517,7 @@ describe("StatusPanel", () => {
       screen.getByRole("button", { name: "git.generateCommitMessage" }),
     );
     const claudeGroup = screen
-      .getByText("git.generateCommitMessageEngineClaude")
+      .getAllByText("git.generateCommitMessageEngineClaude")[0]
       .closest(".commit-message-generate-menu-group");
     expect(claudeGroup).toBeTruthy();
     expect(screen.getByText("git.generateCommitMessageEngineKimi")).toBeTruthy();

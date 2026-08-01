@@ -710,6 +710,7 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "providerModelCatalogs",
     "reasoningOptions",
     "reasoningSupported",
+    "refreshEngineModels",
     "resolvedEffort",
     "resolvedModel",
     "selectedEffort",

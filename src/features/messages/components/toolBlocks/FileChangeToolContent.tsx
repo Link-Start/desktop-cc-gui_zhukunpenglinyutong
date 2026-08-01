@@ -1,6 +1,7 @@
 /**
  * fileChange 工具的多文件列表（GenericToolBlock 旁路）。
  * 幕布主路径连续 fileChange 已并入 EditToolGroupBlock；本组件保持同款折叠契约作 fallback。
+ * 唯一文件直接 FileChangeRow，不套「文件修改（1 个）」组头。
  */
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -17,6 +18,8 @@ import type { ToolStatusTone } from "./toolConstants";
 type FileChangeToolContentProps = {
   changes: GenericToolDisplayChange[];
   status: GenericToolMarkerStatus;
+  /** Prefer editor open when a row has no expandable diff. */
+  onOpenFilePath?: (path: string) => void;
   onOpenDiffPath?: (path: string) => void;
   defaultCollapsed?: boolean;
 };
@@ -24,9 +27,11 @@ type FileChangeToolContentProps = {
 export function FileChangeToolContent({
   changes,
   status,
+  onOpenFilePath,
   onOpenDiffPath,
   defaultCollapsed = true,
 }: FileChangeToolContentProps) {
+  const openMissingDiffPath = onOpenFilePath ?? onOpenDiffPath;
   const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(!defaultCollapsed);
 
@@ -46,6 +51,24 @@ export function FileChangeToolContent({
     return null;
   }
 
+  // 单文件：与 EditToolBlock / EditToolGroupBlock 同款扁平行，不套组头
+  if (normalizedChanges.length === 1) {
+    const change = normalizedChanges[0]!;
+    const diffText = change.diffText;
+    return (
+      <FileChangeRow
+        filePath={change.path}
+        additions={change.diffStats.additions}
+        deletions={change.diffStats.deletions}
+        status={status}
+        canExpand={Boolean(diffText)}
+        loadDiff={diffText ? () => unifiedDiffToPreview(diffText) : undefined}
+        onOpenDiffPath={!diffText ? openMissingDiffPath : onOpenDiffPath}
+        defaultExpanded={!defaultCollapsed}
+      />
+    );
+  }
+
   const fileCount = normalizedChanges.length;
   const sceneLabel = t("tools.fileEditSceneCount", { count: fileCount });
   const sceneAriaLabel = t("tools.fileEditSceneToggle", { count: fileCount });
@@ -53,7 +76,7 @@ export function FileChangeToolContent({
 
   return (
     <ToolMarkerShell
-      icon={<FilePen />}
+      icon={<FilePen size={14} aria-hidden />}
       label={sceneLabel}
       ariaLabel={sceneAriaLabel}
       expanded={isExpanded}
@@ -78,9 +101,7 @@ export function FileChangeToolContent({
                 canExpand={Boolean(diffText)}
                 loadDiff={diffText ? () => unifiedDiffToPreview(diffText) : undefined}
                 onOpenDiffPath={
-                  change.normalizedKind === "added" && !diffText
-                    ? onOpenDiffPath
-                    : undefined
+                  !diffText ? openMissingDiffPath : onOpenDiffPath
                 }
               />
             );

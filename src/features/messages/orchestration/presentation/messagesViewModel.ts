@@ -13,10 +13,6 @@ import {
   isExplicitReasoningSegmentId,
   parseReasoning,
 } from "../../presentation/messagesReasoning";
-import {
-  isMessageConversationItem,
-  isUserMessageConversationItem,
-} from "../../utils/messageItemPredicates";
 
 export type MessageActionTargets = {
   targetByAssistantId: Map<string, string>;
@@ -40,10 +36,94 @@ export type PreservedReadableWindow = {
   visibleCollapsedHistoryItemCount: number;
 };
 
+/**
+ * One causal process phase: the contiguous tool/reasoning/explore run that
+ * immediately precedes an assistant prose message.
+ *
+ * Timeline shape:
+ *   user → [process…] → assistant text A → [process…] → assistant text B → [open process…]
+ * Each completed process run becomes a drawer:
+ *   [header chip] → [process body…] → assistant text
+ */
+export type ProcessPhaseBreakdown = {
+  reasoningCount: number;
+  toolCount: number;
+  exploreCount: number;
+};
+
+export type ProcessPhaseCollapse = {
+  phaseKey: string;
+  assistantItemId: string;
+  /**
+   * Insert the drawer header immediately before this process item
+   * (first tool/reasoning/explore of the phase) so collapse stays at the top.
+   */
+  insertBeforeItemId: string;
+  count: number;
+  breakdown: ProcessPhaseBreakdown;
+  durationMs: number | null;
+  expanded: boolean;
+  hiddenItemIds: readonly string[];
+};
+
 export type CollapsedTimelineItemsResult = {
   timelineItems: ConversationItem[];
-  collapsedMiddleStepCount: number;
+  phases: ProcessPhaseCollapse[];
 };
+
+function emptyCollapsedTimelineResult(
+  timelineSourceItems: ConversationItem[],
+): CollapsedTimelineItemsResult {
+  return {
+    timelineItems: timelineSourceItems,
+    phases: [],
+  };
+}
+
+function isAssistantMessageWithVisibleText(item: ConversationItem): boolean {
+  return (
+    item.kind === "message" &&
+    item.role === "assistant" &&
+    item.text.trim().length > 0
+  );
+}
+
+/** Process items that can form a causal phase above assistant prose. */
+function isCollapsibleProcessItem(item: ConversationItem): boolean {
+  return (
+    item.kind === "tool" ||
+    item.kind === "reasoning" ||
+    item.kind === "explore"
+  );
+}
+
+function resolvePhaseDurationMs(items: readonly ConversationItem[]): number | null {
+  let total = 0;
+  let hasDuration = false;
+  for (const item of items) {
+    if (item.kind === "tool" && typeof item.durationMs === "number" && item.durationMs >= 0) {
+      total += item.durationMs;
+      hasDuration = true;
+    }
+  }
+  return hasDuration ? total : null;
+}
+
+function resolvePhaseBreakdown(items: readonly ConversationItem[]): ProcessPhaseBreakdown {
+  let reasoningCount = 0;
+  let toolCount = 0;
+  let exploreCount = 0;
+  for (const item of items) {
+    if (item.kind === "reasoning") {
+      reasoningCount += 1;
+    } else if (item.kind === "tool") {
+      toolCount += 1;
+    } else if (item.kind === "explore") {
+      exploreCount += 1;
+    }
+  }
+  return { reasoningCount, toolCount, exploreCount };
+}
 
 export function findItemById(items: ConversationItem[], itemId: string | null) {
   if (!itemId) {
@@ -270,128 +350,112 @@ export function resolveVisibleMessageItems(options: {
   return collapseConsecutiveReasoningRuns(deduped, true, appendReasoningRuns);
 }
 
+/**
+ * Collapse only the process run that immediately precedes each assistant prose
+ * message. Trailing process without following text stays fully expanded.
+ *
+ * Performance model (hard unmount):
+ * - Live open process (no following prose yet): fully mounted.
+ * - After prose lands and phase collapses: process rows are removed from the
+ *   timeline (summary chip only) so React trees are freed.
+ * - User expands a phase: process rows remount (no long-lived instance cache).
+ */
 export function resolveCollapsedTimelineItems(options: {
   activeEngine: MessagesEngine;
-  collapseLiveMiddleStepsEnabled: boolean;
-  isThinking: boolean;
-  latestAssistantMessageId: string | null;
-  latestReasoningId: string | null;
+  /** @deprecated ignored — phase collapse is always on */
+  collapseLiveMiddleStepsEnabled?: boolean;
+  /** Phase keys currently expanded by the user (usually assistant item ids). */
+  expandedPhaseKeys?: ReadonlySet<string>;
+  /** @deprecated ignored — expand is per-phase */
+  expandMiddleSteps?: boolean;
+  isThinking?: boolean;
+  latestAssistantMessageId?: string | null;
+  latestReasoningId?: string | null;
   timelineSourceItems: ConversationItem[];
 }): CollapsedTimelineItemsResult {
   const {
     activeEngine,
-    collapseLiveMiddleStepsEnabled,
-    isThinking,
-    latestAssistantMessageId,
-    latestReasoningId,
+    expandedPhaseKeys = new Set<string>(),
     timelineSourceItems,
   } = options;
-  if (!collapseLiveMiddleStepsEnabled || timelineSourceItems.length <= 2) {
-    return { timelineItems: timelineSourceItems, collapsedMiddleStepCount: 0 };
+  if (timelineSourceItems.length <= 2) {
+    return emptyCollapsedTimelineResult(timelineSourceItems);
   }
-  if (!isThinking) {
-    return resolveSettledCollapsedTimelineItems(timelineSourceItems, activeEngine);
-  }
-  return resolveLiveCollapsedTimelineItems({
-    activeEngine,
-    latestAssistantMessageId,
-    latestReasoningId,
-    timelineSourceItems,
-  });
-}
 
-function resolveSettledCollapsedTimelineItems(
-  timelineSourceItems: ConversationItem[],
-  activeEngine: MessagesEngine,
-): CollapsedTimelineItemsResult {
-  const firstUserIndex = timelineSourceItems.findIndex(
-    (item) => item.kind === "message" && item.role === "user",
-  );
-  if (firstUserIndex < 0) {
-    return { timelineItems: timelineSourceItems, collapsedMiddleStepCount: 0 };
-  }
-  let lastMessageIndex = -1;
-  for (let index = timelineSourceItems.length - 1; index >= 0; index -= 1) {
-    if (timelineSourceItems[index]?.kind === "message") {
-      lastMessageIndex = index;
-      break;
-    }
-  }
-  if (lastMessageIndex <= firstUserIndex) {
-    return { timelineItems: timelineSourceItems, collapsedMiddleStepCount: 0 };
-  }
-  const nextTimelineItems: ConversationItem[] = [];
-  const hiddenItems: ConversationItem[] = [];
+  const phases: ProcessPhaseCollapse[] = [];
+  const unmountedItemIds = new Set<string>();
+
   for (let index = 0; index < timelineSourceItems.length; index += 1) {
     const item = timelineSourceItems[index];
-    if (!item) {
+    if (!item || !isAssistantMessageWithVisibleText(item)) {
       continue;
     }
-    if (index < firstUserIndex || index > lastMessageIndex || isMessageConversationItem(item)) {
-      nextTimelineItems.push(item);
-      continue;
-    }
-    hiddenItems.push(item);
-  }
-  const collapsedEntryCount = countRenderableCollapsedEntries(hiddenItems, activeEngine);
-  return hiddenItems.length > 0
-    ? { timelineItems: nextTimelineItems, collapsedMiddleStepCount: collapsedEntryCount }
-    : { timelineItems: timelineSourceItems, collapsedMiddleStepCount: 0 };
-}
 
-function resolveLiveCollapsedTimelineItems(options: {
-  activeEngine: MessagesEngine;
-  latestAssistantMessageId: string | null;
-  latestReasoningId: string | null;
-  timelineSourceItems: ConversationItem[];
-}): CollapsedTimelineItemsResult {
-  const {
-    activeEngine,
-    latestAssistantMessageId,
-    latestReasoningId,
-    timelineSourceItems,
-  } = options;
-  let lastUserIndex = -1;
-  for (let index = timelineSourceItems.length - 1; index >= 0; index -= 1) {
-    const candidate = timelineSourceItems[index];
-    if (isUserMessageConversationItem(candidate)) {
-      lastUserIndex = index;
-      break;
+    // Walk back over the contiguous process run immediately above this text.
+    let phaseStart = index;
+    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+      const previous = timelineSourceItems[cursor];
+      if (!previous || !isCollapsibleProcessItem(previous)) {
+        break;
+      }
+      phaseStart = cursor;
     }
+    if (phaseStart >= index) {
+      continue;
+    }
+
+    // Claude live may reuse one id for the dual reasoning/assistant surface.
+    // Never fold that shared-identity reasoning into the chip — it is the same UI unit.
+    const phaseItems = timelineSourceItems
+      .slice(phaseStart, index)
+      .filter((phaseItem) => phaseItem.id !== item.id);
+    if (phaseItems.length === 0) {
+      continue;
+    }
+    const renderableCount = countRenderableCollapsedEntries(phaseItems, activeEngine);
+    // Skip empty phases and single-step runs (no value in collapsing one step).
+    if (renderableCount <= 1) {
+      continue;
+    }
+
+    const phaseKey = item.id;
+    const expanded = expandedPhaseKeys.has(phaseKey);
+    const firstProcessItem = phaseItems[0];
+    if (!firstProcessItem) {
+      continue;
+    }
+    const hiddenItemIds = phaseItems.map((phaseItem) => phaseItem.id);
+    // Hard unmount when collapsed: drop process rows so tool/reasoning trees free.
+    if (!expanded) {
+      for (const hiddenId of hiddenItemIds) {
+        unmountedItemIds.add(hiddenId);
+      }
+    }
+    phases.push({
+      phaseKey,
+      assistantItemId: item.id,
+      insertBeforeItemId: firstProcessItem.id,
+      count: renderableCount,
+      breakdown: resolvePhaseBreakdown(phaseItems),
+      durationMs: resolvePhaseDurationMs(phaseItems),
+      expanded,
+      hiddenItemIds,
+    });
   }
-  if (lastUserIndex < 0 || lastUserIndex >= timelineSourceItems.length - 2) {
-    return { timelineItems: timelineSourceItems, collapsedMiddleStepCount: 0 };
+
+  if (phases.length === 0) {
+    return emptyCollapsedTimelineResult(timelineSourceItems);
   }
-  const lastIndex = timelineSourceItems.length - 1;
-  const nextTimelineItems: ConversationItem[] = [];
-  const hiddenItems: ConversationItem[] = [];
-  for (let index = 0; index < timelineSourceItems.length; index += 1) {
-    const item = timelineSourceItems[index];
-    if (!item) {
-      continue;
-    }
-    const shouldKeepLatestClaudeReasoningVisible =
-      activeEngine === "claude"
-      && latestAssistantMessageId === null
-      && latestReasoningId !== null
-      && item.kind === "reasoning"
-      && item.id === latestReasoningId;
-    if (index <= lastUserIndex || index === lastIndex) {
-      nextTimelineItems.push(item);
-      continue;
-    }
-    if (isMessageConversationItem(item)) {
-      nextTimelineItems.push(item);
-      continue;
-    }
-    if (shouldKeepLatestClaudeReasoningVisible) {
-      nextTimelineItems.push(item);
-      continue;
-    }
-    hiddenItems.push(item);
+
+  if (unmountedItemIds.size === 0) {
+    return {
+      timelineItems: timelineSourceItems,
+      phases,
+    };
   }
-  const collapsedEntryCount = countRenderableCollapsedEntries(hiddenItems, activeEngine);
-  return hiddenItems.length > 0
-    ? { timelineItems: nextTimelineItems, collapsedMiddleStepCount: collapsedEntryCount }
-    : { timelineItems: timelineSourceItems, collapsedMiddleStepCount: 0 };
+
+  return {
+    timelineItems: timelineSourceItems.filter((item) => !unmountedItemIds.has(item.id)),
+    phases,
+  };
 }

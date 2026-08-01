@@ -26,4 +26,15 @@ describe("feature style loader contracts", () => {
 
     expect(diffLoader).toContain('import("./file-view-panel.css")');
   });
+
+  it("loads vendor model-manager dialog styles without the full settings bundle", () => {
+    const vendorLoader = loaderSource.slice(
+      loaderSource.indexOf("export function loadVendorModelManagerStyles"),
+      loaderSource.indexOf("export function loadReleaseNotesStyles"),
+    );
+
+    expect(vendorLoader).toContain('import("./settings.vendor-dialog.css")');
+    expect(vendorLoader).toContain('import("./settings.part2.vendor-models.css")');
+    expect(vendorLoader).not.toContain('import("./settings.css")');
+  });
 });

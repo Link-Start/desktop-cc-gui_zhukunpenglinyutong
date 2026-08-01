@@ -173,12 +173,6 @@ describe("composerSendReadiness", () => {
     ).toEqual(["files:2", "agent:reviewer"]);
     expect(
       buildComposerContextSummary({
-        ledgerBlockCount: Number.NaN,
-        ledgerGroupCount: 3.8,
-      }).chips,
-    ).toEqual(["groups:3"]);
-    expect(
-      buildComposerContextSummary({
         selectedAgentName: "   ",
       }).chips,
     ).toEqual([]);

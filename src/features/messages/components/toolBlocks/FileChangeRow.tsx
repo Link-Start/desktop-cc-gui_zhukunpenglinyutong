@@ -191,7 +191,7 @@ export const FileChangeRow = memo(function FileChangeRow({
 
   return (
     <ToolMarkerShell
-      icon={<FilePen />}
+      icon={<FilePen size={14} aria-hidden />}
       label={t('tools.editFile')}
       labelHidden
       wrapperClassName={wrapperClassName}

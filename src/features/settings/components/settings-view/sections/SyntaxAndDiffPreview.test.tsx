@@ -22,8 +22,10 @@ vi.mock("react-i18next", () => ({
 import { SyntaxAndDiffPreview } from "./SyntaxAndDiffPreview";
 
 describe("SyntaxAndDiffPreview", () => {
-  it("renders code panel, file panel, and diff panel headings", () => {
-    const { container } = render(<SyntaxAndDiffPreview appearance="dark" />);
+  it("renders code panel, file panel, and diff panel headings when expanded", () => {
+    const { container } = render(
+      <SyntaxAndDiffPreview appearance="dark" defaultExpanded />,
+    );
     const headers = Array.from(
       container.querySelectorAll(".theme-preview-grid__panel-header"),
     ).map((el) => el.textContent ?? "");
@@ -32,9 +34,19 @@ describe("SyntaxAndDiffPreview", () => {
     expect(headers.every((h) => h.length > 0)).toBe(true);
   });
 
+  it("stays collapsed by default so the settings list stays clean", () => {
+    const { container } = render(<SyntaxAndDiffPreview appearance="dark" />);
+    expect(container.querySelector(".theme-preview-grid")).toBeNull();
+    expect(
+      container.querySelector(".settings-pref-preview-toggle")?.getAttribute(
+        "aria-expanded",
+      ),
+    ).toBe("false");
+  });
+
   it("renders add/remove diff lines with correct modifier class", () => {
     const { container } = render(
-      <SyntaxAndDiffPreview appearance="dark" />,
+      <SyntaxAndDiffPreview appearance="dark" defaultExpanded />,
     );
 
     const addLines = container.querySelectorAll(
@@ -49,7 +61,7 @@ describe("SyntaxAndDiffPreview", () => {
 
   it("uses preset-driven CSS variables on diff legend dots", () => {
     const { container } = render(
-      <SyntaxAndDiffPreview appearance="light" />,
+      <SyntaxAndDiffPreview appearance="light" defaultExpanded />,
     );
 
     // legend dots must reference the preset-driven variables
@@ -64,7 +76,9 @@ describe("SyntaxAndDiffPreview", () => {
   });
 
   it("renders syntax token classes without loading the runtime highlighter", () => {
-    const { container } = render(<SyntaxAndDiffPreview appearance="dark" />);
+    const { container } = render(
+      <SyntaxAndDiffPreview appearance="dark" defaultExpanded />,
+    );
 
     expect(container.querySelector(".token.keyword")?.textContent).toBe("const");
     expect(container.querySelector(".token.string")?.textContent).toContain("sidebar");

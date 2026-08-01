@@ -30,7 +30,19 @@ interface ReadToolBlockProps {
 }
 
 const MARKDOWN_EXTENSIONS = new Set(['md', 'markdown', 'mdx']);
-const PATH_KEYS = ['file_path', 'filePath', 'path', 'target_file', 'targetFile', 'filename', 'file'];
+const PATH_KEYS = [
+  'file_path',
+  'filePath',
+  'path',
+  'target_file',
+  'targetFile',
+  'filename',
+  'file',
+  'dir',
+  'directory',
+  'target_directory',
+  'targetDirectory',
+];
 const OUTPUT_KEYS = ['output', 'result', 'content', 'text'];
 
 function looksLikeMarkdownOutput(value: string): boolean {
@@ -129,7 +141,7 @@ export const ReadToolBlock = memo(function ReadToolBlock({
 
   return (
     <ToolMarkerShell
-      icon={isDirectory ? <Folder /> : <FileText />}
+      icon={isDirectory ? <Folder size={14} aria-hidden /> : <FileText size={14} aria-hidden />}
       label={actionText}
       labelHidden
       expanded={expanded && hasBody}

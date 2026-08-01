@@ -44,7 +44,7 @@ describe("Messages live behavior", () => {
   beforeEach(() => {
     window.localStorage.setItem("ccgui.claude.hideReasoningModule", "0");
     window.localStorage.removeItem("ccgui.messages.live.autoFollow");
-    window.localStorage.removeItem("ccgui.messages.live.collapseMiddleSteps");
+    window.localStorage.setItem("ccgui.messages.live.collapseMiddleSteps", "0");
     vi.stubGlobal(
       "ResizeObserver",
       class {
@@ -1272,6 +1272,206 @@ describe("Messages live behavior", () => {
     }
   });
 
+  it("does not thrash scrollTop when focus follow chases a fast-growing stream", async () => {
+    // 快流：scrollKey + 连续 Resize 不得 cancel/restart 整条收敛；应复用 active run + 有限次写底。
+    window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
+    const { container } = render(
+      <Messages
+        items={[
+          {
+            id: "fast-stream-assistant",
+            kind: "message",
+            role: "assistant",
+            text: "streaming fast",
+          },
+        ]}
+        threadId="thread-fast-stream-stick"
+        workspaceId="ws-1"
+        isThinking
+        processingStartedAt={Date.now() - 1_000}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+    const scroller = getMessagesScroller(container);
+    let scrollHeight = 2_000;
+    const metrics = setScrollerMetrics(scroller, 2_000 - 720, () => scrollHeight);
+    fireEvent.scroll(scroller);
+    notifyContentResized();
+    const writesAfterArm = metrics.getScrollTopWriteCount();
+
+    for (let step = 0; step < 12; step += 1) {
+      scrollHeight += 80;
+      notifyContentResized();
+    }
+    // 再冲一帧，让可能存在的 live-follow coalesce rAF 落地。
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+
+    expect(scroller.scrollTop).toBe(scrollHeight - 720);
+    // 12 次增高：理想是每次约 1 次 write。若每次 cancel/restart 整段 pulse，
+    // 会远超 12（首帧 + settle 帧 + recheck 重建）。允许 rAF 与 nudge 偶发双写的余量。
+    const writesDuringChase = metrics.getScrollTopWriteCount() - writesAfterArm;
+    expect(writesDuringChase).toBeGreaterThan(0);
+    expect(writesDuringChase).toBeLessThanOrEqual(28);
+  });
+
+  it("keeps stick-to-bottom after settle when focus follow is on and content grows late", () => {
+    // 回合结束后思考折叠 / full markdown / 虚拟化 remeasure 会继续改 scrollHeight。
+    // 焦点跟随 + 仍停在底部时，必须越过 isWorking 门槛继续追真实底部。
+    window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
+    vi.useFakeTimers();
+    try {
+      const renderWith = (thinking: boolean) => (
+        <Messages
+          items={[
+            {
+              id: "post-settle-stick-user",
+              kind: "message",
+              role: "user",
+              text: "go",
+            },
+            {
+              id: "post-settle-stick-assistant",
+              kind: "message",
+              role: "assistant",
+              text: thinking ? "streaming" : "final answer with taller layout",
+            },
+          ]}
+          threadId="thread-post-settle-stick"
+          workspaceId="ws-1"
+          isThinking={thinking}
+          processingStartedAt={thinking ? Date.now() - 1_000 : null}
+          openTargets={[]}
+          selectedOpenAppId=""
+        />
+      );
+      const { container, rerender } = render(renderWith(true));
+      const scroller = getMessagesScroller(container);
+      let scrollHeight = 2_400;
+      setScrollerMetrics(scroller, 2_400 - 720, () => scrollHeight);
+      fireEvent.scroll(scroller);
+      notifyContentResized();
+      expect(scroller.scrollTop).toBe(2_400 - 720);
+
+      // 回合结束：settle 钉底后预算窗耗尽，模拟迟到测高（思考折叠/全文回刷）。
+      rerender(renderWith(false));
+      expect(scroller.scrollTop).toBe(scrollHeight - 720);
+
+      act(() => {
+        vi.advanceTimersByTime(3_000);
+      });
+      scrollHeight = 3_600;
+      notifyContentResized();
+      expect(scroller.scrollTop).toBe(3_600 - 720);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps follow armed when settle height jumps and a layout scroll fires without user intent", () => {
+    // 回归：尾窗回全量 / 虚拟化 remeasure 让 scrollHeight 暴涨后，浏览器会派发 scroll，
+    // 此时 distanceToBottom 已远超 120px。旧逻辑把「假离底」当成用户离开，解除 autoScroll
+    // 并 cancel 收敛 → 回合结束瞬间视口停在中上段（用户体感「飞到上面」）。
+    window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
+    vi.useFakeTimers();
+    try {
+      const renderWith = (thinking: boolean) => (
+        <Messages
+          items={[
+            {
+              id: "fake-leave-user",
+              kind: "message",
+              role: "user",
+              text: "go",
+            },
+            {
+              id: "fake-leave-assistant",
+              kind: "message",
+              role: "assistant",
+              text: thinking ? "streaming tail" : "final tall answer after full history restore",
+            },
+          ]}
+          threadId="thread-settle-fake-leave"
+          workspaceId="ws-1"
+          isThinking={thinking}
+          processingStartedAt={thinking ? Date.now() - 1_000 : null}
+          openTargets={[]}
+          selectedOpenAppId=""
+        />
+      );
+      const { container, rerender } = render(renderWith(true));
+      const scroller = getMessagesScroller(container);
+      let scrollHeight = 2_400;
+      setScrollerMetrics(scroller, 2_400 - 720, () => scrollHeight);
+      fireEvent.scroll(scroller);
+      notifyContentResized();
+      expect(scroller.scrollTop).toBe(2_400 - 720);
+
+      // settle：先钉到当时的底
+      rerender(renderWith(false));
+      expect(scroller.scrollTop).toBe(scrollHeight - 720);
+
+      // 高度阶跃：scrollTop 仍停在旧底（距新底 2880px ≫ 120），只派发 scroll、无 wheel
+      scrollHeight = 5_280;
+      fireEvent.scroll(scroller);
+      // 保护路径必须仍武装；随后 Resize 才能把视口追到真底
+      notifyContentResized();
+      expect(scroller.scrollTop).toBe(5_280 - 720);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not chase late idle growth when the user has scrolled away from the bottom", () => {
+    window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
+    vi.useFakeTimers();
+    try {
+      const { container } = render(
+        <Messages
+          items={[
+            {
+              id: "idle-away-assistant",
+              kind: "message",
+              role: "assistant",
+              text: "done",
+            },
+          ]}
+          threadId="thread-idle-away-stick"
+          workspaceId="ws-1"
+          isThinking={false}
+          openTargets={[]}
+          selectedOpenAppId=""
+        />,
+      );
+      const scroller = getMessagesScroller(container);
+      let scrollHeight = 2_400;
+      setScrollerMetrics(scroller, 2_400 - 720, () => scrollHeight);
+      notifyContentResized();
+
+      fireEvent.wheel(scroller, { deltaY: -120 });
+      scroller.scrollTop = 400;
+      fireEvent.scroll(scroller);
+
+      act(() => {
+        vi.advanceTimersByTime(3_000);
+      });
+      scrollHeight = 3_600;
+      notifyContentResized();
+      expect(scroller.scrollTop).toBe(400);
+
+      // 再滚回底部应恢复 stick。
+      scroller.scrollTop = 3_600 - 720;
+      fireEvent.scroll(scroller);
+      scrollHeight = 4_200;
+      notifyContentResized();
+      expect(scroller.scrollTop).toBe(4_200 - 720);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("chases late row measurements so opening a thread lands at the true bottom", async () => {
     const scrollSpy = vi
       .spyOn(HTMLElement.prototype, "scrollIntoView")
@@ -2378,8 +2578,7 @@ describe("Messages live behavior", () => {
     });
   });
 
-  it("collapses live middle steps when enabled", () => {
-    window.localStorage.setItem("ccgui.messages.live.collapseMiddleSteps", "1");
+  it("collapses only the causal process run above assistant prose", () => {
     const items: ConversationItem[] = [
       {
         id: "user-live-collapse",
@@ -2391,15 +2590,15 @@ describe("Messages live behavior", () => {
         id: "reasoning-live-collapse",
         kind: "reasoning",
         summary: "分析中",
-        content: "",
+        content: "thinking body",
       },
       {
         id: "tool-live-collapse",
         kind: "tool",
-        toolType: "commandExecution",
-        title: "Command: rg --files",
-        detail: "/tmp",
-        status: "running",
+        toolType: "fileRead",
+        title: "Read causal.ts",
+        detail: "causal.ts",
+        status: "completed",
         output: "",
       },
       {
@@ -2422,50 +2621,95 @@ describe("Messages live behavior", () => {
       />,
     );
 
-    expect(container.querySelector(".messages-live-middle-collapsed-indicator")).toBeTruthy();
+    const chip = container.querySelector(".messages-process-phase-toggle");
+    expect(chip).toBeTruthy();
+    expect(chip?.classList.contains("is-collapsed")).toBe(true);
+    // Hard-unmount: process body is not in the tree while collapsed.
     expect(container.querySelector(".thinking-block")).toBeNull();
+    expect(container.textContent ?? "").not.toContain("Read causal.ts");
     expect(container.textContent ?? "").toContain("最终输出");
-    expect(container.textContent ?? "").not.toContain("Command: rg --files");
+    expect(container.textContent ?? "").toContain("已处理");
   });
 
-  it("excludes hidden commands and batch commands from the live collapsed count", () => {
-    window.localStorage.setItem("ccgui.messages.live.collapseMiddleSteps", "1");
+  it("does not collapse a single process step above prose", () => {
     const items: ConversationItem[] = [
       {
-        id: "user-live-collapse-count",
+        id: "user-single-step",
         kind: "message",
         role: "user",
         text: "请继续",
       },
       {
-        id: "reasoning-live-collapse-count",
-        kind: "reasoning",
-        summary: "分析中",
-        content: "",
-      },
-      {
-        id: "tool-live-collapse-count-1",
+        id: "tool-single",
         kind: "tool",
-        toolType: "commandExecution",
-        title: "Command: rg --files",
-        detail: "/tmp",
-        status: "running",
+        toolType: "fileRead",
+        title: "Read single.ts",
+        detail: "single.ts",
+        status: "completed",
         output: "",
       },
       {
-        id: "tool-live-collapse-count-2",
-        kind: "tool",
-        toolType: "commandExecution",
-        title: "Command: ls -la",
-        detail: "/tmp",
-        status: "running",
-        output: "",
-      },
-      {
-        id: "assistant-live-collapse-count",
+        id: "assistant-single",
         kind: "message",
         role: "assistant",
-        text: "最终输出",
+        text: "单步输出",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.querySelector(".messages-process-phase-toggle")).toBeNull();
+    // Single-step process stays on the narrative surface (no phase chip).
+    expect(container.querySelector(".message-tool-block-shell, .tool-block, .task-container")).toBeTruthy();
+    expect(container.textContent ?? "").toContain("单步输出");
+  });
+
+  it("keeps trailing open process expanded after earlier multi-step phase collapsed", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "user-live-trailing",
+        kind: "message",
+        role: "user",
+        text: "请继续",
+      },
+      {
+        id: "reasoning-done",
+        kind: "reasoning",
+        summary: "done",
+        content: "done-thinking",
+      },
+      {
+        id: "tool-done",
+        kind: "tool",
+        toolType: "fileRead",
+        title: "Read done.ts",
+        detail: "done.ts",
+        status: "completed",
+        output: "",
+      },
+      {
+        id: "assistant-done",
+        kind: "message",
+        role: "assistant",
+        text: "第一段输出",
+      },
+      {
+        id: "tool-running",
+        kind: "tool",
+        toolType: "fileRead",
+        title: "Read running.ts",
+        detail: "running.ts",
+        status: "running",
+        output: "",
       },
     ];
 
@@ -2482,14 +2726,14 @@ describe("Messages live behavior", () => {
       />,
     );
 
-    const indicator = container.querySelector(".messages-live-middle-collapsed-indicator");
-    expect(indicator?.textContent ?? "").toContain("已折叠 1 条中间步骤（实时中）");
-    expect(container.textContent ?? "").not.toContain("Command: rg --files");
-    expect(container.textContent ?? "").not.toContain("Command: ls -la");
+    expect(container.querySelector(".messages-process-phase-toggle")).toBeTruthy();
+    expect(container.querySelector(".thinking-block")).toBeNull();
+    expect(container.textContent ?? "").not.toContain("Read done.ts");
+    expect(container.textContent ?? "").toContain("Read running.ts");
+    expect(container.textContent ?? "").toContain("第一段输出");
   });
 
-  it("does not show a live collapsed indicator when only hidden commands were skipped", () => {
-    window.localStorage.setItem("ccgui.messages.live.collapseMiddleSteps", "1");
+  it("does not show a phase chip when only canvas-hidden commands precede prose", () => {
     const items: ConversationItem[] = [
       {
         id: "user-live-collapse-commands-only",
@@ -2503,7 +2747,7 @@ describe("Messages live behavior", () => {
         toolType: "commandExecution",
         title: "Command: rg --files",
         detail: "/tmp",
-        status: "running",
+        status: "completed",
         output: "",
       },
       {
@@ -2512,7 +2756,7 @@ describe("Messages live behavior", () => {
         toolType: "commandExecution",
         title: "Command: ls -la",
         detail: "/tmp",
-        status: "running",
+        status: "completed",
         output: "",
       },
       {
@@ -2540,8 +2784,7 @@ describe("Messages live behavior", () => {
     expect(container.textContent ?? "").toContain("最终输出");
   });
 
-  it("collapses middle steps in history mode when enabled", () => {
-    window.localStorage.setItem("ccgui.messages.live.collapseMiddleSteps", "1");
+  it("collapses the process phase above historical assistant prose", () => {
     const items: ConversationItem[] = [
       {
         id: "user-history-collapse",
@@ -2553,16 +2796,17 @@ describe("Messages live behavior", () => {
         id: "reasoning-history-collapse",
         kind: "reasoning",
         summary: "分析中",
-        content: "",
+        content: "thinking",
       },
       {
         id: "tool-history-collapse",
         kind: "tool",
-        toolType: "commandExecution",
-        title: "Command: rg --files",
-        detail: "/tmp",
+        toolType: "fileRead",
+        title: "Read Messages.tsx",
+        detail: "Messages.tsx",
         status: "completed",
         output: "",
+        durationMs: 63_000,
       },
       {
         id: "assistant-history-collapse",
@@ -2584,12 +2828,77 @@ describe("Messages live behavior", () => {
     );
 
     expect(container.querySelector(".thinking-block")).toBeNull();
+    expect(container.textContent ?? "").not.toContain("Read Messages.tsx");
     expect(container.textContent ?? "").toContain("历史最终输出");
-    expect(container.textContent ?? "").not.toContain("Command: rg --files");
+    const indicator = container.querySelector(".messages-process-phase-toggle");
+    expect(indicator).toBeTruthy();
+    expect(indicator?.textContent ?? "").toContain("已处理");
+    expect(indicator?.textContent ?? "").not.toMatch(/\d+m\s*\d+s|\d+s/);
   });
 
-  it("collapses middle steps for all previous turns in history mode", () => {
-    window.localStorage.setItem("ccgui.messages.live.collapseMiddleSteps", "1");
+  it("expands one causal phase when its process chip is clicked", async () => {
+    const items: ConversationItem[] = [
+      {
+        id: "user-history-expand",
+        kind: "message",
+        role: "user",
+        text: "请继续",
+      },
+      {
+        id: "reasoning-history-expand",
+        kind: "reasoning",
+        summary: "expand-me-reasoning",
+        content: "expand-me-reasoning-body",
+      },
+      {
+        id: "tool-history-expand",
+        kind: "tool",
+        toolType: "fileRead",
+        title: "Read expand-me.ts",
+        detail: "expand-me.ts",
+        status: "completed",
+        output: "",
+      },
+      {
+        id: "assistant-history-expand",
+        kind: "message",
+        role: "assistant",
+        text: "展开后可见过程",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.querySelector(".thinking-block")).toBeNull();
+    const chip = container.querySelector(
+      ".messages-process-phase-toggle",
+    ) as HTMLButtonElement | null;
+    expect(chip).toBeTruthy();
+    expect(chip?.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(chip!);
+
+    await waitFor(() => {
+      // Remount on expand (hard-unmount model).
+      const expandedChip = container.querySelector(
+        ".messages-process-phase-toggle.is-expanded",
+      );
+      expect(expandedChip).toBeTruthy();
+      expect(expandedChip?.getAttribute("aria-expanded")).toBe("true");
+      expect(container.querySelector(".thinking-block")).toBeTruthy();
+      expect(container.textContent ?? "").toMatch(/expand-me/);
+    });
+  });
+
+  it("collapses each historical turn phase independently", () => {
     const items: ConversationItem[] = [
       {
         id: "user-history-turn-1",
@@ -2601,14 +2910,14 @@ describe("Messages live behavior", () => {
         id: "reasoning-history-turn-1",
         kind: "reasoning",
         summary: "第一轮分析",
-        content: "",
+        content: "turn-1-thinking",
       },
       {
         id: "tool-history-turn-1",
         kind: "tool",
-        toolType: "commandExecution",
-        title: "Command: ls",
-        detail: "/tmp",
+        toolType: "fileRead",
+        title: "Read turn1.ts",
+        detail: "turn1.ts",
         status: "completed",
         output: "",
       },
@@ -2628,14 +2937,14 @@ describe("Messages live behavior", () => {
         id: "reasoning-history-turn-2",
         kind: "reasoning",
         summary: "第二轮分析",
-        content: "",
+        content: "turn-2-thinking",
       },
       {
         id: "tool-history-turn-2",
         kind: "tool",
-        toolType: "commandExecution",
-        title: "Command: rg --files",
-        detail: "/tmp",
+        toolType: "fileRead",
+        title: "Read turn2.ts",
+        detail: "turn2.ts",
         status: "completed",
         output: "",
       },
@@ -2660,9 +2969,10 @@ describe("Messages live behavior", () => {
 
     expect(container.textContent ?? "").toContain("第一轮答案");
     expect(container.textContent ?? "").toContain("第二轮答案");
-    expect(container.textContent ?? "").not.toContain("Command: ls");
-    expect(container.textContent ?? "").not.toContain("Command: rg --files");
+    expect(container.querySelectorAll(".messages-process-phase-toggle")).toHaveLength(2);
     expect(container.querySelector(".thinking-block")).toBeNull();
+    expect(container.textContent ?? "").not.toContain("Read turn1.ts");
+    expect(container.textContent ?? "").not.toContain("Read turn2.ts");
   });
 
   it("shows non-streaming hint for opencode when waiting long for first chunk", () => {

@@ -17,7 +17,6 @@ vi.mock("../../engine/components/EngineSelector", () => ({
   EngineSelector: () => null,
 }));
 
-
 vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
   ChatInputBoxAdapter: ({
     onTextChange,
@@ -116,12 +115,12 @@ function renderComposer({
   );
 }
 
-describe("Composer context ledger transitions", () => {
+describe("Composer context selection session transitions", () => {
   afterEach(() => {
     cleanup();
   });
 
-  it("moves context source summary into the input header and resets it on session switch", async () => {
+  it("resets context selection summary on session switch without ledger surface", async () => {
     const onSend = vi.fn(() => Promise.resolve());
     const view = renderComposer({ onSend });
 
@@ -131,7 +130,7 @@ describe("Composer context ledger transitions", () => {
     });
 
     expect(screen.getByTestId("readiness-context-summary").textContent).toBe(
-      "items:1 · groups:1",
+      "memory:1",
     );
     expect(view.container.querySelector(".composer-context-stack")).toBeTruthy();
     expect(view.container.querySelector(".composer-context-ledger")).toBeNull();

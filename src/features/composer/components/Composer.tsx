@@ -137,16 +137,7 @@ import {
   filterRetainedChipNames,
   filterRetainedEntries,
 } from "../../context-ledger/utils/contextLedgerGovernance";
-import { useContextLedgerGovernance } from "../hooks/useContextLedgerGovernance";
-import { ContextLedgerPanel } from "../../context-ledger/components/ContextLedgerPanel";
-import {
-  buildContextLedgerProjection,
-  resolveDualContextUsageModel,
-} from "../../context-ledger/utils/contextLedgerProjection";
-import type {
-  ContextLedgerSourceNavigationTarget,
-  ContextLedgerProjection,
-} from "../../context-ledger/types";
+import { resolveDualContextUsageModel } from "../../context-ledger/utils/contextLedgerProjection";
 import {
   BrowserContextPreview,
   useBrowserContextAttachment,
@@ -231,6 +222,8 @@ type ComposerProps = {
   models: { id: string; displayName: string; model: string }[];
   providerModelCatalogs?: Partial<Record<EngineType, ModelOption[]>>;
   providerProfileId?: string | null;
+  /** 当前会话创建时的供应商显示名（切老会话时底栏渠道芯片用，避免回落到列表首项 DeepSeek） */
+  providerProfileName?: string | null;
   selectedModelId: string | null;
   onSelectModel: (id: string) => void;
   reasoningOptions: string[];
@@ -352,8 +345,6 @@ type ComposerProps = {
   selectedLinkedKanbanPanelId?: string | null;
   onSelectLinkedKanbanPanel?: (panelId: string | null) => void;
   onOpenLinkedKanbanPanel?: (panelId: string) => void;
-  onOpenContextLedgerMemory?: (memoryId: string) => void;
-  onOpenContextLedgerNote?: (noteId: string) => void;
   activeFilePath?: string | null;
   activeFileLineRange?: { startLine: number; endLine: number } | null;
   fileReferenceMode?: "path" | "none";
@@ -511,6 +502,7 @@ function ComposerImpl({
   models,
   providerModelCatalogs,
   providerProfileId,
+  providerProfileName,
   selectedModelId,
   onSelectModel,
   reasoningOptions,
@@ -616,8 +608,6 @@ function ComposerImpl({
   selectedLinkedKanbanPanelId: _selectedLinkedKanbanPanelId = null,
   onSelectLinkedKanbanPanel: _onSelectLinkedKanbanPanel,
   onOpenLinkedKanbanPanel: _onOpenLinkedKanbanPanel,
-  onOpenContextLedgerMemory: _onOpenContextLedgerMemory,
-  onOpenContextLedgerNote: _onOpenContextLedgerNote,
   activeFilePath = null,
   activeFileLineRange = null,
   fileReferenceMode = "path",
@@ -746,28 +736,59 @@ function ComposerImpl({
       onCreationTargetEngineChange?.(null);
     };
   }, [createSessionTargetPicker, onCreationTargetEngineChange]);
+  /**
+   * Native Atomic 点选的即时投影。
+   * Shared 写 selectedNextTarget 即可立刻刷新勾选；Native 若只走 onSelectModel
+   * 长链，catalog 分叉时勾选/触发器不更新。用本状态对齐 Shared 的「target 即 UI」。
+   * 只覆盖 model 身份；effort 仍跟 selectedEffort prop，避免抢走推理档位选择器。
+   */
+  const [nativeAtomicSelection, setNativeAtomicSelection] = useState<{
+    modelCatalogEntryId: string;
+    model: string;
+  } | null>(null);
+  // 切会话 / 引擎 / 渠道时丢弃点选覆盖，避免串台
+  useEffect(() => {
+    setNativeAtomicSelection(null);
+  }, [activeThreadId, selectedEngine, providerProfileId]);
   // Native 会话合成 ExecutionTarget，驱动与首页相同的 Atomic 双栏选中态（含渠道）。
   const nativeSessionTarget = useMemo((): ExecutionTarget | null => {
     if (isSharedSession || createSessionTargetPicker || !selectedEngine) {
       return null;
     }
-    const modelId = selectedModelId?.trim() || null;
-    const profileId = providerProfileId?.trim() || null;
+    const rawProfileId = providerProfileId?.trim() || null;
+    // 本地 sentinel 与 Shared 一致：对外投影为 null + disk，避免 __disk__ 被当成 managed
+    const isLocalCodexDisk =
+      selectedEngine === "codex" &&
+      rawProfileId === CODEX_DISK_PROVIDER_PROFILE_ID;
+    const isLocalClaude =
+      selectedEngine === "claude" &&
+      rawProfileId === CLAUDE_LOCAL_PROVIDER_PROFILE_ID;
+    const profileId =
+      isLocalCodexDisk || isLocalClaude ? null : rawProfileId;
+    const profileName = providerProfileName?.trim() || null;
+    const propModelId = selectedModelId?.trim() || null;
+    const modelCatalogEntryId =
+      nativeAtomicSelection?.modelCatalogEntryId ?? propModelId;
+    const runtimeModel =
+      nativeAtomicSelection?.model ?? propModelId;
     return {
       engine: selectedEngine,
       providerProfileId: profileId,
-      modelCatalogEntryId: modelId,
-      model: modelId,
+      modelCatalogEntryId,
+      model: runtimeModel,
       reasoning: selectedEffort ? { effort: selectedEffort } : null,
+      // managed 必须带上创建时供应商名，底栏渠道芯片才能显示 kimi/m3 而非回落 DeepSeek
       providerProfileNameSnapshot: profileId
-        ? null
+        ? profileName || profileId
         : LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
       providerProfileSource: profileId ? "managed" : "disk",
     };
   }, [
     createSessionTargetPicker,
     isSharedSession,
+    nativeAtomicSelection,
     providerProfileId,
+    providerProfileName,
     selectedEffort,
     selectedEngine,
     selectedModelId,
@@ -935,6 +956,9 @@ function ComposerImpl({
   /**
    * Native 会话也走首页同款 Atomic 双栏 picker（含「本地配置」渠道）。
    * 同 engine+profile 只切模型；跨 managed profile 走续接；其余走 engine/model 切换。
+   *
+   * 同 profile 切模型：先写 nativeAtomicSelection（勾选即时反馈），再 onSelectModel
+   * 持久化；不依赖 parent catalog 是否收录该 id（catalog 外自定义名同样生效）。
    */
   const handleNativeAtomicTargetChange = useCallback(
     (target: ExecutionTarget) => {
@@ -947,18 +971,27 @@ function ComposerImpl({
         providerProfileId,
         target,
       );
+      const catalogEntryId =
+        target.modelCatalogEntryId?.trim() || target.model?.trim() || null;
+      const runtimeModel =
+        target.model?.trim() || catalogEntryId;
+      const nextEffort = target.reasoning?.effort ?? null;
       if (sameProfile) {
-        const modelId =
-          target.modelCatalogEntryId?.trim() || target.model?.trim() || null;
-        if (modelId) {
-          onSelectModel(modelId);
+        if (catalogEntryId && runtimeModel) {
+          setNativeAtomicSelection({
+            modelCatalogEntryId: catalogEntryId,
+            model: runtimeModel,
+          });
+          // 持久化用 catalog entry id；自由名与 runtime 通常相同
+          onSelectModel(catalogEntryId);
         }
-        const nextEffort = target.reasoning?.effort ?? null;
         if (nextEffort !== selectedEffort) {
           onSelectEffort(nextEffort);
         }
         return;
       }
+      // 跨渠道时清掉本会话点选覆盖，避免沿用旧模型 id
+      setNativeAtomicSelection(null);
       // Claude/Codex 切到 managed 渠道 → Native Provider Continuation
       if (
         (target.engine === "claude" || target.engine === "codex") &&
@@ -970,12 +1003,13 @@ function ComposerImpl({
       if (target.engine !== selectedEngine) {
         onSelectEngine?.(target.engine);
       }
-      const modelId =
-        target.modelCatalogEntryId?.trim() || target.model?.trim() || null;
-      if (modelId) {
-        onSelectModel(modelId);
+      if (catalogEntryId && runtimeModel) {
+        setNativeAtomicSelection({
+          modelCatalogEntryId: catalogEntryId,
+          model: runtimeModel,
+        });
+        onSelectModel(catalogEntryId);
       }
-      const nextEffort = target.reasoning?.effort ?? null;
       if (nextEffort !== selectedEffort) {
         onSelectEffort(nextEffort);
       }
@@ -1016,13 +1050,9 @@ function ComposerImpl({
   const [carryOverNoteCardIds, setCarryOverNoteCardIds] = useState<string[]>([]);
   const [retainedNoteCardIds, setRetainedNoteCardIds] = useState<string[]>([]);
   const [carryOverContextChipKeys, setCarryOverContextChipKeys] = useState<string[]>([]);
-  const [retainedContextChipKeys, setRetainedContextChipKeys] = useState<string[]>([]);
+  const [, setRetainedContextChipKeys] = useState<string[]>([]);
   const [selectedInlineFileReferences, setSelectedInlineFileReferences] = useState<InlineFileReferenceSelection[]>([]);
   const browserContext = useBrowserContextAttachment(activeWorkspaceId);
-  const [contextLedgerExpanded, setContextLedgerExpanded] = useState(false);
-  const currentContextLedgerProjectionRef = useRef<ContextLedgerProjection | null>(null);
-  const previousContextLedgerSessionKeyRef = useRef("");
-  const contextLedgerSessionKey = `${activeWorkspaceId ?? "__no_workspace__"}::${activeThreadId ?? "__no_thread__"}`;
   const onClearCodeAnnotationsRef = useRef(onClearCodeAnnotations);
   const [isComposerCollapsed, setIsComposerCollapsed] = useState(false);
   const [dismissedActiveFileReference, setDismissedActiveFileReference] =
@@ -1209,12 +1239,6 @@ function ComposerImpl({
     setRetainedContextChipKeys(keepArrayWhenEmpty);
     setMemoryReferenceMode("off");
   }, []);
-  const resetContextLedgerSessionState = useCallback(() => {
-    clearComposerContextSelections();
-    setContextLedgerExpanded((current) => (current ? false : current));
-    currentContextLedgerProjectionRef.current = null; previousContextLedgerSessionKeyRef.current = contextLedgerSessionKey;
-  }, [clearComposerContextSelections, contextLedgerSessionKey]);
-
   useEffect(() => {
     if (textareaHeight > COMPOSER_MIN_HEIGHT) {
       lastExpandedHeightRef.current = textareaHeight;
@@ -1235,8 +1259,8 @@ function ComposerImpl({
   }, [hasStatusPanelActivity, statusPanelExpandedOverride]);
 
   useEffect(() => {
-    resetContextLedgerSessionState();
-  }, [activeThreadId, activeWorkspaceId, resetContextLedgerSessionState]);
+    clearComposerContextSelections();
+  }, [activeThreadId, activeWorkspaceId, clearComposerContextSelections]);
 
   useEffect(() => {
     if (!pendingCodeAnnotation) {
@@ -2176,40 +2200,6 @@ function ComposerImpl({
     isProcessing && isComposerInputInteractionActive
       ? deferredAccountRateLimits
       : accountRateLimits;
-  const {
-    handleToggleLedgerPin,
-    handleExcludeLedgerBlock,
-    handleClearCarryOverLedgerBlock,
-    handleBatchKeepLedgerBlocks,
-    handleBatchExcludeLedgerBlocks,
-    handleBatchClearCarryOverLedgerBlocks,
-  } = useContextLedgerGovernance({
-    activeFilePath,
-    activeFileReferenceSignature,
-    setDismissedActiveFileReference,
-    setCarryOverManualMemoryIds,
-    setRetainedManualMemoryIds,
-    setSelectedManualMemories,
-    setCarryOverNoteCardIds,
-    setRetainedNoteCardIds,
-    setSelectedNoteCards,
-    setCarryOverContextChipKeys,
-    setRetainedContextChipKeys,
-    setSelectedSkillNames,
-    setSelectedCommonsNames,
-    setSelectedInlineFileReferences,
-  });
-  const handleOpenLedgerSource = useCallback((target: ContextLedgerSourceNavigationTarget) => {
-    if (target.kind === "manual_memory") {
-      _onOpenContextLedgerMemory?.(target.memoryId);
-      return;
-    }
-    if (target.kind === "note_card") {
-      _onOpenContextLedgerNote?.(target.noteId);
-      return;
-    }
-    onOpenDiffPath?.(target.path);
-  }, [_onOpenContextLedgerMemory, _onOpenContextLedgerNote, onOpenDiffPath]);
   const selectedEngineInfo = useMemo(
     () => engines?.find((engine) => engine.type === selectedEngine),
     [engines, selectedEngine],
@@ -2238,9 +2228,6 @@ function ComposerImpl({
     }
     onJumpToUserInputRequest?.(activeUserInputRequest);
   }, [activeUserInputRequest, onJumpToUserInputRequest]);
-  const handleToggleContextSources = useCallback(() => {
-    setContextLedgerExpanded((current) => !current);
-  }, []);
   const codexContextDualViewEnabled = contextDualViewEnabled && isCodexEngine;
   // 所有 provider 的上下文占用入口统一渲染在输入框下方分支行右侧；
   // Codex 继续使用 dual-view ContextBar，保留 tooltip 与 compaction controls。
@@ -2251,55 +2238,6 @@ function ComposerImpl({
         (resolvedLegacyContextUsage.used / resolvedLegacyContextUsage.total) * 100,
       )
       : null;
-  const contextLedgerProjection = useMemo(
-    () =>
-      buildContextLedgerProjection({
-        engine: selectedEngine,
-        contextUsage,
-        contextDualViewEnabled: codexContextDualViewEnabled,
-        dualContextUsage: codexContextDualViewEnabled
-          ? resolvedDualContextUsage
-          : null,
-        manualMemoryInjectionMode: getManualMemoryInjectionMode(),
-        selectedManualMemories,
-        selectedNoteCards,
-        selectedInlineFileReferences,
-        selectedCodeAnnotations,
-        activeFileReference: hasActiveFileReference && activeFilePath
-          ? {
-              path: activeFilePath,
-              lineRange: activeFileLineRange,
-            }
-          : null,
-        selectedContextChips: contextSelectionChips,
-        carryOverManualMemoryIds,
-        carryOverNoteCardIds,
-        carryOverContextChipKeys,
-        retainedManualMemoryIds,
-        retainedNoteCardIds,
-        retainedContextChipKeys,
-      }),
-    [
-      activeFileLineRange,
-      activeFilePath,
-      carryOverContextChipKeys,
-      carryOverManualMemoryIds,
-      carryOverNoteCardIds,
-      codexContextDualViewEnabled,
-      contextSelectionChips,
-      contextUsage,
-      hasActiveFileReference,
-      retainedContextChipKeys,
-      retainedManualMemoryIds,
-      retainedNoteCardIds,
-      resolvedDualContextUsage,
-      selectedEngine,
-      selectedCodeAnnotations,
-      selectedInlineFileReferences,
-      selectedManualMemories,
-      selectedNoteCards,
-    ],
-  );
   const composerReadinessAccessMode =
     selectedEngine === "codex" && _selectedCollaborationModeId === "plan"
       ? "read-only"
@@ -2342,12 +2280,6 @@ function ComposerImpl({
             selectedInlineFileReferences.length + (hasActiveFileReference ? 1 : 0),
           imageCount: attachedImages.length,
           selectedAgentName: selectedChatInputAgent?.name ?? null,
-          ledgerBlockCount: contextLedgerProjection.visible
-            ? contextLedgerProjection.totalBlockCount
-            : null,
-          ledgerGroupCount: contextLedgerProjection.visible
-            ? contextLedgerProjection.totalGroupCount
-            : null,
         },
       }),
     [
@@ -2355,9 +2287,6 @@ function ComposerImpl({
       attachedImages.length,
       canStop,
       composerReadinessAccessMode,
-      contextLedgerProjection.totalBlockCount,
-      contextLedgerProjection.totalGroupCount,
-      contextLedgerProjection.visible,
       fusingQueuedMessageId,
       hasActiveFileReference,
       isModelConfigRefreshing,
@@ -2382,14 +2311,6 @@ function ComposerImpl({
       text,
     ],
   );
-  useEffect(() => {
-    if (previousContextLedgerSessionKeyRef.current !== contextLedgerSessionKey) {
-      previousContextLedgerSessionKeyRef.current = contextLedgerSessionKey;
-      currentContextLedgerProjectionRef.current = contextLedgerProjection;
-      return;
-    }
-    currentContextLedgerProjectionRef.current = contextLedgerProjection;
-  }, [contextLedgerProjection, contextLedgerSessionKey]);
   const selectedManualMemoryIds = useMemo(
     () => selectedManualMemories.map((entry) => entry.id),
     [selectedManualMemories],
@@ -2434,7 +2355,6 @@ function ComposerImpl({
     selectedManualMemories.length > 0 ||
     selectedNoteCards.length > 0 ||
     selectedCodeAnnotations.length > 0 ||
-    (contextLedgerExpanded && contextLedgerProjection.visible) ||
     shouldRenderReviewInlinePrompt;
 
   return (
@@ -2678,23 +2598,6 @@ function ComposerImpl({
                   </div>
                 )}
 
-                {contextLedgerExpanded && contextLedgerProjection.visible ? (
-                  <ContextLedgerPanel
-                    projection={contextLedgerProjection}
-                    comparison={null}
-                    expanded={contextLedgerExpanded}
-                    hideHeader
-                    onToggle={() => setContextLedgerExpanded((prev) => !prev)}
-                    onExcludeBlock={handleExcludeLedgerBlock}
-                    onClearCarryOverBlock={handleClearCarryOverLedgerBlock}
-                    onBatchKeepBlocks={handleBatchKeepLedgerBlocks}
-                    onBatchExcludeBlocks={handleBatchExcludeLedgerBlocks}
-                    onBatchClearCarryOverBlocks={handleBatchClearCarryOverLedgerBlocks}
-                    onTogglePinBlock={handleToggleLedgerPin}
-                    onOpenBlockSource={handleOpenLedgerSource}
-                  />
-                ) : null}
-
                 {shouldRenderReviewInlinePrompt && reviewPrompt && (
                   <div
                     className="composer-suggestions popover-surface review-inline-suggestions"
@@ -2909,9 +2812,7 @@ function ComposerImpl({
               onModeSelect={handleModeSelect}
               sendReadiness={composerSendReadiness}
               onJumpToRequest={activeUserInputRequest ? handleJumpToUserInputRequest : undefined}
-              onToggleContextSources={contextLedgerProjection.visible ? handleToggleContextSources : undefined}
               onOpenSkillsSettings={_onOpenSkillsSettings}
-              contextSourcesExpanded={contextLedgerExpanded}
               selectedCollaborationModeId={_selectedCollaborationModeId}
               onSelectCollaborationMode={_onSelectCollaborationMode}
               accountRateLimits={resolvedAccountRateLimits}

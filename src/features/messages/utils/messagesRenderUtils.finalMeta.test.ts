@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAssistantFinalBoundaryMetaText,
+  formatDurationCompact,
   formatDurationMs,
   formatTokenCount,
 } from "./messagesRenderUtils";
@@ -52,6 +53,15 @@ describe("buildAssistantFinalBoundaryMetaText", () => {
 
   it("formats multi-hour clock durations", () => {
     expect(formatDurationMs(3_661_000)).toBe("1:01:01");
+  });
+});
+
+describe("formatDurationCompact", () => {
+  it("formats human-readable compact durations", () => {
+    expect(formatDurationCompact(3_000)).toBe("3s");
+    expect(formatDurationCompact(63_000)).toBe("1m 3s");
+    expect(formatDurationCompact(120_000)).toBe("2m");
+    expect(formatDurationCompact(3_661_000)).toBe("1h 1m 1s");
   });
 });
 

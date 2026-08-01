@@ -34,7 +34,6 @@ export const CLIENT_UI_CONTROL_IDS = [
   "bottomActivity.tasks",
   "bottomActivity.agents",
   "bottomActivity.checkpoint",
-  "curtain.contextLedger",
   "cornerStatus.messageAnchors",
 ] as const;
 
@@ -228,13 +227,6 @@ export const CLIENT_UI_CONTROL_REGISTRY: readonly ClientUiControlDefinition[] = 
     iconKey: "fileEdit",
   },
   {
-    id: "curtain.contextLedger",
-    parentPanelId: "cornerStatusIndicator",
-    labelKey: "settings.clientUiVisibility.controls.curtainContextLedger",
-    descriptionKey: "settings.clientUiVisibility.controlDescriptions.curtainContextLedger",
-    iconKey: "layoutList",
-  },
-  {
     id: "cornerStatus.messageAnchors",
     parentPanelId: "cornerStatusIndicator",
     labelKey: "settings.clientUiVisibility.controls.cornerStatusMessageAnchors",
@@ -313,7 +305,6 @@ export const CLIENT_UI_PANEL_REGISTRY: readonly ClientUiPanelDefinition[] = [
     descriptionKey: "settings.clientUiVisibility.panelDescriptions.cornerStatusIndicator",
     iconKey: "messageSquareText",
     controls: [
-      "curtain.contextLedger",
       "cornerStatus.messageAnchors",
     ],
   },

@@ -34,6 +34,9 @@ type GetEffectiveSelectedEffortOptions = {
 
 export const CLAUDE_REASONING_OPTIONS = ["low", "medium", "high", "xhigh", "max"];
 
+/** Grok CLI composer allowlist — keep aligned with `GROK_REASONING_EFFORTS` in grok.rs. */
+export const GROK_REASONING_OPTIONS = ["low", "medium", "high"];
+
 function findModelById(models: ModelOption[], id: string | null) {
   if (!id) {
     return null;
@@ -110,7 +113,7 @@ export function isReasoningEffortSupportedForEngine(
   activeEngine: EngineType,
   reasoningOptions: string[],
 ) {
-  if (activeEngine === "claude") {
+  if (activeEngine === "claude" || activeEngine === "grok") {
     return true;
   }
   if (activeEngine === "codex") {
@@ -232,7 +235,8 @@ export function getEffectiveSelectedEffort({
   if (!isReasoningEffortSupportedForEngine(activeEngine, normalizedReasoningOptions)) {
     return null;
   }
-  if (activeEngine === "claude") {
+  // Claude / Grok: fixed CLI allowlist; only surface thread/draft selection (no silent default).
+  if (activeEngine === "claude" || activeEngine === "grok") {
     return normalizeEffort(activeThreadSelection?.effort ?? null, {
       fallbackToFirst: false,
     });
@@ -262,12 +266,22 @@ export function getEffectiveReasoningSupported(
   activeEngine: EngineType,
   codexReasoningSupported: boolean,
 ) {
-  return activeEngine === "claude" || (activeEngine === "codex" && codexReasoningSupported);
+  return (
+    activeEngine === "claude" ||
+    activeEngine === "grok" ||
+    (activeEngine === "codex" && codexReasoningSupported)
+  );
 }
 
 export function getEffectiveReasoningOptions(
   activeEngine: EngineType,
   modelReasoningOptions: string[],
 ): string[] {
-  return activeEngine === "claude" ? CLAUDE_REASONING_OPTIONS : modelReasoningOptions;
+  if (activeEngine === "claude") {
+    return CLAUDE_REASONING_OPTIONS;
+  }
+  if (activeEngine === "grok") {
+    return GROK_REASONING_OPTIONS;
+  }
+  return modelReasoningOptions;
 }

@@ -124,7 +124,10 @@
   scrollbar-width: none;
   -ms-overflow-style: none;
   width: calc(100% + 24px);
+  /* Right: phantom gutter for scrollbar isolation; bottom: end inset so the
+   * last CLI row is not flush with the window edge when scrolled to end. */
   padding-right: 24px;
+  padding-bottom: 28px;
   box-sizing: border-box;
 }
 
@@ -1307,55 +1310,77 @@
   padding: 18px 16px;
 }
 
+/* Mobile back control: only visible in the detail pane under 900px. */
+.vendor-settings-mobile-back {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 6px 2px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.vendor-settings-mobile-back:hover {
+  color: var(--text-strong);
+}
+
+/*
+ * Master–detail under 900px: show list OR detail, never both stacked.
+ * data-mobile-pane is set by VendorSettingsPanel; desktop ignores it.
+ */
 @media (max-width: 900px) {
+  .vendor-settings-panel {
+    flex-direction: column;
+  }
+
+  .vendor-settings-panel[data-mobile-pane="list"] .vendor-settings-content {
+    display: none;
+  }
+
+  .vendor-settings-panel[data-mobile-pane="detail"] .vendor-engine-nav {
+    display: none;
+  }
+
+  .vendor-settings-panel[data-mobile-pane="detail"]
+    .vendor-settings-mobile-back {
+    display: inline-flex;
+  }
+
   .vendor-engine-nav {
     width: 100%;
-    max-height: none;
-    overflow: visible;
-    padding: 0;
+    height: 100%;
+    min-height: 0;
+    padding: 0 0 12px;
+    overflow: hidden;
   }
 
   .vendor-engine-nav-scroll {
     width: 100%;
-    max-height: none;
+    height: 100%;
+    min-height: 0;
     padding-right: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
-  }
-
-  .vendor-engine-search {
-    min-width: 160px;
-    margin-bottom: 0;
-  }
-
-  .vendor-engine-tab {
-    justify-content: center;
-  }
-
-  /* 横排导航不出组 header：组容器透明化，items 按组序平铺；
-   * 折叠状态在移动端不生效（用户经搜索仍可触达暂未开放项）。 */
-  .vendor-engine-group,
-  .vendor-engine-group-items,
-  .vendor-engine-group-collapsed .vendor-engine-group-items {
-    display: contents;
-  }
-
-  .vendor-engine-group-header,
-  .vendor-engine-group-empty {
-    display: none;
+    padding-bottom: 28px;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .vendor-settings-content {
     width: 100%;
-    max-height: none;
-    overflow-y: visible;
+    height: 100%;
+    max-height: 100%;
     min-height: 0;
-    margin-top: 16px;
+    margin-top: 0;
     padding-left: 0;
     padding-right: 0;
-    padding-top: 16px;
+    padding-top: 0;
     border-left: 0;
-    border-top: 1px solid var(--settings-basic-divider);
+    overflow-y: auto;
   }
 
   .vendor-current-config-body {

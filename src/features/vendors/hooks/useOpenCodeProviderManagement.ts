@@ -8,6 +8,8 @@ import {
   deleteOpenCodeProvider,
   switchOpenCodeProvider,
 } from "../../../services/tauri";
+import { VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT } from "../vendorActiveProviderEvents";
+import { notifyProviderTargetCatalogChanged } from "../../composer/components/ChatInputBox/hooks/useProviderTargetCatalogOwners";
 
 export interface OpenCodeProviderDialogState {
   isOpen: boolean;
@@ -89,6 +91,26 @@ export function useOpenCodeProviderManagement() {
     void loadOpenCodeProviders();
   }, [loadOpenCodeProviders]);
 
+  useEffect(() => {
+    const onActiveProviderChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ engine?: string }>).detail;
+      if (detail?.engine && detail.engine !== "opencode") {
+        return;
+      }
+      void loadOpenCodeProviders();
+    };
+    window.addEventListener(
+      VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT,
+      onActiveProviderChanged,
+    );
+    return () => {
+      window.removeEventListener(
+        VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT,
+        onActiveProviderChanged,
+      );
+    };
+  }, [loadOpenCodeProviders]);
+
   const handleAddOpenCodeProvider = useCallback(() => {
     setOpenCodeProviderDialog({ isOpen: true, provider: null });
   }, []);
@@ -157,6 +179,7 @@ export function useOpenCodeProviderManagement() {
       await deleteOpenCodeProvider(provider.id);
       await loadOpenCodeProviders();
       setOpenCodeProviderError(null);
+      notifyProviderTargetCatalogChanged();
     } catch (error) {
       setOpenCodeProviderError(
         getErrorMessage(error, "Failed to delete OpenCode provider."),

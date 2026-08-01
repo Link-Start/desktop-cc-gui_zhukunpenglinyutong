@@ -38,7 +38,6 @@ describe("useClientUiVisibility", () => {
     expect(result.current.isPanelVisible("topSessionTabs")).toBe(true);
     expect(result.current.isControlVisible("topTool.terminal")).toBe(true);
     expect(result.current.isControlVisible("rightToolbar.projectMap")).toBe(true);
-    expect(result.current.isControlVisible("curtain.contextLedger")).toBe(true);
     expect(result.current.isControlVisible("topTool.clientDocumentation")).toBe(false);
   });
 

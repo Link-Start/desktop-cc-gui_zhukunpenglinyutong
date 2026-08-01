@@ -99,9 +99,10 @@ export function useAppShellComposerModelSection({
       selectedModelId,
       activeThreadSelectedModelId: selectedComposerSelection?.modelId ?? null,
       hasActiveThread: hasActiveComposerThread,
+      // Codex/Claude：允许会话级自由/自定义模型名（含本地配置、catalog 未登记项），
+      // 避免 Atomic picker 选中后被 repair 静默回退。
       allowUnknownActiveThreadModel:
-        (activeEngine === "codex" || activeEngine === "claude") &&
-        Boolean(activeProviderProfileId?.trim()),
+        activeEngine === "codex" || activeEngine === "claude",
       codexModels: effectiveModels,
       engineModelsAsOptions,
       engineSelectedModelIdByType,
@@ -206,7 +207,22 @@ export function useAppShellComposerModelSection({
         }
       }
       if (!nextSelectedModel) {
-        return;
+        // Atomic picker / 自定义模型：不因 effectiveModels 未收录而静默丢弃。
+        // 单一会话点选时 catalog 与 picker 可能分叉（尤其 Codex 本地配置）。
+        const freeformId = id.trim();
+        if (!freeformId) {
+          return;
+        }
+        nextSelectedModel = {
+          id: freeformId,
+          model: freeformId,
+          displayName: freeformId,
+          description: "",
+          source: "custom",
+          supportedReasoningEfforts: [],
+          defaultReasoningEffort: null,
+          isDefault: false,
+        };
       }
       const isCrossEngineSelection = targetEngine !== activeEngine;
       const nextSelectedEffort =
@@ -218,7 +234,9 @@ export function useAppShellComposerModelSection({
           selectedEffort: effectiveSelectedEffort,
           activeThreadSelection:
             !isCrossEngineSelection &&
-            (hasActiveComposerThread || activeEngine === "claude")
+            (hasActiveComposerThread ||
+              activeEngine === "claude" ||
+              activeEngine === "grok")
               ? {
                   modelId: nextSelectedModel.id,
                   effort: effectiveSelectedEffort,
@@ -272,7 +290,9 @@ export function useAppShellComposerModelSection({
         hasActiveThread: hasActiveComposerThread,
         selectedEffort: effort,
         activeThreadSelection:
-          hasActiveComposerThread || activeEngine === "claude"
+          hasActiveComposerThread ||
+          activeEngine === "claude" ||
+          activeEngine === "grok"
             ? {
                 modelId: effectiveSelectedModelId,
                 effort,
@@ -315,6 +335,9 @@ export function useAppShellComposerModelSection({
     effort: resolvedEffort,
     collaborationMode: collaborationModePayload,
   };
+  // 会话选择修复：仅在 effective 与已存选择语义不一致时写回。
+  // freeform（allowUnknown）会保留 catalog 外 modelId——这是业务能力，不是 #185 缺口；
+  // 这里只收敛 effort/model 的有效投影，禁止无变化 persist 触发反馈环。
   useEffect(() => {
     if (
       activeEngine !== "codex" ||
@@ -324,18 +347,18 @@ export function useAppShellComposerModelSection({
     ) {
       return;
     }
+    const nextSelection = {
+      modelId: effectiveSelectedModelId,
+      effort: effectiveSelectedEffort,
+    };
     const needsModelRepair =
-      selectedComposerSelection.modelId !== null &&
-      selectedComposerSelection.modelId !== effectiveSelectedModelId;
+      selectedComposerSelection.modelId !== nextSelection.modelId;
     const needsEffortRepair =
-      selectedComposerSelection.effort !== effectiveSelectedEffort;
+      selectedComposerSelection.effort !== nextSelection.effort;
     if (!needsModelRepair && !needsEffortRepair) {
       return;
     }
-    persistComposerSelectionForThread(activeWorkspaceId, activeThreadId, {
-      modelId: effectiveSelectedModelId,
-      effort: effectiveSelectedEffort,
-    });
+    persistComposerSelectionForThread(activeWorkspaceId, activeThreadId, nextSelection);
   }, [
     activeEngine,
     activeThreadId,

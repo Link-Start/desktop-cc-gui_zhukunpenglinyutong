@@ -22,7 +22,6 @@ import type { AgentTaskScrollRequest } from "../types";
 import { getVisibleApprovalsForThread } from "../../../utils/approvalBatching";
 import {
   MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY,
-  MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY,
   MESSAGES_LIVE_CONTROLS_UPDATED_EVENT,
   readLocalBooleanFlag,
   writeLocalBooleanFlag,
@@ -69,7 +68,6 @@ import {
   MESSAGES_SLOW_ANCHOR_WARN_MS,
   MESSAGES_SLOW_RENDER_WARN_MS,
   resolveWorkingActivityLabel,
-  SCROLL_THRESHOLD_PX,
   shouldDisplayWorkingActivityLabel,
   shouldHideClaudeReasoningModule,
   STREAMING_VISIBLE_WINDOW,
@@ -327,13 +325,11 @@ export const MessagesCore = memo(function MessagesCore({
   const [liveAutoFollowEnabled, setLiveAutoFollowEnabled] = useState(() =>
     readLocalBooleanFlag(MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY, true),
   );
-  const [collapseLiveMiddleStepsEnabled, setCollapseLiveMiddleStepsEnabled] = useState(() =>
-    readLocalBooleanFlag(MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY, false),
+  const [expandedProcessPhaseKeys, setExpandedProcessPhaseKeys] = useState<Set<string>>(
+    () => new Set(),
   );
   const liveAutoFollowEnabledRef = useRef(liveAutoFollowEnabled);
   liveAutoFollowEnabledRef.current = liveAutoFollowEnabled;
-  const collapseLiveMiddleStepsEnabledRef = useRef(collapseLiveMiddleStepsEnabled);
-  collapseLiveMiddleStepsEnabledRef.current = collapseLiveMiddleStepsEnabled;
   const legacyClaudeReasoningDockEnabled =
     activeEngine === "claude" &&
     typeof claudeThinkingVisible !== "boolean" &&
@@ -478,8 +474,6 @@ export const MessagesCore = memo(function MessagesCore({
     getPendingRuntimeResourceCount,
     handleAssistantVisibleTextRender,
     isAssistantFinalizing,
-    isAssistantFinalizingRef,
-    isWorkingRef,
     latestAssistantMessageId,
     latestRetryMessage,
     latestRuntimeReconnectItemId,
@@ -544,14 +538,15 @@ export const MessagesCore = memo(function MessagesCore({
     requestAutoScroll,
     requestHistoryBottomConvergence,
     requestTimelineLayoutBottomConvergence,
+    scrollGeometrySnapshotRef,
     scrollKey,
+    shouldProtectFollowOnScrollEvent,
     stickToBottomDeadlineRef,
     stickToBottomIntentRef,
   } = useMessagesScrollController({
     clearPendingJumpMessage,
-    isAssistantFinalizingRef,
     isThinking,
-    isWorkingRef,
+    isAssistantFinalizing,
     liveAutoFollowEnabledRef,
     rawScrollKey,
     renderScopeKey,
@@ -705,12 +700,6 @@ export const MessagesCore = memo(function MessagesCore({
   }, [liveAutoFollowEnabled]);
 
   useEffect(() => {
-    writeLocalBooleanFlag(
-      MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY,
-      collapseLiveMiddleStepsEnabled,
-    );
-  }, [collapseLiveMiddleStepsEnabled]);
-  useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
@@ -719,7 +708,6 @@ export const MessagesCore = memo(function MessagesCore({
     ) => {
       const customEvent = event as CustomEvent<{
         liveAutoFollowEnabled?: boolean;
-        collapseLiveMiddleStepsEnabled?: boolean;
       }>;
       const detail = customEvent.detail;
       if (!detail) {
@@ -735,15 +723,9 @@ export const MessagesCore = memo(function MessagesCore({
         if (!nextLiveAutoFollowEnabled) {
           cancelFocusFollowConvergence();
         }
-        if (!wasLiveAutoFollowEnabled && nextLiveAutoFollowEnabled && isWorking) {
+        // 重新打开焦点跟随：仅 false→true 边沿 re-arm（流式/闲时均可一键归位）。
+        if (!wasLiveAutoFollowEnabled && nextLiveAutoFollowEnabled) {
           rearmAutoFollowToBottom();
-        }
-      }
-      if (typeof detail.collapseLiveMiddleStepsEnabled === "boolean") {
-        const nextCollapseLiveMiddleStepsEnabled = detail.collapseLiveMiddleStepsEnabled;
-        if (collapseLiveMiddleStepsEnabledRef.current !== nextCollapseLiveMiddleStepsEnabled) {
-          collapseLiveMiddleStepsEnabledRef.current = nextCollapseLiveMiddleStepsEnabled;
-          setCollapseLiveMiddleStepsEnabled(nextCollapseLiveMiddleStepsEnabled);
         }
       }
     };
@@ -756,25 +738,16 @@ export const MessagesCore = memo(function MessagesCore({
           MESSAGES_LIVE_AUTO_FOLLOW_FLAG_KEY,
           true,
         );
-        if (liveAutoFollowEnabledRef.current !== nextLiveAutoFollowEnabled) {
+        const wasLiveAutoFollowEnabled = liveAutoFollowEnabledRef.current;
+        if (wasLiveAutoFollowEnabled !== nextLiveAutoFollowEnabled) {
           liveAutoFollowEnabledRef.current = nextLiveAutoFollowEnabled;
           setLiveAutoFollowEnabled(nextLiveAutoFollowEnabled);
         }
         if (!nextLiveAutoFollowEnabled) {
           cancelFocusFollowConvergence();
-        } else if (isWorking) {
+        } else if (!wasLiveAutoFollowEnabled && nextLiveAutoFollowEnabled) {
+          // 与 CustomEvent 一致：只在边沿 re-arm，避免跨 tab 重复 setItem 拽回底部。
           rearmAutoFollowToBottom();
-        }
-        return;
-      }
-      if (event.key === MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY) {
-        const nextCollapseLiveMiddleStepsEnabled = readLocalBooleanFlag(
-          MESSAGES_LIVE_COLLAPSE_MIDDLE_STEPS_FLAG_KEY,
-          false,
-        );
-        if (collapseLiveMiddleStepsEnabledRef.current !== nextCollapseLiveMiddleStepsEnabled) {
-          collapseLiveMiddleStepsEnabledRef.current = nextCollapseLiveMiddleStepsEnabled;
-          setCollapseLiveMiddleStepsEnabled(nextCollapseLiveMiddleStepsEnabled);
         }
       }
     };
@@ -790,7 +763,7 @@ export const MessagesCore = memo(function MessagesCore({
       );
       window.removeEventListener("storage", handleStorage);
     };
-  }, [cancelFocusFollowConvergence, isWorking, rearmAutoFollowToBottom]);
+  }, [cancelFocusFollowConvergence, rearmAutoFollowToBottom]);
   const reasoningMetaById = useMemo(() => {
     const meta = new Map<string, ReturnType<typeof parseReasoning>>();
     deferredRenderSourceItems.forEach((item) => {
@@ -1008,25 +981,47 @@ export const MessagesCore = memo(function MessagesCore({
       enableCollaborationBadge,
     });
   }, [activeEngine, enableCollaborationBadge, isThinking, visibleItems]);
-  const { timelineItems, collapsedMiddleStepCount } = useMemo(
+  const { timelineItems, phases: processPhases } = useMemo(
     () =>
       resolveCollapsedTimelineItems({
         activeEngine,
-        collapseLiveMiddleStepsEnabled,
-        isThinking,
-        latestAssistantMessageId,
-        latestReasoningId,
+        expandedPhaseKeys: expandedProcessPhaseKeys,
         timelineSourceItems,
       }),
-    [
-      activeEngine,
-      collapseLiveMiddleStepsEnabled,
-      isThinking,
-      latestAssistantMessageId,
-      latestReasoningId,
-      timelineSourceItems,
-    ],
+    [activeEngine, expandedProcessPhaseKeys, timelineSourceItems],
   );
+  const processPhaseChips = useMemo(
+    () =>
+      processPhases.map((phase) => ({
+        phaseKey: phase.phaseKey,
+        count: phase.count,
+        expanded: phase.expanded,
+        breakdown: phase.breakdown,
+        // Prefer per-tool duration; fall back to turn duration so the header matches
+        // the reference "已处理 1m 3s" control when tool timing is missing.
+        durationMs:
+          phase.durationMs ??
+          (typeof lastDurationMs === "number" && lastDurationMs >= 0 ? lastDurationMs : null),
+        insertBeforeItemId: phase.insertBeforeItemId,
+        assistantItemId: phase.assistantItemId,
+        hiddenItemIds: phase.hiddenItemIds,
+      })),
+    [lastDurationMs, processPhases],
+  );
+  const handleToggleProcessPhaseExpanded = useCallback((phaseKey: string) => {
+    setExpandedProcessPhaseKeys((previous) => {
+      const next = new Set(previous);
+      if (next.has(phaseKey)) {
+        next.delete(phaseKey);
+      } else {
+        next.add(phaseKey);
+      }
+      return next;
+    });
+  }, []);
+  useEffect(() => {
+    setExpandedProcessPhaseKeys(new Set());
+  }, [threadId]);
   const latestReasoningVisibleInTimeline = useMemo(() => {
     if (!latestReasoningId) {
       return false;
@@ -1328,11 +1323,10 @@ export const MessagesCore = memo(function MessagesCore({
     }
     const now = performance.now();
     const userOwnsScroll = hasRecentUserScrollIntent();
-    const previousGeometry = {
-      scrollTop: container.scrollTop,
-      maxScrollTop: Math.max(0, container.scrollHeight - container.clientHeight),
-    };
+    // 先读上一帧几何，再写入当前快照——用于识别「高度暴涨、scrollTop 未动」的假离底。
+    const previousGeometry = scrollGeometrySnapshotRef.current;
     recordCurrentScrollGeometry(container);
+    const currentGeometry = scrollGeometrySnapshotRef.current;
     const activeProgrammaticEdge = activeProgrammaticScrollEdgeRef.current;
     const activeProgrammaticMotion = activeProgrammaticScrollMotionRef.current;
     if (
@@ -1369,22 +1363,17 @@ export const MessagesCore = memo(function MessagesCore({
       return;
     }
     const nearBottom = isNearBottom(container);
-    // 回合结束 / 打开历史 settle 窗口：live 尾窗→全量、static→virtual 会让
-    // scrollHeight 暴涨而 scrollTop 尚未追上，nearBottom 瞬时 false。不得因此解除
-    // autoScroll。若用户已主动上滚离开底部（scrollTop 明显低于 max），仍释放跟随。
-    const settleIntent = stickToBottomIntentRef.current;
-    const settleWindowOpen =
-      settleIntent !== null && Date.now() <= stickToBottomDeadlineRef.current;
-    const userLeftBottom =
-      !nearBottom &&
-      previousGeometry.maxScrollTop - previousGeometry.scrollTop >
-        SCROLL_THRESHOLD_PX;
-    const settleArmed =
-      settleWindowOpen &&
+    // forced/settle 窗口内：尾窗→全量 / virtual remeasure 让 maxScrollTop 暴涨，
+    // scrollTop 仍停在旧底 → 假离底。绝不能解除 autoScroll 或 cancel 收敛，
+    // 否则回合结束瞬间视口停在中上段（用户体感「飞到上面」）。
+    // 用户真上滚会改 scrollTop，假离底判定为 false，走下方正常释放。
+    if (
       !userOwnsScroll &&
-      (autoScrollRef.current || activeProgrammaticEdge === "bottom") &&
-      !userLeftBottom;
-    if (settleArmed) {
+      shouldProtectFollowOnScrollEvent(previousGeometry, currentGeometry ?? {
+        maxScrollTop: Math.max(0, container.scrollHeight - container.clientHeight),
+        scrollTop: container.scrollTop,
+      })
+    ) {
       autoScrollRef.current = true;
       scheduleAnchorUpdate("scroll");
       return;
@@ -1413,8 +1402,8 @@ export const MessagesCore = memo(function MessagesCore({
     programmaticScrollTopEchoRef,
     recordCurrentScrollGeometry,
     scheduleAnchorUpdate,
-    stickToBottomDeadlineRef,
-    stickToBottomIntentRef,
+    scrollGeometrySnapshotRef,
+    shouldProtectFollowOnScrollEvent,
   ]);
   const clearTransientUiState = useCallback(() => {
     if (anchorUpdateRafRef.current !== null) {
@@ -1526,7 +1515,9 @@ export const MessagesCore = memo(function MessagesCore({
   }, [hasAnchorRail, messageAnchors, scheduleAnchorUpdate, scrollKey, threadId]);
 
   useEffect(() => {
-    if (!liveAutoFollowEnabled || (!isWorking && !isAssistantFinalizing)) {
+    // 焦点跟随 stick-to-bottom 不绑 isWorking/finalizing：消息回填、思考折叠、
+    // settle 后 full markdown 都会改高度；只要开关开着且视口仍停在底部就追底。
+    if (!liveAutoFollowEnabled) {
       return undefined;
     }
     const container = containerRef.current;
@@ -1543,9 +1534,7 @@ export const MessagesCore = memo(function MessagesCore({
   }, [
     autoScrollRef,
     containerRef,
-    isAssistantFinalizing,
     isNearBottom,
-    isWorking,
     liveAutoFollowEnabled,
     requestAutoScroll,
     scrollKey,
@@ -1650,6 +1639,31 @@ export const MessagesCore = memo(function MessagesCore({
     renderScopeKey,
   ]);
 
+  // useDeferredValue 使尾窗→全量在 isThinking 结束后延迟才落到 DOM。
+  // 流式中仅当「焦点跟随开 + autoScroll 武装」才对 item 增长 pin；
+  // 结束后（回刷）走 history-restore 守卫（turn-settle forced / 武装贴底）。
+  const deferredRenderItemCount = deferredRenderSourceItems.length;
+  const previousDeferredRenderItemCountRef = useRef(deferredRenderItemCount);
+  useLayoutEffect(() => {
+    const previousCount = previousDeferredRenderItemCountRef.current;
+    previousDeferredRenderItemCountRef.current = deferredRenderItemCount;
+    if (deferredRenderItemCount <= previousCount) {
+      return;
+    }
+    if (isThinking) {
+      if (!liveAutoFollowEnabled || !autoScrollRef.current) {
+        return;
+      }
+    }
+    requestTimelineLayoutBottomConvergence();
+  }, [
+    autoScrollRef,
+    deferredRenderItemCount,
+    isThinking,
+    liveAutoFollowEnabled,
+    requestTimelineLayoutBottomConvergence,
+  ]);
+
   useEffect(() => {
     if (!isThinking || liveAutoExpandedExploreId !== null) {
       return;
@@ -1729,7 +1743,7 @@ export const MessagesCore = memo(function MessagesCore({
       assistantFinalBoundarySet,
       assistantLiveTurnFinalBoundarySuppressedSet,
       claudeDockedReasoningItems,
-      collapsedMiddleStepCount,
+      processPhaseChips,
       effectiveItemsCount: timelinePresentationItems.length,
       groupedEntries,
       hasPendingUserTurn: messageActionTargets.hasPendingUserTurn,
@@ -1805,13 +1819,13 @@ export const MessagesCore = memo(function MessagesCore({
       onRewindFromMessage,
       onShowAllHistoryItems: handleShowAllHistoryItems,
       onThreadRecoveryFork,
+      onToggleProcessPhaseExpanded: handleToggleProcessPhaseExpanded,
       openFileLink,
       showFileLinkMenu,
       toggleExpanded,
     },
     presentation: {
       codeBlockCopyUseModifier,
-      collapseLiveMiddleStepsEnabled,
       conversationDetailHydrationRequested,
       conversationLightweightModeEnabled,
       copiedMessageId,

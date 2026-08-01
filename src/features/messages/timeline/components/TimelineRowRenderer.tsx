@@ -1,4 +1,11 @@
-import { Fragment, memo, useMemo, useRef, type ReactNode } from "react";
+import {
+  Fragment,
+  memo,
+  useMemo,
+  useRef,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
 import Check from "lucide-react/dist/esm/icons/check";
 import Copy from "lucide-react/dist/esm/icons/copy";
@@ -42,6 +49,7 @@ import {
 } from "../../components/MessagesRows";
 import { ConversationRowErrorBoundary } from "../../components/conversation/ConversationRowErrorBoundary";
 import { TurnFilesChangedCard } from "../../components/conversation/TurnFilesChangedCard";
+import { MiddleStepsCollapsedChip } from "./MiddleStepsCollapsedChip";
 import type {
   TimelineRowRendererProps,
   TimelineUserActionNodeCacheEntry,
@@ -72,7 +80,6 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     latestFinalAssistantMessageId,
     messageActionTargetByAssistantId,
     messageCopyTextByAssistantId,
-    reasoningMetaById,
     suppressedUserMemoryContextMessageIds,
     suppressedUserNoteCardContextMessageIds,
     turnFileChangesByBoundaryId,
@@ -126,6 +133,7 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     onRetryHistory,
     onRewindFromMessage,
     onThreadRecoveryFork,
+    onToggleProcessPhaseExpanded,
     openFileLink,
     showFileLinkMenu,
     toggleExpanded,
@@ -415,7 +423,10 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     if (renderKind === "reasoning" && renderItem.kind === "reasoning") {
       const itemRenderKey = `reasoning:${renderItem.id}`;
       const isExpanded = expandedItems.has(renderItem.id);
-      const parsed = reasoningMetaById.get(renderItem.id) ?? parseReasoning(renderItem);
+      // 必须基于最终 renderItem 解析：相邻 reasoning 合并后会复用 latest id，
+      // 但 content/summary 已是拼接结果；若仍查源表 reasoningMetaById 会拿到合并前的短正文。
+      // parseReasoning 按 item 引用 WeakMap 缓存，稳定行无额外成本。
+      const parsed = parseReasoning(renderItem);
       const isLiveReasoning =
         isThinking && latestReasoningId === renderItem.id;
       return (
@@ -476,6 +487,7 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
             activeCollaborationModeId={activeCollaborationModeId}
             activeEngine={activeEngine}
             hasPendingUserInputRequest={activeUserInputRequestId !== null}
+            onOpenFilePath={openFileLink}
             onOpenDiffPath={onOpenDiffPath}
             selectedExitPlanExecutionMode={selectedExitPlanExecutionMode}
             onExitPlanModeExecute={handleExitPlanModeExecuteForItem}
@@ -527,13 +539,19 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
         <EditToolGroupBlock
           key={`eg-${firstItem?.id ?? "edit-group"}`}
           items={entry.items}
+          onOpenFilePath={openFileLink}
           onOpenDiffPath={onOpenDiffPath}
         />,
       );
     }
     if (entry.kind === "bashGroup") {
+      // Align Grok/Kimi/OpenCode with Claude-polished canvas: shell batches stay off
+      // the narrative surface (Status Panel / Diff remain the operational trail).
       if (
         activeEngine === "codex" ||
+        activeEngine === "grok" ||
+        activeEngine === "kimi" ||
+        activeEngine === "opencode" ||
         (activeEngine === "claude" && !claudeHistoryTranscriptFallbackActive)
       ) {
         return null;
@@ -646,7 +664,25 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
       return null;
     }
     if (row.kind === "entry") {
-      return renderEntry(row.entry);
+      const entryNode = renderEntry(row.entry);
+      if (!entryNode) {
+        return null;
+      }
+      // Remount fade-in when a phase is expanded (hard-unmount model: no soft hide).
+      if (row.processPhaseKey && !row.processPhaseCollapsed) {
+        const revealDelayMs = Math.min(140, (row.processPhaseRevealIndex ?? 0) * 32);
+        return (
+          <div
+            className="messages-process-phase-slot is-expanded"
+            data-process-phase-key={row.processPhaseKey}
+            data-process-phase-collapsed="false"
+            style={{ animationDelay: `${revealDelayMs}ms` } satisfies CSSProperties}
+          >
+            <div className="messages-process-phase-slot-inner">{entryNode}</div>
+          </div>
+        );
+      }
+      return entryNode;
     }
     if (row.kind === "dockedReasoning") {
       const dockedReasoning = dockedReasoningById.get(row.itemId);
@@ -675,9 +711,12 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     }
     if (row.kind === "liveMiddleCollapsed") {
       return (
-        <div className="messages-live-middle-collapsed-indicator" role="status">
-          {t("messages.middleStepsCollapsedHint", { count: row.count })}
-        </div>
+        <MiddleStepsCollapsedChip
+          count={row.count}
+          expanded={row.expanded}
+          breakdown={row.breakdown}
+          onToggle={() => onToggleProcessPhaseExpanded(row.phaseKey)}
+        />
       );
     }
     if (row.kind === "workingIndicator") {

@@ -80,7 +80,7 @@ pub fn spec_capability_state(engine_type: EngineType, capability: &str) -> &'sta
             "streaming.tool-output" => "unsupported",
             "tool.use" => "supported",
             "tool.mcp" => "unsupported",
-            "reasoning.effort" => "unsupported",
+            "reasoning.effort" => "supported",
             "collaboration.mode" => "unsupported",
             "session.continuation" => "supported",
             "image.input" => "supported",

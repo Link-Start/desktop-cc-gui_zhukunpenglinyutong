@@ -199,6 +199,27 @@ export function formatDurationMs(durationMs: number) {
   return `${durationMinutes}:${String(durationRemainder).padStart(2, "0")}`;
 }
 
+/** Human-readable compact duration for process chips, e.g. "1m 3s". */
+export function formatDurationCompact(durationMs: number) {
+  const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    if (minutes === 0 && seconds === 0) {
+      return `${hours}h`;
+    }
+    if (seconds === 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${hours}h ${minutes}m ${seconds}s`;
+  }
+  if (minutes > 0) {
+    return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+  }
+  return `${seconds}s`;
+}
+
 /** Compact token count for message footers (1234 → "1.2K"), matching jetbrains MessageItem. */
 export function formatTokenCount(count: number) {
   if (!Number.isFinite(count) || count < 0) {
@@ -334,11 +355,23 @@ export function resolveCodexCommandActivityLabel(item: Extract<ConversationItem,
   return buildCommandSummary(item, { includeDetail: false });
 }
 
+/**
+ * Hide bash/command tool cards on the conversation canvas (Claude-polished surface).
+ * Applies to Claude/Codex and, after unify-conversation-canvas, also Grok/Kimi/OpenCode
+ * so multi-CLI process chrome matches: narrative on canvas, shell noise in Status Panel.
+ * ExitPlanMode remains visible.
+ */
 export function shouldHideCodexCanvasCommandCard(
   item: Extract<ConversationItem, { kind: "tool" }>,
   activeEngine: MessagesEngine,
 ) {
-  if (activeEngine !== "codex" && activeEngine !== "claude") {
+  if (
+    activeEngine !== "codex" &&
+    activeEngine !== "claude" &&
+    activeEngine !== "grok" &&
+    activeEngine !== "kimi" &&
+    activeEngine !== "opencode"
+  ) {
     return false;
   }
   const normalizedToolName = extractToolName(item.title)
@@ -387,7 +420,17 @@ export function countRenderableCollapsedEntries(
   }
   return groupToolItems(items).reduce((count, entry) => {
     if (entry.kind === "bashGroup") {
-      return activeEngine === "codex" || activeEngine === "claude" ? count : count + 1;
+      // Hidden on polished multi-CLI canvas (Claude/Codex/Grok/Kimi/OpenCode).
+      if (
+        activeEngine === "codex" ||
+        activeEngine === "claude" ||
+        activeEngine === "grok" ||
+        activeEngine === "kimi" ||
+        activeEngine === "opencode"
+      ) {
+        return count;
+      }
+      return count + 1;
     }
     if (
       entry.kind === "item" &&

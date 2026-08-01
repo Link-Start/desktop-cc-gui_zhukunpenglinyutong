@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -12,6 +14,22 @@ describe("VendorModelManagerDialogHost", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
     window.localStorage.clear();
+  });
+
+  it("loads dialog styles before showing the dialog outside SettingsView", () => {
+    // 未打开设置页时 settings.css 不会加载；当前页 host 必须显式拉取 dialog 样式
+    // 切片，否则冷启动从未进设置时弹窗会完全无样式。test mode 下 hook 不真调
+    // loader，用源码契约锁住接线，防止回归。
+    const hostSource = readFileSync(
+      path.join(
+        process.cwd(),
+        "src/features/vendors/components/VendorModelManagerDialogHost.tsx",
+      ),
+      "utf8",
+    );
+    expect(hostSource).toContain("loadVendorModelManagerStyles");
+    expect(hostSource).toContain("useFeatureStylesReady");
+    expect(hostSource).toContain("open && stylesReady");
   });
 
   it("opens the model manager dialog on the current page when requested", async () => {
@@ -32,6 +50,10 @@ describe("VendorModelManagerDialogHost", () => {
         "settings.vendor.modelManager.modelIdPlaceholder",
       ),
     ).toBeTruthy();
+    // 弹窗壳层 class 保留，样式由 loadVendorModelManagerStyles 按需注入
+    // （测试环境 useFeatureStylesReady 会直接放行）。
+    expect(document.querySelector(".vendor-dialog-overlay")).toBeTruthy();
+    expect(document.querySelector(".vendor-model-manager-dialog")).toBeTruthy();
   });
 
   it("persists a newly added model into provider storage without settings navigation", async () => {

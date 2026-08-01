@@ -747,6 +747,9 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         onAddCloneAgent={options.onAddCloneAgent}
         onToggleWorkspaceCollapse={options.onToggleWorkspaceCollapse}
         onSelectThread={options.onSelectThread}
+        onProviderContinuationTargetReady={
+          options.onProviderContinuationTargetReady
+        }
         onDeleteThread={options.onDeleteThread}
         onArchiveThread={options.onArchiveThread}
         deleteConfirmThreadId={options.deleteConfirmThreadId}
@@ -1575,6 +1578,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           models={options.models}
           providerModelCatalogs={options.providerModelCatalogs}
           providerProfileId={activeThreadSummary?.providerProfileId ?? null}
+          providerProfileName={activeThreadSummary?.providerProfileName ?? null}
           selectedModelId={options.selectedModelId}
           onSelectModel={options.onSelectModel}
           reasoningOptions={options.reasoningOptions}
@@ -1628,8 +1632,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           kanbanContextMode={options.composerKanbanContextMode}
           onKanbanContextModeChange={options.onComposerKanbanContextModeChange}
           onOpenLinkedKanbanPanel={options.onOpenComposerKanbanPanel}
-          onOpenContextLedgerMemory={options.onOpenContextLedgerMemory}
-          onOpenContextLedgerNote={options.onOpenContextLedgerNote}
           activeFilePath={options.activeComposerFilePath}
           activeFileLineRange={options.activeComposerFileLineRange}
           fileReferenceMode={options.fileReferenceMode}

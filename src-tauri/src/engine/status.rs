@@ -131,25 +131,27 @@ pub(crate) fn validate_model_catalog_pair(
         .filter(|value| !value.is_empty());
 
     if let Some(entry_id) = model_catalog_entry_id {
-        let entry = catalog
-            .iter()
-            .find(|entry| entry.id.trim() == entry_id)
-            .ok_or_else(|| {
-                format!(
-                    "invalid-target-model: catalog entry '{entry_id}' is unavailable for the selected Provider"
-                )
-            })?;
-        let expected_runtime_model = if entry.model.trim().is_empty() {
-            entry.id.trim()
-        } else {
-            entry.model.trim()
-        };
-        if runtime_model != Some(expected_runtime_model) {
-            return Err(format!(
-                "invalid-target-model: catalog entry '{entry_id}' requires runtime model '{expected_runtime_model}'"
-            ));
+        if let Some(entry) = catalog.iter().find(|entry| entry.id.trim() == entry_id) {
+            let expected_runtime_model = if entry.model.trim().is_empty() {
+                entry.id.trim()
+            } else {
+                entry.model.trim()
+            };
+            if runtime_model != Some(expected_runtime_model) {
+                return Err(format!(
+                    "invalid-target-model: catalog entry '{entry_id}' requires runtime model '{expected_runtime_model}'"
+                ));
+            }
+            return Ok(());
         }
-        return Ok(());
+        // Catalog 未登记的自定义 / 自由模型名：Allow 时不拦截用户输入的 model id。
+        // Reject 仍 fail-closed（旧 Shared 语义）；调用方若允许自定义应传 Allow。
+        if unlisted_runtime_model_policy == UnlistedRuntimeModelPolicy::Allow {
+            return Ok(());
+        }
+        return Err(format!(
+            "invalid-target-model: catalog entry '{entry_id}' is unavailable for the selected Provider"
+        ));
     }
 
     let Some(runtime_model) = runtime_model else {
@@ -1835,12 +1837,20 @@ mod tests {
     }
 
     #[test]
-    fn unlisted_runtime_policy_keeps_native_compatibility_but_shared_fails_closed() {
+    fn unlisted_runtime_policy_allow_accepts_custom_model_names() {
         let catalog = vec![ModelInfo::new("known", "Known")];
 
         assert!(validate_model_catalog_pair(
             None,
             Some("custom/provider-model"),
+            &catalog,
+            UnlistedRuntimeModelPolicy::Allow,
+        )
+        .is_ok());
+        // 自定义 catalog entry id：Allow 不拦截用户模型名
+        assert!(validate_model_catalog_pair(
+            Some("gpt-5.3-codex-spark"),
+            Some("gpt-5.3-codex-spark"),
             &catalog,
             UnlistedRuntimeModelPolicy::Allow,
         )
@@ -1851,8 +1861,16 @@ mod tests {
             &catalog,
             UnlistedRuntimeModelPolicy::Reject,
         )
-        .expect_err("Shared target requires a catalog runtime match")
+        .expect_err("Reject still fail-closes unknown runtime models")
         .contains("runtime model 'custom/provider-model' is unavailable"));
+        assert!(validate_model_catalog_pair(
+            Some("gpt-5.3-codex-spark"),
+            Some("gpt-5.3-codex-spark"),
+            &catalog,
+            UnlistedRuntimeModelPolicy::Reject,
+        )
+        .expect_err("Reject still fail-closes unknown catalog entries")
+        .contains("catalog entry 'gpt-5.3-codex-spark' is unavailable"));
     }
 
     #[test]

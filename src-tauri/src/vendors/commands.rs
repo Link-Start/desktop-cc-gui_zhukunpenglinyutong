@@ -204,8 +204,14 @@ fn build_local_provider(is_active: bool) -> ProviderConfig {
     }
 }
 
-/// Apply the active provider's settingsConfig to ~/.claude/settings.json
-/// Uses incremental merge: provider-managed fields are overwritten, system fields are preserved
+/// Merge a managed provider's settingsConfig into `~/.claude/settings.json`.
+///
+/// **Not used by `vendor_switch_claude_provider`.** Managed multi-provider isolation
+/// must not overwrite the user's local Claude settings on enable/switch. Session
+/// launch injects env via provider profile + turn-scoped `--settings` instead.
+///
+/// Kept only for intentional/export tooling that explicitly needs disk materialize.
+#[allow(dead_code)]
 fn apply_provider_to_claude_settings(
     provider_value: &Value,
     provider_id: &str,
@@ -967,6 +973,15 @@ pub(crate) async fn vendor_delete_claude_provider(id: String) -> Result<(), Stri
     write_config(&config)
 }
 
+/// L1 全局「启用 / 使用中」标记（配置页与新建菜单共用）。
+///
+/// - local：只标记 current=local，不改写用户 `~/.claude/settings.json` 内容（可读授权）
+/// - managed：只更新 app 内 `claude.current`，**禁止** merge 盖写 `~/.claude/settings.json`
+/// - 真正跑 managed 会话：thread `providerProfileId` + launch profile env + turn `--settings`
+///   （见 `engine/claude/provider_profile.rs` / `ClaudeProviderSettingsOverride`）
+///
+/// 历史上 switch 会 `apply_provider_to_claude_settings`，导致「启用」毁掉独立供应商与
+/// 用户本地配置；与 Codex 独立 home / 7-27 isolation 契约冲突。已移除盖盘。
 #[tauri::command]
 pub(crate) async fn vendor_switch_claude_provider(id: String) -> Result<(), String> {
     let mut config = read_config()?;
@@ -982,18 +997,12 @@ pub(crate) async fn vendor_switch_claude_provider(id: String) -> Result<(), Stri
         write_config(&config)?;
         return Ok(());
     }
-    let provider_value = config
-        .claude
-        .providers
-        .get(&id)
-        .ok_or_else(|| format!("Provider {} not found", id))?
-        .clone();
-    config.claude.current = Some(id.clone());
+    // Managed: require provider exists, mark active only — never overwrite disk settings.
+    if !config.claude.providers.contains_key(&id) {
+        return Err(format!("Provider {} not found", id));
+    }
+    config.claude.current = Some(id);
     write_config(&config)?;
-
-    // Sync the provider's settingsConfig to ~/.claude/settings.json
-    apply_provider_to_claude_settings(&provider_value, &id)?;
-
     Ok(())
 }
 

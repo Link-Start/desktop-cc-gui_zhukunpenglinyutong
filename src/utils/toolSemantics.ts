@@ -3,10 +3,18 @@ export const READ_TOOL_NAMES = new Set([
   "read_file",
   "readfile",
   "file_read",
+  "view",
+  "view_file",
+  "open_file",
+  "get_file",
+  "cat",
   // Grok / agent-style directory browse (group with reads on canvas)
   "list_dir",
   "listdir",
   "list_directory",
+  "ls",
+  "list",
+  "list_files",
 ]);
 
 export const EDIT_TOOL_NAMES = new Set([
@@ -19,10 +27,21 @@ export const EDIT_TOOL_NAMES = new Set([
   "write_to_file",
   "replace_string",
   "search_replace",
+  "str_replace",
+  "strreplace",
+  "multiedit",
+  "multi_edit",
   "file_edit",
   "file_write",
   "notebookedit",
+  "notebook_edit",
   "create_file",
+  "apply_patch",
+  "applypatch",
+  "delete",
+  "delete_file",
+  "remove_file",
+  "rm",
 ]);
 
 export const BASH_TOOL_NAMES = new Set([
@@ -37,6 +56,7 @@ export const BASH_TOOL_NAMES = new Set([
   "exec",
   "exec_command",
   "write_stdin",
+  "run",
 ]);
 
 export const SEARCH_TOOL_NAMES = new Set([
@@ -46,6 +66,10 @@ export const SEARCH_TOOL_NAMES = new Set([
   "find",
   "ripgrep",
   "rg",
+  "codebase_search",
+  "find_by_name",
+  "find_files",
+  "file_search",
 ]);
 
 export const WEB_TOOL_NAMES = new Set([
@@ -55,6 +79,8 @@ export const WEB_TOOL_NAMES = new Set([
   "web_search",
   "fetch",
   "http",
+  "browser",
+  "open_url",
 ]);
 
 const FAILED_TOOL_STATUS_REGEX =
@@ -144,17 +170,25 @@ export function isBashTool(toolName: string): boolean {
     BASH_TOOL_NAMES.has(lower) ||
     lower.includes("bash") ||
     lower.includes("shell") ||
-    lower.includes("terminal")
+    lower.includes("terminal") ||
+    lower.includes("run_terminal") ||
+    lower === "run" ||
+    lower.startsWith("run_")
   );
 }
 
 export function isSearchTool(toolName: string): boolean {
   const lower = toolName.toLowerCase();
+  // Avoid treating search_replace editors as search tools (edit wins in callers).
+  if (lower.includes("replace") && !lower.includes("search_query")) {
+    return false;
+  }
   return (
     SEARCH_TOOL_NAMES.has(lower) ||
     lower.includes("grep") ||
     lower.includes("glob") ||
-    lower.includes("search")
+    lower.includes("codebase_search") ||
+    (lower.includes("search") && !lower.includes("search_replace"))
   );
 }
 
