@@ -1,13 +1,14 @@
 /* Thinking Block - Minimalist (synced with idea-claude-code-gui)
  * 外层 margin 折叠/展开恒定：收起时只卸掉正文高度，不改行间距（避免「每收起一个间距少一截」）。
- * 展开留白交给 .thinking-content 内部，不在根节点上加减 margin。 */
+ * 展开留白交给 .thinking-content 内部，不在根节点上加减 margin。
+ * 与 tool / explore 共用 6px 外层节奏：比原先 4px 更疏一点，过程栈仍保持紧凑日志感。 */
 .thinking-block {
-  margin: 4px 0;
+  margin: 6px 0;
   font-size: var(--message-meta-font-size);
   /* 屏幕外的思考块跳过渲染/绘制；折叠态约为一行 header 高度，
      渲染过后由 auto 缓存真实高度（与 .message 的策略一致）。 */
   content-visibility: auto;
-  contain-intrinsic-block-size: auto 28px;
+  contain-intrinsic-block-size: auto 32px;
 }
 
 /* 正在流式的思考块保持渲染，避免 live 行被跳过导致的闪烁/测量抖动
@@ -24,8 +25,8 @@
   gap: 6px;
   width: fit-content;
   max-width: 100%;
-  min-height: 20px;
-  padding: 1px 0;
+  min-height: 22px;
+  padding: 2px 0;
   border: none;
   cursor: pointer;
   user-select: none;

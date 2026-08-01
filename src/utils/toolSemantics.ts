@@ -314,8 +314,17 @@ export function extractCommandFromTitle(title: string): string {
   if (!trimmed) {
     return "";
   }
-  const match = trimmed.match(/^Command:\s*(.+)$/i);
-  return match?.[1]?.trim() ?? "";
+  const match = trimmed.match(
+    /^(?:Command|Bash|Shell|Terminal|Run(?:\s+command)?):\s*(.+)$/i,
+  );
+  if (match?.[1]) {
+    return match[1].trim();
+  }
+  // Bare tool-name titles are not the command itself.
+  if (/^(?:command|bash|shell|terminal|run)$/i.test(trimmed)) {
+    return "";
+  }
+  return "";
 }
 
 export function looksLikePathOnlyValue(value: string): boolean {
@@ -336,6 +345,14 @@ type BuildCommandSummaryOptions = {
   ignorePathOnlyDetail?: boolean;
 };
 
+function isCommandSummaryToolType(toolType: string): boolean {
+  if (!toolType || toolType === "commandExecution") {
+    return true;
+  }
+  // Claude/Grok often emit toolType "bash" / "shell" rather than commandExecution.
+  return isBashTool(toolType);
+}
+
 export function buildCommandSummary(
   item: {
     title?: unknown;
@@ -346,7 +363,7 @@ export function buildCommandSummary(
 ): string {
   const { includeDetail = true, ignorePathOnlyDetail = true } = options;
   const toolType = normalizeRuntimeString(item.toolType);
-  if (toolType && toolType !== "commandExecution") {
+  if (toolType && !isCommandSummaryToolType(toolType)) {
     return "";
   }
 
@@ -369,10 +386,13 @@ export function buildCommandSummary(
     getFirstCommandField(detailArgs, commandKeys) ||
     getFirstCommandField(nestedInput, commandKeys) ||
     getFirstCommandField(nestedArgs, commandKeys);
+  // Prefer structured command fields; raw detail only as last resort when it is not JSON.
   const detailCommand = includeDetail
     ? ignorePathOnlyDetail && looksLikePathOnlyValue(detail)
       ? ""
-      : detail.trim()
+      : detailArgs
+        ? ""
+        : detail.trim()
     : "";
 
   return [titleCommand, argsCommand, detailCommand]

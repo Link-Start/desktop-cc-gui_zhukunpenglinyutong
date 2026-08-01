@@ -141,7 +141,8 @@ export function ToolMarkerShell({
           : {})}
         className={cn(
           // 覆盖 Marker 默认 text-sm/size-4，对齐 thinking / explore 的 meta 尺度
-          'min-h-5 gap-1.5 rounded-md py-0 pr-1 text-[length:var(--message-meta-font-size,12px)] leading-5 transition-colors',
+          // py-0.5 给折叠行一点纵向呼吸，与 thinking/explore header 的 2px padding 对齐
+          'min-h-5 gap-1.5 rounded-md py-0.5 pr-1 text-[length:var(--message-meta-font-size,12px)] leading-5 transition-colors',
           // ! 强制压过 Marker 的 size-4；选择器不依赖 :not(size-) 以免 merge/引号踩坑
           '[&_svg]:!size-3.5',
           clickable && 'cursor-pointer select-none',

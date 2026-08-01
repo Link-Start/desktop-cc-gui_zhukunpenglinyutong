@@ -446,7 +446,7 @@ describe("Messages live behavior", () => {
     expect(container.textContent ?? "").toContain("这里是实时正文。");
   });
 
-  it("hides command cards in codex canvas while keeping non-command tool cards", () => {
+  it("shows command cards in codex canvas alongside non-command tool cards", () => {
     const items: ConversationItem[] = [
       {
         id: "tool-codex-command-1",
@@ -492,9 +492,10 @@ describe("Messages live behavior", () => {
       />,
     );
 
-    expect(container.querySelector(".bash-group-container")).toBeNull();
-    expect(container.textContent ?? "").not.toContain("pwd && ls -la");
-    expect(container.textContent ?? "").not.toContain("echo done");
+    // Consecutive command tools group into a bash scene that stays on canvas.
+    expect(container.textContent ?? "").toMatch(
+      /tools\.bashGroupBatchRun|批量终端|Batch terminal|pwd|echo/,
+    );
     // File edits render in a default-collapsed scene shell; expand to assert path.
     const editScene = container.querySelector(
       '[data-testid="file-edit-scene-list"]',
@@ -514,7 +515,7 @@ describe("Messages live behavior", () => {
     void editScene;
   });
 
-  it("hides command cards in claude canvas", () => {
+  it("shows command cards in claude canvas", () => {
     const items: ConversationItem[] = [
       {
         id: "tool-claude-command-1",
@@ -548,9 +549,9 @@ describe("Messages live behavior", () => {
       />,
     );
 
-    expect(container.querySelector(".bash-group-container")).toBeNull();
-    expect(container.textContent ?? "").not.toContain("pwd && ls -la");
-    expect(container.textContent ?? "").not.toContain("echo done");
+    expect(container.textContent ?? "").toMatch(
+      /tools\.bashGroupBatchRun|批量终端|Batch terminal|pwd|echo/,
+    );
   });
 
   it.each(["claude", "gemini", "codex"] as const)(

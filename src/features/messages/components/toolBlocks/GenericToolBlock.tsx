@@ -382,8 +382,8 @@ export const GenericToolBlock = memo(function GenericToolBlock({
       <Marker
         {...(isInteractive ? { onClick: handleClick } : {})}
         className={cn(
-          // 与 ToolMarkerShell 同 meta 尺度：12px 字 + 14px 图标 + 20px 行高
-          'min-h-5 gap-1.5 rounded-md py-0 pr-1 text-[length:var(--message-meta-font-size,12px)] leading-5 transition-colors',
+          // 与 ToolMarkerShell 同 meta 尺度：12px 字 + 14px 图标 + 20px 行高 + py-0.5 呼吸
+          'min-h-5 gap-1.5 rounded-md py-0.5 pr-1 text-[length:var(--message-meta-font-size,12px)] leading-5 transition-colors',
           '[&_svg]:!size-3.5',
           isInteractive && 'cursor-pointer select-none hover:bg-accent/50',
         )}

@@ -11,7 +11,7 @@ import {
   isUserMessageConversationItem,
 } from "./messageItemPredicates";
 import { compactComparableReasoningText, parseReasoning } from "../presentation/messagesReasoning";
-import { buildCommandSummary, extractToolName, isBashTool } from "../components/toolBlocks/toolConstants";
+import { buildCommandSummary } from "../components/toolBlocks/toolConstants";
 
 export const SCROLL_THRESHOLD_PX = 120;
 export const OPENCODE_NON_STREAMING_HINT_DELAY_MS = 12_000;
@@ -356,37 +356,18 @@ export function resolveCodexCommandActivityLabel(item: Extract<ConversationItem,
 }
 
 /**
- * Hide bash/command tool cards on the conversation canvas (Claude-polished surface).
- * Applies to Claude/Codex and, after unify-conversation-canvas, also Grok/Kimi/OpenCode
- * so multi-CLI process chrome matches: narrative on canvas, shell noise in Status Panel.
- * ExitPlanMode remains visible.
+ * Historically hid bash/command cards on the polished canvas (shell → Status Panel).
+ * Process-phase stats count every tool item, so hiding shell cards made the header
+ * say "工具调用 N 次" while expansion only showed reasoning. Always show them now
+ * so breakdown counts match the expanded timeline.
+ *
+ * Kept as a named gate for call sites / future policy toggles; currently never hides.
  */
 export function shouldHideCodexCanvasCommandCard(
-  item: Extract<ConversationItem, { kind: "tool" }>,
-  activeEngine: MessagesEngine,
+  _item: Extract<ConversationItem, { kind: "tool" }>,
+  _activeEngine: MessagesEngine,
 ) {
-  if (
-    activeEngine !== "codex" &&
-    activeEngine !== "claude" &&
-    activeEngine !== "grok" &&
-    activeEngine !== "kimi" &&
-    activeEngine !== "opencode"
-  ) {
-    return false;
-  }
-  const normalizedToolName = extractToolName(item.title)
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-  if (
-    normalizedToolName === "exitplanmode" ||
-    normalizedToolName.endsWith("exitplanmode")
-  ) {
-    return false;
-  }
-  if (item.toolType === "commandExecution") {
-    return true;
-  }
-  return isBashTool(extractToolName(item.title).toLowerCase());
+  return false;
 }
 
 export function isClaudeHistoryTranscriptHeavy(items: ConversationItem[]) {
@@ -419,19 +400,6 @@ export function countRenderableCollapsedEntries(
     return 0;
   }
   return groupToolItems(items).reduce((count, entry) => {
-    if (entry.kind === "bashGroup") {
-      // Hidden on polished multi-CLI canvas (Claude/Codex/Grok/Kimi/OpenCode).
-      if (
-        activeEngine === "codex" ||
-        activeEngine === "claude" ||
-        activeEngine === "grok" ||
-        activeEngine === "kimi" ||
-        activeEngine === "opencode"
-      ) {
-        return count;
-      }
-      return count + 1;
-    }
     if (
       entry.kind === "item" &&
       entry.item.kind === "tool" &&

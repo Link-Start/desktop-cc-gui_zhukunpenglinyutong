@@ -76,7 +76,7 @@ describe("Messages turn boundaries", () => {
     expect(container.querySelector(".messages-final-boundary")).toBeTruthy();
   });
 
-  it("does not show reasoning boundary when only hidden command cards exist before final message", () => {
+  it("does not show reasoning boundary when only a single command card exists before final message", () => {
     window.localStorage.setItem("ccgui.messages.live.collapseMiddleSteps", "1");
     const items: ConversationItem[] = [
       {
@@ -121,7 +121,8 @@ describe("Messages turn boundaries", () => {
       "Final Message",
     );
     expect(container.querySelector(".message-assistant-action-footer")).toBeTruthy();
-    expect(container.textContent ?? "").not.toContain("Command: rg --files");
+    // Single command stays on canvas (no phase collapse for count === 1).
+    expect(container.textContent ?? "").toMatch(/rg --files|Command|rg/);
   });
 
   it("renders final boundary only once for the last final assistant in a turn", () => {

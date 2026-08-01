@@ -18,10 +18,7 @@ import { Button } from "../../../../components/ui/button";
 import { TooltipIconButton } from "../../../../components/ui/tooltip-icon-button";
 import { parseReasoning } from "../../presentation/messagesReasoning";
 import { resolveUserMessagePresentation } from "../../presentation/messagesUserPresentation";
-import {
-  buildAssistantFinalBoundaryMetaText,
-  shouldHideCodexCanvasCommandCard,
-} from "../../utils/messagesRenderUtils";
+import { buildAssistantFinalBoundaryMetaText } from "../../utils/messagesRenderUtils";
 import type { GroupedEntry } from "../../utils/groupToolItems";
 import {
   groupedEntryContainsItemId,
@@ -104,7 +101,6 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     activeEngine,
     activeUserInputAnchorItemId,
     activeUserInputRequestId,
-    claudeHistoryTranscriptFallbackActive,
     latestRetryMessage,
     latestRuntimeReconnectItemId,
     nativeRuntimeRecoveryEnabled,
@@ -470,9 +466,6 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
       return <DiffRow key={`diff:${renderItem.id}`} item={renderItem} />;
     }
     if (renderKind === "tool" && renderItem.kind === "tool") {
-      if (shouldHideCodexCanvasCommandCard(renderItem, activeEngine)) {
-        return null;
-      }
       const isExpanded = expandedItems.has(renderItem.id);
       const selectedExitPlanExecutionMode =
         selectedExitPlanExecutionByItemKey[`${threadId ?? "no-thread"}:${renderItem.id}`] ?? null;
@@ -545,17 +538,7 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
       );
     }
     if (entry.kind === "bashGroup") {
-      // Align Grok/Kimi/OpenCode with Claude-polished canvas: shell batches stay off
-      // the narrative surface (Status Panel / Diff remain the operational trail).
-      if (
-        activeEngine === "codex" ||
-        activeEngine === "grok" ||
-        activeEngine === "kimi" ||
-        activeEngine === "opencode" ||
-        (activeEngine === "claude" && !claudeHistoryTranscriptFallbackActive)
-      ) {
-        return null;
-      }
+      // Shell batches stay on the canvas so process-phase tool counts match UI.
       const firstItem = entry.items[0];
       return renderWithAnchoredUserInput(
         <BashToolGroupBlock

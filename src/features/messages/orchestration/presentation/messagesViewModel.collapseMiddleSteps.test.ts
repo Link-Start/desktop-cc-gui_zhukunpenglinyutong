@@ -162,7 +162,7 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
     expect(result.phases.find((phase) => phase.phaseKey === "a2")?.expanded).toBe(false);
   });
 
-  it("skips command-only phases that the canvas already hides", () => {
+  it("does not collapse a single command tool phase (same as any single process step)", () => {
     const items = [
       user("u1"),
       {
@@ -181,8 +181,40 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
       timelineSourceItems: items,
     });
 
-    // bash/command cards are not renderable on Claude canvas, so no phase chip.
+    // Single command is visible on canvas and counts as one step → no chip.
     expect(result.phases).toEqual([]);
     expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "cmd-1", "a1"]);
+  });
+
+  it("collapses multi-step phases that include command tools and counts them in breakdown", () => {
+    const items = [
+      user("u1"),
+      reasoning("r1"),
+      {
+        id: "cmd-1",
+        kind: "tool" as const,
+        toolType: "commandExecution" as const,
+        title: "Command: rg --files",
+        detail: "/tmp",
+        status: "completed" as const,
+        output: "",
+        durationMs: 400,
+      },
+      assistant("a1", "最终输出"),
+    ];
+    const result = resolveCollapsedTimelineItems({
+      activeEngine: "claude",
+      timelineSourceItems: items,
+    });
+
+    expect(result.phases).toHaveLength(1);
+    expect(result.phases[0]).toMatchObject({
+      phaseKey: "a1",
+      expanded: false,
+      breakdown: { reasoningCount: 1, toolCount: 1, exploreCount: 0 },
+      durationMs: 400,
+    });
+    expect(result.phases[0]!.hiddenItemIds).toEqual(["r1", "cmd-1"]);
+    expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "a1"]);
   });
 });

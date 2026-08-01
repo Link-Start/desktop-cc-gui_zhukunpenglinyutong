@@ -253,7 +253,7 @@ describe("Messages history loading", () => {
     expect(screen.getByText(/tools\.bashGroupBatchRun/)).toBeTruthy();
   });
 
-  it("does not enable Claude transcript fallback outside history restore", () => {
+  it("shows bash tool groups on Claude canvas even outside history restore", () => {
     render(
       <Messages
         items={[
@@ -295,7 +295,8 @@ describe("Messages history loading", () => {
       />,
     );
 
-    expect(screen.queryByText(/tools\.bashGroupBatchRun/)).toBeNull();
+    // Shell batches always render on canvas so process-phase tool counts match UI.
+    expect(screen.getByText(/tools\.bashGroupBatchRun/)).toBeTruthy();
   });
 
   // jsdom drops scrollTop writes on unlaid-out elements, so back the scroller
