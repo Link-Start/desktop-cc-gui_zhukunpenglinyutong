@@ -782,15 +782,18 @@ export function useModels({
 
   // 唯一同步收敛入口：catalog / preferred 变化时规划并幂等提交。
   // 不再另设 effort backfill effect，避免双写对打（React #185）。
+  // selection 经 snapshot ref 读取，不把 selected* 放进 deps——切断「commit → layout 再 commit」自反馈
+  // （B1）；用户 setSelected* 已直接写入，无需 layout 回声。
   useLayoutEffect(() => {
+    const snapshot = selectionSnapshotRef.current;
     const plan = planComposerModelSelection({
       models,
       configModel,
       preferredModelId,
       preferredEffort,
       preferredSelectionReady,
-      selectedModelId,
-      selectedEffort,
+      selectedModelId: snapshot.selectedModelId,
+      selectedEffort: snapshot.selectedEffort,
       hasUserSelectedModel: hasUserSelectedModel.current,
       hasUserSelectedEffort: hasUserSelectedEffort.current,
     });
@@ -805,8 +808,6 @@ export function useModels({
     preferredEffort,
     preferredModelId,
     preferredSelectionReady,
-    selectedEffort,
-    selectedModelId,
   ]);
 
   return {

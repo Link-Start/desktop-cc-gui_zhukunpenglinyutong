@@ -34,7 +34,7 @@ export const CollapsibleUserTextBlock = memo(function CollapsibleUserTextBlock({
   const [hasMeasuredOverflow, setHasMeasuredOverflow] = useState(false);
 
   useLayoutEffect(() => {
-    setHasMeasuredOverflow(false);
+    setHasMeasuredOverflow((previous) => (previous ? false : previous));
   }, [content]);
 
   useLayoutEffect(() => {
@@ -42,12 +42,21 @@ export const CollapsibleUserTextBlock = memo(function CollapsibleUserTextBlock({
       return;
     }
 
+    // 测量内层真实内容高度，避免 collapsed maxHeight / is-measured class
+    // 改变外层 scrollHeight 后 isOverflowing 真假翻转 → layout setState 死循环（#185）。
     const checkHeight = () => {
-      if (!contentRef.current) {
+      const root = contentRef.current;
+      if (!root) {
         return;
       }
-      setIsOverflowing(contentRef.current.scrollHeight > MAX_COLLAPSED_HEIGHT);
-      setHasMeasuredOverflow(true);
+      const measureTarget =
+        (root.querySelector(".user-collapsible-text-content") as HTMLElement | null) ??
+        root;
+      const nextOverflowing = measureTarget.scrollHeight > MAX_COLLAPSED_HEIGHT;
+      setIsOverflowing((previous) =>
+        previous === nextOverflowing ? previous : nextOverflowing,
+      );
+      setHasMeasuredOverflow((previous) => (previous ? previous : true));
     };
 
     checkHeight();
