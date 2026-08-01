@@ -1178,3 +1178,44 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1281: 共享会话多供应商额度列表
+
+**Date**: 2026-08-02
+**Task**: 共享会话多供应商额度列表
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+共享会话从 executionTargetSnapshot 去重收集供应商，并行查额度并多卡展示。
+
+### Main Changes
+
+## 完成
+- collectSessionQuotaTargets：按 engine+providerProfileId 去重
+- useSessionQuotaList：并行 getCodingPlanQuota
+- 概览 UI 多额度卡 + 供应商行
+- 官方 none 不占位；单会话行为不变
+
+## 验证
+- status-panel 测试全绿
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b0ef0b9b9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

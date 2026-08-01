@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-30.md`
-- **Total Sessions**: 1280
+- **Total Sessions**: 1281
 - **Last Active**: 2026-08-02
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-30.md` | ~1180 | Active |
+| `journal-30.md` | ~1221 | Active |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
@@ -58,6 +58,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1281 | 2026-08-02 | 共享会话多供应商额度列表 | `b0ef0b9b9` | `cxn-version-0.7.15` |
 | 1280 | 2026-08-02 | status-panel 概览与供应商套餐额度 | `215640267` | `cxn-version-0.7.15` |
 | 1279 | 2026-08-02 | merge upstream chore/bump-version-0.7.15 | `4e4d9fe9a` | `cxn-version-0.7.15` |
 | 1278 | 2026-08-02 | fix React #185 Composer file-ref 引用环 | `637cb3561` | `cxn-version-0.7.15` |
