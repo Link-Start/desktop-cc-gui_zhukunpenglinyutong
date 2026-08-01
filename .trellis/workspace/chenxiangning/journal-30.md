@@ -252,3 +252,44 @@ VendorModelManagerDialogHost 在 AppShell 打开时未加载 settings.css，导�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1260: 幕布滚动所有权重构与权威回底收口
+
+**Date**: 2026-08-01
+**Task**: 幕布滚动所有权重构与权威回底收口
+**Branch**: `bump-version-0.7.14`
+
+### Summary
+
+引入 Scroll Ownership 状态机与 pinCanvasToBottom；覆盖 send/settle/deferred 回刷/Claude-Codex finalizing；手测可接受后提交
+
+### Main Changes
+
+| 项 | 内容 |
+|----|------|
+| OpenSpec | refactor-conversation-canvas-scroll-ownership |
+| 设计文档 | docs/plans/2026-08-01-conversation-canvas-scroll-ownership-architecture.md |
+| 核心实现 | scrollAuthorityMachine + pinCanvasToBottom + continueBottomPinIfArmed |
+| 引擎收敛 | Claude/Codex finalizing 起止 pin；MIN_FORCED_HOLD 覆盖 Codex 6s |
+| 验证 | 相关 vitest 150 绿；手测 Grok/Codex/Claude 可接受 |
+| 未纳入 | 他人 models/threads/shared-session 等无关改动 |
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b34fdaead` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
