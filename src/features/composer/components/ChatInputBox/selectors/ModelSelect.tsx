@@ -4,6 +4,7 @@ import CheckIcon from 'lucide-react/dist/esm/icons/check';
 import ChevronDownIcon from 'lucide-react/dist/esm/icons/chevron-down';
 import Settings2Icon from 'lucide-react/dist/esm/icons/settings-2';
 import type { ModelInfo, ProviderId } from '../types';
+import { resolveCustomModelDefaultReasoningEffort } from '../../../../models/customModelReasoning';
 import type { ProviderModelGroup } from '../modelOptions';
 import type { ProviderTargetGroup } from '../hooks/useProviderTargetCatalogOwners';
 import type { ExecutionTarget } from '../../../../shared-session/target/types';
@@ -177,11 +178,19 @@ export function buildProviderExecutionTarget(
   providerProfileSource?: 'disk' | 'managed',
   normalizeProviderProfile = true,
   runtimeModel?: string,
+  /** 自定义模型等无 capability 来源时播种的默认 effort；仅当结果为 null 时生效。 */
+  defaultReasoningEffort?: string | null,
 ): ExecutionTarget {
   const normalizedProviderProfileId = normalizeProviderProfile
     ? normalizeExecutionProviderProfileId(providerId, providerProfileId)
     : providerProfileId;
   const normalizedRuntimeModel = runtimeModel?.trim() || null;
+  const inheritedReasoning =
+    current?.engine === providerId &&
+    current.providerProfileId === normalizedProviderProfileId
+      ? current.reasoning ?? null
+      : null;
+  const normalizedDefaultEffort = defaultReasoningEffort?.trim() || null;
   return {
     engine: providerId,
     providerProfileId: normalizedProviderProfileId,
@@ -191,10 +200,8 @@ export function buildProviderExecutionTarget(
       providerProfileNameSnapshot?.trim() || null,
     providerProfileSource: providerProfileSource ?? null,
     reasoning:
-      current?.engine === providerId &&
-      current.providerProfileId === normalizedProviderProfileId
-        ? current.reasoning ?? null
-        : null,
+      inheritedReasoning ??
+      (normalizedDefaultEffort ? { effort: normalizedDefaultEffort } : null),
   };
 }
 
@@ -643,6 +650,10 @@ export const ModelSelect = memo(({
           group.targetProfileSource,
           true,
           runtimeModel,
+          resolveCustomModelDefaultReasoningEffort(
+            group.providerId,
+            model.source,
+          ),
         ),
       );
       setIsOpen(false);
@@ -765,6 +776,10 @@ export const ModelSelect = memo(({
             profile.source,
             true,
             runtimeModel,
+            resolveCustomModelDefaultReasoningEffort(
+              group.providerId,
+              keptModel.source,
+            ),
           ),
         );
       })();
@@ -1003,10 +1018,24 @@ export const ModelSelect = memo(({
                       {!group.loading &&
                         !group.error &&
                         group.models.length === 0 && (
-                          <DropdownMenuItem disabled>
-                            {t('models.noModels', {
-                              defaultValue: '暂无可用模型',
-                            })}
+                          <DropdownMenuItem
+                            disabled
+                            className="items-start gap-2"
+                            data-empty-channel-models={group.providerId}
+                          >
+                            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                              <span className="text-sm">
+                                {t('models.emptyChannelModelsTitle', {
+                                  defaultValue: '该供应商暂无可用模型',
+                                })}
+                              </span>
+                              <span className="text-xs text-muted-foreground whitespace-normal">
+                                {t('models.emptyChannelModelsHint', {
+                                  defaultValue:
+                                    '可点击下方「添加模型」，在自定义模型中添加后使用',
+                                })}
+                              </span>
+                            </div>
                           </DropdownMenuItem>
                         )}
                       {group.models.map((model) => {

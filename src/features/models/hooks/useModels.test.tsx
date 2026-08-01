@@ -1030,3 +1030,41 @@ describe("resolveModelEffort / planComposerModelSelection", () => {
     expect(second).toEqual(first);
   });
 });
+
+  it("exposes mainstream default reasoning efforts for user-managed custom Codex models", async () => {
+    window.localStorage.setItem(
+      STORAGE_KEYS.CODEX_CUSTOM_MODELS,
+      JSON.stringify([
+        {
+          id: "my-custom-model",
+          label: "My Custom Model",
+          description: "user managed",
+        },
+      ]),
+    );
+    vi.mocked(getModelList).mockResolvedValueOnce({
+      result: { data: [] },
+    });
+    vi.mocked(getConfigModel).mockResolvedValueOnce(null);
+
+    const { result } = renderHook(() =>
+      useModels({ activeWorkspace: workspace }),
+    );
+
+    await waitFor(() =>
+      expect(
+        result.current.models.some((model) => model.id === "my-custom-model"),
+      ).toBe(true),
+    );
+
+    act(() => result.current.setSelectedModelId("my-custom-model"));
+
+    expect(result.current.selectedModel?.source).toBe("custom");
+    expect(result.current.reasoningOptions).toEqual([
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+    ]);
+    expect(result.current.selectedEffort).toBe("medium");
+  });

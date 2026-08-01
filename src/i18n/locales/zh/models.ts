@@ -14,6 +14,8 @@ const models = {
     discoverModels: "从 CLI 发现模型",
     discoveringModels: "正在发现模型…",
     refreshConfigFailed: "刷新失败：{{message}}",
+    emptyChannelModelsTitle: "该供应商暂无可用模型",
+    emptyChannelModelsHint: "可点击下方「添加模型」，在自定义模型中添加后使用",
     claude: {
       fable5: {
         label: "Fable 5",

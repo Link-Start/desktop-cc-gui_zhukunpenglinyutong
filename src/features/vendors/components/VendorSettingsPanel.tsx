@@ -10,6 +10,7 @@ import Search from "lucide-react/dist/esm/icons/search";
 import type { CodexCustomModel, CodexProviderConfig, VendorTab } from "../types";
 import { LOCAL_GROK_PROVIDER_ID, LOCAL_KIMI_PROVIDER_ID, LOCAL_OPENCODE_PROVIDER_ID, STORAGE_KEYS, validateCodexCustomModels } from "../types";
 import type { AppSettings, CodexUnifiedExecExternalStatus } from "../../../types";
+import { notifyProviderTargetCatalogChanged } from "../../composer/components/ChatInputBox/hooks/useProviderTargetCatalogOwners";
 import { useProviderManagement } from "../hooks/useProviderManagement";
 import { useCodexProviderManagement } from "../hooks/useCodexProviderManagement";
 import { useKimiProviderManagement } from "../hooks/useKimiProviderManagement";
@@ -245,9 +246,13 @@ export function VendorSettingsPanel({
 
   const handleCcSwitchImported = useCallback(() => {
     if (ccSwitchImportSource?.target === "claude") {
-      void claude.loadProviders();
+      void claude.loadProviders().then(() => {
+        notifyProviderTargetCatalogChanged();
+      });
     } else if (ccSwitchImportSource?.target === "codex") {
-      void codex.loadCodexProviders();
+      void codex.loadCodexProviders().then(() => {
+        notifyProviderTargetCatalogChanged();
+      });
     }
   }, [ccSwitchImportSource?.target, claude, codex]);
 

@@ -9,6 +9,7 @@ import {
   switchOpenCodeProvider,
 } from "../../../services/tauri";
 import { VENDOR_ACTIVE_PROVIDER_CHANGED_EVENT } from "../vendorActiveProviderEvents";
+import { notifyProviderTargetCatalogChanged } from "../../composer/components/ChatInputBox/hooks/useProviderTargetCatalogOwners";
 
 export interface OpenCodeProviderDialogState {
   isOpen: boolean;
@@ -178,6 +179,7 @@ export function useOpenCodeProviderManagement() {
       await deleteOpenCodeProvider(provider.id);
       await loadOpenCodeProviders();
       setOpenCodeProviderError(null);
+      notifyProviderTargetCatalogChanged();
     } catch (error) {
       setOpenCodeProviderError(
         getErrorMessage(error, "Failed to delete OpenCode provider."),

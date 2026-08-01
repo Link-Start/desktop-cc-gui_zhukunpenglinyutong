@@ -17,6 +17,8 @@ const models = {
     "reloadingConfig": "Rechargement de la configuration...",
     "discoverModels": "Découvrir les modèles depuis le CLI",
     "discoveringModels": "Découverte des modèles...",
+    "emptyChannelModelsTitle": "Ce fournisseur n'a pas encore de modèle",
+    "emptyChannelModelsHint": "Cliquez sur « Ajouter un modèle » ci-dessous pour ajouter un modèle personnalisé",
     "refreshConfigFailed": "Échec de l'actualisation : {{message}}",
         "claude": {
       "fable5": {

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   discoverCodexModels,
@@ -441,6 +441,32 @@ function useProviderTargetCatalogOwner({
     }
   }, [enabled]);
 
+  // 供应商 CRUD 后：重置本地投影并重新拉取 provider list（模块缓存已被清空）。
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+    const handleCatalogInvalidated = () => {
+      setProfiles(DEFAULT_PROFILES);
+      setLoadedModels(initialLoadedModels(mode));
+      setLoadingBindings(new Set());
+      setModelErrors({});
+      setCatalogActions(new Set());
+      authoritativeRefreshCompletedBindingsRef.current.clear();
+      void ensureProfiles();
+    };
+    window.addEventListener(
+      PROVIDER_TARGET_CATALOG_INVALIDATED_EVENT,
+      handleCatalogInvalidated,
+    );
+    return () => {
+      window.removeEventListener(
+        PROVIDER_TARGET_CATALOG_INVALIDATED_EVENT,
+        handleCatalogInvalidated,
+      );
+    };
+  }, [enabled, ensureProfiles, mode]);
+
   const ensureModels = useCallback(
     async (
       engine: EngineType,
@@ -498,8 +524,24 @@ function useProviderTargetCatalogOwner({
             });
           modelCatalogRequests.set(requestKey, request);
         }
-        const models = await request;
-        modelCatalogCache.set(key, models);
+        let models = await request;
+        // managed profile 空 catalog：回退读取供应商配置默认模型作为兜底 row。
+        // 只写本地 loadedModels，不写模块级 cache，避免污染后续真实 catalog 重试。
+        const isFallbackDefault =
+          models.length === 0 &&
+          !isLocalProviderProfile(engine, providerProfileId);
+        if (isFallbackDefault) {
+          const configuredDefault = await resolveProviderConfiguredDefaultModel(
+            engine,
+            providerProfileId,
+          );
+          if (configuredDefault) {
+            models = [configuredDefault];
+          }
+        }
+        if (!isFallbackDefault) {
+          modelCatalogCache.set(key, models);
+        }
         if (requiresAuthoritativeRefresh) {
           authoritativeRefreshCompletedBindingsRef.current.add(key);
         }
@@ -697,4 +739,93 @@ export function resetProviderTargetCatalogForTests(): void {
   modelCatalogCache.clear();
   modelCatalogRequests.clear();
   discoveredModelCatalogCache.clear();
+}
+
+/**
+ * 供应商 CRUD 后失效生产路径的模块级 catalog 缓存。
+ * 与 test-only reset 等价，但命名/语义面向运行时调用。
+ */
+export function invalidateProviderTargetCatalogForRuntime(): void {
+  profileCatalogCache = null;
+  profileCatalogRequest = null;
+  modelCatalogCache.clear();
+  modelCatalogRequests.clear();
+  discoveredModelCatalogCache.clear();
+}
+
+export const PROVIDER_TARGET_CATALOG_INVALIDATED_EVENT =
+  "ccgui:provider-target-catalog-invalidated";
+
+/**
+ * 供应商增删改/切换/导入成功后调用：失效模块级缓存并通知挂载中的
+ * Atomic picker 重置本地投影、重新拉取 provider list。
+ */
+export function notifyProviderTargetCatalogChanged(): void {
+  invalidateProviderTargetCatalogForRuntime();
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.dispatchEvent(
+    new CustomEvent(PROVIDER_TARGET_CATALOG_INVALIDATED_EVENT),
+  );
+}
+
+/**
+ * 读取 managed provider 配置中的默认模型，作为空 catalog 的兜底 row。
+ * Codex 由 backend `configToml.model` 已覆盖，不做前端 TOML 解析。
+ */
+async function resolveProviderConfiguredDefaultModel(
+  engine: EngineType,
+  providerProfileId: string,
+): Promise<ModelInfo | null> {
+  if (engine === "gemini" || engine === "codex") {
+    // codex 由 backend `configToml.model` 已覆盖；gemini 无 provider-scoped catalog。
+    return null;
+  }
+  const buildRow = (model: string): ModelInfo => ({
+    id: model,
+    model,
+    label: model,
+    source: "provider-config",
+    providerProfileId,
+  });
+  try {
+    if (engine === "claude") {
+      const providers = await getClaudeProviders();
+      const provider = providers.find((entry) => entry.id === providerProfileId);
+      const env = provider?.settingsConfig?.env ?? {};
+      const model =
+        env.ANTHROPIC_MODEL?.trim() ||
+        env.ANTHROPIC_DEFAULT_FABLE_MODEL?.trim() ||
+        env.ANTHROPIC_DEFAULT_SONNET_MODEL?.trim() ||
+        env.ANTHROPIC_DEFAULT_OPUS_MODEL?.trim() ||
+        env.ANTHROPIC_DEFAULT_HAIKU_MODEL?.trim();
+      return model ? buildRow(model) : null;
+    }
+    if (engine === "kimi") {
+      const providers = await getKimiProviders();
+      const model = providers
+        .find((entry) => entry.id === providerProfileId)
+        ?.model?.trim();
+      return model ? buildRow(model) : null;
+    }
+    if (engine === "grok") {
+      const providers = await getGrokProviders();
+      const model = providers
+        .find((entry) => entry.id === providerProfileId)
+        ?.model?.trim();
+      return model ? buildRow(model) : null;
+    }
+    if (engine === "opencode") {
+      const providers = await getOpenCodeProviders();
+      const model = providers
+        .find((entry) => entry.id === providerProfileId)
+        ?.models.find((item) => item.trim().length > 0)
+        ?.trim();
+      return model ? buildRow(model) : null;
+    }
+  } catch {
+    // 配置读取失败不阻断：仍走空态引导。
+  }
+  return null;
 }
