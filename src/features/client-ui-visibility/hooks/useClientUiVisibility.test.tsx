@@ -104,7 +104,13 @@ describe("useClientUiVisibility", () => {
     expect(writeClientStoreValue).toHaveBeenLastCalledWith(
       CLIENT_UI_VISIBILITY_STORE,
       CLIENT_UI_VISIBILITY_KEY,
-      { panels: {}, controls: { "topTool.clientDocumentation": false } },
+      {
+        panels: {},
+        controls: {
+          "topTool.clientDocumentation": false,
+          "bottomActivity.governanceEvidence": false,
+        },
+      },
       { immediate: true },
     );
   });

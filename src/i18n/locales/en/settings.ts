@@ -767,6 +767,7 @@ const settings = {
         bottomActivityTasks: "Tasks tab",
         bottomActivityAgents: "Agents tab",
         bottomActivityCheckpoint: "Result tab",
+        bottomActivityGovernanceEvidence: "Governance evidence (developer)",
         curtainContextLedger: "Context sources card",
         cornerStatusMessageAnchors: "Message anchors",
       },
@@ -802,6 +803,8 @@ const settings = {
         bottomActivityTasks: "Hides the task status tab.",
         bottomActivityAgents: "Hides the agent status tab.",
         bottomActivityCheckpoint: "Hides the result checkpoint tab.",
+        bottomActivityGovernanceEvidence:
+          "Shows repository governance evidence at the top of the Result tab (aimed at mossx development). Off by default.",
         curtainContextLedger:
           "Hides the context sources card above the composer without disabling ledger calculations.",
         cornerStatusMessageAnchors:

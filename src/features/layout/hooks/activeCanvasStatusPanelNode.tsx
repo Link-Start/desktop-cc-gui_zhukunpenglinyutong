@@ -19,8 +19,11 @@ const selectActiveCanvasStatusPanelProps = (
   | "activeThreadId"
   | "activeTurnId"
   | "activeTokenUsage"
+  | "activeRateLimits"
   | "itemsByThread"
   | "threadStatusById"
+  | "pendingApprovals"
+  | "pendingUserInputs"
 > => ({
   items: snapshot.items,
   isProcessing: snapshot.isThinking,
@@ -28,8 +31,11 @@ const selectActiveCanvasStatusPanelProps = (
   activeThreadId: snapshot.threadId,
   activeTurnId: snapshot.activeTurnId,
   activeTokenUsage: snapshot.activeTokenUsage,
+  activeRateLimits: snapshot.activeRateLimits,
   itemsByThread: snapshot.threadItemsByThread,
   threadStatusById: snapshot.threadStatusById,
+  pendingApprovals: (snapshot.approvals ?? []).length,
+  pendingUserInputs: (snapshot.userInputRequests ?? []).length,
 });
 
 export function ActiveCanvasStatusPanel(props: StatusPanelProps) {

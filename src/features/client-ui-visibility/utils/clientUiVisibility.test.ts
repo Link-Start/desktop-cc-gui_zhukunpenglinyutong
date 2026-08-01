@@ -38,6 +38,33 @@ describe("clientUiVisibility", () => {
     expect(isClientUiControlVisible(visiblePreference, "topTool.clientDocumentation")).toBe(true);
   });
 
+  it("keeps governance evidence opt-in and round-trips visibility", () => {
+    expect(
+      isClientUiControlVisible(
+        DEFAULT_CLIENT_UI_VISIBILITY_PREFERENCE,
+        "bottomActivity.governanceEvidence",
+      ),
+    ).toBe(false);
+
+    const enabled = setClientUiControlVisibility(
+      DEFAULT_CLIENT_UI_VISIBILITY_PREFERENCE,
+      "bottomActivity.governanceEvidence",
+      true,
+    );
+    expect(
+      isClientUiControlVisible(enabled, "bottomActivity.governanceEvidence"),
+    ).toBe(true);
+
+    const disabled = setClientUiControlVisibility(
+      enabled,
+      "bottomActivity.governanceEvidence",
+      false,
+    );
+    expect(
+      isClientUiControlVisible(disabled, "bottomActivity.governanceEvidence"),
+    ).toBe(false);
+  });
+
   it("ignores unknown keys while applying known booleans", () => {
     const preference = normalizeClientUiVisibilityPreference({
       panels: {
@@ -59,6 +86,7 @@ describe("clientUiVisibility", () => {
         "topTool.terminal": false,
         "topTool.clientDocumentation": true,
         "rightToolbar.projectMap": false,
+        "bottomActivity.governanceEvidence": false,
       },
     });
     expect(isClientUiPanelVisible(preference, "topSessionTabs")).toBe(false);
@@ -89,8 +117,12 @@ describe("clientUiVisibility", () => {
     expect(preference.controls).toEqual({
       "topTool.clientDocumentation": false,
       "topTool.terminal": false,
+      "bottomActivity.governanceEvidence": false,
     });
     expect(isClientUiControlVisible(preference, "topTool.clientDocumentation")).toBe(false);
+    expect(
+      isClientUiControlVisible(preference, "bottomActivity.governanceEvidence"),
+    ).toBe(false);
   });
 
   it("migrates legacy edits preferences into checkpoint visibility", () => {
@@ -104,6 +136,7 @@ describe("clientUiVisibility", () => {
     expect(preference.controls).toEqual({
       "topTool.clientDocumentation": false,
       "bottomActivity.checkpoint": false,
+      "bottomActivity.governanceEvidence": false,
     });
     expect(isClientUiControlVisible(preference, "bottomActivity.checkpoint")).toBe(false);
   });

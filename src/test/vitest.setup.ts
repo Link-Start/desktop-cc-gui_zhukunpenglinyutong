@@ -693,6 +693,7 @@ vi.mock("react-i18next", () => ({
         "settings.clientUiVisibility.controls.bottomActivityTasks": "Tasks tab",
         "settings.clientUiVisibility.controls.bottomActivityAgents": "Agents tab",
         "settings.clientUiVisibility.controls.bottomActivityCheckpoint": "Result tab",
+        "settings.clientUiVisibility.controls.bottomActivityGovernanceEvidence": "Governance evidence (developer)",
         "settings.clientUiVisibility.controls.curtainContextLedger": "Context sources card",
         "settings.clientUiVisibility.controls.cornerStatusMessageAnchors": "Message anchors",
         "settings.clientUiVisibility.controlDescriptions.topRunStart": "Hides launch script run/edit buttons only.",
@@ -711,6 +712,8 @@ vi.mock("react-i18next", () => ({
         "settings.clientUiVisibility.controlDescriptions.bottomActivityAgents": "Hides the agent status tab.",
         "settings.clientUiVisibility.controlDescriptions.bottomActivityCheckpoint":
           "Hides the result checkpoint tab.",
+        "settings.clientUiVisibility.controlDescriptions.bottomActivityGovernanceEvidence":
+          "Shows repository governance evidence at the top of the Result tab (aimed at mossx development). Off by default.",
         "settings.clientUiVisibility.controlDescriptions.curtainContextLedger": "Hides the context sources card above the composer without disabling ledger calculations.",
         "settings.clientUiVisibility.controlDescriptions.cornerStatusMessageAnchors": "Hides message anchor dots from the conversation canvas.",
         "settings.showRemainingLimitsDesc": "Display what is left instead of what is used.",
@@ -1035,6 +1038,18 @@ vi.mock("react-i18next", () => ({
         "statusPanel.emptyPlan": "No plan",
         "statusPanel.planGenerating": "Generating plan...",
         "statusPanel.planSwitchHint": "Switch to Plan mode to view plan",
+        "statusPanel.sessionOverview.title": "Session overview",
+        "statusPanel.sessionOverview.empty": "No active session yet",
+        "statusPanel.sessionOverview.status.running": "Running",
+        "statusPanel.sessionOverview.status.compacting": "Compacting",
+        "statusPanel.sessionOverview.status.idle": "Idle",
+        "statusPanel.sessionOverview.duration.running": "Current turn {{duration}}",
+        "statusPanel.sessionOverview.duration.last": "Last turn {{duration}}",
+        "statusPanel.sessionOverview.turns": "{{turns}} turns · {{messages}} messages",
+        "statusPanel.sessionOverview.context": "Context {{percent}}%",
+        "statusPanel.sessionOverview.rateLimit": "Rate limit used {{percent}}%",
+        "statusPanel.sessionOverview.pendingApprovals": "{{count}} approval(s) pending",
+        "statusPanel.sessionOverview.pendingUserInputs": "{{count}} question(s) pending",
         // Error messages
         "settings.unableToOpenConfig": "Unable to open config.",
         // Thread error messages

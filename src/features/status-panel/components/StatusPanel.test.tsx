@@ -720,6 +720,7 @@ describe("StatusPanel", () => {
         items={[editToolItem]}
         isProcessing={false}
         variant="dock"
+        showGovernanceEvidence
       />,
     );
 
@@ -729,6 +730,77 @@ describe("StatusPanel", () => {
     expect(screen.getByText("statusPanel.governance.title")).toBeTruthy();
     expect(screen.getByText("OpenSpec tasks")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /OpenSpec tasks/ })).toBeNull();
+  });
+
+  it("hides governance evidence by default in the dock checkpoint panel", () => {
+    mockUseGovernanceEvidence.mockReturnValue({
+      evidence: [
+        {
+          id: "openspec:tasks",
+          source: "openspec",
+          status: "warn",
+          degraded: false,
+          updatedAt: "1970-01-01T00:00:00.000Z",
+          title: "OpenSpec tasks",
+          summary: "1/2 task(s) complete.",
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    render(
+      <StatusPanel
+        workspaceId="ws-1"
+        items={[editToolItem]}
+        isProcessing={false}
+        variant="dock"
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Result"));
+
+    expect(mockUseGovernanceEvidence).toHaveBeenCalledWith("ws-1", false);
+    expect(screen.queryByText("statusPanel.governance.title")).toBeNull();
+    expect(screen.queryByText("OpenSpec tasks")).toBeNull();
+    expect(screen.getByText("Session overview")).toBeTruthy();
+  });
+
+  it("keeps governance evidence out of the checkpoint verdict by default", () => {
+    mockUseGovernanceEvidence.mockReturnValue({
+      evidence: [
+        {
+          id: "openspec:tasks",
+          source: "openspec",
+          status: "warn",
+          degraded: false,
+          updatedAt: "1970-01-01T00:00:00.000Z",
+          title: "OpenSpec tasks",
+          summary: "1/2 task(s) complete.",
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    render(
+      <StatusPanel
+        workspaceId="ws-1"
+        items={[editToolItem]}
+        isProcessing={false}
+        variant="dock"
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Result"));
+
+    expect(screen.queryByText("openspecGovernancePolicy")).toBeNull();
+    expect(
+      screen.queryByText("statusPanel.policy.openspecGovernancePolicy.warn"),
+    ).toBeNull();
+    expect(
+      screen.queryByText("statusPanel.checkpoint.suggested.governance"),
+    ).toBeNull();
   });
 
   it("feeds dock governance evidence into checkpoint policy audit", () => {
@@ -754,6 +826,7 @@ describe("StatusPanel", () => {
         items={[editToolItem]}
         isProcessing={false}
         variant="dock"
+        showGovernanceEvidence
       />,
     );
 
@@ -804,6 +877,7 @@ describe("StatusPanel", () => {
         items={[editToolItem]}
         isProcessing={false}
         variant="dock"
+        showGovernanceEvidence
       />,
     );
 
@@ -888,6 +962,7 @@ describe("StatusPanel", () => {
         items={[editToolItem]}
         isProcessing={false}
         variant="dock"
+        showGovernanceEvidence
       />,
     );
 
@@ -931,6 +1006,7 @@ describe("StatusPanel", () => {
         workspaceId="ws-1"
         items={[editToolItem]}
         isProcessing={false}
+        showGovernanceEvidence
       />,
     );
 
@@ -1566,6 +1642,43 @@ describe("StatusPanel", () => {
 
     expect(mockUseGovernanceEvidence).toHaveBeenCalledWith("ws-1", false);
     expect(screen.queryByText("statusPanel.governance.title")).toBeNull();
+  });
+
+  it("defaults to session overview without governance evidence or file reads", () => {
+    mockUseGovernanceEvidence.mockReturnValue({
+      evidence: [
+        {
+          id: "openspec:tasks",
+          source: "openspec",
+          status: "fail",
+          degraded: true,
+          updatedAt: "1970-01-01T00:00:00.000Z",
+          title: "OpenSpec tasks",
+          summary: "should stay hidden",
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    render(
+      <StatusPanel
+        workspaceId="ws-1"
+        workspaceName="mossx"
+        selectedEngine="claude"
+        selectedModelId="sonnet"
+        items={[editToolItem]}
+        isProcessing={false}
+        variant="dock"
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Result"));
+
+    expect(mockUseGovernanceEvidence).toHaveBeenCalledWith("ws-1", false);
+    expect(screen.getByText("Session overview")).toBeTruthy();
+    expect(screen.queryByText("statusPanel.governance.title")).toBeNull();
+    expect(screen.queryByText("OpenSpec tasks")).toBeNull();
   });
 
   it("does not render when expanded is false", () => {

@@ -733,6 +733,7 @@ const settings = {
         bottomActivityTasks: "任务 Tab",
         bottomActivityAgents: "Agent Tab",
         bottomActivityCheckpoint: "结果 Tab",
+        bottomActivityGovernanceEvidence: "治理证据(开发者)",
         curtainContextLedger: "本轮上下文来源卡片",
         cornerStatusMessageAnchors: "消息锚点",
       },
@@ -759,6 +760,8 @@ const settings = {
         bottomActivityTasks: "隐藏任务状态 Tab。",
         bottomActivityAgents: "隐藏 Agent 状态 Tab。",
         bottomActivityCheckpoint: "隐藏结果检查点 Tab。",
+        bottomActivityGovernanceEvidence:
+          "在结果 Tab 顶部显示仓库治理证据（面向 mossx 自身开发），默认关闭。",
         curtainContextLedger:
           "隐藏 Composer 上方的本轮上下文来源卡片，但不影响账本计算和来源治理能力。",
         cornerStatusMessageAnchors: "隐藏对话幕布中的消息锚点。",
