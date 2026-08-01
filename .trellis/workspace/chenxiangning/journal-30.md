@@ -1219,3 +1219,36 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1282: 修复 CodexCatalogSessionSummary.physicalPath 类型
+
+**Date**: 2026-08-02
+**Task**: 修复 CodexCatalogSessionSummary.physicalPath 类型
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+补齐 CodexCatalogSessionSummary.physicalPath 可选字段，消除 tsc TS2339，恢复 mac-arm64 前端构建。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8b36c6f13` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
