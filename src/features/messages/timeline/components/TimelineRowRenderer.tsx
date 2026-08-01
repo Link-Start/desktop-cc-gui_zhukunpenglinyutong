@@ -546,22 +546,20 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
       );
     }
     if (entry.kind === "bashGroup") {
-      // Shell stays off polished multi-CLI canvas (file read/write remain).
-      // Filter in resolveCollapsedTimelineItems is primary; this is belt-and-suspenders.
-      if (
-        activeEngine === "codex" ||
-        activeEngine === "grok" ||
-        activeEngine === "kimi" ||
-        activeEngine === "opencode" ||
-        (activeEngine === "claude" && !_claudeHistoryTranscriptFallbackActive)
-      ) {
+      // Pure shell noise is filtered before collapse. Remaining bash rows are
+      // Codex file-IO commands (cat/rg/apply_patch) and MUST render — otherwise
+      // process-phase expand shows a chip with N tools but an empty body.
+      const visibleItems = entry.items.filter(
+        (toolItem) => !shouldHideCodexCanvasCommandCard(toolItem, activeEngine),
+      );
+      if (visibleItems.length === 0) {
         return null;
       }
-      const firstItem = entry.items[0];
+      const firstItem = visibleItems[0];
       return renderWithAnchoredUserInput(
         <BashToolGroupBlock
           key={`bg-${firstItem?.id ?? "bash-group"}`}
-          items={entry.items}
+          items={visibleItems}
           onRequestAutoScroll={requestAutoScroll}
         />,
       );

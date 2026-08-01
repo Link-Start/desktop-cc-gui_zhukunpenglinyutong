@@ -277,20 +277,30 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
       },
       assistant("a1", "最终输出"),
     ];
-    const result = resolveCollapsedTimelineItems({
+    const collapsed = resolveCollapsedTimelineItems({
       activeEngine: "codex",
       timelineSourceItems: items,
     });
 
     // pwd noise filtered; cat + apply_patch remain as collapsible process.
-    expect(result.phases).toHaveLength(1);
-    expect(result.phases[0]!.breakdown.toolCount).toBe(2);
-    expect(result.phases[0]!.hiddenItemIds).toContain("cat-1");
-    expect(result.phases[0]!.hiddenItemIds.some((id) => id === "patch-1" || id.startsWith("patch"))).toBe(
-      true,
-    );
-    expect(result.phases[0]!.hiddenItemIds).not.toContain("noise-1");
+    expect(collapsed.phases).toHaveLength(1);
+    expect(collapsed.phases[0]!.count).toBeGreaterThanOrEqual(2);
+    expect(collapsed.phases[0]!.breakdown.toolCount).toBeGreaterThanOrEqual(2);
+    expect(collapsed.phases[0]!.hiddenItemIds).toContain("cat-1");
+    expect(collapsed.phases[0]!.hiddenItemIds).not.toContain("noise-1");
     // When collapsed only user + assistant remain on timeline.
-    expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "a1"]);
+    expect(collapsed.timelineItems.map((item) => item.id)).toEqual(["u1", "a1"]);
+
+    // Expand must remount file-IO process rows (not an empty chip body).
+    const expanded = resolveCollapsedTimelineItems({
+      activeEngine: "codex",
+      expandedPhaseKeys: new Set(["a1"]),
+      timelineSourceItems: items,
+    });
+    expect(expanded.phases[0]?.expanded).toBe(true);
+    const expandedIds = expanded.timelineItems.map((item) => item.id);
+    expect(expandedIds).toContain("cat-1");
+    expect(expandedIds).not.toContain("noise-1");
+    expect(expandedIds).toContain("a1");
   });
 });

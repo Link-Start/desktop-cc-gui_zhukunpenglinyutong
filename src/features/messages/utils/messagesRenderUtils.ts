@@ -586,18 +586,13 @@ export function countRenderableCollapsedEntries(
     return 0;
   }
   return groupToolItems(items).reduce((count, entry) => {
-    // Hidden shell batches never enter the phase chip count (perf + truthful UI).
+    // bashGroup may hold Codex file-IO commands (cat/rg/apply_patch) that we
+    // intentionally keep. Count only rows that are not pure shell noise.
     if (entry.kind === "bashGroup") {
-      if (
-        activeEngine === "codex" ||
-        activeEngine === "claude" ||
-        activeEngine === "grok" ||
-        activeEngine === "kimi" ||
-        activeEngine === "opencode"
-      ) {
-        return count;
-      }
-      return count + Math.max(1, entry.items.length);
+      const visibleCount = entry.items.filter(
+        (toolItem) => !shouldHideCodexCanvasCommandCard(toolItem, activeEngine),
+      ).length;
+      return count + visibleCount;
     }
     if (
       entry.kind === "item" &&
