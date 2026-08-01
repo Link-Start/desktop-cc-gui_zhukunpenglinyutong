@@ -162,31 +162,7 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
     expect(result.phases.find((phase) => phase.phaseKey === "a2")?.expanded).toBe(false);
   });
 
-  it("does not collapse a single command tool (same as any single process step)", () => {
-    const items = [
-      user("u1"),
-      {
-        id: "cmd-1",
-        kind: "tool" as const,
-        toolType: "commandExecution" as const,
-        title: "Command: rg --files",
-        detail: "/tmp",
-        status: "completed" as const,
-        output: "",
-      },
-      assistant("a1", "最终输出"),
-    ];
-    const result = resolveCollapsedTimelineItems({
-      activeEngine: "claude",
-      timelineSourceItems: items,
-    });
-
-    // Single process step stays expanded; command cards are canvas-visible.
-    expect(result.phases).toEqual([]);
-    expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "cmd-1", "a1"]);
-  });
-
-  it("collapses multi-step command process phases so expand can remount them", () => {
+  it("strips canvas-hidden command tools and skips empty shell-only phases", () => {
     const items = [
       user("u1"),
       {
@@ -214,13 +190,56 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
       timelineSourceItems: items,
     });
 
+    // Shell tools leave the canvas entirely — no chip, no remount on expand.
+    expect(result.phases).toEqual([]);
+    expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "a1"]);
+  });
+
+  it("collapses file-read process only and excludes shell from chip counts", () => {
+    const items = [
+      user("u1"),
+      {
+        id: "cmd-1",
+        kind: "tool" as const,
+        toolType: "commandExecution" as const,
+        title: "Command: ls -la",
+        detail: "/tmp",
+        status: "completed" as const,
+        output: "",
+      },
+      {
+        id: "read-1",
+        kind: "tool" as const,
+        toolType: "mcpToolCall",
+        title: "Read README.md",
+        detail: JSON.stringify({ path: "README.md" }),
+        status: "completed" as const,
+        output: "hello",
+      },
+      {
+        id: "read-2",
+        kind: "tool" as const,
+        toolType: "mcpToolCall",
+        title: "Read package.json",
+        detail: JSON.stringify({ path: "package.json" }),
+        status: "completed" as const,
+        output: "{}",
+      },
+      assistant("a1", "最终输出"),
+    ];
+    const result = resolveCollapsedTimelineItems({
+      activeEngine: "codex",
+      timelineSourceItems: items,
+    });
+
     expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "a1"]);
     expect(result.phases).toHaveLength(1);
     expect(result.phases[0]).toMatchObject({
       phaseKey: "a1",
-      count: 2, // underlying command rows (even if UI groups them)
       expanded: false,
-      hiddenItemIds: ["cmd-1", "cmd-2"],
+      breakdown: { reasoningCount: 0, toolCount: 2, exploreCount: 0 },
     });
+    expect(result.phases[0]!.hiddenItemIds).toEqual(["read-1", "read-2"]);
+    expect(result.phases[0]!.hiddenItemIds).not.toContain("cmd-1");
   });
 });

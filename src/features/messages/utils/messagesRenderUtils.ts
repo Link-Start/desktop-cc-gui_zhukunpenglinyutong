@@ -11,7 +11,14 @@ import {
   isUserMessageConversationItem,
 } from "./messageItemPredicates";
 import { compactComparableReasoningText, parseReasoning } from "../presentation/messagesReasoning";
-import { buildCommandSummary, extractToolName, isBashTool } from "../components/toolBlocks/toolConstants";
+import {
+  buildCommandSummary,
+  extractToolName,
+  isBashTool,
+  isEditTool,
+  isReadTool,
+  isSearchTool,
+} from "../components/toolBlocks/toolConstants";
 
 export const SCROLL_THRESHOLD_PX = 120;
 export const OPENCODE_NON_STREAMING_HINT_DELAY_MS = 12_000;
@@ -356,20 +363,58 @@ export function resolveCodexCommandActivityLabel(item: Extract<ConversationItem,
 }
 
 /**
- * Formerly hid bash/commandExecution cards on the polished multi-CLI canvas
- * (Status Panel only). That made process-phase collapse "fake": chip counts
- * tools that never remounted on expand (Codex 178× shell especially).
+ * Hide bash/commandExecution on the conversation canvas for multi-CLI engines.
  *
- * Process-phase collapse is the noise control now — keep command/bash on the
- * canvas so expand is real. ExitPlanMode / TodoWrite still use other filters.
+ * Product intent (perf + narrative):
+ * - Shell noise stays off the canvas (Status Panel remains the ops trail).
+ * - File read / write / fileChange stay visible and still participate in
+ *   process-phase collapse.
+ * - Hidden tools must not remount on phase expand (expand only shows
+ *   file-related process + reasoning).
  *
- * Kept as a named API so call sites and older tests stay stable; always false.
+ * ExitPlanMode remains visible. TodoWrite still uses other filters.
  */
 export function shouldHideCodexCanvasCommandCard(
-  _item: Extract<ConversationItem, { kind: "tool" }>,
-  _activeEngine: MessagesEngine,
+  item: Extract<ConversationItem, { kind: "tool" }>,
+  activeEngine: MessagesEngine,
 ) {
-  return false;
+  if (
+    activeEngine !== "codex" &&
+    activeEngine !== "claude" &&
+    activeEngine !== "grok" &&
+    activeEngine !== "kimi" &&
+    activeEngine !== "opencode"
+  ) {
+    return false;
+  }
+  // File-edit scenes must stay on canvas even when titled with patch-ish names.
+  if (item.toolType === "fileChange") {
+    return false;
+  }
+  if ((item.changes?.length ?? 0) > 0) {
+    return false;
+  }
+  const normalizedToolName = extractToolName(item.title)
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+  if (
+    normalizedToolName === "exitplanmode" ||
+    normalizedToolName.endsWith("exitplanmode")
+  ) {
+    return false;
+  }
+  // Read/Write/Edit agent tools stay visible (file IO narrative).
+  if (
+    isReadTool(extractToolName(item.title).toLowerCase()) ||
+    isEditTool(extractToolName(item.title).toLowerCase()) ||
+    isSearchTool(extractToolName(item.title).toLowerCase())
+  ) {
+    return false;
+  }
+  if (item.toolType === "commandExecution") {
+    return true;
+  }
+  return isBashTool(extractToolName(item.title).toLowerCase());
 }
 
 export function isClaudeHistoryTranscriptHeavy(items: ConversationItem[]) {
@@ -402,7 +447,19 @@ export function countRenderableCollapsedEntries(
     return 0;
   }
   return groupToolItems(items).reduce((count, entry) => {
-    // bash/command cards are visible again so process-phase expand is truthful.
+    // Hidden shell batches never enter the phase chip count (perf + truthful UI).
+    if (entry.kind === "bashGroup") {
+      if (
+        activeEngine === "codex" ||
+        activeEngine === "claude" ||
+        activeEngine === "grok" ||
+        activeEngine === "kimi" ||
+        activeEngine === "opencode"
+      ) {
+        return count;
+      }
+      return count + Math.max(1, entry.items.length);
+    }
     if (
       entry.kind === "item" &&
       entry.item.kind === "tool" &&
@@ -410,10 +467,9 @@ export function countRenderableCollapsedEntries(
     ) {
       return count;
     }
-    // Count underlying tool rows inside groups — a single bashGroup of 178 commands
-    // must still qualify as a multi-step phase (Codex shell-heavy turns).
+    // File read/edit/search groups: count underlying rows so multi-file scenes
+    // still form a collapsible phase.
     if (
-      entry.kind === "bashGroup" ||
       entry.kind === "readGroup" ||
       entry.kind === "editGroup" ||
       entry.kind === "searchGroup"
@@ -422,6 +478,19 @@ export function countRenderableCollapsedEntries(
     }
     return count + 1;
   }, 0);
+}
+
+/** Drop canvas-hidden shell tools before process-phase collapse / timeline mount. */
+export function filterCanvasHiddenProcessTools(
+  items: readonly ConversationItem[],
+  activeEngine: MessagesEngine,
+): ConversationItem[] {
+  return items.filter((item) => {
+    if (item.kind !== "tool") {
+      return true;
+    }
+    return !shouldHideCodexCanvasCommandCard(item, activeEngine);
+  });
 }
 
 export function resolveWorkingActivityLabel(

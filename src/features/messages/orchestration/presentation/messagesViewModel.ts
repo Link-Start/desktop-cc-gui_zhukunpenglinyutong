@@ -4,7 +4,9 @@ import { shouldHideToolItemForRender } from "../../utils/groupToolItems";
 import type { MessagesEngine } from "../../utils/messagesRenderUtils";
 import {
   countRenderableCollapsedEntries,
+  filterCanvasHiddenProcessTools,
   scrollKeyForItems,
+  shouldHideCodexCanvasCommandCard,
   toConversationEngine,
 } from "../../utils/messagesRenderUtils";
 import {
@@ -109,7 +111,10 @@ function resolvePhaseDurationMs(items: readonly ConversationItem[]): number | nu
   return hasDuration ? total : null;
 }
 
-function resolvePhaseBreakdown(items: readonly ConversationItem[]): ProcessPhaseBreakdown {
+function resolvePhaseBreakdown(
+  items: readonly ConversationItem[],
+  activeEngine: MessagesEngine,
+): ProcessPhaseBreakdown {
   let reasoningCount = 0;
   let toolCount = 0;
   let exploreCount = 0;
@@ -117,7 +122,10 @@ function resolvePhaseBreakdown(items: readonly ConversationItem[]): ProcessPhase
     if (item.kind === "reasoning") {
       reasoningCount += 1;
     } else if (item.kind === "tool") {
-      toolCount += 1;
+      // Chip numbers must match visible tools only (hidden shell excluded).
+      if (!shouldHideCodexCanvasCommandCard(item, activeEngine)) {
+        toolCount += 1;
+      }
     } else if (item.kind === "explore") {
       exploreCount += 1;
     }
@@ -378,15 +386,21 @@ export function resolveCollapsedTimelineItems(options: {
     expandedPhaseKeys = new Set<string>(),
     timelineSourceItems,
   } = options;
-  if (timelineSourceItems.length <= 2) {
-    return emptyCollapsedTimelineResult(timelineSourceItems);
+  // Shell/command tools stay off the canvas permanently (not only when collapsed)
+  // so phase expand never remounts hundreds of bash rows. File read/write remain.
+  const canvasItems = filterCanvasHiddenProcessTools(
+    timelineSourceItems,
+    activeEngine,
+  );
+  if (canvasItems.length <= 2) {
+    return emptyCollapsedTimelineResult(canvasItems);
   }
 
   const phases: ProcessPhaseCollapse[] = [];
   const unmountedItemIds = new Set<string>();
 
-  for (let index = 0; index < timelineSourceItems.length; index += 1) {
-    const item = timelineSourceItems[index];
+  for (let index = 0; index < canvasItems.length; index += 1) {
+    const item = canvasItems[index];
     if (!item || !isAssistantMessageWithVisibleText(item)) {
       continue;
     }
@@ -394,7 +408,7 @@ export function resolveCollapsedTimelineItems(options: {
     // Walk back over the contiguous process run immediately above this text.
     let phaseStart = index;
     for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
-      const previous = timelineSourceItems[cursor];
+      const previous = canvasItems[cursor];
       if (!previous || !isCollapsibleProcessItem(previous)) {
         break;
       }
@@ -406,7 +420,7 @@ export function resolveCollapsedTimelineItems(options: {
 
     // Claude live may reuse one id for the dual reasoning/assistant surface.
     // Never fold that shared-identity reasoning into the chip — it is the same UI unit.
-    const phaseItems = timelineSourceItems
+    const phaseItems = canvasItems
       .slice(phaseStart, index)
       .filter((phaseItem) => phaseItem.id !== item.id);
     if (phaseItems.length === 0) {
@@ -436,7 +450,7 @@ export function resolveCollapsedTimelineItems(options: {
       assistantItemId: item.id,
       insertBeforeItemId: firstProcessItem.id,
       count: renderableCount,
-      breakdown: resolvePhaseBreakdown(phaseItems),
+      breakdown: resolvePhaseBreakdown(phaseItems, activeEngine),
       durationMs: resolvePhaseDurationMs(phaseItems),
       expanded,
       hiddenItemIds,
@@ -444,18 +458,18 @@ export function resolveCollapsedTimelineItems(options: {
   }
 
   if (phases.length === 0) {
-    return emptyCollapsedTimelineResult(timelineSourceItems);
+    return emptyCollapsedTimelineResult(canvasItems);
   }
 
   if (unmountedItemIds.size === 0) {
     return {
-      timelineItems: timelineSourceItems,
+      timelineItems: canvasItems,
       phases,
     };
   }
 
   return {
-    timelineItems: timelineSourceItems.filter((item) => !unmountedItemIds.has(item.id)),
+    timelineItems: canvasItems.filter((item) => !unmountedItemIds.has(item.id)),
     phases,
   };
 }

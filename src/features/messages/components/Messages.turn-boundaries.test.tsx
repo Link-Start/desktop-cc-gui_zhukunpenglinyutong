@@ -121,8 +121,8 @@ describe("Messages turn boundaries", () => {
       "Final Message",
     );
     expect(container.querySelector(".message-assistant-action-footer")).toBeTruthy();
-    // Single command step is not phase-collapsed; command cards stay on canvas.
-    expect(container.textContent ?? "").toContain("rg --files");
+    // Shell/command cards stay off the polished canvas (file read/write remain).
+    expect(container.textContent ?? "").not.toContain("rg --files");
   });
 
   it("renders final boundary only once for the last final assistant in a turn", () => {

@@ -546,8 +546,17 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
       );
     }
     if (entry.kind === "bashGroup") {
-      // Shell batches stay on the canvas so process-phase collapse/expand is real.
-      // (Previously hidden for polished multi-CLI; noise is controlled by the phase chip.)
+      // Shell stays off polished multi-CLI canvas (file read/write remain).
+      // Filter in resolveCollapsedTimelineItems is primary; this is belt-and-suspenders.
+      if (
+        activeEngine === "codex" ||
+        activeEngine === "grok" ||
+        activeEngine === "kimi" ||
+        activeEngine === "opencode" ||
+        (activeEngine === "claude" && !_claudeHistoryTranscriptFallbackActive)
+      ) {
+        return null;
+      }
       const firstItem = entry.items[0];
       return renderWithAnchoredUserInput(
         <BashToolGroupBlock

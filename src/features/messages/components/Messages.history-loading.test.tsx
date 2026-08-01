@@ -165,72 +165,45 @@ describe("Messages history loading", () => {
     expect(screen.queryByText("messages.emptyThread")).toBeNull();
   });
 
-  it("keeps Claude transcript-heavy history readable when assistant text is sparse", () => {
+  it("keeps Claude transcript-heavy history readable via file tools when assistant text is sparse", () => {
+    const readTools: ConversationItem[] = [
+      {
+        id: "tool-1",
+        kind: "tool",
+        toolType: "mcpToolCall",
+        title: "Read README.md",
+        detail: JSON.stringify({ path: "README.md" }),
+        status: "completed",
+        output: "README.md\nsrc\n",
+      },
+      {
+        id: "tool-2",
+        kind: "tool",
+        toolType: "mcpToolCall",
+        title: "Read src/index.ts",
+        detail: JSON.stringify({ path: "src/index.ts" }),
+        status: "completed",
+        output: "export {}\n",
+      },
+      {
+        id: "tool-3",
+        kind: "tool",
+        toolType: "mcpToolCall",
+        title: "Read package.json",
+        detail: JSON.stringify({ path: "package.json" }),
+        status: "completed",
+        output: "{\"name\":\"demo\"}\n",
+      },
+    ];
     render(
       <Messages
-        items={[
-          {
-            id: "tool-1",
-            kind: "tool",
-            toolType: "bash",
-            title: "Bash",
-            detail: "{\"command\":\"ls -la\"}",
-            status: "completed",
-            output: "README.md\nsrc\n",
-          },
-          {
-            id: "tool-2",
-            kind: "tool",
-            toolType: "bash",
-            title: "Bash",
-            detail: "{\"command\":\"find src -maxdepth 2\"}",
-            status: "completed",
-            output: "src/index.ts\nsrc/app.tsx\n",
-          },
-          {
-            id: "tool-3",
-            kind: "tool",
-            toolType: "bash",
-            title: "Bash",
-            detail: "{\"command\":\"cat package.json\"}",
-            status: "completed",
-            output: "{\"name\":\"demo\"}\n",
-          },
-        ]}
+        items={readTools}
         threadId="claude:history-transcript-heavy"
         workspaceId="ws-1"
         isThinking={false}
         activeEngine="claude"
         conversationState={{
-          items: [
-            {
-              id: "tool-1",
-              kind: "tool",
-              toolType: "bash",
-              title: "Bash",
-              detail: "{\"command\":\"ls -la\"}",
-              status: "completed",
-              output: "README.md\nsrc\n",
-            },
-            {
-              id: "tool-2",
-              kind: "tool",
-              toolType: "bash",
-              title: "Bash",
-              detail: "{\"command\":\"find src -maxdepth 2\"}",
-              status: "completed",
-              output: "src/index.ts\nsrc/app.tsx\n",
-            },
-            {
-              id: "tool-3",
-              kind: "tool",
-              toolType: "bash",
-              title: "Bash",
-              detail: "{\"command\":\"cat package.json\"}",
-              status: "completed",
-              output: "{\"name\":\"demo\"}\n",
-            },
-          ],
+          items: readTools,
           plan: null,
           userInputQueue: [],
           meta: {
@@ -249,8 +222,9 @@ describe("Messages history loading", () => {
       />,
     );
 
+    // File-read tools stay on canvas; shell stays off for perf.
     expect(screen.queryByText("messages.emptyThread")).toBeNull();
-    expect(screen.getByText(/tools\.bashGroupBatchRun/)).toBeTruthy();
+    expect(screen.getByText(/README\.md/)).toBeTruthy();
   });
 
   it("does not enable Claude transcript fallback outside history restore", () => {
@@ -295,8 +269,8 @@ describe("Messages history loading", () => {
       />,
     );
 
-    // Bash groups are canvas-visible (process-phase collapse owns noise control).
-    expect(screen.getByText(/tools\.bashGroupBatchRun/)).toBeTruthy();
+    // Outside history-transcript fallback, bash groups stay off the canvas.
+    expect(screen.queryByText(/tools\.bashGroupBatchRun/)).toBeNull();
   });
 
   // jsdom drops scrollTop writes on unlaid-out elements, so back the scroller
