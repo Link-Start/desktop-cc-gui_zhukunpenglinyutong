@@ -2370,6 +2370,9 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       showGovernanceEvidence={showGovernanceEvidence}
       showCheckpointDetails={showCheckpointDetails}
       workspaceName={options.activeWorkspace?.name ?? null}
+      sessionDiskPath={activeThreadSummary?.physicalPath ?? null}
+      providerProfileId={activeThreadSummary?.providerProfileId ?? null}
+      usageShowRemaining={options.usageShowRemaining}
       onRefreshGitStatus={options.queueGitStatusRefresh}
       commitMessage={options.commitMessage}
       commitMessageLoading={options.commitMessageLoading}

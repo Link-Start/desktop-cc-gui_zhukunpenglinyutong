@@ -1299,6 +1299,7 @@ export function mergeCodexCatalogSessionSummaries(
           ? session.archivedAt
           : undefined,
       sizeBytes: session.sizeBytes,
+      physicalPath: session.physicalPath ?? undefined,
       engineSource,
       threadKind: "native",
       source: session.source ?? undefined,

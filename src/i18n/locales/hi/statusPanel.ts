@@ -7,7 +7,7 @@ const statusPanel = {
     "tabTodos": "कार्य",
     "tabSubagents": "सबएजेंट",
     "tabAgents": "Agents",
-    "tabCheckpoint": "परिणाम",
+    "tabCheckpoint": "अवलोकन",
     "tabPlan": "योजना",
     "tabCommands": "कमांड",
     "files": "फ़ाइलें",

@@ -27,9 +27,14 @@ export {
   generateRunMetadata,
   getAccountInfo,
   getAccountRateLimits,
+  getCodingPlanQuota,
   getCollaborationModes,
   getModelList,
   runCodexLogin,
+} from "./tauri/modelCatalog";
+export type {
+  CodingPlanQuotaSnapshot,
+  CodingPlanQuotaWindow,
 } from "./tauri/modelCatalog";
 export {
   getClaudeCommandsList,

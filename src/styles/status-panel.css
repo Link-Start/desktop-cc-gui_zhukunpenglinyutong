@@ -2122,14 +2122,67 @@ button.sp-subagent-main:focus-visible,
   color: var(--text-muted);
 }
 
+/* ─── Session overview：无卡片描边，贴近 dock 内容区 ─── */
+.sp-session-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 6px 2px 4px;
+  border: none;
+  background: transparent;
+  border-radius: 0;
+}
+
+.sp-session-overview.is-compact {
+  gap: 8px;
+  padding: 4px 0 2px;
+}
+
+.sp-session-overview-empty-hint {
+  margin: 0;
+  padding: 8px 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.sp-session-overview-status-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.sp-session-overview-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  background: color-mix(in srgb, var(--text-muted) 70%, transparent);
+}
+
+.sp-session-overview-dot.is-running {
+  background: var(--accent, #2563eb);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #2563eb) 16%, transparent);
+  animation: sp-session-overview-pulse 1.6s ease-in-out infinite;
+}
+
+.sp-session-overview-dot.is-compacting {
+  background: var(--warning, #d97706);
+}
+
+.sp-session-overview-dot.is-idle {
+  background: var(--success, #16a34a);
+}
+
 .sp-session-overview-status {
   flex: 0 0 auto;
-  padding: 1px 6px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 650;
   line-height: 1.3;
-  background: color-mix(in srgb, var(--surface-item) 88%, transparent);
+  letter-spacing: 0.01em;
   color: var(--text-muted);
 }
 
@@ -2145,7 +2198,225 @@ button.sp-subagent-main:focus-visible,
   color: var(--success, #16a34a);
 }
 
-.sp-session-overview .sp-checkpoint-evidence-badge.is-attention {
+.sp-session-overview-duration {
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.sp-session-overview-props {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 2px 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+  padding-top: 8px;
+}
+
+.sp-session-overview-prop {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.sp-session-overview-prop-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-faint);
+  letter-spacing: 0.01em;
+}
+
+.sp-session-overview-prop-value {
+  min-width: 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text-strong, var(--text-muted));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sp-session-overview-prop-value.is-mono {
+  font-family: var(
+    --font-mono,
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    "Courier New",
+    monospace
+  );
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.sp-session-overview-meters {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  padding-top: 2px;
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+  padding-top: 8px;
+}
+
+.sp-session-overview-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.sp-session-overview-meter-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.25;
+  color: var(--text-muted);
+}
+
+.sp-session-overview-meter-label > span:first-child {
+  flex: 0 0 auto;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+
+.sp-session-overview-meter-value {
+  min-width: 0;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.sp-session-overview-meter-track {
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-item) 80%, transparent);
+}
+
+.sp-session-overview-meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--accent, #2563eb) 88%, white 8%);
+  transition: width 180ms ease;
+}
+
+.sp-session-overview-meter-fill.is-quota {
+  background: color-mix(in srgb, #14b8a6 90%, white 6%);
+}
+
+.sp-session-overview-meter-fill.is-high {
+  background: var(--warning, #d97706);
+}
+
+.sp-session-overview-meter-fill.is-critical {
+  background: var(--danger, #dc2626);
+}
+
+.sp-session-overview-meter-footer {
+  font-size: 10.5px;
+  line-height: 1.3;
+  color: var(--text-faint);
+}
+
+.sp-session-overview-quota {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.sp-session-overview-quota-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text-faint);
+}
+
+.sp-session-overview-quota-plan {
+  font-weight: 500;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sp-session-overview-quota-empty {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-faint);
+}
+
+.sp-session-overview-quota-credits {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--text-muted);
+}
+
+.sp-session-overview-quota-credits > span:first-child {
+  font-weight: 600;
+  color: var(--text-faint);
+}
+
+.sp-session-overview-stats {
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.sp-overview-tab-status.is-running {
+  color: var(--accent, #2563eb);
+}
+
+.sp-overview-tab-status.is-compacting {
   color: var(--warning, #d97706);
-  border-color: color-mix(in srgb, var(--warning, #d97706) 42%, transparent);
+}
+
+.sp-overview-tab-status.is-idle {
+  color: var(--success, #16a34a);
+}
+
+@keyframes sp-session-overview-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sp-session-overview-dot.is-running {
+    animation: none;
+  }
 }

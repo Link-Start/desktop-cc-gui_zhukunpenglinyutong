@@ -732,8 +732,8 @@ const settings = {
         rightToolbarNotes: "便签入口",
         bottomActivityTasks: "任务 Tab",
         bottomActivityAgents: "Agent Tab",
-        bottomActivityCheckpoint: "结果 Tab",
-        bottomActivityCheckpointDetails: "结果详情",
+        bottomActivityCheckpoint: "概览 Tab",
+        bottomActivityCheckpointDetails: "概览详情",
         bottomActivityGovernanceEvidence: "治理证据(开发者)",
         curtainContextLedger: "本轮上下文来源卡片",
         cornerStatusMessageAnchors: "消息锚点",
@@ -760,11 +760,11 @@ const settings = {
         rightToolbarNotes: "隐藏便签入口，不影响便签池和归档数据。",
         bottomActivityTasks: "隐藏任务状态 Tab。",
         bottomActivityAgents: "隐藏 Agent 状态 Tab。",
-        bottomActivityCheckpoint: "隐藏结果检查点 Tab。",
+        bottomActivityCheckpoint: "隐藏概览 Tab。",
         bottomActivityCheckpointDetails:
-          "在结果 Tab 显示总结、验证、文件变化与提交等详情，关闭后只保留会话概览。",
+          "在概览 Tab 显示总结、验证、文件变化与提交等详情，关闭后只保留会话基础信息。",
         bottomActivityGovernanceEvidence:
-          "在结果 Tab 顶部显示仓库治理证据（面向 mossx 自身开发），默认关闭。",
+          "在概览 Tab 顶部显示仓库治理证据（面向 mossx 自身开发），默认关闭。",
         curtainContextLedger:
           "隐藏 Composer 上方的本轮上下文来源卡片，但不影响账本计算和来源治理能力。",
         cornerStatusMessageAnchors: "隐藏对话幕布中的消息锚点。",

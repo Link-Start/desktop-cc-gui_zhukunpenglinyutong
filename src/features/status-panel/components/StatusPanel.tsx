@@ -11,6 +11,7 @@ import {
 import { useTranslation } from "react-i18next";
 import Bot from "lucide-react/dist/esm/icons/bot";
 import FileEdit from "lucide-react/dist/esm/icons/file-edit";
+import LayoutDashboard from "lucide-react/dist/esm/icons/layout-dashboard";
 import ListChecks from "lucide-react/dist/esm/icons/list-checks";
 import ListTodo from "lucide-react/dist/esm/icons/list-todo";
 import type { LucideIcon } from "lucide-react";
@@ -42,6 +43,7 @@ import { CostBudgetSection } from "./CostBudgetSection";
 import { GovernanceEvidenceSection } from "./GovernanceEvidenceSection";
 import { SessionOverviewSection } from "./SessionOverviewSection";
 import { buildSessionOverview } from "../utils/sessionOverviewViewModel";
+import { useCodingPlanQuota } from "../hooks/useCodingPlanQuota";
 import { projectCostRecord } from "../../context-ledger/cost-budget";
 import { EngineTaskOutputInspector } from "../../engine-task-output/components/EngineTaskOutputInspector";
 import { useEngineTaskOutputSnapshot } from "../../engine-task-output/hooks/useEngineTaskOutputSnapshot";
@@ -94,9 +96,13 @@ interface StatusPanelProps extends CodeAnnotationBridgeProps {
   showGovernanceEvidence?: boolean;
   showCheckpointDetails?: boolean;
   workspaceName?: string | null;
+  /** 会话 transcript 落盘路径；catalog 有 physicalPath 时传入。 */
+  sessionDiskPath?: string | null;
+  /** 当前会话绑定的供应商 profile，用于 Coding Plan 额度查询。 */
+  providerProfileId?: string | null;
   activeRateLimits?: RateLimitSnapshot | null;
-  pendingApprovals?: number;
-  pendingUserInputs?: number;
+  /** 与设置「显示剩余额度」对齐，影响 Codex 限额展示。 */
+  usageShowRemaining?: boolean;
   onRefreshGitStatus?: (() => void) | null;
   commitMessage?: string;
   commitMessageLoading?: boolean;
@@ -223,9 +229,10 @@ export const StatusPanel = memo(function StatusPanel({
   showGovernanceEvidence = false,
   showCheckpointDetails = true,
   workspaceName = null,
+  sessionDiskPath = null,
+  providerProfileId = null,
   activeRateLimits = null,
-  pendingApprovals = 0,
-  pendingUserInputs = 0,
+  usageShowRemaining = false,
   onRefreshGitStatus = null,
   commitMessage = "",
   commitMessageLoading = false,
@@ -555,13 +562,22 @@ export const StatusPanel = memo(function StatusPanel({
         : null,
     [governanceEnabled, costGovernanceEvidence, governanceEvidenceState.evidence],
   );
+  const codingPlanQuota = useCodingPlanQuota({
+    engine: statusPanelEngine,
+    providerProfileId,
+    // 含 codex：后端按 official vs 第三方 provider 路由
+    enabled: statusPanelEngine != null,
+  });
+
   const sessionOverview = useMemo(
     () =>
       buildSessionOverview({
+        sessionId: activeThreadId,
         engine: statusPanelEngine,
         model: selectedModelId,
         workspaceName,
         workspacePath,
+        sessionDiskPath,
         isProcessing,
         threadStatus: activeThreadId
           ? (threadStatusById?.[activeThreadId] ?? null)
@@ -569,8 +585,9 @@ export const StatusPanel = memo(function StatusPanel({
         items: effectiveItems,
         tokenUsage: activeTokenUsage,
         rateLimits: activeRateLimits,
-        pendingApprovals,
-        pendingUserInputs,
+        codingPlanQuota: codingPlanQuota.snapshot,
+        codingPlanQuotaLoading: codingPlanQuota.loading,
+        usageShowRemaining,
         nowMs: Date.now(),
       }),
     [
@@ -578,14 +595,16 @@ export const StatusPanel = memo(function StatusPanel({
       selectedModelId,
       workspaceName,
       workspacePath,
+      sessionDiskPath,
       isProcessing,
       activeThreadId,
       threadStatusById,
       effectiveItems,
       activeTokenUsage,
       activeRateLimits,
-      pendingApprovals,
-      pendingUserInputs,
+      codingPlanQuota.snapshot,
+      codingPlanQuota.loading,
+      usageShowRemaining,
     ],
   );
   const checkpoint = useMemo(
@@ -667,7 +686,7 @@ export const StatusPanel = memo(function StatusPanel({
       checkpoint: {
         tab: "checkpoint",
         labelKey: "statusPanel.tabCheckpoint",
-        icon: FileEdit,
+        icon: LayoutDashboard,
         visible:
           variant === "dock"
             ? isDockTabVisible(
@@ -679,8 +698,10 @@ export const StatusPanel = memo(function StatusPanel({
               )
             : true,
         badge: (
-          <span className="sp-tab-count">
-            {t(`statusPanel.checkpoint.verdict.${checkpoint.verdict}`)}
+          <span
+            className={`sp-tab-count sp-overview-tab-status is-${sessionOverview.status}`}
+          >
+            {t(`statusPanel.sessionOverview.status.${sessionOverview.status}`)}
           </span>
         ),
       },
@@ -713,7 +734,7 @@ export const StatusPanel = memo(function StatusPanel({
       },
     }),
     [
-      checkpoint.verdict,
+      sessionOverview.status,
       codexTaskCompleted,
       codexTaskInProgress,
       codexTaskTotal,

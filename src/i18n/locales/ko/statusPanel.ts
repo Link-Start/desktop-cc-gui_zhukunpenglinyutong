@@ -7,7 +7,7 @@ const statusPanel = {
     "tabTodos": "작업",
     "tabSubagents": "서브에이전트",
     "tabAgents": "에이전트",
-    "tabCheckpoint": "결과",
+    "tabCheckpoint": "개요",
     "tabPlan": "계획",
     "tabCommands": "명령",
     "files": "파일",

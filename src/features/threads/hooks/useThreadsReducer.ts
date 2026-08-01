@@ -302,6 +302,7 @@ function threadSummaryEqual(left: ThreadSummary, right: ThreadSummary) {
     (left.archivedAt ?? null) === (right.archivedAt ?? null) &&
     (left.threadKind ?? null) === (right.threadKind ?? null) &&
     (left.sizeBytes ?? null) === (right.sizeBytes ?? null) &&
+    (left.physicalPath ?? null) === (right.physicalPath ?? null) &&
     (left.engineSource ?? null) === (right.engineSource ?? null) &&
     (left.selectedEngine ?? null) === (right.selectedEngine ?? null) &&
     (left.source ?? null) === (right.source ?? null) &&

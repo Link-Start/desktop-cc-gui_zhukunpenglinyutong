@@ -181,6 +181,8 @@ pub(crate) fn invoke_handler(
         crate::codex::model_list,
         crate::codex::discover_codex_models,
         crate::codex::account_rate_limits,
+        crate::coding_plan_quota::get_coding_plan_quota,
+        crate::coding_plan_quota::get_coding_plan_quota_direct_cmd,
         crate::codex::account_read,
         crate::codex::codex_login,
         crate::codex::codex_login_cancel,

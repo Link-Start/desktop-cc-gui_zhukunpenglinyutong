@@ -131,6 +131,7 @@ mod client_storage;
 mod code_intel;
 mod code_intel_lsp;
 mod codex;
+mod coding_plan_quota;
 mod command_registry;
 mod computer_use;
 mod curated_skills;

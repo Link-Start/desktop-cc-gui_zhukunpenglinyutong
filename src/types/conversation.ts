@@ -234,6 +234,8 @@ export type ThreadSummary = {
   archivedAt?: number;
   threadKind?: "native" | "shared";
   sizeBytes?: number;
+  /** 会话 transcript / history 在磁盘上的物理路径（catalog 有则填充）。 */
+  physicalPath?: string;
   engineSource?: "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode";
   selectedEngine?: "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode";
   source?: string;
