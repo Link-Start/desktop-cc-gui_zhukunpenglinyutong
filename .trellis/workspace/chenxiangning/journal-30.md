@@ -545,3 +545,50 @@ VendorModelManagerDialogHost 在 AppShell 打开时未加载 settings.css，导�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1266: 加固 React #185 收敛（freeform 不回退）
+
+**Date**: 2026-08-01
+**Task**: 加固 React #185 收敛（freeform 不回退）
+**Branch**: `feature/v-0714`
+
+### Summary
+
+B1 切断 useModels layout self-deps；会话 selection 幂等；freeform 只修 effort；Collapsible 内层测量；dev 冷启动已确认不炸。
+
+### Main Changes
+
+## 做了什么
+- useModels layout 仅依赖 catalog/preferred，selection 经 snapshot ref 读取
+- useSelectedComposerSession 全路径 equality commit
+- thread repair 保留 catalog 外 freeform modelId，仅收敛 unsupported effort
+- CollapsibleUserTextBlock 测内层高度 + boolean 幂等
+- app-shell.startup 用例对齐 freeform 语义并断言无 Maximum update depth
+- playbook 追加 C-20260801-02，勾选 B1/B2/B6
+
+## 验证
+- vitest: useModels / app-shell.startup / useSelectedComposerSession 通过
+- 用户 dev 启动确认：目前没炸
+
+## 提交
+- e6e964d88 fix(models): 加固 #185 收敛并保留 freeform 选择
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e6e964d88` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

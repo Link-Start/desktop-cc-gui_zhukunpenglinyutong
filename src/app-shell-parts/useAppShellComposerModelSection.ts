@@ -331,6 +331,9 @@ export function useAppShellComposerModelSection({
     effort: resolvedEffort,
     collaborationMode: collaborationModePayload,
   };
+  // 会话选择修复：仅在 effective 与已存选择语义不一致时写回。
+  // freeform（allowUnknown）会保留 catalog 外 modelId——这是业务能力，不是 #185 缺口；
+  // 这里只收敛 effort/model 的有效投影，禁止无变化 persist 触发反馈环。
   useEffect(() => {
     if (
       activeEngine !== "codex" ||
@@ -340,18 +343,18 @@ export function useAppShellComposerModelSection({
     ) {
       return;
     }
+    const nextSelection = {
+      modelId: effectiveSelectedModelId,
+      effort: effectiveSelectedEffort,
+    };
     const needsModelRepair =
-      selectedComposerSelection.modelId !== null &&
-      selectedComposerSelection.modelId !== effectiveSelectedModelId;
+      selectedComposerSelection.modelId !== nextSelection.modelId;
     const needsEffortRepair =
-      selectedComposerSelection.effort !== effectiveSelectedEffort;
+      selectedComposerSelection.effort !== nextSelection.effort;
     if (!needsModelRepair && !needsEffortRepair) {
       return;
     }
-    persistComposerSelectionForThread(activeWorkspaceId, activeThreadId, {
-      modelId: effectiveSelectedModelId,
-      effort: effectiveSelectedEffort,
-    });
+    persistComposerSelectionForThread(activeWorkspaceId, activeThreadId, nextSelection);
   }, [
     activeEngine,
     activeThreadId,
