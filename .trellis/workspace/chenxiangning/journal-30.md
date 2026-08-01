@@ -381,3 +381,63 @@ VendorModelManagerDialogHost 在 AppShell 打开时未加载 settings.css，导�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1263: 收敛 docs 文档历史
+
+**Date**: 2026-08-01
+**Task**: 收敛 docs 文档历史
+**Branch**: `feature/v-0714`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+### Summary
+
+将 `feature/v-0714` 上的文档校准 merge bubble 收敛为线性历史。以 `b81ae049f` 为稳定基线，保持原 `b3ff47a14` 的 `docs/**` 最终树完全一致，并将文档内容整理为单一提交 `7f14c0a13`。旧过程未丢失：来源提交 `f3c9da4db`、`72f6befe5` 仍由 `origin/bump-version-0.7.14` 保存，原合并现场 `d7e94283c`、`b3ff47a14` 由本地 backup branch 保存。
+
+### Main Changes
+
+- 建立 `backup/feature-v-0714-before-doc-history-cleanup-20260801-1745` 恢复锚点。
+- 将 `docs: 校准全库文档与现行实现` 与后续语义合并结果收敛为 `docs: 整合并校准全库文档`。
+- 保留 `Preference Settings UI/UX Guide`、结构化 docs 索引、analysis/reports/browser-agent/superpowers 分区，以及 lifecycle/current delta 校准。
+- 删除当前分支中重复的两条旧 Trellis session，合并为本条记录，避免会话历史膨胀和失真。
+- 未修改业务代码、OpenSpec、远程分支；未执行 push 或 force push。
+
+### Validation
+
+- `docs/**` tree hash：新提交与清理前 backup 均为 `7c45dcc4d7225f557abab4fe94e0a4d8817be9a7`。
+- `git diff --cached --check` 通过。
+- 冲突标记扫描通过，暂存范围仅包含 `docs/**`。
+- 相同文档树此前已验证 119 篇 Markdown 本地链接 0 失效。
+- lint/typecheck 未重复运行；当前分支已知业务代码 baseline error 与 docs-only 历史整理无关。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 如需发布，当前 `feature/v-0714` 可从 `origin/feature/v-0714` fast-forward push，无需 force push。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7f14c0a13` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
