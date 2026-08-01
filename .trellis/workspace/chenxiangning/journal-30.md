@@ -638,3 +638,56 @@ B1 切断 useModels layout self-deps；会话 selection 幂等；freeform 只修
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1268: Shared 历史幕布过程折叠与 Codex 文件修改投影对齐
+
+**Date**: 2026-08-01
+**Task**: Shared 历史幕布过程折叠与 Codex 文件修改投影对齐
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+对齐 Shared 与 Native 幕布过程顺序/折叠展开/fileChange changes[] 保真，canvas projection v6
+
+### Main Changes
+
+## 本会话交付
+
+| 维度 | 结果 |
+|------|------|
+| 过程顺序 | TurnCommitted：reasoning/tools → 结论 Text（折叠契约） |
+| 折叠真实展开 | bash/command 回幕布；chip 计数含 shell 行 |
+| Codex 文件修改 | ingest 打包 changes[]；投影还原 path/diff |
+| Checkpoint | CANVAS_PROJECTION_VERSION → 6 |
+| OpenSpec | sync-shared-session-curtain-parity |
+
+## 验证
+
+- cargo test --test shared_projection：25 passed
+- cargo test --lib codex_file_change_item_preserves：ok
+- vitest collapse + live-behavior + dataSource：97 passed
+
+## 已知边界
+
+- 旧 canonical 若从未写入 changes 无法回填
+- tool↔text 交错时间戳仍无法 1:1 还原 live
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ef6dc9dbb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
