@@ -75,19 +75,22 @@ describe("ProviderContinuationDialog", () => {
           node?.textContent?.replace(/\s/g, "") === "1,200→600",
       ),
     ).toBeTruthy();
-    expect(screen.getByText("可移植历史 Token → 续接包 Token")).toBeTruthy();
+    expect(screen.getByText("上下文 Token")).toBeTruthy();
     expect(screen.queryByText(/Omissions|省略内容|unsupported/)).toBeNull();
-    expect(screen.getByText("准备上下文")).toBeTruthy();
-    expect(screen.getByText("传递上下文")).toBeTruthy();
-    expect(screen.getByText("校验目标")).toBeTruthy();
+    // Scheme A: no heavy three-step wizard
+    expect(screen.queryByText("准备上下文")).toBeNull();
+    expect(screen.queryByText("传递上下文")).toBeNull();
+    expect(screen.queryByText("校验目标")).toBeNull();
   });
 
-  it("shows preparing progress before confirmation", () => {
+  it("shows preparing status with thin progress and no fake percent label", () => {
     render(
       <ProviderContinuationDialog
         state={{
           ...STATE,
           stage: "preparing",
+          sourceEstimatedTokens: null,
+          packageEstimatedTokens: null,
           progressPhase: "compiling-context",
           progressPercent: 22,
         }}
@@ -99,9 +102,11 @@ describe("ProviderContinuationDialog", () => {
     expect(screen.getByRole("status").textContent).toContain(
       "正在整理可续接上下文",
     );
+    expect(screen.getByText("正在估算上下文…")).toBeTruthy();
     expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe(
       "22",
     );
+    expect(screen.queryByText("22%")).toBeNull();
     expect(
       (screen.getByRole("button", {
         name: "正在准备…",
@@ -109,7 +114,7 @@ describe("ProviderContinuationDialog", () => {
     ).toBe(true);
   });
 
-  it("keeps recovery copy readable and technical detail collapsed", () => {
+  it("hides progress bar and token row on error, keeps recovery copy", () => {
     const onConfirm = vi.fn();
     render(
       <ProviderContinuationDialog
@@ -117,6 +122,8 @@ describe("ProviderContinuationDialog", () => {
           ...STATE,
           stage: "error",
           retryAction: "execute",
+          sourceEstimatedTokens: null,
+          packageEstimatedTokens: null,
           detail:
             "目标会话可能已经创建。重试只会校验同一个会话，不会重复创建。",
           technicalDetail:
@@ -127,7 +134,11 @@ describe("ProviderContinuationDialog", () => {
       />,
     );
 
+    expect(screen.getByText("续接没有完成")).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toContain("不会重复创建");
+    expect(screen.queryByRole("progressbar")).toBeNull();
+    expect(screen.queryByText("上下文 Token")).toBeNull();
+    expect(screen.queryByText("正在估算上下文…")).toBeNull();
     const technicalDetails = screen
       .getByText("技术详情")
       .closest("details") as HTMLDetailsElement;

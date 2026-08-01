@@ -260,7 +260,7 @@
   :root:not([data-theme]) .thread-delete-popover,
   :root[data-theme="light"] .thread-delete-popover {
     border-color: color-mix(in srgb, var(--border-stronger), transparent 34%);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%);
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
     box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
   }
 
@@ -268,7 +268,7 @@
   :root[data-theme="light"] .thread-delete-popover::before {
     border-left-color: color-mix(in srgb, var(--border-stronger), transparent 34%);
     border-bottom-color: color-mix(in srgb, var(--border-stronger), transparent 34%);
-    background: rgba(255, 255, 255, 0.98);
+    background: #ffffff;
   }
 
   :root:not([data-theme]) .thread-delete-popover-message,
@@ -278,7 +278,7 @@
 
   :root:not([data-theme]) .thread-delete-popover-button-secondary,
   :root[data-theme="light"] .thread-delete-popover-button-secondary {
-    background: rgba(255, 255, 255, 0.9);
+    background: #ffffff;
   }
 }
 

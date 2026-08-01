@@ -30,8 +30,12 @@ const threads = {
     providerContinuationTitle: "使用其他 Provider 继续",
     providerContinuationDescription:
       "来源会话保持不变，新会话将直接承接后续工作。",
+    providerContinuationFailedTitle: "续接没有完成",
+    providerContinuationFailedDescription: "来源会话保持不变，可以安全重试。",
     providerContinuationSourcePreserved:
       "来源会话不会被修改。完成后可从新会话直接返回来源。",
+    providerContinuationFromLabel: "来源",
+    providerContinuationToLabel: "目标",
     providerContinuationStagePrepare: "准备上下文",
     providerContinuationStageDeliver: "传递上下文",
     providerContinuationStageVerify: "校验目标",
@@ -62,7 +66,8 @@ const threads = {
     providerContinuationSourceExcerptUnavailable: "来源内容暂无可用摘录",
     providerContinuationOpenSourceTitle: "查看来源会话",
     providerContinuationOpenSource: "查看来源",
-    providerContinuationEstimatedTokens: "可移植历史 Token → 续接包 Token",
+    providerContinuationEstimatedTokens: "上下文 Token",
+    providerContinuationTokensEstimating: "正在估算上下文…",
     providerContinuationErrorCode: "错误代码：{{code}}",
     openClaudeTui: "在 Claude TUI 中打开",
     claudeResumeCommandHelp:
