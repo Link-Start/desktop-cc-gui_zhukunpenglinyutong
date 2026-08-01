@@ -481,7 +481,7 @@ describe("Messages reasoning render", () => {
     expect(container.textContent ?? "").toContain("输出最终分析报告");
   });
 
-  it("keeps segmented gemini reasoning slices visible during realtime rendering", () => {
+  it("merges adjacent segmented gemini reasoning slices into one thinking block", () => {
     const items: ConversationItem[] = [
       {
         id: "gemini-reasoning-seg-1",
@@ -515,7 +515,7 @@ describe("Messages reasoning render", () => {
       />,
     );
 
-    expect(container.querySelectorAll(".thinking-block").length).toBe(3);
+    expect(container.querySelectorAll(".thinking-block").length).toBe(1);
     expect(container.textContent ?? "").toContain("创建 operationlog 目录");
     expect(container.textContent ?? "").toContain("编写 OperationLog.java");
     expect(container.textContent ?? "").toContain("编写 OperationLogRequest.java");
@@ -558,7 +558,7 @@ describe("Messages reasoning render", () => {
     expect(container.querySelectorAll(".thinking-block").length).toBe(1);
   });
 
-  it("keeps consecutive claude live reasoning runs segmented while streaming", () => {
+  it("merges consecutive claude live reasoning runs while streaming", () => {
     const items: ConversationItem[] = [
       {
         id: "reasoning-live-run",
@@ -592,7 +592,7 @@ describe("Messages reasoning render", () => {
       />,
     );
 
-    expect(container.querySelectorAll(".thinking-block").length).toBe(3);
+    expect(container.querySelectorAll(".thinking-block").length).toBe(1);
     expect(container.textContent ?? "").toContain("先读取 README 并识别技术栈");
     expect(container.textContent ?? "").toContain("继续读取 CLAUDE.md 并整理结论");
     expect(container.textContent ?? "").toContain("输出最终分析报告");
@@ -629,6 +629,47 @@ describe("Messages reasoning render", () => {
     expect(container.querySelectorAll(".thinking-block").length).toBe(1);
     expect(container.textContent ?? "").toContain("先读取 README 并识别技术栈");
     expect(container.textContent ?? "").toContain("继续读取 CLAUDE.md 并整理结论");
+  });
+
+  it("keeps reasoning blocks split when a tool interrupts the run", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "reasoning-before-tool-seg-1",
+        kind: "reasoning",
+        summary: "先读取 README 并识别技术栈",
+        content: "先读取 README 并识别技术栈",
+      },
+      {
+        id: "tool-read-1",
+        kind: "tool",
+        toolType: "toolCall",
+        title: "Tool: read",
+        detail: "{}",
+        status: "completed",
+      },
+      {
+        id: "reasoning-after-tool-seg-2",
+        kind: "reasoning",
+        summary: "根据文件内容继续分析",
+        content: "根据文件内容继续分析",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        activeEngine="claude"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.querySelectorAll(".thinking-block").length).toBe(2);
+    expect(container.textContent ?? "").toContain("先读取 README 并识别技术栈");
+    expect(container.textContent ?? "").toContain("根据文件内容继续分析");
   });
 
   it("keeps first multiline claude reasoning content after collapsing runs", () => {

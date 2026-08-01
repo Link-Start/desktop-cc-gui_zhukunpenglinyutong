@@ -41,13 +41,15 @@ export const ReasoningRow = memo(function ReasoningRow({
 }: ReasoningRowProps) {
   const { t } = useTranslation();
   const { bodyText } = parsed;
-  const shouldPreferRawClaudeContent =
-    activeEngine === "claude" &&
+  // header 固定显示「思考过程 / 思考中」，不会渲染 summaryTitle。
+  // 当 summary 与 content 同为多行正文时，parseReasoning 会把首行当 title 剥掉，
+  // 导致合并后的相邻思考丢失第一段；此时直接用 raw content。
+  const shouldPreferRawReasoningContent =
     item.summary.trim().length > 0 &&
     item.content.trim().length > 0 &&
     item.summary.trim() === item.content.trim() &&
     item.content.includes("\n");
-  const thinkingText = shouldPreferRawClaudeContent
+  const thinkingText = shouldPreferRawReasoningContent
     ? item.content
     : bodyText || item.content || item.summary || "";
   // live reasoning delta 同样走 deferred：紧急渲染复用旧文本，重解析推后台。

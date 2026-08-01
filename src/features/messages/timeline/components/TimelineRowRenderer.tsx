@@ -72,7 +72,6 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     latestFinalAssistantMessageId,
     messageActionTargetByAssistantId,
     messageCopyTextByAssistantId,
-    reasoningMetaById,
     suppressedUserMemoryContextMessageIds,
     suppressedUserNoteCardContextMessageIds,
     turnFileChangesByBoundaryId,
@@ -415,7 +414,10 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     if (renderKind === "reasoning" && renderItem.kind === "reasoning") {
       const itemRenderKey = `reasoning:${renderItem.id}`;
       const isExpanded = expandedItems.has(renderItem.id);
-      const parsed = reasoningMetaById.get(renderItem.id) ?? parseReasoning(renderItem);
+      // 必须基于最终 renderItem 解析：相邻 reasoning 合并后会复用 latest id，
+      // 但 content/summary 已是拼接结果；若仍查源表 reasoningMetaById 会拿到合并前的短正文。
+      // parseReasoning 按 item 引用 WeakMap 缓存，稳定行无额外成本。
+      const parsed = parseReasoning(renderItem);
       const isLiveReasoning =
         isThinking && latestReasoningId === renderItem.id;
       return (

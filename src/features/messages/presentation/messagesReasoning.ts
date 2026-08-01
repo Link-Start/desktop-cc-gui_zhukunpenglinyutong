@@ -567,15 +567,13 @@ export function collapseConsecutiveReasoningRuns(
       continue;
     }
 
-    // 相邻且同段（同 seg 编号或都没有）的思考合并为一块；段号变化说明中间有过工具调用，保持分开。
-    const segment = reasoningSegmentNumber(item.id);
+    // 相邻 reasoning 一律合并为一块 UI（换行拼接正文）。
+    // 中间若有 tool / message / explore 等会自然打断；不再按 seg-N 拆分，
+    // 避免「无工具夹在中间却出现连续多个思考过程卡片」的碎片化展示。
     let end = index + 1;
     while (end < list.length) {
       const candidate = list[end];
-      if (
-        !isReasoningConversationItem(candidate) ||
-        reasoningSegmentNumber(candidate.id) !== segment
-      ) {
+      if (!isReasoningConversationItem(candidate)) {
         break;
       }
       end += 1;
