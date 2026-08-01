@@ -1097,3 +1097,43 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1279: merge upstream chore/bump-version-0.7.15
+
+**Date**: 2026-08-02
+**Task**: merge upstream chore/bump-version-0.7.15
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+拉取并 merge upstream 落后的 8 个提交；消息幕布冲突保留本地 shell 过滤策略
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 操作 | `git pull --no-rebase upstream chore/bump-version-0.7.15` |
+| 分叉 | local ahead 23 / remote ahead 8 → merge 后 local ahead 24 |
+| 冲突文件 | 7 个 messages 相关（render/timeline/tests） |
+| 策略 | 保留本地 hide pure shell + keep file IO；上游 always-show 不采纳 |
+| 验证 | 相关 messages tests 101 passed |
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4e4d9fe9a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
