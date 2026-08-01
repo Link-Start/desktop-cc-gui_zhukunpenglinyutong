@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-30.md`
-- **Total Sessions**: 1272
+- **Total Sessions**: 1273
 - **Last Active**: 2026-08-02
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-30.md` | ~825 | Active |
+| `journal-30.md` | ~875 | Active |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
@@ -58,6 +58,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1273 | 2026-08-02 | 会话概览替换治理证据 + 提交消息引擎选择器收口 | `5f52710f7`, `867c1017d` | `cxn-version-0.7.15` |
 | 1272 | 2026-08-02 | Codex 文件读写类 command 可见、纯 shell 仍隐藏 | `1e9ed803a` | `cxn-version-0.7.15` |
 | 1271 | 2026-08-02 | 幕布恢复隐藏 shell 且折叠只计文件读写 | `9a2e35797` | `cxn-version-0.7.15` |
 | 1270 | 2026-08-02 | Shared Codex command argv/apply_patch 投影修复 | `a2f3e50ca` | `cxn-version-0.7.15` |

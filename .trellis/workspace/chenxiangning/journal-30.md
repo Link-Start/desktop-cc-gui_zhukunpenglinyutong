@@ -823,3 +823,53 @@ unhide file-IO commandExecution; promote apply_patch; hide pwd/ls noise; chip co
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1273: 会话概览替换治理证据 + 提交消息引擎选择器收口
+
+**Date**: 2026-08-02
+**Task**: 会话概览替换治理证据 + 提交消息引擎选择器收口
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+完成 replace-checkpoint-governance-with-session-overview 实现；统一 Git 提交消息引擎选择器，修复中英文/子菜单交互与 Grok managed provider 接入 401
+
+### Main Changes
+
+## 本会话交付
+
+### 1. replace-checkpoint-governance-with-session-overview
+- 结果 tab 默认渲染 SessionOverviewSection
+- bottomActivity.governanceEvidence 默认 false，opt-in 后恢复治理证据与 verdict 参与
+- 测试与 openspec change artifacts 已落盘
+
+### 2. 提交消息引擎选择器 (add-cli-engine-visibility-toggle / unify-git-commit-engine-picker)
+- 单面板 picker：上次配置 / 中英文 / 可见引擎
+- 提交框位置改平铺项，避免 flyout 回不去
+- 生成按钮图标从 last config 恢复，统一 EngineIcon
+- engine_send_message_sync 对齐 Grok/Kimi/OpenCode managed provider，修复 commit-message 401
+
+### Commits
+- 5f52710f7 feat(status-panel): 用会话概览替换默认治理证据
+- 867c1017d feat(git): 统一提交消息引擎选择器并修复 Grok 接入
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5f52710f7` | (see git log) |
+| `867c1017d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
