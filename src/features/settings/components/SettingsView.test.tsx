@@ -525,8 +525,13 @@ describe("SettingsView prompts workspace routing", () => {
       />,
     );
 
-    const picker = await screen.findByDisplayValue("Workspace B");
-    expect(picker).toBeTruthy();
+    await waitFor(() => {
+      expect(
+        screen
+          .getAllByRole("combobox", { name: "settings.workspacePickerLabel" })
+          .some((picker) => picker.textContent?.includes("Workspace B")),
+      ).toBe(true);
+    });
   });
 });
 
@@ -1471,7 +1476,7 @@ describe("SettingsView Display", () => {
     });
   });
 
-  it("keeps client UI visibility controls hidden from basic settings", () => {
+  it("keeps hidden client UI visibility controls out of the display settings", () => {
     renderDisplaySection();
 
     expect(screen.queryByText("Client UI visibility")).toBeNull();
