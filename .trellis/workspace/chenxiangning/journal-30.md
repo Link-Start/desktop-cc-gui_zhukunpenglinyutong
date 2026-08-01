@@ -493,3 +493,55 @@ VendorModelManagerDialogHost 在 AppShell 打开时未加载 settings.css，导�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1265: 解决 PR #971 与 main 的 #185 冲突并推送
+
+**Date**: 2026-08-01
+**Task**: 解决 PR #971 与 main 的 #185 冲突并推送
+**Branch**: `bump-version-0.7.14`
+
+### Summary
+
+合并 upstream-main 解决 docs/README、#185 playbook、useModels.test 冲突；再合入远端 messages 稳定化提交；push 后 PR #971 变为 MERGEABLE。
+
+### Main Changes
+
+## 做了什么
+- 检查 PR #971 (bump-version-0.7.14 → main) 冲突状态与本地 merge in progress
+- 确认 3 个冲突文件工作区已语义融合（无 <<<<<<< 标记）
+  - docs/README.md：ours 全库导航 + 专项材料 + #185 链接
+  - docs/analysis/react-185-maximum-update-depth-playbook.md：保留 Fix commit 与索引（ours）
+  - useModels.test.tsx：保留 #185 回归 + 自定义模型测例（ours 超集）
+- useModels.ts 已 auto-merge 为 ours（#185 结构 + 自定义 reasoning）
+- git add 标记解决并完成 merge(main) commit
+- vitest useModels.test.tsx 25/25 通过
+- push 被拒后 fetch：远端多 1 个 fix(messages)，clean merge 后再次 push
+- PR #971 mergeable=MERGEABLE / mergeStateStatus=CLEAN
+
+## 刻意未纳入
+- 工作区曾出现无关脏改动（app-shell freeform model / provider activate 回退、DEBUG sentinel），已 restore，未提交
+
+## 验证
+- pnpm exec vitest run src/features/models/hooks/useModels.test.tsx → 25 passed
+- gh pr view 971 → MERGEABLE / CLEAN
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0fd81eede` | (see git log) |
+| `4732d92ac` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

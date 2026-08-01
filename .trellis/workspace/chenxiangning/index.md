@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-30.md`
-- **Total Sessions**: 1264
+- **Total Sessions**: 1265
 - **Last Active**: 2026-08-01
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-30.md` | ~495 | Active |
+| `journal-30.md` | ~547 | Active |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
@@ -58,6 +58,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1265 | 2026-08-01 | 解决 PR #971 与 main 的 #185 冲突并推送 | `0fd81eede`, `4732d92ac` | `bump-version-0.7.14` |
 | 1264 | 2026-08-01 | 供应商空模型兜底与自定义模型思考强度默认档 | `b92a3c92b` | `feature/v-0714` |
 | 1263 | 2026-08-01 | 收敛 docs 文档历史 | `7f14c0a13` | `feature/v-0714` |
 | 1262 | 2026-08-01 | 修正 Codex 模型思考强度映射 | `ca48f5458` | `bump-version-0.7.14` |
