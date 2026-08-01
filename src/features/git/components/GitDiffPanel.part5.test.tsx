@@ -69,12 +69,12 @@ vi.mock("react-i18next", () => ({
         "git.generateCommitMessage": "Generate commit message",
         "git.generateCommitMessageStaged": "Generate commit message from staged changes",
         "git.generateCommitMessageUnstaged": "Generate commit message from unstaged changes",
-        "git.generateCommitMessageChinese": "Generate Chinese commit message",
-        "git.generateCommitMessageEnglish": "Generate English commit message",
-        "git.generateCommitMessageEngineCodex": "Use Codex engine",
-        "git.generateCommitMessageEngineClaude": "Use Claude engine",
-        "git.generateCommitMessageEngineGemini": "Use Gemini engine",
-        "git.generateCommitMessageEngineOpenCode": "Use OpenCode engine",
+        "git.generateCommitMessageChinese": "中文",
+        "git.generateCommitMessageEnglish": "English",
+        "git.generateCommitMessageEngineCodex": "Codex",
+        "git.generateCommitMessageEngineClaude": "Claude Code",
+        "git.generateCommitMessageEngineGemini": "Gemini",
+        "git.generateCommitMessageEngineOpenCode": "OpenCode",
         "git.generateCommitMessageLastConfig": "Use last configuration",
         "git.commitComposerPlacementMenuLabel": "Commit box position",
         "git.commitComposerPlacementBottom": "Bottom",
@@ -196,8 +196,8 @@ afterEach(() => {
 
 async function chooseCodexEnglishCommitMessage() {
   fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: "Use Codex engine" }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: "Generate English commit message" }));
+  fireEvent.click(await screen.findByRole("button", { name: "English" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Codex" }));
 }
 
 async function openGitFileContextMenu(row: HTMLElement) {
@@ -327,14 +327,17 @@ describe("GitDiffPanel", () => {
       );
       fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
 
-      const quickOption = await screen.findByRole("menuitem", {
+      const quickOption = await screen.findByRole("button", {
         name: "Use last configuration",
       });
       expect((quickOption as HTMLButtonElement).disabled).toBe(true);
     });
 
   it("disables the last-config quick option for a retired engine", async () => {
-      saveLastCommitMessageConfig({ engine: "opencode", language: "en" });
+      window.localStorage.setItem(
+        "ccgui.git.lastCommitMessageConfig",
+        JSON.stringify({ engine: "retired-engine", language: "en" }),
+      );
       render(
         <GitDiffPanel
           {...baseProps}
@@ -344,7 +347,7 @@ describe("GitDiffPanel", () => {
       );
       fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
 
-      const quickOption = await screen.findByRole("menuitem", {
+      const quickOption = await screen.findByRole("button", {
         name: "Use last configuration",
       });
       expect((quickOption as HTMLButtonElement).disabled).toBe(true);
@@ -368,7 +371,7 @@ describe("GitDiffPanel", () => {
       // 上次配置仍是可见 quick option，不改变主按钮的显式选择语义。
       fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
       fireEvent.click(
-        await screen.findByRole("menuitem", { name: "Use last configuration" }),
+        await screen.findByRole("button", { name: "Use last configuration" }),
       );
 
       await waitFor(() => {

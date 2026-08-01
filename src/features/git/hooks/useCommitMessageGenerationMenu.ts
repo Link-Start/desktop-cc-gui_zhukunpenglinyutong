@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type MouseEvent } from "react";
+import { createElement, useCallback, type MouseEvent } from "react";
 import type { TFunction } from "i18next";
 import type {
   CommitMessageEngine,
@@ -6,9 +6,11 @@ import type {
 } from "../../../services/tauri";
 import { saveLastCommitMessageConfig } from "../../../utils/commitMessage";
 import { isEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
+import { getDisabledCliEngineIdsSnapshot } from "../../composer/hooks/cliEngineVisibilityStore";
+import { CommitMessageEnginePicker } from "../components/CommitMessageEnginePicker";
 import {
-  COMMIT_MESSAGE_MENU_ENGINES,
-  readExecutableCommitMessageConfig,
+  COMMIT_MESSAGE_PICKER_MENU_SIZE,
+  readCommitMessageMenuPreferences,
 } from "../utils/commitMessageMenuConfig";
 import type {
   RendererContextMenuItem,
@@ -26,7 +28,10 @@ type CommitMessageGenerationMenuOptions<TContext> = {
     engine: CommitMessageEngine,
     context: TContext | undefined,
   ) => Promise<void>;
-  resolvePosition: (event: MouseEvent<HTMLButtonElement>) => MenuPosition;
+  resolvePosition: (
+    event: MouseEvent<HTMLButtonElement>,
+    menuSize: { width: number; height: number },
+  ) => MenuPosition;
   setEngine: (engine: CommitMessageEngine) => void;
   setMenu: (menu: RendererContextMenuState | null) => void;
   buildExtraItems?: () => RendererContextMenuItem[];
@@ -42,17 +47,6 @@ export function useCommitMessageGenerationMenu<TContext = undefined>({
   setMenu,
   buildExtraItems,
 }: CommitMessageGenerationMenuOptions<TContext>) {
-  const deferredLanguageMenuTimerRef = useRef<number | null>(null);
-
-  useEffect(
-    () => () => {
-      if (deferredLanguageMenuTimerRef.current !== null) {
-        window.clearTimeout(deferredLanguageMenuTimerRef.current);
-      }
-    },
-    [],
-  );
-
   const runGeneration = useCallback(
     async (
       language: CommitMessageLanguage,
@@ -69,37 +63,6 @@ export function useCommitMessageGenerationMenu<TContext = undefined>({
     [busy, canGenerate, generate, setEngine],
   );
 
-  const showLanguageMenu = useCallback(
-    (
-      engine: CommitMessageEngine,
-      position: MenuPosition,
-      context: TContext | undefined,
-    ) => {
-      if (busy || !canGenerate(context)) {
-        return;
-      }
-      setMenu({
-        ...position,
-        label: t("git.generateCommitMessage"),
-        items: [
-          {
-            type: "item",
-            id: "commit-message-zh",
-            label: t("git.generateCommitMessageChinese"),
-            onSelect: () => runGeneration("zh", engine, context),
-          },
-          {
-            type: "item",
-            id: "commit-message-en",
-            label: t("git.generateCommitMessageEnglish"),
-            onSelect: () => runGeneration("en", engine, context),
-          },
-        ],
-      });
-    },
-    [busy, canGenerate, runGeneration, setMenu, t],
-  );
-
   const showEngineMenu = useCallback(
     (event: MouseEvent<HTMLButtonElement>, context?: TContext) => {
       event.preventDefault();
@@ -107,49 +70,26 @@ export function useCommitMessageGenerationMenu<TContext = undefined>({
       if (busy || !canGenerate(context)) {
         return;
       }
-      const position = resolvePosition(event);
-      const lastConfig = readExecutableCommitMessageConfig();
-      const engineLabelKeys = {
-        codex: "git.generateCommitMessageEngineCodex",
-        claude: "git.generateCommitMessageEngineClaude",
-      } as const;
+
+      const position = resolvePosition(event, COMMIT_MESSAGE_PICKER_MENU_SIZE);
+      const preferences = readCommitMessageMenuPreferences(
+        getDisabledCliEngineIdsSnapshot(),
+      );
+
       setMenu({
         ...position,
         label: t("git.generateCommitMessage"),
-        items: [
-          {
-            type: "item",
-            id: "commit-message-last-config",
-            label: t("git.generateCommitMessageLastConfig"),
-            disabled: !lastConfig,
-            onSelect: () =>
-              lastConfig
-                ? runGeneration(
-                    lastConfig.language,
-                    lastConfig.engine,
-                    context,
-                  )
-                : undefined,
+        content: createElement(CommitMessageEnginePicker, {
+          engines: preferences.engines,
+          initialLanguage: preferences.initialLanguage,
+          lastConfig: preferences.lastConfig,
+          onDismiss: () => setMenu(null),
+          onGenerate: (language, engine) => {
+            // language 来自 picker 当前选中态；engine 来自点击的引擎行
+            void runGeneration(language, engine, context);
           },
-          { type: "separator", id: "commit-message-last-config-separator" },
-          ...COMMIT_MESSAGE_MENU_ENGINES.map<RendererContextMenuItem>(
-            (engine) => ({
-              type: "item",
-              id: `commit-message-engine-${engine}`,
-              label: t(engineLabelKeys[engine]),
-              onSelect: () => {
-                if (deferredLanguageMenuTimerRef.current !== null) {
-                  window.clearTimeout(deferredLanguageMenuTimerRef.current);
-                }
-                deferredLanguageMenuTimerRef.current = window.setTimeout(() => {
-                  deferredLanguageMenuTimerRef.current = null;
-                  showLanguageMenu(engine, position, context);
-                }, 0);
-              },
-            }),
-          ),
-          ...(buildExtraItems?.() ?? []),
-        ],
+        }),
+        items: buildExtraItems?.() ?? [],
       });
     },
     [
@@ -159,7 +99,6 @@ export function useCommitMessageGenerationMenu<TContext = undefined>({
       resolvePosition,
       runGeneration,
       setMenu,
-      showLanguageMenu,
       t,
     ],
   );

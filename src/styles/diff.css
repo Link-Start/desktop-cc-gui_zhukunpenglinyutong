@@ -2528,3 +2528,191 @@ body[data-read-only-compare-resizing="true"] .read-only-compare-resizer::after {
     flex: 1 1 140px;
   }
 }
+
+.renderer-context-menu:has(> .commit-message-engine-picker) {
+  width: min(296px, calc(100vw - 24px));
+  min-width: 0;
+  max-width: none;
+  max-height: calc(100vh - 24px);
+  padding: 6px;
+  overflow-y: auto;
+}
+
+.commit-message-engine-picker {
+  width: auto;
+  padding: 2px 2px 6px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.commit-message-engine-picker__quick,
+.commit-message-engine-picker__engine,
+.commit-message-engine-picker__language {
+  border: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.commit-message-engine-picker__quick {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--border-accent) 42%, var(--border-subtle));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent-primary, #2563eb) 8%, var(--surface-raised));
+  text-align: left;
+}
+
+.commit-message-engine-picker__quick:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent-primary, #2563eb) 58%, var(--border-subtle));
+  background: color-mix(in srgb, var(--accent-primary, #2563eb) 12%, var(--surface-raised));
+}
+
+.commit-message-engine-picker__quick:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.commit-message-engine-picker__quick-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.commit-message-engine-picker__quick-copy strong {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commit-message-engine-picker__quick-copy small {
+  overflow: hidden;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--text-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commit-message-engine-picker__languages {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  margin: 6px 0 8px;
+  padding: 3px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  background: var(--surface-muted, var(--surface-hover));
+}
+
+.commit-message-engine-picker__language {
+  min-height: 27px;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text-secondary);
+  cursor: pointer;
+  pointer-events: auto;
+  position: relative;
+  z-index: 1;
+  transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+.commit-message-engine-picker__language:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.commit-message-engine-picker__language[data-selected="true"],
+.commit-message-engine-picker__language[aria-pressed="true"] {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--accent-primary, #2563eb) 14%, var(--surface-raised));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent-primary, #2563eb) 45%, transparent),
+    0 1px 3px rgb(0 0 0 / 16%);
+}
+
+.commit-message-engine-picker__section-label {
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  padding: 0 7px 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+}
+
+.commit-message-engine-picker__engines {
+  display: grid;
+  gap: 2px;
+}
+
+.commit-message-engine-picker__engine {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 4px 7px;
+  border-radius: 7px;
+  background: transparent;
+  text-align: left;
+}
+
+.commit-message-engine-picker__engine:hover {
+  background: var(--surface-hover);
+}
+
+.commit-message-engine-picker__engine-icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-raised);
+}
+
+.commit-message-engine-picker__engine-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.commit-message-engine-picker__engine-name {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commit-message-engine-picker__enabled-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success, #22c55e);
+  box-shadow: 0 0 0 2px rgb(34 197 94 / 12%);
+}
+
+.commit-message-engine-picker__empty {
+  padding: 14px 8px;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 7px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+.commit-message-engine-picker button:focus-visible {
+  outline: 2px solid var(--accent-primary, #2563eb);
+  outline-offset: 1px;
+}

@@ -81,6 +81,7 @@ import {
   writeGitCommitComposerPlacement,
 } from "../hooks/useGitCommitComposerPlacement";
 import { useCommitMessageGenerationMenu } from "../hooks/useCommitMessageGenerationMenu";
+import { readInitialCommitMessageMenuEngine } from "../utils/commitMessageMenuConfig";
 import {
   getPathLeafName,
   isMissingRepo,
@@ -842,7 +843,8 @@ function GitDiffPanelImpl({
   const scopedPreviewRequestIdRef = useRef(0);
   const previewContextKeyRef = useRef<string | null>(null);
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
-  const [commitMessageMenuEngine, setCommitMessageMenuEngine] = useState<CommitMessageEngine>("claude");
+  const [commitMessageMenuEngine, setCommitMessageMenuEngine] =
+    useState<CommitMessageEngine>(() => readInitialCommitMessageMenuEngine());
   const [isGitRootPanelOpen, setIsGitRootPanelOpen] = useState(
     () =>
       isMissingRepo(error) ||
@@ -2056,11 +2058,10 @@ function GitDiffPanelImpl({
     [selectedCommitCount, selectedCommitPaths, hasExplicitCommitSelection],
   );
   const resolveCommitMessageMenuPosition = useCallback(
-    (event: ReactMouseEvent<HTMLButtonElement>) => {
-      const menuSize = {
-        width: 260,
-        height: 300,
-      };
+    (
+      event: ReactMouseEvent<HTMLButtonElement>,
+      menuSize: { width: number; height: number },
+    ) => {
       const triggerRect = event.currentTarget.getBoundingClientRect();
       const position = commitComposerPlacement === "bottom"
         ? resolveBottomCommitMessageMenuPosition(triggerRect, menuSize, {
@@ -2080,25 +2081,23 @@ function GitDiffPanelImpl({
     (): RendererContextMenuItem[] => [
       { type: "separator", id: "commit-message-placement-separator" },
       {
-        type: "submenu",
-        id: "commit-message-placement",
+        type: "label",
+        id: "commit-message-placement-label",
         label: t("git.commitComposerPlacementMenuLabel"),
-        items: [
-          {
-            type: "item",
-            id: "commit-message-placement-bottom",
-            label: t("git.commitComposerPlacementBottom"),
-            disabled: commitComposerPlacement === "bottom",
-            onSelect: () => writeGitCommitComposerPlacement("bottom"),
-          },
-          {
-            type: "item",
-            id: "commit-message-placement-top",
-            label: t("git.commitComposerPlacementTop"),
-            disabled: commitComposerPlacement === "top",
-            onSelect: () => writeGitCommitComposerPlacement("top"),
-          },
-        ],
+      },
+      {
+        type: "item",
+        id: "commit-message-placement-bottom",
+        label: t("git.commitComposerPlacementBottom"),
+        disabled: commitComposerPlacement === "bottom",
+        onSelect: () => writeGitCommitComposerPlacement("bottom"),
+      },
+      {
+        type: "item",
+        id: "commit-message-placement-top",
+        label: t("git.commitComposerPlacementTop"),
+        disabled: commitComposerPlacement === "top",
+        onSelect: () => writeGitCommitComposerPlacement("top"),
       },
     ],
     [commitComposerPlacement, t],

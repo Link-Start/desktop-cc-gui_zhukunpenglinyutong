@@ -1,3 +1,4 @@
+import { BUILTIN_ENGINE_TYPES } from "../../engine/engineRegistry";
 import type { CommitMessageEngine } from "../../../services/tauri";
 import { isEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
 import {
@@ -23,3 +24,48 @@ export function readExecutableCommitMessageConfig(): LastCommitMessageConfig | n
     ? config
     : null;
 }
+
+export const COMMIT_MESSAGE_PICKER_MENU_SIZE = {
+  width: 296,
+  height: 352,
+} as const;
+
+const EMPTY_DISABLED_COMMIT_MESSAGE_ENGINES: ReadonlySet<string> = new Set();
+
+export type CommitMessageMenuPreferences = {
+  engines: LastCommitMessageConfig["engine"][];
+  initialLanguage: LastCommitMessageConfig["language"];
+  lastConfig: LastCommitMessageConfig | null;
+};
+
+export const getVisibleCommitMessageEngines = (
+  disabledEngineIds: ReadonlySet<string> = EMPTY_DISABLED_COMMIT_MESSAGE_ENGINES,
+): LastCommitMessageConfig["engine"][] =>
+  BUILTIN_ENGINE_TYPES.filter(
+    (engine) =>
+      isEngineExecutionEnabled(engine) && !disabledEngineIds.has(engine),
+  ) as LastCommitMessageConfig["engine"][];
+
+export const readCommitMessageMenuPreferences = (
+  disabledEngineIds: ReadonlySet<string> = EMPTY_DISABLED_COMMIT_MESSAGE_ENGINES,
+): CommitMessageMenuPreferences => {
+  const storedConfig = readLastCommitMessageConfig();
+  const engines = getVisibleCommitMessageEngines(disabledEngineIds);
+
+  return {
+    engines,
+    initialLanguage: storedConfig?.language ?? "zh",
+    lastConfig:
+      storedConfig && engines.includes(storedConfig.engine)
+        ? storedConfig
+        : null,
+  };
+};
+
+/** 生成按钮初始图标：优先上次成功选择的可见引擎，否则 claude。 */
+export const readInitialCommitMessageMenuEngine = (
+  disabledEngineIds: ReadonlySet<string> = EMPTY_DISABLED_COMMIT_MESSAGE_ENGINES,
+): LastCommitMessageConfig["engine"] => {
+  const preferences = readCommitMessageMenuPreferences(disabledEngineIds);
+  return preferences.lastConfig?.engine ?? preferences.engines[0] ?? "claude";
+};

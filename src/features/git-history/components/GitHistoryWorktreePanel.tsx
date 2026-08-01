@@ -54,6 +54,7 @@ import {
   type RendererContextMenuState,
 } from "../../../components/ui/RendererContextMenu";
 import { useCommitMessageGenerationMenu } from "../../git/hooks/useCommitMessageGenerationMenu";
+import { readInitialCommitMessageMenuEngine } from "../../git/utils/commitMessageMenuConfig";
 
 export type GitHistoryWorktreePanelProps = {
   workspaceId: string;
@@ -267,7 +268,8 @@ export function GitHistoryWorktreePanel({
   const [commitMessageLoading, setCommitMessageLoading] = useState(false);
   const [commitMessageError, setCommitMessageError] = useState<string | null>(null);
   const [commitLoading, setCommitLoading] = useState(false);
-  const [commitMessageMenuEngine, setCommitMessageMenuEngine] = useState<CommitMessageEngine>("claude");
+  const [commitMessageMenuEngine, setCommitMessageMenuEngine] =
+    useState<CommitMessageEngine>(() => readInitialCommitMessageMenuEngine());
   const [commitMessageContextMenu, setCommitMessageContextMenu] =
     useState<RendererContextMenuState | null>(null);
 
@@ -565,11 +567,17 @@ export function GitHistoryWorktreePanel({
     [hasExplicitCommitSelection, selectedCommitCount, selectedCommitPaths],
   );
   const resolveCommitMessageMenuPosition = useCallback(
-    (event: ReactMouseEvent<HTMLButtonElement>) =>
-      clampRendererContextMenuPosition(event.clientX, event.clientY, {
-        width: 260,
-        height: 240,
-      }),
+    (
+      event: ReactMouseEvent<HTMLButtonElement>,
+      menuSize: { width: number; height: number },
+    ) => {
+      const triggerRect = event.currentTarget.getBoundingClientRect();
+      return clampRendererContextMenuPosition(
+        triggerRect.right - menuSize.width,
+        triggerRect.top - menuSize.height - 8,
+        menuSize,
+      );
+    },
     [],
   );
   const { showEngineMenu: showCommitMessageEngineMenu } =

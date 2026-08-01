@@ -44,6 +44,7 @@ export type RendererContextMenuState = {
   x: number;
   y: number;
   label: string;
+  content?: ReactNode;
   items: RendererContextMenuItem[];
 };
 
@@ -157,11 +158,23 @@ export function RendererContextMenu({
     [],
   );
 
+  const closeSubmenu = useCallback(() => {
+    setOpenSubmenuId(null);
+    setSubmenuPosition(null);
+  }, []);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
+      if (event.key !== "Escape") {
+        return;
       }
+      // 子菜单先收起，再关主菜单，避免「划出来回不去」只能整盘关闭
+      if (openSubmenuId) {
+        event.preventDefault();
+        closeSubmenu();
+        return;
+      }
+      onClose();
     };
     const handleBlur = () => onClose();
 
@@ -171,12 +184,11 @@ export function RendererContextMenu({
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("blur", handleBlur);
     };
-  }, [onClose]);
+  }, [closeSubmenu, onClose, openSubmenuId]);
 
   useEffect(() => {
-    setOpenSubmenuId(null);
-    setSubmenuPosition(null);
-  }, [menu]);
+    closeSubmenu();
+  }, [closeSubmenu, menu]);
 
   const openSubmenuItem = menu.items.find(
     (item): item is Extract<RendererContextMenuItem, { type: "submenu" }> =>
@@ -231,14 +243,12 @@ export function RendererContextMenu({
         disabled={item.disabled}
         onMouseEnter={() => {
           if (options?.closeSubmenuOnHover) {
-            setOpenSubmenuId(null);
-            setSubmenuPosition(null);
+            closeSubmenu();
           }
         }}
         onFocus={() => {
           if (options?.closeSubmenuOnHover) {
-            setOpenSubmenuId(null);
-            setSubmenuPosition(null);
+            closeSubmenu();
           }
         }}
         onClick={() => {
@@ -301,8 +311,7 @@ export function RendererContextMenu({
             return;
           }
           if (isOpen) {
-            setOpenSubmenuId(null);
-            setSubmenuPosition(null);
+            closeSubmenu();
             return;
           }
           openSubmenu(item);
@@ -314,8 +323,7 @@ export function RendererContextMenu({
           }
           if (event.key === "ArrowLeft") {
             event.preventDefault();
-            setOpenSubmenuId(null);
-            setSubmenuPosition(null);
+            closeSubmenu();
           }
         }}
       >
@@ -356,6 +364,15 @@ export function RendererContextMenu({
         onClick={(event) => event.stopPropagation()}
         onContextMenu={(event) => event.preventDefault()}
       >
+        {menu.content ? (
+          <div
+            className="renderer-context-menu-content"
+            onMouseEnter={closeSubmenu}
+            onFocusCapture={closeSubmenu}
+          >
+            {menu.content}
+          </div>
+        ) : null}
         {menu.items.map((item) => renderRootItem(item))}
       </div>
       {openSubmenuItem && submenuPosition ? (
