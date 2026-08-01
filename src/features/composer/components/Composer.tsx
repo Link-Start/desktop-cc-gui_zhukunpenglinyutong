@@ -101,6 +101,7 @@ import {
   buildLatestRewindPreview,
   buildRewindPreviewForMessage,
   extractInlineFileReferenceTokens,
+  mergeInlineFileReferences,
   normalizeInlineFileReferenceTokens,
   normalizeRewindExportPath,
   replaceVisibleFileReferenceLabels,
@@ -715,13 +716,22 @@ function ComposerImpl({
   ]);
   const effectiveCreationTarget =
     selectedCreationTarget ?? defaultCreationTarget;
+  // 只在 engine 语义变化时通知父层，避免等价 setState 触发 layout 重渲染环
+  const publishedCreationTargetEngineRef = useRef<EngineType | null | undefined>(
+    undefined,
+  );
   useEffect(() => {
     if (!createSessionTargetPicker) {
+      publishedCreationTargetEngineRef.current = undefined;
       return;
     }
-    onCreationTargetEngineChange?.(
-      effectiveCreationTarget?.engine ?? selectedEngine ?? null,
-    );
+    const nextEngine =
+      effectiveCreationTarget?.engine ?? selectedEngine ?? null;
+    if (publishedCreationTargetEngineRef.current === nextEngine) {
+      return;
+    }
+    publishedCreationTargetEngineRef.current = nextEngine;
+    onCreationTargetEngineChange?.(nextEngine);
   }, [
     createSessionTargetPicker,
     effectiveCreationTarget?.engine,
@@ -733,6 +743,7 @@ function ComposerImpl({
       return;
     }
     return () => {
+      publishedCreationTargetEngineRef.current = undefined;
       onCreationTargetEngineChange?.(null);
     };
   }, [createSessionTargetPicker, onCreationTargetEngineChange]);
@@ -1251,9 +1262,9 @@ function ComposerImpl({
     }
     const hadActivity = previousStatusPanelActivityRef.current;
     if (!hasStatusPanelActivity) {
-      setStatusPanelExpanded(false);
+      setStatusPanelExpanded((prev) => (prev ? false : prev));
     } else if (!hadActivity) {
-      setStatusPanelExpanded(true);
+      setStatusPanelExpanded((prev) => (prev ? prev : true));
     }
     previousStatusPanelActivityRef.current = hasStatusPanelActivity;
   }, [hasStatusPanelActivity, statusPanelExpandedOverride]);
@@ -1320,16 +1331,10 @@ function ComposerImpl({
       existingReferenceIds,
     );
     if (extracted.length > 0) {
-      setSelectedInlineFileReferences((prev) => {
-        const next = [...prev];
-        for (const ref of extracted) {
-          if (next.some((entry) => entry.id === ref.id)) {
-            continue;
-          }
-          next.push(ref);
-        }
-        return next;
-      });
+      // mergeInlineFileReferences：无新增保持原引用，切断 deps 自反馈（#185）
+      setSelectedInlineFileReferences((prev) =>
+        mergeInlineFileReferences(prev, extracted),
+      );
     }
     if (cleanedText !== text) {
       setComposerText(cleanedText);

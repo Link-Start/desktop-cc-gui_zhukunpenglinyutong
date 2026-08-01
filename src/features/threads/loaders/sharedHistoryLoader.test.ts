@@ -15,6 +15,46 @@ afterEach(() => {
 });
 
 describe("sharedHistoryLoader", () => {
+  it("reports restore progress phases for Shared history load", async () => {
+    const onProgress = vi.fn();
+    const loader = createSharedHistoryLoader({
+      workspaceId: "ws-1",
+      loadSharedSession: vi.fn().mockResolvedValue({
+        id: "shared-progress-1",
+        threadId: "shared:progress-1",
+        selectedEngine: "claude",
+        items: [
+          {
+            id: "user-1",
+            kind: "message",
+            role: "user",
+            text: "hello",
+          },
+        ],
+      }),
+      loadSharedProjection: vi.fn().mockResolvedValue([
+        {
+          id: "user-1",
+          kind: "message",
+          content: { role: "user", text: "hello", engineSource: "claude" },
+          fidelity: "canonical",
+          checksum: "checksum-user",
+        },
+      ]),
+      onProgress,
+    });
+
+    await loader.load("shared:progress-1");
+
+    const phases = onProgress.mock.calls.map((call) => call[0].phase);
+    expect(phases).toContain("prepare");
+    expect(phases).toContain("session");
+    expect(phases).toContain("projection");
+    expect(phases).toContain("merge");
+    expect(phases).toContain("finalize");
+    expect(onProgress.mock.calls.at(-1)?.[0].percent).toBe(100);
+  });
+
   it("restores snapshot items from shared session payload", async () => {
     const loader = createSharedHistoryLoader({
       workspaceId: "ws-1",

@@ -54,12 +54,12 @@ vi.mock("react-i18next", () => ({
         "git.generateCommitMessage": "Generate commit message",
         "git.generateCommitMessageStaged": "Generate commit message from staged changes",
         "git.generateCommitMessageUnstaged": "Generate commit message from unstaged changes",
-        "git.generateCommitMessageChinese": "Generate Chinese commit message",
-        "git.generateCommitMessageEnglish": "Generate English commit message",
-        "git.generateCommitMessageEngineCodex": "Use Codex engine",
-        "git.generateCommitMessageEngineClaude": "Use Claude engine",
-        "git.generateCommitMessageEngineGemini": "Use Gemini engine",
-        "git.generateCommitMessageEngineOpenCode": "Use OpenCode engine",
+        "git.generateCommitMessageChinese": "中文",
+        "git.generateCommitMessageEnglish": "English",
+        "git.generateCommitMessageEngineCodex": "Codex",
+        "git.generateCommitMessageEngineClaude": "Claude Code",
+        "git.generateCommitMessageEngineGemini": "Gemini",
+        "git.generateCommitMessageEngineOpenCode": "OpenCode",
         "git.generateCommitMessageLastConfig": "Use last configuration",
       };
       const template = translations[key] ?? key;
@@ -130,35 +130,25 @@ describe("GitHistoryWorktreePanel", () => {
     cleanup();
   });
 
-  async function chooseCodexEnglishCommitMessage() {
-    const generateButton = await waitFor(() => {
-      const button = screen.getByRole("button", {
-        name: "Generate commit message",
-      }) as HTMLButtonElement;
-      expect(button.disabled).toBe(false);
-      return button;
-    });
-    fireEvent.click(generateButton);
-    const codexItem = await screen.findByRole("menuitem", { name: "Use Codex engine" });
-    expect(screen.getByRole("menuitem", { name: "Use Claude engine" })).toBeTruthy();
-    expect(screen.queryByRole("menuitem", { name: "Use Gemini engine" })).toBeNull();
-    expect(screen.queryByRole("menuitem", { name: "Use OpenCode engine" })).toBeNull();
-    await act(async () => {
-      fireEvent.click(codexItem);
-      await new Promise((resolve) => window.setTimeout(resolve, 0));
-    });
-    const englishItem = await waitFor(() => {
-      const item = screen.getByRole("menuitem", {
-        name: "Generate English commit message",
-      });
-      expect(item).toBeTruthy();
-      return item;
-    });
-    await act(async () => {
-      fireEvent.click(englishItem);
-      await Promise.resolve();
-    });
-  }
+async function chooseCodexEnglishCommitMessage() {
+  const generateButton = await waitFor(() => {
+    const button = screen.getByRole("button", {
+      name: "Generate commit message",
+    }) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    return button;
+  });
+  fireEvent.click(generateButton);
+
+  fireEvent.click(await screen.findByRole("button", { name: "English" }));
+  const codexItem = screen.getByRole("button", { name: "Codex" });
+  expect(screen.getByRole("button", { name: "Claude Code" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Grok" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Kimi" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "OpenCode" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Gemini" })).toBeNull();
+  fireEvent.click(codexItem);
+}
 
   function renderScopedPanel(repositoryRoot: string, onSummaryChange?: (summary: {
     changedFiles: number;
@@ -565,9 +555,10 @@ describe("GitHistoryWorktreePanel", () => {
     });
     fireEvent.click(generateButton);
 
-    expect(await screen.findByRole("menuitem", { name: "Use Codex engine" })).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: "Use Claude engine" })).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: "Use last configuration" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Codex" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Claude Code" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Use last configuration" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "English" })).toBeTruthy();
     expect(mockGenerateCommitMessage).not.toHaveBeenCalled();
   });
 
@@ -583,7 +574,7 @@ describe("GitHistoryWorktreePanel", () => {
       return button;
     });
     fireEvent.click(generateButton);
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Use last configuration" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Use last configuration" }));
 
     await waitFor(() => {
       expect(mockGenerateCommitMessage).toHaveBeenCalledWith(

@@ -73,3 +73,32 @@ composer 的引擎选择器 MUST NOT 列出已被用户停用的引擎；当前�
 - **WHEN** 用户停用全部 supported CLI
 - **THEN** 系统 MUST 允许该状态
 - **AND** MUST NOT 强制要求至少保留一个启用
+
+### Requirement: Git commit message picker MUST derive visible engines from shared policy
+
+GitDiff 与 GitHistory 的 commit message picker MUST 从 global engine registry 派生候选项，并同时应用 product execution policy 与用户 `disabledCliEngines`。Git feature MUST NOT 维护独立的 engine allowlist。
+
+#### Scenario: 展示全部可执行且用户可见的 engines
+
+- **WHEN** 用户打开 commit message generation menu
+- **THEN** 单一面板展示 registry 中所有 product-enabled 且 user-visible engines
+- **AND** 用户可先选择 language，再点击 engine 立即生成
+
+#### Scenario: product-disabled 或 user-disabled engine 不可见
+
+- **WHEN** engine 被 product execution policy 禁用，或存在于 `disabledCliEngines`
+- **THEN** picker 不展示该 engine
+- **AND** 若 last configuration 指向该 engine，“使用上次配置”不得执行
+
+#### Scenario: picker 锚定生成按钮且保持 viewport 可达
+
+- **WHEN** commit composer 位于 bottom 或 top placement
+- **THEN** picker 分别在生成按钮上方或下方展开
+- **AND** picker 与 trigger 右边缘对齐并保持 viewport padding
+- **AND** enabled engines 与 generic extra items 可通过单一紧凑面板访问
+
+#### Scenario: 所有 engines 均被用户关闭
+
+- **WHEN** visibility filter 后没有可用 engine
+- **THEN** picker 展示明确空状态
+- **AND** 不提供可触发 generation 的 engine item

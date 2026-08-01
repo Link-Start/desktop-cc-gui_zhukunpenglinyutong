@@ -367,13 +367,26 @@ export const planComposerModelSelection = (input: {
   const preferCurrentEffort =
     hasUserSelectedEffort || (keepUserModel && currentEffort !== null);
 
+  const nextModelId = nextModel.id;
+  const nextEffort = resolveModelEffort(nextModel, {
+    preferCurrent: preferCurrentEffort,
+    currentEffort: selectedEffort,
+    preferredEffort,
+  });
+
+  // 已收敛则返回 null：layout / refresh 不再发起任何 commit，
+  // 避免「语义等价 plan 反复 apply」在父树重渲染下叠满 update depth。
+  if (
+    !clearUserSelectedModel &&
+    nextModelId === selectedModelId &&
+    normalizeEffort(nextEffort) === currentEffort
+  ) {
+    return null;
+  }
+
   return {
-    nextModelId: nextModel.id,
-    nextEffort: resolveModelEffort(nextModel, {
-      preferCurrent: preferCurrentEffort,
-      currentEffort: selectedEffort,
-      preferredEffort,
-    }),
+    nextModelId,
+    nextEffort,
     clearUserSelectedModel,
   };
 };

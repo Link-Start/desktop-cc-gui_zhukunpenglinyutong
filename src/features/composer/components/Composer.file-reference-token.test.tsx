@@ -313,6 +313,19 @@ describe("Composer file reference token", () => {
     });
     expect(invoke).not.toHaveBeenCalled();
     expect(onCreationTargetEngineChange).toHaveBeenLastCalledWith("codex");
+    // 等价 engine 不得在每次父树重渲染时重复 publish（#185 防护）
+    const publishCountAfterMount = onCreationTargetEngineChange.mock.calls.length;
+    await act(async () => {
+      view.rerender(
+        <ComposerHarness
+          onSend={onSend}
+          createSessionTargetPicker
+          onCreationTargetEngineChange={onCreationTargetEngineChange}
+        />,
+      );
+      await Promise.resolve();
+    });
+    expect(onCreationTargetEngineChange.mock.calls.length).toBe(publishCountAfterMount);
 
     const textarea = getTextarea(view.container);
     await act(async () => {
@@ -756,6 +769,42 @@ describe("Composer file reference token", () => {
     expect(onSend).toHaveBeenCalledWith(
       "请检查 /Users/demo/repo/src-tauri 和 /Users/demo/repo/src/App.tsx",
     );
+  });
+
+  it("does not hit maximum update depth when file tokens settle under repeated parent rerenders", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const onSend = vi.fn();
+    const view = render(<ComposerHarness onSend={onSend} />);
+    const textarea = getTextarea(view.container);
+    const value =
+      "请检查 📄 App.tsx `/Users/demo/repo/src/App.tsx`";
+
+    await act(async () => {
+      fireEvent.change(textarea, {
+        target: {
+          value,
+          selectionStart: value.length,
+        },
+      });
+      fireEvent.select(textarea);
+    });
+
+    // 模拟 AppShell / ActiveCanvas 高频父渲染：token 已 settle 后仍不得 #185
+    for (let i = 0; i < 20; i += 1) {
+      await act(async () => {
+        view.rerender(<ComposerHarness onSend={onSend} />);
+        await Promise.resolve();
+      });
+    }
+
+    expect(getTextarea(view.container).value).toBe("请检查 📄 App.tsx");
+    expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Maximum update depth exceeded"),
+    );
+    expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Minified React error #185"),
+    );
+    consoleErrorSpy.mockRestore();
   });
 
   it("deduplicates repeated references for the same path", async () => {

@@ -653,6 +653,7 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "threadParentById",
     "threadStatusById",
     "historyLoadingByThreadId",
+    "historyLoadingProgressByThreadId",
     "historyRestoredAtMsByThread",
     "threadsByWorkspace",
     "timelinePlan",

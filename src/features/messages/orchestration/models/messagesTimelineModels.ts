@@ -16,6 +16,7 @@ import type { RuntimeReconnectRecoveryCallbackResult } from "../../../../runtime
 import type { MessagesPresentationMode } from "../presentation/messagesLiveWindow";
 import type { MessagesEngine } from "../../utils/messagesRenderUtils";
 import type { parseReasoning } from "../../presentation/messagesReasoning";
+import type { HistoryLoadingProgress } from "../../../threads/utils/historyLoadingProgress";
 
 type MessageItem = Extract<ConversationItem, { kind: "message" }>;
 type ReasoningItem = Extract<ConversationItem, { kind: "reasoning" }>;
@@ -54,6 +55,8 @@ export type TimelineSnapshotModel = {
   suppressedUserMemoryContextMessageIds: Set<string>;
   suppressedUserNoteCardContextMessageIds: Set<string>;
   turnFileChangesByBoundaryId: Map<string, TurnFileChangesSummary>;
+  /** Assistant item ids that should render the Shared turn-target badge. */
+  turnTargetBadgeVisibleItemIds: Set<string>;
   visibleCollapsedHistoryItemCount: number;
 };
 
@@ -84,6 +87,7 @@ export type TimelineRuntimeModel = {
   hasVisibleUserInputRequest: boolean;
   historyRecoveryFailureReason: string | null;
   isHistoryLoading: boolean;
+  historyLoadingProgress?: HistoryLoadingProgress | null;
   latestRetryMessage: RetryMessage | null;
   latestRuntimeReconnectItemId: string | null;
   nativeRuntimeRecoveryEnabled: boolean;

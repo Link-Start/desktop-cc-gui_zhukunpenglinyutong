@@ -9,6 +9,17 @@ describe("mergeUniqueNames", () => {
       "docs",
     ]);
   });
+
+  it("returns the same array reference when all names already exist", () => {
+    const previous = ["review", "debug"];
+    const merged = mergeUniqueNames(previous, ["debug", "review"]);
+    expect(merged).toBe(previous);
+  });
+
+  it("returns the same array reference when incoming is empty", () => {
+    const previous = ["review"];
+    expect(mergeUniqueNames(previous, [])).toBe(previous);
+  });
 });
 
 describe("extractInlineSelections", () => {
@@ -22,6 +33,19 @@ describe("extractInlineSelections", () => {
     expect(result.cleanedText).toBe("帮我分析");
     expect(result.matchedSkillNames).toEqual(["find-skills"]);
     expect(result.matchedCommonsNames).toEqual(["team-rules"]);
+  });
+
+  it("merge after extract is reference-stable when skills already selected", () => {
+    const selected = ["find-skills"];
+    const extracted = extractInlineSelections(
+      "/find-skills 继续",
+      [{ name: "find-skills" }],
+      [],
+    );
+    // 模拟 Composer effect：已选中的 skill 再次 merge 不得换数组引用
+    const merged = mergeUniqueNames(selected, extracted.matchedSkillNames);
+    expect(merged).toBe(selected);
+    expect(extracted.cleanedText).toBe("继续");
   });
 
   it("extracts dollar skill aliases and keeps commons slash-only", () => {

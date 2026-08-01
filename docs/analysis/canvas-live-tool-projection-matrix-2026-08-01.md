@@ -20,7 +20,7 @@
 | **Gemini** | 既有 adapter | 依既有 | **未**进五引擎 hide 集合 | — | 依既有 |
 | **Shared** | 跟 **目标引擎** | 同上 | 同上 | 同上 | 同上 |
 
-`shouldHideCodexCanvasCommandCard` 引擎集合：`codex | claude | grok | kimi | opencode`（**不含 gemini**）。
+`shouldHideCodexCanvasCommandCard`：五引擎 hide shell；**fileChange / Read / Edit / Search 例外**。隐藏项不进过程折叠数字、不 remount。
 
 Gemini 行描述的是代码 adapter / loader capability，不代表当前产品 runtime 可用：`src-tauri/src/engine_policy.rs` 的 `GEMINI_RUNTIME_ENABLED` 仍为 `false`。Registry presence、projection capability 与 runtime availability 必须分开判断。
 
@@ -44,7 +44,7 @@ Gemini 行描述的是代码 adapter / loader capability，不代表当前产品
 | Write / Edit / MultiEdit / search_replace / apply_patch / Delete | **显示** | `EditToolBlock` + fileEdit 场景 |
 | Grep / Glob / codebase_search | **显示** | `SearchToolBlock` |
 | WebFetch / web_search | **显示** | Generic / web 图标 |
-| bash / shell / run_terminal_* / commandExecution | **隐藏** | Status Panel |
+| bash / shell / run_terminal_* / commandExecution | **隐藏**（perf；不进折叠数字） | Status Panel；file read/write 仍显示并参与折叠 |
 | TodoWrite | **剔除** | `shouldHideToolItemForRender` |
 | Task / 未知 agent 工具 | **显示 Generic** | 可折叠摘要 |
 | ExitPlanMode | **显示** | Generic 专用 |

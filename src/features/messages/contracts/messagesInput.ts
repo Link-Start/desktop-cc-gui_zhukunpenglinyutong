@@ -9,6 +9,7 @@ export type MessagesConversationInput = {
 export type MessagesRuntimeInput = Pick<
   MessagesProps,
   | "isHistoryLoading"
+  | "historyLoadingProgress"
   | "historyRecoveryFailureReason"
   | "isContextCompacting"
   | "proxyEnabled"
@@ -108,6 +109,7 @@ export function adaptLegacyMessagesProps(props: MessagesProps): MessagesCoreProp
     },
     runtime: {
       isHistoryLoading: props.isHistoryLoading ?? false,
+      historyLoadingProgress: props.historyLoadingProgress ?? null,
       historyRecoveryFailureReason: props.historyRecoveryFailureReason ?? null,
       isContextCompacting: props.isContextCompacting ?? false,
       proxyEnabled: props.proxyEnabled ?? false,

@@ -693,6 +693,30 @@ export function extractInlineFileReferenceTokens(
   };
 }
 
+/**
+ * 将 extract 结果并入已选文件引用。
+ * 无新增时必须返回 previous 同一引用——Composer effect deps 含
+ * selectedInlineFileReferences，换引用会自反馈触发 React #185。
+ */
+export function mergeInlineFileReferences(
+  previous: InlineFileReferenceSelection[],
+  extracted: InlineFileReferenceSelection[],
+): InlineFileReferenceSelection[] {
+  if (extracted.length === 0) {
+    return previous;
+  }
+  let didAppend = false;
+  const next = [...previous];
+  for (const ref of extracted) {
+    if (next.some((entry) => entry.id === ref.id)) {
+      continue;
+    }
+    next.push(ref);
+    didAppend = true;
+  }
+  return didAppend ? next : previous;
+}
+
 export function replaceVisibleFileReferenceLabels(
   text: string,
   refs: InlineFileReferenceSelection[],

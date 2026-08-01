@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { RequestUserInputRequest } from "../../../types";
+import type { ConversationItem, RequestUserInputRequest } from "../../../types";
 import { Messages } from "./Messages";
 
 vi.mock("./Markdown", () => ({
@@ -48,6 +48,39 @@ describe("Messages history loading", () => {
     expect(screen.getByRole("status")).toBeTruthy();
     expect(screen.getByText("messages.restoringHistory")).toBeTruthy();
     expect(screen.getByText("messages.restoringHistoryHint")).toBeTruthy();
+    expect(screen.getByRole("progressbar")).toBeTruthy();
+    expect(screen.queryByText("messages.emptyThread")).toBeNull();
+  });
+
+  it("shows Shared restore phase copy and determinate progress", () => {
+    render(
+      <Messages
+        items={[]}
+        threadId="shared:session-history-loading"
+        workspaceId="ws-1"
+        isThinking={false}
+        isHistoryLoading
+        historyLoadingProgress={{
+          phase: "projection",
+          percent: 58,
+          titleKey: "restoringSharedHistory",
+          detailKey: "restoringSharedHistoryProjection",
+        }}
+        activeEngine="claude"
+        onUserInputSubmit={vi.fn()}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(screen.getByText("messages.restoringSharedHistory")).toBeTruthy();
+    expect(
+      screen.getByText("messages.restoringSharedHistoryProjection"),
+    ).toBeTruthy();
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe(
+      "58",
+    );
+    expect(screen.getByText("58%")).toBeTruthy();
     expect(screen.queryByText("messages.emptyThread")).toBeNull();
   });
 
@@ -165,72 +198,45 @@ describe("Messages history loading", () => {
     expect(screen.queryByText("messages.emptyThread")).toBeNull();
   });
 
-  it("keeps Claude transcript-heavy history readable when assistant text is sparse", () => {
+  it("keeps Claude transcript-heavy history readable via file tools when assistant text is sparse", () => {
+    const readTools: ConversationItem[] = [
+      {
+        id: "tool-1",
+        kind: "tool",
+        toolType: "mcpToolCall",
+        title: "Read README.md",
+        detail: JSON.stringify({ path: "README.md" }),
+        status: "completed",
+        output: "README.md\nsrc\n",
+      },
+      {
+        id: "tool-2",
+        kind: "tool",
+        toolType: "mcpToolCall",
+        title: "Read src/index.ts",
+        detail: JSON.stringify({ path: "src/index.ts" }),
+        status: "completed",
+        output: "export {}\n",
+      },
+      {
+        id: "tool-3",
+        kind: "tool",
+        toolType: "mcpToolCall",
+        title: "Read package.json",
+        detail: JSON.stringify({ path: "package.json" }),
+        status: "completed",
+        output: "{\"name\":\"demo\"}\n",
+      },
+    ];
     render(
       <Messages
-        items={[
-          {
-            id: "tool-1",
-            kind: "tool",
-            toolType: "bash",
-            title: "Bash",
-            detail: "{\"command\":\"ls -la\"}",
-            status: "completed",
-            output: "README.md\nsrc\n",
-          },
-          {
-            id: "tool-2",
-            kind: "tool",
-            toolType: "bash",
-            title: "Bash",
-            detail: "{\"command\":\"find src -maxdepth 2\"}",
-            status: "completed",
-            output: "src/index.ts\nsrc/app.tsx\n",
-          },
-          {
-            id: "tool-3",
-            kind: "tool",
-            toolType: "bash",
-            title: "Bash",
-            detail: "{\"command\":\"cat package.json\"}",
-            status: "completed",
-            output: "{\"name\":\"demo\"}\n",
-          },
-        ]}
+        items={readTools}
         threadId="claude:history-transcript-heavy"
         workspaceId="ws-1"
         isThinking={false}
         activeEngine="claude"
         conversationState={{
-          items: [
-            {
-              id: "tool-1",
-              kind: "tool",
-              toolType: "bash",
-              title: "Bash",
-              detail: "{\"command\":\"ls -la\"}",
-              status: "completed",
-              output: "README.md\nsrc\n",
-            },
-            {
-              id: "tool-2",
-              kind: "tool",
-              toolType: "bash",
-              title: "Bash",
-              detail: "{\"command\":\"find src -maxdepth 2\"}",
-              status: "completed",
-              output: "src/index.ts\nsrc/app.tsx\n",
-            },
-            {
-              id: "tool-3",
-              kind: "tool",
-              toolType: "bash",
-              title: "Bash",
-              detail: "{\"command\":\"cat package.json\"}",
-              status: "completed",
-              output: "{\"name\":\"demo\"}\n",
-            },
-          ],
+          items: readTools,
           plan: null,
           userInputQueue: [],
           meta: {
@@ -249,11 +255,12 @@ describe("Messages history loading", () => {
       />,
     );
 
+    // File-read tools stay on canvas; shell stays off for perf.
     expect(screen.queryByText("messages.emptyThread")).toBeNull();
-    expect(screen.getByText(/tools\.bashGroupBatchRun/)).toBeTruthy();
+    expect(screen.getByText(/README\.md/)).toBeTruthy();
   });
 
-  it("shows bash tool groups on Claude canvas even outside history restore", () => {
+  it("keeps file-inspection bash rows on Claude canvas outside history restore", () => {
     render(
       <Messages
         items={[
@@ -295,8 +302,53 @@ describe("Messages history loading", () => {
       />,
     );
 
-    // Shell batches always render on canvas so process-phase tool counts match UI.
+    // find/cat are file-inspection → stay on canvas; pure ls noise is filtered out of the group.
     expect(screen.getByText(/tools\.bashGroupBatchRun/)).toBeTruthy();
+  });
+
+  it("hides pure shell noise bash groups on Claude canvas outside history restore", () => {
+    render(
+      <Messages
+        items={[
+          {
+            id: "tool-noise-1",
+            kind: "tool",
+            toolType: "bash",
+            title: "Bash",
+            detail: "{\"command\":\"pwd\"}",
+            status: "completed",
+            output: "/repo",
+          },
+          {
+            id: "tool-noise-2",
+            kind: "tool",
+            toolType: "bash",
+            title: "Bash",
+            detail: "{\"command\":\"ls -la\"}",
+            status: "completed",
+            output: "README.md\n",
+          },
+          {
+            id: "tool-noise-3",
+            kind: "tool",
+            toolType: "bash",
+            title: "Bash",
+            detail: "{\"command\":\"echo done\"}",
+            status: "completed",
+            output: "done\n",
+          },
+        ]}
+        threadId="claude:idle-pure-shell"
+        workspaceId="ws-1"
+        isThinking={false}
+        activeEngine="claude"
+        onUserInputSubmit={vi.fn()}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(screen.queryByText(/tools\.bashGroupBatchRun/)).toBeNull();
   });
 
   // jsdom drops scrollTop writes on unlaid-out elements, so back the scroller

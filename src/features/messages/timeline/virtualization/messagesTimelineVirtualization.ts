@@ -499,6 +499,12 @@ export function isEmptyVirtualProjectionRow(
     case "tailUserInput":
       return !input.hasTailUserInputNode;
     case "entry": {
+      if (row.entry.kind === "bashGroup") {
+        // Empty only when every command row is pure shell noise.
+        return row.entry.items.every((toolItem) =>
+          shouldHideCodexCanvasCommandCard(toolItem, input.activeEngine),
+        );
+      }
       if (row.entry.kind === "item" && row.entry.item.kind === "tool") {
         return shouldHideCodexCanvasCommandCard(row.entry.item, input.activeEngine);
       }

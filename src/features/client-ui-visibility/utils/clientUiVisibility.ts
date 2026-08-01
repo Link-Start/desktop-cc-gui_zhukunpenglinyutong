@@ -34,6 +34,8 @@ export const CLIENT_UI_CONTROL_IDS = [
   "bottomActivity.tasks",
   "bottomActivity.agents",
   "bottomActivity.checkpoint",
+  "bottomActivity.checkpointDetails",
+  "bottomActivity.governanceEvidence",
   "cornerStatus.messageAnchors",
 ] as const;
 
@@ -95,6 +97,8 @@ export const DEFAULT_CLIENT_UI_VISIBILITY_PREFERENCE: ClientUiVisibilityPreferen
   panels: {},
   controls: {
     "topTool.clientDocumentation": false,
+    "bottomActivity.checkpointDetails": false,
+    "bottomActivity.governanceEvidence": false,
   },
 };
 
@@ -227,6 +231,20 @@ export const CLIENT_UI_CONTROL_REGISTRY: readonly ClientUiControlDefinition[] = 
     iconKey: "fileEdit",
   },
   {
+    id: "bottomActivity.governanceEvidence",
+    parentPanelId: "bottomActivityPanel",
+    labelKey: "settings.clientUiVisibility.controls.bottomActivityGovernanceEvidence",
+    descriptionKey: "settings.clientUiVisibility.controlDescriptions.bottomActivityGovernanceEvidence",
+    iconKey: "construction",
+  },
+  {
+    id: "bottomActivity.checkpointDetails",
+    parentPanelId: "bottomActivityPanel",
+    labelKey: "settings.clientUiVisibility.controls.bottomActivityCheckpointDetails",
+    descriptionKey: "settings.clientUiVisibility.controlDescriptions.bottomActivityCheckpointDetails",
+    iconKey: "layoutList",
+  },
+  {
     id: "cornerStatus.messageAnchors",
     parentPanelId: "cornerStatusIndicator",
     labelKey: "settings.clientUiVisibility.controls.cornerStatusMessageAnchors",
@@ -297,6 +315,8 @@ export const CLIENT_UI_PANEL_REGISTRY: readonly ClientUiPanelDefinition[] = [
       "bottomActivity.tasks",
       "bottomActivity.agents",
       "bottomActivity.checkpoint",
+      "bottomActivity.checkpointDetails",
+      "bottomActivity.governanceEvidence",
     ],
   },
   {

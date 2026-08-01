@@ -96,3 +96,80 @@ export function resolveTurnBadge(
     unavailableReason,
   };
 }
+
+/**
+ * Stable comparison key for consecutive turn-target badge dedupe.
+ * Intentionally uses identity fields only (not display labels).
+ */
+export function buildTurnTargetBadgeKey(
+  snapshot: TurnBadgeSnapshot,
+): string {
+  const providerId = snapshot.providerProfileId?.trim() || "";
+  const providerSource = snapshot.providerProfileSource?.trim() || "";
+  const providerName = snapshot.providerProfileNameSnapshot?.trim() || "";
+  const model = snapshot.model?.trim() || "";
+  const reasoning = snapshot.reasoning?.effort?.trim() || "";
+  return [
+    snapshot.engine,
+    providerId,
+    providerSource,
+    providerName,
+    model,
+    reasoning,
+  ].join("\u0001");
+}
+
+type TurnTargetBadgeVisibilityItem = {
+  id: string;
+  kind: string;
+  role?: "user" | "assistant";
+  executionTargetSnapshot?: TurnBadgeSnapshot | null;
+};
+
+/**
+ * Decide which assistant items should render the turn-target badge.
+ *
+ * Policy B (per user turn + target change):
+ * - Show on the first assistant message that carries a snapshot after each user message
+ *   (or at conversation start).
+ * - Within the same user turn, hide consecutive assistants with an identical target key.
+ * - Re-show when the target key changes mid-turn.
+ */
+export function buildTurnTargetBadgeVisibleItemIds(
+  items: readonly TurnTargetBadgeVisibilityItem[],
+): Set<string> {
+  const visibleIds = new Set<string>();
+  let seenAssistantWithBadgeSinceUser = false;
+  let previousTargetKey: string | null = null;
+
+  for (const item of items) {
+    if (item.kind === "message" && item.role === "user") {
+      seenAssistantWithBadgeSinceUser = false;
+      continue;
+    }
+
+    if (item.kind !== "message" || item.role !== "assistant") {
+      continue;
+    }
+
+    const snapshot = item.executionTargetSnapshot;
+    if (!snapshot) {
+      continue;
+    }
+
+    const targetKey = buildTurnTargetBadgeKey(snapshot);
+    const shouldShow =
+      !seenAssistantWithBadgeSinceUser ||
+      previousTargetKey === null ||
+      targetKey !== previousTargetKey;
+
+    if (shouldShow) {
+      visibleIds.add(item.id);
+    }
+
+    seenAssistantWithBadgeSinceUser = true;
+    previousTargetKey = targetKey;
+  }
+
+  return visibleIds;
+}

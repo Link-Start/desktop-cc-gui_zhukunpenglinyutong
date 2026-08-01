@@ -23,6 +23,7 @@ import type {
 } from "../../threads/hooks/useReviewPrompt";
 import type { WorkspaceLaunchScriptsState } from "../../app/hooks/useWorkspaceLaunchScripts";
 import type { SharedSessionSupportedEngine } from "../../shared-session/utils/sharedSessionEngines";
+import type { HistoryLoadingProgress } from "../../threads/utils/historyLoadingProgress";
 import type { OpenAppMenuExtraAction } from "../../app/components/OpenAppMenu";
 import type {
   AccessMode,
@@ -144,6 +145,7 @@ export type LayoutNodesFlatOptions = {
   threadParentById: Record<string, string>;
   threadStatusById: Record<string, ThreadActivityStatus>;
   historyLoadingByThreadId: Record<string, boolean | "failed">;
+  historyLoadingProgressByThreadId?: Record<string, HistoryLoadingProgress>;
   historyRestoredAtMsByThread?: Record<string, number | null | undefined>;
   runningSessionCountByWorkspaceId: Record<string, number>;
   recentCompletedSessionCountByWorkspaceId: Record<string, number>;
@@ -771,6 +773,7 @@ export type WorkspaceLayoutNodesOptions = Pick<
   | "threadParentById"
   | "threadStatusById"
   | "historyLoadingByThreadId"
+  | "historyLoadingProgressByThreadId"
   | "historyRestoredAtMsByThread"
   | "runningSessionCountByWorkspaceId"
   | "recentCompletedSessionCountByWorkspaceId"

@@ -15,7 +15,11 @@ import ListChecks from "lucide-react/dist/esm/icons/list-checks";
 import ListTodo from "lucide-react/dist/esm/icons/list-todo";
 import type { LucideIcon } from "lucide-react";
 import type { ConversationItem, GitFileStatus, TurnPlan } from "../../../types";
-import type { EngineType, ThreadTokenUsage } from "../../../types";
+import type {
+  EngineType,
+  RateLimitSnapshot,
+  ThreadTokenUsage,
+} from "../../../types";
 import { isEngineCapabilityAvailable } from "../../engine/engineCapabilityMatrix";
 import { useStatusPanelData } from "../hooks/useStatusPanelData";
 import {
@@ -36,6 +40,8 @@ import { SubagentList } from "./SubagentList";
 import { TodoList } from "./TodoList";
 import { CostBudgetSection } from "./CostBudgetSection";
 import { GovernanceEvidenceSection } from "./GovernanceEvidenceSection";
+import { SessionOverviewSection } from "./SessionOverviewSection";
+import { buildSessionOverview } from "../utils/sessionOverviewViewModel";
 import { projectCostRecord } from "../../context-ledger/cost-budget";
 import { EngineTaskOutputInspector } from "../../engine-task-output/components/EngineTaskOutputInspector";
 import { useEngineTaskOutputSnapshot } from "../../engine-task-output/hooks/useEngineTaskOutputSnapshot";
@@ -70,12 +76,27 @@ interface StatusPanelProps extends CodeAnnotationBridgeProps {
   }>;
   itemsByThread?: Record<string, ConversationItem[]>;
   threadParentById?: Record<string, string>;
-  threadStatusById?: Record<string, { isProcessing?: boolean } | undefined>;
+  threadStatusById?: Record<
+    string,
+    | {
+        isProcessing?: boolean;
+        isContextCompacting?: boolean;
+        processingStartedAt?: number | null;
+        lastDurationMs?: number | null;
+      }
+    | undefined
+  >;
   onOpenDiffPath?: (path: string) => void;
   onOpenFilePath?: (path: string) => void;
   onSelectSubagent?: (agent: SubagentInfo) => void;
   variant?: "popover" | "dock";
   visibleDockTabs?: Partial<Record<TabType, boolean>>;
+  showGovernanceEvidence?: boolean;
+  showCheckpointDetails?: boolean;
+  workspaceName?: string | null;
+  activeRateLimits?: RateLimitSnapshot | null;
+  pendingApprovals?: number;
+  pendingUserInputs?: number;
   onRefreshGitStatus?: (() => void) | null;
   commitMessage?: string;
   commitMessageLoading?: boolean;
@@ -199,6 +220,12 @@ export const StatusPanel = memo(function StatusPanel({
   onSelectSubagent,
   variant = "popover",
   visibleDockTabs,
+  showGovernanceEvidence = false,
+  showCheckpointDetails = true,
+  workspaceName = null,
+  activeRateLimits = null,
+  pendingApprovals = 0,
+  pendingUserInputs = 0,
   onRefreshGitStatus = null,
   commitMessage = "",
   commitMessageLoading = false,
@@ -449,12 +476,16 @@ export const StatusPanel = memo(function StatusPanel({
         ? openTab
         : preferredTab
       : openTab;
+  const governanceEnabled = showGovernanceEvidence === true;
   const governanceEvidenceState = useGovernanceEvidence(
     workspaceId,
-    variant === "dock" && activeTab === "checkpoint" && Boolean(workspaceId),
+    governanceEnabled &&
+      variant === "dock" &&
+      activeTab === "checkpoint" &&
+      Boolean(workspaceId),
   );
   const costGovernanceEvidence = useMemo(() => {
-    if (!selectedEngine || !activeTokenUsage) {
+    if (!governanceEnabled || !selectedEngine || !activeTokenUsage) {
       return [];
     }
     const costRecord = projectCostRecord({
@@ -503,11 +534,18 @@ export const StatusPanel = memo(function StatusPanel({
       );
     }
     return evidence;
-  }, [activeThreadId, activeTokenUsage, selectedEngine, selectedModelId]);
+  }, [
+    governanceEnabled,
+    activeThreadId,
+    activeTokenUsage,
+    selectedEngine,
+    selectedModelId,
+  ]);
   const governanceSnapshot = useMemo(
     () =>
+      governanceEnabled &&
       governanceEvidenceState.evidence.length + costGovernanceEvidence.length >
-      0
+        0
         ? createFrozenGovernanceEvidenceSnapshot({
             evidence: [
               ...governanceEvidenceState.evidence,
@@ -515,7 +553,40 @@ export const StatusPanel = memo(function StatusPanel({
             ],
           })
         : null,
-    [costGovernanceEvidence, governanceEvidenceState.evidence],
+    [governanceEnabled, costGovernanceEvidence, governanceEvidenceState.evidence],
+  );
+  const sessionOverview = useMemo(
+    () =>
+      buildSessionOverview({
+        engine: statusPanelEngine,
+        model: selectedModelId,
+        workspaceName,
+        workspacePath,
+        isProcessing,
+        threadStatus: activeThreadId
+          ? (threadStatusById?.[activeThreadId] ?? null)
+          : null,
+        items: effectiveItems,
+        tokenUsage: activeTokenUsage,
+        rateLimits: activeRateLimits,
+        pendingApprovals,
+        pendingUserInputs,
+        nowMs: Date.now(),
+      }),
+    [
+      statusPanelEngine,
+      selectedModelId,
+      workspaceName,
+      workspacePath,
+      isProcessing,
+      activeThreadId,
+      threadStatusById,
+      effectiveItems,
+      activeTokenUsage,
+      activeRateLimits,
+      pendingApprovals,
+      pendingUserInputs,
+    ],
   );
   const checkpoint = useMemo(
     () =>
@@ -713,7 +784,11 @@ export const StatusPanel = memo(function StatusPanel({
       )}
       {activeTab === "checkpoint" && (
         <>
-          {variant === "dock" ? (
+          <SessionOverviewSection
+            overview={sessionOverview}
+            compact={variant !== "dock"}
+          />
+          {variant === "dock" && governanceEnabled ? (
             <GovernanceEvidenceSection
               evidence={[
                 ...governanceEvidenceState.evidence,
@@ -722,53 +797,57 @@ export const StatusPanel = memo(function StatusPanel({
               isLoading={governanceEvidenceState.isLoading}
             />
           ) : null}
-          <CostBudgetSection
-            compact={variant !== "dock"}
-            engine={selectedEngine}
-            model={selectedModelId}
-            usage={activeTokenUsage}
-            sessionId={activeThreadId}
-          />
-          <CheckpointPanel
-            checkpoint={checkpoint}
-            compact={variant !== "dock"}
-            fileChanges={displayedFileChanges}
-            totalAdditions={displayedTotalAdditions}
-            totalDeletions={displayedTotalDeletions}
-            onOpenDiffPath={onOpenDiffPath}
-            onOpenFilePath={onOpenFilePath}
-            workspaceId={workspaceId}
-            workspacePath={workspacePath}
-            onRefreshGitStatus={onRefreshGitStatus}
-            commitMessage={commitMessage}
-            commitMessageLoading={commitMessageLoading}
-            commitMessageError={commitMessageError}
-            onCommitMessageChange={onCommitMessageChange}
-            onGenerateCommitMessage={onGenerateCommitMessage}
-            onCommit={onCommit}
-            commitLoading={commitLoading}
-            commitError={commitError}
-            stagedFiles={workspaceGitStagedFiles}
-            unstagedFiles={workspaceGitUnstagedFiles}
-            onCreateCodeAnnotation={onCreateCodeAnnotation}
-            onRemoveCodeAnnotation={onRemoveCodeAnnotation}
-            codeAnnotations={codeAnnotations}
-            onExpandToDock={
-              onExpandToDock
-                ? () => {
-                    onExpandToDock();
-                    if (variant !== "dock") {
-                      setOpenTab(null);
-                    }
+          {showCheckpointDetails ? (
+            <>
+              <CostBudgetSection
+                compact={variant !== "dock"}
+                engine={selectedEngine}
+                model={selectedModelId}
+                usage={activeTokenUsage}
+                sessionId={activeThreadId}
+              />
+              <CheckpointPanel
+                checkpoint={checkpoint}
+                compact={variant !== "dock"}
+                fileChanges={displayedFileChanges}
+                totalAdditions={displayedTotalAdditions}
+                totalDeletions={displayedTotalDeletions}
+                onOpenDiffPath={onOpenDiffPath}
+                onOpenFilePath={onOpenFilePath}
+                workspaceId={workspaceId}
+                workspacePath={workspacePath}
+                onRefreshGitStatus={onRefreshGitStatus}
+                commitMessage={commitMessage}
+                commitMessageLoading={commitMessageLoading}
+                commitMessageError={commitMessageError}
+                onCommitMessageChange={onCommitMessageChange}
+                onGenerateCommitMessage={onGenerateCommitMessage}
+                onCommit={onCommit}
+                commitLoading={commitLoading}
+                commitError={commitError}
+                stagedFiles={workspaceGitStagedFiles}
+                unstagedFiles={workspaceGitUnstagedFiles}
+                onCreateCodeAnnotation={onCreateCodeAnnotation}
+                onRemoveCodeAnnotation={onRemoveCodeAnnotation}
+                codeAnnotations={codeAnnotations}
+                onExpandToDock={
+                  onExpandToDock
+                    ? () => {
+                        onExpandToDock();
+                        if (variant !== "dock") {
+                          setOpenTab(null);
+                        }
+                      }
+                    : undefined
+                }
+                onAfterSelect={() => {
+                  if (variant !== "dock") {
+                    setOpenTab(null);
                   }
-                : undefined
-            }
-            onAfterSelect={() => {
-              if (variant !== "dock") {
-                setOpenTab(null);
-              }
-            }}
-          />
+                }}
+              />
+            </>
+          ) : null}
         </>
       )}
       {activeTab === "plan" && (

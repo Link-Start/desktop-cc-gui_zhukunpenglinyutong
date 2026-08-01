@@ -196,8 +196,8 @@ afterEach(() => {
 
 async function chooseCodexEnglishCommitMessage() {
   fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: "Use Codex engine" }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: "Generate English commit message" }));
+  fireEvent.click(await screen.findByRole("button", { name: "English" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Codex" }));
 }
 
 async function openGitFileContextMenu(row: HTMLElement) {

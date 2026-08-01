@@ -446,7 +446,7 @@ describe("Messages live behavior", () => {
     expect(container.textContent ?? "").toContain("这里是实时正文。");
   });
 
-  it("shows command cards in codex canvas alongside non-command tool cards", () => {
+  it("hides command cards on codex canvas while keeping file-edit cards", () => {
     const items: ConversationItem[] = [
       {
         id: "tool-codex-command-1",
@@ -492,10 +492,8 @@ describe("Messages live behavior", () => {
       />,
     );
 
-    // Consecutive command tools group into a bash scene that stays on canvas.
-    expect(container.textContent ?? "").toMatch(
-      /tools\.bashGroupBatchRun|批量终端|Batch terminal|pwd|echo/,
-    );
+    expect(container.textContent ?? "").not.toContain("pwd && ls -la");
+    expect(container.textContent ?? "").not.toContain("echo done");
     // File edits render in a default-collapsed scene shell; expand to assert path.
     const editScene = container.querySelector(
       '[data-testid="file-edit-scene-list"]',
@@ -515,7 +513,7 @@ describe("Messages live behavior", () => {
     void editScene;
   });
 
-  it("shows command cards in claude canvas", () => {
+  it("hides command cards on claude canvas", () => {
     const items: ConversationItem[] = [
       {
         id: "tool-claude-command-1",
@@ -549,9 +547,8 @@ describe("Messages live behavior", () => {
       />,
     );
 
-    expect(container.textContent ?? "").toMatch(
-      /tools\.bashGroupBatchRun|批量终端|Batch terminal|pwd|echo/,
-    );
+    expect(container.textContent ?? "").not.toContain("pwd && ls -la");
+    expect(container.textContent ?? "").not.toContain("echo done");
   });
 
   it.each(["claude", "gemini", "codex"] as const)(
@@ -2734,7 +2731,7 @@ describe("Messages live behavior", () => {
     expect(container.textContent ?? "").toContain("第一段输出");
   });
 
-  it("does not show a phase chip when only canvas-hidden commands precede prose", () => {
+  it("does not show a phase chip for pure shell noise (pwd/ls stay off canvas)", () => {
     const items: ConversationItem[] = [
       {
         id: "user-live-collapse-commands-only",
@@ -2746,17 +2743,17 @@ describe("Messages live behavior", () => {
         id: "tool-live-collapse-commands-only-1",
         kind: "tool",
         toolType: "commandExecution",
-        title: "Command: rg --files",
-        detail: "/tmp",
+        title: "Command: pwd",
+        detail: JSON.stringify({ command: "pwd" }),
         status: "completed",
-        output: "",
+        output: "/repo",
       },
       {
         id: "tool-live-collapse-commands-only-2",
         kind: "tool",
         toolType: "commandExecution",
         title: "Command: ls -la",
-        detail: "/tmp",
+        detail: JSON.stringify({ command: "ls -la" }),
         status: "completed",
         output: "",
       },
@@ -2783,6 +2780,8 @@ describe("Messages live behavior", () => {
 
     expect(container.querySelector(".messages-live-middle-collapsed-indicator")).toBeNull();
     expect(container.textContent ?? "").toContain("最终输出");
+    expect(container.textContent ?? "").not.toContain("pwd");
+    expect(container.textContent ?? "").not.toContain("ls -la");
   });
 
   it("collapses the process phase above historical assistant prose", () => {

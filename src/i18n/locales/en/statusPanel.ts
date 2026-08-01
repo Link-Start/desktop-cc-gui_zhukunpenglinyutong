@@ -131,6 +131,24 @@ const statusPanel = {
         unknown: "Unknown",
       },
     },
+    sessionOverview: {
+      title: "Session overview",
+      empty: "No active session yet",
+      status: {
+        running: "Running",
+        compacting: "Compacting",
+        idle: "Idle",
+      },
+      duration: {
+        running: "Current turn {{duration}}",
+        last: "Last turn {{duration}}",
+      },
+      turns: "{{turns}} turns · {{messages}} messages",
+      context: "Context {{percent}}%",
+      rateLimit: "Rate limit used {{percent}}%",
+      pendingApprovals: "{{count}} approval(s) pending",
+      pendingUserInputs: "{{count}} question(s) pending",
+    },
     cost: {
       title: "Cost / Budget",
       session: "Session",

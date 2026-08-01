@@ -38,3 +38,11 @@
 
 - [x] 7.1 `tsc --noEmit` 干净；vendors + ChatInputBox + settings 相关 72 文件 533 用例全绿
 - [ ] 7.2 手工：停用 OpenCode → 设置页落组 + composer 下拉消失 → 重启保持 → 重新启用配置原样
+
+## 8. Git commit message picker
+
+- [x] 8.1 从 global registry、execution policy 与 visibility snapshot 派生 Git commit engines
+- [x] 8.2 将两级 engine/language menu 重构为单面板 picker，并保留 generic extra items
+- [x] 8.3 增加 registry filtering 与 picker interaction tests
+- [x] 8.4 按 trigger anchor 修正 picker placement，并压缩方案 B 的视觉密度
+- [x] 8.5 运行 focused Vitest、targeted ESLint、TypeScript 与 strict OpenSpec validation

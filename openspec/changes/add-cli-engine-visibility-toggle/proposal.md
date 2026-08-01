@@ -51,3 +51,17 @@
 - 停用某 CLI MUST NOT 删除其供应商配置；重新启用后配置 MUST 原样可用。
 - composer 引擎选择器 MUST NOT 列出已停用引擎；当前选中引擎已停用时 MUST 仍显示该当前值。
 - 全部停用时 MUST 允许，不得强制挽留至少一个。
+
+## Git commit message engine picker
+
+- GitDiff 与 GitHistory 的 commit message generation menu 改为单面板快捷选择。
+- engine 列表不再在 Git feature 内硬编码，统一从 global engine registry 派生，再叠加 product execution policy 与 `disabledCliEngines`。
+- language 在面板内切换；点击 engine 立即生成，并继续保存 last configuration。
+- “使用上次配置”仅在对应 engine 当前仍可执行且用户可见时启用。
+- 本变更不调整 checkpoint dialog、backend command、settings schema 或 engine runtime contract。
+
+### Acceptance
+
+- 默认展示 Claude Code、Codex、Grok、Kimi、OpenCode，且不展示当前 product policy 禁用的 Gemini。
+- 用户关闭的 engine 不出现在 Git picker；全部关闭时展示明确空状态。
+- GitDiff 与 GitHistory 复用同一 menu hook 和 picker，不复制 engine 清单。

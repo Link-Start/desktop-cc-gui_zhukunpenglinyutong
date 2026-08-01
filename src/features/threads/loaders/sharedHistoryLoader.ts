@@ -13,6 +13,15 @@ import {
   normalizePersistedExecutionTarget,
 } from "../../shared-session/target/types";
 import { mergeHistoryProjectionItems } from "../assembly/conversationAssembler";
+import {
+  buildSharedHistoryFinalizeProgress,
+  buildSharedHistoryMergeProgress,
+  buildSharedHistoryPrepareProgress,
+  buildSharedHistoryProjectionProgress,
+  buildSharedHistorySessionProgress,
+  normalizeHistoryLoadingProgress,
+  type HistoryLoadingProgressListener,
+} from "../utils/historyLoadingProgress";
 
 type SharedHistoryLoaderOptions = {
   workspaceId: string;
@@ -24,6 +33,7 @@ type SharedHistoryLoaderOptions = {
     workspaceId: string,
     threadId: string,
   ) => Promise<SharedProjectionItem[]>;
+  onProgress?: HistoryLoadingProgressListener;
 };
 
 function asString(value: unknown) {
@@ -34,10 +44,17 @@ export function createSharedHistoryLoader({
   workspaceId,
   loadSharedSession,
   loadSharedProjection,
+  onProgress,
 }: SharedHistoryLoaderOptions): HistoryLoader {
+  const report: HistoryLoadingProgressListener = (progress) => {
+    onProgress?.(normalizeHistoryLoadingProgress(progress));
+  };
+
   return {
     engine: "codex",
     async load(threadId: string) {
+      report(buildSharedHistoryPrepareProgress());
+      report(buildSharedHistorySessionProgress("start"));
       const response = await loadSharedSession(workspaceId, threadId);
       const persistedTarget = normalizePersistedExecutionTarget(
         response?.selectedTarget,
@@ -61,13 +78,19 @@ export function createSharedHistoryLoader({
       const legacyItems = Array.isArray(response?.items)
         ? (response?.items as ConversationItem[])
         : [];
+      report(buildSharedHistorySessionProgress("done", legacyItems.length));
       let items = legacyItems;
       if (isSharedProjectionDataSourceEnabled()) {
+        report(buildSharedHistoryProjectionProgress("start"));
         try {
           const projectedItems =
             resolveSharedConversationItems(
               await loadSharedProjection(workspaceId, threadId),
             ) ?? [];
+          report(
+            buildSharedHistoryProjectionProgress("done", projectedItems.length),
+          );
+          report(buildSharedHistoryMergeProgress("start"));
           items =
             legacyItems.length > 0
               ? mergeHistoryProjectionItems(legacyItems, projectedItems, {
@@ -76,6 +99,7 @@ export function createSharedHistoryLoader({
                   engine: normalizedSelectedEngine,
                 })
               : projectedItems;
+          report(buildSharedHistoryMergeProgress("done", items.length));
         } catch (error) {
           console.warn(
             legacyItems.length > 0
@@ -86,8 +110,13 @@ export function createSharedHistoryLoader({
           if (legacyItems.length === 0) {
             throw error;
           }
+          report(buildSharedHistoryMergeProgress("done", legacyItems.length));
         }
+      } else {
+        report(buildSharedHistoryProjectionProgress("skip"));
+        report(buildSharedHistoryMergeProgress("done", items.length));
       }
+      report(buildSharedHistoryFinalizeProgress());
       return normalizeHistorySnapshot({
         engine: normalizedSelectedEngine,
         workspaceId,

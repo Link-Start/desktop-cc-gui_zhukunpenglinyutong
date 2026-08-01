@@ -18,7 +18,10 @@ import { Button } from "../../../../components/ui/button";
 import { TooltipIconButton } from "../../../../components/ui/tooltip-icon-button";
 import { parseReasoning } from "../../presentation/messagesReasoning";
 import { resolveUserMessagePresentation } from "../../presentation/messagesUserPresentation";
-import { buildAssistantFinalBoundaryMetaText } from "../../utils/messagesRenderUtils";
+import {
+  buildAssistantFinalBoundaryMetaText,
+  shouldHideCodexCanvasCommandCard,
+} from "../../utils/messagesRenderUtils";
 import type { GroupedEntry } from "../../utils/groupToolItems";
 import {
   groupedEntryContainsItemId,
@@ -80,6 +83,7 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     suppressedUserMemoryContextMessageIds,
     suppressedUserNoteCardContextMessageIds,
     turnFileChangesByBoundaryId,
+    turnTargetBadgeVisibleItemIds,
   } = snapshot;
   const {
     heartbeatPulse,
@@ -106,6 +110,8 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     nativeRuntimeRecoveryEnabled,
     proxyEnabled,
     proxyUrl,
+    isHistoryLoading: _isHistoryLoading,
+    historyLoadingProgress,
     threadId,
     workspaceId,
   } = runtime;
@@ -384,6 +390,10 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
               onAssistantVisibleTextRender={onAssistantVisibleTextRender}
               suppressMemorySummaryCard={suppressedUserMemoryContextMessageIds.has(renderItem.id)}
               suppressNoteCardSummaryCard={suppressedUserNoteCardContextMessageIds.has(renderItem.id)}
+              showTurnTargetBadge={
+                !renderItem.executionTargetSnapshot ||
+                turnTargetBadgeVisibleItemIds.has(renderItem.id)
+              }
               onOutlineReady={
                 renderItem.role === "assistant" && renderItem.id === liveAssistantMessageId
                   ? liveAssistantOutlineReady
@@ -538,12 +548,20 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
       );
     }
     if (entry.kind === "bashGroup") {
-      // Shell batches stay on the canvas so process-phase tool counts match UI.
-      const firstItem = entry.items[0];
+      // Pure shell noise is filtered before collapse. Remaining bash rows are
+      // Codex file-IO commands (cat/rg/apply_patch) and MUST render — otherwise
+      // process-phase expand shows a chip with N tools but an empty body.
+      const visibleItems = entry.items.filter(
+        (toolItem) => !shouldHideCodexCanvasCommandCard(toolItem, activeEngine),
+      );
+      if (visibleItems.length === 0) {
+        return null;
+      }
+      const firstItem = visibleItems[0];
       return renderWithAnchoredUserInput(
         <BashToolGroupBlock
           key={`bg-${firstItem?.id ?? "bash-group"}`}
-          items={entry.items}
+          items={visibleItems}
           onRequestAutoScroll={requestAutoScroll}
         />,
       );
@@ -757,16 +775,41 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     }
     if (row.kind === "emptyState") {
       if (row.state === "historyLoading") {
+        const progress = historyLoadingProgress ?? null;
+        const title = progress
+          ? t(`messages.${progress.titleKey}`, progress.detailParams)
+          : t("messages.restoringHistory");
+        const detail = progress
+          ? t(`messages.${progress.detailKey}`, progress.detailParams)
+          : t("messages.restoringHistoryHint");
+        const percent = progress?.percent ?? null;
         return (
           <div
             className="empty messages-empty messages-history-loading"
             role="status"
             aria-live="polite"
+            aria-busy="true"
           >
             <span className="working-spinner" aria-hidden="true" />
             <div className="messages-history-loading-copy">
-              <strong>{t("messages.restoringHistory")}</strong>
-              <span>{t("messages.restoringHistoryHint")}</span>
+              <strong>{title}</strong>
+              <span>{detail}</span>
+              <div
+                className={`messages-history-loading-bar${percent == null ? " is-indeterminate" : ""}`}
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={percent ?? undefined}
+                aria-label={title}
+              >
+                <div
+                  className="messages-history-loading-bar-fill"
+                  style={percent == null ? undefined : { width: `${percent}%` }}
+                />
+              </div>
+              {percent != null ? (
+                <span className="messages-history-loading-percent">{percent}%</span>
+              ) : null}
             </div>
           </div>
         );

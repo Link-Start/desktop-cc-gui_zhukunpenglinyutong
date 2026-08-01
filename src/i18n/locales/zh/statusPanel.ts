@@ -130,6 +130,24 @@ const statusPanel = {
         unknown: "未知",
       },
     },
+    sessionOverview: {
+      title: "会话概览",
+      empty: "暂无活跃会话",
+      status: {
+        running: "运行中",
+        compacting: "压缩上下文",
+        idle: "空闲",
+      },
+      duration: {
+        running: "本轮已进行 {{duration}}",
+        last: "上轮耗时 {{duration}}",
+      },
+      turns: "{{turns}} 轮 · {{messages}} 条消息",
+      context: "上下文 {{percent}}%",
+      rateLimit: "限额已用 {{percent}}%",
+      pendingApprovals: "待批准 {{count}}",
+      pendingUserInputs: "待回答 {{count}}",
+    },
     cost: {
       title: "成本 / Budget",
       session: "Session",

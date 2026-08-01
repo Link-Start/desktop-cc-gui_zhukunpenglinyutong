@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-30.md`
-- **Total Sessions**: 1267
-- **Last Active**: 2026-08-01
+- **Total Sessions**: 1279
+- **Last Active**: 2026-08-02
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-30.md` | ~640 | Active |
+| `journal-30.md` | ~1139 | Active |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
@@ -58,6 +58,18 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1279 | 2026-08-02 | merge upstream chore/bump-version-0.7.15 | `4e4d9fe9a` | `cxn-version-0.7.15` |
+| 1278 | 2026-08-02 | fix React #185 Composer file-ref 引用环 | `637cb3561` | `cxn-version-0.7.15` |
+| 1277 | 2026-08-02 | Shared 历史恢复 loading 阶段与进度条 | `75bce0166` | `cxn-version-0.7.15` |
+| 1276 | 2026-08-02 | 结果 Tab 降噪:会话概览取代治理证据与结果详情 | `5f52710f7`, `8a53489cf` | `cxn-version-0.7.15` |
+| 1275 | 2026-08-02 | 折叠 Shared turn-target badge 噪音 | `50db10f0d` | `cxn-version-0.7.15` |
+| 1274 | 2026-08-02 | 修复过程折叠展开 bashGroup 空壳 | `2510b3957` | `cxn-version-0.7.15` |
+| 1273 | 2026-08-02 | 会话概览替换治理证据 + 提交消息引擎选择器收口 | `5f52710f7`, `867c1017d` | `cxn-version-0.7.15` |
+| 1272 | 2026-08-02 | Codex 文件读写类 command 可见、纯 shell 仍隐藏 | `1e9ed803a` | `cxn-version-0.7.15` |
+| 1271 | 2026-08-02 | 幕布恢复隐藏 shell 且折叠只计文件读写 | `9a2e35797` | `cxn-version-0.7.15` |
+| 1270 | 2026-08-02 | Shared Codex command argv/apply_patch 投影修复 | `a2f3e50ca` | `cxn-version-0.7.15` |
+| 1269 | 2026-08-02 | Shared Codex apply_patch/文件修改投影二次修复 | `b42626c1e` | `cxn-version-0.7.15` |
+| 1268 | 2026-08-01 | Shared 历史幕布过程折叠与 Codex 文件修改投影对齐 | `ef6dc9dbb` | `cxn-version-0.7.15` |
 | 1267 | 2026-08-01 | Grok 思考强度接入 | `75a847b9d` | `feature/v-0714` |
 | 1266 | 2026-08-01 | 加固 React #185 收敛（freeform 不回退） | `e6e964d88` | `feature/v-0714` |
 | 1265 | 2026-08-01 | 解决 PR #971 与 main 的 #185 冲突并推送 | `0fd81eede`, `4732d92ac` | `bump-version-0.7.14` |

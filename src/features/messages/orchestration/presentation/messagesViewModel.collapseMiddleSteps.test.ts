@@ -162,28 +162,146 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
     expect(result.phases.find((phase) => phase.phaseKey === "a2")?.expanded).toBe(false);
   });
 
-  it("does not collapse a single command tool phase (same as any single process step)", () => {
+  it("strips pure shell noise and skips empty noise-only phases", () => {
     const items = [
       user("u1"),
       {
         id: "cmd-1",
         kind: "tool" as const,
         toolType: "commandExecution" as const,
-        title: "Command: rg --files",
-        detail: "/tmp",
+        title: "Command: pwd",
+        detail: JSON.stringify({ command: "pwd" }),
+        status: "completed" as const,
+        output: "/repo",
+      },
+      {
+        id: "cmd-2",
+        kind: "tool" as const,
+        toolType: "commandExecution" as const,
+        title: "Command: ls -la",
+        detail: JSON.stringify({ command: "ls -la" }),
         status: "completed" as const,
         output: "",
       },
       assistant("a1", "最终输出"),
     ];
     const result = resolveCollapsedTimelineItems({
-      activeEngine: "claude",
+      activeEngine: "codex",
       timelineSourceItems: items,
     });
 
-    // Single command is visible on canvas and counts as one step → no chip.
+    // Pure shell noise leaves the canvas entirely — no chip, no remount on expand.
     expect(result.phases).toEqual([]);
-    expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "cmd-1", "a1"]);
+    expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "a1"]);
+  });
+
+  it("collapses file-read process only and excludes pure shell from chip counts", () => {
+    const items = [
+      user("u1"),
+      {
+        id: "cmd-1",
+        kind: "tool" as const,
+        toolType: "commandExecution" as const,
+        title: "Command: ls -la",
+        detail: JSON.stringify({ command: "ls -la" }),
+        status: "completed" as const,
+        output: "",
+      },
+      {
+        id: "read-1",
+        kind: "tool" as const,
+        toolType: "mcpToolCall",
+        title: "Read README.md",
+        detail: JSON.stringify({ path: "README.md" }),
+        status: "completed" as const,
+        output: "hello",
+      },
+      {
+        id: "read-2",
+        kind: "tool" as const,
+        toolType: "mcpToolCall",
+        title: "Read package.json",
+        detail: JSON.stringify({ path: "package.json" }),
+        status: "completed" as const,
+        output: "{}",
+      },
+      assistant("a1", "最终输出"),
+    ];
+    const result = resolveCollapsedTimelineItems({
+      activeEngine: "codex",
+      timelineSourceItems: items,
+    });
+
+    expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "a1"]);
+    expect(result.phases).toHaveLength(1);
+    expect(result.phases[0]).toMatchObject({
+      phaseKey: "a1",
+      expanded: false,
+      breakdown: { reasoningCount: 0, toolCount: 2, exploreCount: 0 },
+    });
+    expect(result.phases[0]!.hiddenItemIds).toEqual(["read-1", "read-2"]);
+    expect(result.phases[0]!.hiddenItemIds).not.toContain("cmd-1");
+  });
+
+  it("keeps Codex shell-form cat/apply_patch on canvas and collapses them as file IO", () => {
+    const patch =
+      "*** Begin Patch\n*** Update File: src/a.ts\n@@\n-old\n+new\n*** End Patch\n";
+    const items = [
+      user("u1"),
+      {
+        id: "cat-1",
+        kind: "tool" as const,
+        toolType: "commandExecution" as const,
+        title: "Command: cat README.md",
+        detail: JSON.stringify({ command: ["cat", "README.md"] }),
+        status: "completed" as const,
+        output: "# Hello\n",
+      },
+      {
+        id: "patch-1",
+        kind: "tool" as const,
+        toolType: "commandExecution" as const,
+        title: "Command: apply_patch",
+        detail: JSON.stringify({ command: `apply_patch <<'EOF'\n${patch}EOF` }),
+        status: "completed" as const,
+        output: "Success. Updated the following files:\nM src/a.ts",
+      },
+      {
+        id: "noise-1",
+        kind: "tool" as const,
+        toolType: "commandExecution" as const,
+        title: "Command: pwd",
+        detail: JSON.stringify({ command: "pwd" }),
+        status: "completed" as const,
+        output: "/repo\n",
+      },
+      assistant("a1", "最终输出"),
+    ];
+    const collapsed = resolveCollapsedTimelineItems({
+      activeEngine: "codex",
+      timelineSourceItems: items,
+    });
+
+    // pwd noise filtered; cat + apply_patch remain as collapsible process.
+    expect(collapsed.phases).toHaveLength(1);
+    expect(collapsed.phases[0]!.count).toBeGreaterThanOrEqual(2);
+    expect(collapsed.phases[0]!.breakdown.toolCount).toBeGreaterThanOrEqual(2);
+    expect(collapsed.phases[0]!.hiddenItemIds).toContain("cat-1");
+    expect(collapsed.phases[0]!.hiddenItemIds).not.toContain("noise-1");
+    // When collapsed only user + assistant remain on timeline.
+    expect(collapsed.timelineItems.map((item) => item.id)).toEqual(["u1", "a1"]);
+
+    // Expand must remount file-IO process rows (not an empty chip body).
+    const expanded = resolveCollapsedTimelineItems({
+      activeEngine: "codex",
+      expandedPhaseKeys: new Set(["a1"]),
+      timelineSourceItems: items,
+    });
+    expect(expanded.phases[0]?.expanded).toBe(true);
+    const expandedIds = expanded.timelineItems.map((item) => item.id);
+    expect(expandedIds).toContain("cat-1");
+    expect(expandedIds).not.toContain("noise-1");
+    expect(expandedIds).toContain("a1");
   });
 
   it("collapses multi-step phases that include command tools and counts them in breakdown", () => {

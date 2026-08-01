@@ -638,3 +638,502 @@ B1 切断 useModels layout self-deps；会话 selection 幂等；freeform 只修
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1268: Shared 历史幕布过程折叠与 Codex 文件修改投影对齐
+
+**Date**: 2026-08-01
+**Task**: Shared 历史幕布过程折叠与 Codex 文件修改投影对齐
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+对齐 Shared 与 Native 幕布过程顺序/折叠展开/fileChange changes[] 保真，canvas projection v6
+
+### Main Changes
+
+## 本会话交付
+
+| 维度 | 结果 |
+|------|------|
+| 过程顺序 | TurnCommitted：reasoning/tools → 结论 Text（折叠契约） |
+| 折叠真实展开 | bash/command 回幕布；chip 计数含 shell 行 |
+| Codex 文件修改 | ingest 打包 changes[]；投影还原 path/diff |
+| Checkpoint | CANVAS_PROJECTION_VERSION → 6 |
+| OpenSpec | sync-shared-session-curtain-parity |
+
+## 验证
+
+- cargo test --test shared_projection：25 passed
+- cargo test --lib codex_file_change_item_preserves：ok
+- vitest collapse + live-behavior + dataSource：97 passed
+
+## 已知边界
+
+- 旧 canonical 若从未写入 changes 无法回填
+- tool↔text 交错时间戳仍无法 1:1 还原 live
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ef6dc9dbb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1269: Shared Codex apply_patch/文件修改投影二次修复
+
+**Date**: 2026-08-02
+**Task**: Shared Codex apply_patch/文件修改投影二次修复
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+捕获 custom_tool_call apply_patch；投影解析 patch；dataSource enricher；v7
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b42626c1e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1270: Shared Codex command argv/apply_patch 投影修复
+
+**Date**: 2026-08-02
+**Task**: Shared Codex command argv/apply_patch 投影修复
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+join command argv[]; promote apply_patch in commandExecution; v8
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a2f3e50ca` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1271: 幕布恢复隐藏 shell 且折叠只计文件读写
+
+**Date**: 2026-08-02
+**Task**: 幕布恢复隐藏 shell 且折叠只计文件读写
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+hide commandExecution/bash; chip counts only visible file IO process; no remount of shell on expand
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9a2e35797` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1272: Codex 文件读写类 command 可见、纯 shell 仍隐藏
+
+**Date**: 2026-08-02
+**Task**: Codex 文件读写类 command 可见、纯 shell 仍隐藏
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+unhide file-IO commandExecution; promote apply_patch; hide pwd/ls noise; chip counts visible only
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1e9ed803a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1273: 会话概览替换治理证据 + 提交消息引擎选择器收口
+
+**Date**: 2026-08-02
+**Task**: 会话概览替换治理证据 + 提交消息引擎选择器收口
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+完成 replace-checkpoint-governance-with-session-overview 实现；统一 Git 提交消息引擎选择器，修复中英文/子菜单交互与 Grok managed provider 接入 401
+
+### Main Changes
+
+## 本会话交付
+
+### 1. replace-checkpoint-governance-with-session-overview
+- 结果 tab 默认渲染 SessionOverviewSection
+- bottomActivity.governanceEvidence 默认 false，opt-in 后恢复治理证据与 verdict 参与
+- 测试与 openspec change artifacts 已落盘
+
+### 2. 提交消息引擎选择器 (add-cli-engine-visibility-toggle / unify-git-commit-engine-picker)
+- 单面板 picker：上次配置 / 中英文 / 可见引擎
+- 提交框位置改平铺项，避免 flyout 回不去
+- 生成按钮图标从 last config 恢复，统一 EngineIcon
+- engine_send_message_sync 对齐 Grok/Kimi/OpenCode managed provider，修复 commit-message 401
+
+### Commits
+- 5f52710f7 feat(status-panel): 用会话概览替换默认治理证据
+- 867c1017d feat(git): 统一提交消息引擎选择器并修复 Grok 接入
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5f52710f7` | (see git log) |
+| `867c1017d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1274: 修复过程折叠展开 bashGroup 空壳
+
+**Date**: 2026-08-02
+**Task**: 修复过程折叠展开 bashGroup 空壳
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+render/count file-IO bash groups; pure shell still hidden
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2510b3957` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1275: 折叠 Shared turn-target badge 噪音
+
+**Date**: 2026-08-02
+**Task**: 折叠 Shared turn-target badge 噪音
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 问题 | Shared session 每条 assistant 都渲染 `CLI · Provider · model` badge，连续同 target 刷屏 |
+| 策略 | Policy B：每个 user 后首条 assistant 显示；同 turn 连续相同 target 折叠；target 变更再显示 |
+| 实现 | `buildTurnTargetBadgeVisibleItemIds` 预计算 → presentation state → Timeline → MessageRow `showTurnTargetBadge` |
+| 测试 | `turnBadge.test.ts` + stream-mitigation UI 用例 |
+
+**Updated Files**:
+- `src/utils/turnBadge.ts` / `src/utils/turnBadge.test.ts`
+- `src/features/messages/orchestration/hooks/useMessagesPresentationState.ts`
+- `src/features/messages/orchestration/models/messagesTimelineModels.ts`
+- `src/features/messages/components/MessagesCore.tsx`
+- `src/features/messages/timeline/components/TimelineRowRenderer.tsx`
+- `src/features/messages/rows/components/MessageRow.tsx`
+- `src/features/messages/rows/presentation/messageRowEquality.ts`
+- `src/features/messages/components/MessagesRows.stream-mitigation.test.tsx`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `50db10f0d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1276: 结果 Tab 降噪:会话概览取代治理证据与结果详情
+
+**Date**: 2026-08-02
+**Task**: 结果 Tab 降噪:会话概览取代治理证据与结果详情
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Feature | Description |
+|---------|-------------|
+| 会话概览 section | 结果 Tab 头部常驻 SessionOverviewSection(engine/model/workspace/运行状态/时长/轮次/上下文/rate limit/待处理计数),数据全部来自 activeCanvasStore snapshot,无新增 tauri command |
+| 治理证据默认关闭 | 新增 bottomActivity.governanceEvidence 可见性开关(默认 off),关闭时不读 workspace 文件、不渲染 section、governanceSnapshot 为 null,checkpoint verdict 与仓库 CI 状态解耦 |
+| 结果详情默认关闭 | 新增 bottomActivity.checkpointDetails 开关(默认 off),门控 CostBudgetSection + CheckpointPanel;默认只剩会话概览,开关打开恢复完整 checkpoint 表面 |
+| OpenSpec change | replace-checkpoint-governance-with-session-overview:proposal/design/tasks + status-panel-session-overview 新 capability delta,modified dynamic-project-governance-evidence / governance-evidence-bridge / status-panel-checkpoint-module |
+
+**Updated Files**:
+- `src/features/status-panel/components/StatusPanel.tsx`(门控 + 会话概览装配)
+- `src/features/status-panel/components/SessionOverviewSection.tsx` / `utils/sessionOverviewViewModel.ts`(新增)
+- `src/features/client-ui-visibility/utils/clientUiVisibility.ts`(两个新开关)
+- `src/features/layout/hooks/useLayoutNodes.tsx` / `activeCanvasStatusPanelNode.tsx`(接线)
+- `src/i18n/locales/{zh,en}/{settings,statusPanel}.ts`、`src/styles/status-panel.css`、`src/test/vitest.setup.ts`
+- 测试:StatusPanel / SessionOverviewSection / sessionOverviewViewModel / clientUiVisibility,264+ 用例全绿,tsc 干净
+
+**备注**:顺带修复并行 session 遗留的 Messages.history-loading.test.tsx 缺 ConversationItem import(随 5f52710f7 入库)。手工验收与 spec archive 待后续。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5f52710f7` | (see git log) |
+| `8a53489cf` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1277: Shared 历史恢复 loading 阶段与进度条
+
+**Date**: 2026-08-02
+**Task**: Shared 历史恢复 loading 阶段与进度条
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 问题 | 打开历史 Shared session 先闪空态「今天想构建什么」 |
+| 根因 | `shouldShowHistoryLoadingForSelectionThread` 排除了 `shared:` |
+| 方案 | 启用 shared gate + loader 阶段进度上报 + 画布进度条与真实文案 |
+| 阶段 | prepare → session 快照 → projection transcript → merge → finalize |
+
+**Updated core**:
+- `claudeThreadContinuity.ts` / `sharedHistoryLoader.ts` / `historyLoadingProgress.ts`
+- progress 经 useThreadHistoryLoadingState → layout → Messages Timeline
+- 文案 zh/en + `.messages-history-loading-bar`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `75bce0166` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1278: fix React #185 Composer file-ref 引用环
+
+**Date**: 2026-08-02
+**Task**: fix React #185 Composer file-ref 引用环
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+加固 Composer file-ref / merge 引用稳定与 plan 收敛，切断 #185 更新深度自反馈；补回归与 playbook C-20260801-03
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 问题 | prod App-Bn4fZysL React #185，栈落 Composer / ActiveCanvasComposer |
+| 主修 | mergeInlineFileReferences / mergeUniqueNames 无新增保引用 |
+| 辅修 | plan 已收敛返回 null；creation engine 等价不 publish |
+| 回归 | composerFileReferences.test / Composer.file-reference-token / useModels / app-shell.startup（64 tests） |
+| Playbook | C-20260801-03（AP-02 主因 + defense-in-depth 措辞校准） |
+
+**Updated Files**:
+- `src/features/composer/utils/composerFileReferences.ts`
+- `src/features/composer/utils/composerFileReferences.test.ts`
+- `src/features/composer/components/Composer.tsx`
+- `src/features/composer/utils/inlineSelections.ts`
+- `src/features/models/hooks/useModels.ts`
+- `docs/analysis/react-185-maximum-update-depth-playbook.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `637cb3561` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1279: merge upstream chore/bump-version-0.7.15
+
+**Date**: 2026-08-02
+**Task**: merge upstream chore/bump-version-0.7.15
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+拉取并 merge upstream 落后的 8 个提交；消息幕布冲突保留本地 shell 过滤策略
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 操作 | `git pull --no-rebase upstream chore/bump-version-0.7.15` |
+| 分叉 | local ahead 23 / remote ahead 8 → merge 后 local ahead 24 |
+| 冲突文件 | 7 个 messages 相关（render/timeline/tests） |
+| 策略 | 保留本地 hide pure shell + keep file IO；上游 always-show 不采纳 |
+| 验证 | 相关 messages tests 101 passed |
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4e4d9fe9a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

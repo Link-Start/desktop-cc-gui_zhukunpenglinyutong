@@ -22,6 +22,7 @@ import {
   resolveStreamingPresentationItems,
   type MessagesPresentationMode,
 } from "../presentation/messagesLiveWindow";
+import { buildTurnTargetBadgeVisibleItemIds } from "../../../../utils/turnBadge";
 import { findItemById } from "../presentation/messagesViewModel";
 
 type UseMessagesPresentationStateInput = {
@@ -220,6 +221,10 @@ export function useMessagesPresentationState({
     () => buildSuppressedUserMemoryContextMessageIdSet(timelinePresentationItems),
     [timelinePresentationItems],
   );
+  const turnTargetBadgeVisibleItemIds = useMemo(
+    () => buildTurnTargetBadgeVisibleItemIds(timelinePresentationItems),
+    [timelinePresentationItems],
+  );
 
   return {
     assistantFinalBoundarySet,
@@ -236,5 +241,6 @@ export function useMessagesPresentationState({
     suppressedUserNoteCardContextMessageIds,
     timelinePresentationItems,
     turnFileChangesByBoundaryId,
+    turnTargetBadgeVisibleItemIds,
   };
 }

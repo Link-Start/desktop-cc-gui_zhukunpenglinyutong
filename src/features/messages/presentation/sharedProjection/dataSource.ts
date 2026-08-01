@@ -5,7 +5,9 @@
  * `ConversationItem[]`，供 Messages/Canvas 消费。
  *
  * 纪律：
- * - 与 Native 路径完全隔离；本模块不 import threadItems / Native 数据流。
+ * - 不写 Canonical / 不反向依赖 Shared runtime。
+ * - 允许调用 `buildConversationItem` 做**只读**工具保真（Codex apply_patch /
+ *   fileChange / agent Read·Write），与 Native 同一转换入口，避免历史投影漏字段。
  * - Phase 2 后默认开启；只允许 explicit-negative flag 回滚到 Legacy-only 读取。
  * - `systemNotice` / `metadata` 不是 `ConversationItem` kind，映射时丢弃
  *   （它们是 Shadow 观测面，不属于 Canvas 渲染面）。
@@ -16,6 +18,7 @@ import type { EngineType } from "../../../../types/engine";
 import { BUILTIN_ENGINE_TYPES } from "../../../engine/engineRegistry";
 import type { SharedProjectionItem } from "./types";
 import { LOCAL_PROVIDER_LABEL } from "../../../../utils/turnBadge";
+import { buildConversationItem } from "../../../../utils/threadItems";
 
 export const SHARED_PROJECTION_STORAGE_KEY = "mossx.sharedProjection";
 
@@ -98,6 +101,214 @@ export function isSharedProjectionDataSourceEnabled() {
 function readString(content: Record<string, unknown>, key: string) {
   const value = content[key];
   return typeof value === "string" ? value : "";
+}
+
+function readToolChanges(
+  value: unknown,
+): { path: string; kind?: string; diff?: string }[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) {
+    return undefined;
+  }
+  const changes = value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+      const record = entry as Record<string, unknown>;
+      const path = typeof record.path === "string" ? record.path.trim() : "";
+      if (!path) {
+        return null;
+      }
+      return {
+        path,
+        ...(typeof record.kind === "string" ? { kind: record.kind } : {}),
+        ...(typeof record.diff === "string" ? { diff: record.diff } : {}),
+      };
+    })
+    .filter((entry): entry is { path: string; kind?: string; diff?: string } => entry !== null);
+  return changes.length > 0 ? changes : undefined;
+}
+
+function tryParseJsonObject(value: string): Record<string, unknown> | null {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Rebuild canvas-ready tool items from Shared projection summaries.
+ *
+ * Shared canonical storage only keeps portable summaries; Native live path uses
+ * `buildConversationItem` which understands Codex apply_patch / fileChange and
+ * agent Read/Write argument shapes. Reuse that converter as a pure enricher.
+ */
+function enrichSharedToolConversationItem(input: {
+  id: string;
+  content: Record<string, unknown>;
+  engineSource: EngineType | undefined;
+}): Extract<ConversationItem, { kind: "tool" }> {
+  const { id, content, engineSource } = input;
+  const toolType = readString(content, "toolType");
+  const title = readString(content, "title");
+  const detail = readString(content, "detail");
+  const output = typeof content.output === "string" ? content.output : "";
+  const status = typeof content.status === "string" ? content.status : "";
+  const durationMs =
+    typeof content.durationMs === "number" ? content.durationMs : undefined;
+  const turnId = typeof content.turnId === "string" ? content.turnId : undefined;
+  const projectedChanges = readToolChanges(content.changes);
+  const parsedDetail = tryParseJsonObject(detail);
+
+  const attachMeta = (
+    item: Extract<ConversationItem, { kind: "tool" }>,
+  ): Extract<ConversationItem, { kind: "tool" }> => ({
+    ...item,
+    ...(engineSource ? { engineSource } : {}),
+    ...(turnId ? { turnId } : {}),
+  });
+
+  const base: Extract<ConversationItem, { kind: "tool" }> = {
+    id,
+    kind: "tool",
+    toolType: toolType || "toolCall",
+    title: title || toolType || "Tool",
+    detail,
+    ...(status ? { status } : {}),
+    ...(output ? { output } : {}),
+    ...(typeof durationMs === "number" ? { durationMs } : {}),
+    ...(projectedChanges ? { changes: projectedChanges } : {}),
+  };
+
+  // Already rich enough for file-edit scene.
+  if ((base.changes?.length ?? 0) > 0 && base.toolType === "fileChange") {
+    return attachMeta(base);
+  }
+
+  const commandFromDetail = (() => {
+    if (typeof parsedDetail?.command === "string" && parsedDetail.command.trim()) {
+      return parsedDetail.command.trim();
+    }
+    if (typeof parsedDetail?.cmd === "string" && parsedDetail.cmd.trim()) {
+      return parsedDetail.cmd.trim();
+    }
+    // Codex often sends argv as string[] — same shape as live item.command arrays.
+    if (Array.isArray(parsedDetail?.command)) {
+      return parsedDetail.command
+        .map((part) => (typeof part === "string" ? part.trim() : ""))
+        .filter(Boolean)
+        .join(" ");
+    }
+    return "";
+  })();
+  const patchCandidate =
+    (typeof parsedDetail?.patch === "string" && parsedDetail.patch) ||
+    (typeof parsedDetail?.input === "string" && parsedDetail.input) ||
+    detail;
+  const looksLikeApplyPatch =
+    /apply[_-]?patch/i.test(`${toolType} ${title}`) ||
+    patchCandidate.includes("*** Begin Patch") ||
+    patchCandidate.includes("*** Update File:");
+  const looksLikeCommand =
+    toolType === "commandExecution" ||
+    /^command\s*:/i.test(title) ||
+    Boolean(commandFromDetail);
+  const looksLikeNativeFileChange =
+    toolType === "fileChange" ||
+    /file[_-]?change/i.test(`${toolType} ${title}`) ||
+    (projectedChanges?.length ?? 0) > 0 ||
+    looksLikeApplyPatch;
+
+  const rawCandidates: Record<string, unknown>[] = [];
+
+  // Codex commandExecution (may promote to fileChange when command is apply_patch).
+  if (looksLikeCommand || looksLikeApplyPatch) {
+    rawCandidates.push({
+      id,
+      type: "commandExecution",
+      title,
+      tool: title,
+      name: title,
+      status,
+      output,
+      aggregatedOutput: output,
+      command: commandFromDetail || (looksLikeApplyPatch ? patchCandidate : undefined),
+      cwd:
+        typeof parsedDetail?.cwd === "string" ? parsedDetail.cwd : undefined,
+      description:
+        typeof parsedDetail?.description === "string"
+          ? parsedDetail.description
+          : undefined,
+      input: looksLikeApplyPatch ? patchCandidate : parsedDetail ?? undefined,
+      arguments: parsedDetail ?? undefined,
+      changes: projectedChanges ?? content.changes,
+    });
+  }
+
+  // Codex fileChange item shape
+  if (looksLikeNativeFileChange) {
+    rawCandidates.push({
+      id,
+      type: "fileChange",
+      title: title || "File changes",
+      tool: title,
+      name: title,
+      status,
+      output,
+      aggregatedOutput: output,
+      input: patchCandidate || parsedDetail || detail || undefined,
+      arguments: parsedDetail ?? undefined,
+      changes: projectedChanges ?? content.changes,
+    });
+  }
+
+  // Agent-style Read/Write/Edit — only when title looks like a tool name and detail is JSON args
+  if (parsedDetail && title && !looksLikeCommand) {
+    rawCandidates.push({
+      id,
+      type: "mcpToolCall",
+      server: "agent",
+      tool: title || toolType,
+      title: title || toolType,
+      status,
+      output,
+      arguments: parsedDetail,
+      result: output,
+    });
+  }
+
+  for (const raw of rawCandidates) {
+    const converted = buildConversationItem(raw);
+    if (!converted || converted.kind !== "tool") {
+      continue;
+    }
+    const richerFileChange =
+      converted.toolType === "fileChange" &&
+      (converted.changes?.length ?? 0) > 0;
+    // Accept mcpToolCall polish only when we get structured detail (path etc.).
+    const richerAgentTool =
+      converted.toolType !== "commandExecution" &&
+      converted.toolType !== base.toolType &&
+      Boolean(converted.detail?.trim()) &&
+      converted.detail !== detail;
+    if (richerFileChange || richerAgentTool) {
+      return attachMeta({
+        ...converted,
+        id,
+      });
+    }
+  }
+
+  return attachMeta(base);
 }
 
 function readEngineSource(content: Record<string, unknown>): EngineType | undefined {
@@ -215,18 +426,13 @@ function toConversationItem(item: SharedProjectionItem): ConversationItem | null
         content: readString(content, "content"),
         engineSource,
       };
-    case "tool":
-      return {
+    case "tool": {
+      return enrichSharedToolConversationItem({
         id,
-        kind: "tool",
-        toolType: readString(content, "toolType"),
+        content,
         engineSource,
-        ...(typeof content.turnId === "string" ? { turnId: content.turnId } : {}),
-        title: readString(content, "title"),
-        detail: readString(content, "detail"),
-        ...(typeof content.status === "string" ? { status: content.status } : {}),
-        ...(typeof content.output === "string" ? { output: content.output } : {}),
-      };
+      });
+    }
     case "generatedImage": {
       const rawImages = Array.isArray(content.images) ? content.images : [];
       const images = rawImages
