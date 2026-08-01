@@ -1594,6 +1594,53 @@ describe("useAppServerEvents", () => {
     });
   });
 
+  it("projects a hidden native delta through sharedOwner after conversation navigation", async () => {
+    const handlers: Handlers = {
+      onAgentMessageDelta: vi.fn(),
+    };
+    const { root } = await mount(handlers, {
+      useNormalizedRealtimeAdapters: true,
+    });
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-native-owner-navigation",
+        message: {
+          method: "item/agentMessage/delta",
+          params: {
+            threadId: "claude:hidden-native-navigation",
+            nativeThreadId: "claude:hidden-native-navigation",
+            turnId: "run-native-navigation",
+            itemId: "assistant-native-navigation",
+            delta: "still routed to Shared",
+            sharedOwner: {
+              sharedSessionId: "native-owner-navigation",
+              sharedThreadId: "shared:native-owner-navigation",
+              nativeThreadId: "claude:hidden-native-navigation",
+              runtimeTurnId: "run-native-navigation",
+              attemptId: "attempt-native-navigation",
+              engine: "claude",
+            },
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onAgentMessageDelta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "ws-native-owner-navigation",
+        threadId: "shared:native-owner-navigation",
+        itemId: "assistant-native-navigation",
+        delta: "still routed to Shared",
+      }),
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("does not restart generic Native lifecycle for a Shared V2 projected turn", async () => {
     const handlers: Handlers = {
       onTurnStarted: vi.fn(),
