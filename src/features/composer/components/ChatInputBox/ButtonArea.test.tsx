@@ -104,6 +104,29 @@ describe("ButtonArea custom model storage refresh", () => {
     expect(screen.getByTestId("reasoning-default").textContent).toBe("默认");
   });
 
+  it("renders Grok reasoning selector with default option and fixed allowlist", () => {
+    render(
+      <ButtonArea
+        currentProvider="grok"
+        models={[]}
+        selectedModel=""
+        reasoningEffort={null}
+        reasoningOptions={["low", "medium", "high"]}
+        hasInputContent
+        onSubmit={vi.fn()}
+        onReasoningChange={vi.fn()}
+        shortcutActions={[]}
+      />,
+    );
+
+    openToolDock();
+
+    expect(screen.getByTestId("reasoning-select")).toBeTruthy();
+    expect(screen.getByTestId("reasoning-value").textContent).toBe("");
+    expect(screen.getByTestId("reasoning-options").textContent).toBe("low,medium,high");
+    expect(screen.getByTestId("reasoning-default").textContent).toBe("默认");
+  });
+
   it("does not render reasoning selector for Gemini", () => {
     render(
       <ButtonArea

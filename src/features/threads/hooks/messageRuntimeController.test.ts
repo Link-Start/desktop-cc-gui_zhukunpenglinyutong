@@ -10,6 +10,8 @@ describe("messageRuntimeController", () => {
   it("normalizes effort by engine scope", () => {
     expect(normalizeEngineScopedEffort("claude", "high")).toBe("high");
     expect(normalizeEngineScopedEffort("claude", "ultra")).toBeNull();
+    expect(normalizeEngineScopedEffort("grok", "high")).toBe("high");
+    expect(normalizeEngineScopedEffort("grok", "xhigh")).toBeNull();
     expect(normalizeEngineScopedEffort("codex", "max")).toBe("max");
     expect(normalizeEngineScopedEffort("gemini", "high")).toBeNull();
   });

@@ -234,7 +234,9 @@ export function useAppShellComposerModelSection({
           selectedEffort: effectiveSelectedEffort,
           activeThreadSelection:
             !isCrossEngineSelection &&
-            (hasActiveComposerThread || activeEngine === "claude")
+            (hasActiveComposerThread ||
+              activeEngine === "claude" ||
+              activeEngine === "grok")
               ? {
                   modelId: nextSelectedModel.id,
                   effort: effectiveSelectedEffort,
@@ -288,7 +290,9 @@ export function useAppShellComposerModelSection({
         hasActiveThread: hasActiveComposerThread,
         selectedEffort: effort,
         activeThreadSelection:
-          hasActiveComposerThread || activeEngine === "claude"
+          hasActiveComposerThread ||
+          activeEngine === "claude" ||
+          activeEngine === "grok"
             ? {
                 modelId: effectiveSelectedModelId,
                 effort,

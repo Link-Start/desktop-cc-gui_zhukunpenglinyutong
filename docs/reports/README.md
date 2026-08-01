@@ -22,6 +22,7 @@
 | [engine-model-access-layer-governance-report-2026-07-26.md](./engine-model-access-layer-governance-report-2026-07-26.md) | historical closure evidence | 当时引擎/模型治理；当前 registry 为六引擎，以 matrix 与生成 gate 为准 |
 | [multi-cli-session-foundation-a-d-impact-and-manual-test-plan-2026-07-28.md](./multi-cli-session-foundation-a-d-impact-and-manual-test-plan-2026-07-28.md) | A–D archived evidence | release smoke 参考；后续 active repairs 以各自 change 为准 |
 | [grok-cli-capability-gap-vs-claude-codex-2026-07-30.md](./grok-cli-capability-gap-vs-claude-codex-2026-07-30.md) | implemented，待流程收口 | 图片输入 change `25/25`，仍 active，待 verify / sync / archive |
+| [grok-cli-reasoning-effort-2026-08-01.md](./grok-cli-reasoning-effort-2026-08-01.md) | implemented（本窗口） | Grok 思考强度：matrix + composer + `--reasoning-effort`；OpenSpec `grok-cli-reasoning-effort` |
 
 ## 与其它目录的关系
 

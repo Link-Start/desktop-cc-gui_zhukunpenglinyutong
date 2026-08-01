@@ -2,7 +2,8 @@
 //!
 //! Handles Grok CLI execution via:
 //! - text-only:
-//!   `grok -p "<prompt>" --output-format streaming-json --always-approve [-m <model>] (-s|-r)`
+//!   `grok -p "<prompt>" --output-format streaming-json --always-approve
+//!    [-m <model>] [--reasoning-effort <low|medium|high>] (-s|-r)`
 //! - multimodal (images):
 //!   `grok --prompt-file <staging.json> --output-format streaming-json ...`
 //!
@@ -49,6 +50,11 @@ use super::{EngineConfig, EngineType, SendMessageParams};
 /// than an OS ARG_MAX bound. xAI vision caps are higher; keep a conservative
 /// client-side limit to avoid accidental multi-MB base64 staging.
 const GROK_MAX_IMAGE_BYTES: u64 = 2 * 1024 * 1024;
+
+/// Reasoning effort levels accepted by Grok CLI (`--reasoning-effort` / `--effort`).
+/// Keep this aligned with the composer allowlist; model menus may still reject a
+/// subset (e.g. grok-4.5 advertises low/medium/high only).
+const GROK_REASONING_EFFORTS: &[&str] = &["low", "medium", "high"];
 
 /// Built headless command plus optional multimodal prompt file to clean up.
 struct GrokBuiltCommand {
@@ -474,6 +480,16 @@ impl GrokSession {
         {
             cmd.arg("-m");
             cmd.arg(model);
+        }
+
+        if let Some(effort) = params
+            .effort
+            .as_ref()
+            .map(|value| value.trim())
+            .filter(|value| GROK_REASONING_EFFORTS.contains(value))
+        {
+            cmd.arg("--reasoning-effort");
+            cmd.arg(effort);
         }
 
         // `-s` creates a NEW session with a caller-chosen UUID and errors if the
@@ -1417,6 +1433,82 @@ mod tests {
         assert!(args.iter().any(|arg| arg == "-p"));
         assert!(!args.iter().any(|arg| arg == "--prompt-file"));
         assert!(!args.iter().any(|arg| arg == "--prompt-json"));
+        assert!(!args.iter().any(|arg| arg == "--reasoning-effort"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn build_command_appends_allowed_reasoning_efforts() {
+        let dir = std::env::temp_dir().join(format!("grok-effort-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let session = GrokSession::new(
+            "ws-effort".to_string(),
+            dir.clone(),
+            Some(EngineConfig {
+                bin_path: Some("grok".to_string()),
+                ..Default::default()
+            }),
+        );
+
+        for effort in ["low", "medium", "high"] {
+            let params = SendMessageParams {
+                text: "hello".to_string(),
+                effort: Some(effort.to_string()),
+                ..Default::default()
+            };
+            let built = session
+                .build_command(&params, "33333333-3333-3333-3333-333333333333", false)
+                .expect("build command");
+            let args: Vec<String> = built
+                .command
+                .as_std()
+                .get_args()
+                .map(|arg| arg.to_string_lossy().into_owned())
+                .collect();
+            assert!(
+                args.windows(2)
+                    .any(|window| window[0] == "--reasoning-effort" && window[1] == effort),
+                "missing --reasoning-effort {effort} in args: {args:?}"
+            );
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn build_command_ignores_missing_empty_and_invalid_reasoning_effort() {
+        let dir = std::env::temp_dir().join(format!("grok-effort-bad-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let session = GrokSession::new(
+            "ws-effort-bad".to_string(),
+            dir.clone(),
+            Some(EngineConfig {
+                bin_path: Some("grok".to_string()),
+                ..Default::default()
+            }),
+        );
+
+        for effort in [None, Some(""), Some("   "), Some("xhigh"), Some("ultra"), Some("--danger")]
+        {
+            let params = SendMessageParams {
+                text: "hello".to_string(),
+                effort: effort.map(str::to_string),
+                ..Default::default()
+            };
+            let built = session
+                .build_command(&params, "44444444-4444-4444-4444-444444444444", false)
+                .expect("build command");
+            let args: Vec<String> = built
+                .command
+                .as_std()
+                .get_args()
+                .map(|arg| arg.to_string_lossy().into_owned())
+                .collect();
+            assert!(!args.iter().any(|arg| arg == "--reasoning-effort"));
+            assert!(!args.iter().any(|arg| arg == "--effort"));
+            assert!(!args.iter().any(|arg| arg == "xhigh"));
+            assert!(!args.iter().any(|arg| arg == "ultra"));
+            assert!(!args.iter().any(|arg| arg == "--danger"));
+        }
         let _ = std::fs::remove_dir_all(dir);
     }
 
