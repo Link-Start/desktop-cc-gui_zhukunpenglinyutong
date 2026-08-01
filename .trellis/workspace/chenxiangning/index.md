@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-30.md`
-- **Total Sessions**: 1268
-- **Last Active**: 2026-08-01
+- **Total Sessions**: 1269
+- **Last Active**: 2026-08-02
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-30.md` | ~693 | Active |
+| `journal-30.md` | ~726 | Active |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
@@ -58,6 +58,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1269 | 2026-08-02 | Shared Codex apply_patch/文件修改投影二次修复 | `b42626c1e` | `cxn-version-0.7.15` |
 | 1268 | 2026-08-01 | Shared 历史幕布过程折叠与 Codex 文件修改投影对齐 | `ef6dc9dbb` | `cxn-version-0.7.15` |
 | 1267 | 2026-08-01 | Grok 思考强度接入 | `75a847b9d` | `feature/v-0714` |
 | 1266 | 2026-08-01 | 加固 React #185 收敛（freeform 不回退） | `e6e964d88` | `feature/v-0714` |

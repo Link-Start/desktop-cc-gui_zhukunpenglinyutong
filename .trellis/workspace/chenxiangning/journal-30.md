@@ -691,3 +691,36 @@ B1 切断 useModels layout self-deps；会话 selection 幂等；freeform 只修
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1269: Shared Codex apply_patch/文件修改投影二次修复
+
+**Date**: 2026-08-02
+**Task**: Shared Codex apply_patch/文件修改投影二次修复
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+捕获 custom_tool_call apply_patch；投影解析 patch；dataSource enricher；v7
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b42626c1e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
