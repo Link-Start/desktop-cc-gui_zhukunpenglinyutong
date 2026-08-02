@@ -283,10 +283,14 @@ export function useAppShellComposerModelSection({
           setSelectedModelId(nextSelectedModel.id);
         }
       } else {
-        setEngineSelectedModelIdByType((prev) => ({
-          ...prev,
-          [targetEngine]: nextSelectedModel.id,
-        }));
+        // 幂等：id 未变不换 map 引用，避免父树无意义 rerender（#185）
+        setEngineSelectedModelIdByType((prev) =>
+          upsertEngineSelectedModelId({
+            activeEngine: targetEngine,
+            nextModelId: nextSelectedModel.id,
+            previousSelectionByEngine: prev,
+          }),
+        );
         persistComposerEnginePref?.(targetEngine, {
           modelId: nextSelectedModel.id,
           effort: nextSelectedEffort,
@@ -364,27 +368,10 @@ export function useAppShellComposerModelSection({
     effort: resolvedEffort,
     collaborationMode: collaborationModePayload,
   };
-  // Claude：脏 selection（k3 等）在 catalog 就绪后自动 repair 到合法 entry。
-  useEffect(() => {
-    if (
-      activeEngine !== "claude" ||
-      !modelsReady ||
-      !claudeRuntimeResolution?.repaired ||
-      !claudeRuntimeResolution.entryId
-    ) {
-      return;
-    }
-    if (claudeRuntimeResolution.entryId === effectiveSelectedModelId) {
-      return;
-    }
-    handleSelectModel(claudeRuntimeResolution.entryId);
-  }, [
-    activeEngine,
-    claudeRuntimeResolution,
-    effectiveSelectedModelId,
-    handleSelectModel,
-    modelsReady,
-  ]);
+  // 注意：禁止在 effect 里对 Claude residual 自动 handleSelectModel。
+  // allowUnknown 下 effectiveSelectedModelId 可长期停在 k3，而 resolver 的 entryId
+  // 是 catalog 默认 → effect 会无限 setState（React #185 / AP-04）。
+  // 发送侧已用 resolvedModel 纠正 runtime；UI 点选/续接取消 activate 再收敛展示。
   // 会话选择修复：仅在 effective 与已存选择语义不一致时写回。
   // freeform（allowUnknown）会保留 catalog 外 modelId——这是业务能力，不是 #185 缺口；
   // 这里只收敛 effort/model 的有效投影，禁止无变化 persist 触发反馈环。

@@ -402,7 +402,10 @@ export const ModelSelect = memo(({
 
   // 切会话 / 目标渠道变化时丢弃底栏预览覆盖，避免仍显示上一会话的 DeepSeek 等旧渠道名
   useEffect(() => {
-    setProfileOverrides({});
+    // 幂等：已空则保留同一引用，避免无意义 setState 叠环（#185）
+    setProfileOverrides((prev) =>
+      Object.keys(prev).length === 0 ? prev : {},
+    );
   }, [executionTarget?.engine, executionTarget?.providerProfileId]);
 
   // Native 续接点「取消」：executionTarget 未变，需事件驱动清掉 destination override
@@ -413,7 +416,9 @@ export const ModelSelect = memo(({
       ).detail;
       const engine = detail?.engine?.trim();
       if (!engine) {
-        setProfileOverrides({});
+        setProfileOverrides((prev) =>
+          Object.keys(prev).length === 0 ? prev : {},
+        );
         return;
       }
       setProfileOverrides((current) => {
