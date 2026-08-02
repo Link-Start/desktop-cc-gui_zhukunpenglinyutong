@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ConversationItem, ThreadSummary } from "../../../types";
-import { buildWorkspaceSessionActivity } from "./buildWorkspaceSessionActivity";
+import {
+  buildWorkspaceSessionActivity,
+  DISABLED_WORKSPACE_SESSION_ACTIVITY,
+} from "./buildWorkspaceSessionActivity";
 
 function toolItem(
   id: string,
@@ -1461,5 +1464,25 @@ describe("buildWorkspaceSessionActivity", () => {
 
     expect(taskEvent?.summary).toBe("Task · Task");
     expect(commandEvent?.summary).toBe("Command");
+  });
+});
+
+describe("DISABLED_WORKSPACE_SESSION_ACTIVITY", () => {
+  it("stays a stable empty view model while session-activity kill-switch is on", () => {
+    expect(DISABLED_WORKSPACE_SESSION_ACTIVITY).toEqual({
+      rootThreadId: null,
+      rootThreadName: null,
+      relevantThreadIds: [],
+      timeline: [],
+      sessionSummaries: [],
+      isProcessing: false,
+      emptyState: "idle",
+    });
+  });
+
+  it("freezes the stub so call sites cannot churn or mutate the shared reference", () => {
+    expect(Object.isFrozen(DISABLED_WORKSPACE_SESSION_ACTIVITY)).toBe(true);
+    expect(DISABLED_WORKSPACE_SESSION_ACTIVITY.timeline).toHaveLength(0);
+    expect(DISABLED_WORKSPACE_SESSION_ACTIVITY.isProcessing).toBe(false);
   });
 });
