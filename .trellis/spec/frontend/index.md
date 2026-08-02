@@ -35,6 +35,7 @@
 | [Markdown Math Normalization Idempotence](./quality-guidelines.md#markdown-math-normalization-must-preserve-container-and-math-range-idempotence) | Markdown container prefix、math-range idempotence 与回归口径 | Active |
 | [CodeMirror State-Coupled Extensions 不可跨越 Lazy Boundary](./quality-guidelines.md#codemirror-state-coupled-extensions-不可跨越-lazy-boundary) | 任何把 `@codemirror/*` state-coupled extension 拆到 lazy 边界后的硬性禁止 | Active |
 | [Type Safety](./type-safety.md) | strict TypeScript 与 boundary mapping 规则 | Active |
+| [Linux Native Baidu Analytics Transport](../backend/linux-native-baidu-analytics.md) | Linux native official `hm.js` Image bridge、Tauri IPC 与 Rust fixed transport contract | Active |
 | [Vendored Frontend（tokentracker-dashboard）](./tokentracker-dashboard-vendored.md) | 拓展-使用统计 vendored dashboard 的维护、数据通道、Tailwind v4 与性能边界约定 | Active |
 
 ## Pre-Development Checklist（开始开发前必读）
@@ -50,6 +51,7 @@
 - 涉及 UI -> service -> tauri/rust 的跨层变更，额外读：
   - `../guides/cross-layer-thinking-guide.md`
   - `../guides/code-reuse-thinking-guide.md`
+- 涉及 `src/services/baiduTongji.ts` 或 Linux native analytics 时，额外读 [Linux Native Baidu Analytics Transport](../backend/linux-native-baidu-analytics.md)。
 - 涉及 Web Service assets 检测/安装状态或启动 gate 时，额外读 `../backend/web-assets-package-contract.md`。
 - 涉及 Claude 上下文用量窗体、`ThreadTokenUsage` 或 token indicator 时，额外读 [Claude Context Usage Display](./claude-context-usage-display.md)。
 - 涉及 AI model JSON、structured output、`Return pure JSON only` prompt、`JSON.parse(response.text)` 或模型输出 repair 时，额外读 [Model Structured Output Contract](./model-structured-output.md)。
