@@ -4,8 +4,8 @@
 
 - Updated At: `2026-08-02`
 - Active proposals: `28`
-- Archived proposals: `742`
-- Main capability specs: `438`
+- Archived proposals: `743`
+- Main capability specs: `439`
 
 ## Active Proposals
 
