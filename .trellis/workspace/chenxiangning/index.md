@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-30.md`
-- **Total Sessions**: 1295
+- **Total Sessions**: 1296
 - **Last Active**: 2026-08-02
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-30.md` | ~1846 | Active |
+| `journal-30.md` | ~1881 | Active |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
@@ -58,6 +58,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1296 | 2026-08-02 | 修复 Shared 跨引擎切渠道落本地配置 | `c71d72281` | `cxn-version-0.7.15` |
 | 1295 | 2026-08-02 | 修复 Shared target 竞态与 Claude managed model 串台 | `89d9f7060`, `bc2c75d28` | `cxn-version-0.7.15` |
 | 1294 | 2026-08-02 | fix: 隔离 Kimi AgentSwarm 子代理交付正文 | `80da295e5` | `cxn-version-0.7.15` |
 | 1293 | 2026-08-02 | 跨引擎子代理幕布识别与会话树层级 | `7ada4675b` | `cxn-version-0.7.15` |

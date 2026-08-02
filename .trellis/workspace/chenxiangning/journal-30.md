@@ -1844,3 +1844,38 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1296: 修复 Shared 跨引擎切渠道落本地配置
+
+**Date**: 2026-08-02
+**Task**: 修复 Shared 跨引擎切渠道落本地配置
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+handleChannelSwitch 跨引擎立即写 selectedNextTarget，避免 Codex→Claude DeepSeek 显示本地配置·k3
+
+### Main Changes
+
+用户复现 Shared Codex→Claude DeepSeek 时 target 未写、落到本地配置。
+修复 ModelSelect 跨引擎 channel switch 必须 onExecutionTargetChange。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c71d72281` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
