@@ -10,6 +10,7 @@ const statusPanel = {
     files: "文件",
     emptyTodos: "暂无任务",
     emptySubagents: "暂无子代理",
+    openSubagentTarget: "定位子代理",
     emptyFileChanges: "暂无文件变更",
     emptyCommands: "暂无命令",
     emptyPlan: "暂无计划",

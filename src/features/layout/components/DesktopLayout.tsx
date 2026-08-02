@@ -13,6 +13,10 @@ import { MemoryPanel } from "./MemoryPanel";
 import type { CenterMode, EditorSplitCompanion } from "../../app/hooks/useGitPanelController";
 import { getClientStoreSync, writeClientStoreValue } from "../../../services/clientStorage";
 import { WorkspaceNoteCardsLayoutProvider, useWorkspaceNoteCardsLayoutController } from "../../note-cards/components/WorkspaceNoteCardsLayoutContext";
+import {
+  SubagentChatSplit,
+  useSubagentInspectorSelection,
+} from "../../subagent-ui";
 
 const NOTE_CARDS_SPLIT_RATIO_KEY = "noteCardsSplitRatio";
 const DEFAULT_NOTE_CARDS_SPLIT_RATIO = 66.667;
@@ -88,6 +92,9 @@ type DesktopLayoutProps = {
   gitDiffPanelNode: ReactNode;
   planPanelNode: ReactNode;
   composerNode: ReactNode;
+  /** 子代理 inspector 加载 session 需要 workspace scope */
+  activeWorkspaceId?: string | null;
+  activeWorkspacePath?: string | null;
   runtimeConsoleDockNode: ReactNode;
   terminalDockNode: ReactNode;
   debugPanelNode: ReactNode;
@@ -134,6 +141,8 @@ export function DesktopLayout({
   gitDiffPanelNode,
   planPanelNode,
   composerNode,
+  activeWorkspaceId = null,
+  activeWorkspacePath = null,
   runtimeConsoleDockNode,
   terminalDockNode,
   debugPanelNode,
@@ -165,8 +174,13 @@ export function DesktopLayout({
     isEditorSplitMode && editorSplitCompanion === "chat" && !isEditorFileMaximized;
   const isEditorSplitProjectMapVisible = isEditorSplitMode && editorSplitCompanion === "projectMap" && !isEditorFileMaximized;
   const isBrowserDockSplitVisible = centerMode === "chat" && Boolean(browserDockNode);
+  // 子代理详情打开时，composer 必须进左列，才能形成「左上下 | 右」而非「上左右 | 下全宽」
+  const subagentInspectorOpen = Boolean(useSubagentInspectorSelection());
   const shouldPlaceComposerInChatColumn =
-    isEditorSplitChatVisible || isBrowserDockSplitVisible || isNoteCardsSplitMode;
+    isEditorSplitChatVisible ||
+    isBrowserDockSplitVisible ||
+    isNoteCardsSplitMode ||
+    subagentInspectorOpen;
   const hasBottomPanel = Boolean(planPanelNode);
   const shouldShowComposerBelowContent =
     centerMode !== "projectMap" &&
@@ -753,8 +767,14 @@ export function DesktopLayout({
                     }
                     ref={chatLayerRef}
                   >
-                    {messagesNode}
-                    {shouldPlaceComposerInChatColumn ? composerNode : null}
+                    <SubagentChatSplit
+                      messagesNode={messagesNode}
+                      composerNode={
+                        shouldPlaceComposerInChatColumn ? composerNode : null
+                      }
+                      workspaceId={activeWorkspaceId}
+                      workspacePath={activeWorkspacePath}
+                    />
                   </div>
                   {isBrowserDockSplitVisible ? (
                     <div

@@ -2187,7 +2187,7 @@ describe("StatusPanel", () => {
   });
 
   it("aggregates collab agents from the current root subtree", () => {
-    render(
+    const { container } = render(
       <StatusPanel
         items={[]}
         isProcessing={true}
@@ -2204,8 +2204,9 @@ describe("StatusPanel", () => {
 
     expect(screen.getByText("0/1")).toBeTruthy();
     fireEvent.click(screen.getByText("statusPanel.tabAgents"));
-    expect(screen.getByText("agent-7")).toBeTruthy();
+    // 列表展示 persona 名 + 任务描述，不再暴露 thread id 文案
     expect(screen.getByText("Audit current panel")).toBeTruthy();
+    expect(container.querySelector(".subagent-persona-card")).toBeTruthy();
   });
 
   it("does not mark idle child threads as completed without wait facts", () => {
@@ -2226,8 +2227,8 @@ describe("StatusPanel", () => {
 
     expect(screen.getByText("0/1")).toBeTruthy();
     fireEvent.click(screen.getByText("statusPanel.tabAgents"));
-    expect(screen.getByText("agent-7")).toBeTruthy();
-    expect(container.querySelector(".sp-subagent-running")).toBeTruthy();
+    expect(screen.getByText("Audit current panel")).toBeTruthy();
+    expect(container.querySelector(".subagent-persona-card.is-running")).toBeTruthy();
   });
 
   it("settles idle child threads with historical assistant output as completed", () => {
@@ -2256,8 +2257,10 @@ describe("StatusPanel", () => {
 
     expect(screen.getByText("1/1")).toBeTruthy();
     fireEvent.click(screen.getByText("statusPanel.tabAgents"));
-    expect(screen.getByText("agent-7")).toBeTruthy();
-    expect(container.querySelector(".sp-subagent-completed")).toBeTruthy();
+    expect(screen.getByText("Audit current panel")).toBeTruthy();
+    expect(
+      container.querySelector(".subagent-persona-card.is-completed"),
+    ).toBeTruthy();
   });
 
   it("uses collab wait facts to mark agent completion", () => {
@@ -2277,8 +2280,10 @@ describe("StatusPanel", () => {
 
     expect(screen.getByText("1/1")).toBeTruthy();
     fireEvent.click(screen.getByText("statusPanel.tabAgents"));
-    expect(screen.getByText("agent-7")).toBeTruthy();
-    expect(container.querySelector(".sp-subagent-completed")).toBeTruthy();
+    expect(screen.getByText("Audit current panel")).toBeTruthy();
+    expect(
+      container.querySelector(".subagent-persona-card.is-completed"),
+    ).toBeTruthy();
   });
 
   it("parses verbose text statuses without leaking them into descriptions", () => {
@@ -2309,7 +2314,9 @@ describe("StatusPanel", () => {
     expect(
       screen.queryByText("agent-7: completed (cached after wait)"),
     ).toBeNull();
-    expect(container.querySelector(".sp-subagent-completed")).toBeTruthy();
+    expect(
+      container.querySelector(".subagent-persona-card.is-completed"),
+    ).toBeTruthy();
   });
 
   it("downgrades codex in-progress plan steps when thread is idle", () => {
@@ -2348,24 +2355,17 @@ describe("StatusPanel", () => {
     );
 
     fireEvent.click(screen.getByText("statusPanel.tabAgents"));
-    fireEvent.click(screen.getByRole("button", { name: "engineTaskOutput.inspect" }));
-    expect(screen.getByLabelText("engineTaskOutput.label")).toBeTruthy();
-    expect(screen.getByText("thread agent-7")).toBeTruthy();
-
+    // 列表行只开幕布 drawer，不再提供定位 icon / onSelectSubagent
     fireEvent.click(screen.getAllByText("Audit current panel")[0]);
-
-    expect(onSelectSubagent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: "agent-7",
-        navigationTarget: {
-          kind: "thread",
-          threadId: "agent-7",
-        },
+    expect(onSelectSubagent).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("button", {
+        name: /statusPanel\.openSubagentTarget|定位子代理|Locate subagent/,
       }),
-    );
+    ).toBeNull();
   });
 
-  it("emits claude task navigation targets when clicking subagents", () => {
+  it("opens inspector from list without emitting navigation targets", () => {
     const onSelectSubagent = vi.fn();
 
     render(
@@ -2377,22 +2377,13 @@ describe("StatusPanel", () => {
     );
 
     fireEvent.click(screen.getByText("statusPanel.tabSubagents"));
-    fireEvent.click(screen.getByRole("button", { name: "engineTaskOutput.inspect" }));
-    expect(screen.getByLabelText("engineTaskOutput.label")).toBeTruthy();
-    expect(screen.getByText("task af452b1b615f93a9e")).toBeTruthy();
-
     fireEvent.click(screen.getAllByText("Bug诊断与性能安全审查")[0]);
-
-    expect(onSelectSubagent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: "call_fa8bd06e774141c4a7f29a79",
-        navigationTarget: {
-          kind: "claude-task",
-          taskId: "af452b1b615f93a9e",
-          toolUseId: "call_fa8bd06e774141c4a7f29a79",
-        },
+    expect(onSelectSubagent).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("button", {
+        name: /statusPanel\.openSubagentTarget|定位子代理|Locate subagent/,
       }),
-    );
+    ).toBeNull();
   });
 
   it("does not crash when restored tool items miss runtime string fields", () => {

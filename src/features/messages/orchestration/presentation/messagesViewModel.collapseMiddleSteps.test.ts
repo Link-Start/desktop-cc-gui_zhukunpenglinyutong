@@ -70,6 +70,37 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
     expect(result.phases[0]!.hiddenItemIds).toEqual(["r1", "t1"]);
   });
 
+  it("keeps Agent/Task subagent tools visible when process phase collapses", () => {
+    const agentTool: ConversationItem = {
+      id: "agent-1",
+      kind: "tool",
+      toolType: "agent",
+      title: "Tool: Agent",
+      detail: JSON.stringify({ description: "并行排查", subagent_type: "explore" }),
+      status: "completed",
+    };
+    const items: ConversationItem[] = [
+      user("u1"),
+      reasoning("r1"),
+      tool("t1", "completed", 500),
+      agentTool,
+      assistant("a1", "最终结论"),
+    ];
+    const result = resolveCollapsedTimelineItems({
+      activeEngine: "claude",
+      timelineSourceItems: items,
+    });
+    // reasoning + read 折叠进 chip；Agent 卡片常驻幕布
+    expect(result.timelineItems.map((item) => item.id)).toEqual([
+      "u1",
+      "agent-1",
+      "a1",
+    ]);
+    expect(result.phases).toHaveLength(1);
+    expect(result.phases[0]?.hiddenItemIds).toEqual(["r1", "t1"]);
+    expect(result.phases[0]?.hiddenItemIds).not.toContain("agent-1");
+  });
+
   it("collapses a single process step including lone reasoning into the chip", () => {
     const toolOnly = resolveCollapsedTimelineItems({
       activeEngine: "claude",

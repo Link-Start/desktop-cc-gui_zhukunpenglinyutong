@@ -15,6 +15,7 @@ import {
   isExplicitReasoningSegmentId,
   parseReasoning,
 } from "../../presentation/messagesReasoning";
+import { isSubagentTool } from "../../../subagent-ui";
 
 export type MessageActionTargets = {
   targetByAssistantId: Map<string, string>;
@@ -93,6 +94,10 @@ function isAssistantMessageWithVisibleText(item: ConversationItem): boolean {
 
 /** Process items that can form a causal phase above assistant prose. */
 function isCollapsibleProcessItem(item: ConversationItem): boolean {
+  // subAgent persona 卡片须常驻幕布，禁止被 process-phase 折叠 hard-unmount。
+  if (item.kind === "tool" && isSubagentTool(item)) {
+    return false;
+  }
   return (
     item.kind === "tool" ||
     item.kind === "reasoning" ||

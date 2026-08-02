@@ -609,7 +609,8 @@ export function countRenderableCollapsedEntries(
     if (
       entry.kind === "readGroup" ||
       entry.kind === "editGroup" ||
-      entry.kind === "searchGroup"
+      entry.kind === "searchGroup" ||
+      entry.kind === "subagentGroup"
     ) {
       return count + Math.max(1, entry.items.length);
     }

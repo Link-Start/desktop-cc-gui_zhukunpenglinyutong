@@ -49,11 +49,6 @@ import {
   formatSessionQuotaTargetTitle,
 } from "../utils/sessionQuotaTargets";
 import { projectCostRecord } from "../../context-ledger/cost-budget";
-import { EngineTaskOutputInspector } from "../../engine-task-output/components/EngineTaskOutputInspector";
-import { useEngineTaskOutputSnapshot } from "../../engine-task-output/hooks/useEngineTaskOutputSnapshot";
-import type { EngineTaskOutputSnapshot } from "../../engine-task-output/types";
-import { buildEngineTaskOutputSnapshot } from "../../engine-task-output/utils/engineTaskOutputProjection";
-
 interface StatusPanelProps extends CodeAnnotationBridgeProps {
   workspaceId?: string | null;
   workspacePath?: string | null;
@@ -232,7 +227,8 @@ export const StatusPanel = memo(function StatusPanel({
   threadStatusById,
   onOpenDiffPath,
   onOpenFilePath,
-  onSelectSubagent,
+  // 保留 prop 以兼容外部接线；子代理列表改走幕布 inspector，不再转发 navigation。
+  onSelectSubagent: _onSelectSubagent,
   variant = "popover",
   visibleDockTabs,
   showGovernanceEvidence = false,
@@ -379,13 +375,6 @@ export const StatusPanel = memo(function StatusPanel({
       dockTabAvailability,
     ),
   );
-  const [inspectedTaskOutput, setInspectedTaskOutput] =
-    useState<EngineTaskOutputSnapshot | null>(null);
-  const inspectedTaskOutputState = useEngineTaskOutputSnapshot({
-    workspaceId,
-    snapshot: inspectedTaskOutput,
-  });
-
   useEffect(() => {
     if (variant !== "popover" || !openTab) return;
     function handleClickOutside(event: MouseEvent) {
@@ -808,35 +797,16 @@ export const StatusPanel = memo(function StatusPanel({
         <TodoList todos={usePlanAsTaskList ? codexTaskItems : todos} />
       )}
       {activeTab === "subagent" && (
-        <>
-          <SubagentList
-            subagents={subagents}
-            onSelectSubagent={(agent) => {
-              onSelectSubagent?.(agent);
-              if (variant !== "dock") {
-                setOpenTab(null);
-              }
-            }}
-            onInspectSubagent={(agent) => {
-              if (!agent.taskOutput) {
-                return;
-              }
-              setInspectedTaskOutput(
-                buildEngineTaskOutputSnapshot(agent.taskOutput, activeTokenUsage),
-              );
-            }}
-          />
-          {inspectedTaskOutput ? (
-            <div className="sp-subagent-output">
-              <EngineTaskOutputInspector
-                snapshot={inspectedTaskOutputState.snapshot ?? inspectedTaskOutput}
-                refreshState={inspectedTaskOutputState.refreshState}
-                onRefresh={inspectedTaskOutputState.refresh}
-                onClose={() => setInspectedTaskOutput(null)}
-              />
-            </div>
-          ) : null}
-        </>
+        <SubagentList
+          subagents={subagents}
+          onInspectSubagent={() => {
+            // 列表点击统一打开幕布抽屉；popover 关闭浮层即可。
+            // 不再回调 onSelectSubagent（scroll-to-task / 切线程改由抽屉会话完成）。
+            if (variant !== "dock") {
+              setOpenTab(null);
+            }
+          }}
+        />
       )}
       {activeTab === "checkpoint" && (
         <>

@@ -165,4 +165,40 @@ describe("groupToolItems", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]?.kind).toBe("searchGroup");
   });
+
+  it("promotes a single Agent tool into a subagentGroup", () => {
+    const entries = groupToolItems([createToolItem("agent-1", "Tool: Agent", "agent")]);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.kind).toBe("subagentGroup");
+    if (entries[0]?.kind === "subagentGroup") {
+      expect(entries[0].items).toHaveLength(1);
+      expect(entries[0].items[0]?.id).toBe("agent-1");
+    }
+  });
+
+  it("groups consecutive Agent tools into one subagentGroup", () => {
+    const entries = groupToolItems([
+      createToolItem("agent-1", "Tool: Agent", "agent"),
+      createToolItem("agent-2", "Tool: Agent", "agent"),
+    ]);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.kind).toBe("subagentGroup");
+    if (entries[0]?.kind === "subagentGroup") {
+      expect(entries[0].items).toHaveLength(2);
+    }
+  });
+
+  it("breaks subagentGroup when a non-agent tool interrupts", () => {
+    const entries = groupToolItems([
+      createToolItem("agent-1", "Tool: Agent", "agent"),
+      createToolItem("read-1", "Tool: read"),
+      createToolItem("agent-2", "Tool: Agent", "agent"),
+    ]);
+    // 单个 read 不足以形成 readGroup，仍以 item 打断 subagent 连续段
+    expect(entries.map((entry) => entry.kind)).toEqual([
+      "subagentGroup",
+      "item",
+      "subagentGroup",
+    ]);
+  });
 });

@@ -234,7 +234,16 @@ export function getToolDisplayName(toolName: string, title?: string, t?: (key: s
 /**
  * 工具分类类型
  */
-export type ToolCategory = 'read' | 'edit' | 'bash' | 'search' | 'web' | 'fileChange' | 'mcp' | 'other';
+export type ToolCategory =
+  | 'read'
+  | 'edit'
+  | 'bash'
+  | 'search'
+  | 'web'
+  | 'fileChange'
+  | 'mcp'
+  | 'subagent'
+  | 'other';
 
 /**
  * 对 tool item 进行分类，返回其所属类别。
@@ -247,6 +256,16 @@ export function classifyToolCategory(item: {
   const toolType = normalizeRuntimeString(item.toolType);
   const toolName = extractToolName(item.title);
   const lower = toolName.toLowerCase();
+
+  // 优先级0：subAgent（Agent / Task）单独成组，供 persona 卡片墙
+  if (
+    lower === 'agent' ||
+    lower === 'task' ||
+    toolType === 'agent' ||
+    toolType === 'task'
+  ) {
+    return 'subagent';
+  }
 
   // 优先级1：明确 toolType（但 fileChange 仍可用 title 名做 edit 场景）
   if (toolType === 'commandExecution') return 'bash';

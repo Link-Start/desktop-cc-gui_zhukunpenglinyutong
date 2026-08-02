@@ -577,6 +577,8 @@ export function renderAppShell(ctx: RenderAppShellContext) {
         isEditorFileMaximized={isEditorFileMaximized}
         hasActivePlan={hasActivePlan}
         activeWorkspace={Boolean(activeWorkspace)}
+        activeWorkspaceId={activeWorkspace?.id ?? null}
+        activeWorkspacePath={activeWorkspace?.path ?? null}
         sidebarNode={sidebarNodeWithTopbar}
         messagesNode={mainMessagesNode}
         composerNode={showWorkspaceHome ? null : composerNode}
