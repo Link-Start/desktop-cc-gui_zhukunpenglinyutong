@@ -1615,3 +1615,42 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1291: 为杀开关空 stub 补防御性测试
+
+**Date**: 2026-08-02
+**Task**: 为杀开关空 stub 补防御性测试
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+在 buildWorkspaceSessionActivity.test.ts 增加 DISABLED_WORKSPACE_SESSION_ACTIVITY 形状与冻结断言（timeline 空、isProcessing false、Object.isFrozen），防止下线期间 stub 形状漂移复活派生链路。
+
+### Main Changes
+
+| 项 | 内容 |
+|----|------|
+| 文件 | src/features/session-activity/adapters/buildWorkspaceSessionActivity.test.ts（+24/-1） |
+| 断言 | stub 与 createEmptyWorkspaceSessionActivityViewModel 形状一致；Object.isFrozen；timeline 空、isProcessing false |
+| 验证 | vitest 该文件 40 用例全绿 |
+| 提交 | 6e47b64ef test(session-activity): 为杀开关空 stub 补形状与冻结断言（单独提交） |
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6e47b64ef` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
