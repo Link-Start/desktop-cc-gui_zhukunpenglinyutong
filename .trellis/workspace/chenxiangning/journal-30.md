@@ -1654,3 +1654,50 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1292: 稳定 Shared 会话列表图标（id-first）
+
+**Date**: 2026-08-02
+**Task**: 稳定 Shared 会话列表图标（id-first）
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 问题 | Shared CLI 侧栏/Topbar/Quick Switcher 图标经常变成其他 CLI 的 EngineIcon |
+| 根因 | 图标消费方仍只信可丢的 threadKind；id-first 修了 picker/send/delete 但漏迁列表图标 |
+| 修复 | ThreadList / topbarSessionTabs / sessionProjection 统一 resolveIsSharedSession |
+| 验证 | 63 tests（ThreadList / topbar / sessionProjection / identity）通过 |
+
+**Updated Files**:
+- `src/features/app/components/ThreadList.tsx`
+- `src/features/app/components/ThreadList.test.tsx`
+- `src/features/layout/hooks/topbarSessionTabs.ts`
+- `src/features/layout/hooks/topbarSessionTabs.test.ts`
+- `src/features/quick-switcher/sessionProjection.ts`
+- `src/features/quick-switcher/sessionProjection.test.ts`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7caf8006f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
