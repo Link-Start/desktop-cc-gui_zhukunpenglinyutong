@@ -16,6 +16,7 @@ import type { ThreadMoveFolderTarget } from "../hooks/useSidebarMenus";
 import { ProxyStatusBadge } from "../../../components/ProxyStatusBadge";
 import { EngineIcon } from "../../engine/components/EngineIcon";
 import { SharedSessionIcon } from "../../shared-session/components/SharedSessionIcon";
+import { resolveIsSharedSession } from "../../shared-session/utils/sharedSessionIdentity";
 import { resolveEngineProviderLabel } from "../utils/codexProviderLabel";
 import { THREAD_ROW_TOOLTIP_DELAY_MS } from "../constants";
 import { getExitedSessionRowVisibility } from "../utils/exitedSessionRows";
@@ -691,7 +692,9 @@ export function ThreadList({
     const canPin = depth === 0;
     const isPinned = canPin && isThreadPinned(workspaceId, thread.id);
     const isAutoNaming = isThreadAutoNaming(workspaceId, thread.id);
-    const isSharedThread = thread.threadKind === "shared";
+    // id-first：shared: 前缀是 hard gate；threadKind 投影可丢/被 native 覆盖
+    // （与 fix-shared-session-identity-id-first 同源；图标消费方此前漏迁）。
+    const isSharedThread = resolveIsSharedSession(thread.id, thread);
     const isSubagentThread = depth > 0;
     const isSubagentParent = depth === 0 && hasChildren;
     const isActiveSubagentGroup =
@@ -713,8 +716,7 @@ export function ThreadList({
       isPendingSubagent && thread.parentThreadId
         ? thread.parentThreadId
         : thread.id;
-    const canArchive =
-      !isPendingSubagent && !isSharedThread && !thread.id.startsWith("shared:");
+    const canArchive = !isPendingSubagent && !isSharedThread;
     const engineSource: EngineType = thread.engineSource ?? "codex";
     const baseEngineTitle =
       engineSource === "claude"
