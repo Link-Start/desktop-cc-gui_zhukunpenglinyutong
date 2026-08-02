@@ -1914,3 +1914,38 @@ handleChannelSwitch 跨引擎立即写 selectedNextTarget，避免 Codex→Claud
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1298: 修复 React 185 Claude repair 更新环
+
+**Date**: 2026-08-03
+**Task**: 修复 React 185 Claude repair 更新环
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+拆除 Claude residual 自动 handleSelectModel effect，发送仍用 resolvedModel 纠正 runtime
+
+### Main Changes
+
+用户生产 #185。根因：allowUnknown + repair effect 对打。
+已删除 effect 并幂等化相关 setState。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a4166c03e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
