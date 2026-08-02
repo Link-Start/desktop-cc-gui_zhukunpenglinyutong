@@ -111,6 +111,85 @@ fn build_claude_catalog_entry_from_fact(
     }
 }
 
+fn expand_hidden_session_id_aliases(session_id: &str) -> Vec<String> {
+    let trimmed = session_id.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+    let mut keys = vec![trimmed.to_string()];
+    let parts = trimmed.split(':').collect::<Vec<_>>();
+    if let Some(last) = parts.last().copied().filter(|value| !value.is_empty()) {
+        keys.push(last.to_string());
+    }
+    if parts.len() == 2 {
+        if let Some(raw) = parts.get(1).copied().filter(|value| !value.is_empty()) {
+            keys.push(raw.to_string());
+        }
+    } else if parts.len() >= 3 {
+        let engine = parts[0];
+        let raw = parts[parts.len() - 1];
+        if !engine.is_empty() && !raw.is_empty() {
+            keys.push(format!("{engine}:{raw}"));
+        }
+    }
+    keys.sort();
+    keys.dedup();
+    keys
+}
+
+fn collect_hidden_automatic_session_ids_from_metadata(
+    metadata_by_workspace_id: &HashMap<String, WorkspaceSessionCatalogMetadata>,
+) -> Vec<String> {
+    let mut ids = HashSet::new();
+    for metadata in metadata_by_workspace_id.values() {
+        for (session_id, auto_session) in &metadata.auto_session_by_session_id {
+            if auto_session.visibility != AutoSessionVisibility::Hidden {
+                continue;
+            }
+            for alias in expand_hidden_session_id_aliases(session_id) {
+                ids.insert(alias);
+            }
+        }
+    }
+    let mut out = ids.into_iter().collect::<Vec<_>>();
+    out.sort();
+    out
+}
+
+fn collect_hidden_automatic_session_ids_from_entries(
+    entries: &[WorkspaceSessionCatalogEntry],
+) -> Vec<String> {
+    let mut ids = HashSet::new();
+    for entry in entries {
+        if !entry_is_hidden_automatic_session(entry) {
+            continue;
+        }
+        for alias in expand_hidden_session_id_aliases(&entry.session_id) {
+            ids.insert(alias);
+        }
+        if let Some(stable_key) = entry.stable_session_key.as_deref() {
+            for alias in expand_hidden_session_id_aliases(stable_key) {
+                ids.insert(alias);
+            }
+        }
+    }
+    let mut out = ids.into_iter().collect::<Vec<_>>();
+    out.sort();
+    out
+}
+
+fn merge_hidden_automatic_session_ids(
+    left: impl IntoIterator<Item = String>,
+    right: impl IntoIterator<Item = String>,
+) -> Vec<String> {
+    let mut ids = HashSet::new();
+    ids.extend(left);
+    ids.extend(right);
+    let mut out = ids.into_iter().collect::<Vec<_>>();
+    out.sort();
+    out
+}
+
 fn build_catalog_page(
     entries: Vec<WorkspaceSessionCatalogEntry>,
     query: WorkspaceSessionCatalogQuery,
@@ -118,6 +197,7 @@ fn build_catalog_page(
     limit: Option<u32>,
     partial_source: Option<String>,
     source_statuses: Vec<WorkspaceSessionCatalogSourceStatus>,
+    extra_hidden_automatic_session_ids: Vec<String>,
 ) -> WorkspaceSessionCatalogPage {
     let source_statuses = normalize_source_statuses(source_statuses);
     let cursor_state = parse_catalog_cursor_state(cursor.as_deref());
@@ -135,6 +215,11 @@ fn build_catalog_page(
         .filter(|value| !value.is_empty())
         .map(|value| value.to_lowercase());
     let folder_filter = normalize_query_folder_filter(&query);
+
+    let hidden_automatic_session_ids = merge_hidden_automatic_session_ids(
+        extra_hidden_automatic_session_ids,
+        collect_hidden_automatic_session_ids_from_entries(&entries),
+    );
 
     let filtered: Vec<WorkspaceSessionCatalogEntry> = entries
         .into_iter()
@@ -181,6 +266,7 @@ fn build_catalog_page(
         limit_capped,
         partial_source,
         source_statuses,
+        hidden_automatic_session_ids,
     }
 }
 
@@ -879,6 +965,8 @@ async fn build_workspace_scope_catalog_data(
     );
 
     let deduped = dedupe_catalog_entries_and_apply_children_counts(entries);
+    let hidden_automatic_session_ids =
+        collect_hidden_automatic_session_ids_from_metadata(&metadata_by_workspace_id);
 
     Ok(WorkspaceScopeCatalogData {
         scope_kind,
@@ -886,5 +974,6 @@ async fn build_workspace_scope_catalog_data(
         entries: deduped,
         partial_sources: normalize_partial_sources(partial_sources),
         source_statuses,
+        hidden_automatic_session_ids,
     })
 }

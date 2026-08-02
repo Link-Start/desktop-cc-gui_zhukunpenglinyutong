@@ -82,5 +82,6 @@ pub(crate) async fn list_project_related_sessions_core(
         limit,
         join_partial_sources(partial_sources),
         Vec::new(),
+        Vec::new(),
     ))
 }

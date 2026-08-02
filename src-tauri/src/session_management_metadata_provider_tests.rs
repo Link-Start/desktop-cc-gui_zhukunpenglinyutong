@@ -134,6 +134,30 @@
             Some("spec-hub-apply")
         );
 
+        let page = build_catalog_page(
+            vec![hidden.clone(), traceable.clone()],
+            WorkspaceSessionCatalogQuery::default(),
+            None,
+            Some(10),
+            None,
+            Vec::new(),
+            collect_hidden_automatic_session_ids_from_metadata(&metadata_by_workspace_id),
+        );
+        assert!(
+            page.data
+                .iter()
+                .all(|entry| entry.session_id != "codex-hidden")
+        );
+        assert!(
+            page.hidden_automatic_session_ids
+                .iter()
+                .any(|id| id == "codex-hidden" || id.contains("codex-hidden"))
+        );
+        assert!(page
+            .hidden_automatic_session_ids
+            .iter()
+            .any(|id| id.contains("codex-hidden")));
+
         std::fs::remove_dir_all(base).ok();
     }
 

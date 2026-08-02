@@ -154,6 +154,7 @@ export function useThreadActionsSessionCatalog({
       partialSource: string | null;
       nextCursor: string | null;
       sourceStatuses: WorkspaceSessionCatalogSourceStatus[];
+      hiddenAutomaticSessionIds: string[];
     } | null> => {
       if (!canListWorkspaceSessions || !listWorkspaceSessionsService) {
         return null;
@@ -172,6 +173,7 @@ export function useThreadActionsSessionCatalog({
           partialSource: "session-catalog-timeout",
           nextCursor: null,
           sourceStatuses: [],
+          hiddenAutomaticSessionIds: [],
         };
       }
       const sessionsById = new Map<string, ProjectCatalogSessionSummary>();
@@ -197,11 +199,19 @@ export function useThreadActionsSessionCatalog({
         response.sourceStatuses,
       );
       const sessions = Array.from(sessionsById.values());
+      const hiddenAutomaticSessionIds = Array.isArray(
+        response.hiddenAutomaticSessionIds,
+      )
+        ? response.hiddenAutomaticSessionIds
+            .map((value) => String(value ?? "").trim())
+            .filter(Boolean)
+        : [];
       return {
         sessions,
         partialSource,
         nextCursor: response.nextCursor ?? null,
         sourceStatuses,
+        hiddenAutomaticSessionIds,
       };
     },
     [canListWorkspaceSessions, listWorkspaceSessionsService],

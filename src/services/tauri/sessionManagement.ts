@@ -161,6 +161,12 @@ export interface WorkspaceSessionCatalogPage {
   limitCapped?: boolean;
   partialSource?: string | null;
   sourceStatuses?: WorkspaceSessionCatalogSourceStatus[];
+  /**
+   * Session id aliases for automatic helper sessions with visibility=hidden.
+   * Sidebar/native history merge uses this exclusion set so commit-message
+   * helpers do not reappear when engine-native lists omit autoSession metadata.
+   */
+  hiddenAutomaticSessionIds?: string[];
 }
 
 export interface WorkspaceSessionArchiveEvidence {

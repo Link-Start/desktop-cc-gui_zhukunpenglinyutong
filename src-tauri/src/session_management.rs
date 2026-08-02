@@ -496,6 +496,7 @@ pub(crate) async fn list_workspace_sessions_core(
         limit,
         join_partial_sources(scope_catalog.partial_sources),
         scope_catalog.source_statuses,
+        scope_catalog.hidden_automatic_session_ids,
     ))
 }
 
@@ -569,6 +570,7 @@ pub(crate) async fn list_global_codex_sessions_core(
         cursor,
         limit,
         join_partial_sources(partial_sources),
+        Vec::new(),
         Vec::new(),
     ))
 }

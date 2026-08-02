@@ -140,6 +140,7 @@
             Some(1),
             None,
             Vec::new(),
+            Vec::new(),
         );
 
         assert_eq!(page.data.len(), 1);

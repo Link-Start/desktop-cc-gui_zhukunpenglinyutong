@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import type { ConversationItem, ThreadSummary } from "../../../types";
 import {
+  buildHiddenAutomaticSessionIdSet,
+  filterHiddenAutomaticThreadSummaries,
   isRetainableEngineContinuitySummary,
   mergeCodexCatalogSessionSummaries,
   mergeDegradedClaudeContinuitySummaries,
@@ -15,9 +17,73 @@ import {
   selectReplacementThreadDecision,
   selectReplacementThreadByMessageHistory,
   selectReplacementThreadByMessageHistoryDecision,
+  threadIdMatchesHiddenAutomaticSessionSet,
 } from "./useThreadActions.helpers";
 
 describe("useThreadActions.helpers", () => {
+  it("matches hidden automatic session ids across alias forms", () => {
+    const hiddenIds = buildHiddenAutomaticSessionIdSet([
+      "claude:f87d3167-23d4-47a8-a273-43eb9bd57f8a:2b325056-0242-4450-a18e-1b7b29f718c1",
+      "codex:019fbdf3-fd7d-7422-acf1-900c7361a0ef",
+    ]);
+
+    expect(
+      threadIdMatchesHiddenAutomaticSessionSet(
+        "claude:2b325056-0242-4450-a18e-1b7b29f718c1",
+        hiddenIds,
+      ),
+    ).toBe(true);
+    expect(
+      threadIdMatchesHiddenAutomaticSessionSet(
+        "2b325056-0242-4450-a18e-1b7b29f718c1",
+        hiddenIds,
+      ),
+    ).toBe(true);
+    expect(
+      threadIdMatchesHiddenAutomaticSessionSet(
+        "019fbdf3-fd7d-7422-acf1-900c7361a0ef",
+        hiddenIds,
+      ),
+    ).toBe(true);
+    expect(
+      threadIdMatchesHiddenAutomaticSessionSet("claude:user-visible", hiddenIds),
+    ).toBe(false);
+  });
+
+  it("filters native sidebar rows that lack autoSession but match hidden ids", () => {
+    const hiddenIds = buildHiddenAutomaticSessionIdSet([
+      "claude:2b325056-0242-4450-a18e-1b7b29f718c1",
+    ]);
+    const filtered = filterHiddenAutomaticThreadSummaries(
+      [
+        {
+          id: "claude:2b325056-0242-4450-a18e-1b7b29f718c1",
+          name: "Please generate a commit message",
+          autoSession: null,
+        },
+        {
+          id: "claude:user-visible",
+          name: "审查 PR",
+          autoSession: null,
+        },
+        {
+          id: "codex:helper",
+          name: "helper",
+          autoSession: {
+            sessionPurpose: "commit-message",
+            visibility: "hidden",
+            ownerFeature: "git",
+            autoArchive: true,
+            createdBy: "system",
+          },
+        },
+      ],
+      hiddenIds,
+    );
+
+    expect(filtered.map((row) => row.id)).toEqual(["claude:user-visible"]);
+  });
+
   it("projects provider continuation at the top level without parentThreadId", () => {
     const [continuation] = mergeCodexCatalogSessionSummaries(
       [],

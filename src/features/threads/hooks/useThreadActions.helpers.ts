@@ -96,6 +96,91 @@ export type CodexCatalogSessionSummary = {
   lineageDepth?: number | null;
 };
 
+/**
+ * Expand catalog/native session id aliases so hidden automatic helpers can be
+ * matched across `engine:id`, `engine:workspace:id`, and raw id forms.
+ */
+export function buildHiddenAutomaticSessionIdSet(
+  ids: readonly string[] | null | undefined,
+): Set<string> {
+  const set = new Set<string>();
+  if (!ids || ids.length === 0) {
+    return set;
+  }
+  for (const rawId of ids) {
+    const trimmed = String(rawId ?? "").trim();
+    if (!trimmed) {
+      continue;
+    }
+    set.add(trimmed);
+    const parts = trimmed.split(":").filter(Boolean);
+    if (parts.length === 0) {
+      continue;
+    }
+    const last = parts[parts.length - 1];
+    if (last) {
+      set.add(last);
+    }
+    if (parts.length >= 2) {
+      const engine = parts[0];
+      if (engine && last) {
+        set.add(`${engine}:${last}`);
+      }
+    }
+  }
+  return set;
+}
+
+export function threadIdMatchesHiddenAutomaticSessionSet(
+  threadId: string,
+  hiddenIds: ReadonlySet<string>,
+): boolean {
+  const trimmed = threadId.trim();
+  if (!trimmed || hiddenIds.size === 0) {
+    return false;
+  }
+  if (hiddenIds.has(trimmed)) {
+    return true;
+  }
+  const parts = trimmed.split(":").filter(Boolean);
+  if (parts.length === 0) {
+    return false;
+  }
+  const last = parts[parts.length - 1];
+  if (last && hiddenIds.has(last)) {
+    return true;
+  }
+  if (parts.length >= 2) {
+    const engine = parts[0];
+    if (engine && last && hiddenIds.has(`${engine}:${last}`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function filterHiddenAutomaticThreadSummaries<
+  T extends { id: string; autoSession?: ThreadSummary["autoSession"] },
+>(
+  summaries: readonly T[],
+  hiddenIds: ReadonlySet<string>,
+): T[] {
+  if (summaries.length === 0) {
+    return [];
+  }
+  if (hiddenIds.size === 0) {
+    return summaries.filter(
+      (summary) => summary.autoSession?.visibility !== "hidden",
+    );
+  }
+  return summaries.filter((summary) => {
+    if (summary.autoSession?.visibility === "hidden") {
+      return false;
+    }
+    return !threadIdMatchesHiddenAutomaticSessionSet(summary.id, hiddenIds);
+  });
+}
+
 export function normalizeThreadListPartialSource(
   value: unknown,
 ): string | null {

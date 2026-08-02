@@ -42,7 +42,9 @@ import {
   createRenameThreadTitleMappingAction,
 } from "./useThreadActions.sessionActions";
 import {
+  buildHiddenAutomaticSessionIdSet,
   extractThreadSizeBytes,
+  filterHiddenAutomaticThreadSummaries,
   filterRetainableContinuitySummaries,
   hasHealthyThreadSummaries,
   isLocalSessionScanUnavailable,
@@ -66,6 +68,7 @@ import {
   shouldIncludeWorkspaceThreadEntry,
   shouldApplyCodexSidebarContinuity,
   shouldApplyClaudeSidebarContinuity,
+  threadIdMatchesHiddenAutomaticSessionSet,
   withTimeout,
   type GeminiSessionSummary,
   type GrokSessionSummary,
@@ -803,6 +806,9 @@ export function useThreadActions({
           projectCatalogResult.status === "fulfilled"
             ? projectCatalogResult.value
             : null;
+        const hiddenAutomaticSessionIds = buildHiddenAutomaticSessionIdSet(
+          projectCatalogValue?.hiddenAutomaticSessionIds,
+        );
         const catalogClaudeSourceStatus = findCatalogSourceStatusForEngine(
           projectCatalogValue?.sourceStatuses,
           "claude",
@@ -862,6 +868,14 @@ export function useThreadActions({
                 ? `claude:${session.parentSessionId}`
                 : null;
               if (hiddenSharedBindingIds.has(id)) {
+                return;
+              }
+              if (
+                threadIdMatchesHiddenAutomaticSessionSet(
+                  id,
+                  hiddenAutomaticSessionIds,
+                )
+              ) {
                 return;
               }
               const prev = mergedById.get(id);
@@ -942,6 +956,14 @@ export function useThreadActions({
           opencodeSessions.forEach((session) => {
             const id = `opencode:${session.sessionId}`;
             if (hiddenSharedBindingIds.has(id)) {
+              return;
+            }
+            if (
+              threadIdMatchesHiddenAutomaticSessionSet(
+                id,
+                hiddenAutomaticSessionIds,
+              )
+            ) {
               return;
             }
             const prev = mergedById.get(id);
@@ -1237,7 +1259,10 @@ export function useThreadActions({
         }
         visibleSummaries = applySessionArchiveState(
           filterRootVisibleAutomaticSummaries(
-            filterDeletedSummaries(visibleSummaries),
+            filterHiddenAutomaticThreadSummaries(
+              filterDeletedSummaries(visibleSummaries),
+              hiddenAutomaticSessionIds,
+            ),
           ),
           archivedSessionMap,
         );
@@ -1246,7 +1271,10 @@ export function useThreadActions({
             workspace.id,
             applySessionArchiveState(
               filterRootVisibleAutomaticSummaries(
-                filterDeletedSummaries(lastGoodSnapshotCandidates),
+                filterHiddenAutomaticThreadSummaries(
+                  filterDeletedSummaries(lastGoodSnapshotCandidates),
+                  hiddenAutomaticSessionIds,
+                ),
               ),
               archivedSessionMap,
             ),

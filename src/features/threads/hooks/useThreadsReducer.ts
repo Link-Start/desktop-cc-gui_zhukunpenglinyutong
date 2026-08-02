@@ -2440,9 +2440,11 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         );
       };
 
-      // Merge incoming threads with preserved existing info
+      // Merge incoming threads with preserved existing info.
+      // Apply hidden auto-session filtering AFTER merge so an incoming row that
+      // lost autoSession metadata cannot resurrect a previously-hidden helper.
       const visibleThreads = incomingThreads
-        .filter((thread) => !hidden[thread.id] && !isHiddenAutomaticThread(thread))
+        .filter((thread) => !hidden[thread.id])
         .map((thread) => {
           const existing = existingThreadById.get(thread.id);
           if (existing) {
@@ -2482,7 +2484,8 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
             );
           }
           return thread;
-        });
+        })
+        .filter((thread) => !isHiddenAutomaticThread(thread));
 
       // BUG FIX: Also preserve threads that are currently active but not in the new list
       // (e.g., newly created Claude threads that haven't been synced to the backend yet)
