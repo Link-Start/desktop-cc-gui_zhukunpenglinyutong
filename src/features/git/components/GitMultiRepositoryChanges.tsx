@@ -7,7 +7,10 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
-import type { CommitMessageEngine } from "../../../services/tauri";
+import type {
+  CommitMessageEngine,
+  CommitMessageLanguage,
+} from "../../../services/tauri";
 import type { RepositoryGitStatus } from "../hooks/useMultiRepositoryGitStatus";
 import { normalizeGitPath } from "../utils/commitScope";
 import {
@@ -16,8 +19,8 @@ import {
   isDeletedDiffFile,
 } from "./GitDiffPanelFileSections";
 import { InclusionToggle, type InclusionState } from "./GitDiffPanelInclusion";
-import { CommitMessageEngineIcon } from "./CommitMessageEngineIcon";
 import type { GitCommitComposerPlacement } from "../hooks/useGitCommitComposerPlacement";
+import { GitCommitComposer } from "./GitCommitComposer";
 
 export type RepositoryCommitSelection = {
   repositoryRoot: string;
@@ -38,10 +41,12 @@ type GitMultiRepositoryChangesProps = {
   commitComposerPlacement?: GitCommitComposerPlacement;
   onCommitMessageChange?: (value: string) => void;
   onCommitRepositories?: (selections: RepositoryCommitSelection[]) => void | Promise<void>;
-  onOpenGenerateMenu?: (
-    event: ReactMouseEvent<HTMLButtonElement>,
+  onGenerateCommitMessage?: (
+    language: CommitMessageLanguage,
+    engine: CommitMessageEngine,
     selections: RepositoryCommitSelection[],
-  ) => void;
+  ) => void | Promise<void>;
+  onCommitMessageEngineChange?: (engine: CommitMessageEngine) => void;
   onStageFile?: (repositoryRoot: string, path: string) => Promise<void>;
   onUnstageFile?: (repositoryRoot: string, path: string) => Promise<void>;
   onDiscardFile?: (repositoryRoot: string, path: string) => Promise<void> | void;
@@ -93,7 +98,8 @@ export function GitMultiRepositoryChanges({
   commitComposerPlacement = "bottom",
   onCommitMessageChange,
   onCommitRepositories,
-  onOpenGenerateMenu,
+  onGenerateCommitMessage,
+  onCommitMessageEngineChange,
   onStageFile,
   onUnstageFile,
   onDiscardFile,
@@ -170,76 +176,44 @@ export function GitMultiRepositoryChanges({
       selectedPaths: group.selectedPaths,
     })), [groups]);
   const selectedCount = selections.reduce((count, selection) => count + selection.selectedPaths.length, 0);
-  const canCommit = commitMessage.trim().length > 0 && selectedCount > 0 && !commitLoading;
-  const canGenerateCommitMessage = selectedCount > 0 && !commitMessageLoading && !commitLoading;
+  const canGenerateCommitMessage =
+    selectedCount > 0 && !commitMessageLoading && !commitLoading;
   const commitComposer = (
-    <div className={`commit-message-section git-commit-composer git-commit-composer--${commitComposerPlacement}`}>
-      <div className="commit-message-composer-row">
-        <textarea
-          className="commit-message-input"
-          placeholder={t("git.commitMessage")}
-          value={commitMessage}
-          onChange={(event) => onCommitMessageChange?.(event.target.value)}
-          disabled={commitLoading || commitMessageLoading}
-          rows={2}
-        />
-        <div className="commit-message-actions">
-          {onOpenGenerateMenu ? (
-            <button
-              type="button"
-              className={`commit-message-generate-button${commitMessageLoading ? " commit-message-generate-button--loading" : ""}`}
-              onClick={(event) => onOpenGenerateMenu(event, selections)}
-              disabled={!canGenerateCommitMessage}
-              aria-haspopup="menu"
-              title={t("git.generateCommitMessage")}
-              aria-label={t("git.generateCommitMessage")}
-            >
-              <CommitMessageEngineIcon
-                engine={commitMessageEngine}
-                size={14}
-                className={`commit-message-engine-icon${commitMessageLoading ? " commit-message-engine-icon--spinning" : ""}`}
-              />
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className="commit-message-commit-button"
-            disabled={!canCommit}
-            onClick={() => canCommit && void onCommitRepositories?.(selections)}
-            title={!commitMessage.trim()
-              ? t("git.enterCommitMessage")
-              : selectedCount === 0
-                ? t("git.selectFilesToCommit")
-                : t("git.commitSelectedChanges")}
-            aria-label={commitLoading ? t("git.committing") : t("git.commit")}
-          >
-            {commitLoading ? (
-              <span className="commit-button-spinner" aria-hidden />
-            ) : (
-              <svg
-                width={14}
-                height={14}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
-            )}
-          </button>
-        </div>
-      </div>
-      {commitMessageError ? <div className="commit-message-error">{commitMessageError}</div> : null}
-      {commitError ? <div className="commit-message-error">{commitError}</div> : null}
-      {commitSummary ? <div className="git-repository-commit-summary" aria-live="polite">{commitSummary}</div> : null}
-      <div className="commit-message-hint" aria-live="polite">
-        {t("git.filesChanged", { count: selectedCount })}
-      </div>
-    </div>
+    <GitCommitComposer
+      commitMessage={commitMessage}
+      onCommitMessageChange={onCommitMessageChange}
+      selectedCount={selectedCount}
+      hasAnyChanges={statuses.some(
+        (status) =>
+          status.stagedFiles.length > 0 || status.unstagedFiles.length > 0,
+      )}
+      canGenerate={Boolean(onGenerateCommitMessage) && canGenerateCommitMessage}
+      commitLoading={commitLoading}
+      commitMessageLoading={commitMessageLoading}
+      commitError={commitError}
+      commitMessageError={commitMessageError}
+      hint={
+        selectedCount > 0
+          ? t("git.selectedFilesForCommit", { count: selectedCount })
+          : t("git.selectFilesToCommit")
+      }
+      placement={commitComposerPlacement}
+      engine={commitMessageEngine}
+      onEngineChange={onCommitMessageEngineChange}
+      onGenerate={(language, engine) => {
+        void onGenerateCommitMessage?.(language, engine, selections);
+      }}
+      onCommit={() => {
+        void onCommitRepositories?.(selections);
+      }}
+      footerExtra={
+        commitSummary ? (
+          <div className="git-repository-commit-summary" aria-live="polite">
+            {commitSummary}
+          </div>
+        ) : null
+      }
+    />
   );
   const activateRepositoryFile = useCallback((
     status: RepositoryGitStatus,

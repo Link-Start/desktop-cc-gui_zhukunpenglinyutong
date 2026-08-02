@@ -76,6 +76,12 @@ vi.mock("react-i18next", () => ({
         "git.generateCommitMessageEngineGemini": "Gemini",
         "git.generateCommitMessageEngineOpenCode": "OpenCode",
         "git.generateCommitMessageLastConfig": "Use last configuration",
+        "git.generateCommitMessageWithConfig": "Generate with this config",
+        "git.generateCommitMessageQuick": "Regenerate with current configuration",
+        "git.generatingCommitMessage": "Generating…",
+        "git.commitMessageAvailableEngines": "Engines",
+        "git.commitWithCount": "Commit ({{count}})",
+        "common.language": "Language",
         "git.commitComposerPlacementMenuLabel": "Commit box position",
         "git.commitComposerPlacementBottom": "Bottom",
         "git.commitComposerPlacementTop": "Top",
@@ -197,7 +203,8 @@ afterEach(() => {
 async function chooseCodexEnglishCommitMessage() {
   fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
   fireEvent.click(await screen.findByRole("button", { name: "English" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Codex" }));
+  fireEvent.click(await screen.findByRole("radio", { name: "Codex" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Generate with this config" }));
 }
 
 async function openGitFileContextMenu(row: HTMLElement) {
@@ -317,7 +324,7 @@ describe("GitDiffPanel", () => {
       });
     });
 
-  it("disables the last-config quick option when no previous generation exists", async () => {
+  it("disables the last-config footer action when no previous generation exists", async () => {
       render(
         <GitDiffPanel
           {...baseProps}
@@ -327,13 +334,19 @@ describe("GitDiffPanel", () => {
       );
       fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
 
-      const quickOption = await screen.findByRole("button", {
-        name: "Use last configuration",
-      });
-      expect((quickOption as HTMLButtonElement).disabled).toBe(true);
+      expect(
+        await screen.findByRole("button", { name: "Generate with this config" }),
+      ).toBeTruthy();
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "Use last configuration",
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(true);
     });
 
-  it("disables the last-config quick option for a retired engine", async () => {
+  it("disables the last-config footer action for a retired engine", async () => {
       window.localStorage.setItem(
         "ccgui.git.lastCommitMessageConfig",
         JSON.stringify({ engine: "retired-engine", language: "en" }),
@@ -347,10 +360,16 @@ describe("GitDiffPanel", () => {
       );
       fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
 
-      const quickOption = await screen.findByRole("button", {
-        name: "Use last configuration",
-      });
-      expect((quickOption as HTMLButtonElement).disabled).toBe(true);
+      expect(
+        await screen.findByRole("button", { name: "Generate with this config" }),
+      ).toBeTruthy();
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "Use last configuration",
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(true);
     });
 
   it("regenerates directly with the remembered engine and language from the quick option", async () => {

@@ -76,6 +76,12 @@ vi.mock("react-i18next", () => ({
         "git.generateCommitMessageEngineGemini": "Gemini",
         "git.generateCommitMessageEngineOpenCode": "OpenCode",
         "git.generateCommitMessageLastConfig": "Use last configuration",
+        "git.generateCommitMessageWithConfig": "Generate with this config",
+        "git.generateCommitMessageQuick": "Regenerate with current configuration",
+        "git.generatingCommitMessage": "Generating…",
+        "git.commitMessageAvailableEngines": "Engines",
+        "git.commitWithCount": "Commit ({{count}})",
+        "common.language": "Language",
         "git.commitComposerPlacementMenuLabel": "Commit box position",
         "git.commitComposerPlacementBottom": "Bottom",
         "git.commitComposerPlacementTop": "Top",
@@ -197,7 +203,8 @@ afterEach(() => {
 async function chooseCodexEnglishCommitMessage() {
   fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
   fireEvent.click(await screen.findByRole("button", { name: "English" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Codex" }));
+  fireEvent.click(await screen.findByRole("radio", { name: "Codex" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Generate with this config" }));
 }
 
 async function openGitFileContextMenu(row: HTMLElement) {
@@ -528,7 +535,7 @@ describe("GitDiffPanel", () => {
       });
     });
 
-  it("selects language then engine from the single-panel commit message picker", async () => {
+  it("selects language then engine from the layered commit message picker", async () => {
       const onGenerateCommitMessage = vi.fn();
 
       render(
@@ -539,12 +546,14 @@ describe("GitDiffPanel", () => {
         />,
       );
       fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
-      expect(await screen.findByRole("button", { name: "Codex" })).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Claude Code" })).toBeTruthy();
-      expect(screen.queryByRole("button", { name: "Gemini" })).toBeNull();
-      expect(screen.getByRole("button", { name: "OpenCode" })).toBeTruthy();
+      expect(await screen.findByRole("radio", { name: "Codex" })).toBeTruthy();
+      expect(screen.getByRole("radio", { name: "Claude Code" })).toBeTruthy();
+      expect(screen.queryByRole("radio", { name: "Gemini" })).toBeNull();
+      expect(screen.getByRole("radio", { name: "OpenCode" })).toBeTruthy();
       fireEvent.click(await screen.findByRole("button", { name: "English" }));
-      fireEvent.click(screen.getByRole("button", { name: "Codex" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Codex" }));
+      expect(onGenerateCommitMessage).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "Generate with this config" }));
 
       await waitFor(() => {
         expect(onGenerateCommitMessage).toHaveBeenCalledWith("en", "codex");
@@ -564,8 +573,8 @@ describe("GitDiffPanel", () => {
       );
       fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
 
-      expect(await screen.findByRole("button", { name: "Codex" })).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Claude Code" })).toBeTruthy();
+      expect(await screen.findByRole("radio", { name: "Codex" })).toBeTruthy();
+      expect(screen.getByRole("radio", { name: "Claude Code" })).toBeTruthy();
       expect(screen.getByRole("button", { name: "Use last configuration" })).toBeTruthy();
       expect(screen.getByRole("button", { name: "English" })).toBeTruthy();
       expect(onGenerateCommitMessage).not.toHaveBeenCalled();
@@ -590,7 +599,7 @@ describe("GitDiffPanel", () => {
       });
     });
 
-  it("moves commit composer from the current page menu", async () => {
+  it("opens layered commit config popover without placement settings", async () => {
       render(
         <GitDiffPanel
           {...baseProps}
@@ -600,19 +609,7 @@ describe("GitDiffPanel", () => {
       );
 
       fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
-      // 提交框位置已改为同面板平铺项（label + Bottom/Top），不再走 flyout submenu
-      expect(await screen.findByText("Commit box position")).toBeTruthy();
-      fireEvent.click(await screen.findByRole("menuitem", { name: "Top" }));
-
-      await waitFor(() => {
-        const composer = document.querySelector(".git-commit-composer");
-        const content = document.querySelector(".diff-commit-workspace-content");
-        expect(composer).toBeTruthy();
-        expect(content).toBeTruthy();
-        expect(
-          composer?.compareDocumentPosition(content as Node) ?? 0,
-        ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-        expect(composer?.classList.contains("git-commit-composer--top")).toBe(true);
-      });
+      expect(await screen.findByRole("button", { name: "Generate with this config" })).toBeTruthy();
+      expect(screen.queryByText("Commit box position")).toBeNull();
     });
 });

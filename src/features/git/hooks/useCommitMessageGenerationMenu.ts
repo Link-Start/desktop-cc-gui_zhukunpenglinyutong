@@ -28,12 +28,14 @@ type CommitMessageGenerationMenuOptions<TContext> = {
     engine: CommitMessageEngine,
     context: TContext | undefined,
   ) => Promise<void>;
-  resolvePosition: (
+  resolvePosition?: (
     event: MouseEvent<HTMLButtonElement>,
     menuSize: { width: number; height: number },
   ) => MenuPosition;
   setEngine: (engine: CommitMessageEngine) => void;
-  setMenu: (menu: RendererContextMenuState | null) => void;
+  setMenu?: (menu: RendererContextMenuState | null) => void;
+  /** Current engine shown on the generate trigger / chip. */
+  currentEngine?: CommitMessageEngine;
   buildExtraItems?: () => RendererContextMenuItem[];
 };
 
@@ -45,13 +47,14 @@ export function useCommitMessageGenerationMenu<TContext = undefined>({
   resolvePosition,
   setEngine,
   setMenu,
+  currentEngine,
   buildExtraItems,
 }: CommitMessageGenerationMenuOptions<TContext>) {
   const runGeneration = useCallback(
     async (
       language: CommitMessageLanguage,
       engine: CommitMessageEngine,
-      context: TContext | undefined,
+      context?: TContext,
     ) => {
       if (busy || !canGenerate(context) || !isEngineExecutionEnabled(engine)) {
         return;
@@ -67,7 +70,7 @@ export function useCommitMessageGenerationMenu<TContext = undefined>({
     (event: MouseEvent<HTMLButtonElement>, context?: TContext) => {
       event.preventDefault();
       event.stopPropagation();
-      if (busy || !canGenerate(context)) {
+      if (busy || !canGenerate(context) || !setMenu || !resolvePosition) {
         return;
       }
 
@@ -82,11 +85,14 @@ export function useCommitMessageGenerationMenu<TContext = undefined>({
         content: createElement(CommitMessageEnginePicker, {
           engines: preferences.engines,
           initialLanguage: preferences.initialLanguage,
+          initialEngine: currentEngine ?? preferences.lastConfig?.engine,
           lastConfig: preferences.lastConfig,
           onDismiss: () => setMenu(null),
           onGenerate: (language, engine) => {
-            // language 来自 picker 当前选中态；engine 来自点击的引擎行
             void runGeneration(language, engine, context);
+          },
+          onSelectionChange: (_language, engine) => {
+            setEngine(engine);
           },
         }),
         items: buildExtraItems?.() ?? [],
@@ -96,8 +102,10 @@ export function useCommitMessageGenerationMenu<TContext = undefined>({
       buildExtraItems,
       busy,
       canGenerate,
+      currentEngine,
       resolvePosition,
       runGeneration,
+      setEngine,
       setMenu,
       t,
     ],
