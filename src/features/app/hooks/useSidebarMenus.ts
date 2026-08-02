@@ -51,11 +51,15 @@ import {
   type EngineProviderProfileOption,
 } from "../../threads/constants/codexProviderProfiles";
 import {
+  notifyProviderContinuationUiRollback,
   subscribeProviderContinuationDialogRequests,
   type ProviderContinuationDialogRequest,
 } from "../../threads/services/providerContinuationRequests";
 import { isWeakSessionDisplayTitle } from "../../threads/utils/sessionDisplayProjection";
-import { activateEngineProviderProfileAndNotify } from "../../vendors/activateEngineProviderProfile";
+import {
+  activateEngineProviderProfileAndNotify,
+  isActivatableProviderEngine,
+} from "../../vendors/activateEngineProviderProfile";
 
 /** 新建会话菜单项 id → 对应 CLI engine；用于 CLI 配置管理启停过滤。 */
 const NEW_SESSION_ENGINE_ACTION_IDS: Readonly<Record<string, EngineType>> = {
@@ -725,6 +729,58 @@ export function useSidebarMenus({
     [getThreadSummary, prepareProviderContinuationDialog, t],
   );
 
+  const restoreSourceProviderAfterContinuationCancel = useCallback(
+    (dialog: ProviderContinuationDialogState) => {
+      const source = dialog.request.source;
+      const sourceEngine = source.engine;
+      const rawProfileId = source.providerProfileId?.trim() || null;
+      // 切渠道预览会写 profileOverrides + syncClaudeModelMapping 到 destination；
+      // 取消时必须把 L1 使用中/映射与 Picker 渠道投影还原到来源会话。
+      notifyProviderContinuationUiRollback({
+        engine: sourceEngine,
+        providerProfileId: rawProfileId,
+      });
+      if (!isActivatableProviderEngine(sourceEngine)) {
+        return;
+      }
+      const restoreProfileId =
+        rawProfileId ||
+        (sourceEngine === "claude"
+          ? CLAUDE_LOCAL_PROVIDER_PROFILE_ID
+          : sourceEngine === "codex"
+            ? CODEX_DISK_PROVIDER_PROFILE_ID
+            : sourceEngine === "kimi"
+              ? KIMI_LOCAL_PROVIDER_PROFILE_ID
+              : sourceEngine === "grok"
+                ? GROK_LOCAL_PROVIDER_PROFILE_ID
+                : sourceEngine === "opencode"
+                  ? OPENCODE_LOCAL_PROVIDER_PROFILE_ID
+                  : null);
+      if (!restoreProfileId) {
+        return;
+      }
+      void activateEngineProviderProfileAndNotify(
+        sourceEngine,
+        restoreProfileId,
+      ).catch((error: unknown) => {
+        pushGlobalRuntimeNotice({
+          severity: "error",
+          category: "user-action-error",
+          messageKey: "runtimeNotice.vendor.activateProviderFailed",
+          messageParams: {
+            name:
+              dialog.sourceLabel ||
+              restoreProfileId ||
+              LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
+            message: error instanceof Error ? error.message : String(error),
+          },
+          dedupeKey: `provider-continuation-cancel-restore:${dialog.workspaceId}:${restoreProfileId}`,
+        });
+      });
+    },
+    [],
+  );
+
   const closeProviderContinuationDialog = useCallback(() => {
     const current = providerContinuationDialogStateRef.current;
     if (!current) {
@@ -736,6 +792,8 @@ export function useSidebarMenus({
     canceledProviderContinuationOperationsRef.current.add(operationId);
     providerContinuationOperationIdsRef.current.delete(current.operationKey);
     replaceProviderContinuationDialog(null);
+    // 取消 = 不切换：还原来源会话的供应商/模型映射与渠道底栏投影。
+    restoreSourceProviderAfterContinuationCancel(current);
     if (
       current.stage === "preparing" ||
       current.stage === "confirm" ||
@@ -761,6 +819,7 @@ export function useSidebarMenus({
   }, [
     discardPreparedProviderContinuation,
     replaceProviderContinuationDialog,
+    restoreSourceProviderAfterContinuationCancel,
   ]);
 
   const confirmProviderContinuation = useCallback(async () => {

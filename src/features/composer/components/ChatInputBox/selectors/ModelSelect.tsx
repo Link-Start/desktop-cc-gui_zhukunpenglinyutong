@@ -8,6 +8,7 @@ import { resolveCustomModelDefaultReasoningEffort } from '../../../../models/cus
 import type { ProviderModelGroup } from '../modelOptions';
 import type { ProviderTargetGroup } from '../hooks/useProviderTargetCatalogOwners';
 import type { ExecutionTarget } from '../../../../shared-session/target/types';
+import { PROVIDER_CONTINUATION_UI_ROLLBACK_EVENT } from "../../../../threads/services/providerContinuationRequests";
 import {
   CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
   CODEX_DISK_PROVIDER_PROFILE_ID,
@@ -391,8 +392,9 @@ export const ModelSelect = memo(({
   const [channelPickerProviderId, setChannelPickerProviderId] =
     useState<ProviderId | null>(null);
   /**
-   * 各 CLI 渠道预览覆盖:浏览非当前引擎时切换渠道不立刻改 executionTarget,
-   * 仅投影模型列表;当前引擎切换则实时写回 target。
+   * 各 CLI 渠道预览覆盖：切渠道时投影目标 catalog；
+   * Shared/Native 都会写 executionTarget（Native 走续接 dialog）。
+   * 取消续接时必须清掉 override，否则底栏仍停在 destination 供应商。
    */
   const [profileOverrides, setProfileOverrides] = useState<
     Partial<Record<ProviderId, string>>
@@ -402,6 +404,35 @@ export const ModelSelect = memo(({
   useEffect(() => {
     setProfileOverrides({});
   }, [executionTarget?.engine, executionTarget?.providerProfileId]);
+
+  // Native 续接点「取消」：executionTarget 未变，需事件驱动清掉 destination override
+  useEffect(() => {
+    const onRollback = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{ engine?: string; providerProfileId?: string | null }>
+      ).detail;
+      const engine = detail?.engine?.trim();
+      if (!engine) {
+        setProfileOverrides({});
+        return;
+      }
+      setProfileOverrides((current) => {
+        if (!(engine in current)) {
+          return current;
+        }
+        const next = { ...current };
+        delete next[engine as ProviderId];
+        return next;
+      });
+    };
+    window.addEventListener(PROVIDER_CONTINUATION_UI_ROLLBACK_EVENT, onRollback);
+    return () => {
+      window.removeEventListener(
+        PROVIDER_CONTINUATION_UI_ROLLBACK_EVENT,
+        onRollback,
+      );
+    };
+  }, []);
 
   // Keep label/icon mapping in sync when the active provider rewrites
   // claude-model-mapping (same-tab custom event + cross-tab storage).

@@ -1366,6 +1366,10 @@ describe("useSidebarMenus", () => {
         discardPreparedNativeProviderContinuationMock,
       ).toHaveBeenCalledOnce();
     });
+    // 取消必须还原来源会话供应商（L1 activate），避免底栏/映射停在 destination
+    await waitFor(() => {
+      expect(switchClaudeProvider).toHaveBeenCalledWith("provider-a");
+    });
     expect(handlers.onSelectThread).not.toHaveBeenCalled();
   });
 
