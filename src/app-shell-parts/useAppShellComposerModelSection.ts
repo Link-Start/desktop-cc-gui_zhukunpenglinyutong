@@ -15,6 +15,7 @@ import {
   getReasoningOptionsForModel,
   upsertEngineSelectedModelId,
 } from "./modelSelection";
+import { resolveClaudeManagedRuntimeModel } from "../features/models/claudeManagedRuntimeModel";
 
 export function useAppShellComposerModelSection({
   accessMode,
@@ -172,7 +173,31 @@ export function useAppShellComposerModelSection({
     selectedEffort,
     selectedComposerSelection,
   ]);
-  const resolvedModel = effectiveSelectedModel?.model ?? effectiveSelectedModelId ?? null;
+  // Claude managed：按当前 catalog 重解析 runtime，避免 k3 等跨供应商残留上送。
+  const claudeRuntimeResolution = useMemo(() => {
+    if (activeEngine !== "claude") {
+      return null;
+    }
+    return resolveClaudeManagedRuntimeModel({
+      entryId: effectiveSelectedModelId,
+      catalog: effectiveModels.map((model: ModelOption) => ({
+        id: model.id,
+        model: model.model,
+        isDefault: Boolean(model.isDefault),
+      })),
+      fallbackRuntime:
+        effectiveSelectedModel?.model ?? effectiveSelectedModelId ?? null,
+    });
+  }, [
+    activeEngine,
+    effectiveModels,
+    effectiveSelectedModel?.model,
+    effectiveSelectedModelId,
+  ]);
+  const resolvedModel =
+    activeEngine === "claude"
+      ? claudeRuntimeResolution?.runtime ?? null
+      : (effectiveSelectedModel?.model ?? effectiveSelectedModelId ?? null);
   const resolvedModelSource = effectiveSelectedModel?.source ?? "unknown";
   const resolvedProviderProfileId =
     activeEngine === "codex"
@@ -327,14 +352,39 @@ export function useAppShellComposerModelSection({
     resolvedModel,
   });
   const threadAccessMode = accessMode;
+  const resolvedComposerModelId =
+    activeEngine === "claude" && claudeRuntimeResolution?.entryId
+      ? claudeRuntimeResolution.entryId
+      : effectiveSelectedModelId;
   composerSelectionResolverRef.current = {
-    id: effectiveSelectedModelId,
+    id: resolvedComposerModelId,
     model: resolvedModel,
     source: resolvedModelSource,
     providerProfileId: resolvedProviderProfileId,
     effort: resolvedEffort,
     collaborationMode: collaborationModePayload,
   };
+  // Claude：脏 selection（k3 等）在 catalog 就绪后自动 repair 到合法 entry。
+  useEffect(() => {
+    if (
+      activeEngine !== "claude" ||
+      !modelsReady ||
+      !claudeRuntimeResolution?.repaired ||
+      !claudeRuntimeResolution.entryId
+    ) {
+      return;
+    }
+    if (claudeRuntimeResolution.entryId === effectiveSelectedModelId) {
+      return;
+    }
+    handleSelectModel(claudeRuntimeResolution.entryId);
+  }, [
+    activeEngine,
+    claudeRuntimeResolution,
+    effectiveSelectedModelId,
+    handleSelectModel,
+    modelsReady,
+  ]);
   // 会话选择修复：仅在 effective 与已存选择语义不一致时写回。
   // freeform（allowUnknown）会保留 catalog 外 modelId——这是业务能力，不是 #185 缺口；
   // 这里只收敛 effort/model 的有效投影，禁止无变化 persist 触发反馈环。
