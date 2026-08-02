@@ -134,7 +134,8 @@ export function buildTimelineProjectionRows(input: {
     { phaseKey: string; revealIndex: number }
   >();
   for (const phase of input.processPhaseChips ?? []) {
-    if (phase.count <= 1) {
+    // count >= 1 is intentional: single-step thinking also renders as a chip.
+    if (phase.count < 1) {
       continue;
     }
     if (phase.expanded) {
@@ -227,7 +228,7 @@ export function buildTimelineProjectionRows(input: {
 
   // Fallback for phases whose anchor entry is outside the current window.
   for (const phase of input.processPhaseChips ?? []) {
-    if (phase.count > 1 && !insertedPhaseKeys.has(phase.phaseKey)) {
+    if (phase.count >= 1 && !insertedPhaseKeys.has(phase.phaseKey)) {
       pushPhaseHeader(phase);
     }
   }

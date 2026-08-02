@@ -2629,8 +2629,8 @@ describe("Messages live behavior", () => {
     expect(container.textContent ?? "").toContain("已处理");
   });
 
-  it("does not collapse a single process step above prose", () => {
-    const items: ConversationItem[] = [
+  it("collapses a single process step including lone reasoning into the chip", () => {
+    const toolItems: ConversationItem[] = [
       {
         id: "user-single-step",
         kind: "message",
@@ -2654,9 +2654,9 @@ describe("Messages live behavior", () => {
       },
     ];
 
-    const { container } = render(
+    const { container: toolContainer } = render(
       <Messages
-        items={items}
+        items={toolItems}
         threadId="thread-1"
         workspaceId="ws-1"
         isThinking={false}
@@ -2665,10 +2665,47 @@ describe("Messages live behavior", () => {
       />,
     );
 
-    expect(container.querySelector(".messages-process-phase-toggle")).toBeNull();
-    // Single-step process stays on the narrative surface (no phase chip).
-    expect(container.querySelector(".message-tool-block-shell, .tool-block, .task-container")).toBeTruthy();
-    expect(container.textContent ?? "").toContain("单步输出");
+    expect(toolContainer.querySelector(".messages-process-phase-toggle")).toBeTruthy();
+    expect(toolContainer.textContent ?? "").toContain("已处理");
+    expect(toolContainer.textContent ?? "").not.toContain("Read single.ts");
+    expect(toolContainer.textContent ?? "").toContain("单步输出");
+
+    const reasoningItems: ConversationItem[] = [
+      {
+        id: "user-reason-only",
+        kind: "message",
+        role: "user",
+        text: "你是谁",
+      },
+      {
+        id: "reason-alone",
+        kind: "reasoning",
+        summary: "分析身份",
+        content: "thinking body",
+      },
+      {
+        id: "assistant-reason-only",
+        kind: "message",
+        role: "assistant",
+        text: "我是助手",
+      },
+    ];
+
+    const { container: reasonContainer } = render(
+      <Messages
+        items={reasoningItems}
+        threadId="thread-2"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(reasonContainer.querySelector(".messages-process-phase-toggle")).toBeTruthy();
+    expect(reasonContainer.querySelector(".thinking-block")).toBeNull();
+    expect(reasonContainer.textContent ?? "").toContain("已处理");
+    expect(reasonContainer.textContent ?? "").toContain("我是助手");
   });
 
   it("keeps trailing open process expanded after earlier multi-step phase collapsed", () => {

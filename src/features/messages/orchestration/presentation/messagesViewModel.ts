@@ -482,8 +482,10 @@ export function resolveCollapsedTimelineItems(options: {
       continue;
     }
     const renderableCount = countRenderableCollapsedEntries(phaseItems, activeEngine);
-    // Skip empty phases and single-step runs (no value in collapsing one step).
-    if (renderableCount <= 1) {
+    // Empty phases stay expanded on the surface. Single-step process — including
+    // lone reasoning ("思考过程") — still folds into the chip so Native/Shared
+    // match the clean "已处理 · 思考 1 次" shape.
+    if (renderableCount < 1) {
       continue;
     }
 

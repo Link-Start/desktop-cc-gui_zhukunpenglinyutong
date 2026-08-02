@@ -70,14 +70,39 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
     expect(result.phases[0]!.hiddenItemIds).toEqual(["r1", "t1"]);
   });
 
-  it("does not collapse a single process step", () => {
-    const items = [user("u1"), tool("t1"), assistant("a1", "最终结论")];
-    const result = resolveCollapsedTimelineItems({
+  it("collapses a single process step including lone reasoning into the chip", () => {
+    const toolOnly = resolveCollapsedTimelineItems({
       activeEngine: "claude",
-      timelineSourceItems: items,
+      timelineSourceItems: [user("u1"), tool("t1"), assistant("a1", "最终结论")],
     });
-    expect(result.phases).toEqual([]);
-    expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "t1", "a1"]);
+    expect(toolOnly.phases).toHaveLength(1);
+    expect(toolOnly.phases[0]).toMatchObject({
+      phaseKey: "a1",
+      count: 1,
+      breakdown: { reasoningCount: 0, toolCount: 1, exploreCount: 0 },
+      hiddenItemIds: ["t1"],
+      expanded: false,
+    });
+    expect(toolOnly.timelineItems.map((item) => item.id)).toEqual(["u1", "a1"]);
+
+    // Shared/Native simple Q&A: reasoning only → "已处理 · 思考 1 次", no orphan 思考过程 row.
+    const reasoningOnly = resolveCollapsedTimelineItems({
+      activeEngine: "claude",
+      timelineSourceItems: [
+        user("u2", "你是谁"),
+        reasoning("r-alone"),
+        assistant("a2", "我是助手"),
+      ],
+    });
+    expect(reasoningOnly.phases).toHaveLength(1);
+    expect(reasoningOnly.phases[0]).toMatchObject({
+      phaseKey: "a2",
+      count: 1,
+      breakdown: { reasoningCount: 1, toolCount: 0, exploreCount: 0 },
+      hiddenItemIds: ["r-alone"],
+      expanded: false,
+    });
+    expect(reasoningOnly.timelineItems.map((item) => item.id)).toEqual(["u2", "a2"]);
   });
 
   it("merges the whole user-turn process onto the final assistant (no orphan)", () => {

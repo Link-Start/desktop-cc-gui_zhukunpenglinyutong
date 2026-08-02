@@ -27,11 +27,12 @@ mid-turn assistant 计划/问候正文 MUST 保留在时间线，MUST NOT 被并
 - **AND** `tools1` 与 `tools2` MUST 一并归属 `A2` 的 phase（折叠时 unmount）
 - **AND** `A1` 正文 MUST 保留
 
-#### Scenario: Single-step process stays expanded on the surface
+#### Scenario: Single-step process including lone reasoning folds into the chip
 
-- **WHEN** turn-final 之前仅有 1 个可渲染 process 步
-- **THEN** MUST NOT 创建 process phase chip
-- **AND** 该 process 行 MUST 保持在幕布上可见
+- **WHEN** turn-final 之前仅有 1 个可渲染 process 步（含仅 1 条 reasoning / 思考过程）
+- **THEN** MUST 创建 process phase chip（例如 `已处理 · 思考 1 次`）
+- **AND** 该 process 行在折叠态 MUST hard-unmount，不得作为顶部孤儿 `思考过程` 单独挂载
+- **AND** Native 与 Shared 共用同一门槛，行为一致
 
 #### Scenario: Trailing in-progress process stays live
 
