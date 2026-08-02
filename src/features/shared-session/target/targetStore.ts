@@ -32,6 +32,82 @@ const states = new Map<string, SharedTargetState>();
 const activeAttemptIds = new Map<string, string>();
 const listeners = new Map<string, Set<Listener>>();
 
+/**
+ * Per-thread persist generation counter（fix-shared-session-target-race-and-merge T4）。
+ *
+ * 每次 `hydrateSharedTargetState` 写入选定的 target 时递增；
+ * `sharedHistoryLoader` 在 hydrate 前记录代次、加载完成后比对，
+ * 若代次已在加载期间被更新（存在 in-flight persist）则跳过覆盖。
+ */
+const persistGenerations = new Map<string, number>();
+
+function persistGenerationKeyOf(workspaceId: string, threadId: string): string {
+  return `${workspaceId}:${threadId}`;
+}
+
+export function getPersistGeneration(
+  workspaceId: string,
+  threadId: string,
+): number {
+  return persistGenerations.get(
+    persistGenerationKeyOf(workspaceId, threadId),
+  ) ?? 0;
+}
+
+function incrementPersistGeneration(
+  workspaceId: string,
+  threadId: string,
+): number {
+  const key = persistGenerationKeyOf(workspaceId, threadId);
+  const next = (persistGenerations.get(key) ?? 0) + 1;
+  persistGenerations.set(key, next);
+  return next;
+}
+
+/** 清理指定 thread 的代次记录（thread 关闭/删除时调用）。 */
+export function clearPersistGeneration(
+  workspaceId: string,
+  threadId: string,
+): void {
+  persistGenerations.delete(persistGenerationKeyOf(workspaceId, threadId));
+}
+
+/**
+ * In-flight persist 计数：乐观更新后到 persist settle 前 > 0。
+ * loader 在 > 0 时跳过覆盖，堵住「代次未再递增但仍在 persist」窗口。
+ */
+const persistInFlightCounts = new Map<string, number>();
+
+export function beginSharedTargetPersist(
+  workspaceId: string,
+  threadId: string,
+): void {
+  const key = persistGenerationKeyOf(workspaceId, threadId);
+  persistInFlightCounts.set(key, (persistInFlightCounts.get(key) ?? 0) + 1);
+}
+
+export function endSharedTargetPersist(
+  workspaceId: string,
+  threadId: string,
+): void {
+  const key = persistGenerationKeyOf(workspaceId, threadId);
+  const current = persistInFlightCounts.get(key) ?? 0;
+  if (current <= 1) {
+    persistInFlightCounts.delete(key);
+    return;
+  }
+  persistInFlightCounts.set(key, current - 1);
+}
+
+export function isSharedTargetPersistInFlight(
+  workspaceId: string,
+  threadId: string,
+): boolean {
+  return (persistInFlightCounts.get(
+    persistGenerationKeyOf(workspaceId, threadId),
+  ) ?? 0) > 0;
+}
+
 function readState(key: string): SharedTargetState {
   return states.get(key) ?? EMPTY_STATE;
 }
@@ -53,6 +129,7 @@ export function hydrateSharedTargetState(
 ): void {
   const key = storeKeyOf(workspaceId, threadId);
   writeState(key, { ...readState(key), selectedNextTarget: target });
+  incrementPersistGeneration(workspaceId, threadId);
 }
 
 /** 更新下一次发送的目标选择（兼容调用入口）。 */
@@ -169,4 +246,6 @@ export function resetSharedTargetStoreForTests(): void {
   states.clear();
   activeAttemptIds.clear();
   listeners.clear();
+  persistGenerations.clear();
+  persistInFlightCounts.clear();
 }

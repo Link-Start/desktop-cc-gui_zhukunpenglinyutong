@@ -246,6 +246,7 @@ function createHandlers() {
     onSyncThread: vi.fn(),
     onPinThread: vi.fn(),
     onUnpinThread: vi.fn(),
+    onProviderContinuationTargetReady: vi.fn(),
     isThreadPinned: vi.fn(() => false),
     isThreadAutoNaming: vi.fn(() => false),
     onRenameThread: vi.fn(),
@@ -1366,6 +1367,10 @@ describe("useSidebarMenus", () => {
         discardPreparedNativeProviderContinuationMock,
       ).toHaveBeenCalledOnce();
     });
+    // 取消必须还原来源会话供应商（L1 activate），避免底栏/映射停在 destination
+    await waitFor(() => {
+      expect(switchClaudeProvider).toHaveBeenCalledWith("provider-a");
+    });
     expect(handlers.onSelectThread).not.toHaveBeenCalled();
   });
 
@@ -1848,6 +1853,8 @@ describe("useSidebarMenus", () => {
         destination: {
           engine: "claude",
           providerProfileId: "provider-a",
+          modelCatalogEntryId: "claude-fable-5",
+          model: "MiniMax-M3",
           providerProfileNameSnapshot: "Provider A",
           providerProfileSource: "managed",
           runtimeCapabilityFingerprint: "echo-checksum",
@@ -1870,6 +1877,16 @@ describe("useSidebarMenus", () => {
     );
     await act(async () => {
       await result.current.confirmProviderContinuation();
+    });
+
+    expect(handlers.onProviderContinuationTargetReady).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      threadId: "claude:target-2",
+      engine: "claude",
+      providerProfileId: "provider-a",
+      modelId: "claude-fable-5",
+      modelRuntime: "MiniMax-M3",
+      effort: null,
     });
 
     expect(createNativeProviderContinuationMock).toHaveBeenCalledWith(

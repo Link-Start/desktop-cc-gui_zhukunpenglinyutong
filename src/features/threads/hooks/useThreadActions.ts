@@ -1155,6 +1155,12 @@ export function useThreadActions({
             nativeOwnerToSharedThreadId,
           );
         }
+        // fix-shared-session-target-race-and-merge T5b：
+        // 仅当 list 空/失败（catch→[]）时，用 previous frame existingThreads 补回 shared:。
+        // 非空 list 视为权威全集：不得把「已删除但不在 list 中」的 shared 复活。
+        const existingSharedSummaries = existingThreads.filter((s) =>
+          s.id.startsWith("shared:"),
+        );
         if (sharedSessions.length > 0) {
           const sharedSummaries = sharedSessions.map(toSharedThreadSummary);
           const merged = new Map<string, ThreadSummary>();
@@ -1171,6 +1177,18 @@ export function useThreadActions({
           allSummaries = remapThreadParentsToSharedOwners(
             allSummaries,
             nativeOwnerToSharedThreadId,
+          );
+        } else if (existingSharedSummaries.length > 0) {
+          // 空 list（含 error→[]）：补回 previous shared，避免侧栏整段丢 Shared
+          const mergedBack = new Map<string, ThreadSummary>();
+          allSummaries.forEach((entry) => mergedBack.set(entry.id, entry));
+          existingSharedSummaries.forEach((entry) => {
+            if (!mergedBack.has(entry.id)) {
+              mergedBack.set(entry.id, entry);
+            }
+          });
+          allSummaries = Array.from(mergedBack.values()).sort(
+            (a, b) => b.updatedAt - a.updatedAt,
           );
         }
         const archivedSessionMap = await archivedSessionMapPromise;

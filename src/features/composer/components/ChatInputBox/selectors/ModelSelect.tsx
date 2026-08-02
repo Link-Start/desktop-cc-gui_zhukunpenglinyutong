@@ -8,6 +8,7 @@ import { resolveCustomModelDefaultReasoningEffort } from '../../../../models/cus
 import type { ProviderModelGroup } from '../modelOptions';
 import type { ProviderTargetGroup } from '../hooks/useProviderTargetCatalogOwners';
 import type { ExecutionTarget } from '../../../../shared-session/target/types';
+import { PROVIDER_CONTINUATION_UI_ROLLBACK_EVENT } from "../../../../threads/services/providerContinuationRequests";
 import {
   CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
   CODEX_DISK_PROVIDER_PROFILE_ID,
@@ -391,8 +392,9 @@ export const ModelSelect = memo(({
   const [channelPickerProviderId, setChannelPickerProviderId] =
     useState<ProviderId | null>(null);
   /**
-   * 各 CLI 渠道预览覆盖:浏览非当前引擎时切换渠道不立刻改 executionTarget,
-   * 仅投影模型列表;当前引擎切换则实时写回 target。
+   * 各 CLI 渠道预览覆盖：切渠道时投影目标 catalog；
+   * Shared/Native 都会写 executionTarget（Native 走续接 dialog）。
+   * 取消续接时必须清掉 override，否则底栏仍停在 destination 供应商。
    */
   const [profileOverrides, setProfileOverrides] = useState<
     Partial<Record<ProviderId, string>>
@@ -400,8 +402,42 @@ export const ModelSelect = memo(({
 
   // 切会话 / 目标渠道变化时丢弃底栏预览覆盖，避免仍显示上一会话的 DeepSeek 等旧渠道名
   useEffect(() => {
-    setProfileOverrides({});
+    // 幂等：已空则保留同一引用，避免无意义 setState 叠环（#185）
+    setProfileOverrides((prev) =>
+      Object.keys(prev).length === 0 ? prev : {},
+    );
   }, [executionTarget?.engine, executionTarget?.providerProfileId]);
+
+  // Native 续接点「取消」：executionTarget 未变，需事件驱动清掉 destination override
+  useEffect(() => {
+    const onRollback = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{ engine?: string; providerProfileId?: string | null }>
+      ).detail;
+      const engine = detail?.engine?.trim();
+      if (!engine) {
+        setProfileOverrides((prev) =>
+          Object.keys(prev).length === 0 ? prev : {},
+        );
+        return;
+      }
+      setProfileOverrides((current) => {
+        if (!(engine in current)) {
+          return current;
+        }
+        const next = { ...current };
+        delete next[engine as ProviderId];
+        return next;
+      });
+    };
+    window.addEventListener(PROVIDER_CONTINUATION_UI_ROLLBACK_EVENT, onRollback);
+    return () => {
+      window.removeEventListener(
+        PROVIDER_CONTINUATION_UI_ROLLBACK_EVENT,
+        onRollback,
+      );
+    };
+  }, []);
 
   // Keep label/icon mapping in sync when the active provider rewrites
   // claude-model-mapping (same-tab custom event + cross-tab storage).
@@ -744,20 +780,23 @@ export const ModelSelect = memo(({
         if (!hasTargetGroups || !onExecutionTargetChange) {
           return;
         }
-        if (group.providerId !== executionTarget?.engine) {
-          return;
-        }
-        const keptModel =
-          profileModels.find((model) =>
-            isSelectedExecutionModel(executionTarget, model),
-          ) ??
-          profileModels.find(
-            (model) =>
-              resolveRuntimeModel(model) ===
-              (executionTarget.model?.trim() || undefined),
-          ) ??
-          profileModels[0];
-        // Shared 关键：不得回落到旧渠道的 modelCatalogEntryId
+        // Shared / create-session：渠道切换必须立刻写完整 ExecutionTarget。
+        // 禁止「当前 engine 仍是 Codex 时改 Claude 渠道只预览不落盘」——
+        // 否则底栏/映射像 DeepSeek，selectedNextTarget 仍是旧引擎或 Claude 本地，
+        // 发送会变成「Claude Code · 本地配置 · k3」。
+        const sameEngine = group.providerId === executionTarget?.engine;
+        const keptModel = sameEngine
+          ? (profileModels.find((model) =>
+              isSelectedExecutionModel(executionTarget, model),
+            ) ??
+            profileModels.find(
+              (model) =>
+                resolveRuntimeModel(model) ===
+                (executionTarget.model?.trim() || undefined),
+            ) ??
+            profileModels[0])
+          : profileModels[0];
+        // 无新 catalog 时不得沿用上一引擎/渠道的 model id
         if (!keptModel) {
           return;
         }
@@ -768,7 +807,8 @@ export const ModelSelect = memo(({
         }
         onExecutionTargetChange(
           buildProviderExecutionTarget(
-            executionTarget,
+            // 跨引擎时不要继承旧引擎的 reasoning / profile 语义
+            sameEngine ? executionTarget : null,
             group.providerId,
             profileId,
             catalogEntryId || runtimeModel || "",

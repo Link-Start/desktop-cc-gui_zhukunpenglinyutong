@@ -1794,3 +1794,192 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1295: 修复 Shared target 竞态与 Claude managed model 串台
+
+**Date**: 2026-08-02
+**Task**: 修复 Shared target 竞态与 Claude managed model 串台
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+分两批提交：Shared Session 乐观更新/merge 保护；Native Claude DeepSeek 渠道 k3 残留与进程 env 隔离
+
+### Main Changes
+
+## 本会话交付
+
+### Commit 1 `89d9f7060` fix(shared-session)
+- OpenSpec: fix-shared-session-target-race-and-merge
+- 乐观 hydrate + in-flight + generation 写序
+- shared: threadKind 硬闸；list 空时用 existingThreads 补回（非空不复活已删）
+
+### Commit 2 `bc2c75d28` fix(claude)
+- OpenSpec: fix-native-claude-provider-runtime-model-sync
+- managed spawn env_remove routing 键
+- resolveClaudeManagedRuntimeModel：catalog 命中用 model；仅 k3/kimi 残留 repair；freeform 放行
+
+### 验证
+- vitest / cargo lib 相关单测通过
+- openspec validate 两个 change 通过
+- 手工：DeepSeek 发送、删 Shared 刷新、Claude freeform 建议自测
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `89d9f7060` | (see git log) |
+| `bc2c75d28` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1296: 修复 Shared 跨引擎切渠道落本地配置
+
+**Date**: 2026-08-02
+**Task**: 修复 Shared 跨引擎切渠道落本地配置
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+handleChannelSwitch 跨引擎立即写 selectedNextTarget，避免 Codex→Claude DeepSeek 显示本地配置·k3
+
+### Main Changes
+
+用户复现 Shared Codex→Claude DeepSeek 时 target 未写、落到本地配置。
+修复 ModelSelect 跨引擎 channel switch 必须 onExecutionTargetChange。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c71d72281` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1297: Native 续接取消还原来源供应商
+
+**Date**: 2026-08-03
+**Task**: Native 续接取消还原来源供应商
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+取消 Provider 续接时 activate 来源 profile 并清 ModelSelect 渠道 override
+
+### Main Changes
+
+用户测出：Native DeepSeek→Minimax 续接点取消后仍落在新供应商。
+已修复 cancel 还原路径。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ad8129cac` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1298: 修复 React 185 Claude repair 更新环
+
+**Date**: 2026-08-03
+**Task**: 修复 React 185 Claude repair 更新环
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+拆除 Claude residual 自动 handleSelectModel effect，发送仍用 resolvedModel 纠正 runtime
+
+### Main Changes
+
+用户生产 #185。根因：allowUnknown + repair effect 对打。
+已删除 effect 并幂等化相关 setState。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a4166c03e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1299: 续接成功默认选中目标模型
+
+**Date**: 2026-08-03
+**Task**: 续接成功默认选中目标模型
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+Provider 续接成功后 resolve catalog entry/首档并写入 composer selection
+
+### Main Changes
+
+用户反馈续接后「选择模型」空态。已改为 entry id + 默认首档。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c08facc4e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -1259,10 +1259,94 @@ describe("ModelSelect atomic target groups", () => {
     expect(onExecutionTargetChange).not.toHaveBeenCalled();
   });
 
-  it("previews another engine channel without rewriting the active target until a model is picked", async () => {
+  it("writes execution target immediately when switching another engine channel (codex→claude managed)", async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const onExecutionTargetChange = vi.fn();
-    const onOpenProviderProfile = vi.fn();
+    const onOpenProviderProfile = vi.fn().mockResolvedValue([
+      {
+        id: "claude-fable-5",
+        model: "deepseek-v4-pro",
+        label: "deepseek-v4-pro",
+        providerProfileId: "deepseek",
+      },
+    ]);
+    // 当前 Shared 还在 Codex，用户在 Claude 组切 DeepSeek——必须立刻落盘 target，
+    // 不能只 override UI 却仍显示「本地配置」。
+    const codexTarget = {
+      engine: "codex" as const,
+      providerProfileId: null,
+      modelCatalogEntryId: "gpt-5.6-sol",
+      model: "gpt-5.6-sol",
+      providerProfileNameSnapshot: "本地配置",
+      providerProfileSource: "disk" as const,
+      reasoning: null,
+    };
+    const groups = buildAtomicGroups();
+    groups[0].profiles.push({
+      id: "deepseek",
+      label: "DeepSeek",
+      source: "managed" as const,
+      loading: false,
+      error: null,
+      models: [
+        {
+          id: "claude-fable-5",
+          model: "deepseek-v4-pro",
+          label: "deepseek-v4-pro",
+        },
+      ],
+    });
+
+    render(
+      <ModelSelect
+        value="gpt-5.6-sol"
+        currentProvider="codex"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        onExecutionTargetChange={onExecutionTargetChange}
+        onOpenProviderProfile={onOpenProviderProfile}
+        executionTarget={codexTarget}
+        targetGroups={groups}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "chat.currentModel:gpt-5.6-sol" }),
+    );
+    await screen.findByRole("menuitem", { name: /Claude Code/ });
+    openPickerSubmenu(/Claude Code/);
+
+    const channelTrigger = document.querySelector(
+      "[data-channel-select-trigger='claude']",
+    ) as HTMLButtonElement;
+    expect(channelTrigger).toBeTruthy();
+    fireEvent.click(channelTrigger);
+
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(
+      await within(dialog).findByRole("button", { name: /DeepSeek/ }),
+    );
+
+    expect(onOpenProviderProfile).toHaveBeenCalledWith("claude", "deepseek");
+    await waitFor(() => {
+      expect(onExecutionTargetChange).toHaveBeenCalledWith({
+        engine: "claude",
+        providerProfileId: "deepseek",
+        modelCatalogEntryId: "claude-fable-5",
+        model: "deepseek-v4-pro",
+        providerProfileNameSnapshot: "DeepSeek",
+        providerProfileSource: "managed",
+        reasoning: null,
+      });
+    });
+  });
+
+  it("writes codex managed channel target when previewing from a claude active target", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onExecutionTargetChange = vi.fn();
+    const onOpenProviderProfile = vi.fn().mockResolvedValue([
+      { id: "gpt-provider-b", model: "gpt-provider-b", label: "GPT Provider B" },
+    ]);
     const groups = buildAtomicGroups();
     groups[1].profiles.push({
       id: "provider-b",
@@ -1304,28 +1388,16 @@ describe("ModelSelect atomic target groups", () => {
     );
 
     expect(onOpenProviderProfile).toHaveBeenCalledWith("codex", "provider-b");
-    // Preview only: does not rewrite Claude execution target.
-    expect(onExecutionTargetChange).not.toHaveBeenCalled();
-
-    // Channel dialog closes the model menu; reopen to pick from the previewed catalog.
-    await user.click(
-      screen.getByRole("button", { name: "chat.currentModel:Opus 4.8" }),
-    );
-    await screen.findByRole("menuitem", { name: /Codex CLI/ });
-    openPickerSubmenu(/Codex CLI/);
-
-    expect(await screen.findByText("GPT Provider B")).toBeTruthy();
-    expect(screen.queryByText("GPT-5.7")).toBeNull();
-
-    fireEvent.click(screen.getByText("GPT Provider B"));
-    expect(onExecutionTargetChange).toHaveBeenCalledWith({
-      engine: "codex",
-      providerProfileId: "provider-b",
-      modelCatalogEntryId: "gpt-provider-b",
-      model: "gpt-provider-b",
-      providerProfileNameSnapshot: "Provider B",
-      providerProfileSource: "managed",
-      reasoning: null,
+    await waitFor(() => {
+      expect(onExecutionTargetChange).toHaveBeenCalledWith({
+        engine: "codex",
+        providerProfileId: "provider-b",
+        modelCatalogEntryId: "gpt-provider-b",
+        model: "gpt-provider-b",
+        providerProfileNameSnapshot: "Provider B",
+        providerProfileSource: "managed",
+        reasoning: null,
+      });
     });
   });
 

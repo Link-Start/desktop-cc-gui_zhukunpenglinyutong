@@ -51,11 +51,15 @@ import {
   type EngineProviderProfileOption,
 } from "../../threads/constants/codexProviderProfiles";
 import {
+  notifyProviderContinuationUiRollback,
   subscribeProviderContinuationDialogRequests,
   type ProviderContinuationDialogRequest,
 } from "../../threads/services/providerContinuationRequests";
 import { isWeakSessionDisplayTitle } from "../../threads/utils/sessionDisplayProjection";
-import { activateEngineProviderProfileAndNotify } from "../../vendors/activateEngineProviderProfile";
+import {
+  activateEngineProviderProfileAndNotify,
+  isActivatableProviderEngine,
+} from "../../vendors/activateEngineProviderProfile";
 
 /** 新建会话菜单项 id → 对应 CLI engine；用于 CLI 配置管理启停过滤。 */
 const NEW_SESSION_ENGINE_ACTION_IDS: Readonly<Record<string, EngineType>> = {
@@ -309,7 +313,10 @@ type SidebarMenuHandlers = {
     threadId: string;
     engine: string;
     providerProfileId: string | null;
+    /** 优先 catalog entry id；可与 modelRuntime 二选一或同时给 */
     modelId: string | null;
+    /** CLI runtime 名（如 MiniMax-M3），用于反查 catalog entry */
+    modelRuntime?: string | null;
     effort: string | null;
   }) => void | Promise<void>;
   isThreadAvailable?: (workspaceId: string, threadId: string) => boolean;
@@ -725,6 +732,58 @@ export function useSidebarMenus({
     [getThreadSummary, prepareProviderContinuationDialog, t],
   );
 
+  const restoreSourceProviderAfterContinuationCancel = useCallback(
+    (dialog: ProviderContinuationDialogState) => {
+      const source = dialog.request.source;
+      const sourceEngine = source.engine;
+      const rawProfileId = source.providerProfileId?.trim() || null;
+      // 切渠道预览会写 profileOverrides + syncClaudeModelMapping 到 destination；
+      // 取消时必须把 L1 使用中/映射与 Picker 渠道投影还原到来源会话。
+      notifyProviderContinuationUiRollback({
+        engine: sourceEngine,
+        providerProfileId: rawProfileId,
+      });
+      if (!isActivatableProviderEngine(sourceEngine)) {
+        return;
+      }
+      const restoreProfileId =
+        rawProfileId ||
+        (sourceEngine === "claude"
+          ? CLAUDE_LOCAL_PROVIDER_PROFILE_ID
+          : sourceEngine === "codex"
+            ? CODEX_DISK_PROVIDER_PROFILE_ID
+            : sourceEngine === "kimi"
+              ? KIMI_LOCAL_PROVIDER_PROFILE_ID
+              : sourceEngine === "grok"
+                ? GROK_LOCAL_PROVIDER_PROFILE_ID
+                : sourceEngine === "opencode"
+                  ? OPENCODE_LOCAL_PROVIDER_PROFILE_ID
+                  : null);
+      if (!restoreProfileId) {
+        return;
+      }
+      void activateEngineProviderProfileAndNotify(
+        sourceEngine,
+        restoreProfileId,
+      ).catch((error: unknown) => {
+        pushGlobalRuntimeNotice({
+          severity: "error",
+          category: "user-action-error",
+          messageKey: "runtimeNotice.vendor.activateProviderFailed",
+          messageParams: {
+            name:
+              dialog.sourceLabel ||
+              restoreProfileId ||
+              LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
+            message: error instanceof Error ? error.message : String(error),
+          },
+          dedupeKey: `provider-continuation-cancel-restore:${dialog.workspaceId}:${restoreProfileId}`,
+        });
+      });
+    },
+    [],
+  );
+
   const closeProviderContinuationDialog = useCallback(() => {
     const current = providerContinuationDialogStateRef.current;
     if (!current) {
@@ -736,6 +795,8 @@ export function useSidebarMenus({
     canceledProviderContinuationOperationsRef.current.add(operationId);
     providerContinuationOperationIdsRef.current.delete(current.operationKey);
     replaceProviderContinuationDialog(null);
+    // 取消 = 不切换：还原来源会话的供应商/模型映射与渠道底栏投影。
+    restoreSourceProviderAfterContinuationCancel(current);
     if (
       current.stage === "preparing" ||
       current.stage === "confirm" ||
@@ -761,6 +822,7 @@ export function useSidebarMenus({
   }, [
     discardPreparedProviderContinuation,
     replaceProviderContinuationDialog,
+    restoreSourceProviderAfterContinuationCancel,
   ]);
 
   const confirmProviderContinuation = useCallback(async () => {
@@ -865,8 +927,14 @@ export function useSidebarMenus({
         await onReloadWorkspaceThreads(dialog.workspaceId);
         replaceProviderContinuationDialog(null);
         onSelectThread(dialog.workspaceId, result.operation.resultSessionId);
-        // 应用续接目标模型到新会话 composer，避免仍显示来源会话的 deepseek 等模型
-        const destModel =
+        // 应用续接目标模型到新会话 composer。
+        // modelId 优先 catalog entry id（picker 按 id 匹配）；model 是 runtime。
+        // 两者皆空时仍回调，由上层按目标 provider catalog 默认/首档补齐，避免「选择模型」空态。
+        const destCatalogEntryId =
+          typeof destination.modelCatalogEntryId === "string"
+            ? destination.modelCatalogEntryId.trim()
+            : "";
+        const destRuntimeModel =
           typeof destination.model === "string"
             ? destination.model.trim()
             : "";
@@ -874,16 +942,15 @@ export function useSidebarMenus({
           typeof destination.reasoningEffort === "string"
             ? destination.reasoningEffort.trim()
             : "";
-        if (destModel || destEffort) {
-          onProviderContinuationTargetReady?.({
-            workspaceId: dialog.workspaceId,
-            threadId: result.operation.resultSessionId,
-            engine: destEngine,
-            providerProfileId: destProviderId || null,
-            modelId: destModel || null,
-            effort: destEffort || null,
-          });
-        }
+        onProviderContinuationTargetReady?.({
+          workspaceId: dialog.workspaceId,
+          threadId: result.operation.resultSessionId,
+          engine: destEngine,
+          providerProfileId: destProviderId || null,
+          modelId: destCatalogEntryId || null,
+          modelRuntime: destRuntimeModel || null,
+          effort: destEffort || null,
+        });
         return;
       }
       const latest = providerContinuationDialogStateRef.current;

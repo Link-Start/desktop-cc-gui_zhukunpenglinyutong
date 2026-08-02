@@ -15,6 +15,7 @@ import {
   getReasoningOptionsForModel,
   upsertEngineSelectedModelId,
 } from "./modelSelection";
+import { resolveClaudeManagedRuntimeModel } from "../features/models/claudeManagedRuntimeModel";
 
 export function useAppShellComposerModelSection({
   accessMode,
@@ -172,7 +173,31 @@ export function useAppShellComposerModelSection({
     selectedEffort,
     selectedComposerSelection,
   ]);
-  const resolvedModel = effectiveSelectedModel?.model ?? effectiveSelectedModelId ?? null;
+  // Claude managed：按当前 catalog 重解析 runtime，避免 k3 等跨供应商残留上送。
+  const claudeRuntimeResolution = useMemo(() => {
+    if (activeEngine !== "claude") {
+      return null;
+    }
+    return resolveClaudeManagedRuntimeModel({
+      entryId: effectiveSelectedModelId,
+      catalog: effectiveModels.map((model: ModelOption) => ({
+        id: model.id,
+        model: model.model,
+        isDefault: Boolean(model.isDefault),
+      })),
+      fallbackRuntime:
+        effectiveSelectedModel?.model ?? effectiveSelectedModelId ?? null,
+    });
+  }, [
+    activeEngine,
+    effectiveModels,
+    effectiveSelectedModel?.model,
+    effectiveSelectedModelId,
+  ]);
+  const resolvedModel =
+    activeEngine === "claude"
+      ? claudeRuntimeResolution?.runtime ?? null
+      : (effectiveSelectedModel?.model ?? effectiveSelectedModelId ?? null);
   const resolvedModelSource = effectiveSelectedModel?.source ?? "unknown";
   const resolvedProviderProfileId =
     activeEngine === "codex"
@@ -258,10 +283,14 @@ export function useAppShellComposerModelSection({
           setSelectedModelId(nextSelectedModel.id);
         }
       } else {
-        setEngineSelectedModelIdByType((prev) => ({
-          ...prev,
-          [targetEngine]: nextSelectedModel.id,
-        }));
+        // 幂等：id 未变不换 map 引用，避免父树无意义 rerender（#185）
+        setEngineSelectedModelIdByType((prev) =>
+          upsertEngineSelectedModelId({
+            activeEngine: targetEngine,
+            nextModelId: nextSelectedModel.id,
+            previousSelectionByEngine: prev,
+          }),
+        );
         persistComposerEnginePref?.(targetEngine, {
           modelId: nextSelectedModel.id,
           effort: nextSelectedEffort,
@@ -327,14 +356,22 @@ export function useAppShellComposerModelSection({
     resolvedModel,
   });
   const threadAccessMode = accessMode;
+  const resolvedComposerModelId =
+    activeEngine === "claude" && claudeRuntimeResolution?.entryId
+      ? claudeRuntimeResolution.entryId
+      : effectiveSelectedModelId;
   composerSelectionResolverRef.current = {
-    id: effectiveSelectedModelId,
+    id: resolvedComposerModelId,
     model: resolvedModel,
     source: resolvedModelSource,
     providerProfileId: resolvedProviderProfileId,
     effort: resolvedEffort,
     collaborationMode: collaborationModePayload,
   };
+  // 注意：禁止在 effect 里对 Claude residual 自动 handleSelectModel。
+  // allowUnknown 下 effectiveSelectedModelId 可长期停在 k3，而 resolver 的 entryId
+  // 是 catalog 默认 → effect 会无限 setState（React #185 / AP-04）。
+  // 发送侧已用 resolvedModel 纠正 runtime；UI 点选/续接取消 activate 再收敛展示。
   // 会话选择修复：仅在 effective 与已存选择语义不一致时写回。
   // freeform（allowUnknown）会保留 catalog 外 modelId——这是业务能力，不是 #185 缺口；
   // 这里只收敛 effort/model 的有效投影，禁止无变化 persist 触发反馈环。

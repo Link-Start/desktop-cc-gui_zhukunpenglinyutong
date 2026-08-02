@@ -49,6 +49,7 @@ import {
   archiveWorkspaceSessions,
   clearDetachedExternalChangeMonitor,
   configureDetachedExternalChangeMonitor,
+  getEngineModels,
 } from "../services/tauri";
 import { openOrFocusBrowserAgentDockWindow } from "../features/browser-agent/browserAgentDockWindow";
 import { shouldEnableMainFileExternalChangeMonitoring } from "./fileExternalMonitoring";
@@ -1220,27 +1221,22 @@ export function useAppShellLayoutNodesSection(
     },
   );
   const handleProviderContinuationTargetReady = useEventCallback(
-    (input: {
+    async (input: {
       workspaceId: string;
       threadId: string;
       engine: string;
       providerProfileId: string | null;
       modelId: string | null;
+      modelRuntime?: string | null;
       effort: string | null;
     }) => {
-      // 续接目标模型落到新会话；强制拉目标 provider 的 model catalog，避免仍显示来源 DeepSeek 映射
-      if (input.modelId || input.effort) {
-        persistComposerSelectionForThread(input.workspaceId, input.threadId, {
-          modelId: input.modelId,
-          effort: input.effort,
-        });
-      }
-      if (input.modelId) {
-        handleSelectModel(input.modelId);
-      }
-      if (input.effort) {
-        setSelectedEffort(input.effort);
-      }
+      // 续接成功：把目标供应商模型落到新会话 composer。
+      // picker 按 catalog entry id 匹配；仅传 runtime（MiniMax-M3）会显示「选择模型」。
+      // 解析顺序：catalog entry id → runtime 反查 → default/首档。
+      let resolvedModelId = input.modelId?.trim() || null;
+      const runtimeHint =
+        input.modelRuntime?.trim() || input.modelId?.trim() || null;
+      const effort = input.effort?.trim() || null;
       const engine = input.engine as
         | "claude"
         | "codex"
@@ -1248,6 +1244,7 @@ export function useAppShellLayoutNodesSection(
         | "grok"
         | "opencode"
         | "gemini";
+
       if (
         engine === "claude" ||
         engine === "codex" ||
@@ -1255,11 +1252,56 @@ export function useAppShellLayoutNodesSection(
         engine === "grok" ||
         engine === "opencode"
       ) {
-        void refreshEngineModels(engine, {
-          providerProfileId: input.providerProfileId,
-          forceRefresh: true,
-          phase: "on-demand",
+        try {
+          const models = await getEngineModels(engine, {
+            providerProfileId: input.providerProfileId,
+            forceRefresh: true,
+          });
+          void refreshEngineModels(engine, {
+            providerProfileId: input.providerProfileId,
+            forceRefresh: true,
+            phase: "on-demand",
+          });
+          const byCatalogId = resolvedModelId
+            ? models.find((model) => model.id === resolvedModelId)
+            : undefined;
+          if (!byCatalogId && runtimeHint) {
+            const byRuntime = models.find(
+              (model) =>
+                (model.model?.trim() || model.id) === runtimeHint,
+            );
+            if (byRuntime) {
+              resolvedModelId = byRuntime.id;
+            }
+          } else if (byCatalogId) {
+            resolvedModelId = byCatalogId.id;
+          }
+          if (
+            !resolvedModelId ||
+            !models.some((model) => model.id === resolvedModelId)
+          ) {
+            const defaultModel =
+              models.find((model) => model.isDefault) ?? models[0] ?? null;
+            if (defaultModel) {
+              resolvedModelId = defaultModel.id;
+            }
+          }
+        } catch {
+          // catalog 拉取失败时仍尽量用 destination 给的 id/runtime 落盘
+        }
+      }
+
+      if (resolvedModelId || effort) {
+        persistComposerSelectionForThread(input.workspaceId, input.threadId, {
+          modelId: resolvedModelId,
+          effort,
         });
+      }
+      if (resolvedModelId) {
+        handleSelectModel(resolvedModelId);
+      }
+      if (effort) {
+        setSelectedEffort(effort);
       }
     },
   );

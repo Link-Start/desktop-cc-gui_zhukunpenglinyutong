@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  beginSharedTargetPersist,
   beginTurn,
+  endSharedTargetPersist,
   endTurn,
   getActiveTurnTargetForAttempt,
+  getPersistGeneration,
   getSharedTargetState,
   hydrateSharedTargetState,
+  isSharedTargetPersistInFlight,
   resetSharedTargetStoreForTests,
   selectNextTarget,
 } from "./targetStore";
@@ -340,5 +344,58 @@ describe("resolveSnapshotProviderLabel", () => {
     expect(
       resolveSnapshotProviderLabel({ engine: "claude" }),
     ).toBe("历史配置未知");
+  });
+});
+
+describe("persistGeneration", () => {
+  const WS2 = "ws-gen";
+  const THREAD2 = "thread-gen";
+
+  beforeEach(() => {
+    resetSharedTargetStoreForTests();
+  });
+
+  it("starts at 0 for unknown thread", () => {
+    expect(getPersistGeneration(WS2, THREAD2)).toBe(0);
+  });
+
+  it("increments after hydrate", () => {
+    hydrateSharedTargetState(WS2, THREAD2, { engine: "claude" });
+    expect(getPersistGeneration(WS2, THREAD2)).toBe(1);
+    hydrateSharedTargetState(WS2, THREAD2, { engine: "codex" });
+    expect(getPersistGeneration(WS2, THREAD2)).toBe(2);
+  });
+
+  it("does not increment on beginTurn or endTurn", () => {
+    beginTurn(WS2, THREAD2, freezeTurnSnapshot({ engine: "claude" }));
+    expect(getPersistGeneration(WS2, THREAD2)).toBe(0);
+  });
+
+  it("is thread-isolated", () => {
+    hydrateSharedTargetState(WS2, "thread-a", { engine: "claude" });
+    hydrateSharedTargetState(WS2, "thread-b", { engine: "codex" });
+    expect(getPersistGeneration(WS2, "thread-a")).toBe(1);
+    expect(getPersistGeneration(WS2, "thread-b")).toBe(1);
+  });
+});
+
+describe("shared target persist in-flight", () => {
+  const WS3 = "ws-inflight";
+  const THREAD3 = "thread-inflight";
+
+  beforeEach(() => {
+    resetSharedTargetStoreForTests();
+  });
+
+  it("tracks begin/end persist in-flight", () => {
+    expect(isSharedTargetPersistInFlight(WS3, THREAD3)).toBe(false);
+    beginSharedTargetPersist(WS3, THREAD3);
+    expect(isSharedTargetPersistInFlight(WS3, THREAD3)).toBe(true);
+    beginSharedTargetPersist(WS3, THREAD3);
+    expect(isSharedTargetPersistInFlight(WS3, THREAD3)).toBe(true);
+    endSharedTargetPersist(WS3, THREAD3);
+    expect(isSharedTargetPersistInFlight(WS3, THREAD3)).toBe(true);
+    endSharedTargetPersist(WS3, THREAD3);
+    expect(isSharedTargetPersistInFlight(WS3, THREAD3)).toBe(false);
   });
 });
