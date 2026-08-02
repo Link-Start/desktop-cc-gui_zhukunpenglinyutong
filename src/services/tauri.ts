@@ -203,6 +203,10 @@ export {
   getRendererStabilitySnapshot,
   recordRendererHeartbeat,
 } from "./tauri/rendererStability";
+export {
+  loadBaiduTongjiScript,
+  sendBaiduTongjiBeacon,
+} from "./tauri/baiduTongji";
 export type {
   RendererHeartbeatInput,
   RendererHeartbeatStatus,
