@@ -17,6 +17,15 @@ export type SessionQuotaTargetFallback = {
   model?: string | null;
 };
 
+export type CollectSessionQuotaTargetsOptions = {
+  /**
+   * Shared Session：扫 conversation history 的 executionTargetSnapshot。
+   * Native Session：必须 false，仅用当前 binding（fallback），避免历史供应商额度串台。
+   * 默认 true 仅兼容旧调用；生产路径应显式传入。
+   */
+  includeHistory?: boolean;
+};
+
 export function buildSessionQuotaTargetKey(
   engine: EngineType | string,
   providerProfileId?: string | null,
@@ -37,53 +46,59 @@ function isEngineType(value: unknown): value is EngineType {
 }
 
 /**
- * 从会话 items 的 executionTargetSnapshot 收集去重后的供应商目标。
- * 共享会话多引擎切换时用于并行查额度；原生会话通常只有 fallback 一条。
+ * 收集会话额度查询目标。
+ *
+ * - Shared（includeHistory=true）：从 items 的 executionTargetSnapshot 去重 + fallback
+ * - Native（includeHistory=false）：只返回 fallback 一条，禁止历史供应商串台
  */
 export function collectSessionQuotaTargets(
   items: readonly ConversationItem[],
   fallback: SessionQuotaTargetFallback,
+  options: CollectSessionQuotaTargetsOptions = {},
 ): SessionQuotaTarget[] {
+  const includeHistory = options.includeHistory !== false;
   const ordered = new Map<string, SessionQuotaTarget>();
 
-  for (const item of items) {
-    if (item.kind !== "message") {
-      continue;
+  if (includeHistory) {
+    for (const item of items) {
+      if (item.kind !== "message") {
+        continue;
+      }
+      const snap = item.executionTargetSnapshot;
+      const engine =
+        (snap?.engine && isEngineType(snap.engine) ? snap.engine : null) ??
+        (item.engineSource && isEngineType(item.engineSource)
+          ? item.engineSource
+          : null);
+      if (!engine) {
+        continue;
+      }
+      const providerProfileId =
+        typeof snap?.providerProfileId === "string" &&
+        snap.providerProfileId.trim().length > 0
+          ? snap.providerProfileId.trim()
+          : null;
+      const key = buildSessionQuotaTargetKey(engine, providerProfileId);
+      if (ordered.has(key)) {
+        continue;
+      }
+      const providerLabel =
+        (typeof snap?.providerProfileNameSnapshot === "string" &&
+        snap.providerProfileNameSnapshot.trim().length > 0
+          ? snap.providerProfileNameSnapshot.trim()
+          : null) ?? engine;
+      const model =
+        typeof snap?.model === "string" && snap.model.trim().length > 0
+          ? snap.model.trim()
+          : null;
+      ordered.set(key, {
+        key,
+        engine,
+        providerProfileId,
+        providerLabel,
+        model,
+      });
     }
-    const snap = item.executionTargetSnapshot;
-    const engine =
-      (snap?.engine && isEngineType(snap.engine) ? snap.engine : null) ??
-      (item.engineSource && isEngineType(item.engineSource)
-        ? item.engineSource
-        : null);
-    if (!engine) {
-      continue;
-    }
-    const providerProfileId =
-      typeof snap?.providerProfileId === "string" &&
-      snap.providerProfileId.trim().length > 0
-        ? snap.providerProfileId.trim()
-        : null;
-    const key = buildSessionQuotaTargetKey(engine, providerProfileId);
-    if (ordered.has(key)) {
-      continue;
-    }
-    const providerLabel =
-      (typeof snap?.providerProfileNameSnapshot === "string" &&
-      snap.providerProfileNameSnapshot.trim().length > 0
-        ? snap.providerProfileNameSnapshot.trim()
-        : null) ?? engine;
-    const model =
-      typeof snap?.model === "string" && snap.model.trim().length > 0
-        ? snap.model.trim()
-        : null;
-    ordered.set(key, {
-      key,
-      engine,
-      providerProfileId,
-      providerLabel,
-      model,
-    });
   }
 
   if (fallback.engine && isEngineType(fallback.engine)) {

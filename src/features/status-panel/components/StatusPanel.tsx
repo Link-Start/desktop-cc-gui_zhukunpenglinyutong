@@ -104,6 +104,11 @@ interface StatusPanelProps extends CodeAnnotationBridgeProps {
   sessionDiskPath?: string | null;
   /** 当前会话绑定的供应商 profile，用于 Coding Plan 额度查询。 */
   providerProfileId?: string | null;
+  /**
+   * Shared Session 才扫 history 做多供应商额度列表；
+   * Native 默认 false，只查当前 binding，避免历史供应商额度串台。
+   */
+  isSharedSession?: boolean;
   activeRateLimits?: RateLimitSnapshot | null;
   /** 与设置「显示剩余额度」对齐，影响 Codex 限额展示。 */
   usageShowRemaining?: boolean;
@@ -235,6 +240,7 @@ export const StatusPanel = memo(function StatusPanel({
   workspaceName = null,
   sessionDiskPath = null,
   providerProfileId = null,
+  isSharedSession = false,
   activeRateLimits = null,
   usageShowRemaining = false,
   onRefreshGitStatus = null,
@@ -568,12 +574,23 @@ export const StatusPanel = memo(function StatusPanel({
   );
   const sessionQuotaTargets = useMemo(
     () =>
-      collectSessionQuotaTargets(effectiveItems, {
-        engine: statusPanelEngine,
-        providerProfileId,
-        model: selectedModelId,
-      }),
-    [effectiveItems, statusPanelEngine, providerProfileId, selectedModelId],
+      collectSessionQuotaTargets(
+        effectiveItems,
+        {
+          engine: statusPanelEngine,
+          providerProfileId,
+          model: selectedModelId,
+        },
+        // Shared：history 多供应商；Native：仅当前 binding
+        { includeHistory: isSharedSession },
+      ),
+    [
+      effectiveItems,
+      isSharedSession,
+      statusPanelEngine,
+      providerProfileId,
+      selectedModelId,
+    ],
   );
 
   const sessionQuotaList = useSessionQuotaList({

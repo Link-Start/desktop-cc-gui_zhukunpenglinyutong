@@ -2372,6 +2372,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       workspaceName={options.activeWorkspace?.name ?? null}
       sessionDiskPath={activeThreadSummary?.physicalPath ?? null}
       providerProfileId={activeThreadSummary?.providerProfileId ?? null}
+      isSharedSession={isSharedSession}
       usageShowRemaining={options.usageShowRemaining}
       onRefreshGitStatus={options.queueGitStatusRefresh}
       commitMessage={options.commitMessage}
