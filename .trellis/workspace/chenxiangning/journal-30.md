@@ -1879,3 +1879,38 @@ handleChannelSwitch 跨引擎立即写 selectedNextTarget，避免 Codex→Claud
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1297: Native 续接取消还原来源供应商
+
+**Date**: 2026-08-03
+**Task**: Native 续接取消还原来源供应商
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+取消 Provider 续接时 activate 来源 profile 并清 ModelSelect 渠道 override
+
+### Main Changes
+
+用户测出：Native DeepSeek→Minimax 续接点取消后仍落在新供应商。
+已修复 cancel 还原路径。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ad8129cac` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
