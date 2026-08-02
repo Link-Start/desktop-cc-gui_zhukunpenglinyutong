@@ -1382,3 +1382,48 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1286: fix(status-panel): Native 会话额度仅查当前供应商
+
+**Date**: 2026-08-02
+**Task**: fix(status-panel): Native 会话额度仅查当前供应商
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 内容 |
+|----|------|
+| 根因 | Shared 多供应商额度列表无条件扫 history，Native 串台展示 kimi 等历史供应商 |
+| 修复 | `includeHistory: isSharedSession`；Native 仅当前 binding |
+| OpenSpec | `fix-native-session-quota-target-scoping` proposal/design/tasks/spec |
+| 验证 | sessionQuotaTargets 5 tests 绿 |
+
+**Updated Files**:
+- `src/features/status-panel/utils/sessionQuotaTargets.ts`
+- `src/features/status-panel/components/StatusPanel.tsx`
+- `src/features/layout/hooks/useLayoutNodes.tsx`
+- `openspec/changes/fix-native-session-quota-target-scoping/**`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `46724bb45` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

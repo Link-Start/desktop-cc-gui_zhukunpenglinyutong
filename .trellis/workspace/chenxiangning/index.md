@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-30.md`
-- **Total Sessions**: 1285
+- **Total Sessions**: 1286
 - **Last Active**: 2026-08-02
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-30.md` | ~1384 | Active |
+| `journal-30.md` | ~1429 | Active |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
@@ -58,6 +58,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1286 | 2026-08-02 | fix(status-panel): Native 会话额度仅查当前供应商 | `46724bb45` | `cxn-version-0.7.15` |
 | 1285 | 2026-08-02 | fix: 单步思考收进过程 chip | `9c94ca1df` | `cxn-version-0.7.15` |
 | 1284 | 2026-08-02 | fix: Native 过程折叠吸收孤儿思考 | `cee3ec655` | `cxn-version-0.7.15` |
 | 1283 | 2026-08-02 | 修复 Windows Native Continuation artifact 路径 os error 267 | `94343833d` | `cxn-version-0.7.15` |
