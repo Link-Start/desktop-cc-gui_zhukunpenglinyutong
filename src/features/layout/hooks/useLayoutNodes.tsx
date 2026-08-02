@@ -61,7 +61,6 @@ import type {
   NoteCaptureDraft,
   WorkspaceNoteCaptureRequest,
 } from "../../note-cards/types";
-import { WorkspaceSessionActivityPanel } from "../../session-activity/components/WorkspaceSessionActivityPanel";
 import { WorkspaceSessionRadarPanel } from "../../session-activity/components/WorkspaceSessionRadarPanel";
 import { TabBar } from "../../app/components/TabBar";
 import { TabletNav } from "../../app/components/TabletNav";
@@ -103,7 +102,8 @@ import { resolveDiffPathFromWorkspacePath } from "../../../utils/workspacePaths"
 import { resolvePresentationProfile } from "../../../conversation-presentation/presentationProfile";
 import { appendQueuedHandoffBubbleIfNeeded } from "../../threads/utils/queuedHandoffBubble";
 import { isBackgroundRenderGatingEnabled } from "../../threads/utils/realtimePerfFlags";
-import { useWorkspaceSessionActivity } from "../../session-activity/hooks/useWorkspaceSessionActivity";
+// DISABLED: disable-session-activity-and-solo-mode — keep empty stub only
+import { DISABLED_WORKSPACE_SESSION_ACTIVITY } from "../../session-activity/adapters/buildWorkspaceSessionActivity";
 import { useClientUiVisibility } from "../../client-ui-visibility/hooks/useClientUiVisibility";
 import {
   getHomeWorkspaceOptions,
@@ -413,7 +413,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     "rightActivityToolbar",
   );
   const rightToolbarVisibleTabs = {
-    activity: clientUiVisibility.isControlVisible("rightToolbar.activity"),
+    // Kill-switched: never show activity entry even if client UI visibility allows it.
+    activity: false,
     projectMap: clientUiVisibility.isControlVisible("rightToolbar.projectMap"),
     radar: clientUiVisibility.isControlVisible("rightToolbar.radar"),
     git: clientUiVisibility.isControlVisible("rightToolbar.git"),
@@ -637,15 +638,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     },
     [gitDiffItems, activeWorkspacePath, onGitDiffListViewChange, onSelectDiff],
   );
-  const workspaceActivity = useWorkspaceSessionActivity({
-    activeThreadId: options.activeThreadId,
-    threads: options.activeWorkspaceId
-      ? (options.threadsByWorkspace[options.activeWorkspaceId] ?? [])
-      : [],
-    itemsByThread: deferredThreadItemsByThread,
-    threadParentById: options.threadParentById,
-    threadStatusById: deferredThreadStatusById,
-  });
+  // DISABLED: disable-session-activity-and-solo-mode — no derivation while kill-switch is on
+  const workspaceActivity = DISABLED_WORKSPACE_SESSION_ACTIVITY;
   const isEditorFileMaximized = options.isEditorFileMaximized;
   const onToggleEditorFileMaximized = options.onToggleEditorFileMaximized;
   const handleOpenDiffFromActivity = useCallback(
@@ -1879,6 +1873,11 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
 
   const handleRightPanelTabSelect = useCallback(
     (tabId: RightPanelTabSelection) => {
+      // DISABLED: disable-session-activity-and-solo-mode
+      if (tabId === "activity") {
+        onFilePanelModeChange("files");
+        return;
+      }
       if (tabId === "specHub") {
         onOpenSpecHub();
         return;
@@ -1959,7 +1958,10 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
 
   let gitDiffPanelNode: ReactNode;
   if (
-    (options.filePanelMode === "files" || options.filePanelMode === "notes") &&
+    (options.filePanelMode === "files" ||
+      options.filePanelMode === "notes" ||
+      // DISABLED activity: treat residual mode as files until normalize runs
+      options.filePanelMode === "activity") &&
     options.activeWorkspace
   ) {
     gitDiffPanelNode = (
@@ -2034,20 +2036,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         onFilePanelModeChange={options.onFilePanelModeChange}
         focusMemoryId={options.focusedProjectMemoryId ?? null}
         focusRequestKey={options.focusedProjectMemoryRequestKey ?? 0}
-      />
-    );
-  } else if (options.filePanelMode === "activity") {
-    gitDiffPanelNode = (
-      <WorkspaceSessionActivityPanel
-        workspaceId={options.activeWorkspace?.id ?? null}
-        workspacePath={options.activeWorkspace?.path ?? null}
-        viewModel={workspaceActivity}
-        onOpenDiffPath={handleOpenDiffFromActivity}
-        onSelectThread={options.onSelectThread}
-        liveEditPreviewEnabled={options.liveEditPreviewEnabled}
-        onToggleLiveEditPreview={options.onToggleLiveEditPreview}
-        onRefreshGitStatus={options.queueGitStatusRefresh}
-        {...codeAnnotationBridgeProps}
       />
     );
   } else if (options.filePanelMode === "radar") {

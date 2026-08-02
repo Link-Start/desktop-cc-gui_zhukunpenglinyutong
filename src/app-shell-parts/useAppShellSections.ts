@@ -133,7 +133,7 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     expandSidebar,
     expandRightPanel,
     resetSoloSplitToHalf,
-    liveEditPreviewEnabled,
+    liveEditPreviewEnabled: _liveEditPreviewEnabled,
     workspaceActivity,
     activeEditorFilePath,
     handleOpenFile,
@@ -650,14 +650,8 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     !settingsOpen &&
     centerMode !== "memory",
   );
-  const soloModeEnabled = Boolean(
-    !isCompact &&
-    activeWorkspace &&
-    appMode === "chat" &&
-    !settingsOpen &&
-    !showSpecHub &&
-    !showWorkspaceHome,
-  );
+  // DISABLED: disable-session-activity-and-solo-mode — Solo entry permanently off
+  const soloModeEnabled = false;
   const { isSoloMode, toggleSoloMode, exitSoloMode } = useSoloMode({
     enabled: soloModeEnabled,
     activeTab,
@@ -694,7 +688,8 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
 
   const { markManualNavigation: markLiveEditPreviewManualNavigation } =
     useLiveEditPreview({
-      enabled: liveEditPreviewEnabled,
+      // DISABLED: activity timeline kill-switch removes preview data source
+      enabled: false,
       timeline: workspaceActivity.timeline,
       centerMode,
       activeEditorFilePath,

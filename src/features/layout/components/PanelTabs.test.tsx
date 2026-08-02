@@ -60,18 +60,19 @@ describe("PanelTabs", () => {
     expect(screen.getByRole("tooltip").textContent).toContain("panels.search");
   });
 
-  it("marks the activity tab as live when realtime activity is flowing", () => {
+  it("does not expose the activity tab while session-activity kill-switch is on", () => {
     const onSelect = vi.fn();
 
-    const view = render(
-      <PanelTabs active="activity" onSelect={onSelect} liveStates={{ activity: true }} />,
+    render(
+      <PanelTabs active="files" onSelect={onSelect} liveStates={{ activity: true }} />,
     );
 
-    const activityButton = screen.getByRole("button", { name: "panels.activity" });
-    expect(activityButton.classList.contains("is-live")).toBe(true);
-    expect(
-      view.container.querySelector(".panel-tab.is-live .panel-tab-icon.is-live"),
-    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "panels.activity" })).toBeNull();
+    fireEvent.pointerDown(screen.getByRole("button", { name: "common.moreActions" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    expect(screen.queryByRole("menuitem", { name: "panels.activity" })).toBeNull();
   });
 
   it("marks the radar tab as live when global running sessions exist", () => {
@@ -168,24 +169,24 @@ describe("PanelTabs", () => {
   it("pins an inactive tab as a toolbar button when its checkbox is checked", () => {
     render(<PanelTabs active="files" onSelect={vi.fn()} />);
 
-    expect(screen.queryByRole("button", { name: "panels.activity" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "panels.radar" })).toBeNull();
 
     fireEvent.pointerDown(
       screen.getByRole("button", { name: "common.moreActions" }),
       { button: 0, ctrlKey: false },
     );
-    const activityMenuItem = screen.getByRole("menuitem", {
-      name: "panels.activity",
+    const radarMenuItem = screen.getByRole("menuitem", {
+      name: "panels.radar",
     });
-    const activityCheckbox = within(activityMenuItem).getByRole("checkbox");
-    expect((activityCheckbox as HTMLInputElement).checked).toBe(false);
+    const radarCheckbox = within(radarMenuItem).getByRole("checkbox");
+    expect((radarCheckbox as HTMLInputElement).checked).toBe(false);
 
-    fireEvent.click(activityCheckbox);
+    fireEvent.click(radarCheckbox);
 
     // 菜单仍开着时 Radix 会把工具栏标记为 aria-hidden，故用 hidden 查询
-    expect((activityCheckbox as HTMLInputElement).checked).toBe(true);
+    expect((radarCheckbox as HTMLInputElement).checked).toBe(true);
     expect(
-      screen.getByRole("button", { name: "panels.activity", hidden: true }),
+      screen.getByRole("button", { name: "panels.radar", hidden: true }),
     ).toBeTruthy();
   });
 
