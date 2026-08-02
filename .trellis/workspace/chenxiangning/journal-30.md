@@ -1524,3 +1524,46 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1289: 跨引擎 SubAgent 适配 Codex/Grok/Kimi/Shared
+
+**Date**: 2026-08-02
+**Task**: 跨引擎 SubAgent 适配 Codex/Grok/Kimi/Shared
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 缺口 | 修复 |
+|------|------|
+| Codex collab 幕布扁条 | isSubagentTool + spawn 展开 persona 卡 |
+| 历史点开空抽屉 | 全引擎 history loader + output 回退 |
+| Kimi agent swarm | title/XML 识别与多卡展开 |
+| Grok Subagent N | title 识别 + 幕布分组 |
+| 会话树无父子 | live 投影跨引擎 pending + collab parent 链接 |
+| StatusPanel | Grok/Kimi task-like 纳入列表 |
+
+**提交** `4b4b9a18f`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4b4b9a18f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
