@@ -115,7 +115,10 @@ function renderSidebarVirtualItem(
 }
 
 function isPendingSubagentThread(thread: ThreadSummary) {
-  return thread.id.startsWith("claude-pending-subagent:");
+  return (
+    thread.id.startsWith("claude-pending-subagent:") ||
+    thread.id.includes("-pending-subagent:")
+  );
 }
 
 function filterCollapsedThreadRows(

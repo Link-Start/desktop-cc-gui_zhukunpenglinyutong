@@ -99,6 +99,15 @@ export const SubagentInspectorDrawer = memo(function SubagentInspectorDrawer({
             workspaceId={workspaceId}
             workspacePath={workspacePath}
           />
+        ) : card.outputText || card.description ? (
+          <div className="subagent-session-canvas-fallback">
+            <div className="subagent-inspector-label">
+              {t("subagentUi.fields.output", { defaultValue: "交付报告" })}
+            </div>
+            <pre className="subagent-session-canvas-fallback-body">
+              {card.outputText?.trim() || card.description}
+            </pre>
+          </div>
         ) : (
           <div className="subagent-session-canvas-status">
             {t("subagentUi.noSessionYet", {

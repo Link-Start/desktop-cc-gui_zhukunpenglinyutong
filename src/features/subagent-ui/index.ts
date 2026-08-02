@@ -10,12 +10,22 @@ export {
   assignPersonasForSquad,
 } from "./utils/personaAssign";
 export { PersonaAvatar } from "./components/PersonaAvatar";
-export { isSubagentTool } from "./utils/isSubagentTool";
+export {
+  extractCollabActionName,
+  isCollabLifecycleTool,
+  isCollabSpawnTool,
+  isSubagentTool,
+} from "./utils/isSubagentTool";
 export {
   buildSubagentCardFromSubagentInfo,
   buildSubagentCardFromToolItem,
   buildSubagentCardsFromToolItems,
+  expandSubagentToolToCards,
+  extractCollabAgentIds,
+  extractSwarmAgentEntries,
+  resolveClaudeSubagentThreadId,
   resolveSubagentProgress,
+  resolveSubagentSessionThreadId,
   type SubagentCardStatus,
   type SubagentCardViewModel,
 } from "./utils/subagentViewModel";

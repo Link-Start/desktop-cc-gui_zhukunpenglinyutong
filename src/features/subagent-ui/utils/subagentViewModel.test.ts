@@ -73,4 +73,65 @@ describe("subagentViewModel", () => {
     expect(cards[1]?.status).toBe("running");
     expect(cards[1]?.progress).toBeLessThan(1);
   });
+
+  it("expands Codex collab spawn into one card per receiver", () => {
+    const collabSpawn: Extract<ConversationItem, { kind: "tool" }> = {
+      id: "spawn-1",
+      kind: "tool",
+      toolType: "collabToolCall",
+      title: "Collab: spawn Agent",
+      detail: "From thread-root → agent-a, agent-b",
+      status: "completed",
+      output: "Audit panel",
+      receiverThreadIds: ["agent-a", "agent-b"],
+    };
+    const cards = buildSubagentCardsFromToolItems([collabSpawn], {
+      parentThreadId: "thread-root",
+    });
+    expect(cards).toHaveLength(2);
+    expect(cards.map((card) => card.sessionThreadId)).toEqual(["agent-a", "agent-b"]);
+    expect(cards[0]?.indexLabel).toBe("01");
+    expect(cards[1]?.indexLabel).toBe("02");
+  });
+
+  it("expands agent swarm result XML into multiple cards", () => {
+    const swarm: Extract<ConversationItem, { kind: "tool" }> = {
+      id: "swarm-1",
+      kind: "tool",
+      toolType: "tool",
+      title: "Launching agent swarm: greet",
+      detail: JSON.stringify({
+        items: ["1", "2", "3"],
+        subagent_type: "explore",
+      }),
+      status: "completed",
+      output: `<agent_swarm_result><summary>completed: 3</summary>
+<subagent agent_id="agent-0" item="1" outcome="completed">## 1号报告</subagent>
+<subagent agent_id="agent-1" item="2" outcome="completed">## 2号报告</subagent>
+</agent_swarm_result>`,
+    };
+    const cards = buildSubagentCardsFromToolItems([swarm], {
+      parentThreadId: "kimi:parent",
+    });
+    expect(cards.length).toBeGreaterThanOrEqual(2);
+    expect(cards.every((card) => card.description.length > 0)).toBe(true);
+  });
+
+  it("maps Grok Subagent title tools to persona cards", () => {
+    const grokTool: Extract<ConversationItem, { kind: "tool" }> = {
+      id: "g1",
+      kind: "tool",
+      toolType: "mcpToolCall",
+      title: "Subagent 1 问候测试",
+      detail: "{}",
+      status: "completed",
+      output: "你好，我是子代理 1",
+    };
+    const cards = buildSubagentCardsFromToolItems([grokTool], {
+      parentThreadId: "grok:parent-session",
+    });
+    expect(cards).toHaveLength(1);
+    expect(cards[0]?.description).toContain("问候");
+    expect(cards[0]?.typeLabel.toLowerCase()).toContain("subagent");
+  });
 });

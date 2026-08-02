@@ -535,6 +535,29 @@ body.subagent-chat-split-resizing * {
   line-height: 1.45;
 }
 
+.subagent-session-canvas-fallback {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.subagent-session-canvas-fallback-body {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+  font-family: inherit;
+}
+
 .subagent-session-canvas-status.is-error {
   color: var(--status-error, #ef4444);
 }

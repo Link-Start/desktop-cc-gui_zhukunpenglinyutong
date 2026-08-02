@@ -28,6 +28,7 @@ import {
   resolveToolStatus,
   truncateText,
 } from "../../../../utils/toolSemantics";
+import { isSubagentTool } from "../../../subagent-ui";
 import type { ToolStatusTone } from "../../../../utils/toolSemantics";
 
 export {
@@ -257,14 +258,9 @@ export function classifyToolCategory(item: {
   const toolName = extractToolName(item.title);
   const lower = toolName.toLowerCase();
 
-  // 优先级0：subAgent（Agent / Task）单独成组，供 persona 卡片墙
-  if (
-    lower === 'agent' ||
-    lower === 'task' ||
-    toolType === 'agent' ||
-    toolType === 'task'
-  ) {
-    return 'subagent';
+  // 优先级0：subAgent 跨引擎统一识别，供 persona 卡片墙
+  if (isSubagentTool(item)) {
+    return "subagent";
   }
 
   // 优先级1：明确 toolType（但 fileChange 仍可用 title 名做 edit 场景）

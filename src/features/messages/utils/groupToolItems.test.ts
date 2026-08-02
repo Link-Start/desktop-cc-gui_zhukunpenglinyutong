@@ -201,4 +201,30 @@ describe("groupToolItems", () => {
       "subagentGroup",
     ]);
   });
+
+  it("groups Codex collab spawn into subagentGroup and keeps wait/close as items", () => {
+    const entries = groupToolItems([
+      createToolItem("spawn-1", "Collab: spawn Agent", "collabToolCall"),
+      createToolItem("spawn-2", "Collab: spawn Agent", "collabToolCall"),
+      createToolItem("wait-1", "Collab: wait Agent", "collabToolCall"),
+      createToolItem("close-1", "Collab: close Agent", "collabToolCall"),
+    ]);
+    expect(entries.map((entry) => entry.kind)).toEqual([
+      "subagentGroup",
+      "item",
+      "item",
+    ]);
+    if (entries[0]?.kind === "subagentGroup") {
+      expect(entries[0].items).toHaveLength(2);
+    }
+  });
+
+  it("groups Grok Subagent titles into subagentGroup", () => {
+    const entries = groupToolItems([
+      createToolItem("s1", "Subagent 1 问候测试", "mcpToolCall"),
+      createToolItem("s2", "Subagent 2 问候测试", "mcpToolCall"),
+    ]);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.kind).toBe("subagentGroup");
+  });
 });

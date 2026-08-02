@@ -568,12 +568,34 @@ function isDescendantOfRoot(
 
 function isTaskLikeSubagentTool(item: ToolItem, toolName: string) {
   const normalizedToolType = getToolType(item).trim().toLowerCase();
-  return (
+  // collab 仍走下方 collab 专用路径，避免 spawn 双写两套 id
+  if (
+    normalizedToolType === "collabtoolcall" ||
+    normalizedToolType === "collabagenttoolcall"
+  ) {
+    return false;
+  }
+  if (
     toolName === "task" ||
     toolName === "agent" ||
     normalizedToolType === "task" ||
     normalizedToolType === "agent"
-  );
+  ) {
+    return true;
+  }
+  // Grok / Kimi / Shared：title 含 subagent 或 agent swarm
+  const rawTitle = getToolTitle(item).trim().toLowerCase();
+  if (
+    toolName.startsWith("subagent") ||
+    rawTitle.startsWith("subagent") ||
+    normalizedToolType.includes("subagent") ||
+    toolName.includes("agent swarm") ||
+    rawTitle.includes("agent swarm") ||
+    rawTitle.includes("launching agent swarm")
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function extractTaskDescription(args: Record<string, unknown> | null, item: ToolItem) {
