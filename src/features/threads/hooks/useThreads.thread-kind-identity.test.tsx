@@ -206,3 +206,86 @@ describe("useThreads thread kind identity (id-first)", () => {
     );
   });
 });
+
+// fix-shared-session-target-race-and-merge T5：
+// merge 场景中 shared: id 条目 threadKind 不受 incoming truthy 覆盖。
+describe("useThreads merge thread kind guard (T5)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    writeClientStoreData("threads", {});
+    vi.mocked(loadClaudeSession).mockResolvedValue({ messages: [] });
+  });
+
+  it("getThreadKind returns shared when both id prefix and summary kind are present", () => {
+    writeClientStoreData("threads", {
+      sidebarSnapshot: {
+        version: 1,
+        updatedAt: 1,
+        workspaces: [workspace],
+        threadsByWorkspace: {
+          "ws-1": [
+            {
+              id: "shared:safe",
+              name: "Shared Session",
+              updatedAt: 1,
+              threadKind: "shared",
+            },
+          ],
+        },
+      },
+    });
+
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    expect(result.current.getThreadKind("ws-1", "shared:safe")).toBe("shared");
+  });
+
+  it("getThreadKind returns shared even when summary kind is native (merge corruption scenario)", () => {
+    writeClientStoreData("threads", {
+      sidebarSnapshot: {
+        version: 1,
+        updatedAt: 1,
+        workspaces: [workspace],
+        threadsByWorkspace: {
+          "ws-1": [
+            {
+              id: "shared:corrupted",
+              name: "Shared Session",
+              updatedAt: 1,
+              threadKind: "native", // 被 merge 污染
+            },
+          ],
+        },
+      },
+    });
+
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    // id-first 硬闸兜底：即使 summary 被污染为 native，id 前缀仍返回 shared
+    expect(
+      result.current.getThreadKind("ws-1", "shared:corrupted"),
+    ).toBe("shared");
+  });
+
+  it("getThreadKind still defaults to native for non-shared ids", () => {
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    expect(result.current.getThreadKind("ws-1", "claude:normal")).toBe("native");
+    expect(result.current.getThreadKind("ws-1", "codex:normal")).toBe("native");
+  });
+});

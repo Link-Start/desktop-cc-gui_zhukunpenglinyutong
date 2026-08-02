@@ -34,6 +34,9 @@ import type { EngineDisplayInfo } from "../../engine/hooks/useEngineController";
 import {
   hydrateSharedTargetState,
   useSharedTargetState,
+  getSharedTargetState,
+  beginSharedTargetPersist,
+  endSharedTargetPersist,
 } from "../../shared-session/target/targetStore";
 import {
   freezeTurnSnapshot,
@@ -756,7 +759,7 @@ function ComposerImpl({
   } | null>(null);
   // 切会话 / 引擎 / 渠道时丢弃点选覆盖，避免串台
   useEffect(() => {
-    setNativeAtomicSelection(null);
+    setNativeAtomicSelection((prev) => (prev === null ? prev : null));
   }, [activeThreadId, selectedEngine, providerProfileId]);
   // Native 会话合成 ExecutionTarget，驱动与首页相同的 Atomic 双栏选中态（含渠道）。
   const nativeSessionTarget = useMemo((): ExecutionTarget | null => {
@@ -777,8 +780,23 @@ function ComposerImpl({
     const propModelId = selectedModelId?.trim() || null;
     const modelCatalogEntryId =
       nativeAtomicSelection?.modelCatalogEntryId ?? propModelId;
+    // runtime 优先 catalog 当前映射，禁止用档位 id / 跨供应商残留冒充 --model。
+    const catalogEntry =
+      modelCatalogEntryId != null
+        ? (models.find((candidate) => candidate.id === modelCatalogEntryId) ??
+          null)
+        : null;
+    const catalogRuntime = catalogEntry?.model?.trim() || null;
+    const atomicRuntime = nativeAtomicSelection?.model?.trim() || null;
     const runtimeModel =
-      nativeAtomicSelection?.model ?? propModelId;
+      catalogRuntime ||
+      (atomicRuntime &&
+      atomicRuntime !== modelCatalogEntryId &&
+      !/^k3$/i.test(atomicRuntime) &&
+      !/^kimi-/i.test(atomicRuntime)
+        ? atomicRuntime
+        : null) ||
+      null;
     return {
       engine: selectedEngine,
       providerProfileId: profileId,
@@ -794,6 +812,7 @@ function ComposerImpl({
   }, [
     createSessionTargetPicker,
     isSharedSession,
+    models,
     nativeAtomicSelection,
     providerProfileId,
     providerProfileName,
@@ -888,6 +907,12 @@ function ComposerImpl({
       }
       const workspaceId = activeWorkspaceId;
       const threadId = activeThreadId;
+      // 捕获变更前值，用于 persist 失败时回滚。
+      const previousState = getSharedTargetState(workspaceId, threadId);
+      const previousTarget = previousState.selectedNextTarget;
+      // 乐观更新：先 hydrate UI，再异步持久化。
+      hydrateSharedTargetState(workspaceId, threadId, target);
+      beginSharedTargetPersist(workspaceId, threadId);
       const persistenceKey = `${workspaceId}::${threadId}`;
       const previousPersistence =
         sharedTargetPersistenceByThreadRef.current.get(persistenceKey) ??
@@ -908,12 +933,21 @@ function ComposerImpl({
           });
         })
         .catch((error) => {
+          // 持久化失败：回滚到变更前值。
+          hydrateSharedTargetState(
+            workspaceId,
+            threadId,
+            previousTarget ?? null,
+          );
           pushErrorToast({
             title: t("sharedSend.selectionPersistFailedTitle"),
             message: t("sharedSend.selectionPersistFailedMessage", {
               reason: error instanceof Error ? error.message : String(error),
             }),
           });
+        })
+        .finally(() => {
+          endSharedTargetPersist(workspaceId, threadId);
         });
       sharedTargetPersistenceByThreadRef.current.set(
         persistenceKey,
@@ -1268,16 +1302,20 @@ function ComposerImpl({
   }, [onCodeAnnotationConsumed, pendingCodeAnnotation]);
 
   useEffect(() => {
-    setRewindPreviewState(null);
-    setRewindMode("messages-and-files");
+    setRewindPreviewState((prev) => (prev === null ? prev : null));
+    setRewindMode((prev) =>
+      prev === "messages-and-files" ? prev : "messages-and-files",
+    );
   }, [activeThreadId]);
 
   useEffect(() => {
     if (rewindSupportedEngine && onRewind) {
       return;
     }
-    setRewindPreviewState(null);
-    setRewindMode("messages-and-files");
+    setRewindPreviewState((prev) => (prev === null ? prev : null));
+    setRewindMode((prev) =>
+      prev === "messages-and-files" ? prev : "messages-and-files",
+    );
   }, [onRewind, rewindSupportedEngine]);
 
   const handleExpandComposer = useCallback(() => {

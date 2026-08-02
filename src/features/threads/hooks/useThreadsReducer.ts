@@ -2450,7 +2450,11 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           if (existing) {
             // Preserve engineSource if new thread doesn't have one
             const engineSource = thread.engineSource || existing.engineSource;
-            const threadKind = thread.threadKind || existing.threadKind;
+            // fix-shared-session-target-race-and-merge T5：
+            // shared: id 的 threadKind 恒为 "shared"，不受 incoming truthy 覆盖。
+            const threadKind = existing.id.startsWith("shared:")
+              ? "shared"
+              : thread.threadKind || existing.threadKind;
             const selectedEngine = thread.selectedEngine || existing.selectedEngine;
             const nativeThreadIds = thread.nativeThreadIds || existing.nativeThreadIds;
             const autoSession = thread.autoSession ?? existing.autoSession ?? null;
@@ -2485,6 +2489,14 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           }
           return thread;
         })
+        // fix-shared-session-target-race-and-merge T5 后置矫正：
+        // 所有 shared: 前缀 id 的条目 threadKind 强制为 "shared"，
+        // 兜底 merge 中任何路径导致的 kind 漂移。
+        .map((thread) =>
+          thread.id.startsWith("shared:") && thread.threadKind !== "shared"
+            ? { ...thread, threadKind: "shared" as const }
+            : thread,
+        )
         .filter((thread) => !isHiddenAutomaticThread(thread));
 
       // BUG FIX: Also preserve threads that are currently active but not in the new list
