@@ -1,7 +1,7 @@
 # Shared Session 模型供应商选择器：回退 Native 形态调研与修复提案
 
 > **对照源码日期**：2026-08-02 · 产品以当前 HEAD 为准（调研时约 `0.7.15` 一带）
-> **状态**：**T1–T3 已修复**（id-first 硬闸 + send/delete 连带；T4/T5 仍另开 change）
+> **状态**：**T1–T3 已修复**（commit `8468544a5`；id-first 硬闸 + send/delete 连带；T4/T5 仍另开 change）
 > **用途**：记录 Shared CLI 场景下「模型/渠道选择器行为退化为 Native 续接」的现象、调用链、根因、修复提案与任务拆分
 > **索引**：[`README.md`](./README.md)
 > **姊妹文（契约正本）**：[`native-session-provider-select-vs-disk-overwrite-2026-07-31.md`](./native-session-provider-select-vs-disk-overwrite-2026-07-31.md)

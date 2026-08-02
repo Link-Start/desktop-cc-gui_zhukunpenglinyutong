@@ -80,7 +80,7 @@ OpenSpec 状态快照（2026-08-01；后续仍以 change 目录为准）：
 2026-08-01  本目录二次校准：索引 + 矛盾表述清理 + 历史附录保留
 2026-08-02  shared-picker-native-fallback：Shared 选择器回退 Native 续接调研（未修代码）
 2026-08-02  shared-picker-native-fallback：review 回填（三道闸/send/delete 爆炸半径/竞态）+ 修复提案 T1–T6 就绪，待实施
-2026-08-02  fix-shared-session-identity-id-first：T1–T3 落地（id-first 硬闸 + 回归）；T4/T5 另开
+2026-08-02  fix-shared-session-identity-id-first：T1–T3 落地（8468544a5 id-first 硬闸 + 回归）；T4/T5 另开
 ```
 
 ## 维护检查清单
