@@ -1567,3 +1567,51 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1290: 整体下线会话活动与 Solo 模式（接线级 disable + OpenSpec）
+
+**Date**: 2026-08-02
+**Task**: 整体下线会话活动与 Solo 模式（接线级 disable + OpenSpec）
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+产品决定整条下线「会话活动」面板与 Solo 模式，接线级 disable 保留源码便于回滚，雷达与底部活动面板不受影响。
+
+### Main Changes
+
+| 项 | 内容 |
+|----|------|
+| 入口 | PanelTabs 新增 SHOW_ACTIVITY_TAB=false，顶栏/更多菜单无「活动」，pin 过滤 activity |
+| 接线 | 壳层 useAppShellSearchRadarSection 与布局 useLayoutNodes 停调 useWorkspaceSessionActivity，改用冻结空 viewModel DISABLED_WORKSPACE_SESSION_ACTIVITY |
+| 面板与残留态 | filePanelMode==="activity" 不挂载 WorkspaceSessionActivityPanel，回落 files；setter/tab select 双拦截 activity→files |
+| Solo | soloModeEnabled 恒 false，进入短路、按钮不展示，useSoloMode enabled 兜底退出 |
+| 连带下线 | Live Edit Preview 固定 enabled=false；Quick Switcher AI 最近文件改喂稳定空 timeline |
+| OpenSpec | disable-session-activity-and-solo-mode 全套 artifacts（proposal/design/tasks/3 个 delta specs）validate --strict 通过 |
+| 验证 | PanelTabs/QuickSwitcher/GitPanel/SearchRadar/layout visibility/app-shell startup focused Vitest 全绿；npm run typecheck 通过 |
+| 边界 | 未碰雷达、底部活动面板、Git/Files/Search；未删源码与 CSS/i18n |
+| 待办 | 人工测试（tasks 3.4）：无活动入口、无 Solo、雷达可用、流式对话正常 |
+
+**评审发现**：工作区混有另一条未提交 Grok subagent 工作流（14+ 文件），已确认不属于本任务并留在工作区未提交；review 期间并发写曾把 childSubagentThreads 混入 useLayoutNodes.tsx，已分离（本任务版本入库，并发改动保持 unstaged）。
+
+**相关测试**：保留源码的隔离测试（panel/adapter/hook/utils 140 个）全部通过，应用级「不可达」期望已在 PanelTabs.test 等更新。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7ef9151f9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
