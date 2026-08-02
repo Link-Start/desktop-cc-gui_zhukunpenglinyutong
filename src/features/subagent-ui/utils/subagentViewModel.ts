@@ -604,6 +604,25 @@ export function extractCollabAgentIds(item: ToolItem): string[] {
   return uniqueStrings([...fromReceivers, ...fromStatus, ...fromDetail]);
 }
 
+/** AgentSwarm 展开条目：XML 结果带独立 body，items 占位无 body。 */
+export type SwarmAgentEntry = {
+  id: string;
+  description: string;
+  status: SubagentCardStatus;
+  /**
+   * 仅 `<subagent>…</subagent>` 解析结果有值：该代理交付正文（不含 XML 外壳）。
+   * 详情抽屉应只展示此正文，禁止回退到父 tool 整包 agent_swarm_result。
+   */
+  outputText?: string | null;
+  /** wire / XML 上的 agent_id（如 agent-0），用于 dedupe，不表示可加载 session */
+  agentKey?: string | null;
+  /**
+   * true：已从 XML 拆出独立结果。此时禁止把 agent-0 映射成 kimi:agent-0 去加载
+   *（Kimi history 只读 agents/main，假 id 会失败并污染详情）。
+   */
+  isolatedResult?: boolean;
+};
+
 /**
  * 从 agent swarm 参数 / result XML 展开子代理条目。
  * 优先 XML 结果（完成态真实报告），否则用 items 占位；二者互斥，避免 3+3=6 重复计数。
@@ -611,11 +630,10 @@ export function extractCollabAgentIds(item: ToolItem): string[] {
 export function extractSwarmAgentEntries(
   item: ToolItem,
   args: Record<string, unknown> | null,
-): Array<{ id: string; description: string; status: SubagentCardStatus }> {
+): SwarmAgentEntry[] {
   const status = mapToolStatus(item);
   const baseDescription = extractDescription(args, item);
-  const fromXml: Array<{ id: string; description: string; status: SubagentCardStatus }> =
-    [];
+  const fromXml: SwarmAgentEntry[] = [];
 
   const output = getToolOutput(item) ?? "";
   const subagentTagRegex = /<subagent\b([^>]*)>([\s\S]*?)<\/subagent>/gi;
@@ -641,14 +659,17 @@ export function extractSwarmAgentEntries(
       id: `${item.id}:swarm-result:${agentId ?? itemLabel ?? fromXml.length}`,
       description: firstLine.slice(0, 160),
       status: entryStatus,
+      // 空 body 也视为已隔离：宁可详情为空，也不要整包 XML 泄漏到每张卡
+      outputText: body.length > 0 ? body : null,
+      agentKey: agentId ?? itemLabel,
+      isolatedResult: true,
     });
   }
   if (fromXml.length > 0) {
     return fromXml;
   }
 
-  const fromItems: Array<{ id: string; description: string; status: SubagentCardStatus }> =
-    [];
+  const fromItems: SwarmAgentEntry[] = [];
   const itemsField = args?.items ?? args?.ITEMS;
   if (Array.isArray(itemsField) && itemsField.length > 0) {
     itemsField.forEach((entry, index) => {
@@ -680,6 +701,16 @@ type CardBuildOptions = {
     description?: string;
     typeLabel?: string;
     status?: SubagentCardStatus;
+    /**
+     * 覆盖交付正文。undefined = 沿用父 tool.output；
+     * null/string = 强制使用（AgentSwarm 按 subagent 拆 body 时用）。
+     */
+    outputText?: string | null;
+    /**
+     * true：不解析 sessionThreadId（AgentSwarm XML 结果无独立可加载 session）。
+     * 不影响 Claude/Codex/Grok 的 agentId → 子会话映射。
+     */
+    suppressSessionThread?: boolean;
   };
 };
 
@@ -695,17 +726,25 @@ export function buildSubagentCardFromToolItem(
   const typeLabel = options?.override?.typeLabel ?? extractTypeLabel(args, item);
   const cardId = options?.override?.id ?? item.id;
   const persona = options?.persona ?? assignPersona(cardId);
-  const outputText = getToolOutput(item);
-  const outputFilePath = extractOutputFilePath(args, outputText);
+  const parentOutputText = getToolOutput(item);
+  // 仅当 override 显式传入 outputText（含 null）时覆盖；其它路径保持父 tool 原文
+  const outputText =
+    options?.override && Object.prototype.hasOwnProperty.call(options.override, "outputText")
+      ? (options.override.outputText ?? null)
+      : parentOutputText;
+  // output_file / Claude launch 元数据仍从父 tool 原文解析，避免被拆 body 后丢字段
+  const outputFilePath = extractOutputFilePath(args, parentOutputText);
   const agentId =
-    options?.override?.agentId ?? extractAgentId(args, outputText);
-  const sessionThreadId = resolveSubagentSessionThreadId({
-    parentThreadId: options?.parentThreadId,
-    agentId,
-    explicitThreadId: options?.override?.explicitThreadId,
-    outputText,
-    nativeThreadIds: options?.nativeThreadIds,
-  });
+    options?.override?.agentId ?? extractAgentId(args, parentOutputText);
+  const sessionThreadId = options?.override?.suppressSessionThread
+    ? null
+    : resolveSubagentSessionThreadId({
+        parentThreadId: options?.parentThreadId,
+        agentId,
+        explicitThreadId: options?.override?.explicitThreadId,
+        outputText: parentOutputText,
+        nativeThreadIds: options?.nativeThreadIds,
+      });
   const taskId =
     typeof args?.task_id === "string"
       ? args.task_id
@@ -834,6 +873,7 @@ export function expandSubagentToolToCards(
   }
 
   // Agent swarm：按 items / XML result 展开（互斥）
+  // XML 结果：每张卡只挂该 <subagent> body，禁止共享整包 agent_swarm_result。
   const swarmEntries = extractSwarmAgentEntries(item, args);
   if (swarmEntries.length > 0) {
     const personas = assignPersonasForSquad(swarmEntries.map((entry) => entry.id));
@@ -845,10 +885,19 @@ export function expandSubagentToolToCards(
         nativeThreadIds,
         override: {
           id: entry.id,
-          agentId: entry.id.includes(":") ? entry.id.split(":").pop() ?? null : entry.id,
+          agentId:
+            entry.agentKey?.trim() ||
+            (entry.id.includes(":") ? entry.id.split(":").pop() ?? null : entry.id),
           description: entry.description,
           status: entry.status,
           typeLabel: extractTypeLabel(args, item),
+          // 仅 XML 隔离结果覆盖 output / 禁止假 session；items 占位保持原行为
+          ...(entry.isolatedResult
+            ? {
+                outputText: entry.outputText ?? null,
+                suppressSessionThread: true,
+              }
+            : {}),
         },
       }),
     );
