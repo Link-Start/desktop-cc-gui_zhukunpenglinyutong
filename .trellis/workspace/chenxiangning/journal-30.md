@@ -1949,3 +1949,37 @@ handleChannelSwitch 跨引擎立即写 selectedNextTarget，避免 Codex→Claud
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1299: 续接成功默认选中目标模型
+
+**Date**: 2026-08-03
+**Task**: 续接成功默认选中目标模型
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+Provider 续接成功后 resolve catalog entry/首档并写入 composer selection
+
+### Main Changes
+
+用户反馈续接后「选择模型」空态。已改为 entry id + 默认首档。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c08facc4e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
