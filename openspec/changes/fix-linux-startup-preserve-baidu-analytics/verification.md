@@ -27,7 +27,7 @@ official hm.js generates query
 | Gate | Result |
 |---|---|
 | `npx vitest run src/services/baiduTongji.test.ts src/services/tauri/baiduTongji.test.ts` | PASS：2 files，9/9 tests |
-| `cargo test --manifest-path src-tauri/Cargo.toml baidu_tongji::tests` | PASS：8/8 tests；其余 target 0 tests、filtered only |
+| `cargo test --manifest-path src-tauri/Cargo.toml baidu_tongji::tests` | PASS：13/13 tests；其余 target 0 tests、filtered only |
 | `npm run typecheck` | PASS |
 | `npm run lint` | PASS：0 errors；9 个既有 `react-hooks/exhaustive-deps` warnings |
 | `npm run check:runtime-contracts` | PASS：app-shell + git-history contracts |
@@ -35,6 +35,17 @@ official hm.js generates query
 | `git diff --check` | PASS |
 | `npm run build` | PASS；仅既有 dynamic-import/chunk-size/CSS warnings |
 | `npx -y @fission-ai/openspec@1.3.1 validate fix-linux-startup-preserve-baidu-analytics --strict --no-interactive` | PASS：change is valid |
+
+## Cookie Commit Hardening Follow-up
+
+- Red evidence：新增 tests 首次运行以 Rust `E0425` 失败，缺少 `validate_official_script` 与 `commit_response_cookie`，证明测试先于实现生效。
+- `send_fixed_get` 只在短锁内 clone request cookie snapshot；`.send().await` 与 response handling 位于 `visitor_cookie` mutex 之外。
+- script 在 2xx、declared size、bounded body、UTF-8、transport marker 与 site id 全部通过后才 commit response cookie；beacon 在 2xx 后才 commit。任何此前 return/error 都不会改变 visitor identity。
+- commit 使用 request snapshot compare-and-update；若 current state 已变化，则 stale response 同时保持 memory 与 persisted file 不变。独立 commit mutex 只串行 accepted update + atomic persistence，不覆盖 network I/O。
+- focused green evidence：13/13 tests，新增 valid candidate persist、no candidate no-op、stale response rejection、invalid script no-commit 与 failed beacon no-commit coverage。
+- follow-up final gates：targeted `rustfmt --check` PASS、`git diff --check` PASS、strict OpenSpec validation PASS。
+- 当前 worktree 没有 `node_modules`；`npm run check:runtime-contracts` 在加载 `eslint` 时以 `ERR_MODULE_NOT_FOUND` 停止，未执行到 contract assertions。follow-up 未修改 frontend、command signature、registry 或 IPC mapping；同一 branch parent evidence 的 runtime contracts/typecheck/lint PASS 仍作为 frontend boundary evidence。
+- change consistency wrapper 引用的 `/home/yode/.claude/skills/osp-openspec-sync/scripts/validate-consistency.py` 在当前 host 不存在，因此该 optional workspace-wide wrapper 未执行；change-local strict validator 已通过。
 
 ## Real Native Transport
 

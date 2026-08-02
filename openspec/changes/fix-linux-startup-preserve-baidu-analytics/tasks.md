@@ -28,3 +28,9 @@
 
 - [x] 5.1 [P0, depends: 4.4] 执行独立 code review、cross-layer check 与 finish-work；输出 findings 修复状态、private protocol compatibility risk 与 PR suitability。
 - [x] 5.2 [P1, depends: 5.1] 更新 verification evidence 并向用户交付可运行 artifact/launcher plan；用户授权后切换真实 GNOME favorite、复核同一 artifact，并进入 commit / push / 新 PR delivery。
+
+## 6. Cookie Commit Hardening Follow-up
+
+- [x] 6.1 [P0, depends: 5.2] 增加 valid/no-candidate/stale/invalid-script red tests；输出 Cookie commit 与 response validation 回归边界。
+- [x] 6.2 [P0, depends: 6.1] 将 request network I/O 移出 `visitor_cookie` mutex，并在全部 response validation 后执行 compare-and-update + ordered atomic persistence。
+- [x] 6.3 [P0, depends: 6.2] 运行 focused Rust、targeted rustfmt、diff、strict OpenSpec 与 Trellis quality gates；更新 verification evidence。

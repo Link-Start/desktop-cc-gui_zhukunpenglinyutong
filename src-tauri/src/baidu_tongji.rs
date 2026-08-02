@@ -28,7 +28,14 @@ pub(crate) struct BaiduTongjiState {
     client: Option<reqwest::Client>,
     client_error: Option<String>,
     visitor_cookie: Mutex<Option<String>>,
+    cookie_commit: Mutex<()>,
     storage_path: Option<PathBuf>,
+}
+
+struct NativeAnalyticsResponse {
+    response: reqwest::Response,
+    sent_cookie: Option<String>,
+    response_cookie: Option<String>,
 }
 
 impl BaiduTongjiState {
@@ -64,6 +71,7 @@ impl BaiduTongjiState {
             client,
             client_error,
             visitor_cookie: Mutex::new(visitor_cookie),
+            cookie_commit: Mutex::new(()),
             storage_path,
         }
     }
@@ -252,40 +260,67 @@ async fn persist_cookie_update(state: &BaiduTongjiState, value: String) {
     }
 }
 
+async fn commit_response_cookie(
+    state: &BaiduTongjiState,
+    sent_cookie: Option<String>,
+    response_cookie: Option<String>,
+) {
+    let Some(response_cookie) = response_cookie else {
+        return;
+    };
+
+    // Serialize accepted updates through persistence so an older disk write cannot
+    // finish after a newer in-memory identity. Network I/O never holds either lock.
+    let _commit_guard = state.cookie_commit.lock().await;
+    let accepted = {
+        let mut current_cookie = state.visitor_cookie.lock().await;
+        if current_cookie.as_deref() != sent_cookie.as_deref()
+            || current_cookie.as_deref() == Some(response_cookie.as_str())
+        {
+            false
+        } else {
+            *current_cookie = Some(response_cookie.clone());
+            true
+        }
+    };
+
+    if accepted {
+        persist_cookie_update(state, response_cookie).await;
+    }
+}
+
 async fn send_fixed_get(
     state: &BaiduTongjiState,
     url: reqwest::Url,
     user_agent: HeaderValue,
-) -> Result<(reqwest::Response, bool), String> {
+) -> Result<NativeAnalyticsResponse, String> {
     let client = state.client.as_ref().ok_or_else(|| {
         state
             .client_error
             .clone()
             .unwrap_or_else(|| "native analytics HTTP client is unavailable".to_string())
     })?;
-    let mut visitor_cookie = state.visitor_cookie.lock().await;
-    let had_visitor_cookie = visitor_cookie.is_some();
+    let sent_cookie = state.visitor_cookie.lock().await.clone();
 
     let mut request = client
         .get(url)
         .header(USER_AGENT, user_agent)
         .header(REFERER, BAIDU_TONGJI_REFERER)
         .header(ACCEPT, "*/*");
-    if let Some(value) = visitor_cookie.as_deref() {
+    if let Some(value) = sent_cookie.as_deref() {
         request = request.header(COOKIE, format!("HMACCOUNT={value}"));
     }
     let response = request
         .send()
         .await
         .map_err(|error| redacted_reqwest_error("native analytics request failed", &error))?;
+    let response_cookie = extract_hmac_count(response.headers());
 
-    if let Some(updated) = extract_hmac_count(response.headers()) {
-        if visitor_cookie.as_deref() != Some(updated.as_str()) {
-            *visitor_cookie = Some(updated.clone());
-            persist_cookie_update(state, updated).await;
-        }
-    }
-    Ok((response, had_visitor_cookie))
+    Ok(NativeAnalyticsResponse {
+        response,
+        sent_cookie,
+        response_cookie,
+    })
 }
 
 fn append_bounded_script_chunk(body: &mut Vec<u8>, chunk: &[u8]) -> Result<(), String> {
@@ -311,6 +346,39 @@ async fn read_bounded_script_body(mut response: reqwest::Response) -> Result<Vec
     Ok(body)
 }
 
+fn validate_official_script(bytes: &[u8]) -> Result<&str, String> {
+    let script = std::str::from_utf8(bytes)
+        .map_err(|_| "native analytics script is not UTF-8".to_string())?;
+    if !script.contains(BAIDU_TONGJI_SCRIPT_MARKER) || !script.contains(BAIDU_TONGJI_SITE_ID) {
+        return Err("native analytics script transport marker changed".to_string());
+    }
+    Ok(script)
+}
+
+async fn validate_and_commit_official_script<'a>(
+    state: &BaiduTongjiState,
+    bytes: &'a [u8],
+    sent_cookie: Option<String>,
+    response_cookie: Option<String>,
+) -> Result<&'a str, String> {
+    let script = validate_official_script(bytes)?;
+    commit_response_cookie(state, sent_cookie, response_cookie).await;
+    Ok(script)
+}
+
+async fn validate_and_commit_beacon_response(
+    state: &BaiduTongjiState,
+    status: reqwest::StatusCode,
+    sent_cookie: Option<String>,
+    response_cookie: Option<String>,
+) -> Result<(), String> {
+    if !status.is_success() {
+        return Err(format!("native analytics beacon returned HTTP {status}"));
+    }
+    commit_response_cookie(state, sent_cookie, response_cookie).await;
+    Ok(())
+}
+
 #[tauri::command]
 pub(crate) async fn load_baidu_tongji_script(
     user_agent: String,
@@ -321,7 +389,12 @@ pub(crate) async fn load_baidu_tongji_script(
     let user_agent = validate_user_agent(&user_agent)?;
     let script_url = reqwest::Url::parse(&fixed_script_url())
         .map_err(|error| format!("failed to construct native analytics script URL: {error}"))?;
-    let (response, had_visitor_cookie) = send_fixed_get(&state, script_url, user_agent).await?;
+    let NativeAnalyticsResponse {
+        response,
+        sent_cookie,
+        response_cookie,
+    } = send_fixed_get(&state, script_url, user_agent).await?;
+    let had_visitor_cookie = sent_cookie.is_some();
     let status = response.status();
     if !status.is_success() {
         return Err(format!("native analytics script returned HTTP {status}"));
@@ -333,12 +406,8 @@ pub(crate) async fn load_baidu_tongji_script(
         return Err("native analytics script exceeds size limit".to_string());
     }
     let bytes = read_bounded_script_body(response).await?;
-    let script = std::str::from_utf8(&bytes)
-        .map_err(|_| "native analytics script is not UTF-8".to_string())?;
-    if !script.contains(BAIDU_TONGJI_SCRIPT_MARKER) || !script.contains(BAIDU_TONGJI_SITE_ID) {
-        return Err("native analytics script transport marker changed".to_string());
-    }
-
+    let script =
+        validate_and_commit_official_script(&state, &bytes, sent_cookie, response_cookie).await?;
     webview
         .eval(script)
         .map_err(|error| format!("failed to evaluate native analytics script: {error}"))?;
@@ -361,11 +430,14 @@ pub(crate) async fn send_baidu_tongji_beacon(
     validate_main_linux_webview(&webview)?;
     let url = validate_beacon_url(&url)?;
     let user_agent = validate_user_agent(&user_agent)?;
-    let (response, had_visitor_cookie) = send_fixed_get(&state, url, user_agent).await?;
+    let NativeAnalyticsResponse {
+        response,
+        sent_cookie,
+        response_cookie,
+    } = send_fixed_get(&state, url, user_agent).await?;
+    let had_visitor_cookie = sent_cookie.is_some();
     let status = response.status();
-    if !status.is_success() {
-        return Err(format!("native analytics beacon returned HTTP {status}"));
-    }
+    validate_and_commit_beacon_response(&state, status, sent_cookie, response_cookie).await?;
     log::info!(
         "baidu_tongji: native beacon accepted status={} hasHca=true visitorCookiePresent={}",
         status.as_u16(),
@@ -382,6 +454,16 @@ mod tests {
 
     const VALID_BEACON: &str =
         "http://hm.baidu.com/hm.gif?si=daa60bcc45c658ee35054b93be3cf2e4&hca=visitor-1&et=0";
+
+    fn test_state(visitor_cookie: Option<&str>, storage_path: Option<PathBuf>) -> BaiduTongjiState {
+        BaiduTongjiState {
+            client: None,
+            client_error: None,
+            visitor_cookie: Mutex::new(visitor_cookie.map(str::to_string)),
+            cookie_commit: Mutex::new(()),
+            storage_path,
+        }
+    }
 
     #[test]
     fn validates_and_upgrades_the_fixed_beacon_endpoint() {
@@ -494,6 +576,135 @@ mod tests {
             .expect_err("overflowing chunk must be rejected");
         assert_eq!(error, "native analytics script exceeds size limit");
         assert_eq!(body.len(), MAX_SCRIPT_BYTES, "rejected chunk was appended");
+    }
+
+    #[tokio::test]
+    async fn invalid_official_script_does_not_commit_response_cookie() {
+        let root = std::env::temp_dir().join(format!(
+            "ccgui-baidu-tongji-invalid-script-cookie-test-{}",
+            Uuid::new_v4()
+        ));
+        let path = root.join("analytics").join("baidu-tongji.json");
+        persist_visitor_cookie(&path, "old-cookie").expect("persist old cookie");
+        let state = test_state(Some("old-cookie"), Some(path.clone()));
+        let missing_marker = format!("window.siteId = '{BAIDU_TONGJI_SITE_ID}';");
+        assert!(validate_and_commit_official_script(
+            &state,
+            missing_marker.as_bytes(),
+            Some("old-cookie".to_string()),
+            Some("new-cookie".to_string()),
+        )
+        .await
+        .is_err());
+
+        let missing_site_id = format!("new Image().src = '{BAIDU_TONGJI_SCRIPT_MARKER}';");
+        assert!(validate_official_script(missing_site_id.as_bytes()).is_err());
+        assert!(validate_official_script(&[0xff, 0xfe]).is_err());
+
+        assert_eq!(
+            state.visitor_cookie.lock().await.as_deref(),
+            Some("old-cookie")
+        );
+        assert_eq!(
+            read_visitor_cookie(&path)
+                .expect("read unchanged cookie")
+                .as_deref(),
+            Some("old-cookie")
+        );
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[tokio::test]
+    async fn failed_beacon_response_does_not_commit_response_cookie() {
+        let state = test_state(Some("old-cookie"), None);
+
+        assert!(validate_and_commit_beacon_response(
+            &state,
+            reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+            Some("old-cookie".to_string()),
+            Some("new-cookie".to_string()),
+        )
+        .await
+        .is_err());
+
+        assert_eq!(
+            state.visitor_cookie.lock().await.as_deref(),
+            Some("old-cookie")
+        );
+    }
+
+    #[tokio::test]
+    async fn commits_a_valid_response_cookie_and_persists_it() {
+        let root = std::env::temp_dir().join(format!(
+            "ccgui-baidu-tongji-commit-cookie-test-{}",
+            Uuid::new_v4()
+        ));
+        let path = root.join("analytics").join("baidu-tongji.json");
+        let state = test_state(Some("old-cookie"), Some(path.clone()));
+
+        commit_response_cookie(
+            &state,
+            Some("old-cookie".to_string()),
+            Some("new-cookie".to_string()),
+        )
+        .await;
+
+        assert_eq!(
+            state.visitor_cookie.lock().await.as_deref(),
+            Some("new-cookie")
+        );
+        assert_eq!(
+            read_visitor_cookie(&path)
+                .expect("read committed cookie")
+                .as_deref(),
+            Some("new-cookie")
+        );
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[tokio::test]
+    async fn response_without_a_cookie_leaves_identity_unchanged() {
+        let state = test_state(Some("existing-cookie"), None);
+
+        commit_response_cookie(&state, Some("existing-cookie".to_string()), None).await;
+
+        assert_eq!(
+            state.visitor_cookie.lock().await.as_deref(),
+            Some("existing-cookie")
+        );
+    }
+
+    #[tokio::test]
+    async fn stale_response_cannot_overwrite_a_newer_cookie() {
+        let root = std::env::temp_dir().join(format!(
+            "ccgui-baidu-tongji-stale-cookie-test-{}",
+            Uuid::new_v4()
+        ));
+        let path = root.join("analytics").join("baidu-tongji.json");
+        persist_visitor_cookie(&path, "newer-cookie").expect("persist newer cookie");
+        let state = test_state(Some("newer-cookie"), Some(path.clone()));
+
+        commit_response_cookie(
+            &state,
+            Some("old-cookie".to_string()),
+            Some("stale-cookie".to_string()),
+        )
+        .await;
+
+        assert_eq!(
+            state.visitor_cookie.lock().await.as_deref(),
+            Some("newer-cookie")
+        );
+        assert_eq!(
+            read_visitor_cookie(&path)
+                .expect("read newer cookie")
+                .as_deref(),
+            Some("newer-cookie")
+        );
+
+        std::fs::remove_dir_all(root).ok();
     }
 
     #[test]

@@ -55,7 +55,7 @@ backend 固定获取 `https://hm.baidu.com/hm.js?<site-id>`，限制 status、co
 
 官方 `hm.js` 继续在 renderer storage 中生成/读取 `HMACCOUNT` fallback 并把其 client id 写入 `hca` query。native transport 另外捕获 `hm.baidu.com` response 的 `Set-Cookie: HMACCOUNT=...`，只接受 bounded token value，并保存到 ccgui app home 的 internal analytics JSON。
 
-每次 fixed script/beacon request 都在短 async mutex 下串行复用该 cookie；更新后通过既有 `with_storage_lock + write_json_file` atomic persistence 落盘。日志只允许 `visitorCookiePresent=true/false`，不得输出 value、query 或完整 URL。corrupted persistence 必须 quarantine 后回到 empty identity，不允许覆盖原文件。
+每次 fixed script/beacon request 只在短 async mutex 内 clone cookie snapshot，network I/O 在锁外执行。response status、bounded body、UTF-8、site id / transport marker 等对应校验全部成功后，backend 才按 request snapshot compare-and-update；若 state 已被另一有效响应更新，则 stale response 不得覆盖 newer identity。accepted update 通过独立 commit mutex 串行化，使 in-memory update 与既有 `with_storage_lock + write_json_file` atomic persistence 保持相同顺序；`visitor_cookie` mutex 不覆盖 network 或 persistence I/O。日志只允许 `visitorCookiePresent=true/false`，不得输出 value、query 或完整 URL。corrupted persistence 必须 quarantine 后回到 empty identity，不允许覆盖原文件。
 
 首次迁移到 native transport 可能获得一次新的 server cookie；之后 native launches 保持稳定。`hca` 仍由原 WebView profile 延续，因此不把这一有限迁移风险表述成完全无统计断点。
 
@@ -83,7 +83,7 @@ backend 固定获取 `https://hm.baidu.com/hm.js?<site-id>`，限制 status、co
 | Windows/macOS/Web Service production | existing external script | unchanged |
 | Linux native valid script + beacon | real User-Agent + fixed Tauri Referer native fetch/eval/send + cookie persist | boot proceeds concurrently |
 | invalid URL/site id/hca/user agent | command rejects before network | boot proceeds |
-| DNS/TLS/timeout/non-2xx | redacted warning, no WebKit fallback | boot proceeds |
+| DNS/TLS/timeout/non-2xx 或 script validation failure | redacted warning, no cookie commit, no WebKit fallback | boot proceeds |
 | cookie file missing | empty visitor cookie, persist response | boot proceeds |
 | cookie file corrupted | quarantine, empty visitor cookie | boot proceeds |
 | official script transport marker changes | refuse eval, diagnostic | boot proceeds without unsafe request |

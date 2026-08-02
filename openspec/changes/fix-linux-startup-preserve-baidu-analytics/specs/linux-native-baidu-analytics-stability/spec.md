@@ -39,7 +39,9 @@ The native bridge MUST preserve the browser-script-generated identifiers and rel
 #### Scenario: Baidu returns HMACCOUNT
 
 - **WHEN** a fixed script or beacon response contains a valid `Set-Cookie: HMACCOUNT=...`
-- **THEN** the native state MUST persist only the bounded anonymous value using lock + atomic write
+- **THEN** the request MUST have read its cookie snapshot under a short state lock and MUST NOT hold that lock during network I/O
+- **AND** the native state MUST persist the bounded anonymous value using lock + atomic write only after all corresponding response validation succeeds
+- **AND** a stale response MUST NOT overwrite an identity accepted after that request's snapshot
 - **AND** later fixed requests and later app launches MUST send the same cookie until Baidu replaces it
 - **AND** logs MUST NOT contain the cookie value, full beacon URL or query.
 
