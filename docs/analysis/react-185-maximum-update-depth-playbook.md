@@ -156,6 +156,20 @@
 | **关联历史** | C-20260801-01/02 之后仍在含修复的 `App-Bn4fZysL` 上复现 → Composer 侧 AP-02 残余，**不是** effort 双写回退 |
 | **Review 要点** | 勿把 plan null 说成已证实的唯一根因；production 栈仍缺 1:1 复现 fixture，靠 AP-02 路径回归 + 手测 |
 
+### C-20260802-02 — useModels freeform 清选 + catalog 引用抖动叠环
+
+| 字段 | 内容 |
+|------|------|
+| **状态** | fixed（结构加固） |
+| **现象** | `errorClass: react-maximum-update-depth`；componentStack `AppShell`；dev 栈帧落在 `useModels.ts` |
+| **Bundle / 栈** | dev `localhost:1420`；`useModels` layout/apply 链 |
+| **Owner** | `src/features/models/hooks/useModels.ts`；辅 `usePersistComposerSettings.ts` |
+| **触发条件** | catalog 外 freeform / id-vs-model 双通道；preferred 与 selection 经 persist 回写；`mergeCodexSelectableModels` 换数组引用触发 layout |
+| **根因（AP-01/AP-02）** | ① 非 catalog selected 被 plan 一律 `clearUserSelectedModel`，与 freeform 业务不变量冲突并可与 preferred 回写互踩；② 收敛判断仅 `=== selectedModelId`，id/model 字段语义相等仍反复 commit；③ catalog merge 无结构指纹导致 layout deps 虚抖 |
+| **修复** | freeform 用户锁保留 synthetic model；双通道 selectedMatchesNext；`modelOptionsFingerprint` 稳 models/rawModels；`lastAppliedSelectionKeyRef` 幂等 apply；persist null/"" 归一 |
+| **回归** | `useModels.test.tsx`：freeform 不回退、preferred thrash、id/model 双通道、max-depth 冒烟 |
+| **Review 要点** | 与 C-20260801-01/02 同 owner；本 case 补 freeform + 引用稳定，不恢复 effort 双 writer |
+
 ### C-20260802-01 — CollapsibleReveal useLayoutEffect 无条件 setState 同步闭环
 
 | 字段 | 内容 |

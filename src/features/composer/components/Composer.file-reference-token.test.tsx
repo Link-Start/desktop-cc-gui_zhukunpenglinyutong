@@ -180,6 +180,7 @@ function ComposerHarness({
   createSessionTargetPicker = false,
   onCreationTargetEngineChange,
   activeThreadId = "thread-1",
+  sharedTargetPickerLocked = false,
 }: {
   onSend: (text: string, options?: MessageSendOptions) => void;
   pendingCodeAnnotation?: CodeAnnotationDraftInput | null;
@@ -193,6 +194,7 @@ function ComposerHarness({
   createSessionTargetPicker?: boolean;
   onCreationTargetEngineChange?: (engine: EngineType | null) => void;
   activeThreadId?: string;
+  sharedTargetPickerLocked?: boolean;
 }) {
   const [selectedCodeAnnotations, setSelectedCodeAnnotations] = useState<CodeAnnotationSelection[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -243,6 +245,7 @@ function ComposerHarness({
       onSelectCollaborationMode={() => {}}
       selectedEngine="claude"
       isSharedSession={Boolean(sharedTarget)}
+      sharedTargetPickerLocked={sharedTargetPickerLocked}
       createSessionTargetPicker={createSessionTargetPicker}
       onCreationTargetEngineChange={onCreationTargetEngineChange}
       providerProfileId={sharedTarget?.providerProfileId ?? null}
@@ -733,6 +736,53 @@ describe("Composer file reference token", () => {
         runtimeCapabilityFingerprint: null,
       },
     });
+    unsubscribe();
+  });
+
+  // fix-shared-session-identity-id-first：isSharedSession prop 退化（false）+
+  // shared: id 时，picker 仍 MUST 走 Shared 持久化，MUST NOT 发续接请求。
+  it("routes target changes to shared persistence and never emits continuation when identity projection is lost", async () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeProviderContinuationDialogRequests(listener);
+    vi.mocked(invoke).mockResolvedValueOnce({ selectedTarget: null });
+    const view = render(
+      <ComposerHarness onSend={() => {}} activeThreadId="shared:degraded" />,
+    );
+
+    const authority = view.getByTestId("composer-target-authority");
+    expect(authority.dataset.pickerMode).toBe("shared");
+
+    fireEvent.click(view.getByTestId("request-provider-continuation"));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        "set_shared_session_selected_engine",
+        expect.objectContaining({
+          workspaceId: "ws-1",
+          threadId: "shared:degraded",
+        }),
+      );
+    });
+    expect(listener).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
+  // locked 不构成身份防线：locked + 投影丢失时点选为 no-op，仍不续接。
+  it("keeps locked shared picker inert when identity projection is lost", () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeProviderContinuationDialogRequests(listener);
+    const view = render(
+      <ComposerHarness
+        onSend={() => {}}
+        activeThreadId="shared:locked"
+        sharedTargetPickerLocked
+      />,
+    );
+
+    fireEvent.click(view.getByTestId("request-provider-continuation"));
+
+    expect(listener).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
     unsubscribe();
   });
 

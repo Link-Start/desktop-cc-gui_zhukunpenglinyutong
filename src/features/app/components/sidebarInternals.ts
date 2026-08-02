@@ -95,9 +95,9 @@ export function isPendingEngineThreadId(threadId: string): boolean {
   );
 }
 
-export function isSharedSessionThreadId(threadId: string): boolean {
-  return threadId.trim().startsWith("shared:");
-}
+// 身份判定唯一实现已上提：shared-session/utils/sharedSessionIdentity.ts
+// （fix-shared-session-identity-id-first）。此处仅 re-export 保 callsite 兼容。
+export { isSharedSessionThreadId } from "../../shared-session/utils/sharedSessionIdentity";
 
 export function isSessionCatalogNotReadyError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);

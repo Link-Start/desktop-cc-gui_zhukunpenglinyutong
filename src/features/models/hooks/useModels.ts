@@ -218,6 +218,28 @@ const normalizeEffort = (value: unknown): string | null => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
+/** catalog 结构指纹：仅业务字段，切断无意义 array 换引用触发的 layout 环。 */
+function modelOptionsFingerprint(models: readonly ModelOption[]): string {
+  if (models.length === 0) {
+    return "";
+  }
+  return models
+    .map((model) => {
+      const efforts = model.supportedReasoningEfforts
+        .map((entry) => entry.reasoningEffort)
+        .join(",");
+      return [
+        model.id,
+        model.model,
+        model.source ?? "",
+        model.defaultReasoningEffort ?? "",
+        model.isDefault ? "1" : "0",
+        efforts,
+      ].join("\u001f");
+    })
+    .join("\u001e");
+}
+
 const normalizeReasoningEfforts = (
   value: unknown,
 ): ModelOption["supportedReasoningEfforts"] => {
@@ -342,15 +364,33 @@ export const planComposerModelSelection = (input: {
   const existingSelection = findModelByIdOrModel(models, selectedModelId);
   let clearUserSelectedModel = false;
   let keepUserModel = hasUserSelectedModel;
+  // catalog 外 freeform：用户显式点过则保留，禁止 layout 反复清回 default（#185 / freeform 业务不变量）。
+  // 非用户锁且不在 catalog → 才允许回退 preferred/default。
+  let freeformSelection: ModelOption | null = null;
   if (selectedModelId && !existingSelection) {
-    clearUserSelectedModel = true;
-    keepUserModel = false;
+    if (hasUserSelectedModel) {
+      keepUserModel = true;
+      freeformSelection = {
+        id: selectedModelId,
+        model: selectedModelId,
+        displayName: selectedModelId,
+        description: "",
+        source: "custom",
+        supportedReasoningEfforts: [],
+        defaultReasoningEffort: null,
+        isDefault: false,
+      };
+    } else {
+      clearUserSelectedModel = true;
+      keepUserModel = false;
+    }
   }
 
   const preferredSelection = findModelByIdOrModel(models, preferredModelId);
   const defaultModel = pickDefaultModel(models, configModel);
   const nextModel =
     (keepUserModel && existingSelection ? existingSelection : null) ??
+    (keepUserModel && freeformSelection ? freeformSelection : null) ??
     preferredSelection ??
     defaultModel ??
     existingSelection ??
@@ -373,20 +413,27 @@ export const planComposerModelSelection = (input: {
     currentEffort: selectedEffort,
     preferredEffort,
   });
+  const nextEffortNormalized = normalizeEffort(nextEffort);
 
   // 已收敛则返回 null：layout / refresh 不再发起任何 commit，
   // 避免「语义等价 plan 反复 apply」在父树重渲染下叠满 update depth。
+  // 用 id/model 双通道匹配 selected，避免 "id vs model 字段" 语义相等却反复 commit。
+  const selectedMatchesNext =
+    selectedModelId === nextModelId ||
+    existingSelection?.id === nextModelId ||
+    existingSelection?.model === nextModel.model ||
+    (freeformSelection !== null && selectedModelId === nextModelId);
   if (
     !clearUserSelectedModel &&
-    nextModelId === selectedModelId &&
-    normalizeEffort(nextEffort) === currentEffort
+    selectedMatchesNext &&
+    nextEffortNormalized === currentEffort
   ) {
     return null;
   }
 
   return {
     nextModelId,
-    nextEffort,
+    nextEffort: nextEffortNormalized,
     clearUserSelectedModel,
   };
 };
@@ -409,6 +456,9 @@ export function useModels({
   const hasUserSelectedModel = useRef(false);
   const hasUserSelectedEffort = useRef(false);
   const lastWorkspaceId = useRef<string | null>(null);
+  /** 幂等 apply 门闩：同一 model|effort 不重复 commit，切断 preferred↔selection 回写叠环。 */
+  const lastAppliedSelectionKeyRef = useRef<string | null>(null);
+  const stableModelsRef = useRef<ModelOption[]>([]);
   const [catalogReadyForWorkspace, setCatalogReadyForWorkspace] = useState(false);
   const catalogCacheByWorkspace = useRef(
     new Map<string, ReturnType<typeof createModelCatalogCache>>(),
@@ -435,9 +485,16 @@ export function useModels({
   activeWorkspaceIdRef.current = workspaceId;
   // Codex catalog only — never apply Claude ANTHROPIC_* mapping here.
   // modelCatalogVersion bumps when custom Codex models change in localStorage.
+  // 结构指纹稳定时复用上一帧 array 引用，避免 layout deps 因 merge 新数组误触发。
   const models = useMemo(() => {
     void modelMappingVersion;
-    return mergeCodexSelectableModels(rawModels);
+    const next = mergeCodexSelectableModels(rawModels);
+    const prev = stableModelsRef.current;
+    if (modelOptionsFingerprint(prev) === modelOptionsFingerprint(next)) {
+      return prev;
+    }
+    stableModelsRef.current = next;
+    return next;
   }, [rawModels, modelMappingVersion]);
 
   // 幂等写入：语义相等则保持同一 reference，切断 setState → layout → setState 环
@@ -454,11 +511,24 @@ export function useModels({
 
   const applySelectionPlan = useCallback(
     (plan: ComposerSelectionPlan) => {
+      const nextEffort = normalizeEffort(plan.nextEffort);
+      const applyKey = `${plan.nextModelId ?? ""}\0${nextEffort ?? ""}\0${
+        plan.clearUserSelectedModel ? "1" : "0"
+      }`;
+      const snapshot = selectionSnapshotRef.current;
+      const alreadyApplied =
+        lastAppliedSelectionKeyRef.current === applyKey &&
+        snapshot.selectedModelId === plan.nextModelId &&
+        normalizeEffort(snapshot.selectedEffort) === nextEffort;
+      if (alreadyApplied) {
+        return;
+      }
       if (plan.clearUserSelectedModel) {
         hasUserSelectedModel.current = false;
       }
+      lastAppliedSelectionKeyRef.current = applyKey;
       commitSelectedModelId(plan.nextModelId);
-      commitSelectedEffort(plan.nextEffort);
+      commitSelectedEffort(nextEffort);
     },
     [commitSelectedEffort, commitSelectedModelId],
   );
@@ -503,6 +573,8 @@ export function useModels({
     hasUserSelectedEffort.current = false;
     lastWorkspaceId.current = workspaceId;
     lastCatalogAttemptWorkspaceId.current = null;
+    lastAppliedSelectionKeyRef.current = null;
+    stableModelsRef.current = [];
     setConfigModel(null);
     setRawModels([]);
     setSelectedModelIdState(null);
@@ -527,7 +599,7 @@ export function useModels({
   );
 
   const selectedModel = useMemo(
-    () => models.find((model) => model.id === selectedModelId) ?? null,
+    () => findModelByIdOrModel(models, selectedModelId),
     [models, selectedModelId],
   );
 
@@ -756,7 +828,10 @@ export function useModels({
         return [configOption, ...effectiveDataFromServer];
       })();
       const selectableData = mergeCodexSelectableModels(data);
-      setRawModels(data);
+      // catalog 语义未变则保留 rawModels 引用，避免 models useMemo → layout 无意义重入
+      setRawModels((prev) =>
+        modelOptionsFingerprint(prev) === modelOptionsFingerprint(data) ? prev : data,
+      );
       lastCatalogAttemptWorkspaceId.current = requestedWorkspaceId;
       setCatalogReadyForWorkspace(
         modelListResult.status === "fulfilled" && Array.isArray(rawData),

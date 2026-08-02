@@ -136,6 +136,7 @@ import { ActiveCanvasStatusPanel } from "./activeCanvasStatusPanelNode";
 import { buildShellRuntimeSummary } from "./layoutShellSummary";
 import { buildConversationCanvasNode } from "./conversationCanvasNode";
 import { useLayoutTopbarSessionTabs } from "./useLayoutTopbarSessionTabs";
+import { resolveIsSharedSession } from "../../shared-session/utils/sharedSessionIdentity";
 import {
   buildCompactEmptyNode,
   buildCompactGitBackNode,
@@ -1302,7 +1303,12 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     },
     [],
   );
-  const isSharedSession = activeThreadSummary?.threadKind === "shared";
+  // 身份 id-first：shared: 前缀是 hard gate，threadKind 投影仅兜底
+  // （fix-shared-session-identity-id-first）。
+  const isSharedSession = resolveIsSharedSession(
+    options.activeThreadId,
+    activeThreadSummary,
+  );
   // Wave 4 / B.6：Shared Send UI 状态机（§14.5）。V2 flag 关闭时状态恒为 idle，不影响现有行为。
   const sharedSendEntry = useSharedSendState(
     options.activeWorkspaceId ?? "",

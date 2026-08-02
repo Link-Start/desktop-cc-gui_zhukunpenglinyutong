@@ -1238,6 +1238,83 @@ describe("useSidebarMenus", () => {
     );
   });
 
+  it("rejects continuation for a shared: source id even when threadKind projection is native", async () => {
+    // fix-shared-session-identity-id-first：kind 投影丢失时 id 硬闸仍拒绝续接。
+    const handlers = {
+      ...createHandlers(),
+      codexProviderProfiles: [
+        {
+          id: "provider-b",
+          name: "Provider B",
+          source: "managed" as const,
+          availability: "available" as const,
+        },
+      ],
+      getThreadSummary: () => ({
+        id: "shared:source-1",
+        name: "Shared Session",
+        updatedAt: 1,
+        threadKind: "native" as const,
+        engineSource: "codex" as const,
+      }),
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    act(() => {
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "shared:source-1",
+        destination: {
+          engine: "claude",
+          providerProfileId: "provider-b",
+          providerProfileNameSnapshot: "Provider B",
+          providerProfileSource: "managed",
+          runtimeCapabilityFingerprint: null,
+        },
+      });
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(prepareNativeProviderContinuationMock).not.toHaveBeenCalled();
+    expect(result.current.providerContinuationDialogState).toBeNull();
+  });
+
+  it("shows source-unavailable notice instead of dialog when source summary is missing", async () => {
+    // 变体 A2：summary 整行缺失 → error notice，不弹续接 dialog。
+    const handlers = {
+      ...createHandlers(),
+      getThreadSummary: () => undefined,
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    act(() => {
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "shared:missing-1",
+        destination: {
+          engine: "claude",
+          providerProfileId: "provider-b",
+          providerProfileNameSnapshot: "Provider B",
+          providerProfileSource: "managed",
+          runtimeCapabilityFingerprint: null,
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(pushGlobalRuntimeNoticeMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          severity: "error",
+          messageKey: "runtimeNotice.error.threadTurnFailed",
+        }),
+      );
+    });
+    expect(prepareNativeProviderContinuationMock).not.toHaveBeenCalled();
+    expect(result.current.providerContinuationDialogState).toBeNull();
+  });
+
   it("does not create a continuation after the product dialog is cancelled", async () => {
     const handlers = {
       ...createHandlers(),
