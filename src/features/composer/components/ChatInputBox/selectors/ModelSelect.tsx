@@ -744,20 +744,23 @@ export const ModelSelect = memo(({
         if (!hasTargetGroups || !onExecutionTargetChange) {
           return;
         }
-        if (group.providerId !== executionTarget?.engine) {
-          return;
-        }
-        const keptModel =
-          profileModels.find((model) =>
-            isSelectedExecutionModel(executionTarget, model),
-          ) ??
-          profileModels.find(
-            (model) =>
-              resolveRuntimeModel(model) ===
-              (executionTarget.model?.trim() || undefined),
-          ) ??
-          profileModels[0];
-        // Shared 关键：不得回落到旧渠道的 modelCatalogEntryId
+        // Shared / create-session：渠道切换必须立刻写完整 ExecutionTarget。
+        // 禁止「当前 engine 仍是 Codex 时改 Claude 渠道只预览不落盘」——
+        // 否则底栏/映射像 DeepSeek，selectedNextTarget 仍是旧引擎或 Claude 本地，
+        // 发送会变成「Claude Code · 本地配置 · k3」。
+        const sameEngine = group.providerId === executionTarget?.engine;
+        const keptModel = sameEngine
+          ? (profileModels.find((model) =>
+              isSelectedExecutionModel(executionTarget, model),
+            ) ??
+            profileModels.find(
+              (model) =>
+                resolveRuntimeModel(model) ===
+                (executionTarget.model?.trim() || undefined),
+            ) ??
+            profileModels[0])
+          : profileModels[0];
+        // 无新 catalog 时不得沿用上一引擎/渠道的 model id
         if (!keptModel) {
           return;
         }
@@ -768,7 +771,8 @@ export const ModelSelect = memo(({
         }
         onExecutionTargetChange(
           buildProviderExecutionTarget(
-            executionTarget,
+            // 跨引擎时不要继承旧引擎的 reasoning / profile 语义
+            sameEngine ? executionTarget : null,
             group.providerId,
             profileId,
             catalogEntryId || runtimeModel || "",
