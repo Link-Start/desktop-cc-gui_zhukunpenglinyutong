@@ -26,7 +26,7 @@
 - Backend HTTP client MUST be HTTPS-only, reject redirects, use bounded connect/total timeout, and read `hm.js` incrementally with a hard byte limit before evaluation。
 - Beacon validation MUST require main window、exact host `hm.baidu.com`、exact path `/hm.gif`、built-in `si`、single non-empty bounded `hca`、bounded control-character-free User-Agent；backend owns method、final HTTPS scheme、Referer and headers。
 - Official script evaluation MUST require the expected site id and current `hm.gif` transport marker；marker drift MUST fail closed and leave app startup available。
-- `HMACCOUNT` MUST be validated、serialized through `BaiduTongjiState.visitor_cookie`、persisted with `storage::write_json_file()` lock + atomic write, and quarantined on invalid JSON/semantic value。
+- `HMACCOUNT` MUST be validated、serialized through `BaiduTongjiState.visitor_cookie`、persisted with `storage::write_json_file()` lock + atomic write, and quarantined on invalid JSON/semantic value。request MUST only clone a cookie snapshot under the short state mutex；network I/O MUST run outside that mutex。response cookie MUST commit only after the corresponding status/body/UTF-8/site-id/marker validation succeeds；compare-and-update MUST reject stale responses, and accepted memory/disk updates MUST remain commit-ordered。
 - Logs and returned errors MUST NOT include cookie value、full beacon URL/query or remote response body；network errors expose only categories such as `timeout`、`connect`、`response-body`、`request`。
 - Commands MUST be registered in `src-tauri/src/command_registry.rs`，module/state MUST be wired in `src-tauri/src/lib.rs`，camelCase IPC fields MUST remain `userAgent` and `{ url, userAgent }`。
 
@@ -38,7 +38,7 @@
 | Linux Web Service / Windows / macOS production main | existing external `hm.js` injection | unchanged |
 | development / secondary window | no external or native analytics | continue |
 | wrong host/path/site id、missing `hca`、invalid User-Agent | reject before network | continue |
-| redirect、timeout、DNS/TLS、non-2xx、oversized/empty script | redacted error；no WebKit fallback | continue |
+| redirect、timeout、DNS/TLS、non-2xx、oversized/empty/invalid script | redacted error；no cookie commit；no WebKit fallback | continue |
 | invalid persisted cookie JSON/value | quarantine；start with empty native cookie | continue |
 | official script marker/site id changes | refuse `eval` | continue without unsafe request |
 
@@ -52,7 +52,7 @@
 
 - Frontend routing：`npx vitest run src/services/baiduTongji.test.ts`；断言 Linux native 无 external script、先有 `_hmt`/bridge、matching beacon 走 IPC、普通 Image 委托、Web Service/Windows parity、failure 不 throw。
 - IPC mapping：`npx vitest run src/services/tauri/baiduTongji.test.ts`；断言 command names 与 camelCase payload。
-- Rust validation/persistence：`cargo test --manifest-path src-tauri/Cargo.toml baidu_tongji::tests`；断言 endpoint/site/hca/User-Agent rejection、HTTPS upgrade、bounded chunk、cookie extraction/continuity/quarantine。
+- Rust validation/persistence：`cargo test --manifest-path src-tauri/Cargo.toml baidu_tongji::tests`；断言 endpoint/site/hca/User-Agent rejection、HTTPS upgrade、bounded chunk、cookie extraction/continuity/quarantine、valid/no-candidate commit 与 stale response rejection。
 - Static/cross-layer：检查 `command_registry.rs` 注册、`lib.rs` state wiring；运行 `npm run check:runtime-contracts`、`npm run typecheck`、`npm run lint`、targeted `rustfmt --check`。
 - Release：同一 isolated profile 连续启动 release ELF 两次，再验证 AppImage direct 与 temporary `.desktop -> gtk-launch`；每次都要求 renderer ready、可见非空 UI、真实 script/beacon success、第二次 cookie reuse，并检查 launch timestamp 后无 WebKit/libsoup crash。
 
