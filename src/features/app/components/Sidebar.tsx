@@ -193,6 +193,7 @@ type SidebarProps = {
     engine: string;
     providerProfileId: string | null;
     modelId: string | null;
+    modelRuntime?: string | null;
     effort: string | null;
   }) => void | Promise<void>;
   onDeleteThread: (workspaceId: string, threadId: string) => void;

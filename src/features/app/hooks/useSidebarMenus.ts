@@ -313,7 +313,10 @@ type SidebarMenuHandlers = {
     threadId: string;
     engine: string;
     providerProfileId: string | null;
+    /** 优先 catalog entry id；可与 modelRuntime 二选一或同时给 */
     modelId: string | null;
+    /** CLI runtime 名（如 MiniMax-M3），用于反查 catalog entry */
+    modelRuntime?: string | null;
     effort: string | null;
   }) => void | Promise<void>;
   isThreadAvailable?: (workspaceId: string, threadId: string) => boolean;
@@ -924,8 +927,14 @@ export function useSidebarMenus({
         await onReloadWorkspaceThreads(dialog.workspaceId);
         replaceProviderContinuationDialog(null);
         onSelectThread(dialog.workspaceId, result.operation.resultSessionId);
-        // 应用续接目标模型到新会话 composer，避免仍显示来源会话的 deepseek 等模型
-        const destModel =
+        // 应用续接目标模型到新会话 composer。
+        // modelId 优先 catalog entry id（picker 按 id 匹配）；model 是 runtime。
+        // 两者皆空时仍回调，由上层按目标 provider catalog 默认/首档补齐，避免「选择模型」空态。
+        const destCatalogEntryId =
+          typeof destination.modelCatalogEntryId === "string"
+            ? destination.modelCatalogEntryId.trim()
+            : "";
+        const destRuntimeModel =
           typeof destination.model === "string"
             ? destination.model.trim()
             : "";
@@ -933,16 +942,15 @@ export function useSidebarMenus({
           typeof destination.reasoningEffort === "string"
             ? destination.reasoningEffort.trim()
             : "";
-        if (destModel || destEffort) {
-          onProviderContinuationTargetReady?.({
-            workspaceId: dialog.workspaceId,
-            threadId: result.operation.resultSessionId,
-            engine: destEngine,
-            providerProfileId: destProviderId || null,
-            modelId: destModel || null,
-            effort: destEffort || null,
-          });
-        }
+        onProviderContinuationTargetReady?.({
+          workspaceId: dialog.workspaceId,
+          threadId: result.operation.resultSessionId,
+          engine: destEngine,
+          providerProfileId: destProviderId || null,
+          modelId: destCatalogEntryId || null,
+          modelRuntime: destRuntimeModel || null,
+          effort: destEffort || null,
+        });
         return;
       }
       const latest = providerContinuationDialogStateRef.current;
