@@ -287,10 +287,55 @@ export function buildEffectiveSessionFolderMap(
 export const UNASSIGNED_WORKSPACE_ID = "__global_unassigned__";
 
 export function normalizeEngineType(engine: string): EngineType {
-  if (engine === "claude" || engine === "gemini" || engine === "opencode") {
-    return engine;
+  const normalized = engine.trim().toLowerCase();
+  if (
+    normalized === "claude" ||
+    normalized === "gemini" ||
+    normalized === "opencode" ||
+    normalized === "grok" ||
+    normalized === "kimi"
+  ) {
+    return normalized;
+  }
+  // Shared sessions surface under catalog engine "shared"; icon falls back to
+  // the selected runtime engine when callers pass entry.source instead.
+  if (normalized === "shared") {
+    return "codex";
   }
   return "codex";
+}
+
+export function resolveCatalogEntryEngineIcon(
+  entry: Pick<WorkspaceSessionCatalogEntry, "engine" | "source" | "threadKind">,
+): EngineType {
+  if (
+    entry.engine.trim().toLowerCase() === "shared" ||
+    entry.threadKind === "shared"
+  ) {
+    const sourceEngine = entry.source?.trim().toLowerCase() ?? "";
+    if (
+      sourceEngine === "claude" ||
+      sourceEngine === "codex" ||
+      sourceEngine === "gemini" ||
+      sourceEngine === "grok" ||
+      sourceEngine === "kimi" ||
+      sourceEngine === "opencode"
+    ) {
+      return sourceEngine;
+    }
+    return "codex";
+  }
+  return normalizeEngineType(entry.engine);
+}
+
+export function isSharedCatalogEntry(
+  entry: Pick<WorkspaceSessionCatalogEntry, "engine" | "threadKind" | "sessionId">,
+): boolean {
+  return (
+    entry.threadKind === "shared" ||
+    entry.engine.trim().toLowerCase() === "shared" ||
+    entry.sessionId.startsWith("shared:")
+  );
 }
 
 export function resolveWorkspaceSessionDisplayTitle(

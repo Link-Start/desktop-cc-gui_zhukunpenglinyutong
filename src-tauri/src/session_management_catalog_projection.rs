@@ -1,3 +1,56 @@
+fn build_shared_catalog_entry(
+    summary: crate::shared_sessions::SharedSessionSummary,
+    owner_workspace: &WorkspaceEntry,
+    owner_metadata: &WorkspaceSessionCatalogMetadata,
+    metadata_by_workspace_id: &HashMap<String, WorkspaceSessionCatalogMetadata>,
+) -> WorkspaceSessionCatalogEntry {
+    let session_id = summary.thread_id;
+    let archived_at =
+        archived_at_for_session(owner_metadata, &owner_workspace.id, &session_id);
+    let entry = WorkspaceSessionCatalogEntry {
+        session_id,
+        stable_session_key: None,
+        canonical_session_id: Some(summary.id),
+        parent_session_id: None,
+        workspace_id: owner_workspace.id.clone(),
+        workspace_label: Some(owner_workspace.name.clone()),
+        engine: "shared".to_string(),
+        title: summary.title,
+        native_title: None,
+        updated_at: summary.updated_at as i64,
+        archived_at,
+        thread_kind: "shared".to_string(),
+        source: Some(summary.selected_engine.icon().to_string()),
+        source_label: Some(summary.selected_engine_label),
+        provider_profile_id: None,
+        provider_profile_source: None,
+        provider_profile_name: None,
+        provider_availability: None,
+        source_completeness: Some(WorkspaceSessionSourceCompleteness::Complete),
+        source_status_reason: None,
+        size_bytes: None,
+        cwd: Some(owner_workspace.path.clone()),
+        attribution_status: Some(
+            SessionCatalogAttributionStatus::StrictMatch
+                .as_str()
+                .to_string(),
+        ),
+        attribution_reason: None,
+        attribution_confidence: None,
+        matched_workspace_id: Some(owner_workspace.id.clone()),
+        matched_workspace_label: Some(owner_workspace.name.clone()),
+        folder_id: None,
+        auto_session: None,
+        exists_on_disk: false,
+        inconsistency_code: None,
+        delete_mode: None,
+        physical_path: None,
+        children_count: None,
+        continuation: ProviderContinuationProjection::default(),
+    };
+    finalize_existing_catalog_entry(entry, metadata_by_workspace_id)
+}
+
 fn build_claude_catalog_entry_from_fact(
     fact: engine::claude_history::ClaudeSessionSourceFact,
     owner_workspace: &WorkspaceEntry,
@@ -763,17 +816,55 @@ async fn build_workspace_scope_catalog_data(
                         WorkspaceSessionSourceCompleteness::AuthoritativeEmpty,
                         None,
                     ));
-                    continue;
-                }
-                log::warn!(
+                    // Fall through so shared sessions are still collected for this workspace.
+                } else {
+                    log::warn!(
                     "[session_management.list_workspace_sessions] opencode history unavailable for workspace {}: {}",
                     owner_workspace_id,
                     error
                 );
-                partial_sources.push(SESSION_CATALOG_PARTIAL_OPENCODE.to_string());
+                    partial_sources.push(SESSION_CATALOG_PARTIAL_OPENCODE.to_string());
+                    source_statuses.push(build_degraded_source_status(
+                        "opencode",
+                        SESSION_CATALOG_PARTIAL_OPENCODE,
+                    ));
+                }
+            }
+        }
+
+        match crate::shared_sessions::list_workspace_shared_sessions(&owner_workspace_id, None) {
+            Ok(shared_sessions) => {
+                let shared_completeness = if shared_sessions.is_empty() {
+                    WorkspaceSessionSourceCompleteness::AuthoritativeEmpty
+                } else {
+                    WorkspaceSessionSourceCompleteness::Complete
+                };
+                source_statuses.push(build_success_source_status(
+                    "shared",
+                    shared_sessions.len(),
+                    scan_mode,
+                    shared_completeness,
+                    None,
+                ));
+                entries.extend(shared_sessions.into_iter().map(|summary| {
+                    build_shared_catalog_entry(
+                        summary,
+                        workspace,
+                        &owner_metadata,
+                        &metadata_by_workspace_id,
+                    )
+                }));
+            }
+            Err(error) => {
+                log::warn!(
+                    "[session_management.list_workspace_sessions] shared history unavailable for workspace {}: {}",
+                    owner_workspace_id,
+                    error
+                );
+                partial_sources.push(SESSION_CATALOG_PARTIAL_SHARED.to_string());
                 source_statuses.push(build_degraded_source_status(
-                    "opencode",
-                    SESSION_CATALOG_PARTIAL_OPENCODE,
+                    "shared",
+                    SESSION_CATALOG_PARTIAL_SHARED,
                 ));
             }
         }

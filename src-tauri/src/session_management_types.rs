@@ -18,6 +18,7 @@ pub(crate) const SESSION_CATALOG_PARTIAL_GEMINI: &str = "gemini-history-unavaila
 pub(crate) const SESSION_CATALOG_PARTIAL_GROK: &str = "grok-history-unavailable";
 pub(crate) const SESSION_CATALOG_PARTIAL_KIMI: &str = "kimi-history-unavailable";
 pub(crate) const SESSION_CATALOG_PARTIAL_OPENCODE: &str = "opencode-history-unavailable";
+pub(crate) const SESSION_CATALOG_PARTIAL_SHARED: &str = "shared-history-unavailable";
 pub(crate) const SESSION_CATALOG_PARTIAL_ARCHIVE_METADATA: &str = "archive-metadata-unavailable";
 pub(crate) const SESSION_CATALOG_UNASSIGNED_WORKSPACE_ID: &str = "__global_unassigned__";
 pub(crate) const SESSION_FOLDER_ROOT_ID: &str = "__root__";
