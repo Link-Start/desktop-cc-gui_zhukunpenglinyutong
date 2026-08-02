@@ -1427,3 +1427,52 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1287: SubAgent 幕布 persona 卡片与 inspector 抽屉
+
+**Date**: 2026-08-02
+**Task**: SubAgent 幕布 persona 卡片与 inspector 抽屉
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 模块 | 说明 |
+|------|------|
+| subagent-ui | 独立模块：小队网格/单卡、静态作者池 persona、幕布内抽屉 |
+| 幕布接入 | groupToolItems subagentGroup、ToolBlock/Timeline 渲染、折叠豁免 |
+| 右下角列表 | 单行可点，统一 openSubagentInspector |
+| 闪屏修复 | 仅父 scope 关闭抽屉；嵌套 Messages 不再误关 |
+| 清理 | 移除 StatusPanel 内联 EngineTaskOutput 死代码；测试对齐新 class |
+
+**关键路径**
+- `src/features/subagent-ui/**`
+- `src/styles/subagent-ui.css`
+- `openspec/changes/enhance-subagent-canvas-persona-ui/`
+
+**验证**
+- 相关 vitest 113 通过
+- 用户人工验收通过
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `49353a4c8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
