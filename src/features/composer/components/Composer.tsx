@@ -76,7 +76,6 @@ import { TokenIndicator } from "./ChatInputBox/TokenIndicator";
 import type {
   ClaudeContextUsageViewModel,
   CodexCompactionSource,
-  ContextSelectionChip,
   MemoryReferenceMode,
   PermissionMode,
   SelectedAgent as ChatInputSelectedAgent,
@@ -466,9 +465,6 @@ function resolveSelectedNamedItems<T extends { name: string }>(
   return resolved;
 }
 
-function toContextChipCarryOverKey(chip: ContextSelectionChip) {
-  return `${chip.type}:${chip.name}`;
-}
 
 const OPENCODE_DIRECT_COMMANDS = new Set(["status", "mcp", "export", "share"]);
 
@@ -1216,26 +1212,6 @@ function ComposerImpl({
     selectedEngine === "opencode" &&
     openCodeProviderToneReady &&
     openCodeProviderTone === "is-fail";
-
-  const contextSelectionChips = useMemo<ContextSelectionChip[]>(
-    () => [
-      ...selectedSkills.map((skill) => ({
-        type: "skill" as const,
-        name: skill.name,
-        description: skill.description,
-        path: skill.path,
-        source: skill.source,
-      })),
-      ...selectedCommons.map((item) => ({
-        type: "commons" as const,
-        name: item.name,
-        description: item.description,
-        path: item.path,
-        source: item.source,
-      })),
-    ],
-    [selectedCommons, selectedSkills],
-  );
 
   useEffect(() => {
     onClearCodeAnnotationsRef.current = onClearCodeAnnotations;
@@ -2029,25 +2005,6 @@ function ComposerImpl({
     );
   }, []);
 
-  const handleRemoveContextChip = useCallback((chip: ContextSelectionChip) => {
-    const carryOverKey = toContextChipCarryOverKey(chip);
-    setCarryOverContextChipKeys((prev) =>
-      prev.filter((entry) => entry !== carryOverKey),
-    );
-    setRetainedContextChipKeys((prev) =>
-      prev.filter((entry) => entry !== carryOverKey),
-    );
-    if (chip.type === "skill") {
-      setSelectedSkillNames((prev) =>
-        prev.filter((name) => name !== chip.name),
-      );
-      return;
-    }
-    setSelectedCommonsNames((prev) =>
-      prev.filter((name) => name !== chip.name),
-    );
-  }, []);
-
   const handleRemoveCodeAnnotation = useCallback((annotationId: string) => {
     onRemoveCodeAnnotation?.(annotationId);
   }, [onRemoveCodeAnnotation]);
@@ -2807,10 +2764,8 @@ function ComposerImpl({
                 hasActiveFileReference ? handleClearContext : undefined
               }
               selectedAgent={selectedChatInputAgent}
-              selectedContextChips={contextSelectionChips}
               selectedManualMemoryIds={selectedManualMemoryIds}
               selectedNoteCardIds={selectedNoteCardIds}
-              onRemoveContextChip={handleRemoveContextChip}
               onAgentSelect={handleAgentSelect}
               onOpenAgentSettings={onOpenAgentSettings}
               onOpenPromptSettings={onOpenPromptSettings}
