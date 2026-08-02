@@ -1252,3 +1252,53 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1283: 修复 Windows Native Continuation artifact 路径 os error 267
+
+**Date**: 2026-08-02
+**Task**: 修复 Windows Native Continuation artifact 路径 os error 267
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Feature | Description |
+|---------|-------------|
+| 根因 | Windows 下 artifact 目录名含 ASCII `:`（`claude:<uuid>`）触发 `ERROR_DIRECTORY (267)`；mac 允许 `:` 所以正常 |
+| 修复 | `artifact_store` 路径 key 改为 `sha256(session_id)` 前 16 hex，logical session id 不再直接进入 path segment |
+| 兼容 | 读取保留 legacy `{session_id}` 布局 fallback（带 `../` 穿越 guard），mac 旧 artifact 可读、孤儿扫描不误删 |
+| 加固 | `safe_segment` 拒绝 Windows 保留字符 `\ / < > : " \| ? *`、控制字符、尾随点/空格、保留设备名（CON/PRN/AUX/NUL/COM1-9/LPT1-9） |
+| OpenSpec | `fix-native-continuation-artifact-path-windows-compat` 走完 proposal/design/tasks/verification，已 sync `native-provider-continuation` main spec 并归档 |
+
+**验证**: cargo lib shared_context 18/18、native_continuation 14/14、integration shared_session_v2 14/14、openspec validate --strict passed；mac 实机回归通过。既有失败 `codex_zero_delta_projection_does_not_create_marker_only_import` 与本改动无关（stash 后同样失败）。
+
+**Updated Files**:
+- `src-tauri/src/shared_context/artifact_store.rs`
+- `.trellis/spec/backend/native-provider-continuation-contract.md`
+- `openspec/specs/native-provider-continuation/spec.md`
+- `openspec/changes/README.md`
+- `openspec/changes/archive/README.md`
+- `openspec/changes/archive/2026-08-02-fix-native-continuation-artifact-path-windows-compat/`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `94343833d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

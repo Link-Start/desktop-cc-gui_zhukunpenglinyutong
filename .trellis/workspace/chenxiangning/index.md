@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-30.md`
-- **Total Sessions**: 1282
+- **Total Sessions**: 1283
 - **Last Active**: 2026-08-02
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-30.md` | ~1254 | Active |
+| `journal-30.md` | ~1304 | Active |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
@@ -58,6 +58,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1283 | 2026-08-02 | 修复 Windows Native Continuation artifact 路径 os error 267 | `94343833d` | `cxn-version-0.7.15` |
 | 1282 | 2026-08-02 | 修复 CodexCatalogSessionSummary.physicalPath 类型 | `8b36c6f13` | `cxn-version-0.7.15` |
 | 1281 | 2026-08-02 | 共享会话多供应商额度列表 | `b0ef0b9b9` | `cxn-version-0.7.15` |
 | 1280 | 2026-08-02 | status-panel 概览与供应商套餐额度 | `215640267` | `cxn-version-0.7.15` |
