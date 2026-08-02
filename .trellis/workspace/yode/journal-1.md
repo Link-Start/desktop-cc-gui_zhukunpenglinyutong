@@ -211,3 +211,37 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: 加固 Linux 百度统计 Cookie 提交时序
+
+**Date**: 2026-08-03
+**Task**: 加固 Linux 百度统计 Cookie 提交时序
+**Branch**: `fix/linux-startup-preserve-analytics`
+
+### Summary
+
+将 visitor cookie snapshot 与 network I/O 解耦；仅在 script/beacon 响应完整校验后 compare-and-update，并用独立 commit mutex 保证 atomic persistence 顺序。新增 stale/no-candidate/invalid-script/non-2xx 回归测试，Rust 13/13、targeted rustfmt、diff-check、strict OpenSpec 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b46603e5b` | (see git log) |
+| `5775ec03a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
