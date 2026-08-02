@@ -14,6 +14,9 @@ import type { SessionActivityEvent } from "../features/session-activity/types";
 import type { SessionRadarEntry } from "../features/session-activity/hooks/useSessionRadarFeed";
 import type { AppMode, ThreadSummary, WorkspaceInfo } from "../types";
 
+// Stable empty timeline for activity kill-switch (avoid effect re-fire each render)
+const EMPTY_ACTIVITY_TIMELINE: SessionActivityEvent[] = [];
+
 type QuickSwitcherShellBoundary = {
   activeWorkspaceId: string | null;
   threadsByWorkspace: Record<string, ThreadSummary[]>;
@@ -47,7 +50,8 @@ export function useAppShellQuickSwitcherSection(
 ) {
   const {
     activeWorkspaceId,
-    activityTimeline,
+    // activityTimeline unused while session-activity kill-switch is on
+    activityTimeline: _activityTimeline,
     expandRightPanel,
     handleOpenFile,
     handleToggleTerminalPanel,
@@ -71,7 +75,8 @@ export function useAppShellQuickSwitcherSection(
   const [isQuickSwitcherOpen, setIsQuickSwitcherOpen] = useState(false);
   const { t } = useTranslation();
 
-  useRecordRecentFilesFromActivity(activeWorkspaceId, activityTimeline);
+  // DISABLED: disable-session-activity-and-solo-mode — no AI recent-files from activity
+  useRecordRecentFilesFromActivity(activeWorkspaceId, EMPTY_ACTIVITY_TIMELINE);
 
   const quickSwitcherSessionGroups = useMemo(
     () => projectQuickSwitcherSessionGroups(workspaces, threadsByWorkspace),

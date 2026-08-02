@@ -2587,12 +2587,30 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       if (threadSummaryListEqual(existingThreads, mergedVisibleThreads)) {
         return state;
       }
+      // 同步 parentThreadId → threadParentById，保证会话树与 live 投影一致
+      let nextThreadParentById = state.threadParentById;
+      let parentMapChanged = false;
+      for (const thread of mergedVisibleThreads) {
+        const parentId = thread.parentThreadId?.trim();
+        if (!parentId || parentId === thread.id) {
+          continue;
+        }
+        if (nextThreadParentById[thread.id] === parentId) {
+          continue;
+        }
+        if (!parentMapChanged) {
+          nextThreadParentById = { ...state.threadParentById };
+          parentMapChanged = true;
+        }
+        nextThreadParentById[thread.id] = parentId;
+      }
       return {
         ...state,
         threadsByWorkspace: {
           ...state.threadsByWorkspace,
           [action.workspaceId]: mergedVisibleThreads,
         },
+        ...(parentMapChanged ? { threadParentById: nextThreadParentById } : {}),
       };
     }
     case "setThreadListLoading":

@@ -257,6 +257,71 @@ describe("ThreadList", () => {
     );
   });
 
+  it("keeps SharedSessionIcon when shared: id has lost or native threadKind projection", () => {
+    const cases: Array<{
+      label: string;
+      threadKind?: "native" | "shared";
+      engineSource?: ThreadSummary["engineSource"];
+    }> = [
+      { label: "missing kind", engineSource: "grok" },
+      { label: "native projection", threadKind: "native", engineSource: "claude" },
+      { label: "shared projection", threadKind: "shared", engineSource: "codex" },
+    ];
+
+    for (const testCase of cases) {
+      const { container, unmount } = render(
+        <ThreadList
+          {...baseProps}
+          unpinnedRows={[
+            {
+              thread: {
+                ...thread,
+                id: "shared:icon-stable",
+                name: `Shared ${testCase.label}`,
+                threadKind: testCase.threadKind,
+                engineSource: testCase.engineSource,
+              },
+              depth: 0,
+            },
+          ]}
+        />,
+      );
+
+      const badge = container.querySelector(".thread-engine-badge");
+      expect(badge, testCase.label).toBeTruthy();
+      expect(badge?.className, testCase.label).toContain("thread-engine-shared");
+      expect(badge?.className, testCase.label).not.toMatch(
+        /thread-engine-(codex|claude|grok|kimi|gemini|opencode)/,
+      );
+      // SharedSessionIcon is path/circle SVG without img; EngineIcon may use img for claude
+      expect(badge?.querySelector("img"), testCase.label).toBeNull();
+      unmount();
+    }
+  });
+
+  it("still renders EngineIcon for native sessions", () => {
+    const { container } = render(
+      <ThreadList
+        {...baseProps}
+        unpinnedRows={[
+          {
+            thread: {
+              ...thread,
+              id: "claude:native-1",
+              threadKind: "native",
+              engineSource: "claude",
+            },
+            depth: 0,
+          },
+        ]}
+      />,
+    );
+
+    const badge = container.querySelector(".thread-engine-badge");
+    expect(badge?.className).toContain("thread-engine-claude");
+    expect(badge?.className).not.toContain("thread-engine-shared");
+  });
+
   it("shows pin toggle and allows pinning without selecting the row", () => {
     const onToggleThreadPin = vi.fn();
     const onSelectThread = vi.fn();

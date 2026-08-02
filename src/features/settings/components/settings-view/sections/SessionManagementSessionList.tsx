@@ -8,9 +8,10 @@ import type { WorkspaceSessionCatalogEntry } from "../../../../../services/tauri
 import { buildWorkspaceSessionSelectionKey } from "../hooks/useWorkspaceSessionCatalog";
 import {
   formatUpdatedAtDisplay,
-  normalizeEngineType,
+  isSharedCatalogEntry,
   resolveAttributionConfidenceLabel,
   resolveAttributionReasonLabel,
+  resolveCatalogEntryEngineIcon,
   resolveWorkspaceSessionDisplayTitle,
   UNASSIGNED_WORKSPACE_ID,
 } from "./sessionManagementSectionUtils";
@@ -62,9 +63,11 @@ export function SessionListSection({
         {entries.map((entry) => {
           const selectionKey = buildWorkspaceSessionSelectionKey(entry);
           const selected = Boolean(selectedIds[selectionKey]);
-          const engineLabel =
-            engineFilterLabel[normalizeEngineType(entry.engine)] ??
-            entry.engine;
+          const isShared = isSharedCatalogEntry(entry);
+          const engineLabel = isShared
+            ? (engineFilterLabel.shared ?? t("settings.projectSessionEngineShared"))
+            : (engineFilterLabel[entry.engine.trim().toLowerCase()] ??
+              entry.engine);
           const ownerWorkspaceLabel =
             entry.workspaceId === UNASSIGNED_WORKSPACE_ID
               ? t("settings.sessionManagementWorkspaceUnassigned")
@@ -88,7 +91,7 @@ export function SessionListSection({
           return (
             <li key={selectionKey}>
               <div
-                className={`settings-project-sessions-item${selected ? " is-selected" : ""}${detailExpanded ? " is-expanded" : ""}`}
+                className={`settings-project-sessions-item${selected ? " is-selected" : ""}${detailExpanded ? " is-expanded" : ""}${isShared ? " is-shared" : ""}`}
               >
                 <input
                   type="checkbox"
@@ -101,7 +104,7 @@ export function SessionListSection({
                   aria-hidden
                 >
                   <EngineIcon
-                    engine={normalizeEngineType(entry.engine)}
+                    engine={resolveCatalogEntryEngineIcon(entry)}
                     size={14}
                   />
                 </span>
@@ -110,6 +113,15 @@ export function SessionListSection({
                     <span className="settings-project-sessions-item-title">
                       {titleLabel}
                     </span>
+                    {isShared ? (
+                      <Badge
+                        variant="outline"
+                        size="sm"
+                        className="settings-project-sessions-shared-badge"
+                      >
+                        {t("settings.sessionManagementBadgeShared")}
+                      </Badge>
+                    ) : null}
                     {entry.inconsistencyCode === "missing-on-disk" ? (
                       <Badge variant="destructive" size="sm">
                         {t("settings.sessionManagementBadgeMissingOnDisk")}
@@ -145,6 +157,18 @@ export function SessionListSection({
                   {detailExpanded ? (
                     <span className="settings-project-sessions-item-details">
                       <span className="settings-project-sessions-detail-badges">
+                        {isShared ? (
+                          <Badge
+                            variant="outline"
+                            size="sm"
+                            className="settings-project-sessions-shared-badge"
+                          >
+                            {t("settings.sessionManagementBadgeShared")}
+                            {entry.sourceLabel
+                              ? ` · ${entry.sourceLabel}`
+                              : ""}
+                          </Badge>
+                        ) : null}
                         {entry.archivedAt ? (
                           <Badge variant="secondary" size="sm">
                             {t("settings.sessionManagementBadgeArchived")}

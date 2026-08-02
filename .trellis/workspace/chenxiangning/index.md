@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-30.md`
-- **Total Sessions**: 1282
+- **Total Sessions**: 1293
 - **Last Active**: 2026-08-02
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-30.md` | ~1254 | Active |
+| `journal-30.md` | ~1753 | Active |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
@@ -58,6 +58,17 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1293 | 2026-08-02 | 跨引擎子代理幕布识别与会话树层级 | `7ada4675b` | `cxn-version-0.7.15` |
+| 1292 | 2026-08-02 | 稳定 Shared 会话列表图标（id-first） | `7caf8006f` | `cxn-version-0.7.15` |
+| 1291 | 2026-08-02 | 为杀开关空 stub 补防御性测试 | `6e47b64ef` | `cxn-version-0.7.15` |
+| 1290 | 2026-08-02 | 整体下线会话活动与 Solo 模式（接线级 disable + OpenSpec） | `7ef9151f9` | `cxn-version-0.7.15` |
+| 1289 | 2026-08-02 | 跨引擎 SubAgent 适配 Codex/Grok/Kimi/Shared | `4b4b9a18f` | `cxn-version-0.7.15` |
+| 1288 | 2026-08-02 | fix Shared 模型供应商切换误入 Native 续接 | `8468544a5` | `cxn-version-0.7.15` |
+| 1287 | 2026-08-02 | SubAgent 幕布 persona 卡片与 inspector 抽屉 | `49353a4c8` | `cxn-version-0.7.15` |
+| 1286 | 2026-08-02 | fix(status-panel): Native 会话额度仅查当前供应商 | `46724bb45` | `cxn-version-0.7.15` |
+| 1285 | 2026-08-02 | fix: 单步思考收进过程 chip | `9c94ca1df` | `cxn-version-0.7.15` |
+| 1284 | 2026-08-02 | fix: Native 过程折叠吸收孤儿思考 | `cee3ec655` | `cxn-version-0.7.15` |
+| 1283 | 2026-08-02 | 修复 Windows Native Continuation artifact 路径 os error 267 | `94343833d` | `cxn-version-0.7.15` |
 | 1282 | 2026-08-02 | 修复 CodexCatalogSessionSummary.physicalPath 类型 | `8b36c6f13` | `cxn-version-0.7.15` |
 | 1281 | 2026-08-02 | 共享会话多供应商额度列表 | `b0ef0b9b9` | `cxn-version-0.7.15` |
 | 1280 | 2026-08-02 | status-panel 概览与供应商套餐额度 | `215640267` | `cxn-version-0.7.15` |

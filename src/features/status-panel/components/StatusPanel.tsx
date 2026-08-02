@@ -49,11 +49,6 @@ import {
   formatSessionQuotaTargetTitle,
 } from "../utils/sessionQuotaTargets";
 import { projectCostRecord } from "../../context-ledger/cost-budget";
-import { EngineTaskOutputInspector } from "../../engine-task-output/components/EngineTaskOutputInspector";
-import { useEngineTaskOutputSnapshot } from "../../engine-task-output/hooks/useEngineTaskOutputSnapshot";
-import type { EngineTaskOutputSnapshot } from "../../engine-task-output/types";
-import { buildEngineTaskOutputSnapshot } from "../../engine-task-output/utils/engineTaskOutputProjection";
-
 interface StatusPanelProps extends CodeAnnotationBridgeProps {
   workspaceId?: string | null;
   workspacePath?: string | null;
@@ -104,6 +99,11 @@ interface StatusPanelProps extends CodeAnnotationBridgeProps {
   sessionDiskPath?: string | null;
   /** 当前会话绑定的供应商 profile，用于 Coding Plan 额度查询。 */
   providerProfileId?: string | null;
+  /**
+   * Shared Session 才扫 history 做多供应商额度列表；
+   * Native 默认 false，只查当前 binding，避免历史供应商额度串台。
+   */
+  isSharedSession?: boolean;
   activeRateLimits?: RateLimitSnapshot | null;
   /** 与设置「显示剩余额度」对齐，影响 Codex 限额展示。 */
   usageShowRemaining?: boolean;
@@ -227,7 +227,8 @@ export const StatusPanel = memo(function StatusPanel({
   threadStatusById,
   onOpenDiffPath,
   onOpenFilePath,
-  onSelectSubagent,
+  // 保留 prop 以兼容外部接线；子代理列表改走幕布 inspector，不再转发 navigation。
+  onSelectSubagent: _onSelectSubagent,
   variant = "popover",
   visibleDockTabs,
   showGovernanceEvidence = false,
@@ -235,6 +236,7 @@ export const StatusPanel = memo(function StatusPanel({
   workspaceName = null,
   sessionDiskPath = null,
   providerProfileId = null,
+  isSharedSession = false,
   activeRateLimits = null,
   usageShowRemaining = false,
   onRefreshGitStatus = null,
@@ -373,13 +375,6 @@ export const StatusPanel = memo(function StatusPanel({
       dockTabAvailability,
     ),
   );
-  const [inspectedTaskOutput, setInspectedTaskOutput] =
-    useState<EngineTaskOutputSnapshot | null>(null);
-  const inspectedTaskOutputState = useEngineTaskOutputSnapshot({
-    workspaceId,
-    snapshot: inspectedTaskOutput,
-  });
-
   useEffect(() => {
     if (variant !== "popover" || !openTab) return;
     function handleClickOutside(event: MouseEvent) {
@@ -568,12 +563,23 @@ export const StatusPanel = memo(function StatusPanel({
   );
   const sessionQuotaTargets = useMemo(
     () =>
-      collectSessionQuotaTargets(effectiveItems, {
-        engine: statusPanelEngine,
-        providerProfileId,
-        model: selectedModelId,
-      }),
-    [effectiveItems, statusPanelEngine, providerProfileId, selectedModelId],
+      collectSessionQuotaTargets(
+        effectiveItems,
+        {
+          engine: statusPanelEngine,
+          providerProfileId,
+          model: selectedModelId,
+        },
+        // Shared：history 多供应商；Native：仅当前 binding
+        { includeHistory: isSharedSession },
+      ),
+    [
+      effectiveItems,
+      isSharedSession,
+      statusPanelEngine,
+      providerProfileId,
+      selectedModelId,
+    ],
   );
 
   const sessionQuotaList = useSessionQuotaList({
@@ -791,35 +797,16 @@ export const StatusPanel = memo(function StatusPanel({
         <TodoList todos={usePlanAsTaskList ? codexTaskItems : todos} />
       )}
       {activeTab === "subagent" && (
-        <>
-          <SubagentList
-            subagents={subagents}
-            onSelectSubagent={(agent) => {
-              onSelectSubagent?.(agent);
-              if (variant !== "dock") {
-                setOpenTab(null);
-              }
-            }}
-            onInspectSubagent={(agent) => {
-              if (!agent.taskOutput) {
-                return;
-              }
-              setInspectedTaskOutput(
-                buildEngineTaskOutputSnapshot(agent.taskOutput, activeTokenUsage),
-              );
-            }}
-          />
-          {inspectedTaskOutput ? (
-            <div className="sp-subagent-output">
-              <EngineTaskOutputInspector
-                snapshot={inspectedTaskOutputState.snapshot ?? inspectedTaskOutput}
-                refreshState={inspectedTaskOutputState.refreshState}
-                onRefresh={inspectedTaskOutputState.refresh}
-                onClose={() => setInspectedTaskOutput(null)}
-              />
-            </div>
-          ) : null}
-        </>
+        <SubagentList
+          subagents={subagents}
+          onInspectSubagent={() => {
+            // 列表点击统一打开幕布抽屉；popover 关闭浮层即可。
+            // 不再回调 onSelectSubagent（scroll-to-task / 切线程改由抽屉会话完成）。
+            if (variant !== "dock") {
+              setOpenTab(null);
+            }
+          }}
+        />
       )}
       {activeTab === "checkpoint" && (
         <>

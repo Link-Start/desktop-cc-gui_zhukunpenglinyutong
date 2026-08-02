@@ -106,6 +106,7 @@ import {
 import { buildItemsFromThread } from "../../../utils/threadItems";
 import i18n from "../../../i18n";
 import { clearSharedSessionBindingsForSharedThread } from "../../shared-session/runtime/sharedSessionBridge";
+import { isSharedSessionThreadId } from "../../shared-session/utils/sharedSessionIdentity";
 import {
   syncSharedSessionSnapshot as syncSharedSessionSnapshotService,
 } from "../../shared-session/services/sharedSessions";
@@ -698,6 +699,11 @@ export function useThreads({
 
   const getThreadKind = useCallback(
     (workspaceId: string, threadId: string): "native" | "shared" => {
+      // id-first：shared: 前缀是身份 hard gate，threadKind 投影可丢
+      // （fix-shared-session-identity-id-first）。send/delete 共用此解析。
+      if (isSharedSessionThreadId(threadId)) {
+        return "shared";
+      }
       const threads = state.threadsByWorkspace[workspaceId] ?? [];
       const thread = threads.find((t) => t.id === threadId);
       return thread?.threadKind === "shared" ? "shared" : "native";

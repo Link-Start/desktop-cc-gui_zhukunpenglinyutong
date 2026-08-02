@@ -57,6 +57,8 @@ type PanelTabsProps = {
 const SHOW_PROMPTS_TAB = false;
 // Toggle to show/hide git tab
 const SHOW_GIT_TAB = true;
+// DISABLED: disable-session-activity-and-solo-mode — set true only with OpenSpec re-enable
+const SHOW_ACTIVITY_TAB = false;
 
 // 动作型条目：点击执行动作而非切换面板，选中后不外显到工具栏
 const actionTabIds = new Set<PanelToolbarTabId>(["specHub", "detachedExplorer"]);
@@ -80,6 +82,10 @@ function useRightPanelPinnedTabs() {
       : DEFAULT_RIGHT_PANEL_PINNED_TABS;
   });
   const togglePinned = useCallback((id: string) => {
+    // Activity tab is kill-switched; never pin it.
+    if (id === "activity" && !SHOW_ACTIVITY_TAB) {
+      return;
+    }
     setPinnedIds((prev) => {
       const next = prev.includes(id)
         ? prev.filter((pinnedId) => pinnedId !== id)
@@ -88,7 +94,14 @@ function useRightPanelPinnedTabs() {
       return next;
     });
   }, []);
-  return { pinnedIds, togglePinned };
+  const sanitizedPinnedIds = useMemo(
+    () =>
+      SHOW_ACTIVITY_TAB
+        ? pinnedIds
+        : pinnedIds.filter((id) => id !== "activity"),
+    [pinnedIds],
+  );
+  return { pinnedIds: sanitizedPinnedIds, togglePinned };
 }
 
 const tabIds: PanelToolbarTabId[] = ([
@@ -106,7 +119,8 @@ const tabIds: PanelToolbarTabId[] = ([
 ] as const).filter(
   (id) =>
     (id !== "prompts" || SHOW_PROMPTS_TAB) &&
-    (id !== "git" || SHOW_GIT_TAB)
+    (id !== "git" || SHOW_GIT_TAB) &&
+    (id !== "activity" || SHOW_ACTIVITY_TAB),
 );
 
 const tabIcons: Record<PanelToolbarTabId, ReactNode> = {

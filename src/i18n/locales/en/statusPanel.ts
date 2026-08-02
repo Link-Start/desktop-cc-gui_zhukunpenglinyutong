@@ -10,6 +10,7 @@ const statusPanel = {
     files: "files",
     emptyTodos: "No tasks",
     emptySubagents: "No subagents",
+    openSubagentTarget: "Locate subagent",
     emptyFileChanges: "No file changes",
     emptyCommands: "No commands",
     emptyPlan: "No plan",

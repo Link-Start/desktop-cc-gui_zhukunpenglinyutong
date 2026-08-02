@@ -42,6 +42,7 @@ import {
   type ExecutionTarget,
 } from "../../shared-session/target/types";
 import { persistSharedSessionSelectedTarget } from "../../shared-session/services/sharedSessions";
+import { isSharedSessionThreadId } from "../../shared-session/utils/sharedSessionIdentity";
 import { dispatchSharedSendEvent } from "../../shared-session/runtime/sharedSendStateStore";
 import { requestProviderContinuationDialog } from "../../threads/services/providerContinuationRequests";
 import {
@@ -804,7 +805,12 @@ function ComposerImpl({
     selectedEngine,
     selectedModelId,
   ]);
-  const selectedAtomicTarget = isSharedSession
+  // 身份 id-first 纵深防御（fix-shared-session-identity-id-first）：
+  // prop 链收敛正确时与 isSharedSession 一致；prop 过期时 shared: id 仍兜底，
+  // 保证 shared id 永不进入 native 续接分支。
+  const isSharedSessionResolved =
+    isSharedSession || isSharedSessionThreadId(activeThreadId);
+  const selectedAtomicTarget = isSharedSessionResolved
     ? selectedSharedTarget
     : createSessionTargetPicker
       ? effectiveCreationTarget
@@ -936,7 +942,7 @@ function ComposerImpl({
   const handleNativeProviderTargetChange = useCallback(
     (target: ExecutionTarget) => {
       if (
-        isSharedSession ||
+        isSharedSessionResolved ||
         !activeWorkspaceId ||
         !activeThreadId ||
         (target.engine !== "claude" && target.engine !== "codex") ||
@@ -962,7 +968,7 @@ function ComposerImpl({
         },
       });
     },
-    [activeThreadId, activeWorkspaceId, isSharedSession],
+    [activeThreadId, activeWorkspaceId, isSharedSessionResolved],
   );
   /**
    * Native 会话也走首页同款 Atomic 双栏 picker（含「本地配置」渠道）。
@@ -973,7 +979,7 @@ function ComposerImpl({
    */
   const handleNativeAtomicTargetChange = useCallback(
     (target: ExecutionTarget) => {
-      if (isSharedSession || createSessionTargetPicker || !selectedEngine) {
+      if (isSharedSessionResolved || createSessionTargetPicker || !selectedEngine) {
         return;
       }
       const currentProvider = selectedEngine as ProviderId;
@@ -1028,7 +1034,7 @@ function ComposerImpl({
     [
       createSessionTargetPicker,
       handleNativeProviderTargetChange,
-      isSharedSession,
+      isSharedSessionResolved,
       onSelectEffort,
       onSelectEngine,
       onSelectModel,
@@ -2699,11 +2705,11 @@ function ComposerImpl({
               selectedEngine={
                 selectedAtomicTarget?.engine ?? selectedEngine
               }
-              isSharedSession={isSharedSession}
+              isSharedSession={isSharedSessionResolved}
               // 全场景统一首页 Atomic 双栏 picker（含「本地配置」渠道），
               // 不再维护 conversation native 单栏/无渠道分叉。
               providerTargetPickerMode={
-                isSharedSession && !createSessionTargetPicker
+                isSharedSessionResolved && !createSessionTargetPicker
                   ? "shared"
                   : "create-session"
               }
@@ -2718,7 +2724,7 @@ function ComposerImpl({
               }
               executionTarget={selectedAtomicTarget}
               onExecutionTargetChange={
-                isSharedSession && !sharedTargetPickerLocked
+                isSharedSessionResolved && !sharedTargetPickerLocked
                   ? handleSharedTargetChange
                   : createSessionTargetPicker
                     ? handleCreationTargetChange
@@ -2733,7 +2739,7 @@ function ComposerImpl({
               onSelectEffort={
                 sharedTargetPickerLocked
                   ? undefined
-                  : isSharedSession &&
+                  : isSharedSessionResolved &&
                       isResolvedExecutionTarget(selectedSharedTarget)
                     ? (effort) =>
                         handleSharedTargetChange({

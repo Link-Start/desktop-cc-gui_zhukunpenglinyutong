@@ -165,4 +165,73 @@ describe("groupToolItems", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]?.kind).toBe("searchGroup");
   });
+
+  it("promotes a single Agent tool into a subagentGroup", () => {
+    const entries = groupToolItems([createToolItem("agent-1", "Tool: Agent", "agent")]);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.kind).toBe("subagentGroup");
+    if (entries[0]?.kind === "subagentGroup") {
+      expect(entries[0].items).toHaveLength(1);
+      expect(entries[0].items[0]?.id).toBe("agent-1");
+    }
+  });
+
+  it("groups consecutive Agent tools into one subagentGroup", () => {
+    const entries = groupToolItems([
+      createToolItem("agent-1", "Tool: Agent", "agent"),
+      createToolItem("agent-2", "Tool: Agent", "agent"),
+    ]);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.kind).toBe("subagentGroup");
+    if (entries[0]?.kind === "subagentGroup") {
+      expect(entries[0].items).toHaveLength(2);
+    }
+  });
+
+  it("breaks subagentGroup when a non-agent tool interrupts", () => {
+    const entries = groupToolItems([
+      createToolItem("agent-1", "Tool: Agent", "agent"),
+      createToolItem("read-1", "Tool: read"),
+      createToolItem("agent-2", "Tool: Agent", "agent"),
+    ]);
+    // 单个 read 不足以形成 readGroup，仍以 item 打断 subagent 连续段
+    expect(entries.map((entry) => entry.kind)).toEqual([
+      "subagentGroup",
+      "item",
+      "subagentGroup",
+    ]);
+  });
+
+  it("groups Codex collab spawn into subagentGroup and keeps wait/close as items", () => {
+    const entries = groupToolItems([
+      createToolItem("spawn-1", "Collab: spawn Agent", "collabToolCall"),
+      createToolItem("spawn-2", "Collab: spawn Agent", "collabToolCall"),
+      createToolItem("wait-1", "Collab: wait Agent", "collabToolCall"),
+      createToolItem("close-1", "Collab: close Agent", "collabToolCall"),
+    ]);
+    expect(entries.map((entry) => entry.kind)).toEqual([
+      "subagentGroup",
+      "item",
+      "item",
+    ]);
+    if (entries[0]?.kind === "subagentGroup") {
+      expect(entries[0].items).toHaveLength(2);
+    }
+  });
+
+  it("groups Grok Spawn Subagent into subagentGroup and skips output poller", () => {
+    const entries = groupToolItems([
+      createToolItem("s1", "Spawn Subagent", "spawn_subagent"),
+      createToolItem("s2", "Spawn Subagent", "spawn_subagent"),
+      createToolItem(
+        "poll",
+        "get_command_or_subagent_output",
+        "get_command_or_subagent_output",
+      ),
+    ]);
+    expect(entries.map((entry) => entry.kind)).toEqual(["subagentGroup", "item"]);
+    if (entries[0]?.kind === "subagentGroup") {
+      expect(entries[0].items).toHaveLength(2);
+    }
+  });
 });

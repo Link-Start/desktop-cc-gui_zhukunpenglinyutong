@@ -885,6 +885,7 @@ const settings = {
     projectSessionEngineClaude: "Claude",
     projectSessionEngineGemini: "Gemini",
     projectSessionEngineOpencode: "OpenCode",
+    projectSessionEngineShared: "Shared CLI",
     sessionManagementDescription:
       "按项目统一管理真实会话历史，支持分页读取、筛选、批量归档、取消归档与删除。",
     sessionManagementModeProject: "项目视图",
@@ -968,6 +969,7 @@ const settings = {
     sessionManagementBadgeArchived: "已归档",
     sessionManagementBadgeRelated: "推断相关",
     sessionManagementBadgeMissingOnDisk: "磁盘缺失",
+    sessionManagementBadgeShared: "Shared",
     sessionManagementChildrenCount: "{{count}} 个子会话",
     sessionManagementParentSession: "父会话 {{id}}",
     sessionManagementDetailToggle: "查看会话详情",

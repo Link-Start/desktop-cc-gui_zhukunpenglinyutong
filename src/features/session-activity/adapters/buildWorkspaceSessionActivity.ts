@@ -1543,7 +1543,8 @@ export function buildThreadActivity(args: WorkspaceSessionActivityThreadContext 
   };
 }
 
-function createEmptyWorkspaceSessionActivityViewModel(): WorkspaceSessionActivityViewModel {
+/** Runtime-disabled / no-active-thread empty view model (kill-switch safe stub). */
+export function createEmptyWorkspaceSessionActivityViewModel(): WorkspaceSessionActivityViewModel {
   return {
     rootThreadId: null,
     rootThreadName: null,
@@ -1554,6 +1555,10 @@ function createEmptyWorkspaceSessionActivityViewModel(): WorkspaceSessionActivit
     emptyState: "idle",
   };
 }
+
+/** Stable empty view model for kill-switch call sites (avoid per-render object churn). */
+export const DISABLED_WORKSPACE_SESSION_ACTIVITY: WorkspaceSessionActivityViewModel =
+  Object.freeze(createEmptyWorkspaceSessionActivityViewModel());
 
 export function resolveWorkspaceSessionActivityContext({
   activeThreadId,

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import type { EngineType, ThreadSummary, WorkspaceInfo } from "../../../types";
 import type { SharedSessionSupportedEngine } from "../../shared-session/utils/sharedSessionEngines";
+import { isSharedSessionThreadId } from "../../shared-session/utils/sharedSessionIdentity";
 import {
   createNativeProviderContinuation,
   discardPreparedNativeProviderContinuation,
@@ -585,6 +586,9 @@ export function useSidebarMenus({
     ) => {
       if (
         thread.threadKind === "shared" ||
+        // id 硬闸（fix-shared-session-identity-id-first）：
+        // kind 投影丢失时 shared: 前缀仍兜底拒绝续接
+        isSharedSessionThreadId(thread.id) ||
         !thread.engineSource ||
         !["claude", "codex", "kimi"].includes(thread.engineSource)
       ) {

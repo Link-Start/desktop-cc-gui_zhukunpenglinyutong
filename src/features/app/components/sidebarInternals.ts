@@ -9,11 +9,17 @@ import {
 } from "../../../services/clientStorage";
 import type { ThreadMoveFolderTarget } from "../hooks/useSidebarMenus";
 import {
-  extractToolName,
   getFirstStringField,
   parseToolArgs,
 } from "../../../utils/toolSemantics";
 import type { WorkspaceSessionFolder } from "../../../services/tauri";
+import {
+  extractCollabAgentIds,
+  isCollabSpawnTool,
+  isGrokSpawnSubagentTool,
+  isSubagentTool,
+  resolveSubagentSessionThreadId,
+} from "../../subagent-ui";
 
 export type WorkspaceGroupSection = {
   id: string | null;
@@ -95,9 +101,9 @@ export function isPendingEngineThreadId(threadId: string): boolean {
   );
 }
 
-export function isSharedSessionThreadId(threadId: string): boolean {
-  return threadId.trim().startsWith("shared:");
-}
+// 身份判定唯一实现已上提：shared-session/utils/sharedSessionIdentity.ts
+// （fix-shared-session-identity-id-first）。此处仅 re-export 保 callsite 兼容。
+export { isSharedSessionThreadId } from "../../shared-session/utils/sharedSessionIdentity";
 
 export function isSessionCatalogNotReadyError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -163,7 +169,10 @@ export function isClaudeThreadId(threadId: string | null | undefined) {
 }
 
 export function isPendingSubagentThreadId(threadId: string) {
-  return threadId.startsWith("claude-pending-subagent:");
+  return (
+    threadId.startsWith("claude-pending-subagent:") ||
+    threadId.includes("-pending-subagent:")
+  );
 }
 
 function resolveThreadParentId(
@@ -203,32 +212,60 @@ export function collectThreadSubtreeIds(
   return subtreeIds;
 }
 
-function isClaudeAgentTool(item: ToolConversationItem) {
-  const normalizedToolType =
-    (typeof item.toolType === "string" ? item.toolType : "").trim().toLowerCase();
-  const normalizedToolName = extractToolName(item.title).trim().toLowerCase();
-  return normalizedToolType === "agent" || normalizedToolName === "agent";
-}
-
 function isCompletedToolStatus(status: string | undefined, output: string | undefined) {
   const normalized = status?.trim().toLowerCase() ?? "";
   return Boolean(output) || normalized === "completed" || normalized === "success";
 }
 
+function resolveParentEngineSource(
+  parent: ThreadSummary,
+  activeThreadId: string,
+): ThreadSummary["engineSource"] {
+  if (parent.engineSource) {
+    return parent.engineSource;
+  }
+  if (activeThreadId.startsWith("claude:")) return "claude";
+  if (activeThreadId.startsWith("grok:")) return "grok";
+  if (activeThreadId.startsWith("kimi:")) return "kimi";
+  if (activeThreadId.startsWith("gemini:")) return "gemini";
+  if (activeThreadId.startsWith("opencode:")) return "opencode";
+  if (activeThreadId.startsWith("shared:")) return "codex";
+  return "codex";
+}
+
+function buildPendingSubagentName(item: ToolConversationItem): string {
+  const args = parseToolArgs(item.detail);
+  const description =
+    getFirstStringField(args, ["description", "prompt", "query", "task", "prompt_template"]) ||
+    (typeof item.output === "string" ? item.output.split(/\r?\n/, 1)[0]?.trim() : "") ||
+    (typeof item.title === "string" ? item.title.replace(/^Collab:\s*/i, "").trim() : "") ||
+    "Subagent";
+  const subagentType =
+    getFirstStringField(args, ["subagent_type", "subagentType", "agent", "type", "name"]) ||
+    (isCollabSpawnTool(item) ? "Agent" : "Subagent");
+  return `${subagentType} ${description}`.trim().slice(0, 120);
+}
+
 /**
- * 从对话 items 中筛出 Claude live subagent 投影唯一关心的 agent tool 条目。
+ * 从对话 items 中筛出 live subagent 投影关心的 tool 条目（跨引擎）。
  * Sidebar 用它把 `getProjectedThreads` 的依赖从「每个 token 换引用的 activeItems」
- * 收窄为这份小得多、且流式文本 delta 期间引用稳定的子集，避免每个 token
- * 击穿全部 workspace 的线程树排序。
+ * 收窄为这份小得多、且流式文本 delta 期间引用稳定的子集。
  */
 export function filterClaudeLiveSubagentSourceItems(
   items: ConversationItem[],
 ): ConversationItem[] {
   return items.filter(
-    (item) => item.kind === "tool" && isClaudeAgentTool(item),
+    (item) => item.kind === "tool" && isSubagentTool(item),
   );
 }
 
+/** @deprecated 别名：历史命名保留，逻辑已跨引擎 */
+export const filterLiveSubagentSourceItems = filterClaudeLiveSubagentSourceItems;
+
+/**
+ * 在会话列表中为当前父会话注入 live 子代理行（pending + 已有真实子会话的 parent 链接投影）。
+ * 覆盖 Claude / Codex collab / Grok / Kimi / Shared。
+ */
 export function buildClaudeLiveSubagentRows(
   threads: ThreadSummary[],
   workspaceId: string,
@@ -236,63 +273,185 @@ export function buildClaudeLiveSubagentRows(
   activeThreadId: string | null,
   activeItems: ConversationItem[],
 ): ThreadSummary[] {
-  if (workspaceId !== activeWorkspaceId || !isClaudeThreadId(activeThreadId)) {
+  if (workspaceId !== activeWorkspaceId || !activeThreadId) {
     return threads;
   }
   const parent = threads.find((thread) => thread.id === activeThreadId);
   if (!parent) {
     return threads;
   }
+
   const threadIds = new Set(threads.map((thread) => thread.id));
-  const parentSessionId = activeThreadId?.replace(/^claude:/, "") ?? "";
+  const engineSource = resolveParentEngineSource(parent, activeThreadId);
+  const parentSessionId = activeThreadId.startsWith("claude:")
+    ? activeThreadId.slice("claude:".length)
+    : "";
   let unmatchedRealChildCount = threads.filter(
     (thread) =>
       thread.parentThreadId === activeThreadId ||
-      thread.id.startsWith(`claude:subagent:${parentSessionId}:`),
+      (parentSessionId.length > 0 &&
+        thread.id.startsWith(`claude:subagent:${parentSessionId}:`)),
   ).length;
   const pendingRows: ThreadSummary[] = [];
+  const linkedChildren: ThreadSummary[] = [];
+
+  const pushPending = (pendingId: string, name: string) => {
+    if (threadIds.has(pendingId) || pendingRows.some((row) => row.id === pendingId)) {
+      return;
+    }
+    pendingRows.push({
+      id: pendingId,
+      name,
+      updatedAt: parent.updatedAt,
+      engineSource,
+      threadKind: parent.threadKind ?? "native",
+      parentThreadId: activeThreadId,
+      isDegraded: true,
+      degradedReason: "Subagent is running; transcript is not available yet.",
+    });
+  };
+
+  const linkOrPendingChild = (rawChildId: string, name: string) => {
+    const resolvedChildId =
+      resolveSubagentSessionThreadId({
+        parentThreadId: activeThreadId,
+        agentId: rawChildId,
+        explicitThreadId: rawChildId.includes(":") ? rawChildId : null,
+      }) ?? rawChildId;
+    if (threadIds.has(resolvedChildId)) {
+      const existing = threads.find((thread) => thread.id === resolvedChildId);
+      if (
+        existing &&
+        existing.parentThreadId !== activeThreadId &&
+        !linkedChildren.some((row) => row.id === resolvedChildId)
+      ) {
+        linkedChildren.push({
+          ...existing,
+          parentThreadId: activeThreadId,
+        });
+      }
+      return;
+    }
+    pushPending(
+      `${engineSource}-pending-subagent:${activeThreadId}:${rawChildId}`,
+      name,
+    );
+  };
 
   activeItems.forEach((item) => {
-    if (item.kind !== "tool" || !isClaudeAgentTool(item)) {
+    if (item.kind !== "tool" || !isSubagentTool(item)) {
       return;
     }
+
+    // Codex collab spawn：为每个 receiver 建 pending / 挂 parent
+    if (isCollabSpawnTool(item)) {
+      const agentIds = extractCollabAgentIds(item);
+      if (agentIds.length === 0) {
+        pushPending(
+          `${engineSource}-pending-subagent:${activeThreadId}:${item.id}`,
+          buildPendingSubagentName(item),
+        );
+        return;
+      }
+      agentIds.forEach((agentId) => {
+        linkOrPendingChild(agentId, buildPendingSubagentName(item));
+      });
+      return;
+    }
+
+    // Grok spawn_subagent：output 含 subagent_id → 挂 grok:{id}
+    if (isGrokSpawnSubagentTool(item)) {
+      const args = parseToolArgs(item.detail);
+      const output = typeof item.output === "string" ? item.output : "";
+      const subagentId =
+        getFirstStringField(args, ["subagent_id", "subagentId", "agent_id", "agentId"]) ||
+        /subagent_id\s*[:=]\s*['"]?([a-f0-9-]+)/i.exec(output)?.[1] ||
+        "";
+      if (subagentId) {
+        linkOrPendingChild(subagentId, buildPendingSubagentName(item));
+      } else {
+        pushPending(
+          `${engineSource}-pending-subagent:${activeThreadId}:${item.id}`,
+          buildPendingSubagentName(item),
+        );
+      }
+      return;
+    }
+
     const args = parseToolArgs(item.detail);
     const taskId = getFirstStringField(args, ["task_id", "taskId"]);
-    const stableAgentId = getFirstStringField(args, ["agent_id", "agentId"]);
-    const childSessionId = stableAgentId
-      ? `claude:subagent:${parentSessionId}:${stableAgentId}`
-      : "";
-    if (childSessionId && threadIds.has(childSessionId)) {
+    const stableAgentId = getFirstStringField(args, ["agent_id", "agentId", "subagent_id"]);
+    const resolvedChildId = resolveSubagentSessionThreadId({
+      parentThreadId: activeThreadId,
+      agentId: stableAgentId,
+    });
+
+    if (resolvedChildId && threadIds.has(resolvedChildId)) {
+      linkOrPendingChild(resolvedChildId, buildPendingSubagentName(item));
       return;
     }
+
     const output = typeof item.output === "string" ? item.output : "";
-    if (!stableAgentId && isCompletedToolStatus(item.status, output) && unmatchedRealChildCount > 0) {
+    if (
+      isClaudeThreadId(activeThreadId) &&
+      !stableAgentId &&
+      isCompletedToolStatus(item.status, output) &&
+      unmatchedRealChildCount > 0
+    ) {
       unmatchedRealChildCount -= 1;
       return;
     }
-    const pendingId = `claude-pending-subagent:${activeThreadId}:${taskId || item.id}`;
-    if (threadIds.has(pendingId)) {
-      return;
-    }
-    const description =
-      getFirstStringField(args, ["description", "prompt", "query", "task"]) ||
-      output.split(/\r?\n/, 1)[0]?.trim() ||
-      "Claude subagent";
-    const subagentType =
-      getFirstStringField(args, ["subagent_type", "agent", "type", "name"]) || "Agent";
-    pendingRows.push({
-      id: pendingId,
-      name: `${subagentType} ${description}`.trim(),
-      updatedAt: parent.updatedAt,
-      engineSource: "claude",
-      threadKind: "native",
-      parentThreadId: activeThreadId,
-      isDegraded: true,
-      degradedReason: isCompletedToolStatus(item.status, item.output)
-        ? "Subagent transcript is still being indexed."
-        : "Subagent is running; transcript is not available yet.",
-    });
+
+    const pendingKey = taskId || stableAgentId || item.id;
+    const pendingId = isClaudeThreadId(activeThreadId)
+      ? `claude-pending-subagent:${activeThreadId}:${pendingKey}`
+      : `${engineSource}-pending-subagent:${activeThreadId}:${pendingKey}`;
+    pushPending(pendingId, buildPendingSubagentName(item));
   });
 
-  return pendingRows.length > 0 ? [...threads, ...pendingRows] : threads;
+  // Shared 父会话：把仍挂在 hidden native owner 下的子线程改挂到 shared:
+  if (parent.threadKind === "shared" || activeThreadId.startsWith("shared:")) {
+    const nativeOwners = new Set<string>();
+    (parent.nativeThreadIds ?? []).forEach((raw) => {
+      const id = raw.trim();
+      if (!id) return;
+      nativeOwners.add(id);
+      if (!id.includes(":")) {
+        nativeOwners.add(`grok:${id}`);
+        nativeOwners.add(`codex:${id}`);
+        nativeOwners.add(`claude:${id}`);
+        nativeOwners.add(`kimi:${id}`);
+      }
+    });
+    if (nativeOwners.size > 0) {
+      threads.forEach((thread) => {
+        const currentParent = thread.parentThreadId?.trim() || "";
+        if (!currentParent || currentParent === activeThreadId) {
+          return;
+        }
+        if (!nativeOwners.has(currentParent)) {
+          return;
+        }
+        if (linkedChildren.some((row) => row.id === thread.id)) {
+          return;
+        }
+        linkedChildren.push({
+          ...thread,
+          parentThreadId: activeThreadId,
+        });
+      });
+    }
+  }
+
+  if (pendingRows.length === 0 && linkedChildren.length === 0) {
+    return threads;
+  }
+
+  // 用 linked 覆盖同 id 条目，并追加 pending
+  const linkedById = new Map(linkedChildren.map((row) => [row.id, row]));
+  const merged = threads.map((thread) => linkedById.get(thread.id) ?? thread);
+  return [...merged, ...pendingRows];
 }
+
+/** @deprecated 别名：历史命名保留，逻辑已跨引擎 */
+export const buildLiveSubagentRows = buildClaudeLiveSubagentRows;

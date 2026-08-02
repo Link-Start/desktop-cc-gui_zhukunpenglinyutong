@@ -89,4 +89,71 @@ describe("collectSessionQuotaTargets", () => {
     });
     expect(targets).toHaveLength(1);
   });
+
+  it("native current-only ignores history multi-provider snapshots", () => {
+    const items: ConversationItem[] = [
+      assistant("a1", {
+        engine: "claude",
+        providerProfileId: "kimi-coding",
+        providerProfileNameSnapshot: "Kimi Coding",
+        model: "kimi-k2",
+      }),
+      assistant("a2", {
+        engine: "claude",
+        providerProfileId: "deepseek",
+        providerProfileNameSnapshot: "DeepSeek",
+        model: "deepseek-v4-pro",
+      }),
+    ];
+    const targets = collectSessionQuotaTargets(
+      items,
+      {
+        engine: "claude",
+        providerProfileId: "deepseek",
+        providerLabel: "DeepSeek",
+        model: "deepseek-v4-pro",
+      },
+      { includeHistory: false },
+    );
+    expect(targets).toHaveLength(1);
+    expect(targets[0]?.key).toBe(
+      buildSessionQuotaTargetKey("claude", "deepseek"),
+    );
+    expect(targets[0]?.providerLabel).toBe("DeepSeek");
+    expect(targets[0]?.model).toBe("deepseek-v4-pro");
+  });
+
+  it("shared history mode still collects multi-provider targets", () => {
+    const items: ConversationItem[] = [
+      assistant("a1", {
+        engine: "claude",
+        providerProfileId: "kimi-coding",
+        providerProfileNameSnapshot: "Kimi Coding",
+        model: "kimi-k2",
+      }),
+      assistant("a2", {
+        engine: "claude",
+        providerProfileId: "deepseek",
+        providerProfileNameSnapshot: "DeepSeek",
+        model: "deepseek-v4-pro",
+      }),
+    ];
+    const targets = collectSessionQuotaTargets(
+      items,
+      {
+        engine: "claude",
+        providerProfileId: "deepseek",
+        providerLabel: "DeepSeek",
+        model: "deepseek-v4-pro",
+      },
+      { includeHistory: true },
+    );
+    expect(targets).toHaveLength(2);
+    expect(targets[0]?.key).toBe(
+      buildSessionQuotaTargetKey("claude", "kimi-coding"),
+    );
+    expect(targets[1]?.key).toBe(
+      buildSessionQuotaTargetKey("claude", "deepseek"),
+    );
+  });
 });

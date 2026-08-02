@@ -945,6 +945,7 @@ const settings = {
     projectSessionEngineClaude: "Claude",
     projectSessionEngineGemini: "Gemini",
     projectSessionEngineOpencode: "OpenCode",
+    projectSessionEngineShared: "Shared CLI",
     sessionManagementDescription:
       "Manage real session history per project with paged loading, filtering, batch archive, unarchive, and deletion.",
     sessionManagementModeProject: "Project view",
@@ -1031,6 +1032,7 @@ const settings = {
     sessionManagementBadgeArchived: "Archived",
     sessionManagementBadgeRelated: "Inferred",
     sessionManagementBadgeMissingOnDisk: "Missing on disk",
+    sessionManagementBadgeShared: "Shared",
     sessionManagementChildrenCount: "{{count}} child sessions",
     sessionManagementParentSession: "Parent {{id}}",
     sessionManagementDetailToggle: "View session details",

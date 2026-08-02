@@ -424,7 +424,51 @@
   color: var(--text-faint);
 }
 
-/* ─── SubagentList ─── */
+/* ─── SubagentList：单行列表 ─── */
+.sp-subagent-list-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sp-subagent-list-row {
+  position: relative;
+  min-width: 0;
+}
+
+.sp-subagent-list-row .subagent-persona-card {
+  width: 100%;
+}
+
+/* 列表行：不要选中底 / 定位 icon，只保留 hover 轻微反馈 */
+.sp-subagent-list-row .subagent-persona-card.is-row,
+.sp-subagent-list-row .subagent-persona-card.is-row.is-selected {
+  background: transparent;
+  box-shadow: none;
+}
+
+.sp-subagent-list-row .subagent-persona-card.is-row:hover {
+  background: var(--surface-hover, color-mix(in srgb, var(--surface) 90%, transparent));
+}
+
+/* 兼容旧 class */
+.sp-subagent-squad {
+  min-width: 0;
+}
+
+.sp-subagent-squad-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sp-subagent-squad-item {
+  position: relative;
+  min-width: 0;
+}
+
+/* 兼容旧 class 名（测试/外部样式） */
 .sp-subagent-list {
   display: flex;
   flex-direction: column;

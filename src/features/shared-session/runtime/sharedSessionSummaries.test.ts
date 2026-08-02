@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildNativeOwnerToSharedThreadMap,
   expandHiddenSharedBindingIds,
   normalizeSharedSessionSummary,
+  remapThreadParentsToSharedOwners,
 } from "./sharedSessionSummaries";
 
 describe("sharedSessionSummaries", () => {
@@ -67,5 +69,43 @@ describe("sharedSessionSummaries", () => {
     );
     expect(expanded.has("opencode:ses_opc_1")).toBe(true);
     expect(expanded.has("ses_opc_1")).toBe(true);
+  });
+
+  it("remaps grok subagent parents from hidden native owner to shared thread", () => {
+    const summary = normalizeSharedSessionSummary({
+      id: "shared-session-1",
+      threadId: "shared:shared-session-1",
+      title: "Shared Session",
+      updatedAt: 1,
+      selectedEngine: "grok",
+      nativeThreadIds: ["grok:parent-native"],
+    });
+    expect(summary).not.toBeNull();
+    const map = buildNativeOwnerToSharedThreadMap([summary!]);
+    expect(map.get("grok:parent-native")).toBe("shared:shared-session-1");
+    expect(map.get("parent-native")).toBe("shared:shared-session-1");
+
+    const remapped = remapThreadParentsToSharedOwners(
+      [
+        {
+          id: "grok:child-1",
+          name: "子代理 1",
+          updatedAt: 2,
+          engineSource: "grok",
+          parentThreadId: "grok:parent-native",
+        },
+        {
+          id: "shared:shared-session-1",
+          name: "Shared Session",
+          updatedAt: 3,
+          engineSource: "grok",
+          threadKind: "shared",
+        },
+      ],
+      map,
+    );
+    expect(remapped.find((t) => t.id === "grok:child-1")?.parentThreadId).toBe(
+      "shared:shared-session-1",
+    );
   });
 });

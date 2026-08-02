@@ -629,13 +629,6 @@ pub(crate) async fn archive_workspace_sessions_core(
 
     for session_id in normalized_session_ids {
         match parse_catalog_identity(&session_id) {
-            SessionCatalogIdentity::Shared { .. } => {
-                results.push(batch_error(
-                    session_id,
-                    "UNSUPPORTED_SHARED_SESSION",
-                    "Shared sessions are not supported in phase-one archive management",
-                ));
-            }
             SessionCatalogIdentity::Codex { .. } => {
                 let Some(target) = resolve_session_mutation_target(
                     &scope_catalog.entries,
@@ -662,6 +655,7 @@ pub(crate) async fn archive_workspace_sessions_core(
                 archive_success_targets.push(target.clone());
                 results.push(batch_success_for_target(&target, Some(archived_at)));
             }
+            // Shared and other native engines: soft archive via catalog metadata only.
             _ => {
                 let Some(target) = resolve_session_mutation_target(
                     &scope_catalog.entries,
@@ -818,18 +812,6 @@ pub(crate) async fn delete_workspace_sessions_core(
     let mut other_targets = Vec::new();
 
     for session_id in normalized_session_ids {
-        let identity = parse_catalog_identity(&session_id);
-        if matches!(identity, SessionCatalogIdentity::Shared { .. }) {
-            results_by_session_id.insert(
-                session_id.clone(),
-                batch_error(
-                    session_id,
-                    SESSION_DELETE_CODE_UNSUPPORTED,
-                    "Shared sessions are not supported in phase-one delete management",
-                ),
-            );
-            continue;
-        }
         let Some(target) = resolve_session_mutation_target(
             &scope_catalog.entries,
             &workspaces_snapshot,
@@ -1040,6 +1022,42 @@ pub(crate) async fn delete_workspace_sessions_core(
                                 ),
                             );
                         }
+                    }
+                }
+            }
+            "shared" => {
+                let thread_id = if target.requested_session_id.starts_with("shared:") {
+                    target.requested_session_id.clone()
+                } else {
+                    format!("shared:{}", target.native_session_id)
+                };
+                match crate::shared_sessions::delete_shared_session_files(
+                    &target.owner_workspace_id,
+                    &thread_id,
+                ) {
+                    Ok(true) => {
+                        metadata_cleanup_targets.push(target.clone());
+                        results_by_session_id.insert(
+                            target.requested_session_id.clone(),
+                            batch_delete_success_for_target(&target),
+                        );
+                    }
+                    Ok(false) => {
+                        metadata_cleanup_targets.push(target.clone());
+                        results_by_session_id.insert(
+                            target.requested_session_id.clone(),
+                            batch_already_missing_cleaned_for_target(&target),
+                        );
+                    }
+                    Err(error) => {
+                        results_by_session_id.insert(
+                            target.requested_session_id.clone(),
+                            batch_error(
+                                target.requested_session_id,
+                                SESSION_DELETE_CODE_DELETE_FAILED,
+                                &error,
+                            ),
+                        );
                     }
                 }
             }
@@ -3168,6 +3186,33 @@ async fn build_global_engine_catalog_entries(
                     error
                 );
                     partial_sources.push(SESSION_CATALOG_PARTIAL_GROK.to_string());
+                }
+            }
+        }
+
+        if include_engine("shared") {
+            match crate::shared_sessions::list_workspace_shared_sessions(&workspace.id, None) {
+                Ok(shared_sessions) => {
+                    let owner_metadata = metadata_by_workspace_id
+                        .get(&workspace.id)
+                        .cloned()
+                        .unwrap_or_default();
+                    for summary in shared_sessions {
+                        entries.push(build_shared_catalog_entry(
+                            summary,
+                            &workspace,
+                            &owner_metadata,
+                            &metadata_by_workspace_id,
+                        ));
+                    }
+                }
+                Err(error) => {
+                    log::warn!(
+                        "[session_management.list_global_shared_sessions] shared history unavailable for workspace {}: {}",
+                        workspace.id,
+                        error
+                    );
+                    partial_sources.push(SESSION_CATALOG_PARTIAL_SHARED.to_string());
                 }
             }
         }

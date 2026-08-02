@@ -17,8 +17,10 @@ import {
 } from "../../../utils/threadItems";
 import { listSharedSessions as listSharedSessionsService } from "../../shared-session/services/sharedSessions";
 import {
+  buildNativeOwnerToSharedThreadMap,
   expandHiddenSharedBindingIds,
   normalizeSharedSessionSummaries,
+  remapThreadParentsToSharedOwners,
   toSharedThreadSummary,
 } from "../../shared-session/runtime/sharedSessionSummaries";
 import { asString } from "../utils/threadNormalize";
@@ -413,6 +415,8 @@ export function useThreadActions({
         const hiddenSharedBindingIds = expandHiddenSharedBindingIds(
           sharedSessions.flatMap((session) => session.nativeThreadIds),
         );
+        const nativeOwnerToSharedThreadId =
+          buildNativeOwnerToSharedThreadMap(sharedSessions);
         const existingThreads = filterDeletedSummaries(
           threadsByWorkspace[workspace.id] ?? [],
         );
@@ -1126,6 +1130,7 @@ export function useThreadActions({
             workspace.id,
             mappedTitles,
             getCustomName,
+            nativeOwnerToSharedThreadId,
           );
         }
         if (sharedSessions.length > 0) {
@@ -1139,6 +1144,11 @@ export function useThreadActions({
           });
           allSummaries = Array.from(merged.values()).sort(
             (a, b) => b.updatedAt - a.updatedAt,
+          );
+          // Shared 合并后再次 remap：兜底 cache miss / 其它路径写入的 parent
+          allSummaries = remapThreadParentsToSharedOwners(
+            allSummaries,
+            nativeOwnerToSharedThreadId,
           );
         }
         const archivedSessionMap = await archivedSessionMapPromise;
@@ -1401,6 +1411,11 @@ export function useThreadActions({
               latestThreadsByWorkspaceRef.current[workspace.id] ?? [];
             const baselineSummaries =
               currentSnapshot.length > 0 ? currentSnapshot : allSummaries;
+            const sharedSessionsForRemap = normalizeSharedSessionSummaries(
+              await listSharedSessionsService(workspace.id).catch(() => []),
+            );
+            const nativeOwnerToShared =
+              buildNativeOwnerToSharedThreadMap(sharedSessionsForRemap);
             const nextSummaries = mergeGrokSessionSummaries(
               baselineSummaries,
               normalizedGrokSessions.filter(
@@ -1410,6 +1425,7 @@ export function useThreadActions({
               workspace.id,
               mappedTitles,
               getCustomName,
+              nativeOwnerToShared,
             );
             const visibleNextSummaries = applySessionArchiveState(
               nextSummaries,
@@ -1425,7 +1441,8 @@ export function useThreadActions({
                   prev.name === entry.name &&
                   prev.updatedAt === entry.updatedAt &&
                   prev.engineSource === entry.engineSource &&
-                  prev.threadKind === entry.threadKind
+                  prev.threadKind === entry.threadKind &&
+                  (prev.parentThreadId ?? null) === (entry.parentThreadId ?? null)
                 );
               });
             if (!unchanged) {

@@ -19,6 +19,7 @@ import { BashToolBlock } from './BashToolBlock';
 import { SearchToolBlock } from './SearchToolBlock';
 import { McpToolBlock } from './McpToolBlock';
 import { RequestUserInputSubmittedBlock } from './RequestUserInputSubmittedBlock';
+import { isSubagentTool, SubagentSquadGrid } from '../../../subagent-ui';
 
 interface ToolBlockRendererProps {
   item: Extract<ConversationItem, { kind: 'tool' }>;
@@ -68,6 +69,11 @@ export const ToolBlockRenderer = memo(function ToolBlockRenderer({
   // 0. 已提交的 request user input 历史卡片
   if (item.toolType === 'requestUserInputSubmitted') {
     return <RequestUserInputSubmittedBlock item={item} />;
+  }
+
+  // 0.1 subAgent：未进入 group 时的单卡兜底（persona 卡片）
+  if (isSubagentTool(item)) {
+    return <SubagentSquadGrid items={[item]} />;
   }
 
   // ExitPlanMode handoff must keep its dedicated card even if the runtime

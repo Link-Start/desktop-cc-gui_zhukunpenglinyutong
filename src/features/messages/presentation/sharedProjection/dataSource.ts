@@ -177,11 +177,28 @@ function enrichSharedToolConversationItem(input: {
     ...(turnId ? { turnId } : {}),
   });
 
+  // Shared projector 常把 spawn 参数里的 description 顶成 title；保留可识别的 toolType。
+  const looksLikeGrokSpawn =
+    /spawn_subagent/i.test(toolType) ||
+    /spawn[_\s-]?subagent/i.test(title) ||
+    (/^subagent\b/i.test(title) &&
+      (detail.includes("subagent_type") ||
+        detail.includes("subagentType") ||
+        detail.includes("background")));
+  const resolvedToolType = looksLikeGrokSpawn
+    ? "spawn_subagent"
+    : toolType || "toolCall";
+  const resolvedTitle = looksLikeGrokSpawn
+    ? title && !/^spawn/i.test(title)
+      ? title // 保留 description 作展示文案；识别靠 toolType
+      : "Spawn Subagent"
+    : title || toolType || "Tool";
+
   const base: Extract<ConversationItem, { kind: "tool" }> = {
     id,
     kind: "tool",
-    toolType: toolType || "toolCall",
-    title: title || toolType || "Tool",
+    toolType: resolvedToolType,
+    title: resolvedTitle,
     detail,
     ...(status ? { status } : {}),
     ...(output ? { output } : {}),

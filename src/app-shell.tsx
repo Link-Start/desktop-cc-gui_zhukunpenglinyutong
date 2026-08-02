@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useThreads } from "./features/threads/hooks/useThreads";
+import { resolveIsSharedSession } from "./features/shared-session/utils/sharedSessionIdentity";
 import { useGitPanelController } from "./features/app/hooks/useGitPanelController";
 import { useGitRemote } from "./features/git/hooks/useGitRemote";
 import { useGitRepoScan } from "./features/git/hooks/useGitRepoScan";
@@ -1181,7 +1182,9 @@ export function AppShell() {
     hasPendingUserInput,
     steerEnabled: appSettings.experimentalSteerEnabled,
     activeEngine,
-    isSharedSession: activeThreadSummary?.threadKind === "shared",
+    // 身份 id-first（fix-shared-session-identity-id-first）：
+    // shared: 前缀是 hard gate，threadKind 投影仅兜底。
+    isSharedSession: resolveIsSharedSession(activeThreadId, activeThreadSummary),
     resolveCanonicalThreadId,
     connectWorkspace,
     startThreadForWorkspace,

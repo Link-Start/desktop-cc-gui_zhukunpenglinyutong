@@ -253,16 +253,16 @@ pub(crate) struct SharedSessionSnapshotEntry {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct SharedSessionSummary {
-    id: String,
-    thread_id: String,
-    title: String,
-    updated_at: u64,
-    selected_engine: EngineType,
-    thread_kind: String,
-    engine_source: EngineType,
-    selected_engine_label: String,
-    native_thread_ids: Vec<String>,
+pub(crate) struct SharedSessionSummary {
+    pub(crate) id: String,
+    pub(crate) thread_id: String,
+    pub(crate) title: String,
+    pub(crate) updated_at: u64,
+    pub(crate) selected_engine: EngineType,
+    pub(crate) thread_kind: String,
+    pub(crate) engine_source: EngineType,
+    pub(crate) selected_engine_label: String,
+    pub(crate) native_thread_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -978,7 +978,7 @@ pub(crate) fn read_latest_shared_session_snapshot(
     Ok(latest)
 }
 
-fn list_workspace_shared_sessions(
+pub(crate) fn list_workspace_shared_sessions(
     workspace_id: &str,
     event_writer: Option<&crate::shared_event_log::SharedEventWriter>,
 ) -> Result<Vec<SharedSessionSummary>, String> {
@@ -1560,6 +1560,21 @@ pub async fn sync_shared_session_snapshot(
     }))
 }
 
+/// Deletes shared session storage for a workspace.
+/// Returns `Ok(true)` when files were removed, `Ok(false)` when already absent.
+pub(crate) fn delete_shared_session_files(
+    workspace_id: &str,
+    thread_id: &str,
+) -> Result<bool, String> {
+    let shared_session_id = parse_shared_session_id(thread_id)?;
+    let path = shared_session_dir(workspace_id, &shared_session_id)?;
+    if !path.exists() {
+        return Ok(false);
+    }
+    std::fs::remove_dir_all(&path).map_err(|error| error.to_string())?;
+    Ok(true)
+}
+
 #[tauri::command]
 pub async fn delete_shared_session(
     workspace_id: String,
@@ -1567,13 +1582,8 @@ pub async fn delete_shared_session(
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
     ensure_known_workspace(&state.workspaces, &workspace_id).await?;
-    let shared_session_id = parse_shared_session_id(&thread_id)?;
-    let path = shared_session_dir(&workspace_id, &shared_session_id)?;
-    if !path.exists() {
-        return Ok(json!({ "deleted": false, "threadId": thread_id }));
-    }
-    std::fs::remove_dir_all(&path).map_err(|error| error.to_string())?;
-    Ok(json!({ "deleted": true, "threadId": thread_id }))
+    let deleted = delete_shared_session_files(&workspace_id, &thread_id)?;
+    Ok(json!({ "deleted": deleted, "threadId": thread_id }))
 }
 
 #[derive(Debug, Clone, Deserialize)]

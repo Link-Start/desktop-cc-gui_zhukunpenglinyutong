@@ -1,4 +1,5 @@
 import type { ThreadSummary } from "../../types";
+import { resolveIsSharedSession } from "../shared-session/utils/sharedSessionIdentity";
 import {
   QUICK_SWITCHER_RECENT_LIMIT,
   type QuickSwitcherSession,
@@ -28,7 +29,8 @@ export function projectQuickSwitcherSessionGroups(
       title: thread.name,
       updatedAt: thread.updatedAt,
       engine: thread.selectedEngine ?? thread.engineSource ?? "codex",
-      isShared: thread.threadKind === "shared",
+      // id-first：与侧栏/Topbar 一致，避免 kind 投影丢失时显示成 CLI 图标
+      isShared: resolveIsSharedSession(thread.id, thread),
     }));
 
   const groups = new Map<string, QuickSwitcherSessionGroup>();

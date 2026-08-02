@@ -77,6 +77,8 @@ import {
   buildSessionFolderNavItems,
   buildWorkspaceOptions,
   normalizeEngineType,
+  isSharedCatalogEntry,
+  resolveCatalogEntryEngineIcon,
   resolveWorkspaceSessionDisplayTitle,
   type GroupedWorkspace,
   type SessionFolderCountSummary,
@@ -89,6 +91,11 @@ import {
   listWorkspaceSessionFolders,
   resumeThread,
 } from "../../../../../services/tauri";
+import {
+  loadSharedProjection,
+  loadSharedSession,
+} from "../../../../shared-session/services/sharedSessions";
+import { createSharedHistoryLoader } from "../../../../threads/loaders/sharedHistoryLoader";
 
 type NoticeState =
   | { kind: "success"; text: string }
@@ -729,6 +736,7 @@ export function SessionManagementSection({
       claude: t("settings.projectSessionEngineClaude"),
       gemini: t("settings.projectSessionEngineGemini"),
       opencode: t("settings.projectSessionEngineOpencode"),
+      shared: t("settings.projectSessionEngineShared"),
     }),
     [t],
   );
@@ -948,11 +956,29 @@ export function SessionManagementSection({
   const loadSessionCurtainItems = async (
     entry: WorkspaceSessionCatalogEntry,
   ) => {
+    const engineRaw = entry.engine.trim().toLowerCase();
     const engine = normalizeEngineType(entry.engine);
     const nativeSessionId = resolveNativeSessionId(entry, engine);
     const ownerWorkspace =
       workspaces.find((workspace) => workspace.id === entry.workspaceId) ??
       null;
+
+    if (
+      engineRaw === "shared" ||
+      entry.threadKind === "shared" ||
+      entry.sessionId.startsWith("shared:")
+    ) {
+      const threadId = entry.sessionId.startsWith("shared:")
+        ? entry.sessionId
+        : `shared:${nativeSessionId || entry.sessionId}`;
+      const loader = createSharedHistoryLoader({
+        workspaceId: entry.workspaceId,
+        loadSharedSession,
+        loadSharedProjection,
+      });
+      const snapshot = await loader.load(threadId);
+      return snapshot.items;
+    }
 
     if ((engine === "claude" || engine === "gemini") && !ownerWorkspace?.path) {
       throw new Error(
@@ -1140,7 +1166,11 @@ export function SessionManagementSection({
       error: null,
       notice: null,
     });
-    if (normalizeEngineType(entry.engine) === "codex") {
+    // Shared catalog engine normalizes to codex for icons; keep curtain load separate.
+    if (
+      !isSharedCatalogEntry(entry) &&
+      normalizeEngineType(entry.engine) === "codex"
+    ) {
       startCodexSessionCurtainLoad(entry, loadSeq);
       return;
     }
@@ -1185,7 +1215,11 @@ export function SessionManagementSection({
         ? { ...current, isLoading: true, error: null, notice: null }
         : current,
     );
-    if (normalizeEngineType(entry.engine) === "codex") {
+    // Shared catalog engine normalizes to codex for icons; keep curtain load separate.
+    if (
+      !isSharedCatalogEntry(entry) &&
+      normalizeEngineType(entry.engine) === "codex"
+    ) {
       startCodexSessionCurtainLoad(entry, loadSeq);
       return;
     }
@@ -2003,6 +2037,9 @@ export function SessionManagementSection({
                         <SelectItem value="opencode">
                           {engineFilterLabel.opencode}
                         </SelectItem>
+                        <SelectItem value="shared">
+                          {engineFilterLabel.shared}
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   ) : (
@@ -2475,7 +2512,7 @@ export function SessionManagementSection({
               <div className="settings-session-curtain-title-wrap">
                 <span className="settings-session-curtain-engine" aria-hidden>
                   <EngineIcon
-                    engine={normalizeEngineType(sessionCurtain.entry.engine)}
+                    engine={resolveCatalogEntryEngineIcon(sessionCurtain.entry)}
                     size={16}
                   />
                 </span>
@@ -2485,6 +2522,14 @@ export function SessionManagementSection({
                       sessionCurtain.entry,
                       t("settings.projectSessionItemUntitled"),
                     )}
+                    {isSharedCatalogEntry(sessionCurtain.entry) ? (
+                      <span className="settings-session-curtain-shared-tag">
+                        {t("settings.sessionManagementBadgeShared")}
+                        {sessionCurtain.entry.sourceLabel
+                          ? ` · ${sessionCurtain.entry.sourceLabel}`
+                          : ""}
+                      </span>
+                    ) : null}
                   </div>
                   <div className="settings-session-curtain-subtitle">
                     {sessionCurtain.entry.workspaceLabel ??

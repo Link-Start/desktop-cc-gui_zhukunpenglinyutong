@@ -70,17 +70,73 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
     expect(result.phases[0]!.hiddenItemIds).toEqual(["r1", "t1"]);
   });
 
-  it("does not collapse a single process step", () => {
-    const items = [user("u1"), tool("t1"), assistant("a1", "最终结论")];
+  it("keeps Agent/Task subagent tools visible when process phase collapses", () => {
+    const agentTool: ConversationItem = {
+      id: "agent-1",
+      kind: "tool",
+      toolType: "agent",
+      title: "Tool: Agent",
+      detail: JSON.stringify({ description: "并行排查", subagent_type: "explore" }),
+      status: "completed",
+    };
+    const items: ConversationItem[] = [
+      user("u1"),
+      reasoning("r1"),
+      tool("t1", "completed", 500),
+      agentTool,
+      assistant("a1", "最终结论"),
+    ];
     const result = resolveCollapsedTimelineItems({
       activeEngine: "claude",
       timelineSourceItems: items,
     });
-    expect(result.phases).toEqual([]);
-    expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "t1", "a1"]);
+    // reasoning + read 折叠进 chip；Agent 卡片常驻幕布
+    expect(result.timelineItems.map((item) => item.id)).toEqual([
+      "u1",
+      "agent-1",
+      "a1",
+    ]);
+    expect(result.phases).toHaveLength(1);
+    expect(result.phases[0]?.hiddenItemIds).toEqual(["r1", "t1"]);
+    expect(result.phases[0]?.hiddenItemIds).not.toContain("agent-1");
   });
 
-  it("creates a separate chip for each assistant prose phase", () => {
+  it("collapses a single process step including lone reasoning into the chip", () => {
+    const toolOnly = resolveCollapsedTimelineItems({
+      activeEngine: "claude",
+      timelineSourceItems: [user("u1"), tool("t1"), assistant("a1", "最终结论")],
+    });
+    expect(toolOnly.phases).toHaveLength(1);
+    expect(toolOnly.phases[0]).toMatchObject({
+      phaseKey: "a1",
+      count: 1,
+      breakdown: { reasoningCount: 0, toolCount: 1, exploreCount: 0 },
+      hiddenItemIds: ["t1"],
+      expanded: false,
+    });
+    expect(toolOnly.timelineItems.map((item) => item.id)).toEqual(["u1", "a1"]);
+
+    // Shared/Native simple Q&A: reasoning only → "已处理 · 思考 1 次", no orphan 思考过程 row.
+    const reasoningOnly = resolveCollapsedTimelineItems({
+      activeEngine: "claude",
+      timelineSourceItems: [
+        user("u2", "你是谁"),
+        reasoning("r-alone"),
+        assistant("a2", "我是助手"),
+      ],
+    });
+    expect(reasoningOnly.phases).toHaveLength(1);
+    expect(reasoningOnly.phases[0]).toMatchObject({
+      phaseKey: "a2",
+      count: 1,
+      breakdown: { reasoningCount: 1, toolCount: 0, exploreCount: 0 },
+      hiddenItemIds: ["r-alone"],
+      expanded: false,
+    });
+    expect(reasoningOnly.timelineItems.map((item) => item.id)).toEqual(["u2", "a2"]);
+  });
+
+  it("merges the whole user-turn process onto the final assistant (no orphan)", () => {
     const items: ConversationItem[] = [
       user("u1"),
       tool("t1"),
@@ -111,16 +167,74 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
       timelineSourceItems: items,
     });
 
-    // t1 alone above a1 is a single step → no phase; t2+t3 above a2 → collapsed phase.
+    // Turn-final ownership (fig3): t1+t2+t3 fold into a2; a1 plan text stays;
+    // trailing t4 (no following prose) stays live.
     expect(result.timelineItems.map((item) => item.id)).toEqual([
       "u1",
-      "t1",
       "a1",
       "a2",
       "t4",
     ]);
     expect(result.phases.map((phase) => phase.phaseKey)).toEqual(["a2"]);
+    expect(result.phases[0]!.hiddenItemIds).toEqual(["t1", "t2", "t3"]);
     expect(result.phases[0]!.count).toBeGreaterThanOrEqual(2);
+  });
+
+  it("absorbs leading orphan reasoning across mid-turn assistant plan text", () => {
+    // Native Claude/Grok stream shape (fig1/fig2):
+    //   reasoning → assistant(plan) → tools/reasoning → assistant(final)
+    // Shared history already projects process-before-prose (fig3) without the orphan.
+    const items = [
+      user("u1", "简单项目分析"),
+      reasoning("r-orphan"),
+      assistant("a-plan", "先做快速项目体检：读入口文档与目录结构。"),
+      reasoning("r2"),
+      tool("t1", "completed", 100),
+      tool("t2", "completed", 200),
+      assistant("a-final", "mossx / ccgui - 简单项目分析"),
+    ];
+    const collapsed = resolveCollapsedTimelineItems({
+      activeEngine: "claude",
+      timelineSourceItems: items,
+    });
+
+    expect(collapsed.phases).toHaveLength(1);
+    expect(collapsed.phases[0]).toMatchObject({
+      phaseKey: "a-final",
+      insertBeforeItemId: "r-orphan",
+      expanded: false,
+      breakdown: { reasoningCount: 2, toolCount: 2, exploreCount: 0 },
+    });
+    expect(collapsed.phases[0]!.hiddenItemIds).toEqual([
+      "r-orphan",
+      "r2",
+      "t1",
+      "t2",
+    ]);
+    // Orphan reasoning + tools leave the surface; plan + final stay.
+    expect(collapsed.timelineItems.map((item) => item.id)).toEqual([
+      "u1",
+      "a-plan",
+      "a-final",
+    ]);
+    expect(collapsed.timelineItems.some((item) => item.id === "r-orphan")).toBe(
+      false,
+    );
+
+    const expanded = resolveCollapsedTimelineItems({
+      activeEngine: "claude",
+      expandedPhaseKeys: new Set(["a-final"]),
+      timelineSourceItems: items,
+    });
+    expect(expanded.timelineItems.map((item) => item.id)).toEqual([
+      "u1",
+      "r-orphan",
+      "a-plan",
+      "r2",
+      "t1",
+      "t2",
+      "a-final",
+    ]);
   });
 
   it("does not collapse when assistant message exists but text is still empty", () => {
@@ -134,32 +248,45 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
     expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "t1", "a1"]);
   });
 
-  it("remounts only the expanded phase process rows", () => {
+  it("remounts the turn-final phase when expanded", () => {
     const items: ConversationItem[] = [
       user("u1"),
       reasoning("r1"),
       tool("t1"),
-      assistant("a1", "最终结论"),
+      assistant("a1", "计划说明"),
       reasoning("r2"),
       tool("t2"),
-      assistant("a2", "下一段"),
+      assistant("a2", "最终结论"),
     ];
-    const result = resolveCollapsedTimelineItems({
+    const collapsed = resolveCollapsedTimelineItems({
       activeEngine: "claude",
-      expandedPhaseKeys: new Set(["a1"]),
       timelineSourceItems: items,
     });
+    // Single turn-final phase on a2 owns r1/t1/r2/t2; a1 stays as plan text.
+    expect(collapsed.phases.map((phase) => phase.phaseKey)).toEqual(["a2"]);
+    expect(collapsed.timelineItems.map((item) => item.id)).toEqual([
+      "u1",
+      "a1",
+      "a2",
+    ]);
 
-    // a1 expanded → r1/t1 remounted; a2 collapsed → r2/t2 unmounted.
-    expect(result.timelineItems.map((item) => item.id)).toEqual([
+    const expanded = resolveCollapsedTimelineItems({
+      activeEngine: "claude",
+      expandedPhaseKeys: new Set(["a2"]),
+      timelineSourceItems: items,
+    });
+    expect(expanded.phases.find((phase) => phase.phaseKey === "a2")?.expanded).toBe(
+      true,
+    );
+    expect(expanded.timelineItems.map((item) => item.id)).toEqual([
       "u1",
       "r1",
       "t1",
       "a1",
+      "r2",
+      "t2",
       "a2",
     ]);
-    expect(result.phases.find((phase) => phase.phaseKey === "a1")?.expanded).toBe(true);
-    expect(result.phases.find((phase) => phase.phaseKey === "a2")?.expanded).toBe(false);
   });
 
   it("strips pure shell noise and skips empty noise-only phases", () => {

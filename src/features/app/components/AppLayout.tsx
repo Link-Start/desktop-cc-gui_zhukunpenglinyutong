@@ -24,6 +24,8 @@ type AppLayoutProps = {
   isEditorFileMaximized: boolean;
   hasActivePlan: boolean;
   activeWorkspace: boolean;
+  activeWorkspaceId?: string | null;
+  activeWorkspacePath?: string | null;
   sidebarNode: ReactNode;
   messagesNode: ReactNode;
   composerNode: ReactNode;
@@ -78,6 +80,8 @@ export const AppLayout = memo(function AppLayout({
   isEditorFileMaximized,
   hasActivePlan,
   activeWorkspace,
+  activeWorkspaceId = null,
+  activeWorkspacePath = null,
   sidebarNode,
   messagesNode,
   composerNode,
@@ -144,6 +148,8 @@ export const AppLayout = memo(function AppLayout({
       gitDiffPanelNode={gitDiffPanelNode}
       planPanelNode={planPanelNode}
       composerNode={composerNode}
+      activeWorkspaceId={activeWorkspaceId}
+      activeWorkspacePath={activeWorkspacePath}
       runtimeConsoleDockNode={runtimeConsoleDockNode}
       terminalDockNode={terminalDockNode}
       debugPanelNode={debugPanelNode}
