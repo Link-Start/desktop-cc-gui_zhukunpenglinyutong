@@ -7,8 +7,8 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-30.md`
-- **Total Sessions**: 1299
+- **Active File**: `journal-31.md`
+- **Total Sessions**: 1300
 - **Last Active**: 2026-08-03
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-30.md` | ~1985 | Active |
+| `journal-31.md` | ~42 | Active |
+| `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
@@ -58,6 +59,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1300 | 2026-08-03 | Codex 续接过滤 control 角色 | `c2c45e269` | `cxn-version-0.7.15` |
 | 1299 | 2026-08-03 | 续接成功默认选中目标模型 | `c08facc4e` | `cxn-version-0.7.15` |
 | 1298 | 2026-08-03 | 修复 React 185 Claude repair 更新环 | `a4166c03e` | `cxn-version-0.7.15` |
 | 1297 | 2026-08-03 | Native 续接取消还原来源供应商 | `ad8129cac` | `cxn-version-0.7.15` |
