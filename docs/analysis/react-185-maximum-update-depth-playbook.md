@@ -156,6 +156,22 @@
 | **关联历史** | C-20260801-01/02 之后仍在含修复的 `App-Bn4fZysL` 上复现 → Composer 侧 AP-02 残余，**不是** effort 双写回退 |
 | **Review 要点** | 勿把 plan null 说成已证实的唯一根因；production 栈仍缺 1:1 复现 fixture，靠 AP-02 路径回归 + 手测 |
 
+### C-20260802-01 — CollapsibleReveal useLayoutEffect 无条件 setState 同步闭环
+
+| 字段 | 内容 |
+|------|------|
+| **状态** | fixed |
+| **Fix commit** | 待提交 |
+| **现象** | Settings 页 Session Curtain 打开时全局 ErrorBoundary；`errorClass: react-maximum-update-depth`；两次报告间隔约 30s |
+| **Bundle / 栈** | componentStack `PHt`=ConversationRowErrorBoundary → `FHt`=ErrorBoundary；栈帧落在 CollapsibleReveal → ConversationRow → TimelineRowRenderer |
+| **Owner** | `src/components/common/CollapsibleReveal.tsx` |
+| **触发条件** | Settings 页 `onSessionsMutated` → `threadsByWorkspace` 更新 → Conversation View 重渲染 → CollapsibleReveal `useLayoutEffect` 无条件 `setState` → 与父组件渲染循环形成 `parent render → layout effect → child state → parent render` 同步闭环 |
+| **根因（AP-02）** | `CollapsibleReveal` 的 `useLayoutEffect` 在 deps 未变时仍无条件调用 `setShouldRender(true)` / `setIsOpen(true/false)` / `setPlayEnter()`。`useLayoutEffect` 是同步 flush，state 更新在同一 commit 内完成，与上层组件的渲染循环形成闭环后迅速达到 React 上限 |
+| **修复** | 添加 `prevOpenRef` / `prevKeepMountedRef` 守卫，只在值真正变化时调用 setState；`setPlayEnter` 改用 functional update `prev === next ? prev : next` 保证引用稳定性 |
+| **回归** | `CollapsibleReveal.test.tsx` 4 个测试通过；未新增 regression（修复前已有 1 个无关测试失败在 `Messages.explore.test.tsx`） |
+| **防御模式** | 与 C-20260801-03 Composer 修复完全同构：`prevRef` 守卫跳过等价 state update + functional update 保持引用稳定 |
+| **Review 要点** | 本次修复与 `637cb3561`（Composer #185）采用相同防御模式；应警惕任何在 `useLayoutEffect` 中无条件 setState 的组件 |
+
 ---
 
 ## 6. 新 Case 追加模板
@@ -213,3 +229,4 @@ OpenSpec / 代码中已出现的 #185 类修复（便于对照，**不等于本 
 | 2026-08-01 | 校准：C-20260801-01 补 fix commit `4c5e97c8e`；挂 analysis 索引 |
 | 2026-08-01 | C-20260801-02：B1 layout self-deps 关闭；freeform repair 语义钉死；Collapsible 测量加固 |
 | 2026-08-02 | C-20260801-03：`App-Bn4fZysL` Composer 栈残余——plan null 收敛 + Composer 引用稳定 setState |
+| 2026-08-02 | C-20260802-01：CollapsibleReveal `useLayoutEffect` 无条件 setState——prevRef 守卫 + functional update 引用稳定 |

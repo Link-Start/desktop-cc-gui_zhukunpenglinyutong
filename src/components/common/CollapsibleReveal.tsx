@@ -83,21 +83,42 @@ export function CollapsibleReveal({
     }
   };
 
+  // 追踪已生效的 open 状态，避免 useLayoutEffect 内无条件 setState 形成
+  // 「parent render → layout effect → child state → parent render」的同步闭环。
+  // 与 Composer #185 修复同一模式：值未变时跳过 setState，切断自反馈链。
+  const prevOpenRef = useRef(open);
+  const prevKeepMountedRef = useRef(keepMounted);
+
   useLayoutEffect(() => {
+    const prevOpen = prevOpenRef.current;
+    const prevKeepMounted = prevKeepMountedRef.current;
+    prevOpenRef.current = open;
+    prevKeepMountedRef.current = keepMounted;
+
     clearCloseFallback();
 
     if (open) {
       const remounting = !wasRenderedRef.current;
-      setShouldRender(true);
-      setIsOpen(true);
+
+      // Only set state when the value actually changes (#185 defense).
+      if (!wasRenderedRef.current) {
+        setShouldRender(true);
+      }
+      if (!prevOpen || prevKeepMounted !== keepMounted) {
+        setIsOpen(true);
+      }
       wasRenderedRef.current = true;
+
       // Only remounts need enter keyframes; keepMounted open uses CSS transition.
-      setPlayEnter(remounting && !keepMounted);
+      const nextPlayEnter = remounting && !keepMounted;
+      setPlayEnter((prev) => (prev === nextPlayEnter ? prev : nextPlayEnter));
       return clearCloseFallback;
     }
 
-    setIsOpen(false);
-    setPlayEnter(false);
+    if (prevOpen) {
+      setIsOpen(false);
+    }
+    setPlayEnter((prev) => (prev ? false : prev));
     if (keepMounted) {
       wasRenderedRef.current = true;
       return clearCloseFallback;
@@ -105,7 +126,9 @@ export function CollapsibleReveal({
 
     const node = panelRef.current;
     if (!node || !wasRenderedRef.current) {
-      setShouldRender(false);
+      if (wasRenderedRef.current) {
+        setShouldRender(false);
+      }
       wasRenderedRef.current = false;
       return clearCloseFallback;
     }
