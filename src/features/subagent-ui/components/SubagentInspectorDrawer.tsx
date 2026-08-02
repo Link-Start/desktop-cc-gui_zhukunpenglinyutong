@@ -3,10 +3,15 @@ import { useTranslation } from "react-i18next";
 import X from "lucide-react/dist/esm/icons/x";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useActiveCanvasSelector } from "../../layout/hooks/activeCanvasStore";
 import {
   closeSubagentInspector,
   useSubagentInspectorSelection,
 } from "../hooks/useSubagentInspectorStore";
+import {
+  isClaudeAsyncAgentLaunchOutput,
+  resolveSubagentSessionThreadId,
+} from "../utils/subagentViewModel";
 import { PersonaAvatar } from "./PersonaAvatar";
 import { SubagentProgressBar } from "./SubagentProgressBar";
 import { SubagentSessionCanvas } from "./SubagentSessionCanvas";
@@ -27,6 +32,10 @@ export const SubagentInspectorDrawer = memo(function SubagentInspectorDrawer({
 }: SubagentInspectorDrawerProps) {
   const { t } = useTranslation();
   const card = useSubagentInspectorSelection();
+  const parentThreadId = useActiveCanvasSelector((snapshot) => snapshot.threadId);
+  const nativeThreadIds = useActiveCanvasSelector(
+    (snapshot) => snapshot.activeNativeThreadIds,
+  );
 
   useEffect(() => {
     if (!card) {
@@ -45,8 +54,36 @@ export const SubagentInspectorDrawer = memo(function SubagentInspectorDrawer({
     if (!card) {
       return null;
     }
-    return card.sessionThreadId?.trim() || card.taskOutput?.threadId?.trim() || null;
-  }, [card]);
+    const fromCard =
+      card.sessionThreadId?.trim() || card.taskOutput?.threadId?.trim() || null;
+    // 已是合法引擎会话 id
+    if (
+      fromCard &&
+      (fromCard.startsWith("claude:") ||
+        fromCard.startsWith("grok:") ||
+        fromCard.startsWith("kimi:") ||
+        fromCard.startsWith("gemini:") ||
+        fromCard.startsWith("opencode:") ||
+        fromCard.startsWith("shared:"))
+    ) {
+      return fromCard;
+    }
+    // Shared Claude Agent：card 可能只存了裸 agentId，运行时再拼 claude:subagent:…
+    const resolved = resolveSubagentSessionThreadId({
+      parentThreadId: parentThreadId,
+      agentId: card.agentId || fromCard,
+      outputText: card.outputText,
+      nativeThreadIds,
+      explicitThreadId:
+        fromCard && fromCard.includes(":") ? fromCard : null,
+    });
+    return resolved;
+  }, [card, nativeThreadIds, parentThreadId]);
+
+  const isClaudeLaunchOnlyFallback =
+    card &&
+    !sessionThreadId &&
+    isClaudeAsyncAgentLaunchOutput(card.outputText);
 
   if (!card) {
     return null;
@@ -99,6 +136,18 @@ export const SubagentInspectorDrawer = memo(function SubagentInspectorDrawer({
             workspaceId={workspaceId}
             workspacePath={workspacePath}
           />
+        ) : isClaudeLaunchOnlyFallback ? (
+          <div className="subagent-session-canvas-status">
+            {t("subagentUi.claudeLaunchNoSession", {
+              defaultValue:
+                "已识别 Claude Agent 启动回执，但尚未关联到 claude:subagent 会话（native owner 可能仍在绑定/索引）。请稍后重试，或从左侧会话树打开对应子代理。",
+            })}
+            {card.agentId ? (
+              <span className="subagent-session-canvas-error-detail">
+                agentId: {card.agentId}
+              </span>
+            ) : null}
+          </div>
         ) : card.outputText || card.description ? (
           <div className="subagent-session-canvas-fallback">
             <div className="subagent-inspector-label">

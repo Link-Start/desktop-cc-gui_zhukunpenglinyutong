@@ -26,13 +26,46 @@ describe("isSubagentTool cross-engine", () => {
     ).toBe(true);
   });
 
-  it("matches Grok Subagent N titles", () => {
+  it("matches Codex spawn_agent underscore titles (DeepSeek / new protocol)", () => {
+    expect(
+      isSubagentTool({ toolType: "collabToolCall", title: "Collab: spawn_agent" }),
+    ).toBe(true);
+    expect(
+      isCollabSpawnTool({ toolType: "collabToolCall", title: "Collab: spawn_agent" }),
+    ).toBe(true);
+    expect(
+      isCollabLifecycleTool({ toolType: "collabToolCall", title: "Collab: wait_agent" }),
+    ).toBe(true);
+    expect(
+      isCollabLifecycleTool({ toolType: "collabToolCall", title: "Collab: close_agent" }),
+    ).toBe(true);
+    expect(
+      isSubagentTool({ toolType: "collabToolCall", title: "Collab: wait_agent" }),
+    ).toBe(false);
+  });
+
+  it("matches Grok Subagent N titles and spawn_subagent", () => {
     expect(
       isSubagentTool({ toolType: "mcpToolCall", title: "Subagent 1 问候测试" }),
     ).toBe(true);
     expect(
       isSubagentTool({ toolType: "tool", title: "Subagent 2 问候测试" }),
     ).toBe(true);
+    expect(
+      isSubagentTool({ toolType: "spawn_subagent", title: "Spawn Subagent" }),
+    ).toBe(true);
+    expect(
+      isSubagentTool({ toolType: "tool", title: "Spawn Subagent" }),
+    ).toBe(true);
+  });
+
+  it("rejects Grok subagent output poller", () => {
+    expect(
+      isSubagentTool({
+        toolType: "get_command_or_subagent_output",
+        title: "get_command_or_subagent_output",
+      }),
+    ).toBe(false);
   });
 
   it("matches Kimi agent swarm titles", () => {

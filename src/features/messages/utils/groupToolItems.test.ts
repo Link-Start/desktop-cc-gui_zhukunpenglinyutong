@@ -219,12 +219,19 @@ describe("groupToolItems", () => {
     }
   });
 
-  it("groups Grok Subagent titles into subagentGroup", () => {
+  it("groups Grok Spawn Subagent into subagentGroup and skips output poller", () => {
     const entries = groupToolItems([
-      createToolItem("s1", "Subagent 1 问候测试", "mcpToolCall"),
-      createToolItem("s2", "Subagent 2 问候测试", "mcpToolCall"),
+      createToolItem("s1", "Spawn Subagent", "spawn_subagent"),
+      createToolItem("s2", "Spawn Subagent", "spawn_subagent"),
+      createToolItem(
+        "poll",
+        "get_command_or_subagent_output",
+        "get_command_or_subagent_output",
+      ),
     ]);
-    expect(entries).toHaveLength(1);
-    expect(entries[0]?.kind).toBe("subagentGroup");
+    expect(entries.map((entry) => entry.kind)).toEqual(["subagentGroup", "item"]);
+    if (entries[0]?.kind === "subagentGroup") {
+      expect(entries[0].items).toHaveLength(2);
+    }
   });
 });

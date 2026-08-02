@@ -11,7 +11,7 @@ import {
   assignPersonasForSquad,
   type AssignedPersona,
 } from "./personaAssign";
-import { isCollabSpawnTool } from "./isSubagentTool";
+import { isCollabSpawnTool, isGrokSpawnSubagentTool } from "./isSubagentTool";
 
 export type SubagentCardStatus = "running" | "completed" | "error";
 
@@ -72,34 +72,91 @@ function uniqueStrings(values: string[]): string[] {
   return result;
 }
 
+/**
+ * Codex 官方 collab spawn 的 message 常为 Fernet 密文（gAAAAA…），不可作 UI 文案。
+ */
+export function isOpaqueCiphertext(value: string | null | undefined): boolean {
+  const v = (value ?? "").trim();
+  if (!v) {
+    return false;
+  }
+  if (v.startsWith("gAAAAA")) {
+    return true;
+  }
+  // 长 base64 且无空白/中文：几乎肯定是密文或 token
+  if (
+    v.length >= 64 &&
+    !/\s/.test(v) &&
+    !/[\u4e00-\u9fff]/.test(v) &&
+    /^[A-Za-z0-9+/=_:-]+$/.test(v)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function pickReadableString(...candidates: unknown[]): string {
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string") {
+      continue;
+    }
+    const trimmed = candidate.trim();
+    if (!trimmed || isOpaqueCiphertext(trimmed)) {
+      continue;
+    }
+    return trimmed;
+  }
+  return "";
+}
+
 function extractDescription(args: Record<string, unknown> | null, item: ToolItem): string {
-  const fromArgs =
-    (typeof args?.description === "string" && args.description) ||
-    (typeof args?.prompt === "string" && args.prompt) ||
-    (typeof args?.prompt_template === "string" && args.prompt_template) ||
-    (typeof args?.promptTemplate === "string" && args.promptTemplate) ||
-    (typeof args?.query === "string" && args.query) ||
-    (typeof args?.task === "string" && args.task) ||
-    "";
-  if (fromArgs.trim()) {
-    return fromArgs.trim().slice(0, 160);
+  // 优先可读字段；task_name 是 Codex spawn_agent 明文任务名（message 常为密文）
+  const fromArgs = pickReadableString(
+    args?.description,
+    args?.task_name,
+    args?.taskName,
+    args?.agent_nickname,
+    args?.agentNickname,
+    args?.name,
+    args?.label,
+    args?.prompt,
+    args?.prompt_template,
+    args?.promptTemplate,
+    args?.query,
+    args?.task,
+    args?.message,
+  );
+  if (fromArgs) {
+    return fromArgs.slice(0, 160);
   }
   const title = typeof item.title === "string" ? item.title.trim() : "";
   // Grok: "Subagent 1 问候测试" → 去掉前缀留描述
   const subagentTitle = title.replace(/^subagent\s*\d+\s*/i, "").trim();
-  if (subagentTitle && subagentTitle.toLowerCase() !== title.toLowerCase()) {
+  if (
+    subagentTitle &&
+    subagentTitle.toLowerCase() !== title.toLowerCase() &&
+    !isOpaqueCiphertext(subagentTitle)
+  ) {
     return subagentTitle.slice(0, 160);
   }
   // Kimi swarm: "Launching agent swarm: xxx"
   const swarmTitle = title.replace(/^launching\s+agent\s+swarm:\s*/i, "").trim();
-  if (swarmTitle && swarmTitle.toLowerCase() !== title.toLowerCase()) {
+  if (
+    swarmTitle &&
+    swarmTitle.toLowerCase() !== title.toLowerCase() &&
+    !isOpaqueCiphertext(swarmTitle)
+  ) {
     return swarmTitle.slice(0, 160);
   }
   const outputLine = getToolOutput(item)?.split(/\r?\n/, 1)[0]?.trim();
-  if (outputLine && !outputLine.startsWith("<")) {
+  if (outputLine && !outputLine.startsWith("<") && !isOpaqueCiphertext(outputLine)) {
     return outputLine.slice(0, 160);
   }
-  return extractToolName(item.title).replace(/^Tool:\s*/i, "").trim() || "Subagent";
+  const toolLabel = extractToolName(item.title).replace(/^Tool:\s*/i, "").trim();
+  if (toolLabel && !isOpaqueCiphertext(toolLabel) && toolLabel !== "spawn agent") {
+    return toolLabel;
+  }
+  return "Subagent";
 }
 
 function extractTypeLabel(args: Record<string, unknown> | null, item: ToolItem): string {
@@ -125,7 +182,45 @@ function extractTypeLabel(args: Record<string, unknown> | null, item: ToolItem):
 }
 
 function mapToolStatus(item: ToolItem): SubagentCardStatus {
-  const tone = resolveToolStatus(item.status, Boolean(getToolOutput(item)));
+  const output = getToolOutput(item) ?? "";
+  const hasOutput = Boolean(output.trim());
+  const normalized = (typeof item.status === "string" ? item.status : "").toLowerCase();
+
+  if (
+    /(fail|error|cancel|abort|timeout)/i.test(normalized) ||
+    (/outcome\s*=\s*["']?(failed|error)["']?/i.test(output) || /\[failed\]/i.test(output))
+  ) {
+    return "error";
+  }
+  if (/(complete|success|succeed|done|finish)/i.test(normalized)) {
+    return "completed";
+  }
+
+  // status 仍是 started/running：用 output 判断是否已收工（async spawn 常见）
+  const lines = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const onlyStartAck =
+    lines.length > 0 &&
+    lines.every((line) =>
+      /^(subagent started|async agent launched|subagent_id\s*[:=]|agentId\s*[:=]|type\s*[:=]|description\s*[:=]|use get_command|status\s*[:=]\s*running)/i.test(
+        line,
+      ),
+    );
+  if (hasOutput && !onlyStartAck) {
+    if (
+      /outcome\s*=\s*["']?(completed|success)["']?/i.test(output) ||
+      /\[completed\]/i.test(output) ||
+      /status\s*[:=]\s*completed/i.test(output) ||
+      (/duration_ms\s*=\s*\d+/i.test(output) && /subagent_meta/i.test(output)) ||
+      /(你好|hello|完成|completed|问候|欢迎|任务)/i.test(output)
+    ) {
+      return "completed";
+    }
+  }
+
+  const tone = resolveToolStatus(item.status, hasOutput);
   if (tone === "failed") {
     return "error";
   }
@@ -139,7 +234,15 @@ function extractAgentId(
   args: Record<string, unknown> | null,
   outputText: string | null,
 ): string | null {
-  for (const key of ["agent_id", "agentId", "agentID"]) {
+  for (const key of [
+    "agent_id",
+    "agentId",
+    "agentID",
+    "subagent_id",
+    "subagentId",
+    "child_session_id",
+    "childSessionId",
+  ]) {
     const value = args?.[key];
     if (typeof value === "string" && value.trim()) {
       return value.trim();
@@ -149,9 +252,12 @@ function extractAgentId(
     return null;
   }
   const match =
-    /agentId\s*[:=]\s*['"]?([a-f0-9-]+)['"]?/i.exec(outputText) ??
-    /agent_id\s*[:=]\s*['"]?([a-f0-9-]+)['"]?/i.exec(outputText) ??
-    /agent_id="([^"]+)"/i.exec(outputText);
+    // 允许 grok:uuid / claude:… 完整 thread id
+    /subagent_id\s*[:=]\s*['"]?([a-z0-9:_-]+)['"]?/i.exec(outputText) ??
+    /agentId\s*[:=]\s*['"]?([a-z0-9:_-]+)['"]?/i.exec(outputText) ??
+    /agent_id\s*[:=]\s*['"]?([a-z0-9:_-]+)['"]?/i.exec(outputText) ??
+    /agent_id="([^"]+)"/i.exec(outputText) ??
+    /child_session_id\s*[:=]\s*['"]?([a-z0-9:_-]+)['"]?/i.exec(outputText);
   return match?.[1]?.trim() || null;
 }
 
@@ -167,23 +273,122 @@ export function resolveClaudeSubagentThreadId(
   if (!parent || !agent) {
     return null;
   }
+  // 已是 compound id
+  if (agent.startsWith("claude:subagent:")) {
+    return agent;
+  }
   const parentSessionId = parent.startsWith("claude:")
     ? parent.slice("claude:".length)
-    : parent;
+    : parent.startsWith("claude:subagent:")
+      ? null
+      : parent;
   if (!parentSessionId || parentSessionId.startsWith("subagent:")) {
     return null;
   }
-  return `claude:subagent:${parentSessionId}:${agent}`;
+  // strip nested subagent parent
+  const bareParent = parentSessionId.includes(":")
+    ? parentSessionId.split(":")[0] ?? parentSessionId
+    : parentSessionId;
+  return `claude:subagent:${bareParent}:${agent}`;
+}
+
+/** Claude Agent 异步启动回执（Shared Claude / native Claude 同源） */
+export function isClaudeAsyncAgentLaunchOutput(
+  output: string | null | undefined,
+): boolean {
+  const text = output ?? "";
+  return (
+    /Async agent launched successfully/i.test(text) &&
+    /agentId\s*[:=]/i.test(text)
+  );
+}
+
+/** Claude agentId 常见形态：12–32 位 hex，无连字符（文件名 agent-{id}.jsonl） */
+export function looksLikeClaudeAgentId(agentId: string | null | undefined): boolean {
+  const agent = agentId?.trim() ?? "";
+  return /^[a-f0-9]{12,32}$/i.test(agent);
+}
+
+/**
+ * 从 Claude Agent 启动回执的 output_file 路径提取 parent session UUID。
+ *
+ * 本地常见形态：
+ * `/private/tmp/claude-501/.../<parentSessionId>/tasks/<agentId>.output`
+ * `.../<parentSessionId>/subagents/agent-<agentId>.jsonl`（少见）
+ *
+ * Shared 绑定为空时，这是拼 `claude:subagent:{parent}:{agentId}` 的关键兜底。
+ */
+export function extractClaudeParentSessionIdFromAgentOutput(
+  output: string | null | undefined,
+): string | null {
+  const text = output ?? "";
+  if (!text.trim()) {
+    return null;
+  }
+  const pathMatch =
+    /output_file\s*[:=]\s*(\S+)/i.exec(text) ??
+    /outputFile\s*[:=]\s*(\S+)/i.exec(text);
+  const rawPath = pathMatch?.[1]?.trim().replace(/[.,;)"']+$/, "") ?? "";
+  if (rawPath) {
+    const fromTasks =
+      /\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/tasks\//i.exec(
+        rawPath,
+      );
+    if (fromTasks?.[1]) {
+      return fromTasks[1];
+    }
+    const fromSubagents =
+      /\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/subagents\//i.exec(
+        rawPath,
+      );
+    if (fromSubagents?.[1]) {
+      return fromSubagents[1];
+    }
+  }
+  // 无 path 时：部分回执会写 session 字段
+  const sessionField =
+    /(?:parent_)?session(?:_id|Id)?\s*[:=]\s*['"]?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(
+      text,
+    );
+  return sessionField?.[1]?.trim() || null;
+}
+
+function pickClaudeNativeOwnerId(
+  nativeThreadIds: readonly string[] | null | undefined,
+): string | null {
+  if (!nativeThreadIds?.length) {
+    return null;
+  }
+  for (const raw of nativeThreadIds) {
+    const id = raw.trim();
+    if (!id.startsWith("claude:")) {
+      continue;
+    }
+    if (id.includes(":subagent:") || id.startsWith("claude:subagent:")) {
+      continue;
+    }
+    if (id.includes("pending")) {
+      continue;
+    }
+    return id;
+  }
+  return null;
 }
 
 /**
  * 跨引擎解析子会话 threadId。
+ *
+ * Shared Claude 场景：父是 shared:…，子会话在 native owner 下
+ * `claude:subagent:{nativeSessionId}:{agentId}`，不能返回裸 agentId（会走 codex loader）。
  */
 export function resolveSubagentSessionThreadId(options: {
   parentThreadId?: string | null;
   agentId?: string | null;
   /** Codex collab receiver 等已是完整 thread id 时直接使用 */
   explicitThreadId?: string | null;
+  outputText?: string | null;
+  /** Shared 父会话的 nativeThreadIds（含 claude: owner） */
+  nativeThreadIds?: readonly string[] | null;
 }): string | null {
   const explicit = options.explicitThreadId?.trim() || null;
   if (explicit) {
@@ -215,7 +420,54 @@ export function resolveSubagentSessionThreadId(options: {
     return agent.includes(":") ? agent : `kimi:${agent}`;
   }
   if (parent.startsWith("shared:")) {
-    // shared 侧链多数仍是 native 子 thread id
+    if (agent.includes(":")) {
+      return agent;
+    }
+    // Shared Claude Agent 启动回执 / Claude 风格 agentId → claude:subagent
+    // 1) bindings 里的 native owner
+    // 2) 启动回执 output_file 路径里的 parent session UUID（bindings 常为空时的关键兜底）
+    const claudeOwner =
+      pickClaudeNativeOwnerId(options.nativeThreadIds) ||
+      (() => {
+        const fromOutput = extractClaudeParentSessionIdFromAgentOutput(
+          options.outputText,
+        );
+        return fromOutput ? `claude:${fromOutput}` : null;
+      })();
+    if (
+      claudeOwner &&
+      (isClaudeAsyncAgentLaunchOutput(options.outputText) ||
+        looksLikeClaudeAgentId(agent))
+    ) {
+      return resolveClaudeSubagentThreadId(claudeOwner, agent);
+    }
+    // 裸 UUID：可能是 Grok 子会话，也可能是 Codex collab 子 thread。
+    // 误加 grok: 前缀会导致 Codex 详情加载失败 → 只剩「交付报告」合成文本。
+    if (/^[0-9a-f]{8}-[0-9a-f-]{20,}$/i.test(agent)) {
+      if (isClaudeAsyncAgentLaunchOutput(options.outputText)) {
+        return null;
+      }
+      const natives = options.nativeThreadIds ?? [];
+      const hasGrokOwner = natives.some((id) => id.startsWith("grok:"));
+      const hasCodexOwner = natives.some(
+        (id) =>
+          id.startsWith("codex:") ||
+          (/^[0-9a-f]{8}-[0-9a-f-]{20,}$/i.test(id) && !id.includes(":")),
+      );
+      // 仅当明确是 Grok Shared 且无 Codex owner 时加 grok: 前缀
+      if (hasGrokOwner && !hasCodexOwner) {
+        return `grok:${agent}`;
+      }
+      // Codex / 未知：裸 UUID 走 codex history loader
+      return agent;
+    }
+    // Claude hex agentId 但无法定位 parent session
+    if (
+      isClaudeAsyncAgentLaunchOutput(options.outputText) &&
+      looksLikeClaudeAgentId(agent)
+    ) {
+      return null;
+    }
     return agent;
   }
   // Codex 等裸 thread id
@@ -354,6 +606,7 @@ export function extractCollabAgentIds(item: ToolItem): string[] {
 
 /**
  * 从 agent swarm 参数 / result XML 展开子代理条目。
+ * 优先 XML 结果（完成态真实报告），否则用 items 占位；二者互斥，避免 3+3=6 重复计数。
  */
 export function extractSwarmAgentEntries(
   item: ToolItem,
@@ -361,26 +614,11 @@ export function extractSwarmAgentEntries(
 ): Array<{ id: string; description: string; status: SubagentCardStatus }> {
   const status = mapToolStatus(item);
   const baseDescription = extractDescription(args, item);
-  const entries: Array<{ id: string; description: string; status: SubagentCardStatus }> = [];
-
-  const itemsField = args?.items ?? args?.ITEMS;
-  if (Array.isArray(itemsField) && itemsField.length > 0) {
-    itemsField.forEach((entry, index) => {
-      const label =
-        typeof entry === "string" || typeof entry === "number"
-          ? String(entry)
-          : `item-${index + 1}`;
-      entries.push({
-        id: `${item.id}:swarm:${label}`,
-        description: `${baseDescription} · #${label}`.slice(0, 160),
-        status,
-      });
-    });
-  }
+  const fromXml: Array<{ id: string; description: string; status: SubagentCardStatus }> =
+    [];
 
   const output = getToolOutput(item) ?? "";
-  const subagentTagRegex =
-    /<subagent\b([^>]*)>([\s\S]*?)<\/subagent>/gi;
+  const subagentTagRegex = /<subagent\b([^>]*)>([\s\S]*?)<\/subagent>/gi;
   let match: RegExpExecArray | null;
   while ((match = subagentTagRegex.exec(output)) !== null) {
     const attrs = match[1] ?? "";
@@ -397,21 +635,43 @@ export function extractSwarmAgentEntries(
         : outcome === "completed" || outcome === "success"
           ? "completed"
           : status;
-    const firstLine = body.split(/\r?\n/, 1)[0]?.replace(/^#+\s*/, "").trim() || baseDescription;
-    entries.push({
-      id: `${item.id}:swarm-result:${agentId ?? itemLabel ?? entries.length}`,
+    const firstLine =
+      body.split(/\r?\n/, 1)[0]?.replace(/^#+\s*/, "").trim() || baseDescription;
+    fromXml.push({
+      id: `${item.id}:swarm-result:${agentId ?? itemLabel ?? fromXml.length}`,
       description: firstLine.slice(0, 160),
       status: entryStatus,
     });
   }
+  if (fromXml.length > 0) {
+    return fromXml;
+  }
 
-  return entries;
+  const fromItems: Array<{ id: string; description: string; status: SubagentCardStatus }> =
+    [];
+  const itemsField = args?.items ?? args?.ITEMS;
+  if (Array.isArray(itemsField) && itemsField.length > 0) {
+    itemsField.forEach((entry, index) => {
+      const label =
+        typeof entry === "string" || typeof entry === "number"
+          ? String(entry)
+          : `item-${index + 1}`;
+      fromItems.push({
+        id: `${item.id}:swarm:${label}`,
+        description: `${baseDescription} · #${label}`.slice(0, 160),
+        status,
+      });
+    });
+  }
+  return fromItems;
 }
 
 type CardBuildOptions = {
   index?: number;
   persona?: AssignedPersona;
   parentThreadId?: string | null;
+  /** Shared 父会话 nativeThreadIds，用于 Claude Agent 子会话 id 解析 */
+  nativeThreadIds?: readonly string[] | null;
   /** 覆盖 id / agentId / description / status（swarm / collab 展开用） */
   override?: {
     id?: string;
@@ -443,6 +703,8 @@ export function buildSubagentCardFromToolItem(
     parentThreadId: options?.parentThreadId,
     agentId,
     explicitThreadId: options?.override?.explicitThreadId,
+    outputText,
+    nativeThreadIds: options?.nativeThreadIds,
   });
   const taskId =
     typeof args?.task_id === "string"
@@ -488,18 +750,26 @@ export function buildSubagentCardFromToolItem(
 }
 
 /**
- * 将一个 tool item 展开为 1..N 张 persona 卡（collab multi-agent / agent swarm）。
+ * 将一个 tool item 展开为 1..N 张 persona 卡（collab multi-agent / agent swarm / grok spawn）。
  */
 export function expandSubagentToolToCards(
   item: ToolItem,
-  options?: { parentThreadId?: string | null; indexOffset?: number },
+  options?: {
+    parentThreadId?: string | null;
+    indexOffset?: number;
+    nativeThreadIds?: readonly string[] | null;
+  },
 ): SubagentCardViewModel[] {
   const indexOffset = options?.indexOffset ?? 0;
   const args = parseToolArgs(getToolDetail(item));
+  const outputText = getToolOutput(item);
+  const nativeThreadIds = options?.nativeThreadIds;
 
   // Codex collab spawn：按 receiver agent 展开
   if (isCollabSpawnTool(item)) {
     const agentIds = extractCollabAgentIds(item);
+    const taskName = pickReadableString(args?.task_name, args?.taskName, args?.name);
+    const description = extractDescription(args, item);
     if (agentIds.length > 0) {
       const personas = assignPersonasForSquad(
         agentIds.map((id) => `${item.id}:${id}`),
@@ -509,19 +779,61 @@ export function expandSubagentToolToCards(
           index: indexOffset + index,
           persona: personas[index],
           parentThreadId: options?.parentThreadId,
+          nativeThreadIds,
           override: {
             id: `${item.id}:${agentId}`,
             agentId,
             explicitThreadId: agentId,
-            typeLabel: agentId,
-            description: extractDescription(args, item),
+            // 不要用 UUID 当 typeLabel；优先 task_name
+            typeLabel: taskName || "agent",
+            description: description || taskName || "Subagent",
           },
         }),
       );
     }
+    // 尚无 receiver：单卡，描述用 task_name，勿展示密文 message
+    return [
+      buildSubagentCardFromToolItem(item, {
+        index: indexOffset,
+        parentThreadId: options?.parentThreadId,
+        nativeThreadIds,
+        override: {
+          typeLabel: taskName || "spawn",
+          description: description || taskName || "Subagent",
+          // 清掉密文 output，避免详情当交付报告
+          ...(isOpaqueCiphertext(outputText) ? { description: taskName || "Subagent" } : {}),
+        },
+      }),
+    ];
   }
 
-  // Agent swarm：按 items / XML result 展开
+  // Grok spawn_subagent：单卡，session 用 subagent_id → grok:{id}
+  if (isGrokSpawnSubagentTool(item)) {
+    const agentId = extractAgentId(args, outputText);
+    const description =
+      (typeof args?.description === "string" && args.description.trim()) ||
+      (typeof args?.prompt === "string" && args.prompt.trim().slice(0, 80)) ||
+      extractDescription(args, item);
+    const typeLabel =
+      (typeof args?.subagent_type === "string" && args.subagent_type) ||
+      (typeof args?.subagentType === "string" && args.subagentType) ||
+      "general-purpose";
+    return [
+      buildSubagentCardFromToolItem(item, {
+        index: indexOffset,
+        parentThreadId: options?.parentThreadId,
+        nativeThreadIds,
+        override: {
+          id: agentId ? `${item.id}:${agentId}` : item.id,
+          agentId,
+          description,
+          typeLabel,
+        },
+      }),
+    ];
+  }
+
+  // Agent swarm：按 items / XML result 展开（互斥）
   const swarmEntries = extractSwarmAgentEntries(item, args);
   if (swarmEntries.length > 0) {
     const personas = assignPersonasForSquad(swarmEntries.map((entry) => entry.id));
@@ -530,6 +842,7 @@ export function expandSubagentToolToCards(
         index: indexOffset + index,
         persona: personas[index],
         parentThreadId: options?.parentThreadId,
+        nativeThreadIds,
         override: {
           id: entry.id,
           agentId: entry.id.includes(":") ? entry.id.split(":").pop() ?? null : entry.id,
@@ -545,25 +858,191 @@ export function expandSubagentToolToCards(
     buildSubagentCardFromToolItem(item, {
       index: indexOffset,
       parentThreadId: options?.parentThreadId,
+      nativeThreadIds,
     }),
   ];
 }
 
+/**
+ * 小队去重：
+ * 1) 同组既有 launch items 占位又有 XML 结果时，丢掉 items 占位（防 3+3=6）
+ * 2) 相同 agentId 保留完成度更高 / 描述更完整的一张
+ */
+export function dedupeSubagentSquadCards(
+  cards: readonly SubagentCardViewModel[],
+): SubagentCardViewModel[] {
+  if (cards.length <= 1) {
+    return [...cards];
+  }
+  const hasXmlResult = cards.some((card) => card.id.includes(":swarm-result:"));
+  const withoutItemsPlaceholder = hasXmlResult
+    ? cards.filter(
+        (card) =>
+          !card.id.includes(":swarm:") || card.id.includes(":swarm-result:"),
+      )
+    : [...cards];
+
+  const byKey = new Map<string, SubagentCardViewModel>();
+  const rank = (card: SubagentCardViewModel) => {
+    let score = 0;
+    if (card.status === "completed") score += 4;
+    if (card.status === "error") score += 3;
+    if (card.id.includes(":swarm-result:")) score += 2;
+    if (card.sessionThreadId) score += 1;
+    score += Math.min(2, Math.floor(card.description.length / 40));
+    return score;
+  };
+
+  withoutItemsPlaceholder.forEach((card) => {
+    const key =
+      (card.agentId && card.agentId.trim()) ||
+      /#(\d+)\s*$/.exec(card.description)?.[1] ||
+      card.id;
+    const existing = byKey.get(key);
+    if (!existing || rank(card) >= rank(existing)) {
+      byKey.set(key, card);
+    }
+  });
+
+  // 保持相对稳定顺序：按首次出现顺序
+  const seen = new Set<string>();
+  const ordered: SubagentCardViewModel[] = [];
+  withoutItemsPlaceholder.forEach((card) => {
+    const key =
+      (card.agentId && card.agentId.trim()) ||
+      /#(\d+)\s*$/.exec(card.description)?.[1] ||
+      card.id;
+    if (seen.has(key)) {
+      return;
+    }
+    const chosen = byKey.get(key);
+    if (chosen) {
+      seen.add(key);
+      ordered.push(chosen);
+    }
+  });
+  return ordered;
+}
+
+export type ChildThreadHint = {
+  id: string;
+  name?: string | null;
+};
+
+/**
+ * 用侧栏真实子会话补全 collab 卡：sessionThreadId + 昵称描述。
+ * Native Codex 官方 spawn 的 message 是密文，但子会话已有 Nietzsche 等名字。
+ */
+export function enrichCardsWithChildThreads(
+  cards: readonly SubagentCardViewModel[],
+  children: readonly ChildThreadHint[] | null | undefined,
+): SubagentCardViewModel[] {
+  if (!children?.length) {
+    return cards.map((card) =>
+      isOpaqueCiphertext(card.description)
+        ? { ...card, description: card.typeLabel || "Subagent", outputText: null }
+        : isOpaqueCiphertext(card.outputText)
+          ? { ...card, outputText: null }
+          : card,
+    );
+  }
+  const usedChildIds = new Set<string>();
+  let childCursor = 0;
+
+  return cards.map((card) => {
+    let next = card;
+    // 已有合法 session 且描述可读
+    const hasReadableDesc = Boolean(
+      next.description && !isOpaqueCiphertext(next.description),
+    );
+    const hasSession = Boolean(next.sessionThreadId?.trim());
+
+    if (hasSession && hasReadableDesc && !isOpaqueCiphertext(next.outputText)) {
+      return next;
+    }
+
+    // 按序绑定未使用的子会话
+    while (childCursor < children.length && usedChildIds.has(children[childCursor]!.id)) {
+      childCursor += 1;
+    }
+    const child = children[childCursor];
+    if (child) {
+      usedChildIds.add(child.id);
+      childCursor += 1;
+      const childName = child.name?.trim() || "";
+      next = {
+        ...next,
+        sessionThreadId: next.sessionThreadId?.trim() || child.id,
+        agentId: next.agentId || child.id,
+        description:
+          hasReadableDesc && !isOpaqueCiphertext(next.description)
+            ? next.description
+            : childName || next.description || "Subagent",
+        typeLabel:
+          next.typeLabel &&
+          next.typeLabel !== "spawn" &&
+          next.typeLabel !== "agent" &&
+          !isOpaqueCiphertext(next.typeLabel) &&
+          next.typeLabel.length < 40
+            ? next.typeLabel
+            : childName || next.typeLabel,
+        // 密文 output 清掉，详情走子会话 transcript
+        outputText: isOpaqueCiphertext(next.outputText) ? null : next.outputText,
+      };
+    } else if (isOpaqueCiphertext(next.description) || isOpaqueCiphertext(next.outputText)) {
+      next = {
+        ...next,
+        description: isOpaqueCiphertext(next.description)
+          ? next.typeLabel && next.typeLabel !== "spawn"
+            ? next.typeLabel
+            : "Subagent"
+          : next.description,
+        outputText: isOpaqueCiphertext(next.outputText) ? null : next.outputText,
+      };
+    }
+    return next;
+  });
+}
+
 export function buildSubagentCardsFromToolItems(
   items: readonly ToolItem[],
-  options?: { parentThreadId?: string | null },
+  options?: {
+    parentThreadId?: string | null;
+    nativeThreadIds?: readonly string[] | null;
+    /** 侧栏子会话（含 nickname），用于 Codex 官方密文 message 场景 */
+    childThreads?: readonly ChildThreadHint[] | null;
+  },
 ): SubagentCardViewModel[] {
   const cards: SubagentCardViewModel[] = [];
+  // 组内任一 tool 已有 XML 结果时，跳过纯 items 占位展开（launch 与 result 拆成两条 tool 的场景）
+  const groupHasSwarmXml = items.some((item) =>
+    /<subagent\b/i.test(getToolOutput(item) ?? ""),
+  );
+
   items.forEach((item) => {
+    if (groupHasSwarmXml) {
+      const args = parseToolArgs(getToolDetail(item));
+      const ownXml = /<subagent\b/i.test(getToolOutput(item) ?? "");
+      const itemsField = args?.items ?? args?.ITEMS;
+      const isItemsOnlyLaunch =
+        !ownXml && Array.isArray(itemsField) && itemsField.length > 0;
+      if (isItemsOnlyLaunch) {
+        return;
+      }
+    }
     const expanded = expandSubagentToolToCards(item, {
       parentThreadId: options?.parentThreadId,
+      nativeThreadIds: options?.nativeThreadIds,
       indexOffset: cards.length,
     });
     cards.push(...expanded);
   });
+
+  const withChildren = enrichCardsWithChildThreads(cards, options?.childThreads);
+  const deduped = dedupeSubagentSquadCards(withChildren);
   // 同批 persona 尽量不重名：重算一次 squad persona
-  const personas = assignPersonasForSquad(cards.map((card) => card.id));
-  return cards.map((card, index) => ({
+  const personas = assignPersonasForSquad(deduped.map((card) => card.id));
+  return deduped.map((card, index) => ({
     ...card,
     ...applyPersonaFields(personas[index] ?? assignPersona(card.id)),
     indexLabel: formatIndexLabel(index),

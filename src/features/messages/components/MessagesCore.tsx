@@ -1131,6 +1131,7 @@ export const MessagesCore = memo(function MessagesCore({
     renderScopeKey,
     renderSourceItems,
     supportsStreamingReadableWindowRecovery,
+    threadId,
     timelineItems,
   });
   useEffect(() => {

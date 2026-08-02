@@ -1,6 +1,10 @@
 import { useMemo, useSyncExternalStore } from "react";
 
-import type { RateLimitSnapshot, ThreadTokenUsage } from "../../../types";
+import type {
+  RateLimitSnapshot,
+  ThreadSummary,
+  ThreadTokenUsage,
+} from "../../../types";
 import type { MessagesProps } from "../../messages";
 import type { ThreadActivityStatus } from "./layoutNodesTypes";
 
@@ -32,6 +36,15 @@ export type ActiveCanvasSnapshot = Pick<
   activeThreadStatus: ThreadActivityStatus | null;
   activeTokenUsage: ThreadTokenUsage | null;
   activeRateLimits: RateLimitSnapshot | null;
+  /**
+   * 当前幕布线程的子代理会话（parentThreadId === threadId）。
+   * Shared Grok 投影缺 spawn tool 时，用它合成 persona 卡。
+   */
+  childSubagentThreads: ThreadSummary[];
+  /**
+   * Shared 父会话的 nativeThreadIds（含 claude: owner），用于 Claude Agent 子会话解析。
+   */
+  activeNativeThreadIds: string[];
 };
 
 export type ActiveCanvasStore = {
@@ -84,6 +97,8 @@ export const EMPTY_ACTIVE_CANVAS_SNAPSHOT: ActiveCanvasSnapshot = {
   activeThreadStatus: null,
   activeTokenUsage: null,
   activeRateLimits: null,
+  childSubagentThreads: [],
+  activeNativeThreadIds: [],
 };
 
 export function shallowEqual<T extends Record<string, unknown>>(

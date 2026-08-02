@@ -60,8 +60,11 @@ export type GeminiSessionSummary = {
 // Kimi session summaries share the Gemini summary shape (id/message/updatedAt/size).
 export type KimiSessionSummary = GeminiSessionSummary;
 
-// Grok session summaries share the Gemini summary shape (id/message/updatedAt/size).
-export type GrokSessionSummary = GeminiSessionSummary;
+// Grok：在 Gemini 形状上扩展 parent / sessionKind（子代理树）
+export type GrokSessionSummary = GeminiSessionSummary & {
+  parentSessionId?: string | null;
+  sessionKind?: string | null;
+};
 
 export type CodexCatalogSessionSummary = {
   sessionId: string;
@@ -1053,16 +1056,52 @@ export function normalizeKimiSessionSummaries(
   return normalizeGeminiSessionSummaries(value);
 }
 
+function normalizeGrokSessionSummary(value: unknown): GrokSessionSummary | null {
+  const base = normalizeGeminiSessionSummary(value);
+  if (!base) {
+    return null;
+  }
+  if (!value || typeof value !== "object") {
+    return base;
+  }
+  const record = value as Record<string, unknown>;
+  const parentSessionId = asString(
+    record.parentSessionId ?? record.parent_session_id,
+  ).trim();
+  const sessionKind = asString(
+    record.sessionKind ?? record.session_kind,
+  ).trim();
+  return {
+    ...base,
+    ...(parentSessionId ? { parentSessionId } : {}),
+    ...(sessionKind ? { sessionKind } : {}),
+  };
+}
+
 export function normalizeGrokSessionSummaries(
   value: unknown,
 ): GrokSessionSummary[] {
-  // Grok session summaries share the Gemini summary shape.
-  return normalizeGeminiSessionSummaries(value);
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const summaries: GrokSessionSummary[] = [];
+  value.forEach((entry) => {
+    const summary = normalizeGrokSessionSummary(entry);
+    if (summary) {
+      summaries.push(summary);
+    }
+  });
+  return summaries;
 }
 
 function mergeNativeCliSessionSummaries(params: {
   baseSummaries: ThreadSummary[];
-  sessions: GeminiSessionSummary[];
+  sessions: Array<
+    GeminiSessionSummary & {
+      parentSessionId?: string | null;
+      sessionKind?: string | null;
+    }
+  >;
   idPrefix: "gemini" | "grok" | "kimi";
   engineSource: "gemini" | "grok" | "kimi";
   fallbackTitle: string;
@@ -1094,6 +1133,13 @@ function mergeNativeCliSessionSummaries(params: {
     const mappedTitle = mappedTitles[id];
     const customTitle = getCustomName(workspaceId, id);
     const title = previewThreadName(session.firstMessage, fallbackTitle);
+    const rawParent = session.parentSessionId?.trim() || "";
+    const parentThreadId =
+      rawParent.length > 0
+        ? rawParent.startsWith(`${idPrefix}:`)
+          ? rawParent
+          : `${idPrefix}:${rawParent}`
+        : prev?.parentThreadId ?? null;
     const next: ThreadSummary = {
       id,
       name: selectProjectedSessionDisplayName({
@@ -1105,12 +1151,25 @@ function mergeNativeCliSessionSummaries(params: {
       updatedAt,
       sizeBytes: session.fileSizeBytes,
       engineSource,
+      ...(parentThreadId ? { parentThreadId } : {}),
     };
     if (!prev || next.updatedAt >= prev.updatedAt) {
-      mergedById.set(
-        id,
-        mergeSessionDisplaySummary(prev, next, { mappedTitle, customTitle }),
-      );
+      const merged = mergeSessionDisplaySummary(prev, next, {
+        mappedTitle,
+        customTitle,
+      });
+      // 保留 parent 链接（mergeSessionDisplaySummary 可能丢掉新字段）
+      mergedById.set(id, {
+        ...merged,
+        parentThreadId:
+          next.parentThreadId ?? merged.parentThreadId ?? prev?.parentThreadId ?? null,
+      });
+    } else if (parentThreadId && !prev.parentThreadId) {
+      // 本地 live 线程 updatedAt 更新时，仍要把 list 扫到的 parent 补回去
+      mergedById.set(id, {
+        ...prev,
+        parentThreadId,
+      });
     }
   });
   return Array.from(mergedById.values()).sort(
@@ -1162,8 +1221,10 @@ export function mergeGrokSessionSummaries(
   workspaceId: string,
   mappedTitles: Record<string, string>,
   getCustomName: (workspaceId: string, threadId: string) => string | undefined,
+  /** native owner → shared: 会话，把子代理挂到 Shared 父节点 */
+  nativeOwnerToSharedThreadId?: Map<string, string>,
 ): ThreadSummary[] {
-  return mergeNativeCliSessionSummaries({
+  const merged = mergeNativeCliSessionSummaries({
     baseSummaries,
     sessions: grokSessions,
     idPrefix: "grok",
@@ -1172,6 +1233,20 @@ export function mergeGrokSessionSummaries(
     workspaceId,
     mappedTitles,
     getCustomName,
+  });
+  if (!nativeOwnerToSharedThreadId || nativeOwnerToSharedThreadId.size === 0) {
+    return merged;
+  }
+  return merged.map((thread) => {
+    const parent = thread.parentThreadId?.trim() || "";
+    if (!parent) {
+      return thread;
+    }
+    const remapped = nativeOwnerToSharedThreadId.get(parent);
+    if (!remapped || remapped === parent) {
+      return thread;
+    }
+    return { ...thread, parentThreadId: remapped };
   });
 }
 

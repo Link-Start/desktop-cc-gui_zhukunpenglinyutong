@@ -12,63 +12,165 @@ function normalizeRuntimeString(value: unknown): string {
 /**
  * 从 title 抽出 collab action（与 StatusPanel 口径对齐）。
  * 例："Collab: spawn Agent" → "spawn agent"
+ *     "Collab: spawn_agent" → "spawn_agent" → 归一 "spawn agent"
  */
 export function extractCollabActionName(title: unknown): string {
   const raw = typeof title === "string" ? title.trim() : "";
   if (!raw) {
     return "";
   }
-  return raw
+  const stripped = raw
     .replace(/^collab:\s*/i, "")
     .replace(/^tool:\s*/i, "")
     .trim()
     .toLowerCase();
+  // Codex 新协议 function name 用下划线：spawn_agent / wait_agent / close_agent
+  return stripped.replace(/_/g, " ");
+}
+
+function isCollabToolType(toolType: string): boolean {
+  return (
+    toolType === "collabtoolcall" ||
+    toolType === "collabagenttoolcall" ||
+    // 部分历史/投影只带 title 不带标准 type
+    toolType === "collaboration" ||
+    toolType.includes("collab")
+  );
 }
 
 /**
  * Codex collab 生命周期动作（wait/close）不渲染 persona 卡，只更新状态面板。
+ * 兼容 "wait agent" / "wait_agent" / "close agent" / "close_agent"。
  */
 export function isCollabLifecycleTool(item: ToolLike): boolean {
   const toolType = normalizeRuntimeString(item.toolType);
-  if (toolType !== "collabtoolcall" && toolType !== "collabagenttoolcall") {
-    return false;
-  }
+  const rawTitle =
+    typeof item.title === "string" ? item.title.trim().toLowerCase() : "";
   const action = extractCollabActionName(item.title);
+  const toolName = extractToolName(item.title).trim().toLowerCase().replace(/_/g, " ");
+  const looksCollab =
+    isCollabToolType(toolType) ||
+    rawTitle.startsWith("collab:") ||
+    toolName.includes("wait agent") ||
+    toolName.includes("close agent") ||
+    action === "wait agent" ||
+    action === "close agent";
+  if (!looksCollab && !isCollabToolType(toolType)) {
+    // 无 collab 痕迹时，仅用 action 精确判断
+    return (
+      action === "wait agent" ||
+      action === "wait" ||
+      action === "close agent" ||
+      action === "close"
+    );
+  }
   return (
     action === "wait agent" ||
     action === "wait" ||
     action === "close agent" ||
-    action === "close"
+    action === "close" ||
+    toolName === "wait agent" ||
+    toolName === "close agent" ||
+    /wait_agent|close_agent/.test(normalizeRuntimeString(item.toolType))
   );
 }
 
 /**
  * Codex collab 的 spawn 类工具：幕布要展开成 persona 卡。
+ * 兼容 title "Collab: spawn Agent" / "Collab: spawn_agent" / tool name spawn_agent。
  */
 export function isCollabSpawnTool(item: ToolLike): boolean {
   const toolType = normalizeRuntimeString(item.toolType);
-  if (toolType !== "collabtoolcall" && toolType !== "collabagenttoolcall") {
-    return false;
-  }
+  const rawTitle =
+    typeof item.title === "string" ? item.title.trim().toLowerCase() : "";
   const action = extractCollabActionName(item.title);
-  return (
+  const toolName = extractToolName(item.title).trim().toLowerCase().replace(/_/g, " ");
+  const isSpawnAction =
     action === "spawn agent" ||
     action === "spawn" ||
-    action.startsWith("spawn ")
+    action.startsWith("spawn ") ||
+    toolName === "spawn agent" ||
+    toolName.includes("spawn agent") ||
+    rawTitle.includes("spawn_agent") ||
+    rawTitle.includes("spawn agent");
+  if (!isSpawnAction) {
+    return false;
+  }
+  // 有 collab type/title 或明确 spawn_agent
+  return (
+    isCollabToolType(toolType) ||
+    rawTitle.startsWith("collab:") ||
+    toolName.includes("spawn agent") ||
+    toolType === "spawn_agent" ||
+    toolType.includes("spawn_agent")
   );
+}
+
+/**
+ * Grok 轮询子代理输出的工具，不是 spawn，禁止当 persona 卡。
+ */
+export function isSubagentOutputPoller(item: ToolLike): boolean {
+  const toolName = extractToolName(item.title).trim().toLowerCase();
+  const toolType = normalizeRuntimeString(item.toolType);
+  const rawTitle =
+    typeof item.title === "string" ? item.title.trim().toLowerCase() : "";
+  const haystack = `${toolName} ${toolType} ${rawTitle}`;
+  return (
+    haystack.includes("get_command_or_subagent_output") ||
+    haystack.includes("get_command_or_subagent") ||
+    (haystack.includes("subagent_output") && !haystack.includes("spawn"))
+  );
+}
+
+/**
+ * Grok `spawn_subagent` / 标题 “Spawn Subagent”。
+ * 收窄匹配：避免 “spawn + subagent” 误伤其它工具名。
+ */
+export function isGrokSpawnSubagentTool(item: ToolLike): boolean {
+  if (isSubagentOutputPoller(item)) {
+    return false;
+  }
+  const toolName = extractToolName(item.title).trim().toLowerCase();
+  const toolType = normalizeRuntimeString(item.toolType);
+  const rawTitle =
+    typeof item.title === "string" ? item.title.trim().toLowerCase() : "";
+  if (
+    toolType === "spawn_subagent" ||
+    toolName === "spawn_subagent" ||
+    toolName === "spawn subagent" ||
+    rawTitle === "spawn subagent" ||
+    rawTitle === "spawn_subagent"
+  ) {
+    return true;
+  }
+  // “Spawn Subagent xxx” 变体
+  if (
+    /^(spawn[_\s-]?subagent)\b/.test(toolName) ||
+    /^(spawn[_\s-]?subagent)\b/.test(rawTitle)
+  ) {
+    return true;
+  }
+  return false;
 }
 
 /**
  * 幕布/分组用的 subAgent 识别（跨引擎）：
  * - Claude：Agent / Task
  * - Codex：collab spawn（非 wait/close）
- * - Grok / Kimi / Shared：title/toolType 含 subagent、agent swarm 等
+ * - Grok：spawn_subagent / Spawn Subagent（非 output poller）
+ * - Kimi / Shared：agent swarm 等
  */
 export function isSubagentTool(item: ToolLike): boolean {
+  if (isSubagentOutputPoller(item)) {
+    return false;
+  }
   if (isCollabLifecycleTool(item)) {
     return false;
   }
   if (isCollabSpawnTool(item)) {
+    return true;
+  }
+  if (isGrokSpawnSubagentTool(item)) {
     return true;
   }
 
@@ -86,11 +188,11 @@ export function isSubagentTool(item: ToolLike): boolean {
     return true;
   }
 
-  // Grok: "Subagent 1 问候测试" / toolType 含 subagent
+  // Grok 历史卡："Subagent 1 问候测试"（spawn 完成态标题）
   if (
     toolName.startsWith("subagent") ||
-    toolType.includes("subagent") ||
-    rawTitle.startsWith("subagent")
+    rawTitle.startsWith("subagent") ||
+    /^subagent\s*\d+/i.test(rawTitle)
   ) {
     return true;
   }
@@ -107,8 +209,15 @@ export function isSubagentTool(item: ToolLike): boolean {
     return true;
   }
 
-  // 部分引擎把 spawn 写成裸工具名
-  if (toolName.includes("spawn agent") || rawTitle.includes("spawn agent")) {
+  // Codex / 其它：spawn agent / spawn_agent
+  if (
+    toolName.includes("spawn agent") ||
+    rawTitle.includes("spawn agent") ||
+    toolName.includes("spawn_agent") ||
+    rawTitle.includes("spawn_agent") ||
+    toolType === "spawn_agent" ||
+    toolType.includes("spawn_agent")
+  ) {
     return true;
   }
 

@@ -522,6 +522,12 @@ body.subagent-chat-split-resizing * {
   overflow: hidden;
 }
 
+/* 详情幕布内禁止再嵌套小队墙（防 shared 合成卡递归展示） */
+.subagent-session-canvas .subagent-squad,
+.subagent-session-canvas .subagent-squad-single {
+  display: none !important;
+}
+
 .subagent-session-canvas .messages-shell {
   flex: 1 1 auto;
   min-height: 0;

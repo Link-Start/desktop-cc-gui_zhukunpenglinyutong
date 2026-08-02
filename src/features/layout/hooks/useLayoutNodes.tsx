@@ -1034,6 +1034,20 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       activeThreadStatus,
       activeTokenUsage: options.activeTokenUsage,
       activeRateLimits: options.activeRateLimits,
+      childSubagentThreads: (() => {
+        const activeId = options.activeThreadId;
+        const workspaceId = options.activeWorkspaceId;
+        if (!activeId || !workspaceId) {
+          return [];
+        }
+        const threads = options.threadsByWorkspace[workspaceId] ?? [];
+        return threads.filter((thread) => {
+          const parent =
+            thread.parentThreadId ?? options.threadParentById[thread.id] ?? null;
+          return parent === activeId;
+        });
+      })(),
+      activeNativeThreadIds: activeThreadSummary?.nativeThreadIds ?? [],
     }),
     [
       options.activeWorkspaceId,
@@ -1056,6 +1070,9 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       sidebarThreadStatusById,
       options.activeTokenUsage,
       options.activeRateLimits,
+      options.threadsByWorkspace,
+      options.threadParentById,
+      activeThreadSummary?.nativeThreadIds,
     ],
   );
 

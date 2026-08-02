@@ -3,7 +3,7 @@
 本页是 `mossx` OpenSpec proposal 的当前入口。它只维护 active change 的执行状态，并把 archived change 路由到完整历史索引；详细治理快照仍以 [`../project.md`](../project.md) 为准。
 
 - Updated At: `2026-08-02`
-- Active proposals: `28`
+- Active proposals: `30`
 - Archived proposals: `743`
 - Main capability specs: `439`
 
@@ -40,6 +40,9 @@
 | [`stabilize-client-runtime-and-diagnostics`](stabilize-client-runtime-and-diagnostics/proposal.md)                                   |    21/22 | Quantified frame / first-delta trace retention                    | [design](stabilize-client-runtime-and-diagnostics/design.md) · [tasks](stabilize-client-runtime-and-diagnostics/tasks.md) · [specs](stabilize-client-runtime-and-diagnostics/specs/) · [verification](stabilize-client-runtime-and-diagnostics/verification.md)                                                                     |
 | [`enhance-provider-empty-model-and-custom-reasoning`](enhance-provider-empty-model-and-custom-reasoning/proposal.md)                       |      9/9 | implemented，待人工 review / verify                              | [proposal](enhance-provider-empty-model-and-custom-reasoning/proposal.md) · [design](enhance-provider-empty-model-and-custom-reasoning/design.md) · [tasks](enhance-provider-empty-model-and-custom-reasoning/tasks.md) · [specs](enhance-provider-empty-model-and-custom-reasoning/specs/)                                           |
 | [`add-message-file-edit-scene-collapse`](add-message-file-edit-scene-collapse/proposal.md)                                           |      4/4 | implemented；待人工幕布 smoke / verify / archive                  | [proposal](add-message-file-edit-scene-collapse/proposal.md) · [design](add-message-file-edit-scene-collapse/design.md) · [tasks](add-message-file-edit-scene-collapse/tasks.md) · [specs](add-message-file-edit-scene-collapse/specs/)                                                                                             |
+
+| [`enhance-subagent-canvas-persona-ui`](enhance-subagent-canvas-persona-ui/proposal.md)                                           |    25/25 | 已验收；archive 决策                                            | [design](enhance-subagent-canvas-persona-ui/design.md) · [tasks](enhance-subagent-canvas-persona-ui/tasks.md) · [specs](enhance-subagent-canvas-persona-ui/specs/) |
+| [`adapt-subagent-cross-engine-display`](adapt-subagent-cross-engine-display/proposal.md)                                         |    24/25 | 追溯提案（跨引擎适配 + i18n，已验收）；archive 决策              | [design](adapt-subagent-cross-engine-display/design.md) · [tasks](adapt-subagent-cross-engine-display/tasks.md) · [specs](adapt-subagent-cross-engine-display/specs/) |
 
 ## Archived Proposals
 

@@ -583,12 +583,22 @@ function isTaskLikeSubagentTool(item: ToolItem, toolName: string) {
   ) {
     return true;
   }
-  // Grok / Kimi / Shared：title 含 subagent 或 agent swarm
+  // 排除 Grok 轮询输出工具
+  if (
+    toolName.includes("get_command_or_subagent") ||
+    normalizedToolType.includes("get_command_or_subagent")
+  ) {
+    return false;
+  }
+  // Grok / Kimi / Shared：spawn_subagent、Subagent N、agent swarm
   const rawTitle = getToolTitle(item).trim().toLowerCase();
   if (
+    toolName === "spawn_subagent" ||
+    toolName === "spawn subagent" ||
+    normalizedToolType === "spawn_subagent" ||
+    (toolName.includes("spawn") && toolName.includes("subagent")) ||
     toolName.startsWith("subagent") ||
     rawTitle.startsWith("subagent") ||
-    normalizedToolType.includes("subagent") ||
     toolName.includes("agent swarm") ||
     rawTitle.includes("agent swarm") ||
     rawTitle.includes("launching agent swarm")

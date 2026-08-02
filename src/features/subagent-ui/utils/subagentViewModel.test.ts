@@ -94,7 +94,7 @@ describe("subagentViewModel", () => {
     expect(cards[1]?.indexLabel).toBe("02");
   });
 
-  it("expands agent swarm result XML into multiple cards", () => {
+  it("expands agent swarm result XML into multiple cards without double-counting items", () => {
     const swarm: Extract<ConversationItem, { kind: "tool" }> = {
       id: "swarm-1",
       kind: "tool",
@@ -108,30 +108,171 @@ describe("subagentViewModel", () => {
       output: `<agent_swarm_result><summary>completed: 3</summary>
 <subagent agent_id="agent-0" item="1" outcome="completed">## 1号报告</subagent>
 <subagent agent_id="agent-1" item="2" outcome="completed">## 2号报告</subagent>
+<subagent agent_id="agent-2" item="3" outcome="completed">## 3号报告</subagent>
 </agent_swarm_result>`,
     };
     const cards = buildSubagentCardsFromToolItems([swarm], {
       parentThreadId: "kimi:parent",
     });
-    expect(cards.length).toBeGreaterThanOrEqual(2);
+    // items=3 且 XML=3 时只计 XML 结果，禁止 6 张
+    expect(cards).toHaveLength(3);
     expect(cards.every((card) => card.description.length > 0)).toBe(true);
   });
 
-  it("maps Grok Subagent title tools to persona cards", () => {
+  it("dedupes launch items + separate result tool in one squad (Kimi 3+3)", () => {
+    const launch: Extract<ConversationItem, { kind: "tool" }> = {
+      id: "launch",
+      kind: "tool",
+      toolType: "tool",
+      title: "Launching agent swarm: greet",
+      detail: JSON.stringify({ items: ["1", "2", "3"], subagent_type: "explore" }),
+      status: "completed",
+      output: "started",
+    };
+    const result: Extract<ConversationItem, { kind: "tool" }> = {
+      id: "result",
+      kind: "tool",
+      toolType: "tool",
+      title: "Launching agent swarm: greet",
+      detail: "{}",
+      status: "completed",
+      output: `<agent_swarm_result>
+<subagent agent_id="agent-0" item="1" outcome="completed">## 1号报告</subagent>
+<subagent agent_id="agent-1" item="2" outcome="completed">## 2号报告</subagent>
+<subagent agent_id="agent-2" item="3" outcome="completed">## 3号报告</subagent>
+</agent_swarm_result>`,
+    };
+    const cards = buildSubagentCardsFromToolItems([launch, result], {
+      parentThreadId: "kimi:parent",
+    });
+    expect(cards).toHaveLength(3);
+    expect(cards.some((card) => card.description.includes("#1"))).toBe(false);
+  });
+
+  it("resolves Shared Claude Agent launch to claude:subagent via nativeThreadIds", () => {
+    const agentTool: Extract<ConversationItem, { kind: "tool" }> = {
+      id: "call-claude-agent",
+      kind: "tool",
+      toolType: "agent",
+      title: "Tool: Agent",
+      detail: JSON.stringify({
+        description: "问候测试 4 号",
+        subagent_type: "agent",
+      }),
+      status: "completed",
+      output:
+        "Async agent launched successfully.\nagentId: ad284bfdf0aa8384f\noutput_file: /tmp/x.output",
+    };
+    const cards = buildSubagentCardsFromToolItems([agentTool], {
+      parentThreadId: "shared:shared-session-1",
+      nativeThreadIds: ["claude:parent-native-session"],
+    });
+    expect(cards).toHaveLength(1);
+    expect(cards[0]?.agentId).toBe("ad284bfdf0aa8384f");
+    expect(cards[0]?.sessionThreadId).toBe(
+      "claude:subagent:parent-native-session:ad284bfdf0aa8384f",
+    );
+  });
+
+  it("uses task_name instead of encrypted message for Codex spawn_agent cards", () => {
+    const spawn: Extract<ConversationItem, { kind: "tool" }> = {
+      id: "spawn-enc",
+      kind: "tool",
+      toolType: "collabToolCall",
+      title: "Collab: spawn_agent",
+      detail: JSON.stringify({
+        task_name: "greeting_one",
+        message:
+          "gAAAAABqbyCy4OfSzmv9XIaXZpVaHUL1uXiAfFJQZ3XiLWVaozcSOLO0QjL3WuvKrNbTA_lHBW7kN_upxg",
+      }),
+      status: "completed",
+      output:
+        "gAAAAABqbyCy4OfSzmv9XIaXZpVaHUL1uXiAfFJQZ3XiLWVaozcSOLO0QjL3WuvKrNbTA_lHBW7kN_upxg",
+    };
+    const cards = buildSubagentCardsFromToolItems([spawn], {
+      parentThreadId: "019fc217-9f8f-73e3-b82a-d9f88bb7ab27",
+      childThreads: [
+        { id: "019fc217-d91b-7bc1-9438-8b6b0ba80621", name: "Nietzsche" },
+        { id: "019fc217-ccb1-7371-a7ee-1d796bf11b9e", name: "Avicenna" },
+        { id: "019fc217-b7fd-7111-aff7-44792e4c6985", name: "Aristotle" },
+      ],
+    });
+    expect(cards).toHaveLength(1);
+    expect(cards[0]?.description).not.toMatch(/^gAAAAA/);
+    expect(cards[0]?.description).toMatch(/greeting_one|Nietzsche|Subagent/i);
+    expect(cards[0]?.sessionThreadId).toBe(
+      "019fc217-d91b-7bc1-9438-8b6b0ba80621",
+    );
+    expect(cards[0]?.outputText).toBeNull();
+  });
+
+  it("does not force grok: prefix on Codex UUID under Shared parent", () => {
+    const collab: Extract<ConversationItem, { kind: "tool" }> = {
+      id: "spawn-codex",
+      kind: "tool",
+      toolType: "collabToolCall",
+      title: "Collab: spawn_agent",
+      detail: "From parent → 019fc217-4b28-7c03-94b4-b1be16d1045a",
+      status: "completed",
+      output: "Euler ready",
+      receiverThreadIds: ["019fc217-4b28-7c03-94b4-b1be16d1045a"],
+    };
+    const cards = buildSubagentCardsFromToolItems([collab], {
+      parentThreadId: "shared:shared-codex-1",
+      nativeThreadIds: ["019fc217-9f8f-73e3-b82a-d9f88bb7ab27"],
+    });
+    expect(cards[0]?.sessionThreadId).toBe(
+      "019fc217-4b28-7c03-94b4-b1be16d1045a",
+    );
+    expect(cards[0]?.sessionThreadId?.startsWith("grok:")).toBe(false);
+  });
+
+  it("resolves Shared Claude Agent when bindings empty using output_file path parent UUID", () => {
+    const agentTool: Extract<ConversationItem, { kind: "tool" }> = {
+      id: "call-claude-agent-2",
+      kind: "tool",
+      toolType: "agent",
+      title: "Tool: Agent",
+      detail: JSON.stringify({ description: "问候测试 4 号" }),
+      status: "completed",
+      output: [
+        "Async agent launched successfully.",
+        "agentId: ad284bfdf0aa8384f",
+        "output_file: /private/tmp/claude-501/-Users-chenxiangning-code-----/0dfedf87-33ef-407f-b018-e07168420e16/tasks/ad284bfdf0aa8384f.output",
+      ].join("\n"),
+    };
+    const cards = buildSubagentCardsFromToolItems([agentTool], {
+      parentThreadId: "shared:shared-session-empty-bind",
+      nativeThreadIds: [], // 本地扫描：近期 Shared meta bindings 常为空
+    });
+    expect(cards[0]?.sessionThreadId).toBe(
+      "claude:subagent:0dfedf87-33ef-407f-b018-e07168420e16:ad284bfdf0aa8384f",
+    );
+  });
+
+  it("maps Grok Spawn Subagent tools with subagent_id to grok session thread", () => {
     const grokTool: Extract<ConversationItem, { kind: "tool" }> = {
       id: "g1",
       kind: "tool",
-      toolType: "mcpToolCall",
-      title: "Subagent 1 问候测试",
-      detail: "{}",
+      toolType: "spawn_subagent",
+      title: "Spawn Subagent",
+      detail: JSON.stringify({
+        description: "SubAgent 1 问候测试",
+        prompt: "你是一个友好的中文助手",
+        subagent_type: "general-purpose",
+      }),
       status: "completed",
-      output: "你好，我是子代理 1",
+      output:
+        "Subagent started in background.\nsubagent_id: 019fc1e0-fcf7-76e3-8c10-d55ef5fff9cd\ntype: general-purpose",
     };
     const cards = buildSubagentCardsFromToolItems([grokTool], {
       parentThreadId: "grok:parent-session",
     });
     expect(cards).toHaveLength(1);
     expect(cards[0]?.description).toContain("问候");
-    expect(cards[0]?.typeLabel.toLowerCase()).toContain("subagent");
+    expect(cards[0]?.agentId).toBe("019fc1e0-fcf7-76e3-8c10-d55ef5fff9cd");
+    expect(cards[0]?.sessionThreadId).toBe(
+      "grok:019fc1e0-fcf7-76e3-8c10-d55ef5fff9cd",
+    );
   });
 });

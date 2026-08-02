@@ -16,6 +16,7 @@ import type { WorkspaceSessionFolder } from "../../../services/tauri";
 import {
   extractCollabAgentIds,
   isCollabSpawnTool,
+  isGrokSpawnSubagentTool,
   isSubagentTool,
   resolveSubagentSessionThreadId,
 } from "../../subagent-ui";
@@ -310,6 +311,33 @@ export function buildClaudeLiveSubagentRows(
     });
   };
 
+  const linkOrPendingChild = (rawChildId: string, name: string) => {
+    const resolvedChildId =
+      resolveSubagentSessionThreadId({
+        parentThreadId: activeThreadId,
+        agentId: rawChildId,
+        explicitThreadId: rawChildId.includes(":") ? rawChildId : null,
+      }) ?? rawChildId;
+    if (threadIds.has(resolvedChildId)) {
+      const existing = threads.find((thread) => thread.id === resolvedChildId);
+      if (
+        existing &&
+        existing.parentThreadId !== activeThreadId &&
+        !linkedChildren.some((row) => row.id === resolvedChildId)
+      ) {
+        linkedChildren.push({
+          ...existing,
+          parentThreadId: activeThreadId,
+        });
+      }
+      return;
+    }
+    pushPending(
+      `${engineSource}-pending-subagent:${activeThreadId}:${rawChildId}`,
+      name,
+    );
+  };
+
   activeItems.forEach((item) => {
     if (item.kind !== "tool" || !isSubagentTool(item)) {
       return;
@@ -326,37 +354,40 @@ export function buildClaudeLiveSubagentRows(
         return;
       }
       agentIds.forEach((agentId) => {
-        if (threadIds.has(agentId)) {
-          const existing = threads.find((thread) => thread.id === agentId);
-          if (
-            existing &&
-            !existing.parentThreadId &&
-            !linkedChildren.some((row) => row.id === agentId)
-          ) {
-            linkedChildren.push({
-              ...existing,
-              parentThreadId: activeThreadId,
-            });
-          }
-          return;
-        }
-        pushPending(
-          `${engineSource}-pending-subagent:${activeThreadId}:${agentId}`,
-          buildPendingSubagentName(item).replace(/^Agent\s+/i, `${agentId} `),
-        );
+        linkOrPendingChild(agentId, buildPendingSubagentName(item));
       });
+      return;
+    }
+
+    // Grok spawn_subagent：output 含 subagent_id → 挂 grok:{id}
+    if (isGrokSpawnSubagentTool(item)) {
+      const args = parseToolArgs(item.detail);
+      const output = typeof item.output === "string" ? item.output : "";
+      const subagentId =
+        getFirstStringField(args, ["subagent_id", "subagentId", "agent_id", "agentId"]) ||
+        /subagent_id\s*[:=]\s*['"]?([a-f0-9-]+)/i.exec(output)?.[1] ||
+        "";
+      if (subagentId) {
+        linkOrPendingChild(subagentId, buildPendingSubagentName(item));
+      } else {
+        pushPending(
+          `${engineSource}-pending-subagent:${activeThreadId}:${item.id}`,
+          buildPendingSubagentName(item),
+        );
+      }
       return;
     }
 
     const args = parseToolArgs(item.detail);
     const taskId = getFirstStringField(args, ["task_id", "taskId"]);
-    const stableAgentId = getFirstStringField(args, ["agent_id", "agentId"]);
+    const stableAgentId = getFirstStringField(args, ["agent_id", "agentId", "subagent_id"]);
     const resolvedChildId = resolveSubagentSessionThreadId({
       parentThreadId: activeThreadId,
       agentId: stableAgentId,
     });
 
     if (resolvedChildId && threadIds.has(resolvedChildId)) {
+      linkOrPendingChild(resolvedChildId, buildPendingSubagentName(item));
       return;
     }
 
@@ -377,6 +408,40 @@ export function buildClaudeLiveSubagentRows(
       : `${engineSource}-pending-subagent:${activeThreadId}:${pendingKey}`;
     pushPending(pendingId, buildPendingSubagentName(item));
   });
+
+  // Shared 父会话：把仍挂在 hidden native owner 下的子线程改挂到 shared:
+  if (parent.threadKind === "shared" || activeThreadId.startsWith("shared:")) {
+    const nativeOwners = new Set<string>();
+    (parent.nativeThreadIds ?? []).forEach((raw) => {
+      const id = raw.trim();
+      if (!id) return;
+      nativeOwners.add(id);
+      if (!id.includes(":")) {
+        nativeOwners.add(`grok:${id}`);
+        nativeOwners.add(`codex:${id}`);
+        nativeOwners.add(`claude:${id}`);
+        nativeOwners.add(`kimi:${id}`);
+      }
+    });
+    if (nativeOwners.size > 0) {
+      threads.forEach((thread) => {
+        const currentParent = thread.parentThreadId?.trim() || "";
+        if (!currentParent || currentParent === activeThreadId) {
+          return;
+        }
+        if (!nativeOwners.has(currentParent)) {
+          return;
+        }
+        if (linkedChildren.some((row) => row.id === thread.id)) {
+          return;
+        }
+        linkedChildren.push({
+          ...thread,
+          parentThreadId: activeThreadId,
+        });
+      });
+    }
+  }
 
   if (pendingRows.length === 0 && linkedChildren.length === 0) {
     return threads;

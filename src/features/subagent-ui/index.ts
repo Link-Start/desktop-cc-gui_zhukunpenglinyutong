@@ -14,21 +14,39 @@ export {
   extractCollabActionName,
   isCollabLifecycleTool,
   isCollabSpawnTool,
+  isGrokSpawnSubagentTool,
+  isSubagentOutputPoller,
   isSubagentTool,
 } from "./utils/isSubagentTool";
 export {
   buildSubagentCardFromSubagentInfo,
   buildSubagentCardFromToolItem,
   buildSubagentCardsFromToolItems,
+  dedupeSubagentSquadCards,
+  enrichCardsWithChildThreads,
   expandSubagentToolToCards,
   extractCollabAgentIds,
   extractSwarmAgentEntries,
+  extractClaudeParentSessionIdFromAgentOutput,
+  isClaudeAsyncAgentLaunchOutput,
+  isOpaqueCiphertext,
+  looksLikeClaudeAgentId,
   resolveClaudeSubagentThreadId,
   resolveSubagentProgress,
   resolveSubagentSessionThreadId,
+  type ChildThreadHint,
   type SubagentCardStatus,
   type SubagentCardViewModel,
 } from "./utils/subagentViewModel";
+export {
+  buildSyntheticSpawnToolsFromChildren,
+  injectSyntheticSubagentToolsIfNeeded,
+} from "./utils/syntheticSharedSubagentTools";
+export {
+  enrichSubagentCardStatuses,
+  isSubagentFinishedOutput,
+  resolveSyntheticChildToolStatus,
+} from "./utils/subagentCardStatus";
 export {
   closeSubagentInspector,
   closeSubagentInspectorIfScopeChanged,

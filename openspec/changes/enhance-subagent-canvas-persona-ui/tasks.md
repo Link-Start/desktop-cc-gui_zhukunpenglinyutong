@@ -34,7 +34,7 @@
 
 - [x] 6.1 focused Vitest（persona / grouping / viewModel）
 - [x] 6.2 typecheck 相关路径（无新增 error）
-- [ ] 6.3 人工 smoke：多 agent 网格、单卡、无 output、右下角打开抽屉（留给用户）
+- [x] 6.3 人工 smoke：多 agent 网格、单卡、无 output、右下角打开抽屉（用户已验收通过）
 
 ## 7. Review 补丁（P0/P1）
 
