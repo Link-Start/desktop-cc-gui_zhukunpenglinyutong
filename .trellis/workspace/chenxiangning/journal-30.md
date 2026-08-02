@@ -1794,3 +1794,53 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1295: 修复 Shared target 竞态与 Claude managed model 串台
+
+**Date**: 2026-08-02
+**Task**: 修复 Shared target 竞态与 Claude managed model 串台
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+分两批提交：Shared Session 乐观更新/merge 保护；Native Claude DeepSeek 渠道 k3 残留与进程 env 隔离
+
+### Main Changes
+
+## 本会话交付
+
+### Commit 1 `89d9f7060` fix(shared-session)
+- OpenSpec: fix-shared-session-target-race-and-merge
+- 乐观 hydrate + in-flight + generation 写序
+- shared: threadKind 硬闸；list 空时用 existingThreads 补回（非空不复活已删）
+
+### Commit 2 `bc2c75d28` fix(claude)
+- OpenSpec: fix-native-claude-provider-runtime-model-sync
+- managed spawn env_remove routing 键
+- resolveClaudeManagedRuntimeModel：catalog 命中用 model；仅 k3/kimi 残留 repair；freeform 放行
+
+### 验证
+- vitest / cargo lib 相关单测通过
+- openspec validate 两个 change 通过
+- 手工：DeepSeek 发送、删 Shared 刷新、Claude freeform 建议自测
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `89d9f7060` | (see git log) |
+| `bc2c75d28` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
