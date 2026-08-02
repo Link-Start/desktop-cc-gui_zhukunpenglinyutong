@@ -2,11 +2,17 @@
 
 本页为 `mossx` 已归档 OpenSpec proposal 的完整可点击索引。目录名中的日期是 archive date，不代表 proposal 首次创建时间。
 
-- Updated At: `2026-07-27`
-- Indexed proposals: `734`
+- Updated At: `2026-08-02`
+- Indexed proposals: `735`
 - Source of truth: `openspec/changes/archive/<archive-date>-<change-id>/proposal.md`
 - Back to current changes: [`../README.md`](../README.md)
 - Back to workspace overview: [`../../project.md`](../../project.md)
+
+## 2026-08 (1)
+
+### 2026-08-02
+
+- [`2026-08-02-fix-native-continuation-artifact-path-windows-compat`](2026-08-02-fix-native-continuation-artifact-path-windows-compat/proposal.md) — verified implementation，已同步 `native-provider-continuation`；artifact 存储路径改为 platform-safe key，修复 Windows `os error 267`，读取兼容 legacy `{sessionId}` 布局
 
 ## 2026-07 (201)
 

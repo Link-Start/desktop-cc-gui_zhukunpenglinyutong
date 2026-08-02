@@ -55,6 +55,12 @@ createNativeProviderContinuation({
   native thread，且 MUST 保留 caller 提供的 exact logical `sessionId` 用于
   materialization、lineage 与来源导航。Codex source MUST 带 authoritative
   `providerProfileId`。
+- Continuation artifact 存储 MUST 使用 platform-safe 的确定性 path key（如
+  `sha256(sessionId)` 短前缀），禁止将 logical `sessionId`（`<engine>:<native>`）
+  直接作为 filesystem path segment；Windows 下 `:` 会触发 `ERROR_DIRECTORY (267)`。
+  Record JSON 内 MUST 保留原始 `sessionId`；读取 MUST 兼容 legacy
+  `{sessionId}` 目录布局，保证升级前 artifact 可读，且
+  `scan_orphan_artifacts` 不得因路径布局变化误删被引用 artifact。
 - destination V1 支持 Claude/Codex。Kimi target 与 remote daemon MUST 返回 typed
   `unsupported-target-acceptance`，禁止 fallback。
 - phase 顺序：`prepared -> creating -> ready`；不确定 ACK 进入

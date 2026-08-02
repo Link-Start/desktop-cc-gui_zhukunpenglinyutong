@@ -2,9 +2,9 @@
 
 本页是 `mossx` OpenSpec proposal 的当前入口。它只维护 active change 的执行状态，并把 archived change 路由到完整历史索引；详细治理快照仍以 [`../project.md`](../project.md) 为准。
 
-- Updated At: `2026-07-31`
-- Active proposals: `29`
-- Archived proposals: `741`
+- Updated At: `2026-08-02`
+- Active proposals: `28`
+- Archived proposals: `742`
 - Main capability specs: `438`
 
 ## Active Proposals
@@ -43,7 +43,8 @@
 
 ## Archived Proposals
 
-- [完整归档提案索引](archive/README.md) — 734 个 proposal，按月份 / 归档日期分组。
+- [完整归档提案索引](archive/README.md) — 735 个 proposal，按月份 / 归档日期分组。
+- [2026-08-02 `fix-native-continuation-artifact-path-windows-compat`](archive/2026-08-02-fix-native-continuation-artifact-path-windows-compat/proposal.md) — verified implementation，已同步 `native-provider-continuation`；artifact 存储路径改为 platform-safe key，修复 Windows `os error 267`，读取兼容 legacy `{sessionId}` 布局。
 - [2026-07-27 `expose-shared-projection-test-toggle`](archive/2026-07-27-expose-shared-projection-test-toggle/proposal.md) — 已同步 `shared-canonical-projection`；设置页新增 Shared Projection 动态测试开关，总任务清单补齐大白话说明、改变点与 UI 变化。
 - [2026-07-27 `improve-codex-provider-protocol-error`](archive/2026-07-27-improve-codex-provider-protocol-error/proposal.md) — 已同步 Codex provider TOML/protocol error contract 与 renderer native Alert 禁令。
 - [2026-07-26 `fix-file-document-loading-error-stuck-state`](archive/2026-07-26-fix-file-document-loading-error-stuck-state/proposal.md) — 已同步 `file-document-loading-error-surface`；文件读取失败或读取期间产生本地脏改后，loading 状态必须收敛且错误可见。
