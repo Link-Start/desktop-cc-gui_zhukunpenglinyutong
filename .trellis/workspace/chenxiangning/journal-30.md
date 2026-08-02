@@ -1701,3 +1701,53 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1293: 跨引擎子代理幕布识别与会话树层级
+
+**Date**: 2026-08-02
+**Task**: 跨引擎子代理幕布识别与会话树层级
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 区域 | 说明 |
+|------|------|
+| 幕布识别 | Codex collab / Grok spawn_subagent / Kimi swarm / Shared 合成卡 |
+| 会话树 | Grok parent_session_id、Shared native→shared parent remap、threadParentById |
+| 详情抽屉 | 跨引擎 loader；过滤 launch 元数据/密文；output_file 路径兜底 Claude subagent id |
+| 状态纠偏 | completion 语义 + isProcessing，避免假运行中与 0/3 |
+| i18n | zh-TW/ja/ko/es/fr/ru/hi/pt-BR + locale parity 测试 |
+| OpenSpec | 追溯提案 adapt-subagent-cross-engine-display；persona-ui 6.3 勾选 |
+
+**Commit**: `7ada4675b` feat(subagent-ui): 跨引擎适配子代理幕布识别与会话树层级
+
+**Updated Files (摘要)**:
+- `src/features/subagent-ui/**`（ViewModel、识别、合成卡、详情 transcript、状态）
+- `src-tauri/src/engine/grok_history.rs`
+- `src/features/shared-session/runtime/sharedSessionSummaries.ts`
+- `src/features/threads/hooks/*`、`activeCanvasStore`、`StatusPanel`
+- `src/i18n/locales/*` + `openspec/changes/adapt-subagent-cross-engine-display/**`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7ada4675b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

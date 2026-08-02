@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-30.md`
-- **Total Sessions**: 1292
+- **Total Sessions**: 1293
 - **Last Active**: 2026-08-02
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-30.md` | ~1703 | Active |
+| `journal-30.md` | ~1753 | Active |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
@@ -58,6 +58,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1293 | 2026-08-02 | 跨引擎子代理幕布识别与会话树层级 | `7ada4675b` | `cxn-version-0.7.15` |
 | 1292 | 2026-08-02 | 稳定 Shared 会话列表图标（id-first） | `7caf8006f` | `cxn-version-0.7.15` |
 | 1291 | 2026-08-02 | 为杀开关空 stub 补防御性测试 | `6e47b64ef` | `cxn-version-0.7.15` |
 | 1290 | 2026-08-02 | 整体下线会话活动与 Solo 模式（接线级 disable + OpenSpec） | `7ef9151f9` | `cxn-version-0.7.15` |
