@@ -1302,3 +1302,45 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1284: fix: Native 过程折叠吸收孤儿思考
+
+**Date**: 2026-08-02
+**Task**: fix: Native 过程折叠吸收孤儿思考
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 内容 |
+|----|------|
+| 问题 | Native Claude/Grok 流式 mid-plan 打断 process walk-back，顶部孤儿「思考过程」；Shared 图3 干净 |
+| 修复 | turn-final ownership：终稿 assistant 吸收同 turn 全部 reasoning/tool/explore |
+| 代码 | `messagesViewModel.ts` + collapseMiddleSteps tests |
+| OpenSpec | `message-process-phase-collapse` main spec；归档 `2026-08-02-fix-native-process-phase-orphan-reasoning` |
+| 验证 | vitest collapse 11 + projection 8 + live-behavior collapse 相关；openspec validate 通过 |
+
+**未纳入**：session_management / SessionManagement UI 工作区脏文件
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cee3ec655` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
