@@ -119,6 +119,58 @@ describe("subagentViewModel", () => {
     expect(cards.every((card) => card.description.length > 0)).toBe(true);
   });
 
+  it("isolates each AgentSwarm card body so detail is not the full XML envelope (Kimi)", () => {
+    const swarm: Extract<ConversationItem, { kind: "tool" }> = {
+      id: "swarm-iso",
+      kind: "tool",
+      toolType: "tool",
+      title: "Launching agent swarm: greet",
+      detail: JSON.stringify({
+        items: ["1号", "2号", "3号"],
+        subagent_type: "coder",
+      }),
+      status: "completed",
+      output: `<agent_swarm_result>
+<summary>completed: 3</summary>
+<subagent agent_id="agent-0" item="1号" outcome="completed">## 任务执行总结
+
+### 任务内容
+1号独立正文
+</subagent>
+<subagent agent_id="agent-1" item="2号" outcome="completed">## 完整任务总结
+
+2号独立正文
+</subagent>
+<subagent agent_id="agent-2" item="3号" outcome="completed">任务完成。
+3号独立正文
+</subagent>
+</agent_swarm_result>`,
+    };
+    const cards = buildSubagentCardsFromToolItems([swarm], {
+      parentThreadId: "kimi:session_parent",
+    });
+    expect(cards).toHaveLength(3);
+
+    // 每张卡只含自己的 body，不含 XML 外壳与其它 agent 正文
+    expect(cards[0]?.outputText).toContain("1号独立正文");
+    expect(cards[0]?.outputText).not.toContain("2号独立正文");
+    expect(cards[0]?.outputText).not.toContain("<agent_swarm_result>");
+    expect(cards[0]?.outputText).not.toContain("<subagent");
+    expect(cards[0]?.agentId).toBe("agent-0");
+
+    expect(cards[1]?.outputText).toContain("2号独立正文");
+    expect(cards[1]?.outputText).not.toContain("1号独立正文");
+    expect(cards[1]?.agentId).toBe("agent-1");
+
+    expect(cards[2]?.outputText).toContain("3号独立正文");
+    expect(cards[2]?.outputText).not.toContain("1号独立正文");
+
+    // 禁止映射成不可加载的 kimi:agent-0（history 只读 agents/main）
+    expect(cards.every((card) => card.sessionThreadId == null)).toBe(true);
+    // 换行应保留，详情 pre-wrap 才能正常排版
+    expect(cards[0]?.outputText).toMatch(/任务执行总结[\s\S]*任务内容/);
+  });
+
   it("dedupes launch items + separate result tool in one squad (Kimi 3+3)", () => {
     const launch: Extract<ConversationItem, { kind: "tool" }> = {
       id: "launch",
@@ -147,6 +199,34 @@ describe("subagentViewModel", () => {
     });
     expect(cards).toHaveLength(3);
     expect(cards.some((card) => card.description.includes("#1"))).toBe(false);
+    // 结果卡应带隔离 body
+    expect(cards[0]?.outputText).toBe("## 1号报告");
+    expect(cards[1]?.outputText).toBe("## 2号报告");
+    expect(cards[2]?.outputText).toBe("## 3号报告");
+  });
+
+  it("does not suppress Claude Agent sessionThreadId (non-swarm regression guard)", () => {
+    const agentTool: Extract<ConversationItem, { kind: "tool" }> = {
+      id: "claude-agent-1",
+      kind: "tool",
+      toolType: "agent",
+      title: "Tool: Agent",
+      detail: JSON.stringify({
+        description: "explore catalog",
+        subagent_type: "explore",
+      }),
+      status: "completed",
+      output:
+        "Async agent launched successfully.\nagentId: a59c91e328c6a6c61\noutput_file: /tmp/claude/tasks/abc/agent.output",
+    };
+    const cards = buildSubagentCardsFromToolItems([agentTool], {
+      parentThreadId: "claude:parent-session-id",
+    });
+    expect(cards).toHaveLength(1);
+    expect(cards[0]?.sessionThreadId).toBe(
+      "claude:subagent:parent-session-id:a59c91e328c6a6c61",
+    );
+    expect(cards[0]?.outputText).toContain("Async agent launched successfully");
   });
 
   it("resolves Shared Claude Agent launch to claude:subagent via nativeThreadIds", () => {
