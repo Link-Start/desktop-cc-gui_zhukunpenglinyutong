@@ -1344,3 +1344,41 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1285: fix: 单步思考收进过程 chip
+
+**Date**: 2026-08-02
+**Task**: fix: 单步思考收进过程 chip
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 内容 |
+|----|------|
+| 产品 | 单步思考也进 chip，Native/Shared 一致 |
+| 改动 | count 门槛 1；投影层同步；单测覆盖 lone reasoning |
+| 提交 | 见 commit |
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9c94ca1df` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
