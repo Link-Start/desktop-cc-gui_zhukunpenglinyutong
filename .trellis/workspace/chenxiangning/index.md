@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-30.md`
-- **Total Sessions**: 1287
+- **Total Sessions**: 1288
 - **Last Active**: 2026-08-02
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-30.md` | ~1478 | Active |
+| `journal-30.md` | ~1526 | Active |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
@@ -58,6 +58,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1288 | 2026-08-02 | fix Shared 模型供应商切换误入 Native 续接 | `8468544a5` | `cxn-version-0.7.15` |
 | 1287 | 2026-08-02 | SubAgent 幕布 persona 卡片与 inspector 抽屉 | `49353a4c8` | `cxn-version-0.7.15` |
 | 1286 | 2026-08-02 | fix(status-panel): Native 会话额度仅查当前供应商 | `46724bb45` | `cxn-version-0.7.15` |
 | 1285 | 2026-08-02 | fix: 单步思考收进过程 chip | `9c94ca1df` | `cxn-version-0.7.15` |

@@ -1476,3 +1476,51 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1288: fix Shared 模型供应商切换误入 Native 续接
+
+**Date**: 2026-08-02
+**Task**: fix Shared 模型供应商切换误入 Native 续接
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 主修复 | Shared 身份 id-first：`shared:` 硬闸，threadKind 仅兜底 |
+| 爆炸半径 | picker / send getThreadKind / delete 绑定清理 / 续接 prepare |
+| 附带 | useModels freeform 用户锁 + catalog 指纹 + persist 归一（#185） |
+| OpenSpec | `fix-shared-session-identity-id-first` T1–T3 |
+| 验证 | vitest 103 通过；tsc --noEmit 通过 |
+| 未做 | T4 hydrate 写序；T5 merge 保护 |
+
+**关键文件**:
+- `src/features/shared-session/utils/sharedSessionIdentity.ts`
+- `src/features/composer/components/Composer.tsx`
+- `src/features/threads/hooks/useThreads.ts`
+- `src/features/models/hooks/useModels.ts`
+- `docs/analysis/shared-session-model-picker-native-fallback-2026-08-02.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8468544a5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
