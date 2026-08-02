@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-30.md`
-- **Total Sessions**: 1293
+- **Total Sessions**: 1294
 - **Last Active**: 2026-08-02
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-30.md` | ~1753 | Active |
+| `journal-30.md` | ~1796 | Active |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
@@ -58,6 +58,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1294 | 2026-08-02 | fix: 隔离 Kimi AgentSwarm 子代理交付正文 | `80da295e5` | `cxn-version-0.7.15` |
 | 1293 | 2026-08-02 | 跨引擎子代理幕布识别与会话树层级 | `7ada4675b` | `cxn-version-0.7.15` |
 | 1292 | 2026-08-02 | 稳定 Shared 会话列表图标（id-first） | `7caf8006f` | `cxn-version-0.7.15` |
 | 1291 | 2026-08-02 | 为杀开关空 stub 补防御性测试 | `6e47b64ef` | `cxn-version-0.7.15` |

@@ -1751,3 +1751,46 @@ render/count file-IO bash groups; pure shell still hidden
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1294: fix: 隔离 Kimi AgentSwarm 子代理交付正文
+
+**Date**: 2026-08-02
+**Task**: fix: 隔离 Kimi AgentSwarm 子代理交付正文
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 问题 | Native Kimi AgentSwarm 详情共享整包 agent_swarm_result XML |
+| 修复 | 按 subagent 拆 body；suppressSessionThread 禁止假 kimi:agent-N |
+| 范围 | 仅 subagent-ui viewModel；Claude/Codex/Grok 不回归 |
+| 验证 | vitest subagentViewModel 14/14 |
+
+**Updated Files**:
+- `src/features/subagent-ui/utils/subagentViewModel.ts`
+- `src/features/subagent-ui/utils/subagentViewModel.test.ts`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `80da295e5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
