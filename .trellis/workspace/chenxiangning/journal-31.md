@@ -492,3 +492,36 @@ onDebugRef 解耦、原子 selection state、乐观 snapshot、preferred 归一�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1313: 收录轨道路由 Logo 示例
+
+**Date**: 2026-08-03
+**Task**: 收录轨道路由 Logo 示例
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+将 9 个轨道路由 Logo 示例从临时 output 目录移动至 docs/assets/logo-concepts/orbit-routing，并作为文档设计资产提交。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `22164e20e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
