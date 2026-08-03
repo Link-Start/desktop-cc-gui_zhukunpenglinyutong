@@ -1,8 +1,13 @@
+---
+type: performance
+status: historical
+---
+
 # Parallel Conversation Jank Handbook
 
 > **内容类型**：Troubleshooting + historical remediation playbook
 > **生命周期**：implemented / historical；七类风险模型仍可用于诊断，但路径、flags 和阈值必须按当前代码重验
-> **最后校准**：2026-08-01 · mossx `0.7.14` · HEAD `26f8065a0c`
+> **最后校准**：2026-08-03 · mossx `0.7.16`
 > **读者**：接手「客户端并行对话卡顿」问题的工程师 / QA / on-call。
 > **事实源**：`openspec/specs/parallel-conversation-runtime-residuals/spec.md`、`.trellis/spec/frontend/parallel-conversation-runtime-residuals.md`、当前 runtime evidence
 
@@ -40,7 +45,7 @@
 
 如果满足「5 workspace + 2 long-running turn + 15 分钟后切 workspace 响应 > 200ms」,即可确认是本手册描述的卡顿。
 
-复现脚本:`scripts/perf-reproduce-jank.sh`(只跑外部采样,需 Tauri 实例已开)。
+复现脚本：`OUTPUT_DIR=.artifacts/perf/jank bash scripts/perf-reproduce-jank.sh`（只跑外部采样，需 Tauri 实例已开）。显式指定 `OUTPUT_DIR`，避免把一次性报告写回长期 docs 根目录。
 
 ---
 
@@ -946,7 +951,7 @@ it('clears src when out of viewport', async () => {
 
 - 跑 `npm run typecheck` + `npm run lint` + `npm run test` 全套，确认无回归。
 - 跑 §1 复现步骤,记录卡顿改善程度(切 workspace 响应时间 / 帧时间 / 内存)。
-- 在 `docs/perf/jank-fix-progress.md` 记录本次修复的根因 + 数据 + 验收结果。
+- 将本次根因、数据和验收结果写入带 timestamp/version/commit 的独立 evidence artifact；`docs/perf/jank-fix-progress.md` 是只读历史 worksheet，不再续写。
 
 ---
 
@@ -986,7 +991,7 @@ it('clears src when out of viewport', async () => {
 - **主线 OpenSpec spec**:`openspec/specs/parallel-conversation-runtime-residuals/spec.md`
 - **Code-level rule**:`.trellis/spec/frontend/parallel-conversation-runtime-residuals.md`(沉淀)
 - **复现脚本**:`scripts/perf-reproduce-jank.sh`
-- **执行进度**:`docs/perf/jank-fix-progress.md`(边修边记)
+- **历史执行进度**：`docs/perf/jank-fix-progress.md`（deprecated worksheet，只读，不再回填）
 - **修复提案归档**：`openspec/changes/archive/2026-06-14-fix-parallel-conversation-runtime-residuals-2026-06/`
 
 ---
@@ -1003,7 +1008,7 @@ A:看症状。优先 P0(§4 + §5),这两条修了通常就能解决 60-80% 的�
 
 ### Q:如果修完后还有卡顿,怎么办?
 
-A:1) 跑 §2 第一轮排查 5 步,确认没漏。2) 看 `docs/perf/jank-fix-progress.md` 历史记录,看是否有未根治的子症状。3) 在 `openspec/changes/` 起新的 change 处理新发现的根因。
+A:1) 跑 §2 第一轮排查 5 步，确认没漏。2) 只把 `docs/perf/jank-fix-progress.md` 当历史线索，不把空白项当 backlog。3) 用新的 timestamped evidence 立证后，在 `openspec/changes/` 起独立 change。
 
 ### Q:这跟 `c27bb18a` 那些 P1 提案冲突吗?
 

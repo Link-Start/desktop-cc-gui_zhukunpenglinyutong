@@ -939,6 +939,10 @@ export function dedupeSubagentSquadCards(
     if (card.id.includes(":swarm-result:")) score += 2;
     if (card.sessionThreadId) score += 1;
     score += Math.min(2, Math.floor(card.description.length / 40));
+    // 真实 collab/spawn tool 优先于 synthetic-*-subagent 占位，避免 live 双卡
+    if (card.id.includes("synthetic-") && card.id.includes("-subagent:")) {
+      score -= 5;
+    }
     return score;
   };
 

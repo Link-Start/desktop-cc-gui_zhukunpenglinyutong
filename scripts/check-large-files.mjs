@@ -630,9 +630,18 @@ function buildMarkdownReport(scan, generatedAt) {
         ? "Large File New-File Ratchet Baseline"
       : "Large File Baseline";
 
-  const lines = [];
-  lines.push(`# ${title}`);
-  lines.push("");
+  const lines = [
+    "---",
+    "type: generated",
+    "status: generated",
+    "---",
+    "",
+    `# ${title}`,
+    "",
+    "> **Lifecycle**: Generated snapshot. This report reflects repository state only at the generation time below; rerun the current scanner before making governance decisions.",
+    "> **Fact boundary**: This Markdown is a human-readable projection, not an accepted baseline source or proof that the current tree passes the gate. Machine-readable baseline JSON and current CLI output remain authoritative.",
+    "",
+  ];
   lines.push(`- Generated at: ${generatedAt}`);
   lines.push(`- Scope: ${scan.scope}`);
   if (scan.policyVersion) {

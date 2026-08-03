@@ -1,7 +1,18 @@
+---
+type: analysis
+status: historical
+---
+
+<!-- DOC-LIFECYCLE: resolved-incident -->
+> [!IMPORTANT]
+> **Lifecycle: Resolved incident, closed 2026-08-03.** Identity T1-T3、target optimistic persistence T4 与 stale hydrate/merge protection T5 均已实施并进入 main specs。本文后续的“待实施”措辞只保留历史推演语境，不代表当前状态。
+>
+> Canonical evidence：[identity fix](../../openspec/changes/archive/2026-08-03-fix-shared-session-identity-id-first/) · [target race/merge fix](../../openspec/changes/archive/2026-08-03-fix-shared-session-target-race-and-merge/) · [shared target optimistic spec](../../openspec/specs/shared-session-target-optimistic/spec.md)。
+
 # Shared Session 模型供应商选择器：回退 Native 形态调研与修复提案
 
 > **对照源码日期**：2026-08-02 · 产品以当前 HEAD 为准（调研时约 `0.7.15` 一带）
-> **状态**：**T1–T3 已修复**（commit `8468544a5`；id-first 硬闸 + send/delete 连带；T4/T5 仍另开 change）
+> **状态**：**已关闭**；T1–T3 与 T4/T5 已分别实现并归档，证据见文首 canonical links
 > **用途**：记录 Shared CLI 场景下「模型/渠道选择器行为退化为 Native 续接」的现象、调用链、根因、修复提案与任务拆分
 > **索引**：[`README.md`](./README.md)
 > **姊妹文（契约正本）**：[`native-session-provider-select-vs-disk-overwrite-2026-07-31.md`](./native-session-provider-select-vs-disk-overwrite-2026-07-31.md)
@@ -321,7 +332,7 @@ Shared 与 Native **长得一样**；分叉只在 handler 与 catalog mode。身
 
 ---
 
-## 7. 修复提案（完整，待实施）
+## 7. 历史修复提案（已实施）
 
 > 总原则：**id-first, kind-second**。`shared:` 前缀是身份 hard gate；`threadKind` 只是投影。所有 picker / send / delete / 续接 guard 收敛到同一 helper。
 > 止血闭环 = T1+T2+T3（一个 commit）；T4/T5 分开提交，避免行为变更与策略变更混在一个 PR。

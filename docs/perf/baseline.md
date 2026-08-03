@@ -1,4 +1,11 @@
+---
+type: performance
+status: historical
+---
+
 # v0.5.11 Performance Baseline
+
+> **Lifecycle**：Historical Generated Snapshot。锚定下方 version/branch/commit；不是 0.7.16 current evidence。当前结论必须重新采样。
 
 Generated at: 2026-06-18T11:01:56.460Z
 Schema version: 1.0

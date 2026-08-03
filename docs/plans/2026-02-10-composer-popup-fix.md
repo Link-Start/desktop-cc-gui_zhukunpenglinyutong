@@ -1,3 +1,12 @@
+---
+type: plan
+status: implemented
+---
+
+<!-- DOC-LIFECYCLE: implemented-historical-plan -->
+> [!NOTE]
+> **Lifecycle: Implemented historical plan.** 本文保留当时的实施顺序与验收轨迹，不是 current plan。当前行为以 [OpenSpec main specifications](../../openspec/specs/README.md) 与代码为准；unchecked checkbox 不构成 active backlog。
+
 # Composer 弹窗问题修复落盘（2026-02-10）
 
 > **Lifecycle**：Historical Fix Record。本文保留当时 root-cause 与两阶段修复证据；当前 Composer popover ownership、portal/CSS 与 regression coverage 须按现有 `src/features/composer/` 重验。

@@ -1,4 +1,13 @@
+---
+type: design
+status: implemented
+---
+
 # Sidebar Cache Design
+
+> **生命周期**：implemented / historical
+> **实现事实源**：`src/features/threads/utils/sidebarSnapshot.ts`、`useWorkspaces.ts`、`useThreads.ts` 及对应 tests
+> **说明**：本文保留原始设计语态；current behavior 以代码为准。
 
 ## Summary
 

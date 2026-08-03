@@ -1,3 +1,12 @@
+---
+type: analysis
+status: historical
+---
+
+<!-- DOC-LIFECYCLE: implemented-review -->
+> [!NOTE]
+> **Lifecycle: Implemented review/closure evidence.** `unify-conversation-canvas` 已于 2026-08-03 归档。本文保留 review 当时的发现与验收轨迹；current behavior 以 [main specs](../../openspec/specs/README.md) 与代码为准。
+
 # unify-conversation-canvas 多角度 Review（2026-08-01）
 
 > **文档性质**：**过程后验**（改前判断 + 实施完成度 + 入库后校准）。**不删除**实施期结论，只追加「当时→现在」。

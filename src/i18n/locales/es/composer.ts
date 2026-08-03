@@ -188,6 +188,7 @@ const composer = {
       "empty-draft": "Borrador vacío"
     },
     "queueStatusWaiting": "En cola para el próximo turno",
+    "queueStatusPendingAck": "Enviado — confirmando (anti-duplicado)",
     "queueStatusFuseReady": "Se puede fusionar con el turno actual",
     "queueStatusFusing": "Fusionando con el turno actual",
     "queueStatusCommand": "El comando con barra espera al próximo turno",

@@ -1,9 +1,18 @@
+---
+type: plan
+status: implemented
+---
+
+<!-- DOC-LIFECYCLE: implemented-architecture-plan -->
+> [!NOTE]
+> **Lifecycle: Implemented architecture plan.** 本文保留设计推演和执行证据；implementation change 已归档。Current contract 以 [OpenSpec main specifications](../../openspec/specs/README.md) 与代码为准，历史 task/checklist 不构成 backlog。
+
 # 共同幕布滚动所有权与编排架构（Scroll Ownership Architecture）
 
 > **日期**：2026-08-01（F 类 / 间歇性补记同日）
 > **内容类型**：Strategic Architecture + Decision Record
-> **生命周期**：implemented，待 Human QA / verify / archive
-> **状态**：**代码已入库** `b34fdaead`（`scrollAuthorityMachine` + controller 接入）；OpenSpec `23/26`，仅余 3 项 Human QA
+> **生命周期**：implemented；相关 change 已归档，正文未勾 Human QA 仅保留历史验收轨迹，不构成 active backlog
+> **归档前快照**：**代码已入库** `b34fdaead`（`scrollAuthorityMachine` + controller 接入）；OpenSpec 当时为 `23/26`，仅余 3 项 Human QA
 > **最后校准**：2026-08-01 · mossx `0.7.14` · HEAD `26f8065a0c`
 > **分析入口**：`docs/analysis/conversation-canvas-structure-2026-07-31.md` §7.3 · `docs/analysis/README.md`
 > **触发症状（已确认）**
@@ -14,7 +23,7 @@
 > **关联**
 > - 结构底稿：`docs/analysis/conversation-canvas-structure-2026-07-31.md`
 > - 统一幕布任务：`docs/plans/2026-08-01-unified-conversation-canvas-architecture.md`
-> - 既有止血 change：`openspec/changes/fix-messages-scroll-echo-follow-loss`（实现 + 单测闭环；**实机 5.x 未勾**）
+> - 既有止血 change：`openspec/changes/archive/2026-08-03-fix-messages-scroll-echo-follow-loss/`（实现 + 单测闭环；归档前 **实机 5.x 未勾**）
 > - 近期路径修：`b3cbfaa8` 快流 thrash / settle 吸底偏差
 
 ---
@@ -912,7 +921,9 @@ function browserClampProven(prev, next):
 
 ---
 
-## 12. 下一步（当前收口路径）
+## 12. 历史收口清单（归档前）
+
+以下步骤保留归档前的 Human QA / verify 计划，不是 current backlog。
 
 1. 在实机完成 A 类发送、F 类结束真底、上滚释放/重新武装三组 Human QA。
 2. 用 `distanceToBottom <= 1px` 和 reason code 作为证据，不以滑块观感替代。

@@ -1,3 +1,8 @@
+---
+type: design
+status: implemented
+---
+
 # A4 实施方案：流式正文 live-text 外部化（delta 不进根 reducer）
 
 > 日期：2026-07-08
@@ -5,15 +10,15 @@
 > 内容类型：Implementation Plan + historical evidence
 > 生命周期：implemented；2026-07-30 由 `1537211a1` 继续演进
 > 状态：**已实施 + 人工验收通过；flag `liveTextExternalization` 默认开启**
-> 最后校准：2026-08-01 · mossx `0.7.14` · HEAD `26f8065a0c`
-> 侦察方式：2 个并行 Explore agent + 人工核验，所有事实均带 文件:行号
+> 最后校准：2026-08-03 · mossx `0.7.16`
+> 侦察方式：2026-07-08 capture-time 代码侦察 + 2026-08-03 current symbol 核验；正文旧行号只锚定当时快照
 >
 > **实施落点**：通道 `utils/liveAssistantTextChannel.ts`、hook `hooks/useLiveAssistantText.ts`、flag `liveTextExternalization`、写入/settle/drain/rename/evict 生命周期，以及 `rows/components/MessageRow.tsx` 渲染换源。
 > **回退方式**：devtools console 执行 `localStorage.setItem("ccgui.perf.liveTextExternalization", "0")` 后**刷新**；删除该 key 恢复默认（开）。
 
 ---
 
-## 0. 2026-08-01 演进增量
+## 0. 2026-08-03 当前实现合同
 
 原方案的「delta 不进根 reducer」合同未变；`1537211a1` 在 store → React 边界补上单一发布节奏：
 
@@ -151,11 +156,11 @@ const liveEntry = useLiveAssistantText(
 
 ```
 id: "liveTextExternalization"
-defaultValue: false          // 上线默认关,行为与现状完全一致
-testDefaultValue: false      // 存量测试零影响
+defaultValue: true           // 0.7.16 production 默认开启
+testDefaultValue: false      // 测试默认仍关闭，按用例显式开启
 ```
 
-验证达标后翻 `defaultValue: true`；出问题 localStorage 一键回退（`ccgui.perf.liveTextExternalization`）。
+当前 production 已为 `defaultValue: true`；出问题可通过 localStorage 一键回退（`ccgui.perf.liveTextExternalization`）。
 
 ---
 

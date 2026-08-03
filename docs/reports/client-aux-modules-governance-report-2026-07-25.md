@@ -1,3 +1,12 @@
+---
+type: report
+status: historical
+---
+
+<!-- DOC-LIFECYCLE: historical-report -->
+> [!NOTE]
+> **Lifecycle: Historical dated report.** 本文保留当时的 audit、impact 与 debt snapshot，不是 current backlog。未完成建议必须重新核验代码并建立新的 OpenSpec change 后才能执行。
+
 # 客户端辅助功能与技术债务综合治理报告（合并版）
 
 > **2026-08-01 生命周期校准**：Historical Evidence Snapshot。本文保存 2026-07-25～26 的审计与收口过程，不是当前 debt checklist；任何残余项须对 `0.7.14` 当前代码与 OpenSpec 重新立证。

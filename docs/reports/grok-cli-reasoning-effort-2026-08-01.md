@@ -1,8 +1,17 @@
+---
+type: report
+status: historical
+---
+
+<!-- DOC-LIFECYCLE: implemented-capability-evidence -->
+> [!NOTE]
+> **Lifecycle: Implemented capability evidence.** Grok reasoning-effort change 已于 2026-08-03 归档。Current contract：[Grok reasoning effort spec](../../openspec/specs/grok-reasoning-effort/spec.md)。
+
 # Grok CLI 思考强度接入（2026-08-01）
 
 > **文档性质**：implementation + verification evidence  
 > **基线分支**：`feature/v-0714`  
-> **OpenSpec change**：`openspec/changes/grok-cli-reasoning-effort/`  
+> **OpenSpec change**：`openspec/changes/archive/2026-08-03-grok-cli-reasoning-effort/`  
 > **关联**：`add-grok-engine` 初版非目标；本 change 单独收口 reasoning effort  
 > **不是** 永久 current value：能力以 `openspec/specs/engine-capability-matrix/fixtures/matrix.json` 与 `pnpm check:engine-capability-matrix` 为准
 

@@ -1,3 +1,12 @@
+---
+type: plan
+status: implemented
+---
+
+<!-- DOC-LIFECYCLE: implemented-historical-plan -->
+> [!NOTE]
+> **Lifecycle: Implemented historical plan.** 本文保留当时的实施顺序与验收轨迹，不是 current plan。当前行为以 [OpenSpec main specifications](../../openspec/specs/README.md) 与代码为准；unchecked checkbox 不构成 active backlog。
+
 # Context Ledger Then Task Center Implementation Plan
 
 > **Lifecycle**：Implemented / Historical Program Plan。Context Ledger 与 Task Center 的相关 changes 已归档；下文 Phase A/B、Trellis task 与 “current” 描述保留为实施过程，不是 2026-08 backlog。

@@ -1,3 +1,8 @@
+---
+type: historical-reference
+status: historical
+---
+
 # Browser Dock Phase 3 Cross-Platform Degraded-Capability Matrix
 
 > **文档性质**：Phase 3 **跨平台降级能力矩阵**（时间快照）。

@@ -1,3 +1,12 @@
+---
+type: guide
+status: active
+---
+
+<!-- DOC-LIFECYCLE: active-troubleshooting -->
+> [!NOTE]
+> **Lifecycle: Active troubleshooting runbook.** Historical case log 必须区分 fixed-in-code、manually verified 与 unverified；记录中的待提交/待验证占位不构成 current backlog。
+
 # React #185 Maximum Update Depth Playbook
 
 > **文档性质**：可追加 living playbook（依据文档），不是一次性事故报告。

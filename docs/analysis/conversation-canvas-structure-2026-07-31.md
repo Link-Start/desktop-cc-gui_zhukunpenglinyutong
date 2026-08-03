@@ -1,6 +1,15 @@
+---
+type: analysis
+status: active
+---
+
+<!-- DOC-LIFECYCLE: active-reference -->
+> [!NOTE]
+> **Lifecycle: Active explanatory reference.** 已按产品 `0.7.16` 校准；implementation changes 已归档。Current contract 以 [OpenSpec main specs](../../openspec/specs/README.md) 与代码为准。
+
 # 对话幕布结构（多 CLI + 共享会话）
 
-> **对照源码日期**：2026-08-01（二次校准；产品 **`0.7.14`**）
+> **对照源码日期**：2026-08-01（二次校准；产品 **`0.7.16`**）
 > **实现状态**：统一幕布 Phase A–E 已入库（`bf3b35bd6`）；滚动所有权状态机已入库（`b34fdaead`）
 > **范围**：中心对话区（幕布 / Messages 时间线）
 > **用途**：**现网结构**底稿 + 排障入口；过程后验见 unify-review，能力登记见 matrix
@@ -843,7 +852,7 @@ oversized / 手动轻量 → 灰条「详情已延迟」→ 点「渲染详情�
 | 2026-08-01 | 增补 **§5.1 Grok 实时无 live tool**（当时缺口诊断） |
 | 2026-08-01 | 挂接统一幕布 PLAN；Phase A–E 实施（轻量下线、Grok 桥、藏 bash） |
 | 2026-08-01 | Phase E + Review + matrix 落盘 |
-| 2026-08-01 | **二次校准（不丢过程）**：文头对齐 `0.7.14` 与 commit 锚点；§5.1 改为「缺口→桥」演进；§7.2 拆现网/历史触发；新增 **§7.3 scroll authority**；§8–§11/§10 优先级与症状表同步；矛盾「Grok 永远无 tool」清除 |
+| 2026-08-01 | **二次校准（不丢过程）**：文头对齐 `0.7.16` 与 commit 锚点；§5.1 改为「缺口→桥」演进；§7.2 拆现网/历史触发；新增 **§7.3 scroll authority**；§8–§11/§10 优先级与症状表同步；矛盾「Grok 永远无 tool」清除 |
 
 ---
 

@@ -1,3 +1,12 @@
+---
+type: plan
+status: superseded
+---
+
+<!-- DOC-LIFECYCLE: superseded-plan -->
+> [!WARNING]
+> **Lifecycle: Superseded historical plan.** 本方案已被后续修正版和 current Project Memory contracts 替代，不得按本文 checkbox 继续实施。Current source：[Project Memory consumption spec](../../../openspec/specs/project-memory-consumption/spec.md)。
+
 # Phase 2.1 实施计划：项目记忆消费注入 MVP
 
 > 创建：2026-02-10

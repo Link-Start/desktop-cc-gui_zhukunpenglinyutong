@@ -1,9 +1,18 @@
+---
+type: guide
+status: active
+---
+
+<!-- DOC-LIFECYCLE: active-guide -->
+> [!NOTE]
+> **Lifecycle: Current onboarding guide.** 已按产品 `0.7.16` 校准；概念性名称不能替代真实 source symbol，接入前必须核验当前 engine registry、capability matrix 与 runtime adapters。
+
 # 新 CLI 接入指南（Engine Onboarding Guide）
 
 > 初始日期：2026-07-27
 > 内容类型：How-to + conceptual integration contract
 > 生命周期：accepted；流程有效，注册点已按 2026-08-01 代码校准
-> 最近校准：2026-08-01 · mossx `0.7.14` · HEAD `26f8065a0c`
+> 最近校准：2026-08-01 · mossx `0.7.16` · HEAD `26f8065a0c`
 > 上游契约：[`mossx-multi-cli-provider-session-foundation-design.md`](./mossx-multi-cli-provider-session-foundation-design.md)（下称**基石设计**）
 > 适用读者：要为 mossx 接入新 Agent CLI（如 Grok CLI、Auggie、未来任意 CLI）的工程师
 > 核心结论：接入一个新 CLI = **一次 Capability Spike + 一个 RuntimeDeliveryAdapter + terminal/event normalizer + 注册点**，不是复制一套 Shared lifecycle。接入目标是保持存量 CLI、Native Session 与 Shared Session 的既有语义不变。

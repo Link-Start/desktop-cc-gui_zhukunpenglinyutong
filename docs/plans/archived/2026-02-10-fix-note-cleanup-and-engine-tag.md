@@ -1,3 +1,12 @@
+---
+type: plan
+status: implemented
+---
+
+<!-- DOC-LIFECYCLE: implemented-historical-plan -->
+> [!NOTE]
+> **Lifecycle: Implemented historical plan.** 正文中的“待执行”“待归档”或 unchecked checkbox 是当时的执行快照，不代表当前状态。Current Project Memory contract 以 [OpenSpec main specifications](../../../openspec/specs/README.md) 与代码为准。
+
 # 修复 note 未清理 + 每条记忆打上引擎标签
 
 > **Claude 必读**: 使用 wf-plan-execute 实施此计划

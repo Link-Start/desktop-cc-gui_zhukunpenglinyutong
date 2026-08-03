@@ -1,8 +1,13 @@
+---
+type: performance
+status: historical
+---
+
 # Parallel Conversation Jank — Document Index
 
 > **内容类型**：Troubleshooting index
 > **生命周期**：historical / reusable diagnosis；对应 P0 修复 change 已归档
-> **最后校准**：2026-08-01 · mossx `0.7.14` · HEAD `26f8065a0c`
+> **最后校准**：2026-08-03 · mossx `0.7.16`
 > 读者：接手「客户端并行对话卡顿」问题的人。先看 TL;DR，再按 §1 顺序读。
 
 ## 0. TL;DR
@@ -51,8 +56,8 @@
 
 若当前 evidence 再次命中对应根因，可参考该顺序；否则新建独立 change。每阶段完成后：
 - 跑 `npm run typecheck && npm run lint && npm run test` 全套
-- 跑 `bash scripts/perf-reproduce-jank.sh` 复现 + 采基线
-- 在 `jank-fix-progress.md` 记录数据
+- 跑 `OUTPUT_DIR=.artifacts/perf/jank bash scripts/perf-reproduce-jank.sh` 复现 + 采基线
+- 新数据写入带 timestamp/version/commit 的独立 evidence artifact；`jank-fix-progress.md` 只读，不再续写
 
 ## 4. 验收基线
 

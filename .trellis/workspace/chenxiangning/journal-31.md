@@ -393,3 +393,135 @@ onDebugRef 解耦、原子 selection state、乐观 snapshot、preferred 归一�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1310: Codex collab 子代理 live 与 history 呈现对齐
+
+**Date**: 2026-08-03
+**Task**: Codex collab 子代理 live 与 history 呈现对齐
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+修复 Codex multi-agent 实时 wait 阶段幕布/Status 缺子代理呈现；engine-gate 隔离其他 CLI；仅提交本任务相关文件。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b725e011e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1311: Shared 队列 pending-ack UI 标识
+
+**Date**: 2026-08-03
+**Task**: Shared 队列 pending-ack UI 标识
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+队列 pending-ack 显示「已发送，确认中（防重复）」；不改防双发出队逻辑；仅提交 composer/i18n 相关文件。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1a6f7ea4a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1312: 文档信息架构治理
+
+**Date**: 2026-08-03
+**Task**: 文档信息架构治理
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+重构 docs 信息架构与索引，统一 139 份文档 lifecycle metadata，归档废弃内容，新增文档治理 gate 与 CI 检查，并修复 review 发现的语义漂移。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `64b7a817f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1313: 收录轨道路由 Logo 示例
+
+**Date**: 2026-08-03
+**Task**: 收录轨道路由 Logo 示例
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+将 9 个轨道路由 Logo 示例从临时 output 目录移动至 docs/assets/logo-concepts/orbit-routing，并作为文档设计资产提交。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `22164e20e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

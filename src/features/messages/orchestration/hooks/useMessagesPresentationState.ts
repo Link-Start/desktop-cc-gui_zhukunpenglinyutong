@@ -28,7 +28,7 @@ import { useActiveCanvasSelector } from "../../../layout/hooks/activeCanvasStore
 import {
   buildSyntheticSpawnToolsFromChildren,
   injectSyntheticSubagentToolsIfNeeded,
-  isSubagentTool,
+  shouldInjectChildSubagentSynthetic,
 } from "../../../subagent-ui";
 
 type UseMessagesPresentationStateInput = {
@@ -165,12 +165,14 @@ export function useMessagesPresentationState({
     return item && isReasoningConversationItem(item) ? item : null;
   }, [isThinking, latestReasoningId, renderSourceItems]);
 
-  // Shared 父会话幕布：投影常缺 spawn_subagent tool，用子线程合成 persona 卡。
-  // 必须用本 Messages 的 threadId，禁止读 activeCanvas——子代理详情嵌套 Messages
-  // 的 threadId 是 grok:…，若误用主 canvas 的 shared: 会把小队卡再嵌进详情里。
+  // 子会话合成小队：
+  // - Shared 父：投影常缺 spawn tool（既有）
+  // - Codex native live wait 缺口：侧栏已有 children、timeline 无可识别 spawn 卡
+  // 必须用本 Messages 的 threadId 与 canvas threadId 对齐，禁止嵌套详情再注入父小队。
   const childSubagentThreads = useActiveCanvasSelector(
     (snapshot) => snapshot.childSubagentThreads,
   );
+  const canvasThreadId = useActiveCanvasSelector((snapshot) => snapshot.threadId);
   const threadStatusById = useActiveCanvasSelector(
     (snapshot) => snapshot.threadStatusById,
   );
@@ -179,21 +181,32 @@ export function useMessagesPresentationState({
   );
   const timelineItemsForGrouping = useMemo(() => {
     const ownThreadId = threadId?.trim() || "";
-    if (!ownThreadId.startsWith("shared:")) {
+    if (
+      !shouldInjectChildSubagentSynthetic({
+        ownThreadId,
+        canvasThreadId,
+        activeEngine,
+        items: timelinePresentationItems,
+        childCount: childSubagentThreads.length,
+      })
+    ) {
       return timelinePresentationItems;
     }
-    const hasSubagentTools = timelinePresentationItems.some(
-      (item) => item.kind === "tool" && isSubagentTool(item),
-    );
-    if (hasSubagentTools || childSubagentThreads.length === 0) {
-      return timelinePresentationItems;
-    }
+    const idPrefix =
+      ownThreadId.startsWith("shared:") && activeEngine !== "codex"
+        ? "shared"
+        : activeEngine === "codex"
+          ? "codex"
+          : "shared";
     const synthetic = buildSyntheticSpawnToolsFromChildren(childSubagentThreads, {
       statusById: threadStatusById,
       itemsByThread: threadItemsByThread,
+      idPrefix,
     });
     return injectSyntheticSubagentToolsIfNeeded(timelinePresentationItems, synthetic);
   }, [
+    activeEngine,
+    canvasThreadId,
     childSubagentThreads,
     threadId,
     threadItemsByThread,

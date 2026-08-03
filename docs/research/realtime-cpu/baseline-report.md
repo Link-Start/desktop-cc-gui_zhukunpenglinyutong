@@ -1,3 +1,12 @@
+---
+type: evidence
+status: generated
+---
+
+<!-- DOC-LIFECYCLE: generated-evidence -->
+> [!CAUTION]
+> **Lifecycle: Generated performance evidence.** Measurement 正文由 `npm run perf:realtime:report` 生成，不应手工解释为永久 current baseline。代码、fixture 或 runtime flags 变化后必须重新生成。
+
 # Realtime CPU Baseline Report
 
 Generated at: 2026-05-13T15:51:23.671Z

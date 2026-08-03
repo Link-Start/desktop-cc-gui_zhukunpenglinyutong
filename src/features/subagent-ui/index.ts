@@ -40,8 +40,11 @@ export {
 } from "./utils/subagentViewModel";
 export {
   buildSyntheticSpawnToolsFromChildren,
+  hasBlockingSubagentToolSource,
   injectSyntheticSubagentToolsIfNeeded,
+  shouldInjectChildSubagentSynthetic,
 } from "./utils/syntheticSharedSubagentTools";
+export type { ChildSubagentSyntheticEligibilityInput } from "./utils/syntheticSharedSubagentTools";
 export {
   enrichSubagentCardStatuses,
   isSubagentFinishedOutput,

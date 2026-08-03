@@ -1,17 +1,22 @@
+---
+type: design
+status: implemented
+---
+
 # 幕布对话流式渲染卡顿（stall-then-flush）设计文档
 
 > 日期：2026-07-30
 > 内容类型：Troubleshooting + implementation design
-> 生命周期：implemented；OpenSpec tasks `17/17`，change 仍 active，待 verify / sync / archive
+> 生命周期：implemented / archived；OpenSpec tasks `17/17`，已于 2026-08-03 完成 archive
 > 状态：核心修复已入库 `1537211a1`；idle timeline virtualization 后续由 `4e932e672` 恢复
-> 最后校准：2026-08-01 · mossx `0.7.14` · HEAD `26f8065a0c`
+> 最后校准：2026-08-03 · mossx `0.7.16`
 > 范围：Native Session / Shared Session 幕布对话的流式输出渲染链路（Rust 后端 → Tauri IPC → 前端事件 → React 渲染）
 > 关联文档：`docs/perf/parallel-conversation-jank-handbook.md`、`docs/perf/a4-live-text-externalization-plan.md`、`docs/perf/render-jank-knife-experiments-2026-07-08.md`
-> OpenSpec：`openspec/changes/fix-streaming-render-stall-then-flush/`
+> OpenSpec：`openspec/changes/archive/2026-08-03-fix-streaming-render-stall-then-flush/`
 
 ---
 
-## 0. 2026-08-01 当前代码校准
+## 0. 2026-08-03 当前代码校准
 
 本文 §1–§3 保留 2026-07-30 的诊断过程；以下是已落地后的现网合同。
 

@@ -1,8 +1,15 @@
+---
+type: index
+status: historical
+---
+
 # browser-agent — Browser Dock 文档索引
 
-> **用途**：Browser Dock / 可信观察与代码桥相关的**能力与降级矩阵**。
+> **内容类型**：Evidence Landing
+> **生命周期**：historical
+> **用途**：Browser Dock / 可信观察与代码桥相关的能力与降级矩阵。
 > **事实边界**：矩阵反映 2026-06 的跨平台契约；对应 change 已归档，当前实现以 `BrowserDock.tsx` / OpenSpec main specs 为准。
-> **上级导航**：[`../README.md`](../README.md)
+> **上级导航**：[`../archive/README.md`](../archive/README.md) · [`../README.md`](../README.md)
 
 ## 文档
 

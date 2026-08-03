@@ -1,3 +1,12 @@
+---
+type: report
+status: historical
+---
+
+<!-- DOC-LIFECYCLE: historical-report -->
+> [!NOTE]
+> **Lifecycle: Historical dated report.** 本文保留当时的 audit、impact 与 debt snapshot，不是 current backlog。未完成建议必须重新核验代码并建立新的 OpenSpec change 后才能执行。
+
 # 输入与提示词体系优化项 · 逐项影响明细
 
 > **2026-08-01 生命周期校准**：Historical Closure Evidence。四批 commit 仍用于追溯；当前 Composer 行为须从 `ComposerContextMenuPopover.tsx`、相关 hooks 与 OpenSpec 重扫。

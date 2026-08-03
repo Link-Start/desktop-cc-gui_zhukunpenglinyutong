@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-31.md`
-- **Total Sessions**: 1309
+- **Total Sessions**: 1313
 - **Last Active**: 2026-08-03
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-31.md` | ~395 | Active |
+| `journal-31.md` | ~527 | Active |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
@@ -59,6 +59,10 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1313 | 2026-08-03 | 收录轨道路由 Logo 示例 | `22164e20e` | `CXN-version-0.7.16` |
+| 1312 | 2026-08-03 | 文档信息架构治理 | `64b7a817f` | `CXN-version-0.7.16` |
+| 1311 | 2026-08-03 | Shared 队列 pending-ack UI 标识 | `1a6f7ea4a` | `CXN-version-0.7.16` |
+| 1310 | 2026-08-03 | Codex collab 子代理 live 与 history 呈现对齐 | `b725e011e` | `CXN-version-0.7.16` |
 | 1309 | 2026-08-03 | OpenSpec 第三波：归档已上线人工 residual 提案 | `5192d03df` | `CXN-version-0.7.16` |
 | 1308 | 2026-08-03 | OpenSpec 第二波 bulk archive 37 complete 提案 | `a8cd3f2f9` | `CXN-version-0.7.16` |
 | 1307 | 2026-08-03 | OpenSpec 批量归档已验证提案 | `d8bc34a6f` | `CXN-version-0.7.16` |

@@ -188,6 +188,7 @@ const composer = {
       "empty-draft": "खाली ड्राफ़्ट"
     },
     "queueStatusWaiting": "अगले टर्न के लिए कतारबद्ध",
+    "queueStatusPendingAck": "भेजा गया — पुष्टि हो रही है (डुप्लिकेट रोक)",
     "queueStatusFuseReady": "मौजूदा टर्न में मिलाया जा सकता है",
     "queueStatusFusing": "मौजूदा टर्न में मिलाया जा रहा है",
     "queueStatusCommand": "स्लैश कमांड अगले टर्न की प्रतीक्षा करता है",

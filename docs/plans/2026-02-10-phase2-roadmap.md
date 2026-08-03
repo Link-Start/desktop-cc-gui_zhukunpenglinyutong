@@ -1,3 +1,12 @@
+---
+type: plan
+status: superseded
+---
+
+<!-- DOC-LIFECYCLE: superseded-roadmap -->
+> [!WARNING]
+> **Lifecycle: Superseded historical roadmap.** 本路线图已被后续 Project Memory changes、main specs 与当前实现替代。不得直接执行本文未完成项；新需求必须建立新的 OpenSpec change。
+
 # Phase 2 路线图：项目记忆模块待落地全清单
 
 > 创建：2026-02-10

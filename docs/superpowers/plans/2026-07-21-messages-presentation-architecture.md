@@ -1,3 +1,8 @@
+---
+type: plan
+status: historical
+---
+
 # Messages Presentation Architecture Implementation Plan
 
 > **Lifecycle**：historical implementation plan；对应 OpenSpec change 已归档于 `openspec/changes/archive/2026-07-21-refactor-messages-presentation-architecture/`。下列 checkbox 保留原始执行过程，不是当前 backlog。

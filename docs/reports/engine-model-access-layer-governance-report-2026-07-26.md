@@ -1,3 +1,12 @@
+---
+type: report
+status: historical
+---
+
+<!-- DOC-LIFECYCLE: historical-report -->
+> [!NOTE]
+> **Lifecycle: Historical dated report.** 本文保留当时的 audit、impact 与 debt snapshot，不是 current backlog。未完成建议必须重新核验代码并建立新的 OpenSpec change 后才能执行。
+
 # 引擎与模型接入层治理闭环报告
 
 > **2026-08-01 生命周期校准**：Historical Closure Evidence。当前 built-in registry 已为六引擎（含 Grok）；读取本文表格前先核对 `engineIds.json`、Rust `adapter_registry.rs` 与 capability matrix gate。

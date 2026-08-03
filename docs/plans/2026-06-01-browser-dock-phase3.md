@@ -1,3 +1,12 @@
+---
+type: plan
+status: implemented
+---
+
+<!-- DOC-LIFECYCLE: implemented-historical-plan -->
+> [!NOTE]
+> **Lifecycle: Implemented historical plan.** 本文保留当时的实施顺序与验收轨迹，不是 current plan。当前行为以 [OpenSpec main specifications](../../openspec/specs/README.md) 与代码为准；unchecked checkbox 不构成 active backlog。
+
 # Browser Dock Phase 3 Implementation Plan
 
 > **Lifecycle**：Implemented / Historical Plan。对应 trusted observation / code bridge change 已归档于 `openspec/changes/archive/2026-06-03-advance-browser-dock-trusted-observation-and-code-bridge/`；跨平台实机 evidence 仍须重跑。

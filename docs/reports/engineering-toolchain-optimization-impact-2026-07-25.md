@@ -1,3 +1,12 @@
+---
+type: report
+status: historical
+---
+
+<!-- DOC-LIFECYCLE: historical-report -->
+> [!NOTE]
+> **Lifecycle: Historical dated report.** 本文保留当时的 audit、impact 与 debt snapshot，不是 current backlog。未完成建议必须重新核验代码并建立新的 OpenSpec change 后才能执行。
+
 # 当前工程工具链优化现状与影响范围
 
 > **2026-08-01 生命周期校准**：Historical Closure Evidence。本文只证明当时目标文件与 gate 状态；当前 large-file / OpenSpec / governance 结论必须重跑对应命令，不能继承 2026-07-26 的数量。

@@ -1,3 +1,8 @@
+---
+type: design
+status: historical
+---
+
 # Messages Presentation Architecture Design
 
 > **Lifecycle**：historical mirror；canonical change 已归档。

@@ -1,3 +1,12 @@
+---
+type: plan
+status: implemented
+---
+
+<!-- DOC-LIFECYCLE: implemented-historical-plan -->
+> [!NOTE]
+> **Lifecycle: Implemented historical plan.** 本文保留当时的实施顺序与验收轨迹，不是 current plan。当前行为以 [OpenSpec main specifications](../../openspec/specs/README.md) 与代码为准；unchecked checkbox 不构成 active backlog。
+
 # Claude 供应商列表：拖动排序 + 启用项置顶
 
 > **Lifecycle**：Implemented / Historical Plan。对应 provider order/model fetch change 已归档于 `openspec/changes/archive/2026-06-21-add-claude-provider-management-order-and-model-fetch/`；下文 `feature/v0.5.11` / “待提交”是原始交付窗口。
