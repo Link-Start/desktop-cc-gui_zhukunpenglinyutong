@@ -2040,6 +2040,49 @@ go lang`,
     }
   });
 
+  it("extracts live collab receivers from targets and arguments (history parity)", () => {
+    const fromTargets = buildConversationItem({
+      type: "collabToolCall",
+      id: "wait-targets-1",
+      tool: "wait_agent",
+      status: "running",
+      targets: ["agent-current-1", "agent-current-2"],
+    });
+    expect(fromTargets).not.toBeNull();
+    if (fromTargets && fromTargets.kind === "tool") {
+      expect(fromTargets.receiverThreadIds).toEqual([
+        "agent-current-1",
+        "agent-current-2",
+      ]);
+      // tool call id must not become a receiver
+      expect(fromTargets.receiverThreadIds).not.toContain("wait-targets-1");
+    }
+
+    const fromArgs = buildConversationItem({
+      type: "collabToolCall",
+      id: "wait-args-1",
+      tool: "wait",
+      status: "running",
+      arguments: JSON.stringify({ ids: ["agent-9"] }),
+    });
+    expect(fromArgs).not.toBeNull();
+    if (fromArgs && fromArgs.kind === "tool") {
+      expect(fromArgs.receiverThreadIds).toEqual(["agent-9"]);
+    }
+
+    const fromDetailArrow = buildConversationItem({
+      type: "collabToolCall",
+      id: "wait-detail-1",
+      tool: "wait",
+      status: "running",
+      detail: "From parent-root → agent-a, agent-b",
+    });
+    expect(fromDetailArrow).not.toBeNull();
+    if (fromDetailArrow && fromDetailArrow.kind === "tool") {
+      expect(fromDetailArrow.receiverThreadIds).toEqual(["agent-a", "agent-b"]);
+    }
+  });
+
   it("normalizes AskUserQuestion answer echo into submitted history card", () => {
     const items: ConversationItem[] = [
       {

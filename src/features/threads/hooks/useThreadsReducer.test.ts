@@ -100,6 +100,8 @@ describe("threadReducer", () => {
       parentThreadId: "parent-thread",
       engineSource: "codex",
     });
+    // Status 树兜底与侧栏同源：ensureThread 必须同步 threadParentById
+    expect(next.threadParentById["child-thread"]).toBe("parent-thread");
 
     const repeated = threadReducer(next, {
       type: "ensureThread",
@@ -134,6 +136,7 @@ describe("threadReducer", () => {
       name: "Herschel",
       parentThreadId: "parent-thread",
     });
+    expect(enriched.threadParentById["child-thread"]).toBe("parent-thread");
   });
 
   it("keeps the live parent while accepting a stronger refreshed name", () => {

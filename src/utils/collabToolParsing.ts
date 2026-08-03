@@ -52,6 +52,7 @@ function extractThreadIdsFromRecord(record: Record<string, unknown>) {
         record.receiver_thread_ids ??
         record.newThreadIds ??
         record.new_thread_ids ??
+        record.targets ??
         record.threadIds ??
         record.thread_ids ??
         record.agentIds ??
@@ -63,6 +64,7 @@ function extractThreadIdsFromRecord(record: Record<string, unknown>) {
         record.receiver_thread_id ??
         record.newThreadId ??
         record.new_thread_id ??
+        record.target ??
         record.threadId ??
         record.thread_id ??
         record.agentId ??
@@ -71,6 +73,73 @@ function extractThreadIdsFromRecord(record: Record<string, unknown>) {
     ),
   ];
   return uniqueStringList(ids);
+}
+
+function parseJsonRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Live / app-server collabToolCall 上的 receiver 抽取。
+ * 与 history codexSessionHistory 字段对齐（targets / ids / …），
+ * 但 MUST NOT 把 tool call 自身的 id 当 agent id。
+ */
+export function extractCollabReceiversFromToolPayload(
+  item: Record<string, unknown>,
+): string[] {
+  const topLevel = uniqueStringList([
+    ...toStringList(
+      item.receiverThreadIds ??
+        item.receiver_thread_ids ??
+        item.newThreadIds ??
+        item.new_thread_ids ??
+        item.targets ??
+        item.threadIds ??
+        item.thread_ids ??
+        item.agentIds ??
+        item.agent_ids ??
+        item.ids,
+    ),
+    ...toStringList(
+      item.receiverThreadId ??
+        item.receiver_thread_id ??
+        item.newThreadId ??
+        item.new_thread_id ??
+        item.target ??
+        item.threadId ??
+        item.thread_id ??
+        item.agentId ??
+        item.agent_id,
+    ),
+  ]);
+  // 仅 parse 结构化 arguments/input/params；detail 可能是 "From x → y" 文案，勿当 JSON 乱抽 id
+  const argsRecord = parseJsonRecord(
+    item.arguments ?? item.input ?? item.params,
+  );
+  const fromArgs = argsRecord ? extractThreadIdsFromRecord(argsRecord) : [];
+  const detailText = asString(item.detail);
+  const fromDetailLink = detailText
+    ? (parseCollabFallbackLink(detailText, "")?.receivers ?? [])
+    : [];
+  return uniqueStringList([...topLevel, ...fromArgs, ...fromDetailLink]);
 }
 
 function extractRawStatus(value: unknown) {

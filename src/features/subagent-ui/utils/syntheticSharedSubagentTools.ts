@@ -1,22 +1,92 @@
-import type { ConversationItem, ThreadSummary } from "../../../types";
+import type { ConversationItem, EngineType, ThreadSummary } from "../../../types";
+import { isCollabSpawnTool, isSubagentTool } from "./isSubagentTool";
 import { resolveSyntheticChildToolStatus } from "./subagentCardStatus";
+import { extractCollabAgentIds } from "./subagentViewModel";
+
+type ToolItem = Extract<ConversationItem, { kind: "tool" }>;
+
+/**
+ * 是否已有「足够」的 subagent 卡源，从而禁止 child synthetic。
+ * - Claude / Grok / Kimi 真实 tool：阻塞
+ * - Codex collab spawn 且已有 receiver：阻塞
+ * - collab spawn 尚无 receiver（live 半截）：不阻塞，允许 children 合成补齐小队
+ */
+export function hasBlockingSubagentToolSource(
+  items: readonly ConversationItem[],
+): boolean {
+  return items.some((item) => {
+    if (item.kind !== "tool" || !isSubagentTool(item)) {
+      return false;
+    }
+    if (isCollabSpawnTool(item)) {
+      return extractCollabAgentIds(item as ToolItem).length > 0;
+    }
+    return true;
+  });
+}
 
 type ChildStatusOptions = {
   statusById?: Record<string, { isProcessing?: boolean }>;
   itemsByThread?: Record<string, ConversationItem[] | undefined>;
+  /** synthetic tool id 前缀；默认 shared，Codex native 用 codex */
+  idPrefix?: "shared" | "codex";
+};
+
+export type ChildSubagentSyntheticEligibilityInput = {
+  /** 本 Messages 实例绑定的 thread（嵌套详情是 child id） */
+  ownThreadId: string | null | undefined;
+  /** 主幕布 active canvas threadId；嵌套详情时与 own 不同 */
+  canvasThreadId?: string | null | undefined;
+  activeEngine?: EngineType | string | null | undefined;
+  items: readonly ConversationItem[];
+  childCount: number;
 };
 
 /**
- * Shared 投影缺 spawn_subagent tool 时，用已挂到父会话下的子线程合成 tool items，
- * 以便 groupToolItems → SubagentSquadGrid 与 native 一致。
+ * 是否应用子会话合成小队。
+ * - Shared 父：保持既有行为（任意 engine，投影常缺 spawn tool）
+ * - Codex native live 缺口：engine=codex 且无 isSubagentTool
+ * - 嵌套详情幕布：own !== canvas → 永不注入
+ * - Claude/Grok/Kimi native：硬否（除非 shared 父）
+ */
+export function shouldInjectChildSubagentSynthetic(
+  input: ChildSubagentSyntheticEligibilityInput,
+): boolean {
+  const childCount = input.childCount;
+  if (childCount <= 0) {
+    return false;
+  }
+  const own = (input.ownThreadId ?? "").trim();
+  if (!own) {
+    return false;
+  }
+  const canvas = (input.canvasThreadId ?? "").trim();
+  // 嵌套子代理详情：canvas 是父、own 是子 → 禁止再注入父小队
+  if (canvas && own !== canvas) {
+    return false;
+  }
+  if (hasBlockingSubagentToolSource(input.items)) {
+    return false;
+  }
+  if (own.startsWith("shared:")) {
+    return true;
+  }
+  const engine = (input.activeEngine ?? "").toString().trim().toLowerCase();
+  return engine === "codex";
+}
+
+/**
+ * Shared / Codex live 缺 spawn 卡时，用已挂到父会话下的子线程合成 tool items，
+ * 以便 groupToolItems → SubagentSquadGrid。
  */
 export function buildSyntheticSpawnToolsFromChildren(
   children: readonly ThreadSummary[],
   options?: ChildStatusOptions,
 ): Extract<ConversationItem, { kind: "tool" }>[] {
+  const idPrefix = options?.idPrefix ?? "shared";
   return children.map((thread, index) => {
     const rawId = thread.id.trim();
-    // 保留完整 thread id（grok:… / claude:…），避免 shared 父下详情走错 loader
+    // 保留完整 thread id（grok:… / claude:… / 裸 codex uuid），避免详情走错 loader
     const description = thread.name?.trim() || `SubAgent ${index + 1}`;
     const cardStatus = resolveSyntheticChildToolStatus(rawId, {
       isDegraded: thread.isDegraded,
@@ -36,7 +106,7 @@ export function buildSyntheticSpawnToolsFromChildren(
       .slice(-2)
       .join("\n");
     return {
-      id: `synthetic-shared-subagent:${rawId}`,
+      id: `synthetic-${idPrefix}-subagent:${rawId}`,
       kind: "tool" as const,
       toolType: "spawn_subagent",
       title: "Spawn Subagent",

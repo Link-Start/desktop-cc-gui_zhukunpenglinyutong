@@ -544,12 +544,28 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         }
         const nextList = [...list];
         nextList[existingIndex] = updated;
+        // 同步 parentThreadId → threadParentById（Status / 树兜底与侧栏 summary 同源）
+        let nextThreadParentById = state.threadParentById;
+        const nextParent = updated.parentThreadId?.trim() || "";
+        if (
+          nextParent &&
+          nextParent !== updated.id &&
+          state.threadParentById[updated.id] !== nextParent
+        ) {
+          nextThreadParentById = {
+            ...state.threadParentById,
+            [updated.id]: nextParent,
+          };
+        }
         return {
           ...state,
           threadsByWorkspace: {
             ...state.threadsByWorkspace,
             [action.workspaceId]: nextList,
           },
+          ...(nextThreadParentById !== state.threadParentById
+            ? { threadParentById: nextThreadParentById }
+            : {}),
         };
       }
 
@@ -710,6 +726,15 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         ...(parentThreadId ? { parentThreadId } : {}),
         ...providerBindingFromEnsureThreadAction(action),
       };
+      // live subagent：summary.parentThreadId 与 threadParentById 必须同事务写入，
+      // 否则 Status 树兜底读不到侧栏已有的 children。
+      const nextThreadParentById =
+        parentThreadId && parentThreadId !== action.threadId
+          ? {
+              ...state.threadParentById,
+              [action.threadId]: parentThreadId,
+            }
+          : state.threadParentById;
       return {
         ...state,
         threadsByWorkspace: {
@@ -725,6 +750,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           [action.workspaceId]:
             state.activeThreadIdByWorkspace[action.workspaceId] ?? action.threadId,
         },
+        ...(nextThreadParentById !== state.threadParentById
+          ? { threadParentById: nextThreadParentById }
+          : {}),
       };
     }
     case "hideThread": {

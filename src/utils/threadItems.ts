@@ -5,6 +5,7 @@ import {
   withMessagePresentationMetadata,
 } from "../features/threads/assembly/conversationNormalization";
 import {
+  extractCollabReceiversFromToolPayload,
   formatCollabAgentStates,
   normalizeCollabAgentStatusMap,
 } from "./collabToolParsing";
@@ -362,14 +363,6 @@ function shouldPreserveToolDetail(item: Extract<ConversationItem, { kind: "tool"
     return true;
   }
   return false;
-}
-
-function normalizeStringList(value: unknown) {
-  if (Array.isArray(value)) {
-    return value.map((entry) => asString(entry)).filter(Boolean);
-  }
-  const single = asString(value);
-  return single ? [single] : [];
 }
 
 function stringifyUnknown(value: unknown): string {
@@ -1088,11 +1081,8 @@ export function buildConversationItem(
     const tool = asString(item.tool ?? "");
     const status = asString(item.status ?? "");
     const sender = asString(item.senderThreadId ?? item.sender_thread_id ?? "");
-    const receivers = [
-      ...normalizeStringList(item.receiverThreadId ?? item.receiver_thread_id),
-      ...normalizeStringList(item.receiverThreadIds ?? item.receiver_thread_ids),
-      ...normalizeStringList(item.newThreadId ?? item.new_thread_id),
-    ];
+    // Live 与 history 对齐：targets / ids / arguments；禁止把 call id 当 agent
+    const receivers = extractCollabReceiversFromToolPayload(item);
     const prompt = asString(item.prompt ?? "");
     const normalizedAgentStatus = normalizeCollabAgentStatusMap(
       item.agentStatus ?? item.agentsStates ?? item.agents_states,
