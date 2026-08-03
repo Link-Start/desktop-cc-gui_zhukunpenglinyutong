@@ -58,6 +58,13 @@ Defines Claude provider management behavior for managed provider ordering, backe
 - **THEN** 后端 MUST 从 `~/.ccgui/config.json` 的 `claude.providers[id].settingsConfig.env` 解析键值对
 - **AND** MUST 在该 turn 的 `claude` 进程中通过 `cmd.env` 注入全部键值（含 `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_API_KEY` 等，不过滤键名）
 
+#### Scenario: parent routing env is cleared before provider env apply
+
+- **WHEN** 绑定 managed provider 的 Claude thread 发送消息
+- **THEN** 后端 MUST 先清除 child 进程中的 Claude provider routing 环境键（`ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL` / `ANTHROPIC_MODEL` / `ANTHROPIC_DEFAULT_*` / `ANTHROPIC_REASONING_MODEL` / `CLAUDE_CODE_SUBAGENT_MODEL` / `CLAUDE_CODE_USE_*` 等既有 routing 列表）
+- **AND** 再写入当前 profile 的 normalized env
+- **AND** MUST NOT 让父进程残留的 model 槽（如 `k3`）在缺失 profile 键时继续生效
+
 #### Scenario: command-line settings override global settings.json
 
 - **WHEN** 全局 `~/.claude/settings.json` 的 `env` 块与绑定 provider 的 `settingsConfig.env` 存在相同键
@@ -70,6 +77,12 @@ Defines Claude provider management behavior for managed provider ordering, backe
 - **WHEN** 绑定指向的 provider id 在 `~/.ccgui/config.json` 中已不存在
 - **THEN** 该次发送 MUST 以包含 provider 标识的错误失败
 - **AND** MUST NOT 静默回退到其他供应商
+
+#### Scenario: --model uses provider-scoped runtime not foreign residue
+
+- **WHEN** 发送参数携带 model 且会话绑定 managed provider
+- **THEN** 传给 Claude CLI 的 `--model` MUST 为当前 profile catalog/env 解析后的 runtime
+- **AND** MUST NOT 使用其它供应商残留模型名（例如 DeepSeek profile 下的 `k3`）
 
 ### Requirement: Claude provider model fetch SHALL use backend networking and suggestion-only UI
 
@@ -191,3 +204,36 @@ Claude provider management UI MUST represent managed providers as selectable lau
 - **THEN** UI MUST 明确它是 local/default configuration
 - **AND** MUST 保留编辑入口
 - **AND** MUST NOT 把它描述成隔离的 managed provider
+
+### Requirement: Claude Managed Enable MUST NOT Overwrite Local Disk Settings
+
+启用 Claude managed provider（配置页「启用」或新建菜单选择）MUST 只更新 app 内 active 标记，MUST NOT merge 盖写用户 `~/.claude/settings.json`。
+
+#### Scenario: settings enable managed provider leaves settings.json intact
+
+- **WHEN** 用户在 Claude 供应商设置页点击 managed provider 的「启用」
+- **THEN** 系统 MUST 将 `claude.current` 设为该 provider id（配置页显示「使用中」）
+- **AND** 系统 MUST NOT 将该 provider 的 settingsConfig.env merge 进 `~/.claude/settings.json`
+- **AND** 用户本地 `~/.claude/settings.json` 中既有 env/model 等字段 MUST 保持不变
+
+#### Scenario: menu select managed provider same as non-covering enable
+
+- **WHEN** 用户在新建会话菜单选择 Claude managed provider P
+- **THEN** 系统 MUST 同步 L1 `claude.current = P`（配置页「使用中」）且 MUST NOT 盖写 `~/.claude/settings.json`
+- **AND** 系统 MUST 记忆 P 供创建会话写入 thread `providerProfileId`
+
+### Requirement: Global Enable And Session Binding MUST Remain Separate Layers
+
+Claude L1「使用中」与 L2 会话 binding MUST 分层：L1 不盖盘；L2 负责 managed 会话 env。
+
+#### Scenario: settings enable does not rewrite bound sessions
+
+- **WHEN** 已存在携带 managed `providerProfileId` 的 Claude native 会话，用户在设置页启用另一 provider
+- **THEN** 已绑定会话的后续发送 MUST 继续使用其 thread binding
+- **AND** MUST NOT 因全局启用而改写该 thread 的 `providerProfileId`
+
+#### Scenario: managed session launch uses profile not disk current
+
+- **WHEN** 用户创建并发送绑定 managed provider P 的 Claude 会话
+- **THEN** 进程 env MUST 来自 P 的 launch profile / turn-scoped `--settings`
+- **AND** MUST NOT 依赖「先把 P 盖进 ~/.claude/settings.json」才能跑通

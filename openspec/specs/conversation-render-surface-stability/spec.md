@@ -471,3 +471,79 @@ The conversation surface MUST scope deferred snapshots, virtualizer measurement 
 - **AND** the turn completes and the renderer restores the full static history for the same `workspaceId + threadId`
 - **THEN** the initial bottom-pin scope MUST NOT have been consumed by the earlier working/thinking render
 - **AND** the restored static history MUST land at the latest message unless an explicit jump-to-message action owns the scroll position
+
+### Requirement: History Reopen MUST Not Convert Degraded Empty Evidence Into Authoritative Empty
+
+History hydration and reopen MUST distinguish a proven empty conversation from a degraded or failed empty response.
+
+#### Scenario: optimistic pending thread is selected
+
+- **WHEN** a local optimistic thread id matches the `codex-pending-*` contract
+- **THEN** resume MUST preserve the local thread surface and mark the local draft loaded
+- **AND** it MUST NOT invoke a backend history loader
+- **AND** it MUST NOT record `history-hydrate-empty`.
+
+#### Scenario: last-good transcript exists and reopen returns degraded empty
+
+- **WHEN** a conversation has a last-good readable transcript
+- **AND** local hydration, snapshot hydration, or runtime reopen temporarily returns empty or fails
+- **THEN** the client MUST preserve the last-good readable transcript
+- **AND** it MUST record a bounded recovery outcome instead of replacing the surface with an empty-thread placeholder.
+
+#### Scenario: bounded recovery also fails
+
+- **WHEN** the client performs its one allowed automatic reopen or refresh recovery
+- **AND** no readable transcript or authoritative empty proof is produced
+- **THEN** the client MUST stop automatic retries
+- **AND** it MUST expose a degraded/failed history state with a stable reason code.
+- **AND** it MUST NOT mark the failed recovery as successfully restored or loaded.
+
+#### Scenario: failed thread is selected again without explicit retry
+
+- **WHEN** one canonical thread has consumed its automatic recovery and remains degraded or failed
+- **AND** the user switches away and later selects that thread again, or another caller directly resumes the same canonical thread
+- **THEN** every alias and caller MUST preserve the failed readable surface without another automatic loader call
+- **AND** only an explicit user Retry action MAY re-arm one bounded recovery attempt.
+
+#### Scenario: an older history request settles after a newer request
+
+- **WHEN** overlapping requests exist for the same canonical thread
+- **AND** the older generation completes after a newer generation has already published readable or failed state
+- **THEN** the older generation MUST NOT write loaded/failed flags, replace items, switch aliases, or hydrate queues
+- **AND** the newest generation MUST remain the sole state owner.
+
+#### Scenario: legacy fallback or replacement candidate is also empty
+
+- **WHEN** the primary loader fails and a legacy fallback still produces no readable items
+- **OR** stale-thread recovery selects a replacement candidate whose bounded hydration also remains empty
+- **THEN** the client MUST keep the source conversation active and preserve its last-good surface
+- **AND** it MUST NOT write `restoredAt`, persist an alias, clear the source queue, or switch the active thread to the empty candidate.
+
+#### Scenario: backend proves conversation is empty
+
+- **WHEN** an authoritative history source confirms the conversation contains no readable items
+- **THEN** the client MAY render the normal empty-thread state
+- **AND** last-good degraded fallback MUST NOT fabricate deleted content as current truth.
+
+### Requirement: Growing Assistant Snapshots MUST Preserve Live-Text Render Isolation
+
+Active non-terminal assistant item 的纯正文增长 snapshot MUST 复用 transient live-text channel，不得仅因正文增长持续改写 root conversation item array。
+
+#### Scenario: Active assistant snapshot only grows body text
+
+- **WHEN** 同一个 active assistant item 收到 non-terminal snapshot
+- **AND** snapshot 变化仅为正文单调增长
+- **THEN** 最新正文 MUST 通过 live assistant text channel 对 active row 可见
+- **AND** stable Timeline presentation input MUST NOT 因该纯正文增长被替换
+
+#### Scenario: Snapshot changes durable structure
+
+- **WHEN** assistant snapshot 改变 item identity、结构 metadata、tool boundary、reasoning boundary 或其他 durable semantics
+- **THEN** 该变化 MUST 进入 durable conversation state
+- **AND** transient text optimization MUST NOT 丢弃或重排结构事件
+
+#### Scenario: Streaming item completes
+
+- **WHEN** 使用 transient channel 的 assistant item 收到 terminal 或 final snapshot
+- **THEN** durable transcript MUST 收敛到完整最终正文
+- **AND** final Markdown、history restore 与 thread switching MUST 无需依赖 transient channel

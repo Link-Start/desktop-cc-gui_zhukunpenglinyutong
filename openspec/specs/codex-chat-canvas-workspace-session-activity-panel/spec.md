@@ -6,101 +6,59 @@
 ## Requirements
 ### Requirement: Right Panel Workspace Session Activity Entry
 
-系统 MUST 在右侧 panel 体系中提供独立的 workspace session activity 入口。
+系统 MUST **不再**在右侧 panel 体系中向用户暴露可用的 workspace session activity 入口（runtime disabled）。
 
-#### Scenario: right panel exposes activity tab alongside existing panels
+#### Scenario: right panel does not expose activity tab
 
 - **WHEN** 用户进入支持 chat canvas 的 workspace
-- **THEN** 右侧区域 MUST 提供独立的 `activity` 面板入口或等效命名入口
-- **AND** 该入口 MUST 与 Git、Files、Search、Memory 等现有 panel 并列存在
+- **THEN** 右侧区域 MUST NOT 提供可用的 `activity` /「会话活动」面板入口
+- **AND** Git、Files、Search、Radar、Notes 等其余 panel MUST 保持原有访问方式
 
 #### Scenario: adding activity panel does not replace existing right-side capabilities
 
-- **WHEN** 新增 activity panel 后
-- **THEN** Git、Files、Search、Memory 等现有 panel MUST 保持原有访问方式与核心行为
-- **AND** activity panel MUST NOT 取代 runtime console 或消息区工具卡片
+- **WHEN** activity 能力处于 disabled 状态
+- **THEN** Git、Files、Search、Memory、Radar 等现有 panel MUST 保持原有访问方式与核心行为
+- **AND** 系统 MUST NOT 因 activity 下线而移除或替换 runtime console / 消息区工具卡片
 
-#### Scenario: solo mode entry is explicit when used as container
+#### Scenario: solo mode is disabled as activity container
 
-- **WHEN** 产品使用 `SOLO` 视图模式承载 activity 监控
-- **THEN** 系统 MUST 提供显式进入入口，例如按钮或等效显式操作
-- **AND** 系统 MUST NOT 因 session 进入运行态就自动强制切入 `SOLO`
+- **WHEN** 产品曾使用 `SOLO` 作为 activity 监控容器
+- **THEN** 系统 MUST NOT 提供可用的 Solo 进入入口
+- **AND** 系统 MUST NOT 因 session 进入运行态自动切入 Solo
+- **AND** 若本地残留 Solo 态，系统 MUST 在下一次布局 resolve 时退出 Solo
 
 ### Requirement: Relevant Session Scope Is Root-Subtree Bound
-系统 MUST 保持 `Activity` 面板聚合范围为当前任务 root-subtree，不因 Radar 引入而扩散范围。
 
-#### Scenario: activity panel keeps root-subtree scope
-- **GIVEN** 用户处于 `Activity` 面板
-- **WHEN** 系统构建 activity 数据
-- **THEN** 系统 MUST 仅聚合当前 active thread 所在 root thread 及其 descendants
-- **AND** 与当前任务无亲缘关系的线程 MUST NOT 混入
+当 activity 派生未运行时，本 requirement 不适用运行时聚合；若未来重新启用，MUST 仍仅聚合 active thread root-subtree。
+
+#### Scenario: activity derivation is not running while disabled
+
+- **GIVEN** session activity 处于 runtime disabled
+- **WHEN** 对话流式更新 items
+- **THEN** 系统 MUST NOT 为 activity 面板维护 live timeline 派生
+- **AND** Radar 会话跟踪 MUST 不受影响、继续按既有 radar contract 工作
 
 ### Requirement: Multi-Session Timeline Coverage
 
-面板 MUST 以统一时间线作为默认主视图，并聚合至少三类核心活动：命令执行、任务推进、文件修改；`explore` 与 `reasoning` 若展示，MUST 作为独立分类存在。
+在 runtime disabled 期间，系统 MUST NOT 渲染 workspace session activity 多会话时间线 UI。
 
-#### Scenario: panel shows command task and file-change events across sessions
+#### Scenario: panel is not mounted
 
-- **WHEN** root session 或任一相关 child session 产生命令、任务、文件修改事件
-- **THEN** activity panel MUST 将这些事件并入同一聚合视图
-- **AND** 每条事件 MUST 标明 `kind`、`summary`、`status` 与来源 session
-
-#### Scenario: explore events stay visible without polluting executable categories
-
-- **WHEN** 系统收到 `explore` 事件，例如 `run`、`search`、`read`、`list`
-- **THEN** activity panel MAY 将其展示为独立 timeline event
-- **AND** 该事件 MUST 使用独立 `explore` 分类，而不是伪装成 `command` 或 `task`
-- **AND** `command / task / fileChange` 的统计与筛选 MUST 不受 `explore` 污染
-
-#### Scenario: reasoning stays visible without polluting executable categories
-
-- **WHEN** 系统收到 `reasoning` 或其他纯思考型事件
-- **THEN** activity panel MAY 将其展示为独立 timeline event
-- **AND** 该事件 MUST 使用独立 `reasoning` 分类，而不是伪装成 `command`、`task` 或 `fileChange`
-- **AND** `command / task / fileChange / explore / reasoning` 的统计与筛选 MUST 各自独立
-- **AND** `reasoning` MUST NOT 改变 `command / task / fileChange` 作为默认扫描主体的事实
-
-#### Scenario: timeline is the default scanning mode
-
-- **WHEN** 用户首次打开 activity panel
-- **THEN** 面板 MUST 默认展示按时间组织的聚合时间线
-- **AND** session 分组视图如存在，MAY 作为辅助筛选或切换视图，而不是默认主视图
-
-#### Scenario: child session activity is visible in merged timeline
-
-- **WHEN** AI 为当前任务拉起子 session 或子 agent session
-- **THEN** 子 session 的关键活动 MUST 出现在 activity panel 中
-- **AND** 用户 MUST 能区分该活动来自 root session 还是 child session
+- **WHEN** 用户尝试打开 activity（含旧快捷键、旧 `filePanelMode` 残留）
+- **THEN** 系统 MUST NOT 挂载 `WorkspaceSessionActivityPanel` 作为可用主视图
+- **AND** 系统 MUST 将右侧面板 normalize 到安全模式（例如 files）
+- **AND** 系统 MUST NOT crash
 
 ### Requirement: Realtime Incremental Refresh
 
-activity panel MUST 随相关 session 的实时状态增量刷新，而不是在每次轻微状态变化时全量重建全部相关 timeline 数据。
+在 runtime disabled 期间，系统 MUST NOT 为 activity 执行增量 timeline 刷新逻辑。
 
-#### Scenario: unchanged threads do not force full timeline replay
+#### Scenario: streaming does not rebuild activity view model
 
-- **GIVEN** 当前 active thread root subtree 下存在多个相关 threads
-- **AND** 本次实时更新仅影响其中一个 thread
-- **WHEN** 系统刷新 activity panel
-- **THEN** 系统 SHOULD 仅重建发生变化的 thread activity
-- **AND** 未变化 threads 的历史 events SHOULD 复用既有结果，而不是整体重放
-
-#### Scenario: running command appears before turn completion
-
-- **WHEN** 相关 session 正在执行命令且回合尚未结束
-- **THEN** activity panel MUST 显示该命令的运行中状态
-- **AND** 回合结束后 MUST 更新为完成态或失败态，而不是重新插入重复事件
-
-#### Scenario: running command updates status without duplicating event identity
-
-- **WHEN** 相关 session 中某个命令从 running 切换为 completed 或 failed
-- **THEN** activity panel MUST 复用同一条事件身份更新状态
-- **AND** MUST NOT 因状态切换重新插入一条新的历史命令事件
-
-#### Scenario: workspace switch isolates realtime updates
-
-- **WHEN** 用户切换到其他 workspace 或切换到其他任务上下文
-- **THEN** activity panel MUST 立即切换到新的聚合上下文
-- **AND** 后续实时更新 MUST 仅作用于当前上下文
+- **GIVEN** session activity 处于 runtime disabled
+- **WHEN** 相关 session 产生 tool / file-change 事件
+- **THEN** 系统 MUST NOT 调用 `useWorkspaceSessionActivity` 进行全量或增量重建
+- **AND** 主对话渲染 MUST 保持可用
 
 ### Requirement: Session Provenance and Jump Actions
 
@@ -457,3 +415,18 @@ follow coach 气泡的自动消失 MUST 给予用户充足阅读时间（不少�
 - **WHEN** 某历史 turn 处于折叠状态
 - **THEN** header MUST 展示事件计数与文件变更增删行数徽章
 
+### Requirement: Session Activity And Solo Runtime Kill-Switch
+
+系统 MUST 提供明确的 runtime kill-switch，使会话活动与 Solo 同时不可用，且不删除雷达能力。
+
+#### Scenario: kill-switch hides activity and solo together
+
+- **WHEN** kill-switch 生效（本 change 默认生效）
+- **THEN** activity 入口与 Solo 入口均不可用
+- **AND** Radar 入口与 radar 数据路径 MUST 仍可用
+
+#### Scenario: persisted activity mode is sanitized
+
+- **WHEN** 客户端存储中 `filePanelMode` 为 `activity` 或 Solo 标记为开启
+- **THEN** 系统 MUST 在布局解析时纠正为非 activity 安全状态
+- **AND** MUST NOT 保留半开 Solo + activity 组合
