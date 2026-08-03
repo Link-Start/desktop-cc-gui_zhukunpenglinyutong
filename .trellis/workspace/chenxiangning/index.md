@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-31.md`
-- **Total Sessions**: 1305
+- **Total Sessions**: 1306
 - **Last Active**: 2026-08-03
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-31.md` | ~234 | Active |
+| `journal-31.md` | ~278 | Active |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
@@ -59,6 +59,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1306 | 2026-08-03 | 适配 Shared MCP AskUserQuestion 工具卡 UI | `7c40eaaab` | `cxn-version-0.7.15` |
 | 1305 | 2026-08-03 | 修复 Shared Claude AskUserQuestion 弹窗与超时体验 | `87836b7cb` | `cxn-version-0.7.15` |
 | 1304 | 2026-08-03 | 修复 Codex 死 thread 恢复卡 Fork 静默失败 | `76951f6e2` | `cxn-version-0.7.15` |
 | 1303 | 2026-08-03 | fix shortcuts guide Quick Switcher i18n key | `d2537a77b` | `cxn-version-0.7.15` |

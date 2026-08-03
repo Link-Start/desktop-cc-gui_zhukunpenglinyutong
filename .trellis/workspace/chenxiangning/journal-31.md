@@ -232,3 +232,47 @@ onDebugRef 解耦、原子 selection state、乐观 snapshot、preferred 归一�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1306: 适配 Shared MCP AskUserQuestion 工具卡 UI
+
+**Date**: 2026-08-03
+**Task**: 适配 Shared MCP AskUserQuestion 工具卡 UI
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 问题 | Shared CLI 将 mcp__ccgui__AskUserQuestion 当通用 MCP 渲染，展示 raw QUESTIONS/_input/_output |
+| 修复 | extractToolName/isMcpTool 识别；McpToolBlock 专用展示；完成态归一 requestUserInputSubmitted |
+| 验证 | 用户验收通过；相关单测 124 通过 |
+
+**Updated Files**:
+- `src/features/messages/components/toolBlocks/McpToolBlock.tsx`
+- `src/utils/threadItemsAskUserQuestion.ts`
+- `src/utils/toolSemantics.ts`
+- `src/features/messages/components/toolBlocks/toolConstants.ts`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7c40eaaab` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
