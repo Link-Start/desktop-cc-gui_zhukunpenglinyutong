@@ -943,6 +943,254 @@ describe("useModels", () => {
 
     expect(result.current.selectedEffort).toBe("high");
   });
+
+  it("does not exceed max update depth when preferred props thrash after converge", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(getModelList).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "gpt-5.5",
+            model: "gpt-5.5",
+            displayName: "gpt-5.5",
+            supportedReasoningEfforts: [
+              { reasoningEffort: "low", description: "" },
+              { reasoningEffort: "medium", description: "" },
+              { reasoningEffort: "high", description: "" },
+            ],
+            defaultReasoningEffort: "medium",
+            isDefault: true,
+          },
+        ],
+      },
+    });
+    vi.mocked(getConfigModel).mockResolvedValue(null);
+
+    const { result, rerender } = renderHook(
+      ({
+        preferredModelId,
+        preferredEffort,
+      }: {
+        preferredModelId: string | null;
+        preferredEffort: string | null;
+      }) =>
+        useModels({
+          activeWorkspace: workspace,
+          preferredModelId,
+          preferredEffort,
+          preferredSelectionReady: true,
+        }),
+      {
+        initialProps: {
+          preferredModelId: "gpt-5.5" as string | null,
+          preferredEffort: "medium" as string | null,
+        },
+      },
+    );
+
+    await waitFor(() => {
+      expect(result.current.selectedModelId).toBe("gpt-5.5");
+      expect(result.current.selectedEffort).toBe("medium");
+    });
+
+    // 模拟 persist 回写 preferred 与 selection 同值 / 轻微抖动
+    for (let i = 0; i < 20; i += 1) {
+      rerender({
+        preferredModelId: "gpt-5.5",
+        preferredEffort: i % 2 === 0 ? "medium" : "medium",
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+
+    expect(result.current.selectedModelId).toBe("gpt-5.5");
+    expect(result.current.selectedEffort).toBe("medium");
+    expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Maximum update depth exceeded"),
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("keeps freeform setSelectedModelId under thrashing preferred catalog ids", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(getModelList).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "gpt-5.5",
+            model: "gpt-5.5",
+            displayName: "gpt-5.5",
+            supportedReasoningEfforts: [],
+            defaultReasoningEffort: "medium",
+            isDefault: true,
+          },
+        ],
+      },
+    });
+    vi.mocked(getConfigModel).mockResolvedValue(null);
+
+    const { result, rerender } = renderHook(
+      ({ preferredModelId }: { preferredModelId: string | null }) =>
+        useModels({
+          activeWorkspace: workspace,
+          preferredModelId,
+          preferredEffort: null,
+          preferredSelectionReady: true,
+        }),
+      { initialProps: { preferredModelId: "gpt-5.5" as string | null } },
+    );
+
+    await waitFor(() => {
+      expect(result.current.selectedModelId).toBe("gpt-5.5");
+    });
+
+    act(() => {
+      result.current.setSelectedModelId("user-freeform-model");
+    });
+    expect(result.current.selectedModelId).toBe("user-freeform-model");
+
+    for (let i = 0; i < 15; i += 1) {
+      rerender({ preferredModelId: i % 2 === 0 ? "gpt-5.5" : "k3" });
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+
+    expect(result.current.selectedModelId).toBe("user-freeform-model");
+    expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Maximum update depth exceeded"),
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("converges on cold start when parent passes a new onDebug identity every render", async () => {
+    // 生产 AppShell 的 addDebugEntry 可能非稳定；若进 layout deps 会每帧 apply → #185
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(getModelList).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "gpt-5.5",
+            model: "gpt-5.5",
+            displayName: "gpt-5.5",
+            supportedReasoningEfforts: [
+              { reasoningEffort: "medium", description: "" },
+              { reasoningEffort: "high", description: "" },
+            ],
+            defaultReasoningEffort: "medium",
+            isDefault: true,
+          },
+        ],
+      },
+    });
+    vi.mocked(getConfigModel).mockResolvedValue(null);
+
+    let preferredModelId: string | null = "k3";
+    let preferredEffort: string | null = null;
+    let preferredSelectionReady = false;
+    let renderCount = 0;
+
+    const { result, rerender } = renderHook(() => {
+      renderCount += 1;
+      // 故意每帧新函数：模拟 AppShell 非稳定 onDebug
+      const onDebug = () => {};
+      return useModels({
+        activeWorkspace: workspace,
+        onDebug,
+        preferredModelId,
+        preferredEffort,
+        preferredSelectionReady,
+      });
+    });
+
+    // 模拟 settings 晚到 + preferred 脏值 + persist 回写
+    preferredSelectionReady = true;
+    rerender();
+
+    await waitFor(() => {
+      expect(result.current.selectedModelId).toBe("gpt-5.5");
+      expect(result.current.selectedEffort).toBe("medium");
+    });
+
+    preferredModelId = "gpt-5.5";
+    preferredEffort = "medium";
+    for (let i = 0; i < 30; i += 1) {
+      rerender();
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+
+    expect(result.current.selectedModelId).toBe("gpt-5.5");
+    expect(result.current.selectedEffort).toBe("medium");
+    expect(renderCount).toBeLessThan(80);
+    expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Maximum update depth exceeded"),
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("normalizes blank preferred identities so layout deps do not thrash", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(getModelList).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "gpt-5.5",
+            model: "gpt-5.5",
+            displayName: "gpt-5.5",
+            supportedReasoningEfforts: [],
+            defaultReasoningEffort: "medium",
+            isDefault: true,
+          },
+        ],
+      },
+    });
+    vi.mocked(getConfigModel).mockResolvedValue(null);
+
+    const { result, rerender } = renderHook(
+      ({
+        preferredModelId,
+        preferredEffort,
+      }: {
+        preferredModelId: string | null;
+        preferredEffort: string | null;
+      }) =>
+        useModels({
+          activeWorkspace: workspace,
+          preferredModelId,
+          preferredEffort,
+          preferredSelectionReady: true,
+        }),
+      {
+        initialProps: {
+          preferredModelId: null as string | null,
+          preferredEffort: null as string | null,
+        },
+      },
+    );
+
+    await waitFor(() => {
+      expect(result.current.selectedModelId).toBe("gpt-5.5");
+    });
+
+    for (let i = 0; i < 20; i += 1) {
+      rerender({
+        preferredModelId: i % 2 === 0 ? null : "",
+        preferredEffort: i % 2 === 0 ? null : "   ",
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+
+    expect(result.current.selectedModelId).toBe("gpt-5.5");
+    expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Maximum update depth exceeded"),
+    );
+    consoleErrorSpy.mockRestore();
+  });
 });
 
 describe("resolveModelEffort / planComposerModelSelection", () => {
@@ -1022,12 +1270,101 @@ describe("resolveModelEffort / planComposerModelSelection", () => {
       clearUserSelectedModel: false,
     });
 
+    // 已收敛：再次规划必须返回 null，禁止等价 commit 叠满 update depth
     const second = planComposerModelSelection({
       ...input,
       selectedModelId: first?.nextModelId ?? null,
       selectedEffort: first?.nextEffort ?? null,
     });
-    expect(second).toEqual(first);
+    expect(second).toBeNull();
+
+    const third = planComposerModelSelection({
+      ...input,
+      selectedModelId: first?.nextModelId ?? null,
+      selectedEffort: first?.nextEffort ?? null,
+    });
+    expect(third).toBeNull();
+  });
+
+  it("returns null when selection already matches even if catalog-external dirty id was cleared", () => {
+    // 脏 id 已纠正到 default 后：不得因 clear 语义反复产出非 null plan
+    const plan = planComposerModelSelection({
+      models: [listedModel],
+      configModel: null,
+      preferredModelId: "k3",
+      preferredEffort: null,
+      preferredSelectionReady: true,
+      selectedModelId: "gpt-5.5",
+      selectedEffort: "medium",
+      hasUserSelectedModel: false,
+      hasUserSelectedEffort: false,
+    });
+    expect(plan).toBeNull();
+  });
+
+  it("keeps freeform user selection out of catalog instead of clearing to default", () => {
+    const plan = planComposerModelSelection({
+      models: [listedModel],
+      configModel: null,
+      preferredModelId: "gpt-5.5",
+      preferredEffort: "medium",
+      preferredSelectionReady: true,
+      selectedModelId: "my-freeform-model",
+      selectedEffort: "high",
+      hasUserSelectedModel: true,
+      hasUserSelectedEffort: true,
+    });
+    // 用户锁 freeform：不得被 layout 清回 catalog default
+    expect(plan).toBeNull();
+  });
+
+  it("does not oscillate when preferred effort flips after freeform lock", () => {
+    const base = {
+      models: [listedModel],
+      configModel: null,
+      preferredModelId: "gpt-5.5",
+      preferredSelectionReady: true,
+      selectedModelId: "gpt-5.5",
+      selectedEffort: "high",
+      hasUserSelectedModel: true,
+      hasUserSelectedEffort: true,
+    };
+    const a = planComposerModelSelection({
+      ...base,
+      preferredEffort: "low",
+    });
+    const b = planComposerModelSelection({
+      ...base,
+      preferredEffort: "medium",
+    });
+    const c = planComposerModelSelection({
+      ...base,
+      preferredEffort: "low",
+    });
+    expect(a).toBeNull();
+    expect(b).toBeNull();
+    expect(c).toBeNull();
+  });
+
+  it("treats model-field selected id as already converged when next uses catalog id", () => {
+    const dualIdentity: ModelOption = {
+      ...listedModel,
+      id: "catalog-id-gpt-5.5",
+      model: "gpt-5.5",
+    };
+    const first = planComposerModelSelection({
+      models: [dualIdentity],
+      configModel: null,
+      preferredModelId: null,
+      preferredEffort: null,
+      preferredSelectionReady: true,
+      selectedModelId: "gpt-5.5",
+      selectedEffort: "medium",
+      hasUserSelectedModel: false,
+      hasUserSelectedEffort: false,
+    });
+    // selected 用 model 字段命中；next 用 id — 应判已收敛，禁止反复 commit
+    expect(first).toBeNull();
   });
 });
 

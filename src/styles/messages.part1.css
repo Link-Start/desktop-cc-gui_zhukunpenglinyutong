@@ -2287,9 +2287,9 @@
 
 /* 归组块：无边框极简（参考 AI SDK Task），标题行整行可点、内容沿左侧 rail 缩进展开 */
 /* 根层级不画竖线：覆盖 .tool-inline 的 border-left / padding-left，rail 只在展开列表上 */
-/* 外层 margin 折叠/展开恒定（与 thinking-block 同 4px），收起只卸列表高度、不改行距 */
+/* 外层 margin 折叠/展开恒定（与 thinking-block 同 6px），收起只卸列表高度、不改行距 */
 .explore-inline {
-  margin: 4px 0;
+  margin: 6px 0;
   box-sizing: border-box;
   max-width: 100%;
   min-width: 0;
@@ -2314,8 +2314,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 1px 0;
-  min-height: 20px;
+  padding: 2px 0;
+  min-height: 22px;
   background: transparent;
   font-size: var(--message-meta-font-size, 12px);
   line-height: 20px;
@@ -2328,7 +2328,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 20px;
+  min-height: 22px;
   padding: 0;
   margin: 0;
   border: none;

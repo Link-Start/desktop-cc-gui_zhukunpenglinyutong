@@ -17,8 +17,10 @@ import {
 } from "../../../utils/threadItems";
 import { listSharedSessions as listSharedSessionsService } from "../../shared-session/services/sharedSessions";
 import {
+  buildNativeOwnerToSharedThreadMap,
   expandHiddenSharedBindingIds,
   normalizeSharedSessionSummaries,
+  remapThreadParentsToSharedOwners,
   toSharedThreadSummary,
 } from "../../shared-session/runtime/sharedSessionSummaries";
 import { asString } from "../utils/threadNormalize";
@@ -40,7 +42,9 @@ import {
   createRenameThreadTitleMappingAction,
 } from "./useThreadActions.sessionActions";
 import {
+  buildHiddenAutomaticSessionIdSet,
   extractThreadSizeBytes,
+  filterHiddenAutomaticThreadSummaries,
   filterRetainableContinuitySummaries,
   hasHealthyThreadSummaries,
   isLocalSessionScanUnavailable,
@@ -64,6 +68,7 @@ import {
   shouldIncludeWorkspaceThreadEntry,
   shouldApplyCodexSidebarContinuity,
   shouldApplyClaudeSidebarContinuity,
+  threadIdMatchesHiddenAutomaticSessionSet,
   withTimeout,
   type GeminiSessionSummary,
   type GrokSessionSummary,
@@ -140,7 +145,9 @@ export function useThreadActions({
 }: UseThreadActionsOptions) {
   const {
     historyLoadingByThreadId,
+    historyLoadingProgressByThreadId,
     setThreadHistoryLoading,
+    setThreadHistoryLoadingProgress,
     setThreadHistoryRecoveryFailed,
   } = useThreadHistoryLoadingState();
   // Map workspaceId → filesystem path, populated in listThreadsForWorkspace
@@ -248,6 +255,7 @@ export function useThreadActions({
     previousThreadsByWorkspaceRef,
     threadListCursorByWorkspace,
     setThreadHistoryRecoveryFailed,
+    setThreadHistoryLoadingProgress,
   });
 
   const {
@@ -410,6 +418,8 @@ export function useThreadActions({
         const hiddenSharedBindingIds = expandHiddenSharedBindingIds(
           sharedSessions.flatMap((session) => session.nativeThreadIds),
         );
+        const nativeOwnerToSharedThreadId =
+          buildNativeOwnerToSharedThreadMap(sharedSessions);
         const existingThreads = filterDeletedSummaries(
           threadsByWorkspace[workspace.id] ?? [],
         );
@@ -796,6 +806,9 @@ export function useThreadActions({
           projectCatalogResult.status === "fulfilled"
             ? projectCatalogResult.value
             : null;
+        const hiddenAutomaticSessionIds = buildHiddenAutomaticSessionIdSet(
+          projectCatalogValue?.hiddenAutomaticSessionIds,
+        );
         const catalogClaudeSourceStatus = findCatalogSourceStatusForEngine(
           projectCatalogValue?.sourceStatuses,
           "claude",
@@ -855,6 +868,14 @@ export function useThreadActions({
                 ? `claude:${session.parentSessionId}`
                 : null;
               if (hiddenSharedBindingIds.has(id)) {
+                return;
+              }
+              if (
+                threadIdMatchesHiddenAutomaticSessionSet(
+                  id,
+                  hiddenAutomaticSessionIds,
+                )
+              ) {
                 return;
               }
               const prev = mergedById.get(id);
@@ -935,6 +956,14 @@ export function useThreadActions({
           opencodeSessions.forEach((session) => {
             const id = `opencode:${session.sessionId}`;
             if (hiddenSharedBindingIds.has(id)) {
+              return;
+            }
+            if (
+              threadIdMatchesHiddenAutomaticSessionSet(
+                id,
+                hiddenAutomaticSessionIds,
+              )
+            ) {
               return;
             }
             const prev = mergedById.get(id);
@@ -1123,8 +1152,15 @@ export function useThreadActions({
             workspace.id,
             mappedTitles,
             getCustomName,
+            nativeOwnerToSharedThreadId,
           );
         }
+        // fix-shared-session-target-race-and-merge T5b：
+        // 仅当 list 空/失败（catch→[]）时，用 previous frame existingThreads 补回 shared:。
+        // 非空 list 视为权威全集：不得把「已删除但不在 list 中」的 shared 复活。
+        const existingSharedSummaries = existingThreads.filter((s) =>
+          s.id.startsWith("shared:"),
+        );
         if (sharedSessions.length > 0) {
           const sharedSummaries = sharedSessions.map(toSharedThreadSummary);
           const merged = new Map<string, ThreadSummary>();
@@ -1135,6 +1171,23 @@ export function useThreadActions({
             }
           });
           allSummaries = Array.from(merged.values()).sort(
+            (a, b) => b.updatedAt - a.updatedAt,
+          );
+          // Shared 合并后再次 remap：兜底 cache miss / 其它路径写入的 parent
+          allSummaries = remapThreadParentsToSharedOwners(
+            allSummaries,
+            nativeOwnerToSharedThreadId,
+          );
+        } else if (existingSharedSummaries.length > 0) {
+          // 空 list（含 error→[]）：补回 previous shared，避免侧栏整段丢 Shared
+          const mergedBack = new Map<string, ThreadSummary>();
+          allSummaries.forEach((entry) => mergedBack.set(entry.id, entry));
+          existingSharedSummaries.forEach((entry) => {
+            if (!mergedBack.has(entry.id)) {
+              mergedBack.set(entry.id, entry);
+            }
+          });
+          allSummaries = Array.from(mergedBack.values()).sort(
             (a, b) => b.updatedAt - a.updatedAt,
           );
         }
@@ -1224,7 +1277,10 @@ export function useThreadActions({
         }
         visibleSummaries = applySessionArchiveState(
           filterRootVisibleAutomaticSummaries(
-            filterDeletedSummaries(visibleSummaries),
+            filterHiddenAutomaticThreadSummaries(
+              filterDeletedSummaries(visibleSummaries),
+              hiddenAutomaticSessionIds,
+            ),
           ),
           archivedSessionMap,
         );
@@ -1233,7 +1289,10 @@ export function useThreadActions({
             workspace.id,
             applySessionArchiveState(
               filterRootVisibleAutomaticSummaries(
-                filterDeletedSummaries(lastGoodSnapshotCandidates),
+                filterHiddenAutomaticThreadSummaries(
+                  filterDeletedSummaries(lastGoodSnapshotCandidates),
+                  hiddenAutomaticSessionIds,
+                ),
               ),
               archivedSessionMap,
             ),
@@ -1398,6 +1457,11 @@ export function useThreadActions({
               latestThreadsByWorkspaceRef.current[workspace.id] ?? [];
             const baselineSummaries =
               currentSnapshot.length > 0 ? currentSnapshot : allSummaries;
+            const sharedSessionsForRemap = normalizeSharedSessionSummaries(
+              await listSharedSessionsService(workspace.id).catch(() => []),
+            );
+            const nativeOwnerToShared =
+              buildNativeOwnerToSharedThreadMap(sharedSessionsForRemap);
             const nextSummaries = mergeGrokSessionSummaries(
               baselineSummaries,
               normalizedGrokSessions.filter(
@@ -1407,6 +1471,7 @@ export function useThreadActions({
               workspace.id,
               mappedTitles,
               getCustomName,
+              nativeOwnerToShared,
             );
             const visibleNextSummaries = applySessionArchiveState(
               nextSummaries,
@@ -1422,7 +1487,8 @@ export function useThreadActions({
                   prev.name === entry.name &&
                   prev.updatedAt === entry.updatedAt &&
                   prev.engineSource === entry.engineSource &&
-                  prev.threadKind === entry.threadKind
+                  prev.threadKind === entry.threadKind &&
+                  (prev.parentThreadId ?? null) === (entry.parentThreadId ?? null)
                 );
               });
             if (!unchanged) {
@@ -1666,6 +1732,8 @@ export function useThreadActions({
     deleteThreadForWorkspace,
     renameThreadTitleMapping,
     setThreadHistoryLoading,
+    setThreadHistoryLoadingProgress,
     historyLoadingByThreadId,
+    historyLoadingProgressByThreadId,
   };
 }

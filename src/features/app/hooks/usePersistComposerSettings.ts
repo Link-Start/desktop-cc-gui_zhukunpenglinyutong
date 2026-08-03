@@ -11,6 +11,14 @@ type Params = {
   queueSaveSettings: (next: AppSettings) => Promise<AppSettings>;
 };
 
+function normalizeComposerPref(value: string | null | undefined): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 export function usePersistComposerSettings({
   enabled,
   appSettingsLoading,
@@ -25,16 +33,18 @@ export function usePersistComposerSettings({
       return;
     }
     setAppSettings((current) => {
-      if (
-        current.lastComposerModelId === selectedModelId &&
-        current.lastComposerReasoningEffort === selectedEffort
-      ) {
+      // null / "" / undefined 归一，避免 preferred 回写抖动叠满 useModels layout
+      const nextModelId = normalizeComposerPref(selectedModelId);
+      const nextEffort = normalizeComposerPref(selectedEffort);
+      const currentModelId = normalizeComposerPref(current.lastComposerModelId);
+      const currentEffort = normalizeComposerPref(current.lastComposerReasoningEffort);
+      if (currentModelId === nextModelId && currentEffort === nextEffort) {
         return current;
       }
       const nextSettings = {
         ...current,
-        lastComposerModelId: selectedModelId,
-        lastComposerReasoningEffort: selectedEffort,
+        lastComposerModelId: nextModelId,
+        lastComposerReasoningEffort: nextEffort,
       };
       void queueSaveSettings(nextSettings);
       return nextSettings;

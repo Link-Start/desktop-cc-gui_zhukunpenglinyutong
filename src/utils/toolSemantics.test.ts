@@ -26,6 +26,13 @@ describe("toolSemantics", () => {
     );
     expect(extractToolName("Command: exec_command")).toBe("exec_command");
     expect(extractToolName("claude / TodoWrite")).toBe("TodoWrite");
+    expect(extractToolName("Tool: mcp__ccgui__AskUserQuestion")).toBe(
+      "AskUserQuestion",
+    );
+    expect(extractToolName("Mcp Ccgui Askuserquestion")).toBe("Askuserquestion");
+    expect(extractToolName("Tool: ccgui / AskUserQuestion")).toBe(
+      "AskUserQuestion",
+    );
   });
 
   it("resolves command statuses with explicit failure and completion precedence", () => {
@@ -83,5 +90,29 @@ describe("toolSemantics", () => {
         detail: "/tmp/worktree",
       }),
     ).toBe("git status");
+  });
+
+  it("builds command summaries for bash toolType (Claude-style)", () => {
+    expect(
+      buildCommandSummary(
+        {
+          title: "Bash",
+          toolType: "bash",
+          detail: JSON.stringify({ command: "wc -l $(find src -type f)" }),
+        },
+        { includeDetail: false },
+      ),
+    ).toBe("wc -l $(find src -type f)");
+
+    expect(
+      buildCommandSummary(
+        {
+          title: "Bash: find . -name package.json",
+          toolType: "bash",
+          detail: "",
+        },
+        { includeDetail: false },
+      ),
+    ).toBe("find . -name package.json");
   });
 });

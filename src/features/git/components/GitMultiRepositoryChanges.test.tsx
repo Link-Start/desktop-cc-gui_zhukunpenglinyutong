@@ -179,7 +179,7 @@ describe("GitMultiRepositoryChanges", () => {
 
   it("renders repository groups and isolates the same relative path selection", () => {
     const onCommitRepositories = vi.fn();
-    const onOpenGenerateMenu = vi.fn();
+    const onGenerateCommitMessage = vi.fn();
     render(
       <GitMultiRepositoryChanges
         workspaceId="ws-1"
@@ -188,7 +188,7 @@ describe("GitMultiRepositoryChanges", () => {
         commitMessage="fix: scoped"
         commitLoading={false}
         onCommitRepositories={onCommitRepositories}
-        onOpenGenerateMenu={onOpenGenerateMenu}
+        onGenerateCommitMessage={onGenerateCommitMessage}
       />,
     );
 
@@ -207,15 +207,13 @@ describe("GitMultiRepositoryChanges", () => {
       name: "git.commitSelectionToggleFile:pom.xml",
     });
     fireEvent.click(secondFileToggle);
-    const generateButton = screen.getByRole("button", {
+    const configChip = screen.getByRole("button", {
       name: "git.generateCommitMessage",
     });
-    expect(generateButton.querySelector(".commit-message-engine-icon")).not.toBeNull();
-    fireEvent.click(generateButton);
-    expect(onOpenGenerateMenu).toHaveBeenCalledWith(
-      expect.anything(),
-      [{ repositoryRoot: "b", selectedPaths: ["pom.xml"] }],
-    );
+    expect(configChip.querySelector(".commit-message-engine-icon")).not.toBeNull();
+    fireEvent.click(configChip);
+    // Popover opens structured picker; generation needs explicit CTA.
+    expect(onGenerateCommitMessage).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "git.commit" }));
 
     expect(onCommitRepositories).toHaveBeenCalledWith([

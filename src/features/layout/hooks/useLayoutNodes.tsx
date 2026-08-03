@@ -61,7 +61,6 @@ import type {
   NoteCaptureDraft,
   WorkspaceNoteCaptureRequest,
 } from "../../note-cards/types";
-import { WorkspaceSessionActivityPanel } from "../../session-activity/components/WorkspaceSessionActivityPanel";
 import { WorkspaceSessionRadarPanel } from "../../session-activity/components/WorkspaceSessionRadarPanel";
 import { TabBar } from "../../app/components/TabBar";
 import { TabletNav } from "../../app/components/TabletNav";
@@ -103,7 +102,8 @@ import { resolveDiffPathFromWorkspacePath } from "../../../utils/workspacePaths"
 import { resolvePresentationProfile } from "../../../conversation-presentation/presentationProfile";
 import { appendQueuedHandoffBubbleIfNeeded } from "../../threads/utils/queuedHandoffBubble";
 import { isBackgroundRenderGatingEnabled } from "../../threads/utils/realtimePerfFlags";
-import { useWorkspaceSessionActivity } from "../../session-activity/hooks/useWorkspaceSessionActivity";
+// DISABLED: disable-session-activity-and-solo-mode — keep empty stub only
+import { DISABLED_WORKSPACE_SESSION_ACTIVITY } from "../../session-activity/adapters/buildWorkspaceSessionActivity";
 import { useClientUiVisibility } from "../../client-ui-visibility/hooks/useClientUiVisibility";
 import {
   getHomeWorkspaceOptions,
@@ -136,6 +136,7 @@ import { ActiveCanvasStatusPanel } from "./activeCanvasStatusPanelNode";
 import { buildShellRuntimeSummary } from "./layoutShellSummary";
 import { buildConversationCanvasNode } from "./conversationCanvasNode";
 import { useLayoutTopbarSessionTabs } from "./useLayoutTopbarSessionTabs";
+import { resolveIsSharedSession } from "../../shared-session/utils/sharedSessionIdentity";
 import {
   buildCompactEmptyNode,
   buildCompactGitBackNode,
@@ -289,8 +290,15 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   >([]);
   const [noteCardSelectionRequest, setNoteCardSelectionRequest] =
     useState<ComposerNoteCardSelectionRequest | null>(null);
-  const [homeCreationTargetEngine, setHomeCreationTargetEngine] =
+  const [homeCreationTargetEngine, setHomeCreationTargetEngineState] =
     useState<EngineType | null>(null);
+  // 幂等：Composer 创建态会在 effect 中回写 engine，等价值禁止触发父树重渲染
+  const setHomeCreationTargetEngine = useCallback(
+    (next: EngineType | null) => {
+      setHomeCreationTargetEngineState((prev) => (prev === next ? prev : next));
+    },
+    [],
+  );
   const [gitModalPreviewRequest, setGitModalPreviewRequest] =
     useState<GitModalPreviewRequest | null>(null);
   const [gitModeControlsTarget, setGitModeControlsTarget] =
@@ -358,6 +366,11 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const activeThreadHistoryLoading = options.activeThreadId
     ? options.historyLoadingByThreadId[options.activeThreadId] === true
     : false;
+  const activeThreadHistoryLoadingProgress =
+    options.activeThreadId && activeThreadHistoryLoading
+      ? options.historyLoadingProgressByThreadId?.[options.activeThreadId] ??
+        null
+      : null;
   const activeThreadHistoryRecoveryFailureReason =
     options.activeThreadId &&
     options.historyLoadingByThreadId[options.activeThreadId] === "failed"
@@ -400,7 +413,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     "rightActivityToolbar",
   );
   const rightToolbarVisibleTabs = {
-    activity: clientUiVisibility.isControlVisible("rightToolbar.activity"),
+    // Kill-switched: never show activity entry even if client UI visibility allows it.
+    activity: false,
     projectMap: clientUiVisibility.isControlVisible("rightToolbar.projectMap"),
     radar: clientUiVisibility.isControlVisible("rightToolbar.radar"),
     git: clientUiVisibility.isControlVisible("rightToolbar.git"),
@@ -424,6 +438,12 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       "bottomActivity.checkpoint",
     ),
   };
+  const showGovernanceEvidence = clientUiVisibility.isControlVisible(
+    "bottomActivity.governanceEvidence",
+  );
+  const showCheckpointDetails = clientUiVisibility.isControlVisible(
+    "bottomActivity.checkpointDetails",
+  );
   const shellRuntimeSummary = useMemo(
     () =>
       buildShellRuntimeSummary({
@@ -618,15 +638,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     },
     [gitDiffItems, activeWorkspacePath, onGitDiffListViewChange, onSelectDiff],
   );
-  const workspaceActivity = useWorkspaceSessionActivity({
-    activeThreadId: options.activeThreadId,
-    threads: options.activeWorkspaceId
-      ? (options.threadsByWorkspace[options.activeWorkspaceId] ?? [])
-      : [],
-    itemsByThread: deferredThreadItemsByThread,
-    threadParentById: options.threadParentById,
-    threadStatusById: deferredThreadStatusById,
-  });
+  // DISABLED: disable-session-activity-and-solo-mode — no derivation while kill-switch is on
+  const workspaceActivity = DISABLED_WORKSPACE_SESSION_ACTIVITY;
   const isEditorFileMaximized = options.isEditorFileMaximized;
   const onToggleEditorFileMaximized = options.onToggleEditorFileMaximized;
   const handleOpenDiffFromActivity = useCallback(
@@ -1007,6 +1020,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       plan: options.plan,
       isThinking: isThreadThinking,
       isHistoryLoading: activeThreadHistoryLoading,
+      historyLoadingProgress: activeThreadHistoryLoadingProgress,
       historyRecoveryFailureReason: activeThreadHistoryRecoveryFailureReason,
       isContextCompacting: activeThreadStatus?.isContextCompacting ?? false,
       processingStartedAt: activeThreadStatus?.processingStartedAt ?? null,
@@ -1020,6 +1034,20 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       activeThreadStatus,
       activeTokenUsage: options.activeTokenUsage,
       activeRateLimits: options.activeRateLimits,
+      childSubagentThreads: (() => {
+        const activeId = options.activeThreadId;
+        const workspaceId = options.activeWorkspaceId;
+        if (!activeId || !workspaceId) {
+          return [];
+        }
+        const threads = options.threadsByWorkspace[workspaceId] ?? [];
+        return threads.filter((thread) => {
+          const parent =
+            thread.parentThreadId ?? options.threadParentById[thread.id] ?? null;
+          return parent === activeId;
+        });
+      })(),
+      activeNativeThreadIds: activeThreadSummary?.nativeThreadIds ?? [],
     }),
     [
       options.activeWorkspaceId,
@@ -1034,6 +1062,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       options.plan,
       isThreadThinking,
       activeThreadHistoryLoading,
+      activeThreadHistoryLoadingProgress,
       activeThreadHistoryRecoveryFailureReason,
       activeThreadStatus,
       taskRunStore.runs,
@@ -1041,6 +1070,9 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       sidebarThreadStatusById,
       options.activeTokenUsage,
       options.activeRateLimits,
+      options.threadsByWorkspace,
+      options.threadParentById,
+      activeThreadSummary?.nativeThreadIds,
     ],
   );
 
@@ -1282,7 +1314,12 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     },
     [],
   );
-  const isSharedSession = activeThreadSummary?.threadKind === "shared";
+  // 身份 id-first：shared: 前缀是 hard gate，threadKind 投影仅兜底
+  // （fix-shared-session-identity-id-first）。
+  const isSharedSession = resolveIsSharedSession(
+    options.activeThreadId,
+    activeThreadSummary,
+  );
   // Wave 4 / B.6：Shared Send UI 状态机（§14.5）。V2 flag 关闭时状态恒为 idle，不影响现有行为。
   const sharedSendEntry = useSharedSendState(
     options.activeWorkspaceId ?? "",
@@ -1853,6 +1890,11 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
 
   const handleRightPanelTabSelect = useCallback(
     (tabId: RightPanelTabSelection) => {
+      // DISABLED: disable-session-activity-and-solo-mode
+      if (tabId === "activity") {
+        onFilePanelModeChange("files");
+        return;
+      }
       if (tabId === "specHub") {
         onOpenSpecHub();
         return;
@@ -1933,7 +1975,10 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
 
   let gitDiffPanelNode: ReactNode;
   if (
-    (options.filePanelMode === "files" || options.filePanelMode === "notes") &&
+    (options.filePanelMode === "files" ||
+      options.filePanelMode === "notes" ||
+      // DISABLED activity: treat residual mode as files until normalize runs
+      options.filePanelMode === "activity") &&
     options.activeWorkspace
   ) {
     gitDiffPanelNode = (
@@ -2008,20 +2053,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         onFilePanelModeChange={options.onFilePanelModeChange}
         focusMemoryId={options.focusedProjectMemoryId ?? null}
         focusRequestKey={options.focusedProjectMemoryRequestKey ?? 0}
-      />
-    );
-  } else if (options.filePanelMode === "activity") {
-    gitDiffPanelNode = (
-      <WorkspaceSessionActivityPanel
-        workspaceId={options.activeWorkspace?.id ?? null}
-        workspacePath={options.activeWorkspace?.path ?? null}
-        viewModel={workspaceActivity}
-        onOpenDiffPath={handleOpenDiffFromActivity}
-        onSelectThread={options.onSelectThread}
-        liveEditPreviewEnabled={options.liveEditPreviewEnabled}
-        onToggleLiveEditPreview={options.onToggleLiveEditPreview}
-        onRefreshGitStatus={options.queueGitStatusRefresh}
-        {...codeAnnotationBridgeProps}
       />
     );
   } else if (options.filePanelMode === "radar") {
@@ -2347,6 +2378,13 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       onSelectSubagent={options.onSelectSubagent}
       variant="dock"
       visibleDockTabs={bottomActivityVisibleTabs}
+      showGovernanceEvidence={showGovernanceEvidence}
+      showCheckpointDetails={showCheckpointDetails}
+      workspaceName={options.activeWorkspace?.name ?? null}
+      sessionDiskPath={activeThreadSummary?.physicalPath ?? null}
+      providerProfileId={activeThreadSummary?.providerProfileId ?? null}
+      isSharedSession={isSharedSession}
+      usageShowRemaining={options.usageShowRemaining}
       onRefreshGitStatus={options.queueGitStatusRefresh}
       commitMessage={options.commitMessage}
       commitMessageLoading={options.commitMessageLoading}

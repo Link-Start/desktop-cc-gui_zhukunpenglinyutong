@@ -106,6 +106,7 @@ import {
 import { buildItemsFromThread } from "../../../utils/threadItems";
 import i18n from "../../../i18n";
 import { clearSharedSessionBindingsForSharedThread } from "../../shared-session/runtime/sharedSessionBridge";
+import { isSharedSessionThreadId } from "../../shared-session/utils/sharedSessionIdentity";
 import {
   syncSharedSessionSnapshot as syncSharedSessionSnapshotService,
 } from "../../shared-session/services/sharedSessions";
@@ -698,6 +699,11 @@ export function useThreads({
 
   const getThreadKind = useCallback(
     (workspaceId: string, threadId: string): "native" | "shared" => {
+      // id-first：shared: 前缀是身份 hard gate，threadKind 投影可丢
+      // （fix-shared-session-identity-id-first）。send/delete 共用此解析。
+      if (isSharedSessionThreadId(threadId)) {
+        return "shared";
+      }
       const threads = state.threadsByWorkspace[workspaceId] ?? [];
       const thread = threads.find((t) => t.id === threadId);
       return thread?.threadKind === "shared" ? "shared" : "native";
@@ -978,7 +984,9 @@ export function useThreads({
     deleteThreadForWorkspace,
     renameThreadTitleMapping,
     setThreadHistoryLoading,
+    setThreadHistoryLoadingProgress,
     historyLoadingByThreadId,
+    historyLoadingProgressByThreadId,
   } = useThreadActions({
     dispatch,
     itemsByThread: state.itemsByThread,
@@ -1036,15 +1044,55 @@ export function useThreads({
     [dispatch, rawRefreshThread, resolveCanonicalThreadId],
   );
 
-  const { handleTurnCompletedForHistoryReconcile } =
-    useThreadRealtimeHistoryReconcile({
-      itemsByThreadRef,
-      onDebug,
-      refreshThread,
-      resolveCanonicalThreadId,
-      threadStatusByIdRef,
-      threadsByWorkspace: state.threadsByWorkspace,
-    });
+  const {
+    handleTurnCompletedForHistoryReconcile,
+    scheduleClaudeBlankCurtainRecovery,
+  } = useThreadRealtimeHistoryReconcile({
+    itemsByThreadRef,
+    onDebug,
+    refreshThread,
+    resolveCanonicalThreadId,
+    threadStatusByIdRef,
+    threadsByWorkspace: state.threadsByWorkspace,
+  });
+
+  // Claude blank-curtain in place: while the active Claude thread is empty during
+  // processing (or after a failed history hydrate), force disk rehydrate without
+  // requiring the user to switch pages and come back.
+  useEffect(() => {
+    if (!activeWorkspaceId || !activeThreadId) {
+      return;
+    }
+    if (!activeThreadId.startsWith("claude:")) {
+      return;
+    }
+    const itemCount = state.itemsByThread[activeThreadId]?.length ?? 0;
+    if (itemCount > 0) {
+      return;
+    }
+    const isProcessing = Boolean(
+      state.threadStatusById[activeThreadId]?.isProcessing,
+    );
+    const historyFailed =
+      historyLoadingByThreadId[activeThreadId] === "failed";
+    if (!isProcessing && !historyFailed) {
+      return;
+    }
+    scheduleClaudeBlankCurtainRecovery(
+      activeWorkspaceId,
+      activeThreadId,
+      isProcessing
+        ? "active-processing-empty-surface"
+        : "active-failed-empty-surface",
+    );
+  }, [
+    activeThreadId,
+    activeWorkspaceId,
+    historyLoadingByThreadId,
+    scheduleClaudeBlankCurtainRecovery,
+    state.itemsByThread,
+    state.threadStatusById,
+  ]);
 
   useEffect(() => {
     if (!isWebServiceRuntime()) {
@@ -2103,6 +2151,16 @@ export function useThreads({
         const isProcessing = Boolean(
           threadStatusByIdRef.current[canonicalThreadId]?.isProcessing,
         );
+        const activeSurfaceItemCount =
+          itemsByThreadRef.current[canonicalThreadId]?.length ?? 0;
+        const isClaudeEmptySurface =
+          canonicalThreadId.startsWith("claude:") &&
+          activeSurfaceItemCount === 0;
+        // Empty Claude surfaces must force rehydrate even after a prior
+        // history-hydrate-empty failure, otherwise the user is stuck until a
+        // full remount and sees only messages.emptyThread.
+        const shouldForceEmptyClaudeReload =
+          isClaudeEmptySurface && !isProcessing;
         let lastRefreshAt =
           loadedThreadLastRefreshAtRef.current[canonicalThreadId] ?? 0;
         if (isLoaded && lastRefreshAt <= 0) {
@@ -2115,7 +2173,8 @@ export function useThreads({
           now - lastRefreshAt >= THREAD_SWITCH_LOADED_REFRESH_MS;
         const shouldScheduleResume =
           (!isLoaded && !isProcessing && !automaticRecoveryBlocked) ||
-          shouldRefreshLoaded;
+          shouldRefreshLoaded ||
+          shouldForceEmptyClaudeReload;
         if (!shouldScheduleResume) {
           clearHistoryLoadingForThread(canonicalThreadId);
           return;
@@ -2127,6 +2186,14 @@ export function useThreads({
           setThreadHistoryLoading(canonicalThreadId, true);
           historyLoadingThreadByWorkspaceRef.current[targetId] =
             canonicalThreadId;
+          if (canonicalThreadId.startsWith("shared:")) {
+            setThreadHistoryLoadingProgress(canonicalThreadId, {
+              phase: "prepare",
+              percent: 8,
+              titleKey: "restoringSharedHistory",
+              detailKey: "restoringSharedHistoryPrepare",
+            });
+          }
         } else {
           clearHistoryLoadingForThread(canonicalThreadId);
         }
@@ -2148,11 +2215,19 @@ export function useThreads({
             loadedThreadLastRefreshAtRef.current[canonicalThreadId] =
               Date.now();
             let resumeLoadingThreadId = canonicalThreadId;
+            // Force when prior automatic recovery failed or Claude surface is
+            // empty so resume is not skipped by automaticRecoveryFailedByScope.
+            const forceEmptyClaudeResume =
+              historyLoadingStateByThreadRef.current[canonicalThreadId] ===
+                "failed" ||
+              (canonicalThreadId.startsWith("claude:") &&
+                (itemsByThreadRef.current[canonicalThreadId]?.length ?? 0) ===
+                  0);
             void resumeThreadForWorkspace(
               targetId,
               canonicalThreadId,
-              false,
-              false,
+              forceEmptyClaudeResume,
+              forceEmptyClaudeResume,
               {
                 preferLocalCodexHistory: true,
               },
@@ -2222,9 +2297,15 @@ export function useThreads({
           }
           const callbackLastRefreshAt =
             loadedThreadLastRefreshAtRef.current[canonicalThreadId] ?? 0;
+          const claudeEmptyAtCallback =
+            canonicalThreadId.startsWith("claude:") &&
+            (itemsByThreadRef.current[canonicalThreadId]?.length ?? 0) === 0;
+          // Claude empty surfaces skip the 20s cooldown so reselect immediately
+          // rehydrates transcript instead of showing messages.emptyThread.
           if (
+            !claudeEmptyAtCallback &&
             Date.now() - callbackLastRefreshAt <
-            THREAD_SWITCH_LOADED_REFRESH_MS
+              THREAD_SWITCH_LOADED_REFRESH_MS
           ) {
             return;
           }
@@ -2233,7 +2314,7 @@ export function useThreads({
             targetId,
             canonicalThreadId,
             true,
-            false,
+            claudeEmptyAtCallback,
             {
               preferLocalCodexHistory: true,
             },
@@ -2279,6 +2360,7 @@ export function useThreads({
       resolveCanonicalThreadId,
       resumeThreadForWorkspace,
       setThreadHistoryLoading,
+      setThreadHistoryLoadingProgress,
     ],
   );
 
@@ -2957,6 +3039,7 @@ export function useThreads({
     threadParentById: state.threadParentById,
     threadStatusById: state.threadStatusById,
     historyLoadingByThreadId,
+    historyLoadingProgressByThreadId,
     threadListLoadingByWorkspace: state.threadListLoadingByWorkspace,
     threadListPagingByWorkspace: state.threadListPagingByWorkspace,
     threadListCursorByWorkspace: state.threadListCursorByWorkspace,

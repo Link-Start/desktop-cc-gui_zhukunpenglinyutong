@@ -38,6 +38,7 @@ import {
   SearchToolGroupBlock,
   ToolBlockRenderer,
 } from "../../components/toolBlocks";
+import { SubagentSquadGrid } from "../../../subagent-ui";
 import {
   DiffRow,
   ExploreRow,
@@ -83,6 +84,7 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     suppressedUserMemoryContextMessageIds,
     suppressedUserNoteCardContextMessageIds,
     turnFileChangesByBoundaryId,
+    turnTargetBadgeVisibleItemIds,
   } = snapshot;
   const {
     heartbeatPulse,
@@ -104,12 +106,13 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     activeEngine,
     activeUserInputAnchorItemId,
     activeUserInputRequestId,
-    claudeHistoryTranscriptFallbackActive,
     latestRetryMessage,
     latestRuntimeReconnectItemId,
     nativeRuntimeRecoveryEnabled,
     proxyEnabled,
     proxyUrl,
+    isHistoryLoading: _isHistoryLoading,
+    historyLoadingProgress,
     threadId,
     workspaceId,
   } = runtime;
@@ -388,6 +391,10 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
               onAssistantVisibleTextRender={onAssistantVisibleTextRender}
               suppressMemorySummaryCard={suppressedUserMemoryContextMessageIds.has(renderItem.id)}
               suppressNoteCardSummaryCard={suppressedUserNoteCardContextMessageIds.has(renderItem.id)}
+              showTurnTargetBadge={
+                !renderItem.executionTargetSnapshot ||
+                turnTargetBadgeVisibleItemIds.has(renderItem.id)
+              }
               onOutlineReady={
                 renderItem.role === "assistant" && renderItem.id === liveAssistantMessageId
                   ? liveAssistantOutlineReady
@@ -470,9 +477,6 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
       return <DiffRow key={`diff:${renderItem.id}`} item={renderItem} />;
     }
     if (renderKind === "tool" && renderItem.kind === "tool") {
-      if (shouldHideCodexCanvasCommandCard(renderItem, activeEngine)) {
-        return null;
-      }
       const isExpanded = expandedItems.has(renderItem.id);
       const selectedExitPlanExecutionMode =
         selectedExitPlanExecutionByItemKey[`${threadId ?? "no-thread"}:${renderItem.id}`] ?? null;
@@ -545,22 +549,20 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
       );
     }
     if (entry.kind === "bashGroup") {
-      // Align Grok/Kimi/OpenCode with Claude-polished canvas: shell batches stay off
-      // the narrative surface (Status Panel / Diff remain the operational trail).
-      if (
-        activeEngine === "codex" ||
-        activeEngine === "grok" ||
-        activeEngine === "kimi" ||
-        activeEngine === "opencode" ||
-        (activeEngine === "claude" && !claudeHistoryTranscriptFallbackActive)
-      ) {
+      // Pure shell noise is filtered before collapse. Remaining bash rows are
+      // Codex file-IO commands (cat/rg/apply_patch) and MUST render — otherwise
+      // process-phase expand shows a chip with N tools but an empty body.
+      const visibleItems = entry.items.filter(
+        (toolItem) => !shouldHideCodexCanvasCommandCard(toolItem, activeEngine),
+      );
+      if (visibleItems.length === 0) {
         return null;
       }
-      const firstItem = entry.items[0];
+      const firstItem = visibleItems[0];
       return renderWithAnchoredUserInput(
         <BashToolGroupBlock
           key={`bg-${firstItem?.id ?? "bash-group"}`}
-          items={entry.items}
+          items={visibleItems}
           onRequestAutoScroll={requestAutoScroll}
         />,
       );
@@ -569,6 +571,15 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
       const firstItem = entry.items[0];
       return renderWithAnchoredUserInput(
         <SearchToolGroupBlock key={`sg-${firstItem?.id ?? "search-group"}`} items={entry.items} />,
+      );
+    }
+    if (entry.kind === "subagentGroup") {
+      const firstItem = entry.items[0];
+      return renderWithAnchoredUserInput(
+        <SubagentSquadGrid
+          key={`sag-${firstItem?.id ?? "subagent-group"}`}
+          items={entry.items}
+        />,
       );
     }
     return renderWithAnchoredUserInput(renderSingleItem(entry.item));
@@ -774,16 +785,41 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     }
     if (row.kind === "emptyState") {
       if (row.state === "historyLoading") {
+        const progress = historyLoadingProgress ?? null;
+        const title = progress
+          ? t(`messages.${progress.titleKey}`, progress.detailParams)
+          : t("messages.restoringHistory");
+        const detail = progress
+          ? t(`messages.${progress.detailKey}`, progress.detailParams)
+          : t("messages.restoringHistoryHint");
+        const percent = progress?.percent ?? null;
         return (
           <div
             className="empty messages-empty messages-history-loading"
             role="status"
             aria-live="polite"
+            aria-busy="true"
           >
             <span className="working-spinner" aria-hidden="true" />
             <div className="messages-history-loading-copy">
-              <strong>{t("messages.restoringHistory")}</strong>
-              <span>{t("messages.restoringHistoryHint")}</span>
+              <strong>{title}</strong>
+              <span>{detail}</span>
+              <div
+                className={`messages-history-loading-bar${percent == null ? " is-indeterminate" : ""}`}
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={percent ?? undefined}
+                aria-label={title}
+              >
+                <div
+                  className="messages-history-loading-bar-fill"
+                  style={percent == null ? undefined : { width: `${percent}%` }}
+                />
+              </div>
+              {percent != null ? (
+                <span className="messages-history-loading-percent">{percent}%</span>
+              ) : null}
             </div>
           </div>
         );

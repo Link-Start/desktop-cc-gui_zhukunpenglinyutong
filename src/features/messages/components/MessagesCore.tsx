@@ -192,6 +192,7 @@ export const MessagesCore = memo(function MessagesCore({
   const { state: conversationState, workspacePath = null } = conversation;
   const {
     isHistoryLoading = false,
+    historyLoadingProgress = null,
     historyRecoveryFailureReason = null,
     isContextCompacting = false,
     proxyEnabled = false,
@@ -243,6 +244,9 @@ export const MessagesCore = memo(function MessagesCore({
   const userInputRequests = conversationState.userInputQueue;
   const workspaceId = conversationState.meta.workspaceId || null;
   const threadId = conversationState.meta.threadId || null;
+  // 注意：不要在此处 closeSubagentInspector。
+  // 右侧抽屉会嵌套挂载另一个 Messages（子 session threadId），若在这里按 thread 关抽屉，
+  // 打开瞬间就会被嵌套实例关掉 → 闪屏。切会话关闭改由 SubagentChatSplit 只监听父幕布 scope。
   const nativeRuntimeRecoveryEnabled = !threadId?.startsWith("shared:");
   const activeTurnId = conversationState.meta.activeTurnId ?? null;
   const activeEngine = conversationState.meta.engine;
@@ -1109,6 +1113,7 @@ export const MessagesCore = memo(function MessagesCore({
     suppressedUserNoteCardContextMessageIds,
     timelinePresentationItems,
     turnFileChangesByBoundaryId,
+    turnTargetBadgeVisibleItemIds,
   } = useMessagesPresentationState({
     activeEngine,
     claudeDockedReasoningItemCount: claudeDockedReasoningItems.length,
@@ -1126,6 +1131,7 @@ export const MessagesCore = memo(function MessagesCore({
     renderScopeKey,
     renderSourceItems,
     supportsStreamingReadableWindowRecovery,
+    threadId,
     timelineItems,
   });
   useEffect(() => {
@@ -1755,6 +1761,7 @@ export const MessagesCore = memo(function MessagesCore({
       suppressedUserMemoryContextMessageIds,
       suppressedUserNoteCardContextMessageIds,
       turnFileChangesByBoundaryId,
+      turnTargetBadgeVisibleItemIds,
       visibleCollapsedHistoryItemCount: presentationCollapsedHistoryItemCount,
     },
     live: {
@@ -1785,6 +1792,7 @@ export const MessagesCore = memo(function MessagesCore({
         ? historyRecoveryFailureReason
         : null,
       isHistoryLoading,
+      historyLoadingProgress,
       latestRetryMessage,
       latestRuntimeReconnectItemId,
       nativeRuntimeRecoveryEnabled,

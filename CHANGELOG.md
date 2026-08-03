@@ -2,6 +2,136 @@
 
 ---
 
+##### **2026年8月3日（v0.7.15）**
+
+中文：
+
+这一版的主菜是「子代理看得见、会话概览清楚、跨引擎更稳」：幕布上的小队有了独立卡片与详情抽屉，结果区换成会话概览并接上套餐额度，Shared / 续接与冷启动白屏也一并压实。
+
+✨ Features
+- 子代理幕布升级：Agent / Task 从扁条变成带人格的小队卡片，可点开幕布内 inspector 抽屉看子会话全文，不再挤进全局右侧 Tab
+- 跨引擎子代理对齐：Codex Collab、Grok spawn、Kimi Swarm 与 Shared 投影也能识别为子代理；会话树补齐父子层级，交付正文与启动回执分开
+- 会话概览进结果区：默认展示会话静态信息与运行态；官方 runtime 与 Coding Plan 可查 Codex / Kimi / MiniMax / 智谱额度，Shared 会话支持多供应商额度列表
+- Shared 会话可管了：会话管理支持扫描、预览与删除 Shared 会话，列表带 Shared 徽章与引擎筛选
+- AI 提交消息更可控：提交框改为结构化 composer，先选引擎与语言再点「按此配置生成」；支持「沿用上次配置」一键再生成，并修好 Grok 等 managed 引擎接入
+- 供应商新增 Atlas Cloud Codex 预设
+- 侧栏工作区分组：整行单击即可折叠，不再依赖双击或小三角
+
+🔧 Improvements
+- 过程时间线更干净：纯 shell 默认收起，文件读写类命令保留在过程折叠里；单步 / 孤儿思考也会并进 chip，展开动画更顺
+- 结果 Tab 默认只留会话概览，治理证据改为开发者开关 opt-in
+- 下线「会话活动」面板与 Solo 模式，减少常驻入口与派生开销（雷达与底部活动面板不受影响）
+- 弹层与续接反馈更清晰；会话菜单会尊重已禁用的 CLI 引擎
+- 侧栏会话状态指示更克制；隐藏的自动 helper 不再混入侧栏合并
+
+🐛 Fixes
+- 多处收敛 React #185 冷启动 / 折叠动画 / file-ref 引用环导致的白屏
+- 修复 Linux 启动空白页，同时保留百度统计；收紧访客 Cookie 提交时序
+- 修复 Claude managed 渠道模型与进程环境串台；空白幕布可恢复，并去掉多余 skill chips
+- Shared / 跨引擎续接：切渠道立即写执行目标；取消 Provider 续接会还原来源供应商与模型；成功后默认选中目标 catalog 模型
+- 以 `shared:` id 硬闸，避免模型选择误入 Native 续接；稳定 Shared 列表图标与 merge 保护
+- Codex 续接 inject 过滤 control 角色，避免三方 API 反序列化失败；补齐 apply_patch / 文件修改历史投影
+- 兼容 WKWebView：去掉 lookbehind 正则，并持久化 turn 完成元数据
+- 终端 host 重挂后 xterm 能重新附着；过程折叠展开后 bash 组不再空壳
+- Native 会话额度只查当前供应商，避免误打其它账号
+
+English:
+
+The headline of this release is visible subagents, a clearer session overview, and steadier cross-engine work: squad cards open an in-canvas inspector, the results area becomes a session overview with plan quotas, and Shared / continuation / cold-start white screens get hardened.
+
+✨ Features
+- Subagent canvas upgrade: Agent / Task steps become persona squad cards with an in-canvas inspector drawer for the child transcript — no more stuffing into the global right tab
+- Cross-engine subagent parity: Codex Collab, Grok spawn, Kimi Swarm, and Shared projections resolve as subagents; the session tree gets parent–child hierarchy, and delivery text is separated from launch receipts
+- Session overview in the results area: static session info plus runtime state by default; official runtime / Coding Plan quotas for Codex, Kimi, MiniMax, and Zhipu; multi-vendor quota lists on Shared sessions
+- Shared sessions are manageable: session management can scan, preview, and delete Shared sessions, with badges and engine filters
+- Safer AI commit messages: a structured composer — pick engine and language, then “Generate with this config”; “Use last configuration” for one-click regenerate; managed engines such as Grok wired correctly
+- New vendor preset: Atlas Cloud Codex
+- Sidebar workspace groups: single-click the full header row to collapse (no more double-click-only)
+
+🔧 Improvements
+- Quieter process timelines: pure shell stays folded by default while file read/write commands remain in the phase; single-step / orphan reasoning joins the chip, with smoother expand animation
+- Results tab defaults to session overview only; governance evidence is an opt-in developer switch
+- Retired the Session Activity panel and Solo mode to cut permanent chrome and derivation cost (radar and bottom activity panels are unchanged)
+- Clearer popovers and continuation feedback; session menus respect disabled CLI engines
+- Quieter sidebar status indicators; hidden automatic helpers no longer merge into the sidebar
+
+🐛 Fixes
+- Multiple React #185 cold-start / collapse-animation / file-ref cycle white-screen fixes
+- Fixed Linux blank startup while keeping Baidu analytics; tightened visitor cookie submit timing
+- Fixed Claude managed-channel model vs process-env cross-talk; blank curtains recover, and stray skill chips are dropped
+- Shared / cross-engine continuation: write execution target immediately on channel switch; canceling Provider continuation restores the source vendor/model; success selects the target catalog model by default
+- Hard-gate on `shared:` ids so model picks no longer fall into Native resume; stable Shared list icons and merge protection
+- Codex continuation inject filters `control` roles to avoid third-party API deserialize failures; apply_patch / file-edit history projection filled in
+- WKWebView compatibility: remove lookbehind regex and persist turn-final metadata
+- xterm reattaches after terminal host remount; bash groups no longer render empty after expanding a collapsed phase
+- Native session quotas query only the current vendor
+
+---
+
+##### **2026年8月1日（v0.7.14）**
+
+中文：
+
+这一版的主菜是「设置焕新、过程更清、思考可调」：偏好设置整体重排更易扫读，多引擎对话幕布统一过程投影并默认折叠已完成步骤，Grok / 自定义模型也接上了思考强度。
+
+✨ Features
+- 设置页焕新：偏好区改为更密的行式布局，界面缩放与代码字号改为预设选择；打开应用编辑进对话框；快捷键与供应商 CLI 在移动端支持主从导航
+- 对话过程更安静：已完成的推理 / 工具 / 探索步骤按因果阶段自动折叠成可展开摘要，进行中的步骤保持展开，正文更突出
+- 多引擎幕布对齐：统一轻量下线策略，Grok / Kimi / OpenCode 接齐过程投影（含 Grok 实时工具桥），读 / 写 / 搜呈现更接近 Claude
+- Grok 思考强度：支持 low / medium / high，从选模贯通到 headless 参数
+- 供应商空模型更友好：渠道无 catalog 时回退默认模型并给出引导；自定义 Codex 模型可设思考强度默认档
+- 应用图标更新：刷新桌面端图标资源
+
+🔧 Improvements
+- 会话管理与设置区块布局简化；移除本地 usage 看板等冗余表面
+- 提示词库与设置页选择器外壳统一，排版更整齐
+- 收敛幕布滚动所有权与权威回底通道，快流下吸底更稳
+- 开发体验：支持隔离启动多个 Tauri 开发实例（端口可配）
+
+🐛 Fixes
+- 修复冷启动 React #185：effort 双写导致的死循环，并保留 freeform / catalog 外模型名选择
+- 修复 Claude 切换供应商后模型列表不刷新；Native 会话供应商与模型切换不再互相盖盘
+- 对齐 Grok / Kimi / OpenCode Hidden Binding 隐藏逻辑；修复切换后的实时投影
+- 允许跨供应商续接在运行中取消，并忽略晚到的创建结果
+- 禁用当前引擎时自动迁移首页 / 新建会话默认引擎，进行中会话不中断
+- 修正 Codex 思考强度映射
+- 修复浏览器预览启动崩溃，以及未进设置页时 vendor 弹窗样式裸奔
+- 修复工具行稳定与底部跟随抖动；相邻 reasoning 块合并；折叠阶段 hard-unmount 避免幽灵行
+- 修复用户气泡复制按钮遮挡正文
+- 当前页「添加模型」弹窗补齐 settings 样式加载
+
+English:
+
+The headline of this release is a fresher Settings, quieter process timelines, and tunable reasoning: preferences are easier to scan, multi-engine canvases collapse finished work by default, and Grok / custom models pick up reasoning effort.
+
+✨ Features
+- Settings redesign: denser preference rows, preset selects for UI scale and code font size, open-app editing in a dialog, and master–detail mobile flows for shortcuts and vendor CLI
+- Quieter process output: completed reasoning / tool / explore steps auto-collapse into expandable causal phase summaries; in-progress work stays open so answers stay front and center
+- Unified multi-engine canvas: lightweight summary walls step aside; Grok / Kimi / OpenCode get aligned process projection (including a Grok live tool bridge) with read / write / search presentation closer to Claude
+- Grok reasoning effort: low / medium / high from the model picker through headless flags
+- Friendlier empty vendor catalogs: fall back to configured defaults with guidance; custom Codex models expose default reasoning-effort tiers
+- Refreshed application icon set
+
+🔧 Improvements
+- Simpler session-management and settings section layouts; remove the local usage dashboard and other redundant surfaces
+- Unified prompt-library and settings select chrome for cleaner typography
+- Converged canvas scroll ownership and authoritative “scroll to bottom” so fast streams stick to the end more reliably
+- Dev ergonomics: isolated multi-instance Tauri development launches with configurable ports
+
+🐛 Fixes
+- Fixed React #185 cold-start effort double-write loops while keeping freeform / out-of-catalog model names
+- Fixed Claude model-list refresh after vendor switch; Native session vendor/model switches no longer overwrite each other
+- Aligned Grok / Kimi / OpenCode hidden-binding behavior and fixed live projection after switches
+- Allow canceling cross-provider continuation while running and ignore late create results
+- Auto-migrate home / new-session defaults when the active engine is disabled, without disrupting in-flight threads
+- Corrected Codex reasoning-effort mapping
+- Fixed browser-preview startup crashes and bare vendor dialogs opened outside Settings
+- Stabilized tool rows and bottom-follow jank; merge adjacent reasoning blocks; hard-unmount collapsed phases to avoid ghost rows
+- Stopped the user-bubble copy control from covering message text
+- Ensured the in-page “add model” dialog loads settings styles
+
+---
+
 ##### **2026年7月31日（v0.7.13）**
 
 中文：

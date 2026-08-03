@@ -8,9 +8,10 @@ use cc_gui_lib::shared_event_log::canonical::shadow_v0::{
     map_v0_snapshot_to_presentation_only_facts, map_v0_turn_to_presentation_only_facts, v0_evidence,
 };
 use cc_gui_lib::shared_event_log::canonical::types::{
-    ArtifactRef, CanonicalAssistantBlocks, CanonicalBlock, CanonicalFact, CanonicalUserInput,
-    ControlFact, Outcome, OutcomeStatus, TurnCommittedFact, TurnExecutionSnapshot,
-    TurnRequestedFact, UsageRecordedFact, UsageShape, UsageSource, UsageVerification,
+    ArtifactRef, AtomicToolExchange, CanonicalAssistantBlocks, CanonicalBlock, CanonicalFact,
+    CanonicalUserInput, ControlFact, Outcome, OutcomeStatus, ToolCall, ToolResult, ToolResultStatus,
+    TurnCommittedFact, TurnExecutionSnapshot, TurnRequestedFact, UsageRecordedFact, UsageShape,
+    UsageSource, UsageVerification,
 };
 use cc_gui_lib::shared_event_log::{
     open, AppendOutcome, Fidelity, NewCanonicalEvent, OpenOutcome, ProjectionCheckpointRow,
@@ -842,7 +843,11 @@ fn legacy_type_less_delivery_fact_does_not_block_history_rebuild() {
         .expect("rebuild legacy stream");
     assert_eq!(items.len(), 3);
     assert_eq!(items[0].content["role"], "user");
-    assert_eq!(items[1].content["role"], "assistant");
+    // process-before-prose: reasoning (if any) sits above final assistant text
+    assert!(items.iter().any(|item| {
+        item.kind == ProjectionItemKind::Message
+            && item.content.get("role").and_then(|v| v.as_str()) == Some("assistant")
+    }));
     assert_eq!(
         writer
             .get_projection_checkpoint(SESSION, "canvas")
@@ -851,6 +856,437 @@ fn legacy_type_less_delivery_fact_does_not_block_history_rebuild() {
             .through_sequence,
         3
     );
+    writer.shutdown().unwrap();
+}
+
+/// Scenario: Shared history stamps Native-parity final footer meta onto assistant messages.
+#[test]
+fn turn_committed_stamps_final_duration_and_usage_tokens() {
+    let temp = TempStoreDir::new("final-meta-stamp");
+    let writer = open_writer(&temp);
+    writer
+        .append_canonical_fact(SESSION, make_turn_requested("attempt-meta"))
+        .expect("append request");
+    writer
+        .append_canonical_fact(SESSION, make_turn_committed("attempt-meta"))
+        .expect("append commit");
+    writer
+        .append_canonical_fact(
+            SESSION,
+            make_usage_recorded_with_source(
+                "usage-meta",
+                "attempt-meta",
+                UsageSource::ProviderReport,
+                1,
+                15,
+            ),
+        )
+        .expect("append usage");
+
+    let projected = SharedProjector::new()
+        .project_events(&writer.events_for_session(SESSION).expect("events"))
+        .expect("project");
+    let assistant = projected
+        .iter()
+        .find(|item| {
+            item.kind == ProjectionItemKind::Message
+                && item.content.get("role").and_then(|v| v.as_str()) == Some("assistant")
+                && item.content.get("isFinal").and_then(|v| v.as_bool()) == Some(true)
+                && item
+                    .content
+                    .get("text")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|text| !text.is_empty())
+        })
+        .expect("final assistant message");
+    assert_eq!(assistant.content["finalCompletedAt"], 1_700_000_000_001_i64);
+    assert_eq!(assistant.content["finalDurationMs"], 1);
+    assert_eq!(assistant.content["finalInputTokens"], 10);
+    assert_eq!(assistant.content["finalOutputTokens"], 5);
+    // metadata usage remains for shadow/comparator consumers
+    assert!(projected.iter().any(|item| {
+        item.kind == ProjectionItemKind::Metadata
+            && item.content.get("type").and_then(|v| v.as_str()) == Some("usage")
+    }));
+    writer.shutdown().unwrap();
+}
+
+/// Scenario: edit-like tools map to fileChange with path changes for Shared history canvas.
+#[test]
+fn tool_exchanges_map_to_canvas_tool_types() {
+    let temp = TempStoreDir::new("tool-type-map");
+    let writer = open_writer(&temp);
+    let mut committed = match make_turn_committed("attempt-tools") {
+        CanonicalFact::TurnCommitted(fact) => fact,
+        _ => unreachable!(),
+    };
+    committed.atomic_tool_exchanges = vec![
+        AtomicToolExchange {
+            tool_call_id: "call-write".to_string(),
+            tool_name: "Write".to_string(),
+            call: ToolCall {
+                arguments_summary: Some(r#"{"path":"docs/note.md","content":"hi"}"#.to_string()),
+                arguments_artifact_ref: None,
+                extra: serde_json::Value::Object(Default::default()),
+            },
+            result: ToolResult {
+                status: ToolResultStatus::Completed,
+                output_summary: Some("wrote".to_string()),
+                output_artifact_ref: None,
+                error_message: None,
+                extra: serde_json::Value::Object(Default::default()),
+            },
+            extra: serde_json::Value::Object(Default::default()),
+        },
+        AtomicToolExchange {
+            tool_call_id: "call-bash".to_string(),
+            tool_name: "Bash".to_string(),
+            call: ToolCall {
+                arguments_summary: Some(r#"{"command":"ls"}"#.to_string()),
+                arguments_artifact_ref: None,
+                extra: serde_json::Value::Object(Default::default()),
+            },
+            result: ToolResult {
+                status: ToolResultStatus::Completed,
+                output_summary: Some("ok".to_string()),
+                output_artifact_ref: None,
+                error_message: None,
+                extra: serde_json::Value::Object(Default::default()),
+            },
+            extra: serde_json::Value::Object(Default::default()),
+        },
+        AtomicToolExchange {
+            tool_call_id: "call-read".to_string(),
+            tool_name: "Read".to_string(),
+            call: ToolCall {
+                arguments_summary: Some(r#"{"path":"README.md"}"#.to_string()),
+                arguments_artifact_ref: None,
+                extra: serde_json::Value::Object(Default::default()),
+            },
+            result: ToolResult {
+                status: ToolResultStatus::Completed,
+                output_summary: Some("content".to_string()),
+                output_artifact_ref: None,
+                error_message: None,
+                extra: serde_json::Value::Object(Default::default()),
+            },
+            extra: serde_json::Value::Object(Default::default()),
+        },
+    ];
+    writer
+        .append_canonical_fact(SESSION, CanonicalFact::TurnCommitted(committed))
+        .expect("append tools turn");
+
+    let projected = SharedProjector::new()
+        .project_events(&writer.events_for_session(SESSION).expect("events"))
+        .expect("project");
+    let tools: Vec<_> = projected
+        .iter()
+        .filter(|item| item.kind == ProjectionItemKind::Tool)
+        .collect();
+    assert_eq!(tools.len(), 3);
+    // Keep original Write/Read names so FE EditToolBlock/ReadToolBlock still route
+    // (forcing fileChange would water-soil into GenericToolBlock only).
+    assert_eq!(tools[0].content["toolType"], "Write");
+    assert_eq!(tools[0].content["title"], "Write");
+    assert_eq!(tools[0].content["changes"][0]["path"], "docs/note.md");
+    assert_eq!(tools[1].content["toolType"], "commandExecution");
+    // Prefer command text as title when present (Codex shell history readability).
+    assert_eq!(tools[1].content["title"], "ls");
+    assert_eq!(tools[2].content["toolType"], "Read");
+    assert_eq!(tools[2].content["title"], "Read");
+    writer.shutdown().unwrap();
+}
+
+/// Scenario: Codex fileChange changes[] survive Shared history projection for file-edit scene.
+#[test]
+fn turn_committed_projects_file_change_changes_array() {
+    let temp = TempStoreDir::new("file-change-changes");
+    let writer = open_writer(&temp);
+    let mut committed = match make_turn_committed("attempt-file-change") {
+        CanonicalFact::TurnCommitted(fact) => fact,
+        _ => unreachable!(),
+    };
+    committed.assistant.blocks = vec![CanonicalBlock::Text {
+        text: "patched".to_string(),
+    }];
+    committed.atomic_tool_exchanges = vec![AtomicToolExchange {
+        tool_call_id: "call-fc".to_string(),
+        tool_name: "fileChange".to_string(),
+        call: ToolCall {
+            arguments_summary: Some(
+                r#"{"changes":[{"path":"src/a.ts","kind":"update","diff":"--- a\n+++ b\n@@\n-old\n+new"}]}"#
+                    .to_string(),
+            ),
+            arguments_artifact_ref: None,
+            extra: serde_json::Value::Object(Default::default()),
+        },
+        result: ToolResult {
+            status: ToolResultStatus::Completed,
+            output_summary: Some("ok".to_string()),
+            output_artifact_ref: None,
+            error_message: None,
+            extra: serde_json::Value::Object(Default::default()),
+        },
+        extra: serde_json::Value::Object(Default::default()),
+    }];
+    writer
+        .append_canonical_fact(SESSION, CanonicalFact::TurnCommitted(committed))
+        .expect("append");
+
+    let projected = SharedProjector::new()
+        .project_events(&writer.events_for_session(SESSION).expect("events"))
+        .expect("project");
+    let tool = projected
+        .iter()
+        .find(|item| item.kind == ProjectionItemKind::Tool)
+        .expect("tool");
+    assert_eq!(tool.content["toolType"], "fileChange");
+    assert_eq!(tool.content["title"], "File changes");
+    assert_eq!(tool.content["changes"][0]["path"], "src/a.ts");
+    assert!(
+        tool.content["changes"][0]["diff"]
+            .as_str()
+            .is_some_and(|diff| diff.contains("+new")),
+        "diff should be preserved for canvas file-edit scene"
+    );
+    writer.shutdown().unwrap();
+}
+
+/// Scenario: commandExecution with apply_patch in command text promotes to fileChange.
+#[test]
+fn turn_committed_promotes_command_execution_apply_patch_to_file_change() {
+    let temp = TempStoreDir::new("cmd-apply-patch");
+    let writer = open_writer(&temp);
+    let mut committed = match make_turn_committed("attempt-cmd-patch") {
+        CanonicalFact::TurnCommitted(fact) => fact,
+        _ => unreachable!(),
+    };
+    committed.assistant.blocks = vec![CanonicalBlock::Text {
+        text: "done".to_string(),
+    }];
+    let patch = "*** Begin Patch\n*** Update File: docs/a.md\n@@\n-a\n+b\n*** End Patch\n";
+    let command = format!("apply_patch <<'EOF'\n{patch}EOF");
+    committed.atomic_tool_exchanges = vec![AtomicToolExchange {
+        tool_call_id: "call-cmd-patch".to_string(),
+        tool_name: "commandExecution".to_string(),
+        call: ToolCall {
+            arguments_summary: Some(
+                serde_json::json!({
+                    "command": command,
+                    "cwd": "/repo"
+                })
+                .to_string(),
+            ),
+            arguments_artifact_ref: None,
+            extra: serde_json::Value::Object(Default::default()),
+        },
+        result: ToolResult {
+            status: ToolResultStatus::Completed,
+            output_summary: Some(
+                "Success. Updated the following files:\nM docs/a.md".to_string(),
+            ),
+            output_artifact_ref: None,
+            error_message: None,
+            extra: serde_json::Value::Object(Default::default()),
+        },
+        extra: serde_json::Value::Object(Default::default()),
+    }];
+    writer
+        .append_canonical_fact(SESSION, CanonicalFact::TurnCommitted(committed))
+        .expect("append");
+
+    let projected = SharedProjector::new()
+        .project_events(&writer.events_for_session(SESSION).expect("events"))
+        .expect("project");
+    let tool = projected
+        .iter()
+        .find(|item| item.kind == ProjectionItemKind::Tool)
+        .expect("tool");
+    assert_eq!(tool.content["toolType"], "fileChange");
+    assert_eq!(tool.content["changes"][0]["path"], "docs/a.md");
+    writer.shutdown().unwrap();
+}
+
+/// Scenario: Codex apply_patch custom_tool_call summary rebuilds fileChange changes[].
+#[test]
+fn turn_committed_projects_apply_patch_input_as_file_change() {
+    let temp = TempStoreDir::new("apply-patch-file-change");
+    let writer = open_writer(&temp);
+    let mut committed = match make_turn_committed("attempt-apply-patch") {
+        CanonicalFact::TurnCommitted(fact) => fact,
+        _ => unreachable!(),
+    };
+    committed.assistant.blocks = vec![CanonicalBlock::Text {
+        text: "done".to_string(),
+    }];
+    let patch = "*** Begin Patch\n*** Update File: src/keep.ts\n@@\n-old\n+new\n*** End Patch\n";
+    committed.atomic_tool_exchanges = vec![AtomicToolExchange {
+        tool_call_id: "call-patch".to_string(),
+        tool_name: "apply_patch".to_string(),
+        call: ToolCall {
+            arguments_summary: Some(
+                serde_json::json!({ "name": "apply_patch", "input": patch, "patch": patch })
+                    .to_string(),
+            ),
+            arguments_artifact_ref: None,
+            extra: serde_json::Value::Object(Default::default()),
+        },
+        result: ToolResult {
+            status: ToolResultStatus::Completed,
+            output_summary: Some("Success. Updated the following files:\nM src/keep.ts".to_string()),
+            output_artifact_ref: None,
+            error_message: None,
+            extra: serde_json::Value::Object(Default::default()),
+        },
+        extra: serde_json::Value::Object(Default::default()),
+    }];
+    writer
+        .append_canonical_fact(SESSION, CanonicalFact::TurnCommitted(committed))
+        .expect("append");
+
+    let projected = SharedProjector::new()
+        .project_events(&writer.events_for_session(SESSION).expect("events"))
+        .expect("project");
+    let tool = projected
+        .iter()
+        .find(|item| item.kind == ProjectionItemKind::Tool)
+        .expect("tool");
+    assert_eq!(tool.content["toolType"], "fileChange");
+    assert_eq!(tool.content["changes"][0]["path"], "src/keep.ts");
+    writer.shutdown().unwrap();
+}
+
+/// Scenario: Shared history emits process before final prose so Messages collapse works.
+#[test]
+fn turn_committed_emits_process_before_final_assistant_prose() {
+    let temp = TempStoreDir::new("process-before-prose");
+    let writer = open_writer(&temp);
+    let mut committed = match make_turn_committed("attempt-order") {
+        CanonicalFact::TurnCommitted(fact) => fact,
+        _ => unreachable!(),
+    };
+    // Fixture order is Text then Reasoning; projection must still put process first.
+    committed.atomic_tool_exchanges = vec![AtomicToolExchange {
+        tool_call_id: "call-read".to_string(),
+        tool_name: "Read".to_string(),
+        call: ToolCall {
+            arguments_summary: Some(r#"{"path":"README.md"}"#.to_string()),
+            arguments_artifact_ref: None,
+            extra: serde_json::Value::Object(Default::default()),
+        },
+        result: ToolResult {
+            status: ToolResultStatus::Completed,
+            output_summary: Some("ok".to_string()),
+            output_artifact_ref: None,
+            error_message: None,
+            extra: serde_json::Value::Object(Default::default()),
+        },
+        extra: serde_json::Value::Object(Default::default()),
+    }];
+    writer
+        .append_canonical_fact(SESSION, CanonicalFact::TurnCommitted(committed))
+        .expect("append");
+
+    let projected = SharedProjector::new()
+        .project_events(&writer.events_for_session(SESSION).expect("events"))
+        .expect("project");
+
+    let reasoning_idx = projected
+        .iter()
+        .position(|item| item.kind == ProjectionItemKind::Reasoning)
+        .expect("reasoning");
+    let tool_idx = projected
+        .iter()
+        .position(|item| item.kind == ProjectionItemKind::Tool)
+        .expect("tool");
+    let assistant_idx = projected
+        .iter()
+        .position(|item| {
+            item.kind == ProjectionItemKind::Message
+                && item.content.get("role").and_then(|v| v.as_str()) == Some("assistant")
+                && item.content.get("text").and_then(|v| v.as_str()) == Some("hello back")
+        })
+        .expect("assistant prose");
+
+    assert!(
+        reasoning_idx < assistant_idx,
+        "reasoning must precede final prose (got reasoning={reasoning_idx} assistant={assistant_idx})"
+    );
+    assert!(
+        tool_idx < assistant_idx,
+        "tools must precede final prose (got tool={tool_idx} assistant={assistant_idx})"
+    );
+    writer.shutdown().unwrap();
+}
+
+/// Scenario: UsageRecorded after TurnCommitted still stamps footer tokens (order-independent).
+#[test]
+fn late_usage_stamps_tokens_onto_already_projected_assistant() {
+    let temp = TempStoreDir::new("late-usage-stamp");
+    let writer = open_writer(&temp);
+    writer
+        .append_canonical_fact(SESSION, make_turn_requested("attempt-late"))
+        .expect("request");
+    writer
+        .append_canonical_fact(SESSION, make_turn_committed("attempt-late"))
+        .expect("commit");
+
+    let before = SharedProjector::new()
+        .project_events(&writer.events_for_session(SESSION).expect("events"))
+        .expect("project before usage");
+    let assistant_before = before
+        .iter()
+        .find(|item| {
+            item.kind == ProjectionItemKind::Message
+                && item.content.get("role").and_then(|v| v.as_str()) == Some("assistant")
+                && item.content.get("isFinal").and_then(|v| v.as_bool()) == Some(true)
+                && item
+                    .content
+                    .get("text")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|text| text == "hello back")
+        })
+        .expect("assistant before usage");
+    assert!(assistant_before.content.get("finalInputTokens").is_none());
+    assert!(assistant_before.content.get("finalOutputTokens").is_none());
+    assert_eq!(
+        assistant_before.content["finalDurationMs"],
+        1,
+        "duration comes from request/commit even without usage"
+    );
+
+    writer
+        .append_canonical_fact(
+            SESSION,
+            make_usage_recorded_with_source(
+                "usage-late",
+                "attempt-late",
+                UsageSource::ProviderReport,
+                1,
+                15,
+            ),
+        )
+        .expect("late usage");
+
+    let after = SharedProjector::new()
+        .project_events(&writer.events_for_session(SESSION).expect("events"))
+        .expect("project after usage");
+    let assistant_after = after
+        .iter()
+        .find(|item| {
+            item.kind == ProjectionItemKind::Message
+                && item.content.get("role").and_then(|v| v.as_str()) == Some("assistant")
+                && item.content.get("isFinal").and_then(|v| v.as_bool()) == Some(true)
+                && item
+                    .content
+                    .get("text")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|text| text == "hello back")
+        })
+        .expect("assistant after usage");
+    assert_eq!(assistant_after.content["finalInputTokens"], 10);
+    assert_eq!(assistant_after.content["finalOutputTokens"], 5);
     writer.shutdown().unwrap();
 }
 

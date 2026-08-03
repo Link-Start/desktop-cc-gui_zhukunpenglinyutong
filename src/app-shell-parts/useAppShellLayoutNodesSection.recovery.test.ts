@@ -1,9 +1,169 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  continueStaleThreadBindingForManualRecovery,
   recoverThreadBindingAndResendForManualRecovery,
   recoverThreadBindingForManualRecovery,
   shouldSuppressManualRecoveryResendUserMessage,
 } from "./manualThreadRecovery";
+
+describe("continueStaleThreadBindingForManualRecovery", () => {
+  it("returns forked when native fork succeeds", async () => {
+    const forkThreadForWorkspace = vi.fn(async () => " thread-forked ");
+    const startThreadForWorkspace = vi.fn(async () => "thread-fresh");
+
+    const result = await continueStaleThreadBindingForManualRecovery({
+      workspaceId: " ws-1 ",
+      threadId: " thread-stale ",
+      threadsByWorkspace: {
+        "ws-1": [{ id: "thread-stale", engineSource: "codex" }],
+      },
+      forkThreadForWorkspace,
+      startThreadForWorkspace,
+    });
+
+    expect(result).toEqual({
+      kind: "forked",
+      threadId: "thread-forked",
+      retryable: true,
+      userAction: "start-fresh-thread",
+    });
+    expect(forkThreadForWorkspace).toHaveBeenCalledWith("ws-1", "thread-stale", {
+      activate: true,
+    });
+    expect(startThreadForWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("falls back to fresh when native fork returns null for a dead parent", async () => {
+    const forkThreadForWorkspace = vi.fn(async () => null);
+    const startThreadForWorkspace = vi.fn(async () => " thread-fresh ");
+
+    const result = await continueStaleThreadBindingForManualRecovery({
+      workspaceId: "ws-1",
+      threadId: "thread-stale",
+      threadsByWorkspace: {
+        "ws-1": [
+          {
+            id: "thread-stale",
+            engineSource: "codex",
+            providerProfileId: "provider-a",
+          },
+        ],
+      },
+      forkThreadForWorkspace,
+      startThreadForWorkspace,
+    });
+
+    expect(result).toEqual({
+      kind: "fresh",
+      threadId: "thread-fresh",
+      retryable: true,
+      userAction: "start-fresh-thread",
+    });
+    expect(forkThreadForWorkspace).toHaveBeenCalledWith("ws-1", "thread-stale", {
+      activate: true,
+      providerProfileId: "provider-a",
+    });
+    expect(startThreadForWorkspace).toHaveBeenCalledWith("ws-1", {
+      activate: true,
+      engine: "codex",
+      providerProfileId: "provider-a",
+    });
+  });
+
+  it("falls back to fresh when native fork throws thread not found", async () => {
+    const forkThreadForWorkspace = vi.fn(async () => {
+      throw new Error("thread not found: thread-stale");
+    });
+    const startThreadForWorkspace = vi.fn(async () => "thread-fresh");
+
+    const result = await continueStaleThreadBindingForManualRecovery({
+      workspaceId: "ws-1",
+      threadId: "thread-stale",
+      threadsByWorkspace: {
+        "ws-1": [{ id: "thread-stale", engineSource: "codex" }],
+      },
+      forkThreadForWorkspace,
+      startThreadForWorkspace,
+    });
+
+    expect(result).toEqual({
+      kind: "fresh",
+      threadId: "thread-fresh",
+      retryable: true,
+      userAction: "start-fresh-thread",
+    });
+  });
+
+  it("surfaces failed when both fork and fresh are unavailable", async () => {
+    const forkThreadForWorkspace = vi.fn(async () => null);
+    const startThreadForWorkspace = vi.fn(async () => null);
+
+    const result = await continueStaleThreadBindingForManualRecovery({
+      workspaceId: "ws-1",
+      threadId: "thread-stale",
+      threadsByWorkspace: {
+        "ws-1": [{ id: "thread-stale", engineSource: "codex" }],
+      },
+      forkThreadForWorkspace,
+      startThreadForWorkspace,
+    });
+
+    expect(result).toEqual({
+      kind: "failed",
+      reason: "fresh thread unavailable",
+      retryable: true,
+      userAction: "start-fresh-thread",
+    });
+  });
+
+  it("surfaces the fresh error when fresh thread start throws", async () => {
+    const forkThreadForWorkspace = vi.fn(async () => null);
+    const startThreadForWorkspace = vi.fn(async () => {
+      throw new Error("runtime unavailable");
+    });
+
+    const result = await continueStaleThreadBindingForManualRecovery({
+      workspaceId: "ws-1",
+      threadId: "thread-stale",
+      threadsByWorkspace: {
+        "ws-1": [{ id: "thread-stale", engineSource: "codex" }],
+      },
+      forkThreadForWorkspace,
+      startThreadForWorkspace,
+    });
+
+    expect(result).toEqual({
+      kind: "failed",
+      reason: "runtime unavailable",
+      retryable: true,
+      userAction: "start-fresh-thread",
+    });
+  });
+
+  it("starts fresh directly when no fork primitive is provided", async () => {
+    const startThreadForWorkspace = vi.fn(async () => "thread-fresh");
+
+    const result = await continueStaleThreadBindingForManualRecovery({
+      workspaceId: "ws-1",
+      threadId: "thread-stale",
+      threadsByWorkspace: {
+        "ws-1": [{ id: "thread-stale", engineSource: "codex" }],
+      },
+      startThreadForWorkspace,
+    });
+
+    expect(result).toEqual({
+      kind: "fresh",
+      threadId: "thread-fresh",
+      retryable: true,
+      userAction: "start-fresh-thread",
+    });
+    expect(startThreadForWorkspace).toHaveBeenCalledWith("ws-1", {
+      activate: true,
+      engine: "codex",
+    });
+  });
+});
 
 describe("recoverThreadBindingForManualRecovery", () => {
   it("returns the rebound thread when refresh succeeds", async () => {

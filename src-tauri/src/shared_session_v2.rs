@@ -132,6 +132,17 @@ pub(crate) fn codex_import_items(package: &crate::shared_context::ContextPackage
     codex_import_projection(package).0
 }
 
+/// OpenAI / Responses / 多数三方兼容 API 只接受这些 message.role。
+/// Codex 本地 rollout 经 native-history 归一后会有 `control`（session meta / 未知 type），
+/// 若原样 inject 进目标 thread，续接到 DeepSeek 等会在下次 turn 反序列化失败：
+/// `unknown variant control, expected one of user, assistant, system, developer`.
+fn is_portable_codex_message_role(role: &str) -> bool {
+    matches!(
+        role.trim().to_ascii_lowercase().as_str(),
+        "user" | "assistant" | "system" | "developer"
+    )
+}
+
 pub(crate) fn codex_import_projection(
     package: &crate::shared_context::ContextPackage,
 ) -> (Vec<Value>, usize) {
@@ -147,15 +158,16 @@ pub(crate) fn codex_import_projection(
                 .collect::<Vec<_>>()
                 .join("\n");
             let mut items = Vec::new();
-            if !text.trim().is_empty() {
-                let content_type = if entry.role == "assistant" {
+            let role = entry.role.trim().to_ascii_lowercase();
+            if !text.trim().is_empty() && is_portable_codex_message_role(&role) {
+                let content_type = if role == "assistant" {
                     "output_text"
                 } else {
                     "input_text"
                 };
                 items.push(json!({
                     "type": "message",
-                    "role": entry.role,
+                    "role": role,
                     "content": [{ "type": content_type, "text": text }],
                 }));
             }
@@ -5664,6 +5676,110 @@ mod native_continuation_import_tests {
             package_marker.replacen("MOSSX_CONTEXT_PACKAGE:", "MOSSX_CONTEXT_ACCEPTED:", 1)
         );
         assert_eq!(dropped, 1);
+        assert!(
+            items
+                .iter()
+                .all(|item| item.get("role").and_then(Value::as_str) != Some("control")),
+            "control roles must not be injected as messages"
+        );
+    }
+
+    #[test]
+    fn codex_import_projection_drops_control_role_text_messages() {
+        // DeepSeek 等兼容 API：unknown variant `control`，只认 user/assistant/system/developer。
+        let source = NativeHistorySource {
+            session_id: "codex:source".to_string(),
+            native_session_id: "source".to_string(),
+            engine: NativeHistoryEngine::Codex,
+            provider_profile_id: Some("provider-a".to_string()),
+        };
+        let package = compile_native_context(&CompileNativeContextRequest {
+            session_id: source.session_id.clone(),
+            binding_key: "continuation:op".to_string(),
+            destination: json!({"engine": "codex"}),
+            source,
+            history: NativeHistoryReadResult {
+                reader_id: "codex-rollout-jsonl/v1".to_string(),
+                source_fingerprint: "sha256:source".to_string(),
+                through_cursor: "jsonl-v1:2:sha256:source".to_string(),
+                entries: vec![
+                    ContextSourceEntry {
+                        source_entry_id: "u1".to_string(),
+                        occurred_at: None,
+                        role: "user".to_string(),
+                        blocks: vec![json!({"kind": "text", "text": "hello from user"})],
+                        provenance: json!({}),
+                        fidelity: NativeHistoryFidelity::Semantic,
+                    },
+                    ContextSourceEntry {
+                        source_entry_id: "control-meta".to_string(),
+                        occurred_at: None,
+                        role: "control".to_string(),
+                        blocks: vec![json!({
+                            "kind": "text",
+                            "text": "session meta that must not become a control message"
+                        })],
+                        provenance: json!({}),
+                        fidelity: NativeHistoryFidelity::Lossy,
+                    },
+                    ContextSourceEntry {
+                        source_entry_id: "a1".to_string(),
+                        occurred_at: None,
+                        role: "assistant".to_string(),
+                        blocks: vec![json!({"kind": "text", "text": "hello from assistant"})],
+                        provenance: json!({}),
+                        fidelity: NativeHistoryFidelity::Semantic,
+                    },
+                ],
+                fidelity: NativeHistoryFidelity::Semantic,
+                omissions: Vec::new(),
+            },
+            capabilities: RuntimeContextCapabilities {
+                native_delta: false,
+                structured_history_import: true,
+                native_clone: false,
+                user_channel_transcript: true,
+                tool_history: true,
+                image_history: false,
+                strong_context_ack: true,
+            },
+            budget_estimated_tokens: None,
+        })
+        .expect("compile");
+
+        let (items, dropped) = codex_import_projection(&package);
+        let roles: Vec<&str> = items
+            .iter()
+            .filter_map(|item| item.get("role").and_then(Value::as_str))
+            .collect();
+        assert!(roles.contains(&"user"));
+        assert!(roles.contains(&"assistant"));
+        assert!(
+            !roles.iter().any(|role| *role == "control"),
+            "control text must be dropped, got roles={roles:?}"
+        );
+        assert!(
+            dropped >= 1,
+            "control entry should count as dropped, dropped={dropped}"
+        );
+        assert!(
+            items.iter().any(|item| {
+                item.get("role") == Some(&json!("user"))
+                    && item["content"][0]["text"]
+                        .as_str()
+                        .is_some_and(|text| text.contains("hello from user"))
+            }),
+            "user text preserved"
+        );
+        assert!(
+            items.iter().any(|item| {
+                item.get("role") == Some(&json!("assistant"))
+                    && item["content"][0]["text"]
+                        .as_str()
+                        .is_some_and(|text| text.contains("hello from assistant"))
+            }),
+            "assistant text preserved"
+        );
     }
 
     #[test]

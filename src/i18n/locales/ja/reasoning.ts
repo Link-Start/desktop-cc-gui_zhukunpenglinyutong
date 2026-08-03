@@ -7,6 +7,7 @@ const reasoning = {
     "title": "推論の深さを選択",
     "default": "既定",
     "claudeDefault": "既定",
+    "grokDefault": "既定",
     "defaultDescription": "エンジン既定の推論動作を使用します",
     "low": {
       "label": "低",

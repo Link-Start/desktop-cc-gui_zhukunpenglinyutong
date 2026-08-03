@@ -17,6 +17,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
+import { CollapsibleReveal } from "../../../../components/common/CollapsibleReveal";
 import { TOOL_META_ICON_PX } from "../../../../components/common/ToolMarkerShell";
 
 function normalizeExploreIcon(icon: ReactNode): ReactNode {
@@ -87,15 +88,15 @@ export const ExploreInlineToolGroup = memo(function ExploreInlineToolGroup({
             </span>
           </button>
         </div>
-        {/* 折叠时不挂载列表，避免隐藏节点 + flex gap 造成折叠栈间距抖动 */}
-        {isExpanded ? (
+        {/* 统一折叠动画；关合后卸载列表，避免隐藏节点 + flex gap 抖动 */}
+        <CollapsibleReveal open={isExpanded}>
           <div
             ref={listRef}
             className={cn("explore-inline-list", listClassName)}
           >
             {children}
           </div>
-        ) : null}
+        </CollapsibleReveal>
       </div>
     </div>
   );

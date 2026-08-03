@@ -199,6 +199,76 @@ describe("RendererContextMenu", () => {
     expect(events).toEqual(["close", "move-planning"]);
   });
 
+  it("closes an open submenu on Escape before dismissing the whole menu", () => {
+    const onClose = vi.fn();
+    render(
+      <RendererContextMenu
+        menu={createMenu({
+          content: <div data-testid="custom-content">Picker</div>,
+          items: [
+            {
+              type: "submenu",
+              id: "placement",
+              label: "Placement",
+              items: [
+                {
+                  type: "item",
+                  id: "bottom",
+                  label: "Bottom",
+                  onSelect: vi.fn(),
+                },
+              ],
+            },
+          ],
+        })}
+        onClose={onClose}
+      />,
+    );
+
+    fireEvent.mouseEnter(screen.getByRole("menuitem", { name: "Placement" }));
+    expect(screen.getByRole("menu", { name: "Placement" })).toBeTruthy();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("menu", { name: "Placement" })).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByTestId("custom-content")).toBeTruthy();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("closes submenu when pointer returns to custom content", () => {
+    render(
+      <RendererContextMenu
+        menu={createMenu({
+          content: <div data-testid="custom-content">Picker</div>,
+          items: [
+            {
+              type: "submenu",
+              id: "placement",
+              label: "Placement",
+              items: [
+                {
+                  type: "item",
+                  id: "bottom",
+                  label: "Bottom",
+                  onSelect: vi.fn(),
+                },
+              ],
+            },
+          ],
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.mouseEnter(screen.getByRole("menuitem", { name: "Placement" }));
+    expect(screen.getByRole("menu", { name: "Placement" })).toBeTruthy();
+
+    fireEvent.mouseEnter(screen.getByTestId("custom-content").parentElement!);
+    expect(screen.queryByRole("menu", { name: "Placement" })).toBeNull();
+  });
+
   it("aligns compact submenu flyouts with the trigger row when viewport space allows", () => {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,

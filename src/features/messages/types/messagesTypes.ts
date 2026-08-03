@@ -18,6 +18,7 @@ import type { RuntimeReconnectRecoveryCallbackResult } from "../../../runtime-re
 import type { AgentTaskScrollRequest } from "../types";
 import type { TaskRunRecord } from "../../tasks/types";
 import type { NoteCaptureDraft } from "../../note-cards/types";
+import type { HistoryLoadingProgress } from "../../threads/utils/historyLoadingProgress";
 
 export type LastVisibleTextReport = {
   itemId: string | null;
@@ -42,6 +43,7 @@ export type MessagesProps = {
   workspaceId?: string | null;
   isThinking: boolean;
   isHistoryLoading?: boolean;
+  historyLoadingProgress?: HistoryLoadingProgress | null;
   historyRecoveryFailureReason?: string | null;
   onRetryHistory?: () => void;
   isContextCompacting?: boolean;
@@ -101,7 +103,9 @@ export type MessagesProps = {
     threadId: string,
     message: Pick<QueuedMessage, "text" | "images">,
   ) => Promise<RuntimeReconnectRecoveryCallbackResult> | RuntimeReconnectRecoveryCallbackResult;
-  onThreadRecoveryFork?: () => Promise<void> | void;
+  onThreadRecoveryFork?: () =>
+    | Promise<RuntimeReconnectRecoveryCallbackResult>
+    | RuntimeReconnectRecoveryCallbackResult;
   onForkFromMessage?: (messageId: string) => void;
   onRewindFromMessage?: (messageId: string) => void;
   taskRuns?: TaskRunRecord[];

@@ -353,7 +353,7 @@
 .git-history-toolbar-confirm-options-menu {
   border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--border-default) 72%, transparent);
-  background: color-mix(in srgb, var(--surface-popover, #ffffff) 96%, transparent);
+  background: var(--surface-popover);
   padding: 6px;
   display: flex;
   flex-wrap: wrap;
@@ -1056,7 +1056,7 @@
   padding: 6px;
   border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--border-default) 72%, transparent);
-  background: color-mix(in srgb, var(--surface-popover, #ffffff) 96%, transparent);
+  background: var(--surface-popover);
   box-shadow: 0 12px 24px color-mix(in srgb, #0f172a 16%, transparent);
   display: flex;
   flex-direction: column;
@@ -1312,7 +1312,7 @@
   min-height: 34px;
   margin: 0 0 6px;
   padding: 6px 4px 8px;
-  background: color-mix(in srgb, var(--surface-popover, #ffffff) 96%, transparent);
+  background: var(--surface-popover);
 }
 
 .git-history-push-target-menu .git-history-push-picker-item {

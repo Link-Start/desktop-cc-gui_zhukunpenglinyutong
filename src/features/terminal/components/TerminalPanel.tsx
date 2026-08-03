@@ -5,7 +5,7 @@ import {
   useState,
   type KeyboardEvent,
   type MouseEvent,
-  type RefObject,
+  type Ref,
 } from "react";
 import { useTranslation } from "react-i18next";
 import type { TerminalStatus } from "../../../types";
@@ -18,7 +18,7 @@ import {
 } from "../../../components/ui/RendererContextMenu";
 
 type TerminalPanelProps = {
-  containerRef: RefObject<HTMLDivElement | null>;
+  containerRef: Ref<HTMLDivElement>;
   status: TerminalStatus;
   message: string;
   /** 读取 xterm 内部选区文本(即用户看到的拖蓝高亮),无选区时返回空串。 */

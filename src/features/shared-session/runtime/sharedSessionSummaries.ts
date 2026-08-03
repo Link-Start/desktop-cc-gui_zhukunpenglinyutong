@@ -149,3 +149,65 @@ export function toSharedThreadSummary(summary: SharedSessionSummary): ThreadSumm
     nativeThreadIds: summary.nativeThreadIds,
   };
 }
+
+/**
+ * native owner id（含 raw / engine: 前缀）→ shared: threadId。
+ * 用于把 Grok/Codex 子代理的 parent 从「被 hide 的 native owner」改挂到 Shared 会话。
+ */
+export function buildNativeOwnerToSharedThreadMap(
+  sharedSessions: readonly SharedSessionSummary[],
+): Map<string, string> {
+  const map = new Map<string, string>();
+  sharedSessions.forEach((session) => {
+    const sharedId = session.threadId.trim();
+    if (!sharedId.startsWith("shared:")) {
+      return;
+    }
+    expandHiddenSharedBindingIds(session.nativeThreadIds).forEach((nativeId) => {
+      const key = nativeId.trim();
+      if (!key || map.has(key)) {
+        return;
+      }
+      map.set(key, sharedId);
+    });
+  });
+  return map;
+}
+
+/** 若 parent 是某 Shared 的 hidden native owner，则改写为 shared: 会话 id */
+export function remapParentThreadIdToSharedOwner(
+  parentThreadId: string | null | undefined,
+  nativeToShared: Map<string, string>,
+): string | null {
+  const parent = parentThreadId?.trim() || "";
+  if (!parent) {
+    return null;
+  }
+  return nativeToShared.get(parent) ?? parent;
+}
+
+/**
+ * 批量把 threads 上指向 hidden native owner 的 parent 改挂到 Shared。
+ */
+export function remapThreadParentsToSharedOwners(
+  threads: ThreadSummary[],
+  nativeToShared: Map<string, string>,
+): ThreadSummary[] {
+  if (nativeToShared.size === 0) {
+    return threads;
+  }
+  let changed = false;
+  const next = threads.map((thread) => {
+    const currentParent = thread.parentThreadId?.trim() || "";
+    if (!currentParent) {
+      return thread;
+    }
+    const remapped = remapParentThreadIdToSharedOwner(currentParent, nativeToShared);
+    if (!remapped || remapped === currentParent) {
+      return thread;
+    }
+    changed = true;
+    return { ...thread, parentThreadId: remapped };
+  });
+  return changed ? next : threads;
+}

@@ -38,6 +38,21 @@ describe("Sidebar styles", () => {
     expect(body).toMatch(/overflow-y:\s*auto/);
   });
 
+  // Regression: virtualized rows used min-height:36 while flex rows pitch at
+  // 30+2=32, so expanding "更多" past the virtualization threshold looked gappy.
+  it("keeps virtualized thread row pitch aligned with non-virtualized rows", () => {
+    const css = readFileSync(
+      resolve(process.cwd(), "src/styles/sidebar.css"),
+      "utf8",
+    );
+    const body = ruleBody(css, ".thread-list-virtual-row");
+
+    expect(body).not.toMatch(/min-height:\s*36px/);
+    expect(body).toMatch(
+      /min-height:\s*calc\(\s*var\(--sidebar-row-height-thread\)\s*\+\s*2px\s*\)/,
+    );
+  });
+
   it("does not bold the active quick-new-thread sidebar item", () => {
     const css = readFileSync(
       resolve(process.cwd(), "src/styles/sidebar.css"),
@@ -56,8 +71,33 @@ describe("Sidebar styles", () => {
 
     expect(ruleBody(css, ".pinned-thread-list")).toMatch(/padding:\s*0;/);
     expect(ruleBody(css, ".sidebar-pinned-section")).toMatch(
-      /padding:\s*0\s+2px;/,
+      /padding:\s*0\s+4px;/,
     );
+  });
+
+  it("aligns thread active selection with workspace soft fill", () => {
+    const sidebarCss = readFileSync(
+      resolve(process.cwd(), "src/styles/sidebar.css"),
+      "utf8",
+    );
+    const shellCss = readFileSync(
+      resolve(process.cwd(), "src/styles/sidebar-shell.css"),
+      "utf8",
+    );
+
+    // Primary active token must be the soft surface-hover mix (not full hover).
+    expect(shellCss).toMatch(
+      /--sidebar-color-active-primary:\s*color-mix\(\s*in srgb,\s*var\(--surface-hover\)\s+72%,\s*transparent\s*\)/,
+    );
+    expect(ruleBody(sidebarCss, ".thread-row.active")).toMatch(
+      /background:\s*var\(--sidebar-color-active-primary\);/,
+    );
+    // Horizontal inset + radius keep session pills aligned with project rows.
+    // Anchor on the base `.thread-list` rule (not `.worktree-card .thread-list`).
+    expect(sidebarCss).toMatch(
+      /\.thread-list\s*\{[\s\S]*?padding:\s*1px\s+4px\s+2px;/,
+    );
+    expect(shellCss).toMatch(/--sidebar-row-radius:\s*6px;/);
   });
 
   it("hides the workspace menu scrollbar without disabling vertical scrolling", () => {

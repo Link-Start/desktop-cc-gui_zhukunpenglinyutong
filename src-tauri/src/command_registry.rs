@@ -1,6 +1,8 @@
 pub(crate) fn invoke_handler(
 ) -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static {
     tauri::generate_handler![
+        crate::baidu_tongji::load_baidu_tongji_script,
+        crate::baidu_tongji::send_baidu_tongji_beacon,
         // Settings
         crate::settings::get_app_settings,
         crate::settings::take_settings_recovery_notice,
@@ -181,6 +183,8 @@ pub(crate) fn invoke_handler(
         crate::codex::model_list,
         crate::codex::discover_codex_models,
         crate::codex::account_rate_limits,
+        crate::coding_plan_quota::get_coding_plan_quota,
+        crate::coding_plan_quota::get_coding_plan_quota_direct_cmd,
         crate::codex::account_read,
         crate::codex::codex_login,
         crate::codex::codex_login_cancel,

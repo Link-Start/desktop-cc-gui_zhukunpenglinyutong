@@ -11,11 +11,16 @@ import {
 import { useTranslation } from "react-i18next";
 import Bot from "lucide-react/dist/esm/icons/bot";
 import FileEdit from "lucide-react/dist/esm/icons/file-edit";
+import LayoutDashboard from "lucide-react/dist/esm/icons/layout-dashboard";
 import ListChecks from "lucide-react/dist/esm/icons/list-checks";
 import ListTodo from "lucide-react/dist/esm/icons/list-todo";
 import type { LucideIcon } from "lucide-react";
 import type { ConversationItem, GitFileStatus, TurnPlan } from "../../../types";
-import type { EngineType, ThreadTokenUsage } from "../../../types";
+import type {
+  EngineType,
+  RateLimitSnapshot,
+  ThreadTokenUsage,
+} from "../../../types";
 import { isEngineCapabilityAvailable } from "../../engine/engineCapabilityMatrix";
 import { useStatusPanelData } from "../hooks/useStatusPanelData";
 import {
@@ -36,12 +41,14 @@ import { SubagentList } from "./SubagentList";
 import { TodoList } from "./TodoList";
 import { CostBudgetSection } from "./CostBudgetSection";
 import { GovernanceEvidenceSection } from "./GovernanceEvidenceSection";
+import { SessionOverviewSection } from "./SessionOverviewSection";
+import { buildSessionOverview } from "../utils/sessionOverviewViewModel";
+import { useSessionQuotaList } from "../hooks/useSessionQuotaList";
+import {
+  collectSessionQuotaTargets,
+  formatSessionQuotaTargetTitle,
+} from "../utils/sessionQuotaTargets";
 import { projectCostRecord } from "../../context-ledger/cost-budget";
-import { EngineTaskOutputInspector } from "../../engine-task-output/components/EngineTaskOutputInspector";
-import { useEngineTaskOutputSnapshot } from "../../engine-task-output/hooks/useEngineTaskOutputSnapshot";
-import type { EngineTaskOutputSnapshot } from "../../engine-task-output/types";
-import { buildEngineTaskOutputSnapshot } from "../../engine-task-output/utils/engineTaskOutputProjection";
-
 interface StatusPanelProps extends CodeAnnotationBridgeProps {
   workspaceId?: string | null;
   workspacePath?: string | null;
@@ -70,12 +77,36 @@ interface StatusPanelProps extends CodeAnnotationBridgeProps {
   }>;
   itemsByThread?: Record<string, ConversationItem[]>;
   threadParentById?: Record<string, string>;
-  threadStatusById?: Record<string, { isProcessing?: boolean } | undefined>;
+  threadStatusById?: Record<
+    string,
+    | {
+        isProcessing?: boolean;
+        isContextCompacting?: boolean;
+        processingStartedAt?: number | null;
+        lastDurationMs?: number | null;
+      }
+    | undefined
+  >;
   onOpenDiffPath?: (path: string) => void;
   onOpenFilePath?: (path: string) => void;
   onSelectSubagent?: (agent: SubagentInfo) => void;
   variant?: "popover" | "dock";
   visibleDockTabs?: Partial<Record<TabType, boolean>>;
+  showGovernanceEvidence?: boolean;
+  showCheckpointDetails?: boolean;
+  workspaceName?: string | null;
+  /** 会话 transcript 落盘路径；catalog 有 physicalPath 时传入。 */
+  sessionDiskPath?: string | null;
+  /** 当前会话绑定的供应商 profile，用于 Coding Plan 额度查询。 */
+  providerProfileId?: string | null;
+  /**
+   * Shared Session 才扫 history 做多供应商额度列表；
+   * Native 默认 false，只查当前 binding，避免历史供应商额度串台。
+   */
+  isSharedSession?: boolean;
+  activeRateLimits?: RateLimitSnapshot | null;
+  /** 与设置「显示剩余额度」对齐，影响 Codex 限额展示。 */
+  usageShowRemaining?: boolean;
   onRefreshGitStatus?: (() => void) | null;
   commitMessage?: string;
   commitMessageLoading?: boolean;
@@ -196,9 +227,18 @@ export const StatusPanel = memo(function StatusPanel({
   threadStatusById,
   onOpenDiffPath,
   onOpenFilePath,
-  onSelectSubagent,
+  // 保留 prop 以兼容外部接线；子代理列表改走幕布 inspector，不再转发 navigation。
+  onSelectSubagent: _onSelectSubagent,
   variant = "popover",
   visibleDockTabs,
+  showGovernanceEvidence = false,
+  showCheckpointDetails = true,
+  workspaceName = null,
+  sessionDiskPath = null,
+  providerProfileId = null,
+  isSharedSession = false,
+  activeRateLimits = null,
+  usageShowRemaining = false,
   onRefreshGitStatus = null,
   commitMessage = "",
   commitMessageLoading = false,
@@ -335,13 +375,6 @@ export const StatusPanel = memo(function StatusPanel({
       dockTabAvailability,
     ),
   );
-  const [inspectedTaskOutput, setInspectedTaskOutput] =
-    useState<EngineTaskOutputSnapshot | null>(null);
-  const inspectedTaskOutputState = useEngineTaskOutputSnapshot({
-    workspaceId,
-    snapshot: inspectedTaskOutput,
-  });
-
   useEffect(() => {
     if (variant !== "popover" || !openTab) return;
     function handleClickOutside(event: MouseEvent) {
@@ -449,12 +482,16 @@ export const StatusPanel = memo(function StatusPanel({
         ? openTab
         : preferredTab
       : openTab;
+  const governanceEnabled = showGovernanceEvidence === true;
   const governanceEvidenceState = useGovernanceEvidence(
     workspaceId,
-    variant === "dock" && activeTab === "checkpoint" && Boolean(workspaceId),
+    governanceEnabled &&
+      variant === "dock" &&
+      activeTab === "checkpoint" &&
+      Boolean(workspaceId),
   );
   const costGovernanceEvidence = useMemo(() => {
-    if (!selectedEngine || !activeTokenUsage) {
+    if (!governanceEnabled || !selectedEngine || !activeTokenUsage) {
       return [];
     }
     const costRecord = projectCostRecord({
@@ -503,11 +540,18 @@ export const StatusPanel = memo(function StatusPanel({
       );
     }
     return evidence;
-  }, [activeThreadId, activeTokenUsage, selectedEngine, selectedModelId]);
+  }, [
+    governanceEnabled,
+    activeThreadId,
+    activeTokenUsage,
+    selectedEngine,
+    selectedModelId,
+  ]);
   const governanceSnapshot = useMemo(
     () =>
+      governanceEnabled &&
       governanceEvidenceState.evidence.length + costGovernanceEvidence.length >
-      0
+        0
         ? createFrozenGovernanceEvidenceSnapshot({
             evidence: [
               ...governanceEvidenceState.evidence,
@@ -515,7 +559,77 @@ export const StatusPanel = memo(function StatusPanel({
             ],
           })
         : null,
-    [costGovernanceEvidence, governanceEvidenceState.evidence],
+    [governanceEnabled, costGovernanceEvidence, governanceEvidenceState.evidence],
+  );
+  const sessionQuotaTargets = useMemo(
+    () =>
+      collectSessionQuotaTargets(
+        effectiveItems,
+        {
+          engine: statusPanelEngine,
+          providerProfileId,
+          model: selectedModelId,
+        },
+        // Shared：history 多供应商；Native：仅当前 binding
+        { includeHistory: isSharedSession },
+      ),
+    [
+      effectiveItems,
+      isSharedSession,
+      statusPanelEngine,
+      providerProfileId,
+      selectedModelId,
+    ],
+  );
+
+  const sessionQuotaList = useSessionQuotaList({
+    targets: sessionQuotaTargets,
+    enabled: sessionQuotaTargets.length > 0,
+  });
+
+  const sessionOverview = useMemo(
+    () =>
+      buildSessionOverview({
+        sessionId: activeThreadId,
+        engine: statusPanelEngine,
+        model: selectedModelId,
+        workspaceName,
+        workspacePath,
+        sessionDiskPath,
+        isProcessing,
+        threadStatus: activeThreadId
+          ? (threadStatusById?.[activeThreadId] ?? null)
+          : null,
+        items: effectiveItems,
+        tokenUsage: activeTokenUsage,
+        rateLimits: activeRateLimits,
+        quotaEntries: sessionQuotaList.entries.map((entry) => ({
+          key: entry.target.key,
+          title: formatSessionQuotaTargetTitle(entry.target),
+          subtitle: entry.target.model,
+          engine: entry.target.engine,
+          providerProfileId: entry.target.providerProfileId,
+          codingPlanQuota: entry.snapshot,
+          codingPlanQuotaLoading: entry.loading,
+        })),
+        usageShowRemaining,
+        nowMs: Date.now(),
+      }),
+    [
+      statusPanelEngine,
+      selectedModelId,
+      workspaceName,
+      workspacePath,
+      sessionDiskPath,
+      isProcessing,
+      activeThreadId,
+      threadStatusById,
+      effectiveItems,
+      activeTokenUsage,
+      activeRateLimits,
+      sessionQuotaList.entries,
+      usageShowRemaining,
+    ],
   );
   const checkpoint = useMemo(
     () =>
@@ -596,7 +710,7 @@ export const StatusPanel = memo(function StatusPanel({
       checkpoint: {
         tab: "checkpoint",
         labelKey: "statusPanel.tabCheckpoint",
-        icon: FileEdit,
+        icon: LayoutDashboard,
         visible:
           variant === "dock"
             ? isDockTabVisible(
@@ -608,8 +722,10 @@ export const StatusPanel = memo(function StatusPanel({
               )
             : true,
         badge: (
-          <span className="sp-tab-count">
-            {t(`statusPanel.checkpoint.verdict.${checkpoint.verdict}`)}
+          <span
+            className={`sp-tab-count sp-overview-tab-status is-${sessionOverview.status}`}
+          >
+            {t(`statusPanel.sessionOverview.status.${sessionOverview.status}`)}
           </span>
         ),
       },
@@ -642,7 +758,7 @@ export const StatusPanel = memo(function StatusPanel({
       },
     }),
     [
-      checkpoint.verdict,
+      sessionOverview.status,
       codexTaskCompleted,
       codexTaskInProgress,
       codexTaskTotal,
@@ -681,39 +797,24 @@ export const StatusPanel = memo(function StatusPanel({
         <TodoList todos={usePlanAsTaskList ? codexTaskItems : todos} />
       )}
       {activeTab === "subagent" && (
-        <>
-          <SubagentList
-            subagents={subagents}
-            onSelectSubagent={(agent) => {
-              onSelectSubagent?.(agent);
-              if (variant !== "dock") {
-                setOpenTab(null);
-              }
-            }}
-            onInspectSubagent={(agent) => {
-              if (!agent.taskOutput) {
-                return;
-              }
-              setInspectedTaskOutput(
-                buildEngineTaskOutputSnapshot(agent.taskOutput, activeTokenUsage),
-              );
-            }}
-          />
-          {inspectedTaskOutput ? (
-            <div className="sp-subagent-output">
-              <EngineTaskOutputInspector
-                snapshot={inspectedTaskOutputState.snapshot ?? inspectedTaskOutput}
-                refreshState={inspectedTaskOutputState.refreshState}
-                onRefresh={inspectedTaskOutputState.refresh}
-                onClose={() => setInspectedTaskOutput(null)}
-              />
-            </div>
-          ) : null}
-        </>
+        <SubagentList
+          subagents={subagents}
+          onInspectSubagent={() => {
+            // 列表点击统一打开幕布抽屉；popover 关闭浮层即可。
+            // 不再回调 onSelectSubagent（scroll-to-task / 切线程改由抽屉会话完成）。
+            if (variant !== "dock") {
+              setOpenTab(null);
+            }
+          }}
+        />
       )}
       {activeTab === "checkpoint" && (
         <>
-          {variant === "dock" ? (
+          <SessionOverviewSection
+            overview={sessionOverview}
+            compact={variant !== "dock"}
+          />
+          {variant === "dock" && governanceEnabled ? (
             <GovernanceEvidenceSection
               evidence={[
                 ...governanceEvidenceState.evidence,
@@ -722,53 +823,57 @@ export const StatusPanel = memo(function StatusPanel({
               isLoading={governanceEvidenceState.isLoading}
             />
           ) : null}
-          <CostBudgetSection
-            compact={variant !== "dock"}
-            engine={selectedEngine}
-            model={selectedModelId}
-            usage={activeTokenUsage}
-            sessionId={activeThreadId}
-          />
-          <CheckpointPanel
-            checkpoint={checkpoint}
-            compact={variant !== "dock"}
-            fileChanges={displayedFileChanges}
-            totalAdditions={displayedTotalAdditions}
-            totalDeletions={displayedTotalDeletions}
-            onOpenDiffPath={onOpenDiffPath}
-            onOpenFilePath={onOpenFilePath}
-            workspaceId={workspaceId}
-            workspacePath={workspacePath}
-            onRefreshGitStatus={onRefreshGitStatus}
-            commitMessage={commitMessage}
-            commitMessageLoading={commitMessageLoading}
-            commitMessageError={commitMessageError}
-            onCommitMessageChange={onCommitMessageChange}
-            onGenerateCommitMessage={onGenerateCommitMessage}
-            onCommit={onCommit}
-            commitLoading={commitLoading}
-            commitError={commitError}
-            stagedFiles={workspaceGitStagedFiles}
-            unstagedFiles={workspaceGitUnstagedFiles}
-            onCreateCodeAnnotation={onCreateCodeAnnotation}
-            onRemoveCodeAnnotation={onRemoveCodeAnnotation}
-            codeAnnotations={codeAnnotations}
-            onExpandToDock={
-              onExpandToDock
-                ? () => {
-                    onExpandToDock();
-                    if (variant !== "dock") {
-                      setOpenTab(null);
-                    }
+          {showCheckpointDetails ? (
+            <>
+              <CostBudgetSection
+                compact={variant !== "dock"}
+                engine={selectedEngine}
+                model={selectedModelId}
+                usage={activeTokenUsage}
+                sessionId={activeThreadId}
+              />
+              <CheckpointPanel
+                checkpoint={checkpoint}
+                compact={variant !== "dock"}
+                fileChanges={displayedFileChanges}
+                totalAdditions={displayedTotalAdditions}
+                totalDeletions={displayedTotalDeletions}
+                onOpenDiffPath={onOpenDiffPath}
+                onOpenFilePath={onOpenFilePath}
+                workspaceId={workspaceId}
+                workspacePath={workspacePath}
+                onRefreshGitStatus={onRefreshGitStatus}
+                commitMessage={commitMessage}
+                commitMessageLoading={commitMessageLoading}
+                commitMessageError={commitMessageError}
+                onCommitMessageChange={onCommitMessageChange}
+                onGenerateCommitMessage={onGenerateCommitMessage}
+                onCommit={onCommit}
+                commitLoading={commitLoading}
+                commitError={commitError}
+                stagedFiles={workspaceGitStagedFiles}
+                unstagedFiles={workspaceGitUnstagedFiles}
+                onCreateCodeAnnotation={onCreateCodeAnnotation}
+                onRemoveCodeAnnotation={onRemoveCodeAnnotation}
+                codeAnnotations={codeAnnotations}
+                onExpandToDock={
+                  onExpandToDock
+                    ? () => {
+                        onExpandToDock();
+                        if (variant !== "dock") {
+                          setOpenTab(null);
+                        }
+                      }
+                    : undefined
+                }
+                onAfterSelect={() => {
+                  if (variant !== "dock") {
+                    setOpenTab(null);
                   }
-                : undefined
-            }
-            onAfterSelect={() => {
-              if (variant !== "dock") {
-                setOpenTab(null);
-              }
-            }}
-          />
+                }}
+              />
+            </>
+          ) : null}
         </>
       )}
       {activeTab === "plan" && (

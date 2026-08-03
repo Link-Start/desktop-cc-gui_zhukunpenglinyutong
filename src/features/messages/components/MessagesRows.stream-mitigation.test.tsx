@@ -239,6 +239,56 @@ describe("MessagesRows stream mitigation", () => {
     expect(screen.getByText("历史思考")).toBeTruthy();
   });
 
+  it("hides consecutive same-target badges within a turn and re-shows after user (policy B)", () => {
+    const snapshot = {
+      engine: "grok" as const,
+      providerProfileId: null,
+      providerProfileNameSnapshot: "本地配置",
+      providerProfileSource: "local" as const,
+      model: "grok",
+    };
+    render(
+      <>
+        <MessageRow
+          item={{
+            id: "a1",
+            kind: "message",
+            role: "assistant",
+            text: "first",
+            executionTargetSnapshot: snapshot,
+          }}
+          showTurnTargetBadge
+        />
+        <MessageRow
+          item={{
+            id: "a2",
+            kind: "message",
+            role: "assistant",
+            text: "second same target",
+            executionTargetSnapshot: snapshot,
+          }}
+          showTurnTargetBadge={false}
+        />
+        <MessageRow
+          item={{
+            id: "a3",
+            kind: "message",
+            role: "assistant",
+            text: "after next user",
+            executionTargetSnapshot: snapshot,
+          }}
+          showTurnTargetBadge
+        />
+      </>,
+    );
+
+    const badges = screen.getAllByTestId("message-turn-target-badge");
+    expect(badges).toHaveLength(2);
+    expect(badges[0]?.textContent).toContain("Grok CLI");
+    expect(badges[1]?.textContent).toContain("Grok CLI");
+    expect(screen.getByText("second same target")).toBeTruthy();
+  });
+
   it("rerenders a memoized row when browser context attachment changes", () => {
     const baseItem = {
       id: "user-browser-attachment",

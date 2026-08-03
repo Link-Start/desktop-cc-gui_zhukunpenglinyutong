@@ -112,11 +112,11 @@ function McpsDetailPanelInner({ row, engineLabel, pendingRowId, onToggleConfig, 
         exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 24, scale: 0.98 }}
         transition={transition}
         className={
-          "fixed inset-x-3 bottom-3 top-20 z-30 flex flex-col overflow-hidden rounded-2xl border border-white/40 bg-white/75 shadow-[0_24px_60px_-20px_rgba(15,23,42,0.25)] backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/65 dark:border-white/10 dark:bg-oai-gray-950/70 dark:shadow-[0_24px_60px_-20px_rgba(0,0,0,0.7)] dark:supports-[backdrop-filter]:bg-oai-gray-950/55 " +
+          "fixed inset-x-3 bottom-3 top-20 z-30 flex flex-col overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-[0_24px_60px_-20px_rgba(15,23,42,0.25)] dark:shadow-[0_24px_60px_-20px_rgba(0,0,0,0.7)] " +
           "lg:inset-auto lg:right-6 lg:top-24 lg:bottom-6 lg:w-[22rem] lg:max-h-[calc(100vh-7.5rem)]"
         }
       >
-        <header className="flex items-center gap-3 border-b border-white/40 bg-gradient-to-b from-white/30 to-transparent px-5 pb-4 pt-5 dark:border-white/10 dark:from-white/[0.04]">
+        <header className="flex items-center gap-3 border-b border-border bg-popover px-5 pb-4 pt-5">
           <div className="min-w-0 flex-1">
             <h2
               className="truncate text-base font-semibold text-oai-black dark:text-white"

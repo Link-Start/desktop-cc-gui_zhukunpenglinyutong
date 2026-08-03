@@ -269,6 +269,35 @@ describe("topbarSessionTabs", () => {
     expect(items[0]?.engineLabel).toBe("Kimi");
   });
 
+  it("marks shared: tabs as shared even when threadKind projection is lost or native", () => {
+    const items = buildTopbarSessionTabItems(
+      "w1",
+      "shared:session-1",
+      {
+        w1: [
+          {
+            id: "shared:session-1",
+            name: "Shared Session",
+            updatedAt: Date.now(),
+            engineSource: "grok",
+            // 模拟 merge 后 kind 投影丢失 / 被写成 native
+            threadKind: "native",
+          },
+        ],
+      },
+      {
+        tabs: [{ workspaceId: "w1", threadId: "shared:session-1" }],
+        activationOrdinalByTabKey: { "w1::shared:session-1": 1 },
+        nextActivationOrdinal: 1,
+      },
+      "Untitled",
+    );
+
+    expect(items[0]?.isShared).toBe(true);
+    expect(items[0]?.engineType).toBe("grok");
+    expect(items[0]?.engineLabel).toBe("Shared · Grok");
+  });
+
   it("prunes stale thread references that no longer exist", () => {
     const windows: TopbarSessionWindows = {
       tabs: [

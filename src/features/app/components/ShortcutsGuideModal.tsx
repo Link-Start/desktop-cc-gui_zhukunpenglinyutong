@@ -117,7 +117,7 @@ function buildGuideGroups(
   // Quick Switcher 为硬编码 cmd+e，不在可配置元数据内，补充到面板组
   rows.push({
     id: "quick-switcher",
-    label: t("sidebar.quickSwitcher.title"),
+    label: t("quickSwitcher.title"),
     shortcut: "cmd+e",
   });
   // 发送/换行为二选一设置而非快捷键字符串，按当前配置动态展示

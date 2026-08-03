@@ -50,7 +50,10 @@ const approval = {
     "submitted": "已送出",
     "noAnswerProvided": "（未提供回答）",
     "noDisplayableAnswer": "（沒有可顯示的回答）",
-    "userInputSubmittedBanner": "[已送出使用者輸入]"
+    "userInputSubmittedBanner": "[已送出使用者輸入]",
+    "timeoutHintRecommend": "逾時後自動選擇建議項「{{option}}」",
+    "timeoutHintRecommendMulti": "逾時後自動選擇各題建議項（首項）",
+    "timeoutHintSkip": "逾時後將略過並繼續",
   }
 };
 

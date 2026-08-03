@@ -10,10 +10,10 @@ const terminalCss = readFileSync(
 describe("terminal panel tabs", () => {
   it("keeps the collapse toggle as a flat tab bar cell", () => {
     expect(terminalCss).toMatch(
-      /\.terminal-header\s*\{[^}]*min-height:\s*34px/s,
+      /\.terminal-header\s*\{[^}]*min-height:\s*28px/s,
     );
     expect(terminalCss).toMatch(
-      /\.terminal-panel-toggle\s*\{[^}]*min-height:\s*34px/s,
+      /\.terminal-panel-toggle\s*\{[^}]*min-height:\s*28px/s,
     );
     expect(terminalCss).toMatch(
       /\.terminal-panel-toggle\s*\{[^}]*border-radius:\s*0/s,
@@ -22,13 +22,19 @@ describe("terminal panel tabs", () => {
       /\.terminal-panel-toggle\s*\{[^}]*border-right:\s*1px solid var\(--border-subtle\)/s,
     );
     expect(terminalCss).toMatch(
-      /\.terminal-tab\s*\{[^}]*min-height:\s*34px/s,
+      /\.terminal-tab\s*\{[^}]*min-height:\s*28px/s,
     );
   });
 
   it("draws a single divider above the tab bar", () => {
-    // The resizer already renders the divider above the tabs; a header
-    // border-top would stack a second line 6px away and look off.
+    // Panel border-top is the only divider; resizer is an overlay hit
+    // target and must not reserve a layout strip above the tabs.
+    expect(terminalCss).toMatch(
+      /\.terminal-panel\s*\{[^}]*border-top:\s*1px solid var\(--border-subtle\)/s,
+    );
+    expect(terminalCss).toMatch(
+      /\.terminal-panel-resizer\s*\{[^}]*position:\s*absolute/s,
+    );
     expect(terminalCss).not.toMatch(/\.terminal-header\s*\{[^}]*border-top/s);
   });
 });

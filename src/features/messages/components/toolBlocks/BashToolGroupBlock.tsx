@@ -152,13 +152,15 @@ export const BashToolGroupBlock = memo(function BashToolGroupBlock({
   return (
     <ToolMarkerShell
       icon={<Terminal size={14} aria-hidden />}
-      label={`${t("tools.bashGroupBatchRun")} (${totalCount})`}
+      label={t("tools.bashGroupBatchRun")}
+      ariaLabel={`${t("tools.bashGroupBatchRun")} (${totalCount})`}
       expanded={isExpanded}
       onToggle={() => setIsExpanded((prev) => !prev)}
       trailing={<span className="ml-auto shrink-0">{progressNode}</span>}
+      contentClassName="min-w-0 flex-1"
       body={
         <div
-          className="bash-group-timeline mt-1 overflow-hidden rounded-md"
+          className="bash-group-timeline bash-panel mt-1 overflow-hidden rounded-md"
           ref={timelineRef}
           style={{
             maxHeight: `${listHeight + 16}px`,
@@ -205,12 +207,24 @@ export const BashToolGroupBlock = memo(function BashToolGroupBlock({
                   </div>
                   {isItemExpanded && (
                     <div className="bash-timeline-detail">
-                      {entry.command && (
-                        <div className="bash-command-block">{entry.command}</div>
-                      )}
-                      {outputLines.length > 0 && (
-                        <div className="bash-output-block normal">
-                          <div className="bash-output-toolbar">
+                      {entry.command ? (
+                        <div className="bash-panel-section">
+                          <div className="bash-panel-section-head">
+                            <span className="bash-panel-section-title">
+                              {t("tools.commandLabel")}
+                            </span>
+                          </div>
+                          <div className="bash-command-block bash-panel-command">
+                            {entry.command}
+                          </div>
+                        </div>
+                      ) : null}
+                      {outputLines.length > 0 ? (
+                        <div className="bash-panel-section">
+                          <div className="bash-panel-section-head">
+                            <span className="bash-panel-section-title">
+                              {t("tools.outputLabel")}
+                            </span>
                             <button
                               type="button"
                               className="bash-command-copy-btn"
@@ -219,32 +233,48 @@ export const BashToolGroupBlock = memo(function BashToolGroupBlock({
                                 try {
                                   await navigator.clipboard.writeText(entry.output ?? "");
                                   setCopiedOutputId(entry.id);
-                                  window.setTimeout(() => setCopiedOutputId((prev) => (prev === entry.id ? null : prev)), 1200);
+                                  window.setTimeout(
+                                    () =>
+                                      setCopiedOutputId((prev) =>
+                                        prev === entry.id ? null : prev,
+                                      ),
+                                    1200,
+                                  );
                                 } catch {
                                   setCopiedOutputId(null);
                                 }
                               }}
                             >
-                              {copiedOutputId === entry.id ? t("messages.copied") : t("messages.copy")}
+                              {copiedOutputId === entry.id
+                                ? t("messages.copied")
+                                : t("messages.copy")}
                             </button>
                           </div>
-                          {outputLines.map((line, i) => (
-                            <div
-                              key={`line-${outputStartIndex + i}`}
-                              className="bash-output-line"
-                            >
-                              {ERROR_LINE_PATTERN.test(line) ? (
-                                <span className="bash-output-line-error">{line || ' '}</span>
-                              ) : line.length === 0 ? (
-                                <span>&nbsp;</span>
-                              ) : (
-                                <span
-                                  dangerouslySetInnerHTML={{ __html: highlightedOutputLines[i] ?? "" }}
-                                />
-                              )}
-                            </div>
-                          ))}
+                          <div className="bash-output-block bash-panel-output normal">
+                            {outputLines.map((line, i) => (
+                              <div
+                                key={`line-${outputStartIndex + i}`}
+                                className="bash-output-line"
+                              >
+                                {ERROR_LINE_PATTERN.test(line) ? (
+                                  <span className="bash-output-line-error">
+                                    {line || " "}
+                                  </span>
+                                ) : line.length === 0 ? (
+                                  <span>&nbsp;</span>
+                                ) : (
+                                  <span
+                                    dangerouslySetInnerHTML={{
+                                      __html: highlightedOutputLines[i] ?? "",
+                                    }}
+                                  />
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         </div>
+                      ) : (
+                        <div className="bash-panel-empty">{t("tools.noOutput")}</div>
                       )}
                     </div>
                   )}
@@ -254,7 +284,11 @@ export const BashToolGroupBlock = memo(function BashToolGroupBlock({
           })}
         </div>
       }
-    />
+    >
+      <span className="bash-marker-summary truncate text-muted-foreground">
+        {t("tools.bashGroupCount", { count: totalCount })}
+      </span>
+    </ToolMarkerShell>
   );
 });
 

@@ -47,7 +47,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(screen.getByText("README.md"));
 
     expect(onOpenFilePath).toHaveBeenCalledWith("README.md");
@@ -79,7 +79,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(screen.queryByText("README.md")).toBeNull();
     expect(screen.queryByText("docs/EXECUTION_PLAN.md")).toBeNull();
@@ -111,7 +111,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     expect(screen.getByText("WorkspaceOnly.tsx")).toBeTruthy();
 
     rerender(
@@ -156,7 +156,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(
       screen.getByLabelText("statusPanel.checkpoint.actions.reviewDiff"),
     );
@@ -203,7 +203,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(screen.queryByText("OldTurn.tsx")).toBeNull();
     expect(
@@ -245,7 +245,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(
       screen.queryByText("statusPanel.checkpoint.headline.blocked"),
@@ -310,7 +310,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(screen.getByText("statusPanel.checkpoint.actions.commit"));
 
     expect(
@@ -318,7 +318,7 @@ describe("StatusPanel", () => {
         name: "statusPanel.checkpoint.commitDialog.title",
       }),
     ).toBeTruthy();
-    expect(screen.getByText("/tmp/workspace")).toBeTruthy();
+    expect(screen.getAllByText("/tmp/workspace").length).toBeGreaterThan(0);
     expect(screen.getByDisplayValue("feat: ready commit")).toBeTruthy();
     fireEvent.change(screen.getByDisplayValue("feat: ready commit"), {
       target: { value: "feat: updated commit" },
@@ -383,7 +383,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(screen.getByText("statusPanel.checkpoint.actions.commit"));
 
     const toggleAllFiles = screen.getByRole("checkbox", {
@@ -448,7 +448,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(screen.getByText("statusPanel.checkpoint.actions.commit"));
 
     const toggleAllFiles = screen.getByRole("checkbox", {
@@ -511,7 +511,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(screen.getByText("statusPanel.checkpoint.actions.commit"));
     fireEvent.click(
       screen.getByRole("button", { name: "git.generateCommitMessage" }),
@@ -569,7 +569,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     const nextActionSection = screen
       .getByText("statusPanel.checkpoint.sections.suggestedActions")
@@ -607,7 +607,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(
       screen.getByText("statusPanel.checkpoint.headline.needs_review"),
@@ -652,7 +652,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(
       screen.getByText("statusPanel.checkpoint.actions.hint.needs_review"),
@@ -678,7 +678,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     const auditDetails = screen
       .getByText("statusPanel.audit.title")
@@ -720,10 +720,11 @@ describe("StatusPanel", () => {
         items={[editToolItem]}
         isProcessing={false}
         variant="dock"
+        showGovernanceEvidence
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(mockUseGovernanceEvidence).toHaveBeenCalledWith("ws-1", true);
     expect(screen.getByText("statusPanel.governance.title")).toBeTruthy();
@@ -731,7 +732,7 @@ describe("StatusPanel", () => {
     expect(screen.queryByRole("button", { name: /OpenSpec tasks/ })).toBeNull();
   });
 
-  it("feeds dock governance evidence into checkpoint policy audit", () => {
+  it("hides governance evidence by default in the dock checkpoint panel", () => {
     mockUseGovernanceEvidence.mockReturnValue({
       evidence: [
         {
@@ -757,7 +758,120 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
+
+    expect(mockUseGovernanceEvidence).toHaveBeenCalledWith("ws-1", false);
+    expect(screen.queryByText("statusPanel.governance.title")).toBeNull();
+    expect(screen.queryByText("OpenSpec tasks")).toBeNull();
+    expect(screen.getByLabelText("Overview")).toBeTruthy();
+  });
+
+  it("keeps governance evidence out of the checkpoint verdict by default", () => {
+    mockUseGovernanceEvidence.mockReturnValue({
+      evidence: [
+        {
+          id: "openspec:tasks",
+          source: "openspec",
+          status: "warn",
+          degraded: false,
+          updatedAt: "1970-01-01T00:00:00.000Z",
+          title: "OpenSpec tasks",
+          summary: "1/2 task(s) complete.",
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    render(
+      <StatusPanel
+        workspaceId="ws-1"
+        items={[editToolItem]}
+        isProcessing={false}
+        variant="dock"
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Overview"));
+
+    expect(screen.queryByText("openspecGovernancePolicy")).toBeNull();
+    expect(
+      screen.queryByText("statusPanel.policy.openspecGovernancePolicy.warn"),
+    ).toBeNull();
+    expect(
+      screen.queryByText("statusPanel.checkpoint.suggested.governance"),
+    ).toBeNull();
+  });
+
+  it("shows only the session overview when checkpoint details are hidden", () => {
+    render(
+      <StatusPanel
+        workspaceId="ws-1"
+        items={[editToolItem]}
+        isProcessing={false}
+        variant="dock"
+        showCheckpointDetails={false}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Overview"));
+
+    expect(screen.getByLabelText("Overview")).toBeTruthy();
+    expect(screen.queryByText("statusPanel.cost.title")).toBeNull();
+    expect(screen.queryByText("README.md")).toBeNull();
+    expect(
+      screen.queryByText("statusPanel.checkpoint.sections.suggestedActions"),
+    ).toBeNull();
+  });
+
+  it("renders checkpoint details when the details switch is enabled", () => {
+    render(
+      <StatusPanel
+        workspaceId="ws-1"
+        items={[editToolItem]}
+        isProcessing={false}
+        variant="dock"
+        showCheckpointDetails
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Overview"));
+
+    expect(screen.getByLabelText("Overview")).toBeTruthy();
+    expect(screen.getByText("README.md")).toBeTruthy();
+    expect(
+      screen.getByText("statusPanel.checkpoint.sections.suggestedActions"),
+    ).toBeTruthy();
+  });
+
+  it("feeds dock governance evidence into checkpoint policy audit", () => {
+    mockUseGovernanceEvidence.mockReturnValue({
+      evidence: [
+        {
+          id: "openspec:tasks",
+          source: "openspec",
+          status: "warn",
+          degraded: false,
+          updatedAt: "1970-01-01T00:00:00.000Z",
+          title: "OpenSpec tasks",
+          summary: "1/2 task(s) complete.",
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    render(
+      <StatusPanel
+        workspaceId="ws-1"
+        items={[editToolItem]}
+        isProcessing={false}
+        variant="dock"
+        showGovernanceEvidence
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(screen.getByText("statusPanel.audit.title"));
 
     expect(
@@ -804,10 +918,11 @@ describe("StatusPanel", () => {
         items={[editToolItem]}
         isProcessing={false}
         variant="dock"
+        showGovernanceEvidence
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     const nextActionSection = screen
       .getByText("statusPanel.checkpoint.sections.suggestedActions")
@@ -888,10 +1003,11 @@ describe("StatusPanel", () => {
         items={[editToolItem]}
         isProcessing={false}
         variant="dock"
+        showGovernanceEvidence
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(
       screen.queryByText("statusPanel.checkpoint.sections.evidenceTrail"),
@@ -931,10 +1047,11 @@ describe("StatusPanel", () => {
         workspaceId="ws-1"
         items={[editToolItem]}
         isProcessing={false}
+        showGovernanceEvidence
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(
       screen.getByText("statusPanel.checkpoint.sections.advisorySignals"),
@@ -979,7 +1096,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(screen.getByLabelText("git.previewModalAction"));
 
     expect(onOpenDiffPath).toHaveBeenCalledWith("src/One.tsx");
@@ -1013,7 +1130,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(
       screen.getByLabelText("statusPanel.checkpoint.actions.reviewDiff"),
     );
@@ -1054,7 +1171,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     const evidenceSection = screen
       .getByText("statusPanel.checkpoint.evidence.validations")
@@ -1101,7 +1218,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     expect(screen.queryByText('*Login*.java"}')).toBeNull();
     expect(screen.getByText("SecurityConfig.java")).toBeTruthy();
   });
@@ -1143,7 +1260,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     expect(screen.queryByText("LoginResponse.java")).toBeNull();
     expect(screen.queryByText("AppLoginResponse.java")).toBeNull();
     expect(screen.getByText("JwtUtil.java")).toBeTruthy();
@@ -1178,7 +1295,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(screen.queryByText("mvn test")).toBeNull();
     expect(screen.queryByText("mvn package")).toBeNull();
@@ -1192,7 +1309,7 @@ describe("StatusPanel", () => {
   it("gives visible feedback when opening risks from checkpoint actions", () => {
     render(<StatusPanel items={[editToolItem]} isProcessing={false} />);
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     expect(
       screen.queryByText("statusPanel.checkpoint.actions.openRisk"),
     ).toBeNull();
@@ -1241,7 +1358,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(
       screen.getByLabelText("statusPanel.checkpoint.actions.reviewDiff"),
     );
@@ -1297,7 +1414,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(
       screen.getByLabelText("statusPanel.checkpoint.actions.reviewDiff"),
     );
@@ -1346,7 +1463,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(
       screen.getByLabelText("statusPanel.checkpoint.actions.reviewDiff"),
     );
@@ -1381,7 +1498,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(
       screen.getByLabelText("statusPanel.checkpoint.actions.reviewDiff"),
     );
@@ -1406,7 +1523,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(screen.getByText("README.md")).toBeTruthy();
     expect(screen.getByText("App.tsx")).toBeTruthy();
@@ -1422,7 +1539,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(
       screen
@@ -1481,7 +1598,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(
       screen.queryByText(
@@ -1505,7 +1622,7 @@ describe("StatusPanel", () => {
   it("closes opened popover by Escape key", () => {
     render(<StatusPanel items={[editToolItem]} isProcessing={false} />);
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     expect(
       screen.getByText("statusPanel.checkpoint.headline.needs_review"),
     ).toBeTruthy();
@@ -1526,7 +1643,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     fireEvent.click(screen.getByText("statusPanel.checkpoint.expandToDock"));
 
     expect(onExpandToDock).toHaveBeenCalledTimes(1);
@@ -1544,7 +1661,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(screen.queryByText("statusPanel.audit.title")).toBeNull();
     expect(
@@ -1562,10 +1679,47 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(mockUseGovernanceEvidence).toHaveBeenCalledWith("ws-1", false);
     expect(screen.queryByText("statusPanel.governance.title")).toBeNull();
+  });
+
+  it("defaults to session overview without governance evidence or file reads", () => {
+    mockUseGovernanceEvidence.mockReturnValue({
+      evidence: [
+        {
+          id: "openspec:tasks",
+          source: "openspec",
+          status: "fail",
+          degraded: true,
+          updatedAt: "1970-01-01T00:00:00.000Z",
+          title: "OpenSpec tasks",
+          summary: "should stay hidden",
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    render(
+      <StatusPanel
+        workspaceId="ws-1"
+        workspaceName="mossx"
+        selectedEngine="claude"
+        selectedModelId="sonnet"
+        items={[editToolItem]}
+        isProcessing={false}
+        variant="dock"
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Overview"));
+
+    expect(mockUseGovernanceEvidence).toHaveBeenCalledWith("ws-1", false);
+    expect(screen.getByLabelText("Overview")).toBeTruthy();
+    expect(screen.queryByText("statusPanel.governance.title")).toBeNull();
+    expect(screen.queryByText("OpenSpec tasks")).toBeNull();
   });
 
   it("does not render when expanded is false", () => {
@@ -1581,7 +1735,7 @@ describe("StatusPanel", () => {
 
   it("shows only edits tab when expanded without status data", () => {
     render(<StatusPanel items={[]} isProcessing={false} />);
-    expect(screen.getByText("Result")).toBeTruthy();
+    expect(screen.getByText("Overview")).toBeTruthy();
     expect(screen.queryByText("statusPanel.tabTodos")).toBeNull();
     expect(screen.queryByText("statusPanel.tabSubagents")).toBeNull();
   });
@@ -1598,12 +1752,12 @@ describe("StatusPanel", () => {
     );
     expect(screen.queryByText("statusPanel.tabTodos")).toBeNull();
     expect(screen.queryByText("statusPanel.tabSubagents")).toBeNull();
-    const editTab = screen.getByText("Result").closest("button");
+    const editTab = screen.getByText("Overview").closest("button");
     const planTab = screen.getByText("Plan").closest("button");
     expect(editTab?.className).not.toContain("sp-tab-half");
     expect(planTab?.className).not.toContain("sp-tab-half");
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     expect(screen.getByText("README.md")).toBeTruthy();
     fireEvent.click(screen.getByText("Plan"));
     expect(screen.queryByText("README.md")).toBeNull();
@@ -1623,7 +1777,7 @@ describe("StatusPanel", () => {
     expect(screen.getByText("statusPanel.tabTodos")).toBeTruthy();
     expect(screen.getByText("1/2")).toBeTruthy();
     expect(screen.getByText("statusPanel.tabAgents")).toBeTruthy();
-    expect(screen.getByText("Result")).toBeTruthy();
+    expect(screen.getByText("Overview")).toBeTruthy();
     expect(screen.queryByText("Plan")).toBeNull();
     const allTabs = document.querySelectorAll(".sp-tab-half");
     expect(allTabs.length).toBe(0);
@@ -1663,14 +1817,14 @@ describe("StatusPanel", () => {
     );
 
     expect(container.querySelector(".sp-root--dock-collapsed")).toBeTruthy();
-    expect(screen.getByText("Result")).toBeTruthy();
+    expect(screen.getByText("Overview")).toBeTruthy();
     expect(screen.queryByText("README.md")).toBeNull();
 
     fireEvent.click(screen.getByTitle("Show status panel"));
     expect(onExpandDock).toHaveBeenCalledTimes(1);
     expect(onCollapseDock).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     expect(onExpandDock).toHaveBeenCalledTimes(2);
   });
 
@@ -1709,7 +1863,7 @@ describe("StatusPanel", () => {
     ).map((node) => node.textContent);
     expect(labels).toEqual([]);
     expect(container.querySelector(".sp-root--dock")).toBeNull();
-    expect(screen.queryByText("Result")).toBeNull();
+    expect(screen.queryByText("Overview")).toBeNull();
   });
 
   it("renders cost budget section in checkpoint panel when token usage is available", () => {
@@ -1741,7 +1895,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(screen.getByText("statusPanel.cost.title")).toBeTruthy();
     expect(screen.getByText("statusPanel.cost.session: $0.01")).toBeTruthy();
@@ -1782,7 +1936,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(screen.getByText("statusPanel.cost.session: —")).toBeTruthy();
     expect(screen.getByText("statusPanel.cost.tokens: 2.0k")).toBeTruthy();
@@ -1824,7 +1978,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
 
     expect(
       screen.getByLabelText("statusPanel.cost.tokenBreakdownLabel"),
@@ -1860,7 +2014,7 @@ describe("StatusPanel", () => {
     expect(labels).toEqual([
       "statusPanel.tabTodos",
       "statusPanel.tabAgents",
-      "Result",
+      "Overview",
     ]);
     expect(screen.getByText("1/1")).toBeTruthy();
     expect(screen.getByText("0/1")).toBeTruthy();
@@ -1875,8 +2029,8 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
-    expect(screen.getByText("Result").closest("button")?.className).toContain(
+    fireEvent.click(screen.getByText("Overview"));
+    expect(screen.getByText("Overview").closest("button")?.className).toContain(
       "sp-tab-active",
     );
 
@@ -1896,7 +2050,7 @@ describe("StatusPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Result").closest("button")?.className).toContain(
+    expect(screen.getByText("Overview").closest("button")?.className).toContain(
       "sp-tab-active",
     );
     expect(screen.queryByText("新的问题")).toBeNull();
@@ -1965,9 +2119,9 @@ describe("StatusPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     expect(screen.getByText("README.md")).toBeTruthy();
-    fireEvent.click(screen.getByText("Result"));
+    fireEvent.click(screen.getByText("Overview"));
     expect(screen.getByText("README.md")).toBeTruthy();
   });
 
@@ -2002,7 +2156,7 @@ describe("StatusPanel", () => {
     );
 
     expect(screen.getByText("statusPanel.tabTodos")).toBeTruthy();
-    expect(screen.getByText("Result")).toBeTruthy();
+    expect(screen.getByText("Overview")).toBeTruthy();
     expect(screen.queryByText("statusPanel.tabAgents")).toBeNull();
     expect(screen.queryByText("Plan")).toBeNull();
   });
@@ -2026,14 +2180,14 @@ describe("StatusPanel", () => {
   it("hides zero-state tabs when there is no status data", () => {
     render(<StatusPanel items={[]} isProcessing={false} isCodexEngine />);
 
-    expect(screen.getByText("Result")).toBeTruthy();
+    expect(screen.getByText("Overview")).toBeTruthy();
     expect(screen.queryByText("statusPanel.tabTodos")).toBeNull();
     expect(screen.queryByText("statusPanel.tabAgents")).toBeNull();
     expect(screen.queryByText("0/0")).toBeNull();
   });
 
   it("aggregates collab agents from the current root subtree", () => {
-    render(
+    const { container } = render(
       <StatusPanel
         items={[]}
         isProcessing={true}
@@ -2050,8 +2204,9 @@ describe("StatusPanel", () => {
 
     expect(screen.getByText("0/1")).toBeTruthy();
     fireEvent.click(screen.getByText("statusPanel.tabAgents"));
-    expect(screen.getByText("agent-7")).toBeTruthy();
+    // 列表展示 persona 名 + 任务描述，不再暴露 thread id 文案
     expect(screen.getByText("Audit current panel")).toBeTruthy();
+    expect(container.querySelector(".subagent-persona-card")).toBeTruthy();
   });
 
   it("does not mark idle child threads as completed without wait facts", () => {
@@ -2072,8 +2227,8 @@ describe("StatusPanel", () => {
 
     expect(screen.getByText("0/1")).toBeTruthy();
     fireEvent.click(screen.getByText("statusPanel.tabAgents"));
-    expect(screen.getByText("agent-7")).toBeTruthy();
-    expect(container.querySelector(".sp-subagent-running")).toBeTruthy();
+    expect(screen.getByText("Audit current panel")).toBeTruthy();
+    expect(container.querySelector(".subagent-persona-card.is-running")).toBeTruthy();
   });
 
   it("settles idle child threads with historical assistant output as completed", () => {
@@ -2102,8 +2257,10 @@ describe("StatusPanel", () => {
 
     expect(screen.getByText("1/1")).toBeTruthy();
     fireEvent.click(screen.getByText("statusPanel.tabAgents"));
-    expect(screen.getByText("agent-7")).toBeTruthy();
-    expect(container.querySelector(".sp-subagent-completed")).toBeTruthy();
+    expect(screen.getByText("Audit current panel")).toBeTruthy();
+    expect(
+      container.querySelector(".subagent-persona-card.is-completed"),
+    ).toBeTruthy();
   });
 
   it("uses collab wait facts to mark agent completion", () => {
@@ -2123,8 +2280,10 @@ describe("StatusPanel", () => {
 
     expect(screen.getByText("1/1")).toBeTruthy();
     fireEvent.click(screen.getByText("statusPanel.tabAgents"));
-    expect(screen.getByText("agent-7")).toBeTruthy();
-    expect(container.querySelector(".sp-subagent-completed")).toBeTruthy();
+    expect(screen.getByText("Audit current panel")).toBeTruthy();
+    expect(
+      container.querySelector(".subagent-persona-card.is-completed"),
+    ).toBeTruthy();
   });
 
   it("parses verbose text statuses without leaking them into descriptions", () => {
@@ -2155,7 +2314,9 @@ describe("StatusPanel", () => {
     expect(
       screen.queryByText("agent-7: completed (cached after wait)"),
     ).toBeNull();
-    expect(container.querySelector(".sp-subagent-completed")).toBeTruthy();
+    expect(
+      container.querySelector(".subagent-persona-card.is-completed"),
+    ).toBeTruthy();
   });
 
   it("downgrades codex in-progress plan steps when thread is idle", () => {
@@ -2194,24 +2355,17 @@ describe("StatusPanel", () => {
     );
 
     fireEvent.click(screen.getByText("statusPanel.tabAgents"));
-    fireEvent.click(screen.getByRole("button", { name: "engineTaskOutput.inspect" }));
-    expect(screen.getByLabelText("engineTaskOutput.label")).toBeTruthy();
-    expect(screen.getByText("thread agent-7")).toBeTruthy();
-
+    // 列表行只开幕布 drawer，不再提供定位 icon / onSelectSubagent
     fireEvent.click(screen.getAllByText("Audit current panel")[0]);
-
-    expect(onSelectSubagent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: "agent-7",
-        navigationTarget: {
-          kind: "thread",
-          threadId: "agent-7",
-        },
+    expect(onSelectSubagent).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("button", {
+        name: /statusPanel\.openSubagentTarget|定位子代理|Locate subagent/,
       }),
-    );
+    ).toBeNull();
   });
 
-  it("emits claude task navigation targets when clicking subagents", () => {
+  it("opens inspector from list without emitting navigation targets", () => {
     const onSelectSubagent = vi.fn();
 
     render(
@@ -2223,22 +2377,13 @@ describe("StatusPanel", () => {
     );
 
     fireEvent.click(screen.getByText("statusPanel.tabSubagents"));
-    fireEvent.click(screen.getByRole("button", { name: "engineTaskOutput.inspect" }));
-    expect(screen.getByLabelText("engineTaskOutput.label")).toBeTruthy();
-    expect(screen.getByText("task af452b1b615f93a9e")).toBeTruthy();
-
     fireEvent.click(screen.getAllByText("Bug诊断与性能安全审查")[0]);
-
-    expect(onSelectSubagent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: "call_fa8bd06e774141c4a7f29a79",
-        navigationTarget: {
-          kind: "claude-task",
-          taskId: "af452b1b615f93a9e",
-          toolUseId: "call_fa8bd06e774141c4a7f29a79",
-        },
+    expect(onSelectSubagent).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("button", {
+        name: /statusPanel\.openSubagentTarget|定位子代理|Locate subagent/,
       }),
-    );
+    ).toBeNull();
   });
 
   it("does not crash when restored tool items miss runtime string fields", () => {

@@ -1,3 +1,4 @@
+import { CollapsibleReveal } from "../../../../components/common/CollapsibleReveal";
 import { Markdown } from "../Markdown";
 import type {
   ExitPlanCardContent,
@@ -107,7 +108,7 @@ export function ExitPlanToolContent({
         </div>
       </div>
 
-      {isExpanded ? (
+      <CollapsibleReveal open={isExpanded}>
         <div className="tool-exit-plan-card-body">
           {content.planMarkdown ? (
             <section className="tool-exit-plan-card-section">
@@ -180,7 +181,7 @@ export function ExitPlanToolContent({
             </section>
           ) : null}
         </div>
-      ) : null}
+      </CollapsibleReveal>
     </section>
   );
 }

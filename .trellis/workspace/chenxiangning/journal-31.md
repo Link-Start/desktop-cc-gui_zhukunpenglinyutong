@@ -1,0 +1,278 @@
+# Journal - chenxiangning (Part 31)
+
+> Continuation from `journal-30.md` (archived at ~2000 lines)
+> Started: 2026-08-03
+
+---
+
+
+
+## Session 1300: Codex 续接过滤 control 角色
+
+**Date**: 2026-08-03
+**Task**: Codex 续接过滤 control 角色
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+codex_import_projection 不再 inject control 消息，避免 DeepSeek 等兼容 API invalid_request_error
+
+### Main Changes
+
+用户：本地 Codex 续接 DeepSeek-codex 后对话失败（control variant）。
+已在 codex_import_projection 过滤非 portable message roles。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c2c45e269` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1301: fix(models): 冷启 useModels selection 收敛环致 React #185 白屏
+
+**Date**: 2026-08-03
+**Task**: fix(models): 冷启 useModels selection 收敛环致 React #185 白屏
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+onDebugRef 解耦、原子 selection state、乐观 snapshot、preferred 归一、epoch 熔断、playbook 追加 C-20260803-01
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2974b721e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1302: fix(models): 冷启 useModels selection 收敛环致 React #185 白屏
+
+**Date**: 2026-08-03
+**Task**: fix(models): 冷启 useModels selection 收敛环致 React #185 白屏
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+onDebugRef 解耦、原子 selection state、乐观 snapshot、preferred 归一、epoch 熔断、playbook 追加 C-20260803-01
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d4806464c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1303: fix shortcuts guide Quick Switcher i18n key
+
+**Date**: 2026-08-03
+**Task**: fix shortcuts guide Quick Switcher i18n key
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+快捷键指南误用 sidebar.quickSwitcher.title，改为 quickSwitcher.title；仅提交 2 个文件，未混入其他 WIP。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d2537a77b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1304: 修复 Codex 死 thread 恢复卡 Fork 静默失败
+
+**Date**: 2026-08-03
+**Task**: 修复 Codex 死 thread 恢复卡 Fork 静默失败
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 内容 |
+|----|------|
+| OpenSpec | `fix-codex-stale-dead-thread-fork-continuation` |
+| 问题 | 老 Codex 会话 `thread not found` 时点 Fork 无效（native fork 死父 + 静默 null） |
+| 修复 | 恢复卡 Fork 走 `continueStaleThreadBindingForManualRecovery`：fork→fresh，失败可见 |
+| 验证 | openspec validate ✅；recovery+runtime-reconnect 53 passed |
+
+**Updated Files**:
+- `src/app-shell-parts/manualThreadRecovery.ts`
+- `src/app-shell-parts/useAppShellLayoutNodesSection.tsx`
+- `src/features/messages/components/recovery/RuntimeReconnectCard.tsx`
+- `openspec/changes/fix-codex-stale-dead-thread-fork-continuation/**`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `76951f6e2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1305: 修复 Shared Claude AskUserQuestion 弹窗与超时体验
+
+**Date**: 2026-08-03
+**Task**: 修复 Shared Claude AskUserQuestion 弹窗与超时体验
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 根因 | Shared control owner 校验时 Claude RequestUserInput 的 turnId 与 runtimeTurnId 不一致，提问事件被静默丢弃 |
+| 修复 | events 映射用 turn_id_context；projection 对 control 方法强制对齐 turnId；OpenSpec change 收口 |
+| 体验 | 超时 5→30 分钟，超时默认选推荐首项；提交后本地立即收起 live 卡；倒计时前展示超时说明 |
+| 验证 | 用户手测弹窗通过；Vitest 44 通过；cargo MCP timeout 相关测试通过 |
+
+**Updated Files**:
+- `src-tauri/src/engine/events.rs`
+- `src-tauri/src/shared_runtime_coordinator.rs`
+- `src-tauri/src/engine/claude/user_input.rs`
+- `src/features/app/components/RequestUserInputMessage.tsx`
+- `src/features/app/components/UserInputQuestionCard.tsx`
+- `src/features/app/components/userInputTimeout.ts`
+- `openspec/changes/fix-shared-session-askuserquestion-control-owner/**`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `87836b7cb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1306: 适配 Shared MCP AskUserQuestion 工具卡 UI
+
+**Date**: 2026-08-03
+**Task**: 适配 Shared MCP AskUserQuestion 工具卡 UI
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 问题 | Shared CLI 将 mcp__ccgui__AskUserQuestion 当通用 MCP 渲染，展示 raw QUESTIONS/_input/_output |
+| 修复 | extractToolName/isMcpTool 识别；McpToolBlock 专用展示；完成态归一 requestUserInputSubmitted |
+| 验证 | 用户验收通过；相关单测 124 通过 |
+
+**Updated Files**:
+- `src/features/messages/components/toolBlocks/McpToolBlock.tsx`
+- `src/utils/threadItemsAskUserQuestion.ts`
+- `src/utils/toolSemantics.ts`
+- `src/features/messages/components/toolBlocks/toolConstants.ts`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7c40eaaab` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

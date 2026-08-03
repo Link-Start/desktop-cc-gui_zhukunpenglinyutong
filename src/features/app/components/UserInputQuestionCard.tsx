@@ -125,6 +125,23 @@ export function UserInputQuestionCard({
       ? t("askUserQuestion.cancel")
       : t("approval.skipUserInputRequest");
 
+  // Timeout copy: first option of each question is the recommended default.
+  const recommendedLabels = questions
+    .map((question) => {
+      const first = question.options?.[0];
+      if (!first) {
+        return "";
+      }
+      return getUserInputOptionValue(first, 0).trim();
+    })
+    .filter((label) => label.length > 0);
+  const timeoutHint =
+    recommendedLabels.length === 0
+      ? t("approval.timeoutHintSkip")
+      : recommendedLabels.length === 1
+        ? t("approval.timeoutHintRecommend", { option: recommendedLabels[0] })
+        : t("approval.timeoutHintRecommendMulti");
+
   const dataProps = Object.fromEntries(
     Object.entries(dataAttributes ?? {})
       .filter(([, value]) => value !== undefined && value !== null)
@@ -172,13 +189,30 @@ export function UserInputQuestionCard({
         </div>
         <div
           className={cx(
-            "user-input-question-timer",
-            getFlavorClass(flavor, "timer"),
+            "user-input-question-timer-block",
+            getFlavorClass(flavor, "timer-block"),
             isTimeWarning && "is-warning",
           )}
-          aria-hidden="true"
+          title={timeoutHint}
         >
-          {remainingSecondsLabel}
+          <span
+            className={cx(
+              "user-input-question-timeout-hint",
+              getFlavorClass(flavor, "timeout-hint"),
+            )}
+          >
+            {timeoutHint}
+          </span>
+          <span
+            className={cx(
+              "user-input-question-timer",
+              getFlavorClass(flavor, "timer"),
+              isTimeWarning && "is-warning",
+            )}
+            aria-label={`${timeoutHint} ${remainingSecondsLabel}`}
+          >
+            {remainingSecondsLabel}
+          </span>
         </div>
         <button
           className={cx("user-input-question-close", closeClass)}

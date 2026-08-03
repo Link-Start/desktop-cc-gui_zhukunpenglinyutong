@@ -4,7 +4,9 @@ import { shouldHideToolItemForRender } from "../../utils/groupToolItems";
 import type { MessagesEngine } from "../../utils/messagesRenderUtils";
 import {
   countRenderableCollapsedEntries,
+  filterCanvasHiddenProcessTools,
   scrollKeyForItems,
+  shouldHideCodexCanvasCommandCard,
   toConversationEngine,
 } from "../../utils/messagesRenderUtils";
 import {
@@ -13,6 +15,7 @@ import {
   isExplicitReasoningSegmentId,
   parseReasoning,
 } from "../../presentation/messagesReasoning";
+import { isSubagentTool } from "../../../subagent-ui";
 
 export type MessageActionTargets = {
   targetByAssistantId: Map<string, string>;
@@ -37,13 +40,14 @@ export type PreservedReadableWindow = {
 };
 
 /**
- * One causal process phase: the contiguous tool/reasoning/explore run that
- * immediately precedes an assistant prose message.
+ * One causal process phase owned by a user-turn's **final** assistant prose.
  *
- * Timeline shape:
- *   user → [process…] → assistant text A → [process…] → assistant text B → [open process…]
- * Each completed process run becomes a drawer:
- *   [header chip] → [process body…] → assistant text
+ * Timeline shape (Native streaming may insert mid-turn plan text):
+ *   user → [process…] → assistant(plan)? → [process…] → assistant(final)
+ * All process items between the previous user message and that final assistant
+ * fold into one drawer on the final assistant (fig3 / Shared TurnCommitted style).
+ * Intermediate assistant plan text stays visible; process rows hard-unmount into
+ * the chip when collapsed.
  */
 export type ProcessPhaseBreakdown = {
   reasoningCount: number;
@@ -90,6 +94,10 @@ function isAssistantMessageWithVisibleText(item: ConversationItem): boolean {
 
 /** Process items that can form a causal phase above assistant prose. */
 function isCollapsibleProcessItem(item: ConversationItem): boolean {
+  // subAgent persona 卡片须常驻幕布，禁止被 process-phase 折叠 hard-unmount。
+  if (item.kind === "tool" && isSubagentTool(item)) {
+    return false;
+  }
   return (
     item.kind === "tool" ||
     item.kind === "reasoning" ||
@@ -109,7 +117,10 @@ function resolvePhaseDurationMs(items: readonly ConversationItem[]): number | nu
   return hasDuration ? total : null;
 }
 
-function resolvePhaseBreakdown(items: readonly ConversationItem[]): ProcessPhaseBreakdown {
+function resolvePhaseBreakdown(
+  items: readonly ConversationItem[],
+  activeEngine: MessagesEngine,
+): ProcessPhaseBreakdown {
   let reasoningCount = 0;
   let toolCount = 0;
   let exploreCount = 0;
@@ -117,7 +128,10 @@ function resolvePhaseBreakdown(items: readonly ConversationItem[]): ProcessPhase
     if (item.kind === "reasoning") {
       reasoningCount += 1;
     } else if (item.kind === "tool") {
-      toolCount += 1;
+      // Chip numbers must match visible tools only (hidden shell excluded).
+      if (!shouldHideCodexCanvasCommandCard(item, activeEngine)) {
+        toolCount += 1;
+      }
     } else if (item.kind === "explore") {
       exploreCount += 1;
     }
@@ -350,14 +364,85 @@ export function resolveVisibleMessageItems(options: {
   return collapseConsecutiveReasoningRuns(deduped, true, appendReasoningRuns);
 }
 
+function isUserMessageItem(item: ConversationItem): boolean {
+  return item.kind === "message" && item.role === "user";
+}
+
 /**
- * Collapse only the process run that immediately precedes each assistant prose
- * message. Trailing process without following text stays fully expanded.
+ * Collect process items that belong to the final assistant prose of a user turn.
+ *
+ * Native streaming often inserts mid-turn assistant plan text between the first
+ * reasoning block and later tools:
+ *   user → reasoning(orphan) → assistant(plan) → tools… → assistant(final)
+ * Contiguous walk-back only folds tools above the final answer, leaving the
+ * leading reasoning as a permanent "孤儿思考过程" row.
+ *
+ * Shared history (TurnCommitted) already emits process-before-prose as one
+ * block, so it never shows that orphan. Align Native by assigning every process
+ * item between the previous user message and the **last** assistant prose of the
+ * turn to that final assistant. Intermediate assistant text stays on the
+ * timeline; process rows hard-unmount into the phase chip (fig3 style).
+ */
+function collectTurnProcessItemsForFinalAssistant(
+  canvasItems: readonly ConversationItem[],
+  finalAssistantIndex: number,
+): ConversationItem[] {
+  const finalAssistant = canvasItems[finalAssistantIndex];
+  if (!finalAssistant || !isAssistantMessageWithVisibleText(finalAssistant)) {
+    return [];
+  }
+
+  let userBoundary = -1;
+  for (let cursor = finalAssistantIndex - 1; cursor >= 0; cursor -= 1) {
+    const previous = canvasItems[cursor];
+    if (previous && isUserMessageItem(previous)) {
+      userBoundary = cursor;
+      break;
+    }
+  }
+
+  // Only the last assistant prose inside this user turn owns the turn process.
+  for (let cursor = finalAssistantIndex + 1; cursor < canvasItems.length; cursor += 1) {
+    const next = canvasItems[cursor];
+    if (next && isUserMessageItem(next)) {
+      break;
+    }
+    if (next && isAssistantMessageWithVisibleText(next)) {
+      return [];
+    }
+  }
+
+  const phaseItems: ConversationItem[] = [];
+  for (let cursor = userBoundary + 1; cursor < finalAssistantIndex; cursor += 1) {
+    const candidate = canvasItems[cursor];
+    if (!candidate) {
+      continue;
+    }
+    // Mid-turn assistant plan/greeting stays visible; do not fold it into the chip.
+    if (isAssistantMessageWithVisibleText(candidate)) {
+      continue;
+    }
+    if (!isCollapsibleProcessItem(candidate)) {
+      continue;
+    }
+    // Claude live may reuse one id for the dual reasoning/assistant surface.
+    if (candidate.id === finalAssistant.id) {
+      continue;
+    }
+    phaseItems.push(candidate);
+  }
+  return phaseItems;
+}
+
+/**
+ * Collapse the multi-step process of each user turn into a drawer above the
+ * turn's final assistant prose. Trailing process without following text stays
+ * fully expanded.
  *
  * Performance model (hard unmount):
  * - Live open process (no following prose yet): fully mounted.
- * - After prose lands and phase collapses: process rows are removed from the
- *   timeline (summary chip only) so React trees are freed.
+ * - After final prose lands and phase collapses: process rows are removed from
+ *   the timeline (summary chip only) so React trees are freed.
  * - User expands a phase: process rows remount (no long-lived instance cache).
  */
 export function resolveCollapsedTimelineItems(options: {
@@ -378,43 +463,34 @@ export function resolveCollapsedTimelineItems(options: {
     expandedPhaseKeys = new Set<string>(),
     timelineSourceItems,
   } = options;
-  if (timelineSourceItems.length <= 2) {
-    return emptyCollapsedTimelineResult(timelineSourceItems);
+  // Shell/command tools stay off the canvas permanently (not only when collapsed)
+  // so phase expand never remounts hundreds of bash rows. File read/write remain.
+  const canvasItems = filterCanvasHiddenProcessTools(
+    timelineSourceItems,
+    activeEngine,
+  );
+  if (canvasItems.length <= 2) {
+    return emptyCollapsedTimelineResult(canvasItems);
   }
 
   const phases: ProcessPhaseCollapse[] = [];
   const unmountedItemIds = new Set<string>();
 
-  for (let index = 0; index < timelineSourceItems.length; index += 1) {
-    const item = timelineSourceItems[index];
+  for (let index = 0; index < canvasItems.length; index += 1) {
+    const item = canvasItems[index];
     if (!item || !isAssistantMessageWithVisibleText(item)) {
       continue;
     }
 
-    // Walk back over the contiguous process run immediately above this text.
-    let phaseStart = index;
-    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
-      const previous = timelineSourceItems[cursor];
-      if (!previous || !isCollapsibleProcessItem(previous)) {
-        break;
-      }
-      phaseStart = cursor;
-    }
-    if (phaseStart >= index) {
-      continue;
-    }
-
-    // Claude live may reuse one id for the dual reasoning/assistant surface.
-    // Never fold that shared-identity reasoning into the chip — it is the same UI unit.
-    const phaseItems = timelineSourceItems
-      .slice(phaseStart, index)
-      .filter((phaseItem) => phaseItem.id !== item.id);
+    const phaseItems = collectTurnProcessItemsForFinalAssistant(canvasItems, index);
     if (phaseItems.length === 0) {
       continue;
     }
     const renderableCount = countRenderableCollapsedEntries(phaseItems, activeEngine);
-    // Skip empty phases and single-step runs (no value in collapsing one step).
-    if (renderableCount <= 1) {
+    // Empty phases stay expanded on the surface. Single-step process — including
+    // lone reasoning ("思考过程") — still folds into the chip so Native/Shared
+    // match the clean "已处理 · 思考 1 次" shape.
+    if (renderableCount < 1) {
       continue;
     }
 
@@ -436,7 +512,7 @@ export function resolveCollapsedTimelineItems(options: {
       assistantItemId: item.id,
       insertBeforeItemId: firstProcessItem.id,
       count: renderableCount,
-      breakdown: resolvePhaseBreakdown(phaseItems),
+      breakdown: resolvePhaseBreakdown(phaseItems, activeEngine),
       durationMs: resolvePhaseDurationMs(phaseItems),
       expanded,
       hiddenItemIds,
@@ -444,18 +520,18 @@ export function resolveCollapsedTimelineItems(options: {
   }
 
   if (phases.length === 0) {
-    return emptyCollapsedTimelineResult(timelineSourceItems);
+    return emptyCollapsedTimelineResult(canvasItems);
   }
 
   if (unmountedItemIds.size === 0) {
     return {
-      timelineItems: timelineSourceItems,
+      timelineItems: canvasItems,
       phases,
     };
   }
 
   return {
-    timelineItems: timelineSourceItems.filter((item) => !unmountedItemIds.has(item.id)),
+    timelineItems: canvasItems.filter((item) => !unmountedItemIds.has(item.id)),
     phases,
   };
 }

@@ -470,16 +470,16 @@ impl ClaudeSession {
         provider_settings_path: Option<&Path>,
     ) -> Result<Option<tokio::io::Lines<BufReader<tokio::process::ChildStdout>>>, String> {
         let notify = self.get_or_create_user_input_notify(turn_id);
-        log::info!("AskUserQuestion detected, waiting for user (up to 5 min)…");
+        log::info!("AskUserQuestion detected, waiting for user (up to 30 min)…");
         let user_answered = tokio::select! {
             _ = notify.notified() => true,
             _ = tokio::time::sleep(
-                std::time::Duration::from_secs(300)
+                std::time::Duration::from_secs(1800)
             ) => false,
         };
 
         if !user_answered {
-            log::info!("AskUserQuestion timed out (5 min), resuming original");
+            log::info!("AskUserQuestion timed out (30 min), resuming original");
             self.clear_pending_user_inputs_for_turn(turn_id);
             return Ok(None);
         }
@@ -924,7 +924,8 @@ impl ClaudeSession {
         self.emit_turn_event(turn_id, event);
 
         // Block until the answer arrives (or the native 5-min bound elapses).
-        let answer = match tokio::time::timeout(std::time::Duration::from_secs(300), rx).await {
+        // Keep in lockstep with USER_INPUT_TIMEOUT_SECONDS (30 min) on the FE card.
+        let answer = match tokio::time::timeout(std::time::Duration::from_secs(1800), rx).await {
             Ok(Ok(text)) => text,
             Ok(Err(_)) => {
                 // Sender dropped without answering.
@@ -948,7 +949,7 @@ impl ClaudeSession {
                         completed: true,
                     },
                 );
-                return Err("AskUserQuestion timed out after 5 minutes".to_string());
+                return Err("AskUserQuestion timed out after 30 minutes".to_string());
             }
         };
 

@@ -286,9 +286,26 @@ export function useGitPanelController({
   const [gitDiffListView, setGitDiffListViewState] = useState<"flat" | "tree">(
     () => readGitDiffListView(activeWorkspace?.id),
   );
-  const [filePanelMode, setFilePanelMode] = useState<
+  const [filePanelMode, setFilePanelModeRaw] = useState<
     "git" | "files" | "search" | "notes" | "prompts" | "memory" | "activity" | "radar"
   >("files");
+  // DISABLED: disable-session-activity-and-solo-mode — never accept activity mode
+  const setFilePanelMode = useCallback(
+    (
+      mode:
+        | "git"
+        | "files"
+        | "search"
+        | "notes"
+        | "prompts"
+        | "memory"
+        | "activity"
+        | "radar",
+    ) => {
+      setFilePanelModeRaw(mode === "activity" ? "files" : mode);
+    },
+    [],
+  );
   const [selectedPullRequest, setSelectedPullRequest] =
     useState<GitHubPullRequest | null>(null);
   const [selectedCommitSha, setSelectedCommitSha] = useState<string | null>(

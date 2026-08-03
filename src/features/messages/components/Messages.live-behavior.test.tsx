@@ -446,7 +446,7 @@ describe("Messages live behavior", () => {
     expect(container.textContent ?? "").toContain("这里是实时正文。");
   });
 
-  it("hides command cards in codex canvas while keeping non-command tool cards", () => {
+  it("hides command cards on codex canvas while keeping file-edit cards", () => {
     const items: ConversationItem[] = [
       {
         id: "tool-codex-command-1",
@@ -492,7 +492,6 @@ describe("Messages live behavior", () => {
       />,
     );
 
-    expect(container.querySelector(".bash-group-container")).toBeNull();
     expect(container.textContent ?? "").not.toContain("pwd && ls -la");
     expect(container.textContent ?? "").not.toContain("echo done");
     // File edits render in a default-collapsed scene shell; expand to assert path.
@@ -514,7 +513,7 @@ describe("Messages live behavior", () => {
     void editScene;
   });
 
-  it("hides command cards in claude canvas", () => {
+  it("hides command cards on claude canvas", () => {
     const items: ConversationItem[] = [
       {
         id: "tool-claude-command-1",
@@ -548,7 +547,6 @@ describe("Messages live behavior", () => {
       />,
     );
 
-    expect(container.querySelector(".bash-group-container")).toBeNull();
     expect(container.textContent ?? "").not.toContain("pwd && ls -la");
     expect(container.textContent ?? "").not.toContain("echo done");
   });
@@ -2631,8 +2629,8 @@ describe("Messages live behavior", () => {
     expect(container.textContent ?? "").toContain("已处理");
   });
 
-  it("does not collapse a single process step above prose", () => {
-    const items: ConversationItem[] = [
+  it("collapses a single process step including lone reasoning into the chip", () => {
+    const toolItems: ConversationItem[] = [
       {
         id: "user-single-step",
         kind: "message",
@@ -2656,9 +2654,9 @@ describe("Messages live behavior", () => {
       },
     ];
 
-    const { container } = render(
+    const { container: toolContainer } = render(
       <Messages
-        items={items}
+        items={toolItems}
         threadId="thread-1"
         workspaceId="ws-1"
         isThinking={false}
@@ -2667,10 +2665,47 @@ describe("Messages live behavior", () => {
       />,
     );
 
-    expect(container.querySelector(".messages-process-phase-toggle")).toBeNull();
-    // Single-step process stays on the narrative surface (no phase chip).
-    expect(container.querySelector(".message-tool-block-shell, .tool-block, .task-container")).toBeTruthy();
-    expect(container.textContent ?? "").toContain("单步输出");
+    expect(toolContainer.querySelector(".messages-process-phase-toggle")).toBeTruthy();
+    expect(toolContainer.textContent ?? "").toContain("已处理");
+    expect(toolContainer.textContent ?? "").not.toContain("Read single.ts");
+    expect(toolContainer.textContent ?? "").toContain("单步输出");
+
+    const reasoningItems: ConversationItem[] = [
+      {
+        id: "user-reason-only",
+        kind: "message",
+        role: "user",
+        text: "你是谁",
+      },
+      {
+        id: "reason-alone",
+        kind: "reasoning",
+        summary: "分析身份",
+        content: "thinking body",
+      },
+      {
+        id: "assistant-reason-only",
+        kind: "message",
+        role: "assistant",
+        text: "我是助手",
+      },
+    ];
+
+    const { container: reasonContainer } = render(
+      <Messages
+        items={reasoningItems}
+        threadId="thread-2"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(reasonContainer.querySelector(".messages-process-phase-toggle")).toBeTruthy();
+    expect(reasonContainer.querySelector(".thinking-block")).toBeNull();
+    expect(reasonContainer.textContent ?? "").toContain("已处理");
+    expect(reasonContainer.textContent ?? "").toContain("我是助手");
   });
 
   it("keeps trailing open process expanded after earlier multi-step phase collapsed", () => {
@@ -2733,7 +2768,7 @@ describe("Messages live behavior", () => {
     expect(container.textContent ?? "").toContain("第一段输出");
   });
 
-  it("does not show a phase chip when only canvas-hidden commands precede prose", () => {
+  it("does not show a phase chip for pure shell noise (pwd/ls stay off canvas)", () => {
     const items: ConversationItem[] = [
       {
         id: "user-live-collapse-commands-only",
@@ -2745,17 +2780,17 @@ describe("Messages live behavior", () => {
         id: "tool-live-collapse-commands-only-1",
         kind: "tool",
         toolType: "commandExecution",
-        title: "Command: rg --files",
-        detail: "/tmp",
+        title: "Command: pwd",
+        detail: JSON.stringify({ command: "pwd" }),
         status: "completed",
-        output: "",
+        output: "/repo",
       },
       {
         id: "tool-live-collapse-commands-only-2",
         kind: "tool",
         toolType: "commandExecution",
         title: "Command: ls -la",
-        detail: "/tmp",
+        detail: JSON.stringify({ command: "ls -la" }),
         status: "completed",
         output: "",
       },
@@ -2782,6 +2817,8 @@ describe("Messages live behavior", () => {
 
     expect(container.querySelector(".messages-live-middle-collapsed-indicator")).toBeNull();
     expect(container.textContent ?? "").toContain("最终输出");
+    expect(container.textContent ?? "").not.toContain("pwd");
+    expect(container.textContent ?? "").not.toContain("ls -la");
   });
 
   it("collapses the process phase above historical assistant prose", () => {

@@ -45,6 +45,16 @@ const messages = {
     openLinkedRun: "打开运行详情",
     restoringHistory: "正在加载对话窗口…",
     restoringHistoryHint: "正在加载本地 transcript 和会话状态。",
+    restoringSharedHistory: "正在恢复 Shared 会话…",
+    restoringSharedHistoryPrepare: "准备打开历史 Shared 会话。",
+    restoringSharedHistorySession: "正在拉取 Shared 会话快照（会话元数据与 V0 消息列表）…",
+    restoringSharedHistorySessionDone: "会话快照已就绪（{{count}} 条本地消息）。",
+    restoringSharedHistoryProjection: "正在拉取 canonical 投影 transcript…",
+    restoringSharedHistoryProjectionDone: "投影 transcript 已就绪（{{count}} 条）。",
+    restoringSharedHistoryProjectionSkip: "已跳过投影源，使用会话快照。",
+    restoringSharedHistoryMerge: "正在合并快照与投影时间线…",
+    restoringSharedHistoryMergeDone: "时间线合并完成（共 {{count}} 条）。",
+    restoringSharedHistoryFinalize: "正在完成画布恢复…",
     generatingResponse: "正在生成响应...",
     codexWaitingForFirstText: "Codex 已启动，正在等待首段文本...",
     codexSilentSuspected: "Codex 暂时没有新输出，仍在监听运行状态...",
@@ -121,7 +131,11 @@ const messages = {
     threadRecoveryThreadNotFound:
       "当前会话绑定的 Codex thread 已失效，原 thread 不能安全继续。幕布里已有内容会保留，但这次请求需要切到可用会话承接。",
     threadRecoveryRecommendation:
-      "建议下一步：点击 Fork，系统会基于当前对话创建一个可用会话继续承接。",
+      "建议下一步：点击 Fork。系统会优先基于当前对话 fork；若原 thread 已失效，则自动新建可用会话承接。",
+    threadRecoveryForkedContinued:
+      "已切换到 Fork 会话，可以继续输入。",
+    threadRecoveryFreshContinued:
+      "原 thread 无法 fork，已新建会话承接，可以继续输入。",
     threadRecoveryDetailLabel: "错误详情：",
     threadRecoveryAction: "尝试恢复会话",
     threadRecoveryRunning: "正在恢复...",

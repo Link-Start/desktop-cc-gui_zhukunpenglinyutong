@@ -34,6 +34,9 @@ import type { EngineDisplayInfo } from "../../engine/hooks/useEngineController";
 import {
   hydrateSharedTargetState,
   useSharedTargetState,
+  getSharedTargetState,
+  beginSharedTargetPersist,
+  endSharedTargetPersist,
 } from "../../shared-session/target/targetStore";
 import {
   freezeTurnSnapshot,
@@ -42,6 +45,7 @@ import {
   type ExecutionTarget,
 } from "../../shared-session/target/types";
 import { persistSharedSessionSelectedTarget } from "../../shared-session/services/sharedSessions";
+import { isSharedSessionThreadId } from "../../shared-session/utils/sharedSessionIdentity";
 import { dispatchSharedSendEvent } from "../../shared-session/runtime/sharedSendStateStore";
 import { requestProviderContinuationDialog } from "../../threads/services/providerContinuationRequests";
 import {
@@ -75,7 +79,6 @@ import { TokenIndicator } from "./ChatInputBox/TokenIndicator";
 import type {
   ClaudeContextUsageViewModel,
   CodexCompactionSource,
-  ContextSelectionChip,
   MemoryReferenceMode,
   PermissionMode,
   SelectedAgent as ChatInputSelectedAgent,
@@ -101,6 +104,7 @@ import {
   buildLatestRewindPreview,
   buildRewindPreviewForMessage,
   extractInlineFileReferenceTokens,
+  mergeInlineFileReferences,
   normalizeInlineFileReferenceTokens,
   normalizeRewindExportPath,
   replaceVisibleFileReferenceLabels,
@@ -464,9 +468,6 @@ function resolveSelectedNamedItems<T extends { name: string }>(
   return resolved;
 }
 
-function toContextChipCarryOverKey(chip: ContextSelectionChip) {
-  return `${chip.type}:${chip.name}`;
-}
 
 const OPENCODE_DIRECT_COMMANDS = new Set(["status", "mcp", "export", "share"]);
 
@@ -715,13 +716,22 @@ function ComposerImpl({
   ]);
   const effectiveCreationTarget =
     selectedCreationTarget ?? defaultCreationTarget;
+  // 只在 engine 语义变化时通知父层，避免等价 setState 触发 layout 重渲染环
+  const publishedCreationTargetEngineRef = useRef<EngineType | null | undefined>(
+    undefined,
+  );
   useEffect(() => {
     if (!createSessionTargetPicker) {
+      publishedCreationTargetEngineRef.current = undefined;
       return;
     }
-    onCreationTargetEngineChange?.(
-      effectiveCreationTarget?.engine ?? selectedEngine ?? null,
-    );
+    const nextEngine =
+      effectiveCreationTarget?.engine ?? selectedEngine ?? null;
+    if (publishedCreationTargetEngineRef.current === nextEngine) {
+      return;
+    }
+    publishedCreationTargetEngineRef.current = nextEngine;
+    onCreationTargetEngineChange?.(nextEngine);
   }, [
     createSessionTargetPicker,
     effectiveCreationTarget?.engine,
@@ -733,6 +743,7 @@ function ComposerImpl({
       return;
     }
     return () => {
+      publishedCreationTargetEngineRef.current = undefined;
       onCreationTargetEngineChange?.(null);
     };
   }, [createSessionTargetPicker, onCreationTargetEngineChange]);
@@ -748,7 +759,7 @@ function ComposerImpl({
   } | null>(null);
   // 切会话 / 引擎 / 渠道时丢弃点选覆盖，避免串台
   useEffect(() => {
-    setNativeAtomicSelection(null);
+    setNativeAtomicSelection((prev) => (prev === null ? prev : null));
   }, [activeThreadId, selectedEngine, providerProfileId]);
   // Native 会话合成 ExecutionTarget，驱动与首页相同的 Atomic 双栏选中态（含渠道）。
   const nativeSessionTarget = useMemo((): ExecutionTarget | null => {
@@ -769,8 +780,23 @@ function ComposerImpl({
     const propModelId = selectedModelId?.trim() || null;
     const modelCatalogEntryId =
       nativeAtomicSelection?.modelCatalogEntryId ?? propModelId;
+    // runtime 优先 catalog 当前映射，禁止用档位 id / 跨供应商残留冒充 --model。
+    const catalogEntry =
+      modelCatalogEntryId != null
+        ? (models.find((candidate) => candidate.id === modelCatalogEntryId) ??
+          null)
+        : null;
+    const catalogRuntime = catalogEntry?.model?.trim() || null;
+    const atomicRuntime = nativeAtomicSelection?.model?.trim() || null;
     const runtimeModel =
-      nativeAtomicSelection?.model ?? propModelId;
+      catalogRuntime ||
+      (atomicRuntime &&
+      atomicRuntime !== modelCatalogEntryId &&
+      !/^k3$/i.test(atomicRuntime) &&
+      !/^kimi-/i.test(atomicRuntime)
+        ? atomicRuntime
+        : null) ||
+      null;
     return {
       engine: selectedEngine,
       providerProfileId: profileId,
@@ -786,6 +812,7 @@ function ComposerImpl({
   }, [
     createSessionTargetPicker,
     isSharedSession,
+    models,
     nativeAtomicSelection,
     providerProfileId,
     providerProfileName,
@@ -793,7 +820,12 @@ function ComposerImpl({
     selectedEngine,
     selectedModelId,
   ]);
-  const selectedAtomicTarget = isSharedSession
+  // 身份 id-first 纵深防御（fix-shared-session-identity-id-first）：
+  // prop 链收敛正确时与 isSharedSession 一致；prop 过期时 shared: id 仍兜底，
+  // 保证 shared id 永不进入 native 续接分支。
+  const isSharedSessionResolved =
+    isSharedSession || isSharedSessionThreadId(activeThreadId);
+  const selectedAtomicTarget = isSharedSessionResolved
     ? selectedSharedTarget
     : createSessionTargetPicker
       ? effectiveCreationTarget
@@ -875,6 +907,12 @@ function ComposerImpl({
       }
       const workspaceId = activeWorkspaceId;
       const threadId = activeThreadId;
+      // 捕获变更前值，用于 persist 失败时回滚。
+      const previousState = getSharedTargetState(workspaceId, threadId);
+      const previousTarget = previousState.selectedNextTarget;
+      // 乐观更新：先 hydrate UI，再异步持久化。
+      hydrateSharedTargetState(workspaceId, threadId, target);
+      beginSharedTargetPersist(workspaceId, threadId);
       const persistenceKey = `${workspaceId}::${threadId}`;
       const previousPersistence =
         sharedTargetPersistenceByThreadRef.current.get(persistenceKey) ??
@@ -895,12 +933,21 @@ function ComposerImpl({
           });
         })
         .catch((error) => {
+          // 持久化失败：回滚到变更前值。
+          hydrateSharedTargetState(
+            workspaceId,
+            threadId,
+            previousTarget ?? null,
+          );
           pushErrorToast({
             title: t("sharedSend.selectionPersistFailedTitle"),
             message: t("sharedSend.selectionPersistFailedMessage", {
               reason: error instanceof Error ? error.message : String(error),
             }),
           });
+        })
+        .finally(() => {
+          endSharedTargetPersist(workspaceId, threadId);
         });
       sharedTargetPersistenceByThreadRef.current.set(
         persistenceKey,
@@ -925,7 +972,7 @@ function ComposerImpl({
   const handleNativeProviderTargetChange = useCallback(
     (target: ExecutionTarget) => {
       if (
-        isSharedSession ||
+        isSharedSessionResolved ||
         !activeWorkspaceId ||
         !activeThreadId ||
         (target.engine !== "claude" && target.engine !== "codex") ||
@@ -951,7 +998,7 @@ function ComposerImpl({
         },
       });
     },
-    [activeThreadId, activeWorkspaceId, isSharedSession],
+    [activeThreadId, activeWorkspaceId, isSharedSessionResolved],
   );
   /**
    * Native 会话也走首页同款 Atomic 双栏 picker（含「本地配置」渠道）。
@@ -962,7 +1009,7 @@ function ComposerImpl({
    */
   const handleNativeAtomicTargetChange = useCallback(
     (target: ExecutionTarget) => {
-      if (isSharedSession || createSessionTargetPicker || !selectedEngine) {
+      if (isSharedSessionResolved || createSessionTargetPicker || !selectedEngine) {
         return;
       }
       const currentProvider = selectedEngine as ProviderId;
@@ -1017,7 +1064,7 @@ function ComposerImpl({
     [
       createSessionTargetPicker,
       handleNativeProviderTargetChange,
-      isSharedSession,
+      isSharedSessionResolved,
       onSelectEffort,
       onSelectEngine,
       onSelectModel,
@@ -1200,26 +1247,6 @@ function ComposerImpl({
     openCodeProviderToneReady &&
     openCodeProviderTone === "is-fail";
 
-  const contextSelectionChips = useMemo<ContextSelectionChip[]>(
-    () => [
-      ...selectedSkills.map((skill) => ({
-        type: "skill" as const,
-        name: skill.name,
-        description: skill.description,
-        path: skill.path,
-        source: skill.source,
-      })),
-      ...selectedCommons.map((item) => ({
-        type: "commons" as const,
-        name: item.name,
-        description: item.description,
-        path: item.path,
-        source: item.source,
-      })),
-    ],
-    [selectedCommons, selectedSkills],
-  );
-
   useEffect(() => {
     onClearCodeAnnotationsRef.current = onClearCodeAnnotations;
   }, [onClearCodeAnnotations]);
@@ -1251,9 +1278,9 @@ function ComposerImpl({
     }
     const hadActivity = previousStatusPanelActivityRef.current;
     if (!hasStatusPanelActivity) {
-      setStatusPanelExpanded(false);
+      setStatusPanelExpanded((prev) => (prev ? false : prev));
     } else if (!hadActivity) {
-      setStatusPanelExpanded(true);
+      setStatusPanelExpanded((prev) => (prev ? prev : true));
     }
     previousStatusPanelActivityRef.current = hasStatusPanelActivity;
   }, [hasStatusPanelActivity, statusPanelExpandedOverride]);
@@ -1275,16 +1302,20 @@ function ComposerImpl({
   }, [onCodeAnnotationConsumed, pendingCodeAnnotation]);
 
   useEffect(() => {
-    setRewindPreviewState(null);
-    setRewindMode("messages-and-files");
+    setRewindPreviewState((prev) => (prev === null ? prev : null));
+    setRewindMode((prev) =>
+      prev === "messages-and-files" ? prev : "messages-and-files",
+    );
   }, [activeThreadId]);
 
   useEffect(() => {
     if (rewindSupportedEngine && onRewind) {
       return;
     }
-    setRewindPreviewState(null);
-    setRewindMode("messages-and-files");
+    setRewindPreviewState((prev) => (prev === null ? prev : null));
+    setRewindMode((prev) =>
+      prev === "messages-and-files" ? prev : "messages-and-files",
+    );
   }, [onRewind, rewindSupportedEngine]);
 
   const handleExpandComposer = useCallback(() => {
@@ -1320,16 +1351,10 @@ function ComposerImpl({
       existingReferenceIds,
     );
     if (extracted.length > 0) {
-      setSelectedInlineFileReferences((prev) => {
-        const next = [...prev];
-        for (const ref of extracted) {
-          if (next.some((entry) => entry.id === ref.id)) {
-            continue;
-          }
-          next.push(ref);
-        }
-        return next;
-      });
+      // mergeInlineFileReferences：无新增保持原引用，切断 deps 自反馈（#185）
+      setSelectedInlineFileReferences((prev) =>
+        mergeInlineFileReferences(prev, extracted),
+      );
     }
     if (cleanedText !== text) {
       setComposerText(cleanedText);
@@ -2018,25 +2043,6 @@ function ComposerImpl({
     );
   }, []);
 
-  const handleRemoveContextChip = useCallback((chip: ContextSelectionChip) => {
-    const carryOverKey = toContextChipCarryOverKey(chip);
-    setCarryOverContextChipKeys((prev) =>
-      prev.filter((entry) => entry !== carryOverKey),
-    );
-    setRetainedContextChipKeys((prev) =>
-      prev.filter((entry) => entry !== carryOverKey),
-    );
-    if (chip.type === "skill") {
-      setSelectedSkillNames((prev) =>
-        prev.filter((name) => name !== chip.name),
-      );
-      return;
-    }
-    setSelectedCommonsNames((prev) =>
-      prev.filter((name) => name !== chip.name),
-    );
-  }, []);
-
   const handleRemoveCodeAnnotation = useCallback((annotationId: string) => {
     onRemoveCodeAnnotation?.(annotationId);
   }, [onRemoveCodeAnnotation]);
@@ -2694,11 +2700,11 @@ function ComposerImpl({
               selectedEngine={
                 selectedAtomicTarget?.engine ?? selectedEngine
               }
-              isSharedSession={isSharedSession}
+              isSharedSession={isSharedSessionResolved}
               // 全场景统一首页 Atomic 双栏 picker（含「本地配置」渠道），
               // 不再维护 conversation native 单栏/无渠道分叉。
               providerTargetPickerMode={
-                isSharedSession && !createSessionTargetPicker
+                isSharedSessionResolved && !createSessionTargetPicker
                   ? "shared"
                   : "create-session"
               }
@@ -2713,7 +2719,7 @@ function ComposerImpl({
               }
               executionTarget={selectedAtomicTarget}
               onExecutionTargetChange={
-                isSharedSession && !sharedTargetPickerLocked
+                isSharedSessionResolved && !sharedTargetPickerLocked
                   ? handleSharedTargetChange
                   : createSessionTargetPicker
                     ? handleCreationTargetChange
@@ -2728,7 +2734,7 @@ function ComposerImpl({
               onSelectEffort={
                 sharedTargetPickerLocked
                   ? undefined
-                  : isSharedSession &&
+                  : isSharedSessionResolved &&
                       isResolvedExecutionTarget(selectedSharedTarget)
                     ? (effort) =>
                         handleSharedTargetChange({
@@ -2796,10 +2802,8 @@ function ComposerImpl({
                 hasActiveFileReference ? handleClearContext : undefined
               }
               selectedAgent={selectedChatInputAgent}
-              selectedContextChips={contextSelectionChips}
               selectedManualMemoryIds={selectedManualMemoryIds}
               selectedNoteCardIds={selectedNoteCardIds}
-              onRemoveContextChip={handleRemoveContextChip}
               onAgentSelect={handleAgentSelect}
               onOpenAgentSettings={onOpenAgentSettings}
               onOpenPromptSettings={onOpenPromptSettings}

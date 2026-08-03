@@ -1171,12 +1171,12 @@ impl ClaudeSession {
                 cmd.arg(crate::engine::claude::AskUserMcpServer::allowed_tool_name());
                 // The CLI's per-request MCP tool-call fetch timeout defaults to 60s
                 // for remote HTTP servers. Our AskUserQuestion server blocks up to
-                // 300s waiting for the user, so without this the CLI abandons the
-                // call at 60s and any ask the user takes longer than a minute on is
-                // lost. Raise it to match our server bound (ms). Only set when our
-                // MCP ask is actually wired; the user can still override via env.
+                // 1800s waiting for the user, so without this the CLI abandons the
+                // call early. Raise it to match our server bound (ms). Only set when
+                // our MCP ask is actually wired; the user can still override via env.
+                // Keep ≥ frontend USER_INPUT_TIMEOUT_SECONDS (30 min).
                 if std::env::var_os("MCP_TOOL_TIMEOUT").is_none() {
-                    cmd.env("MCP_TOOL_TIMEOUT", "300000");
+                    cmd.env("MCP_TOOL_TIMEOUT", "1800000");
                 }
             } else {
                 log::warn!(
@@ -1265,7 +1265,13 @@ impl ClaudeSession {
         if params.disable_thinking {
             cmd.env("CLAUDE_CODE_DISABLE_THINKING", "1");
         }
+        // Managed provider：先清掉父进程残留的 routing 键（如 Kimi 时代 ANTHROPIC_MODEL=k3），
+        // 再写入当前 profile env，避免第三方 API 收到跨供应商模型名。
+        // 无 provider_env 时不清理，保留 local/disk 跟随全局 settings 的既有行为。
         if let Some(provider_env) = provider_env {
+            for key in CLAUDE_PROVIDER_ROUTING_ENV_KEYS {
+                cmd.env_remove(key);
+            }
             cmd.envs(provider_env);
         }
 

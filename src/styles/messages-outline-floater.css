@@ -65,14 +65,12 @@
   overflow: auto;
   padding: 8px;
   border-radius: 8px;
-  background: var(--surface-popover, var(--surface-card-strong));
+  background: var(--surface-popover);
   border: 1px solid var(--border-subtle);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
   display: flex;
   flex-direction: column;
   gap: 4px;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
 .messages-outline-floater-header {

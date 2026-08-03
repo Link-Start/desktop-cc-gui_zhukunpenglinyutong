@@ -145,6 +145,12 @@ function normalizeThreadSummary(value: unknown): ThreadSummary | null {
     summary.sizeBytes = value.sizeBytes;
   }
   if (
+    typeof value.physicalPath === "string" &&
+    value.physicalPath.trim().length > 0
+  ) {
+    summary.physicalPath = value.physicalPath.trim();
+  }
+  if (
     value.engineSource === "codex" ||
     value.engineSource === "claude" ||
     value.engineSource === "gemini" ||

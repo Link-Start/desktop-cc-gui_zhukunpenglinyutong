@@ -1,9 +1,17 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   buildBrowserContextSnapshot,
   sanitizeBrowserSnapshotText,
 } from "./snapshotSanitizer";
 import type { BrowserSession } from "../types";
+
+const sanitizerSource = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "snapshotSanitizer.ts"),
+  "utf8",
+);
 
 function makeSession(): BrowserSession {
   return {
@@ -44,10 +52,44 @@ describe("browser snapshot sanitizer", () => {
     expect(result.text).not.toContain("abc123");
     expect(result.text).not.toContain("secret-value");
     expect(result.text).toContain("[redacted-email]");
+    expect(result.text).toContain("[redacted-phone]");
+    expect(result.text).not.toContain("415 555 1234");
     expect(result.privacy.redactionApplied).toBe(true);
     expect(result.privacy.redactedKinds).toEqual(
       expect.arrayContaining(["password", "token", "email", "phone"]),
     );
+  });
+
+  it("redacts phone numbers without lookbehind while preserving neighbors", () => {
+    // Regression: lookbehind crashes older WKWebView at module load with
+    // `SyntaxError: invalid group specifier name` (Application Startup Error).
+    const codeWithoutComments = sanitizerSource
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/.*$/gm, "");
+    expect(codeWithoutComments).not.toMatch(/\(\?<[=!]/);
+
+    const mid = sanitizeBrowserSnapshotText("call +1 415 555 1234 now");
+    expect(mid.text).toBe("call [redacted-phone] now");
+    expect(mid.privacy.redactedKinds).toContain("phone");
+
+    // Same as lookbehind: match starts at the first digit, so a leading "(" remains.
+    const paren = sanitizeBrowserSnapshotText("office (415) 555-1234 desk");
+    expect(paren.text).toBe("office ([redacted-phone] desk");
+
+    // Digit then "+" then number: both lookbehind and prefix-capture redact from the
+    // first digit after "+", leaving the leading digit and plus sign.
+    const glued = sanitizeBrowserSnapshotText("9+14155551234");
+    expect(glued.text).toBe("9+[redacted-phone]");
+    expect(glued.privacy.redactedKinds).toContain("phone");
+
+    // Too short to look like a phone.
+    const short = sanitizeBrowserSnapshotText("ext 1234 only");
+    expect(short.text).toBe("ext 1234 only");
+    expect(short.privacy.redactedKinds).not.toContain("phone");
+
+    // Leading phone still redacts.
+    const leading = sanitizeBrowserSnapshotText("+14155551234 end");
+    expect(leading.text).toBe("[redacted-phone] end");
   });
 
   it("sanitizes structured page understanding fields used by fixture regressions", () => {

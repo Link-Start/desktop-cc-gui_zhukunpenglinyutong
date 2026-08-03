@@ -18,6 +18,7 @@ pub(crate) const SESSION_CATALOG_PARTIAL_GEMINI: &str = "gemini-history-unavaila
 pub(crate) const SESSION_CATALOG_PARTIAL_GROK: &str = "grok-history-unavailable";
 pub(crate) const SESSION_CATALOG_PARTIAL_KIMI: &str = "kimi-history-unavailable";
 pub(crate) const SESSION_CATALOG_PARTIAL_OPENCODE: &str = "opencode-history-unavailable";
+pub(crate) const SESSION_CATALOG_PARTIAL_SHARED: &str = "shared-history-unavailable";
 pub(crate) const SESSION_CATALOG_PARTIAL_ARCHIVE_METADATA: &str = "archive-metadata-unavailable";
 pub(crate) const SESSION_CATALOG_UNASSIGNED_WORKSPACE_ID: &str = "__global_unassigned__";
 pub(crate) const SESSION_FOLDER_ROOT_ID: &str = "__root__";
@@ -255,6 +256,11 @@ pub(crate) struct WorkspaceSessionCatalogPage {
     pub(crate) partial_source: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) source_statuses: Vec<WorkspaceSessionCatalogSourceStatus>,
+    /// Session id aliases for automatic helper sessions with `visibility=hidden`.
+    /// Used by sidebar/native list merge to exclude commit-message helpers that
+    /// still appear in engine-native history sources without autoSession metadata.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) hidden_automatic_session_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -405,6 +411,7 @@ pub(crate) struct WorkspaceScopeCatalogData {
     pub(crate) entries: Vec<WorkspaceSessionCatalogEntry>,
     pub(crate) partial_sources: Vec<String>,
     pub(crate) source_statuses: Vec<WorkspaceSessionCatalogSourceStatus>,
+    pub(crate) hidden_automatic_session_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy)]

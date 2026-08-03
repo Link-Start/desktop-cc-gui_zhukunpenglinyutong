@@ -180,6 +180,7 @@ function ComposerHarness({
   createSessionTargetPicker = false,
   onCreationTargetEngineChange,
   activeThreadId = "thread-1",
+  sharedTargetPickerLocked = false,
 }: {
   onSend: (text: string, options?: MessageSendOptions) => void;
   pendingCodeAnnotation?: CodeAnnotationDraftInput | null;
@@ -193,6 +194,7 @@ function ComposerHarness({
   createSessionTargetPicker?: boolean;
   onCreationTargetEngineChange?: (engine: EngineType | null) => void;
   activeThreadId?: string;
+  sharedTargetPickerLocked?: boolean;
 }) {
   const [selectedCodeAnnotations, setSelectedCodeAnnotations] = useState<CodeAnnotationSelection[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -243,6 +245,7 @@ function ComposerHarness({
       onSelectCollaborationMode={() => {}}
       selectedEngine="claude"
       isSharedSession={Boolean(sharedTarget)}
+      sharedTargetPickerLocked={sharedTargetPickerLocked}
       createSessionTargetPicker={createSessionTargetPicker}
       onCreationTargetEngineChange={onCreationTargetEngineChange}
       providerProfileId={sharedTarget?.providerProfileId ?? null}
@@ -313,6 +316,19 @@ describe("Composer file reference token", () => {
     });
     expect(invoke).not.toHaveBeenCalled();
     expect(onCreationTargetEngineChange).toHaveBeenLastCalledWith("codex");
+    // 等价 engine 不得在每次父树重渲染时重复 publish（#185 防护）
+    const publishCountAfterMount = onCreationTargetEngineChange.mock.calls.length;
+    await act(async () => {
+      view.rerender(
+        <ComposerHarness
+          onSend={onSend}
+          createSessionTargetPicker
+          onCreationTargetEngineChange={onCreationTargetEngineChange}
+        />,
+      );
+      await Promise.resolve();
+    });
+    expect(onCreationTargetEngineChange.mock.calls.length).toBe(publishCountAfterMount);
 
     const textarea = getTextarea(view.container);
     await act(async () => {
@@ -723,6 +739,53 @@ describe("Composer file reference token", () => {
     unsubscribe();
   });
 
+  // fix-shared-session-identity-id-first：isSharedSession prop 退化（false）+
+  // shared: id 时，picker 仍 MUST 走 Shared 持久化，MUST NOT 发续接请求。
+  it("routes target changes to shared persistence and never emits continuation when identity projection is lost", async () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeProviderContinuationDialogRequests(listener);
+    vi.mocked(invoke).mockResolvedValueOnce({ selectedTarget: null });
+    const view = render(
+      <ComposerHarness onSend={() => {}} activeThreadId="shared:degraded" />,
+    );
+
+    const authority = view.getByTestId("composer-target-authority");
+    expect(authority.dataset.pickerMode).toBe("shared");
+
+    fireEvent.click(view.getByTestId("request-provider-continuation"));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        "set_shared_session_selected_engine",
+        expect.objectContaining({
+          workspaceId: "ws-1",
+          threadId: "shared:degraded",
+        }),
+      );
+    });
+    expect(listener).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
+  // locked 不构成身份防线：locked + 投影丢失时点选为 no-op，仍不续接。
+  it("keeps locked shared picker inert when identity projection is lost", () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeProviderContinuationDialogRequests(listener);
+    const view = render(
+      <ComposerHarness
+        onSend={() => {}}
+        activeThreadId="shared:locked"
+        sharedTargetPickerLocked
+      />,
+    );
+
+    fireEvent.click(view.getByTestId("request-provider-continuation"));
+
+    expect(listener).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
   it("converts visual file tokens to absolute paths before send", async () => {
     const onSend = vi.fn();
     const view = render(<ComposerHarness onSend={onSend} />);
@@ -756,6 +819,42 @@ describe("Composer file reference token", () => {
     expect(onSend).toHaveBeenCalledWith(
       "请检查 /Users/demo/repo/src-tauri 和 /Users/demo/repo/src/App.tsx",
     );
+  });
+
+  it("does not hit maximum update depth when file tokens settle under repeated parent rerenders", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const onSend = vi.fn();
+    const view = render(<ComposerHarness onSend={onSend} />);
+    const textarea = getTextarea(view.container);
+    const value =
+      "请检查 📄 App.tsx `/Users/demo/repo/src/App.tsx`";
+
+    await act(async () => {
+      fireEvent.change(textarea, {
+        target: {
+          value,
+          selectionStart: value.length,
+        },
+      });
+      fireEvent.select(textarea);
+    });
+
+    // 模拟 AppShell / ActiveCanvas 高频父渲染：token 已 settle 后仍不得 #185
+    for (let i = 0; i < 20; i += 1) {
+      await act(async () => {
+        view.rerender(<ComposerHarness onSend={onSend} />);
+        await Promise.resolve();
+      });
+    }
+
+    expect(getTextarea(view.container).value).toBe("请检查 📄 App.tsx");
+    expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Maximum update depth exceeded"),
+    );
+    expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Minified React error #185"),
+    );
+    consoleErrorSpy.mockRestore();
   });
 
   it("deduplicates repeated references for the same path", async () => {

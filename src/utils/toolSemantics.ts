@@ -125,17 +125,42 @@ export function extractToolName(title: unknown): string {
     ? (prefixMatch[1] ?? normalizedTitle).trim()
     : normalizedTitle.trim();
 
+  // mcp__server__ToolName → ToolName
   if (cleanTitle.includes("__")) {
     const parts = cleanTitle.split("__");
     return (parts[parts.length - 1] ?? cleanTitle).trim();
   }
 
+  // "server / tool" or "Claude / askuserquestion"
   if (cleanTitle.includes("/")) {
     const parts = cleanTitle.split("/");
     return (parts[parts.length - 1] ?? cleanTitle).trim();
   }
 
+  // Display-formatted MCP titles: "Mcp Ccgui Askuserquestion" → Askuserquestion
+  const mcpSpacedMatch = cleanTitle.match(/^mcp\s+\S+\s+(.+)$/i);
+  if (mcpSpacedMatch?.[1]) {
+    return mcpSpacedMatch[1].trim();
+  }
+
   return cleanTitle.toLowerCase();
+}
+
+/** AskUserQuestion (native or mcp__ccgui__ / "Mcp Ccgui Askuserquestion"). */
+export function isAskUserQuestionToolName(
+  toolName: string,
+  title?: string,
+): boolean {
+  const compact = (value: string) =>
+    value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  const compactName = compact(toolName);
+  if (
+    compactName === "askuserquestion" ||
+    compactName.endsWith("askuserquestion")
+  ) {
+    return true;
+  }
+  return compact(normalizeRuntimeString(title)).includes("askuserquestion");
 }
 
 export function isReadTool(toolName: string): boolean {
@@ -314,8 +339,17 @@ export function extractCommandFromTitle(title: string): string {
   if (!trimmed) {
     return "";
   }
-  const match = trimmed.match(/^Command:\s*(.+)$/i);
-  return match?.[1]?.trim() ?? "";
+  const match = trimmed.match(
+    /^(?:Command|Bash|Shell|Terminal|Run(?:\s+command)?):\s*(.+)$/i,
+  );
+  if (match?.[1]) {
+    return match[1].trim();
+  }
+  // Bare tool-name titles are not the command itself.
+  if (/^(?:command|bash|shell|terminal|run)$/i.test(trimmed)) {
+    return "";
+  }
+  return "";
 }
 
 export function looksLikePathOnlyValue(value: string): boolean {
@@ -336,6 +370,14 @@ type BuildCommandSummaryOptions = {
   ignorePathOnlyDetail?: boolean;
 };
 
+function isCommandSummaryToolType(toolType: string): boolean {
+  if (!toolType || toolType === "commandExecution") {
+    return true;
+  }
+  // Claude/Grok often emit toolType "bash" / "shell" rather than commandExecution.
+  return isBashTool(toolType);
+}
+
 export function buildCommandSummary(
   item: {
     title?: unknown;
@@ -346,7 +388,7 @@ export function buildCommandSummary(
 ): string {
   const { includeDetail = true, ignorePathOnlyDetail = true } = options;
   const toolType = normalizeRuntimeString(item.toolType);
-  if (toolType && toolType !== "commandExecution") {
+  if (toolType && !isCommandSummaryToolType(toolType)) {
     return "";
   }
 
@@ -369,10 +411,13 @@ export function buildCommandSummary(
     getFirstCommandField(detailArgs, commandKeys) ||
     getFirstCommandField(nestedInput, commandKeys) ||
     getFirstCommandField(nestedArgs, commandKeys);
+  // Prefer structured command fields; raw detail only as last resort when it is not JSON.
   const detailCommand = includeDetail
     ? ignorePathOnlyDetail && looksLikePathOnlyValue(detail)
       ? ""
-      : detail.trim()
+      : detailArgs
+        ? ""
+        : detail.trim()
     : "";
 
   return [titleCommand, argsCommand, detailCommand]

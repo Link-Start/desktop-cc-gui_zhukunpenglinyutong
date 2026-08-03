@@ -37,7 +37,9 @@ export type MessageRowEqualityProps = {
     threadId: string,
     message: Pick<QueuedMessage, "text" | "images">,
   ) => Promise<RuntimeReconnectRecoveryCallbackResult> | RuntimeReconnectRecoveryCallbackResult;
-  onThreadRecoveryFork?: () => Promise<void> | void;
+  onThreadRecoveryFork?: () =>
+    | Promise<RuntimeReconnectRecoveryCallbackResult>
+    | RuntimeReconnectRecoveryCallbackResult;
   retryMessage?: Pick<QueuedMessage, "text" | "images"> | null;
   isCopied?: boolean;
   onCopy?: (item: MessageItem, copyText?: string) => void;
@@ -52,6 +54,11 @@ export type MessageRowEqualityProps = {
   }) => void;
   suppressMemorySummaryCard?: boolean;
   suppressNoteCardSummaryCard?: boolean;
+  /**
+   * Shared turn-target badge visibility. Default true for standalone renders;
+   * timeline passes false for consecutive same-target assistants within a turn.
+   */
+  showTurnTargetBadge?: boolean;
   onOutlineReady?: (outline: MessageRowOutlineEntry[]) => void;
 };
 
@@ -182,6 +189,7 @@ export function areMessageRowPropsEqual(
       )
     ) &&
     previous.suppressMemorySummaryCard === next.suppressMemorySummaryCard &&
-    previous.suppressNoteCardSummaryCard === next.suppressNoteCardSummaryCard
+    previous.suppressNoteCardSummaryCard === next.suppressNoteCardSummaryCard &&
+    (previous.showTurnTargetBadge ?? true) === (next.showTurnTargetBadge ?? true)
   );
 }

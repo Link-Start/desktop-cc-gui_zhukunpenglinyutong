@@ -18,6 +18,7 @@ import {
 import { FileIcon } from './FileIcon';
 import { cn } from '@/lib/utils';
 import { Marker, MarkerContent, MarkerIcon } from '../../../../components/ui/marker';
+import { CollapsibleReveal } from '../../../../components/common/CollapsibleReveal';
 import { ToolStatusIcon } from './ToolMarkerShell';
 import { ExitPlanToolContent, type ExitPlanToolCopy } from './ExitPlanToolContent';
 import { FileChangeToolContent } from './FileChangeToolContent';
@@ -295,7 +296,10 @@ export const GenericToolBlock = memo(function GenericToolBlock({
   );
 
   const shouldShowDetails = otherParams.length > 0 && isExpanded;
-  const isAskUserQuestionTool = toolName.toLowerCase() === "askuserquestion";
+  const isAskUserQuestionTool =
+    toolName.toLowerCase() === "askuserquestion" ||
+    toolName.toLowerCase().replace(/[^a-z0-9]/g, "").endsWith("askuserquestion") ||
+    item.title.toLowerCase().replace(/[^a-z0-9]/g, "").includes("askuserquestion");
   const suppressPlanModeHintForClaude =
     isAskUserQuestionTool &&
     activeEngine === "claude" &&
@@ -382,8 +386,8 @@ export const GenericToolBlock = memo(function GenericToolBlock({
       <Marker
         {...(isInteractive ? { onClick: handleClick } : {})}
         className={cn(
-          // 与 ToolMarkerShell 同 meta 尺度：12px 字 + 14px 图标 + 20px 行高
-          'min-h-5 gap-1.5 rounded-md py-0 pr-1 text-[length:var(--message-meta-font-size,12px)] leading-5 transition-colors',
+          // 与 ToolMarkerShell 同 meta 尺度：12px 字 + 14px 图标 + 20px 行高 + py-0.5 呼吸
+          'min-h-5 gap-1.5 rounded-md py-0.5 pr-1 text-[length:var(--message-meta-font-size,12px)] leading-5 transition-colors',
           '[&_svg]:!size-3.5',
           isInteractive && 'cursor-pointer select-none hover:bg-accent/50',
         )}
@@ -424,7 +428,11 @@ export const GenericToolBlock = memo(function GenericToolBlock({
         </div>
       )}
 
-      {isExpanded && item.output && !hasChanges && (!isImageViewTool || !imageViewPreviewSrc) && (
+      <CollapsibleReveal
+        open={Boolean(
+          isExpanded && item.output && !hasChanges && (!isImageViewTool || !imageViewPreviewSrc),
+        )}
+      >
         <div className="task-details" style={{ padding: '12px', border: 'none' }}>
           <div className="task-field-content tool-output-raw-shell" style={{ maxHeight: '300px', overflowY: 'auto', overflowX: 'auto' }}>
             <div className="tool-output-toolbar">
@@ -453,7 +461,7 @@ export const GenericToolBlock = memo(function GenericToolBlock({
               : <pre className="tool-output-raw-pre">{item.output}</pre>}
           </div>
         </div>
-      )}
+      </CollapsibleReveal>
 
       {isImageViewTool && imageViewPreviewSrc && (
         <ImageViewToolContent
@@ -464,11 +472,15 @@ export const GenericToolBlock = memo(function GenericToolBlock({
         />
       )}
 
-      {isExpanded && !shouldShowDetails && !item.output && !hasChanges && item.detail && (
+      <CollapsibleReveal
+        open={Boolean(
+          isExpanded && !shouldShowDetails && !item.output && !hasChanges && item.detail,
+        )}
+      >
         <div className="task-details" style={{ padding: '12px', border: 'none' }}>
           <pre style={{ margin: 0, fontSize: '12px', whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: 'var(--text-secondary)' }}>{item.detail}</pre>
         </div>
-      )}
+      </CollapsibleReveal>
 
       {showPlanModeHint && (
         <div className="task-details" style={{ border: 'none' }}>

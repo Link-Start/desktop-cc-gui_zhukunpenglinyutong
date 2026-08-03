@@ -46,15 +46,35 @@ pub struct TypedArtifactStoreRecord {
 }
 
 fn safe_segment(value: &str, field: &str) -> Result<(), String> {
+    let has_unsafe_char = value.chars().any(|ch| {
+        matches!(ch, '/' | '\\' | '<' | '>' | ':' | '"' | '|' | '?' | '*')
+            || ch.is_control()
+    });
     if value.is_empty()
         || value == "."
         || value == ".."
-        || value.contains('/')
-        || value.contains('\\')
+        || has_unsafe_char
+        || value.ends_with('.')
+        || value.ends_with(' ')
+        || is_windows_reserved_name(value)
     {
         return Err(format!("invalid {field}"));
     }
     Ok(())
+}
+
+fn is_windows_reserved_name(value: &str) -> bool {
+    let stem = value.split('.').next().unwrap_or(value);
+    let upper = stem.to_ascii_uppercase();
+    if matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL") {
+        return true;
+    }
+    let is_reserved_port = |prefix: &str| {
+        upper.strip_prefix(prefix).is_some_and(|suffix| {
+            suffix.len() == 1 && matches!(suffix.as_bytes()[0], b'1'..=b'9')
+        })
+    };
+    is_reserved_port("COM") || is_reserved_port("LPT")
 }
 
 fn workspace_hash(workspace_id: &str) -> String {
@@ -64,12 +84,31 @@ fn workspace_hash(workspace_id: &str) -> String {
         .collect::<String>()
 }
 
+fn session_path_key(session_id: &str) -> String {
+    Sha256::digest(session_id.as_bytes())
+        .iter()
+        .take(8)
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>()
+}
+
 fn artifact_dir(root: &Path, workspace_id: &str, session_id: &str) -> Result<PathBuf, String> {
-    safe_segment(session_id, "session id")?;
+    if session_id.is_empty() {
+        return Err("invalid session id".to_string());
+    }
     Ok(root
         .join("shared-context-artifacts")
         .join(workspace_hash(workspace_id))
-        .join(session_id))
+        .join(session_path_key(session_id)))
+}
+
+/// Legacy layout written before the platform-safe path key migration:
+/// `shared-context-artifacts/{workspace_hash}/{session_id}/`. Only used for
+/// read-back compatibility on upgrades; never written.
+fn legacy_artifact_dir(root: &Path, workspace_id: &str, session_id: &str) -> PathBuf {
+    root.join("shared-context-artifacts")
+        .join(workspace_hash(workspace_id))
+        .join(session_id)
 }
 
 fn artifact_path(
@@ -80,6 +119,31 @@ fn artifact_path(
 ) -> Result<PathBuf, String> {
     safe_segment(artifact_id, "artifact id")?;
     Ok(artifact_dir(root, workspace_id, session_id)?.join(format!("{artifact_id}.json")))
+}
+
+fn artifact_path_with_legacy_fallback(
+    root: &Path,
+    workspace_id: &str,
+    session_id: &str,
+    artifact_id: &str,
+) -> Result<PathBuf, String> {
+    let path = artifact_path(root, workspace_id, session_id, artifact_id)?;
+    if path.exists() {
+        return Ok(path);
+    }
+    let legacy_eligible = !session_id.is_empty()
+        && !session_id.contains('/')
+        && !session_id.contains('\\')
+        && session_id != "."
+        && session_id != "..";
+    if legacy_eligible {
+        let legacy = legacy_artifact_dir(root, workspace_id, session_id)
+            .join(format!("{artifact_id}.json"));
+        if legacy.exists() {
+            return Ok(legacy);
+        }
+    }
+    Ok(path)
 }
 
 fn package_checksum(package: &ContextPackage) -> Result<String, String> {
@@ -244,7 +308,7 @@ pub fn read_typed_artifact(
     root: &Path,
     request: &ArtifactReadRequest,
 ) -> Result<TypedArtifactStoreRecord, String> {
-    let path = artifact_path(
+    let path = artifact_path_with_legacy_fallback(
         root,
         &request.workspace_id,
         &request.session_id,
@@ -277,7 +341,7 @@ pub fn read_artifact(
     root: &Path,
     request: &ArtifactReadRequest,
 ) -> Result<ArtifactStoreRecord, String> {
-    let path = artifact_path(
+    let path = artifact_path_with_legacy_fallback(
         root,
         &request.workspace_id,
         &request.session_id,
@@ -484,5 +548,136 @@ mod tests {
             .expect("scan")
             .is_empty());
         fs::remove_dir_all(root.as_path()).ok();
+    }
+
+    #[test]
+    fn typed_artifact_round_trips_with_prefixed_session_id() {
+        let root = std::env::temp_dir().join(format!("mossx-prefixed-artifact-{}", Uuid::new_v4()));
+        let session_id = format!("claude:{}", Uuid::new_v4());
+        let written = write_typed_artifact(
+            &root,
+            "workspace-a",
+            &session_id,
+            "application/vnd.mossx.native-history-entries+json",
+            &json!({"entries": [{"role": "user", "text": "hello"}]}),
+            1,
+        )
+        .expect("write prefixed session");
+
+        let directory = root
+            .join("shared-context-artifacts")
+            .join(workspace_hash("workspace-a"))
+            .join(session_path_key(&session_id));
+        assert!(directory.is_dir(), "artifact directory must exist");
+        let directory_name = directory
+            .file_name()
+            .expect("directory name")
+            .to_string_lossy()
+            .to_string();
+        assert!(
+            !directory_name.contains(':'),
+            "path key must not contain a Windows-unsafe colon: {directory_name}"
+        );
+
+        let read = read_typed_artifact(
+            &root,
+            &ArtifactReadRequest {
+                workspace_id: "workspace-a".to_string(),
+                session_id: session_id.clone(),
+                artifact_id: written.artifact_id,
+                checksum: written.checksum,
+            },
+        )
+        .expect("read prefixed session");
+        assert_eq!(read.session_id, session_id);
+        assert_eq!(read.payload["entries"][0]["text"], "hello");
+        assert!(scan_orphan_artifacts(&root, |_| true)
+            .expect("scan")
+            .is_empty());
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn read_artifact_falls_back_to_legacy_session_directory() {
+        let root = std::env::temp_dir().join(format!("mossx-legacy-artifact-{}", Uuid::new_v4()));
+        let session_id = format!("claude:{}", Uuid::new_v4());
+        let written = write_typed_artifact(
+            &root,
+            "workspace-a",
+            &session_id,
+            "application/vnd.mossx.native-history-entries+json",
+            &json!({"entries": [{"role": "user", "text": "legacy"}]}),
+            1,
+        )
+        .expect("write");
+
+        // Simulate the pre-fix layout: the artifact directory is named with the
+        // raw session id (e.g. written on macOS before this change).
+        let new_directory = root
+            .join("shared-context-artifacts")
+            .join(workspace_hash("workspace-a"))
+            .join(session_path_key(&session_id));
+        let legacy_directory = root
+            .join("shared-context-artifacts")
+            .join(workspace_hash("workspace-a"))
+            .join(&session_id);
+        fs::rename(&new_directory, &legacy_directory).expect("move to legacy layout");
+
+        let read = read_typed_artifact(
+            &root,
+            &ArtifactReadRequest {
+                workspace_id: "workspace-a".to_string(),
+                session_id: session_id.clone(),
+                artifact_id: written.artifact_id,
+                checksum: written.checksum,
+            },
+        )
+        .expect("read legacy layout");
+        assert_eq!(read.session_id, session_id);
+        assert_eq!(read.payload["entries"][0]["text"], "legacy");
+        assert!(scan_orphan_artifacts(&root, |_| true)
+            .expect("scan")
+            .is_empty());
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn safe_segment_rejects_windows_unsafe_values() {
+        for (value, field) in [
+            ("", "empty"),
+            (".", "dot"),
+            ("..", "dotdot"),
+            ("a/b", "slash"),
+            ("a\\b", "backslash"),
+            ("a:b", "colon"),
+            ("a*b", "star"),
+            ("a?b", "question"),
+            ("a\"b", "quote"),
+            ("a<b", "less-than"),
+            ("a>b", "greater-than"),
+            ("a|b", "pipe"),
+            ("a\u{0000}b", "control"),
+            ("trailing.", "trailing-dot"),
+            ("trailing ", "trailing-space"),
+            ("con", "reserved-con"),
+            ("CON", "reserved-con-upper"),
+            ("con.txt", "reserved-con-ext"),
+            ("prn", "reserved-prn"),
+            ("aux", "reserved-aux"),
+            ("nul", "reserved-nul"),
+            ("com1", "reserved-com1"),
+            ("lpt9", "reserved-lpt9"),
+        ] {
+            assert!(
+                safe_segment(value, field).is_err(),
+                "must reject {value:?} ({field})"
+            );
+        }
+        for value in ["artifact-a", "0123456789abcdef", "a-b_c.9"] {
+            assert!(
+                safe_segment(value, "artifact id").is_ok(),
+                "must accept {value:?}"
+            );
+        }
     }
 }

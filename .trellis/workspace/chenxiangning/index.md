@@ -7,9 +7,9 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-30.md`
-- **Total Sessions**: 1267
-- **Last Active**: 2026-08-01
+- **Active File**: `journal-31.md`
+- **Total Sessions**: 1306
+- **Last Active**: 2026-08-03
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-30.md` | ~640 | Active |
+| `journal-31.md` | ~278 | Active |
+| `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
 | `journal-27.md` | ~1974 | Archived |
@@ -58,6 +59,45 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1306 | 2026-08-03 | 适配 Shared MCP AskUserQuestion 工具卡 UI | `7c40eaaab` | `cxn-version-0.7.15` |
+| 1305 | 2026-08-03 | 修复 Shared Claude AskUserQuestion 弹窗与超时体验 | `87836b7cb` | `cxn-version-0.7.15` |
+| 1304 | 2026-08-03 | 修复 Codex 死 thread 恢复卡 Fork 静默失败 | `76951f6e2` | `cxn-version-0.7.15` |
+| 1303 | 2026-08-03 | fix shortcuts guide Quick Switcher i18n key | `d2537a77b` | `cxn-version-0.7.15` |
+| 1302 | 2026-08-03 | fix(models): 冷启 useModels selection 收敛环致 React #185 白屏 | `d4806464c` | `cxn-version-0.7.15` |
+| 1301 | 2026-08-03 | fix(models): 冷启 useModels selection 收敛环致 React #185 白屏 | `2974b721e` | `cxn-version-0.7.15` |
+| 1300 | 2026-08-03 | Codex 续接过滤 control 角色 | `c2c45e269` | `cxn-version-0.7.15` |
+| 1299 | 2026-08-03 | 续接成功默认选中目标模型 | `c08facc4e` | `cxn-version-0.7.15` |
+| 1298 | 2026-08-03 | 修复 React 185 Claude repair 更新环 | `a4166c03e` | `cxn-version-0.7.15` |
+| 1297 | 2026-08-03 | Native 续接取消还原来源供应商 | `ad8129cac` | `cxn-version-0.7.15` |
+| 1296 | 2026-08-02 | 修复 Shared 跨引擎切渠道落本地配置 | `c71d72281` | `cxn-version-0.7.15` |
+| 1295 | 2026-08-02 | 修复 Shared target 竞态与 Claude managed model 串台 | `89d9f7060`, `bc2c75d28` | `cxn-version-0.7.15` |
+| 1294 | 2026-08-02 | fix: 隔离 Kimi AgentSwarm 子代理交付正文 | `80da295e5` | `cxn-version-0.7.15` |
+| 1293 | 2026-08-02 | 跨引擎子代理幕布识别与会话树层级 | `7ada4675b` | `cxn-version-0.7.15` |
+| 1292 | 2026-08-02 | 稳定 Shared 会话列表图标（id-first） | `7caf8006f` | `cxn-version-0.7.15` |
+| 1291 | 2026-08-02 | 为杀开关空 stub 补防御性测试 | `6e47b64ef` | `cxn-version-0.7.15` |
+| 1290 | 2026-08-02 | 整体下线会话活动与 Solo 模式（接线级 disable + OpenSpec） | `7ef9151f9` | `cxn-version-0.7.15` |
+| 1289 | 2026-08-02 | 跨引擎 SubAgent 适配 Codex/Grok/Kimi/Shared | `4b4b9a18f` | `cxn-version-0.7.15` |
+| 1288 | 2026-08-02 | fix Shared 模型供应商切换误入 Native 续接 | `8468544a5` | `cxn-version-0.7.15` |
+| 1287 | 2026-08-02 | SubAgent 幕布 persona 卡片与 inspector 抽屉 | `49353a4c8` | `cxn-version-0.7.15` |
+| 1286 | 2026-08-02 | fix(status-panel): Native 会话额度仅查当前供应商 | `46724bb45` | `cxn-version-0.7.15` |
+| 1285 | 2026-08-02 | fix: 单步思考收进过程 chip | `9c94ca1df` | `cxn-version-0.7.15` |
+| 1284 | 2026-08-02 | fix: Native 过程折叠吸收孤儿思考 | `cee3ec655` | `cxn-version-0.7.15` |
+| 1283 | 2026-08-02 | 修复 Windows Native Continuation artifact 路径 os error 267 | `94343833d` | `cxn-version-0.7.15` |
+| 1282 | 2026-08-02 | 修复 CodexCatalogSessionSummary.physicalPath 类型 | `8b36c6f13` | `cxn-version-0.7.15` |
+| 1281 | 2026-08-02 | 共享会话多供应商额度列表 | `b0ef0b9b9` | `cxn-version-0.7.15` |
+| 1280 | 2026-08-02 | status-panel 概览与供应商套餐额度 | `215640267` | `cxn-version-0.7.15` |
+| 1279 | 2026-08-02 | merge upstream chore/bump-version-0.7.15 | `4e4d9fe9a` | `cxn-version-0.7.15` |
+| 1278 | 2026-08-02 | fix React #185 Composer file-ref 引用环 | `637cb3561` | `cxn-version-0.7.15` |
+| 1277 | 2026-08-02 | Shared 历史恢复 loading 阶段与进度条 | `75bce0166` | `cxn-version-0.7.15` |
+| 1276 | 2026-08-02 | 结果 Tab 降噪:会话概览取代治理证据与结果详情 | `5f52710f7`, `8a53489cf` | `cxn-version-0.7.15` |
+| 1275 | 2026-08-02 | 折叠 Shared turn-target badge 噪音 | `50db10f0d` | `cxn-version-0.7.15` |
+| 1274 | 2026-08-02 | 修复过程折叠展开 bashGroup 空壳 | `2510b3957` | `cxn-version-0.7.15` |
+| 1273 | 2026-08-02 | 会话概览替换治理证据 + 提交消息引擎选择器收口 | `5f52710f7`, `867c1017d` | `cxn-version-0.7.15` |
+| 1272 | 2026-08-02 | Codex 文件读写类 command 可见、纯 shell 仍隐藏 | `1e9ed803a` | `cxn-version-0.7.15` |
+| 1271 | 2026-08-02 | 幕布恢复隐藏 shell 且折叠只计文件读写 | `9a2e35797` | `cxn-version-0.7.15` |
+| 1270 | 2026-08-02 | Shared Codex command argv/apply_patch 投影修复 | `a2f3e50ca` | `cxn-version-0.7.15` |
+| 1269 | 2026-08-02 | Shared Codex apply_patch/文件修改投影二次修复 | `b42626c1e` | `cxn-version-0.7.15` |
+| 1268 | 2026-08-01 | Shared 历史幕布过程折叠与 Codex 文件修改投影对齐 | `ef6dc9dbb` | `cxn-version-0.7.15` |
 | 1267 | 2026-08-01 | Grok 思考强度接入 | `75a847b9d` | `feature/v-0714` |
 | 1266 | 2026-08-01 | 加固 React #185 收敛（freeform 不回退） | `e6e964d88` | `feature/v-0714` |
 | 1265 | 2026-08-01 | 解决 PR #971 与 main 的 #185 冲突并推送 | `0fd81eede`, `4732d92ac` | `bump-version-0.7.14` |

@@ -33,4 +33,38 @@ describe("projectQuickSwitcherSessionGroups", () => {
     expect(result[0]?.sessions[0]?.id).toBe("beta-new");
     expect(result[1]?.sessions.at(-1)?.id).toBe("thread-3");
   });
+
+  it("marks shared: sessions as shared even when threadKind projection is lost", () => {
+    const result = projectQuickSwitcherSessionGroups(
+      [{ id: "workspace-a", name: "Alpha" }],
+      {
+        "workspace-a": [
+          {
+            id: "shared:lost-kind",
+            name: "Shared CLI",
+            updatedAt: 10,
+            engineSource: "claude",
+            selectedEngine: "claude",
+            // kind 投影丢失：缺省或 native 都不应改掉 Shared 图标语义
+            threadKind: "native",
+          },
+          {
+            id: "claude:native-1",
+            name: "Native Claude",
+            updatedAt: 9,
+            engineSource: "claude",
+            threadKind: "native",
+          },
+        ],
+      },
+    );
+
+    const sessions = result[0]?.sessions ?? [];
+    expect(sessions.find((s) => s.id === "shared:lost-kind")?.isShared).toBe(
+      true,
+    );
+    expect(sessions.find((s) => s.id === "claude:native-1")?.isShared).toBe(
+      false,
+    );
+  });
 });

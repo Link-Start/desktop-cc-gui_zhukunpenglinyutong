@@ -126,6 +126,7 @@
                 diagnostics: Vec::new(),
                 cache: None,
             }],
+            Vec::new(),
         );
 
         assert_eq!(page.data.len(), 25);
@@ -177,6 +178,7 @@
             Some(2),
             None,
             Vec::new(),
+            Vec::new(),
         );
         let cursor = first_page.next_cursor.clone().expect("next cursor");
 
@@ -201,6 +203,7 @@
             Some(cursor),
             Some(2),
             None,
+            Vec::new(),
             Vec::new(),
         );
 
@@ -237,6 +240,7 @@
             Some(cursor),
             Some(1),
             None,
+            Vec::new(),
             Vec::new(),
         );
 

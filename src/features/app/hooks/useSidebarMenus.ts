@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import type { EngineType, ThreadSummary, WorkspaceInfo } from "../../../types";
 import type { SharedSessionSupportedEngine } from "../../shared-session/utils/sharedSessionEngines";
+import { isSharedSessionThreadId } from "../../shared-session/utils/sharedSessionIdentity";
 import {
   createNativeProviderContinuation,
   discardPreparedNativeProviderContinuation,
@@ -32,6 +33,7 @@ import type {
   EngineDisplayInfo,
   EngineRefreshResult,
 } from "../../engine/hooks/useEngineController";
+import { useCliEngineVisibility } from "../../composer/hooks/cliEngineVisibilityStore";
 import {
   PINNABLE_WORKSPACE_ACTION_IDS,
   SIDEBAR_WORKSPACE_PINNED_ACTIONS_CHANGED_EVENT,
@@ -49,11 +51,25 @@ import {
   type EngineProviderProfileOption,
 } from "../../threads/constants/codexProviderProfiles";
 import {
+  notifyProviderContinuationUiRollback,
   subscribeProviderContinuationDialogRequests,
   type ProviderContinuationDialogRequest,
 } from "../../threads/services/providerContinuationRequests";
 import { isWeakSessionDisplayTitle } from "../../threads/utils/sessionDisplayProjection";
-import { activateEngineProviderProfileAndNotify } from "../../vendors/activateEngineProviderProfile";
+import {
+  activateEngineProviderProfileAndNotify,
+  isActivatableProviderEngine,
+} from "../../vendors/activateEngineProviderProfile";
+
+/** 新建会话菜单项 id → 对应 CLI engine；用于 CLI 配置管理启停过滤。 */
+const NEW_SESSION_ENGINE_ACTION_IDS: Readonly<Record<string, EngineType>> = {
+  "new-session-claude": "claude",
+  "new-session-codex": "codex",
+  "new-session-opencode": "opencode",
+  "new-session-gemini": "gemini",
+  "new-session-kimi": "kimi",
+  "new-session-grok": "grok",
+};
 
 const LAST_PROVIDER_PROFILE_KEYS = {
   claude: "claudeLastProviderProfileId",
@@ -297,7 +313,10 @@ type SidebarMenuHandlers = {
     threadId: string;
     engine: string;
     providerProfileId: string | null;
+    /** 优先 catalog entry id；可与 modelRuntime 二选一或同时给 */
     modelId: string | null;
+    /** CLI runtime 名（如 MiniMax-M3），用于反查 catalog entry */
+    modelRuntime?: string | null;
     effort: string | null;
   }) => void | Promise<void>;
   isThreadAvailable?: (workspaceId: string, threadId: string) => boolean;
@@ -382,6 +401,8 @@ export function useSidebarMenus({
   opencodeProviderProfiles = [],
 }: SidebarMenuHandlers) {
   const { t } = useTranslation();
+  // 与 Composer ProviderSelect 同源：AppSettings.disabledCliEngines 的前台可见性。
+  const disabledCliEngineIds = useCliEngineVisibility();
   const [workspaceMenuState, setWorkspaceMenuState] =
     useState<WorkspaceMenuState | null>(null);
   const [sidebarContextMenuState, setSidebarContextMenuState] =
@@ -572,6 +593,9 @@ export function useSidebarMenus({
     ) => {
       if (
         thread.threadKind === "shared" ||
+        // id 硬闸（fix-shared-session-identity-id-first）：
+        // kind 投影丢失时 shared: 前缀仍兜底拒绝续接
+        isSharedSessionThreadId(thread.id) ||
         !thread.engineSource ||
         !["claude", "codex", "kimi"].includes(thread.engineSource)
       ) {
@@ -708,6 +732,58 @@ export function useSidebarMenus({
     [getThreadSummary, prepareProviderContinuationDialog, t],
   );
 
+  const restoreSourceProviderAfterContinuationCancel = useCallback(
+    (dialog: ProviderContinuationDialogState) => {
+      const source = dialog.request.source;
+      const sourceEngine = source.engine;
+      const rawProfileId = source.providerProfileId?.trim() || null;
+      // 切渠道预览会写 profileOverrides + syncClaudeModelMapping 到 destination；
+      // 取消时必须把 L1 使用中/映射与 Picker 渠道投影还原到来源会话。
+      notifyProviderContinuationUiRollback({
+        engine: sourceEngine,
+        providerProfileId: rawProfileId,
+      });
+      if (!isActivatableProviderEngine(sourceEngine)) {
+        return;
+      }
+      const restoreProfileId =
+        rawProfileId ||
+        (sourceEngine === "claude"
+          ? CLAUDE_LOCAL_PROVIDER_PROFILE_ID
+          : sourceEngine === "codex"
+            ? CODEX_DISK_PROVIDER_PROFILE_ID
+            : sourceEngine === "kimi"
+              ? KIMI_LOCAL_PROVIDER_PROFILE_ID
+              : sourceEngine === "grok"
+                ? GROK_LOCAL_PROVIDER_PROFILE_ID
+                : sourceEngine === "opencode"
+                  ? OPENCODE_LOCAL_PROVIDER_PROFILE_ID
+                  : null);
+      if (!restoreProfileId) {
+        return;
+      }
+      void activateEngineProviderProfileAndNotify(
+        sourceEngine,
+        restoreProfileId,
+      ).catch((error: unknown) => {
+        pushGlobalRuntimeNotice({
+          severity: "error",
+          category: "user-action-error",
+          messageKey: "runtimeNotice.vendor.activateProviderFailed",
+          messageParams: {
+            name:
+              dialog.sourceLabel ||
+              restoreProfileId ||
+              LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
+            message: error instanceof Error ? error.message : String(error),
+          },
+          dedupeKey: `provider-continuation-cancel-restore:${dialog.workspaceId}:${restoreProfileId}`,
+        });
+      });
+    },
+    [],
+  );
+
   const closeProviderContinuationDialog = useCallback(() => {
     const current = providerContinuationDialogStateRef.current;
     if (!current) {
@@ -719,6 +795,8 @@ export function useSidebarMenus({
     canceledProviderContinuationOperationsRef.current.add(operationId);
     providerContinuationOperationIdsRef.current.delete(current.operationKey);
     replaceProviderContinuationDialog(null);
+    // 取消 = 不切换：还原来源会话的供应商/模型映射与渠道底栏投影。
+    restoreSourceProviderAfterContinuationCancel(current);
     if (
       current.stage === "preparing" ||
       current.stage === "confirm" ||
@@ -744,6 +822,7 @@ export function useSidebarMenus({
   }, [
     discardPreparedProviderContinuation,
     replaceProviderContinuationDialog,
+    restoreSourceProviderAfterContinuationCancel,
   ]);
 
   const confirmProviderContinuation = useCallback(async () => {
@@ -848,8 +927,14 @@ export function useSidebarMenus({
         await onReloadWorkspaceThreads(dialog.workspaceId);
         replaceProviderContinuationDialog(null);
         onSelectThread(dialog.workspaceId, result.operation.resultSessionId);
-        // 应用续接目标模型到新会话 composer，避免仍显示来源会话的 deepseek 等模型
-        const destModel =
+        // 应用续接目标模型到新会话 composer。
+        // modelId 优先 catalog entry id（picker 按 id 匹配）；model 是 runtime。
+        // 两者皆空时仍回调，由上层按目标 provider catalog 默认/首档补齐，避免「选择模型」空态。
+        const destCatalogEntryId =
+          typeof destination.modelCatalogEntryId === "string"
+            ? destination.modelCatalogEntryId.trim()
+            : "";
+        const destRuntimeModel =
           typeof destination.model === "string"
             ? destination.model.trim()
             : "";
@@ -857,16 +942,15 @@ export function useSidebarMenus({
           typeof destination.reasoningEffort === "string"
             ? destination.reasoningEffort.trim()
             : "";
-        if (destModel || destEffort) {
-          onProviderContinuationTargetReady?.({
-            workspaceId: dialog.workspaceId,
-            threadId: result.operation.resultSessionId,
-            engine: destEngine,
-            providerProfileId: destProviderId || null,
-            modelId: destModel || null,
-            effort: destEffort || null,
-          });
-        }
+        onProviderContinuationTargetReady?.({
+          workspaceId: dialog.workspaceId,
+          threadId: result.operation.resultSessionId,
+          engine: destEngine,
+          providerProfileId: destProviderId || null,
+          modelId: destCatalogEntryId || null,
+          modelRuntime: destRuntimeModel || null,
+          effort: destEffort || null,
+        });
         return;
       }
       const latest = providerContinuationDialogStateRef.current;
@@ -1259,8 +1343,10 @@ export function useSidebarMenus({
   );
 
   const isEngineSessionEntryVisible = useCallback(
-    (engineType: EngineType) => isEngineExecutionEnabled(engineType),
-    [],
+    (engineType: EngineType) =>
+      isEngineExecutionEnabled(engineType) &&
+      !disabledCliEngineIds.has(engineType),
+    [disabledCliEngineIds],
   );
 
   const [claudeSelectedProfileId, setClaudeSelectedProfileId] = useState<
@@ -1295,7 +1381,8 @@ export function useSidebarMenus({
         engine: EngineType,
         actionOptions?: EngineProviderProfileSelection,
       ) => {
-        if (!isEngineExecutionEnabled(engine)) {
+        // 产品策略停用 + CLI 配置管理停用：双重 gate，与菜单过滤一致。
+        if (!isEngineSessionEntryVisible(engine)) {
           return null;
         }
         if (actionOptions?.providerProfile?.availability === "unavailable") {
@@ -1415,33 +1502,45 @@ export function useSidebarMenus({
         kimi: t("workspace.engineKimi"),
         grok: t("workspace.engineGrok"),
       };
+      // Shared CLI 子引擎同样受 CLI 配置管理控制。
+      const sharedEngineEntries = (
+        [
+          ["claude", "engine-claude"],
+          ["codex", "engine-codex"],
+          ["opencode", "engine-opencode"],
+          ["kimi", "engine-kimi"],
+          ["grok", "engine-grok"],
+        ] as const
+      ).filter(([engine]) => isEngineSessionEntryVisible(engine));
       const actions = [
-        {
-          id: "new-session-shared",
-          label: t("sidebar.newSharedSession"),
-          iconKind: "new-shared",
-          unavailable: !onAddSharedAgent,
-          submenuOnly: true,
-          onSelect: () => {},
-          children: (
-            [
-              ["claude", "engine-claude"],
-              ["codex", "engine-codex"],
-              ["opencode", "engine-opencode"],
-              ["kimi", "engine-kimi"],
-              ["grok", "engine-grok"],
-            ] as const
-          ).map(([engine, iconKind]) => ({
-            id: `new-session-shared-${engine}`,
-            label: sharedEngineLabels[engine],
-            iconKind,
-            ...resolveEngineActionMeta(workspace, engine),
-            onSelect: async () => {
-              const threadId = await onAddSharedAgent?.(workspace, engine);
-              await handleCreatedSession(threadId);
-            },
-          })),
-        },
+        ...(sharedEngineEntries.length > 0
+          ? [
+              {
+                id: "new-session-shared",
+                label: t("sidebar.newSharedSession"),
+                iconKind: "new-shared" as const,
+                unavailable: !onAddSharedAgent,
+                submenuOnly: true,
+                onSelect: () => {},
+                children: sharedEngineEntries.map(([engine, iconKind]) => ({
+                  id: `new-session-shared-${engine}`,
+                  label: sharedEngineLabels[engine],
+                  iconKind,
+                  ...resolveEngineActionMeta(workspace, engine),
+                  onSelect: async () => {
+                    if (!isEngineSessionEntryVisible(engine)) {
+                      return;
+                    }
+                    const threadId = await onAddSharedAgent?.(
+                      workspace,
+                      engine,
+                    );
+                    await handleCreatedSession(threadId);
+                  },
+                })),
+              },
+            ]
+          : []),
         {
           id: "new-session-claude",
           label: t("workspace.engineClaudeCode"),
@@ -1670,14 +1769,13 @@ export function useSidebarMenus({
         },
       ] satisfies WorkspaceMenuAction[];
 
+      // CLI 配置管理停用 / 产品策略停用的引擎从「新建会话」入口隐藏。
       const visibleActions = actions.filter((action) => {
-        if (action.id === "new-session-opencode") {
-          return isEngineSessionEntryVisible("opencode");
+        const engine = NEW_SESSION_ENGINE_ACTION_IDS[action.id];
+        if (!engine) {
+          return true;
         }
-        if (action.id === "new-session-gemini") {
-          return isEngineSessionEntryVisible("gemini");
-        }
-        return true;
+        return isEngineSessionEntryVisible(engine);
       });
 
       return {

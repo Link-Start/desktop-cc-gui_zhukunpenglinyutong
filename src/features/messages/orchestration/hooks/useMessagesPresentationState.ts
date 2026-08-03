@@ -22,7 +22,14 @@ import {
   resolveStreamingPresentationItems,
   type MessagesPresentationMode,
 } from "../presentation/messagesLiveWindow";
+import { buildTurnTargetBadgeVisibleItemIds } from "../../../../utils/turnBadge";
 import { findItemById } from "../presentation/messagesViewModel";
+import { useActiveCanvasSelector } from "../../../layout/hooks/activeCanvasStore";
+import {
+  buildSyntheticSpawnToolsFromChildren,
+  injectSyntheticSubagentToolsIfNeeded,
+  isSubagentTool,
+} from "../../../subagent-ui";
 
 type UseMessagesPresentationStateInput = {
   activeEngine: EngineType;
@@ -41,6 +48,8 @@ type UseMessagesPresentationStateInput = {
   renderScopeKey: string;
   renderSourceItems: ConversationItem[];
   supportsStreamingReadableWindowRecovery: boolean;
+  /** 本 Messages 实例绑定的 thread（嵌套子会话幕布必须是 grok:/claude:…，禁止用主 canvas） */
+  threadId?: string | null;
   timelineItems: ConversationItem[];
 };
 
@@ -61,6 +70,7 @@ export function useMessagesPresentationState({
   renderScopeKey,
   renderSourceItems,
   supportsStreamingReadableWindowRecovery,
+  threadId = null,
   timelineItems,
 }: UseMessagesPresentationStateInput) {
   const presentationScopeKey = buildMessagesPresentationScopeKey({
@@ -154,9 +164,46 @@ export function useMessagesPresentationState({
     const item = findItemById(renderSourceItems, latestReasoningId);
     return item && isReasoningConversationItem(item) ? item : null;
   }, [isThinking, latestReasoningId, renderSourceItems]);
+
+  // Shared 父会话幕布：投影常缺 spawn_subagent tool，用子线程合成 persona 卡。
+  // 必须用本 Messages 的 threadId，禁止读 activeCanvas——子代理详情嵌套 Messages
+  // 的 threadId 是 grok:…，若误用主 canvas 的 shared: 会把小队卡再嵌进详情里。
+  const childSubagentThreads = useActiveCanvasSelector(
+    (snapshot) => snapshot.childSubagentThreads,
+  );
+  const threadStatusById = useActiveCanvasSelector(
+    (snapshot) => snapshot.threadStatusById,
+  );
+  const threadItemsByThread = useActiveCanvasSelector(
+    (snapshot) => snapshot.threadItemsByThread,
+  );
+  const timelineItemsForGrouping = useMemo(() => {
+    const ownThreadId = threadId?.trim() || "";
+    if (!ownThreadId.startsWith("shared:")) {
+      return timelinePresentationItems;
+    }
+    const hasSubagentTools = timelinePresentationItems.some(
+      (item) => item.kind === "tool" && isSubagentTool(item),
+    );
+    if (hasSubagentTools || childSubagentThreads.length === 0) {
+      return timelinePresentationItems;
+    }
+    const synthetic = buildSyntheticSpawnToolsFromChildren(childSubagentThreads, {
+      statusById: threadStatusById,
+      itemsByThread: threadItemsByThread,
+    });
+    return injectSyntheticSubagentToolsIfNeeded(timelinePresentationItems, synthetic);
+  }, [
+    childSubagentThreads,
+    threadId,
+    threadItemsByThread,
+    threadStatusById,
+    timelinePresentationItems,
+  ]);
+
   const groupedEntries = useMemo(
-    () => groupToolItems(timelinePresentationItems),
-    [timelinePresentationItems],
+    () => groupToolItems(timelineItemsForGrouping),
+    [timelineItemsForGrouping],
   );
   const liveAutoExpandedExploreId = useMemo(
     () => resolveLiveAutoExpandedExploreId(groupedEntries, isThinking),
@@ -220,6 +267,10 @@ export function useMessagesPresentationState({
     () => buildSuppressedUserMemoryContextMessageIdSet(timelinePresentationItems),
     [timelinePresentationItems],
   );
+  const turnTargetBadgeVisibleItemIds = useMemo(
+    () => buildTurnTargetBadgeVisibleItemIds(timelinePresentationItems),
+    [timelinePresentationItems],
+  );
 
   return {
     assistantFinalBoundarySet,
@@ -236,5 +287,6 @@ export function useMessagesPresentationState({
     suppressedUserNoteCardContextMessageIds,
     timelinePresentationItems,
     turnFileChangesByBoundaryId,
+    turnTargetBadgeVisibleItemIds,
   };
 }

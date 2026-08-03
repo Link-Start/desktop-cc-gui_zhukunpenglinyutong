@@ -16,6 +16,7 @@ import type { ThreadMoveFolderTarget } from "../hooks/useSidebarMenus";
 import { ProxyStatusBadge } from "../../../components/ProxyStatusBadge";
 import { EngineIcon } from "../../engine/components/EngineIcon";
 import { SharedSessionIcon } from "../../shared-session/components/SharedSessionIcon";
+import { resolveIsSharedSession } from "../../shared-session/utils/sharedSessionIdentity";
 import { resolveEngineProviderLabel } from "../utils/codexProviderLabel";
 import { THREAD_ROW_TOOLTIP_DELAY_MS } from "../constants";
 import { getExitedSessionRowVisibility } from "../utils/exitedSessionRows";
@@ -27,6 +28,7 @@ import {
 import {
   flattenSidebarWorkspaceItems,
   resolveSidebarItemKey,
+  SIDEBAR_THREAD_ROW_ESTIMATED_HEIGHT_PX,
   shouldVirtualizeSidebarList,
   type SidebarVirtualItem,
 } from "./sidebarVirtualItems";
@@ -114,7 +116,10 @@ function renderSidebarVirtualItem(
 }
 
 function isPendingSubagentThread(thread: ThreadSummary) {
-  return thread.id.startsWith("claude-pending-subagent:");
+  return (
+    thread.id.startsWith("claude-pending-subagent:") ||
+    thread.id.includes("-pending-subagent:")
+  );
 }
 
 function filterCollapsedThreadRows(
@@ -228,14 +233,25 @@ const ThreadRowItem = memo(function ThreadRowItem({
       : rowProjection.hasUnread
         ? "unread"
         : "ready";
-  const runtimeBadge = status?.isReviewing
+  // Live / completion status uses a compact meta-area dot (not a text pill):
+  // - processing: blue breathe
+  // - reviewing: static light blue
+  // - unread (finished while away): green; cleared on select via setActiveThreadId
+  const runtimeIndicator = status?.isReviewing
     ? { label: t("threads.runtimeReviewing"), severity: "reviewing" as const }
     : status?.isProcessing
       ? {
           label: t("threads.runtimeProcessing"),
           severity: "processing" as const,
         }
-      : null;
+      : status?.hasUnread
+        ? {
+            label: t("threads.runtimeCompleted", {
+              defaultValue: "Completed",
+            }),
+            severity: "completed" as const,
+          }
+        : null;
   const isProcessing = rowProjection.isProcessing;
   const showProxyBadge = systemProxyEnabled && isProcessing;
   const indentStyle =
@@ -376,10 +392,17 @@ const ThreadRowItem = memo(function ThreadRowItem({
             {providerLabel}
           </span>
         ) : null}
-        {runtimeBadge ? <span className={`thread-runtime-badge thread-runtime-badge--${runtimeBadge.severity}`}>
-          {runtimeBadge.label}
-        </span> : null}
-        {relativeTime && !runtimeBadge ? <span className="thread-time">{relativeTime}</span> : null}
+        {runtimeIndicator ? (
+          <span
+            className={`thread-runtime-dot thread-runtime-dot--${runtimeIndicator.severity}`}
+            title={runtimeIndicator.label}
+            aria-label={runtimeIndicator.label}
+            role="status"
+          />
+        ) : null}
+        {relativeTime && !runtimeIndicator ? (
+          <span className="thread-time">{relativeTime}</span>
+        ) : null}
       </div>
     </FloatingTooltipButton>
   );
@@ -582,7 +605,11 @@ export function ThreadList({
   const threadRowVirtualizer = useVirtualizer({
     count: shouldVirtualizeThreads ? sidebarVirtualItems.length : 0,
     getScrollElement: () => threadListRef.current,
-    estimateSize: () => 36,
+    // Match non-virtualized pitch (row min-height 30 + list gap 2). A larger
+    // estimate leaves visible gaps after expanding "更多" past the
+    // virtualization threshold; measureElement cannot shrink below the CSS
+    // min-height on `.thread-list-virtual-row`.
+    estimateSize: () => SIDEBAR_THREAD_ROW_ESTIMATED_HEIGHT_PX,
     overscan: 8,
     getItemKey: (index) => resolveSidebarItemKey(sidebarVirtualItems, index),
   });
@@ -665,7 +692,9 @@ export function ThreadList({
     const canPin = depth === 0;
     const isPinned = canPin && isThreadPinned(workspaceId, thread.id);
     const isAutoNaming = isThreadAutoNaming(workspaceId, thread.id);
-    const isSharedThread = thread.threadKind === "shared";
+    // id-first：shared: 前缀是 hard gate；threadKind 投影可丢/被 native 覆盖
+    // （与 fix-shared-session-identity-id-first 同源；图标消费方此前漏迁）。
+    const isSharedThread = resolveIsSharedSession(thread.id, thread);
     const isSubagentThread = depth > 0;
     const isSubagentParent = depth === 0 && hasChildren;
     const isActiveSubagentGroup =
@@ -687,8 +716,7 @@ export function ThreadList({
       isPendingSubagent && thread.parentThreadId
         ? thread.parentThreadId
         : thread.id;
-    const canArchive =
-      !isPendingSubagent && !isSharedThread && !thread.id.startsWith("shared:");
+    const canArchive = !isPendingSubagent && !isSharedThread;
     const engineSource: EngineType = thread.engineSource ?? "codex";
     const baseEngineTitle =
       engineSource === "claude"

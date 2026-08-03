@@ -8,7 +8,6 @@ import { getFileIcon } from '../../utils/fileIcons';
 import { TokenIndicator } from './TokenIndicator';
 import type {
   ClaudeContextUsageViewModel,
-  ContextSelectionChip,
   DualContextUsageViewModel,
   SelectedAgent,
 } from './types';
@@ -45,8 +44,6 @@ interface ContextBarProps {
   onClearFile?: () => void;
   onAddAttachment?: (files?: FileList | null) => void;
   selectedAgent?: SelectedAgent | null;
-  selectedContextChips?: ContextSelectionChip[];
-  onRemoveContextChip?: (chip: ContextSelectionChip) => void;
   onClearAgent?: () => void;
   /** Current provider (for conditional rendering) */
   currentProvider?: string;
@@ -89,8 +86,6 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
   onClearFile,
   onAddAttachment,
   selectedAgent,
-  selectedContextChips = [],
-  onRemoveContextChip,
   onClearAgent,
   currentProvider = 'claude',
   hasMessages = false,
@@ -397,11 +392,9 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
       (shouldShowLegacyTokenIndicator && (percentage !== null || usedTokens !== undefined || claudeContextUsage)) ||
       (showUsage && contextDualViewEnabled && dualUsageSummary),
   );
-  const hasExternalContext = Boolean(
-    selectedContextChips.length > 0 ||
-      selectedAgent ||
-      displayText,
-  );
+  // Skill / commons chips are no longer rendered in the external surface;
+  // selection still drives prompt assembly via Composer state.
+  const hasExternalContext = Boolean(selectedAgent || displayText);
 
   if (!isToolPopoverSurface && !hasExternalContext) {
     return null;
@@ -539,29 +532,6 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
           {onAddAttachment ? <div className="context-tool-divider" /> : null}
         </div>
       )}
-
-      {/* Selected Skill / Commons Chips */}
-      {!isToolPopoverSurface && selectedContextChips.map((chip) => (
-        <div
-          key={`${chip.type}:${chip.name}`}
-          className="context-item has-tooltip"
-          data-tooltip={chip.description || chip.name}
-          style={{ cursor: 'default' }}
-        >
-          <span
-            className={`codicon ${chip.type === 'skill' ? 'codicon-tools' : 'codicon-wrench'}`}
-            style={{ marginRight: 4 }}
-          />
-          <span className="context-text">
-            <span dir="ltr">{chip.name}</span>
-          </span>
-          <span
-            className="codicon codicon-close context-close"
-            onClick={() => onRemoveContextChip?.(chip)}
-            title={t('chat.removeContextSelection')}
-          />
-        </div>
-      ))}
 
       {/* Selected Agent Chip */}
       {!isToolPopoverSurface && selectedAgent && (

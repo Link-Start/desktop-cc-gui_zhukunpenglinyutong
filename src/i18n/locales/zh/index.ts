@@ -45,6 +45,7 @@ import shortcutsGuide from "./shortcutsGuide";
 import sidebar from "./sidebar";
 import specHub from "./specHub";
 import statusPanel from "./statusPanel";
+import subagentUi from "./subagentUi";
 import tabbar from "./tabbar";
 import taskCenter from "./taskCenter";
 import terminal from "./terminal";
@@ -104,6 +105,7 @@ const zh = {
   ...sidebar,
   ...specHub,
   ...statusPanel,
+  ...subagentUi,
   ...tabbar,
   ...taskCenter,
   ...terminal,

@@ -51,7 +51,7 @@ describe("ShortcutsGuideModal", () => {
     // 发送/换行动态行与硬编码 Quick Switcher 行始终展示
     expect(screen.getByText("shortcutsGuide.sendMessage")).toBeTruthy();
     expect(screen.getByText("shortcutsGuide.insertNewline")).toBeTruthy();
-    expect(screen.getByText("sidebar.quickSwitcher.title")).toBeTruthy();
+    expect(screen.getByText("quickSwitcher.title")).toBeTruthy();
   });
 
   it("falls back to default shortcuts before settings load", () => {

@@ -27,9 +27,14 @@ export {
   generateRunMetadata,
   getAccountInfo,
   getAccountRateLimits,
+  getCodingPlanQuota,
   getCollaborationModes,
   getModelList,
   runCodexLogin,
+} from "./tauri/modelCatalog";
+export type {
+  CodingPlanQuotaSnapshot,
+  CodingPlanQuotaWindow,
 } from "./tauri/modelCatalog";
 export {
   getClaudeCommandsList,
@@ -203,6 +208,10 @@ export {
   getRendererStabilitySnapshot,
   recordRendererHeartbeat,
 } from "./tauri/rendererStability";
+export {
+  loadBaiduTongjiScript,
+  sendBaiduTongjiBeacon,
+} from "./tauri/baiduTongji";
 export type {
   RendererHeartbeatInput,
   RendererHeartbeatStatus,

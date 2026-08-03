@@ -433,8 +433,11 @@ impl AttemptAccumulator {
             if let Some(tool_name) = tool_name.filter(|name| !name.trim().is_empty()) {
                 existing.tool_name = tool_name;
             }
-            if arguments_summary.is_some() {
-                existing.arguments_summary = arguments_summary;
+            if let Some(incoming) = arguments_summary {
+                existing.arguments_summary = Some(merge_tool_arguments_summary(
+                    existing.arguments_summary.as_deref(),
+                    &incoming,
+                ));
             }
             return;
         }
@@ -1266,6 +1269,21 @@ pub(crate) fn project_app_server_event_to_shared_owner(
     let native_thread_id = crate::backend::app_server::extract_thread_id(&event.message)
         .filter(|thread_id| !thread_id.starts_with("shared:"))
         .or_else(|| owner.native_session_id.clone());
+    // Read method before mutably borrowing params (same message object).
+    let method = event
+        .message
+        .get("method")
+        .and_then(|value| value.as_str())
+        .unwrap_or("")
+        .to_string();
+    // Control-plane methods are fail-closed on the frontend: params.turnId must
+    // equal sharedOwner.runtimeTurnId. Claude historically mapped
+    // requestUserInput.turnId to the assistant item id; force-align here so
+    // Shared AskUserQuestion / approval cards are not silently dropped.
+    let force_control_turn_identity = method == "item/tool/requestUserInput"
+        || method == "approval/request"
+        || method == "collaboration/modeBlocked"
+        || method.contains("requestApproval");
     let params = event.message.as_object_mut().and_then(|message| {
         message
             .entry("params".to_string())
@@ -1298,12 +1316,23 @@ pub(crate) fn project_app_server_event_to_shared_owner(
         );
     }
     if let Some(runtime_turn_id) = owner.runtime_turn_id.as_deref() {
-        params
-            .entry("turnId".to_string())
-            .or_insert_with(|| Value::String(runtime_turn_id.to_string()));
-        params
-            .entry("turn_id".to_string())
-            .or_insert_with(|| Value::String(runtime_turn_id.to_string()));
+        if force_control_turn_identity {
+            params.insert(
+                "turnId".to_string(),
+                Value::String(runtime_turn_id.to_string()),
+            );
+            params.insert(
+                "turn_id".to_string(),
+                Value::String(runtime_turn_id.to_string()),
+            );
+        } else {
+            params
+                .entry("turnId".to_string())
+                .or_insert_with(|| Value::String(runtime_turn_id.to_string()));
+            params
+                .entry("turn_id".to_string())
+                .or_insert_with(|| Value::String(runtime_turn_id.to_string()));
+        }
     }
     params.insert(
         "sharedOwner".to_string(),
@@ -1809,9 +1838,16 @@ fn normalize_codex_item_event(
     }
     let tool_id = value_string_by_aliases(Some(item), &["id", "toolId", "tool_id"])
         .unwrap_or_else(|| "unknown-tool".to_string());
-    let tool_name = value_string_by_aliases(Some(item), &["tool", "toolName", "tool_name", "name"])
-        .unwrap_or_else(|| item_type.clone());
-    let input = value_by_aliases(item, &["arguments", "input"]).cloned();
+    // Prefer explicit tool name; custom_tool_call uses `name` (e.g. apply_patch).
+    // Fall back to item type (e.g. "fileChange") for canvas classifiers.
+    let tool_name = value_string_by_aliases(
+        Some(item),
+        &["tool", "toolName", "tool_name", "name", "title"],
+    )
+    .unwrap_or_else(|| item_type.clone());
+    // Codex fileChange puts paths/diffs on `changes[]`, not `arguments`/`input`.
+    // Pack both so SharedProjector can rebuild ConversationItem.changes.
+    let input = extract_codex_tool_payload(item);
     if method == "item/started" {
         actions.push(AccumulatorAction::ToolStarted {
             tool_id: tool_id.clone(),
@@ -1839,6 +1875,14 @@ fn normalize_codex_item_event(
         });
     }
 
+    // Completed snapshots often carry the final `changes[]` only at this step.
+    if let Some(payload) = input.clone() {
+        actions.push(AccumulatorAction::ToolInputUpdated {
+            tool_id: tool_id.clone(),
+            tool_name: Some(tool_name.clone()),
+            input: Some(payload),
+        });
+    }
     let output = value_by_aliases(item, &["result", "output", "aggregatedOutput"])
         .or_else(|| value_by_aliases(params, &["result", "output"]))
         .cloned();
@@ -1857,6 +1901,137 @@ fn normalize_codex_item_event(
         output,
         error,
     })
+}
+
+/// Build a portable tool payload for Shared canonical storage.
+///
+/// Codex `fileChange` items put path/diff on `changes[]` (not `arguments`).
+/// Codex `apply_patch` often arrives as `custom_tool_call` with a raw patch string
+/// in `input`. Both must be packed or history cannot rebuild the file-edit scene.
+fn extract_codex_tool_payload(item: &Value) -> Option<Value> {
+    let mut object = serde_json::Map::new();
+
+    match value_by_aliases(item, &["arguments", "input"]) {
+        Some(Value::Object(map)) => {
+            for (key, value) in map {
+                object.insert(key.clone(), value.clone());
+            }
+        }
+        Some(Value::String(text)) => {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                object.insert("input".to_string(), Value::String(trimmed.to_string()));
+                // Preserve patch-shaped strings under an explicit key for projection.
+                if trimmed.contains("*** Begin Patch") || trimmed.contains("*** Update File:") {
+                    object.insert("patch".to_string(), Value::String(trimmed.to_string()));
+                }
+            }
+        }
+        Some(value) if !value.is_null() => {
+            object.insert("input".to_string(), value.clone());
+        }
+        _ => {}
+    }
+
+    if let Some(changes) = item.get("changes") {
+        if changes.as_array().is_some_and(|rows| !rows.is_empty()) {
+            object.insert("changes".to_string(), changes.clone());
+        }
+    }
+
+    // custom_tool_call / function_call name (apply_patch, shell, …)
+    if let Some(name) = value_string_by_aliases(Some(item), &["name", "tool", "toolName", "tool_name"])
+    {
+        let trimmed = name.trim();
+        if !trimmed.is_empty() {
+            object.insert("name".to_string(), Value::String(trimmed.to_string()));
+        }
+    }
+
+    if let Some(title) = item.get("title").and_then(Value::as_str) {
+        let trimmed = title.trim();
+        if !trimmed.is_empty() {
+            object.insert("title".to_string(), Value::String(trimmed.to_string()));
+        }
+    }
+
+    // commandExecution-shaped fields. Codex often sends `command` as a string[] argv
+    // (e.g. ["cat","README.md"] or apply_patch + patch body). We must join argv into a
+    // single string or Shared history loses the command text and cannot promote
+    // apply_patch → fileChange.
+    for key in ["cwd", "description"] {
+        if let Some(Value::String(text)) = item.get(key) {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                object.insert(key.to_string(), Value::String(trimmed.to_string()));
+            }
+        }
+    }
+    if let Some(command) = coerce_command_field(item.get("command").or_else(|| item.get("cmd"))) {
+        let looks_like_patch = command.contains("*** Begin Patch")
+            || command.contains("*** Update File:")
+            || command.to_ascii_lowercase().contains("apply_patch");
+        object.insert("command".to_string(), Value::String(command.clone()));
+        if looks_like_patch {
+            object.insert("patch".to_string(), Value::String(command));
+        }
+    }
+
+    if object.is_empty() {
+        None
+    } else {
+        Some(Value::Object(object))
+    }
+}
+
+/// Normalize Codex command field: string as-is, string[] joined with spaces.
+fn coerce_command_field(value: Option<&Value>) -> Option<String> {
+    match value {
+        Some(Value::String(text)) => {
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        Some(Value::Array(parts)) => {
+            let joined = parts
+                .iter()
+                .filter_map(|part| part.as_str().map(str::trim))
+                .filter(|part| !part.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ");
+            if joined.is_empty() {
+                None
+            } else {
+                Some(joined)
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Merge tool argument JSON summaries. Object keys from `incoming` win; non-JSON
+/// strings fall back to last-write-wins (preserves prior string when incoming empty).
+fn merge_tool_arguments_summary(existing: Option<&str>, incoming: &str) -> String {
+    let incoming = incoming.trim();
+    if incoming.is_empty() {
+        return existing.unwrap_or("").to_string();
+    }
+    let Some(existing) = existing.map(str::trim).filter(|text| !text.is_empty()) else {
+        return incoming.to_string();
+    };
+    let Ok(Value::Object(mut base)) = serde_json::from_str::<Value>(existing) else {
+        return incoming.to_string();
+    };
+    let Ok(Value::Object(patch)) = serde_json::from_str::<Value>(incoming) else {
+        return incoming.to_string();
+    };
+    for (key, value) in patch {
+        base.insert(key, value);
+    }
+    serde_json::to_string(&Value::Object(base)).unwrap_or_else(|_| incoming.to_string())
 }
 
 fn terminal_evidence_from_value(
@@ -2278,6 +2453,13 @@ fn is_tool_item_type(item_type: &str) -> bool {
             | "tool_call"
             | "dynamictoolcall"
             | "dynamic_tool_call"
+            // Codex Responses often emits apply_patch as custom_tool_call (not fileChange).
+            | "customtoolcall"
+            | "custom_tool_call"
+            | "function_call"
+            | "functioncall"
+            | "apply_patch"
+            | "applypatch"
     )
 }
 
@@ -2773,6 +2955,221 @@ mod tests {
         assert_eq!(
             settled.final_snapshot.error_message.as_deref(),
             Some("provider rejected request")
+        );
+    }
+
+    #[test]
+    #[test]
+    fn codex_command_execution_argv_array_is_joined_into_summary() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        coordinator
+            .register_attempt(owner("attempt-argv", Some("run-argv"), Some("native-argv")))
+            .expect("register");
+        let events = [
+            json!({
+                "method": "item/started",
+                "params": {
+                    "threadId": "native-argv",
+                    "turnId": "run-argv",
+                    "item": {
+                        "id": "cmd-1",
+                        "type": "commandExecution",
+                        "command": ["cat", "README.md"],
+                        "cwd": "/repo",
+                        "status": "inProgress"
+                    }
+                }
+            }),
+            json!({
+                "method": "item/completed",
+                "params": {
+                    "threadId": "native-argv",
+                    "turnId": "run-argv",
+                    "item": {
+                        "id": "cmd-1",
+                        "type": "commandExecution",
+                        "command": ["cat", "README.md"],
+                        "cwd": "/repo",
+                        "status": "completed",
+                        "aggregatedOutput": "# Title\n"
+                    }
+                }
+            }),
+            json!({
+                "method": "item/agentMessage/delta",
+                "params": {"threadId": "native-argv", "turnId": "run-argv", "delta": "ok"}
+            }),
+            json!({
+                "method": "turn/completed",
+                "params": {
+                    "threadId": "native-argv",
+                    "turnId": "run-argv",
+                    "status": "completed"
+                }
+            }),
+        ];
+        let mut settled = None;
+        for event in events {
+            let observation = coordinator.ingest_codex_event("ws-1", &event);
+            settled = settled.or(observation.settled);
+        }
+        let settled = settled.expect("settled");
+        assert_eq!(settled.final_snapshot.tool_calls.len(), 1);
+        let summary = settled.final_snapshot.tool_calls[0]
+            .arguments_summary
+            .as_deref()
+            .unwrap_or("");
+        assert!(
+            summary.contains("cat") && summary.contains("README.md"),
+            "argv[] command must be joined into summary, got: {summary}"
+        );
+    }
+
+    #[test]
+    fn codex_apply_patch_custom_tool_call_is_captured_as_tool_exchange() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        coordinator
+            .register_attempt(owner("attempt-ap", Some("run-ap"), Some("native-ap")))
+            .expect("register");
+        let patch =
+            "*** Begin Patch\n*** Update File: src/a.ts\n@@\n-old\n+new\n*** End Patch\n";
+        let events = [
+            json!({
+                "method": "item/started",
+                "params": {
+                    "threadId": "native-ap",
+                    "turnId": "run-ap",
+                    "item": {
+                        "id": "call-ap",
+                        "type": "custom_tool_call",
+                        "name": "apply_patch",
+                        "input": patch,
+                        "status": "inProgress"
+                    }
+                }
+            }),
+            json!({
+                "method": "item/completed",
+                "params": {
+                    "threadId": "native-ap",
+                    "turnId": "run-ap",
+                    "item": {
+                        "id": "call-ap",
+                        "type": "custom_tool_call",
+                        "name": "apply_patch",
+                        "input": patch,
+                        "status": "completed",
+                        "output": "Success. Updated the following files:\nM src/a.ts"
+                    }
+                }
+            }),
+            json!({
+                "method": "item/agentMessage/delta",
+                "params": {"threadId": "native-ap", "turnId": "run-ap", "delta": "ok"}
+            }),
+            json!({
+                "method": "turn/completed",
+                "params": {
+                    "threadId": "native-ap",
+                    "turnId": "run-ap",
+                    "status": "completed"
+                }
+            }),
+        ];
+        let mut settled = None;
+        for event in events {
+            let observation = coordinator.ingest_codex_event("ws-1", &event);
+            settled = settled.or(observation.settled);
+        }
+        let settled = settled.expect("settled");
+        assert_eq!(settled.final_snapshot.tool_calls.len(), 1);
+        assert_eq!(
+            settled.final_snapshot.tool_calls[0].tool_name,
+            "apply_patch"
+        );
+        let summary = settled.final_snapshot.tool_calls[0]
+            .arguments_summary
+            .as_deref()
+            .unwrap_or("");
+        assert!(
+            summary.contains("Begin Patch") && summary.contains("src/a.ts"),
+            "apply_patch input must be packed for history, got: {summary}"
+        );
+    }
+
+    #[test]
+    fn codex_file_change_item_preserves_changes_in_tool_arguments_summary() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        coordinator
+            .register_attempt(owner("attempt-fc", Some("run-fc"), Some("native-fc")))
+            .expect("register");
+
+        let events = [
+            json!({
+                "method": "item/started",
+                "params": {
+                    "threadId": "native-fc",
+                    "turnId": "run-fc",
+                    "item": {
+                        "id": "fc-1",
+                        "type": "fileChange",
+                        "status": "inProgress",
+                        "changes": [{
+                            "path": "src/keep.ts",
+                            "kind": "update",
+                            "diff": "--- a\n+++ b\n@@\n-old\n+new"
+                        }]
+                    }
+                }
+            }),
+            json!({
+                "method": "item/completed",
+                "params": {
+                    "threadId": "native-fc",
+                    "turnId": "run-fc",
+                    "item": {
+                        "id": "fc-1",
+                        "type": "fileChange",
+                        "status": "completed",
+                        "changes": [{
+                            "path": "src/keep.ts",
+                            "kind": "update",
+                            "diff": "--- a\n+++ b\n@@\n-old\n+new"
+                        }]
+                    }
+                }
+            }),
+            json!({
+                "method": "item/agentMessage/delta",
+                "params": {"threadId": "native-fc", "turnId": "run-fc", "delta": "done"}
+            }),
+            json!({
+                "method": "turn/completed",
+                "params": {
+                    "threadId": "native-fc",
+                    "turnId": "run-fc",
+                    "status": "completed"
+                }
+            }),
+        ];
+        let mut settled = None;
+        for event in events {
+            let observation = coordinator.ingest_codex_event("ws-1", &event);
+            settled = settled.or(observation.settled);
+        }
+        let settled = settled.expect("settled");
+        assert_eq!(settled.final_snapshot.tool_calls.len(), 1);
+        let summary = settled.final_snapshot.tool_calls[0]
+            .arguments_summary
+            .as_deref()
+            .unwrap_or("");
+        assert!(
+            summary.contains("src/keep.ts") && summary.contains("changes"),
+            "fileChange changes[] must be packed into arguments_summary for history projection, got: {summary}"
+        );
+        assert_eq!(
+            settled.final_snapshot.tool_calls[0].tool_name.to_ascii_lowercase(),
+            "filechange"
         );
     }
 
@@ -4168,6 +4565,91 @@ mod tests {
         assert_eq!(
             event.message["params"]["sharedOwner"]["attemptId"],
             "attempt-1"
+        );
+    }
+
+    #[test]
+    fn projection_force_aligns_request_user_input_turn_id_to_runtime_turn() {
+        // Claude historically set requestUserInput.turnId to the assistant item
+        // id. Shared control-owner resolution requires params.turnId ==
+        // sharedOwner.runtimeTurnId; force-align so the dialog is not dropped.
+        let owner = owner(
+            "attempt-ask",
+            Some("runtime-turn-ask"),
+            Some("claude:native-ask"),
+        );
+        let mut event = AppServerEvent {
+            workspace_id: "ws-1".to_string(),
+            message: json!({
+                "method": "item/tool/requestUserInput",
+                "id": "ask-req-shared",
+                "params": {
+                    "threadId": "claude:native-ask",
+                    "turnId": "assistant-item-stale",
+                    "itemId": "askuserquestion-ask-req-shared",
+                    "questions": [{
+                        "id": "q-0",
+                        "header": "Pick",
+                        "question": "Which option?"
+                    }],
+                    "completed": false
+                }
+            }),
+        };
+
+        project_app_server_event_to_shared_owner(&mut event, &owner);
+
+        assert_eq!(event.message["params"]["threadId"], "shared:session-1");
+        assert_eq!(
+            event.message["params"]["nativeThreadId"],
+            "claude:native-ask"
+        );
+        assert_eq!(
+            event.message["params"]["turnId"],
+            "runtime-turn-ask",
+            "control events must overwrite stale assistant-item turnId"
+        );
+        assert_eq!(event.message["params"]["turn_id"], "runtime-turn-ask");
+        assert_eq!(
+            event.message["params"]["sharedOwner"]["runtimeTurnId"],
+            "runtime-turn-ask"
+        );
+        assert_eq!(
+            event.message["params"]["itemId"],
+            "askuserquestion-ask-req-shared",
+            "ask card item id must stay request-scoped"
+        );
+    }
+
+    #[test]
+    fn projection_does_not_overwrite_non_control_existing_turn_id() {
+        let owner = owner(
+            "attempt-delta",
+            Some("runtime-turn-delta"),
+            Some("native-delta"),
+        );
+        let mut event = AppServerEvent {
+            workspace_id: "ws-1".to_string(),
+            message: json!({
+                "method": "item/agentMessage/delta",
+                "params": {
+                    "threadId": "native-delta",
+                    "turnId": "pre-existing-turn",
+                    "delta": "hello"
+                }
+            }),
+        };
+
+        project_app_server_event_to_shared_owner(&mut event, &owner);
+
+        assert_eq!(
+            event.message["params"]["turnId"],
+            "pre-existing-turn",
+            "non-control events keep existing turnId via or_insert"
+        );
+        assert_eq!(
+            event.message["params"]["sharedOwner"]["runtimeTurnId"],
+            "runtime-turn-delta"
         );
     }
 

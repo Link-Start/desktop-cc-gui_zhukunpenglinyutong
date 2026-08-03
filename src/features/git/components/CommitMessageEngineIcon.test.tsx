@@ -1,10 +1,11 @@
+// @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { CommitMessageEngineIcon } from "./CommitMessageEngineIcon";
 
 describe("CommitMessageEngineIcon", () => {
-  it("renders the Codex commit generator icon as a monochrome glyph", () => {
+  it("delegates to EngineIcon for codex monochrome glyph", () => {
     const markup = renderToStaticMarkup(
       <CommitMessageEngineIcon engine="codex" size={14} />,
     );
@@ -14,7 +15,7 @@ describe("CommitMessageEngineIcon", () => {
     expect(markup).not.toContain("#10a37f");
   });
 
-  it("renders the OpenCode commit generator icon as the official square glyph", () => {
+  it("delegates to EngineIcon for opencode square glyph", () => {
     const markup = renderToStaticMarkup(
       <CommitMessageEngineIcon engine="opencode" size={14} />,
     );
@@ -22,5 +23,17 @@ describe("CommitMessageEngineIcon", () => {
     expect(markup).toContain('fill="currentColor"');
     expect(markup).toContain("M16 6H8v12h8V6zm4 16H4V2h16v20z");
     expect(markup).not.toContain("#3B82F6");
+  });
+
+  it("renders grok and kimi via the shared EngineIcon path glyphs", () => {
+    const grok = renderToStaticMarkup(
+      <CommitMessageEngineIcon engine="grok" size={14} />,
+    );
+    const kimi = renderToStaticMarkup(
+      <CommitMessageEngineIcon engine="kimi" size={14} />,
+    );
+
+    expect(grok).toContain("M9.27 15.29");
+    expect(kimi).toContain("M21.846 0");
   });
 });

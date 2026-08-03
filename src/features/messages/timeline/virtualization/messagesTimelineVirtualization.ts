@@ -413,6 +413,17 @@ export function estimateTimelineProjectionRowSize(row: TimelineProjectionRow) {
   switch (row.kind) {
     case "entry":
       if (row.entry.kind !== "item") {
+        if (row.entry.kind === "subagentGroup") {
+          // 对齐 compact 卡片：minmax(168px) 约 2~3 列；描述单行 + 细进度条。
+          const count = Math.max(1, row.entry.items.length);
+          const columns = count === 1 ? 1 : Math.min(3, count);
+          const rows = Math.ceil(count / columns);
+          const header = count > 1 ? 28 : 0;
+          const card = count === 1 ? 88 : 82;
+          const gap = 6;
+          const chrome = 18;
+          return header + rows * card + Math.max(0, rows - 1) * gap + chrome;
+        }
         if (row.entry.kind === "bashGroup" || row.entry.kind === "readGroup") {
           return 128;
         }
@@ -420,14 +431,14 @@ export function estimateTimelineProjectionRowSize(row: TimelineProjectionRow) {
       }
       switch (row.entry.item.kind) {
         case "explore":
-          // 折叠 explore 行约 20px 行高 + 上下 4px margin
-          return row.entry.item.status === "exploring" ? 48 : 32;
+          // 折叠 explore 行约 22px 行高 + 上下 6px margin
+          return row.entry.item.status === "exploring" ? 52 : 36;
         case "tool":
-          // 折叠 Marker 行 + 4px 外层 margin（展开体另由 measure 纠正）
-          return 40;
+          // 折叠 Marker 行 + 6px 外层 margin（展开体另由 measure 纠正）
+          return 44;
         case "reasoning":
-          // 折叠思考头 + 4px 外层 margin；展开/流式由 measure 纠正
-          return 36;
+          // 折叠思考头 + 6px 外层 margin；展开/流式由 measure 纠正
+          return 40;
         case "message": {
           const textLength = row.entry.item.text.length;
           if (row.entry.item.role === "user") {
@@ -448,7 +459,8 @@ export function estimateTimelineProjectionRowSize(row: TimelineProjectionRow) {
     case "tailUserInput":
       return 132;
     case "liveMiddleCollapsed":
-      return 36;
+      // drawer header + hairline + 上下 4/12 外层 margin
+      return 40;
     case "workingIndicator":
       return 52;
     case "emptyState":
@@ -463,13 +475,13 @@ export function estimateTimelineProjectionRowSize(row: TimelineProjectionRow) {
 }
 
 /**
- * 部分投影行在某些上下文下会渲染成 null/空（如非工作态的 workingIndicator、
- * Claude 引擎下被跳过的 bashGroup、被隐藏的 codex canvas 命令卡）。虚拟行容器对
- * 每行强制 minHeight=估高，这些空行因而被撑出大段空白。此函数复刻 MessagesTimeline
- * 中对应的渲染条件，供虚拟化层把空行的占位高度归零。
+ * 部分投影行在某些上下文下会渲染成 null/空（如非工作态的 workingIndicator）。
+ * 虚拟行容器对每行强制 minHeight=估高，这些空行因而被撑出大段空白。此函数复刻
+ * MessagesTimeline 中对应的渲染条件，供虚拟化层把空行的占位高度归零。
  *
  * 注意：判断逻辑必须与 renderEntry/renderProjectionRow/WorkingIndicator 的真实
  * 渲染分支保持同步，否则会错判（漏判=残留空白，误判=塌掉真实行）。
+ * bash/command 工具卡已始终上画布，不再按引擎判空。
  */
 export function isEmptyVirtualProjectionRow(
   row: TimelineProjectionRow,
@@ -499,13 +511,9 @@ export function isEmptyVirtualProjectionRow(
       return !input.hasTailUserInputNode;
     case "entry": {
       if (row.entry.kind === "bashGroup") {
-        return (
-          input.activeEngine === "codex" ||
-          input.activeEngine === "grok" ||
-          input.activeEngine === "kimi" ||
-          input.activeEngine === "opencode" ||
-          (input.activeEngine === "claude" &&
-            !input.claudeHistoryTranscriptFallbackActive)
+        // Empty only when every command row is pure shell noise.
+        return row.entry.items.every((toolItem) =>
+          shouldHideCodexCanvasCommandCard(toolItem, input.activeEngine),
         );
       }
       if (row.entry.kind === "item" && row.entry.item.kind === "tool") {

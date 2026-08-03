@@ -76,7 +76,7 @@ describe("Messages turn boundaries", () => {
     expect(container.querySelector(".messages-final-boundary")).toBeTruthy();
   });
 
-  it("does not show reasoning boundary when only hidden command cards exist before final message", () => {
+  it("does not show reasoning boundary when only a single command card exists before final message", () => {
     window.localStorage.setItem("ccgui.messages.live.collapseMiddleSteps", "1");
     const items: ConversationItem[] = [
       {
@@ -89,10 +89,10 @@ describe("Messages turn boundaries", () => {
         id: "tool-hidden-command-1",
         kind: "tool",
         toolType: "commandExecution",
-        title: "Command: rg --files",
-        detail: "/tmp",
+        title: "Command: pwd",
+        detail: JSON.stringify({ command: "pwd" }),
         status: "completed",
-        output: "",
+        output: "/repo",
       },
       {
         id: "assistant-hidden-command-final-1",
@@ -121,7 +121,8 @@ describe("Messages turn boundaries", () => {
       "Final Message",
     );
     expect(container.querySelector(".message-assistant-action-footer")).toBeTruthy();
-    expect(container.textContent ?? "").not.toContain("Command: rg --files");
+    // Pure shell noise stays off the polished canvas (file read/write remain).
+    expect(container.textContent ?? "").not.toContain("pwd");
   });
 
   it("renders final boundary only once for the last final assistant in a turn", () => {

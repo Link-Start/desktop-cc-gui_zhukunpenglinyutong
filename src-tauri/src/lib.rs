@@ -122,6 +122,7 @@ mod agents;
 mod app_paths;
 mod backend;
 mod backend_budget;
+mod baidu_tongji;
 mod browser_agent;
 mod claude_commands;
 mod claude_commands_watch;
@@ -131,6 +132,7 @@ mod client_storage;
 mod code_intel;
 mod code_intel_lsp;
 mod codex;
+mod coding_plan_quota;
 mod command_registry;
 mod computer_use;
 mod curated_skills;
@@ -252,6 +254,7 @@ pub fn run() {
             if let Err(error) = app_paths::app_home_dir() {
                 log::warn!("Failed to prepare ccgui home directory: {error}");
             }
+            app.manage(baidu_tongji::BaiduTongjiState::load());
             let state = state::AppState::load(&app.handle());
             app.manage(state);
             renderer_stability::spawn_renderer_heartbeat_watchdog(app.handle().clone());

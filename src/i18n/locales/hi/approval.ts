@@ -50,7 +50,10 @@ const approval = {
     "submitted": "सबमिट किया गया",
     "noAnswerProvided": "(कोई उत्तर प्रदान नहीं किया गया)",
     "noDisplayableAnswer": "(कोई प्रदर्शन योग्य उत्तर नहीं)",
-    "userInputSubmittedBanner": "[उपयोगकर्ता इनपुट सबमिट किया गया]"
+    "userInputSubmittedBanner": "[उपयोगकर्ता इनपुट सबमिट किया गया]",
+    "timeoutHintRecommend": "समय समाप्त होने पर अनुशंसित “{{option}}” स्वतः चुना जाएगा",
+    "timeoutHintRecommendMulti": "समय समाप्त होने पर प्रत्येक प्रश्न का अनुशंसित (पहला) विकल्प स्वतः चुना जाएगा",
+    "timeoutHintSkip": "समय समाप्त होने पर छोड़कर जारी रखें",
   }
 };
 

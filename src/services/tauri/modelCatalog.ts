@@ -68,6 +68,35 @@ export async function getAccountRateLimits(workspaceId: string) {
   }>("account_rate_limits", { workspaceId });
 }
 
+/** Coding Plan 双窗口额度（对齐 CC Switch：Kimi / MiniMax / 智谱） */
+export type CodingPlanQuotaWindow = {
+  id: string;
+  usedPercent: number;
+  remainingPercent: number;
+  resetsAt?: string | null;
+};
+
+export type CodingPlanQuotaSnapshot = {
+  source: string;
+  /** api | cli | official_runtime */
+  via?: string | null;
+  success: boolean;
+  error?: string | null;
+  planLabel?: string | null;
+  windows: CodingPlanQuotaWindow[];
+  queriedAt: number;
+};
+
+export async function getCodingPlanQuota(
+  engine: string,
+  providerProfileId?: string | null,
+): Promise<CodingPlanQuotaSnapshot> {
+  return invoke<CodingPlanQuotaSnapshot>("get_coding_plan_quota", {
+    engine,
+    providerProfileId: providerProfileId ?? null,
+  });
+}
+
 export async function getAccountInfo(workspaceId: string) {
   return invoke<Record<string, unknown> | null>("account_read", {
     workspaceId,

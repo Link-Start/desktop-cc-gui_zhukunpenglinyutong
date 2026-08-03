@@ -1,5 +1,6 @@
 import { memo, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { CollapsibleReveal } from "../../../../components/common/CollapsibleReveal";
 import FileIcon from "../../../../components/FileIcon";
 
 type CollapsibleUserTextBlockProps = {
@@ -163,7 +164,7 @@ export const UserCodeAnnotationContextBlock = memo(function UserCodeAnnotationCo
           />
         </button>
       </div>
-      {expanded ? (
+      <CollapsibleReveal open={expanded}>
         <div className="message-code-annotation-context-list">
           {annotations.map((annotation, index) => (
             <div
@@ -193,7 +194,7 @@ export const UserCodeAnnotationContextBlock = memo(function UserCodeAnnotationCo
             </div>
           ))}
         </div>
-      ) : null}
+      </CollapsibleReveal>
     </div>
   );
 });

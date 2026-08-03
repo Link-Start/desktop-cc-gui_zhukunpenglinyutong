@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type MouseEvent } from "react";
+import { createElement, useCallback, type MouseEvent } from "react";
 import type { TFunction } from "i18next";
 import type {
   CommitMessageEngine,
@@ -6,9 +6,11 @@ import type {
 } from "../../../services/tauri";
 import { saveLastCommitMessageConfig } from "../../../utils/commitMessage";
 import { isEngineExecutionEnabled } from "../../../utils/engineExecutionPolicy";
+import { getDisabledCliEngineIdsSnapshot } from "../../composer/hooks/cliEngineVisibilityStore";
+import { CommitMessageEnginePicker } from "../components/CommitMessageEnginePicker";
 import {
-  COMMIT_MESSAGE_MENU_ENGINES,
-  readExecutableCommitMessageConfig,
+  COMMIT_MESSAGE_PICKER_MENU_SIZE,
+  readCommitMessageMenuPreferences,
 } from "../utils/commitMessageMenuConfig";
 import type {
   RendererContextMenuItem,
@@ -26,9 +28,14 @@ type CommitMessageGenerationMenuOptions<TContext> = {
     engine: CommitMessageEngine,
     context: TContext | undefined,
   ) => Promise<void>;
-  resolvePosition: (event: MouseEvent<HTMLButtonElement>) => MenuPosition;
+  resolvePosition?: (
+    event: MouseEvent<HTMLButtonElement>,
+    menuSize: { width: number; height: number },
+  ) => MenuPosition;
   setEngine: (engine: CommitMessageEngine) => void;
-  setMenu: (menu: RendererContextMenuState | null) => void;
+  setMenu?: (menu: RendererContextMenuState | null) => void;
+  /** Current engine shown on the generate trigger / chip. */
+  currentEngine?: CommitMessageEngine;
   buildExtraItems?: () => RendererContextMenuItem[];
 };
 
@@ -40,24 +47,14 @@ export function useCommitMessageGenerationMenu<TContext = undefined>({
   resolvePosition,
   setEngine,
   setMenu,
+  currentEngine,
   buildExtraItems,
 }: CommitMessageGenerationMenuOptions<TContext>) {
-  const deferredLanguageMenuTimerRef = useRef<number | null>(null);
-
-  useEffect(
-    () => () => {
-      if (deferredLanguageMenuTimerRef.current !== null) {
-        window.clearTimeout(deferredLanguageMenuTimerRef.current);
-      }
-    },
-    [],
-  );
-
   const runGeneration = useCallback(
     async (
       language: CommitMessageLanguage,
       engine: CommitMessageEngine,
-      context: TContext | undefined,
+      context?: TContext,
     ) => {
       if (busy || !canGenerate(context) || !isEngineExecutionEnabled(engine)) {
         return;
@@ -69,97 +66,47 @@ export function useCommitMessageGenerationMenu<TContext = undefined>({
     [busy, canGenerate, generate, setEngine],
   );
 
-  const showLanguageMenu = useCallback(
-    (
-      engine: CommitMessageEngine,
-      position: MenuPosition,
-      context: TContext | undefined,
-    ) => {
-      if (busy || !canGenerate(context)) {
-        return;
-      }
-      setMenu({
-        ...position,
-        label: t("git.generateCommitMessage"),
-        items: [
-          {
-            type: "item",
-            id: "commit-message-zh",
-            label: t("git.generateCommitMessageChinese"),
-            onSelect: () => runGeneration("zh", engine, context),
-          },
-          {
-            type: "item",
-            id: "commit-message-en",
-            label: t("git.generateCommitMessageEnglish"),
-            onSelect: () => runGeneration("en", engine, context),
-          },
-        ],
-      });
-    },
-    [busy, canGenerate, runGeneration, setMenu, t],
-  );
-
   const showEngineMenu = useCallback(
     (event: MouseEvent<HTMLButtonElement>, context?: TContext) => {
       event.preventDefault();
       event.stopPropagation();
-      if (busy || !canGenerate(context)) {
+      if (busy || !canGenerate(context) || !setMenu || !resolvePosition) {
         return;
       }
-      const position = resolvePosition(event);
-      const lastConfig = readExecutableCommitMessageConfig();
-      const engineLabelKeys = {
-        codex: "git.generateCommitMessageEngineCodex",
-        claude: "git.generateCommitMessageEngineClaude",
-      } as const;
+
+      const position = resolvePosition(event, COMMIT_MESSAGE_PICKER_MENU_SIZE);
+      const preferences = readCommitMessageMenuPreferences(
+        getDisabledCliEngineIdsSnapshot(),
+      );
+
       setMenu({
         ...position,
         label: t("git.generateCommitMessage"),
-        items: [
-          {
-            type: "item",
-            id: "commit-message-last-config",
-            label: t("git.generateCommitMessageLastConfig"),
-            disabled: !lastConfig,
-            onSelect: () =>
-              lastConfig
-                ? runGeneration(
-                    lastConfig.language,
-                    lastConfig.engine,
-                    context,
-                  )
-                : undefined,
+        content: createElement(CommitMessageEnginePicker, {
+          engines: preferences.engines,
+          initialLanguage: preferences.initialLanguage,
+          initialEngine: currentEngine ?? preferences.lastConfig?.engine,
+          lastConfig: preferences.lastConfig,
+          onDismiss: () => setMenu(null),
+          onGenerate: (language, engine) => {
+            void runGeneration(language, engine, context);
           },
-          { type: "separator", id: "commit-message-last-config-separator" },
-          ...COMMIT_MESSAGE_MENU_ENGINES.map<RendererContextMenuItem>(
-            (engine) => ({
-              type: "item",
-              id: `commit-message-engine-${engine}`,
-              label: t(engineLabelKeys[engine]),
-              onSelect: () => {
-                if (deferredLanguageMenuTimerRef.current !== null) {
-                  window.clearTimeout(deferredLanguageMenuTimerRef.current);
-                }
-                deferredLanguageMenuTimerRef.current = window.setTimeout(() => {
-                  deferredLanguageMenuTimerRef.current = null;
-                  showLanguageMenu(engine, position, context);
-                }, 0);
-              },
-            }),
-          ),
-          ...(buildExtraItems?.() ?? []),
-        ],
+          onSelectionChange: (_language, engine) => {
+            setEngine(engine);
+          },
+        }),
+        items: buildExtraItems?.() ?? [],
       });
     },
     [
       buildExtraItems,
       busy,
       canGenerate,
+      currentEngine,
       resolvePosition,
       runGeneration,
+      setEngine,
       setMenu,
-      showLanguageMenu,
       t,
     ],
   );

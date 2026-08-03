@@ -126,6 +126,68 @@ fn build_command_injects_managed_provider_env_per_turn() {
 }
 
 #[test]
+fn build_command_clears_parent_routing_env_before_provider_apply() {
+    // 模拟父进程残留 Kimi 模型槽：managed provider 未声明该键时，
+    // 子进程也不得继续看到旧值（env_remove + 仅写 provider 键）。
+    std::env::set_var("ANTHROPIC_MODEL", "k3");
+    std::env::set_var("ANTHROPIC_DEFAULT_FABLE_MODEL", "k3");
+
+    let session = ClaudeSession::new("test-workspace".to_string(), test_workspace_path(), None);
+    let mut params = SendMessageParams::default();
+    params.text = "hello".to_string();
+    let provider_env = BTreeMap::from([
+        (
+            "ANTHROPIC_AUTH_TOKEN".to_string(),
+            "deepseek-token".to_string(),
+        ),
+        (
+            "ANTHROPIC_BASE_URL".to_string(),
+            "https://api.deepseek.com/anthropic".to_string(),
+        ),
+        (
+            "ANTHROPIC_MODEL".to_string(),
+            "deepseek-v4-pro".to_string(),
+        ),
+    ]);
+
+    let command = session.build_command_with_provider_env(
+        &params,
+        false,
+        true,
+        None,
+        None,
+        Some(&provider_env),
+        None,
+    );
+    let env = command
+        .as_std()
+        .get_envs()
+        .filter_map(|(key, value)| {
+            value.map(|value| {
+                (
+                    key.to_string_lossy().to_string(),
+                    value.to_string_lossy().to_string(),
+                )
+            })
+        })
+        .collect::<HashMap<_, _>>();
+
+    assert_eq!(
+        env.get("ANTHROPIC_MODEL").map(String::as_str),
+        Some("deepseek-v4-pro")
+    );
+    // 未在 provider_env 中声明的 DEFAULT_FABLE 经 env_remove 后不应再是 k3。
+    // std::process::Command 的 env_remove 在 get_envs 中表现为 key 缺失或 None。
+    assert_ne!(
+        env.get("ANTHROPIC_DEFAULT_FABLE_MODEL").map(String::as_str),
+        Some("k3")
+    );
+
+    std::env::remove_var("ANTHROPIC_MODEL");
+    std::env::remove_var("ANTHROPIC_DEFAULT_FABLE_MODEL");
+}
+
+#[test]
 fn build_command_uses_private_provider_settings_without_exposing_secret_in_args() {
     let session = ClaudeSession::new("test-workspace".to_string(), test_workspace_path(), None);
     let mut params = SendMessageParams::default();

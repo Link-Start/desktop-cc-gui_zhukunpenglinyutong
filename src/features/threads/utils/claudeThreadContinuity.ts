@@ -17,8 +17,9 @@ export function shouldShowHistoryLoadingForSelectionThread(
   if (!normalizedThreadId || normalizedThreadId.includes("-pending-")) {
     return false;
   }
+  // Shared 与 Native 一样需要画布 loading，避免空态闪烁；
+  // gemini/opencode 历史链路较轻，仍保持原排除策略。
   return (
-    !normalizedThreadId.startsWith("shared:") &&
     !normalizedThreadId.startsWith("gemini:") &&
     !normalizedThreadId.startsWith("opencode:")
   );

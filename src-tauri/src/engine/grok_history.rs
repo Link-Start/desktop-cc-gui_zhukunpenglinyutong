@@ -66,6 +66,12 @@ pub struct GrokSessionSummary {
     pub canonical_session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attribution_status: Option<String>,
+    /// 子代理会话的父 session id（裸 id，无 `grok:` 前缀）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_session_id: Option<String>,
+    /// `subagent` | 其它（主会话）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_kind: Option<String>,
 }
 
 /// Single normalized message row used by frontend history parser.
@@ -976,12 +982,61 @@ fn first_user_prompt_text(raw: &str) -> Option<String> {
     None
 }
 
+/// 扫描 `*/subagents/{child_id}/meta.json` 建立 child → parent 映射。
+async fn build_grok_subagent_parent_map(
+    session_dirs: &[(String, PathBuf)],
+) -> std::collections::HashMap<String, String> {
+    let mut map = std::collections::HashMap::new();
+    for (parent_id, parent_dir) in session_dirs {
+        let subagents_dir = parent_dir.join("subagents");
+        let mut entries = match fs::read_dir(&subagents_dir).await {
+            Ok(dirs) => dirs,
+            Err(_) => continue,
+        };
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let child_path = entry.path();
+            if !child_path.is_dir() {
+                continue;
+            }
+            let child_id = child_path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(|value| value.to_string());
+            let Some(child_id) = child_id else {
+                continue;
+            };
+            // meta.json 优先 parent_session_id；否则用父目录 session id
+            let parent_from_meta = fs::read_to_string(child_path.join("meta.json"))
+                .await
+                .ok()
+                .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+                .and_then(|value| {
+                    value
+                        .get("parent_session_id")
+                        .or_else(|| value.get("parentSessionId"))
+                        .and_then(|v| v.as_str())
+                        .map(str::trim)
+                        .filter(|v| !v.is_empty())
+                        .map(|v| v.to_string())
+                });
+            map.insert(
+                child_id,
+                parent_from_meta.unwrap_or_else(|| parent_id.clone()),
+            );
+        }
+    }
+    map
+}
+
 /// Build a sidebar summary from one session directory. Best-effort: missing
 /// or malformed `summary.json` degrades individual fields instead of dropping
 /// the session.
 async fn build_summary_from_session_dir(
     session_id: &str,
     session_dir: &Path,
+    parent_session_id: Option<String>,
 ) -> GrokSessionSummary {
     let summary_path = session_dir.join("summary.json");
     let chat_history_path = session_dir.join("chat_history.jsonl");
@@ -1066,6 +1121,19 @@ async fn build_summary_from_session_dir(
         .ok()
         .map(|metadata| metadata.len());
 
+    let session_kind = summary_value
+        .as_ref()
+        .and_then(|summary| summary.get("session_kind"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.to_string());
+
+    let resolved_parent = parent_session_id.or_else(|| {
+        // 若 summary 标明 subagent 但 map 未命中，不猜父会话
+        None
+    });
+
     GrokSessionSummary {
         canonical_session_id: Some(session_id.to_string()),
         session_id: session_id.to_string(),
@@ -1076,6 +1144,8 @@ async fn build_summary_from_session_dir(
         file_size_bytes,
         engine: Some("grok".to_string()),
         attribution_status: Some("strict-match".to_string()),
+        parent_session_id: resolved_parent,
+        session_kind,
     }
 }
 
@@ -1136,9 +1206,13 @@ pub async fn list_grok_sessions(
 ) -> Result<Vec<GrokSessionSummary>, String> {
     timeout(LOCAL_SESSION_SCAN_TIMEOUT, async {
         let session_dirs = resolve_workspace_session_dirs(workspace_path, custom_home).await;
+        let parent_map = build_grok_subagent_parent_map(&session_dirs).await;
         let mut sessions = Vec::new();
         for (session_id, session_dir) in session_dirs {
-            sessions.push(build_summary_from_session_dir(&session_id, &session_dir).await);
+            let parent = parent_map.get(&session_id).cloned();
+            sessions.push(
+                build_summary_from_session_dir(&session_id, &session_dir, parent).await,
+            );
         }
         sessions.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
         sessions.truncate(limit.unwrap_or(200));

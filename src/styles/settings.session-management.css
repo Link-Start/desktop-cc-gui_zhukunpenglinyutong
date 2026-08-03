@@ -529,6 +529,24 @@
   cursor: default;
 }
 
+.settings-project-sessions-item.is-shared {
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--project-session-accent) 6%, transparent);
+}
+
+.settings-project-sessions-item.is-shared.is-selected {
+  background: color-mix(in srgb, var(--project-session-accent) 12%, transparent);
+}
+
+.settings-project-sessions-shared-badge {
+  flex-shrink: 0;
+  border-color: color-mix(in srgb, var(--project-session-accent) 42%, transparent);
+  color: var(--project-session-accent-text);
+  background: color-mix(in srgb, var(--project-session-accent) 10%, transparent);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
 .settings-project-sessions-item input {
   margin: 4px 0 0;
   flex-shrink: 0;
@@ -783,9 +801,28 @@
 }
 
 .settings-session-curtain-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-strong);
+  white-space: normal;
+}
+
+.settings-session-curtain-shared-tag {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--project-session-accent) 42%, transparent);
+  border-radius: 999px;
+  padding: 1px 8px;
+  background: color-mix(in srgb, var(--project-session-accent) 10%, transparent);
+  color: var(--project-session-accent-text);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
 .settings-session-curtain-subtitle {

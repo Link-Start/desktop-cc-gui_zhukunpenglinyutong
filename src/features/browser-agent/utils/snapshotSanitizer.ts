@@ -26,7 +26,12 @@ const SECRET_PATTERNS = [
 ];
 
 const EMAIL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
-const PHONE_PATTERN = /(?<!\d)(?:\+?\d[\d\s().-]{7,}\d)(?!\d)/g;
+// Lookbehind (`(?<!d)`) is unsupported on older Safari/WKWebView and throws
+// `SyntaxError: invalid group specifier name` at module evaluation time (App
+// chunk load → Application Startup Error). Capture an optional non-digit
+// prefix instead; replacement re-emits that prefix so surrounding text is
+// preserved. Behavior matches `/(?<!\d)(?:\+?\d[\d\s().-]{7,}\d)(?!\d)/g`.
+const PHONE_PATTERN = /(^|[^\d])(\+?\d[\d\s().-]{7,}\d)(?!\d)/g;
 const QUERY_SECRET_PATTERN =
   /([?&](?:token|access_token|refresh_token|api[_-]?key|secret|password|authorization)=)[^&#]+/gi;
 const MAX_SINGLE_FIELD_CHARS = 640;
@@ -118,9 +123,9 @@ export function sanitizeBrowserSnapshotText(
     addRedactionKind(privacy, "email");
     return "[redacted-email]";
   });
-  text = text.replace(PHONE_PATTERN, () => {
+  text = text.replace(PHONE_PATTERN, (_match, prefix: string) => {
     addRedactionKind(privacy, "phone");
-    return "[redacted-phone]";
+    return `${prefix}[redacted-phone]`;
   });
   text = text.replace(QUERY_SECRET_PATTERN, (_match, prefix: string) => {
     addRedactionKind(privacy, "token");

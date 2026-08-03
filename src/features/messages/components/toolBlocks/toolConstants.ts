@@ -28,6 +28,7 @@ import {
   resolveToolStatus,
   truncateText,
 } from "../../../../utils/toolSemantics";
+import { isSubagentTool } from "../../../subagent-ui";
 import type { ToolStatusTone } from "../../../../utils/toolSemantics";
 
 export {
@@ -164,7 +165,24 @@ function normalizeRuntimeString(value: unknown): string {
  */
 export function isMcpTool(title: unknown): boolean {
   const name = normalizeRuntimeString(title).toLowerCase();
-  return name.includes('mcp__') || name.includes('mcp_');
+  return (
+    name.includes('mcp__') ||
+    name.includes('mcp_') ||
+    // Display-formatted titles from formatMcpToolName: "Mcp Ccgui Askuserquestion"
+    /^mcp\s+\S+/i.test(name.replace(/^tool:\s*/i, ''))
+  );
+}
+
+function isAskUserQuestionDisplayName(toolName: string, title?: string): boolean {
+  const compact = (value: string) =>
+    value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  const nameKey = compact(toolName);
+  const titleKey = compact(normalizeRuntimeString(title));
+  return (
+    nameKey === 'askuserquestion' ||
+    nameKey.endsWith('askuserquestion') ||
+    titleKey.includes('askuserquestion')
+  );
 }
 
 /**
@@ -172,6 +190,11 @@ export function isMcpTool(title: unknown): boolean {
  */
 export function getToolDisplayName(toolName: string, title?: string, t?: (key: string) => string): string {
   const lower = toolName.toLowerCase();
+
+  // AskUserQuestion (native / MCP) → locale "询问用户问题"
+  if (isAskUserQuestionDisplayName(toolName, title)) {
+    return t ? t('tools.userInputRequest') : i18n.t('tools.userInputRequest');
+  }
 
   // 当 t 函数存在时使用翻译
   if (t) {
@@ -234,7 +257,16 @@ export function getToolDisplayName(toolName: string, title?: string, t?: (key: s
 /**
  * 工具分类类型
  */
-export type ToolCategory = 'read' | 'edit' | 'bash' | 'search' | 'web' | 'fileChange' | 'mcp' | 'other';
+export type ToolCategory =
+  | 'read'
+  | 'edit'
+  | 'bash'
+  | 'search'
+  | 'web'
+  | 'fileChange'
+  | 'mcp'
+  | 'subagent'
+  | 'other';
 
 /**
  * 对 tool item 进行分类，返回其所属类别。
@@ -247,6 +279,11 @@ export function classifyToolCategory(item: {
   const toolType = normalizeRuntimeString(item.toolType);
   const toolName = extractToolName(item.title);
   const lower = toolName.toLowerCase();
+
+  // 优先级0：subAgent 跨引擎统一识别，供 persona 卡片墙
+  if (isSubagentTool(item)) {
+    return "subagent";
+  }
 
   // 优先级1：明确 toolType（但 fileChange 仍可用 title 名做 edit 场景）
   if (toolType === 'commandExecution') return 'bash';

@@ -687,6 +687,7 @@ describe("Messages rich content", () => {
     expect(userText.trim()).toBe("看看");
     expect(bubble?.textContent ?? "").not.toContain("JwtAuthenticationDetails.java");
     expect(annotationContext?.classList.contains("is-collapsed")).toBe(true);
+    expect(annotationContext?.querySelector(".message-code-annotation-context-list")).toBeNull();
     expect(annotationContext?.textContent ?? "").not.toContain("JwtAuthenticationDetails.java");
     expect(annotationContext?.textContent ?? "").not.toContain("L21-L25");
 

@@ -141,6 +141,66 @@
 | **回归** | `useModels.test.tsx`；`app-shell.startup.test.tsx`（freeform + effort 修复且无 #185）；`useSelectedComposerSession.test.tsx`；`modelSelection.test.ts` |
 | **业务不变量** | Atomic picker / 自定义模型名 freeform **不得**被 repair 静默回退到 catalog default |
 
+### C-20260801-03 — Composer 栈残余：file-ref / merge 引用环 + plan 收敛卫生
+
+| 字段 | 内容 |
+|------|------|
+| **状态** | fixed（结构加固；**非** production 栈 1:1 红绿复现结案） |
+| **现象** | prod `errorClass: react-maximum-update-depth`；`appVersion: unknown`；全局 ErrorBoundary |
+| **Bundle / 栈** | `App-Bn4fZysL.js`；componentStack `s4t`=Composer、`c4t`=ActiveCanvasComposer、`u$t`/`_Wt`=AppShell 布局 |
+| **Owner** | **主：`mergeInlineFileReferences` / `mergeUniqueNames` + Composer file-ref effect**；辅：`planComposerModelSelection` null 收敛、creation engine publish 门闩 |
+| **触发条件** | 主会话画布 Composer 热路径；内联文件 token settle 后父树高频 rerender，或 extract 仍吐出已选 id 时 effect 换数组引用自反馈 |
+| **根因（AP-02 主 / 加固辅）** | **主因（可测）**：file-ref effect deps 含 `selectedInlineFileReferences`，旧逻辑无新增仍 `return [...prev]` / `mergeUniqueNames` 换引用 → effect 再入。**辅（defense-in-depth）**：已收敛 plan 仍返回对象（commit 本已幂等，单独通常不致 #185）；Home creation engine 等价回写 |
+| **修复** | 抽出 `mergeInlineFileReferences` 无新增保引用；`mergeUniqueNames` 同；plan 已收敛 → `null`；creation engine ref 门闩；status panel expand 函数式等价值（收益低） |
+| **回归** | `composerFileReferences.test.ts`（含 30 次 extract→merge 同引用）；`inlineSelections.test.ts`；`Composer.file-reference-token.test.tsx`（token settle + 20 次 rerender 无 #185；engine 不重复 publish）；`useModels.test.tsx`（plan 二次 null） |
+| **关联历史** | C-20260801-01/02 之后仍在含修复的 `App-Bn4fZysL` 上复现 → Composer 侧 AP-02 残余，**不是** effort 双写回退 |
+| **Review 要点** | 勿把 plan null 说成已证实的唯一根因；production 栈仍缺 1:1 复现 fixture，靠 AP-02 路径回归 + 手测 |
+
+### C-20260802-02 — useModels freeform 清选 + catalog 引用抖动叠环
+
+| 字段 | 内容 |
+|------|------|
+| **状态** | fixed（结构加固） |
+| **现象** | `errorClass: react-maximum-update-depth`；componentStack `AppShell`；dev 栈帧落在 `useModels.ts` |
+| **Bundle / 栈** | dev `localhost:1420`；`useModels` layout/apply 链 |
+| **Owner** | `src/features/models/hooks/useModels.ts`；辅 `usePersistComposerSettings.ts` |
+| **触发条件** | catalog 外 freeform / id-vs-model 双通道；preferred 与 selection 经 persist 回写；`mergeCodexSelectableModels` 换数组引用触发 layout |
+| **根因（AP-01/AP-02）** | ① 非 catalog selected 被 plan 一律 `clearUserSelectedModel`，与 freeform 业务不变量冲突并可与 preferred 回写互踩；② 收敛判断仅 `=== selectedModelId`，id/model 字段语义相等仍反复 commit；③ catalog merge 无结构指纹导致 layout deps 虚抖 |
+| **修复** | freeform 用户锁保留 synthetic model；双通道 selectedMatchesNext；`modelOptionsFingerprint` 稳 models/rawModels；`lastAppliedSelectionKeyRef` 幂等 apply；persist null/"" 归一 |
+| **回归** | `useModels.test.tsx`：freeform 不回退、preferred thrash、id/model 双通道、max-depth 冒烟 |
+| **Review 要点** | 与 C-20260801-01/02 同 owner；本 case 补 freeform + 引用稳定，不恢复 effort 双 writer |
+
+### C-20260802-01 — CollapsibleReveal useLayoutEffect 无条件 setState 同步闭环
+
+| 字段 | 内容 |
+|------|------|
+| **状态** | fixed |
+| **Fix commit** | 待提交 |
+| **现象** | Settings 页 Session Curtain 打开时全局 ErrorBoundary；`errorClass: react-maximum-update-depth`；两次报告间隔约 30s |
+| **Bundle / 栈** | componentStack `PHt`=ConversationRowErrorBoundary → `FHt`=ErrorBoundary；栈帧落在 CollapsibleReveal → ConversationRow → TimelineRowRenderer |
+| **Owner** | `src/components/common/CollapsibleReveal.tsx` |
+| **触发条件** | Settings 页 `onSessionsMutated` → `threadsByWorkspace` 更新 → Conversation View 重渲染 → CollapsibleReveal `useLayoutEffect` 无条件 `setState` → 与父组件渲染循环形成 `parent render → layout effect → child state → parent render` 同步闭环 |
+| **根因（AP-02）** | `CollapsibleReveal` 的 `useLayoutEffect` 在 deps 未变时仍无条件调用 `setShouldRender(true)` / `setIsOpen(true/false)` / `setPlayEnter()`。`useLayoutEffect` 是同步 flush，state 更新在同一 commit 内完成，与上层组件的渲染循环形成闭环后迅速达到 React 上限 |
+| **修复** | 添加 `prevOpenRef` / `prevKeepMountedRef` 守卫，只在值真正变化时调用 setState；`setPlayEnter` 改用 functional update `prev === next ? prev : next` 保证引用稳定性 |
+| **回归** | `CollapsibleReveal.test.tsx` 4 个测试通过；未新增 regression（修复前已有 1 个无关测试失败在 `Messages.explore.test.tsx`） |
+| **防御模式** | 与 C-20260801-03 Composer 修复完全同构：`prevRef` 守卫跳过等价 state update + functional update 保持引用稳定 |
+| **Review 要点** | 本次修复与 `637cb3561`（Composer #185）采用相同防御模式；应警惕任何在 `useLayoutEffect` 中无条件 setState 的组件 |
+
+### C-20260803-01 — 冷启 useModels layout apply 环（App-BCnXFvD4）
+
+| 字段 | 内容 |
+|------|------|
+| **状态** | fixed（结构加固；待用户手测冷启） |
+| **现象** | 冷启全局 Application Error；reload 恢复；`errorClass: react-maximum-update-depth`；`appVersion: unknown` |
+| **Bundle / 栈** | `App-BCnXFvD4.js`；componentStack `dWt`=AppShell；栈帧落在 `useModels` `applySelectionPlan` + selection `useLayoutEffect` |
+| **Owner** | `src/features/models/hooks/useModels.ts` |
+| **触发条件** | 冷启；settings/preferred 与 catalog 收敛窗；父层 `onDebug` 回调 identity 不稳定时可放大 |
+| **根因（AP-04 / layout deps）** | ① `refreshModels` / `applySelectionPlan` 曾把不稳定 `onDebug` 放进 callback deps → layout 每帧重跑；② model+effort 双 setState + 同 tick refresh/layout 双 apply；③ preferred `""`/null 虚抖；④ 缺 epoch 熔断时 plan 非 null 叠满 #185 |
+| **修复** | `onDebugRef` 解耦；原子 selection state；乐观 snapshot；preferred 归一；config/catalogReady 幂等 set；epoch 熔断（12）；plan 已对齐即 null |
+| **回归** | `useModels.test.tsx`：unstable onDebug 冷启、blank preferred thrash、plan null；`app-shell.startup.test.tsx` 既有 #185 场景 |
+| **关联** | 同日 `a4166c03e` 拆除 Claude residual repair；本 case 是 useModels 侧残余腿 |
+| **Review 要点** | 禁止把父层非稳定回调放进 layout 链 deps；冷启手测：脏 `lastComposerModelId` + 无 active thread |
+
 ---
 
 ## 6. 新 Case 追加模板
@@ -197,3 +257,6 @@ OpenSpec / 代码中已出现的 #185 类修复（便于对照，**不等于本 
 | 2026-08-01 | 初版：协议 + AP 目录 + C-20260801-01（useModels）+ backlog |
 | 2026-08-01 | 校准：C-20260801-01 补 fix commit `4c5e97c8e`；挂 analysis 索引 |
 | 2026-08-01 | C-20260801-02：B1 layout self-deps 关闭；freeform repair 语义钉死；Collapsible 测量加固 |
+| 2026-08-02 | C-20260801-03：`App-Bn4fZysL` Composer 栈残余——plan null 收敛 + Composer 引用稳定 setState |
+| 2026-08-02 | C-20260802-01：CollapsibleReveal `useLayoutEffect` 无条件 setState——prevRef 守卫 + functional update 引用稳定 |
+| 2026-08-03 | C-20260803-01：`App-BCnXFvD4` 冷启 useModels layout apply——onDebugRef、原子 selection、epoch 熔断 |

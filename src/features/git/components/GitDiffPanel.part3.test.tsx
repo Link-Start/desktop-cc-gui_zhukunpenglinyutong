@@ -69,13 +69,19 @@ vi.mock("react-i18next", () => ({
         "git.generateCommitMessage": "Generate commit message",
         "git.generateCommitMessageStaged": "Generate commit message from staged changes",
         "git.generateCommitMessageUnstaged": "Generate commit message from unstaged changes",
-        "git.generateCommitMessageChinese": "Generate Chinese commit message",
-        "git.generateCommitMessageEnglish": "Generate English commit message",
-        "git.generateCommitMessageEngineCodex": "Use Codex engine",
-        "git.generateCommitMessageEngineClaude": "Use Claude engine",
-        "git.generateCommitMessageEngineGemini": "Use Gemini engine",
-        "git.generateCommitMessageEngineOpenCode": "Use OpenCode engine",
+        "git.generateCommitMessageChinese": "中文",
+        "git.generateCommitMessageEnglish": "English",
+        "git.generateCommitMessageEngineCodex": "Codex",
+        "git.generateCommitMessageEngineClaude": "Claude Code",
+        "git.generateCommitMessageEngineGemini": "Gemini",
+        "git.generateCommitMessageEngineOpenCode": "OpenCode",
         "git.generateCommitMessageLastConfig": "Use last configuration",
+        "git.generateCommitMessageWithConfig": "Generate with this config",
+        "git.generateCommitMessageQuick": "Regenerate with current configuration",
+        "git.generatingCommitMessage": "Generating…",
+        "git.commitMessageAvailableEngines": "Engines",
+        "git.commitWithCount": "Commit ({{count}})",
+        "common.language": "Language",
         "git.commitComposerPlacementMenuLabel": "Commit box position",
         "git.commitComposerPlacementBottom": "Bottom",
         "git.commitComposerPlacementTop": "Top",
@@ -196,8 +202,9 @@ afterEach(() => {
 
 async function chooseCodexEnglishCommitMessage() {
   fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: "Use Codex engine" }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: "Generate English commit message" }));
+  fireEvent.click(await screen.findByRole("button", { name: "English" }));
+  fireEvent.click(await screen.findByRole("radio", { name: "Codex" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Generate with this config" }));
 }
 
 async function openGitFileContextMenu(row: HTMLElement) {

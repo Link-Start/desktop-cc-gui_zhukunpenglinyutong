@@ -19,6 +19,7 @@ const selectActiveCanvasStatusPanelProps = (
   | "activeThreadId"
   | "activeTurnId"
   | "activeTokenUsage"
+  | "activeRateLimits"
   | "itemsByThread"
   | "threadStatusById"
 > => ({
@@ -28,6 +29,7 @@ const selectActiveCanvasStatusPanelProps = (
   activeThreadId: snapshot.threadId,
   activeTurnId: snapshot.activeTurnId,
   activeTokenUsage: snapshot.activeTokenUsage,
+  activeRateLimits: snapshot.activeRateLimits,
   itemsByThread: snapshot.threadItemsByThread,
   threadStatusById: snapshot.threadStatusById,
 });

@@ -107,7 +107,15 @@ export function ProjectsSection({
     <section className="settings-section">
       <div className="settings-subsection-header">
         <div className="settings-subsection-title">{t("settings.groupsTitle")}</div>
-        <Popover open={createGroupOpen} onOpenChange={setCreateGroupOpen}>
+        <Popover
+          open={createGroupOpen}
+          onOpenChange={(open) => {
+            setCreateGroupOpen(open);
+            if (!open) {
+              setNewGroupName("");
+            }
+          }}
+        >
           <PopoverTrigger asChild>
             <button
               className="ghost icon-button"
@@ -116,10 +124,10 @@ export function ProjectsSection({
               <Plus aria-hidden />
             </button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="p-3">
+          <PopoverContent align="end" className="settings-create-group-popover">
             <div className="settings-popover-content">
               <div className="settings-field-label">
-                {t("settings.newGroupPlaceholder")}
+                {t("settings.createGroup")}
               </div>
               <input
                 className="settings-input settings-input--compact"
@@ -132,19 +140,29 @@ export function ProjectsSection({
                     event.preventDefault();
                     void handleCreateGroup();
                   }
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    setCreateGroupOpen(false);
+                    setNewGroupName("");
+                  }
                 }}
               />
               <div className="settings-popover-actions">
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setCreateGroupOpen(false)}
+                  className="settings-popover-cancel"
+                  onClick={() => {
+                    setCreateGroupOpen(false);
+                    setNewGroupName("");
+                  }}
                 >
                   {t("common.cancel")}
                 </Button>
                 <Button
                   size="sm"
                   disabled={!canCreateGroup}
+                  className="settings-popover-confirm"
                   onClick={() => {
                     void handleCreateGroup();
                   }}

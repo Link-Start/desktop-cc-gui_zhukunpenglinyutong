@@ -69,13 +69,19 @@ vi.mock("react-i18next", () => ({
         "git.generateCommitMessage": "Generate commit message",
         "git.generateCommitMessageStaged": "Generate commit message from staged changes",
         "git.generateCommitMessageUnstaged": "Generate commit message from unstaged changes",
-        "git.generateCommitMessageChinese": "Generate Chinese commit message",
-        "git.generateCommitMessageEnglish": "Generate English commit message",
-        "git.generateCommitMessageEngineCodex": "Use Codex engine",
-        "git.generateCommitMessageEngineClaude": "Use Claude engine",
-        "git.generateCommitMessageEngineGemini": "Use Gemini engine",
-        "git.generateCommitMessageEngineOpenCode": "Use OpenCode engine",
+        "git.generateCommitMessageChinese": "中文",
+        "git.generateCommitMessageEnglish": "English",
+        "git.generateCommitMessageEngineCodex": "Codex",
+        "git.generateCommitMessageEngineClaude": "Claude Code",
+        "git.generateCommitMessageEngineGemini": "Gemini",
+        "git.generateCommitMessageEngineOpenCode": "OpenCode",
         "git.generateCommitMessageLastConfig": "Use last configuration",
+        "git.generateCommitMessageWithConfig": "Generate with this config",
+        "git.generateCommitMessageQuick": "Regenerate with current configuration",
+        "git.generatingCommitMessage": "Generating…",
+        "git.commitMessageAvailableEngines": "Engines",
+        "git.commitWithCount": "Commit ({{count}})",
+        "common.language": "Language",
         "git.commitComposerPlacementMenuLabel": "Commit box position",
         "git.commitComposerPlacementBottom": "Bottom",
         "git.commitComposerPlacementTop": "Top",
@@ -196,8 +202,9 @@ afterEach(() => {
 
 async function chooseCodexEnglishCommitMessage() {
   fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: "Use Codex engine" }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: "Generate English commit message" }));
+  fireEvent.click(await screen.findByRole("button", { name: "English" }));
+  fireEvent.click(await screen.findByRole("radio", { name: "Codex" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Generate with this config" }));
 }
 
 async function openGitFileContextMenu(row: HTMLElement) {
@@ -528,7 +535,7 @@ describe("GitDiffPanel", () => {
       });
     });
 
-  it("opens engine menu then language menu before generating commit message", async () => {
+  it("selects language then engine from the layered commit message picker", async () => {
       const onGenerateCommitMessage = vi.fn();
 
       render(
@@ -539,12 +546,14 @@ describe("GitDiffPanel", () => {
         />,
       );
       fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
-      expect(await screen.findByRole("menuitem", { name: "Use Codex engine" })).toBeTruthy();
-      expect(screen.getByRole("menuitem", { name: "Use Claude engine" })).toBeTruthy();
-      expect(screen.queryByRole("menuitem", { name: "Use Gemini engine" })).toBeNull();
-      expect(screen.queryByRole("menuitem", { name: "Use OpenCode engine" })).toBeNull();
-      fireEvent.click(screen.getByRole("menuitem", { name: "Use Codex engine" }));
-      fireEvent.click(await screen.findByRole("menuitem", { name: "Generate English commit message" }));
+      expect(await screen.findByRole("radio", { name: "Codex" })).toBeTruthy();
+      expect(screen.getByRole("radio", { name: "Claude Code" })).toBeTruthy();
+      expect(screen.queryByRole("radio", { name: "Gemini" })).toBeNull();
+      expect(screen.getByRole("radio", { name: "OpenCode" })).toBeTruthy();
+      fireEvent.click(await screen.findByRole("button", { name: "English" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Codex" }));
+      expect(onGenerateCommitMessage).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "Generate with this config" }));
 
       await waitFor(() => {
         expect(onGenerateCommitMessage).toHaveBeenCalledWith("en", "codex");
@@ -564,9 +573,10 @@ describe("GitDiffPanel", () => {
       );
       fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
 
-      expect(await screen.findByRole("menuitem", { name: "Use Codex engine" })).toBeTruthy();
-      expect(screen.getByRole("menuitem", { name: "Use Claude engine" })).toBeTruthy();
-      expect(screen.getByRole("menuitem", { name: "Use last configuration" })).toBeTruthy();
+      expect(await screen.findByRole("radio", { name: "Codex" })).toBeTruthy();
+      expect(screen.getByRole("radio", { name: "Claude Code" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Use last configuration" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "English" })).toBeTruthy();
       expect(onGenerateCommitMessage).not.toHaveBeenCalled();
     });
 
@@ -582,14 +592,14 @@ describe("GitDiffPanel", () => {
         />,
       );
       fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
-      fireEvent.click(await screen.findByRole("menuitem", { name: "Use last configuration" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Use last configuration" }));
 
       await waitFor(() => {
         expect(onGenerateCommitMessage).toHaveBeenCalledWith("zh", "codex");
       });
     });
 
-  it("moves commit composer from the current page menu", async () => {
+  it("opens layered commit config popover without placement settings", async () => {
       render(
         <GitDiffPanel
           {...baseProps}
@@ -599,18 +609,7 @@ describe("GitDiffPanel", () => {
       );
 
       fireEvent.click(screen.getByRole("button", { name: "Generate commit message" }));
-      fireEvent.click(await screen.findByRole("menuitem", { name: "Commit box position" }));
-      fireEvent.click(await screen.findByRole("menuitem", { name: "Top" }));
-
-      await waitFor(() => {
-        const composer = document.querySelector(".git-commit-composer");
-        const content = document.querySelector(".diff-commit-workspace-content");
-        expect(composer).toBeTruthy();
-        expect(content).toBeTruthy();
-        expect(
-          composer?.compareDocumentPosition(content as Node) ?? 0,
-        ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-        expect(composer?.classList.contains("git-commit-composer--top")).toBe(true);
-      });
+      expect(await screen.findByRole("button", { name: "Generate with this config" })).toBeTruthy();
+      expect(screen.queryByText("Commit box position")).toBeNull();
     });
 });

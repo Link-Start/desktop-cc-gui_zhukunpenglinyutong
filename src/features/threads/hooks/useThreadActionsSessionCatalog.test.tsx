@@ -140,6 +140,10 @@ describe("useThreadActionsSessionCatalog", () => {
       nextCursor: null,
       partialSource: null,
       sourceStatuses: [{ engine: "claude", completeness: "complete" }],
+      hiddenAutomaticSessionIds: [
+        "claude:2b325056-0242-4450-a18e-1b7b29f718c1",
+        "codex:commit-helper",
+      ],
     });
 
     const { result } = renderHook(() =>
@@ -158,6 +162,10 @@ describe("useThreadActionsSessionCatalog", () => {
       folderId: "__system_auto__",
       autoSession,
     });
+    expect(catalog?.hiddenAutomaticSessionIds).toEqual([
+      "claude:2b325056-0242-4450-a18e-1b7b29f718c1",
+      "codex:commit-helper",
+    ]);
   });
 
   it("treats archive evidence with missing source status as incomplete", async () => {

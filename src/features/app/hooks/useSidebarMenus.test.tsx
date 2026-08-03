@@ -19,6 +19,7 @@ import type {
   EngineDisplayInfo,
   EngineRefreshResult,
 } from "../../engine/hooks/useEngineController";
+import { seedCliEngineVisibility } from "../../composer/hooks/cliEngineVisibilityStore";
 import { requestProviderContinuationDialog } from "../../threads/services/providerContinuationRequests";
 
 const clientStoreMock = vi.hoisted(() => ({
@@ -245,6 +246,7 @@ function createHandlers() {
     onSyncThread: vi.fn(),
     onPinThread: vi.fn(),
     onUnpinThread: vi.fn(),
+    onProviderContinuationTargetReady: vi.fn(),
     isThreadPinned: vi.fn(() => false),
     isThreadAutoNaming: vi.fn(() => false),
     onRenameThread: vi.fn(),
@@ -272,6 +274,8 @@ describe("useSidebarMenus", () => {
     clientStoreMock.data = {};
     clientStoreMock.getClientStoreSync.mockClear();
     clientStoreMock.writeClientStoreValue.mockClear();
+    // 默认全部 CLI 启用，避免用例互相污染。
+    seedCliEngineVisibility([]);
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: {
@@ -565,6 +569,69 @@ describe("useSidebarMenus", () => {
 
     expect(sessionActions.map((action) => action.id)).not.toContain("new-session-gemini");
     expect(sessionActions.map((action) => action.id)).toContain("new-session-opencode");
+  });
+
+  it("hides CLI engines disabled in CLI configuration management from new session menu", async () => {
+    seedCliEngineVisibility(["opencode", "kimi", "grok"]);
+    const handlers = createHandlers();
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    await act(async () => {
+      const event = {
+        clientX: 160,
+        clientY: 120,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0];
+      result.current.showWorkspaceMenu(event, workspace);
+    });
+
+    const sessionActions =
+      result.current.workspaceMenuState?.groups.find(
+        (group) => group.id === "new-session",
+      )?.actions ?? [];
+    const sessionActionIds = sessionActions.map((action) => action.id);
+
+    expect(sessionActionIds).toContain("new-session-claude");
+    expect(sessionActionIds).toContain("new-session-codex");
+    expect(sessionActionIds).not.toContain("new-session-opencode");
+    expect(sessionActionIds).not.toContain("new-session-kimi");
+    expect(sessionActionIds).not.toContain("new-session-grok");
+    expect(sessionActionIds).not.toContain("new-session-gemini");
+
+    const sharedAction = sessionActions.find(
+      (action) => action.id === "new-session-shared",
+    );
+    expect(sharedAction).toBeDefined();
+    expect(sharedAction?.children?.map((child) => child.id)).toEqual([
+      "new-session-shared-claude",
+      "new-session-shared-codex",
+    ]);
+  });
+
+  it("hides Shared CLI entry when all shared engines are disabled", async () => {
+    seedCliEngineVisibility(["claude", "codex", "opencode", "kimi", "grok"]);
+    const handlers = createHandlers();
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    await act(async () => {
+      const event = {
+        clientX: 160,
+        clientY: 120,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0];
+      result.current.showWorkspaceMenu(event, workspace);
+    });
+
+    const sessionActionIds =
+      result.current.workspaceMenuState?.groups
+        .find((group) => group.id === "new-session")
+        ?.actions.map((action) => action.id) ?? [];
+
+    expect(sessionActionIds).not.toContain("new-session-shared");
+    expect(sessionActionIds).not.toContain("new-session-claude");
+    expect(sessionActionIds).not.toContain("new-session-codex");
   });
 
   it("moves workspace quick actions into the workspace actions menu group", async () => {
@@ -1172,6 +1239,83 @@ describe("useSidebarMenus", () => {
     );
   });
 
+  it("rejects continuation for a shared: source id even when threadKind projection is native", async () => {
+    // fix-shared-session-identity-id-first：kind 投影丢失时 id 硬闸仍拒绝续接。
+    const handlers = {
+      ...createHandlers(),
+      codexProviderProfiles: [
+        {
+          id: "provider-b",
+          name: "Provider B",
+          source: "managed" as const,
+          availability: "available" as const,
+        },
+      ],
+      getThreadSummary: () => ({
+        id: "shared:source-1",
+        name: "Shared Session",
+        updatedAt: 1,
+        threadKind: "native" as const,
+        engineSource: "codex" as const,
+      }),
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    act(() => {
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "shared:source-1",
+        destination: {
+          engine: "claude",
+          providerProfileId: "provider-b",
+          providerProfileNameSnapshot: "Provider B",
+          providerProfileSource: "managed",
+          runtimeCapabilityFingerprint: null,
+        },
+      });
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(prepareNativeProviderContinuationMock).not.toHaveBeenCalled();
+    expect(result.current.providerContinuationDialogState).toBeNull();
+  });
+
+  it("shows source-unavailable notice instead of dialog when source summary is missing", async () => {
+    // 变体 A2：summary 整行缺失 → error notice，不弹续接 dialog。
+    const handlers = {
+      ...createHandlers(),
+      getThreadSummary: () => undefined,
+    };
+    const { result } = renderHook(() => useSidebarMenus(handlers));
+
+    act(() => {
+      requestProviderContinuationDialog({
+        workspaceId: "ws-1",
+        sourceSessionId: "shared:missing-1",
+        destination: {
+          engine: "claude",
+          providerProfileId: "provider-b",
+          providerProfileNameSnapshot: "Provider B",
+          providerProfileSource: "managed",
+          runtimeCapabilityFingerprint: null,
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(pushGlobalRuntimeNoticeMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          severity: "error",
+          messageKey: "runtimeNotice.error.threadTurnFailed",
+        }),
+      );
+    });
+    expect(prepareNativeProviderContinuationMock).not.toHaveBeenCalled();
+    expect(result.current.providerContinuationDialogState).toBeNull();
+  });
+
   it("does not create a continuation after the product dialog is cancelled", async () => {
     const handlers = {
       ...createHandlers(),
@@ -1222,6 +1366,10 @@ describe("useSidebarMenus", () => {
       expect(
         discardPreparedNativeProviderContinuationMock,
       ).toHaveBeenCalledOnce();
+    });
+    // 取消必须还原来源会话供应商（L1 activate），避免底栏/映射停在 destination
+    await waitFor(() => {
+      expect(switchClaudeProvider).toHaveBeenCalledWith("provider-a");
     });
     expect(handlers.onSelectThread).not.toHaveBeenCalled();
   });
@@ -1705,6 +1853,8 @@ describe("useSidebarMenus", () => {
         destination: {
           engine: "claude",
           providerProfileId: "provider-a",
+          modelCatalogEntryId: "claude-fable-5",
+          model: "MiniMax-M3",
           providerProfileNameSnapshot: "Provider A",
           providerProfileSource: "managed",
           runtimeCapabilityFingerprint: "echo-checksum",
@@ -1727,6 +1877,16 @@ describe("useSidebarMenus", () => {
     );
     await act(async () => {
       await result.current.confirmProviderContinuation();
+    });
+
+    expect(handlers.onProviderContinuationTargetReady).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      threadId: "claude:target-2",
+      engine: "claude",
+      providerProfileId: "provider-a",
+      modelId: "claude-fable-5",
+      modelRuntime: "MiniMax-M3",
+      effort: null,
     });
 
     expect(createNativeProviderContinuationMock).toHaveBeenCalledWith(

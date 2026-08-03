@@ -13,6 +13,7 @@
 | 多引擎 live tool 是否进幕布 | [`canvas-live-tool-projection-matrix-2026-08-01.md`](./canvas-live-tool-projection-matrix-2026-08-01.md) |
 | 统一幕布改动**后验**（含改前改后） | [`unify-conversation-canvas-review-2026-08-01.md`](./unify-conversation-canvas-review-2026-08-01.md) |
 | Native / Shared 供应商与模型 | [`native-session-provider-select-vs-disk-overwrite-2026-07-31.md`](./native-session-provider-select-vs-disk-overwrite-2026-07-31.md) |
+| Shared 选择器回退 Native 续接（T1–T3 id-first 已修复；T4/T5 另开） | [`shared-session-model-picker-native-fallback-2026-08-02.md`](./shared-session-model-picker-native-fallback-2026-08-02.md) |
 | React #185 诊断 playbook | [`react-185-maximum-update-depth-playbook.md`](./react-185-maximum-update-depth-playbook.md) |
 | 历史执行建议快照（v0.7.3） | [`client-shortcuts-and-priorities-2026-07.md`](./client-shortcuts-and-priorities-2026-07.md) |
 
@@ -62,6 +63,7 @@ OpenSpec 状态快照（2026-08-01；后续仍以 change 目录为准）：
 | **matrix** | live tool **能力登记** + 手测清单 | 不重写 Messages 树 |
 | **unify-review** | 统一幕布**过程后验**（改前/改后/完成度） | 不替代 structure 的现网表 |
 | **native-session** | Native L1/L2 + Shared next-target 契约 | 不描述 Messages 渲染核 |
+| **shared-picker-native-fallback** | Shared 模型选择器误入 Native 续接的调研与 T1–T3 止血 | 不替代 native-session 契约正本；T4/T5 仍开放 |
 | **react-185** | #185 诊断协议 + case 追加 | 不是事故结案唯一源 |
 | **client-shortcuts** | **历史**执行建议快照 + 现状附录 | 不当前 backlog 真相源 |
 
@@ -76,6 +78,9 @@ OpenSpec 状态快照（2026-08-01；后续仍以 change 目录为准）：
 2026-08-01  44fcf26a6 / 4c5e97c8e：模型点选 freeform + #185 结构修
 2026-08-01  1537211a1 / 4e932e672：流式调度收口 + idle virtualization 恢复
 2026-08-01  本目录二次校准：索引 + 矛盾表述清理 + 历史附录保留
+2026-08-02  shared-picker-native-fallback：Shared 选择器回退 Native 续接调研（未修代码）
+2026-08-02  shared-picker-native-fallback：review 回填（三道闸/send/delete 爆炸半径/竞态）+ 修复提案 T1–T6 就绪，待实施
+2026-08-02  fix-shared-session-identity-id-first：T1–T3 落地（8468544a5 id-first 硬闸 + 回归）；T4/T5 另开
 ```
 
 ## 维护检查清单

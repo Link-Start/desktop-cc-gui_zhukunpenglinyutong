@@ -60,8 +60,11 @@ export type GeminiSessionSummary = {
 // Kimi session summaries share the Gemini summary shape (id/message/updatedAt/size).
 export type KimiSessionSummary = GeminiSessionSummary;
 
-// Grok session summaries share the Gemini summary shape (id/message/updatedAt/size).
-export type GrokSessionSummary = GeminiSessionSummary;
+// Grok：在 Gemini 形状上扩展 parent / sessionKind（子代理树）
+export type GrokSessionSummary = GeminiSessionSummary & {
+  parentSessionId?: string | null;
+  sessionKind?: string | null;
+};
 
 export type CodexCatalogSessionSummary = {
   sessionId: string;
@@ -71,6 +74,7 @@ export type CodexCatalogSessionSummary = {
   updatedAt: number;
   archivedAt?: number | null;
   sizeBytes?: number;
+  physicalPath?: string | null;
   parentSessionId?: string | null;
   engine?: ThreadSummary["engineSource"] | string | null;
   source?: string | null;
@@ -91,6 +95,91 @@ export type CodexCatalogSessionSummary = {
   lineageKind?: string | null;
   lineageDepth?: number | null;
 };
+
+/**
+ * Expand catalog/native session id aliases so hidden automatic helpers can be
+ * matched across `engine:id`, `engine:workspace:id`, and raw id forms.
+ */
+export function buildHiddenAutomaticSessionIdSet(
+  ids: readonly string[] | null | undefined,
+): Set<string> {
+  const set = new Set<string>();
+  if (!ids || ids.length === 0) {
+    return set;
+  }
+  for (const rawId of ids) {
+    const trimmed = String(rawId ?? "").trim();
+    if (!trimmed) {
+      continue;
+    }
+    set.add(trimmed);
+    const parts = trimmed.split(":").filter(Boolean);
+    if (parts.length === 0) {
+      continue;
+    }
+    const last = parts[parts.length - 1];
+    if (last) {
+      set.add(last);
+    }
+    if (parts.length >= 2) {
+      const engine = parts[0];
+      if (engine && last) {
+        set.add(`${engine}:${last}`);
+      }
+    }
+  }
+  return set;
+}
+
+export function threadIdMatchesHiddenAutomaticSessionSet(
+  threadId: string,
+  hiddenIds: ReadonlySet<string>,
+): boolean {
+  const trimmed = threadId.trim();
+  if (!trimmed || hiddenIds.size === 0) {
+    return false;
+  }
+  if (hiddenIds.has(trimmed)) {
+    return true;
+  }
+  const parts = trimmed.split(":").filter(Boolean);
+  if (parts.length === 0) {
+    return false;
+  }
+  const last = parts[parts.length - 1];
+  if (last && hiddenIds.has(last)) {
+    return true;
+  }
+  if (parts.length >= 2) {
+    const engine = parts[0];
+    if (engine && last && hiddenIds.has(`${engine}:${last}`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function filterHiddenAutomaticThreadSummaries<
+  T extends { id: string; autoSession?: ThreadSummary["autoSession"] },
+>(
+  summaries: readonly T[],
+  hiddenIds: ReadonlySet<string>,
+): T[] {
+  if (summaries.length === 0) {
+    return [];
+  }
+  if (hiddenIds.size === 0) {
+    return summaries.filter(
+      (summary) => summary.autoSession?.visibility !== "hidden",
+    );
+  }
+  return summaries.filter((summary) => {
+    if (summary.autoSession?.visibility === "hidden") {
+      return false;
+    }
+    return !threadIdMatchesHiddenAutomaticSessionSet(summary.id, hiddenIds);
+  });
+}
 
 export function normalizeThreadListPartialSource(
   value: unknown,
@@ -1052,16 +1141,52 @@ export function normalizeKimiSessionSummaries(
   return normalizeGeminiSessionSummaries(value);
 }
 
+function normalizeGrokSessionSummary(value: unknown): GrokSessionSummary | null {
+  const base = normalizeGeminiSessionSummary(value);
+  if (!base) {
+    return null;
+  }
+  if (!value || typeof value !== "object") {
+    return base;
+  }
+  const record = value as Record<string, unknown>;
+  const parentSessionId = asString(
+    record.parentSessionId ?? record.parent_session_id,
+  ).trim();
+  const sessionKind = asString(
+    record.sessionKind ?? record.session_kind,
+  ).trim();
+  return {
+    ...base,
+    ...(parentSessionId ? { parentSessionId } : {}),
+    ...(sessionKind ? { sessionKind } : {}),
+  };
+}
+
 export function normalizeGrokSessionSummaries(
   value: unknown,
 ): GrokSessionSummary[] {
-  // Grok session summaries share the Gemini summary shape.
-  return normalizeGeminiSessionSummaries(value);
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const summaries: GrokSessionSummary[] = [];
+  value.forEach((entry) => {
+    const summary = normalizeGrokSessionSummary(entry);
+    if (summary) {
+      summaries.push(summary);
+    }
+  });
+  return summaries;
 }
 
 function mergeNativeCliSessionSummaries(params: {
   baseSummaries: ThreadSummary[];
-  sessions: GeminiSessionSummary[];
+  sessions: Array<
+    GeminiSessionSummary & {
+      parentSessionId?: string | null;
+      sessionKind?: string | null;
+    }
+  >;
   idPrefix: "gemini" | "grok" | "kimi";
   engineSource: "gemini" | "grok" | "kimi";
   fallbackTitle: string;
@@ -1093,6 +1218,13 @@ function mergeNativeCliSessionSummaries(params: {
     const mappedTitle = mappedTitles[id];
     const customTitle = getCustomName(workspaceId, id);
     const title = previewThreadName(session.firstMessage, fallbackTitle);
+    const rawParent = session.parentSessionId?.trim() || "";
+    const parentThreadId =
+      rawParent.length > 0
+        ? rawParent.startsWith(`${idPrefix}:`)
+          ? rawParent
+          : `${idPrefix}:${rawParent}`
+        : prev?.parentThreadId ?? null;
     const next: ThreadSummary = {
       id,
       name: selectProjectedSessionDisplayName({
@@ -1104,12 +1236,25 @@ function mergeNativeCliSessionSummaries(params: {
       updatedAt,
       sizeBytes: session.fileSizeBytes,
       engineSource,
+      ...(parentThreadId ? { parentThreadId } : {}),
     };
     if (!prev || next.updatedAt >= prev.updatedAt) {
-      mergedById.set(
-        id,
-        mergeSessionDisplaySummary(prev, next, { mappedTitle, customTitle }),
-      );
+      const merged = mergeSessionDisplaySummary(prev, next, {
+        mappedTitle,
+        customTitle,
+      });
+      // 保留 parent 链接（mergeSessionDisplaySummary 可能丢掉新字段）
+      mergedById.set(id, {
+        ...merged,
+        parentThreadId:
+          next.parentThreadId ?? merged.parentThreadId ?? prev?.parentThreadId ?? null,
+      });
+    } else if (parentThreadId && !prev.parentThreadId) {
+      // 本地 live 线程 updatedAt 更新时，仍要把 list 扫到的 parent 补回去
+      mergedById.set(id, {
+        ...prev,
+        parentThreadId,
+      });
     }
   });
   return Array.from(mergedById.values()).sort(
@@ -1161,8 +1306,10 @@ export function mergeGrokSessionSummaries(
   workspaceId: string,
   mappedTitles: Record<string, string>,
   getCustomName: (workspaceId: string, threadId: string) => string | undefined,
+  /** native owner → shared: 会话，把子代理挂到 Shared 父节点 */
+  nativeOwnerToSharedThreadId?: Map<string, string>,
 ): ThreadSummary[] {
-  return mergeNativeCliSessionSummaries({
+  const merged = mergeNativeCliSessionSummaries({
     baseSummaries,
     sessions: grokSessions,
     idPrefix: "grok",
@@ -1171,6 +1318,20 @@ export function mergeGrokSessionSummaries(
     workspaceId,
     mappedTitles,
     getCustomName,
+  });
+  if (!nativeOwnerToSharedThreadId || nativeOwnerToSharedThreadId.size === 0) {
+    return merged;
+  }
+  return merged.map((thread) => {
+    const parent = thread.parentThreadId?.trim() || "";
+    if (!parent) {
+      return thread;
+    }
+    const remapped = nativeOwnerToSharedThreadId.get(parent);
+    if (!remapped || remapped === parent) {
+      return thread;
+    }
+    return { ...thread, parentThreadId: remapped };
   });
 }
 
@@ -1299,6 +1460,7 @@ export function mergeCodexCatalogSessionSummaries(
           ? session.archivedAt
           : undefined,
       sizeBytes: session.sizeBytes,
+      physicalPath: session.physicalPath ?? undefined,
       engineSource,
       threadKind: "native",
       source: session.source ?? undefined,

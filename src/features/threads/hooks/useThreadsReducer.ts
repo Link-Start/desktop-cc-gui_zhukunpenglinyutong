@@ -65,6 +65,12 @@ import {
 } from "./threadReducerAssistantFinalMetadata";
 import { mergeThreadItemsPreservingOptimisticUsers } from "./threadReducerOptimisticItemMerge";
 import {
+  mergeTurnFinalMetaIntoItems,
+  scheduleDeleteTurnFinalMetaForThread,
+  schedulePersistTurnFinalMetaFromItems,
+  scheduleRenameTurnFinalMetaThreadId,
+} from "../utils/turnFinalMetaStorage";
+import {
   dropLatestLocalReviewStart,
   ensureUniqueReviewId,
   findMatchingReview,
@@ -86,6 +92,7 @@ import {
   findAssistantMessageIndexById,
   findAssistantMessageIndexByPrefix,
   isAssistantMessageItem,
+  isThreadActiveInState,
   isThreadScopedCodexCompactionMessage,
   isThreadTokenUsageEqual,
   isToolConversationItem,
@@ -301,6 +308,7 @@ function threadSummaryEqual(left: ThreadSummary, right: ThreadSummary) {
     (left.archivedAt ?? null) === (right.archivedAt ?? null) &&
     (left.threadKind ?? null) === (right.threadKind ?? null) &&
     (left.sizeBytes ?? null) === (right.sizeBytes ?? null) &&
+    (left.physicalPath ?? null) === (right.physicalPath ?? null) &&
     (left.engineSource ?? null) === (right.engineSource ?? null) &&
     (left.selectedEngine ?? null) === (right.selectedEngine ?? null) &&
     (left.source ?? null) === (right.source ?? null) &&
@@ -580,6 +588,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           }
           const oldThreadId = pendingThread.id;
           const newThreadId = action.threadId;
+          scheduleRenameTurnFinalMetaThreadId(oldThreadId, newThreadId);
 
           // Rename thread inline (similar to renameThreadId action)
           const updatedThread = attachReplacedThreadId(
@@ -760,6 +769,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         state.activeThreadIdByWorkspace[action.workspaceId] === action.threadId
           ? filtered[0]?.id ?? null
           : state.activeThreadIdByWorkspace[action.workspaceId] ?? null;
+      scheduleDeleteTurnFinalMetaForThread(action.threadId);
       const { [action.threadId]: _items, ...restItems } = state.itemsByThread;
       const { [action.threadId]: _historyRestoredAt, ...restHistoryRestoredAt } =
         state.historyRestoredAtMsByThread;
@@ -891,13 +901,23 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         wasProcessing && startedAt
           ? Math.max(0, action.timestamp - startedAt)
           : lastDurationMs ?? null;
+      // Background completion: when a live turn settles while the user is not
+      // viewing this thread, mark unread so the sidebar can show the green "done"
+      // dot. Active-thread settles stay clean (no green). Rely on reducer state
+      // rather than agent-message paths, which often miss this transition.
+      const settledWhileAway =
+        wasProcessing &&
+        !isThreadActiveInState(state.activeThreadIdByWorkspace, action.threadId);
+      const nextHasUnread = settledWhileAway
+        ? true
+        : (previous?.hasUnread ?? false);
       return {
         ...state,
         threadStatusById: {
           ...state.threadStatusById,
           [action.threadId]: {
             isProcessing: false,
-            hasUnread: previous?.hasUnread ?? false,
+            hasUnread: nextHasUnread,
             isReviewing: previous?.isReviewing ?? false,
             isContextCompacting: previous?.isContextCompacting ?? false,
             processingStartedAt: null,
@@ -1468,10 +1488,16 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         };
       }
 
-      // 3) \u6761\u4ef6 markUnread
+      // 3) \u6761\u4ef6 markUnread — reducer active selection is SSOT.
+      // Handler isActiveThread can lag after the user switches threads.
       let threadStatusChanged = false;
       let nextThreadStatusById = state.threadStatusById;
-      if (!action.isActiveThread) {
+      const isActiveInState = isThreadActiveInState(
+        state.activeThreadIdByWorkspace,
+        action.threadId,
+        action.workspaceId,
+      );
+      if (!isActiveInState) {
         const currentStatus = state.threadStatusById[action.threadId];
         const baseStatus = withThreadStatusDefaults(currentStatus);
         if (!baseStatus.hasUnread) {
@@ -1800,8 +1826,13 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
             "idle",
         },
       );
+      // Cold reload / history path: fill missing final footer meta from local sidecar.
+      const itemsWithSidecarMeta = mergeTurnFinalMetaIntoItems(
+        action.threadId,
+        mergedItems,
+      );
       const preserveMessageTextIds = new Set<string>();
-      for (const item of mergedItems) {
+      for (const item of itemsWithSidecarMeta) {
         if (
           item.kind === "message" &&
           item.role === "assistant" &&
@@ -1814,7 +1845,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         ...state,
         itemsByThread: {
           ...state.itemsByThread,
-          [action.threadId]: prepareThreadItems(mergedItems, {
+          [action.threadId]: prepareThreadItems(itemsWithSidecarMeta, {
             preserveMessageTextIds,
           }),
         },
@@ -1892,6 +1923,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       }
       const next = [...list];
       next[latestAssistantIndex] = withTokens;
+      schedulePersistTurnFinalMetaFromItems(action.threadId, next);
       return {
         ...state,
         itemsByThread: {
@@ -1916,6 +1948,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       };
     case "renameThreadId": {
       const { workspaceId, oldThreadId, newThreadId } = action;
+      scheduleRenameTurnFinalMetaThreadId(oldThreadId, newThreadId);
       return renameThreadStateIdentity({
         state,
         workspaceId,
@@ -2422,15 +2455,21 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         );
       };
 
-      // Merge incoming threads with preserved existing info
+      // Merge incoming threads with preserved existing info.
+      // Apply hidden auto-session filtering AFTER merge so an incoming row that
+      // lost autoSession metadata cannot resurrect a previously-hidden helper.
       const visibleThreads = incomingThreads
-        .filter((thread) => !hidden[thread.id] && !isHiddenAutomaticThread(thread))
+        .filter((thread) => !hidden[thread.id])
         .map((thread) => {
           const existing = existingThreadById.get(thread.id);
           if (existing) {
             // Preserve engineSource if new thread doesn't have one
             const engineSource = thread.engineSource || existing.engineSource;
-            const threadKind = thread.threadKind || existing.threadKind;
+            // fix-shared-session-target-race-and-merge T5：
+            // shared: id 的 threadKind 恒为 "shared"，不受 incoming truthy 覆盖。
+            const threadKind = existing.id.startsWith("shared:")
+              ? "shared"
+              : thread.threadKind || existing.threadKind;
             const selectedEngine = thread.selectedEngine || existing.selectedEngine;
             const nativeThreadIds = thread.nativeThreadIds || existing.nativeThreadIds;
             const autoSession = thread.autoSession ?? existing.autoSession ?? null;
@@ -2464,7 +2503,16 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
             );
           }
           return thread;
-        });
+        })
+        // fix-shared-session-target-race-and-merge T5 后置矫正：
+        // 所有 shared: 前缀 id 的条目 threadKind 强制为 "shared"，
+        // 兜底 merge 中任何路径导致的 kind 漂移。
+        .map((thread) =>
+          thread.id.startsWith("shared:") && thread.threadKind !== "shared"
+            ? { ...thread, threadKind: "shared" as const }
+            : thread,
+        )
+        .filter((thread) => !isHiddenAutomaticThread(thread));
 
       // BUG FIX: Also preserve threads that are currently active but not in the new list
       // (e.g., newly created Claude threads that haven't been synced to the backend yet)
@@ -2569,12 +2617,30 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       if (threadSummaryListEqual(existingThreads, mergedVisibleThreads)) {
         return state;
       }
+      // 同步 parentThreadId → threadParentById，保证会话树与 live 投影一致
+      let nextThreadParentById = state.threadParentById;
+      let parentMapChanged = false;
+      for (const thread of mergedVisibleThreads) {
+        const parentId = thread.parentThreadId?.trim();
+        if (!parentId || parentId === thread.id) {
+          continue;
+        }
+        if (nextThreadParentById[thread.id] === parentId) {
+          continue;
+        }
+        if (!parentMapChanged) {
+          nextThreadParentById = { ...state.threadParentById };
+          parentMapChanged = true;
+        }
+        nextThreadParentById[thread.id] = parentId;
+      }
       return {
         ...state,
         threadsByWorkspace: {
           ...state.threadsByWorkspace,
           [action.workspaceId]: mergedVisibleThreads,
         },
+        ...(parentMapChanged ? { threadParentById: nextThreadParentById } : {}),
       };
     }
     case "setThreadListLoading":
@@ -2639,6 +2705,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       const itemsChanged = nextItems !== existingItems;
       if (!usageSnapshotChanged && !shouldClearCompletedCompaction && !itemsChanged) {
         return state;
+      }
+      if (itemsChanged) {
+        schedulePersistTurnFinalMetaFromItems(action.threadId, nextItems);
       }
       const tokenUsageUpdatedAt = usageSnapshotChanged
         ? Date.now()
@@ -2893,6 +2962,7 @@ function applyCompleteAgentMessageToState(
   const updatedItems = prepareThreadItems(list, {
     preserveMessageTextIds: new Set([targetItemId]),
   });
+  schedulePersistTurnFinalMetaFromItems(params.threadId, updatedItems);
   const nextThreadsByWorkspace = maybeRenameThreadFromAgent({
     workspaceId: params.workspaceId,
     threadId: params.threadId,

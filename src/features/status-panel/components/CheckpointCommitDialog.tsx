@@ -10,6 +10,7 @@ import {
   useGitCommitSelection,
 } from "../../git/components/GitDiffPanelCommitScope";
 import { normalizeGitPath } from "../../git/utils/commitScope";
+import { readInitialCommitMessageMenuEngine } from "../../git/utils/commitMessageMenuConfig";
 import type { FileChangeSummary } from "../types";
 
 type CheckpointCommitDialogProps = {
@@ -69,7 +70,7 @@ export function CheckpointCommitDialog({
 }: CheckpointCommitDialogProps) {
   const { t } = useTranslation();
   const [commitMessageMenuEngine, setCommitMessageMenuEngine] =
-    useState<CommitMessageEngine>("claude");
+    useState<CommitMessageEngine>(() => readInitialCommitMessageMenuEngine());
   const [isCommitMessageMenuOpen, setIsCommitMessageMenuOpen] = useState(false);
   const commitMessageMenuRef = useRef<HTMLDivElement | null>(null);
   const fallbackUnstagedFiles = useMemo(

@@ -3239,8 +3239,34 @@ pub async fn engine_send_message_sync(
                     .ok_or_else(|| "Workspace not found".to_string())?
             };
 
+            let effective_provider_profile_id = {
+                let from_session =
+                    crate::session_management::resolve_engine_provider_profile_id(
+                        state.storage_path.as_path(),
+                        &workspace_id,
+                        session_id.as_deref(),
+                        "opencode",
+                        None,
+                    )?;
+                if from_session.is_some() {
+                    from_session
+                } else {
+                    crate::vendors::read_config()
+                        .ok()
+                        .and_then(|config| config.opencode.current)
+                }
+            };
+            let provider_launch_profile = crate::engine::opencode_provider_profile::resolve_opencode_provider_launch_profile(
+                &workspace_id,
+                effective_provider_profile_id.as_deref(),
+            )?;
             let session = manager
-                .get_or_create_opencode_session(&workspace_id, &workspace_path)
+                .get_or_create_opencode_session_for_runtime(
+                    &workspace_id,
+                    &workspace_path,
+                    &provider_launch_profile.runtime_key,
+                    provider_launch_profile.config_content.clone(),
+                )
                 .await;
             let resolved_session_id = if continue_session {
                 if session_id.is_some() {
@@ -3290,6 +3316,20 @@ pub async fn engine_send_message_sync(
             )
             .await
             .map_err(|_| "OpenCode response timed out".to_string())??;
+            if let Some(binding) = provider_launch_profile.binding.as_ref() {
+                let binding_session_id = response_session_id
+                    .as_deref()
+                    .unwrap_or(turn_id.as_str());
+                crate::session_management::record_engine_provider_binding_core(
+                    &state.workspaces,
+                    state.storage_path.as_path(),
+                    workspace_id.clone(),
+                    binding_session_id.to_string(),
+                    "opencode".to_string(),
+                    binding.clone(),
+                )
+                .await?;
+            }
             record_auto_session_metadata_if_present(
                 &state,
                 &workspace_id,
@@ -3404,22 +3444,52 @@ pub async fn engine_send_message_sync(
                     .ok_or_else(|| "Workspace not found".to_string())?
             };
 
+            // 与 async send 对齐：无 session 绑定时回落到 vendors.kimi.current，
+            // 让 commit-message 等 helper 也能吃到 managed provider 的 API key。
+            let effective_provider_profile_id = {
+                let from_session =
+                    crate::session_management::resolve_engine_provider_profile_id(
+                        state.storage_path.as_path(),
+                        &workspace_id,
+                        session_id.as_deref(),
+                        "kimi",
+                        None,
+                    )?;
+                if from_session.is_some() {
+                    from_session
+                } else {
+                    crate::vendors::read_config()
+                        .ok()
+                        .and_then(|config| config.kimi.current)
+                }
+            };
+            let provider_launch_profile =
+                crate::engine::kimi_provider_profile::resolve_kimi_provider_launch_profile(
+                    &workspace_id,
+                    effective_provider_profile_id.as_deref(),
+                )?;
             let session = manager
-                .get_or_create_kimi_session(&workspace_id, &workspace_path)
+                .get_or_create_kimi_session_for_runtime(
+                    &workspace_id,
+                    &workspace_path,
+                    &provider_launch_profile.runtime_key,
+                    provider_launch_profile.home_dir.as_deref(),
+                )
                 .await;
             let resolved_session_id = resolve_kimi_session_id_for_engine_send(
                 continue_session,
                 session_id,
                 session.get_session_id().await,
             );
+            let runtime_model = model
+                .as_ref()
+                .map(|value| value.trim())
+                .filter(|value| !value.is_empty())
+                .map(|value| value.to_string());
 
             let params = super::SendMessageParams {
                 text,
-                model: model
-                    .as_ref()
-                    .map(|value| value.trim())
-                    .filter(|value| !value.is_empty())
-                    .map(|value| value.to_string()),
+                model: runtime_model,
                 effort,
                 disable_thinking: false,
                 access_mode,
@@ -3441,6 +3511,20 @@ pub async fn engine_send_message_sync(
             .await
             .map_err(|_| "Kimi response timed out".to_string())??;
             let response_session_id = session.get_session_id().await;
+            if let Some(binding) = provider_launch_profile.binding.as_ref() {
+                let binding_session_id = response_session_id
+                    .as_deref()
+                    .unwrap_or(turn_id.as_str());
+                crate::session_management::record_engine_provider_binding_core(
+                    &state.workspaces,
+                    state.storage_path.as_path(),
+                    workspace_id.clone(),
+                    binding_session_id.to_string(),
+                    "kimi".to_string(),
+                    binding.clone(),
+                )
+                .await?;
+            }
             record_auto_session_metadata_if_present(
                 &state,
                 &workspace_id,
@@ -3465,22 +3549,64 @@ pub async fn engine_send_message_sync(
                     .ok_or_else(|| "Workspace not found".to_string())?
             };
 
+            // 根因：旧 sync 路径走 bare get_or_create_grok_session（无 provider home），
+            // 导致 managed Grok API key 不会被注入，commit-message 出现 401 Unauthorized。
+            let effective_provider_profile_id = {
+                let from_session =
+                    crate::session_management::resolve_engine_provider_profile_id(
+                        state.storage_path.as_path(),
+                        &workspace_id,
+                        session_id.as_deref(),
+                        "grok",
+                        None,
+                    )?;
+                if from_session.is_some() {
+                    from_session
+                } else {
+                    crate::vendors::read_config()
+                        .ok()
+                        .and_then(|config| config.grok.current)
+                }
+            };
+            let provider_launch_profile =
+                crate::engine::grok_provider_profile::resolve_grok_provider_launch_profile(
+                    &workspace_id,
+                    effective_provider_profile_id.as_deref(),
+                )?;
             let session = manager
-                .get_or_create_grok_session(&workspace_id, &workspace_path)
+                .get_or_create_grok_session_for_runtime(
+                    &workspace_id,
+                    &workspace_path,
+                    &provider_launch_profile.runtime_key,
+                    provider_launch_profile.home_dir.as_deref(),
+                )
                 .await;
             let resolved_session_id = resolve_grok_session_id_for_engine_send(
                 continue_session,
                 session_id,
                 session.get_session_id().await,
             );
+            let runtime_model = model
+                .as_ref()
+                .map(|value| value.trim())
+                .filter(|value| !value.is_empty())
+                .map(|value| value.to_string())
+                .or_else(|| {
+                    // managed provider 时若未显式传 model，用 provider 配置的默认 model
+                    effective_provider_profile_id.as_deref().and_then(|profile_id| {
+                        crate::engine::grok_provider_profile::resolve_grok_provider_model_config(
+                            profile_id,
+                        )
+                        .ok()
+                        .flatten()
+                        .map(|provider| provider.model)
+                        .filter(|value| !value.trim().is_empty())
+                    })
+                });
 
             let params = super::SendMessageParams {
                 text,
-                model: model
-                    .as_ref()
-                    .map(|value| value.trim())
-                    .filter(|value| !value.is_empty())
-                    .map(|value| value.to_string()),
+                model: runtime_model,
                 effort,
                 disable_thinking: false,
                 access_mode,
@@ -3502,6 +3628,20 @@ pub async fn engine_send_message_sync(
             .await
             .map_err(|_| "Grok response timed out".to_string())??;
             let response_session_id = session.get_session_id().await;
+            if let Some(binding) = provider_launch_profile.binding.as_ref() {
+                let binding_session_id = response_session_id
+                    .as_deref()
+                    .unwrap_or(turn_id.as_str());
+                crate::session_management::record_engine_provider_binding_core(
+                    &state.workspaces,
+                    state.storage_path.as_path(),
+                    workspace_id.clone(),
+                    binding_session_id.to_string(),
+                    "grok".to_string(),
+                    binding.clone(),
+                )
+                .await?;
+            }
             record_auto_session_metadata_if_present(
                 &state,
                 &workspace_id,

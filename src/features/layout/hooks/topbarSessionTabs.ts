@@ -1,4 +1,5 @@
 import type { EngineType, ThreadSummary } from "../../../types";
+import { resolveIsSharedSession } from "../../shared-session/utils/sharedSessionIdentity";
 
 export const TOPBAR_SESSION_TAB_MAX = 5;
 
@@ -415,10 +416,11 @@ export function buildTopbarSessionTabItems(
     const engineType = resolveEngineType(thread.engineSource);
     const baseEngineLabel =
       engineLabelByType[engineType] ?? DEFAULT_ENGINE_LABEL_BY_TYPE[engineType];
-    const engineLabel =
-      thread.threadKind === "shared"
-        ? `Shared · ${baseEngineLabel}`
-        : baseEngineLabel;
+    // id-first：与侧栏 ThreadList 一致，kind 投影丢失时仍显示 Shared 图标/标签
+    const isShared = resolveIsSharedSession(thread.id, thread);
+    const engineLabel = isShared
+      ? `Shared · ${baseEngineLabel}`
+      : baseEngineLabel;
     items.push({
       workspaceId: tab.workspaceId,
       threadId: tab.threadId,
@@ -426,7 +428,7 @@ export function buildTopbarSessionTabItems(
       displayLabel: truncateSessionLabel(label),
       engineType,
       engineLabel,
-      isShared: thread.threadKind === "shared",
+      isShared,
       isActive:
         tab.workspaceId === activeWorkspaceId && tab.threadId === activeThreadId,
     });

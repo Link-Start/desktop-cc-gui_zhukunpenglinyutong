@@ -30,7 +30,8 @@ import type {
   WorkspaceSearchApiSnapshot,
   WorkspaceSearchFileSnapshot,
 } from "../features/search/types";
-import { useWorkspaceSessionActivity } from "../features/session-activity/hooks/useWorkspaceSessionActivity";
+// DISABLED: disable-session-activity-and-solo-mode — empty stub only (radar stays live)
+import { DISABLED_WORKSPACE_SESSION_ACTIVITY } from "../features/session-activity/adapters/buildWorkspaceSessionActivity";
 import { useSessionRadarFeed } from "../features/session-activity/hooks/useSessionRadarFeed";
 import { isBackgroundRenderGatingEnabled } from "../features/threads/utils/realtimePerfFlags";
 import {
@@ -187,7 +188,7 @@ export function useAppShellSearchRadarSection({
   t,
   threadItemsByThread,
   threadListLoadingByWorkspace,
-  threadParentById,
+  threadParentById: _threadParentById,
   threadStatusById,
   threadsByWorkspace,
   workspaces,
@@ -357,13 +358,8 @@ export function useAppShellSearchRadarSection({
     [activeWorkspaceProjectionOwnerIds, threadsByWorkspace],
   );
 
-  const workspaceActivity = useWorkspaceSessionActivity({
-    activeThreadId,
-    threads: activeWorkspaceThreads,
-    itemsByThread: deferredThreadItemsByThread,
-    threadParentById,
-    threadStatusById,
-  });
+  // DISABLED: disable-session-activity-and-solo-mode — no activity derivation
+  const workspaceActivity = DISABLED_WORKSPACE_SESSION_ACTIVITY;
 
   const recentThreads = useMemo(() => {
     if (!activeWorkspaceId || activeWorkspaceProjectionOwnerIds.length === 0) {

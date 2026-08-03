@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { WorkspaceSessionCatalogEntry } from "../../../../../services/tauri";
 import {
   buildLoadedSessionFolderCountSummary,
+  isSharedCatalogEntry,
+  resolveCatalogEntryEngineIcon,
   resolveWorkspaceSessionDisplayTitle,
 } from "./sessionManagementSectionUtils";
 
@@ -61,5 +63,21 @@ describe("sessionManagementSectionUtils", () => {
     expect(resolveWorkspaceSessionDisplayTitle(makeEntry({ title: "" }), "Untitled")).toBe(
       "Untitled",
     );
+  });
+
+  it("detects shared catalog entries and resolves selected-engine icons", () => {
+    const sharedEntry = makeEntry({
+      sessionId: "shared:abc",
+      engine: "shared",
+      threadKind: "shared",
+      source: "claude",
+    });
+    expect(isSharedCatalogEntry(sharedEntry)).toBe(true);
+    expect(resolveCatalogEntryEngineIcon(sharedEntry)).toBe("claude");
+    expect(
+      isSharedCatalogEntry(
+        makeEntry({ sessionId: "codex:1", engine: "codex", threadKind: "native" }),
+      ),
+    ).toBe(false);
   });
 });

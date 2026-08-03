@@ -7,7 +7,7 @@ const statusPanel = {
     "tabTodos": "Задачи",
     "tabSubagents": "Субагенты",
     "tabAgents": "Агенты",
-    "tabCheckpoint": "Результат",
+    "tabCheckpoint": "Обзор",
     "tabPlan": "План",
     "tabCommands": "Команды",
     "files": "файлов",

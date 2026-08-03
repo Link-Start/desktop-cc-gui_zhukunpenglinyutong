@@ -56,3 +56,18 @@ VendorSettingsPanel 行「...」菜单
   → appSettings 回流 VendorSettingsPanel（分组重算）
   → cliEngineVisibilityStore seed → composer ProviderSelect 过滤下拉项
 ```
+
+## 6. Commit message picker data flow
+
+```text
+BUILTIN_ENGINE_TYPES
+  -> isEngineExecutionEnabled
+  -> disabledCliEngines snapshot
+  -> CommitMessageEnginePicker
+  -> language selection
+  -> runGeneration / persist last config
+```
+
+`useCommitMessageGenerationMenu` 在每次打开菜单时读取 visibility snapshot，避免把低频菜单状态订阅到 GitDiff/GitHistory render chain。`RendererContextMenuState.content` 提供 feature-owned custom content；既有 generic items 继续承载“提交框位置”等扩展项。language 只保存在 picker local state，点击 engine 后立即关闭菜单并进入既有 generation flow。
+
+picker 使用统一的 `296x352` positioning estimate。bottom composer 向上并与 trigger 右边缘对齐，top composer 向下展开；两种 placement 均保留 12px viewport boundary。视觉层去掉重复标题并压缩 row density，确保 enabled engines 与 generic extra items 在常规窗口内同时可达。

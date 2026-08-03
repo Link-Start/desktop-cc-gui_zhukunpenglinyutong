@@ -766,7 +766,9 @@ const settings = {
         rightToolbarNotes: "Notes entry",
         bottomActivityTasks: "Tasks tab",
         bottomActivityAgents: "Agents tab",
-        bottomActivityCheckpoint: "Result tab",
+        bottomActivityCheckpoint: "Overview tab",
+        bottomActivityCheckpointDetails: "Overview details",
+        bottomActivityGovernanceEvidence: "Governance evidence (developer)",
         curtainContextLedger: "Context sources card",
         cornerStatusMessageAnchors: "Message anchors",
       },
@@ -801,7 +803,11 @@ const settings = {
           "Hides the note entry without affecting note pool or archive data.",
         bottomActivityTasks: "Hides the task status tab.",
         bottomActivityAgents: "Hides the agent status tab.",
-        bottomActivityCheckpoint: "Hides the result checkpoint tab.",
+        bottomActivityCheckpoint: "Hides the overview tab.",
+        bottomActivityCheckpointDetails:
+          "Shows summary, validations, file changes, and commit actions in the Overview tab. When off, only basic session info remains.",
+        bottomActivityGovernanceEvidence:
+          "Shows repository governance evidence at the top of the Overview tab (aimed at mossx development). Off by default.",
         curtainContextLedger:
           "Hides the context sources card above the composer without disabling ledger calculations.",
         cornerStatusMessageAnchors:
@@ -939,6 +945,7 @@ const settings = {
     projectSessionEngineClaude: "Claude",
     projectSessionEngineGemini: "Gemini",
     projectSessionEngineOpencode: "OpenCode",
+    projectSessionEngineShared: "Shared CLI",
     sessionManagementDescription:
       "Manage real session history per project with paged loading, filtering, batch archive, unarchive, and deletion.",
     sessionManagementModeProject: "Project view",
@@ -1025,6 +1032,7 @@ const settings = {
     sessionManagementBadgeArchived: "Archived",
     sessionManagementBadgeRelated: "Inferred",
     sessionManagementBadgeMissingOnDisk: "Missing on disk",
+    sessionManagementBadgeShared: "Shared",
     sessionManagementChildrenCount: "{{count}} child sessions",
     sessionManagementParentSession: "Parent {{id}}",
     sessionManagementDetailToggle: "View session details",
@@ -1395,6 +1403,7 @@ const settings = {
         kimi: "Kimi",
         kimiCoding: "Kimi Coding",
         deepseek: "DeepSeek",
+        atlasCloud: "Atlas Cloud",
         minimax: "MiniMax",
         xiaomi: "Xiaomi MiMo",
         xiaomiPlan: "Xiaomi MiMo Plan",
