@@ -525,3 +525,49 @@ onDebugRef 解耦、原子 selection state、乐观 snapshot、preferred 归一�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1314: 跨平台应用图标切换
+
+**Date**: 2026-08-04
+**Task**: 跨平台应用图标切换
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+外观设置增加应用图标选择（默认+orbit-routing）；macOS Dock / Win-Linux 窗口任务栏；联动 About/锁屏；边界加固后提交
+
+### Main Changes
+
+| 能力 | 说明 |
+|------|------|
+| 设置 UI | 外观页单行图标轨 + 左右 chevron，无原生滚动条 |
+| 持久化 | AppSettings.dockIconId，非法 id 回退 default |
+| macOS | NSApplication.setApplicationIconImage，默认也走 PNG bytes |
+| Win/Linux | Window.set_icon 遍历已开窗口；About/explorer 二次 reapply |
+| 边界 | PNG magic 校验、4MB 上限、快速切换 generation 丢弃、Uint8Array IPC |
+
+**Updated Files** (核心):
+- `src/features/theme/utils/dockIcon.ts`
+- `src-tauri/src/window.rs`
+- `src/features/settings/.../BasicAppearanceSection.tsx`
+- `src/assets/dock-icons/**`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f3d57fac7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

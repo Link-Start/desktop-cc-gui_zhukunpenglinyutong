@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-31.md`
-- **Total Sessions**: 1313
-- **Last Active**: 2026-08-03
+- **Total Sessions**: 1314
+- **Last Active**: 2026-08-04
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-31.md` | ~527 | Active |
+| `journal-31.md` | ~573 | Active |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
@@ -59,6 +59,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1314 | 2026-08-04 | 跨平台应用图标切换 | `f3d57fac7` | `CXN-version-0.7.16` |
 | 1313 | 2026-08-03 | 收录轨道路由 Logo 示例 | `22164e20e` | `CXN-version-0.7.16` |
 | 1312 | 2026-08-03 | 文档信息架构治理 | `64b7a817f` | `CXN-version-0.7.16` |
 | 1311 | 2026-08-03 | Shared 队列 pending-ack UI 标识 | `1a6f7ea4a` | `CXN-version-0.7.16` |
