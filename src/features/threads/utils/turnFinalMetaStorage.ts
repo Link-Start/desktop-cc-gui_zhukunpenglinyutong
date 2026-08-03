@@ -20,7 +20,10 @@ export type TurnFinalMetaRecord = {
 
 export type TurnFinalMetaMap = Record<string, TurnFinalMetaRecord[]>;
 
-type AssistantMessageItem = Extract<ConversationItem, { kind: "message"; role: "assistant" }>;
+// role 在 ConversationItem 上是 "user" | "assistant" 联合，不能用
+// Extract<..., { role: "assistant" }>（会得到 never）；先抽 message 再交叉收窄。
+type MessageConversationItem = Extract<ConversationItem, { kind: "message" }>;
+type AssistantMessageItem = MessageConversationItem & { role: "assistant" };
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
