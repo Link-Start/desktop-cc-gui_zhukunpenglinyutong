@@ -74,23 +74,22 @@ function isAskUserQuestionToolItem(
   return false;
 }
 
-function parseAskUserQuestionTemplatesFromDetail(
-  detail: string,
+function parseAskUserQuestionTemplatesFromRecord(
+  record: Record<string, unknown>,
 ): AskUserQuestionTemplate[] {
-  const record = parseJsonRecordFromText(detail);
-  if (!record) {
-    return [];
-  }
+  // Nested MCP result envelope: { _input: { questions: [...] }, _output: "..." }
+  const nestedInput = asRecord(record._input ?? record.input ?? record.arguments);
+  const source = nestedInput ?? record;
   const hasSingleQuestionShape =
-    "question" in record ||
-    "prompt" in record ||
-    "header" in record ||
-    "title" in record ||
-    "options" in record;
-  const rawQuestions = Array.isArray(record.questions)
-    ? record.questions
+    "question" in source ||
+    "prompt" in source ||
+    "header" in source ||
+    "title" in source ||
+    "options" in source;
+  const rawQuestions = Array.isArray(source.questions)
+    ? source.questions
     : hasSingleQuestionShape
-      ? [record]
+      ? [source]
       : [];
   const templates: AskUserQuestionTemplate[] = [];
   rawQuestions.forEach((entry, index) => {
@@ -127,6 +126,46 @@ function parseAskUserQuestionTemplatesFromDetail(
     });
   });
   return templates;
+}
+
+function parseAskUserQuestionTemplatesFromDetail(
+  detail: string,
+): AskUserQuestionTemplate[] {
+  const record = parseJsonRecordFromText(detail);
+  if (!record) {
+    return [];
+  }
+  return parseAskUserQuestionTemplatesFromRecord(record);
+}
+
+function parseAskUserQuestionTemplatesFromToolItem(
+  item: Extract<ConversationItem, { kind: "tool" }>,
+): AskUserQuestionTemplate[] {
+  const fromDetail = parseAskUserQuestionTemplatesFromDetail(item.detail);
+  if (fromDetail.length > 0) {
+    return fromDetail;
+  }
+  return parseAskUserQuestionTemplatesFromDetail(asString(item.output));
+}
+
+function parseAskUserQuestionAnswerFromToolOutput(
+  output: string | undefined,
+  templates: AskUserQuestionTemplate[],
+): AskUserQuestionAnswerParseResult | null {
+  const raw = asString(output).trim();
+  if (!raw) {
+    return null;
+  }
+  const record = parseJsonRecordFromText(raw);
+  if (record) {
+    const nestedOutput = asString(
+      record._output ?? record.output ?? record.result ?? record.text ?? "",
+    ).trim();
+    if (nestedOutput) {
+      return parseAskUserQuestionAnswerText(nestedOutput, templates);
+    }
+  }
+  return parseAskUserQuestionAnswerText(raw, templates);
 }
 
 function parseAskUserAnswerParts(raw: string): AskUserQuestionAnswer {
@@ -359,11 +398,45 @@ export function normalizeAskUserQuestionHistoryItems(items: ConversationItem[]) 
     return "";
   };
 
+  const pushSubmittedCard = (
+    matchedToolId: string,
+    templates: AskUserQuestionTemplate[],
+    parsedAnswer: AskUserQuestionAnswerParseResult,
+  ) => {
+    if (existingSubmittedToolIds.has(matchedToolId)) {
+      return;
+    }
+    existingSubmittedToolIds.add(matchedToolId);
+    normalized.push({
+      id: `request-user-input-submitted-${matchedToolId}`,
+      kind: "tool",
+      toolType: "requestUserInputSubmitted",
+      title: i18n.t("approval.inputRequested"),
+      detail: buildRequestUserInputSubmittedDetail(templates, parsedAnswer),
+      status: "completed",
+      output: parsedAnswer.rawSelectionText,
+    });
+  };
+
   for (const item of items) {
     if (item.kind === "tool" && isAskUserQuestionToolItem(item)) {
+      const templates = parseAskUserQuestionTemplatesFromToolItem(item);
+      // Shared/MCP path often lands the answer on tool.output as
+      // {_input, _output: "The user answered..."} — convert to submitted card
+      // so the canvas does not keep a raw QUESTIONS / _input dump.
+      const parsedFromOutput = parseAskUserQuestionAnswerFromToolOutput(
+        item.output,
+        templates,
+      );
+      if (parsedFromOutput) {
+        pushSubmittedCard(item.id, templates, parsedFromOutput);
+        continue;
+      }
+
       askToolOrder.push(item.id);
-      askTemplatesByToolId.set(item.id, parseAskUserQuestionTemplatesFromDetail(item.detail));
+      askTemplatesByToolId.set(item.id, templates);
       askToolIndexById.set(item.id, normalized.length);
+      // Keep a slim trace row while pending; McpToolBlock will polish display.
       normalized.push(item);
       continue;
     }
@@ -390,18 +463,11 @@ export function normalizeAskUserQuestionHistoryItems(items: ConversationItem[]) 
               };
             }
           }
-          if (!existingSubmittedToolIds.has(matchedToolId)) {
-            const templates = askTemplatesByToolId.get(matchedToolId) ?? [];
-            normalized.push({
-              id: `request-user-input-submitted-${matchedToolId}`,
-              kind: "tool",
-              toolType: "requestUserInputSubmitted",
-              title: i18n.t("approval.inputRequested"),
-              detail: buildRequestUserInputSubmittedDetail(templates, parsedAnswer),
-              status: "completed",
-              output: parsedAnswer.rawSelectionText,
-            });
-          }
+          pushSubmittedCard(
+            matchedToolId,
+            askTemplatesByToolId.get(matchedToolId) ?? pendingTemplates,
+            parsedAnswer,
+          );
           continue;
         }
       }

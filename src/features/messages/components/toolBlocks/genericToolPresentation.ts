@@ -654,6 +654,31 @@ function extractSummary(
     return url ? truncateText(url, 50) : "";
   }
 
+  if (
+    matchesNormalizedToolIdentifier(toolName, "askuserquestion") ||
+    normalizeToolIdentifier(item.title).includes("askuserquestion")
+  ) {
+    const nested =
+      parsedArgs &&
+      typeof parsedArgs === "object" &&
+      parsedArgs._input &&
+      typeof parsedArgs._input === "object"
+        ? (parsedArgs._input as Record<string, unknown>)
+        : parsedArgs;
+    const questions = Array.isArray(nested?.questions) ? nested.questions : [];
+    const first =
+      questions[0] && typeof questions[0] === "object"
+        ? (questions[0] as Record<string, unknown>)
+        : null;
+    const questionText =
+      (typeof first?.question === "string" && first.question) ||
+      (typeof nested?.question === "string" && nested.question) ||
+      "";
+    if (questionText.trim()) {
+      return truncateText(questionText.trim(), 60);
+    }
+  }
+
   if (isMcpTool(item.title)) {
     const query = getFirstStringField(parsedArgs, ["query", "pattern", "path", "file_path"]);
     return query ? truncateText(query, 50) : "";
@@ -726,10 +751,19 @@ export function buildGenericToolPresentation(
   const filePath = rawFilePath || null;
   const fileName = filePath ? getFileName(filePath) : "";
   const isDirectory = filePath ? isDirectoryPath(filePath, fileName) : false;
+  const isAskUserQuestionTool =
+    matchesNormalizedToolIdentifier(toolName, "askuserquestion") ||
+    normalizeToolIdentifier(item.title).includes("askuserquestion");
   const otherParams = parsedArgs
     ? Object.entries(parsedArgs).filter(
         ([key, value]) =>
           !OMITTED_DETAIL_FIELDS.has(key) &&
+          // AskUserQuestion: never dump raw questions / MCP envelopes in the tool row.
+          !(isAskUserQuestionTool &&
+            (key === "questions" ||
+              key === "_input" ||
+              key === "input" ||
+              key === "arguments")) &&
           value !== undefined &&
           value !== null &&
           value !== "",

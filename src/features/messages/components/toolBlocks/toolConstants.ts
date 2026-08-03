@@ -165,7 +165,24 @@ function normalizeRuntimeString(value: unknown): string {
  */
 export function isMcpTool(title: unknown): boolean {
   const name = normalizeRuntimeString(title).toLowerCase();
-  return name.includes('mcp__') || name.includes('mcp_');
+  return (
+    name.includes('mcp__') ||
+    name.includes('mcp_') ||
+    // Display-formatted titles from formatMcpToolName: "Mcp Ccgui Askuserquestion"
+    /^mcp\s+\S+/i.test(name.replace(/^tool:\s*/i, ''))
+  );
+}
+
+function isAskUserQuestionDisplayName(toolName: string, title?: string): boolean {
+  const compact = (value: string) =>
+    value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  const nameKey = compact(toolName);
+  const titleKey = compact(normalizeRuntimeString(title));
+  return (
+    nameKey === 'askuserquestion' ||
+    nameKey.endsWith('askuserquestion') ||
+    titleKey.includes('askuserquestion')
+  );
 }
 
 /**
@@ -173,6 +190,11 @@ export function isMcpTool(title: unknown): boolean {
  */
 export function getToolDisplayName(toolName: string, title?: string, t?: (key: string) => string): string {
   const lower = toolName.toLowerCase();
+
+  // AskUserQuestion (native / MCP) → locale "询问用户问题"
+  if (isAskUserQuestionDisplayName(toolName, title)) {
+    return t ? t('tools.userInputRequest') : i18n.t('tools.userInputRequest');
+  }
 
   // 当 t 函数存在时使用翻译
   if (t) {
