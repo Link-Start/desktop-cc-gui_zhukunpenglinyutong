@@ -393,3 +393,36 @@ onDebugRef 解耦、原子 selection state、乐观 snapshot、preferred 归一�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1310: Codex collab 子代理 live 与 history 呈现对齐
+
+**Date**: 2026-08-03
+**Task**: Codex collab 子代理 live 与 history 呈现对齐
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+修复 Codex multi-agent 实时 wait 阶段幕布/Status 缺子代理呈现；engine-gate 隔离其他 CLI；仅提交本任务相关文件。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b725e011e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
