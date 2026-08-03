@@ -173,11 +173,37 @@ function extractSummaryLines(assistantMessage: string): string[] {
   if (bulletLines.length > 0) {
     return bulletLines.slice(0, MAX_SUMMARY_LINES);
   }
-  const sentenceLines = assistantMessage
-    .split(/(?<=[.!?。！？])\s+/)
+  const sentenceLines = splitOnSentenceBoundaries(assistantMessage)
     .map((line) => truncateLine(line))
     .filter(Boolean);
   return sentenceLines.slice(0, MAX_SUMMARY_LINES);
+}
+
+/**
+ * Split on whitespace that follows sentence-ending punctuation, keeping the
+ * punctuation on the preceding segment — equivalent to
+ * `text.split(/(?<=[.!?。！？])\s+/)` without lookbehind.
+ *
+ * Lookbehind is unsupported on older Safari/WKWebView (`invalid group
+ * specifier name`). Capture the terminator and re-attach it instead.
+ */
+function splitOnSentenceBoundaries(text: string): string[] {
+  const parts = text.split(/([.!?。！？])\s+/);
+  const lines: string[] = [];
+  for (let i = 0; i < parts.length; ) {
+    const body = parts[i] ?? "";
+    const punct = parts[i + 1];
+    if (typeof punct === "string" && /[.!?。！？]/.test(punct)) {
+      lines.push(`${body}${punct}`);
+      i += 2;
+      continue;
+    }
+    if (body.length > 0) {
+      lines.push(body);
+    }
+    i += 1;
+  }
+  return lines;
 }
 
 function extractFinalMessageLines(assistantMessage: string): string[] {
