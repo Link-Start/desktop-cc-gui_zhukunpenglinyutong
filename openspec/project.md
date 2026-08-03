@@ -1,7 +1,7 @@
 # Project Context
 
 - Type: OpenSpec Workspace
-- Updated At: 2026-07-26T14:39:23+08:00
+- Updated At: 2026-08-03T12:00:00+08:00
 - Scope: governance snapshot for the current `mossx` repository workspace
 - Product version fact: `ccgui@0.7.5` from `package.json` and `src-tauri/tauri.conf.json`
 
@@ -20,7 +20,7 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 - Change workflow artifacts: `openspec/changes/<change-id>/{proposal,design,tasks,verification}.md`
 - Archive: `openspec/changes/archive/*`
 - Implementation rules: `.trellis/spec/**`
-- Current workspace state: active changes = `24`, archive changes = `739`, main specs = `437`
+- Current workspace state: active changes = `58`, archive changes = `791`, main specs = `462`
 
 ## Entry Surfaces
 
@@ -64,25 +64,21 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 
 ## Current Inventory
 
-- Active changes: `24`
-- Archive changes: `739`
-- Main specs: `437`
+- Active changes: `58`
+- Archive changes: `791`
+- Main specs: `462`
 - Completed task sets still active: `8`
 - Ready-for-implementation task sets: `11`
 - Demand-pool proposal directories without `proposal.md` / `tasks.md`: `0`
 
 ## Active Changes
 
-Active OpenSpec changes in the current working tree are grouped as follows:
+Active OpenSpec changes in the current working tree (58 directories on disk; see [`changes/README.md`](changes/README.md) for the live table):
 
-- CLI foundation：11 个 change 已完成 proposal / design / spec deltas / tasks，按 Batch 0-6 从 capability、identity、event bus 推进到 adapter、delivery、session、catalog、compatibility 和 controller cleanup。
-- 已实现待 verify/archive：8 个 change。
-- 尚有执行/人工 gate：`add-linux-native-menu-localization`、`add-vendor-cli-lifecycle-header`、`enable-claude-lightweight-streaming-and-frame-attribution`、`reduce-client-polling-overhead`、`stabilize-client-runtime-and-diagnostics`。
-- 全工作区 strict validation 当前有两个既有 blocker：`add-tokentracker-usage-dashboard` 与 `reduce-client-polling-overhead` 缺少 spec delta；CLI foundation 11 个 change 均已单独 strict validation 通过。
+- complete / 待 verify-archive：若干（如 composer skill、skills hub、tokentracker、shared session 等）— 本轮仅归档严格 verified + 已验收 7 项。
+- in-progress：含 Linux menu i18n、Claude lightweight streaming、polling overhead、diagnostics quantified gate 等仍有 verification block 的提案。
+- 下一波建议：先对 `status=complete` 且无 archive block 的 change 补 verification 或直接 archive；保持 `changes/README.md` 与磁盘一致。
 
-Calibration rule: `openspec validate --strict` proves artifact structure only. Implementation verification uses code/test/live-run evidence in each `verification.md`; manual gates may be waived only when deterministic coverage or a newer owner makes the old gate non-discriminating.
-
-Complete active artifact links are maintained in the [`OpenSpec Change Index`](changes/README.md).
 
 ## P1 Performance Execution Order
 
@@ -387,6 +383,22 @@ npm run check:large-files
 - ccgui contributors
 
 ## Update History
+
+### 2026-08-03 Verified Bulk Archive
+
+Archived 7 verified active changes after agent-driven main-spec sync:
+
+- `add-atlas-cloud-codex-preset` → `codex-provider-management`
+- `close-native-session-provider-create-binding` → `claude-provider-management`, `engine-per-session-provider-binding`, `shared-execution-target`
+- `default-collapse-workspace-actions-menu` → `sidebar-workspace-menu-group-collapse`
+- `fix-linux-startup-preserve-baidu-analytics` → `linux-native-baidu-analytics-stability`
+- `honor-native-session-renamed-titles` → `claude-session-sidebar-state-parity`, `codex-session-sidebar-state-parity`
+- `grok-cli-image-input-capability-gap` → `engine-image-input-boundary`
+- `enhance-subagent-canvas-persona-ui` → `subagent-canvas-persona-ui`, `generic-tool-presentation`
+
+Also rebuilt `openspec/changes/README.md` active index from disk (was stale at ~30 vs actual 58+) and refreshed main specs / archive indexes. Counts: active=`58`, archive=`791`, specs=`462`. Documentation refresh is iterative; remaining complete-but-unverified actives stay for later verify/archive waves.
+
+
 
 - 2026-07-26: 将 engine/model 接入治理拆为 11 个 CLI foundation changes，覆盖 capability、runtime identity、`MossxAgentEvent` bus、`run.settled`、adapter/protocol registry、message delivery、executable session registry、model/provider catalog、Kimi/Claude/OpenCode compatibility 与 controller facade migration；共 96 个未执行任务。11 个 change 均完成 proposal/design/spec deltas/tasks 并单独 strict validation 通过。全工作区 strict validation 仍被既有 `add-tokentracker-usage-dashboard`、`reduce-client-polling-overhead` 缺失 spec delta 阻塞。校准当前目录计数为 active=24、archive=739、specs=437；无业务代码改动。
 - 2026-07-25: Archived `close-cleanup-review-findings` after correcting the prior cleanup wave: removed absent-producer JCEF completion waits, keyed semantic AI review cache by diff/language, kept engine fallback serial, made corrupted storage backup targets unique, and removed residual notice dock branches. Synced five requirements into four existing specs. Calibrated indexes to active=5, archive=731, specs=431 and restored the missing `add-tokentracker-usage-dashboard` active entry.

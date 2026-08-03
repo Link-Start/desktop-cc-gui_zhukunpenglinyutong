@@ -2,13 +2,23 @@
 
 本页为 `mossx` 已归档 OpenSpec proposal 的完整可点击索引。目录名中的日期是 archive date，不代表 proposal 首次创建时间。
 
-- Updated At: `2026-08-02`
-- Indexed proposals: `736`
+- Updated At: `2026-08-03`
+- Indexed proposals: `791`
 - Source of truth: `openspec/changes/archive/<archive-date>-<change-id>/proposal.md`
 - Back to current changes: [`../README.md`](../README.md)
 - Back to workspace overview: [`../../project.md`](../../project.md)
 
-## 2026-08 (2)
+## 2026-08 (9)
+
+### 2026-08-03
+
+- [`2026-08-03-add-atlas-cloud-codex-preset`](2026-08-03-add-atlas-cloud-codex-preset/proposal.md) — verified implementation，已同步 `codex-provider-management`；Codex provider 预设新增 Atlas Cloud，含 Live API smoke
+- [`2026-08-03-close-native-session-provider-create-binding`](2026-08-03-close-native-session-provider-create-binding/proposal.md) — verified implementation，已同步 `claude-provider-management`、`engine-per-session-provider-binding`、`shared-execution-target`；Native 新建菜单绑定供应商 + Shared Claude 切渠道重载 catalog
+- [`2026-08-03-default-collapse-workspace-actions-menu`](2026-08-03-default-collapse-workspace-actions-menu/proposal.md) — verified implementation，已同步 `sidebar-workspace-menu-group-collapse`；workspace actions 组默认折叠，支持可访问临时展开
+- [`2026-08-03-fix-linux-startup-preserve-baidu-analytics`](2026-08-03-fix-linux-startup-preserve-baidu-analytics/proposal.md) — verified implementation，已同步 `linux-native-baidu-analytics-stability`；Linux native 百度统计绕过 unsafe WebKit 路径，保留 PV/UV 与 visitor identity
+- [`2026-08-03-honor-native-session-renamed-titles`](2026-08-03-honor-native-session-renamed-titles/proposal.md) — verified implementation，已同步 `claude-session-sidebar-state-parity`、`codex-session-sidebar-state-parity`；侧栏标题优先展示 native rename（custom-title / thread_name）
+- [`2026-08-03-grok-cli-image-input-capability-gap`](2026-08-03-grok-cli-image-input-capability-gap/proposal.md) — verified / 已验收，已同步 `engine-image-input-boundary`；Grok/Kimi/OpenCode image transport + history presentation；Claude/Codex 兼容
+- [`2026-08-03-enhance-subagent-canvas-persona-ui`](2026-08-03-enhance-subagent-canvas-persona-ui/proposal.md) — verified / 已验收，已同步 `subagent-canvas-persona-ui`、`generic-tool-presentation`；subagent canvas 人格卡片、squad grid、inspector drawer
 
 ### 2026-08-02
 
