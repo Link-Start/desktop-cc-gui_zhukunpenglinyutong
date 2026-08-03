@@ -40,3 +40,36 @@ codex_import_projection 不再 inject control 消息，避免 DeepSeek 等兼容
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1301: fix(models): 冷启 useModels selection 收敛环致 React #185 白屏
+
+**Date**: 2026-08-03
+**Task**: fix(models): 冷启 useModels selection 收敛环致 React #185 白屏
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+onDebugRef 解耦、原子 selection state、乐观 snapshot、preferred 归一、epoch 熔断、playbook 追加 C-20260803-01
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2974b721e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

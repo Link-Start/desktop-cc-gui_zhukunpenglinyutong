@@ -186,6 +186,21 @@
 | **防御模式** | 与 C-20260801-03 Composer 修复完全同构：`prevRef` 守卫跳过等价 state update + functional update 保持引用稳定 |
 | **Review 要点** | 本次修复与 `637cb3561`（Composer #185）采用相同防御模式；应警惕任何在 `useLayoutEffect` 中无条件 setState 的组件 |
 
+### C-20260803-01 — 冷启 useModels layout apply 环（App-BCnXFvD4）
+
+| 字段 | 内容 |
+|------|------|
+| **状态** | fixed（结构加固；待用户手测冷启） |
+| **现象** | 冷启全局 Application Error；reload 恢复；`errorClass: react-maximum-update-depth`；`appVersion: unknown` |
+| **Bundle / 栈** | `App-BCnXFvD4.js`；componentStack `dWt`=AppShell；栈帧落在 `useModels` `applySelectionPlan` + selection `useLayoutEffect` |
+| **Owner** | `src/features/models/hooks/useModels.ts` |
+| **触发条件** | 冷启；settings/preferred 与 catalog 收敛窗；父层 `onDebug` 回调 identity 不稳定时可放大 |
+| **根因（AP-04 / layout deps）** | ① `refreshModels` / `applySelectionPlan` 曾把不稳定 `onDebug` 放进 callback deps → layout 每帧重跑；② model+effort 双 setState + 同 tick refresh/layout 双 apply；③ preferred `""`/null 虚抖；④ 缺 epoch 熔断时 plan 非 null 叠满 #185 |
+| **修复** | `onDebugRef` 解耦；原子 selection state；乐观 snapshot；preferred 归一；config/catalogReady 幂等 set；epoch 熔断（12）；plan 已对齐即 null |
+| **回归** | `useModels.test.tsx`：unstable onDebug 冷启、blank preferred thrash、plan null；`app-shell.startup.test.tsx` 既有 #185 场景 |
+| **关联** | 同日 `a4166c03e` 拆除 Claude residual repair；本 case 是 useModels 侧残余腿 |
+| **Review 要点** | 禁止把父层非稳定回调放进 layout 链 deps；冷启手测：脏 `lastComposerModelId` + 无 active thread |
+
 ---
 
 ## 6. 新 Case 追加模板
@@ -244,3 +259,4 @@ OpenSpec / 代码中已出现的 #185 类修复（便于对照，**不等于本 
 | 2026-08-01 | C-20260801-02：B1 layout self-deps 关闭；freeform repair 语义钉死；Collapsible 测量加固 |
 | 2026-08-02 | C-20260801-03：`App-Bn4fZysL` Composer 栈残余——plan null 收敛 + Composer 引用稳定 setState |
 | 2026-08-02 | C-20260802-01：CollapsibleReveal `useLayoutEffect` 无条件 setState——prevRef 守卫 + functional update 引用稳定 |
+| 2026-08-03 | C-20260803-01：`App-BCnXFvD4` 冷启 useModels layout apply——onDebugRef、原子 selection、epoch 熔断 |
