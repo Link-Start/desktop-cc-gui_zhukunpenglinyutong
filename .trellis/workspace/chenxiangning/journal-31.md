@@ -459,3 +459,36 @@ onDebugRef 解耦、原子 selection state、乐观 snapshot、preferred 归一�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1312: 文档信息架构治理
+
+**Date**: 2026-08-03
+**Task**: 文档信息架构治理
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+重构 docs 信息架构与索引，统一 139 份文档 lifecycle metadata，归档废弃内容，新增文档治理 gate 与 CI 检查，并修复 review 发现的语义漂移。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `64b7a817f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
