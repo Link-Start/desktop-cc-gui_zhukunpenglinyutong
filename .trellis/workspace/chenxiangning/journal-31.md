@@ -139,3 +139,48 @@ onDebugRef 解耦、原子 selection state、乐观 snapshot、preferred 归一�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1304: 修复 Codex 死 thread 恢复卡 Fork 静默失败
+
+**Date**: 2026-08-03
+**Task**: 修复 Codex 死 thread 恢复卡 Fork 静默失败
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 内容 |
+|----|------|
+| OpenSpec | `fix-codex-stale-dead-thread-fork-continuation` |
+| 问题 | 老 Codex 会话 `thread not found` 时点 Fork 无效（native fork 死父 + 静默 null） |
+| 修复 | 恢复卡 Fork 走 `continueStaleThreadBindingForManualRecovery`：fork→fresh，失败可见 |
+| 验证 | openspec validate ✅；recovery+runtime-reconnect 53 passed |
+
+**Updated Files**:
+- `src/app-shell-parts/manualThreadRecovery.ts`
+- `src/app-shell-parts/useAppShellLayoutNodesSection.tsx`
+- `src/features/messages/components/recovery/RuntimeReconnectCard.tsx`
+- `openspec/changes/fix-codex-stale-dead-thread-fork-continuation/**`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `76951f6e2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
