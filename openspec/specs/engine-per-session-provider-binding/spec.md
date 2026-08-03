@@ -10,31 +10,18 @@
 
 系统 MUST 将 managed provider 绑定建模为会话级 launch configuration（而非全局切换），并在发送消息时按固定优先级解析生效供应商。
 
-#### Scenario: binding recorded from send parameter
-
-- **WHEN** `engine_send_message` 携带 `providerProfileId` 且目标引擎为 Claude Code 或 Kimi CLI
-- **THEN** 后端 MUST 将该绑定（engine、profile id、source、显示名、availability）幂等写入 workspace catalog metadata 的统一 engine provider binding map
-- **AND** metadata key MUST 使用显式 engine + owner workspace + canonical/logical session identity，不得从无前缀 native id 猜引擎
-- **AND** 当参数值与已持久化绑定一致时 MUST 跳过写入
-
 #### Scenario: resolution priority
 
 - **WHEN** 后端为某个 thread 的一次发送解析供应商
 - **THEN** 解析优先级 MUST 为：send 参数携带的 managed `providerProfileId` > catalog metadata 中该 thread 的持久化 managed binding > 无绑定/default
 - **AND** 无绑定时 MUST 保持变更前的行为（Claude 走全局 `~/.claude/settings.json`，Kimi 走全局 `~/.kimi-code/config.toml` / 引擎默认 home）
 
-#### Scenario: binding survives thread id rename
+#### Scenario: Claude runtime model is resolved against bound profile catalog
 
-- **WHEN** 一个 `claude-pending-*` / `kimi-pending-*` 前端乐观创建的 thread 在首个 turn 后被重命名为真实 session id
-- **THEN** 后续发送 MUST 仍能解析到正确绑定（前端每次发送从 thread state 携带 `providerProfileId`）
-- **AND** 应用重启后从历史恢复的 thread MUST 能通过持久化绑定兜底解析
-
-#### Scenario: local profile means intentional default behavior
-
-- **WHEN** 绑定的 profile 为本地配置项（Claude 的 `__local_settings_json__`、Kimi 的 `__local_config_toml__`）
-- **THEN** 后端 MUST NOT 注入任何 per-session 覆盖
-- **AND** 行为 MUST 与无绑定一致并继续跟随 disk/global config
-- **AND** UI MUST NOT 把 local/default profile 描述成隔离的 managed binding
+- **WHEN** Claude managed-bound thread 发送消息且携带 model / model catalog entry 选择
+- **THEN** 系统 MUST 使用 **该 thread 绑定 profile** 的 model catalog（及 profile env model 槽）解析最终 runtime model
+- **AND** MUST NOT 使用其它 profile 或全局脏 mapping 残留作为 `--model`
+- **AND** 解析失败时 MUST fail closed 或 repair 到绑定 profile 默认 runtime，不得静默发送跨供应商模型名
 
 ### Requirement: Parallel Sessions With Different Providers MUST Be Isolated
 
@@ -358,3 +345,14 @@ The new-conversation provider selector MUST describe local/disk profiles and man
 - **WHEN** the selector renders a managed Claude Code, Codex, or Kimi provider
 - **THEN** the badge MUST use the localized equivalent of `独立配置`
 - **AND** it MUST NOT use an engine-specific synonym such as `自定义配置`
+
+### Requirement: UI Selection MUST Repair When Bound Profile Catalog Changes
+
+当 Native Claude 会话的绑定 profile 或该 profile 的 model catalog 变化后，composer 选中态 MUST 与新 catalog 对齐。
+
+#### Scenario: foreign runtime after provider switch is repaired
+
+- **WHEN** 用户将会话上下文切换到另一 managed Claude profile（含续接成功后的目标会话，或切到绑定不同 profile 的老会话）
+- **AND** 当前 composer selection 的 runtime 不属于新 profile 的合法 model 集合
+- **THEN** 系统 MUST 将 selection repair 为新 profile 默认 runtime 对应的 catalog entry
+- **AND** 后续发送 MUST 使用 repair 后的 runtime

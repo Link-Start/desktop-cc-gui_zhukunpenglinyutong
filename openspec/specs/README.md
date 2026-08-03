@@ -1,14 +1,13 @@
 # OpenSpec Main Specs 索引
 
-`openspec/specs/*/spec.md` 是已经同步进入 mainline 的 capability behavior truth。当前索引覆盖 **481** 个 capability，并按 capability id 首字母分组。
+`openspec/specs/*/spec.md` 是已经同步进入 mainline 的 capability behavior truth。当前索引覆盖 **492** 个 capability，并按 capability id 首字母分组。
 
 ## 使用边界
 
 - 查当前已生效的行为契约：从本索引进入对应 `spec.md`。
 - 查尚未归档、可能仍含未同步 delta 的提案：查看 [Active Changes](../changes/README.md)。
 - 查历史决策与归档证据：查看 [Archived Changes](../changes/archive/README.md)。
-- 本页只做导航，不复制 requirement 正文；capability 语义以各自 `spec.md` 为准。
-- Updated At: `2026-08-03`（第二波 bulk archive 同步后重建）。
+- Updated At: `2026-08-03`（第三波 bulk archive 后重建）。
 
 ## A
 
@@ -41,6 +40,7 @@
 
 - [capability-aware-policy-router](./capability-aware-policy-router/spec.md)
 - [cc-gui-daemon-warning-cleanliness](./cc-gui-daemon-warning-cleanliness/spec.md)
+- [cc-switch-provider-import](./cc-switch-provider-import/spec.md)
 - [checkpoint-policy-chain](./checkpoint-policy-chain/spec.md)
 - [claude-chat-canvas-review-quick-action](./claude-chat-canvas-review-quick-action/spec.md)
 - [claude-cli-settings-doctor](./claude-cli-settings-doctor/spec.md)
@@ -57,15 +57,18 @@
 - [claude-history-transcript-visibility](./claude-history-transcript-visibility/spec.md)
 - [claude-manual-compact-command](./claude-manual-compact-command/spec.md)
 - [claude-provider-management](./claude-provider-management/spec.md)
+- [claude-provider-runtime-model-sync](./claude-provider-runtime-model-sync/spec.md)
 - [claude-reasoning-effort-support](./claude-reasoning-effort-support/spec.md)
 - [claude-repeat-turn-blanking-recovery](./claude-repeat-turn-blanking-recovery/spec.md)
 - [claude-rewind-review-surface](./claude-rewind-review-surface/spec.md)
 - [claude-runtime-mcp-servers-panel](./claude-runtime-mcp-servers-panel/spec.md)
 - [claude-runtime-termination-hardening](./claude-runtime-termination-hardening/spec.md)
 - [claude-session-sidebar-state-parity](./claude-session-sidebar-state-parity/spec.md)
+- [claude-streaming-lightweight-render](./claude-streaming-lightweight-render/spec.md)
 - [claude-thread-session-continuity](./claude-thread-session-continuity/spec.md)
 - [claude-tui-resume-affordance](./claude-tui-resume-affordance/spec.md)
 - [claude-turn-settlement-stream-lifecycle](./claude-turn-settlement-stream-lifecycle/spec.md)
+- [cli-engine-visibility](./cli-engine-visibility/spec.md)
 - [cli-execution-backend-parity](./cli-execution-backend-parity/spec.md)
 - [cli-one-click-installer](./cli-one-click-installer/spec.md)
 - [client-design-system-zinc-primitives](./client-design-system-zinc-primitives/spec.md)
@@ -168,6 +171,7 @@
 - [context-ledger-transition-diff](./context-ledger-transition-diff/spec.md)
 - [conversation-approval-thread-scoping](./conversation-approval-thread-scoping/spec.md)
 - [conversation-canvas-runtime-isolation](./conversation-canvas-runtime-isolation/spec.md)
+- [conversation-canvas-scroll-ownership](./conversation-canvas-scroll-ownership/spec.md)
 - [conversation-canvas-unified-presentation](./conversation-canvas-unified-presentation/spec.md)
 - [conversation-completion-email-notification](./conversation-completion-email-notification/spec.md)
 - [conversation-completion-notification-sound](./conversation-completion-notification-sound/spec.md)
@@ -257,6 +261,7 @@
 - [file-view-markdown-github-preview](./file-view-markdown-github-preview/spec.md)
 - [file-view-rendering-runtime-stability](./file-view-rendering-runtime-stability/spec.md)
 - [filetree-multitab-open](./filetree-multitab-open/spec.md)
+- [frame-drop-attribution-diagnostics](./frame-drop-attribution-diagnostics/spec.md)
 - [frontend-error-feedback](./frontend-error-feedback/spec.md)
 - [frontend-prop-chain-stability](./frontend-prop-chain-stability/spec.md)
 
@@ -288,6 +293,7 @@
 - [global-session-history-archive-center](./global-session-history-archive-center/spec.md)
 - [governance-evidence-bridge](./governance-evidence-bridge/spec.md)
 - [governance-telemetry-loop](./governance-telemetry-loop/spec.md)
+- [grok-engine-runtime](./grok-engine-runtime/spec.md)
 - [grok-history-tool-projection](./grok-history-tool-projection/spec.md)
 - [grok-reasoning-effort](./grok-reasoning-effort/spec.md)
 
@@ -336,6 +342,7 @@
 - [message-assistant-tool-call-card-fallback](./message-assistant-tool-call-card-fallback/spec.md)
 - [message-codeblock-filechange-rendering](./message-codeblock-filechange-rendering/spec.md)
 - [message-compact-display-math-compatibility](./message-compact-display-math-compatibility/spec.md)
+- [message-file-edit-scene-collapse](./message-file-edit-scene-collapse/spec.md)
 - [message-markdown-latex-compatibility](./message-markdown-latex-compatibility/spec.md)
 - [message-markdown-streaming-compatibility](./message-markdown-streaming-compatibility/spec.md)
 - [message-process-phase-collapse](./message-process-phase-collapse/spec.md)
@@ -464,6 +471,8 @@
 - [shared-session-curtain-parity](./shared-session-curtain-parity/spec.md)
 - [shared-session-engine-selection](./shared-session-engine-selection/spec.md)
 - [shared-session-identity](./shared-session-identity/spec.md)
+- [shared-session-merge-guard](./shared-session-merge-guard/spec.md)
+- [shared-session-target-optimistic](./shared-session-target-optimistic/spec.md)
 - [shared-session-thread](./shared-session-thread/spec.md)
 - [shared-state-lock-governance](./shared-state-lock-governance/spec.md)
 - [shell-first-lazy-runtime-isolation](./shell-first-lazy-runtime-isolation/spec.md)
@@ -495,6 +504,7 @@
 - [startup-css-loading-performance](./startup-css-loading-performance/spec.md)
 - [status-panel-checkpoint-module](./status-panel-checkpoint-module/spec.md)
 - [status-panel-latest-user-message-tab](./status-panel-latest-user-message-tab/spec.md)
+- [status-panel-session-overview](./status-panel-session-overview/spec.md)
 - [streaming-dispatch-decision-table](./streaming-dispatch-decision-table/spec.md)
 - [streaming-schedule-tier-rollback](./streaming-schedule-tier-rollback/spec.md)
 - [subagent-canvas-persona-ui](./subagent-canvas-persona-ui/spec.md)

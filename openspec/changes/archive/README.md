@@ -3,12 +3,12 @@
 本页为 `mossx` 已归档 OpenSpec proposal 的完整可点击索引。目录名中的日期是 archive date，不代表 proposal 首次创建时间。
 
 - Updated At: `2026-08-03`
-- Indexed proposals: `828`
+- Indexed proposals: `848`
 - Source of truth: `openspec/changes/archive/<archive-date>-<change-id>/proposal.md`
 - Back to current changes: [`../README.md`](../README.md)
 - Back to workspace overview: [`../../project.md`](../../project.md)
 
-## 2026-08 (46)
+## 2026-08 (66)
 
 ### 2026-08-03
 
@@ -60,6 +60,32 @@
 - [`2026-08-03-unify-conversation-canvas`](2026-08-03-unify-conversation-canvas/proposal.md) — 已同步 unified conversation canvas
 - [`2026-08-03-unify-input-history-and-commands-refresh`](2026-08-03-unify-input-history-and-commands-refresh/proposal.md) — 已同步 input history / commands refresh contracts
 - [`2026-08-03-use-home-double-column-target-picker`](2026-08-03-use-home-double-column-target-picker/proposal.md) — 已同步 home double-column target picker
+
+
+#### 2026-08-03 第三波（shipped + manual residual waived）
+
+判定口径：实现已合入主线，仅剩人工 smoke / 可选测试 / quantified evidence 的 change，按“已上线解决主问题”归档。
+
+- [`2026-08-03-adapt-subagent-cross-engine-display`](2026-08-03-adapt-subagent-cross-engine-display/proposal.md) — 已上线+用户验收；可选 ja/ko 文案 residual waived；已同步 subagent persona/tree specs
+- [`2026-08-03-add-cc-switch-provider-import`](2026-08-03-add-cc-switch-provider-import/proposal.md) — 实现已上线；真实 CC Switch DB 手工 residual waived
+- [`2026-08-03-add-cli-engine-visibility-toggle`](2026-08-03-add-cli-engine-visibility-toggle/proposal.md) — 实现已上线；设置页/composer 可见性开关；已同步 `cli-engine-visibility`
+- [`2026-08-03-add-grok-engine`](2026-08-03-add-grok-engine/proposal.md) — Grok 引擎 runtime 已上线；GUI 全路径 smoke residual waived；已同步 `grok-engine-runtime`
+- [`2026-08-03-add-message-file-edit-scene-collapse`](2026-08-03-add-message-file-edit-scene-collapse/proposal.md) — 幕布文件修改折叠已上线；人工 smoke residual waived
+- [`2026-08-03-add-shared-session-catalog-management`](2026-08-03-add-shared-session-catalog-management/proposal.md) — shared catalog 已上线；可选单测 residual waived
+- [`2026-08-03-add-vendor-cli-lifecycle-header`](2026-08-03-add-vendor-cli-lifecycle-header/proposal.md) — CLI lifecycle header 已上线；多状态手工 residual waived
+- [`2026-08-03-compact-diff-push-button`](2026-08-03-compact-diff-push-button/proposal.md) — compact push 已上线；UI 确认 residual waived
+- [`2026-08-03-disable-session-activity-and-solo-mode`](2026-08-03-disable-session-activity-and-solo-mode/proposal.md) — session activity/solo 下线已上线；人工清单 residual waived
+- [`2026-08-03-enable-claude-lightweight-streaming-and-frame-attribution`](2026-08-03-enable-claude-lightweight-streaming-and-frame-attribution/proposal.md) — lightweight streaming + frame attribution 已上线；quantified FPS residual waived
+- [`2026-08-03-fix-messages-scroll-echo-follow-loss`](2026-08-03-fix-messages-scroll-echo-follow-loss/proposal.md) — scroll echo 修复已上线（含 focused tests）；实机 residual waived
+- [`2026-08-03-fix-native-claude-provider-runtime-model-sync`](2026-08-03-fix-native-claude-provider-runtime-model-sync/proposal.md) — Claude provider runtime model sync 已上线；DeepSeek 手工 residual waived
+- [`2026-08-03-fix-native-session-quota-target-scoping`](2026-08-03-fix-native-session-quota-target-scoping/proposal.md) — quota target scoping 已上线；已同步 `status-panel-session-overview`
+- [`2026-08-03-fix-runtime-jank-feedback-and-catalog-race`](2026-08-03-fix-runtime-jank-feedback-and-catalog-race/proposal.md) — jank/catalog race 修复已上线+自动化通过；packaged runtime residual waived
+- [`2026-08-03-fix-shared-session-target-race-and-merge`](2026-08-03-fix-shared-session-target-race-and-merge/proposal.md) — shared target race/merge 已上线；手工 residual waived
+- [`2026-08-03-reduce-client-polling-overhead`](2026-08-03-reduce-client-polling-overhead/proposal.md) — polling 降载已上线+自动化通过；四路径 smoke residual waived
+- [`2026-08-03-refactor-conversation-canvas-scroll-ownership`](2026-08-03-refactor-conversation-canvas-scroll-ownership/proposal.md) — scroll ownership 重构已上线；实机 residual waived
+- [`2026-08-03-replace-checkpoint-governance-with-session-overview`](2026-08-03-replace-checkpoint-governance-with-session-overview/proposal.md) — 结果 tab 会话概览已上线；手工 residual waived
+- [`2026-08-03-stabilize-client-runtime-and-diagnostics`](2026-08-03-stabilize-client-runtime-and-diagnostics/proposal.md) — runtime/diagnostics 稳定化已上线；功能 smoke 已过，quantified frame residual waived
+- [`2026-08-03-streamline-native-provider-continuation`](2026-08-03-streamline-native-provider-continuation/proposal.md) — provider continuation 单确认/进度已上线；跨引擎手工 residual waived
 
 ### 2026-08-02
 

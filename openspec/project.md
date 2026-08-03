@@ -1,7 +1,7 @@
 # Project Context
 
 - Type: OpenSpec Workspace
-- Updated At: 2026-08-03T18:00:00+08:00
+- Updated At: 2026-08-03T20:00:00+08:00
 - Scope: governance snapshot for the current `mossx` repository workspace
 - Product version fact: `ccgui@0.7.5` from `package.json` and `src-tauri/tauri.conf.json`
 
@@ -20,7 +20,7 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 - Change workflow artifacts: `openspec/changes/<change-id>/{proposal,design,tasks,verification}.md`
 - Archive: `openspec/changes/archive/*`
 - Implementation rules: `.trellis/spec/**`
-- Current workspace state: active changes = `21`, archive changes = `828`, main specs = `481`
+- Current workspace state: active changes = `1`, archive changes = `848`, main specs = `492`
 
 ## Entry Surfaces
 
@@ -64,20 +64,19 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 
 ## Current Inventory
 
-- Active changes: `21`
-- Archive changes: `828`
-- Main specs: `481`
+- Active changes: `1`
+- Archive changes: `848`
+- Main specs: `492`
 - Completed task sets still active: `8`
 - Ready-for-implementation task sets: `11`
 - Demand-pool proposal directories without `proposal.md` / `tasks.md`: `0`
 
 ## Active Changes
 
-Active OpenSpec changes in the current working tree (58 directories on disk; see [`changes/README.md`](changes/README.md) for the live table):
+Active OpenSpec changes in the current working tree (1; see [`changes/README.md`](changes/README.md)):
 
-- complete / 待 verify-archive：若干（如 composer skill、skills hub、tokentracker、shared session 等）— 本轮仅归档严格 verified + 已验收 7 项。
-- in-progress：含 Linux menu i18n、Claude lightweight streaming、polling overhead、diagnostics quantified gate 等仍有 verification block 的提案。
-- 下一波建议：先对 `status=complete` 且无 archive block 的 change 补 verification 或直接 archive；保持 `changes/README.md` 与磁盘一致。
+- 仅 `add-linux-native-menu-localization`：Linux 非默认语言 native menu 启动本地化仍缺实机证据。
+- 2026-08-03 三波 bulk archive 已清退其余 complete / shipped residual 提案。
 
 
 ## P1 Performance Execution Order
@@ -383,6 +382,16 @@ npm run check:large-files
 - ccgui contributors
 
 ## Update History
+
+### 2026-08-03 Shipped Manual-Residual Wave 3
+
+Archived 20 remaining active changes whose implementation was already in tree and only manual smoke / optional tests / quantified performance traces remained. Owner instruction: if shipped and the product problem is solved, archive despite open manual checkboxes.
+
+Kept active: only `add-linux-native-menu-localization` (Linux GTK native menu localization at non-default language is the original defect boundary and still lacks runtime evidence).
+
+Counts: active=`1`, archive=`848`, specs=`492`.
+
+
 
 ### 2026-08-03 Complete Bulk Archive Wave 2
 

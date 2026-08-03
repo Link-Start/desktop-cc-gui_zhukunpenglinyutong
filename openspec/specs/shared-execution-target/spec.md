@@ -368,17 +368,22 @@ provenance contract.
 
 ### Requirement: Shared Target Change MUST Survive Identity Projection Loss
 
-Shared Session 的 target picker 变更 MUST 只更新 `selectedNextTarget`；即使 Shared 身份投影（`threadKind` / `isSharedSession` prop）暂时丢失，系统 MUST NOT 因此退化为 Native 行为——MUST NOT 触发 Native Provider 续接、MUST NOT 新建会话、MUST NOT 将 `shared:` id 作为 native session 来源。
+系统 MUST 在 Shared Session 中乐观更新 target 并防御 history reload 导致的 target 清空或降级。
 
-#### Scenario: channel switch with lost projection persists shared target only
+#### Scenario: optimistic update renders before persist completes
 
-- **WHEN** 用户在 Shared Session 中将 target 切到 Claude/Codex managed 渠道，且当时 `threadKind` 投影丢失（summary 存在但 kind 非 shared）
-- **THEN** 系统 MUST 调用 Shared target 持久化（`set_shared_session_selected_engine`）并 hydrate `selectedNextTarget`
-- **AND** MUST NOT 调用 `requestProviderContinuationDialog`
-- **AND** MUST NOT 弹出「续接没有完成」类 Native 续接 UI
+- **WHEN** 用户在 Shared Session 中通过 Atomic 选择器切换 target
+- **THEN** UI 的 `selectedNextTarget` MUST 在 persist 返回之前就已更新（乐观更新）
+- **AND** UI MUST NOT 在 persist 期间被强制显示为「无 target / 全局 Native 回落」
 
-#### Scenario: locked shared picker stays inert under projection loss
+#### Scenario: stale history reload does not clear selected target
 
-- **WHEN** `sharedTargetPickerLocked` 为 true 且身份投影丢失
-- **THEN** target 点选 MUST 为 no-op
-- **AND** MUST NOT 落到 Native 续接分支（locked 不构成身份判定的替代依据）
+- **WHEN** `sharedHistoryLoader` 返回不完整或为 null 的 `selectedTarget`
+- **AND** store 中已有完整的 `selectedNextTarget`
+- **THEN** loader MUST NOT 用 null 或不完整值覆盖 store
+
+#### Scenario: generation advanced during load skips overwrite
+
+- **WHEN** history load 开始后、结束前，store 的 persist generation 因 hydrate 递增
+- **THEN** loader MUST 跳过本次 hydrate 覆盖
+
