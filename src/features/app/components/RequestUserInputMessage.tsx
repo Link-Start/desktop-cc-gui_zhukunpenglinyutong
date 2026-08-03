@@ -16,6 +16,12 @@ import {
   type UserInputSecretVisibilityState,
   type UserInputSelectionState,
 } from "./UserInputQuestionCard";
+import {
+  buildRecommendedDefaultAnswers,
+  hasRecommendedDefaultAnswers,
+  USER_INPUT_TIMEOUT_SECONDS,
+  USER_INPUT_TIMEOUT_WARNING_SECONDS,
+} from "./userInputTimeout";
 
 type RequestUserInputMessageProps = {
   requests: RequestUserInputRequest[];
@@ -39,8 +45,8 @@ type RequestDraftState = {
   activeQuestionIndex: number;
 };
 
-const REQUEST_STALE_TIMEOUT_SECONDS = 300;
-const REQUEST_STALE_WARNING_SECONDS = 30;
+const REQUEST_STALE_TIMEOUT_SECONDS = USER_INPUT_TIMEOUT_SECONDS;
+const REQUEST_STALE_WARNING_SECONDS = USER_INPUT_TIMEOUT_WARNING_SECONDS;
 
 function getRequestDraftKey(request: RequestUserInputRequest) {
   return requestUserInputIdentityKey(request);
@@ -209,11 +215,13 @@ export function RequestUserInputMessage({
     ? remainingSecondsByRequest[collapsedRequestKey] ?? REQUEST_STALE_TIMEOUT_SECONDS
     : REQUEST_STALE_TIMEOUT_SECONDS;
 
+  // Timeout: submit the recommended (first) option. Fall back to dismiss only
+  // when there is no selectable recommended answer.
+  // Must stay above any early return to keep hook order stable.
   useEffect(() => {
     if (
       !activeRequest ||
       !activeRequestKey ||
-      !onDismiss ||
       isSubmitting ||
       submitError ||
       activeRemainingSeconds > 0 ||
@@ -222,7 +230,20 @@ export function RequestUserInputMessage({
       return;
     }
     timeoutDismissedRequestKeysRef.current.add(activeRequestKey);
-    void Promise.resolve(onDismiss(activeRequest, { staleSettlementHint: "timeout" }))
+    const recommended = buildRecommendedDefaultAnswers(
+      activeRequest.params.questions,
+    );
+    const settlementOptions: RequestUserInputSettlementOptions = {
+      staleSettlementHint: "timeout",
+    };
+    const settleTimeout = hasRecommendedDefaultAnswers(recommended)
+      ? () =>
+          onSubmit(activeRequest, { answers: recommended }, settlementOptions)
+      : () =>
+          onDismiss
+            ? onDismiss(activeRequest, settlementOptions)
+            : Promise.resolve();
+    void Promise.resolve(settleTimeout())
       .then(() => {
         setLocallyCollapsedRequestKeys((current) => {
           if (!current.has(activeRequestKey)) {
@@ -268,6 +289,7 @@ export function RequestUserInputMessage({
     activeRequestKey,
     isSubmitting,
     onDismiss,
+    onSubmit,
     submitError,
     t,
   ]);
@@ -475,19 +497,9 @@ export function RequestUserInputMessage({
     setSubmitError(null);
     try {
       await submitRequest(activeRequest, { answers: buildAnswers() }, requestKey);
-      setDraftByRequest((current) => {
-        const next = { ...current };
-        delete next[requestKey];
-        return next;
-      });
-      setRemainingSecondsByRequest((current) => {
-        if (typeof current[requestKey] !== "number") {
-          return current;
-        }
-        const next = { ...current };
-        delete next[requestKey];
-        return next;
-      });
+      // Hide the live card immediately so a lagging parent queue cannot leave
+      // a second "still open" form after the history shows 已提交.
+      settleRequestLocally(requestKey);
     } catch {
       setSubmitError(t("approval.submitFailed"));
     } finally {

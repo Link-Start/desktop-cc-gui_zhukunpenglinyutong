@@ -26,7 +26,9 @@ type RuntimeReconnectCardProps = {
     threadId: string,
     message: Pick<QueuedMessage, "text" | "images">,
   ) => Promise<RuntimeReconnectRecoveryCallbackResult> | RuntimeReconnectRecoveryCallbackResult;
-  onThreadRecoveryFork?: () => Promise<void> | void;
+  onThreadRecoveryFork?: () =>
+    | Promise<RuntimeReconnectRecoveryCallbackResult>
+    | RuntimeReconnectRecoveryCallbackResult;
 };
 
 export function RuntimeReconnectCard({
@@ -89,7 +91,34 @@ export function RuntimeReconnectCard({
       setLastAction(mode);
       setReconnectErrorDetail(null);
       try {
-        await onThreadRecoveryFork();
+        const forkResult = await onThreadRecoveryFork();
+        // void/undefined keeps legacy mocks that resolve without a payload.
+        if (forkResult === undefined) {
+          setReconnectStatus("forked");
+          setReconnectErrorDetail(t("messages.threadRecoveryForkedContinued"));
+          return;
+        }
+        const normalized = normalizeRuntimeReconnectRecoveryResult(forkResult);
+        if (normalized.kind === "failed") {
+          setReconnectStatus("error");
+          setReconnectErrorDetail(
+            normalized.reason?.trim() || t("messages.threadRecoveryRecoverFailed"),
+          );
+          return;
+        }
+        if (normalized.kind === "fresh") {
+          setReconnectStatus("fresh");
+          setReconnectErrorDetail(t("messages.threadRecoveryFreshContinued"));
+          return;
+        }
+        if (normalized.kind === "forked") {
+          setReconnectStatus("forked");
+          setReconnectErrorDetail(t("messages.threadRecoveryForkedContinued"));
+          return;
+        }
+        // rebound is unexpected for dead-parent Fork but treat as restored.
+        setReconnectStatus("restored");
+        setReconnectErrorDetail(t("messages.threadRecoveryRestoredDetail"));
       } catch (error) {
         setReconnectStatus("error");
         setReconnectErrorDetail(normalizeRuntimeReconnectErrorMessage(error));

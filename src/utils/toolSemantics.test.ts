@@ -26,6 +26,13 @@ describe("toolSemantics", () => {
     );
     expect(extractToolName("Command: exec_command")).toBe("exec_command");
     expect(extractToolName("claude / TodoWrite")).toBe("TodoWrite");
+    expect(extractToolName("Tool: mcp__ccgui__AskUserQuestion")).toBe(
+      "AskUserQuestion",
+    );
+    expect(extractToolName("Mcp Ccgui Askuserquestion")).toBe("Askuserquestion");
+    expect(extractToolName("Tool: ccgui / AskUserQuestion")).toBe(
+      "AskUserQuestion",
+    );
   });
 
   it("resolves command statuses with explicit failure and completion precedence", () => {

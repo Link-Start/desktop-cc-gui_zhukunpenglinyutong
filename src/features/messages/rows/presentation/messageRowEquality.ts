@@ -37,7 +37,9 @@ export type MessageRowEqualityProps = {
     threadId: string,
     message: Pick<QueuedMessage, "text" | "images">,
   ) => Promise<RuntimeReconnectRecoveryCallbackResult> | RuntimeReconnectRecoveryCallbackResult;
-  onThreadRecoveryFork?: () => Promise<void> | void;
+  onThreadRecoveryFork?: () =>
+    | Promise<RuntimeReconnectRecoveryCallbackResult>
+    | RuntimeReconnectRecoveryCallbackResult;
   retryMessage?: Pick<QueuedMessage, "text" | "images"> | null;
   isCopied?: boolean;
   onCopy?: (item: MessageItem, copyText?: string) => void;

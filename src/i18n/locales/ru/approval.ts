@@ -50,7 +50,10 @@ const approval = {
     "submitted": "Отправлено",
     "noAnswerProvided": "(Ответ не предоставлен)",
     "noDisplayableAnswer": "(Нет отображаемого ответа)",
-    "userInputSubmittedBanner": "[Ввод пользователя отправлен]"
+    "userInputSubmittedBanner": "[Ввод пользователя отправлен]",
+    "timeoutHintRecommend": "По таймауту автоматически выберется рекомендованный «{{option}}»",
+    "timeoutHintRecommendMulti": "По таймауту автоматически выберется рекомендованный (первый) вариант каждого вопроса",
+    "timeoutHintSkip": "По таймауту пропустить и продолжить",
   }
 };
 

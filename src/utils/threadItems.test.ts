@@ -2461,6 +2461,49 @@ go lang`,
     });
   });
 
+  it("normalizes shared MCP AskUserQuestion _input/_output dump into submitted card", () => {
+    const questions = [
+      {
+        id: "q-0",
+        header: "实现方式",
+        multiSelect: false,
+        question: "实现方式选择哪一种？",
+        options: [
+          { label: "A 适配层", description: "改动小" },
+          { label: "B 重写引擎", description: "成本高" },
+        ],
+      },
+    ];
+    const items: ConversationItem[] = [
+      {
+        id: "mcp-shared-ask-1",
+        kind: "tool",
+        toolType: "mcpToolCall",
+        title: "Tool: mcp__ccgui__AskUserQuestion",
+        detail: JSON.stringify({ questions }),
+        status: "completed",
+        output: JSON.stringify({
+          _input: { questions },
+          _output:
+            "The user answered the AskUserQuestion: q-0=B 重写引擎. Please continue based on this selection.",
+        }),
+      },
+    ];
+
+    const prepared = prepareThreadItems(items);
+    expect(prepared).toHaveLength(1);
+    expect(prepared[0]).toMatchObject({
+      id: "request-user-input-submitted-mcp-shared-ask-1",
+      kind: "tool",
+      toolType: "requestUserInputSubmitted",
+      status: "completed",
+    });
+    expect(prepared[0].kind === "tool" && prepared[0].detail).toContain("B 重写引擎");
+    expect(prepared[0].kind === "tool" && prepared[0].detail).toContain(
+      "requestUserInputSubmitted/v1",
+    );
+  });
+
   it("parses ISO timestamps for thread updates", () => {
     const timestamp = getThreadTimestamp({ updated_at: "2025-01-01T00:00:00Z" });
     expect(timestamp).toBe(Date.parse("2025-01-01T00:00:00Z"));

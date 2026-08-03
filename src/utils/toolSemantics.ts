@@ -125,17 +125,42 @@ export function extractToolName(title: unknown): string {
     ? (prefixMatch[1] ?? normalizedTitle).trim()
     : normalizedTitle.trim();
 
+  // mcp__server__ToolName → ToolName
   if (cleanTitle.includes("__")) {
     const parts = cleanTitle.split("__");
     return (parts[parts.length - 1] ?? cleanTitle).trim();
   }
 
+  // "server / tool" or "Claude / askuserquestion"
   if (cleanTitle.includes("/")) {
     const parts = cleanTitle.split("/");
     return (parts[parts.length - 1] ?? cleanTitle).trim();
   }
 
+  // Display-formatted MCP titles: "Mcp Ccgui Askuserquestion" → Askuserquestion
+  const mcpSpacedMatch = cleanTitle.match(/^mcp\s+\S+\s+(.+)$/i);
+  if (mcpSpacedMatch?.[1]) {
+    return mcpSpacedMatch[1].trim();
+  }
+
   return cleanTitle.toLowerCase();
+}
+
+/** AskUserQuestion (native or mcp__ccgui__ / "Mcp Ccgui Askuserquestion"). */
+export function isAskUserQuestionToolName(
+  toolName: string,
+  title?: string,
+): boolean {
+  const compact = (value: string) =>
+    value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  const compactName = compact(toolName);
+  if (
+    compactName === "askuserquestion" ||
+    compactName.endsWith("askuserquestion")
+  ) {
+    return true;
+  }
+  return compact(normalizeRuntimeString(title)).includes("askuserquestion");
 }
 
 export function isReadTool(toolName: string): boolean {

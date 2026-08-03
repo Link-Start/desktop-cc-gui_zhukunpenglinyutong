@@ -147,7 +147,11 @@ const messages = {
     threadRecoveryThreadNotFound:
       "This conversation is bound to a Codex thread that is no longer available. The existing canvas stays visible, but this request needs a usable conversation to continue safely.",
     threadRecoveryRecommendation:
-      "Recommended next step: fork. The app will create a usable conversation from the current one.",
+      "Recommended next step: fork. The app tries to fork this conversation first; if the original thread is already gone, it creates a fresh usable session to continue.",
+    threadRecoveryForkedContinued:
+      "Switched to the forked session. You can keep typing.",
+    threadRecoveryFreshContinued:
+      "The original thread could not be forked, so a fresh session was created. You can keep typing.",
     threadRecoveryDetailLabel: "Error detail:",
     threadRecoveryAction: "Try recovery",
     threadRecoveryRunning: "Recovering...",

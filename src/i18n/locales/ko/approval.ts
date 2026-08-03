@@ -50,7 +50,10 @@ const approval = {
     "submitted": "제출됨",
     "noAnswerProvided": "(답변이 제공되지 않음)",
     "noDisplayableAnswer": "(표시할 수 있는 답변 없음)",
-    "userInputSubmittedBanner": "[사용자 입력 제출됨]"
+    "userInputSubmittedBanner": "[사용자 입력 제출됨]",
+    "timeoutHintRecommend": "시간 초과 시 권장 항목 「{{option}}」 자동 선택",
+    "timeoutHintRecommendMulti": "시간 초과 시 각 질문의 권장(첫 항목) 자동 선택",
+    "timeoutHintSkip": "시간 초과 시 건너뛰고 계속",
   }
 };
 

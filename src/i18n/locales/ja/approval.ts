@@ -50,7 +50,10 @@ const approval = {
     "submitted": "送信済み",
     "noAnswerProvided": "（回答なし）",
     "noDisplayableAnswer": "（表示可能な回答なし）",
-    "userInputSubmittedBanner": "[ユーザー入力が送信されました]"
+    "userInputSubmittedBanner": "[ユーザー入力が送信されました]",
+    "timeoutHintRecommend": "タイムアウト時は推奨「{{option}}」を自動選択",
+    "timeoutHintRecommendMulti": "タイムアウト時は各質問の推奨（先頭）を自動選択",
+    "timeoutHintSkip": "タイムアウト時はスキップして続行",
   }
 };
 

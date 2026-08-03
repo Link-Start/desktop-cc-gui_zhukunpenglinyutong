@@ -205,7 +205,58 @@ describe("RequestUserInputMessage", () => {
     expect(screen.queryByText("Provide input")).toBeNull();
   });
 
-  it("auto-dismisses unanswered stale request after local timeout", async () => {
+  it("auto-submits recommended first option after local timeout", async () => {
+    vi.useFakeTimers();
+    const onSubmit = vi.fn();
+    const onDismiss = vi.fn();
+    const requestWithOptions: RequestUserInputRequest = {
+      ...baseRequest,
+      params: {
+        ...baseRequest.params,
+        questions: [
+          {
+            id: "path",
+            header: "实现方式",
+            question: "走哪条路?",
+            options: [
+              { label: "A 适配层", description: "推荐" },
+              { label: "B 重写引擎", description: "" },
+            ],
+          },
+        ],
+      },
+    };
+    render(
+      <RequestUserInputMessage
+        requests={[requestWithOptions]}
+        activeThreadId="thread-1"
+        activeWorkspaceId="ws-1"
+        onSubmit={onSubmit}
+        onDismiss={onDismiss}
+      />,
+    );
+
+    expect(screen.getByText("30:00")).toBeTruthy();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1_800_000);
+      await Promise.resolve();
+    });
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      requestWithOptions,
+      {
+        answers: {
+          path: { answers: ["A 适配层"] },
+        },
+      },
+      { staleSettlementHint: "timeout" },
+    );
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(screen.queryByText("走哪条路?")).toBeNull();
+  });
+
+  it("falls back to dismiss on timeout when no recommended option exists", async () => {
     vi.useFakeTimers();
     const onSubmit = vi.fn();
     const onDismiss = vi.fn();
@@ -219,10 +270,8 @@ describe("RequestUserInputMessage", () => {
       />,
     );
 
-    expect(screen.getByText("5:00")).toBeTruthy();
-
     await act(async () => {
-      vi.advanceTimersByTime(300_000);
+      vi.advanceTimersByTime(1_800_000);
       await Promise.resolve();
     });
 
@@ -233,11 +282,50 @@ describe("RequestUserInputMessage", () => {
     expect(screen.queryByText("Provide input")).toBeNull();
   });
 
-  it("keeps timed-out request visible when auto-dismiss settlement fails", async () => {
+  it("keeps timed-out request visible when auto-default settlement fails", async () => {
+    vi.useFakeTimers();
+    const onSubmit = vi.fn().mockRejectedValue(new Error("fail"));
+    const onDismiss = vi.fn();
+    const requestWithOptions: RequestUserInputRequest = {
+      ...baseRequest,
+      params: {
+        ...baseRequest.params,
+        questions: [
+          {
+            id: "path",
+            header: "实现方式",
+            question: "走哪条路?",
+            options: [{ label: "A 适配层", description: "推荐" }],
+          },
+        ],
+      },
+    };
+    render(
+      <RequestUserInputMessage
+        requests={[requestWithOptions]}
+        activeThreadId="thread-1"
+        activeWorkspaceId="ws-1"
+        onSubmit={onSubmit}
+        onDismiss={onDismiss}
+      />,
+    );
+
+    await act(async () => {
+      vi.advanceTimersByTime(1_800_000);
+      await Promise.resolve();
+    });
+
+    expect(onSubmit).toHaveBeenCalled();
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(screen.getByText("Submit failed. Please retry.")).toBeTruthy();
+    expect(screen.getByText("走哪条路?")).toBeTruthy();
+  });
+
+  it("does not repeat timeout settlement after parent rerender keeps the same request", async () => {
     vi.useFakeTimers();
     const onSubmit = vi.fn();
-    const onDismiss = vi.fn().mockRejectedValue(new Error("fail"));
-    render(
+    const onDismiss = vi.fn();
+    const { rerender } = render(
       <RequestUserInputMessage
         requests={[baseRequest]}
         activeThreadId="thread-1"
@@ -248,33 +336,7 @@ describe("RequestUserInputMessage", () => {
     );
 
     await act(async () => {
-      vi.advanceTimersByTime(300_000);
-      await Promise.resolve();
-    });
-
-    expect(onDismiss).toHaveBeenCalledWith(baseRequest, {
-      staleSettlementHint: "timeout",
-    });
-    expect(onSubmit).not.toHaveBeenCalled();
-    expect(screen.getByText("Submit failed. Please retry.")).toBeTruthy();
-    expect(screen.getByText("Provide input")).toBeTruthy();
-  });
-
-  it("does not repeat stale timeout dismiss after parent rerender keeps the same request", async () => {
-    vi.useFakeTimers();
-    const onDismiss = vi.fn();
-    const { rerender } = render(
-      <RequestUserInputMessage
-        requests={[baseRequest]}
-        activeThreadId="thread-1"
-        activeWorkspaceId="ws-1"
-        onSubmit={vi.fn()}
-        onDismiss={onDismiss}
-      />,
-    );
-
-    await act(async () => {
-      vi.advanceTimersByTime(300_000);
+      vi.advanceTimersByTime(1_800_000);
       await Promise.resolve();
     });
 
@@ -285,7 +347,7 @@ describe("RequestUserInputMessage", () => {
         requests={[{ ...baseRequest }]}
         activeThreadId="thread-1"
         activeWorkspaceId="ws-1"
-        onSubmit={vi.fn()}
+        onSubmit={onSubmit}
         onDismiss={onDismiss}
       />,
     );
@@ -298,7 +360,37 @@ describe("RequestUserInputMessage", () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
-  it("submits timed-out active request with stale settlement hint", async () => {
+  it("hides live card immediately after successful submit even if parent keeps request", async () => {
+    const stickyRequest = { ...baseRequest };
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const { rerender } = render(
+      <RequestUserInputMessage
+        requests={[stickyRequest]}
+        activeThreadId="thread-1"
+        activeWorkspaceId="ws-1"
+        onSubmit={onSubmit}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "approval.submit" }));
+      await Promise.resolve();
+    });
+
+    expect(onSubmit).toHaveBeenCalled();
+    // Parent still holds the request (Shared lag / identity delay) — live card must hide.
+    rerender(
+      <RequestUserInputMessage
+        requests={[stickyRequest]}
+        activeThreadId="thread-1"
+        activeWorkspaceId="ws-1"
+        onSubmit={onSubmit}
+      />,
+    );
+    expect(screen.queryByText("Provide input")).toBeNull();
+  });
+
+  it("submits timed-out active request with stale settlement hint on manual submit", async () => {
     vi.useFakeTimers();
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     render(
@@ -307,13 +399,17 @@ describe("RequestUserInputMessage", () => {
         activeThreadId="thread-1"
         activeWorkspaceId="ws-1"
         onSubmit={onSubmit}
+        onDismiss={vi.fn().mockRejectedValue(new Error("keep-visible"))}
       />,
     );
 
     await act(async () => {
-      vi.advanceTimersByTime(300_000);
+      vi.advanceTimersByTime(1_800_000);
       await Promise.resolve();
     });
+
+    // Auto timeout falls back to dismiss (no options); force keep visible via dismiss failure.
+    expect(screen.getByText("Provide input")).toBeTruthy();
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "approval.submit" }));
@@ -344,7 +440,7 @@ describe("RequestUserInputMessage", () => {
     );
 
     await act(async () => {
-      vi.advanceTimersByTime(300_000);
+      vi.advanceTimersByTime(1_800_000);
       await Promise.resolve();
     });
 
@@ -385,7 +481,7 @@ describe("RequestUserInputMessage", () => {
     fireEvent.click(screen.getByRole("button", { name: "approval.submit" }));
 
     act(() => {
-      vi.advanceTimersByTime(300_000);
+      vi.advanceTimersByTime(1_800_000);
     });
 
     expect(onDismiss).not.toHaveBeenCalled();
@@ -419,7 +515,7 @@ describe("RequestUserInputMessage", () => {
     expect(screen.getByText("Submit failed. Please retry.")).toBeTruthy();
 
     act(() => {
-      vi.advanceTimersByTime(300_000);
+      vi.advanceTimersByTime(1_800_000);
     });
 
     expect(onDismiss).not.toHaveBeenCalled();

@@ -15,10 +15,16 @@ import {
   type UserInputSecretVisibilityState,
   type UserInputSelectionState,
 } from "./UserInputQuestionCard";
+import {
+  buildRecommendedDefaultAnswers,
+  hasRecommendedDefaultAnswers,
+  USER_INPUT_TIMEOUT_SECONDS,
+  USER_INPUT_TIMEOUT_WARNING_SECONDS,
+} from "./userInputTimeout";
 
 const MAX_CUSTOM_INPUT_LENGTH = 2000;
-const TIMEOUT_SECONDS = 300; // 5 minutes
-const WARNING_THRESHOLD_SECONDS = 30;
+const TIMEOUT_SECONDS = USER_INPUT_TIMEOUT_SECONDS;
+const WARNING_THRESHOLD_SECONDS = USER_INPUT_TIMEOUT_WARNING_SECONDS;
 
 function formatCountdown(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -58,11 +64,6 @@ export function AskUserQuestionDialog({
     [requests, activeThreadId, activeWorkspaceId],
   );
 
-  const activeRequest = activeRequests[0] ?? null;
-  const requestId = activeRequest
-    ? requestUserInputIdentityKey(activeRequest)
-    : null;
-
   const [selections, setSelections] = useState<UserInputSelectionState>({});
   const [customInputs, setCustomInputs] = useState<UserInputNotesState>({});
   const [secretVisible, setSecretVisible] = useState<UserInputSecretVisibilityState>({});
@@ -70,28 +71,64 @@ export function AskUserQuestionDialog({
   const [remainingSeconds, setRemainingSeconds] = useState(TIMEOUT_SECONDS);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [locallySettledRequestKeys, setLocallySettledRequestKeys] = useState<
+    Set<string>
+  >(() => new Set());
 
   const customInputRef = useRef<HTMLTextAreaElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevRequestIdRef = useRef<string | null>(null);
+  const timeoutSettledRequestKeysRef = useRef<Set<string>>(new Set());
 
   const isTimeWarning = remainingSeconds <= WARNING_THRESHOLD_SECONDS && remainingSeconds > 0;
   const isTimedOut = remainingSeconds <= 0;
 
+  const visibleActiveRequests = useMemo(
+    () =>
+      activeRequests.filter(
+        (req) => !locallySettledRequestKeys.has(requestUserInputIdentityKey(req)),
+      ),
+    [activeRequests, locallySettledRequestKeys],
+  );
+  const visibleActiveRequest = visibleActiveRequests[0] ?? null;
+  const visibleRequestId = visibleActiveRequest
+    ? requestUserInputIdentityKey(visibleActiveRequest)
+    : null;
+
+  // Drop local settlement marks once parent queue no longer carries the request.
+  useEffect(() => {
+    setLocallySettledRequestKeys((current) => {
+      if (current.size === 0) {
+        return current;
+      }
+      const liveKeys = new Set(requests.map(requestUserInputIdentityKey));
+      let changed = false;
+      const next = new Set<string>();
+      current.forEach((key) => {
+        if (liveKeys.has(key)) {
+          next.add(key);
+        } else {
+          changed = true;
+        }
+      });
+      return changed ? next : current;
+    });
+  }, [requests]);
+
   // Reset when a new request arrives
   useEffect(() => {
-    if (requestId && requestId !== prevRequestIdRef.current) {
-      prevRequestIdRef.current = requestId;
+    if (visibleRequestId && visibleRequestId !== prevRequestIdRef.current) {
+      prevRequestIdRef.current = visibleRequestId;
       setQuestionIndex(0);
       setRemainingSeconds(TIMEOUT_SECONDS);
       setIsSubmitting(false);
       setSubmitError(null);
 
-      if (activeRequest) {
+      if (visibleActiveRequest) {
         const nextSelections: UserInputSelectionState = {};
         const nextCustom: UserInputNotesState = {};
         const nextSecret: UserInputSecretVisibilityState = {};
-        activeRequest.params.questions.forEach((q, i) => {
+        visibleActiveRequest.params.questions.forEach((q, i) => {
           const key = getUserInputQuestionKey(q, i);
           nextSelections[key] = new Set();
           nextCustom[key] = "";
@@ -102,7 +139,7 @@ export function AskUserQuestionDialog({
         setSecretVisible(nextSecret);
       }
     }
-  }, [requestId, activeRequest]);
+  }, [visibleRequestId, visibleActiveRequest]);
 
   // Countdown timer
   useEffect(() => {
@@ -112,7 +149,7 @@ export function AskUserQuestionDialog({
         timerRef.current = null;
       }
     };
-    if (!activeRequest) {
+    if (!visibleActiveRequest || !visibleRequestId) {
       clearTimer();
       return;
     }
@@ -127,34 +164,86 @@ export function AskUserQuestionDialog({
       });
     }, 1000);
     return clearTimer;
-  }, [requestId, activeRequest]);
+  }, [visibleRequestId, visibleActiveRequest]);
+
+  const markRequestSettledLocally = useCallback((key: string) => {
+    setLocallySettledRequestKeys((current) => {
+      if (current.has(key)) {
+        return current;
+      }
+      const next = new Set(current);
+      next.add(key);
+      return next;
+    });
+  }, []);
 
   const handleCancel = useCallback(() => {
-    if (!activeRequest) return;
+    if (!visibleActiveRequest || !visibleRequestId) return;
     // Submit empty answers to unblock the agent
-    void onSubmit(activeRequest, { answers: {} });
-  }, [activeRequest, onSubmit]);
+    void Promise.resolve(onSubmit(visibleActiveRequest, { answers: {} })).then(
+      () => {
+        markRequestSettledLocally(visibleRequestId);
+      },
+    );
+  }, [
+    markRequestSettledLocally,
+    onSubmit,
+    visibleActiveRequest,
+    visibleRequestId,
+  ]);
 
-  // Auto-cancel on timeout
+  // Auto-submit recommended (first) option on timeout
   useEffect(() => {
-    if (isTimedOut && activeRequest) {
-      handleCancel();
+    if (
+      !isTimedOut ||
+      !visibleActiveRequest ||
+      !visibleRequestId ||
+      isSubmitting ||
+      timeoutSettledRequestKeysRef.current.has(visibleRequestId)
+    ) {
+      return;
     }
-  }, [isTimedOut, activeRequest, handleCancel]);
+    timeoutSettledRequestKeysRef.current.add(visibleRequestId);
+    const recommended = buildRecommendedDefaultAnswers(
+      visibleActiveRequest.params.questions,
+    );
+    const response: RequestUserInputResponse = hasRecommendedDefaultAnswers(
+      recommended,
+    )
+      ? { answers: recommended }
+      : { answers: {} };
+    void Promise.resolve(onSubmit(visibleActiveRequest, response))
+      .then(() => {
+        markRequestSettledLocally(visibleRequestId);
+        timeoutSettledRequestKeysRef.current.delete(visibleRequestId);
+      })
+      .catch(() => {
+        timeoutSettledRequestKeysRef.current.delete(visibleRequestId);
+        setSubmitError(t("approval.submitFailed"));
+      });
+  }, [
+    isSubmitting,
+    isTimedOut,
+    markRequestSettledLocally,
+    onSubmit,
+    t,
+    visibleActiveRequest,
+    visibleRequestId,
+  ]);
 
   // ESC key
   useEffect(() => {
-    if (!activeRequest) return;
+    if (!visibleActiveRequest) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") handleCancel();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [activeRequest, handleCancel]);
+  }, [visibleActiveRequest, handleCancel]);
 
-  if (!activeRequest) return null;
+  if (!visibleActiveRequest) return null;
 
-  const { questions } = activeRequest.params;
+  const { questions } = visibleActiveRequest.params;
   if (!questions.length) return null;
 
   const safeIndex = Math.max(0, Math.min(questionIndex, questions.length - 1));
@@ -266,10 +355,15 @@ export function AskUserQuestionDialog({
   };
 
   const handleSubmitFinal = async () => {
+    if (!visibleActiveRequest || !visibleRequestId) {
+      return;
+    }
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      await onSubmit(activeRequest, { answers: buildAnswers() });
+      await onSubmit(visibleActiveRequest, { answers: buildAnswers() });
+      // Hide immediately even if parent queue lag leaves the request briefly.
+      markRequestSettledLocally(visibleRequestId);
     } catch {
       setSubmitError(t("approval.submitFailed"));
     } finally {
@@ -277,7 +371,7 @@ export function AskUserQuestionDialog({
     }
   };
 
-  const totalRequests = activeRequests.length;
+  const totalRequests = visibleActiveRequests.length;
 
   return (
     <div

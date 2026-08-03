@@ -95,6 +95,126 @@ function buildManualRecoveryFailure(
   };
 }
 
+type ManualRecoveryThreadMeta = {
+  id: string;
+  engineSource?: ManualRecoveryEngine;
+  providerProfileId?: string | null;
+};
+
+function resolveManualRecoveryProviderProfileId(
+  workspaceId: string,
+  threadId: string,
+  threadsByWorkspace: Record<string, ManualRecoveryThreadMeta[]>,
+): string | null {
+  const thread = (threadsByWorkspace[workspaceId] ?? []).find((entry) => entry.id === threadId);
+  const providerProfileId = thread?.providerProfileId?.trim() || "";
+  return providerProfileId || null;
+}
+
+/**
+ * Recovery-card Fork path: explicit continuation without forced resend.
+ * Prefer native fork; if the dead parent cannot be forked, start a fresh thread.
+ */
+export async function continueStaleThreadBindingForManualRecovery(params: {
+  workspaceId: string;
+  threadId: string;
+  threadsByWorkspace: Record<string, ManualRecoveryThreadMeta[]>;
+  forkThreadForWorkspace?: (
+    workspaceId: string,
+    threadId: string,
+    options?: {
+      activate?: boolean;
+      providerProfileId?: string | null;
+    },
+  ) => Promise<string | null>;
+  startThreadForWorkspace: (
+    workspaceId: string,
+    options?: {
+      activate?: boolean;
+      engine?: ManualRecoveryEngine;
+      providerProfileId?: string | null;
+    },
+  ) => Promise<string | null>;
+}): Promise<ManualThreadRecoveryResult> {
+  const normalizedWorkspaceId = params.workspaceId.trim();
+  const normalizedThreadId = params.threadId.trim();
+  if (!normalizedWorkspaceId || !normalizedThreadId) {
+    return buildManualRecoveryFailure("missing workspace or thread id", true);
+  }
+
+  const recoveryEngine = inferManualRecoveryEngine(
+    normalizedWorkspaceId,
+    normalizedThreadId,
+    params.threadsByWorkspace,
+  );
+  if (!isEngineExecutionEnabled(recoveryEngine)) {
+    return buildManualRecoveryFailure("unsupported_engine", true);
+  }
+
+  const providerProfileId = resolveManualRecoveryProviderProfileId(
+    normalizedWorkspaceId,
+    normalizedThreadId,
+    params.threadsByWorkspace,
+  );
+  const providerOptions = providerProfileId ? { providerProfileId } : {};
+
+  let forkErrorMessage: string | null = null;
+  if (params.forkThreadForWorkspace) {
+    try {
+      const forkedThreadId = await params.forkThreadForWorkspace(
+        normalizedWorkspaceId,
+        normalizedThreadId,
+        { activate: true, ...providerOptions },
+      );
+      const normalizedForkedThreadId =
+        typeof forkedThreadId === "string" ? forkedThreadId.trim() : "";
+      if (normalizedForkedThreadId) {
+        return {
+          kind: "forked",
+          threadId: normalizedForkedThreadId,
+          retryable: true,
+          userAction: "start-fresh-thread",
+        };
+      }
+      forkErrorMessage = "fork thread unavailable";
+    } catch (error) {
+      forkErrorMessage = normalizeManualRecoveryError(error);
+      console.warn(
+        "[thread-recovery] Native fork failed for stale parent; trying fresh continuation",
+        forkErrorMessage,
+      );
+    }
+  }
+
+  let freshThreadId: string | null = null;
+  let freshErrorMessage: string | null = null;
+  try {
+    freshThreadId = await params.startThreadForWorkspace(normalizedWorkspaceId, {
+      activate: true,
+      engine: recoveryEngine,
+      ...providerOptions,
+    });
+  } catch (error) {
+    freshErrorMessage = normalizeManualRecoveryError(error);
+  }
+
+  const normalizedFreshThreadId =
+    typeof freshThreadId === "string" ? freshThreadId.trim() : "";
+  if (normalizedFreshThreadId) {
+    return {
+      kind: "fresh",
+      threadId: normalizedFreshThreadId,
+      retryable: true,
+      userAction: "start-fresh-thread",
+    };
+  }
+
+  return buildManualRecoveryFailure(
+    freshErrorMessage || "fresh thread unavailable",
+    true,
+  );
+}
+
 export async function recoverThreadBindingForManualRecovery(params: {
   workspaceId: string;
   threadId: string;
@@ -105,6 +225,7 @@ export async function recoverThreadBindingForManualRecovery(params: {
     options?: {
       activate?: boolean;
       engine?: ManualRecoveryEngine;
+      providerProfileId?: string | null;
     },
   ) => Promise<string | null>;
   allowFreshThread?: boolean;
@@ -186,6 +307,7 @@ export async function recoverThreadBindingAndResendForManualRecovery<
     options?: {
       activate?: boolean;
       engine?: ManualRecoveryEngine;
+      providerProfileId?: string | null;
     },
   ) => Promise<string | null>;
   forkThreadForWorkspace?: (
@@ -193,6 +315,7 @@ export async function recoverThreadBindingAndResendForManualRecovery<
     threadId: string,
     options?: {
       activate?: boolean;
+      providerProfileId?: string | null;
     },
   ) => Promise<string | null>;
   connectWorkspace: (workspace: Workspace) => Promise<void>;

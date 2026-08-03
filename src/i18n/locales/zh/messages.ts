@@ -131,7 +131,11 @@ const messages = {
     threadRecoveryThreadNotFound:
       "当前会话绑定的 Codex thread 已失效，原 thread 不能安全继续。幕布里已有内容会保留，但这次请求需要切到可用会话承接。",
     threadRecoveryRecommendation:
-      "建议下一步：点击 Fork，系统会基于当前对话创建一个可用会话继续承接。",
+      "建议下一步：点击 Fork。系统会优先基于当前对话 fork；若原 thread 已失效，则自动新建可用会话承接。",
+    threadRecoveryForkedContinued:
+      "已切换到 Fork 会话，可以继续输入。",
+    threadRecoveryFreshContinued:
+      "原 thread 无法 fork，已新建会话承接，可以继续输入。",
     threadRecoveryDetailLabel: "错误详情：",
     threadRecoveryAction: "尝试恢复会话",
     threadRecoveryRunning: "正在恢复...",

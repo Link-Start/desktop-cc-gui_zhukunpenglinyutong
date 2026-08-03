@@ -296,7 +296,10 @@ export const GenericToolBlock = memo(function GenericToolBlock({
   );
 
   const shouldShowDetails = otherParams.length > 0 && isExpanded;
-  const isAskUserQuestionTool = toolName.toLowerCase() === "askuserquestion";
+  const isAskUserQuestionTool =
+    toolName.toLowerCase() === "askuserquestion" ||
+    toolName.toLowerCase().replace(/[^a-z0-9]/g, "").endsWith("askuserquestion") ||
+    item.title.toLowerCase().replace(/[^a-z0-9]/g, "").includes("askuserquestion");
   const suppressPlanModeHintForClaude =
     isAskUserQuestionTool &&
     activeEngine === "claude" &&

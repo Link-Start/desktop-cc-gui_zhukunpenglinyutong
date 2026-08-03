@@ -766,14 +766,23 @@ pub fn engine_event_to_app_server_event_with_turn_context(
             // non-matching itemId makes the frontend fall back to its default
             // tail placement, so the card renders at the bottom of the turn near
             // the composer; it also gives the settled ask its own item id instead
-            // of reusing the assistant message item. turnId stays as item_id for
-            // turn context.
+            // of reusing the assistant message item.
+            //
+            // turnId MUST be the runtime turn identity (turn_id_context), not the
+            // assistant item id. Shared Session control-owner resolution compares
+            // params.turnId to sharedOwner.runtimeTurnId and fail-closes on
+            // mismatch — using assistant item id silently drops AskUserQuestion
+            // dialogs in Shared while the MCP tool keeps spinning.
             let ask_item_id = format!("askuserquestion-{}", stringify_value(request_id));
+            let turn_id = turn_id_context
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or(item_id);
             json!({
                 "method": "item/tool/requestUserInput",
                 "params": {
                     "threadId": thread_id,
-                    "turnId": item_id,
+                    "turnId": turn_id,
                     "itemId": ask_item_id,
                     "questions": questions,
                     "completed": completed,
@@ -1157,8 +1166,13 @@ mod tests {
             completed: false,
         };
 
-        let mapped = engine_event_to_app_server_event(&event, "thread-1", "assistant-item-9")
-            .expect("mapped event");
+        let mapped = engine_event_to_app_server_event_with_turn_context(
+            &event,
+            "thread-1",
+            "assistant-item-9",
+            Some("runtime-turn-42"),
+        )
+        .expect("mapped event");
 
         assert_eq!(
             mapped.message["method"],
@@ -1173,9 +1187,18 @@ mod tests {
             mapped.message["params"]["itemId"],
             json!("assistant-item-9")
         );
-        // turnId still carries the assistant item so turn association is unchanged.
+        // turnId must be the runtime turn identity for Shared control-owner match.
         assert_eq!(
             mapped.message["params"]["turnId"],
+            Value::String("runtime-turn-42".to_string())
+        );
+
+        // Without turn context, fall back to item_id for legacy callers.
+        let mapped_legacy =
+            engine_event_to_app_server_event(&event, "thread-1", "assistant-item-9")
+                .expect("mapped legacy event");
+        assert_eq!(
+            mapped_legacy.message["params"]["turnId"],
             Value::String("assistant-item-9".to_string())
         );
     }
