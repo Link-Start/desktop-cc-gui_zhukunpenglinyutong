@@ -106,3 +106,36 @@ onDebugRef 解耦、原子 selection state、乐观 snapshot、preferred 归一�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1303: fix shortcuts guide Quick Switcher i18n key
+
+**Date**: 2026-08-03
+**Task**: fix shortcuts guide Quick Switcher i18n key
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+快捷键指南误用 sidebar.quickSwitcher.title，改为 quickSwitcher.title；仅提交 2 个文件，未混入其他 WIP。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d2537a77b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
