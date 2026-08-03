@@ -168,3 +168,80 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: 保留百度统计并修复 Linux 启动空白
+
+**Date**: 2026-08-03
+**Task**: 保留百度统计并修复 Linux 启动空白
+**Branch**: `fix/linux-startup-preserve-analytics`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项目 | 结果 |
+|---|---|
+| Root cause | Ubuntu 22.04 的 WebKitNetworkProcess/libsoup 访问 `hm.baidu.com` 时崩溃，导致 renderer content area 空白。 |
+| Production fix | Linux native 继续执行 official `hm.js` 生成 payload，仅将 fixed script/beacon transport 转交 Rust `reqwest`；Windows、macOS 与 Web Service 行为不变。 |
+| Identity | `HMACCOUNT` 使用 existing lock + atomic persistence，日志不记录 identifier、完整 URL 或 query。 |
+| Real launcher | GNOME favorite 的既有 wrapper 只切换 artifact path；`gtk-launch` 实测完整 UI、renderer ready、47 秒稳定、identity continuity 且无新增 WebKit/libsoup crash。 |
+| Validation | Focused Vitest 9/9、Rust 8/8、typecheck、lint 0 errors/9 existing warnings、runtime contracts、rustfmt、diff check、build 与 OpenSpec strict validation 通过。 |
+| Baseline boundary | Sidebar 2 tests、doctor branding gate 与 full cargo fmt failure 已在 main 复现为既有无关 failure，并按用户授权不阻断。 |
+
+**交付边界**：verified AppImage SHA-256 为 `cf3df07f6821323b5dea5b6983c5f6686992d25196cedfada3400701661f7b82`；本地 artifact unsigned，因为未提供 `TAURI_SIGNING_PRIVATE_KEY`。百度 dashboard 最终聚合展示未自动验证，已验证 official endpoint transport success 与 visitor continuity。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0df8d661d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 7: 加固 Linux 百度统计 Cookie 提交时序
+
+**Date**: 2026-08-03
+**Task**: 加固 Linux 百度统计 Cookie 提交时序
+**Branch**: `fix/linux-startup-preserve-analytics`
+
+### Summary
+
+将 visitor cookie snapshot 与 network I/O 解耦；仅在 script/beacon 响应完整校验后 compare-and-update，并用独立 commit mutex 保证 atomic persistence 顺序。新增 stale/no-candidate/invalid-script/non-2xx 回归测试，Rust 13/13、targeted rustfmt、diff-check、strict OpenSpec 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b46603e5b` | (see git log) |
+| `5775ec03a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
