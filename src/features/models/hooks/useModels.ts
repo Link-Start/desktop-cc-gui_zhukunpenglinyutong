@@ -418,16 +418,13 @@ export const planComposerModelSelection = (input: {
   // 已收敛则返回 null：layout / refresh 不再发起任何 commit，
   // 避免「语义等价 plan 反复 apply」在父树重渲染下叠满 update depth。
   // 用 id/model 双通道匹配 selected，避免 "id vs model 字段" 语义相等却反复 commit。
+  // clearUserSelectedModel 只清用户锁 ref，不单独触发 setState；state 已对齐时直接 null。
   const selectedMatchesNext =
     selectedModelId === nextModelId ||
     existingSelection?.id === nextModelId ||
     existingSelection?.model === nextModel.model ||
     (freeformSelection !== null && selectedModelId === nextModelId);
-  if (
-    !clearUserSelectedModel &&
-    selectedMatchesNext &&
-    nextEffortNormalized === currentEffort
-  ) {
+  if (selectedMatchesNext && nextEffortNormalized === currentEffort) {
     return null;
   }
 
@@ -438,6 +435,23 @@ export const planComposerModelSelection = (input: {
   };
 };
 
+/** preferred 入参归一：null/"" / 空白 → null，切断 layout deps 虚抖。 */
+const normalizePreferredIdentity = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+/** 单次 catalog/preferred epoch 内最多 apply 次数；超限熔断防 #185 白屏。 */
+const SELECTION_APPLY_CIRCUIT_LIMIT = 12;
+
+type ComposerSelectionState = {
+  modelId: string | null;
+  effort: string | null;
+};
+
 export function useModels({
   activeWorkspace,
   onDebug,
@@ -445,10 +459,20 @@ export function useModels({
   preferredEffort = null,
   preferredSelectionReady = true,
 }: UseModelsOptions): UseModelsResult {
+  // 边界归一 preferred，避免 ""/空白与 null 在 layout deps 上抖动
+  const stablePreferredModelId = normalizePreferredIdentity(preferredModelId);
+  const stablePreferredEffort = normalizeEffort(preferredEffort);
+  const stablePreferredSelectionReady = Boolean(preferredSelectionReady);
+
   const [rawModels, setRawModels] = useState<ModelOption[]>([]);
   const [configModel, setConfigModel] = useState<string | null>(null);
-  const [selectedModelId, setSelectedModelIdState] = useState<string | null>(null);
-  const [selectedEffort, setSelectedEffortState] = useState<string | null>(null);
+  // 原子 selection：model+effort 一次 setState，避免双 commit 嵌套更新叠 depth
+  const [selection, setSelection] = useState<ComposerSelectionState>({
+    modelId: null,
+    effort: null,
+  });
+  const selectedModelId = selection.modelId;
+  const selectedEffort = selection.effort;
   const [modelMappingVersion, setModelMappingVersion] = useState(0);
   const lastCatalogAttemptWorkspaceId = useRef<string | null>(null);
   const inFlightWorkspaceId = useRef<string | null>(null);
@@ -456,8 +480,9 @@ export function useModels({
   const hasUserSelectedModel = useRef(false);
   const hasUserSelectedEffort = useRef(false);
   const lastWorkspaceId = useRef<string | null>(null);
-  /** 幂等 apply 门闩：同一 model|effort 不重复 commit，切断 preferred↔selection 回写叠环。 */
-  const lastAppliedSelectionKeyRef = useRef<string | null>(null);
+  /** catalog/preferred epoch 熔断：同 epoch 超限 apply 直接停，防冷启 #185 白屏 */
+  const selectionApplyEpochRef = useRef<string | null>(null);
+  const selectionApplyCountRef = useRef(0);
   const stableModelsRef = useRef<ModelOption[]>([]);
   const [catalogReadyForWorkspace, setCatalogReadyForWorkspace] = useState(false);
   const catalogCacheByWorkspace = useRef(
@@ -467,22 +492,25 @@ export function useModels({
   const selectionSnapshotRef = useRef({
     selectedModelId: null as string | null,
     selectedEffort: null as string | null,
-    preferredModelId,
-    preferredEffort,
-    preferredSelectionReady,
+    preferredModelId: stablePreferredModelId,
+    preferredEffort: stablePreferredEffort,
+    preferredSelectionReady: stablePreferredSelectionReady,
   });
   selectionSnapshotRef.current = {
     selectedModelId,
     selectedEffort,
-    preferredModelId,
-    preferredEffort,
-    preferredSelectionReady,
+    preferredModelId: stablePreferredModelId,
+    preferredEffort: stablePreferredEffort,
+    preferredSelectionReady: stablePreferredSelectionReady,
   };
 
   const workspaceId = activeWorkspace?.id ?? null;
   const isConnected = Boolean(activeWorkspace?.connected);
   const activeWorkspaceIdRef = useRef<string | null>(workspaceId);
   activeWorkspaceIdRef.current = workspaceId;
+  // onDebug 常为父组件非稳定回调；经 ref 读取，禁止拖进 apply/layout deps 形成 #185
+  const onDebugRef = useRef(onDebug);
+  onDebugRef.current = onDebug;
   // Codex catalog only — never apply Claude ANTHROPIC_* mapping here.
   // modelCatalogVersion bumps when custom Codex models change in localStorage.
   // 结构指纹稳定时复用上一帧 array 引用，避免 layout deps 因 merge 新数组误触发。
@@ -497,40 +525,93 @@ export function useModels({
     return next;
   }, [rawModels, modelMappingVersion]);
 
-  // 幂等写入：语义相等则保持同一 reference，切断 setState → layout → setState 环
+  const modelsFingerprint = useMemo(
+    () => modelOptionsFingerprint(models),
+    [models],
+  );
+
+  // 原子幂等写入：语义相等保持同一 state 引用
+  const commitSelection = useCallback(
+    (nextModelId: string | null, nextEffort: string | null) => {
+      const normalizedEffort = normalizeEffort(nextEffort);
+      setSelection((prev) => {
+        if (
+          prev.modelId === nextModelId &&
+          normalizeEffort(prev.effort) === normalizedEffort
+        ) {
+          return prev;
+        }
+        return { modelId: nextModelId, effort: normalizedEffort };
+      });
+    },
+    [],
+  );
+
   const commitSelectedModelId = useCallback((next: string | null) => {
-    setSelectedModelIdState((prev) => (prev === next ? prev : next));
+    setSelection((prev) => (prev.modelId === next ? prev : { ...prev, modelId: next }));
   }, []);
 
   const commitSelectedEffort = useCallback((next: string | null) => {
     const normalized = normalizeEffort(next);
-    setSelectedEffortState((prev) =>
-      normalizeEffort(prev) === normalized ? prev : normalized,
+    setSelection((prev) =>
+      normalizeEffort(prev.effort) === normalized
+        ? prev
+        : { ...prev, effort: normalized },
     );
   }, []);
 
   const applySelectionPlan = useCallback(
     (plan: ComposerSelectionPlan) => {
       const nextEffort = normalizeEffort(plan.nextEffort);
-      const applyKey = `${plan.nextModelId ?? ""}\0${nextEffort ?? ""}\0${
-        plan.clearUserSelectedModel ? "1" : "0"
-      }`;
+      const nextModelId = plan.nextModelId;
       const snapshot = selectionSnapshotRef.current;
-      const alreadyApplied =
-        lastAppliedSelectionKeyRef.current === applyKey &&
-        snapshot.selectedModelId === plan.nextModelId &&
+      const stateAlreadyMatched =
+        snapshot.selectedModelId === nextModelId &&
         normalizeEffort(snapshot.selectedEffort) === nextEffort;
-      if (alreadyApplied) {
-        return;
-      }
+
       if (plan.clearUserSelectedModel) {
         hasUserSelectedModel.current = false;
       }
-      lastAppliedSelectionKeyRef.current = applyKey;
-      commitSelectedModelId(plan.nextModelId);
-      commitSelectedEffort(nextEffort);
+
+      // state 已对齐：只清锁，禁止再 setState（冷启 #185）
+      if (stateAlreadyMatched) {
+        return;
+      }
+
+      const epochKey = `${modelsFingerprint}\0${snapshot.preferredModelId ?? ""}\0${
+        snapshot.preferredEffort ?? ""
+      }\0${snapshot.preferredSelectionReady ? "1" : "0"}`;
+      if (selectionApplyEpochRef.current !== epochKey) {
+        selectionApplyEpochRef.current = epochKey;
+        selectionApplyCountRef.current = 0;
+      }
+      selectionApplyCountRef.current += 1;
+      if (selectionApplyCountRef.current > SELECTION_APPLY_CIRCUIT_LIMIT) {
+        // 熔断：不再 setState，避免 Maximum update depth 白屏
+        onDebugRef.current?.({
+          id: `${Date.now()}-client-model-selection-circuit-breaker`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "model selection apply circuit breaker",
+          payload: {
+            epochKey,
+            applyCount: selectionApplyCountRef.current,
+            nextModelId,
+            nextEffort,
+          },
+        });
+        return;
+      }
+
+      // 同 tick 乐观更新 snapshot：refresh apply 与 layout apply 不会双写叠 depth
+      selectionSnapshotRef.current = {
+        ...selectionSnapshotRef.current,
+        selectedModelId: nextModelId,
+        selectedEffort: nextEffort,
+      };
+      commitSelection(nextModelId, nextEffort);
     },
-    [commitSelectedEffort, commitSelectedModelId],
+    [commitSelection, modelsFingerprint],
   );
 
   // Listen for localStorage changes (cross-tab sync + custom events)
@@ -573,18 +654,28 @@ export function useModels({
     hasUserSelectedEffort.current = false;
     lastWorkspaceId.current = workspaceId;
     lastCatalogAttemptWorkspaceId.current = null;
-    lastAppliedSelectionKeyRef.current = null;
+    selectionApplyEpochRef.current = null;
+    selectionApplyCountRef.current = 0;
     stableModelsRef.current = [];
     setConfigModel(null);
     setRawModels([]);
-    setSelectedModelIdState(null);
-    setSelectedEffortState(null);
+    setSelection({ modelId: null, effort: null });
+    selectionSnapshotRef.current = {
+      ...selectionSnapshotRef.current,
+      selectedModelId: null,
+      selectedEffort: null,
+    };
     setCatalogReadyForWorkspace(false);
   }, [workspaceId]);
 
   const setSelectedModelId = useCallback(
     (next: string | null) => {
       hasUserSelectedModel.current = true;
+      // 用户显式选择也走乐观 snapshot，避免紧随其后的 layout plan 回写
+      selectionSnapshotRef.current = {
+        ...selectionSnapshotRef.current,
+        selectedModelId: next,
+      };
       commitSelectedModelId(next);
     },
     [commitSelectedModelId],
@@ -593,7 +684,12 @@ export function useModels({
   const setSelectedEffort = useCallback(
     (next: string | null) => {
       hasUserSelectedEffort.current = true;
-      commitSelectedEffort(next);
+      const normalized = normalizeEffort(next);
+      selectionSnapshotRef.current = {
+        ...selectionSnapshotRef.current,
+        selectedEffort: normalized,
+      };
+      commitSelectedEffort(normalized);
     },
     [commitSelectedEffort],
   );
@@ -635,7 +731,7 @@ export function useModels({
     const refreshRequestId = latestRefreshRequestId.current + 1;
     latestRefreshRequestId.current = refreshRequestId;
     const requestedWorkspaceId = workspaceId;
-    onDebug?.({
+    onDebugRef.current?.({
       id: `${Date.now()}-client-model-list`,
       timestamp: Date.now(),
       source: "client",
@@ -675,7 +771,7 @@ export function useModels({
           ? configModelResult.value
           : null;
       if (configModelResult.status === "rejected") {
-        onDebug?.({
+        onDebugRef.current?.({
           id: `${Date.now()}-client-config-model-error`,
           timestamp: Date.now(),
           source: "error",
@@ -689,7 +785,7 @@ export function useModels({
       const response =
         modelListResult.status === "fulfilled" ? modelListResult.value : null;
       if (modelListResult.status === "rejected") {
-        onDebug?.({
+        onDebugRef.current?.({
           id: `${Date.now()}-client-model-list-error`,
           timestamp: Date.now(),
           source: "error",
@@ -700,7 +796,7 @@ export function useModels({
               : String(modelListResult.reason),
         });
       }
-      onDebug?.({
+      onDebugRef.current?.({
         id: `${Date.now()}-server-model-list`,
         timestamp: Date.now(),
         source: "server",
@@ -713,7 +809,9 @@ export function useModels({
       if (isStaleResponse) {
         return;
       }
-      setConfigModel(configModelFromConfig);
+      setConfigModel((prev) =>
+        prev === configModelFromConfig ? prev : configModelFromConfig,
+      );
       const rawData = response?.result?.data ?? response?.data ?? [];
       const dataFromServer: ModelOption[] = rawData.map((item: any) => ({
         id: String(item.id ?? item.model ?? ""),
@@ -793,7 +891,7 @@ export function useModels({
           lastVerifiedAt: entry.lastVerifiedAt ?? null,
           lifecycle: entry.lifecycle ?? null,
         }));
-        onDebug?.({
+        onDebugRef.current?.({
           id: `${Date.now()}-client-model-catalog-stale`,
           timestamp: Date.now(),
           source: "error",
@@ -833,8 +931,10 @@ export function useModels({
         modelOptionsFingerprint(prev) === modelOptionsFingerprint(data) ? prev : data,
       );
       lastCatalogAttemptWorkspaceId.current = requestedWorkspaceId;
-      setCatalogReadyForWorkspace(
-        modelListResult.status === "fulfilled" && Array.isArray(rawData),
+      const nextCatalogReady =
+        modelListResult.status === "fulfilled" && Array.isArray(rawData);
+      setCatalogReadyForWorkspace((prev) =>
+        prev === nextCatalogReady ? prev : nextCatalogReady,
       );
       const snapshot = selectionSnapshotRef.current;
       const plan = planComposerModelSelection({
@@ -856,7 +956,7 @@ export function useModels({
         inFlightWorkspaceId.current = null;
       }
     }
-  }, [applySelectionPlan, isConnected, onDebug, workspaceId]);
+  }, [applySelectionPlan, isConnected, workspaceId]);
 
   useEffect(() => {
     if (!workspaceId || !isConnected) {
@@ -872,14 +972,15 @@ export function useModels({
   // 不再另设 effort backfill effect，避免双写对打（React #185）。
   // selection 经 snapshot ref 读取，不把 selected* 放进 deps——切断「commit → layout 再 commit」自反馈
   // （B1）；用户 setSelected* 已直接写入，无需 layout 回声。
+  // preferred 使用归一后的 stable*，避免 ""/null 虚抖。
   useLayoutEffect(() => {
     const snapshot = selectionSnapshotRef.current;
     const plan = planComposerModelSelection({
       models,
       configModel,
-      preferredModelId,
-      preferredEffort,
-      preferredSelectionReady,
+      preferredModelId: stablePreferredModelId,
+      preferredEffort: stablePreferredEffort,
+      preferredSelectionReady: stablePreferredSelectionReady,
       selectedModelId: snapshot.selectedModelId,
       selectedEffort: snapshot.selectedEffort,
       hasUserSelectedModel: hasUserSelectedModel.current,
@@ -893,9 +994,9 @@ export function useModels({
     applySelectionPlan,
     configModel,
     models,
-    preferredEffort,
-    preferredModelId,
-    preferredSelectionReady,
+    stablePreferredEffort,
+    stablePreferredModelId,
+    stablePreferredSelectionReady,
   ]);
 
   return {
