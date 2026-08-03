@@ -1,3 +1,8 @@
+---
+type: evidence
+status: historical
+---
+
 # Evidence policy
 
 Raw ACP transcripts and replay payloads are intentionally not committed because

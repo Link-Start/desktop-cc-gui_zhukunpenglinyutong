@@ -1,3 +1,12 @@
+---
+type: research
+status: historical
+---
+
+<!-- DOC-LIFECYCLE: external-pinned-research -->
+> [!NOTE]
+> **Lifecycle: External pinned research snapshot.** 本文描述记录日期或 pinned commit 的 upstream 状态，不代表 mossx current behavior。任何 current claim、security judgment 或产品决策都必须重新核验 upstream primary source。
+
 # Obsidian 安全与信任模型调研报告
 
 > **Lifecycle**：External Security Snapshot。安全结论具有时效性，不是 mossx threat model 或权限 contract。

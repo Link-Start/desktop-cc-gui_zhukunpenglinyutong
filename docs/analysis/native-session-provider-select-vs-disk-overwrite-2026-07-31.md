@@ -1,6 +1,15 @@
+---
+type: analysis
+status: active
+---
+
+<!-- DOC-LIFECYCLE: active-reference -->
+> [!NOTE]
+> **Lifecycle: Active explanatory reference.** 已按产品 `0.7.16` 校准；implementation changes 已归档。Current contract 以 [OpenSpec main specs](../../openspec/specs/README.md) 与代码为准。
+
 # 同 CLI 多供应商：Native / Shared 供应商与模型切换（最终契约）
 
-> **对照源码日期**：2026-08-01 二次校准 · 产品 **`0.7.14`**
+> **对照源码日期**：2026-08-01 二次校准 · 产品 **`0.7.16`**
 > **状态**：**人工验收通过**（Native + Shared；含 Codex 本地配置点选）
 > **OpenSpec**：`close-native-session-provider-create-binding` 为 `27/27`，仍 active，待 sync / archive
 > **用途**：最终行为契约 + 实现锚点（**过程 commit 见 §3 / §8**）
@@ -158,7 +167,7 @@
 | Kimi/Grok/OpenCode freeform allowUnknown | 低 | 点选 freeform 已接受；会话 repair 仍以引擎 catalog 为主（本次问题域为 Codex/Claude） |
 | E2E / openspec sync·archive | 流程 | tasks `27/27`；change 仍 active，待 sync / archive |
 
-与 `openspec/changes/close-native-session-provider-create-binding/verification.md` 对齐。
+与 `openspec/changes/archive/2026-08-03-close-native-session-provider-create-binding/verification.md` 对齐。
 
 ---
 
@@ -184,7 +193,7 @@
 
 - Change：`close-native-session-provider-create-binding`
 - Deltas：`engine-per-session-provider-binding`、`claude-provider-management`、**`shared-execution-target`**
-- Verification：`openspec/changes/close-native-session-provider-create-binding/verification.md`
+- Verification：`openspec/changes/archive/2026-08-03-close-native-session-provider-create-binding/verification.md`
 
 ---
 

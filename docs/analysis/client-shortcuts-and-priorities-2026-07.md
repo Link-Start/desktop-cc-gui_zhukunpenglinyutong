@@ -1,3 +1,12 @@
+---
+type: analysis
+status: historical
+---
+
+<!-- DOC-LIFECYCLE: historical-priority-snapshot -->
+> [!WARNING]
+> **Lifecycle: Historical priority snapshot.** 本文冻结 2026-07 当时的判断，不是 current roadmap 或 backlog。当前优先级只从 active OpenSpec changes 与当前代码状态推导。
+
 # mossx v0.7.3 后续执行建议（历史快照）
 
 > **文档性质**：**2026-07-16 执行建议快照**，保留全文以便追溯当时判断。

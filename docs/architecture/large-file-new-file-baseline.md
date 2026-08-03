@@ -1,4 +1,11 @@
+---
+type: architecture
+status: generated
+---
+
 # Large File New-File Ratchet Baseline
+
+> **Lifecycle**：Generated Operational Ratchet Ledger。条目锚定生成时的 accepted file set；禁止为隐藏新增 800+ 行文件而随意重生成。
 
 - Generated at: 2026-07-24T17:32:58.401Z
 - Scope: new-file
@@ -318,4 +325,3 @@
 | `src/features/app/components/ThreadList.tsx` | 806 | ts/tsx | default-source | P1 | 2600 | 800 | fail | captured |  |  |
 | `src/features/messages/components/Messages.runtime-reconnect.test.tsx` | 806 | ts/tsx | test-files | P2 | 2600 | 800 | fail | captured |  |  |
 | `.claude/hooks/inject-subagent-context.py` | 803 | py | default-source | P1 | 2600 | 800 | fail | captured |  |  |
-

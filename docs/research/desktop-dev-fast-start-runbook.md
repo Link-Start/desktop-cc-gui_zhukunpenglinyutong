@@ -1,3 +1,12 @@
+---
+type: guide
+status: active
+---
+
+<!-- DOC-LIFECYCLE: active-runbook -->
+> [!NOTE]
+> **Lifecycle: Current development runbook.** 已按产品 `0.7.16` 校准：`scripts/dev-local.sh`、`npm run tauri:dev` 与默认 Vite port `1420` 仍有效；实际命令以 repository scripts/config 为准。
+
 # ccgui 桌面开发版快速启动 Runbook
 
 ## 目标

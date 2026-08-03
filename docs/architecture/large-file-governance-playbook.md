@@ -1,3 +1,8 @@
+---
+type: guide
+status: active
+---
+
 # Large File Governance Playbook
 
 ## Scope
@@ -24,7 +29,7 @@ All policy groups share an additional new-file fail threshold of `800` lines. Fi
 
 | Policy | Scope | Warn | Legacy Fail | New-File Fail | Priority |
 |---|---|---:|---:|---:|---|
-| `bridge-runtime-critical` | `src/services/tauri.ts`, `src/app-shell.tsx`, `src-tauri/src/{backend,engine,git,runtime,codex}/**` | 2200 | 2600 | 800 | P0 |
+| `bridge-runtime-critical` | `src/services/tauri.ts`, `src/app-shell.tsx`, `src-tauri/src/{backend,engine,git,runtime,codex,computer_use}/**` | 2200 | 2600 | 800 | P0 |
 | `feature-hotpath` | `threads/messages/composer/git-history/settings/spec/workspaces/shared-session` + `src/utils/threadItems.ts` | 2400 | 2800 | 800 | P1 |
 | `styles` | `src/styles/**` | 2200 | 2800 | 800 | P1 |
 | `test-files` | `src/test/**`, `*.test.*` | 2600 | 3000 | 800 | P2 |
@@ -78,12 +83,13 @@ npm run check:large-files:near-threshold
 npm run check:large-files:gate
 ```
 
-## CI Checks
+## Automation Checks
 
 - Workflow: `.github/workflows/large-file-governance.yml`
 - Watch step: `npm run check:large-files:near-threshold`
 - Hard gate step: `npm run check:large-files:gate`
-- Rule: CI blocks only when a PR introduces `new` or `regressed` hard debt.
+- Current trigger: weekly `schedule` + manual `workflow_dispatch`。该 workflow **没有** `pull_request` trigger，因此不能宣称它会自动阻断每个 PR。
+- Gate semantics: 命令遇到 `new` 或 `regressed` hard debt 会失败；是否成为 PR merge blocker，取决于调用它的 PR workflow / branch protection，不能从本 workflow 推断。
 
 ## Baseline Maintenance
 
@@ -115,13 +121,11 @@ cargo check --manifest-path src-tauri/Cargo.toml
 
 4. Record retained capability notes in the PR description.
 
-## Current Follow-Up Queue
+## Follow-Up Selection
 
-The first follow-up refactor targets remain:
+不在 playbook 维护静态拆分队列。旧列表会随着拆分迅速失真，例如 `src/services/tauri.ts` 已显著缩小，而其他 hot path 已增长。
 
-- `src/services/tauri.ts`
-- `src/app-shell.tsx`
-- `src/features/threads/hooks/useThreadMessaging.ts`
+每轮治理先运行 `npm run check:large-files:near-threshold`，再结合 `.artifacts/large-files-near-threshold.json`、hard gate 结果、domain ownership 和活跃 OpenSpec change 选择目标。Watchlist 是 dated snapshot，不是 backlog。
 
 ## Rollback Manual
 

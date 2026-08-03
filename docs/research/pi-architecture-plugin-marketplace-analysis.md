@@ -1,3 +1,12 @@
+---
+type: research
+status: historical
+---
+
+<!-- DOC-LIFECYCLE: external-pinned-research -->
+> [!NOTE]
+> **Lifecycle: External pinned research snapshot.** 本文描述记录日期或 pinned commit 的 upstream 状态，不代表 mossx current behavior。任何 current claim、security judgment 或产品决策都必须重新核验 upstream primary source。
+
 # mossx 插件市场调研：Obsidian × Pi 双参照设计手册
 
 > **Lifecycle**：Exploratory Comparative Design。不是已批准的 mossx plugin runtime / marketplace architecture。

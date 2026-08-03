@@ -1,3 +1,12 @@
+---
+type: report
+status: historical
+---
+
+<!-- DOC-LIFECYCLE: historical-report -->
+> [!NOTE]
+> **Lifecycle: Historical dated report.** 本文保留当时的 audit、impact 与 debt snapshot，不是 current backlog。未完成建议必须重新核验代码并建立新的 OpenSpec change 后才能执行。
+
 # 检索与导航优化项 · 逐项影响明细
 
 > **2026-08-01 生命周期校准**：Historical / Evolved。本文保留 2026-07 的职责判断；当前行为以 `SearchPalette.tsx`、`useUnifiedSearch.ts` 与当前 specs 为准。

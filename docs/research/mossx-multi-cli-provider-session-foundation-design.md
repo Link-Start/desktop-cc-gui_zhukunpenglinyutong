@@ -1,9 +1,18 @@
+---
+type: research
+status: implemented
+---
+
+<!-- DOC-LIFECYCLE: active-architecture-reference -->
+> [!IMPORTANT]
+> **Lifecycle: Active architecture reference with historical execution sections.** Foundation decisions 仍被 current specs 使用；implementation checklist 与 wave 状态只保留历史证据。Current contract 以 [OpenSpec main specs](../../openspec/specs/README.md) 与代码为准。
+
 # mossx 多 CLI × 多 Provider 会话基石设计
 
 > 内容类型：Architecture Decision Record
 > 生命周期：accepted / implemented in slices；原始 A–D 路线已归档，后续修复与收口 change 独立演进
 > 初始日期：2026-07-27
-> 最近校准：2026-08-01 · mossx `0.7.14` · HEAD `26f8065a0c`
+> 最近校准：2026-08-01 · mossx `0.7.16` · HEAD `26f8065a0c`
 > 适用范围：Native Session、Shared Session、Provider Runtime、Session Catalog、Sidebar Projection、未来 Plugin / Orchestration
 > 核心决策：Native Session 保持原生身份；Shared Session 承担跨 CLI、跨 Provider 的逐 Turn 切换
 
@@ -11,7 +20,7 @@
 
 ## 零、2026-08-01 当前实现校准
 
-本文继续作为多 CLI 会话的 ADR。原始 Change A1–A3、B、C、D 已归档；当前 active change 主要承担 Native/Shared 的修复、兼容和流程收口，不应回写成「原路线未实现」。
+本文继续作为多 CLI 会话的 ADR。原始 Change A1–A3、B、C、D 已归档；截至 2026-08-03，Native/Shared 的后续修复、兼容和流程收口以 [OpenSpec main specs](../../openspec/specs/README.md) 与对应 archived changes 为准，不应回写成「原路线未实现」。
 
 | 契约面 | 当前代码事实 | 事实源 |
 |--------|--------------|--------|

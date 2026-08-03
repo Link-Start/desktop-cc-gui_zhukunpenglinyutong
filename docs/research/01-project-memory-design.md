@@ -1,3 +1,14 @@
+---
+type: research
+status: superseded
+---
+
+<!-- DOC-LIFECYCLE: superseded-research -->
+> [!WARNING]
+> **Lifecycle: Superseded research/design.** 早期 storage、module layout 与 silent/default-auto injection 已被后续 OpenSpec 与当前实现替代。本文仅保留决策演进与历史证据，不得作为 implementation contract。
+>
+> Current source：[Project Memory consumption spec](../../openspec/specs/project-memory-consumption/spec.md) · [local semantic retrieval spec](../../openspec/specs/project-memory-local-semantic-retrieval/spec.md)。
+
 # CodeMoss 项目记忆功能设计方案（活文档）
 
 **文档类型**: 技术设计方案

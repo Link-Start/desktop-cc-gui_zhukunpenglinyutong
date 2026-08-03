@@ -1,3 +1,12 @@
+---
+type: analysis
+status: active
+---
+
+<!-- DOC-LIFECYCLE: active-guide -->
+> [!NOTE]
+> **Lifecycle: Active guide.** Native 与 Shared 的 current contract 以 [OpenSpec main specs](../../openspec/specs/README.md) 和代码为准。
+
 # Native CLI 与 Shared CLI：到底有什么区别？
 
 > **内容类型**：How-to / Product Reference  

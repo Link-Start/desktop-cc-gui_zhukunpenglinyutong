@@ -1,3 +1,12 @@
+---
+type: plan
+status: implemented
+---
+
+<!-- DOC-LIFECYCLE: implemented-historical-plan -->
+> [!NOTE]
+> **Lifecycle: Implemented historical plan.** 正文中的“待执行”“待归档”或 unchecked checkbox 是当时的执行快照，不代表当前状态。Current Project Memory contract 以 [OpenSpec main specifications](../../../openspec/specs/README.md) 与代码为准。
+
 # Memory Auto Capture ABCD Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.

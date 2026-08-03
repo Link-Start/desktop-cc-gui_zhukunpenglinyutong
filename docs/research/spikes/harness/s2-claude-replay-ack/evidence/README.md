@@ -1,3 +1,8 @@
+---
+type: evidence
+status: historical
+---
+
 # Evidence policy
 
 Raw Claude NDJSON transcripts and metadata are intentionally not committed because

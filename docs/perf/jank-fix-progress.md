@@ -1,6 +1,12 @@
+---
+type: performance
+status: deprecated
+---
+
 # Parallel Conversation Jank — Fix Progress
 
 > **Lifecycle**：Historical Unfilled Worksheet。空白 metric 不是 current measurement，也不是待办承诺；新采样应生成带 timestamp/version/commit 的 evidence artifact，不回填本表伪造连续性。
+> **Deprecated workflow**：本文只读。新采样使用 `OUTPUT_DIR=.artifacts/perf/jank bash scripts/perf-reproduce-jank.sh`，再将经过筛选的结果固化为独立 evidence，不续写本表。
 > 原始用法：边修边填。每完成一个根因,记录数据。
 
 ## 阶段 0:基线(修复前)

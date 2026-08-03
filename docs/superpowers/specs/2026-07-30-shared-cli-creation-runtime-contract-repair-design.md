@@ -1,7 +1,13 @@
+---
+type: design
+status: implemented
+---
+
 # Shared CLI Creation And Runtime Contract Repair Design
 
-> **Lifecycle**：implemented，待 OpenSpec flow closure；`repair-shared-cli-creation-runtime-contracts` 为 `7/7`，仍 active。
-> **最后校准**：2026-08-01 · mossx `0.7.14` · HEAD `26f8065a0c`
+> **Lifecycle**：implemented / historical；canonical OpenSpec change 已归档。
+> **Archive**：`openspec/changes/archive/2026-08-03-repair-shared-cli-creation-runtime-contracts/`
+> **最后校准**：2026-08-03 · mossx `0.7.16`
 
 ## Outcome
 

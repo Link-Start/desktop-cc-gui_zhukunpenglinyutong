@@ -1,6 +1,15 @@
+---
+type: analysis
+status: active
+---
+
+<!-- DOC-LIFECYCLE: active-reference -->
+> [!NOTE]
+> **Lifecycle: Active explanatory reference.** 已按产品 `0.7.16` 校准；implementation changes 已归档。Current contract 以 [OpenSpec main specs](../../openspec/specs/README.md) 与代码为准。
+
 # Canvas live tool projection matrix（2026-08-01）
 
-> **对照源码**：2026-08-01 二次校准 · 产品 **`0.7.14`** · 实现 commit **`bf3b35bd6`**
+> **对照源码**：2026-08-01 二次校准 · 产品 **`0.7.16`** · 实现 commit **`bf3b35bd6`**
 > **状态**：**已入库**（非工作树草案）
 > **OpenSpec**：`fix-grok-history-tool-projection` 为 `12/13`；仅余 verify / archive
 > **目标呈现**：向 **Claude 打磨后的幕布** 看齐——**读/写过程可见**，**bash/command 默认不进幕布**

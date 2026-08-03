@@ -1,3 +1,8 @@
+---
+type: evidence
+status: historical
+---
+
 # Evidence policy
 
 Raw app-server transcripts and rollout excerpts are intentionally not committed:

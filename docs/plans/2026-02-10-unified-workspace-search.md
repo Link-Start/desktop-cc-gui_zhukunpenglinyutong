@@ -1,3 +1,12 @@
+---
+type: plan
+status: implemented
+---
+
+<!-- DOC-LIFECYCLE: implemented-historical-plan -->
+> [!NOTE]
+> **Lifecycle: Implemented historical plan.** 本文保留当时的实施顺序与验收轨迹，不是 current plan。当前行为以 [OpenSpec main specifications](../../openspec/specs/README.md) 与代码为准；unchecked checkbox 不构成 active backlog。
+
 # Unified Workspace Search Implementation Plan
 
 > **Lifecycle**：Historical Implementation Plan。SearchPalette / provider aggregation 已实现并继续演进；当前行为以 `src/features/search/` 与 OpenSpec main specs 为准，本文 checkbox 不是 backlog。
