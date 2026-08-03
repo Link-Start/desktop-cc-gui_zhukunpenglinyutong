@@ -360,3 +360,36 @@ onDebugRef 解耦、原子 selection state、乐观 snapshot、preferred 归一�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1309: OpenSpec 第三波：归档已上线人工 residual 提案
+
+**Date**: 2026-08-03
+**Task**: OpenSpec 第三波：归档已上线人工 residual 提案
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+归档 20 个 shipped+manual residual active changes；active 仅剩 add-linux-native-menu-localization；archive=848 specs=492
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5192d03df` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
