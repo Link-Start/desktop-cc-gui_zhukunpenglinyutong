@@ -276,3 +276,54 @@ onDebugRef 解耦、原子 selection state、乐观 snapshot、preferred 归一�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1307: OpenSpec 批量归档已验证提案
+
+**Date**: 2026-08-03
+**Task**: OpenSpec 批量归档已验证提案
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 归档 | 7 个 verified/已验收 change → `archive/2026-08-03-*` |
+| Spec sync | 新建 5 个 capability + 修改多个既有 main specs |
+| 索引 | 重建 `changes/README`、`specs/README`，更新 `archive/README`、`project.md` |
+
+**归档清单**:
+- add-atlas-cloud-codex-preset
+- close-native-session-provider-create-binding
+- default-collapse-workspace-actions-menu
+- fix-linux-startup-preserve-baidu-analytics
+- honor-native-session-renamed-titles
+- grok-cli-image-input-capability-gap
+- enhance-subagent-canvas-persona-ui
+
+**库存**: active=58, archive=791, main specs=462
+
+**后续**: complete 但无 verification 的 active 可作下一波 archive；有 archive block 的 verification 提案暂留
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d8bc34a6f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
