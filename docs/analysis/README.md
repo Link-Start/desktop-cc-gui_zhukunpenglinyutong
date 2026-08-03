@@ -9,6 +9,7 @@
 | 你要… | 先读 |
 |--------|------|
 | 30 秒地图 + 校准锚点 | **本文** |
+| **Native vs Shared 产品口径（用户答疑）** | [`native-vs-shared-cli-explained.md`](./native-vs-shared-cli-explained.md) |
 | 幕布结构 / 默认运行态 / 排障 | [`conversation-canvas-structure-2026-07-31.md`](./conversation-canvas-structure-2026-07-31.md) |
 | 多引擎 live tool 是否进幕布 | [`canvas-live-tool-projection-matrix-2026-08-01.md`](./canvas-live-tool-projection-matrix-2026-08-01.md) |
 | 统一幕布改动**后验**（含改前改后） | [`unify-conversation-canvas-review-2026-08-01.md`](./unify-conversation-canvas-review-2026-08-01.md) |
@@ -62,6 +63,7 @@ OpenSpec 状态快照（2026-08-01；后续仍以 change 目录为准）：
 | **structure** | 幕布**现网结构**、默认开关、引擎硬分支、症状→入口 | 不重复 matrix 的逐引擎手测表全文 |
 | **matrix** | live tool **能力登记** + 手测清单 | 不重写 Messages 树 |
 | **unify-review** | 统一幕布**过程后验**（改前/改后/完成度） | 不替代 structure 的现网表 |
+| **native-vs-shared-explained** | 用户向产品口径：两种入口、供应商续接、CLI≠SDK、上下文准备成本 | 不替代 native-session 工程契约 |
 | **native-session** | Native L1/L2 + Shared next-target 契约 | 不描述 Messages 渲染核 |
 | **shared-picker-native-fallback** | Shared 模型选择器误入 Native 续接的调研与 T1–T3 止血 | 不替代 native-session 契约正本；T4/T5 仍开放 |
 | **react-185** | #185 诊断协议 + case 追加 | 不是事故结案唯一源 |
