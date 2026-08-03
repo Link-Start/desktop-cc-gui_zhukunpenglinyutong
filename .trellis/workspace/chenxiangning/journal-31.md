@@ -426,3 +426,36 @@ onDebugRef 解耦、原子 selection state、乐观 snapshot、preferred 归一�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1311: Shared 队列 pending-ack UI 标识
+
+**Date**: 2026-08-03
+**Task**: Shared 队列 pending-ack UI 标识
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+队列 pending-ack 显示「已发送，确认中（防重复）」；不改防双发出队逻辑；仅提交 composer/i18n 相关文件。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1a6f7ea4a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
