@@ -29,6 +29,10 @@ vi.mock("../../services/clientStorage", () => ({
   getClientStoreSync: (...args: any[]) => (getClientStoreSyncMock as any)(...args),
 }));
 
+vi.mock("../theme/utils/dockIcon", () => ({
+  reapplyLastDockIconPreference: vi.fn(async () => undefined),
+}));
+
 vi.mock("@tauri-apps/api/webviewWindow", () => {
   class MockWebviewWindow {
     label: string;

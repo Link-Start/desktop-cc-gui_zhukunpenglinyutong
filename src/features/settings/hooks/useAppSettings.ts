@@ -44,6 +44,11 @@ import {
   sanitizeLightThemePresetId,
   sanitizeThemePresetId,
 } from "../../theme/utils/themePreset";
+import {
+  applyDockIconPreference,
+  DEFAULT_DOCK_ICON_ID,
+  sanitizeDockIconId,
+} from "../../theme/utils/dockIcon";
 
 const allowedThemes = new Set(["system", "light", "dark", "dim", "custom"]);
 const allowedCanvasWidthModes = new Set(["narrow", "wide"]);
@@ -275,6 +280,7 @@ const defaultSettings: AppSettings = {
   lastComposerPrefsByEngine: {},
   uiScale: UI_SCALE_DEFAULT,
   theme: "system",
+  dockIconId: DEFAULT_DOCK_ICON_ID,
   lightThemePresetId: "vscode-light-modern",
   darkThemePresetId: "vscode-dark-modern",
   customThemePresetId: "vscode-dark-modern",
@@ -429,6 +435,7 @@ function normalizeAppSettings(
       ? sanitizeUiScale(settings.uiScale)
       : clampUiScale(settings.uiScale),
     theme: allowedThemes.has(settings.theme) ? settings.theme : "system",
+    dockIconId: sanitizeDockIconId(settings.dockIconId),
     lightThemePresetId: sanitizeLightThemePresetId(settings.lightThemePresetId),
     darkThemePresetId: sanitizeDarkThemePresetId(settings.darkThemePresetId),
     customThemePresetId: sanitizeThemePresetId(settings.customThemePresetId),
@@ -592,19 +599,22 @@ export function useAppSettings() {
         if (active) {
           const allowLegacyUserMsgColorFallback =
             (response as Partial<AppSettings>).userMsgColor == null;
-          setSettings(
-            normalizeAppSettings(
-              {
-                ...defaultSettings,
-                ...response,
-              },
-              {
-                allowLegacyUserMsgColorFallback,
-                fallbackUiScaleToDefault: true,
-                upgradeWarmTtlToDefaultOnLoad: true,
-              },
-            ),
+          const normalized = normalizeAppSettings(
+            {
+              ...defaultSettings,
+              ...response,
+            },
+            {
+              allowLegacyUserMsgColorFallback,
+              fallbackUiScaleToDefault: true,
+              upgradeWarmTtlToDefaultOnLoad: true,
+            },
           );
+          setSettings(normalized);
+          // Restore app icon after cold start (macOS Dock; Win/Linux window/taskbar).
+          void applyDockIconPreference(normalized.dockIconId).catch((error) => {
+            console.error("[useAppSettings] failed to apply dock icon", error);
+          });
         }
         // Startup quarantine happens before the webview loads, so getAppSettings
         // resolves successfully even when settings.json was corrupted. The one-shot
@@ -676,6 +686,7 @@ export function useAppSettings() {
     // (empty snapshot) to avoid wiping loaded prefs.
     const snapshot = getComposerEnginePrefsSnapshot();
     const hasSnapshot = Object.keys(snapshot).length > 0;
+    const previousDockIconId = sanitizeDockIconId(settings.dockIconId);
     const normalized = normalizeAppSettings(
       hasSnapshot ? { ...next, lastComposerPrefsByEngine: snapshot } : next,
     );
@@ -688,8 +699,13 @@ export function useAppSettings() {
     setSettings((current) =>
       areAppSettingsEqual(current, nextSettings) ? current : nextSettings,
     );
+    if (sanitizeDockIconId(nextSettings.dockIconId) !== previousDockIconId) {
+      void applyDockIconPreference(nextSettings.dockIconId).catch((error) => {
+        console.error("[useAppSettings] failed to apply dock icon", error);
+      });
+    }
     return saved;
-  }, []);
+  }, [settings.dockIconId]);
 
   const doctor = useCallback(
     async (codexBin: string | null, codexArgs: string | null) => {

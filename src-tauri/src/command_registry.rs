@@ -91,6 +91,7 @@ pub(crate) fn invoke_handler(
         crate::menu::menu_set_accelerators,
         crate::menu::menu_update_labels,
         crate::window::set_main_window_opacity,
+        crate::window::set_dock_icon,
         // Engine management
         crate::engine::detect_engines,
         crate::engine::get_active_engine,
