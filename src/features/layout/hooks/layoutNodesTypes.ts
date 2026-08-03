@@ -207,7 +207,9 @@ export type LayoutNodesFlatOptions = {
   ) =>
     | Promise<RuntimeReconnectRecoveryCallbackResult>
     | RuntimeReconnectRecoveryCallbackResult;
-  onThreadRecoveryFork?: () => Promise<void> | void;
+  onThreadRecoveryFork?: () =>
+    | Promise<RuntimeReconnectRecoveryCallbackResult>
+    | RuntimeReconnectRecoveryCallbackResult;
   handleExitPlanModeExecute?: (
     mode: Extract<AccessMode, "default" | "full-access">,
   ) => Promise<void> | void;

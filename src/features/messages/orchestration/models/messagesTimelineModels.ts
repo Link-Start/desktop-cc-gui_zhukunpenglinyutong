@@ -136,7 +136,9 @@ export type TimelineInteractionModel = {
   onRetryHistory?: () => void;
   onRewindFromMessage?: (messageId: string) => void;
   onShowAllHistoryItems: () => void;
-  onThreadRecoveryFork?: () => Promise<void> | void;
+  onThreadRecoveryFork?: () =>
+    | Promise<RuntimeReconnectRecoveryCallbackResult>
+    | RuntimeReconnectRecoveryCallbackResult;
   onToggleProcessPhaseExpanded: (phaseKey: string) => void;
   openFileLink?: (path: string) => void;
   showFileLinkMenu?: (event: React.MouseEvent, path: string) => void;

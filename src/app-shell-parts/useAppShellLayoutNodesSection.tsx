@@ -19,6 +19,7 @@ import type {
   IntentCanvasOpenRequest,
 } from "../features/intent-canvas/types";
 import {
+  continueStaleThreadBindingForManualRecovery,
   recoverThreadBindingAndResendForManualRecovery,
   recoverThreadBindingForManualRecovery,
 } from "./manualThreadRecovery";
@@ -565,7 +566,6 @@ export function useAppShellLayoutNodesSection(
     skills,
     soloModeEnabled,
     startCompact,
-    startFork,
     startThreadForWorkspace,
     startUpdate,
     syncError,
@@ -1157,7 +1157,25 @@ export function useAppShellLayoutNodesSection(
       }),
   );
   const handleThreadRecoveryFork = useEventCallback(async () => {
-    await startFork("/fork");
+    const workspaceId =
+      typeof activeWorkspaceId === "string" ? activeWorkspaceId.trim() : "";
+    const threadId =
+      typeof activeThreadId === "string" ? activeThreadId.trim() : "";
+    if (!workspaceId || !threadId) {
+      return {
+        kind: "failed" as const,
+        reason: "missing workspace or thread id",
+        retryable: true,
+        userAction: "start-fresh-thread" as const,
+      };
+    }
+    return continueStaleThreadBindingForManualRecovery({
+      workspaceId,
+      threadId,
+      threadsByWorkspace,
+      forkThreadForWorkspace,
+      startThreadForWorkspace,
+    });
   });
   const handleOpenSettings = useEventCallback(() => openSettings());
   const handleOpenShortcutsSettings = useEventCallback(() =>

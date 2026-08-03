@@ -73,7 +73,9 @@ describe("Messages runtime reconnect", () => {
       threadId: string,
       message: { text: string; images?: string[] },
     ) => Promise<RuntimeReconnectRecoveryCallbackResult> | RuntimeReconnectRecoveryCallbackResult;
-    onThreadRecoveryFork?: () => Promise<void> | void;
+    onThreadRecoveryFork?: () =>
+      | Promise<RuntimeReconnectRecoveryCallbackResult>
+      | RuntimeReconnectRecoveryCallbackResult;
   }) {
     return render(
       <Messages
@@ -568,7 +570,10 @@ describe("Messages runtime reconnect", () => {
   it("routes stale thread recovery fork through the shared fork callback", async () => {
     const onRecoverThreadRuntime = vi.fn().mockResolvedValue("thread-recovered-resend");
     const onRecoverThreadRuntimeAndResend = vi.fn().mockResolvedValue("thread-recovered-resend");
-    const onThreadRecoveryFork = vi.fn().mockResolvedValue(undefined);
+    const onThreadRecoveryFork = vi.fn().mockResolvedValue({
+      kind: "forked",
+      threadId: "thread-forked-1",
+    });
 
     renderMessages([
       {
@@ -597,6 +602,72 @@ describe("Messages runtime reconnect", () => {
     });
     expect(vi.mocked(ensureRuntimeReady)).not.toHaveBeenCalled();
     expect(onRecoverThreadRuntimeAndResend).not.toHaveBeenCalled();
+    expect(screen.getByText("messages.threadRecoveryForkedContinued")).toBeTruthy();
+  });
+
+  it("surfaces fresh continuation when recovery-card fork falls back", async () => {
+    const onThreadRecoveryFork = vi.fn().mockResolvedValue({
+      kind: "fresh",
+      threadId: "thread-fresh-1",
+    });
+
+    renderMessages([
+      {
+        id: "user-before-fresh-continuation",
+        kind: "message",
+        role: "user",
+        text: "继续",
+      },
+      {
+        id: "assistant-thread-not-found-fresh",
+        kind: "message",
+        role: "assistant",
+        text: "会话启动失败： thread not found: legacy-thread-id",
+      },
+    ], {
+      threadId: "thread-runtime-stale-fresh-card",
+      onThreadRecoveryFork,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "messages.threadRecoveryForkAction" }));
+
+    await waitFor(() => {
+      expect(onThreadRecoveryFork).toHaveBeenCalledTimes(1);
+      expect(screen.getByText("messages.threadRecoveryFreshContinued")).toBeTruthy();
+    });
+  });
+
+  it("surfaces visible failure when recovery-card fork cannot continue", async () => {
+    const onThreadRecoveryFork = vi.fn().mockResolvedValue({
+      kind: "failed",
+      reason: "fork thread unavailable",
+    });
+
+    renderMessages([
+      {
+        id: "user-before-fork-failed",
+        kind: "message",
+        role: "user",
+        text: "继续",
+      },
+      {
+        id: "assistant-thread-not-found-failed",
+        kind: "message",
+        role: "assistant",
+        text: "会话启动失败： thread not found: legacy-thread-id",
+      },
+    ], {
+      threadId: "thread-runtime-stale-fork-failed",
+      onThreadRecoveryFork,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "messages.threadRecoveryForkAction" }));
+
+    await waitFor(() => {
+      expect(onThreadRecoveryFork).toHaveBeenCalledTimes(1);
+      expect(screen.getByText("messages.threadRecoveryFailed")).toBeTruthy();
+      expect(screen.getByText("fork thread unavailable")).toBeTruthy();
+    });
   });
 
   it("does not route stale thread fork through fresh fallback resend", async () => {
