@@ -564,8 +564,6 @@ export function useModels({
     (plan: ComposerSelectionPlan) => {
       const nextEffort = normalizeEffort(plan.nextEffort);
       const nextModelId = plan.nextModelId;
-      // clear 不进 state key：state 只看 model+effort
-      const stateKey = `${nextModelId ?? ""}\0${nextEffort ?? ""}`;
       const snapshot = selectionSnapshotRef.current;
       const stateAlreadyMatched =
         snapshot.selectedModelId === nextModelId &&
