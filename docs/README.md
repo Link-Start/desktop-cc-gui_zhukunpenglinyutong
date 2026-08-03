@@ -66,6 +66,7 @@
 
 ### 同 CLI 供应商 / Shared
 
+- [Native vs Shared 产品口径（用户答疑）](analysis/native-vs-shared-cli-explained.md)
 - [Native / Shared 供应商与模型契约](analysis/native-session-provider-select-vs-disk-overwrite-2026-07-31.md)
 - [多 CLI 会话基石设计](research/mossx-multi-cli-provider-session-foundation-design.md)
 - [A–D 影响与手测计划](reports/multi-cli-session-foundation-a-d-impact-and-manual-test-plan-2026-07-28.md)
