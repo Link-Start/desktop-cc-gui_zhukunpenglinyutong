@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-31.md`
-- **Total Sessions**: 1300
+- **Total Sessions**: 1302
 - **Last Active**: 2026-08-03
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-31.md` | ~42 | Active |
+| `journal-31.md` | ~108 | Active |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
@@ -59,6 +59,8 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1302 | 2026-08-03 | fix(models): 冷启 useModels selection 收敛环致 React #185 白屏 | `d4806464c` | `cxn-version-0.7.15` |
+| 1301 | 2026-08-03 | fix(models): 冷启 useModels selection 收敛环致 React #185 白屏 | `2974b721e` | `cxn-version-0.7.15` |
 | 1300 | 2026-08-03 | Codex 续接过滤 control 角色 | `c2c45e269` | `cxn-version-0.7.15` |
 | 1299 | 2026-08-03 | 续接成功默认选中目标模型 | `c08facc4e` | `cxn-version-0.7.15` |
 | 1298 | 2026-08-03 | 修复 React 185 Claude repair 更新环 | `a4166c03e` | `cxn-version-0.7.15` |
