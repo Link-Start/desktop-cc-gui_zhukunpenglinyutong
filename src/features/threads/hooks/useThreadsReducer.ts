@@ -65,6 +65,12 @@ import {
 } from "./threadReducerAssistantFinalMetadata";
 import { mergeThreadItemsPreservingOptimisticUsers } from "./threadReducerOptimisticItemMerge";
 import {
+  mergeTurnFinalMetaIntoItems,
+  scheduleDeleteTurnFinalMetaForThread,
+  schedulePersistTurnFinalMetaFromItems,
+  scheduleRenameTurnFinalMetaThreadId,
+} from "../utils/turnFinalMetaStorage";
+import {
   dropLatestLocalReviewStart,
   ensureUniqueReviewId,
   findMatchingReview,
@@ -582,6 +588,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           }
           const oldThreadId = pendingThread.id;
           const newThreadId = action.threadId;
+          scheduleRenameTurnFinalMetaThreadId(oldThreadId, newThreadId);
 
           // Rename thread inline (similar to renameThreadId action)
           const updatedThread = attachReplacedThreadId(
@@ -762,6 +769,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         state.activeThreadIdByWorkspace[action.workspaceId] === action.threadId
           ? filtered[0]?.id ?? null
           : state.activeThreadIdByWorkspace[action.workspaceId] ?? null;
+      scheduleDeleteTurnFinalMetaForThread(action.threadId);
       const { [action.threadId]: _items, ...restItems } = state.itemsByThread;
       const { [action.threadId]: _historyRestoredAt, ...restHistoryRestoredAt } =
         state.historyRestoredAtMsByThread;
@@ -1818,8 +1826,13 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
             "idle",
         },
       );
+      // Cold reload / history path: fill missing final footer meta from local sidecar.
+      const itemsWithSidecarMeta = mergeTurnFinalMetaIntoItems(
+        action.threadId,
+        mergedItems,
+      );
       const preserveMessageTextIds = new Set<string>();
-      for (const item of mergedItems) {
+      for (const item of itemsWithSidecarMeta) {
         if (
           item.kind === "message" &&
           item.role === "assistant" &&
@@ -1832,7 +1845,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         ...state,
         itemsByThread: {
           ...state.itemsByThread,
-          [action.threadId]: prepareThreadItems(mergedItems, {
+          [action.threadId]: prepareThreadItems(itemsWithSidecarMeta, {
             preserveMessageTextIds,
           }),
         },
@@ -1910,6 +1923,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       }
       const next = [...list];
       next[latestAssistantIndex] = withTokens;
+      schedulePersistTurnFinalMetaFromItems(action.threadId, next);
       return {
         ...state,
         itemsByThread: {
@@ -1934,6 +1948,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       };
     case "renameThreadId": {
       const { workspaceId, oldThreadId, newThreadId } = action;
+      scheduleRenameTurnFinalMetaThreadId(oldThreadId, newThreadId);
       return renameThreadStateIdentity({
         state,
         workspaceId,
@@ -2691,6 +2706,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       if (!usageSnapshotChanged && !shouldClearCompletedCompaction && !itemsChanged) {
         return state;
       }
+      if (itemsChanged) {
+        schedulePersistTurnFinalMetaFromItems(action.threadId, nextItems);
+      }
       const tokenUsageUpdatedAt = usageSnapshotChanged
         ? Date.now()
         : existingStatus.lastTokenUsageUpdatedAt;
@@ -2944,6 +2962,7 @@ function applyCompleteAgentMessageToState(
   const updatedItems = prepareThreadItems(list, {
     preserveMessageTextIds: new Set([targetItemId]),
   });
+  schedulePersistTurnFinalMetaFromItems(params.threadId, updatedItems);
   const nextThreadsByWorkspace = maybeRenameThreadFromAgent({
     workspaceId: params.workspaceId,
     threadId: params.threadId,

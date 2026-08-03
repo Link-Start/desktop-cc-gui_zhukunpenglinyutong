@@ -467,4 +467,38 @@ describe("buildConversationCompletionEmail", () => {
       reason: "missing_assistant_message",
     });
   });
+
+  it("summarizes prose by sentence boundaries without regex lookbehind", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { dirname, join } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const source = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "conversationCompletionEmail.ts"),
+      "utf8",
+    );
+    // Older WKWebView throws on lookbehind: invalid group specifier name.
+    const codeWithoutComments = source
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/.*$/gm, "");
+    expect(codeWithoutComments).not.toMatch(/\(\?<[=!]/);
+
+    const items: ConversationItem[] = [
+      { id: "u1", kind: "message", role: "user", text: "What changed?" },
+      {
+        id: "a1",
+        kind: "message",
+        role: "assistant",
+        text: "Fixed the crash. Updated the sanitizer. 请再验证一次。",
+      },
+    ];
+    const result = buildConversationCompletionEmail(items, baseMetadata);
+    expect(result.status).toBe("ready");
+    if (result.status !== "ready") {
+      return;
+    }
+    // Sentence split keeps terminators on the preceding segment (lookbehind-equivalent).
+    expect(result.request.textBody).toContain("Fixed the crash.");
+    expect(result.request.textBody).toContain("Updated the sanitizer.");
+    expect(result.request.textBody).toContain("请再验证一次。");
+  });
 });
