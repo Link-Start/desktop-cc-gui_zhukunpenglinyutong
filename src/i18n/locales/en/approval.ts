@@ -50,6 +50,9 @@ const approval = {
     noAnswerProvided: "(No answer provided)",
     noDisplayableAnswer: "(No displayable answer)",
     userInputSubmittedBanner: "[User input submitted]",
+    timeoutHintRecommend: "On timeout, auto-select recommended “{{option}}”",
+    timeoutHintRecommendMulti: "On timeout, auto-select each recommended option (first)",
+    timeoutHintSkip: "On timeout, skip and continue",
   },
 };
 

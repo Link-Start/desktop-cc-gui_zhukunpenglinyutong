@@ -173,6 +173,49 @@ describe("sharedSessionBridge", () => {
         threadId: "shared:poisoned",
       }),
     ).toBeNull();
+    // Historical Claude bug: params.turnId was assistant item id while
+    // sharedOwner.runtimeTurnId was the attempt runtime turn → fail closed.
+    expect(
+      resolveSharedRuntimeControlOwner("ws-owner", {
+        ...params,
+        turnId: "assistant-item-stale",
+      }),
+    ).toBeNull();
+  });
+
+  it("accepts Shared control owner when turnId matches runtimeTurnId after projection", () => {
+    // Mirrors Rust project_app_server_event_to_shared_owner force-align for
+    // item/tool/requestUserInput (stale assistant-item turnId rewritten).
+    const params = {
+      threadId: "shared:thread-owner",
+      nativeThreadId: "claude:native-ask",
+      turnId: "runtime-turn-ask",
+      sharedOwner: {
+        sharedThreadId: "shared:thread-owner",
+        nativeThreadId: "claude:native-ask",
+        runtimeTurnId: "runtime-turn-ask",
+        attemptId: "attempt-ask",
+        providerRuntimeKey: "claude::ws-owner::provider-ask",
+        engine: "claude",
+        executionTargetSnapshot: {
+          engine: "claude",
+          providerProfileId: "provider-ask",
+          modelCatalogEntryId: "catalog-ask",
+          model: "claude-runtime",
+          providerProfileNameSnapshot: "Claude Ask",
+          providerProfileSource: "managed" as const,
+        },
+      },
+    };
+    expect(resolveSharedRuntimeControlOwner("ws-owner", params)).toEqual({
+      attemptId: "attempt-ask",
+      providerRuntimeKey: "claude::ws-owner::provider-ask",
+      sharedThreadId: "shared:thread-owner",
+      nativeThreadId: "claude:native-ask",
+      runtimeTurnId: "runtime-turn-ask",
+      engine: "claude",
+      providerProfileId: "provider-ask",
+    });
   });
 
   it("rejects a runtime owner whose provider conflicts with the frozen snapshot", () => {

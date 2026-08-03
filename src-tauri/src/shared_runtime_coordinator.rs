@@ -1269,6 +1269,21 @@ pub(crate) fn project_app_server_event_to_shared_owner(
     let native_thread_id = crate::backend::app_server::extract_thread_id(&event.message)
         .filter(|thread_id| !thread_id.starts_with("shared:"))
         .or_else(|| owner.native_session_id.clone());
+    // Read method before mutably borrowing params (same message object).
+    let method = event
+        .message
+        .get("method")
+        .and_then(|value| value.as_str())
+        .unwrap_or("")
+        .to_string();
+    // Control-plane methods are fail-closed on the frontend: params.turnId must
+    // equal sharedOwner.runtimeTurnId. Claude historically mapped
+    // requestUserInput.turnId to the assistant item id; force-align here so
+    // Shared AskUserQuestion / approval cards are not silently dropped.
+    let force_control_turn_identity = method == "item/tool/requestUserInput"
+        || method == "approval/request"
+        || method == "collaboration/modeBlocked"
+        || method.contains("requestApproval");
     let params = event.message.as_object_mut().and_then(|message| {
         message
             .entry("params".to_string())
@@ -1301,12 +1316,23 @@ pub(crate) fn project_app_server_event_to_shared_owner(
         );
     }
     if let Some(runtime_turn_id) = owner.runtime_turn_id.as_deref() {
-        params
-            .entry("turnId".to_string())
-            .or_insert_with(|| Value::String(runtime_turn_id.to_string()));
-        params
-            .entry("turn_id".to_string())
-            .or_insert_with(|| Value::String(runtime_turn_id.to_string()));
+        if force_control_turn_identity {
+            params.insert(
+                "turnId".to_string(),
+                Value::String(runtime_turn_id.to_string()),
+            );
+            params.insert(
+                "turn_id".to_string(),
+                Value::String(runtime_turn_id.to_string()),
+            );
+        } else {
+            params
+                .entry("turnId".to_string())
+                .or_insert_with(|| Value::String(runtime_turn_id.to_string()));
+            params
+                .entry("turn_id".to_string())
+                .or_insert_with(|| Value::String(runtime_turn_id.to_string()));
+        }
     }
     params.insert(
         "sharedOwner".to_string(),
@@ -4539,6 +4565,91 @@ mod tests {
         assert_eq!(
             event.message["params"]["sharedOwner"]["attemptId"],
             "attempt-1"
+        );
+    }
+
+    #[test]
+    fn projection_force_aligns_request_user_input_turn_id_to_runtime_turn() {
+        // Claude historically set requestUserInput.turnId to the assistant item
+        // id. Shared control-owner resolution requires params.turnId ==
+        // sharedOwner.runtimeTurnId; force-align so the dialog is not dropped.
+        let owner = owner(
+            "attempt-ask",
+            Some("runtime-turn-ask"),
+            Some("claude:native-ask"),
+        );
+        let mut event = AppServerEvent {
+            workspace_id: "ws-1".to_string(),
+            message: json!({
+                "method": "item/tool/requestUserInput",
+                "id": "ask-req-shared",
+                "params": {
+                    "threadId": "claude:native-ask",
+                    "turnId": "assistant-item-stale",
+                    "itemId": "askuserquestion-ask-req-shared",
+                    "questions": [{
+                        "id": "q-0",
+                        "header": "Pick",
+                        "question": "Which option?"
+                    }],
+                    "completed": false
+                }
+            }),
+        };
+
+        project_app_server_event_to_shared_owner(&mut event, &owner);
+
+        assert_eq!(event.message["params"]["threadId"], "shared:session-1");
+        assert_eq!(
+            event.message["params"]["nativeThreadId"],
+            "claude:native-ask"
+        );
+        assert_eq!(
+            event.message["params"]["turnId"],
+            "runtime-turn-ask",
+            "control events must overwrite stale assistant-item turnId"
+        );
+        assert_eq!(event.message["params"]["turn_id"], "runtime-turn-ask");
+        assert_eq!(
+            event.message["params"]["sharedOwner"]["runtimeTurnId"],
+            "runtime-turn-ask"
+        );
+        assert_eq!(
+            event.message["params"]["itemId"],
+            "askuserquestion-ask-req-shared",
+            "ask card item id must stay request-scoped"
+        );
+    }
+
+    #[test]
+    fn projection_does_not_overwrite_non_control_existing_turn_id() {
+        let owner = owner(
+            "attempt-delta",
+            Some("runtime-turn-delta"),
+            Some("native-delta"),
+        );
+        let mut event = AppServerEvent {
+            workspace_id: "ws-1".to_string(),
+            message: json!({
+                "method": "item/agentMessage/delta",
+                "params": {
+                    "threadId": "native-delta",
+                    "turnId": "pre-existing-turn",
+                    "delta": "hello"
+                }
+            }),
+        };
+
+        project_app_server_event_to_shared_owner(&mut event, &owner);
+
+        assert_eq!(
+            event.message["params"]["turnId"],
+            "pre-existing-turn",
+            "non-control events keep existing turnId via or_insert"
+        );
+        assert_eq!(
+            event.message["params"]["sharedOwner"]["runtimeTurnId"],
+            "runtime-turn-delta"
         );
     }
 

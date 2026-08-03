@@ -48,6 +48,9 @@ const approval = {
     noAnswerProvided: "（未填写）",
     noDisplayableAnswer: "（未提供可展示的答案）",
     userInputSubmittedBanner: "[用户输入已提交]",
+    timeoutHintRecommend: "超时后自动选择推荐项「{{option}}」",
+    timeoutHintRecommendMulti: "超时后自动选择各题推荐项（首项）",
+    timeoutHintSkip: "超时后将跳过并继续",
   },
 };
 

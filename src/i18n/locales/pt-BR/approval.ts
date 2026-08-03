@@ -50,7 +50,10 @@ const approval = {
     "submitted": "Enviado",
     "noAnswerProvided": "(Nenhuma resposta fornecida)",
     "noDisplayableAnswer": "(Nenhuma resposta exibível)",
-    "userInputSubmittedBanner": "[Entrada do usuário enviada]"
+    "userInputSubmittedBanner": "[Entrada do usuário enviada]",
+    "timeoutHintRecommend": "Ao expirar, seleciona automaticamente a recomendada “{{option}}”",
+    "timeoutHintRecommendMulti": "Ao expirar, seleciona a recomendada (primeira) de cada pergunta",
+    "timeoutHintSkip": "Ao expirar, ignora e continua",
   }
 };
 

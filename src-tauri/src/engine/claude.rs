@@ -1171,12 +1171,12 @@ impl ClaudeSession {
                 cmd.arg(crate::engine::claude::AskUserMcpServer::allowed_tool_name());
                 // The CLI's per-request MCP tool-call fetch timeout defaults to 60s
                 // for remote HTTP servers. Our AskUserQuestion server blocks up to
-                // 300s waiting for the user, so without this the CLI abandons the
-                // call at 60s and any ask the user takes longer than a minute on is
-                // lost. Raise it to match our server bound (ms). Only set when our
-                // MCP ask is actually wired; the user can still override via env.
+                // 1800s waiting for the user, so without this the CLI abandons the
+                // call early. Raise it to match our server bound (ms). Only set when
+                // our MCP ask is actually wired; the user can still override via env.
+                // Keep ≥ frontend USER_INPUT_TIMEOUT_SECONDS (30 min).
                 if std::env::var_os("MCP_TOOL_TIMEOUT").is_none() {
-                    cmd.env("MCP_TOOL_TIMEOUT", "300000");
+                    cmd.env("MCP_TOOL_TIMEOUT", "1800000");
                 }
             } else {
                 log::warn!(

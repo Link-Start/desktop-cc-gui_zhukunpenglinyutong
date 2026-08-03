@@ -362,7 +362,7 @@ async fn build_command_raises_mcp_tool_timeout_when_ask_wired() {
     // Root cause of the "answers >60s are lost" bug (2026-07-04): the CLI's
     // per-request MCP tool-call fetch timeout defaults to 60s for remote HTTP
     // servers, so it abandons our AskUserQuestion call before a slow user answers.
-    // build_command must raise MCP_TOOL_TIMEOUT to our 300s server bound whenever
+    // build_command must raise MCP_TOOL_TIMEOUT to our 1800s server bound whenever
     // the MCP ask is wired (non-plan mode + server started).
     let manager = std::sync::Arc::new(ClaudeSessionManager::new());
     // Idempotent; starts the process-global in-process MCP server so the wiring
@@ -391,8 +391,8 @@ async fn build_command_raises_mcp_tool_timeout_when_ask_wired() {
 
     assert_eq!(
         timeout_env.as_deref(),
-        Some("300000"),
-        "MCP_TOOL_TIMEOUT must be raised to 300s when the AskUserQuestion MCP ask is wired"
+        Some("1800000"),
+        "MCP_TOOL_TIMEOUT must be raised to 1800s when the AskUserQuestion MCP ask is wired"
     );
 }
 
