@@ -228,21 +228,67 @@ Composer browser context snapshot cards and their message summary counterparts M
 
 ### Requirement: Provider Groups MUST Use Provider-Scoped Model Catalogs
 
-The grouped Composer model selector MUST resolve each provider group from provider-scoped catalog facts rather than treating the active engine `models` array as the catalog for every provider.
+The grouped Composer model selector MUST resolve each engine group from provider-scoped catalog facts rather than treating the active engine `models` array as the catalog for every provider. When the active thread has a persisted managed provider binding, its active engine group MUST contain only that provider's configured models plus public models, with deterministic dedupe.
+
+#### Scenario: active managed provider uses its catalog
+
+- **WHEN** a new or restored Claude Code, Codex, or Kimi thread has managed `providerProfileId=A`
+- **THEN** the active engine model group MUST use provider A's configured models
+- **AND** it MUST append public models
+- **AND** it MUST NOT include models owned only by provider B or the disk/global provider
+
+#### Scenario: provider and public model duplicate
+
+- **WHEN** the active provider catalog and public catalog contain the same runtime model identity
+- **THEN** the selector MUST show one row
+- **AND** the provider-owned label and metadata MUST take precedence
+
+#### Scenario: provider-scoped Codex model preserves reasoning capabilities
+
+- **WHEN** a provider-scoped Codex model matches an authoritative Codex catalog row by normalized runtime model identity
+- **THEN** missing `supportedReasoningEfforts` and `defaultReasoningEffort` MUST be inherited from the authoritative row
+- **AND** provider-owned label, origin, profile binding, and explicit reasoning metadata MUST remain authoritative
+- **AND** an unmatched provider-only model MUST NOT receive inferred reasoning capabilities
+
+#### Scenario: user selects an arbitrary provider-bound Codex model
+
+- **WHEN** an active provider-bound Codex thread stores a non-empty user-selected model name
+- **THEN** Composer MUST preserve the selected model without requiring membership in the current or global Codex catalog
+- **AND** temporary catalog loading, refresh, or absence MUST NOT invalidate the selection
+- **AND** selection repair MUST NOT replace it with a global/default model
+- **AND** blank model names MUST continue through the existing fallback path
+
+#### Scenario: user selects an arbitrary provider-bound Claude Code model
+
+- **WHEN** an active provider-bound Claude Code thread stores a non-empty user-selected model name
+- **THEN** Composer MUST preserve the selected model without requiring membership in the current Claude catalog
+- **AND** temporary catalog loading, refresh, or absence MUST NOT invalidate the model or its reasoning effort
+- **AND** selection repair MUST NOT replace it with a default model
+- **AND** blank model names MUST continue through the existing fallback path
+
+#### Scenario: switching parallel provider sessions updates catalog
+
+- **WHEN** the same workspace contains active sessions bound to different provider profiles
+- **AND** the user switches the active session
+- **THEN** the selector MUST load and display the newly active session's provider-scoped catalog
+- **AND** an older request MUST NOT overwrite the new session's model list
 
 #### Scenario: non-active Claude group has Claude catalog
+
 - **WHEN** the active Composer provider is not `Claude Code`
 - **AND** Claude Code has settings/env or user custom model entries
 - **THEN** the grouped selector MUST include a Claude Code group
 - **AND** that group MUST use Claude Code model entries instead of the active provider's model list
 
 #### Scenario: non-active Codex group has Codex catalog
+
 - **WHEN** the active Composer provider is not `Codex`
 - **AND** Codex has built-in, config-derived, runtime, or user custom model entries
 - **THEN** the grouped selector MUST include a Codex group
 - **AND** that group MUST use Codex model entries instead of the active provider's model list
 
 #### Scenario: provider footer action targets effective provider
+
 - **WHEN** a provider group is rendered in the selector
 - **THEN** add-model and refresh-config footer actions MUST remain scoped to the effective selected provider context
 - **AND** refreshing a provider group MUST NOT start, stop, or restart a conversation runtime
@@ -251,7 +297,7 @@ The grouped Composer model selector MUST resolve each provider group from provid
 
 Native Session 的 Composer model selector MUST 只展示来源 Session 当前 CLI 下的
 Provider Profiles 与 Provider-scoped Model catalogs；它 MUST NOT 把其他 CLI 作为 model
-group 展示。
+group 展示。该约束 MUST 覆盖 Claude、Codex、Kimi、Grok 与 OpenCode Native Session。
 
 #### Scenario: Claude native session lists only Claude providers
 
@@ -271,6 +317,18 @@ group 展示。
 - **THEN** selector MUST 展示 Kimi CLI 的 Provider Profiles
 - **AND** 未验证为 continuation target 的其他 Kimi Provider MUST 保持不可选并展示原因
 - **AND** 当前绑定 Provider 内的 Model selection MUST 继续可用
+
+#### Scenario: Grok native session lists only Grok providers
+
+- **WHEN** 用户在 Grok Native Session 打开 model selector
+- **THEN** selector MUST 只展示 Grok CLI 的 Provider Profiles 与 scoped Models
+- **AND** MUST NOT 展示 Claude、Codex、Kimi 或 OpenCode CLI group
+
+#### Scenario: OpenCode native session lists only OpenCode providers
+
+- **WHEN** 用户在 OpenCode Native Session 打开 model selector
+- **THEN** selector MUST 只展示 OpenCode 的 Provider Profiles 与 scoped Models
+- **AND** MUST NOT 展示 Claude、Codex、Grok 或 Kimi CLI group
 
 ### Requirement: Provider Model Lists MUST Expand Mutually Exclusively
 
@@ -336,3 +394,152 @@ Model selection；当前 Provider 内选择 Model MUST 继续使用来源 Sessio
 - **WHEN** 用户选择其他 Provider Profile 下的 Model
 - **THEN** Composer MUST 请求 Provider Continuation confirmation
 - **AND** 在 continuation 成功前 MUST NOT 改写来源 Session 的 Provider 或 Model
+
+### Requirement: Composer Selection Repair MUST Converge
+
+When provider catalog hydration repairs the active thread model or reasoning effort, the Composer MUST publish the normalized selection to both durable storage and active in-memory selection state.
+Persisting a semantically equal selection MUST preserve state identity and MUST NOT trigger another
+render.
+
+#### Scenario: active provider selection is repaired
+
+- **WHEN** catalog hydration determines that the active provider thread selection requires repair
+- **THEN** cache, durable storage, active selection ref, and active selection state MUST observe the same normalized value
+- **AND** the next render MUST NOT schedule the same repair again
+
+#### Scenario: repeated equal persistence
+
+- **WHEN** the active thread receives a persistence request equal to its current normalized selection
+- **THEN** active selection state MUST retain its existing reference
+- **AND** no additional render MUST be scheduled
+
+### Requirement: Shared Local Model Selection MUST Preserve Catalog And Runtime Identity
+
+Shared Session 双栏 model picker 的具体 Model selection MUST 原子提交一个可执行 `ExecutionTarget`，
+并 MUST 分别保存 catalog entry
+identity 与 runtime model identity，并且 MUST NOT 从 display label 猜测 runtime model。
+
+#### Scenario: Codex switches to Claude local model with distinct identities
+
+- **WHEN** 当前 Shared target 是 Codex CLI，用户选择 Claude Code 的
+  `Local Settings.json` Provider 下 catalog id 为 `settings-main`、runtime model 为
+  `kimi-for-coding` 的 row
+- **THEN** picker MUST 关闭并提交一次 Claude local `ExecutionTarget`
+- **AND** `modelCatalogEntryId` MUST 为 `settings-main`
+- **AND** runtime `model` MUST 为 `kimi-for-coding`
+- **AND** selection MUST NOT 创建 Turn 或 hidden binding
+
+#### Scenario: legacy local row uses catalog id as runtime fallback
+
+- **WHEN** local settings catalog row 的 runtime `model` 为空，但 catalog `id` 非空
+- **THEN** selector MUST 使用 catalog `id` 作为 compatibility runtime model
+- **AND** `modelCatalogEntryId` 与 runtime `model` MUST 同时提交为该 `id`
+- **AND** 已知 `id != model` 的 row MUST 继续提交明确 runtime `model`
+
+### Requirement: Native Provider Selection MUST Use The Same Normalized Binding Identity
+
+Native 单栏与 Shared 双栏 MUST 复用同一 Provider binding identity 规则。
+`engine + normalized providerProfileId` 是选中态 identity；`providerProfileSource` 是
+metadata，不得因为 Native synthesized target 暂未携带 source 而丢失 Provider 或 Model 勾选。
+
+#### Scenario: Native local selection omits source metadata
+
+- **WHEN** Native Claude thread 的 target 使用 `providerProfileId = null`，且 synthesized
+  target 未携带 `providerProfileSource`
+- **THEN** `Local Settings.json` MUST 显示为当前 Provider
+- **AND** runtime model 或 catalog entry 匹配的 row MUST 显示选中勾选
+
+### Requirement: New Home MUST Use The Atomic CLI And Provider Target Picker
+
+New Home Composer MUST 使用现有双栏 CLI + Provider/Model target picker 选择新会话目标。该 picker MUST 将 CLI 浏览、Provider 展开与最终 Model selection 保持在同一 focus surface；只有 Model selection SHALL 形成完整 create-session target。
+
+#### Scenario: Home opens the double-column target picker
+
+- **WHEN** 用户在 New Home 打开模型选择器
+- **THEN** 左栏 MUST 展示当前 capability gate 允许浏览的 CLI
+- **AND** 右栏 MUST 展示当前 CLI 的 Provider Profiles 与 Provider-scoped Models
+- **AND** selector MUST NOT退化为仅展示当前 CLI Provider 的 Native 单栏模式
+
+#### Scenario: Home browsing does not mutate session state
+
+- **WHEN** 用户在 New Home 切换 CLI 或展开 Provider Profile，但尚未选择具体 Model
+- **THEN** picker MUST 保持打开
+- **AND** system MUST NOT 创建 thread、写入 Shared target store 或请求 Native Provider Continuation
+
+#### Scenario: Home model selection creates one atomic draft target
+
+- **WHEN** 用户在任一 enabled CLI/Provider 下选择具体 Model
+- **THEN** system MUST 原子保存 Engine、Provider Profile、Model catalog/runtime identity 与 Reasoning selection
+- **AND** picker MUST 关闭并在 Home Composer footer 展示该选择
+- **AND** Home hero Engine icon MUST 与该 creation target 的 Engine 同步
+
+#### Scenario: Unsupported discovery keeps the Provider header aligned
+
+- **WHEN** 双栏 picker 展示不具备可信 CLI model discovery protocol 的 Claude Code
+- **THEN** Provider header MUST 保留与 Codex 相同的 discovery action slot
+- **AND** discovery icon MUST 置灰且不可触发 discovery
+- **AND** system MUST NOT 将 config reload、HTTP 请求或静态模型列表伪装成 CLI discovery
+
+#### Scenario: Claude local model selection settles before menu close
+
+- **WHEN** Home 当前 target 属于 Codex，用户打开 Claude Code 的 local/disk Profile 并选择一个有效 Model
+- **THEN** selector MUST 先提交包含 `engine=claude`、canonical local binding、catalog/runtime model identity 与 `providerProfileSource=disk` 的完整 target
+- **AND** picker MUST 在 target owner 接收选择后关闭
+- **AND** catalog refresh 或 dropdown default-close MUST NOT吞掉该次 selection
+
+#### Scenario: Atomic catalog never projects Native current models
+
+- **WHEN** Home 双栏展示 Claude Code local/disk 与 managed Provider Profiles
+- **THEN** 每个 Profile 的 Models MUST 只来自该 `engine + providerProfileId` 的 scoped catalog
+- **AND** Atomic catalog MUST NOT接收或投影 Native Session 的 `currentModels`
+- **AND** Local Models MUST NOT出现在任一 managed Provider 下
+- **AND** 展开 Local Profile 后用户 MUST 能选择其有效 Model
+
+### Requirement: New Home Target MUST Initialize The Created Conversation
+
+New Home 发送 MUST 使用当前完整 create-session target 创建新会话并发送首 Turn。创建链路 MUST NOT 依赖异步全局 Engine/Model state 更新来反推 Provider 或 Model。
+
+#### Scenario: Home creates a conversation with the selected target
+
+- **WHEN** 用户在 New Home 选择目标后发送首条消息
+- **THEN** system MUST 使用所选 Engine 与 Provider Profile 创建新 thread
+- **AND** 首 Turn MUST 使用所选 runtime Model 与 Reasoning
+- **AND** 新 thread 的 Composer selection MUST 使用所选 model catalog identity 与 Reasoning
+
+#### Scenario: Home creation target is consumed once
+
+- **WHEN** creation orchestration 已使用 Home target 创建 thread
+- **THEN** creation-only target MUST NOT 作为普通 Turn option 继续传播
+- **AND** 后续 Native Session 发送 MUST 由已创建 thread 的 Engine/Provider binding 与 thread-scoped Composer selection 决定
+
+#### Scenario: Existing selector modes remain isolated
+
+- **WHEN** 用户打开普通 Native Session 或 Shared Session 的模型选择器
+- **THEN** Native Session MUST 继续使用当前 CLI 的单栏 Provider/Model selector
+- **AND** Shared Session MUST 继续使用双栏 selector 与其 durable selected target persistence
+- **AND** Home create-session draft MUST NOT 改写这两种 Session 的状态
+- **AND** Native 单栏 catalog owner 与 Atomic 双栏 catalog owner MUST NOT共享可变 selection/expanded state 或 `currentModels` input
+
+### Requirement: Shared And Home Atomic Pickers MUST Enable Five CLIs
+
+Shared Session and New Home Atomic target pickers MUST expose Claude Code、Codex CLI、
+Kimi CLI、Grok CLI and OpenCode CLI as enabled creation/execution targets. Native Session
+selector behavior MUST remain unchanged.
+
+#### Scenario: Shared picker lists five enabled CLI rows
+
+- **WHEN** a user opens the Shared Session target picker
+- **THEN** Claude、Codex、Kimi、Grok and OpenCode rows MUST be enabled
+- **AND** selecting any row MUST display that CLI's Provider Profiles in the right panel
+
+#### Scenario: Home picker creates a newly supported target
+
+- **WHEN** a user selects a Kimi、Grok or OpenCode Provider Model from New Home
+- **THEN** Home MUST create one complete create-session target
+- **AND** the new Native Session and first Turn MUST use that Engine、Provider and runtime Model
+
+#### Scenario: Native session remains unchanged
+
+- **WHEN** a user opens an existing Kimi、Grok or OpenCode Native Session selector
+- **THEN** the selector MUST preserve its existing Native behavior
+- **AND** this Shared integration MUST NOT add cross-CLI mutation to the Native Session

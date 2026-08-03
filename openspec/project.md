@@ -1,7 +1,7 @@
 # Project Context
 
 - Type: OpenSpec Workspace
-- Updated At: 2026-08-03T12:00:00+08:00
+- Updated At: 2026-08-03T18:00:00+08:00
 - Scope: governance snapshot for the current `mossx` repository workspace
 - Product version fact: `ccgui@0.7.5` from `package.json` and `src-tauri/tauri.conf.json`
 
@@ -20,7 +20,7 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 - Change workflow artifacts: `openspec/changes/<change-id>/{proposal,design,tasks,verification}.md`
 - Archive: `openspec/changes/archive/*`
 - Implementation rules: `.trellis/spec/**`
-- Current workspace state: active changes = `58`, archive changes = `791`, main specs = `462`
+- Current workspace state: active changes = `21`, archive changes = `828`, main specs = `481`
 
 ## Entry Surfaces
 
@@ -64,9 +64,9 @@ The product in this repository is `ccgui`: a Tauri 2 desktop AI engineering work
 
 ## Current Inventory
 
-- Active changes: `58`
-- Archive changes: `791`
-- Main specs: `462`
+- Active changes: `21`
+- Archive changes: `828`
+- Main specs: `481`
 - Completed task sets still active: `8`
 - Ready-for-implementation task sets: `11`
 - Demand-pool proposal directories without `proposal.md` / `tasks.md`: `0`
@@ -383,6 +383,16 @@ npm run check:large-files
 - ccgui contributors
 
 ## Update History
+
+### 2026-08-03 Complete Bulk Archive Wave 2
+
+Archived 37 additional active changes whose task sets were complete (or only archive/sync meta remaining). Deltas were agent-merged into main specs in chronological order (older first, newer overlays). Capability conflicts on shared-send-pipeline / composer-control-surface / native-provider-continuation / shared-execution-target / etc. resolved by time order.
+
+Excluded (still blocked or incomplete manual gates): Linux menu localization、Claude lightweight streaming quantified trace、runtime jank manual evidence、polling overhead smoke、stabilize diagnostics quantified frame、and other in-progress manual/smoke items (21 active remaining).
+
+Counts: active=`21`, archive=`828`, specs=`481`.
+
+
 
 ### 2026-08-03 Verified Bulk Archive
 

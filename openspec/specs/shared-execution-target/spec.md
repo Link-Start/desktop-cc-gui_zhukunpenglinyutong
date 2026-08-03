@@ -122,14 +122,21 @@ When a Native runtime event is owner-routed into a Shared Session, every realtim
 
 ### Requirement: Explicit local target MUST freeze canonical Provider semantics
 
-The system MUST treat an Execution Target with no Provider Profile ID as explicit local/default execution. At the send/freeze boundary, the mutable selection source `"disk"` MUST be converted to canonical `providerProfileSource = "local"` and persisted with a readable local Provider name. This normalization MUST NOT apply to legacy Turns whose execution target is unknown.
+The system MUST treat an Execution Target with no Provider Profile ID as explicit local/default
+execution.
+At the send/freeze boundary, the mutable selection source `"disk"` MUST be converted to
+canonical `providerProfileSource = "local"` and persisted with a readable local Provider name.
+This normalization MUST NOT apply to legacy Turns whose execution target is unknown.
 
 #### Scenario: new local Turn reloads as local configuration
+
 - **WHEN** a new Shared Turn is sent with no Provider Profile ID
-- **THEN** its frozen canonical snapshot MUST identify local Provider semantics with `providerProfileSource = "local"`
+- **THEN** its frozen canonical snapshot MUST identify local Provider semantics with
+  `providerProfileSource = "local"`
 - **AND** realtime and history badges MUST display “本地配置” rather than “历史配置未知”
 
 #### Scenario: unknown legacy identity remains unknown
+
 - **WHEN** a legacy Turn lacks both explicit local/default semantics and Provider identity
 - **THEN** history MUST keep the unknown-history label
 - **AND** MUST NOT fabricate local Provider semantics
@@ -205,3 +212,173 @@ Shared Session 模型选择器在同一 CLI 下切换 Provider 时，MUST 先加
 - **WHEN** 全局 Claude model mapping 仍为上一渠道（如 deepseek-v4-pro），而当前 Shared 渠道 catalog 行为 MiniMax runtime
 - **THEN** 模型列表行 MUST 显示 MiniMax runtime 名（或 catalog 已写入的 label/model）
 - **AND** MUST NOT 全部显示为上一渠道映射名
+
+### Requirement: Frozen Model Identity MUST Separate Catalog And Runtime Values
+
+Every new Shared Turn target MUST freeze both `modelCatalogEntryId` and runtime `model` when a
+catalog entry is selected. The backend MUST validate both values against the same
+Provider-scoped catalog entry. Runtime adapters MUST consume only runtime `model`; a catalog-only
+ID MUST NOT cross the Runtime boundary. Legacy snapshots without `modelCatalogEntryId` MAY be
+validated by runtime `model`, but MUST NOT treat a catalog ID as a runtime model.
+
+#### Scenario: catalog id differs from runtime model
+
+- **WHEN** the selected catalog entry has `id != model`
+- **THEN** the frozen Turn snapshot MUST preserve both values
+- **AND** the CLI request MUST contain only the entry's runtime `model`
+
+#### Scenario: mismatched model pair fails before side effect
+
+- **WHEN** `modelCatalogEntryId` and runtime `model` do not identify the same entry for the
+  frozen Engine and Provider
+- **THEN** the Turn MUST fail closed before process start, Binding materialization, or prompt send
+- **AND** the system MUST NOT substitute a default Provider or Model
+
+### Requirement: Turn Snapshot MUST Be The Sole Runtime Authority
+
+After `conversation.turnRequested` is durably appended, every operation for that attempt MUST
+derive Engine, Provider, Model, and Reasoning from the persisted snapshot. Frontend or legacy flat
+Target fields MUST NOT override the snapshot. Picker changes after freeze MUST affect only the
+next Turn.
+
+#### Scenario: stale legacy fields disagree with durable snapshot
+
+- **WHEN** a durable attempt snapshot selects Target A while stale legacy fields contain Target B
+- **THEN** Runtime dispatch, Binding, Context Delivery, terminal commit, and badge MUST all use
+  Target A
+- **AND** Target B MUST cause no Runtime side effect
+
+#### Scenario: changing picker does not rewrite history
+
+- **WHEN** the user changes `selectedNextTarget` after an earlier Turn was requested
+- **THEN** the earlier Turn's Runtime owner and visible label MUST remain bound to its immutable
+  snapshot
+
+#### Scenario: stale collaboration mode cannot override durable model
+
+- **WHEN** `collaborationMode.settings` still contains Model or Reasoning from a prior Provider
+  while the durable Attempt snapshot selects a different Target
+- **THEN** the Runtime request MUST rewrite those settings from the Attempt snapshot
+- **AND** the stale Model or Reasoning MUST cause no Runtime side effect
+
+### Requirement: New Shared Session MUST Start With A Complete Execution Target
+
+A newly created Shared Session MUST persist a complete resolved `initialTarget` before it becomes
+visible. The target MUST include Engine, Provider semantics, `modelCatalogEntryId`, runtime
+`model`, and a readable Provider snapshot. `selectedEngine` MAY remain as a legacy rollback
+mirror, but MUST be derived from `initialTarget.engine`; it MUST NOT be an independent creation
+authority. Legacy partial metadata MAY remain readable, but MUST NOT define the creation contract
+for new sessions.
+
+#### Scenario: complete initial target is persisted atomically
+
+- **WHEN** a user creates a Shared Session with a resolved local or managed Target
+- **THEN** the first persisted legacy metadata and `shared_sessions_v2.selected_target_json` row
+  MUST contain that complete Target
+- **AND** the returned Session and Composer MUST expose the same Engine, Provider, catalog model,
+  runtime model, and readable snapshot
+- **AND** no Runtime Binding or canonical Turn fact may be created by Session creation
+
+#### Scenario: missing or partial initial target fails before creation
+
+- **WHEN** a caller omits `initialTarget` or supplies only Engine/Provider without the required
+  catalog/runtime model pair and readable Provider snapshot
+- **THEN** Session creation MUST fail with an actionable invalid-target error
+- **AND** no Shared Session directory, metadata row, Binding, or Turn fact may be created
+
+#### Scenario: selected engine conflicts with initial target
+
+- **WHEN** a compatibility caller supplies `selectedEngine` that differs from
+  `initialTarget.engine`
+- **THEN** Session creation MUST fail closed
+- **AND** the system MUST NOT silently choose either value
+
+### Requirement: Shared Target Selection MUST Have One Complete Authority
+
+The Shared Composer MUST expose only the complete CLI → Provider → Model → Reasoning selector.
+An Engine-only selector or callback MUST NOT be reachable on a Shared Session. A selected Target
+MUST be persisted successfully before it is published to the in-memory `selectedNextTarget`
+store. Persistence failure MUST keep the previous Target visible and effective.
+
+#### Scenario: CLI switch uses the complete target selector
+
+- **WHEN** a user changes CLI in a Shared Session
+- **THEN** the change MUST resolve and persist a complete Target through the four-level selector
+- **AND** no Engine-only action may replace the existing Target with a partial value
+
+#### Scenario: CLI navigation does not persist a transitional target
+
+- **WHEN** a user navigates from Codex CLI to Claude Code before selecting a concrete Provider
+  Model row
+- **THEN** the Picker MUST keep that navigation state local to the open menu
+- **AND** it MUST NOT invoke the persistence boundary with an Engine-only or otherwise partial
+  Target
+- **AND** selecting the concrete Model MUST emit exactly one complete `ResolvedExecutionTarget`
+
+#### Scenario: selection persistence fails
+
+- **WHEN** persisting a newly selected Target fails
+- **THEN** the Composer MUST keep the previous durable Target selected
+- **AND** it MUST surface a readable error
+- **AND** a later send MUST NOT use the unpersisted Target
+
+#### Scenario: parallel sessions persist targets independently
+
+- **WHEN** Target persistence for Shared Session A is pending while the user selects a Target in
+  Shared Session B
+- **THEN** Session B MUST persist through its own Workspace/Thread queue without waiting for A
+- **AND** a delayed failure from A MUST NOT be surfaced as Session B's selection failure
+
+#### Scenario: legacy partial target cannot persist reasoning alone
+
+- **WHEN** a legacy Shared Session exposes a partial Target that lacks the complete model pair or
+  readable Provider snapshot
+- **THEN** changing Reasoning MUST NOT enqueue Target persistence
+- **AND** the user MUST first resolve a complete Target through the four-level selector
+
+### Requirement: Shared Execution Target MUST Support Five Provider-scoped CLIs
+
+Shared `ExecutionTarget`、Binding Key、mutable selection、frozen snapshot and owner routing MUST
+support Claude Code、Codex CLI、Kimi CLI、Grok CLI and OpenCode CLI with the same Provider
+provenance contract.
+
+#### Scenario: newly supported CLI target survives reload
+
+- **WHEN** a user selects a resolved Kimi、Grok or OpenCode Target and reloads the Shared Session
+- **THEN** the complete Engine、Provider、Model and Reasoning selection MUST be restored
+- **AND** no field MAY be rewritten from global Engine or Model state
+
+#### Scenario: same CLI with two Providers owns two bindings
+
+- **WHEN** Shared turns target two managed Providers under Kimi、Grok or OpenCode
+- **THEN** the system MUST persist two distinct `engine + providerProfileId` bindings
+- **AND** switching back MUST reuse the original binding
+
+#### Scenario: local profile freezes canonical local provenance
+
+- **WHEN** a Kimi、Grok or OpenCode local Profile is selected
+- **THEN** mutable selection MUST use `providerProfileId=null + providerProfileSource=disk`
+- **AND** the frozen canonical snapshot MUST use `providerProfileSource=local`
+
+#### Scenario: local target is revalidated across Shared boundaries
+
+- **WHEN** Kimi、Grok or OpenCode local Target is used to create a Shared Session or begin a V2 turn
+- **THEN** both boundaries MUST resolve a non-empty local Model catalog for the selected CLI
+- **AND** the same strict catalog pair validation MUST run before durable state changes
+
+### Requirement: Shared Target Change MUST Survive Identity Projection Loss
+
+Shared Session 的 target picker 变更 MUST 只更新 `selectedNextTarget`；即使 Shared 身份投影（`threadKind` / `isSharedSession` prop）暂时丢失，系统 MUST NOT 因此退化为 Native 行为——MUST NOT 触发 Native Provider 续接、MUST NOT 新建会话、MUST NOT 将 `shared:` id 作为 native session 来源。
+
+#### Scenario: channel switch with lost projection persists shared target only
+
+- **WHEN** 用户在 Shared Session 中将 target 切到 Claude/Codex managed 渠道，且当时 `threadKind` 投影丢失（summary 存在但 kind 非 shared）
+- **THEN** 系统 MUST 调用 Shared target 持久化（`set_shared_session_selected_engine`）并 hydrate `selectedNextTarget`
+- **AND** MUST NOT 调用 `requestProviderContinuationDialog`
+- **AND** MUST NOT 弹出「续接没有完成」类 Native 续接 UI
+
+#### Scenario: locked shared picker stays inert under projection loss
+
+- **WHEN** `sharedTargetPickerLocked` 为 true 且身份投影丢失
+- **THEN** target 点选 MUST 为 no-op
+- **AND** MUST NOT 落到 Native 续接分支（locked 不构成身份判定的替代依据）
