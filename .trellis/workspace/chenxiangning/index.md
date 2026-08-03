@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-31.md`
-- **Total Sessions**: 1307
+- **Total Sessions**: 1308
 - **Last Active**: 2026-08-03
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-31.md` | ~329 | Active |
+| `journal-31.md` | ~362 | Active |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
@@ -59,6 +59,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1308 | 2026-08-03 | OpenSpec 第二波 bulk archive 37 complete 提案 | `a8cd3f2f9` | `CXN-version-0.7.16` |
 | 1307 | 2026-08-03 | OpenSpec 批量归档已验证提案 | `d8bc34a6f` | `CXN-version-0.7.16` |
 | 1306 | 2026-08-03 | 适配 Shared MCP AskUserQuestion 工具卡 UI | `7c40eaaab` | `cxn-version-0.7.15` |
 | 1305 | 2026-08-03 | 修复 Shared Claude AskUserQuestion 弹窗与超时体验 | `87836b7cb` | `cxn-version-0.7.15` |

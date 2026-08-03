@@ -327,3 +327,36 @@ onDebugRef 解耦、原子 selection state、乐观 snapshot、preferred 归一�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1308: OpenSpec 第二波 bulk archive 37 complete 提案
+
+**Date**: 2026-08-03
+**Task**: OpenSpec 第二波 bulk archive 37 complete 提案
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+归档 37 个 complete/archive-ready OpenSpec changes 到 2026-08-03；时间序同步 main specs；active 剩余 21（blocked/manual gates）；archive=828 specs=481
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a8cd3f2f9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
