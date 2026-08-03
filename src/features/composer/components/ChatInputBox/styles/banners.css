@@ -469,10 +469,22 @@
   color: var(--text-muted);
   font-size: 11px;
   line-height: 1.2;
-  max-width: 140px;
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Shared pending-ack：已发出、等 commit ACK，避免被误读成「还在排队」 */
+.message-queue-item.is-pending-ack {
+  border-color: color-mix(in srgb, var(--button-primary) 34%, var(--input-border));
+  background: color-mix(in srgb, var(--button-primary) 8%, var(--input-bg) 92%);
+}
+
+.message-queue-status.is-pending-ack {
+  color: var(--button-primary);
+  font-weight: 600;
+  max-width: 180px;
 }
 
 .message-queue-actions {
@@ -544,4 +556,14 @@
   box-shadow:
     0 1px 0 rgba(15, 23, 36, 0.03),
     inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* light 主题下 generic item 选择器优先级更高，需显式保留 pending-ack 高亮 */
+[data-theme="light"] .message-queue-item.is-pending-ack {
+  border-color: color-mix(in srgb, var(--button-primary) 40%, var(--input-border));
+  background: color-mix(in srgb, var(--button-primary) 10%, #ffffff 90%);
+}
+
+[data-theme="light"] .message-queue-status.is-pending-ack {
+  color: var(--button-primary);
 }

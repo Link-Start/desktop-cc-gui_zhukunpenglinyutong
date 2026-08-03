@@ -983,4 +983,9 @@ export interface QueuedMessage {
   queuedAt: number;
   /** Whether this item is currently fusing into the active turn */
   isFusing?: boolean;
+  /**
+   * Shared V2：已发出、等待 commit ACK（防双发锁）。
+   * 仅 UI 标识，不改变队列生命周期。
+   */
+  isPendingAck?: boolean;
 }

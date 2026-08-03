@@ -188,6 +188,7 @@ const composer = {
       "empty-draft": "草稿為空"
     },
     "queueStatusWaiting": "已排入下一回合佇列",
+    "queueStatusPendingAck": "已送出，確認中（防重複）",
     "queueStatusFuseReady": "可融合進目前回合",
     "queueStatusFusing": "正在融合進目前回合",
     "queueStatusCommand": "斜線指令將等待下一回合",

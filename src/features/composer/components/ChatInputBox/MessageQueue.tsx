@@ -20,13 +20,19 @@ function resolveQueueItemStatus({
   canFuse,
   fullContent,
   isFusing,
+  isPendingAck,
 }: {
   canFuse: boolean;
   fullContent: string;
   isFusing: boolean;
+  isPendingAck?: boolean;
 }) {
   if (isFusing) {
     return 'composer.queueStatusFusing';
+  }
+  // Shared 已发出、等 commit ACK（防双发）：优先于「排队到下一轮」
+  if (isPendingAck) {
+    return 'composer.queueStatusPendingAck';
   }
   if (canFuse && isFuseEligibleQueuedContent(fullContent)) {
     return 'composer.queueStatusFuseReady';
@@ -76,10 +82,27 @@ export function MessageQueue({
         const fullContent = item.fullContent ?? item.content;
         const previewContent = buildMessageQueuePreview(item.content);
         const isFusing = item.isFusing || item.id === fusingMessageId;
-        const canFuseItem = canFuse && isFuseEligibleQueuedContent(fullContent);
-        const statusKey = resolveQueueItemStatus({ canFuse, fullContent, isFusing });
+        const isPendingAck = Boolean(item.isPendingAck);
+        // pending-ack 不允许融合（与 useQueuedSend isQueuedMessageFuseEligible 一致）
+        const canFuseItem =
+          canFuse &&
+          !isPendingAck &&
+          isFuseEligibleQueuedContent(fullContent);
+        const statusKey = resolveQueueItemStatus({
+          canFuse,
+          fullContent,
+          isFusing,
+          isPendingAck,
+        });
         return (
-          <div key={item.id} className="message-queue-item">
+          <div
+            key={item.id}
+            className={
+              isPendingAck
+                ? 'message-queue-item is-pending-ack'
+                : 'message-queue-item'
+            }
+          >
             <span className="message-queue-number">{queuePosition}</span>
             <span
               className="message-queue-content"
@@ -88,7 +111,16 @@ export function MessageQueue({
             >
               {previewContent}
             </span>
-            <span className="message-queue-status">{t(statusKey)}</span>
+            <span
+              className={
+                isPendingAck
+                  ? 'message-queue-status is-pending-ack'
+                  : 'message-queue-status'
+              }
+              title={t(statusKey)}
+            >
+              {t(statusKey)}
+            </span>
             <div className="message-queue-actions">
               <button
                 type="button"
@@ -110,7 +142,13 @@ export function MessageQueue({
                 onClick={() => onRemove(item.id)}
                 disabled={isFusing}
                 aria-disabled={isFusing}
-                title={t('chat.removeFromQueue')}
+                // 排队中：可删；确认中：按钮仍可用作卡死 pending-ack 的出口，
+                // 若底层仍 in-flight 会静默 no-op（防双发，不在此改生命周期）。
+                title={
+                  isPendingAck
+                    ? t(statusKey)
+                    : t('chat.removeFromQueue')
+                }
               >
                 {t('chat.deleteQueuedMessage')}
               </button>

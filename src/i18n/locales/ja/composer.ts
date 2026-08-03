@@ -188,6 +188,7 @@ const composer = {
       "empty-draft": "下書きが空です"
     },
     "queueStatusWaiting": "次のターンのキューに追加済み",
+    "queueStatusPendingAck": "送信済み — 確認中（重複防止）",
     "queueStatusFuseReady": "現在のターンに統合可能",
     "queueStatusFusing": "現在のターンに統合中",
     "queueStatusCommand": "スラッシュコマンドは次のターンを待機します",

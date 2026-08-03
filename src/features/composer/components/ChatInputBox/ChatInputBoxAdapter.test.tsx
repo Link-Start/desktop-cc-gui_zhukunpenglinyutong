@@ -1040,6 +1040,7 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
         fullContent: 'queue full text',
         queuedAt: 123,
         isFusing: true,
+        isPendingAck: false,
       },
     ]);
     expect(latest.canFuseFromQueue).toBe(true);
@@ -1050,6 +1051,32 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     });
 
     expect(onFuseQueued).toHaveBeenCalledWith('queued-1');
+  });
+
+  it('maps Shared pending-ack queue state for UI labeling', async () => {
+    renderAdapter({
+      queuedMessages: [
+        {
+          id: 'queued-ack',
+          text: 'follow-up already sent',
+          createdAt: 456,
+          sharedDispatchState: 'pending-ack',
+        },
+      ],
+    });
+
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+
+    const latest = mockState.latestProps as {
+      messageQueue?: Array<{ id: string; isPendingAck?: boolean }>;
+    };
+
+    expect(latest.messageQueue).toEqual([
+      expect.objectContaining({
+        id: 'queued-ack',
+        isPendingAck: true,
+      }),
+    ]);
   });
 
   it('forwards input text changes without runtime errors', async () => {

@@ -204,6 +204,7 @@ const composer = {
       "empty-draft": "Empty draft",
     },
     queueStatusWaiting: "Queued for next turn",
+    queueStatusPendingAck: "Sent — confirming (anti-duplicate)",
     queueStatusFuseReady: "Can fuse into current turn",
     queueStatusFusing: "Fusing into current turn",
     queueStatusCommand: "Slash command waits for next turn",

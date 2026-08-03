@@ -202,7 +202,8 @@ function areQueuedMessagesEqual(
     if (
       leftMessage?.id !== rightMessage?.id ||
       leftMessage?.text !== rightMessage?.text ||
-      leftMessage?.createdAt !== rightMessage?.createdAt
+      leftMessage?.createdAt !== rightMessage?.createdAt ||
+      leftMessage?.sharedDispatchState !== rightMessage?.sharedDispatchState
     ) {
       return false;
     }
@@ -1337,6 +1338,8 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         fullContent: q.text,
         queuedAt: q.createdAt,
         isFusing: q.id === fusingQueuedMessageId,
+        // Shared pending-ack：仅透传 UI 标识，队列出队逻辑不变
+        isPendingAck: q.sharedDispatchState === "pending-ack",
       }));
     }, [fusingQueuedMessageId, queuedMessages]);
 

@@ -88,6 +88,7 @@ const composer = {
       "empty-draft": "输入为空",
     },
     queueStatusWaiting: "排队到下一轮",
+    queueStatusPendingAck: "已发送，确认中（防重复）",
     queueStatusFuseReady: "可并入本轮回复",
     queueStatusFusing: "正在并入本轮回复",
     queueStatusCommand: "Slash 命令等待下一轮",
