@@ -184,3 +184,51 @@ onDebugRef 解耦、原子 selection state、乐观 snapshot、preferred 归一�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1305: 修复 Shared Claude AskUserQuestion 弹窗与超时体验
+
+**Date**: 2026-08-03
+**Task**: 修复 Shared Claude AskUserQuestion 弹窗与超时体验
+**Branch**: `cxn-version-0.7.15`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 根因 | Shared control owner 校验时 Claude RequestUserInput 的 turnId 与 runtimeTurnId 不一致，提问事件被静默丢弃 |
+| 修复 | events 映射用 turn_id_context；projection 对 control 方法强制对齐 turnId；OpenSpec change 收口 |
+| 体验 | 超时 5→30 分钟，超时默认选推荐首项；提交后本地立即收起 live 卡；倒计时前展示超时说明 |
+| 验证 | 用户手测弹窗通过；Vitest 44 通过；cargo MCP timeout 相关测试通过 |
+
+**Updated Files**:
+- `src-tauri/src/engine/events.rs`
+- `src-tauri/src/shared_runtime_coordinator.rs`
+- `src-tauri/src/engine/claude/user_input.rs`
+- `src/features/app/components/RequestUserInputMessage.tsx`
+- `src/features/app/components/UserInputQuestionCard.tsx`
+- `src/features/app/components/userInputTimeout.ts`
+- `openspec/changes/fix-shared-session-askuserquestion-control-owner/**`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `87836b7cb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
