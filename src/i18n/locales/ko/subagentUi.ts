@@ -2,6 +2,8 @@ export default {
   subagentUi: {
     squadAria: "하위 에이전트 팀",
     squadTitle: "{{completed}}/{{total}} 에이전트",
+    squadTitleCount: "에이전트 {{total}}개",
+
     squadFallbackTitle: "병렬 하위 에이전트",
     defaultName: "하위 에이전트",
     badge: "SubAgent",
@@ -17,6 +19,11 @@ export default {
     noSessionYet:
       "아직 하위 에이전트 세션과 연결되지 않았습니다(agentId 미확인 또는 transcript 인덱싱 중). 왼쪽 세션 트리에서 「하위 에이전트」 행을 열어 확인하세요.",
 
+    statusShort: {
+      completed: "완료",
+      running: "실행 중",
+      error: "실패",
+    },
     status: {
       running: "실행 중",
       completed: "완료",

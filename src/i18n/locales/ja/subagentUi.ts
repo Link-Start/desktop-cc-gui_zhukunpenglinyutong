@@ -2,6 +2,8 @@ export default {
   subagentUi: {
     squadAria: "サブエージェントチーム",
     squadTitle: "{{completed}}/{{total}} エージェント",
+    squadTitleCount: "エージェント {{total}}",
+
     squadFallbackTitle: "並列サブエージェント",
     defaultName: "サブエージェント",
     badge: "SubAgent",
@@ -17,6 +19,11 @@ export default {
     noSessionYet:
       "サブエージェントセッションにまだ関連付けられていません（agentId が未解決か、transcript がインデックス作成中）。左のセッションツリーで「サブエージェント」行を開いて確認できます。",
 
+    statusShort: {
+      completed: "完了",
+      running: "実行中",
+      error: "失敗",
+    },
     status: {
       running: "実行中",
       completed: "完了",

@@ -40,11 +40,15 @@ export {
 } from "./utils/subagentViewModel";
 export {
   buildSyntheticSpawnToolsFromChildren,
+  enrichTimelineWithSyntheticSubagentsBeforeCollapse,
   hasBlockingSubagentToolSource,
   injectSyntheticSubagentToolsIfNeeded,
   shouldInjectChildSubagentSynthetic,
 } from "./utils/syntheticSharedSubagentTools";
-export type { ChildSubagentSyntheticEligibilityInput } from "./utils/syntheticSharedSubagentTools";
+export type {
+  ChildSubagentSyntheticEligibilityInput,
+  EnrichTimelineSyntheticSubagentInput,
+} from "./utils/syntheticSharedSubagentTools";
 export {
   enrichSubagentCardStatuses,
   isSubagentFinishedOutput,
@@ -55,9 +59,19 @@ export {
   closeSubagentInspectorIfScopeChanged,
   getSubagentInspectorSelection,
   openSubagentInspector,
+  syncSubagentInspectorFromCards,
+  syncSubagentInspectorSelection,
   useSubagentInspectorSelection,
 } from "./hooks/useSubagentInspectorStore";
+export {
+  clearSubagentSessionProbeStore,
+  getSubagentSessionProbeSnapshot,
+  mergeSubagentEnrichmentSources,
+  publishSubagentSessionProbe,
+  useSubagentSessionProbeVersion,
+} from "./hooks/useSubagentSessionProbeStore";
 export { SubagentPersonaCard } from "./components/SubagentPersonaCard";
+export { SubagentRingCard } from "./components/SubagentRingCard";
 export { SubagentSquadGrid } from "./components/SubagentSquadGrid";
 export { SubagentInspectorDrawer } from "./components/SubagentInspectorDrawer";
 export { SubagentChatSplit } from "./components/SubagentChatSplit";

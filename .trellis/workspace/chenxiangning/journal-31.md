@@ -960,3 +960,145 @@ Claude structured backgroundTaskId settlement blocker: suppress post-result 5s p
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1325: fix assistant duplicate render Native/Shared
+
+**Date**: 2026-08-04
+**Task**: fix assistant duplicate render Native/Shared
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+OpenSpec + merge early-body 折叠 + 跨 id 收敛；review 收紧 streaming/stop 边界后自检提交
+
+### Main Changes
+
+| 项 | 内容 |
+|----|------|
+| Change | `fix-assistant-duplicate-render-native-shared` |
+| 单气泡 | substantial early-body echo（≥24 且 ≥50% coverage） |
+| 双气泡 | Shared/Native complete/upsert 跨 id 收敛 |
+| 防误吞 | streaming 仅 exact body 或双方≥80 等价；reasoning/tool stop 对齐 assembler |
+| 测试 | merge + completed-duplicate + adapters + fast-path 84/84 |
+| 验证 | openspec validate OK；未纳入无关 subagent WIP |
+
+**Updated Files**:
+- `src/features/threads/hooks/threadReducerTextMerge.ts`
+- `src/features/threads/hooks/useThreadsReducerAssistantDedup.ts`
+- `src/features/threads/hooks/useThreadsReducer.ts`
+- tests + openspec/changes/fix-assistant-duplicate-render-native-shared/**
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `379d9935b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1326: 修复子代理状态卡死与抽屉冻结
+
+**Date**: 2026-08-04
+**Task**: 修复子代理状态卡死与抽屉冻结
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 问题 | 子代理列表长期「运行中」；点开 inspector 抽屉 status 不刷新；仅侧栏开 session 才对齐 |
+| 根因 | inspector 整卡快照冻结；SessionCanvas 旁路 load 不回写 enrich 源；layout snapshot 会冲掉旁路写 store |
+| 方案 | 新增 useSubagentSessionProbeStore；SquadGrid/SubagentList merge+enrich；sync inspector；Ring 卡 UI 收口 |
+| 验证 | vitest inspector/probe/cardStatus hooks 通过；本地确认开抽屉后 status 可更新 |
+
+**Updated Files**:
+- `src/features/subagent-ui/hooks/useSubagentSessionProbeStore.ts` (new)
+- `src/features/subagent-ui/hooks/useSubagentInspectorStore.ts`
+- `src/features/subagent-ui/components/SubagentSessionCanvas.tsx`
+- `src/features/subagent-ui/components/SubagentSquadGrid.tsx`
+- `src/features/subagent-ui/components/SubagentRingCard.tsx` (new)
+- `src/features/status-panel/components/SubagentList.tsx`
+- 多语言 `subagentUi` + `src/styles/subagent-ui.css`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c33a3f254` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1327: SubAgent S10 卡收口：折叠收纳、去重与宽度自适应
+
+**Date**: 2026-08-04
+**Task**: SubAgent S10 卡收口：折叠收纳、去重与宽度自适应
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+幕布 SubAgent 改为 S10 分段色条+Ring 卡；参与已处理折叠；合成注入前移防回钉；description 顶 title 识别消双重渲染；Ring 网格 auto-fit 均分宽度
+
+### Main Changes
+
+## 本次交付
+- S10 Segment Bar + Ring 卡片 UI（已在 c33a3f254 含部分 UI）
+- SubAgent 进入 process-phase「已处理」折叠（取消常驻豁免）
+- 合成 spawn 注入移到 collapse 之前，堵住 Shared 折叠后再钉回 chip 外侧
+- isSubagentTool 识别 Shared description-as-title 载荷，只走 subagentGroup，去掉下方扳手重复行
+- Ring grid：auto-fill → auto-fit，卡均分铺满宽度
+
+## 验证
+- vitest：collapseMiddleSteps / isSubagentTool / groupToolItems / syntheticSharedSubagentTools 相关用例通过
+- 设计预览 HTML 仅在 output/，未入库
+
+## 未纳入
+- output/subagent-card-*.html 设计稿（本地预览）
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2e381d204` | (see git log) |
+| `c33a3f254` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

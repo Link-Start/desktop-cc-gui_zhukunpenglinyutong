@@ -31,6 +31,51 @@ export function closeSubagentInspector() {
 }
 
 /**
+ * 小队 / 状态面板 re-enrich 后，把同 id 的最新 card 同步进 inspector，
+ * 避免抽屉打开瞬间的 status 快照永久冻结在 running。
+ */
+export function syncSubagentInspectorSelection(
+  latest: SubagentCardViewModel,
+): void {
+  if (!selected || selected.id !== latest.id) {
+    return;
+  }
+  if (
+    selected.status === latest.status &&
+    selected.progress === latest.progress &&
+    selected.outputText === latest.outputText &&
+    selected.sessionThreadId === latest.sessionThreadId &&
+    selected.description === latest.description &&
+    selected.typeLabel === latest.typeLabel
+  ) {
+    return;
+  }
+  selected = {
+    ...selected,
+    ...latest,
+    // 保留打开时可能已解析的 session，除非最新值更具体
+    sessionThreadId: latest.sessionThreadId ?? selected.sessionThreadId,
+    agentId: latest.agentId ?? selected.agentId,
+    taskOutput: latest.taskOutput ?? selected.taskOutput,
+    outputText: latest.outputText ?? selected.outputText,
+  };
+  emit();
+}
+
+/** 对当前选中卡批量尝试同步（传入 squad 全部 cards） */
+export function syncSubagentInspectorFromCards(
+  cards: readonly SubagentCardViewModel[],
+): void {
+  if (!selected) {
+    return;
+  }
+  const match = cards.find((card) => card.id === selected?.id);
+  if (match) {
+    syncSubagentInspectorSelection(match);
+  }
+}
+
+/**
  * 仅在 workspace/thread **真正切换**时关闭 inspector。
  * 禁止在 Messages 重挂载（同 scope）时关闭——否则打开 split 会闪一下立刻关。
  */

@@ -81,6 +81,8 @@ import {
   resolveVisibleMessageItems,
   type MessageActionTargets,
 } from "../orchestration/presentation/messagesViewModel";
+import { useActiveCanvasSelector } from "../../layout/hooks/activeCanvasStore";
+import { enrichTimelineWithSyntheticSubagentsBeforeCollapse } from "../../subagent-ui";
 import {
   INITIAL_BOTTOM_PIN_BUDGET_MS,
 } from "../constants/messagesConstants";
@@ -985,14 +987,46 @@ export const MessagesCore = memo(function MessagesCore({
       enableCollaborationBadge,
     });
   }, [activeEngine, enableCollaborationBadge, isThinking, visibleItems]);
+  // 合成子代理卡必须在 process-phase 折叠之前注入，才能进「已处理」hiddenItemIds。
+  const childSubagentThreads = useActiveCanvasSelector(
+    (snapshot) => snapshot.childSubagentThreads,
+  );
+  const canvasThreadId = useActiveCanvasSelector((snapshot) => snapshot.threadId);
+  const threadStatusById = useActiveCanvasSelector(
+    (snapshot) => snapshot.threadStatusById,
+  );
+  const threadItemsByThread = useActiveCanvasSelector(
+    (snapshot) => snapshot.threadItemsByThread,
+  );
+  const timelineSourceItemsWithSubagents = useMemo(
+    () =>
+      enrichTimelineWithSyntheticSubagentsBeforeCollapse({
+        items: timelineSourceItems,
+        ownThreadId: threadId,
+        canvasThreadId,
+        activeEngine,
+        childThreads: childSubagentThreads,
+        statusById: threadStatusById,
+        itemsByThread: threadItemsByThread,
+      }),
+    [
+      activeEngine,
+      canvasThreadId,
+      childSubagentThreads,
+      threadId,
+      threadItemsByThread,
+      threadStatusById,
+      timelineSourceItems,
+    ],
+  );
   const { timelineItems, phases: processPhases } = useMemo(
     () =>
       resolveCollapsedTimelineItems({
         activeEngine,
         expandedPhaseKeys: expandedProcessPhaseKeys,
-        timelineSourceItems,
+        timelineSourceItems: timelineSourceItemsWithSubagents,
       }),
-    [activeEngine, expandedProcessPhaseKeys, timelineSourceItems],
+    [activeEngine, expandedProcessPhaseKeys, timelineSourceItemsWithSubagents],
   );
   const processPhaseChips = useMemo(
     () =>

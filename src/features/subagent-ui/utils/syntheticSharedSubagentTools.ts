@@ -157,3 +157,51 @@ export function injectSyntheticSubagentToolsIfNeeded(
     ...items.slice(lastUserIndex + 1),
   ];
 }
+
+export type EnrichTimelineSyntheticSubagentInput = {
+  items: readonly ConversationItem[];
+  ownThreadId: string | null | undefined;
+  canvasThreadId?: string | null | undefined;
+  activeEngine?: EngineType | string | null | undefined;
+  childThreads: readonly ThreadSummary[];
+  statusById?: Record<string, { isProcessing?: boolean }>;
+  itemsByThread?: Record<string, ConversationItem[] | undefined>;
+};
+
+/**
+ * 在 process-phase 折叠 **之前** 注入合成 spawn 卡。
+ *
+ * 必须先于 resolveCollapsedTimelineItems：若在折叠后注入，
+ * 真 Agent 被 hard-unmount 后 hasBlocking 变 false → 合成卡钉回 user 后、
+ * 落在「已处理」chip 外侧（Shared 会话回归）。
+ */
+export function enrichTimelineWithSyntheticSubagentsBeforeCollapse(
+  input: EnrichTimelineSyntheticSubagentInput,
+): ConversationItem[] {
+  const items = input.items;
+  if (
+    !shouldInjectChildSubagentSynthetic({
+      ownThreadId: input.ownThreadId,
+      canvasThreadId: input.canvasThreadId,
+      activeEngine: input.activeEngine,
+      items,
+      childCount: input.childThreads.length,
+    })
+  ) {
+    return items as ConversationItem[];
+  }
+  const own = (input.ownThreadId ?? "").trim();
+  const engine = (input.activeEngine ?? "").toString().trim().toLowerCase();
+  const idPrefix =
+    own.startsWith("shared:") && engine !== "codex"
+      ? "shared"
+      : engine === "codex"
+        ? "codex"
+        : "shared";
+  const synthetic = buildSyntheticSpawnToolsFromChildren(input.childThreads, {
+    statusById: input.statusById,
+    itemsByThread: input.itemsByThread,
+    idPrefix,
+  });
+  return injectSyntheticSubagentToolsIfNeeded(items, synthetic);
+}

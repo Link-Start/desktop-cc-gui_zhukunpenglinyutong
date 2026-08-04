@@ -6,6 +6,16 @@ type MessageItem = Extract<ConversationItem, { kind: "message" }>;
 type AssistantMessageItem = MessageItem & { role: "assistant" };
 type UserMessageItem = MessageItem & { role: "user" };
 
+export type AssistantEquivalenceMatchMode = "settled" | "streaming";
+
+/** Settled complete/upsert: need enough text so short openers cannot glue turns. */
+const SETTLED_EQUIVALENCE_MIN_CHARS = 24;
+/**
+ * Streaming append must not use cross-id glue at all for short deltas.
+ * If ever re-enabled, keep this floor well above areEquivalent's 8-char prefix rule.
+ */
+const STREAMING_EQUIVALENCE_MIN_CHARS = 80;
+
 function isUserMessageItem(item: ConversationItem | undefined): item is UserMessageItem {
   return item?.kind === "message" && item.role === "user";
 }
@@ -16,86 +26,108 @@ function isAssistantMessageItem(
   return item?.kind === "message" && item.role === "assistant";
 }
 
-function hasKnownNonCodexThreadPrefix(threadId: string) {
-  const normalized = threadId.trim().toLowerCase();
+/**
+ * Align with conversationAssembler.shouldStopAssistantEquivalenceSearch:
+ * user / tool / reasoning / media / review boundaries block cross-id merge.
+ */
+export function shouldStopEquivalentAssistantSearch(item: ConversationItem): boolean {
+  if (item.kind === "message") {
+    return item.role === "user";
+  }
   return (
-    normalized.startsWith("claude:") ||
-    normalized.startsWith("claude-pending-") ||
-    normalized.startsWith("gemini:") ||
-    normalized.startsWith("gemini-pending-") ||
-    normalized.startsWith("grok:") ||
-    normalized.startsWith("grok-pending-") ||
-    normalized.startsWith("kimi:") ||
-    normalized.startsWith("kimi-pending-") ||
-    normalized.startsWith("opencode:") ||
-    normalized.startsWith("opencode-pending-") ||
-    normalized.startsWith("shared:")
+    item.kind === "reasoning" ||
+    item.kind === "tool" ||
+    item.kind === "generatedImage" ||
+    item.kind === "diff" ||
+    item.kind === "review" ||
+    item.kind === "explore"
   );
 }
 
-function inferCodexThreadId(threadId: string) {
-  const normalized = threadId.trim().toLowerCase();
-  if (!normalized || hasKnownNonCodexThreadPrefix(normalized)) {
-    return false;
-  }
-  return (
-    normalized.startsWith("codex:") ||
-    normalized.startsWith("codex-pending-") ||
-    !normalized.includes(":")
-  );
+/**
+ * Whether cross-itemId equivalent assistant convergence is allowed for the thread.
+ * Native and Shared share the same policy; safety is in match mode + stop boundaries.
+ *
+ * @see openspec/changes/fix-assistant-duplicate-render-native-shared
+ */
+export function shouldConvergeEquivalentAssistantMessages(_params: {
+  threadsByWorkspace: Record<string, ThreadSummary[]>;
+  workspaceId: string;
+  threadId: string;
+}) {
+  return true;
 }
 
-function findThreadSummary(
-  threadsByWorkspace: Record<string, ThreadSummary[]>,
-  workspaceId: string,
-  threadId: string,
-) {
-  const threads = threadsByWorkspace[workspaceId] ?? [];
-  const exact = threads.find((thread) => thread.id === threadId);
-  if (exact || threadId.includes(":")) {
-    return exact ?? null;
-  }
-  const aliasMatches = threads.filter((thread) => thread.id.endsWith(`:${threadId}`));
-  return aliasMatches.length === 1 ? aliasMatches[0] ?? null : null;
-}
-
+/** @deprecated Prefer shouldConvergeEquivalentAssistantMessages; kept as stable export name. */
 export function shouldDeduplicateCodexAssistantMessages(params: {
   threadsByWorkspace: Record<string, ThreadSummary[]>;
   workspaceId: string;
   threadId: string;
 }) {
-  const thread = findThreadSummary(
-    params.threadsByWorkspace,
-    params.workspaceId,
-    params.threadId,
-  );
-  if (thread?.threadKind === "shared") {
-    return false;
-  }
-  if (thread?.engineSource) {
-    return thread.engineSource === "codex";
-  }
-  return inferCodexThreadId(params.threadId);
+  return shouldConvergeEquivalentAssistantMessages(params);
 }
 
+/**
+ * Cross-id assistant lookup.
+ *
+ * - `settled`: complete / upsert — length floor 24 + areEquivalent.
+ * - `streaming`: append/snapshot — prefer **exact body** match (full snapshot alias);
+ *   loose areEquivalent only when both sides are long (≥80), so short openers cannot
+ *   prefix-glue a new turn onto the previous bubble.
+ */
 export function findEquivalentCodexAssistantMessageIndex(
   list: ConversationItem[],
   incomingText: string,
+  mode: AssistantEquivalenceMatchMode = "settled",
 ) {
-  if (!incomingText.trim()) {
+  const trimmed = incomingText.trim();
+  if (!trimmed) {
     return -1;
   }
+  if (mode === "settled" && trimmed.length < SETTLED_EQUIVALENCE_MIN_CHARS) {
+    return -1;
+  }
+  if (mode === "streaming" && trimmed.length < SETTLED_EQUIVALENCE_MIN_CHARS) {
+    // Even exact snapshot aliases need a minimal body; never match tiny fragments.
+    return -1;
+  }
+
   for (let index = list.length - 1; index >= 0; index -= 1) {
     const item = list[index];
     if (!item) {
       continue;
     }
-    if (isUserMessageItem(item)) {
+    if (shouldStopEquivalentAssistantSearch(item)) {
       return -1;
     }
     if (!isAssistantMessageItem(item)) {
       continue;
     }
+    const existingTrimmed = item.text.trim();
+    if (existingTrimmed.length < SETTLED_EQUIVALENCE_MIN_CHARS) {
+      continue;
+    }
+
+    if (mode === "streaming") {
+      // Full snapshot re-send under a new id (Codex snapshot-before-delta).
+      if (existingTrimmed === trimmed) {
+        return index;
+      }
+      // Loose prefix/near-dup only for long streaming bodies.
+      if (
+        existingTrimmed.length >= STREAMING_EQUIVALENCE_MIN_CHARS &&
+        trimmed.length >= STREAMING_EQUIVALENCE_MIN_CHARS &&
+        areEquivalentAssistantMessageTexts(
+          item.text,
+          incomingText,
+          mergeAgentMessageText,
+        )
+      ) {
+        return index;
+      }
+      continue;
+    }
+
     if (
       areEquivalentAssistantMessageTexts(
         item.text,
@@ -107,4 +139,11 @@ export function findEquivalentCodexAssistantMessageIndex(
     }
   }
   return -1;
+}
+
+/** @internal test helper — documents the intentional streaming ban. */
+export function getAssistantEquivalenceMinChars(mode: AssistantEquivalenceMatchMode) {
+  return mode === "streaming"
+    ? STREAMING_EQUIVALENCE_MIN_CHARS
+    : SETTLED_EQUIVALENCE_MIN_CHARS;
 }

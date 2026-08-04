@@ -81,4 +81,24 @@ describe("isSubagentTool cross-engine", () => {
     expect(isSubagentTool({ toolType: "commandExecution", title: "Bash" })).toBe(false);
     expect(isSubagentTool({ toolType: "read", title: "Tool: Read" })).toBe(false);
   });
+
+  it("matches Shared description-as-title Agent payload (no Tool: Agent prefix)", () => {
+    expect(
+      isSubagentTool({
+        toolType: "toolCall",
+        title: "问候测试代理1",
+        detail: JSON.stringify({
+          description: "问候测试代理1",
+          subagent_type: "general-purpose",
+        }),
+      }),
+    ).toBe(true);
+    expect(
+      isSubagentTool({
+        toolType: "toolCall",
+        title: "Read foo.ts",
+        detail: JSON.stringify({ file_path: "foo.ts" }),
+      }),
+    ).toBe(false);
+  });
 });

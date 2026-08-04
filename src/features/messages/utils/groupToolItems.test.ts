@@ -188,6 +188,31 @@ describe("groupToolItems", () => {
     }
   });
 
+  it("groups Shared description-as-title agents into one subagentGroup (replaces wrench rows)", () => {
+    const makeDescTitleAgent = (id: string, name: string) =>
+      ({
+        id,
+        kind: "tool" as const,
+        toolType: "toolCall",
+        title: name,
+        detail: JSON.stringify({
+          description: name,
+          subagent_type: "general-purpose",
+        }),
+        status: "completed" as const,
+      });
+    const entries = groupToolItems([
+      makeDescTitleAgent("a1", "问候测试代理1"),
+      makeDescTitleAgent("a2", "问候测试代理2"),
+      makeDescTitleAgent("a3", "问候测试代理3"),
+    ]);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.kind).toBe("subagentGroup");
+    if (entries[0]?.kind === "subagentGroup") {
+      expect(entries[0].items).toHaveLength(3);
+    }
+  });
+
   it("breaks subagentGroup when a non-agent tool interrupts", () => {
     const entries = groupToolItems([
       createToolItem("agent-1", "Tool: Agent", "agent"),

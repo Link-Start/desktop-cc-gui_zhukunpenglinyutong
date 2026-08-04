@@ -8,6 +8,7 @@ import {
 } from "../../layout/hooks/activeCanvasStore";
 import { createThreadHistoryLoaderForThread } from "../../threads/hooks/useThreadActions.historyLoaderFactory";
 import { useSubagentInspectorSelection } from "../hooks/useSubagentInspectorStore";
+import { publishSubagentSessionProbe } from "../hooks/useSubagentSessionProbeStore";
 import {
   buildTranscriptItemsFromSubagentFallback,
   isOpaqueCiphertextOutput,
@@ -94,6 +95,14 @@ export const SubagentSessionCanvas = memo(function SubagentSessionCanvas({
     if (cachedItems && cachedItems.length > 0) {
       setLoadedItems(cachedItems);
       setLoading(false);
+      // canvas 已有缓存也发布 probe，驱动小队卡 status 与 inspector 同步
+      for (const id of loadCandidates) {
+        const items = threadItemsByThread[id];
+        if (items && items.length > 0) {
+          publishSubagentSessionProbe(id, items);
+          break;
+        }
+      }
       return () => {
         cancelled = true;
       };
@@ -128,6 +137,8 @@ export const SubagentSessionCanvas = memo(function SubagentSessionCanvas({
             setResolvedLoadId(candidateId);
             setLoadedItems(nextItems);
             setLoading(false);
+            // 旁路历史加载回写 probe，让列表 status 不必依赖「侧栏打开 session」
+            publishSubagentSessionProbe(candidateId, nextItems);
             return;
           }
           // 空 transcript：继续试下一个 candidate
@@ -149,7 +160,14 @@ export const SubagentSessionCanvas = memo(function SubagentSessionCanvas({
     return () => {
       cancelled = true;
     };
-  }, [cachedItems, loadCandidates, resolvedWorkspaceId, resolvedWorkspacePath, sessionThreadId]);
+  }, [
+    cachedItems,
+    loadCandidates,
+    resolvedWorkspaceId,
+    resolvedWorkspacePath,
+    sessionThreadId,
+    threadItemsByThread,
+  ]);
 
   const items = useMemo(
     () => loadedItems ?? cachedItems ?? EMPTY_ACTIVE_CANVAS_ITEMS,

@@ -24,12 +24,6 @@ import {
 } from "../presentation/messagesLiveWindow";
 import { buildTurnTargetBadgeVisibleItemIds } from "../../../../utils/turnBadge";
 import { findItemById } from "../presentation/messagesViewModel";
-import { useActiveCanvasSelector } from "../../../layout/hooks/activeCanvasStore";
-import {
-  buildSyntheticSpawnToolsFromChildren,
-  injectSyntheticSubagentToolsIfNeeded,
-  shouldInjectChildSubagentSynthetic,
-} from "../../../subagent-ui";
 
 type UseMessagesPresentationStateInput = {
   activeEngine: EngineType;
@@ -48,7 +42,10 @@ type UseMessagesPresentationStateInput = {
   renderScopeKey: string;
   renderSourceItems: ConversationItem[];
   supportsStreamingReadableWindowRecovery: boolean;
-  /** 本 Messages 实例绑定的 thread（嵌套子会话幕布必须是 grok:/claude:…，禁止用主 canvas） */
+  /**
+   * 本 Messages 实例绑定的 thread。
+   * 合成 spawn 已在 collapse 前注入，此处仅保留 API 兼容（嵌套详情等调用方仍传）。
+   */
   threadId?: string | null;
   timelineItems: ConversationItem[];
 };
@@ -70,7 +67,7 @@ export function useMessagesPresentationState({
   renderScopeKey,
   renderSourceItems,
   supportsStreamingReadableWindowRecovery,
-  threadId = null,
+  threadId: _threadId = null,
   timelineItems,
 }: UseMessagesPresentationStateInput) {
   const presentationScopeKey = buildMessagesPresentationScopeKey({
@@ -165,58 +162,12 @@ export function useMessagesPresentationState({
     return item && isReasoningConversationItem(item) ? item : null;
   }, [isThinking, latestReasoningId, renderSourceItems]);
 
-  // 子会话合成小队：
-  // - Shared 父：投影常缺 spawn tool（既有）
-  // - Codex native live wait 缺口：侧栏已有 children、timeline 无可识别 spawn 卡
-  // 必须用本 Messages 的 threadId 与 canvas threadId 对齐，禁止嵌套详情再注入父小队。
-  const childSubagentThreads = useActiveCanvasSelector(
-    (snapshot) => snapshot.childSubagentThreads,
-  );
-  const canvasThreadId = useActiveCanvasSelector((snapshot) => snapshot.threadId);
-  const threadStatusById = useActiveCanvasSelector(
-    (snapshot) => snapshot.threadStatusById,
-  );
-  const threadItemsByThread = useActiveCanvasSelector(
-    (snapshot) => snapshot.threadItemsByThread,
-  );
-  const timelineItemsForGrouping = useMemo(() => {
-    const ownThreadId = threadId?.trim() || "";
-    if (
-      !shouldInjectChildSubagentSynthetic({
-        ownThreadId,
-        canvasThreadId,
-        activeEngine,
-        items: timelinePresentationItems,
-        childCount: childSubagentThreads.length,
-      })
-    ) {
-      return timelinePresentationItems;
-    }
-    const idPrefix =
-      ownThreadId.startsWith("shared:") && activeEngine !== "codex"
-        ? "shared"
-        : activeEngine === "codex"
-          ? "codex"
-          : "shared";
-    const synthetic = buildSyntheticSpawnToolsFromChildren(childSubagentThreads, {
-      statusById: threadStatusById,
-      itemsByThread: threadItemsByThread,
-      idPrefix,
-    });
-    return injectSyntheticSubagentToolsIfNeeded(timelinePresentationItems, synthetic);
-  }, [
-    activeEngine,
-    canvasThreadId,
-    childSubagentThreads,
-    threadId,
-    threadItemsByThread,
-    threadStatusById,
-    timelinePresentationItems,
-  ]);
-
+  // 合成 spawn 已在 MessagesCore → resolveCollapsedTimelineItems **之前**注入。
+  // 禁止在折叠后再 inject：否则真 Agent 被 hard-unmount 后 hasBlocking 变 false，
+  // 合成卡会钉回 user 后、落在「已处理」chip 外侧。
   const groupedEntries = useMemo(
-    () => groupToolItems(timelineItemsForGrouping),
-    [timelineItemsForGrouping],
+    () => groupToolItems(timelinePresentationItems),
+    [timelinePresentationItems],
   );
   const liveAutoExpandedExploreId = useMemo(
     () => resolveLiveAutoExpandedExploreId(groupedEntries, isThinking),
