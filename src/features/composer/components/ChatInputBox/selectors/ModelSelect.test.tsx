@@ -8,6 +8,7 @@ import {
   isSameProviderExecutionProfile,
   ModelSelect,
   resolveActiveProviderProfileId,
+  resolveAtomicSelectedModelDisplay,
 } from "./ModelSelect";
 import { STORAGE_KEYS } from "../../../types/provider";
 import type { ExecutionTarget } from "../../../../shared-session/target/types";
@@ -745,6 +746,222 @@ describe("ModelSelect", () => {
 
     expect(screen.queryByText("sonnet")).toBeNull();
     expect(screen.getByRole("button").textContent ?? "").toContain("models.selectModel");
+  });
+
+  it("resolveAtomicSelectedModelDisplay uses executionTarget snapshot when catalog is empty", () => {
+    const target: ExecutionTarget = {
+      engine: "grok",
+      providerProfileId: null,
+      modelCatalogEntryId: "grok",
+      model: "grok",
+      reasoning: null,
+      providerProfileNameSnapshot: "本地配置",
+      providerProfileSource: "disk",
+    };
+
+    const display = resolveAtomicSelectedModelDisplay(target, "grok", []);
+    expect(display?.id).toBe("grok");
+    expect(display?.model).toBe("grok");
+  });
+
+  it("resolveAtomicSelectedModelDisplay supports native-like target with catalog entry only", () => {
+    // Native nativeSessionTarget 常见：catalog 未命中时 model runtime 仍可能为空，
+    // 但 modelCatalogEntryId 已由 selectedModelId / nativeAtomicSelection 写入。
+    const nativeLike: ExecutionTarget = {
+      engine: "codex",
+      providerProfileId: null,
+      modelCatalogEntryId: "gpt-5.5",
+      model: null,
+      reasoning: null,
+      providerProfileNameSnapshot: "本地配置",
+      providerProfileSource: "disk",
+    };
+    const display = resolveAtomicSelectedModelDisplay(
+      nativeLike,
+      "gpt-5.5",
+      [],
+    );
+    expect(display?.id).toBe("gpt-5.5");
+    expect(display?.label).toBe("gpt-5.5");
+  });
+
+  it("resolveAtomicSelectedModelDisplay prefers catalog row when loaded", () => {
+    const target: ExecutionTarget = {
+      engine: "claude",
+      providerProfileId: "kimi-k3",
+      modelCatalogEntryId: "claude-sonnet-4-6",
+      model: "kimi-k2.5",
+      reasoning: null,
+      providerProfileNameSnapshot: "kimi-k3",
+      providerProfileSource: "managed",
+    };
+    const display = resolveAtomicSelectedModelDisplay(target, "claude-sonnet-4-6", [
+      {
+        id: "claude-sonnet-4-6",
+        model: "kimi-k2.5",
+        label: "Kimi friendly",
+        providerProfileId: "kimi-k3",
+      },
+    ]);
+    expect(display?.label).toBe("Kimi friendly");
+    expect(display?.model).toBe("kimi-k2.5");
+  });
+
+  it("resolveAtomicSelectedModelDisplay returns null without model identity", () => {
+    expect(
+      resolveAtomicSelectedModelDisplay(
+        {
+          engine: "grok",
+          providerProfileId: null,
+          modelCatalogEntryId: null,
+          model: null,
+          reasoning: null,
+          providerProfileNameSnapshot: "本地配置",
+          providerProfileSource: "disk",
+        },
+        "",
+        [],
+      ),
+    ).toBeNull();
+  });
+
+  it("shows shared grok executionTarget on closed trigger when catalog and parent models miss", () => {
+    const executionTarget: ExecutionTarget = {
+      engine: "grok",
+      providerProfileId: null,
+      modelCatalogEntryId: "grok",
+      model: "grok",
+      reasoning: null,
+      providerProfileNameSnapshot: "本地配置",
+      providerProfileSource: "disk",
+    };
+    const targetGroups: ProviderTargetGroup[] = [
+      {
+        providerId: "grok",
+        providerLabel: "Grok CLI",
+        enabled: true,
+        profiles: [
+          {
+            id: "__local_config_toml__",
+            label: "本地配置",
+            source: "disk",
+            enabled: true,
+            models: [],
+            loading: true,
+            reloadingConfig: false,
+            discoveringModels: false,
+            discoverySupported: false,
+            error: null,
+          },
+        ],
+      },
+    ];
+
+    render(
+      <ModelSelect
+        value="grok"
+        currentProvider="claude"
+        onChange={vi.fn()}
+        models={[
+          { id: "claude-sonnet-4-6", label: "Sonnet" },
+          { id: "claude-opus-4-6", label: "Opus" },
+        ]}
+        targetGroups={targetGroups}
+        executionTarget={executionTarget}
+      />,
+    );
+
+    const buttonText = screen.getByRole("button").textContent ?? "";
+    expect(buttonText).toContain("grok");
+    expect(buttonText).not.toContain("models.selectModel");
+    expect(buttonText).not.toContain("Sonnet");
+  });
+
+  it("keeps unselected closed trigger when atomic mode has no executionTarget model", () => {
+    const targetGroups: ProviderTargetGroup[] = [
+      {
+        providerId: "grok",
+        providerLabel: "Grok CLI",
+        enabled: true,
+        profiles: [
+          {
+            id: "__local_config_toml__",
+            label: "本地配置",
+            source: "disk",
+            enabled: true,
+            models: [],
+            loading: false,
+            reloadingConfig: false,
+            discoveringModels: false,
+            discoverySupported: false,
+            error: null,
+          },
+        ],
+      },
+    ];
+
+    render(
+      <ModelSelect
+        value=""
+        currentProvider="grok"
+        onChange={vi.fn()}
+        models={[{ id: "global-other", label: "Other" }]}
+        targetGroups={targetGroups}
+        executionTarget={null}
+      />,
+    );
+
+    expect(screen.getByRole("button").textContent ?? "").toContain(
+      "models.selectModel",
+    );
+  });
+
+  it("shows native codex selection from executionTarget when atomic catalog is still empty", () => {
+    const executionTarget: ExecutionTarget = {
+      engine: "codex",
+      providerProfileId: null,
+      modelCatalogEntryId: "gpt-5.5",
+      model: null,
+      reasoning: null,
+      providerProfileNameSnapshot: "本地配置",
+      providerProfileSource: "disk",
+    };
+    const targetGroups: ProviderTargetGroup[] = [
+      {
+        providerId: "codex",
+        providerLabel: "Codex CLI",
+        enabled: true,
+        profiles: [
+          {
+            id: "__disk__",
+            label: "本地配置",
+            source: "disk",
+            enabled: true,
+            models: [],
+            loading: true,
+            reloadingConfig: false,
+            discoveringModels: false,
+            discoverySupported: true,
+            error: null,
+          },
+        ],
+      },
+    ];
+
+    render(
+      <ModelSelect
+        value="gpt-5.5"
+        currentProvider="codex"
+        onChange={vi.fn()}
+        models={[]}
+        targetGroups={targetGroups}
+        executionTarget={executionTarget}
+      />,
+    );
+
+    const buttonText = screen.getByRole("button").textContent ?? "";
+    expect(buttonText).toContain("gpt-5.5");
+    expect(buttonText).not.toContain("models.selectModel");
   });
 
   it("renders settings-sourced Claude runtime models without legacy family relabeling", () => {

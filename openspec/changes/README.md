@@ -2,22 +2,25 @@
 
 本页是 `mossx` OpenSpec proposal 的当前入口。它只维护 active change 的执行状态，并把 archived change 路由到完整历史索引；详细治理快照仍以 [`../project.md`](../project.md) 为准。
 
-- Updated At: `2026-08-03`
-- Active proposals: `2`
-- Archived proposals: `848`
+- Updated At: `2026-08-04`
+- Active proposals: `5+`（以磁盘 `openspec/changes/*` 为准）
+- Archived proposals: `848+`
 - Main capability specs: `492`
 
 ## Active Proposals
 
 | Change | Progress | Current gate | Artifacts |
 | ------ | -------: | ------------ | --------- |
+| [`fix-shared-model-picker-display-authority`](fix-shared-model-picker-display-authority/proposal.md) | artifacts ready / implementing | Shared Atomic 闭合态以 `selectedNextTarget` 为 display authority；catalog enrichment；禁止全局 model 回落；**不 commit，交用户审批** | [proposal](fix-shared-model-picker-display-authority/proposal.md) · [design](fix-shared-model-picker-display-authority/design.md) · [tasks](fix-shared-model-picker-display-authority/tasks.md) · [specs](fix-shared-model-picker-display-authority/specs/) |
+| [`fix-shared-session-recovery-exit-closure`](fix-shared-session-recovery-exit-closure/proposal.md) | open | recovery exit ladder | [proposal](fix-shared-session-recovery-exit-closure/proposal.md) · [design](fix-shared-session-recovery-exit-closure/design.md) · [tasks](fix-shared-session-recovery-exit-closure/tasks.md) · [specs](fix-shared-session-recovery-exit-closure/specs/) |
+| [`fix-shared-sidebar-hide-set-staleness`](fix-shared-sidebar-hide-set-staleness/proposal.md) | open | sidebar hide set | [proposal](fix-shared-sidebar-hide-set-staleness/proposal.md) · [tasks](fix-shared-sidebar-hide-set-staleness/tasks.md) |
 | [`fix-codex-collab-subagent-live-parity`](fix-codex-collab-subagent-live-parity/proposal.md) | implemented / need manual smoke | 代码已落地 + focused vitest/tsc 绿；待 Codex live wait 与其他 CLI 人工冒烟后 verify/archive | [proposal](fix-codex-collab-subagent-live-parity/proposal.md) · [design](fix-codex-collab-subagent-live-parity/design.md) · [tasks](fix-codex-collab-subagent-live-parity/tasks.md) · [specs](fix-codex-collab-subagent-live-parity/specs/) · [verification](fix-codex-collab-subagent-live-parity/verification.md) |
 | [`add-linux-native-menu-localization`](add-linux-native-menu-localization/proposal.md) | 4/5 | NOT READY archive — Linux non-default language native menu smoke（原 GTK 缺陷边界，未在本机验证） | [proposal](add-linux-native-menu-localization/proposal.md) · [design](add-linux-native-menu-localization/design.md) · [tasks](add-linux-native-menu-localization/tasks.md) · [specs](add-linux-native-menu-localization/specs/) · [verification](add-linux-native-menu-localization/verification.md) |
 
-## Active backlog notes（2026-08-03）
+## Active backlog notes（2026-08-04）
 
-- **新增** `fix-codex-collab-subagent-live-parity`：Codex multi-agent 实时 wait 阶段幕布/Status 缺子代理呈现；history 已 OK。实现须 engine-gate，禁止回归 Claude/Grok/Kimi。
-- 保留 `add-linux-native-menu-localization`（Linux 菜单实机 smoke）。
+- **新增** `fix-shared-model-picker-display-authority`：Shared/Atomic 底栏「选择模型」假空（Grok local 典型 B）；正规修复 display authority + Shared 禁全局回落 + catalog ensure。
+- 保留 `fix-codex-collab-subagent-live-parity` / `add-linux-native-menu-localization` 等既有 active。
 
 ## Archived Proposals
 

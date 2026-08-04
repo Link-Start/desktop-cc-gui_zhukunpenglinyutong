@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-31.md`
-- **Total Sessions**: 1320
+- **Total Sessions**: 1321
 - **Last Active**: 2026-08-04
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-31.md` | ~800 | Active |
+| `journal-31.md` | ~833 | Active |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
@@ -59,6 +59,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1321 | 2026-08-04 | fix Shared 模型选择器 display authority | `a3a631a90` | `CXN-version-0.7.16` |
 | 1320 | 2026-08-04 | 修复 activeCanvasStore 测试 tsc 构建失败 | `9dc47c0b0` | `CXN-version-0.7.16` |
 | 1319 | 2026-08-04 | 对抗式 review 收口 React #185 canvas store / storm | `2afeadabf` | `CXN-version-0.7.16` |
 | 1318 | 2026-08-04 | docs: 重写新 CLI 接入指南, 补全量注册点核对矩阵 A~H 八层 56 行 | `f6858e821` | `CXN-version-0.7.16` |
