@@ -1594,6 +1594,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           onDeleteQueued={options.onDeleteQueued}
           onFuseQueued={options.onFuseQueued}
           canFuseQueuedMessages={options.canFuseActiveQueue}
+          fuseDisabledReasonKey={options.fuseDisabledReasonKey ?? null}
           fusingQueuedMessageId={options.activeFusingMessageId}
           collaborationModes={options.collaborationModes}
           collaborationModesEnabled={options.collaborationModesEnabled}

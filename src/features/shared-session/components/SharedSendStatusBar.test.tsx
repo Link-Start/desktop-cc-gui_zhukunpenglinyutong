@@ -20,6 +20,8 @@ const mockServices = vi.hoisted(() => ({
   sharedSessionV2ProbeBinding: vi.fn(),
   sharedSessionV2RecoverAttempt: vi.fn(),
   sharedSessionV2RebuildBinding: vi.fn(),
+  sharedSessionV2InterruptTurn: vi.fn(),
+  sharedSessionV2AbandonUnresolvedAttempt: vi.fn(),
   sharedSessionV2AwaitTurnTerminal: vi.fn(),
   registerSharedSessionNativeBinding: vi.fn(),
 }));
@@ -46,8 +48,15 @@ vi.mock("../services/sharedSessions", () => ({
   sharedSessionV2ProbeBinding: mockServices.sharedSessionV2ProbeBinding,
   sharedSessionV2RecoverAttempt: mockServices.sharedSessionV2RecoverAttempt,
   sharedSessionV2RebuildBinding: mockServices.sharedSessionV2RebuildBinding,
+  sharedSessionV2InterruptTurn: mockServices.sharedSessionV2InterruptTurn,
+  sharedSessionV2AbandonUnresolvedAttempt:
+    mockServices.sharedSessionV2AbandonUnresolvedAttempt,
   sharedSessionV2AwaitTurnTerminal:
     mockServices.sharedSessionV2AwaitTurnTerminal,
+}));
+
+vi.mock("../runtime/sharedRecoveryExitFlag", () => ({
+  isSharedRecoveryExitV2Enabled: () => true,
 }));
 
 vi.mock("../runtime/sharedSessionBridge", () => ({
@@ -73,9 +82,12 @@ beforeEach(() => {
   mockServices.sharedSessionV2ProbeBinding.mockReset();
   mockServices.sharedSessionV2RecoverAttempt.mockReset();
   mockServices.sharedSessionV2RebuildBinding.mockReset();
+  mockServices.sharedSessionV2InterruptTurn.mockReset();
+  mockServices.sharedSessionV2AbandonUnresolvedAttempt.mockReset();
   mockServices.sharedSessionV2AwaitTurnTerminal.mockReset();
   mockServices.registerSharedSessionNativeBinding.mockReset();
   mockServices.registerSharedSessionNativeBinding.mockReturnValue(true);
+  vi.stubGlobal("confirm", vi.fn(() => true));
 });
 
 afterEach(() => {
@@ -331,7 +343,7 @@ describe("SharedSendStatusBar", () => {
     );
   });
 
-  it("recovery-required：显式重建调用 rebuild 并解锁", async () => {
+  it("recovery-required：停止并重建调用 rebuild 并解锁", async () => {
     dispatchSharedSendEvent(WS, THREAD, { type: "send" });
     dispatchSharedSendEvent(WS, THREAD, { type: "packagePrepared" });
     dispatchSharedSendEvent(WS, THREAD, { type: "ackAmbiguous" });
@@ -352,7 +364,7 @@ describe("SharedSendStatusBar", () => {
       nativeThreadId: "native-1",
     });
     renderBar();
-    fireEvent.click(screen.getByText("sharedSend.recoveryRebuild"));
+    fireEvent.click(screen.getByText("sharedSend.recoveryStopAndRebuild"));
     await waitFor(() => {
       expect(getSharedSendState(WS, THREAD).state).toBe("idle");
     });
@@ -363,7 +375,51 @@ describe("SharedSendStatusBar", () => {
     );
   });
 
-  it("recovery-required：显式重建失败保持锁定并显示错误", async () => {
+  it("recovery-required：停止并重建在 Runtime own 时先 interrupt", async () => {
+    dispatchSharedSendEvent(WS, THREAD, { type: "send" });
+    dispatchSharedSendEvent(WS, THREAD, { type: "packagePrepared" });
+    dispatchSharedSendEvent(WS, THREAD, { type: "ackAmbiguous" });
+    mockServices.sharedSessionV2TurnState.mockResolvedValue({
+      status: "ok",
+      inFlightAttempts: [
+        {
+          attemptId: "attempt-owned",
+          bindingKey: "codex:prov-1",
+          accepted: true,
+        },
+      ],
+      bindings: [],
+    });
+    mockServices.sharedSessionV2InterruptTurn.mockResolvedValue({
+      status: "interrupted",
+      attemptId: "attempt-owned",
+      engine: "codex",
+      bindingKey: "codex:prov-1",
+      nativeThreadId: "native-1",
+      runtimeTurnId: "run-1",
+    });
+    mockServices.sharedSessionV2RebuildBinding.mockResolvedValue({
+      status: "prepared",
+      bindingKey: "codex:prov-1",
+    });
+    renderBar();
+    fireEvent.click(screen.getByText("sharedSend.recoveryStopAndRebuild"));
+    await waitFor(() => {
+      expect(getSharedSendState(WS, THREAD).state).toBe("idle");
+    });
+    expect(mockServices.sharedSessionV2InterruptTurn).toHaveBeenCalledWith(
+      WS,
+      THREAD,
+      "attempt-owned",
+    );
+    expect(mockServices.sharedSessionV2RebuildBinding).toHaveBeenCalledWith(
+      WS,
+      THREAD,
+      "codex:prov-1",
+    );
+  });
+
+  it("recovery-required：停止并重建失败保持锁定并映射可操作错误", async () => {
     dispatchSharedSendEvent(WS, THREAD, { type: "send" });
     dispatchSharedSendEvent(WS, THREAD, { type: "packagePrepared" });
     dispatchSharedSendEvent(WS, THREAD, { type: "ackAmbiguous" });
@@ -379,18 +435,65 @@ describe("SharedSendStatusBar", () => {
       ],
     });
     mockServices.sharedSessionV2RebuildBinding.mockRejectedValue(
-      new Error("rebuild rejected"),
+      new Error(
+        "recovery-active: attempt a1 is still owned by Runtime; Probe/Stop before rebuild",
+      ),
     );
 
     renderBar();
-    fireEvent.click(screen.getByText("sharedSend.recoveryRebuild"));
+    fireEvent.click(screen.getByText("sharedSend.recoveryStopAndRebuild"));
     await waitFor(() => {
       expect(mockServices.pushErrorToast).toHaveBeenCalledWith({
         title: "sharedSend.recoveryTitle",
-        message: "sharedSend.recoveryRebuild: rebuild rejected",
-        durationMs: 4800,
+        message: "sharedSend.recoveryErrorActive",
+        durationMs: 5200,
       });
     });
     expect(getSharedSendState(WS, THREAD).state).toBe("recovery-required");
+  });
+
+  it("recovery-required：放弃本轮 durable cancel 后解锁", async () => {
+    dispatchSharedSendEvent(WS, THREAD, { type: "send" });
+    dispatchSharedSendEvent(WS, THREAD, { type: "packagePrepared" });
+    dispatchSharedSendEvent(WS, THREAD, { type: "ackAmbiguous" });
+    mockServices.sharedSessionV2TurnState.mockResolvedValue({
+      status: "ok",
+      inFlightAttempts: [
+        {
+          attemptId: "attempt-abandon",
+          bindingKey: "codex:prov-1",
+          accepted: false,
+        },
+      ],
+      bindings: [],
+    });
+    mockServices.sharedSessionV2AbandonUnresolvedAttempt.mockResolvedValue({
+      status: "cancelled-committed",
+      attemptId: "attempt-abandon",
+      bindingKey: "codex:prov-1",
+      sequence: 9,
+    });
+    renderBar();
+    fireEvent.click(screen.getByText("sharedSend.recoveryAbandon"));
+    await waitFor(() => {
+      expect(getSharedSendState(WS, THREAD).state).toBe("idle");
+    });
+    expect(
+      mockServices.sharedSessionV2AbandonUnresolvedAttempt,
+    ).toHaveBeenCalledWith(WS, THREAD, {
+      attemptId: "attempt-abandon",
+      forceStop: true,
+    });
+  });
+
+  it("target-unavailable 引导更换目标", () => {
+    dispatchSharedSendEvent(WS, THREAD, { type: "send" });
+    dispatchSharedSendEvent(WS, THREAD, { type: "targetUnavailable" }, {
+      detail: "missing provider",
+    });
+    renderBar();
+    const text = screen.getByTestId("shared-send-status").textContent ?? "";
+    expect(text).toContain("sharedSend.targetUnavailableReason");
+    expect(text).toContain("sharedSend.targetUnavailableHint");
   });
 });

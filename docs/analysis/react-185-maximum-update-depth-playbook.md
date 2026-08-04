@@ -77,6 +77,7 @@ status: active
 | AP-04 | **repair effect 订阅自身写入结果** | reload 写 cache，cache 再触发 reload | 读 ref / 外部 store，写走 equality gate |
 | AP-05 | **async refresh 把 selection 放进 deps** | selection 变 → refresh 重建 → 再写 selection | snapshot ref 读最新值 |
 | AP-06 | **第三方 ref / presence 版本抖动** | Radix ScrollArea / Tooltip 在 React 19 下 ref loop | 稳定 ref identity 或换实现 |
+| AP-07 | **useSyncExternalStore + 不稳定 selector / 非稳定 getSnapshot** | 内联 selector 进 useMemo deps，或 getSnapshot 每次 new 对象 | selector/isEqual 经 ref；getSnapshot 语义相等回缓存引用；对象切片强制 shallowEqual |
 
 ---
 
@@ -210,6 +211,45 @@ status: active
 | **关联** | 同日 `a4166c03e` 拆除 Claude residual repair；本 case 是 useModels 侧残余腿 |
 | **Review 要点** | 禁止把父层非稳定回调放进 layout 链 deps；冷启手测：脏 `lastComposerModelId` + 无 active thread |
 
+### C-20260804-01 — 持续性 #185：canvas store / selection storm / session reload 残余
+
+| 字段 | 内容 |
+|------|------|
+| **状态** | fixed（结构加固 + 对抗式 review 二次收口；待用户手测冷启 / 切换 workspace） |
+| **现象** | 生产全局 ErrorBoundary；`errorClass: react-maximum-update-depth`；`appVersion: unknown`；**持续性复发**（非单次冷启） |
+| **Bundle / 栈** | `App-hx3PTjEz.js`；componentStack 浅树：`k8t`→`I8t`→`section`→`OBt`→…→`bootstrapApp-CR90pqFG`；栈帧落在 App chunk layout/setState 链（无 1:1 sourcemap；按协议按 AP 模式收敛） |
+| **Owner** | 主：`activeCanvasStore.ts` / `useActiveCanvasSelector`；辅：`useModels.ts` storm 熔断、`useSelectedComposerSession.ts`、`GlobalRuntimeNoticeDock.tsx`；报告：`errorBoundaryReport.ts` |
+| **触发条件** | 冷启或运行中父树高频 rerender；canvas snapshot 壳引用抖动；inline selector identity 不稳；preferred/persist 对打重置 epoch；session reload 依赖非稳定 `resolveEngineDefault` |
+| **根因（AP-02 / AP-04 / AP-05 / AP-07）** | ① `useActiveCanvasSelector` 把 `selector`/`isEqual` 放进 `useMemo` deps → 内联 selector 每帧重建 getSnapshot（AP-07）；② `setSnapshot` 仅 `Object.is` 整对象，layout 每帧新壳即 notify；③ useModels epoch 熔断在 preferred 对打时被重置；④ session reload 订阅非稳定 engineDefault；⑤ 报告未读 `__APP_VERSION__` |
+| **修复** | 见下「对抗式 review 结论」 |
+| **回归** | `activeCanvasStore.test.tsx`：壳抖动不 notify；unstable selector 30× rerender 无环；object slice + heartbeat 抖动保持 selected 引用；既有 useModels / app-shell.startup |
+| **关联历史** | C-20260801-01…03、C-20260802-01/02、C-20260803-01 之后仍复发 → 本 case 补 store/selector/storm 层 |
+| **Review 要点** | 见下 |
+
+**对抗式 review 结论（C-20260804-01，二次收口）**
+
+| 检视项 | 结论 |
+|--------|------|
+| 是否掩盖根因 | 否：主修是 getSnapshot 引用稳定 + setSnapshot 壳门闩（P0）；storm 熔断是防御网，不替代 plan null 收敛 |
+| useActiveCanvasSelector 形态 | **二次修正**：禁止 render 期写 ref；改为 getSnapshot 内 cache（对齐 `use-sync-external-store/with-selector` 语义）——同 store 指针直接回缓存；跨 snapshot 时 isEqual 命中则保留 selected 引用 |
+| setSnapshot shallow | 顶层字段 Object.is；仅换壳不 notify。**刻意**：heartbeat 等字段变化仍 notify，由 selector isEqual 决定是否重渲染 |
+| storm 熔断副作用 | 1s 内 >24 次 apply 后停止写入，selection 可能短暂停在中间态；优于 #185 白屏；debug label `model selection apply circuit breaker` |
+| 生产栈 1:1 | 仍缺 `App-hx3PTjEz` sourcemap；靠 AP-07 可测路径 + 历史 owner 矩阵收敛，**不**声称栈帧符号 1:1 还原 |
+| 残余风险 | 对象切片若漏传 shallowEqual 仍可能环（调用约定）；storm 熔断后需用户重选 model 的概率极低 |
+| 不变量 | freeform catalog 外 modelId 不静默回退；Messages 不因 heartbeat  alone 整树重渲 |
+
+**代码入口（C-20260804-01）**
+
+| 路径 | 角色 |
+|------|------|
+| `src/features/layout/hooks/activeCanvasStore.ts` | setSnapshot shallow + selector getSnapshot cache |
+| `src/features/layout/hooks/activeCanvasStore.test.tsx` | 壳 / selector / slice 引用回归 |
+| `src/features/models/hooks/useModels.ts` | 跨 epoch storm 熔断 |
+| `src/app-shell-parts/useSelectedComposerSession.ts` | engineDefault ref |
+| `src/features/notifications/components/GlobalRuntimeNoticeDock.tsx` | placement 幂等 |
+| `src/components/errorBoundaryReport.ts` | `__APP_VERSION__` |
+| 本文 §5 C-20260804-01 | 诊断与 review 留痕 |
+
 ---
 
 ## 6. 新 Case 追加模板
@@ -239,9 +279,11 @@ status: active
 - [x] **B1** layout 收敛仅依赖 catalog/preferred；selection 经 ref 读取（C-20260801-02）
 - [x] **B2** thread repair / freeform：只收敛 effective 投影；catalog 外 modelId 保留（C-20260801-02）
 - [ ] **B3** runtime 空 reasoning metadata 的 hydrate 策略产品化（catalog 内 merge vs catalog 外 STANDARD fallback）
-- [ ] **B4** ErrorBoundary 报告稳定注入 `appVersion`（避免 `unknown` 干扰归因）
-- [ ] **B5** 将本 playbook 关键到 `openspec/specs/client-renderer-stability-under-pressure` 的诊断入口（仅文档指针，不扩 scope）
+- [x] **B4** ErrorBoundary 报告稳定注入 `appVersion`（`getAppVersionForReport` 读 `__APP_VERSION__`；C-20260804-01）
+- [ ] **B5** 将本 playbook 链接到 `openspec/specs/client-renderer-stability-under-pressure` 的诊断入口（仅文档指针，不扩 scope）
 - [x] **B6** 冷启动 fixture：freeform + invalid effort（`app-shell.startup.test.tsx`）
+- [x] **B7** activeCanvasStore shallow setSnapshot + selector ref 化（C-20260804-01）
+- [x] **B8** useModels 跨 epoch storm 熔断（C-20260804-01）
 ---
 
 ## 8. 历史相关入口（索引，非完整列表）
@@ -254,8 +296,19 @@ OpenSpec / 代码中已出现的 #185 类修复（便于对照，**不等于本 
 - Agent catalog：`agent-startup-selection-stability`
 - Composer selection：`codex-composer-startup-selection-stability`
 - 分类与报告：`src/components/errorBoundaryReport.ts`
-- 本 case 代码：`src/features/models/hooks/useModels.ts`
-- 本 case 测试：`src/features/models/hooks/useModels.test.tsx`
+- useModels：`src/features/models/hooks/useModels.ts` + `useModels.test.tsx`
+- canvas store / selector：`src/features/layout/hooks/activeCanvasStore.ts` + `activeCanvasStore.test.tsx`（C-20260804-01 / AP-07）
+- session reload：`src/app-shell-parts/useSelectedComposerSession.ts`
+- NoticeDock placement：`src/features/notifications/components/GlobalRuntimeNoticeDock.tsx`
+
+### 8.1 开发自检（改 selection / canvas / layout setState 时勾选）
+
+- [ ] 任何 `useLayoutEffect` 内 setState：值未变是否跳过（functional update 或 prevRef）？
+- [ ] `useSyncExternalStore` 的 getSnapshot 在 store 未变时是否 **引用稳定**？
+- [ ] 对象切片 selector 是否传了 `shallowEqual`（或自定义 isEqual）？
+- [ ] 非稳定父回调是否只经 ref 读取、未进 layout/reload deps？
+- [ ] 成对 state（model/effort 等）是否 single plan + single apply + 幂等 commit？
+- [ ] 是否补了可执行 regression（Vitest），而不是只靠冷启手测？
 
 ---
 
@@ -269,3 +322,5 @@ OpenSpec / 代码中已出现的 #185 类修复（便于对照，**不等于本 
 | 2026-08-02 | C-20260801-03：`App-Bn4fZysL` Composer 栈残余——plan null 收敛 + Composer 引用稳定 setState |
 | 2026-08-02 | C-20260802-01：CollapsibleReveal `useLayoutEffect` 无条件 setState——prevRef 守卫 + functional update 引用稳定 |
 | 2026-08-03 | C-20260803-01：`App-BCnXFvD4` 冷启 useModels layout apply——onDebugRef、原子 selection、epoch 熔断 |
+| 2026-08-04 | C-20260804-01：`App-hx3PTjEz` 持续性 #185——canvas store/selector、storm、session reload、appVersion |
+| 2026-08-04 | 对抗式 review 二次收口：AP-07；getSnapshot 内 cache（禁 render 期写 ref）；§8.1 自检清单 |

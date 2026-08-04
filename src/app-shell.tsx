@@ -1161,6 +1161,7 @@ export function AppShell() {
     handleDeleteQueued,
     handleFuseQueued,
     canFuseActiveQueue,
+    fuseDisabledReasonKey,
     activeFusingMessageId,
     clearDraftForThread,
   } = useComposerController({
@@ -1703,6 +1704,7 @@ export function AppShell() {
       selectedRepositoryRoot,
       selectRepository,
       canFuseActiveQueue,
+      fuseDisabledReasonKey,
       canInterrupt,
       cancelClonePrompt,
       cancelWorktreePrompt,

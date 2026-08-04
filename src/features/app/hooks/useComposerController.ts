@@ -15,6 +15,7 @@ import {
 import { useComposerImages } from "../../composer/hooks/useComposerImages";
 import { useQueuedSend } from "../../threads/hooks/useQueuedSend";
 import type { ThreadMessageDispatchResult } from "../../threads/hooks/useThreadMessaging";
+import { classifyNetworkError } from "../../threads/utils/networkErrors";
 
 export function useComposerController({
   activeThreadId,
@@ -139,6 +140,7 @@ export function useComposerController({
     removeQueuedMessage,
     fuseQueuedMessage,
     canFuseActiveQueue,
+    fuseDisabledReasonKey,
     activeFusingMessageId,
   } = useQueuedSend({
     activeThreadId,
@@ -234,12 +236,18 @@ export function useComposerController({
       try {
         await fuseQueuedMessage(activeThreadId, id);
       } catch (error) {
+        const raw =
+          error instanceof Error && error.message
+            ? error.message
+            : String(error ?? "");
+        const networkKind = classifyNetworkError(raw);
+        const message =
+          networkKind === "connect" || networkKind === "timeout"
+            ? t("chat.fuseFailedGatewayOrRuntime")
+            : raw || t("chat.fuseQueuedMessageFailedDetail");
         pushErrorToast({
           title: t("chat.fuseQueuedMessageFailed"),
-          message:
-            error instanceof Error && error.message
-              ? error.message
-              : t("chat.fuseQueuedMessageFailedDetail"),
+          message,
         });
       }
     },
@@ -274,6 +282,7 @@ export function useComposerController({
     handleDeleteQueued,
     handleFuseQueued,
     canFuseActiveQueue,
+    fuseDisabledReasonKey,
     activeFusingMessageId,
     clearDraftForThread,
   };

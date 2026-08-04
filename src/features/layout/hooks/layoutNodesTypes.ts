@@ -657,6 +657,7 @@ export type LayoutNodesFlatOptions = {
   onDeleteQueued: (id: string) => void;
   onFuseQueued: (id: string) => void | Promise<void>;
   canFuseActiveQueue: boolean;
+  fuseDisabledReasonKey?: string | null;
   activeFusingMessageId: string | null;
   collaborationModes: CollaborationModeOption[];
   collaborationModesEnabled: boolean;
@@ -1138,6 +1139,7 @@ export type ComposerLayoutNodesOptions = Pick<
   | "onDeleteQueued"
   | "onFuseQueued"
   | "canFuseActiveQueue"
+  | "fuseDisabledReasonKey"
   | "activeFusingMessageId"
   | "collaborationModes"
   | "collaborationModesEnabled"

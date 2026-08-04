@@ -52,6 +52,11 @@ export interface MessageQueueProps {
   onFuse?: (id: string) => void;
   /** Whether fuse is available */
   canFuse?: boolean;
+  /**
+   * 全局融合不可用时的 i18n key（如 chat.fuseDisabledNoActiveTurn）。
+   * 仅在 canFuse=false 时用于按钮 title，避免“点了没反应”。
+   */
+  fuseDisabledReasonKey?: string | null;
   /** Message id currently being fused */
   fusingMessageId?: string | null;
 }
@@ -65,6 +70,7 @@ export function MessageQueue({
   onRemove,
   onFuse,
   canFuse = false,
+  fuseDisabledReasonKey = null,
   fusingMessageId = null,
 }: MessageQueueProps) {
   const { t } = useTranslation();
@@ -131,7 +137,16 @@ export function MessageQueue({
                 title={
                   isFusing
                     ? t('chat.fusingQueuedMessage')
-                    : t(statusKey)
+                    : !canFuseItem
+                      ? t(
+                          fuseDisabledReasonKey ||
+                            (isPendingAck
+                              ? 'chat.fuseDisabledPendingAck'
+                              : !isFuseEligibleQueuedContent(fullContent)
+                                ? 'chat.fuseDisabledCommand'
+                                : 'chat.fuseDisabledUnavailable'),
+                        )
+                      : t(statusKey)
                 }
               >
                 {isFusing ? t('chat.fusingQueuedMessage') : t('chat.fuseFromQueue')}

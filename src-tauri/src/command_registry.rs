@@ -218,6 +218,7 @@ pub(crate) fn invoke_handler(
         crate::shared_session_v2::shared_session_v2_interrupt_turn,
         crate::shared_session_v2::shared_session_v2_recover_attempt,
         crate::shared_session_v2::shared_session_v2_rebuild_binding,
+        crate::shared_session_v2::shared_session_v2_abandon_unresolved_attempt,
         crate::shared_session_v2::shared_session_v2_probe_binding,
         crate::shared_session_v2::shared_session_v2_turn_state,
         crate::shared_session_v2::shared_context_retrieve_artifact,

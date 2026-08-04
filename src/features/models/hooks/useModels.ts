@@ -446,6 +446,12 @@ const normalizePreferredIdentity = (value: unknown): string | null => {
 
 /** 单次 catalog/preferred epoch 内最多 apply 次数；超限熔断防 #185 白屏。 */
 const SELECTION_APPLY_CIRCUIT_LIMIT = 12;
+/**
+ * 跨 epoch 的滑动窗口熔断：preferred/persist 虚抖会重置 epoch 计数，
+ * 单独 epoch 限额挡不住「双值对打」叠满 nested update depth。
+ */
+const SELECTION_APPLY_STORM_WINDOW_MS = 1_000;
+const SELECTION_APPLY_STORM_LIMIT = 24;
 
 type ComposerSelectionState = {
   modelId: string | null;
@@ -483,6 +489,9 @@ export function useModels({
   /** catalog/preferred epoch 熔断：同 epoch 超限 apply 直接停，防冷启 #185 白屏 */
   const selectionApplyEpochRef = useRef<string | null>(null);
   const selectionApplyCountRef = useRef(0);
+  /** 跨 epoch 滑动窗口：preferred 对打时 epoch 会重置，本计数仍累积 */
+  const selectionApplyStormWindowStartRef = useRef(0);
+  const selectionApplyStormCountRef = useRef(0);
   const stableModelsRef = useRef<ModelOption[]>([]);
   const [catalogReadyForWorkspace, setCatalogReadyForWorkspace] = useState(false);
   const catalogCacheByWorkspace = useRef(
@@ -586,7 +595,21 @@ export function useModels({
         selectionApplyCountRef.current = 0;
       }
       selectionApplyCountRef.current += 1;
-      if (selectionApplyCountRef.current > SELECTION_APPLY_CIRCUIT_LIMIT) {
+
+      const nowMs = Date.now();
+      if (
+        nowMs - selectionApplyStormWindowStartRef.current >
+        SELECTION_APPLY_STORM_WINDOW_MS
+      ) {
+        selectionApplyStormWindowStartRef.current = nowMs;
+        selectionApplyStormCountRef.current = 0;
+      }
+      selectionApplyStormCountRef.current += 1;
+
+      if (
+        selectionApplyCountRef.current > SELECTION_APPLY_CIRCUIT_LIMIT ||
+        selectionApplyStormCountRef.current > SELECTION_APPLY_STORM_LIMIT
+      ) {
         // 熔断：不再 setState，避免 Maximum update depth 白屏
         onDebugRef.current?.({
           id: `${Date.now()}-client-model-selection-circuit-breaker`,
@@ -596,6 +619,7 @@ export function useModels({
           payload: {
             epochKey,
             applyCount: selectionApplyCountRef.current,
+            stormCount: selectionApplyStormCountRef.current,
             nextModelId,
             nextEffort,
           },
@@ -656,6 +680,8 @@ export function useModels({
     lastCatalogAttemptWorkspaceId.current = null;
     selectionApplyEpochRef.current = null;
     selectionApplyCountRef.current = 0;
+    selectionApplyStormWindowStartRef.current = 0;
+    selectionApplyStormCountRef.current = 0;
     stableModelsRef.current = [];
     setConfigModel(null);
     setRawModels([]);

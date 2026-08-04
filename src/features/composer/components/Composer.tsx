@@ -281,6 +281,7 @@ type ComposerProps = {
   onDeleteQueued?: (id: string) => void;
   onFuseQueued?: (id: string) => void | Promise<void>;
   canFuseQueuedMessages?: boolean;
+  fuseDisabledReasonKey?: string | null;
   fusingQueuedMessageId?: string | null;
   userInputRequests?: RequestUserInputRequest[];
   onJumpToUserInputRequest?: (request: RequestUserInputRequest) => void;
@@ -551,6 +552,7 @@ function ComposerImpl({
   onDeleteQueued,
   onFuseQueued,
   canFuseQueuedMessages = false,
+  fuseDisabledReasonKey = null,
   fusingQueuedMessageId = null,
   userInputRequests = [],
   onJumpToUserInputRequest,
@@ -2771,6 +2773,7 @@ function ComposerImpl({
               onDeleteQueued={onDeleteQueued}
               onFuseQueued={onFuseQueued}
               canFuseQueuedMessages={canFuseQueuedMessages}
+              fuseDisabledReasonKey={fuseDisabledReasonKey}
               fusingQueuedMessageId={fusingQueuedMessageId}
               suggestionsOpen={suggestionsOpen}
               files={files}

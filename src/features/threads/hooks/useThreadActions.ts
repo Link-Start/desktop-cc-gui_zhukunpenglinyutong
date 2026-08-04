@@ -68,6 +68,7 @@ import {
   shouldIncludeWorkspaceThreadEntry,
   shouldApplyCodexSidebarContinuity,
   shouldApplyClaudeSidebarContinuity,
+  stripHiddenSharedBindingSummaries,
   threadIdMatchesHiddenAutomaticSessionSet,
   withTimeout,
   type GeminiSessionSummary,
@@ -1128,6 +1129,7 @@ export function useThreadActions({
             workspace.id,
             mappedTitles,
             getCustomName,
+            hiddenSharedBindingIds,
           );
         }
         if (hasFreshKimiCache && cachedKimi.sessions.length > 0) {
@@ -1140,6 +1142,7 @@ export function useThreadActions({
             workspace.id,
             mappedTitles,
             getCustomName,
+            hiddenSharedBindingIds,
           );
         }
         if (hasFreshGrokCache && cachedGrok.sessions.length > 0) {
@@ -1153,6 +1156,7 @@ export function useThreadActions({
             mappedTitles,
             getCustomName,
             nativeOwnerToSharedThreadId,
+            hiddenSharedBindingIds,
           );
         }
         // fix-shared-session-target-race-and-merge T5b：
@@ -1303,6 +1307,12 @@ export function useThreadActions({
           );
         }
 
+        // 最终 hide 闸门：任何路径（cache merge / continuity / last-good）
+        // 都不得把 Shared-owned native binding 写进侧栏。
+        visibleSummaries = stripHiddenSharedBindingSummaries(
+          visibleSummaries,
+          hiddenSharedBindingIds,
+        );
         dispatch({
           type: "setThreads",
           workspaceId: workspace.id,
@@ -1375,18 +1385,38 @@ export function useThreadActions({
               latestThreadsByWorkspaceRef.current[workspace.id] ?? [];
             const baselineSummaries =
               currentSnapshot.length > 0 ? currentSnapshot : allSummaries;
+            // Gemini Shared 已退役，但仍走同一 hide 契约，避免 stale set 误注入。
+            const sharedSessionsForGeminiHide = normalizeSharedSessionSummaries(
+              await listSharedSessionsService(workspace.id).catch(() => []),
+            );
+            if (threadListRequestSeqRef.current[workspace.id] !== requestSeq) {
+              return;
+            }
+            // fresh ∪ outer：shared list 失败回空时不得放宽已有 hide 可见性。
+            const freshHiddenSharedBindingIds = expandHiddenSharedBindingIds([
+              ...sharedSessionsForGeminiHide.flatMap(
+                (session) => session.nativeThreadIds,
+              ),
+              ...hiddenSharedBindingIds,
+            ]);
             const nextSummaries = mergeGeminiSessionSummaries(
               baselineSummaries,
               normalizedGeminiSessions.filter(
                 (session) =>
-                  !hiddenSharedBindingIds.has(`gemini:${session.sessionId}`),
+                  !freshHiddenSharedBindingIds.has(
+                    `gemini:${session.sessionId}`,
+                  ),
               ),
               workspace.id,
               mappedTitles,
               getCustomName,
+              freshHiddenSharedBindingIds,
             );
             const visibleNextSummaries = applySessionArchiveState(
-              nextSummaries,
+              stripHiddenSharedBindingSummaries(
+                nextSummaries,
+                freshHiddenSharedBindingIds,
+              ),
               await archivedSessionMapPromise,
             );
             const unchanged =
@@ -1457,24 +1487,40 @@ export function useThreadActions({
               latestThreadsByWorkspaceRef.current[workspace.id] ?? [];
             const baselineSummaries =
               currentSnapshot.length > 0 ? currentSnapshot : allSummaries;
+            // 异步 refresh 时 binding 可能已 materialize；必须重建 hide set，
+            // 禁止复用 listThreads 开头的 stale 闭包（创建 Shared 时往往是空集）。
             const sharedSessionsForRemap = normalizeSharedSessionSummaries(
               await listSharedSessionsService(workspace.id).catch(() => []),
             );
+            if (threadListRequestSeqRef.current[workspace.id] !== requestSeq) {
+              return;
+            }
+            // fresh ∪ outer：shared list 失败回空时不得放宽已有 hide 可见性。
+            const freshHiddenSharedBindingIds = expandHiddenSharedBindingIds([
+              ...sharedSessionsForRemap.flatMap((session) => session.nativeThreadIds),
+              ...hiddenSharedBindingIds,
+            ]);
             const nativeOwnerToShared =
               buildNativeOwnerToSharedThreadMap(sharedSessionsForRemap);
             const nextSummaries = mergeGrokSessionSummaries(
               baselineSummaries,
               normalizedGrokSessions.filter(
                 (session) =>
-                  !hiddenSharedBindingIds.has(`grok:${session.sessionId}`),
+                  !freshHiddenSharedBindingIds.has(
+                    `grok:${session.sessionId}`,
+                  ),
               ),
               workspace.id,
               mappedTitles,
               getCustomName,
               nativeOwnerToShared,
+              freshHiddenSharedBindingIds,
             );
             const visibleNextSummaries = applySessionArchiveState(
-              nextSummaries,
+              stripHiddenSharedBindingSummaries(
+                nextSummaries,
+                freshHiddenSharedBindingIds,
+              ),
               await archivedSessionMapPromise,
             );
             const unchanged =
@@ -1537,18 +1583,39 @@ export function useThreadActions({
               latestThreadsByWorkspaceRef.current[workspace.id] ?? [];
             const baselineSummaries =
               currentSnapshot.length > 0 ? currentSnapshot : allSummaries;
+            // 与 Grok 同构：异步路径用 fresh hide set，避免 pending→established
+            // rebind 后仍按 list 开头的空/旧 hide set 注入 native 行。
+            const sharedSessionsForKimiHide = normalizeSharedSessionSummaries(
+              await listSharedSessionsService(workspace.id).catch(() => []),
+            );
+            if (threadListRequestSeqRef.current[workspace.id] !== requestSeq) {
+              return;
+            }
+            // fresh ∪ outer：shared list 失败回空时不得放宽已有 hide 可见性。
+            const freshHiddenSharedBindingIds = expandHiddenSharedBindingIds([
+              ...sharedSessionsForKimiHide.flatMap(
+                (session) => session.nativeThreadIds,
+              ),
+              ...hiddenSharedBindingIds,
+            ]);
             const nextSummaries = mergeKimiSessionSummaries(
               baselineSummaries,
               normalizedKimiSessions.filter(
                 (session) =>
-                  !hiddenSharedBindingIds.has(`kimi:${session.sessionId}`),
+                  !freshHiddenSharedBindingIds.has(
+                    `kimi:${session.sessionId}`,
+                  ),
               ),
               workspace.id,
               mappedTitles,
               getCustomName,
+              freshHiddenSharedBindingIds,
             );
             const visibleNextSummaries = applySessionArchiveState(
-              nextSummaries,
+              stripHiddenSharedBindingSummaries(
+                nextSummaries,
+                freshHiddenSharedBindingIds,
+              ),
               await archivedSessionMapPromise,
             );
             const unchanged =

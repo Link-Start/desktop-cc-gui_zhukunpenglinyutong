@@ -716,6 +716,7 @@ export interface ChatInputBoxProps {
   onFuseFromQueue?: (id: string) => void;
   /** Whether queued fuse is available for the active thread */
   canFuseFromQueue?: boolean;
+  fuseDisabledReasonKey?: string | null;
   /** Currently fusing queue message id */
   fusingQueueMessageId?: string | null;
 

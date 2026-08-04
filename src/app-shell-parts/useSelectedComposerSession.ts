@@ -94,6 +94,12 @@ export function useSelectedComposerSession({
   const selectedComposerSelectionRef = useRef<ComposerSessionSelection | null>(null);
   const draftComposerSelectionWorkspaceIdRef = useRef<string | null>(null);
   const shouldApplyDraftToNextThreadRef = useRef(false);
+  // 父层常传入非稳定 resolveEngineDefault；经 ref 读，禁止拖进 reload deps（#185）
+  const resolveEngineDefaultComposerSelectionRef = useRef(
+    resolveEngineDefaultComposerSelection,
+  );
+  resolveEngineDefaultComposerSelectionRef.current =
+    resolveEngineDefaultComposerSelection;
 
   const resolveSelectedComposerSessionKey = useCallback(
     (workspaceId: string | null, threadId: string | null): string | null => {
@@ -306,7 +312,8 @@ export function useSelectedComposerSession({
       ) {
         const engineDefault = normalizeComposerSessionSelectionForThread(
           activeThreadId,
-          resolveEngineDefaultComposerSelection?.(activeThreadId) ?? null,
+          resolveEngineDefaultComposerSelectionRef.current?.(activeThreadId) ??
+            null,
         );
         if (engineDefault) {
           candidate = engineDefault;
@@ -327,7 +334,6 @@ export function useSelectedComposerSession({
     draftComposerSelection,
     engineDefaultSelectionReady,
     cacheSelectionForSessionKey,
-    resolveEngineDefaultComposerSelection,
     resolveSelectedComposerSessionKey,
     writeSelectionForSessionKey,
   ]);

@@ -65,3 +65,12 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.shared-send-status__button--danger {
+  color: var(--text-danger, #e5484d);
+  border-color: var(--border-danger, rgba(229, 72, 77, 0.4));
+}
+
+.shared-send-status__button--danger:hover:not(:disabled) {
+  background: var(--bg-danger-hover, rgba(229, 72, 77, 0.1));
+}

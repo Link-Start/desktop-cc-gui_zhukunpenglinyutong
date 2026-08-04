@@ -7,7 +7,7 @@ status: active
 # Analysis 文档索引
 
 > [!IMPORTANT]
-> **Lifecycle: Active section index.** 本索引校准于 2026-08-03，当前产品版本为 `0.7.16`。Analysis 解释实现与决策背景，不是行为事实源；current contract 以 OpenSpec main specs 与代码为准。
+> **Lifecycle: Active section index.** 本索引校准于 2026-08-04，当前产品版本为 `0.7.16`。Analysis 解释实现与决策背景，不是行为事实源；current contract 以 OpenSpec main specs 与代码为准。
 
 ## Current reference
 
@@ -15,7 +15,7 @@ status: active
 - [Conversation canvas structure](./conversation-canvas-structure-2026-07-31.md) — Active architecture reference。
 - [Native session provider select vs disk overwrite](./native-session-provider-select-vs-disk-overwrite-2026-07-31.md) — Active session-selection contract explanation。
 - [Native vs Shared CLI explained](./native-vs-shared-cli-explained.md) — Active product/engineering guide。
-- [React #185 Maximum Update Depth playbook](./react-185-maximum-update-depth-playbook.md) — Active troubleshooting runbook。
+- [React #185 Maximum Update Depth playbook](./react-185-maximum-update-depth-playbook.md) — Active troubleshooting runbook；最新 case `C-20260804-01`（canvas store / storm / appVersion）。
 
 ## Resolved incidents and closure evidence
 

@@ -604,3 +604,197 @@ onDebugRef 解耦、原子 selection state、乐观 snapshot、preferred 归一�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1316: 修复 Shared 侧栏异步刷新 stale hide set 泄漏原生会话
+
+**Date**: 2026-08-04
+**Task**: 修复 Shared 侧栏异步刷新 stale hide set 泄漏原生会话
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+异步 Grok/Kimi/Gemini refresh 重建 hide set 并 purge baseline 泄漏；补齐 OpenSpec 变更 fix-shared-sidebar-hide-set-staleness；typecheck/lint/36 测试全绿
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e0f8c0aa7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1317: 闭环 Shared 恢复出口
+
+**Date**: 2026-08-04
+**Task**: 闭环 Shared 恢复出口
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 内容 |
+|----|------|
+| OpenSpec | `fix-shared-session-recovery-exit-closure` |
+| P0 | Recovery Exit Ladder：Probe / Stop / 停止并重建 / 放弃本轮 |
+| P0 | `target-unavailable` 分类纠偏；abandon durable + 清 binding recovery |
+| P1 | force-stop 先读 settled 再 remove（防丢已完成回答） |
+| P1 | 融合禁用原因 `fuseDisabledReasonKey` + 网关类 toast |
+| 收尾 | 删死 key、补 `--danger` CSS、`__details` class |
+
+**验证**：OpenSpec validate strict；FE SharedSend/MessageQueue/locale；Rust abandon + remove_attempt settled 契约测试。
+
+**未提交残留**：`.trellis` 旧脏文件、`fix-shared-sidebar-hide-set-staleness/tasks.md` 未纳入本 commit。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c4cb33daf` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1318: docs: 重写新 CLI 接入指南, 补全量注册点核对矩阵 A~H 八层 56 行
+
+**Date**: 2026-08-04
+**Task**: docs: 重写新 CLI 接入指南, 补全量注册点核对矩阵 A~H 八层 56 行
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+基于全仓库 40+ 真实注册点盘点, 重写 mossx-new-cli-onboarding-guide.md; 补 AGENTS.md Engine Onboarding Gate + guides/index.md 触发信号
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f6858e821` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1319: 对抗式 review 收口 React #185 canvas store / storm
+
+**Date**: 2026-08-04
+**Task**: 对抗式 review 收口 React #185 canvas store / storm
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 问题 | 生产持续性 React #185（App-hx3PTjEz），appVersion unknown |
+| 对抗式 review | 修正 useActiveCanvasSelector：禁 render 期写 ref，改为 getSnapshot 内 cache |
+| 结构修复 | setSnapshot shallow 门闩；跨 epoch storm 熔断；session engineDefault ref；NoticeDock 幂等；报告 __APP_VERSION__ |
+| 文档 | playbook C-20260804-01 + AP-07 + §8.1；analysis README 校准 |
+| 验证 | vitest 70 通过（activeCanvasStore / useModels / app-shell.startup / session / errorBoundaryReport） |
+
+**Updated Files**:
+- `src/features/layout/hooks/activeCanvasStore.ts`
+- `src/features/layout/hooks/activeCanvasStore.test.tsx`
+- `src/features/models/hooks/useModels.ts`
+- `src/app-shell-parts/useSelectedComposerSession.ts`
+- `src/features/notifications/components/GlobalRuntimeNoticeDock.tsx`
+- `src/components/errorBoundaryReport.ts`
+- `docs/analysis/react-185-maximum-update-depth-playbook.md`
+- `docs/analysis/README.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2afeadabf` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1320: 修复 activeCanvasStore 测试 tsc 构建失败
+
+**Date**: 2026-08-04
+**Task**: 修复 activeCanvasStore 测试 tsc 构建失败
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+test 文件被 tsc include，let|null 收窄为 never 导致 build 失败；改为 ref box 修 TS2339
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9dc47c0b0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

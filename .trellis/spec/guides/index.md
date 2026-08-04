@@ -12,6 +12,7 @@
 | [Codex Unified Exec Override Contract](./codex-unified-exec-override-contract.md) | 固化 unified_exec 的 settings/runtime/global-config 边界 | 触及 experimental settings、Codex args、global config repair |
 | [Terminal Shell Configuration Contract](./terminal-shell-configuration.md) | 固化 built-in terminal shell path override 与平台 fallback 边界 | 触及 terminal shell path 设置或 `terminal_open` shell 解析 |
 | [Workspace Session Catalog Contract](./workspace-session-catalog-contract.md) | 固化 workspace session membership、ownership、metadata overlay、source-fact cache 边界 | 触及工作区会话列表、Claude history、Session Management、Sidebar session merge |
+| [新 CLI 接入指南](../../../docs/research/mossx-new-cli-onboarding-guide.md) | 新 CLI engine 全量接入点核对矩阵（含静默失败点标注）；上游契约为[基石设计](../../../docs/research/mossx-multi-cli-provider-session-foundation-design.md) | 接入新 CLI engine，或恢复/变更既有 engine 的接入面（registry、capability、渲染白名单、Shared 集合、i18n） |
 
 ## 项目级触发信号（mossx）
 
@@ -20,6 +21,7 @@
 - 修改大 CSS 文件或 `*.partN.css`。
 - 修改 `threads/spec-hub/git-history/file-view/composer` 主流程。
 - 修改 `AGENTS.md`、`openspec/README.md`、`openspec/project.md`、`.gitignore`、`.claude/**`、`.codex/**` 等治理入口。
+- 新增/恢复 CLI engine，或修改 `engineIds.json`、`EngineType`、`sharedSessionEngines`、capability matrix fixture、幕布渲染白名单（`TimelineRowRenderer` / `MessagesCore` / `useAppServerEvents`）中的任一 engine 分支。
 
 ## Pre-Change Search Rule
 
