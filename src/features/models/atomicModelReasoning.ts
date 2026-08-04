@@ -11,7 +11,6 @@ import { CODEX_MODEL_CATALOG } from "./codexModelCatalog";
 import {
   CUSTOM_MODEL_DEFAULT_REASONING_EFFORT,
   CUSTOM_MODEL_REASONING_EFFORTS,
-  CUSTOM_MODEL_SUPPORTED_REASONING_OPTIONS,
 } from "./customModelReasoning";
 
 /** Keep aligned with `CLAUDE_REASONING_OPTIONS` in modelSelection.ts. */
