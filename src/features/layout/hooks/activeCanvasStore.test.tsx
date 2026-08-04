@@ -143,6 +143,10 @@ describe("activeCanvasStore", () => {
   });
 
   it("useActiveCanvasSelector keeps object slice identity when only unrelated store fields change", () => {
+    type CanvasSlice = {
+      threadId: string | null;
+      items: ActiveCanvasSnapshot["items"];
+    };
     const items: ActiveCanvasSnapshot["items"] = [
       { id: "m1", kind: "message", role: "assistant", text: "hello" },
     ];
@@ -155,26 +159,28 @@ describe("activeCanvasStore", () => {
     );
 
     let renderCount = 0;
-    let lastSlice: { threadId: string | null; items: ActiveCanvasSnapshot["items"] } | null =
-      null;
+    // 用数组槽位承接闭包写入，避免 let | null 在 tsc 下被收窄成 never
+    // （build 的 `tsc` include 了 src/**/*.test.tsx）。
+    const lastSliceBox: { current: CanvasSlice | null } = { current: null };
 
     function Probe() {
       renderCount += 1;
       const slice = useActiveCanvasSelector(
-        (snapshot) => ({
+        (snapshot): CanvasSlice => ({
           threadId: snapshot.threadId,
           items: snapshot.items,
         }),
         shallowEqual,
       );
-      lastSlice = slice;
+      lastSliceBox.current = slice;
       return <div data-testid="slice">{slice.threadId}</div>;
     }
 
     render(<Probe />);
-    const sliceAfterMount = lastSlice;
+    const sliceAfterMount = lastSliceBox.current;
     const rendersAfterMount = renderCount;
-    expect(sliceAfterMount?.threadId).toBe("thread-1");
+    expect(sliceAfterMount).not.toBeNull();
+    expect(sliceAfterMount!.threadId).toBe("thread-1");
 
     // 仅 heartbeat 抖动：select 切片语义不变 → 不得强制重渲染换引用
     setActiveCanvasSnapshot(
@@ -187,6 +193,6 @@ describe("activeCanvasStore", () => {
     );
 
     expect(renderCount).toBe(rendersAfterMount);
-    expect(lastSlice).toBe(sliceAfterMount);
+    expect(lastSliceBox.current).toBe(sliceAfterMount);
   });
 });
