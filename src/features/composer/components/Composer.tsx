@@ -677,6 +677,9 @@ function ComposerImpl({
   const selectedSharedTarget = sharedTargetState.selectedNextTarget;
   const [selectedCreationTarget, setSelectedCreationTarget] =
     useState<ExecutionTarget | null>(null);
+  // 首页 picker 主动切换 engine 时，parent selectedEngine 可能尚未异步跟上；
+  // 用 ref 标记「等待 parent 追上的目标」，避免误清 sticky creation target。
+  const pendingPickerEngineRef = useRef<EngineType | null>(null);
   const defaultCreationTarget = useMemo<ExecutionTarget | null>(() => {
     return resolveDefaultCreationExecutionTarget({
       enabled: createSessionTargetPicker,
@@ -724,9 +727,33 @@ function ComposerImpl({
     }
     return () => {
       publishedCreationTargetEngineRef.current = undefined;
+      pendingPickerEngineRef.current = null;
       onCreationTargetEngineChange?.(null);
     };
   }, [createSessionTargetPicker, onCreationTargetEngineChange]);
+  // 全局 selectedEngine 外部变更（启动 restore / 从会话回首页）时，丢掉与其不一致的
+  // sticky creation target，否则首页会卡在首屏默认 claude，而会话区已是 grok。
+  // 仅依赖 selectedEngine：用户点选时只写 sticky、不立刻改 prop，故不会误清。
+  useEffect(() => {
+    if (!createSessionTargetPicker || !selectedEngine) {
+      return;
+    }
+    if (pendingPickerEngineRef.current != null) {
+      if (pendingPickerEngineRef.current === selectedEngine) {
+        // 用户点选已落地，保留 sticky 的 model/profile 细节
+        pendingPickerEngineRef.current = null;
+        return;
+      }
+      // parent 走到了别的 engine（外部 restore 或 switch 失败后的回落）
+      pendingPickerEngineRef.current = null;
+    }
+    setSelectedCreationTarget((prev) => {
+      if (prev == null || prev.engine === selectedEngine) {
+        return prev;
+      }
+      return null;
+    });
+  }, [createSessionTargetPicker, selectedEngine]);
   /**
    * Native Atomic 点选的即时投影。
    * Shared 写 selectedNextTarget 即可立刻刷新勾选；Native 若只走 onSelectModel
@@ -1212,9 +1239,15 @@ function ComposerImpl({
       if (!createSessionTargetPicker || !isResolvedExecutionTarget(target)) {
         return;
       }
+      // 首页 engine 选择必须同步全局 activeEngine + client store，否则重启后首页
+      // 回落到默认 claude，而项目会话因 thread.engineSource 仍显示上次的 CLI。
+      if (target.engine !== selectedEngine) {
+        pendingPickerEngineRef.current = target.engine;
+        onSelectEngine?.(target.engine);
+      }
       setSelectedCreationTarget(target);
     },
-    [createSessionTargetPicker],
+    [createSessionTargetPicker, onSelectEngine, selectedEngine],
   );
   // 草稿值直接订阅模块级 store(而非经 app-shell 根 prop 灌入):按键写 store 时
   // 只有 Composer 自身重渲染,不再把整个 app-shell 拖下水。

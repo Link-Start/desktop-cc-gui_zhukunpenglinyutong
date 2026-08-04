@@ -179,6 +179,8 @@ function ComposerHarness({
   sharedTarget,
   createSessionTargetPicker = false,
   onCreationTargetEngineChange,
+  onSelectEngine,
+  selectedEngine = "claude",
   activeThreadId = "thread-1",
   sharedTargetPickerLocked = false,
 }: {
@@ -193,6 +195,8 @@ function ComposerHarness({
   };
   createSessionTargetPicker?: boolean;
   onCreationTargetEngineChange?: (engine: EngineType | null) => void;
+  onSelectEngine?: (engine: EngineType) => void;
+  selectedEngine?: EngineType;
   activeThreadId?: string;
   sharedTargetPickerLocked?: boolean;
 }) {
@@ -243,7 +247,8 @@ function ComposerHarness({
       collaborationModesEnabled={true}
       selectedCollaborationModeId={null}
       onSelectCollaborationMode={() => {}}
-      selectedEngine="claude"
+      selectedEngine={selectedEngine}
+      onSelectEngine={onSelectEngine}
       isSharedSession={Boolean(sharedTarget)}
       sharedTargetPickerLocked={sharedTargetPickerLocked}
       createSessionTargetPicker={createSessionTargetPicker}
@@ -298,11 +303,13 @@ describe("Composer file reference token", () => {
   it("keeps Home create-session target local and sends one complete target", async () => {
     const onSend = vi.fn();
     const onCreationTargetEngineChange = vi.fn();
+    const onSelectEngine = vi.fn();
     const view = render(
       <ComposerHarness
         onSend={onSend}
         createSessionTargetPicker
         onCreationTargetEngineChange={onCreationTargetEngineChange}
+        onSelectEngine={onSelectEngine}
       />,
     );
 
@@ -316,6 +323,8 @@ describe("Composer file reference token", () => {
     });
     expect(invoke).not.toHaveBeenCalled();
     expect(onCreationTargetEngineChange).toHaveBeenLastCalledWith("codex");
+    // 首页切 CLI 必须同步全局 engine，重启后首页才能回到上次选择
+    expect(onSelectEngine).toHaveBeenCalledWith("codex");
     // 等价 engine 不得在每次父树重渲染时重复 publish（#185 防护）
     const publishCountAfterMount = onCreationTargetEngineChange.mock.calls.length;
     await act(async () => {
@@ -324,6 +333,8 @@ describe("Composer file reference token", () => {
           onSend={onSend}
           createSessionTargetPicker
           onCreationTargetEngineChange={onCreationTargetEngineChange}
+          onSelectEngine={onSelectEngine}
+          selectedEngine="codex"
         />,
       );
       await Promise.resolve();
@@ -351,6 +362,41 @@ describe("Composer file reference token", () => {
         },
       }),
     );
+  });
+
+  it("drops sticky home creation engine when selectedEngine restores externally", async () => {
+    const onSend = vi.fn();
+    const onCreationTargetEngineChange = vi.fn();
+    const view = render(
+      <ComposerHarness
+        onSend={onSend}
+        createSessionTargetPicker
+        onCreationTargetEngineChange={onCreationTargetEngineChange}
+        selectedEngine="claude"
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(view.getByTestId("select-shared-target"));
+      await Promise.resolve();
+    });
+    expect(onCreationTargetEngineChange).toHaveBeenLastCalledWith("codex");
+
+    // 模拟启动 restore 把全局 engine 切到 grok（非本 picker 触发）
+    await act(async () => {
+      view.rerender(
+        <ComposerHarness
+          onSend={onSend}
+          createSessionTargetPicker
+          onCreationTargetEngineChange={onCreationTargetEngineChange}
+          selectedEngine="grok"
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    // sticky codex 应被清掉，首页跟随 restore 后的 grok
+    expect(onCreationTargetEngineChange).toHaveBeenLastCalledWith("grok");
   });
 
   it("accepts a Claude local model as the Home creation target", async () => {
