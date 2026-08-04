@@ -45,9 +45,10 @@ status: active
 
 1. [`analysis/conversation-canvas-structure-2026-07-31.md`](analysis/conversation-canvas-structure-2026-07-31.md)
 2. [`analysis/canvas-live-tool-projection-matrix-2026-08-01.md`](analysis/canvas-live-tool-projection-matrix-2026-08-01.md)
-3. [`plans/2026-08-01-conversation-canvas-scroll-ownership-architecture.md`](plans/2026-08-01-conversation-canvas-scroll-ownership-architecture.md)
-4. [`reference/conversation/conversation-curtain-contracts.md`](reference/conversation/conversation-curtain-contracts.md)
-5. 历史单引擎链路见 [`archive/conversation-rendering/README.md`](archive/conversation-rendering/README.md)
+3. [`analysis/live-settle-assistant-tool-order-2026-08-04.md`](analysis/live-settle-assistant-tool-order-2026-08-04.md) — live settle 后结论文本落到工具前（Shared×Claude 已确认；跨 CLI 矩阵）
+4. [`plans/2026-08-01-conversation-canvas-scroll-ownership-architecture.md`](plans/2026-08-01-conversation-canvas-scroll-ownership-architecture.md)
+5. [`reference/conversation/conversation-curtain-contracts.md`](reference/conversation/conversation-curtain-contracts.md)
+6. 历史单引擎链路见 [`archive/conversation-rendering/README.md`](archive/conversation-rendering/README.md)
 
 ### Provider、Shared Session 与多 CLI
 

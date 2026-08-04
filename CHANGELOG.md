@@ -2,6 +2,66 @@
 
 ---
 
+##### **2026年8月4日（v0.7.16）**
+
+中文：
+
+这一版的主菜是「常用设置钉上手、Git 批量更顺手、后台任务不误杀」：侧栏设置动作可以 pin 到齿轮旁一键直达，应用图标支持换肤并完成全平台品牌刷新，Git 变更面板补上批量 unstage / 丢弃，Claude 后台 Shell 任务不再被 5 秒宽限误杀，React #185 白屏防线继续压实。
+
+✨ Features
+- 侧栏设置 pin：锁屏 / Spec Hub / 项目记忆 / Git 历史 / 运行时通知可在设置菜单项旁勾选 pin，在齿轮旁生成一键图标按钮；最多 2 个并持久化到 clientStorage，未知 id 自动过滤，超限后禁用继续 pin 并给出中英提示
+- 应用图标换肤：外观设置新增 Dock / 任务栏图标选择，默认 logo 与 orbit-routing 系列方案可切换；macOS 更新 Dock，Windows / Linux 更新各窗口图标，并联动 About 页与锁屏 logo；带 PNG 校验、快速切换竞态保护与次级窗口重应用
+- Git 批量写操作：变更面板支持一键 unstage 全部、unstage 选中路径、批量丢弃多个未暂存文件，一次后端调用替代逐个 IPC 循环；rename / copy 对在 restore / clean 前展开路径，与单文件语义对齐；多仓库视图、worktree 历史与远程 daemon 转发同步接入，单文件操作保留为回退
+- 品牌图标全面刷新：桌面（含 Windows Store 方块 logo）、Web、iOS AppIcon、Android launcher 全套换为新品牌图，安装包与各 UI 表面视觉统一
+
+🔧 Improvements
+- 文件树右键菜单补齐 Lucide 图标（git / 新建 / 复制 / LSP / 删除等），删除项走 danger 样式，扫读更快
+- 右键菜单定位更贴光标：靠近屏幕底部时只滑动刚好进视口的距离而非整块翻转，布局后按真实测量尺寸二次 clamp，菜单项高度估算与 CSS 对齐
+- diff 行内密集按钮的 tooltip 换成 FloatingTooltipButton（body portal + flip），不再被 overflow 裁切，并保留高对比 CSS 回退
+- Shared 队列已发送等待 ACK 时显示「已发送，确认中（防重复）」，不再误读为仍在排队；防双发出队逻辑不变
+- 文档治理：OpenSpec 三波归档 64 个已落地提案并同步 main specs；新增文档生命周期规范、新 CLI 接入 A~H 全量注册点核对矩阵、Native vs Shared CLI 产品口径说明文档
+
+🐛 Fixes
+- 修复 Claude 后台 Shell / PowerShell 任务被 5 秒宽限误杀（issue #983）：stream 携带结构化 backgroundTaskId 时进入 WaitBgTasks 等待任务终态，期间禁止 grace tree-kill；任务清空后重新武装完整 5s 宽限（禁止 remaining=0 秒杀），Unix killpg / Windows taskkill 不再误杀合法后台任务与 MCP / Stop-hook 管道
+- 继续收敛 React #185 白屏：Composer extract effect 切断 selectedInlineFileReferences 自订阅、target 等价时跳过壳写；canvas store 快照门闩与 selector 缓存、useModels 跨 epoch storm 熔断、session reload 稳定回调
+- 修复 Shared 侧栏异步刷新复用 stale hide set 导致原生会话泄漏：Grok / Kimi / Gemini 刷新改用 fresh hide set 重建，merge 与 final 闸门剔除已泄漏的 Shared-owned 行，hide set 拉取失败时取并集不放宽
+- 闭环 Shared 恢复出口：补齐 Probe / Stop / 停止并重建 / 放弃本轮；force-stop 先读 settled 再 remove，修复 abandon 竞态；融合禁用原因可解释
+- Shared 模型选择以 ExecutionTarget 快照为展示权威，闭合态不再依赖 catalog 命中或全局 selectedModelId，Native 保留全局回落契约
+- Codex collab 子代理实时 wait 阶段用子会话树兜底幕布小队与 Status Agents，补齐 live receiver 字段抽取与 synthetic / 真实 spawn 去重，live 与 history 呈现对齐
+- 相邻思考块不再被幕布外隐藏的 shell 工具切成多张思考卡片：resolveVisibleMessageItems 先过滤隐藏进程工具再合并，live 与完成后展开的时间线逻辑一致；可见文件工具仍会正确打断思考段
+- 修复 dockIcon 与 activeCanvasStore 测试在 strict 下被推断为 never 导致的 tsc 构建失败（曾阻断 mac-arm64 打包）
+- 修复多工具回合 settle 后助手结论文本偶发跑到工具卡前面的问题：reducer 在 `resetAgentSegment` 后通过 `findAssistantMessageIndexForLiveSettlement`（append/complete 双模式）解析正确 segment，禁止终稿并回工具前气泡；同时补上 late tool 插入与重排逻辑确保工具与结论的相对位置在 settle 后与 history 一致，不再依赖「重开会话」恢复正确顺序
+
+English:
+
+The headline of this release is pinned settings at your fingertips, smoother bulk Git operations, and no more killed background tasks: frequent sidebar actions can be pinned next to the settings gear, the app icon is switchable with a full cross-platform brand refresh, the changes panel gains bulk unstage / discard, Claude background shell tasks survive the 5-second grace, and the React #185 white-screen defenses keep tightening.
+
+✨ Features
+- Pinned sidebar settings: lock screen, Spec Hub, project memory, git history, and runtime notice can be pinned from the settings menu to one-click icon buttons beside the gear; max 2, persisted in client storage, unknown ids filtered, further pins disabled with accessible en/zh tooltip copy
+- App icon skinning: appearance settings now offer a Dock / taskbar icon picker — default logo or the orbit-routing set; macOS updates the Dock, Windows / Linux update per-window icons, with the About page and lock screen logo in sync; PNG validation, rapid-switch race protection, and secondary-window reapply included
+- Bulk Git write operations: unstage all, unstage selected paths, and discard multiple unstaged paths in one backend call instead of per-path IPC loops; rename/copy pairs are expanded before restore/clean to match single-file semantics; multi-repo views, worktree history, and remote daemon forwarding wired in, with single-file actions kept as fallback
+- Full brand icon refresh: desktop (including Windows Store square logos), web, iOS AppIcon, and Android launcher sets all updated to the new artwork for consistent installs and UI surfaces
+
+🔧 Improvements
+- File-tree context menus gain Lucide icons (git, new file, copy, LSP, delete, etc.) with a danger style on delete for faster scanning
+- Context menus stay near the cursor: near the screen bottom they slide only enough to fit the viewport instead of flipping wholesale, re-clamp after layout with measured size, and item-height estimates now match the CSS
+- Dense diff-row action tooltips switch to FloatingTooltipButton (body portal + flip) so they are no longer clipped by overflow, with a high-contrast CSS fallback
+- Shared queue shows "sent, awaiting ACK (duplicate-safe)" while waiting for acknowledgement instead of looking still queued; dequeue logic unchanged
+- Documentation governance: three OpenSpec archive waves moved 64 shipped proposals into the archive with main specs synced; new doc-lifecycle rules, an A–H full registration-point checklist for onboarding new CLIs, and a Native vs Shared CLI product explainer
+
+🐛 Fixes
+- Fixed Claude background Shell / PowerShell tasks being killed by the 5-second grace (issue #983): when the stream carries a structured backgroundTaskId the reader enters WaitBgTasks and waits for task terminal states with grace tree-kill disabled; once tasks drain, the full 5s grace re-arms (no remaining=0 instant kill), so Unix killpg / Windows taskkill no longer kill legitimate background tasks or MCP / Stop-hook pipelines
+- More React #185 white-screen hardening: the Composer extract effect no longer self-subscribes to selectedInlineFileReferences and skips shell writes on equivalent targets; canvas store snapshot latch and selector caching, a useModels cross-epoch storm breaker, and stable session-reload callbacks
+- Fixed the Shared sidebar reusing a stale hide set on async refresh and leaking native sessions: Grok / Kimi / Gemini refreshes rebuild with a fresh hide set, merge and final gates strip already-leaked Shared-owned rows, and hide-set fetch failures union instead of widening
+- Closed the Shared recovery exits: Probe / Stop / stop-and-rebuild / abandon-turn completed; force-stop reads settled before remove, fixing the abandon race; fusion-disabled reasons are now explainable
+- Shared model selection now uses the ExecutionTarget snapshot as display authority — the closed state no longer depends on catalog hits or the global selectedModelId, while Native keeps its global fallback contract
+- Codex collab subagents fall back to the child session tree during live wait phases for canvas squads and Status Agents, with live receiver field extraction and synthetic/real spawn dedupe, aligning live and history rendering
+- Adjacent thinking blocks are no longer split into multiple thinking cards by canvas-hidden shell tools: resolveVisibleMessageItems filters hidden process tools before merging, keeping live and post-complete expanded timelines consistent; visible file tools still correctly interrupt reasoning runs
+- Fixed dockIcon and activeCanvasStore tests being inferred as never under strict mode, which broke tsc builds (and had blocked mac-arm64 packaging)
+- Fixed assistant conclusion text occasionally appearing before tool cards after multi-tool turns settle: the reducer now uses `findAssistantMessageIndexForLiveSettlement` (append/complete dual mode) to resolve the correct post-tool segment after `resetAgentSegment`, preventing conclusion text from merging into the pre-tool bubble; late-tool insertion and rebalancing keep the tool-conclusion relative order consistent with history after settlement, removing the need to reopen conversations as a workaround
+
+---
+
 ##### **2026年8月3日（v0.7.15）**
 
 中文：
