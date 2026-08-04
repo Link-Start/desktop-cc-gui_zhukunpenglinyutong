@@ -1,4 +1,4 @@
-import { useMemo, useSyncExternalStore } from "react";
+import { useCallback, useRef, useSyncExternalStore } from "react";
 
 import type {
   RateLimitSnapshot,
@@ -132,6 +132,16 @@ export function createActiveCanvasStore(
       if (Object.is(snapshot, nextSnapshot)) {
         return;
       }
+      // 顶层字段全部 Object.is 相等时不 notify：切断 layout 每帧换 snapshot 壳引用
+      // 导致的 useSyncExternalStore 订阅风暴（AP-02 / #185）。
+      if (
+        shallowEqual(
+          snapshot as unknown as Record<string, unknown>,
+          nextSnapshot as unknown as Record<string, unknown>,
+        )
+      ) {
+        return;
+      }
       snapshot = nextSnapshot;
       notify();
     },
@@ -175,32 +185,58 @@ export function getActiveCanvasSnapshot(): ActiveCanvasSnapshot {
   return activeCanvasStore.getSnapshot();
 }
 
+/**
+ * 从 activeCanvasStore 选取切片。
+ *
+ * 关键 #185 防护（对抗式约束）：
+ * 1. selector / isEqual 经 ref 读取——内联箭头 identity 不得驱动 subscribe/getSnapshot 重建。
+ * 2. getSnapshot 必须可重复调用且返回稳定引用：语义相等时回传缓存 selected，
+ *    禁止「每次 selector() 都 new 对象 → useSyncExternalStore 判定变化 → 无限渲染」。
+ * 3. 对象切片必须传 shallowEqual（或自定义 isEqual）；默认 Object.is 只适用于
+ *    primitive / 稳定字段引用。
+ * 4. 订阅整 store notify，由 getSnapshot 做选择与 isEqual；无关字段抖动不换 selected 引用。
+ */
 export function useActiveCanvasSelector<T>(
   selector: (snapshot: ActiveCanvasSnapshot) => T,
   isEqual: (left: T, right: T) => boolean = Object.is,
 ): T {
-  const selectedStore = useMemo(() => {
-    let selected = selector(activeCanvasStore.getSnapshot());
-    const getSelectedSnapshot = () => selected;
-    const subscribeSelected = (listener: () => void) =>
-      activeCanvasStore.subscribeSelector(
-        selector,
-        () => {
-          selected = selector(activeCanvasStore.getSnapshot());
-          listener();
-        },
-        isEqual,
-      );
+  const selectorRef = useRef(selector);
+  const isEqualRef = useRef(isEqual);
+  selectorRef.current = selector;
+  isEqualRef.current = isEqual;
 
-    return {
-      getSelectedSnapshot,
-      subscribeSelected,
+  type SelectionCache = {
+    storeSnapshot: ActiveCanvasSnapshot;
+    selected: T;
+  };
+  const cacheRef = useRef<SelectionCache | null>(null);
+
+  const subscribe = useCallback((onStoreChange: () => void) => {
+    return activeCanvasStore.subscribe(onStoreChange);
+  }, []);
+
+  const getSnapshot = useCallback((): T => {
+    const storeSnapshot = activeCanvasStore.getSnapshot();
+    const cache = cacheRef.current;
+    // 同一 store 对象：直接回缓存，保证 getSnapshot 多次调用恒等
+    if (cache && Object.is(cache.storeSnapshot, storeSnapshot)) {
+      return cache.selected;
+    }
+    const nextSelected = selectorRef.current(storeSnapshot);
+    if (cache && isEqualRef.current(cache.selected, nextSelected)) {
+      // 字段语义未变：保留 selected 引用，只前移 storeSnapshot 指针
+      cacheRef.current = {
+        storeSnapshot,
+        selected: cache.selected,
+      };
+      return cache.selected;
+    }
+    cacheRef.current = {
+      storeSnapshot,
+      selected: nextSelected,
     };
-  }, [isEqual, selector]);
+    return nextSelected;
+  }, []);
 
-  return useSyncExternalStore(
-    selectedStore.subscribeSelected,
-    selectedStore.getSelectedSnapshot,
-    selectedStore.getSelectedSnapshot,
-  );
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
