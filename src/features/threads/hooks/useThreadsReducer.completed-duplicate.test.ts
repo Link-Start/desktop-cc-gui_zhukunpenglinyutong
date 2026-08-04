@@ -348,6 +348,218 @@ describe("threadReducer completed duplicate collapse", () => {
     expect(messages.map((message) => message.text)).toEqual([first, second]);
   });
 
+  it("late complete after resetAgentSegment does not remount conclusion onto pre-tool bare id", () => {
+    // Repro: same provider itemId across tool-separated segments.
+    // Streaming builds agent-1 then agent-1-seg-1; resetAgentSegment → 0;
+    // late completeAgentMessage(agent-1, conclusion) used to merge into agent-1
+    // (before tools). Settlement lookup must prefer agent-1-seg-1.
+    const preTool = "先读一下相关模块。";
+    const conclusion =
+      "我的建议走方案 A——改动最小、风险最低。GS1 CN 模块已有完整远端同步删除逻辑。";
+    const withPre = threadReducer(initialState, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "claude:session-1",
+      itemId: "agent-msg",
+      delta: preTool,
+      hasCustomName: true,
+    });
+    const withSeg = threadReducer(withPre, {
+      type: "incrementAgentSegment",
+      threadId: "claude:session-1",
+    });
+    const withTool = threadReducer(withSeg, {
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "claude:session-1",
+      item: {
+        id: "tool-search-1",
+        kind: "tool",
+        toolType: "mcpToolCall",
+        title: "Search",
+        detail: "",
+        status: "completed",
+      },
+      hasCustomName: true,
+    });
+    const withPostShell = threadReducer(withTool, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "claude:session-1",
+      itemId: "agent-msg",
+      delta: "建壳",
+      hasCustomName: true,
+    });
+    const afterReset = threadReducer(withPostShell, {
+      type: "resetAgentSegment",
+      threadId: "claude:session-1",
+    });
+    const afterLateComplete = threadReducer(afterReset, {
+      type: "completeAgentMessage",
+      workspaceId: "ws-1",
+      threadId: "claude:session-1",
+      itemId: "agent-msg",
+      text: conclusion,
+      hasCustomName: true,
+    });
+
+    const items = afterLateComplete.itemsByThread["claude:session-1"] ?? [];
+    const assistantTexts = items
+      .filter(
+        (item): item is Extract<ConversationItem, { kind: "message" }> =>
+          item.kind === "message" && item.role === "assistant",
+      )
+      .map((item) => ({ id: item.id, text: item.text }));
+    const toolIndex = items.findIndex((item) => item.kind === "tool");
+    const preIndex = items.findIndex(
+      (item) => item.kind === "message" && item.id === "agent-msg",
+    );
+    const postIndex = items.findIndex(
+      (item) => item.kind === "message" && item.id === "agent-msg-seg-1",
+    );
+
+    expect(toolIndex).toBeGreaterThan(-1);
+    expect(preIndex).toBeGreaterThan(-1);
+    expect(postIndex).toBeGreaterThan(-1);
+    expect(preIndex).toBeLessThan(toolIndex);
+    expect(postIndex).toBeGreaterThan(toolIndex);
+    expect(assistantTexts.find((row) => row.id === "agent-msg")?.text).toBe(
+      preTool,
+    );
+    expect(
+      assistantTexts.find((row) => row.id === "agent-msg-seg-1")?.text,
+    ).toContain(conclusion);
+    expect(assistantTexts.find((row) => row.id === "agent-msg")?.text).not.toContain(
+      "方案 A",
+    );
+  });
+
+  it("late appendAgentDelta after resetAgentSegment appends to post-tool segment not pre-tool", () => {
+    const preTool = "开场说明。";
+    const withPre = threadReducer(initialState, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "claude:session-2",
+      itemId: "agent-msg",
+      delta: preTool,
+      hasCustomName: true,
+    });
+    const withSeg = threadReducer(withPre, {
+      type: "incrementAgentSegment",
+      threadId: "claude:session-2",
+    });
+    const withTool = threadReducer(withSeg, {
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "claude:session-2",
+      item: {
+        id: "tool-1",
+        kind: "tool",
+        toolType: "commandExecution",
+        title: "Read",
+        detail: "",
+        status: "completed",
+      },
+      hasCustomName: true,
+    });
+    const withPostShell = threadReducer(withTool, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "claude:session-2",
+      itemId: "agent-msg",
+      delta: "壳",
+      hasCustomName: true,
+    });
+    const afterReset = threadReducer(withPostShell, {
+      type: "resetAgentSegment",
+      threadId: "claude:session-2",
+    });
+    const afterLateAppend = threadReducer(afterReset, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "claude:session-2",
+      itemId: "agent-msg",
+      delta: " 终稿尾巴",
+      hasCustomName: true,
+    });
+
+    const items = afterLateAppend.itemsByThread["claude:session-2"] ?? [];
+    const pre = items.find(
+      (item) => item.kind === "message" && item.id === "agent-msg",
+    ) as Extract<ConversationItem, { kind: "message" }> | undefined;
+    const post = items.find(
+      (item) => item.kind === "message" && item.id === "agent-msg-seg-1",
+    ) as Extract<ConversationItem, { kind: "message" }> | undefined;
+
+    expect(pre?.text).toBe(preTool);
+    expect(post?.text).toContain("终稿尾巴");
+    expect(pre?.text).not.toContain("终稿尾巴");
+  });
+
+  it("flushAgentCompletedBatch after reset also targets post-tool segment", () => {
+    const conclusion = "方案 B：增强删除安全约束。";
+    const withPre = threadReducer(initialState, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "claude:session-3",
+      itemId: "agent-msg",
+      delta: "先查。",
+      hasCustomName: true,
+    });
+    const withSeg = threadReducer(withPre, {
+      type: "incrementAgentSegment",
+      threadId: "claude:session-3",
+    });
+    const withTool = threadReducer(withSeg, {
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "claude:session-3",
+      item: {
+        id: "tool-1",
+        kind: "tool",
+        toolType: "mcpToolCall",
+        title: "Search",
+        detail: "",
+        status: "completed",
+      },
+      hasCustomName: true,
+    });
+    const withPostShell = threadReducer(withTool, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "claude:session-3",
+      itemId: "agent-msg",
+      delta: "壳",
+      hasCustomName: true,
+    });
+    const afterReset = threadReducer(withPostShell, {
+      type: "resetAgentSegment",
+      threadId: "claude:session-3",
+    });
+    const afterFlush = threadReducer(afterReset, {
+      type: "flushAgentCompletedBatch",
+      workspaceId: "ws-1",
+      threadId: "claude:session-3",
+      itemId: "agent-msg",
+      text: conclusion,
+      hasCustomName: true,
+      timestamp: Date.now(),
+      isActiveThread: true,
+    });
+
+    const items = afterFlush.itemsByThread["claude:session-3"] ?? [];
+    const pre = items.find(
+      (item) => item.kind === "message" && item.id === "agent-msg",
+    ) as Extract<ConversationItem, { kind: "message" }> | undefined;
+    const post = items.find(
+      (item) => item.kind === "message" && item.id === "agent-msg-seg-1",
+    ) as Extract<ConversationItem, { kind: "message" }> | undefined;
+
+    expect(pre?.text).toBe("先查。");
+    expect(post?.text).toContain("方案 B");
+    expect(pre?.text).not.toContain("方案 B");
+  });
+
   it("keeps similar codex assistant segments with different endings separate", () => {
     const first =
       "我会先检查 Computer Use 权限状态，然后确认系统设置入口是否打开。";

@@ -36,6 +36,7 @@ status: active
 | **「详情已延迟 / 渲染详情」**（对话/行级已下线；块级显示详情保留） | **§7.2** |
 | **滚动所有权 / 飞顶 / 结束离真底** | **§7.3** |
 | **Grok 实时读/写过程卡（jsonl 桥）** | **§5.1** · matrix |
+| **live settle 后结论跑到工具前（跨 CLI）** | [`live-settle-assistant-tool-order-2026-08-04.md`](./live-settle-assistant-tool-order-2026-08-04.md) |
 | 改 Shared 历史/发送观感 | §6、§9 |
 | 改代码从哪进 | §11 源码索引 |
 
