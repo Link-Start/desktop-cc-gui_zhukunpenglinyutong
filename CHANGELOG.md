@@ -6,7 +6,7 @@
 
 中文：
 
-这一版的主菜是「Git 历史看得清、设置钉上手、Shared / 子代理更稳」：Git Graph 仍在底部 half-dock（可拖高），内部接上多泳道提交图并加宽提交列，侧栏设置可 pin、工作区可右键改分组，应用图标可换肤并全平台品牌刷新，Git 变更支持批量 unstage / 丢弃，Claude 后台 Shell 不再被 5 秒宽限误杀，Shared 续接 / 附图 / 思考档位与子代理卡状态一并压实。
+这一版的主菜是「Git 历史看得清、设置钉上手、会话归属与 Shared / 子代理更稳」：Git Graph 仍在底部 half-dock（可拖高），内部接上多泳道提交图并加宽提交列，侧栏设置可 pin、工作区可右键改分组，应用图标可换肤并全平台品牌刷新，Git 变更支持批量 unstage / 丢弃，Claude 后台 Shell 不再被 5 秒宽限误杀；空工作区不再串入外项目历史，首页引擎 / 模型选择可持久恢复，Shared 续接 / 附图 / 思考档位与子代理卡状态一并压实。
 
 ✨ Features
 - Git Graph 工作台更密：底部 half-dock 历史面板保留可拖拽调高；面板内三列默认比例改为 4:11:5，提交列表更宽、信息更好读
@@ -29,6 +29,9 @@
 
 🐛 Fixes
 - 修复 Claude 后台 Shell / PowerShell 任务被 5 秒宽限误杀（issue #983）：stream 携带结构化 backgroundTaskId 时进入 WaitBgTasks 等待任务终态，期间禁止 grace tree-kill；任务清空后重新武装完整 5s 宽限（禁止 remaining=0 秒杀），Unix killpg / Windows taskkill 不再误杀合法后台任务与 MCP / Stop-hook 管道
+- 修复空 / 新建工作区串入外项目会话历史：OpenCode 改用 JSON 列表并按 `directory` 归属过滤；Claude 以 transcript `cwd` 为权威并失效旧缓存（scanner v5），收紧 CJK 编码路径前缀匹配；Gemini / Grok / Kimi 改为一向 ownership（会话路径须为工作区或其子路径），去掉反向 home 匹配，避免 Desktop 中文空文件夹继承 `$HOME` 下无关历史
+- 修复首页创建会话时 Grok / Kimi / OpenCode 等 Atomic 引擎闭合选择器长期停在「选择模型」：为全部 Atomic 引擎播种默认 ExecutionTarget（catalog 优先，空 catalog 时用 selectedModelId 合成），Shared 会话不自动 seed，避免跨会话污染
+- 修复首页 CLI 选择器与全局引擎不同步、重启后回落 Claude：home picker 变更会 publish 全局 engine；外部 restore / 回首页时丢弃 sticky creation target；首屏从 clientStorage 恢复上次引擎，避免先闪 Claude 再纠正
 - 收敛 Native 与 Shared 的 assistant 重复渲染：单气泡内 early-body 回显折叠；跨 itemId 的等价 complete / history upsert 统一收敛，短开场不误粘、文末短复述不误删
 - 修复子代理状态长期「运行中」、inspector 打开后不刷新：旁路加载的子会话 transcript 经 probe store 补洞并 re-enrich 小队卡 / StatusPanel，终态直推已打开抽屉
 - 修复 Shared 用户附图双气泡与刷新丢图：TurnRequested 写入 image_refs，投影与 dataSource 透传 images，optimistic / history 合并保图
@@ -49,7 +52,7 @@
 
 English:
 
-The headline of this release is a readable Git history, pinned settings, and steadier Shared / subagent surfaces: Git Graph stays a bottom half-dock (resizable height) with a multi-lane commit graph and a wider commit column, sidebar actions pin next to the gear and workspaces can be regrouped from the context menu, the app icon is switchable with a full brand refresh, the changes panel gains bulk unstage / discard, Claude background shell tasks survive the 5-second grace, and Shared resume / attachments / reasoning plus subagent card status get hardened.
+The headline of this release is a readable Git history, pinned settings, and steadier workspace ownership plus Shared / subagent surfaces: Git Graph stays a bottom half-dock (resizable height) with a multi-lane commit graph and a wider commit column, sidebar actions pin next to the gear and workspaces can be regrouped from the context menu, the app icon is switchable with a full brand refresh, the changes panel gains bulk unstage / discard, Claude background shell tasks survive the 5-second grace; empty workspaces no longer inherit foreign session history, the home engine / model picker restores across restarts, and Shared resume / attachments / reasoning plus subagent card status get hardened.
 
 ✨ Features
 - Denser Git Graph workbench: the history panel remains a bottom half-dock with a drag resize handle; the in-panel three-column default ratio becomes 4:11:5 so the commit list is wider and messages stay readable
@@ -72,6 +75,9 @@ The headline of this release is a readable Git history, pinned settings, and ste
 
 🐛 Fixes
 - Fixed Claude background Shell / PowerShell tasks being killed by the 5-second grace (issue #983): when the stream carries a structured backgroundTaskId the reader enters WaitBgTasks and waits for task terminal states with grace tree-kill disabled; once tasks drain, the full 5s grace re-arms (no remaining=0 instant kill), so Unix killpg / Windows taskkill no longer kill legitimate background tasks or MCP / Stop-hook pipelines
+- Fixed empty / newly created workspaces inheriting foreign session history: OpenCode lists sessions as JSON and filters by `directory` ownership; Claude treats transcript `cwd` as authoritative and invalidates old caches (scanner v5), with tighter CJK encoded-path prefix matching; Gemini / Grok / Kimi use one-way ownership (session path must be the workspace or a child) and drop reverse home matching so Chinese Desktop empty folders no longer inherit unrelated `$HOME` history
+- Fixed the home create-session closed picker stuck on "select model" for Atomic engines such as Grok / Kimi / OpenCode: seed a default ExecutionTarget for every Atomic engine (catalog preferred; synthesize from selectedModelId when the catalog is empty); Shared sessions never auto-seed to avoid cross-session contamination
+- Fixed the home CLI picker drifting from the global engine and falling back to Claude after restart: choosing an engine on the home picker publishes the global selection; external restore / return-to-home drops the sticky creation target; first paint restores the last engine from client storage so Claude no longer flashes first
 - Converged Native and Shared assistant duplicate rendering: fold early-body echo inside a single bubble; converge equivalent complete / history upserts across item ids without gluing short openers or dropping short trailing restatements
 - Fixed subagent rows stuck on "running" and inspectors that never refreshed after open: bypass-loaded child transcripts feed a probe store that re-enriches squad cards / StatusPanel and pushes terminal status into the open drawer
 - Fixed Shared user attachment double-bubbles and images lost on reload: TurnRequested writes image_refs, projection and dataSource pass images through, and optimistic / history merge keeps attachments

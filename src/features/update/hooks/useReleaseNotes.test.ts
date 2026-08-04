@@ -6,7 +6,7 @@ import {
   type ReleaseNotesEntry,
 } from "./useReleaseNotes";
 
-const changelogSample = `
+const changelogSampleH5EnglishFirst = `
 # Changelog
 
 ---
@@ -34,6 +34,35 @@ English:
 - 上一个版本
 `;
 
+/** Matches current repo CHANGELOG: ### headings, 中文 before English. */
+const changelogSampleH3ChineseFirst = `
+# Changelog
+
+---
+
+### **2026年8月4日（v0.7.16）**
+
+中文：
+
+✨ Features
+- Git Graph 工作台更密
+
+English:
+
+✨ Features
+- Denser Git Graph workbench
+
+---
+
+### **2026年8月3日（v0.7.15）**
+
+中文：
+- 上一版中文
+
+English:
+- Previous English
+`;
+
 describe("normalizeReleaseVersion", () => {
   it("strips leading v prefix and trims whitespace", () => {
     expect(normalizeReleaseVersion(" v0.2.4 ")).toBe("0.2.4");
@@ -48,8 +77,8 @@ describe("normalizeReleaseVersion", () => {
 });
 
 describe("parseChangelogEntries", () => {
-  it("extracts bilingual sections from changelog markdown", () => {
-    const entries = parseChangelogEntries(changelogSample);
+  it("extracts bilingual sections from ##### headings (English first)", () => {
+    const entries = parseChangelogEntries(changelogSampleH5EnglishFirst);
 
     expect(entries).toHaveLength(2);
     expect(entries[0]).toEqual(
@@ -61,6 +90,26 @@ describe("parseChangelogEntries", () => {
     );
     expect(entries[0]?.englishBody).toContain("Add release notes modal");
     expect(entries[0]?.chineseBody).toContain("新增版本记录弹窗");
+    expect(entries[0]?.englishBody).not.toContain("新增版本记录弹窗");
+    expect(entries[0]?.chineseBody).not.toContain("Add release notes modal");
+  });
+
+  it("parses ### headings with 中文 section before English", () => {
+    const entries = parseChangelogEntries(changelogSampleH3ChineseFirst);
+
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toEqual(
+      expect.objectContaining({
+        tagName: "v0.7.16",
+        version: "0.7.16",
+        dateLabel: "2026/08/04",
+      }),
+    );
+    expect(entries[0]?.chineseBody).toContain("Git Graph 工作台更密");
+    expect(entries[0]?.englishBody).toContain("Denser Git Graph workbench");
+    expect(entries[0]?.chineseBody).not.toContain("Denser Git Graph workbench");
+    expect(entries[0]?.englishBody).not.toContain("Git Graph 工作台更密");
+    expect(entries[1]?.version).toBe("0.7.15");
   });
 });
 
