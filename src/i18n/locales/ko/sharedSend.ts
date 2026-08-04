@@ -62,6 +62,23 @@ const sharedSend = {
     selectionPersistFailedTitle: "선택한 전송 대상을 저장하지 못했습니다",
     selectionPersistFailedMessage:
       "현재 선택은 메모리에 유지되지만 다시 시작하면 이전 전송 대상이 사용될 수 있습니다: {{reason}}",
+    recoveryStop: "Stop delivery",
+    recoveryStopHint: "Ask the runtime to stop the in-flight attempt. The session stays locked until you settle or rebuild.",
+    recoveryStopAndRebuild: "Stop and rebuild",
+    recoveryStopAndRebuildHint: "Stop the runtime-owned attempt when needed, then archive the binding and prepare a new connection.",
+    recoveryAbandon: "Abandon this turn",
+    recoveryAbandonHint: "Durably cancel the unresolved turn and unlock the session. Does not delete the conversation.",
+    recoveryAbandonConfirm: "Abandon this unresolved turn and unlock the shared session? The turn will be marked cancelled. The conversation itself is kept.",
+    recoveryStopNoAttempt: "No in-flight attempt to stop. Use check status, rebuild, or abandon instead.",
+    recoveryHintAfterStop: "Delivery stop was requested. Check status, stop and rebuild, or abandon this turn to finish unlocking.",
+    recoveryErrorActive: "The runtime still owns this attempt. Stop delivery first, then rebuild—or abandon this turn.",
+    recoveryErrorActiveRequiresStop: "The runtime still owns this attempt. Stop delivery before abandoning, or confirm force-stop when abandoning.",
+    recoveryErrorAmbiguous: "Multiple unresolved owners were found. Recovery cannot safely continue automatically; contact support with session details if this persists.",
+    recoveryErrorOwnerMissing: "No matching unresolved attempt was found. Try check status; the session may already be clear.",
+    recoveryErrorEmptyContextHandoff:
+      "공유 컨텍스트를 다시 구성할 수 없습니다. 중지 후 재구축하거나 다른 대상으로 전환한 뒤 다시 보내세요.",
+    recoveryTechDetail: "technical detail available",
+    targetUnavailableHint: "Switch to another target in the picker, then send again.",
     cancel: "취소",
   },
 };

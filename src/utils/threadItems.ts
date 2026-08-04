@@ -5,6 +5,7 @@ import {
   withMessagePresentationMetadata,
 } from "../features/threads/assembly/conversationNormalization";
 import {
+  extractCollabReceiversFromToolPayload,
   formatCollabAgentStates,
   normalizeCollabAgentStatusMap,
 } from "./collabToolParsing";
@@ -362,14 +363,6 @@ function shouldPreserveToolDetail(item: Extract<ConversationItem, { kind: "tool"
     return true;
   }
   return false;
-}
-
-function normalizeStringList(value: unknown) {
-  if (Array.isArray(value)) {
-    return value.map((entry) => asString(entry)).filter(Boolean);
-  }
-  const single = asString(value);
-  return single ? [single] : [];
 }
 
 function stringifyUnknown(value: unknown): string {
@@ -734,11 +727,120 @@ export function __getPrepareThreadItemsCallCountForTests() {
   return prepareThreadItemsCallCountForTests;
 }
 
+/**
+ * Index at which a newly observed tool should be inserted so late tools do not
+ * land after a **settled** trailing assistant conclusion.
+ *
+ * Failure mode (Grok jsonl bridge / any late ToolStarted after complete):
+ * assistant already `isFinal`, tools append at list end → "结论在工具前".
+ * History rebuilds correctly; reopen appears fixed.
+ *
+ * Mid-stream tools after a **non-final** preamble must still append after that
+ * preamble so segment++ can place post-tool text after tools
+ * (`[preamble, tool, conclusion]`). Only pull tools before trailing assistants
+ * when those assistants are already final.
+ *
+ * @see openspec/changes/fix-live-settle-assistant-tool-order
+ * @see docs/analysis/live-settle-assistant-tool-order-2026-08-04.md
+ */
+export function findToolInsertIndexBeforeTrailingAssistants(
+  list: ConversationItem[],
+): number {
+  let insertAt = list.length;
+  let sawFinalTrailingAssistant = false;
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const entry = list[index];
+    if (!entry) {
+      continue;
+    }
+    if (entry.kind === "reasoning") {
+      // Trailing reasoning may sit after a final assistant; keep walking back.
+      insertAt = index;
+      continue;
+    }
+    if (entry.kind === "message" && entry.role === "assistant") {
+      if (entry.isFinal === true) {
+        sawFinalTrailingAssistant = true;
+        insertAt = index;
+        continue;
+      }
+      // Live non-final preamble / in-flight shell: keep append-at-end.
+      return list.length;
+    }
+    break;
+  }
+  return sawFinalTrailingAssistant ? insertAt : list.length;
+}
+
+/**
+ * After assistants become final, tools that were appended at the list tail
+ * (late ToolStarted while the bubble was still non-final) sit after the
+ * conclusion. Move that trailing tool run before the contiguous final
+ * assistant/reasoning trailer. No-op when the list already ends on an
+ * assistant or when no final assistant precedes the trailing tools.
+ */
+export function rebalanceTrailingToolsBeforeFinalAssistants(
+  list: ConversationItem[],
+): ConversationItem[] {
+  if (list.length < 2) {
+    return list;
+  }
+  let cursor = list.length - 1;
+  while (cursor >= 0 && list[cursor]?.kind === "tool") {
+    cursor -= 1;
+  }
+  const toolsStart = cursor + 1;
+  if (toolsStart >= list.length) {
+    return list;
+  }
+
+  let sawFinalAssistant = false;
+  while (cursor >= 0) {
+    const entry = list[cursor];
+    if (!entry) {
+      break;
+    }
+    if (entry.kind === "reasoning") {
+      cursor -= 1;
+      continue;
+    }
+    if (entry.kind === "message" && entry.role === "assistant") {
+      if (entry.isFinal === true) {
+        sawFinalAssistant = true;
+        cursor -= 1;
+        continue;
+      }
+      break;
+    }
+    break;
+  }
+  if (!sawFinalAssistant) {
+    return list;
+  }
+  const blockStart = cursor + 1;
+  if (blockStart >= toolsStart) {
+    return list;
+  }
+
+  const prefix = list.slice(0, blockStart);
+  const assistantBlock = list.slice(blockStart, toolsStart);
+  const trailingTools = list.slice(toolsStart);
+  return [...prefix, ...trailingTools, ...assistantBlock];
+}
+
 export function upsertItem(list: ConversationItem[], item: ConversationItem) {
   const index = list.findIndex(
     (entry) => entry.id === item.id && entry.kind === item.kind,
   );
   if (index === -1) {
+    if (item.kind === "tool") {
+      const insertAt = findToolInsertIndexBeforeTrailingAssistants(list);
+      if (insertAt < list.length) {
+        const next = list.slice();
+        next.splice(insertAt, 0, item);
+        return next;
+      }
+    }
     return [...list, item];
   }
   const next = [...list];
@@ -1088,11 +1190,8 @@ export function buildConversationItem(
     const tool = asString(item.tool ?? "");
     const status = asString(item.status ?? "");
     const sender = asString(item.senderThreadId ?? item.sender_thread_id ?? "");
-    const receivers = [
-      ...normalizeStringList(item.receiverThreadId ?? item.receiver_thread_id),
-      ...normalizeStringList(item.receiverThreadIds ?? item.receiver_thread_ids),
-      ...normalizeStringList(item.newThreadId ?? item.new_thread_id),
-    ];
+    // Live 与 history 对齐：targets / ids / arguments；禁止把 call id 当 agent
+    const receivers = extractCollabReceiversFromToolPayload(item);
     const prompt = asString(item.prompt ?? "");
     const normalizedAgentStatus = normalizeCollabAgentStatusMap(
       item.agentStatus ?? item.agentsStates ?? item.agents_states,

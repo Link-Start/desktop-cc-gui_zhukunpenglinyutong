@@ -2,7 +2,10 @@ export default {
   subagentUi: {
     squadAria: "Subagent squad",
     squadTitle: "{{completed}}/{{total}} agents",
+    squadTitleCount: "{{total}} agents",
+
     squadFallbackTitle: "Parallel subagents",
+    defaultName: "Subagent",
     badge: "SubAgent",
     claudeLaunchNoSession:
       "Claude Agent launch ack detected, but no claude:subagent session is linked yet (native owner may still be binding/indexing). Retry later or open the subagent from the session tree.",
@@ -16,6 +19,11 @@ export default {
     noSessionYet:
       "No linked subagent session yet (agentId missing or transcript still indexing). Open the subagent row in the session tree.",
 
+    statusShort: {
+      completed: "done",
+      running: "running",
+      error: "failed",
+    },
     status: {
       running: "Running",
       completed: "Completed",

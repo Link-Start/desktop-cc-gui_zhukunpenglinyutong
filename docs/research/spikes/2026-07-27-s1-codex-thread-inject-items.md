@@ -1,3 +1,12 @@
+---
+type: evidence
+status: historical
+---
+
+<!-- DOC-LIFECYCLE: historical-reproducible-evidence -->
+> [!NOTE]
+> **Lifecycle: Historical reproducible spike evidence.** 结论只对报告记录的 CLI binary/version/schema 有效。CLI 或 protocol version 变化后必须重跑对应 harness，旧报告不得自动升级为 current capability claim。
+
 # S1 Spike：Codex CLI 0.144.6 `thread/inject_items` 实测报告
 
 - **探测日期**：2026-07-27

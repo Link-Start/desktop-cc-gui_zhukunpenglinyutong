@@ -24,6 +24,7 @@ import {
   type EngineProviderProfileOption,
 } from "../../../../threads/constants/codexProviderProfiles";
 import type { ModelInfo, ProviderId } from "../types";
+import { enrichModelInfoWithAtomicReasoning } from "../../../../models/atomicModelReasoning";
 import { useCliEngineVisibility } from "../../../hooks/cliEngineVisibilityStore";
 
 // Native 单栏与 Atomic 双栏共享不可变 cache primitives，但拥有独立 hook state/input contract。
@@ -279,8 +280,9 @@ function initialLoadedModels(
 
 function toModelInfo(
   model: Awaited<ReturnType<typeof getEngineModels>>[number],
+  engine?: EngineType,
 ): ModelInfo {
-  return {
+  const base: ModelInfo = {
     id: model.id,
     model: model.model,
     label: model.displayName || model.id,
@@ -288,6 +290,7 @@ function toModelInfo(
     source: model.source,
     providerProfileId: model.providerProfileId ?? undefined,
   };
+  return enrichModelInfoWithAtomicReasoning(engine ?? null, base);
 }
 
 function modelRuntimeIdentity(model: ModelInfo): string {
@@ -518,7 +521,7 @@ function useProviderTargetCatalogOwner({
               ? { forceRefresh: true }
               : {}),
           })
-            .then((models) => models.map(toModelInfo))
+            .then((models) => models.map((entry) => toModelInfo(entry, engine)))
             .finally(() => {
               modelCatalogRequests.delete(requestKey);
             });
@@ -597,7 +600,7 @@ function useProviderTargetCatalogOwner({
           const models = (await getEngineModels(engine, {
             providerProfileId,
             forceRefresh: true,
-          })).map(toModelInfo);
+          })).map((entry) => toModelInfo(entry, engine));
           modelCatalogCache.set(key, models);
           if (
             mode === "shared" &&
@@ -611,7 +614,12 @@ function useProviderTargetCatalogOwner({
 
         const models = extractCodexDiscoveredModels(
           await discoverCodexModels(workspaceId!.trim(), providerProfileId),
-        ).map((model) => ({ ...model, providerProfileId }));
+        ).map((model) =>
+          enrichModelInfoWithAtomicReasoning("codex", {
+            ...model,
+            providerProfileId,
+          }),
+        );
         discoveredModelCatalogCache.set(key, models);
         setLoadedModels((current) => ({ ...current }));
       } catch (error) {

@@ -63,6 +63,7 @@ import type {
   ThreadSummary,
   ThreadTokenUsage,
   TurnPlan,
+  WorkspaceGroup,
   WorkspaceInfo,
 } from "../../../types";
 import type { EngineDisplayInfo } from "../../engine/hooks/useEngineController";
@@ -278,6 +279,11 @@ export type LayoutNodesFlatOptions = {
   onDeleteWorkspace: (workspaceId: string) => void;
   onDeleteWorktree: (workspaceId: string) => void;
   onRenameWorkspaceAlias: (workspace: WorkspaceInfo) => void;
+  workspaceGroups?: WorkspaceGroup[];
+  onAssignWorkspaceGroup?: (
+    workspaceId: string,
+    groupId: string | null,
+  ) => void | Promise<unknown>;
   onLoadOlderThreads: (workspaceId: string) => void;
   onReloadWorkspaceThreads: (
     workspaceId: string,
@@ -519,8 +525,11 @@ export type LayoutNodesFlatOptions = {
   onPickGitRoot: () => void | Promise<void>;
   onStageGitAll: () => Promise<void>;
   onStageGitFile: (path: string) => Promise<void>;
+  onUnstageGitAll: () => Promise<void>;
   onUnstageGitFile: (path: string) => Promise<void>;
+  onUnstageGitPaths: (paths: string[]) => Promise<void>;
   onRevertGitFile: (path: string) => Promise<void>;
+  onRevertGitPaths: (paths: string[]) => Promise<void>;
   onRevertAllGitChanges: () => Promise<void>;
   gitDiffs: GitDiffViewerItem[];
   gitDiffLoading: boolean;
@@ -555,7 +564,10 @@ export type LayoutNodesFlatOptions = {
   onRefreshRepositoryStatuses?: () => Promise<void> | void;
   onStageRepositoryFile?: (repositoryRoot: string, path: string) => Promise<void>;
   onUnstageRepositoryFile?: (repositoryRoot: string, path: string) => Promise<void>;
+  onUnstageRepositoryAll?: (repositoryRoot: string) => Promise<void>;
+  onUnstageRepositoryFiles?: (repositoryRoot: string, paths: string[]) => Promise<void>;
   onRevertRepositoryFile?: (repositoryRoot: string, path: string) => Promise<void>;
+  onRevertRepositoryFiles?: (repositoryRoot: string, paths: string[]) => Promise<void>;
   onStageRepositoryAll?: (repositoryRoot: string) => Promise<void>;
   onCommitRepositories?: (selections: RepositoryCommitSelection[]) => Promise<void> | void;
   repositoryCommitSummary?: string | null;
@@ -657,6 +669,7 @@ export type LayoutNodesFlatOptions = {
   onDeleteQueued: (id: string) => void;
   onFuseQueued: (id: string) => void | Promise<void>;
   canFuseActiveQueue: boolean;
+  fuseDisabledReasonKey?: string | null;
   activeFusingMessageId: string | null;
   collaborationModes: CollaborationModeOption[];
   collaborationModesEnabled: boolean;
@@ -874,6 +887,8 @@ export type ChromeLayoutNodesOptions = Pick<
   | "onDeleteWorkspace"
   | "onDeleteWorktree"
   | "onRenameWorkspaceAlias"
+  | "workspaceGroups"
+  | "onAssignWorkspaceGroup"
   | "onLoadOlderThreads"
   | "onQuickReloadWorkspaceThreads"
   | "onReloadWorkspaceThreads"
@@ -1036,8 +1051,11 @@ export type GitLayoutNodesOptions = Pick<
   | "onPickGitRoot"
   | "onStageGitAll"
   | "onStageGitFile"
+  | "onUnstageGitAll"
   | "onUnstageGitFile"
+  | "onUnstageGitPaths"
   | "onRevertGitFile"
+  | "onRevertGitPaths"
   | "onRevertAllGitChanges"
   | "gitDiffs"
   | "gitDiffLoading"
@@ -1070,7 +1088,10 @@ export type GitLayoutNodesOptions = Pick<
   | "onRefreshRepositoryStatuses"
   | "onStageRepositoryFile"
   | "onUnstageRepositoryFile"
+  | "onUnstageRepositoryAll"
+  | "onUnstageRepositoryFiles"
   | "onRevertRepositoryFile"
+  | "onRevertRepositoryFiles"
   | "onStageRepositoryAll"
   | "onCommitRepositories"
   | "repositoryCommitSummary"
@@ -1138,6 +1159,7 @@ export type ComposerLayoutNodesOptions = Pick<
   | "onDeleteQueued"
   | "onFuseQueued"
   | "canFuseActiveQueue"
+  | "fuseDisabledReasonKey"
   | "activeFusingMessageId"
   | "collaborationModes"
   | "collaborationModesEnabled"

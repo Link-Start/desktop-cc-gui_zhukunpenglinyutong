@@ -5,6 +5,7 @@ import type {
   EngineType,
   RateLimitSnapshot,
   ThreadSummary,
+  WorkspaceGroup as WorkspaceGroupConfig,
   WorkspaceInfo,
 } from "../../../types";
 import type { SharedSessionSupportedEngine } from "../../shared-session/utils/sharedSessionEngines";
@@ -79,7 +80,6 @@ import {
   type WorkspaceThreadRows,
 } from "./sidebarInternals";
 import ChevronsDownUp from "lucide-react/dist/esm/icons/chevrons-down-up";
-import Copy from "lucide-react/dist/esm/icons/copy";
 import ArrowRight from "lucide-react/dist/esm/icons/arrow-right";
 import Eye from "lucide-react/dist/esm/icons/eye";
 import EyeOff from "lucide-react/dist/esm/icons/eye-off";
@@ -88,6 +88,7 @@ import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import House from "lucide-react/dist/esm/icons/house";
 import Blocks from "lucide-react/dist/esm/icons/blocks";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
+import LayoutGrid from "lucide-react/dist/esm/icons/layout-grid";
 import Pencil from "lucide-react/dist/esm/icons/pencil";
 import Store from "lucide-react/dist/esm/icons/store";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2";
@@ -215,6 +216,11 @@ type SidebarProps = {
   onDeleteWorkspace: (workspaceId: string) => void;
   onDeleteWorktree: (workspaceId: string) => void;
   onRenameWorkspaceAlias: (workspace: WorkspaceInfo) => void;
+  workspaceGroups?: WorkspaceGroupConfig[];
+  onAssignWorkspaceGroup?: (
+    workspaceId: string,
+    groupId: string | null,
+  ) => void | Promise<unknown>;
   onLoadOlderThreads: (workspaceId: string) => void;
   onReloadWorkspaceThreads: (
     workspaceId: string,
@@ -292,7 +298,7 @@ function SidebarImpl({
   onRefreshEngineOptions,
   onAddSharedAgent,
   onAddWorktreeAgent,
-  onAddCloneAgent,
+  onAddCloneAgent: _onAddCloneAgent,
   onOpenClaudeTui,
   onToggleWorkspaceCollapse,
   onSelectThread,
@@ -316,6 +322,8 @@ function SidebarImpl({
   onDeleteWorkspace,
   onDeleteWorktree,
   onRenameWorkspaceAlias,
+  workspaceGroups = [],
+  onAssignWorkspaceGroup,
   onLoadOlderThreads,
   onReloadWorkspaceThreads,
   onQuickReloadWorkspaceThreads,
@@ -1037,8 +1045,9 @@ function SidebarImpl({
       onDeleteWorkspace,
       onDeleteWorktree,
       onRenameWorkspaceAlias,
+      workspaceGroups,
+      onAssignWorkspaceGroup,
       onAddWorktreeAgent,
-      onAddCloneAgent,
     });
   const normalizedQuery = debouncedQuery.trim().toLowerCase();
 
@@ -1083,12 +1092,12 @@ function SidebarImpl({
         return <SharedSessionIcon size={13} />;
       case "alias":
         return <Pencil size={13} />;
+      case "assign-group":
+        return <LayoutGrid size={13} />;
       case "remove":
         return <Trash2 size={13} />;
       case "new-worktree":
         return <GitBranch size={13} />;
-      case "new-clone":
-        return <Copy size={13} />;
       default:
         return null;
     }

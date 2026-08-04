@@ -235,4 +235,74 @@ describe("useStatusPanelData helpers", () => {
       threadId: "agent-7",
     });
   });
+
+  it("seeds Codex Agents from child tree when wait collab has no receiver ids", () => {
+    const waitTool: ConversationItem = {
+      id: "wait-1",
+      kind: "tool",
+      toolType: "collabToolCall",
+      title: "Collab: wait",
+      detail: "",
+      status: "running",
+      // no receiverThreadIds — live wait 残缺
+    };
+
+    const { result } = renderHook(() =>
+      useStatusPanelData([waitTool], {
+        isCodexEngine: true,
+        activeEngine: "codex",
+        activeThreadId: "parent-root",
+        itemsByThread: {
+          "parent-root": [waitTool],
+          "agent-a": [],
+          "agent-b": [],
+        },
+        threadParentById: {
+          "agent-a": "parent-root",
+          "agent-b": "parent-root",
+        },
+        threadStatusById: {
+          "agent-a": { isProcessing: true },
+          "agent-b": { isProcessing: false },
+        },
+      }),
+    );
+
+    expect(result.current.subagentTotal).toBe(2);
+    expect(result.current.subagents.map((entry) => entry.id).sort()).toEqual([
+      "agent-a",
+      "agent-b",
+    ]);
+    expect(
+      result.current.subagents.find((entry) => entry.id === "agent-a")?.status,
+    ).toBe("running");
+  });
+
+  it("does not seed child-tree Agents for non-Codex engines", () => {
+    const waitTool: ConversationItem = {
+      id: "wait-1",
+      kind: "tool",
+      toolType: "collabToolCall",
+      title: "Collab: wait",
+      detail: "",
+      status: "running",
+    };
+
+    const { result } = renderHook(() =>
+      useStatusPanelData([waitTool], {
+        isCodexEngine: false,
+        activeEngine: "claude",
+        activeThreadId: "parent-root",
+        itemsByThread: {
+          "parent-root": [waitTool],
+          "child-1": [],
+        },
+        threadParentById: {
+          "child-1": "parent-root",
+        },
+      }),
+    );
+
+    expect(result.current.subagentTotal).toBe(0);
+  });
 });

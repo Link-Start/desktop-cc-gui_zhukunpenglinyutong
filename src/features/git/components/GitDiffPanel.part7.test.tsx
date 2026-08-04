@@ -310,11 +310,13 @@ describe("GitDiffPanel", () => {
     });
 
   it("keeps tree mode unstage-all action behavior", async () => {
+      const onUnstageAllChanges = vi.fn();
       const onUnstageFile = vi.fn();
       render(
         <GitDiffPanel
           {...baseProps}
           gitDiffListView="tree"
+          onUnstageAllChanges={onUnstageAllChanges}
           onUnstageFile={onUnstageFile}
           stagedFiles={[
             { path: "src/a.ts", status: "M", additions: 1, deletions: 0 },
@@ -328,8 +330,31 @@ describe("GitDiffPanel", () => {
       );
 
       await waitFor(() => {
-        expect(onUnstageFile).toHaveBeenNthCalledWith(1, "src/a.ts");
-        expect(onUnstageFile).toHaveBeenNthCalledWith(2, "src/b.ts");
+        expect(onUnstageAllChanges).toHaveBeenCalledTimes(1);
+      });
+      expect(onUnstageFile).not.toHaveBeenCalled();
+    });
+
+  it("falls back bulk unstage-all to onUnstageFiles when all-handler is absent", async () => {
+      const onUnstageFiles = vi.fn();
+      render(
+        <GitDiffPanel
+          {...baseProps}
+          gitDiffListView="tree"
+          onUnstageFiles={onUnstageFiles}
+          stagedFiles={[
+            { path: "src/a.ts", status: "M", additions: 1, deletions: 0 },
+            { path: "src/b.ts", status: "M", additions: 2, deletions: 0 },
+          ]}
+        />,
+      );
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Unstage all changes" }),
+      );
+
+      await waitFor(() => {
+        expect(onUnstageFiles).toHaveBeenCalledWith(["src/a.ts", "src/b.ts"]);
       });
     });
 

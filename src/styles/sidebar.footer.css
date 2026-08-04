@@ -46,7 +46,7 @@
   cursor: pointer;
   transition: all 0.15s ease;
   font-size: var(--sidebar-content-font-size);
-  font-weight: 350;
+  font-weight: 400;
   width: auto;
   flex-shrink: 0;
 }

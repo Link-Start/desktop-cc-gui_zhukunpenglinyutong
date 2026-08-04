@@ -539,8 +539,59 @@ pub(super) fn parse_opencode_updated_at(updated_label: &str, now: DateTime<Local
     parse_relative_updated_at_millis(trimmed, now)
 }
 
+#[derive(Debug, Deserialize)]
+struct OpenCodeSessionListJsonRow {
+    id: Option<String>,
+    title: Option<String>,
+    updated: Option<i64>,
+    directory: Option<String>,
+}
+
+/// Prefer OpenCode JSON list (`--format json`). Falls back to the table layout
+/// used by older CLI builds (no directory field).
 pub(super) fn parse_opencode_session_list(stdout: &str) -> Vec<OpenCodeSessionEntry> {
     let clean = strip_ansi_codes(stdout);
+    let trimmed = clean.trim();
+    if trimmed.starts_with('[') {
+        if let Ok(rows) = serde_json::from_str::<Vec<OpenCodeSessionListJsonRow>>(trimmed) {
+            return rows
+                .into_iter()
+                .filter_map(|row| {
+                    let session_id = row.id.unwrap_or_default();
+                    let session_id = session_id.trim();
+                    if session_id.is_empty() || !session_id.starts_with("ses_") {
+                        return None;
+                    }
+                    let title = row
+                        .title
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .unwrap_or("Untitled")
+                        .to_string();
+                    let updated_at = row.updated.filter(|value| *value > 0);
+                    let directory = row
+                        .directory
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .map(str::to_string);
+                    Some(OpenCodeSessionEntry {
+                        session_id: session_id.to_string(),
+                        title,
+                        updated_label: String::new(),
+                        updated_at,
+                        directory,
+                    })
+                })
+                .collect();
+        }
+    }
+
+    parse_opencode_session_list_table(&clean)
+}
+
+fn parse_opencode_session_list_table(clean: &str) -> Vec<OpenCodeSessionEntry> {
     let now = Local::now();
     let mut entries = Vec::new();
     for raw in clean.lines() {
@@ -579,7 +630,35 @@ pub(super) fn parse_opencode_session_list(stdout: &str) -> Vec<OpenCodeSessionEn
             title: title.to_string(),
             updated_label: updated.to_string(),
             updated_at: parse_opencode_updated_at(updated, now),
+            // Table layout has no directory evidence; callers must not treat these
+            // as workspace-owned without additional filtering.
+            directory: None,
         });
     }
     entries
+}
+
+/// Keep only OpenCode sessions whose recorded directory belongs to `workspace_path`.
+///
+/// OpenCode's `session list` for unregistered/empty folders falls back to the
+/// **global** project and returns foreign history (`/private/tmp`, home, etc.).
+/// Without this filter, empty workspaces show weeks of unrelated sessions.
+pub(super) fn filter_opencode_sessions_for_workspace(
+    entries: Vec<OpenCodeSessionEntry>,
+    workspace_path: &std::path::Path,
+) -> Vec<OpenCodeSessionEntry> {
+    entries
+        .into_iter()
+        .filter(|entry| {
+            let Some(directory) = entry
+                .directory
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            else {
+                return false;
+            };
+            crate::local_usage::path_matches_workspace(directory, workspace_path)
+        })
+        .collect()
 }

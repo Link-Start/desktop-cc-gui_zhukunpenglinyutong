@@ -1,3 +1,12 @@
+---
+type: guide
+status: active
+---
+
+<!-- DOC-LIFECYCLE: active-runbook -->
+> [!NOTE]
+> **Lifecycle: Current scoped runbook.** 本 SOP 只覆盖文中四个 legacy realtime flags；current registry 已有九项。新增 flags、backend env gate 与 `liveTextExternalization` 的权威定义以 `src/features/threads/utils/realtimePerfFlags.ts` 和相关 specs 为准。
+
 # Realtime CPU Optimization Rollout and Rollback SOP
 
 ## Scope

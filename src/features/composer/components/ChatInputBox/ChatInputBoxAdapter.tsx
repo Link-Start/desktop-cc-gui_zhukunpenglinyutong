@@ -202,7 +202,8 @@ function areQueuedMessagesEqual(
     if (
       leftMessage?.id !== rightMessage?.id ||
       leftMessage?.text !== rightMessage?.text ||
-      leftMessage?.createdAt !== rightMessage?.createdAt
+      leftMessage?.createdAt !== rightMessage?.createdAt ||
+      leftMessage?.sharedDispatchState !== rightMessage?.sharedDispatchState
     ) {
       return false;
     }
@@ -485,6 +486,7 @@ export interface ChatInputBoxAdapterProps {
   onDeleteQueued?: (id: string) => void;
   onFuseQueued?: (id: string) => void | Promise<void>;
   canFuseQueuedMessages?: boolean;
+  fuseDisabledReasonKey?: string | null;
   fusingQueuedMessageId?: string | null;
 
   // External keyboard handler (for Composer-level shortcuts)
@@ -1026,6 +1028,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       onDeleteQueued,
       onFuseQueued,
       canFuseQueuedMessages = false,
+      fuseDisabledReasonKey = null,
       fusingQueuedMessageId = null,
       files,
       customSkillDirectories,
@@ -1337,6 +1340,8 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         fullContent: q.text,
         queuedAt: q.createdAt,
         isFusing: q.id === fusingQueuedMessageId,
+        // Shared pending-ack：仅透传 UI 标识，队列出队逻辑不变
+        isPendingAck: q.sharedDispatchState === "pending-ack",
       }));
     }, [fusingQueuedMessageId, queuedMessages]);
 
@@ -2133,6 +2138,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         onRemoveFromQueue={onDeleteQueued}
         onFuseFromQueue={onFuseQueued}
         canFuseFromQueue={canFuseQueuedMessages}
+        fuseDisabledReasonKey={fuseDisabledReasonKey}
         fusingQueueMessageId={fusingQueuedMessageId}
         sdkInstalled={true}
         fileCompletionProvider={fileCompletionProvider}

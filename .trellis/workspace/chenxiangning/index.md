@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-31.md`
-- **Total Sessions**: 1306
-- **Last Active**: 2026-08-03
+- **Total Sessions**: 1334
+- **Last Active**: 2026-08-04
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-31.md` | ~278 | Active |
+| `journal-31.md` | ~1360 | Active |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
@@ -59,6 +59,34 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1334 | 2026-08-04 | 修复 PR 创建弹窗下拉被遮罩挡住 | `1a6ffab1f` | `CXN-version-0.7.16` |
+| 1333 | 2026-08-04 | 阻断 Shared 初始化回落 Native 思考档位 | `385d20e3a` | `CXN-version-0.7.16` |
+| 1332 | 2026-08-04 | 修复 Shared Atomic 模型与思考强度联动 | `cf7abdbf3` | `CXN-version-0.7.16` |
+| 1331 | 2026-08-04 | 修复 Composer rewind reset React #185 | `fa84f2dba`, `a59985654` | `CXN-version-0.7.16` |
+| 1330 | 2026-08-04 | fix Shared 上下文续接 resume-integrity | `165f0fda6` | `CXN-version-0.7.16` |
+| 1329 | 2026-08-04 | fix Shared 用户附图双气泡与历史丢图 | `b2a1ef000` | `CXN-version-0.7.16` |
+| 1328 | 2026-08-04 | 退役 Claude SubAgent 旧 Agent session 卡 | `9ac441d8f` | `CXN-version-0.7.16` |
+| 1327 | 2026-08-04 | SubAgent S10 卡收口：折叠收纳、去重与宽度自适应 | `2e381d204`, `c33a3f254` | `CXN-version-0.7.16` |
+| 1326 | 2026-08-04 | 修复子代理状态卡死与抽屉冻结 | `c33a3f254` | `CXN-version-0.7.16` |
+| 1325 | 2026-08-04 | fix assistant duplicate render Native/Shared | `379d9935b` | `CXN-version-0.7.16` |
+| 1324 | 2026-08-04 | fix(threads): live settlement order — 多工具回合 settle 后结论偶发跑到工具前 | `74654f1d6` | `CXN-version-0.7.16` |
+| 1323 | 2026-08-04 | fix React #185 Composer extract 自订阅 | `9c04f381a` | `CXN-version-0.7.16` |
+| 1322 | 2026-08-04 | fix Claude backgroundTaskId post-result grace mis-kill (#983) | `3724a114b` | `CXN-version-0.7.16` |
+| 1321 | 2026-08-04 | fix Shared 模型选择器 display authority | `a3a631a90` | `CXN-version-0.7.16` |
+| 1320 | 2026-08-04 | 修复 activeCanvasStore 测试 tsc 构建失败 | `9dc47c0b0` | `CXN-version-0.7.16` |
+| 1319 | 2026-08-04 | 对抗式 review 收口 React #185 canvas store / storm | `2afeadabf` | `CXN-version-0.7.16` |
+| 1318 | 2026-08-04 | docs: 重写新 CLI 接入指南, 补全量注册点核对矩阵 A~H 八层 56 行 | `f6858e821` | `CXN-version-0.7.16` |
+| 1317 | 2026-08-04 | 闭环 Shared 恢复出口 | `c4cb33daf` | `CXN-version-0.7.16` |
+| 1316 | 2026-08-04 | 修复 Shared 侧栏异步刷新 stale hide set 泄漏原生会话 | `e0f8c0aa7` | `CXN-version-0.7.16` |
+| 1315 | 2026-08-04 | 修复 dockIcon 测试 tsc 错误 | `8cfa50e6f` | `CXN-version-0.7.16` |
+| 1314 | 2026-08-04 | 跨平台应用图标切换 | `f3d57fac7` | `CXN-version-0.7.16` |
+| 1313 | 2026-08-03 | 收录轨道路由 Logo 示例 | `22164e20e` | `CXN-version-0.7.16` |
+| 1312 | 2026-08-03 | 文档信息架构治理 | `64b7a817f` | `CXN-version-0.7.16` |
+| 1311 | 2026-08-03 | Shared 队列 pending-ack UI 标识 | `1a6f7ea4a` | `CXN-version-0.7.16` |
+| 1310 | 2026-08-03 | Codex collab 子代理 live 与 history 呈现对齐 | `b725e011e` | `CXN-version-0.7.16` |
+| 1309 | 2026-08-03 | OpenSpec 第三波：归档已上线人工 residual 提案 | `5192d03df` | `CXN-version-0.7.16` |
+| 1308 | 2026-08-03 | OpenSpec 第二波 bulk archive 37 complete 提案 | `a8cd3f2f9` | `CXN-version-0.7.16` |
+| 1307 | 2026-08-03 | OpenSpec 批量归档已验证提案 | `d8bc34a6f` | `CXN-version-0.7.16` |
 | 1306 | 2026-08-03 | 适配 Shared MCP AskUserQuestion 工具卡 UI | `7c40eaaab` | `cxn-version-0.7.15` |
 | 1305 | 2026-08-03 | 修复 Shared Claude AskUserQuestion 弹窗与超时体验 | `87836b7cb` | `cxn-version-0.7.15` |
 | 1304 | 2026-08-03 | 修复 Codex 死 thread 恢复卡 Fork 静默失败 | `76951f6e2` | `cxn-version-0.7.15` |

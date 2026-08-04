@@ -126,9 +126,13 @@ pub(crate) async fn opencode_session_list_core(
     };
     let config = manager.get_engine_config(EngineType::OpenCode).await;
     let mut cmd = build_opencode_command(config.as_ref())?;
-    cmd.current_dir(workspace_path);
+    cmd.current_dir(&workspace_path);
     cmd.arg("session");
     cmd.arg("list");
+    // JSON includes `directory` so we can drop global-project leakage for empty
+    // / unregistered folders. Table layout cannot safely attribute sessions.
+    cmd.arg("--format");
+    cmd.arg("json");
     let output = cmd
         .output()
         .await
@@ -138,7 +142,8 @@ pub(crate) async fn opencode_session_list_core(
         return Err(format!("opencode session list failed: {}", stderr.trim()));
     }
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let entries = parse_opencode_session_list(&stdout);
+    let raw_entries = parse_opencode_session_list(&stdout);
+    let entries = filter_opencode_sessions_for_workspace(raw_entries, &workspace_path);
     entries.iter().for_each(|entry| {
         if !entry.updated_label.trim().is_empty() && entry.updated_at.is_none() {
             log::warn!(

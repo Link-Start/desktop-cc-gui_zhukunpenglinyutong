@@ -158,6 +158,53 @@ describe("threadReducerTextMerge", () => {
     ).toBe(finalReport);
   });
 
+  it("collapses growing snapshot followed by early-body echo (A2 then A2+A)", () => {
+    const earlyBody = [
+      "第一段结论说明背景与范围，内容足够长以通过 substantial echo 门槛。",
+      "",
+      "第二段建议给出实现路径与风险控制。",
+      "",
+      "第三段补充验证步骤与回滚策略。",
+    ].join("\n");
+    const longerDraft = `${earlyBody}\n\n第四段补充收尾说明。`;
+    const broken = `${longerDraft}\n\n${earlyBody}`;
+
+    expect(mergeAgentMessageText(longerDraft, broken)).toBe(longerDraft);
+    expect(mergeCompletedAgentText(longerDraft, broken)).toBe(longerDraft);
+    expect(
+      mergeAgentMessageText(longerDraft, broken).split("第一段结论说明背景").length - 1,
+    ).toBe(1);
+  });
+
+  it("still appends genuine novel suffix after longer draft", () => {
+    const draft = [
+      "第一段结论说明背景与范围，内容足够长以通过 substantial echo 门槛。",
+      "",
+      "第二段建议给出实现路径与风险控制。",
+      "",
+      "第三段补充验证步骤与回滚策略。",
+    ].join("\n");
+    const grown = `${draft}\n\n第四段全新内容不会回放前半。`;
+    expect(mergeAgentMessageText(draft, grown)).toBe(grown);
+    expect(mergeCompletedAgentText(draft, grown)).toBe(grown);
+  });
+
+  it("does not collapse a short trailing recap of only the opening line", () => {
+    const draft = [
+      "第一段结论写得很长，足以覆盖覆盖率阈值。",
+      "",
+      "第二段建议继续展开实现细节与边界条件。",
+      "",
+      "第三段补充测试计划与回滚方案。",
+      "",
+      "第四段给出最终验收口径。",
+    ].join("\n");
+    const withShortRecap = `${draft}\n\n第一段结论写得很长，足以覆盖覆盖率阈值。`;
+    // Short opening recap is intentional emphasis — must not be treated as full early-body echo.
+    expect(mergeAgentMessageText(draft, withShortRecap)).toBe(withShortRecap);
+    expect(mergeCompletedAgentText(draft, withShortRecap)).toBe(withShortRecap);
+  });
+
   it("collapses trailing repeated Computer Use permission guidance blocks", () => {
     const firstPass = [
       "Computer Use 这边还没真正拿到系统自动化权限，调用返回：",

@@ -712,6 +712,32 @@ describe("useEngineController", () => {
     expect(result.current.activeEngine).toBe("opencode");
   });
 
+  it("initializes activeEngine from persisted selection before detect settles", async () => {
+    getClientStoreSyncMock.mockReturnValue("grok");
+    const detectDeferred = createDeferred<EngineStatus[]>();
+    const activeEngineDeferred = createDeferred<"claude">();
+    detectEnginesMock.mockReturnValueOnce(detectDeferred.promise);
+    getActiveEngineMock.mockReturnValueOnce(activeEngineDeferred.promise);
+    getEngineModelsMock.mockResolvedValue([]);
+
+    const { result } = renderHook(() =>
+      useEngineController({ activeWorkspace: null }),
+    );
+
+    // 首屏必须已经是上次选择，不能先渲染 claude 再异步跳回
+    expect(result.current.activeEngine).toBe("grok");
+
+    detectDeferred.resolve([
+      createEngineStatus("claude", true),
+      createEngineStatus("grok", true),
+    ]);
+    activeEngineDeferred.resolve("claude");
+
+    await waitFor(() => expect(result.current.isInitialized).toBe(true));
+    expect(result.current.activeEngine).toBe("grok");
+    expect(switchEngineMock).toHaveBeenCalledWith("grok");
+  });
+
   it("ignores a legacy persisted Gemini execution selection", async () => {
     detectEnginesMock.mockResolvedValue([
       {

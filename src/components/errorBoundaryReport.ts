@@ -38,6 +38,14 @@ export type DecodedReactError = {
 };
 
 export function getAppVersionForReport(): string {
+  // vite.config define 注入的构建期版本；优先于 env，避免报告长期 appVersion: unknown
+  try {
+    if (typeof __APP_VERSION__ === "string" && __APP_VERSION__.trim()) {
+      return __APP_VERSION__.trim();
+    }
+  } catch {
+    // non-vite test hosts may not declare the global
+  }
   const env = (import.meta.env ?? {}) as Record<string, string | undefined>;
   return env.VITE_APP_VERSION || env.PACKAGE_VERSION || "unknown";
 }

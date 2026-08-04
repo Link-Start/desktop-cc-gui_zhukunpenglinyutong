@@ -1,3 +1,12 @@
+---
+type: research
+status: historical
+---
+
+<!-- DOC-LIFECYCLE: draft-rfc -->
+> [!WARNING]
+> **Lifecycle: Draft exploratory RFC.** 当前代码不存在本文设想的通用 plugin marketplace/runtime；本文不是 approved architecture 或 implementation plan。若推进，必须新建 OpenSpec change 并重新校准现状。
+
 # mossx 插件市场 × 扩展体系 × CLI 基石与串线 —— 设计参考文档
 
 > 内容类型：Exploratory RFC / industry research

@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { GitCommitFileChange } from "../../../../../types";
 import {
   buildFileTreeItems,
   collectDirPaths,
+  getBranchAheadBehindTooltip,
 } from "./gitHistoryPanelSharedUtils";
 
 function createFileChange(path: string): GitCommitFileChange {
@@ -123,5 +124,41 @@ describe("gitHistoryPanelSharedUtils file tree projection", () => {
         depth: 1,
       }),
     ]);
+  });
+});
+
+describe("getBranchAheadBehindTooltip", () => {
+  it("prefers upstream-specific copy when upstream is present", () => {
+    const t = vi.fn((key: string, options?: Record<string, unknown>) => {
+      if (key === "git.historyBranchBehindOfTooltip") {
+        return `落后 ${options?.upstream} ${options?.count} 个提交`;
+      }
+      if (key === "git.historyBranchAheadOfTooltip") {
+        return `领先 ${options?.upstream} ${options?.count} 个提交`;
+      }
+      return key;
+    });
+
+    expect(getBranchAheadBehindTooltip("behind", 14, "origin/chore/bump-version-0.7.7", t))
+      .toBe("落后 origin/chore/bump-version-0.7.7 14 个提交");
+    expect(getBranchAheadBehindTooltip("ahead", 3, "origin/main", t))
+      .toBe("领先 origin/main 3 个提交");
+  });
+
+  it("falls back to generic upstream wording when upstream is missing", () => {
+    const t = vi.fn((key: string, options?: Record<string, unknown>) => {
+      if (key === "git.historyBranchBehindTooltip") {
+        return `落后上游 ${options?.count} 个提交`;
+      }
+      if (key === "git.historyBranchAheadTooltip") {
+        return `领先上游 ${options?.count} 个提交`;
+      }
+      return key;
+    });
+
+    expect(getBranchAheadBehindTooltip("behind", 14, null, t))
+      .toBe("落后上游 14 个提交");
+    expect(getBranchAheadBehindTooltip("ahead", 2, "   ", t))
+      .toBe("领先上游 2 个提交");
   });
 });

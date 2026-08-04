@@ -1,3 +1,12 @@
+---
+type: research
+status: historical
+---
+
+<!-- DOC-LIFECYCLE: external-pinned-research -->
+> [!NOTE]
+> **Lifecycle: External pinned research snapshot.** 本文描述记录日期或 pinned commit 的 upstream 状态，不代表 mossx current behavior。任何 current claim、security judgment 或产品决策都必须重新核验 upstream primary source。
+
 # Obsidian 插件分发、安装与开发者体验调研
 
 > **Lifecycle**：Historical External Research，正文主体是 2026-02 旧分发模型。

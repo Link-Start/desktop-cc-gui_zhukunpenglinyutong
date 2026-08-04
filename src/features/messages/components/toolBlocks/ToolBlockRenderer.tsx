@@ -71,7 +71,7 @@ export const ToolBlockRenderer = memo(function ToolBlockRenderer({
     return <RequestUserInputSubmittedBlock item={item} />;
   }
 
-  // 0.1 subAgent：未进入 group 时的单卡兜底（persona 卡片）
+  // 0.1 subAgent：未进入 group 时的单卡兜底（S10 分段条 + Ring 格）
   if (isSubagentTool(item)) {
     return <SubagentSquadGrid items={[item]} />;
   }

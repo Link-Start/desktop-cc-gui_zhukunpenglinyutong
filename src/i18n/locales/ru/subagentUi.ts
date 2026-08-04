@@ -2,7 +2,10 @@ export default {
   subagentUi: {
     squadAria: "Группа субагентов",
     squadTitle: "{{completed}}/{{total}} агентов",
+    squadTitleCount: "{{total}} агентов",
+
     squadFallbackTitle: "Параллельные субагенты",
+    defaultName: "Субагент",
     badge: "SubAgent",
     claudeLaunchNoSession:
       "Обнаружено подтверждение запуска Claude Agent, но сеанс claude:subagent ещё не связан (native owner может ещё привязываться/индексироваться). Повторите попытку позже или откройте субагента из дерева сеансов слева.",
@@ -16,6 +19,11 @@ export default {
     noSessionYet:
       "Сеанс субагента ещё не связан (agentId не определён или transcript ещё индексируется). Откройте строку «Субагент» в дереве сеансов слева.",
 
+    statusShort: {
+      completed: "готово",
+      running: "в работе",
+      error: "с ошибкой",
+    },
     status: {
       running: "Выполняется",
       completed: "Завершено",

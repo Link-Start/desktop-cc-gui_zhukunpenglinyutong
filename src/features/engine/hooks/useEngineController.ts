@@ -69,8 +69,11 @@ export function useEngineController({
   const [engineStatuses, setEngineStatuses] = useState<EngineStatus[]>(() =>
     isWebServiceRuntime() ? WEB_RUNTIME_INITIAL_STATUSES : [],
   );
+  // 首屏直接读 client store，避免默认 claude 抢先渲染后再异步 restore 造成首页闪回。
   const [activeEngine, setActiveEngineState] = useState<EngineType>(() =>
-    isWebServiceRuntime() ? WEB_RUNTIME_DEFAULT_ENGINE : "claude",
+    isWebServiceRuntime()
+      ? WEB_RUNTIME_DEFAULT_ENGINE
+      : (readPersistedEngineSelection() ?? "claude"),
   );
   const [engineModels, setEngineModels] = useState<EngineModelInfo[]>([]);
   const [isDetecting, setIsDetecting] = useState(false);

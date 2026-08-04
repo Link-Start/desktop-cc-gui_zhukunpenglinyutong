@@ -65,6 +65,8 @@ const common = {
     moreActions: "More actions",
     showInHeader: "Show in toolbar",
     showOnWorkspaceRow: "Show on project row",
+    showBesideSettings: "Show next to settings",
+    showBesideSettingsLimit: "You can pin up to 2 items. Uncheck one first.",
     markdownMermaidFullscreen: "Fullscreen",
     markdownMermaidFullscreenHint: "Open diagram fullscreen",
     markdownMermaidDownloadPng: "Download PNG",

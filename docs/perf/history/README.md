@@ -1,3 +1,8 @@
+---
+type: index
+status: active
+---
+
 # Performance Baseline History
 
 本目录保留按版本与采样时间生成的性能基线。所有条目都是历史 evidence，不代表当前 `HEAD`、当前 release 或当前性能预算结论。

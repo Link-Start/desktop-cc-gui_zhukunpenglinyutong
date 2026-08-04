@@ -188,6 +188,7 @@ const composer = {
       "empty-draft": "Пустой черновик"
     },
     "queueStatusWaiting": "В очереди на следующий ход",
+    "queueStatusPendingAck": "Отправлено — подтверждение (антидубль)",
     "queueStatusFuseReady": "Можно объединить с текущим ходом",
     "queueStatusFusing": "Объединяется с текущим ходом",
     "queueStatusCommand": "Слэш-команда ждёт следующего хода",

@@ -3,6 +3,7 @@ import type * as React from "react";
 import { AppLayout } from "../features/app/components/AppLayout";
 import { AppModals } from "../features/app/components/AppModals";
 import { LockScreenOverlay } from "../features/app/components/LockScreenOverlay";
+import { resolveDockIconSrc } from "../features/theme/utils/dockIcon";
 import { RuntimeConsoleDock } from "../features/app/components/RuntimeConsoleDock";
 import { VendorModelManagerDialogHost } from "../features/vendors/components/VendorModelManagerDialogHost";
 import {
@@ -151,6 +152,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     intentCanvasPanelNode,
     browserDockNode,
     files,
+    gitDiffListView,
     gitDiffPanelNode,
     gitDiffViewerNode,
     gitHistoryPanelHeight,
@@ -262,6 +264,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     selectedPullRequest,
     setActiveTab,
     setAppSettings,
+    setGitDiffListView,
     setKanbanViewState,
     setReduceTransparency,
     setWindowTransparencyEnabled,
@@ -373,6 +376,8 @@ export function renderAppShell(ctx: RenderAppShellContext) {
         onSelectWorkspacePath={handleSelectWorkspacePathForGitHistory}
         onOpenDiffPath={handleSelectDiffForPanel}
         onRequestClose={handleCloseGitHistoryPanel}
+        listView={gitDiffListView === "tree" ? "tree" : "flat"}
+        onListViewChange={setGitDiffListView}
         fileHistoryTabs={fileHistoryTabs}
         activeTabId={activeGitHistoryTabId}
         onActivateTab={handleActivateGitHistoryTab}
@@ -694,6 +699,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
         isOpen={isPanelLocked}
         onUnlock={handleUnlockPanel}
         liveSessions={lockLiveSessions}
+        logoSrc={resolveDockIconSrc(appSettings?.dockIconId)}
       />
       {isSearchPaletteOpen ? (
         <Suspense fallback={null}>

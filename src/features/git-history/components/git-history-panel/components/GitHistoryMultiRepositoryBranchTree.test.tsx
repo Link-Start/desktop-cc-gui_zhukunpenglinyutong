@@ -251,8 +251,24 @@ describe("GitHistoryMultiRepositoryBranchTree", () => {
     const branchCatalog: GitHistoryRepositoryBranchCatalog = {
       ...catalog("services/a", "feature/v-076", "origin/main"),
       localBranches: [
-        { name: "main", isCurrent: false, isRemote: false, lastCommit: 1, ahead: 0, behind: 131 },
-        { name: "feature/v-076", isCurrent: true, isRemote: false, lastCommit: 1, ahead: 8, behind: 0 },
+        {
+          name: "main",
+          isCurrent: false,
+          isRemote: false,
+          lastCommit: 1,
+          ahead: 0,
+          behind: 131,
+          upstream: "origin/main",
+        },
+        {
+          name: "feature/v-076",
+          isCurrent: true,
+          isRemote: false,
+          lastCommit: 1,
+          ahead: 8,
+          behind: 0,
+          upstream: "origin/feature/v-076",
+        },
       ],
       currentBranch: "feature/v-076",
     };
@@ -278,11 +294,17 @@ describe("GitHistoryMultiRepositoryBranchTree", () => {
       .toBe("git.historyBranchBadgeMain");
     expect(mainBranch.querySelector(".is-ahead")).toBeNull();
     expect(mainBranch.querySelector(".is-behind")?.textContent).toBe("-131");
+    expect(mainBranch.querySelector(".is-behind")?.getAttribute("data-tooltip")).toContain(
+      "git.historyBranchBehindOfTooltip",
+    );
 
     const currentBranch = screen.getByRole("button", { name: "v-076HEAD+8" });
     expect(currentBranch.classList.contains("is-head-branch")).toBe(true);
     expect(currentBranch.querySelector(".is-head")?.textContent).toBe("HEAD");
     expect(currentBranch.querySelector(".is-ahead")?.textContent).toBe("+8");
+    expect(currentBranch.querySelector(".is-ahead")?.getAttribute("data-tooltip")).toContain(
+      "git.historyBranchAheadOfTooltip",
+    );
     expect(currentBranch.querySelector(".is-behind")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /git.historyToggleRemoteGroup:origin/ }));

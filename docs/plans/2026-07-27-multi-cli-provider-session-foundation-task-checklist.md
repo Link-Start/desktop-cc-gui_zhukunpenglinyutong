@@ -1,3 +1,12 @@
+---
+type: plan
+status: implemented
+---
+
+<!-- DOC-LIFECYCLE: implemented-historical-plan -->
+> [!NOTE]
+> **Lifecycle: Implemented historical plan.** 本文保留当时的实施顺序与验收轨迹，不是 current plan。当前行为以 [OpenSpec main specifications](../../openspec/specs/README.md) 与代码为准；unchecked checkbox 不构成 active backlog。
+
 # 多 CLI × 多 Provider 会话基石：实施任务清单
 
 > 初始日期：2026-07-27

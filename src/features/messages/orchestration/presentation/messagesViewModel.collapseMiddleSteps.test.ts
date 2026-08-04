@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ConversationItem } from "../../../../types";
-import { resolveCollapsedTimelineItems } from "./messagesViewModel";
+import {
+  resolveCollapsedTimelineItems,
+  resolveVisibleMessageItems,
+} from "./messagesViewModel";
+import { parseReasoning } from "../../presentation/messagesReasoning";
 
 function user(id: string, text = "你好"): ConversationItem {
   return { id, kind: "message", role: "user", text };
@@ -10,8 +14,8 @@ function assistant(id: string, text: string): ConversationItem {
   return { id, kind: "message", role: "assistant", text };
 }
 
-function reasoning(id: string): ConversationItem {
-  return { id, kind: "reasoning", summary: "分析中", content: "thinking" };
+function reasoning(id: string, content = "thinking"): ConversationItem {
+  return { id, kind: "reasoning", summary: content, content };
 }
 
 function tool(
@@ -29,6 +33,29 @@ function tool(
     output: "",
     durationMs,
   };
+}
+
+/** Pure shell noise (not cat/rg/file-IO) — canvas-hidden but used to interrupt merge if left in list. */
+function bashTool(id: string, command = "cargo check"): ConversationItem {
+  return {
+    id,
+    kind: "tool",
+    toolType: "commandExecution",
+    title: `Command: ${command}`,
+    detail: command,
+    status: "completed",
+    output: "",
+  };
+}
+
+function reasoningMetaMap(items: ConversationItem[]) {
+  const map = new Map<string, ReturnType<typeof parseReasoning>>();
+  for (const item of items) {
+    if (item.kind === "reasoning") {
+      map.set(item.id, parseReasoning(item));
+    }
+  }
+  return map;
 }
 
 describe("resolveCollapsedTimelineItems causal phase collapse", () => {
@@ -70,7 +97,7 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
     expect(result.phases[0]!.hiddenItemIds).toEqual(["r1", "t1"]);
   });
 
-  it("keeps Agent/Task subagent tools visible when process phase collapses", () => {
+  it("folds Agent/Task subagent tools into the process phase chip when collapsed", () => {
     const agentTool: ConversationItem = {
       id: "agent-1",
       kind: "tool",
@@ -90,15 +117,43 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
       activeEngine: "claude",
       timelineSourceItems: items,
     });
-    // reasoning + read 折叠进 chip；Agent 卡片常驻幕布
+    // reasoning + read + Agent 一并折叠；收起后幕布只剩 user + assistant（chip 在投影层）
+    expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "a1"]);
+    expect(result.phases).toHaveLength(1);
+    expect(result.phases[0]?.hiddenItemIds).toEqual(["r1", "t1", "agent-1"]);
+    expect(result.phases[0]?.hiddenItemIds).toContain("agent-1");
+  });
+
+  it("remounts Agent/Task subagent tools inside the phase when expanded", () => {
+    const agentTool: ConversationItem = {
+      id: "agent-1",
+      kind: "tool",
+      toolType: "agent",
+      title: "Tool: Agent",
+      detail: JSON.stringify({ description: "并行排查", subagent_type: "explore" }),
+      status: "completed",
+    };
+    const items: ConversationItem[] = [
+      user("u1"),
+      reasoning("r1"),
+      tool("t1", "completed", 500),
+      agentTool,
+      assistant("a1", "最终结论"),
+    ];
+    const result = resolveCollapsedTimelineItems({
+      activeEngine: "claude",
+      timelineSourceItems: items,
+      expandedPhaseKeys: new Set(["a1"]),
+    });
     expect(result.timelineItems.map((item) => item.id)).toEqual([
       "u1",
+      "r1",
+      "t1",
       "agent-1",
       "a1",
     ]);
-    expect(result.phases).toHaveLength(1);
-    expect(result.phases[0]?.hiddenItemIds).toEqual(["r1", "t1"]);
-    expect(result.phases[0]?.hiddenItemIds).not.toContain("agent-1");
+    expect(result.phases[0]?.expanded).toBe(true);
+    expect(result.phases[0]?.hiddenItemIds).toContain("agent-1");
   });
 
   it("collapses a single process step including lone reasoning into the chip", () => {
@@ -461,5 +516,92 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
     });
     expect(result.phases[0]!.hiddenItemIds).toEqual(["r1", "cmd-1"]);
     expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "a1"]);
+  });
+});
+
+describe("resolveVisibleMessageItems / collapse after hidden shell tools", () => {
+  it("merges reasoning runs that only look adjacent after pure shell tools are filtered", () => {
+    const items: ConversationItem[] = [
+      reasoning("r1", "Need handleUnstageRepositoryAll in layout"),
+      bashTool("bash-1", "pwd"),
+      reasoning("r2", "Need handleUnstageRepositoryFiles in app-shell"),
+      bashTool("bash-2", "cargo check"),
+      reasoning("r3", "Cargo is in src-tauri"),
+    ];
+
+    const visible = resolveVisibleMessageItems({
+      items,
+      activeEngine: "claude",
+      hideClaudeReasoning: false,
+      latestTitleOnlyReasoningId: null,
+      presentationProfile: null,
+      reasoningMetaById: reasoningMetaMap(items),
+    });
+
+    const reasoningRows = visible.filter((item) => item.kind === "reasoning");
+    expect(reasoningRows).toHaveLength(1);
+    expect(visible.some((item) => item.kind === "tool")).toBe(false);
+    if (reasoningRows[0]?.kind === "reasoning") {
+      expect(reasoningRows[0].content).toContain("handleUnstageRepositoryAll");
+      expect(reasoningRows[0].content).toContain("handleUnstageRepositoryFiles");
+      expect(reasoningRows[0].content).toContain("src-tauri");
+    }
+  });
+
+  it("keeps reasoning split when a visible file tool interrupts the run", () => {
+    const items: ConversationItem[] = [
+      reasoning("r1", "先读文件"),
+      tool("read-1"),
+      reasoning("r2", "再继续分析"),
+    ];
+
+    const visible = resolveVisibleMessageItems({
+      items,
+      activeEngine: "claude",
+      hideClaudeReasoning: false,
+      latestTitleOnlyReasoningId: null,
+      presentationProfile: null,
+      reasoningMetaById: reasoningMetaMap(items),
+    });
+
+    expect(visible.map((item) => item.kind)).toEqual([
+      "reasoning",
+      "tool",
+      "reasoning",
+    ]);
+  });
+
+  it("merges shell-separated reasoning on expanded completed timeline", () => {
+    const items: ConversationItem[] = [
+      user("u1"),
+      reasoning("r1", "段一"),
+      bashTool("bash-1"),
+      reasoning("r2", "段二"),
+      bashTool("bash-2"),
+      reasoning("r3", "段三"),
+      assistant("a1", "最终结论"),
+    ];
+
+    const expanded = resolveCollapsedTimelineItems({
+      activeEngine: "claude",
+      expandedPhaseKeys: new Set(["a1"]),
+      timelineSourceItems: items,
+    });
+
+    const reasoningRows = expanded.timelineItems.filter(
+      (item) => item.kind === "reasoning",
+    );
+    expect(reasoningRows).toHaveLength(1);
+    if (reasoningRows[0]?.kind === "reasoning") {
+      expect(reasoningRows[0].content).toContain("段一");
+      expect(reasoningRows[0].content).toContain("段二");
+      expect(reasoningRows[0].content).toContain("段三");
+    }
+    // Shell stays off canvas even when phase is expanded.
+    expect(expanded.timelineItems.some((item) => item.id.startsWith("bash-"))).toBe(
+      false,
+    );
+    // Chip counts one merged thinking run, not three fragments.
+    expect(expanded.phases[0]?.breakdown.reasoningCount).toBe(1);
   });
 });

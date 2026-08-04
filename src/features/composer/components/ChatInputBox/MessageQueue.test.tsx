@@ -124,6 +124,28 @@ describe('MessageQueue', () => {
     expect(screen.getByText('composer.queueStatusCommand')).toBeTruthy();
   });
 
+  it('shows global fuse disabled reason on fuse button title', () => {
+    render(
+      <MessageQueue
+        queue={[
+          {
+            id: 'queued-disabled',
+            content: 'please fuse this',
+            queuedAt: Date.now(),
+          },
+        ]}
+        onFuse={() => {}}
+        onRemove={() => {}}
+        canFuse={false}
+        fuseDisabledReasonKey="chat.fuseDisabledNoActiveTurn"
+      />,
+    );
+
+    const fuse = screen.getByRole('button', { name: 'chat.fuseFromQueue' });
+    expect(fuse.hasAttribute('disabled')).toBe(true);
+    expect(fuse.getAttribute('title')).toBe('chat.fuseDisabledNoActiveTurn');
+  });
+
   it('disables fuse action for empty queued content', () => {
     render(
       <MessageQueue
@@ -190,5 +212,29 @@ describe('MessageQueue', () => {
     );
 
     expect(screen.getByText('composer.queueStatusFuseReady')).toBeTruthy();
+  });
+
+  it('labels Shared pending-ack items as confirming, not waiting for next turn', () => {
+    render(
+      <MessageQueue
+        queue={[
+          {
+            id: 'queued-pending-ack',
+            content: 'already sent follow-up',
+            queuedAt: Date.now(),
+            isPendingAck: true,
+          },
+        ]}
+        onFuse={() => {}}
+        onRemove={() => {}}
+        canFuse={true}
+      />,
+    );
+
+    expect(screen.getByText('composer.queueStatusPendingAck')).toBeTruthy();
+    expect(screen.queryByText('composer.queueStatusWaiting')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'chat.fuseFromQueue' }).hasAttribute('disabled'),
+    ).toBe(true);
   });
 });

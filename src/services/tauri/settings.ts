@@ -52,3 +52,26 @@ export async function setCodexUnifiedExecOfficialOverride(
 export async function reloadCodexRuntimeConfig(): Promise<CodexRuntimeReloadResult> {
   return invoke<CodexRuntimeReloadResult>("reload_codex_runtime_config");
 }
+
+export type DockIconApplyResult = {
+  iconId: string;
+  applied: boolean;
+  platform: string;
+  /** Windows/Linux: number of windows whose chrome icon was updated. */
+  windowsUpdated?: number;
+  reason?: string | null;
+};
+
+export async function setDockIcon(payload: {
+  iconId: string;
+  /**
+   * Prefer `Uint8Array` over `number[]` — catalog icons are ~250KB each and a
+   * dense typed array keeps IPC/serialization cost reasonable on all platforms.
+   */
+  pngBytes?: Uint8Array | number[] | null;
+}): Promise<DockIconApplyResult> {
+  return invoke<DockIconApplyResult>("set_dock_icon", {
+    iconId: payload.iconId,
+    pngBytes: payload.pngBytes ?? null,
+  });
+}

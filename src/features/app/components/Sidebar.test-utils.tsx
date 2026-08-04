@@ -1,7 +1,11 @@
 import { createRef } from "react";
 import type React from "react";
 import { vi } from "vitest";
-import { writeClientStoreData } from "../../../services/clientStorage";
+import {
+  writeClientStoreData,
+  writeClientStoreValue,
+} from "../../../services/clientStorage";
+import { SIDEBAR_SETTINGS_PINNED_ACTIONS_KEY } from "../hooks/useSidebarSettingsPinnedActions";
 import {
   assignWorkspaceSessionFolder,
   assignWorkspaceSessionFolders,
@@ -74,6 +78,8 @@ vi.mock("react-i18next", () => ({
         "common.terminal": "Terminal",
         "common.refresh": "Refresh",
         "common.toggleTerminalPanel": "Toggle terminal panel",
+        "common.showBesideSettings": "Show next to settings",
+        "common.showBesideSettingsLimit": "You can pin up to 2 items. Uncheck one first.",
         "git.logMode": "Git",
         "git.historyQuickAction": "Git Graph",
         "sidebar.releaseNotes": "Release Notes",
@@ -175,6 +181,7 @@ export function resetSidebarTestMocks() {
   vi.clearAllMocks();
   writeClientStoreData("threads", {});
   writeClientStoreData("layout", {});
+  writeClientStoreValue("app", SIDEBAR_SETTINGS_PINNED_ACTIONS_KEY, []);
   vi.mocked(listWorkspaceSessionFolders).mockResolvedValue({
     workspaceId: "default",
     folders: [],

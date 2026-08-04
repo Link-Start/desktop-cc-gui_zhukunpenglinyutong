@@ -4,10 +4,15 @@ import {
   closeSubagentInspectorIfScopeChanged,
   getSubagentInspectorSelection,
   openSubagentInspector,
+  syncSubagentInspectorFromCards,
+  syncSubagentInspectorSelection,
 } from "./useSubagentInspectorStore";
 import type { SubagentCardViewModel } from "../utils/subagentViewModel";
 
-function card(id: string): SubagentCardViewModel {
+function card(
+  id: string,
+  overrides: Partial<SubagentCardViewModel> = {},
+): SubagentCardViewModel {
   return {
     id,
     displayName: "tester",
@@ -24,6 +29,7 @@ function card(id: string): SubagentCardViewModel {
     githubLogin: null,
     githubProfileUrl: null,
     avatarSrc: null,
+    ...overrides,
   };
 }
 
@@ -74,5 +80,31 @@ describe("useSubagentInspectorStore", () => {
     // 右侧嵌套 Messages 的 threadId 是子会话；关抽屉只能看父 scope
     closeSubagentInspectorIfScopeChanged("ws-1", "claude:parent");
     expect(getSubagentInspectorSelection()?.id).toBe("a");
+  });
+
+  it("syncs selected card status after re-enrich (breaks open-time freeze)", () => {
+    openSubagentInspector(card("a", { status: "running", progress: 0.2 }));
+    syncSubagentInspectorSelection(
+      card("a", { status: "completed", progress: 1, outputText: "done" }),
+    );
+    const selected = getSubagentInspectorSelection();
+    expect(selected?.status).toBe("completed");
+    expect(selected?.progress).toBe(1);
+    expect(selected?.outputText).toBe("done");
+  });
+
+  it("syncFromCards only updates matching selection id", () => {
+    openSubagentInspector(card("a", { status: "running" }));
+    syncSubagentInspectorFromCards([
+      card("b", { status: "completed", progress: 1 }),
+      card("a", { status: "completed", progress: 1 }),
+    ]);
+    expect(getSubagentInspectorSelection()?.status).toBe("completed");
+  });
+
+  it("does not sync unrelated card ids", () => {
+    openSubagentInspector(card("a", { status: "running" }));
+    syncSubagentInspectorSelection(card("b", { status: "completed", progress: 1 }));
+    expect(getSubagentInspectorSelection()?.status).toBe("running");
   });
 });

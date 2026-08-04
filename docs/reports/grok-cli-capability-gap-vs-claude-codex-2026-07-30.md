@@ -1,3 +1,12 @@
+---
+type: report
+status: historical
+---
+
+<!-- DOC-LIFECYCLE: implemented-capability-evidence -->
+> [!NOTE]
+> **Lifecycle: Implemented capability evidence.** Grok image-input gap change 已于 2026-08-03 归档。本文保留当时的 comparison/verification；current capability 以 [engine capability matrix](../../openspec/specs/engine-capability-matrix/spec.md) 与代码为准。
+
 # 多 CLI 图片输入能力对齐（以代码为准，2026-07-30）
 
 > **2026-08-01 生命周期校准**：implemented；OpenSpec `grok-cli-image-input-capability-gap` 为 `25/25`，仍 active，待 verify / sync / archive。当前 capability 以 generated matrix 与 `pnpm check:engine-capability-matrix` 为准。  

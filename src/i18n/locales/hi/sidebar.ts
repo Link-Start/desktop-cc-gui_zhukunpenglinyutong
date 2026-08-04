@@ -70,6 +70,7 @@ const sidebar = {
     "activateWorkspace": "मुख्य पैनल में खोलें",
     "workspaceActionsGroup": "Workspace क्रियाएँ",
     "setWorkspaceAlias": "उपनाम सेट करें",
+    "assignWorkspaceGroup": "प्रोजेक्ट समूह बदलें",
     "workspaceAliasPrompt": "साइडबार में इस workspace के लिए दिखाया जाने वाला उपनाम दर्ज करें। मूल प्रोजेक्ट नाम उपयोग करने के लिए खाली छोड़ें।",
     "workspaceAliasDialogTitle": "Workspace उपनाम सेट करें",
     "workspaceAliasDialogSubtitle": "मूल प्रोजेक्ट नाम: {{name}}",

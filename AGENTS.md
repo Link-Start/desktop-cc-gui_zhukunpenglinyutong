@@ -94,6 +94,12 @@ Keep this managed block so 'trellis update' can refresh the instructions.
 - 任何代码、配置、规范落盘前，先给出 `PLAN` 或等价 OpenSpec artifact。
 - 若任务已进入 OpenSpec workflow，则以 OpenSpec artifact 作为 plan 载体。
 
+### Engine Onboarding Gate
+
+- 接入新 CLI engine（或恢复/变更既有 engine 的接入面）前，必读 `docs/research/mossx-multi-cli-provider-session-foundation-design.md`（基石设计）与 `docs/research/mossx-new-cli-onboarding-guide.md`（全量接入点核对矩阵）。
+- 实施必须按核对矩阵 §0 逐层勾选；⚠ 标记的静默失败点全部人工核对，🔵 按需在 PR 描述写决策记录。
+- PR 描述须附矩阵完成度说明、渲染层目视验收结果与受影响 CI gate 运行结果。
+
 ### Merge Guardrails
 
 - 高风险文件冲突时，禁止整文件 `--ours` / `--theirs` 覆盖。

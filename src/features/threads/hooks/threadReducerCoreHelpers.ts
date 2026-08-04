@@ -228,6 +228,92 @@ export function findAssistantMessageIndexByPrefix(
   return -1;
 }
 
+export function listHasAssistantSegmentSiblings(
+  list: ConversationItem[],
+  baseItemId: string,
+) {
+  if (!baseItemId) {
+    return false;
+  }
+  const segmentPrefix = `${baseItemId}-seg-`;
+  for (const item of list) {
+    if (isAssistantMessageItem(item) && item.id.startsWith(segmentPrefix)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export type LiveSettlementLookupMode = "append" | "complete";
+
+/**
+ * Resolve which assistant row should receive live complete / delta for a provider itemId.
+ *
+ * Tool boundaries create durable ids `{base}` then `{base}-seg-1`…. After
+ * `resetAgentSegment`, `resolveLiveAssistantMessageId` returns bare `base` again.
+ * Preferring bare id first remounts post-tool conclusion text onto the pre-tool
+ * bubble (user sees conclusion before tools). When segmented siblings exist and
+ * the resolved id collapses to bare base, target the latest `-seg-*` sibling.
+ *
+ * For `append` of a **new** `-seg-N` shell, must return -1 (create) — never fall
+ * back to bare `base`, or post-tool deltas merge into the pre-tool bubble.
+ *
+ * @see openspec/changes/fix-live-settle-assistant-tool-order
+ */
+export function findAssistantMessageIndexForLiveSettlement(
+  list: ConversationItem[],
+  itemId: string,
+  segmentedItemId: string,
+  mode: LiveSettlementLookupMode = "complete",
+) {
+  const baseId = itemId.trim();
+  const resolvedId = segmentedItemId.trim() || baseId;
+  const hasSegmentedSiblings =
+    baseId.length > 0 && listHasAssistantSegmentSiblings(list, baseId);
+  const resolvedIsSegmentedShell =
+    baseId.length > 0 && resolvedId.startsWith(`${baseId}-seg-`);
+
+  // resetAgentSegment → segment=0 → resolved id === bare base, but post-tool
+  // shells already live under base-seg-N. Prefer that latest sibling.
+  if (hasSegmentedSiblings && resolvedId === baseId) {
+    const latestSegmented = findAssistantMessageIndexByPrefix(list, baseId);
+    if (latestSegmented >= 0) {
+      return latestSegmented;
+    }
+  }
+
+  let index = findAssistantMessageIndexById(list, resolvedId);
+  if (index >= 0) {
+    return index;
+  }
+
+  // Missing -seg-N: append must create a new shell; complete may fall back to
+  // the latest existing sibling so late final text still lands after tools.
+  if (resolvedIsSegmentedShell) {
+    if (mode === "append") {
+      return -1;
+    }
+    index = findAssistantMessageIndexByPrefix(list, baseId);
+    if (index >= 0) {
+      return index;
+    }
+    return findAssistantMessageIndexById(list, baseId);
+  }
+
+  if (baseId) {
+    index = findAssistantMessageIndexByPrefix(list, baseId);
+    if (index >= 0) {
+      return index;
+    }
+    index = findAssistantMessageIndexById(list, baseId);
+    if (index >= 0) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
 export function resolveLiveAssistantMessageId(
   state: ThreadState,
   threadId: string,

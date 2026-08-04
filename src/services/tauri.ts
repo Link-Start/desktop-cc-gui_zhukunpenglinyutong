@@ -181,8 +181,8 @@ export {
   renameWorkspaceSessionFolder,
   unarchiveWorkspaceSessions,
 } from "./tauri/sessionManagement";
-export type { CodexRuntimeReloadResult, SettingsRecoveryNotice } from "./tauri/settings";
-export { getAppSettings, getCodexConfigPath, getCodexUnifiedExecExternalStatus, reloadCodexRuntimeConfig, restoreCodexUnifiedExecOfficialDefault, setCodexUnifiedExecOfficialOverride, takeSettingsRecoveryNotice, updateAppSettings } from "./tauri/settings";
+export type { CodexRuntimeReloadResult, DockIconApplyResult, SettingsRecoveryNotice } from "./tauri/settings";
+export { getAppSettings, getCodexConfigPath, getCodexUnifiedExecExternalStatus, reloadCodexRuntimeConfig, restoreCodexUnifiedExecOfficialDefault, setCodexUnifiedExecOfficialOverride, setDockIcon, takeSettingsRecoveryNotice, updateAppSettings } from "./tauri/settings";
 export type {
   AgentMdResponse,
   ClaudeMdResponse,
@@ -498,10 +498,13 @@ export {
   revertCommit,
   revertGitAll,
   revertGitFile,
+  revertGitPaths,
   stageGitAll,
   stageGitFile,
   syncGit,
+  unstageGitAll,
   unstageGitFile,
+  unstageGitPaths,
   updateGitBranch,
 } from "./tauri/git";
 export type {

@@ -1,3 +1,8 @@
+---
+type: index
+status: active
+---
+
 # Architecture 文档索引
 
 本目录记录架构策略、治理规则与 large-file 基线。基线类文档反映**生成时**的仓库状态；当前代码事实仍需回到 [`../../README.md`](../../README.md)、[`../../AGENTS.md`](../../AGENTS.md) 与 [OpenSpec](../../openspec/project.md) 核验。
@@ -5,10 +10,10 @@
 
 ## 架构与治理
 
-- [Harness Governance Layer — mossx 战略架构文档](harness-governance-strategy.md) — accepted 战略；2026-05 正文保留，文首含 2026-08-01 六引擎、AppShell 与 gate audit 校准
+- [Harness Governance Layer — mossx 战略架构文档](harness-governance-strategy.md) — accepted 战略；2026-05 正文保留，文首含 2026-08-03 / 0.7.16 六引擎、AppShell 与 gate audit 校准
 - [Large File Governance Playbook](large-file-governance-playbook.md)
 
-当前 Harness gate 快照（2026-08-01）：engine registry、capability matrix、evidence bridge、domain-event schema 通过；domain-event adoption 因 checker 未跟随 type extraction 而失败。Policy-router 另为 advisory inventory（3,101 files / 458 findings），exit 0 不代表零 debt。**在 adoption gate 重新转绿前，不声明 governance evidence-complete。**
+最近记录的 Harness gate 快照（运行于 2026-08-01，代码边界于 2026-08-03 复核）：engine registry、capability matrix、evidence bridge、domain-event schema 通过；domain-event adoption checker 仍未跟随 type extraction。Policy-router 的 3,101 files / 458 findings 仅是 2026-08-01 advisory inventory，exit 0 不代表零 debt。**在 adoption gate 重新转绿并重新生成 evidence 前，不声明 governance evidence-complete。**
 
 ## Large-file 基线
 
@@ -34,3 +39,4 @@ baseline / watchlist 是采样快照，**不代表**当前文件行数。执行 
 | （既有） | harness + large-file 列表 |
 | 2026-08-01 | Batch 1：交叉链接 reports/analysis/perf；强调重扫 |
 | 2026-08-01 | Batch 6：Harness 战略文档校准到六引擎；记录可重跑 gate 结果与 checker drift |
+| 2026-08-03 | 校准到 0.7.16；把 Harness 数值标记为 recorded snapshot，并更新 AppShell / checker 边界 |

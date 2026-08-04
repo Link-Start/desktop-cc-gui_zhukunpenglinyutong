@@ -1,11 +1,23 @@
-import { memo, useMemo } from "react";
+import { memo, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { cn } from "@/lib/utils";
 import type { ConversationItem } from "../../../types";
 import { useActiveCanvasSelector } from "../../layout/hooks/activeCanvasStore";
 import { buildSubagentCardsFromToolItems } from "../utils/subagentViewModel";
 import { enrichSubagentCardStatuses } from "../utils/subagentCardStatus";
-import { useSubagentInspectorSelection } from "../hooks/useSubagentInspectorStore";
-import { SubagentPersonaCard } from "./SubagentPersonaCard";
+import {
+  enrichSubagentCardsFromTaskNotifications,
+  mergeConversationItemSources,
+} from "../utils/enrichSubagentCardsFromTaskNotifications";
+import {
+  syncSubagentInspectorFromCards,
+  useSubagentInspectorSelection,
+} from "../hooks/useSubagentInspectorStore";
+import {
+  mergeSubagentEnrichmentSources,
+  useSubagentSessionProbeVersion,
+} from "../hooks/useSubagentSessionProbeStore";
+import { SubagentRingCard } from "./SubagentRingCard";
 
 type ToolItem = Extract<ConversationItem, { kind: "tool" }>;
 
@@ -14,12 +26,55 @@ type SubagentSquadGridProps = {
   className?: string;
 };
 
+type StatusCounts = {
+  completed: number;
+  running: number;
+  error: number;
+};
+
+function countCardStatuses(
+  cards: readonly { status: "running" | "completed" | "error" }[],
+): StatusCounts {
+  let completed = 0;
+  let running = 0;
+  let error = 0;
+  for (const card of cards) {
+    if (card.status === "completed") {
+      completed += 1;
+    } else if (card.status === "error") {
+      error += 1;
+    } else {
+      running += 1;
+    }
+  }
+  return { completed, running, error };
+}
+
+/** 只拼非 0 段，避免「4 完成 · 0 运行 · 0 失败」噪音 */
+export function formatSquadStatusSummary(
+  counts: StatusCounts,
+  labels: { completed: string; running: string; error: string },
+): string {
+  const parts: string[] = [];
+  if (counts.completed > 0) {
+    parts.push(`${counts.completed} ${labels.completed}`);
+  }
+  if (counts.running > 0) {
+    parts.push(`${counts.running} ${labels.running}`);
+  }
+  if (counts.error > 0) {
+    parts.push(`${counts.error} ${labels.error}`);
+  }
+  return parts.join(" · ");
+}
+
 export const SubagentSquadGrid = memo(function SubagentSquadGrid({
   items,
   className,
 }: SubagentSquadGridProps) {
   const { t } = useTranslation();
   const selected = useSubagentInspectorSelection();
+  const probeVersion = useSubagentSessionProbeVersion();
   const parentThreadId = useActiveCanvasSelector((snapshot) => snapshot.threadId);
   const nativeThreadIds = useActiveCanvasSelector(
     (snapshot) => snapshot.activeNativeThreadIds,
@@ -33,6 +88,8 @@ export const SubagentSquadGrid = memo(function SubagentSquadGrid({
   const threadItemsByThread = useActiveCanvasSelector(
     (snapshot) => snapshot.threadItemsByThread,
   );
+  // 幕布正在渲染的 items 是 notification 扫描最稳的事实源
+  const canvasItems = useActiveCanvasSelector((snapshot) => snapshot.items);
   const cards = useMemo(() => {
     const raw = buildSubagentCardsFromToolItems(items, {
       parentThreadId,
@@ -42,69 +99,92 @@ export const SubagentSquadGrid = memo(function SubagentSquadGrid({
         name: thread.name,
       })),
     });
-    return enrichSubagentCardStatuses(raw, {
+    const enrichment = mergeSubagentEnrichmentSources({
       statusById: threadStatusById,
       itemsByThread: threadItemsByThread,
     });
+    const statusEnriched = enrichSubagentCardStatuses(raw, enrichment);
+    // Claude task-notification：幕布 items ∪ 父 thread 表，避免只扫 store 空表
+    const parentTableItems =
+      parentThreadId && threadItemsByThread
+        ? threadItemsByThread[parentThreadId] ?? null
+        : null;
+    const notificationSource = mergeConversationItemSources(
+      canvasItems,
+      parentTableItems,
+    );
+    return enrichSubagentCardsFromTaskNotifications(
+      statusEnriched,
+      notificationSource,
+      items,
+    );
+    // probeVersion：抽屉旁路 load 写入 probe 后强制 re-enrich
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- probeVersion 是订阅触发器
   }, [
+    canvasItems,
     childSubagentThreads,
     items,
     nativeThreadIds,
     parentThreadId,
+    probeVersion,
     threadItemsByThread,
     threadStatusById,
   ]);
-  const completedCount = cards.filter((card) => card.status === "completed").length;
-  const titleHint =
-    cards.find((card) => card.description)?.description ??
-    t("subagentUi.squadFallbackTitle", { defaultValue: "并行子代理" });
+
+  // 列表 re-enrich 后同步抽屉 header status（打破打开瞬间的 snapshot 冻结）
+  useEffect(() => {
+    syncSubagentInspectorFromCards(cards);
+  }, [cards]);
+
+  const statusCounts = useMemo(() => countCardStatuses(cards), [cards]);
+
+  const statusSummary = useMemo(
+    () =>
+      formatSquadStatusSummary(statusCounts, {
+        completed: t("subagentUi.statusShort.completed", { defaultValue: "完成" }),
+        running: t("subagentUi.statusShort.running", { defaultValue: "运行" }),
+        error: t("subagentUi.statusShort.error", { defaultValue: "失败" }),
+      }),
+    [statusCounts, t],
+  );
 
   if (cards.length === 0) {
     return null;
   }
 
-  if (cards.length === 1) {
-    const only = cards[0];
-    if (!only) {
-      return null;
-    }
-    return (
-      <div className={className ?? "subagent-squad-single"}>
-        <SubagentPersonaCard
-          card={only}
-          compact
-          selected={selected?.id === only.id}
-        />
-      </div>
-    );
-  }
-
   return (
     <section
-      className={className ?? "subagent-squad"}
+      className={cn("subagent-squad", className)}
       aria-label={t("subagentUi.squadAria", { defaultValue: "子代理小队" })}
     >
-      <header className="subagent-squad-header">
+      <header className="subagent-squad-header is-segment">
         <span className="subagent-squad-title">
-          {t("subagentUi.squadTitle", {
+          {t("subagentUi.squadTitleCount", {
             total: cards.length,
-            completed: completedCount,
-            defaultValue: "{{completed}}/{{total}} 个助手",
+            defaultValue: "{{total}} 个助手",
           })}
         </span>
-        <span className="subagent-squad-badge" aria-hidden>
-          {t("subagentUi.badge", { defaultValue: "SubAgent" })}
-        </span>
-        <span className="subagent-squad-subtitle" title={titleHint}>
-          {titleHint}
-        </span>
+        {statusSummary ? (
+          <span className="subagent-squad-summary" title={statusSummary}>
+            {statusSummary}
+          </span>
+        ) : null}
       </header>
-      <div className="subagent-squad-grid">
+
+      <div className="subagent-segment-track" aria-hidden>
         {cards.map((card) => (
-          <SubagentPersonaCard
+          <span
+            key={card.id}
+            className={`subagent-segment is-${card.status}`}
+          />
+        ))}
+      </div>
+
+      <div className="subagent-ring-grid">
+        {cards.map((card) => (
+          <SubagentRingCard
             key={card.id}
             card={card}
-            compact
             selected={selected?.id === card.id}
           />
         ))}

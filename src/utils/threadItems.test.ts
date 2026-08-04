@@ -9,6 +9,7 @@ import {
   normalizeItem,
   previewThreadName,
   prepareThreadItems,
+  rebalanceTrailingToolsBeforeFinalAssistants,
   upsertItem,
 } from "./threadItems";
 
@@ -729,6 +730,215 @@ describe("threadItems", () => {
     expect(
       merged.some((item) => item.kind === "reasoning" && item.id === "shared-1"),
     ).toBe(true);
+  });
+
+  it("inserts late tools before trailing final assistant conclusion (not after)", () => {
+    const user: ConversationItem = {
+      id: "user-1",
+      kind: "message",
+      role: "user",
+      text: "查一下再总结",
+    };
+    const conclusion: ConversationItem = {
+      id: "assistant-1",
+      kind: "message",
+      role: "assistant",
+      text: "方案 A：改动最小。",
+      isFinal: true,
+    };
+    const lateTool: ConversationItem = {
+      id: "tool-read-1",
+      kind: "tool",
+      toolType: "mcpToolCall",
+      title: "Read proposal.md",
+      detail: "",
+      status: "completed",
+      output: "...",
+    };
+
+    const next = upsertItem([user, conclusion], lateTool);
+    expect(next.map((item) => item.id)).toEqual([
+      "user-1",
+      "tool-read-1",
+      "assistant-1",
+    ]);
+  });
+
+  it("does not pull mid-stream tools before a non-final preamble", () => {
+    const list: ConversationItem[] = [
+      {
+        id: "user-1",
+        kind: "message",
+        role: "user",
+        text: "go",
+      },
+      {
+        id: "assistant-1",
+        kind: "message",
+        role: "assistant",
+        text: "我先读文件。",
+        isFinal: false,
+      },
+    ];
+    const midTool: ConversationItem = {
+      id: "tool-1",
+      kind: "tool",
+      toolType: "mcpToolCall",
+      title: "Read",
+      detail: "",
+      status: "in_progress",
+    };
+    const next = upsertItem(list, midTool);
+    expect(next.map((item) => item.id)).toEqual([
+      "user-1",
+      "assistant-1",
+      "tool-1",
+    ]);
+  });
+
+  it("inserts late tools before trailing final assistant (+ reasoning) block", () => {
+    const list: ConversationItem[] = [
+      {
+        id: "user-1",
+        kind: "message",
+        role: "user",
+        text: "go",
+      },
+      {
+        id: "assistant-1",
+        kind: "message",
+        role: "assistant",
+        text: "结论在工具后才对",
+        isFinal: true,
+      },
+      {
+        id: "reasoning-1",
+        kind: "reasoning",
+        summary: "",
+        content: "think",
+      },
+    ];
+    const lateTool: ConversationItem = {
+      id: "tool-1",
+      kind: "tool",
+      toolType: "commandExecution",
+      title: "Read",
+      detail: "",
+      status: "in_progress",
+    };
+    const next = upsertItem(list, lateTool);
+    expect(next.map((item) => item.kind)).toEqual([
+      "message",
+      "tool",
+      "message",
+      "reasoning",
+    ]);
+    expect(next[1]?.id).toBe("tool-1");
+  });
+
+  it("keeps in-place tool updates and does not move existing tools", () => {
+    const list: ConversationItem[] = [
+      {
+        id: "user-1",
+        kind: "message",
+        role: "user",
+        text: "q",
+      },
+      {
+        id: "tool-1",
+        kind: "tool",
+        toolType: "mcpToolCall",
+        title: "Read",
+        detail: "a.ts",
+        status: "in_progress",
+      },
+      {
+        id: "assistant-1",
+        kind: "message",
+        role: "assistant",
+        text: "done",
+      },
+    ];
+    const completed: ConversationItem = {
+      id: "tool-1",
+      kind: "tool",
+      toolType: "mcpToolCall",
+      title: "Read",
+      detail: "a.ts",
+      status: "completed",
+      output: "ok",
+    };
+    const next = upsertItem(list, completed);
+    expect(next.map((item) => item.id)).toEqual([
+      "user-1",
+      "tool-1",
+      "assistant-1",
+    ]);
+    expect((next[1] as Extract<ConversationItem, { kind: "tool" }>).status).toBe(
+      "completed",
+    );
+  });
+
+  it("appends tools when there is no trailing assistant", () => {
+    const list: ConversationItem[] = [
+      {
+        id: "user-1",
+        kind: "message",
+        role: "user",
+        text: "q",
+      },
+    ];
+    const tool: ConversationItem = {
+      id: "tool-1",
+      kind: "tool",
+      toolType: "mcpToolCall",
+      title: "Read",
+      detail: "",
+      status: "in_progress",
+    };
+    const next = upsertItem(list, tool);
+    expect(next.map((item) => item.id)).toEqual(["user-1", "tool-1"]);
+  });
+
+  it("rebalances trailing tools before final assistants after late append", () => {
+    const list: ConversationItem[] = [
+      {
+        id: "user-1",
+        kind: "message",
+        role: "user",
+        text: "q",
+      },
+      {
+        id: "assistant-1",
+        kind: "message",
+        role: "assistant",
+        text: "长结论",
+        isFinal: true,
+      },
+      {
+        id: "tool-1",
+        kind: "tool",
+        toolType: "mcpToolCall",
+        title: "Read a",
+        detail: "",
+        status: "completed",
+      },
+      {
+        id: "tool-2",
+        kind: "tool",
+        toolType: "mcpToolCall",
+        title: "Read b",
+        detail: "",
+        status: "completed",
+      },
+    ];
+    const next = rebalanceTrailingToolsBeforeFinalAssistants(list);
+    expect(next.map((item) => item.id)).toEqual([
+      "user-1",
+      "tool-1",
+      "tool-2",
+      "assistant-1",
+    ]);
   });
 
   it("ignores glob patterns when summarizing rg --files commands", () => {
@@ -2037,6 +2247,49 @@ go lang`,
       expect(item.agentStatus).toEqual({
         "agent-2": { status: "completed" },
       });
+    }
+  });
+
+  it("extracts live collab receivers from targets and arguments (history parity)", () => {
+    const fromTargets = buildConversationItem({
+      type: "collabToolCall",
+      id: "wait-targets-1",
+      tool: "wait_agent",
+      status: "running",
+      targets: ["agent-current-1", "agent-current-2"],
+    });
+    expect(fromTargets).not.toBeNull();
+    if (fromTargets && fromTargets.kind === "tool") {
+      expect(fromTargets.receiverThreadIds).toEqual([
+        "agent-current-1",
+        "agent-current-2",
+      ]);
+      // tool call id must not become a receiver
+      expect(fromTargets.receiverThreadIds).not.toContain("wait-targets-1");
+    }
+
+    const fromArgs = buildConversationItem({
+      type: "collabToolCall",
+      id: "wait-args-1",
+      tool: "wait",
+      status: "running",
+      arguments: JSON.stringify({ ids: ["agent-9"] }),
+    });
+    expect(fromArgs).not.toBeNull();
+    if (fromArgs && fromArgs.kind === "tool") {
+      expect(fromArgs.receiverThreadIds).toEqual(["agent-9"]);
+    }
+
+    const fromDetailArrow = buildConversationItem({
+      type: "collabToolCall",
+      id: "wait-detail-1",
+      tool: "wait",
+      status: "running",
+      detail: "From parent-root → agent-a, agent-b",
+    });
+    expect(fromDetailArrow).not.toBeNull();
+    if (fromDetailArrow && fromDetailArrow.kind === "tool") {
+      expect(fromDetailArrow.receiverThreadIds).toEqual(["agent-a", "agent-b"]);
     }
   });
 

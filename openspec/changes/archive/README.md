@@ -2,13 +2,90 @@
 
 本页为 `mossx` 已归档 OpenSpec proposal 的完整可点击索引。目录名中的日期是 archive date，不代表 proposal 首次创建时间。
 
-- Updated At: `2026-08-02`
-- Indexed proposals: `736`
+- Updated At: `2026-08-03`
+- Indexed proposals: `848`
 - Source of truth: `openspec/changes/archive/<archive-date>-<change-id>/proposal.md`
 - Back to current changes: [`../README.md`](../README.md)
 - Back to workspace overview: [`../../project.md`](../../project.md)
 
-## 2026-08 (2)
+## 2026-08 (66)
+
+### 2026-08-03
+
+- [`2026-08-03-add-atlas-cloud-codex-preset`](2026-08-03-add-atlas-cloud-codex-preset/proposal.md) — verified implementation，已同步 `codex-provider-management`；Codex provider 预设新增 Atlas Cloud，含 Live API smoke
+- [`2026-08-03-close-native-session-provider-create-binding`](2026-08-03-close-native-session-provider-create-binding/proposal.md) — verified implementation，已同步 `claude-provider-management`、`engine-per-session-provider-binding`、`shared-execution-target`；Native 新建菜单绑定供应商 + Shared Claude 切渠道重载 catalog
+- [`2026-08-03-default-collapse-workspace-actions-menu`](2026-08-03-default-collapse-workspace-actions-menu/proposal.md) — verified implementation，已同步 `sidebar-workspace-menu-group-collapse`；workspace actions 组默认折叠，支持可访问临时展开
+- [`2026-08-03-fix-linux-startup-preserve-baidu-analytics`](2026-08-03-fix-linux-startup-preserve-baidu-analytics/proposal.md) — verified implementation，已同步 `linux-native-baidu-analytics-stability`；Linux native 百度统计绕过 unsafe WebKit 路径，保留 PV/UV 与 visitor identity
+- [`2026-08-03-honor-native-session-renamed-titles`](2026-08-03-honor-native-session-renamed-titles/proposal.md) — verified implementation，已同步 `claude-session-sidebar-state-parity`、`codex-session-sidebar-state-parity`；侧栏标题优先展示 native rename（custom-title / thread_name）
+- [`2026-08-03-grok-cli-image-input-capability-gap`](2026-08-03-grok-cli-image-input-capability-gap/proposal.md) — verified / 已验收，已同步 `engine-image-input-boundary`；Grok/Kimi/OpenCode image transport + history presentation；Claude/Codex 兼容
+- [`2026-08-03-enhance-subagent-canvas-persona-ui`](2026-08-03-enhance-subagent-canvas-persona-ui/proposal.md) — verified / 已验收，已同步 `subagent-canvas-persona-ui`、`generic-tool-presentation`；subagent canvas 人格卡片、squad grid、inspector drawer
+
+
+#### 2026-08-03 第二波（complete / archive-ready）
+
+- [`2026-08-03-add-skill-invocation-contract-and-prompt-distill`](2026-08-03-add-skill-invocation-contract-and-prompt-distill/proposal.md) — 已同步 skill invocation / prompt distill contracts
+- [`2026-08-03-add-skills-hub-management`](2026-08-03-add-skills-hub-management/proposal.md) — 已同步 `extensions-management-surface`、`curated-skill-bundles`、`skills-hub-management`
+- [`2026-08-03-add-tokentracker-usage-dashboard`](2026-08-03-add-tokentracker-usage-dashboard/proposal.md) — complete implementation archive；无 delta specs
+- [`2026-08-03-allow-provider-continuation-cancel-while-running`](2026-08-03-allow-provider-continuation-cancel-while-running/proposal.md) — 已同步 running 态 continuation cancel
+- [`2026-08-03-default-collapse-provider-continuation-families`](2026-08-03-default-collapse-provider-continuation-families/proposal.md) — 已同步 provider continuation families 默认折叠
+- [`2026-08-03-enhance-provider-empty-model-and-custom-reasoning`](2026-08-03-enhance-provider-empty-model-and-custom-reasoning/proposal.md) — 已同步 empty model / custom reasoning
+- [`2026-08-03-establish-session-foundation-contracts`](2026-08-03-establish-session-foundation-contracts/proposal.md) — 已同步 session foundation contracts
+- [`2026-08-03-extend-shared-session-cli-targets`](2026-08-03-extend-shared-session-cli-targets/proposal.md) — 已同步 shared session CLI targets 扩展
+- [`2026-08-03-filter-native-grok-opencode-provider-picker`](2026-08-03-filter-native-grok-opencode-provider-picker/proposal.md) — 已同步 native Grok/OpenCode provider picker filter
+- [`2026-08-03-fix-codex-model-reasoning-fallback-mapping`](2026-08-03-fix-codex-model-reasoning-fallback-mapping/proposal.md) — 已同步 Codex model reasoning fallback mapping
+- [`2026-08-03-fix-codex-provider-continuation-projection`](2026-08-03-fix-codex-provider-continuation-projection/proposal.md) — 已同步 `native-provider-continuation` Codex projection
+- [`2026-08-03-fix-codex-provider-continuation-source-identity`](2026-08-03-fix-codex-provider-continuation-source-identity/proposal.md) — 已同步 Codex continuation source identity
+- [`2026-08-03-fix-codex-stale-dead-thread-fork-continuation`](2026-08-03-fix-codex-stale-dead-thread-fork-continuation/proposal.md) — 已同步 Codex stale/dead thread fork continuation
+- [`2026-08-03-fix-grok-history-tool-projection`](2026-08-03-fix-grok-history-tool-projection/proposal.md) — 已同步 Grok history tool projection
+- [`2026-08-03-fix-native-continuation-token-projection`](2026-08-03-fix-native-continuation-token-projection/proposal.md) — 已同步 native continuation token projection
+- [`2026-08-03-fix-provider-scoped-model-catalog-selection`](2026-08-03-fix-provider-scoped-model-catalog-selection/proposal.md) — 已同步 provider-scoped model catalog selection
+- [`2026-08-03-fix-shared-canonical-history-recovery`](2026-08-03-fix-shared-canonical-history-recovery/proposal.md) — 已同步 shared canonical history recovery
+- [`2026-08-03-fix-shared-durable-terminal-barrier`](2026-08-03-fix-shared-durable-terminal-barrier/proposal.md) — 已同步 shared durable terminal barrier
+- [`2026-08-03-fix-shared-hidden-binding-visibility`](2026-08-03-fix-shared-hidden-binding-visibility/proposal.md) — 已同步 shared hidden binding visibility
+- [`2026-08-03-fix-shared-local-claude-target-selection`](2026-08-03-fix-shared-local-claude-target-selection/proposal.md) — 已同步 shared local Claude target selection
+- [`2026-08-03-fix-shared-session-askuserquestion-control-owner`](2026-08-03-fix-shared-session-askuserquestion-control-owner/proposal.md) — 已同步 AskUserQuestion control owner
+- [`2026-08-03-fix-shared-session-identity-id-first`](2026-08-03-fix-shared-session-identity-id-first/proposal.md) — 已同步 shared session identity id-first
+- [`2026-08-03-fix-shared-session-live-projection-resume`](2026-08-03-fix-shared-session-live-projection-resume/proposal.md) — 已同步 shared live projection resume
+- [`2026-08-03-fix-shared-target-send-rollout`](2026-08-03-fix-shared-target-send-rollout/proposal.md) — 已同步 shared target send rollout / pipeline
+- [`2026-08-03-fix-shared-terminal-recovery-i18n`](2026-08-03-fix-shared-terminal-recovery-i18n/proposal.md) — 已同步 shared terminal recovery i18n
+- [`2026-08-03-fix-streaming-render-stall-then-flush`](2026-08-03-fix-streaming-render-stall-then-flush/proposal.md) — 已同步 streaming render stall/flush
+- [`2026-08-03-grok-cli-reasoning-effort`](2026-08-03-grok-cli-reasoning-effort/proposal.md) — 已同步 Grok CLI reasoning effort
+- [`2026-08-03-harden-composer-and-ai-commit-controls`](2026-08-03-harden-composer-and-ai-commit-controls/proposal.md) — 已同步 composer / AI commit control surfaces
+- [`2026-08-03-modernize-prompt-enhancer-and-curated-skills-refresh`](2026-08-03-modernize-prompt-enhancer-and-curated-skills-refresh/proposal.md) — 已同步 `composer-prompt-enhancer` 与 curated skills refresh
+- [`2026-08-03-move-mcp-inventory-to-extensions`](2026-08-03-move-mcp-inventory-to-extensions/proposal.md) — 已同步 `extensions-management-surface`、`claude-runtime-mcp-servers-panel`、`mcp-inventory-extensions-placement`
+- [`2026-08-03-prune-composer-autocomplete-dead-paths`](2026-08-03-prune-composer-autocomplete-dead-paths/proposal.md) — 已同步 composer autocomplete dead-path 清理相关 specs
+- [`2026-08-03-repair-shared-cli-creation-runtime-contracts`](2026-08-03-repair-shared-cli-creation-runtime-contracts/proposal.md) — 已同步 shared CLI creation runtime contracts
+- [`2026-08-03-restore-opencode-engine`](2026-08-03-restore-opencode-engine/proposal.md) — 已同步 OpenCode restore；移除 soft-retirement 过时约束
+- [`2026-08-03-sync-shared-session-curtain-parity`](2026-08-03-sync-shared-session-curtain-parity/proposal.md) — 已同步 shared session curtain parity
+- [`2026-08-03-unify-conversation-canvas`](2026-08-03-unify-conversation-canvas/proposal.md) — 已同步 unified conversation canvas
+- [`2026-08-03-unify-input-history-and-commands-refresh`](2026-08-03-unify-input-history-and-commands-refresh/proposal.md) — 已同步 input history / commands refresh contracts
+- [`2026-08-03-use-home-double-column-target-picker`](2026-08-03-use-home-double-column-target-picker/proposal.md) — 已同步 home double-column target picker
+
+
+#### 2026-08-03 第三波（shipped + manual residual waived）
+
+判定口径：实现已合入主线，仅剩人工 smoke / 可选测试 / quantified evidence 的 change，按“已上线解决主问题”归档。
+
+- [`2026-08-03-adapt-subagent-cross-engine-display`](2026-08-03-adapt-subagent-cross-engine-display/proposal.md) — 已上线+用户验收；可选 ja/ko 文案 residual waived；已同步 subagent persona/tree specs
+- [`2026-08-03-add-cc-switch-provider-import`](2026-08-03-add-cc-switch-provider-import/proposal.md) — 实现已上线；真实 CC Switch DB 手工 residual waived
+- [`2026-08-03-add-cli-engine-visibility-toggle`](2026-08-03-add-cli-engine-visibility-toggle/proposal.md) — 实现已上线；设置页/composer 可见性开关；已同步 `cli-engine-visibility`
+- [`2026-08-03-add-grok-engine`](2026-08-03-add-grok-engine/proposal.md) — Grok 引擎 runtime 已上线；GUI 全路径 smoke residual waived；已同步 `grok-engine-runtime`
+- [`2026-08-03-add-message-file-edit-scene-collapse`](2026-08-03-add-message-file-edit-scene-collapse/proposal.md) — 幕布文件修改折叠已上线；人工 smoke residual waived
+- [`2026-08-03-add-shared-session-catalog-management`](2026-08-03-add-shared-session-catalog-management/proposal.md) — shared catalog 已上线；可选单测 residual waived
+- [`2026-08-03-add-vendor-cli-lifecycle-header`](2026-08-03-add-vendor-cli-lifecycle-header/proposal.md) — CLI lifecycle header 已上线；多状态手工 residual waived
+- [`2026-08-03-compact-diff-push-button`](2026-08-03-compact-diff-push-button/proposal.md) — compact push 已上线；UI 确认 residual waived
+- [`2026-08-03-disable-session-activity-and-solo-mode`](2026-08-03-disable-session-activity-and-solo-mode/proposal.md) — session activity/solo 下线已上线；人工清单 residual waived
+- [`2026-08-03-enable-claude-lightweight-streaming-and-frame-attribution`](2026-08-03-enable-claude-lightweight-streaming-and-frame-attribution/proposal.md) — lightweight streaming + frame attribution 已上线；quantified FPS residual waived
+- [`2026-08-03-fix-messages-scroll-echo-follow-loss`](2026-08-03-fix-messages-scroll-echo-follow-loss/proposal.md) — scroll echo 修复已上线（含 focused tests）；实机 residual waived
+- [`2026-08-03-fix-native-claude-provider-runtime-model-sync`](2026-08-03-fix-native-claude-provider-runtime-model-sync/proposal.md) — Claude provider runtime model sync 已上线；DeepSeek 手工 residual waived
+- [`2026-08-03-fix-native-session-quota-target-scoping`](2026-08-03-fix-native-session-quota-target-scoping/proposal.md) — quota target scoping 已上线；已同步 `status-panel-session-overview`
+- [`2026-08-03-fix-runtime-jank-feedback-and-catalog-race`](2026-08-03-fix-runtime-jank-feedback-and-catalog-race/proposal.md) — jank/catalog race 修复已上线+自动化通过；packaged runtime residual waived
+- [`2026-08-03-fix-shared-session-target-race-and-merge`](2026-08-03-fix-shared-session-target-race-and-merge/proposal.md) — shared target race/merge 已上线；手工 residual waived
+- [`2026-08-03-reduce-client-polling-overhead`](2026-08-03-reduce-client-polling-overhead/proposal.md) — polling 降载已上线+自动化通过；四路径 smoke residual waived
+- [`2026-08-03-refactor-conversation-canvas-scroll-ownership`](2026-08-03-refactor-conversation-canvas-scroll-ownership/proposal.md) — scroll ownership 重构已上线；实机 residual waived
+- [`2026-08-03-replace-checkpoint-governance-with-session-overview`](2026-08-03-replace-checkpoint-governance-with-session-overview/proposal.md) — 结果 tab 会话概览已上线；手工 residual waived
+- [`2026-08-03-stabilize-client-runtime-and-diagnostics`](2026-08-03-stabilize-client-runtime-and-diagnostics/proposal.md) — runtime/diagnostics 稳定化已上线；功能 smoke 已过，quantified frame residual waived
+- [`2026-08-03-streamline-native-provider-continuation`](2026-08-03-streamline-native-provider-continuation/proposal.md) — provider continuation 单确认/进度已上线；跨引擎手工 residual waived
 
 ### 2026-08-02
 

@@ -115,6 +115,23 @@ describe("DesktopLayout", () => {
     expect(container.querySelector(".right-panel")).toBeNull();
   });
 
+  it("opens Git Graph as a bottom half-dock with a resize handle", () => {
+    const { container, getByText, getByRole } = renderDesktopLayout({
+      showGitHistory: true,
+    });
+
+    const overlay = container.querySelector(".git-history-dock-overlay");
+    const body = container.querySelector(".git-history-dock-body");
+    expect(overlay).toBeTruthy();
+    expect(body).toBeTruthy();
+    expect(body?.getAttribute("role")).not.toBe("dialog");
+    expect(container.querySelector(".git-history-dock-resizer")).toBeTruthy();
+    expect(
+      getByRole("separator", { name: /resizeGitHistoryPanel|resize git history/i }),
+    ).toBeTruthy();
+    expect(getByText("git-history")).toBeTruthy();
+  });
+
   it("keeps plan section expanded in normal activity view", () => {
     const { container } = renderDesktopLayout();
 

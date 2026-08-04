@@ -28,6 +28,12 @@ export type GitHistoryCommitFiltersProps = {
   onFiltersChange: (values: GitHistoryCommitFilterValues) => void;
   onBranchChange: (branch: string) => void;
   onClear: () => void;
+  /** Graph density: only first-parent spine (collapsed hierarchy). */
+  graphFirstParentOnly?: boolean;
+  /** Hide chore(trellis) session-record noise commits. */
+  graphHideNoise?: boolean;
+  onGraphFirstParentOnlyChange?: (value: boolean) => void;
+  onGraphHideNoiseChange?: (value: boolean) => void;
 };
 
 type TextFilterFieldProps = {
@@ -108,6 +114,10 @@ export function GitHistoryCommitFilters({
   onFiltersChange,
   onBranchChange,
   onClear,
+  graphFirstParentOnly = false,
+  graphHideNoise = false,
+  onGraphFirstParentOnlyChange,
+  onGraphHideNoiseChange,
 }: GitHistoryCommitFiltersProps) {
   const { t } = useTranslation();
   const authorListId = useId();
@@ -147,14 +157,19 @@ export function GitHistoryCommitFilters({
     queryDraft.trim()
       || authorDraft.trim()
       || values.datePreset !== "all"
-      || selectedBranch !== defaultBranch,
+      || selectedBranch !== defaultBranch
+      || graphFirstParentOnly
+      || graphHideNoise,
+  );
+  const showGraphToggles = Boolean(
+    onGraphFirstParentOnlyChange || onGraphHideNoiseChange,
   );
 
   return (
     <div className="git-history-commit-filters">
       <div className="git-history-column-header git-history-commit-filter-header">
-        <span className="git-history-commit-filter-title">{headerTitle}</span>
-        <div className="git-history-filter-row">
+        <div className="git-history-commit-filter-leading">
+          <span className="git-history-commit-filter-title">{headerTitle}</span>
           <GitHistoryInlinePicker
             label={t("git.historyFilterBranchLabel")}
             value={selectedBranch}
@@ -172,7 +187,9 @@ export function GitHistoryCommitFilters({
               onBranchChange(branch);
             }}
           />
+        </div>
 
+        <div className="git-history-filter-row">
           <TextFilterField
             icon={<UserRound size={12} />}
             name="git-history-commit-author"
@@ -213,13 +230,55 @@ export function GitHistoryCommitFilters({
             }}
           />
 
+          {showGraphToggles ? (
+            <div
+              className="git-history-graph-view-toggles"
+              role="group"
+              aria-label={t("git.historyGraphViewOptions")}
+            >
+              {onGraphFirstParentOnlyChange ? (
+                <button
+                  type="button"
+                  className={`git-history-graph-view-toggle${
+                    graphFirstParentOnly ? " is-active" : ""
+                  }`}
+                  disabled={disabled}
+                  aria-pressed={graphFirstParentOnly}
+                  title={t("git.historyGraphFirstParentHint")}
+                  onClick={() => onGraphFirstParentOnlyChange(!graphFirstParentOnly)}
+                >
+                  {t("git.historyGraphFirstParent")}
+                </button>
+              ) : null}
+              {onGraphHideNoiseChange ? (
+                <button
+                  type="button"
+                  className={`git-history-graph-view-toggle${
+                    graphHideNoise ? " is-active" : ""
+                  }`}
+                  disabled={disabled}
+                  aria-pressed={graphHideNoise}
+                  title={t("git.historyGraphHideNoiseHint")}
+                  onClick={() => onGraphHideNoiseChange(!graphHideNoise)}
+                >
+                  {t("git.historyGraphHideNoise")}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
           <button
             type="button"
             className="git-history-filter-clear-all"
-            disabled={disabled || !hasActiveFilters}
+            disabled={
+              disabled
+              || !hasActiveFilters
+            }
             onClick={() => {
               setQueryDraft("");
               setAuthorDraft("");
+              onGraphFirstParentOnlyChange?.(false);
+              onGraphHideNoiseChange?.(false);
               onClear();
             }}
           >

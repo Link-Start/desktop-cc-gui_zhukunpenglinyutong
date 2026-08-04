@@ -107,7 +107,13 @@ The bridge MUST distinguish three quality states: healthy (`degraded: false`, `s
 
 ### Requirement: Governance Evidence Consumption MUST Default To Advisory Semantics
 
-The system MUST treat all harness governance evidence consumed by the bridge, existing and new, as advisory by default. Missing artifacts, stale artifacts, malformed advisory reports, platform qualifiers, spec warnings, large-file near-threshold findings, and heavy-test-noise warnings MUST remain visible as governance evidence without automatically creating a blocking checkpoint verdict.
+The system MUST treat all harness governance evidence consumed by the bridge, existing and new, as advisory by default. Missing artifacts, stale artifacts, malformed advisory reports, platform qualifiers, spec warnings, large-file near-threshold findings, and heavy-test-noise warnings MUST remain visible as governance evidence without automatically creating a blocking checkpoint verdict. Governance evidence MUST only participate in checkpoint verdict computation while the governance evidence surface is opted in; when the surface is disabled, the checkpoint verdict MUST be derived exclusively from in-session signals.
+
+#### Scenario: disabled surface decouples governance from verdict
+
+- **WHEN** the governance evidence visibility control is off
+- **THEN** the checkpoint view model MUST receive a null governance snapshot
+- **AND** the checkpoint verdict MUST NOT be influenced by any governance evidence, including cost-budget derived evidence
 
 #### Scenario: missing governance artifact remains advisory
 

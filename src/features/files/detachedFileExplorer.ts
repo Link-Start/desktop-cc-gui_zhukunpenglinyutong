@@ -1,6 +1,7 @@
 import { emitTo } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { writeClientStoreValue, getClientStoreSync } from "../../services/clientStorage";
+import { reapplyLastDockIconPreference } from "../theme/utils/dockIcon";
 import { isMacPlatform } from "../../utils/platform";
 
 export const DETACHED_FILE_EXPLORER_WINDOW_LABEL = "file-explorer";
@@ -203,6 +204,14 @@ async function createDetachedFileExplorerWindow(
           sessionForWindow,
         ).catch(() => {});
         await detachedWindow.setFocus().catch(() => {});
+        // Win/Linux: per-window taskbar icon — stamp the new surface with the
+        // current preference (no-op-ish on macOS beyond window chrome).
+        void reapplyLastDockIconPreference().catch((error) => {
+          console.error(
+            "[detached-file-explorer] failed to reapply dock icon",
+            error,
+          );
+        });
         settle(() => {
           resolve("created");
         });

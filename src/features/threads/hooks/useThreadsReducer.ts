@@ -4,6 +4,7 @@ import {
   MAX_ITEM_TEXT,
   normalizeItem,
   prepareThreadItems,
+  rebalanceTrailingToolsBeforeFinalAssistants,
   __getPrepareThreadItemsCallCountForTests,
   __resetPrepareThreadItemsCallCountForTests,
   upsertItem,
@@ -90,7 +91,7 @@ import {
   collectThreadScopedCodexCompactionMessages,
   filterThreadScopedCodexCompactionMessages,
   findAssistantMessageIndexById,
-  findAssistantMessageIndexByPrefix,
+  findAssistantMessageIndexForLiveSettlement,
   isAssistantMessageItem,
   isThreadActiveInState,
   isThreadScopedCodexCompactionMessage,
@@ -544,12 +545,28 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         }
         const nextList = [...list];
         nextList[existingIndex] = updated;
+        // 同步 parentThreadId → threadParentById（Status / 树兜底与侧栏 summary 同源）
+        let nextThreadParentById = state.threadParentById;
+        const nextParent = updated.parentThreadId?.trim() || "";
+        if (
+          nextParent &&
+          nextParent !== updated.id &&
+          state.threadParentById[updated.id] !== nextParent
+        ) {
+          nextThreadParentById = {
+            ...state.threadParentById,
+            [updated.id]: nextParent,
+          };
+        }
         return {
           ...state,
           threadsByWorkspace: {
             ...state.threadsByWorkspace,
             [action.workspaceId]: nextList,
           },
+          ...(nextThreadParentById !== state.threadParentById
+            ? { threadParentById: nextThreadParentById }
+            : {}),
         };
       }
 
@@ -710,6 +727,15 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         ...(parentThreadId ? { parentThreadId } : {}),
         ...providerBindingFromEnsureThreadAction(action),
       };
+      // live subagent：summary.parentThreadId 与 threadParentById 必须同事务写入，
+      // 否则 Status 树兜底读不到侧栏已有的 children。
+      const nextThreadParentById =
+        parentThreadId && parentThreadId !== action.threadId
+          ? {
+              ...state.threadParentById,
+              [action.threadId]: parentThreadId,
+            }
+          : state.threadParentById;
       return {
         ...state,
         threadsByWorkspace: {
@@ -725,6 +751,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           [action.workspaceId]:
             state.activeThreadIdByWorkspace[action.workspaceId] ?? action.threadId,
         },
+        ...(nextThreadParentById !== state.threadParentById
+          ? { threadParentById: nextThreadParentById }
+          : {}),
       };
     }
     case "hideThread": {
@@ -1291,7 +1320,14 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       );
 
       const sourceItems = state.itemsByThread[action.threadId] ?? [];
-      let index = findAssistantMessageIndexById(sourceItems, segmentedItemId);
+      // Prefer latest tool-separated segment when resetAgentSegment collapsed
+      // resolution back to bare provider itemId (see live settlement helper).
+      let index = findAssistantMessageIndexForLiveSettlement(
+        sourceItems,
+        action.itemId,
+        segmentedItemId,
+        "append",
+      );
       let shouldCanonicalizeLegacyId = false;
       if (index < 0 && !isLegacyTextDeltaItemId(action.threadId, segmentedItemId)) {
         const legacySegmentedItemId = resolveLiveAssistantMessageId(
@@ -1299,19 +1335,31 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           action.threadId,
           buildLegacyTextDeltaItemId(action.threadId),
         );
-        index = findAssistantMessageIndexById(sourceItems, legacySegmentedItemId);
+        index = findAssistantMessageIndexForLiveSettlement(
+          sourceItems,
+          buildLegacyTextDeltaItemId(action.threadId),
+          legacySegmentedItemId,
+          "append",
+        );
         if (index < 0) {
           index = findAssistantMessageIndexByLegacyTextDelta(sourceItems, action.threadId);
         }
         shouldCanonicalizeLegacyId = index >= 0;
       }
+      // Streaming deltas MUST NOT cross-id glue: short prefixes trip loose
+      // areEquivalent (≥8) and can attach a new turn onto the previous bubble
+      // when the user row is not yet inserted. Settlement/upsert still converge.
       const shouldDeduplicateCodexAssistant = shouldDeduplicateCodexAssistantMessages({
         threadsByWorkspace: state.threadsByWorkspace,
         workspaceId: action.workspaceId,
         threadId: action.threadId,
       });
       if (index < 0 && shouldDeduplicateCodexAssistant) {
-        index = findEquivalentCodexAssistantMessageIndex(sourceItems, action.delta);
+        index = findEquivalentCodexAssistantMessageIndex(
+          sourceItems,
+          action.delta,
+          "streaming",
+        );
       }
       let list: ConversationItem[];
       if (index >= 0) {
@@ -1665,6 +1713,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         const codexEquivalentAssistantIndex = findEquivalentCodexAssistantMessageIndex(
           list,
           incomingAssistantText,
+          "settled",
         );
         const equivalentAssistantIndex =
           codexEquivalentAssistantIndex >= 0
@@ -1918,17 +1967,27 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         latestAssistant.finalDurationMs !== durationMs ||
         latestAssistant.finalInputTokens !== withTokens.finalInputTokens ||
         latestAssistant.finalOutputTokens !== withTokens.finalOutputTokens;
-      if (!shouldUpdate) {
-        return state;
-      }
       const next = [...list];
       next[latestAssistantIndex] = withTokens;
-      schedulePersistTurnFinalMetaFromItems(action.threadId, next);
+      // Late tools may have been appended while this bubble was still non-final
+      // (Grok bridge). After isFinal, pull trailing tools before the conclusion.
+      const finalizedItems = rebalanceTrailingToolsBeforeFinalAssistants(next);
+      const orderChanged = finalizedItems !== next;
+      if (!shouldUpdate && !orderChanged) {
+        // rebalance may return a new array even when order is unchanged — compare ids.
+        const sameOrder =
+          finalizedItems.length === list.length &&
+          finalizedItems.every((item, index) => item.id === list[index]?.id);
+        if (sameOrder) {
+          return state;
+        }
+      }
+      schedulePersistTurnFinalMetaFromItems(action.threadId, finalizedItems);
       return {
         ...state,
         itemsByThread: {
           ...state.itemsByThread,
-          [action.threadId]: next,
+          [action.threadId]: finalizedItems,
         },
       };
     }
@@ -2841,13 +2900,14 @@ function applyCompleteAgentMessageToState(
     params.itemId,
   );
   const list = [...(state.itemsByThread[params.threadId] ?? [])];
-  let index = findAssistantMessageIndexById(list, segmentedItemId);
-  if (index < 0) {
-    index = findAssistantMessageIndexById(list, params.itemId);
-  }
-  if (index < 0) {
-    index = findAssistantMessageIndexByPrefix(list, params.itemId);
-  }
+  // Settlement-safe target: do not remount post-tool conclusion onto pre-tool
+  // bare itemId after resetAgentSegment (fix-live-settle-assistant-tool-order).
+  let index = findAssistantMessageIndexForLiveSettlement(
+    list,
+    params.itemId,
+    segmentedItemId,
+    "complete",
+  );
   let shouldCanonicalizeLegacyId = false;
   if (index < 0 && !isLegacyTextDeltaItemId(params.threadId, segmentedItemId)) {
     const legacySegmentedItemId = resolveLiveAssistantMessageId(
@@ -2855,7 +2915,12 @@ function applyCompleteAgentMessageToState(
       params.threadId,
       buildLegacyTextDeltaItemId(params.threadId),
     );
-    index = findAssistantMessageIndexById(list, legacySegmentedItemId);
+    index = findAssistantMessageIndexForLiveSettlement(
+      list,
+      buildLegacyTextDeltaItemId(params.threadId),
+      legacySegmentedItemId,
+      "complete",
+    );
     if (index < 0) {
       index = findAssistantMessageIndexByLegacyTextDelta(list, params.threadId);
     }
@@ -2867,7 +2932,7 @@ function applyCompleteAgentMessageToState(
     threadId: params.threadId,
   });
   if (index < 0 && shouldDeduplicateCodexAssistant) {
-    index = findEquivalentCodexAssistantMessageIndex(list, params.text);
+    index = findEquivalentCodexAssistantMessageIndex(list, params.text, "settled");
   }
   const targetItemId =
     index >= 0
@@ -2959,9 +3024,12 @@ function applyCompleteAgentMessageToState(
       list.push(computedCompletedItem);
     }
   }
-  const updatedItems = prepareThreadItems(list, {
+  const preparedItems = prepareThreadItems(list, {
     preserveMessageTextIds: new Set([targetItemId]),
   });
+  // Complete marks isFinal; rebalance tools that already landed after the
+  // conclusion while the bubble was still non-final (late bridge tools).
+  const updatedItems = rebalanceTrailingToolsBeforeFinalAssistants(preparedItems);
   schedulePersistTurnFinalMetaFromItems(params.threadId, updatedItems);
   const nextThreadsByWorkspace = maybeRenameThreadFromAgent({
     workspaceId: params.workspaceId,

@@ -39,7 +39,7 @@ A `shared session` MUST append all user turns and assistant outputs into one can
 
 ### Requirement: Shared Session Hidden Native Bindings Stay Internal
 
-Native bindings owned by a `shared session` are runtime internals and MUST NOT become user-facing native conversations.
+Native bindings owned by a `shared session` are runtime internals and MUST NOT become user-facing native conversations. This rule applies to every Shared-supported engine (`Claude`, `Codex`, `Kimi`, `Grok`, `OpenCode`), not only `Claude` / `Codex`.
 
 #### Scenario: selector change does not create a visible native conversation
 
@@ -50,8 +50,21 @@ Native bindings owned by a `shared session` are runtime internals and MUST NOT b
 #### Scenario: shared-owned native bindings are filtered from native list surfaces
 
 - **WHEN** thread list / tabs / reopen flows include both native sessions and shared sessions
-- **THEN** native bindings marked as shared-owned internals MUST remain hidden from native conversation surfaces
+- **THEN** native bindings marked as shared-owned internals MUST remain hidden from native conversation surfaces for Claude, Codex, Kimi, Grok, and OpenCode
 - **AND** users MUST continue the conversation through the `shared session` identity
+
+#### Scenario: grok shared binding does not appear as native sidebar row
+
+- **WHEN** a Shared Session turn executes on Grok and materializes a Hidden Native Binding
+- **THEN** the thread list MUST NOT show a separate Grok native row for that binding
+  (including sessions whose first message is a context-package marker)
+- **AND** the only user-facing conversation row for that work MUST remain the `shared:*` identity
+
+#### Scenario: kimi and opencode shared bindings stay hidden after real id finalizes
+
+- **WHEN** a Shared Session turn executes on Kimi or OpenCode and the runtime later finalizes a real native session id
+- **THEN** the durable binding MUST be updated to that real identity
+- **AND** subsequent thread list / catalog merges MUST hide that native id from user-facing native surfaces
 
 ### Requirement: Shared Session Folder Assignment Stays Separate From Native Assignment
 
@@ -94,13 +107,20 @@ Shared history replay MUST preserve user-message visibility even when source pay
 
 ### Requirement: Shared Pending Rebinding Is Safe And Deterministic
 
-Pending placeholder rebind for shared/native bridge MUST avoid stale or ambiguous mappings.
+Pending placeholder rebind for shared/native bridge MUST avoid stale or ambiguous mappings, and MUST cover every Shared-supported engine that can finalize a native session id after send.
 
 #### Scenario: pending rebind uses unique fresh placeholder
 
 - **WHEN** runtime events arrive for a shared turn whose native thread id finalized after send
 - **THEN** the bridge MUST rebind through a unique pending placeholder for the same workspace/engine
 - **AND** subsequent turn events MUST route to the same shared thread identity
+
+#### Scenario: pending rebind covers all shared engines
+
+- **WHEN** a Shared Session pending binding exists for Claude, Codex, Kimi, Grok, or OpenCode
+- **AND** a `thread/started` (or equivalent identity finalization) event arrives for that engine
+- **THEN** the bridge MUST be allowed to rebind that engine's pending placeholder to the finalized native thread id
+- **AND** the system MUST NOT limit this rebind path to Claude/Codex only
 
 #### Scenario: stale or ambiguous pending placeholders are ignored
 
@@ -133,3 +153,37 @@ Adding `shared session` support MUST NOT change the creation, reopen, or history
 - **WHEN** the user creates or reopens a native `Codex`, `Claude`, `Gemini`, or `OpenCode` conversation
 - **THEN** the existing conversation MUST remain engine-scoped and follow its current native lifecycle
 - **AND** the presence of `shared session` support MUST NOT force migration or conversion
+
+### Requirement: Shared History Recovery MUST Remain Owned By The Shared Thread
+
+Shared history reload MUST use the stable canonical `shared:<UUID>` identity independently from its
+display title. A successful empty canonical projection MUST be treated as a valid empty Shared
+Session. A projection failure MUST remain observable and retryable, and MUST NOT activate or expose
+the Native history recovery card or Native automatic-recovery block.
+
+#### Scenario: title changes after first user turn
+
+- **WHEN** Shared Session presentation metadata changes from `Shared Session` to the first user
+  message
+- **THEN** Sidebar and history loading MUST continue using the original `shared:<UUID>`
+- **AND** all canonical history MUST remain attached to that same Shared thread
+
+#### Scenario: new Shared Session has no canonical turns
+
+- **WHEN** a newly created Shared Session successfully loads an empty canonical projection
+- **THEN** the history load MUST complete as a valid empty state
+- **AND** the UI MUST NOT show the Native “current session needs recovery” card
+
+#### Scenario: Shared projection temporarily fails
+
+- **WHEN** canonical projection fails and no readable Legacy snapshot exists
+- **THEN** the failure MUST remain observable in diagnostics
+- **AND** selecting the Shared Session again MUST retry canonical loading
+- **AND** the UI MUST NOT show the Native history recovery card
+- **AND** the loader MUST NOT invoke a Native Codex or Claude history fallback
+
+#### Scenario: Native history recovery remains unchanged
+
+- **WHEN** a Native Session enters its existing history recovery failure state
+- **THEN** the Native recovery card and action MUST remain available
+- **AND** Shared-specific recovery rules MUST NOT alter that Native state

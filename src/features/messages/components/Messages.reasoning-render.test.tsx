@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConversationItem } from "../../../types";
@@ -670,6 +670,128 @@ describe("Messages reasoning render", () => {
     expect(container.querySelectorAll(".thinking-block").length).toBe(2);
     expect(container.textContent ?? "").toContain("先读取 README 并识别技术栈");
     expect(container.textContent ?? "").toContain("根据文件内容继续分析");
+  });
+
+  it("merges thinking blocks when only canvas-hidden shell tools sit between them", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "reasoning-live-1",
+        kind: "reasoning",
+        summary: "Need handleUnstageRepositoryAll in layout",
+        content: "Need handleUnstageRepositoryAll in layout",
+      },
+      {
+        id: "bash-1",
+        kind: "tool",
+        toolType: "commandExecution",
+        title: "Command: pwd",
+        detail: "pwd",
+        status: "completed",
+        output: "",
+      },
+      {
+        id: "reasoning-live-2",
+        kind: "reasoning",
+        summary: "Need handleUnstageRepositoryFiles in app-shell",
+        content: "Need handleUnstageRepositoryFiles in app-shell",
+      },
+      {
+        id: "bash-2",
+        kind: "tool",
+        toolType: "bash",
+        title: "Bash",
+        detail: JSON.stringify({ command: "cargo check" }),
+        status: "completed",
+        output: "",
+      },
+      {
+        id: "reasoning-live-3",
+        kind: "reasoning",
+        summary: "Cargo is in src-tauri",
+        content: "Cargo is in src-tauri",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking
+        activeEngine="claude"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    // Shell is off-canvas, so consecutive thinking must render as one block.
+    expect(container.querySelectorAll(".thinking-block").length).toBe(1);
+    expect(container.textContent ?? "").toContain("handleUnstageRepositoryAll");
+    expect(container.textContent ?? "").toContain("handleUnstageRepositoryFiles");
+    expect(container.textContent ?? "").toContain("src-tauri");
+    expect(container.textContent ?? "").not.toContain("cargo check");
+  });
+
+  it("merges shell-separated thinking after the turn completes", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "user-1",
+        kind: "message",
+        role: "user",
+        text: "继续",
+      },
+      {
+        id: "reasoning-done-1",
+        kind: "reasoning",
+        summary: "先核对 unstage 入口",
+        content: "先核对 unstage 入口",
+      },
+      {
+        id: "bash-done-1",
+        kind: "tool",
+        toolType: "commandExecution",
+        title: "Command: cargo check",
+        detail: "cargo check",
+        status: "completed",
+        output: "",
+      },
+      {
+        id: "reasoning-done-2",
+        kind: "reasoning",
+        summary: "再跑 cargo",
+        content: "再跑 cargo",
+      },
+      {
+        id: "assistant-1",
+        kind: "message",
+        role: "assistant",
+        text: "已完成核对。",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        activeEngine="claude"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    // Completed turn folds process into chip by default; expand to assert merge.
+    const expandButton = container.querySelector(
+      "button.messages-live-middle-collapsed-indicator",
+    );
+    expect(expandButton).toBeTruthy();
+    fireEvent.click(expandButton as HTMLButtonElement);
+
+    // After expand, shell-separated reasoning must still be one thinking card.
+    expect(container.querySelectorAll(".thinking-block").length).toBe(1);
+    expect(container.textContent ?? "").toContain("先核对 unstage 入口");
+    expect(container.textContent ?? "").toContain("再跑 cargo");
   });
 
   it("keeps first multiline claude reasoning content after collapsing runs", () => {

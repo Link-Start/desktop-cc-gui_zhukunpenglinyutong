@@ -77,6 +77,7 @@ const sidebar = {
     expandWorkspace: "展开工作区会话",
     workspaceActionsGroup: "工作区操作",
     setWorkspaceAlias: "设置别名",
+    assignWorkspaceGroup: "调整所属分组",
     workspaceAliasPrompt:
       "输入此工作区在左侧栏显示的别名；留空将恢复原项目名。",
     workspaceAliasDialogTitle: "设置工作区别名",

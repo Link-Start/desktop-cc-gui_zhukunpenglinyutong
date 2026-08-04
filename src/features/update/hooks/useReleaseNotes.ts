@@ -5,8 +5,9 @@ import type { DebugEntry } from "../../../types";
 
 const RELEASE_NOTES_LAST_SEEN_KEY = "releaseNotesLastSeenVersion";
 
-const CHANGELOG_HEADING_CN = /^#{5}\s+\*\*(.+?)（\s*(v?[^）]+)\s*）\*\*\s*$/;
-const CHANGELOG_HEADING_ASCII = /^#{5}\s+\*\*(.+?)\(\s*(v?[^)]+)\s*\)\*\*\s*$/;
+// Real CHANGELOG uses ###; older samples / docs used #####. Accept both.
+const CHANGELOG_HEADING_CN = /^#{3,5}\s+\*\*(.+?)（\s*(v?[^）]+)\s*）\*\*\s*$/;
+const CHANGELOG_HEADING_ASCII = /^#{3,5}\s+\*\*(.+?)\(\s*(v?[^)]+)\s*\)\*\*\s*$/;
 const ENGLISH_MARKER = /^English:\s*$/i;
 const CHINESE_MARKER = /^中文[:：]\s*$/;
 const RULE_LINE = /^-{3,}\s*$/;
@@ -84,6 +85,19 @@ function trimBlock(lines: string[]): string {
   return filtered.slice(start, end).join("\n");
 }
 
+/** Slice one language block; stop at the other marker when it follows. */
+function sliceLanguageBlock(
+  lines: string[],
+  startIndex: number,
+  otherIndex: number,
+): string[] {
+  if (startIndex < 0) {
+    return [];
+  }
+  const end = otherIndex > startIndex ? otherIndex : lines.length;
+  return lines.slice(startIndex + 1, end);
+}
+
 function parseLanguageSections(lines: string[]): { englishBody: string; chineseBody: string } {
   const englishIndex = lines.findIndex((line) => ENGLISH_MARKER.test(line.trim()));
   const chineseIndex = lines.findIndex((line) => CHINESE_MARKER.test(line.trim()));
@@ -96,14 +110,9 @@ function parseLanguageSections(lines: string[]): { englishBody: string; chineseB
     };
   }
 
-  const englishLines =
-    englishIndex >= 0
-      ? lines.slice(englishIndex + 1, chineseIndex >= 0 ? chineseIndex : lines.length)
-      : [];
-  const chineseLines =
-    chineseIndex >= 0
-      ? lines.slice(chineseIndex + 1)
-      : [];
+  // Support both "English then 中文" and current CHANGELOG "中文 then English".
+  const englishLines = sliceLanguageBlock(lines, englishIndex, chineseIndex);
+  const chineseLines = sliceLanguageBlock(lines, chineseIndex, englishIndex);
 
   return {
     englishBody: trimBlock(englishLines),

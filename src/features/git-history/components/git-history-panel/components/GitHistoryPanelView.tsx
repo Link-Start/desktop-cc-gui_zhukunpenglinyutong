@@ -1,3 +1,13 @@
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ComponentType,
+} from "react";
+import type { LucideProps } from "lucide-react";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
+import FolderTree from "lucide-react/dist/esm/icons/folder-tree";
+import LayoutGrid from "lucide-react/dist/esm/icons/layout-grid";
 import { renderGitHistoryPanelDialogs } from "./GitHistoryPanelDialogs";
 import type { GitHistoryPanelViewScope } from "./GitHistoryPanelImpl";
 
@@ -8,15 +18,149 @@ import {
 import { WorkspaceEditableDiffReviewSurface } from "../../../../git/components/WorkspaceEditableDiffReviewSurface";
 import { CommitMessageEngineIcon } from "../../../../git/components/CommitMessageEngineIcon";
 import { RendererContextMenu } from "../../../../../components/ui/RendererContextMenu";
+import { PersonaAvatar } from "../../../../subagent-ui";
+import { resolveGitHistoryAuthorAvatar } from "../utils/gitHistoryAuthorAvatar";
 import { getGitHistoryAuthorColorSlot } from "../utils/gitHistoryAuthorPalette";
+import { getBranchAheadBehindTooltip } from "../utils/gitHistoryPanelSharedUtils";
 import type { GitHistoryRepositoryBranchCatalog } from "../hooks/useGitHistoryRepositoryBranchCatalogs";
 import { GitHistoryCommitFilters } from "./GitHistoryCommitFilters";
+import { GitHistoryGraphCell } from "./GitHistoryGraphCell";
 import { GitHistoryMultiRepositoryBranchTree } from "./GitHistoryMultiRepositoryBranchTree";
-
+import { GitHistoryBranchStatusBadge } from "./GitHistoryPanelPickers";
 const EMPTY_REPOSITORY_BRANCH_CATALOGS: ReadonlyMap<
   string,
   GitHistoryRepositoryBranchCatalog
 > = new Map();
+
+type ListViewMode = "flat" | "tree";
+type ListViewIcon = ComponentType<LucideProps>;
+
+const LIST_VIEW_OPTIONS: ReadonlyArray<{
+  value: ListViewMode;
+  icon: ListViewIcon;
+  labelKey: "git.listFlat" | "git.listTree";
+}> = [
+  { value: "flat", icon: LayoutGrid, labelKey: "git.listFlat" },
+  { value: "tree", icon: FolderTree, labelKey: "git.listTree" },
+];
+
+function GitHistoryChangedFilesListSelect({
+  listView,
+  onListViewChange,
+  title,
+  listViewLabel,
+  flatLabel,
+  treeLabel,
+}: {
+  listView: ListViewMode;
+  onListViewChange: (view: ListViewMode) => void;
+  title: string;
+  listViewLabel: string;
+  flatLabel: string;
+  treeLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const CurrentIcon = listView === "tree" ? FolderTree : LayoutGrid;
+  const optionLabels: Record<ListViewMode, string> = {
+    flat: flatLabel,
+    tree: treeLabel,
+  };
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+      if (!rootRef.current?.contains(target)) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+      }
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div className="git-history-details-list-select" ref={rootRef}>
+      <button
+        type="button"
+        className={`git-history-details-list-trigger${open ? " is-open" : ""}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`${title} · ${listViewLabel}`}
+        title={`${title} · ${optionLabels[listView]}`}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <CurrentIcon size={14} aria-hidden />
+        <span className="git-history-details-list-title">{title}</span>
+        <ChevronDown
+          size={12}
+          className="git-history-details-list-caret"
+          aria-hidden
+        />
+      </button>
+      {open ? (
+        <div
+          className="git-history-details-list-menu popover-surface"
+          role="menu"
+          aria-label={listViewLabel}
+        >
+          <div className="git-history-details-list-menu-title">
+            {listViewLabel}
+          </div>
+          {LIST_VIEW_OPTIONS.map((option) => {
+            const isActive = listView === option.value;
+            const OptionIcon = option.icon;
+            const label = optionLabels[option.value];
+            return (
+              <button
+                key={option.value}
+                type="button"
+                className={`git-history-details-list-option${
+                  isActive ? " is-active" : ""
+                }`}
+                role="menuitemradio"
+                aria-checked={isActive}
+                aria-label={label}
+                onClick={() => {
+                  onListViewChange(option.value);
+                  setOpen(false);
+                }}
+              >
+                <span className="git-history-details-list-option-main">
+                  <OptionIcon size={13} aria-hidden />
+                  <span>{label}</span>
+                </span>
+                <span
+                  className={`git-history-details-list-option-check${
+                    isActive ? " is-active" : ""
+                  }`}
+                  aria-hidden
+                >
+                  ✓
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export function renderGitHistoryPanelView(scope: GitHistoryPanelViewScope) {
   const {
@@ -80,6 +224,7 @@ export function renderGitHistoryPanelView(scope: GitHistoryPanelViewScope) {
     commitListRef,
     commitRowVirtualizer,
     commits,
+    commitGraphLayout,
     comparePreviewDetailFile,
     comparePreviewDetailFileDiff,
     comparePreviewDiffEntries,
@@ -188,15 +333,12 @@ export function renderGitHistoryPanelView(scope: GitHistoryPanelViewScope) {
     handleToggleRemoteScope,
     handleWorktreeSummaryChange,
     historyError,
-    historyHasMore,
     historyLoading,
-    historyLoadingMore,
     historyPreviewHeaderControlsTarget,
     historyTotal,
     isCreatePrDialogMaximized,
     isHistoryDiffModalMaximized,
     loadCreatePrCommitPreview,
-    loadHistory,
     localSectionExpanded,
     localizeKnownGitError,
     localizedOperationName,
@@ -675,7 +817,7 @@ export function renderGitHistoryPanelView(scope: GitHistoryPanelViewScope) {
         }
       }}
     >
-      <div className="git-history-toolbar git-history-toolbar--hover-actions">
+      <div className="git-history-toolbar">
         <div className="git-history-toolbar-left">
           <h2>{t("git.historyTitle")}</h2>
           {projectOptions.length > 0 && onSelectWorkspace ? (
@@ -987,7 +1129,7 @@ export function renderGitHistoryPanelView(scope: GitHistoryPanelViewScope) {
                 placeholder={t("git.historySearchBranches")}
               />
             </label>
-            <div className="git-history-branch-list">
+            <div className="git-history-branch-list scrollable">
               {hasRepositoryTree ? (
                 <GitHistoryMultiRepositoryBranchTree
                   repositories={repositories}
@@ -1041,11 +1183,6 @@ export function renderGitHistoryPanelView(scope: GitHistoryPanelViewScope) {
                       }
                       ariaLabel={t("git.historyToggleLocalBranches")}
                     >
-                      {localSectionExpanded ? (
-                        <ChevronDown size={13} />
-                      ) : (
-                        <ChevronRight size={13} />
-                      )}
                       <HardDrive size={13} />
                       <span>{t("git.historyLocal")}</span>
                     </ActionSurface>
@@ -1127,14 +1264,28 @@ export function renderGitHistoryPanelView(scope: GitHistoryPanelViewScope) {
                                           </i>
                                         ))}
                                         {entry.ahead > 0 ? (
-                                          <i className="is-ahead">
-                                            +{entry.ahead}
-                                          </i>
+                                          <GitHistoryBranchStatusBadge
+                                            kind="ahead"
+                                            count={entry.ahead}
+                                            tooltip={getBranchAheadBehindTooltip(
+                                              "ahead",
+                                              entry.ahead,
+                                              entry.upstream,
+                                              t,
+                                            )}
+                                          />
                                         ) : null}
                                         {entry.behind > 0 ? (
-                                          <i className="is-behind">
-                                            -{entry.behind}
-                                          </i>
+                                          <GitHistoryBranchStatusBadge
+                                            kind="behind"
+                                            count={entry.behind}
+                                            tooltip={getBranchAheadBehindTooltip(
+                                              "behind",
+                                              entry.behind,
+                                              entry.upstream,
+                                              t,
+                                            )}
+                                          />
                                         ) : null}
                                       </span>
                                     </ActionSurface>
@@ -1155,11 +1306,6 @@ export function renderGitHistoryPanelView(scope: GitHistoryPanelViewScope) {
                       }
                       ariaLabel={t("git.historyToggleRemoteBranches")}
                     >
-                      {remoteSectionExpanded ? (
-                        <ChevronDown size={13} />
-                      ) : (
-                        <ChevronRight size={13} />
-                      )}
                       <Cloud size={13} />
                       <span>{t("git.historyRemote")}</span>
                     </ActionSurface>
@@ -1293,7 +1439,7 @@ export function renderGitHistoryPanelView(scope: GitHistoryPanelViewScope) {
               </div>
             )}
 
-            <div className="git-history-commit-list" ref={commitListRef}>
+            <div className="git-history-commit-list scrollable" ref={commitListRef}>
               <div
                 className="git-history-commit-list-virtual"
                 style={{ height: `${commitRowVirtualizer.getTotalSize()}px` }}
@@ -1308,6 +1454,11 @@ export function renderGitHistoryPanelView(scope: GitHistoryPanelViewScope) {
                     entry.authorEmail,
                     entry.author,
                   );
+                  const authorDisplayName = entry.author || t("git.unknown");
+                  const authorAvatar = resolveGitHistoryAuthorAvatar(
+                    entry.authorEmail,
+                    entry.author,
+                  );
                   const normalizedAuthorName = entry.author
                     .trim()
                     .toLowerCase();
@@ -1319,23 +1470,14 @@ export function renderGitHistoryPanelView(scope: GitHistoryPanelViewScope) {
                     !normalizedAuthorName.includes(activeAuthorFilter) &&
                     normalizedAuthorEmail.includes(activeAuthorFilter),
                   );
-                  const graphClassName = [
-                    "git-history-graph",
-                    virtualRow.index === 0 ? "is-first" : "",
-                    virtualRow.index === commits.length - 1 ? "is-last" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ");
+                  const graphRow = commitGraphLayout.rows[virtualRow.index];
 
                   return (
-                    <ActionSurface
+                    <div
                       key={entry.sha}
-                      className={`git-history-commit-row git-history-author-color-${authorColorSlot}`}
-                      active={active}
-                      onActivate={() => setSelectedCommitSha(entry.sha)}
-                      onContextMenu={(event) =>
-                        handleOpenCommitContextMenu(event, entry.sha)
-                      }
+                      data-index={virtualRow.index}
+                      ref={commitRowVirtualizer.measureElement}
+                      className="git-history-commit-row-host"
                       style={{
                         position: "absolute",
                         top: 0,
@@ -1344,55 +1486,65 @@ export function renderGitHistoryPanelView(scope: GitHistoryPanelViewScope) {
                         transform: `translateY(${virtualRow.start}px)`,
                       }}
                     >
-                      <span className={graphClassName} aria-hidden>
-                        <i className="git-history-graph-line" />
-                        <i className="git-history-graph-dot" />
-                      </span>
-                      <span className="git-history-commit-content">
-                        <span
-                          className="git-history-commit-summary"
-                          title={entry.summary || t("git.historyNoMessage")}
-                        >
-                          {entry.summary || t("git.historyNoMessage")}
-                        </span>
-                        <span className="git-history-commit-meta">
-                          <code>{entry.shortSha}</code>
-                          <em>{entry.author || t("git.unknown")}</em>
-                          {showMatchedAuthorEmail ? (
-                            <span className="git-history-commit-author-email">
-                              &lt;{entry.authorEmail}&gt;
-                            </span>
-                          ) : null}
-                          <time>{formatRelativeTime(entry.timestamp, t)}</time>
-                        </span>
-                        {entry.refs.length > 0 && (
+                      <ActionSurface
+                        className={`git-history-commit-row git-history-author-color-${authorColorSlot}`}
+                        active={active}
+                        onActivate={() => setSelectedCommitSha(entry.sha)}
+                        onContextMenu={(event) =>
+                          handleOpenCommitContextMenu(event, entry.sha)
+                        }
+                      >
+                        <GitHistoryGraphCell
+                          row={graphRow}
+                          height={virtualRow.size}
+                          active={active}
+                          isFirst={virtualRow.index === 0}
+                          isLast={virtualRow.index === commits.length - 1}
+                        />
+                        <span className="git-history-commit-content">
                           <span
-                            className="git-history-commit-refs"
-                            title={entry.refs.join(", ")}
+                            className="git-history-commit-summary"
+                            title={entry.summary || t("git.historyNoMessage")}
                           >
-                            {entry.refs.slice(0, 3).join(" · ")}
+                            {entry.summary || t("git.historyNoMessage")}
                           </span>
-                        )}
-                      </span>
-                    </ActionSurface>
+                          <span className="git-history-commit-meta">
+                            <code>{entry.shortSha}</code>
+                            {/* Author chip is redundant when already filtered by user;
+                                only keep email when the filter matched email, not name. */}
+                            {!activeAuthorFilter ? (
+                              <span className="git-history-commit-author">
+                                <PersonaAvatar
+                                  displayName={authorDisplayName}
+                                  avatarSrc={authorAvatar.avatarSrc}
+                                  githubProfileUrl={authorAvatar.githubProfileUrl}
+                                  size={14}
+                                  className="git-history-commit-author-avatar"
+                                />
+                                <em title={authorDisplayName}>{authorDisplayName}</em>
+                              </span>
+                            ) : showMatchedAuthorEmail ? (
+                              <span className="git-history-commit-author-email">
+                                &lt;{entry.authorEmail}&gt;
+                              </span>
+                            ) : null}
+                            <time>{formatRelativeTime(entry.timestamp, t)}</time>
+                          </span>
+                          {entry.refs.length > 0 && (
+                            <span
+                              className="git-history-commit-refs"
+                              title={entry.refs.join(", ")}
+                            >
+                              {entry.refs.slice(0, 3).join(" · ")}
+                            </span>
+                          )}
+                        </span>
+                      </ActionSurface>
+                    </div>
                   );
                 })}
               </div>
             </div>
-
-            {historyHasMore && (
-              <div className="git-history-load-more">
-                <ActionSurface
-                  className="git-history-load-more-chip"
-                  disabled={historyLoadingMore}
-                  onActivate={() => void loadHistory(true, commits.length)}
-                >
-                  {historyLoadingMore
-                    ? t("common.loading")
-                    : t("git.historyLoadMore")}
-                </ActionSurface>
-              </div>
-            )}
           </section>
 
           {desktopSplitLayout && (
@@ -1410,13 +1562,22 @@ export function renderGitHistoryPanelView(scope: GitHistoryPanelViewScope) {
 
           <section className="git-history-details">
             <div className="git-history-column-header">
-              <span>
-                {details ? <FolderTree size={14} /> : <FileText size={14} />}
-                {details
-                  ? t("git.historyChangedFiles")
-                  : t("git.historyCommitDetails")}
-              </span>
-              {details && (
+              {details ? (
+                <GitHistoryChangedFilesListSelect
+                  listView={overviewListView}
+                  onListViewChange={(view) => setOverviewListView(view)}
+                  title={t("git.historyChangedFiles")}
+                  listViewLabel={t("git.listView")}
+                  flatLabel={t("git.listFlat")}
+                  treeLabel={t("git.listTree")}
+                />
+              ) : (
+                <span>
+                  <FileText size={14} />
+                  {t("git.historyCommitDetails")}
+                </span>
+              )}
+              {details ? (
                 <span className="git-history-file-tree-head-summary">
                   {renderChangedFilesSummary(
                     t,
@@ -1425,7 +1586,7 @@ export function renderGitHistoryPanelView(scope: GitHistoryPanelViewScope) {
                     details.totalDeletions,
                   )}
                 </span>
-              )}
+              ) : null}
             </div>
 
             {detailsError && (
@@ -1453,63 +1614,99 @@ export function renderGitHistoryPanelView(scope: GitHistoryPanelViewScope) {
                     gridTemplateRows: `minmax(140px, ${detailsSplitRatio}%) 8px minmax(0, 1fr)`,
                   }}
                 >
-                  <div className="git-history-file-list git-filetree-section">
-                    {!fileTreeItems.length && (
+                  <div
+                    className={`git-history-file-list git-filetree-section${
+                      overviewListView === "tree"
+                        ? " diff-section-tree-list git-filetree-list--tree"
+                        : ""
+                    }`}
+                  >
+                    {details.files.length === 0 ? (
                       <div className="git-history-empty">
                         {t("git.historyNoFileChangesInCommit")}
                       </div>
-                    )}
-
-                    {fileTreeItems.map((item) => {
-                      if (item.type === "dir") {
+                    ) : overviewListView === "flat" ? (
+                      details.files.map((file) => {
+                        const fileKey = buildFileKey(file);
+                        const active = selectedFileKey === fileKey;
                         return (
-                          <DiffFolderRow
-                            key={item.id}
-                            name={item.label}
-                            iconName={item.path}
-                            depth={item.depth}
-                            indentStep={14}
-                            collapsed={!item.expanded}
-                            className="git-history-tree-item git-history-tree-dir"
-                            onToggle={() => handleFileTreeDirToggle(item.path)}
+                          <DiffFileRow
+                            key={fileKey}
+                            file={{ ...file, mutationDisabled: true }}
+                            className="git-history-tree-item git-history-file-item"
+                            showStats
+                            section="unstaged"
+                            isSelected={false}
+                            isActive={active}
+                            inclusionState="none"
+                            inclusionDisabled
+                            treeItem={false}
+                            showDirectory
+                            onClick={() => {
+                              setSelectedFileKey(fileKey);
+                              setPreviewFileKey(fileKey);
+                            }}
+                            onKeySelect={() => {
+                              setSelectedFileKey(fileKey);
+                              setPreviewFileKey(fileKey);
+                            }}
+                            onOpenPreview={() => setPreviewFileKey(fileKey)}
+                            onContextMenu={() => undefined}
                           />
                         );
-                      }
+                      })
+                    ) : (
+                      fileTreeItems.map((item) => {
+                        if (item.type === "dir") {
+                          return (
+                            <DiffFolderRow
+                              key={item.id}
+                              name={item.label}
+                              iconName={item.path}
+                              depth={item.depth}
+                              indentStep={14}
+                              collapsed={!item.expanded}
+                              className="git-history-tree-item git-history-tree-dir"
+                              onToggle={() => handleFileTreeDirToggle(item.path)}
+                            />
+                          );
+                        }
 
-                      const file = item.change;
-                      const active = selectedFileKey === buildFileKey(file);
-                      return (
-                        <DiffFileRow
-                          key={item.id}
-                          file={{ ...file, mutationDisabled: true }}
-                          className="git-history-tree-item git-history-file-item"
-                          showStats
-                          section="unstaged"
-                          isSelected={false}
-                          isActive={active}
-                          inclusionState="none"
-                          inclusionDisabled
-                          treeItem
-                          treeDepth={item.depth + 1}
-                          indentLevel={item.depth * 2}
-                          showDirectory={false}
-                          onClick={() => {
-                            const fileKey = buildFileKey(file);
-                            setSelectedFileKey(fileKey);
-                            setPreviewFileKey(fileKey);
-                          }}
-                          onKeySelect={() => {
-                            const fileKey = buildFileKey(file);
-                            setSelectedFileKey(fileKey);
-                            setPreviewFileKey(fileKey);
-                          }}
-                          onOpenPreview={() =>
-                            setPreviewFileKey(buildFileKey(file))
-                          }
-                          onContextMenu={() => undefined}
-                        />
-                      );
-                    })}
+                        const file = item.change;
+                        const active = selectedFileKey === buildFileKey(file);
+                        return (
+                          <DiffFileRow
+                            key={item.id}
+                            file={{ ...file, mutationDisabled: true }}
+                            className="git-history-tree-item git-history-file-item"
+                            showStats
+                            section="unstaged"
+                            isSelected={false}
+                            isActive={active}
+                            inclusionState="none"
+                            inclusionDisabled
+                            treeItem
+                            treeDepth={item.depth + 1}
+                            indentLevel={item.depth * 2}
+                            showDirectory={false}
+                            onClick={() => {
+                              const fileKey = buildFileKey(file);
+                              setSelectedFileKey(fileKey);
+                              setPreviewFileKey(fileKey);
+                            }}
+                            onKeySelect={() => {
+                              const fileKey = buildFileKey(file);
+                              setSelectedFileKey(fileKey);
+                              setPreviewFileKey(fileKey);
+                            }}
+                            onOpenPreview={() =>
+                              setPreviewFileKey(buildFileKey(file))
+                            }
+                            onContextMenu={() => undefined}
+                          />
+                        );
+                      })
+                    )}
                   </div>
 
                   <div

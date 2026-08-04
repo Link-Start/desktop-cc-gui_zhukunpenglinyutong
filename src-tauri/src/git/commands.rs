@@ -250,6 +250,37 @@ pub(crate) async fn stage_git_all(
     run_git_command(&repo_root, &["add", "-A"]).await
 }
 
+fn expand_git_action_paths(
+    repo_root: &std::path::Path,
+    paths: &[String],
+    layer: GitStatusLayer,
+) -> Vec<String> {
+    let mut expanded = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for path in paths {
+        for action_path in action_paths_for_file(repo_root, path, layer) {
+            if seen.insert(action_path.clone()) {
+                expanded.push(action_path);
+            }
+        }
+    }
+    expanded
+}
+
+async fn run_git_command_with_paths(
+    repo_root: &std::path::Path,
+    prefix: &[&str],
+    paths: &[String],
+) -> Result<(), String> {
+    if paths.is_empty() {
+        return Err("path is required".to_string());
+    }
+    let mut args: Vec<String> = prefix.iter().map(|part| (*part).to_string()).collect();
+    args.extend(paths.iter().cloned());
+    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    run_git_command(repo_root, &arg_refs).await
+}
+
 #[tauri::command]
 pub(crate) async fn unstage_git_file(
     workspace_id: String,
@@ -280,6 +311,64 @@ pub(crate) async fn unstage_git_file(
         run_git_command(&repo_root, &["restore", "--staged", "--", &path]).await?;
     }
     Ok(())
+}
+
+#[tauri::command]
+pub(crate) async fn unstage_git_all(
+    workspace_id: String,
+    repository_root: Option<String>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    if should_forward_git_remote(&state).await {
+        return forward_git_remote_unit(
+            &state,
+            &app,
+            "unstage_git_all",
+            json!({ "workspaceId": workspace_id.clone(), "repositoryRoot": repository_root.clone() }),
+        )
+        .await;
+    }
+    let entry = {
+        let workspaces = state.workspaces.lock().await;
+        workspaces
+            .get(&workspace_id)
+            .cloned()
+            .ok_or("workspace not found")?
+    };
+
+    let repo_root = resolve_git_root_for_scope(&entry, repository_root.as_deref())?;
+    run_git_command(&repo_root, &["restore", "--staged", "--", "."]).await
+}
+
+#[tauri::command]
+pub(crate) async fn unstage_git_paths(
+    workspace_id: String,
+    paths: Vec<String>,
+    repository_root: Option<String>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    if should_forward_git_remote(&state).await {
+        return forward_git_remote_unit(
+            &state,
+            &app,
+            "unstage_git_paths",
+            json!({ "workspaceId": workspace_id.clone(), "paths": paths.clone(), "repositoryRoot": repository_root.clone() }),
+        )
+        .await;
+    }
+    let entry = {
+        let workspaces = state.workspaces.lock().await;
+        workspaces
+            .get(&workspace_id)
+            .cloned()
+            .ok_or("workspace not found")?
+    };
+
+    let repo_root = resolve_git_root_for_scope(&entry, repository_root.as_deref())?;
+    let expanded = expand_git_action_paths(&repo_root, &paths, GitStatusLayer::Index);
+    run_git_command_with_paths(&repo_root, &["restore", "--staged", "--"], &expanded).await
 }
 
 #[tauri::command]
@@ -319,6 +408,51 @@ pub(crate) async fn revert_git_file(
             continue;
         }
         run_git_command(&repo_root, &["clean", "-f", "--", &path]).await?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub(crate) async fn revert_git_paths(
+    workspace_id: String,
+    paths: Vec<String>,
+    repository_root: Option<String>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    if should_forward_git_remote(&state).await {
+        return forward_git_remote_unit(
+            &state,
+            &app,
+            "revert_git_paths",
+            json!({ "workspaceId": workspace_id.clone(), "paths": paths.clone(), "repositoryRoot": repository_root.clone() }),
+        )
+        .await;
+    }
+    let entry = {
+        let workspaces = state.workspaces.lock().await;
+        workspaces
+            .get(&workspace_id)
+            .cloned()
+            .ok_or("workspace not found")?
+    };
+
+    let repo_root = resolve_git_root_for_scope(&entry, repository_root.as_deref())?;
+    let expanded = expand_git_action_paths(&repo_root, &paths, GitStatusLayer::Workdir);
+    if expanded.is_empty() {
+        return Err("path is required".to_string());
+    }
+    // Tracked files restore in one shot; untracked paths may fail restore and fall to clean.
+    let _ = run_git_command_with_paths(
+        &repo_root,
+        &["restore", "--staged", "--worktree", "--"],
+        &expanded,
+    )
+    .await;
+    // Match single-file semantics: clean only when needed, and never fail the batch
+    // solely because a tracked path is not cleanable.
+    for path in &expanded {
+        let _ = run_git_command(&repo_root, &["clean", "-f", "--", path]).await;
     }
     Ok(())
 }

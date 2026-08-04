@@ -14,8 +14,6 @@ const INCLUDE_PATHS = [
   ".github/workflows/release.yml",
   "README.md",
   "README.zh-CN.md",
-  "docs/index.html",
-  "docs/changelog.html",
   "package.json",
   "package-lock.json",
   "flake.nix",

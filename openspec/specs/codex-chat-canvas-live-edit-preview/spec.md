@@ -6,19 +6,25 @@
 ## Requirements
 ### Requirement: Live Edit Preview Is Explicitly Opt-In
 
-系统 MUST 将 live edit preview 设计为显式 opt-in 能力，而不是默认开启。
+系统 MUST 将 live edit preview 设计为显式 opt-in 能力。在 session activity 派生下线后，自动预览 MUST 无法获得 file-change timeline 数据源，行为上等同于未启用。
 
 #### Scenario: preview stays off until user enables it
 
 - **WHEN** 用户尚未开启 live edit preview
-- **THEN** file-change event MUST 仅通过 activity panel 或现有跳转入口可见
-- **AND** 系统 MUST NOT 自动打开文件或 diff 视图
+- **THEN** 系统 MUST NOT 自动打开文件或 diff 视图
+
+#### Scenario: preview has no activity timeline while activity is disabled
+
+- **GIVEN** workspace session activity 处于 runtime disabled
+- **WHEN** AI 产生 file-change
+- **THEN** live edit preview MUST NOT 依赖 activity timeline 自动打开文件
+- **AND** 系统 MUST NOT 因 timeline 为空而抛错
 
 #### Scenario: preview can be enabled inside solo
 
-- **WHEN** 用户处于 `SOLO` 视图并显式开启 live edit preview
-- **THEN** 系统 MAY 开始对符合条件的 file-change 自动触发预览
-- **AND** 该开启状态 MUST 对用户可感知
+- **WHEN** Solo 模式亦被禁用
+- **THEN** 本 scenario 不适用（Solo 不可达）
+- **AND** 系统 MUST NOT 因 Solo 不可达导致 preview 模块崩溃
 
 ### Requirement: Preview Reuses Existing Open-File Surfaces
 
@@ -34,18 +40,11 @@
 
 用户手动导航行为 MUST 高于自动预览行为。
 
-#### Scenario: manual file switch pauses preview takeover
-
-- **WHEN** live edit preview 已开启
-- **AND** 用户手动切换到其他文件、diff 或视图
-- **THEN** 系统 MUST 暂停自动抢占焦点
-- **AND** 后续 file-change MUST NOT 立即把界面抢回
-
 #### Scenario: disabling preview fully stops automatic opening
 
-- **WHEN** 用户关闭 live edit preview
+- **WHEN** live edit preview 关闭，或 activity 数据源不可用
 - **THEN** 系统 MUST 停止自动打开文件或 diff
-- **AND** file-change 仍 SHOULD 通过 activity panel 保留手动跳转入口
+- **AND** 系统 MUST NOT 要求 activity panel 仍提供手动跳转入口（activity 已 disabled）
 
 ### Requirement: Preview Switching Must Be Throttled
 
@@ -59,13 +58,13 @@
 
 ### Requirement: SOLO Integration Remains Optional
 
-live edit preview SHOULD 与 `SOLO` 协同工作，但 MUST NOT 依赖 `SOLO` 作为唯一承载前提。
+live edit preview MUST NOT 依赖 Solo 作为唯一承载前提；在 Solo 禁用后，preview 模块 MUST 仍可安全 no-op。
 
 #### Scenario: capability is not hard-coupled to solo container
 
-- **WHEN** 产品未来希望在非 `SOLO` 视图中复用 live edit preview
-- **THEN** capability 的核心策略和协调逻辑 MUST 可独立存在
-- **AND** 不得把核心能力硬编码进 `SOLO` 专属容器
+- **WHEN** Solo 入口被移除且 activity 下线
+- **THEN** live edit preview 协调逻辑 MUST 以 no-op 或空 timeline 安全退出
+- **AND** MUST NOT 把核心打开文件链路硬编码为仅 Solo 可调用
 
 ### Requirement: Live Edit Preview MAY Gate Main File External Monitoring
 

@@ -329,6 +329,15 @@ export interface ModelInfo {
   description?: string;
   source?: string;
   providerProfileId?: string;
+  /**
+   * Atomic / Shared 模型↔思考联动：Codex catalog 或 custom 播种。
+   * Engine runtime 未声明时由 enrich 从 generated catalog 补齐。
+   */
+  supportedReasoningEfforts?: {
+    reasoningEffort: string;
+    description?: string;
+  }[];
+  defaultReasoningEffort?: string | null;
 }
 
 /**
@@ -716,6 +725,7 @@ export interface ChatInputBoxProps {
   onFuseFromQueue?: (id: string) => void;
   /** Whether queued fuse is available for the active thread */
   canFuseFromQueue?: boolean;
+  fuseDisabledReasonKey?: string | null;
   /** Currently fusing queue message id */
   fusingQueueMessageId?: string | null;
 
@@ -983,4 +993,9 @@ export interface QueuedMessage {
   queuedAt: number;
   /** Whether this item is currently fusing into the active turn */
   isFusing?: boolean;
+  /**
+   * Shared V2：已发出、等待 commit ACK（防双发锁）。
+   * 仅 UI 标识，不改变队列生命周期。
+   */
+  isPendingAck?: boolean;
 }

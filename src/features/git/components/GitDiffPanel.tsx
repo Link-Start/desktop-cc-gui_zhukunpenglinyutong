@@ -32,6 +32,7 @@ import { createPortal } from "react-dom";
 import { matchesShortcutForPlatform } from "../../../utils/shortcuts";
 import { formatRelativeTime } from "../../../utils/time";
 import FileIcon from "../../../components/FileIcon";
+import { FloatingTooltipButton } from "@/components/ui/floating-tooltip-button";
 import { UnsavedChangesDialog } from "../../../components/ui/UnsavedChangesDialog";
 import {
   useGitCommitSelection,
@@ -182,7 +183,9 @@ function DiffTreeSection({
   onActivateFile,
   onStageAllChanges,
   onStageFile,
+  onUnstageAllChanges,
   onUnstageFile,
+  onUnstageFiles,
   onDiscardFile,
   onDiscardFiles,
   isCommitPathLocked,
@@ -499,7 +502,11 @@ function DiffTreeSection({
               actionFilePaths.length === files.length ? onStageAllChanges : undefined
             }
             onStageFile={onStageFile}
+            onUnstageAllChanges={
+              actionFilePaths.length === files.length ? onUnstageAllChanges : undefined
+            }
             onUnstageFile={onUnstageFile}
+            onUnstageFiles={onUnstageFiles}
             onDiscardFiles={onDiscardFiles}
           />
         )}
@@ -772,8 +779,11 @@ function GitDiffPanelImpl({
   unstagedFiles = [],
   onStageAllChanges,
   onStageFile,
+  onUnstageAllChanges,
   onUnstageFile,
+  onUnstageFiles,
   onRevertFile,
+  onRevertFiles,
   onGitRootScanDepthChange,
   onScanGitRoots,
   onSelectGitRoot,
@@ -809,7 +819,10 @@ function GitDiffPanelImpl({
   onRefreshRepositoryStatuses,
   onStageRepositoryFile,
   onUnstageRepositoryFile,
+  onUnstageRepositoryAll,
+  onUnstageRepositoryFiles,
   onRevertRepositoryFile,
+  onRevertRepositoryFiles,
   onStageRepositoryAll,
   onCommitRepositories,
   repositoryCommitSummary = null,
@@ -1610,17 +1623,21 @@ function GitDiffPanelImpl({
 
   const discardFiles = useCallback(
     async (paths: string[]) => {
-      if (!onRevertFile || paths.length === 0 || discardDialogSubmitting) {
+      if ((!onRevertFile && !onRevertFiles) || paths.length === 0 || discardDialogSubmitting) {
         return;
       }
       setDiscardDialogTarget({ scope: "current-repository", paths });
     },
-    [discardDialogSubmitting, onRevertFile],
+    [discardDialogSubmitting, onRevertFile, onRevertFiles],
   );
 
   const discardRepositoryFile = useCallback(
     async (repositoryRoot: string, path: string) => {
-      if (!onRevertRepositoryFile || !path || discardDialogSubmitting) {
+      if (
+        (!onRevertRepositoryFile && !onRevertRepositoryFiles)
+        || !path
+        || discardDialogSubmitting
+      ) {
         return;
       }
       setDiscardDialogTarget({
@@ -1629,12 +1646,16 @@ function GitDiffPanelImpl({
         paths: [path],
       });
     },
-    [discardDialogSubmitting, onRevertRepositoryFile],
+    [discardDialogSubmitting, onRevertRepositoryFile, onRevertRepositoryFiles],
   );
 
   const discardRepositoryFiles = useCallback(
     async (repositoryRoot: string, paths: string[]) => {
-      if (!onRevertRepositoryFile || paths.length === 0 || discardDialogSubmitting) {
+      if (
+        (!onRevertRepositoryFile && !onRevertRepositoryFiles)
+        || paths.length === 0
+        || discardDialogSubmitting
+      ) {
         return;
       }
       setDiscardDialogTarget({
@@ -1643,31 +1664,45 @@ function GitDiffPanelImpl({
         paths,
       });
     },
-    [discardDialogSubmitting, onRevertRepositoryFile],
+    [discardDialogSubmitting, onRevertRepositoryFile, onRevertRepositoryFiles],
   );
 
   const handleConfirmDiscardFiles = useCallback(async () => {
     if (!discardDialogTarget || discardDialogTarget.paths.length === 0 || discardDialogSubmitting) {
       return;
     }
-    if (discardDialogTarget.scope === "current-repository" && !onRevertFile) {
+    if (
+      discardDialogTarget.scope === "current-repository"
+      && !onRevertFiles
+      && !onRevertFile
+    ) {
       return;
     }
-    if (discardDialogTarget.scope === "explicit-repository" && !onRevertRepositoryFile) {
+    if (
+      discardDialogTarget.scope === "explicit-repository"
+      && !onRevertRepositoryFiles
+      && !onRevertRepositoryFile
+    ) {
       return;
     }
     const target = discardDialogTarget;
     setDiscardDialogSubmitting(true);
     try {
-      for (const path of target.paths) {
-        if (target.scope === "explicit-repository") {
-          await onRevertRepositoryFile?.(target.repositoryRoot, path);
+      if (target.scope === "explicit-repository") {
+        if (onRevertRepositoryFiles) {
+          await onRevertRepositoryFiles(target.repositoryRoot, target.paths);
         } else {
+          for (const path of target.paths) {
+            await onRevertRepositoryFile?.(target.repositoryRoot, path);
+          }
+        }
+        await onRefreshRepositoryStatuses?.();
+      } else if (onRevertFiles) {
+        await onRevertFiles(target.paths);
+      } else {
+        for (const path of target.paths) {
           await onRevertFile?.(path);
         }
-      }
-      if (target.scope === "explicit-repository") {
-        await onRefreshRepositoryStatuses?.();
       }
       setDiscardDialogTarget(null);
     } finally {
@@ -1678,7 +1713,9 @@ function GitDiffPanelImpl({
     discardDialogTarget,
     onRefreshRepositoryStatuses,
     onRevertFile,
+    onRevertFiles,
     onRevertRepositoryFile,
+    onRevertRepositoryFiles,
   ]);
 
   const closeDiscardDialog = useCallback(() => {
@@ -1759,12 +1796,18 @@ function GitDiffPanelImpl({
       const items = buildGitDiffPanelFileContextMenuItems({
         t,
         unstageAction:
-          mutationEnabled && section === "staged" && onUnstageFile
+          mutationEnabled
+          && section === "staged"
+          && (onUnstageFiles || onUnstageFile)
             ? {
                 count: targetPaths.length,
                 onSelect: async () => {
+                  if (onUnstageFiles) {
+                    await onUnstageFiles(targetPaths);
+                    return;
+                  }
                   for (const targetPath of targetPaths) {
-                    await onUnstageFile(targetPath);
+                    await onUnstageFile?.(targetPath);
                   }
                 },
               }
@@ -1816,6 +1859,7 @@ function GitDiffPanelImpl({
       onOpenFileHistory,
       onStageFile,
       onUnstageFile,
+      onUnstageFiles,
       selectedFiles,
       stagedFiles,
       t,
@@ -2229,7 +2273,7 @@ function GitDiffPanelImpl({
                         <div className="git-panel-select-menu-divider" role="separator" />
                         <button
                           type="button"
-                          className={`git-panel-select-option git-panel-select-option--git-graph${isGitHistoryOpen ? " is-active" : ""}`}
+                          className={`git-panel-select-option${isGitHistoryOpen ? " is-active" : ""}`}
                           role="menuitem"
                           onClick={() => {
                             setIsModeMenuOpen(false);
@@ -2257,18 +2301,21 @@ function GitDiffPanelImpl({
             </>
           </GitModeSelectorMount>
           {showApplyWorktree && (
-            <button
+            <FloatingTooltipButton
               type="button"
               className="diff-row-action diff-row-action--apply"
               onClick={() => {
                 void onApplyWorktreeChanges?.();
               }}
               disabled={worktreeApplyLoading || worktreeApplySuccess}
-              data-tooltip={worktreeApplyTitle ?? t("git.applyWorktreeChanges")}
+              tooltipLabel={worktreeApplyTitle ?? t("git.applyWorktreeChanges")}
+              tooltipSide="bottom"
+              tooltipAlign="end"
+              tooltipDelay={180}
               aria-label={t("git.applyWorktreeChangesAction")}
             >
               {worktreeApplyIcon}
-            </button>
+            </FloatingTooltipButton>
           )}
         </div>
       </div>
@@ -2446,8 +2493,14 @@ function GitDiffPanelImpl({
               onCommitMessageEngineChange={setCommitMessageMenuEngine}
               onStageFile={onStageRepositoryFile}
               onUnstageFile={onUnstageRepositoryFile}
+              onUnstageAll={onUnstageRepositoryAll}
+              onUnstageFiles={onUnstageRepositoryFiles}
               onDiscardFile={onRevertRepositoryFile ? discardRepositoryFile : undefined}
-              onDiscardFiles={onRevertRepositoryFile ? discardRepositoryFiles : undefined}
+              onDiscardFiles={
+                onRevertRepositoryFiles || onRevertRepositoryFile
+                  ? discardRepositoryFiles
+                  : undefined
+              }
               onStageAll={onStageRepositoryAll}
               onOpenFile={(repositoryRoot, path) => onOpenFile?.(path, repositoryRoot)}
               onOpenFilePreview={handleOpenRepositoryFilePreview}
@@ -2482,9 +2535,11 @@ function GitDiffPanelImpl({
                     selectedFiles={selectedFiles}
                     selectedPath={selectedPath}
                     onActivateFile={handleFileActivation}
+                    onUnstageAllChanges={onUnstageAllChanges}
                     onUnstageFile={onUnstageFile}
-                    onDiscardFile={onRevertFile ? discardFile : undefined}
-                    onDiscardFiles={onRevertFile ? discardFiles : undefined}
+                    onUnstageFiles={onUnstageFiles}
+                    onDiscardFile={onRevertFile || onRevertFiles ? discardFile : undefined}
+                    onDiscardFiles={onRevertFile || onRevertFiles ? discardFiles : undefined}
                     isCommitPathLocked={isCommitPathLocked}
                     onSetCommitSelection={setCommitSelection}
                     onFileClick={handleFileClick}
@@ -2509,9 +2564,11 @@ function GitDiffPanelImpl({
                     selectedFiles={selectedFiles}
                     selectedPath={selectedPath}
                     onActivateFile={handleFileActivation}
+                    onUnstageAllChanges={onUnstageAllChanges}
                     onUnstageFile={onUnstageFile}
-                    onDiscardFile={onRevertFile ? discardFile : undefined}
-                    onDiscardFiles={onRevertFile ? discardFiles : undefined}
+                    onUnstageFiles={onUnstageFiles}
+                    onDiscardFile={onRevertFile || onRevertFiles ? discardFile : undefined}
+                    onDiscardFiles={onRevertFile || onRevertFiles ? discardFiles : undefined}
                     isCommitPathLocked={isCommitPathLocked}
                     onSetCommitSelection={setCommitSelection}
                     onFileClick={handleFileClick}
@@ -2538,8 +2595,8 @@ function GitDiffPanelImpl({
                     onActivateFile={handleFileActivation}
                     onStageAllChanges={onStageAllChanges}
                     onStageFile={onStageFile}
-                    onDiscardFile={onRevertFile ? discardFile : undefined}
-                    onDiscardFiles={onRevertFile ? discardFiles : undefined}
+                    onDiscardFile={onRevertFile || onRevertFiles ? discardFile : undefined}
+                    onDiscardFiles={onRevertFile || onRevertFiles ? discardFiles : undefined}
                     isCommitPathLocked={isCommitPathLocked}
                     onSetCommitSelection={setCommitSelection}
                     onFileClick={handleFileClick}
@@ -2566,8 +2623,8 @@ function GitDiffPanelImpl({
                     onActivateFile={handleFileActivation}
                     onStageAllChanges={onStageAllChanges}
                     onStageFile={onStageFile}
-                    onDiscardFile={onRevertFile ? discardFile : undefined}
-                    onDiscardFiles={onRevertFile ? discardFiles : undefined}
+                    onDiscardFile={onRevertFile || onRevertFiles ? discardFile : undefined}
+                    onDiscardFiles={onRevertFile || onRevertFiles ? discardFiles : undefined}
                     isCommitPathLocked={isCommitPathLocked}
                     onSetCommitSelection={setCommitSelection}
                     onFileClick={handleFileClick}

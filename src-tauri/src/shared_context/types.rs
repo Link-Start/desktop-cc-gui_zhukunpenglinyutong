@@ -138,6 +138,11 @@ pub struct ContextPackage {
     pub compression: ContextCompressionReport,
 }
 
+/// True when the package carries no transferable context (prompt-prefix or delta).
+pub fn is_zero_transfer_package(package: &ContextPackage) -> bool {
+    package.delta.is_empty() && package.prompt_prefix.trim().is_empty()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PendingDelivery {

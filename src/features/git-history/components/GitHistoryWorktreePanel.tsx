@@ -30,9 +30,12 @@ import {
   getGitStatus,
   revertGitAll,
   revertGitFile,
+  revertGitPaths,
   stageGitAll,
   stageGitFile,
+  unstageGitAll,
   unstageGitFile,
+  unstageGitPaths,
 } from "../../../services/tauri";
 import type { GitFileStatus } from "../../../types";
 import { subscribeDetachedExternalFileChangeBatch } from "../../../services/events";
@@ -234,11 +237,37 @@ export function GitHistoryWorktreePanel({
         : unstageGitFile(targetWorkspaceId, path, repositoryRoot),
     [repositoryRoot],
   );
-  const scopedRevertGitFile = useCallback(
-    (targetWorkspaceId: string, path: string) =>
+  const scopedUnstageGitAll = useCallback(
+    (targetWorkspaceId: string) =>
       repositoryRoot === null
-        ? revertGitFile(targetWorkspaceId, path)
-        : revertGitFile(targetWorkspaceId, path, repositoryRoot),
+        ? unstageGitAll(targetWorkspaceId)
+        : unstageGitAll(targetWorkspaceId, repositoryRoot),
+    [repositoryRoot],
+  );
+  const scopedUnstageGitPaths = useCallback(
+    (targetWorkspaceId: string, paths: string[]) => {
+      if (paths.length === 1) {
+        return repositoryRoot === null
+          ? unstageGitFile(targetWorkspaceId, paths[0]!)
+          : unstageGitFile(targetWorkspaceId, paths[0]!, repositoryRoot);
+      }
+      return repositoryRoot === null
+        ? unstageGitPaths(targetWorkspaceId, paths)
+        : unstageGitPaths(targetWorkspaceId, paths, repositoryRoot);
+    },
+    [repositoryRoot],
+  );
+  const scopedRevertGitPaths = useCallback(
+    (targetWorkspaceId: string, paths: string[]) => {
+      if (paths.length === 1) {
+        return repositoryRoot === null
+          ? revertGitFile(targetWorkspaceId, paths[0]!)
+          : revertGitFile(targetWorkspaceId, paths[0]!, repositoryRoot);
+      }
+      return repositoryRoot === null
+        ? revertGitPaths(targetWorkspaceId, paths)
+        : revertGitPaths(targetWorkspaceId, paths, repositoryRoot);
+    },
     [repositoryRoot],
   );
   const scopedRevertGitAll = useCallback(
@@ -406,15 +435,13 @@ export function GitHistoryWorktreePanel({
     const targetPaths = [...discardDialogPaths];
     setDiscardDialogPaths(null);
     await handleMutation(async () => {
-      for (const path of targetPaths) {
-        await scopedRevertGitFile(workspaceId, path);
-      }
+      await scopedRevertGitPaths(workspaceId, targetPaths);
     });
   }, [
     discardDialogPaths,
     handleMutation,
     operationLoading,
-    scopedRevertGitFile,
+    scopedRevertGitPaths,
     workspaceId,
   ]);
 
@@ -940,9 +967,19 @@ export function GitHistoryWorktreePanel({
                     ? () => handleMutation(() => scopedStageGitAll(workspaceId))
                     : undefined
                 }
+                onUnstageAllChanges={
+                  compactSection === "staged"
+                    ? () => handleMutation(() => scopedUnstageGitAll(workspaceId))
+                    : undefined
+                }
                 onUnstageFile={
                   compactSection === "staged"
                     ? (path) => handleMutation(() => scopedUnstageGitFile(workspaceId, path))
+                    : undefined
+                }
+                onUnstageFiles={
+                  compactSection === "staged"
+                    ? (paths) => handleMutation(() => scopedUnstageGitPaths(workspaceId, paths))
                     : undefined
                 }
                 onDiscardFiles={
@@ -969,7 +1006,9 @@ export function GitHistoryWorktreePanel({
                   toggleableFilePaths={stagedToggleablePaths}
                   filePaths={stagedFilePaths}
                   onSetCommitSelection={setCommitSelection}
+                  onUnstageAllChanges={() => handleMutation(() => scopedUnstageGitAll(workspaceId))}
                   onUnstageFile={(path) => handleMutation(() => scopedUnstageGitFile(workspaceId, path))}
+                  onUnstageFiles={(paths) => handleMutation(() => scopedUnstageGitPaths(workspaceId, paths))}
                 />
               </div>
               <div

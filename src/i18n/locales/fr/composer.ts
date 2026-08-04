@@ -188,6 +188,7 @@ const composer = {
       "empty-draft": "Brouillon vide"
     },
     "queueStatusWaiting": "En file d'attente pour le prochain tour",
+    "queueStatusPendingAck": "Envoyé — confirmation (anti-doublon)",
     "queueStatusFuseReady": "Peut fusionner dans le tour actuel",
     "queueStatusFusing": "Fusion dans le tour actuel",
     "queueStatusCommand": "La commande slash attend le prochain tour",

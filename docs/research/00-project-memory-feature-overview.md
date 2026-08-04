@@ -1,3 +1,14 @@
+---
+type: research
+status: historical
+---
+
+<!-- DOC-LIFECYCLE: historical-overview -->
+> [!WARNING]
+> **Lifecycle: Historical foundation overview.** Current implementation has 11 backend modules and 10 Project Memory commands；Memory Reference is explicit and defaults to `off`。Historical architecture details below are not current contract。
+>
+> Current source：[Project Memory consumption spec](../../openspec/specs/project-memory-consumption/spec.md) and current code。
+
 # CodeMoss 项目记忆功能全景（Phase 1 完成版）
 
 **文档类型**: 功能全景（合并自原 00-调研总结 / 01-现状分析 / 04-适配方案）

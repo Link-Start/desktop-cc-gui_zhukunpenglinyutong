@@ -1,3 +1,12 @@
+---
+type: plan
+status: implemented
+---
+
+<!-- DOC-LIFECYCLE: implemented-historical-plan -->
+> [!NOTE]
+> **Lifecycle: Implemented historical plan.** 正文中的“待执行”“待归档”或 unchecked checkbox 是当时的执行快照，不代表当前状态。Current Project Memory contract 以 [OpenSpec main specifications](../../../openspec/specs/README.md) 与代码为准。
+
 # PLAN: 记忆落盘结构改造（项目分层文件夹 + 按天累加 + 项目元数据注入）
 
 > 状态：已完成（待归档）

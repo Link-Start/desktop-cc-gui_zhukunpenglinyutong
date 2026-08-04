@@ -6,12 +6,10 @@ import {
 } from "../../../utils/toolSemantics";
 import type { EngineTaskOutputSource } from "../../engine-task-output/types";
 import type { SubagentInfo } from "../../status-panel/types";
-import {
-  assignPersona,
-  assignPersonasForSquad,
-  type AssignedPersona,
-} from "./personaAssign";
 import { isCollabSpawnTool, isGrokSpawnSubagentTool } from "./isSubagentTool";
+
+/** 卡片固定展示名（UI 用 i18n `subagentUi.defaultName` 覆盖） */
+export const FIXED_SUBAGENT_DISPLAY_NAME = "Subagent";
 
 export type SubagentCardStatus = "running" | "completed" | "error";
 
@@ -558,17 +556,16 @@ function formatIndexLabel(index: number): string {
   return String(index + 1).padStart(2, "0");
 }
 
-function applyPersonaFields(
-  persona: AssignedPersona,
-): Pick<
+/** 不再绑定贡献者头像 / GitHub 名；并行实例靠 indexLabel 区分 */
+function applyFixedSubagentIdentity(): Pick<
   SubagentCardViewModel,
   "displayName" | "githubLogin" | "githubProfileUrl" | "avatarSrc"
 > {
   return {
-    displayName: persona.name,
-    githubLogin: persona.githubLogin,
-    githubProfileUrl: persona.githubProfileUrl,
-    avatarSrc: persona.avatarSrc,
+    displayName: FIXED_SUBAGENT_DISPLAY_NAME,
+    githubLogin: null,
+    githubProfileUrl: null,
+    avatarSrc: null,
   };
 }
 
@@ -689,7 +686,6 @@ export function extractSwarmAgentEntries(
 
 type CardBuildOptions = {
   index?: number;
-  persona?: AssignedPersona;
   parentThreadId?: string | null;
   /** Shared 父会话 nativeThreadIds，用于 Claude Agent 子会话 id 解析 */
   nativeThreadIds?: readonly string[] | null;
@@ -725,7 +721,6 @@ export function buildSubagentCardFromToolItem(
     options?.override?.description ?? extractDescription(args, item);
   const typeLabel = options?.override?.typeLabel ?? extractTypeLabel(args, item);
   const cardId = options?.override?.id ?? item.id;
-  const persona = options?.persona ?? assignPersona(cardId);
   const parentOutputText = getToolOutput(item);
   // 仅当 override 显式传入 outputText（含 null）时覆盖；其它路径保持父 tool 原文
   const outputText =
@@ -774,7 +769,7 @@ export function buildSubagentCardFromToolItem(
 
   return {
     id: cardId,
-    ...applyPersonaFields(persona),
+    ...applyFixedSubagentIdentity(),
     indexLabel: formatIndexLabel(options?.index ?? 0),
     description,
     typeLabel,
@@ -810,13 +805,9 @@ export function expandSubagentToolToCards(
     const taskName = pickReadableString(args?.task_name, args?.taskName, args?.name);
     const description = extractDescription(args, item);
     if (agentIds.length > 0) {
-      const personas = assignPersonasForSquad(
-        agentIds.map((id) => `${item.id}:${id}`),
-      );
       return agentIds.map((agentId, index) =>
         buildSubagentCardFromToolItem(item, {
           index: indexOffset + index,
-          persona: personas[index],
           parentThreadId: options?.parentThreadId,
           nativeThreadIds,
           override: {
@@ -876,11 +867,9 @@ export function expandSubagentToolToCards(
   // XML 结果：每张卡只挂该 <subagent> body，禁止共享整包 agent_swarm_result。
   const swarmEntries = extractSwarmAgentEntries(item, args);
   if (swarmEntries.length > 0) {
-    const personas = assignPersonasForSquad(swarmEntries.map((entry) => entry.id));
     return swarmEntries.map((entry, index) =>
       buildSubagentCardFromToolItem(item, {
         index: indexOffset + index,
-        persona: personas[index],
         parentThreadId: options?.parentThreadId,
         nativeThreadIds,
         override: {
@@ -939,6 +928,10 @@ export function dedupeSubagentSquadCards(
     if (card.id.includes(":swarm-result:")) score += 2;
     if (card.sessionThreadId) score += 1;
     score += Math.min(2, Math.floor(card.description.length / 40));
+    // 真实 collab/spawn tool 优先于 synthetic-*-subagent 占位，避免 live 双卡
+    if (card.id.includes("synthetic-") && card.id.includes("-subagent:")) {
+      score -= 5;
+    }
     return score;
   };
 
@@ -1089,11 +1082,9 @@ export function buildSubagentCardsFromToolItems(
 
   const withChildren = enrichCardsWithChildThreads(cards, options?.childThreads);
   const deduped = dedupeSubagentSquadCards(withChildren);
-  // 同批 persona 尽量不重名：重算一次 squad persona
-  const personas = assignPersonasForSquad(deduped.map((card) => card.id));
   return deduped.map((card, index) => ({
     ...card,
-    ...applyPersonaFields(personas[index] ?? assignPersona(card.id)),
+    ...applyFixedSubagentIdentity(),
     indexLabel: formatIndexLabel(index),
   }));
 }
@@ -1102,7 +1093,6 @@ export function buildSubagentCardFromSubagentInfo(
   agent: SubagentInfo,
   options?: { index?: number; parentThreadId?: string | null },
 ): SubagentCardViewModel {
-  const persona = assignPersona(agent.id);
   const toolCount = null;
   const outputText = agent.taskOutput?.recentOutput ?? null;
   const agentIdFromOutput = extractAgentId(null, outputText);
@@ -1120,7 +1110,7 @@ export function buildSubagentCardFromSubagentInfo(
     });
   return {
     id: agent.id,
-    ...applyPersonaFields(persona),
+    ...applyFixedSubagentIdentity(),
     indexLabel: formatIndexLabel(options?.index ?? 0),
     description: agent.description || agent.type || "Subagent",
     typeLabel: agent.type || "agent",

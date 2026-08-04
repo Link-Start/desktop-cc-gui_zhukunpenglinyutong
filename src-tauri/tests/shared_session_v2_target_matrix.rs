@@ -78,7 +78,7 @@ fn run_turn(
     outcome: &CommitOutcomeInput,
     native_id: &str,
 ) -> String {
-    let begin = begin_turn_core(writer, SESSION, target, text.to_string()).expect("begin");
+    let begin = begin_turn_core(writer, SESSION, target, text.to_string(), None).expect("begin");
     assert_eq!(begin.status, BeginTurnStatus::Creating);
     let attempt_id = begin.attempt_id.clone().expect("attempt id");
     let logical_turn_id = begin.logical_turn_id.clone().expect("logical turn id");

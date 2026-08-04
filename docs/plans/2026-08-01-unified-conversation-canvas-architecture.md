@@ -1,3 +1,12 @@
+---
+type: plan
+status: implemented
+---
+
+<!-- DOC-LIFECYCLE: implemented-architecture-plan -->
+> [!NOTE]
+> **Lifecycle: Implemented architecture plan.** 本文保留设计推演和执行证据；implementation change 已归档。Current contract 以 [OpenSpec main specifications](../../openspec/specs/README.md) 与代码为准，历史 task/checklist 不构成 backlog。
+
 # 统一对话幕布架构改善任务
 
 > **日期**：2026-08-01
@@ -310,7 +319,7 @@ unify-conversation-canvas
 > **内容类型**：Plan + implementation handoff
 > **生命周期**：implemented；OpenSpec change `unify-conversation-canvas` 为 `23/23`，仍 active，待 verify / sync / archive
 > **最后校准**：mossx `0.7.14`，HEAD `26f8065a0c`；核心实现 commit `bf3b35bd6`
-> **事实源**：当前源码、`openspec/changes/unify-conversation-canvas/`、后验 review 与 capability matrix
+> **事实源**：当前源码、`openspec/specs/`、`openspec/changes/archive/2026-08-03-unify-conversation-canvas/`、后验 review 与 capability matrix
 
 | 包 | 状态 |
 |----|------|

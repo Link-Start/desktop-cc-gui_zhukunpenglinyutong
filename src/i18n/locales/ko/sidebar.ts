@@ -70,6 +70,7 @@ const sidebar = {
     "activateWorkspace": "메인 패널에서 열기",
     "workspaceActionsGroup": "워크스페이스 작업",
     "setWorkspaceAlias": "별칭 설정",
+    "assignWorkspaceGroup": "프로젝트 그룹 변경",
     "workspaceAliasPrompt": "사이드바에 표시할 이 워크스페이스의 별칭을 입력하세요. 비워 두면 원래 프로젝트 이름을 사용합니다.",
     "workspaceAliasDialogTitle": "워크스페이스 별칭 설정",
     "workspaceAliasDialogSubtitle": "원래 프로젝트 이름: {{name}}",

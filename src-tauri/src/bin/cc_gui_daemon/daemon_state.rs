@@ -3029,9 +3029,11 @@ impl DaemonState {
             .get_engine_config(engine::EngineType::OpenCode)
             .await;
         let mut cmd = build_opencode_command(config.as_ref())?;
-        cmd.current_dir(workspace_path);
+        cmd.current_dir(&workspace_path);
         cmd.arg("session");
         cmd.arg("list");
+        cmd.arg("--format");
+        cmd.arg("json");
         let output = cmd
             .output()
             .await
@@ -3041,7 +3043,21 @@ impl DaemonState {
             return Err(format!("opencode session list failed: {}", stderr.trim()));
         }
         let stdout = String::from_utf8_lossy(&output.stdout);
-        Ok(parse_opencode_session_list(&stdout))
+        let raw = parse_opencode_session_list(&stdout);
+        // Prefer the engine helper when available; daemon-local parse already
+        // returns directory fields from JSON so re-apply the same ownership filter.
+        Ok(raw
+            .into_iter()
+            .filter(|entry| {
+                entry
+                    .directory
+                    .as_deref()
+                    .map(|directory| {
+                        crate::local_usage::path_matches_workspace(directory, &workspace_path)
+                    })
+                    .unwrap_or(false)
+            })
+            .collect())
     }
 
     pub(super) async fn list_claude_sessions(

@@ -709,6 +709,38 @@ fn parse_patch_diff_entries(diff_text: &str) -> Vec<GitCommitDiff> {
     results
 }
 
+fn expand_daemon_git_action_paths(
+    repo_root: &Path,
+    paths: &[String],
+    layer: crate::git_utils::GitStatusLayer,
+) -> Vec<String> {
+    let mut expanded = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for path in paths {
+        for action_path in crate::git_utils::git_action_paths_for_file(repo_root, path, layer) {
+            if seen.insert(action_path.clone()) {
+                expanded.push(action_path);
+            }
+        }
+    }
+    expanded
+}
+
+async fn run_daemon_git_command_with_paths(
+    repo_root: &PathBuf,
+    prefix: &[&str],
+    paths: &[String],
+) -> Result<(), String> {
+    if paths.is_empty() {
+        return Err("path is required".to_string());
+    }
+    let mut args: Vec<String> = prefix.iter().map(|part| (*part).to_string()).collect();
+    args.extend(paths.iter().cloned());
+    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    git_core::run_git_command(repo_root, &arg_refs).await?;
+    Ok(())
+}
+
 fn infer_remote_head_branch(repo: &git2::Repository, remote_name: &str) -> Option<String> {
     let remote_head_ref = format!("refs/remotes/{remote_name}/HEAD");
     let reference = repo.find_reference(&remote_head_ref).ok()?;
@@ -1541,6 +1573,36 @@ impl DaemonState {
         Ok(())
     }
 
+    pub(crate) async fn unstage_git_all(
+        &self,
+        workspace_id: String,
+        repository_root: Option<String>,
+    ) -> Result<(), String> {
+        let repo_root = self
+            .git_repo_root_for_scope(&workspace_id, repository_root.as_deref())
+            .await?;
+        git_core::run_git_command(&repo_root, &["restore", "--staged", "--", "."]).await?;
+        Ok(())
+    }
+
+    pub(crate) async fn unstage_git_paths(
+        &self,
+        workspace_id: String,
+        paths: Vec<String>,
+        repository_root: Option<String>,
+    ) -> Result<(), String> {
+        let repo_root = self
+            .git_repo_root_for_scope(&workspace_id, repository_root.as_deref())
+            .await?;
+        let expanded = expand_daemon_git_action_paths(
+            &repo_root,
+            &paths,
+            crate::git_utils::GitStatusLayer::Index,
+        );
+        run_daemon_git_command_with_paths(&repo_root, &["restore", "--staged", "--"], &expanded)
+            .await
+    }
+
     pub(crate) async fn revert_git_file(
         &self,
         workspace_id: String,
@@ -1568,6 +1630,37 @@ impl DaemonState {
             {
                 git_core::run_git_command(&repo_root, &["clean", "-f", "--", &path]).await?;
             }
+        }
+        Ok(())
+    }
+
+    pub(crate) async fn revert_git_paths(
+        &self,
+        workspace_id: String,
+        paths: Vec<String>,
+        repository_root: Option<String>,
+    ) -> Result<(), String> {
+        let repo_root = self
+            .git_repo_root_for_scope(&workspace_id, repository_root.as_deref())
+            .await?;
+        let expanded = expand_daemon_git_action_paths(
+            &repo_root,
+            &paths,
+            crate::git_utils::GitStatusLayer::Workdir,
+        );
+        if expanded.is_empty() {
+            return Err("path is required".to_string());
+        }
+        let _ = run_daemon_git_command_with_paths(
+            &repo_root,
+            &["restore", "--staged", "--worktree", "--"],
+            &expanded,
+        )
+        .await;
+        // Match single-file semantics: clean only when needed, and never fail the batch
+        // solely because a tracked path is not cleanable.
+        for path in &expanded {
+            let _ = git_core::run_git_command(&repo_root, &["clean", "-f", "--", path]).await;
         }
         Ok(())
     }

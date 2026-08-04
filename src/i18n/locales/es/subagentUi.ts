@@ -2,7 +2,10 @@ export default {
   subagentUi: {
     squadAria: "Equipo de subagentes",
     squadTitle: "{{completed}}/{{total}} agentes",
+    squadTitleCount: "{{total}} agentes",
+
     squadFallbackTitle: "Subagentes en paralelo",
+    defaultName: "Subagente",
     badge: "SubAgent",
     claudeLaunchNoSession:
       "Se detectó la confirmación de inicio del Claude Agent, pero aún no hay una sesión claude:subagent vinculada (el native owner puede seguir vinculándose/indexándose). Inténtalo más tarde o abre el subagente desde el árbol de sesiones.",
@@ -16,6 +19,11 @@ export default {
     noSessionYet:
       "Aún no hay una sesión de subagente vinculada (agentId sin resolver o transcript aún indexándose). Abre la fila «Subagente» en el árbol de sesiones.",
 
+    statusShort: {
+      completed: "hechos",
+      running: "en curso",
+      error: "fallidos",
+    },
     status: {
       running: "En ejecución",
       completed: "Completado",

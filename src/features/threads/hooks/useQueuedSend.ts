@@ -121,6 +121,8 @@ type UseQueuedSendResult = {
   removeQueuedMessage: (threadId: string, messageId: string) => void;
   fuseQueuedMessage: (threadId: string, messageId: string) => Promise<void>;
   canFuseActiveQueue: boolean;
+  /** 全局融合不可用时的 i18n key；canFuse 时为 null。 */
+  fuseDisabledReasonKey: string | null;
   activeFusingMessageId: string | null;
 };
 
@@ -573,35 +575,54 @@ export function useQueuedSend({
         typeof interruptTurn === "function",
     };
   }, [activeEngine, activeThreadId, activeTurnId, interruptTurn, steerEnabled]);
-  const canFuseActiveQueue = useMemo(
-    () =>
-      Boolean(
-        activeThreadId &&
-        activeWorkspace &&
-        activeQueue.length > 0 &&
-        !activeFusion &&
-        !isClaudePendingBootstrapThread &&
-        !isContextCompacting &&
-        isProcessing &&
-        !isReviewing &&
-        (!isSharedSession ||
-          isSharedFollowUpState(activeSharedSendState)) &&
-        (activeFusionCapability.sameRun || activeFusionCapability.cutover),
-      ),
-    [
-      activeFusion,
-      activeQueue.length,
-      activeThreadId,
-      activeFusionCapability,
-      activeWorkspace,
-      activeSharedSendState,
-      isClaudePendingBootstrapThread,
-      isContextCompacting,
-      isProcessing,
-      isReviewing,
-      isSharedSession,
-    ],
-  );
+  const fuseDisabledReasonKey = useMemo((): string | null => {
+    if (!activeThreadId || !activeWorkspace) {
+      return "chat.fuseDisabledNoSession";
+    }
+    if (activeQueue.length === 0) {
+      return "chat.fuseDisabledEmptyQueue";
+    }
+    if (activeFusion) {
+      return "chat.fuseDisabledAlreadyFusing";
+    }
+    if (isClaudePendingBootstrapThread) {
+      return "chat.fuseDisabledBootstrap";
+    }
+    if (isContextCompacting) {
+      return "chat.fuseDisabledCompacting";
+    }
+    if (!isProcessing) {
+      return "chat.fuseDisabledNoActiveTurn";
+    }
+    if (isReviewing) {
+      return "chat.fuseDisabledReviewing";
+    }
+    if (
+      isSharedSession &&
+      !isSharedFollowUpState(activeSharedSendState)
+    ) {
+      return activeSharedSendState === "recovery-required"
+        ? "chat.fuseDisabledSharedRecovery"
+        : "chat.fuseDisabledSharedNotReady";
+    }
+    if (!(activeFusionCapability.sameRun || activeFusionCapability.cutover)) {
+      return "chat.fuseDisabledCapability";
+    }
+    return null;
+  }, [
+    activeFusion,
+    activeQueue.length,
+    activeThreadId,
+    activeFusionCapability,
+    activeWorkspace,
+    activeSharedSendState,
+    isClaudePendingBootstrapThread,
+    isContextCompacting,
+    isProcessing,
+    isReviewing,
+    isSharedSession,
+  ]);
+  const canFuseActiveQueue = fuseDisabledReasonKey === null;
 
   useEffect(() => {
     if (previousActiveThreadIdRef.current === activeThreadId) {
@@ -1864,6 +1885,7 @@ export function useQueuedSend({
     removeQueuedMessage,
     fuseQueuedMessage,
     canFuseActiveQueue,
+    fuseDisabledReasonKey,
     activeFusingMessageId,
   };
 }

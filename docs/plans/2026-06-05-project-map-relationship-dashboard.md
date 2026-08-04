@@ -1,3 +1,12 @@
+---
+type: plan
+status: implemented
+---
+
+<!-- DOC-LIFECYCLE: implemented-historical-plan -->
+> [!NOTE]
+> **Lifecycle: Implemented historical plan.** 本文保留当时的实施顺序与验收轨迹，不是 current plan。当前行为以 [OpenSpec main specifications](../../openspec/specs/README.md) 与代码为准；unchecked checkbox 不构成 active backlog。
+
 # Project Map Relationship Dashboard 推进指导（修订版）
 
 > **Lifecycle**：Implemented / Historical Plan。Canonical change 已归档于 `openspec/changes/archive/2026-06-06-add-project-map-relationship-dashboard/`；后续 Project Map 已多轮演进，本文只保留原始 architecture/acceptance reasoning。

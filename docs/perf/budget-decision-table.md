@@ -1,3 +1,8 @@
+---
+type: performance
+status: historical
+---
+
 # Budget Decision Table — 2026-06-24-harden-realtime-interaction-jank-during-tool-call
 
 > **Lifecycle**：Historical Budget Decision。表内 v0.5.11/v0.5.13 proxy 值不是 0.7.x current budget evidence；设计方法可复用，数值必须重测。

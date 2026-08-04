@@ -179,6 +179,8 @@ function ComposerHarness({
   sharedTarget,
   createSessionTargetPicker = false,
   onCreationTargetEngineChange,
+  onSelectEngine,
+  selectedEngine = "claude",
   activeThreadId = "thread-1",
   sharedTargetPickerLocked = false,
 }: {
@@ -193,6 +195,8 @@ function ComposerHarness({
   };
   createSessionTargetPicker?: boolean;
   onCreationTargetEngineChange?: (engine: EngineType | null) => void;
+  onSelectEngine?: (engine: EngineType) => void;
+  selectedEngine?: EngineType;
   activeThreadId?: string;
   sharedTargetPickerLocked?: boolean;
 }) {
@@ -243,7 +247,8 @@ function ComposerHarness({
       collaborationModesEnabled={true}
       selectedCollaborationModeId={null}
       onSelectCollaborationMode={() => {}}
-      selectedEngine="claude"
+      selectedEngine={selectedEngine}
+      onSelectEngine={onSelectEngine}
       isSharedSession={Boolean(sharedTarget)}
       sharedTargetPickerLocked={sharedTargetPickerLocked}
       createSessionTargetPicker={createSessionTargetPicker}
@@ -298,11 +303,13 @@ describe("Composer file reference token", () => {
   it("keeps Home create-session target local and sends one complete target", async () => {
     const onSend = vi.fn();
     const onCreationTargetEngineChange = vi.fn();
+    const onSelectEngine = vi.fn();
     const view = render(
       <ComposerHarness
         onSend={onSend}
         createSessionTargetPicker
         onCreationTargetEngineChange={onCreationTargetEngineChange}
+        onSelectEngine={onSelectEngine}
       />,
     );
 
@@ -316,6 +323,8 @@ describe("Composer file reference token", () => {
     });
     expect(invoke).not.toHaveBeenCalled();
     expect(onCreationTargetEngineChange).toHaveBeenLastCalledWith("codex");
+    // 首页切 CLI 必须同步全局 engine，重启后首页才能回到上次选择
+    expect(onSelectEngine).toHaveBeenCalledWith("codex");
     // 等价 engine 不得在每次父树重渲染时重复 publish（#185 防护）
     const publishCountAfterMount = onCreationTargetEngineChange.mock.calls.length;
     await act(async () => {
@@ -324,6 +333,8 @@ describe("Composer file reference token", () => {
           onSend={onSend}
           createSessionTargetPicker
           onCreationTargetEngineChange={onCreationTargetEngineChange}
+          onSelectEngine={onSelectEngine}
+          selectedEngine="codex"
         />,
       );
       await Promise.resolve();
@@ -351,6 +362,41 @@ describe("Composer file reference token", () => {
         },
       }),
     );
+  });
+
+  it("drops sticky home creation engine when selectedEngine restores externally", async () => {
+    const onSend = vi.fn();
+    const onCreationTargetEngineChange = vi.fn();
+    const view = render(
+      <ComposerHarness
+        onSend={onSend}
+        createSessionTargetPicker
+        onCreationTargetEngineChange={onCreationTargetEngineChange}
+        selectedEngine="claude"
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(view.getByTestId("select-shared-target"));
+      await Promise.resolve();
+    });
+    expect(onCreationTargetEngineChange).toHaveBeenLastCalledWith("codex");
+
+    // 模拟启动 restore 把全局 engine 切到 grok（非本 picker 触发）
+    await act(async () => {
+      view.rerender(
+        <ComposerHarness
+          onSend={onSend}
+          createSessionTargetPicker
+          onCreationTargetEngineChange={onCreationTargetEngineChange}
+          selectedEngine="grok"
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    // sticky codex 应被清掉，首页跟随 restore 后的 grok
+    expect(onCreationTargetEngineChange).toHaveBeenLastCalledWith("grok");
   });
 
   it("accepts a Claude local model as the Home creation target", async () => {
@@ -854,6 +900,107 @@ describe("Composer file reference token", () => {
     expect(consoleErrorSpy).not.toHaveBeenCalledWith(
       expect.stringContaining("Minified React error #185"),
     );
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("does not hit maximum update depth when skills/commands identity thrash after token settle", async () => {
+    // C-20260804-02：0.7.16 App-DjQ3UnSh 生产栈落在 Composer extract effect。
+    // 父树每次渲染换 skills/commands 数组引用时，旧 effect deps 会反复入场。
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const onSend = vi.fn();
+    const onDraftChange = vi.fn();
+
+    function ThrashingSkillsHarness() {
+      const [tick, setTick] = useState(0);
+      // 每次 tick 新数组引用，语义相同
+      void tick;
+      return (
+        <div>
+          <button type="button" data-testid="thrash-skills" onClick={() => setTick((n) => n + 1)}>
+            thrash
+          </button>
+          <Composer
+            onSend={(text) => onSend(text)}
+            onQueue={() => {}}
+            onStop={() => {}}
+            canStop={false}
+            isProcessing={false}
+            steerEnabled={false}
+            collaborationModes={[]}
+            collaborationModesEnabled
+            selectedCollaborationModeId={null}
+            onSelectCollaborationMode={() => {}}
+            selectedEngine="claude"
+            models={[]}
+            selectedModelId={null}
+            onSelectModel={() => {}}
+            reasoningOptions={[]}
+            selectedEffort={null}
+            onSelectEffort={() => {}}
+            reasoningSupported={false}
+            accessMode="current"
+            onSelectAccessMode={() => {}}
+            skills={[
+              {
+                name: "review-pr",
+                path: "/tmp/review-pr",
+                description: "review",
+              },
+            ]}
+            prompts={[]}
+            commands={[
+              {
+                name: "compact",
+                path: "/tmp/compact",
+                description: "compact",
+                content: "compact",
+              },
+            ]}
+            files={[]}
+            onDraftChange={onDraftChange}
+            editorSettings={{
+              preset: "default",
+              expandFenceOnSpace: false,
+              expandFenceOnEnter: false,
+              fenceLanguageTags: false,
+              fenceWrapSelection: false,
+              autoWrapPasteMultiline: false,
+              autoWrapPasteCodeLike: false,
+              continueListOnShiftEnter: false,
+            }}
+            activeWorkspaceId="ws-1"
+            activeThreadId="thread-thrash"
+          />
+        </div>
+      );
+    }
+
+    const view = render(<ThrashingSkillsHarness />);
+    const textarea = getTextarea(view.container);
+    const value = "请检查 📄 App.tsx `/Users/demo/repo/src/App.tsx` /review-pr";
+
+    await act(async () => {
+      fireEvent.change(textarea, {
+        target: { value, selectionStart: value.length },
+      });
+      fireEvent.select(textarea);
+    });
+
+    for (let i = 0; i < 40; i += 1) {
+      await act(async () => {
+        fireEvent.click(view.getByTestId("thrash-skills"));
+        await Promise.resolve();
+      });
+    }
+
+    expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Maximum update depth exceeded"),
+    );
+    expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Minified React error #185"),
+    );
+    // token settle 后正文应收敛（文件标签保留；skill token 抽出）
+    expect(getTextarea(view.container).value).toContain("📄 App.tsx");
     consoleErrorSpy.mockRestore();
   });
 

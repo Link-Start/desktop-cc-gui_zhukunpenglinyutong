@@ -188,6 +188,7 @@ const composer = {
       "empty-draft": "빈 초안"
     },
     "queueStatusWaiting": "다음 턴 대기 중",
+    "queueStatusPendingAck": "전송됨 — 확인 중(중복 방지)",
     "queueStatusFuseReady": "현재 턴에 병합 가능",
     "queueStatusFusing": "현재 턴에 병합 중",
     "queueStatusCommand": "슬래시 명령이 다음 턴을 기다림",

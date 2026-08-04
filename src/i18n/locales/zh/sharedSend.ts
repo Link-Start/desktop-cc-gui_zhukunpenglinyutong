@@ -43,15 +43,42 @@ const sharedSend = {
     settling: "正在保存结果…",
     recoveryTitle: "需要恢复",
     recoveryHint:
-      "上一次发送的接收结果不确定，已锁定本会话。请先检查执行状态，或明确重建会话连接。",
+      "上一次发送的接收结果不确定，已锁定本会话。请检查状态、停止投递、停止并重建，或放弃本轮。",
     recoveryProbe: "检查状态",
     recoveryProbing: "正在检查…",
     recoveryRebuild: "重建会话连接",
+    recoveryStop: "停止投递",
+    recoveryStopHint:
+      "请求运行时停止正在进行的投递。停止后会话仍保持锁定，需继续结算或重建。",
+    recoveryStopAndRebuild: "停止并重建",
+    recoveryStopAndRebuildHint:
+      "必要时先停止运行时仍占用的投递，再归档旧连接并准备新的会话连接。",
+    recoveryAbandon: "放弃本轮",
+    recoveryAbandonHint:
+      "将未决轮次持久标记为已取消并解锁会话。不会删除整条对话。",
+    recoveryAbandonConfirm:
+      "确定放弃本轮未决发送并解锁共享会话吗？该轮次将标记为已取消，对话本身会保留。",
+    recoveryStopNoAttempt:
+      "当前没有可停止的进行中投递。请改用检查状态、重建连接或放弃本轮。",
+    recoveryHintAfterStop:
+      "已请求停止投递。请继续检查状态、停止并重建，或放弃本轮以完成解锁。",
     recoveryProbeHeld:
       "检查发现发送已被接收，但结果尚未保存；为保证顺序，继续保持锁定。",
     recoveryProbeCleared: "未发现待处理的发送，已解除锁定。",
+    recoveryErrorActive:
+      "运行时仍占用该次投递。请先停止投递再重建连接，或放弃本轮。",
+    recoveryErrorActiveRequiresStop:
+      "运行时仍占用该次投递。请先停止投递再放弃，或在放弃时确认强制停止。",
+    recoveryErrorAmbiguous:
+      "检测到多个未决发送，无法安全自动恢复；若持续出现请联系支持并提供会话详情。",
+    recoveryErrorOwnerMissing:
+      "未找到匹配的未决投递。请尝试检查状态，会话可能已解锁。",
+    recoveryErrorEmptyContextHandoff:
+      "无法为当前目标重建共享上下文（历史可能不完整）。请尝试停止并重建会话连接，或切换可用目标后重发。",
+    recoveryTechDetail: "可查看技术详情",
     targetUnavailable: "当前发送目标不可用。",
     targetUnavailableReason: "当前发送目标不可用：{{reason}}",
+    targetUnavailableHint: "请在目标选择器中切换到其他可用目标，然后重新发送。",
     selectionPersistFailedTitle: "发送目标保存失败",
     selectionPersistFailedMessage:
       "当前选择仍然有效，但重启恢复时可能使用上一次发送目标：{{reason}}",

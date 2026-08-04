@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { EngineType, ThreadSummary, WorkspaceInfo } from "../../../types";
+import type {
+  EngineType,
+  ThreadSummary,
+  WorkspaceGroup,
+  WorkspaceInfo,
+} from "../../../types";
 import type { SharedSessionSupportedEngine } from "../../shared-session/utils/sharedSessionEngines";
 import { isSharedSessionThreadId } from "../../shared-session/utils/sharedSessionIdentity";
 import {
@@ -194,14 +199,14 @@ export type WorkspaceMenuIconKind =
   | "engine-grok"
   | "new-shared"
   | "alias"
+  | "assign-group"
   | "activate"
   | "exited-sessions-hidden"
   | "exited-sessions-visible"
   | "new-folder"
   | "reload"
   | "remove"
-  | "new-worktree"
-  | "new-clone";
+  | "new-worktree";
 
 export type WorkspaceMenuAction = {
   id: string;
@@ -332,8 +337,13 @@ type SidebarMenuHandlers = {
   onDeleteWorkspace: (workspaceId: string) => void;
   onDeleteWorktree: (workspaceId: string) => void;
   onRenameWorkspaceAlias: (workspace: WorkspaceInfo) => void;
+  /** 侧栏快捷改分组；与设置 → 项目管理 → 分组 同源。仅 main workspace 可用。 */
+  workspaceGroups?: WorkspaceGroup[];
+  onAssignWorkspaceGroup?: (
+    workspaceId: string,
+    groupId: string | null,
+  ) => void | Promise<unknown>;
   onAddWorktreeAgent: (workspace: WorkspaceInfo) => void;
-  onAddCloneAgent: (workspace: WorkspaceInfo) => void;
 };
 
 export type ThreadMoveFolderTarget = {
@@ -392,8 +402,9 @@ export function useSidebarMenus({
   onDeleteWorkspace,
   onDeleteWorktree,
   onRenameWorkspaceAlias,
+  workspaceGroups = [],
+  onAssignWorkspaceGroup,
   onAddWorktreeAgent,
-  onAddCloneAgent,
   claudeProviderProfiles = [],
   codexProviderProfiles = [],
   kimiProviderProfiles = [],
@@ -1830,6 +1841,17 @@ export function useSidebarMenus({
       const showExitedSessionsToggle =
         Boolean(onToggleExitedSessions) &&
         (shouldShowExitedSessionsToggle?.(workspace) ?? false);
+      // worktree 的 groupId 跟父项目走；仅 main 可改分组（与 assignWorkspaceGroup 一致）。
+      const canAssignWorkspaceGroup =
+        Boolean(onAssignWorkspaceGroup) &&
+        workspaceGroups.length > 0 &&
+        (workspace.kind ?? "main") !== "worktree";
+      const currentGroupId = workspace.settings.groupId ?? null;
+      const resolvedGroupId =
+        currentGroupId &&
+        workspaceGroups.some((group) => group.id === currentGroupId)
+          ? currentGroupId
+          : null;
 
       return {
         id: "workspace-actions",
@@ -1888,6 +1910,38 @@ export function useSidebarMenus({
             ...createRowPinMeta("rename-workspace-alias"),
             onSelect: () => onRenameWorkspaceAlias(workspace),
           },
+          ...(canAssignWorkspaceGroup && onAssignWorkspaceGroup
+            ? [
+                {
+                  id: "assign-workspace-group",
+                  label: t("sidebar.assignWorkspaceGroup"),
+                  iconKind: "assign-group" as const,
+                  submenuOnly: true,
+                  submenuTitle: t("sidebar.assignWorkspaceGroup"),
+                  onSelect: () => {},
+                  children: [
+                    {
+                      id: "assign-workspace-group-none",
+                      label: t("settings.ungrouped"),
+                      iconKind: "assign-group" as const,
+                      selected: resolvedGroupId === null,
+                      onSelect: () => {
+                        void onAssignWorkspaceGroup(workspaceId, null);
+                      },
+                    },
+                    ...workspaceGroups.map((group) => ({
+                      id: `assign-workspace-group-${group.id}`,
+                      label: group.name,
+                      iconKind: "assign-group" as const,
+                      selected: resolvedGroupId === group.id,
+                      onSelect: () => {
+                        void onAssignWorkspaceGroup(workspaceId, group.id);
+                      },
+                    })),
+                  ],
+                },
+              ]
+            : []),
           {
             id: "remove-workspace",
             label: t("sidebar.removeWorkspace"),
@@ -1903,14 +1957,6 @@ export function useSidebarMenus({
             ...createRowPinMeta("new-worktree-agent"),
             onSelect: () => onAddWorktreeAgent(workspace),
           },
-          {
-            id: "new-clone-agent",
-            label: t("sidebar.newCloneAgent"),
-            iconKind: "new-clone",
-            deprecated: true,
-            ...createRowPinMeta("new-clone-agent"),
-            onSelect: () => onAddCloneAgent(workspace),
-          },
         ],
       };
     },
@@ -1925,8 +1971,9 @@ export function useSidebarMenus({
       isExitedSessionsHidden,
       onDeleteWorkspace,
       onRenameWorkspaceAlias,
+      workspaceGroups,
+      onAssignWorkspaceGroup,
       onAddWorktreeAgent,
-      onAddCloneAgent,
     ],
   );
 

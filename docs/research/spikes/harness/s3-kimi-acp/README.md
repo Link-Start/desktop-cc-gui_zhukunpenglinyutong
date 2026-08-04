@@ -1,3 +1,8 @@
+---
+type: evidence
+status: historical
+---
+
 # S3 Spike Harness — Kimi CLI 0.27.0 ACP 探测
 
 针对 `kimi acp`（stdio, newline-delimited JSON-RPC）的可重复探测脚本。

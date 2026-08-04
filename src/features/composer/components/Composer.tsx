@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { useEventCallback } from "../../../utils/useEventCallback";
 import type {
   ComposerSendShortcut,
   ComposerEditorSettings,
@@ -45,14 +46,14 @@ import {
   type ExecutionTarget,
 } from "../../shared-session/target/types";
 import { persistSharedSessionSelectedTarget } from "../../shared-session/services/sharedSessions";
+import { resolveComposerAtomicSelectedModelId } from "../utils/resolveComposerAtomicSelectedModelId";
+import { resolveDefaultCreationExecutionTarget } from "../utils/resolveDefaultCreationExecutionTarget";
 import { isSharedSessionThreadId } from "../../shared-session/utils/sharedSessionIdentity";
 import { dispatchSharedSendEvent } from "../../shared-session/runtime/sharedSendStateStore";
 import { requestProviderContinuationDialog } from "../../threads/services/providerContinuationRequests";
 import {
   CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
-  CLAUDE_LOCAL_PROVIDER_PROFILE_NAME,
   CODEX_DISK_PROVIDER_PROFILE_ID,
-  CODEX_DISK_PROVIDER_PROFILE_NAME,
   LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
 } from "../../threads/constants/codexProviderProfiles";
 import { computeDictationInsertion } from "../../../utils/dictation";
@@ -68,6 +69,10 @@ import {
   permissionModeToAccessMode,
   type ProviderId,
 } from "./ChatInputBox/types";
+import {
+  reconcileAtomicReasoningEffort,
+  resolveAtomicReasoningOptions,
+} from "../../models/atomicModelReasoning";
 import {
   ClaudeRewindConfirmDialog,
   type ClaudeRewindPreviewState,
@@ -281,6 +286,7 @@ type ComposerProps = {
   onDeleteQueued?: (id: string) => void;
   onFuseQueued?: (id: string) => void | Promise<void>;
   canFuseQueuedMessages?: boolean;
+  fuseDisabledReasonKey?: string | null;
   fusingQueuedMessageId?: string | null;
   userInputRequests?: RequestUserInputRequest[];
   onJumpToUserInputRequest?: (request: RequestUserInputRequest) => void;
@@ -551,6 +557,7 @@ function ComposerImpl({
   onDeleteQueued,
   onFuseQueued,
   canFuseQueuedMessages = false,
+  fuseDisabledReasonKey = null,
   fusingQueuedMessageId = null,
   userInputRequests = [],
   onJumpToUserInputRequest,
@@ -670,42 +677,18 @@ function ComposerImpl({
   const selectedSharedTarget = sharedTargetState.selectedNextTarget;
   const [selectedCreationTarget, setSelectedCreationTarget] =
     useState<ExecutionTarget | null>(null);
+  // 首页 picker 主动切换 engine 时，parent selectedEngine 可能尚未异步跟上；
+  // 用 ref 标记「等待 parent 追上的目标」，避免误清 sticky creation target。
+  const pendingPickerEngineRef = useRef<EngineType | null>(null);
   const defaultCreationTarget = useMemo<ExecutionTarget | null>(() => {
-    if (
-      !createSessionTargetPicker ||
-      (selectedEngine !== "claude" && selectedEngine !== "codex") ||
-      !selectedModelId?.trim()
-    ) {
-      return null;
-    }
-    const selectedModel =
-      models.find((candidate) => candidate.id === selectedModelId) ?? null;
-    const runtimeModel = selectedModel?.model?.trim() || null;
-    if (!selectedModel || !runtimeModel) {
-      return null;
-    }
-    const rawProviderProfileId = providerProfileId?.trim() || null;
-    const localProviderProfileId =
-      selectedEngine === "claude"
-        ? CLAUDE_LOCAL_PROVIDER_PROFILE_ID
-        : CODEX_DISK_PROVIDER_PROFILE_ID;
-    const normalizedProviderProfileId =
-      rawProviderProfileId === localProviderProfileId
-        ? null
-        : rawProviderProfileId;
-    return {
-      engine: selectedEngine,
-      providerProfileId: normalizedProviderProfileId,
-      modelCatalogEntryId: selectedModel.id,
-      model: runtimeModel,
-      reasoning: selectedEffort ? { effort: selectedEffort } : null,
-      providerProfileNameSnapshot:
-        normalizedProviderProfileId ??
-        (selectedEngine === "claude"
-          ? CLAUDE_LOCAL_PROVIDER_PROFILE_NAME
-          : CODEX_DISK_PROVIDER_PROFILE_NAME),
-      providerProfileSource: normalizedProviderProfileId ? "managed" : "disk",
-    };
+    return resolveDefaultCreationExecutionTarget({
+      enabled: createSessionTargetPicker,
+      selectedEngine,
+      selectedModelId,
+      selectedEffort,
+      providerProfileId,
+      models,
+    });
   }, [
     createSessionTargetPicker,
     models,
@@ -744,9 +727,33 @@ function ComposerImpl({
     }
     return () => {
       publishedCreationTargetEngineRef.current = undefined;
+      pendingPickerEngineRef.current = null;
       onCreationTargetEngineChange?.(null);
     };
   }, [createSessionTargetPicker, onCreationTargetEngineChange]);
+  // 全局 selectedEngine 外部变更（启动 restore / 从会话回首页）时，丢掉与其不一致的
+  // sticky creation target，否则首页会卡在首屏默认 claude，而会话区已是 grok。
+  // 仅依赖 selectedEngine：用户点选时只写 sticky、不立刻改 prop，故不会误清。
+  useEffect(() => {
+    if (!createSessionTargetPicker || !selectedEngine) {
+      return;
+    }
+    if (pendingPickerEngineRef.current != null) {
+      if (pendingPickerEngineRef.current === selectedEngine) {
+        // 用户点选已落地，保留 sticky 的 model/profile 细节
+        pendingPickerEngineRef.current = null;
+        return;
+      }
+      // parent 走到了别的 engine（外部 restore 或 switch 失败后的回落）
+      pendingPickerEngineRef.current = null;
+    }
+    setSelectedCreationTarget((prev) => {
+      if (prev == null || prev.engine === selectedEngine) {
+        return prev;
+      }
+      return null;
+    });
+  }, [createSessionTargetPicker, selectedEngine]);
   /**
    * Native Atomic 点选的即时投影。
    * Shared 写 selectedNextTarget 即可立刻刷新勾选；Native 若只走 onSelectModel
@@ -830,6 +837,160 @@ function ComposerImpl({
     : createSessionTargetPicker
       ? effectiveCreationTarget
       : nativeSessionTarget;
+  /**
+   * Shared / create-session Atomic：思考档位 options + effort 只信 target 的
+   * engine+model。Native Codex 残留的 activeEngine / selectedEffort /
+   * reasoningOptions 禁止在 Shared 初始化或 target 短暂为空时回灌 UI。
+   */
+  const atomicModelReasoningRef = useMemo(() => {
+    const target = selectedAtomicTarget;
+    if (!target?.engine) {
+      return null;
+    }
+    const catalogEntryId = target.modelCatalogEntryId?.trim() || null;
+    const runtimeModel = target.model?.trim() || null;
+    if (target.engine !== "codex") {
+      return {
+        engine: target.engine,
+        model: {
+          id: catalogEntryId ?? runtimeModel,
+          model: runtimeModel ?? catalogEntryId,
+        },
+      };
+    }
+    type ModelReasoningLike = {
+      id: string;
+      model?: string;
+      source?: string | null;
+      supportedReasoningEfforts?: ModelOption["supportedReasoningEfforts"];
+      defaultReasoningEffort?: string | null;
+    };
+    const catalog = (providerModelCatalogs?.codex ?? []) as ModelReasoningLike[];
+    const parentModels = models as ModelReasoningLike[];
+    const matchByIdentity = (entry: ModelReasoningLike) => {
+      if (catalogEntryId && entry.id === catalogEntryId) {
+        return true;
+      }
+      if (
+        runtimeModel &&
+        (entry.model === runtimeModel || entry.id === runtimeModel)
+      ) {
+        return true;
+      }
+      return false;
+    };
+    const matchedCatalog = catalog.find(matchByIdentity) ?? null;
+    const matchedParent = parentModels.find(matchByIdentity) ?? null;
+    const preferred = matchedCatalog ?? matchedParent;
+    return {
+      engine: target.engine,
+      model: {
+        id:
+          catalogEntryId ??
+          preferred?.id ??
+          runtimeModel,
+        model:
+          runtimeModel ??
+          preferred?.model ??
+          catalogEntryId,
+        source: preferred?.source ?? undefined,
+        supportedReasoningEfforts:
+          preferred?.supportedReasoningEfforts &&
+          preferred.supportedReasoningEfforts.length > 0
+            ? preferred.supportedReasoningEfforts
+            : matchedParent?.supportedReasoningEfforts,
+        defaultReasoningEffort:
+          preferred?.defaultReasoningEffort ??
+          matchedParent?.defaultReasoningEffort ??
+          null,
+      },
+    };
+  }, [models, providerModelCatalogs, selectedAtomicTarget]);
+  const useAtomicReasoningProjection =
+    isSharedSessionResolved || Boolean(createSessionTargetPicker);
+  const atomicReasoningOptions = useMemo(() => {
+    if (!useAtomicReasoningProjection) {
+      return reasoningOptions;
+    }
+    // Shared / create-session：即使 target 尚未 hydrate，也禁止回落父层
+    // Native Codex 的全量 options（会带出 xhigh/max/ultra + 脏 effort）。
+    if (atomicModelReasoningRef) {
+      return resolveAtomicReasoningOptions(
+        atomicModelReasoningRef.engine,
+        atomicModelReasoningRef.model,
+      );
+    }
+    return [];
+  }, [
+    atomicModelReasoningRef,
+    reasoningOptions,
+    useAtomicReasoningProjection,
+  ]);
+  const atomicSelectedEffort = useMemo(() => {
+    if (!useAtomicReasoningProjection) {
+      return selectedEffort;
+    }
+    if (!selectedAtomicTarget?.engine) {
+      // Shared 无 target：不展示父层 Codex high 等残留
+      return null;
+    }
+    return reconcileAtomicReasoningEffort({
+      engine: selectedAtomicTarget.engine,
+      model: atomicModelReasoningRef?.model ?? null,
+      effort: selectedAtomicTarget.reasoning?.effort ?? null,
+    });
+  }, [
+    atomicModelReasoningRef,
+    selectedAtomicTarget,
+    selectedEffort,
+    useAtomicReasoningProjection,
+  ]);
+  // Shared：收敛 null/非法 effort（含 Claude/Grok 夹紧 + Codex 播种）。
+  useEffect(() => {
+    if (
+      !isSharedSessionResolved ||
+      sharedTargetPickerLocked ||
+      !selectedSharedTarget ||
+      !isResolvedExecutionTarget(selectedSharedTarget) ||
+      !atomicModelReasoningRef
+    ) {
+      return;
+    }
+    if (!activeWorkspaceId || !activeThreadId) {
+      return;
+    }
+    const engine = selectedSharedTarget.engine;
+    if (
+      engine !== "codex" &&
+      engine !== "claude" &&
+      engine !== "grok"
+    ) {
+      return;
+    }
+    const raw = selectedSharedTarget.reasoning?.effort ?? null;
+    const normalizedRaw =
+      typeof raw === "string" ? raw.trim() || null : null;
+    const reconciled = reconcileAtomicReasoningEffort({
+      engine,
+      model: atomicModelReasoningRef.model,
+      effort: normalizedRaw,
+    });
+    if (reconciled === normalizedRaw) {
+      return;
+    }
+    // 仅内存收敛：保证本会话 UI/send 一致；下次 hydrate 仍会再 reconcile。
+    hydrateSharedTargetState(activeWorkspaceId, activeThreadId, {
+      ...selectedSharedTarget,
+      reasoning: reconciled ? { effort: reconciled } : null,
+    });
+  }, [
+    activeThreadId,
+    activeWorkspaceId,
+    atomicModelReasoningRef,
+    isSharedSessionResolved,
+    selectedSharedTarget,
+    sharedTargetPickerLocked,
+  ]);
   const imageAttachEngine = useMemo((): EngineType | null => {
     if (
       isSharedSession &&
@@ -1078,9 +1239,15 @@ function ComposerImpl({
       if (!createSessionTargetPicker || !isResolvedExecutionTarget(target)) {
         return;
       }
+      // 首页 engine 选择必须同步全局 activeEngine + client store，否则重启后首页
+      // 回落到默认 claude，而项目会话因 thread.engineSource 仍显示上次的 CLI。
+      if (target.engine !== selectedEngine) {
+        pendingPickerEngineRef.current = target.engine;
+        onSelectEngine?.(target.engine);
+      }
       setSelectedCreationTarget(target);
     },
-    [createSessionTargetPicker],
+    [createSessionTargetPicker, onSelectEngine, selectedEngine],
   );
   // 草稿值直接订阅模块级 store(而非经 app-shell 根 prop 灌入):按键写 store 时
   // 只有 Composer 自身重渲染,不再把整个 app-shell 拖下水。
@@ -1157,6 +1324,15 @@ function ComposerImpl({
       : `${activeFilePath}:all`)
     : null;
   const rewindSupportedEngine = resolveRewindSupportedEngineFromThreadId(activeThreadId);
+  const canRewindSession = Boolean(onRewind && rewindSupportedEngine);
+  const resetRewindState = useEventCallback(() => {
+    if (rewindPreviewState !== null) {
+      setRewindPreviewState(null);
+    }
+    if (rewindMode !== "messages-and-files") {
+      setRewindMode("messages-and-files");
+    }
+  });
   const hasActiveFileReference = Boolean(
     activeFileReferenceSignature &&
     fileReferenceMode === "path" &&
@@ -1302,21 +1478,14 @@ function ComposerImpl({
   }, [onCodeAnnotationConsumed, pendingCodeAnnotation]);
 
   useEffect(() => {
-    setRewindPreviewState((prev) => (prev === null ? prev : null));
-    setRewindMode((prev) =>
-      prev === "messages-and-files" ? prev : "messages-and-files",
-    );
-  }, [activeThreadId]);
+    resetRewindState();
+  }, [activeThreadId, resetRewindState]);
 
   useEffect(() => {
-    if (rewindSupportedEngine && onRewind) {
-      return;
+    if (!canRewindSession) {
+      resetRewindState();
     }
-    setRewindPreviewState((prev) => (prev === null ? prev : null));
-    setRewindMode((prev) =>
-      prev === "messages-and-files" ? prev : "messages-and-files",
-    );
-  }, [onRewind, rewindSupportedEngine]);
+  }, [canRewindSession, resetRewindState]);
 
   const handleExpandComposer = useCallback(() => {
     setIsComposerCollapsed(false);
@@ -1332,17 +1501,35 @@ function ComposerImpl({
     setText((prev) => (prev === draftText ? prev : draftText));
   }, [draftText]);
 
-  const setComposerText = useCallback(
-    (next: string) => {
-      setText(next);
-      onDraftChange?.(next);
-    },
-    [onDraftChange],
-  );
+  // text / draft / catalog 经 ref 读：setComposerText 保持稳定 identity，
+  // extract effect 不得因 onDraftChange / skills / commands 引用抖动重入（#185 AP-04）。
+  const textRef = useRef(text);
+  textRef.current = text;
+  const onDraftChangeRef = useRef(onDraftChange);
+  onDraftChangeRef.current = onDraftChange;
+  const selectedInlineFileReferencesRef = useRef(selectedInlineFileReferences);
+  selectedInlineFileReferencesRef.current = selectedInlineFileReferences;
+  const skillsRef = useRef(skills);
+  skillsRef.current = skills;
+  const commandsRef = useRef(commands);
+  commandsRef.current = commands;
+
+  const setComposerText = useCallback((next: string) => {
+    // 等价值短路：禁止 text→draft→text 虚写叠 nested update
+    if (textRef.current === next) {
+      return;
+    }
+    textRef.current = next;
+    setText(next);
+    onDraftChangeRef.current?.(next);
+  }, []);
 
   useEffect(() => {
+    // 只订阅 text：selection / skills / commands 读 ref。
+    // 旧 deps 含 selectedInlineFileReferences 时，即便 merge 幂等，
+    // 父树 skills 引用抖动 + 同 tick 多 setState 仍可能叠满 #185（0.7.16 / App-DjQ3UnSh）。
     const existingReferenceIds = new Set(
-      selectedInlineFileReferences
+      selectedInlineFileReferencesRef.current
         .filter((entry) => text.includes(entry.label))
         .map((entry) => entry.id),
     );
@@ -1351,7 +1538,7 @@ function ComposerImpl({
       existingReferenceIds,
     );
     if (extracted.length > 0) {
-      // mergeInlineFileReferences：无新增保持原引用，切断 deps 自反馈（#185）
+      // mergeInlineFileReferences：无新增保持原引用
       setSelectedInlineFileReferences((prev) =>
         mergeInlineFileReferences(prev, extracted),
       );
@@ -1364,7 +1551,11 @@ function ComposerImpl({
       cleanedText: cleanedSelectionText,
       matchedSkillNames,
       matchedCommonsNames,
-    } = extractInlineSelections(text, skills, commands);
+    } = extractInlineSelections(
+      text,
+      skillsRef.current,
+      commandsRef.current,
+    );
     if (matchedSkillNames.length > 0) {
       setSelectedSkillNames((prev) =>
         mergeUniqueNames(prev, matchedSkillNames),
@@ -1378,7 +1569,7 @@ function ComposerImpl({
     if (cleanedSelectionText !== text) {
       setComposerText(cleanedSelectionText);
     }
-  }, [commands, selectedInlineFileReferences, setComposerText, skills, text]);
+  }, [setComposerText, text]);
 
   const handleSelectManualMemory = useCallback(
     (memory: ManualMemorySelection) => {
@@ -1524,8 +1715,6 @@ function ComposerImpl({
     statusPanelExpandedOverride ?? statusPanelExpanded;
   const resolvedToggleStatusPanel =
     onToggleStatusPanelOverride ?? handleToggleStatusPanel;
-  const canRewindSession = Boolean(onRewind && rewindSupportedEngine);
-
   const handleCancelRewind = useCallback(() => {
     if (rewindInFlight) {
       return;
@@ -2690,13 +2879,11 @@ function ComposerImpl({
               onSend={handleSend}
               onStop={onStop}
               onTextChange={handleTextChangeWithHistory}
-              selectedModelId={
-                selectedAtomicTarget
-                  ? selectedAtomicTarget.modelCatalogEntryId ??
-                    selectedAtomicTarget.model ??
-                    ""
-                  : selectedModelId
-              }
+              selectedModelId={resolveComposerAtomicSelectedModelId({
+                isSharedSession: isSharedSessionResolved,
+                executionTarget: selectedAtomicTarget,
+                globalSelectedModelId: selectedModelId,
+              })}
               selectedEngine={
                 selectedAtomicTarget?.engine ?? selectedEngine
               }
@@ -2725,10 +2912,10 @@ function ComposerImpl({
                     ? handleCreationTargetChange
                     : handleNativeAtomicTargetChange
               }
-              reasoningOptions={reasoningOptions}
+              reasoningOptions={atomicReasoningOptions}
               selectedEffort={
-                selectedAtomicTarget
-                  ? selectedAtomicTarget.reasoning?.effort ?? null
+                useAtomicReasoningProjection
+                  ? atomicSelectedEffort
                   : selectedEffort
               }
               onSelectEffort={
@@ -2771,6 +2958,7 @@ function ComposerImpl({
               onDeleteQueued={onDeleteQueued}
               onFuseQueued={onFuseQueued}
               canFuseQueuedMessages={canFuseQueuedMessages}
+              fuseDisabledReasonKey={fuseDisabledReasonKey}
               fusingQueuedMessageId={fusingQueuedMessageId}
               suggestionsOpen={suggestionsOpen}
               files={files}

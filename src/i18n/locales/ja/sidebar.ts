@@ -70,6 +70,7 @@ const sidebar = {
     "activateWorkspace": "メインパネルで開く",
     "workspaceActionsGroup": "ワークスペースの操作",
     "setWorkspaceAlias": "エイリアスを設定",
+    "assignWorkspaceGroup": "プロジェクトグループを変更",
     "workspaceAliasPrompt": "サイドバーでこのワークスペースに表示するエイリアスを入力します。空欄のままにすると元のプロジェクト名が使われます。",
     "workspaceAliasDialogTitle": "ワークスペースのエイリアスを設定",
     "workspaceAliasDialogSubtitle": "元のプロジェクト名: {{name}}",

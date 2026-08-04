@@ -111,11 +111,22 @@ describe("GitHistoryCommitFilters", () => {
 
     const filterRow = document.querySelector(".git-history-filter-row");
     const filterHeader = filterRow?.closest(".git-history-column-header");
+    const leading = document.querySelector(".git-history-commit-filter-leading");
     const searchField = screen
       .getByLabelText("git.historyFilterQueryLabel")
       .closest(".git-history-filter-field");
+    const branchTrigger = screen.getByRole("button", {
+      name: "git.historyFilterBranchLabel",
+    });
+    const authorField = screen
+      .getByLabelText("git.historyFilterAuthorLabel")
+      .closest(".git-history-filter-field");
     expect(filterHeader?.contains(screen.getByText("Commits"))).toBe(true);
     expect(filterHeader?.contains(filterRow as Node)).toBe(true);
+    expect(leading?.contains(screen.getByText("Commits"))).toBe(true);
+    expect(leading?.contains(branchTrigger)).toBe(true);
+    expect(filterRow?.contains(branchTrigger)).toBe(false);
+    expect(filterRow?.contains(authorField as Node)).toBe(true);
     expect(filterHeader?.nextElementSibling).toBe(searchField);
     expect(searchField?.closest(".git-history-column-header")).toBeNull();
     expect(

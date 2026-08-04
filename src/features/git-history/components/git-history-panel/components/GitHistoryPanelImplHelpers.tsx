@@ -33,8 +33,20 @@ export const COMMITS_MIN_WIDTH = 260;
 export const DETAILS_MIN_WIDTH = 260;
 export const DISABLE_HISTORY_ACTION_BUTTONS = false;
 export const DISABLE_HISTORY_COMMIT_ACTIONS = false;
-export const COMMIT_ROW_ESTIMATED_HEIGHT = 56;
+/**
+ * Virtualizer estimates for commit rows (content-driven height).
+ * Real height is measured via measureElement; these reduce first-paint jump.
+ * Keep in sync with `.git-history-commit-content` padding/gap + line stack.
+ */
+export const COMMIT_ROW_ESTIMATED_HEIGHT = 58;
+/** summary + meta + refs */
+export const COMMIT_ROW_WITH_REFS_ESTIMATED_HEIGHT = 76;
 export const GIT_HISTORY_PAGE_SIZE = 100;
+
+/** Best-effort virtualizer estimate; real height comes from measureElement. */
+export function estimateGitHistoryCommitRowHeight(hasRefs: boolean): number {
+  return hasRefs ? COMMIT_ROW_WITH_REFS_ESTIMATED_HEIGHT : COMMIT_ROW_ESTIMATED_HEIGHT;
+}
 export const PUSH_TARGET_MENU_MAX_HEIGHT = 220;
 export const PUSH_TARGET_MENU_MIN_HEIGHT = 120;
 export const PUSH_TARGET_MENU_ESTIMATED_ROW_HEIGHT = 34;
@@ -220,8 +232,11 @@ export function getDefaultColumnWidths(containerWidth: number): {
     safeWidth - splitterTotalWidth,
   );
 
-  let branchesWidth = Math.round((availableColumnsWidth * 3) / 10);
-  let commitsWidth = Math.round((availableColumnsWidth * 4) / 10);
+  // Desktop default: give the commit list the majority of horizontal space
+  // (branches ~20% / commits ~55% / details ~25%), matching the preferred
+  // history workbench proportions where commit messages stay readable.
+  let branchesWidth = Math.round((availableColumnsWidth * 4) / 20);
+  let commitsWidth = Math.round((availableColumnsWidth * 11) / 20);
   let detailsWidth = availableColumnsWidth - branchesWidth - commitsWidth;
 
   const columns = [branchesWidth, commitsWidth, detailsWidth];

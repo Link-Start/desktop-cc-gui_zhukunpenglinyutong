@@ -332,6 +332,23 @@ export function useStatusPanelData(
       });
     });
 
+    // Codex live wait 缺口：collab 抽不出 agentIds 时，用 parent→child 树种子化 Agents 列表。
+    // 硬闸：仅 isCodexEngine / activeEngine=codex；其他 CLI 不走此路径。
+    const codexContext =
+      isCodexEngine || activeEngine === "codex";
+    if (codexContext && result.size === 0) {
+      seedCodexSubagentsFromChildTree(result, {
+        rootThreadId:
+          scopedToolEntries.rootThreadId ??
+          projectionInputs.activeThreadId ??
+          null,
+        activeThreadId: projectionInputs.activeThreadId ?? null,
+        threadParentById: projectionInputs.threadParentById,
+        threadStatusById: projectionInputs.threadStatusById,
+        itemsByThread: projectionInputs.itemsByThread,
+      });
+    }
+
     return Array.from(result.values())
       .map(({ statusPriority: _statusPriority, ...subagent }) => subagent)
       .sort((left, right) => {
@@ -344,7 +361,9 @@ export function useStatusPanelData(
   }, [
     activeEngine,
     isCodexEngine,
+    projectionInputs.activeThreadId,
     projectionInputs.itemsByThread,
+    projectionInputs.threadParentById,
     projectionInputs.threadStatusById,
     scopedToolEntries,
   ]);
@@ -829,6 +848,61 @@ function resolveThreadScopedSubagentStatus(
     return undefined;
   }
   return inferHistoricalThreadTerminalStatus(threadItems);
+}
+
+/**
+ * Codex collab live：wait 无 receiver 时，从 threadParentById 子树补 SubagentInfo。
+ */
+function seedCodexSubagentsFromChildTree(
+  result: Map<string, SubagentAccumulator>,
+  options: {
+    rootThreadId: string | null;
+    activeThreadId: string | null;
+    threadParentById?: Record<string, string>;
+    threadStatusById?: Record<string, ThreadStatusSnapshot | undefined>;
+    itemsByThread?: Record<string, ConversationItem[]>;
+  },
+) {
+  const parentById = options.threadParentById ?? {};
+  // 只用 collab 根会话找直接 children；勿把 active child 也当 root，避免误收集无关子树
+  const rootId =
+    (options.rootThreadId ?? options.activeThreadId ?? "").trim() || null;
+  if (!rootId) {
+    return;
+  }
+  const childIds = Object.entries(parentById)
+    .filter(([, parentId]) => parentId === rootId)
+    .map(([childId]) => childId.trim())
+    .filter((childId) => childId && childId !== rootId);
+  uniqueStringList(childIds).forEach((childId) => {
+    const threadScopedStatus = resolveThreadScopedSubagentStatus(
+      childId,
+      options.threadStatusById,
+      options.itemsByThread,
+    );
+    // 无任何证据时默认 running（live 常见）；有历史 assistant/tool 终态则用终态
+    const status = threadScopedStatus ?? "running";
+    upsertSubagent(result, {
+      id: childId,
+      type: childId,
+      description: "",
+      status,
+      statusPriority: threadScopedStatus ? 5 : 2,
+      taskOutput: {
+        id: childId,
+        engine: "codex",
+        title: childId,
+        description: "",
+        status: mapSubagentStatusToTaskOutputStatus(status),
+        taskId: null,
+        toolUseId: null,
+        threadId: childId,
+        outputFileName: null,
+        recentOutput: null,
+      },
+      navigationTarget: { kind: "thread", threadId: childId },
+    });
+  });
 }
 
 function inferHistoricalThreadTerminalStatus(

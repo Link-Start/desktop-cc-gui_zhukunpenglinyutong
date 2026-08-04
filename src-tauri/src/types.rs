@@ -1144,6 +1144,9 @@ pub(crate) struct AppSettings {
     pub(crate) ui_scale: f64,
     #[serde(default = "default_theme", rename = "theme")]
     pub(crate) theme: String,
+    /// macOS Dock + in-app logo preference (`default` = shipping product icon).
+    #[serde(default = "default_dock_icon_id", rename = "dockIconId")]
+    pub(crate) dock_icon_id: String,
     #[serde(
         default = "default_light_theme_preset_id",
         rename = "lightThemePresetId"
@@ -1438,6 +1441,10 @@ fn default_web_service_port() -> u16 {
 
 fn default_ui_scale() -> f64 {
     1.0
+}
+
+fn default_dock_icon_id() -> String {
+    "default".to_string()
 }
 
 fn default_theme() -> String {
@@ -2010,6 +2017,7 @@ impl Default for AppSettings {
             last_composer_prefs_by_engine: None,
             ui_scale: 1.0,
             theme: default_theme(),
+            dock_icon_id: default_dock_icon_id(),
             light_theme_preset_id: default_light_theme_preset_id(),
             dark_theme_preset_id: default_dark_theme_preset_id(),
             custom_theme_preset_id: default_custom_theme_preset_id(),

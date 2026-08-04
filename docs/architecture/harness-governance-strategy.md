@@ -1,41 +1,46 @@
+---
+type: architecture
+status: implemented
+---
+
 # Harness Governance Layer — mossx 战略架构文档
 
-> **状态**：v1.11（历史战略正文 + 2026-08-01 现网校准）
+> **状态**：v1.12（历史战略正文 + 2026-08-03 现网校准）
 > **作者**：陈湘宁 × AI Co-Architect
 > **日期**：2026-05-17
 > **类型**：架构战略文档（Strategic Architecture）
 > **生命周期**：accepted；核心治理切片已实现并归档，百分比 readiness 为历史评估，不是当前 release KPI
-> **最后校准**：2026-08-01 · mossx `0.7.14` · HEAD `26f8065a0c`
+> **最后校准**：2026-08-03 · mossx `0.7.16`
 > **关联文档**：`docs/architecture/`、`.trellis/workflow.md`、`openspec/project.md`、`openspec/changes/archive/2026-05-28-stabilize-core-runtime-and-realtime-contracts/`
 
 ---
 
-## 2026-08-01 当前代码校准（先读）
+## 2026-08-03 当前代码校准（先读）
 
 本文 2026-05 的战略判断仍用于解释「为什么做 governance」，但引擎数量、文件规模、change 生命周期和 gate 结果已经变化。以下表格覆盖正文中的旧「当前」表述；正文保留原貌用于追溯决策演进。
 
-| 维度 | 2026-05 原始快照 | 2026-08-01 当前事实 | 事实源 / 判定 |
+| 维度 | 2026-05 原始快照 | 2026-08-03 当前事实 | 事实源 / 判定 |
 |------|------------------|---------------------|---------------|
 | Built-in engines | 4 | **6**：`claude / codex / gemini / grok / kimi / opencode` | `src/features/engine/engineIds.json`、`src/types/engine.ts` |
 | Realtime / history projections | 4 + shared | **6 engine-specific + shared**，共 7 adapters、7 loaders | `src/features/threads/adapters/`、`loaders/` |
 | Shared engine boundary | 未定型 | 5：Claude/Codex/Kimi/Grok/OpenCode；Gemini 不支持 Shared | `sharedSessionEngines.ts` 与对应 Rust contract |
 | Governance changes | active implementation queue | 本文引用的 capability/domain-event/evidence/90% 等主干 change 均已归档 | `openspec/changes/archive/` |
 | Governance gates | 设计目标 | capability matrix、evidence bridge、domain-event schema **PASS**；domain-event adoption **FAIL** | 见下方 gate audit |
-| AppShell | 约 82KB 单体 | `src/app-shell.tsx` 为 **70,072 bytes**，已有 `app-shell-parts/` **92 files**；仍是需要持续减重的 orchestration root | 2026-08-01 文件扫描 |
+| AppShell | 约 82KB 单体 | `src/app-shell.tsx` 为 **70,896 bytes**，已有 `app-shell-parts/` **94 files**；仍是需要持续减重的 orchestration root | 2026-08-03 文件扫描 |
 | `SpecHub` | 旧路径 | `src/features/spec/components/SpecHub.tsx` | 当前源码 |
 
 ### Gate audit
 
-2026-08-01 在当前工作区重跑：
+下表是 2026-08-01 的 recorded run；2026-08-03 只做代码边界复核，没有伪造新的运行结果：
 
 | 命令 | 结果 | 解释 |
 |------|------|------|
-| `pnpm check:engine-adapter-registry` | PASS | 6 built-ins 的 frontend/Rust registry parity 成立 |
-| `pnpm check:engine-capability-matrix` | PASS | 15 capabilities 与生成物一致 |
-| `pnpm check:governance-evidence-bridge` | PASS | evidence bridge contract 完整 |
-| `pnpm check:agent-domain-event-schema` | PASS | schema gate 完整 |
-| `pnpm check:agent-domain-event-adoption` | **FAIL** | checker 仍在 `useThreadEventHandlers.ts` 查找已抽到 `threadEventHandlerTypes.ts` 的类型 token |
-| `pnpm check:capability-aware-policy-router` | inventory 生成成功 | 扫描 3,101 files，458 findings；exit 0 不表示零 branch debt，须审查 finding delta |
+| `npm run check:engine-adapter-registry` | PASS | 6 built-ins 的 frontend/Rust registry parity 成立 |
+| `npm run check:engine-capability-matrix` | PASS | 15 capabilities 与生成物一致 |
+| `npm run check:governance-evidence-bridge` | PASS | evidence bridge contract 完整 |
+| `npm run check:agent-domain-event-schema` | PASS | schema gate 完整 |
+| `npm run check:agent-domain-event-adoption` | **FAIL** | checker 仍在 `useThreadEventHandlers.ts` 查找已抽到 `threadEventHandlerTypes.ts` 的类型 token |
+| `npm run check:capability-aware-policy-router` | inventory 生成成功 | 扫描 3,101 files，458 findings；exit 0 不表示零 branch debt，须审查 finding delta |
 
 `agent-domain-event-adoption` 是 **gate implementation drift**：producer / consumer / controller 接线仍在，当前失败不能直接推导为 runtime adoption 缺失；但 gate 为红也不能声明 governance evidence-complete。应修 checker 使其跟随类型拆分，再重跑并记录 artifact。
 

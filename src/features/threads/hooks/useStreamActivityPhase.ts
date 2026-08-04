@@ -84,6 +84,11 @@ export function useStreamActivityPhase({
   }, []);
 
   useEffect(() => {
+    // 等价值不 setState：fingerprint/items 引用抖动时避免 Composer 子树无意义 commit（#185 防御）
+    const commitPhase = (next: StreamActivityPhase) => {
+      setPhase((prev) => (prev === next ? prev : next));
+    };
+
     if (!isProcessing) {
       if (timeoutRef.current !== null) {
         window.clearTimeout(timeoutRef.current);
@@ -91,7 +96,7 @@ export function useStreamActivityPhase({
       }
       previousFingerprintRef.current = fingerprint;
       lastIngressAtRef.current = 0;
-      setPhase("idle");
+      commitPhase("idle");
       return;
     }
 
@@ -100,17 +105,17 @@ export function useStreamActivityPhase({
 
     if (previousFingerprint !== null && previousFingerprint !== fingerprint) {
       lastIngressAtRef.current = Date.now();
-      setPhase("ingress");
+      commitPhase("ingress");
       return;
     }
 
     if (lastIngressAtRef.current <= 0) {
-      setPhase("waiting");
+      commitPhase("waiting");
       return;
     }
 
     const elapsed = Date.now() - lastIngressAtRef.current;
-    setPhase(elapsed < ingressHoldMs ? "ingress" : "waiting");
+    commitPhase(elapsed < ingressHoldMs ? "ingress" : "waiting");
   }, [fingerprint, ingressHoldMs, isProcessing]);
 
   useEffect(() => {
@@ -125,7 +130,7 @@ export function useStreamActivityPhase({
     const elapsed = Date.now() - lastIngressAtRef.current;
     const remaining = Math.max(0, ingressHoldMs - elapsed);
     if (remaining <= 0) {
-      setPhase("waiting");
+      setPhase((prev) => (prev === "waiting" ? prev : "waiting"));
       return;
     }
 
@@ -135,7 +140,7 @@ export function useStreamActivityPhase({
     timeoutRef.current = window.setTimeout(() => {
       timeoutRef.current = null;
       if (isProcessingRef.current) {
-        setPhase("waiting");
+        setPhase((prev) => (prev === "waiting" ? prev : "waiting"));
       }
     }, remaining);
 

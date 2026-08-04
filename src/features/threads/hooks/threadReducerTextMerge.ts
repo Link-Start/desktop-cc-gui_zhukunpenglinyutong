@@ -718,6 +718,13 @@ function collapseLeadingCompletedSnapshotEcho(value: string) {
 }
 
 const CLEAN_SNAPSHOT_LEADING_ECHO_PROBE_CHARS = 16;
+/** Floor so tiny openers are never treated as early-body echo. */
+const EARLY_BODY_ECHO_MIN_CHARS = 24;
+/**
+ * Suffix must cover a large share of existing (early-body / full restate).
+ * Short trailing citations of the opening line must NOT collapse.
+ */
+const EARLY_BODY_ECHO_MIN_COVERAGE = 0.5;
 
 /**
  * 快照增长快路径的回显护栏：delta 恰以 existing 为前缀时，新增后缀本应是全新内容；
@@ -732,14 +739,78 @@ function suffixReplaysLeadingSnapshot(existing: string, suffix: string) {
   return suffix.trimStart().startsWith(probe);
 }
 
+function isSubstantialEarlyBodyEcho(existing: string, trimmedSuffix: string): boolean {
+  if (
+    trimmedSuffix.length < EARLY_BODY_ECHO_MIN_CHARS ||
+    trimmedSuffix.length > existing.length ||
+    !existing.startsWith(trimmedSuffix)
+  ) {
+    return false;
+  }
+  return trimmedSuffix.length >= Math.ceil(existing.length * EARLY_BODY_ECHO_MIN_COVERAGE);
+}
+
+/**
+ * 折叠「更长稿 A2 + 分隔 + 前半段 A 回显」：
+ * 当 incoming 以 existing 为前缀，且后缀（trim 后）是 existing 的 substantial early body 时，保留 existing。
+ * 热路径上只做 startsWith / 前缀判定，避免对 clean-prefix 快路径引入额外 O(L) compact。
+ */
+function collapseEarlyBodyEchoAfterLongerDraft(
+  existing: string,
+  incoming: string,
+): string | null {
+  if (!existing || !incoming || incoming.length <= existing.length) {
+    return null;
+  }
+
+  if (incoming.startsWith(existing)) {
+    const trimmedSuffix = incoming.slice(existing.length).replace(/^[\s\u00a0]+/u, "");
+    if (!trimmedSuffix) {
+      return existing;
+    }
+    if (isSubstantialEarlyBodyEcho(existing, trimmedSuffix)) {
+      return existing;
+    }
+    return null;
+  }
+
+  // 非严格前缀（空白差异）时才走 compact；completed 路径偶发需要。
+  const compactExisting = compactComparableStreamingText(existing);
+  const compactIncoming = compactComparableStreamingText(incoming);
+  if (
+    compactExisting.length >= EARLY_BODY_ECHO_MIN_CHARS &&
+    compactIncoming.length > compactExisting.length &&
+    compactIncoming.startsWith(compactExisting)
+  ) {
+    const compactRemainder = compactIncoming.slice(compactExisting.length);
+    if (
+      compactRemainder.length >= EARLY_BODY_ECHO_MIN_CHARS &&
+      compactRemainder.length <= compactExisting.length &&
+      compactExisting.startsWith(compactRemainder) &&
+      compactRemainder.length >= Math.ceil(compactExisting.length * EARLY_BODY_ECHO_MIN_COVERAGE)
+    ) {
+      return existing;
+    }
+  }
+
+  return null;
+}
+
 export function mergeAgentMessageText(existing: string, delta: string) {
+  if (!delta) {
+    return existing;
+  }
+  if (!existing) {
+    return collapseMergedAssistantRepeats(delta);
+  }
+
   // 快照增长快路径（Claude 主路径）：delta 是不断增长的整段快照、恰以 existing 为前缀时，
   // 新增后缀若不跨段落边界（去重按 \n\n 段落工作）也不回显 existing 头部，直接追加即可，
   // 把整段去重/归一化推迟到下一个边界快照或收尾——与 mergeReasoningText 等既有的
   // “归一化推迟到边界”约束一致。由此跳过 stripLeadingEchoFromSnapshot / compact /
   // getMarkdownInlineCodeInfo / sharedPrefixLength 对整段 existing 的多趟 O(L) 扫描，
   // 把每次快照更新从 ~O(L) 多趟降到单趟 O(L) 前缀比对 + O(后缀)，消除长回复的 O(L^2) 累计成本。
-  if (existing && delta.length > existing.length && delta.startsWith(existing)) {
+  if (delta.length > existing.length && delta.startsWith(existing)) {
     const appendedSuffix = delta.slice(existing.length);
     if (
       appendedSuffix &&
@@ -747,6 +818,16 @@ export function mergeAgentMessageText(existing: string, delta: string) {
       !suffixReplaysLeadingSnapshot(existing, appendedSuffix)
     ) {
       return `${existing}${appendedSuffix}`;
+    }
+    // 跨段落增长：优先折叠 early-body 回显，再进入完整去重机器。
+    const earlyBodyEcho = collapseEarlyBodyEchoAfterLongerDraft(existing, delta);
+    if (earlyBodyEcho !== null) {
+      return collapseMergedAssistantRepeats(earlyBodyEcho);
+    }
+  } else {
+    const earlyBodyEcho = collapseEarlyBodyEchoAfterLongerDraft(existing, delta);
+    if (earlyBodyEcho !== null) {
+      return collapseMergedAssistantRepeats(earlyBodyEcho);
     }
   }
   const snapshotCandidate = collapseRepeatedAssistantEcho(
@@ -986,6 +1067,15 @@ export function mergeCompletedAgentText(
   if (!existing) {
     return normalizedCompleted;
   }
+
+  const earlyBodyEcho = collapseEarlyBodyEchoAfterLongerDraft(
+    existing,
+    normalizedCompleted,
+  );
+  if (earlyBodyEcho !== null) {
+    return collapseMergedAssistantRepeats(earlyBodyEcho);
+  }
+
   const compactExisting = compactStreamingText(existing);
   const compactCompleted = compactStreamingText(normalizedCompleted);
   if (!compactExisting || !compactCompleted) {

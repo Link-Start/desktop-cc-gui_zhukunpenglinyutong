@@ -97,8 +97,11 @@ export type GitDiffPanelProps = CodeAnnotationBridgeProps & {
   unstagedFiles: GitFileStatus[];
   onStageAllChanges?: () => void | Promise<void>;
   onStageFile?: (path: string) => Promise<void> | void;
+  onUnstageAllChanges?: () => void | Promise<void>;
   onUnstageFile?: (path: string) => Promise<void> | void;
+  onUnstageFiles?: (paths: string[]) => Promise<void> | void;
   onRevertFile?: (path: string) => Promise<void> | void;
+  onRevertFiles?: (paths: string[]) => Promise<void> | void;
   logEntries: GitLogEntry[];
   selectedCommitSha?: string | null;
   onSelectCommit?: (entry: GitLogEntry) => void;
@@ -133,7 +136,10 @@ export type GitDiffPanelProps = CodeAnnotationBridgeProps & {
   onRefreshRepositoryStatuses?: () => Promise<void> | void;
   onStageRepositoryFile?: (repositoryRoot: string, path: string) => Promise<void>;
   onUnstageRepositoryFile?: (repositoryRoot: string, path: string) => Promise<void>;
+  onUnstageRepositoryAll?: (repositoryRoot: string) => Promise<void>;
+  onUnstageRepositoryFiles?: (repositoryRoot: string, paths: string[]) => Promise<void>;
   onRevertRepositoryFile?: (repositoryRoot: string, path: string) => Promise<void>;
+  onRevertRepositoryFiles?: (repositoryRoot: string, paths: string[]) => Promise<void>;
   onStageRepositoryAll?: (repositoryRoot: string) => Promise<void>;
   onCommitRepositories?: (selections: RepositoryCommitSelection[]) => Promise<void> | void;
   repositoryCommitSummary?: string | null;

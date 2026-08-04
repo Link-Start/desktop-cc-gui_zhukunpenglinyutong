@@ -40,9 +40,20 @@ export function UpdateToast({ state, onUpdate, onDismiss }: UpdateToastProps) {
       <div className="update-toast" role="status">
         <div className="update-toast-header">
           <div className="update-toast-title">{t("update.title")}</div>
-          {state.version ? (
-            <div className="update-toast-version">v{state.version}</div>
-          ) : null}
+          <div className="update-toast-header-actions">
+            {state.version ? (
+              <div className="update-toast-version">v{state.version}</div>
+            ) : null}
+            <button
+              type="button"
+              className="update-toast-dismiss"
+              onClick={onDismiss}
+              aria-label={t("common.dismiss")}
+              title={t("common.dismiss")}
+            >
+              ×
+            </button>
+          </div>
         </div>
         {state.stage === "checking" && (
           <div className="update-toast-body">{t("update.checkingForUpdates")}</div>

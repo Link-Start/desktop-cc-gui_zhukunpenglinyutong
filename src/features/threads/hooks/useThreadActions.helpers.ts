@@ -1179,6 +1179,28 @@ export function normalizeGrokSessionSummaries(
   return summaries;
 }
 
+/**
+ * 从侧栏快照剔除 Shared Hidden Native Binding。
+ * hide set 由 expandHiddenSharedBindingIds 构建（含 raw / engine:raw / pending 变体）。
+ */
+export function stripHiddenSharedBindingSummaries(
+  summaries: ThreadSummary[],
+  hiddenSharedBindingIds: ReadonlySet<string>,
+): ThreadSummary[] {
+  if (hiddenSharedBindingIds.size === 0 || summaries.length === 0) {
+    return summaries;
+  }
+  let changed = false;
+  const next = summaries.filter((summary) => {
+    if (hiddenSharedBindingIds.has(summary.id)) {
+      changed = true;
+      return false;
+    }
+    return true;
+  });
+  return changed ? next : summaries;
+}
+
 function mergeNativeCliSessionSummaries(params: {
   baseSummaries: ThreadSummary[];
   sessions: Array<
@@ -1193,9 +1215,10 @@ function mergeNativeCliSessionSummaries(params: {
   workspaceId: string;
   mappedTitles: Record<string, string>;
   getCustomName: (workspaceId: string, threadId: string) => string | undefined;
+  /** Shared-owned native ids；baseline 与新增 session 都必须剔除 */
+  hiddenSharedBindingIds?: ReadonlySet<string>;
 }): ThreadSummary[] {
   const {
-    baseSummaries,
     sessions,
     idPrefix,
     engineSource,
@@ -1203,7 +1226,13 @@ function mergeNativeCliSessionSummaries(params: {
     workspaceId,
     mappedTitles,
     getCustomName,
+    hiddenSharedBindingIds,
   } = params;
+  // sessions 全被 hide 过滤为空时，仍要清 baseline 泄漏；禁止 early-return 原 base。
+  const baseSummaries = stripHiddenSharedBindingSummaries(
+    params.baseSummaries,
+    hiddenSharedBindingIds ?? new Set(),
+  );
   if (sessions.length === 0) {
     return baseSummaries;
   }
@@ -1211,6 +1240,9 @@ function mergeNativeCliSessionSummaries(params: {
   baseSummaries.forEach((entry) => mergedById.set(entry.id, entry));
   sessions.forEach((session) => {
     const id = `${idPrefix}:${session.sessionId}`;
+    if (hiddenSharedBindingIds?.has(id)) {
+      return;
+    }
     const prev = mergedById.get(id);
     const updatedAt = Number.isFinite(session.updatedAt)
       ? Math.max(0, session.updatedAt)
@@ -1268,6 +1300,7 @@ export function mergeGeminiSessionSummaries(
   workspaceId: string,
   mappedTitles: Record<string, string>,
   getCustomName: (workspaceId: string, threadId: string) => string | undefined,
+  hiddenSharedBindingIds?: ReadonlySet<string>,
 ): ThreadSummary[] {
   return mergeNativeCliSessionSummaries({
     baseSummaries,
@@ -1278,6 +1311,7 @@ export function mergeGeminiSessionSummaries(
     workspaceId,
     mappedTitles,
     getCustomName,
+    hiddenSharedBindingIds,
   });
 }
 
@@ -1287,6 +1321,7 @@ export function mergeKimiSessionSummaries(
   workspaceId: string,
   mappedTitles: Record<string, string>,
   getCustomName: (workspaceId: string, threadId: string) => string | undefined,
+  hiddenSharedBindingIds?: ReadonlySet<string>,
 ): ThreadSummary[] {
   return mergeNativeCliSessionSummaries({
     baseSummaries,
@@ -1297,6 +1332,7 @@ export function mergeKimiSessionSummaries(
     workspaceId,
     mappedTitles,
     getCustomName,
+    hiddenSharedBindingIds,
   });
 }
 
@@ -1308,6 +1344,7 @@ export function mergeGrokSessionSummaries(
   getCustomName: (workspaceId: string, threadId: string) => string | undefined,
   /** native owner → shared: 会话，把子代理挂到 Shared 父节点 */
   nativeOwnerToSharedThreadId?: Map<string, string>,
+  hiddenSharedBindingIds?: ReadonlySet<string>,
 ): ThreadSummary[] {
   const merged = mergeNativeCliSessionSummaries({
     baseSummaries,
@@ -1318,6 +1355,7 @@ export function mergeGrokSessionSummaries(
     workspaceId,
     mappedTitles,
     getCustomName,
+    hiddenSharedBindingIds,
   });
   if (!nativeOwnerToSharedThreadId || nativeOwnerToSharedThreadId.size === 0) {
     return merged;

@@ -4,6 +4,9 @@ import X from "lucide-react/dist/esm/icons/x";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useActiveCanvasSelector } from "../../layout/hooks/activeCanvasStore";
+import { EngineTaskOutputInspector } from "../../engine-task-output/components/EngineTaskOutputInspector";
+import { useEngineTaskOutputSnapshot } from "../../engine-task-output/hooks/useEngineTaskOutputSnapshot";
+import { buildEngineTaskOutputSnapshot } from "../../engine-task-output/utils/engineTaskOutputProjection";
 import {
   closeSubagentInspector,
   useSubagentInspectorSelection,
@@ -12,7 +15,6 @@ import {
   isClaudeAsyncAgentLaunchOutput,
   resolveSubagentSessionThreadId,
 } from "../utils/subagentViewModel";
-import { PersonaAvatar } from "./PersonaAvatar";
 import { SubagentProgressBar } from "./SubagentProgressBar";
 import { SubagentSessionCanvas } from "./SubagentSessionCanvas";
 
@@ -80,14 +82,55 @@ export const SubagentInspectorDrawer = memo(function SubagentInspectorDrawer({
     return resolved;
   }, [card, nativeThreadIds, parentThreadId]);
 
-  const isClaudeLaunchOnlyFallback =
-    card &&
-    !sessionThreadId &&
-    isClaudeAsyncAgentLaunchOutput(card.outputText);
+  const isClaudeLaunchOnly =
+    Boolean(card) && isClaudeAsyncAgentLaunchOutput(card?.outputText);
+
+  const taskOutputSnapshot = useMemo(() => {
+    if (!card?.taskOutput?.outputFilePath?.trim()) {
+      return null;
+    }
+    return buildEngineTaskOutputSnapshot(card.taskOutput, null);
+  }, [card]);
+  const taskOutputState = useEngineTaskOutputSnapshot({
+    workspaceId,
+    snapshot: taskOutputSnapshot,
+  });
 
   if (!card) {
     return null;
   }
+
+  const hasArtifactPath = Boolean(taskOutputSnapshot?.outputFilePath);
+  // session 与 artifact 可并存：session 空/仅 launch ack 时 artifact 作主路径；
+  // 已有 session 时 artifact 作 secondary（session 可能仍是空壳）
+  const showArtifactAsPrimary =
+    hasArtifactPath && (!sessionThreadId || isClaudeLaunchOnly);
+  const showArtifactAsSecondary =
+    hasArtifactPath && Boolean(sessionThreadId) && !isClaudeLaunchOnly;
+
+  const artifactBlock =
+    hasArtifactPath && taskOutputSnapshot ? (
+      <div className="subagent-session-canvas-fallback">
+        <EngineTaskOutputInspector
+          snapshot={taskOutputState.snapshot ?? taskOutputSnapshot}
+          refreshState={taskOutputState.refreshState}
+          onRefresh={taskOutputState.refresh}
+          className="border-border/60 bg-muted/30 shadow-none before:hidden"
+        />
+      </div>
+    ) : null;
+
+  const resultFallback =
+    card.outputText?.trim() && !isClaudeLaunchOnly ? (
+      <div className="subagent-session-canvas-fallback">
+        <div className="subagent-inspector-label">
+          {t("subagentUi.fields.output", { defaultValue: "交付报告" })}
+        </div>
+        <pre className="subagent-session-canvas-fallback-body">
+          {card.outputText.trim()}
+        </pre>
+      </div>
+    ) : null;
 
   return (
     <aside
@@ -96,15 +139,11 @@ export const SubagentInspectorDrawer = memo(function SubagentInspectorDrawer({
     >
       <header className="subagent-inspector-header">
         <div className="subagent-inspector-identity">
-          <PersonaAvatar
-            displayName={card.displayName}
-            avatarSrc={card.avatarSrc}
-            githubProfileUrl={card.githubProfileUrl}
-            size={36}
-          />
           <div className="min-w-0">
             <div className="subagent-inspector-name-row">
-              <strong className="subagent-inspector-name">{card.displayName}</strong>
+              <strong className="subagent-inspector-name">
+                {t("subagentUi.defaultName", { defaultValue: "子代理" })}
+              </strong>
               <span className="subagent-persona-index">{card.indexLabel}</span>
             </div>
             <div className="subagent-inspector-type" title={card.description}>
@@ -130,13 +169,21 @@ export const SubagentInspectorDrawer = memo(function SubagentInspectorDrawer({
       </div>
 
       <div className="subagent-inspector-body is-session-canvas">
-        {sessionThreadId ? (
-          <SubagentSessionCanvas
-            sessionThreadId={sessionThreadId}
-            workspaceId={workspaceId}
-            workspacePath={workspacePath}
-          />
-        ) : isClaudeLaunchOnlyFallback ? (
+        {sessionThreadId && !isClaudeLaunchOnly ? (
+          <>
+            <SubagentSessionCanvas
+              sessionThreadId={sessionThreadId}
+              workspaceId={workspaceId}
+              workspacePath={workspacePath}
+            />
+            {showArtifactAsSecondary ? artifactBlock : null}
+          </>
+        ) : showArtifactAsPrimary ? (
+          <>
+            {artifactBlock}
+            {resultFallback}
+          </>
+        ) : isClaudeLaunchOnly ? (
           <div className="subagent-session-canvas-status">
             {t("subagentUi.claudeLaunchNoSession", {
               defaultValue:

@@ -1,4 +1,11 @@
+---
+type: performance
+status: historical
+---
+
 # Runtime Evidence Gates
+
+> **Lifecycle**：Historical Generated Evidence。该报告生成于 2026-06-23，输入主要来自 0.5.x artifacts；不可把文件名或重新生成时间当作 current release proof。
 
 Generated at: 2026-06-23T12:31:55.749Z
 

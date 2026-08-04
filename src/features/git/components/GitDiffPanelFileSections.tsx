@@ -13,6 +13,7 @@ import PanelRightOpen from "lucide-react/dist/esm/icons/panel-right-open";
 import Plus from "lucide-react/dist/esm/icons/plus";
 import Undo2 from "lucide-react/dist/esm/icons/undo-2";
 import { Badge } from "@/components/ui/badge";
+import { FloatingTooltipButton } from "@/components/ui/floating-tooltip-button";
 import type { GitFileStatus } from "../../../types";
 import { getFileTreeIconSvg } from "../../files/utils/fileTreeIcons";
 import { GitDiffPanelSectionActions } from "./GitDiffPanelSectionActions";
@@ -306,74 +307,89 @@ export const DiffFileRow = memo(function DiffFileRow({
         ) : null}
         <div className="diff-row-actions" role="group" aria-label={t("git.fileActions")}>
           {onOpenInlinePreview ? (
-            <button
+            <FloatingTooltipButton
               type="button"
               className="diff-row-action diff-row-action--preview-inline"
+              tooltipLabel={t("git.previewInline")}
+              tooltipSide="bottom"
+              tooltipAlign="end"
+              tooltipDelay={180}
+              aria-label={t("git.previewInlineAction")}
               onClick={(event) => {
                 event.stopPropagation();
                 onOpenInlinePreview();
               }}
-              data-tooltip={t("git.previewInline")}
-              aria-label={t("git.previewInlineAction")}
             >
               <PanelRightOpen size={12} aria-hidden />
-            </button>
+            </FloatingTooltipButton>
           ) : null}
           {onOpenPreview ? (
-            <button
+            <FloatingTooltipButton
               type="button"
               className="diff-row-action diff-row-action--preview-modal"
+              tooltipLabel={t("git.previewModal")}
+              tooltipSide="bottom"
+              tooltipAlign="end"
+              tooltipDelay={180}
+              aria-label={t("git.previewModalAction")}
               onClick={(event) => {
                 event.stopPropagation();
                 onOpenPreview();
               }}
-              data-tooltip={t("git.previewModal")}
-              aria-label={t("git.previewModalAction")}
             >
               <Expand size={12} aria-hidden />
-            </button>
+            </FloatingTooltipButton>
           ) : null}
           {showStage && (
-            <button
+            <FloatingTooltipButton
               type="button"
               className="diff-row-action diff-row-action--stage"
+              tooltipLabel={t("git.stageChanges")}
+              tooltipSide="bottom"
+              tooltipAlign="end"
+              tooltipDelay={180}
+              aria-label={t("git.stageFile")}
               onClick={(event) => {
                 event.stopPropagation();
                 void onStageFile?.(file.path);
               }}
-              data-tooltip={t("git.stageChanges")}
-              aria-label={t("git.stageFile")}
             >
               <Plus size={12} aria-hidden />
-            </button>
+            </FloatingTooltipButton>
           )}
           {showUnstage && (
-            <button
+            <FloatingTooltipButton
               type="button"
               className="diff-row-action diff-row-action--unstage"
+              tooltipLabel={t("git.unstageChanges")}
+              tooltipSide="bottom"
+              tooltipAlign="end"
+              tooltipDelay={180}
+              aria-label={t("git.unstageFile")}
               onClick={(event) => {
                 event.stopPropagation();
                 void onUnstageFile?.(file.path);
               }}
-              data-tooltip={t("git.unstageChanges")}
-              aria-label={t("git.unstageFile")}
             >
               <Minus size={12} aria-hidden />
-            </button>
+            </FloatingTooltipButton>
           )}
           {showDiscard && (
-            <button
+            <FloatingTooltipButton
               type="button"
               className="diff-row-action diff-row-action--discard"
+              tooltipLabel={t("git.discardChanges")}
+              tooltipSide="bottom"
+              tooltipAlign="end"
+              tooltipDelay={180}
+              aria-label={t("git.discardChange")}
               onClick={(event) => {
                 event.stopPropagation();
                 void onDiscardFile?.(file.path);
               }}
-              data-tooltip={t("git.discardChanges")}
-              aria-label={t("git.discardChange")}
             >
               <Undo2 size={12} aria-hidden />
-            </button>
+            </FloatingTooltipButton>
           )}
         </div>
         {!mutationDisabled ? (
@@ -414,7 +430,9 @@ export type DiffSectionProps = {
   ) => void;
   onStageAllChanges?: () => Promise<void> | void;
   onStageFile?: (path: string) => Promise<void> | void;
+  onUnstageAllChanges?: () => Promise<void> | void;
   onUnstageFile?: (path: string) => Promise<void> | void;
+  onUnstageFiles?: (paths: string[]) => Promise<void> | void;
   onDiscardFile?: (path: string) => Promise<void> | void;
   onDiscardFiles?: (paths: string[]) => Promise<void> | void;
   isCommitPathLocked?: (path: string) => boolean;
@@ -523,7 +541,9 @@ export function DiffSection({
   onActivateFile,
   onStageAllChanges,
   onStageFile,
+  onUnstageAllChanges,
   onUnstageFile,
+  onUnstageFiles,
   onDiscardFile,
   onDiscardFiles,
   isCommitPathLocked,
@@ -641,7 +661,11 @@ export function DiffSection({
               actionFilePaths.length === files.length ? onStageAllChanges : undefined
             }
             onStageFile={onStageFile}
+            onUnstageAllChanges={
+              actionFilePaths.length === files.length ? onUnstageAllChanges : undefined
+            }
             onUnstageFile={onUnstageFile}
+            onUnstageFiles={onUnstageFiles}
             onDiscardFiles={onDiscardFiles}
           />
         )}

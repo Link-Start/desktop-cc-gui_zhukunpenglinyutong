@@ -1,4 +1,13 @@
+---
+type: plan
+status: implemented
+---
+
 # Sidebar Cache Implementation Plan
+
+> **生命周期**：implemented / historical
+> **实现事实源**：`src/features/threads/utils/sidebarSnapshot.ts`、`useWorkspaces.ts`、`useThreads.ts` 及对应 tests
+> **说明**：下列 checkbox 保留原始 agent plan，不是 current backlog。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

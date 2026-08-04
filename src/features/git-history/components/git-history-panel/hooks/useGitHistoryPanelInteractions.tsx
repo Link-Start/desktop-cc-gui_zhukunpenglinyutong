@@ -3,7 +3,10 @@ import type { GitPrWorkflowDefaults } from "../../../../../types";
 import { useGitHistoryPanelBranchCompareHandlers } from "./useGitHistoryPanelBranchCompareHandlers";
 import { useGitHistoryPanelBranchContextMenu } from "./useGitHistoryPanelBranchContextMenu";
 import type { GitHistoryPanelInteractionScope } from "../components/GitHistoryPanelImpl";
-import type { CommitActionId } from "../components/GitHistoryPanelImplHelpers";
+import {
+  estimateGitHistoryCommitRowHeight,
+  type CommitActionId,
+} from "../components/GitHistoryPanelImplHelpers";
 import type { CommitActionDescriptor } from "../components/GitHistoryPanelTypes";
 
 export function useGitHistoryPanelInteractions(
@@ -12,7 +15,6 @@ export function useGitHistoryPanelInteractions(
   const {
     BRANCHES_MIN_WIDTH,
     COMMITS_MIN_WIDTH,
-    COMMIT_ROW_ESTIMATED_HEIGHT,
     COMPACT_LAYOUT_BREAKPOINT,
     CREATE_PR_PREVIEW_COMMIT_LIMIT,
     DETAILS_MIN_WIDTH,
@@ -47,6 +49,7 @@ export function useGitHistoryPanelInteractions(
     commitContextMenu,
     commitListRef,
     commits,
+    historyLoadedCount,
     commitsWidth,
     createBranchName,
     createBranchSource,
@@ -2657,7 +2660,10 @@ export function useGitHistoryPanelInteractions(
   const commitRowVirtualizer = useVirtualizer({
     count: commits.length,
     getScrollElement: () => commitListRef.current,
-    estimateSize: () => COMMIT_ROW_ESTIMATED_HEIGHT,
+    // Estimate from content shape; measureElement corrects to real DOM height.
+    estimateSize: (index) =>
+      estimateGitHistoryCommitRowHeight((commits[index]?.refs.length ?? 0) > 0),
+    getItemKey: (index) => commits[index]?.sha ?? index,
     overscan: 10,
   });
   const virtualCommitRows = commitRowVirtualizer.getVirtualItems();
@@ -2684,11 +2690,15 @@ export function useGitHistoryPanelInteractions(
       return;
     }
     const lastVisible = virtualCommitRows[virtualCommitRows.length - 1];
-    if (lastVisible.index >= commits.length - 8) {
-      void loadHistory(true, commits.length);
+    const nearEndOfDisplay =
+      commits.length === 0 || lastVisible.index >= commits.length - 8;
+    // Pagination offset must track raw loaded history, not the projected display list.
+    if (nearEndOfDisplay) {
+      void loadHistory(true, historyLoadedCount);
     }
   }, [
     commits.length,
+    historyLoadedCount,
     historyHasMore,
     historyLoading,
     historyLoadingMore,

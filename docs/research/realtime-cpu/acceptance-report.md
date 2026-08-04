@@ -1,3 +1,12 @@
+---
+type: evidence
+status: generated
+---
+
+<!-- DOC-LIFECYCLE: generated-evidence -->
+> [!CAUTION]
+> **Lifecycle: Generated acceptance evidence.** Measurement 正文由 `npm run perf:realtime:report` 生成；本文件只证明生成时间点的 deterministic replay，不证明当前 release/runtime 性能。
+
 # Realtime CPU Optimization Acceptance Report
 
 Generated at: 2026-05-13T15:51:23.671Z

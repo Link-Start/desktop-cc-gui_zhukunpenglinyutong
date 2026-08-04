@@ -1,3 +1,12 @@
+---
+type: report
+status: historical
+---
+
+<!-- DOC-LIFECYCLE: implemented-acceptance-evidence -->
+> [!NOTE]
+> **Lifecycle: Implemented acceptance evidence.** Foundation A-D changes 已归档；本文的 manual test plan 与结果只代表当时验收面。Current contract 以 [OpenSpec main specs](../../openspec/specs/README.md) 为准。
+
 # 多 CLI × 多 Provider 会话基石 A–D：代码梳理、客户端影响与人工测试计划
 
 > **2026-08-01 生命周期校准**：A–D canonical changes 已归档；本文作为影响与 release smoke 证据保留。后续 Native/Shared repair changes 不回填为 A–D 未完成项。
@@ -9,7 +18,7 @@
 > - 上游设计：[`mossx-multi-cli-provider-session-foundation-design.md`](../research/mossx-multi-cli-provider-session-foundation-design.md)
 > - 总任务清单：[`2026-07-27-multi-cli-provider-session-foundation-task-checklist.md`](../plans/2026-07-27-multi-cli-provider-session-foundation-task-checklist.md)
 > - Change D：[`add-native-provider-continuation`](../../openspec/changes/archive/2026-07-28-add-native-provider-continuation/)
-> - Shared history recovery 校准：[`fix-shared-canonical-history-recovery`](../../openspec/changes/fix-shared-canonical-history-recovery/)
+> - Shared history recovery 校准：[`fix-shared-canonical-history-recovery`](../../openspec/changes/archive/2026-08-03-fix-shared-canonical-history-recovery/)
 
 ## 0. 怎么读这篇文档
 

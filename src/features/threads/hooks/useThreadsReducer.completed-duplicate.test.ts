@@ -348,6 +348,218 @@ describe("threadReducer completed duplicate collapse", () => {
     expect(messages.map((message) => message.text)).toEqual([first, second]);
   });
 
+  it("late complete after resetAgentSegment does not remount conclusion onto pre-tool bare id", () => {
+    // Repro: same provider itemId across tool-separated segments.
+    // Streaming builds agent-1 then agent-1-seg-1; resetAgentSegment → 0;
+    // late completeAgentMessage(agent-1, conclusion) used to merge into agent-1
+    // (before tools). Settlement lookup must prefer agent-1-seg-1.
+    const preTool = "先读一下相关模块。";
+    const conclusion =
+      "我的建议走方案 A——改动最小、风险最低。GS1 CN 模块已有完整远端同步删除逻辑。";
+    const withPre = threadReducer(initialState, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "claude:session-1",
+      itemId: "agent-msg",
+      delta: preTool,
+      hasCustomName: true,
+    });
+    const withSeg = threadReducer(withPre, {
+      type: "incrementAgentSegment",
+      threadId: "claude:session-1",
+    });
+    const withTool = threadReducer(withSeg, {
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "claude:session-1",
+      item: {
+        id: "tool-search-1",
+        kind: "tool",
+        toolType: "mcpToolCall",
+        title: "Search",
+        detail: "",
+        status: "completed",
+      },
+      hasCustomName: true,
+    });
+    const withPostShell = threadReducer(withTool, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "claude:session-1",
+      itemId: "agent-msg",
+      delta: "建壳",
+      hasCustomName: true,
+    });
+    const afterReset = threadReducer(withPostShell, {
+      type: "resetAgentSegment",
+      threadId: "claude:session-1",
+    });
+    const afterLateComplete = threadReducer(afterReset, {
+      type: "completeAgentMessage",
+      workspaceId: "ws-1",
+      threadId: "claude:session-1",
+      itemId: "agent-msg",
+      text: conclusion,
+      hasCustomName: true,
+    });
+
+    const items = afterLateComplete.itemsByThread["claude:session-1"] ?? [];
+    const assistantTexts = items
+      .filter(
+        (item): item is Extract<ConversationItem, { kind: "message" }> =>
+          item.kind === "message" && item.role === "assistant",
+      )
+      .map((item) => ({ id: item.id, text: item.text }));
+    const toolIndex = items.findIndex((item) => item.kind === "tool");
+    const preIndex = items.findIndex(
+      (item) => item.kind === "message" && item.id === "agent-msg",
+    );
+    const postIndex = items.findIndex(
+      (item) => item.kind === "message" && item.id === "agent-msg-seg-1",
+    );
+
+    expect(toolIndex).toBeGreaterThan(-1);
+    expect(preIndex).toBeGreaterThan(-1);
+    expect(postIndex).toBeGreaterThan(-1);
+    expect(preIndex).toBeLessThan(toolIndex);
+    expect(postIndex).toBeGreaterThan(toolIndex);
+    expect(assistantTexts.find((row) => row.id === "agent-msg")?.text).toBe(
+      preTool,
+    );
+    expect(
+      assistantTexts.find((row) => row.id === "agent-msg-seg-1")?.text,
+    ).toContain(conclusion);
+    expect(assistantTexts.find((row) => row.id === "agent-msg")?.text).not.toContain(
+      "方案 A",
+    );
+  });
+
+  it("late appendAgentDelta after resetAgentSegment appends to post-tool segment not pre-tool", () => {
+    const preTool = "开场说明。";
+    const withPre = threadReducer(initialState, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "claude:session-2",
+      itemId: "agent-msg",
+      delta: preTool,
+      hasCustomName: true,
+    });
+    const withSeg = threadReducer(withPre, {
+      type: "incrementAgentSegment",
+      threadId: "claude:session-2",
+    });
+    const withTool = threadReducer(withSeg, {
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "claude:session-2",
+      item: {
+        id: "tool-1",
+        kind: "tool",
+        toolType: "commandExecution",
+        title: "Read",
+        detail: "",
+        status: "completed",
+      },
+      hasCustomName: true,
+    });
+    const withPostShell = threadReducer(withTool, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "claude:session-2",
+      itemId: "agent-msg",
+      delta: "壳",
+      hasCustomName: true,
+    });
+    const afterReset = threadReducer(withPostShell, {
+      type: "resetAgentSegment",
+      threadId: "claude:session-2",
+    });
+    const afterLateAppend = threadReducer(afterReset, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "claude:session-2",
+      itemId: "agent-msg",
+      delta: " 终稿尾巴",
+      hasCustomName: true,
+    });
+
+    const items = afterLateAppend.itemsByThread["claude:session-2"] ?? [];
+    const pre = items.find(
+      (item) => item.kind === "message" && item.id === "agent-msg",
+    ) as Extract<ConversationItem, { kind: "message" }> | undefined;
+    const post = items.find(
+      (item) => item.kind === "message" && item.id === "agent-msg-seg-1",
+    ) as Extract<ConversationItem, { kind: "message" }> | undefined;
+
+    expect(pre?.text).toBe(preTool);
+    expect(post?.text).toContain("终稿尾巴");
+    expect(pre?.text).not.toContain("终稿尾巴");
+  });
+
+  it("flushAgentCompletedBatch after reset also targets post-tool segment", () => {
+    const conclusion = "方案 B：增强删除安全约束。";
+    const withPre = threadReducer(initialState, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "claude:session-3",
+      itemId: "agent-msg",
+      delta: "先查。",
+      hasCustomName: true,
+    });
+    const withSeg = threadReducer(withPre, {
+      type: "incrementAgentSegment",
+      threadId: "claude:session-3",
+    });
+    const withTool = threadReducer(withSeg, {
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "claude:session-3",
+      item: {
+        id: "tool-1",
+        kind: "tool",
+        toolType: "mcpToolCall",
+        title: "Search",
+        detail: "",
+        status: "completed",
+      },
+      hasCustomName: true,
+    });
+    const withPostShell = threadReducer(withTool, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "claude:session-3",
+      itemId: "agent-msg",
+      delta: "壳",
+      hasCustomName: true,
+    });
+    const afterReset = threadReducer(withPostShell, {
+      type: "resetAgentSegment",
+      threadId: "claude:session-3",
+    });
+    const afterFlush = threadReducer(afterReset, {
+      type: "flushAgentCompletedBatch",
+      workspaceId: "ws-1",
+      threadId: "claude:session-3",
+      itemId: "agent-msg",
+      text: conclusion,
+      hasCustomName: true,
+      timestamp: Date.now(),
+      isActiveThread: true,
+    });
+
+    const items = afterFlush.itemsByThread["claude:session-3"] ?? [];
+    const pre = items.find(
+      (item) => item.kind === "message" && item.id === "agent-msg",
+    ) as Extract<ConversationItem, { kind: "message" }> | undefined;
+    const post = items.find(
+      (item) => item.kind === "message" && item.id === "agent-msg-seg-1",
+    ) as Extract<ConversationItem, { kind: "message" }> | undefined;
+
+    expect(pre?.text).toBe("先查。");
+    expect(post?.text).toContain("方案 B");
+    expect(pre?.text).not.toContain("方案 B");
+  });
+
   it("keeps similar codex assistant segments with different endings separate", () => {
     const first =
       "我会先检查 Computer Use 权限状态，然后确认系统设置入口是否打开。";
@@ -378,7 +590,7 @@ describe("threadReducer completed duplicate collapse", () => {
     expect(messages.map((message) => message.text)).toEqual([first, second]);
   });
 
-  it("does not apply codex assistant dedupe to bare threads marked as claude", () => {
+  it("converges equivalent assistant completions for bare threads marked as claude", () => {
     const claudeState = {
       ...initialState,
       threadsByWorkspace: {
@@ -415,11 +627,195 @@ describe("threadReducer completed duplicate collapse", () => {
       (item): item is Extract<ConversationItem, { kind: "message" }> =>
         item.kind === "message" && item.role === "assistant",
     );
+    // fix-assistant-duplicate-render-native-shared: Claude Native cross-id converge
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.id).toBe("assistant-first");
+    expect(messages[0]?.text).toBe(text);
+  });
+
+  it("converges equivalent assistant completions on shared claude threads", () => {
+    const sharedState = {
+      ...initialState,
+      threadsByWorkspace: {
+        "ws-1": [
+          {
+            id: "shared:session-1",
+            name: "Shared session",
+            updatedAt: 1,
+            threadKind: "shared" as const,
+            engineSource: "claude" as const,
+          },
+        ],
+      },
+    };
+    const text = [
+      '请问你的"Java架构"是指：',
+      "",
+      "• 微服务架构？",
+      "• 还是部署方案？",
+      "",
+      "请再补充一下你的需求方向。",
+    ].join("\n");
+    const withFirst = threadReducer(sharedState, {
+      type: "completeAgentMessage",
+      workspaceId: "ws-1",
+      threadId: "shared:session-1",
+      itemId: "msg-live-1",
+      text,
+      hasCustomName: false,
+    });
+    const withSecond = threadReducer(withFirst, {
+      type: "completeAgentMessage",
+      workspaceId: "ws-1",
+      threadId: "shared:session-1",
+      itemId: "msg-final-2",
+      text,
+      hasCustomName: false,
+    });
+    const messages = (withSecond.itemsByThread["shared:session-1"] ?? []).filter(
+      (item): item is Extract<ConversationItem, { kind: "message" }> =>
+        item.kind === "message" && item.role === "assistant",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.text).toBe(text);
+  });
+
+  it("does not glue a new streaming turn onto the previous assistant via short shared opener", () => {
+    const previous = [
+      "好的，我来分析一下这个项目的结构与依赖关系。",
+      "先从入口文件与包管理配置开始。",
+      "然后给出模块划分建议。",
+    ].join("\n\n");
+    const claudeState = {
+      ...initialState,
+      threadsByWorkspace: {
+        "ws-1": [
+          {
+            id: "claude:session-no-glue",
+            name: "Claude",
+            updatedAt: 1,
+            engineSource: "claude" as const,
+          },
+        ],
+      },
+    };
+    const afterPrevious = threadReducer(claudeState, {
+      type: "completeAgentMessage",
+      workspaceId: "ws-1",
+      threadId: "claude:session-no-glue",
+      itemId: "assistant-prev",
+      text: previous,
+      hasCustomName: false,
+    });
+    // User row intentionally missing (race) + short opener that is a prefix of previous.
+    const afterNewDelta = threadReducer(afterPrevious, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "claude:session-no-glue",
+      itemId: "assistant-next",
+      delta: "好的，我来分析一下这个项目的结构与依赖关系。",
+      hasCustomName: false,
+    });
+    const messages = (afterNewDelta.itemsByThread["claude:session-no-glue"] ?? []).filter(
+      (item): item is Extract<ConversationItem, { kind: "message" }> =>
+        item.kind === "message" && item.role === "assistant",
+    );
     expect(messages).toHaveLength(2);
     expect(messages.map((message) => message.id)).toEqual([
-      "assistant-first",
-      "assistant-second",
+      "assistant-prev",
+      "assistant-next",
     ]);
+    expect(messages[0]?.text).toBe(previous);
+    expect(messages[1]?.text).toBe("好的，我来分析一下这个项目的结构与依赖关系。");
+  });
+
+  it("does not merge assistants across a reasoning boundary", () => {
+    const text =
+      "这是一段足够长的助手结论文本，用于跨 id 等价判定，不能被 reasoning 夹层误合并。";
+    const withFirst = threadReducer(initialState, {
+      type: "completeAgentMessage",
+      workspaceId: "ws-1",
+      threadId: "claude:session-reason-boundary",
+      itemId: "assistant-a",
+      text,
+      hasCustomName: false,
+    });
+    const withReasoning = threadReducer(withFirst, {
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "claude:session-reason-boundary",
+      item: {
+        id: "reasoning-1",
+        kind: "reasoning",
+        summary: "思考中",
+        content: "中间夹一层 reasoning",
+      },
+      hasCustomName: false,
+    });
+    const withSecond = threadReducer(withReasoning, {
+      type: "completeAgentMessage",
+      workspaceId: "ws-1",
+      threadId: "claude:session-reason-boundary",
+      itemId: "assistant-b",
+      text,
+      hasCustomName: false,
+    });
+    const messages = (
+      withSecond.itemsByThread["claude:session-reason-boundary"] ?? []
+    ).filter(
+      (item): item is Extract<ConversationItem, { kind: "message" }> =>
+        item.kind === "message" && item.role === "assistant",
+    );
+    expect(messages).toHaveLength(2);
+  });
+
+  it("converges live complete then history upsert of equivalent assistant on shared", () => {
+    const sharedState = {
+      ...initialState,
+      threadsByWorkspace: {
+        "ws-1": [
+          {
+            id: "shared:session-2",
+            name: "Shared session",
+            updatedAt: 1,
+            threadKind: "shared" as const,
+            engineSource: "claude" as const,
+          },
+        ],
+      },
+    };
+    const body = [
+      "先按仓库规范做一次基线扫描。",
+      "我会检查项目内的配置目录与技术栈。",
+      "最后给你一个简明项目分析。",
+    ].join("\n\n");
+    const withLive = threadReducer(sharedState, {
+      type: "completeAgentMessage",
+      workspaceId: "ws-1",
+      threadId: "shared:session-2",
+      itemId: "live-item",
+      text: body,
+      hasCustomName: false,
+    });
+    const withHistory = threadReducer(withLive, {
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "shared:session-2",
+      item: {
+        id: "history-item",
+        kind: "message",
+        role: "assistant",
+        text: body,
+        isFinal: true,
+      },
+      hasCustomName: false,
+    });
+    const messages = (withHistory.itemsByThread["shared:session-2"] ?? []).filter(
+      (item): item is Extract<ConversationItem, { kind: "message" }> =>
+        item.kind === "message" && item.role === "assistant",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.text).toContain("基线扫描");
   });
 
   it("collapses repeated trailing codex snapshot text inside one assistant message", () => {

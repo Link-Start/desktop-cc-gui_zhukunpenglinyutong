@@ -132,12 +132,13 @@ export function GlobalRuntimeNoticeDock({
 
   useLayoutEffect(() => {
     const shell = shellRef.current;
-    setIsSidebarPlacement(Boolean(shell?.closest(".sidebar-bottom-nav")));
+    const next = Boolean(shell?.closest(".sidebar-bottom-nav"));
+    setIsSidebarPlacement((prev) => (prev === next ? prev : next));
   }, []);
 
   useLayoutEffect(() => {
     if (isMinimized || !isSidebarPlacement) {
-      setSidebarPanelPlacement(null);
+      setSidebarPanelPlacement((prev) => (prev === null ? prev : null));
       return;
     }
 
@@ -146,7 +147,19 @@ export function GlobalRuntimeNoticeDock({
       if (!shell) {
         return;
       }
-      setSidebarPanelPlacement(resolveSidebarPanelPlacement(shell.getBoundingClientRect()));
+      const next = resolveSidebarPanelPlacement(shell.getBoundingClientRect());
+      // 几何未变不换对象引用，避免 resize/scroll 回声叠 setState（#185 防御）
+      setSidebarPanelPlacement((prev) => {
+        if (
+          prev &&
+          prev.style.left === next.style.left &&
+          prev.style.bottom === next.style.bottom &&
+          prev.style.width === next.style.width
+        ) {
+          return prev;
+        }
+        return next;
+      });
     };
 
     updatePlacement();

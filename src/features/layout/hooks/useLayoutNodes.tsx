@@ -783,6 +783,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         onDeleteWorkspace={options.onDeleteWorkspace}
         onDeleteWorktree={options.onDeleteWorktree}
         onRenameWorkspaceAlias={options.onRenameWorkspaceAlias}
+        workspaceGroups={options.workspaceGroups}
+        onAssignWorkspaceGroup={options.onAssignWorkspaceGroup}
         onLoadOlderThreads={options.onLoadOlderThreads}
         onReloadWorkspaceThreads={options.onReloadWorkspaceThreads}
         onQuickReloadWorkspaceThreads={options.onQuickReloadWorkspaceThreads}
@@ -1594,6 +1596,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           onDeleteQueued={options.onDeleteQueued}
           onFuseQueued={options.onFuseQueued}
           canFuseQueuedMessages={options.canFuseActiveQueue}
+          fuseDisabledReasonKey={options.fuseDisabledReasonKey ?? null}
           fusingQueuedMessageId={options.activeFusingMessageId}
           collaborationModes={options.collaborationModes}
           collaborationModesEnabled={options.collaborationModesEnabled}
@@ -2142,8 +2145,11 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           onPickGitRoot={options.onPickGitRoot}
           onStageAllChanges={options.onStageGitAll}
           onStageFile={options.onStageGitFile}
+          onUnstageAllChanges={options.onUnstageGitAll}
           onUnstageFile={options.onUnstageGitFile}
+          onUnstageFiles={options.onUnstageGitPaths}
           onRevertFile={options.onRevertGitFile}
+          onRevertFiles={options.onRevertGitPaths}
           onRevertAllChanges={options.onRevertAllGitChanges}
           commitMessage={options.commitMessage}
           commitMessageLoading={options.commitMessageLoading}
@@ -2168,7 +2174,10 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           onRefreshRepositoryStatuses={options.onRefreshRepositoryStatuses}
           onStageRepositoryFile={options.onStageRepositoryFile}
           onUnstageRepositoryFile={options.onUnstageRepositoryFile}
+          onUnstageRepositoryAll={options.onUnstageRepositoryAll}
+          onUnstageRepositoryFiles={options.onUnstageRepositoryFiles}
           onRevertRepositoryFile={options.onRevertRepositoryFile}
+          onRevertRepositoryFiles={options.onRevertRepositoryFiles}
           onStageRepositoryAll={options.onStageRepositoryAll}
           onCommitRepositories={options.onCommitRepositories}
           repositoryCommitSummary={options.repositoryCommitSummary}

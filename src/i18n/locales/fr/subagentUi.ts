@@ -2,7 +2,10 @@ export default {
   subagentUi: {
     squadAria: "Escouade de sous-agents",
     squadTitle: "{{completed}}/{{total}} agents",
+    squadTitleCount: "{{total}} agents",
+
     squadFallbackTitle: "Sous-agents en parallèle",
+    defaultName: "Sous-agent",
     badge: "SubAgent",
     claudeLaunchNoSession:
       "Accusé de lancement du Claude Agent détecté, mais aucune session claude:subagent n'est encore associée (le native owner est peut-être encore en cours de liaison/indexation). Réessayez plus tard ou ouvrez le sous-agent depuis l'arborescence des sessions.",
@@ -16,6 +19,11 @@ export default {
     noSessionYet:
       "Aucune session de sous-agent associée pour le moment (agentId non résolu ou transcript encore en indexation). Ouvrez la ligne « Sous-agent » dans l'arborescence des sessions.",
 
+    statusShort: {
+      completed: "terminés",
+      running: "en cours",
+      error: "en échec",
+    },
     status: {
       running: "En cours",
       completed: "Terminé",

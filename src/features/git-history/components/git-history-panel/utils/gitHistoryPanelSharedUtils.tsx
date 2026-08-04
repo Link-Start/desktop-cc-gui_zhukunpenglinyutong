@@ -269,3 +269,27 @@ export function getSpecialBranchBadges(
   }
   return badges;
 }
+
+/** Hover tip for local branch +N / -N upstream status badges. */
+export function getBranchAheadBehindTooltip(
+  kind: "ahead" | "behind",
+  count: number,
+  upstream: string | null | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  const trimmedUpstream = upstream?.trim() ?? "";
+  if (trimmedUpstream.length > 0) {
+    return t(
+      kind === "ahead"
+        ? "git.historyBranchAheadOfTooltip"
+        : "git.historyBranchBehindOfTooltip",
+      { count, upstream: trimmedUpstream },
+    );
+  }
+  return t(
+    kind === "ahead"
+      ? "git.historyBranchAheadTooltip"
+      : "git.historyBranchBehindTooltip",
+    { count },
+  );
+}

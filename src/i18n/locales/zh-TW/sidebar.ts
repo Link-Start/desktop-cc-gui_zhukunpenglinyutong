@@ -70,6 +70,7 @@ const sidebar = {
     "activateWorkspace": "在主面板開啟",
     "workspaceActionsGroup": "工作區操作",
     "setWorkspaceAlias": "設定別名",
+    "assignWorkspaceGroup": "調整所屬分組",
     "workspaceAliasPrompt": "輸入此工作區在側邊欄顯示的別名。留空則使用原始專案名稱。",
     "workspaceAliasDialogTitle": "設定工作區別名",
     "workspaceAliasDialogSubtitle": "原始專案名稱：{{name}}",

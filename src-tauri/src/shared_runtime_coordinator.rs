@@ -4670,4 +4670,59 @@ mod tests {
             .expect_err("target rewrite must fail")
             .contains("owner mismatch"));
     }
+
+    /// 验证 remove_attempt 会清掉 settled_by_attempt。
+    /// 这是 abandon 竞态修复的前置契约：必须在 remove 之前读 settled，
+    /// 否则 interrupt 与 completion 竞态时会丢失已完成的助手回复。
+    #[test]
+    fn remove_attempt_clears_settled_evidence() {
+        let coordinator = SharedRuntimeCoordinator::default();
+        let attempt_owner =
+            owner("attempt-settled-race", Some("run-settled"), Some("native-settled"));
+        coordinator
+            .register_attempt(attempt_owner.clone())
+            .expect("register");
+
+        // 模拟 interrupt 与 completion 竞态：settled 证据已写入 coordinator。
+        let settled = SettledSharedRuntimeAttempt {
+            owner: attempt_owner.clone(),
+            final_snapshot: RuntimeFinalSnapshot {
+                assistant_blocks: vec![],
+                assistant_text: None,
+                tool_calls: vec![],
+                tool_results: vec![],
+                artifacts: vec![],
+                provider_private_refs: vec![],
+                omissions: vec![],
+                outcome: OutcomeStatus::Completed,
+                error_code: None,
+                error_message: None,
+                stop_reason: None,
+            },
+        };
+        coordinator
+            .inner
+            .lock()
+            .unwrap()
+            .settled_by_attempt
+            .insert("attempt-settled-race".to_string(), settled);
+
+        // remove 前 settled 可读。
+        assert!(
+            coordinator
+                .settled_for_attempt("attempt-settled-race")
+                .is_some(),
+            "settled evidence MUST be readable before remove_attempt"
+        );
+
+        // remove 后 settled 被清掉。
+        coordinator.remove_attempt("attempt-settled-race");
+        assert!(
+            coordinator
+                .settled_for_attempt("attempt-settled-race")
+                .is_none(),
+            "settled evidence MUST be cleared after remove_attempt — \
+             callers must read settled BEFORE remove"
+        );
+    }
 }

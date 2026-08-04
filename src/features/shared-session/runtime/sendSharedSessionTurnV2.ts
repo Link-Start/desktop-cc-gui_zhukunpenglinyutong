@@ -28,6 +28,7 @@ import {
   type SharedV2ExecutionTargetPayload,
 } from "../services/sharedSessions";
 import { beginTurn, endTurn } from "../target/targetStore";
+import { isExplicitTargetUnavailableMessage } from "./recoveryErrorMap";
 import {
   freezeTurnSnapshot,
   isResolvedExecutionTarget,
@@ -151,6 +152,8 @@ function isKnownFailedTerminalError(error: unknown): boolean {
   return (
     !message.includes("canonical-failure-persistence:") &&
     (message.startsWith("context-prepare-failed:") ||
+      message.startsWith("empty-context-handoff:") ||
+      message.includes("empty-context-handoff:") ||
       message.startsWith("target-unavailable:") ||
       message.startsWith("target-provider-rejected:"))
   );
@@ -233,9 +236,23 @@ export async function sendSharedSessionTurnV2(
       input.threadId,
       targetPayload,
       input.text,
+      input.images,
     );
   } catch (beginError) {
-    // Tx1 RPC 失败无法证明 turnRequested 未落盘；禁止回 idle 后盲目重发。
+    // begin 正常路径以 Ok(status) 返回 target-unavailable / recovery-required；
+    // 若 RPC 抛错且文案明确为 target-unavailable，且尚未推进 packagePrepared，
+    // 可安全视为未产生 ambiguous durable attempt（validate 早退类失败）。
+    // 其他 Tx1 失败无法证明 turnRequested 未落盘 → fail closed recovery。
+    const beginMessage = toErrorMessage(beginError);
+    if (isExplicitTargetUnavailableMessage(beginMessage)) {
+      dispatchSendEvent(
+        input.workspaceId,
+        input.threadId,
+        { type: "targetUnavailable" },
+        { detail: beginMessage },
+      );
+      throw beginError;
+    }
     dispatchSendEvent(input.workspaceId, input.threadId, { type: "packagePrepared" });
     dispatchSendEvent(input.workspaceId, input.threadId, { type: "ackAmbiguous" });
     throw beginError;
@@ -247,6 +264,7 @@ export async function sendSharedSessionTurnV2(
       dispatchSendEvent(input.workspaceId, input.threadId, { type: "packagePrepared" });
       dispatchSendEvent(input.workspaceId, input.threadId, { type: "ackAmbiguous" });
     } else {
+      // 纯 target 不可用：不锁 recovery；Picker 可换。
       dispatchSendEvent(input.workspaceId, input.threadId, { type: "targetUnavailable" }, {
         detail: begin.reason ?? null,
       });

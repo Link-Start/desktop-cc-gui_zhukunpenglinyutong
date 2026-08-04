@@ -196,9 +196,11 @@ fn matches_workspace_path(work_dir: &str, workspace_variants: &[String]) -> bool
     let work_dir_variants = build_path_variants(work_dir);
     for candidate in work_dir_variants {
         for workspace in workspace_variants {
-            if path_is_same_or_child(&candidate, workspace)
-                || path_is_same_or_child(workspace, &candidate)
-            {
+            // One-way only: session workDir must be the workspace or a child of it.
+            // Reverse matching (workspace under session dir) leaks home/tmp sessions
+            // into every nested empty project, e.g. workDir=/Users/me shown under
+            // /Users/me/Desktop/新的空文件夹.
+            if path_is_same_or_child(&candidate, workspace) {
                 return true;
             }
         }
@@ -838,8 +840,17 @@ mod tests {
             "/private/Users/demo/repo",
             &variants
         ));
+        assert!(matches_workspace_path(
+            "/Users/demo/repo/packages/app",
+            &variants
+        ));
         assert!(!matches_workspace_path("/Users/demo/other", &variants));
         assert!(!matches_workspace_path("", &variants));
+        // Home-level sessions must not appear inside nested empty folders.
+        assert!(!matches_workspace_path(
+            "/Users/demo",
+            &["/Users/demo/Desktop/新的空文件夹".to_string()]
+        ));
     }
 
     #[test]

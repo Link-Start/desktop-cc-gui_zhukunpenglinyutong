@@ -2,7 +2,103 @@
 
 ---
 
-##### **2026年8月3日（v0.7.15）**
+### **2026年8月4日（v0.7.16）**
+
+中文：
+
+这一版的主菜是「Git 历史看得清、设置钉上手、会话归属与 Shared / 子代理更稳」：Git Graph 仍在底部 half-dock（可拖高），内部接上多泳道提交图并加宽提交列，侧栏设置可 pin、工作区可右键改分组，应用图标可换肤并全平台品牌刷新，Git 变更支持批量 unstage / 丢弃，Claude 后台 Shell 不再被 5 秒宽限误杀；空工作区不再串入外项目历史，首页引擎 / 模型选择可持久恢复，Shared 续接 / 附图 / 思考档位与子代理卡状态一并压实。
+
+✨ Features
+- Git Graph 工作台更密：底部 half-dock 历史面板保留可拖拽调高；面板内三列默认比例改为 4:11:5，提交列表更宽、信息更好读
+- 多泳道提交图：按拓扑分配 lane，合并 / 旁支 / 穿越边可见；提供 Spine（仅 first-parent）与 Denoise（隐藏默认 trellis session-record 并改写 parent 保持连续）开关；作者头像、upstream-aware 的 ahead/behind tooltip、变更文件 flat/tree 与主 Git Diff 面板同步
+- 侧栏设置 pin：锁屏 / Spec Hub / 项目记忆 / Git 历史 / 运行时通知可在设置菜单项旁勾选 pin，在齿轮旁生成一键图标按钮；最多 2 个并持久化到 clientStorage，未知 id 自动过滤，超限后禁用继续 pin 并给出中英提示
+- 工作区项目分组：侧栏工作区右键菜单新增「更改项目分组」，可直接分配到已有分组或取消分组，无需进入设置 → 项目管理（仅主工作区；worktree 继承父分组）
+- 应用图标换肤：外观设置新增 Dock / 任务栏图标选择，默认 logo 与 orbit-routing 系列方案可切换；macOS 更新 Dock，Windows / Linux 更新各窗口图标，并联动 About 页与锁屏 logo；带 PNG 校验、快速切换竞态保护与次级窗口重应用
+- Git 批量写操作：变更面板支持一键 unstage 全部、unstage 选中路径、批量丢弃多个未暂存文件，一次后端调用替代逐个 IPC 循环；rename / copy 对在 restore / clean 前展开路径，与单文件语义对齐；多仓库视图、worktree 历史与远程 daemon 转发同步接入，单文件操作保留为回退
+- 品牌图标全面刷新：桌面（含 Windows Store 方块 logo）、Web、iOS AppIcon、Android launcher 全套换为新品牌图，安装包与各 UI 表面视觉统一
+
+🔧 Improvements
+- 文件树右键菜单补齐 Lucide 图标（git / 新建 / 复制 / LSP / 删除等），删除项走 danger 样式并加分隔，扫读更快
+- 右键菜单贴系统习惯：优先在光标右下展开；空间不足时整块翻到上方或左侧（对齐 Finder / VS Code），再 clamp 进视口，首帧即按估算位置落点
+- Git History 筛选与选择器：项目 / 分支切换改用 Command + Popover；分支筛选前置，图开关与清除联动；密集状态 chip 的 tooltip 近乎即时
+- 子代理身份更干净：小队卡与 inspector 不再套贡献者人格头像，统一 i18n「子代理」标签，并行实例仅用序号区分
+- 子代理完成表面统一为 S10 小队卡：旧 Claude Agent session 卡退役，终态 / result / output-file 迁入小队卡与 inspector；合成 spawn 进 process-phase 折叠，避免 chip 外侧回钉
+- diff 行内密集按钮的 tooltip 换成 FloatingTooltipButton（body portal + flip），不再被 overflow 裁切，并保留高对比 CSS 回退
+- Shared 队列已发送等待 ACK 时显示「已发送，确认中（防重复）」，不再误读为仍在排队；防双发出队逻辑不变
+- 文档治理：OpenSpec 三波归档 64 个已落地提案并同步 main specs；新增文档生命周期规范、新 CLI 接入 A~H 全量注册点核对矩阵、Native vs Shared CLI 产品口径说明文档
+
+🐛 Fixes
+- 修复 Claude 后台 Shell / PowerShell 任务被 5 秒宽限误杀（issue #983）：stream 携带结构化 backgroundTaskId 时进入 WaitBgTasks 等待任务终态，期间禁止 grace tree-kill；任务清空后重新武装完整 5s 宽限（禁止 remaining=0 秒杀），Unix killpg / Windows taskkill 不再误杀合法后台任务与 MCP / Stop-hook 管道
+- 修复空 / 新建工作区串入外项目会话历史：OpenCode 改用 JSON 列表并按 `directory` 归属过滤；Claude 以 transcript `cwd` 为权威并失效旧缓存（scanner v5），收紧 CJK 编码路径前缀匹配；Gemini / Grok / Kimi 改为一向 ownership（会话路径须为工作区或其子路径），去掉反向 home 匹配，避免 Desktop 中文空文件夹继承 `$HOME` 下无关历史
+- 修复首页创建会话时 Grok / Kimi / OpenCode 等 Atomic 引擎闭合选择器长期停在「选择模型」：为全部 Atomic 引擎播种默认 ExecutionTarget（catalog 优先，空 catalog 时用 selectedModelId 合成），Shared 会话不自动 seed，避免跨会话污染
+- 修复首页 CLI 选择器与全局引擎不同步、重启后回落 Claude：home picker 变更会 publish 全局 engine；外部 restore / 回首页时丢弃 sticky creation target；首屏从 clientStorage 恢复上次引擎，避免先闪 Claude 再纠正
+- 收敛 Native 与 Shared 的 assistant 重复渲染：单气泡内 early-body 回显折叠；跨 itemId 的等价 complete / history upsert 统一收敛，短开场不误粘、文末短复述不误删
+- 修复子代理状态长期「运行中」、inspector 打开后不刷新：旁路加载的子会话 transcript 经 probe store 补洞并 re-enrich 小队卡 / StatusPanel，终态直推已打开抽屉
+- 修复 Shared 用户附图双气泡与刷新丢图：TurnRequested 写入 image_refs，投影与 dataSource 透传 images，optimistic / history 合并保图
+- 修复 Shared 上下文续接 integrity：binding 增加 nativeContextTrust；503 / 失联后 needs-history 强制 rematerialize，避免只发短指令丢原任务
+- 阻断 Shared 初始化与 Atomic 模型思考档位污染：create-session / 跨引擎切换按目标 CLI capability 播种与收敛 options / effort，不再借用全局 Native Codex 档位；send 边界二次 reconcile
+- 阻断 Composer rewind reset 更新环，避免回退重置在 extract / shell 写回之间打转
+- 修复 Git Graph 在作者 / 搜索 / 日期过滤下出现无节点幻影泳道：稀疏列表压缩缺失 parent；作者筛选激活时隐藏冗余作者 chip
+- 修复 Create PR 弹层内 base / compare 等下拉被 backdrop 挡住：Popover z-index 抬到 80，高于 PR 遮罩
+- 手动刷新 Git 状态时清除过期的 commit / push / sync 错误横幅，可恢复故障后不必整应用重载
+- 继续收敛 React #185 白屏：Composer extract effect 切断 selectedInlineFileReferences 自订阅、target 等价时跳过壳写；canvas store 快照门闩与 selector 缓存、useModels 跨 epoch storm 熔断、session reload 稳定回调
+- 修复 Shared 侧栏异步刷新复用 stale hide set 导致原生会话泄漏：Grok / Kimi / Gemini 刷新改用 fresh hide set 重建，merge 与 final 闸门剔除已泄漏的 Shared-owned 行，hide set 拉取失败时取并集不放宽
+- 闭环 Shared 恢复出口：补齐 Probe / Stop / 停止并重建 / 放弃本轮；force-stop 先读 settled 再 remove，修复 abandon 竞态；融合禁用原因可解释
+- Shared 模型选择以 ExecutionTarget 快照为展示权威，闭合态不再依赖 catalog 命中或全局 selectedModelId，Native 保留全局回落契约
+- Codex collab 子代理实时 wait 阶段用子会话树兜底幕布小队与 Status Agents，补齐 live receiver 字段抽取与 synthetic / 真实 spawn 去重，live 与 history 呈现对齐
+- 相邻思考块不再被幕布外隐藏的 shell 工具切成多张思考卡片：resolveVisibleMessageItems 先过滤隐藏进程工具再合并，live 与完成后展开的时间线逻辑一致；可见文件工具仍会正确打断思考段
+- 修复 dockIcon 与 activeCanvasStore 测试在 strict 下被推断为 never 导致的 tsc 构建失败（曾阻断 mac-arm64 打包）
+- 修复多工具回合 settle 后助手结论文本偶发跑到工具卡前面的问题：reducer 在 `resetAgentSegment` 后通过 `findAssistantMessageIndexForLiveSettlement`（append/complete 双模式）解析正确 segment，禁止终稿并回工具前气泡；同时补上 late tool 插入与重排逻辑确保工具与结论的相对位置在 settle 后与 history 一致，不再依赖「重开会话」恢复正确顺序
+
+English:
+
+The headline of this release is a readable Git history, pinned settings, and steadier workspace ownership plus Shared / subagent surfaces: Git Graph stays a bottom half-dock (resizable height) with a multi-lane commit graph and a wider commit column, sidebar actions pin next to the gear and workspaces can be regrouped from the context menu, the app icon is switchable with a full brand refresh, the changes panel gains bulk unstage / discard, Claude background shell tasks survive the 5-second grace; empty workspaces no longer inherit foreign session history, the home engine / model picker restores across restarts, and Shared resume / attachments / reasoning plus subagent card status get hardened.
+
+✨ Features
+- Denser Git Graph workbench: the history panel remains a bottom half-dock with a drag resize handle; the in-panel three-column default ratio becomes 4:11:5 so the commit list is wider and messages stay readable
+- Multi-lane commit graph: topology-aware lanes with merge / side-branch / pass-through edges; Spine (first-parent only) and Denoise (hide default trellis session-record commits and rewrite parents so the graph stays continuous); author avatars, upstream-aware ahead/behind tooltips, and changed-files flat/tree mode shared with the main Git Diff panel
+- Pinned sidebar settings: lock screen, Spec Hub, project memory, git history, and runtime notice can be pinned from the settings menu to one-click icon buttons beside the gear; max 2, persisted in client storage, unknown ids filtered, further pins disabled with accessible en/zh tooltip copy
+- Workspace project groups: the workspace actions menu gains "Change project group" so a main workspace can be assigned to an existing group or ungrouped without opening Settings → Project Management (worktrees inherit the parent group)
+- App icon skinning: appearance settings now offer a Dock / taskbar icon picker — default logo or the orbit-routing set; macOS updates the Dock, Windows / Linux update per-window icons, with the About page and lock screen logo in sync; PNG validation, rapid-switch race protection, and secondary-window reapply included
+- Bulk Git write operations: unstage all, unstage selected paths, and discard multiple unstaged paths in one backend call instead of per-path IPC loops; rename/copy pairs are expanded before restore/clean to match single-file semantics; multi-repo views, worktree history, and remote daemon forwarding wired in, with single-file actions kept as fallback
+- Full brand icon refresh: desktop (including Windows Store square logos), web, iOS AppIcon, and Android launcher sets all updated to the new artwork for consistent installs and UI surfaces
+
+🔧 Improvements
+- File-tree context menus gain Lucide icons (git, new file, copy, LSP, delete, etc.) with a danger style and separator on delete for faster scanning
+- Context menus follow OS habit: prefer open below-right of the cursor; when space is tight, flip wholesale above or left (Finder / VS Code style), then clamp into the viewport, with an estimated first-paint position
+- Git History filters and pickers: project / branch switchers move to Command + Popover; branch filter leads, graph toggles clear together; dense status-chip tooltips are near-instant
+- Cleaner subagent identity: squad cards and the inspector no longer reuse contributor personas — a fixed i18n "Subagent" label plus index labels for parallel instances
+- Unified subagent completion surface on S10 squad cards: legacy Claude Agent session cards retire; terminal / result / output-file move into the squad card and inspector; synthetic spawns join process-phase collapse so they no longer re-pin outside the chip
+- Dense diff-row action tooltips switch to FloatingTooltipButton (body portal + flip) so they are no longer clipped by overflow, with a high-contrast CSS fallback
+- Shared queue shows "sent, awaiting ACK (duplicate-safe)" while waiting for acknowledgement instead of looking still queued; dequeue logic unchanged
+- Documentation governance: three OpenSpec archive waves moved 64 shipped proposals into the archive with main specs synced; new doc-lifecycle rules, an A–H full registration-point checklist for onboarding new CLIs, and a Native vs Shared CLI product explainer
+
+🐛 Fixes
+- Fixed Claude background Shell / PowerShell tasks being killed by the 5-second grace (issue #983): when the stream carries a structured backgroundTaskId the reader enters WaitBgTasks and waits for task terminal states with grace tree-kill disabled; once tasks drain, the full 5s grace re-arms (no remaining=0 instant kill), so Unix killpg / Windows taskkill no longer kill legitimate background tasks or MCP / Stop-hook pipelines
+- Fixed empty / newly created workspaces inheriting foreign session history: OpenCode lists sessions as JSON and filters by `directory` ownership; Claude treats transcript `cwd` as authoritative and invalidates old caches (scanner v5), with tighter CJK encoded-path prefix matching; Gemini / Grok / Kimi use one-way ownership (session path must be the workspace or a child) and drop reverse home matching so Chinese Desktop empty folders no longer inherit unrelated `$HOME` history
+- Fixed the home create-session closed picker stuck on "select model" for Atomic engines such as Grok / Kimi / OpenCode: seed a default ExecutionTarget for every Atomic engine (catalog preferred; synthesize from selectedModelId when the catalog is empty); Shared sessions never auto-seed to avoid cross-session contamination
+- Fixed the home CLI picker drifting from the global engine and falling back to Claude after restart: choosing an engine on the home picker publishes the global selection; external restore / return-to-home drops the sticky creation target; first paint restores the last engine from client storage so Claude no longer flashes first
+- Converged Native and Shared assistant duplicate rendering: fold early-body echo inside a single bubble; converge equivalent complete / history upserts across item ids without gluing short openers or dropping short trailing restatements
+- Fixed subagent rows stuck on "running" and inspectors that never refreshed after open: bypass-loaded child transcripts feed a probe store that re-enriches squad cards / StatusPanel and pushes terminal status into the open drawer
+- Fixed Shared user attachment double-bubbles and images lost on reload: TurnRequested writes image_refs, projection and dataSource pass images through, and optimistic / history merge keeps attachments
+- Fixed Shared context-resume integrity: bindings gain nativeContextTrust; after 503 / disconnect, needs-history forces rematerialize so a short follow-up no longer drops the original task
+- Blocked Shared init and Atomic-model reasoning pollution: create-session and cross-engine switches seed / converge options and effort from the target CLI capability instead of borrowing global Native Codex settings; send-time reconcile as a second gate
+- Blocked the Composer rewind-reset update loop so rewind no longer thrash between extract and shell write-back
+- Fixed phantom Git Graph lanes under author / search / date filters by compacting missing parents on sparse lists; hide the redundant author chip when an author filter is already active
+- Fixed Create PR base / compare pickers blocked by the modal backdrop by raising Popover z-index above the PR overlay
+- Manual Git status refresh clears stale commit / push / sync error banners so recoverable failures no longer require a full app reload
+- More React #185 white-screen hardening: the Composer extract effect no longer self-subscribes to selectedInlineFileReferences and skips shell writes on equivalent targets; canvas store snapshot latch and selector caching, a useModels cross-epoch storm breaker, and stable session-reload callbacks
+- Fixed the Shared sidebar reusing a stale hide set on async refresh and leaking native sessions: Grok / Kimi / Gemini refreshes rebuild with a fresh hide set, merge and final gates strip already-leaked Shared-owned rows, and hide-set fetch failures union instead of widening
+- Closed the Shared recovery exits: Probe / Stop / stop-and-rebuild / abandon-turn completed; force-stop reads settled before remove, fixing the abandon race; fusion-disabled reasons are now explainable
+- Shared model selection now uses the ExecutionTarget snapshot as display authority — the closed state no longer depends on catalog hits or the global selectedModelId, while Native keeps its global fallback contract
+- Codex collab subagents fall back to the child session tree during live wait phases for canvas squads and Status Agents, with live receiver field extraction and synthetic/real spawn dedupe, aligning live and history rendering
+- Adjacent thinking blocks are no longer split into multiple thinking cards by canvas-hidden shell tools: resolveVisibleMessageItems filters hidden process tools before merging, keeping live and post-complete expanded timelines consistent; visible file tools still correctly interrupt reasoning runs
+- Fixed dockIcon and activeCanvasStore tests being inferred as never under strict mode, which broke tsc builds (and had blocked mac-arm64 packaging)
+- Fixed assistant conclusion text occasionally appearing before tool cards after multi-tool turns settle: the reducer now uses `findAssistantMessageIndexForLiveSettlement` (append/complete dual mode) to resolve the correct post-tool segment after `resetAgentSegment`, preventing conclusion text from merging into the pre-tool bubble; late-tool insertion and rebalancing keep the tool-conclusion relative order consistent with history after settlement, removing the need to reopen conversations as a workaround
+
+---
+
+### **2026年8月3日（v0.7.15）**
 
 中文：
 
@@ -68,7 +164,7 @@ The headline of this release is visible subagents, a clearer session overview, a
 
 ---
 
-##### **2026年8月1日（v0.7.14）**
+### **2026年8月1日（v0.7.14）**
 
 中文：
 
@@ -132,7 +228,7 @@ The headline of this release is a fresher Settings, quieter process timelines, a
 
 ---
 
-##### **2026年7月31日（v0.7.13）**
+### **2026年7月31日（v0.7.13）**
 
 中文：
 
@@ -180,7 +276,7 @@ The headline of this release is clearer replies and a leaner Settings: assistant
 
 ---
 
-##### **2026年7月30日（v0.7.12）**
+### **2026年7月30日（v0.7.12）**
 
 中文：
 
@@ -220,7 +316,7 @@ The headline of this release is cross-CLI continuation: a conversation is no lon
 
 ---
 
-##### **2026年7月28日（v0.7.11）**
+### **2026年7月28日（v0.7.11）**
 
 中文：
 
@@ -256,7 +352,7 @@ English:
 
 ---
 
-##### **2026年7月27日（v0.7.10）**
+### **2026年7月27日（v0.7.10）**
 
 中文：
 
@@ -334,7 +430,7 @@ English:
 
 ---
 
-##### **2026年7月25日（v0.7.9）**
+### **2026年7月25日（v0.7.9）**
 
 中文：
 
@@ -380,7 +476,7 @@ English:
 
 ---
 
-##### **2026年7月24日（v0.7.8）**
+### **2026年7月24日（v0.7.8）**
 
 中文：
 
@@ -418,7 +514,7 @@ English:
 
 ---
 
-##### **2026年7月23日（v0.7.7）**
+### **2026年7月23日（v0.7.7）**
 
 中文：
 
@@ -472,7 +568,7 @@ English:
 
 ---
 
-##### **2026年7月22日（v0.7.6）**
+### **2026年7月22日（v0.7.6）**
 
 中文：
 
@@ -526,7 +622,7 @@ English:
 
 ---
 
-##### **2026年7月20日（v0.7.5）**
+### **2026年7月20日（v0.7.5）**
 
 中文：
 
@@ -624,7 +720,7 @@ English:
 
 ---
 
-##### **2026年7月16日（v0.7.4）**
+### **2026年7月16日（v0.7.4）**
 
 中文：
 
@@ -676,7 +772,7 @@ English:
 
 ---
 
-##### **2026年7月15日（v0.7.3）**
+### **2026年7月15日（v0.7.3）**
 
 中文：
 
@@ -734,7 +830,7 @@ English:
 
 ---
 
-##### **2026年7月13日（v0.7.2）**
+### **2026年7月13日（v0.7.2）**
 
 中文：
 
@@ -762,7 +858,7 @@ English:
 
 ---
 
-##### **2026年7月12日（v0.7.1）**
+### **2026年7月12日（v0.7.1）**
 
 中文：
 
@@ -804,7 +900,7 @@ English:
 
 ---
 
-##### **2026年7月10日（v0.7.0）**
+### **2026年7月10日（v0.7.0）**
 
 中文：
 
@@ -858,7 +954,7 @@ English:
 
 ---
 
-##### **2026年7月9日（v0.6.9）**
+### **2026年7月9日（v0.6.9）**
 
 中文：
 
@@ -902,7 +998,7 @@ English:
 
 ---
 
-##### **2026年7月8日（v0.6.8）**
+### **2026年7月8日（v0.6.8）**
 
 中文：
 
@@ -942,7 +1038,7 @@ English:
 
 ---
 
-##### **2026年7月6日（v0.6.7）**
+### **2026年7月6日（v0.6.7）**
 
 中文：
 
@@ -990,7 +1086,7 @@ English:
 
 ---
 
-##### **2026年7月5日（v0.6.6）**
+### **2026年7月5日（v0.6.6）**
 
 中文：
 
@@ -1028,7 +1124,7 @@ English:
 
 ---
 
-##### **2026年7月4日（v0.6.5）**
+### **2026年7月4日（v0.6.5）**
 
 中文：
 
@@ -1078,7 +1174,7 @@ English:
 
 ---
 
-##### **2026年7月3日（v0.6.4）**
+### **2026年7月3日（v0.6.4）**
 
 中文：
 
@@ -1110,7 +1206,7 @@ English:
 
 ---
 
-##### **2026年7月3日（v0.6.3）**
+### **2026年7月3日（v0.6.3）**
 
 中文：
 
@@ -1150,7 +1246,7 @@ English:
 
 ---
 
-##### **2026年7月1日（v0.6.2）**
+### **2026年7月1日（v0.6.2）**
 
 中文：
 
@@ -1208,7 +1304,7 @@ English:
 
 ---
 
-##### **2026年6月28日（v0.6.1）**
+### **2026年6月28日（v0.6.1）**
 
 中文：
 
@@ -1248,7 +1344,7 @@ English:
 
 ---
 
-##### **2026年6月27日（v0.6.0）**
+### **2026年6月27日（v0.6.0）**
 
 中文：
 
@@ -1290,7 +1386,7 @@ English:
 
 ---
 
-##### **2026年6月26日（v0.5.13）**
+### **2026年6月26日（v0.5.13）**
 
 中文：
 
@@ -1378,7 +1474,7 @@ English:
 
 ---
 
-##### **2026年6月22日（v0.5.12）**
+### **2026年6月22日（v0.5.12）**
 
 中文：
 
@@ -1428,7 +1524,7 @@ English:
 
 ---
 
-##### **2026年6月18日（v0.5.11）**
+### **2026年6月18日（v0.5.11）**
 
 中文：
 
@@ -1498,7 +1594,7 @@ English:
 
 ---
 
-##### **2026年6月16日（v0.5.10）**
+### **2026年6月16日（v0.5.10）**
 
 中文：
 
@@ -1562,7 +1658,7 @@ English:
 
 ---
 
-##### **2026年6月14日（v0.5.9）**
+### **2026年6月14日（v0.5.9）**
 
 中文：
 
@@ -1626,7 +1722,7 @@ English:
 
 ---
 
-##### **2026年6月10日（v0.5.8）**
+### **2026年6月10日（v0.5.8）**
 
 中文：
 
@@ -1688,7 +1784,7 @@ English:
 
 ---
 
-##### **2026年6月7日（v0.5.7）**
+### **2026年6月7日（v0.5.7）**
 
 中文：
 
@@ -1742,7 +1838,7 @@ English:
 
 ---
 
-##### **2026年6月5日（v0.5.6）**
+### **2026年6月5日（v0.5.6）**
 
 中文：
 
@@ -1794,7 +1890,7 @@ English:
 
 ---
 
-##### **2026年6月3日（v0.5.5）**
+### **2026年6月3日（v0.5.5）**
 
 中文：
 
@@ -1848,7 +1944,7 @@ English:
 
 ---
 
-##### **2026年5月29日（v0.5.4）**
+### **2026年5月29日（v0.5.4）**
 
 中文：
 
@@ -1966,7 +2062,7 @@ English:
 
 ---
 
-##### **2026年5月27日（v0.5.3）**
+### **2026年5月27日（v0.5.3）**
 
 中文：
 
@@ -2018,7 +2114,7 @@ English:
 
 ---
 
-##### **2026年5月24日（v0.5.2）**
+### **2026年5月24日（v0.5.2）**
 
 中文：
 
@@ -2080,7 +2176,7 @@ English:
 
 ---
 
-##### **2026年5月22日（v0.5.1）**
+### **2026年5月22日（v0.5.1）**
 
 中文：
 
@@ -2136,7 +2232,7 @@ English:
 
 ---
 
-##### **2026年5月20日（v0.5）**
+### **2026年5月20日（v0.5）**
 
 中文：
 
@@ -2200,7 +2296,7 @@ English:
 
 ---
 
-##### **2026年5月15日（v0.4.18）**
+### **2026年5月15日（v0.4.18）**
 
 中文：
 
@@ -2250,7 +2346,7 @@ English:
 
 ---
 
-##### **2026年5月13日（v0.4.17）**
+### **2026年5月13日（v0.4.17）**
 
 中文：
 
@@ -2332,7 +2428,7 @@ English:
 
 ---
 
-##### **2026年5月11日（v0.4.16）**
+### **2026年5月11日（v0.4.16）**
 
 中文：
 
@@ -2384,7 +2480,7 @@ English:
 
 ---
 
-##### **2026年5月8日（v0.4.15）**
+### **2026年5月8日（v0.4.15）**
 
 中文：
 
@@ -2452,7 +2548,7 @@ English:
 
 ---
 
-##### **2026年5月7日（v0.4.14）**
+### **2026年5月7日（v0.4.14）**
 
 中文：
 
@@ -2500,7 +2596,7 @@ English:
 
 ---
 
-##### **2026年5月3日（v0.4.13）**
+### **2026年5月3日（v0.4.13）**
 
 中文：
 
@@ -2568,7 +2664,7 @@ English:
 
 ---
 
-##### **2026年4月30日（v0.4.11）**
+### **2026年4月30日（v0.4.11）**
 
 中文：
 
@@ -2648,7 +2744,7 @@ English:
 
 ---
 
-##### **2026年4月29日（v0.4.10）**
+### **2026年4月29日（v0.4.10）**
 
 中文：
 
@@ -2726,7 +2822,7 @@ English:
 
 ---
 
-##### **2026年4月27日（v0.4.9）**
+### **2026年4月27日（v0.4.9）**
 
 中文：
 
@@ -2844,7 +2940,7 @@ English:
 
 ---
 
-##### **2026年4月23日（v0.4.8）**
+### **2026年4月23日（v0.4.8）**
 
 中文：
 
@@ -2914,7 +3010,7 @@ English:
 
 ---
 
-##### **2026年4月22日（v0.4.7）**
+### **2026年4月22日（v0.4.7）**
 
 中文：
 
@@ -2966,7 +3062,7 @@ English:
 
 ---
 
-##### **2026年4月21日（v0.4.6）**
+### **2026年4月21日（v0.4.6）**
 
 中文：
 
@@ -3008,7 +3104,7 @@ English:
 
 ---
 
-##### **2026年4月20日（v0.4.5）**
+### **2026年4月20日（v0.4.5）**
 
 中文：
 
@@ -3062,7 +3158,7 @@ English:
 
 ---
 
-##### **2026年4月20日（v0.4.4）**
+### **2026年4月20日（v0.4.4）**
 
 中文：
 
@@ -3092,7 +3188,7 @@ English:
 
 ---
 
-##### **2026年4月18日（v0.4.3）**
+### **2026年4月18日（v0.4.3）**
 
 中文：
 
@@ -3136,7 +3232,7 @@ English:
 
 ---
 
-##### **2026年4月16日（v0.4.2）**
+### **2026年4月16日（v0.4.2）**
 
 中文：
 
@@ -3172,7 +3268,7 @@ English:
 
 ---
 
-##### **2026年4月16日（v0.4.1）**
+### **2026年4月16日（v0.4.1）**
 
 中文：
 
@@ -3208,7 +3304,7 @@ English:
 
 ---
 
-##### **2026年4月14日（v0.4.0）**
+### **2026年4月14日（v0.4.0）**
 
 中文：
 
@@ -3270,7 +3366,7 @@ English:
 
 ---
 
-##### **2026年4月11日（v0.3.12）**
+### **2026年4月11日（v0.3.12）**
 
 中文：
 
@@ -3352,7 +3448,7 @@ English:
 
 ---
 
-##### **2026年4月9日（v0.3.11）**
+### **2026年4月9日（v0.3.11）**
 
 中文：
 
@@ -3408,7 +3504,7 @@ English:
 
 ---
 
-##### **2026年4月7日（v0.3.10）**
+### **2026年4月7日（v0.3.10）**
 
 中文：
 
@@ -3448,7 +3544,7 @@ English:
 
 ---
 
-##### **2026年4月4日（v0.3.9）**
+### **2026年4月4日（v0.3.9）**
 
 中文：
 
@@ -3488,7 +3584,7 @@ English:
 
 ---
 
-##### **2026年4月1日（v0.3.7）**
+### **2026年4月1日（v0.3.7）**
 
 中文：
 
@@ -3532,7 +3628,7 @@ English:
 
 ---
 
-##### **2026年3月30日（v0.3.6）**
+### **2026年3月30日（v0.3.6）**
 
 English:
 
@@ -3600,7 +3696,7 @@ English:
 
 ---
 
-##### **2026年3月28日（v0.3.5）**
+### **2026年3月28日（v0.3.5）**
 
 English:
 
@@ -3638,7 +3734,7 @@ English:
 
 ---
 
-##### **2026年3月25日（v0.3.4）**
+### **2026年3月25日（v0.3.4）**
 
 English:
 
@@ -3712,7 +3808,7 @@ English:
 
 ---
 
-##### **2026年3月23日（v0.3.3）**
+### **2026年3月23日（v0.3.3）**
 
 English:
 
@@ -3760,7 +3856,7 @@ English:
 
 ---
 
-##### **2026年3月22日（v0.3.2）**
+### **2026年3月22日（v0.3.2）**
 
 English:
 
@@ -3826,7 +3922,7 @@ English:
 
 ---
 
-##### **2026年3月20日（v0.3.1）**
+### **2026年3月20日（v0.3.1）**
 
 English:
 
@@ -3884,7 +3980,7 @@ English:
 
 ---
 
-##### **2026年3月19日（v0.3.0）**
+### **2026年3月19日（v0.3.0）**
 
 English:
 
@@ -3934,7 +4030,7 @@ English:
 
 ---
 
-##### **2026年3月18日（v0.2.9）**
+### **2026年3月18日（v0.2.9）**
 
 English:
 
@@ -3992,7 +4088,7 @@ English:
 
 ---
 
-##### **2026年3月15日（v0.2.8）**
+### **2026年3月15日（v0.2.8）**
 
 English:
 
@@ -4046,7 +4142,7 @@ English:
 
 ---
 
-##### **2026年3月12日（v0.2.7）**
+### **2026年3月12日（v0.2.7）**
 
 English:
 
@@ -4074,7 +4170,7 @@ English:
 
 ---
 
-##### **2026年3月11日（v0.2.6）**
+### **2026年3月11日（v0.2.6）**
 
 English:
 
@@ -4106,7 +4202,7 @@ English:
 
 ---
 
-##### **2026年3月10日（v0.2.5）**
+### **2026年3月10日（v0.2.5）**
 
 English:
 
@@ -4154,7 +4250,7 @@ English:
 
 ---
 
-##### **2026年3月6日（v0.2.4）**
+### **2026年3月6日（v0.2.4）**
 
 English:
 
@@ -4208,7 +4304,7 @@ English:
 
 ---
 
-##### **2026年3月5日（v0.2.3）**
+### **2026年3月5日（v0.2.3）**
 
 English:
 
@@ -4272,7 +4368,7 @@ English:
 
 ---
 
-##### **2026年3月3日（v0.2.2）**
+### **2026年3月3日（v0.2.2）**
 
 English:
 
@@ -4304,7 +4400,7 @@ English:
 
 ---
 
-##### **2026年3月2日（v0.2.1）**
+### **2026年3月2日（v0.2.1）**
 
 English:
 
@@ -4332,7 +4428,7 @@ English:
 
 ---
 
-##### **2026年3月2日（v0.2.0）**
+### **2026年3月2日（v0.2.0）**
 
 English:
 
@@ -4400,7 +4496,7 @@ English:
 
 ---
 
-##### **2026年2月27日（v0.1.9）**
+### **2026年2月27日（v0.1.9）**
 
 English:
 
@@ -4456,7 +4552,7 @@ English:
 
 ---
 
-##### **2026年2月22日（v0.1.8）**
+### **2026年2月22日（v0.1.8）**
 
 English:
 
@@ -4514,7 +4610,7 @@ English:
 
 ---
 
-##### **2026年2月18日（v0.1.7）**
+### **2026年2月18日（v0.1.7）**
 
 English:
 
@@ -4586,7 +4682,7 @@ English:
 
 ---
 
-##### **2026年2月11日（v0.1.6）**
+### **2026年2月11日（v0.1.6）**
 
 English:
 
@@ -4610,7 +4706,7 @@ English:
 
 ---
 
-##### **2026年2月10日（v0.1.5）**
+### **2026年2月10日（v0.1.5）**
 
 English:
 
@@ -4624,7 +4720,7 @@ English:
 
 ---
 
-##### **2026年2月10日（v0.1.4）**
+### **2026年2月10日（v0.1.4）**
 
 English:
 
@@ -4650,7 +4746,7 @@ English:
 
 ---
 
-##### **2026年2月9日（v0.1.2）**
+### **2026年2月9日（v0.1.2）**
 
 English:
 
@@ -4682,7 +4778,7 @@ English:
 
 ---
 
-##### **2026年2月9日（v0.1.1）**
+### **2026年2月9日（v0.1.1）**
 
 English:
 
@@ -4702,7 +4798,7 @@ English:
 
 ---
 
-##### **2026年2月9日（v0.1.0）**
+### **2026年2月9日（v0.1.0）**
 
 English:
 
@@ -4724,7 +4820,7 @@ English:
 
 ---
 
-##### **2026年2月8日（v0.0.9）**
+### **2026年2月8日（v0.0.9）**
 
 English:
 
@@ -4752,7 +4848,7 @@ English:
 
 ---
 
-##### **2026年2月7日（v0.0.8）**
+### **2026年2月7日（v0.0.8）**
 
 English:
 
@@ -4766,7 +4862,7 @@ English:
 
 ---
 
-##### **2026年2月7日（v0.0.7）**
+### **2026年2月7日（v0.0.7）**
 
 English:
 
@@ -4786,7 +4882,7 @@ English:
 
 ---
 
-##### **2026年2月7日（v0.0.6）**
+### **2026年2月7日（v0.0.6）**
 
 English:
 
@@ -4820,7 +4916,7 @@ English:
 
 ---
 
-##### **2026年2月7日（v0.0.5）**
+### **2026年2月7日（v0.0.5）**
 
 English:
 
@@ -4858,7 +4954,7 @@ English:
 
 ---
 
-##### **2026年2月6日（v0.0.4）**
+### **2026年2月6日（v0.0.4）**
 
 English:
 
@@ -4874,7 +4970,7 @@ English:
 
 ---
 
-##### **2026年2月5日（v0.0.3）**
+### **2026年2月5日（v0.0.3）**
 
 English:
 
@@ -4902,7 +4998,7 @@ English:
 
 ---
 
-##### **2026年2月5日（v0.0.2）**
+### **2026年2月5日（v0.0.2）**
 
 English:
 
@@ -4918,7 +5014,7 @@ English:
 
 ---
 
-##### **2026年2月4日（v0.0.1）**
+### **2026年2月4日（v0.0.1）**
 
 English:
 

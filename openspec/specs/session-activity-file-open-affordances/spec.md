@@ -6,20 +6,15 @@ Defines the session-activity-file-open-affordances behavior contract, covering A
 ## Requirements
 ### Requirement: Activity Panel Primary File Click MUST Open The File And Maximize The Editor Surface
 
-右侧 `workspace session activity` 文件条目的主点击 MUST 打开目标文件，并在当前布局支持时切换到 editor/file surface 的最大化状态。
+当 workspace session activity 面板 **可用** 时，文件条目主点击 MUST 打开目标文件并在支持时最大化 editor surface。  
+当 activity 处于 **runtime disabled** 时，本 requirement 的 UI 路径 MUST 不可达，系统 MUST NOT 因此崩溃。
 
-#### Scenario: primary click opens file and maximizes editor
+#### Scenario: primary click is unreachable while activity disabled
 
-- **WHEN** 用户点击 activity panel 文件条目的主区域
-- **THEN** 系统 MUST 复用既有文件打开链路打开目标文件
-- **AND** 在当前 editor/file surface 支持 maximize 时，系统 MUST 切换到最大化状态
-
-#### Scenario: maximize unavailable falls back to existing open behavior
-
-- **WHEN** 用户点击 activity panel 文件条目的主区域
-- **AND** 当前平台、布局或 surface 不支持 meaningful maximize
-- **THEN** 系统 MUST 继续完成既有打开行为
-- **AND** MUST NOT 因 maximize 不可用而导致文件无法打开
+- **GIVEN** session activity 处于 runtime disabled
+- **WHEN** 用户无法打开 activity 面板
+- **THEN** 系统 MUST NOT 暴露 activity 文件主点击 affordance
+- **AND** 既有 Files / Search / 消息区文件打开路径 MUST 保持可用
 
 ### Requirement: Activity Panel MUST Provide A Separate Diff Preview Affordance
 
@@ -97,3 +92,14 @@ Defines the session-activity-file-open-affordances behavior contract, covering A
 - **THEN** 系统 MUST 向用户展示可恢复错误反馈
 - **AND** 当前文件 tab 与主编辑区 MUST 保持可用
 
+### Requirement: Activity Panel Diff Icon Opens Diff Preview
+
+当 activity 面板可用时，文件条目 MUST 提供独立 diff icon。  
+当 activity disabled 时，该 affordance MUST 不可达。
+
+#### Scenario: diff icon is unreachable while activity disabled
+
+- **GIVEN** session activity 处于 runtime disabled
+- **WHEN** 用户浏览右侧面板
+- **THEN** 系统 MUST NOT 要求渲染 activity 内 diff icon
+- **AND** Git panel 的 diff 打开路径 MUST 保持可用

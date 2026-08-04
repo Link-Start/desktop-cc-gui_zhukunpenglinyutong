@@ -41,6 +41,38 @@ function normalizeResultText(text: string): string {
   return text.replace(RESULT_CLOSE_SUFFIX_REGEX, "").trim();
 }
 
+/**
+ * SubAgent 完成通知（Claude Agent/Task）形态，与 background shell 等非 SubAgent
+ * task-notification 区分：仅此类应退役 legacy Agent session 卡，迁入 S10 表面。
+ */
+export function isSubagentStyleAgentTaskNotification(
+  notification: AgentTaskNotification | null | undefined,
+): boolean {
+  if (!notification) {
+    return false;
+  }
+  const summary = (notification.summary ?? "").trim();
+  if (!summary) {
+    return false;
+  }
+  // Agent "描述" … / Agent “描述” …
+  if (/Agent\s+["“][^"”]+["”]/i.test(summary)) {
+    return true;
+  }
+  // 智能体 "描述"
+  if (/智能体\s*["“][^"”]+["”]/.test(summary)) {
+    return true;
+  }
+  // Agent … completed|finished（无引号的宽松终态）
+  if (
+    /^Agent\b/i.test(summary) &&
+    /(completed|finished|done|success|succeed|failed|error)/i.test(summary)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function parseAgentTaskNotification(
   text: string,
 ): AgentTaskNotification | null {

@@ -32,11 +32,11 @@ describe("subagentViewModel", () => {
     expect(card.description).toContain("session catalog");
     expect(card.status).toBe("completed");
     expect(card.progress).toBe(1);
-    expect(card.displayName.length).toBeGreaterThan(0);
+    expect(card.displayName).toBe("Subagent");
     expect(card.outputText).toContain("done report");
-    // 作者池有 githubLogin 时带主页/头像字段
-    expect("githubProfileUrl" in card).toBe(true);
-    expect("avatarSrc" in card).toBe(true);
+    // 固定身份：不再绑定贡献者头像 / GitHub
+    expect(card.githubProfileUrl).toBeNull();
+    expect(card.avatarSrc).toBeNull();
   });
 
   it("parses output_file path and agentId from agent launch ack text", () => {

@@ -421,4 +421,178 @@ describe("useThreadActions shared/native compatibility", () => {
       expect(threadIds).not.toContain("opencode:ses_opc_hidden_1");
     });
   });
+
+  it("rebuilds hide set on async grok refresh so post-create binding materialize still hides", async () => {
+    // 复现：创建 Shared 时 binding 为空 → list 开头 hide set=∅ → 异步 listGrok
+    // 期间 binding materialize → 必须用 fresh hide set，否则 native 泄漏。
+    let sharedListCalls = 0;
+    vi.mocked(listSharedSessions).mockImplementation(async () => {
+      sharedListCalls += 1;
+      if (sharedListCalls === 1) {
+        return [
+          {
+            id: "shared-session-race-1",
+            threadId: "shared:shared-session-race-1",
+            title: "Shared Session",
+            updatedAt: 1_730_000_500_000,
+            selectedEngine: "grok",
+            nativeThreadIds: [],
+          },
+        ];
+      }
+      return [
+        {
+          id: "shared-session-race-1",
+          threadId: "shared:shared-session-race-1",
+          title: "分析一下给我结论",
+          updatedAt: 1_730_000_510_000,
+          selectedEngine: "grok",
+          nativeThreadIds: ["grok:grok-bound-race-1"],
+        },
+      ];
+    });
+
+    let resolveGrokSessions: (value: unknown) => void = () => {};
+    const grokSessionsGate = new Promise((resolve) => {
+      resolveGrokSessions = resolve;
+    });
+    vi.mocked(listGrokSessions).mockImplementation(async () => {
+      await grokSessionsGate;
+      return [
+        {
+          sessionId: "grok-bound-race-1",
+          firstMessage: "分析一下给我结论",
+          updatedAt: 1_730_000_520_000,
+        },
+        {
+          sessionId: "grok-user-visible-1",
+          firstMessage: "User Grok Session",
+          updatedAt: 1_730_000_530_000,
+        },
+      ];
+    });
+
+    const { result, dispatch } = renderActions();
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+
+    // 主路径 setThreads 先落地（binding 仍空，尚无 grok 行）
+    await waitFor(() => {
+      const setThreadsActions = vi.mocked(dispatch).mock.calls
+        .map(([action]) => action)
+        .filter((action) => action?.type === "setThreads");
+      expect(setThreadsActions.length).toBeGreaterThan(0);
+      expect(
+        setThreadsActions.some((action) => {
+          const ids = Array.isArray(action.threads)
+            ? action.threads.map((t: { id: string }) => t.id)
+            : [];
+          return ids.includes("shared:shared-session-race-1");
+        }),
+      ).toBe(true);
+    });
+
+    // 模拟首轮 send 后 binding materialize，再放行异步 Grok list
+    await act(async () => {
+      resolveGrokSessions(undefined);
+    });
+
+    await waitFor(() => {
+      const setThreadsActions = vi.mocked(dispatch).mock.calls
+        .map(([action]) => action)
+        .filter((action) => action?.type === "setThreads");
+      const latest = setThreadsActions[setThreadsActions.length - 1];
+      const threadIds = Array.isArray(latest?.threads)
+        ? latest.threads.map((thread: { id: string }) => thread.id)
+        : [];
+      expect(threadIds).toContain("shared:shared-session-race-1");
+      expect(threadIds).toContain("grok:grok-user-visible-1");
+      expect(threadIds).not.toContain("grok:grok-bound-race-1");
+    });
+  });
+
+  it("main list strip purges previously leaked shared-owned grok row", async () => {
+    // 模拟上一帧已泄漏的 native 仍在 store；主路径 final hide 闸门必须清掉。
+    vi.mocked(listSharedSessions).mockResolvedValue([
+      {
+        id: "shared-session-purge-1",
+        threadId: "shared:shared-session-purge-1",
+        title: "Shared Session",
+        updatedAt: 1_730_000_600_000,
+        selectedEngine: "grok",
+        nativeThreadIds: ["grok:grok-already-leaked"],
+      },
+    ]);
+    // 避免异步 Grok 路径干扰本断言（主路径 strip 独立可测）
+    vi.mocked(listGrokSessions).mockResolvedValue([]);
+
+    const dispatch = vi.fn();
+    const loadedThreadsRef = { current: {} as Record<string, boolean> };
+    const replaceOnResumeRef = { current: {} as Record<string, boolean> };
+    const threadActivityRef = {
+      current: {} as Record<string, Record<string, number>>,
+    };
+    const args: Parameters<typeof useThreadActions>[0] = {
+      dispatch,
+      itemsByThread: {},
+      userInputRequests: [],
+      threadsByWorkspace: {
+        "ws-1": [
+          {
+            id: "shared:shared-session-purge-1",
+            name: "Shared Session",
+            updatedAt: 1_730_000_600_000,
+            engineSource: "grok",
+            threadKind: "shared",
+            nativeThreadIds: ["grok:grok-already-leaked"],
+          },
+          {
+            id: "grok:grok-already-leaked",
+            name: "分析一下给我结论",
+            updatedAt: 1_730_000_610_000,
+            engineSource: "grok",
+            threadKind: "native",
+          },
+        ],
+      },
+      activeThreadIdByWorkspace: {},
+      threadListCursorByWorkspace: {},
+      threadStatusById: {},
+      getCustomName: () => undefined,
+      threadActivityRef,
+      loadedThreadsRef,
+      replaceOnResumeRef,
+      applyCollabThreadLinksFromThread: vi.fn(),
+      updateThreadParent: vi.fn(),
+      onThreadTitleMappingsLoaded: vi.fn(),
+      onRenameThreadTitleMapping: vi.fn(),
+    };
+
+    const { result } = renderHook(() => useThreadActions(args));
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+
+    await waitFor(() => {
+      const setThreadsActions = vi.mocked(dispatch).mock.calls
+        .map(([action]) => action)
+        .filter((action) => action?.type === "setThreads");
+      expect(setThreadsActions.length).toBeGreaterThan(0);
+      // 任意一次落地都不得再带 hidden binding；最终快照亦然。
+      for (const action of setThreadsActions) {
+        const ids = Array.isArray(action.threads)
+          ? action.threads.map((thread: { id: string }) => thread.id)
+          : [];
+        expect(ids).not.toContain("grok:grok-already-leaked");
+      }
+      const latest = setThreadsActions[setThreadsActions.length - 1];
+      const latestIds = Array.isArray(latest?.threads)
+        ? latest.threads.map((thread: { id: string }) => thread.id)
+        : [];
+      expect(latestIds).toContain("shared:shared-session-purge-1");
+    });
+  });
 });
