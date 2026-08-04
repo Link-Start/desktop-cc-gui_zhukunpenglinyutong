@@ -44,6 +44,36 @@ describe("SharedTargetStore", () => {
     expect(state.activeTurnTarget).toBeNull();
   });
 
+  it("skips equivalent hydrate so shell thrash does not bump generation or replace state", () => {
+    const target = {
+      engine: "claude" as const,
+      providerProfileId: "p1",
+      modelCatalogEntryId: "m1",
+      model: "claude-opus",
+      reasoning: { effort: "high" },
+      providerProfileNameSnapshot: "Official",
+      providerProfileSource: "managed" as const,
+    };
+    hydrateSharedTargetState(WS, THREAD, target);
+    const first = getSharedTargetState(WS, THREAD);
+    const gen1 = getPersistGeneration(WS, THREAD);
+
+    // 语义相同、引用不同 → 不得写壳 / 不得 generation++
+    hydrateSharedTargetState(WS, THREAD, { ...target });
+    const second = getSharedTargetState(WS, THREAD);
+    expect(second).toBe(first);
+    expect(getPersistGeneration(WS, THREAD)).toBe(gen1);
+
+    for (let i = 0; i < 30; i += 1) {
+      hydrateSharedTargetState(WS, THREAD, {
+        ...target,
+        reasoning: { effort: "high" },
+      });
+    }
+    expect(getSharedTargetState(WS, THREAD)).toBe(first);
+    expect(getPersistGeneration(WS, THREAD)).toBe(gen1);
+  });
+
   it("hydrates and clears the selected target without rewriting the active turn", () => {
     const activeSnapshot = freezeTurnSnapshot({
       engine: "claude",

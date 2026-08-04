@@ -1335,17 +1335,35 @@ function ComposerImpl({
     setText((prev) => (prev === draftText ? prev : draftText));
   }, [draftText]);
 
-  const setComposerText = useCallback(
-    (next: string) => {
-      setText(next);
-      onDraftChange?.(next);
-    },
-    [onDraftChange],
-  );
+  // text / draft / catalog 经 ref 读：setComposerText 保持稳定 identity，
+  // extract effect 不得因 onDraftChange / skills / commands 引用抖动重入（#185 AP-04）。
+  const textRef = useRef(text);
+  textRef.current = text;
+  const onDraftChangeRef = useRef(onDraftChange);
+  onDraftChangeRef.current = onDraftChange;
+  const selectedInlineFileReferencesRef = useRef(selectedInlineFileReferences);
+  selectedInlineFileReferencesRef.current = selectedInlineFileReferences;
+  const skillsRef = useRef(skills);
+  skillsRef.current = skills;
+  const commandsRef = useRef(commands);
+  commandsRef.current = commands;
+
+  const setComposerText = useCallback((next: string) => {
+    // 等价值短路：禁止 text→draft→text 虚写叠 nested update
+    if (textRef.current === next) {
+      return;
+    }
+    textRef.current = next;
+    setText(next);
+    onDraftChangeRef.current?.(next);
+  }, []);
 
   useEffect(() => {
+    // 只订阅 text：selection / skills / commands 读 ref。
+    // 旧 deps 含 selectedInlineFileReferences 时，即便 merge 幂等，
+    // 父树 skills 引用抖动 + 同 tick 多 setState 仍可能叠满 #185（0.7.16 / App-DjQ3UnSh）。
     const existingReferenceIds = new Set(
-      selectedInlineFileReferences
+      selectedInlineFileReferencesRef.current
         .filter((entry) => text.includes(entry.label))
         .map((entry) => entry.id),
     );
@@ -1354,7 +1372,7 @@ function ComposerImpl({
       existingReferenceIds,
     );
     if (extracted.length > 0) {
-      // mergeInlineFileReferences：无新增保持原引用，切断 deps 自反馈（#185）
+      // mergeInlineFileReferences：无新增保持原引用
       setSelectedInlineFileReferences((prev) =>
         mergeInlineFileReferences(prev, extracted),
       );
@@ -1367,7 +1385,11 @@ function ComposerImpl({
       cleanedText: cleanedSelectionText,
       matchedSkillNames,
       matchedCommonsNames,
-    } = extractInlineSelections(text, skills, commands);
+    } = extractInlineSelections(
+      text,
+      skillsRef.current,
+      commandsRef.current,
+    );
     if (matchedSkillNames.length > 0) {
       setSelectedSkillNames((prev) =>
         mergeUniqueNames(prev, matchedSkillNames),
@@ -1381,7 +1403,7 @@ function ComposerImpl({
     if (cleanedSelectionText !== text) {
       setComposerText(cleanedSelectionText);
     }
-  }, [commands, selectedInlineFileReferences, setComposerText, skills, text]);
+  }, [setComposerText, text]);
 
   const handleSelectManualMemory = useCallback(
     (memory: ManualMemorySelection) => {
