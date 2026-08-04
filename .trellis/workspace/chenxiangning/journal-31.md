@@ -765,3 +765,36 @@ onDebugRef 解耦、原子 selection state、乐观 snapshot、preferred 归一�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1320: 修复 activeCanvasStore 测试 tsc 构建失败
+
+**Date**: 2026-08-04
+**Task**: 修复 activeCanvasStore 测试 tsc 构建失败
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+test 文件被 tsc include，let|null 收窄为 never 导致 build 失败；改为 ref box 修 TS2339
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9dc47c0b0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
