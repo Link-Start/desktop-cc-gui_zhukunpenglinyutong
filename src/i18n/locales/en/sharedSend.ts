@@ -82,6 +82,8 @@ const sharedSend = {
       "Multiple unresolved owners were found. Recovery cannot safely continue automatically; contact support with session details if this persists.",
     recoveryErrorOwnerMissing:
       "No matching unresolved attempt was found. Try check status; the session may already be clear.",
+    recoveryErrorEmptyContextHandoff:
+      "Shared context could not be rebuilt for this target (history may be incomplete). Stop and rebuild the session connection, or switch to another available target and resend.",
     recoveryTechDetail: "technical detail available",
     targetUnavailable: "The selected target is unavailable.",
     targetUnavailableReason: "The selected target is unavailable: {{reason}}",

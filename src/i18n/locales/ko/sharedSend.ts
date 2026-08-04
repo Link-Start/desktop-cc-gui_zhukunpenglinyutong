@@ -75,6 +75,8 @@ const sharedSend = {
     recoveryErrorActiveRequiresStop: "The runtime still owns this attempt. Stop delivery before abandoning, or confirm force-stop when abandoning.",
     recoveryErrorAmbiguous: "Multiple unresolved owners were found. Recovery cannot safely continue automatically; contact support with session details if this persists.",
     recoveryErrorOwnerMissing: "No matching unresolved attempt was found. Try check status; the session may already be clear.",
+    recoveryErrorEmptyContextHandoff:
+      "공유 컨텍스트를 다시 구성할 수 없습니다. 중지 후 재구축하거나 다른 대상으로 전환한 뒤 다시 보내세요.",
     recoveryTechDetail: "technical detail available",
     targetUnavailableHint: "Switch to another target in the picker, then send again.",
     cancel: "취소",

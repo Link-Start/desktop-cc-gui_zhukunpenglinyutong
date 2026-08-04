@@ -152,6 +152,8 @@ function isKnownFailedTerminalError(error: unknown): boolean {
   return (
     !message.includes("canonical-failure-persistence:") &&
     (message.startsWith("context-prepare-failed:") ||
+      message.startsWith("empty-context-handoff:") ||
+      message.includes("empty-context-handoff:") ||
       message.startsWith("target-unavailable:") ||
       message.startsWith("target-provider-rejected:"))
   );

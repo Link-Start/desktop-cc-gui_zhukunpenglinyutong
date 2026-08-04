@@ -21,10 +21,11 @@ use uuid::Uuid;
 
 pub use crate::engine::EngineType;
 use crate::shared_context::{
-    accept_delivery, compile_context, mark_delivery_sent, prepare_delivery, read_artifact,
-    scan_orphan_artifacts, terminal_binding_update, write_artifact, AcceptDeliveryRequest,
-    ArtifactReadRequest, CompileContextRequest, MarkDeliverySentRequest, PendingDelivery,
-    PrepareDeliveryRequest, RuntimeContextCapabilities,
+    accept_delivery, compile_context, is_zero_transfer_package, mark_delivery_sent,
+    prepare_delivery, read_artifact, scan_orphan_artifacts, session_needs_history,
+    terminal_binding_update, write_artifact, AcceptDeliveryRequest, ArtifactReadRequest,
+    CompileContextRequest, MarkDeliverySentRequest, PendingDelivery, PrepareDeliveryRequest,
+    RuntimeContextCapabilities,
 };
 use crate::shared_event_log::canonical::assembler::{
     RuntimeFinalSnapshot, RuntimeToolCall, RuntimeToolResult,
@@ -605,13 +606,66 @@ const PROVISIONING_CREATING: &str = "creating";
 const PROVISIONING_READY: &str = "ready";
 const PROVISIONING_RECOVERY_REQUIRED: &str = "recovery-required";
 
+/// Native context trust for Shared Binding（fix-shared-context-resume-integrity）。
+/// `dirty`：不得依赖 native 已持有历史，zero-transfer 时须 rematerialize。
+/// `trusted`：允许 destination-owned / accepted cursor 省略交接。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NativeContextTrust {
+    Trusted,
+    Dirty,
+}
+
+impl NativeContextTrust {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Trusted => "trusted",
+            Self::Dirty => "dirty",
+        }
+    }
+
+    fn parse(raw: &str) -> Option<Self> {
+        match raw.trim() {
+            "trusted" => Some(Self::Trusted),
+            "dirty" => Some(Self::Dirty),
+            _ => None,
+        }
+    }
+}
+
+/// Compatibility：缺字段时 **fail-closed 为 dirty**。
+/// 升级后首次发送会 rematerialize 一次，accept/completed 再写回 trusted。
+/// （旧逻辑 ready+native→trusted 会让已坏会话静默继续丢上下文。）
+fn read_native_context_trust(row: &StoredBindingState) -> NativeContextTrust {
+    if let Some(trust) = row
+        .provisioning_json
+        .as_deref()
+        .and_then(|raw| serde_json::from_str::<Value>(raw).ok())
+        .and_then(|value| {
+            value
+                .get("nativeContextTrust")
+                .and_then(Value::as_str)
+                .and_then(NativeContextTrust::parse)
+        })
+    {
+        return trust;
+    }
+    NativeContextTrust::Dirty
+}
+
 fn provisioning_json(
     state: &str,
     reason: Option<&str>,
     attempt_id: Option<&str>,
     binding_operation_id: Option<&str>,
+    existing: Option<&StoredBindingState>,
+    trust_override: Option<NativeContextTrust>,
 ) -> String {
     let updated_at = now_millis();
+    let trust = trust_override.unwrap_or_else(|| {
+        existing
+            .map(read_native_context_trust)
+            .unwrap_or(NativeContextTrust::Dirty)
+    });
     json!({
         "state": state,
         "updatedAt": updated_at,
@@ -619,8 +673,54 @@ fn provisioning_json(
         "reason": reason,
         "attemptId": attempt_id,
         "operationId": binding_operation_id,
+        "nativeContextTrust": trust.as_str(),
     })
     .to_string()
+}
+
+/// RMW：只改 trust，保留其余 provisioning / cursor / native。
+fn set_native_context_trust(
+    writer: &SharedEventWriter,
+    session_id: &str,
+    binding_key: &str,
+    trust: NativeContextTrust,
+) -> Result<(), String> {
+    let existing = writer
+        .binding_state(session_id, binding_key)
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| format!("binding {binding_key} is missing"))?;
+    if read_native_context_trust(&existing) == trust {
+        return Ok(());
+    }
+    let engine = serde_json::from_value::<EngineType>(Value::String(existing.engine.clone()))
+        .map_err(|_| {
+            format!(
+                "binding {binding_key} has unsupported engine '{}'",
+                existing.engine
+            )
+        })
+        .and_then(ensure_supported_shared_session_engine)?;
+    let state = provisioning_state_of(&existing);
+    upsert_binding_row(
+        writer,
+        session_id,
+        binding_key,
+        engine,
+        existing.provider_profile_id.clone(),
+        Some(&existing),
+        None,
+        None,
+        provisioning_json(
+            &state,
+            None,
+            None,
+            binding_operation_id_of(&existing).as_deref(),
+            Some(&existing),
+            Some(trust),
+        ),
+        &existing.availability,
+    )
+    .map_err(|error| error.to_string())
 }
 
 /// 从 durable 行解析 provisioning state；缺省视为 prepared（未开始）。
@@ -1108,6 +1208,9 @@ pub fn begin_turn_core(
             None,
             Some(&attempt_id),
             Some(&binding_operation_id),
+            existing.as_ref(),
+            // 新 attempt：有 ready native 则沿用 trust；无 native 默认 dirty。
+            None,
         ),
         initial_availability,
     );
@@ -1535,6 +1638,8 @@ pub(crate) fn accept_turn_for_attempt_core(
             None,
             Some(attempt_id),
             Some(&owner.binding_operation_id),
+            Some(&existing),
+            None,
         ),
         "ready",
     );
@@ -1691,11 +1796,21 @@ pub(crate) fn commit_runtime_snapshot_core(
     } else {
         "provisioning"
     };
+    // 失败 / 取消 / 替换：native 历史不可再盲信 → dirty。
+    // completed：证明 native resume / 本轮交付可用 → trusted。
+    let terminal_trust = match final_snapshot.outcome {
+        OutcomeStatus::Failed | OutcomeStatus::Cancelled | OutcomeStatus::Replaced => {
+            Some(NativeContextTrust::Dirty)
+        }
+        OutcomeStatus::Completed => Some(NativeContextTrust::Trusted),
+    };
     let provisioning = provisioning_json(
         terminal_provisioning_state,
         None,
         Some(attempt_id),
         Some(&owner.binding_operation_id),
+        Some(&existing_binding),
+        terminal_trust,
     );
     let pending = existing_binding
         .pending_delivery_json
@@ -1844,6 +1959,8 @@ pub fn mark_recovery_core(
                 .as_ref()
                 .and_then(binding_operation_id_of)
                 .as_deref(),
+            existing.as_ref(),
+            Some(NativeContextTrust::Dirty),
         ),
         "recovery-required",
     )
@@ -1966,6 +2083,7 @@ pub fn rebuild_binding_core(
                 "rebuiltAt": rebuilt_at,
                 "operationId": binding_operation_id,
                 "archivedNativeSessionId": archived_native_session_id,
+                "nativeContextTrust": NativeContextTrust::Dirty.as_str(),
             })
             .to_string(),
         ),
@@ -2580,7 +2698,13 @@ fn persist_context_prepare_failure(
     owner: &DurableAttemptOwner,
     error: &str,
 ) -> String {
-    let typed = if error.starts_with("context-prepare-failed:") {
+    // empty-context-handoff 必须保持主前缀，供 FE includes/startsWith 分类；
+    // 不可被 context-prepare-failed 吞掉。
+    let typed = if error.starts_with("empty-context-handoff:") {
+        error.to_string()
+    } else if error.contains("empty-context-handoff:") {
+        format!("empty-context-handoff: {error}")
+    } else if error.starts_with("context-prepare-failed:") {
         error.to_string()
     } else {
         format!("context-prepare-failed: {error}")
@@ -2944,6 +3068,8 @@ fn persist_materialized_binding(
             None,
             Some(&owner.requested.attempt_id),
             Some(&owner.binding_operation_id),
+            Some(&existing),
+            None,
         ),
         availability,
     )
@@ -2981,6 +3107,8 @@ fn mark_binding_materialization_started(
             None,
             Some(&owner.requested.attempt_id),
             Some(&owner.binding_operation_id),
+            Some(&existing),
+            None,
         ),
         "provisioning",
     )
@@ -3362,25 +3490,57 @@ pub async fn shared_session_v2_prepare_delivery(
             })
             .map(|event| event.sequence.saturating_sub(1))
             .ok_or_else(|| "turnRequested missing before context prepare".to_string())?;
-        let package = compile_context(
-            &events,
-            &CompileContextRequest {
-                session_id: shared_session_id.clone(),
-                binding_key: owner.binding_key.clone(),
-                destination: serde_json::to_value(&owner.requested.target)
-                    .map_err(|error| error.to_string())?,
-                destination_native_session_id: binding
-                    .as_ref()
-                    .and_then(|row| row.native_session_id.clone()),
-                from_sequence_exclusive: binding
-                    .as_ref()
-                    .and_then(|row| row.accepted_through_sequence),
-                through_sequence_inclusive: Some(source_upper),
-                exclude_attempt_id: Some(attempt_id.clone()),
-                capabilities: context_capabilities(&owner.target),
-                budget_estimated_tokens: None,
-            },
-        )?;
+        let capabilities = context_capabilities(&owner.target);
+        let destination = serde_json::to_value(&owner.requested.target)
+            .map_err(|error| error.to_string())?;
+        let incremental_request = CompileContextRequest {
+            session_id: shared_session_id.clone(),
+            binding_key: owner.binding_key.clone(),
+            destination: destination.clone(),
+            destination_native_session_id: binding
+                .as_ref()
+                .and_then(|row| row.native_session_id.clone()),
+            from_sequence_exclusive: binding
+                .as_ref()
+                .and_then(|row| row.accepted_through_sequence),
+            through_sequence_inclusive: Some(source_upper),
+            exclude_attempt_id: Some(attempt_id.clone()),
+            capabilities: capabilities.clone(),
+            budget_estimated_tokens: None,
+        };
+        let mut package = compile_context(&events, &incremental_request)?;
+        let trust = binding
+            .as_ref()
+            .map(read_native_context_trust)
+            .unwrap_or(NativeContextTrust::Dirty);
+        let mut rematerialized = false;
+        // P0：dirty 时只要 needs_history，一律全量 rematerialize。
+        // 不可仅看 zero-transfer——失败轮「继续」未 turnAccepted 时增量 package
+        // 非空但只有短指令，仍会丢原任务（图1）。
+        let needs_history = session_needs_history(&events, &incremental_request)?;
+        if trust == NativeContextTrust::Dirty && needs_history {
+            package = compile_context(
+                &events,
+                &CompileContextRequest {
+                    session_id: shared_session_id.clone(),
+                    binding_key: owner.binding_key.clone(),
+                    destination,
+                    destination_native_session_id: None,
+                    from_sequence_exclusive: None,
+                    through_sequence_inclusive: Some(source_upper),
+                    exclude_attempt_id: Some(attempt_id.clone()),
+                    capabilities: capabilities.clone(),
+                    budget_estimated_tokens: None,
+                },
+            )?;
+            rematerialized = true;
+            if is_zero_transfer_package(&package) {
+                return Err(format!(
+                    "empty-context-handoff: needs-history but package empty after rematerialize (binding={}, trust=dirty)",
+                    owner.binding_key
+                ));
+            }
+        }
         let prepared_at = now_millis() as i64;
         let artifact = write_artifact(
             context_artifact_root(&state)?,
@@ -3403,9 +3563,9 @@ pub async fn shared_session_v2_prepare_delivery(
                 prepared_at,
             },
         )?;
-        Ok::<_, String>((package, artifact))
+        Ok::<_, String>((package, artifact, rematerialized, trust))
     })();
-    let (package, artifact) = preparation.map_err(|error| {
+    let (package, artifact, rematerialized, trust) = preparation.map_err(|error| {
         persist_context_prepare_failure(writer, &shared_session_id, &owner, &error)
     })?;
     Ok(json!({
@@ -3431,6 +3591,8 @@ pub async fn shared_session_v2_prepare_delivery(
         "manifest": package.manifest,
         "compression": package.compression,
         "ackFidelity": if context_capabilities(&owner.target).strong_context_ack { "strong" } else { "weak" },
+        "rematerialized": rematerialized,
+        "nativeContextTrust": trust.as_str(),
     }))
 }
 
@@ -3738,6 +3900,15 @@ pub async fn shared_session_v2_dispatch_turn(
             &native_session_id,
             (!no_context_transfer_required).then(|| delivery_request_id.clone()),
         )?;
+        // 非零交接 accept 后可再信任 native 省略。
+        if !no_context_transfer_required {
+            set_native_context_trust(
+                writer,
+                &shared_session_id,
+                &owner.binding_key,
+                NativeContextTrust::Trusted,
+            )?;
+        }
     }
 
     let user_text = owner
@@ -4027,6 +4198,21 @@ pub async fn shared_session_v2_dispatch_turn(
             Some(native_turn_id.clone()),
         )
         .map_err(|error| persist_ambiguous_dispatch(writer, &shared_session_id, &owner, &error))?;
+        if !no_context_transfer_required {
+            if let Err(error) = set_native_context_trust(
+                writer,
+                &shared_session_id,
+                &owner.binding_key,
+                NativeContextTrust::Trusted,
+            ) {
+                return Err(persist_ambiguous_dispatch(
+                    writer,
+                    &shared_session_id,
+                    &owner,
+                    &error,
+                ));
+            }
+        }
     }
     accept_turn_for_attempt_core(
         writer,
@@ -4797,11 +4983,14 @@ fn clear_binding_recovery_if_idle(
         Some(&existing),
         None,
         None,
+        // abandon 后即使保留 native，也不得盲信历史 → dirty。
         provisioning_json(
             next_state,
             Some("recovery-cleared-after-abandon"),
             None,
             binding_operation_id_of(&existing).as_deref(),
+            Some(&existing),
+            Some(NativeContextTrust::Dirty),
         ),
         availability,
     )
@@ -5390,9 +5579,13 @@ mod shared_interrupt_owner_tests {
         assert_eq!(route.engine, engine);
         assert_eq!(route.provider_profile_id.as_deref(), Some(provider));
         assert_eq!(route.binding_key, binding_key);
+        // 与 SharedRuntimeCoordinator::normalize_native_session_identity 对齐：
+        // Claude/Kimi/Grok/OpenCode 使用 engine: 前缀；Codex 保持 raw。
         let expected_native_thread_id = match engine {
-            EngineType::Claude => format!("claude:native-{provider}"),
-            _ => format!("native-{provider}"),
+            EngineType::Claude | EngineType::Kimi | EngineType::Grok | EngineType::OpenCode => {
+                format!("{}:native-{provider}", engine.icon())
+            }
+            EngineType::Codex | EngineType::Gemini => format!("native-{provider}"),
         };
         assert_eq!(route.native_thread_id, expected_native_thread_id);
         assert_eq!(route.runtime_turn_id, format!("run-{provider}"));
@@ -5961,9 +6154,379 @@ mod shared_interrupt_owner_tests {
         let binding_key = first.binding_key.clone();
         let rebuilt = rebuild_binding_core(&writer, session_id, &binding_key).expect("rebuild");
         assert_eq!(rebuilt.replaced_attempt_ids.len(), 1);
+        let binding = writer
+            .binding_state(session_id, &binding_key)
+            .expect("read")
+            .expect("binding");
+        assert_eq!(
+            read_native_context_trust(&binding),
+            NativeContextTrust::Dirty,
+            "rebuild must mark trust dirty"
+        );
 
         writer.shutdown().expect("shutdown writer");
         std::fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn mark_recovery_and_failed_terminal_mark_native_context_trust_dirty() {
+        let session_id = "trust-dirty-on-failure";
+        let provider = "provider-trust";
+        let (root, writer) = open_test_writer("trust-dirty-on-failure");
+        let begin = begin_turn_core(
+            &writer,
+            session_id,
+            &target(EngineType::Claude, provider),
+            "原任务正文".to_string(),
+            None)
+        .expect("begin");
+        let attempt_id = begin.attempt_id.expect("attempt");
+        let binding_key = begin.binding_key.clone();
+
+        // 先标 trusted，模拟曾成功 accept。
+        set_native_context_trust(
+            &writer,
+            session_id,
+            &binding_key,
+            NativeContextTrust::Trusted,
+        )
+        .expect("set trusted");
+        assert_eq!(
+            read_native_context_trust(
+                &writer
+                    .binding_state(session_id, &binding_key)
+                    .expect("read")
+                    .expect("binding")
+            ),
+            NativeContextTrust::Trusted
+        );
+
+        mark_recovery_core(
+            &writer,
+            session_id,
+            &binding_key,
+            EngineType::Claude,
+            Some(provider.to_string()),
+            Some("runtime-delivery-ambiguous"),
+        )
+        .expect("mark recovery");
+        assert_eq!(
+            read_native_context_trust(
+                &writer
+                    .binding_state(session_id, &binding_key)
+                    .expect("read")
+                    .expect("binding")
+            ),
+            NativeContextTrust::Dirty
+        );
+
+        // 失败 terminal 也保持 dirty。
+        commit_runtime_snapshot_core(
+            &writer,
+            session_id,
+            &attempt_id,
+            RuntimeFinalSnapshot {
+                assistant_blocks: vec![],
+                assistant_text: None,
+                tool_calls: vec![],
+                tool_results: vec![],
+                artifacts: vec![],
+                provider_private_refs: vec![],
+                omissions: vec![],
+                outcome: OutcomeStatus::Failed,
+                error_code: Some("503".to_string()),
+                error_message: Some("No available accounts".to_string()),
+                stop_reason: None,
+            },
+            Some("claude:native-trust"),
+        )
+        .expect("failed terminal");
+        assert_eq!(
+            read_native_context_trust(
+                &writer
+                    .binding_state(session_id, &binding_key)
+                    .expect("read")
+                    .expect("binding")
+            ),
+            NativeContextTrust::Dirty
+        );
+
+        writer.shutdown().expect("shutdown writer");
+        std::fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn dirty_zero_transfer_needs_history_detects_original_task() {
+        // 编译层：destination-owned 清空 transfer 后，session_needs_history 仍为 true。
+        use crate::shared_context::{
+            is_zero_transfer_package, session_needs_history, CompileContextRequest,
+            RuntimeContextCapabilities,
+        };
+        use crate::shared_event_log::{Fidelity, StoredEvent};
+
+        let stored = |sequence: i64, event_id: &str, fact_type: &str, attempt: &str, payload: Value| {
+            StoredEvent {
+                session_id: "s-needs".to_string(),
+                sequence,
+                event_id: event_id.to_string(),
+                fact_type: fact_type.to_string(),
+                logical_turn_id: Some(format!("turn-{sequence}")),
+                attempt_id: Some(attempt.to_string()),
+                dedupe_key: None,
+                payload_json: payload.to_string(),
+                payload_checksum: format!("sha256:{event_id}"),
+                fidelity: Fidelity::Canonical,
+                committed_at: sequence,
+            }
+        };
+        let events = vec![
+            stored(
+                1,
+                "req-1",
+                "conversation.turnRequested",
+                "attempt-1",
+                json!({"input": {"text": "原任务正文请实现登录"}}),
+            ),
+            stored(
+                2,
+                "acc-1",
+                "conversation.turnAccepted",
+                "attempt-1",
+                json!({"bindingKey": "claude:provider-a"}),
+            ),
+        ];
+        let caps = RuntimeContextCapabilities {
+            native_delta: false,
+            structured_history_import: false,
+            native_clone: false,
+            user_channel_transcript: true,
+            tool_history: false,
+            image_history: false,
+            strong_context_ack: true,
+        };
+        let owned = compile_context(
+            &events,
+            &CompileContextRequest {
+                session_id: "s-needs".to_string(),
+                binding_key: "claude:provider-a".to_string(),
+                destination: json!({"engine": "claude"}),
+                destination_native_session_id: Some("claude:native-1".to_string()),
+                from_sequence_exclusive: None,
+                through_sequence_inclusive: None,
+                exclude_attempt_id: None,
+                capabilities: caps.clone(),
+                budget_estimated_tokens: None,
+            },
+        )
+        .expect("owned compile");
+        assert!(
+            is_zero_transfer_package(&owned),
+            "destination-owned should empty transfer"
+        );
+        let needs = session_needs_history(
+            &events,
+            &CompileContextRequest {
+                session_id: "s-needs".to_string(),
+                binding_key: "claude:provider-a".to_string(),
+                destination: json!({"engine": "claude"}),
+                destination_native_session_id: Some("claude:native-1".to_string()),
+                from_sequence_exclusive: None,
+                through_sequence_inclusive: None,
+                exclude_attempt_id: None,
+                capabilities: caps,
+                budget_estimated_tokens: None,
+            },
+        )
+        .expect("needs");
+        assert!(needs, "full rematerialize must see original task");
+        let rematerialized = compile_context(
+            &events,
+            &CompileContextRequest {
+                session_id: "s-needs".to_string(),
+                binding_key: "claude:provider-a".to_string(),
+                destination: json!({"engine": "claude"}),
+                destination_native_session_id: None,
+                from_sequence_exclusive: None,
+                through_sequence_inclusive: None,
+                exclude_attempt_id: None,
+                capabilities: RuntimeContextCapabilities {
+                    native_delta: false,
+                    structured_history_import: false,
+                    native_clone: false,
+                    user_channel_transcript: true,
+                    tool_history: false,
+                    image_history: false,
+                    strong_context_ack: true,
+                },
+                budget_estimated_tokens: None,
+            },
+        )
+        .expect("rematerialize");
+        assert!(!is_zero_transfer_package(&rematerialized));
+        assert!(rematerialized.prompt_prefix.contains("原任务正文请实现登录"));
+    }
+
+    #[test]
+    fn dirty_non_zero_continue_only_package_still_needs_full_rematerialize() {
+        // 图1 P0：accepted 之后有未 Accepted 的「继续」turnRequested → 增量 package 非空
+        // 但缺原任务；dirty 时仍必须判定 needs_history 并全量 rematerialize。
+        use crate::shared_context::{
+            is_zero_transfer_package, session_needs_history, CompileContextRequest,
+            RuntimeContextCapabilities,
+        };
+        use crate::shared_event_log::{Fidelity, StoredEvent};
+
+        let stored = |sequence: i64, event_id: &str, fact_type: &str, attempt: &str, payload: Value| {
+            StoredEvent {
+                session_id: "s-continue-only".to_string(),
+                sequence,
+                event_id: event_id.to_string(),
+                fact_type: fact_type.to_string(),
+                logical_turn_id: Some(format!("turn-{sequence}")),
+                attempt_id: Some(attempt.to_string()),
+                dedupe_key: None,
+                payload_json: payload.to_string(),
+                payload_checksum: format!("sha256:{event_id}"),
+                fidelity: Fidelity::Canonical,
+                committed_at: sequence,
+            }
+        };
+        let events = vec![
+            stored(
+                1,
+                "req-orig",
+                "conversation.turnRequested",
+                "attempt-orig",
+                json!({"input": {"text": "原任务：实现登录并写测试"}}),
+            ),
+            stored(
+                2,
+                "acc-orig",
+                "conversation.turnAccepted",
+                "attempt-orig",
+                json!({"bindingKey": "claude:provider-a"}),
+            ),
+            // 失败轮：只有 turnRequested「继续」，无 turnAccepted → 不 destination-owned
+            stored(
+                3,
+                "req-c1",
+                "conversation.turnRequested",
+                "attempt-c1",
+                json!({"input": {"text": "继续"}}),
+            ),
+            stored(
+                4,
+                "req-c2",
+                "conversation.turnRequested",
+                "attempt-c2",
+                json!({"input": {"text": "继续"}}),
+            ),
+        ];
+        let caps = RuntimeContextCapabilities {
+            native_delta: false,
+            structured_history_import: false,
+            native_clone: false,
+            user_channel_transcript: true,
+            tool_history: false,
+            image_history: false,
+            strong_context_ack: true,
+        };
+        // 模拟 accepted_through=2 后的增量 compile（当前 attempt-c3 排除）
+        let incremental = compile_context(
+            &events,
+            &CompileContextRequest {
+                session_id: "s-continue-only".to_string(),
+                binding_key: "claude:provider-a".to_string(),
+                destination: json!({"engine": "claude"}),
+                destination_native_session_id: Some("claude:native-1".to_string()),
+                from_sequence_exclusive: Some(2),
+                through_sequence_inclusive: Some(4),
+                exclude_attempt_id: Some("attempt-c3".to_string()),
+                capabilities: caps.clone(),
+                budget_estimated_tokens: None,
+            },
+        )
+        .expect("incremental");
+        assert!(
+            !is_zero_transfer_package(&incremental),
+            "continue-only package is non-empty"
+        );
+        assert!(
+            !incremental.prompt_prefix.contains("原任务"),
+            "incremental must NOT contain original task"
+        );
+        assert!(
+            incremental.prompt_prefix.contains("继续"),
+            "incremental only has continues"
+        );
+        let needs = session_needs_history(
+            &events,
+            &CompileContextRequest {
+                session_id: "s-continue-only".to_string(),
+                binding_key: "claude:provider-a".to_string(),
+                destination: json!({"engine": "claude"}),
+                destination_native_session_id: Some("claude:native-1".to_string()),
+                from_sequence_exclusive: Some(2),
+                through_sequence_inclusive: Some(4),
+                exclude_attempt_id: Some("attempt-c3".to_string()),
+                capabilities: caps.clone(),
+                budget_estimated_tokens: None,
+            },
+        )
+        .expect("needs");
+        assert!(needs, "full history still needed");
+        let full = compile_context(
+            &events,
+            &CompileContextRequest {
+                session_id: "s-continue-only".to_string(),
+                binding_key: "claude:provider-a".to_string(),
+                destination: json!({"engine": "claude"}),
+                destination_native_session_id: None,
+                from_sequence_exclusive: None,
+                through_sequence_inclusive: Some(4),
+                exclude_attempt_id: Some("attempt-c3".to_string()),
+                capabilities: caps,
+                budget_estimated_tokens: None,
+            },
+        )
+        .expect("full rematerialize");
+        assert!(full.prompt_prefix.contains("原任务：实现登录并写测试"));
+        assert!(full.prompt_prefix.contains("继续"));
+    }
+
+    #[test]
+    fn missing_native_context_trust_field_defaults_dirty() {
+        let (_, writer) = open_test_writer("legacy-trust-default");
+        let session_id = "legacy-trust-session";
+        let binding_key = "claude:legacy";
+        writer
+            .upsert_binding_state(&BindingStateUpdate {
+                session_id: session_id.to_string(),
+                binding_key: binding_key.to_string(),
+                engine: "claude".to_string(),
+                provider_profile_id: Some("legacy".to_string()),
+                native_session_id: Some("claude:native-legacy".to_string()),
+                accepted_through_sequence: Some(3),
+                committed_through_sequence: Some(3),
+                // 无 nativeContextTrust 字段
+                provisioning_json: Some(
+                    json!({"state": "ready", "updatedAt": 1}).to_string(),
+                ),
+                pending_delivery_json: None,
+                availability: "ready".to_string(),
+                updated_at: 1,
+            })
+            .expect("upsert");
+        let row = writer
+            .binding_state(session_id, binding_key)
+            .expect("read")
+            .expect("row");
+        assert_eq!(
+            read_native_context_trust(&row),
+            NativeContextTrust::Dirty,
+            "legacy missing field must fail-closed to dirty"
+        );
+        writer.shutdown().expect("shutdown");
     }
 }
 
