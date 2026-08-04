@@ -4,7 +4,7 @@
 //! streaming JSON output.
 
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -81,9 +81,11 @@ use stream_helpers::extract_text_from_content;
 #[cfg(test)]
 use stream_helpers::extract_tool_result_text;
 use stream_helpers::{
-    extract_claude_tool_input, extract_claude_tool_name, extract_result_text, extract_string_field,
-    is_claude_stream_control_line, looks_like_claude_runtime_error, merge_text_chunks,
-    parse_claude_stream_json_line, tool_input_signature,
+    can_force_kill_for_grace, extract_background_task_id, extract_claude_tool_input,
+    extract_claude_tool_name, extract_result_text, extract_string_field,
+    extract_terminal_task_release_id, is_claude_stream_control_line,
+    looks_like_claude_runtime_error, merge_text_chunks, parse_claude_stream_json_line,
+    tool_input_signature, try_register_background_task_id, try_release_background_task_id,
 };
 
 const CLAUDE_PROVIDER_ROUTING_ENV_KEYS: &[&str] = &[
@@ -1708,8 +1710,15 @@ impl ClaudeSession {
         // logically complete and we only wait for the CLI to exit; that wait is
         // bounded by CLAUDE_POST_RESULT_GRACE (see below) so lingering MCP
         // children / Stop hooks that inherit the stdio pipes cannot keep the UI
-        // stuck on "generating" forever.
+        // stuck on "generating" forever — unless structured background-task
+        // blockers are active (issue #983 / backgroundTaskId).
         let mut result_seen_at: Option<Instant> = None;
+        // When Some, post-result EOF wait is bounded by this absolute deadline.
+        // D3b: first result with empty blockers → result_seen + GRACE;
+        // blockers clear after WaitBgTasks → full re-arm from clearance.
+        let mut post_result_grace_deadline: Option<Instant> = None;
+        // Turn-scoped structured backgroundTaskId set (settlement blockers).
+        let mut active_background_task_ids: HashSet<String> = HashSet::new();
         // Set when we stop waiting because the post-result grace elapsed. The
         // turn is settled as a success (result was already emitted) and the
         // exit-status failure checks are skipped for the process we force-kill.
@@ -1743,24 +1752,37 @@ impl ClaudeSession {
 
             let next_line = if pending_text_delta.is_empty() {
                 if saw_valid_stream_event {
-                    match result_seen_at {
-                        // Turn is logically done (`result` seen). Bound the wait
-                        // for stdout EOF: if MCP children / Stop hooks keep the
-                        // pipe open, stop waiting once the grace elapses and
-                        // settle the turn instead of hanging on "generating".
-                        Some(seen_at) => {
-                            let remaining = CLAUDE_POST_RESULT_GRACE
-                                .checked_sub(seen_at.elapsed())
-                                .unwrap_or(Duration::ZERO);
+                    if result_seen_at.is_some() {
+                        // Turn is logically done (`result` seen).
+                        // - active structured background blockers → WaitBgTasks
+                        //   (no grace tree-kill; issue #983)
+                        // - otherwise GraceWaitEof bounded by post_result_grace_deadline
+                        if !active_background_task_ids.is_empty() {
+                            lines.next_line().await
+                        } else {
+                            let deadline = post_result_grace_deadline.get_or_insert_with(|| {
+                                Instant::now() + CLAUDE_POST_RESULT_GRACE
+                            });
+                            let remaining = deadline
+                                .saturating_duration_since(Instant::now());
                             match tokio::time::timeout(remaining, lines.next_line()).await {
                                 Ok(result) => result,
                                 Err(_) => {
-                                    settled_by_grace = true;
-                                    break;
+                                    if can_force_kill_for_grace(
+                                        true,
+                                        active_background_task_ids.is_empty(),
+                                        true,
+                                    ) {
+                                        settled_by_grace = true;
+                                        break;
+                                    }
+                                    // Blockers appeared mid-timeout window; continue WaitBgTasks.
+                                    continue;
                                 }
                             }
                         }
-                        None => lines.next_line().await,
+                    } else {
+                        lines.next_line().await
                     }
                 } else {
                     let wait_duration = first_event_deadline
@@ -1782,7 +1804,7 @@ impl ClaudeSession {
             } else if let Some(wait_duration) =
                 pending_text_delta.remaining_window(text_delta_coalesce_window)
             {
-                let wait_duration = if saw_valid_stream_event {
+                let mut wait_duration = if saw_valid_stream_event {
                     wait_duration
                 } else {
                     let remaining_startup = first_event_deadline
@@ -1790,9 +1812,28 @@ impl ClaudeSession {
                         .unwrap_or(Duration::ZERO);
                     wait_duration.min(remaining_startup)
                 };
+                // Share grace policy with the empty-buffer branch (Windows coalesce).
+                if result_seen_at.is_some()
+                    && active_background_task_ids.is_empty()
+                {
+                    let deadline = post_result_grace_deadline
+                        .get_or_insert_with(|| Instant::now() + CLAUDE_POST_RESULT_GRACE);
+                    wait_duration =
+                        wait_duration.min(deadline.saturating_duration_since(Instant::now()));
+                }
                 match tokio::time::timeout(wait_duration, lines.next_line()).await {
                     Ok(result) => result,
                     Err(_) => {
+                        if result_seen_at.is_some()
+                            && active_background_task_ids.is_empty()
+                            && post_result_grace_deadline
+                                .is_some_and(|d| Instant::now() >= d)
+                            && can_force_kill_for_grace(true, true, true)
+                        {
+                            self.flush_buffered_text_delta(turn_id, &mut pending_text_delta);
+                            settled_by_grace = true;
+                            break;
+                        }
                         if saw_valid_stream_event {
                             self.flush_buffered_text_delta(turn_id, &mut pending_text_delta);
                             continue;
@@ -1836,10 +1877,77 @@ impl ClaudeSession {
 
             match parse_claude_stream_json_line(&line) {
                 Ok(event) => {
+                    // Structured background-task settlement blockers (issue #983).
+                    if let Some(bg_id) = extract_background_task_id(&event) {
+                        let before_len = active_background_task_ids.len();
+                        if try_register_background_task_id(
+                            &mut active_background_task_ids,
+                            &bg_id,
+                        ) {
+                            if before_len != active_background_task_ids.len() {
+                                log::info!(
+                                    "[claude] registered backgroundTaskId blocker turn={} id={} active={}",
+                                    turn_id,
+                                    bg_id,
+                                    active_background_task_ids.len()
+                                );
+                            }
+                            // Late id after result: suppress grace kill (enter WaitBgTasks).
+                            if result_seen_at.is_some() {
+                                post_result_grace_deadline = None;
+                            }
+                        } else if before_len >= stream_helpers::CLAUDE_BG_TASK_SET_MAX {
+                            log::warn!(
+                                "[claude] backgroundTaskId budget full turn={} rejected_id_len={}",
+                                turn_id,
+                                bg_id.len()
+                            );
+                        }
+                    }
+                    if let Some(release_id) = extract_terminal_task_release_id(&event) {
+                        // extract_terminal_task_release_id only yields terminal statuses;
+                        // pass a terminal status so the shared release helper accepts it.
+                        let was_non_empty = !active_background_task_ids.is_empty();
+                        if try_release_background_task_id(
+                            &mut active_background_task_ids,
+                            &release_id,
+                            "completed",
+                        ) {
+                            log::info!(
+                                "[claude] released backgroundTaskId blocker turn={} id={} remaining={}",
+                                turn_id,
+                                release_id,
+                                active_background_task_ids.len()
+                            );
+                            // D3b: last blocker cleared while still post-result → full re-arm grace.
+                            if was_non_empty
+                                && active_background_task_ids.is_empty()
+                                && result_seen_at.is_some()
+                            {
+                                post_result_grace_deadline =
+                                    Some(Instant::now() + CLAUDE_POST_RESULT_GRACE);
+                                log::info!(
+                                    "[claude] re-armed post-result grace after blockers cleared turn={}",
+                                    turn_id
+                                );
+                            }
+                        }
+                    }
                     if result_seen_at.is_none()
                         && event.get("type").and_then(|v| v.as_str()) == Some("result")
                     {
                         result_seen_at = Some(Instant::now());
+                        if active_background_task_ids.is_empty() {
+                            post_result_grace_deadline =
+                                Some(Instant::now() + CLAUDE_POST_RESULT_GRACE);
+                        } else {
+                            post_result_grace_deadline = None;
+                            log::info!(
+                                "[claude] result seen with {} background blocker(s); suppressing post-result grace kill turn={}",
+                                active_background_task_ids.len(),
+                                turn_id
+                            );
+                        }
                     }
                     if Self::is_valid_claude_stream_event(&event) {
                         if stream_startup_timing

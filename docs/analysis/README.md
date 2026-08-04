@@ -15,7 +15,7 @@ status: active
 - [Conversation canvas structure](./conversation-canvas-structure-2026-07-31.md) — Active architecture reference。
 - [Native session provider select vs disk overwrite](./native-session-provider-select-vs-disk-overwrite-2026-07-31.md) — Active session-selection contract explanation。
 - [Native vs Shared CLI explained](./native-vs-shared-cli-explained.md) — Active product/engineering guide。
-- [React #185 Maximum Update Depth playbook](./react-185-maximum-update-depth-playbook.md) — Active troubleshooting runbook；最新 case `C-20260804-01`（canvas store / storm / appVersion）。
+- [React #185 Maximum Update Depth playbook](./react-185-maximum-update-depth-playbook.md) — Active troubleshooting runbook；最新 case `C-20260804-02`（0.7.16 Composer extract / target hydrate；前案 `C-20260804-01` canvas/storm）。
 
 ## Resolved incidents and closure evidence
 

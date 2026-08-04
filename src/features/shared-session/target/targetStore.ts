@@ -112,9 +112,39 @@ function readState(key: string): SharedTargetState {
   return states.get(key) ?? EMPTY_STATE;
 }
 
+/** 选择语义相等：禁止等价 hydrate 换壳 notify 拖垮 Composer（#185 AP-02）。 */
+function isSameExecutionTarget(
+  left: ExecutionTarget | null,
+  right: ExecutionTarget | null,
+): boolean {
+  if (Object.is(left, right)) {
+    return true;
+  }
+  if (!left || !right) {
+    return false;
+  }
+  return (
+    left.engine === right.engine &&
+    (left.providerProfileId ?? null) === (right.providerProfileId ?? null) &&
+    (left.modelCatalogEntryId ?? null) === (right.modelCatalogEntryId ?? null) &&
+    (left.model ?? null) === (right.model ?? null) &&
+    (left.reasoning?.effort ?? null) === (right.reasoning?.effort ?? null) &&
+    (left.providerProfileNameSnapshot ?? null) ===
+      (right.providerProfileNameSnapshot ?? null) &&
+    (left.providerProfileSource ?? null) === (right.providerProfileSource ?? null)
+  );
+}
+
 function writeState(key: string, next: SharedTargetState): void {
   const prev = readState(key);
   if (Object.is(prev, next)) {
+    return;
+  }
+  // 顶层字段语义全同：不 notify（hydrate 总是 `{...prev}` 新壳）
+  if (
+    isSameExecutionTarget(prev.selectedNextTarget, next.selectedNextTarget) &&
+    Object.is(prev.activeTurnTarget, next.activeTurnTarget)
+  ) {
     return;
   }
   states.set(key, next);
@@ -128,7 +158,12 @@ export function hydrateSharedTargetState(
   target: ExecutionTarget | null,
 ): void {
   const key = storeKeyOf(workspaceId, threadId);
-  writeState(key, { ...readState(key), selectedNextTarget: target });
+  const prev = readState(key);
+  // 语义相等：跳过写与 generation，避免 persist 回写/loader 重复 hydrate 风暴
+  if (isSameExecutionTarget(prev.selectedNextTarget, target)) {
+    return;
+  }
+  writeState(key, { ...prev, selectedNextTarget: target });
   incrementPersistGeneration(workspaceId, threadId);
 }
 

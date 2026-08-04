@@ -1000,6 +1000,124 @@ async fn send_message_treats_stream_result_as_raw_and_emits_single_final_complet
     assert_eq!(completed, &json!({ "text": "final answer" }));
 }
 
+/// Issue #983: structured `backgroundTaskId` must suppress post-result grace
+/// tree-kill so a still-running Claude background shell can outlive 5s and
+/// settle via provider EOF (D4) instead of force-kill.
+///
+/// Fake stream: tool result with backgroundTaskId → result → sleep 7s.
+/// Without blockers the grace path would kill ~5s; with blockers we must wait
+/// until the process exits (~7s) and still complete successfully.
+#[cfg(unix)]
+#[tokio::test]
+async fn send_message_waits_past_grace_when_structured_background_task_active() {
+    let script_body = concat!(
+        "#!/bin/sh\n",
+        "echo '{\"type\":\"user\",\"toolUseResult\":{\"backgroundTaskId\":\"bg-wait-1\",\"output\":\"started\"}}'\n",
+        "echo '{\"type\":\"result\",\"session_id\":\"11111111-1111-4111-8111-111111111111\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"final answer\"}]}}'\n",
+        "# Keep the CLI process (and stdout pipe) alive past CLAUDE_POST_RESULT_GRACE.\n",
+        "sleep 7\n",
+        "exit 0\n",
+    );
+    let (root, workspace_path, script_path) = create_fake_claude_script(script_body);
+
+    let session = ClaudeSession::new(
+        "test-workspace".to_string(),
+        workspace_path,
+        Some(EngineConfig {
+            bin_path: Some(script_path.to_string_lossy().to_string()),
+            home_dir: None,
+            custom_args: None,
+            default_model: None,
+        }),
+    );
+    let mut receiver = session.subscribe();
+    let mut params = SendMessageParams::default();
+    params.text = "run background".to_string();
+
+    let started = std::time::Instant::now();
+    let response = tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        session.send_message(params, "turn-bg-blocker"),
+    )
+    .await
+    .expect("send_message must finish when provider exits after WaitBgTasks")
+    .expect("background-blocked turn should succeed without grace force-kill");
+    let elapsed = started.elapsed();
+
+    let events = drain_turn_events(&mut receiver);
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert_eq!(response, "final answer");
+    assert!(
+        elapsed >= std::time::Duration::from_secs(6),
+        "expected wait past 5s grace when backgroundTaskId is active; elapsed={elapsed:?}"
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event.event, EngineEvent::TurnCompleted { .. }))
+            .count(),
+        1,
+        "exactly one TurnCompleted after provider EOF with blockers"
+    );
+}
+
+/// Matching terminal task-notification must release the blocker and allow
+/// subsequent grace settlement if the pipe remains open (re-arm path).
+#[cfg(unix)]
+#[tokio::test]
+async fn send_message_releases_background_blocker_on_matching_terminal_notification() {
+    let script_body = concat!(
+        "#!/bin/sh\n",
+        "echo '{\"type\":\"user\",\"toolUseResult\":{\"backgroundTaskId\":\"bg-release-1\"}}'\n",
+        "echo '{\"type\":\"result\",\"session_id\":\"11111111-1111-4111-8111-111111111111\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"final answer\"}]}}'\n",
+        "sleep 1\n",
+        "echo '{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"<task-notification><task-id>bg-release-1</task-id><status>completed</status><result>done</result></task-notification>\"}]}}'\n",
+        "# After release, pipe held open by background sleep → grace should re-arm and settle.\n",
+        "sleep 30 &\n",
+        "exit 0\n",
+    );
+    let (root, workspace_path, script_path) = create_fake_claude_script(script_body);
+
+    let session = ClaudeSession::new(
+        "test-workspace".to_string(),
+        workspace_path,
+        Some(EngineConfig {
+            bin_path: Some(script_path.to_string_lossy().to_string()),
+            home_dir: None,
+            custom_args: None,
+            default_model: None,
+        }),
+    );
+    let mut receiver = session.subscribe();
+    let mut params = SendMessageParams::default();
+    params.text = "bg then notify".to_string();
+
+    let response = tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        session.send_message(params, "turn-bg-release"),
+    )
+    .await
+    .expect("send_message must settle after notification + re-armed grace")
+    .expect("release + grace path should succeed");
+
+    let events = drain_turn_events(&mut receiver);
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert!(
+        response.contains("final answer"),
+        "response should keep the result text; got {response:?}"
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event.event, EngineEvent::TurnCompleted { .. }))
+            .count(),
+        1,
+        "notification release + re-armed grace must still emit one TurnCompleted"
+    );
+}
+
 /// Regression: once Claude emits its final `result`, the turn must settle even
 /// if an MCP child / Stop hook inherits stdout and keeps the pipe open past the
 /// CLI leader's exit. Before the post-result grace was wired into the read loop,

@@ -857,6 +857,107 @@ describe("Composer file reference token", () => {
     consoleErrorSpy.mockRestore();
   });
 
+  it("does not hit maximum update depth when skills/commands identity thrash after token settle", async () => {
+    // C-20260804-02：0.7.16 App-DjQ3UnSh 生产栈落在 Composer extract effect。
+    // 父树每次渲染换 skills/commands 数组引用时，旧 effect deps 会反复入场。
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const onSend = vi.fn();
+    const onDraftChange = vi.fn();
+
+    function ThrashingSkillsHarness() {
+      const [tick, setTick] = useState(0);
+      // 每次 tick 新数组引用，语义相同
+      void tick;
+      return (
+        <div>
+          <button type="button" data-testid="thrash-skills" onClick={() => setTick((n) => n + 1)}>
+            thrash
+          </button>
+          <Composer
+            onSend={(text) => onSend(text)}
+            onQueue={() => {}}
+            onStop={() => {}}
+            canStop={false}
+            isProcessing={false}
+            steerEnabled={false}
+            collaborationModes={[]}
+            collaborationModesEnabled
+            selectedCollaborationModeId={null}
+            onSelectCollaborationMode={() => {}}
+            selectedEngine="claude"
+            models={[]}
+            selectedModelId={null}
+            onSelectModel={() => {}}
+            reasoningOptions={[]}
+            selectedEffort={null}
+            onSelectEffort={() => {}}
+            reasoningSupported={false}
+            accessMode="current"
+            onSelectAccessMode={() => {}}
+            skills={[
+              {
+                name: "review-pr",
+                path: "/tmp/review-pr",
+                description: "review",
+              },
+            ]}
+            prompts={[]}
+            commands={[
+              {
+                name: "compact",
+                path: "/tmp/compact",
+                description: "compact",
+                content: "compact",
+              },
+            ]}
+            files={[]}
+            onDraftChange={onDraftChange}
+            editorSettings={{
+              preset: "default",
+              expandFenceOnSpace: false,
+              expandFenceOnEnter: false,
+              fenceLanguageTags: false,
+              fenceWrapSelection: false,
+              autoWrapPasteMultiline: false,
+              autoWrapPasteCodeLike: false,
+              continueListOnShiftEnter: false,
+            }}
+            activeWorkspaceId="ws-1"
+            activeThreadId="thread-thrash"
+          />
+        </div>
+      );
+    }
+
+    const view = render(<ThrashingSkillsHarness />);
+    const textarea = getTextarea(view.container);
+    const value = "请检查 📄 App.tsx `/Users/demo/repo/src/App.tsx` /review-pr";
+
+    await act(async () => {
+      fireEvent.change(textarea, {
+        target: { value, selectionStart: value.length },
+      });
+      fireEvent.select(textarea);
+    });
+
+    for (let i = 0; i < 40; i += 1) {
+      await act(async () => {
+        fireEvent.click(view.getByTestId("thrash-skills"));
+        await Promise.resolve();
+      });
+    }
+
+    expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Maximum update depth exceeded"),
+    );
+    expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Minified React error #185"),
+    );
+    // token settle 后正文应收敛（文件标签保留；skill token 抽出）
+    expect(getTextarea(view.container).value).toContain("📄 App.tsx");
+    consoleErrorSpy.mockRestore();
+  });
+
   it("deduplicates repeated references for the same path", async () => {
     const onSend = vi.fn();
     const view = render(<ComposerHarness onSend={onSend} />);

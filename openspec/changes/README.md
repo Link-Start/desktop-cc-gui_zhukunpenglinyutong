@@ -11,6 +11,7 @@
 
 | Change | Progress | Current gate | Artifacts |
 | ------ | -------: | ------------ | --------- |
+| [`fix-claude-background-shell-settlement`](fix-claude-background-shell-settlement/proposal.md) | artifacts ready / design review | Issue #983：result 后 5s grace 误杀 Claude 结构化后台 Shell；全平台 structured blocker settlement；**待用户审 design，未实现** | [proposal](fix-claude-background-shell-settlement/proposal.md) · [design](fix-claude-background-shell-settlement/design.md) · [tasks](fix-claude-background-shell-settlement/tasks.md) · [specs](fix-claude-background-shell-settlement/specs/) |
 | [`fix-shared-model-picker-display-authority`](fix-shared-model-picker-display-authority/proposal.md) | artifacts ready / implementing | Shared Atomic 闭合态以 `selectedNextTarget` 为 display authority；catalog enrichment；禁止全局 model 回落；**不 commit，交用户审批** | [proposal](fix-shared-model-picker-display-authority/proposal.md) · [design](fix-shared-model-picker-display-authority/design.md) · [tasks](fix-shared-model-picker-display-authority/tasks.md) · [specs](fix-shared-model-picker-display-authority/specs/) |
 | [`fix-shared-session-recovery-exit-closure`](fix-shared-session-recovery-exit-closure/proposal.md) | open | recovery exit ladder | [proposal](fix-shared-session-recovery-exit-closure/proposal.md) · [design](fix-shared-session-recovery-exit-closure/design.md) · [tasks](fix-shared-session-recovery-exit-closure/tasks.md) · [specs](fix-shared-session-recovery-exit-closure/specs/) |
 | [`fix-shared-sidebar-hide-set-staleness`](fix-shared-sidebar-hide-set-staleness/proposal.md) | open | sidebar hide set | [proposal](fix-shared-sidebar-hide-set-staleness/proposal.md) · [tasks](fix-shared-sidebar-hide-set-staleness/tasks.md) |
@@ -19,6 +20,7 @@
 
 ## Active backlog notes（2026-08-04）
 
+- **进行中** `fix-claude-background-shell-settlement`：Claude 后台 Shell 被 `CLAUDE_POST_RESULT_GRACE` 误杀（issue #983）；后端门闩已接线（helpers + `claude.rs` + fake-stream 回归）；FE waiting 文案为 P1；待 commit/收口。
 - **新增** `fix-shared-model-picker-display-authority`：Shared/Atomic 底栏「选择模型」假空（Grok local 典型 B）；正规修复 display authority + Shared 禁全局回落 + catalog ensure。
 - 保留 `fix-codex-collab-subagent-live-parity` / `add-linux-native-menu-localization` 等既有 active。
 
