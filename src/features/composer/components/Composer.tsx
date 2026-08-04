@@ -46,14 +46,13 @@ import {
 } from "../../shared-session/target/types";
 import { persistSharedSessionSelectedTarget } from "../../shared-session/services/sharedSessions";
 import { resolveComposerAtomicSelectedModelId } from "../utils/resolveComposerAtomicSelectedModelId";
+import { resolveDefaultCreationExecutionTarget } from "../utils/resolveDefaultCreationExecutionTarget";
 import { isSharedSessionThreadId } from "../../shared-session/utils/sharedSessionIdentity";
 import { dispatchSharedSendEvent } from "../../shared-session/runtime/sharedSendStateStore";
 import { requestProviderContinuationDialog } from "../../threads/services/providerContinuationRequests";
 import {
   CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
-  CLAUDE_LOCAL_PROVIDER_PROFILE_NAME,
   CODEX_DISK_PROVIDER_PROFILE_ID,
-  CODEX_DISK_PROVIDER_PROFILE_NAME,
   LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
 } from "../../threads/constants/codexProviderProfiles";
 import { computeDictationInsertion } from "../../../utils/dictation";
@@ -674,41 +673,14 @@ function ComposerImpl({
   const [selectedCreationTarget, setSelectedCreationTarget] =
     useState<ExecutionTarget | null>(null);
   const defaultCreationTarget = useMemo<ExecutionTarget | null>(() => {
-    if (
-      !createSessionTargetPicker ||
-      (selectedEngine !== "claude" && selectedEngine !== "codex") ||
-      !selectedModelId?.trim()
-    ) {
-      return null;
-    }
-    const selectedModel =
-      models.find((candidate) => candidate.id === selectedModelId) ?? null;
-    const runtimeModel = selectedModel?.model?.trim() || null;
-    if (!selectedModel || !runtimeModel) {
-      return null;
-    }
-    const rawProviderProfileId = providerProfileId?.trim() || null;
-    const localProviderProfileId =
-      selectedEngine === "claude"
-        ? CLAUDE_LOCAL_PROVIDER_PROFILE_ID
-        : CODEX_DISK_PROVIDER_PROFILE_ID;
-    const normalizedProviderProfileId =
-      rawProviderProfileId === localProviderProfileId
-        ? null
-        : rawProviderProfileId;
-    return {
-      engine: selectedEngine,
-      providerProfileId: normalizedProviderProfileId,
-      modelCatalogEntryId: selectedModel.id,
-      model: runtimeModel,
-      reasoning: selectedEffort ? { effort: selectedEffort } : null,
-      providerProfileNameSnapshot:
-        normalizedProviderProfileId ??
-        (selectedEngine === "claude"
-          ? CLAUDE_LOCAL_PROVIDER_PROFILE_NAME
-          : CODEX_DISK_PROVIDER_PROFILE_NAME),
-      providerProfileSource: normalizedProviderProfileId ? "managed" : "disk",
-    };
+    return resolveDefaultCreationExecutionTarget({
+      enabled: createSessionTargetPicker,
+      selectedEngine,
+      selectedModelId,
+      selectedEffort,
+      providerProfileId,
+      models,
+    });
   }, [
     createSessionTargetPicker,
     models,

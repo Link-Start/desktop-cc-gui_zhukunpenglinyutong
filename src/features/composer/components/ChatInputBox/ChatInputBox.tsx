@@ -51,7 +51,11 @@ import {
   useUndoRedoHistory,
 } from './hooks/index.js';
 import { useAtomicProviderTargetCatalog } from './hooks/useProviderTargetCatalogOwners';
-import { resolveActiveProviderProfileId } from './selectors/ModelSelect';
+import {
+  buildProviderExecutionTarget,
+  resolveActiveProviderProfileId,
+} from './selectors/ModelSelect';
+import { LOCAL_PROVIDER_PROFILE_DISPLAY_NAME } from '../../../threads/constants/codexProviderProfiles';
 import type { EngineType } from '../../../../types';
 import {
   commandToDropdownItem,
@@ -417,6 +421,113 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       executionTarget?.modelCatalogEntryId,
       executionTarget?.model,
       executionTarget?.providerProfileId,
+    ]);
+
+    // create-session only：父层 models 未就绪 / 未写入 target 时，用 Atomic catalog
+    // 默认档补种完整 ExecutionTarget，修复首页 Grok 等闭合态长期「选择模型」。
+    // Shared 禁止自动补种（fail-closed，避免串台）。
+    const createSessionTargetSeedKeyRef = useRef<string | null>(null);
+    useEffect(() => {
+      if (providerTargetPickerMode !== "create-session") {
+        createSessionTargetSeedKeyRef.current = null;
+        return;
+      }
+      if (!onExecutionTargetChange) {
+        return;
+      }
+      const engine = currentProvider as EngineType;
+      if (
+        !["claude", "codex", "kimi", "grok", "opencode"].includes(engine)
+      ) {
+        return;
+      }
+      const hasModelIdentity = Boolean(
+        executionTarget?.modelCatalogEntryId?.trim() ||
+          executionTarget?.model?.trim(),
+      );
+      if (hasModelIdentity && executionTarget?.engine === engine) {
+        return;
+      }
+      const profileId = resolveActiveProviderProfileId(
+        engine as ProviderId,
+        executionTarget?.engine === engine ? executionTarget : null,
+      );
+      if (!profileId) {
+        return;
+      }
+      const preferredId = selectedModel?.trim() || "";
+      const seedKey = `${engine}::${profileId}::${preferredId}`;
+      if (createSessionTargetSeedKeyRef.current === seedKey) {
+        return;
+      }
+
+      let cancelled = false;
+      void (async () => {
+        try {
+          await atomicProviderTargetCatalog.ensureProfiles();
+          const catalogModels = await atomicProviderTargetCatalog.ensureModels(
+            engine,
+            profileId,
+          );
+          if (cancelled || catalogModels.length === 0) {
+            return;
+          }
+          const picked =
+            (preferredId
+              ? (catalogModels.find((model) => model.id === preferredId) ??
+                catalogModels.find(
+                  (model) =>
+                    (model.model?.trim() || model.id) === preferredId,
+                ) ??
+                null)
+              : null) ?? catalogModels[0];
+          if (!picked || cancelled) {
+            return;
+          }
+          const runtimeModel = picked.model?.trim() || picked.id.trim();
+          if (!runtimeModel) {
+            return;
+          }
+          const group = atomicProviderTargetCatalog.groups.find(
+            (entry) => entry.providerId === engine,
+          );
+          const profile = group?.profiles.find(
+            (entry) => entry.id === profileId,
+          );
+          // groups 可能尚未投影出 profile label/source：本地渠道回落「本地配置」+ disk，
+          // 保证 isResolvedExecutionTarget 可通过，否则 handleCreationTargetChange 会静默丢弃。
+          createSessionTargetSeedKeyRef.current = seedKey;
+          onExecutionTargetChange(
+            buildProviderExecutionTarget(
+              null,
+              engine as ProviderId,
+              profileId,
+              picked.id,
+              profile?.label || LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
+              profile?.source ?? "disk",
+              true,
+              runtimeModel,
+            ),
+          );
+        } catch {
+          // catalog 失败不阻塞；闭合态仍可由 defaultCreationTarget 承担
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [
+      atomicProviderTargetCatalog.ensureModels,
+      atomicProviderTargetCatalog.ensureProfiles,
+      atomicProviderTargetCatalog.groups,
+      currentProvider,
+      executionTarget?.engine,
+      executionTarget?.model,
+      executionTarget?.modelCatalogEntryId,
+      onExecutionTargetChange,
+      providerTargetPickerMode,
+      selectedModel,
     ]);
 
     // Records the exact text of the latest programmatic (external) write.
