@@ -296,6 +296,25 @@ status: active
 | `src/features/threads/hooks/useStreamActivityPhase.ts` | phase 等价值 setState |
 | 本文 §5 C-20260804-02 | 诊断与 review 留痕 |
 
+### C-20260804-03 — Composer rewind reset passive effect #185（App-C2u7zJPh）
+
+| 字段 | 内容 |
+|------|------|
+| **状态** | fixed（exact bundle/source mapping + structural guard；待修后构建手测） |
+| **现象** | `appVersion: 0.7.16`；全局 ErrorBoundary；`errorClass: react-maximum-update-depth`；React minified error `#185` |
+| **Bundle / 栈** | `App-C2u7zJPh.js` + `bootstrapApp-Clly4Zvi.js`；componentStack `qjt`=`ComposerImpl`、`Qjt`=`ActiveCanvasComposer`；exact frame `App-C2u7zJPh.js:543:16313` 落在 active-thread rewind reset effect 的 `setRewindMode` dispatch |
+| **Owner** | `src/features/composer/components/Composer.tsx`：rewind preview/mode reset effects |
+| **触发条件** | active thread transition 或 rewind capability transition；父层 pending updates 与 passive effect state dispatch 交错时放大 |
+| **根因（AP-04）** | reset effect 每次都调用两个 setter，仅依赖 functional updater 返回旧值做 eager bailout；React 19 pending lanes 下 dispatch 已进入 scheduling，不能作为“未变化则不写”的收敛契约；capability effect 同时订阅 `onRewind` function identity，扩大无业务变化的 effect 执行面 |
+| **修复** | 复用 `useEventCallback` 建立 stable reset callback；读取 latest committed rewind state，在 dispatch 前做 semantic guard；capability effect 改依赖 primitive `canRewindSession` |
+| **回归** | `Composer.rewind-confirm.test.tsx`：StrictMode 下 callback identity churn 保留当前 mode；thread transition 关闭 dialog 并恢复默认 mode |
+| **Review 要点** | 不把 rewind state 放入 reset effect deps，避免用户选择 mode 后被立即重置；不 key-remount Composer，避免丢失 draft/selection；无 dependency/API/data migration |
+
+**Guardrail（C-20260804-03）**
+
+- passive effect 做 local UI reset 时，semantic equality 必须在 React setter dispatch **之前**判断；functional updater 返回 `prev` 只能作为最后一道幂等保护，不能替代 pre-dispatch guard。
+- effect 只依赖业务语义。callback 是否存在应投影为 primitive capability；callback 最新实现经 stable event callback/ref 读取。
+
 ---
 
 ## 6. 新 Case 追加模板
@@ -331,6 +350,7 @@ status: active
 - [x] **B7** activeCanvasStore shallow setSnapshot + selector ref 化（C-20260804-01）
 - [x] **B8** useModels 跨 epoch storm 熔断（C-20260804-01）
 - [x] **B9** Composer extract effect 去自订阅 + setComposerText 稳定 + target 等价 hydrate（C-20260804-02）
+- [x] **B10** Composer rewind reset pre-dispatch guard + semantic capability deps（C-20260804-03）
 ---
 
 ## 8. 历史相关入口（索引，非完整列表）
@@ -348,6 +368,7 @@ OpenSpec / 代码中已出现的 #185 类修复（便于对照，**不等于本 
 - session reload：`src/app-shell-parts/useSelectedComposerSession.ts`
 - NoticeDock placement：`src/features/notifications/components/GlobalRuntimeNoticeDock.tsx`
 - Composer extract / draft：`src/features/composer/components/Composer.tsx` + `Composer.file-reference-token.test.tsx`（C-20260804-02 / AP-04）
+- Composer rewind reset：`src/features/composer/components/Composer.tsx` + `Composer.rewind-confirm.test.tsx`（C-20260804-03 / AP-04）
 - Shared target store：`src/features/shared-session/target/targetStore.ts`（C-20260804-02 / AP-02）
 
 ### 8.1 开发自检（改 selection / canvas / layout setState 时勾选）
@@ -360,6 +381,7 @@ OpenSpec / 代码中已出现的 #185 类修复（便于对照，**不等于本 
 - [ ] **extract / repair effect 是否订阅了自身写入的 state**（应 ref 读，deps 只留真正的外部 source）？
 - [ ] **external store hydrate 是否语义相等就跳过**（禁止每次 `{...prev}` 换壳 notify）？
 - [ ] 是否补了可执行 regression（Vitest），而不是只靠冷启手测？
+- [ ] passive effect reset 是否在调用 setter **之前**判断 semantic equality，而非只靠 updater 返回 `prev`？
 
 ---
 
@@ -376,3 +398,4 @@ OpenSpec / 代码中已出现的 #185 类修复（便于对照，**不等于本 
 | 2026-08-04 | C-20260804-01：`App-hx3PTjEz` 持续性 #185——canvas store/selector、storm、session reload、appVersion |
 | 2026-08-04 | 对抗式 review 二次收口：AP-07；getSnapshot 内 cache（禁 render 期写 ref）；§8.1 自检清单 |
 | 2026-08-04 | C-20260804-02：`App-DjQ3UnSh` 0.7.16 手测仍炸——Composer extract deps 断环 + target 等价 hydrate + phase 等价值 |
+| 2026-08-04 | C-20260804-03：`App-C2u7zJPh` rewind reset passive effect——pre-dispatch guard + semantic capability deps |

@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { useEventCallback } from "../../../utils/useEventCallback";
 import type {
   ComposerSendShortcut,
   ComposerEditorSettings,
@@ -1160,6 +1161,15 @@ function ComposerImpl({
       : `${activeFilePath}:all`)
     : null;
   const rewindSupportedEngine = resolveRewindSupportedEngineFromThreadId(activeThreadId);
+  const canRewindSession = Boolean(onRewind && rewindSupportedEngine);
+  const resetRewindState = useEventCallback(() => {
+    if (rewindPreviewState !== null) {
+      setRewindPreviewState(null);
+    }
+    if (rewindMode !== "messages-and-files") {
+      setRewindMode("messages-and-files");
+    }
+  });
   const hasActiveFileReference = Boolean(
     activeFileReferenceSignature &&
     fileReferenceMode === "path" &&
@@ -1305,21 +1315,14 @@ function ComposerImpl({
   }, [onCodeAnnotationConsumed, pendingCodeAnnotation]);
 
   useEffect(() => {
-    setRewindPreviewState((prev) => (prev === null ? prev : null));
-    setRewindMode((prev) =>
-      prev === "messages-and-files" ? prev : "messages-and-files",
-    );
-  }, [activeThreadId]);
+    resetRewindState();
+  }, [activeThreadId, resetRewindState]);
 
   useEffect(() => {
-    if (rewindSupportedEngine && onRewind) {
-      return;
+    if (!canRewindSession) {
+      resetRewindState();
     }
-    setRewindPreviewState((prev) => (prev === null ? prev : null));
-    setRewindMode((prev) =>
-      prev === "messages-and-files" ? prev : "messages-and-files",
-    );
-  }, [onRewind, rewindSupportedEngine]);
+  }, [canRewindSession, resetRewindState]);
 
   const handleExpandComposer = useCallback(() => {
     setIsComposerCollapsed(false);
@@ -1549,8 +1552,6 @@ function ComposerImpl({
     statusPanelExpandedOverride ?? statusPanelExpanded;
   const resolvedToggleStatusPanel =
     onToggleStatusPanelOverride ?? handleToggleStatusPanel;
-  const canRewindSession = Boolean(onRewind && rewindSupportedEngine);
-
   const handleCancelRewind = useCallback(() => {
     if (rewindInFlight) {
       return;

@@ -90,6 +90,8 @@ setPanelWidth(safeWidth);
 - target 是 active session 时，persistence owner MUST 同步 active ref 与 React state。
 - target 不是 active session 时，MUST NOT 改写 active ref/state。
 - semantically equal selection MUST skip React setter，不能只依赖 setter updater 返回旧引用。
+- passive effect 执行 reset / normalize 时，MUST 在调用 React setter **之前**比较 committed semantic state；functional updater 返回旧引用只能作为最后一道幂等保护，不能替代 pre-dispatch guard。
+- effect dependency MUST 表达业务语义；若 effect 只关心 callback 是否可用，应依赖 primitive capability boolean，callback 最新实现经 stable event callback/ref 读取。
 - repair effect 的 next render MUST 观察到 repaired value 并停止。
 
 ### 4. Validation & Error Matrix
@@ -99,6 +101,8 @@ setPanelWidth(safeWidth);
 | active selection repair | cache/store/ref/state 同步收敛 | 只写 store/cache |
 | inactive selection persistence | 只更新目标 session | 污染 active selection |
 | repeated equal persistence | 不调用 React setter、不增加 render | 每次构造等价 state |
+| passive reset 已处于目标值 | setter dispatch 前短路 | 每次 effect 都 dispatch，再期待 React eager bailout |
+| callback identity churn | primitive capability 未变则不 reset | 把 callback identity 当作 capability transition |
 | malformed persisted value | normalize 后再发布 | raw value 进入 active state |
 
 ### 5. Good / Base / Bad Cases
@@ -106,8 +110,12 @@ setPanelWidth(safeWidth);
 - Good：shared persistence owner 比对 active session key，统一发布 normalized selection。
 - Base：inactive session 只更新自身 cache/store。
 - Bad：repair effect 写 store 后继续消费旧 active state，并在后续 render 重复 repair。
+- Bad：`setState(prev => prev === target ? prev : target)` 被当作唯一 guard，导致 pending lanes 下 passive effect 重复进入 update scheduling。
 
 ### 6. Tests Required
+
+- passive reset regression MUST 覆盖 StrictMode、semantic callback identity churn 与真实 source transition。
+- 测试 MUST 证明 callback identity 变化不清空当前交互，真实 source transition 会收敛到 reset target。
 
 - active repair 后 ref/state 立即等于 durable normalized value。
 - repeated equal persistence 保留 state reference，render count 不增加。
