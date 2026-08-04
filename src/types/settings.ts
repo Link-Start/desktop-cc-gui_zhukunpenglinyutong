@@ -38,6 +38,18 @@ export type DarkThemePresetId =
 
 export type ThemePresetId = LightThemePresetId | DarkThemePresetId;
 
+/** Dock / app logo preference. See `features/theme/utils/dockIcon.ts`. */
+export type DockIconId =
+  | "default"
+  | "multi-orbit-hub"
+  | "open-star-ring"
+  | "gravitational-core"
+  | "dual-orbit-handoff"
+  | "layered-control-plane"
+  | "four-port-router"
+  | "adaptive-routing-fabric"
+  | "triadic-router";
+
 export type AppMode = "chat" | "kanban" | "gitHistory" | "extensions";
 
 export type ComposerEditorPreset = "default" | "helpful" | "smart";
@@ -145,6 +157,8 @@ export type AppSettings = {
   lastComposerPrefsByEngine?: Partial<Record<EngineType, ComposerEnginePrefs>>;
   uiScale: number;
   theme: ThemePreference;
+  /** macOS Dock + in-app logo preference; default is the shipping product icon. */
+  dockIconId?: DockIconId;
   lightThemePresetId?: LightThemePresetId;
   darkThemePresetId?: DarkThemePresetId;
   customThemePresetId?: ThemePresetId;

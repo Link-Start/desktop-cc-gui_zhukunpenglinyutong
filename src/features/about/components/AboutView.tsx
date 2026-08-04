@@ -3,12 +3,21 @@ import { useTranslation } from "react-i18next";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { loadAboutStyles } from "../../../styles/featureStyleLoaders";
+import { getAppSettings } from "../../../services/tauri";
+import {
+  applyDockIconPreference,
+  DEFAULT_DOCK_ICON_ID,
+  resolveDockIconSrc,
+} from "../../theme/utils/dockIcon";
 
 const GITHUB_URL = "https://github.com/zhukunpenglinyutong/desktop-cc-gui";
 
 export function AboutView() {
   const { t } = useTranslation();
   const [version, setVersion] = useState<string | null>(null);
+  const [logoSrc, setLogoSrc] = useState(() =>
+    resolveDockIconSrc(DEFAULT_DOCK_ICON_ID),
+  );
   useEffect(() => {
     void loadAboutStyles();
   }, []);
@@ -38,13 +47,36 @@ export function AboutView() {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const settings = await getAppSettings();
+        if (!active) {
+          return;
+        }
+        setLogoSrc(resolveDockIconSrc(settings.dockIconId));
+        // Win/Linux: icons are per-window. Re-apply so the About surface inherits
+        // the current preference (macOS Dock is process-wide and already set).
+        void applyDockIconPreference(settings.dockIconId).catch((error) => {
+          console.error("[AboutView] failed to apply dock icon", error);
+        });
+      } catch {
+        // Keep default logo when settings are unavailable.
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <div className="about">
       <div className="about-card">
         <div className="about-header">
           <img
             className="about-icon"
-            src="/app-icon.png"
+            src={logoSrc}
             alt="ccgui icon"
           />
           <div className="about-title">ccgui</div>

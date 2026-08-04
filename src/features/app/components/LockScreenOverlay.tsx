@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Lock from "lucide-react/dist/esm/icons/lock";
-import appIcon from "../../../../icon.png";
+import {
+  DEFAULT_DOCK_ICON_ID,
+  resolveDockIconSrc,
+} from "../../theme/utils/dockIcon";
 
 type FeatureCard = {
   titleKey: string;
@@ -17,6 +20,8 @@ type LockScreenOverlayProps = {
   isOpen: boolean;
   onUnlock: (password: string) => Promise<boolean>;
   liveSessions: LiveSessionPreview[];
+  /** Resolved dock/app logo URL; falls back to default product icon. */
+  logoSrc?: string | null;
 };
 
 type LockTabId = "live" | "capabilities" | "workflow" | "elements";
@@ -129,7 +134,12 @@ export function LockScreenOverlay({
   isOpen,
   onUnlock,
   liveSessions,
+  logoSrc,
 }: LockScreenOverlayProps) {
+  const resolvedLogoSrc =
+    logoSrc && logoSrc.trim().length > 0
+      ? logoSrc
+      : resolveDockIconSrc(DEFAULT_DOCK_ICON_ID);
   const { t } = useTranslation();
   const unlockInputRef = useRef<HTMLInputElement | null>(null);
   const liveListRef = useRef<HTMLDivElement | null>(null);
@@ -197,7 +207,7 @@ export function LockScreenOverlay({
         <section className="panel-lock-atlas panel-lock-panel">
           <header className="panel-lock-hero">
             <div className="panel-lock-brand">
-              <img src={appIcon} alt="ccgui" className="panel-lock-logo" />
+              <img src={resolvedLogoSrc} alt="ccgui" className="panel-lock-logo" />
               <div>
                 <p className="panel-lock-brand-kicker">{t("lockScreen.brandKicker")}</p>
                 <h2>{t("lockScreen.title")}</h2>

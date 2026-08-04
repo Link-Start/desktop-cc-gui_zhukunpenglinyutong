@@ -415,6 +415,10 @@ vi.mock("react-i18next", () => ({
         "settings.cliUninstall": "Uninstall",
         "settings.sidebarExperimental": "Experimental",
         "settings.basicAppearance": "Appearance",
+        "settings.dockIcon": "App icon",
+        "settings.dockIconDesc":
+          "Choose the icon used in the Dock/taskbar and across the app.",
+        "settings.dockIconDefault": "Default",
         "settings.basicBehavior": "Behavior",
         "settings.browserAgentTitle": "Built-in Browser Agent",
         "settings.browserAgentDesc":

@@ -32,6 +32,15 @@ vi.mock("../../../services/tauri", () => ({
   takeSettingsRecoveryNotice: vi.fn(),
 }));
 
+vi.mock("../../theme/utils/dockIcon", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../theme/utils/dockIcon")>();
+  return {
+    ...actual,
+    applyDockIconPreference: vi.fn(async () => undefined),
+    reapplyLastDockIconPreference: vi.fn(async () => undefined),
+  };
+});
+
 vi.mock("../../../services/toasts", () => ({
   pushErrorToast: vi.fn(),
 }));
