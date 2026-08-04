@@ -831,3 +831,36 @@ Shared Atomic 闭合态以 selectedNextTarget/executionTarget 快照为展示权
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1322: fix Claude backgroundTaskId post-result grace mis-kill (#983)
+
+**Date**: 2026-08-04
+**Task**: fix Claude backgroundTaskId post-result grace mis-kill (#983)
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+Claude structured backgroundTaskId settlement blocker: suppress post-result 5s process-tree mis-kill; helpers+read-loop+OpenSpec+14 tests. FE waiting label P1.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3724a114b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
