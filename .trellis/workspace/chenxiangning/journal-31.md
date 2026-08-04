@@ -1282,3 +1282,36 @@ Shared 从 Grok 切到 Codex 后思考档位不再沿用 activeEngine 或遗留 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1333: 阻断 Shared 初始化回落 Native 思考档位
+
+**Date**: 2026-08-04
+**Task**: 阻断 Shared 初始化回落 Native 思考档位
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+Shared Grok 初始化禁止借用 Native Codex 的 reasoning options/effort；initialTarget 按目标 CLI 播种；target 未就绪 fail-closed。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `385d20e3a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-31.md`
-- **Total Sessions**: 1332
+- **Total Sessions**: 1333
 - **Last Active**: 2026-08-04
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-31.md` | ~1284 | Active |
+| `journal-31.md` | ~1317 | Active |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
@@ -59,6 +59,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1333 | 2026-08-04 | 阻断 Shared 初始化回落 Native 思考档位 | `385d20e3a` | `CXN-version-0.7.16` |
 | 1332 | 2026-08-04 | 修复 Shared Atomic 模型与思考强度联动 | `cf7abdbf3` | `CXN-version-0.7.16` |
 | 1331 | 2026-08-04 | 修复 Composer rewind reset React #185 | `fa84f2dba`, `a59985654` | `CXN-version-0.7.16` |
 | 1330 | 2026-08-04 | fix Shared 上下文续接 resume-integrity | `165f0fda6` | `CXN-version-0.7.16` |
