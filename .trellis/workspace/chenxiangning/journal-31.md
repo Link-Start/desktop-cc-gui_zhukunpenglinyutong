@@ -913,3 +913,50 @@ Claude structured backgroundTaskId settlement blocker: suppress post-result 5s p
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1324: fix(threads): live settlement order — 多工具回合 settle 后结论偶发跑到工具前
+
+**Date**: 2026-08-04
+**Task**: fix(threads): live settlement order — 多工具回合 settle 后结论偶发跑到工具前
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+**修复**：Shared×Claude 多工具回合流式中顺序正常但 settle 后结论偶发跑到工具前，关开历史恢复。
+
+**根因**：resetAgentSegment 后 resolveLiveAssistantMessageId 回到裸 itemId，complete/append 命中工具前首段 → 终稿并进 pre-tool 气泡。
+
+**P0 修复**：
+- findAssistantMessageIndexForLiveSettlement（append/complete 双 mode）：有 -seg-* 兄弟时优先最新分段，禁止终稿并回 pre-tool
+- 接入 appendAgentDelta + applyCompleteAgentMessageToState
+
+**late tool 防御**：
+- upsertItem：新 tool 若尾部是 isFinal assistant 则插入到结论前
+- rebalanceTrailingToolsBeforeFinalAssistants：complete/markFinal 后重排
+
+**门禁**：tsc ✅ / OpenSpec validate ✅ / 全量 hooks 测试 1100 ✅ / 聚焦回归 138 ✅
+
+**OpenSpec**：fix-live-settle-assistant-tool-order
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `74654f1d6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

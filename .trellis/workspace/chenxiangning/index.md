@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-31.md`
-- **Total Sessions**: 1323
+- **Total Sessions**: 1324
 - **Last Active**: 2026-08-04
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-31.md` | ~915 | Active |
+| `journal-31.md` | ~962 | Active |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
@@ -59,6 +59,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1324 | 2026-08-04 | fix(threads): live settlement order — 多工具回合 settle 后结论偶发跑到工具前 | `74654f1d6` | `CXN-version-0.7.16` |
 | 1323 | 2026-08-04 | fix React #185 Composer extract 自订阅 | `9c04f381a` | `CXN-version-0.7.16` |
 | 1322 | 2026-08-04 | fix Claude backgroundTaskId post-result grace mis-kill (#983) | `3724a114b` | `CXN-version-0.7.16` |
 | 1321 | 2026-08-04 | fix Shared 模型选择器 display authority | `a3a631a90` | `CXN-version-0.7.16` |
