@@ -14,6 +14,28 @@ import { emitTo } from "@tauri-apps/api/event";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import LoaderCircle from "lucide-react/dist/esm/icons/loader-circle";
+import FilePlus from "lucide-react/dist/esm/icons/file-plus";
+import FolderPlus from "lucide-react/dist/esm/icons/folder-plus";
+import Copy from "lucide-react/dist/esm/icons/copy";
+import ClipboardPaste from "lucide-react/dist/esm/icons/clipboard-paste";
+import CopyPlus from "lucide-react/dist/esm/icons/copy-plus";
+import Pencil from "lucide-react/dist/esm/icons/pencil";
+import Link2 from "lucide-react/dist/esm/icons/link-2";
+import MessageSquarePlus from "lucide-react/dist/esm/icons/message-square-plus";
+import Columns2 from "lucide-react/dist/esm/icons/columns-2";
+import FolderOpen from "lucide-react/dist/esm/icons/folder-open";
+import GitBranch from "lucide-react/dist/esm/icons/git-branch";
+import History from "lucide-react/dist/esm/icons/history";
+import GitCommitHorizontal from "lucide-react/dist/esm/icons/git-commit-horizontal";
+import Upload from "lucide-react/dist/esm/icons/upload";
+import Download from "lucide-react/dist/esm/icons/download";
+import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
+import FileMinus from "lucide-react/dist/esm/icons/file-minus";
+import Layers from "lucide-react/dist/esm/icons/layers";
+import Code from "lucide-react/dist/esm/icons/code";
+import ListTree from "lucide-react/dist/esm/icons/list-tree";
+import Trash2 from "lucide-react/dist/esm/icons/trash-2";
+import Repeat from "lucide-react/dist/esm/icons/repeat";
 import type { PanelTabId } from "../../layout/components/PanelTabs";
 import {
   createWorkspaceDirectory,
@@ -75,7 +97,6 @@ import {
 } from "./useFileTreeViewState";
 import { FileTreeRefreshControls } from "./FileTreeRefreshControls";
 import {
-  clampRendererContextMenuPosition,
   RendererContextMenu,
   type RendererContextMenuItem,
 } from "../../../components/ui/RendererContextMenu";
@@ -1988,19 +2009,70 @@ export function FileTreePanel({
           branchName: repositorySummary.currentBranch,
         });
       };
+      const menuIcon = (Icon: typeof FilePlus) => <Icon size={15} aria-hidden />;
       const repositoryGitItems = repositorySummary
         ? [
             { type: "label" as const, id: "git-target", label: repositorySummary.displayName },
-            { type: "item" as const, id: "git-commit", label: t("git.repositoryMenuCommit"), onSelect: () => runRepositoryAction("commit") },
-            { type: "item" as const, id: "git-stage-all", label: t("git.repositoryMenuStageAll"), onSelect: () => runRepositoryAction("stage-all") },
-            { type: "item" as const, id: "git-ignore", label: t("git.repositoryMenuAddToGitignore"), disabled: repositorySummary.repositoryRoot.length === 0, onSelect: () => runRepositoryAction("add-to-gitignore") },
+            {
+              type: "item" as const,
+              id: "git-commit",
+              label: t("git.repositoryMenuCommit"),
+              icon: menuIcon(GitCommitHorizontal),
+              onSelect: () => runRepositoryAction("commit"),
+            },
+            {
+              type: "item" as const,
+              id: "git-stage-all",
+              label: t("git.repositoryMenuStageAll"),
+              icon: menuIcon(Layers),
+              onSelect: () => runRepositoryAction("stage-all"),
+            },
+            {
+              type: "item" as const,
+              id: "git-ignore",
+              label: t("git.repositoryMenuAddToGitignore"),
+              icon: menuIcon(FileMinus),
+              disabled: repositorySummary.repositoryRoot.length === 0,
+              onSelect: () => runRepositoryAction("add-to-gitignore"),
+            },
             { type: "separator" as const, id: "git-separator-diff" },
-            { type: "item" as const, id: "git-update", label: t("git.historyBranchMenuUpdate"), disabled: !canUpdateRepository, onSelect: runRepositoryUpdate },
-            { type: "item" as const, id: "git-history", label: t("git.repositoryMenuHistory"), onSelect: () => runRepositoryAction("show-history") },
+            {
+              type: "item" as const,
+              id: "git-update",
+              label: t("git.historyBranchMenuUpdate"),
+              icon: menuIcon(Repeat),
+              disabled: !canUpdateRepository,
+              onSelect: runRepositoryUpdate,
+            },
+            {
+              type: "item" as const,
+              id: "git-history",
+              label: t("git.repositoryMenuHistory"),
+              icon: menuIcon(History),
+              onSelect: () => runRepositoryAction("show-history"),
+            },
             { type: "separator" as const, id: "git-separator-remote" },
-            { type: "item" as const, id: "git-push", label: t("git.repositoryMenuPush"), onSelect: () => runRepositoryAction("push") },
-            { type: "item" as const, id: "git-pull", label: t("git.repositoryMenuPull"), onSelect: () => runRepositoryAction("pull") },
-            { type: "item" as const, id: "git-fetch", label: t("git.repositoryMenuFetch"), onSelect: () => runRepositoryAction("fetch") },
+            {
+              type: "item" as const,
+              id: "git-push",
+              label: t("git.repositoryMenuPush"),
+              icon: menuIcon(Upload),
+              onSelect: () => runRepositoryAction("push"),
+            },
+            {
+              type: "item" as const,
+              id: "git-pull",
+              label: t("git.repositoryMenuPull"),
+              icon: menuIcon(Download),
+              onSelect: () => runRepositoryAction("pull"),
+            },
+            {
+              type: "item" as const,
+              id: "git-fetch",
+              label: t("git.repositoryMenuFetch"),
+              icon: menuIcon(RefreshCw),
+              onSelect: () => runRepositoryAction("fetch"),
+            },
           ]
         : [];
       const fileHistoryGitItems = fileHistoryScope
@@ -2012,6 +2084,7 @@ export function FileTreePanel({
               type: "item" as const,
               id: "git-file-history",
               label: t("git.repositoryMenuFileHistory"),
+              icon: menuIcon(History),
               onSelect: () => onOpenFileHistory?.({
                 workspaceId,
                 workspacePath,
@@ -2031,6 +2104,7 @@ export function FileTreePanel({
           type: "item",
           id: "new-file",
           label: t("files.newFile"),
+          icon: menuIcon(FilePlus),
           onSelect: () => {
             setFileTreeContextMenu(null);
             openNewFilePrompt(parentFolder);
@@ -2040,6 +2114,7 @@ export function FileTreePanel({
           type: "item",
           id: "new-folder",
           label: t("files.newFolder"),
+          icon: menuIcon(FolderPlus),
           onSelect: () => {
             setFileTreeContextMenu(null);
             openNewFolderPrompt(parentFolder);
@@ -2052,6 +2127,7 @@ export function FileTreePanel({
                 type: "item" as const,
                 id: "copy-item",
                 label: t("files.copyItem"),
+                icon: menuIcon(Copy),
                 onSelect: () => {
                   setFileTreeContextMenu(null);
                   copyFileTreeItem(relativePath, itemKind);
@@ -2062,6 +2138,7 @@ export function FileTreePanel({
           type: "item",
           id: "paste-item",
           label: t("files.pasteItem"),
+          icon: menuIcon(ClipboardPaste),
           onSelect: async () => {
             setFileTreeContextMenu(null);
             await pasteFileTreeItem(parentFolder);
@@ -2074,6 +2151,7 @@ export function FileTreePanel({
                 type: "item" as const,
                 id: "duplicate",
                 label: t("files.duplicateItem"),
+                icon: menuIcon(CopyPlus),
                 onSelect: async () => {
                   await duplicateItem(relativePath);
                 },
@@ -2082,6 +2160,7 @@ export function FileTreePanel({
                 type: "item" as const,
                 id: "rename",
                 label: t("files.renameItem"),
+                icon: menuIcon(Pencil),
                 onSelect: () => {
                   setFileTreeContextMenu(null);
                   openRenamePrompt(relativePath, itemKind);
@@ -2092,6 +2171,7 @@ export function FileTreePanel({
           type: "item",
           id: "copy-path",
           label: t("files.copyPath"),
+          icon: menuIcon(Link2),
           onSelect: async () => {
             await copyPath(relativePath);
           },
@@ -2103,6 +2183,7 @@ export function FileTreePanel({
                 type: "item" as const,
                 id: "send-path-to-composer",
                 label: t("files.sendPathToComposer"),
+                icon: menuIcon(MessageSquarePlus),
                 onSelect: () => {
                   setFileTreeContextMenu(null);
                   const absolutePath = resolvePath(relativePath);
@@ -2120,6 +2201,7 @@ export function FileTreePanel({
                 type: "item" as const,
                 id: "compare-files",
                 label: t("files.fileCompare.compareSelected"),
+                icon: menuIcon(Columns2),
                 onSelect: () => {
                   setFileTreeContextMenu(null);
                   onCompareFiles?.(selectedFilePaths);
@@ -2131,6 +2213,7 @@ export function FileTreePanel({
           type: "item",
           id: "reveal",
           label: t("files.revealInFinder"),
+          icon: menuIcon(FolderOpen),
           onSelect: async () => {
             await revealItemInDir(resolvePath(relativePath));
           },
@@ -2142,6 +2225,7 @@ export function FileTreePanel({
                 type: "submenu" as const,
                 id: "git-repository",
                 label: t("git.repositoryMenuTitle"),
+                icon: menuIcon(GitBranch),
                 items: gitItems,
               },
             ]
@@ -2152,6 +2236,7 @@ export function FileTreePanel({
                 type: "item" as const,
                 id: "insert-lsp-diagnostics",
                 label: t("files.insertLspDiagnostics"),
+                icon: menuIcon(Code),
                 onSelect: () => {
                   onInsertText(`/lsp diagnostics "${relativePath}"`);
                 },
@@ -2160,6 +2245,7 @@ export function FileTreePanel({
                 type: "item" as const,
                 id: "insert-lsp-document-symbols",
                 label: t("files.insertLspDocumentSymbols"),
+                icon: menuIcon(ListTree),
                 onSelect: () => {
                   onInsertText(`/lsp document-symbols "${relativePath}"`);
                 },
@@ -2173,6 +2259,7 @@ export function FileTreePanel({
                 type: "item" as const,
                 id: "delete",
                 label: t("files.deleteItem"),
+                icon: menuIcon(Trash2),
                 tone: "danger" as const,
                 onSelect: async () => {
                   setFileTreeContextMenu(null);
@@ -2182,9 +2269,11 @@ export function FileTreePanel({
             ]),
       ];
 
-      const position = clampRendererContextMenuPosition(event.clientX, event.clientY);
+      // Anchor to the click position. RendererContextMenu re-clamps with measured size
+      // after layout so the menu stays near the cursor without jumping far above.
       setFileTreeContextMenu({
-        ...position,
+        x: event.clientX,
+        y: event.clientY,
         label: t("files.fileActions"),
         items: menuItems,
       });

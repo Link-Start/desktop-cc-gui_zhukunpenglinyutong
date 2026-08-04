@@ -4,8 +4,18 @@ import GitCommitHorizontal from "lucide-react/dist/esm/icons/git-commit-horizont
 import LayoutDashboard from "lucide-react/dist/esm/icons/layout-dashboard";
 import Lock from "lucide-react/dist/esm/icons/lock";
 import Settings from "lucide-react/dist/esm/icons/settings";
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { AppMode } from "../../../types";
+import {
+  SIDEBAR_SETTINGS_PINNED_MAX,
+  useSidebarSettingsPinnedActions,
+  type SidebarSettingsPinnedActionId,
+} from "../hooks/useSidebarSettingsPinnedActions";
 
 type SidebarSettingsMenuProps = {
   isOpen: boolean;
@@ -26,6 +36,15 @@ type SidebarSettingsMenuProps = {
   showRuntimeNotice?: boolean;
 };
 
+type SettingsMenuAction = {
+  id: SidebarSettingsPinnedActionId;
+  label: string;
+  icon: ReactNode;
+  onSelect: () => void;
+  active?: boolean;
+  visible: boolean;
+};
+
 export function SidebarSettingsMenu({
   isOpen,
   appMode,
@@ -42,103 +61,203 @@ export function SidebarSettingsMenu({
   onOpenRuntimeNotice,
   showRuntimeNotice = false,
 }: SidebarSettingsMenuProps) {
+  const { pinnedIds, togglePinned } = useSidebarSettingsPinnedActions();
+  const atPinLimit = pinnedIds.length >= SIDEBAR_SETTINGS_PINNED_MAX;
+
+  const actions: SettingsMenuAction[] = [
+    {
+      id: "lock",
+      label: t("lockScreen.lock"),
+      icon: <Lock size={14} aria-hidden />,
+      onSelect: () => {
+        onClose();
+        onLockPanel?.();
+      },
+      visible: true,
+    },
+    {
+      id: "spec-hub",
+      label: t("sidebar.specHub"),
+      icon: <LayoutDashboard size={14} aria-hidden />,
+      onSelect: () => {
+        onClose();
+        onOpenSpecHub();
+      },
+      visible: true,
+    },
+    {
+      id: "project-memory",
+      label: t("panels.memory"),
+      icon: <Brain size={14} aria-hidden />,
+      onSelect: () => {
+        onClose();
+        onOpenProjectMemory();
+      },
+      visible: true,
+    },
+    {
+      id: "git-history",
+      label: t("git.historyQuickAction"),
+      icon: <GitCommitHorizontal size={14} aria-hidden />,
+      onSelect: () => {
+        onClose();
+        onAppModeChange(appMode === "gitHistory" ? "chat" : "gitHistory");
+      },
+      active: appMode === "gitHistory",
+      visible: true,
+    },
+    {
+      id: "runtime-notice",
+      label: t("runtimeNotice.title"),
+      icon: <CircleCheck size={14} aria-hidden />,
+      onSelect: () => {
+        onClose();
+        onOpenRuntimeNotice?.();
+      },
+      visible: Boolean(showRuntimeNotice && onOpenRuntimeNotice),
+    },
+  ];
+
+  const visibleActions = actions.filter((action) => action.visible);
+  const pinnedActions = pinnedIds
+    .map((id) => visibleActions.find((action) => action.id === id))
+    .filter((action): action is SettingsMenuAction => Boolean(action));
+
+  const pinLabel = t("common.showBesideSettings");
+  const pinLimitLabel = t("common.showBesideSettingsLimit");
+
   return (
-    <div className="sidebar-settings-dropdown-wrapper">
-      {isOpen && (
-        <div
-          className="sidebar-settings-dropdown"
-          ref={menuRef}
-          role="menu"
-        >
-          <button
-            type="button"
-            role="menuitem"
-            className="sidebar-settings-dropdown-item"
-            onClick={() => {
-              onClose();
-              onLockPanel?.();
-            }}
+    <div className="sidebar-settings-cluster">
+      <div className="sidebar-settings-dropdown-wrapper">
+        {isOpen && (
+          <div
+            className="sidebar-settings-dropdown"
+            ref={menuRef}
+            role="menu"
           >
-            <Lock size={14} aria-hidden />
-            <span>{t("lockScreen.lock")}</span>
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="sidebar-settings-dropdown-item"
-            onClick={() => {
-              onClose();
-              onOpenSpecHub();
-            }}
-          >
-            <LayoutDashboard size={14} aria-hidden />
-            <span>{t("sidebar.specHub")}</span>
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="sidebar-settings-dropdown-item"
-            onClick={() => {
-              onClose();
-              onOpenProjectMemory();
-            }}
-          >
-            <Brain size={14} aria-hidden />
-            <span>{t("panels.memory")}</span>
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className={`sidebar-settings-dropdown-item${appMode === "gitHistory" ? " is-active" : ""}`}
-            onClick={() => {
-              onClose();
-              onAppModeChange(appMode === "gitHistory" ? "chat" : "gitHistory");
-            }}
-          >
-            <GitCommitHorizontal size={14} aria-hidden />
-            <span>{t("git.historyQuickAction")}</span>
-          </button>
-          {showRuntimeNotice && onOpenRuntimeNotice ? (
+            {visibleActions.map((action) => {
+              const pinned = pinnedIds.includes(action.id);
+              const pinDisabled = !pinned && atPinLimit;
+              const pinCheckbox = (
+                <input
+                  type="checkbox"
+                  className="sidebar-settings-dropdown-pin"
+                  checked={pinned}
+                  disabled={pinDisabled}
+                  onChange={() => {
+                    if (pinDisabled) {
+                      return;
+                    }
+                    togglePinned(action.id);
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                  }}
+                  onMouseDown={(event) => {
+                    event.stopPropagation();
+                  }}
+                  aria-label={pinDisabled ? pinLimitLabel : pinLabel}
+                  // disabled 的 input 多数浏览器不触发 title；可达时仍用原生 tip
+                  title={pinDisabled ? undefined : pinLabel}
+                  data-tauri-drag-region="false"
+                />
+              );
+              return (
+                <div
+                  key={action.id}
+                  className={`sidebar-settings-dropdown-option${
+                    action.active ? " is-active" : ""
+                  }`}
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={`sidebar-settings-dropdown-item${
+                      action.active ? " is-active" : ""
+                    }`}
+                    onClick={action.onSelect}
+                  >
+                    {action.icon}
+                    <span>{action.label}</span>
+                  </button>
+                  {pinDisabled ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span
+                          className="sidebar-settings-dropdown-pin-wrap is-disabled"
+                          // 包一层可接收 hover/focus：disabled checkbox 本身不会弹出 tip
+                          tabIndex={0}
+                          title={pinLimitLabel}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                          }}
+                          onMouseDown={(event) => {
+                            event.stopPropagation();
+                          }}
+                        >
+                          {pinCheckbox}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" sideOffset={8}>
+                        {pinLimitLabel}
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    pinCheckbox
+                  )}
+                </div>
+              );
+            })}
             <button
               type="button"
               role="menuitem"
               className="sidebar-settings-dropdown-item"
               onClick={() => {
                 onClose();
-                onOpenRuntimeNotice();
+                onOpenSettings();
               }}
             >
-              <CircleCheck size={14} aria-hidden />
-              <span>{t("runtimeNotice.title")}</span>
+              <Settings size={14} aria-hidden />
+              <span>{t("settings.title")}</span>
             </button>
-          ) : null}
-          <button
-            type="button"
-            role="menuitem"
-            className="sidebar-settings-dropdown-item"
-            onClick={() => {
-              onClose();
-              onOpenSettings();
-            }}
-          >
-            <Settings size={14} aria-hidden />
-            <span>{t("settings.title")}</span>
-          </button>
+          </div>
+        )}
+        <button
+          ref={buttonRef}
+          type="button"
+          className={`sidebar-primary-nav-item sidebar-primary-nav-item-bottom${isOpen ? " is-active" : ""}`}
+          onClick={onToggleOpen}
+          title={t("settings.title")}
+          aria-label={t("settings.title")}
+          aria-expanded={isOpen}
+          aria-haspopup="menu"
+          data-tauri-drag-region="false"
+        >
+          <Settings className="sidebar-primary-nav-icon" aria-hidden />
+        </button>
+      </div>
+      {pinnedActions.length > 0 ? (
+        <div className="sidebar-settings-pinned" role="toolbar" aria-label={pinLabel}>
+          {pinnedActions.map((action) => (
+            <button
+              key={action.id}
+              type="button"
+              className={`sidebar-primary-nav-item sidebar-primary-nav-item-bottom sidebar-settings-pinned-item${
+                action.active ? " is-active" : ""
+              }`}
+              onClick={action.onSelect}
+              title={action.label}
+              aria-label={action.label}
+              aria-pressed={action.active}
+              data-tauri-drag-region="false"
+            >
+              <span className="sidebar-primary-nav-icon" aria-hidden>
+                {action.icon}
+              </span>
+            </button>
+          ))}
         </div>
-      )}
-      <button
-        ref={buttonRef}
-        type="button"
-        className={`sidebar-primary-nav-item sidebar-primary-nav-item-bottom${isOpen ? " is-active" : ""}`}
-        onClick={onToggleOpen}
-        title={t("settings.title")}
-        aria-label={t("settings.title")}
-        aria-expanded={isOpen}
-        aria-haspopup="menu"
-        data-tauri-drag-region="false"
-      >
-        <Settings className="sidebar-primary-nav-icon" aria-hidden />
-      </button>
+      ) : null}
     </div>
   );
 }

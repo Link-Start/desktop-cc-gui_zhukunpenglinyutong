@@ -61,9 +61,10 @@ type RendererContextSubmenuPosition = {
 
 const MENU_MAX_HEIGHT = 420;
 const MENU_VERTICAL_PADDING = 16;
-const MENU_ITEM_HEIGHT = 40;
-const MENU_LABEL_HEIGHT = 32;
-const MENU_SEPARATOR_HEIGHT = 9;
+// Match .renderer-context-menu-item: padding 7+7 + ~16 line ≈ 30–32px.
+const MENU_ITEM_HEIGHT = 32;
+const MENU_LABEL_HEIGHT = 28;
+const MENU_SEPARATOR_HEIGHT = 11;
 const SUBMENU_WIDTH = 260;
 const SUBMENU_MAX_HEIGHT = 420;
 const SUBMENU_GAP = 2;
@@ -189,6 +190,22 @@ export function RendererContextMenu({
   useEffect(() => {
     closeSubmenu();
   }, [closeSubmenu, menu]);
+
+  // Re-clamp with real measured size so tall/short menus stay near the cursor.
+  useLayoutEffect(() => {
+    const element = menuRef.current;
+    if (!element || typeof window === "undefined") {
+      return;
+    }
+    const rect = element.getBoundingClientRect();
+    const next = clampRendererContextMenuPosition(menu.x, menu.y, {
+      width: rect.width || 280,
+      height: rect.height || estimateRendererContextMenuHeight(menu.items),
+      padding: VIEWPORT_PADDING,
+    });
+    element.style.left = `${next.x}px`;
+    element.style.top = `${next.y}px`;
+  }, [menu]);
 
   const openSubmenuItem = menu.items.find(
     (item): item is Extract<RendererContextMenuItem, { type: "submenu" }> =>
@@ -417,11 +434,10 @@ export function clampRendererContextMenuPosition(
   }
   const maxX = Math.max(padding, window.innerWidth - width - padding);
   const maxY = Math.max(padding, window.innerHeight - height - padding);
-  const preferredY = y + height + padding > window.innerHeight
-    ? Math.max(padding, y - height)
-    : y;
+  // Stay at the cursor when possible; only slide just enough to fit viewport.
+  // Avoid flipping the menu far above the click (that feels untracked).
   return {
     x: Math.min(Math.max(x, padding), maxX),
-    y: Math.min(Math.max(preferredY, padding), maxY),
+    y: Math.min(Math.max(y, padding), maxY),
   };
 }

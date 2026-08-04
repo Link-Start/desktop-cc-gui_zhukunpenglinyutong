@@ -375,4 +375,33 @@ describe("RendererContextMenu", () => {
       }),
     ).toEqual({ x: 8, y: 8 });
   });
+
+  it("slides near the cursor instead of flipping far above", () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 1000,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 800,
+    });
+
+    // Near bottom: only slide up enough to fit, keep menu close to click.
+    expect(
+      clampRendererContextMenuPosition(200, 700, {
+        width: 280,
+        height: 200,
+        padding: 12,
+      }),
+    ).toEqual({ x: 200, y: 588 });
+
+    // Mid-screen with room below: stay at cursor (no upward jump).
+    expect(
+      clampRendererContextMenuPosition(200, 400, {
+        width: 280,
+        height: 200,
+        padding: 12,
+      }),
+    ).toEqual({ x: 200, y: 400 });
+  });
 });

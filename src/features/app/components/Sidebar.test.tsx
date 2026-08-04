@@ -193,6 +193,69 @@ describe("Sidebar", () => {
     expect(container.querySelector(".sidebar-settings-dropdown")).toBeNull();
   });
 
+  it("pins up to two settings actions beside the gear and blocks a third pin", async () => {
+    const onOpenSpecHub = vi.fn();
+    const onOpenProjectMemory = vi.fn();
+    const { container } = render(
+      <Sidebar
+        {...baseProps}
+        onOpenSpecHub={onOpenSpecHub}
+        onOpenProjectMemory={onOpenProjectMemory}
+      />,
+    );
+
+    const settingsToggle = container.querySelector(".sidebar-primary-nav-item-bottom");
+    expect(settingsToggle).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(settingsToggle as Element);
+    });
+
+    const dropdown = container.querySelector(".sidebar-settings-dropdown");
+    expect(dropdown).toBeTruthy();
+    const pinBoxes = within(dropdown as HTMLElement).getAllByRole("checkbox", {
+      name: "Show next to settings",
+    });
+    // lock / spec hub / project memory / git graph（无 runtime notice）
+    expect(pinBoxes).toHaveLength(4);
+
+    await act(async () => {
+      fireEvent.click(pinBoxes[1]); // Spec Hub
+      fireEvent.click(pinBoxes[2]); // Project Memory
+    });
+
+    expect(container.querySelectorAll(".sidebar-settings-pinned-item")).toHaveLength(2);
+
+    // 第三个未勾选的框应被禁用，并由 wrapper 提供 tip 文案
+    const disabledPins = within(dropdown as HTMLElement).getAllByRole("checkbox", {
+      name: "You can pin up to 2 items. Uncheck one first.",
+    });
+    expect(disabledPins.length).toBeGreaterThanOrEqual(1);
+    expect((disabledPins[0] as HTMLInputElement).disabled).toBe(true);
+    expect(
+      (disabledPins[0] as HTMLInputElement).closest(
+        ".sidebar-settings-dropdown-pin-wrap.is-disabled",
+      ),
+    ).toBeTruthy();
+    expect(
+      (disabledPins[0] as HTMLInputElement)
+        .closest(".sidebar-settings-dropdown-pin-wrap")
+        ?.getAttribute("title"),
+    ).toBe("You can pin up to 2 items. Uncheck one first.");
+
+    // 设置项本身没有 pin 勾选框
+    const settingsItem = within(dropdown as HTMLElement).getByRole("menuitem", {
+      name: "Settings",
+    });
+    expect(settingsItem.closest(".sidebar-settings-dropdown-option")).toBeNull();
+
+    // 点击外显图标触发对应动作
+    const pinnedSpecHub = within(
+      container.querySelector(".sidebar-settings-pinned") as HTMLElement,
+    ).getByRole("button", { name: "Spec Hub" });
+    fireEvent.click(pinnedSpecHub);
+    expect(onOpenSpecHub).toHaveBeenCalledTimes(1);
+  });
+
   it("marks the macOS sidebar titlebar placeholder as a drag region", () => {
     const { container } = render(<Sidebar {...baseProps} />);
 
