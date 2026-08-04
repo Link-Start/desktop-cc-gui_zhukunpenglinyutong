@@ -73,8 +73,12 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring, var(--accent-primary, #2563eb)) 16%, transparent);
 }
 
-/* Shared popover shell for Git history Command pickers (align with HomeChat). */
+/* Shared popover shell for Git history Command pickers (align with HomeChat).
+ * Must sit above create-pr backdrop (z-index: 68) and the history dock (z-index: 48).
+ * Popover portals to document.body, so a bare z-50 leaves the menu trapped under the PR mask.
+ */
 .git-history-picker-content {
+  z-index: 80;
   overflow: hidden;
   border-radius: 10px;
   box-shadow:
