@@ -352,15 +352,18 @@ export function resolveVisibleMessageItems(options: {
       : activeEngine === "codex";
     return keepTitleOnlyReasoning || item.id === latestTitleOnlyReasoningId;
   });
+  // Shell/bash 在幕布上永久隐藏，但若仍留在 list 里会把相邻思考拆成多卡。
+  // 必须先丢掉这些不可见工具，再做相邻 reasoning 合并——对话中与完成后同一条路径。
+  const canvasVisible = filterCanvasHiddenProcessTools(filtered, activeEngine);
   const appendReasoningRuns =
     activeEngine === "claude" || activeEngine === "gemini" || activeEngine === "grok" || activeEngine === "kimi" || activeEngine === "opencode";
   const deduped = dedupeAdjacentReasoningItems(
-    filtered,
+    canvasVisible,
     reasoningMetaById,
     appendReasoningRuns,
     toConversationEngine(activeEngine),
   );
-  // codex 也合并相邻思考块（与 session-activity 面板行为一致），中间有工具调用会自然断开。
+  // codex 也合并相邻思考块（与 session-activity 面板行为一致），中间有可见工具调用会自然断开。
   return collapseConsecutiveReasoningRuns(deduped, true, appendReasoningRuns);
 }
 
@@ -465,9 +468,15 @@ export function resolveCollapsedTimelineItems(options: {
   } = options;
   // Shell/command tools stay off the canvas permanently (not only when collapsed)
   // so phase expand never remounts hundreds of bash rows. File read/write remain.
-  const canvasItems = filterCanvasHiddenProcessTools(
-    timelineSourceItems,
-    activeEngine,
+  // 再次合并：若上游未先滤 shell，隐藏后相邻的思考仍需收成一块（展开 phase 时一致）。
+  const canvasItems = collapseConsecutiveReasoningRuns(
+    filterCanvasHiddenProcessTools(timelineSourceItems, activeEngine),
+    true,
+    activeEngine === "claude" ||
+      activeEngine === "gemini" ||
+      activeEngine === "grok" ||
+      activeEngine === "kimi" ||
+      activeEngine === "opencode",
   );
   if (canvasItems.length <= 2) {
     return emptyCollapsedTimelineResult(canvasItems);
