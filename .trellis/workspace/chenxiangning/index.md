@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-31.md`
-- **Total Sessions**: 1322
+- **Total Sessions**: 1323
 - **Last Active**: 2026-08-04
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-31.md` | ~866 | Active |
+| `journal-31.md` | ~915 | Active |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
@@ -59,6 +59,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1323 | 2026-08-04 | fix React #185 Composer extract 自订阅 | `9c04f381a` | `CXN-version-0.7.16` |
 | 1322 | 2026-08-04 | fix Claude backgroundTaskId post-result grace mis-kill (#983) | `3724a114b` | `CXN-version-0.7.16` |
 | 1321 | 2026-08-04 | fix Shared 模型选择器 display authority | `a3a631a90` | `CXN-version-0.7.16` |
 | 1320 | 2026-08-04 | 修复 activeCanvasStore 测试 tsc 构建失败 | `9dc47c0b0` | `CXN-version-0.7.16` |

@@ -864,3 +864,52 @@ Claude structured backgroundTaskId settlement blocker: suppress post-result 5s p
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1323: fix React #185 Composer extract 自订阅
+
+**Date**: 2026-08-04
+**Task**: fix React #185 Composer extract 自订阅
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 内容 |
+|----|------|
+| 问题 | 0.7.16 App-DjQ3UnSh 生产仍炸 react-maximum-update-depth；栈钉 Composer + ActiveCanvasComposer |
+| 根因 | extract effect deps 自订阅 selectedInlineFileReferences + skills/commands 引用抖动；target 等价 hydrate 换壳 notify |
+| 修复 | extract 仅依赖 text；setComposerText 稳定幂等；target isSameExecutionTarget 门闩；stream phase 等价值 setPhase |
+| 文档 | playbook C-20260804-02 + analysis README |
+| 验证 | vitest Composer.file-reference-token + targetStore 共 54 passed |
+
+**Updated Files**:
+- `src/features/composer/components/Composer.tsx`
+- `src/features/composer/components/Composer.file-reference-token.test.tsx`
+- `src/features/shared-session/target/targetStore.ts`
+- `src/features/shared-session/target/targetStore.test.ts`
+- `src/features/threads/hooks/useStreamActivityPhase.ts`
+- `docs/analysis/react-185-maximum-update-depth-playbook.md`
+- `docs/analysis/README.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9c04f381a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
