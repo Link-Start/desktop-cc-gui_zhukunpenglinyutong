@@ -4,7 +4,6 @@ import { mergeAgentMessageText } from "./threadReducerTextMerge";
 
 type MessageItem = Extract<ConversationItem, { kind: "message" }>;
 type AssistantMessageItem = MessageItem & { role: "assistant" };
-type UserMessageItem = MessageItem & { role: "user" };
 
 export type AssistantEquivalenceMatchMode = "settled" | "streaming";
 
@@ -15,10 +14,6 @@ const SETTLED_EQUIVALENCE_MIN_CHARS = 24;
  * If ever re-enabled, keep this floor well above areEquivalent's 8-char prefix rule.
  */
 const STREAMING_EQUIVALENCE_MIN_CHARS = 80;
-
-function isUserMessageItem(item: ConversationItem | undefined): item is UserMessageItem {
-  return item?.kind === "message" && item.role === "user";
-}
 
 function isAssistantMessageItem(
   item: ConversationItem | undefined,
