@@ -62,6 +62,12 @@ export type GitHistoryGraphViewOptions = {
    */
   hideNoise?: boolean;
   isNoise?: (commit: GitHistoryGraphCommitInput) => boolean;
+  /**
+   * List is a sparse subset (author / query / date filter): parent SHAs often
+   * point at commits not present in the page. Compact those links so multi-lane
+   * layout does not open phantom rainbow lanes with no nodes.
+   */
+  sparseList?: boolean;
 };
 
 export const GIT_HISTORY_GRAPH_LANE_COLORS = [
@@ -204,6 +210,49 @@ export function filterNoiseCommits<T extends GitHistoryGraphCommitInput>(
 }
 
 /**
+ * Compact parent links when the visible list is a sparse subset.
+ *
+ * - Keep only parents that also appear in this list (real topology within page).
+ * - If no parent remains in-list, fall back to the next older displayed commit
+ *   so the graph becomes a continuous single-lane timeline instead of opening
+ *   phantom lanes for missing authors / filtered-out intermediates.
+ */
+export function compactSparseCommitParents<T extends GitHistoryGraphCommitInput>(
+  commits: readonly T[],
+): Array<T & { parents: string[] }> {
+  if (commits.length === 0) {
+    return [];
+  }
+
+  const present = new Set(commits.map((commit) => commit.sha));
+
+  return commits.map((commit, index) => {
+    const rewritten: string[] = [];
+    for (const parent of commit.parents) {
+      if (
+        present.has(parent)
+        && parent !== commit.sha
+        && !rewritten.includes(parent)
+      ) {
+        rewritten.push(parent);
+      }
+    }
+
+    if (rewritten.length === 0 && index < commits.length - 1) {
+      const nextOlder = commits[index + 1]!.sha;
+      if (nextOlder !== commit.sha) {
+        rewritten.push(nextOlder);
+      }
+    }
+
+    return {
+      ...commit,
+      parents: rewritten,
+    };
+  });
+}
+
+/**
  * Apply view options then produce commits suitable for layout + list rendering.
  */
 export function projectCommitsForGraph<T extends GitHistoryGraphCommitInput>(
@@ -224,6 +273,12 @@ export function projectCommitsForGraph<T extends GitHistoryGraphCommitInput>(
 
   if (options.hideNoise) {
     working = filterNoiseCommits(working, options.isNoise ?? isGitHistoryNoiseCommit);
+  }
+
+  // Sparse compact runs last so author/query/date filters can heal parent gaps
+  // left after first-parent / noise projection.
+  if (options.sparseList) {
+    working = compactSparseCommitParents(working);
   }
 
   return working;

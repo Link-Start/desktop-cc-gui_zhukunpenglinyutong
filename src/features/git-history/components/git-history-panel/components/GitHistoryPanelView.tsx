@@ -1510,17 +1510,20 @@ export function renderGitHistoryPanelView(scope: GitHistoryPanelViewScope) {
                           </span>
                           <span className="git-history-commit-meta">
                             <code>{entry.shortSha}</code>
-                            <span className="git-history-commit-author">
-                              <PersonaAvatar
-                                displayName={authorDisplayName}
-                                avatarSrc={authorAvatar.avatarSrc}
-                                githubProfileUrl={authorAvatar.githubProfileUrl}
-                                size={14}
-                                className="git-history-commit-author-avatar"
-                              />
-                              <em title={authorDisplayName}>{authorDisplayName}</em>
-                            </span>
-                            {showMatchedAuthorEmail ? (
+                            {/* Author chip is redundant when already filtered by user;
+                                only keep email when the filter matched email, not name. */}
+                            {!activeAuthorFilter ? (
+                              <span className="git-history-commit-author">
+                                <PersonaAvatar
+                                  displayName={authorDisplayName}
+                                  avatarSrc={authorAvatar.avatarSrc}
+                                  githubProfileUrl={authorAvatar.githubProfileUrl}
+                                  size={14}
+                                  className="git-history-commit-author-avatar"
+                                />
+                                <em title={authorDisplayName}>{authorDisplayName}</em>
+                              </span>
+                            ) : showMatchedAuthorEmail ? (
                               <span className="git-history-commit-author-email">
                                 &lt;{entry.authorEmail}&gt;
                               </span>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildGitHistoryGraphLayout,
+  compactSparseCommitParents,
   filterFirstParentCommits,
   filterNoiseCommits,
   getGitHistoryGraphRowWidth,
@@ -194,6 +195,48 @@ describe("filterNoiseCommits / isGitHistoryNoiseCommit", () => {
   });
 });
 
+describe("compactSparseCommitParents", () => {
+  it("keeps parents that are still present in the filtered list", () => {
+    const commits = [
+      commit("c3", ["c2"]),
+      commit("c2", ["c1"]),
+      commit("c1", []),
+    ];
+    const compacted = compactSparseCommitParents(commits);
+    expect(compacted.map((item) => item.parents)).toEqual([
+      ["c2"],
+      ["c1"],
+      [],
+    ]);
+  });
+
+  it("rewrites missing parents to the next older displayed commit", () => {
+    // Author filter: only this user's commits remain; intermediates gone.
+    const commits = [
+      commit("a3", ["other2"]),
+      commit("a2", ["other1"]),
+      commit("a1", ["root-outside"]),
+    ];
+    const compacted = compactSparseCommitParents(commits);
+    expect(compacted.map((item) => item.sha)).toEqual(["a3", "a2", "a1"]);
+    expect(compacted.map((item) => item.parents)).toEqual([
+      ["a2"],
+      ["a1"],
+      [],
+    ]);
+  });
+
+  it("drops missing merge parents but keeps present ones", () => {
+    const commits = [
+      commit("M", ["A", "missing-side"]),
+      commit("A", ["B"]),
+      commit("B", []),
+    ];
+    const compacted = compactSparseCommitParents(commits);
+    expect(compacted[0]!.parents).toEqual(["A"]);
+  });
+});
+
 describe("projectCommitsForGraph + buildGitHistoryGraphLayout", () => {
   it("combines first-parent and noise filters", () => {
     const commits = [
@@ -216,5 +259,36 @@ describe("projectCommitsForGraph + buildGitHistoryGraphLayout", () => {
     });
     expect(layout.laneCount).toBe(1);
     expect(layout.rows).toHaveLength(3);
+  });
+
+  it("sparseList collapses author-filtered gaps into a single lane", () => {
+    // Simulates author filter: same author, parents point at other authors
+    // who were removed from the page → without sparseList this opens
+    // phantom lanes (rainbow lines with no nodes).
+    const commits = [
+      commit("a4", ["x3"]),
+      commit("a3", ["x2"]),
+      commit("a2", ["x1"]),
+      commit("a1", ["root"]),
+    ];
+    const { layout } = buildGitHistoryGraphLayout(commits, {
+      sparseList: true,
+    });
+    expect(layout.laneCount).toBe(1);
+    expect(layout.rows.map((row) => row.lane)).toEqual([0, 0, 0, 0]);
+    expect(layout.rows.every((row) => row.laneSpan === 1)).toBe(true);
+  });
+
+  it("without sparseList, missing parents still open extra lanes", () => {
+    const commits = [
+      commit("a3", ["x2"]),
+      commit("a2", ["x1"]),
+      commit("a1", []),
+    ];
+    const { layout } = buildGitHistoryGraphLayout(commits, {
+      sparseList: false,
+    });
+    // Phantom parent placeholders force laneCount > 1 for this sparse set.
+    expect(layout.laneCount).toBeGreaterThan(1);
   });
 });

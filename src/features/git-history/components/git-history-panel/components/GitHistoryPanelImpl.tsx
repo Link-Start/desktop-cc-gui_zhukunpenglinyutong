@@ -1427,13 +1427,22 @@ export const GitHistoryPanel = memo(function GitHistoryPanel({
     commits,
   });
 
+  // Author / query / date filters return a sparse subset whose parent SHAs often
+  // point at commits not on the page. Compact those links so the graph does not
+  // open phantom rainbow lanes with no nodes.
+  const graphSparseList = Boolean(
+    commitAuthor.trim()
+    || commitQuery.trim()
+    || commitDatePreset !== "all",
+  );
   const graphProjection = useMemo(
     () =>
       buildGitHistoryGraphLayout(commits, {
         firstParentOnly: graphFirstParentOnly,
         hideNoise: graphHideNoise,
+        sparseList: graphSparseList,
       }),
-    [commits, graphFirstParentOnly, graphHideNoise],
+    [commits, graphFirstParentOnly, graphHideNoise, graphSparseList],
   );
   const displayCommits = graphProjection.commits as GitHistoryCommit[];
   const commitGraphLayout = graphProjection.layout;
