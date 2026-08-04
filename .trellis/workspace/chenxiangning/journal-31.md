@@ -715,3 +715,53 @@ onDebugRef 解耦、原子 selection state、乐观 snapshot、preferred 归一�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1319: 对抗式 review 收口 React #185 canvas store / storm
+
+**Date**: 2026-08-04
+**Task**: 对抗式 review 收口 React #185 canvas store / storm
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 问题 | 生产持续性 React #185（App-hx3PTjEz），appVersion unknown |
+| 对抗式 review | 修正 useActiveCanvasSelector：禁 render 期写 ref，改为 getSnapshot 内 cache |
+| 结构修复 | setSnapshot shallow 门闩；跨 epoch storm 熔断；session engineDefault ref；NoticeDock 幂等；报告 __APP_VERSION__ |
+| 文档 | playbook C-20260804-01 + AP-07 + §8.1；analysis README 校准 |
+| 验证 | vitest 70 通过（activeCanvasStore / useModels / app-shell.startup / session / errorBoundaryReport） |
+
+**Updated Files**:
+- `src/features/layout/hooks/activeCanvasStore.ts`
+- `src/features/layout/hooks/activeCanvasStore.test.tsx`
+- `src/features/models/hooks/useModels.ts`
+- `src/app-shell-parts/useSelectedComposerSession.ts`
+- `src/features/notifications/components/GlobalRuntimeNoticeDock.tsx`
+- `src/components/errorBoundaryReport.ts`
+- `docs/analysis/react-185-maximum-update-depth-playbook.md`
+- `docs/analysis/README.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2afeadabf` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

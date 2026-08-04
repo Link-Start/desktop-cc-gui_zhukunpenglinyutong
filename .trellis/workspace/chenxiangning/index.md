@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-31.md`
-- **Total Sessions**: 1318
+- **Total Sessions**: 1319
 - **Last Active**: 2026-08-04
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-31.md` | ~717 | Active |
+| `journal-31.md` | ~767 | Active |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
@@ -59,6 +59,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1319 | 2026-08-04 | 对抗式 review 收口 React #185 canvas store / storm | `2afeadabf` | `CXN-version-0.7.16` |
 | 1318 | 2026-08-04 | docs: 重写新 CLI 接入指南, 补全量注册点核对矩阵 A~H 八层 56 行 | `f6858e821` | `CXN-version-0.7.16` |
 | 1317 | 2026-08-04 | 闭环 Shared 恢复出口 | `c4cb33daf` | `CXN-version-0.7.16` |
 | 1316 | 2026-08-04 | 修复 Shared 侧栏异步刷新 stale hide set 泄漏原生会话 | `e0f8c0aa7` | `CXN-version-0.7.16` |
