@@ -720,7 +720,7 @@
 .selector-dropdown-title {
   padding: 8px 20px 4px 18px;
   font-size: 14px;
-  font-weight: 350;
+  font-weight: 400;
   color: var(--dropdown-title-color, #8A9096);
   pointer-events: none;
   user-select: none;
@@ -816,7 +816,7 @@
 
 .selector-option .model-description {
   font-size: 12px;
-  font-weight: 300;
+  font-weight: 400;
   color: var(--dropdown-description-color, #8A9096);
   font-style: italic;
   font-family: inherit;
