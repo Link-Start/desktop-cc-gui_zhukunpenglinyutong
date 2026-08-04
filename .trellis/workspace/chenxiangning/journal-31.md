@@ -1315,3 +1315,46 @@ Shared Grok 初始化禁止借用 Native Codex 的 reasoning options/effort；in
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1334: 修复 PR 创建弹窗下拉被遮罩挡住
+
+**Date**: 2026-08-04
+**Task**: 修复 PR 创建弹窗下拉被遮罩挡住
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 内容 |
+|----|------|
+| 问题 | Create PR 弹窗中 base/compare 等下拉点不开 |
+| 根因 | git graph 改造将 picker 改为 Radix Popover portal + 默认 z-50，低于 create-pr backdrop z-68 |
+| 修复 | PopoverContent 与 `.git-history-picker-content` 抬到 z-index:80，并补回归测试 |
+
+**Updated Files**:
+- `src/features/git-history/components/git-history-panel/components/GitHistoryPanelPickers.tsx`
+- `src/features/git-history/components/git-history-panel/components/GitHistoryPanelPickers.test.tsx`
+- `src/styles/git-history.part1.overview.css`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1a6ffab1f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -37,6 +37,35 @@ describe("GitHistoryPanelPickers", () => {
     fireEvent.click(screen.getByRole("button", { name: "Target branch" }));
     expect(screen.getByPlaceholderText("Search branches")).toBeTruthy();
   });
+
+  it("stacks picker content above create-pr backdrop z-index so PR dialog menus stay clickable", () => {
+    const onSelect = vi.fn();
+
+    render(
+      <div className="git-history-create-pr-backdrop" style={{ zIndex: 68 }}>
+        <GitHistoryInlinePicker
+          label="Base branch"
+          value="main"
+          options={[
+            { value: "main", label: "main" },
+            { value: "develop", label: "develop" },
+          ]}
+          searchPlaceholder="Search branches"
+          emptyText="No branches"
+          onSelect={onSelect}
+        />
+      </div>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Base branch" }));
+    const content = document.querySelector(".git-history-picker-content");
+    expect(content).toBeTruthy();
+    // Portal content must declare a layer above create-pr backdrop (z-68).
+    expect(content?.className ?? "").toMatch(/z-\[80\]/);
+
+    fireEvent.click(screen.getByRole("option", { name: /develop/i }));
+    expect(onSelect).toHaveBeenCalledWith("develop");
+  });
 });
 
 describe("ActionSurface tooltips", () => {

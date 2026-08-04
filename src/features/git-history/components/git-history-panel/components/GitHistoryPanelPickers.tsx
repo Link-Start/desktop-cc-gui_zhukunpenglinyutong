@@ -271,7 +271,8 @@ export function GitHistoryProjectPicker({
           align="start"
           side="bottom"
           sideOffset={6}
-          className="git-history-picker-content w-72 p-0"
+          // Above create-pr backdrop (z-68) and git-history dock (z-48).
+          className="git-history-picker-content z-[80] w-72 p-0"
         >
           <Command shouldFilter={false}>
             <CommandInput
@@ -434,7 +435,8 @@ export function GitHistoryInlinePicker({
           align={dropdownAlign === "end" ? "end" : "start"}
           side="bottom"
           sideOffset={6}
-          className="git-history-picker-content w-80 max-w-[min(90vw,480px)] p-0"
+          // Above create-pr backdrop (z-68) so options are clickable inside PR dialog.
+          className="git-history-picker-content z-[80] w-80 max-w-[min(90vw,480px)] p-0"
         >
           <Command shouldFilter={false}>
             <CommandInput
