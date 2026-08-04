@@ -798,3 +798,36 @@ test 文件被 tsc include，let|null 收窄为 never 导致 build 失败；改�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1321: fix Shared 模型选择器 display authority
+
+**Date**: 2026-08-04
+**Task**: fix Shared 模型选择器 display authority
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+Shared Atomic 闭合态以 selectedNextTarget/executionTarget 快照为展示权威；catalog 仅 enrichment；Shared 禁止回落全局 selectedModelId；Native 保持全局回落。含 OpenSpec change 与 79 项相关单测。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a3a631a90` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
