@@ -211,6 +211,57 @@ function resolveRuntimeModel(model: ModelInfo): string | undefined {
 }
 
 /**
+ * Atomic 闭合态选中展示解析（Shared / create-session Atomic 共用）。
+ *
+ * catalog 命中时用 catalog 行做友好标签；未命中时用 executionTarget 快照合成展示行。
+ * Atomic 路径 MUST NOT 依赖父层 activeEngine `models` 判定“是否已选”。
+ */
+export function resolveAtomicSelectedModelDisplay(
+  executionTarget: ExecutionTarget | null | undefined,
+  selectedModelValue: string,
+  catalogModels: readonly ModelInfo[] | null | undefined,
+): ModelInfo | null {
+  if (!executionTarget) {
+    return null;
+  }
+  const catalogEntryId =
+    executionTarget.modelCatalogEntryId?.trim() || selectedModelValue.trim();
+  const runtimeModel = executionTarget.model?.trim() || "";
+  if (!catalogEntryId && !runtimeModel) {
+    return null;
+  }
+
+  const matchedCatalog =
+    catalogModels?.find((model) => {
+      if (catalogEntryId && model.id === catalogEntryId) {
+        return true;
+      }
+      if (selectedModelValue && model.id === selectedModelValue) {
+        return true;
+      }
+      const catalogRuntime = resolveRuntimeModel(model);
+      return Boolean(
+        runtimeModel &&
+          catalogRuntime &&
+          catalogRuntime === runtimeModel,
+      );
+    }) ?? null;
+  if (matchedCatalog) {
+    return matchedCatalog;
+  }
+
+  const snapshotId = catalogEntryId || runtimeModel;
+  return {
+    id: snapshotId,
+    model: runtimeModel || snapshotId,
+    label: runtimeModel || snapshotId,
+    providerProfileId:
+      executionTarget.providerProfileId?.trim() || undefined,
+    source: "provider-config",
+  };
+}
+
+/**
  * Resolve the model id used for brand-icon matching.
  * Prefer the mapped runtime model (e.g. kimi-k3) so third-party providers show
  * their own logo instead of the Claude glyph.
@@ -557,17 +608,19 @@ export const ModelSelect = memo(({
   }, [currentProvider, models, value]);
 
   const selectedModelValue = value.trim();
-  const targetCurrentModel =
-    executionTarget && selectedModelValue.length > 0
-      ? pickerGroups
-          .find((group) => group.providerId === executionTarget.engine)
-          ?.models.find((model) => model.id === selectedModelValue) ?? null
+  // Atomic：闭合态权威 = executionTarget 快照；catalog 仅 enrich，父层 models 不参与“已选”判定。
+  // Legacy 单栏：仍用 value + effectiveModels。
+  const currentModel = hasTargetGroups
+    ? resolveAtomicSelectedModelDisplay(
+        executionTarget,
+        selectedModelValue,
+        pickerGroups.find(
+          (group) => group.providerId === executionTarget?.engine,
+        )?.models,
+      )
+    : selectedModelValue.length > 0
+      ? effectiveModels.find((model) => model.id === selectedModelValue) ?? null
       : null;
-  const currentModel =
-    targetCurrentModel ??
-    (selectedModelValue.length > 0
-      ? effectiveModels.find(m => m.id === selectedModelValue) ?? null
-      : null);
 
   const getModelLabel = (
     model: ModelInfo,

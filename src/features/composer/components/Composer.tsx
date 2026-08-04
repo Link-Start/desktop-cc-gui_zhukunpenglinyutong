@@ -45,6 +45,7 @@ import {
   type ExecutionTarget,
 } from "../../shared-session/target/types";
 import { persistSharedSessionSelectedTarget } from "../../shared-session/services/sharedSessions";
+import { resolveComposerAtomicSelectedModelId } from "../utils/resolveComposerAtomicSelectedModelId";
 import { isSharedSessionThreadId } from "../../shared-session/utils/sharedSessionIdentity";
 import { dispatchSharedSendEvent } from "../../shared-session/runtime/sharedSendStateStore";
 import { requestProviderContinuationDialog } from "../../threads/services/providerContinuationRequests";
@@ -2692,13 +2693,11 @@ function ComposerImpl({
               onSend={handleSend}
               onStop={onStop}
               onTextChange={handleTextChangeWithHistory}
-              selectedModelId={
-                selectedAtomicTarget
-                  ? selectedAtomicTarget.modelCatalogEntryId ??
-                    selectedAtomicTarget.model ??
-                    ""
-                  : selectedModelId
-              }
+              selectedModelId={resolveComposerAtomicSelectedModelId({
+                isSharedSession: isSharedSessionResolved,
+                executionTarget: selectedAtomicTarget,
+                globalSelectedModelId: selectedModelId,
+              })}
               selectedEngine={
                 selectedAtomicTarget?.engine ?? selectedEngine
               }

@@ -51,6 +51,8 @@ import {
   useUndoRedoHistory,
 } from './hooks/index.js';
 import { useAtomicProviderTargetCatalog } from './hooks/useProviderTargetCatalogOwners';
+import { resolveActiveProviderProfileId } from './selectors/ModelSelect';
+import type { EngineType } from '../../../../types';
 import {
   commandToDropdownItem,
   fileReferenceProvider,
@@ -384,6 +386,38 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         defaultValue: '可作为来源；目标续接尚未验证',
       }),
     });
+
+    // Shared/Atomic enrichment：完整 executionTarget 时主动 ensure catalog。
+    // 失败不清 target；闭合态标签由 ModelSelect snapshot authority 承担。
+    useEffect(() => {
+      const engine = executionTarget?.engine;
+      if (
+        !engine ||
+        !["claude", "codex", "kimi", "grok", "opencode"].includes(engine)
+      ) {
+        return;
+      }
+      const profileId = resolveActiveProviderProfileId(
+        engine as ProviderId,
+        executionTarget,
+      );
+      if (!profileId) {
+        return;
+      }
+      void atomicProviderTargetCatalog.ensureProfiles();
+      void atomicProviderTargetCatalog.ensureModels(
+        engine as EngineType,
+        profileId,
+      );
+    }, [
+      atomicProviderTargetCatalog.ensureModels,
+      atomicProviderTargetCatalog.ensureProfiles,
+      executionTarget,
+      executionTarget?.engine,
+      executionTarget?.modelCatalogEntryId,
+      executionTarget?.model,
+      executionTarget?.providerProfileId,
+    ]);
 
     // Records the exact text of the latest programmatic (external) write.
     // Programmatic innerText assignment fires no input event, so this must NOT
