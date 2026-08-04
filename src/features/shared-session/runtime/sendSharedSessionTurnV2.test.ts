@@ -271,6 +271,7 @@ describe("sendSharedSessionTurnRouted（flag 路由）", () => {
         providerProfileSource: "local",
       }),
       "hello",
+      [],
     );
     expect(sharedSessionV2DispatchTurn).toHaveBeenCalledTimes(1);
     expect(setSharedSessionSelectedEngine).not.toHaveBeenCalled();
@@ -420,6 +421,7 @@ describe("sendSharedSessionTurnV2", () => {
         model: "sonnet-4",
       }),
       "hello",
+      [],
     );
     // actual-send 只携带 durable attempt + artifact identity 与非 Target 操作参数。
     expect(sharedSessionV2DispatchTurn).toHaveBeenCalledWith(
@@ -477,6 +479,7 @@ describe("sendSharedSessionTurnV2", () => {
         providerProfileId: "profile-1",
       }),
       "hello",
+      [],
     );
     const dispatchParams = sharedSessionV2DispatchTurn.mock.calls[0]?.[2];
     expect(dispatchParams).toEqual(
@@ -528,6 +531,7 @@ describe("sendSharedSessionTurnV2", () => {
         reasoningEffort: "high",
       }),
       "hello",
+      [],
     );
     expect(registerSharedSessionNativeBinding).toHaveBeenCalledWith(
       expect.objectContaining({

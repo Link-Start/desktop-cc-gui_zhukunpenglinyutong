@@ -31,8 +31,8 @@ use crate::shared_event_log::canonical::assembler::{
 };
 use crate::shared_event_log::canonical::sink;
 use crate::shared_event_log::canonical::types::{
-    CanonicalFact, CanonicalProviderProfileSource, CanonicalUserInput, ControlFact, OutcomeStatus,
-    ReasoningSelection, TurnAcceptedFact, TurnExecutionSnapshot, TurnRequestedFact,
+    ArtifactRef, CanonicalFact, CanonicalProviderProfileSource, CanonicalUserInput, ControlFact,
+    OutcomeStatus, ReasoningSelection, TurnAcceptedFact, TurnExecutionSnapshot, TurnRequestedFact,
 };
 use crate::shared_event_log::{
     deterministic_json_bytes, AppendOutcome, BindingStateUpdate, LegacyImportRow,
@@ -897,11 +897,70 @@ fn recover_creating_binding(
     )
 }
 
+/// 用户本地附图路径 → 合法 ArtifactRef（UI projection 用 locator）。
+/// sha256 优先文件内容；不可读时用 path bytes，满足 validator 64 hex。
+fn user_image_paths_to_artifact_refs(paths: Option<Vec<String>>) -> Option<Vec<ArtifactRef>> {
+    let paths = paths?;
+    let mut refs = Vec::new();
+    for path in paths {
+        let locator = path.trim().to_string();
+        if locator.is_empty() {
+            continue;
+        }
+        let (sha_hex, size_bytes) = match std::fs::read(&locator) {
+            Ok(bytes) => {
+                let size = bytes.len() as i64;
+                (format!("{:x}", Sha256::digest(&bytes)), Some(size))
+            }
+            Err(_) => (format!("{:x}", Sha256::digest(locator.as_bytes())), None),
+        };
+        let media_type = guess_user_image_media_type(&locator);
+        let artifact_id = format!(
+            "user-image-{}",
+            sha_hex.get(..16).unwrap_or(sha_hex.as_str())
+        );
+        refs.push(ArtifactRef {
+            artifact_id,
+            media_type,
+            size_bytes,
+            sha256: sha_hex,
+            locator,
+            redaction: None,
+            extra: Value::Object(Default::default()),
+        });
+    }
+    if refs.is_empty() {
+        None
+    } else {
+        Some(refs)
+    }
+}
+
+fn guess_user_image_media_type(path: &str) -> String {
+    let lower = path.to_ascii_lowercase();
+    if lower.ends_with(".png") {
+        "image/png".to_string()
+    } else if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
+        "image/jpeg".to_string()
+    } else if lower.ends_with(".gif") {
+        "image/gif".to_string()
+    } else if lower.ends_with(".webp") {
+        "image/webp".to_string()
+    } else if lower.ends_with(".bmp") {
+        "image/bmp".to_string()
+    } else if lower.ends_with(".svg") {
+        "image/svg+xml".to_string()
+    } else {
+        "image/*".to_string()
+    }
+}
+
 pub fn begin_turn_core(
     writer: &SharedEventWriter,
     session_id: &str,
     target: &ExecutionTargetInput,
     text: String,
+    images: Option<Vec<String>>,
 ) -> Result<BeginTurnOutcome, String> {
     let engine = match ensure_supported_shared_session_engine(target.engine) {
         Ok(engine) => engine,
@@ -1025,7 +1084,8 @@ pub fn begin_turn_core(
         retry_of_attempt_id: None,
         input: CanonicalUserInput {
             text: Some(text),
-            image_refs: None,
+            // Shared 共有路径：用户附图必须 durable，否则 projection 无图 → 双气泡/丢图
+            image_refs: user_image_paths_to_artifact_refs(images),
             attachment_refs: None,
             extra: Value::Object(Default::default()),
         },
@@ -3185,6 +3245,7 @@ pub async fn shared_session_v2_begin_turn(
     thread_id: String,
     target: ExecutionTargetInput,
     text: String,
+    images: Option<Vec<String>>,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
     let writer = require_writer(&state)?;
@@ -3197,7 +3258,7 @@ pub async fn shared_session_v2_begin_turn(
         }));
     }
     import_legacy_shared_snapshot(writer, &workspace_id, &thread_id, &shared_session_id)?;
-    let outcome = begin_turn_core(writer, &shared_session_id, &target, text)?;
+    let outcome = begin_turn_core(writer, &shared_session_id, &target, text, images)?;
     Ok(match outcome.status {
         BeginTurnStatus::Creating => json!({
             "status": "creating",
@@ -5285,7 +5346,7 @@ mod shared_interrupt_owner_tests {
             &session_id,
             &target(engine, provider),
             "hello".to_string(),
-        )
+            None)
         .expect("begin");
         let attempt_id = begin.attempt_id.expect("attempt");
         let logical_turn_id = begin.logical_turn_id.expect("logical turn");
@@ -5348,7 +5409,7 @@ mod shared_interrupt_owner_tests {
         let provider = "provider-active";
         let active_target = target(EngineType::Codex, provider);
         let (root, writer) = open_test_writer("recovery-active-owner");
-        let begin = begin_turn_core(&writer, session_id, &active_target, "hello".to_string())
+        let begin = begin_turn_core(&writer, session_id, &active_target, "hello".to_string(), None)
             .expect("begin");
         let attempt_id = begin.attempt_id.expect("attempt");
         let logical_turn_id = begin.logical_turn_id.expect("logical turn");
@@ -5439,7 +5500,7 @@ mod shared_interrupt_owner_tests {
             session_id,
             &target(EngineType::Codex, provider),
             "hello".to_string(),
-        )
+            None)
         .expect("begin");
         let attempt_id = begin.attempt_id.expect("attempt");
         let binding_operation_id = durable_attempt_owner(&writer, session_id, &attempt_id)
@@ -5522,7 +5583,7 @@ mod shared_interrupt_owner_tests {
         let session_id = "compaction-active-attempt";
         let (root, writer) = open_test_writer("compaction-active-attempt");
         let active_target = target(EngineType::Codex, "provider-active");
-        let begin = begin_turn_core(&writer, session_id, &active_target, "hello".to_string())
+        let begin = begin_turn_core(&writer, session_id, &active_target, "hello".to_string(), None)
             .expect("begin");
         let attempt_id = begin.attempt_id.expect("attempt");
         let logical_turn_id = begin.logical_turn_id.expect("logical turn");
@@ -5557,7 +5618,7 @@ mod shared_interrupt_owner_tests {
         let session_id = "compaction-selected-target";
         let (root, writer) = open_test_writer("compaction-selected-target");
         let selected_target = target(EngineType::Codex, "provider-selected");
-        let begin = begin_turn_core(&writer, session_id, &selected_target, "hello".to_string())
+        let begin = begin_turn_core(&writer, session_id, &selected_target, "hello".to_string(), None)
             .expect("begin");
         let attempt_id = begin.attempt_id.expect("attempt");
         let logical_turn_id = begin.logical_turn_id.expect("logical turn");
@@ -5604,7 +5665,7 @@ mod shared_interrupt_owner_tests {
         let session_id = "compaction-selected-claude";
         let (root, writer) = open_test_writer("compaction-selected-claude");
         let selected_target = target(EngineType::Claude, "provider-managed");
-        let begin = begin_turn_core(&writer, session_id, &selected_target, "hello".to_string())
+        let begin = begin_turn_core(&writer, session_id, &selected_target, "hello".to_string(), None)
             .expect("begin");
         let attempt_id = begin.attempt_id.expect("attempt");
         let logical_turn_id = begin.logical_turn_id.expect("logical turn");
@@ -5680,7 +5741,7 @@ mod shared_interrupt_owner_tests {
         let session_id = "interrupt-already-committed";
         let (root, writer) = open_test_writer("already-committed");
         let selected_target = target(EngineType::Claude, "provider-committed");
-        let begin = begin_turn_core(&writer, session_id, &selected_target, "hello".to_string())
+        let begin = begin_turn_core(&writer, session_id, &selected_target, "hello".to_string(), None)
             .expect("begin");
         let attempt_id = begin.attempt_id.expect("attempt");
         let logical_turn_id = begin.logical_turn_id.expect("logical turn");
@@ -5714,7 +5775,7 @@ mod shared_interrupt_owner_tests {
         let session_id = "await-terminal-committed";
         let (root, writer) = open_test_writer("await-terminal-committed");
         let selected_target = target(EngineType::Claude, "provider-committed");
-        let begin = begin_turn_core(&writer, session_id, &selected_target, "hello".to_string())
+        let begin = begin_turn_core(&writer, session_id, &selected_target, "hello".to_string(), None)
             .expect("begin");
         let attempt_id = begin.attempt_id.expect("attempt");
         let logical_turn_id = begin.logical_turn_id.expect("logical turn");
@@ -5768,7 +5829,7 @@ mod shared_interrupt_owner_tests {
             session_id,
             &target(EngineType::Codex, "provider-a"),
             "hello".to_string(),
-        )
+            None)
         .expect("begin");
         let attempt_id = begin.attempt_id.expect("attempt");
         let binding_operation_id = durable_attempt_owner(&writer, session_id, &attempt_id)
@@ -5825,7 +5886,7 @@ mod shared_interrupt_owner_tests {
             session_id,
             &target(EngineType::Codex, provider),
             "hello".to_string(),
-        )
+            None)
         .expect("begin");
         let attempt_id = begin.attempt_id.expect("attempt");
         let binding_key = begin.binding_key.clone();
@@ -5877,7 +5938,7 @@ mod shared_interrupt_owner_tests {
             session_id,
             &target(EngineType::Codex, provider),
             "again".to_string(),
-        )
+            None)
         .expect("begin after abandon");
         assert_eq!(next.status, BeginTurnStatus::Creating);
 
@@ -5895,7 +5956,7 @@ mod shared_interrupt_owner_tests {
             session_id,
             &target(EngineType::Codex, provider),
             "one".to_string(),
-        )
+            None)
         .expect("begin first");
         let binding_key = first.binding_key.clone();
         let rebuilt = rebuild_binding_core(&writer, session_id, &binding_key).expect("rebuild");

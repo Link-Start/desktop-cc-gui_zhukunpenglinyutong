@@ -457,12 +457,14 @@ export async function sharedSessionV2BeginTurn(
   threadId: string,
   target: SharedV2ExecutionTargetPayload,
   text: string,
+  images?: string[] | null,
 ) {
   return invoke<SharedV2BeginTurnResult>("shared_session_v2_begin_turn", {
     workspaceId,
     threadId,
     target,
     text,
+    images: images ?? null,
   });
 }
 

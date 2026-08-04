@@ -2,6 +2,8 @@ import type { ConversationItem } from "../../../types";
 import {
   buildComparableUserMessageKey,
   isEquivalentUserObservation,
+  normalizeComparableUserText,
+  normalizeUserImages,
 } from "../assembly/conversationNormalization";
 import { isProcessingGeneratedImageItem } from "../utils/generatedImagePlaceholder";
 import { shouldPreserveProcessingGeneratedImage } from "../utils/generatedImagePlaceholderMatching";
@@ -35,6 +37,20 @@ function isOptimisticUserMessage(
   return isUserMessageItem(item) && isOptimisticUserMessageId(item.id);
 }
 
+function userMessageImageList(item: UserMessageItem): string[] {
+  return normalizeUserImages(item.images, item.text);
+}
+
+function isTextEquivalentUserTurn(
+  left: Pick<UserMessageItem, "text">,
+  right: Pick<UserMessageItem, "text">,
+) {
+  return (
+    normalizeComparableUserText(left.text) ===
+    normalizeComparableUserText(right.text)
+  );
+}
+
 function findMatchingRealUserMessage(
   list: ConversationItem[],
   candidate: UserMessageItem,
@@ -46,7 +62,41 @@ function findMatchingRealUserMessage(
     if (isOptimisticUserMessageId(item.id)) {
       return false;
     }
-    return isEquivalentUserObservation(item, candidate);
+    // 全文+图等价，或同 turn 文案等价（Shared 投影曾丢图时仍要收敛双气泡）
+    return (
+      isEquivalentUserObservation(item, candidate) ||
+      isTextEquivalentUserTurn(item, candidate)
+    );
+  });
+}
+
+function enrichRealUserImagesFromOptimistic(
+  incomingItems: ConversationItem[],
+  localItems: ConversationItem[],
+): ConversationItem[] {
+  const optimisticUsers = localItems.filter(isOptimisticUserMessage);
+  if (optimisticUsers.length === 0) {
+    return incomingItems;
+  }
+  return incomingItems.map((item) => {
+    if (!isUserMessageItem(item) || isOptimisticUserMessageId(item.id)) {
+      return item;
+    }
+    if (userMessageImageList(item).length > 0) {
+      return item;
+    }
+    const matchedOptimistic = optimisticUsers.find(
+      (optimistic) =>
+        isTextEquivalentUserTurn(optimistic, item) &&
+        userMessageImageList(optimistic).length > 0,
+    );
+    if (!matchedOptimistic) {
+      return item;
+    }
+    return {
+      ...item,
+      images: matchedOptimistic.images,
+    };
   });
 }
 
@@ -91,9 +141,14 @@ export function mergeThreadItemsPreservingOptimisticUsers(
   const localUserSequence = toComparableUserMessageSequence(localItems);
   const incomingUserSequence = toComparableUserMessageSequence(incomingItems);
   const hasUserSequenceDrift = !areSameSequence(localUserSequence, incomingUserSequence);
+  // Shared 投影若暂时无图：先把 optimistic 附图补到 text 等价的真实用户消息上，再收敛。
+  const incomingWithImageEnrichment = enrichRealUserImagesFromOptimistic(
+    incomingItems,
+    localItems,
+  );
   const optimisticUserReplacementById = buildOptimisticUserReplacementMap(
     localItems,
-    incomingItems,
+    incomingWithImageEnrichment,
   );
   const localUserMessageMetadataBuckets = new Map<
     string,
@@ -112,7 +167,7 @@ export function mergeThreadItemsPreservingOptimisticUsers(
     localUserMessageMetadataBuckets.set(key, bucket);
   }
 
-  let mergedItems = incomingItems.map((item) => {
+  let mergedItems = incomingWithImageEnrichment.map((item) => {
     if (!isUserMessageItem(item)) {
       return item;
     }

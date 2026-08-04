@@ -234,6 +234,7 @@ export async function sendSharedSessionTurnV2(
       input.threadId,
       targetPayload,
       input.text,
+      input.images,
     );
   } catch (beginError) {
     // begin 正常路径以 Ok(status) 返回 target-unavailable / recovery-required；

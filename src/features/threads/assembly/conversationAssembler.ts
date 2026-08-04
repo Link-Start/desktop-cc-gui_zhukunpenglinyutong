@@ -10,6 +10,8 @@ import {
   compactComparableConversationText,
   findEquivalentReasoningObservationIndex,
   isEquivalentUserObservation,
+  normalizeComparableUserText,
+  normalizeUserImages,
 } from "./conversationNormalization";
 import {
   classifyConversationObservation,
@@ -149,6 +151,61 @@ function findEquivalentAssistantMessageIndex(
   return -1;
 }
 
+/** 同 turn 用户文案等价（允许 images 一侧缺失，用于 Shared history 补图）。 */
+function isTextEquivalentUserTurn(
+  left: Pick<UserMessageItem, "text">,
+  right: Pick<UserMessageItem, "text">,
+) {
+  return (
+    normalizeComparableUserText(left.text) ===
+    normalizeComparableUserText(right.text)
+  );
+}
+
+function isHistoryCompatibleUserObservation(
+  left: UserMessageItem,
+  right: UserMessageItem,
+) {
+  return (
+    isEquivalentUserObservation(left, right) ||
+    isTextEquivalentUserTurn(left, right)
+  );
+}
+
+/** 合并两侧用户附图：优先非空；两侧皆有时保留更长列表。 */
+export function preferRicherUserImages(
+  existing: UserMessageItem,
+  incoming: UserMessageItem,
+): string[] | undefined {
+  const existingImages = normalizeUserImages(existing.images, existing.text);
+  const incomingImages = normalizeUserImages(incoming.images, incoming.text);
+  if (incomingImages.length === 0 && existingImages.length === 0) {
+    return undefined;
+  }
+  if (incomingImages.length === 0) {
+    return existing.images ?? existingImages;
+  }
+  if (existingImages.length === 0) {
+    return incoming.images ?? incomingImages;
+  }
+  if (incomingImages.length >= existingImages.length) {
+    return incoming.images ?? incomingImages;
+  }
+  return existing.images ?? existingImages;
+}
+
+function mergeUserMessageSnapshot(
+  existing: UserMessageItem,
+  incoming: UserMessageItem,
+): UserMessageItem {
+  const images = preferRicherUserImages(existing, incoming);
+  return {
+    ...existing,
+    ...incoming,
+    images,
+  };
+}
+
 function findEquivalentTrailingUserMessageIndex(
   items: ConversationItem[],
   incoming: UserMessageItem,
@@ -164,7 +221,8 @@ function findEquivalentTrailingUserMessageIndex(
     if (!isUserMessageItem(candidate)) {
       break;
     }
-    if (isEquivalentUserObservation(candidate, incoming)) {
+    // Shared history：projection 无图 / legacy 有图时仍要命中并补图
+    if (isHistoryCompatibleUserObservation(candidate, incoming)) {
       return index;
     }
   }
@@ -515,10 +573,11 @@ function upsertSnapshotItem(
                 items,
                 new Map([[existing.id, normalizedNext.id]]),
               );
-        return replaceItemAtIndex(retargetedItems, userIndex, {
-          ...existing,
-          ...normalizedNext,
-        });
+        return replaceItemAtIndex(
+          retargetedItems,
+          userIndex,
+          mergeUserMessageSnapshot(existing, normalizedNext),
+        );
       }
     }
   }
@@ -920,7 +979,7 @@ export function mergeHistoryProjectionItems(
         (item, index) =>
           index > lastMatchedUserIndex &&
           isUserMessageItem(item) &&
-          isEquivalentUserObservation(item, overlayItem),
+          isHistoryCompatibleUserObservation(item, overlayItem),
       );
       if (matchedUserIndex < 0) {
         items = upsertSnapshotItem(items, overlayItem, event);
@@ -933,12 +992,14 @@ export function mergeHistoryProjectionItems(
           appendedUserIndex >= 0 ? appendedUserIndex : items.length - 1;
       } else {
         const existingUser = items[matchedUserIndex];
-        const [mergedUser] = upsertSnapshotItem(
-          [existingUser],
-          { ...overlayItem, id: existingUser.id },
-          event,
-        );
-        items[matchedUserIndex] = mergedUser;
+        if (!isUserMessageItem(existingUser)) {
+          continue;
+        }
+        // 保留 legacy 与 projection 两侧更完整的附图，避免 history 丢图
+        items[matchedUserIndex] = mergeUserMessageSnapshot(existingUser, {
+          ...overlayItem,
+          id: existingUser.id,
+        });
         lastMatchedUserIndex = matchedUserIndex;
       }
       activeTurnStart = lastMatchedUserIndex + 1;
