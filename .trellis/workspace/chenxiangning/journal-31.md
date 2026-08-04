@@ -1149,3 +1149,103 @@ OpenSpec + merge early-body 折叠 + 跨 id 收敛；review 收紧 streaming/sto
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1329: fix Shared 用户附图双气泡与历史丢图
+
+**Date**: 2026-08-04
+**Task**: fix Shared 用户附图双气泡与历史丢图
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+Shared CLI 用户附图：TurnRequested.image_refs + projection/dataSource 透传 images + optimistic/history 保图合并；OpenSpec fix-shared-user-image-bubble-projection；单独提交不含 resume-integrity
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b2a1ef000` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1330: fix Shared 上下文续接 resume-integrity
+
+**Date**: 2026-08-04
+**Task**: fix Shared 上下文续接 resume-integrity
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+nativeContextTrust dirty/trusted + dirty 时 needs-history rematerialize + empty-context-handoff FE/i18n；OpenSpec fix-shared-context-resume-integrity；用户验收通过后单独提交
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `165f0fda6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1331: 修复 Composer rewind reset React #185
+
+**Date**: 2026-08-04
+**Task**: 修复 Composer rewind reset React #185
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+将 production bundle App-C2u7zJPh exact stack 映射到 Composer rewind passive effect；复用 useEventCallback 加 pre-dispatch semantic guard，并以 primitive capability dependency 断开 callback identity churn；补 StrictMode regression、OpenSpec contract、React #185 playbook 与 Trellis state guardrail。验证：clean-base typecheck 通过，scoped ESLint 通过，focused Vitest 62/62，OpenSpec strict 506/506；全仓 lint 保留既有 personaAssign prefer-const baseline error。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fa84f2dba` | (see git log) |
+| `a59985654` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
