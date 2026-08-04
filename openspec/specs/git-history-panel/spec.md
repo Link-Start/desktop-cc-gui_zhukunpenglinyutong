@@ -39,6 +39,25 @@ The middle column SHALL display commit rows with graph and key metadata columns.
     - Author
     - Relative time
 
+#### Scenario: Multi-lane graph shows branch hierarchy
+
+- **WHEN** commit history includes merges or parallel side branches
+- **THEN** the graph column SHALL assign commits to horizontal lanes based on parent topology
+- **AND** first-parent edges, merge edges, and pass-through lanes SHALL be drawn so fork/join hierarchy is visible
+- **AND** lane colors SHALL remain stable for the active layout of the loaded page
+
+#### Scenario: First-parent spine mode
+
+- **WHEN** the user enables the first-parent (spine) graph option
+- **THEN** the commit list SHALL keep only the first-parent chain from the tip
+- **AND** the graph SHALL collapse to a single primary lane
+
+#### Scenario: Hide session-noise commits
+
+- **WHEN** the user enables the denoise graph option
+- **THEN** commits matching session-record noise (default: `chore(trellis)`) SHALL be hidden from the list
+- **AND** parent links of remaining commits SHALL be rewritten so the graph stays continuous
+
 #### Scenario: Truncated subject with full tooltip
 
 - **WHEN** subject exceeds row width
@@ -475,6 +494,16 @@ The system SHALL preserve visual semantics when large panel styles are split int
 - **WHEN** 用户在 Git History worktree 区域切换 flat/tree mode
 - **THEN** shared renderer MUST preserve section、folder collapse、selection 与 mutation actions
 
+#### Scenario: Commit details list supports flat and tree modes
+- **WHEN** 用户在 Git History 右侧 commit details 的变更文件区切换 flat/tree mode
+- **THEN** 列表 MUST 在平铺（显示目录路径）与树形（目录折叠）之间切换
+- **AND** 切换 MUST 写入与主 Git Diff 面板共享的 `gitDiffListView` 设置
+
+#### Scenario: Commit details list stays in sync with main Git panel
+- **WHEN** 用户在主 Git Diff 面板将文件列表视图设为 tree 或 flat
+- **THEN** Git History commit details 变更文件区 MUST 使用同一视图模式渲染
+- **AND** 在 History 内切换视图 MUST 反向更新主 Git Diff 面板的同一设置
+
 #### Scenario: Commit file activation opens preview command
 - **WHEN** 用户通过 mouse 或 keyboard 激活 commit details file row
 - **THEN** shared renderer MUST 向容器发出同一个 preview command
@@ -542,11 +571,11 @@ The system SHALL provide a three-column Git History workspace focused on branch 
     - Top: changed files list
     - Bottom: selected commit message
 
-#### Scenario: Desktop columns use a three-four-three default ratio
+#### Scenario: Desktop columns use a four-eleven-five default ratio
 
 - **WHEN** Git History opens in desktop split layout
 - **THEN** the system SHALL subtract the two visible vertical separators from the available width
-- **AND** branch, commit, and details columns SHALL receive the remaining width in a `3:4:3` default ratio
+- **AND** branch, commit, and details columns SHALL receive the remaining width in a `4:11:5` default ratio (about 20% / 55% / 25%) so the commit list stays dominant and commit messages remain readable
 - **AND** users SHALL retain the existing ability to resize the columns
 
 #### Scenario: Click file to preview diff in modal

@@ -954,6 +954,8 @@
 }
 
 .git-history-push-preview-file-tree {
+  /* 与变更文件列一致：文件名比 content 小一号 */
+  --git-filetree-name-font-size: var(--client-meta-font-size, 12px);
   min-height: 0;
   flex: 1;
   overflow: auto;
@@ -1800,7 +1802,7 @@
 
 @media (max-width: 1380px) {
   .git-history-main-grid {
-    grid-template-columns: minmax(200px, 3fr) minmax(310px, 4fr) minmax(330px, 3fr);
+    grid-template-columns: minmax(200px, 4fr) minmax(360px, 11fr) minmax(260px, 5fr);
   }
 }
 

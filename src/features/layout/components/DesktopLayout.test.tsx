@@ -115,8 +115,8 @@ describe("DesktopLayout", () => {
     expect(container.querySelector(".right-panel")).toBeNull();
   });
 
-  it("opens Git Graph as a full modal dialog instead of a bottom half-dock", () => {
-    const { container, getByText, queryByRole } = renderDesktopLayout({
+  it("opens Git Graph as a bottom half-dock with a resize handle", () => {
+    const { container, getByText, getByRole } = renderDesktopLayout({
       showGitHistory: true,
     });
 
@@ -124,10 +124,11 @@ describe("DesktopLayout", () => {
     const body = container.querySelector(".git-history-dock-body");
     expect(overlay).toBeTruthy();
     expect(body).toBeTruthy();
-    expect(body?.getAttribute("role")).toBe("dialog");
-    expect(body?.getAttribute("aria-modal")).toBe("true");
-    expect(container.querySelector(".git-history-dock-resizer")).toBeNull();
-    expect(queryByRole("separator", { name: /resize git history/i })).toBeNull();
+    expect(body?.getAttribute("role")).not.toBe("dialog");
+    expect(container.querySelector(".git-history-dock-resizer")).toBeTruthy();
+    expect(
+      getByRole("separator", { name: /resizeGitHistoryPanel|resize git history/i }),
+    ).toBeTruthy();
     expect(getByText("git-history")).toBeTruthy();
   });
 

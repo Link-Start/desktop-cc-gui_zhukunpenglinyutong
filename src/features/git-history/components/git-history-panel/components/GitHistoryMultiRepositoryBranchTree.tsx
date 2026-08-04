@@ -25,11 +25,12 @@ import {
 } from "../../../../git/utils/gitRepositoryIconColors";
 import type { GitHistoryRepositoryBranchCatalog } from "../hooks/useGitHistoryRepositoryBranchCatalogs";
 import {
+  getBranchAheadBehindTooltip,
   getBranchLeafName,
   getBranchScope,
   getSpecialBranchBadges,
 } from "../utils/gitHistoryPanelSharedUtils";
-import { ActionSurface } from "./GitHistoryPanelPickers";
+import { ActionSurface, GitHistoryBranchStatusBadge } from "./GitHistoryPanelPickers";
 
 type BranchScope = "local" | "remote";
 
@@ -326,10 +327,32 @@ export const GitHistoryMultiRepositoryBranchTree = memo(function GitHistoryMulti
                                 </i>
                               ))}
                               {scope === "local" && branch.ahead > 0
-                                ? <i className="is-ahead">+{branch.ahead}</i>
+                                ? (
+                                  <GitHistoryBranchStatusBadge
+                                    kind="ahead"
+                                    count={branch.ahead}
+                                    tooltip={getBranchAheadBehindTooltip(
+                                      "ahead",
+                                      branch.ahead,
+                                      branch.upstream,
+                                      t,
+                                    )}
+                                  />
+                                )
                                 : null}
                               {scope === "local" && branch.behind > 0
-                                ? <i className="is-behind">-{branch.behind}</i>
+                                ? (
+                                  <GitHistoryBranchStatusBadge
+                                    kind="behind"
+                                    count={branch.behind}
+                                    tooltip={getBranchAheadBehindTooltip(
+                                      "behind",
+                                      branch.behind,
+                                      branch.upstream,
+                                      t,
+                                    )}
+                                  />
+                                )
                                 : null}
                             </span>
                           </ActionSurface>
@@ -358,7 +381,6 @@ export const GitHistoryMultiRepositoryBranchTree = memo(function GitHistoryMulti
             ? t("git.historyToggleLocalBranches")
             : t("git.historyToggleRemoteBranches")}
         >
-          {sectionExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
           {icon}
           <span>{label}</span>
         </ActionSurface>

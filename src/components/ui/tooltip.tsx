@@ -33,15 +33,19 @@ function Tooltip({
   // is accepted for backward compatibility and intentionally not forwarded
   // (consumers drive visibility through the controlled `open` prop).
   disabled: _disabled,
+  // Optional per-tooltip dwell. Defaults to DEFAULT_TOOLTIP_DELAY_MS via
+  // TooltipProvider; pass 0 for dense status chips that need near-instant tips.
+  delayDuration,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Root> & {
   disabled?: boolean
+  delayDuration?: number
 }) {
   // Canonical shadcn wraps each Tooltip in its own Provider so consumers can
   // render <Tooltip> standalone (Radix Root throws without a Provider ancestor,
   // unlike the previous base-ui implementation).
   return (
-    <TooltipProvider>
+    <TooltipProvider delayDuration={delayDuration}>
       <TooltipPrimitive.Root data-slot="tooltip" {...props} />
     </TooltipProvider>
   )

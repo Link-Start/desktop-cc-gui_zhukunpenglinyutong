@@ -28,6 +28,9 @@ export type GitHistoryPanelProps = CodeAnnotationBridgeProps & {
   onSelectWorkspacePath?: (path: string) => Promise<void> | void;
   onOpenDiffPath?: (path: string) => void;
   onRequestClose?: () => void;
+  /** Shared with main Git panel `gitDiffListView` — flat/tree stay in sync. */
+  listView?: "flat" | "tree";
+  onListViewChange?: (view: "flat" | "tree") => void;
   toolbarTabsNode?: ReactNode;
   documentContentNode?: ReactNode;
   activeDocumentTabId?: string;

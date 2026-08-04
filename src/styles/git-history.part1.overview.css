@@ -73,125 +73,32 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring, var(--accent-primary, #2563eb)) 16%, transparent);
 }
 
-.git-history-project-dropdown {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  min-width: max(260px, 100%);
-  max-width: min(52vw, 560px);
-  max-height: 420px;
-  padding: 6px;
-  border-radius: var(--git-history-radius, 10px);
-  border: 1px solid var(--border, var(--git-history-border, var(--border-default)));
-  background: var(--popover, var(--surface-popover, var(--background, #fff)));
+/* Shared popover shell for Git history Command pickers (align with HomeChat). */
+.git-history-picker-content {
+  overflow: hidden;
+  border-radius: 10px;
   box-shadow:
     0 4px 6px -1px color-mix(in srgb, #000 8%, transparent),
-    0 10px 24px -4px color-mix(in srgb, #000 12%, transparent);
-  z-index: 40;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+    0 12px 28px -6px color-mix(in srgb, #000 14%, transparent);
 }
 
-.git-history-project-search {
-  padding: 2px;
-}
-
-.git-history-project-search input {
-  width: 100%;
+.git-history-picker-content [data-slot="command-input-wrapper"] {
   height: 36px;
-  border-radius: 12px;
-  border: 1px solid color-mix(in srgb, var(--border-default) 70%, transparent);
-  background: color-mix(in srgb, var(--surface-control, #1a2230) 84%, transparent);
-  color: var(--text-primary);
+}
+
+.git-history-picker-content [data-slot="command-input"] {
   font-size: 13px;
-  padding: 0 12px;
-  outline: none;
 }
 
-.git-history-project-search input:focus-visible {
-  border-color: color-mix(in srgb, var(--accent-primary, #2563eb) 62%, transparent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary, #2563eb) 16%, transparent);
-}
-
-.git-history-project-list {
-  overflow-y: auto;
-  max-height: 340px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 0 2px 2px;
-}
-
-.git-history-project-group {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.git-history-project-group + .git-history-project-group {
-  margin-top: 6px;
-}
-
-.git-history-project-group-label {
-  padding: 6px 10px 4px;
-  font-size: 11px;
-  line-height: 1.2;
-  color: var(--text-faint);
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-
-.git-history-project-item {
-  width: 100%;
+.git-history-picker-content [data-slot="command-item"] {
   min-height: 32px;
-  border: none;
-  border-radius: var(--git-history-radius-xs, 6px);
-  background: transparent;
-  color: var(--muted-foreground, var(--text-secondary));
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 10px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.git-history-project-item:hover {
-  background: var(--accent, var(--surface-hover));
-  color: var(--accent-foreground, var(--text-stronger));
-}
-
-.git-history-project-item.is-active {
-  background: var(--accent, color-mix(in srgb, var(--primary, var(--accent-primary, #2563eb)) 10%, transparent));
-  color: var(--accent-foreground, var(--foreground, var(--text-primary)));
-  font-weight: 600;
-}
-
-.git-history-project-item-check {
-  width: 14px;
-  flex: 0 0 14px;
-  text-align: center;
+  border-radius: 6px;
   font-size: 13px;
 }
 
-.git-history-project-item-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.git-history-project-item-label.is-worktree {
-  color: color-mix(in srgb, var(--text-secondary) 84%, var(--text-muted));
-  padding-left: 6px;
-}
-
-.git-history-project-empty {
-  padding: 10px;
-  color: var(--text-muted);
-  font-size: 12px;
-  text-align: center;
+.git-history-picker-content [data-slot="command-list"] {
+  max-height: 300px;
+  padding: 4px;
 }
 
 .git-history-fallback-picker {
@@ -285,7 +192,7 @@
 }
 
 .git-history-toolbar-worktree.is-dirty {
-  color: #fca5a5;
+  color: var(--foreground, var(--text-primary));
 }
 
 .git-history-toolbar-worktree.is-clean {
@@ -369,7 +276,7 @@
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(220px, 3fr) minmax(420px, 4fr) minmax(420px, 3fr);
+  grid-template-columns: minmax(220px, 4fr) minmax(480px, 11fr) minmax(280px, 5fr);
   overflow: hidden;
 }
 

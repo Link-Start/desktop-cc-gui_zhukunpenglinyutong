@@ -152,6 +152,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     intentCanvasPanelNode,
     browserDockNode,
     files,
+    gitDiffListView,
     gitDiffPanelNode,
     gitDiffViewerNode,
     gitHistoryPanelHeight,
@@ -263,6 +264,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     selectedPullRequest,
     setActiveTab,
     setAppSettings,
+    setGitDiffListView,
     setKanbanViewState,
     setReduceTransparency,
     setWindowTransparencyEnabled,
@@ -374,6 +376,8 @@ export function renderAppShell(ctx: RenderAppShellContext) {
         onSelectWorkspacePath={handleSelectWorkspacePathForGitHistory}
         onOpenDiffPath={handleSelectDiffForPanel}
         onRequestClose={handleCloseGitHistoryPanel}
+        listView={gitDiffListView === "tree" ? "tree" : "flat"}
+        onListViewChange={setGitDiffListView}
         fileHistoryTabs={fileHistoryTabs}
         activeTabId={activeGitHistoryTabId}
         onActivateTab={handleActivateGitHistoryTab}

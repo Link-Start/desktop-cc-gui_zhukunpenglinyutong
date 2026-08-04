@@ -1,7 +1,25 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import Check from "lucide-react/dist/esm/icons/check";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
+import Folder from "lucide-react/dist/esm/icons/folder";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
-import Search from "lucide-react/dist/esm/icons/search";
+import {
+  Command,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipPopup,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 function isActivationKey(event: KeyboardEvent<HTMLElement>): boolean {
   return event.key === "Enter" || event.key === " ";
@@ -14,6 +32,7 @@ export type ActionSurfaceProps = {
   active?: boolean;
   onActivate?: () => void;
   onContextMenu?: (event: MouseEvent<HTMLDivElement>) => void;
+  /** Hover/focus tooltip label. Prefer this over native `title` for icon-only actions. */
   title?: string;
   ariaLabel?: string;
   style?: CSSProperties;
@@ -39,14 +58,13 @@ export function ActionSurface({
     .filter(Boolean)
     .join(" ");
 
-  return (
+  const surface = (
     <div
       role="button"
       tabIndex={disabled ? -1 : 0}
       aria-disabled={disabled || undefined}
-      aria-label={ariaLabel}
+      aria-label={ariaLabel ?? title}
       className={mergedClassName}
-      title={title}
       style={style}
       onClick={() => {
         if (!disabled) {
@@ -71,6 +89,52 @@ export function ActionSurface({
     >
       {children}
     </div>
+  );
+
+  // Icon-only chips rely on hover meaning; native `title` is slow and easy to miss
+  // in desktop webviews, so surface a real tooltip when a label is provided.
+  if (!title) {
+    return surface;
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{surface}</TooltipTrigger>
+      <TooltipPopup side="bottom" sideOffset={6}>
+        {title}
+      </TooltipPopup>
+    </Tooltip>
+  );
+}
+
+/** Local branch +N / -N chip with near-instant hover tip (avoids native title lag). */
+export function GitHistoryBranchStatusBadge({
+  kind,
+  count,
+  tooltip,
+}: {
+  kind: "ahead" | "behind";
+  count: number;
+  tooltip: string;
+}) {
+  return (
+    <Tooltip delayDuration={0}>
+      <TooltipTrigger asChild>
+        {/*
+          Keep this a plain <i> without aria-label so the parent branch row's
+          accessible name stays "+N"/"-N", not the long tip sentence.
+        */}
+        <i
+          className={kind === "ahead" ? "is-ahead" : "is-behind"}
+          data-tooltip={tooltip}
+        >
+          {kind === "ahead" ? `+${count}` : `-${count}`}
+        </i>
+      </TooltipTrigger>
+      <TooltipPopup side="top" sideOffset={4}>
+        {tooltip}
+      </TooltipPopup>
+    </Tooltip>
   );
 }
 
@@ -133,8 +197,6 @@ export function GitHistoryProjectPicker({
 }: GitHistoryProjectPickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const pickerRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
 
   const filteredSections = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -155,54 +217,25 @@ export function GitHistoryProjectPicker({
     [filteredSections],
   );
 
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (disabled) {
+        return;
+      }
+      setOpen(nextOpen);
+      if (!nextOpen) {
+        setQuery("");
+      }
+    },
+    [disabled],
+  );
+
   useEffect(() => {
     if (disabled && open) {
       setOpen(false);
       setQuery("");
     }
   }, [disabled, open]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) {
-        return;
-      }
-      if (!pickerRef.current?.contains(target)) {
-        setOpen(false);
-        setQuery("");
-      }
-    };
-
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-        setQuery("");
-      }
-    };
-
-    window.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [open]);
 
   const handleSelect = useCallback(
     (id: string) => {
@@ -218,77 +251,81 @@ export function GitHistoryProjectPicker({
   return (
     <div
       className={`git-history-project-picker${open ? " is-open" : ""}${disabled ? " is-disabled" : ""}`}
-      ref={pickerRef}
     >
-      <button
-        type="button"
-        className="git-history-project-display git-history-project-trigger"
-        aria-label={ariaLabel}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        disabled={disabled}
-        onClick={() => {
-          if (disabled) {
-            return;
-          }
-          setOpen((prev) => !prev);
-        }}
-      >
-        {icon}
-        <span className="git-history-project-value">{selectedLabel}</span>
-        <ChevronDown size={12} className="git-history-project-caret" />
-      </button>
-
-      {open && (
-        <div className="git-history-project-dropdown popover-surface" role="listbox" aria-label={ariaLabel}>
-          <div className="git-history-project-search">
-            <input
-              ref={inputRef}
+      <Popover open={open} onOpenChange={handleOpenChange}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="git-history-project-display git-history-project-trigger"
+            aria-label={ariaLabel}
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            disabled={disabled}
+          >
+            {icon}
+            <span className="git-history-project-value">{selectedLabel}</span>
+            <ChevronDown size={12} className="git-history-project-caret" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          side="bottom"
+          sideOffset={6}
+          className="git-history-picker-content w-72 p-0"
+        >
+          <Command shouldFilter={false}>
+            <CommandInput
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onValueChange={setQuery}
               placeholder={searchPlaceholder}
+              autoFocus
               aria-label={searchPlaceholder}
             />
-          </div>
-          <div className="git-history-project-list">
-            {filteredSections.map((section) => (
-              <div key={section.id ?? "ungrouped"} className="git-history-project-group">
-                {showGroupLabel && section.name.trim().length > 0 ? (
-                  <div className="git-history-project-group-label">{section.name}</div>
-                ) : null}
-                {section.options.map((entry) => {
-                  const selected = entry.id === selectedId;
-                  return (
-                    <button
-                      key={entry.id}
-                      type="button"
-                      className={`git-history-project-item${selected ? " is-active" : ""}`}
-                      role="option"
-                      aria-selected={selected}
-                      onClick={() => handleSelect(entry.id)}
-                    >
-                      <span className="git-history-project-item-check" aria-hidden>
-                        {selected ? "✓" : ""}
-                      </span>
-                      <span
-                        className={`git-history-project-item-label${
-                          entry.kind === "worktree" ? " is-worktree" : ""
-                        }`}
+            <CommandList>
+              {filteredSections.map((section) => (
+                <CommandGroup
+                  key={section.id ?? "ungrouped"}
+                  heading={
+                    showGroupLabel && section.name.trim().length > 0
+                      ? section.name
+                      : undefined
+                  }
+                >
+                  {section.options.map((entry) => {
+                    const selected = entry.id === selectedId;
+                    return (
+                      <CommandItem
+                        key={entry.id}
+                        value={entry.id}
+                        data-selected={selected ? "true" : undefined}
+                        onSelect={() => handleSelect(entry.id)}
                       >
-                        {entry.kind === "worktree" ? "↳ " : ""}
-                        {entry.label}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
-            {filteredSections.length === 0 && (
-              <div className="git-history-project-empty">{emptyText}</div>
-            )}
-          </div>
-        </div>
-      )}
+                        <Folder className="size-4 shrink-0 opacity-60" aria-hidden />
+                        <span
+                          className={`min-w-0 flex-1 truncate${
+                            entry.kind === "worktree" ? " pl-1 text-muted-foreground" : ""
+                          }`}
+                        >
+                          {entry.kind === "worktree" ? "↳ " : ""}
+                          {entry.label}
+                        </span>
+                        {selected ? (
+                          <Check className="size-4 shrink-0" aria-hidden />
+                        ) : null}
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              ))}
+              {filteredSections.length === 0 ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">
+                  {emptyText}
+                </div>
+              ) : null}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
@@ -307,8 +344,6 @@ export function GitHistoryInlinePicker({
 }: GitHistoryInlinePickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const pickerRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
 
   const trimmedValue = value.trim();
   const filteredOptions = useMemo(() => {
@@ -342,44 +377,18 @@ export function GitHistoryInlinePicker({
     [options, trimmedValue],
   );
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) {
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (disabled) {
         return;
       }
-      if (!pickerRef.current?.contains(target)) {
-        setOpen(false);
+      setOpen(nextOpen);
+      if (!nextOpen) {
         setQuery("");
       }
-    };
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-        setQuery("");
-      }
-    };
-    window.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [open]);
+    },
+    [disabled],
+  );
 
   useEffect(() => {
     if (disabled && open) {
@@ -391,103 +400,102 @@ export function GitHistoryInlinePicker({
   return (
     <div
       className={`git-history-create-pr-picker${open ? " is-open" : ""}${disabled ? " is-disabled" : ""}${dropdownAlign === "end" ? " is-dropdown-end" : ""}`}
-      ref={pickerRef}
     >
-      <button
-        type="button"
-        className="git-history-create-pr-picker-trigger"
-        aria-label={label}
-        title={trimmedValue}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        disabled={disabled}
-        onClick={() => {
-          if (disabled) {
-            return;
-          }
-          setOpen((previous) => !previous);
-        }}
-      >
-        {triggerIcon ? (
-          <span className="git-history-create-pr-picker-leading-icon" aria-hidden>
-            {triggerIcon}
-          </span>
-        ) : null}
-        <span className="git-history-create-pr-picker-value">
-          <span className="git-history-create-pr-picker-value-title">
-            {(selectedOption?.label ?? trimmedValue) || "-"}
-          </span>
-          {selectedOption?.description ? (
-            <span className="git-history-create-pr-picker-value-hint">{selectedOption.description}</span>
-          ) : null}
-        </span>
-        <ChevronDown size={12} className="git-history-create-pr-picker-caret" />
-      </button>
-
-      {open ? (
-        <div className="git-history-create-pr-picker-dropdown popover-surface" role="listbox" aria-label={label}>
-          <label className="git-history-create-pr-picker-search">
-            <Search size={12} />
-            <input
-              ref={inputRef}
+      <Popover open={open} onOpenChange={handleOpenChange}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="git-history-create-pr-picker-trigger"
+            aria-label={label}
+            title={trimmedValue}
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            disabled={disabled}
+          >
+            {triggerIcon ? (
+              <span className="git-history-create-pr-picker-leading-icon" aria-hidden>
+                {triggerIcon}
+              </span>
+            ) : null}
+            <span className="git-history-create-pr-picker-value">
+              <span className="git-history-create-pr-picker-value-title">
+                {(selectedOption?.label ?? trimmedValue) || "-"}
+              </span>
+              {selectedOption?.description ? (
+                <span className="git-history-create-pr-picker-value-hint">
+                  {selectedOption.description}
+                </span>
+              ) : null}
+            </span>
+            <ChevronDown size={12} className="git-history-create-pr-picker-caret" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          align={dropdownAlign === "end" ? "end" : "start"}
+          side="bottom"
+          sideOffset={6}
+          className="git-history-picker-content w-80 max-w-[min(90vw,480px)] p-0"
+        >
+          <Command shouldFilter={false}>
+            <CommandInput
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onValueChange={setQuery}
               placeholder={searchPlaceholder}
+              autoFocus
               aria-label={searchPlaceholder}
             />
-          </label>
-          <div className="git-history-create-pr-picker-list">
-            {groupedOptions.map((groupEntry) => (
-              <div
-                key={groupEntry.group || "__ungrouped__"}
-                className="git-history-create-pr-picker-group"
-              >
-                {showGroupLabel && groupEntry.group ? (
-                  <div className="git-history-create-pr-picker-group-label">{groupEntry.group}</div>
-                ) : null}
-                {groupEntry.items.map((option) => {
-                  const selected = option.value === trimmedValue;
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={`git-history-create-pr-picker-item${selected ? " is-active" : ""}`}
-                      role="option"
-                      aria-selected={selected}
-                      title={option.value}
-                      onClick={() => {
-                        onSelect(option.value);
-                        setOpen(false);
-                        setQuery("");
-                      }}
-                    >
-                      {optionIcon ? (
-                        <span className="git-history-create-pr-picker-item-icon" aria-hidden>
-                          {optionIcon}
-                        </span>
-                      ) : null}
-                      <span className="git-history-create-pr-picker-item-main">
-                        <span className="git-history-create-pr-picker-item-title">{option.label}</span>
-                        {option.description ? (
-                          <span className="git-history-create-pr-picker-item-description">
-                            {option.description}
+            <CommandList>
+              {groupedOptions.map((groupEntry) => (
+                <CommandGroup
+                  key={groupEntry.group || "__ungrouped__"}
+                  heading={
+                    showGroupLabel && groupEntry.group ? groupEntry.group : undefined
+                  }
+                >
+                  {groupEntry.items.map((option) => {
+                    const selected = option.value === trimmedValue;
+                    return (
+                      <CommandItem
+                        key={option.value}
+                        value={`${option.value} ${option.label} ${option.description ?? ""}`}
+                        title={option.value}
+                        data-selected={selected ? "true" : undefined}
+                        onSelect={() => {
+                          onSelect(option.value);
+                          setOpen(false);
+                          setQuery("");
+                        }}
+                      >
+                        {optionIcon ? (
+                          <span className="shrink-0 opacity-60" aria-hidden>
+                            {optionIcon}
                           </span>
                         ) : null}
-                      </span>
-                      <span className="git-history-create-pr-picker-item-check" aria-hidden>
-                        {selected ? "✓" : ""}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
-            {groupedOptions.length === 0 ? (
-              <div className="git-history-create-pr-picker-empty">{emptyText}</div>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+                        <span className="min-w-0 flex-1 truncate">
+                          <span className="block truncate">{option.label}</span>
+                          {option.description ? (
+                            <span className="block truncate text-xs text-muted-foreground">
+                              {option.description}
+                            </span>
+                          ) : null}
+                        </span>
+                        {selected ? (
+                          <Check className="size-4 shrink-0" aria-hidden />
+                        ) : null}
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              ))}
+              {groupedOptions.length === 0 ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">
+                  {emptyText}
+                </div>
+              ) : null}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }

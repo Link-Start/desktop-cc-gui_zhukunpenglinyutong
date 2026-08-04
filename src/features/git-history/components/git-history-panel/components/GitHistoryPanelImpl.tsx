@@ -154,6 +154,10 @@ import {
   useGitHistoryCommitFilters,
   type GitHistoryRequestFilters,
 } from "../hooks/useGitHistoryCommitFilters";
+import {
+  buildGitHistoryGraphLayout,
+  type GitHistoryGraphLayout,
+} from "../utils/gitHistoryGraphLayout";
 import type { GitHistoryCommitFiltersProps } from "./GitHistoryCommitFilters";
 import {
   GIT_REPOSITORY_ACTION_LABEL_KEYS,
@@ -162,7 +166,6 @@ import {
 import { renderGitHistoryPanelView } from "./GitHistoryPanelView";
 import {
   BRANCHES_MIN_WIDTH,
-  COMMIT_ROW_ESTIMATED_HEIGHT,
   COMMITS_MIN_WIDTH,
   COMPACT_LAYOUT_BREAKPOINT,
   CREATE_PR_PREVIEW_COMMIT_LIMIT,
@@ -246,7 +249,6 @@ export { getDefaultColumnWidths } from "./GitHistoryPanelImplHelpers";
 export type GitHistoryPanelInteractionScope = {
   BRANCHES_MIN_WIDTH: number;
   COMMITS_MIN_WIDTH: number;
-  COMMIT_ROW_ESTIMATED_HEIGHT: number;
   COMPACT_LAYOUT_BREAKPOINT: number;
   CREATE_PR_PREVIEW_COMMIT_LIMIT: number;
   DETAILS_MIN_WIDTH: number;
@@ -288,7 +290,10 @@ export type GitHistoryPanelInteractionScope = {
   closeBranchContextMenu: () => void;
   commitContextMenu: CommitContextMenuState | null;
   commitListRef: RefObject<HTMLDivElement | null>;
+  /** Commits rendered in the list / graph (may be projected: first-parent / hide-noise). */
   commits: GitHistoryCommit[];
+  /** Raw loaded history length used as pagination offset (must not use projected length). */
+  historyLoadedCount: number;
   commitsWidth: number;
   createBranchName: string;
   createBranchSource: string;
@@ -714,6 +719,7 @@ export type GitHistoryPanelViewScope = {
   commitListRef: RefObject<HTMLDivElement | null>;
   commitRowVirtualizer: GitHistoryPanelInteractionResult["commitRowVirtualizer"];
   commits: GitHistoryCommit[];
+  commitGraphLayout: GitHistoryGraphLayout;
   commitsWidth: number;
   comparePreviewDetailFile: GitCommitFileChange | null;
   comparePreviewDetailFileDiff: string | null;
@@ -878,15 +884,12 @@ export type GitHistoryPanelViewScope = {
   handleToggleRemoteScope: GitHistoryPanelInteractionResult["handleToggleRemoteScope"];
   handleWorktreeSummaryChange: GitHistoryPanelInteractionResult["handleWorktreeSummaryChange"];
   historyError: string | null;
-  historyHasMore: boolean;
   historyLoading: boolean;
-  historyLoadingMore: boolean;
   historyPreviewHeaderControlsTarget: HTMLDivElement | null;
   historyTotal: number;
   isCreatePrDialogMaximized: boolean;
   isHistoryDiffModalMaximized: boolean;
   loadCreatePrCommitPreview: GitHistoryPanelInteractionResult["loadCreatePrCommitPreview"];
-  loadHistory: (append: boolean, startOffset?: number) => Promise<void>;
   localSectionExpanded: boolean;
   localizeKnownGitError: (message: string | null) => string | null;
   localizedOperationName: string | null;
@@ -1146,6 +1149,8 @@ export const GitHistoryPanel = memo(function GitHistoryPanel({
   onSelectWorkspacePath,
   onOpenDiffPath,
   onRequestClose,
+  listView: listViewProp,
+  onListViewChange,
   toolbarTabsNode,
   documentContentNode,
   activeDocumentTabId,
@@ -1363,9 +1368,32 @@ export const GitHistoryPanel = memo(function GitHistoryPanel({
   const [expandedRemoteScopes, setExpandedRemoteScopes] = useState<Set<string>>(
     new Set(),
   );
-  const [overviewListView, setOverviewListView] = useState<"flat" | "tree">(
-    "flat",
+  const isListViewControlled = onListViewChange !== undefined;
+  const [uncontrolledListView, setUncontrolledListView] = useState<
+    "flat" | "tree"
+  >(listViewProp ?? "flat");
+  const overviewListView = isListViewControlled
+    ? (listViewProp ?? "flat")
+    : uncontrolledListView;
+  const setOverviewListView = useCallback(
+    (value: SetStateAction<"flat" | "tree">) => {
+      const resolveNext = (previous: "flat" | "tree") =>
+        typeof value === "function" ? value(previous) : value;
+      if (isListViewControlled) {
+        const next = resolveNext(listViewProp ?? "flat");
+        onListViewChange?.(next);
+        return;
+      }
+      setUncontrolledListView((previous) => resolveNext(previous));
+    },
+    [isListViewControlled, listViewProp, onListViewChange],
   );
+
+  useEffect(() => {
+    if (!isListViewControlled && listViewProp) {
+      setUncontrolledListView(listViewProp);
+    }
+  }, [isListViewControlled, listViewProp]);
   const [overviewCommitSectionCollapsed, setOverviewCommitSectionCollapsed] =
     useState(true);
   const [workingTreeChangedFiles, setWorkingTreeChangedFiles] = useState(0);
@@ -1374,6 +1402,8 @@ export const GitHistoryPanel = memo(function GitHistoryPanel({
   const [, setWorkingTreeStatusError] = useState<string | null>(null);
 
   const [commits, setCommits] = useState<GitHistoryCommit[]>([]);
+  const [graphFirstParentOnly, setGraphFirstParentOnly] = useState(false);
+  const [graphHideNoise, setGraphHideNoise] = useState(false);
   const [historyTotal, setHistoryTotal] = useState(0);
   const [historyHasMore, setHistoryHasMore] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -1386,7 +1416,7 @@ export const GitHistoryPanel = memo(function GitHistoryPanel({
     commitAuthor,
     commitDatePreset,
     createHistoryRequestFilters,
-    commitFilterSurface,
+    commitFilterSurface: baseCommitFilterSurface,
   } = useGitHistoryCommitFilters({
     workspaceId,
     selectedRepositoryRoot,
@@ -1397,9 +1427,47 @@ export const GitHistoryPanel = memo(function GitHistoryPanel({
     commits,
   });
 
+  const graphProjection = useMemo(
+    () =>
+      buildGitHistoryGraphLayout(commits, {
+        firstParentOnly: graphFirstParentOnly,
+        hideNoise: graphHideNoise,
+      }),
+    [commits, graphFirstParentOnly, graphHideNoise],
+  );
+  const displayCommits = graphProjection.commits as GitHistoryCommit[];
+  const commitGraphLayout = graphProjection.layout;
+
+  const commitFilterSurface = useMemo<
+    Omit<GitHistoryCommitFiltersProps, "headerTitle">
+  >(
+    () => ({
+      ...baseCommitFilterSurface,
+      graphFirstParentOnly,
+      graphHideNoise,
+      onGraphFirstParentOnlyChange: setGraphFirstParentOnly,
+      onGraphHideNoiseChange: setGraphHideNoise,
+    }),
+    [
+      baseCommitFilterSurface,
+      graphFirstParentOnly,
+      graphHideNoise,
+    ],
+  );
+
   const [selectedCommitSha, setSelectedCommitSha] = useState<string | null>(
     () => persistedPanelState.selectedCommitSha ?? null,
   );
+
+  useEffect(() => {
+    if (!selectedCommitSha || displayCommits.length === 0) {
+      return;
+    }
+    if (!displayCommits.some((entry) => entry.sha === selectedCommitSha)) {
+      setSelectedCommitSha(displayCommits[0]?.sha ?? null);
+    }
+  }, [displayCommits, selectedCommitSha]);
+
   const [details, setDetails] = useState<GitCommitDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
@@ -3905,7 +3973,6 @@ export const GitHistoryPanel = memo(function GitHistoryPanel({
   } = useGitHistoryPanelInteractions({
     BRANCHES_MIN_WIDTH,
     COMMITS_MIN_WIDTH,
-    COMMIT_ROW_ESTIMATED_HEIGHT,
     COMPACT_LAYOUT_BREAKPOINT,
     CREATE_PR_PREVIEW_COMMIT_LIMIT,
     DETAILS_MIN_WIDTH,
@@ -3939,7 +4006,8 @@ export const GitHistoryPanel = memo(function GitHistoryPanel({
     closeBranchContextMenu,
     commitContextMenu,
     commitListRef,
-    commits,
+    commits: displayCommits,
+    historyLoadedCount: commits.length,
     commitsWidth,
     createBranchName,
     createBranchSource,
@@ -4481,7 +4549,8 @@ export const GitHistoryPanel = memo(function GitHistoryPanel({
     commitFilterSurface,
     commitListRef,
     commitRowVirtualizer,
-    commits,
+    commits: displayCommits,
+    commitGraphLayout,
     commitsWidth,
     comparePreviewDetailFile,
     comparePreviewDetailFileDiff,
@@ -4613,15 +4682,12 @@ export const GitHistoryPanel = memo(function GitHistoryPanel({
     handleToggleRemoteScope,
     handleWorktreeSummaryChange,
     historyError,
-    historyHasMore,
     historyLoading,
-    historyLoadingMore,
     historyPreviewHeaderControlsTarget,
     historyTotal,
     isCreatePrDialogMaximized,
     isHistoryDiffModalMaximized,
     loadCreatePrCommitPreview,
-    loadHistory,
     localSectionExpanded,
     localizeKnownGitError,
     localizedOperationName,

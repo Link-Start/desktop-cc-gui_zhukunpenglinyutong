@@ -379,11 +379,12 @@ describe("GitHistoryPanel helpers", () => {
     expect(items.map((item) => item.label)).toEqual(["a.b.c", "d.txt"]);
   });
 
-  it("returns exact 3:4:3 defaults for the visible desktop columns", () => {
+  it("returns exact 4:11:5 defaults for the visible desktop columns", () => {
     const widths = getDefaultColumnWidths(1600);
-    expect(widths.branchesWidth).toBe(475);
-    expect(widths.commitsWidth).toBe(634);
-    expect(1600 - 16 - widths.branchesWidth - widths.commitsWidth).toBe(475);
+    // 1600 - 2 * 8px splitters = 1584; 4/20, 11/20, remainder for details
+    expect(widths.branchesWidth).toBe(317);
+    expect(widths.commitsWidth).toBe(871);
+    expect(1600 - 16 - widths.branchesWidth - widths.commitsWidth).toBe(396);
   });
 });
 
@@ -464,6 +465,39 @@ describe("GitHistoryPanel interactions", () => {
     expect(firstAliceRow?.classList.contains(`git-history-author-color-${aliceSlot}`)).toBe(true);
     expect(secondAliceRow?.classList.contains(`git-history-author-color-${aliceSlot}`)).toBe(true);
     expect(bobRow?.classList.contains(`git-history-author-color-${bobSlot}`)).toBe(true);
+  });
+
+  it("renders author avatars beside muted author labels", async () => {
+    vi.mocked(tauriService.getGitCommitHistory).mockResolvedValueOnce({
+      snapshotId: "snap-author-avatars",
+      total: 1,
+      offset: 0,
+      limit: 100,
+      hasMore: false,
+      commits: [
+        {
+          sha: "d".repeat(40),
+          shortSha: "ddddddd",
+          summary: "feat: with avatar",
+          message: "with avatar",
+          author: "chenxiangning",
+          authorEmail: "chenxiangning@users.noreply.github.com",
+          timestamp: 1739300000,
+          parents: [],
+          refs: [],
+        },
+      ],
+    });
+
+    render(<GitHistoryPanel workspace={workspace as never} />);
+
+    const authorLabel = await screen.findByText("chenxiangning");
+    const authorGroup = authorLabel.closest(".git-history-commit-author");
+    expect(authorGroup).toBeTruthy();
+    expect(
+      authorGroup?.querySelector(".git-history-commit-author-avatar"),
+    ).toBeTruthy();
+    expect(authorGroup?.querySelector("img, svg")).toBeTruthy();
   });
 
   it("switches a multi-repository history target through the repository branch tree", async () => {
@@ -2038,6 +2072,70 @@ describe("GitHistoryPanel interactions", () => {
       expect(screen.getByText("feat: second target only")).toBeTruthy();
     });
     expect(screen.queryByText("feat: stale first target only")).toBeNull();
+  });
+
+  it("keeps commit details file list mode in sync with the shared listView setting", async () => {
+    const onListViewChange = vi.fn();
+    const { rerender } = render(
+      <GitHistoryPanel
+        workspace={workspace as never}
+        listView="flat"
+        onListViewChange={onListViewChange}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("feat: one")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("feat: one"));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("src/main/java/com/demo/App.java")).toBeTruthy();
+    });
+
+    const details = document.querySelector(".git-history-details");
+    expect(details).toBeTruthy();
+    expect(details?.querySelector(".git-filetree-list--tree")).toBeNull();
+    expect(details?.querySelector(".diff-dir")?.textContent).toBe(
+      "src/main/java/com/demo",
+    );
+
+    const listSelectTrigger = within(details as HTMLElement).getByRole("button", {
+      name: "git.historyChangedFiles · git.listView",
+    });
+    fireEvent.click(listSelectTrigger);
+    fireEvent.click(within(details as HTMLElement).getByRole("menuitemradio", { name: "git.listTree" }));
+    expect(onListViewChange).toHaveBeenCalledWith("tree");
+
+    rerender(
+      <GitHistoryPanel
+        workspace={workspace as never}
+        listView="tree"
+        onListViewChange={onListViewChange}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(details?.querySelector(".git-filetree-list--tree")).toBeTruthy();
+    });
+    expect(details?.querySelector(".diff-dir")).toBeNull();
+    expect(within(details as HTMLElement).getByText("src.main.java.com.demo")).toBeTruthy();
+    expect(
+      within(details as HTMLElement).getByLabelText("src/main/java/com/demo/App.java"),
+    ).toBeTruthy();
+    expect(
+      within(details as HTMLElement)
+        .getByLabelText("src/main/java/com/demo/App.java")
+        .classList.contains("git-filetree-row--tree"),
+    ).toBe(true);
+
+    fireEvent.click(
+      within(details as HTMLElement).getByRole("button", {
+        name: "git.historyChangedFiles · git.listView",
+      }),
+    );
+    fireEvent.click(within(details as HTMLElement).getByRole("menuitemradio", { name: "git.listFlat" }));
+    expect(onListViewChange).toHaveBeenCalledWith("flat");
   });
 
   it("opens commit file preview with the canonical modal header controls", async () => {
