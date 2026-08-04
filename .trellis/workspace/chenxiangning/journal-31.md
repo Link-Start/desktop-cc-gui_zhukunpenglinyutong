@@ -604,3 +604,81 @@ onDebugRef 解耦、原子 selection state、乐观 snapshot、preferred 归一�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1316: 修复 Shared 侧栏异步刷新 stale hide set 泄漏原生会话
+
+**Date**: 2026-08-04
+**Task**: 修复 Shared 侧栏异步刷新 stale hide set 泄漏原生会话
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+异步 Grok/Kimi/Gemini refresh 重建 hide set 并 purge baseline 泄漏；补齐 OpenSpec 变更 fix-shared-sidebar-hide-set-staleness；typecheck/lint/36 测试全绿
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e0f8c0aa7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1317: 闭环 Shared 恢复出口
+
+**Date**: 2026-08-04
+**Task**: 闭环 Shared 恢复出口
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 内容 |
+|----|------|
+| OpenSpec | `fix-shared-session-recovery-exit-closure` |
+| P0 | Recovery Exit Ladder：Probe / Stop / 停止并重建 / 放弃本轮 |
+| P0 | `target-unavailable` 分类纠偏；abandon durable + 清 binding recovery |
+| P1 | force-stop 先读 settled 再 remove（防丢已完成回答） |
+| P1 | 融合禁用原因 `fuseDisabledReasonKey` + 网关类 toast |
+| 收尾 | 删死 key、补 `--danger` CSS、`__details` class |
+
+**验证**：OpenSpec validate strict；FE SharedSend/MessageQueue/locale；Rust abandon + remove_attempt settled 契约测试。
+
+**未提交残留**：`.trellis` 旧脏文件、`fix-shared-sidebar-hide-set-staleness/tasks.md` 未纳入本 commit。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c4cb33daf` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
