@@ -15,6 +15,7 @@ export function ChatInputBoxHeader({
   onRemoveFromQueue,
   onFuseFromQueue,
   canFuseFromQueue = false,
+  fuseDisabledReasonKey = null,
   fusingQueueMessageId = null,
   showOpenSourceBanner,
   onDismissOpenSourceBanner,
@@ -30,6 +31,7 @@ export function ChatInputBoxHeader({
   onRemoveFromQueue?: (id: string) => void;
   onFuseFromQueue?: (id: string) => void;
   canFuseFromQueue?: boolean;
+  fuseDisabledReasonKey?: string | null;
   fusingQueueMessageId?: string | null;
   showOpenSourceBanner?: boolean;
   onDismissOpenSourceBanner?: () => void;
@@ -99,6 +101,7 @@ export function ChatInputBoxHeader({
           onRemove={onRemoveFromQueue ?? (() => {})}
           onFuse={onFuseFromQueue}
           canFuse={canFuseFromQueue}
+          fuseDisabledReasonKey={fuseDisabledReasonKey}
           fusingMessageId={fusingQueueMessageId}
         />
       )}

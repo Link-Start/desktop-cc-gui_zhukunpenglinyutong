@@ -259,6 +259,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       onRemoveFromQueue,
       onFuseFromQueue,
       canFuseFromQueue,
+      fuseDisabledReasonKey,
       fusingQueueMessageId,
       fileCompletionProvider,
       commandCompletionProvider,
@@ -1558,6 +1559,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
               onRemoveFromQueue={onRemoveFromQueue}
               onFuseFromQueue={onFuseFromQueue}
               canFuseFromQueue={canFuseFromQueue}
+              fuseDisabledReasonKey={fuseDisabledReasonKey}
               fusingQueueMessageId={fusingQueueMessageId}
               showOpenSourceBanner={showOpenSourceBanner}
               onDismissOpenSourceBanner={handleDismissOpenSourceBanner}

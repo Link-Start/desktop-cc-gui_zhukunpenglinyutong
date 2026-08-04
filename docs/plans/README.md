@@ -7,7 +7,11 @@ status: active
 # Plans 文档索引
 
 > [!IMPORTANT]
-> **Lifecycle: Active section index.** 截至 2026-08-03，本目录没有 current active implementation plan。当前执行计划必须以 active OpenSpec change 为准；下列文件均为 implemented 或 superseded history。文件中的 unchecked checkbox 只保留执行轨迹，不构成 backlog。
+> **Lifecycle: Active section index.** 当前**正式执行**仍以 active OpenSpec change 为准。下列含 draft plan 时，需经确认并 OpenSpec 化后才能当 backlog 执行；implemented 文件中的 unchecked checkbox 不构成 active backlog。
+
+## Draft / pending confirmation
+
+- [Shared Session recovery exit closure](./2026-08-04-shared-session-recovery-exit-closure.md) — P0：恢复出口闭环（跨平台）；**尚未** OpenSpec 化、未改代码。
 
 ## Implemented historical plans
 

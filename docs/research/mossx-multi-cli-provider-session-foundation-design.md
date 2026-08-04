@@ -12,13 +12,13 @@ status: implemented
 > 内容类型：Architecture Decision Record
 > 生命周期：accepted / implemented in slices；原始 A–D 路线已归档，后续修复与收口 change 独立演进
 > 初始日期：2026-07-27
-> 最近校准：2026-08-01 · mossx `0.7.16` · HEAD `26f8065a0c`
+> 最近校准：2026-08-04 · Shared recovery exit 设计补丁（§14.5.7）；实现见 OpenSpec `fix-shared-session-recovery-exit-closure`（pending user review / 未 commit）
 > 适用范围：Native Session、Shared Session、Provider Runtime、Session Catalog、Sidebar Projection、未来 Plugin / Orchestration
 > 核心决策：Native Session 保持原生身份；Shared Session 承担跨 CLI、跨 Provider 的逐 Turn 切换
 
 ---
 
-## 零、2026-08-01 当前实现校准
+## 零、当前实现校准
 
 本文继续作为多 CLI 会话的 ADR。原始 Change A1–A3、B、C、D 已归档；截至 2026-08-03，Native/Shared 的后续修复、兼容和流程收口以 [OpenSpec main specs](../../openspec/specs/README.md) 与对应 archived changes 为准，不应回写成「原路线未实现」。
 
@@ -29,10 +29,12 @@ status: implemented
 | Shared target boundary | Claude/Codex/Kimi/Grok/OpenCode；Gemini 排除 | `sharedSessionEngines.ts`、`src-tauri/src/shared_sessions.rs` |
 | Gemini runtime | registry 中存在，但 runtime policy 默认 disabled | `src-tauri/src/engine_policy.rs` |
 | Provider selection | Native 原子选择；Shared 逐 Turn target | `close-native-session-provider-create-binding` 与 Shared target contracts |
+| Shared send UI 状态机 | 九态 + Recovery Exit Ladder（Probe/Stop/停止并重建/放弃本轮） | `sendStateMachine.ts`、`SharedSendStatusBar.tsx`、`shared_session_v2.rs` |
+| Recovery Exit Closure | **设计见 §14.5.7**；实现见 OpenSpec `fix-shared-session-recovery-exit-closure` + plan | abandon durable + stop-before-rebuild + fuse disabled reasons |
 
 本文中的 `RuntimeDeliveryAdapter`、`Canonical Fact`、`ContextPackage` 等名称既包含实现合同，也包含 ADR 概念层语言。读者需要复制代码或接新 CLI 时，必须同时使用 [Engine Onboarding Guide](./mossx-new-cli-onboarding-guide.md) 的「当前注册面」清单，不能只按概念接口猜文件名。
 
-> **更新触发器**：engine registry、Shared 支持集合、provider binding、canonical fact schema、context compiler、terminal/ACK contract 变化。
+> **更新触发器**：engine registry、Shared 支持集合、provider binding、canonical fact schema、context compiler、terminal/ACK contract、**recovery exit / abandon** 变化。
 
 ## 一、Executive Summary
 
@@ -2583,14 +2585,22 @@ stateDiagram-v2
     Settling --> Idle: canonical commit
     Settling --> RecoveryRequired: commit failed
     TargetUnavailable --> Idle: target repaired or changed
-    RecoveryRequired --> Running: probe finds active run
+    RecoveryRequired --> Running: probe/recover finds active run
     RecoveryRequired --> Settling: probe finds terminal run
     RecoveryRequired --> Settling: probe proves not accepted / commit cancelled
+    RecoveryRequired --> Settling: user abandons unresolved attempt (durable)
+    RecoveryRequired --> Settling: stop+rebuild commits replaced attempts
+    note right of RecoveryRequired
+      Stop alone stays RecoveryRequired until Probe/Rebuild/Abandon settles
+      Never jump RecoveryRequired → Idle without Settling/canonical commit
+    end note
 ```
 
 `PreparingContext` / `DegradedContext` 的 cancel 发生在外部 Side Effect 前，但 Tx 1 已有 `turnRequested`，因此仍经 `Settling` 写入 `turnCommitted(cancelled)` 后回到 Idle。`AwaitingAcceptance` 的 Cancel 只是 cancel request：Adapter 支持 `cancelPendingDelivery` 时进入 `CancelPending`，直到 cancel ACK、Terminal Evidence 或 Probe 定性；能力不支持时禁用 Cancel 并解释原因。ambiguous 不能直接取消为未投递。
 
 Cancel intent 不单独持久化；App 在 `CancelPending` 崩溃后由 `pendingDelivery + Probe` 恢复定性，不产生第二条 Side Effect。
+
+**校准（§14.5.7）**：`RecoveryRequired` 的成功解锁 **必须** 经 `Settling`（或 reattach 回 `Running`），**禁止** 前端直接 `RecoveryRequired → Idle`。Stop 若只释放 Runtime ownership 而未 durable 结算 attempt，状态 **仍停在** `RecoveryRequired`。
 
 #### 14.5.3 UI Contract
 
@@ -2603,8 +2613,8 @@ Cancel intent 不单独持久化；App 在 `CancelPending` 崩溃后由 `pending
 | `cancel-pending` | “正在确认取消结果” + pending phase | 锁定 | 锁定 | Probe；不展示普通 Retry |
 | `running` | Assistant Placeholder 固定显示 Active Target | V1 锁定 | Stop/Steer 按 capability | Stop |
 | `settling` | “正在保存结果” | 锁定 | 锁定 | 无；短时状态 |
-| `recovery-required` | Shared 状态条：Pending phase、Target、last probe | 锁定 | 锁定 | Probe、查看技术详情、显式重建当前 Binding |
-| `target-unavailable` | Provider/Runtime unavailable 原因 | 可更换 | Send disabled | 修复配置、选择其他 Target |
+| `recovery-required` | Shared 状态条：Pending phase、Target、last probe | 锁定 | 锁定 | **见 §14.5.7**：Probe、Stop、Stop并重建 Binding、durable 放弃本轮、查看技术详情（第一阶段曾仅写 Probe+重建，出口过窄） |
+| `target-unavailable` | Provider/Runtime unavailable 原因 | 可更换 | Send disabled | 修复配置、选择其他 Target；**不得**抬升为 recovery-required（无 unresolved attempt 时） |
 
 第一阶段 Picker 在非 Idle 状态锁定。后续若需要“运行中预选 Next Target”，必须增加独立 Queue contract，不能让一个 Picker 同时表示 Active 与 Next。
 
@@ -2643,7 +2653,9 @@ Assistant · Claude / OpenRouter / ...  Failed
 - “使用其他 Target 重试”：创建新 Turn Attempt，并写 `retryOfAttemptId`；不修改原 Snapshot。
 - 已完成回答的 Regenerate：保留旧回答，创建新 Attempt/Variant；第一阶段可以只在详情中展示旧 Variant。
 - “重建 Binding”：归档旧 Binding metadata，创建新 Native Session；Shared Session Identity 不变。
+  **前置与出口见 §14.5.7.3**：Runtime 仍 own 对应 attempt 时不得成功 Rebuild；须先 Stop/释放或先 commit settled terminal。
 - Provider failover 必须由用户显式选择，不自动执行。
+- Rebuild **不是** Abandon 的同义词：Rebuild 换 Hidden Native Session；Abandon 只结算未决 Turn Attempt（见 §14.5.7.4）。
 
 #### 14.5.6 UX Acceptance Tests
 
@@ -2655,6 +2667,170 @@ Assistant · Claude / OpenRouter / ...  Failed
 - Provider 删除后历史 Badge 仍可解释。
 - Hidden Binding 重建前后 Sidebar 始终只有一个 Shared Row。
 - Retry 到其他 Target 后，原失败 Attempt 与新 Attempt 都可审计。
+
+#### 14.5.7 Recovery Exit Closure（2026-08-04 设计补丁 · 同日校准）
+
+> **触发**：社区反馈 Shared 切换/失败后整会话锁死；点「重建会话连接」循环提示「需要恢复」，后端返回
+> `recovery-active: attempt … is still owned by Runtime; Probe/Stop before rebuild`。
+> **关联实施 plan**：[`docs/plans/2026-08-04-shared-session-recovery-exit-closure.md`](../plans/2026-08-04-shared-session-recovery-exit-closure.md)。
+> **平台**：跨平台契约（macOS / Linux / Windows 同一状态机）；非 Win-only。
+> **校准原则**：**不推翻** §14.5.1–14.5.6 与红线 27/40；只 **收窄缺口、对齐术语、钉死迟到证据与状态边**。
+
+##### 14.5.7.0 设计 vs 实现缺口判定
+
+| 议题 | 基石原文是否覆盖 | 判定 | 说明 |
+|------|------------------|------|------|
+| `recovery-required` 锁整会话 | §14.5.3 / §8.4 已写 | **设计已有 · 保留** | 线性顺序合同；ambiguous 不得放行其他 Target |
+| `target-unavailable` 可换 Picker、Send disabled | §14.5.3 / §8.4 已写 | **设计已有** | 与 recovery **分态** |
+| 纯 target 不可用却进入 recovery 锁死 | 设计要求分态 | **实现遗漏 / 分类偏差** | 若复现，按 §14.5.2 边与 §8.4 纠偏，不得用 recovery 顶替 unavailable |
+| ACK ambiguous → 先 Probe、禁 blind retry | §14.5.5 / 红线 27 已写 | **设计已有 · 实现大体对齐** | UI 已有「检查状态」 |
+| 显式重建 Binding（identity 不变） | §14.5.5 已写 | **设计已有 · 实现已有命令** | `shared_session_v2_rebuild_binding` |
+| Rebuild 前 Runtime 仍 own attempt 必须先 Stop/释放 | **原文未写清** | **设计缺失（本补丁补齐）** | 代码 fail-closed 拒绝 rebuild 是正确安全默认；但 UI 出口未设计 |
+| `recovery-required` 下用户动作仅 Probe + 重建 | §14.5.3 动作列 | **设计过窄（本补丁扩展）** | 缺 Stop、缺 durable 放弃本轮；与 impact report「无放弃 operation 管理面」一致 |
+| Probe 后 disposition → Running / Settling | §14.5.2 状态图已写 | **设计已有** | active reattach / terminal / not-accepted |
+| 用户显式「放弃本轮」→ Idle 且 durable | **原文未写** | **设计缺失（本补丁补齐）** | 否则 unknown / interrupt 失败会永久积压锁死 |
+| Fail-closed 必须配套**可完成出口** | 分散在多处 fail-closed 句 | **原则补丁** | 「可完成出口」≠ fail-open；仍 fail-closed，但每条锁必须有合法终态路径 |
+| 迟到 ACK / 迟到 terminal 在 Abandon·Rebuild 之后 | **原文未写清** | **设计缺口（§14.5.7.5 校准）** | 必须吸收/忽略，不得复活 Turn 或二次投递 |
+| attempt-owner vs binding-owner | 实现有 `findRecoveryOwner` | **设计需显式化（§14.5.7.1）** | 动作随 owner 种类启用 |
+
+**一句话**：基石把 **「为何锁」与「禁什么」** 写清了；把 **「如何在有限步内合法解锁」** 写窄了。  
+本补丁 **不推翻** 线性锁与禁 blind retry，只补 **Recovery Exit Ladder**，并校准术语/状态边/迟到证据。
+
+##### 14.5.7.1 术语与 Owner 校准（禁止混用）
+
+| 术语 | 含义 | 典型命令 / 路径 | 是否改 Runtime | 是否写 Canonical |
+|------|------|-----------------|----------------|------------------|
+| **Probe Binding** | 只读读取 durable + runtime 健康快照 | `shared_session_v2_probe_binding` | 否 | 否 |
+| **Recover Attempt** | 按 disposition 接回 active 或提交 terminal/not-accepted | `shared_session_v2_recover_attempt` | 可 reattach observer | 可 commit |
+| **Stop / Interrupt** | 对 **已路由的 owner attempt** 发 interrupt | `shared_session_v2_interrupt_turn` | 是（停 native turn） | 不单独等于 terminal；后续仍要 Probe/Recover/Abandon 结算 |
+| **CancelPending** | ACK 前 cancel request（§14.5.2） | Adapter `cancelPendingDelivery` | 依 capability | 最终仍经 Settling |
+| **Rebuild Binding** | 归档 Hidden Binding + 新 provisioning | `shared_session_v2_rebuild_binding` | 换 native session | 是（archive + replaced attempts） |
+| **Abandon Turn** | 用户显式结算未决 attempt 为 cancelled/not-accepted | 拟 `abandon_unresolved_attempt` 或等价组合 | 可 best-effort interrupt | **必须** durable terminal |
+
+UI 文案「检查状态」= Probe Binding ± 必要时 Recover Attempt（用户仍感知为一步「检查」；审计日志须区分）。  
+**禁止** 把 Rebuild 说成「解锁」、把 Abandon 说成「重建」、把 Stop 说成「取消并回 idle」。
+
+**Recovery Owner 两种（与实现 `findRecoveryOwner` 对齐）：**
+
+| Owner kind | 含义 | 优先动作 |
+|------------|------|----------|
+| `attempt` | 存在 in-flight / unresolved attempt | Probe/Recover → Stop（若 active/own）→ Abandon 或（释放后）Rebuild |
+| `binding` | 无 in-flight attempt，但 Binding `provisioningState=recovery-required` | Probe → 条件满足后 **Rebuild**；Abandon 不适用或 no-op |
+| `clear` | 无可恢复 owner | 直接 Settling→Idle（解锁） |
+| `ambiguous` | 多 attempt / 多 recovery binding | fail closed；展示技术详情；禁止一键 Abandon/Rebuild 全部 |
+
+##### 14.5.7.2 失败分类铁律（纠偏口径）
+
+进入 `recovery-required` **仅当**存在未决的 delivery/attempt **或** binding provisioning 未决风险（ACK ambiguous、cancel ambiguous、connection lost 且可能已 accepted、commit failed 且可能已 accepted、binding identity ACK 不确定等）。
+
+**不得**仅因下列原因进入 `recovery-required`：
+
+- Provider / Model 配置不可用、catalog 拒绝、runtime 明确 missing（**且**无 unresolved attempt / 无 recovery binding）→ **`target-unavailable`**
+- 网关/daemon 全局不可达且无 in-flight Shared attempt → **全局连通性提示**；不锁 Shared recovery
+- `prepare_context` 只读失败且无 durable pending → 回 idle 或 failed attempt 结算，不抬升为 recovery 锁
+
+切换 Target 时：若目标不可用但 **尚未** 留下 unresolved attempt，必须停在 `target-unavailable` 或 idle 前校验失败，**禁止**伪装成「需要恢复」。
+
+**校准**：用户口语「切换失败锁死」在工程上要拆成两问——(1) 是否已有 unresolved attempt？(2) 还是纯 target 不可用？前者锁 recovery 是合同；后者锁 recovery 是 **实现偏差**。
+
+##### 14.5.7.3 Recovery Exit Ladder（用户动作合同）
+
+推荐用户心智顺序（**不是**强制状态机只能串行）：
+
+```text
+1. 检查状态 (Probe ± Recover)
+2. 若仍 own / active → 停止投递 (Stop/Interrupt)
+3. 绑定损坏或需换 Native → 重建连接 (Rebuild；own 时 UI 呈现「停止并重建」)
+4. 仍无法定性 / 用户不要该 Turn → 放弃本轮 (Abandon，确认框)
+```
+
+| 动作 | 语义 | durable / runtime | 成功后 UI 状态 | 失败后 |
+|------|------|-------------------|---------------|--------|
+| **检查状态** | Probe；必要时 Recover | 见术语表 | active→`running`；terminal/not-accepted→`settling`→`idle`；clear→`idle`；unknown→held 仍 `recovery-required` | held + 原因；**不**自动 Rebuild |
+| **停止投递** | interrupt 当前 attempt owner | 释放 `owns_attempt`；**不**自动等于 Turn 已 cancelled | **仍为** `recovery-required`（直到 Probe/Abandon/Rebuild 结算） | 保持 recovery；展示 interrupt 失败；引导 Abandon |
+| **重建连接** | 条件满足后 `rebuild_binding` | archive binding + replace attempts | 经 `settling`→`idle`；Shared identity 不变 | `recovery-active`→可操作错误；ambiguous→fail closed |
+| **放弃本轮** | durable 结算 attempt | cancel/not-accepted commit + remove ownership | `settling`→`idle`；重启不复活 | ambiguous→fail closed；**accepted+active** 须强警告 |
+
+**前端状态机校准（实现约束，不扩九态）：**
+
+- **不新增** SharedSend 状态枚举。
+- Abandon / Rebuild 成功映射到既有事件：`commitCancelled` / `probeNotAccepted` / `probeTerminalRun` + `canonicalCommitted` / `terminalCommitted` 等（与现行 `sendStateMachine` 边兼容）。
+- Stop 成功 **不** 单独新增状态；可用 detail/flag 记录 `runtimeReleased` 以启用 Rebuild 文案，状态名仍是 `recovery-required`。
+
+**Disposition → 按钮启用（校准矩阵）：**
+
+| 最近 disposition / owner | 检查 | 停止 | 重建 | 放弃本轮 |
+|--------------------------|------|------|------|----------|
+| `clear` | ✓（应变 idle） | — | — | — |
+| `not-accepted` / terminal 可 commit | ✓ | — | 可选 | ✓（若仍未 commit） |
+| `active` 且 owns | ✓ | ✓（capability） | ✓ 仅作「停止并重建」 | ✓ 强警告 |
+| `unknown` / held | ✓ | ✓ best-effort | 禁用或降级为「停止并重建」 | ✓ 主出口 |
+| binding-only recovery | ✓ | — | ✓ 主出口 | — |
+| `ambiguous` | ✓ | 禁用批量 | 禁用批量 | 禁用批量 |
+| interrupt capability = none | ✓ | 禁用并说明 | 禁用直接重建若仍 own | ✓ 主出口 |
+
+##### 14.5.7.4 Rebuild 前置条件（规范性）
+
+`rebuild_binding` 允许执行，当且仅当对该 `bindingKey`：
+
+1. unresolved attempts ≤ 1（>1 → `recovery-owner-ambiguous`，fail closed）；且  
+2. 若存在 attempt：Runtime **不再** `owns_attempt`，或已有 settled terminal 可先 commit；且  
+3. 用户意图为 **显式重建**（非自动）。
+
+若 (2) 不满足：返回结构化错误 `code=recovery-active`，`hint=stop-before-rebuild`；  
+UI **必须**映射为可操作步骤（先 Stop / 停止并重建），不得只循环展示「需要恢复」标题。
+
+**何时需要 Rebuild vs 只需 Abandon：**
+
+| 情况 | 优先 |
+|------|------|
+| attempt 未决，Binding 仍 ready、Native 健康 | **Abandon 或 Probe 结算**；不必 Rebuild |
+| Binding provisioning 损坏 / Native identity 不可用 / 需新 Native Session | **Rebuild**（先满足前置） |
+| Runtime zombie own 且 interrupt 失败 | Abandon durable 结算 + 视情况再 Rebuild |
+
+Rebuild 实现可对用户呈现「停止并重建」（策略 B），审计须能区分 Stop 与 Rebuild 两步。
+
+##### 14.5.7.5 Abandon 规范性与迟到证据
+
+Abandon 是 **用户显式、可审计的 Terminal 路径**，不是 Retry，也不是 Rebuild：
+
+- 输入：`sharedSessionId` + owner `attemptId`（或可唯一推导的 binding+单 attempt）
+- 输出：canonical cancelled / not-accepted commit + attempt 从 Runtime coordinator 移除
+- 幂等：同一 attempt 重复 Abandon 不产生第二套矛盾 terminal
+- 与 CancelPending：若仍在 pre-accept 且 Adapter 支持 cancel ACK，**优先**既有 cancel 路径；Abandon 用于 cancel 不可用、Probe unknown、interrupt 失败、或用户明确放弃
+- App 重启：仅当 durable 仍存在 unresolved evidence 时恢复 `recovery-required`；Abandon 成功后重启必须为可发送 `idle`（或等价非锁态）
+
+**迟到证据（校准 · 必须实现）：**
+
+| 时序 | 规则 |
+|------|------|
+| Abandon commit 成功后，迟到的 runtime ACK / terminal / tool 事件到达 | **不得** 再创建新 user turn 或第二次 `turnCommitted` 成功态；记 diagnostic / 吸收为 late observation；UI 不回到 recovery 锁死同一 attempt |
+| Rebuild 成功后，旧 native session 迟到事件 | 按 archived binding 丢弃或只读诊断；**不得** 写入新 binding 的 live turn |
+| Stop 成功但尚未 Abandon/Rebuild，迟到 terminal | Probe/Recover 应能结算为 terminal → Settling（优于强迫用户 Abandon） |
+
+##### 14.5.7.6 Interrupt 能力与引擎差异
+
+- Stop/Interrupt **必须** 走 Target Owner 路由（红线 10），禁止 workspace-wide 乱杀。
+- 当 Adapter/引擎 **不支持** interrupt：Stop 按钮禁用并说明原因；**不得** 假装 Stop 成功后 Rebuild；此时 **Abandon** 为主要可完成出口（仍 durable）。
+- `running` 态 Stop 与 `recovery-required` 态 Stop **共用** interrupt 实现，仅 UI 入口不同。
+
+##### 14.5.7.7 本补丁验收（在 14.5.6 之上追加）
+
+- 纯 target 不可用（无 unresolved attempt / 无 recovery binding）**永不**进入 `recovery-required`。
+- `recovery-required` 下用户经 **≤3 次明确点击** 必达 `idle` 或 reattach `running`，无无限 Rebuild 死循环。
+- Runtime own attempt 时单独 Rebuild 不得“假装成功”；必须 Stop 或结构化引导。
+- Abandon 后强制杀进程重启，同一 attempt **不得**再次锁死该 Shared Session。
+- Abandon/Rebuild 后注入迟到 ACK：**不** 双发、**不** 矛盾 double commit、**不** 无故重锁。
+- Stop 单独成功后状态仍为 `recovery-required`（直到结算），且审计可区分 Stop / Rebuild / Abandon。
+- 全程不产生第二个同序 blind delivery / 第二个同 Target Binding（既有强杀测试仍成立）。
+- 前端 **不** 新增 SharedSend 状态名；只复用既有 transition 事件。
+
+##### 14.5.7.8 明确不在本补丁范围
+
+- recovery 中放行其他 Target（需 Queue/Branch，§14.5.3 未来项）
+- 全局「所有 locked Shared 一键治理」管理中心（产品 backlog；impact report §9.1.4）
+- 项目归档、窗口拖拽热区等非 recovery 议题
+- 把 CancelPending 与 Abandon 合成单一产品按钮（实现可聚合文案，合同仍分域）
 
 ### 14.6 Native Conversation Canvas Compatibility Guardrails
 
@@ -3376,6 +3552,18 @@ Codex / Provider A
     正常空历史。
 48. Shared durable identity 只能来自 session UUID；标题、排序时间、当前 Target 与 Provider
     label 都不得参与 storage lookup、Projection checkpoint、cache 或 recovery key。
+49. `target-unavailable` 与 `recovery-required` 不得混用：无 unresolved attempt 的配置/runtime
+    不可用只进前者；后者仅服务未决 delivery/attempt 风险。
+50. Fail-closed recovery 必须配套**可完成出口**（completable exit，不是 fail-open 放行）：
+    Probe/Recover 定性、Stop 释放 Runtime ownership、条件满足后的显式 Rebuild、以及用户
+    显式 durable Abandon；禁止只锁不放。
+51. Runtime 仍 own attempt 时不得成功 Rebuild Binding；须先 Stop/释放或走已 settled commit，
+    UI 不得把 `recovery-active` 表现为无限无出口「需要恢复」。
+52. Abandon 必须 durable 结算 attempt 且可审计；禁止仅清前端 state 回 idle；多 owner
+    ambiguous 时禁止一键清空。
+53. Recovery 成功解锁不得跳过 Settling/canonical commit 直接 Idle；Stop 单独成功不构成
+    Turn 已结算。Abandon/Rebuild 之后的迟到 ACK/terminal 必须吸收或诊断，不得双发或
+    复活同一 attempt 的 recovery 锁。
 
 ---
 

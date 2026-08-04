@@ -124,6 +124,28 @@ describe('MessageQueue', () => {
     expect(screen.getByText('composer.queueStatusCommand')).toBeTruthy();
   });
 
+  it('shows global fuse disabled reason on fuse button title', () => {
+    render(
+      <MessageQueue
+        queue={[
+          {
+            id: 'queued-disabled',
+            content: 'please fuse this',
+            queuedAt: Date.now(),
+          },
+        ]}
+        onFuse={() => {}}
+        onRemove={() => {}}
+        canFuse={false}
+        fuseDisabledReasonKey="chat.fuseDisabledNoActiveTurn"
+      />,
+    );
+
+    const fuse = screen.getByRole('button', { name: 'chat.fuseFromQueue' });
+    expect(fuse.hasAttribute('disabled')).toBe(true);
+    expect(fuse.getAttribute('title')).toBe('chat.fuseDisabledNoActiveTurn');
+  });
+
   it('disables fuse action for empty queued content', () => {
     render(
       <MessageQueue

@@ -43,7 +43,7 @@ const sharedSend = {
     settling: "正在儲存結果…",
     recoveryTitle: "需要恢復",
     recoveryHint:
-      "上一次發送的接收結果不確定，已鎖定本會話。請先檢查執行狀態，或明確重建會話連線。",
+      "上一次發送的接收結果不確定，已鎖定本會話。請檢查狀態、停止投遞、停止並重建，或放棄本輪。",
     recoveryProbe: "檢查狀態",
     recoveryProbing: "正在檢查…",
     recoveryRebuild: "重建會話連線",
@@ -55,6 +55,31 @@ const sharedSend = {
     selectionPersistFailedTitle: "發送目標儲存失敗",
     selectionPersistFailedMessage:
       "目前選擇仍然有效，但重新啟動恢復時可能使用上一次發送目標：{{reason}}",
+    recoveryStop: "停止投遞",
+    recoveryStopHint:
+      "請求執行環境停止進行中的投遞。停止成功後會話仍保持鎖定，需再檢查、重建或放棄本輪以完成解鎖。",
+    recoveryStopAndRebuild: "停止並重建",
+    recoveryStopAndRebuildHint:
+      "必要時先停止執行環境仍占用的投遞，再封存舊連線並準備新的會話連線。",
+    recoveryAbandon: "放棄本輪",
+    recoveryAbandonHint:
+      "將未決輪次持久標記為已取消並解鎖會話。不會刪除整條對話。",
+    recoveryAbandonConfirm:
+      "確定放棄本輪未決發送並解鎖共用會話嗎？該輪次將標記為已取消，對話本身會保留。",
+    recoveryStopNoAttempt:
+      "目前沒有可停止的進行中投遞。請改用檢查狀態、重建連線或放棄本輪。",
+    recoveryHintAfterStop:
+      "已請求停止投遞。請繼續檢查狀態、停止並重建，或放棄本輪以完成解鎖。",
+    recoveryErrorActive:
+      "執行環境仍占用該輪次。請先停止投遞再重建，或使用「放棄本輪」。",
+    recoveryErrorActiveRequiresStop:
+      "執行環境仍占用該輪次。請先停止投遞再放棄，或在放棄時確認強制停止。",
+    recoveryErrorAmbiguous:
+      "發現多個未決占用，無法安全自動處理。若持續出現，請攜帶會話資訊聯繫支援。",
+    recoveryErrorOwnerMissing:
+      "未找到對應的未決輪次。請再檢查狀態；會話可能已經可以繼續。",
+    recoveryTechDetail: "可查看技術詳情",
+    targetUnavailableHint: "請在選擇器中更換目標後重新發送。",
     cancel: "取消",
   },
 };

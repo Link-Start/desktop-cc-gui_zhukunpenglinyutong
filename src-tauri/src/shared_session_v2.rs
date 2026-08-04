@@ -4643,6 +4643,7 @@ pub async fn shared_session_v2_rebuild_binding(
         {
             commit_observed_runtime_settlement(&state, settled)?;
         } else if state.shared_runtime_coordinator.owns_attempt(attempt_id) {
+            // 结构化前缀供前端映射 i18n；message 保留兼容旧 startsWith 解析。
             return Err(format!(
                 "recovery-active: attempt {attempt_id} is still owned by Runtime; Probe/Stop before rebuild"
             ));
@@ -4660,6 +4661,231 @@ pub async fn shared_session_v2_rebuild_binding(
         "archivedNativeSessionId": rebuilt.archived_native_session_id,
         "replacedAttemptIds": rebuilt.replaced_attempt_ids,
         "bindingOperationId": rebuilt.binding_operation_id,
+    }))
+}
+
+/// 用户显式「放弃本轮」：把唯一未决 Attempt durable 结算为 cancelled，
+/// 并在无更多 unresolved 时清除 binding 的 recovery-required，使会话可重新发送。
+///
+/// Fail-closed：
+/// - Runtime 仍 own attempt 且 `force_stop=false` → 拒绝（须先 Stop）
+/// - 多 owner → ambiguous 拒绝
+/// - 已 committed → 幂等返回 terminal-committed
+pub fn abandon_unresolved_attempt_core(
+    writer: &SharedEventWriter,
+    session_id: &str,
+    attempt_id: &str,
+    stop_reason: &str,
+) -> Result<CommitTurnOutcome, String> {
+    let committed = commit_runtime_snapshot_core(
+        writer,
+        session_id,
+        attempt_id,
+        recovery_terminal_snapshot(OutcomeStatus::Cancelled, stop_reason),
+        None,
+    )?;
+    clear_binding_recovery_if_idle(writer, session_id, &committed.binding_key)?;
+    Ok(committed)
+}
+
+/// 当 binding 无 unresolved attempt 且 provisioning=recovery-required 时，
+/// 回落 prepared（无 native）或 ready（有 native），避免「attempt 已结算但仍锁 begin」。
+fn clear_binding_recovery_if_idle(
+    writer: &SharedEventWriter,
+    session_id: &str,
+    binding_key: &str,
+) -> Result<(), String> {
+    let remaining = unresolved_attempt_evidence(writer, session_id, Some(binding_key))?;
+    if !remaining.is_empty() {
+        return Ok(());
+    }
+    let existing = match writer
+        .binding_state(session_id, binding_key)
+        .map_err(|error| error.to_string())?
+    {
+        Some(row) => row,
+        None => return Ok(()),
+    };
+    if provisioning_state_of(&existing) != PROVISIONING_RECOVERY_REQUIRED {
+        return Ok(());
+    }
+    let engine = serde_json::from_value::<EngineType>(Value::String(existing.engine.clone()))
+        .map_err(|_| {
+            format!(
+                "binding {binding_key} has unsupported engine '{}'",
+                existing.engine
+            )
+        })
+        .and_then(ensure_supported_shared_session_engine)?;
+    let has_native = existing
+        .native_session_id
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty());
+    let next_state = if has_native {
+        PROVISIONING_READY
+    } else {
+        PROVISIONING_PREPARED
+    };
+    let availability = if has_native { "ready" } else { "provisioning" };
+    upsert_binding_row(
+        writer,
+        session_id,
+        binding_key,
+        engine,
+        existing.provider_profile_id.clone(),
+        Some(&existing),
+        None,
+        None,
+        provisioning_json(
+            next_state,
+            Some("recovery-cleared-after-abandon"),
+            None,
+            binding_operation_id_of(&existing).as_deref(),
+        ),
+        availability,
+    )
+    .map_err(|error| error.to_string())?;
+    append_control_fact(
+        writer,
+        session_id,
+        "binding.recovery-cleared",
+        Some(binding_key),
+        Some("user-abandon-unresolved"),
+    )?;
+    Ok(())
+}
+
+/// 用户显式放弃未决 Attempt（durable cancel）。可选 `force_stop`：在 Runtime own 时先 interrupt。
+#[tauri::command]
+pub async fn shared_session_v2_abandon_unresolved_attempt(
+    workspace_id: String,
+    thread_id: String,
+    attempt_id: Option<String>,
+    force_stop: Option<bool>,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let writer = require_writer(&state)?;
+    let shared_session_id = parse_shared_session_id(&thread_id)?;
+    require_shared_session_workspace_owner(&workspace_id, &shared_session_id)?;
+    let force_stop = force_stop.unwrap_or(false);
+
+    let unresolved = unresolved_attempt_evidence(writer, &shared_session_id, None)?;
+    let attempt_id = match attempt_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        Some(requested) => {
+            if !unresolved
+                .iter()
+                .any(|evidence| evidence.owner.requested.attempt_id == requested)
+            {
+                // 幂等：若已 terminal-committed，返回已提交。
+                if let Some(sequence) =
+                    committed_attempt_sequence(writer, &shared_session_id, requested)?
+                {
+                    return Ok(json!({
+                        "status": "terminal-committed",
+                        "attemptId": requested,
+                        "sequence": sequence,
+                    }));
+                }
+                return Err(format!(
+                    "recovery-owner-missing: attempt {requested} is not unresolved"
+                ));
+            }
+            requested.to_string()
+        }
+        None => {
+            if unresolved.is_empty() {
+                return Ok(json!({
+                    "status": "clear",
+                    "reason": "no-unresolved-attempt",
+                }));
+            }
+            if unresolved.len() > 1 {
+                return Err(format!(
+                    "recovery-owner-ambiguous: session has {} unresolved attempts",
+                    unresolved.len()
+                ));
+            }
+            unresolved[0].owner.requested.attempt_id.clone()
+        }
+    };
+
+    if let Some(sequence) =
+        committed_attempt_sequence(writer, &shared_session_id, &attempt_id)?
+    {
+        return Ok(json!({
+            "status": "terminal-committed",
+            "attemptId": attempt_id,
+            "sequence": sequence,
+        }));
+    }
+
+    let owned = state.shared_runtime_coordinator.owns_attempt(&attempt_id);
+    if owned {
+        if !force_stop {
+            return Err(format!(
+                "recovery-active-requires-stop: attempt {attempt_id} is still owned by Runtime; Stop before abandon or pass forceStop"
+            ));
+        }
+        // force_stop：best-effort interrupt；失败则拒绝 abandon（禁止假装释放）。
+        let interrupt = shared_session_v2_interrupt_turn(
+            workspace_id.clone(),
+            thread_id.clone(),
+            attempt_id.clone(),
+            state.clone(),
+        )
+        .await;
+        if let Err(error) = interrupt {
+            return Err(format!(
+                "recovery-active-requires-stop: interrupt failed before abandon: {error}"
+            ));
+        }
+        // 不立即 remove_attempt —— 先检查 settled_for_attempt，
+        // 以防 interrupt 与真实完成竞态导致 settled 证据被误删。
+    }
+
+    // 必须在 remove_attempt 之前读取：remove_attempt 会清掉 settled_by_attempt。
+    // 场景：interrupt 调用时，后端恰好刚完成并写入 settled 证据，
+    // 此时不应丢弃该证据（否则会丢失已完成的助手回复）。
+    if let Some(settled) = state
+        .shared_runtime_coordinator
+        .settled_for_attempt(&attempt_id)
+    {
+        // 清理 coordinator 跟踪（不再需要）
+        state.shared_runtime_coordinator.remove_attempt(&attempt_id);
+        let committed = commit_observed_runtime_settlement(&state, settled)?;
+        clear_binding_recovery_if_idle(writer, &shared_session_id, &committed.binding_key)?;
+        return Ok(json!({
+            "status": "terminal-committed",
+            "attemptId": attempt_id,
+            "bindingKey": committed.binding_key,
+            "sequence": committed.sequence,
+        }));
+    }
+
+    // 未 settled：清理 coordinator 跟踪，走 durable cancel。
+    if owned {
+        state.shared_runtime_coordinator.remove_attempt(&attempt_id);
+    }
+
+    let committed = abandon_unresolved_attempt_core(
+        writer,
+        &shared_session_id,
+        &attempt_id,
+        "user-abandon-unresolved",
+    )?;
+    // abandon_unresolved_attempt_core 不负责 coordinator；最终清理。
+    state.shared_runtime_coordinator.remove_attempt(&attempt_id);
+
+    Ok(json!({
+        "status": "cancelled-committed",
+        "attemptId": attempt_id,
+        "bindingKey": committed.binding_key,
+        "sequence": committed.sequence,
+        "duplicate": committed.duplicate,
     }))
 }
 
@@ -5585,6 +5811,96 @@ mod shared_interrupt_owner_tests {
         assert!(error.contains("shared-control-owner-mismatch"));
 
         coordinator.remove_attempt(&attempt_id);
+        writer.shutdown().expect("shutdown writer");
+        std::fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn abandon_unresolved_attempt_commits_cancelled_and_clears_recovery() {
+        let session_id = "abandon-unresolved";
+        let provider = "provider-abandon";
+        let (root, writer) = open_test_writer("abandon-unresolved");
+        let begin = begin_turn_core(
+            &writer,
+            session_id,
+            &target(EngineType::Codex, provider),
+            "hello".to_string(),
+        )
+        .expect("begin");
+        let attempt_id = begin.attempt_id.expect("attempt");
+        let binding_key = begin.binding_key.clone();
+        mark_recovery_core(
+            &writer,
+            session_id,
+            &binding_key,
+            EngineType::Codex,
+            Some(provider.to_string()),
+            Some("test-ambiguous"),
+        )
+        .expect("mark recovery");
+        assert_eq!(
+            provisioning_state_of(
+                &writer
+                    .binding_state(session_id, &binding_key)
+                    .expect("read binding")
+                    .expect("binding exists")
+            ),
+            PROVISIONING_RECOVERY_REQUIRED
+        );
+
+        let committed = abandon_unresolved_attempt_core(
+            &writer,
+            session_id,
+            &attempt_id,
+            "user-abandon-unresolved",
+        )
+        .expect("abandon");
+        assert_eq!(committed.binding_key, binding_key);
+        assert!(
+            unresolved_attempt_evidence(&writer, session_id, None)
+                .expect("evidence")
+                .is_empty()
+        );
+        assert_ne!(
+            provisioning_state_of(
+                &writer
+                    .binding_state(session_id, &binding_key)
+                    .expect("read binding")
+                    .expect("binding exists")
+            ),
+            PROVISIONING_RECOVERY_REQUIRED
+        );
+
+        // begin 不应再被旧 recovery 挡住。
+        let next = begin_turn_core(
+            &writer,
+            session_id,
+            &target(EngineType::Codex, provider),
+            "again".to_string(),
+        )
+        .expect("begin after abandon");
+        assert_eq!(next.status, BeginTurnStatus::Creating);
+
+        writer.shutdown().expect("shutdown writer");
+        std::fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn rebuild_binding_core_settles_single_unresolved() {
+        let session_id = "rebuild-single-unresolved";
+        let provider = "provider-multi";
+        let (root, writer) = open_test_writer("rebuild-single-unresolved");
+        let first = begin_turn_core(
+            &writer,
+            session_id,
+            &target(EngineType::Codex, provider),
+            "one".to_string(),
+        )
+        .expect("begin first");
+        let binding_key = first.binding_key.clone();
+        let rebuilt = rebuild_binding_core(&writer, session_id, &binding_key).expect("rebuild");
+        assert_eq!(rebuilt.replaced_attempt_ids.len(), 1);
+
         writer.shutdown().expect("shutdown writer");
         std::fs::remove_dir_all(root).expect("remove test root");
     }

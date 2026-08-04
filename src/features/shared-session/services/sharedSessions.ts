@@ -647,6 +647,45 @@ export async function sharedSessionV2RebuildBinding(
   });
 }
 
+export type SharedV2AbandonUnresolvedAttemptResult =
+  | {
+      status: "cancelled-committed";
+      attemptId: string;
+      bindingKey: string;
+      sequence?: number | null;
+      duplicate?: boolean;
+    }
+  | {
+      status: "terminal-committed";
+      attemptId: string;
+      bindingKey?: string;
+      sequence?: number | null;
+    }
+  | {
+      status: "clear";
+      reason?: string;
+    };
+
+/**
+ * 用户显式「放弃本轮」：durable cancel 未决 attempt。
+ * `forceStop=true` 时若 Runtime 仍 own 会先 interrupt 再结算。
+ */
+export async function sharedSessionV2AbandonUnresolvedAttempt(
+  workspaceId: string,
+  threadId: string,
+  options?: { attemptId?: string | null; forceStop?: boolean },
+) {
+  return invoke<SharedV2AbandonUnresolvedAttemptResult>(
+    "shared_session_v2_abandon_unresolved_attempt",
+    {
+      workspaceId,
+      threadId,
+      attemptId: options?.attemptId ?? null,
+      forceStop: options?.forceStop ?? false,
+    },
+  );
+}
+
 export async function sharedSessionV2ProbeBinding(
   workspaceId: string,
   threadId: string,

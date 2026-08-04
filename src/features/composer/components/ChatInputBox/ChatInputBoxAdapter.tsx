@@ -486,6 +486,7 @@ export interface ChatInputBoxAdapterProps {
   onDeleteQueued?: (id: string) => void;
   onFuseQueued?: (id: string) => void | Promise<void>;
   canFuseQueuedMessages?: boolean;
+  fuseDisabledReasonKey?: string | null;
   fusingQueuedMessageId?: string | null;
 
   // External keyboard handler (for Composer-level shortcuts)
@@ -1027,6 +1028,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       onDeleteQueued,
       onFuseQueued,
       canFuseQueuedMessages = false,
+      fuseDisabledReasonKey = null,
       fusingQueuedMessageId = null,
       files,
       customSkillDirectories,
@@ -2136,6 +2138,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         onRemoveFromQueue={onDeleteQueued}
         onFuseFromQueue={onFuseQueued}
         canFuseFromQueue={canFuseQueuedMessages}
+        fuseDisabledReasonKey={fuseDisabledReasonKey}
         fusingQueueMessageId={fusingQueuedMessageId}
         sdkInstalled={true}
         fileCompletionProvider={fileCompletionProvider}
