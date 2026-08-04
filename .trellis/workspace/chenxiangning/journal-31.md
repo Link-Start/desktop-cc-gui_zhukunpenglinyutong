@@ -1249,3 +1249,36 @@ nativeContextTrust dirty/trusted + dirty 时 needs-history rematerialize + empty
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1332: 修复 Shared Atomic 模型与思考强度联动
+
+**Date**: 2026-08-04
+**Task**: 修复 Shared Atomic 模型与思考强度联动
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+Shared 从 Grok 切到 Codex 后思考档位不再沿用 activeEngine 或遗留 null；按目标模型 capability seed/收敛 options 与 effort，并在 UI hydrate 与 send 边界 reconcile。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cf7abdbf3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
