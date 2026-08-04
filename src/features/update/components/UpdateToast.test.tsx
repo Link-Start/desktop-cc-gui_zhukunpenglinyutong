@@ -82,14 +82,19 @@ describe("UpdateToast", () => {
       error: "Network error",
     };
 
-    render(
+    const { container } = render(
       <UpdateToast state={state} onUpdate={onUpdate} onDismiss={onDismiss} />,
     );
 
     expect(screen.getByText("Update failed.")).toBeTruthy();
     expect(screen.getByText("Network error")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    fireEvent.click(
+      within(container.querySelector(".update-toast-actions")!).getByRole(
+        "button",
+        { name: "Dismiss" },
+      ),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
 
     expect(onDismiss).toHaveBeenCalledTimes(1);
@@ -106,7 +111,30 @@ describe("UpdateToast", () => {
     const scoped = within(container);
 
     expect(scoped.getByText(/up to date/i)).toBeTruthy();
-    fireEvent.click(scoped.getByRole("button", { name: /dismiss/i }));
+    fireEvent.click(
+      within(container.querySelector(".update-toast-inline")!).getByRole(
+        "button",
+        { name: /dismiss/i },
+      ),
+    );
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders a header close button that dismisses checking state", () => {
+    const onDismiss = vi.fn();
+    const state: UpdateState = { stage: "checking" };
+
+    const { container } = render(
+      <UpdateToast state={state} onUpdate={vi.fn()} onDismiss={onDismiss} />,
+    );
+
+    expect(screen.getByText("Checking for updates...")).toBeTruthy();
+    fireEvent.click(
+      within(container.querySelector(".update-toast-header")!).getByRole(
+        "button",
+        { name: "Dismiss" },
+      ),
+    );
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 });
