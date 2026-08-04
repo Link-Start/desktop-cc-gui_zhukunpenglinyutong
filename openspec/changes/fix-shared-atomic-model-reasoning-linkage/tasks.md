@@ -26,3 +26,9 @@
 - [x] 5.2 `reconcileAtomicReasoningEffort` + Composer UI/store 收敛
 - [x] 5.3 Shared send boundary reconcile in `useThreadMessaging`
 - [x] 5.4 单测：partial enrich / null→default / invalid→default
+
+## 6. Shared init × Native Codex residue
+
+- [x] 6.1 Shared/create-session 禁止回落父层 reasoningOptions/selectedEffort
+- [x] 6.2 `buildLocalSharedSessionInitialTarget` 按目标 CLI 播种 effort
+- [x] 6.3 initialTarget 单测：Grok null / Codex sol→low

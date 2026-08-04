@@ -64,3 +64,21 @@ When Shared Session holds a Codex `selectedNextTarget` with a known catalog/cust
 - **WHEN** Shared Codex target effort is `ultra` but the selected model does not support `ultra`
 - **THEN** display and send MUST use that model’s default or first supported effort
 - **AND** MUST NOT dispatch `ultra`
+
+### Requirement: Shared Session Initialization MUST NOT Borrow Native Composer Reasoning State
+
+Creating or activating a Shared Session MUST derive reasoning options and effort from the Shared `selectedNextTarget` (or the create-session Atomic target), not from the global Native composer `activeEngine` / `selectedEffort` / model reasoning catalog. After a user has used Native Codex, initializing Shared Grok MUST show only Grok’s fixed allowlist and Default; it MUST NOT show Codex-only tiers such as `xhigh` / `max` / `ultra`, and MUST NOT preselect a leftover Native Codex effort.
+
+#### Scenario: Native Codex then Shared Grok init
+
+- **WHEN** the global Native composer last used Codex with a non-null effort and full model reasoning options
+- **AND** the user creates a Shared Session with initial engine Grok and a local default model
+- **THEN** the composer ReasoningSelect options MUST be limited to Grok’s fixed `low` / `medium` / `high` (plus Default)
+- **AND** MUST NOT include `xhigh` / `max` / `ultra`
+- **AND** the selected effort MUST NOT inherit the previous Native Codex effort solely because `activeEngine` is still Codex
+
+#### Scenario: Shared without hydrated target fail-closed for reasoning UI
+
+- **WHEN** the active conversation is Shared but `selectedNextTarget` is not yet available
+- **THEN** the composer MUST NOT fall back to Native/global reasoning options or effort
+- **AND** MAY show an empty option set and null effort until the Shared target hydrates

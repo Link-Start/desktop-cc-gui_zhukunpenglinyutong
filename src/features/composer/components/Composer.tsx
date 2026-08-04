@@ -839,9 +839,9 @@ function ComposerImpl({
       ? effectiveCreationTarget
       : nativeSessionTarget;
   /**
-   * Shared / create-session Atomic：思考档位 options + effort 跟 selectedNextTarget
-   * 的 engine+model 走，禁止继续用全局 activeEngine 的 Grok 三档冒充 Codex 模型。
-   * Native 会话仍用父层 reasoningOptions / selectedEffort。
+   * Shared / create-session Atomic：思考档位 options + effort 只信 target 的
+   * engine+model。Native Codex 残留的 activeEngine / selectedEffort /
+   * reasoningOptions 禁止在 Shared 初始化或 target 短暂为空时回灌 UI。
    */
   const atomicModelReasoningRef = useMemo(() => {
     const target = selectedAtomicTarget;
@@ -910,21 +910,30 @@ function ComposerImpl({
   const useAtomicReasoningProjection =
     isSharedSessionResolved || Boolean(createSessionTargetPicker);
   const atomicReasoningOptions = useMemo(() => {
-    if (!useAtomicReasoningProjection || !atomicModelReasoningRef) {
+    if (!useAtomicReasoningProjection) {
       return reasoningOptions;
     }
-    return resolveAtomicReasoningOptions(
-      atomicModelReasoningRef.engine,
-      atomicModelReasoningRef.model,
-    );
+    // Shared / create-session：即使 target 尚未 hydrate，也禁止回落父层
+    // Native Codex 的全量 options（会带出 xhigh/max/ultra + 脏 effort）。
+    if (atomicModelReasoningRef) {
+      return resolveAtomicReasoningOptions(
+        atomicModelReasoningRef.engine,
+        atomicModelReasoningRef.model,
+      );
+    }
+    return [];
   }, [
     atomicModelReasoningRef,
     reasoningOptions,
     useAtomicReasoningProjection,
   ]);
   const atomicSelectedEffort = useMemo(() => {
-    if (!useAtomicReasoningProjection || !selectedAtomicTarget?.engine) {
+    if (!useAtomicReasoningProjection) {
       return selectedEffort;
+    }
+    if (!selectedAtomicTarget?.engine) {
+      // Shared 无 target：不展示父层 Codex high 等残留
+      return null;
     }
     return reconcileAtomicReasoningEffort({
       engine: selectedAtomicTarget.engine,
@@ -937,27 +946,33 @@ function ComposerImpl({
     selectedEffort,
     useAtomicReasoningProjection,
   ]);
-  // Shared：把 hydrate/历史遗留的 null 或非法 effort 写回 selectedNextTarget，
-  // 避免 UI 显示已收敛而发送仍带 null（Codex 已知模型）。
+  // Shared：收敛 null/非法 effort（含 Claude/Grok 夹紧 + Codex 播种）。
   useEffect(() => {
     if (
       !isSharedSessionResolved ||
       sharedTargetPickerLocked ||
       !selectedSharedTarget ||
       !isResolvedExecutionTarget(selectedSharedTarget) ||
-      !atomicModelReasoningRef ||
-      selectedSharedTarget.engine !== "codex"
+      !atomicModelReasoningRef
     ) {
       return;
     }
     if (!activeWorkspaceId || !activeThreadId) {
       return;
     }
+    const engine = selectedSharedTarget.engine;
+    if (
+      engine !== "codex" &&
+      engine !== "claude" &&
+      engine !== "grok"
+    ) {
+      return;
+    }
     const raw = selectedSharedTarget.reasoning?.effort ?? null;
     const normalizedRaw =
       typeof raw === "string" ? raw.trim() || null : null;
     const reconciled = reconcileAtomicReasoningEffort({
-      engine: selectedSharedTarget.engine,
+      engine,
       model: atomicModelReasoningRef.model,
       effort: normalizedRaw,
     });

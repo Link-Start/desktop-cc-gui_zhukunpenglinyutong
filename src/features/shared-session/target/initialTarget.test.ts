@@ -36,6 +36,62 @@ describe("buildLocalSharedSessionInitialTarget", () => {
     });
   });
 
+  it("seeds Grok with null effort and does not invent Codex-tier options", () => {
+    // Native Codex 可能残留 high/ultra；初始化 Shared Grok 时不得借用。
+    expect(
+      buildLocalSharedSessionInitialTarget(
+        "grok",
+        [
+          {
+            id: "grok-4-1-fast",
+            model: "grok-4-1-fast",
+            displayName: "Grok 4.5",
+            description: "",
+            isDefault: true,
+            source: "builtin",
+          },
+        ],
+        "本地配置",
+        "Grok CLI 没有可用于 Shared Session 的本地 Model。",
+      ),
+    ).toEqual({
+      engine: "grok",
+      providerProfileId: null,
+      modelCatalogEntryId: "grok-4-1-fast",
+      model: "grok-4-1-fast",
+      reasoning: null,
+      providerProfileNameSnapshot: "本地配置",
+      providerProfileSource: "disk",
+    });
+  });
+
+  it("seeds Codex catalog model default effort without Native composer state", () => {
+    expect(
+      buildLocalSharedSessionInitialTarget(
+        "codex",
+        [
+          {
+            id: "gpt-5.6-sol",
+            model: "gpt-5.6-sol",
+            displayName: "gpt-5.6-sol",
+            description: "",
+            isDefault: true,
+            source: "fallback",
+          },
+        ],
+        "本地配置",
+        "Codex 没有可用于 Shared Session 的本地 Model。",
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        engine: "codex",
+        modelCatalogEntryId: "gpt-5.6-sol",
+        model: "gpt-5.6-sol",
+        reasoning: { effort: "low" },
+      }),
+    );
+  });
+
   it("fails closed when the selected CLI has no usable local model", () => {
     expect(() =>
       buildLocalSharedSessionInitialTarget(

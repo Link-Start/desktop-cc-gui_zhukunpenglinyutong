@@ -90,3 +90,24 @@ Native Codex 的 model ↔ effort 路径是通的；断裂只在 Shared / create
 2. **`reconcileAtomicReasoningEffort`**：UI 显示与 store 收敛共用；Codex null/非法 → 模型 default；Claude/Grok 非法 → null
 3. **Composer 内存 soft-repair**：Shared hydrate 后遗留 null/非法 effort 时写回 `selectedNextTarget`（语义相等则 skip，防环）
 4. **Send 边界 reconcile**：`useThreadMessaging` Shared 发送路径对 target effort 再收敛一次，防止 UI 已修但 send 仍带 null
+
+## Review 补强（第三轮：Shared Grok 初始化 × Native Codex 残留）
+
+用户复现：先用 **Native Codex**，再创建 **Shared Grok** 初始化时思考菜单出现 Default + Low…Ultra（Codex 全量档），并可能勾上父层残留 `high`。
+
+根因链路：
+
+```text
+Native Codex → activeEngine=codex + selectedEffort=high + options=catalog全量
+     ↓
+start Shared Grok → initialTarget.engine=grok, reasoning=null
+     ↓ 不 setActiveEngine
+Composer 若 target 未就绪 / 回落父层 → 仍用 codex options + high
+     + showDefaultOption(grok)=true → 截图态
+```
+
+第三轮加固：
+
+1. **Shared/create-session 禁止回落父层** `reasoningOptions` / `selectedEffort`（target 空 → `[]` / `null` fail-closed）
+2. **`buildLocalSharedSessionInitialTarget`** 按目标 engine+model 播种 effort，禁止 inherit 全局 Native 状态
+3. soft-repair 覆盖 claude/grok/codex
