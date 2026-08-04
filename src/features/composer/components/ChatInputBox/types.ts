@@ -329,6 +329,15 @@ export interface ModelInfo {
   description?: string;
   source?: string;
   providerProfileId?: string;
+  /**
+   * Atomic / Shared 模型↔思考联动：Codex catalog 或 custom 播种。
+   * Engine runtime 未声明时由 enrich 从 generated catalog 补齐。
+   */
+  supportedReasoningEfforts?: {
+    reasoningEffort: string;
+    description?: string;
+  }[];
+  defaultReasoningEffort?: string | null;
 }
 
 /**

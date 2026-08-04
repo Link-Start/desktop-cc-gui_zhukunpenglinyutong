@@ -293,16 +293,34 @@ impl SharedProjector {
         fact: &TurnRequestedFact,
     ) -> Vec<ProjectionItem> {
         let text = fact.input.text.clone().unwrap_or_default();
+        // 用户附图 → user message.images（locator）；禁止投成 generatedImage。
+        let images: Vec<String> = fact
+            .input
+            .image_refs
+            .as_ref()
+            .map(|refs| {
+                refs.iter()
+                    .map(|artifact| artifact.locator.trim().to_string())
+                    .filter(|locator| !locator.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let mut content = json!({
+            "role": "user",
+            "text": text,
+            "turnId": fact.logical_turn_id,
+            "engineSource": fact.target.engine,
+            "executionTargetSnapshot": fact.target,
+        });
+        if !images.is_empty() {
+            if let Some(object) = content.as_object_mut() {
+                object.insert("images".to_string(), json!(images));
+            }
+        }
         vec![ProjectionItem {
             id: format!("{}:user", event.sequence),
             kind: ProjectionItemKind::Message,
-            content: json!({
-                "role": "user",
-                "text": text,
-                "turnId": fact.logical_turn_id,
-                "engineSource": fact.target.engine,
-                "executionTargetSnapshot": fact.target,
-            }),
+            content,
             fidelity: event.fidelity,
             checksum: event.payload_checksum.clone(),
         }]

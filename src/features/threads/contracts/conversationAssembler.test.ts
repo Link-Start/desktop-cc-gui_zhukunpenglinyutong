@@ -1755,4 +1755,74 @@ describe("conversationAssembler", () => {
         .map((item) => item.text),
     ).toEqual(["旧回答", "完全不同的新回答"]);
   });
+
+  it("preserves user attachment images when projection and legacy disagree on images", () => {
+    const fromLegacyRicher = mergeHistoryProjectionItems(
+      [
+        {
+          id: "legacy-user",
+          kind: "message",
+          role: "user",
+          text: "看这张图",
+          images: ["/tmp/shot.png"],
+        },
+      ],
+      [
+        {
+          id: "1:user",
+          kind: "message",
+          role: "user",
+          text: "看这张图",
+          turnId: "turn-1",
+        },
+      ],
+      {
+        workspaceId: "ws-1",
+        threadId: "shared:thread-user-images",
+        engine: "grok",
+      },
+    );
+    const fromProjectionRicher = mergeHistoryProjectionItems(
+      [
+        {
+          id: "legacy-user",
+          kind: "message",
+          role: "user",
+          text: "看这张图",
+        },
+      ],
+      [
+        {
+          id: "1:user",
+          kind: "message",
+          role: "user",
+          text: "看这张图",
+          turnId: "turn-1",
+          images: ["/tmp/shot.png"],
+        },
+      ],
+      {
+        workspaceId: "ws-1",
+        threadId: "shared:thread-user-images-2",
+        engine: "grok",
+      },
+    );
+
+    const legacyUsers = fromLegacyRicher.filter(
+      (item) => item.kind === "message" && item.role === "user",
+    );
+    const projectionUsers = fromProjectionRicher.filter(
+      (item) => item.kind === "message" && item.role === "user",
+    );
+    expect(legacyUsers).toHaveLength(1);
+    expect(legacyUsers[0]).toMatchObject({
+      text: "看这张图",
+      images: ["/tmp/shot.png"],
+    });
+    expect(projectionUsers).toHaveLength(1);
+    expect(projectionUsers[0]).toMatchObject({
+      text: "看这张图",
+      images: ["/tmp/shot.png"],
+    });
+  });
 });

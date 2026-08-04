@@ -25,4 +25,5 @@ pub const CANVAS_PROJECTION_NAME: &str = "canvas";
 // v6: Codex fileChange changes[] preserved through Shared history projection.
 // v7: custom_tool_call/apply_patch + apply_patch text → changes[]; FE enricher.
 // v8: command argv[] join so commandExecution/apply_patch history keeps command text.
-pub const CANVAS_PROJECTION_VERSION: i64 = 8;
+// v9: turnRequested user image_refs → message.content.images (Shared 用户附图历史).
+pub const CANVAS_PROJECTION_VERSION: i64 = 9;

@@ -8,6 +8,7 @@ export type RecoveryErrorKind =
   | "recovery-active-requires-stop"
   | "recovery-owner-ambiguous"
   | "recovery-owner-missing"
+  | "empty-context-handoff"
   | "other";
 
 export function classifyRecoveryError(error: unknown): {
@@ -19,6 +20,12 @@ export function classifyRecoveryError(error: unknown): {
       ? error.message
       : String(error ?? "");
   const lower = raw.toLowerCase();
+  if (
+    lower.startsWith("empty-context-handoff:") ||
+    lower.includes("empty-context-handoff:")
+  ) {
+    return { kind: "empty-context-handoff", raw };
+  }
   if (
     lower.startsWith("recovery-active-requires-stop:") ||
     lower.includes("recovery-active-requires-stop:")

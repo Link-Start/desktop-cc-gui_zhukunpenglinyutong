@@ -6,6 +6,10 @@ import { useActiveCanvasSelector } from "../../layout/hooks/activeCanvasStore";
 import { buildSubagentCardsFromToolItems } from "../utils/subagentViewModel";
 import { enrichSubagentCardStatuses } from "../utils/subagentCardStatus";
 import {
+  enrichSubagentCardsFromTaskNotifications,
+  mergeConversationItemSources,
+} from "../utils/enrichSubagentCardsFromTaskNotifications";
+import {
   syncSubagentInspectorFromCards,
   useSubagentInspectorSelection,
 } from "../hooks/useSubagentInspectorStore";
@@ -84,6 +88,8 @@ export const SubagentSquadGrid = memo(function SubagentSquadGrid({
   const threadItemsByThread = useActiveCanvasSelector(
     (snapshot) => snapshot.threadItemsByThread,
   );
+  // 幕布正在渲染的 items 是 notification 扫描最稳的事实源
+  const canvasItems = useActiveCanvasSelector((snapshot) => snapshot.items);
   const cards = useMemo(() => {
     const raw = buildSubagentCardsFromToolItems(items, {
       parentThreadId,
@@ -97,10 +103,25 @@ export const SubagentSquadGrid = memo(function SubagentSquadGrid({
       statusById: threadStatusById,
       itemsByThread: threadItemsByThread,
     });
-    return enrichSubagentCardStatuses(raw, enrichment);
+    const statusEnriched = enrichSubagentCardStatuses(raw, enrichment);
+    // Claude task-notification：幕布 items ∪ 父 thread 表，避免只扫 store 空表
+    const parentTableItems =
+      parentThreadId && threadItemsByThread
+        ? threadItemsByThread[parentThreadId] ?? null
+        : null;
+    const notificationSource = mergeConversationItemSources(
+      canvasItems,
+      parentTableItems,
+    );
+    return enrichSubagentCardsFromTaskNotifications(
+      statusEnriched,
+      notificationSource,
+      items,
+    );
     // probeVersion：抽屉旁路 load 写入 probe 后强制 re-enrich
     // eslint-disable-next-line react-hooks/exhaustive-deps -- probeVersion 是订阅触发器
   }, [
+    canvasItems,
     childSubagentThreads,
     items,
     nativeThreadIds,

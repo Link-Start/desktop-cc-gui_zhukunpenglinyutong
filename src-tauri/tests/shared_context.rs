@@ -51,7 +51,7 @@ fn completed() -> CommitOutcomeInput {
 
 fn seed_history(writer: &SharedEventWriter) {
     let source = target(None);
-    let begin = begin_turn_core(writer, SESSION, &source, "历史问题".to_string()).expect("begin");
+    let begin = begin_turn_core(writer, SESSION, &source, "历史问题".to_string(), None).expect("begin");
     let attempt = begin.attempt_id.expect("attempt");
     let turn = begin.logical_turn_id.expect("turn");
     accept_turn_core(writer, SESSION, &attempt, &turn, &source, "claude:source").expect("accept");
@@ -88,7 +88,7 @@ fn package_artifact_and_two_phase_cursor_close_without_replay_gap() {
 
     let destination = target(Some("provider-b"));
     let begin =
-        begin_turn_core(&writer, SESSION, &destination, "新问题".to_string()).expect("begin B");
+        begin_turn_core(&writer, SESSION, &destination, "新问题".to_string(), None).expect("begin B");
     let attempt_id = begin.attempt_id.expect("attempt B");
     let logical_turn_id = begin.logical_turn_id.expect("turn B");
     let requested_sequence = writer
@@ -222,7 +222,7 @@ fn package_artifact_and_two_phase_cursor_close_without_replay_gap() {
         SESSION,
         &target(Some("provider-c")),
         "绕过".to_string(),
-    )
+            None)
     .expect("cross-target begin result");
     assert_eq!(
         blocked_other_target.status,
@@ -344,7 +344,7 @@ fn portable_context_excludes_destination_owned_history_on_a_b_a_reuse() {
     let target_b = target(Some("provider-b"));
 
     let begin_a =
-        begin_turn_core(&writer, SESSION_ABA, &target_a, "A 问题".to_string()).expect("begin A");
+        begin_turn_core(&writer, SESSION_ABA, &target_a, "A 问题".to_string(), None).expect("begin A");
     let attempt_a = begin_a.attempt_id.expect("attempt A");
     let turn_a = begin_a.logical_turn_id.expect("turn A");
     accept_turn_core(
@@ -369,7 +369,7 @@ fn portable_context_excludes_destination_owned_history_on_a_b_a_reuse() {
     .expect("commit A");
 
     let begin_b =
-        begin_turn_core(&writer, SESSION_ABA, &target_b, "B 问题".to_string()).expect("begin B");
+        begin_turn_core(&writer, SESSION_ABA, &target_b, "B 问题".to_string(), None).expect("begin B");
     let attempt_b = begin_b.attempt_id.expect("attempt B");
     let turn_b = begin_b.logical_turn_id.expect("turn B");
     accept_turn_core(
@@ -432,7 +432,7 @@ fn portable_context_keeps_legacy_only_turns_without_shadowing_canonical_turns() 
         MIXED_SESSION,
         &canonical_target,
         "canonical question".to_string(),
-    )
+            None)
     .expect("begin canonical");
     let attempt = begin.attempt_id.expect("attempt");
     let logical_turn = begin.logical_turn_id.expect("logical turn");

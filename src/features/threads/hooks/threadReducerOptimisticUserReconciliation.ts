@@ -1,5 +1,9 @@
 import type { ConversationItem } from "../../../types";
-import { buildComparableUserMessageKey, isEquivalentUserObservation } from "../assembly/conversationNormalization";
+import {
+  buildComparableUserMessageKey,
+  isEquivalentUserObservation,
+  normalizeComparableUserText,
+} from "../assembly/conversationNormalization";
 import { isOptimisticUserMessageId } from "../utils/queuedHandoffBubble";
 import { isProcessingGeneratedImageItem } from "../utils/generatedImagePlaceholder";
 
@@ -17,6 +21,16 @@ function isOptimisticUserMessage(
   return isUserMessageItem(item) && isOptimisticUserMessageId(item.id);
 }
 
+function isTextEquivalentUserTurn(
+  left: Pick<UserMessageItem, "text">,
+  right: Pick<UserMessageItem, "text">,
+) {
+  return (
+    normalizeComparableUserText(left.text) ===
+    normalizeComparableUserText(right.text)
+  );
+}
+
 function dropMatchingOptimisticUserMessage(
   list: ConversationItem[],
   incoming: UserMessageItem,
@@ -29,7 +43,11 @@ function dropMatchingOptimisticUserMessage(
       continue;
     }
     optimisticIndexes.push(index);
-    if (isEquivalentUserObservation(item, incoming)) {
+    // 含「同文案、图不一致」：Shared 投影补图前也能收敛双气泡
+    if (
+      isEquivalentUserObservation(item, incoming) ||
+      isTextEquivalentUserTurn(item, incoming)
+    ) {
       matchedIndex = index;
       break;
     }
@@ -69,23 +87,41 @@ export function buildOptimisticUserReplacementMap(
 
   const replacementByOptimisticId = new Map<string, string>();
   const matchedIncomingIds = new Set<string>();
-  incomingRealUsers.forEach((incomingUser) => {
-    const key = buildComparableUserMessageKey(incomingUser);
+  const takeOptimisticByKey = (key: string): UserMessageItem | null => {
     const bucket = optimisticBucketsByKey.get(key);
     if (!bucket || bucket.length === 0) {
-      return;
+      return null;
     }
-    const matchedOptimisticUser = bucket.shift();
+    const matchedOptimisticUser = bucket.shift() ?? null;
     if (!matchedOptimisticUser) {
-      return;
+      return null;
     }
-    replacementByOptimisticId.set(matchedOptimisticUser.id, incomingUser.id);
-    matchedIncomingIds.add(incomingUser.id);
     if (bucket.length === 0) {
       optimisticBucketsByKey.delete(key);
     } else {
       optimisticBucketsByKey.set(key, bucket);
     }
+    return matchedOptimisticUser;
+  };
+  incomingRealUsers.forEach((incomingUser) => {
+    const fullKey = buildComparableUserMessageKey(incomingUser);
+    let matchedOptimisticUser = takeOptimisticByKey(fullKey);
+    // text-only fallback：projection 丢图时 fullKey 对不上
+    if (!matchedOptimisticUser) {
+      const textKey = `${normalizeComparableUserText(incomingUser.text)}\u0000`;
+      for (const [key] of optimisticBucketsByKey) {
+        if (!key.startsWith(textKey)) {
+          continue;
+        }
+        matchedOptimisticUser = takeOptimisticByKey(key);
+        break;
+      }
+    }
+    if (!matchedOptimisticUser) {
+      return;
+    }
+    replacementByOptimisticId.set(matchedOptimisticUser.id, incomingUser.id);
+    matchedIncomingIds.add(incomingUser.id);
   });
 
   const hasLocalRealUser = localItems.some(

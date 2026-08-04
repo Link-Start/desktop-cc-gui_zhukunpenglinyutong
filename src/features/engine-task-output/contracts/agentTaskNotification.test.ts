@@ -1,5 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { parseAgentTaskNotification } from "./agentTaskNotification";
+import {
+  isSubagentStyleAgentTaskNotification,
+  parseAgentTaskNotification,
+} from "./agentTaskNotification";
+
+describe("isSubagentStyleAgentTaskNotification", () => {
+  it("recognizes Agent quoted summary", () => {
+    expect(
+      isSubagentStyleAgentTaskNotification({
+        taskId: "t1",
+        toolUseId: "call-1",
+        outputFile: null,
+        status: "completed",
+        summary: 'Agent "项目结构与架构扫描" finished',
+        resultText: "ok",
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects non-subagent summaries", () => {
+    expect(
+      isSubagentStyleAgentTaskNotification({
+        taskId: "bg-1",
+        toolUseId: null,
+        outputFile: "/tmp/bg.output",
+        status: "completed",
+        summary: "Background shell task bg-1 completed",
+        resultText: "done",
+      }),
+    ).toBe(false);
+  });
+});
 
 describe("parseAgentTaskNotification", () => {
   it("extracts structured metadata and result text from task notification envelopes", () => {

@@ -1,5 +1,6 @@
 import type { ConversationItem } from "../../../../types";
 import {
+  isSubagentStyleAgentTaskNotification,
   parseAgentTaskNotification,
 } from "../../../engine-task-output/contracts/agentTaskNotification";
 import {
@@ -164,6 +165,10 @@ export function buildMessageRowPresentation(input: {
   const resolvedMemorySummary = suppressMemorySummaryCard ? null : memorySummary;
   const resolvedNoteCardSummary = suppressNoteCardSummaryCard ? null : noteCardSummary;
   const agentTaskNotification = parseAgentTaskNotification(item.text);
+  /** SubAgent 型 notification：退役 legacy Agent session 卡与 result 独立气泡 */
+  const suppressSubagentAgentTaskCard = isSubagentStyleAgentTaskNotification(
+    agentTaskNotification,
+  );
   const browserContextSummary = item.role === "user"
     ? getPresentationContext(presentationMetadata, "browser")
     : null;
@@ -186,7 +191,9 @@ export function buildMessageRowPresentation(input: {
       )
     );
   const displayText = agentTaskNotification
-    ? agentTaskNotification.resultText
+    ? suppressSubagentAgentTaskCard
+      ? ""
+      : agentTaskNotification.resultText
     : item.role === "user"
       ? (shouldHideSuppressedInjectedContextText
         ? ""
@@ -240,6 +247,7 @@ export function buildMessageRowPresentation(input: {
     memorySummaryRawPayload: resolvedMemorySummary?.rawPayload?.trim() ?? "",
     memoryPayloadPacks: resolvedMemorySummary?.memoryPacks ?? [],
     agentTaskNotification,
+    suppressSubagentAgentTaskCard,
     browserContextSummary,
     intentCanvasContextSummary,
     displayText,
@@ -248,11 +256,12 @@ export function buildMessageRowPresentation(input: {
       !agentTaskNotification &&
       !resolvedMemorySummary &&
       !resolvedNoteCardSummary,
-    messageRowSubtype: agentTaskNotification
-      ? "agent-task" as const
-      : item.role === "assistant"
-        ? "assistant" as const
-        : "user" as const,
+    messageRowSubtype:
+      agentTaskNotification && !suppressSubagentAgentTaskCard
+        ? ("agent-task" as const)
+        : item.role === "assistant"
+          ? ("assistant" as const)
+          : ("user" as const),
     selectedAgentName,
     selectedAgentIcon,
     hasExternalAgentBadge,

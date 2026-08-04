@@ -73,6 +73,8 @@ const sharedSend = {
       "检测到多个未决发送，无法安全自动恢复；若持续出现请联系支持并提供会话详情。",
     recoveryErrorOwnerMissing:
       "未找到匹配的未决投递。请尝试检查状态，会话可能已解锁。",
+    recoveryErrorEmptyContextHandoff:
+      "无法为当前目标重建共享上下文（历史可能不完整）。请尝试停止并重建会话连接，或切换可用目标后重发。",
     recoveryTechDetail: "可查看技术详情",
     targetUnavailable: "当前发送目标不可用。",
     targetUnavailableReason: "当前发送目标不可用：{{reason}}",

@@ -427,6 +427,11 @@ function toConversationItem(item: SharedProjectionItem): ConversationItem | null
         content,
         item.fidelity,
       );
+      const rawImages = Array.isArray(content.images) ? content.images : [];
+      const images = rawImages
+        .filter((image): image is string => typeof image === "string")
+        .map((image) => image.trim())
+        .filter((image) => image.length > 0);
       return {
         id,
         kind: "message",
@@ -434,6 +439,7 @@ function toConversationItem(item: SharedProjectionItem): ConversationItem | null
         text: readString(content, "text"),
         turnId: typeof content.turnId === "string" ? content.turnId : null,
         engineSource,
+        ...(images.length > 0 ? { images } : {}),
         ...(executionTargetSnapshot ? { executionTargetSnapshot } : {}),
         isFinal: content.isFinal === true,
         ...(typeof content.finalCompletedAt === "number"

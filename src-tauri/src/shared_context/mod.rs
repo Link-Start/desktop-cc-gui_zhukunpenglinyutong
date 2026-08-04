@@ -13,11 +13,12 @@ pub use artifact_store::{
     write_typed_artifact, ArtifactReadRequest, ArtifactStoreRecord, TypedArtifactStoreRecord,
 };
 pub use compiler::{
-    compile_context, compile_native_context, CompileContextRequest, CompileNativeContextRequest,
+    compile_context, compile_native_context, session_needs_history, CompileContextRequest,
+    CompileNativeContextRequest,
 };
 pub use delivery::{
     accept_delivery, commit_delivery, mark_delivery_sent, prepare_delivery,
     terminal_binding_update, AcceptDeliveryRequest, MarkDeliverySentRequest,
     PrepareDeliveryRequest,
 };
-pub use types::*;
+pub use types::{is_zero_transfer_package, *};

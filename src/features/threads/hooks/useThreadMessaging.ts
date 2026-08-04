@@ -60,6 +60,7 @@ import {
   selectNextTarget,
 } from "../../shared-session/target/targetStore";
 import { isResolvedExecutionTarget } from "../../shared-session/target/types";
+import { reconcileAtomicReasoningEffort } from "../../models/atomicModelReasoning";
 import { projectMemoryFacade } from "../../project-memory/services/projectMemoryFacade";
 import {
   injectSelectedMemoriesContext,
@@ -1391,12 +1392,33 @@ export function useThreadMessaging({
           // Shared Picker 写入的 selectedNextTarget 是下一轮唯一权威输入。
           // 旧的全局 Composer selection 可能仍指向上一个 CLI/Provider，不能在
           // send boundary 重新组装并覆盖用户刚选中的 Target。
-          const sharedNextTarget = supportedStoredSharedTarget ?? {
+          // effort：对 Codex catalog 模型在 send 边界再 reconcile 一次，
+          // 避免 hydrate 遗留 null / 非法档位直送 CLI。
+          const sharedTargetBase = supportedStoredSharedTarget ?? {
             engine: sharedResolvedEngine,
             providerProfileId:
               resolvedComposerSelection?.providerProfileId?.trim() || null,
             model: modelForSend ?? null,
+            modelCatalogEntryId:
+              resolvedComposerSelection?.id?.trim() || null,
             reasoning: resolvedEffort ? { effort: resolvedEffort } : null,
+          };
+          const sharedReconciledEffort = reconcileAtomicReasoningEffort({
+            engine: sharedTargetBase.engine,
+            model: {
+              id:
+                sharedTargetBase.modelCatalogEntryId?.trim() ||
+                sharedTargetBase.model?.trim() ||
+                null,
+              model: sharedTargetBase.model?.trim() || null,
+            },
+            effort: sharedTargetBase.reasoning?.effort ?? null,
+          });
+          const sharedNextTarget = {
+            ...sharedTargetBase,
+            reasoning: sharedReconciledEffort
+              ? { effort: sharedReconciledEffort }
+              : null,
           };
           if (!sharedV2SendEnabled && !supportedStoredSharedTarget) {
             selectNextTarget(workspace.id, threadId, sharedNextTarget);

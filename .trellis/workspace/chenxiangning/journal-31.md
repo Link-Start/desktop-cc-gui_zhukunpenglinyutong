@@ -1102,3 +1102,216 @@ OpenSpec + merge early-body 折叠 + 跨 id 收敛；review 收紧 streaming/sto
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1328: 退役 Claude SubAgent 旧 Agent session 卡
+
+**Date**: 2026-08-04
+**Task**: 退役 Claude SubAgent 旧 Agent session 卡
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| OpenSpec | `retire-claude-subagent-agent-session-card`（proposal/design/specs/tasks） |
+| 目标 | Shared/Native Claude 幕布 SubAgent 完成态只保留 S10，去掉 legacy `Agent session` 卡 |
+| 实现 | 藏 SubAgent 型 task-notification 旧卡；终态/result/output-file enrich 到 S10 与 inspector；安全 toolUseId 匹配；StatusPanel 同源 enrich；Timeline 0 高锚点 |
+| 验证 | enrich/notification unit 18 通过；rich-content 退役路径通过；相关 tsc 无 error |
+
+**Updated Files**:
+- `src/features/subagent-ui/utils/enrichSubagentCardsFromTaskNotifications.ts`
+- `src/features/messages/rows/components/MessageRow.tsx`
+- `src/features/messages/timeline/components/TimelineRowRenderer.tsx`
+- `src/features/status-panel/components/SubagentList.tsx`
+- `src/features/subagent-ui/components/SubagentInspectorDrawer.tsx`
+- `openspec/changes/retire-claude-subagent-agent-session-card/**`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9ac441d8f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1329: fix Shared 用户附图双气泡与历史丢图
+
+**Date**: 2026-08-04
+**Task**: fix Shared 用户附图双气泡与历史丢图
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+Shared CLI 用户附图：TurnRequested.image_refs + projection/dataSource 透传 images + optimistic/history 保图合并；OpenSpec fix-shared-user-image-bubble-projection；单独提交不含 resume-integrity
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b2a1ef000` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1330: fix Shared 上下文续接 resume-integrity
+
+**Date**: 2026-08-04
+**Task**: fix Shared 上下文续接 resume-integrity
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+nativeContextTrust dirty/trusted + dirty 时 needs-history rematerialize + empty-context-handoff FE/i18n；OpenSpec fix-shared-context-resume-integrity；用户验收通过后单独提交
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `165f0fda6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1331: 修复 Composer rewind reset React #185
+
+**Date**: 2026-08-04
+**Task**: 修复 Composer rewind reset React #185
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+将 production bundle App-C2u7zJPh exact stack 映射到 Composer rewind passive effect；复用 useEventCallback 加 pre-dispatch semantic guard，并以 primitive capability dependency 断开 callback identity churn；补 StrictMode regression、OpenSpec contract、React #185 playbook 与 Trellis state guardrail。验证：clean-base typecheck 通过，scoped ESLint 通过，focused Vitest 62/62，OpenSpec strict 506/506；全仓 lint 保留既有 personaAssign prefer-const baseline error。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fa84f2dba` | (see git log) |
+| `a59985654` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1332: 修复 Shared Atomic 模型与思考强度联动
+
+**Date**: 2026-08-04
+**Task**: 修复 Shared Atomic 模型与思考强度联动
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+Shared 从 Grok 切到 Codex 后思考档位不再沿用 activeEngine 或遗留 null；按目标模型 capability seed/收敛 options 与 effort，并在 UI hydrate 与 send 边界 reconcile。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cf7abdbf3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1333: 阻断 Shared 初始化回落 Native 思考档位
+
+**Date**: 2026-08-04
+**Task**: 阻断 Shared 初始化回落 Native 思考档位
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+Shared Grok 初始化禁止借用 Native Codex 的 reasoning options/effort；initialTarget 按目标 CLI 播种；target 未就绪 fail-closed。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `385d20e3a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -40,6 +40,10 @@ import {
 } from "../../components/toolBlocks";
 import { SubagentSquadGrid } from "../../../subagent-ui";
 import {
+  isSubagentStyleAgentTaskNotification,
+  parseAgentTaskNotification as parseFullAgentTaskNotification,
+} from "../../../engine-task-output/contracts/agentTaskNotification";
+import {
   DiffRow,
   ExploreRow,
   GeneratedImageRow,
@@ -178,6 +182,34 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
       const itemRenderKey = `message:${renderItem.id}`;
       const isCopied = copiedMessageId === renderItem.id;
       const agentTaskNotification = parseAgentTaskNotification(renderItem.text);
+      // SubAgent 型 task-notification：幕布行整段退役（事实迁 S10）；仅保留 0 高锚点供 scroll
+      // Timeline prop 类型只有 taskId/toolUseId，退役判定用 contract 完整 parse（含 summary）
+      const fullAgentTaskNotification = parseFullAgentTaskNotification(renderItem.text);
+      if (
+        fullAgentTaskNotification &&
+        isSubagentStyleAgentTaskNotification(fullAgentTaskNotification)
+      ) {
+        const retiredTaskId = fullAgentTaskNotification.taskId ?? null;
+        const retiredToolUseId = fullAgentTaskNotification.toolUseId ?? null;
+        const bindMessageNode = messageNodeRefs.getRef(renderItem.id, {
+          role: renderItem.role,
+          taskId: retiredTaskId,
+          toolUseId: retiredToolUseId,
+        });
+        return (
+          <div
+            key={itemRenderKey}
+            ref={bindMessageNode}
+            data-message-anchor-id={renderItem.id}
+            data-agent-task-id={retiredTaskId ?? undefined}
+            data-agent-tool-use-id={retiredToolUseId ?? undefined}
+            data-subagent-task-notification-retired="1"
+            // 0 高可定位锚点：不占幕布像素，仍可被 scrollInto / getBoundingClientRect
+            style={{ height: 0, overflow: "hidden", margin: 0, padding: 0 }}
+            aria-hidden
+          />
+        );
+      }
       const shouldRenderFinalBoundary =
         renderItem.role === "assistant" &&
         renderItem.isFinal === true &&

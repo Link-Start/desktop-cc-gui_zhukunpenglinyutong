@@ -1738,6 +1738,61 @@ describe("buildProviderExecutionTarget", () => {
     });
   });
 
+  it("seeds Codex catalog model default effort when switching from Grok", () => {
+    // Cross-engine: Grok high MUST NOT inherit; gpt-5.6-sol default is low.
+    expect(
+      buildProviderExecutionTarget(
+        {
+          engine: "grok",
+          providerProfileId: null,
+          modelCatalogEntryId: "grok-4-1-fast",
+          model: "grok-4-1-fast",
+          reasoning: { effort: "high" },
+        },
+        "codex",
+        "__disk__",
+        "gpt-5.6-sol",
+        "Local disk",
+        "disk",
+        true,
+        "gpt-5.6-sol",
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        engine: "codex",
+        modelCatalogEntryId: "gpt-5.6-sol",
+        model: "gpt-5.6-sol",
+        reasoning: { effort: "low" },
+      }),
+    );
+  });
+
+  it("keeps same-profile effort when the next Codex model still supports it", () => {
+    expect(
+      buildProviderExecutionTarget(
+        {
+          engine: "codex",
+          providerProfileId: null,
+          modelCatalogEntryId: "gpt-5.6-sol",
+          model: "gpt-5.6-sol",
+          reasoning: { effort: "high" },
+        },
+        "codex",
+        "__disk__",
+        "gpt-5.6-terra",
+        "Local disk",
+        "disk",
+        true,
+        "gpt-5.6-terra",
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        modelCatalogEntryId: "gpt-5.6-terra",
+        reasoning: { effort: "high" },
+      }),
+    );
+  });
+
   it("normalizes local profile sentinels to the canonical default binding", () => {
     expect(
       buildProviderExecutionTarget(

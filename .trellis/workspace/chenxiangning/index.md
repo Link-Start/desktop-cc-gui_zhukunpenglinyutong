@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-31.md`
-- **Total Sessions**: 1327
+- **Total Sessions**: 1333
 - **Last Active**: 2026-08-04
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-31.md` | ~1104 | Active |
+| `journal-31.md` | ~1317 | Active |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
@@ -59,6 +59,12 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1333 | 2026-08-04 | 阻断 Shared 初始化回落 Native 思考档位 | `385d20e3a` | `CXN-version-0.7.16` |
+| 1332 | 2026-08-04 | 修复 Shared Atomic 模型与思考强度联动 | `cf7abdbf3` | `CXN-version-0.7.16` |
+| 1331 | 2026-08-04 | 修复 Composer rewind reset React #185 | `fa84f2dba`, `a59985654` | `CXN-version-0.7.16` |
+| 1330 | 2026-08-04 | fix Shared 上下文续接 resume-integrity | `165f0fda6` | `CXN-version-0.7.16` |
+| 1329 | 2026-08-04 | fix Shared 用户附图双气泡与历史丢图 | `b2a1ef000` | `CXN-version-0.7.16` |
+| 1328 | 2026-08-04 | 退役 Claude SubAgent 旧 Agent session 卡 | `9ac441d8f` | `CXN-version-0.7.16` |
 | 1327 | 2026-08-04 | SubAgent S10 卡收口：折叠收纳、去重与宽度自适应 | `2e381d204`, `c33a3f254` | `CXN-version-0.7.16` |
 | 1326 | 2026-08-04 | 修复子代理状态卡死与抽屉冻结 | `c33a3f254` | `CXN-version-0.7.16` |
 | 1325 | 2026-08-04 | fix assistant duplicate render Native/Shared | `379d9935b` | `CXN-version-0.7.16` |

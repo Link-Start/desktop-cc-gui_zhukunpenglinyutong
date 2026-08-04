@@ -550,24 +550,30 @@ fn trim_checkpoint_entries_to_budget(
         return None;
     }
 
-    // ponytail: checkpoint history is session-bounded. Recompute after each complete-Turn
-    // removal for deterministic output; replace with a prefix token index if histories become
-    // large enough for this low-frequency compiler path to matter.
+    // Resume integrity：永远保留最早 user 原任务；预算不够时删 **中间** complete Turn
+    // （第二段及之后的较旧轮），再尽量保留最近 spine。禁止把首条 user 当「oldest」裁掉。
     while estimated_tokens(&transcript(entries, true)) > budget {
-        let Some(next_user_index) = entries
+        let user_indices = entries
             .iter()
             .enumerate()
-            .skip(1)
-            .find_map(|(index, entry)| (entry.role == "user").then_some(index))
-        else {
+            .filter_map(|(index, entry)| (entry.role == "user").then_some(index))
+            .collect::<Vec<_>>();
+        // 需要至少两轮 user 才有可删的「非首轮」complete turn。
+        if user_indices.len() < 2 {
             break;
-        };
-        let remove_count = next_user_index;
-        for entry in entries.drain(..remove_count) {
+        }
+        // 删除第二轮 user 起至第三轮 user 前（或末尾）——即丢掉次旧一轮，保留首轮。
+        let start = user_indices[1];
+        let end = user_indices.get(2).copied().unwrap_or(entries.len());
+        if start >= end || start == 0 {
+            break;
+        }
+        for entry in entries.drain(start..end) {
             omissions.push(ProjectionOmission {
                 entry_id: entry.entry_id,
                 category: "checkpoint-budget".to_string(),
-                reason: "oldest complete Turn omitted to satisfy checkpoint budget".to_string(),
+                reason: "middle complete Turn omitted to satisfy checkpoint budget while preserving earliest user task"
+                    .to_string(),
                 disposition: OmissionDisposition::RetrievableOnDemand,
                 retrievable_ref: None,
             });
@@ -575,7 +581,11 @@ fn trim_checkpoint_entries_to_budget(
     }
 
     if estimated_tokens(&transcript(entries, true)) > budget && !entries.is_empty() {
-        let user_anchor = entries
+        let first_user_anchor = entries
+            .iter()
+            .find(|entry| entry.role == "user")
+            .map(|entry| entry.entry_id.clone());
+        let latest_user_anchor = entries
             .iter()
             .rposition(|entry| entry.role == "user")
             .map(|index| entries[index].entry_id.clone());
@@ -584,7 +594,7 @@ fn trim_checkpoint_entries_to_budget(
             .rposition(|entry| entry.role == "assistant")
             .or_else(|| entries.len().checked_sub(1))
             .map(|index| entries[index].entry_id.clone());
-        let anchors = [user_anchor, outcome_anchor]
+        let anchors = [first_user_anchor, latest_user_anchor, outcome_anchor]
             .into_iter()
             .flatten()
             .collect::<HashSet<_>>();
@@ -599,7 +609,8 @@ fn trim_checkpoint_entries_to_budget(
             omissions.push(ProjectionOmission {
                 entry_id: entry.entry_id,
                 category: "checkpoint-budget".to_string(),
-                reason: "intermediate entry omitted from oversized latest Turn".to_string(),
+                reason: "intermediate entry omitted from oversized Turn; earliest user and latest spine retained"
+                    .to_string(),
                 disposition: OmissionDisposition::RetrievableOnDemand,
                 retrievable_ref: None,
             });
@@ -608,10 +619,31 @@ fn trim_checkpoint_entries_to_budget(
 
     Some(CompressionCategory {
         category: "checkpoint-history".to_string(),
-        strategy: "drop-oldest-turns-then-preserve-latest-spine".to_string(),
+        strategy: "preserve-earliest-user-drop-middle-then-latest-spine".to_string(),
         source_estimated_tokens,
         package_estimated_tokens: estimated_tokens(&transcript(entries, true)),
     })
+}
+
+/// Whether a full rematerialize compile (no accepted cursor, no destination-owned
+/// omission) would produce a non-empty transfer payload for this session range.
+pub fn session_needs_history(
+    events: &[StoredEvent],
+    request: &CompileContextRequest,
+) -> Result<bool, String> {
+    let rematerialize_request = CompileContextRequest {
+        session_id: request.session_id.clone(),
+        binding_key: request.binding_key.clone(),
+        destination: request.destination.clone(),
+        destination_native_session_id: None,
+        from_sequence_exclusive: None,
+        through_sequence_inclusive: request.through_sequence_inclusive,
+        exclude_attempt_id: request.exclude_attempt_id.clone(),
+        capabilities: request.capabilities.clone(),
+        budget_estimated_tokens: request.budget_estimated_tokens,
+    };
+    let package = compile_context(events, &rematerialize_request)?;
+    Ok(!super::types::is_zero_transfer_package(&package))
 }
 
 pub fn compile_context(
@@ -977,13 +1009,13 @@ mod tests {
     }
 
     #[test]
-    fn checkpoint_budget_drops_oldest_complete_turn_without_splitting_roles() {
+    fn checkpoint_budget_preserves_earliest_user_and_drops_middle_turns() {
         let mut entries = vec![
             PortableContextEntry {
                 entry_id: "u1".to_string(),
                 sequence: 1,
                 role: "user".to_string(),
-                blocks: vec![text_block("old question")],
+                blocks: vec![text_block("original task body")],
                 outcome: None,
             },
             PortableContextEntry {
@@ -997,43 +1029,59 @@ mod tests {
                 entry_id: "u2".to_string(),
                 sequence: 3,
                 role: "user".to_string(),
-                blocks: vec![text_block("recent question")],
+                blocks: vec![text_block("middle question")],
                 outcome: None,
             },
             PortableContextEntry {
                 entry_id: "a2".to_string(),
                 sequence: 4,
                 role: "assistant".to_string(),
+                blocks: vec![text_block("middle answer")],
+                outcome: Some("completed".to_string()),
+            },
+            PortableContextEntry {
+                entry_id: "u3".to_string(),
+                sequence: 5,
+                role: "user".to_string(),
+                blocks: vec![text_block("recent question")],
+                outcome: None,
+            },
+            PortableContextEntry {
+                entry_id: "a3".to_string(),
+                sequence: 6,
+                role: "assistant".to_string(),
                 blocks: vec![text_block("recent answer")],
                 outcome: Some("completed".to_string()),
             },
         ];
-        let recent_budget = estimated_tokens(&transcript(&entries[2..], true));
+        // 预算约等于首轮+最近轮，逼出中间轮删除。
+        let tight_budget = estimated_tokens(&transcript(
+            &[entries[0].clone(), entries[1].clone(), entries[4].clone(), entries[5].clone()],
+            true,
+        ));
         let mut omissions = Vec::new();
 
         let category =
-            trim_checkpoint_entries_to_budget(&mut entries, &mut omissions, recent_budget)
+            trim_checkpoint_entries_to_budget(&mut entries, &mut omissions, tight_budget)
                 .expect("budget trimming");
 
-        assert_eq!(
-            entries
-                .iter()
-                .map(|entry| entry.entry_id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["u2", "a2"]
+        let ids = entries
+            .iter()
+            .map(|entry| entry.entry_id.as_str())
+            .collect::<Vec<_>>();
+        assert!(
+            ids.contains(&"u1"),
+            "earliest user task must survive checkpoint budget: {ids:?}"
         );
-        assert_eq!(
-            omissions
-                .iter()
-                .map(|omission| omission.entry_id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["u1", "a1"]
+        assert!(
+            !ids.contains(&"u2") && !ids.contains(&"a2"),
+            "middle turn should be dropped first: {ids:?}"
         );
         assert_eq!(
             category.strategy,
-            "drop-oldest-turns-then-preserve-latest-spine"
+            "preserve-earliest-user-drop-middle-then-latest-spine"
         );
-        assert!(estimated_tokens(&transcript(&entries, true)) <= recent_budget);
+        assert!(estimated_tokens(&transcript(&entries, true)) <= tight_budget);
     }
 
     #[test]

@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { useEventCallback } from "../../../utils/useEventCallback";
 import type {
   ComposerSendShortcut,
   ComposerEditorSettings,
@@ -68,6 +69,10 @@ import {
   permissionModeToAccessMode,
   type ProviderId,
 } from "./ChatInputBox/types";
+import {
+  reconcileAtomicReasoningEffort,
+  resolveAtomicReasoningOptions,
+} from "../../models/atomicModelReasoning";
 import {
   ClaudeRewindConfirmDialog,
   type ClaudeRewindPreviewState,
@@ -805,6 +810,160 @@ function ComposerImpl({
     : createSessionTargetPicker
       ? effectiveCreationTarget
       : nativeSessionTarget;
+  /**
+   * Shared / create-session Atomic：思考档位 options + effort 只信 target 的
+   * engine+model。Native Codex 残留的 activeEngine / selectedEffort /
+   * reasoningOptions 禁止在 Shared 初始化或 target 短暂为空时回灌 UI。
+   */
+  const atomicModelReasoningRef = useMemo(() => {
+    const target = selectedAtomicTarget;
+    if (!target?.engine) {
+      return null;
+    }
+    const catalogEntryId = target.modelCatalogEntryId?.trim() || null;
+    const runtimeModel = target.model?.trim() || null;
+    if (target.engine !== "codex") {
+      return {
+        engine: target.engine,
+        model: {
+          id: catalogEntryId ?? runtimeModel,
+          model: runtimeModel ?? catalogEntryId,
+        },
+      };
+    }
+    type ModelReasoningLike = {
+      id: string;
+      model?: string;
+      source?: string | null;
+      supportedReasoningEfforts?: ModelOption["supportedReasoningEfforts"];
+      defaultReasoningEffort?: string | null;
+    };
+    const catalog = (providerModelCatalogs?.codex ?? []) as ModelReasoningLike[];
+    const parentModels = models as ModelReasoningLike[];
+    const matchByIdentity = (entry: ModelReasoningLike) => {
+      if (catalogEntryId && entry.id === catalogEntryId) {
+        return true;
+      }
+      if (
+        runtimeModel &&
+        (entry.model === runtimeModel || entry.id === runtimeModel)
+      ) {
+        return true;
+      }
+      return false;
+    };
+    const matchedCatalog = catalog.find(matchByIdentity) ?? null;
+    const matchedParent = parentModels.find(matchByIdentity) ?? null;
+    const preferred = matchedCatalog ?? matchedParent;
+    return {
+      engine: target.engine,
+      model: {
+        id:
+          catalogEntryId ??
+          preferred?.id ??
+          runtimeModel,
+        model:
+          runtimeModel ??
+          preferred?.model ??
+          catalogEntryId,
+        source: preferred?.source ?? undefined,
+        supportedReasoningEfforts:
+          preferred?.supportedReasoningEfforts &&
+          preferred.supportedReasoningEfforts.length > 0
+            ? preferred.supportedReasoningEfforts
+            : matchedParent?.supportedReasoningEfforts,
+        defaultReasoningEffort:
+          preferred?.defaultReasoningEffort ??
+          matchedParent?.defaultReasoningEffort ??
+          null,
+      },
+    };
+  }, [models, providerModelCatalogs, selectedAtomicTarget]);
+  const useAtomicReasoningProjection =
+    isSharedSessionResolved || Boolean(createSessionTargetPicker);
+  const atomicReasoningOptions = useMemo(() => {
+    if (!useAtomicReasoningProjection) {
+      return reasoningOptions;
+    }
+    // Shared / create-session：即使 target 尚未 hydrate，也禁止回落父层
+    // Native Codex 的全量 options（会带出 xhigh/max/ultra + 脏 effort）。
+    if (atomicModelReasoningRef) {
+      return resolveAtomicReasoningOptions(
+        atomicModelReasoningRef.engine,
+        atomicModelReasoningRef.model,
+      );
+    }
+    return [];
+  }, [
+    atomicModelReasoningRef,
+    reasoningOptions,
+    useAtomicReasoningProjection,
+  ]);
+  const atomicSelectedEffort = useMemo(() => {
+    if (!useAtomicReasoningProjection) {
+      return selectedEffort;
+    }
+    if (!selectedAtomicTarget?.engine) {
+      // Shared 无 target：不展示父层 Codex high 等残留
+      return null;
+    }
+    return reconcileAtomicReasoningEffort({
+      engine: selectedAtomicTarget.engine,
+      model: atomicModelReasoningRef?.model ?? null,
+      effort: selectedAtomicTarget.reasoning?.effort ?? null,
+    });
+  }, [
+    atomicModelReasoningRef,
+    selectedAtomicTarget,
+    selectedEffort,
+    useAtomicReasoningProjection,
+  ]);
+  // Shared：收敛 null/非法 effort（含 Claude/Grok 夹紧 + Codex 播种）。
+  useEffect(() => {
+    if (
+      !isSharedSessionResolved ||
+      sharedTargetPickerLocked ||
+      !selectedSharedTarget ||
+      !isResolvedExecutionTarget(selectedSharedTarget) ||
+      !atomicModelReasoningRef
+    ) {
+      return;
+    }
+    if (!activeWorkspaceId || !activeThreadId) {
+      return;
+    }
+    const engine = selectedSharedTarget.engine;
+    if (
+      engine !== "codex" &&
+      engine !== "claude" &&
+      engine !== "grok"
+    ) {
+      return;
+    }
+    const raw = selectedSharedTarget.reasoning?.effort ?? null;
+    const normalizedRaw =
+      typeof raw === "string" ? raw.trim() || null : null;
+    const reconciled = reconcileAtomicReasoningEffort({
+      engine,
+      model: atomicModelReasoningRef.model,
+      effort: normalizedRaw,
+    });
+    if (reconciled === normalizedRaw) {
+      return;
+    }
+    // 仅内存收敛：保证本会话 UI/send 一致；下次 hydrate 仍会再 reconcile。
+    hydrateSharedTargetState(activeWorkspaceId, activeThreadId, {
+      ...selectedSharedTarget,
+      reasoning: reconciled ? { effort: reconciled } : null,
+    });
+  }, [
+    activeThreadId,
+    activeWorkspaceId,
+    atomicModelReasoningRef,
+    isSharedSessionResolved,
+    selectedSharedTarget,
+    sharedTargetPickerLocked,
+  ]);
   const imageAttachEngine = useMemo((): EngineType | null => {
     if (
       isSharedSession &&
@@ -1132,6 +1291,15 @@ function ComposerImpl({
       : `${activeFilePath}:all`)
     : null;
   const rewindSupportedEngine = resolveRewindSupportedEngineFromThreadId(activeThreadId);
+  const canRewindSession = Boolean(onRewind && rewindSupportedEngine);
+  const resetRewindState = useEventCallback(() => {
+    if (rewindPreviewState !== null) {
+      setRewindPreviewState(null);
+    }
+    if (rewindMode !== "messages-and-files") {
+      setRewindMode("messages-and-files");
+    }
+  });
   const hasActiveFileReference = Boolean(
     activeFileReferenceSignature &&
     fileReferenceMode === "path" &&
@@ -1277,21 +1445,14 @@ function ComposerImpl({
   }, [onCodeAnnotationConsumed, pendingCodeAnnotation]);
 
   useEffect(() => {
-    setRewindPreviewState((prev) => (prev === null ? prev : null));
-    setRewindMode((prev) =>
-      prev === "messages-and-files" ? prev : "messages-and-files",
-    );
-  }, [activeThreadId]);
+    resetRewindState();
+  }, [activeThreadId, resetRewindState]);
 
   useEffect(() => {
-    if (rewindSupportedEngine && onRewind) {
-      return;
+    if (!canRewindSession) {
+      resetRewindState();
     }
-    setRewindPreviewState((prev) => (prev === null ? prev : null));
-    setRewindMode((prev) =>
-      prev === "messages-and-files" ? prev : "messages-and-files",
-    );
-  }, [onRewind, rewindSupportedEngine]);
+  }, [canRewindSession, resetRewindState]);
 
   const handleExpandComposer = useCallback(() => {
     setIsComposerCollapsed(false);
@@ -1521,8 +1682,6 @@ function ComposerImpl({
     statusPanelExpandedOverride ?? statusPanelExpanded;
   const resolvedToggleStatusPanel =
     onToggleStatusPanelOverride ?? handleToggleStatusPanel;
-  const canRewindSession = Boolean(onRewind && rewindSupportedEngine);
-
   const handleCancelRewind = useCallback(() => {
     if (rewindInFlight) {
       return;
@@ -2720,10 +2879,10 @@ function ComposerImpl({
                     ? handleCreationTargetChange
                     : handleNativeAtomicTargetChange
               }
-              reasoningOptions={reasoningOptions}
+              reasoningOptions={atomicReasoningOptions}
               selectedEffort={
-                selectedAtomicTarget
-                  ? selectedAtomicTarget.reasoning?.effort ?? null
+                useAtomicReasoningProjection
+                  ? atomicSelectedEffort
                   : selectedEffort
               }
               onSelectEffort={

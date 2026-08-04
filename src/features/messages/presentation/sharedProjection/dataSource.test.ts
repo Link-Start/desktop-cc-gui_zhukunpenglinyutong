@@ -178,6 +178,31 @@ describe("toSharedConversationItems", () => {
     });
   });
 
+  it("maps user message images locators from shared projection content", () => {
+    const [item] = toSharedConversationItems([
+      makeItem({
+        id: "1:user",
+        kind: "message",
+        content: {
+          role: "user",
+          text: "看这张图",
+          images: ["/tmp/shot.png", "  ", "/tmp/shot-2.jpg"],
+          turnId: "turn-img",
+          engineSource: "grok",
+        },
+      }),
+    ]);
+
+    expect(item).toMatchObject({
+      id: "1:user",
+      kind: "message",
+      role: "user",
+      text: "看这张图",
+      images: ["/tmp/shot.png", "/tmp/shot-2.jpg"],
+      engineSource: "grok",
+    });
+  });
+
   it("drops systemNotice and metadata items (shadow 观测面不属于渲染面)", () => {
     const items: SharedProjectionItem[] = [
       makeItem({ id: "1:control", kind: "systemNotice", content: { text: "Control: cancel" } }),

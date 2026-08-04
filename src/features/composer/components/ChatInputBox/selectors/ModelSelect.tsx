@@ -4,7 +4,9 @@ import CheckIcon from 'lucide-react/dist/esm/icons/check';
 import ChevronDownIcon from 'lucide-react/dist/esm/icons/chevron-down';
 import Settings2Icon from 'lucide-react/dist/esm/icons/settings-2';
 import type { ModelInfo, ProviderId } from '../types';
-import { resolveCustomModelDefaultReasoningEffort } from '../../../../models/customModelReasoning';
+import {
+  resolveAtomicReasoningEffort,
+} from '../../../../models/atomicModelReasoning';
 import type { ProviderModelGroup } from '../modelOptions';
 import type { ProviderTargetGroup } from '../hooks/useProviderTargetCatalogOwners';
 import type { ExecutionTarget } from '../../../../shared-session/target/types';
@@ -170,6 +172,12 @@ export function isSameProviderExecutionProfile(
   );
 }
 
+export type BuildProviderExecutionTargetModelMeta = {
+  source?: string | null;
+  supportedReasoningEfforts?: ModelInfo['supportedReasoningEfforts'];
+  defaultReasoningEffort?: string | null;
+};
+
 export function buildProviderExecutionTarget(
   current: ExecutionTarget | null | undefined,
   providerId: ProviderId,
@@ -179,19 +187,37 @@ export function buildProviderExecutionTarget(
   providerProfileSource?: 'disk' | 'managed',
   normalizeProviderProfile = true,
   runtimeModel?: string,
-  /** 自定义模型等无 capability 来源时播种的默认 effort；仅当结果为 null 时生效。 */
+  /**
+   * @deprecated 兼容旧调用：仅当 modelMeta 未提供 default 时作为 fallback。
+   * 新代码请走 modelMeta（含 supported + default + source）。
+   */
   defaultReasoningEffort?: string | null,
+  /** 目标模型 capability；Shared/Atomic 据此 seed/校验 reasoning effort。 */
+  modelMeta?: BuildProviderExecutionTargetModelMeta | null,
 ): ExecutionTarget {
   const normalizedProviderProfileId = normalizeProviderProfile
     ? normalizeExecutionProviderProfileId(providerId, providerProfileId)
     : providerProfileId;
   const normalizedRuntimeModel = runtimeModel?.trim() || null;
-  const inheritedReasoning =
+  const sameProfile =
     current?.engine === providerId &&
-    current.providerProfileId === normalizedProviderProfileId
-      ? current.reasoning ?? null
-      : null;
-  const normalizedDefaultEffort = defaultReasoningEffort?.trim() || null;
+    current.providerProfileId === normalizedProviderProfileId;
+  const modelRef: ModelInfo = {
+    id: modelCatalogEntryId,
+    model: normalizedRuntimeModel ?? modelCatalogEntryId,
+    label: modelCatalogEntryId,
+    source: modelMeta?.source ?? undefined,
+    supportedReasoningEfforts: modelMeta?.supportedReasoningEfforts,
+    defaultReasoningEffort:
+      modelMeta?.defaultReasoningEffort ??
+      (defaultReasoningEffort?.trim() || null),
+  };
+  const nextEffort = resolveAtomicReasoningEffort({
+    engine: providerId,
+    model: modelRef,
+    previousEffort: current?.reasoning?.effort ?? null,
+    inherit: sameProfile,
+  });
   return {
     engine: providerId,
     providerProfileId: normalizedProviderProfileId,
@@ -200,9 +226,7 @@ export function buildProviderExecutionTarget(
     providerProfileNameSnapshot:
       providerProfileNameSnapshot?.trim() || null,
     providerProfileSource: providerProfileSource ?? null,
-    reasoning:
-      inheritedReasoning ??
-      (normalizedDefaultEffort ? { effort: normalizedDefaultEffort } : null),
+    reasoning: nextEffort ? { effort: nextEffort } : null,
   };
 }
 
@@ -739,10 +763,12 @@ export const ModelSelect = memo(({
           group.targetProfileSource,
           true,
           runtimeModel,
-          resolveCustomModelDefaultReasoningEffort(
-            group.providerId,
-            model.source,
-          ),
+          null,
+          {
+            source: model.source,
+            supportedReasoningEfforts: model.supportedReasoningEfforts,
+            defaultReasoningEffort: model.defaultReasoningEffort,
+          },
         ),
       );
       setIsOpen(false);
@@ -869,10 +895,12 @@ export const ModelSelect = memo(({
             profile.source,
             true,
             runtimeModel,
-            resolveCustomModelDefaultReasoningEffort(
-              group.providerId,
-              keptModel.source,
-            ),
+            null,
+            {
+              source: keptModel.source,
+              supportedReasoningEfforts: keptModel.supportedReasoningEfforts,
+              defaultReasoningEffort: keptModel.defaultReasoningEffort,
+            },
           ),
         );
       })();

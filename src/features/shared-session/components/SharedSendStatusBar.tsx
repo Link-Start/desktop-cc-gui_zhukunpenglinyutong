@@ -74,6 +74,8 @@ function mapRecoveryErrorToast(
       return t("sharedSend.recoveryErrorAmbiguous");
     case "recovery-owner-missing":
       return t("sharedSend.recoveryErrorOwnerMissing");
+    case "empty-context-handoff":
+      return t("sharedSend.recoveryErrorEmptyContextHandoff");
     default:
       return `${actionLabel}: ${raw}`;
   }

@@ -78,6 +78,8 @@ const sharedSend = {
       "發現多個未決占用，無法安全自動處理。若持續出現，請攜帶會話資訊聯繫支援。",
     recoveryErrorOwnerMissing:
       "未找到對應的未決輪次。請再檢查狀態；會話可能已經可以繼續。",
+    recoveryErrorEmptyContextHandoff:
+      "無法為目前目標重建共享上下文（歷史可能不完整）。請嘗試停止並重建連線，或切換可用目標後重送。",
     recoveryTechDetail: "可查看技術詳情",
     targetUnavailableHint: "請在選擇器中更換目標後重新發送。",
     cancel: "取消",

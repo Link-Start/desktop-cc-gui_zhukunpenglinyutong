@@ -1,5 +1,8 @@
 /** @vitest-environment jsdom */
 import {
+  StrictMode,
+} from "react";
+import {
   cleanup,
   fireEvent,
   render,
@@ -1256,27 +1259,58 @@ describe("Composer Claude rewind confirmation", () => {
     expect(screen.queryByTestId("rewind-trigger")).not.toBeNull();
   });
 
-  it("keeps codex rewind dialog open when onRewind callback identity changes", () => {
+  it("preserves rewind interaction across callback churn and resets on thread transition", () => {
     const { rerender } = render(
-      <ComposerHarness
-        selectedEngine="codex"
-        activeThreadId="thread-codex-1"
-        onRewind={vi.fn(async () => {})}
-      />,
+      <StrictMode>
+        <ComposerHarness
+          selectedEngine="codex"
+          activeThreadId="thread-codex-1"
+          onRewind={vi.fn(async () => {})}
+        />
+      </StrictMode>,
     );
 
     fireEvent.click(screen.getByTestId("rewind-trigger"));
-    expect(screen.queryByTestId("claude-rewind-dialog")).not.toBeNull();
+    fireEvent.click(screen.getByTestId("claude-rewind-mode-files-only"));
 
     rerender(
-      <ComposerHarness
-        selectedEngine="codex"
-        activeThreadId="thread-codex-1"
-        onRewind={vi.fn(async () => {})}
-      />,
+      <StrictMode>
+        <ComposerHarness
+          selectedEngine="codex"
+          activeThreadId="thread-codex-1"
+          onRewind={vi.fn(async () => {})}
+        />
+      </StrictMode>,
     );
 
     expect(screen.queryByTestId("claude-rewind-dialog")).not.toBeNull();
+    expect(
+      (
+        screen.getByTestId(
+          "claude-rewind-mode-files-only",
+        ) as HTMLInputElement
+      ).checked,
+    ).toBe(true);
+
+    rerender(
+      <StrictMode>
+        <ComposerHarness
+          selectedEngine="codex"
+          activeThreadId="thread-codex-2"
+          onRewind={vi.fn(async () => {})}
+        />
+      </StrictMode>,
+    );
+
+    expect(screen.queryByTestId("claude-rewind-dialog")).toBeNull();
+    fireEvent.click(screen.getByTestId("rewind-trigger"));
+    expect(
+      (
+        screen.getByTestId(
+          "claude-rewind-mode-messages-and-files",
+        ) as HTMLInputElement
+      ).checked,
+    ).toBe(true);
   });
 
   it("stores rewind files under codex engine using unprefixed thread id as session id", async () => {

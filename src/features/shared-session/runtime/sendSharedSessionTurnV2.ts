@@ -152,6 +152,8 @@ function isKnownFailedTerminalError(error: unknown): boolean {
   return (
     !message.includes("canonical-failure-persistence:") &&
     (message.startsWith("context-prepare-failed:") ||
+      message.startsWith("empty-context-handoff:") ||
+      message.includes("empty-context-handoff:") ||
       message.startsWith("target-unavailable:") ||
       message.startsWith("target-provider-rejected:"))
   );
@@ -234,6 +236,7 @@ export async function sendSharedSessionTurnV2(
       input.threadId,
       targetPayload,
       input.text,
+      input.images,
     );
   } catch (beginError) {
     // begin 正常路径以 Ok(status) 返回 target-unavailable / recovery-required；
