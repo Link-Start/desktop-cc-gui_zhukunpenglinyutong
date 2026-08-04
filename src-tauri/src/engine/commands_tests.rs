@@ -13,8 +13,9 @@ use super::{
     normalize_provider_key, opencode_data_candidate_roots, opencode_session_candidate_paths,
     parse_imported_session_id, parse_json_value, parse_opencode_agent_list,
     parse_opencode_auth_providers, parse_opencode_debug_config_agents,
-    parse_opencode_help_commands, parse_opencode_mcp_servers, parse_opencode_session_list,
-    parse_opencode_updated_at, provider_keys_match,
+    filter_opencode_sessions_for_workspace, parse_opencode_help_commands, parse_opencode_mcp_servers,
+    parse_opencode_session_list, parse_opencode_updated_at, provider_keys_match,
+    OpenCodeSessionEntry,
     record_claude_auto_session_metadata_for_sync_result,
     resolve_claude_auto_session_metadata_session_id, resolve_claude_session_id_for_engine_send,
     resolve_enabled_engine_for_send, validate_remote_requested_engine, EngineConfig,
@@ -1291,6 +1292,72 @@ ses_3aaf6e47cffesEP8ro2EePcJAQ  New session - 2026-02-13T02:24:24.582Z          
     assert_eq!(entries[0].session_id, "ses_3aab47663ffegTpCFd6UN8ri40");
     assert_eq!(entries[0].title, "Health check 3 status review");
     assert!(entries[0].updated_at.is_some());
+    assert!(entries[0].directory.is_none());
+}
+
+#[test]
+fn parse_opencode_session_list_json_rows() {
+    let output = r#"[
+  {
+    "id": "ses_05b8ad9ccffeds79p735fLh45H",
+    "title": "New session - 2026-07-27T16:42:48.755Z",
+    "updated": 1785170596606,
+    "directory": "/private/tmp",
+    "projectId": "global"
+  },
+  {
+    "id": "ses_047af0f9affeFDNwlCKWkaRVts",
+    "title": "only mine",
+    "updated": 1785503752964,
+    "directory": "/Users/demo/Desktop/新的空文件夹",
+    "projectId": "abc"
+  }
+]"#;
+    let entries = parse_opencode_session_list(output);
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].directory.as_deref(), Some("/private/tmp"));
+    assert_eq!(
+        entries[1].directory.as_deref(),
+        Some("/Users/demo/Desktop/新的空文件夹")
+    );
+}
+
+#[test]
+fn filter_opencode_sessions_drops_global_foreign_directories() {
+    let workspace = std::path::Path::new("/Users/demo/Desktop/新的空文件夹");
+    let entries = vec![
+        OpenCodeSessionEntry {
+            session_id: "ses_foreign".to_string(),
+            title: "New session - 2026-07-27".to_string(),
+            updated_label: String::new(),
+            updated_at: Some(1),
+            directory: Some("/private/tmp".to_string()),
+        },
+        OpenCodeSessionEntry {
+            session_id: "ses_home".to_string(),
+            title: "Greeting".to_string(),
+            updated_label: String::new(),
+            updated_at: Some(2),
+            directory: Some("/Users/demo".to_string()),
+        },
+        OpenCodeSessionEntry {
+            session_id: "ses_own".to_string(),
+            title: "mine".to_string(),
+            updated_label: String::new(),
+            updated_at: Some(3),
+            directory: Some("/Users/demo/Desktop/新的空文件夹".to_string()),
+        },
+        OpenCodeSessionEntry {
+            session_id: "ses_nodir".to_string(),
+            title: "table layout".to_string(),
+            updated_label: String::new(),
+            updated_at: Some(4),
+            directory: None,
+        },
+    ];
+    let filtered = filter_opencode_sessions_for_workspace(entries, workspace);
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].session_id, "ses_own");
 }
 
 #[test]

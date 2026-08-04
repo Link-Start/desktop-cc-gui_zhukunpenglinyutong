@@ -74,6 +74,8 @@ pub mod commands {
         pub title: String,
         pub updated_label: String,
         pub updated_at: Option<i64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub directory: Option<String>,
     }
 
     fn strip_ansi_codes(input: &str) -> String {
@@ -114,6 +116,46 @@ pub mod commands {
 
     fn parse_opencode_session_list(stdout: &str) -> Vec<OpenCodeSessionEntry> {
         let clean = strip_ansi_codes(stdout);
+        let trimmed = clean.trim();
+        if trimmed.starts_with('[') {
+            if let Ok(rows) = serde_json::from_str::<Vec<serde_json::Value>>(trimmed) {
+                return rows
+                    .into_iter()
+                    .filter_map(|row| {
+                        let session_id = row
+                            .get("id")
+                            .and_then(|value| value.as_str())
+                            .unwrap_or("")
+                            .trim();
+                        if session_id.is_empty() || !session_id.starts_with("ses_") {
+                            return None;
+                        }
+                        let title = row
+                            .get("title")
+                            .and_then(|value| value.as_str())
+                            .map(str::trim)
+                            .filter(|value| !value.is_empty())
+                            .unwrap_or("Untitled")
+                            .to_string();
+                        let updated_at = row.get("updated").and_then(|value| value.as_i64());
+                        let directory = row
+                            .get("directory")
+                            .and_then(|value| value.as_str())
+                            .map(str::trim)
+                            .filter(|value| !value.is_empty())
+                            .map(str::to_string);
+                        Some(OpenCodeSessionEntry {
+                            session_id: session_id.to_string(),
+                            title,
+                            updated_label: String::new(),
+                            updated_at,
+                            directory,
+                        })
+                    })
+                    .collect();
+            }
+        }
+
         let mut entries = Vec::new();
         for raw in clean.lines() {
             let trimmed = raw.trim();
@@ -152,9 +194,30 @@ pub mod commands {
                 title: title.to_string(),
                 updated_label: updated_label.to_string(),
                 updated_at: None,
+                directory: None,
             });
         }
         entries
+    }
+
+    fn filter_opencode_sessions_for_workspace(
+        entries: Vec<OpenCodeSessionEntry>,
+        workspace_path: &Path,
+    ) -> Vec<OpenCodeSessionEntry> {
+        entries
+            .into_iter()
+            .filter(|entry| {
+                let Some(directory) = entry
+                    .directory
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                else {
+                    return false;
+                };
+                crate::local_usage::path_matches_workspace(directory, workspace_path)
+            })
+            .collect()
     }
 
     fn opencode_session_candidate_paths(
@@ -304,9 +367,11 @@ pub mod commands {
         };
         let config = manager.get_engine_config(EngineType::OpenCode).await;
         let mut cmd = build_opencode_command(config.as_ref())?;
-        cmd.current_dir(workspace_path);
+        cmd.current_dir(&workspace_path);
         cmd.arg("session");
         cmd.arg("list");
+        cmd.arg("--format");
+        cmd.arg("json");
         let output = cmd
             .output()
             .await
@@ -315,9 +380,8 @@ pub mod commands {
             let stderr = strip_ansi_codes(&String::from_utf8_lossy(&output.stderr));
             return Err(format!("opencode session list failed: {}", stderr.trim()));
         }
-        Ok(parse_opencode_session_list(&String::from_utf8_lossy(
-            &output.stdout,
-        )))
+        let raw = parse_opencode_session_list(&String::from_utf8_lossy(&output.stdout));
+        Ok(filter_opencode_sessions_for_workspace(raw, &workspace_path))
     }
 
     pub(crate) async fn opencode_delete_session_core(

@@ -40,9 +40,10 @@ pub(crate) const CLAUDE_ATTRIBUTION_REASON_PROJECT_DIRECTORY: &str = "claude-pro
 const CLAUDE_ATTRIBUTION_REASON_TRANSCRIPT_CWD: &str = "claude-transcript-cwd";
 const CLAUDE_ATTRIBUTION_REASON_GIT_ROOT: &str = "claude-git-root";
 const CLAUDE_SOURCE_FACT_CACHE_SCHEMA_VERSION: u32 = 1;
-// v4: native custom-title records now override first-message previews, so stale cached titles
-// must be rebuilt.
-const CLAUDE_SOURCE_FACT_SCANNER_VERSION: u32 = 4;
+// v5: explicit transcript cwd outside attribution scope is always rejected (no project-dir
+// fallback override). Invalidates caches that previously leaked foreign history via
+// non-ASCII path collisions (e.g. 新的空文件夹 vs 个人财务管理).
+const CLAUDE_SOURCE_FACT_SCANNER_VERSION: u32 = 5;
 const CLAUDE_SESSION_TITLE_PREVIEW_MAX_CHARS: usize = 60;
 fn normalize_session_id(session_id: &str) -> Result<String, String> {
     normalize_claude_session_id(session_id)
@@ -292,6 +293,14 @@ fn candidate_workspace_paths(workspace_path: &Path) -> Vec<PathBuf> {
     candidates
 }
 
+/// True when `candidate` is the workspace project dir or a nested subdir of it.
+///
+/// Claude encodes every non-ASCII character to `-`, so two Chinese sibling
+/// folders of different lengths become pure-hyphen suffixes of each other
+/// (e.g. `Desktop-------` vs `Desktop-------------`). Treating that as a
+/// nested project dir incorrectly merges unrelated history. Require at least
+/// one ASCII alphanumeric in the remainder so real ASCII nests
+/// (`…-repo-packages-foo`) still match while pure-hyphen collisions do not.
 fn is_encoded_workspace_prefix_match(candidate: &str, encoded_workspace: &str) -> bool {
     if candidate == encoded_workspace {
         return true;
@@ -299,10 +308,11 @@ fn is_encoded_workspace_prefix_match(candidate: &str, encoded_workspace: &str) -
     if !candidate.starts_with(encoded_workspace) {
         return false;
     }
-    candidate
-        .as_bytes()
-        .get(encoded_workspace.len())
-        .is_some_and(|next| *next == b'-')
+    let rest = &candidate[encoded_workspace.len()..];
+    if !rest.starts_with('-') {
+        return false;
+    }
+    rest.chars().any(|c| c.is_ascii_alphanumeric())
 }
 
 fn claude_project_dirs_for_path(base_dir: &Path, workspace_path: &Path) -> Vec<PathBuf> {
@@ -883,10 +893,12 @@ async fn scan_session_source_file(
             .find(|scope| crate::local_usage::path_matches_workspace(cwd, &scope.path))
             .map(|scope| scope.reason.clone())
     });
-    if transcript_cwd.is_some()
-        && matched_scope_reason.is_none()
-        && !allow_project_directory_fallback
-    {
+    // Explicit transcript cwd always wins over project-directory placement.
+    // Claude's encode_project_path maps distinct non-ASCII paths onto the same
+    // bucket (e.g. 新的空文件夹 vs 个人财务管理), so trusting the project dir
+    // when cwd points elsewhere leaks foreign history into empty/new folders.
+    // Project-directory fallback remains only for missing-cwd transcripts.
+    if transcript_cwd.is_some() && matched_scope_reason.is_none() {
         diagnostics.push(build_scan_diagnostic(
             ClaudeSessionScanDiagnosticCode::CwdOutsideAttributionScope,
             path,

@@ -184,9 +184,10 @@ fn matches_workspace_path(project_root: &str, workspace_variants: &[String]) -> 
     let project_variants = build_path_variants(project_root);
     for candidate in project_variants {
         for workspace in workspace_variants {
-            if path_is_same_or_child(&candidate, workspace)
-                || path_is_same_or_child(workspace, &candidate)
-            {
+            // One-way only: Gemini project root must be the workspace or a child.
+            // Reverse matching (workspace under project root) makes home-level
+            // Gemini projects appear inside every nested empty Desktop folder.
+            if path_is_same_or_child(&candidate, workspace) {
                 return true;
             }
         }
@@ -1642,11 +1643,17 @@ mod tests {
     }
 
     #[test]
-    fn matches_workspace_path_accepts_parent_project_root() {
+    fn matches_workspace_path_rejects_parent_project_root_for_isolation() {
+        // Parent monorepo project roots must not leak into child package workspaces.
+        // Empty nested folders under $HOME were previously polluted by reverse match.
         let workspace_variants =
             vec!["/Users/demo/code/AI/github/mossx/packages/desktop".to_string()];
-        assert!(matches_workspace_path(
+        assert!(!matches_workspace_path(
             "/Users/demo/code/AI/github/mossx",
+            &workspace_variants
+        ));
+        assert!(!matches_workspace_path(
+            "/Users/demo",
             &workspace_variants
         ));
     }

@@ -515,6 +515,8 @@ struct OpenCodeSessionEntry {
     updated_label: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     updated_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    directory: Option<String>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -929,6 +931,46 @@ fn strip_ansi_codes(input: &str) -> String {
 
 fn parse_opencode_session_list(stdout: &str) -> Vec<OpenCodeSessionEntry> {
     let clean = strip_ansi_codes(stdout);
+    let trimmed = clean.trim();
+    if trimmed.starts_with('[') {
+        if let Ok(rows) = serde_json::from_str::<Vec<serde_json::Value>>(trimmed) {
+            return rows
+                .into_iter()
+                .filter_map(|row| {
+                    let session_id = row
+                        .get("id")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or("")
+                        .trim();
+                    if session_id.is_empty() || !session_id.starts_with("ses_") {
+                        return None;
+                    }
+                    let title = row
+                        .get("title")
+                        .and_then(|value| value.as_str())
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .unwrap_or("Untitled")
+                        .to_string();
+                    let updated_at = row.get("updated").and_then(|value| value.as_i64());
+                    let directory = row
+                        .get("directory")
+                        .and_then(|value| value.as_str())
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .map(str::to_string);
+                    Some(OpenCodeSessionEntry {
+                        session_id: session_id.to_string(),
+                        title,
+                        updated_label: String::new(),
+                        updated_at,
+                        directory,
+                    })
+                })
+                .collect();
+        }
+    }
+
     let mut entries = Vec::new();
     for raw in clean.lines() {
         let trimmed = raw.trim();
@@ -966,6 +1008,7 @@ fn parse_opencode_session_list(stdout: &str) -> Vec<OpenCodeSessionEntry> {
             title: title.to_string(),
             updated_label: updated_label.to_string(),
             updated_at: None,
+            directory: None,
         });
     }
     entries

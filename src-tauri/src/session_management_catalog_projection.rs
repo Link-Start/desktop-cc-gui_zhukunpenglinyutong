@@ -871,7 +871,7 @@ async fn build_workspace_scope_catalog_data(
                         source_completeness: None,
                         source_status_reason: None,
                         size_bytes: None,
-                        cwd: None,
+                        cwd: session.directory.clone(),
                         attribution_status: Some(
                             SessionCatalogAttributionStatus::StrictMatch
                                 .as_str()

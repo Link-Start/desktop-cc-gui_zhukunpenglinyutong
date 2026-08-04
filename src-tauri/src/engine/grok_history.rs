@@ -235,9 +235,10 @@ fn matches_workspace_path(work_dir: &str, workspace_variants: &[String]) -> bool
     }
     for candidate in work_dir_variants {
         for workspace in workspace_variants {
-            if path_is_same_or_child(&candidate, workspace)
-                || path_is_same_or_child(workspace, &candidate)
-            {
+            // One-way only: session cwd must be the workspace or a child of it.
+            // Reverse matching leaks home-directory Grok history into every nested
+            // empty folder under $HOME (observed: 17 sessions under /Users/me).
+            if path_is_same_or_child(&candidate, workspace) {
                 return true;
             }
         }
@@ -1650,8 +1651,17 @@ mod tests {
             "/private/Users/demo/repo",
             &variants
         ));
+        assert!(matches_workspace_path(
+            "/Users/demo/repo/packages/app",
+            &variants
+        ));
         assert!(!matches_workspace_path("/Users/demo/other", &variants));
         assert!(!matches_workspace_path("", &variants));
+        // Home-level sessions must not appear inside nested empty folders.
+        assert!(!matches_workspace_path(
+            "/Users/demo",
+            &["/Users/demo/Desktop/新的空文件夹".to_string()]
+        ));
     }
 
     #[test]

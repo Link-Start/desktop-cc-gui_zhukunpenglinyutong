@@ -7,7 +7,7 @@ use chrono::{
     DateTime, Duration as ChronoDuration, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone,
 };
 use rusqlite::{params, Connection};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::fs;
@@ -503,6 +503,10 @@ pub struct OpenCodeSessionEntry {
     pub title: String,
     pub updated_label: String,
     pub updated_at: Option<i64>,
+    /// Session working directory from OpenCode (`session list --format json`).
+    /// Used to filter out global/foreign project leakage into empty workspaces.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub directory: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

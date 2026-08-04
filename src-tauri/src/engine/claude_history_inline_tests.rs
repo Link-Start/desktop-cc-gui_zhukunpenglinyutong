@@ -102,6 +102,149 @@ fn encoded_workspace_prefix_match_supports_nested_project_dirs() {
     ));
 }
 
+#[test]
+fn encoded_workspace_prefix_match_rejects_pure_hyphen_non_ascii_collisions() {
+    // Same-length Chinese Desktop siblings encode to identical pure-hyphen tails.
+    // Longer Chinese names must not look like nested children of shorter ones.
+    let empty_folder = encode_project_path("/Users/zhukunpeng/Desktop/新的空文件夹");
+    let personal_finance = encode_project_path("/Users/zhukunpeng/Desktop/个人财务管理");
+    let longer_chinese = encode_project_path("/Users/zhukunpeng/Desktop/个人财务管理系统测试");
+    assert_eq!(empty_folder, personal_finance);
+    assert!(empty_folder.ends_with("-------"));
+    assert!(is_encoded_workspace_prefix_match(
+        empty_folder.as_str(),
+        empty_folder.as_str()
+    ));
+    assert!(!is_encoded_workspace_prefix_match(
+        longer_chinese.as_str(),
+        empty_folder.as_str()
+    ));
+    // ASCII nested project dirs still match.
+    assert!(is_encoded_workspace_prefix_match(
+        "-Users-demo-Desktop-repo-packages-app",
+        "-Users-demo-Desktop-repo"
+    ));
+}
+
+#[tokio::test]
+async fn list_claude_sessions_rejects_non_ascii_project_dir_collision() {
+    let unique = Uuid::new_v4().to_string();
+    let temp_root = std::env::temp_dir().join(format!("ccgui-claude-cjk-collision-{}", unique));
+    let base_dir = temp_root.join("claude-projects");
+    let empty_folder = temp_root.join("新的空文件夹");
+    let personal_finance = temp_root.join("个人财务管理");
+    std::fs::create_dir_all(&empty_folder).expect("create empty folder workspace");
+    std::fs::create_dir_all(&personal_finance).expect("create personal finance workspace");
+    std::fs::create_dir_all(&base_dir).expect("create claude projects base");
+
+    // Same encoded bucket for both Chinese workspaces.
+    assert_eq!(
+        encode_project_path(&empty_folder.to_string_lossy()),
+        encode_project_path(&personal_finance.to_string_lossy())
+    );
+    let shared_project_dir = create_project_dir(&base_dir, &personal_finance);
+
+    let foreign_session_id = format!("foreign-cjk-{}", unique);
+    write_jsonl_lines(
+        &shared_project_dir.join(format!("{}.jsonl", foreign_session_id)),
+        &[json!({
+            "uuid": "user-1",
+            "timestamp": "2026-05-09T08:00:00.000Z",
+            "session_id": foreign_session_id,
+            "cwd": personal_finance.to_string_lossy(),
+            "message": { "role": "user", "content": "Nihao" }
+        })],
+        "\n",
+    );
+    let own_session_id = format!("own-cjk-{}", unique);
+    write_jsonl_lines(
+        &shared_project_dir.join(format!("{}.jsonl", own_session_id)),
+        &[json!({
+            "uuid": "user-2",
+            "timestamp": "2026-05-09T09:00:00.000Z",
+            "session_id": own_session_id,
+            "cwd": empty_folder.to_string_lossy(),
+            "message": { "role": "user", "content": "only mine" }
+        })],
+        "\n",
+    );
+
+    let empty_scopes = vec![ClaudeSessionAttributionScope::workspace_path(
+        empty_folder.clone(),
+    )];
+    let empty_listed =
+        list_claude_sessions_from_base_dir(&base_dir, &empty_folder, &empty_scopes, None)
+            .await
+            .expect("list for empty chinese folder");
+    assert!(
+        empty_listed
+            .iter()
+            .all(|session| session.session_id != foreign_session_id),
+        "foreign cwd session must not leak into colliding chinese workspace"
+    );
+    assert!(
+        empty_listed
+            .iter()
+            .any(|session| session.session_id == own_session_id),
+        "own cwd session in shared bucket must still appear"
+    );
+
+    let finance_scopes = vec![ClaudeSessionAttributionScope::workspace_path(
+        personal_finance.clone(),
+    )];
+    let finance_listed =
+        list_claude_sessions_from_base_dir(&base_dir, &personal_finance, &finance_scopes, None)
+            .await
+            .expect("list for personal finance workspace");
+    assert!(finance_listed
+        .iter()
+        .any(|session| session.session_id == foreign_session_id));
+    assert!(finance_listed
+        .iter()
+        .all(|session| session.session_id != own_session_id));
+
+    let _ = std::fs::remove_dir_all(&temp_root);
+}
+
+#[tokio::test]
+async fn list_claude_sessions_keeps_missing_cwd_project_dir_fallback() {
+    let unique = Uuid::new_v4().to_string();
+    let temp_root = std::env::temp_dir().join(format!("ccgui-claude-missing-cwd-fallback-{}", unique));
+    let base_dir = temp_root.join("claude-projects");
+    let workspace_path = temp_root.join("workspace");
+    std::fs::create_dir_all(&workspace_path).expect("create workspace path");
+    let project_dir = create_project_dir(&base_dir, &workspace_path);
+    let session_id = format!("missing-cwd-keep-{}", unique);
+    write_jsonl_lines(
+        &project_dir.join(format!("{}.jsonl", session_id)),
+        &[json!({
+            "uuid": "user-1",
+            "timestamp": "2026-05-09T08:00:00.000Z",
+            "session_id": session_id,
+            "message": { "role": "user", "content": "legacy transcript without cwd" }
+        })],
+        "\n",
+    );
+
+    let attribution_scopes = vec![ClaudeSessionAttributionScope::workspace_path(
+        workspace_path.clone(),
+    )];
+    let sessions =
+        list_claude_sessions_from_base_dir(&base_dir, &workspace_path, &attribution_scopes, None)
+            .await
+            .expect("list sessions");
+    let session = sessions
+        .iter()
+        .find(|entry| entry.session_id == session_id)
+        .expect("missing-cwd fallback session");
+    assert_eq!(
+        session.attribution_reason.as_deref(),
+        Some(CLAUDE_ATTRIBUTION_REASON_PROJECT_DIRECTORY)
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_root);
+}
+
 #[tokio::test]
 async fn list_claude_sessions_with_config_reads_configured_home_projects_dir() {
     let unique = Uuid::new_v4().to_string();
@@ -299,16 +442,14 @@ async fn scan_session_source_file_reports_unresolved_candidates() {
         })],
         "\n",
     );
+    // Explicit foreign cwd must never be claimed via project-directory fallback.
+    // Shared Claude project buckets (non-ASCII path collisions) would otherwise
+    // leak sibling-workspace history into empty/new folders.
     let mismatched = scan_session_source_file(&mismatched_path, &attribution_scopes, true).await;
-    let mismatched_fact = mismatched.fact.expect("project dir fallback fact");
-    assert_eq!(
-        mismatched_fact.attribution_reason.as_deref(),
-        Some(CLAUDE_ATTRIBUTION_REASON_PROJECT_DIRECTORY)
-    );
-    assert_eq!(
-        mismatched_fact.cwd.as_deref(),
-        Some(sibling_path.to_string_lossy().as_ref())
-    );
+    assert!(mismatched.fact.is_none());
+    assert!(mismatched.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == ClaudeSessionScanDiagnosticCode::CwdOutsideAttributionScope
+    }));
 
     let missing_cwd_path = project_dir.join(format!("missing-cwd-{}.jsonl", unique));
     write_jsonl_lines(
