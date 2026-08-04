@@ -960,3 +960,50 @@ Claude structured backgroundTaskId settlement blocker: suppress post-result 5s p
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1325: fix assistant duplicate render Native/Shared
+
+**Date**: 2026-08-04
+**Task**: fix assistant duplicate render Native/Shared
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+OpenSpec + merge early-body 折叠 + 跨 id 收敛；review 收紧 streaming/stop 边界后自检提交
+
+### Main Changes
+
+| 项 | 内容 |
+|----|------|
+| Change | `fix-assistant-duplicate-render-native-shared` |
+| 单气泡 | substantial early-body echo（≥24 且 ≥50% coverage） |
+| 双气泡 | Shared/Native complete/upsert 跨 id 收敛 |
+| 防误吞 | streaming 仅 exact body 或双方≥80 等价；reasoning/tool stop 对齐 assembler |
+| 测试 | merge + completed-duplicate + adapters + fast-path 84/84 |
+| 验证 | openspec validate OK；未纳入无关 subagent WIP |
+
+**Updated Files**:
+- `src/features/threads/hooks/threadReducerTextMerge.ts`
+- `src/features/threads/hooks/useThreadsReducerAssistantDedup.ts`
+- `src/features/threads/hooks/useThreadsReducer.ts`
+- tests + openspec/changes/fix-assistant-duplicate-render-native-shared/**
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8efaa50f3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
