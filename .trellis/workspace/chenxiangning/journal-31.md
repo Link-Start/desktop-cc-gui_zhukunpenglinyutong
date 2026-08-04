@@ -1007,3 +1007,51 @@ OpenSpec + merge early-body 折叠 + 跨 id 收敛；review 收紧 streaming/sto
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1326: 修复子代理状态卡死与抽屉冻结
+
+**Date**: 2026-08-04
+**Task**: 修复子代理状态卡死与抽屉冻结
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 问题 | 子代理列表长期「运行中」；点开 inspector 抽屉 status 不刷新；仅侧栏开 session 才对齐 |
+| 根因 | inspector 整卡快照冻结；SessionCanvas 旁路 load 不回写 enrich 源；layout snapshot 会冲掉旁路写 store |
+| 方案 | 新增 useSubagentSessionProbeStore；SquadGrid/SubagentList merge+enrich；sync inspector；Ring 卡 UI 收口 |
+| 验证 | vitest inspector/probe/cardStatus hooks 通过；本地确认开抽屉后 status 可更新 |
+
+**Updated Files**:
+- `src/features/subagent-ui/hooks/useSubagentSessionProbeStore.ts` (new)
+- `src/features/subagent-ui/hooks/useSubagentInspectorStore.ts`
+- `src/features/subagent-ui/components/SubagentSessionCanvas.tsx`
+- `src/features/subagent-ui/components/SubagentSquadGrid.tsx`
+- `src/features/subagent-ui/components/SubagentRingCard.tsx` (new)
+- `src/features/status-panel/components/SubagentList.tsx`
+- 多语言 `subagentUi` + `src/styles/subagent-ui.css`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c33a3f254` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

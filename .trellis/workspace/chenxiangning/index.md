@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-31.md`
-- **Total Sessions**: 1325
+- **Total Sessions**: 1326
 - **Last Active**: 2026-08-04
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-31.md` | ~1009 | Active |
+| `journal-31.md` | ~1057 | Active |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
@@ -59,6 +59,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1326 | 2026-08-04 | 修复子代理状态卡死与抽屉冻结 | `c33a3f254` | `CXN-version-0.7.16` |
 | 1325 | 2026-08-04 | fix assistant duplicate render Native/Shared | `379d9935b` | `CXN-version-0.7.16` |
 | 1324 | 2026-08-04 | fix(threads): live settlement order — 多工具回合 settle 后结论偶发跑到工具前 | `74654f1d6` | `CXN-version-0.7.16` |
 | 1323 | 2026-08-04 | fix React #185 Composer extract 自订阅 | `9c04f381a` | `CXN-version-0.7.16` |
