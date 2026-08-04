@@ -21,7 +21,7 @@
 - [x] 4.1 [P0] helpers unit：strip + merge empty sessions purge
 - [x] 4.2 [P0] shared-native-compat：async race materialize hide + main strip
 - [x] 4.3 [P0] focused Vitest 通过（36 tests）
-- [ ] 4.4 [P1] 手测 Shared × Grok 首轮发送侧栏仅 shared 行
+- [x] 4.4 [P1] 手测 Shared × Grok 首轮发送侧栏仅 shared 行（2026-08-04 用户确认通过）
 - [ ] 4.5 [P2] 手测 Shared × Kimi / Claude / Codex 无回归（可选）
 
 ## 5. 跨引擎审查（文档）
