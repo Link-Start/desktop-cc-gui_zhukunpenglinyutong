@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-31.md`
-- **Total Sessions**: 1327
+- **Total Sessions**: 1328
 - **Last Active**: 2026-08-04
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-31.md` | ~1104 | Active |
+| `journal-31.md` | ~1151 | Active |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
@@ -59,6 +59,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1328 | 2026-08-04 | 退役 Claude SubAgent 旧 Agent session 卡 | `9ac441d8f` | `CXN-version-0.7.16` |
 | 1327 | 2026-08-04 | SubAgent S10 卡收口：折叠收纳、去重与宽度自适应 | `2e381d204`, `c33a3f254` | `CXN-version-0.7.16` |
 | 1326 | 2026-08-04 | 修复子代理状态卡死与抽屉冻结 | `c33a3f254` | `CXN-version-0.7.16` |
 | 1325 | 2026-08-04 | fix assistant duplicate render Native/Shared | `379d9935b` | `CXN-version-0.7.16` |

@@ -1102,3 +1102,50 @@ OpenSpec + merge early-body 折叠 + 跨 id 收敛；review 收紧 streaming/sto
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1328: 退役 Claude SubAgent 旧 Agent session 卡
+
+**Date**: 2026-08-04
+**Task**: 退役 Claude SubAgent 旧 Agent session 卡
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| OpenSpec | `retire-claude-subagent-agent-session-card`（proposal/design/specs/tasks） |
+| 目标 | Shared/Native Claude 幕布 SubAgent 完成态只保留 S10，去掉 legacy `Agent session` 卡 |
+| 实现 | 藏 SubAgent 型 task-notification 旧卡；终态/result/output-file enrich 到 S10 与 inspector；安全 toolUseId 匹配；StatusPanel 同源 enrich；Timeline 0 高锚点 |
+| 验证 | enrich/notification unit 18 通过；rich-content 退役路径通过；相关 tsc 无 error |
+
+**Updated Files**:
+- `src/features/subagent-ui/utils/enrichSubagentCardsFromTaskNotifications.ts`
+- `src/features/messages/rows/components/MessageRow.tsx`
+- `src/features/messages/timeline/components/TimelineRowRenderer.tsx`
+- `src/features/status-panel/components/SubagentList.tsx`
+- `src/features/subagent-ui/components/SubagentInspectorDrawer.tsx`
+- `openspec/changes/retire-claude-subagent-agent-session-card/**`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9ac441d8f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
