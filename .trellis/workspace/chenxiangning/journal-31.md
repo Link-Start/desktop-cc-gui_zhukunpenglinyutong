@@ -1055,3 +1055,50 @@ OpenSpec + merge early-body 折叠 + 跨 id 收敛；review 收紧 streaming/sto
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1327: SubAgent S10 卡收口：折叠收纳、去重与宽度自适应
+
+**Date**: 2026-08-04
+**Task**: SubAgent S10 卡收口：折叠收纳、去重与宽度自适应
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+幕布 SubAgent 改为 S10 分段色条+Ring 卡；参与已处理折叠；合成注入前移防回钉；description 顶 title 识别消双重渲染；Ring 网格 auto-fit 均分宽度
+
+### Main Changes
+
+## 本次交付
+- S10 Segment Bar + Ring 卡片 UI（已在 c33a3f254 含部分 UI）
+- SubAgent 进入 process-phase「已处理」折叠（取消常驻豁免）
+- 合成 spawn 注入移到 collapse 之前，堵住 Shared 折叠后再钉回 chip 外侧
+- isSubagentTool 识别 Shared description-as-title 载荷，只走 subagentGroup，去掉下方扳手重复行
+- Ring grid：auto-fill → auto-fit，卡均分铺满宽度
+
+## 验证
+- vitest：collapseMiddleSteps / isSubagentTool / groupToolItems / syntheticSharedSubagentTools 相关用例通过
+- 设计预览 HTML 仅在 output/，未入库
+
+## 未纳入
+- output/subagent-card-*.html 设计稿（本地预览）
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2e381d204` | (see git log) |
+| `c33a3f254` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
