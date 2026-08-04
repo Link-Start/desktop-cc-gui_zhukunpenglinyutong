@@ -73,6 +73,9 @@ const SUBMENU_ITEM_HEIGHT = 40;
 const SUBMENU_LABEL_HEIGHT = 32;
 const SUBMENU_SEPARATOR_HEIGHT = 9;
 const VIEWPORT_PADDING = 12;
+// Small gap between the click anchor and the menu edge so the pointer /
+// selected row stays visible without floating far away ("跟手").
+const ANCHOR_GAP = 4;
 
 export function estimateRendererContextMenuHeight(
   items: readonly RendererContextMenuItem[],
@@ -191,7 +194,8 @@ export function RendererContextMenu({
     closeSubmenu();
   }, [closeSubmenu, menu]);
 
-  // Re-clamp with real measured size so tall/short menus stay near the cursor.
+  // Place from the click anchor using the real measured size (flip above /
+  // left when the preferred side would overflow).
   useLayoutEffect(() => {
     const element = menuRef.current;
     if (!element || typeof window === "undefined") {
@@ -361,6 +365,15 @@ export function RendererContextMenu({
     );
   };
 
+  const initialPosition =
+    typeof window !== "undefined"
+      ? clampRendererContextMenuPosition(menu.x, menu.y, {
+          width: 280,
+          height: estimateRendererContextMenuHeight(menu.items),
+          padding: VIEWPORT_PADDING,
+        })
+      : { x: menu.x, y: menu.y };
+
   const menuNode = (
     <div
       className="renderer-context-menu-backdrop"
@@ -375,7 +388,7 @@ export function RendererContextMenu({
         className={className}
         role="menu"
         aria-label={menu.label}
-        style={{ left: menu.x, top: menu.y }}
+        style={{ left: initialPosition.x, top: initialPosition.y }}
         onMouseDown={(event) => event.stopPropagation()}
         onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
@@ -417,6 +430,16 @@ export function RendererContextMenu({
   return createPortal(menuNode, document.body);
 }
 
+/**
+ * Place a context menu relative to an anchor point (usually the cursor).
+ *
+ * Strategy (OS / Finder / VS Code style):
+ * 1. Prefer open below-right of the anchor with a small gap — feels attached.
+ * 2. If it would overflow the bottom, flip above the anchor so the click
+ *    target stays visible instead of being covered by a slid-up panel.
+ * 3. If it would overflow the right, flip to the left of the anchor.
+ * 4. Final clamp keeps the box inside the viewport for oversized menus.
+ */
 export function clampRendererContextMenuPosition(
   x: number,
   y: number,
@@ -424,20 +447,39 @@ export function clampRendererContextMenuPosition(
     width?: number;
     height?: number;
     padding?: number;
+    gap?: number;
   },
 ) {
   const width = options?.width ?? 280;
   const height = options?.height ?? 420;
   const padding = options?.padding ?? 12;
+  const gap = options?.gap ?? ANCHOR_GAP;
   if (typeof window === "undefined") {
     return { x, y };
   }
-  const maxX = Math.max(padding, window.innerWidth - width - padding);
-  const maxY = Math.max(padding, window.innerHeight - height - padding);
-  // Stay at the cursor when possible; only slide just enough to fit viewport.
-  // Avoid flipping the menu far above the click (that feels untracked).
-  return {
-    x: Math.min(Math.max(x, padding), maxX),
-    y: Math.min(Math.max(y, padding), maxY),
-  };
+
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const maxX = Math.max(padding, viewportWidth - width - padding);
+  const maxY = Math.max(padding, viewportHeight - height - padding);
+  const maxRight = viewportWidth - padding;
+  const maxBottom = viewportHeight - padding;
+
+  // Horizontal: prefer right of anchor; flip left when the preferred side
+  // cannot fit a full menu width.
+  let nextX = x + gap;
+  if (nextX + width > maxRight) {
+    nextX = x - width - gap;
+  }
+  nextX = Math.min(Math.max(nextX, padding), maxX);
+
+  // Vertical: prefer below anchor; flip above so the selection stays visible
+  // when the user right-clicks near the bottom of the list / viewport.
+  let nextY = y + gap;
+  if (nextY + height > maxBottom) {
+    nextY = y - height - gap;
+  }
+  nextY = Math.min(Math.max(nextY, padding), maxY);
+
+  return { x: nextX, y: nextY };
 }

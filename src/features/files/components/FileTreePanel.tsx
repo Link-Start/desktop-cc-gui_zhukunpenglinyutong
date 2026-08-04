@@ -2255,6 +2255,7 @@ export function FileTreePanel({
         ...(isRootActionTarget
           ? []
           : [
+              { type: "separator" as const, id: "delete-separator" },
               {
                 type: "item" as const,
                 id: "delete",

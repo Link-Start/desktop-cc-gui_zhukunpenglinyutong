@@ -376,7 +376,7 @@ describe("RendererContextMenu", () => {
     ).toEqual({ x: 8, y: 8 });
   });
 
-  it("slides near the cursor instead of flipping far above", () => {
+  it("opens below-right of the anchor, and flips when space is tight", () => {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
       value: 1000,
@@ -386,22 +386,35 @@ describe("RendererContextMenu", () => {
       value: 800,
     });
 
-    // Near bottom: only slide up enough to fit, keep menu close to click.
-    expect(
-      clampRendererContextMenuPosition(200, 700, {
-        width: 280,
-        height: 200,
-        padding: 12,
-      }),
-    ).toEqual({ x: 200, y: 588 });
-
-    // Mid-screen with room below: stay at cursor (no upward jump).
+    // Mid-screen with room below: open just below-right of the click (跟手).
     expect(
       clampRendererContextMenuPosition(200, 400, {
         width: 280,
         height: 200,
         padding: 12,
+        gap: 4,
       }),
-    ).toEqual({ x: 200, y: 400 });
+    ).toEqual({ x: 204, y: 404 });
+
+    // Near bottom: flip entirely above the click so the selection stays visible
+    // instead of being covered by a slid-up menu.
+    expect(
+      clampRendererContextMenuPosition(200, 700, {
+        width: 280,
+        height: 200,
+        padding: 12,
+        gap: 4,
+      }),
+    ).toEqual({ x: 204, y: 496 });
+
+    // Near right edge: flip to the left of the click.
+    expect(
+      clampRendererContextMenuPosition(900, 200, {
+        width: 280,
+        height: 120,
+        padding: 12,
+        gap: 4,
+      }),
+    ).toEqual({ x: 616, y: 204 });
   });
 });
