@@ -505,6 +505,7 @@ export function useAppShellLayoutNodesSection(
     prompts,
     pushError,
     pushLoading,
+    clearGitOperationErrors,
     queueGitStatusRefresh,
     queueSaveSettings,
     reasoningOptions,
@@ -1200,6 +1201,11 @@ export function useAppShellLayoutNodesSection(
   const handleOpenDictationSettings = useEventCallback(() =>
     openSettings("dictation"),
   );
+  // Manual git panel refresh should dismiss stale commit/push/sync error banners.
+  const handleManualGitStatusRefresh = useCallback(() => {
+    clearGitOperationErrors();
+    queueGitStatusRefresh();
+  }, [clearGitOperationErrors, queueGitStatusRefresh]);
   const handleOpenSkillsSettings = useEventCallback(() =>
     openSettings("other", "mcp-skills"),
   );
@@ -2173,7 +2179,7 @@ export function useAppShellLayoutNodesSection(
       gitDiffError: activeDiffError,
       refreshGitLog,
       refreshGitDiffs,
-      queueGitStatusRefresh,
+      queueGitStatusRefresh: handleManualGitStatusRefresh,
       onDiffActivePathChange: handleActiveDiffPath,
       onGitDiffViewStyleChange: setGitDiffViewStyle,
       commitMessage,

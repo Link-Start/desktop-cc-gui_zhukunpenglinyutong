@@ -117,6 +117,7 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "clearDictationHint",
     "clearDictationTranscript",
     "clearDraftForThread",
+    "clearGitOperationErrors",
     "clearGitRootCandidates",
     "clonePrompt",
     "closePlanPanel",

@@ -1013,6 +1013,7 @@ vi.mock("./features/app/hooks/useGitCommitController", () => ({
     commitError: null,
     pushError: null,
     syncError: null,
+    repositoryCommitSummary: null,
     onCommitMessageChange: createNoopFunction(),
     onGenerateCommitMessage: createNoopFunction(),
     onCommit: createNoopFunction(),
@@ -1020,6 +1021,8 @@ vi.mock("./features/app/hooks/useGitCommitController", () => ({
     onCommitAndSync: createNoopFunction(),
     onPush: createNoopFunction(),
     onSync: createNoopFunction(),
+    onCommitRepositories: createNoopFunction(),
+    clearOperationErrors: createNoopFunction(),
   }),
 }));
 

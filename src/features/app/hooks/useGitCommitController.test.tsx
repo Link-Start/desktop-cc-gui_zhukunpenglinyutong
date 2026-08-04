@@ -317,4 +317,32 @@ describe("useGitCommitController", () => {
     expect(mockGenerateCommitMessageWithEngine).not.toHaveBeenCalled();
     expect(result.current.commitMessageError).toBe("unsupported_engine");
   });
+
+  it("clears stale push/sync/commit operation errors on demand", async () => {
+    mockPushGit.mockRejectedValueOnce(new Error("remote rejected"));
+    mockSyncGit.mockRejectedValueOnce(new Error("sync failed"));
+    const { result } = createController({
+      stagedFiles: [{ path: "src/file.ts", status: "M", additions: 1, deletions: 0 }],
+      unstagedFiles: [],
+    });
+
+    await act(async () => {
+      await result.current.onPush();
+    });
+    expect(result.current.pushError).toBe("remote rejected");
+
+    await act(async () => {
+      await result.current.onSync();
+    });
+    expect(result.current.syncError).toBe("sync failed");
+
+    act(() => {
+      result.current.clearOperationErrors();
+    });
+
+    expect(result.current.pushError).toBeNull();
+    expect(result.current.syncError).toBeNull();
+    expect(result.current.commitError).toBeNull();
+    expect(result.current.repositoryCommitSummary).toBeNull();
+  });
 });

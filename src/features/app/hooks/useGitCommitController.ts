@@ -66,6 +66,8 @@ type GitCommitController = {
   onPush: () => Promise<void>;
   onSync: () => Promise<void>;
   onCommitRepositories: (selections: RepositoryCommitSelection[]) => Promise<void>;
+  /** Clear stale commit/push/sync error banners (e.g. after manual status refresh). */
+  clearOperationErrors: () => void;
 };
 
 export function useGitCommitController({
@@ -101,6 +103,13 @@ export function useGitCommitController({
 
   const handleCommitMessageChange = useCallback((value: string) => {
     setCommitMessage(value);
+  }, []);
+
+  const clearOperationErrors = useCallback(() => {
+    setCommitError(null);
+    setPushError(null);
+    setSyncError(null);
+    setRepositoryCommitSummary(null);
   }, []);
 
   const handleGenerateCommitMessage = useCallback(async (
@@ -461,5 +470,6 @@ export function useGitCommitController({
     onPush: handlePush,
     onSync: handleSync,
     onCommitRepositories: handleCommitRepositories,
+    clearOperationErrors,
   };
 }

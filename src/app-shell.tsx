@@ -1488,6 +1488,7 @@ export function AppShell() {
     onPush: handlePush,
     onSync: handleSync,
     onCommitRepositories: handleCommitRepositories,
+    clearOperationErrors: clearGitOperationErrors,
   } = useGitCommitController({
     activeWorkspace,
     activeWorkspaceId,
@@ -1755,6 +1756,7 @@ export function AppShell() {
       clearDictationHint,
       clearDictationTranscript,
       clearDraftForThread,
+      clearGitOperationErrors,
       clearGitRootCandidates,
       checkForUpdates,
       clonePrompt,
