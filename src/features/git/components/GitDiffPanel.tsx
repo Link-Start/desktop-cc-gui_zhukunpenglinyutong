@@ -2273,7 +2273,7 @@ function GitDiffPanelImpl({
                         <div className="git-panel-select-menu-divider" role="separator" />
                         <button
                           type="button"
-                          className={`git-panel-select-option git-panel-select-option--git-graph${isGitHistoryOpen ? " is-active" : ""}`}
+                          className={`git-panel-select-option${isGitHistoryOpen ? " is-active" : ""}`}
                           role="menuitem"
                           onClick={() => {
                             setIsModeMenuOpen(false);

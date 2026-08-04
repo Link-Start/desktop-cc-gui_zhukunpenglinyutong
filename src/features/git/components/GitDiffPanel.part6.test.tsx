@@ -403,7 +403,6 @@ describe("GitDiffPanel", () => {
 
       const gitGraphAction = screen.getByRole("menuitem", { name: "Git Graph" });
       expect(gitGraphAction.querySelector(".lucide-git-commit-horizontal")).toBeTruthy();
-      expect(gitGraphAction.classList.contains("git-panel-select-option--git-graph")).toBe(true);
 
       fireEvent.click(gitGraphAction);
       expect(onOpenGitHistoryPanel).toHaveBeenCalledTimes(1);

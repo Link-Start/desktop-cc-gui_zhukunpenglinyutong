@@ -362,18 +362,6 @@
   line-height: 1.2;
 }
 
-.git-panel-select-option--git-graph .git-panel-select-option-label {
-  color: var(--accent-primary, #2563eb);
-  font-weight: 700;
-}
-
-.git-panel-select-option--git-graph .git-panel-select-option-icon,
-.git-panel-select-option--git-graph:hover .git-panel-select-option-icon,
-.git-panel-select-option--git-graph:focus-visible .git-panel-select-option-icon,
-.git-panel-select-option--git-graph.is-active .git-panel-select-option-icon {
-  color: var(--accent-primary, #2563eb);
-}
-
 .git-panel-select-option-description {
   min-width: 0;
   font-size: 12px;
