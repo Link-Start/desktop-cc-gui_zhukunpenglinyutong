@@ -9,6 +9,8 @@ import {
   mergeDegradedClaudeContinuitySummaries,
   mergeDegradedCodexContinuitySummaries,
   mergeGeminiSessionSummaries,
+  mergeGrokSessionSummaries,
+  mergeKimiSessionSummaries,
   mergeThreadSummaryPreservingStableIdentity,
   resolveThreadSourceMeta,
   seedLastGoodEngineIntoMerged,
@@ -17,6 +19,7 @@ import {
   selectReplacementThreadDecision,
   selectReplacementThreadByMessageHistory,
   selectReplacementThreadByMessageHistoryDecision,
+  stripHiddenSharedBindingSummaries,
   threadIdMatchesHiddenAutomaticSessionSet,
 } from "./useThreadActions.helpers";
 
@@ -789,6 +792,131 @@ describe("useThreadActions.helpers", () => {
 
     expect(seeded).toBe(1);
     expect([...mergedById.keys()]).toEqual(["opencode:session-1"]);
+  });
+
+  it("strips shared hidden binding summaries from any sidebar snapshot", () => {
+    const hidden = new Set(["grok:bound-1", "kimi:bound-2"]);
+    const input: ThreadSummary[] = [
+      {
+        id: "shared:s1",
+        name: "Shared",
+        updatedAt: 3,
+        threadKind: "shared",
+        engineSource: "grok",
+      },
+      {
+        id: "grok:bound-1",
+        name: "Leaked Grok",
+        updatedAt: 2,
+        engineSource: "grok",
+      },
+      {
+        id: "grok:visible-1",
+        name: "User Grok",
+        updatedAt: 1,
+        engineSource: "grok",
+      },
+    ];
+    const stripped = stripHiddenSharedBindingSummaries(input, hidden);
+    expect(stripped.map((row) => row.id)).toEqual([
+      "shared:s1",
+      "grok:visible-1",
+    ]);
+    // 空 hide set 应返回原引用
+    expect(stripHiddenSharedBindingSummaries(input, new Set())).toBe(input);
+  });
+
+  it("mergeGrok clears leaked baseline even when sessions filter empties", () => {
+    const hidden = new Set(["grok:leaked-1"]);
+    const baseline: ThreadSummary[] = [
+      {
+        id: "shared:s1",
+        name: "Shared",
+        updatedAt: 10,
+        threadKind: "shared",
+        engineSource: "grok",
+      },
+      {
+        id: "grok:leaked-1",
+        name: "分析一下给我结论",
+        updatedAt: 9,
+        engineSource: "grok",
+      },
+      {
+        id: "grok:user-1",
+        name: "User Grok",
+        updatedAt: 8,
+        engineSource: "grok",
+      },
+    ];
+    // 全部 session 被调用方 filter 掉（或磁盘只有 hidden）→ 旧实现 early-return 原 base
+    const mergedEmpty = mergeGrokSessionSummaries(
+      baseline,
+      [],
+      "ws-1",
+      {},
+      () => undefined,
+      undefined,
+      hidden,
+    );
+    expect(mergedEmpty.map((row) => row.id)).toEqual([
+      "shared:s1",
+      "grok:user-1",
+    ]);
+
+    const mergedWithVisible = mergeGrokSessionSummaries(
+      baseline,
+      [
+        {
+          sessionId: "user-1",
+          firstMessage: "User Grok refreshed",
+          updatedAt: 20,
+        },
+        {
+          sessionId: "leaked-1",
+          firstMessage: "should stay hidden",
+          updatedAt: 21,
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+      undefined,
+      hidden,
+    );
+    expect(mergedWithVisible.map((row) => row.id)).toEqual([
+      "grok:user-1",
+      "shared:s1",
+    ]);
+    expect(
+      mergedWithVisible.find((row) => row.id === "grok:user-1")?.updatedAt,
+    ).toBe(20);
+  });
+
+  it("mergeKimi clears leaked baseline with empty sessions", () => {
+    const hidden = new Set(["kimi:leaked-k"]);
+    const merged = mergeKimiSessionSummaries(
+      [
+        {
+          id: "kimi:leaked-k",
+          name: "Leaked",
+          updatedAt: 1,
+          engineSource: "kimi",
+        },
+        {
+          id: "kimi:ok",
+          name: "OK",
+          updatedAt: 2,
+          engineSource: "kimi",
+        },
+      ],
+      [],
+      "ws-1",
+      {},
+      () => undefined,
+      hidden,
+    );
+    expect(merged.map((row) => row.id)).toEqual(["kimi:ok"]);
   });
 
 });
