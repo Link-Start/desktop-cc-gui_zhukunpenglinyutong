@@ -55,9 +55,19 @@ export {
   closeSubagentInspectorIfScopeChanged,
   getSubagentInspectorSelection,
   openSubagentInspector,
+  syncSubagentInspectorFromCards,
+  syncSubagentInspectorSelection,
   useSubagentInspectorSelection,
 } from "./hooks/useSubagentInspectorStore";
+export {
+  clearSubagentSessionProbeStore,
+  getSubagentSessionProbeSnapshot,
+  mergeSubagentEnrichmentSources,
+  publishSubagentSessionProbe,
+  useSubagentSessionProbeVersion,
+} from "./hooks/useSubagentSessionProbeStore";
 export { SubagentPersonaCard } from "./components/SubagentPersonaCard";
+export { SubagentRingCard } from "./components/SubagentRingCard";
 export { SubagentSquadGrid } from "./components/SubagentSquadGrid";
 export { SubagentInspectorDrawer } from "./components/SubagentInspectorDrawer";
 export { SubagentChatSplit } from "./components/SubagentChatSplit";

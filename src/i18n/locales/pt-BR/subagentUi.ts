@@ -2,6 +2,8 @@ export default {
   subagentUi: {
     squadAria: "Equipe de subagentes",
     squadTitle: "{{completed}}/{{total}} agentes",
+    squadTitleCount: "{{total}} agentes",
+
     squadFallbackTitle: "Subagentes em paralelo",
     defaultName: "Subagente",
     badge: "SubAgent",
@@ -17,6 +19,11 @@ export default {
     noSessionYet:
       "Nenhuma sessão de subagente vinculada ainda (agentId não resolvido ou transcript ainda indexando). Abra a linha «Subagente» na árvore de sessões.",
 
+    statusShort: {
+      completed: "concluídos",
+      running: "em execução",
+      error: "falharam",
+    },
     status: {
       running: "Em execução",
       completed: "Concluído",
