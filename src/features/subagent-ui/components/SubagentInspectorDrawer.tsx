@@ -12,7 +12,6 @@ import {
   isClaudeAsyncAgentLaunchOutput,
   resolveSubagentSessionThreadId,
 } from "../utils/subagentViewModel";
-import { PersonaAvatar } from "./PersonaAvatar";
 import { SubagentProgressBar } from "./SubagentProgressBar";
 import { SubagentSessionCanvas } from "./SubagentSessionCanvas";
 
@@ -96,15 +95,11 @@ export const SubagentInspectorDrawer = memo(function SubagentInspectorDrawer({
     >
       <header className="subagent-inspector-header">
         <div className="subagent-inspector-identity">
-          <PersonaAvatar
-            displayName={card.displayName}
-            avatarSrc={card.avatarSrc}
-            githubProfileUrl={card.githubProfileUrl}
-            size={36}
-          />
           <div className="min-w-0">
             <div className="subagent-inspector-name-row">
-              <strong className="subagent-inspector-name">{card.displayName}</strong>
+              <strong className="subagent-inspector-name">
+                {t("subagentUi.defaultName", { defaultValue: "子代理" })}
+              </strong>
               <span className="subagent-persona-index">{card.indexLabel}</span>
             </div>
             <div className="subagent-inspector-type" title={card.description}>

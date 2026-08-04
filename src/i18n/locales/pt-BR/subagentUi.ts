@@ -3,6 +3,7 @@ export default {
     squadAria: "Equipe de subagentes",
     squadTitle: "{{completed}}/{{total}} agentes",
     squadFallbackTitle: "Subagentes em paralelo",
+    defaultName: "Subagente",
     badge: "SubAgent",
     claudeLaunchNoSession:
       "Confirmação de inicialização do Claude Agent detectada, mas nenhuma sessão claude:subagent está vinculada ainda (o native owner pode estar vinculando/indexando). Tente novamente mais tarde ou abra o subagente na árvore de sessões.",

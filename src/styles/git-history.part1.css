@@ -336,11 +336,13 @@
 }
 
 .git-history-branch-list {
+  overflow-x: hidden;
   padding: 4px 0 8px;
 }
 
 .git-history-commit-list {
   position: relative;
+  overflow-x: hidden;
   padding: 4px 0 8px;
 }
 

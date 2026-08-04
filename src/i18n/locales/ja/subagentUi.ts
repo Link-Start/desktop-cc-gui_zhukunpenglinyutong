@@ -3,6 +3,7 @@ export default {
     squadAria: "サブエージェントチーム",
     squadTitle: "{{completed}}/{{total}} エージェント",
     squadFallbackTitle: "並列サブエージェント",
+    defaultName: "サブエージェント",
     badge: "SubAgent",
     claudeLaunchNoSession:
       "Claude Agent の起動応答を検出しましたが、claude:subagent セッションにまだ関連付けられていません（native owner がバインド/インデックス中の可能性があります）。しばらくしてから再試行するか、左のセッションツリーからサブエージェントを開いてください。",

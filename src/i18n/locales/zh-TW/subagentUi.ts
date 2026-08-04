@@ -3,6 +3,7 @@ export default {
     squadAria: "子代理小隊",
     squadTitle: "{{completed}}/{{total}} 個助手",
     squadFallbackTitle: "並行子代理",
+    defaultName: "子代理",
     badge: "SubAgent",
     claudeLaunchNoSession:
       "已識別 Claude Agent 啟動回執，但尚未關聯到 claude:subagent 會話（native owner 可能仍在綁定/索引）。請稍後重試，或從左側會話樹打開對應子代理。",

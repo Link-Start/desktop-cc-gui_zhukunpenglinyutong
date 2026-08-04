@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import type { SubagentCardViewModel } from "../utils/subagentViewModel";
 import { openSubagentInspector } from "../hooks/useSubagentInspectorStore";
-import { PersonaAvatar } from "./PersonaAvatar";
 import { SubagentProgressBar } from "./SubagentProgressBar";
 
 type SubagentPersonaCardProps = {
@@ -35,6 +34,8 @@ export const SubagentPersonaCard = memo(function SubagentPersonaCard({
   const isRow = layout === "row";
 
   const badgeLabel = t("subagentUi.badge", { defaultValue: "SubAgent" });
+  // 固定展示名：不再用贡献者 GitHub 名 / 头像
+  const nameLabel = t("subagentUi.defaultName", { defaultValue: "子代理" });
 
   return (
     <button
@@ -58,14 +59,8 @@ export const SubagentPersonaCard = memo(function SubagentPersonaCard({
       title={card.description}
     >
       <div className="subagent-persona-card-head">
-        <PersonaAvatar
-          displayName={card.displayName}
-          avatarSrc={card.avatarSrc}
-          githubProfileUrl={card.githubProfileUrl}
-          size={isRow ? 26 : compact ? 22 : 26}
-        />
         <div className="subagent-persona-identity">
-          <span className="subagent-persona-name">{card.displayName}</span>
+          <span className="subagent-persona-name">{nameLabel}</span>
           <span className="subagent-persona-index">{card.indexLabel}</span>
         </div>
         {!isRow ? (

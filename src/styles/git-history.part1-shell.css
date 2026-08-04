@@ -1,52 +1,39 @@
+/* Git Graph: full modal (not bottom half-dock) */
 .git-history-dock-overlay {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 48;
-  height: var(--git-history-panel-height, 50vh);
-  min-height: 240px;
-  max-height: calc(100vh - var(--main-topbar-height, 44px));
+  inset: 0;
+  z-index: 2200;
   display: flex;
-  flex-direction: column;
-  border-top: 1px solid var(--border, var(--border-default));
-  background: var(--background, var(--surface-messages, #ffffff));
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  transition: height 120ms ease;
-}
-
-.git-history-dock-resizer {
-  position: relative;
-  height: 8px;
-  cursor: row-resize;
-  flex: 0 0 auto;
-  touch-action: none;
-  background: transparent;
-}
-
-.git-history-dock-resizer::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  width: 68px;
-  top: 50%;
-  height: 2px;
-  border-radius: 999px;
-  transform: translate(-50%, -50%);
-  background: color-mix(in srgb, var(--border-default) 90%, transparent);
-}
-
-.git-history-dock-resizer:hover::after,
-body[data-git-history-resizing="true"] .git-history-dock-resizer::after {
-  background: color-mix(in srgb, var(--accent-primary, #2563eb) 70%, transparent);
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(7, 11, 18, 0.42);
+  backdrop-filter: blur(1.5px);
+  -webkit-backdrop-filter: blur(1.5px);
+  animation: git-history-modal-fade-in 130ms ease;
 }
 
 .git-history-dock-body {
-  flex: 1;
+  width: min(80vw, calc(100vw - 32px));
+  height: min(80vh, calc(100vh - 32px));
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 0;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--border-strong, var(--border-default)) 82%, transparent);
+  background: var(--background, var(--surface-messages, #ffffff));
+  color: var(--text-primary);
+  box-shadow: 0 22px 64px rgba(0, 0, 0, 0.4);
+  animation: git-history-modal-pop-in 160ms ease;
+}
+
+/* Legacy resizer kept inert (full modal no longer resizes by drag) */
+.git-history-dock-resizer {
+  display: none;
 }
 
 .git-history-document-tabs {

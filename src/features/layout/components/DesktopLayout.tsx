@@ -102,7 +102,8 @@ type DesktopLayoutProps = {
   onSidebarResizeStart: (event: MouseEvent<HTMLDivElement>) => void;
   onRightPanelResizeStart: (event: MouseEvent<HTMLDivElement>) => void;
   onPlanPanelResizeStart: (event: MouseEvent<HTMLDivElement>) => void;
-  onGitHistoryPanelResizeStart: (event: PointerEvent<HTMLDivElement>) => void;
+  /** @deprecated Git Graph is a full modal; resize handle removed. Kept optional for callers. */
+  onGitHistoryPanelResizeStart?: (event: PointerEvent<HTMLDivElement>) => void;
 };
 
 export function DesktopLayout({
@@ -149,7 +150,6 @@ export function DesktopLayout({
   onSidebarResizeStart,
   onRightPanelResizeStart,
   onPlanPanelResizeStart,
-  onGitHistoryPanelResizeStart,
 }: DesktopLayoutProps) {
   const { t } = useTranslation();
   const diffLayerRef = useRef<HTMLDivElement | null>(null);
@@ -581,15 +581,15 @@ export function DesktopLayout({
 
   const isMemoryMode = centerMode === "memory";
   const gitHistoryDockNode = showGitHistory ? (
-    <div className="git-history-dock-overlay">
+    <div className="git-history-dock-overlay" role="presentation">
       <div
-        className="git-history-dock-resizer"
-        role="separator"
-        aria-orientation="horizontal"
-        aria-label={t("layout.resizeGitHistoryPanel")}
-        onPointerDown={onGitHistoryPanelResizeStart}
-      />
-      <div className="git-history-dock-body">{gitHistoryNode}</div>
+        className="git-history-dock-body"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("git.historyQuickAction")}
+      >
+        {gitHistoryNode}
+      </div>
     </div>
   ) : null;
 

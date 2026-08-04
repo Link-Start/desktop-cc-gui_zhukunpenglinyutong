@@ -675,7 +675,7 @@ export function renderGitHistoryPanelView(scope: GitHistoryPanelViewScope) {
         }
       }}
     >
-      <div className="git-history-toolbar git-history-toolbar--hover-actions">
+      <div className="git-history-toolbar">
         <div className="git-history-toolbar-left">
           <h2>{t("git.historyTitle")}</h2>
           {projectOptions.length > 0 && onSelectWorkspace ? (
@@ -987,7 +987,7 @@ export function renderGitHistoryPanelView(scope: GitHistoryPanelViewScope) {
                 placeholder={t("git.historySearchBranches")}
               />
             </label>
-            <div className="git-history-branch-list">
+            <div className="git-history-branch-list scrollable">
               {hasRepositoryTree ? (
                 <GitHistoryMultiRepositoryBranchTree
                   repositories={repositories}
@@ -1293,7 +1293,7 @@ export function renderGitHistoryPanelView(scope: GitHistoryPanelViewScope) {
               </div>
             )}
 
-            <div className="git-history-commit-list" ref={commitListRef}>
+            <div className="git-history-commit-list scrollable" ref={commitListRef}>
               <div
                 className="git-history-commit-list-virtual"
                 style={{ height: `${commitRowVirtualizer.getTotalSize()}px` }}

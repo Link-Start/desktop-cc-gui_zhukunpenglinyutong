@@ -3,6 +3,7 @@ export default {
     squadAria: "하위 에이전트 팀",
     squadTitle: "{{completed}}/{{total}} 에이전트",
     squadFallbackTitle: "병렬 하위 에이전트",
+    defaultName: "하위 에이전트",
     badge: "SubAgent",
     claudeLaunchNoSession:
       "Claude Agent 시작 확인을 감지했지만 아직 claude:subagent 세션과 연결되지 않았습니다(native owner가 아직 바인딩/인덱싱 중일 수 있음). 잠시 후 다시 시도하거나 왼쪽 세션 트리에서 해당 하위 에이전트를 여세요.",
