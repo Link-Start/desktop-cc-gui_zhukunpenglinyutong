@@ -178,6 +178,15 @@
   gap: 4px;
 }
 
+.sidebar-settings-cluster {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
 .sidebar-settings-dropdown-wrapper {
   position: relative;
   display: flex;
@@ -188,14 +197,24 @@
   flex: 0 0 32px;
 }
 
+.sidebar-settings-pinned {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sidebar-settings-pinned-item {
+  flex: 0 0 32px;
+}
 
 .sidebar-settings-dropdown {
   /* 跟随侧栏宽度收缩，避免窄侧栏时被 .sidebar-body 的 overflow:hidden 裁掉右侧圆角/阴影 */
-  width: min(200px, calc(var(--sidebar-width, 210px) - 24px));
+  width: min(220px, calc(var(--sidebar-width, 210px) - 24px));
   position: absolute;
   bottom: 100%;
   left: 0;
-  right: 0;
   margin-bottom: 4px;
   padding: 4px;
   border-radius: 10px;
@@ -223,6 +242,21 @@
   }
 }
 
+.sidebar-settings-dropdown-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  border-radius: 7px;
+  color: var(--text-muted);
+}
+
+.sidebar-settings-dropdown-option:hover,
+.sidebar-settings-dropdown-option:focus-within,
+.sidebar-settings-dropdown-option.is-active {
+  background: var(--surface-hover);
+  color: var(--text-strong);
+}
+
 .sidebar-settings-dropdown-item {
   width: 100%;
   display: flex;
@@ -232,7 +266,7 @@
   border: none;
   border-radius: 7px;
   background: transparent;
-  color: var(--text-muted);
+  color: inherit;
   font-size: 13px;
   font-weight: 500;
   text-align: left;
@@ -240,6 +274,17 @@
   transition:
     background-color 0.12s ease,
     color 0.12s ease;
+}
+
+.sidebar-settings-dropdown-option > .sidebar-settings-dropdown-item {
+  flex: 1;
+  min-width: 0;
+  padding-right: 4px;
+}
+
+.sidebar-settings-dropdown-option > .sidebar-settings-dropdown-item:hover:not(:disabled),
+.sidebar-settings-dropdown-option > .sidebar-settings-dropdown-item:focus-visible:not(:disabled) {
+  background: transparent;
 }
 
 .sidebar-settings-dropdown-item:hover:not(:disabled),
@@ -255,6 +300,44 @@
 .sidebar-settings-dropdown-item:disabled {
   color: var(--text-faint);
   opacity: 0.55;
+}
+
+.sidebar-settings-dropdown-pin {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin: 0 8px 0 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.sidebar-settings-dropdown-pin:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* disabled checkbox 不接收指针事件，用 wrapper 承载 tip 与 not-allowed 光标 */
+.sidebar-settings-dropdown-pin-wrap {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  margin: 0 8px 0 0;
+  line-height: 0;
+}
+
+.sidebar-settings-dropdown-pin-wrap > .sidebar-settings-dropdown-pin {
+  margin: 0;
+}
+
+.sidebar-settings-dropdown-pin-wrap.is-disabled {
+  cursor: not-allowed;
+}
+
+.sidebar-settings-dropdown-pin-wrap.is-disabled:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--primary));
+  outline-offset: 2px;
+  border-radius: 3px;
 }
 
 .sidebar-settings-chevron {
@@ -1063,6 +1146,10 @@
 
 .sidebar-workspace-menu-item.is-danger,
 .renderer-context-menu-item.is-danger {
+  color: var(--danger-strong, #d64545);
+}
+
+.renderer-context-menu-item.is-danger .renderer-context-menu-item-icon {
   color: var(--danger-strong, #d64545);
 }
 

@@ -41,6 +41,8 @@ const common = {
     moreActions: "更多操作",
     showInHeader: "在顶栏显示",
     showOnWorkspaceRow: "在项目行显示",
+    showBesideSettings: "在设置旁显示",
+    showBesideSettingsLimit: "最多只能展示 2 个，请先取消已勾选的入口",
     markdownMermaidFullscreen: "全屏",
     markdownMermaidFullscreenHint: "放大查看图表",
     markdownMermaidDownloadPng: "下载 PNG",
