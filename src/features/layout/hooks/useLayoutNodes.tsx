@@ -783,6 +783,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         onDeleteWorkspace={options.onDeleteWorkspace}
         onDeleteWorktree={options.onDeleteWorktree}
         onRenameWorkspaceAlias={options.onRenameWorkspaceAlias}
+        workspaceGroups={options.workspaceGroups}
+        onAssignWorkspaceGroup={options.onAssignWorkspaceGroup}
         onLoadOlderThreads={options.onLoadOlderThreads}
         onReloadWorkspaceThreads={options.onReloadWorkspaceThreads}
         onQuickReloadWorkspaceThreads={options.onQuickReloadWorkspaceThreads}

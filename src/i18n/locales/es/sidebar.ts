@@ -70,6 +70,7 @@ const sidebar = {
     "activateWorkspace": "Abrir en el panel principal",
     "workspaceActionsGroup": "Acciones del espacio de trabajo",
     "setWorkspaceAlias": "Establecer alias",
+    "assignWorkspaceGroup": "Cambiar grupo del proyecto",
     "workspaceAliasPrompt": "Introduce el alias que se muestra para este espacio de trabajo en la barra lateral. Déjalo vacío para usar el nombre original del proyecto.",
     "workspaceAliasDialogTitle": "Establecer alias del espacio de trabajo",
     "workspaceAliasDialogSubtitle": "Nombre original del proyecto: {{name}}",

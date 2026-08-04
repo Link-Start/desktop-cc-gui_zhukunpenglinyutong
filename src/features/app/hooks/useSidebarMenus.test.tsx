@@ -77,6 +77,8 @@ vi.mock("react-i18next", () => ({
         "sidebar.workspaceActionsGroup": "Workspace actions",
         "sidebar.activateWorkspace": "Open in main panel",
         "sidebar.setWorkspaceAlias": "Set alias",
+        "sidebar.assignWorkspaceGroup": "Change project group",
+        "settings.ungrouped": "Ungrouped",
         "sidebar.newSessionFolder": "New folder",
         "workspace.engineClaudeCode": "Claude Code",
         "workspace.engineCodex": "Codex",
@@ -265,7 +267,6 @@ function createHandlers() {
     onDeleteWorktree: vi.fn(),
     onRenameWorkspaceAlias: vi.fn(),
     onAddWorktreeAgent: vi.fn(),
-    onAddCloneAgent: vi.fn(),
   };
 }
 
@@ -665,7 +666,6 @@ describe("useSidebarMenus", () => {
       "rename-workspace-alias",
       "remove-workspace",
       "new-worktree-agent",
-      "new-clone-agent",
     ]);
 
     act(() => {
@@ -2384,6 +2384,131 @@ describe("useSidebarMenus", () => {
 
     expect(handlers.onRenameWorkspaceAlias).toHaveBeenCalledTimes(1);
     expect(handlers.onRenameWorkspaceAlias).toHaveBeenCalledWith(workspace);
+  });
+
+  it("assigns workspace group from the workspace actions submenu", async () => {
+    const handlers = createHandlers();
+    const onAssignWorkspaceGroup = vi.fn().mockResolvedValue(true);
+    const groupedWorkspace: WorkspaceInfo = {
+      ...workspace,
+      settings: {
+        ...workspace.settings,
+        groupId: "group-a",
+      },
+    };
+    const { result } = renderHook(() =>
+      useSidebarMenus({
+        ...handlers,
+        workspaceGroups: [
+          { id: "group-a", name: "Alpha" },
+          { id: "group-b", name: "Beta" },
+        ],
+        onAssignWorkspaceGroup,
+      }),
+    );
+
+    await act(async () => {
+      const event = {
+        clientX: 200,
+        clientY: 160,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0];
+      result.current.showWorkspaceMenu(event, groupedWorkspace);
+    });
+
+    const assignAction = result.current.workspaceMenuState?.groups
+      .find((group) => group.id === "workspace-actions")
+      ?.actions.find((action) => action.id === "assign-workspace-group");
+
+    expect(assignAction?.label).toBe("Change project group");
+    expect(assignAction?.submenuOnly).toBe(true);
+    expect(assignAction?.children?.map((child) => child.id)).toEqual([
+      "assign-workspace-group-none",
+      "assign-workspace-group-group-a",
+      "assign-workspace-group-group-b",
+    ]);
+    expect(
+      assignAction?.children?.find(
+        (child) => child.id === "assign-workspace-group-group-a",
+      )?.selected,
+    ).toBe(true);
+
+    await act(async () => {
+      result.current.onWorkspaceMenuAction(
+        assignAction!.children!.find(
+          (child) => child.id === "assign-workspace-group-group-b",
+        )!,
+      );
+    });
+
+    expect(onAssignWorkspaceGroup).toHaveBeenCalledWith(
+      groupedWorkspace.id,
+      "group-b",
+    );
+  });
+
+  it("hides assign-group action when no groups exist or workspace is worktree", async () => {
+    const handlers = createHandlers();
+    const onAssignWorkspaceGroup = vi.fn();
+    const { result } = renderHook(() =>
+      useSidebarMenus({
+        ...handlers,
+        workspaceGroups: [],
+        onAssignWorkspaceGroup,
+      }),
+    );
+
+    await act(async () => {
+      const event = {
+        clientX: 120,
+        clientY: 120,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      } as unknown as Parameters<typeof result.current.showWorkspaceMenu>[0];
+      result.current.showWorkspaceMenu(event, workspace);
+    });
+
+    const actionsWithoutGroups =
+      result.current.workspaceMenuState?.groups
+        .find((group) => group.id === "workspace-actions")
+        ?.actions.map((action) => action.id) ?? [];
+    expect(actionsWithoutGroups).not.toContain("assign-workspace-group");
+
+    const worktreeWorkspace: WorkspaceInfo = {
+      ...workspace,
+      id: "ws-worktree",
+      kind: "worktree",
+      settings: {
+        ...workspace.settings,
+        groupId: "group-a",
+      },
+    };
+    const { result: worktreeResult } = renderHook(() =>
+      useSidebarMenus({
+        ...handlers,
+        workspaceGroups: [{ id: "group-a", name: "Alpha" }],
+        onAssignWorkspaceGroup,
+      }),
+    );
+
+    await act(async () => {
+      const event = {
+        clientX: 130,
+        clientY: 130,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      } as unknown as Parameters<
+        typeof worktreeResult.current.showWorkspaceMenu
+      >[0];
+      worktreeResult.current.showWorkspaceMenu(event, worktreeWorkspace);
+    });
+
+    const worktreeActions =
+      worktreeResult.current.workspaceMenuState?.groups
+        .find((group) => group.id === "workspace-actions")
+        ?.actions.map((action) => action.id) ?? [];
+    expect(worktreeActions).not.toContain("assign-workspace-group");
   });
 
   it("shows session-only menu for worktree plus entry", async () => {

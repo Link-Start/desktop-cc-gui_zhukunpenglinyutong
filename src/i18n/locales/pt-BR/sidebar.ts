@@ -70,6 +70,7 @@ const sidebar = {
     "activateWorkspace": "Abrir no painel principal",
     "workspaceActionsGroup": "Ações do workspace",
     "setWorkspaceAlias": "Definir apelido",
+    "assignWorkspaceGroup": "Alterar grupo do projeto",
     "workspaceAliasPrompt": "Digite o apelido exibido para este workspace na barra lateral. Deixe em branco para usar o nome original do projeto.",
     "workspaceAliasDialogTitle": "Definir apelido do workspace",
     "workspaceAliasDialogSubtitle": "Nome original do projeto: {{name}}",

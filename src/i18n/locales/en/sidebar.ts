@@ -81,6 +81,7 @@ const sidebar = {
     expandWorkspace: "Expand workspace sessions",
     workspaceActionsGroup: "Workspace Actions",
     setWorkspaceAlias: "Set alias",
+    assignWorkspaceGroup: "Change project group",
     workspaceAliasPrompt:
       "Enter the alias shown for this workspace in the sidebar. Leave empty to use the original project name.",
     workspaceAliasDialogTitle: "Set workspace alias",

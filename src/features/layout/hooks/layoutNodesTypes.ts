@@ -63,6 +63,7 @@ import type {
   ThreadSummary,
   ThreadTokenUsage,
   TurnPlan,
+  WorkspaceGroup,
   WorkspaceInfo,
 } from "../../../types";
 import type { EngineDisplayInfo } from "../../engine/hooks/useEngineController";
@@ -278,6 +279,11 @@ export type LayoutNodesFlatOptions = {
   onDeleteWorkspace: (workspaceId: string) => void;
   onDeleteWorktree: (workspaceId: string) => void;
   onRenameWorkspaceAlias: (workspace: WorkspaceInfo) => void;
+  workspaceGroups?: WorkspaceGroup[];
+  onAssignWorkspaceGroup?: (
+    workspaceId: string,
+    groupId: string | null,
+  ) => void | Promise<unknown>;
   onLoadOlderThreads: (workspaceId: string) => void;
   onReloadWorkspaceThreads: (
     workspaceId: string,
@@ -881,6 +887,8 @@ export type ChromeLayoutNodesOptions = Pick<
   | "onDeleteWorkspace"
   | "onDeleteWorktree"
   | "onRenameWorkspaceAlias"
+  | "workspaceGroups"
+  | "onAssignWorkspaceGroup"
   | "onLoadOlderThreads"
   | "onQuickReloadWorkspaceThreads"
   | "onReloadWorkspaceThreads"

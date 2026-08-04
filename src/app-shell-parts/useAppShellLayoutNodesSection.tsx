@@ -187,6 +187,7 @@ export function useAppShellLayoutNodesSection(
   const {
     accessMode,
     accountSwitching,
+    assignWorkspaceGroup,
     activeAccount,
     activeDiffError,
     activeDiffLoading,
@@ -2005,6 +2006,8 @@ export function useAppShellLayoutNodesSection(
       onDeleteWorkspace: handleDeleteWorkspace,
       onDeleteWorktree: handleDeleteWorktree,
       onRenameWorkspaceAlias: handleRenameWorkspaceAlias,
+      workspaceGroups,
+      onAssignWorkspaceGroup: assignWorkspaceGroup,
       onLoadOlderThreads: handleLoadOlderThreads,
       onQuickReloadWorkspaceThreads: handleQuickReloadWorkspaceThreads,
       onReloadWorkspaceThreads: handleReloadWorkspaceThreads,
