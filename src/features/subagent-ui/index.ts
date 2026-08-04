@@ -45,6 +45,12 @@ export {
   injectSyntheticSubagentToolsIfNeeded,
   shouldInjectChildSubagentSynthetic,
 } from "./utils/syntheticSharedSubagentTools";
+export {
+  collectSubagentStyleNotificationsFromItems,
+  enrichSubagentCardsFromTaskNotifications,
+  matchToolItemToNotificationToolUseId,
+  mergeConversationItemSources,
+} from "./utils/enrichSubagentCardsFromTaskNotifications";
 export type {
   ChildSubagentSyntheticEligibilityInput,
   EnrichTimelineSyntheticSubagentInput,

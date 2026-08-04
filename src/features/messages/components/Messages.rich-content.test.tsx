@@ -818,7 +818,7 @@ describe("Messages rich content", () => {
     ).toBeTruthy();
   });
 
-  it("renders task-notification assistant output as an independent agent card", () => {
+  it("retires SubAgent-style task-notification agent session card from the canvas", () => {
     const items: ConversationItem[] = [
       {
         id: "agent-message-1",
@@ -847,15 +847,43 @@ describe("Messages rich content", () => {
       />,
     );
 
-    expect(container.querySelector(".message-agent-task-card")).toBeTruthy();
-    expect(screen.getByText("Spring生态治理与技术选型评估")).toBeTruthy();
-    expect(screen.getByText("completed")).toBeTruthy();
+    // SubAgent 型 notification：legacy Agent session 卡退役（S10 为唯一完成表面）
+    expect(container.querySelector(".message-agent-task-card")).toBeNull();
     expect(container.textContent ?? "").not.toContain("<task-notification>");
-    expect(container.textContent ?? "").toContain("让我系统地读取项目的核心文件。");
+    expect(screen.queryByRole("button", { name: "engineTaskOutput.inspect" })).toBeNull();
+  });
 
+  it("still renders non-subagent task-notification as an independent agent card", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "bg-message-1",
+        kind: "message",
+        role: "assistant",
+        text: `<task-notification>
+<task-id>bg-shell-1</task-id>
+<tool-use-id>call_bg_1</tool-use-id>
+<output-file>/private/tmp/tasks/bg-shell-1.output</output-file>
+<status>completed</status>
+<summary>Background shell task bg-shell-1 completed</summary>
+<result>shell finished ok`,
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.querySelector(".message-agent-task-card")).toBeTruthy();
+    expect(container.textContent ?? "").toContain("shell finished ok");
     fireEvent.click(screen.getByRole("button", { name: "engineTaskOutput.inspect" }));
     expect(screen.getByLabelText("engineTaskOutput.label")).toBeTruthy();
-    expect(screen.getAllByText("task ae242051e14492047").length).toBeGreaterThan(1);
   });
 
   it("shows only the current thread approval when sibling thread ids differ", () => {
@@ -1006,7 +1034,7 @@ describe("Messages rich content", () => {
     expect(messagesFull?.lastElementChild?.previousElementSibling?.classList.contains("messages-inline-approval-slot")).toBe(true);
   });
 
-  it("renders task-notification user payloads as an independent agent card", () => {
+  it("retires SubAgent-style user task-notification from the canvas", () => {
     const items: ConversationItem[] = [
       {
         id: "agent-message-user-1",
@@ -1033,26 +1061,23 @@ describe("Messages rich content", () => {
       />,
     );
 
-    const taskCard = container.querySelector(".message-agent-task-card");
-    expect(taskCard).toBeTruthy();
-    expect(screen.getByText("Bug诊断与性能安全审查")).toBeTruthy();
+    expect(container.querySelector(".message-agent-task-card")).toBeNull();
     expect(container.querySelector(".user-collapsible-text-content")).toBeNull();
     expect(container.textContent ?? "").not.toContain("<task-notification>");
-    expect(container.textContent ?? "").toContain("读取项目规范文件");
   });
 
-  it("scrolls to the matching independent agent card when requested by tool use id", async () => {
+  it("scrolls to the matching agent-task anchor when requested by tool use id", async () => {
     const items: ConversationItem[] = [
       {
         id: "agent-message-scroll-1",
         kind: "message",
-        role: "user",
+        role: "assistant",
         text: `<task-notification>
 <task-id>af452b1b615f93a9e</task-id>
 <tool-use-id>call_fa8bd06e774141c4a7f29a79</tool-use-id>
 <output-file>/private/tmp/tasks/af452b1b615f93a9e.output</output-file>
 <status>completed</status>
-<summary>Agent "Bug诊断与性能安全审查" completed</summary>
+<summary>Background shell task af452b1b615f93a9e completed</summary>
 <result>我先按照规范流程执行：读取项目规范文件，然后进行全面审查。`,
       },
     ];
@@ -1074,6 +1099,7 @@ describe("Messages rich content", () => {
     ) as HTMLDivElement | null;
     expect(messagesContainer).toBeTruthy();
     expect(targetNode).toBeTruthy();
+    expect(container.querySelector(".message-agent-task-card")).toBeTruthy();
     const scrollToSpy = vi.fn();
     if (messagesContainer) {
       messagesContainer.scrollTo = scrollToSpy;

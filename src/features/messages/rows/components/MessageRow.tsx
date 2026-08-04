@@ -274,6 +274,7 @@ export const MessageRow = memo(function MessageRow({
     memorySummaryRawPayload,
     memoryPayloadPacks,
     agentTaskNotification,
+    suppressSubagentAgentTaskCard,
     browserContextSummary,
     intentCanvasContextSummary,
     displayText: staticDisplayText,
@@ -320,7 +321,7 @@ export const MessageRow = memo(function MessageRow({
     isStreaming,
   );
   const agentTaskDisplay = useMemo(() => {
-    if (!agentTaskNotification) {
+    if (!agentTaskNotification || suppressSubagentAgentTaskCard) {
       return null;
     }
     return {
@@ -328,9 +329,9 @@ export const MessageRow = memo(function MessageRow({
       status: normalizeAgentTaskStatus(agentTaskNotification.status),
       outputFileName: basenameFromPath(agentTaskNotification.outputFile),
     };
-  }, [agentTaskNotification]);
+  }, [agentTaskNotification, suppressSubagentAgentTaskCard]);
   const agentTaskOutputSnapshot = useMemo(() => {
-    if (!agentTaskNotification || !agentTaskDisplay) {
+    if (!agentTaskNotification || !agentTaskDisplay || suppressSubagentAgentTaskCard) {
       return null;
     }
     return buildEngineTaskOutputSnapshot(
@@ -342,7 +343,13 @@ export const MessageRow = memo(function MessageRow({
       }),
       null,
     );
-  }, [activeEngine, agentTaskDisplay, agentTaskNotification, item.id]);
+  }, [
+    activeEngine,
+    agentTaskDisplay,
+    agentTaskNotification,
+    item.id,
+    suppressSubagentAgentTaskCard,
+  ]);
   useEffect(() => {
     setIsAgentBadgeExpanded(false);
   }, [item.id, selectedAgentIcon, selectedAgentName]);
@@ -550,7 +557,7 @@ export const MessageRow = memo(function MessageRow({
       : null;
 
   const bubbleNode = (
-    <div className={`bubble message-bubble${agentTaskNotification ? " message-bubble-agent-task" : ""}`}>
+    <div className={`bubble message-bubble${agentTaskNotification && !suppressSubagentAgentTaskCard ? " message-bubble-agent-task" : ""}`}>
       {turnBadge && item.role === "assistant" ? (
         <div
           className={`message-turn-target-badge${turnBadge.unavailable ? " is-unavailable" : ""}`}
@@ -797,12 +804,23 @@ export const MessageRow = memo(function MessageRow({
       </>
     ) : null;
   const shouldRenderBubble =
-    agentTaskNotification
+    (agentTaskNotification && !suppressSubagentAgentTaskCard)
     || imageItems.length > 0
     || deferredImageItems.length > 0
     || showActiveRuntimeReconnectCard
     || Boolean(turnBadge)
     || (hasText && !suppressRuntimeReconnectText);
+  // SubAgent 型 task-notification：整行视觉退役（事实已迁 S10 / inspector）
+  if (
+    suppressSubagentAgentTaskCard &&
+    !shouldRenderBubble &&
+    !resolvedMemorySummary &&
+    !resolvedNoteCardSummary &&
+    !browserContextSummary &&
+    !(intentCanvasContextSummary && intentCanvasContextSummary.length > 0)
+  ) {
+    return null;
+  }
   const memoryPayloadDialogNode =
     memoryPayloadDialogOpen && memorySummaryRawPayload && typeof document !== "undefined"
       ? createPortal(
@@ -1022,7 +1040,9 @@ export const MessageRow = memo(function MessageRow({
   const messageClassName = [
     "message",
     item.role,
-    agentTaskNotification ? "message-agent-task" : "",
+    agentTaskNotification && !suppressSubagentAgentTaskCard
+      ? "message-agent-task"
+      : "",
     item.role === "assistant" && isStreaming ? "is-live-streaming" : "",
   ].filter(Boolean).join(" ");
 

@@ -4,6 +4,8 @@ import type { SubagentInfo } from "../types";
 import {
   buildSubagentCardFromSubagentInfo,
   enrichSubagentCardStatuses,
+  enrichSubagentCardsFromTaskNotifications,
+  mergeConversationItemSources,
   openSubagentInspector,
   SubagentPersonaCard,
 } from "../../subagent-ui";
@@ -37,6 +39,7 @@ export const SubagentList = memo(function SubagentList({
   const threadItemsByThread = useActiveCanvasSelector(
     (snapshot) => snapshot.threadItemsByThread,
   );
+  const canvasItems = useActiveCanvasSelector((snapshot) => snapshot.items);
 
   const cards = useMemo(() => {
     const raw = subagents.map((agent, index) =>
@@ -49,13 +52,27 @@ export const SubagentList = memo(function SubagentList({
       statusById: threadStatusById,
       itemsByThread: threadItemsByThread,
     });
-    const enriched = enrichSubagentCardStatuses(raw, enrichment);
+    const statusEnriched = enrichSubagentCardStatuses(raw, enrichment);
+    const parentTableItems =
+      parentThreadId && threadItemsByThread
+        ? threadItemsByThread[parentThreadId] ?? null
+        : null;
+    const notificationSource = mergeConversationItemSources(
+      canvasItems,
+      parentTableItems,
+    );
+    // 与幕布 S10 同源：task-notification 终态/result 迁入，避免 StatusPanel 卡死 running
+    const enriched = enrichSubagentCardsFromTaskNotifications(
+      statusEnriched,
+      notificationSource,
+    );
     return subagents.map((agent, index) => ({
       agent,
       card: enriched[index] ?? raw[index]!,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- probeVersion 订阅旁路 load
   }, [
+    canvasItems,
     parentThreadId,
     probeVersion,
     subagents,
