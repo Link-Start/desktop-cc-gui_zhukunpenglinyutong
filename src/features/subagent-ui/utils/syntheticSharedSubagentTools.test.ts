@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   buildSyntheticSpawnToolsFromChildren,
+  enrichTimelineWithSyntheticSubagentsBeforeCollapse,
   injectSyntheticSubagentToolsIfNeeded,
   shouldInjectChildSubagentSynthetic,
 } from "./syntheticSharedSubagentTools";
+import { resolveCollapsedTimelineItems } from "../../messages/orchestration/presentation/messagesViewModel";
 import { isSubagentTool } from "./isSubagentTool";
 import {
   buildSubagentCardsFromToolItems,
@@ -72,6 +74,101 @@ describe("syntheticSharedSubagentTools", () => {
       { idPrefix: "codex" },
     );
     expect(tools[0]?.id).toBe("synthetic-codex-subagent:agent-7");
+  });
+
+  it("enriches shared parent timeline before collapse so cards fold into process phase", () => {
+    const childId = "grok:child-1";
+    const base: ConversationItem[] = [
+      { id: "u1", kind: "message", role: "user", text: "hi" },
+      {
+        id: "r1",
+        kind: "reasoning",
+        summary: "think",
+        content: "think",
+      },
+      {
+        id: "t1",
+        kind: "tool",
+        toolType: "fileRead",
+        title: "Read a.ts",
+        detail: "a.ts",
+        status: "completed",
+      },
+      {
+        id: "a1",
+        kind: "message",
+        role: "assistant",
+        text: "done",
+      },
+    ];
+    const enriched = enrichTimelineWithSyntheticSubagentsBeforeCollapse({
+      items: base,
+      ownThreadId: "shared:parent",
+      canvasThreadId: "shared:parent",
+      activeEngine: "claude",
+      childThreads: [
+        {
+          id: childId,
+          name: "排查助手消息重复渲染根因",
+          updatedAt: 1,
+          engineSource: "grok",
+          parentThreadId: "shared:parent",
+        },
+      ],
+    });
+    const syntheticId = `synthetic-shared-subagent:${childId}`;
+    expect(enriched.map((item) => item.id)).toEqual([
+      "u1",
+      syntheticId,
+      "r1",
+      "t1",
+      "a1",
+    ]);
+
+    const collapsed = resolveCollapsedTimelineItems({
+      activeEngine: "claude",
+      timelineSourceItems: enriched,
+    });
+    // 收起：合成卡进 phase，不钉在 chip 外
+    expect(collapsed.timelineItems.map((item) => item.id)).toEqual(["u1", "a1"]);
+    expect(collapsed.phases[0]?.hiddenItemIds).toContain(syntheticId);
+
+    const expanded = resolveCollapsedTimelineItems({
+      activeEngine: "claude",
+      timelineSourceItems: enriched,
+      expandedPhaseKeys: new Set(["a1"]),
+    });
+    expect(expanded.timelineItems.map((item) => item.id)).toContain(syntheticId);
+  });
+
+  it("does not re-inject when blocking real agent tool already exists", () => {
+    const base: ConversationItem[] = [
+      { id: "u1", kind: "message", role: "user", text: "hi" },
+      {
+        id: "agent-1",
+        kind: "tool",
+        toolType: "agent",
+        title: "Tool: Agent",
+        detail: JSON.stringify({ description: "并行", subagent_type: "explore" }),
+        status: "completed",
+      },
+      { id: "a1", kind: "message", role: "assistant", text: "done" },
+    ];
+    const next = enrichTimelineWithSyntheticSubagentsBeforeCollapse({
+      items: base,
+      ownThreadId: "shared:parent",
+      canvasThreadId: "shared:parent",
+      activeEngine: "claude",
+      childThreads: [
+        {
+          id: "grok:child",
+          name: "child",
+          updatedAt: 1,
+          engineSource: "grok",
+        },
+      ],
+    });
+    expect(next.map((item) => item.id)).toEqual(["u1", "agent-1", "a1"]);
   });
 });
 

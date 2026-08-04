@@ -230,10 +230,12 @@ body.subagent-chat-split-resizing * {
 }
 
 /* ─── Ring 进度格 ─── */
+/* auto-fit（非 auto-fill）：折叠空列，卡均分铺满宽度，避免右侧缺一段 */
 .subagent-ring-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 148px), 1fr));
   gap: 6px;
+  width: 100%;
 }
 
 .subagent-ring-card {

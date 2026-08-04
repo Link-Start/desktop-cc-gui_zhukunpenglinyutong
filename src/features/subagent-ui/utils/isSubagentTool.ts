@@ -3,6 +3,8 @@ import { extractToolName } from "../../../utils/toolSemantics";
 type ToolLike = {
   toolType?: unknown;
   title?: unknown;
+  /** Shared 常把 description 顶成 title，识别要靠 detail */
+  detail?: unknown;
 };
 
 function normalizeRuntimeString(value: unknown): string {
@@ -160,6 +162,35 @@ export function isGrokSpawnSubagentTool(item: ToolLike): boolean {
  * - Grok：spawn_subagent / Spawn Subagent（非 output poller）
  * - Kimi / Shared：agent swarm 等
  */
+/**
+ * Shared/历史投影常把 spawn 的 description 顶成 title（如「问候测试代理1」），
+ * toolType 也可能退化成 toolCall。靠 detail 里的 subagent 字段兜底，
+ * 否则会同时出现 S10 小队卡 + 下方扳手行（同一批 Agent 双重渲染）。
+ */
+function looksLikeSubagentPayload(detail: unknown): boolean {
+  if (typeof detail !== "string" || !detail.trim()) {
+    return false;
+  }
+  if (
+    /"subagent_type"\s*:/i.test(detail) ||
+    /"subagentType"\s*:/i.test(detail) ||
+    /"subagent_id"\s*:/i.test(detail) ||
+    /"subagentId"\s*:/i.test(detail) ||
+    /"agentId"\s*:/i.test(detail) ||
+    /"agent_id"\s*:/i.test(detail)
+  ) {
+    return true;
+  }
+  // Claude Agent：detail 里有 description + 常见 type 枚举
+  if (
+    /"description"\s*:/i.test(detail) &&
+    /"(general-purpose|explore|plan|debug|worker)"/i.test(detail)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function isSubagentTool(item: ToolLike): boolean {
   if (isSubagentOutputPoller(item)) {
     return false;
@@ -218,6 +249,11 @@ export function isSubagentTool(item: ToolLike): boolean {
     toolType === "spawn_agent" ||
     toolType.includes("spawn_agent")
   ) {
+    return true;
+  }
+
+  // Shared description-as-title：走 subagentGroup，替换扳手行，不再双重渲染
+  if (looksLikeSubagentPayload(item.detail)) {
     return true;
   }
 

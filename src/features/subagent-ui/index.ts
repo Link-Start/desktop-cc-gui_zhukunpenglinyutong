@@ -40,11 +40,15 @@ export {
 } from "./utils/subagentViewModel";
 export {
   buildSyntheticSpawnToolsFromChildren,
+  enrichTimelineWithSyntheticSubagentsBeforeCollapse,
   hasBlockingSubagentToolSource,
   injectSyntheticSubagentToolsIfNeeded,
   shouldInjectChildSubagentSynthetic,
 } from "./utils/syntheticSharedSubagentTools";
-export type { ChildSubagentSyntheticEligibilityInput } from "./utils/syntheticSharedSubagentTools";
+export type {
+  ChildSubagentSyntheticEligibilityInput,
+  EnrichTimelineSyntheticSubagentInput,
+} from "./utils/syntheticSharedSubagentTools";
 export {
   enrichSubagentCardStatuses,
   isSubagentFinishedOutput,

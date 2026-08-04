@@ -185,9 +185,24 @@ function enrichSharedToolConversationItem(input: {
       (detail.includes("subagent_type") ||
         detail.includes("subagentType") ||
         detail.includes("background")));
+  // Claude Agent/Task：即使 title 被换成 description，也要保住 toolType，
+  // 否则会掉进 Generic 扳手行，与 SubagentSquadGrid 双重渲染。
+  const looksLikeClaudeAgent =
+    /^agent$/i.test(toolType) ||
+    /^task$/i.test(toolType) ||
+    /^tool:\s*agent$/i.test(title) ||
+    /^tool:\s*task$/i.test(title) ||
+    (Boolean(detail.trim()) &&
+      (/"subagent_type"\s*:/i.test(detail) || /"subagentType"\s*:/i.test(detail)));
   const resolvedToolType = looksLikeGrokSpawn
     ? "spawn_subagent"
-    : toolType || "toolCall";
+    : looksLikeClaudeAgent
+      ? /^task$/i.test(toolType) || /^tool:\s*task$/i.test(title)
+        ? "task"
+        : toolType && /^(agent|task)$/i.test(toolType)
+          ? toolType
+          : "agent"
+      : toolType || "toolCall";
   const resolvedTitle = looksLikeGrokSpawn
     ? title && !/^spawn/i.test(title)
       ? title // 保留 description 作展示文案；识别靠 toolType
