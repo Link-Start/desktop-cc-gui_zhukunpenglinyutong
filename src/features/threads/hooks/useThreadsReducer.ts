@@ -1346,13 +1346,20 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         }
         shouldCanonicalizeLegacyId = index >= 0;
       }
+      // Streaming deltas MUST NOT cross-id glue: short prefixes trip loose
+      // areEquivalent (≥8) and can attach a new turn onto the previous bubble
+      // when the user row is not yet inserted. Settlement/upsert still converge.
       const shouldDeduplicateCodexAssistant = shouldDeduplicateCodexAssistantMessages({
         threadsByWorkspace: state.threadsByWorkspace,
         workspaceId: action.workspaceId,
         threadId: action.threadId,
       });
       if (index < 0 && shouldDeduplicateCodexAssistant) {
-        index = findEquivalentCodexAssistantMessageIndex(sourceItems, action.delta);
+        index = findEquivalentCodexAssistantMessageIndex(
+          sourceItems,
+          action.delta,
+          "streaming",
+        );
       }
       let list: ConversationItem[];
       if (index >= 0) {
@@ -1706,6 +1713,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         const codexEquivalentAssistantIndex = findEquivalentCodexAssistantMessageIndex(
           list,
           incomingAssistantText,
+          "settled",
         );
         const equivalentAssistantIndex =
           codexEquivalentAssistantIndex >= 0
@@ -2924,7 +2932,7 @@ function applyCompleteAgentMessageToState(
     threadId: params.threadId,
   });
   if (index < 0 && shouldDeduplicateCodexAssistant) {
-    index = findEquivalentCodexAssistantMessageIndex(list, params.text);
+    index = findEquivalentCodexAssistantMessageIndex(list, params.text, "settled");
   }
   const targetItemId =
     index >= 0

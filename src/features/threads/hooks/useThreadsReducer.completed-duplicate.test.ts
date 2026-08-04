@@ -590,7 +590,7 @@ describe("threadReducer completed duplicate collapse", () => {
     expect(messages.map((message) => message.text)).toEqual([first, second]);
   });
 
-  it("does not apply codex assistant dedupe to bare threads marked as claude", () => {
+  it("converges equivalent assistant completions for bare threads marked as claude", () => {
     const claudeState = {
       ...initialState,
       threadsByWorkspace: {
@@ -627,11 +627,195 @@ describe("threadReducer completed duplicate collapse", () => {
       (item): item is Extract<ConversationItem, { kind: "message" }> =>
         item.kind === "message" && item.role === "assistant",
     );
+    // fix-assistant-duplicate-render-native-shared: Claude Native cross-id converge
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.id).toBe("assistant-first");
+    expect(messages[0]?.text).toBe(text);
+  });
+
+  it("converges equivalent assistant completions on shared claude threads", () => {
+    const sharedState = {
+      ...initialState,
+      threadsByWorkspace: {
+        "ws-1": [
+          {
+            id: "shared:session-1",
+            name: "Shared session",
+            updatedAt: 1,
+            threadKind: "shared" as const,
+            engineSource: "claude" as const,
+          },
+        ],
+      },
+    };
+    const text = [
+      '请问你的"Java架构"是指：',
+      "",
+      "• 微服务架构？",
+      "• 还是部署方案？",
+      "",
+      "请再补充一下你的需求方向。",
+    ].join("\n");
+    const withFirst = threadReducer(sharedState, {
+      type: "completeAgentMessage",
+      workspaceId: "ws-1",
+      threadId: "shared:session-1",
+      itemId: "msg-live-1",
+      text,
+      hasCustomName: false,
+    });
+    const withSecond = threadReducer(withFirst, {
+      type: "completeAgentMessage",
+      workspaceId: "ws-1",
+      threadId: "shared:session-1",
+      itemId: "msg-final-2",
+      text,
+      hasCustomName: false,
+    });
+    const messages = (withSecond.itemsByThread["shared:session-1"] ?? []).filter(
+      (item): item is Extract<ConversationItem, { kind: "message" }> =>
+        item.kind === "message" && item.role === "assistant",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.text).toBe(text);
+  });
+
+  it("does not glue a new streaming turn onto the previous assistant via short shared opener", () => {
+    const previous = [
+      "好的，我来分析一下这个项目的结构与依赖关系。",
+      "先从入口文件与包管理配置开始。",
+      "然后给出模块划分建议。",
+    ].join("\n\n");
+    const claudeState = {
+      ...initialState,
+      threadsByWorkspace: {
+        "ws-1": [
+          {
+            id: "claude:session-no-glue",
+            name: "Claude",
+            updatedAt: 1,
+            engineSource: "claude" as const,
+          },
+        ],
+      },
+    };
+    const afterPrevious = threadReducer(claudeState, {
+      type: "completeAgentMessage",
+      workspaceId: "ws-1",
+      threadId: "claude:session-no-glue",
+      itemId: "assistant-prev",
+      text: previous,
+      hasCustomName: false,
+    });
+    // User row intentionally missing (race) + short opener that is a prefix of previous.
+    const afterNewDelta = threadReducer(afterPrevious, {
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "claude:session-no-glue",
+      itemId: "assistant-next",
+      delta: "好的，我来分析一下这个项目的结构与依赖关系。",
+      hasCustomName: false,
+    });
+    const messages = (afterNewDelta.itemsByThread["claude:session-no-glue"] ?? []).filter(
+      (item): item is Extract<ConversationItem, { kind: "message" }> =>
+        item.kind === "message" && item.role === "assistant",
+    );
     expect(messages).toHaveLength(2);
     expect(messages.map((message) => message.id)).toEqual([
-      "assistant-first",
-      "assistant-second",
+      "assistant-prev",
+      "assistant-next",
     ]);
+    expect(messages[0]?.text).toBe(previous);
+    expect(messages[1]?.text).toBe("好的，我来分析一下这个项目的结构与依赖关系。");
+  });
+
+  it("does not merge assistants across a reasoning boundary", () => {
+    const text =
+      "这是一段足够长的助手结论文本，用于跨 id 等价判定，不能被 reasoning 夹层误合并。";
+    const withFirst = threadReducer(initialState, {
+      type: "completeAgentMessage",
+      workspaceId: "ws-1",
+      threadId: "claude:session-reason-boundary",
+      itemId: "assistant-a",
+      text,
+      hasCustomName: false,
+    });
+    const withReasoning = threadReducer(withFirst, {
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "claude:session-reason-boundary",
+      item: {
+        id: "reasoning-1",
+        kind: "reasoning",
+        summary: "思考中",
+        content: "中间夹一层 reasoning",
+      },
+      hasCustomName: false,
+    });
+    const withSecond = threadReducer(withReasoning, {
+      type: "completeAgentMessage",
+      workspaceId: "ws-1",
+      threadId: "claude:session-reason-boundary",
+      itemId: "assistant-b",
+      text,
+      hasCustomName: false,
+    });
+    const messages = (
+      withSecond.itemsByThread["claude:session-reason-boundary"] ?? []
+    ).filter(
+      (item): item is Extract<ConversationItem, { kind: "message" }> =>
+        item.kind === "message" && item.role === "assistant",
+    );
+    expect(messages).toHaveLength(2);
+  });
+
+  it("converges live complete then history upsert of equivalent assistant on shared", () => {
+    const sharedState = {
+      ...initialState,
+      threadsByWorkspace: {
+        "ws-1": [
+          {
+            id: "shared:session-2",
+            name: "Shared session",
+            updatedAt: 1,
+            threadKind: "shared" as const,
+            engineSource: "claude" as const,
+          },
+        ],
+      },
+    };
+    const body = [
+      "先按仓库规范做一次基线扫描。",
+      "我会检查项目内的配置目录与技术栈。",
+      "最后给你一个简明项目分析。",
+    ].join("\n\n");
+    const withLive = threadReducer(sharedState, {
+      type: "completeAgentMessage",
+      workspaceId: "ws-1",
+      threadId: "shared:session-2",
+      itemId: "live-item",
+      text: body,
+      hasCustomName: false,
+    });
+    const withHistory = threadReducer(withLive, {
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "shared:session-2",
+      item: {
+        id: "history-item",
+        kind: "message",
+        role: "assistant",
+        text: body,
+        isFinal: true,
+      },
+      hasCustomName: false,
+    });
+    const messages = (withHistory.itemsByThread["shared:session-2"] ?? []).filter(
+      (item): item is Extract<ConversationItem, { kind: "message" }> =>
+        item.kind === "message" && item.role === "assistant",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.text).toContain("基线扫描");
   });
 
   it("collapses repeated trailing codex snapshot text inside one assistant message", () => {

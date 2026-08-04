@@ -11,6 +11,7 @@
 
 | Change | Progress | Current gate | Artifacts |
 | ------ | -------: | ------------ | --------- |
+| [`fix-assistant-duplicate-render-native-shared`](fix-assistant-duplicate-render-native-shared/proposal.md) | implemented / await human check | Shared+Native：assistant 单气泡 A2+A 回显 + 跨 id 双气泡收敛已落地；focused vitest 48/48；**不 commit，交用户审批** | [proposal](fix-assistant-duplicate-render-native-shared/proposal.md) · [design](fix-assistant-duplicate-render-native-shared/design.md) · [tasks](fix-assistant-duplicate-render-native-shared/tasks.md) · [specs](fix-assistant-duplicate-render-native-shared/specs/) |
 | [`fix-live-settle-assistant-tool-order`](fix-live-settle-assistant-tool-order/proposal.md) | artifacts ready / await apply | Shared×Claude：流式对、结束后偶发结论在工具前、重开历史恢复；segment+live-text settle 同源修复；**artifacts 齐，待审后实现** | [proposal](fix-live-settle-assistant-tool-order/proposal.md) · [design](fix-live-settle-assistant-tool-order/design.md) · [tasks](fix-live-settle-assistant-tool-order/tasks.md) · [specs](fix-live-settle-assistant-tool-order/specs/) · [分析](../../docs/analysis/live-settle-assistant-tool-order-2026-08-04.md) |
 | [`fix-claude-background-shell-settlement`](fix-claude-background-shell-settlement/proposal.md) | artifacts ready / design review | Issue #983：result 后 5s grace 误杀 Claude 结构化后台 Shell；全平台 structured blocker settlement；**待用户审 design，未实现** | [proposal](fix-claude-background-shell-settlement/proposal.md) · [design](fix-claude-background-shell-settlement/design.md) · [tasks](fix-claude-background-shell-settlement/tasks.md) · [specs](fix-claude-background-shell-settlement/specs/) |
 | [`fix-shared-model-picker-display-authority`](fix-shared-model-picker-display-authority/proposal.md) | artifacts ready / implementing | Shared Atomic 闭合态以 `selectedNextTarget` 为 display authority；catalog enrichment；禁止全局 model 回落；**不 commit，交用户审批** | [proposal](fix-shared-model-picker-display-authority/proposal.md) · [design](fix-shared-model-picker-display-authority/design.md) · [tasks](fix-shared-model-picker-display-authority/tasks.md) · [specs](fix-shared-model-picker-display-authority/specs/) |
@@ -21,6 +22,7 @@
 
 ## Active backlog notes（2026-08-04）
 
+- **新增** `fix-assistant-duplicate-render-native-shared`：Shared+Native assistant「渲染两遍」——单气泡 early-body 回显 + 跨 id 双气泡；OpenSpec Batch 1 齐，分批实现、不 commit。
 - **新增** `fix-live-settle-assistant-tool-order`：幕布 live settle 后助手结论落到工具前（Shared×Claude 已确认；Shared/Native 共用 segment+live-text）；artifacts 齐，待 apply。
 - **进行中** `fix-claude-background-shell-settlement`：Claude 后台 Shell 被 `CLAUDE_POST_RESULT_GRACE` 误杀（issue #983）；后端门闩已接线（helpers + `claude.rs` + fake-stream 回归）；FE waiting 文案为 P1；待 commit/收口。
 - **新增** `fix-shared-model-picker-display-authority`：Shared/Atomic 底栏「选择模型」假空（Grok local 典型 B）；正规修复 display authority + Shared 禁全局回落 + catalog ensure。
