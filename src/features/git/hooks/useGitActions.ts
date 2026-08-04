@@ -5,9 +5,12 @@ import {
   applyWorktreeChanges as applyWorktreeChangesService,
   revertGitAll,
   revertGitFile as revertGitFileService,
+  revertGitPaths as revertGitPathsService,
   stageGitAll as stageGitAllService,
   stageGitFile as stageGitFileService,
+  unstageGitAll as unstageGitAllService,
   unstageGitFile as unstageGitFileService,
+  unstageGitPaths as unstageGitPathsService,
 } from "../../../services/tauri";
 import type { WorkspaceInfo } from "../../../types";
 
@@ -106,6 +109,45 @@ export function useGitActions({
     [onError, refreshGitData, workspaceId],
   );
 
+  const unstageGitAll = useCallback(async () => {
+    if (!workspaceId) {
+      return;
+    }
+    const actionWorkspaceId = workspaceId;
+    try {
+      await unstageGitAllService(actionWorkspaceId);
+    } catch (error) {
+      onError?.(error);
+    } finally {
+      if (workspaceIdRef.current === actionWorkspaceId) {
+        refreshGitData();
+      }
+    }
+  }, [onError, refreshGitData, workspaceId]);
+
+  const unstageGitPaths = useCallback(
+    async (paths: string[]) => {
+      if (!workspaceId || paths.length === 0) {
+        return;
+      }
+      const actionWorkspaceId = workspaceId;
+      try {
+        if (paths.length === 1) {
+          await unstageGitFileService(actionWorkspaceId, paths[0]!);
+        } else {
+          await unstageGitPathsService(actionWorkspaceId, paths);
+        }
+      } catch (error) {
+        onError?.(error);
+      } finally {
+        if (workspaceIdRef.current === actionWorkspaceId) {
+          refreshGitData();
+        }
+      }
+    },
+    [onError, refreshGitData, workspaceId],
+  );
+
   const revertGitFile = useCallback(
     async (path: string) => {
       if (!workspaceId) {
@@ -114,6 +156,29 @@ export function useGitActions({
       const actionWorkspaceId = workspaceId;
       try {
         await revertGitFileService(actionWorkspaceId, path);
+      } catch (error) {
+        onError?.(error);
+      } finally {
+        if (workspaceIdRef.current === actionWorkspaceId) {
+          refreshGitData();
+        }
+      }
+    },
+    [onError, refreshGitData, workspaceId],
+  );
+
+  const revertGitPaths = useCallback(
+    async (paths: string[]) => {
+      if (!workspaceId || paths.length === 0) {
+        return;
+      }
+      const actionWorkspaceId = workspaceId;
+      try {
+        if (paths.length === 1) {
+          await revertGitFileService(actionWorkspaceId, paths[0]!);
+        } else {
+          await revertGitPathsService(actionWorkspaceId, paths);
+        }
       } catch (error) {
         onError?.(error);
       } finally {
@@ -186,9 +251,12 @@ export function useGitActions({
     applyWorktreeChanges,
     revertAllGitChanges,
     revertGitFile,
+    revertGitPaths,
     stageGitAll,
     stageGitFile,
+    unstageGitAll,
     unstageGitFile,
+    unstageGitPaths,
     worktreeApplyError,
     worktreeApplyLoading,
     worktreeApplySuccess,

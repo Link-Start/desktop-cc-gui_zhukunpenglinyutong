@@ -40,7 +40,15 @@ import { useCopyThread } from "./features/threads/hooks/useCopyThread";
 import { useKanbanStore } from "./features/kanban/hooks/useKanbanStore";
 import { useGitCommitController } from "./features/app/hooks/useGitCommitController";
 import { useMultiRepositoryGitStatus } from "./features/git/hooks/useMultiRepositoryGitStatus";
-import { revertGitFile, stageGitAll, stageGitFile, unstageGitFile } from "./services/tauri";
+import {
+  revertGitFile,
+  revertGitPaths,
+  stageGitAll,
+  stageGitFile,
+  unstageGitAll,
+  unstageGitFile,
+  unstageGitPaths,
+} from "./services/tauri";
 import { forceRefreshAgents } from "./features/composer/components/ChatInputBox/providers";
 import { normalizeFsPath } from "./utils/workspacePaths";
 import type {
@@ -651,10 +659,13 @@ export function AppShell() {
     handlePickGitRoot,
     handleRevertAllGitChanges,
     handleRevertGitFile,
+    handleRevertGitPaths,
     handleSetGitRoot,
     handleStageGitAll,
     handleStageGitFile,
+    handleUnstageGitAll,
     handleUnstageGitFile,
+    handleUnstageGitPaths,
     worktreeApplyError,
     worktreeApplyLoading,
     worktreeApplySuccess,
@@ -1429,9 +1440,29 @@ export function AppShell() {
     if (!activeWorkspace) return;
     await unstageGitFile(activeWorkspace.id, path, repositoryRoot);
   }, [activeWorkspace]);
+  const handleUnstageRepositoryAll = useCallback(async (repositoryRoot: string) => {
+    if (!activeWorkspace) return;
+    await unstageGitAll(activeWorkspace.id, repositoryRoot);
+  }, [activeWorkspace]);
+  const handleUnstageRepositoryFiles = useCallback(async (repositoryRoot: string, paths: string[]) => {
+    if (!activeWorkspace || paths.length === 0) return;
+    if (paths.length === 1) {
+      await unstageGitFile(activeWorkspace.id, paths[0]!, repositoryRoot);
+      return;
+    }
+    await unstageGitPaths(activeWorkspace.id, paths, repositoryRoot);
+  }, [activeWorkspace]);
   const handleRevertRepositoryFile = useCallback(async (repositoryRoot: string, path: string) => {
     if (!activeWorkspace) return;
     await revertGitFile(activeWorkspace.id, path, repositoryRoot);
+  }, [activeWorkspace]);
+  const handleRevertRepositoryFiles = useCallback(async (repositoryRoot: string, paths: string[]) => {
+    if (!activeWorkspace || paths.length === 0) return;
+    if (paths.length === 1) {
+      await revertGitFile(activeWorkspace.id, paths[0]!, repositoryRoot);
+      return;
+    }
+    await revertGitPaths(activeWorkspace.id, paths, repositoryRoot);
   }, [activeWorkspace]);
   const handleStageRepositoryAll = useCallback(async (repositoryRoot: string) => {
     if (!activeWorkspace) return;
@@ -1697,7 +1728,10 @@ export function AppShell() {
       refreshRepositoryStatuses,
       handleStageRepositoryFile,
       handleUnstageRepositoryFile,
+      handleUnstageRepositoryAll,
+      handleUnstageRepositoryFiles,
       handleRevertRepositoryFile,
+      handleRevertRepositoryFiles,
       handleStageRepositoryAll,
       handleCommitRepositories,
       repositoryCommitSummary,
@@ -1929,6 +1963,7 @@ export function AppShell() {
       handleRevealWorkspacePrompts,
       handleRevertAllGitChanges,
       handleRevertGitFile,
+      handleRevertGitPaths,
       handleReviewPromptKeyDown,
       handleSelectAgent,
       handleSelectCommit,
@@ -1954,7 +1989,9 @@ export function AppShell() {
       handleToggleTerminal,
       handleToggleTerminalPanel,
       handleUnlockPanel,
+      handleUnstageGitAll,
       handleUnstageGitFile,
+      handleUnstageGitPaths,
       handleUpdatePrompt,
       handleUserInputSubmit,
       handleUserInputSubmitWithPlanApply,

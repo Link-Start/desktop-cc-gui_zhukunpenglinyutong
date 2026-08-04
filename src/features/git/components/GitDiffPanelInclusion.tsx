@@ -1,5 +1,9 @@
 import Check from "lucide-react/dist/esm/icons/check";
 import Minus from "lucide-react/dist/esm/icons/minus";
+import {
+  FloatingTooltipButton,
+  type FloatingTooltipSide,
+} from "@/components/ui/floating-tooltip-button";
 import { normalizeGitPath } from "../utils/commitScope";
 
 export type InclusionState = "all" | "none" | "partial";
@@ -96,6 +100,8 @@ type InclusionToggleProps = {
   className?: string;
   disabled?: boolean;
   stopPropagation?: boolean;
+  /** Prefer bottom for section headers so tips stay inside the list. */
+  tooltipSide?: FloatingTooltipSide;
 };
 
 export function InclusionToggle({
@@ -105,14 +111,18 @@ export function InclusionToggle({
   className,
   disabled = false,
   stopPropagation = false,
+  tooltipSide = "bottom",
 }: InclusionToggleProps) {
   return (
-    <button
+    <FloatingTooltipButton
       type="button"
       role="checkbox"
       aria-checked={state === "partial" ? "mixed" : state === "all"}
       aria-label={label}
-      title={label}
+      tooltipLabel={label}
+      tooltipSide={tooltipSide}
+      tooltipAlign="end"
+      tooltipDelay={180}
       className={`git-commit-scope-toggle is-${state}${className ? ` ${className}` : ""}`}
       disabled={disabled}
       onClick={(event) => {
@@ -124,6 +134,6 @@ export function InclusionToggle({
     >
       {state === "all" ? <Check size={12} aria-hidden /> : null}
       {state === "partial" ? <Minus size={12} aria-hidden /> : null}
-    </button>
+    </FloatingTooltipButton>
   );
 }

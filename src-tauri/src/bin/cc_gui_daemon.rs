@@ -1441,12 +1441,36 @@ async fn handle_rpc_request(
                 .await?;
             Ok(json!({ "ok": true }))
         }
+        "unstage_git_all" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let repository_root = parse_optional_string(&params, "repositoryRoot");
+            state.unstage_git_all(workspace_id, repository_root).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "unstage_git_paths" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let paths = parse_string_array(&params, "paths")?;
+            let repository_root = parse_optional_string(&params, "repositoryRoot");
+            state
+                .unstage_git_paths(workspace_id, paths, repository_root)
+                .await?;
+            Ok(json!({ "ok": true }))
+        }
         "revert_git_file" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
             let path = parse_string(&params, "path")?;
             let repository_root = parse_optional_string(&params, "repositoryRoot");
             state
                 .revert_git_file(workspace_id, path, repository_root)
+                .await?;
+            Ok(json!({ "ok": true }))
+        }
+        "revert_git_paths" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let paths = parse_string_array(&params, "paths")?;
+            let repository_root = parse_optional_string(&params, "repositoryRoot");
+            state
+                .revert_git_paths(workspace_id, paths, repository_root)
                 .await?;
             Ok(json!({ "ok": true }))
         }

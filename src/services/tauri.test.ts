@@ -56,6 +56,9 @@ import {
   renameThreadTitleKey,
   setThreadTitle,
   stageGitAll,
+  unstageGitAll,
+  unstageGitPaths,
+  revertGitPaths,
   respondToServerRequest,
   respondToUserInputRequest,
   sendUserMessage,
@@ -1660,6 +1663,37 @@ describe("tauri invoke wrappers", () => {
 
     expect(invokeMock).toHaveBeenCalledWith("stage_git_all", {
       workspaceId: "ws-6",
+      repositoryRoot: null,
+    });
+  });
+
+  it("invokes unstage_git_all and unstage_git_paths", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({}).mockResolvedValueOnce({});
+
+    await unstageGitAll("ws-6");
+    await unstageGitPaths("ws-6", ["a.ts", "b.ts"], "services/api");
+
+    expect(invokeMock).toHaveBeenNthCalledWith(1, "unstage_git_all", {
+      workspaceId: "ws-6",
+      repositoryRoot: null,
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(2, "unstage_git_paths", {
+      workspaceId: "ws-6",
+      paths: ["a.ts", "b.ts"],
+      repositoryRoot: "services/api",
+    });
+  });
+
+  it("invokes revert_git_paths", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await revertGitPaths("ws-6", ["a.ts", "b.ts"]);
+
+    expect(invokeMock).toHaveBeenCalledWith("revert_git_paths", {
+      workspaceId: "ws-6",
+      paths: ["a.ts", "b.ts"],
       repositoryRoot: null,
     });
   });

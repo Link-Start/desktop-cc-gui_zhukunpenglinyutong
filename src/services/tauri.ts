@@ -498,10 +498,13 @@ export {
   revertCommit,
   revertGitAll,
   revertGitFile,
+  revertGitPaths,
   stageGitAll,
   stageGitFile,
   syncGit,
+  unstageGitAll,
   unstageGitFile,
+  unstageGitPaths,
   updateGitBranch,
 } from "./tauri/git";
 export type {

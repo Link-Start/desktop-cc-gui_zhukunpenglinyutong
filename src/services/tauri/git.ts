@@ -245,8 +245,36 @@ export async function unstageGitFile(workspaceId: string, path: string, reposito
   return invoke("unstage_git_file", { workspaceId, path, repositoryRoot: repositoryRoot ?? null });
 }
 
+export async function unstageGitAll(workspaceId: string, repositoryRoot?: string | null): Promise<void> {
+  return invoke("unstage_git_all", { workspaceId, repositoryRoot: repositoryRoot ?? null });
+}
+
+export async function unstageGitPaths(
+  workspaceId: string,
+  paths: string[],
+  repositoryRoot?: string | null,
+): Promise<void> {
+  return invoke("unstage_git_paths", {
+    workspaceId,
+    paths,
+    repositoryRoot: repositoryRoot ?? null,
+  });
+}
+
 export async function revertGitFile(workspaceId: string, path: string, repositoryRoot?: string | null) {
   return invoke("revert_git_file", { workspaceId, path, repositoryRoot: repositoryRoot ?? null });
+}
+
+export async function revertGitPaths(
+  workspaceId: string,
+  paths: string[],
+  repositoryRoot?: string | null,
+): Promise<void> {
+  return invoke("revert_git_paths", {
+    workspaceId,
+    paths,
+    repositoryRoot: repositoryRoot ?? null,
+  });
 }
 
 export async function revertGitAll(workspaceId: string, repositoryRoot?: string | null) {

@@ -18,7 +18,10 @@ const mockGenerateCommitMessage = vi.fn<
 const mockStageGitFile = vi.fn<(workspaceId: string, path: string, repositoryRoot?: string | null) => Promise<void>>();
 const mockStageGitAll = vi.fn<(workspaceId: string, repositoryRoot?: string | null) => Promise<void>>();
 const mockUnstageGitFile = vi.fn<(workspaceId: string, path: string, repositoryRoot?: string | null) => Promise<void>>();
+const mockUnstageGitAll = vi.fn<(workspaceId: string, repositoryRoot?: string | null) => Promise<void>>();
+const mockUnstageGitPaths = vi.fn<(workspaceId: string, paths: string[], repositoryRoot?: string | null) => Promise<void>>();
 const mockRevertGitFile = vi.fn<(workspaceId: string, path: string, repositoryRoot?: string | null) => Promise<void>>();
+const mockRevertGitPaths = vi.fn<(workspaceId: string, paths: string[], repositoryRoot?: string | null) => Promise<void>>();
 const mockRevertGitAll = vi.fn<(workspaceId: string, repositoryRoot?: string | null) => Promise<void>>();
 
 vi.mock("react-i18next", () => ({
@@ -89,9 +92,12 @@ vi.mock("../../../services/tauri", () => ({
   getGitStatus: (...args: [string, (string | null)?]) => mockGetGitStatus(...args),
   revertGitAll: (...args: [string, (string | null)?]) => mockRevertGitAll(...args),
   revertGitFile: (...args: [string, string, (string | null)?]) => mockRevertGitFile(...args),
+  revertGitPaths: (...args: [string, string[], (string | null)?]) => mockRevertGitPaths(...args),
   stageGitAll: (...args: [string, (string | null)?]) => mockStageGitAll(...args),
   stageGitFile: (...args: [string, string, (string | null)?]) => mockStageGitFile(...args),
+  unstageGitAll: (...args: [string, (string | null)?]) => mockUnstageGitAll(...args),
   unstageGitFile: (...args: [string, string, (string | null)?]) => mockUnstageGitFile(...args),
+  unstageGitPaths: (...args: [string, string[], (string | null)?]) => mockUnstageGitPaths(...args),
 }));
 
 describe("GitHistoryWorktreePanel", () => {
@@ -104,14 +110,20 @@ describe("GitHistoryWorktreePanel", () => {
     mockStageGitFile.mockReset();
     mockStageGitAll.mockReset();
     mockUnstageGitFile.mockReset();
+    mockUnstageGitAll.mockReset();
+    mockUnstageGitPaths.mockReset();
     mockRevertGitFile.mockReset();
+    mockRevertGitPaths.mockReset();
     mockRevertGitAll.mockReset();
     mockCommitGit.mockResolvedValue(undefined);
     mockGenerateCommitMessage.mockResolvedValue("Generated commit message");
     mockStageGitFile.mockResolvedValue(undefined);
     mockStageGitAll.mockResolvedValue(undefined);
     mockUnstageGitFile.mockResolvedValue(undefined);
+    mockUnstageGitAll.mockResolvedValue(undefined);
+    mockUnstageGitPaths.mockResolvedValue(undefined);
     mockRevertGitFile.mockResolvedValue(undefined);
+    mockRevertGitPaths.mockResolvedValue(undefined);
     mockRevertGitAll.mockResolvedValue(undefined);
     mockGetGitStatus.mockResolvedValue({
       branchName: "main",

@@ -49,6 +49,8 @@ type GitMultiRepositoryChangesProps = {
   onCommitMessageEngineChange?: (engine: CommitMessageEngine) => void;
   onStageFile?: (repositoryRoot: string, path: string) => Promise<void>;
   onUnstageFile?: (repositoryRoot: string, path: string) => Promise<void>;
+  onUnstageAll?: (repositoryRoot: string) => Promise<void>;
+  onUnstageFiles?: (repositoryRoot: string, paths: string[]) => Promise<void>;
   onDiscardFile?: (repositoryRoot: string, path: string) => Promise<void> | void;
   onDiscardFiles?: (repositoryRoot: string, paths: string[]) => Promise<void> | void;
   onStageAll?: (repositoryRoot: string) => Promise<void>;
@@ -102,6 +104,8 @@ export function GitMultiRepositoryChanges({
   onCommitMessageEngineChange,
   onStageFile,
   onUnstageFile,
+  onUnstageAll,
+  onUnstageFiles,
   onDiscardFile,
   onDiscardFiles,
   onStageAll,
@@ -331,8 +335,16 @@ export function GitMultiRepositoryChanges({
               onActivateFile={(path, section) =>
                 activateRepositoryFile(status, path, section)
               }
+              onUnstageAllChanges={onUnstageAll ? async () => {
+                await onUnstageAll(status.repositoryRoot);
+                await onRefresh?.();
+              } : undefined}
               onUnstageFile={onUnstageFile ? async (path) => {
                 await onUnstageFile(status.repositoryRoot, path);
+                await onRefresh?.();
+              } : undefined}
+              onUnstageFiles={onUnstageFiles ? async (paths) => {
+                await onUnstageFiles(status.repositoryRoot, paths);
                 await onRefresh?.();
               } : undefined}
               isCommitPathLocked={isCommitPathLocked}

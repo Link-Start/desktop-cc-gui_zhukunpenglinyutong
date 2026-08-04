@@ -519,8 +519,11 @@ export type LayoutNodesFlatOptions = {
   onPickGitRoot: () => void | Promise<void>;
   onStageGitAll: () => Promise<void>;
   onStageGitFile: (path: string) => Promise<void>;
+  onUnstageGitAll: () => Promise<void>;
   onUnstageGitFile: (path: string) => Promise<void>;
+  onUnstageGitPaths: (paths: string[]) => Promise<void>;
   onRevertGitFile: (path: string) => Promise<void>;
+  onRevertGitPaths: (paths: string[]) => Promise<void>;
   onRevertAllGitChanges: () => Promise<void>;
   gitDiffs: GitDiffViewerItem[];
   gitDiffLoading: boolean;
@@ -555,7 +558,10 @@ export type LayoutNodesFlatOptions = {
   onRefreshRepositoryStatuses?: () => Promise<void> | void;
   onStageRepositoryFile?: (repositoryRoot: string, path: string) => Promise<void>;
   onUnstageRepositoryFile?: (repositoryRoot: string, path: string) => Promise<void>;
+  onUnstageRepositoryAll?: (repositoryRoot: string) => Promise<void>;
+  onUnstageRepositoryFiles?: (repositoryRoot: string, paths: string[]) => Promise<void>;
   onRevertRepositoryFile?: (repositoryRoot: string, path: string) => Promise<void>;
+  onRevertRepositoryFiles?: (repositoryRoot: string, paths: string[]) => Promise<void>;
   onStageRepositoryAll?: (repositoryRoot: string) => Promise<void>;
   onCommitRepositories?: (selections: RepositoryCommitSelection[]) => Promise<void> | void;
   repositoryCommitSummary?: string | null;
@@ -1037,8 +1043,11 @@ export type GitLayoutNodesOptions = Pick<
   | "onPickGitRoot"
   | "onStageGitAll"
   | "onStageGitFile"
+  | "onUnstageGitAll"
   | "onUnstageGitFile"
+  | "onUnstageGitPaths"
   | "onRevertGitFile"
+  | "onRevertGitPaths"
   | "onRevertAllGitChanges"
   | "gitDiffs"
   | "gitDiffLoading"
@@ -1071,7 +1080,10 @@ export type GitLayoutNodesOptions = Pick<
   | "onRefreshRepositoryStatuses"
   | "onStageRepositoryFile"
   | "onUnstageRepositoryFile"
+  | "onUnstageRepositoryAll"
+  | "onUnstageRepositoryFiles"
   | "onRevertRepositoryFile"
+  | "onRevertRepositoryFiles"
   | "onStageRepositoryAll"
   | "onCommitRepositories"
   | "repositoryCommitSummary"

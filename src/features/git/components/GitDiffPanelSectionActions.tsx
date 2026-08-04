@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import Minus from "lucide-react/dist/esm/icons/minus";
 import Plus from "lucide-react/dist/esm/icons/plus";
 import Undo2 from "lucide-react/dist/esm/icons/undo-2";
+import { FloatingTooltipButton } from "@/components/ui/floating-tooltip-button";
 import {
   InclusionToggle,
   runSequentialPathAction,
@@ -17,7 +18,9 @@ type GitDiffPanelSectionActionsProps = {
   onSetCommitSelection?: (paths: string[], selected: boolean) => void;
   onStageAllChanges?: () => Promise<void> | void;
   onStageFile?: (path: string) => Promise<void> | void;
+  onUnstageAllChanges?: () => Promise<void> | void;
   onUnstageFile?: (path: string) => Promise<void> | void;
+  onUnstageFiles?: (paths: string[]) => Promise<void> | void;
   onDiscardFiles?: (paths: string[]) => Promise<void> | void;
 };
 
@@ -30,14 +33,18 @@ export function GitDiffPanelSectionActions({
   onSetCommitSelection,
   onStageAllChanges,
   onStageFile,
+  onUnstageAllChanges,
   onUnstageFile,
+  onUnstageFiles,
   onDiscardFiles,
 }: GitDiffPanelSectionActionsProps) {
   const { t } = useTranslation();
   const canToggleSelection = toggleableFilePaths.length > 0 && Boolean(onSetCommitSelection);
   const canStageAll = section === "unstaged" && filePaths.length > 0;
   const canUnstageAll =
-    section === "staged" && Boolean(onUnstageFile) && filePaths.length > 0;
+    section === "staged" &&
+    filePaths.length > 0 &&
+    Boolean(onUnstageAllChanges || onUnstageFiles || onUnstageFile);
   const canDiscardAll =
     section === "unstaged" && Boolean(onDiscardFiles) && filePaths.length > 0;
 
@@ -57,15 +64,21 @@ export function GitDiffPanelSectionActions({
           label={t("git.commitSelectionToggleScope", { path: title })}
           className="git-commit-scope-toggle--section"
           stopPropagation
+          tooltipSide="bottom"
           onToggle={() => {
             onSetCommitSelection?.(toggleableFilePaths, sectionInclusionState !== "all");
           }}
         />
       ) : null}
       {canStageAll ? (
-        <button
+        <FloatingTooltipButton
           type="button"
           className="diff-row-action diff-row-action--stage"
+          tooltipLabel={t("git.stageAllChanges")}
+          tooltipSide="bottom"
+          tooltipAlign="end"
+          tooltipDelay={180}
+          aria-label={t("git.stageAllChangesAction")}
           onClick={() => {
             if (onStageAllChanges) {
               void onStageAllChanges();
@@ -73,37 +86,49 @@ export function GitDiffPanelSectionActions({
             }
             void runSequentialPathAction(filePaths, onStageFile);
           }}
-          data-tooltip={t("git.stageAllChanges")}
-          aria-label={t("git.stageAllChangesAction")}
         >
           <Plus size={12} aria-hidden />
-        </button>
+        </FloatingTooltipButton>
       ) : null}
       {canUnstageAll ? (
-        <button
+        <FloatingTooltipButton
           type="button"
           className="diff-row-action diff-row-action--unstage"
+          tooltipLabel={t("git.unstageAllChanges")}
+          tooltipSide="bottom"
+          tooltipAlign="end"
+          tooltipDelay={180}
+          aria-label={t("git.unstageAllChangesAction")}
           onClick={() => {
+            if (onUnstageAllChanges) {
+              void onUnstageAllChanges();
+              return;
+            }
+            if (onUnstageFiles) {
+              void onUnstageFiles(filePaths);
+              return;
+            }
             void runSequentialPathAction(filePaths, onUnstageFile);
           }}
-          data-tooltip={t("git.unstageAllChanges")}
-          aria-label={t("git.unstageAllChangesAction")}
         >
           <Minus size={12} aria-hidden />
-        </button>
+        </FloatingTooltipButton>
       ) : null}
       {canDiscardAll ? (
-        <button
+        <FloatingTooltipButton
           type="button"
           className="diff-row-action diff-row-action--discard"
+          tooltipLabel={t("git.discardAllChanges")}
+          tooltipSide="bottom"
+          tooltipAlign="end"
+          tooltipDelay={180}
+          aria-label={t("git.discardAllChangesAction")}
           onClick={() => {
             void onDiscardFiles?.(filePaths);
           }}
-          data-tooltip={t("git.discardAllChanges")}
-          aria-label={t("git.discardAllChangesAction")}
         >
           <Undo2 size={12} aria-hidden />
-        </button>
+        </FloatingTooltipButton>
       ) : null}
     </div>
   );
