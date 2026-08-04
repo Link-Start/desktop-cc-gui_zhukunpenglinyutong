@@ -994,7 +994,7 @@ OpenSpec + merge early-body 折叠 + 跨 id 收敛；review 收紧 streaming/sto
 
 | Hash | Message |
 |------|---------|
-| `8efaa50f3` | (see git log) |
+| `379d9935b` | (see git log) |
 
 ### Testing
 

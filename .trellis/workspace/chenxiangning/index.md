@@ -59,7 +59,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
-| 1325 | 2026-08-04 | fix assistant duplicate render Native/Shared | `8efaa50f3` | `CXN-version-0.7.16` |
+| 1325 | 2026-08-04 | fix assistant duplicate render Native/Shared | `379d9935b` | `CXN-version-0.7.16` |
 | 1324 | 2026-08-04 | fix(threads): live settlement order — 多工具回合 settle 后结论偶发跑到工具前 | `74654f1d6` | `CXN-version-0.7.16` |
 | 1323 | 2026-08-04 | fix React #185 Composer extract 自订阅 | `9c04f381a` | `CXN-version-0.7.16` |
 | 1322 | 2026-08-04 | fix Claude backgroundTaskId post-result grace mis-kill (#983) | `3724a114b` | `CXN-version-0.7.16` |
