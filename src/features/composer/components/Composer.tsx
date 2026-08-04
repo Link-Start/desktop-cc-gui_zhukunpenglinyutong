@@ -71,6 +71,10 @@ import {
   type ProviderId,
 } from "./ChatInputBox/types";
 import {
+  reconcileAtomicReasoningEffort,
+  resolveAtomicReasoningOptions,
+} from "../../models/atomicModelReasoning";
+import {
   ClaudeRewindConfirmDialog,
   type ClaudeRewindPreviewState,
 } from "./ClaudeRewindConfirmDialog";
@@ -834,6 +838,145 @@ function ComposerImpl({
     : createSessionTargetPicker
       ? effectiveCreationTarget
       : nativeSessionTarget;
+  /**
+   * Shared / create-session Atomic：思考档位 options + effort 跟 selectedNextTarget
+   * 的 engine+model 走，禁止继续用全局 activeEngine 的 Grok 三档冒充 Codex 模型。
+   * Native 会话仍用父层 reasoningOptions / selectedEffort。
+   */
+  const atomicModelReasoningRef = useMemo(() => {
+    const target = selectedAtomicTarget;
+    if (!target?.engine) {
+      return null;
+    }
+    const catalogEntryId = target.modelCatalogEntryId?.trim() || null;
+    const runtimeModel = target.model?.trim() || null;
+    if (target.engine !== "codex") {
+      return {
+        engine: target.engine,
+        model: {
+          id: catalogEntryId ?? runtimeModel,
+          model: runtimeModel ?? catalogEntryId,
+        },
+      };
+    }
+    type ModelReasoningLike = {
+      id: string;
+      model?: string;
+      source?: string | null;
+      supportedReasoningEfforts?: ModelOption["supportedReasoningEfforts"];
+      defaultReasoningEffort?: string | null;
+    };
+    const catalog = (providerModelCatalogs?.codex ?? []) as ModelReasoningLike[];
+    const parentModels = models as ModelReasoningLike[];
+    const matchByIdentity = (entry: ModelReasoningLike) => {
+      if (catalogEntryId && entry.id === catalogEntryId) {
+        return true;
+      }
+      if (
+        runtimeModel &&
+        (entry.model === runtimeModel || entry.id === runtimeModel)
+      ) {
+        return true;
+      }
+      return false;
+    };
+    const matchedCatalog = catalog.find(matchByIdentity) ?? null;
+    const matchedParent = parentModels.find(matchByIdentity) ?? null;
+    const preferred = matchedCatalog ?? matchedParent;
+    return {
+      engine: target.engine,
+      model: {
+        id:
+          catalogEntryId ??
+          preferred?.id ??
+          runtimeModel,
+        model:
+          runtimeModel ??
+          preferred?.model ??
+          catalogEntryId,
+        source: preferred?.source ?? undefined,
+        supportedReasoningEfforts:
+          preferred?.supportedReasoningEfforts &&
+          preferred.supportedReasoningEfforts.length > 0
+            ? preferred.supportedReasoningEfforts
+            : matchedParent?.supportedReasoningEfforts,
+        defaultReasoningEffort:
+          preferred?.defaultReasoningEffort ??
+          matchedParent?.defaultReasoningEffort ??
+          null,
+      },
+    };
+  }, [models, providerModelCatalogs, selectedAtomicTarget]);
+  const useAtomicReasoningProjection =
+    isSharedSessionResolved || Boolean(createSessionTargetPicker);
+  const atomicReasoningOptions = useMemo(() => {
+    if (!useAtomicReasoningProjection || !atomicModelReasoningRef) {
+      return reasoningOptions;
+    }
+    return resolveAtomicReasoningOptions(
+      atomicModelReasoningRef.engine,
+      atomicModelReasoningRef.model,
+    );
+  }, [
+    atomicModelReasoningRef,
+    reasoningOptions,
+    useAtomicReasoningProjection,
+  ]);
+  const atomicSelectedEffort = useMemo(() => {
+    if (!useAtomicReasoningProjection || !selectedAtomicTarget?.engine) {
+      return selectedEffort;
+    }
+    return reconcileAtomicReasoningEffort({
+      engine: selectedAtomicTarget.engine,
+      model: atomicModelReasoningRef?.model ?? null,
+      effort: selectedAtomicTarget.reasoning?.effort ?? null,
+    });
+  }, [
+    atomicModelReasoningRef,
+    selectedAtomicTarget,
+    selectedEffort,
+    useAtomicReasoningProjection,
+  ]);
+  // Shared：把 hydrate/历史遗留的 null 或非法 effort 写回 selectedNextTarget，
+  // 避免 UI 显示已收敛而发送仍带 null（Codex 已知模型）。
+  useEffect(() => {
+    if (
+      !isSharedSessionResolved ||
+      sharedTargetPickerLocked ||
+      !selectedSharedTarget ||
+      !isResolvedExecutionTarget(selectedSharedTarget) ||
+      !atomicModelReasoningRef ||
+      selectedSharedTarget.engine !== "codex"
+    ) {
+      return;
+    }
+    if (!activeWorkspaceId || !activeThreadId) {
+      return;
+    }
+    const raw = selectedSharedTarget.reasoning?.effort ?? null;
+    const normalizedRaw =
+      typeof raw === "string" ? raw.trim() || null : null;
+    const reconciled = reconcileAtomicReasoningEffort({
+      engine: selectedSharedTarget.engine,
+      model: atomicModelReasoningRef.model,
+      effort: normalizedRaw,
+    });
+    if (reconciled === normalizedRaw) {
+      return;
+    }
+    // 仅内存收敛：保证本会话 UI/send 一致；下次 hydrate 仍会再 reconcile。
+    hydrateSharedTargetState(activeWorkspaceId, activeThreadId, {
+      ...selectedSharedTarget,
+      reasoning: reconciled ? { effort: reconciled } : null,
+    });
+  }, [
+    activeThreadId,
+    activeWorkspaceId,
+    atomicModelReasoningRef,
+    isSharedSessionResolved,
+    selectedSharedTarget,
+    sharedTargetPickerLocked,
+  ]);
   const imageAttachEngine = useMemo((): EngineType | null => {
     if (
       isSharedSession &&
@@ -2749,10 +2892,10 @@ function ComposerImpl({
                     ? handleCreationTargetChange
                     : handleNativeAtomicTargetChange
               }
-              reasoningOptions={reasoningOptions}
+              reasoningOptions={atomicReasoningOptions}
               selectedEffort={
-                selectedAtomicTarget
-                  ? selectedAtomicTarget.reasoning?.effort ?? null
+                useAtomicReasoningProjection
+                  ? atomicSelectedEffort
                   : selectedEffort
               }
               onSelectEffort={
