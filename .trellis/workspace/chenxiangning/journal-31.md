@@ -682,3 +682,36 @@ onDebugRef 解耦、原子 selection state、乐观 snapshot、preferred 归一�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1318: docs: 重写新 CLI 接入指南, 补全量注册点核对矩阵 A~H 八层 56 行
+
+**Date**: 2026-08-04
+**Task**: docs: 重写新 CLI 接入指南, 补全量注册点核对矩阵 A~H 八层 56 行
+**Branch**: `CXN-version-0.7.16`
+
+### Summary
+
+基于全仓库 40+ 真实注册点盘点, 重写 mossx-new-cli-onboarding-guide.md; 补 AGENTS.md Engine Onboarding Gate + guides/index.md 触发信号
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f6858e821` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
