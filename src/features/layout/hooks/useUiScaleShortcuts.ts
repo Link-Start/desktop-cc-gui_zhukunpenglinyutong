@@ -39,10 +39,11 @@ export function useUiScaleShortcuts({
     if (typeof window === "undefined" || typeof document === "undefined") {
       return;
     }
-    // Platform split: Windows uses CSS zoom + native zoom pinned to 1
-    // (WebView2 SetZoomFactor(≠1) freezes renderer). macOS/Linux keep native
-    // setZoom(uiScale). See docs/analysis/windows-ccgui-startup-hang-2026-08-05.md
-    // and openspec/changes/fix-windows-ui-scale-webview2-hang/.
+    // Platform split: Windows uses CSS transform scale + native zoom pinned to 1
+    // (WebView2 SetZoomFactor(≠1) freezes renderer; CSS zoom alone letterboxes).
+    // macOS/Linux keep native setZoom(uiScale). See
+    // docs/analysis/windows-ccgui-startup-hang-2026-08-05.md and
+    // openspec/changes/fix-windows-ui-scale-webview2-hang/.
     let setNativeZoom: ((factor: number) => Promise<void>) | undefined;
     try {
       // getCurrentWebview() reads window.__TAURI_INTERNALS__.metadata
