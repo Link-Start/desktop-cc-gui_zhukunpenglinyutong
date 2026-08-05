@@ -108,7 +108,12 @@ describe("clientUiVisibility", () => {
     });
 
     expect(preference).toEqual({
-      panels: { topSessionTabs: false, globalRuntimeNoticeDock: false },
+      panels: {
+        topToolControls: true,
+        rightActivityToolbar: true,
+        topSessionTabs: false,
+        globalRuntimeNoticeDock: false,
+      },
       controls: {
         "topTool.terminal": false,
         "topTool.clientDocumentation": true,
@@ -119,6 +124,7 @@ describe("clientUiVisibility", () => {
     });
     expect(isClientUiPanelVisible(preference, "topSessionTabs")).toBe(false);
     expect(isClientUiPanelVisible(preference, "globalRuntimeNoticeDock")).toBe(false);
+    expect(isClientUiPanelVisible(preference, "topToolControls")).toBe(true);
     expect(isClientUiControlVisible(preference, "topTool.terminal")).toBe(false);
     expect(isClientUiControlVisible(preference, "rightToolbar.projectMap")).toBe(false);
   });
@@ -174,28 +180,39 @@ describe("clientUiVisibility", () => {
     expect(isClientUiControlVisible(preference, "bottomActivity.checkpoint")).toBe(false);
   });
 
-  it("lets parent panel hiding override child visibility without erasing child preference", () => {
+  it("keeps essential chrome panels visible even when preference stores false", () => {
+    const preference = normalizeClientUiVisibilityPreference({
+      panels: {
+        topToolControls: false,
+        rightActivityToolbar: false,
+        topSessionTabs: false,
+      },
+      controls: {},
+    });
+
+    expect(preference.panels.topToolControls).toBe(true);
+    expect(preference.panels.rightActivityToolbar).toBe(true);
+    expect(isClientUiPanelVisible(preference, "topToolControls")).toBe(true);
+    expect(isClientUiPanelVisible(preference, "rightActivityToolbar")).toBe(true);
+    // Non-essential panels still honor false.
+    expect(isClientUiPanelVisible(preference, "topSessionTabs")).toBe(false);
+  });
+
+  it("lets non-essential parent panel hiding override child visibility", () => {
     const preference = setClientUiControlVisibility(
       setClientUiPanelVisibility(
         DEFAULT_CLIENT_UI_VISIBILITY_PREFERENCE,
-        "rightActivityToolbar",
+        "topRunControls",
         false,
       ),
-      "rightToolbar.files",
+      "topRun.start",
       true,
     );
 
-    expect(isClientUiPanelVisible(preference, "rightActivityToolbar")).toBe(false);
+    expect(isClientUiPanelVisible(preference, "topRunControls")).toBe(false);
     expect(
-      isClientUiControlPreferenceVisible(preference, "rightToolbar.files"),
+      isClientUiControlPreferenceVisible(preference, "topRun.start"),
     ).toBe(true);
-    expect(isClientUiControlVisible(preference, "rightToolbar.files")).toBe(false);
-
-    const restored = setClientUiPanelVisibility(
-      preference,
-      "rightActivityToolbar",
-      true,
-    );
-    expect(isClientUiControlVisible(restored, "rightToolbar.files")).toBe(true);
+    expect(isClientUiControlVisible(preference, "topRun.start")).toBe(false);
   });
 });

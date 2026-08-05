@@ -93,8 +93,21 @@ export type ClientUiVisibilityQueries = {
   isControlPreferenceVisible: (controlId: ClientUiControlId) => boolean;
 };
 
+/**
+ * Core chrome that must stay visible. Some Windows clients persisted
+ * topToolControls/rightActivityToolbar as false and "lost" the top-right menu
+ * and right toolbar; product default is always on.
+ */
+export const ESSENTIAL_CLIENT_UI_PANELS: readonly ClientUiPanelId[] = [
+  "topToolControls",
+  "rightActivityToolbar",
+] as const;
+
 export const DEFAULT_CLIENT_UI_VISIBILITY_PREFERENCE: ClientUiVisibilityPreference = {
-  panels: {},
+  panels: {
+    topToolControls: true,
+    rightActivityToolbar: true,
+  },
   controls: {
     "topTool.clientDocumentation": false,
     "bottomActivity.checkpointDetails": false,
@@ -384,13 +397,21 @@ export function normalizeClientUiVisibilityPreference(
   value: unknown,
 ): ClientUiVisibilityPreference {
   if (!isRecord(value)) {
-    return { ...DEFAULT_CLIENT_UI_VISIBILITY_PREFERENCE };
+    return {
+      panels: { ...DEFAULT_CLIENT_UI_VISIBILITY_PREFERENCE.panels },
+      controls: { ...DEFAULT_CLIENT_UI_VISIBILITY_PREFERENCE.controls },
+    };
+  }
+  const panels: Partial<Record<ClientUiPanelId, boolean>> = {
+    ...DEFAULT_CLIENT_UI_VISIBILITY_PREFERENCE.panels,
+    ...normalizeBooleanMap<ClientUiPanelId>(value.panels, panelIdSet),
+  };
+  // Essential chrome cannot stay off after normalize (repair bad persisted prefs).
+  for (const panelId of ESSENTIAL_CLIENT_UI_PANELS) {
+    panels[panelId] = true;
   }
   return {
-    panels: {
-      ...DEFAULT_CLIENT_UI_VISIBILITY_PREFERENCE.panels,
-      ...normalizeBooleanMap<ClientUiPanelId>(value.panels, panelIdSet),
-    },
+    panels,
     controls: {
       ...DEFAULT_CLIENT_UI_VISIBILITY_PREFERENCE.controls,
       ...normalizeControlBooleanMap(value.controls),
@@ -402,6 +423,9 @@ export function isClientUiPanelVisible(
   preference: ClientUiVisibilityPreference,
   panelId: ClientUiPanelId,
 ): boolean {
+  if ((ESSENTIAL_CLIENT_UI_PANELS as readonly string[]).includes(panelId)) {
+    return true;
+  }
   return preference.panels[panelId] !== false;
 }
 

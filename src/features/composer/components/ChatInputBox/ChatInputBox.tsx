@@ -234,8 +234,10 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       onStreamingEnabledChange,
       sendShortcut = 'enter',
       selectedAgent,
+      selectedContextChips = [],
       selectedManualMemoryIds = [],
       selectedNoteCardIds = [],
+      onRemoveContextChip,
       onAgentSelect,
       onOpenAgentSettings,
       onOpenPromptSettings,
@@ -1609,9 +1611,12 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       ]),
       [handleEnhancePrompt, handleShortcutChipClick, t],
     );
-    // External surface only hosts agent/file chips now (skill/commons chips removed).
+    // External surface hosts agent/file chips and selected skill/commons chips.
     const shouldShowContextToolbarSurface = Boolean(
-      showHeader && (selectedAgent || activeFile),
+      showHeader &&
+        (selectedAgent ||
+          activeFile ||
+          selectedContextChips.length > 0),
     );
     const curatedSkillIndicator = (
       <CuratedSkillIndicator onOpenSkillsSettings={onOpenSkillsSettings} />
@@ -1650,8 +1655,10 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
             activeFile={activeFile}
             selectedLines={selectedLines}
             selectedAgent={selectedAgent}
+            selectedContextChips={selectedContextChips}
             onClearFile={onClearContext}
             onClearAgent={() => onAgentSelect?.(null)}
+            onRemoveContextChip={onRemoveContextChip}
           />
         ) : null}
       </>

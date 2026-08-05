@@ -1358,3 +1358,50 @@ Shared Grok 初始化禁止借用 Native Codex 的 reasoning options/effort；in
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1335: fix Windows uiScale WebView2 假死并恢复右侧 chrome
+
+**Date**: 2026-08-05
+**Task**: fix Windows uiScale WebView2 假死并恢复右侧 chrome
+**Branch**: `cxn-version-0.8`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 根因 | Windows uiScale≠1 时 setZoom 落到 WebView2 SetZoomFactor 导致渲染假死 |
+| 方案 | applyUiScale 平台分发：Win/unknown=CSS zoom + native pin 1；Mac/Linux=native |
+| Chrome | ESSENTIAL_CLIENT_UI_PANELS 强制顶栏/右栏；rightPanelChromeOpenV1 一次性展开 |
+| 验证 | focused vitest 24/24 |
+
+**Updated Files**:
+- `src/utils/applyUiScale.ts` (+test)
+- `src/features/layout/hooks/useUiScaleShortcuts.ts` (+test)
+- `src/features/layout/hooks/useSidebarToggles.tsx`
+- `src/features/client-ui-visibility/utils/clientUiVisibility.ts` (+test)
+- `openspec/changes/fix-windows-ui-scale-webview2-hang/**`
+- `docs/analysis/windows-ccgui-startup-hang-2026-08-05.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b62e241fe` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
