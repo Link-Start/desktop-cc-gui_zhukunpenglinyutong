@@ -13,10 +13,32 @@ function readStoredBool(key: string, defaultValue = false) {
   return stored;
 }
 
+/** One-shot: open right panel for clients that inherited collapsed-by-default. */
+const RIGHT_PANEL_OPEN_MIGRATION_KEY = "rightPanelChromeOpenV1";
+
+function readRightPanelCollapsed(): boolean {
+  const migrated = getClientStoreSync<boolean>(
+    "layout",
+    RIGHT_PANEL_OPEN_MIGRATION_KEY,
+  );
+  if (migrated !== true) {
+    writeClientStoreValue("layout", RIGHT_PANEL_OPEN_MIGRATION_KEY, true, {
+      immediate: true,
+    });
+    writeClientStoreValue("layout", "rightPanelCollapsed", false, {
+      immediate: true,
+    });
+    return false;
+  }
+  return readStoredBool("rightPanelCollapsed", false);
+}
+
 export function useSidebarToggles({ isCompact }: UseSidebarTogglesOptions) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(() =>
-    readStoredBool("rightPanelCollapsed", true),
+  // Default expanded. Migration opens once for clients that shipped with
+  // collapsed-by-default (true) and never saw the right panel / tools.
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(
+    readRightPanelCollapsed,
   );
 
   useEffect(() => {
