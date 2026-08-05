@@ -158,21 +158,32 @@ body::-webkit-scrollbar-corner,
   background: transparent;
 }
 
+/*
+ * Full-window shell must use a % size chain (not 100vh/100vw).
+ * Windows uiScale is transform:scale on <body> + layout fill width/height =
+ * 100/scale% (CSS zoom alone left a letterboxed shell on WebView2).
+ * <html> stays 100% viewport. Viewport units ignore parent expansion, so the
+ * outer .app shell would stay letterboxed while only some paint scaled —
+ * see applyUiScale.ts and docs/analysis/windows-ccgui-startup-hang-2026-08-05.md.
+ */
 html,
 body {
   margin: 0;
   background: transparent;
   overflow: hidden;
+  width: 100%;
+  height: 100%;
 }
 
 #root {
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
 }
 
 .app {
-  height: 100vh;
-  width: 100vw;
+  width: 100%;
+  height: 100%;
   display: grid;
   grid-template-columns: var(--sidebar-width, 210px) 1fr;
   background: var(--surface-messages, #0d0f14);

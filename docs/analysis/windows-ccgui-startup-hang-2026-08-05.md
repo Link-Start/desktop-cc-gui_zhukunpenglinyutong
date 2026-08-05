@@ -359,6 +359,8 @@ WebView:  %LOCALAPPDATA%\com.zhukunpenglinyutong.ccgui\EBWebView\
 | **诊断误导** | 磁盘只有 `bootstrap/start` 易被当成 preload 故障；真凶是 mount 后 `setZoom`。修 bootstrap 超时 **治不了** 根因。 |
 | **timeout 包 setZoom** | hang 是渲染进程失控，不是 Promise 慢；timeout **无效**。 |
 | **CSS zoom 副作用** | 分割条拖拽等用 `clientX` + `getBoundingClientRect`（如 `DesktopLayout.tsx`）。Chromium 下二者通常同比例缩放，**多数情况仍一致**，但 fixed / canvas / 自定义坐标要手测。 |
+| **CSS zoom + 100vh 壳子** | 仅给 root 设 `zoom` 与 `width/height: 100/scale%` **不够**：若 `#root`/`.app` 仍是 `100vh`/`100vw`，视口单位不跟 parent 放大，**外层壳不随缩放铺满窗口**（缩小留边、放大裁切）。必须把 shell 改成 `html→body→#root→.app` 的 `%` 高度链（`src/styles/base.css`）。 |
+| **CSS zoom 落在 `<html>`** | 在 `overflow: hidden` 下 WebView2 容易 **先裁剪再缩放**：`100/scale%` 扩出来的盒子被视口裁掉后，再 zoom 缩小 → 仍黑边。应让 `<html>` 保持 100% 视口，**zoom + fill 落在 `<body>`**（见 `applyUiScale.ts`）。 |
 
 ### 10.2 三端能力对照（实现选型依据）
 

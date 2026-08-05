@@ -50,7 +50,12 @@ describe("useUiScaleShortcuts", () => {
     resetUiScaleNativePinForTests();
     platformMocks.platform = "macos";
     document.documentElement.style.zoom = "";
+    document.documentElement.style.width = "";
+    document.documentElement.style.height = "";
     document.documentElement.style.removeProperty("--ui-scale");
+    document.body.style.zoom = "";
+    document.body.style.width = "";
+    document.body.style.height = "";
     webviewMocks.setZoom.mockReset();
     webviewMocks.setZoom.mockResolvedValue(undefined);
     webviewMocks.getCurrentWebview.mockReset();
@@ -59,8 +64,14 @@ describe("useUiScaleShortcuts", () => {
     });
   });
 
-  it("macos: applies native zoom at uiScale", async () => {
+  it("macos: applies native zoom at uiScale and strips CSS layout fill", async () => {
     platformMocks.platform = "macos";
+    document.documentElement.style.zoom = "0.8";
+    document.documentElement.style.width = "125%";
+    document.documentElement.style.height = "125%";
+    document.body.style.zoom = "0.8";
+    document.body.style.width = "125%";
+    document.body.style.height = "125%";
     const settings = createSettings({ uiScale: 1.1 });
     renderHook(() =>
       useUiScaleShortcuts({
@@ -74,6 +85,11 @@ describe("useUiScaleShortcuts", () => {
       expect(webviewMocks.setZoom).toHaveBeenCalledWith(1.1);
     });
     expect(document.documentElement.style.zoom).toBe("");
+    expect(document.documentElement.style.width).toBe("");
+    expect(document.documentElement.style.height).toBe("");
+    expect(document.body.style.zoom).toBe("");
+    expect(document.body.style.width).toBe("");
+    expect(document.body.style.height).toBe("");
   });
 
   it("linux: applies native zoom at uiScale (same as macos)", async () => {
@@ -91,21 +107,28 @@ describe("useUiScaleShortcuts", () => {
     });
   });
 
-  it("windows: CSS zoom at uiScale and native zoom pinned to 1", async () => {
+  it("windows: transform scale + layout fill on body and native zoom pinned to 1", async () => {
     platformMocks.platform = "windows";
     renderHook(() =>
       useUiScaleShortcuts({
-        settings: createSettings({ uiScale: 1.1 }),
+        settings: createSettings({ uiScale: 0.8 }),
         setSettings: vi.fn(),
         saveSettings: vi.fn(async (next) => next),
       }),
     );
 
     await waitFor(() => {
-      expect(document.documentElement.style.zoom).toBe("1.1");
+      // Scale lives on <body> via transform; <html> stays viewport-sized.
+      expect(document.documentElement.style.zoom).toBe("");
+      expect(document.documentElement.style.transform).toBe("");
+      expect(document.body.style.zoom).toBe("");
+      expect(document.body.style.transform).toBe("scale(0.8)");
+      expect(document.body.style.width).toBe("125%");
+      expect(document.body.style.height).toBe("125%");
+      expect(document.body.style.position).toBe("fixed");
       expect(webviewMocks.setZoom).toHaveBeenCalledWith(1);
     });
-    expect(webviewMocks.setZoom).not.toHaveBeenCalledWith(1.1);
+    expect(webviewMocks.setZoom).not.toHaveBeenCalledWith(0.8);
   });
 
   it("survives missing Tauri window metadata in browser previews", async () => {
@@ -127,7 +150,7 @@ describe("useUiScaleShortcuts", () => {
     ).not.toThrow();
 
     await waitFor(() => {
-      expect(document.documentElement.style.zoom).toBe("0.9");
+      expect(document.body.style.transform).toBe("scale(0.9)");
     });
   });
 });
