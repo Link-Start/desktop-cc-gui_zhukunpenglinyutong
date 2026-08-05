@@ -2413,7 +2413,7 @@ describe("useThreadActions", () => {
     expect(listWorkspaceSessions).toHaveBeenCalledWith("ws-1", {
       query: { status: "active", sessionAttributionMode: "related" },
       cursor: null,
-      limit: 100,
+      limit: 5,
     });
     expectSetThreadsDispatched(dispatch, "ws-1", [
       {
@@ -2532,7 +2532,7 @@ describe("useThreadActions", () => {
       });
     });
 
-    expect(listClaudeSessions).toHaveBeenCalledWith("/tmp/codex", 100);
+    expect(listClaudeSessions).toHaveBeenCalledWith("/tmp/codex", 5);
     expectSetThreadsDispatched(dispatch, "ws-1", [
       {
         id: "claude:claude-visible-200",
@@ -2605,7 +2605,7 @@ describe("useThreadActions", () => {
     expect(listWorkspaceSessions).toHaveBeenCalledWith("ws-1", {
       query: { status: "active", sessionAttributionMode: "related" },
       cursor: null,
-      limit: 100,
+      limit: 5,
     });
     expectSetThreadsDispatched(dispatch, "ws-1", [
       {

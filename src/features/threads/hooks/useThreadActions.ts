@@ -100,9 +100,9 @@ import {
   THREAD_LIST_MAX_FETCH_DURATION_MS,
   THREAD_LIST_MAX_TOTAL_PAGES,
   THREAD_LIST_PAGE_SIZE,
-  THREAD_LIST_TARGET_COUNT,
   countCatalogSessionsByEngine,
   countSummariesByEngine,
+  resolveInitialThreadListTargetCount,
   resolveNativeSessionListLimit,
   resolveThreadListCursorForDisplay,
   type StartupThreadHydrationMode,
@@ -501,8 +501,9 @@ export function useThreadActions({
           threadActivityRef.current[workspace.id] ?? {};
         const hasKnownActivity = Object.keys(knownActivityByThread).length > 0;
         const matchingThreads: Record<string, unknown>[] = [];
-        const targetCount = THREAD_LIST_TARGET_COUNT;
-        const pageSize = THREAD_LIST_PAGE_SIZE;
+        // First paint: only the visible root budget (default 5). More via Load older.
+        const targetCount = resolveInitialThreadListTargetCount(workspace);
+        const pageSize = Math.max(THREAD_LIST_PAGE_SIZE, targetCount);
         const maxPagesWithoutMatch = hasKnownActivity
           ? THREAD_LIST_MAX_EMPTY_PAGES_WITH_ACTIVITY
           : THREAD_LIST_MAX_EMPTY_PAGES;
@@ -1348,6 +1349,8 @@ export function useThreadActions({
             [workspace.id]: visibleSummaries,
           };
         }
+        // nextCursor from catalog/runtime drives "Load older". First paint only
+        // requested a small page (default 5); more pages load on demand.
         dispatch({
           type: "setThreadListCursor",
           workspaceId: workspace.id,

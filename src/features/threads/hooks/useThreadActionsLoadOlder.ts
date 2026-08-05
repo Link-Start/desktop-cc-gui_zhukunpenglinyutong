@@ -31,11 +31,11 @@ import {
 import {
   CODEX_SESSION_CATALOG_FETCH_TIMEOUT_MS,
   SESSION_CATALOG_PAGE_SIZE,
+  THREAD_LIST_LOAD_OLDER_PAGE_SIZE,
+  THREAD_LIST_LOAD_OLDER_TARGET_COUNT,
   THREAD_LIST_MAX_EMPTY_PAGES_LOAD_OLDER,
   THREAD_LIST_MAX_FETCH_DURATION_MS,
   THREAD_LIST_MAX_TOTAL_PAGES,
-  THREAD_LIST_PAGE_SIZE,
-  THREAD_LIST_TARGET_COUNT,
   decodeThreadListCursorState,
   normalizeProjectCatalogSession,
   resolveThreadListCursorForDisplay,
@@ -164,8 +164,8 @@ export function useLoadOlderThreadsForWorkspace({
           }
         }
         const matchingThreads: Record<string, unknown>[] = [];
-        const targetCount = THREAD_LIST_TARGET_COUNT;
-        const pageSize = THREAD_LIST_PAGE_SIZE;
+        const targetCount = THREAD_LIST_LOAD_OLDER_TARGET_COUNT;
+        const pageSize = THREAD_LIST_LOAD_OLDER_PAGE_SIZE;
         const maxPagesWithoutMatch = THREAD_LIST_MAX_EMPTY_PAGES_LOAD_OLDER;
         let pagesFetched = 0;
         const fetchStartedAt = Date.now();

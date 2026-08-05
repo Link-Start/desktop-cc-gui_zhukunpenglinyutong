@@ -521,4 +521,55 @@ describe("useWorkspaceThreadListHydration", () => {
 
     vi.useRealTimers();
   });
+
+  it("retries active workspace hydration once workspacesById gains the workspace", async () => {
+    const workspaces = [createWorkspace("ws-1")];
+    const listThreadsForWorkspace = vi.fn<
+      (
+        workspace: WorkspaceInfo,
+        options?: {
+          preserveState?: boolean;
+          includeOpenCodeSessions?: boolean;
+          startupHydrationMode?: "full-catalog";
+        },
+      ) => Promise<void>
+    >().mockResolvedValue(undefined);
+
+    const { rerender } = renderHook(
+      ({
+        workspacesById,
+      }: {
+        workspacesById: Map<string, WorkspaceInfo>;
+      }) =>
+        useWorkspaceThreadListHydration({
+          activeWorkspaceId: "ws-1",
+          activeWorkspaceProjectionOwnerIds: ["ws-1"],
+          listThreadsForWorkspace,
+          threadListLoadingByWorkspace: {},
+          workspaces,
+          workspacesById,
+        }),
+      {
+        initialProps: {
+          workspacesById: new Map<string, WorkspaceInfo>(),
+        },
+      },
+    );
+
+    expect(listThreadsForWorkspace).not.toHaveBeenCalled();
+
+    rerender({
+      workspacesById: new Map(
+        workspaces.map((workspace) => [workspace.id, workspace]),
+      ),
+    });
+
+    await waitFor(() => {
+      expect(listThreadsForWorkspace).toHaveBeenCalledTimes(1);
+    });
+    expect(listThreadsForWorkspace).toHaveBeenCalledWith(
+      workspaces[0],
+      expect.objectContaining({ preserveState: true }),
+    );
+  });
 });

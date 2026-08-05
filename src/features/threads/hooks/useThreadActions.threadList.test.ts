@@ -2,9 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import { buildWorkspaceSessionSelectionKey } from "../../settings/components/settings-view/hooks/useWorkspaceSessionCatalog";
 import {
+  SESSION_CATALOG_INITIAL_PAGE_SIZE,
+  THREAD_LIST_INITIAL_PAGE_SIZE,
+  THREAD_LIST_INITIAL_TARGET_COUNT,
+  THREAD_LIST_LOAD_OLDER_PAGE_SIZE,
+  THREAD_LIST_LOAD_OLDER_TARGET_COUNT,
   normalizeProjectCatalogSession,
+  resolveInitialThreadListTargetCount,
   resolveThreadListCursorForDisplay,
 } from "./useThreadActions.threadList";
+import type { WorkspaceInfo } from "../../../types";
 
 describe("useThreadActions.threadList", () => {
   it("preserves additive catalog source fields during normalization", () => {
@@ -131,5 +138,22 @@ describe("useThreadActions.threadList", () => {
         runtimeCursor: null,
       }),
     ).toBe("catalog::offset:200");
+  });
+
+  it("first-paint list target defaults to 5 and stays smaller than load-older batches", () => {
+    expect(THREAD_LIST_INITIAL_TARGET_COUNT).toBe(5);
+    expect(THREAD_LIST_INITIAL_PAGE_SIZE).toBe(5);
+    expect(SESSION_CATALOG_INITIAL_PAGE_SIZE).toBe(5);
+    expect(THREAD_LIST_LOAD_OLDER_TARGET_COUNT).toBe(50);
+    expect(THREAD_LIST_LOAD_OLDER_PAGE_SIZE).toBe(50);
+
+    const workspace = {
+      id: "ws-1",
+      name: "ws",
+      path: "/tmp/ws",
+      connected: true,
+      settings: { sidebarCollapsed: false },
+    } as WorkspaceInfo;
+    expect(resolveInitialThreadListTargetCount(workspace)).toBe(5);
   });
 });

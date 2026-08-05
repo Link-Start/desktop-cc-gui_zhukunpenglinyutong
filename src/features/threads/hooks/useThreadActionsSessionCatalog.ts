@@ -9,7 +9,7 @@ import type { WorkspaceSessionAttributionMode } from "../../../types";
 import { withTimeout } from "./useThreadActions.helpers";
 import {
   CODEX_SESSION_CATALOG_FETCH_TIMEOUT_MS,
-  SESSION_CATALOG_PAGE_SIZE,
+  SESSION_CATALOG_INITIAL_PAGE_SIZE,
   normalizeProjectCatalogSession,
   type ProjectCatalogSessionSummary,
 } from "./useThreadActions.threadList";
@@ -163,7 +163,8 @@ export function useThreadActionsSessionCatalog({
         listWorkspaceSessionsService(workspaceId, {
           query: { status: "active", sessionAttributionMode },
           cursor: null,
-          limit: SESSION_CATALOG_PAGE_SIZE,
+          // First-paint catalog page matches sidebar initial page (default 5).
+          limit: SESSION_CATALOG_INITIAL_PAGE_SIZE,
         }),
         CODEX_SESSION_CATALOG_FETCH_TIMEOUT_MS,
       );

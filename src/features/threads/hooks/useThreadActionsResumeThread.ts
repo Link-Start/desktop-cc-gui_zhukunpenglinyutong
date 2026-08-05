@@ -61,7 +61,7 @@ import {
 import { createThreadHistoryLoaderForThread } from "./useThreadActions.historyLoaderFactory";
 import {
   RELATED_THREAD_LOAD_CONCURRENCY,
-  THREAD_LIST_PAGE_SIZE,
+  THREAD_LIST_LOAD_OLDER_PAGE_SIZE,
   THREAD_RECOVERY_HISTORY_MATCH_CANDIDATES,
   THREAD_RECOVERY_MAX_FETCH_DURATION_MS,
   THREAD_RECOVERY_MAX_PAGES,
@@ -612,7 +612,8 @@ export function useThreadActionsResumeThreadForWorkspace(
                 const response = (await listThreadsService(
                   workspaceId,
                   cursor,
-                  THREAD_LIST_PAGE_SIZE,
+                  // Recovery scans need larger pages than first-paint (5).
+                  THREAD_LIST_LOAD_OLDER_PAGE_SIZE,
                 )) as Record<string, unknown>;
                 if (!isCurrentResumeRequest()) {
                   return null;
