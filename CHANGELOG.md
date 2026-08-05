@@ -2,6 +2,30 @@
 
 ---
 
+### **2026年8月5日（v0.8.0）**
+
+中文：
+
+这一版将产品线升到 **0.8.0**，并修掉侧栏会话列表在 hydration 完成后仍永久「加载中…」的问题：memo 安全的 Set 身份发布后，Layout / Sidebar 能正确感知列表就绪。
+
+🔧 Improvements
+- 将应用版本号提升到 `0.8.0`（`package.json` / `package-lock.json` / `src-tauri/tauri.conf.json`），为下一轮 minor 发版对齐 SemVer 与打包元数据
+
+🐛 Fixes
+- 修复侧栏会话列表 hydration 完成后仍卡在「加载中…」：`hydratedThreadListWorkspaceIds` 改为发布新的 Set 身份（禁止原地 mutate 共享 Set），使 `memo(Sidebar)` 在完成 / 超时后能重渲染；AppShell 域上下文透传 state 快照；`listThreadTitles` / `listSharedSessions` 拉取加超时，避免超时后列表路径长期半完成
+
+English:
+
+This release moves the product line to **0.8.0** and fixes the sidebar thread list that stayed on "Loading…" forever after hydration finished: publishing a memo-safe Set identity lets Layout / Sidebar notice the list is ready.
+
+🔧 Improvements
+- Bump the app version to `0.8.0` across frontend package metadata, the lockfile, and Tauri bundle configuration so the next minor ship aligns SemVer and packaging metadata
+
+🐛 Fixes
+- Fixed the sidebar thread list stuck on "Loading…" after hydration: `hydratedThreadListWorkspaceIds` now publishes a new Set identity instead of mutating a shared Set in place, so `memo(Sidebar)` re-renders on complete / timeout; AppShell domain contexts pass the state snapshot; `listThreadTitles` / `listSharedSessions` fetches are wrapped with a timeout so a hang no longer leaves partial hydration unresolved
+
+---
+
 ### **2026年8月4日（v0.7.16）**
 
 中文：
