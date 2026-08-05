@@ -222,8 +222,22 @@
   line-height: var(--message-codeblock-line-height, 1.6);
 }
 
+.spec-hub-markdown .markdown-codeblock-single-wrap {
+  position: relative;
+  margin: 0;
+}
+
+.spec-hub-markdown .markdown-codeblock-single-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+}
+
 .spec-hub-markdown .markdown-codeblock-single {
-  padding-top: 14px;
+  padding: 14px 44px 16px 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--message-codeblock-bg);
