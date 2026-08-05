@@ -5,13 +5,21 @@ import { createElement } from "react";
 
 const mocks = vi.hoisted(() => ({
   isWindowsPlatform: vi.fn(),
+  closeWindow: vi.fn(),
+  getCurrentWindow: vi.fn(),
 }));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string) => {
+    t: (key: string, options?: { appName?: string; defaultValue?: string }) => {
       const translations: Record<string, string> = {
+        "app.title": "ccgui",
         "menu.closeWindow": "Close window",
+        "menu.closeWindowConfirmTitle": "Close window?",
+        "menu.closeWindowConfirmMessage": `Are you sure you want to close ${options?.appName ?? "ccgui"}?`,
+        "menu.closeWindowConfirmOk": "Close",
+        "menu.closeWindowConfirmCancel": "Cancel",
+        "menu.closeWindowConfirmBusy": "Closing…",
         "menu.maximize": "Maximize",
         "menu.minimize": "Minimize",
         "common.restore": "Restore",
@@ -20,13 +28,13 @@ vi.mock("react-i18next", () => ({
         "sidebar.quickSearch": "Search",
         "quickSwitcher.open": "Recent activity",
       };
-      return translations[key] ?? key;
+      return translations[key] ?? options?.defaultValue ?? key;
     },
   }),
 }));
 
 vi.mock("@tauri-apps/api/window", () => ({
-  getCurrentWindow: vi.fn(),
+  getCurrentWindow: mocks.getCurrentWindow,
 }));
 
 vi.mock("../../../utils/platform", () => ({
@@ -55,6 +63,15 @@ describe("TitlebarExpandControls", () => {
   beforeEach(() => {
     mocks.isWindowsPlatform.mockReset();
     mocks.isWindowsPlatform.mockReturnValue(false);
+    mocks.closeWindow.mockReset();
+    mocks.getCurrentWindow.mockReset();
+    mocks.getCurrentWindow.mockReturnValue({
+      close: mocks.closeWindow,
+      isMaximized: vi.fn().mockResolvedValue(false),
+      onResized: vi.fn().mockResolvedValue(() => undefined),
+      minimize: vi.fn(),
+      toggleMaximize: vi.fn().mockResolvedValue(undefined),
+    });
   });
 
   afterEach(() => {
@@ -96,6 +113,80 @@ describe("TitlebarExpandControls", () => {
     expect(screen.getByRole("button", { name: "Minimize" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Maximize" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Close window" })).toBeTruthy();
+  });
+
+  it("opens a custom confirm dialog before closing the Windows main window", async () => {
+    mocks.isWindowsPlatform.mockReturnValue(true);
+
+    render(
+      createElement(TitlebarExpandControls as never, {
+        ...baseProps,
+        showSidebarTitlebarToggle: false,
+      }),
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Close window" }));
+    });
+
+    expect(screen.getByTestId("windows-main-window-close-confirm")).toBeTruthy();
+    expect(
+      screen.getByText("Are you sure you want to close ccgui?"),
+    ).toBeTruthy();
+    expect(mocks.closeWindow).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("windows-main-window-close-confirm-ok"));
+    });
+
+    expect(mocks.closeWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not close when the custom confirm dialog is cancelled", async () => {
+    mocks.isWindowsPlatform.mockReturnValue(true);
+
+    render(
+      createElement(TitlebarExpandControls as never, {
+        ...baseProps,
+        showSidebarTitlebarToggle: false,
+      }),
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Close window" }));
+    });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId("windows-main-window-close-confirm-cancel"),
+      );
+    });
+
+    expect(mocks.closeWindow).not.toHaveBeenCalled();
+    expect(
+      screen.queryByTestId("windows-main-window-close-confirm"),
+    ).toBeNull();
+  });
+
+  it("ignores repeated close clicks while the confirm dialog is open", async () => {
+    mocks.isWindowsPlatform.mockReturnValue(true);
+
+    render(
+      createElement(TitlebarExpandControls as never, {
+        ...baseProps,
+        showSidebarTitlebarToggle: false,
+      }),
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Close window" }));
+      fireEvent.click(screen.getByRole("button", { name: "Close window" }));
+      fireEvent.click(screen.getByRole("button", { name: "Close window" }));
+    });
+
+    expect(
+      screen.getAllByTestId("windows-main-window-close-confirm"),
+    ).toHaveLength(1);
   });
 
   it("shows a tooltip for the sidebar collapse button on hover", async () => {
