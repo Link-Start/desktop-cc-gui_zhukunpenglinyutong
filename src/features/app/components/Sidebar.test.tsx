@@ -1123,12 +1123,12 @@ describe("Sidebar", () => {
     expect(screen.queryByText("No sessions yet.")).toBeNull();
   });
 
-  it("shows a loading state for an expanded workspace before its sessions hydrate", () => {
+  it("shows a loading state for a connected expanded workspace before its sessions hydrate", () => {
     const workspace = {
       id: "ws-unhydrated",
       name: "unhydrated-workspace",
       path: "/tmp/unhydrated-workspace",
-      connected: false,
+      connected: true,
       kind: "main" as const,
       settings: {
         sidebarCollapsed: false,
@@ -1152,6 +1152,77 @@ describe("Sidebar", () => {
 
     expect(screen.getByText("Loading…")).toBeTruthy();
     expect(screen.queryByText("No sessions yet.")).toBeNull();
+  });
+
+  it("shows cached sessions before hydration finishes instead of masking them with loading", () => {
+    const workspace = {
+      id: "ws-cached",
+      name: "cached-workspace",
+      path: "/tmp/cached-workspace",
+      connected: true,
+      kind: "main" as const,
+      settings: {
+        sidebarCollapsed: false,
+        worktreeSetupScript: null,
+      },
+    };
+
+    render(
+      <Sidebar
+        {...baseProps}
+        workspaces={[workspace]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Ungrouped",
+            workspaces: [workspace],
+          },
+        ]}
+        threadsByWorkspace={{
+          "ws-cached": [
+            {
+              id: "thread-cached",
+              name: "Cached session",
+              updatedAt: 1,
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Cached session")).toBeTruthy();
+    expect(screen.queryByText("Loading…")).toBeNull();
+  });
+
+  it("shows empty state for disconnected workspaces instead of spinning forever", () => {
+    const workspace = {
+      id: "ws-disconnected",
+      name: "disconnected-workspace",
+      path: "/tmp/disconnected-workspace",
+      connected: false,
+      kind: "main" as const,
+      settings: {
+        sidebarCollapsed: false,
+        worktreeSetupScript: null,
+      },
+    };
+
+    render(
+      <Sidebar
+        {...baseProps}
+        workspaces={[workspace]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Ungrouped",
+            workspaces: [workspace],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.queryByText("Loading…")).toBeNull();
+    expect(screen.getByText("No sessions yet.")).toBeTruthy();
   });
 
   it("does not render workspace or worktree session count badges", () => {

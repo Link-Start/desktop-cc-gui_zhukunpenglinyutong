@@ -389,9 +389,16 @@ export function useWorkspaceThreadListHydration({
     if (autoHydratedActiveWorkspaceIdRef.current === activeWorkspaceId) {
       return;
     }
+    // Do not mark the active workspace as auto-hydrated until it exists in the
+    // workspace map. On cold start activeWorkspaceId can land before workspacesById
+    // is populated; marking early permanently skips ensure and leaves the sidebar
+    // on "加载中…".
+    if (!workspacesById.has(activeWorkspaceId)) {
+      return;
+    }
     autoHydratedActiveWorkspaceIdRef.current = activeWorkspaceId;
     ensureWorkspaceThreadListLoaded(activeWorkspaceId, { preserveState: true });
-  }, [activeWorkspaceId, ensureWorkspaceThreadListLoaded]);
+  }, [activeWorkspaceId, ensureWorkspaceThreadListLoaded, workspacesById]);
 
   useEffect(() => {
     if (!activeWorkspaceId || activeWorkspaceProjectionOwnerIds.length <= 1) {
@@ -401,12 +408,16 @@ export function useWorkspaceThreadListHydration({
       if (workspaceId === activeWorkspaceId) {
         return;
       }
+      if (!workspacesById.has(workspaceId)) {
+        return;
+      }
       ensureWorkspaceThreadListLoaded(workspaceId, { preserveState: true });
     });
   }, [
     activeWorkspaceId,
     activeWorkspaceProjectionOwnerIds,
     ensureWorkspaceThreadListLoaded,
+    workspacesById,
   ]);
 
   const nextBackgroundWorkspaceThreadHydrationId =

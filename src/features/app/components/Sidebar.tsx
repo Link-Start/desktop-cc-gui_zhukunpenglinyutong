@@ -1838,22 +1838,27 @@ function SidebarImpl({
     const isThreadListHydrated = hydratedThreadListWorkspaceIds.has(entry.id);
     const isPaging = threadListPagingByWorkspace[entry.id] ?? false;
     const worktrees = worktreesByParent.get(entry.id) ?? [];
-    // Until a workspace finishes its first hydration, show a loading placeholder
-    // instead of leaving the expanded region blank or leaking stale/fallback-named
-    // ("Agent 1", "Agent 2") preview threads before real data lands.
+    // First-paint / cold start: prefer snapshot or last-good threads immediately.
+    // Only spin when the workspace is connected, has nothing to show yet, and has
+    // not finished its first hydration. Masking cached sessions behind "加载中…"
+    // made the whole sidebar look frozen while orchestrator work ran, and
+    // disconnected workspaces never hydrate so they spun forever.
+    const hasCachedThreadList =
+      threads.length > 0 || Boolean(nextCursor);
     const showThreadLoadingState =
       !isThreadListHydrated &&
-      worktrees.length === 0;
+      worktrees.length === 0 &&
+      !hasCachedThreadList &&
+      entry.connected;
     const showThreadList =
-      !showThreadLoadingState &&
-      (threads.length > 0 || Boolean(nextCursor));
+      !showThreadLoadingState && hasCachedThreadList;
     const isWorktreeSectionCollapsed =
       collapsedWorktreeSections.has(entry.id);
     const showThreadEmptyState =
       !showThreadList &&
       !showThreadLoadingState &&
       worktrees.length === 0 &&
-      isThreadListHydrated;
+      (isThreadListHydrated || !entry.connected);
     const hasPrimaryActiveThread =
       entry.id === activeWorkspaceId && Boolean(activeThreadId);
     const hasRunningSession = hasRunningSessionByProjectId.get(entry.id) ?? false;

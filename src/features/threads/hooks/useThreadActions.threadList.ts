@@ -9,8 +9,20 @@ import {
 } from "../../app/constants";
 import type { CodexCatalogSessionSummary } from "./useThreadActions.helpers";
 
-export const THREAD_LIST_TARGET_COUNT = 50;
-export const THREAD_LIST_PAGE_SIZE = 50;
+/**
+ * First-paint / startup hydration: only pull a small page so cold start stays
+ * cheap. Aligns with DEFAULT_VISIBLE_THREAD_ROOT_COUNT (5). Users load more
+ * via the sidebar "Load older" control.
+ */
+export const THREAD_LIST_INITIAL_TARGET_COUNT = DEFAULT_VISIBLE_THREAD_ROOT_COUNT;
+export const THREAD_LIST_INITIAL_PAGE_SIZE = DEFAULT_VISIBLE_THREAD_ROOT_COUNT;
+/** @deprecated Prefer THREAD_LIST_INITIAL_*; kept as aliases for initial path. */
+export const THREAD_LIST_TARGET_COUNT = THREAD_LIST_INITIAL_TARGET_COUNT;
+/** @deprecated Prefer THREAD_LIST_INITIAL_*; kept as aliases for initial path. */
+export const THREAD_LIST_PAGE_SIZE = THREAD_LIST_INITIAL_PAGE_SIZE;
+/** "Load older" batch — larger than first paint so fewer clicks for history. */
+export const THREAD_LIST_LOAD_OLDER_TARGET_COUNT = 50;
+export const THREAD_LIST_LOAD_OLDER_PAGE_SIZE = 50;
 export const THREAD_LIST_MAX_EMPTY_PAGES = 5;
 export const THREAD_LIST_MAX_EMPTY_PAGES_WITH_ACTIVITY = 20;
 export const THREAD_LIST_MAX_TOTAL_PAGES = 40;
@@ -35,7 +47,11 @@ export const NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS =
   SIDEBAR_THREAD_LIST_TIMEOUT_MS;
 export const CODEX_SESSION_CATALOG_FETCH_TIMEOUT_MS =
   SIDEBAR_THREAD_LIST_TIMEOUT_MS;
+/** Load-older / recovery catalog page size. */
 export const SESSION_CATALOG_PAGE_SIZE = 100;
+/** First catalog page on startup hydration — matches initial sidebar page. */
+export const SESSION_CATALOG_INITIAL_PAGE_SIZE =
+  DEFAULT_VISIBLE_THREAD_ROOT_COUNT;
 
 const MIN_NATIVE_SESSION_LIST_LIMIT = Math.min(
   SESSION_CATALOG_PAGE_SIZE,
@@ -140,10 +156,19 @@ export function resolveNativeSessionListLimit(
   const visibleRootCount = normalizeVisibleThreadRootCount(
     workspace.settings.visibleThreadRootCount,
   );
+  // First-paint: never pull more than the visible root budget (default 5).
+  // Load-older uses SESSION_CATALOG_PAGE_SIZE / LOAD_OLDER_* separately.
   return Math.min(
-    SESSION_CATALOG_PAGE_SIZE,
+    THREAD_LIST_INITIAL_TARGET_COUNT,
     Math.max(MIN_NATIVE_SESSION_LIST_LIMIT, visibleRootCount),
   );
+}
+
+/** First-page target for a workspace (settings-aware, default 5). */
+export function resolveInitialThreadListTargetCount(
+  workspace: WorkspaceInfo,
+): number {
+  return resolveNativeSessionListLimit(workspace);
 }
 
 export function resolveThreadListCursorForDisplay(params: {
