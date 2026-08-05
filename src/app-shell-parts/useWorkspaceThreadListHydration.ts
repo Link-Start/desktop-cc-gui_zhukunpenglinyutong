@@ -45,6 +45,8 @@ type UseWorkspaceThreadListHydrationResult = {
       deletedThreadIds?: string[];
     },
   ) => void;
+  /** Immutable snapshot identity for UI (memo-safe). Prefer this over the ref for render props. */
+  hydratedThreadListWorkspaceIds: ReadonlySet<string>;
   hydratedThreadListWorkspaceIdsRef: MutableRefObject<Set<string>>;
   listThreadsForWorkspaceTracked: ListThreadsForWorkspace;
   prewarmSessionRadarForWorkspace: (workspaceId: string) => void;
@@ -102,9 +104,29 @@ function createThreadHydrationTask(
   };
 }
 
-type ThreadListHydrationResult = void | { applied?: boolean; stale?: boolean };const ACTIVE_WORKSPACE_READY_MILESTONE: StartupMilestoneName =
+type ThreadListHydrationResult = void | { applied?: boolean; stale?: boolean };
+const ACTIVE_WORKSPACE_READY_MILESTONE: StartupMilestoneName =
   "active-workspace-ready";
 const IDLE_PREWARM_DELAY_MS = 120;
+
+/**
+ * Publish a new Set identity so memo(Sidebar) can see hydration progress.
+ * Mutating a shared Set in place + setHydrationCycle alone is not enough:
+ * layout passes the same Set reference into a memoized Sidebar and the
+ * "加载中…" placeholder never leaves even after orchestrator timeout.
+ */
+function publishHydratedWorkspaceId(
+  targetRef: MutableRefObject<Set<string>>,
+  workspaceId: string,
+): Set<string> {
+  if (targetRef.current.has(workspaceId)) {
+    return targetRef.current;
+  }
+  const next = new Set(targetRef.current);
+  next.add(workspaceId);
+  targetRef.current = next;
+  return next;
+}
 
 export function useWorkspaceThreadListHydration({
   activeWorkspaceId,
@@ -125,6 +147,10 @@ export function useWorkspaceThreadListHydration({
   );
   const autoHydratedActiveWorkspaceIdRef = useRef<string | null>(null);
   const idleHydrationCleanupByWorkspaceIdRef = useRef(new Map<string, () => void>());
+  // State carries the published Set identity for consumers (Sidebar via layout).
+  // Ref stays the sync source of truth for in-flight guards.
+  const [hydratedThreadListWorkspaceIds, setHydratedThreadListWorkspaceIds] =
+    useState<ReadonlySet<string>>(() => hydratedThreadListWorkspaceIdsRef.current);
   const [hydrationCycle, setHydrationCycle] = useState(0);
   const renderScheduler = useRenderScheduler({
     budgetMs: 0,
@@ -193,11 +219,19 @@ export function useWorkspaceThreadListHydration({
         ) {
           recordStartupMilestone(ACTIVE_WORKSPACE_READY_MILESTONE);
         }
+        // Timeout/fallback resolves as undefined (not stale). Always publish a
+        // new Set identity so memo(Sidebar) drops the loading placeholder even
+        // when listThreads is still running in the background (soft-ignore).
         if (!discardedAsStale) {
-          hydratedThreadListWorkspaceIdsRef.current.add(workspace.id);
-        }
-        if (!discardedAsStale) {
-          fullyHydratedThreadListWorkspaceIdsRef.current.add(workspace.id);
+          const nextHydrated = publishHydratedWorkspaceId(
+            hydratedThreadListWorkspaceIdsRef,
+            workspace.id,
+          );
+          publishHydratedWorkspaceId(
+            fullyHydratedThreadListWorkspaceIdsRef,
+            workspace.id,
+          );
+          setHydratedThreadListWorkspaceIds(nextHydrated);
         }
         hydratingThreadListWorkspaceIdsRef.current.delete(workspace.id);
         hydrationPhaseByWorkspaceIdRef.current.delete(workspace.id);
@@ -409,6 +443,7 @@ export function useWorkspaceThreadListHydration({
 
   return {
     ensureWorkspaceThreadListLoaded,
+    hydratedThreadListWorkspaceIds,
     hydratedThreadListWorkspaceIdsRef,
     listThreadsForWorkspaceTracked,
     prewarmSessionRadarForWorkspace,

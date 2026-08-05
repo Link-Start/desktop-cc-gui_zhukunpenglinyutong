@@ -460,7 +460,7 @@ export function useAppShellLayoutNodesSection(
     highlightedCommitIndex,
     highlightedPresetIndex,
     availableEngines,
-    hydratedThreadListWorkspaceIdsRef,
+    hydratedThreadListWorkspaceIds,
     interruptTurn,
     isCompact,
     isDeleteThreadPromptBusy,
@@ -1916,7 +1916,12 @@ export function useAppShellLayoutNodesSection(
       historyRestoredAtMsByThread,
       runningSessionCountByWorkspaceId,
       recentCompletedSessionCountByWorkspaceId,
-      hydratedThreadListWorkspaceIds: hydratedThreadListWorkspaceIdsRef.current,
+      // Prefer state snapshot (new Set identity on each mark) over the ref so
+      // memo(Sidebar) actually re-renders when hydration completes / times out.
+      hydratedThreadListWorkspaceIds:
+        hydratedThreadListWorkspaceIds instanceof Set
+          ? hydratedThreadListWorkspaceIds
+          : new Set<string>(),
       threadListLoadingByWorkspace,
       threadListPagingByWorkspace,
       threadListCursorByWorkspace,
