@@ -16,20 +16,28 @@
 
 - Persist migration of `uiScale`.
 - Rust-side zoom intercept.
-- Full visual parity of CSS zoom vs native zoom.
+- Pixel-perfect parity of every fixed/canvas edge case vs native zoom (letterbox fill is in scope).
 
 ## Decisions
 
 ### 1. Split by `detectRendererPlatform()`
 
-| platform | CSS zoom | native setZoom |
-|----------|----------|----------------|
-| windows / unknown | `String(scale)` | `1` only |
-| macos / linux | clear `""` | `scale` |
+| platform | CSS scale target | layout fill (`width`/`height`) | native setZoom |
+|----------|------------------|--------------------------------|----------------|
+| windows / unknown | `<body>` `transform: scale(s)` + `position:fixed` | `100/scale %` on body when `scale≠1`; clear at `1` | `1` only |
+| macos / linux | clear transform/zoom on html **and** body | clear `""` on html **and** body | `scale` |
 
 **Why not Linux=CSS:** no hang evidence; WebKitGTK CSS zoom weaker than Chromium.
 
 **Why pin native 1 on Windows:** clear residual ZoomFactor from older builds; prevent double scale.
+
+**Why `transform: scale` not CSS `zoom` for fill:** WebView2 was observed applying `width/height: 100/scale%` while CSS `zoom` did **not** re-expand the border box (uiScale 1.3 → ~77% shell + black bars). `transform: scale(s)` with origin `0 0` always scales paint including chrome. Body portals (dialogs/menus) still scale.
+
+**Why layout fill on Windows only:** bare scale shrinks the paint box and leaves letterbox (black over transparent html/body). Expanding layout by `1/scale` restores full-window coverage without calling `SetZoomFactor(≠1)`. macOS/Linux must never keep these CSS dimensions.
+
+**Why scale `<body>` not `<html>`:** keep `<html>` at 100% viewport; put transform + fill on `<body>` so residual html zoom from older builds can be cleared without double-scale.
+
+**Why shell must be `%` not `100vh`/`100vw`:** expanding body only works if `#root` / `.app` inherit from the expanded parent. Viewport units stay tied to the window — fixed in `src/styles/base.css` (html/body/#root/.app → width/height 100%).
 
 ### 2. Platform detection API
 
@@ -44,6 +52,7 @@ Settings still load via `useAppSettings` → controller → hook. No early apply
 - [Risk] CSS zoom vs pane drag coordinates → manual smoke DesktopLayout drag on Windows.
 - [Risk] Linux future hang → switch linux into CSS branch with new evidence only.
 - [Risk] `setZoom(1)` on every Windows apply → catch errors; CSS already applied.
+- [Risk] Subpixel gaps after `100/scale %` fill → rare 1px letterbox; smoke at 0.8 / 1.1 / 1.25 DPI.
 
 ## Migration Plan
 
