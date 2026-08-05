@@ -320,6 +320,7 @@ export function useAppShellSearchRadarSection({
 
   const {
     ensureWorkspaceThreadListLoaded,
+    hydratedThreadListWorkspaceIds,
     hydratedThreadListWorkspaceIdsRef,
     listThreadsForWorkspaceTracked,
     prewarmSessionRadarForWorkspace,
@@ -1032,6 +1033,7 @@ export function useAppShellSearchRadarSection({
     handleEnsureWorkspaceThreadsForSettings,
     handleInsertComposerText,
     historySearchItems,
+    hydratedThreadListWorkspaceIds,
     hydratedThreadListWorkspaceIdsRef,
     listThreadsForWorkspaceTracked,
     lockLiveSessions,

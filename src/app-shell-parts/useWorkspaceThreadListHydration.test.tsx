@@ -438,4 +438,87 @@ describe("useWorkspaceThreadListHydration", () => {
     });
     expect(listThreadsForWorkspace).toHaveBeenCalledTimes(1);
   });
+
+  it("publishes a new hydrated Set identity so memo consumers can drop loading", async () => {
+    const workspaces = [createWorkspace("ws-1")];
+    const listThreadsForWorkspace = vi.fn<
+      (
+        workspace: WorkspaceInfo,
+        options?: {
+          preserveState?: boolean;
+          includeOpenCodeSessions?: boolean;
+          startupHydrationMode?: "full-catalog";
+        },
+      ) => Promise<void>
+    >().mockResolvedValue(undefined);
+
+    const { result } = renderHook(() =>
+      useWorkspaceThreadListHydration({
+        activeWorkspaceId: "ws-1",
+        activeWorkspaceProjectionOwnerIds: ["ws-1"],
+        listThreadsForWorkspace,
+        threadListLoadingByWorkspace: {},
+        workspaces,
+        workspacesById: new Map(workspaces.map((workspace) => [workspace.id, workspace])),
+      }),
+    );
+
+    const emptySnapshot = result.current.hydratedThreadListWorkspaceIds;
+    expect(emptySnapshot.size).toBe(0);
+
+    await waitFor(() => {
+      expect(result.current.hydratedThreadListWorkspaceIds.has("ws-1")).toBe(
+        true,
+      );
+    });
+
+    const published = result.current.hydratedThreadListWorkspaceIds;
+    expect(published).not.toBe(emptySnapshot);
+    expect(published.has("ws-1")).toBe(true);
+    expect(result.current.hydratedThreadListWorkspaceIdsRef.current).toBe(
+      published,
+    );
+  });
+
+  it("marks active workspace hydrated with a new Set after orchestrator timeout", async () => {
+    vi.useFakeTimers();
+    const workspaces = [createWorkspace("ws-1")];
+    const listThreadsForWorkspace = vi.fn<
+      (
+        workspace: WorkspaceInfo,
+        options?: {
+          preserveState?: boolean;
+          includeOpenCodeSessions?: boolean;
+          startupHydrationMode?: "full-catalog";
+        },
+      ) => Promise<void>
+    >().mockImplementation(() => new Promise(() => {}));
+
+    const { result } = renderHook(() =>
+      useWorkspaceThreadListHydration({
+        activeWorkspaceId: "ws-1",
+        activeWorkspaceProjectionOwnerIds: ["ws-1"],
+        listThreadsForWorkspace,
+        threadListLoadingByWorkspace: {},
+        workspaces,
+        workspacesById: new Map(workspaces.map((workspace) => [workspace.id, workspace])),
+      }),
+    );
+
+    const emptySnapshot = result.current.hydratedThreadListWorkspaceIds;
+    expect(listThreadsForWorkspace).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      // active-workspace hydration timeoutMs is 12_000
+      await vi.advanceTimersByTimeAsync(12_000);
+    });
+
+    expect(result.current.hydratedThreadListWorkspaceIds.has("ws-1")).toBe(true);
+    expect(result.current.hydratedThreadListWorkspaceIds).not.toBe(emptySnapshot);
+    expect(result.current.hydratedThreadListWorkspaceIdsRef.current.has("ws-1")).toBe(
+      true,
+    );
+
+    vi.useRealTimers();
+  });
 });

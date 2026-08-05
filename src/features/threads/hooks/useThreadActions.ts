@@ -408,13 +408,36 @@ export function useThreadActions({
         };
         let mappedTitles: Record<string, string> = {};
         try {
-          mappedTitles = await listThreadTitlesService(workspace.id);
-          onThreadTitleMappingsLoaded?.(workspace.id, mappedTitles);
+          // Titles/shared must not hang the whole list path forever: orchestrator
+          // timeout alone still leaves this promise running under soft-ignore.
+          const titlesResult = await withTimeout(
+            // Coerce null→{} before the race so withTimeout's null strictly
+            // means "timed out" (invoke may legitimately resolve null).
+            listThreadTitlesService(workspace.id).then((value) => value ?? {}),
+            NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS,
+          );
+          if (titlesResult === null) {
+            mappedTitles = {};
+            rememberPartialSource("thread-titles-timeout");
+          } else {
+            mappedTitles = titlesResult;
+            onThreadTitleMappingsLoaded?.(workspace.id, mappedTitles);
+          }
         } catch {
           mappedTitles = {};
         }
+        const sharedSessionsResult = await withTimeout(
+          // Coerce null→[] so the null sentinel only means timeout (see above).
+          listSharedSessionsService(workspace.id)
+            .catch(() => [])
+            .then((value) => value ?? []),
+          NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS,
+        );
+        if (sharedSessionsResult === null) {
+          rememberPartialSource("shared-sessions-timeout");
+        }
         const sharedSessions = normalizeSharedSessionSummaries(
-          await listSharedSessionsService(workspace.id).catch(() => []),
+          sharedSessionsResult ?? [],
         );
         const hiddenSharedBindingIds = expandHiddenSharedBindingIds(
           sharedSessions.flatMap((session) => session.nativeThreadIds),
@@ -1387,7 +1410,10 @@ export function useThreadActions({
               currentSnapshot.length > 0 ? currentSnapshot : allSummaries;
             // Gemini Shared 已退役，但仍走同一 hide 契约，避免 stale set 误注入。
             const sharedSessionsForGeminiHide = normalizeSharedSessionSummaries(
-              await listSharedSessionsService(workspace.id).catch(() => []),
+              (await withTimeout(
+                listSharedSessionsService(workspace.id).catch(() => []),
+                NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS,
+              )) ?? [],
             );
             if (threadListRequestSeqRef.current[workspace.id] !== requestSeq) {
               return;
@@ -1490,7 +1516,10 @@ export function useThreadActions({
             // 异步 refresh 时 binding 可能已 materialize；必须重建 hide set，
             // 禁止复用 listThreads 开头的 stale 闭包（创建 Shared 时往往是空集）。
             const sharedSessionsForRemap = normalizeSharedSessionSummaries(
-              await listSharedSessionsService(workspace.id).catch(() => []),
+              (await withTimeout(
+                listSharedSessionsService(workspace.id).catch(() => []),
+                NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS,
+              )) ?? [],
             );
             if (threadListRequestSeqRef.current[workspace.id] !== requestSeq) {
               return;
@@ -1586,7 +1615,10 @@ export function useThreadActions({
             // 与 Grok 同构：异步路径用 fresh hide set，避免 pending→established
             // rebind 后仍按 list 开头的空/旧 hide set 注入 native 行。
             const sharedSessionsForKimiHide = normalizeSharedSessionSummaries(
-              await listSharedSessionsService(workspace.id).catch(() => []),
+              (await withTimeout(
+                listSharedSessionsService(workspace.id).catch(() => []),
+                NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS,
+              )) ?? [],
             );
             if (threadListRequestSeqRef.current[workspace.id] !== requestSeq) {
               return;

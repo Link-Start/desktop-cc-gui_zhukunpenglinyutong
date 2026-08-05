@@ -392,6 +392,7 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "highlightedCommitIndex",
     "highlightedPresetIndex",
     "historySearchItems",
+    "hydratedThreadListWorkspaceIds",
     "hydratedThreadListWorkspaceIdsRef",
     "availableEngines",
     "installedEngines",
