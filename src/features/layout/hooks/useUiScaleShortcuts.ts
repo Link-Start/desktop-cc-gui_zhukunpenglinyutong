@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { useTranslation } from "react-i18next";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { AppSettings } from "../../../types";
+import { applyUiScaleToDocument } from "../../../utils/applyUiScale";
 import {
   formatShortcutForPlatform,
   isEditableShortcutTarget,
@@ -35,20 +36,26 @@ export function useUiScaleShortcuts({
   const uiScale = clampUiScale(settings.uiScale);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
+    if (typeof window === "undefined" || typeof document === "undefined") {
       return;
     }
+    // Platform split: Windows uses CSS zoom + native zoom pinned to 1
+    // (WebView2 SetZoomFactor(≠1) freezes renderer). macOS/Linux keep native
+    // setZoom(uiScale). See docs/analysis/windows-ccgui-startup-hang-2026-08-05.md
+    // and openspec/changes/fix-windows-ui-scale-webview2-hang/.
+    let setNativeZoom: ((factor: number) => Promise<void>) | undefined;
     try {
-      // getCurrentWebview() itself reads window.__TAURI_INTERNALS__.metadata
-      // synchronously. In pure Vite/browser previews that object is missing, so
-      // the call throws before setZoom()'s promise rejection path can run.
-      // React 19 surfaces passive-effect throws through ErrorBoundary.
-      void getCurrentWebview()
-        .setZoom(uiScale)
-        .catch(() => undefined);
+      // getCurrentWebview() reads window.__TAURI_INTERNALS__.metadata
+      // synchronously; missing metadata throws before setZoom's rejection path.
+      const webview = getCurrentWebview();
+      setNativeZoom = (factor) => webview.setZoom(factor);
     } catch {
       // Non-Tauri runtimes (browser dev server, vitest) skip native zoom.
+      setNativeZoom = undefined;
     }
+    void applyUiScaleToDocument(uiScale, { setNativeZoom }).catch(
+      () => undefined,
+    );
   }, [uiScale]);
 
   const scaleShortcutTitle = useMemo(() => {
