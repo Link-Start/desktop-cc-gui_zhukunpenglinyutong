@@ -4,6 +4,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import type { DownloadEvent, Update } from "@tauri-apps/plugin-updater";
+import { withTimeout } from "../../files/utils/fileViewNavigationUtils";
 import type { DebugEntry } from "../../../types";
 
 type UpdateStage =
@@ -39,6 +40,7 @@ type CheckForUpdatesOptions = {
 };
 
 const AUTO_UPDATE_ENABLED = true;
+const UPDATE_CHECK_TIMEOUT_MS = 15_000;
 
 function normalizeUpdateVersion(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
@@ -176,7 +178,14 @@ export function useUpdater({ enabled = true, onDebug }: UseUpdaterOptions) {
       try {
         clearLatestTimeout();
         setState({ stage: "checking" });
-        update = await check();
+        // plugin-updater 的 check() 走 reqwest 且没有默认超时：更新服务器不可达
+        // 时 Promise 永不 settle，Toast 会永远停在「正在检查更新...」。超时按失败
+        // 处理（catch 里非交互模式回 idle），后台请求继续软忽略。
+        update = await withTimeout(
+          check(),
+          UPDATE_CHECK_TIMEOUT_MS,
+          "update check timed out",
+        );
 
         if (isStaleRequest()) {
           return;
