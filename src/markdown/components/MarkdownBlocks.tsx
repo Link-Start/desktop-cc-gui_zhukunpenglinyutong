@@ -373,14 +373,27 @@ export function PreBlock({
   }
   const isSingleLine = !value.includes("\n");
   if (isSingleLine) {
+    // Compact single-line card (no language header / line numbers), but still
+    // exposes the same copy control as multi-line blocks — install commands
+    // and one-liners are the main copy targets.
+    const fencedValue = `\`\`\`${languageTag ?? ""}\n${value}\n\`\`\``;
     const highlightedHtml = highlightLine(value, languageTag);
     return (
-      <pre className="markdown-codeblock-single">
-        <code
-          className={className}
-          dangerouslySetInnerHTML={{ __html: highlightedHtml }}
-        />
-      </pre>
+      <div className="markdown-codeblock-single-wrap">
+        <div className="markdown-codeblock-single-actions">
+          <CodeBlockCopyButton
+            value={value}
+            fencedValue={fencedValue}
+            copyUseModifier={copyUseModifier}
+          />
+        </div>
+        <pre className="markdown-codeblock-single">
+          <code
+            className={className}
+            dangerouslySetInnerHTML={{ __html: highlightedHtml }}
+          />
+        </pre>
+      </div>
     );
   }
   const codeLineCount = value.split(/\r?\n/).length;

@@ -114,6 +114,35 @@ describe("Markdown fenced block rendering", () => {
     ).toBe("text");
   });
 
+  it("renders single-line fenced code blocks with a copy button", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    const value = ["```bash", "sudo apt-get install -y libncurses5", "```"].join("\n");
+
+    const { container } = render(
+      <Markdown value={value} className="markdown message" codeBlockStyle="message" />,
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector(".markdown-codeblock-single")).toBeTruthy();
+    });
+    expect(container.querySelector(".markdown-codeblock-single-wrap")).toBeTruthy();
+    expect(container.querySelector(".markdown-codeblock-header")).toBeNull();
+    expect(container.textContent).toContain("sudo apt-get install -y libncurses5");
+
+    // Test i18n setup returns the key for this label.
+    const copyButton = screen.getByRole("button", { name: "messages.copyCodeBlock" });
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("sudo apt-get install -y libncurses5");
+    });
+  });
+
   it("renders heavy code blocks immediately while defer kill-switch is off", async () => {
     const onRenderedValueChange = vi.fn();
     const value = [

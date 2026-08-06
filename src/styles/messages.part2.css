@@ -697,9 +697,25 @@
   color: var(--theme-syntax-function, var(--message-code-token-function));
 }
 
-:is(.message, .thinking-block) .markdown-codeblock-single {
+/* Single-line fenced blocks keep a compact card body, with an always-visible
+   copy control anchored top-right (same glyph as multi-line headers). */
+:is(.message, .thinking-block) .markdown-codeblock-single-wrap {
+  position: relative;
   margin: 1.25em 0;
-  padding: 14px 16px 16px;
+}
+
+:is(.message, .thinking-block) .markdown-codeblock-single-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+}
+
+:is(.message, .thinking-block) .markdown-codeblock-single {
+  margin: 0;
+  padding: 14px 44px 16px 16px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   background: var(--message-codeblock-bg);

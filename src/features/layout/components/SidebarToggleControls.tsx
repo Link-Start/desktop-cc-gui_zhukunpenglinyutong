@@ -9,6 +9,11 @@ import PanelRightOpen from "lucide-react/dist/esm/icons/panel-right-open";
 import Search from "lucide-react/dist/esm/icons/search";
 import GalleryVerticalEnd from "lucide-react/dist/esm/icons/gallery-vertical-end";
 import { TooltipIconButton } from "../../../components/ui/tooltip-icon-button";
+import { WindowsMainWindowCloseConfirmDialog } from "./WindowsMainWindowCloseConfirmDialog";
+import {
+  canOpenWindowsMainWindowCloseConfirm,
+  performWindowsMainWindowClose,
+} from "../utils/windowsMainWindowCloseConfirm";
 
 export type SidebarToggleProps = {
   isCompact: boolean;
@@ -122,6 +127,8 @@ export function RightPanelCollapseButton({
 function WindowControls() {
   const { t } = useTranslation();
   const [isMaximized, setIsMaximized] = useState(false);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
 
   const syncMaximizedState = useCallback(async () => {
     try {
@@ -183,62 +190,100 @@ function WindowControls() {
     }
   }, []);
 
-  const handleClose = useCallback(() => {
-    try {
-      void getCurrentWindow().close();
-    } catch {
-      // Ignore in non-Tauri environments.
+  // Windows-only path (this component mounts only under windows-desktop chrome).
+  // Custom dialog + isolated helpers; macOS hide-on-close / menus untouched.
+  const handleCloseClick = useCallback(() => {
+    if (
+      !canOpenWindowsMainWindowCloseConfirm({
+        isDialogOpen: closeConfirmOpen,
+        isClosing,
+      })
+    ) {
+      return;
     }
-  }, []);
+    setCloseConfirmOpen(true);
+  }, [closeConfirmOpen, isClosing]);
+
+  const handleCloseConfirmCancel = useCallback(() => {
+    if (isClosing) {
+      return;
+    }
+    setCloseConfirmOpen(false);
+  }, [isClosing]);
+
+  const handleCloseConfirmAccept = useCallback(async () => {
+    if (isClosing) {
+      return;
+    }
+    setIsClosing(true);
+    try {
+      await performWindowsMainWindowClose(() => getCurrentWindow().close());
+    } finally {
+      // If close succeeded the host unloads; if not, re-enable UI.
+      setIsClosing(false);
+      setCloseConfirmOpen(false);
+    }
+  }, [isClosing]);
 
   const maximizeLabel = isMaximized ? t("common.restore") : t("menu.maximize");
 
   return (
-    <div className="titlebar-toggle titlebar-toggle-right titlebar-window-controls">
-      <button
-        type="button"
-        className="titlebar-window-button"
-        onClick={handleMinimize}
-        data-tauri-drag-region="false"
-        aria-label={t("menu.minimize")}
-        title={t("menu.minimize")}
-      >
-        <span
-          className="codicon codicon-chrome-minimize titlebar-window-glyph"
-          aria-hidden
-        />
-      </button>
-      <button
-        type="button"
-        className="titlebar-window-button"
-        onClick={() => {
-          void handleToggleMaximize();
-        }}
-        data-tauri-drag-region="false"
-        aria-label={maximizeLabel}
-        title={maximizeLabel}
-      >
-        <span
-          className={`codicon ${
-            isMaximized ? "codicon-chrome-restore" : "codicon-chrome-maximize"
-          } titlebar-window-glyph`}
-          aria-hidden
-        />
-      </button>
-      <button
-        type="button"
-        className="titlebar-window-button titlebar-window-button-close"
-        onClick={handleClose}
-        data-tauri-drag-region="false"
-        aria-label={t("menu.closeWindow")}
-        title={t("menu.closeWindow")}
-      >
-        <span
-          className="codicon codicon-chrome-close titlebar-window-glyph"
-          aria-hidden
-        />
-      </button>
-    </div>
+    <>
+      <div className="titlebar-toggle titlebar-toggle-right titlebar-window-controls">
+        <button
+          type="button"
+          className="titlebar-window-button"
+          onClick={handleMinimize}
+          data-tauri-drag-region="false"
+          aria-label={t("menu.minimize")}
+          title={t("menu.minimize")}
+        >
+          <span
+            className="codicon codicon-chrome-minimize titlebar-window-glyph"
+            aria-hidden
+          />
+        </button>
+        <button
+          type="button"
+          className="titlebar-window-button"
+          onClick={() => {
+            void handleToggleMaximize();
+          }}
+          data-tauri-drag-region="false"
+          aria-label={maximizeLabel}
+          title={maximizeLabel}
+        >
+          <span
+            className={`codicon ${
+              isMaximized ? "codicon-chrome-restore" : "codicon-chrome-maximize"
+            } titlebar-window-glyph`}
+            aria-hidden
+          />
+        </button>
+        <button
+          type="button"
+          className="titlebar-window-button titlebar-window-button-close"
+          onClick={handleCloseClick}
+          data-tauri-drag-region="false"
+          aria-label={t("menu.closeWindow")}
+          title={t("menu.closeWindow")}
+          aria-haspopup="dialog"
+          aria-expanded={closeConfirmOpen}
+          disabled={isClosing}
+        >
+          <span
+            className="codicon codicon-chrome-close titlebar-window-glyph"
+            aria-hidden
+          />
+        </button>
+      </div>
+      <WindowsMainWindowCloseConfirmDialog
+        open={closeConfirmOpen}
+        isClosing={isClosing}
+        onCancel={handleCloseConfirmCancel}
+        onConfirm={handleCloseConfirmAccept}
+      />
+    </>
   );
 }
 
