@@ -25,6 +25,9 @@ const runtimeNotice = {
       "ready": "클라이언트 초기화가 완료되었습니다.",
       "failed": "클라이언트 초기화에 실패했습니다. 다시 로드한 후 시도하세요."
     },
+    "uiScale": {
+      "startupGuardReset": "이전 실행에서 인터페이스 배율 {{scale}}%에서 응답이 멈췄으므로, 이번 세션은 임시로 100%로 복원했습니다. 설정 값은 변경되지 않았으며 설정에서 다시 적용할 수 있습니다."
+    },
     "runtime": {
       "startupPending": "{{workspace}}: {{engine}} 런타임 연결 중...",
       "resumePending": "{{workspace}}: 런타임 상태 확인에 실패했습니다. 복구를 시도합니다.",

@@ -22,6 +22,10 @@ const runtimeNotice = {
       ready: "客户端初始化完成",
       failed: "客户端初始化失败，请刷新后重试",
     },
+    uiScale: {
+      startupGuardReset:
+        "检测到上次启动在界面缩放 {{scale}}% 时卡死，本次已临时恢复为 100%。您的缩放设置未被修改，可在设置中重新调整。",
+    },
     runtime: {
       startupPending: "{{workspace}}：{{engine}} runtime 正在连接...",
       resumePending: "{{workspace}}：Runtime 探活异常，正在尝试恢复",

@@ -25,6 +25,9 @@ const runtimeNotice = {
       "ready": "Inicialização do cliente concluída.",
       "failed": "Falha na inicialização do cliente. Recarregue e tente novamente."
     },
+    "uiScale": {
+      "startupGuardReset": "A inicialização anterior travou com a escala da interface em {{scale}}%, então ela foi redefinida temporariamente para 100% nesta sessão. Sua configuração não foi alterada — você pode reaplicá-la em Configurações."
+    },
     "runtime": {
       "startupPending": "{{workspace}}: o runtime {{engine}} está conectando...",
       "resumePending": "{{workspace}}: falha na verificação de integridade do runtime. Tentando recuperação.",

@@ -5,6 +5,10 @@ import { useUiScaleShortcuts } from "./useUiScaleShortcuts";
 import type { AppSettings } from "../../../types";
 import type { RendererPlatform } from "../../../utils/rendererPlatform";
 import { resetUiScaleNativePinForTests } from "../../../utils/applyUiScale";
+import {
+  readUiScaleStartupGuardRecord,
+  resetUiScaleStartupGuardForTests,
+} from "../../../utils/uiScaleStartupGuard";
 
 const webviewMocks = vi.hoisted(() => ({
   getCurrentWebview: vi.fn(),
@@ -48,6 +52,7 @@ function createSettings(overrides: Partial<AppSettings> = {}): AppSettings {
 describe("useUiScaleShortcuts", () => {
   beforeEach(() => {
     resetUiScaleNativePinForTests();
+    resetUiScaleStartupGuardForTests();
     platformMocks.platform = "macos";
     document.documentElement.style.zoom = "";
     document.documentElement.style.width = "";
@@ -56,6 +61,8 @@ describe("useUiScaleShortcuts", () => {
     document.body.style.zoom = "";
     document.body.style.width = "";
     document.body.style.height = "";
+    document.body.style.transform = "";
+    document.body.style.position = "";
     webviewMocks.setZoom.mockReset();
     webviewMocks.setZoom.mockResolvedValue(undefined);
     webviewMocks.getCurrentWebview.mockReset();
@@ -64,14 +71,10 @@ describe("useUiScaleShortcuts", () => {
     });
   });
 
-  it("macos: applies native zoom at uiScale and strips CSS layout fill", async () => {
+  it("macos: unified CSS path — transform scale on body, native zoom pinned to 1", async () => {
     platformMocks.platform = "macos";
     document.documentElement.style.zoom = "0.8";
-    document.documentElement.style.width = "125%";
-    document.documentElement.style.height = "125%";
     document.body.style.zoom = "0.8";
-    document.body.style.width = "125%";
-    document.body.style.height = "125%";
     const settings = createSettings({ uiScale: 1.1 });
     renderHook(() =>
       useUiScaleShortcuts({
@@ -82,17 +85,16 @@ describe("useUiScaleShortcuts", () => {
     );
 
     await waitFor(() => {
-      expect(webviewMocks.setZoom).toHaveBeenCalledWith(1.1);
+      expect(document.documentElement.style.zoom).toBe("");
+      expect(document.body.style.zoom).toBe("");
+      expect(document.body.style.transform).toBe("scale(1.1)");
+      expect(document.body.style.width).toBe(`${100 / 1.1}%`);
+      expect(webviewMocks.setZoom).toHaveBeenCalledWith(1);
     });
-    expect(document.documentElement.style.zoom).toBe("");
-    expect(document.documentElement.style.width).toBe("");
-    expect(document.documentElement.style.height).toBe("");
-    expect(document.body.style.zoom).toBe("");
-    expect(document.body.style.width).toBe("");
-    expect(document.body.style.height).toBe("");
+    expect(webviewMocks.setZoom).not.toHaveBeenCalledWith(1.1);
   });
 
-  it("linux: applies native zoom at uiScale (same as macos)", async () => {
+  it("linux: same unified CSS path as macos (native pinned to 1)", async () => {
     platformMocks.platform = "linux";
     renderHook(() =>
       useUiScaleShortcuts({
@@ -103,8 +105,10 @@ describe("useUiScaleShortcuts", () => {
     );
 
     await waitFor(() => {
-      expect(webviewMocks.setZoom).toHaveBeenCalledWith(0.8);
+      expect(document.body.style.transform).toBe("scale(0.8)");
+      expect(webviewMocks.setZoom).toHaveBeenCalledWith(1);
     });
+    expect(webviewMocks.setZoom).not.toHaveBeenCalledWith(0.8);
   });
 
   it("windows: transform scale + layout fill on body and native zoom pinned to 1", async () => {
@@ -151,6 +155,50 @@ describe("useUiScaleShortcuts", () => {
 
     await waitFor(() => {
       expect(document.body.style.transform).toBe("scale(0.9)");
+    });
+  });
+
+  it("non-identity apply records a pending startup-guard mark", async () => {
+    platformMocks.platform = "macos";
+    renderHook(() =>
+      useUiScaleShortcuts({
+        settings: createSettings({ uiScale: 0.9 }),
+        setSettings: vi.fn(),
+        saveSettings: vi.fn(async (next) => next),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(readUiScaleStartupGuardRecord()?.scale).toBe(0.9);
+    });
+  });
+
+  it("startup guard forces identity scale for one session after an unhealthy ≠1 launch", async () => {
+    platformMocks.platform = "macos";
+    // Simulate: previous session applied 0.9 and froze before proving healthy.
+    window.localStorage.setItem(
+      "ccgui.uiScaleStartupGuard.v1",
+      JSON.stringify({ scale: 0.9, markedAt: Date.now() }),
+    );
+    document.body.style.transform = "scale(0.9)";
+    document.body.style.width = `${100 / 0.9}%`;
+    document.body.style.position = "fixed";
+
+    renderHook(() =>
+      useUiScaleShortcuts({
+        settings: createSettings({ uiScale: 0.9 }),
+        setSettings: vi.fn(),
+        saveSettings: vi.fn(async (next) => next),
+      }),
+    );
+
+    await waitFor(() => {
+      // Scale 1 applied instead of the stored 0.9: CSS fill cleared.
+      expect(document.body.style.transform).toBe("");
+      expect(document.body.style.width).toBe("");
+      expect(document.body.style.position).toBe("");
+      // The pending record is consumed so the next launch retries the setting.
+      expect(readUiScaleStartupGuardRecord()).toBeNull();
     });
   });
 });
