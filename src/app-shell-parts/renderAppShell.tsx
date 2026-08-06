@@ -757,7 +757,12 @@ export function renderAppShell(ctx: RenderAppShellContext) {
             onPrev={showPreviousReleaseNotes}
             onNext={showNextReleaseNotes}
             onRetry={retryReleaseNotesLoad}
-            onCheckForUpdates={checkForUpdates}
+            onCheckForUpdates={() => {
+              void checkForUpdates({
+                announceNoUpdate: true,
+                interactive: true,
+              });
+            }}
             onStartUpdate={startUpdate}
           />
         </Suspense>

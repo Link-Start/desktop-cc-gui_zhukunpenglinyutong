@@ -2,6 +2,64 @@
 
 ---
 
+### **2026年8月6日（v0.8.2）**
+
+中文：
+
+这一版将应用升到 **0.8.2**，主线是「界面缩放全平台不再假死、坏缩放可自救」：macOS / Linux 与 Windows 一样不再对 WebView 使用 `uiScale ≠ 1` 的 native zoom；统一走 CSS `transform: scale()`，并加上启动 guard——上次缩放把渲染打挂时，下次启动临时回退 100%，**不改写**用户已保存的偏好，避免进不了设置页的锁死循环。
+
+🔧 Improvements
+- 将应用版本号提升到 `0.8.2`（`package.json` / `package-lock.json` / `src-tauri/tauri.conf.json`），与本补丁发版元数据对齐
+
+🐛 Fixes
+- 修复全平台 native WebView zoom 假死（Windows WebView2 已证实；macOS WKWebView `setPageZoom` 在 2026-08-06 现场同样复现）：所有平台的 `uiScale` 仅通过 CSS `transform: scale()` + body `100/scale%` 布局补偿应用；native `setZoom` 每会话只钉死为 `1` 一次以清除旧构建残留，**禁止**再调用 `≠ 1`
+- 新增 `uiScaleStartupGuard`：应用 `uiScale ≠ 1` 时写入 pending 标记，约 8s + rAF 证明绘制链路健康后清除；若标记残留，下一会话仅临时强制 100% 并弹出运行时提示，**从不改写** `settings.json` 里的用户缩放偏好，用户可自行改回或留在安全值
+
+English:
+
+This release moves the app to **0.8.2**. The headline is interface scaling that no longer freezes the renderer on any platform, with self-recovery when a bad scale bricks a session: macOS / Linux join Windows in never applying `uiScale ≠ 1` via native WebView zoom; everything uses CSS `transform: scale()`, plus a startup guard that temporarily falls back to 100% on the next launch when the previous scale hung the paint pipeline—**without rewriting** the user's saved preference, so Settings remains reachable.
+
+🔧 Improvements
+- Bump the app version to `0.8.2` across frontend package metadata, the lockfile, and Tauri bundle configuration so this patch ship matches SemVer and packaging metadata
+
+🐛 Fixes
+- Fixed native WebView zoom freezes on all platforms (WebView2 already confirmed on Windows; macOS WKWebView `setPageZoom` reproduced in the field on 2026-08-06): apply `uiScale` everywhere through CSS `transform: scale()` plus body `100/scale%` layout compensation; pin native `setZoom` to `1` once per session to clear residual zoom from older builds, and **never** call native zoom at a non-identity factor
+- Added `uiScaleStartupGuard`: write a pending mark when applying `uiScale ≠ 1`, clear it after ~8s + rAF proves the paint pipeline is alive; a leftover mark forces temporary 100% for the next session only and shows a runtime notice, **without rewriting** the stored user scale so a lockout loop is breakable without hand-editing settings
+
+---
+
+### **2026年8月5日（v0.8.1）**
+
+中文：
+
+这一版将应用升到 **0.8.1**，主线是「Windows 缩放铺满、关窗可确认、单行代码可复制」：Windows 在 CSS 缩放后不再留黑边，主窗点 X 先二次确认再退出，消息 / Spec Hub 里单行围栏代码块也有复制按钮。
+
+✨ Features
+- Windows 主窗关闭二次确认：点右上角 X 弹出应用内 AlertDialog（非系统对话框），确认后才关闭；连点不叠层，关闭失败可观测；不改动 macOS hide-on-close、菜单退出与 Alt+F4
+- 单行围栏代码块复制：消息与 Spec Hub 中单行 fenced code 与多行块对齐，始终显示复制按钮（纯文本 / 带围栏两种），无语言头、无行号，布局用右上角定位与右侧内边距避免压住代码
+
+🔧 Improvements
+- 将应用版本号提升到 `0.8.1`（`package.json` / `package-lock.json` / `src-tauri/tauri.conf.json`），为 patch 发版对齐 SemVer 与打包元数据
+
+🐛 Fixes
+- 修复 Windows `uiScale ≠ 1` 时 CSS `zoom` 无法铺满视口留下黑边：改为 body `transform: scale()` + `100/scale%` 尺寸补偿填满 WebView2 视口；当时 macOS / Linux 仍走 native `setZoom` 并清理残留 CSS（全平台统一 CSS 缩放见 v0.8.2）
+
+English:
+
+This release moves the app to **0.8.1**. The headline is Windows scaling that fills the viewport, a confirm step before closing the main window, and copy controls on single-line code fences: Windows no longer leaves black bars after CSS scale, the main-window X asks once in-app before quit, and one-liner fenced blocks in chat / Spec Hub gain the same copy control as multi-line blocks.
+
+✨ Features
+- Windows main-window close confirmation: clicking the top-right X opens an in-app AlertDialog (not a system sheet) and only closes after confirm; rapid clicks do not stack dialogs; close failures are observable; macOS hide-on-close, menu Quit, and Alt+F4 are unchanged
+- Single-line fenced code copy: message and Spec Hub one-liner fences match multi-line blocks with an always-visible copy control (plain value and fenced value); no language header or line numbers; top-right action positioning and right padding keep code from sitting under the button
+
+🔧 Improvements
+- Bump the app version to `0.8.1` across frontend package metadata, the lockfile, and Tauri bundle configuration so this patch ship aligns SemVer and packaging metadata
+
+🐛 Fixes
+- Fixed Windows black bars when `uiScale ≠ 1`: CSS `zoom` could not fill the WebView2 viewport, so scaling moved to body `transform: scale()` plus `100/scale%` size compensation; macOS / Linux still used native `setZoom` and cleared residual CSS at that point (full-platform CSS-only scale lands in v0.8.2)
+
+---
+
 ### **2026年8月5日（v0.8.0）**
 
 中文：

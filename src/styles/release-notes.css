@@ -87,6 +87,16 @@
   flex-shrink: 0;
 }
 
+.release-notes-modal-check-updates {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  /* 中和 buttons.css 全局 padding 泄漏 */
+  line-height: 1;
+}
+
 .release-notes-modal-update-badge {
   display: inline-flex;
   align-items: center;
