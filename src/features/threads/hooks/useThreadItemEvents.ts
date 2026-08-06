@@ -1734,7 +1734,9 @@ export function useThreadItemEvents({
           },
           {
             urgent:
-              threadId.startsWith("shared:") && liveTextResult?.isFirst === true,
+              (threadId.startsWith("shared:") ||
+                threadId.startsWith("agent-canvas:")) &&
+              liveTextResult?.isFirst === true,
           },
         );
       }
