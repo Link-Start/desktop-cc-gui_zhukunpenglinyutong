@@ -39,9 +39,9 @@ describe("usesCssPageZoom", () => {
   it.each<[RendererPlatform, boolean]>([
     ["windows", true],
     ["unknown", true],
-    ["macos", false],
-    ["linux", false],
-  ])("platform %s → %s", (platform, expected) => {
+    ["macos", true],
+    ["linux", true],
+  ])("platform %s → %s (unified CSS path)", (platform, expected) => {
     expect(usesCssPageZoom(platform)).toBe(expected);
   });
 });
@@ -175,13 +175,8 @@ describe("applyUiScale", () => {
     expect(order[order.length - 1]).toBe(1);
   });
 
-  it("macos: native zoom at uiScale and clears CSS scale + layout fill", async () => {
+  it("macos: unified CSS path — transform scale + native zoom pinned to 1 once", async () => {
     const root = makeRoot();
-    root.style.zoom = "1.2";
-    root.style.width = "125%";
-    root.style.height = "125%";
-    root.style.transform = "scale(1.2)";
-    root.style.position = "fixed";
     const setNativeZoom = vi.fn(async () => undefined);
     await applyUiScale(0.8, {
       root,
@@ -189,21 +184,19 @@ describe("applyUiScale", () => {
       platform: "macos",
     });
     expect(root.style.zoom).toBe("");
-    expect(root.style.transform).toBe("");
-    expect(root.style.width).toBe("");
-    expect(root.style.height).toBe("");
-    expect(root.style.position).toBe("");
+    expect(root.style.transform).toBe("scale(0.8)");
+    expect(root.style.width).toBe("125%");
+    expect(root.style.height).toBe("125%");
     expect(root.style.getPropertyValue("--ui-scale")).toBe("0.8");
-    expect(setNativeZoom).toHaveBeenCalledWith(0.8);
-    expect(setNativeZoom).not.toHaveBeenCalledWith(1);
+    // Native zoom is pinned to 1 once — never setZoom(uiScale≠1).
+    expect(setNativeZoom).toHaveBeenCalledTimes(1);
+    expect(setNativeZoom).toHaveBeenCalledWith(1);
+    expect(setNativeZoom).not.toHaveBeenCalledWith(0.8);
   });
 
-  it("macos documentElement: clears body fill left by Windows path", async () => {
-    document.body.style.zoom = "0.8";
-    document.body.style.width = "125%";
-    document.body.style.height = "125%";
-    document.body.style.transform = "scale(0.8)";
-    document.body.style.position = "fixed";
+  it("macos documentElement: scales body and clears residual html zoom", async () => {
+    document.documentElement.style.zoom = "0.8";
+    document.documentElement.style.width = "125%";
     const setNativeZoom = vi.fn(async () => undefined);
     await applyUiScale(1.1, {
       root: document.documentElement,
@@ -211,19 +204,16 @@ describe("applyUiScale", () => {
       platform: "macos",
     });
     expect(document.documentElement.style.zoom).toBe("");
-    expect(document.body.style.zoom).toBe("");
-    expect(document.body.style.transform).toBe("");
-    expect(document.body.style.width).toBe("");
-    expect(document.body.style.height).toBe("");
-    expect(document.body.style.position).toBe("");
-    expect(setNativeZoom).toHaveBeenCalledWith(1.1);
+    expect(document.documentElement.style.width).toBe("");
+    expect(document.documentElement.style.transform).toBe("");
+    expect(document.body.style.transform).toBe("scale(1.1)");
+    expect(document.body.style.width).toBe(`${100 / 1.1}%`);
+    expect(setNativeZoom).toHaveBeenCalledWith(1);
+    expect(setNativeZoom).not.toHaveBeenCalledWith(1.1);
   });
 
-  it("linux: same as macos (native uiScale, no CSS fill)", async () => {
+  it("linux: same unified CSS path as macos (native pinned to 1)", async () => {
     const root = makeRoot();
-    root.style.width = "125%";
-    root.style.height = "125%";
-    root.style.transform = "scale(1.2)";
     const setNativeZoom = vi.fn(async () => undefined);
     await applyUiScale(1.2, {
       root,
@@ -231,10 +221,12 @@ describe("applyUiScale", () => {
       platform: "linux",
     });
     expect(root.style.zoom).toBe("");
-    expect(root.style.transform).toBe("");
-    expect(root.style.width).toBe("");
-    expect(root.style.height).toBe("");
-    expect(setNativeZoom).toHaveBeenCalledWith(1.2);
+    expect(root.style.transform).toBe("scale(1.2)");
+    expect(root.style.width).toBe(`${100 / 1.2}%`);
+    expect(root.style.height).toBe(`${100 / 1.2}%`);
+    expect(setNativeZoom).toHaveBeenCalledTimes(1);
+    expect(setNativeZoom).toHaveBeenCalledWith(1);
+    expect(setNativeZoom).not.toHaveBeenCalledWith(1.2);
   });
 
   it("unknown: CSS scale + fill without requiring native API", async () => {

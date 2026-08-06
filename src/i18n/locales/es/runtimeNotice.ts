@@ -25,6 +25,9 @@ const runtimeNotice = {
       "ready": "Se completó la inicialización del cliente.",
       "failed": "Falló la inicialización del cliente. Recarga e inténtalo de nuevo."
     },
+    "uiScale": {
+      "startupGuardReset": "El inicio anterior se congeló con la escala de interfaz al {{scale}} %, por lo que se restableció temporalmente al 100 % para esta sesión. Tu ajuste no se modificó; puedes volver a aplicarlo en Configuración."
+    },
     "runtime": {
       "startupPending": "{{workspace}}: el tiempo de ejecución de {{engine}} se está conectando...",
       "resumePending": "{{workspace}}: falló la comprobación de estado del tiempo de ejecución. Intentando recuperación.",

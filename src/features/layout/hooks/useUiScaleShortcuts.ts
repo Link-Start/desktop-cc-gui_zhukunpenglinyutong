@@ -5,6 +5,13 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { AppSettings } from "../../../types";
 import { applyUiScaleToDocument } from "../../../utils/applyUiScale";
 import {
+  confirmUiScaleHealthy,
+  markUiScalePending,
+  shouldForceUiScaleIdentity,
+} from "../../../utils/uiScaleStartupGuard";
+import { appendRendererDiagnostic } from "../../../services/rendererDiagnostics";
+import { pushGlobalRuntimeNotice } from "../../../services/globalRuntimeNotices";
+import {
   formatShortcutForPlatform,
   isEditableShortcutTarget,
   matchesShortcutForPlatform,
@@ -39,11 +46,23 @@ export function useUiScaleShortcuts({
     if (typeof window === "undefined" || typeof document === "undefined") {
       return;
     }
-    // Platform split: Windows uses CSS transform scale + native zoom pinned to 1
-    // (WebView2 SetZoomFactor(≠1) freezes renderer; CSS zoom alone letterboxes).
-    // macOS/Linux keep native setZoom(uiScale). See
-    // docs/analysis/windows-ccgui-startup-hang-2026-08-05.md and
-    // openspec/changes/fix-windows-ui-scale-webview2-hang/.
+    // All platforms apply uiScale via CSS transform scale; native webview zoom
+    // (WebView2 SetZoomFactor / WKWebView setPageZoom) is pinned to 1 once —
+    // native zoom ≠1 has frozen renderers in the field. See
+    // docs/analysis/windows-ccgui-startup-hang-2026-08-05.md,
+    // openspec/changes/fix-windows-ui-scale-webview2-hang/ and
+    // openspec/changes/fix-ui-scale-native-zoom-freeze-all-platforms/.
+    //
+    // Startup guard: if the previous session applied a non-identity scale and
+    // never proved healthy (renderer froze before it could clear the pending
+    // record), apply scale 1 for THIS session only — the stored setting is
+    // never rewritten, so the user keeps their preference and can retry.
+    let effectiveScale = uiScale;
+    let forcedIdentity = false;
+    if (uiScale !== 1 && shouldForceUiScaleIdentity()) {
+      effectiveScale = 1;
+      forcedIdentity = true;
+    }
     let setNativeZoom: ((factor: number) => Promise<void>) | undefined;
     try {
       // getCurrentWebview() reads window.__TAURI_INTERNALS__.metadata
@@ -54,9 +73,26 @@ export function useUiScaleShortcuts({
       // Non-Tauri runtimes (browser dev server, vitest) skip native zoom.
       setNativeZoom = undefined;
     }
-    void applyUiScaleToDocument(uiScale, { setNativeZoom }).catch(
+    void applyUiScaleToDocument(effectiveScale, { setNativeZoom }).catch(
       () => undefined,
     );
+    if (effectiveScale === 1) {
+      confirmUiScaleHealthy();
+    } else {
+      markUiScalePending(effectiveScale);
+    }
+    if (forcedIdentity) {
+      appendRendererDiagnostic("ui-scale/startup-guard-forced-identity", {
+        storedScale: uiScale,
+      });
+      pushGlobalRuntimeNotice({
+        severity: "warning",
+        category: "diagnostic",
+        messageKey: "runtimeNotice.uiScale.startupGuardReset",
+        messageParams: { scale: Math.round(uiScale * 100) },
+        dedupeKey: "ui-scale:startup-guard-forced-identity",
+      });
+    }
   }, [uiScale]);
 
   const scaleShortcutTitle = useMemo(() => {

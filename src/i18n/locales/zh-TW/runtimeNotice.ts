@@ -25,6 +25,9 @@ const runtimeNotice = {
       "ready": "用戶端初始化已完成。",
       "failed": "用戶端初始化失敗。請重新載入後再試。"
     },
+    "uiScale": {
+      "startupGuardReset": "偵測到上次啟動在介面縮放 {{scale}}% 時凍結，本次已暫時恢復為 100%。您的縮放設定未被修改，可在設定中重新調整。"
+    },
     "runtime": {
       "startupPending": "{{workspace}}：{{engine}} 執行階段正在連線…",
       "resumePending": "{{workspace}}：執行階段健康檢查失敗。正在嘗試復原。",

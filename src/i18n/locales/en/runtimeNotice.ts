@@ -24,6 +24,10 @@ const runtimeNotice = {
       ready: "Client initialization completed.",
       failed: "Client initialization failed. Reload and try again.",
     },
+    uiScale: {
+      startupGuardReset:
+        "The previous launch froze at {{scale}}% interface scale, so scale was temporarily reset to 100% for this session. Your setting was not changed — you can re-apply it in Settings.",
+    },
     runtime: {
       startupPending: "{{workspace}}: {{engine}} runtime is connecting...",
       resumePending:

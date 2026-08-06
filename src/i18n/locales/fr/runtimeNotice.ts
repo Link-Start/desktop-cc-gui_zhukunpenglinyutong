@@ -25,6 +25,9 @@ const runtimeNotice = {
       "ready": "Initialisation du client terminée.",
       "failed": "Échec de l'initialisation du client. Rechargez et réessayez."
     },
+    "uiScale": {
+      "startupGuardReset": "Le lancement précédent a figé l'application à une échelle d'interface de {{scale}} % ; elle a été temporairement rétablie à 100 % pour cette session. Votre réglage n'a pas été modifié — vous pouvez le réappliquer dans les Réglages."
+    },
     "runtime": {
       "startupPending": "{{workspace}} : le runtime {{engine}} se connecte...",
       "resumePending": "{{workspace}} : échec du contrôle de santé du runtime. Tentative de récupération.",

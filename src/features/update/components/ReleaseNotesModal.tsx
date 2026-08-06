@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import X from "lucide-react/dist/esm/icons/x";
 import ChevronLeft from "lucide-react/dist/esm/icons/chevron-left";
@@ -25,8 +25,8 @@ type ReleaseNotesModalProps = {
   onStartUpdate?: () => void;
 };
 
-const ACTIVE_UPDATE_STAGES = new Set([
-  "available",
+/** Stages where a new "check for updates" click would be redundant or unsafe. */
+const BUSY_UPDATE_STAGES = new Set([
   "checking",
   "downloading",
   "installing",
@@ -48,29 +48,12 @@ export function ReleaseNotesModal({
   onStartUpdate,
 }: ReleaseNotesModalProps) {
   const { t } = useTranslation();
-  const checkedOnOpenRef = useRef(false);
 
   useEffect(() => {
     if (isOpen) {
       void loadReleaseNotesStyles();
     }
   }, [isOpen]);
-
-  // Opening release notes also probes for app updates; keep silent when already latest.
-  useEffect(() => {
-    if (!isOpen) {
-      checkedOnOpenRef.current = false;
-      return;
-    }
-    if (!onCheckForUpdates || checkedOnOpenRef.current) {
-      return;
-    }
-    checkedOnOpenRef.current = true;
-    if (ACTIVE_UPDATE_STAGES.has(updaterState?.stage ?? "idle")) {
-      return;
-    }
-    onCheckForUpdates();
-  }, [isOpen, onCheckForUpdates, updaterState?.stage]);
 
   const currentEntry = useMemo(
     () => entries[activeIndex] ?? null,
@@ -79,7 +62,9 @@ export function ReleaseNotesModal({
   const currentPage = entries.length > 0 ? activeIndex + 1 : 0;
   const hasPrevious = activeIndex > 0;
   const hasNext = activeIndex < entries.length - 1;
-  const updateAvailable = updaterState?.stage === "available";
+  const updateStage = updaterState?.stage ?? "idle";
+  const updateAvailable = updateStage === "available";
+  const updateBusy = BUSY_UPDATE_STAGES.has(updateStage);
   const updateVersionLabel = updaterState?.version
     ? `v${updaterState.version.replace(/^v/i, "")}`
     : null;
@@ -151,6 +136,17 @@ export function ReleaseNotesModal({
                   </span>
                 ) : null}
               </button>
+            ) : onCheckForUpdates ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="release-notes-modal-check-updates"
+                onClick={onCheckForUpdates}
+                disabled={updateBusy}
+              >
+                {t("about.checkForUpdates")}
+              </Button>
             ) : null}
             <Button
               type="button"

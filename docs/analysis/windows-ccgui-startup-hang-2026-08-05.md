@@ -6,6 +6,8 @@
 > **状态**：**根因已确认**；修复代码已在本机落地（OpenSpec change `fix-windows-ui-scale-webview2-hang`）；**未 git commit**；settings 可保持 `uiScale:0.8` 做验收  
 > **平台**：Windows（WebView2）已证实；macOS（WKWebView）未见；Linux（WebKitGTK）无 hang 证据  
 > **实现入口**：`src/utils/applyUiScale.ts` + `useUiScaleShortcuts.ts`；规格见 `openspec/changes/fix-windows-ui-scale-webview2-hang/`
+>
+> **⏩ 2026-08-06 后续（平台结论已过期，以此为准）**：现场反馈 **macOS `uiScale=0.9` 同样卡死**，上文 §0.3「Mac 未见同症」系样本不足。修复策略已升级为 **三端统一 CSS transform scale、全平台 native zoom 只钉 1**，并新增启动看门狗（上次非 100% 启动未证明健康 → 本次临时 100% + runtime notice，不改写用户设置）。另有「Windows App 100% + 系统缩放 120% 卡死」一例，zoom API 理论无法解释，疑似另有 fractional-scale 敏感点，待真机 profiling 单独排查。见 OpenSpec change `fix-ui-scale-native-zoom-freeze-all-platforms`。
 
 ---
 

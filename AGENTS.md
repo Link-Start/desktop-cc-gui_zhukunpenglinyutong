@@ -124,6 +124,12 @@ Keep this managed block so 'trellis update' can refresh the instructions.
 - 硬红线：① 高频 setState（每事件/日志/轮询级）禁挂根 hook 链；② 数组追加型 setState 禁入根链；③ 根链 store 用事件驱动 + ≥30s 兜底轮询，禁秒级轮询；④ 流式正文走 `liveAssistantTextChannel`（flag `liveTextExternalization` 默认开），禁恢复逐 delta dispatch 进 reducer。
 - 渲染风暴排查用归因面板 + React `memoizedUpdaters` 追踪（复现指南见上述文档 §七）；react-scan 2~3x 放大，测量前关。
 
+### Native WebView API Gate（2026-08-06 uiScale P0 沉淀）
+
+- 调用任何 native / WebView 系统能力（zoom、DPI、窗口、透明度、Tauri command）前，必读 `.trellis/spec/guides/native-webview-api-risk-gate.md` 并过三问：① 有无纯 Web 替代（有则一律用，如 CSS `transform: scale()` 替代 native zoom）；② 出错用户能否自救；③ 验收矩阵是否覆盖平台 × 取值 × 系统 DPI。
+- 「启动时生效的持久化设置」若错误值可致起不来 / 进不了设置页，必须配 startup guard（模板 `src/utils/uiScaleStartupGuard.ts`）：危险值留 pending 记录，未证明健康则下次会话临时回退安全值，**禁止改写用户存储**，禁止拿 timeout 当修复。
+- 平台结论必须按证据分级（已证实 / 已排除 / 未验证）；「没接到投诉」不算安全证据。
+
 ## 仓库卫生
 
 - `.omx/**`、`.trellis/.developer`、`.trellis/.current-task` 等本地 state 属于 runtime artifact 或 local-only state。

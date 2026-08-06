@@ -19,6 +19,7 @@ vi.mock("react-i18next", () => ({
         "update.releaseNotesNext": "Next",
         "update.releaseNotesPage": `${params?.current} / ${params?.total}`,
         "update.availableAction": "Update available",
+        "about.checkForUpdates": "Check for Updates",
         "common.retry": "Retry",
       };
       return translations[key] ?? key;
@@ -185,13 +186,12 @@ describe("ReleaseNotesModal", () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
-  it("checks for updates when opened and starts update from badge", () => {
+  it("does not auto-check for updates when opened", () => {
     const onCheckForUpdates = vi.fn();
-    const onStartUpdate = vi.fn();
 
-    const { rerender } = render(
+    render(
       <ReleaseNotesModal
-        isOpen={false}
+        isOpen
         entries={entries}
         activeIndex={0}
         loading={false}
@@ -202,13 +202,21 @@ describe("ReleaseNotesModal", () => {
         onNext={vi.fn()}
         onRetry={vi.fn()}
         onCheckForUpdates={onCheckForUpdates}
-        onStartUpdate={onStartUpdate}
+        onStartUpdate={vi.fn()}
       />,
     );
 
     expect(onCheckForUpdates).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "Check for Updates" }),
+    ).toBeTruthy();
+  });
 
-    rerender(
+  it("checks for updates only when the header button is clicked", () => {
+    const onCheckForUpdates = vi.fn();
+    const onStartUpdate = vi.fn();
+
+    const { rerender } = render(
       <ReleaseNotesModal
         isOpen
         entries={entries}
@@ -225,8 +233,33 @@ describe("ReleaseNotesModal", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Check for Updates" }));
     expect(onCheckForUpdates).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("button", { name: /Update available/i })).toBeNull();
+
+    rerender(
+      <ReleaseNotesModal
+        isOpen
+        entries={entries}
+        activeIndex={0}
+        loading={false}
+        error={null}
+        updaterState={{ stage: "checking" }}
+        onClose={vi.fn()}
+        onPrev={vi.fn()}
+        onNext={vi.fn()}
+        onRetry={vi.fn()}
+        onCheckForUpdates={onCheckForUpdates}
+        onStartUpdate={onStartUpdate}
+      />,
+    );
+
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Check for Updates",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
 
     rerender(
       <ReleaseNotesModal
@@ -245,13 +278,14 @@ describe("ReleaseNotesModal", () => {
       />,
     );
 
+    expect(screen.queryByRole("button", { name: "Check for Updates" })).toBeNull();
     const badge = screen.getByRole("button", { name: /Update available/i });
     expect(badge.textContent).toContain("v0.7.13");
     fireEvent.click(badge);
     expect(onStartUpdate).toHaveBeenCalledTimes(1);
   });
 
-  it("does not re-check when an update is already available", () => {
+  it("shows update badge instead of check button when update is available", () => {
     const onCheckForUpdates = vi.fn();
 
     render(
@@ -272,6 +306,7 @@ describe("ReleaseNotesModal", () => {
     );
 
     expect(onCheckForUpdates).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Check for Updates" })).toBeNull();
     expect(screen.getByRole("button", { name: /Update available/i })).toBeTruthy();
   });
 });

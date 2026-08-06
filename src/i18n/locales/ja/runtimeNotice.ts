@@ -25,6 +25,9 @@ const runtimeNotice = {
       "ready": "クライアントの初期化が完了しました。",
       "failed": "クライアントの初期化に失敗しました。再読み込みして再試行してください。"
     },
+    "uiScale": {
+      "startupGuardReset": "前回の起動時に表示倍率 {{scale}}% でフリーズしたため、今回のセッションでは一時的に 100% に戻しました。設定値は変更されていません。設定から再度適用できます。"
+    },
     "runtime": {
       "startupPending": "{{workspace}}: {{engine}} ランタイムに接続中...",
       "resumePending": "{{workspace}}: ランタイムのヘルスチェックに失敗しました。復旧を試みています。",
