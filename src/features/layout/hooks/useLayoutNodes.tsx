@@ -131,6 +131,7 @@ import {
 } from "../../shared-session/target/sendStateMachine";
 import { buildShellRuntimeSummary } from "./layoutShellSummary";
 import { buildConversationCanvasNode } from "./conversationCanvasNode";
+import { CollabTimelineWaiting } from "../../multi-agent/components/CollabTimelineWaiting";
 import { useLayoutTopbarSessionTabs } from "./useLayoutTopbarSessionTabs";
 import { resolveIsSharedSession } from "../../shared-session/utils/sharedSessionIdentity";
 import {
@@ -1116,6 +1117,12 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       buildConversationCanvasNode({
         isProviderContinuation:
           activeThreadSummary?.originKind === "provider-continuation",
+        timelineTrailingNode: (
+          <CollabTimelineWaiting
+            workspaceId={options.activeWorkspaceId}
+            threadId={options.activeThreadId ?? null}
+          />
+        ),
         continuationContextNode:
           activeThreadSummary?.originKind === "provider-continuation" ? (
             <ProviderContinuationContextCard
@@ -1232,6 +1239,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       options.onOpenFile,
       handleCaptureWorkspaceNote,
       options.agentTaskScrollRequest,
+      options.activeWorkspaceId,
+      options.activeThreadId,
       // heartbeatPulse removed from deps — uses ref to avoid
       // recreating messagesNode on every heartbeat tick
     ],
