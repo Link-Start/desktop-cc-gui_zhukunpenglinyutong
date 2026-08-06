@@ -1969,8 +1969,12 @@
   flex-direction: column;
   gap: 2px;
   margin-left: 0;
-  /* Horizontal inset matches workspace-row (4px) so active pills align */
-  padding: 1px 4px 2px;
+  /*
+   * Session selection pills stay inset vs workspace-row (margin 4px) so nested
+   * session backgrounds are narrower and do not flush-align with the project
+   * pill above. Left is a bit larger for clear tree hierarchy.
+   */
+  padding: 1px 8px 2px 12px;
 }
 
 .thread-list[data-virtualized="true"] {
@@ -2377,10 +2381,11 @@
 }
 
 /* Updated Thread Row Styles — selection geometry aligned with workspace-row */
+/* Session pill geometry is inset via .thread-list padding (not flush with workspace-row). */
 .thread-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   min-height: var(--sidebar-row-height-thread);
   padding: 2px 6px 2px calc(10px + var(--thread-indent, 0px));
   border-radius: var(--sidebar-row-radius);
