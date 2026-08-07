@@ -16,6 +16,17 @@ const messages = {
     turnFilesChanged: {
       title_other: "已编辑 {{count}} 个文件",
       showMore_other: "再显示 {{count}} 个文件",
+      revertAll: "撤销全部",
+      revertFile: "撤销 {{path}}",
+      revertFileAction: "撤销",
+      revertAllConfirmTitle: "撤销全部更改",
+      revertAllConfirmBody:
+        "将撤销这 {{count}} 个文件的本地更改，恢复到最近一次提交。此操作无法撤销。",
+      revertAllConfirmAction: "确认撤销全部",
+      revertFileConfirmTitle: "撤销文件更改",
+      revertFileConfirmBody:
+        "将撤销「{{path}}」的本地更改，恢复到最近一次提交。此操作无法撤销。",
+      revertFileConfirmAction: "确认撤销",
     },
     noThinkingContent: "无思考内容",
     hiddenThinkingContent: "思考内容已按当前设置隐藏",

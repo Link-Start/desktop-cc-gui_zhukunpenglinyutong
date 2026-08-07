@@ -24,6 +24,10 @@ export type ComposerRunStatusStripProps = ComposerRunStatusInput & {
   isCodexEngine?: boolean;
   onOpenDiffPath?: (path: string) => void;
   onInspectSubagent?: (agent: SubagentInfo) => void;
+  /** 撤销已编辑列表中的单个文件 */
+  onRevertFile?: (path: string) => void | Promise<void>;
+  /** 撤销已编辑列表中的多个文件（撤销全部） */
+  onRevertAllFiles?: (paths: string[]) => void | Promise<void>;
 };
 
 type PillDef = {
@@ -121,6 +125,8 @@ export const ComposerRunStatusStrip = memo(function ComposerRunStatusStrip(
     isCodexEngine = false,
     onOpenDiffPath,
     onInspectSubagent,
+    onRevertFile,
+    onRevertAllFiles,
     isPlanMode,
     isProcessing,
     ...statusInput
@@ -188,7 +194,7 @@ export const ComposerRunStatusStrip = memo(function ComposerRunStatusStrip(
             {sectionExpanded ? (
               <div
                 id={panelId}
-                className="composer-run-status-panel"
+                className="composer-run-status-panel scrollable"
                 role="tabpanel"
                 aria-label={
                   pills.find((p) => p.id === sectionExpanded)?.label ??
@@ -206,6 +212,8 @@ export const ComposerRunStatusStrip = memo(function ComposerRunStatusStrip(
                   sessionFileChanges={model.sessionFileChanges}
                   onOpenDiffPath={onOpenDiffPath}
                   onInspectSubagent={onInspectSubagent}
+                  onRevertFile={onRevertFile}
+                  onRevertAllFiles={onRevertAllFiles}
                 />
               </div>
             ) : null}
@@ -318,6 +326,8 @@ function ExpandedBody({
   sessionFileChanges,
   onOpenDiffPath,
   onInspectSubagent,
+  onRevertFile,
+  onRevertAllFiles,
 }: {
   section: RunStatusSection;
   todos: TodoItem[];
@@ -329,6 +339,8 @@ function ExpandedBody({
   sessionFileChanges: TurnFileChangesSummary | null;
   onOpenDiffPath?: (path: string) => void;
   onInspectSubagent?: (agent: SubagentInfo) => void;
+  onRevertFile?: (path: string) => void | Promise<void>;
+  onRevertAllFiles?: (paths: string[]) => void | Promise<void>;
 }) {
   if (section === "todo") {
     return (
@@ -371,6 +383,8 @@ function ExpandedBody({
       <TurnFilesChangedCard
         summary={sessionFileChanges}
         onPreviewFileDiff={onOpenDiffPath}
+        onRevertFile={onRevertFile}
+        onRevertAll={onRevertAllFiles}
       />
     </div>
   );

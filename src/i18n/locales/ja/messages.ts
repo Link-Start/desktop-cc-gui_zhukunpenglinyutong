@@ -20,7 +20,18 @@ const messages = {
       "title_one": "{{count}} 個のファイルを編集",
       "title_other": "{{count}} 個のファイルを編集",
       "showMore_one": "他 {{count}} 個のファイルを表示",
-      "showMore_other": "他 {{count}} 個のファイルを表示"
+      "showMore_other": "他 {{count}} 個のファイルを表示",
+      "revertAll": "すべて取り消し",
+      "revertFile": "{{path}} を取り消し",
+      "revertFileAction": "取り消し",
+      "revertAllConfirmTitle": "すべての変更を取り消し",
+      "revertAllConfirmBody":
+        "{{count}} 個のファイルのローカル変更を破棄し、最新のコミットに戻します。この操作は元に戻せません。",
+      "revertAllConfirmAction": "すべて取り消す",
+      "revertFileConfirmTitle": "ファイル変更を取り消し",
+      "revertFileConfirmBody":
+        "「{{path}}」のローカル変更を破棄し、最新のコミットに戻します。この操作は元に戻せません。",
+      "revertFileConfirmAction": "取り消す"
     },
     "noThinkingContent": "思考内容がありません",
     "hiddenThinkingContent": "現在の設定により思考内容は非表示になっています。",

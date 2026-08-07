@@ -382,6 +382,10 @@ type ComposerProps = {
   plan?: TurnPlan | null;
   isPlanMode?: boolean;
   onOpenDiffPath?: (path: string) => void;
+  /** 撤销会话已编辑列表中的单个文件（git restore） */
+  onRevertFile?: (path: string) => void | Promise<void>;
+  /** 撤销会话已编辑列表中的多个文件 */
+  onRevertAllFiles?: (paths: string[]) => void | Promise<void>;
   onRewind?: (
     userMessageId: string,
     options?: RewindExecutionOptions,
@@ -643,6 +647,8 @@ function ComposerImpl({
   plan = null,
   isPlanMode = false,
   onOpenDiffPath,
+  onRevertFile,
+  onRevertAllFiles,
   onRewind,
   rewindDialogRequest = null,
   onRewindDialogRequestConsumed,
@@ -2936,6 +2942,8 @@ function ComposerImpl({
               sessionFileChanges={sessionFileChanges}
               isCodexEngine={isCodexEngine}
               onOpenDiffPath={onOpenDiffPath}
+              onRevertFile={onRevertFile}
+              onRevertAllFiles={onRevertAllFiles}
             />
             <ChatInputBoxAdapter
               ref={chatInputRef}

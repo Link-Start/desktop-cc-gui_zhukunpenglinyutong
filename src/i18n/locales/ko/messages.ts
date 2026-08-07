@@ -20,7 +20,18 @@ const messages = {
       "title_one": "파일 {{count}}개 편집됨",
       "title_other": "파일 {{count}}개 편집됨",
       "showMore_one": "파일 {{count}}개 더 보기",
-      "showMore_other": "파일 {{count}}개 더 보기"
+      "showMore_other": "파일 {{count}}개 더 보기",
+      "revertAll": "모두 실행 취소",
+      "revertFile": "{{path}} 실행 취소",
+      "revertFileAction": "실행 취소",
+      "revertAllConfirmTitle": "모든 변경 실행 취소",
+      "revertAllConfirmBody":
+        "{{count}}개 파일의 로컬 변경을 버리고 마지막 커밋으로 복원합니다. 이 작업은 되돌릴 수 없습니다.",
+      "revertAllConfirmAction": "모두 실행 취소",
+      "revertFileConfirmTitle": "파일 변경 실행 취소",
+      "revertFileConfirmBody":
+        "「{{path}}」의 로컬 변경을 버리고 마지막 커밋으로 복원합니다. 이 작업은 되돌릴 수 없습니다.",
+      "revertFileConfirmAction": "실행 취소"
     },
     "noThinkingContent": "사고 내용 없음",
     "hiddenThinkingContent": "현재 설정에 따라 사고 내용이 숨겨져 있습니다.",

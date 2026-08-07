@@ -1633,6 +1633,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           plan={options.plan}
           isPlanMode={options.isPlanMode}
           onOpenDiffPath={handleComposerOpenDiffPath}
+          onRevertFile={options.onRevertGitFile}
+          onRevertAllFiles={options.onRevertGitPaths}
           showStatusPanelToggleOverride={false}
           statusPanelExpandedOverride={false}
           onToggleStatusPanelOverride={undefined}
