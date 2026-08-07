@@ -1,7 +1,11 @@
 /* @vitest-environment jsdom */
-import { renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useUiScaleShortcuts } from "./useUiScaleShortcuts";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  setUiScaleColdStartDeferForTests,
+  useUiScaleShortcuts,
+  UI_SCALE_AFTER_FORCE_ENTER_DELAY_MS,
+} from "./useUiScaleShortcuts";
 import type { AppSettings } from "../../../types";
 import type { RendererPlatform } from "../../../utils/rendererPlatform";
 import { resetUiScaleNativePinForTests } from "../../../utils/applyUiScale";
@@ -9,6 +13,14 @@ import {
   readUiScaleStartupGuardRecord,
   resetUiScaleStartupGuardForTests,
 } from "../../../utils/uiScaleStartupGuard";
+import {
+  markStartupForceEnter,
+  resetStartupForceEnterForTests,
+} from "../../startup-orchestration/utils/startupForceEnter";
+import {
+  recordStartupMilestone,
+  resetStartupTraceForTests,
+} from "../../startup-orchestration/utils/startupTrace";
 
 const webviewMocks = vi.hoisted(() => ({
   getCurrentWebview: vi.fn(),
@@ -50,9 +62,19 @@ function createSettings(overrides: Partial<AppSettings> = {}): AppSettings {
 }
 
 describe("useUiScaleShortcuts", () => {
+  afterEach(() => {
+    setUiScaleColdStartDeferForTests(false);
+    resetStartupForceEnterForTests();
+    resetStartupTraceForTests();
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
     resetUiScaleNativePinForTests();
     resetUiScaleStartupGuardForTests();
+    resetStartupForceEnterForTests();
+    resetStartupTraceForTests();
+    setUiScaleColdStartDeferForTests(false);
     platformMocks.platform = "macos";
     document.documentElement.style.zoom = "";
     document.documentElement.style.width = "";
@@ -170,6 +192,59 @@ describe("useUiScaleShortcuts", () => {
     await waitFor(() => {
       expect(readUiScaleStartupGuardRecord()?.scale).toBe(0.9);
     });
+  });
+
+  it("cold-start defer: waits for startup-gate-ready before applying any ≠1 scale", async () => {
+    setUiScaleColdStartDeferForTests(true);
+    vi.useFakeTimers({ shouldAdvanceTime: false });
+    platformMocks.platform = "macos";
+    renderHook(() =>
+      useUiScaleShortcuts({
+        settings: createSettings({ uiScale: 1.2 }),
+        setSettings: vi.fn(),
+        saveSettings: vi.fn(async (next) => next),
+      }),
+    );
+
+    // Phase 1 identity only.
+    expect(document.body.style.zoom).toBe("");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000);
+    });
+    // Still deferred without gate-ready.
+    expect(document.body.style.zoom).toBe("");
+
+    await act(async () => {
+      recordStartupMilestone("startup-gate-ready");
+    });
+    expect(document.body.style.zoom).toBe("1.2");
+    vi.useRealTimers();
+  });
+
+  it("cold-start defer: force-enter applies ≠1 only after quiet delay", async () => {
+    setUiScaleColdStartDeferForTests(true);
+    vi.useFakeTimers({ shouldAdvanceTime: false });
+    renderHook(() =>
+      useUiScaleShortcuts({
+        settings: createSettings({ uiScale: 0.8 }),
+        setSettings: vi.fn(),
+        saveSettings: vi.fn(async (next) => next),
+      }),
+    );
+    expect(document.body.style.zoom).toBe("");
+
+    await act(async () => {
+      markStartupForceEnter();
+      await vi.advanceTimersByTimeAsync(UI_SCALE_AFTER_FORCE_ENTER_DELAY_MS - 50);
+    });
+    expect(document.body.style.zoom).toBe("");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(document.body.style.zoom).toBe("0.8");
+    vi.useRealTimers();
   });
 
   it("startup guard forces identity scale for one session after an unhealthy ≠1 launch", async () => {

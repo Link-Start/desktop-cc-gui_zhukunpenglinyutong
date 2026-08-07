@@ -17,6 +17,37 @@ import {
   matchesShortcutForPlatform,
 } from "../../../utils/shortcuts";
 import { clampUiScale, UI_SCALE_STEP } from "../../../utils/uiScale";
+import {
+  getStartupTraceSnapshot,
+  subscribeStartupTrace,
+} from "../../startup-orchestration/utils/startupTrace";
+import {
+  getStartupForceEnteredAtMs,
+  isStartupForceEntered,
+  subscribeStartupForceEnter,
+} from "../../startup-orchestration/utils/startupForceEnter";
+
+/**
+ * Hard ceiling: apply stored uiScale even if startup-gate-ready never fires
+ * (home-only shell / no workspace list).
+ * Field: ANY uiScale ≠ 1 (0.8 / 0.9 / 1.1 / 1.2 / …) + early click during
+ * full-catalog freezes on macOS and Windows — not a single-preset bug.
+ */
+export const UI_SCALE_COLD_START_MAX_DELAY_MS = 12_000;
+
+/**
+ * After force-enter, wait this long before applying ≠1 so the click window
+ * is not stacked with CSS zoom + residual IPC.
+ */
+export const UI_SCALE_AFTER_FORCE_ENTER_DELAY_MS = 2_000;
+
+/** @internal test-only: exercise production cold-start defer path under vitest. */
+let forceColdStartDeferForTests = false;
+
+/** @internal */
+export function setUiScaleColdStartDeferForTests(enabled: boolean): void {
+  forceColdStartDeferForTests = enabled;
+}
 
 type UseUiScaleShortcutsOptions = {
   settings: AppSettings;
@@ -50,10 +81,9 @@ export function useUiScaleShortcuts({
     // setZoom(≠1) and transform+fill freezes are documented in
     // docs/analysis/windows-ccgui-startup-hang-2026-08-05.md.
     //
-    // Cold-start deferral (2026-08-07 field): uiScale=0.8 + early clicks during
-    // sidebar list loading still froze WebView2. Stay at identity until the
-    // cold-start window ends, then apply the stored scale. Waiting without
-    // clicking was already OK; this removes the "click during loading" path.
+    // Cold-start deferral: ANY uiScale ≠ 1 (0.8 / 0.9 / 1.1 / 1.2 / …) + early
+    // clicks during list hydrate freezes WebView2 / WKWebView. Stay at identity
+    // until cold-start is late-ready, then apply the stored scale.
     //
     // Startup guard: previous unhealthy ≠1 session → force 1 this session only
     // (never rewrite settings).
@@ -107,25 +137,86 @@ export function useUiScaleShortcuts({
       };
     }
 
-    // Phase 2: apply user scale after cold-start list work has room to finish.
-    // Vitest: apply immediately so unit tests stay deterministic.
-    const isTest =
+    // Phase 2: apply ANY user scale ≠ 1 only after cold-start is late-ready,
+    // or after a hard ceiling. Earlier (0.8–3s idle) still overlapped
+    // full-catalog + pointer on macOS / WebView2 for every non-identity scale.
+    const isVitest =
       typeof import.meta !== "undefined" &&
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (import.meta as any).env?.MODE === "test";
-    const delayMs = isTest ? 0 : 2000;
+    // Default tests apply immediately; opt into real defer via test helper.
+    const useImmediateApply = isVitest && !forceColdStartDeferForTests;
 
-    const timer = window.setTimeout(() => {
-      if (cancelled) {
+    let appliedUserScale = false;
+    const applyUserScaleOnce = () => {
+      if (cancelled || appliedUserScale) {
         return;
       }
+      appliedUserScale = true;
       apply(effectiveScale);
       markUiScalePending(effectiveScale);
-    }, delayMs);
+    };
+
+    if (useImmediateApply) {
+      const t = window.setTimeout(() => {
+        applyUserScaleOnce();
+      }, 0);
+      return () => {
+        cancelled = true;
+        window.clearTimeout(t);
+      };
+    }
+
+    let forceEnterTimer: number | null = null;
+
+    const tryApplyUserScale = () => {
+      if (cancelled || appliedUserScale) {
+        return;
+      }
+      const milestones = getStartupTraceSnapshot().milestones;
+      // Prefer full-catalog done. Home-only: input-ready without ever starting list.
+      if (
+        milestones["startup-gate-ready"] ||
+        (milestones["input-ready"] && !milestones["active-workspace-ready"])
+      ) {
+        applyUserScaleOnce();
+        return;
+      }
+      // Force-enter path: wait a short quiet window after unmask.
+      if (isStartupForceEntered()) {
+        const enteredAt = getStartupForceEnteredAtMs();
+        const elapsed =
+          (typeof performance !== "undefined" && typeof performance.now === "function"
+            ? performance.now()
+            : Date.now()) - enteredAt;
+        if (elapsed >= UI_SCALE_AFTER_FORCE_ENTER_DELAY_MS) {
+          applyUserScaleOnce();
+          return;
+        }
+        if (forceEnterTimer == null) {
+          forceEnterTimer = window.setTimeout(() => {
+            forceEnterTimer = null;
+            tryApplyUserScale();
+          }, Math.max(0, UI_SCALE_AFTER_FORCE_ENTER_DELAY_MS - elapsed));
+        }
+      }
+    };
+
+    tryApplyUserScale();
+    const unsubTrace = subscribeStartupTrace(tryApplyUserScale);
+    const unsubForce = subscribeStartupForceEnter(tryApplyUserScale);
+    const ceilingTimer = window.setTimeout(() => {
+      applyUserScaleOnce();
+    }, UI_SCALE_COLD_START_MAX_DELAY_MS);
 
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
+      unsubTrace();
+      unsubForce();
+      window.clearTimeout(ceilingTimer);
+      if (forceEnterTimer != null) {
+        window.clearTimeout(forceEnterTimer);
+      }
     };
   }, [uiScale]);
 

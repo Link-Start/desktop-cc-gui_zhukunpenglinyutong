@@ -1,4 +1,5 @@
 import { startTransition, useCallback, useMemo, useRef } from "react";
+import { yieldToInteractiveInput } from "../../../utils/interactiveMainThread";
 import type { ThreadSummary, WorkspaceInfo } from "../../../types";
 import {
   connectWorkspace as connectWorkspaceService,
@@ -1371,11 +1372,8 @@ export function useThreadActions({
         if (!isLatestThreadListRequest()) {
           return { applied: false, stale: true };
         }
-        // Yield once so a pending click/pointer frame can run before the
-        // AppShell-wide setThreads commit (cold-start jank window).
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, 0);
-        });
+        // Prefer input over list commit: if user is clicking, wait a few frames.
+        await yieldToInteractiveInput({ maxRounds: 32 });
         if (!isLatestThreadListRequest()) {
           return { applied: false, stale: true };
         }
@@ -1401,7 +1399,7 @@ export function useThreadActions({
             timestamp: getThreadTimestamp(thread) ?? Date.now(),
           });
         });
-        // Background lane: keep user clicks urgent while sidebar list lands.
+        // Background lane: clicks stay urgent.
         startTransition(() => {
           if (!isLatestThreadListRequest()) {
             return;
@@ -1411,8 +1409,6 @@ export function useThreadActions({
             workspaceId: workspace.id,
             threads: visibleSummaries,
           });
-          // nextCursor from catalog/runtime drives "Load older". First paint only
-          // requested a small page (default 5); more pages load on demand.
           dispatch({
             type: "setThreadListCursor",
             workspaceId: workspace.id,

@@ -19,9 +19,17 @@ import {
   type StartupMilestoneName,
 } from "../features/startup-orchestration/utils/startupTrace";
 import {
+  isStartupForceEntered,
+  registerStartupIdleHydrationCancel,
+} from "../features/startup-orchestration/utils/startupForceEnter";
+import {
   resolveNextWorkspaceThreadListHydrationId,
   shouldSkipWorkspaceThreadListLoad,
 } from "./workspaceThreadListLoadGuard";
+import {
+  ensureInteractiveInputHooks,
+  scheduleWhenBrowserIdle,
+} from "../utils/interactiveMainThread";
 
 type ListThreadsForWorkspace = (
   workspace: WorkspaceInfo,
@@ -134,7 +142,11 @@ function createThreadHydrationTask(
     commandLabel: "list_threads",
     run,
     fallback: (reason) =>
-      reason === "stale" ? { applied: false, stale: true } : undefined,
+      // cancelAllTasks / cancelWorkspaceTasks / abort: all must look "stale"
+      // so finally skips publish-hydrate + full-catalog re-schedule.
+      reason === "stale" || reason === "cancelled"
+        ? { applied: false, stale: true }
+        : undefined,
   };
 }
 
@@ -143,8 +155,7 @@ function publishHydrationUiState(
   setCycle: (updater: (current: number) => number) => void,
   nextHydrated: Set<string>,
 ): void {
-  // Hydration is background work: keep pointer/click updates urgent so the
-  // shell stays interactive while the sidebar list is still refreshing.
+  // Background lane — clicks stay urgent.
   startTransition(() => {
     setHydrated(nextHydrated);
     setCycle((current) => current + 1);
@@ -283,6 +294,7 @@ export function useWorkspaceThreadListHydration({
           (phase === "active-workspace" || finishedKind === "first-paint") &&
           !hasRecordedActiveWorkspaceReady()
         ) {
+          // first-paint still marks this for notices — NOT the Windows click gate
           recordStartupMilestone(ACTIVE_WORKSPACE_READY_MILESTONE);
         }
         // Timeout/fallback resolves as undefined (not stale). Publish a new Set
@@ -293,7 +305,6 @@ export function useWorkspaceThreadListHydration({
         hydrationPhaseByWorkspaceIdRef.current.delete(workspace.id);
         hydrationKindByWorkspaceIdRef.current.delete(workspace.id);
         if (!discardedAsStale) {
-          // first-paint: clear sidebar "加载中" without claiming full multi-engine done.
           const nextHydrated = publishHydratedWorkspaceId(
             hydratedThreadListWorkspaceIdsRef,
             workspace.id,
@@ -303,6 +314,12 @@ export function useWorkspaceThreadListHydration({
               fullyHydratedThreadListWorkspaceIdsRef,
               workspace.id,
             );
+            // Gate unmask: full-catalog (heavy multi-engine) finished, not first-paint.
+            if (
+              !getStartupTraceSnapshot().milestones["startup-gate-ready"]
+            ) {
+              recordStartupMilestone("startup-gate-ready");
+            }
           }
           publishHydrationUiState(
             setHydratedThreadListWorkspaceIds,
@@ -310,13 +327,26 @@ export function useWorkspaceThreadListHydration({
             nextHydrated,
           );
           if (finishedKind === "first-paint") {
-            // Follow-up full catalog when the ensure path sees UI-hydrated but
-            // not fully-hydrated (see ensureWorkspaceThreadListLoaded).
-            window.setTimeout(() => {
-              ensureWorkspaceThreadListLoadedRef.current?.(workspace.id, {
-                preserveState: true,
-              });
-            }, 0);
+            // CRITICAL: do NOT setTimeout(0) full-catalog — that immediately
+            // re-floods the main thread right when the user starts clicking
+            // after first-paint. Wait for real browser idle (min 1.5s).
+            // Force-enter cancels this disposer so full-catalog cannot restart
+            // into the unmasked click window.
+            if (isStartupForceEntered()) {
+              return;
+            }
+            const cancelIdleFullCatalog = scheduleWhenBrowserIdle(
+              () => {
+                if (isStartupForceEntered()) {
+                  return;
+                }
+                ensureWorkspaceThreadListLoadedRef.current?.(workspace.id, {
+                  preserveState: true,
+                });
+              },
+              { minDelayMs: 1_500, timeoutMs: 6_000 },
+            );
+            registerStartupIdleHydrationCancel(cancelIdleFullCatalog);
           }
         } else {
           // Synchronous: background retry scheduling depends on this cycle tick
@@ -480,6 +510,10 @@ export function useWorkspaceThreadListHydration({
       workspacesById,
     ],
   );
+
+  useEffect(() => {
+    ensureInteractiveInputHooks();
+  }, []);
 
   useEffect(() => {
     const previousActiveWorkspaceId = previousActiveWorkspaceIdRef.current;

@@ -190,6 +190,33 @@ export class StartupOrchestrator {
     this.drainQueue();
   }
 
+  /**
+   * Abort every queued/running startup task (force-enter / emergency unmask).
+   * Orphan IPC bodies still finish but isStale skips setThreads commits.
+   *
+   * Default reason is `stale` (not `cancelled`): thread-list hydration fallback
+   * only maps `stale` → `{ applied: false, stale: true }`. Other reasons resolve
+   * as undefined and are treated as soft-success in finally blocks.
+   */
+  cancelAllTasks(reason: StartupFallbackReason = "stale") {
+    for (const queuedTask of [...this.queue]) {
+      this.removeQueuedTask(queuedTask);
+      void this.settleWithFallback(queuedTask, reason, "cancelled");
+    }
+    for (const [dedupeKey, runningTask] of [
+      ...this.runningByDedupeKey.entries(),
+    ]) {
+      runningTask.abortController.abort();
+      this.cancelledGenerations.add(runningTask.generation);
+      runningTask.settleCancelled(reason);
+      if (!runningTask.concurrencyReleased) {
+        runningTask.concurrencyReleased = true;
+        this.runningByDedupeKey.delete(dedupeKey);
+        this.decrementRunning(runningTask.descriptor);
+      }
+    }
+  }
+
   getQueuedTaskCount() {
     return this.queue.length;
   }
