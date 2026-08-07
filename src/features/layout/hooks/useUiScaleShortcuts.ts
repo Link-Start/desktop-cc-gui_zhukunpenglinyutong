@@ -17,6 +17,7 @@ import {
   matchesShortcutForPlatform,
 } from "../../../utils/shortcuts";
 import { clampUiScale, UI_SCALE_STEP } from "../../../utils/uiScale";
+import { scheduleWhenBrowserIdle } from "../../../utils/interactiveMainThread";
 
 type UseUiScaleShortcutsOptions = {
   settings: AppSettings;
@@ -107,25 +108,35 @@ export function useUiScaleShortcuts({
       };
     }
 
-    // Phase 2: apply user scale after cold-start list work has room to finish.
-    // Vitest: apply immediately so unit tests stay deterministic.
+    // Phase 2: apply user scale on idle (not a hard quiet period that piles work).
+    // Prefer idle so clicks during load are not competing with zoom style changes.
     const isTest =
       typeof import.meta !== "undefined" &&
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (import.meta as any).env?.MODE === "test";
-    const delayMs = isTest ? 0 : 2000;
 
-    const timer = window.setTimeout(() => {
-      if (cancelled) {
-        return;
-      }
-      apply(effectiveScale);
-      markUiScalePending(effectiveScale);
-    }, delayMs);
+    let cancelIdle: (() => void) | undefined;
+    if (isTest) {
+      const t = window.setTimeout(() => {
+        if (cancelled) return;
+        apply(effectiveScale);
+        markUiScalePending(effectiveScale);
+      }, 0);
+      cancelIdle = () => window.clearTimeout(t);
+    } else {
+      cancelIdle = scheduleWhenBrowserIdle(
+        () => {
+          if (cancelled) return;
+          apply(effectiveScale);
+          markUiScalePending(effectiveScale);
+        },
+        { minDelayMs: 800, timeoutMs: 3_000 },
+      );
+    }
 
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
+      cancelIdle?.();
     };
   }, [uiScale]);
 

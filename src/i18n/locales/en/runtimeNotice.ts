@@ -24,6 +24,12 @@ const runtimeNotice = {
       ready: "Client initialization completed.",
       failed: "Client initialization failed. Reload and try again.",
     },
+    windowsStartupGate: {
+      title: "Starting",
+      message:
+        "Finishing startup. Please wait — clicking the UI now may freeze the app.",
+      forceDismiss: "Skip and enter the app",
+    },
     uiScale: {
       startupGuardReset:
         "The previous launch froze at {{scale}}% interface scale, so scale was temporarily reset to 100% for this session. Your setting was not changed — you can re-apply it in Settings.",
