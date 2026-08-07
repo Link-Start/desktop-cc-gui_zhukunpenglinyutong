@@ -40,6 +40,8 @@ vi.mock("../../engine/components/EngineSelector", () => ({
 
 vi.mock("../../status-panel/hooks/useStatusPanelData", () => ({
   useStatusPanelData: () => ({
+    todos: [],
+    subagents: [],
     todoTotal: 0,
     subagentTotal: 0,
     fileChanges: [],

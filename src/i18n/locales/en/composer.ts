@@ -286,6 +286,14 @@ const composer = {
     noteCardPreviewExpand: "Expand note",
     noteCardPreviewCollapse: "Collapse note",
     noteCardArchivedBadge: "Archived",
+    runStatus: {
+      label: "Turn run status",
+      panel: "Run status details",
+      edit: "Edits",
+      edited: "Edited",
+      expandChrome: "Show run status",
+      collapseChrome: "Hide run status",
+    },
   },
 };
 

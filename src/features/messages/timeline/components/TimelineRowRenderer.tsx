@@ -53,7 +53,6 @@ import {
   WorkingIndicator,
 } from "../../components/MessagesRows";
 import { ConversationRowErrorBoundary } from "../../components/conversation/ConversationRowErrorBoundary";
-import { TurnFilesChangedCard } from "../../components/conversation/TurnFilesChangedCard";
 import { MiddleStepsCollapsedChip } from "./MiddleStepsCollapsedChip";
 import type {
   TimelineRowRendererProps,
@@ -81,13 +80,11 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     assistantLiveTurnFinalBoundarySuppressedSet,
     claudeDockedReasoningItems,
     effectiveItemsCount,
-    hasPendingUserTurn,
     latestFinalAssistantMessageId,
     messageActionTargetByAssistantId,
     messageCopyTextByAssistantId,
     suppressedUserMemoryContextMessageIds,
     suppressedUserNoteCardContextMessageIds,
-    turnFileChangesByBoundaryId,
     turnTargetBadgeVisibleItemIds,
   } = snapshot;
   const {
@@ -134,7 +131,6 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     onForkFromMessage,
     onOpenDiffPath,
     onOpenNoteCaptureMenu,
-    onPreviewFileDiff,
     onRecoverThreadRuntime,
     onRecoverThreadRuntimeAndResend,
     onRetryHistory,
@@ -215,14 +211,7 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
         renderItem.isFinal === true &&
         assistantFinalBoundarySet.has(renderItem.id) &&
         !assistantLiveTurnFinalBoundarySuppressedSet.has(renderItem.id);
-      // 空闲时最后一轮的汇总由时间线末尾的会话累计卡承载，内联卡只回溯更早轮次；
-      // 一旦有新回合进行中（hasPendingUserTurn），末尾累计卡会落到新问题之后，
-      // 此时改由这一轮的内联卡把汇总钉在它自己的回合边界上。
-      const turnFilesChangedSummary =
-        shouldRenderFinalBoundary &&
-        (renderItem.id !== latestFinalAssistantMessageId || hasPendingUserTurn)
-          ? turnFileChangesByBoundaryId.get(renderItem.id) ?? null
-          : null;
+      // 文件变更汇总已迁到 Composer 运行态条「已编辑」pill；流内不再渲染回合卡。
       const finalMetaText = buildAssistantFinalBoundaryMetaText({
         finalDurationMs: renderItem.finalDurationMs,
         finalInputTokens: renderItem.finalInputTokens,
@@ -434,12 +423,6 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
               }
             />
           </div>
-          {turnFilesChangedSummary && (
-            <TurnFilesChangedCard
-              summary={turnFilesChangedSummary}
-              onPreviewFileDiff={onPreviewFileDiff}
-            />
-          )}
           {shouldRenderFinalBoundary && (
             <div
               className="message-assistant-action-footer messages-final-boundary"

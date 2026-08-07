@@ -3,7 +3,6 @@ import {
   Profiler,
   Suspense,
   useCallback,
-  useDeferredValue,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -13,7 +12,6 @@ import {
   type ReactNode,
 } from "react";
 import { useEventCallback } from "../../../utils/useEventCallback";
-import { useDeferredFrameAccumulator } from "./useDeferredFrameAccumulator";
 import { useSidebarThreadStatusProjection } from "../../threads/hooks/useSidebarThreadStatusProjection";
 import { useTranslation } from "react-i18next";
 import { Sidebar } from "../../app/components/Sidebar";
@@ -64,13 +62,8 @@ import type {
 import { WorkspaceSessionRadarPanel } from "../../session-activity/components/WorkspaceSessionRadarPanel";
 import { TabBar } from "../../app/components/TabBar";
 import { TabletNav } from "../../app/components/TabletNav";
-import { useStatusPanelData } from "../../status-panel/hooks/useStatusPanelData";
 import { useGlobalRuntimeNoticeDock } from "../../notifications/hooks/useGlobalRuntimeNoticeDock";
-import type { TabType } from "../../status-panel/types";
-import type {
-  EditorNavigationLocation,
-  OpenFileOptions,
-} from "../../app/hooks/useGitPanelController";
+import type { EditorNavigationLocation } from "../../app/hooks/useGitPanelController";
 import type {
   CustomCommandOption,
   EngineType,
@@ -101,7 +94,6 @@ import type {
 import { resolveDiffPathFromWorkspacePath } from "../../../utils/workspacePaths";
 import { resolvePresentationProfile } from "../../../conversation-presentation/presentationProfile";
 import { appendQueuedHandoffBubbleIfNeeded } from "../../threads/utils/queuedHandoffBubble";
-import { isBackgroundRenderGatingEnabled } from "../../threads/utils/realtimePerfFlags";
 // DISABLED: disable-session-activity-and-solo-mode — keep empty stub only
 import { DISABLED_WORKSPACE_SESSION_ACTIVITY } from "../../session-activity/adapters/buildWorkspaceSessionActivity";
 import { useClientUiVisibility } from "../../client-ui-visibility/hooks/useClientUiVisibility";
@@ -137,7 +129,6 @@ import {
   isComposerSubmitLocked,
   isPickerLocked,
 } from "../../shared-session/target/sendStateMachine";
-import { ActiveCanvasStatusPanel } from "./activeCanvasStatusPanelNode";
 import { buildShellRuntimeSummary } from "./layoutShellSummary";
 import { buildConversationCanvasNode } from "./conversationCanvasNode";
 import { useLayoutTopbarSessionTabs } from "./useLayoutTopbarSessionTabs";
@@ -281,10 +272,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const clientUiVisibility = useClientUiVisibility();
   const onOpenFile = options.onOpenFile;
   const onFilePanelModeChange = options.onFilePanelModeChange;
-  const [preferredDockStatusTab, setPreferredDockStatusTab] = useState<{
-    tab: TabType;
-    requestKey: number;
-  } | null>(null);
   const [rewindDialogRequest, setRewindDialogRequest] =
     useState<ComposerRewindDialogRequest | null>(null);
   const [forkConfirmUserMessageId, setForkConfirmUserMessageId] = useState<
@@ -430,24 +417,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const hasVisibleRightToolbarControl = Object.values(
     rightToolbarVisibleTabs,
   ).some(Boolean);
-  const showBottomActivityPanel = clientUiVisibility.isPanelVisible(
-    "bottomActivityPanel",
-  );
   const showGlobalRuntimeNoticeDock = clientUiVisibility.isPanelVisible(
     "globalRuntimeNoticeDock",
-  );
-  const bottomActivityVisibleTabs = {
-    todo: clientUiVisibility.isControlVisible("bottomActivity.tasks"),
-    subagent: clientUiVisibility.isControlVisible("bottomActivity.agents"),
-    checkpoint: clientUiVisibility.isControlVisible(
-      "bottomActivity.checkpoint",
-    ),
-  };
-  const showGovernanceEvidence = clientUiVisibility.isControlVisible(
-    "bottomActivity.governanceEvidence",
-  );
-  const showCheckpointDetails = clientUiVisibility.isControlVisible(
-    "bottomActivity.checkpointDetails",
   );
   const shellRuntimeSummary = useMemo(
     () =>
@@ -496,32 +467,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       ),
     [options.activeItems, options.activeQueuedHandoffBubble],
   );
-  const backgroundRenderGatingEnabled = isBackgroundRenderGatingEnabled();
-  // 2026-06-24-harden-realtime-interaction-jank-during-tool-call §7.1
-  // Accumulate background items across 3 rAF frames before exposing them to
-  // non-active threads. Active thread switching (via `resetKey`) drains
-  // immediately so the new active thread renders without a multi-frame lag.
-  const threadItemsAccumulator = useDeferredFrameAccumulator<typeof options.threadItemsByThread>({
-    value: options.threadItemsByThread,
-    framesToAccumulate: 3,
-    resetKey: options.activeThreadId ?? null,
-  });
-  const deferredThreadItemsByThreadValue = useDeferredValue(
-    threadItemsAccumulator.committed,
-  );
-  const deferredThreadStatusByIdValue = useDeferredValue(
-    options.threadStatusById,
-  );
-  const deferredStatusPanelItemsValue = useDeferredValue(options.activeItems);
-  const statusPanelItems = options.isProcessing
-    ? deferredStatusPanelItemsValue
-    : options.activeItems;
-  const deferredThreadItemsByThread = backgroundRenderGatingEnabled
-    ? deferredThreadItemsByThreadValue
-    : options.threadItemsByThread;
-  const deferredThreadStatusById = backgroundRenderGatingEnabled
-    ? deferredThreadStatusByIdValue
-    : options.threadStatusById;
   // 仅暴露三个布尔位且引用稳定：heartbeat/continuation pulse 不再击穿 Sidebar/topbar tabs 的 memo。
   const sidebarThreadStatusById = useSidebarThreadStatusProjection(
     options.threadStatusById,
@@ -647,19 +592,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const workspaceActivity = DISABLED_WORKSPACE_SESSION_ACTIVITY;
   const isEditorFileMaximized = options.isEditorFileMaximized;
   const onToggleEditorFileMaximized = options.onToggleEditorFileMaximized;
-  const handleOpenDiffFromActivity = useCallback(
-    (
-      path: string,
-      location?: EditorNavigationLocation,
-      highlightOptions?: OpenFileOptions,
-    ) => {
-      onOpenFile(path, location, highlightOptions);
-      if (!isEditorFileMaximized) {
-        onToggleEditorFileMaximized();
-      }
-    },
-    [isEditorFileMaximized, onOpenFile, onToggleEditorFileMaximized],
-  );
   const handleOpenProjectMapEvidenceFile = useCallback(
     (path: string, location?: EditorNavigationLocation) => {
       onOpenFile(path, location, { editorSplitCompanion: "projectMap" });
@@ -1318,47 +1250,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     [options.selectedAgent],
   );
   const composerCommands = options.commands ?? EMPTY_COMMANDS;
-  const isStatusPanelEngine =
-    options.selectedEngine === "claude" ||
-    options.selectedEngine === "codex" ||
-    options.selectedEngine === "gemini" ||
-    options.selectedEngine === "grok" ||
-    options.selectedEngine === "kimi" ||
-    options.selectedEngine === "opencode";
-  const isStatusPanelCodexEngine = options.selectedEngine === "codex";
-  const { todoTotal, subagentTotal, fileChanges, commandTotal } =
-    useStatusPanelData(statusPanelItems, {
-      isCodexEngine: isStatusPanelCodexEngine,
-      activeEngine: options.selectedEngine ?? null,
-      activeThreadId: options.activeThreadId,
-      itemsByThread: deferredThreadItemsByThread,
-      threadParentById: options.threadParentById,
-      threadStatusById: deferredThreadStatusById,
-    });
-  const hasStatusPanelActivity =
-    todoTotal > 0 ||
-    subagentTotal > 0 ||
-    fileChanges.length > 0 ||
-    commandTotal > 0 ||
-    options.isPlanMode ||
-    Boolean(options.plan);
-  const hasVisibleBaselineStatusTab = bottomActivityVisibleTabs.checkpoint;
-  const shouldMountBottomStatusPanel =
-    showBottomActivityPanel &&
-    isStatusPanelEngine &&
-    (hasStatusPanelActivity ||
-      options.bottomStatusPanelExpanded ||
-      (hasVisibleBaselineStatusTab && Boolean(options.activeThreadId)));
-  const showBottomStatusPanel =
-    shouldMountBottomStatusPanel && options.bottomStatusPanelExpanded;
-  const openBottomStatusPanel = options.onOpenPlanPanel;
-  const handleExpandCheckpointToDock = useCallback(() => {
-    openBottomStatusPanel();
-    setPreferredDockStatusTab((previous) => ({
-      tab: "checkpoint",
-      requestKey: (previous?.requestKey ?? 0) + 1,
-    }));
-  }, [openBottomStatusPanel]);
   const composerRuntimeLifecycleState = resolveRuntimeLifecycleForComposer(
     globalRuntimeNoticeDock.runtimeRows,
     options.activeWorkspaceId,
@@ -1560,7 +1451,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   );
 
   const renderComposerNode = (
-    showStatusPanelToggleOverride?: boolean,
+    _showStatusPanelToggleOverride?: boolean,
     branchControlEnabled: boolean = true,
     externalNoteCardRequest: ComposerNoteCardSelectionRequest | null = null,
     createSessionTargetPicker: boolean = false,
@@ -1742,13 +1633,9 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           plan={options.plan}
           isPlanMode={options.isPlanMode}
           onOpenDiffPath={handleComposerOpenDiffPath}
-          showStatusPanelToggleOverride={showStatusPanelToggleOverride}
-          statusPanelExpandedOverride={showBottomStatusPanel}
-          onToggleStatusPanelOverride={
-            showBottomStatusPanel
-              ? options.onClosePlanPanel
-              : options.onOpenPlanPanel
-          }
+          showStatusPanelToggleOverride={false}
+          statusPanelExpandedOverride={false}
+          onToggleStatusPanelOverride={undefined}
           selectedCodeAnnotations={selectedCodeAnnotations}
           onRemoveCodeAnnotation={handleRemoveCodeAnnotation}
           onClearCodeAnnotations={handleClearCodeAnnotations}
@@ -2413,62 +2300,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     </Suspense>
   ) : null;
 
-  const planPanelNode = shouldMountBottomStatusPanel ? (
-    <ActiveCanvasStatusPanel
-      workspaceId={options.activeWorkspace?.id ?? null}
-      workspacePath={options.activeWorkspace?.path ?? null}
-      items={EMPTY_ACTIVE_CANVAS_ITEMS}
-      isProcessing={false}
-      expanded
-      plan={null}
-      isPlanMode={options.isPlanMode}
-      isCodexEngine={isStatusPanelCodexEngine}
-      activeThreadId={null}
-      activeTurnId={null}
-      selectedEngine={options.selectedEngine}
-      selectedModelId={options.selectedModelId}
-      activeTokenUsage={null}
-      workspaceGitFiles={options.gitStatus.files}
-      workspaceGitStagedFiles={options.gitStatus.stagedFiles}
-      workspaceGitUnstagedFiles={options.gitStatus.unstagedFiles}
-      workspaceGitTotals={{
-        additions: options.gitStatus.totalAdditions,
-        deletions: options.gitStatus.totalDeletions,
-      }}
-      workspaceGitDiffs={options.gitDiffs}
-      itemsByThread={{}}
-      threadParentById={options.threadParentById}
-      threadStatusById={{}}
-      onOpenDiffPath={handleOpenDiffPath}
-      onOpenFilePath={handleOpenDiffFromActivity}
-      onSelectSubagent={options.onSelectSubagent}
-      variant="dock"
-      visibleDockTabs={bottomActivityVisibleTabs}
-      showGovernanceEvidence={showGovernanceEvidence}
-      showCheckpointDetails={showCheckpointDetails}
-      workspaceName={options.activeWorkspace?.name ?? null}
-      sessionDiskPath={activeThreadSummary?.physicalPath ?? null}
-      providerProfileId={activeThreadSummary?.providerProfileId ?? null}
-      isSharedSession={isSharedSession}
-      usageShowRemaining={options.usageShowRemaining}
-      onRefreshGitStatus={options.queueGitStatusRefresh}
-      commitMessage={options.commitMessage}
-      commitMessageLoading={options.commitMessageLoading}
-      commitMessageError={options.commitMessageError}
-      onCommitMessageChange={options.onCommitMessageChange}
-      onGenerateCommitMessage={options.onGenerateCommitMessage}
-      onCommit={options.onCommit}
-      commitLoading={options.commitLoading}
-      commitError={options.commitError}
-      preferredDockTab={preferredDockStatusTab?.tab ?? null}
-      preferredDockTabRequestKey={preferredDockStatusTab?.requestKey ?? 0}
-      dockCollapsed={!showBottomStatusPanel}
-      onCollapseDock={options.onClosePlanPanel}
-      onExpandDock={options.onOpenPlanPanel}
-      onExpandToDock={handleExpandCheckpointToDock}
-      {...codeAnnotationBridgeProps}
-    />
-  ) : null;
+  // 运行态入口改挂 Composer 上方 strip；底部 dock 暂不挂载。
+  const planPanelNode = null;
 
   const terminalDockNode = buildTerminalDockNode({
     terminalState: options.terminalState,
