@@ -3,7 +3,7 @@ import { useWindowLabel } from "./features/layout/hooks/useWindowLabel";
 import { isDetachedFileExplorerWindowLabel } from "./features/files/detachedFileExplorer";
 import { isBrowserAgentDockWindowLabel } from "./features/browser-agent/browserAgentDockWindow";
 import { AppShell } from "./app-shell";
-import { WindowsStartupGateOverlay } from "./features/app/components/WindowsStartupGateOverlay";
+import { StartupGateOverlay } from "./features/app/components/StartupGateOverlay";
 
 const AboutView = lazy(() =>
   import("./features/about/components/AboutView").then((module) => ({
@@ -75,8 +75,8 @@ export function AppRouter() {
   return (
     <>
       <AppShell />
-      {/* Windows-only: block clicks during cold-start hydrate window. */}
-      <WindowsStartupGateOverlay />
+      {/* Tauri desktop: block clicks during cold-start hydrate window. */}
+      <StartupGateOverlay />
     </>
   );
 }

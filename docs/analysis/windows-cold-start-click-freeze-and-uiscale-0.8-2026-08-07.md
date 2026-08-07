@@ -279,7 +279,21 @@ mount / uiScale 变化
 - [ ] 分栏、modal、标题栏拖拽  
 - [ ] Retina + 系统缩放各一档  
 
-**结论：** 修复 **不是 Windows-only 条件编译**；列表与编排改动对 Mac **应偏正面**；缩放路径与 2s 延迟对 Mac **有可感知行为变化**，需冒烟，不宜默认「Mac 无感」。
+**结论：** 列表 / 编排 / CSS zoom 改动 **三端共用**。  
+**启动遮罩：** 现 `isStartupGatePlatform()` = **任意 Tauri desktop**（Win / macOS / Linux）；组件 `StartupGateOverlay`；强关 10s「直接进入」；max 20s force-enter。
+
+### 5.3b 全量修复收口（2026-08-07 晚）
+
+| 证据 | 内容 |
+|------|------|
+| 危险条件 | **任意 `uiScale ≠ 1`**（0.8 / 0.9 / 1.1 / 1.2 / … 全部同类） |
+| 复现 | 冷启动，**loading 结束前点界面按钮** → 必现假死 |
+| 交叉模型 | 线 A full-catalog + 线 B 早期 CSS zoom(**任意 ≠1**) 叠点击 |
+| 安全对照 | **仅 `uiScale === 1`** 不走 phase-2 zoom；线 A 靠遮罩挡点击 |
+| 止血 | 桌面遮罩；强关 10s +「直接进入」；`cancelAllTasks("stale")` + force-enter |
+| 根因加固 | phase-2 等 **gate-ready** / force-enter+2s / **12s 天花板** |
+| force-enter | 取消 idle full-catalog 重扫；hydrate fallback 认 stale\|cancelled；不 stamp gate-ready |
+| 命名 | `StartupGateOverlay` / `startupGate` i18n（旧 Windows* re-export） |
 
 ### 5.4 若要减少 Mac 回归面（可选后续）
 

@@ -19,6 +19,10 @@ import {
   type StartupMilestoneName,
 } from "../features/startup-orchestration/utils/startupTrace";
 import {
+  isStartupForceEntered,
+  registerStartupIdleHydrationCancel,
+} from "../features/startup-orchestration/utils/startupForceEnter";
+import {
   resolveNextWorkspaceThreadListHydrationId,
   shouldSkipWorkspaceThreadListLoad,
 } from "./workspaceThreadListLoadGuard";
@@ -138,7 +142,11 @@ function createThreadHydrationTask(
     commandLabel: "list_threads",
     run,
     fallback: (reason) =>
-      reason === "stale" ? { applied: false, stale: true } : undefined,
+      // cancelAllTasks / cancelWorkspaceTasks / abort: all must look "stale"
+      // so finally skips publish-hydrate + full-catalog re-schedule.
+      reason === "stale" || reason === "cancelled"
+        ? { applied: false, stale: true }
+        : undefined,
   };
 }
 
@@ -322,14 +330,23 @@ export function useWorkspaceThreadListHydration({
             // CRITICAL: do NOT setTimeout(0) full-catalog — that immediately
             // re-floods the main thread right when the user starts clicking
             // after first-paint. Wait for real browser idle (min 1.5s).
-            scheduleWhenBrowserIdle(
+            // Force-enter cancels this disposer so full-catalog cannot restart
+            // into the unmasked click window.
+            if (isStartupForceEntered()) {
+              return;
+            }
+            const cancelIdleFullCatalog = scheduleWhenBrowserIdle(
               () => {
+                if (isStartupForceEntered()) {
+                  return;
+                }
                 ensureWorkspaceThreadListLoadedRef.current?.(workspace.id, {
                   preserveState: true,
                 });
               },
               { minDelayMs: 1_500, timeoutMs: 6_000 },
             );
+            registerStartupIdleHydrationCancel(cancelIdleFullCatalog);
           }
         } else {
           // Synchronous: background retry scheduling depends on this cycle tick

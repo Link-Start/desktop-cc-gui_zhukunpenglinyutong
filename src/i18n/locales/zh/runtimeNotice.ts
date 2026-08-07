@@ -22,11 +22,11 @@ const runtimeNotice = {
       ready: "客户端初始化完成",
       failed: "客户端初始化失败，请刷新后重试",
     },
-    windowsStartupGate: {
+    startupGate: {
       title: "正在启动",
       message:
         "正在完成初始化（约数秒），请稍候…此期间界面不可操作，避免无响应。",
-      forceDismiss: "跳过并进入应用",
+      forceDismiss: "直接进入",
     },
     uiScale: {
       startupGuardReset:
