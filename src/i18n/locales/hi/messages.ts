@@ -20,7 +20,18 @@ const messages = {
       "title_one": "{{count}} फ़ाइल संपादित की",
       "title_other": "{{count}} फ़ाइलें संपादित कीं",
       "showMore_one": "{{count}} और फ़ाइल दिखाएँ",
-      "showMore_other": "{{count}} और फ़ाइलें दिखाएँ"
+      "showMore_other": "{{count}} और फ़ाइलें दिखाएँ",
+      "revertAll": "सभी पूर्ववत करें",
+      "revertFile": "{{path}} पूर्ववत करें",
+      "revertFileAction": "पूर्ववत करें",
+      "revertAllConfirmTitle": "सभी परिवर्तन पूर्ववत करें",
+      "revertAllConfirmBody":
+        "इससे {{count}} फ़ाइलों में स्थानीय परिवर्तन छोड़ दिए जाएंगे और अंतिम commit पर पुनर्स्थापित होंगे। इसे पूर्ववत नहीं किया जा सकता।",
+      "revertAllConfirmAction": "सभी पूर्ववत करें",
+      "revertFileConfirmTitle": "फ़ाइल परिवर्तन पूर्ववत करें",
+      "revertFileConfirmBody":
+        "इससे «{{path}}» के स्थानीय परिवर्तन छोड़ दिए जाएंगे और अंतिम commit पर पुनर्स्थापित होंगे। इसे पूर्ववत नहीं किया जा सकता।",
+      "revertFileConfirmAction": "पूर्ववत करें"
     },
     "noThinkingContent": "कोई सोच सामग्री नहीं",
     "hiddenThinkingContent": "वर्तमान सेटिंग के कारण सोच सामग्री छिपी हुई है।",

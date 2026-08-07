@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  startTransition,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useRenderScheduler } from "../hooks/useRenderScheduler";
 import type { MutableRefObject } from "react";
 import type { WorkspaceInfo } from "../types";
@@ -12,9 +19,17 @@ import {
   type StartupMilestoneName,
 } from "../features/startup-orchestration/utils/startupTrace";
 import {
+  isStartupForceEntered,
+  registerStartupIdleHydrationCancel,
+} from "../features/startup-orchestration/utils/startupForceEnter";
+import {
   resolveNextWorkspaceThreadListHydrationId,
   shouldSkipWorkspaceThreadListLoad,
 } from "./workspaceThreadListLoadGuard";
+import {
+  ensureInteractiveInputHooks,
+  scheduleWhenBrowserIdle,
+} from "../utils/interactiveMainThread";
 
 type ListThreadsForWorkspace = (
   workspace: WorkspaceInfo,
@@ -22,8 +37,10 @@ type ListThreadsForWorkspace = (
     preserveState?: boolean;
     includeOpenCodeSessions?: boolean;
     deletedThreadIds?: string[];
-    startupHydrationMode?: "full-catalog";
+    startupHydrationMode?: "full-catalog" | "first-paint";
     allowRuntimeReconnect?: boolean;
+    /** When true mid-flight, list apply must no-op (workspace cancelled/switched). */
+    isStale?: () => boolean;
   },
 ) => Promise<void | { applied?: boolean; stale?: boolean }>;
 
@@ -53,7 +70,15 @@ type UseWorkspaceThreadListHydrationResult = {
 };
 
 type ThreadHydrationPhase = "active-workspace" | "idle-prewarm" | "on-demand";
-type ThreadHydrationKind = "full-catalog" | "session-radar";
+type ThreadHydrationKind = "full-catalog" | "session-radar" | "first-paint";
+
+/** Delay before first active list so open + first clicks stay free (0.7.15 often skipped load via race). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const COLD_START_FIRST_PAINT_DELAY_MS =
+  typeof import.meta !== "undefined" &&
+  (import.meta as any).env?.MODE === "test"
+    ? 0
+    : 500;
 function isDiscardedStaleHydrationResult(
   result: ThreadListHydrationResult,
 ): boolean {
@@ -75,33 +100,66 @@ function createThreadHydrationTask(
   workspace: WorkspaceInfo,
   phase: ThreadHydrationPhase,
   kind: ThreadHydrationKind,
-  run: () => Promise<ThreadListHydrationResult>,
+  run: (
+    context: Parameters<
+      StartupTaskDescriptor<ThreadListHydrationResult>["run"]
+    >[0],
+  ) => Promise<ThreadListHydrationResult>,
 ): StartupTaskDescriptor<ThreadListHydrationResult> {
   const dedupeKey = `thread-list:${kind}:${workspace.id}`;
   return {
     id: `thread-list:${kind}:${workspace.id}`,
     phase,
     priority:
-      phase === "active-workspace"
-        ? 90
-        : phase === "on-demand"
-          ? 85
-          : kind === "session-radar"
-            ? 30
-            : 20,
+      kind === "first-paint"
+        ? 95
+        : phase === "active-workspace"
+          ? 90
+          : phase === "on-demand"
+            ? 85
+            : kind === "session-radar"
+              ? 30
+              : 20,
     dedupeKey,
     concurrencyKey: "thread-session-scan",
-    timeoutMs: phase === "active-workspace" ? 12_000 : 20_000,
+    timeoutMs:
+      kind === "first-paint"
+        ? 8_000
+        : phase === "active-workspace"
+          ? 12_000
+          : 20_000,
     workspaceScope: { workspaceId: workspace.id },
+    // soft-ignore: timeout/cancel settle UI without hard-aborting native IPC,
+    // but run() + list apply must honor isStale so late setThreads do not
+    // storm the main thread after the user already moved on.
     cancelPolicy: "soft-ignore",
     traceLabel:
       kind === "session-radar"
         ? "session-radar workspace prewarm"
-        : `thread/list ${kind} hydration`,
+        : kind === "first-paint"
+          ? "thread/list first-paint hydration"
+          : `thread/list ${kind} hydration`,
     commandLabel: "list_threads",
     run,
-    fallback: () => undefined,
+    fallback: (reason) =>
+      // cancelAllTasks / cancelWorkspaceTasks / abort: all must look "stale"
+      // so finally skips publish-hydrate + full-catalog re-schedule.
+      reason === "stale" || reason === "cancelled"
+        ? { applied: false, stale: true }
+        : undefined,
   };
+}
+
+function publishHydrationUiState(
+  setHydrated: (next: Set<string>) => void,
+  setCycle: (updater: (current: number) => number) => void,
+  nextHydrated: Set<string>,
+): void {
+  // Background lane — clicks stay urgent.
+  startTransition(() => {
+    setHydrated(nextHydrated);
+    setCycle((current) => current + 1);
+  });
 }
 
 type ThreadListHydrationResult = void | { applied?: boolean; stale?: boolean };
@@ -146,6 +204,18 @@ export function useWorkspaceThreadListHydration({
     new Map<string, ThreadHydrationKind>(),
   );
   const autoHydratedActiveWorkspaceIdRef = useRef<string | null>(null);
+  const previousActiveWorkspaceIdRef = useRef<string | null>(null);
+  const ensureWorkspaceThreadListLoadedRef = useRef<
+    | ((
+        workspaceId: string,
+        options?: {
+          preserveState?: boolean;
+          force?: boolean;
+          deletedThreadIds?: string[];
+        },
+      ) => void)
+    | null
+  >(null);
   const idleHydrationCleanupByWorkspaceIdRef = useRef(new Map<string, () => void>());
   // State carries the published Set identity for consumers (Sidebar via layout).
   // Ref stays the sync source of truth for in-flight guards.
@@ -199,44 +269,90 @@ export function useWorkspaceThreadListHydration({
         hydrationKindByWorkspaceIdRef.current.get(workspace.id) ??
         "full-catalog";
       let hydrationResult: ThreadListHydrationResult = undefined;
+      const finishedKind = kind;
       try {
+        const mode =
+          kind === "first-paint" ? "first-paint" : "full-catalog";
         hydrationResult = await startupOrchestrator.run(
-          createThreadHydrationTask(workspace, phase, kind, () =>
-            listThreadsForWorkspace(workspace, {
+          createThreadHydrationTask(workspace, phase, kind, async (context) => {
+            if (context.isStale()) {
+              return { applied: false, stale: true };
+            }
+            return listThreadsForWorkspace(workspace, {
               ...options,
-              startupHydrationMode: "full-catalog",
-            allowRuntimeReconnect: false,
-}),
-          ),
+              startupHydrationMode: mode,
+              allowRuntimeReconnect: false,
+              isStale: context.isStale,
+            });
+          }),
         );
       } finally {
         const discardedAsStale =
           isDiscardedStaleHydrationResult(hydrationResult);
         if (
           !discardedAsStale &&
-          phase === "active-workspace" &&
+          (phase === "active-workspace" || finishedKind === "first-paint") &&
           !hasRecordedActiveWorkspaceReady()
         ) {
+          // first-paint still marks this for notices — NOT the Windows click gate
           recordStartupMilestone(ACTIVE_WORKSPACE_READY_MILESTONE);
         }
-        // Timeout/fallback resolves as undefined (not stale). Always publish a
-        // new Set identity so memo(Sidebar) drops the loading placeholder even
-        // when listThreads is still running in the background (soft-ignore).
+        // Timeout/fallback resolves as undefined (not stale). Publish a new Set
+        // identity so memo(Sidebar) drops the loading placeholder even when the
+        // underlying soft-ignore body is still finishing — but never do that for
+        // stale/cancelled workspaces (would thrash the wrong shell).
+        hydratingThreadListWorkspaceIdsRef.current.delete(workspace.id);
+        hydrationPhaseByWorkspaceIdRef.current.delete(workspace.id);
+        hydrationKindByWorkspaceIdRef.current.delete(workspace.id);
         if (!discardedAsStale) {
           const nextHydrated = publishHydratedWorkspaceId(
             hydratedThreadListWorkspaceIdsRef,
             workspace.id,
           );
-          publishHydratedWorkspaceId(
-            fullyHydratedThreadListWorkspaceIdsRef,
-            workspace.id,
+          if (finishedKind !== "first-paint") {
+            publishHydratedWorkspaceId(
+              fullyHydratedThreadListWorkspaceIdsRef,
+              workspace.id,
+            );
+            // Gate unmask: full-catalog (heavy multi-engine) finished, not first-paint.
+            if (
+              !getStartupTraceSnapshot().milestones["startup-gate-ready"]
+            ) {
+              recordStartupMilestone("startup-gate-ready");
+            }
+          }
+          publishHydrationUiState(
+            setHydratedThreadListWorkspaceIds,
+            setHydrationCycle,
+            nextHydrated,
           );
-          setHydratedThreadListWorkspaceIds(nextHydrated);
+          if (finishedKind === "first-paint") {
+            // CRITICAL: do NOT setTimeout(0) full-catalog — that immediately
+            // re-floods the main thread right when the user starts clicking
+            // after first-paint. Wait for real browser idle (min 1.5s).
+            // Force-enter cancels this disposer so full-catalog cannot restart
+            // into the unmasked click window.
+            if (isStartupForceEntered()) {
+              return;
+            }
+            const cancelIdleFullCatalog = scheduleWhenBrowserIdle(
+              () => {
+                if (isStartupForceEntered()) {
+                  return;
+                }
+                ensureWorkspaceThreadListLoadedRef.current?.(workspace.id, {
+                  preserveState: true,
+                });
+              },
+              { minDelayMs: 1_500, timeoutMs: 6_000 },
+            );
+            registerStartupIdleHydrationCancel(cancelIdleFullCatalog);
+          }
+        } else {
+          // Synchronous: background retry scheduling depends on this cycle tick
+          // after a stale discard (must not wait behind startTransition).
+          setHydrationCycle((current) => current + 1);
         }
-        hydratingThreadListWorkspaceIdsRef.current.delete(workspace.id);
-        hydrationPhaseByWorkspaceIdRef.current.delete(workspace.id);
-        hydrationKindByWorkspaceIdRef.current.delete(workspace.id);
-        setHydrationCycle((current) => current + 1);
       }
     },
     [listThreadsForWorkspace],
@@ -257,8 +373,18 @@ export function useWorkspaceThreadListHydration({
       }
       const force = options?.force ?? false;
       const isLoading = threadListLoadingByWorkspace[workspaceId] ?? false;
-      const hasHydratedThreadList =
+      const uiHydrated =
         hydratedThreadListWorkspaceIdsRef.current.has(workspaceId);
+      const fullyHydrated =
+        fullyHydratedThreadListWorkspaceIdsRef.current.has(workspaceId);
+      // first-paint if UI never ready; else full-catalog until fully done.
+      const kind: ThreadHydrationKind = force
+        ? "full-catalog"
+        : !uiHydrated
+          ? "first-paint"
+          : "full-catalog";
+      const hasHydratedThreadList =
+        kind === "first-paint" ? uiHydrated : fullyHydrated;
       const isHydratingThreadList =
         hydratingThreadListWorkspaceIdsRef.current.has(workspaceId);
       if (
@@ -277,10 +403,12 @@ export function useWorkspaceThreadListHydration({
           ? "active-workspace"
           : "idle-prewarm";
       hydrationPhaseByWorkspaceIdRef.current.set(workspaceId, phase);
-      hydrationKindByWorkspaceIdRef.current.set(workspaceId, "full-catalog");
+      hydrationKindByWorkspaceIdRef.current.set(workspaceId, kind);
       void listThreadsForWorkspaceTracked(workspace, {
         preserveState: options?.preserveState,
         deletedThreadIds: options?.deletedThreadIds,
+        startupHydrationMode:
+          kind === "first-paint" ? "first-paint" : "full-catalog",
       });
     },
     [
@@ -290,6 +418,8 @@ export function useWorkspaceThreadListHydration({
       workspacesById,
     ],
   );
+
+  ensureWorkspaceThreadListLoadedRef.current = ensureWorkspaceThreadListLoaded;
 
   const prewarmSessionRadarForWorkspace = useCallback(
     (workspaceId: string) => {
@@ -382,6 +512,33 @@ export function useWorkspaceThreadListHydration({
   );
 
   useEffect(() => {
+    ensureInteractiveInputHooks();
+  }, []);
+
+  useEffect(() => {
+    const previousActiveWorkspaceId = previousActiveWorkspaceIdRef.current;
+    if (
+      previousActiveWorkspaceId &&
+      previousActiveWorkspaceId !== activeWorkspaceId
+    ) {
+      // Spec: stale workspace hydration is cancelled on switch. Soft-ignore
+      // marks the generation stale so late list apply no-ops via isStale.
+      startupOrchestrator.cancelWorkspaceTasks(
+        previousActiveWorkspaceId,
+        "stale",
+      );
+      const idleCleanup = idleHydrationCleanupByWorkspaceIdRef.current.get(
+        previousActiveWorkspaceId,
+      );
+      if (idleCleanup) {
+        idleCleanup();
+        idleHydrationCleanupByWorkspaceIdRef.current.delete(
+          previousActiveWorkspaceId,
+        );
+      }
+    }
+    previousActiveWorkspaceIdRef.current = activeWorkspaceId;
+
     if (!activeWorkspaceId) {
       autoHydratedActiveWorkspaceIdRef.current = null;
       return;
@@ -396,8 +553,25 @@ export function useWorkspaceThreadListHydration({
     if (!workspacesById.has(activeWorkspaceId)) {
       return;
     }
-    autoHydratedActiveWorkspaceIdRef.current = activeWorkspaceId;
-    ensureWorkspaceThreadListLoaded(activeWorkspaceId, { preserveState: true });
+    // Defer first-paint list so cold-start clicks stay interactive. 0.7.15 often
+    // skipped load via the workspacesById race; we keep correctness of 9e3c1bdd8
+    // but do not start multi-engine work in the same frame as first paint.
+    const targetId = activeWorkspaceId;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (cancelled) {
+        return;
+      }
+      if (autoHydratedActiveWorkspaceIdRef.current === targetId) {
+        return;
+      }
+      autoHydratedActiveWorkspaceIdRef.current = targetId;
+      ensureWorkspaceThreadListLoaded(targetId, { preserveState: true });
+    }, COLD_START_FIRST_PAINT_DELAY_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [activeWorkspaceId, ensureWorkspaceThreadListLoaded, workspacesById]);
 
   useEffect(() => {
@@ -438,10 +612,22 @@ export function useWorkspaceThreadListHydration({
     if (!nextBackgroundWorkspaceThreadHydrationId) {
       return;
     }
+    // Do not stack idle full-catalog on top of the active workspace scan —
+    // that overlap was the cold-start "any click freezes until list lands"
+    // window. Skip while the active id is still in-flight; after settle/stale
+    // the hydrating set clears and background can proceed (or retry).
+    if (
+      activeWorkspaceId &&
+      hydratingThreadListWorkspaceIdsRef.current.has(activeWorkspaceId)
+    ) {
+      return;
+    }
     prewarmFullCatalogForWorkspace(nextBackgroundWorkspaceThreadHydrationId);
   }, [
+    activeWorkspaceId,
     nextBackgroundWorkspaceThreadHydrationId,
     prewarmFullCatalogForWorkspace,
+    hydrationCycle,
   ]);
 
   useEffect(() => {

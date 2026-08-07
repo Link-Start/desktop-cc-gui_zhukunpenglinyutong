@@ -518,10 +518,10 @@ export function useMessagesScrollController({
       return;
     }
     const boundary = stickToBottomIntentRef.current;
-    if (
-      scrollAuthorityRef.current.mode === "forced-bottom" ||
-      isTurnBoundaryScrollIntent(boundary)
-    ) {
+    const boundaryActive =
+      isTurnBoundaryScrollIntent(boundary) &&
+      Date.now() <= stickToBottomDeadlineRef.current;
+    if (scrollAuthorityRef.current.mode === "forced-bottom" || boundaryActive) {
       const intent =
         isTurnBoundaryScrollIntent(boundary) && boundary
           ? boundary
@@ -542,6 +542,12 @@ export function useMessagesScrollController({
         },
       });
       return;
+    }
+    // turn 边界意图的 settle 死线已过：清掉残留意图。否则旧逻辑会让该分支永真、
+    // shouldContinue 永假，下面的 live-follow 通道被永久短路——回合结束后
+    // 容器收缩 / 迟到测高（虚拟化回填、Markdown 全量渲染）将再也无人追底。
+    if (isTurnBoundaryScrollIntent(boundary)) {
+      stickToBottomIntentRef.current = null;
     }
     if (liveAutoFollowEnabledRef.current) {
       flushLiveFollowStick();
@@ -766,7 +772,7 @@ export function useMessagesScrollController({
     window.addEventListener("pointercancel", handlePointerEnd);
     window.addEventListener("keydown", handleScrollKey);
     recordCurrentScrollGeometry(container);
-    if (!content || typeof ResizeObserver === "undefined") {
+    if (typeof ResizeObserver === "undefined") {
       return removeInputListeners;
     }
     const observer = new ResizeObserver(() => {
@@ -870,7 +876,13 @@ export function useMessagesScrollController({
       // convergence 首次 pulse 同步写 scrollTop；snapshot 必须反映写后的真实位置。
       recordCurrentScrollGeometry(container);
     });
-    observer.observe(content);
+    // 观察容器自身 + 内容：Composer 运行态条（「已编辑 N 个文件」等）挂载或窗口 resize
+    // 会压小 clientHeight，maxScrollTop 静默变大——scrollTop 不变、不派发 scroll 事件，
+    // 仅观察内容永远感知不到（回合结束后视口滞留底部上方的主根因之一）。
+    observer.observe(container);
+    if (content) {
+      observer.observe(content);
+    }
     return () => {
       observer.disconnect();
       removeInputListeners();

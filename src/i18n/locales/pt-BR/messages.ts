@@ -20,7 +20,18 @@ const messages = {
       "title_one": "{{count}} arquivo editado",
       "title_other": "{{count}} arquivos editados",
       "showMore_one": "Mostrar mais {{count}} arquivo",
-      "showMore_other": "Mostrar mais {{count}} arquivos"
+      "showMore_other": "Mostrar mais {{count}} arquivos",
+      "revertAll": "Desfazer tudo",
+      "revertFile": "Desfazer {{path}}",
+      "revertFileAction": "Desfazer",
+      "revertAllConfirmTitle": "Desfazer todas as alterações",
+      "revertAllConfirmBody":
+        "Isso descartará as alterações locais em {{count}} arquivos e os restaurará para o último commit. Isso não pode ser desfeito.",
+      "revertAllConfirmAction": "Desfazer tudo",
+      "revertFileConfirmTitle": "Desfazer alterações do arquivo",
+      "revertFileConfirmBody":
+        "Isso descartará as alterações locais de “{{path}}” e o restaurará para o último commit. Isso não pode ser desfeito.",
+      "revertFileConfirmAction": "Desfazer"
     },
     "noThinkingContent": "Sem conteúdo de raciocínio",
     "hiddenThinkingContent": "O conteúdo de raciocínio está oculto pela configuração atual.",

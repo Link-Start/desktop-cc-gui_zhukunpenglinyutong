@@ -18,6 +18,17 @@ const messages = {
       title_other: "Edited {{count}} files",
       showMore_one: "Show {{count}} more file",
       showMore_other: "Show {{count}} more files",
+      revertAll: "Undo all",
+      revertFile: "Undo {{path}}",
+      revertFileAction: "Undo",
+      revertAllConfirmTitle: "Undo all changes",
+      revertAllConfirmBody:
+        "This will discard local changes in {{count}} files and restore them to the last commit. This cannot be undone.",
+      revertAllConfirmAction: "Undo all",
+      revertFileConfirmTitle: "Undo file changes",
+      revertFileConfirmBody:
+        "This will discard local changes in “{{path}}” and restore it to the last commit. This cannot be undone.",
+      revertFileConfirmAction: "Undo",
     },
     noThinkingContent: "No thinking content",
     hiddenThinkingContent: "Thinking content is hidden by the current setting.",

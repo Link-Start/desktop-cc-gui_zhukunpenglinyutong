@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useRef } from "react";
+import { startTransition, useCallback, useMemo, useRef } from "react";
+import { yieldToInteractiveInput } from "../../../utils/interactiveMainThread";
 import type { ThreadSummary, WorkspaceInfo } from "../../../types";
 import {
   connectWorkspace as connectWorkspaceService,
@@ -23,6 +24,7 @@ import {
   remapThreadParentsToSharedOwners,
   toSharedThreadSummary,
 } from "../../shared-session/runtime/sharedSessionSummaries";
+import { getCollabWorkerNativeHideIds } from "../../multi-agent/runtime/collabNativeHideRegistry";
 import { asString } from "../utils/threadNormalize";
 import { clearLiveAssistantText } from "../utils/liveAssistantTextChannel";
 import { resolveCodexSubagentIdentity } from "../utils/codexSubagentIdentity";
@@ -68,6 +70,8 @@ import {
   shouldIncludeWorkspaceThreadEntry,
   shouldApplyCodexSidebarContinuity,
   shouldApplyClaudeSidebarContinuity,
+  isSharedCollabWorkerSpawnTitle,
+  isSharedControlPlaneSpawnTitle,
   stripHiddenSharedBindingSummaries,
   threadIdMatchesHiddenAutomaticSessionSet,
   withTimeout,
@@ -316,6 +320,8 @@ export function useThreadActions({
         recoverySource?: AutomaticRuntimeRecoverySource;
         allowRuntimeReconnect?: boolean;
         startupHydrationMode?: StartupThreadHydrationMode;
+        /** Orchestrator cancel/stale flag — skip late setThreads after soft-ignore cancel. */
+        isStale?: () => boolean;
       },
     ) => {
       // Store workspace path for Claude session loading
@@ -324,9 +330,14 @@ export function useThreadActions({
         (threadListRequestSeqRef.current[workspace.id] ?? 0) + 1;
       threadListRequestSeqRef.current[workspace.id] = requestSeq;
       const isLatestThreadListRequest = () =>
-        threadListRequestSeqRef.current[workspace.id] === requestSeq;
+        threadListRequestSeqRef.current[workspace.id] === requestSeq &&
+        !(options?.isStale?.() ?? false);
       const preserveState = options?.preserveState ?? false;
-      const includeOpenCodeSessions = options?.includeOpenCodeSessions ?? true;
+      const isFirstPaintHydration =
+        options?.startupHydrationMode === "first-paint";
+      // First-paint never fans out OpenCode/native multi-engine lists.
+      const includeOpenCodeSessions =
+        !isFirstPaintHydration && (options?.includeOpenCodeSessions ?? true);
       const deletedThreadIds = [
         ...new Set(
           (options?.deletedThreadIds ?? [])
@@ -439,9 +450,11 @@ export function useThreadActions({
         const sharedSessions = normalizeSharedSessionSummaries(
           sharedSessionsResult ?? [],
         );
-        const hiddenSharedBindingIds = expandHiddenSharedBindingIds(
-          sharedSessions.flatMap((session) => session.nativeThreadIds),
-        );
+        const hiddenSharedBindingIds = expandHiddenSharedBindingIds([
+          ...sharedSessions.flatMap((session) => session.nativeThreadIds),
+          // 协作 worker realtime 登记的 native id（改名 Agent N 后仍能 strip）
+          ...getCollabWorkerNativeHideIds(),
+        ]);
         const nativeOwnerToSharedThreadId =
           buildNativeOwnerToSharedThreadMap(sharedSessions);
         const existingThreads = filterDeletedSummaries(
@@ -809,24 +822,48 @@ export function useThreadActions({
           : Promise.resolve(
               [] as Awaited<ReturnType<typeof getOpenCodeSessionListService>>,
             );
-        const projectCatalogSessionsPromise = canListWorkspaceSessions
-          ? loadActiveProjectCatalogSessions(
-              workspace.id,
-              sessionAttributionMode,
+        // Cold-start first-paint: skip multi-engine project catalog + Claude
+        // disk seed. That path is the multi-second main-thread/IPC freeze window
+        // (list_workspace_sessions walks every engine). Full-catalog runs idle.
+        const projectCatalogSessionsPromise =
+          !isFirstPaintHydration && canListWorkspaceSessions
+            ? loadActiveProjectCatalogSessions(
+                workspace.id,
+                sessionAttributionMode,
+              )
+            : Promise.resolve(null);
+        const claudeSessionsPromise = isFirstPaintHydration
+          ? Promise.resolve(
+              null as Awaited<
+                ReturnType<typeof listClaudeSessionsForFallbackSeedService>
+              > | null,
             )
-          : Promise.resolve(null);
-        const [claudeResult, opencodeResult, projectCatalogResult] =
-          await Promise.allSettled([
-            withTimeout(
+          : withTimeout(
               listClaudeSessionsForFallbackSeedService(
                 workspace.path,
                 nativeSessionListLimit,
               ),
               NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS,
-            ),
+            );
+        // Yield so clicks queued during codex paging can run before catalog.
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 0);
+        });
+        if (!isLatestThreadListRequest()) {
+          return { applied: false, stale: true };
+        }
+        const [claudeResult, opencodeResult, projectCatalogResult] =
+          await Promise.allSettled([
+            claudeSessionsPromise,
             opencodeSessionsPromise,
             projectCatalogSessionsPromise,
           ]);
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 0);
+        });
+        if (!isLatestThreadListRequest()) {
+          return { applied: false, stale: true };
+        }
         const projectCatalogValue =
           projectCatalogResult.status === "fulfilled"
             ? projectCatalogResult.value
@@ -903,18 +940,35 @@ export function useThreadActions({
               ) {
                 return;
               }
+              // Shared/control-plane 内部 session：raw 首包或 nativeTitle 行首 MOSSX_*
+              if (
+                isSharedControlPlaneSpawnTitle(session.firstMessage) ||
+                isSharedControlPlaneSpawnTitle(session.nativeTitle)
+              ) {
+                return;
+              }
               const prev = mergedById.get(id);
               const updatedAt = session.updatedAt;
               const mappedTitle = mappedTitles[id];
               const customTitle = getCustomName(workspace.id, id);
               const nativeTitle = asString(session.nativeTitle).trim();
+              const previewName = previewThreadName(
+                session.firstMessage,
+                "Claude Session",
+              );
+              if (
+                isSharedControlPlaneSpawnTitle(mappedTitle) ||
+                isSharedControlPlaneSpawnTitle(previewName)
+              ) {
+                return;
+              }
               const next: ThreadSummary = {
                 id,
                 name:
                   customTitle ||
                   mappedTitle ||
                   nativeTitle ||
-                  previewThreadName(session.firstMessage, "Claude Session"),
+                  previewName,
                 updatedAt,
                 sizeBytes: extractThreadSizeBytes(
                   session as Record<string, unknown>,
@@ -991,6 +1045,12 @@ export function useThreadActions({
             ) {
               return;
             }
+            if (
+              isSharedControlPlaneSpawnTitle(session.title) ||
+              isSharedControlPlaneSpawnTitle(mappedTitles[id])
+            ) {
+              return;
+            }
             const prev = mergedById.get(id);
             const sessionUpdatedAt =
               typeof session.updatedAt === "number" &&
@@ -1006,12 +1066,19 @@ export function useThreadActions({
               nextActivityByThread[id] = updatedAt;
               didChangeActivity = true;
             }
+            const previewName = previewThreadName(
+              session.title,
+              "OpenCode Session",
+            );
+            if (isSharedControlPlaneSpawnTitle(previewName)) {
+              return;
+            }
             const next: ThreadSummary = {
               id,
               name:
                 mappedTitles[id] ||
                 getCustomName(workspace.id, id) ||
-                previewThreadName(session.title, "OpenCode Session"),
+                previewName,
               updatedAt,
               sizeBytes: extractThreadSizeBytes(
                 session as Record<string, unknown>,
@@ -1060,11 +1127,30 @@ export function useThreadActions({
           rememberPartialSource(projectCatalogValue?.partialSource);
           const projectCatalogSessions = (
             projectCatalogValue?.sessions ?? []
-          ).filter(
-            (entry) =>
-              !hiddenSharedBindingIds.has(entry.sessionId) &&
-              !deletedThreadIdSet.has(entry.sessionId),
-          );
+          ).filter((entry) => {
+            if (deletedThreadIdSet.has(entry.sessionId)) return false;
+            // id 命中 Shared hidden binding（含 codex:uuid / raw uuid）
+            if (
+              hiddenSharedBindingIds.has(entry.sessionId) ||
+              (() => {
+                const colon = entry.sessionId.indexOf(":");
+                if (colon <= 0) return false;
+                const bare = entry.sessionId.slice(colon + 1).trim();
+                return Boolean(bare && hiddenSharedBindingIds.has(bare));
+              })()
+            ) {
+              return false;
+            }
+            // 协作 worker multi-line MOSSX+squad（改名成 Agent N 之前）
+            // 不用任意 MOSSX 单行，避免 Provider Continuation 被误杀
+            if (
+              isSharedCollabWorkerSpawnTitle(entry.title) ||
+              isSharedCollabWorkerSpawnTitle(entry.nativeTitle)
+            ) {
+              return false;
+            }
+            return true;
+          });
           if (claudeSuccessfulEmpty && projectCatalogValue?.partialSource) {
             onDebug?.({
               id: `${Date.now()}-client-claude-successful-empty-degraded`,
@@ -1092,6 +1178,7 @@ export function useThreadActions({
             workspace.id,
             mappedTitles,
             getCustomName,
+            hiddenSharedBindingIds,
           );
           mergedById.clear();
           allSummaries.forEach((entry) => mergedById.set(entry.id, entry));
@@ -1337,10 +1424,59 @@ export function useThreadActions({
           visibleSummaries,
           hiddenSharedBindingIds,
         );
-        dispatch({
-          type: "setThreads",
-          workspaceId: workspace.id,
-          threads: visibleSummaries,
+        if (!isLatestThreadListRequest()) {
+          return { applied: false, stale: true };
+        }
+        // Prefer input over list commit: if user is clicking, wait a few frames.
+        await yieldToInteractiveInput({ maxRounds: 32 });
+        if (!isLatestThreadListRequest()) {
+          return { applied: false, stale: true };
+        }
+        const cursorForDisplay = resolveThreadListCursorForDisplay({
+          catalogCursor: projectCatalogValue?.nextCursor ?? null,
+          catalogPartialSource: projectCatalogValue?.partialSource ?? null,
+          runtimeCursor: cursor,
+        });
+        const previewUpdates: Array<{
+          threadId: string;
+          text: string;
+          timestamp: number;
+        }> = [];
+        uniqueThreads.forEach((thread) => {
+          const threadId = String(thread?.id ?? "");
+          const preview = asString(thread?.preview ?? "").trim();
+          if (!threadId || !preview) {
+            return;
+          }
+          previewUpdates.push({
+            threadId,
+            text: preview,
+            timestamp: getThreadTimestamp(thread) ?? Date.now(),
+          });
+        });
+        // Background lane: clicks stay urgent.
+        startTransition(() => {
+          if (!isLatestThreadListRequest()) {
+            return;
+          }
+          dispatch({
+            type: "setThreads",
+            workspaceId: workspace.id,
+            threads: visibleSummaries,
+          });
+          dispatch({
+            type: "setThreadListCursor",
+            workspaceId: workspace.id,
+            cursor: cursorForDisplay,
+          });
+          previewUpdates.forEach((entry) => {
+            dispatch({
+              type: "setLastAgentMessage",
+              threadId: entry.threadId,
+              text: entry.text,
+              timestamp: entry.timestamp,
+            });
+          });
         });
         appliedThreadListUpdate = true;
         if (hasHealthyThreadSummaries(visibleSummaries)) {
@@ -1349,35 +1485,12 @@ export function useThreadActions({
             [workspace.id]: visibleSummaries,
           };
         }
-        // nextCursor from catalog/runtime drives "Load older". First paint only
-        // requested a small page (default 5); more pages load on demand.
-        dispatch({
-          type: "setThreadListCursor",
-          workspaceId: workspace.id,
-          cursor: resolveThreadListCursorForDisplay({
-            catalogCursor: projectCatalogValue?.nextCursor ?? null,
-            catalogPartialSource: projectCatalogValue?.partialSource ?? null,
-            runtimeCursor: cursor,
-          }),
-        });
-        uniqueThreads.forEach((thread) => {
-          const threadId = String(thread?.id ?? "");
-          const preview = asString(thread?.preview ?? "").trim();
-          if (!threadId || !preview) {
-            return;
-          }
-          dispatch({
-            type: "setLastAgentMessage",
-            threadId,
-            text: preview,
-            timestamp: getThreadTimestamp(thread),
-          });
-        });
 
         const hasAttemptedGeminiRefresh =
           geminiRefreshAttemptedRef.current[workspace.id] === true;
         const shouldRefreshGeminiSessions =
-          hasGeminiSignal || !!cachedGemini || !hasAttemptedGeminiRefresh;
+          !isFirstPaintHydration &&
+          (hasGeminiSignal || !!cachedGemini || !hasAttemptedGeminiRefresh);
         if (shouldRefreshGeminiSessions) {
           void (async () => {
             geminiRefreshAttemptedRef.current[workspace.id] = true;
@@ -1427,6 +1540,7 @@ export function useThreadActions({
                 (session) => session.nativeThreadIds,
               ),
               ...hiddenSharedBindingIds,
+              ...getCollabWorkerNativeHideIds(),
             ]);
             const nextSummaries = mergeGeminiSessionSummaries(
               baselineSummaries,
@@ -1478,11 +1592,13 @@ export function useThreadActions({
         const hasAttemptedKimiRefresh =
           kimiRefreshAttemptedRef.current[workspace.id] === true;
         const shouldRefreshKimiSessions =
-          hasKimiSignal || !!cachedKimi || !hasAttemptedKimiRefresh;
+          !isFirstPaintHydration &&
+          (hasKimiSignal || !!cachedKimi || !hasAttemptedKimiRefresh);
         const hasAttemptedGrokRefresh =
           grokRefreshAttemptedRef.current[workspace.id] === true;
         const shouldRefreshGrokSessions =
-          hasGrokSignal || !!cachedGrok || !hasAttemptedGrokRefresh;
+          !isFirstPaintHydration &&
+          (hasGrokSignal || !!cachedGrok || !hasAttemptedGrokRefresh);
         if (shouldRefreshGrokSessions) {
           void (async () => {
             grokRefreshAttemptedRef.current[workspace.id] = true;
@@ -1531,6 +1647,7 @@ export function useThreadActions({
             const freshHiddenSharedBindingIds = expandHiddenSharedBindingIds([
               ...sharedSessionsForRemap.flatMap((session) => session.nativeThreadIds),
               ...hiddenSharedBindingIds,
+              ...getCollabWorkerNativeHideIds(),
             ]);
             const nativeOwnerToShared =
               buildNativeOwnerToSharedThreadMap(sharedSessionsForRemap);
@@ -1632,6 +1749,7 @@ export function useThreadActions({
                 (session) => session.nativeThreadIds,
               ),
               ...hiddenSharedBindingIds,
+              ...getCollabWorkerNativeHideIds(),
             ]);
             const nextSummaries = mergeKimiSessionSummaries(
               baselineSummaries,
@@ -1741,7 +1859,12 @@ export function useThreadActions({
           ),
         });
       } finally {
-        if (!preserveState && isLatestThreadListRequest()) {
+        // Clear loading if this request still owns the seq (even when isStale
+        // made isLatestThreadListRequest false — cancelled hydrate must not
+        // leave the spinner stuck).
+        const ownsRequest =
+          threadListRequestSeqRef.current[workspace.id] === requestSeq;
+        if (!preserveState && ownsRequest) {
           dispatch({
             type: "setThreadListLoading",
             workspaceId: workspace.id,

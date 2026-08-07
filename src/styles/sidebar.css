@@ -209,6 +209,19 @@
   flex: 0 0 32px;
 }
 
+/* 运行时提示固定入口：有失败时恢复对号→叹号的红色态（与 dock bubble is-has-error 对齐） */
+.sidebar-settings-pinned-item.is-runtime-notice-error {
+  color: #fda4af;
+}
+
+.sidebar-settings-runtime-notice-icon.is-has-error {
+  color: #fda4af;
+}
+
+.sidebar-settings-runtime-notice-icon.is-idle {
+  color: inherit;
+}
+
 .sidebar-settings-dropdown {
   /* 跟随侧栏宽度收缩，避免窄侧栏时被 .sidebar-body 的 overflow:hidden 裁掉右侧圆角/阴影 */
   width: min(220px, calc(var(--sidebar-width, 210px) - 24px));

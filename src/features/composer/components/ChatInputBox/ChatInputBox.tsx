@@ -26,6 +26,7 @@ import { ChatInputBoxFooter } from './ChatInputBoxFooter.js';
 import { ComposerReadinessBar } from './ComposerReadinessBar.js';
 import { ContextBar } from './ContextBar.js';
 import { ResizeHandles } from './ResizeHandles.js';
+import { shouldSkipComposerShellFocus } from './utils/shouldSkipComposerShellFocus.js';
 import { CuratedSkillIndicator } from '../../../curated-skills';
 import {
   useCompletionDropdown,
@@ -208,6 +209,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       onCodexSpeedModeChange,
       onCodexReviewQuickStart,
       onForkQuickStart,
+      squadSurface,
       memoryReferenceMode = 'off',
       onSetMemoryReferenceMode,
       attachments: externalAttachments,
@@ -1679,8 +1681,10 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       <div className="chat-input-box-wrapper">
         <div
           className={`chat-input-box ${isResizingInputBox ? 'is-resizing' : ''}${isInputBoxCollapsed ? ' is-collapsed' : ''}${isDragOver ? " is-drag-over" : ""}`}
-          onClick={() => {
+          onClick={(event) => {
             if (isInputBoxCollapsed) return;
+            // Portal 弹层 DOM 在 body、React 树仍是子孙 → 合成 click 会冒泡抢焦
+            if (shouldSkipComposerShellFocus(event.target)) return;
             focusInput();
           }}
           onDragOver={handleDragOver}
@@ -1903,6 +1907,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
               readinessSurface={readinessSurface}
               panelToggleSurface={panelToggleSurface}
               curatedSkillSurface={curatedSkillIndicator}
+              squadSurface={squadSurface}
               toolSurface={(
                 <ContextBar
                   surface="tool-popover"

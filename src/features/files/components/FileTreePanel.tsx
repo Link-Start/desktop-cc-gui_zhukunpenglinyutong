@@ -11,7 +11,6 @@ import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { emitTo } from "@tauri-apps/api/event";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import LoaderCircle from "lucide-react/dist/esm/icons/loader-circle";
 import FilePlus from "lucide-react/dist/esm/icons/file-plus";
@@ -44,10 +43,13 @@ import {
   pasteWorkspaceItem,
   readWorkspaceFile,
   renameWorkspaceItem,
+  revealInFileManager,
   trashWorkspaceItem,
   writeWorkspaceFile,
   type WorkspaceDirectoryEntry,
 } from "../../../services/tauri";
+import { joinWorkspaceAbsolutePath } from "../../../utils/workspacePaths";
+import { detectRendererPlatform } from "../../../utils/rendererPlatform";
 import { appendWorkspaceFileListingBudgetDiagnostic } from "../../../services/rendererDiagnostics";
 import type {
   GitFileStatus,
@@ -1186,17 +1188,20 @@ export function FileTreePanel({
   );
 
   const resolvePath = useCallback(
-    (relativePath: string) => {
-      const usesWindowsSeparator = workspacePath.includes("\\");
-      const separator = usesWindowsSeparator ? "\\" : "/";
-      const base = workspacePath.replace(/[\\/]+$/, "");
-      const normalizedRelative = usesWindowsSeparator
-        ? relativePath.replaceAll("/", "\\")
-        : relativePath;
-      return `${base}${separator}${normalizedRelative}`;
-    },
+    (relativePath: string) => joinWorkspaceAbsolutePath(workspacePath, relativePath),
     [workspacePath],
   );
+
+  const revealInOsLabel = useMemo(() => {
+    const platform = detectRendererPlatform();
+    if (platform === "windows") {
+      return t("files.revealInExplorer");
+    }
+    if (platform === "linux") {
+      return t("files.revealInFileManager");
+    }
+    return t("files.revealInFinder");
+  }, [t]);
 
   const previewImageSrc = useMemo(() => {
     if (!previewPath || previewKind !== "image") {
@@ -2212,10 +2217,20 @@ export function FileTreePanel({
         {
           type: "item",
           id: "reveal",
-          label: t("files.revealInFinder"),
+          label: revealInOsLabel,
           icon: menuIcon(FolderOpen),
           onSelect: async () => {
-            await revealItemInDir(resolvePath(relativePath));
+            const absolutePath = resolvePath(relativePath);
+            try {
+              await revealInFileManager(absolutePath);
+            } catch (error) {
+              showOperationNotice(
+                "error",
+                t("files.revealFailed", {
+                  message: normalizeOperationError(error),
+                }),
+              );
+            }
           },
         },
         ...(gitItems.length > 0
@@ -2302,6 +2317,8 @@ export function FileTreePanel({
       resolveParentFolderForNode,
       selectedNodePaths,
       showOperationNotice,
+      normalizeOperationError,
+      revealInOsLabel,
       t,
       visibleTreePathTypeMap,
       workspaceId,

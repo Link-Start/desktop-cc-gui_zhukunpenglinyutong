@@ -20,7 +20,18 @@ const messages = {
       "title_one": "{{count}} fichier modifié",
       "title_other": "{{count}} fichiers modifiés",
       "showMore_one": "Afficher {{count}} fichier de plus",
-      "showMore_other": "Afficher {{count}} fichiers de plus"
+      "showMore_other": "Afficher {{count}} fichiers de plus",
+      "revertAll": "Tout annuler",
+      "revertFile": "Annuler {{path}}",
+      "revertFileAction": "Annuler",
+      "revertAllConfirmTitle": "Annuler toutes les modifications",
+      "revertAllConfirmBody":
+        "Les modifications locales de {{count}} fichiers seront abandonnées et restaurées au dernier commit. Cette action est irréversible.",
+      "revertAllConfirmAction": "Tout annuler",
+      "revertFileConfirmTitle": "Annuler les modifications du fichier",
+      "revertFileConfirmBody":
+        "Les modifications locales de « {{path}} » seront abandonnées et restaurées au dernier commit. Cette action est irréversible.",
+      "revertFileConfirmAction": "Annuler"
     },
     "noThinkingContent": "Aucun contenu de réflexion",
     "hiddenThinkingContent": "Le contenu de réflexion est masqué par le paramètre actuel.",

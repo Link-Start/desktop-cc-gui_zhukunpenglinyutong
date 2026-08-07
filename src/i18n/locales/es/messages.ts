@@ -20,7 +20,18 @@ const messages = {
       "title_one": "Editado {{count}} archivo",
       "title_other": "Editados {{count}} archivos",
       "showMore_one": "Mostrar {{count}} archivo más",
-      "showMore_other": "Mostrar {{count}} archivos más"
+      "showMore_other": "Mostrar {{count}} archivos más",
+      "revertAll": "Deshacer todo",
+      "revertFile": "Deshacer {{path}}",
+      "revertFileAction": "Deshacer",
+      "revertAllConfirmTitle": "Deshacer todos los cambios",
+      "revertAllConfirmBody":
+        "Se descartarán los cambios locales en {{count}} archivos y se restaurarán al último commit. Esto no se puede deshacer.",
+      "revertAllConfirmAction": "Deshacer todo",
+      "revertFileConfirmTitle": "Deshacer cambios del archivo",
+      "revertFileConfirmBody":
+        "Se descartarán los cambios locales de «{{path}}» y se restaurará al último commit. Esto no se puede deshacer.",
+      "revertFileConfirmAction": "Deshacer"
     },
     "noThinkingContent": "No hay contenido de razonamiento",
     "hiddenThinkingContent": "El contenido de razonamiento está oculto por el ajuste actual.",
