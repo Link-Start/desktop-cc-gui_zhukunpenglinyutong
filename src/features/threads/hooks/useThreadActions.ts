@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from "react";
+import { startTransition, useCallback, useMemo, useRef } from "react";
 import type { ThreadSummary, WorkspaceInfo } from "../../../types";
 import {
   connectWorkspace as connectWorkspaceService,
@@ -316,6 +316,8 @@ export function useThreadActions({
         recoverySource?: AutomaticRuntimeRecoverySource;
         allowRuntimeReconnect?: boolean;
         startupHydrationMode?: StartupThreadHydrationMode;
+        /** Orchestrator cancel/stale flag — skip late setThreads after soft-ignore cancel. */
+        isStale?: () => boolean;
       },
     ) => {
       // Store workspace path for Claude session loading
@@ -324,9 +326,14 @@ export function useThreadActions({
         (threadListRequestSeqRef.current[workspace.id] ?? 0) + 1;
       threadListRequestSeqRef.current[workspace.id] = requestSeq;
       const isLatestThreadListRequest = () =>
-        threadListRequestSeqRef.current[workspace.id] === requestSeq;
+        threadListRequestSeqRef.current[workspace.id] === requestSeq &&
+        !(options?.isStale?.() ?? false);
       const preserveState = options?.preserveState ?? false;
-      const includeOpenCodeSessions = options?.includeOpenCodeSessions ?? true;
+      const isFirstPaintHydration =
+        options?.startupHydrationMode === "first-paint";
+      // First-paint never fans out OpenCode/native multi-engine lists.
+      const includeOpenCodeSessions =
+        !isFirstPaintHydration && (options?.includeOpenCodeSessions ?? true);
       const deletedThreadIds = [
         ...new Set(
           (options?.deletedThreadIds ?? [])
@@ -809,24 +816,48 @@ export function useThreadActions({
           : Promise.resolve(
               [] as Awaited<ReturnType<typeof getOpenCodeSessionListService>>,
             );
-        const projectCatalogSessionsPromise = canListWorkspaceSessions
-          ? loadActiveProjectCatalogSessions(
-              workspace.id,
-              sessionAttributionMode,
+        // Cold-start first-paint: skip multi-engine project catalog + Claude
+        // disk seed. That path is the multi-second main-thread/IPC freeze window
+        // (list_workspace_sessions walks every engine). Full-catalog runs idle.
+        const projectCatalogSessionsPromise =
+          !isFirstPaintHydration && canListWorkspaceSessions
+            ? loadActiveProjectCatalogSessions(
+                workspace.id,
+                sessionAttributionMode,
+              )
+            : Promise.resolve(null);
+        const claudeSessionsPromise = isFirstPaintHydration
+          ? Promise.resolve(
+              null as Awaited<
+                ReturnType<typeof listClaudeSessionsForFallbackSeedService>
+              > | null,
             )
-          : Promise.resolve(null);
-        const [claudeResult, opencodeResult, projectCatalogResult] =
-          await Promise.allSettled([
-            withTimeout(
+          : withTimeout(
               listClaudeSessionsForFallbackSeedService(
                 workspace.path,
                 nativeSessionListLimit,
               ),
               NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS,
-            ),
+            );
+        // Yield so clicks queued during codex paging can run before catalog.
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 0);
+        });
+        if (!isLatestThreadListRequest()) {
+          return { applied: false, stale: true };
+        }
+        const [claudeResult, opencodeResult, projectCatalogResult] =
+          await Promise.allSettled([
+            claudeSessionsPromise,
             opencodeSessionsPromise,
             projectCatalogSessionsPromise,
           ]);
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 0);
+        });
+        if (!isLatestThreadListRequest()) {
+          return { applied: false, stale: true };
+        }
         const projectCatalogValue =
           projectCatalogResult.status === "fulfilled"
             ? projectCatalogResult.value
@@ -1337,10 +1368,64 @@ export function useThreadActions({
           visibleSummaries,
           hiddenSharedBindingIds,
         );
-        dispatch({
-          type: "setThreads",
-          workspaceId: workspace.id,
-          threads: visibleSummaries,
+        if (!isLatestThreadListRequest()) {
+          return { applied: false, stale: true };
+        }
+        // Yield once so a pending click/pointer frame can run before the
+        // AppShell-wide setThreads commit (cold-start jank window).
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 0);
+        });
+        if (!isLatestThreadListRequest()) {
+          return { applied: false, stale: true };
+        }
+        const cursorForDisplay = resolveThreadListCursorForDisplay({
+          catalogCursor: projectCatalogValue?.nextCursor ?? null,
+          catalogPartialSource: projectCatalogValue?.partialSource ?? null,
+          runtimeCursor: cursor,
+        });
+        const previewUpdates: Array<{
+          threadId: string;
+          text: string;
+          timestamp: number;
+        }> = [];
+        uniqueThreads.forEach((thread) => {
+          const threadId = String(thread?.id ?? "");
+          const preview = asString(thread?.preview ?? "").trim();
+          if (!threadId || !preview) {
+            return;
+          }
+          previewUpdates.push({
+            threadId,
+            text: preview,
+            timestamp: getThreadTimestamp(thread) ?? Date.now(),
+          });
+        });
+        // Background lane: keep user clicks urgent while sidebar list lands.
+        startTransition(() => {
+          if (!isLatestThreadListRequest()) {
+            return;
+          }
+          dispatch({
+            type: "setThreads",
+            workspaceId: workspace.id,
+            threads: visibleSummaries,
+          });
+          // nextCursor from catalog/runtime drives "Load older". First paint only
+          // requested a small page (default 5); more pages load on demand.
+          dispatch({
+            type: "setThreadListCursor",
+            workspaceId: workspace.id,
+            cursor: cursorForDisplay,
+          });
+          previewUpdates.forEach((entry) => {
+            dispatch({
+              type: "setLastAgentMessage",
+              threadId: entry.threadId,
+              text: entry.text,
+              timestamp: entry.timestamp,
+            });
+          });
         });
         appliedThreadListUpdate = true;
         if (hasHealthyThreadSummaries(visibleSummaries)) {
@@ -1349,35 +1434,12 @@ export function useThreadActions({
             [workspace.id]: visibleSummaries,
           };
         }
-        // nextCursor from catalog/runtime drives "Load older". First paint only
-        // requested a small page (default 5); more pages load on demand.
-        dispatch({
-          type: "setThreadListCursor",
-          workspaceId: workspace.id,
-          cursor: resolveThreadListCursorForDisplay({
-            catalogCursor: projectCatalogValue?.nextCursor ?? null,
-            catalogPartialSource: projectCatalogValue?.partialSource ?? null,
-            runtimeCursor: cursor,
-          }),
-        });
-        uniqueThreads.forEach((thread) => {
-          const threadId = String(thread?.id ?? "");
-          const preview = asString(thread?.preview ?? "").trim();
-          if (!threadId || !preview) {
-            return;
-          }
-          dispatch({
-            type: "setLastAgentMessage",
-            threadId,
-            text: preview,
-            timestamp: getThreadTimestamp(thread),
-          });
-        });
 
         const hasAttemptedGeminiRefresh =
           geminiRefreshAttemptedRef.current[workspace.id] === true;
         const shouldRefreshGeminiSessions =
-          hasGeminiSignal || !!cachedGemini || !hasAttemptedGeminiRefresh;
+          !isFirstPaintHydration &&
+          (hasGeminiSignal || !!cachedGemini || !hasAttemptedGeminiRefresh);
         if (shouldRefreshGeminiSessions) {
           void (async () => {
             geminiRefreshAttemptedRef.current[workspace.id] = true;
@@ -1478,11 +1540,13 @@ export function useThreadActions({
         const hasAttemptedKimiRefresh =
           kimiRefreshAttemptedRef.current[workspace.id] === true;
         const shouldRefreshKimiSessions =
-          hasKimiSignal || !!cachedKimi || !hasAttemptedKimiRefresh;
+          !isFirstPaintHydration &&
+          (hasKimiSignal || !!cachedKimi || !hasAttemptedKimiRefresh);
         const hasAttemptedGrokRefresh =
           grokRefreshAttemptedRef.current[workspace.id] === true;
         const shouldRefreshGrokSessions =
-          hasGrokSignal || !!cachedGrok || !hasAttemptedGrokRefresh;
+          !isFirstPaintHydration &&
+          (hasGrokSignal || !!cachedGrok || !hasAttemptedGrokRefresh);
         if (shouldRefreshGrokSessions) {
           void (async () => {
             grokRefreshAttemptedRef.current[workspace.id] = true;
@@ -1741,7 +1805,12 @@ export function useThreadActions({
           ),
         });
       } finally {
-        if (!preserveState && isLatestThreadListRequest()) {
+        // Clear loading if this request still owns the seq (even when isStale
+        // made isLatestThreadListRequest false — cancelled hydrate must not
+        // leave the spinner stuck).
+        const ownsRequest =
+          threadListRequestSeqRef.current[workspace.id] === requestSeq;
+        if (!preserveState && ownsRequest) {
           dispatch({
             type: "setThreadListLoading",
             workspaceId: workspace.id,

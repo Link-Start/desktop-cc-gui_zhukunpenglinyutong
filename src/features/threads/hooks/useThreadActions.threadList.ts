@@ -70,7 +70,12 @@ const WORKSPACE_SESSION_SOURCE_COMPLETENESS_VALUES =
 
 type ThreadListCursorSource = "catalog" | "runtime";
 
-export type StartupThreadHydrationMode = "full-catalog";
+/**
+ * - first-paint: codex page + last-good only; skip multi-engine project catalog
+ *   and gemini/kimi/grok refresh storms so cold-start stays clickable.
+ * - full-catalog: full multi-engine merge (post first-paint / force reload).
+ */
+export type StartupThreadHydrationMode = "full-catalog" | "first-paint";
 
 export type ThreadListCursorState = {
   source: ThreadListCursorSource;
