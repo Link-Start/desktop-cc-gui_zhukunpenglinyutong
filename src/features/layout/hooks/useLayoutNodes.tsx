@@ -830,6 +830,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         showRuntimeNoticeMenuItem={
           Boolean(showGlobalRuntimeNoticeDock && !options.isPhone)
         }
+        runtimeNoticeHasError={globalRuntimeNoticeDock.status === "has-error"}
       />
     </Profiler>
   );
