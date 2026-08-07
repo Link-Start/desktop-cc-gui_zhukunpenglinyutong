@@ -57,6 +57,7 @@ describe("useUiScaleShortcuts", () => {
     document.documentElement.style.zoom = "";
     document.documentElement.style.width = "";
     document.documentElement.style.height = "";
+    document.documentElement.style.transform = "";
     document.documentElement.style.removeProperty("--ui-scale");
     document.body.style.zoom = "";
     document.body.style.width = "";
@@ -71,7 +72,7 @@ describe("useUiScaleShortcuts", () => {
     });
   });
 
-  it("macos: unified CSS path — transform scale on body, native zoom pinned to 1", async () => {
+  it("macos: CSS zoom on body, native zoom pinned to 1", async () => {
     platformMocks.platform = "macos";
     document.documentElement.style.zoom = "0.8";
     document.body.style.zoom = "0.8";
@@ -86,15 +87,14 @@ describe("useUiScaleShortcuts", () => {
 
     await waitFor(() => {
       expect(document.documentElement.style.zoom).toBe("");
-      expect(document.body.style.zoom).toBe("");
-      expect(document.body.style.transform).toBe("scale(1.1)");
-      expect(document.body.style.width).toBe(`${100 / 1.1}%`);
+      expect(document.body.style.zoom).toBe("1.1");
+      expect(document.body.style.transform).toBe("");
       expect(webviewMocks.setZoom).toHaveBeenCalledWith(1);
     });
     expect(webviewMocks.setZoom).not.toHaveBeenCalledWith(1.1);
   });
 
-  it("linux: same unified CSS path as macos (native pinned to 1)", async () => {
+  it("linux: CSS zoom path (native pinned to 1)", async () => {
     platformMocks.platform = "linux";
     renderHook(() =>
       useUiScaleShortcuts({
@@ -105,13 +105,14 @@ describe("useUiScaleShortcuts", () => {
     );
 
     await waitFor(() => {
-      expect(document.body.style.transform).toBe("scale(0.8)");
+      expect(document.body.style.zoom).toBe("0.8");
+      expect(document.body.style.transform).toBe("");
       expect(webviewMocks.setZoom).toHaveBeenCalledWith(1);
     });
     expect(webviewMocks.setZoom).not.toHaveBeenCalledWith(0.8);
   });
 
-  it("windows: transform scale + layout fill on body and native zoom pinned to 1", async () => {
+  it("windows: CSS zoom on body, no transform fill, native pin 1", async () => {
     platformMocks.platform = "windows";
     renderHook(() =>
       useUiScaleShortcuts({
@@ -122,14 +123,11 @@ describe("useUiScaleShortcuts", () => {
     );
 
     await waitFor(() => {
-      // Scale lives on <body> via transform; <html> stays viewport-sized.
       expect(document.documentElement.style.zoom).toBe("");
-      expect(document.documentElement.style.transform).toBe("");
-      expect(document.body.style.zoom).toBe("");
-      expect(document.body.style.transform).toBe("scale(0.8)");
-      expect(document.body.style.width).toBe("125%");
-      expect(document.body.style.height).toBe("125%");
-      expect(document.body.style.position).toBe("fixed");
+      expect(document.body.style.zoom).toBe("0.8");
+      expect(document.body.style.transform).toBe("");
+      expect(document.body.style.width).toBe("");
+      expect(document.body.style.position).toBe("");
       expect(webviewMocks.setZoom).toHaveBeenCalledWith(1);
     });
     expect(webviewMocks.setZoom).not.toHaveBeenCalledWith(0.8);
@@ -154,7 +152,8 @@ describe("useUiScaleShortcuts", () => {
     ).not.toThrow();
 
     await waitFor(() => {
-      expect(document.body.style.transform).toBe("scale(0.9)");
+      expect(document.body.style.zoom).toBe("0.9");
+      expect(document.body.style.transform).toBe("");
     });
   });
 
@@ -175,11 +174,11 @@ describe("useUiScaleShortcuts", () => {
 
   it("startup guard forces identity scale for one session after an unhealthy ≠1 launch", async () => {
     platformMocks.platform = "macos";
-    // Simulate: previous session applied 0.9 and froze before proving healthy.
     window.localStorage.setItem(
       "ccgui.uiScaleStartupGuard.v1",
       JSON.stringify({ scale: 0.9, markedAt: Date.now() }),
     );
+    document.body.style.zoom = "0.9";
     document.body.style.transform = "scale(0.9)";
     document.body.style.width = `${100 / 0.9}%`;
     document.body.style.position = "fixed";
@@ -193,11 +192,10 @@ describe("useUiScaleShortcuts", () => {
     );
 
     await waitFor(() => {
-      // Scale 1 applied instead of the stored 0.9: CSS fill cleared.
+      expect(document.body.style.zoom).toBe("");
       expect(document.body.style.transform).toBe("");
       expect(document.body.style.width).toBe("");
       expect(document.body.style.position).toBe("");
-      // The pending record is consumed so the next launch retries the setting.
       expect(readUiScaleStartupGuardRecord()).toBeNull();
     });
   });

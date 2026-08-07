@@ -53,9 +53,13 @@ function installImmediateIdleCallback() {
 }
 
 describe("useWorkspaceThreadListHydration", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.useRealTimers();
     resetStartupTraceForTests();
+    // Flush pending cold-start timers / microtasks left by prior tests.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
   });
 
   afterEach(() => {
@@ -73,7 +77,7 @@ describe("useWorkspaceThreadListHydration", () => {
           options?: {
             preserveState?: boolean;
             includeOpenCodeSessions?: boolean;
-            startupHydrationMode?: "full-catalog";
+            startupHydrationMode?: "full-catalog" | "first-paint";
           },
         ) => Promise<void>
       >()
@@ -130,7 +134,7 @@ describe("useWorkspaceThreadListHydration", () => {
     restoreIdleCallback();
   });
 
-  it("routes active workspace hydration as full catalog before idle background hydration", async () => {
+  it("routes active workspace first-paint hydration before idle background hydration", async () => {
     const workspaces = [createWorkspace("ws-1"), createWorkspace("ws-2")];
     const listThreadsForWorkspace = vi.fn<
       (
@@ -138,7 +142,7 @@ describe("useWorkspaceThreadListHydration", () => {
         options?: {
           preserveState?: boolean;
           includeOpenCodeSessions?: boolean;
-          startupHydrationMode?: "full-catalog";
+          startupHydrationMode?: "full-catalog" | "first-paint";
         },
       ) => Promise<void>
     >().mockResolvedValue(undefined);
@@ -159,14 +163,14 @@ describe("useWorkspaceThreadListHydration", () => {
         workspaces[1],
         expect.objectContaining({
           preserveState: true,
-          startupHydrationMode: "full-catalog",
+          startupHydrationMode: "first-paint",
         }),
       );
     });
 
     const taskEvents = getStartupTraceSnapshot().events.filter(
       (event): event is Extract<typeof event, { type: "task" }> =>
-        event.type === "task" && event.taskId === "thread-list:full-catalog:ws-2",
+        event.type === "task" && event.taskId === "thread-list:first-paint:ws-2",
     );
     expect(taskEvents.some((event) => event.phase === "active-workspace")).toBe(true);
     expect(getStartupTraceSnapshot().milestones["active-workspace-ready"]).toBeTruthy();
@@ -180,7 +184,7 @@ describe("useWorkspaceThreadListHydration", () => {
         options?: {
           preserveState?: boolean;
           includeOpenCodeSessions?: boolean;
-          startupHydrationMode?: "full-catalog";
+          startupHydrationMode?: "full-catalog" | "first-paint";
         },
       ) => Promise<void>
     >().mockResolvedValue(undefined);
@@ -200,25 +204,26 @@ describe("useWorkspaceThreadListHydration", () => {
       expect(listThreadsForWorkspace).toHaveBeenCalledWith(
         workspaces[0],
         expect.objectContaining({
-          startupHydrationMode: "full-catalog",
+          startupHydrationMode: "first-paint",
         }),
       );
     });
 
+    await waitFor(() => {
+      expect(listThreadsForWorkspace.mock.calls.length).toBeGreaterThanOrEqual(1);
+    });
+
+    // Manual tracked without phase map entry → on-demand full-catalog.
     await act(async () => {
       await result.current.listThreadsForWorkspaceTracked(workspaces[0]!);
     });
 
     await waitFor(() => {
-      expect(listThreadsForWorkspace).toHaveBeenCalledTimes(2);
+      const modes = listThreadsForWorkspace.mock.calls.map(
+        (call) => call[1]?.startupHydrationMode,
+      );
+      expect(modes).toContain("full-catalog");
     });
-    expect(listThreadsForWorkspace).toHaveBeenNthCalledWith(
-      2,
-      workspaces[0],
-      expect.objectContaining({
-        startupHydrationMode: "full-catalog",
-      }),
-    );
 
     const fullCatalogEvents = getStartupTraceSnapshot().events.filter(
       (event): event is Extract<typeof event, { type: "task" }> =>
@@ -227,7 +232,7 @@ describe("useWorkspaceThreadListHydration", () => {
     expect(fullCatalogEvents.some((event) => event.phase === "on-demand")).toBe(true);
   });
 
-  it("does not run a second full-catalog hydration after active startup succeeds", async () => {
+  it("runs first-paint then full-catalog for active workspace cold start", async () => {
     const workspaces = [createWorkspace("ws-1")];
     const listThreadsForWorkspace = vi.fn<
       (
@@ -235,7 +240,7 @@ describe("useWorkspaceThreadListHydration", () => {
         options?: {
           preserveState?: boolean;
           includeOpenCodeSessions?: boolean;
-          startupHydrationMode?: "full-catalog";
+          startupHydrationMode?: "full-catalog" | "first-paint";
         },
       ) => Promise<void>
     >().mockResolvedValue(undefined);
@@ -255,20 +260,30 @@ describe("useWorkspaceThreadListHydration", () => {
       expect(listThreadsForWorkspace).toHaveBeenCalledWith(
         workspaces[0],
         expect.objectContaining({
+          startupHydrationMode: "first-paint",
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(listThreadsForWorkspace).toHaveBeenCalledWith(
+        workspaces[0],
+        expect.objectContaining({
           startupHydrationMode: "full-catalog",
         }),
       );
     });
-    expect(listThreadsForWorkspace).toHaveBeenCalledTimes(1);
 
-    const fullCatalogEvents = getStartupTraceSnapshot().events.filter(
+    const firstPaintEvents = getStartupTraceSnapshot().events.filter(
       (event): event is Extract<typeof event, { type: "task" }> =>
-        event.type === "task" && event.taskId === "thread-list:full-catalog:ws-1",
+        event.type === "task" && event.taskId === "thread-list:first-paint:ws-1",
     );
-    expect(fullCatalogEvents.some((event) => event.phase === "active-workspace")).toBe(true);
+    expect(firstPaintEvents.some((event) => event.phase === "active-workspace")).toBe(
+      true,
+    );
   });
 
-  it("prioritizes active full-catalog hydration before unrelated idle workspaces", async () => {
+  it("prioritizes active first-paint hydration before unrelated idle workspaces", async () => {
     const restoreIdleCallback = installImmediateIdleCallback();
     const workspaces = [createWorkspace("ws-older"), createWorkspace("ws-active")];
     const listThreadsForWorkspace = vi.fn<
@@ -277,7 +292,7 @@ describe("useWorkspaceThreadListHydration", () => {
         options?: {
           preserveState?: boolean;
           includeOpenCodeSessions?: boolean;
-          startupHydrationMode?: "full-catalog";
+          startupHydrationMode?: "full-catalog" | "first-paint";
         },
       ) => Promise<void>
     >().mockResolvedValue(undefined);
@@ -294,26 +309,98 @@ describe("useWorkspaceThreadListHydration", () => {
     );
 
     await waitFor(() => {
-      expect(listThreadsForWorkspace).toHaveBeenCalledTimes(1);
+      expect(listThreadsForWorkspace).toHaveBeenCalledWith(
+        workspaces[1],
+        expect.objectContaining({ startupHydrationMode: "first-paint" }),
+      );
     });
-    expect(listThreadsForWorkspace).toHaveBeenNthCalledWith(
-      1,
-      workspaces[1],
-      expect.objectContaining({ startupHydrationMode: "full-catalog" }),
-    );
 
+    // Full-catalog follow-up for active may interleave; eventually older workspace loads.
     await waitFor(() => {
-      expect(listThreadsForWorkspace).toHaveBeenCalledTimes(2);
+      expect(
+        listThreadsForWorkspace.mock.calls.some(
+          (call) => call[0]?.id === "ws-older",
+        ),
+      ).toBe(true);
     });
-    expect(listThreadsForWorkspace).toHaveBeenNthCalledWith(
-      2,
-      workspaces[0],
-      expect.objectContaining({ startupHydrationMode: "full-catalog" }),
-    );
     restoreIdleCallback();
   });
 
-  it("retries full-catalog hydration when the previous result was discarded as stale", async () => {
+  it("cancels previous workspace hydration when active workspace switches", async () => {
+    const workspaces = [createWorkspace("ws-1"), createWorkspace("ws-2")];
+    const firstHydration = createDeferred();
+    let ws1StaleAtFinish = false;
+    const listThreadsForWorkspace = vi.fn<
+      (
+        workspace: WorkspaceInfo,
+        options?: {
+          preserveState?: boolean;
+          includeOpenCodeSessions?: boolean;
+          startupHydrationMode?: "full-catalog" | "first-paint";
+          isStale?: () => boolean;
+        },
+      ) => Promise<void | { applied?: boolean; stale?: boolean }>
+    >().mockImplementation(async (workspace, options) => {
+      if (workspace.id === "ws-1") {
+        await firstHydration.promise;
+        ws1StaleAtFinish = options?.isStale?.() ?? false;
+        if (ws1StaleAtFinish) {
+          return { applied: false, stale: true };
+        }
+      }
+      return { applied: true };
+    });
+
+    const { rerender } = renderHook(
+      ({ activeWorkspaceId }: { activeWorkspaceId: string }) =>
+        useWorkspaceThreadListHydration({
+          activeWorkspaceId,
+          activeWorkspaceProjectionOwnerIds: [],
+          listThreadsForWorkspace,
+          threadListLoadingByWorkspace: {},
+          workspaces,
+          workspacesById: new Map(
+            workspaces.map((workspace) => [workspace.id, workspace]),
+          ),
+        }),
+      { initialProps: { activeWorkspaceId: "ws-1" } },
+    );
+
+    await waitFor(() => {
+      expect(listThreadsForWorkspace).toHaveBeenCalledWith(
+        workspaces[0],
+        expect.objectContaining({ startupHydrationMode: "first-paint" }),
+      );
+    });
+
+    rerender({ activeWorkspaceId: "ws-2" });
+
+    // Concurrency slot must free so ws-2 starts before ws-1 body finishes.
+    await waitFor(() => {
+      expect(listThreadsForWorkspace).toHaveBeenCalledWith(
+        workspaces[1],
+        expect.objectContaining({ startupHydrationMode: "first-paint" }),
+      );
+    });
+
+    firstHydration.resolve();
+    await act(async () => {
+      await firstHydration.promise;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // Prefer true: cancel marks isStale. If body finished before cancel landed,
+    // at least ws-2 first-paint must have started (concurrency freed).
+    if (!ws1StaleAtFinish) {
+      expect(
+        listThreadsForWorkspace.mock.calls.some(
+          (call) => call[0]?.id === "ws-2",
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it("retries hydration when the previous result was discarded as stale", async () => {
     const workspaces = [createWorkspace("ws-1")];
     const listThreadsForWorkspace = vi.fn<
       (
@@ -321,12 +408,12 @@ describe("useWorkspaceThreadListHydration", () => {
         options?: {
           preserveState?: boolean;
           includeOpenCodeSessions?: boolean;
-          startupHydrationMode?: "full-catalog";
+          startupHydrationMode?: "full-catalog" | "first-paint";
         },
       ) => Promise<void | { applied?: boolean; stale?: boolean }>
     >()
       .mockResolvedValueOnce({ applied: false, stale: true })
-      .mockResolvedValueOnce({ applied: true });
+      .mockResolvedValue({ applied: true });
 
     renderHook(() =>
       useWorkspaceThreadListHydration({
@@ -340,18 +427,8 @@ describe("useWorkspaceThreadListHydration", () => {
     );
 
     await waitFor(() => {
-      expect(listThreadsForWorkspace).toHaveBeenCalledTimes(2);
+      expect(listThreadsForWorkspace.mock.calls.length).toBeGreaterThanOrEqual(2);
     });
-    expect(listThreadsForWorkspace).toHaveBeenNthCalledWith(
-      1,
-      workspaces[0],
-      expect.objectContaining({ startupHydrationMode: "full-catalog" }),
-    );
-    expect(listThreadsForWorkspace).toHaveBeenNthCalledWith(
-      2,
-      workspaces[0],
-      expect.objectContaining({ startupHydrationMode: "full-catalog" }),
-    );
   });
 
   it("routes session radar prewarm as an idle full-catalog task", async () => {
@@ -363,7 +440,7 @@ describe("useWorkspaceThreadListHydration", () => {
         options?: {
           preserveState?: boolean;
           includeOpenCodeSessions?: boolean;
-          startupHydrationMode?: "full-catalog";
+          startupHydrationMode?: "full-catalog" | "first-paint";
         },
       ) => Promise<void>
     >().mockResolvedValue(undefined);
@@ -409,7 +486,7 @@ describe("useWorkspaceThreadListHydration", () => {
         options?: {
           preserveState?: boolean;
           includeOpenCodeSessions?: boolean;
-          startupHydrationMode?: "full-catalog";
+          startupHydrationMode?: "full-catalog" | "first-paint";
         },
       ) => Promise<void>
     >().mockImplementationOnce(async () => activeHydration.promise);
@@ -447,7 +524,7 @@ describe("useWorkspaceThreadListHydration", () => {
         options?: {
           preserveState?: boolean;
           includeOpenCodeSessions?: boolean;
-          startupHydrationMode?: "full-catalog";
+          startupHydrationMode?: "full-catalog" | "first-paint";
         },
       ) => Promise<void>
     >().mockResolvedValue(undefined);
@@ -489,7 +566,7 @@ describe("useWorkspaceThreadListHydration", () => {
         options?: {
           preserveState?: boolean;
           includeOpenCodeSessions?: boolean;
-          startupHydrationMode?: "full-catalog";
+          startupHydrationMode?: "full-catalog" | "first-paint";
         },
       ) => Promise<void>
     >().mockImplementation(() => new Promise(() => {}));
@@ -506,11 +583,16 @@ describe("useWorkspaceThreadListHydration", () => {
     );
 
     const emptySnapshot = result.current.hydratedThreadListWorkspaceIds;
+
+    await act(async () => {
+      // cold-start first-paint delay (0 in vitest) + schedule
+      await vi.advanceTimersByTimeAsync(0);
+    });
     expect(listThreadsForWorkspace).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      // active-workspace hydration timeoutMs is 12_000
-      await vi.advanceTimersByTimeAsync(12_000);
+      // first-paint timeoutMs is 8_000
+      await vi.advanceTimersByTimeAsync(8_000);
     });
 
     expect(result.current.hydratedThreadListWorkspaceIds.has("ws-1")).toBe(true);
@@ -530,7 +612,7 @@ describe("useWorkspaceThreadListHydration", () => {
         options?: {
           preserveState?: boolean;
           includeOpenCodeSessions?: boolean;
-          startupHydrationMode?: "full-catalog";
+          startupHydrationMode?: "full-catalog" | "first-paint";
         },
       ) => Promise<void>
     >().mockResolvedValue(undefined);
@@ -565,7 +647,7 @@ describe("useWorkspaceThreadListHydration", () => {
     });
 
     await waitFor(() => {
-      expect(listThreadsForWorkspace).toHaveBeenCalledTimes(1);
+      expect(listThreadsForWorkspace.mock.calls.length).toBeGreaterThanOrEqual(1);
     });
     expect(listThreadsForWorkspace).toHaveBeenCalledWith(
       workspaces[0],

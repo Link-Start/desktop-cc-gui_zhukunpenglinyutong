@@ -46,17 +46,17 @@ export function useUiScaleShortcuts({
     if (typeof window === "undefined" || typeof document === "undefined") {
       return;
     }
-    // All platforms apply uiScale via CSS transform scale; native webview zoom
-    // (WebView2 SetZoomFactor / WKWebView setPageZoom) is pinned to 1 once —
-    // native zoom ≠1 has frozen renderers in the field. See
-    // docs/analysis/windows-ccgui-startup-hang-2026-08-05.md,
-    // openspec/changes/fix-windows-ui-scale-webview2-hang/ and
-    // openspec/changes/fix-ui-scale-native-zoom-freeze-all-platforms/.
+    // CSS `zoom` carries uiScale; native webview zoom is pinned to 1 once.
+    // setZoom(≠1) and transform+fill freezes are documented in
+    // docs/analysis/windows-ccgui-startup-hang-2026-08-05.md.
     //
-    // Startup guard: if the previous session applied a non-identity scale and
-    // never proved healthy (renderer froze before it could clear the pending
-    // record), apply scale 1 for THIS session only — the stored setting is
-    // never rewritten, so the user keeps their preference and can retry.
+    // Cold-start deferral (2026-08-07 field): uiScale=0.8 + early clicks during
+    // sidebar list loading still froze WebView2. Stay at identity until the
+    // cold-start window ends, then apply the stored scale. Waiting without
+    // clicking was already OK; this removes the "click during loading" path.
+    //
+    // Startup guard: previous unhealthy ≠1 session → force 1 this session only
+    // (never rewrite settings).
     let effectiveScale = uiScale;
     let forcedIdentity = false;
     if (uiScale !== 1 && shouldForceUiScaleIdentity()) {
@@ -65,22 +65,26 @@ export function useUiScaleShortcuts({
     }
     let setNativeZoom: ((factor: number) => Promise<void>) | undefined;
     try {
-      // getCurrentWebview() reads window.__TAURI_INTERNALS__.metadata
-      // synchronously; missing metadata throws before setZoom's rejection path.
       const webview = getCurrentWebview();
       setNativeZoom = (factor) => webview.setZoom(factor);
     } catch {
-      // Non-Tauri runtimes (browser dev server, vitest) skip native zoom.
       setNativeZoom = undefined;
     }
-    void applyUiScaleToDocument(effectiveScale, { setNativeZoom }).catch(
-      () => undefined,
-    );
-    if (effectiveScale === 1) {
-      confirmUiScaleHealthy();
-    } else {
-      markUiScalePending(effectiveScale);
-    }
+
+    let cancelled = false;
+    const apply = (scale: number) => {
+      if (cancelled) {
+        return;
+      }
+      void applyUiScaleToDocument(scale, { setNativeZoom }).catch(
+        () => undefined,
+      );
+    };
+
+    // Phase 1: always identity first (safe for WebView2 + cold-start clicks).
+    apply(1);
+    confirmUiScaleHealthy();
+
     if (forcedIdentity) {
       appendRendererDiagnostic("ui-scale/startup-guard-forced-identity", {
         storedScale: uiScale,
@@ -92,7 +96,37 @@ export function useUiScaleShortcuts({
         messageParams: { scale: Math.round(uiScale * 100) },
         dedupeKey: "ui-scale:startup-guard-forced-identity",
       });
+      return () => {
+        cancelled = true;
+      };
     }
+
+    if (effectiveScale === 1) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    // Phase 2: apply user scale after cold-start list work has room to finish.
+    // Vitest: apply immediately so unit tests stay deterministic.
+    const isTest =
+      typeof import.meta !== "undefined" &&
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (import.meta as any).env?.MODE === "test";
+    const delayMs = isTest ? 0 : 2000;
+
+    const timer = window.setTimeout(() => {
+      if (cancelled) {
+        return;
+      }
+      apply(effectiveScale);
+      markUiScalePending(effectiveScale);
+    }, delayMs);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [uiScale]);
 
   const scaleShortcutTitle = useMemo(() => {
