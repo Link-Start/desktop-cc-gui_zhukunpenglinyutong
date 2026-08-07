@@ -1,22 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git config:*)",
-      "Skill(aimax:auto)",
-      "Skill(aimax:auto:*)",
-      "mcp__ace-tool__search_context",
-      "Bash(npm run typecheck:*)",
-      "Bash(npm run lint:*)",
-      "Bash(npm run build:*)",
-      "Bash(npx tsc:*)",
-      "Bash(npm install:*)",
-      "Bash(git add *)",
-      "Bash(git rebase *)",
-      "Bash(rtk git *)",
-      "Bash(rtk read *)",
-      "Bash(git check-ignore *)",
-      "Bash(rtk ls *)"
-    ]
+      "Bash(git log:*)",
+      "Bash(for h in 710bcde8c b34fdaead b3cbfaa8c d38d0f9b9 5aeb5e597 770a943a1)",
+      "Bash(do echo:*)",
+      "Bash(git show:*)",
+      "Bash(done)"
+    ],
+    "deny": [],
+    "ask": []
   },
   "enabledMcpjsonServers": [
     "claude-flow",
