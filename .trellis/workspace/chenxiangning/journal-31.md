@@ -1405,3 +1405,36 @@ Shared Grok 初始化禁止借用 Native Codex 的 reasoning options/effort；in
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1336: 合并 upstream/chore/bump-version-0.8.3 到 cxn-win-version-0.8.3
+
+**Date**: 2026-08-07
+**Task**: 合并 upstream/chore/bump-version-0.8.3 到 cxn-win-version-0.8.3
+**Branch**: `cxn-win-version-0.8.3`
+
+### Summary
+
+解决 divergent branches pull 失败：以 merge 策略合入上游 4 个提交，保留本分支 2 个冷启动修复，自动合并无冲突。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `41bcb2699` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
