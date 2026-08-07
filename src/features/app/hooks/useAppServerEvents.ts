@@ -56,6 +56,7 @@ import {
   isAgentCanvasThreadId,
   parseAgentCanvasThreadId,
 } from "../../multi-agent/runtime/agentCanvasThread";
+import { rememberCollabWorkerNativeThreadId } from "../../multi-agent/runtime/collabNativeHideRegistry";
 
 export {
   getAppServerEventBackpressureForTests,
@@ -1599,6 +1600,18 @@ export function dispatchAppServerEvent(
     isAgentAttempt(sharedBridge?.attemptId) ||
     sharedBridge?.bindingKey?.startsWith("squad:")
   ) {
+    // 侧栏 hide：立刻登记 native id（含改名 Agent N 后的 catalog id）
+    if (realtimeThreadId) {
+      rememberCollabWorkerNativeThreadId(realtimeThreadId);
+    }
+    const nativeFromBridge =
+      typeof (sharedBridge as { nativeThreadId?: string } | null)
+        ?.nativeThreadId === "string"
+        ? (sharedBridge as { nativeThreadId?: string }).nativeThreadId
+        : null;
+    if (nativeFromBridge) {
+      rememberCollabWorkerNativeThreadId(nativeFromBridge);
+    }
     const owner = resolveAgentAttemptOwner({
       attemptId: sharedBridge?.attemptId,
       bindingKey: sharedBridge?.bindingKey,

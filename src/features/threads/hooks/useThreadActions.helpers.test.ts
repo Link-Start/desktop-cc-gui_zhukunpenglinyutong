@@ -6,6 +6,8 @@ import {
   buildHiddenAutomaticSessionIdSet,
   filterHiddenAutomaticThreadSummaries,
   isRetainableEngineContinuitySummary,
+  isCollabPlanSummarySidebarTitle,
+  isCollabWorkerAgentNumberTitle,
   isSharedCollabWorkerSpawnTitle,
   isSharedControlPlaneSpawnTitle,
   mergeCodexCatalogSessionSummaries,
@@ -903,6 +905,68 @@ describe("useThreadActions.helpers", () => {
     ).toBe(false);
     expect(isSharedControlPlaneSpawnTitle("Agent 81")).toBe(false);
     expect(isSharedControlPlaneSpawnTitle("正常功能讨论")).toBe(false);
+    // 协作规划 SUMMARY 当 title（实机侧栏泄漏形态）
+    expect(
+      isSharedControlPlaneSpawnTitle(
+        "SUMMARY: 创建一个最小 Hello World 示例",
+      ),
+    ).toBe(true);
+    expect(isSharedControlPlaneSpawnTitle("SUM")).toBe(true);
+    expect(isCollabPlanSummarySidebarTitle("SUMMARY: foo")).toBe(true);
+    expect(
+      isSharedControlPlaneSpawnTitle(
+        "你是多 Agent 协作管线中的【实现】环节。按已确认计划完成工作。",
+      ),
+    ).toBe(true);
+    // 自定义模板 stage id（draft/polish）
+    expect(
+      isSharedControlPlaneSpawnTitle(
+        "你是多 Agent 协作管线中的【draft】环节。",
+      ),
+    ).toBe(true);
+    // 泛 Markdown 不得当 control-plane（native 用户首条「## 需求」）
+    expect(isSharedControlPlaneSpawnTitle("## 需求说明")).toBe(false);
+    expect(isSharedControlPlaneSpawnTitle("**重要** 请审阅")).toBe(false);
+    expect(isSharedControlPlaneSpawnTitle("**交付说明** - 新")).toBe(true);
+    expect(isSharedControlPlaneSpawnTitle("SUMMARY：制定大纲")).toBe(true);
+    expect(isCollabWorkerAgentNumberTitle("Agent 11")).toBe(true);
+    expect(isCollabWorkerAgentNumberTitle("Agent 11 讨论")).toBe(false);
+  });
+
+  it("stripHiddenSharedBindingSummaries drops SUMMARY titles and shared-parent natives", () => {
+    const input = [
+      {
+        id: "shared:s1",
+        name: "Shared Session",
+        updatedAt: 1,
+        engineSource: "claude" as const,
+        threadKind: "shared" as const,
+      },
+      {
+        id: "claude:plan-1",
+        name: "SUMMARY: 创建一个最小 Hello World",
+        updatedAt: 2,
+        engineSource: "claude" as const,
+      },
+      {
+        id: "grok:impl-1",
+        name: "按",
+        updatedAt: 3,
+        engineSource: "grok" as const,
+        parentThreadId: "shared:s1",
+      },
+      {
+        id: "claude:user-1",
+        name: "正常功能讨论",
+        updatedAt: 4,
+        engineSource: "claude" as const,
+      },
+    ];
+    const stripped = stripHiddenSharedBindingSummaries(input, new Set());
+    expect(stripped.map((row) => row.id)).toEqual([
+      "shared:s1",
+      "claude:user-1",
+    ]);
   });
 
   it("isSharedCollabWorkerSpawnTitle catches multi-line collab worker titles", () => {

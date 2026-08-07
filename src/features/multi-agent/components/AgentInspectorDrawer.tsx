@@ -332,11 +332,16 @@ export function AgentInspectorDrawer() {
           <div
             className="subagent-session-canvas"
             data-subagent-session-canvas="1"
+            // 切 stage/attempt 强制重挂，避免 Messages 复用上一节点流式状态
+            key={`${projection.runId}:${stage?.id ?? "na"}:${stage?.attemptId ?? "na"}`}
           >
             <Messages
               items={canvasItems}
-              // agent-canvas: 作用域：与主幕同源 liveAssistantTextChannel / MessageRow 流式
-              threadId={canvasThreadId || selection.threadId}
+              // 仅 agent-canvas / 合成 stage 作用域；禁止回退 shared 主会话（会串上一节点）
+              threadId={
+                canvasThreadId ||
+                `agent-stage-fallback:${projection.runId}:${stage?.id ?? "na"}`
+              }
               workspaceId={selection.workspaceId}
               isThinking={Boolean(isLive)}
               processingStartedAt={processingStartedAt}

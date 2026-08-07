@@ -24,6 +24,7 @@ import {
   remapThreadParentsToSharedOwners,
   toSharedThreadSummary,
 } from "../../shared-session/runtime/sharedSessionSummaries";
+import { getCollabWorkerNativeHideIds } from "../../multi-agent/runtime/collabNativeHideRegistry";
 import { asString } from "../utils/threadNormalize";
 import { clearLiveAssistantText } from "../utils/liveAssistantTextChannel";
 import { resolveCodexSubagentIdentity } from "../utils/codexSubagentIdentity";
@@ -449,9 +450,11 @@ export function useThreadActions({
         const sharedSessions = normalizeSharedSessionSummaries(
           sharedSessionsResult ?? [],
         );
-        const hiddenSharedBindingIds = expandHiddenSharedBindingIds(
-          sharedSessions.flatMap((session) => session.nativeThreadIds),
-        );
+        const hiddenSharedBindingIds = expandHiddenSharedBindingIds([
+          ...sharedSessions.flatMap((session) => session.nativeThreadIds),
+          // 协作 worker realtime 登记的 native id（改名 Agent N 后仍能 strip）
+          ...getCollabWorkerNativeHideIds(),
+        ]);
         const nativeOwnerToSharedThreadId =
           buildNativeOwnerToSharedThreadMap(sharedSessions);
         const existingThreads = filterDeletedSummaries(
@@ -1537,6 +1540,7 @@ export function useThreadActions({
                 (session) => session.nativeThreadIds,
               ),
               ...hiddenSharedBindingIds,
+              ...getCollabWorkerNativeHideIds(),
             ]);
             const nextSummaries = mergeGeminiSessionSummaries(
               baselineSummaries,
@@ -1643,6 +1647,7 @@ export function useThreadActions({
             const freshHiddenSharedBindingIds = expandHiddenSharedBindingIds([
               ...sharedSessionsForRemap.flatMap((session) => session.nativeThreadIds),
               ...hiddenSharedBindingIds,
+              ...getCollabWorkerNativeHideIds(),
             ]);
             const nativeOwnerToShared =
               buildNativeOwnerToSharedThreadMap(sharedSessionsForRemap);
@@ -1744,6 +1749,7 @@ export function useThreadActions({
                 (session) => session.nativeThreadIds,
               ),
               ...hiddenSharedBindingIds,
+              ...getCollabWorkerNativeHideIds(),
             ]);
             const nextSummaries = mergeKimiSessionSummaries(
               baselineSummaries,

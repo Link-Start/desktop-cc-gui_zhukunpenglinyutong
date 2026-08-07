@@ -79,6 +79,7 @@ export function stageTargetToSnapshot(
 /**
  * 幕布 items 徽章强制对齐当前 stage.target。
  * 防止跨 attempt 脏 snapshot 在 Inspector 里「骗人」。
+ * 必须比 effort，否则 grok high/low 会串徽章。
  */
 export function alignItemsToStageTarget(
   items: readonly ConversationItem[],
@@ -92,12 +93,21 @@ export function alignItemsToStageTarget(
   const next = items.map((item) => {
     if (item.kind !== "message" || item.role !== "assistant") return item;
     const prev = item.executionTargetSnapshot;
+    const prevEffort =
+      prev?.reasoning && typeof prev.reasoning === "object"
+        ? (prev.reasoning as { effort?: string | null }).effort ?? null
+        : null;
+    const nextEffort =
+      snapshot.reasoning && typeof snapshot.reasoning === "object"
+        ? (snapshot.reasoning as { effort?: string | null }).effort ?? null
+        : null;
     if (
       prev &&
       prev.engine === snapshot.engine &&
       (prev.model ?? null) === (snapshot.model ?? null) &&
       (prev.providerProfileNameSnapshot ?? null) ===
-        (snapshot.providerProfileNameSnapshot ?? null)
+        (snapshot.providerProfileNameSnapshot ?? null) &&
+      (prevEffort ?? null) === (nextEffort ?? null)
     ) {
       return item;
     }
@@ -110,6 +120,9 @@ export function alignItemsToStageTarget(
 /**
  * settle / 无 live 时：仅用本 stage 的 fullOutcome（plan 可用 plan.markdown）。
  * 禁止用共享 projection 整会话回填（worker 不进主 canvas，易空→串台）。
+ *
+ * LIVE / running / pending：只允许本 phase 的 liveText；禁止 fullOutcome /
+ * plan.markdown 回填（否则上一节点审查/规划正文会顶到当前 LIVE 卡）。
  */
 export function buildStageOwnedFallback(input: {
   stage: AgentStageProjection;
@@ -117,13 +130,36 @@ export function buildStageOwnedFallback(input: {
   liveText: string;
   isLive: boolean;
 }): ConversationItem[] {
-  // plan 可用 plan.markdown；其它 stage **禁止**用 plan.markdown（串台根因之一）
+  const stageRunning =
+    input.isLive ||
+    input.stage.status === "running" ||
+    input.stage.status === "pending";
+
+  if (stageRunning) {
+    const liveOnly = (input.liveText ?? "").trim();
+    if (!liveOnly || isWeakStatusText(liveOnly)) return [];
+    const baseId = `agent-stage-canvas:${input.projection.runId}:${input.stage.id}:${input.stage.attemptId ?? "na"}`;
+    const snapshot = stageTargetToSnapshot(input.stage.target);
+    return [
+      {
+        id: `${baseId}:assistant`,
+        kind: "message",
+        role: "assistant",
+        text: liveOnly,
+        isFinal: false,
+        ...(snapshot ? { executionTargetSnapshot: snapshot } : {}),
+      },
+    ];
+  }
+
+  // settle：只用本 stage 落盘正文。禁止 liveText 归档（易串 phase）、禁止 plan 串非 plan。
   const planBody =
     input.stage.id === "plan"
       ? input.projection.plan?.markdown ?? ""
       : "";
   const body = pickLongestStageBody(
-    input.liveText,
+    // 明确不传 liveText：归档可能被错误 phase 污染，导致润色卡显示审查汇总
+    "",
     input.stage.fullOutcome,
     planBody,
     input.stage.shortOutcome,
@@ -131,22 +167,41 @@ export function buildStageOwnedFallback(input: {
   if (!body || isWeakStatusText(body)) return [];
   const baseId = `agent-stage-canvas:${input.projection.runId}:${input.stage.id}:${input.stage.attemptId ?? "na"}`;
   const snapshot = stageTargetToSnapshot(input.stage.target);
-  const items: ConversationItem[] = [
+  return [
     {
       id: `${baseId}:assistant`,
       kind: "message",
       role: "assistant",
       text: body,
-      isFinal: !input.isLive,
+      isFinal: true,
       ...(snapshot ? { executionTargetSnapshot: snapshot } : {}),
     },
   ];
-  return items;
+}
+
+/** 本 attempt canvas 是否已有可展示的实质内容（非空壳） */
+export function canvasHasOwnStageContent(
+  items: readonly ConversationItem[],
+  options?: { minAssistantChars?: number },
+): boolean {
+  const minChars = options?.minAssistantChars ?? 24;
+  if (items.length === 0) return false;
+  if (items.some((i) => i.kind === "tool" || i.kind === "reasoning")) {
+    return true;
+  }
+  let assistantLen = 0;
+  for (const item of items) {
+    if (item.kind === "message" && item.role === "assistant") {
+      assistantLen += item.text?.trim().length ?? 0;
+    }
+  }
+  return assistantLen >= minChars;
 }
 
 /**
  * 右栏节点幕布（严格 attempt 隔离）：
- * 1) live：仅 agent-canvas:{shared}:{attemptId} 的 realtime items
+ * 1) live：仅 agent-canvas:{shared}:{attemptId} 的 realtime items；
+ *    无本 attempt 实质内容时返回空 → Inspector emptyLive（禁止串上一节点）
  * 2) settle / 空 canvas：仅本 stage fullOutcome（徽章=stage.target）
  * 3) 不用 shared projection 整会话切片（防串台）
  */
@@ -159,7 +214,7 @@ export function useAgentStageTranscript(input: {
   liveText: string;
 }): {
   items: ConversationItem[];
-  source: "canvas" | "synthetic";
+  source: "canvas" | "synthetic" | "empty";
   canvasThreadId: string;
   processingStartedAt: number | null;
 } {
@@ -188,30 +243,30 @@ export function useAgentStageTranscript(input: {
     });
   }, [projection, stage, liveText, isLive]);
 
-  const canvasBodyLen = useMemo(() => {
-    return liveCanvasItems
-      .filter(
-        (item): item is Extract<ConversationItem, { kind: "message" }> =>
-          item.kind === "message" && item.role === "assistant",
-      )
-      .reduce((sum, item) => sum + (item.text?.trim().length ?? 0), 0);
-  }, [liveCanvasItems]);
+  const ownCanvasReady = useMemo(
+    () => canvasHasOwnStageContent(liveCanvasItems as ConversationItem[]),
+    [liveCanvasItems],
+  );
 
-  // live：有 canvas 即用；settle：有实质正文或工具轨迹才用 canvas，否则 fullOutcome
-  const useCanvas =
-    Boolean(canvasThreadId) &&
-    liveCanvasItems.length > 0 &&
-    (isLive ||
-      liveCanvasItems.some((i) => i.kind === "tool" || i.kind === "reasoning") ||
-      canvasBodyLen >= 24);
+  // live：仅本 attempt 有实质 canvas 才用
+  // settle：**强制** fullOutcome synthetic，禁用 canvas（canvas 常残留他段/末段流）
+  const useCanvas = Boolean(isLive) && Boolean(canvasThreadId) && ownCanvasReady;
 
   const items = useMemo(() => {
     if (!stage) return [] as ConversationItem[];
-    const raw = useCanvas
-      ? (liveCanvasItems as ConversationItem[])
-      : synthetic;
-    return alignItemsToStageTarget(raw, stage);
-  }, [stage, useCanvas, liveCanvasItems, synthetic]);
+    if (isLive) {
+      if (useCanvas) {
+        return alignItemsToStageTarget(
+          liveCanvasItems as ConversationItem[],
+          stage,
+        );
+      }
+      // LIVE 无本 attempt 流：只允许本 phase liveText synthetic；否则空 → emptyLive
+      return alignItemsToStageTarget(synthetic, stage);
+    }
+    // 终态：永远本 stage fullOutcome，保证切节点正文互不相同
+    return alignItemsToStageTarget(synthetic, stage);
+  }, [stage, isLive, useCanvas, liveCanvasItems, synthetic]);
 
   const stableStartedAt = useMemo(() => {
     if (!isLive || !stage) return null;
@@ -220,9 +275,15 @@ export function useAgentStageTranscript(input: {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
   }, [isLive, stage?.id, stage?.attemptId, stage?.startedAt]);
 
+  const source: "canvas" | "synthetic" | "empty" = useCanvas
+    ? "canvas"
+    : items.length > 0
+      ? "synthetic"
+      : "empty";
+
   return {
     items,
-    source: useCanvas ? "canvas" : "synthetic",
+    source,
     canvasThreadId,
     processingStartedAt: stableStartedAt,
   };

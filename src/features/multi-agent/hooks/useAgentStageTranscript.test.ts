@@ -236,6 +236,154 @@ describe("buildStageOwnedFallback", () => {
       expect(items[0].executionTargetSnapshot?.engine).toBe("claude");
     }
   });
+
+  it("LIVE implement must not surface previous fullOutcome or plan body", () => {
+    const runningImplement: AgentStageProjection = {
+      ...implementStage,
+      status: "running",
+      // 脏数据：running 时不应再展示旧 fullOutcome
+      fullOutcome: "这是上一轮实现全文，LIVE 时禁止展示",
+      shortOutcome: "旧短摘要",
+    };
+    const items = buildStageOwnedFallback({
+      stage: runningImplement,
+      projection: {
+        schemaVersion: 1,
+        runId: "run-1",
+        workspaceId: "ws",
+        workspaceRoot: "/tmp",
+        sessionId: "sess",
+        requestText: "hello",
+        target: runningImplement.target,
+        status: "running",
+        planRevision: 1,
+        plan: {
+          schemaVersion: 1,
+          summary: "plan summary",
+          markdown: "SUMMARY: 规划正文禁止进 LIVE 实现卡",
+        },
+        stages: [runningImplement],
+        activeAttemptIds: ["attempt-implement"],
+        diagnostics: [],
+        requestedAt: 1,
+        updatedAt: 1,
+      },
+      liveText: "",
+      isLive: true,
+    });
+    expect(items).toEqual([]);
+  });
+
+  it("LIVE implement may only use this-phase liveText", () => {
+    const runningImplement: AgentStageProjection = {
+      ...implementStage,
+      status: "running",
+      fullOutcome: "旧全文",
+    };
+    const items = buildStageOwnedFallback({
+      stage: runningImplement,
+      projection: {
+        schemaVersion: 1,
+        runId: "run-1",
+        workspaceId: "ws",
+        workspaceRoot: "/tmp",
+        sessionId: "sess",
+        requestText: "hello",
+        target: runningImplement.target,
+        status: "running",
+        planRevision: 1,
+        stages: [runningImplement],
+        activeAttemptIds: ["attempt-implement"],
+        diagnostics: [],
+        requestedAt: 1,
+        updatedAt: 1,
+      },
+      liveText: "本段实现正在流式输出的正文内容足够长。",
+      isLive: true,
+    });
+    expect(items).toHaveLength(1);
+    if (items[0]?.kind === "message") {
+      expect(items[0].text).toContain("本段实现正在流式");
+      expect(items[0].text).not.toContain("旧全文");
+      expect(items[0].isFinal).toBe(false);
+    }
+  });
+
+  it("settle ignores liveText archive so stages stay isolated", () => {
+    const polish: AgentStageProjection = {
+      ...implementStage,
+      id: "polish",
+      title: "润色",
+      status: "succeeded",
+      fullOutcome: "润色结果\n\n落叶知秋意。",
+      shortOutcome: "润色完成",
+    };
+    const items = buildStageOwnedFallback({
+      stage: polish,
+      projection: {
+        schemaVersion: 1,
+        runId: "run-1",
+        workspaceId: "ws",
+        workspaceRoot: "/tmp",
+        sessionId: "sess",
+        requestText: "写诗",
+        target: polish.target,
+        status: "succeeded",
+        planRevision: 1,
+        stages: [polish],
+        activeAttemptIds: [],
+        diagnostics: [],
+        requestedAt: 1,
+        updatedAt: 1,
+      },
+      // 错误归档：审查汇总不应盖住润色 fullOutcome
+      liveText:
+        "审查汇总\n\n完成了什么\n五言律诗已完成起草与润色，可直接交付。",
+      isLive: false,
+    });
+    expect(items).toHaveLength(1);
+    if (items[0]?.kind === "message") {
+      expect(items[0].text).toContain("润色结果");
+      expect(items[0].text).not.toContain("审查汇总");
+      expect(items[0].isFinal).toBe(true);
+    }
+  });
+});
+
+describe("alignItemsToStageTarget effort", () => {
+  it("rewrites badge when only reasoning effort differs", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "a1",
+        kind: "message",
+        role: "assistant",
+        text: "body",
+        executionTargetSnapshot: {
+          engine: "grok",
+          model: "grok",
+          providerProfileNameSnapshot: "xAI",
+          providerProfileSource: "managed",
+          reasoning: { effort: "low" },
+        },
+      },
+    ];
+    const stage: AgentStageProjection = {
+      ...implementStage,
+      target: {
+        engine: "grok",
+        model: "grok",
+        providerProfileNameSnapshot: "xAI",
+        providerProfileSource: "managed",
+        reasoningEffort: "high",
+      },
+    };
+    const next = alignItemsToStageTarget(items, stage);
+    if (next[0]?.kind === "message") {
+      expect(next[0].executionTargetSnapshot?.reasoning).toEqual({
+        effort: "high",
+      });
+    }
+  });
 });
 
 describe("stageTargetToSnapshot", () => {
