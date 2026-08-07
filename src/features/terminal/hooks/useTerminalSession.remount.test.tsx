@@ -169,4 +169,63 @@ describe("useTerminalSession remount after host unmount", () => {
     expect(secondHost.isConnected).toBe(true);
     expect(secondHost).not.toBe(firstHost);
   });
+
+  it("does not steal focus during open / refresh / remount lifecycle", async () => {
+    const workspace = {
+      id: "ws-1",
+      name: "ws",
+      path: "/tmp/ws",
+    } as const;
+
+    const { result } = renderHook(() =>
+      useTerminalSession({
+        activeWorkspace: workspace as never,
+        activeTerminalId: "term-1",
+        isVisible: true,
+      }),
+    );
+
+    const view = render(
+      <Host
+        containerRef={result.current.containerRef as (node: HTMLDivElement | null) => void}
+        mounted
+      />,
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(openMock).toHaveBeenCalled();
+    // open → applyTerminalAppearance → refreshTerminal must not focus,
+    // otherwise composer typing loses keyboard focus when the dock is open.
+    expect(focusMock).not.toHaveBeenCalled();
+
+    view.rerender(
+      <Host
+        containerRef={result.current.containerRef as (node: HTMLDivElement | null) => void}
+        mounted={false}
+      />,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    view.rerender(
+      <Host
+        containerRef={result.current.containerRef as (node: HTMLDivElement | null) => void}
+        mounted
+      />,
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(openMock).toHaveBeenCalledTimes(2);
+    expect(focusMock).not.toHaveBeenCalled();
+  });
 });
