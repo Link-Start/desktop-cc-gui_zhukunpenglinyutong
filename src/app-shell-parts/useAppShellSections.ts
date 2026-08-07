@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+
 import {
   getEngineModels,
   getWorkspaceFiles,
+  revealInFileManager,
 } from "../services/tauri";
 import { pushErrorToast } from "../services/toasts";
 import { useSoloMode } from "../features/layout/hooks/useSoloMode";
@@ -476,7 +477,7 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
       return;
     }
     try {
-      await revealItemInDir(activeWorkspace.path);
+      await revealInFileManager(activeWorkspace.path);
     } catch (error) {
       alertError(error);
     }

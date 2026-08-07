@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { GitRepositorySummary, OpenAppTarget } from "../../../types";
 
-const revealItemInDirMock = vi.fn(async () => undefined);
+const revealInFileManagerMock = vi.fn(async (_path: string) => undefined);
 const emitToMock = vi.fn(async () => undefined);
 
 const invokeMock = vi.fn(async (...args: any[]) => {
@@ -69,14 +69,12 @@ vi.mock("../../../services/tauri", () => ({
     invokeMock("trash_workspace_item", { workspaceId, path }),
   writeWorkspaceFile: (workspaceId: string, path: string, content: string) =>
     invokeMock("write_workspace_file", { workspaceId, path, content }),
+  revealInFileManager: (...args: unknown[]) =>
+    revealInFileManagerMock(...(args as [string])),
 }));
 
 vi.mock("../../../services/rendererDiagnostics", () => ({
   appendWorkspaceFileListingBudgetDiagnostic: vi.fn(),
-}));
-
-vi.mock("@tauri-apps/plugin-opener", () => ({
-  revealItemInDir: revealItemInDirMock,
 }));
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
@@ -109,7 +107,7 @@ afterEach(() => {
   cleanup();
   invokeMock.mockClear();
   emitToMock.mockClear();
-  revealItemInDirMock.mockClear();
+  revealInFileManagerMock.mockClear();
   delete window.handleFilePathFromJava;
   delete window.__fileTreeDragPaths;
   delete window.__fileTreeDragStamp;
