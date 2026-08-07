@@ -272,6 +272,7 @@ pub(crate) fn invoke_handler(
         crate::workspaces::run_workspace_command,
         crate::workspaces::run_spec_command,
         crate::workspaces::open_workspace_in,
+        crate::workspaces::reveal_in_file_manager,
         crate::workspaces::open_new_window,
         crate::workspaces::configure_detached_external_change_monitor,
         crate::workspaces::clear_detached_external_change_monitor,

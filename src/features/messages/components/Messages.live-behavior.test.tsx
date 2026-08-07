@@ -1406,6 +1406,68 @@ describe("Messages live behavior", () => {
     }
   });
 
+  it("re-pins when the composer status strip shrinks the container after the settle window", () => {
+    vi.useFakeTimers();
+    try {
+      const renderWith = (thinking: boolean) => (
+        <Messages
+          items={[
+            {
+              id: "settle-shrink-user",
+              kind: "message",
+              role: "user",
+              text: "run",
+            },
+            {
+              id: "settle-shrink-assistant",
+              kind: "message",
+              role: "assistant",
+              text: thinking ? "streaming tail" : "final answer",
+            },
+          ]}
+          threadId="thread-settle-shrink"
+          workspaceId="ws-1"
+          isThinking={thinking}
+          processingStartedAt={thinking ? Date.now() - 1_000 : null}
+          openTargets={[]}
+          selectedOpenAppId=""
+        />
+      );
+      const { container, rerender } = render(renderWith(true));
+      const scroller = getMessagesScroller(container);
+      const scrollHeight = 2_400;
+      let clientHeight = 720;
+      setScrollerMetrics(scroller, scrollHeight - 720, scrollHeight);
+      Object.defineProperty(scroller, "clientHeight", {
+        configurable: true,
+        get: () => clientHeight,
+      });
+      notifyContentResized();
+
+      // settle：先钉到当时的底
+      rerender(renderWith(false));
+      expect(scroller.scrollTop).toBe(scrollHeight - 720);
+
+      // 让 forced 走完最短保持（6s）并凭真底 + 高度稳定采样退役，
+      // 同时越过 settle 死线（finalizing 结束后 2.4s）。
+      for (let i = 0; i < 6; i += 1) {
+        act(() => {
+          vi.advanceTimersByTime(1_400);
+        });
+        scroller.scrollTop = scrollHeight - clientHeight;
+        notifyContentResized();
+      }
+
+      // Composer 运行态条（「已编辑 N 个文件」）迟到挂载：容器 clientHeight 被压小，
+      // scrollTop / scrollHeight 均不变、不派发 scroll 事件。视口必须被追回新底。
+      clientHeight = 620;
+      notifyContentResized();
+      expect(scroller.scrollTop).toBe(scrollHeight - 620);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not chase late idle growth when the user has scrolled away from the bottom", () => {
     window.localStorage.setItem("ccgui.messages.live.autoFollow", "1");
     vi.useFakeTimers();
