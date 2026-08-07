@@ -2249,6 +2249,48 @@ describe("FileTreePanel run action isolation", () => {
     });
   });
 
+  it("reveals a Windows workspace path via native Explorer command with backslashes", async () => {
+    const originalPlatform = window.navigator.platform;
+    Object.defineProperty(window.navigator, "platform", {
+      configurable: true,
+      value: "Win32",
+    });
+
+    try {
+      render(
+        <FileTreePanel
+          workspaceId="workspace-win-reveal"
+          workspacePath="C:/Users/Chen/Project"
+          files={["README.md"]}
+          isLoading={false}
+          filePanelMode="files"
+          onFilePanelModeChange={() => undefined}
+          onOpenFile={() => undefined}
+          openTargets={[]}
+          openAppIconById={{}}
+          selectedOpenAppId=""
+          onSelectOpenAppId={() => undefined}
+        />,
+      );
+
+      fireEvent.contextMenu(screen.getByRole("button", { name: "README.md" }));
+      fireEvent.click(
+        await screen.findByRole("menuitem", { name: "files.revealInExplorer" }),
+      );
+
+      await waitFor(() => {
+        expect(revealInFileManagerMock).toHaveBeenCalledWith(
+          "C:\\Users\\Chen\\Project\\README.md",
+        );
+      });
+    } finally {
+      Object.defineProperty(window.navigator, "platform", {
+        configurable: true,
+        value: originalPlatform,
+      });
+    }
+  });
+
   it("uses the same insertion bridge as the + action when tree drag ends over chat input", () => {
     const handleFilePathFromJava = vi.fn();
     window.handleFilePathFromJava = handleFilePathFromJava;
