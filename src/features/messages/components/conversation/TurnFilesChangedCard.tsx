@@ -1,12 +1,13 @@
 /**
- * 回合文件变更汇总卡 - 渲染在回合完成边界处，或时间线末尾作为会话累计常驻卡。
- * 第一版仅做展示：头部「已编辑 N 个文件 + 总增删」，列表复用文件树彩色图标 +
- * 文件名 + 每文件增删统计，默认收起为前 N 个可展开。撤销/审核入口暂隐藏。
+ * 回合/会话文件变更汇总卡 - 头部「已编辑 N 个文件 + 总增删」，
+ * 列表复用文件树彩色图标 + 文件名 + 每文件增删统计。
+ * 可选：顶部「撤销全部」与行 hover 单文件「撤销」（均为文字按钮 + 二次确认）。
  */
-import { memo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import { cn } from "@/lib/utils";
+import { ConfirmDialog } from "../../../../components/ui/ConfirmDialog";
 import { getFileTreeIconSvg } from "../../../files/utils/fileTreeIcons";
 import {
   areTurnFileChangesSummariesEqual,
@@ -15,10 +16,15 @@ import {
 import { getFileName } from "../toolBlocks/toolConstants";
 
 const COLLAPSED_FILE_COUNT = 4;
+const EMPTY_REVERTED = new Set<string>();
 
 interface TurnFilesChangedCardProps {
   summary: TurnFileChangesSummary;
   onPreviewFileDiff?: (path: string) => void;
+  /** 撤销单个文件的本地改动（git restore） */
+  onRevertFile?: (path: string) => void | Promise<void>;
+  /** 撤销列表内全部文件的本地改动；入参为当前可见文件路径 */
+  onRevertAll?: (paths: string[]) => void | Promise<void>;
 }
 
 function DiffStat({
@@ -56,34 +62,176 @@ export const TurnFilesChangedCard = memo(
   function TurnFilesChangedCard({
     summary,
     onPreviewFileDiff,
+    onRevertFile,
+    onRevertAll,
   }: TurnFilesChangedCardProps) {
     const { t } = useTranslation();
     const [showAll, setShowAll] = useState(false);
+    const [revertedPaths, setRevertedPaths] =
+      useState<ReadonlySet<string>>(EMPTY_REVERTED);
+    const [confirmRevertAllOpen, setConfirmRevertAllOpen] = useState(false);
+    /** 待二次确认的单文件路径；null 表示未打开确认框 */
+    const [pendingRevertFilePath, setPendingRevertFilePath] = useState<
+      string | null
+    >(null);
+    const [isReverting, setIsReverting] = useState(false);
 
-    const { files, totalAdditions, totalDeletions } = summary;
-    if (files.length === 0) {
+    const canRevert = Boolean(onRevertFile || onRevertAll);
+
+    // 会话派生列表不会随 git restore 自动消失；成功撤销后本地隐藏，
+    // 若同 path 的增删统计变化（代理再次编辑）则重新展示。
+    const fileSignatureByPath = useMemo(() => {
+      const map = new Map<string, string>();
+      for (const file of summary.files) {
+        map.set(file.path, `${file.additions}:${file.deletions}`);
+      }
+      return map;
+    }, [summary.files]);
+
+    const [hiddenSignatures, setHiddenSignatures] = useState<
+      ReadonlyMap<string, string>
+    >(() => new Map());
+
+    const visibleFiles = useMemo(() => {
+      return summary.files.filter((file) => {
+        if (!revertedPaths.has(file.path)) return true;
+        const hiddenSig = hiddenSignatures.get(file.path);
+        const currentSig = fileSignatureByPath.get(file.path);
+        // 同 path 统计变化 → 视为新编辑，重新显示
+        return hiddenSig != null && currentSig !== hiddenSig;
+      });
+    }, [
+      fileSignatureByPath,
+      hiddenSignatures,
+      revertedPaths,
+      summary.files,
+    ]);
+
+    const visibleTotals = useMemo(() => {
+      let totalAdditions = 0;
+      let totalDeletions = 0;
+      for (const file of visibleFiles) {
+        totalAdditions += file.additions;
+        totalDeletions += file.deletions;
+      }
+      return { totalAdditions, totalDeletions };
+    }, [visibleFiles]);
+
+    if (visibleFiles.length === 0 && summary.files.length > 0 && canRevert) {
+      // 全部已撤销：不渲染空壳
+      return null;
+    }
+    if (summary.files.length === 0) {
       return null;
     }
 
-    const visibleFiles = showAll ? files : files.slice(0, COLLAPSED_FILE_COUNT);
-    const hiddenCount = files.length - visibleFiles.length;
+    const displayedFiles = showAll
+      ? visibleFiles
+      : visibleFiles.slice(0, COLLAPSED_FILE_COUNT);
+    const hiddenCount = visibleFiles.length - displayedFiles.length;
+    const showRevertAll = Boolean(onRevertAll) && visibleFiles.length > 0;
+
+    const markReverted = (paths: string[]) => {
+      setRevertedPaths((prev) => {
+        const next = new Set(prev);
+        for (const path of paths) next.add(path);
+        return next;
+      });
+      setHiddenSignatures((prev) => {
+        const next = new Map(prev);
+        for (const path of paths) {
+          const sig = fileSignatureByPath.get(path);
+          if (sig != null) next.set(path, sig);
+        }
+        return next;
+      });
+    };
+
+    const handleConfirmRevertFile = async () => {
+      if (!onRevertFile || isReverting || !pendingRevertFilePath) return;
+      const path = pendingRevertFilePath;
+      setIsReverting(true);
+      try {
+        await onRevertFile(path);
+        markReverted([path]);
+        setPendingRevertFilePath(null);
+      } finally {
+        setIsReverting(false);
+      }
+    };
+
+    const handleConfirmRevertAll = async () => {
+      if (!onRevertAll || isReverting) return;
+      const paths = visibleFiles.map((f) => f.path);
+      if (paths.length === 0) {
+        setConfirmRevertAllOpen(false);
+        return;
+      }
+      setIsReverting(true);
+      try {
+        await onRevertAll(paths);
+        markReverted(paths);
+        setConfirmRevertAllOpen(false);
+      } finally {
+        setIsReverting(false);
+      }
+    };
+
+    const pendingRevertFileName = pendingRevertFilePath
+      ? getFileName(pendingRevertFilePath) || pendingRevertFilePath
+      : "";
 
     return (
-      <div className="turn-files-changed-card my-2 overflow-hidden rounded-lg border border-border bg-background text-sm font-normal [&_button]:font-normal">
-        <div className="flex items-center justify-between gap-2 px-3 py-2">
-          <span className="truncate text-muted-foreground">
-            {t("messages.turnFilesChanged.title", { count: files.length })}
-          </span>
-          <DiffStat
-            additions={totalAdditions}
-            deletions={totalDeletions}
-            className="text-xs"
-          />
+      <div className="turn-files-changed-card my-2 overflow-hidden rounded-lg border border-border bg-background text-[13px] font-normal leading-5 [&_button]:font-normal">
+        {/* 紧凑头：固定 h-8；下边框分隔列表；run-status 面板内 sticky 不随滚动 */}
+        <div className="turn-files-changed-card__header flex h-8 items-center justify-between gap-2 border-b border-border px-2.5">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-muted-foreground">
+              {t("messages.turnFilesChanged.title", {
+                count: visibleFiles.length,
+              })}
+            </span>
+            <DiffStat
+              additions={visibleTotals.totalAdditions}
+              deletions={visibleTotals.totalDeletions}
+              className="text-xs leading-none"
+            />
+          </div>
+          {showRevertAll ? (
+            <button
+              type="button"
+              data-testid="turn-files-changed-revert-all"
+              className={cn(
+                // 显式 p/h 覆盖全局 button { padding: 8px 14px }；纯文字、无图标
+                "inline-flex h-6 shrink-0 items-center rounded-md px-1.5 py-0 text-xs font-medium leading-none",
+                "text-destructive hover:bg-destructive/10",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40",
+                "disabled:pointer-events-none disabled:opacity-50",
+              )}
+              disabled={isReverting}
+              title={t("messages.turnFilesChanged.revertAll")}
+              aria-label={t("messages.turnFilesChanged.revertAll")}
+              onClick={(event) => {
+                event.stopPropagation();
+                setPendingRevertFilePath(null);
+                setConfirmRevertAllOpen(true);
+              }}
+            >
+              {t("messages.turnFilesChanged.revertAll")}
+            </button>
+          ) : null}
         </div>
-        <div className="pb-1">
-          {visibleFiles.map((file) => {
+        <div className="pb-0.5">
+          {displayedFiles.map((file) => {
             const fileName = getFileName(file.path) || file.path;
-            const content = (
+            // 紧凑行：左侧 icon+文件名；右侧固定槽位默认 stats，hover 时槽位内切换为「撤销」
+            // （不 absolute 浮动，直接占红框对应的 stats 列）
+            const rowClass = cn(
+              "group/file flex h-7 w-full items-center gap-2 px-2.5 text-left transition-colors",
+              "hover:bg-accent/50 focus-visible:bg-accent/50 focus-visible:outline-none",
+            );
+
+            const fileIdentity = (
               <>
                 <span
                   className="flex size-4 shrink-0 items-center justify-center [&_svg]:size-4"
@@ -95,37 +243,77 @@ export const TurnFilesChangedCard = memo(
                 <span className="min-w-0 truncate text-foreground">
                   {fileName}
                 </span>
+              </>
+            );
+
+            // 右侧槽：默认 diff 统计；有撤销能力时 hover/focus 替换为文字「撤销」
+            const trailingSlot = (
+              <span className="ml-auto flex h-6 shrink-0 items-center justify-end">
                 <DiffStat
                   additions={file.additions}
                   deletions={file.deletions}
-                  className="ml-auto text-xs"
+                  className={cn(
+                    "text-xs leading-none",
+                    onRevertFile &&
+                      "group-hover/file:hidden group-focus-within/file:hidden",
+                  )}
                 />
-              </>
+                {onRevertFile ? (
+                  <button
+                    type="button"
+                    data-testid="turn-files-changed-revert-file"
+                    data-path={file.path}
+                    className={cn(
+                      // 占 stats 同列；默认隐藏，hover 时以 in-flow 显示（非浮动）
+                      "hidden h-6 items-center rounded-md px-1.5 py-0 text-xs font-medium leading-none",
+                      "text-destructive hover:bg-destructive/10",
+                      "group-hover/file:inline-flex group-focus-within/file:inline-flex",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40",
+                      "disabled:pointer-events-none disabled:opacity-40",
+                    )}
+                    disabled={isReverting}
+                    title={t("messages.turnFilesChanged.revertFile", {
+                      path: fileName,
+                    })}
+                    aria-label={t("messages.turnFilesChanged.revertFile", {
+                      path: fileName,
+                    })}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      event.preventDefault();
+                      setConfirmRevertAllOpen(false);
+                      setPendingRevertFilePath(file.path);
+                    }}
+                  >
+                    {t("messages.turnFilesChanged.revertFileAction")}
+                  </button>
+                ) : null}
+              </span>
             );
+
             return onPreviewFileDiff ? (
-              <button
-                key={file.path}
-                type="button"
-                className="flex w-full items-center gap-2 px-3 py-1 text-left transition-colors hover:bg-accent/50 focus-visible:bg-accent/50 focus-visible:outline-none"
-                title={file.path}
-                onClick={() => onPreviewFileDiff(file.path)}
-              >
-                {content}
-              </button>
+              <div key={file.path} className={rowClass} title={file.path}>
+                <button
+                  type="button"
+                  // p-0 必须：否则继承全局 button { padding: 8px 14px } 把行高撑成双倍
+                  className="flex h-full min-w-0 flex-1 items-center gap-2 p-0 text-left text-[13px] font-normal leading-5"
+                  onClick={() => onPreviewFileDiff(file.path)}
+                >
+                  {fileIdentity}
+                </button>
+                {trailingSlot}
+              </div>
             ) : (
-              <div
-                key={file.path}
-                className="flex w-full items-center gap-2 px-3 py-1"
-                title={file.path}
-              >
-                {content}
+              <div key={file.path} className={rowClass} title={file.path}>
+                {fileIdentity}
+                {trailingSlot}
               </div>
             );
           })}
           {hiddenCount > 0 && (
             <button
               type="button"
-              className="flex w-full items-center gap-1 px-3 py-1 text-left text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+              className="flex h-7 w-full items-center gap-1 px-2.5 py-0 text-left text-xs font-normal leading-none text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
               onClick={() => setShowAll(true)}
             >
               {t("messages.turnFilesChanged.showMore", { count: hiddenCount })}
@@ -133,10 +321,52 @@ export const TurnFilesChangedCard = memo(
             </button>
           )}
         </div>
+
+        {showRevertAll ? (
+          <ConfirmDialog
+            open={confirmRevertAllOpen}
+            title={t("messages.turnFilesChanged.revertAllConfirmTitle")}
+            body={t("messages.turnFilesChanged.revertAllConfirmBody", {
+              count: visibleFiles.length,
+            })}
+            confirmText={t("messages.turnFilesChanged.revertAllConfirmAction")}
+            danger
+            onCancel={() => {
+              if (!isReverting) setConfirmRevertAllOpen(false);
+            }}
+            onConfirm={() => {
+              void handleConfirmRevertAll();
+            }}
+          />
+        ) : null}
+
+        {onRevertFile ? (
+          <ConfirmDialog
+            open={pendingRevertFilePath != null}
+            title={t("messages.turnFilesChanged.revertFileConfirmTitle")}
+            body={t("messages.turnFilesChanged.revertFileConfirmBody", {
+              path: pendingRevertFileName,
+            })}
+            confirmText={t(
+              "messages.turnFilesChanged.revertFileConfirmAction",
+            )}
+            danger
+            onCancel={() => {
+              if (!isReverting) setPendingRevertFilePath(null);
+            }}
+            onConfirm={() => {
+              void handleConfirmRevertFile();
+            }}
+          />
+        ) : null}
       </div>
     );
   },
-  (prev, next) => areTurnFileChangesSummariesEqual(prev.summary, next.summary),
+  (prev, next) =>
+    areTurnFileChangesSummariesEqual(prev.summary, next.summary) &&
+    prev.onPreviewFileDiff === next.onPreviewFileDiff &&
+    prev.onRevertFile === next.onRevertFile &&
+    prev.onRevertAll === next.onRevertAll,
 );
 
 export default TurnFilesChangedCard;

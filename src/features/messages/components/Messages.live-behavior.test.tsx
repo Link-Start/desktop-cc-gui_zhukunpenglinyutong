@@ -743,7 +743,7 @@ describe("Messages live behavior", () => {
     );
   });
 
-  it("defers the Codex session file-change summary until the turn is no longer working", async () => {
+  it("does not render Codex session file-change summary cards in the timeline", async () => {
     const items: ConversationItem[] = [
       {
         id: "user-codex-file-summary",
@@ -775,23 +775,7 @@ describe("Messages live behavior", () => {
       },
     ];
 
-    const view = render(
-      <Messages
-        items={items}
-        threadId="thread-codex-file-summary"
-        workspaceId="ws-1"
-        isThinking
-        activeEngine="codex"
-        openTargets={[]}
-        selectedOpenAppId=""
-      />,
-    );
-
-    await waitFor(() => {
-      expect(screen.queryByText("messages.turnFilesChanged.title")).toBeNull();
-    });
-
-    view.rerender(
+    render(
       <Messages
         items={items}
         threadId="thread-codex-file-summary"
@@ -804,7 +788,7 @@ describe("Messages live behavior", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("messages.turnFilesChanged.title")).toBeTruthy();
+      expect(screen.queryByText("messages.turnFilesChanged.title")).toBeNull();
     });
   });
 

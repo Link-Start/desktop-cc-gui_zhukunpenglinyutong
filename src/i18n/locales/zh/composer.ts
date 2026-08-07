@@ -269,6 +269,14 @@ const composer = {
     contextLedgerActionOpenSourceDetail: "查看来源详情",
     contextLedgerDetailDialogTitle: "来源详情",
     contextLedgerDetailDialogClose: "关闭",
+    runStatus: {
+      label: "本轮运行状态",
+      panel: "运行状态详情",
+      edit: "编辑",
+      edited: "已编辑",
+      expandChrome: "展开运行状态",
+      collapseChrome: "收起运行状态",
+    },
   },
 };
 

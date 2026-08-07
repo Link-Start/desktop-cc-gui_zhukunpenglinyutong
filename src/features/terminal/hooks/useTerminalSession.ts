@@ -270,6 +270,9 @@ export function useTerminalSession({
       : false;
   }, []);
 
+  // Visual-only refresh. Never call terminal.focus() here — appearance sync,
+  // buffer restore, HMR/theme observers, and session readiness all call this
+  // while the user may be typing in the composer.
   const refreshTerminal = useCallback(() => {
     const terminal = terminalRef.current;
     if (!terminal) {
@@ -277,7 +280,6 @@ export function useTerminalSession({
     }
     const lastRow = Math.max(0, terminal.rows - 1);
     terminal.refresh(0, lastRow);
-    terminal.focus();
   }, []);
   const applyTerminalAppearance = useCallback(() => {
     const terminal = terminalRef.current;

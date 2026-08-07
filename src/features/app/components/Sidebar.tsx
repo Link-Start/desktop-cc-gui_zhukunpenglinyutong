@@ -258,6 +258,8 @@ type SidebarProps = {
   /** 打开运行时提示（入口在设置二级菜单，不在侧栏底部外显） */
   onOpenRuntimeNotice?: () => void;
   showRuntimeNoticeMenuItem?: boolean;
+  /** 运行时提示是否有失败（控制设置菜单/固定入口的对号↔叹号） */
+  runtimeNoticeHasError?: boolean;
 };
 
 function SidebarImpl({
@@ -356,6 +358,7 @@ function SidebarImpl({
   runtimeNoticeDockNode = null,
   onOpenRuntimeNotice,
   showRuntimeNoticeMenuItem = false,
+  runtimeNoticeHasError = false,
 }: SidebarProps) {
   const { t } = useTranslation();
   const quickSearchLabel = t("sidebar.quickSearch");
@@ -2304,6 +2307,7 @@ function SidebarImpl({
               onAppModeChange={onAppModeChange}
               onOpenRuntimeNotice={onOpenRuntimeNotice}
               showRuntimeNotice={showRuntimeNoticeMenuItem}
+              runtimeNoticeHasError={runtimeNoticeHasError}
             />
             {/* 锚点保留在侧栏底部供展开面板定位；外显气泡入口已收入设置二级菜单 */}
             {runtimeNoticeDockNode}

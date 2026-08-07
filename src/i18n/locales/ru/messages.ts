@@ -20,7 +20,18 @@ const messages = {
       "title_one": "Изменён {{count}} файл",
       "title_other": "Изменено файлов: {{count}}",
       "showMore_one": "Показать ещё {{count}} файл",
-      "showMore_other": "Показать ещё файлов: {{count}}"
+      "showMore_other": "Показать ещё файлов: {{count}}",
+      "revertAll": "Отменить всё",
+      "revertFile": "Отменить {{path}}",
+      "revertFileAction": "Отменить",
+      "revertAllConfirmTitle": "Отменить все изменения",
+      "revertAllConfirmBody":
+        "Локальные изменения в {{count}} файлах будут сброшены до последнего коммита. Это действие нельзя отменить.",
+      "revertAllConfirmAction": "Отменить всё",
+      "revertFileConfirmTitle": "Отменить изменения файла",
+      "revertFileConfirmBody":
+        "Локальные изменения в «{{path}}» будут сброшены до последнего коммита. Это действие нельзя отменить.",
+      "revertFileConfirmAction": "Отменить"
     },
     "noThinkingContent": "Нет содержимого размышлений",
     "hiddenThinkingContent": "Содержимое размышлений скрыто текущей настройкой.",

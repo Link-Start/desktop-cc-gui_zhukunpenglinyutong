@@ -90,6 +90,12 @@ import type {
   SelectedAgent as ChatInputSelectedAgent,
 } from "./ChatInputBox/types";
 import { useStatusPanelData } from "../../status-panel/hooks/useStatusPanelData";
+import { ComposerRunStatusStrip } from "./run-status";
+import { isEngineCapabilityAvailable } from "../../engine/engineCapabilityMatrix";
+import {
+  buildTurnFileChangesByBoundaryId,
+  mergeTurnFileChangesSummaries,
+} from "../../messages/utils/turnFileChanges";
 import {
   assembleSinglePrompt,
   expandLeadingManagedCommand,
@@ -376,6 +382,10 @@ type ComposerProps = {
   plan?: TurnPlan | null;
   isPlanMode?: boolean;
   onOpenDiffPath?: (path: string) => void;
+  /** 撤销会话已编辑列表中的单个文件（git restore） */
+  onRevertFile?: (path: string) => void | Promise<void>;
+  /** 撤销会话已编辑列表中的多个文件 */
+  onRevertAllFiles?: (paths: string[]) => void | Promise<void>;
   onRewind?: (
     userMessageId: string,
     options?: RewindExecutionOptions,
@@ -637,6 +647,8 @@ function ComposerImpl({
   plan = null,
   isPlanMode = false,
   onOpenDiffPath,
+  onRevertFile,
+  onRevertAllFiles,
   onRewind,
   rewindDialogRequest = null,
   onRewindDialogRequestConsumed,
@@ -669,12 +681,6 @@ function ComposerImpl({
   });
   const isReviewQuickActionEngine =
     selectedEngine === "codex" || selectedEngine === "claude";
-  const showStatusPanel =
-    selectedEngine === "claude" ||
-    selectedEngine === "codex" ||
-    selectedEngine === "gemini" ||
-    selectedEngine === "grok" ||
-    selectedEngine === "kimi";
   const sharedTargetState = useSharedTargetState(
     activeWorkspaceId ?? "",
     activeThreadId ?? "",
@@ -1289,20 +1295,34 @@ function ComposerImpl({
   const [isComposerInputInteractionActive, setIsComposerInputInteractionActive] = useState(false);
   const shouldDeferStatusSummary =
     isProcessing && isComposerInputInteractionActive;
-  const { todoTotal, subagentTotal, fileChanges, commandTotal } =
-    useStatusPanelData(performanceScopedItems, {
-      isCodexEngine,
-      activeThreadId,
-      itemsByThread: threadItemsByThread,
-      threadParentById,
-      threadStatusById,
-      deferSummary: shouldDeferStatusSummary,
-    });
+  const {
+    todos: statusTodos,
+    subagents: statusSubagents,
+    todoTotal,
+    subagentTotal,
+    commandTotal,
+  } = useStatusPanelData(performanceScopedItems, {
+    isCodexEngine,
+    activeEngine: selectedEngine ?? null,
+    activeThreadId,
+    itemsByThread: threadItemsByThread,
+    threadParentById,
+    threadStatusById,
+    deferSummary: shouldDeferStatusSummary,
+  });
+  const sessionFileChanges = useMemo(() => {
+    const byBoundary = buildTurnFileChangesByBoundaryId(performanceScopedItems);
+    return mergeTurnFileChangesSummaries(byBoundary.values());
+  }, [performanceScopedItems]);
+  const mergePlanIntoTodos =
+    isCodexEngine &&
+    selectedEngine != null &&
+    isEngineCapabilityAvailable(selectedEngine, "collaboration.mode");
   const hasStatusPanelActivity = useMemo(() => {
     const hasLegacyActivity =
       todoTotal > 0 ||
       subagentTotal > 0 ||
-      fileChanges.length > 0 ||
+      Boolean(sessionFileChanges) ||
       isPlanMode ||
       Boolean(plan);
     if (isCodexEngine) {
@@ -1311,14 +1331,15 @@ function ComposerImpl({
     return hasLegacyActivity;
   }, [
     commandTotal,
-    fileChanges.length,
     isCodexEngine,
     isPlanMode,
     plan,
+    sessionFileChanges,
     subagentTotal,
     todoTotal,
   ]);
-  const [statusPanelExpanded, setStatusPanelExpanded] = useState(hasStatusPanelActivity);
+  // 底部 dock 已退役；toggle 仅兼容旧 override，默认不再展示。
+  const [statusPanelExpanded, setStatusPanelExpanded] = useState(false);
   const previousStatusPanelActivityRef = useRef(hasStatusPanelActivity);
   const internalRef = useRef<HTMLTextAreaElement | null>(null);
   const textareaRef = externalTextareaRef ?? internalRef;
@@ -1753,8 +1774,7 @@ function ComposerImpl({
   const handleToggleStatusPanel = useCallback(() => {
     setStatusPanelExpanded((prev) => !prev);
   }, []);
-  const resolvedShowStatusPanelToggle =
-    showStatusPanelToggleOverride ?? showStatusPanel;
+  const resolvedShowStatusPanelToggle = showStatusPanelToggleOverride ?? false;
   const resolvedStatusPanelExpanded =
     statusPanelExpandedOverride ?? statusPanelExpanded;
   const resolvedToggleStatusPanel =
@@ -2912,6 +2932,19 @@ function ComposerImpl({
                 ))}
               </div>
             ) : null}
+            <ComposerRunStatusStrip
+              todos={statusTodos}
+              subagents={statusSubagents}
+              plan={plan ?? null}
+              isPlanMode={Boolean(isPlanMode)}
+              isProcessing={Boolean(isProcessing)}
+              mergePlanIntoTodos={mergePlanIntoTodos}
+              sessionFileChanges={sessionFileChanges}
+              isCodexEngine={isCodexEngine}
+              onOpenDiffPath={onOpenDiffPath}
+              onRevertFile={onRevertFile}
+              onRevertAllFiles={onRevertAllFiles}
+            />
             <ChatInputBoxAdapter
               ref={chatInputRef}
               text={text}
