@@ -28,6 +28,7 @@ import {
   extractClaudeForkParentSessionId,
   isClaudeForkThreadId,
 } from "../utils/claudeForkThread";
+import { emitMessagesForcePinBottom } from "../../../live-canvas/liveCanvasControls";
 import {
   sendUserMessage as sendUserMessageService,
   startReview as startReviewService,
@@ -943,6 +944,8 @@ export function useThreadMessaging({
         safeMessageActivity();
         return;
       }
+      // 通过校验后立刻贴底（含无乐观气泡路径）；乐观气泡处再发一次无害。
+      emitMessagesForcePinBottom();
       let resolvedSelectedAgent =
         resolvedEngine !== "opencode" ? (options?.selectedAgent ?? null) : null;
       if (resolvedSelectedAgent?.source === "builtIn") {

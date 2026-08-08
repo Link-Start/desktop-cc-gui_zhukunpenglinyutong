@@ -62,13 +62,14 @@ describe("messages context stack layout", () => {
     expect(contextCardRule).toContain("box-sizing: border-box;");
   });
 
-  it("keeps image-bearing rows out of content-visibility clipping", () => {
-    const imageMessageRule = getCssRuleBlock(
-      messagesPart1Css,
+  it("does not use content-visibility on message rows (jetbrains scroll stability)", () => {
+    // 2026-08：对齐 jetbrains-cc-gui——content-visibility 占位→真高跳变是
+    // 「视口上跳卡中部」根因，messages 行全面禁用，不再需要 image 行例外规则。
+    expect(messagesPart1Css).not.toMatch(
+      /^\s*content-visibility\s*:/m,
+    );
+    expect(messagesPart1Css).not.toContain(
       ".message:has(.message-image-grid, .message-deferred-image-list, .message-generated-image-card)",
     );
-
-    expect(imageMessageRule).toContain("content-visibility: visible;");
-    expect(imageMessageRule).toContain("contain-intrinsic-block-size: auto;");
   });
 });
