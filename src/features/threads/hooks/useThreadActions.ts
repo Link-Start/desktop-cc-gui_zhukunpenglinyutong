@@ -98,6 +98,7 @@ import {
   KIMI_SESSION_CACHE_TTL_MS,
   KIMI_SESSION_FETCH_TIMEOUT_MS,
   NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS,
+  OPENCODE_FULL_CATALOG_FETCH_TIMEOUT_MS,
   THREAD_LIST_LIVE_REQUEST_TIMEOUT_MS,
   THREAD_LIST_MAX_EMPTY_PAGES,
   THREAD_LIST_MAX_EMPTY_PAGES_WITH_ACTIVITY,
@@ -814,11 +815,12 @@ export function useThreadActions({
           workspace.id,
         );
         const nativeSessionListLimit = resolveNativeSessionListLimit(workspace);
+        // Budget is applied inside getOpenCodeSessionList so command-cost trace
+        // reflects the budget (not zombie IPC wall-clock after withTimeout).
         const opencodeSessionsPromise = includeOpenCodeSessions
-          ? withTimeout(
-              getOpenCodeSessionListService(workspace.id),
-              NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS,
-            )
+          ? getOpenCodeSessionListService(workspace.id, {
+              timeoutMs: OPENCODE_FULL_CATALOG_FETCH_TIMEOUT_MS,
+            })
           : Promise.resolve(
               [] as Awaited<ReturnType<typeof getOpenCodeSessionListService>>,
             );
