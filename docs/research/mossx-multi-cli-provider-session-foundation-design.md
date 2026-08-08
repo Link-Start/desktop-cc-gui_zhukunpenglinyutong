@@ -12,7 +12,7 @@ status: implemented
 > 内容类型：Architecture Decision Record
 > 生命周期：accepted / implemented in slices；原始 A–D 路线已归档，后续修复与收口 change 独立演进
 > 初始日期：2026-07-27
-> 最近校准：2026-08-06 · multi-agent 协作后 UI 收口：Runtime Context 吃 stage body、Inspector **按 attempt 隔离幕布**、徽章对齐 stage.target；本地 event log 核对 **执行按模板引擎**（plan/implement/review 分 binding），展示串台属 UI 问题已修
+> 最近校准：2026-08-08 · Composer Run Status Strip 数据面：Shared/协作合成 **主 items ∪ agent-canvas ∪ child threads**（`collectRunStatusSourceItems`），禁止仅依赖根 props 空 items；协作写文件变更可在输入框上方「已编辑」汇总
 > 适用范围：Native Session、Shared Session、Provider Runtime、Session Catalog、Sidebar Projection、未来 Plugin / Orchestration
 > 核心决策：Native Session 保持原生身份；Shared Session 承担跨 CLI、跨 Provider 的逐 Turn 切换
 
@@ -43,12 +43,13 @@ status: implemented
 | Multi-agent collab Runtime Context | **仅协作存在时**：`squad.nodeOutcomeRecorded.outcome.body`（capped）经 Context Compiler 投影为 portable assistant 条目；**禁止** destination-owned / squad-worker attempt 剔除吞掉 stage digest；collab control briefing user turn 可 omission | `agent_orchestration/commands.rs`、`shared_context/compiler.rs`、OpenSpec `fix-shared-collab-context-and-sidebar-spawn` |
 | Multi-agent stage 执行 target | 每 stage `begin_stage_turn(&stage.target)` + squad worker bindingKey；本地 event log 核对 plan/claude、implement/codex、review/grok 分 binding **真实执行** | `agent_orchestration/{commands,support}.rs`、`shared_session_v2.begin_squad_worker_turn_core`、`shared-event-log-v2.sqlite3` |
 | Multi-agent Inspector 流式与隔离 | 右栏 **禁止** `extractRealtimeTextDelta` 旁路；`agent-canvas:{shared}:{attemptId}` + 主幕同源 adapter / liveAssistantTextChannel；**幕布仅当前 attempt**；settle 只信本 stage `fullOutcome`；徽章 **强制对齐 stage.target**；activeTurn 查询用 **shared:** key 非 agent-canvas key | `useAppServerEvents.ts`、`agentCanvasThread.ts`、`useAgentStageTranscript.ts` |
+| Composer Run Status Strip 数据源 | 输入框上方 pills（todo/subagent/plan/**已编辑**）对 Shared 普通与协作均生效；源 items = 当前会话主时间线 ∪ `agent-canvas:{shared}:*` ∪ parent=active 子会话；**不**把全量 items 绑回 AppShell 根 props（ActiveCanvas 隔离不变） | `collectRunStatusSourceItems.ts`、`Composer.tsx`、`ComposerRunStatusStrip.tsx`、OpenSpec `wire-shared-composer-run-status-strip` |
 | Multi-agent 模板智能体 | 环节可选客户端智能体（`agentProvider` 同源）；persona 字段进 stageBindings；Inspector 头展示「· 智能体 {name}」；注入目前为 rolePrompt 前缀（非 Composer 全量 AGENT_PROMPT 协议） | `StageAgentPicker.tsx`、`templates/types.ts`、`AgentInspectorDrawer` |
 | Shared Sidebar hidden binding | Shared 内部 native binding **永不**作为用户顶层会话展示；hide set（fresh∪outer）+ control-plane 标题闸双闸。**侧栏 title**：行首 `MOSSX_*`（兼容 `previewThreadName` 50 字截断）∪ 严格 classify ∪ collab worker；**幕布 transcript**：仍仅严格 `classifyContextProtocolText`（禁止 `includes("MOSSX")`） | `isMossxProgramControlTitle`、`isSharedControlPlaneSpawnTitle`、`stripHiddenSharedBindingSummaries`、merge 预过滤、`list_shared_sessions.nativeThreadIds`、OpenSpec `fix-shared-collab-context-and-sidebar-spawn` §follow-up 2026-08-07 |
 
 本文中的 `RuntimeDeliveryAdapter`、`Canonical Fact`、`ContextPackage` 等名称既包含实现合同，也包含 ADR 概念层语言。读者需要复制代码或接新 CLI 时，必须同时使用 [Engine Onboarding Guide](./mossx-new-cli-onboarding-guide.md) 的「当前注册面」清单，不能只按概念接口猜文件名。
 
-> **更新触发器**：engine registry、Shared 支持集合、provider binding、canonical fact schema、context compiler、terminal/ACK contract、**recovery exit / abandon**、Squad exact-owner / mutation lease / settlement projection、**collab stage digest → Runtime Context**、**Shared sidebar hide / spawn 闸**、**multi-agent Inspector attempt 隔离 / 徽章权威** 变化。
+> **更新触发器**：engine registry、Shared 支持集合、provider binding、canonical fact schema、context compiler、terminal/ACK contract、**recovery exit / abandon**、Squad exact-owner / mutation lease / settlement projection、**collab stage digest → Runtime Context**、**Shared sidebar hide / spawn 闸**、**multi-agent Inspector attempt 隔离 / 徽章权威**、**Composer run-status 合成数据源** 变化。
 
 ## 一、Executive Summary
 

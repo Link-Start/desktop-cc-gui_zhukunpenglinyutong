@@ -91,13 +91,18 @@ import type {
   SelectedAgent as ChatInputSelectedAgent,
 } from "./ChatInputBox/types";
 import { useStatusPanelData } from "../../status-panel/hooks/useStatusPanelData";
-import { ComposerRunStatusStrip } from "./run-status";
-import { isEngineCapabilityAvailable } from "../../engine/engineCapabilityMatrix";
 import {
-  buildTurnFileChangesByBoundaryId,
-  mergeTurnFileChangesSummaries,
-  overlaySessionFileChangesWithGitStats,
-} from "../../messages/utils/turnFileChanges";
+  ComposerRunStatusStrip,
+  collectRunStatusSubagentSourceItems,
+} from "./run-status";
+import { isEngineCapabilityAvailable } from "../../engine/engineCapabilityMatrix";
+import { overlaySessionFileChangesWithGitStats } from "../../messages/utils/turnFileChanges";
+import {
+  ingestFileEditsFromConversationItems,
+  removeFileEditPaths,
+} from "../../session-side-effects/sessionSideEffectLedger";
+import { useActiveCanvasSelector } from "../../layout/hooks/activeCanvasStore";
+import { enrichTimelineWithSyntheticSubagentsBeforeCollapse } from "../../subagent-ui";
 import {
   assembleSinglePrompt,
   expandLeadingManagedCommand,
@@ -1364,26 +1369,125 @@ function ComposerImpl({
   ] = useState(false);
   const shouldDeferStatusSummary =
     isProcessing && isComposerInputInteractionActive;
+  // —— 子代理 Strip 源：S10 同源合成，只喂 Strip，不进主幕布 ——
+  // 断点修复：useStatusPanelData 在传入 itemsByThread 时只扫表内条目，
+  // 必须把「含 synthetic spawn」的 items 写回 activeThread 槽位，否则合成等于没接。
+  const canvasChildSubagentThreads = useActiveCanvasSelector(
+    (snapshot) => snapshot.childSubagentThreads,
+  );
+  const canvasThreadIdForStrip = useActiveCanvasSelector(
+    (snapshot) => snapshot.threadId,
+  );
+  const canvasStatusById = useActiveCanvasSelector(
+    (snapshot) => snapshot.threadStatusById,
+  );
+  const canvasItemsByThread = useActiveCanvasSelector(
+    (snapshot) => snapshot.threadItemsByThread,
+  );
+  // 子线程：canvas 过滤 + threadParentById 上挂到当前会话的 id（Shared 历史常用）
+  const stripChildThreads = useMemo(() => {
+    const byId = new Map(
+      canvasChildSubagentThreads.map((thread) => [thread.id, thread]),
+    );
+    const parentMap = threadParentById ?? {};
+    const activeId = (activeThreadId ?? "").trim();
+    if (activeId) {
+      for (const [childId, parentId] of Object.entries(parentMap)) {
+        if (parentId !== activeId || !childId || childId === activeId) continue;
+        if (byId.has(childId)) continue;
+        byId.set(childId, {
+          id: childId,
+          name: childId,
+          updatedAt: 0,
+          engineSource: selectedEngine ?? "claude",
+        });
+      }
+    }
+    return Array.from(byId.values());
+  }, [
+    canvasChildSubagentThreads,
+    threadParentById,
+    activeThreadId,
+    selectedEngine,
+  ]);
+  const runStatusItemsWithSyntheticSubagents = useMemo(
+    () =>
+      enrichTimelineWithSyntheticSubagentsBeforeCollapse({
+        items: performanceScopedItems,
+        ownThreadId: activeThreadId,
+        canvasThreadId: canvasThreadIdForStrip ?? activeThreadId,
+        activeEngine: selectedEngine ?? null,
+        childThreads: stripChildThreads,
+        statusById: canvasStatusById,
+        itemsByThread: canvasItemsByThread,
+      }),
+    [
+      performanceScopedItems,
+      activeThreadId,
+      canvasThreadIdForStrip,
+      selectedEngine,
+      stripChildThreads,
+      canvasStatusById,
+      canvasItemsByThread,
+    ],
+  );
+  // 实时协作：worker 工具事实隔离在 agent-canvas:{shared}:{attempt}，
+  // 主幕 shared: 只有消息/汇总 → 把本会话 agent-canvas 的 subagent 工具并入扫描源。
+  const runStatusItemsForStrip = useMemo(
+    () =>
+      collectRunStatusSubagentSourceItems({
+        mainItems: runStatusItemsWithSyntheticSubagents,
+        threadItemsByThread: canvasItemsByThread ?? threadItemsByThread,
+        activeThreadId,
+      }),
+    [
+      runStatusItemsWithSyntheticSubagents,
+      canvasItemsByThread,
+      threadItemsByThread,
+      activeThreadId,
+    ],
+  );
+  // 关键：把合成后的 items 写入 activeThread，供 collectScopedToolEntries 扫到
+  const itemsByThreadForRunStatus = useMemo(() => {
+    const base = {
+      ...(canvasItemsByThread ?? {}),
+      ...(threadItemsByThread ?? {}),
+    };
+    const activeId = (activeThreadId ?? "").trim();
+    if (!activeId) return base;
+    return {
+      ...base,
+      [activeId]: runStatusItemsForStrip,
+    };
+  }, [
+    canvasItemsByThread,
+    threadItemsByThread,
+    activeThreadId,
+    runStatusItemsForStrip,
+  ]);
   const {
     todos: statusTodos,
     subagents: statusSubagents,
     todoTotal,
     subagentTotal,
     commandTotal,
-  } = useStatusPanelData(performanceScopedItems, {
+  } = useStatusPanelData(runStatusItemsForStrip, {
     isCodexEngine,
     activeEngine: selectedEngine ?? null,
     activeThreadId,
-    itemsByThread: threadItemsByThread,
+    itemsByThread: itemsByThreadForRunStatus,
     threadParentById,
-    threadStatusById,
+    threadStatusById: threadStatusById ?? canvasStatusById,
     deferSummary: shouldDeferStatusSummary,
   });
-  // 文件编辑汇总用未 deferred 的 items，保证 AI 改文件时 path 实时出现
+  // 已编辑：ledger 合成主线∪agent-canvas（Shared/协作 fan-in），用未 deferred items 保证实时
   const sessionToolFileChanges = useMemo(() => {
-    const byBoundary = buildTurnFileChangesByBoundaryId(items);
-    return mergeTurnFileChangesSummaries(byBoundary.values());
-  }, [items]);
+    return ingestFileEditsFromConversationItems({
+      threadId: activeThreadId,
+      mainItems: items,
+      threadItemsByThread: threadItemsByThread ?? canvasItemsByThread,
+    });
+  }, [items, threadItemsByThread, canvasItemsByThread, activeThreadId]);
 
   // 回合结束后 git 刷新有延迟：短 grace 内仍允许 tool 临时数，避免 pill 闪空
   const [gitOverlayGrace, setGitOverlayGrace] = useState(false);
@@ -1437,6 +1541,21 @@ function ComposerImpl({
     onRequestGitStatusRefresh,
     sessionToolFileSignature,
   ]);
+
+  const handleRevertFileForStrip = useCallback(
+    async (path: string) => {
+      await onRevertFile?.(path);
+      removeFileEditPaths(activeThreadId, [path]);
+    },
+    [activeThreadId, onRevertFile],
+  );
+  const handleRevertAllFilesForStrip = useCallback(
+    async (paths: string[]) => {
+      await onRevertAllFiles?.(paths);
+      removeFileEditPaths(activeThreadId, paths);
+    },
+    [activeThreadId, onRevertAllFiles],
+  );
   const mergePlanIntoTodos =
     isCodexEngine &&
     selectedEngine != null &&
@@ -3224,8 +3343,12 @@ function ComposerImpl({
               sessionScopeKey={activeThreadId ?? null}
               isCodexEngine={isCodexEngine}
               onOpenDiffPath={onOpenDiffPath}
-              onRevertFile={onRevertFile}
-              onRevertAllFiles={onRevertAllFiles}
+              onRevertFile={
+                onRevertFile ? handleRevertFileForStrip : undefined
+              }
+              onRevertAllFiles={
+                onRevertAllFiles ? handleRevertAllFilesForStrip : undefined
+              }
             />
             <ChatInputBoxAdapter
               ref={chatInputRef}
