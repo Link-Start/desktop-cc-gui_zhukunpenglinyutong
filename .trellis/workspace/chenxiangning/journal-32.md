@@ -172,3 +172,52 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1354: 自定义模型按供应商绑定（Claude/Codex 对称）
+
+**Date**: 2026-08-08
+**Task**: 自定义模型按供应商绑定（Claude/Codex 对称）
+**Branch**: `cxn-version-0.8.4`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 内容 |
+|----|------|
+| OpenSpec | `custom-model-provider-binding` proposal/design/specs/tasks 4/4 |
+| 功能 | 管理弹窗前置供应商选择；三方双写 customModels+catalog；本地仅写 catalog |
+| 对称 | Claude/Codex 同一录入与写盘语义；Rust `ProviderConfig.custom_models` 读写 |
+| 加固 | Dialog 异步 options 不清表单；persist 错误可见；per-engine 串行 queue |
+| 回归边界 | Shared/Native 开会话权威不变；Claude resolvedProviderProfileId 仍固定 null；缺省不发明 ownership |
+
+**主要文件**:
+- `src/features/vendors/customModelProviderBinding.ts`
+- `src/features/vendors/persistCustomModelCatalog.ts`
+- `src/features/vendors/components/CustomModelDialog.tsx`
+- `src/features/vendors/components/VendorModelManagerDialogHost.tsx`
+- `openspec/changes/custom-model-provider-binding/**`
+
+**未纳入本 commit**: cold-start / hydration 相关工作区改动（他人或并行 change）仍留 working tree。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c03428f20` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
