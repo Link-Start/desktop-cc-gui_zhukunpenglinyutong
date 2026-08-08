@@ -190,7 +190,7 @@ const files = {
     "documentPreviewTooLarge": "ドキュメントプレビューは最大 {{maxMb}} MB のファイルに制限されています。外部で開くか、先にドキュメントを縮小してください。",
     "documentPreviewOutlineEmpty": "見出しのアウトラインが検出されませんでした。Word の見出しスタイルを使用して安定した目次を表示してください。",
     "clearSelection": "クリア",
-    "addToChat": "チャットに追加",
+    "addToChat": "入力欄に送信",
     "selectionHintShiftClick": "Shift + クリック または ドラッグ + クリック",
     "selectionHintMultiLine": "で複数行を選択",
     "annotateForAi": "AI 向けに注釈",

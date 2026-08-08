@@ -190,7 +190,7 @@ const files = {
     "documentPreviewTooLarge": "文件預覽僅支援 {{maxMb}} MB 以內的檔案。請以外部程式開啟，或先縮小文件。",
     "documentPreviewOutlineEmpty": "未偵測到標題大綱。請使用 Word 標題樣式，以提供穩定的目錄。",
     "clearSelection": "清除",
-    "addToChat": "加入對話",
+    "addToChat": "傳送到輸入框",
     "selectionHintShiftClick": "Shift + 點按，或拖曳 + 點按",
     "selectionHintMultiLine": "以進行多行選取",
     "annotateForAi": "為 AI 標註",

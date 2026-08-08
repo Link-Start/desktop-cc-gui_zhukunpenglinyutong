@@ -77,6 +77,7 @@ const messages = {
       "Timeline merge complete ({{count}} items total).",
     restoringSharedHistoryFinalize: "Finishing canvas restore…",
     generatingResponse: "Generating response...",
+    responding: "Responding...",
     codexWaitingForFirstText:
       "Codex is running. Waiting for the first text chunk...",
     codexSilentSuspected:
@@ -98,7 +99,7 @@ const messages = {
       "{{engine}} does not support image input in this release",
     doneIn: "Done in {{duration}}",
     totalDuration: "Duration",
-    durationSeconds: "took {{seconds}}s",
+    durationSeconds: "took {{duration}}",
     tokenUsage: "In {{input}} / Out {{output}}",
     tokenUsageTooltip: "In {{input}} token / Out {{output}} token",
     messageActions: "Message actions",

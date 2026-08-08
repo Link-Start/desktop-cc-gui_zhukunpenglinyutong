@@ -1395,6 +1395,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       setHasContent,
       adjustHeight,
       invalidateCache,
+      renderFileTags,
     });
 
     useEffect(() => {

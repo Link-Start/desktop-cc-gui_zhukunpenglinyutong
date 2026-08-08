@@ -190,7 +190,7 @@ const files = {
     "documentPreviewTooLarge": "La vista previa de documento se limita a archivos de hasta {{maxMb}} MB. Ábrelo externamente o reduce primero el documento.",
     "documentPreviewOutlineEmpty": "No se detectó ningún esquema de encabezados. Usa los estilos de encabezado de Word para exponer una tabla de contenido estable.",
     "clearSelection": "Limpiar",
-    "addToChat": "Añadir al chat",
+    "addToChat": "Enviar al cuadro de entrada",
     "selectionHintShiftClick": "Mayús + clic o arrastrar + clic",
     "selectionHintMultiLine": "para selección de varias líneas",
     "annotateForAi": "Anotar para la IA",

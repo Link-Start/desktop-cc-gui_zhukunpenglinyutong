@@ -190,7 +190,7 @@ const files = {
     "documentPreviewTooLarge": "문서 미리 보기는 최대 {{maxMb}} MB 파일까지 지원됩니다. 외부에서 열거나 문서를 먼저 줄이세요.",
     "documentPreviewOutlineEmpty": "제목 개요가 감지되지 않았습니다. 안정적인 목차를 표시하려면 Word 제목 스타일을 사용하세요.",
     "clearSelection": "지우기",
-    "addToChat": "채팅에 추가",
+    "addToChat": "입력창으로 보내기",
     "selectionHintShiftClick": "Shift + 클릭 또는 드래그 + 클릭",
     "selectionHintMultiLine": "여러 줄을 선택하려면",
     "annotateForAi": "AI용 주석 추가",

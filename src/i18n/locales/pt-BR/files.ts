@@ -190,7 +190,7 @@ const files = {
     "documentPreviewTooLarge": "A prévia do documento é limitada a arquivos de até {{maxMb}} MB. Abra externamente ou reduza o documento primeiro.",
     "documentPreviewOutlineEmpty": "Nenhuma estrutura de títulos foi detectada. Use estilos de título do Word para expor um sumário estável.",
     "clearSelection": "Limpar",
-    "addToChat": "Adicionar ao chat",
+    "addToChat": "Enviar para a entrada",
     "selectionHintShiftClick": "Shift + clique ou arraste + clique",
     "selectionHintMultiLine": "para seleção de múltiplas linhas",
     "annotateForAi": "Anotar para a IA",
