@@ -1893,3 +1893,43 @@ A+B 方案同步 isProcessing：协作蓝点/代理电、approve/retry 失败熄
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1348: Composer 会话控制 HUD 与多供应商实时用量
+
+**Date**: 2026-08-08
+**Task**: Composer 会话控制 HUD 与多供应商实时用量
+**Branch**: `cxn-version-0.8.4`
+
+### Summary
+
+双栏 Session Control HUD；复用概览额度链路；Kimi CLI OAuth refresh；智谱解析加固；千问 DashScope 明确无公开额度 API
+
+### Main Changes
+
+## 本次工作
+- OpenSpec: redesign-composer-session-control-hud
+- Composer 工具菜单改为双栏 HUD（左控制 / 右配额 / 底工具），宽度锚定 chat-input-box
+- 右侧用量复用 useCodingPlanQuota + buildSessionOverviewQuota
+- coding_plan_quota: Kimi CLI via=cli + token refresh；智谱窗口解析对齐 CC Switch；DashScope 给出明确 unsupported 文案
+- 测试：Vitest 26 + cargo coding_plan_quota 10 通过
+- 未入库：_temp 设计原型 HTML
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f97a5ed74` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
