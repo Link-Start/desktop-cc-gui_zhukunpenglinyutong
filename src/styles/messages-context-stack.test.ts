@@ -36,6 +36,8 @@ describe("messages context stack layout", () => {
     expect(userBubbleRule).toContain(
       "max-width: var(--message-user-bubble-max-width, 85%);",
     );
+    // 复制入口用叠层衬底，不再固定预留 padding-right（避免短气泡右侧空一块）
+    expect(userBubbleRule).not.toMatch(/padding-right\s*:/);
     expect(userStackRule).toContain(
       "width: var(--message-user-bubble-max-width, 85%);",
     );
@@ -43,6 +45,15 @@ describe("messages context stack layout", () => {
     expect(userStackRule).toContain("margin-left: auto;");
     expect(userStackRule).toContain("justify-items: end;");
     expect(stackedBubbleRule).toContain("max-width: 100%;");
+  });
+
+  it("overlays user bubble copy actions with a matching scrim instead of reserved width", () => {
+    const actionsRule = getCssRuleBlock(messagesPart1Css, ".message-user-bubble-actions");
+
+    expect(actionsRule).toContain("position: absolute;");
+    expect(actionsRule).toContain("pointer-events: none;");
+    expect(actionsRule).toMatch(/background:\s*color-mix\(/);
+    expect(actionsRule).toMatch(/box-shadow:\s*0 0 10px 6px/);
   });
 
   it("bounds appended user context cards inside the shared user column", () => {

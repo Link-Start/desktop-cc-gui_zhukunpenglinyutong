@@ -303,7 +303,7 @@
   display: grid;
   gap: 8px;
   justify-items: stretch;
-  padding-right: 36px;
+  /* 不再固定预留复制入口宽度：短气泡更紧凑，图标 hover 时叠层显示 */
   background: var(--color-message-user-bg, var(--surface-bubble-user));
   color: var(--color-message-user-text, #ffffff);
   border-radius: 12px;
@@ -314,21 +314,37 @@
   );
 }
 
-/* 复制按钮浮动到气泡右下角，脱离 grid 文档流(不再独占一行)，默认隐藏、悬停气泡时淡入 */
+/* 复制按钮浮动到气泡右下角，脱离文档流；默认隐藏，悬停/焦点时淡入并叠在正文上 */
 .message-user-bubble-actions {
   position: absolute;
-  right: 8px;
-  bottom: 6px;
+  right: 6px;
+  bottom: 4px;
   z-index: 2;
   opacity: 0;
   transform: translateY(4px);
   transition: opacity 160ms ease, transform 160ms ease;
+  pointer-events: none;
+  /* 气泡同色衬底 + 柔光，叠在末字上时仍可读 */
+  padding: 3px;
+  border-radius: 8px;
+  background: color-mix(
+    in srgb,
+    var(--color-message-user-bg, var(--surface-bubble-user)) 94%,
+    transparent
+  );
+  box-shadow: 0 0 10px 6px
+    color-mix(
+      in srgb,
+      var(--color-message-user-bg, var(--surface-bubble-user)) 78%,
+      transparent
+    );
 }
 
 .message.user .bubble:hover .message-user-bubble-actions,
 .message-user-bubble-actions:focus-within {
   opacity: 1;
   transform: translateY(0);
+  pointer-events: auto;
 }
 
 .message.user .message-action-button {
