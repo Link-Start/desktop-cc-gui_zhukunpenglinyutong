@@ -1469,7 +1469,6 @@ function ComposerImpl({
     todos: statusTodos,
     subagents: statusSubagents,
     todoTotal,
-    subagentTotal,
     commandTotal,
   } = useStatusPanelData(runStatusItemsForStrip, {
     isCodexEngine,

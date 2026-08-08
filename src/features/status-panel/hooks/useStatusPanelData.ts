@@ -909,7 +909,7 @@ function seedSubagentsFromChildTree(
     itemsByThread?: Record<string, ConversationItem[]>;
     /** S10 canvas child 列表（可含无 parent 的 subagent 行） */
     childSubagentThreadIds?: readonly string[] | null;
-    engine?: string | null;
+    engine?: EngineType | null;
   },
 ) {
   const parentById = options.threadParentById ?? {};
@@ -930,8 +930,7 @@ function seedSubagentsFromChildTree(
   if (childIds.length === 0) {
     return;
   }
-  const engineLabel =
-    (options.engine ?? "").toString().trim().toLowerCase() || "claude";
+  const engineLabel: EngineType = options.engine ?? "claude";
   childIds.forEach((childId) => {
     const threadScopedStatus = resolveThreadScopedSubagentStatus(
       childId,
