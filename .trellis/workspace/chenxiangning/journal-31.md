@@ -1552,3 +1552,49 @@ A+B 方案同步 isProcessing：协作蓝点/代理电、approve/retry 失败熄
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1340: 主幕布退役 subagent 小队卡片
+
+**Date**: 2026-08-08
+**Task**: 主幕布退役 subagent 小队卡片
+**Branch**: `cxn-version-0.8.4`
+
+### Summary
+
+从主幕布移除 SubagentSquadGrid/Ring，子代理主表面收敛到 ComposerRunStatusStrip；补齐 OpenSpec retire-canvas-subagent-squad-grid
+
+### Main Changes
+
+| 主题 | 说明 |
+|------|------|
+| 行为 | 幕布不再渲染「N 个助手」S10 小队；subagent tool 降级为 Generic 工具行 |
+| 主表面 | ComposerRunStatusStrip（pill + 展开行）+ StatusPanel + inspector |
+| 删除 | SubagentSquadGrid / SubagentRingCard / syntheticSharedSubagentTools + i18n squad* + CSS |
+| 保留 | PersonaCard / ProgressBar / subagent-ui utils enrich / isSubagentTool |
+| OpenSpec | 新增 retire-canvas-subagent-squad-grid；部分 supersede 既有 active change 的幕布 S10 表述 |
+
+**关键路径**:
+- `src/features/messages/**`（group / timeline / ToolBlock / MessagesCore）
+- `src/features/subagent-ui/**`
+- `src/i18n/locales/*/subagentUi.ts`
+- `openspec/changes/retire-canvas-subagent-squad-grid/**`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `61c8bf537` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
