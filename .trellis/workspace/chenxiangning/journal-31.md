@@ -1768,3 +1768,47 @@ A+B 方案同步 isProcessing：协作蓝点/代理电、approve/retry 失败熄
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1345: 协作上游喂料策略贯通与验收收口
+
+**Date**: 2026-08-08
+**Task**: 协作上游喂料策略贯通与验收收口
+**Branch**: `cxn-version-0.8.4`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 功能 | 模板 per-stage 吃摘要/吃全文；首段 full、移到首位强制 full |
+| 运行时 | prior_feed_notes + implement 追加上游；fact stageBindings 补 upstreamFeedMode |
+| Inspector | 吃全文/吃摘要徽章；注入区滚动与隐藏滚动条 |
+| UI | 模板帮助侧栏；协作 pill 去胶囊边框 |
+| 验证 | 人工验收通过；vitest 31；rust feed mode roundtrip ok |
+
+**Commits**
+- 4f4c053c6 注入上下文 Header
+- 07f095ec8 上游喂料策略贯通
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `07f095ec8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
