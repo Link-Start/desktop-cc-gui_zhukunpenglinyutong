@@ -1854,3 +1854,42 @@ A+B 方案同步 isProcessing：协作蓝点/代理电、approve/retry 失败熄
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1347: S10 退役后 Strip 宽识别与右侧详情补齐
+
+**Date**: 2026-08-08
+**Task**: S10 退役后 Strip 宽识别与右侧详情补齐
+**Branch**: `cxn-version-0.8.4`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 提交 | `ec9811c49` fix(subagent-ui): 补齐 S10 退役后 Strip 与右侧详情的宽识别与加载链路 |
+| 范围 | 14 文件；仅子代理 Strip / StatusPanel / Inspector；未混 session HUD/配额 WIP |
+| 要点 | isSubagentTool 宽扫；child 种子；session 身份解析；launch ack 不挡幕布；父线补 assistant |
+| 验证 | 相关 vitest 通过；手测多引擎历史/详情基本可用 |
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ec9811c49` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
