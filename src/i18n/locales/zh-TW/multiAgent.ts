@@ -134,7 +134,31 @@ export default {
       "roundBlockedTitle": "輪次尚未開始",
       "roundBlocked": "該輪次尚未開始。",
       "nextRoundHint": "目前輪完成後再次傳送即開啟下一輪。",
-      "personaAgent": "智慧體 {{name}}"
+      "personaAgent": "智慧體 {{name}}",
+      "inject": {
+        "title": "注入上下文",
+        "summaryFallback": "本節點上下文",
+        "itemCount": "{{n}} 項",
+        "pipeAria": "上下文流水線",
+        "pipeUser": "使用者",
+        "pipeNote": "批准補充",
+        "pipeRole": "本環節",
+        "paneList": "內容清單",
+        "paneTrace": "上下文溯源",
+        "sectionUser": "使用者任務",
+        "sectionNote": "批准補充",
+        "sectionUpstream": "上游",
+        "sectionUpstreamNamed": "上游 · {{name}}",
+        "sectionRole": "本環節指令",
+        "noteMeta": "已注入後續環節的執行提示",
+        "upstreamMeta": "含規劃摘要與上一節點產出（解釋用，非完整 prompt）",
+        "expandBody": "展開全文",
+        "collapseBody": "收起",
+        "jumpStage": "開啟節點",
+        "traceHint": "點擊定位到內容清單對應分區；需要切換節點請點「開啟節點」。",
+        "pipeFocusHint": "定位到「{{label}}」分區",
+        "currentBadge": "目前"
+      }
     },
     "template": {
       "modalTitle": "⚡ 協作範本管理",

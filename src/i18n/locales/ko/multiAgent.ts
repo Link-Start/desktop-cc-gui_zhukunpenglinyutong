@@ -134,7 +134,31 @@ export default {
       "roundBlockedTitle": "라운드 미시작",
       "roundBlocked": "이 라운드는 아직 시작되지 않았습니다.",
       "nextRoundHint": "현재 라운드가 끝난 뒤 다시 보내면 다음 라운드가 시작됩니다.",
-      "personaAgent": "에이전트 {{name}}"
+      "personaAgent": "에이전트 {{name}}",
+      "inject": {
+        "title": "주입 컨텍스트",
+        "summaryFallback": "이 단계 컨텍스트",
+        "itemCount": "{{n}}개",
+        "pipeAria": "컨텍스트 파이프라인",
+        "pipeUser": "사용자",
+        "pipeNote": "승인 메모",
+        "pipeRole": "이 단계",
+        "paneList": "내용 목록",
+        "paneTrace": "출처 추적",
+        "sectionUser": "사용자 작업",
+        "sectionNote": "승인 메모",
+        "sectionUpstream": "업스트림",
+        "sectionUpstreamNamed": "업스트림 · {{name}}",
+        "sectionRole": "단계 지시",
+        "noteMeta": "이후 단계 실행 프롬프트에 주입됨",
+        "upstreamMeta": "계획 요약과 이전 단계 결과 포함(설명용, 전체 prompt 아님)",
+        "expandBody": "더 보기",
+        "collapseBody": "접기",
+        "jumpStage": "단계 열기",
+        "traceHint": "클릭하면 내용 목록의 해당 섹션을 강조합니다. 카드 전환은 「단계 열기」.",
+        "pipeFocusHint": "「{{label}}」 섹션 강조",
+        "currentBadge": "현재"
+      }
     },
     "template": {
       "modalTitle": "⚡ 협업 템플릿",

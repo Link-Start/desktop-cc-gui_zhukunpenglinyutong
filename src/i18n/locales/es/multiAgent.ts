@@ -134,7 +134,31 @@ export default {
       "roundBlockedTitle": "Ronda no iniciada",
       "roundBlocked": "Esta ronda aún no ha empezado.",
       "nextRoundHint": "Envía de nuevo al terminar la ronda actual para la siguiente.",
-      "personaAgent": "Agente {{name}}"
+      "personaAgent": "Agente {{name}}",
+      "inject": {
+        "title": "Contexto inyectado",
+        "summaryFallback": "Contexto de esta etapa",
+        "itemCount": "{{n}} elementos",
+        "pipeAria": "Canal de contexto",
+        "pipeUser": "Usuario",
+        "pipeNote": "Nota de aprobación",
+        "pipeRole": "Esta etapa",
+        "paneList": "Contenido",
+        "paneTrace": "Procedencia",
+        "sectionUser": "Tarea del usuario",
+        "sectionNote": "Nota de aprobación",
+        "sectionUpstream": "Upstream",
+        "sectionUpstreamNamed": "Upstream · {{name}}",
+        "sectionRole": "Instrucciones de etapa",
+        "noteMeta": "Inyectado en los prompts de etapas posteriores",
+        "upstreamMeta": "Incluye resumen del plan y el resultado de la etapa previa (explicativo, no el prompt completo)",
+        "expandBody": "Mostrar más",
+        "collapseBody": "Mostrar menos",
+        "jumpStage": "Abrir etapa",
+        "traceHint": "Clic para resaltar la sección. Usa «Abrir etapa» para cambiar de tarjeta.",
+        "pipeFocusHint": "Resaltar sección «{{label}}»",
+        "currentBadge": "Actual"
+      }
     },
     "template": {
       "modalTitle": "⚡ Plantillas collab",

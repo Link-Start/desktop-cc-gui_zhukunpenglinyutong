@@ -134,7 +134,31 @@ export default {
       "roundBlockedTitle": "Раунд не начат",
       "roundBlocked": "Этот раунд ещё не начался.",
       "nextRoundHint": "Отправьте снова после текущего раунда, чтобы начать следующий.",
-      "personaAgent": "Агент {{name}}"
+      "personaAgent": "Агент {{name}}",
+      "inject": {
+        "title": "Внедрённый контекст",
+        "summaryFallback": "Контекст этапа",
+        "itemCount": "{{n}} эл.",
+        "pipeAria": "Конвейер контекста",
+        "pipeUser": "Пользователь",
+        "pipeNote": "Заметка одобрения",
+        "pipeRole": "Этот этап",
+        "paneList": "Содержание",
+        "paneTrace": "Происхождение",
+        "sectionUser": "Задача пользователя",
+        "sectionNote": "Заметка одобрения",
+        "sectionUpstream": "Апстрим",
+        "sectionUpstreamNamed": "Апстрим · {{name}}",
+        "sectionRole": "Инструкции этапа",
+        "noteMeta": "Внедрено в промпты последующих этапов",
+        "upstreamMeta": "Включает краткое описание плана и итог предыдущего этапа (для пояснения, не полный prompt)",
+        "expandBody": "Показать больше",
+        "collapseBody": "Свернуть",
+        "jumpStage": "Открыть этап",
+        "traceHint": "Клик — подсветить раздел. «Открыть этап» — переключить карточку.",
+        "pipeFocusHint": "Подсветить раздел «{{label}}»",
+        "currentBadge": "Текущий"
+      }
     },
     "template": {
       "modalTitle": "⚡ Шаблоны коллаба",

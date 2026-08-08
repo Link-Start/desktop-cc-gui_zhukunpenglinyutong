@@ -134,7 +134,31 @@ export default {
       "roundBlockedTitle": "राउंड शुरू नहीं",
       "roundBlocked": "यह राउंड अभी शुरू नहीं हुआ।",
       "nextRoundHint": "वर्तमान राउंड खत्म होने पर फिर भेजें।",
-      "personaAgent": "एजेंट {{name}}"
+      "personaAgent": "एजेंट {{name}}",
+      "inject": {
+        "title": "इंजेक्टेड संदर्भ",
+        "summaryFallback": "इस चरण का संदर्भ",
+        "itemCount": "{{n}} आइटम",
+        "pipeAria": "संदर्भ पाइपलाइन",
+        "pipeUser": "उपयोगकर्ता",
+        "pipeNote": "अनुमोदन नोट",
+        "pipeRole": "यह चरण",
+        "paneList": "सामग्री",
+        "paneTrace": "उत्पत्ति",
+        "sectionUser": "उपयोगकर्ता कार्य",
+        "sectionNote": "अनुमोदन नोट",
+        "sectionUpstream": "अपस्ट्रीम",
+        "sectionUpstreamNamed": "अपस्ट्रीम · {{name}}",
+        "sectionRole": "चरण निर्देश",
+        "noteMeta": "बाद के चरण प्रॉम्प्ट में इंजेक्ट किया गया",
+        "upstreamMeta": "योजना सारांश और पिछली चरण आउटपुट शामिल (व्याख्यात्मक, पूरा prompt नहीं)",
+        "expandBody": "और दिखाएँ",
+        "collapseBody": "कम दिखाएँ",
+        "jumpStage": "चरण खोलें",
+        "traceHint": "अनुभाग हाइलाइट करने के लिए क्लिक करें। कार्ड बदलने के लिए «चरण खोलें»।",
+        "pipeFocusHint": "«{{label}}» अनुभाग हाइलाइट करें",
+        "currentBadge": "वर्तमान"
+      }
     },
     "template": {
       "modalTitle": "⚡ Collab टेम्पलेट",

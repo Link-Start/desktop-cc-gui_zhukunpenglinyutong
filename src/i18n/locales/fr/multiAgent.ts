@@ -134,7 +134,31 @@ export default {
       "roundBlockedTitle": "Tour non démarré",
       "roundBlocked": "Ce tour n’a pas encore commencé.",
       "nextRoundHint": "Renvoyez après la fin du tour actuel pour enchaîner.",
-      "personaAgent": "Agent {{name}}"
+      "personaAgent": "Agent {{name}}",
+      "inject": {
+        "title": "Contexte injecté",
+        "summaryFallback": "Contexte de cette étape",
+        "itemCount": "{{n}} éléments",
+        "pipeAria": "Pipeline de contexte",
+        "pipeUser": "Utilisateur",
+        "pipeNote": "Note d'approbation",
+        "pipeRole": "Cette étape",
+        "paneList": "Contenu",
+        "paneTrace": "Provenance",
+        "sectionUser": "Tâche utilisateur",
+        "sectionNote": "Note d'approbation",
+        "sectionUpstream": "Amont",
+        "sectionUpstreamNamed": "Amont · {{name}}",
+        "sectionRole": "Instructions d'étape",
+        "noteMeta": "Injecté dans les prompts des étapes suivantes",
+        "upstreamMeta": "Inclut le résumé du plan et le résultat de l'étape précédente (explicatif, pas le prompt complet)",
+        "expandBody": "Afficher plus",
+        "collapseBody": "Réduire",
+        "jumpStage": "Ouvrir l'étape",
+        "traceHint": "Clic pour surligner la section. Utilisez « Ouvrir l'étape » pour changer de carte.",
+        "pipeFocusHint": "Surligner la section « {{label}} »",
+        "currentBadge": "Actuel"
+      }
     },
     "template": {
       "modalTitle": "⚡ Modèles collab",

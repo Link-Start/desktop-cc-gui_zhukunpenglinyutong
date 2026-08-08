@@ -134,7 +134,31 @@ export default {
       "roundBlockedTitle": "Rodada não iniciada",
       "roundBlocked": "Esta rodada ainda não começou.",
       "nextRoundHint": "Envie de novo após a rodada atual para iniciar a próxima.",
-      "personaAgent": "Agente {{name}}"
+      "personaAgent": "Agente {{name}}",
+      "inject": {
+        "title": "Contexto injetado",
+        "summaryFallback": "Contexto desta etapa",
+        "itemCount": "{{n}} itens",
+        "pipeAria": "Pipeline de contexto",
+        "pipeUser": "Usuário",
+        "pipeNote": "Nota de aprovação",
+        "pipeRole": "Esta etapa",
+        "paneList": "Conteúdo",
+        "paneTrace": "Procedência",
+        "sectionUser": "Tarefa do usuário",
+        "sectionNote": "Nota de aprovação",
+        "sectionUpstream": "Upstream",
+        "sectionUpstreamNamed": "Upstream · {{name}}",
+        "sectionRole": "Instruções da etapa",
+        "noteMeta": "Injetado nos prompts das etapas seguintes",
+        "upstreamMeta": "Inclui resumo do plano e resultado da etapa anterior (explicativo, não o prompt completo)",
+        "expandBody": "Mostrar mais",
+        "collapseBody": "Mostrar menos",
+        "jumpStage": "Abrir etapa",
+        "traceHint": "Clique para destacar a seção. Use «Abrir etapa» para trocar o cartão.",
+        "pipeFocusHint": "Destacar seção «{{label}}»",
+        "currentBadge": "Atual"
+      }
     },
     "template": {
       "modalTitle": "⚡ Modelos collab",

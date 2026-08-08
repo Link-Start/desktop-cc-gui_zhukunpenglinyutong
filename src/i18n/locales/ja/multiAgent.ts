@@ -134,7 +134,31 @@ export default {
       "roundBlockedTitle": "ラウンド未開始",
       "roundBlocked": "このラウンドはまだ始まっていません。",
       "nextRoundHint": "現ラウンド終了後に再送信すると次ラウンドが始まります。",
-      "personaAgent": "エージェント {{name}}"
+      "personaAgent": "エージェント {{name}}",
+      "inject": {
+        "title": "注入コンテキスト",
+        "summaryFallback": "この段階のコンテキスト",
+        "itemCount": "{{n}} 件",
+        "pipeAria": "コンテキストパイプライン",
+        "pipeUser": "ユーザー",
+        "pipeNote": "承認メモ",
+        "pipeRole": "本段階",
+        "paneList": "内容一覧",
+        "paneTrace": "出所トレース",
+        "sectionUser": "ユーザータスク",
+        "sectionNote": "承認メモ",
+        "sectionUpstream": "上流",
+        "sectionUpstreamNamed": "上流 · {{name}}",
+        "sectionRole": "段階指示",
+        "noteMeta": "後続段階の実行プロンプトに注入済み",
+        "upstreamMeta": "計画要約と直前段階の成果を含む（説明用・完全な prompt ではない）",
+        "expandBody": "全文を表示",
+        "collapseBody": "折りたたむ",
+        "jumpStage": "段階を開く",
+        "traceHint": "クリックで内容一覧の該当セクションを強調。「段階を開く」でカード切替。",
+        "pipeFocusHint": "「{{label}}」セクションを強調",
+        "currentBadge": "現在"
+      }
     },
     "template": {
       "modalTitle": "⚡ コラボテンプレート",

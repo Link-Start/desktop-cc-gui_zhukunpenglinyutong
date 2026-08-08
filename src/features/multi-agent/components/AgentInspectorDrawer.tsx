@@ -34,6 +34,7 @@ import {
   stageInspectorTypeLine,
   stageStatusText,
 } from "../utils/format";
+import { StageInjectContextHeader } from "./StageInjectContextHeader";
 
 function useLivePhase(
   workspaceId: string | null | undefined,
@@ -326,6 +327,19 @@ export function AgentInspectorDrawer() {
           </button>
         </div>
       </div>
+
+      {stage ? (
+        <StageInjectContextHeader
+          projection={projection}
+          stage={stage}
+          stageIndex={safeIndex}
+          onJumpStage={(stageId) => {
+            const idx = stages.findIndex((item) => item.id === stageId);
+            if (idx >= 0) showCard(idx);
+            else selectAgentStage(stageId);
+          }}
+        />
+      ) : null}
 
       <div className="subagent-inspector-body is-session-canvas">
         {canvasItems.length > 0 ? (
