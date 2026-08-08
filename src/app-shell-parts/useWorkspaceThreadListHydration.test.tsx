@@ -6,6 +6,9 @@ import {
   getStartupTraceSnapshot,
   resetStartupTraceForTests,
 } from "../features/startup-orchestration/utils/startupTrace";
+import { resetFullCatalogAutoRetryForTests } from "../features/startup-orchestration/utils/fullCatalogAutoRetry";
+import { resetStartupGateReadyForTests } from "../features/startup-orchestration/utils/startupGateReady";
+import { resetStartupForceEnterForTests } from "../features/startup-orchestration/utils/startupForceEnter";
 import { useWorkspaceThreadListHydration } from "./useWorkspaceThreadListHydration";
 
 let restoreIdleCallbackForTest: (() => void) | null = null;
@@ -56,6 +59,9 @@ describe("useWorkspaceThreadListHydration", () => {
   beforeEach(async () => {
     vi.useRealTimers();
     resetStartupTraceForTests();
+    resetFullCatalogAutoRetryForTests();
+    resetStartupGateReadyForTests();
+    resetStartupForceEnterForTests();
     // Flush pending cold-start timers / microtasks left by prior tests.
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -213,7 +219,7 @@ describe("useWorkspaceThreadListHydration", () => {
       expect(listThreadsForWorkspace.mock.calls.length).toBeGreaterThanOrEqual(1);
     });
 
-    // Manual tracked without phase map entry → on-demand full-catalog.
+    // After first-paint, manual tracked without phase map → full-catalog (active phase).
     await act(async () => {
       await result.current.listThreadsForWorkspaceTracked(workspaces[0]!);
     });
@@ -229,7 +235,60 @@ describe("useWorkspaceThreadListHydration", () => {
       (event): event is Extract<typeof event, { type: "task" }> =>
         event.type === "task" && event.taskId === "thread-list:full-catalog:ws-1",
     );
-    expect(fullCatalogEvents.some((event) => event.phase === "on-demand")).toBe(true);
+    expect(
+      fullCatalogEvents.some(
+        (event) =>
+          event.phase === "active-workspace" || event.phase === "on-demand",
+      ),
+    ).toBe(true);
+  });
+
+  it("does not stamp startup-gate-ready from full-catalog timeout", async () => {
+    vi.useFakeTimers();
+    const workspaces = [createWorkspace("ws-1")];
+    const listThreadsForWorkspace = vi.fn().mockImplementation(
+      () => new Promise(() => {}),
+    );
+
+    renderHook(() =>
+      useWorkspaceThreadListHydration({
+        activeWorkspaceId: "ws-1",
+        activeWorkspaceProjectionOwnerIds: ["ws-1"],
+        listThreadsForWorkspace,
+        threadListLoadingByWorkspace: {},
+        workspaces,
+        workspacesById: new Map(workspaces.map((workspace) => [workspace.id, workspace])),
+      }),
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    // first-paint hang → timeout 8s settles with timeout sentinel and stamps gate
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(8_000);
+    });
+    expect(getStartupTraceSnapshot().milestones["startup-gate-ready"]).toBeTruthy();
+
+    // Drive idle full-catalog schedule; hang past 20s timeout
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6_000);
+    });
+    const gateSeqBefore = getStartupTraceSnapshot().events.filter(
+      (e) => e.type === "milestone" && e.milestone === "startup-gate-ready",
+    ).length;
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20_000);
+    });
+
+    const gateSeqAfter = getStartupTraceSnapshot().events.filter(
+      (e) => e.type === "milestone" && e.milestone === "startup-gate-ready",
+    ).length;
+    // Full timeout must not re-stamp / must not be the only path — count stays 1
+    expect(gateSeqAfter).toBe(gateSeqBefore);
+
+    vi.useRealTimers();
   });
 
   it("runs first-paint then full-catalog for active workspace cold start", async () => {
@@ -283,7 +342,7 @@ describe("useWorkspaceThreadListHydration", () => {
     );
   });
 
-  it("prioritizes active first-paint hydration before unrelated idle workspaces", async () => {
+  it("prioritizes active first-paint and defers unrelated workspaces until gate", async () => {
     const restoreIdleCallback = installImmediateIdleCallback();
     const workspaces = [createWorkspace("ws-older"), createWorkspace("ws-active")];
     const listThreadsForWorkspace = vi.fn<
@@ -315,7 +374,13 @@ describe("useWorkspaceThreadListHydration", () => {
       );
     });
 
-    // Full-catalog follow-up for active may interleave; eventually older workspace loads.
+    // First list call must be active only.
+    expect(listThreadsForWorkspace.mock.calls[0]?.[0]?.id).toBe("ws-active");
+
+    // After active first-paint stamps gate, idle prewarm may load older.
+    await waitFor(() => {
+      expect(getStartupTraceSnapshot().milestones["startup-gate-ready"]).toBeTruthy();
+    });
     await waitFor(() => {
       expect(
         listThreadsForWorkspace.mock.calls.some(
@@ -323,7 +388,33 @@ describe("useWorkspaceThreadListHydration", () => {
         ),
       ).toBe(true);
     });
+    // Active still first in the sequence.
+    expect(listThreadsForWorkspace.mock.calls[0]?.[0]?.id).toBe("ws-active");
     restoreIdleCallback();
+  });
+
+  it("blocks non-active listThreadsForWorkspaceTracked during cold-start", async () => {
+    const workspaces = [createWorkspace("ws-side"), createWorkspace("ws-active")];
+    const listThreadsForWorkspace = vi.fn().mockResolvedValue(undefined);
+
+    const { result } = renderHook(() =>
+      useWorkspaceThreadListHydration({
+        activeWorkspaceId: "ws-active",
+        activeWorkspaceProjectionOwnerIds: [],
+        listThreadsForWorkspace,
+        threadListLoadingByWorkspace: {},
+        workspaces,
+        workspacesById: new Map(workspaces.map((workspace) => [workspace.id, workspace])),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspaceTracked(workspaces[0]!);
+    });
+    // Side workspace skipped (stale no-op) before gate.
+    expect(
+      listThreadsForWorkspace.mock.calls.some((call) => call[0]?.id === "ws-side"),
+    ).toBe(false);
   });
 
   it("cancels previous workspace hydration when active workspace switches", async () => {

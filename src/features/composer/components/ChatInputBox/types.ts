@@ -783,6 +783,8 @@ export interface ButtonAreaProps {
   permissionMode?: PermissionMode;
   /** Current provider */
   currentProvider?: string;
+  /** Active provider profile id (managed providers: deepseek/minimax/kimi/…) */
+  currentProviderProfileId?: string | null;
   /** Provider availability override (installed state from host app) */
   providerAvailability?: Partial<Record<ProviderId, boolean>>;
   /** Provider CLI versions (from host app detection) */

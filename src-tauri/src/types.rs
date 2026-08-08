@@ -2121,6 +2121,9 @@ pub(crate) struct ProviderConfig {
     pub(crate) is_local_provider: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) settings_config: Option<serde_json::Value>,
+    /// Provider-owned custom models (symmetric with CodexProviderConfig).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) custom_models: Option<Vec<CodexCustomModel>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

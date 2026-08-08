@@ -46,6 +46,7 @@ import {
   type ExecutionTarget,
 } from "../../shared-session/target/types";
 import { persistSharedSessionSelectedTarget } from "../../shared-session/services/sharedSessions";
+import { shouldSuppressSharedTargetPersistToast } from "../../shared-session/target/sharedTargetPersistErrors";
 import { resolveComposerAtomicSelectedModelId } from "../utils/resolveComposerAtomicSelectedModelId";
 import { resolveDefaultCreationExecutionTarget } from "../utils/resolveDefaultCreationExecutionTarget";
 import { isSharedSessionThreadId } from "../../shared-session/utils/sharedSessionIdentity";
@@ -91,12 +92,18 @@ import type {
   SelectedAgent as ChatInputSelectedAgent,
 } from "./ChatInputBox/types";
 import { useStatusPanelData } from "../../status-panel/hooks/useStatusPanelData";
-import { ComposerRunStatusStrip } from "./run-status";
-import { isEngineCapabilityAvailable } from "../../engine/engineCapabilityMatrix";
 import {
-  buildTurnFileChangesByBoundaryId,
-  mergeTurnFileChangesSummaries,
-} from "../../messages/utils/turnFileChanges";
+  ComposerRunStatusStrip,
+  collectRunStatusSubagentSourceItems,
+} from "./run-status";
+import { isEngineCapabilityAvailable } from "../../engine/engineCapabilityMatrix";
+import { overlaySessionFileChangesWithGitStats } from "../../messages/utils/turnFileChanges";
+import {
+  ingestFileEditsFromConversationItems,
+  removeFileEditPaths,
+} from "../../session-side-effects/sessionSideEffectLedger";
+import { useActiveCanvasSelector } from "../../layout/hooks/activeCanvasStore";
+import { enrichTimelineWithSyntheticSubagentsBeforeCollapse } from "../../subagent-ui";
 import {
   assembleSinglePrompt,
   expandLeadingManagedCommand,
@@ -403,6 +410,19 @@ type ComposerProps = {
   plan?: TurnPlan | null;
   isPlanMode?: boolean;
   onOpenDiffPath?: (path: string) => void;
+  /**
+   * 工作区 git 脏文件（含行统计）。会话「已编辑」pill 的 +/− 以此为准，
+   * path 集合仍来自本会话 AI 工具调用。
+   */
+  gitChangedFiles?: Array<{
+    path: string;
+    additions: number;
+    deletions: number;
+  }> | null;
+  /** 非 git 仓库时传 false，退回 tool 统计 */
+  isGitRepository?: boolean;
+  /** AI 改文件后请求刷新 git status（防抖由 Composer 侧触发） */
+  onRequestGitStatusRefresh?: () => void;
   /** 撤销会话已编辑列表中的单个文件（git restore） */
   onRevertFile?: (path: string) => void | Promise<void>;
   /** 撤销会话已编辑列表中的多个文件 */
@@ -667,6 +687,9 @@ function ComposerImpl({
   plan = null,
   isPlanMode = false,
   onOpenDiffPath,
+  gitChangedFiles = null,
+  isGitRepository = true,
+  onRequestGitStatusRefresh,
   onRevertFile,
   onRevertAllFiles,
   onRewind,
@@ -1093,6 +1116,15 @@ function ComposerImpl({
   const sharedTargetPersistenceByThreadRef = useRef(
     new Map<string, Promise<void>>(),
   );
+  // 异步 persist 晚于切 workspace/thread 时用 ref 判断「用户是否还在该会话」。
+  const activeSharedPersistScopeRef = useRef({
+    workspaceId: activeWorkspaceId,
+    threadId: activeThreadId,
+  });
+  activeSharedPersistScopeRef.current = {
+    workspaceId: activeWorkspaceId,
+    threadId: activeThreadId,
+  };
   const handleSharedTargetChange = useCallback(
     (target: ExecutionTarget) => {
       if (!activeWorkspaceId || !activeThreadId || sharedTargetPickerLocked) {
@@ -1133,12 +1165,24 @@ function ComposerImpl({
           });
         })
         .catch((error) => {
-          // 持久化失败：回滚到变更前值。
+          // 持久化失败：回滚到变更前值（不依赖 toast）。
           hydrateSharedTargetState(
             workspaceId,
             threadId,
             previousTarget ?? null,
           );
+          const scope = activeSharedPersistScopeRef.current;
+          if (
+            shouldSuppressSharedTargetPersistToast(error, {
+              persistWorkspaceId: workspaceId,
+              persistThreadId: threadId,
+              activeWorkspaceId: scope.workspaceId,
+              activeThreadId: scope.threadId,
+            })
+          ) {
+            // 切走会话 / meta 缺失：静默，避免用户只切空间/会话却被红字吓到。
+            return;
+          }
           pushErrorToast({
             title: t("sharedSend.selectionPersistFailedTitle"),
             message: t("sharedSend.selectionPersistFailedMessage", {
@@ -1347,33 +1391,202 @@ function ComposerImpl({
   ] = useState(false);
   const shouldDeferStatusSummary =
     isProcessing && isComposerInputInteractionActive;
+  // —— 子代理 Strip 源：S10 同源合成，只喂 Strip，不进主幕布 ——
+  // 断点修复：useStatusPanelData 在传入 itemsByThread 时只扫表内条目，
+  // 必须把「含 synthetic spawn」的 items 写回 activeThread 槽位，否则合成等于没接。
+  const canvasChildSubagentThreads = useActiveCanvasSelector(
+    (snapshot) => snapshot.childSubagentThreads,
+  );
+  const canvasThreadIdForStrip = useActiveCanvasSelector(
+    (snapshot) => snapshot.threadId,
+  );
+  const canvasStatusById = useActiveCanvasSelector(
+    (snapshot) => snapshot.threadStatusById,
+  );
+  const canvasItemsByThread = useActiveCanvasSelector(
+    (snapshot) => snapshot.threadItemsByThread,
+  );
+  // 子线程：canvas 过滤 + threadParentById 上挂到当前会话的 id（Shared 历史常用）
+  const stripChildThreads = useMemo(() => {
+    const byId = new Map(
+      canvasChildSubagentThreads.map((thread) => [thread.id, thread]),
+    );
+    const parentMap = threadParentById ?? {};
+    const activeId = (activeThreadId ?? "").trim();
+    if (activeId) {
+      for (const [childId, parentId] of Object.entries(parentMap)) {
+        if (parentId !== activeId || !childId || childId === activeId) continue;
+        if (byId.has(childId)) continue;
+        byId.set(childId, {
+          id: childId,
+          name: childId,
+          updatedAt: 0,
+          engineSource: selectedEngine ?? "claude",
+        });
+      }
+    }
+    return Array.from(byId.values());
+  }, [
+    canvasChildSubagentThreads,
+    threadParentById,
+    activeThreadId,
+    selectedEngine,
+  ]);
+  const runStatusItemsWithSyntheticSubagents = useMemo(
+    () =>
+      enrichTimelineWithSyntheticSubagentsBeforeCollapse({
+        items: performanceScopedItems,
+        ownThreadId: activeThreadId,
+        canvasThreadId: canvasThreadIdForStrip ?? activeThreadId,
+        activeEngine: selectedEngine ?? null,
+        childThreads: stripChildThreads,
+        statusById: canvasStatusById,
+        itemsByThread: canvasItemsByThread,
+      }),
+    [
+      performanceScopedItems,
+      activeThreadId,
+      canvasThreadIdForStrip,
+      selectedEngine,
+      stripChildThreads,
+      canvasStatusById,
+      canvasItemsByThread,
+    ],
+  );
+  // 实时协作：worker 工具事实隔离在 agent-canvas:{shared}:{attempt}，
+  // 主幕 shared: 只有消息/汇总 → 把本会话 agent-canvas 的 subagent 工具并入扫描源。
+  const runStatusItemsForStrip = useMemo(
+    () =>
+      collectRunStatusSubagentSourceItems({
+        mainItems: runStatusItemsWithSyntheticSubagents,
+        threadItemsByThread: canvasItemsByThread ?? threadItemsByThread,
+        activeThreadId,
+      }),
+    [
+      runStatusItemsWithSyntheticSubagents,
+      canvasItemsByThread,
+      threadItemsByThread,
+      activeThreadId,
+    ],
+  );
+  // 关键：把合成后的 items 写入 activeThread，供 collectScopedToolEntries 扫到
+  const itemsByThreadForRunStatus = useMemo(() => {
+    const base = {
+      ...(canvasItemsByThread ?? {}),
+      ...(threadItemsByThread ?? {}),
+    };
+    const activeId = (activeThreadId ?? "").trim();
+    if (!activeId) return base;
+    return {
+      ...base,
+      [activeId]: runStatusItemsForStrip,
+    };
+  }, [
+    canvasItemsByThread,
+    threadItemsByThread,
+    activeThreadId,
+    runStatusItemsForStrip,
+  ]);
   const {
     todos: statusTodos,
     subagents: statusSubagents,
     todoTotal,
-    subagentTotal,
     commandTotal,
-  } = useStatusPanelData(performanceScopedItems, {
+  } = useStatusPanelData(runStatusItemsForStrip, {
     isCodexEngine,
     activeEngine: selectedEngine ?? null,
     activeThreadId,
-    itemsByThread: threadItemsByThread,
+    itemsByThread: itemsByThreadForRunStatus,
     threadParentById,
-    threadStatusById,
+    threadStatusById: threadStatusById ?? canvasStatusById,
+    // S10 同源子代理线程（含 Shared 无 parent 的 claude:subagent:owner:*）
+    childSubagentThreadIds: stripChildThreads.map((thread) => thread.id),
     deferSummary: shouldDeferStatusSummary,
   });
-  const sessionFileChanges = useMemo(() => {
-    const byBoundary = buildTurnFileChangesByBoundaryId(performanceScopedItems);
-    return mergeTurnFileChangesSummaries(byBoundary.values());
-  }, [performanceScopedItems]);
+  // 已编辑：ledger 合成主线∪agent-canvas（Shared/协作 fan-in），用未 deferred items 保证实时
+  const sessionToolFileChanges = useMemo(() => {
+    return ingestFileEditsFromConversationItems({
+      threadId: activeThreadId,
+      mainItems: items,
+      threadItemsByThread: threadItemsByThread ?? canvasItemsByThread,
+    });
+  }, [items, threadItemsByThread, canvasItemsByThread, activeThreadId]);
+
+  // 回合结束后 git 刷新有延迟：短 grace 内仍允许 tool 临时数，避免 pill 闪空
+  const [gitOverlayGrace, setGitOverlayGrace] = useState(false);
+  useEffect(() => {
+    if (isProcessing) {
+      setGitOverlayGrace(true);
+      return;
+    }
+    const timer = window.setTimeout(() => setGitOverlayGrace(false), 1600);
+    return () => window.clearTimeout(timer);
+  }, [isProcessing]);
+
+  // 行统计对齐 git status；进行中/grace 内允许 tool 临时数，稳定后只保留仍 dirty 的 path
+  const sessionFileChanges = useMemo(
+    () =>
+      overlaySessionFileChangesWithGitStats(
+        sessionToolFileChanges,
+        isGitRepository ? gitChangedFiles : null,
+        {
+          workspacePath: activeWorkspacePath ?? null,
+          allowToolProvisional: Boolean(isProcessing) || gitOverlayGrace,
+        },
+      ),
+    [
+      activeWorkspacePath,
+      gitChangedFiles,
+      gitOverlayGrace,
+      isGitRepository,
+      isProcessing,
+      sessionToolFileChanges,
+    ],
+  );
+
+  // AI 改文件后尽快刷 git，避免 pill 长期停在 tool 临时数或虚高累加
+  const sessionToolFileSignature = useMemo(() => {
+    if (!sessionToolFileChanges) return "";
+    return sessionToolFileChanges.files
+      .map((file) => `${file.path}:${file.additions}:${file.deletions}`)
+      .join("|");
+  }, [sessionToolFileChanges]);
+
+  useEffect(() => {
+    if (!onRequestGitStatusRefresh || !isGitRepository) return;
+    if (!sessionToolFileSignature) return;
+    const timer = window.setTimeout(() => {
+      onRequestGitStatusRefresh();
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [
+    isGitRepository,
+    onRequestGitStatusRefresh,
+    sessionToolFileSignature,
+  ]);
+
+  const handleRevertFileForStrip = useCallback(
+    async (path: string) => {
+      await onRevertFile?.(path);
+      removeFileEditPaths(activeThreadId, [path]);
+    },
+    [activeThreadId, onRevertFile],
+  );
+  const handleRevertAllFilesForStrip = useCallback(
+    async (paths: string[]) => {
+      await onRevertAllFiles?.(paths);
+      removeFileEditPaths(activeThreadId, paths);
+    },
+    [activeThreadId, onRevertAllFiles],
+  );
   const mergePlanIntoTodos =
     isCodexEngine &&
     selectedEngine != null &&
     isEngineCapabilityAvailable(selectedEngine, "collaboration.mode");
+  // 底部 legacy dock 活动：子代理已迁到 Strip 独立判定，不并入此铁律
   const hasStatusPanelActivity = useMemo(() => {
     const hasLegacyActivity =
       todoTotal > 0 ||
-      subagentTotal > 0 ||
       Boolean(sessionFileChanges) ||
       isPlanMode ||
       Boolean(plan);
@@ -1387,7 +1600,6 @@ function ComposerImpl({
     isPlanMode,
     plan,
     sessionFileChanges,
-    subagentTotal,
     todoTotal,
   ]);
   // 底部 dock 已退役；toggle 仅兼容旧 override，默认不再展示。
@@ -3150,10 +3362,15 @@ function ComposerImpl({
               isProcessing={Boolean(isProcessing)}
               mergePlanIntoTodos={mergePlanIntoTodos}
               sessionFileChanges={sessionFileChanges}
+              sessionScopeKey={activeThreadId ?? null}
               isCodexEngine={isCodexEngine}
               onOpenDiffPath={onOpenDiffPath}
-              onRevertFile={onRevertFile}
-              onRevertAllFiles={onRevertAllFiles}
+              onRevertFile={
+                onRevertFile ? handleRevertFileForStrip : undefined
+              }
+              onRevertAllFiles={
+                onRevertAllFiles ? handleRevertAllFilesForStrip : undefined
+              }
             />
             <ChatInputBoxAdapter
               ref={chatInputRef}
@@ -3166,26 +3383,6 @@ function ComposerImpl({
               streamActivityPhase={resolvedComposerStreamActivityPhase}
               canStop={canStop}
               onSend={handleSend}
-              squadSurface={
-                isSharedSessionResolved ? (
-                  <MultiAgentComposerToggle
-                    engine={selectedAtomicTarget?.engine}
-                    armed={agentArmed || collabRunActive}
-                    disabled={
-                      disabled ||
-                      effectiveSubmitDisabled ||
-                      !isResolvedExecutionTarget(selectedAtomicTarget) ||
-                      collabRunActive
-                    }
-                    hasActiveRun={collabRunActive}
-                    onToggle={() => {
-                      if (collabRunActive) return;
-                      setAgentArmed((armed) => !armed);
-                    }}
-                    onArm={() => setAgentArmed(true)}
-                  />
-                ) : undefined
-              }
               onStop={onStop}
               onTextChange={handleTextChangeWithHistory}
               selectedModelId={resolveComposerAtomicSelectedModelId({
@@ -3339,40 +3536,70 @@ function ComposerImpl({
               completionEmailDisabled={completionEmailDisabled}
               onToggleCompletionEmail={onToggleCompletionEmail}
             />
-            {branchControl?.branchName || showFooterUsageIndicator ? (
+            {branchControl?.branchName ||
+            showFooterUsageIndicator ||
+            isSharedSessionResolved ? (
               <div className="composer-branch-row">
                 {branchControl?.branchName ? (
                   <ComposerBranchBadge {...branchControl} />
                 ) : null}
-                {showFooterUsageIndicator ? (
-                  <div className="composer-branch-row-usage">
-                    {codexContextDualViewEnabled ? (
-                      <ContextBar
-                        surface="tool-popover"
-                        contextDualViewEnabled
-                        dualContextUsage={resolvedDualContextUsage}
-                        onRequestContextCompaction={handleManualCompactContext}
-                        codexAutoCompactionEnabled={codexAutoCompactionEnabled}
-                        codexAutoCompactionThresholdPercent={
-                          codexAutoCompactionThresholdPercent
-                        }
-                        onCodexAutoCompactionSettingsChange={
-                          onCodexAutoCompactionSettingsChange
-                        }
-                        currentProvider="codex"
-                      />
-                    ) : (
-                      <TokenIndicator
-                        percentage={footerUsagePercentage}
-                        usedTokens={resolvedLegacyContextUsage?.used}
-                        maxTokens={resolvedLegacyContextUsage?.total}
-                        claudeContextUsage={
-                          selectedEngine === "claude"
-                            ? resolvedClaudeContextUsage
-                            : null
-                        }
-                      />
-                    )}
+                {showFooterUsageIndicator || isSharedSessionResolved ? (
+                  <div className="composer-branch-row-trailing">
+                    {isSharedSessionResolved ? (
+                      <div className="composer-collab-slot">
+                        <MultiAgentComposerToggle
+                          engine={selectedAtomicTarget?.engine}
+                          armed={agentArmed || collabRunActive}
+                          disabled={
+                            disabled ||
+                            effectiveSubmitDisabled ||
+                            !isResolvedExecutionTarget(selectedAtomicTarget) ||
+                            collabRunActive
+                          }
+                          hasActiveRun={collabRunActive}
+                          onToggle={() => {
+                            if (collabRunActive) return;
+                            setAgentArmed((armed) => !armed);
+                          }}
+                          onArm={() => setAgentArmed(true)}
+                        />
+                      </div>
+                    ) : null}
+                    {showFooterUsageIndicator ? (
+                      <div className="composer-branch-row-usage">
+                        {codexContextDualViewEnabled ? (
+                          <ContextBar
+                            surface="tool-popover"
+                            contextDualViewEnabled
+                            dualContextUsage={resolvedDualContextUsage}
+                            onRequestContextCompaction={
+                              handleManualCompactContext
+                            }
+                            codexAutoCompactionEnabled={
+                              codexAutoCompactionEnabled
+                            }
+                            codexAutoCompactionThresholdPercent={
+                              codexAutoCompactionThresholdPercent
+                            }
+                            onCodexAutoCompactionSettingsChange={
+                              onCodexAutoCompactionSettingsChange
+                            }
+                            currentProvider="codex"
+                          />
+                        ) : (
+                          <TokenIndicator
+                            percentage={footerUsagePercentage}
+                            usedTokens={resolvedLegacyContextUsage?.used}
+                            maxTokens={resolvedLegacyContextUsage?.total}
+                            claudeContextUsage={
+                              selectedEngine === "claude"
+                                ? resolvedClaudeContextUsage
+                                : null
+                            }
+                          />
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

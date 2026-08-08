@@ -37,6 +37,11 @@ export type AgentStageBinding = {
   rolePrompt?: string | null;
   accessMode?: string | null;
   requiresApproval?: boolean | null;
+  /**
+   * 本段如何消费前序产出：summary | full。
+   * 缺省 summary；首段可省略。
+   */
+  upstreamFeedMode?: "summary" | "full" | null;
   /** 模板绑定的客户端智能体（展示用，可选） */
   personaAgentId?: string | null;
   personaAgentName?: string | null;
@@ -68,6 +73,10 @@ export type AgentStageProjection = {
   shortOutcome?: string | null;
   /** 右栏节点全文（Messages 渲染，与 SubAgent 幕布同源） */
   fullOutcome?: string | null;
+  /**
+   * 本段启动时上游喂料策略（绑定快照）；缺省 summary。
+   */
+  upstreamFeedMode?: "summary" | "full" | null;
   error?: string | null;
   /** 本环节绑定的智能体（Inspector 标题行展示 icon/name；正文不展示） */
   personaAgentId?: string | null;
@@ -109,6 +118,8 @@ export type AgentProjectionV1 = {
   diagnostics?: string[];
   requestedAt: number;
   approvedAt?: number | null;
+  /** 批准时用户可选补充；后续段 prompt 已注入（展示/调试用） */
+  approvalNote?: string | null;
   updatedAt: number;
   finalSummary?: string | null;
 };

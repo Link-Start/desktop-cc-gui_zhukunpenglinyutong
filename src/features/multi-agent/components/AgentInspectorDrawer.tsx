@@ -34,6 +34,7 @@ import {
   stageInspectorTypeLine,
   stageStatusText,
 } from "../utils/format";
+import { StageInjectContextHeader } from "./StageInjectContextHeader";
 
 function useLivePhase(
   workspaceId: string | null | undefined,
@@ -253,10 +254,31 @@ export function AgentInspectorDrawer() {
                 </span>
               ) : null}
             </div>
-            <div className="subagent-inspector-type">
-              {stage
-                ? stageInspectorTypeLine(stage)
-                : t("multiAgent.inspector.phaseIdle")}
+            <div className="subagent-inspector-type ma-inspector-type-row">
+              <span className="ma-inspector-type-text">
+                {stage
+                  ? stageInspectorTypeLine(stage)
+                  : t("multiAgent.inspector.phaseIdle")}
+              </span>
+              {stage ? (
+                <span
+                  className={cn(
+                    "ma-feed-badge",
+                    (stage.upstreamFeedMode === "full" ||
+                      (!stage.upstreamFeedMode && safeIndex === 0)) &&
+                      "is-full",
+                    (stage.upstreamFeedMode === "summary" ||
+                      (!stage.upstreamFeedMode && safeIndex > 0)) &&
+                      "is-summary",
+                  )}
+                  title={t("multiAgent.inspector.feedModeHint")}
+                >
+                  {stage.upstreamFeedMode === "full" ||
+                  (!stage.upstreamFeedMode && safeIndex === 0)
+                    ? t("multiAgent.inspector.feedFull")
+                    : t("multiAgent.inspector.feedSummary")}
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
@@ -326,6 +348,19 @@ export function AgentInspectorDrawer() {
           </button>
         </div>
       </div>
+
+      {stage ? (
+        <StageInjectContextHeader
+          projection={projection}
+          stage={stage}
+          stageIndex={safeIndex}
+          onJumpStage={(stageId) => {
+            const idx = stages.findIndex((item) => item.id === stageId);
+            if (idx >= 0) showCard(idx);
+            else selectAgentStage(stageId);
+          }}
+        />
+      ) : null}
 
       <div className="subagent-inspector-body is-session-canvas">
         {canvasItems.length > 0 ? (

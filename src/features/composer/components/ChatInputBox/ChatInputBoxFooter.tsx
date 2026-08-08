@@ -225,6 +225,7 @@ export function ChatInputBoxFooter({
   models,
   permissionMode,
   currentProvider,
+  currentProviderProfileId = null,
   workspaceId = null,
   providerAvailability,
   providerVersions,
@@ -290,6 +291,7 @@ export function ChatInputBoxFooter({
   models?: ModelInfo[];
   permissionMode: PermissionMode;
   currentProvider: string;
+  currentProviderProfileId?: string | null;
   workspaceId?: string | null;
   providerAvailability?: Partial<Record<ProviderId, boolean>>;
   providerVersions?: Partial<Record<ProviderId, string | null>>;
@@ -530,6 +532,7 @@ export function ChatInputBoxFooter({
         models={models}
         permissionMode={permissionMode}
         currentProvider={currentProvider}
+        currentProviderProfileId={currentProviderProfileId}
         providerAvailability={providerAvailability}
         providerVersions={providerVersions}
         providerStatusLabels={providerStatusLabels}

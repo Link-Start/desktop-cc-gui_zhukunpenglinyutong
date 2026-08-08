@@ -45,6 +45,12 @@ export const KIMI_SESSION_CACHE_TTL_MS = 60_000;
 export const KIMI_SESSION_FETCH_TIMEOUT_MS = SIDEBAR_THREAD_LIST_TIMEOUT_MS;
 export const NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS =
   SIDEBAR_THREAD_LIST_TIMEOUT_MS;
+
+/**
+ * Cold-start / full-catalog OpenCode 子源预算：远短于通用 30s，
+ * 超时走 last-good，避免 opencode_session_list 10s+ 占窗。
+ */
+export const OPENCODE_FULL_CATALOG_FETCH_TIMEOUT_MS = 3_000;
 export const CODEX_SESSION_CATALOG_FETCH_TIMEOUT_MS =
   SIDEBAR_THREAD_LIST_TIMEOUT_MS;
 /** Load-older / recovery catalog page size. */

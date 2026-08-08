@@ -33,6 +33,9 @@ export const RunStatusSubagentRows = memo(function RunStatusSubagentRows({
   const { t } = useTranslation();
   const probeVersion = useSubagentSessionProbeVersion();
   const parentThreadId = useActiveCanvasSelector((snapshot) => snapshot.threadId);
+  const nativeThreadIds = useActiveCanvasSelector(
+    (snapshot) => snapshot.activeNativeThreadIds,
+  );
   const threadStatusById = useActiveCanvasSelector(
     (snapshot) => snapshot.threadStatusById,
   );
@@ -46,6 +49,8 @@ export const RunStatusSubagentRows = memo(function RunStatusSubagentRows({
       buildSubagentCardFromSubagentInfo(agent, {
         index,
         parentThreadId,
+        // Shared Claude：拼 claude:subagent:{owner}:{agentId} 必需
+        nativeThreadIds,
       }),
     );
     const enrichment = mergeSubagentEnrichmentSources({
@@ -72,6 +77,7 @@ export const RunStatusSubagentRows = memo(function RunStatusSubagentRows({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- probeVersion 订阅旁路 load
   }, [
     canvasItems,
+    nativeThreadIds,
     parentThreadId,
     probeVersion,
     subagents,

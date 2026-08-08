@@ -30,11 +30,39 @@ fn next_pending_stage(run: &AgentProjectionV1) -> Option<&AgentStageProjectionV1
         .find(|stage| stage.status == AgentStageStatus::Pending)
 }
 
-fn last_succeeded_notes(run: &AgentProjectionV1) -> String {
+/// 按**当前段** upstream_feed_mode 组装已成功前序产出。
+/// - summary（默认）：short_outcome
+/// - full：full_outcome（空则回退 short），并 cap body 上限
+fn prior_feed_notes(run: &AgentProjectionV1, stage_index: usize) -> String {
+    let mode = run
+        .stages
+        .get(stage_index)
+        .and_then(|stage| stage.upstream_feed_mode.as_deref())
+        .map(str::trim)
+        .unwrap_or("summary");
+    let use_full = mode == "full";
     run.stages
         .iter()
+        .take(stage_index)
         .filter(|stage| stage.status == AgentStageStatus::Succeeded)
-        .filter_map(|stage| stage.short_outcome.as_deref())
+        .filter_map(|stage| {
+            if use_full {
+                let full = stage
+                    .full_outcome
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty());
+                if let Some(text) = full {
+                    return Some(cap_text(text, STAGE_OUTCOME_BODY_CHARS));
+                }
+            }
+            stage
+                .short_outcome
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+        })
         .collect::<Vec<_>>()
         .join("\n---\n")
 }
@@ -66,13 +94,28 @@ fn start_stage_attempt(
 ) -> Result<AgentPreparedAttemptV1, String> {
     let stage_idx = stage_index(run, &stage.id).unwrap_or(0);
     // 首段吃完整 model text（含注入）；后续段只吃可见原文 + plan/上游短说明
-    let task_text = if stage_idx == 0 {
+    let base_task = if stage_idx == 0 {
         run.request_text.as_str()
     } else if !run.user_visible_text.trim().is_empty() {
         run.user_visible_text.as_str()
     } else {
         run.request_text.as_str()
     };
+    // 批准补充：仅注入非首段（规划后），与打回补充对称但不重开 run
+    let task_owned = if stage_idx > 0 {
+        match run
+            .approval_note
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            Some(note) => Some(format!("{base_task}\n\n【批准时用户补充】\n{note}")),
+            None => None,
+        }
+    } else {
+        None
+    };
+    let task_text = task_owned.as_deref().unwrap_or(base_task);
     let prompt = build_stage_prompt(
         &stage.id,
         stage_idx,
@@ -82,7 +125,7 @@ fn start_stage_attempt(
         stage.persona_prompt.as_deref(),
         task_text,
         run.plan.as_ref(),
-        &last_succeeded_notes(run),
+        &prior_feed_notes(run, stage_idx),
     );
     let attempt_id = Uuid::new_v4().to_string();
     let logical_turn_id = Uuid::new_v4().to_string();
@@ -192,6 +235,8 @@ pub(crate) async fn shared_agent_request_run(
     let first = stages[0].clone();
     let access_mode = access_mode_for(&first);
 
+    // 必须与 AgentStageBindingInput / stages_from_bindings 字段对齐；
+    // 漏写 upstreamFeedMode 会导致投影回放后后续段永远缺省 summary（假实现）。
     let bindings_json = serde_json::to_value(
         stages
             .iter()
@@ -202,6 +247,7 @@ pub(crate) async fn shared_agent_request_run(
                     "rolePrompt": stage.role_prompt,
                     "accessMode": stage.access_mode,
                     "requiresApproval": stage.requires_approval,
+                    "upstreamFeedMode": stage.upstream_feed_mode,
                     "personaAgentId": stage.persona_agent_id,
                     "personaAgentName": stage.persona_agent_name,
                     "personaAgentIcon": stage.persona_agent_icon,
@@ -334,6 +380,8 @@ pub(crate) async fn shared_agent_approve(
     thread_id: String,
     run_id: String,
     revision: u32,
+    // 可选：用户批准时补充，写入 fact.extra 并注入后续段 prompt
+    approval_note: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
     require_agent_enabled()?;
@@ -371,6 +419,15 @@ pub(crate) async fn shared_agent_approve(
         ));
     }
     let approved_at = now_ms();
+    let note = approval_note
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.to_string());
+    let extra = match note.as_ref() {
+        Some(value) => json!({ "approvalNote": value }),
+        None => empty_extra(),
+    };
     append_fact(
         writer,
         &session_id,
@@ -379,7 +436,7 @@ pub(crate) async fn shared_agent_approve(
             run_id: run_id.clone(),
             revision,
             approved_at,
-            extra: empty_extra(),
+            extra,
         }),
     )?;
 
@@ -1127,6 +1184,7 @@ mod degrade_settle_tests {
             status,
             access_mode: "current".into(),
             requires_approval: false,
+            upstream_feed_mode: None,
             attempt_id: None,
             binding_key: None,
             started_at: None,
@@ -1188,6 +1246,7 @@ mod degrade_settle_tests {
             diagnostics: vec![],
             requested_at: 1,
             approved_at: Some(2),
+            approval_note: None,
             updated_at: 3,
             final_summary: None,
         };

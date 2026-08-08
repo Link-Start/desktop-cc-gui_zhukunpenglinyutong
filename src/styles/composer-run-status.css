@@ -17,12 +17,20 @@
   --crs-muted: var(--text-muted, var(--muted-foreground, #6b7280));
   --crs-ink: var(--text-primary, var(--foreground, #111827));
 
+  /* 仅 toolbar 占文档流；展开面板 absolute 上浮，不挤压消息区 */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0;
+  overflow: visible;
   /* composer-shell 默认 gap 8px；用负 margin 把与输入框的间距再收 5px */
   margin: 0 0 4px;
   animation: crs-strip-in var(--crs-duration) var(--crs-ease) both;
+}
+
+/* 展开时抬高 stacking，盖住上方 messages 内容 */
+.composer-run-status.is-expanded {
+  z-index: 12;
 }
 
 @keyframes crs-strip-in {
@@ -36,15 +44,25 @@
   }
 }
 
+/*
+ * 展开面板：绝对定位贴在 pills 上方，不参与文档流高度。
+ * 任务 / 子代理 / Plan / 已编辑 共用此壳，避免任一点开都把消息区顶上去。
+ */
 .composer-run-status-panel-shell {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 1;
   display: grid;
   grid-template-rows: 0fr;
+  pointer-events: none;
   transition: grid-template-rows var(--crs-duration) var(--crs-ease);
 }
 
 .composer-run-status-panel-shell.is-open {
   grid-template-rows: 1fr;
-  margin-bottom: 6px;
+  pointer-events: auto;
 }
 
 .composer-run-status-panel-clip {
@@ -58,7 +76,10 @@
   border: 1px dashed var(--crs-border);
   border-radius: var(--crs-radius);
   background: var(--crs-surface-elevated);
-  box-shadow: none;
+  /* 浮层略抬起，与消息区分层 */
+  box-shadow:
+    0 8px 24px color-mix(in srgb, var(--foreground, #111) 8%, transparent),
+    0 1px 0 color-mix(in srgb, var(--crs-border) 70%, transparent);
   animation: crs-panel-fade var(--crs-duration) var(--crs-ease) both;
 }
 
@@ -195,6 +216,28 @@ html.dark .crs-subagent-row.is-error .crs-subagent-status {
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+}
+
+/* 新文件行入场：实时编辑汇总新增行时的轻反馈 */
+.turn-files-changed-card__row {
+  animation: turn-files-changed-row-in 320ms ease-out;
+}
+
+@keyframes turn-files-changed-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turn-files-changed-card__row {
+    animation: none;
+  }
 }
 
 /* 复用 status-panel 列表时收紧间距 */
@@ -372,6 +415,31 @@ html.dark .crs-subagent-row.is-error .crs-subagent-status {
   gap: 4px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
+}
+
+/* RollingStat（@number-flow/react）：位滚动需要一定上下留白，mask 过小会「看起来没动画」 */
+.composer-run-status-pill-count--edit .is-add,
+.composer-run-status-pill-count--edit .is-del {
+  display: inline-flex;
+  align-items: center;
+  min-width: 1.5ch;
+  min-height: 1.15em;
+  text-align: right;
+  line-height: 1;
+  /* 允许 digit 上下滑出一点，再由 NumberFlow 自身 mask 裁切 */
+  overflow: visible;
+}
+
+.composer-run-status-pill-count--edit .composer-run-status-rolling-stat {
+  font-variant-numeric: tabular-nums;
+  line-height: 0.85;
+  --number-flow-mask-height: 0.25em;
+  --number-flow-mask-width: 0.35em;
+}
+
+/* 父级 pill 若 overflow:hidden 会裁掉滚动；编辑计数允许露出 */
+.composer-run-status-pill .composer-run-status-pill-count--edit {
+  overflow: visible;
 }
 
 /* pill 上 +/- 与 diff 语义一致：增绿删红 */

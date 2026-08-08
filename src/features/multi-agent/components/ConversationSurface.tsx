@@ -55,6 +55,7 @@ function stageBindingsFromProjection(
     rolePrompt: stage.rolePrompt ?? null,
     accessMode: stage.accessMode,
     requiresApproval: stage.requiresApproval ?? false,
+    upstreamFeedMode: stage.upstreamFeedMode ?? null,
     target: stage.target,
     personaAgentId: stage.personaAgentId ?? null,
     personaAgentName: stage.personaAgentName ?? null,
@@ -101,7 +102,8 @@ function OrchCard({
   workspaceId: string;
   threadId: string;
   onOpenStage: (stage: AgentStageProjection) => void;
-  onApprove: () => void;
+  /** note 为空则按规划执行；有内容则注入后续段 */
+  onApprove: (note?: string) => void;
   /** note 为空则按原任务重规划；有内容则追加到原任务后 */
   onRejectReplan: (note?: string) => void;
   onStop: () => void;
@@ -113,8 +115,9 @@ function OrchCard({
   featureEnabled: boolean;
 }) {
   const { t } = useTranslation();
-  const [replanOpen, setReplanOpen] = useState(false);
-  const [replanNote, setReplanNote] = useState("");
+  /** 待批准：批准 / 打回 二选一展开补充面板 */
+  const [notePanel, setNotePanel] = useState<"approve" | "replan" | null>(null);
+  const [actionNote, setActionNote] = useState("");
   const [hangHint, setHangHint] = useState(false);
   // 进行中默认折叠阶段列表；loading 进度条始终露出
   const [stagesOpen, setStagesOpen] = useState(false);
@@ -172,13 +175,18 @@ function OrchCard({
           ? t("multiAgent.card.runningStage", { stage: headline.stageTitle })
           : t(`multiAgent.status.${projection.status}`);
 
-  // 离开待批准态时收起打回面板
+  // 离开待批准态时收起补充面板
   useEffect(() => {
     if (projection.status !== "awaiting-approval") {
-      setReplanOpen(false);
-      setReplanNote("");
+      setNotePanel(null);
+      setActionNote("");
     }
   }, [projection.status]);
+
+  const awaitingApproval = projection.status === "awaiting-approval";
+  const showHangBar = hangHint && !terminal && Boolean(runningStage);
+  // 待批准 / 超时卡已自带停止类操作时，不再单独挂底部 stop 行
+  const showStandaloneStop = !terminal && !awaitingApproval && !showHangBar;
 
   return (
     <div
@@ -273,59 +281,97 @@ function OrchCard({
       })
         : null}
 
-      {projection.status === "awaiting-approval" ? (
-        <div className="ma-approve-bar">
+      {awaitingApproval ? (
+        <div className="ma-action-bar ma-action-bar--approve">
           {!featureEnabled ? (
             <p className="ma-approve-summary ma--feature-off-hint">
               {t("multiAgent.errors.featureDisabled")}
             </p>
           ) : null}
-          <button
-            type="button"
-            className="ma-primary"
-            disabled={busy !== null || !featureEnabled}
-            onClick={onApprove}
-          >
-            {busy === "approve"
-              ? t("multiAgent.actions.approving")
-              : t("multiAgent.actions.confirmExecute")}
-          </button>
-          <button
-            type="button"
-            className={`ma-ghost${replanOpen ? " is-on" : ""}`}
-            disabled={busy !== null || !featureEnabled}
-            aria-expanded={replanOpen}
-            onClick={() => setReplanOpen((v) => !v)}
-          >
-            {busy === "replan"
-              ? t("multiAgent.actions.replanning")
-              : t("multiAgent.actions.rejectReplan")}
-          </button>
           {projection.plan?.summary ? (
             <p className="ma-approve-summary">{projection.plan.summary}</p>
           ) : null}
-          {replanOpen ? (
-            <div className="ma-replan-panel" role="region" aria-label={t("multiAgent.actions.replanNoteLabel")}>
-              <label className="ma-replan-label" htmlFor={`ma-replan-note-${projection.runId}`}>
-                {t("multiAgent.actions.replanNoteLabel")}
+          <div className="ma-action-row">
+            <div className="ma-action-row__primary">
+              <button
+                type="button"
+                className={`ma-primary${notePanel === "approve" ? " is-on" : ""}`}
+                disabled={busy !== null || !featureEnabled}
+                aria-expanded={notePanel === "approve"}
+                onClick={() => {
+                  setNotePanel((prev) =>
+                    prev === "approve" ? null : "approve",
+                  );
+                  if (notePanel !== "approve") setActionNote("");
+                }}
+              >
+                {busy === "approve"
+                  ? t("multiAgent.actions.approving")
+                  : t("multiAgent.actions.confirmExecute")}
+              </button>
+              <button
+                type="button"
+                className={`ma-ghost${notePanel === "replan" ? " is-on" : ""}`}
+                disabled={busy !== null || !featureEnabled}
+                aria-expanded={notePanel === "replan"}
+                onClick={() => {
+                  setNotePanel((prev) =>
+                    prev === "replan" ? null : "replan",
+                  );
+                  if (notePanel !== "replan") setActionNote("");
+                }}
+              >
+                {busy === "replan"
+                  ? t("multiAgent.actions.replanning")
+                  : t("multiAgent.actions.rejectReplan")}
+              </button>
+            </div>
+            <div className="ma-action-row__end">
+              <button
+                type="button"
+                className="ma-stop"
+                disabled={busy !== null || !featureEnabled}
+                onClick={onStop}
+              >
+                {busy === "stop"
+                  ? t("multiAgent.actions.stopping")
+                  : t("multiAgent.actions.stop")}
+              </button>
+            </div>
+          </div>
+          {notePanel ? (
+            <div
+              className="ma-note-panel"
+              role="region"
+              aria-label={t("multiAgent.actions.noteLabel")}
+            >
+              <label
+                className="ma-note-label"
+                htmlFor={`ma-action-note-${projection.runId}`}
+              >
+                {t("multiAgent.actions.noteLabel")}
               </label>
               <textarea
-                id={`ma-replan-note-${projection.runId}`}
-                className="ma-replan-textarea"
+                id={`ma-action-note-${projection.runId}`}
+                className="ma-note-textarea"
                 rows={3}
-                value={replanNote}
+                value={actionNote}
                 disabled={busy !== null || !featureEnabled}
-                placeholder={t("multiAgent.actions.replanNotePlaceholder")}
-                onChange={(e) => setReplanNote(e.target.value)}
+                placeholder={
+                  notePanel === "approve"
+                    ? t("multiAgent.actions.approveNotePlaceholder")
+                    : t("multiAgent.actions.replanNotePlaceholder")
+                }
+                onChange={(e) => setActionNote(e.target.value)}
               />
-              <div className="ma-replan-actions">
+              <div className="ma-note-actions">
                 <button
                   type="button"
                   className="ma-ghost"
                   disabled={busy !== null || !featureEnabled}
                   onClick={() => {
-                    setReplanOpen(false);
-                    setReplanNote("");
+                    setNotePanel(null);
+                    setActionNote("");
                   }}
                 >
                   {t("multiAgent.actions.replanCancel")}
@@ -335,12 +381,21 @@ function OrchCard({
                   className="ma-primary"
                   disabled={busy !== null || !featureEnabled}
                   onClick={() => {
-                    onRejectReplan(replanNote.trim() || undefined);
+                    const note = actionNote.trim() || undefined;
+                    if (notePanel === "approve") {
+                      onApprove(note);
+                    } else {
+                      onRejectReplan(note);
+                    }
                   }}
                 >
-                  {busy === "replan"
-                    ? t("multiAgent.actions.replanning")
-                    : t("multiAgent.actions.replanConfirm")}
+                  {notePanel === "approve"
+                    ? busy === "approve"
+                      ? t("multiAgent.actions.approving")
+                      : t("multiAgent.actions.approveConfirm")
+                    : busy === "replan"
+                      ? t("multiAgent.actions.replanning")
+                      : t("multiAgent.actions.replanConfirm")}
                 </button>
               </div>
             </div>
@@ -365,70 +420,91 @@ function OrchCard({
         </div>
       ) : null}
 
-      {hangHint && !terminal && runningStage ? (
-        <div className="ma-hang-bar" role="status">
+      {showHangBar && runningStage ? (
+        <div className="ma-action-bar ma-action-bar--hang" role="status">
           <p className="ma-hang-text">
             {t("multiAgent.actions.hangHint", {
-              stage: runningStage.title || runningStage.id })}
+              stage: runningStage.title || runningStage.id,
+            })}
           </p>
-          <div className="ma-hang-actions">
-            <button
-              type="button"
-              className="ma-primary"
-              disabled={busy !== null}
-              onClick={() => onRetryStage(runningStage)}
-            >
-              {busy === "retry"
-                ? t("multiAgent.actions.retrying")
-                : t("multiAgent.actions.retryStage")}
-            </button>
-            <button
-              type="button"
-              className="ma-stop"
-              disabled={busy !== null}
-              onClick={onForceUnlock}
-            >
-              {busy === "stop"
-                ? t("multiAgent.actions.stopping")
-                : t("multiAgent.actions.forceUnlock")}
-            </button>
-            <button
-              type="button"
-              className="ma-ghost"
-              disabled={busy !== null}
-              onClick={() => onRetryRun(runningStage.id)}
-            >
-              {t("multiAgent.actions.retryRun")}
-            </button>
+          <div className="ma-action-row">
+            <div className="ma-action-row__primary">
+              <button
+                type="button"
+                className="ma-primary"
+                disabled={busy !== null}
+                onClick={() => onRetryStage(runningStage)}
+              >
+                {busy === "retry"
+                  ? t("multiAgent.actions.retrying")
+                  : t("multiAgent.actions.retryStage")}
+              </button>
+              <button
+                type="button"
+                className="ma-ghost"
+                disabled={busy !== null}
+                onClick={() => onRetryRun(runningStage.id)}
+              >
+                {t("multiAgent.actions.retryRun")}
+              </button>
+            </div>
+            <div className="ma-action-row__end">
+              <button
+                type="button"
+                className="ma-ghost"
+                disabled={busy !== null}
+                onClick={onForceUnlock}
+                title={t("multiAgent.actions.forceUnlockHint")}
+              >
+                {busy === "stop"
+                  ? t("multiAgent.actions.stopping")
+                  : t("multiAgent.actions.forceUnlock")}
+              </button>
+              <button
+                type="button"
+                className="ma-stop"
+                disabled={busy !== null || !featureEnabled}
+                onClick={onStop}
+              >
+                {busy === "stop"
+                  ? t("multiAgent.actions.stopping")
+                  : t("multiAgent.actions.stop")}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
 
-      {!terminal ? (
+      {showStandaloneStop ? (
         <div
-          className={`ma-orch-actions${stagesOpen ? "" : " is-compact"}`}
+          className={`ma-action-bar ma-action-bar--running${stagesOpen ? "" : " is-compact"}`}
         >
-          <button
-            type="button"
-            className="ma-stop"
-            disabled={busy !== null || !featureEnabled}
-            onClick={onStop}
-          >
-            {busy === "stop"
-              ? t("multiAgent.actions.stopping")
-              : t("multiAgent.actions.stop")}
-          </button>
-          {anyStageLive && !(hangHint && runningStage) ? (
-            <button
-              type="button"
-              className="ma-ghost"
-              disabled={busy !== null}
-              onClick={onForceUnlock}
-              title={t("multiAgent.actions.forceUnlockHint")}
-            >
-              {t("multiAgent.actions.forceUnlock")}
-            </button>
-          ) : null}
+          <div className="ma-action-row">
+            <div className="ma-action-row__primary" />
+            <div className="ma-action-row__end">
+              {anyStageLive ? (
+                <button
+                  type="button"
+                  className="ma-ghost"
+                  disabled={busy !== null}
+                  onClick={onForceUnlock}
+                  title={t("multiAgent.actions.forceUnlockHint")}
+                >
+                  {t("multiAgent.actions.forceUnlock")}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="ma-stop"
+                disabled={busy !== null || !featureEnabled}
+                onClick={onStop}
+              >
+                {busy === "stop"
+                  ? t("multiAgent.actions.stopping")
+                  : t("multiAgent.actions.stop")}
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -596,7 +672,7 @@ export function MultiAgentConversationSurface({
     return null;
   }
 
-  const approve = async () => {
+  const approve = async (note?: string) => {
     if (busy) return;
     setBusy("approve");
     try {
@@ -605,6 +681,7 @@ export function MultiAgentConversationSurface({
         threadId,
         projection.runId,
         projection.planRevision,
+        note,
       );
     } catch (error) {
       pushErrorToast({
@@ -739,7 +816,7 @@ export function MultiAgentConversationSurface({
           threadId={threadId}
           busy={busy}
           featureEnabled={featureEnabled}
-          onApprove={() => void approve()}
+          onApprove={(note) => void approve(note)}
           onRejectReplan={(note) => void rejectReplan(note)}
           onStop={() => void stop()}
           onForceUnlock={() => void forceUnlock()}

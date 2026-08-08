@@ -177,6 +177,7 @@ pub fn project_agent_runs(
                     diagnostics: vec![],
                     requested_at: fact.requested_at,
                     approved_at: None,
+                    approval_note: None,
                     updated_at: fact.requested_at,
                     final_summary: None,
                 });
@@ -209,6 +210,15 @@ pub fn project_agent_runs(
                         run.status = AgentRunStatus::Implementing;
                         run.approved_at = Some(fact.approved_at);
                         run.updated_at = fact.approved_at;
+                        // 可选：用户在批准时补充，供后续段 prompt 注入
+                        let note = fact
+                            .extra
+                            .get("approvalNote")
+                            .and_then(|value| value.as_str())
+                            .map(str::trim)
+                            .filter(|value| !value.is_empty())
+                            .map(|value| value.to_string());
+                        run.approval_note = note;
                     } else {
                         run.status = AgentRunStatus::Failed;
                         run.diagnostics.push(format!(

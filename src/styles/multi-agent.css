@@ -30,11 +30,11 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  border: 1px solid var(--ma-border);
-  background: var(--ma-card);
+  border: 0;
+  background: transparent;
   color: var(--ma-muted);
   border-radius: 999px;
-  padding: 0.22rem 0.7rem;
+  padding: 0.22rem 0.35rem;
   font-size: 0.72rem;
   line-height: 1.2;
   cursor: pointer;
@@ -51,20 +51,18 @@
 .ma-collab-pill:hover {
   background: var(--ma-surface-hover);
   color: var(--ma-txt);
-  border-color: var(--ma-border2);
 }
 
-/* 已开启：中性边框强调，不用彩色光晕 */
+/* 已开启：底色强调，无胶囊描边 */
 .ma-collab-pill.is-armed {
   color: var(--ma-txt);
-  border-color: var(--ma-border2);
   background: var(--ma-control);
-  box-shadow: 0 0 0 1px var(--ma-border2);
+  box-shadow: none;
 }
 
 .ma-collab-pill.is-open {
-  border-color: var(--ma-border2);
   color: var(--ma-txt);
+  background: var(--ma-surface-hover);
 }
 
 .ma-collab-pill:disabled {
@@ -587,42 +585,105 @@
   color: var(--ma-blue);
 }
 
-.ma-approve-bar {
+/* 统一操作条：批准 / 超时 / 运行中 共用「主操作左 + 停止右」一排 */
+.ma-action-bar {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
-  align-items: center;
   padding: 10px 14px 12px;
   border-top: 1px solid var(--ma-border);
+}
+
+.ma-action-bar--approve {
   background: color-mix(in srgb, var(--ma-amber) 6%, transparent);
+}
+
+.ma-action-bar--hang {
+  margin: 0 12px 10px;
+  padding: 10px 12px;
+  border-top: 0;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--ma-amber, #f59e0b) 45%, var(--ma-border));
+  background: color-mix(in srgb, var(--ma-amber, #f59e0b) 10%, transparent);
+}
+
+.ma-action-bar--running {
+  padding: 6px 10px 8px;
+}
+
+.ma-action-bar--running.is-compact {
+  padding: 4px 10px 6px;
+}
+
+.ma-orch.is-stages-collapsed .ma-action-bar--running {
+  border-top: 0;
+}
+
+.ma-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.ma-action-row__primary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ma-action-row__end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.ma-action-bar--running .ma-stop,
+.ma-action-bar--running .ma-ghost {
+  padding: 4px 10px;
+  font-size: 12px;
+  line-height: 1.2;
+  min-height: 0;
 }
 
 .ma-approve-summary {
   width: 100%;
-  margin: 4px 0 0;
+  margin: 0;
   font-size: 12px;
   color: var(--ma-muted);
 }
 
-.ma-approve-bar .ma-ghost.is-on {
+.ma-action-bar .ma-ghost.is-on,
+.ma-action-bar .ma-primary.is-on {
+  outline: 2px solid color-mix(in srgb, var(--ma-amber, #f59e0b) 55%, transparent);
+  outline-offset: 1px;
+}
+
+.ma-action-bar .ma-ghost.is-on {
   border-color: color-mix(in srgb, var(--ma-amber, #f59e0b) 55%, var(--ma-border));
   color: var(--text-primary, inherit);
 }
 
-/* 打回重规划：按钮下方滑出的可选补充框 */
-.ma-replan-panel {
+/* 批准/打回：按钮下方滑出的可选补充框 */
+.ma-note-panel {
   width: 100%;
   display: grid;
   gap: 8px;
-  margin-top: 4px;
+  margin-top: 2px;
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid var(--ma-border);
   background: color-mix(in srgb, var(--surface-composer, var(--ma-card)) 88%, transparent);
-  animation: ma-replan-slide 0.16s ease-out;
+  animation: ma-note-slide 0.16s ease-out;
 }
 
-@keyframes ma-replan-slide {
+@keyframes ma-note-slide {
   from {
     opacity: 0;
     transform: translateY(-6px);
@@ -633,13 +694,13 @@
   }
 }
 
-.ma-replan-label {
+.ma-note-label {
   font-size: 12px;
   font-weight: 600;
   color: var(--ma-muted);
 }
 
-.ma-replan-textarea {
+.ma-note-textarea {
   width: 100%;
   min-height: 72px;
   resize: vertical;
@@ -654,20 +715,42 @@
   padding: 8px 10px;
 }
 
-.ma-replan-textarea:focus {
+.ma-note-textarea:focus {
   outline: 2px solid color-mix(in srgb, var(--ma-amber, #f59e0b) 45%, transparent);
   outline-offset: 1px;
 }
 
-.ma-replan-textarea:disabled {
+.ma-note-textarea:disabled {
   opacity: 0.6;
 }
 
-.ma-replan-actions {
+.ma-note-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+/* 兼容旧类名（历史/测试可能引用） */
+.ma-approve-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--ma-border);
+  background: color-mix(in srgb, var(--ma-amber) 6%, transparent);
+}
+
+.ma-replan-panel {
+  width: 100%;
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--ma-border);
+  background: color-mix(in srgb, var(--surface-composer, var(--ma-card)) 88%, transparent);
 }
 
 .ma-orch-actions {
@@ -680,25 +763,6 @@
   border-top: 1px solid var(--ma-border);
 }
 
-/* 阶段列表折叠时：按钮行更扁，减少大块空白 */
-.ma-orch-actions.is-compact {
-  padding: 4px 10px 6px;
-  gap: 6px;
-}
-
-.ma-orch-actions .ma-stop,
-.ma-orch-actions .ma-ghost {
-  padding: 4px 10px;
-  font-size: 12px;
-  line-height: 1.2;
-  min-height: 0;
-}
-
-.ma-orch.is-stages-collapsed .ma-orch-actions {
-  border-top: 0;
-}
-
-/* 节点卡死恢复条：文案整行在上，操作按钮固定一排居右在下 */
 .ma-hang-bar {
   margin: 0 12px 10px;
   padding: 10px 12px;
@@ -1203,6 +1267,11 @@ button.ma-hist-toggle:hover .ma-hist-title {
   overflow: hidden; /* body 内滚动；下拉走 Portal 不受此裁剪 */
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.7);
   color: var(--ma-txt);
+  transition: width 0.15s ease;
+}
+
+.ma-tpl-modal.has-help {
+  width: min(1380px, 98vw);
 }
 
 .ma-tpl-modal-head {
@@ -1224,15 +1293,54 @@ button.ma-hist-toggle:hover .ma-hist-title {
   margin-top: 2px;
 }
 
-.ma-tpl-close {
+.ma-tpl-head-actions {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ma-tpl-help-btn {
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 7px;
+  border: 1px solid var(--ma-border2);
+  background: none;
+  color: var(--ma-muted);
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.ma-tpl-help-btn:hover,
+.ma-tpl-help-btn.is-on {
+  color: var(--ma-txt);
+  background: var(--ma-control-hover);
+  border-color: var(--ma-border2);
+}
+
+.ma-tpl-help-btn.is-on {
+  color: var(--ma-blue, #3b82f6);
+  border-color: color-mix(in srgb, var(--ma-blue, #3b82f6) 45%, var(--ma-border2));
+  background: color-mix(in srgb, var(--ma-blue, #3b82f6) 12%, transparent);
+}
+
+.ma-tpl-close {
+  box-sizing: border-box;
+  height: 28px;
   color: var(--ma-muted);
   cursor: pointer;
   border: 1px solid var(--ma-border2);
-  border-radius: 6px;
-  padding: 3px 10px;
+  border-radius: 7px;
+  padding: 0 10px;
   background: none;
   font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
 }
 
 .ma-tpl-close:hover {
@@ -1240,11 +1348,87 @@ button.ma-hist-toggle:hover .ma-hist-title {
   background: var(--ma-control-hover);
 }
 
+.ma-tpl-main-row {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+}
+
 .ma-tpl-body {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   display: grid;
   grid-template-columns: 240px 1fr;
+}
+
+.ma-tpl-help {
+  width: min(300px, 32vw);
+  flex: 0 0 auto;
+  border-left: 1px solid var(--ma-border);
+  background: color-mix(in srgb, var(--ma-card2, var(--ma-bg)) 88%, transparent);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.ma-tpl-help-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--ma-border);
+  font-size: 13px;
+}
+
+.ma-tpl-help-close {
+  border: 0;
+  background: none;
+  color: var(--ma-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.ma-tpl-help-close:hover {
+  color: var(--ma-txt);
+}
+
+.ma-tpl-help-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 14px 18px;
+}
+
+.ma-tpl-help-lead {
+  margin: 0 0 12px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ma-muted);
+}
+
+.ma-tpl-help-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ma-tpl-help-item dt {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--ma-txt);
+  margin: 0 0 3px;
+}
+
+.ma-tpl-help-item dd {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ma-muted);
 }
 
 .ma-tpl-list {
@@ -1535,6 +1719,41 @@ button.ma-hist-toggle:hover .ma-hist-title {
   font-size: 10px;
   color: var(--ma-muted);
   cursor: pointer;
+}
+
+/* 上游喂料：摘要 | 全文（第 2 段起） */
+.ma-feed-mode {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  gap: 2px;
+  border-radius: 7px;
+  border: 1px solid var(--ma-border);
+  background: var(--ma-control, var(--ma-bg));
+  flex-shrink: 0;
+}
+
+.ma-feed-mode-btn {
+  border: 0;
+  background: transparent;
+  color: var(--ma-muted);
+  font-size: 10px;
+  font-weight: 550;
+  padding: 4px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ma-feed-mode-btn.is-on {
+  background: var(--ma-card, var(--ma-bg));
+  color: var(--ma-txt);
+  font-weight: 650;
+  box-shadow: 0 0 0 1px var(--ma-border);
+}
+
+.ma-feed-mode-btn:hover:not(.is-on) {
+  color: var(--ma-txt);
 }
 
 /* 环节智能体选择（Composer # 同源 agentProvider） */
@@ -1896,6 +2115,616 @@ button.ma-hist-toggle:hover .ma-hist-title {
 
 .ma-agent-inspector .ma-pager {
   margin-left: auto;
+}
+
+.ma-inspector-type-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.ma-inspector-type-text {
+  min-width: 0;
+}
+
+/* 当前节点上游喂料：吃全文 / 吃摘要 */
+.ma-feed-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  border: 1px solid var(--ma-border);
+  white-space: nowrap;
+}
+
+.ma-feed-badge.is-full {
+  color: color-mix(in srgb, var(--ma-blue, #3b82f6) 55%, var(--ma-txt));
+  background: color-mix(in srgb, var(--ma-blue, #3b82f6) 14%, transparent);
+  border-color: color-mix(in srgb, var(--ma-blue, #3b82f6) 35%, var(--ma-border));
+}
+
+.ma-feed-badge.is-summary {
+  color: color-mix(in srgb, var(--ma-muted) 40%, var(--ma-txt));
+  background: color-mix(in srgb, var(--ma-control, var(--ma-card2)) 80%, transparent);
+  border-color: var(--ma-border);
+}
+
+/* —— 注入上下文 Header（B+C，默认折叠；跟 --ma-* 双主题） —— */
+.ma-inject {
+  flex: 0 0 auto;
+  min-height: 0;
+  border-bottom: 1px solid var(--ma-border);
+  background: color-mix(in srgb, var(--ma-card2) 88%, transparent);
+  display: flex;
+  flex-direction: column;
+}
+
+/* 展开：虚线边框整卡成块；按内容自适应，保底高度防短文被挤没，上限内 body 滚动 */
+.ma-inject.is-open {
+  flex: 0 0 auto;
+  min-height: min(200px, 36vh);
+  max-height: min(52vh, 440px);
+  margin: 6px 8px 8px;
+  border: 1px dashed color-mix(in srgb, var(--ma-border2) 80%, var(--ma-muted));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ma-card2) 94%, transparent);
+  overflow: hidden;
+}
+
+.ma-inject:not(.is-open) {
+  border-bottom: 1px solid var(--ma-border);
+}
+
+.ma-inject-summary {
+  width: 100%;
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: inherit;
+}
+
+.ma-inject-summary:hover {
+  background: var(--ma-surface-hover);
+}
+
+.ma-inject-chev {
+  color: var(--ma-muted2);
+  font-size: 10px;
+  width: 14px;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.ma-inject.is-open .ma-inject-chev {
+  transform: rotate(90deg);
+}
+
+.ma-inject-label {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--ma-muted);
+  flex-shrink: 0;
+}
+
+.ma-inject-one-line {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--ma-txt);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ma-inject-count {
+  font-size: 10px;
+  color: var(--ma-muted);
+  background: var(--ma-control);
+  border: 1px solid var(--ma-border);
+  padding: 2px 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.ma-inject-body {
+  flex: 1 1 auto;
+  /* 正文区保底（随视口收）；长文仍靠父级 max-height + 本区滚动 */
+  min-height: min(120px, 22vh);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 12px 10px;
+  -webkit-overflow-scrolling: touch;
+  /* 默认隐藏滚动条；悬停 / 聚焦 / 滚动中再显示 */
+  scrollbar-width: none;
+  scrollbar-color: transparent transparent;
+}
+
+.ma-inject-body:hover,
+.ma-inject-body:focus-within,
+.ma-inject-body.is-scrolling {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--ma-muted) 55%, transparent) transparent;
+}
+
+.ma-inject-body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.ma-inject-body:hover::-webkit-scrollbar,
+.ma-inject-body:focus-within::-webkit-scrollbar,
+.ma-inject-body.is-scrolling::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.ma-inject-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ma-inject-body::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.ma-inject-body:hover::-webkit-scrollbar-thumb,
+.ma-inject-body:focus-within::-webkit-scrollbar-thumb,
+.ma-inject-body.is-scrolling::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--ma-muted) 45%, transparent);
+}
+
+.ma-inject-body:hover::-webkit-scrollbar-thumb:hover,
+.ma-inject-body.is-scrolling::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--ma-muted) 70%, transparent);
+}
+
+.ma-inject-mini {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 6px 8px 7px;
+  margin: 0 0 8px;
+  overflow-x: auto;
+  border: 1px solid var(--ma-border);
+  border-radius: 8px;
+  background: var(--ma-control);
+}
+
+.ma-inject-mini::-webkit-scrollbar {
+  height: 0;
+}
+
+.ma-inject-mini-wrap {
+  display: flex;
+  align-items: flex-start;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.ma-inject-conn {
+  flex: 0 0 auto;
+  width: 12px;
+  min-width: 8px;
+  max-width: 18px;
+  margin-top: 9px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: var(--ma-border2);
+  align-self: flex-start;
+  opacity: 0.7;
+}
+
+.ma-inject-conn.from-done {
+  background: color-mix(in srgb, var(--ma-green) 70%, var(--ma-border));
+  opacity: 1;
+}
+
+.ma-inject-conn.to-cur {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--ma-green) 55%, var(--ma-border)),
+    color-mix(in srgb, var(--ma-blue) 75%, var(--ma-border))
+  );
+  opacity: 1;
+}
+
+.ma-inject-step {
+  display: flex;
+  align-items: center;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.ma-inject-step > button {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 100%;
+  min-width: 40px;
+  max-width: 72px;
+  margin: 0 auto;
+  padding: 1px 2px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.ma-inject-step > button:hover {
+  transform: translateY(-1px);
+}
+
+.ma-inject-step > button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ma-blue) 55%, transparent);
+  outline-offset: 1px;
+}
+
+.ma-inject-node {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ma-muted);
+  background: var(--ma-card);
+  border: 1px solid var(--ma-border2);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ma-card2) 80%, transparent);
+}
+
+.ma-inject-node svg {
+  width: 8px;
+  height: 8px;
+  display: block;
+}
+
+.ma-inject-step-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--ma-muted);
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* done：节点亮绿；标签用偏深成功色，浅色底也清晰 */
+.ma-inject-step.is-done .ma-inject-node {
+  color: #fff;
+  background: color-mix(in srgb, var(--ma-green) 88%, #15803d);
+  border-color: transparent;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--ma-green) 22%, transparent),
+    0 1px 3px color-mix(in srgb, var(--ma-green) 28%, transparent);
+}
+
+.ma-inject-step.is-done .ma-inject-step-label {
+  color: color-mix(in srgb, var(--ma-green) 42%, var(--ma-txt));
+  font-weight: 650;
+}
+
+.ma-inject-step.is-cur .ma-inject-node {
+  color: #fff;
+  background: color-mix(in srgb, var(--ma-blue) 92%, #1d4ed8);
+  border-color: transparent;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--ma-blue) 28%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--ma-blue) 10%, transparent),
+    0 1px 4px color-mix(in srgb, var(--ma-blue) 30%, transparent);
+}
+
+.ma-inject-step.is-cur .ma-inject-step-label {
+  color: color-mix(in srgb, var(--ma-blue) 48%, var(--ma-txt));
+  font-weight: 700;
+}
+
+.ma-inject-step.is-cur .ma-inject-node::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--ma-blue) 40%, transparent);
+  animation: ma-inject-pulse 1.8s ease-out infinite;
+}
+
+@keyframes ma-inject-pulse {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+}
+
+.ma-inject-step.is-active .ma-inject-step-label {
+  color: var(--ma-txt);
+}
+
+.ma-inject-switch {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  background: var(--ma-control);
+  border: 1px solid var(--ma-border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.ma-inject-switch button {
+  border: 0;
+  background: transparent;
+  color: var(--ma-muted);
+  font-size: 11px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.ma-inject-switch button.is-on {
+  background: var(--ma-card);
+  color: var(--ma-txt);
+  font-weight: 650;
+  box-shadow: 0 0 0 1px var(--ma-border);
+}
+
+.ma-inject-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ma-inject-sec {
+  padding: 8px 10px;
+  border: 1px solid var(--ma-border);
+  border-radius: 8px;
+  background: var(--ma-card);
+}
+
+.ma-inject-sec.is-flash {
+  animation: ma-inject-flash 0.9s ease;
+  border-color: color-mix(in srgb, var(--ma-blue) 55%, var(--ma-border));
+}
+
+@keyframes ma-inject-flash {
+  0% {
+    background: color-mix(in srgb, var(--ma-blue) 14%, var(--ma-card));
+  }
+  100% {
+    background: var(--ma-card);
+  }
+}
+
+.ma-inject-sec-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.ma-inject-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+/* 标签：色块浅底 + 字色与正文混色，浅色/深色都够对比 */
+.ma-inject-tag.is-user {
+  background: color-mix(in srgb, var(--ma-blue) 16%, var(--ma-card));
+  color: color-mix(in srgb, var(--ma-blue) 55%, var(--ma-txt));
+}
+
+.ma-inject-tag.is-approvalNote {
+  background: color-mix(in srgb, var(--ma-amber) 16%, var(--ma-card));
+  color: color-mix(in srgb, var(--ma-amber) 50%, var(--ma-txt));
+}
+
+.ma-inject-tag.is-upstream {
+  background: color-mix(in srgb, var(--ma-violet) 16%, var(--ma-card));
+  color: color-mix(in srgb, var(--ma-violet) 50%, var(--ma-txt));
+}
+
+.ma-inject-tag.is-role {
+  background: color-mix(in srgb, var(--ma-green) 16%, var(--ma-card));
+  color: color-mix(in srgb, var(--ma-green) 45%, var(--ma-txt));
+}
+
+.ma-inject-jump {
+  border: 0;
+  background: none;
+  color: color-mix(in srgb, var(--ma-blue) 55%, var(--ma-txt));
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.ma-inject-jump:hover {
+  color: var(--ma-blue);
+  text-decoration: underline;
+}
+
+.ma-inject-sec-body {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ma-txt);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ma-inject-sec-body.is-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+}
+
+.ma-inject-more {
+  border: 0;
+  background: none;
+  color: color-mix(in srgb, var(--ma-blue) 55%, var(--ma-txt));
+  font-size: 11px;
+  padding: 4px 0 0;
+  cursor: pointer;
+}
+
+.ma-inject-more:hover {
+  color: var(--ma-blue);
+  text-decoration: underline;
+}
+
+.ma-inject-sec-meta {
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--ma-muted2);
+}
+
+.ma-inject-trace-hint {
+  font-size: 10px;
+  color: var(--ma-muted2);
+  margin: 0 0 8px;
+}
+
+.ma-inject-trace-pipe {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.ma-inject-trace-node {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 8px;
+}
+
+.ma-inject-trace-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ma-inject-trace-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--ma-border2);
+  background: var(--ma-card);
+  flex-shrink: 0;
+}
+
+.ma-inject-trace-node.is-done .ma-inject-trace-dot {
+  border-color: color-mix(in srgb, var(--ma-green) 70%, var(--ma-border));
+  background: color-mix(in srgb, var(--ma-green) 28%, var(--ma-card));
+}
+
+.ma-inject-trace-node.is-cur .ma-inject-trace-dot {
+  border-color: var(--ma-blue);
+  background: var(--ma-blue);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ma-blue) 18%, transparent);
+}
+
+.ma-inject-trace-line {
+  flex: 1;
+  width: 2px;
+  min-height: 14px;
+  background: var(--ma-border);
+  margin: 2px 0;
+}
+
+.ma-inject-trace-card-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  margin-bottom: 6px;
+  min-width: 0;
+}
+
+.ma-inject-trace-card {
+  border: 1px solid var(--ma-border);
+  border-radius: 8px;
+  padding: 7px 9px;
+  background: var(--ma-card);
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  width: 100%;
+  font: inherit;
+}
+
+.ma-inject-trace-jump {
+  padding: 0 2px 2px;
+}
+
+.ma-inject-trace-card:hover {
+  border-color: var(--ma-border2);
+  background: var(--ma-surface-hover);
+}
+
+.ma-inject-trace-node.is-cur .ma-inject-trace-card {
+  border-color: color-mix(in srgb, var(--ma-blue) 40%, var(--ma-border));
+  background: color-mix(in srgb, var(--ma-blue) 8%, var(--ma-card));
+}
+
+.ma-inject-trace-card-h {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--ma-txt);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ma-inject-trace-badge {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--ma-muted);
+  background: var(--ma-control);
+  border: 1px solid var(--ma-border);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.ma-inject-trace-card-b {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--ma-muted);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ma-inject-step.is-cur .ma-inject-node::after,
+  .ma-inject-sec.is-flash {
+    animation: none;
+  }
 }
 
 .ma-agent-stream-wrap {

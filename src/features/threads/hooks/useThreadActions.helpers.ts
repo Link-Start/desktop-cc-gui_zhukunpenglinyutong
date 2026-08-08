@@ -1339,12 +1339,12 @@ export function stripHiddenSharedBindingSummaries(
       changed = true;
       return false;
     }
-    // Shared 挂名的 native 子行：协作 worker / hidden binding 改名后仍挂 parent
-    // 时靠 hide set 可能尚未 materialize；有 shared 父则不进侧栏顶层列表。
+    // Shared 子代理：parent 已 remap 到 shared: 时必须保留在列表中，
+    // 供 useThreadRows / childSubagentThreads / S10→Strip 合成使用。
+    // （旧逻辑直接丢掉 → Shared 无子代理入口；Native 不受影响）
     const parent = summary.parentThreadId?.trim() ?? "";
     if (parent.startsWith("shared:") && !summary.id.startsWith("shared:")) {
-      changed = true;
-      return false;
+      return true;
     }
     return true;
   });

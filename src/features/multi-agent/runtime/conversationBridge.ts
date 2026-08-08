@@ -336,3 +336,33 @@ export function emitReplanConversationItems(
     text: ackBody,
   });
 }
+
+/** 批准并补充：主幕线性事件（仅有 note 时调用，避免无补充时刷屏） */
+export function emitApproveConversationItems(
+  workspaceId: string,
+  threadId: string,
+  runId: string,
+  approvalNote: string,
+): void {
+  if (typeof window === "undefined") return;
+  const note = approvalNote.trim();
+  if (!note) return;
+  emitItem(workspaceId, threadId, {
+    id: `agent:${runId}:approve-user`,
+    kind: "message",
+    role: "user",
+    text: maT("multiAgent.collab.approveUserWithNote", {
+      note,
+      defaultValue: `批准并继续\n\n补充：${note}`,
+    }),
+  });
+  emitItem(workspaceId, threadId, {
+    id: `agent:${runId}:approve-ack`,
+    kind: "message",
+    role: "assistant",
+    text: maT("multiAgent.collab.approveAckWithNote", {
+      note,
+      defaultValue: `已批准。将按规划 + 你的补充自动执行后续环节：\n\n> ${note}`,
+    }),
+  });
+}

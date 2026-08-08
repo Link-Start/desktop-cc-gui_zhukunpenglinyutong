@@ -152,6 +152,9 @@ pub struct AgentStageBindingInput {
     /// 本段成功后是否进入批准门闩
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub requires_approval: Option<bool>,
+    /// 本段启动时上游喂料：summary | full（缺省 summary；首段忽略）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upstream_feed_mode: Option<String>,
     /// 客户端智能体（展示 + 绑定元数据，可选）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub persona_agent_id: Option<String>,
@@ -178,6 +181,9 @@ pub struct AgentStageProjectionV1 {
     pub access_mode: String,
     #[serde(default)]
     pub requires_approval: bool,
+    /// summary | full；缺省按 summary 解释
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upstream_feed_mode: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attempt_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -257,6 +263,9 @@ pub struct AgentProjectionV1 {
     pub requested_at: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub approved_at: Option<i64>,
+    /// 批准时用户可选补充；后续段 prompt 注入（空则省略）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_note: Option<String>,
     pub updated_at: i64,
     /// 主幕布调度汇总：综括本轮各节点结果（非末段原文重复）
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -285,6 +294,7 @@ pub fn default_stage_specs(default_target: &ExecutionTargetInput) -> Vec<AgentSt
             status: AgentStageStatus::Pending,
             access_mode: "read-only".into(),
             requires_approval: true,
+            upstream_feed_mode: Some("full".into()),
             attempt_id: None,
             binding_key: None,
             started_at: None,
@@ -306,6 +316,7 @@ pub fn default_stage_specs(default_target: &ExecutionTargetInput) -> Vec<AgentSt
             status: AgentStageStatus::Pending,
             access_mode: "current".into(),
             requires_approval: false,
+            upstream_feed_mode: Some("summary".into()),
             attempt_id: None,
             binding_key: None,
             started_at: None,
@@ -327,6 +338,7 @@ pub fn default_stage_specs(default_target: &ExecutionTargetInput) -> Vec<AgentSt
             status: AgentStageStatus::Pending,
             access_mode: "read-only".into(),
             requires_approval: false,
+            upstream_feed_mode: Some("summary".into()),
             attempt_id: None,
             binding_key: None,
             started_at: None,
@@ -440,6 +452,27 @@ pub fn stages_from_bindings(
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
                 .map(str::to_string);
+            // 首段默认 full（用户全文）；后续默认 summary
+            let upstream_feed_mode = if index == 0 {
+                match binding
+                    .upstream_feed_mode
+                    .as_deref()
+                    .map(str::trim)
+                {
+                    Some("summary") => Some("summary".into()),
+                    _ => Some("full".into()),
+                }
+            } else {
+                match binding
+                    .upstream_feed_mode
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                {
+                    Some("full") => Some("full".into()),
+                    _ => Some("summary".into()),
+                }
+            };
             AgentStageProjectionV1 {
                 id: id.clone(),
                 title,
@@ -451,6 +484,7 @@ pub fn stages_from_bindings(
                 status: AgentStageStatus::Pending,
                 access_mode,
                 requires_approval,
+                upstream_feed_mode,
                 attempt_id: None,
                 binding_key: None,
                 started_at: None,
@@ -479,6 +513,7 @@ pub fn apply_stage_bindings(
         binding.title.is_some()
             || binding.role_prompt.is_some()
             || binding.requires_approval.is_some()
+            || binding.upstream_feed_mode.is_some()
             || binding.access_mode.is_some()
             || binding.persona_agent_id.is_some()
             || binding.persona_agent_name.is_some()
@@ -513,6 +548,16 @@ pub fn apply_stage_bindings(
             }
             if let Some(requires) = binding.requires_approval {
                 stage.requires_approval = requires;
+            }
+            if let Some(feed) = binding.upstream_feed_mode.as_ref() {
+                let feed = feed.trim();
+                stage.upstream_feed_mode = if feed == "full" {
+                    Some("full".into())
+                } else if feed == "summary" {
+                    Some("summary".into())
+                } else {
+                    stage.upstream_feed_mode.clone()
+                };
             }
             if let Some(mode) = binding.access_mode.as_ref() {
                 let mode = mode.trim();

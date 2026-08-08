@@ -4,6 +4,7 @@ import CircleCheck from "lucide-react/dist/esm/icons/circle-check";
 import GitCommitHorizontal from "lucide-react/dist/esm/icons/git-commit-horizontal";
 import LayoutDashboard from "lucide-react/dist/esm/icons/layout-dashboard";
 import Lock from "lucide-react/dist/esm/icons/lock";
+import PanelLeftClose from "lucide-react/dist/esm/icons/panel-left-close";
 import Settings from "lucide-react/dist/esm/icons/settings";
 import type { ReactNode, RefObject } from "react";
 import {
@@ -40,6 +41,9 @@ type SidebarSettingsMenuProps = {
    * 与 GlobalRuntimeNoticeDock 最小化气泡的 has-error 语义一致。
    */
   runtimeNoticeHasError?: boolean;
+  /** non-macOS：设置菜单「隐藏对话侧边栏」；mac 用 titlebar */
+  showHideThreadsSidebar?: boolean;
+  onCollapseSidebar?: () => void;
 };
 
 type SettingsMenuAction = {
@@ -67,6 +71,8 @@ export function SidebarSettingsMenu({
   onOpenRuntimeNotice,
   showRuntimeNotice = false,
   runtimeNoticeHasError = false,
+  showHideThreadsSidebar = false,
+  onCollapseSidebar,
 }: SidebarSettingsMenuProps) {
   const { pinnedIds, togglePinned } = useSidebarSettingsPinnedActions();
   const atPinLimit = pinnedIds.length >= SIDEBAR_SETTINGS_PINNED_MAX;
@@ -83,6 +89,7 @@ export function SidebarSettingsMenu({
       className="sidebar-settings-runtime-notice-icon is-idle"
     />
   );
+  const showHideThreads = Boolean(showHideThreadsSidebar && onCollapseSidebar);
 
   const actions: SettingsMenuAction[] = [
     {
@@ -155,6 +162,20 @@ export function SidebarSettingsMenu({
             ref={menuRef}
             role="menu"
           >
+            {showHideThreads ? (
+              <button
+                type="button"
+                role="menuitem"
+                className="sidebar-settings-dropdown-item"
+                onClick={() => {
+                  onClose();
+                  onCollapseSidebar?.();
+                }}
+              >
+                <PanelLeftClose size={14} aria-hidden />
+                <span>{t("sidebar.hideThreadsSidebar")}</span>
+              </button>
+            ) : null}
             {visibleActions.map((action) => {
               const pinned = pinnedIds.includes(action.id);
               const pinDisabled = !pinned && atPinLimit;

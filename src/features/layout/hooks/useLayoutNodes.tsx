@@ -253,6 +253,49 @@ function resolveActiveConversationEngine(
   return toConversationEngine(threadEngine ?? selectedEngine);
 }
 
+/**
+ * 收集当前 canvas 会话的「子代理线程」。
+ *
+ * - parent 直接挂到 activeId 的行（grok 等 Shared remap 后的子行）
+ * - Shared 父：`claude:subagent:{owner}:{agentId}` 行 parentThreadId 为空，
+ *   owner 命中该 Shared 的 nativeThreadIds 即视为子代理
+ *   （与侧栏树对 claude:subagent id 的解析口径一致）。
+ */
+export function collectCanvasChildSubagentThreads(
+  activeId: string | null | undefined,
+  workspaceId: string | null | undefined,
+  threads: readonly ThreadSummary[] | undefined,
+  threadParentById: Record<string, string>,
+  nativeThreadIds: readonly string[] | undefined,
+): ThreadSummary[] {
+  if (!activeId || !workspaceId || !threads) {
+    return [];
+  }
+  const isSharedParent = activeId.startsWith("shared:");
+  const owners = isSharedParent
+    ? (nativeThreadIds ?? []).filter((id) => id.trim().length > 0)
+    : [];
+  return threads.filter((thread) => {
+    const parent =
+      thread.parentThreadId ?? threadParentById[thread.id] ?? null;
+    if (parent === activeId) {
+      return true;
+    }
+    if (owners.length === 0) {
+      return false;
+    }
+    return owners.some((owner) => {
+      const bare = owner.startsWith("claude:")
+        ? owner.slice("claude:".length)
+        : owner;
+      return (
+        thread.id.startsWith(`claude:subagent:${owner}:`) ||
+        thread.id.startsWith(`claude:subagent:${bare}:`)
+      );
+    });
+  });
+}
+
 function flattenLayoutNodesOptions(
   options: LayoutNodesOptions,
 ): LayoutNodesFlatOptions {
@@ -746,6 +789,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         onOpenProjectMemory={options.onOpenProjectMemory}
         onOpenReleaseNotes={options.onOpenReleaseNotes}
         onOpenGlobalSearch={options.onOpenGlobalSearch}
+        onOpenQuickSwitcher={options.onOpenQuickSwitcher}
+        onCollapseSidebar={options.onCollapseSidebar}
         globalSearchShortcut={options.globalSearchShortcut}
         openChatShortcut={options.openChatShortcut}
         openKanbanShortcut={options.openKanbanShortcut}
@@ -957,12 +1002,13 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     const workspaceId = options.activeWorkspaceId;
     let next = EMPTY_ACTIVE_CANVAS_CHILD_SUBAGENT_THREADS;
     if (activeId && workspaceId) {
-      const threads = options.threadsByWorkspace[workspaceId] ?? [];
-      const filtered = threads.filter((thread) => {
-        const parent =
-          thread.parentThreadId ?? options.threadParentById[thread.id] ?? null;
-        return parent === activeId;
-      });
+      const filtered = collectCanvasChildSubagentThreads(
+        activeId,
+        workspaceId,
+        options.threadsByWorkspace[workspaceId],
+        options.threadParentById,
+        activeThreadSummary?.nativeThreadIds,
+      );
       next =
         filtered.length === 0
           ? EMPTY_ACTIVE_CANVAS_CHILD_SUBAGENT_THREADS
@@ -980,6 +1026,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     options.activeWorkspaceId,
     options.threadParentById,
     options.threadsByWorkspace,
+    activeThreadSummary?.nativeThreadIds,
   ]);
 
   const activeNativeThreadIdsStableRef = useRef(
@@ -1641,6 +1688,14 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           plan={options.plan}
           isPlanMode={options.isPlanMode}
           onOpenDiffPath={handleComposerOpenDiffPath}
+          gitChangedFiles={
+            // 非 git 仓库时传 null，退回 tool 统计；空数组表示 clean working tree
+            options.gitStatus.error === "not a git repository"
+              ? null
+              : options.gitStatus.files
+          }
+          isGitRepository={options.gitStatus.error !== "not a git repository"}
+          onRequestGitStatusRefresh={options.queueGitStatusRefresh}
           onRevertFile={options.onRevertGitFile}
           onRevertAllFiles={options.onRevertGitPaths}
           showStatusPanelToggleOverride={false}

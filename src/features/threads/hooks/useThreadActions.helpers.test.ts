@@ -933,7 +933,7 @@ describe("useThreadActions.helpers", () => {
     expect(isCollabWorkerAgentNumberTitle("Agent 11 讨论")).toBe(false);
   });
 
-  it("stripHiddenSharedBindingSummaries drops SUMMARY titles and shared-parent natives", () => {
+  it("stripHiddenSharedBindingSummaries drops SUMMARY titles but keeps nested shared children", () => {
     const input = [
       {
         id: "shared:s1",
@@ -963,8 +963,10 @@ describe("useThreadActions.helpers", () => {
       },
     ];
     const stripped = stripHiddenSharedBindingSummaries(input, new Set());
+    // control-plane 顶层仍丢；挂在 shared 下的子代理保留（Strip/childThreads 数据源）
     expect(stripped.map((row) => row.id)).toEqual([
       "shared:s1",
+      "grok:impl-1",
       "claude:user-1",
     ]);
   });

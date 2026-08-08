@@ -18,8 +18,8 @@
   position: relative;
   z-index: 30;
   /* Bottom border-radius since ButtonArea is now the last element inside the box */
-  border-bottom-left-radius: 13px;
-  border-bottom-right-radius: 13px;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
 }
 
 .button-area-primary-row {

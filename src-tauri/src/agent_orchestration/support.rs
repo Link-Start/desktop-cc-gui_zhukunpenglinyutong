@@ -269,7 +269,14 @@ pub(super) fn build_stage_prompt(
         });
         review_prompt(request_text, &plan_ref, upstream_notes)
     } else if let Some(plan) = plan {
-        implement_prompt(request_text, plan)
+        let mut implement = implement_prompt(request_text, plan);
+        // full/summary 上游 notes：implement 基座原只含 plan，非空时追加前序产出
+        if !upstream_notes.trim().is_empty() {
+            implement.push_str("\n\n上游环节产出：\n");
+            implement.push_str(upstream_notes.trim());
+            implement.push('\n');
+        }
+        implement
     } else {
         format!(
             r#"你是多 Agent 协作管线中的【{title}】环节。

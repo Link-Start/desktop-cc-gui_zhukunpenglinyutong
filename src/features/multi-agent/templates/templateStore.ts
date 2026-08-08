@@ -61,6 +61,8 @@ function migrateStage(raw: unknown): CollaborationTemplateStage | null {
       rolePrompt: typeof row.rolePrompt === "string" ? row.rolePrompt : "",
       accessMode: row.accessMode === "read-only" ? "read-only" : "current",
       requiresApproval: row.requiresApproval === true,
+      upstreamFeedMode:
+        row.upstreamFeedMode === "full" ? "full" : "summary",
       personaAgentId:
         typeof row.personaAgentId === "string" ? row.personaAgentId : null,
       personaAgentName:
@@ -115,6 +117,7 @@ function migrateStage(raw: unknown): CollaborationTemplateStage | null {
     rolePrompt: typeof row.rolePrompt === "string" ? row.rolePrompt : "",
     accessMode: row.accessMode === "read-only" ? "read-only" : "current",
     requiresApproval: row.requiresApproval === true,
+    upstreamFeedMode: row.upstreamFeedMode === "full" ? "full" : "summary",
     personaAgentId:
       typeof row.personaAgentId === "string" ? row.personaAgentId : null,
     personaAgentName:
@@ -343,6 +346,7 @@ export function cloneStage(
       : { ...emptyTarget("claude"), reasoningEffort: "medium" },
     accessMode: partial?.accessMode ?? "current",
     requiresApproval: partial?.requiresApproval ?? false,
+    upstreamFeedMode: partial?.upstreamFeedMode === "full" ? "full" : "summary",
     rolePrompt: partial?.rolePrompt ?? "",
     personaAgentId: partial?.personaAgentId ?? null,
     personaAgentName: partial?.personaAgentName ?? null,

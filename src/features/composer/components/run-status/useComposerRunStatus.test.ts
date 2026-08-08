@@ -27,6 +27,51 @@ describe("useComposerRunStatus", () => {
       }),
     );
     expect(result.current.visible).toBe(false);
+    expect(result.current.activityVisible).toBe(false);
+    expect(result.current.showSubagentSection).toBe(false);
+  });
+
+  it("shows strip for subagents alone without counting them as activityVisible", () => {
+    const { result } = renderHook(() =>
+      useComposerRunStatus({
+        todos: [],
+        subagents: [
+          {
+            id: "s1",
+            type: "explore",
+            description: "only agent",
+            status: "completed",
+          },
+        ],
+        plan: null,
+        isPlanMode: false,
+        isProcessing: false,
+        mergePlanIntoTodos: false,
+        sessionFileChanges: null,
+      }),
+    );
+    expect(result.current.showSubagentSection).toBe(true);
+    expect(result.current.activityVisible).toBe(false);
+    expect(result.current.visible).toBe(true);
+    expect(result.current.showTodoSection).toBe(false);
+    expect(result.current.showEditSection).toBe(false);
+  });
+
+  it("keeps activityVisible true when only todos/edits exist without subagents", () => {
+    const { result } = renderHook(() =>
+      useComposerRunStatus({
+        todos: [{ content: "A", status: "pending" }],
+        subagents: [],
+        plan: null,
+        isPlanMode: false,
+        isProcessing: false,
+        mergePlanIntoTodos: false,
+        sessionFileChanges: null,
+      }),
+    );
+    expect(result.current.activityVisible).toBe(true);
+    expect(result.current.showSubagentSection).toBe(false);
+    expect(result.current.visible).toBe(true);
   });
 
   it("exposes todo / subagent / plan / edit sections and toggles expand", () => {
@@ -101,5 +146,74 @@ describe("useComposerRunStatus", () => {
     expect(result.current.displayTodos).toHaveLength(2);
     expect(result.current.displayTodos[0]?.content).toBe("from plan");
     expect(result.current.displayTodos[1]?.status).toBe("in_progress");
+  });
+
+  it("hides edit section after markFilesReverted and restores when stats change", () => {
+    const first: TurnFileChangesSummary = {
+      files: [
+        { path: "a.ts", additions: 3, deletions: 1, status: "completed" },
+      ],
+      totalAdditions: 3,
+      totalDeletions: 1,
+    };
+    const { result, rerender } = renderHook(
+      ({ files }) =>
+        useComposerRunStatus({
+          todos: [],
+          subagents: [],
+          plan: null,
+          isPlanMode: false,
+          isProcessing: false,
+          mergePlanIntoTodos: false,
+          sessionFileChanges: files,
+          sessionScopeKey: "thread-1",
+        }),
+      { initialProps: { files: first as TurnFileChangesSummary | null } },
+    );
+
+    expect(result.current.showEditSection).toBe(true);
+    act(() => {
+      result.current.markFilesReverted(["a.ts"]);
+    });
+    expect(result.current.showEditSection).toBe(false);
+    expect(result.current.sessionFileChanges).toBeNull();
+
+    const reEdited: TurnFileChangesSummary = {
+      files: [
+        { path: "a.ts", additions: 8, deletions: 2, status: "completed" },
+      ],
+      totalAdditions: 8,
+      totalDeletions: 2,
+    };
+    rerender({ files: reEdited });
+    expect(result.current.showEditSection).toBe(true);
+    expect(result.current.totalAdditions).toBe(8);
+  });
+
+  it("clears reverted hide state when sessionScopeKey changes", () => {
+    const files = demoSessionFiles;
+    const { result, rerender } = renderHook(
+      ({ scope }) =>
+        useComposerRunStatus({
+          todos: [],
+          subagents: [],
+          plan: null,
+          isPlanMode: false,
+          isProcessing: false,
+          mergePlanIntoTodos: false,
+          sessionFileChanges: files,
+          sessionScopeKey: scope,
+        }),
+      { initialProps: { scope: "thread-a" } },
+    );
+
+    act(() => {
+      result.current.markFilesReverted(["a.ts", "b.ts"]);
+    });
+    expect(result.current.showEditSection).toBe(false);
+
+    rerender({ scope: "thread-b" });
+    expect(result.current.showEditSection).toBe(true);
+    expect(result.current.editFileCount).toBe(2);
   });
 });

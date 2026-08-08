@@ -128,6 +128,10 @@ describe("templateToStageBindings", () => {
     ]);
     expect(bindings[0]?.requiresApproval).toBe(true);
     expect(bindings[0]?.rolePrompt).toBe("plan me");
+    // 首段默认 full；非首段默认 summary
+    expect(bindings[0]?.upstreamFeedMode).toBe("full");
+    expect(bindings[1]?.upstreamFeedMode).toBe("summary");
+    expect(bindings[3]?.upstreamFeedMode).toBe("summary");
     // incomplete cross-engine → 回退会话 target 且 source 归一 local
     expect(bindings[0]?.target.engine).toBe("codex");
     expect(bindings[0]?.target.providerProfileSource).toBe("local");

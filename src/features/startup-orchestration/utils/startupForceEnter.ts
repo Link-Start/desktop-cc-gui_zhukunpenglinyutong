@@ -6,6 +6,8 @@
  * not re-flood the main thread into the same click window.
  */
 
+import { stampStartupGateReady } from "./startupGateReady";
+
 type ForceEnterListener = () => void;
 
 let forceEntered = false;
@@ -61,6 +63,8 @@ export function markStartupForceEnter(): void {
     }
     idleHydrationCancels.delete(cancel);
   }
+  // Gate attribution only — Overlay closes without waiting full-catalog.
+  stampStartupGateReady("force-enter");
   listeners.forEach((listener) => {
     try {
       listener();
