@@ -1933,3 +1933,36 @@ A+B 方案同步 isProcessing：协作蓝点/代理电、approve/retry 失败熄
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1349: 修复 mac 打包 TypeScript 门禁阻塞
+
+**Date**: 2026-08-08
+**Task**: 修复 mac 打包 TypeScript 门禁阻塞
+**Branch**: `cxn-version-0.8.4`
+
+### Summary
+
+修复 build:mac-arm64 前端 tsc 四处错误：Composer 未使用 subagentTotal、hast/DOMPurify 跨包类型断言、seed 子代理 engine 收紧为 EngineType。vitest 相关 50 测通过后提交。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7492d4f58` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
