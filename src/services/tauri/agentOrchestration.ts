@@ -73,16 +73,20 @@ export async function sharedAgentApprove(
   threadId: string,
   runId: string,
   revision: number,
+  /** 可选：批准时用户补充，注入后续实现/审查段 */
+  approvalNote?: string | null,
 ): Promise<{
   projection: AgentProjectionV1;
   stageAttempt?: AgentPreparedAttempt | null;
   executeAttempt?: AgentPreparedAttempt | null;
 }> {
+  const note = approvalNote?.trim() || null;
   return invoke("shared_agent_approve", {
     workspaceId,
     threadId,
     runId,
     revision,
+    approvalNote: note,
   });
 }
 

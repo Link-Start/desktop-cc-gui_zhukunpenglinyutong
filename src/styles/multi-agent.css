@@ -587,42 +587,105 @@
   color: var(--ma-blue);
 }
 
-.ma-approve-bar {
+/* 统一操作条：批准 / 超时 / 运行中 共用「主操作左 + 停止右」一排 */
+.ma-action-bar {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
-  align-items: center;
   padding: 10px 14px 12px;
   border-top: 1px solid var(--ma-border);
+}
+
+.ma-action-bar--approve {
   background: color-mix(in srgb, var(--ma-amber) 6%, transparent);
+}
+
+.ma-action-bar--hang {
+  margin: 0 12px 10px;
+  padding: 10px 12px;
+  border-top: 0;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--ma-amber, #f59e0b) 45%, var(--ma-border));
+  background: color-mix(in srgb, var(--ma-amber, #f59e0b) 10%, transparent);
+}
+
+.ma-action-bar--running {
+  padding: 6px 10px 8px;
+}
+
+.ma-action-bar--running.is-compact {
+  padding: 4px 10px 6px;
+}
+
+.ma-orch.is-stages-collapsed .ma-action-bar--running {
+  border-top: 0;
+}
+
+.ma-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.ma-action-row__primary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ma-action-row__end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.ma-action-bar--running .ma-stop,
+.ma-action-bar--running .ma-ghost {
+  padding: 4px 10px;
+  font-size: 12px;
+  line-height: 1.2;
+  min-height: 0;
 }
 
 .ma-approve-summary {
   width: 100%;
-  margin: 4px 0 0;
+  margin: 0;
   font-size: 12px;
   color: var(--ma-muted);
 }
 
-.ma-approve-bar .ma-ghost.is-on {
+.ma-action-bar .ma-ghost.is-on,
+.ma-action-bar .ma-primary.is-on {
+  outline: 2px solid color-mix(in srgb, var(--ma-amber, #f59e0b) 55%, transparent);
+  outline-offset: 1px;
+}
+
+.ma-action-bar .ma-ghost.is-on {
   border-color: color-mix(in srgb, var(--ma-amber, #f59e0b) 55%, var(--ma-border));
   color: var(--text-primary, inherit);
 }
 
-/* 打回重规划：按钮下方滑出的可选补充框 */
-.ma-replan-panel {
+/* 批准/打回：按钮下方滑出的可选补充框 */
+.ma-note-panel {
   width: 100%;
   display: grid;
   gap: 8px;
-  margin-top: 4px;
+  margin-top: 2px;
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid var(--ma-border);
   background: color-mix(in srgb, var(--surface-composer, var(--ma-card)) 88%, transparent);
-  animation: ma-replan-slide 0.16s ease-out;
+  animation: ma-note-slide 0.16s ease-out;
 }
 
-@keyframes ma-replan-slide {
+@keyframes ma-note-slide {
   from {
     opacity: 0;
     transform: translateY(-6px);
@@ -633,13 +696,13 @@
   }
 }
 
-.ma-replan-label {
+.ma-note-label {
   font-size: 12px;
   font-weight: 600;
   color: var(--ma-muted);
 }
 
-.ma-replan-textarea {
+.ma-note-textarea {
   width: 100%;
   min-height: 72px;
   resize: vertical;
@@ -654,20 +717,42 @@
   padding: 8px 10px;
 }
 
-.ma-replan-textarea:focus {
+.ma-note-textarea:focus {
   outline: 2px solid color-mix(in srgb, var(--ma-amber, #f59e0b) 45%, transparent);
   outline-offset: 1px;
 }
 
-.ma-replan-textarea:disabled {
+.ma-note-textarea:disabled {
   opacity: 0.6;
 }
 
-.ma-replan-actions {
+.ma-note-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+/* 兼容旧类名（历史/测试可能引用） */
+.ma-approve-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--ma-border);
+  background: color-mix(in srgb, var(--ma-amber) 6%, transparent);
+}
+
+.ma-replan-panel {
+  width: 100%;
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--ma-border);
+  background: color-mix(in srgb, var(--surface-composer, var(--ma-card)) 88%, transparent);
 }
 
 .ma-orch-actions {
@@ -680,25 +765,6 @@
   border-top: 1px solid var(--ma-border);
 }
 
-/* 阶段列表折叠时：按钮行更扁，减少大块空白 */
-.ma-orch-actions.is-compact {
-  padding: 4px 10px 6px;
-  gap: 6px;
-}
-
-.ma-orch-actions .ma-stop,
-.ma-orch-actions .ma-ghost {
-  padding: 4px 10px;
-  font-size: 12px;
-  line-height: 1.2;
-  min-height: 0;
-}
-
-.ma-orch.is-stages-collapsed .ma-orch-actions {
-  border-top: 0;
-}
-
-/* 节点卡死恢复条：文案整行在上，操作按钮固定一排居右在下 */
 .ma-hang-bar {
   margin: 0 12px 10px;
   padding: 10px 12px;

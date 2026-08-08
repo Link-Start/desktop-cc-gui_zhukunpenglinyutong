@@ -66,13 +66,28 @@ fn start_stage_attempt(
 ) -> Result<AgentPreparedAttemptV1, String> {
     let stage_idx = stage_index(run, &stage.id).unwrap_or(0);
     // 首段吃完整 model text（含注入）；后续段只吃可见原文 + plan/上游短说明
-    let task_text = if stage_idx == 0 {
+    let base_task = if stage_idx == 0 {
         run.request_text.as_str()
     } else if !run.user_visible_text.trim().is_empty() {
         run.user_visible_text.as_str()
     } else {
         run.request_text.as_str()
     };
+    // 批准补充：仅注入非首段（规划后），与打回补充对称但不重开 run
+    let task_owned = if stage_idx > 0 {
+        match run
+            .approval_note
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            Some(note) => Some(format!("{base_task}\n\n【批准时用户补充】\n{note}")),
+            None => None,
+        }
+    } else {
+        None
+    };
+    let task_text = task_owned.as_deref().unwrap_or(base_task);
     let prompt = build_stage_prompt(
         &stage.id,
         stage_idx,
@@ -334,6 +349,8 @@ pub(crate) async fn shared_agent_approve(
     thread_id: String,
     run_id: String,
     revision: u32,
+    // 可选：用户批准时补充，写入 fact.extra 并注入后续段 prompt
+    approval_note: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
     require_agent_enabled()?;
@@ -371,6 +388,15 @@ pub(crate) async fn shared_agent_approve(
         ));
     }
     let approved_at = now_ms();
+    let note = approval_note
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.to_string());
+    let extra = match note.as_ref() {
+        Some(value) => json!({ "approvalNote": value }),
+        None => empty_extra(),
+    };
     append_fact(
         writer,
         &session_id,
@@ -379,7 +405,7 @@ pub(crate) async fn shared_agent_approve(
             run_id: run_id.clone(),
             revision,
             approved_at,
-            extra: empty_extra(),
+            extra,
         }),
     )?;
 
@@ -1188,6 +1214,7 @@ mod degrade_settle_tests {
             diagnostics: vec![],
             requested_at: 1,
             approved_at: Some(2),
+            approval_note: None,
             updated_at: 3,
             final_summary: None,
         };

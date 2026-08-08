@@ -26,6 +26,7 @@ const ALLOW_LINE_PATTERNS = [
   /【智能体：/, // legacy / 展示协议
   /【智能体角色指令】/, // Rust 侧叠层（若前端镜像）
   /【打回补充】/, // executor → 模型任务续写
+  /【批准时用户补充】/, // backend stage prompt 注入（前端若镜像）
   /【节点重试】/, // executor → 模型任务续写
   /节点原文已截断供概括/, // 汇总 turn 模型摘录
   /isWeakStatusText|成功|完成|失败|取消/, // 状态弱文案正则

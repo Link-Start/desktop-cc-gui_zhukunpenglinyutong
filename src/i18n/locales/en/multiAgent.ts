@@ -46,9 +46,13 @@ export default {
     actions: {
       confirmExecute: "✓ Approve · auto-run next",
       rejectReplan: "Reject & replan",
+      noteLabel: "Extra notes (optional)",
       replanNoteLabel: "Extra notes (optional)",
+      approveNotePlaceholder:
+        "e.g. prioritize tests; don't touch auth… Leave empty to continue with the current plan",
       replanNotePlaceholder:
         "e.g. don't touch auth; prioritize README API table… Leave empty to replan with the original task only",
+      approveConfirm: "Confirm approve & run",
       replanConfirm: "Confirm reject & replan",
       replanCancel: "Cancel",
       approving: "Approving…",
@@ -91,6 +95,9 @@ export default {
       replanAckWithExcerpt:
         "Rejected. Replanning with the original task:\n\n> {{excerpt}}",
       replanAckEmpty: "Rejected. Replanning with the original task.",
+      approveUserWithNote: "Approve & continue\n\nNotes: {{note}}",
+      approveAckWithNote:
+        "Approved. Continuing with the plan plus your notes:\n\n> {{note}}",
       terminalLine: "{{status}} · {{done}}/{{total}} done · {{dur}}",
       collabTitle: "Collab · {{title}}",
     },

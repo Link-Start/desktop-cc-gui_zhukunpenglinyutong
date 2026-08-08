@@ -109,6 +109,8 @@ export type AgentProjectionV1 = {
   diagnostics?: string[];
   requestedAt: number;
   approvedAt?: number | null;
+  /** 批准时用户可选补充；后续段 prompt 已注入（展示/调试用） */
+  approvalNote?: string | null;
   updatedAt: number;
   finalSummary?: string | null;
 };

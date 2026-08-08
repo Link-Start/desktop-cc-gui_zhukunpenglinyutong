@@ -45,9 +45,13 @@ export default {
     actions: {
       confirmExecute: "✓ 批准，后续自动执行",
       rejectReplan: "打回重规划",
+      noteLabel: "补充说明（可选）",
       replanNoteLabel: "补充说明（可选）",
+      approveNotePlaceholder:
+        "例如：优先补测试、不要动鉴权… 不填则按当前规划继续执行",
       replanNotePlaceholder:
         "例如：不要改鉴权、优先补 README 的 API 表… 不填则按原任务重规划",
+      approveConfirm: "确认批准并执行",
       replanConfirm: "确认打回并重规划",
       replanCancel: "取消",
       approving: "正在确认…",
@@ -88,6 +92,9 @@ export default {
         "已打回。将按原任务 + 你的补充重新规划：\n\n> {{excerpt}}",
       replanAckWithExcerpt: "已打回。将按原任务重新规划：\n\n> {{excerpt}}",
       replanAckEmpty: "已打回。将按原任务重新规划。",
+      approveUserWithNote: "批准并继续\n\n补充：{{note}}",
+      approveAckWithNote:
+        "已批准。将按规划 + 你的补充自动执行后续环节：\n\n> {{note}}",
       terminalLine: "{{status}} · {{done}}/{{total}} 完成 · {{dur}}",
       collabTitle: "协作 · {{title}}",
     },

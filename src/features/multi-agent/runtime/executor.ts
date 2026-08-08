@@ -43,6 +43,7 @@ import {
 } from "./livePhaseChannel";
 import { pickLongestStageBody } from "../utils/stageBodyText";
 import {
+  emitApproveConversationItems,
   emitCollabStatusAssistantMessage,
   emitCollabVisibleUserMessage,
   emitMultiAgentConversationItems,
@@ -687,9 +688,12 @@ export async function approveAndExecuteAgent(
   threadId: string,
   runId: string,
   revision: number,
+  /** 可选：批准时用户补充，并入后续段 prompt */
+  approvalNote?: string | null,
 ): Promise<AgentProjectionV1> {
   // B：审批通过后继续执行 → 重新点亮左侧运行态
   setCollabThreadProcessing(threadId, true);
+  const note = approvalNote?.trim() || "";
   let approved: Awaited<ReturnType<typeof sharedAgentApprove>>;
   try {
     approved = await sharedAgentApprove(
@@ -697,11 +701,16 @@ export async function approveAndExecuteAgent(
       threadId,
       runId,
       revision,
+      note || null,
     );
   } catch (error) {
     // Approve RPC 失败不得留下悬挂蓝点
     setCollabThreadProcessing(threadId, false);
     throw error;
+  }
+  // 主幕叙事：RPC 成功后再记气泡，避免失败时误报已批准
+  if (note) {
+    emitApproveConversationItems(workspaceId, threadId, runId, note);
   }
   publishAgentProjection(workspaceId, threadId, approved.projection);
   const implementAttempt = asPrepared(

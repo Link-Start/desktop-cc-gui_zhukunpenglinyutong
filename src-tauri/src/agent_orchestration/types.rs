@@ -257,6 +257,9 @@ pub struct AgentProjectionV1 {
     pub requested_at: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub approved_at: Option<i64>,
+    /// 批准时用户可选补充；后续段 prompt 注入（空则省略）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_note: Option<String>,
     pub updated_at: i64,
     /// 主幕布调度汇总：综括本轮各节点结果（非末段原文重复）
     #[serde(default, skip_serializing_if = "Option::is_none")]

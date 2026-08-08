@@ -1,9 +1,29 @@
 import { describe, expect, it } from "vitest";
 
 import en from "./en/multiAgent";
+import es from "./es/multiAgent";
+import fr from "./fr/multiAgent";
+import hi from "./hi/multiAgent";
+import ja from "./ja/multiAgent";
+import ko from "./ko/multiAgent";
+import ptBR from "./pt-BR/multiAgent";
+import ru from "./ru/multiAgent";
 import zh from "./zh/multiAgent";
+import zhTW from "./zh-TW/multiAgent";
 
 type Bundle = { multiAgent: Record<string, unknown> };
+
+const locales: Record<string, Bundle> = {
+  es: es as Bundle,
+  fr: fr as Bundle,
+  hi: hi as Bundle,
+  ja: ja as Bundle,
+  ko: ko as Bundle,
+  "pt-BR": ptBR as Bundle,
+  ru: ru as Bundle,
+  zh: zh as Bundle,
+  "zh-TW": zhTW as Bundle,
+};
 
 function flattenKeys(node: Record<string, unknown>, prefix = ""): string[] {
   return Object.entries(node).flatMap(([key, value]) => {
@@ -30,17 +50,22 @@ function placeholders(value: string) {
 
 describe("multiAgent locale parity", () => {
   const enKeys = flattenKeys((en as Bundle).multiAgent).sort();
-  const zhKeys = flattenKeys((zh as Bundle).multiAgent).sort();
 
-  it("zh and en share the same key set", () => {
-    expect(zhKeys).toEqual(enKeys);
-  });
+  it.each(Object.entries(locales))(
+    "%s shares the English key set",
+    (_language, locale) => {
+      expect(flattenKeys(locale.multiAgent).sort()).toEqual(enKeys);
+    },
+  );
 
-  it("zh mirrors en interpolation placeholders", () => {
-    enKeys.forEach((path) => {
-      expect(placeholders(valueAt((zh as Bundle).multiAgent, path))).toEqual(
-        placeholders(valueAt((en as Bundle).multiAgent, path)),
-      );
-    });
-  });
+  it.each(Object.entries(locales))(
+    "%s mirrors English interpolation placeholders",
+    (_language, locale) => {
+      enKeys.forEach((path) => {
+        expect(
+          placeholders(valueAt(locale.multiAgent, path)),
+        ).toEqual(placeholders(valueAt((en as Bundle).multiAgent, path)));
+      });
+    },
+  );
 });
