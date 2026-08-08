@@ -400,20 +400,54 @@ describe("Sidebar", () => {
       configurable: true,
     });
     try {
-      const { container } = render(<Sidebar {...baseProps} />);
+      const onOpenQuickSwitcher = vi.fn();
+      const { container } = render(
+        <Sidebar {...baseProps} onOpenQuickSwitcher={onOpenQuickSwitcher} />,
+      );
       expect(screen.queryByText("Ctrl+J")).toBeNull();
       expect(screen.getByText("Ctrl+K")).toBeTruthy();
       expect(screen.getByText("Ctrl+O")).toBeTruthy();
-      expect(container.querySelectorAll(".sidebar-primary-nav .sidebar-primary-nav-shortcut")).toHaveLength(2);
+      expect(screen.getByText("Ctrl+E")).toBeTruthy();
+      expect(
+        container.querySelectorAll(
+          ".sidebar-primary-nav .sidebar-primary-nav-shortcut",
+        ),
+      ).toHaveLength(3);
       expect(screen.getByRole("button", { name: "Home" }).getAttribute("title")).toContain("Ctrl+J");
       expect(screen.getByRole("button", { name: "Automation" }).getAttribute("title")).toContain("Ctrl+K");
       expect(screen.getByRole("button", { name: "Search" }).getAttribute("title")).toContain("Ctrl+O");
+      expect(
+        screen.getByRole("button", { name: "Quick Switcher" }).getAttribute("title"),
+      ).toContain("Ctrl+E");
+      fireEvent.click(screen.getByRole("button", { name: "Quick Switcher" }));
+      expect(onOpenQuickSwitcher).toHaveBeenCalledTimes(1);
     } finally {
       Object.defineProperty(window.navigator, "platform", {
         value: originalPlatform,
         configurable: true,
       });
     }
+  });
+
+  it("exposes hide conversation sidebar in settings menu when collapse handler is provided", async () => {
+    const onCollapseSidebar = vi.fn();
+    const { container } = render(
+      <Sidebar {...baseProps} onCollapseSidebar={onCollapseSidebar} />,
+    );
+
+    const settingsToggle = container.querySelector(".sidebar-primary-nav-item-bottom");
+    expect(settingsToggle).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(settingsToggle as Element);
+    });
+
+    const dropdown = container.querySelector(".sidebar-settings-dropdown");
+    expect(dropdown).toBeTruthy();
+    const hideItem = within(dropdown as HTMLElement).getByRole("menuitem", {
+      name: "Hide conversation sidebar",
+    });
+    fireEvent.click(hideItem);
+    expect(onCollapseSidebar).toHaveBeenCalledTimes(1);
   });
 
   it("reflects cleared quick mode shortcuts in button hints", () => {
@@ -461,6 +495,9 @@ describe("Sidebar", () => {
     expect(menu.queryByRole("menuitem", { name: "Home" })).toBeNull();
     expect(menu.queryByRole("menuitem", { name: "Automation" })).toBeNull();
     expect(menu.queryByRole("menuitem", { name: "Skills" })).toBeNull();
+    expect(
+      menu.queryByRole("menuitem", { name: "Hide conversation sidebar" }),
+    ).toBeNull();
     expect(menu.getByRole("menuitem", { name: "Lock" })).toBeTruthy();
     expect(menu.queryByRole("menuitem", { name: "Long-term Memory" })).toBeNull();
     expect(menu.getByRole("menuitem", { name: "Spec Hub" })).toBeTruthy();

@@ -11,6 +11,7 @@
 
 | Change | Progress | Current gate | Artifacts |
 | ------ | -------: | ------------ | --------- |
+| [`add-windows-sidebar-quick-switcher-and-collapse`](add-windows-sidebar-quick-switcher-and-collapse/proposal.md) | implemented / committed | Win 主导航 Ctrl+E Quick Switcher + 设置菜单隐藏对话侧栏；mac titlebar 不重复；手测通过；author chenxiangning | [proposal](add-windows-sidebar-quick-switcher-and-collapse/proposal.md) · [design](add-windows-sidebar-quick-switcher-and-collapse/design.md) · [tasks](add-windows-sidebar-quick-switcher-and-collapse/tasks.md) · [specs](add-windows-sidebar-quick-switcher-and-collapse/specs/) |
 | [`add-collab-stage-upstream-feed-mode`](add-collab-stage-upstream-feed-mode/proposal.md) | implemented / await human check | 模板第 2 段起「吃摘要/吃全文」；`prior_feed_notes` + implement 追加上游；Inspector 对齐；vitest 31 + rust binding ok；**待手测定稿 full** | [proposal](add-collab-stage-upstream-feed-mode/proposal.md) · [design](add-collab-stage-upstream-feed-mode/design.md) · [tasks](add-collab-stage-upstream-feed-mode/tasks.md) · [specs](add-collab-stage-upstream-feed-mode/specs/) |
 | [`add-multi-agent-inspector-inject-context`](add-multi-agent-inspector-inject-context/proposal.md) | implemented / committed | B+C 注入上下文 Header；commit `4f4c053c6` | [proposal](add-multi-agent-inspector-inject-context/proposal.md) · [design](add-multi-agent-inspector-inject-context/design.md) · [tasks](add-multi-agent-inspector-inject-context/tasks.md) · [specs](add-multi-agent-inspector-inject-context/specs/) |
 | [`fix-shared-create-default-provider-catalog`](fix-shared-create-default-provider-catalog/proposal.md) | implemented / user accepted | Shared 创建第一 Provider + 权威 catalog；打开历史文案/图标与 mapping 同源；人工验收通过 | [proposal](fix-shared-create-default-provider-catalog/proposal.md) · [design](fix-shared-create-default-provider-catalog/design.md) · [tasks](fix-shared-create-default-provider-catalog/tasks.md) · [specs](fix-shared-create-default-provider-catalog/specs/) · [verification](fix-shared-create-default-provider-catalog/verification.md) · [分析](../../docs/analysis/shared-create-local-catalog-stale-mapping-2026-08-08.md) |
@@ -32,6 +33,7 @@
 
 ## Active backlog notes（2026-08-08）
 
+- **已提交** `add-windows-sidebar-quick-switcher-and-collapse`：Win 侧栏补 Quick Switcher（Ctrl+E）与设置菜单「隐藏对话侧边栏」；mac titlebar 互斥；手测通过。
 - **新增** `add-collab-stage-upstream-feed-mode`：协作模板第 2 段起配置上游吃摘要/全文；运行时与 Inspector 对齐；代码已落地待手测。
 - **已提交** `add-multi-agent-inspector-inject-context`：`4f4c053c6`。
 - **落地** `fix-shared-create-default-provider-catalog`：Shared 创建默认第一 Provider + profile 权威 catalog；打开历史文案/图标 catalog runtime 优先 + Claude mapping sync；人工验收通过。

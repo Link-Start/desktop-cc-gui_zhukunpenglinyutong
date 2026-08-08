@@ -789,6 +789,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         onOpenProjectMemory={options.onOpenProjectMemory}
         onOpenReleaseNotes={options.onOpenReleaseNotes}
         onOpenGlobalSearch={options.onOpenGlobalSearch}
+        onOpenQuickSwitcher={options.onOpenQuickSwitcher}
+        onCollapseSidebar={options.onCollapseSidebar}
         globalSearchShortcut={options.globalSearchShortcut}
         openChatShortcut={options.openChatShortcut}
         openKanbanShortcut={options.openKanbanShortcut}
