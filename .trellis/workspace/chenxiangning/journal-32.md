@@ -38,3 +38,57 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1351: 本地 HTML 内置浏览器打开 + OpenSpec 收口
+
+**Date**: 2026-08-08
+**Task**: 本地 HTML 内置浏览器打开 + OpenSpec 收口
+**Branch**: `cxn-version-0.8.4`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+## 完成内容
+
+为本地 HTML/HTM 提供「在浏览器打开」，统一走内置 Browser Agent（file://）。
+
+| 区域 | 说明 |
+|------|------|
+| 入口 | 内容区右键、文件树 Globe/右键、Git Changes 行 Globe |
+| 策略 | Rust 仅放行 file:// + .html/.htm；BrowserDock 保留 file:// |
+| 错误 | 全局 pushErrorToast + formatOpenHtmlInBrowserError i18n |
+| OpenSpec | 同步 local-html-builtin-browser-open / vibecoding-browser-agent，归档 2026-08-08 |
+
+## 验证
+
+- focused vitest 19 通过
+- openspec validate --strict 通过
+
+## 残留
+
+- Browser 窗口 label 已存在时 focus+导航复用（另案）
+- tab 右键未覆盖
+- 工作区仍有无关 multi-agent.css 未提交改动
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `daad1393c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

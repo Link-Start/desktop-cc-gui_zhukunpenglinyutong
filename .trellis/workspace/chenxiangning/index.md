@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-32.md`
-- **Total Sessions**: 1350
+- **Total Sessions**: 1351
 - **Last Active**: 2026-08-08
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-32.md` | ~40 | Active |
+| `journal-32.md` | ~94 | Active |
 | `journal-31.md` | ~1968 | Archived |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
@@ -60,6 +60,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1351 | 2026-08-08 | 本地 HTML 内置浏览器打开 + OpenSpec 收口 | `daad1393c` | `cxn-version-0.8.4` |
 | 1350 | 2026-08-08 | 对齐 tauri plugin-dialog 版本以修复打包 | `b1e0c7851` | `cxn-version-0.8.4` |
 | 1349 | 2026-08-08 | 修复 mac 打包 TypeScript 门禁阻塞 | `7492d4f58` | `cxn-version-0.8.4` |
 | 1348 | 2026-08-08 | Composer 会话控制 HUD 与多供应商实时用量 | `f97a5ed74` | `cxn-version-0.8.4` |
