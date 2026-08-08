@@ -62,6 +62,7 @@ import type {
 } from "../../git/types/gitRepositoryActions";
 import { projectGitRepositoryFileStatuses } from "../../git/utils/gitRepositorySummary";
 import { languageFromPath } from "../../../utils/syntax";
+import { buildCodeSelectionChatSnippet } from "../utils/codeSelectionChatSnippet";
 import {
   resolveGitRootWorkspacePrefix,
   resolveGitStatusPathCandidates,
@@ -1397,12 +1398,16 @@ export function FileTreePanel({
       previewSelection.start,
       previewSelection.end + 1,
     );
-    const language = languageFromPath(previewPath);
-    const fence = language ? `\`\`\`${language}` : "```";
-    const start = previewSelection.start + 1;
-    const end = previewSelection.end + 1;
-    const rangeLabel = start === end ? `L${start}` : `L${start}-L${end}`;
-    const snippet = `${previewPath}:${rangeLabel}\n${fence}\n${selected.join("\n")}\n\`\`\``;
+    const snippet = buildCodeSelectionChatSnippet({
+      path: previewPath,
+      content: selected.join("\n"),
+      startLine: previewSelection.start + 1,
+      endLine: previewSelection.end + 1,
+      language: languageFromPath(previewPath),
+    });
+    if (!snippet) {
+      return;
+    }
     onInsertText(snippet);
     closePreview();
   }, [

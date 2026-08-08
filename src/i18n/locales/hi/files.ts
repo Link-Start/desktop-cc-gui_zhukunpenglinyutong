@@ -190,7 +190,7 @@ const files = {
     "documentPreviewTooLarge": "दस्तावेज़ पूर्वावलोकन {{maxMb}} MB तक की फ़ाइलों तक सीमित है। पहले बाहरी रूप से खोलें या दस्तावेज़ छोटा करें।",
     "documentPreviewOutlineEmpty": "कोई शीर्षक रूपरेखा नहीं मिली। स्थिर सामग्री-सूची प्रदर्शित करने के लिए Word शीर्षक शैलियों का उपयोग करें।",
     "clearSelection": "साफ़ करें",
-    "addToChat": "चैट में जोड़ें",
+    "addToChat": "इनपुट में भेजें",
     "selectionHintShiftClick": "Shift + क्लिक या ड्रैग + क्लिक",
     "selectionHintMultiLine": "बहु-पंक्ति चयन के लिए",
     "annotateForAi": "AI के लिए एनोटेट करें",

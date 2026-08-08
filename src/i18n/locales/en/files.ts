@@ -201,7 +201,7 @@ const files = {
     documentPreviewOutlineEmpty:
       "No heading outline was detected. Use Word heading styles to expose a stable table of contents.",
     clearSelection: "Clear",
-    addToChat: "Add to chat",
+    addToChat: "Send to input",
     selectionHintShiftClick: "Shift + click or drag + click",
     selectionHintMultiLine: "for multi-line selection",
     annotateForAi: "Annotate for AI",

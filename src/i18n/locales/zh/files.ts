@@ -197,7 +197,7 @@ const files = {
     documentPreviewOutlineEmpty:
       "没有检测到标题目录。若需要稳定目录，请在 Word 中使用 Heading 标题样式。",
     clearSelection: "清除",
-    addToChat: "添加到聊天",
+    addToChat: "发送到输入框",
     selectionHintShiftClick: "Shift + 点击或拖动 + 点击",
     selectionHintMultiLine: "进行多行选择",
     annotateForAi: "标注给 AI",

@@ -190,7 +190,7 @@ const files = {
     "documentPreviewTooLarge": "L'aperçu du document est limité aux fichiers d'au plus {{maxMb}} Mo. Ouvrez-le en externe ou réduisez d'abord le document.",
     "documentPreviewOutlineEmpty": "Aucun plan de titres détecté. Utilisez les styles de titre Word pour exposer une table des matières stable.",
     "clearSelection": "Effacer",
-    "addToChat": "Ajouter au chat",
+    "addToChat": "Envoyer à la saisie",
     "selectionHintShiftClick": "Maj + clic ou glisser + cliquer",
     "selectionHintMultiLine": "pour une sélection multiligne",
     "annotateForAi": "Annoter pour l'IA",

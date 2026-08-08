@@ -190,7 +190,7 @@ const files = {
     "documentPreviewTooLarge": "Просмотр документов ограничен файлами до {{maxMb}} МБ. Откройте во внешней программе или сначала уменьшите документ.",
     "documentPreviewOutlineEmpty": "Структура заголовков не обнаружена. Используйте стили заголовков Word, чтобы получить стабильное оглавление.",
     "clearSelection": "Очистить",
-    "addToChat": "Добавить в чат",
+    "addToChat": "Отправить во ввод",
     "selectionHintShiftClick": "Shift + клик или перетаскивание + клик",
     "selectionHintMultiLine": "для многострочного выделения",
     "annotateForAi": "Аннотировать для ИИ",

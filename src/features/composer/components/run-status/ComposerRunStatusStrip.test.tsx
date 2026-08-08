@@ -1,7 +1,34 @@
 /** @vitest-environment jsdom */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ComposerRunStatusStrip } from "./ComposerRunStatusStrip";
+
+describe("ComposerRunStatusStrip styles", () => {
+  it("keeps expanded panels out of document flow (absolute overlay)", () => {
+    const css = readFileSync(
+      resolve(process.cwd(), "src/styles/composer-run-status.css"),
+      "utf8",
+    );
+    const shellRule =
+      css.match(
+        /\.composer-run-status-panel-shell\s*\{([\s\S]*?)\n\}/,
+      )?.[1] ?? "";
+    const rootRule =
+      css.match(/\.composer-run-status\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
+
+    // 展开壳绝对定位，不撑高 strip / 不挤压 messages
+    expect(shellRule).toContain("position: absolute");
+    expect(shellRule).toContain("bottom: calc(100% + 6px)");
+    expect(rootRule).toContain("position: relative");
+    expect(rootRule).toContain("overflow: visible");
+    // 不得再用 in-flow 的 margin 去占位
+    expect(css).not.toMatch(
+      /\.composer-run-status-panel-shell\.is-open\s*\{[\s\S]*margin-bottom\s*:/,
+    );
+  });
+});
 
 describe("ComposerRunStatusStrip", () => {
   it("renders nothing without activity", () => {

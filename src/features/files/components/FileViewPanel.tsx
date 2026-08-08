@@ -33,6 +33,7 @@ import Save from "lucide-react/dist/esm/icons/save";
 import Search from "lucide-react/dist/esm/icons/search";
 import TextSelect from "lucide-react/dist/esm/icons/text-select";
 import NotebookPen from "lucide-react/dist/esm/icons/notebook-pen";
+import MessageSquare from "lucide-react/dist/esm/icons/message-square";
 import LocateFixed from "lucide-react/dist/esm/icons/locate-fixed";
 import X from "lucide-react/dist/esm/icons/x";
 import type { ReactCodeMirrorProps } from "@uiw/react-codemirror";
@@ -78,6 +79,10 @@ import {
 import { reorderTabPathsAtTarget } from "../utils/fileTabOrder";
 import { getFileTreeIconSvg } from "../utils/fileTreeIcons";
 import { FILE_CONTEXT_MENU_SHORTCUTS } from "../utils/fileContextMenuShortcuts";
+import {
+  buildCodeSelectionChatSnippet,
+  buildFileChatReference,
+} from "../utils/codeSelectionChatSnippet";
 import { reduceExternalChangeSyncState } from "../externalChangeStateMachine";
 import { resolveFileRenderProfile } from "../utils/fileRenderProfile";
 import { getFileDocumentSnapshotMetrics } from "../utils/fileDocumentSnapshot";
@@ -1197,6 +1202,35 @@ export function FileViewPanel({
     truncated,
   ]);
 
+  const resolveEditorSelectionChatSnippet = useCallback(() => {
+    if (!onInsertText || skipTextRead || truncated) {
+      return null;
+    }
+    const editorView = mode === "edit" ? (cmRef.current?.view ?? null) : null;
+    if (editorView) {
+      const selection = editorView.state.selection.main;
+      if (selection.empty) {
+        return null;
+      }
+      const endOffset = Math.max(selection.from, selection.to - 1);
+      return buildCodeSelectionChatSnippet({
+        path: filePath,
+        content: editorView.state.sliceDoc(selection.from, selection.to),
+        startLine: editorView.state.doc.lineAt(selection.from).number,
+        endLine: editorView.state.doc.lineAt(endOffset).number,
+        language: renderProfile.previewLanguage,
+      });
+    }
+    return null;
+  }, [
+    filePath,
+    mode,
+    onInsertText,
+    renderProfile.previewLanguage,
+    skipTextRead,
+    truncated,
+  ]);
+
   useEffect(() => {
     const handleFileCommandShortcut = (event: KeyboardEvent) => {
       const panelRoot = panelRootRef.current;
@@ -1255,6 +1289,15 @@ export function FileViewPanel({
         const noteDraft = buildCurrentNoteCaptureDraft();
         action = noteDraft ? () => onCaptureNote(noteDraft) : null;
       } else if (
+        onInsertText &&
+        matchesShortcutForPlatform(
+          event,
+          FILE_CONTEXT_MENU_SHORTCUTS.addToChat,
+        )
+      ) {
+        const snippet = resolveEditorSelectionChatSnippet();
+        action = snippet ? () => onInsertText(snippet) : null;
+      } else if (
         activeFileGitScope &&
         onOpenFileHistory &&
         matchesShortcutForPlatform(
@@ -1304,8 +1347,10 @@ export function FileViewPanel({
     mode,
     onAssociateIntentCanvasCodeAnchor,
     onCaptureNote,
+    onInsertText,
     onOpenFileHistory,
     onRevealInFileTree,
+    resolveEditorSelectionChatSnippet,
     truncated,
     workspaceId,
     workspacePath,
@@ -1372,6 +1417,50 @@ export function FileViewPanel({
             })
           : null;
       const noteCaptureDraft = selectionNoteDraft ?? wholeFileNoteDraft;
+      const selectionSource =
+        selectionNoteDraft?.source.kind === "codeSelection"
+          ? selectionNoteDraft.source
+          : null;
+      // Preview mode keeps logical line selection outside window.getSelection();
+      // fall back to the snapshot range from note-capture draft when needed.
+      const selectionContentFromSnapshot = selectionSource
+        ? documentSnapshot
+            .getLines(selectionSource.startLine - 1, selectionSource.endLine)
+            .join("\n")
+        : "";
+      const selectionContent =
+        selectedText.trim().length > 0
+          ? selectedText
+          : selectionContentFromSnapshot;
+      const selectionChatSnippet =
+        onInsertText && selectionContent.trim().length > 0
+          ? selectionSource
+            ? buildCodeSelectionChatSnippet({
+                path: selectionSource.path,
+                content: selectionContent,
+                startLine: selectionSource.startLine,
+                endLine: selectionSource.endLine,
+                language:
+                  selectionSource.language ?? renderProfile.previewLanguage,
+              })
+            : editorView
+              ? (() => {
+                  const selection = editorView.state.selection.main;
+                  if (selection.empty) {
+                    return null;
+                  }
+                  const endOffset = Math.max(selection.from, selection.to - 1);
+                  return buildCodeSelectionChatSnippet({
+                    path: filePath,
+                    content: selectionContent,
+                    startLine: editorView.state.doc.lineAt(selection.from)
+                      .number,
+                    endLine: editorView.state.doc.lineAt(endOffset).number,
+                    language: renderProfile.previewLanguage,
+                  });
+                })()
+              : null
+          : null;
 
       const writeClipboardText = async (action: string, text: string) => {
         try {
@@ -1622,6 +1711,22 @@ export function FileViewPanel({
               ],
             ]
           : []),
+        ...(selectionChatSnippet && onInsertText
+          ? [
+              [
+                {
+                  type: "item" as const,
+                  id: "add-selection-to-chat",
+                  label: t("files.addToChat"),
+                  icon: <MessageSquare size={15} />,
+                  shortcut: formatShortcutForPlatform(
+                    FILE_CONTEXT_MENU_SHORTCUTS.addToChat,
+                  ),
+                  onSelect: () => onInsertText(selectionChatSnippet),
+                },
+              ],
+            ]
+          : []),
         clipboardItems,
         ...(gitItems.length > 0
           ? [
@@ -1684,7 +1789,7 @@ export function FileViewPanel({
       activeFileGitScope,
       canEditDocument,
       content,
-      documentSnapshot.lineCount,
+      documentSnapshot,
       effectiveIsDirty,
       expandSelectionShortcut,
       filePath,
@@ -1701,6 +1806,7 @@ export function FileViewPanel({
       mode,
       onAssociateIntentCanvasCodeAnchor,
       onCaptureNote,
+      onInsertText,
       onOpenFileHistory,
       onRevealInFileTree,
       renderProfile.previewLanguage,
@@ -2872,11 +2978,10 @@ export function FileViewPanel({
             type="button"
             className="ghost fvp-action-btn"
             onClick={() => {
-              const fence = previewLanguage
-                ? `\`\`\`${previewLanguage}`
-                : "```";
-              const snippet = `${filePath}\n${fence}\n${content}\n\`\`\``;
-              onInsertText(snippet);
+              const reference = buildFileChatReference(filePath);
+              if (reference) {
+                onInsertText(reference);
+              }
             }}
           >
             {t("files.addToChat")}
