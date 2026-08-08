@@ -7,8 +7,8 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-31.md`
-- **Total Sessions**: 1349
+- **Active File**: `journal-32.md`
+- **Total Sessions**: 1350
 - **Last Active**: 2026-08-08
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-31.md` | ~1968 | Active |
+| `journal-32.md` | ~40 | Active |
+| `journal-31.md` | ~1968 | Archived |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
@@ -59,6 +60,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1350 | 2026-08-08 | 对齐 tauri plugin-dialog 版本以修复打包 | `b1e0c7851` | `cxn-version-0.8.4` |
 | 1349 | 2026-08-08 | 修复 mac 打包 TypeScript 门禁阻塞 | `7492d4f58` | `cxn-version-0.8.4` |
 | 1348 | 2026-08-08 | Composer 会话控制 HUD 与多供应商实时用量 | `f97a5ed74` | `cxn-version-0.8.4` |
 | 1347 | 2026-08-08 | S10 退役后 Strip 宽识别与右侧详情补齐 | `ec9811c49` | `cxn-version-0.8.4` |
