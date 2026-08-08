@@ -1598,3 +1598,50 @@ A+B 方案同步 isProcessing：协作蓝点/代理电、approve/retry 失败熄
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1341: 协作批准补充说明与操作条统一布局
+
+**Date**: 2026-08-08
+**Task**: 协作批准补充说明与操作条统一布局
+**Branch**: `cxn-version-0.8.4`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 批准补充 | 批准与打回对称：可展开可选 note；写入 fact.extra.approvalNote，后续 stage prompt 注入 |
+| 操作条布局 | ma-action-row 左主操作/右停止；待批准、超时卡、运行中共用同一视觉语言 |
+| i18n | multiAgent 补齐 8 语言 + parity 全量对齐 |
+| review 修复 | approve 气泡改为 RPC 成功后再 emit，避免失败误报 |
+
+**主要文件**:
+- `ConversationSurface.tsx` / `multi-agent.css`
+- `commands.rs` / `projection.rs` / `types.rs`
+- `executor.ts` / `conversationBridge.ts` / `agentOrchestration.ts`
+- `src/i18n/locales/*/multiAgent.ts`
+
+**未纳入**: Composer 协作 pill 挪位仍留 working tree
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d24ca09ab` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
