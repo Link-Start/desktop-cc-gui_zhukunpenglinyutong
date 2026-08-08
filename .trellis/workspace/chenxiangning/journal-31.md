@@ -1812,3 +1812,45 @@ A+B 方案同步 isProcessing：协作蓝点/代理电、approve/retry 失败熄
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1346: Shared Composer Run Status Strip 合成数据源
+
+**Date**: 2026-08-08
+**Task**: Shared Composer Run Status Strip 合成数据源
+**Branch**: `cxn-version-0.8.4`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| OpenSpec | `wire-shared-composer-run-status-strip`（手测通过后单独提交） |
+| 核心改动 | Composer「已编辑/子代理」Strip 改为合成源：主 items ∪ agent-canvas ∪ child threads |
+| 支撑 | `collectRunStatusSourceItems`、sessionSideEffectLedger、syntheticSharedSubagentTools、collectCanvasChildSubagentThreads |
+| 文档 | 基石校准表 + Session File-Edit Ledger 设计草案 |
+| 未纳入 | 文件树 HTML 外部浏览器打开等无关 WIP 仍留 working tree |
+
+**验证**：用户已手测通过；本会话仅挑出提案相关 22 文件提交，未碰 files/tauri/i18n 等其它改动。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2ad5a0cc2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

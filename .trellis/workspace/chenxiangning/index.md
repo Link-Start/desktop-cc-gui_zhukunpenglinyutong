@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-31.md`
-- **Total Sessions**: 1345
+- **Total Sessions**: 1346
 - **Last Active**: 2026-08-08
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-31.md` | ~1814 | Active |
+| `journal-31.md` | ~1856 | Active |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
@@ -59,6 +59,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1346 | 2026-08-08 | Shared Composer Run Status Strip 合成数据源 | `2ad5a0cc2` | `cxn-version-0.8.4` |
 | 1345 | 2026-08-08 | 协作上游喂料策略贯通与验收收口 | `07f095ec8` | `cxn-version-0.8.4` |
 | 1344 | 2026-08-08 | 协作 Inspector 注入上下文 Header | `4f4c053c6` | `cxn-version-0.8.4` |
 | 1343 | 2026-08-08 | Shared 创建/打开历史 Claude catalog 串台修复 | `1974c4cee` | `cxn-version-0.8.4` |
