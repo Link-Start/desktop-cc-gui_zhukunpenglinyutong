@@ -1723,3 +1723,48 @@ A+B 方案同步 isProcessing：协作蓝点/代理电、approve/retry 失败熄
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1344: 协作 Inspector 注入上下文 Header
+
+**Date**: 2026-08-08
+**Task**: 协作 Inspector 注入上下文 Header
+**Branch**: `cxn-version-0.8.4`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 功能 | 节点幕布上方 B+C 可折叠注入上下文（用户/批准补充/上游 short/本环节指令） |
+| 交互 | 默认折叠；迷你条只高亮；打开节点才跳 stage |
+| 样式 | --ma-* 双主题 + 展开虚线框 |
+| i18n | 10 locale + parity |
+| OpenSpec | add-multi-agent-inspector-inject-context |
+| 验证 | inject 4 + locale 18 绿 |
+
+**Updated**:
+- AgentInspectorDrawer / StageInjectContextHeader / buildStageInjectContext
+- multi-agent.css / multiAgent locales / preview HTML
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4f4c053c6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
