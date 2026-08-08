@@ -756,15 +756,24 @@ export function useThreadMessaging({
           getSelectedTemplate(),
           collabTarget,
         );
-        await requestAgentPlan({
-          workspaceId: workspace.id,
-          threadId,
-          text: modelText,
-          visibleText: visibleUserText,
-          images: finalImages,
-          target: collabTarget,
-          stageBindings,
-        });
+        // A：入口只负责点亮 + 异常熄灭；终态/审批/停止由 executor（B）权威收口，
+        // 避免 A 晚到的 false 盖掉「停→立刻再开」的新 run。
+        markProcessing(threadId, true);
+        safeMessageActivity();
+        try {
+          await requestAgentPlan({
+            workspaceId: workspace.id,
+            threadId,
+            text: modelText,
+            visibleText: visibleUserText,
+            images: finalImages,
+            target: collabTarget,
+            stageBindings,
+          });
+        } catch (error) {
+          markProcessing(threadId, false);
+          throw error;
+        }
         return;
       }
       const resolvedEngine =

@@ -23,6 +23,13 @@ export {
   hydrateAgentProjection,
   isActiveAgentProjection,
 } from "./runtime/executor";
+export {
+  registerCollabThreadProcessingMarker,
+  setCollabThreadProcessing,
+  applyCollabThreadProcessingFromProjection,
+  applyCollabThreadProcessingFromStatus,
+  restoreCollabThreadProcessingIfActive,
+} from "./runtime/collabThreadProcessingBridge";
 export { subscribeMultiAgentConversationItems } from "./runtime/conversationBridge";
 export {
   useAgentProjection,

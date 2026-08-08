@@ -48,6 +48,11 @@ import {
   emitMultiAgentConversationItems,
   emitReplanConversationItems,
 } from "./conversationBridge";
+import {
+  applyCollabThreadProcessingFromProjection,
+  restoreCollabThreadProcessingIfActive,
+  setCollabThreadProcessing,
+} from "./collabThreadProcessingBridge";
 import { openAgentInspector } from "../store/inspectorStore";
 import type {
   AgentExecutionTarget,
@@ -535,6 +540,8 @@ export async function requestAgentPlan(input: {
     requestText: visible || modelText,
     flowLabel,
   });
+  // B：协作开始 → 左侧会话蓝点 / 代理电
+  setCollabThreadProcessing(input.threadId, true);
   emitCollabVisibleUserMessage(
     input.workspaceId,
     input.threadId,
@@ -563,6 +570,7 @@ export async function requestAgentPlan(input: {
     );
   } catch (error) {
     clearCollabUiState(input.workspaceId, input.threadId);
+    setCollabThreadProcessing(input.threadId, false);
     throw error;
   }
   publishAgentProjection(
@@ -585,6 +593,7 @@ export async function requestAgentPlan(input: {
   );
   if (!planAttempt) {
     clearCollabUiState(input.workspaceId, input.threadId);
+    setCollabThreadProcessing(input.threadId, false);
     throw new Error("agent-plan-attempt-missing");
   }
   try {
@@ -610,11 +619,15 @@ export async function requestAgentPlan(input: {
       );
       if (latest) {
         publishAgentProjection(input.workspaceId, input.threadId, latest);
+        applyCollabThreadProcessingFromProjection(input.threadId, latest);
         return latest;
       }
-    } else {
-      clearCollabUiState(input.workspaceId, input.threadId);
+      applyCollabThreadProcessingFromProjection(input.threadId, settled);
+      return settled;
     }
+    clearCollabUiState(input.workspaceId, input.threadId);
+    // awaiting-approval 等非终态保持蓝点；终态熄灭
+    applyCollabThreadProcessingFromProjection(input.threadId, settled);
     return settled;
   } catch (error) {
     clearCollabUiState(input.workspaceId, input.threadId);
@@ -651,6 +664,10 @@ export async function requestAgentPlan(input: {
           input.threadId,
           projection,
         );
+        applyCollabThreadProcessingFromProjection(
+          input.threadId,
+          projection,
+        );
         return projection;
       }
     } catch {
@@ -671,17 +688,27 @@ export async function approveAndExecuteAgent(
   runId: string,
   revision: number,
 ): Promise<AgentProjectionV1> {
-  const approved = await sharedAgentApprove(
-    workspaceId,
-    threadId,
-    runId,
-    revision,
-  );
+  // B：审批通过后继续执行 → 重新点亮左侧运行态
+  setCollabThreadProcessing(threadId, true);
+  let approved: Awaited<ReturnType<typeof sharedAgentApprove>>;
+  try {
+    approved = await sharedAgentApprove(
+      workspaceId,
+      threadId,
+      runId,
+      revision,
+    );
+  } catch (error) {
+    // Approve RPC 失败不得留下悬挂蓝点
+    setCollabThreadProcessing(threadId, false);
+    throw error;
+  }
   publishAgentProjection(workspaceId, threadId, approved.projection);
   const implementAttempt = asPrepared(
     approved.stageAttempt ?? approved.executeAttempt,
   );
   if (!implementAttempt) {
+    applyCollabThreadProcessingFromProjection(threadId, approved.projection);
     return approved.projection;
   }
   openAgentInspector({
@@ -713,11 +740,14 @@ export async function approveAndExecuteAgent(
         const latest = await sharedAgentGet(workspaceId, threadId);
         if (latest) {
           publishAgentProjection(workspaceId, threadId, latest);
+          applyCollabThreadProcessingFromProjection(threadId, latest);
           return latest;
         }
-      } else {
-        clearCollabUiState(workspaceId, threadId);
+        applyCollabThreadProcessingFromProjection(threadId, settled);
+        return settled;
       }
+      clearCollabUiState(workspaceId, threadId);
+      applyCollabThreadProcessingFromProjection(threadId, settled);
       return settled;
     } catch (error) {
       clearCollabUiState(workspaceId, threadId);
@@ -802,6 +832,8 @@ export async function stopAgent(
   // 无论后端成败，先清 UI 相位/直播，避免用户卡在「编排进行中」锁输入
   clearCollabUiState(workspaceId, threadId);
   clearAgentLivePhase(workspaceId, threadId);
+  // B：停止立刻熄灭左侧运行态（不等 cancel RPC）
+  setCollabThreadProcessing(threadId, false);
   try {
     const cancelling = await sharedAgentCancel(
       workspaceId,
@@ -880,6 +912,7 @@ export async function forceStopAndUnlock(
   } finally {
     clearCollabUiState(workspaceId, threadId);
     clearAgentLivePhase(workspaceId, threadId);
+    setCollabThreadProcessing(threadId, false);
   }
 }
 
@@ -936,6 +969,8 @@ export async function retryAgentStage(input: {
     input.runId,
   );
   clearAgentLivePhase(input.workspaceId, input.threadId);
+  // B：单节点重试继续跑 → 保持 / 点亮左侧运行态
+  setCollabThreadProcessing(input.threadId, true);
 
   // 尽量打断卡死 turn，让旧 driveAutoChain 退出
   const oldAttempt = input.oldAttemptId?.trim();
@@ -960,12 +995,18 @@ export async function retryAgentStage(input: {
     }
   }
 
-  const prepared = await sharedAgentRetryStage(
-    input.workspaceId,
-    input.threadId,
-    input.runId,
-    input.stageId,
-  );
+  let prepared: Awaited<ReturnType<typeof sharedAgentRetryStage>>;
+  try {
+    prepared = await sharedAgentRetryStage(
+      input.workspaceId,
+      input.threadId,
+      input.runId,
+      input.stageId,
+    );
+  } catch (error) {
+    setCollabThreadProcessing(input.threadId, false);
+    throw error;
+  }
   publishAgentProjection(
     input.workspaceId,
     input.threadId,
@@ -975,6 +1016,8 @@ export async function retryAgentStage(input: {
     prepared.stageAttempt ?? null,
   );
   if (!stageAttempt) {
+    // 无法续跑：熄灭，避免悬挂蓝点（不沿用可能仍非终态的旧 projection）
+    setCollabThreadProcessing(input.threadId, false);
     throw new Error("agent-retry-stage: missing stageAttempt");
   }
 
@@ -992,9 +1035,18 @@ export async function retryAgentStage(input: {
     input.runId,
     stageAttempt,
     gen,
-  ).finally(() => {
-    if (running.get(runKey) === task) running.delete(runKey);
-  });
+  )
+    .then((projection) => {
+      applyCollabThreadProcessingFromProjection(input.threadId, projection);
+      return projection;
+    })
+    .catch((error) => {
+      setCollabThreadProcessing(input.threadId, false);
+      throw error;
+    })
+    .finally(() => {
+      if (running.get(runKey) === task) running.delete(runKey);
+    });
   running.set(runKey, task);
   return task;
 }
@@ -1022,13 +1074,17 @@ export async function hydrateAgentProjection(
       emitMultiAgentConversationItems(workspaceId, threadId, run);
     }
     flushAgentProjectionNotify();
-    return allRuns[allRuns.length - 1]!;
+    const latest = allRuns[allRuns.length - 1]!;
+    // 仅活跃 run 恢复蓝点；终态不 force false（避免盖掉普通 Shared turn）
+    restoreCollabThreadProcessingIfActive(threadId, latest);
+    return latest;
   }
 
   // 兜底：event log 无记录时尝试旧 single-get
   const projection = await sharedAgentGet(workspaceId, threadId);
   if (projection) {
     publishAgentProjection(workspaceId, threadId, projection);
+    restoreCollabThreadProcessingIfActive(threadId, projection);
   }
   return projection;
 }
