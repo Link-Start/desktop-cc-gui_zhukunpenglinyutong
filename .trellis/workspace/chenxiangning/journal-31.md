@@ -1645,3 +1645,36 @@ A+B 方案同步 isProcessing：协作蓝点/代理电、approve/retry 失败熄
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1342: 协作入口下移至输入框下方
+
+**Date**: 2026-08-08
+**Task**: 协作入口下移至输入框下方
+**Branch**: `cxn-version-0.8.4`
+
+### Summary
+
+将 Multi-Agent 协作 pill 从发送按钮前移到 composer-branch-row 右侧 trailing 区，并与上下文指示器左右对调
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `149af622a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-31.md`
-- **Total Sessions**: 1341
+- **Total Sessions**: 1342
 - **Last Active**: 2026-08-08
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-31.md` | ~1647 | Active |
+| `journal-31.md` | ~1680 | Active |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
@@ -59,6 +59,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1342 | 2026-08-08 | 协作入口下移至输入框下方 | `149af622a` | `cxn-version-0.8.4` |
 | 1341 | 2026-08-08 | 协作批准补充说明与操作条统一布局 | `d24ca09ab` | `cxn-version-0.8.4` |
 | 1340 | 2026-08-08 | 主幕布退役 subagent 小队卡片 | `61c8bf537` | `cxn-version-0.8.4` |
 | 1339 | 2026-08-08 | 补齐 Shared 协作左侧会话运行态指示 | `256801cb6` | `cxn-version-0.8.4` |
