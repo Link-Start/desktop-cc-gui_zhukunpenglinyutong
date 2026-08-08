@@ -221,3 +221,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1355: 冷启 first-paint 编排闭环收口
+
+**Date**: 2026-08-08
+**Task**: 冷启 first-paint 编排闭环收口
+**Branch**: `cxn-version-0.8.4`
+
+### Summary
+
+实现 optimize-cold-start-hydration-orchestration S0-S3+S5：冷启默认 first-paint、gate 诚实归因、full 60s 禁重扫、OpenCode 3s 预算、Overlay 诊断折叠与自动关闭恢复。实测可交互~4.4s。defer S4 git/skills 错峰与 4.4 stale apply。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a094a67ab` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

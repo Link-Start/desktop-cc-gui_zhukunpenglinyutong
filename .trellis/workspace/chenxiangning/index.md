@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-32.md`
-- **Total Sessions**: 1354
+- **Total Sessions**: 1355
 - **Last Active**: 2026-08-08
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-32.md` | ~223 | Active |
+| `journal-32.md` | ~256 | Active |
 | `journal-31.md` | ~1968 | Archived |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
@@ -60,6 +60,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1355 | 2026-08-08 | 冷启 first-paint 编排闭环收口 | `a094a67ab` | `cxn-version-0.8.4` |
 | 1354 | 2026-08-08 | 自定义模型按供应商绑定（Claude/Codex 对称） | `c03428f20` | `cxn-version-0.8.4` |
 | 1353 | 2026-08-08 | 抑制切换场景误报 toast | `88dd0c4c2` | `cxn-version-0.8.4` |
 | 1352 | 2026-08-08 | 注入上下文展开态保底高度 | `c568c1b66` | `cxn-version-0.8.4` |
