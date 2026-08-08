@@ -333,6 +333,10 @@ export function useThreadActions({
       const isLatestThreadListRequest = () =>
         threadListRequestSeqRef.current[workspace.id] === requestSeq &&
         !(options?.isStale?.() ?? false);
+      // Runtime workspace switch (soft-ignore cancel): stop further IPC/merge
+      // stages after isStale. In-flight single invoke may finish; no fan-out after.
+      const abandonIfStale = (): { applied: false; stale: true } | null =>
+        isLatestThreadListRequest() ? null : { applied: false, stale: true };
       const preserveState = options?.preserveState ?? false;
       const isFirstPaintHydration =
         options?.startupHydrationMode === "first-paint";
@@ -418,6 +422,12 @@ export function useThreadActions({
             }
           }
         };
+        {
+          const abandoned = abandonIfStale();
+          if (abandoned) {
+            return abandoned;
+          }
+        }
         let mappedTitles: Record<string, string> = {};
         try {
           // Titles/shared must not hang the whole list path forever: orchestrator
@@ -438,6 +448,12 @@ export function useThreadActions({
         } catch {
           mappedTitles = {};
         }
+        {
+          const abandoned = abandonIfStale();
+          if (abandoned) {
+            return abandoned;
+          }
+        }
         const sharedSessionsResult = await withTimeout(
           // Coerce null→[] so the null sentinel only means timeout (see above).
           listSharedSessionsService(workspace.id)
@@ -447,6 +463,12 @@ export function useThreadActions({
         );
         if (sharedSessionsResult === null) {
           rememberPartialSource("shared-sessions-timeout");
+        }
+        {
+          const abandoned = abandonIfStale();
+          if (abandoned) {
+            return abandoned;
+          }
         }
         const sharedSessions = normalizeSharedSessionSummaries(
           sharedSessionsResult ?? [],
@@ -525,6 +547,12 @@ export function useThreadActions({
         const fetchStartedAt = Date.now();
         let cursor: string | null = null;
         do {
+          {
+            const abandoned = abandonIfStale();
+            if (abandoned) {
+              return abandoned;
+            }
+          }
           pagesFetched += 1;
           let response: Record<string, unknown>;
           try {
@@ -815,6 +843,17 @@ export function useThreadActions({
           workspace.id,
         );
         const nativeSessionListLimit = resolveNativeSessionListLimit(workspace);
+        // Yield so clicks queued during codex paging can run before catalog.
+        // Must abandon BEFORE starting multi-engine fan-out (soft-ignore cancel).
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 0);
+        });
+        {
+          const abandoned = abandonIfStale();
+          if (abandoned) {
+            return abandoned;
+          }
+        }
         // Budget is applied inside getOpenCodeSessionList so command-cost trace
         // reflects the budget (not zombie IPC wall-clock after withTimeout).
         const opencodeSessionsPromise = includeOpenCodeSessions
@@ -847,13 +886,6 @@ export function useThreadActions({
               ),
               NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS,
             );
-        // Yield so clicks queued during codex paging can run before catalog.
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, 0);
-        });
-        if (!isLatestThreadListRequest()) {
-          return { applied: false, stale: true };
-        }
         const [claudeResult, opencodeResult, projectCatalogResult] =
           await Promise.allSettled([
             claudeSessionsPromise,
@@ -863,8 +895,11 @@ export function useThreadActions({
         await new Promise<void>((resolve) => {
           setTimeout(resolve, 0);
         });
-        if (!isLatestThreadListRequest()) {
-          return { applied: false, stale: true };
+        {
+          const abandoned = abandonIfStale();
+          if (abandoned) {
+            return abandoned;
+          }
         }
         const projectCatalogValue =
           projectCatalogResult.status === "fulfilled"
@@ -1319,8 +1354,11 @@ export function useThreadActions({
           saveThreadActivity(next);
         }
 
-        if (!isLatestThreadListRequest()) {
-          return { applied: false, stale: true };
+        {
+          const abandoned = abandonIfStale();
+          if (abandoned) {
+            return abandoned;
+          }
         }
 
         let visibleSummaries = allSummaries;
@@ -1426,13 +1464,19 @@ export function useThreadActions({
           visibleSummaries,
           hiddenSharedBindingIds,
         );
-        if (!isLatestThreadListRequest()) {
-          return { applied: false, stale: true };
+        {
+          const abandoned = abandonIfStale();
+          if (abandoned) {
+            return abandoned;
+          }
         }
         // Prefer input over list commit: if user is clicking, wait a few frames.
         await yieldToInteractiveInput({ maxRounds: 32 });
-        if (!isLatestThreadListRequest()) {
-          return { applied: false, stale: true };
+        {
+          const abandoned = abandonIfStale();
+          if (abandoned) {
+            return abandoned;
+          }
         }
         const cursorForDisplay = resolveThreadListCursorForDisplay({
           catalogCursor: projectCatalogValue?.nextCursor ?? null,
@@ -1491,6 +1535,7 @@ export function useThreadActions({
         const hasAttemptedGeminiRefresh =
           geminiRefreshAttemptedRef.current[workspace.id] === true;
         const shouldRefreshGeminiSessions =
+          isLatestThreadListRequest() &&
           !isFirstPaintHydration &&
           (hasGeminiSignal || !!cachedGemini || !hasAttemptedGeminiRefresh);
         if (shouldRefreshGeminiSessions) {
@@ -1500,7 +1545,7 @@ export function useThreadActions({
               listGeminiSessionsService(workspace.path, 50),
               GEMINI_SESSION_FETCH_TIMEOUT_MS,
             );
-            if (threadListRequestSeqRef.current[workspace.id] !== requestSeq) {
+            if (!isLatestThreadListRequest()) {
               return;
             }
             if (geminiResult === null) {
@@ -1533,7 +1578,7 @@ export function useThreadActions({
                 NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS,
               )) ?? [],
             );
-            if (threadListRequestSeqRef.current[workspace.id] !== requestSeq) {
+            if (!isLatestThreadListRequest()) {
               return;
             }
             // fresh ∪ outer：shared list 失败回空时不得放宽已有 hide 可见性。
@@ -1577,7 +1622,7 @@ export function useThreadActions({
                   prev.threadKind === entry.threadKind
                 );
               });
-            if (!unchanged) {
+            if (!unchanged && isLatestThreadListRequest()) {
               dispatch({
                 type: "setThreads",
                 workspaceId: workspace.id,
@@ -1594,11 +1639,13 @@ export function useThreadActions({
         const hasAttemptedKimiRefresh =
           kimiRefreshAttemptedRef.current[workspace.id] === true;
         const shouldRefreshKimiSessions =
+          isLatestThreadListRequest() &&
           !isFirstPaintHydration &&
           (hasKimiSignal || !!cachedKimi || !hasAttemptedKimiRefresh);
         const hasAttemptedGrokRefresh =
           grokRefreshAttemptedRef.current[workspace.id] === true;
         const shouldRefreshGrokSessions =
+          isLatestThreadListRequest() &&
           !isFirstPaintHydration &&
           (hasGrokSignal || !!cachedGrok || !hasAttemptedGrokRefresh);
         if (shouldRefreshGrokSessions) {
@@ -1608,7 +1655,7 @@ export function useThreadActions({
               listGrokSessionsService(workspace.path, 50),
               GROK_SESSION_FETCH_TIMEOUT_MS,
             );
-            if (threadListRequestSeqRef.current[workspace.id] !== requestSeq) {
+            if (!isLatestThreadListRequest()) {
               return;
             }
             if (grokResult === null) {
@@ -1642,7 +1689,7 @@ export function useThreadActions({
                 NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS,
               )) ?? [],
             );
-            if (threadListRequestSeqRef.current[workspace.id] !== requestSeq) {
+            if (!isLatestThreadListRequest()) {
               return;
             }
             // fresh ∪ outer：shared list 失败回空时不得放宽已有 hide 可见性。
@@ -1688,7 +1735,7 @@ export function useThreadActions({
                   (prev.parentThreadId ?? null) === (entry.parentThreadId ?? null)
                 );
               });
-            if (!unchanged) {
+            if (!unchanged && isLatestThreadListRequest()) {
               dispatch({
                 type: "setThreads",
                 workspaceId: workspace.id,
@@ -1708,7 +1755,7 @@ export function useThreadActions({
               listKimiSessionsService(workspace.path, 50),
               KIMI_SESSION_FETCH_TIMEOUT_MS,
             );
-            if (threadListRequestSeqRef.current[workspace.id] !== requestSeq) {
+            if (!isLatestThreadListRequest()) {
               return;
             }
             if (kimiResult === null) {
@@ -1742,7 +1789,7 @@ export function useThreadActions({
                 NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS,
               )) ?? [],
             );
-            if (threadListRequestSeqRef.current[workspace.id] !== requestSeq) {
+            if (!isLatestThreadListRequest()) {
               return;
             }
             // fresh ∪ outer：shared list 失败回空时不得放宽已有 hide 可见性。
@@ -1786,7 +1833,7 @@ export function useThreadActions({
                   prev.threadKind === entry.threadKind
                 );
               });
-            if (!unchanged) {
+            if (!unchanged && isLatestThreadListRequest()) {
               dispatch({
                 type: "setThreads",
                 workspaceId: workspace.id,
