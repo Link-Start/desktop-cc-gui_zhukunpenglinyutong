@@ -1867,6 +1867,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
               models={models}
               permissionMode={permissionMode}
               currentProvider={currentProvider}
+              currentProviderProfileId={currentProviderProfileId}
               workspaceId={workspaceId}
               providerAvailability={providerAvailability}
               providerVersions={providerVersions}
