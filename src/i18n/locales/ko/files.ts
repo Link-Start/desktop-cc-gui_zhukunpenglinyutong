@@ -13,6 +13,13 @@ const files = {
     "revealInFileManager": "파일 관리자에서 보기",
     "revealFailed": "파일 관리자에서 표시할 수 없습니다: {{message}}",
     "revealInFileTree": "파일 트리에서 보기",
+    "openInBrowser": "브라우저에서 열기",
+    "openInBrowserFailed": "내장 브라우저에서 이 파일을 열 수 없습니다",
+    "openInBrowserNoWorkspace":
+      "내장 브라우저에서 열기 전에 작업 영역을 선택하세요",
+    "openInBrowserWindowBusy":
+      "내장 브라우저 창이 이미 열려 있습니다. 해당 창으로 전환하거나 닫은 후 다시 시도하세요",
+    "openInBrowserBlocked": "이 파일은 내장 브라우저에서 열 수 없습니다",
     "deleteItem": "휴지통으로 이동",
     "deleteFileConfirm": "\"{{name}}\"을(를) 휴지통으로 이동하시겠습니까?",
     "deleteFolderConfirm": "\"{{name}}\" 폴더와 그 안의 모든 내용을 휴지통으로 이동하시겠습니까?",

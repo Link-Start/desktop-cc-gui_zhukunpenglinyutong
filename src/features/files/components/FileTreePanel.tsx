@@ -35,6 +35,7 @@ import Code from "lucide-react/dist/esm/icons/code";
 import ListTree from "lucide-react/dist/esm/icons/list-tree";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2";
 import Repeat from "lucide-react/dist/esm/icons/repeat";
+import Globe from "lucide-react/dist/esm/icons/globe";
 import type { PanelTabId } from "../../layout/components/PanelTabs";
 import {
   createWorkspaceDirectory,
@@ -80,6 +81,12 @@ import {
   CROSS_WINDOW_TREE_DRAG_REBROADCAST_THROTTLE_MS,
 } from "../utils/fileTreeDragBridge";
 import { FILE_COMPARE_MAX_WORKSPACE_FILES } from "../types/fileCompare";
+import {
+  formatOpenHtmlInBrowserError,
+  isHtmlFilePath,
+  openHtmlInBrowser,
+} from "../utils/openHtmlInBrowser";
+import { pushErrorToast } from "../../../services/toasts";
 import { FilePreviewPopover } from "./FilePreviewPopover";
 import {
   FileTreeNewFilePrompt,
@@ -1442,6 +1449,29 @@ export function FileTreePanel({
     });
   }, [setOperationNotice]);
 
+  const openHtmlFileInBuiltInBrowser = useCallback(
+    (relativePath: string) => {
+      if (!workspaceId?.trim()) {
+        pushErrorToast({
+          title: t("files.openInBrowser"),
+          message: t("files.openInBrowserNoWorkspace"),
+        });
+        return;
+      }
+      void openHtmlInBrowser(resolvePath(relativePath), {
+        workspaceId,
+        ownerSurface: "file-tree",
+      }).catch((error) => {
+        console.warn("[file-tree] openHtmlInBrowser failed", error);
+        pushErrorToast({
+          title: t("files.openInBrowser"),
+          message: formatOpenHtmlInBrowserError(error, t),
+        });
+      });
+    },
+    [resolvePath, t, workspaceId],
+  );
+
   useEffect(() => {
     setSuppressedDeletedPaths((prev) => {
       if (prev.size === 0) {
@@ -2238,6 +2268,20 @@ export function FileTreePanel({
             }
           },
         },
+        ...(!isFolder && isHtmlFilePath(relativePath)
+          ? [
+              {
+                type: "item" as const,
+                id: "open-in-browser",
+                label: t("files.openInBrowser"),
+                icon: menuIcon(Globe),
+                onSelect: () => {
+                  setFileTreeContextMenu(null);
+                  openHtmlFileInBuiltInBrowser(relativePath);
+                },
+              },
+            ]
+          : []),
         ...(gitItems.length > 0
           ? [
               { type: "separator" as const, id: "git-repository-separator" },
@@ -2311,6 +2355,7 @@ export function FileTreePanel({
       openRenamePrompt,
       openNewFilePrompt,
       openNewFolderPrompt,
+      openHtmlFileInBuiltInBrowser,
       onCompareFiles,
       orderedSelectedNodePaths,
       addRepositoryToGitignore,
@@ -2395,6 +2440,7 @@ export function FileTreePanel({
     rebroadcastCrossWindowTreeDrag,
     onOpenFile,
     onInsertText,
+    onOpenInBrowser: openHtmlFileInBuiltInBrowser,
   };
   const fileTreeRowRefs: FileTreeRowRefs = {
     activeCrossWindowDragPathsRef,

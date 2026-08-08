@@ -10,6 +10,14 @@ const files = {
     revealInFileManager: "Reveal in File Manager",
     revealFailed: "Couldn’t show in file manager: {{message}}",
     revealInFileTree: "Reveal in File Tree",
+    openInBrowser: "Open in Browser",
+    openInBrowserFailed: "Couldn't open this file in the built-in browser",
+    openInBrowserNoWorkspace:
+      "Select a workspace before opening a file in the built-in browser",
+    openInBrowserWindowBusy:
+      "The built-in browser window is already open. Switch to it or close it, then try again",
+    openInBrowserBlocked:
+      "This file can't be opened in the built-in browser",
     deleteItem: "Move to Trash",
     deleteFileConfirm: 'Are you sure you want to move "{{name}}" to the trash?',
     deleteFolderConfirm:

@@ -13,6 +13,13 @@ const files = {
     "revealInFileManager": "ファイルマネージャーで表示",
     "revealFailed": "ファイルマネージャーで表示できませんでした: {{message}}",
     "revealInFileTree": "ファイルツリーで表示",
+    "openInBrowser": "ブラウザで開く",
+    "openInBrowserFailed": "内蔵ブラウザでこのファイルを開けませんでした",
+    "openInBrowserNoWorkspace":
+      "内蔵ブラウザで開く前にワークスペースを選択してください",
+    "openInBrowserWindowBusy":
+      "内蔵ブラウザのウィンドウは既に開いています。そのウィンドウに切り替えるか、閉じてから再試行してください",
+    "openInBrowserBlocked": "このファイルは内蔵ブラウザでは開けません",
     "deleteItem": "ゴミ箱に移動",
     "deleteFileConfirm": "「{{name}}」をゴミ箱に移動してもよろしいですか？",
     "deleteFolderConfirm": "フォルダ「{{name}}」とそのすべての内容をゴミ箱に移動してもよろしいですか？",

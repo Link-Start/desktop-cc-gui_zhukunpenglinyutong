@@ -13,6 +13,12 @@ const files = {
     "revealInFileManager": "在檔案管理員中顯示",
     "revealFailed": "無法在檔案管理員中顯示：{{message}}",
     "revealInFileTree": "在檔案樹中顯示",
+    "openInBrowser": "在瀏覽器開啟",
+    "openInBrowserFailed": "無法在內建瀏覽器中開啟該檔案",
+    "openInBrowserNoWorkspace": "請先選擇工作區，再在內建瀏覽器中開啟",
+    "openInBrowserWindowBusy":
+      "內建瀏覽器視窗已開啟，請先切換到該視窗，或關閉後重試",
+    "openInBrowserBlocked": "該檔案無法由內建瀏覽器開啟",
     "deleteItem": "移到垃圾桶",
     "deleteFileConfirm": "確定要將「{{name}}」移到垃圾桶嗎？",
     "deleteFolderConfirm": "確定要將資料夾「{{name}}」及其所有內容移到垃圾桶嗎？",

@@ -83,6 +83,11 @@ import {
   buildCodeSelectionChatSnippet,
   buildFileChatReference,
 } from "../utils/codeSelectionChatSnippet";
+import {
+  formatOpenHtmlInBrowserError,
+  isHtmlFilePath,
+  openHtmlInBrowser,
+} from "../utils/openHtmlInBrowser";
 import { reduceExternalChangeSyncState } from "../externalChangeStateMachine";
 import { resolveFileRenderProfile } from "../utils/fileRenderProfile";
 import { getFileDocumentSnapshotMetrics } from "../utils/fileDocumentSnapshot";
@@ -1753,6 +1758,30 @@ export function FileViewPanel({
                     FILE_CONTEXT_MENU_SHORTCUTS.revealInFileTree,
                   ),
                   onSelect: () => onRevealInFileTree(filePath),
+                },
+              ],
+            ]
+          : []),
+        ...(isHtmlFilePath(filePath)
+          ? [
+              [
+                {
+                  type: "item" as const,
+                  id: "open-in-browser",
+                  label: t("files.openInBrowser"),
+                  icon: <ExternalLink size={15} />,
+                  onSelect: () => {
+                    void openHtmlInBrowser(
+                      resolveAbsolutePath(workspacePath, filePath),
+                      { workspaceId },
+                    ).catch((error) => {
+                      console.warn("[file-view] openHtmlInBrowser failed", error);
+                      pushErrorToast({
+                        title: t("files.openInBrowser"),
+                        message: formatOpenHtmlInBrowserError(error, t),
+                      });
+                    });
+                  },
                 },
               ],
             ]

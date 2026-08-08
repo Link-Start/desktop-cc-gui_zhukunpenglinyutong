@@ -33,6 +33,7 @@
 
 ## Active backlog notes（2026-08-08）
 
+- **已归档** `add-local-html-open-in-builtin-browser` → `archive/2026-08-08-add-local-html-open-in-builtin-browser`：本地 HTML 内置 Browser Agent；三入口 + 全局 toast i18n；main specs 已同步。
 - **已提交** `add-windows-sidebar-quick-switcher-and-collapse`：Win 侧栏补 Quick Switcher（Ctrl+E）与设置菜单「隐藏对话侧边栏」；mac titlebar 互斥；手测通过。
 - **新增** `add-collab-stage-upstream-feed-mode`：协作模板第 2 段起配置上游吃摘要/全文；运行时与 Inspector 对齐；代码已落地待手测。
 - **已提交** `add-multi-agent-inspector-inject-context`：`4f4c053c6`。

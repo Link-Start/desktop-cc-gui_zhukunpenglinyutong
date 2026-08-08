@@ -13,6 +13,15 @@ const files = {
     "revealInFileManager": "Afficher dans le gestionnaire de fichiers",
     "revealFailed": "Impossible d’afficher dans le gestionnaire de fichiers : {{message}}",
     "revealInFileTree": "Afficher dans l’arborescence des fichiers",
+    "openInBrowser": "Ouvrir dans le navigateur",
+    "openInBrowserFailed":
+      "Impossible d'ouvrir ce fichier dans le navigateur intégré",
+    "openInBrowserNoWorkspace":
+      "Sélectionnez un espace de travail avant d'ouvrir un fichier dans le navigateur intégré",
+    "openInBrowserWindowBusy":
+      "La fenêtre du navigateur intégré est déjà ouverte. Basculez vers elle ou fermez-la, puis réessayez",
+    "openInBrowserBlocked":
+      "Ce fichier ne peut pas être ouvert dans le navigateur intégré",
     "deleteItem": "Mettre à la corbeille",
     "deleteFileConfirm": "Voulez-vous vraiment mettre « {{name}} » à la corbeille ?",
     "deleteFolderConfirm": "Voulez-vous vraiment mettre le dossier « {{name}} » et tout son contenu à la corbeille ?",

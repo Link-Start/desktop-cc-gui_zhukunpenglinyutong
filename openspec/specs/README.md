@@ -325,6 +325,7 @@
 - [linux-appimage-startup-compatibility](./linux-appimage-startup-compatibility/spec.md)
 - [linux-native-baidu-analytics-stability](./linux-native-baidu-analytics-stability/spec.md)
 - [live-assistant-shadow-transcript](./live-assistant-shadow-transcript/spec.md)
+- [local-html-builtin-browser-open](./local-html-builtin-browser-open/spec.md)
 - [long-list-virtualization-performance](./long-list-virtualization-performance/spec.md)
 
 ## M

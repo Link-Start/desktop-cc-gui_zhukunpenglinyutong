@@ -10,6 +10,12 @@ const files = {
     revealInFileManager: "在文件管理器中显示",
     revealFailed: "无法在文件管理器中显示：{{message}}",
     revealInFileTree: "定位到文件",
+    openInBrowser: "在浏览器打开",
+    openInBrowserFailed: "无法在内置浏览器中打开该文件",
+    openInBrowserNoWorkspace: "请先选择工作区，再在内置浏览器中打开",
+    openInBrowserWindowBusy:
+      "内置浏览器窗口已打开，请先切换到该窗口，或关闭后重试",
+    openInBrowserBlocked: "该文件无法由内置浏览器打开",
     deleteItem: "移到废纸篓",
     deleteFileConfirm: '确定要将 "{{name}}" 移到废纸篓吗？',
     deleteFolderConfirm: '确定要将文件夹 "{{name}}" 及其所有内容移到废纸篓吗？',

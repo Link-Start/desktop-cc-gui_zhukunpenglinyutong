@@ -13,6 +13,15 @@ const files = {
     "revealInFileManager": "Mostrar en el administrador de archivos",
     "revealFailed": "No se pudo mostrar en el administrador de archivos: {{message}}",
     "revealInFileTree": "Mostrar en el árbol de archivos",
+    "openInBrowser": "Abrir en el navegador",
+    "openInBrowserFailed":
+      "No se pudo abrir este archivo en el navegador integrado",
+    "openInBrowserNoWorkspace":
+      "Selecciona un espacio de trabajo antes de abrir un archivo en el navegador integrado",
+    "openInBrowserWindowBusy":
+      "La ventana del navegador integrado ya está abierta. Cambia a ella o ciérrala e inténtalo de nuevo",
+    "openInBrowserBlocked":
+      "Este archivo no se puede abrir en el navegador integrado",
     "deleteItem": "Mover a la papelera",
     "deleteFileConfirm": "¿Seguro que quieres mover \"{{name}}\" a la papelera?",
     "deleteFolderConfirm": "¿Seguro que quieres mover la carpeta \"{{name}}\" y todo su contenido a la papelera?",
