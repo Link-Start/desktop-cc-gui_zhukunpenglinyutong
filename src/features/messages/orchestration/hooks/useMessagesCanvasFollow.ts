@@ -1,15 +1,11 @@
 /**
- * 幕布跟随 —— 对齐 jetbrains-cc-gui `useScrollBehavior`（P0 砍分叉后）。
+ * 幕布跟随 —— jetbrains 三 ref + 在底一直跟，并针对「MD 开渲狂闪 / 中途丢底」加固：
  *
- * 只保留 jetbrains 三 ref + wheel + 在底一直跟：
- * - userPaused / isUserAtBottom / isAutoScrolling
- * - wheel 上滚暂停；下滚回阈值恢复
- * - scroll 未暂停时按距底同步 isUserAtBottom（无假离底几何保护）
- * - 在底且未暂停：followSignal / RO / live text → scrollTop = scrollHeight
- * - 发送 / 打开历史 / 回底：resumeFollowAndPin
- * - 换会话：默认武装贴底（isUserAtBottom=true），内容就绪再 pin（history-open）
- *
- * 故意不做：scrollIntoView、liveAutoFollow 门闩、FORCE 超时、假离底 lastScroll 栈
+ * 1. wheel 上滚才硬停；scroll 假离底保护（高度暴涨且 scrollTop 未上移 → 不解绑）
+ * 2. 钉底后 isAutoScrolling 罩 2 帧，挡住 MD reflow 的 scroll 回声误杀
+ * 3. ResizeObserver / live text：rAF 合并每帧最多钉一次（消狂闪）
+ * 4. followSignal useLayoutEffect：同步钉底（同帧 layout，消 deferred 类一闪）
+ * 5. 无 FORCE 超时松手
  */
 import {
   useCallback,
@@ -37,7 +33,6 @@ export function isCanvasNearBottom(
 type UseMessagesCanvasFollowInput = {
   followSignal: unknown;
   isThinking: boolean;
-  /** 有 pending jump 时换会话不武装 stick，避免 RO/follow 抢在锚点跳转前钉底。 */
   hasPendingJump?: boolean;
   /**
    * 产品「焦点跟随」：仅卡住 continuous stick（layout/RO/channel）。
@@ -65,6 +60,9 @@ export function useMessagesCanvasFollow({
   const wheelRafRef = useRef<number | null>(null);
   const scrollRafRef = useRef<number | null>(null);
   const autoScrollClearRafRef = useRef<number | null>(null);
+  // 假离底保护：区分「用户上滚」与「MD/工具高度暴涨」。
+  const lastScrollTopRef = useRef(0);
+  const lastScrollHeightRef = useRef(0);
 
   const syncScrollAnchoring = useCallback(() => {
     const container = containerRef.current;
@@ -75,10 +73,29 @@ export function useMessagesCanvasFollow({
     container.classList.toggle(SCROLL_ANCHOR_ENABLED_CLASS, shouldEnable);
   }, []);
 
+  /**
+   * scroll 信道：真底 re-arm；仅 scrollTop 上移且高度未缩时释放。
+   * 高度暴涨（MD 开渲）导致 distance>100 但 scrollTop 未动 → 保持武装。
+   */
   const syncUserAtBottomState = useCallback(
     (container: HTMLDivElement) => {
-      // jetbrains：未暂停时 scroll 直接按距底重算，无高度阶跃保护。
-      isUserAtBottomRef.current = isCanvasNearBottom(container);
+      const scrollTop = container.scrollTop;
+      const scrollHeight = container.scrollHeight;
+      const nearBottom = isCanvasNearBottom(container);
+
+      if (nearBottom) {
+        isUserAtBottomRef.current = true;
+      } else {
+        const heightShrank = scrollHeight < lastScrollHeightRef.current - 1;
+        const scrollTopMovedUp = lastScrollTopRef.current - scrollTop >= 1;
+        if (scrollTopMovedUp && !heightShrank) {
+          isUserAtBottomRef.current = false;
+        }
+        // 否则保持原 isUserAtBottom（内容长高假离底不杀锁）
+      }
+
+      lastScrollTopRef.current = scrollTop;
+      lastScrollHeightRef.current = scrollHeight;
       syncScrollAnchoring();
     },
     [syncScrollAnchoring],
@@ -107,17 +124,25 @@ export function useMessagesCanvasFollow({
     }
 
     container.scrollTop = container.scrollHeight;
+    lastScrollTopRef.current = container.scrollTop;
+    lastScrollHeightRef.current = container.scrollHeight;
 
     if (autoScrollClearRafRef.current !== null) {
       cancelAnimationFrame(autoScrollClearRafRef.current);
     }
+    // 两帧 grace：MD reflow 的 scroll 回声常落在写底后 1～2 帧，避免误杀 armed。
     autoScrollClearRafRef.current = requestAnimationFrame(() => {
-      autoScrollClearRafRef.current = null;
-      isAutoScrollingRef.current = false;
+      autoScrollClearRafRef.current = requestAnimationFrame(() => {
+        autoScrollClearRafRef.current = null;
+        isAutoScrollingRef.current = false;
+      });
     });
   }, []);
 
-  /** continuous stick：焦点跟随开 + 在底未暂停。同步钉 + rAF 补一帧真高。 */
+  /**
+   * continuous stick：每帧最多钉一次（rAF 合并）。
+   * RO / live text 高频连打时只落一次，消「MD 开渲狂闪」。
+   */
   const pinIfFollowing = useCallback(() => {
     if (!containerRef.current) {
       return;
@@ -131,7 +156,6 @@ export function useMessagesCanvasFollow({
     if (pinRafRef.current !== null) {
       return;
     }
-    scrollToBottom();
     pinRafRef.current = requestAnimationFrame(() => {
       pinRafRef.current = null;
       if (
@@ -149,7 +173,6 @@ export function useMessagesCanvasFollow({
     userPausedRef.current = false;
     isUserAtBottomRef.current = true;
     scrollToBottom();
-    // layout 后再补一帧真高（气泡/MD 同 commit 后测高）。
     requestAnimationFrame(() => {
       if (!userPausedRef.current) {
         scrollToBottom();
@@ -165,7 +188,6 @@ export function useMessagesCanvasFollow({
     resumeFollowAndPin();
   }, [resumeFollowAndPin]);
 
-  // 换会话：默认武装贴底；若本帧已有 pending jump 则暂停 stick（跳锚优先）。
   useLayoutEffect(() => {
     if (hasPendingJump) {
       userPausedRef.current = true;
@@ -175,6 +197,8 @@ export function useMessagesCanvasFollow({
       isUserAtBottomRef.current = true;
     }
     isAutoScrollingRef.current = false;
+    lastScrollTopRef.current = 0;
+    lastScrollHeightRef.current = 0;
     if (pinRafRef.current !== null) {
       cancelAnimationFrame(pinRafRef.current);
       pinRafRef.current = null;
@@ -185,7 +209,7 @@ export function useMessagesCanvasFollow({
     }
   }, [hasPendingJump, renderScopeKey]);
 
-  // jetbrains：layout 阶段钉底（paint 前）。受焦点跟随开关约束（发送/open 走 resume）。
+  // layout 同步钉底（paint 前）；与 jetbrains 一致，避免内容先 paint 再 rAF 钉。
   useLayoutEffect(() => {
     void followSignal;
     void isThinking;
@@ -220,6 +244,8 @@ export function useMessagesCanvasFollow({
       return undefined;
     }
 
+    lastScrollTopRef.current = container.scrollTop;
+    lastScrollHeightRef.current = container.scrollHeight;
     syncScrollAnchoring();
 
     const handleScroll = () => {
@@ -229,9 +255,13 @@ export function useMessagesCanvasFollow({
       scrollRafRef.current = requestAnimationFrame(() => {
         scrollRafRef.current = null;
         if (isAutoScrollingRef.current) {
+          lastScrollTopRef.current = container.scrollTop;
+          lastScrollHeightRef.current = container.scrollHeight;
           return;
         }
         if (userPausedRef.current) {
+          lastScrollTopRef.current = container.scrollTop;
+          lastScrollHeightRef.current = container.scrollHeight;
           return;
         }
         syncUserAtBottomState(container);
@@ -255,6 +285,8 @@ export function useMessagesCanvasFollow({
             userPausedRef.current = false;
             isUserAtBottomRef.current = true;
           }
+          lastScrollTopRef.current = container.scrollTop;
+          lastScrollHeightRef.current = container.scrollHeight;
           syncScrollAnchoring();
         });
       }
@@ -284,7 +316,7 @@ export function useMessagesCanvasFollow({
       };
     }
 
-    // RO 在布局之后触发：同步钉底（不再额外 rAF 拖一帧）。
+    // RO：rAF 合并钉底，避免 MD 每 token reflow 同步狂写 scrollTop。
     const observer = new ResizeObserver(() => {
       if (userPausedRef.current) {
         syncScrollAnchoring();
@@ -294,7 +326,7 @@ export function useMessagesCanvasFollow({
         return;
       }
       if (isUserAtBottomRef.current) {
-        scrollToBottom();
+        pinIfFollowing();
         return;
       }
       syncUserAtBottomState(container);
@@ -330,6 +362,7 @@ export function useMessagesCanvasFollow({
     };
   }, [
     liveAutoFollowEnabledRef,
+    pinIfFollowing,
     renderScopeKey,
     scrollToBottom,
     syncScrollAnchoring,

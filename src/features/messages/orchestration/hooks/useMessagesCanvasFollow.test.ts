@@ -216,7 +216,7 @@ describe("useMessagesCanvasFollow (jetbrains P0)", () => {
     expect(getScrollTop()).toBe(600);
   });
 
-  it("releases follow when scroll lands far from bottom (jetbrains pure distance)", () => {
+  it("releases follow when user moves scrollTop up (real leave)", () => {
     const { container, getScrollTop, setScrollTop } = createScrollableContainer();
     const { result, rerender } = mountFollow();
 
@@ -240,6 +240,38 @@ describe("useMessagesCanvasFollow (jetbrains P0)", () => {
     });
 
     expect(result.current.isUserAtBottomRef.current).toBe(false);
+  });
+
+  it("keeps follow armed when height grows without scrollTop moving up (MD open render)", () => {
+    const { container, getScrollTop, setScrollHeight } = createScrollableContainer();
+    const { result, rerender } = mountFollow();
+
+    act(() => {
+      result.current.containerRef.current = container;
+      rerender({
+        followSignal: "s0",
+        isThinking: true,
+        renderScopeKey: "scope-1",
+      });
+    });
+
+    act(() => {
+      result.current.resumeFollowAndPin();
+    });
+    expect(getScrollTop()).toBe(600);
+
+    // MD 开渲：高度暴涨，scrollTop 仍停在旧底；假 scroll 回声不得解绑。
+    act(() => {
+      setScrollHeight(2000);
+      container.dispatchEvent(new Event("scroll"));
+    });
+    expect(result.current.isUserAtBottomRef.current).toBe(true);
+
+    act(() => {
+      resizeObserverCallback?.([], {} as ResizeObserver);
+    });
+    // rAF 合并钉底（stub 立即执行）
+    expect(getScrollTop()).toBe(1600);
   });
 
   it("settleFollow forces pin when not wheel-paused", () => {
