@@ -92,3 +92,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1352: 注入上下文展开态保底高度
+
+**Date**: 2026-08-08
+**Task**: 注入上下文展开态保底高度
+**Branch**: `cxn-version-0.8.4`
+
+### Summary
+
+修复 Inspector 注入上下文展开后短文案在 flex 侧栏被挤扁看不全：min-height + flex-shrink:0，保留 max 与 body 滚动
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c568c1b66` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
