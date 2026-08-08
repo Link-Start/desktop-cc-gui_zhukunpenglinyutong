@@ -397,6 +397,8 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
 
     // Shared/Atomic enrichment：完整 executionTarget 时主动 ensure catalog。
     // 失败不清 target；闭合态标签由 ModelSelect snapshot authority 承担。
+    // Claude：打开历史会话 / 切 target 时同步 ANTHROPIC mapping 到当前渠道，
+    // 避免 chip 已是「本地配置」而列表标签仍是上一 managed 的 MiniMax/DeepSeek。
     useEffect(() => {
       const engine = executionTarget?.engine;
       if (
@@ -417,6 +419,15 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         engine as EngineType,
         profileId,
       );
+      if (engine === "claude") {
+        void import("../../../vendors/activateEngineProviderProfile")
+          .then(({ syncClaudeModelMappingForProfile }) =>
+            syncClaudeModelMappingForProfile(profileId),
+          )
+          .catch(() => {
+            // mapping 失败不挡 catalog；列表仍可走 model.model 权威展示
+          });
+      }
     }, [
       atomicProviderTargetCatalog.ensureModels,
       atomicProviderTargetCatalog.ensureProfiles,
