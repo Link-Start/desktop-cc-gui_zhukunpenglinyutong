@@ -27,6 +27,51 @@ describe("useComposerRunStatus", () => {
       }),
     );
     expect(result.current.visible).toBe(false);
+    expect(result.current.activityVisible).toBe(false);
+    expect(result.current.showSubagentSection).toBe(false);
+  });
+
+  it("shows strip for subagents alone without counting them as activityVisible", () => {
+    const { result } = renderHook(() =>
+      useComposerRunStatus({
+        todos: [],
+        subagents: [
+          {
+            id: "s1",
+            type: "explore",
+            description: "only agent",
+            status: "completed",
+          },
+        ],
+        plan: null,
+        isPlanMode: false,
+        isProcessing: false,
+        mergePlanIntoTodos: false,
+        sessionFileChanges: null,
+      }),
+    );
+    expect(result.current.showSubagentSection).toBe(true);
+    expect(result.current.activityVisible).toBe(false);
+    expect(result.current.visible).toBe(true);
+    expect(result.current.showTodoSection).toBe(false);
+    expect(result.current.showEditSection).toBe(false);
+  });
+
+  it("keeps activityVisible true when only todos/edits exist without subagents", () => {
+    const { result } = renderHook(() =>
+      useComposerRunStatus({
+        todos: [{ content: "A", status: "pending" }],
+        subagents: [],
+        plan: null,
+        isPlanMode: false,
+        isProcessing: false,
+        mergePlanIntoTodos: false,
+        sessionFileChanges: null,
+      }),
+    );
+    expect(result.current.activityVisible).toBe(true);
+    expect(result.current.showSubagentSection).toBe(false);
+    expect(result.current.visible).toBe(true);
   });
 
   it("exposes todo / subagent / plan / edit sections and toggles expand", () => {

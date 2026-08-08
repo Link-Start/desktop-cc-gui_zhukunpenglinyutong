@@ -125,10 +125,14 @@ export function useComposerRunStatus(input: ComposerRunStatusInput) {
     );
 
   const showTodoSection = todoTotal > 0;
+  // 子代理独立判定：不与 todo/plan/edit 绑在同一条「活动」铁律里
   const showSubagentSection = subagentTotal > 0;
 
-  const visible =
-    showTodoSection || showSubagentSection || showPlanSection || showEditSection;
+  // 回合活动条（任务 / 计划 / 已编辑）— 不含子代理
+  const activityVisible =
+    showTodoSection || showPlanSection || showEditSection;
+  // strip 是否挂载：活动条 ∪ 子代理（子代理单独算，可只亮 Agent pill）
+  const visible = activityVisible || showSubagentSection;
 
   const [expandedSection, setExpandedSection] = useState<RunStatusSection | null>(
     null,
@@ -136,8 +140,9 @@ export function useComposerRunStatus(input: ComposerRunStatusInput) {
   const userCollapsedRef = useRef(false);
   const autoExpandedSubagentRef = useRef(false);
 
+  // 活动条 section 消失时清对应 expand；与子代理互不拖垮
   useEffect(() => {
-    if (!visible) {
+    if (!activityVisible && !showSubagentSection) {
       setExpandedSection(null);
       userCollapsedRef.current = false;
       autoExpandedSubagentRef.current = false;
@@ -145,25 +150,33 @@ export function useComposerRunStatus(input: ComposerRunStatusInput) {
     }
     setExpandedSection((current) => {
       if (current === "todo" && !showTodoSection) return null;
-      if (current === "subagent" && !showSubagentSection) return null;
       if (current === "plan" && !showPlanSection) return null;
       if (current === "edit" && !showEditSection) return null;
+      if (current === "subagent" && !showSubagentSection) return null;
       return current;
     });
   }, [
+    activityVisible,
     showEditSection,
     showPlanSection,
     showSubagentSection,
     showTodoSection,
-    visible,
   ]);
 
+  // 子代理 running 时自动展开：只看子代理自身，不看 todo/edit 是否有活动
   useEffect(() => {
     if (!subagentRunning || !showSubagentSection) return;
     if (userCollapsedRef.current || autoExpandedSubagentRef.current) return;
     autoExpandedSubagentRef.current = true;
     setExpandedSection("subagent");
   }, [showSubagentSection, subagentRunning]);
+
+  // 子代理段从有→无时，允许下次再 auto-expand
+  useEffect(() => {
+    if (!showSubagentSection) {
+      autoExpandedSubagentRef.current = false;
+    }
+  }, [showSubagentSection]);
 
   const toggleSection = useCallback((section: RunStatusSection) => {
     setExpandedSection((current) => {
@@ -182,7 +195,10 @@ export function useComposerRunStatus(input: ComposerRunStatusInput) {
   }, []);
 
   return {
+    /** strip 是否挂载（活动条或子代理任一有内容） */
     visible,
+    /** 仅 todo/plan/edit；子代理不计入 */
+    activityVisible,
     expandedSection,
     toggleSection,
     collapse,

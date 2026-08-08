@@ -1478,6 +1478,8 @@ function ComposerImpl({
     itemsByThread: itemsByThreadForRunStatus,
     threadParentById,
     threadStatusById: threadStatusById ?? canvasStatusById,
+    // S10 同源子代理线程（含 Shared 无 parent 的 claude:subagent:owner:*）
+    childSubagentThreadIds: stripChildThreads.map((thread) => thread.id),
     deferSummary: shouldDeferStatusSummary,
   });
   // 已编辑：ledger 合成主线∪agent-canvas（Shared/协作 fan-in），用未 deferred items 保证实时
@@ -1560,10 +1562,10 @@ function ComposerImpl({
     isCodexEngine &&
     selectedEngine != null &&
     isEngineCapabilityAvailable(selectedEngine, "collaboration.mode");
+  // 底部 legacy dock 活动：子代理已迁到 Strip 独立判定，不并入此铁律
   const hasStatusPanelActivity = useMemo(() => {
     const hasLegacyActivity =
       todoTotal > 0 ||
-      subagentTotal > 0 ||
       Boolean(sessionFileChanges) ||
       isPlanMode ||
       Boolean(plan);
@@ -1577,7 +1579,6 @@ function ComposerImpl({
     isPlanMode,
     plan,
     sessionFileChanges,
-    subagentTotal,
     todoTotal,
   ]);
   // 底部 dock 已退役；toggle 仅兼容旧 override，默认不再展示。
