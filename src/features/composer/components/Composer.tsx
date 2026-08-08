@@ -46,6 +46,7 @@ import {
   type ExecutionTarget,
 } from "../../shared-session/target/types";
 import { persistSharedSessionSelectedTarget } from "../../shared-session/services/sharedSessions";
+import { shouldSuppressSharedTargetPersistToast } from "../../shared-session/target/sharedTargetPersistErrors";
 import { resolveComposerAtomicSelectedModelId } from "../utils/resolveComposerAtomicSelectedModelId";
 import { resolveDefaultCreationExecutionTarget } from "../utils/resolveDefaultCreationExecutionTarget";
 import { isSharedSessionThreadId } from "../../shared-session/utils/sharedSessionIdentity";
@@ -1115,6 +1116,15 @@ function ComposerImpl({
   const sharedTargetPersistenceByThreadRef = useRef(
     new Map<string, Promise<void>>(),
   );
+  // 异步 persist 晚于切 workspace/thread 时用 ref 判断「用户是否还在该会话」。
+  const activeSharedPersistScopeRef = useRef({
+    workspaceId: activeWorkspaceId,
+    threadId: activeThreadId,
+  });
+  activeSharedPersistScopeRef.current = {
+    workspaceId: activeWorkspaceId,
+    threadId: activeThreadId,
+  };
   const handleSharedTargetChange = useCallback(
     (target: ExecutionTarget) => {
       if (!activeWorkspaceId || !activeThreadId || sharedTargetPickerLocked) {
@@ -1155,12 +1165,24 @@ function ComposerImpl({
           });
         })
         .catch((error) => {
-          // 持久化失败：回滚到变更前值。
+          // 持久化失败：回滚到变更前值（不依赖 toast）。
           hydrateSharedTargetState(
             workspaceId,
             threadId,
             previousTarget ?? null,
           );
+          const scope = activeSharedPersistScopeRef.current;
+          if (
+            shouldSuppressSharedTargetPersistToast(error, {
+              persistWorkspaceId: workspaceId,
+              persistThreadId: threadId,
+              activeWorkspaceId: scope.workspaceId,
+              activeThreadId: scope.threadId,
+            })
+          ) {
+            // 切走会话 / meta 缺失：静默，避免用户只切空间/会话却被红字吓到。
+            return;
+          }
           pushErrorToast({
             title: t("sharedSend.selectionPersistFailedTitle"),
             message: t("sharedSend.selectionPersistFailedMessage", {
