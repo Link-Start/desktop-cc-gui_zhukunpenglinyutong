@@ -1678,3 +1678,48 @@ A+B 方案同步 isProcessing：协作蓝点/代理电、approve/retry 失败熄
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1343: Shared 创建/打开历史 Claude catalog 串台修复
+
+**Date**: 2026-08-08
+**Task**: Shared 创建/打开历史 Claude catalog 串台修复
+**Branch**: `cxn-version-0.8.4`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| OpenSpec | fix-shared-create-default-provider-catalog |
+| 创建 | 第一 Provider + local forceRefresh / managed scoped catalog |
+| 打开 | 不 reseed last target；Claude sync mapping |
+| 展示 | 文案/图标 catalog runtime 优先于 localStorage mapping |
+| 品牌 | k3 短 id → kimi |
+| 验证 | vitest 相关绿；人工验收文案+图标通过 |
+| 文档 | analysis shared-create-local-catalog-stale-mapping-2026-08-08 |
+
+**代码 commit**：`1974c4cee`
+**未纳入**：multi-agent inspector 相关工作树改动（另轨）
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1974c4cee` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
