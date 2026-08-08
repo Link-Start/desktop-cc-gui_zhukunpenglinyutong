@@ -2166,14 +2166,16 @@ button.ma-hist-toggle:hover .ma-hist-title {
   flex-direction: column;
 }
 
-/* 展开：虚线边框整卡成块；限制高度，正文区内滚动，避免撑死侧栏 */
+/* 展开：虚线边框整卡成块；按内容自适应，保底高度防短文被挤没，上限内 body 滚动 */
 .ma-inject.is-open {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
+  min-height: min(200px, 36vh);
   max-height: min(52vh, 440px);
   margin: 6px 8px 8px;
   border: 1px dashed color-mix(in srgb, var(--ma-border2) 80%, var(--ma-muted));
   border-radius: 10px;
   background: color-mix(in srgb, var(--ma-card2) 94%, transparent);
+  overflow: hidden;
 }
 
 .ma-inject:not(.is-open) {
@@ -2240,7 +2242,8 @@ button.ma-hist-toggle:hover .ma-hist-title {
 
 .ma-inject-body {
   flex: 1 1 auto;
-  min-height: 0;
+  /* 正文区保底（随视口收）；长文仍靠父级 max-height + 本区滚动 */
+  min-height: min(120px, 22vh);
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
