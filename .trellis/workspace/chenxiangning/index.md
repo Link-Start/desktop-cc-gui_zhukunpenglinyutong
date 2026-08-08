@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-32.md`
-- **Total Sessions**: 1352
+- **Total Sessions**: 1353
 - **Last Active**: 2026-08-08
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-32.md` | ~127 | Active |
+| `journal-32.md` | ~174 | Active |
 | `journal-31.md` | ~1968 | Archived |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
@@ -60,6 +60,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1353 | 2026-08-08 | 抑制切换场景误报 toast | `88dd0c4c2` | `cxn-version-0.8.4` |
 | 1352 | 2026-08-08 | 注入上下文展开态保底高度 | `c568c1b66` | `cxn-version-0.8.4` |
 | 1351 | 2026-08-08 | 本地 HTML 内置浏览器打开 + OpenSpec 收口 | `daad1393c` | `cxn-version-0.8.4` |
 | 1350 | 2026-08-08 | 对齐 tauri plugin-dialog 版本以修复打包 | `b1e0c7851` | `cxn-version-0.8.4` |

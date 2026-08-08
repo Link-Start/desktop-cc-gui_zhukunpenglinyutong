@@ -125,3 +125,50 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1353: 抑制切换场景误报 toast
+
+**Date**: 2026-08-08
+**Task**: 抑制切换场景误报 toast
+**Branch**: `cxn-version-0.8.4`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 斜杠指令 stale | orchestrator soft-cancel 不再弹「命令列表不可用」 |
+| Shared 发送目标 | 切走会话 / meta ENOENT 静默；同会话真失败仍提示 |
+| 验证 | vitest 相关 37 tests 通过 |
+| 未纳入 | StartupGateOverlay 工作区本地改动仍未提交 |
+
+**Updated Files**:
+- `src/features/commands/hooks/useCustomCommands.ts`
+- `src/features/commands/hooks/useCustomCommands.test.tsx`
+- `src/features/composer/components/Composer.tsx`
+- `src/features/composer/components/Composer.file-reference-token.test.tsx`
+- `src/features/shared-session/target/sharedTargetPersistErrors.ts`
+- `src/features/shared-session/target/sharedTargetPersistErrors.test.ts`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `88dd0c4c2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
