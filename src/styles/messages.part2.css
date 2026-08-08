@@ -5,18 +5,6 @@
 .thinking-block {
   margin: 6px 0;
   font-size: var(--message-meta-font-size);
-  /* 屏幕外的思考块跳过渲染/绘制；折叠态约为一行 header 高度，
-     渲染过后由 auto 缓存真实高度（与 .message 的策略一致）。 */
-  content-visibility: auto;
-  contain-intrinsic-block-size: auto 32px;
-}
-
-/* 正在流式的思考块保持渲染，避免 live 行被跳过导致的闪烁/测量抖动
-   （与 .message.assistant.is-live-streaming 同策略）。
-   外层 margin 与折叠态相同：展开留白只靠 .thinking-content。 */
-.thinking-block.is-live {
-  content-visibility: visible;
-  contain-intrinsic-block-size: auto;
 }
 
 .thinking-header {
