@@ -3166,26 +3166,6 @@ function ComposerImpl({
               streamActivityPhase={resolvedComposerStreamActivityPhase}
               canStop={canStop}
               onSend={handleSend}
-              squadSurface={
-                isSharedSessionResolved ? (
-                  <MultiAgentComposerToggle
-                    engine={selectedAtomicTarget?.engine}
-                    armed={agentArmed || collabRunActive}
-                    disabled={
-                      disabled ||
-                      effectiveSubmitDisabled ||
-                      !isResolvedExecutionTarget(selectedAtomicTarget) ||
-                      collabRunActive
-                    }
-                    hasActiveRun={collabRunActive}
-                    onToggle={() => {
-                      if (collabRunActive) return;
-                      setAgentArmed((armed) => !armed);
-                    }}
-                    onArm={() => setAgentArmed(true)}
-                  />
-                ) : undefined
-              }
               onStop={onStop}
               onTextChange={handleTextChangeWithHistory}
               selectedModelId={resolveComposerAtomicSelectedModelId({
@@ -3339,40 +3319,70 @@ function ComposerImpl({
               completionEmailDisabled={completionEmailDisabled}
               onToggleCompletionEmail={onToggleCompletionEmail}
             />
-            {branchControl?.branchName || showFooterUsageIndicator ? (
+            {branchControl?.branchName ||
+            showFooterUsageIndicator ||
+            isSharedSessionResolved ? (
               <div className="composer-branch-row">
                 {branchControl?.branchName ? (
                   <ComposerBranchBadge {...branchControl} />
                 ) : null}
-                {showFooterUsageIndicator ? (
-                  <div className="composer-branch-row-usage">
-                    {codexContextDualViewEnabled ? (
-                      <ContextBar
-                        surface="tool-popover"
-                        contextDualViewEnabled
-                        dualContextUsage={resolvedDualContextUsage}
-                        onRequestContextCompaction={handleManualCompactContext}
-                        codexAutoCompactionEnabled={codexAutoCompactionEnabled}
-                        codexAutoCompactionThresholdPercent={
-                          codexAutoCompactionThresholdPercent
-                        }
-                        onCodexAutoCompactionSettingsChange={
-                          onCodexAutoCompactionSettingsChange
-                        }
-                        currentProvider="codex"
-                      />
-                    ) : (
-                      <TokenIndicator
-                        percentage={footerUsagePercentage}
-                        usedTokens={resolvedLegacyContextUsage?.used}
-                        maxTokens={resolvedLegacyContextUsage?.total}
-                        claudeContextUsage={
-                          selectedEngine === "claude"
-                            ? resolvedClaudeContextUsage
-                            : null
-                        }
-                      />
-                    )}
+                {showFooterUsageIndicator || isSharedSessionResolved ? (
+                  <div className="composer-branch-row-trailing">
+                    {isSharedSessionResolved ? (
+                      <div className="composer-collab-slot">
+                        <MultiAgentComposerToggle
+                          engine={selectedAtomicTarget?.engine}
+                          armed={agentArmed || collabRunActive}
+                          disabled={
+                            disabled ||
+                            effectiveSubmitDisabled ||
+                            !isResolvedExecutionTarget(selectedAtomicTarget) ||
+                            collabRunActive
+                          }
+                          hasActiveRun={collabRunActive}
+                          onToggle={() => {
+                            if (collabRunActive) return;
+                            setAgentArmed((armed) => !armed);
+                          }}
+                          onArm={() => setAgentArmed(true)}
+                        />
+                      </div>
+                    ) : null}
+                    {showFooterUsageIndicator ? (
+                      <div className="composer-branch-row-usage">
+                        {codexContextDualViewEnabled ? (
+                          <ContextBar
+                            surface="tool-popover"
+                            contextDualViewEnabled
+                            dualContextUsage={resolvedDualContextUsage}
+                            onRequestContextCompaction={
+                              handleManualCompactContext
+                            }
+                            codexAutoCompactionEnabled={
+                              codexAutoCompactionEnabled
+                            }
+                            codexAutoCompactionThresholdPercent={
+                              codexAutoCompactionThresholdPercent
+                            }
+                            onCodexAutoCompactionSettingsChange={
+                              onCodexAutoCompactionSettingsChange
+                            }
+                            currentProvider="codex"
+                          />
+                        ) : (
+                          <TokenIndicator
+                            percentage={footerUsagePercentage}
+                            usedTokens={resolvedLegacyContextUsage?.used}
+                            maxTokens={resolvedLegacyContextUsage?.total}
+                            claudeContextUsage={
+                              selectedEngine === "claude"
+                                ? resolvedClaudeContextUsage
+                                : null
+                            }
+                          />
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
