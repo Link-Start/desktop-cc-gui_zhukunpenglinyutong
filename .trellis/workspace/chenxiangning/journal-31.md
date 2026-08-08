@@ -1504,3 +1504,51 @@ Shared Grok 初始化禁止借用 Native Codex 的 reasoning options/effort；in
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1339: 补齐 Shared 协作左侧会话运行态指示
+
+**Date**: 2026-08-08
+**Task**: 补齐 Shared 协作左侧会话运行态指示
+**Branch**: `cxn-version-0.8.4`
+
+### Summary
+
+A+B 方案同步 isProcessing：协作蓝点/代理电、approve/retry 失败熄灭、hydrate 不踩普通 Shared turn
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 问题 | Shared 协作运行时左侧缺蓝点/绿点/代理电 |
+| 根因 | squadRequest 早退未 markProcessing |
+| 方案 | A 发送入口 + B executor 生命周期 + Bridge |
+| 加固 | approve/retry 失败熄灭；hydrate 仅活跃点亮 |
+| 测试 | collabThreadProcessingBridge.test.ts 7/7 |
+
+**Updated Files**:
+- `src/features/multi-agent/runtime/collabThreadProcessingBridge.ts`
+- `src/features/multi-agent/runtime/collabThreadProcessingBridge.test.ts`
+- `src/features/multi-agent/runtime/executor.ts`
+- `src/features/multi-agent/index.ts`
+- `src/features/threads/hooks/useThreadMessaging.ts`
+- `src/features/threads/hooks/useThreads.ts`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `256801cb6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

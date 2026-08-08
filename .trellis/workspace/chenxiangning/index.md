@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-31.md`
-- **Total Sessions**: 1338
-- **Last Active**: 2026-08-07
+- **Total Sessions**: 1339
+- **Last Active**: 2026-08-08
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-31.md` | ~1520 | Active |
+| `journal-31.md` | ~1554 | Active |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
 | `journal-28.md` | ~1984 | Archived |
@@ -59,6 +59,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1339 | 2026-08-08 | 补齐 Shared 协作左侧会话运行态指示 | `256801cb6` | `cxn-version-0.8.4` |
 | 1338 | 2026-08-07 | 合并 upstream/chore/bump-version-0.8.3 到 cxn-win-version-0.8.3 | `41bcb2699` | `cxn-win-version-0.8.3` |
 | 1337 | 2026-08-05 | 隔离非 Squad 会话副作用 | `979814ccb` | `CXN-version-0.7.16` |
 | 1336 | 2026-08-05 | 实现 Phase 5 Agent Squad 基础编排 | `38db8cae7` | `CXN-version-0.7.16` |
