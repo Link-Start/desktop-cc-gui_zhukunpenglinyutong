@@ -39,22 +39,11 @@ export {
   type SubagentCardViewModel,
 } from "./utils/subagentViewModel";
 export {
-  buildSyntheticSpawnToolsFromChildren,
-  enrichTimelineWithSyntheticSubagentsBeforeCollapse,
-  hasBlockingSubagentToolSource,
-  injectSyntheticSubagentToolsIfNeeded,
-  shouldInjectChildSubagentSynthetic,
-} from "./utils/syntheticSharedSubagentTools";
-export {
   collectSubagentStyleNotificationsFromItems,
   enrichSubagentCardsFromTaskNotifications,
   matchToolItemToNotificationToolUseId,
   mergeConversationItemSources,
 } from "./utils/enrichSubagentCardsFromTaskNotifications";
-export type {
-  ChildSubagentSyntheticEligibilityInput,
-  EnrichTimelineSyntheticSubagentInput,
-} from "./utils/syntheticSharedSubagentTools";
 export {
   enrichSubagentCardStatuses,
   isSubagentFinishedOutput,
@@ -77,8 +66,6 @@ export {
   useSubagentSessionProbeVersion,
 } from "./hooks/useSubagentSessionProbeStore";
 export { SubagentPersonaCard } from "./components/SubagentPersonaCard";
-export { SubagentRingCard } from "./components/SubagentRingCard";
-export { SubagentSquadGrid } from "./components/SubagentSquadGrid";
 export { SubagentInspectorDrawer } from "./components/SubagentInspectorDrawer";
 export { SubagentChatSplit } from "./components/SubagentChatSplit";
 export { ConversationInspectorSplit } from "./components/ConversationInspectorSplit";

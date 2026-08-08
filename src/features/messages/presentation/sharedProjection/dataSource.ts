@@ -187,7 +187,7 @@ function enrichSharedToolConversationItem(input: {
         detail.includes("subagentType") ||
         detail.includes("background")));
   // Claude Agent/Task：即使 title 被换成 description，也要保住 toolType，
-  // 否则会掉进 Generic 扳手行，与 SubagentSquadGrid 双重渲染。
+  // 以便 status-panel / run-status strip 的 isSubagentTool 识别。
   const looksLikeClaudeAgent =
     /^agent$/i.test(toolType) ||
     /^task$/i.test(toolType) ||

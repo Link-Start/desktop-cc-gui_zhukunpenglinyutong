@@ -38,7 +38,6 @@ import {
   SearchToolGroupBlock,
   ToolBlockRenderer,
 } from "../../components/toolBlocks";
-import { SubagentSquadGrid } from "../../../subagent-ui";
 import {
   isSubagentStyleAgentTaskNotification,
   parseAgentTaskNotification as parseFullAgentTaskNotification,
@@ -611,15 +610,6 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
       const firstItem = entry.items[0];
       return renderWithAnchoredUserInput(
         <SearchToolGroupBlock key={`sg-${firstItem?.id ?? "search-group"}`} items={entry.items} />,
-      );
-    }
-    if (entry.kind === "subagentGroup") {
-      const firstItem = entry.items[0];
-      return renderWithAnchoredUserInput(
-        <SubagentSquadGrid
-          key={`sag-${firstItem?.id ?? "subagent-group"}`}
-          items={entry.items}
-        />,
       );
     }
     return renderWithAnchoredUserInput(renderSingleItem(entry.item));
