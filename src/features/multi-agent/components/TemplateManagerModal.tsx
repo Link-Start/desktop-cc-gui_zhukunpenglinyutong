@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
+import CircleHelp from "lucide-react/dist/esm/icons/circle-help";
 
 import { pushErrorToast } from "../../../services/toasts";
 import {
@@ -21,6 +22,7 @@ import {
   displayStageTitle,
   displayTemplateDescription,
   displayTemplateName,
+  normalizeStagesFeedModes,
   templateApprovalCount,
   templateFlowLabel,
 } from "../templates/types";
@@ -42,11 +44,13 @@ function emptyEditor(template: CollaborationTemplate): CollaborationTemplate {
     ...template,
     name,
     description,
-    stages: template.stages.map((stage) => ({
-      ...stage,
-      title: displayStageTitle(template, stage),
-      target: { ...stage.target },
-    })),
+    stages: normalizeStagesFeedModes(
+      template.stages.map((stage) => ({
+        ...stage,
+        title: displayStageTitle(template, stage),
+        target: { ...stage.target },
+      })),
+    ),
   };
 }
 
@@ -64,6 +68,7 @@ export function TemplateManagerModal({
     emptyEditor(getTemplateById(activeId)),
   );
   const [query, setQuery] = useState("");
+  const [helpOpen, setHelpOpen] = useState(false);
 
   // 仅 open / 显式切模板时 hydrate draft，避免 store 重渲打断输入焦点
   useEffect(() => {
@@ -72,6 +77,7 @@ export function TemplateManagerModal({
     setActiveId(id);
     setDraft(emptyEditor(getTemplateById(id)));
     setQuery("");
+    setHelpOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 故意不依赖 catalog 全量，防失焦
   }, [open, initialTemplateId]);
 
@@ -124,21 +130,25 @@ export function TemplateManagerModal({
   const removeStage = (index: number) => {
     setDraft((prev) => ({
       ...prev,
-      stages: prev.stages.filter((_, i) => i !== index),
+      stages: normalizeStagesFeedModes(
+        prev.stages.filter((_, i) => i !== index),
+      ),
     }));
   };
 
   const addStage = () => {
     setDraft((prev) => ({
       ...prev,
-      stages: [
+      stages: normalizeStagesFeedModes([
         ...prev.stages,
         cloneStage({
           title: t("multiAgent.template.stageFallback", {
             n: prev.stages.length + 1,
           }),
+          // 新增在末尾，默认吃摘要；若成首段由 normalize 改为 full
+          upstreamFeedMode: "summary",
         }),
-      ],
+      ]),
     }));
   };
 
@@ -149,7 +159,8 @@ export function TemplateManagerModal({
       const stages = [...prev.stages];
       const [row] = stages.splice(index, 1);
       stages.splice(next, 0, row!);
-      return { ...prev, stages };
+      // 谁到首位谁强制「吃全文」
+      return { ...prev, stages: normalizeStagesFeedModes(stages) };
     });
   };
 
@@ -234,7 +245,7 @@ export function TemplateManagerModal({
       }}
     >
       <div
-        className="ma-tpl-modal"
+        className={`ma-tpl-modal${helpOpen ? " has-help" : ""}`}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="ma-tpl-modal-head">
@@ -246,11 +257,25 @@ export function TemplateManagerModal({
               {t("multiAgent.template.modalSub")}
             </div>
           </div>
-          <button type="button" className="ma-tpl-close" onClick={onClose}>
-            {t("multiAgent.template.close")}
-          </button>
+          <div className="ma-tpl-head-actions">
+            <button
+              type="button"
+              className={`ma-tpl-help-btn${helpOpen ? " is-on" : ""}`}
+              onClick={() => setHelpOpen((v) => !v)}
+              aria-expanded={helpOpen}
+              aria-controls="ma-tpl-help-panel"
+              aria-label={t("multiAgent.template.helpTitle")}
+              title={t("multiAgent.template.helpTitle")}
+            >
+              <CircleHelp size={16} strokeWidth={2} aria-hidden />
+            </button>
+            <button type="button" className="ma-tpl-close" onClick={onClose}>
+              {t("multiAgent.template.close")}
+            </button>
+          </div>
         </header>
 
+        <div className="ma-tpl-main-row">
         <div className="ma-tpl-body">
           <aside className="ma-tpl-list">
             <input
@@ -404,6 +429,40 @@ export function TemplateManagerModal({
                     />
                     {t("multiAgent.template.requiresApproval")}
                   </label>
+                  <div
+                    className="ma-feed-mode"
+                    role="group"
+                    aria-label={t("multiAgent.template.upstreamFeedAria")}
+                  >
+                    <button
+                      type="button"
+                      className={`ma-feed-mode-btn${
+                        (stage.upstreamFeedMode ??
+                          (index === 0 ? "full" : "summary")) === "summary"
+                          ? " is-on"
+                          : ""
+                      }`}
+                      onClick={() =>
+                        updateStage(index, { upstreamFeedMode: "summary" })
+                      }
+                    >
+                      {t("multiAgent.template.upstreamFeedSummary")}
+                    </button>
+                    <button
+                      type="button"
+                      className={`ma-feed-mode-btn${
+                        (stage.upstreamFeedMode ??
+                          (index === 0 ? "full" : "summary")) === "full"
+                          ? " is-on"
+                          : ""
+                      }`}
+                      onClick={() =>
+                        updateStage(index, { upstreamFeedMode: "full" })
+                      }
+                    >
+                      {t("multiAgent.template.upstreamFeedFull")}
+                    </button>
+                  </div>
                   <StageAgentPicker
                     value={
                       stage.personaAgentId && stage.personaAgentName
@@ -469,6 +528,54 @@ export function TemplateManagerModal({
               </button>
             </div>
           </div>
+        </div>
+
+        {helpOpen ? (
+          <aside
+            id="ma-tpl-help-panel"
+            className="ma-tpl-help"
+            aria-label={t("multiAgent.template.helpTitle")}
+          >
+            <div className="ma-tpl-help-head">
+              <strong>{t("multiAgent.template.helpTitle")}</strong>
+              <button
+                type="button"
+                className="ma-tpl-help-close"
+                onClick={() => setHelpOpen(false)}
+              >
+                {t("multiAgent.template.helpClose")}
+              </button>
+            </div>
+            <div className="ma-tpl-help-body">
+              <p className="ma-tpl-help-lead">
+                {t("multiAgent.template.helpLead")}
+              </p>
+              <dl className="ma-tpl-help-list">
+                {(
+                  [
+                    "helpMove",
+                    "helpStageName",
+                    "helpTarget",
+                    "helpApproval",
+                    "helpFeed",
+                    "helpPersona",
+                    "helpClearPersona",
+                    "helpDeleteStage",
+                    "helpRolePrompt",
+                    "helpAddStage",
+                    "helpDefault",
+                    "helpSave",
+                  ] as const
+                ).map((key) => (
+                  <div key={key} className="ma-tpl-help-item">
+                    <dt>{t(`multiAgent.template.${key}Label`)}</dt>
+                    <dd>{t(`multiAgent.template.${key}Desc`)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </aside>
+        ) : null}
         </div>
       </div>
     </div>

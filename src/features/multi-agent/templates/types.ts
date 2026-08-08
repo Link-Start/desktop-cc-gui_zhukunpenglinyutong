@@ -4,6 +4,15 @@ import { maT } from "../utils/i18n";
 
 export type ReasoningEffortLevel = string;
 
+/** 本段启动时如何消费已成功前序产出（仅 stages[index≥1] 生效）。 */
+export type UpstreamFeedMode = "summary" | "full";
+
+export function normalizeUpstreamFeedMode(
+  value: unknown,
+): UpstreamFeedMode {
+  return value === "full" ? "full" : "summary";
+}
+
 /** 模板内单个环节：完整 ExecutionTarget + 提示词 + 批准点 + 可选智能体。 */
 export type CollaborationTemplateStage = {
   id: string;
@@ -12,6 +21,11 @@ export type CollaborationTemplateStage = {
   target: AgentExecutionTarget;
   accessMode: "read-only" | "current";
   requiresApproval: boolean;
+  /**
+   * 上游喂料：summary=shortOutcome（默认）；full=fullOutcome。
+   * 首段忽略；缺省 summary 兼容旧模板。
+   */
+  upstreamFeedMode?: UpstreamFeedMode;
   /** 客户端智能体（与 Composer # 菜单同源），可选 */
   personaAgentId?: string | null;
   personaAgentName?: string | null;
@@ -167,18 +181,38 @@ export function templateToStageBindings(
   fallback: AgentExecutionTarget,
 ): AgentStageBinding[] {
   const base = normalizeAgentTargetSource(fallback);
-  return template.stages.map((stage) => ({
+  return template.stages.map((stage, index) => ({
     id: stage.id,
     // 内置环节 title 随 UI 语言写入 binding，投影/右栏与模板展示一致
     title: displayStageTitle(template, stage),
     rolePrompt: composeStageRolePrompt(stage),
     accessMode: stage.accessMode,
     requiresApproval: stage.requiresApproval,
+    // 首段默认 full（用户全文）；后续默认 summary。可移动后由 UI 强制首段 full。
+    upstreamFeedMode:
+      index === 0
+        ? stage.upstreamFeedMode === "summary"
+          ? "summary"
+          : "full"
+        : normalizeUpstreamFeedMode(stage.upstreamFeedMode),
     target: normalizeAgentTargetSource(mergeTarget(stage.target, base)),
     personaAgentId: stage.personaAgentId ?? null,
     personaAgentName: stage.personaAgentName ?? null,
     personaAgentIcon: stage.personaAgentIcon ?? null,
     personaPrompt: composeStagePersonaPrompt(stage),
+  }));
+}
+
+/** 移动/hydrate 后：下标 0 强制 full；其余缺省 summary。 */
+export function normalizeStagesFeedModes(
+  stages: CollaborationTemplateStage[],
+): CollaborationTemplateStage[] {
+  return stages.map((stage, index) => ({
+    ...stage,
+    upstreamFeedMode:
+      index === 0
+        ? "full"
+        : normalizeUpstreamFeedMode(stage.upstreamFeedMode),
   }));
 }
 

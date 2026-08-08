@@ -55,6 +55,7 @@ function stageBindingsFromProjection(
     rolePrompt: stage.rolePrompt ?? null,
     accessMode: stage.accessMode,
     requiresApproval: stage.requiresApproval ?? false,
+    upstreamFeedMode: stage.upstreamFeedMode ?? null,
     target: stage.target,
     personaAgentId: stage.personaAgentId ?? null,
     personaAgentName: stage.personaAgentName ?? null,

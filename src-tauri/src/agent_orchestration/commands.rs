@@ -30,11 +30,39 @@ fn next_pending_stage(run: &AgentProjectionV1) -> Option<&AgentStageProjectionV1
         .find(|stage| stage.status == AgentStageStatus::Pending)
 }
 
-fn last_succeeded_notes(run: &AgentProjectionV1) -> String {
+/// 按**当前段** upstream_feed_mode 组装已成功前序产出。
+/// - summary（默认）：short_outcome
+/// - full：full_outcome（空则回退 short），并 cap body 上限
+fn prior_feed_notes(run: &AgentProjectionV1, stage_index: usize) -> String {
+    let mode = run
+        .stages
+        .get(stage_index)
+        .and_then(|stage| stage.upstream_feed_mode.as_deref())
+        .map(str::trim)
+        .unwrap_or("summary");
+    let use_full = mode == "full";
     run.stages
         .iter()
+        .take(stage_index)
         .filter(|stage| stage.status == AgentStageStatus::Succeeded)
-        .filter_map(|stage| stage.short_outcome.as_deref())
+        .filter_map(|stage| {
+            if use_full {
+                let full = stage
+                    .full_outcome
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty());
+                if let Some(text) = full {
+                    return Some(cap_text(text, STAGE_OUTCOME_BODY_CHARS));
+                }
+            }
+            stage
+                .short_outcome
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+        })
         .collect::<Vec<_>>()
         .join("\n---\n")
 }
@@ -97,7 +125,7 @@ fn start_stage_attempt(
         stage.persona_prompt.as_deref(),
         task_text,
         run.plan.as_ref(),
-        &last_succeeded_notes(run),
+        &prior_feed_notes(run, stage_idx),
     );
     let attempt_id = Uuid::new_v4().to_string();
     let logical_turn_id = Uuid::new_v4().to_string();
@@ -207,6 +235,8 @@ pub(crate) async fn shared_agent_request_run(
     let first = stages[0].clone();
     let access_mode = access_mode_for(&first);
 
+    // 必须与 AgentStageBindingInput / stages_from_bindings 字段对齐；
+    // 漏写 upstreamFeedMode 会导致投影回放后后续段永远缺省 summary（假实现）。
     let bindings_json = serde_json::to_value(
         stages
             .iter()
@@ -217,6 +247,7 @@ pub(crate) async fn shared_agent_request_run(
                     "rolePrompt": stage.role_prompt,
                     "accessMode": stage.access_mode,
                     "requiresApproval": stage.requires_approval,
+                    "upstreamFeedMode": stage.upstream_feed_mode,
                     "personaAgentId": stage.persona_agent_id,
                     "personaAgentName": stage.persona_agent_name,
                     "personaAgentIcon": stage.persona_agent_icon,
@@ -1153,6 +1184,7 @@ mod degrade_settle_tests {
             status,
             access_mode: "current".into(),
             requires_approval: false,
+            upstream_feed_mode: None,
             attempt_id: None,
             binding_key: None,
             started_at: None,

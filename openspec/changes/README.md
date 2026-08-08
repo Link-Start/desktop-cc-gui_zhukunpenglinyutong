@@ -11,6 +11,8 @@
 
 | Change | Progress | Current gate | Artifacts |
 | ------ | -------: | ------------ | --------- |
+| [`add-collab-stage-upstream-feed-mode`](add-collab-stage-upstream-feed-mode/proposal.md) | implemented / await human check | 模板第 2 段起「吃摘要/吃全文」；`prior_feed_notes` + implement 追加上游；Inspector 对齐；vitest 31 + rust binding ok；**待手测定稿 full** | [proposal](add-collab-stage-upstream-feed-mode/proposal.md) · [design](add-collab-stage-upstream-feed-mode/design.md) · [tasks](add-collab-stage-upstream-feed-mode/tasks.md) · [specs](add-collab-stage-upstream-feed-mode/specs/) |
+| [`add-multi-agent-inspector-inject-context`](add-multi-agent-inspector-inject-context/proposal.md) | implemented / committed | B+C 注入上下文 Header；commit `4f4c053c6` | [proposal](add-multi-agent-inspector-inject-context/proposal.md) · [design](add-multi-agent-inspector-inject-context/design.md) · [tasks](add-multi-agent-inspector-inject-context/tasks.md) · [specs](add-multi-agent-inspector-inject-context/specs/) |
 | [`fix-shared-create-default-provider-catalog`](fix-shared-create-default-provider-catalog/proposal.md) | implemented / user accepted | Shared 创建第一 Provider + 权威 catalog；打开历史文案/图标与 mapping 同源；人工验收通过 | [proposal](fix-shared-create-default-provider-catalog/proposal.md) · [design](fix-shared-create-default-provider-catalog/design.md) · [tasks](fix-shared-create-default-provider-catalog/tasks.md) · [specs](fix-shared-create-default-provider-catalog/specs/) · [verification](fix-shared-create-default-provider-catalog/verification.md) · [分析](../../docs/analysis/shared-create-local-catalog-stale-mapping-2026-08-08.md) |
 | [`retire-canvas-subagent-squad-grid`](retire-canvas-subagent-squad-grid/proposal.md) | implemented / await review + commit hygiene | 主幕布摘 S10 Squad/Ring；canonical 表面 → ComposerRunStatusStrip；代码已落地；**提案补齐待审，commit 勿混 multi-agent 无关 diff** | [proposal](retire-canvas-subagent-squad-grid/proposal.md) · [design](retire-canvas-subagent-squad-grid/design.md) · [tasks](retire-canvas-subagent-squad-grid/tasks.md) · [specs](retire-canvas-subagent-squad-grid/specs/) |
 | [`fix-shared-collab-context-and-sidebar-spawn`](fix-shared-collab-context-and-sidebar-spawn/proposal.md) | follow-up implemented / await human check | G1 collab context 已验；侧栏 follow-up：行首 `MOSSX_*` 截断标题闸 + merge 预过滤已落地；vitest 62/62；**待实机确认侧栏无崽子，不 commit** | [proposal](fix-shared-collab-context-and-sidebar-spawn/proposal.md) · [design](fix-shared-collab-context-and-sidebar-spawn/design.md) · [tasks](fix-shared-collab-context-and-sidebar-spawn/tasks.md) · [specs](fix-shared-collab-context-and-sidebar-spawn/specs/) |
@@ -30,6 +32,8 @@
 
 ## Active backlog notes（2026-08-08）
 
+- **新增** `add-collab-stage-upstream-feed-mode`：协作模板第 2 段起配置上游吃摘要/全文；运行时与 Inspector 对齐；代码已落地待手测。
+- **已提交** `add-multi-agent-inspector-inject-context`：`4f4c053c6`。
 - **落地** `fix-shared-create-default-provider-catalog`：Shared 创建默认第一 Provider + profile 权威 catalog；打开历史文案/图标 catalog runtime 优先 + Claude mapping sync；人工验收通过。
 - **新增** `retire-canvas-subagent-squad-grid`：主幕布退役 S10 Squad/Ring；子代理主表面收敛到 Composer run-status strip；**部分 supersede** `retire-claude-subagent-agent-session-card`（canonical 不再是幕布 S10）与 `fix-codex-collab-subagent-live-parity`（幕布合成小队注入）。
 - **跟进** `fix-shared-collab-context-and-sidebar-spawn`：侧栏 follow-up——`previewThreadName` 截断后严格 classify 失效导致 `MOSSX_CONTEXT_PACKAGE:sha25…` 泄漏；行首 `MOSSX_*` 闸 + merge raw 预过滤；幕布 classifier 仍严格；待实机、不 commit。

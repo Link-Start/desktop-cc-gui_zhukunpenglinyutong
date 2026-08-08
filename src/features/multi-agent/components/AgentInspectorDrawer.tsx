@@ -254,10 +254,31 @@ export function AgentInspectorDrawer() {
                 </span>
               ) : null}
             </div>
-            <div className="subagent-inspector-type">
-              {stage
-                ? stageInspectorTypeLine(stage)
-                : t("multiAgent.inspector.phaseIdle")}
+            <div className="subagent-inspector-type ma-inspector-type-row">
+              <span className="ma-inspector-type-text">
+                {stage
+                  ? stageInspectorTypeLine(stage)
+                  : t("multiAgent.inspector.phaseIdle")}
+              </span>
+              {stage ? (
+                <span
+                  className={cn(
+                    "ma-feed-badge",
+                    (stage.upstreamFeedMode === "full" ||
+                      (!stage.upstreamFeedMode && safeIndex === 0)) &&
+                      "is-full",
+                    (stage.upstreamFeedMode === "summary" ||
+                      (!stage.upstreamFeedMode && safeIndex > 0)) &&
+                      "is-summary",
+                  )}
+                  title={t("multiAgent.inspector.feedModeHint")}
+                >
+                  {stage.upstreamFeedMode === "full" ||
+                  (!stage.upstreamFeedMode && safeIndex === 0)
+                    ? t("multiAgent.inspector.feedFull")
+                    : t("multiAgent.inspector.feedSummary")}
+                </span>
+              ) : null}
             </div>
           </div>
         </div>

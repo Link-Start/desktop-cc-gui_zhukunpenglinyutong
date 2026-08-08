@@ -31,6 +31,7 @@ fn stages_from_bindings_preserves_n_stages_and_role_prompt() {
             role_prompt: Some("only plan".into()),
             access_mode: Some("read-only".into()),
             requires_approval: Some(true),
+            upstream_feed_mode: None,
             persona_agent_id: Some("a1".into()),
             persona_agent_name: Some("小张".into()),
             persona_agent_icon: None,
@@ -43,6 +44,7 @@ fn stages_from_bindings_preserves_n_stages_and_role_prompt() {
             role_prompt: None,
             access_mode: Some("current".into()),
             requires_approval: Some(false),
+            upstream_feed_mode: None,
             persona_agent_id: None,
             persona_agent_name: None,
             persona_agent_icon: None,
@@ -55,6 +57,7 @@ fn stages_from_bindings_preserves_n_stages_and_role_prompt() {
             role_prompt: Some("add tests".into()),
             access_mode: Some("current".into()),
             requires_approval: Some(false),
+            upstream_feed_mode: None,
             persona_agent_id: None,
             persona_agent_name: None,
             persona_agent_icon: None,
@@ -67,6 +70,7 @@ fn stages_from_bindings_preserves_n_stages_and_role_prompt() {
             role_prompt: None,
             access_mode: Some("read-only".into()),
             requires_approval: Some(false),
+            upstream_feed_mode: None,
             persona_agent_id: None,
             persona_agent_name: None,
             persona_agent_icon: None,
@@ -85,6 +89,90 @@ fn stages_from_bindings_preserves_n_stages_and_role_prompt() {
     assert!(!stages[2].requires_approval);
 }
 
+/// 回归：非首段 full 必须经 stageBindings JSON 往返后仍为 full（禁止静默掉回 summary）
+#[test]
+fn upstream_feed_mode_full_survives_stage_bindings_json_roundtrip() {
+    let default = target(EngineType::Codex);
+    let bindings = vec![
+        AgentStageBindingInput {
+            id: "outline".into(),
+            target: target(EngineType::Claude),
+            title: Some("大纲".into()),
+            role_prompt: None,
+            access_mode: Some("read-only".into()),
+            requires_approval: Some(true),
+            upstream_feed_mode: Some("full".into()),
+            persona_agent_id: None,
+            persona_agent_name: None,
+            persona_agent_icon: None,
+            persona_prompt: None,
+        },
+        AgentStageBindingInput {
+            id: "draft".into(),
+            target: target(EngineType::Claude),
+            title: Some("起草".into()),
+            role_prompt: None,
+            access_mode: Some("current".into()),
+            requires_approval: Some(false),
+            upstream_feed_mode: Some("full".into()),
+            persona_agent_id: None,
+            persona_agent_name: None,
+            persona_agent_icon: None,
+            persona_prompt: None,
+        },
+        AgentStageBindingInput {
+            id: "polish".into(),
+            target: target(EngineType::Grok),
+            title: Some("润色定稿".into()),
+            role_prompt: None,
+            access_mode: Some("read-only".into()),
+            requires_approval: Some(false),
+            upstream_feed_mode: Some("full".into()),
+            persona_agent_id: None,
+            persona_agent_name: None,
+            persona_agent_icon: None,
+            persona_prompt: None,
+        },
+    ];
+    let stages = stages_from_bindings(&default, &bindings);
+    assert_eq!(stages[0].upstream_feed_mode.as_deref(), Some("full"));
+    assert_eq!(stages[1].upstream_feed_mode.as_deref(), Some("full"));
+    assert_eq!(stages[2].upstream_feed_mode.as_deref(), Some("full"));
+
+    // 模拟 commands.rs 写入 fact.extra.stageBindings 的形状（必须含 upstreamFeedMode）
+    let bindings_json = serde_json::to_value(
+        stages
+            .iter()
+            .map(|stage| {
+                serde_json::json!({
+                    "id": stage.id,
+                    "title": stage.title,
+                    "rolePrompt": stage.role_prompt,
+                    "accessMode": stage.access_mode,
+                    "requiresApproval": stage.requires_approval,
+                    "upstreamFeedMode": stage.upstream_feed_mode,
+                    "personaAgentId": stage.persona_agent_id,
+                    "personaAgentName": stage.persona_agent_name,
+                    "personaAgentIcon": stage.persona_agent_icon,
+                    "personaPrompt": stage.persona_prompt,
+                    "target": stage.target,
+                })
+            })
+            .collect::<Vec<_>>(),
+    )
+    .expect("bindings json");
+
+    let parsed: Vec<AgentStageBindingInput> =
+        serde_json::from_value(bindings_json).expect("parse bindings");
+    let rebuilt = stages_from_bindings(&default, &parsed);
+    assert_eq!(
+        rebuilt[1].upstream_feed_mode.as_deref(),
+        Some("full"),
+        "non-first full must survive fact stageBindings roundtrip"
+    );
+    assert_eq!(rebuilt[2].upstream_feed_mode.as_deref(), Some("full"));
+}
+
 #[test]
 fn apply_stage_bindings_rebuilds_when_rich_metadata_present() {
     let default = target(EngineType::Codex);
@@ -98,6 +186,7 @@ fn apply_stage_bindings_rebuilds_when_rich_metadata_present() {
             role_prompt: Some("ra".into()),
             access_mode: None,
             requires_approval: Some(false),
+            upstream_feed_mode: None,
             persona_agent_id: None,
             persona_agent_name: None,
             persona_agent_icon: None,
@@ -110,6 +199,7 @@ fn apply_stage_bindings_rebuilds_when_rich_metadata_present() {
             role_prompt: None,
             access_mode: None,
             requires_approval: Some(false),
+            upstream_feed_mode: None,
             persona_agent_id: None,
             persona_agent_name: None,
             persona_agent_icon: None,

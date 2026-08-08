@@ -47,10 +47,13 @@ export function StageInjectContextHeader({
   const [expanded, setExpanded] = useState(false);
   const [pane, setPane] = useState<Pane>("list");
   const [flashId, setFlashId] = useState<InjectSectionId | null>(null);
+  const [bodyScrolling, setBodyScrolling] = useState(false);
   const [expandedBodies, setExpandedBodies] = useState<
     Partial<Record<InjectSectionId, boolean>>
   >({});
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const injectBodyRef = useRef<HTMLDivElement | null>(null);
 
   const labels = useMemo(
     () => ({
@@ -74,6 +77,34 @@ export function StageInjectContextHeader({
   };
 
   useEffect(() => () => clearFlashTimer(), []);
+
+  // 滚动时短暂显示滚动条（默认隐藏）
+  useEffect(() => {
+    if (!expanded) {
+      setBodyScrolling(false);
+      return;
+    }
+    const el = injectBodyRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      setBodyScrolling(true);
+      if (scrollHideTimerRef.current != null) {
+        clearTimeout(scrollHideTimerRef.current);
+      }
+      scrollHideTimerRef.current = setTimeout(() => {
+        setBodyScrolling(false);
+        scrollHideTimerRef.current = null;
+      }, 800);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      if (scrollHideTimerRef.current != null) {
+        clearTimeout(scrollHideTimerRef.current);
+        scrollHideTimerRef.current = null;
+      }
+    };
+  }, [expanded, pane, projection.runId, stage.id]);
 
   // 切 stage 时回到清单，保留折叠偏好
   useEffect(() => {
@@ -289,7 +320,10 @@ export function StageInjectContextHeader({
       </button>
 
       {expanded ? (
-        <div className="ma-inject-body">
+        <div
+          ref={injectBodyRef}
+          className={cn("ma-inject-body", bodyScrolling && "is-scrolling")}
+        >
           <div
             className="ma-inject-mini"
             aria-label={t("multiAgent.inspector.inject.pipeAria")}

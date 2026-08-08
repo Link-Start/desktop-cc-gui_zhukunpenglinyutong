@@ -146,6 +146,9 @@ export default {
       roundBlocked: "This round has not started yet.",
       nextRoundHint: "Send again after the current round finishes to start the next.",
       personaAgent: "Agent {{name}}",
+      feedFull: "Full text",
+      feedSummary: "Summary",
+      feedModeHint: "How this stage consumes prior output (from template)",
       inject: {
         title: "Injected context",
         summaryFallback: "Context for this stage",
@@ -189,6 +192,44 @@ export default {
       descPlaceholder: "When to use this template",
       modelPlaceholder: "Model",
       requiresApproval: "Needs approval",
+      upstreamFeedAria: "Upstream feed mode",
+      upstreamFeedSummary: "Summary",
+      upstreamFeedFull: "Full text",
+      helpTitle: "Control guide",
+      helpClose: "Close",
+      helpLead:
+        "Meanings of controls in the editor. Stages can be reordered; the first stage is forced to Full text.",
+      helpMoveLabel: "↑ ↓ Reorder",
+      helpMoveDesc:
+        "Change stage order. When a stage becomes first, feed mode is set to Full text.",
+      helpStageNameLabel: "Stage name",
+      helpStageNameDesc: "Title shown in the card carousel and timeline.",
+      helpTargetLabel: "CLI · model · effort",
+      helpTargetDesc:
+        "Engine, model, and reasoning for this stage. Incomplete targets fall back to the session target at send.",
+      helpApprovalLabel: "Needs approval",
+      helpApprovalDesc:
+        "Pause after this stage succeeds until you approve before continuing.",
+      helpFeedLabel: "Summary / Full text",
+      helpFeedDesc:
+        "How this stage consumes prior output: short summary vs full body (capped). First stage defaults to full (user task); later stages default to summary.",
+      helpPersonaLabel: "Agent persona",
+      helpPersonaDesc:
+        "Bind a client agent persona. Body injects to CLI only, not the canvas.",
+      helpClearPersonaLabel: "Clear persona (×)",
+      helpClearPersonaDesc: "Remove the bound agent for this stage.",
+      helpDeleteStageLabel: "Delete stage",
+      helpDeleteStageDesc: "Remove this stage from the template.",
+      helpRolePromptLabel: "Stage instructions",
+      helpRolePromptDesc:
+        "Workflow constraints for this stage (separate from persona body).",
+      helpAddStageLabel: "+ Add stage",
+      helpAddStageDesc: "Append a stage at the end (defaults to Summary).",
+      helpDefaultLabel: "Set as default",
+      helpDefaultDesc: "Use this template by default when starting collab.",
+      helpSaveLabel: "Save template",
+      helpSaveDesc:
+        "Write to My templates. Saving a built-in creates an editable copy.",
       promptPlaceholder:
         "Stage instructions (workflow constraints; agent body is selected separately and not shown here)…",
       builtinResetHint:

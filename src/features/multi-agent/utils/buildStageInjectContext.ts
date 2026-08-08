@@ -33,6 +33,8 @@ export type StageInjectContext = {
 };
 
 const UPSTREAM_PREVIEW_CHARS = 480;
+/** full 模式展示 cap（仍可 UI clamp；完整阅读用打开节点） */
+const UPSTREAM_FULL_PREVIEW_CHARS = 4000;
 
 function trimText(value: string | null | undefined): string {
   return (value ?? "").trim();
@@ -41,6 +43,12 @@ function trimText(value: string | null | undefined): string {
 function capPreview(text: string, max = UPSTREAM_PREVIEW_CHARS): string {
   if (text.length <= max) return text;
   return `${text.slice(0, max)}…`;
+}
+
+function stageFeedMode(
+  stage: AgentStageProjection | null,
+): "summary" | "full" {
+  return stage?.upstreamFeedMode === "full" ? "full" : "summary";
 }
 
 function userTaskText(projection: AgentProjectionV1): string {
@@ -107,20 +115,35 @@ export function buildStageInjectContext(
 
   const priors = stage ? priorSucceededStages(stages, stageIndex) : [];
   const planText = planPreview(projection);
+  const feedMode = stageFeedMode(stage);
   const directPrior =
     stageIndex > 0 ? stages[stageIndex - 1] ?? null : null;
-  const priorOutcome = directPrior
-    ? trimText(directPrior.shortOutcome)
+  const priorRaw =
+    directPrior == null
+      ? ""
+      : feedMode === "full"
+        ? trimText(directPrior.fullOutcome) ||
+          trimText(directPrior.shortOutcome)
+        : trimText(directPrior.shortOutcome);
+  const priorCap =
+    feedMode === "full" ? UPSTREAM_FULL_PREVIEW_CHARS : 200;
+  const priorOutcome = priorRaw
+    ? capPreview(priorRaw, priorCap)
     : "";
 
   if (stageIndex > 0) {
     const upstreamChunks: string[] = [];
-    if (planText) upstreamChunks.push(planText);
+    // full 模式以节点产出为主；summary 仍可附 plan 摘要帮助解释
+    if (feedMode === "summary" && planText) {
+      upstreamChunks.push(planText);
+    }
     if (priorOutcome && priorOutcome !== planText) {
       const title = trimText(directPrior?.title) || directPrior?.id || "";
       upstreamChunks.push(
-        title ? `${title}: ${capPreview(priorOutcome, 200)}` : capPreview(priorOutcome, 200),
+        title ? `${title}: ${priorOutcome}` : priorOutcome,
       );
+    } else if (feedMode === "full" && planText && !priorOutcome) {
+      upstreamChunks.push(planText);
     }
     const body = upstreamChunks.join("\n\n").trim();
     if (body) {

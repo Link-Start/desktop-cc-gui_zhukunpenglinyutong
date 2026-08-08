@@ -15,6 +15,7 @@ function stage(
     rolePrompt: partial.rolePrompt,
     shortOutcome: partial.shortOutcome,
     fullOutcome: partial.fullOutcome,
+    upstreamFeedMode: partial.upstreamFeedMode,
     personaPrompt: partial.personaPrompt,
     personaAgentName: partial.personaAgentName,
   };
@@ -133,5 +134,34 @@ describe("buildStageInjectContext", () => {
       ctx.sections.some((s) => s.body.includes("秘密人设不应展示")),
     ).toBe(false);
     expect(ctx.itemCount).toBe(4);
+  });
+
+  it("full feed mode prefers prior fullOutcome over short", () => {
+    const longFull = "全文润色稿".repeat(20);
+    const ctx = buildStageInjectContext(
+      projection({
+        requestText: "赞美这张图",
+        stages: [
+          stage({
+            id: "draft",
+            title: "起草",
+            status: "succeeded",
+            shortOutcome: "短摘要",
+            fullOutcome: longFull,
+          }),
+          stage({
+            id: "polish",
+            title: "润色",
+            status: "running",
+            rolePrompt: "润色",
+            upstreamFeedMode: "full",
+          }),
+        ],
+      }),
+      1,
+    );
+    const up = ctx.sections.find((s) => s.id === "upstream")?.body ?? "";
+    expect(up).toContain("全文润色稿");
+    expect(up).not.toContain("短摘要");
   });
 });
