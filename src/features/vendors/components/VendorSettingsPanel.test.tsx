@@ -20,6 +20,10 @@ import {
 } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
 import type { AppSettings } from "../../../types";
+import type {
+  GrokProviderConfig,
+  OpenCodeProviderConfig,
+} from "../types";
 import { VendorSettingsPanel } from "./VendorSettingsPanel";
 
 const mockState = vi.hoisted(() => ({
@@ -73,7 +77,7 @@ const mockState = vi.hoisted(() => ({
   },
   grokManagement: {
     grokProviderError: null,
-    grokProviders: [],
+    grokProviders: [] as GrokProviderConfig[],
     grokLoading: false,
     handleAddGrokProvider: vi.fn(),
     handleEditGrokProvider: vi.fn(),
@@ -89,7 +93,7 @@ const mockState = vi.hoisted(() => ({
   },
   openCodeManagement: {
     openCodeProviderError: null,
-    openCodeProviders: [],
+    openCodeProviders: [] as OpenCodeProviderConfig[],
     openCodeLoading: false,
     handleAddOpenCodeProvider: vi.fn(),
     handleEditOpenCodeProvider: vi.fn(),
@@ -639,7 +643,7 @@ describe("VendorSettingsPanel", () => {
         isActive: true,
         baseUrl: "https://example.test",
         apiKey: "k",
-        model: "m",
+        models: ["m"],
       },
     ];
     renderPanel();
