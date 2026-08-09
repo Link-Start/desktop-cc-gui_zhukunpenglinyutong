@@ -2,7 +2,7 @@
 
 > **周期**：2026-08-05 ~ 2026-08-10  
 > **机器**：本地 Windows（CXN, 系统 DPI 125%）+ macOS 冒烟  
-> **最终状态**：Windows + macOS 均完全解决  
+> **最终状态**：Windows + macOS 均完全解决（platform-split 终局）  
 > **基线**：v0.7.15 无此现象；v0.8.x 回归  
 > **关联文档**：
 > - `windows-ccgui-startup-hang-2026-08-05.md` — uiScale / WebView2 初步二分
@@ -22,8 +22,9 @@
 | **A** | 冷启 full-catalog 多引擎会话枚举（OpenCode 10s+、Codex、Claude seed、gemini/kimi/grok 刷）在主线程同步 setState，占满 IPC 窗口 | 全平台 | 主线程 57s 内无法处理点击 |
 | **B** | `uiScale ≠ 1` 时 native `setZoom(≠1)` → WebView2 `SetZoomFactor` 渲染进程 CPU/内存暴涨 | Windows 专属 | 渲染进程 2GB+ 内存 |
 | **C** | 冷启首帧 `useEffect` 中 `apply(1)` 无条件对 `<html>` + `<body>` 写入 20+ CSS inline 属性 → Blink 触发全文档 style recalc + layout → 阻塞 compositor hit-test | Windows 专属 (WebView2) | 点击瞬间假死 |
+| **D** | `apply(1)` 零写入导致 WKWebView 懒加载 CSSOM 未初始化 → 首次点击触发同步 style recalc + layout → 主线程死锁 | macOS 专属 (WKWebView) | e0ddd9e99 后 macOS 2s 内点击卡死 |
 
-macOS 的 WKWebView compositor 使用 stale hit-test 不等待主线程布局树，故不受 C 影响。
+macOS WKWebView compositor 使用 stale hit-test，不等待主线程布局树，故不受 C 影响。但 WKWebView **懒加载 CSSOM**——当冷启无任何 CSS inline 写入时，computed style tree 不会构建，首次用户点击触发 hit-test → 同步 layout → 死锁。这是与 C 方向相反的因果链：Windows 需要零写入避免 layout 风暴，macOS 需要 CSS 写入触发 CSSOM 预热。
 
 ### 0.2 关键人物与角色
 
@@ -131,7 +132,45 @@ macOS 的 WKWebView compositor 使用 stale hit-test 不等待主线程布局树
 2. `setScaleLayoutStyles` 在 scale=1 时直接 return，不写 zoom
 3. `--ui-scale` 在 scale=1 时跳过写入（CSS `:root` 已有默认值）
 
-**效果**：冷启首帧 → 零 CSS 写入 → 零布局无效化 → compositor 不阻塞。Windows + macOS **均完全修复**。
+**效果**：冷启首帧 → 零 CSS 写入 → 零布局无效化 → compositor 不阻塞。Windows **修复**。
+
+**未检测到的回归**：macOS WKWebView 从旧代码的「无条件 20 属性写入」切换到零写入后，CSSOM 不再在首帧预热。macOS 验证时未在 2s 窗口内点击，漏掉了此回归。
+
+---
+
+### Day 7 — 2026-08-10：macOS 回归发现与 platform-split 终局
+
+**发现**：macOS 真机更新代码后，2s 窗口内点击必现卡死——与 Windows Day 5 症状完全相同，但根因相反。
+
+**关键洞察**：
+
+```text
+Windows (Chromium Blink):                 macOS (WKWebView):
+  CSS 写入 → style recalc + layout          CSS 写入 → CSSOM 预热（必要！）
+            → compositor 阻塞                          → hit-test 缓存就绪
+            → 点击假死 ❌                              → 点击正常 ✓
+                                            
+  零写入   → 布局干净                        零写入   → CSSOM 未初始化
+            → compositor 正常                          → 首次点击触发同步 layout
+            → 点击正常 ✓                              → 点击死锁 ❌
+```
+
+**两边行为完全相反**。同一段代码无法同时满足两个引擎。
+
+**终局修复**（platform-split）：
+
+| 平台 | 路径 | 行为 |
+|------|------|------|
+| **macOS** | 无条件写入 (旧代码) | 10 属性无条件赋值 `= ""`, 无条件写 `--ui-scale`, scale=1 时写 `zoom = ""` |
+| **Windows** | 残留清除 (新代码) | 仅清除非空属性, `--ui-scale` 仅 scale≠1 时写入, scale=1 时零写入 |
+
+改动位置：`src/utils/applyUiScale.ts` — 仅此一个文件。
+
+- `clearScaleLayoutStyles` / `setScaleLayoutStyles_Mac`：macOS 无条件路径
+- `clearResidualScaleStyles` / `setResidualScaleLayoutStyles`：Windows 残留清除路径
+- `applyCssPageScaleStyles(root, scale, platform)`：按 platform 路由
+
+**效果**：Windows + macOS **均完全修复**。两端都在真机上通过 2s 窗口点击验证。
 
 ---
 
@@ -152,6 +191,8 @@ macOS 的 WKWebView compositor 使用 stale hit-test 不等待主线程布局树
 | 08-09 | `db8b3c308` | cxn | 重构加载诊断时间轴 | A |
 | 08-09 | `3c3ac3f08` | cxn | **根治冷启点击卡死** | A+B |
 | 08-10 | `c0e91a0d3` | cxn | **消除冷启首帧 CSS 写入最终修复** | C |
+| 08-10 | `e0ddd9e99` | cxn | 条件 CSS 清除 + blankScreenWatchdog 延迟 + color-mix 替换 | C |
+| 08-10 | *(待提交)* | cxn | **platform-split：macOS 无条件 / Windows 残留清除，兼容两端** | C+D |
 
 ### OpenSpec Changes
 
@@ -162,7 +203,7 @@ macOS 的 WKWebView compositor 使用 stale hit-test 不等待主线程布局树
 | `optimize-cold-start-hydration-orchestration` | 冷启 hydration 编排契约重写 | S0–S8 落地 |
 | `redesign-startup-diagnostics-timeline` | 诊断时间轴 UI 重设计 | archive |
 | `hide-startup-gate-overlay` | Gate overlay manual-only | archive |
-| `fix-windows-cold-start-freeze-residual` | **最终修复：条件 CSS 清除** | active |
+| `fix-windows-cold-start-freeze-residual` | **最终修复：platform-split + 条件 CSS 清除** | active |
 
 ---
 
@@ -209,19 +250,39 @@ macOS 的 WKWebView compositor 使用 stale hit-test 不等待主线程布局树
 └──────────────────────────────────────────────────────┘
 ```
 
-### 3.2 修复后的冷启首帧执行模型
+### 3.2 修复后的冷启首帧执行模型（platform-split）
 
 ```text
 冷启首帧：
   React render → DOM commit
   useEffect:
-    apply(1):
-      ZOOM_FILL_PROPS 逐个检查 → 全部为空 → 零写入 ✓
-      scale=1 → setScaleLayoutStyles 直接 return → 零写入 ✓
-      scale=1 → --ui-scale 跳过 → 零写入 ✓
-    → 总共零次 CSS 写入, 零次布局无效化
-    → compositor 不阻塞, hit-test 随时可用
-    → 点击正常处理 ✓
+    apply(1) → applyCssPageScaleStyles(root, 1, platform):
+
+    ┌─ platform === "macos" ─────────────────────────────┐
+    │ --ui-scale: 无条件写入 "1"                          │
+    │ layout ≠ root → clearScaleLayoutStyles(root)        │
+    │   → 10 属性无条件赋值 = ""                           │
+    │ setScaleLayoutStyles_Mac(body, 1):                  │
+    │   → 9 属性无条件赋值 = ""                            │
+    │   → scale=1 → zoom = ""                             │
+    │                                                     │
+    │ 效果: 20+ CSS 写入 → CSSOM 预热                      │
+    │       → WKWebView hit-test 缓存就绪                  │
+    │       → 点击正常 ✓                                   │
+    └─────────────────────────────────────────────────────┘
+
+    ┌─ platform !== "macos" (Windows/Linux) ─────────────┐
+    │ --ui-scale: scale=1 → 跳过（CSS :root 已有默认值）    │
+    │ layout ≠ root → clearResidualScaleStyles(root)      │
+    │   → ZOOM_FILL_PROPS 逐个检查 → 全部为空 → 零写入     │
+    │ setResidualScaleLayoutStyles(body, 1):              │
+    │   → clearResidualScaleStyles(body) → 全部为空 → 零写入│
+    │   → scale=1 → return（不写 zoom）                    │
+    │                                                     │
+    │ 效果: 零次 CSS 写入 → 零次布局无效化                   │
+    │       → Blink compositor 不阻塞                      │
+    │       → 点击正常 ✓                                   │
+    └─────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -260,14 +321,17 @@ Codex `list_threads` 的 `limit=5` 只限制返回数量，Rust 侧仍扫完整 
 
 **每一条 inline style mutation 都有成本。在关键路径上，必须 verify-before-write。**
 
-### 4.6 逐步止血 vs 根因治理
+### 4.6 逐步止血 vs 根因治理 vs 跨平台终局
 
-这次修复经历了三个阶段：
+这次修复经历了四个阶段：
 1. **止血**（08-05~06）：遮罩 + guard → 防止用户点击触发死循环
 2. **减负**（08-07~09）：first-paint 轻量化 + 禁用 auto full-catalog + Codex bounded scan
-3. **根除**（08-10）：消除首帧所有 CSS 写入
+3. **根除**（08-10 上午）：消除 Windows 首帧所有 CSS 写入
+4. **终局**（08-10 下午）：platform-split — 发现 macOS 与 Windows 引擎行为完全相反，分块处理
 
-只有阶段 3 才是真正的 root cause fix。前两个阶段是必要的（降低主线程负载、建立观测能力），但不能替代根因修复。
+阶段 3 修复了 Windows 但破坏了 macOS（零写入导致 WKWebView CSSOM 未初始化）。阶段 4 以 platform-split 同时兼容两端。
+
+**教训**：当一个修复声称「macOS 不受影响」时，必须在真机上验证回归。代码路径相同不代表引擎行为相同，两个平台可能对同一段代码有完全相反的依赖。
 
 ---
 
@@ -275,10 +339,9 @@ Codex `list_threads` 的 `limit=5` 只限制返回数量，Rust 侧仍扫完整 
 
 | # | 关注点 | 优先级 |
 |---|--------|--------|
-| 1 | macOS 回归：分层 opacity 替代 color-mix 的视觉效果确认 | 中 |
-| 2 | 2s 固定延迟改为 first-paint-complete 事件驱动 | 低（当前已稳） |
-| 3 | git/skills/model 冷启错峰（S4 defer） | 低 |
-| 4 | 慢机 + 狂切 workspace 压测 | 低 |
+| 1 | 2s 固定延迟改为 first-paint-complete 事件驱动 | 低（当前已稳） |
+| 2 | git/skills/model 冷启错峰（S4 defer） | 低 |
+| 3 | 慢机 + 狂切 workspace 压测 | 低 |
 
 ---
 
@@ -313,4 +376,4 @@ OpenSpec:
 
 **一句话总结：**
 
-冷启点击卡死是**三条因果链**的叠加——(1) full-catalog 多引擎会话枚举占满主线程，(2) uiScale≠1 的 native zoom 拖死 WebView2 渲染进程，(3) 冷启首帧 20+ 次无意义 CSS 属性写入触发 Blink 全文档布局回算阻塞 compositor hit-test。macOS 只受 (1) 影响故修好编排即解决；Windows 叠加 (3) 需要**条件 CSS 清除 + verify-before-write** 才彻底根治。6 天，3 个 OpenSpec changes，~2000 行改动，两条平台真机验证，最终冷启首帧零 CSS 写入结束战斗。
+冷启点击卡死是**四条因果链**的叠加——(1) full-catalog 多引擎会话枚举占满主线程，(2) uiScale≠1 的 native zoom 拖死 WebView2 渲染进程，(3) 冷启首帧 20+ 次无意义 CSS 属性写入触发 Blink 全文档布局回算阻塞 compositor hit-test，(4) 零 CSS 写入导致 WKWebView CSSOM 懒加载未初始化——首次点击触发同步 layout 死锁。(3) 和 (4) 方向相反，同一段代码无法同时兼容两个引擎。macOS 修好编排即解决 (1)，但 (4) 在消除 (3) 后才暴露出来。Windows 需要零写入避免 layout 风暴，macOS 需要无条件写入触发 CSSOM 预热——platform-split 是唯一终局。6 天，3 个 OpenSpec changes，~2000 行改动，四条因果链，一个 platform-split 干净收尾。

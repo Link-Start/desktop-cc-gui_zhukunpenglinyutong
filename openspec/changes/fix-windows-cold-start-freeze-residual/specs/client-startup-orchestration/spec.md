@@ -5,14 +5,29 @@
 
 ## ADDED Requirements
 
-### CSS scale-styles must only clear residual values
+### CSS scale-styles must use platform-split strategy
 
-`applyUiScale` 在写入 CSS 属性前必须先检查 inline 值是否已有残留。若属性值为空字符串（默认状态），不得写入空字符串——该操作在 Blink (WebView2) 中仍触发样式重算 + 布局无效化，冷启首帧写入 20+ 空值直接阻塞主线程。
+`applyUiScale` 必须按渲染引擎平台采用不同的 CSS 写入策略。
 
-- **Given** 冷启首帧 `<html>` 和 `<body>` 无任何 inline zoom/transform/width/height/position 值
-- **When** `useUiScaleShortcuts` 的 effect 调用 `apply(1)`（phase 1 identity）
-- **Then** `applyUiScale` 不得对值为空的 CSS 属性执行写入操作
-- **And** `--ui-scale` CSS custom property 正常设为 `"1"`
+**macOS WKWebView** 懒加载 CSSOM——冷启时无 CSS inline 写入意味着 computed style tree 不构建，首次点击触发 hit-test → 同步 style recalc + layout → 主线程死锁。必须无条件写入 CSS 属性以触发 CSSOM 预热。
+
+**Windows WebView2 (Chromium Blink)** 积极构建 CSSOM，每次 inline style mutation 触发全量 cascade re-resolution。冷启首帧 20+ 次写入空字符串累积为可测量的布局回算延迟，阻塞 compositor hit-test。必须仅清除有残留值的属性。
+
+- **Given** 平台为 macOS
+- **When** `apply(1)` 在 cold-start effect 中执行
+- **Then** 无条件清除 10 个 scale 相关 CSS 属性（`clearScaleLayoutStyles`）
+- **And** 无条件写 zoom（scale=1 时写 `""`，否则写 String(scale)）
+- **And** 无条件写入 `--ui-scale`
+
+- **Given** 平台为 Windows / Linux / unknown
+- **When** `apply(1)` 在 cold-start effect 中执行
+- **Then** 仅清除有残留值（`getPropertyValue(prop) !== ""`）的 CSS 属性
+- **And** scale=1 时不写 zoom（`setResidualScaleLayoutStyles` 直接 return）
+- **And** `--ui-scale` 仅 scale≠1 时写入，scale=1 且无残留时跳过
+
+- **Given** 任何平台 + hot-reload / 前次 session 残留非 identity scale
+- **When** `apply(scale)` 执行
+- **Then** macOS 路径无条件覆盖残留，Windows 路径清除检测到的残留后写入新值
 
 ### blankScreenWatchdog must defer during cold-start gate window
 

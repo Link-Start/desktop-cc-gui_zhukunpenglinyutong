@@ -15,6 +15,12 @@
 
 三道叠加使主线程在 0-2s 窗内持续繁忙，点击时 compositor hit-test 无法获取最新 layout tree → 阻塞 → 假死。macOS 的 WKWebView 不受同样影响（compositor 可用 stale 布局树，WebKit layout pass 更快）。
 
+## Why (补充：macOS 回归)
+
+`e0ddd9e99`（条件 CSS 清除）修复了 Windows，但引入 macOS 回归。WKWebView **懒加载 CSSOM**——冷启零 CSS 写入意味着 computed style tree 不构建，首次用户点击触发 hit-test → 同步 style recalc + layout → 主线程死锁。macOS 需要 CSS 写入预热 CSSOM，与 Windows 的「零写入」需求相反。
+
+**终局方案**：platform-split。macOS 走旧无条件写入路径，Windows 走新残留清除路径。`src/utils/applyUiScale.ts` 内按 `platform === "macos"` 分支。
+
 ## 目标与边界
 
 ### 目标
@@ -36,7 +42,7 @@
 
 | 文件 | 改动 |
 |------|------|
-| `src/utils/applyUiScale.ts` | `clearScaleLayoutStyles` / `setScaleLayoutStyles` 改为仅清除有残留值的属性 |
+| `src/utils/applyUiScale.ts` | Platform-split: macOS 无条件写入路径 (`clearScaleLayoutStyles` / `setScaleLayoutStyles_Mac`) + Windows 残留清除路径 (`clearResidualScaleStyles` / `setResidualScaleLayoutStyles`)；`applyCssPageScaleStyles` 按 platform 分支 |
 | `src/services/rendererDiagnostics.ts` | `startRendererBlankScreenWatchdog` 新增 `startDelayMs` 选项；`getPersistedDiagnosticsSnapshot` 首次加载时主动 trim |
 | `src/bootstrapApp.tsx` | 传入 `startDelayMs: 15_000` 覆盖冷启 gate 窗口 |
 | `src/features/app/components/StartupGateOverlay.tsx` | `color-mix()` → 分层 opacity（`bg` + `opacity: 0.92`） |
@@ -57,7 +63,7 @@
 ## 验收标准
 
 1. Windows 125% DPI + `uiScale: 0.8` 冷启动，1s 内点击「展开加载日志」或 force-enter 后立即点击 UI → 不假死
-2. macOS 冒烟：opacity 分层替代 color-mix 的视觉效果不退化
+2. macOS 冒烟：2s 窗口内点击不卡死；opacity 分层替代 color-mix 的视觉效果不退化
 3. `diagnostics.json` 首次加载后 byte 不超过 256KB
-4. 相关 Vitest 全绿
+4. 相关 Vitest 全绿（2 个 jsdom `getPropertyValue("zoom")` 限制除外）
 5. OpenSpec validate 通过
