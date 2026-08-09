@@ -20,6 +20,7 @@ vi.mock("react-i18next", () => ({
         "settings.vendor.customPathDescription":
           "Configure the executable used by this CLI.",
         "settings.vendor.customPath": "Custom path",
+        "settings.vendor.whatIsThis": "What does this do?",
         "settings.vendor.configurePath": "Configure path",
         "settings.vendor.customPathUsingSystemPath": "Using system PATH",
         "settings.vendor.customPathNoArgs": "No extra args",
@@ -215,16 +216,24 @@ describe("CliCustomPathDialog", () => {
 describe("CliCustomPathEntry", () => {
   it("shows system PATH summary when no custom path is set", () => {
     const onConfigure = vi.fn();
-    render(<CliCustomPathEntry path={null} onConfigure={onConfigure} />);
+    render(
+      <CliCustomPathEntry
+        engine="claude"
+        path={null}
+        onConfigure={onConfigure}
+      />,
+    );
 
+    expect(screen.getByText("Custom path")).not.toBeNull();
     expect(screen.getByText("Using system PATH")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Configure path" }));
     expect(onConfigure).toHaveBeenCalled();
   });
 
-  it("shows path and args summary for codex", () => {
+  it("shows path and args summary for codex without help", () => {
     render(
       <CliCustomPathEntry
+        engine="codex"
         path="/bin/codex"
         args="--profile personal"
         showArgsSummary
@@ -232,7 +241,38 @@ describe("CliCustomPathEntry", () => {
       />,
     );
 
-    expect(screen.getByText("/bin/codex")).not.toBeNull();
-    expect(screen.getByText("--profile personal")).not.toBeNull();
+    expect(screen.getByText("Custom path")).not.toBeNull();
+    expect(
+      screen.getByText("/bin/codex · --profile personal"),
+    ).not.toBeNull();
+  });
+
+  it("folds path status into help and hides the inline summary", async () => {
+    render(
+      <CliCustomPathEntry
+        engine="codex"
+        path={null}
+        showArgsSummary
+        helpContent={
+          <div>
+            <p>Configure the executable used by this CLI.</p>
+            <p>Using system PATH · No extra args</p>
+          </div>
+        }
+        onConfigure={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Custom path")).not.toBeNull();
+    expect(screen.queryByText("Using system PATH · No extra args")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "What does this do?" }));
+
+    expect(
+      await screen.findByText("Using system PATH · No extra args"),
+    ).not.toBeNull();
+    expect(
+      screen.getByText("Configure the executable used by this CLI."),
+    ).not.toBeNull();
   });
 });

@@ -74,6 +74,33 @@ describe("ReadToolBlock", () => {
     expect(view.container.querySelector(".tool-marker-file-type-icon")).toBeTruthy();
   });
 
+  it("shows folder icon and list kind for list_dir target directories", () => {
+    const item: Extract<ConversationItem, { kind: "tool" }> = {
+      id: "tool-list-dir",
+      kind: "tool",
+      toolType: "list_dir",
+      title: "list_dir",
+      detail: JSON.stringify({ target_directory: "src/features/vendors" }),
+      output: "VendorSettingsPanel.tsx\nindex.ts",
+      status: "completed",
+    };
+
+    const view = render(<ReadToolBlock item={item} isExpanded={false} onToggle={() => {}} />);
+
+    expect(screen.getByText(/tools\.kindList|List|列表/)).toBeTruthy();
+    expect(screen.getByText("vendors")).toBeTruthy();
+    expect(screen.getByText(/tools\.readDirectory|目录|directory/i)).toBeTruthy();
+    // 文件夹图标应渲染（getFileTreeIconSvg isFolder=true）
+    expect(view.container.querySelector(".tool-marker-file-type-icon")).toBeTruthy();
+  });
+
+  it("treats trailing-slash paths as directories", () => {
+    const item = createReadItem("tool-read-dir-slash", { path: "src/features/" }, "ok");
+    render(<ReadToolBlock item={item} isExpanded={false} onToggle={() => {}} />);
+    expect(screen.getByText(/tools\.kindList|List|列表/)).toBeTruthy();
+    expect(screen.getByText("features")).toBeTruthy();
+  });
+
   it("renders a real image preview for image file reads instead of path-only text", () => {
     const imagePath =
       "/Users/zhukunpeng/.grok/sessions/demo/assets/image-0b1d7113-f591-407a-8332-b678fdcc7e96.png";

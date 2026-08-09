@@ -337,9 +337,18 @@ pub(crate) async fn vendor_delete_opencode_provider(id: String) -> Result<(), St
     write_config(&config)
 }
 
+/// Pseudo id: clear `opencode.current` so no managed/local provider is active.
+const DISABLED_OPENCODE_PROVIDER_ID: &str = "__disabled__";
+
 #[tauri::command]
 pub(crate) async fn vendor_switch_opencode_provider(id: String) -> Result<(), String> {
     let mut config = read_config()?;
+    // 「取消使用」: 清空 current，不改用户本地 opencode 配置
+    if id == DISABLED_OPENCODE_PROVIDER_ID {
+        config.opencode.current = None;
+        write_config(&config)?;
+        return Ok(());
+    }
     if id == LOCAL_OPENCODE_PROVIDER_ID {
         config.opencode.current = Some(id);
         write_config(&config)?;

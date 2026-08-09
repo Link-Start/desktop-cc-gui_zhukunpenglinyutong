@@ -414,9 +414,18 @@ pub(crate) async fn vendor_delete_kimi_provider(
     }
 }
 
+/// Pseudo id: clear `kimi.current` so no managed/local provider is active.
+const DISABLED_KIMI_PROVIDER_ID: &str = "__disabled__";
+
 #[tauri::command]
 pub(crate) async fn vendor_switch_kimi_provider(id: String) -> Result<(), String> {
     let mut config = read_config()?;
+    // 「取消使用」: 清空 current，不改 ~/.kimi-code/config.toml
+    if id == DISABLED_KIMI_PROVIDER_ID {
+        config.kimi.current = None;
+        write_config(&config)?;
+        return Ok(());
+    }
     if id == LOCAL_KIMI_PROVIDER_ID {
         config.kimi.current = Some(id);
         write_config(&config)?;

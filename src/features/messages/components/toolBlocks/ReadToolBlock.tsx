@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { isImagePath } from '../../../files/utils/fileRenderProfile';
 import {
   asRecord,
+  extractToolName,
   parseToolArgs,
   getFirstStringField,
   getFileName,
@@ -39,7 +40,7 @@ interface ReadToolBlockProps {
 }
 
 const MARKDOWN_EXTENSIONS = new Set(['md', 'markdown', 'mdx']);
-const PATH_KEYS = [
+const FILE_PATH_KEYS = [
   'file_path',
   'filePath',
   'path',
@@ -47,11 +48,22 @@ const PATH_KEYS = [
   'targetFile',
   'filename',
   'file',
-  'dir',
-  'directory',
+];
+const DIRECTORY_PATH_KEYS = [
   'target_directory',
   'targetDirectory',
+  'directory',
+  'dir',
 ];
+/** 与 ReadToolGroupBlock 对齐：list_dir / ls 等目录浏览工具应显示文件夹图标。 */
+const DIRECTORY_TOOL_NAMES = new Set([
+  'list_dir',
+  'listdir',
+  'list_directory',
+  'ls',
+  'list',
+  'list_files',
+]);
 const OUTPUT_KEYS = ['output', 'result', 'content', 'text'];
 
 /** Agent Read 工具读图时常见的占位输出前缀（Claude / Grok 等）。 */
@@ -172,11 +184,20 @@ export const ReadToolBlock = memo(function ReadToolBlock({
   const nestedInput = useMemo(() => asRecord(args?.input), [args]);
   const nestedArgs = useMemo(() => asRecord(args?.arguments), [args]);
 
+  const directoryPath =
+    getFirstStringField(args, DIRECTORY_PATH_KEYS) ||
+    getFirstStringField(nestedInput, DIRECTORY_PATH_KEYS) ||
+    getFirstStringField(nestedArgs, DIRECTORY_PATH_KEYS);
   const filePath =
-    getFirstStringField(args, PATH_KEYS) ||
-    getFirstStringField(nestedInput, PATH_KEYS) ||
-    getFirstStringField(nestedArgs, PATH_KEYS);
+    getFirstStringField(args, FILE_PATH_KEYS) ||
+    getFirstStringField(nestedInput, FILE_PATH_KEYS) ||
+    getFirstStringField(nestedArgs, FILE_PATH_KEYS) ||
+    directoryPath;
   const fileName = getFileName(filePath);
+  const toolName = (
+    extractToolName(item.title) ||
+    (typeof item.toolType === 'string' ? item.toolType : '')
+  ).toLowerCase();
 
   const renderedOutput = useMemo(() => {
     if (item.output && item.output.trim()) {
@@ -223,7 +244,13 @@ export const ReadToolBlock = memo(function ReadToolBlock({
     lineInfo = t("tools.lineRange", { start: startLine, end: endLine });
   }
 
-  const isDirectory = filePath?.endsWith('/') || fileName === '.' || fileName === '..';
+  // 与 ReadToolGroupBlock 同构：list_dir / target_directory / 尾斜杠都算目录
+  const isDirectory =
+    Boolean(directoryPath) ||
+    DIRECTORY_TOOL_NAMES.has(toolName) ||
+    filePath === '.' ||
+    filePath === '..' ||
+    (filePath?.endsWith('/') ?? false);
   const actionText = isDirectory ? t("tools.readDirectory") : t("tools.readFile");
   const kindLabel = isDirectory ? t("tools.kindList") : t("tools.kindRead");
 

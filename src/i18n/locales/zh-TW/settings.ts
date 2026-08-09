@@ -1016,8 +1016,10 @@ const settings = {
     "vendor": {
       "officialConfig": "官方配置",
       "thirdPartyConfig": "第三方配置",
+      "engineSettings": "引擎設定",
+      "providerChannels": "供應商渠道",
       "ccSwitchImport": {
-        "entry": "匯入",
+        "entry": "匯入ccswitch",
         "title": "匯入 cc-switch 配置",
         "summary": "共識別到 {{total}} 個配置，其中",
         "newCount": "{{count}} 新增",

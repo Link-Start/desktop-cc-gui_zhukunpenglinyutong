@@ -55,9 +55,10 @@ describe("ClaudeLocalSettingsCard", () => {
     renderCard(localProvider({ isActive: true }));
 
     expect(screen.getByText("settings.vendor.officialConfig")).toBeTruthy();
+    // Description lives in the row help popover, not inline.
     expect(
-      screen.getByText("settings.vendor.localProviderDescription"),
-    ).toBeTruthy();
+      screen.queryByText("settings.vendor.localProviderDescription"),
+    ).toBeNull();
     expect(screen.getByText("settings.vendor.inUse")).toBeTruthy();
     expect(
       screen.getByRole("button", {
@@ -135,22 +136,18 @@ describe("ClaudeLocalSettingsCard", () => {
     expect(props.onSwitch).toHaveBeenCalledWith(DISABLED_PROVIDER_ID);
   });
 
-  it("opens and closes the local provider help dialog", () => {
+  it("surfaces local provider help in the row popover", async () => {
     renderCard(localProvider());
 
     fireEvent.click(screen.getByTitle("settings.vendor.whatIsThis"));
 
-    const dialog = document.querySelector(".vendor-dialog") as HTMLElement;
-    expect(dialog.textContent).toContain(
-      "settings.vendor.localProviderHelpTitle",
-    );
-    expect(dialog.textContent).toContain(
-      "settings.vendor.localProviderHelpBody",
-    );
-
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: "settings.vendor.gotIt" }),
-    );
+    expect(
+      await screen.findByText("settings.vendor.localProviderDescription"),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("settings.vendor.localProviderHelpBody"),
+    ).toBeTruthy();
+    // No legacy full-screen help dialog.
     expect(document.querySelector(".vendor-dialog")).toBeNull();
   });
 

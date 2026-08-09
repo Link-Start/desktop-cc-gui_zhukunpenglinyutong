@@ -47,7 +47,14 @@ const DIRECTORY_PATH_KEYS = [
   'dir',
 ];
 const LIST_KEYS = ['files', 'file_paths', 'filePaths', 'paths'];
-const DIRECTORY_TOOL_NAMES = new Set(['list_dir', 'listdir', 'list_directory']);
+const DIRECTORY_TOOL_NAMES = new Set([
+  'list_dir',
+  'listdir',
+  'list_directory',
+  'ls',
+  'list',
+  'list_files',
+]);
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {

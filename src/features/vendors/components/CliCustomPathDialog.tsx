@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
+import { SettingsRowHelp } from "./SettingsRowHelp";
 
 export type CliCustomPathEngine =
   | "claude"
@@ -321,20 +323,29 @@ export function CliCustomPathDialog({
 }
 
 type CliCustomPathEntryProps = {
+  engine: CliCustomPathEngine;
   path: string | null;
   args?: string | null;
   showArgsSummary?: boolean;
+  /**
+   * When set, path/args status is folded into this help popover and no
+   * secondary line is rendered under the title.
+   */
+  helpContent?: ReactNode;
   onConfigure: () => void;
 };
 
 export function CliCustomPathEntry({
+  engine: _engine,
   path,
   args = null,
   showArgsSummary = false,
+  helpContent,
   onConfigure,
 }: CliCustomPathEntryProps) {
   const { t } = useTranslation();
-  const summary = path?.trim()
+  void _engine;
+  const pathSummary = path?.trim()
     ? path.trim()
     : t("settings.vendor.customPathUsingSystemPath");
   const argsSummary =
@@ -343,6 +354,12 @@ export function CliCustomPathEntry({
       : showArgsSummary
         ? t("settings.vendor.customPathNoArgs")
         : null;
+  const summary = argsSummary
+    ? `${pathSummary} · ${argsSummary}`
+    : pathSummary;
+  // Dense group cards use the help popover for status; keep inline summary only
+  // when the caller did not provide help (legacy / other layouts).
+  const showInlineSummary = !helpContent;
 
   return (
     <div
@@ -360,32 +377,30 @@ export function CliCustomPathEntry({
       <div className="vendor-group-row-copy">
         <span className="vendor-group-row-title">
           {t("settings.vendor.customPath")}
+          {helpContent ? <SettingsRowHelp>{helpContent}</SettingsRowHelp> : null}
         </span>
-        <div
-          className="settings-help vendor-custom-path-summary"
-          title={summary}
-        >
-          {summary}
-        </div>
-        {argsSummary ? (
+        {showInlineSummary ? (
           <div
             className="settings-help vendor-custom-path-summary"
-            title={argsSummary}
+            title={summary}
           >
-            {argsSummary}
+            {summary}
           </div>
         ) : null}
       </div>
-      <button
-        type="button"
-        className="vendor-plugin-models-manage-btn"
-        onClick={(event) => {
-          event.stopPropagation();
-          onConfigure();
-        }}
-      >
-        {t("settings.vendor.configurePath")}
-      </button>
+      <div className="vendor-group-row-trailing">
+        <button
+          type="button"
+          className="vendor-group-row-chevron-btn"
+          aria-label={t("settings.vendor.configurePath")}
+          onClick={(event) => {
+            event.stopPropagation();
+            onConfigure();
+          }}
+        >
+          <ChevronRight size={16} aria-hidden="true" />
+        </button>
+      </div>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import {
   useEffect,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,14 @@ interface CurrentCodexGlobalConfigCardProps {
   authContent: string;
   authTruncated: boolean;
   authError: string | null;
+  /** Whether official (global) config is the active source */
+  inUse?: boolean;
+  /** Switch back to official / clear managed provider */
+  onUse?: () => void;
+  /** Leave official active source (clear current when official is active) */
+  onCancel?: () => void;
+  /** Optional row-title help popover content */
+  helpContent?: ReactNode;
   onSaved?: () => void | Promise<void>;
 }
 
@@ -96,6 +105,10 @@ export function CurrentCodexGlobalConfigCard({
   authContent,
   authTruncated,
   authError,
+  inUse = true,
+  onUse,
+  onCancel,
+  helpContent,
   onSaved,
 }: CurrentCodexGlobalConfigCardProps) {
   const { t } = useTranslation();
@@ -132,6 +145,8 @@ export function CurrentCodexGlobalConfigCard({
 
   const loading = configLoading || authLoading;
   const truncated = configTruncated || authTruncated;
+  // Healthy summary is shown in the engine-settings help popover; keep only
+  // operational status (loading / error / truncated / empty) inline.
   const firstStatus =
     loading
       ? t("settings.loading")
@@ -152,9 +167,7 @@ export function CurrentCodexGlobalConfigCard({
               ? `${t("settings.vendor.codexGlobalConfigEmpty")} ${t(
                   "settings.vendor.codexAuthConfigEmpty",
                 )}`
-              : `${t("settings.vendor.currentCodexGlobalConfig")} · ${t(
-                  "settings.vendor.currentCodexAuthConfig",
-                )}`;
+              : null;
 
   const handleEditorKeyDown = (
     event: ReactKeyboardEvent<HTMLTextAreaElement>,
@@ -248,7 +261,11 @@ export function CurrentCodexGlobalConfigCard({
       <VendorOfficialConfigCard
         title={t("settings.vendor.officialConfig")}
         description={firstStatus}
-        inUse
+        inUse={inUse}
+        mode="global"
+        helpContent={helpContent}
+        onUse={onUse}
+        onCancel={onCancel}
         onEdit={() => setEditOpen(true)}
       />
 

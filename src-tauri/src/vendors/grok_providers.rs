@@ -413,9 +413,18 @@ pub(crate) async fn vendor_delete_grok_provider(
     }
 }
 
+/// Pseudo id: clear `grok.current` so no managed/local provider is active.
+const DISABLED_GROK_PROVIDER_ID: &str = "__disabled__";
+
 #[tauri::command]
 pub(crate) async fn vendor_switch_grok_provider(id: String) -> Result<(), String> {
     let mut config = read_config()?;
+    // 「取消使用」: 清空 current，不改 ~/.grok/config.toml
+    if id == DISABLED_GROK_PROVIDER_ID {
+        config.grok.current = None;
+        write_config(&config)?;
+        return Ok(());
+    }
     if id == LOCAL_GROK_PROVIDER_ID {
         config.grok.current = Some(id);
         write_config(&config)?;

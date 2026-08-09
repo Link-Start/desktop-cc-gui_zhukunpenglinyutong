@@ -638,7 +638,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 14px;
+  padding: 10px 14px;
+  min-height: 44px;
 }
 
 .vendor-official-config-main,
@@ -658,25 +659,141 @@
 }
 
 .vendor-official-config-actions {
-  gap: 10px;
+  gap: 2px;
   flex-shrink: 0;
 }
 
+/* Quiet status: text + green dot, no pill chrome */
 .vendor-official-status {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 10px;
-  border: 1px solid var(--border-muted);
-  border-radius: 999px;
-  color: var(--text-primary);
-  background: var(--surface-card-strong);
+  padding: 0 2px;
+  border: 0;
+  border-radius: 0;
+  color: var(--text-muted);
+  background: transparent;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
-.vendor-codex-runtime-segmented {
+.vendor-official-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
   flex-shrink: 0;
+}
+
+.vendor-official-actions-divider {
+  width: 1px;
+  height: 14px;
+  margin: 0 4px;
+  background: var(--border-muted);
+  flex-shrink: 0;
+}
+
+/* Text action for cancel / revoke — neutral by default, warm on hover */
+.vendor-official-text-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.vendor-official-text-btn:hover {
+  background: color-mix(in srgb, var(--surface-hover) 80%, transparent);
+  color: var(--text-primary);
+}
+
+.vendor-official-text-btn-danger:hover {
+  color: #b45309;
+  background: color-mix(in srgb, #fff7ed 90%, transparent);
+}
+
+:root[data-theme="dark"] .vendor-official-text-btn-danger:hover,
+html.dark .vendor-official-text-btn-danger:hover {
+  color: #fdba74;
+  background: color-mix(in srgb, #9a3412 18%, transparent);
+}
+
+.vendor-official-use-btn {
+  appearance: none;
+  border: 0;
+  background: var(--text-primary);
+  color: var(--surface-card, #fff);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 550;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.12s ease;
+}
+
+.vendor-official-use-btn:hover {
+  opacity: 0.88;
+}
+
+/*
+ * Codex unified_exec segmented: preference-style track + elevated active pill.
+ * Avoid flat grey slabs (reads as disabled) and large black selected blocks.
+ */
+.vendor-codex-runtime-segmented.settings-segmented {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  overflow: visible;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border-muted) 88%, transparent);
+  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+}
+
+.vendor-codex-runtime-segmented .settings-segmented-btn {
+  min-height: 28px;
+  padding: 4px 11px;
+  border-radius: 7px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.vendor-codex-runtime-segmented .settings-segmented-btn:hover:not(:disabled) {
+  color: var(--text-strong);
+  background: color-mix(in srgb, var(--surface-card-strong, var(--surface-card)) 55%, transparent);
+}
+
+.vendor-codex-runtime-segmented .settings-segmented-btn.active {
+  color: var(--text-strong);
+  font-weight: 600;
+  background: var(--surface-card-strong, var(--surface-card));
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    0 0 0 1px color-mix(in srgb, var(--border-muted) 70%, transparent);
+}
+
+.vendor-codex-runtime-segmented .settings-segmented-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .vendor-codex-runtime-reload-row {

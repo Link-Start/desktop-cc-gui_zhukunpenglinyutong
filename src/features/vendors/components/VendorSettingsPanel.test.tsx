@@ -498,7 +498,7 @@ describe("VendorSettingsPanel", () => {
     expect(screen.getByRole("heading", { name: "CodeBuddy CLI" })).toBeTruthy();
     expect(screen.getByText("正在适配此CLI，即将开放")).toBeTruthy();
     const docsLink = screen.getByRole("link", {
-      name: "Open docs",
+      name: "Official docs",
     });
     expect(docsLink.getAttribute("href")).toBe(
       "https://www.codebuddy.ai/docs/cli/quickstart",
@@ -511,7 +511,7 @@ describe("VendorSettingsPanel", () => {
     expect(screen.queryByTestId("current-codex-config-stub")).toBeNull();
   });
 
-  it("renders the Grok CLI tab with current config summary and provider list", async () => {
+  it("renders the Grok CLI tab with official config row and provider list", async () => {
     renderPanel();
 
     await waitFor(() => {
@@ -525,7 +525,7 @@ describe("VendorSettingsPanel", () => {
       .closest(".vendor-brand-header") as HTMLElement;
     expect(brandHeader).toBeTruthy();
     const docsLink = within(brandHeader).getByRole("link", {
-      name: "Open docs",
+      name: "Official docs",
     });
     expect(docsLink.getAttribute("href")).toBe("https://x.ai/cli");
     fireEvent.click(docsLink);
@@ -537,13 +537,21 @@ describe("VendorSettingsPanel", () => {
     expect(screen.queryByTestId("kimi-provider-list-stub")).toBeNull();
     expect(screen.queryByTestId("current-codex-config-stub")).toBeNull();
     expect(screen.queryByText("正在适配此CLI，即将开放")).toBeNull();
+    expect(screen.queryByText("settings.vendor.grokCurrentConfig")).toBeNull();
+    expect(screen.queryByText("settings.vendor.grokNoConfig")).toBeNull();
+    expect(screen.getByText("Official Config")).toBeTruthy();
     expect(
-      screen.getByText("settings.vendor.grokCurrentConfig"),
+      screen.queryByText("settings.vendor.grokLocalProviderDescription"),
+    ).toBeNull();
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "What does this do?" })[0],
+    );
+    expect(
+      await screen.findByText("settings.vendor.grokLocalProviderDescription"),
     ).toBeTruthy();
-    expect(screen.getByText("settings.vendor.grokNoConfig")).toBeTruthy();
   });
 
-  it("renders the OpenCode CLI tab with current config summary and provider list", async () => {
+  it("renders the OpenCode CLI tab with official config row and provider list", async () => {
     renderPanel();
 
     await waitFor(() => {
@@ -557,7 +565,7 @@ describe("VendorSettingsPanel", () => {
       .closest(".vendor-brand-header") as HTMLElement;
     expect(brandHeader).toBeTruthy();
     const docsLink = within(brandHeader).getByRole("link", {
-      name: "Open docs",
+      name: "Official docs",
     });
     expect(docsLink.getAttribute("href")).toBe("https://opencode.ai/docs/");
     fireEvent.click(docsLink);
@@ -571,9 +579,21 @@ describe("VendorSettingsPanel", () => {
     expect(screen.queryByTestId("current-codex-config-stub")).toBeNull();
     expect(screen.queryByText("正在适配此CLI，即将开放")).toBeNull();
     expect(
-      screen.getByText("settings.vendor.opencodeCurrentConfig"),
+      screen.queryByText("settings.vendor.opencodeCurrentConfig"),
+    ).toBeNull();
+    expect(screen.queryByText("settings.vendor.opencodeNoConfig")).toBeNull();
+    expect(screen.getByText("Official Config")).toBeTruthy();
+    expect(
+      screen.queryByText("settings.vendor.opencodeLocalProviderDescription"),
+    ).toBeNull();
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "What does this do?" })[0],
+    );
+    expect(
+      await screen.findByText(
+        "settings.vendor.opencodeLocalProviderDescription",
+      ),
     ).toBeTruthy();
-    expect(screen.getByText("settings.vendor.opencodeNoConfig")).toBeTruthy();
   });
 
   it("keeps the CLI engine list in its own scroll container", async () => {
@@ -644,6 +664,35 @@ describe("VendorSettingsPanel", () => {
     expect(document.querySelector(".vendor-codex-runtime-reload-row")).toBeNull();
   });
 
+  it("separates engine settings and provider channels into sibling sections", async () => {
+    renderPanel();
+
+    await openCodexTab();
+
+    const dense = document.querySelector(
+      ".vendor-tab-content-dense",
+    ) as HTMLElement;
+    expect(dense).toBeTruthy();
+
+    const engineLabel = within(dense).getByRole("heading", {
+      level: 3,
+      name: "Engine settings",
+    });
+    const engineSection = engineLabel.closest(
+      ".vendor-settings-section",
+    ) as HTMLElement;
+    expect(engineSection).toBeTruthy();
+    expect(engineSection.querySelector(".vendor-group-card")).toBeTruthy();
+
+    // CodexProviderList is stubbed in this suite; assert the sibling section wraps it.
+    const providerStub = within(dense).getByTestId("codex-provider-list-stub");
+    const providerSection = providerStub.closest(
+      ".vendor-settings-section",
+    ) as HTMLElement;
+    expect(providerSection).toBeTruthy();
+    expect(providerSection).not.toBe(engineSection);
+  });
+
   it("renders a Claude brand header above the provider sections", async () => {
     renderPanel();
 
@@ -662,7 +711,7 @@ describe("VendorSettingsPanel", () => {
     expect(brandLogo?.querySelector(".vendor-cli-logo-img")).toBeTruthy();
     expect(brandLogo?.querySelector(".vendor-cli-logo-img-mono")).toBeNull();
     const docsLink = within(brandHeader).getByRole("link", {
-      name: "Open docs",
+      name: "Official docs",
     });
     expect(docsLink.getAttribute("href")).toBe(
       "https://code.claude.com/docs/en/cli-reference",
@@ -696,7 +745,7 @@ describe("VendorSettingsPanel", () => {
     expect(brandLogo?.querySelector(".vendor-cli-logo-img")).toBeTruthy();
     expect(brandLogo?.querySelector(".vendor-cli-logo-img-mono")).toBeNull();
     const docsLink = within(brandHeader).getByRole("link", {
-      name: "Open docs",
+      name: "Official docs",
     });
     expect(docsLink.getAttribute("href")).toBe(
       "https://learn.chatgpt.com/docs/codex/cli",
@@ -717,7 +766,7 @@ describe("VendorSettingsPanel", () => {
     ).toBeNull();
   });
 
-  it("renders the Kimi CLI tab with current config summary and provider list", async () => {
+  it("renders the Kimi CLI tab with official config row and provider list", async () => {
     renderPanel();
 
     await waitFor(() => {
@@ -731,7 +780,7 @@ describe("VendorSettingsPanel", () => {
       .closest(".vendor-brand-header") as HTMLElement;
     expect(brandHeader).toBeTruthy();
     const docsLink = within(brandHeader).getByRole("link", {
-      name: "Open docs",
+      name: "Official docs",
     });
     expect(docsLink.getAttribute("href")).toBe(
       "https://www.kimi.com/code/docs/en/",
@@ -746,10 +795,20 @@ describe("VendorSettingsPanel", () => {
     expect(screen.queryByTestId("codex-provider-list-stub")).toBeNull();
     expect(screen.queryByTestId("current-codex-config-stub")).toBeNull();
     expect(screen.queryByText("正在适配此CLI，即将开放")).toBeNull();
+    // Summary card removed; official config lives in the engine group card.
+    expect(screen.queryByText("settings.vendor.kimiCurrentConfig")).toBeNull();
+    expect(screen.queryByText("settings.vendor.kimiNoConfig")).toBeNull();
+    expect(screen.getByText("Official Config")).toBeTruthy();
+    // Local provider explanation is folded into the row help popover.
     expect(
-      screen.getByText("settings.vendor.kimiCurrentConfig"),
+      screen.queryByText("settings.vendor.kimiLocalProviderDescription"),
+    ).toBeNull();
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "What does this do?" })[0],
+    );
+    expect(
+      await screen.findByText("settings.vendor.kimiLocalProviderDescription"),
     ).toBeTruthy();
-    expect(screen.getByText("settings.vendor.kimiNoConfig")).toBeTruthy();
   });
 
   it("shows compact background terminal official actions in the Codex tab", async () => {
@@ -763,8 +822,48 @@ describe("VendorSettingsPanel", () => {
     expect(runtimeCardQueries.getByText("Disable")).toBeTruthy();
     expect(runtimeCardQueries.getByText("Follow official default")).toBeTruthy();
     expect(runtimeRow.className).toContain("settings-toggle-row");
+    // Long official-status copy lives in the section help popover, not inline.
     expect(
-      runtimeCardQueries.getByText("Official default on this platform: enabled."),
+      runtimeCardQueries.queryByText(
+        "Official default on this platform: enabled.",
+      ),
+    ).toBeNull();
+    expect(
+      runtimeCardQueries.queryByText(
+        "Official config status: no explicit unified_exec key; Codex will fall back to the official default or any remaining config.",
+      ),
+    ).toBeNull();
+  });
+
+  it("surfaces per-row Codex engine setting explanations in help popovers", async () => {
+    renderPanel();
+    await openCodexTab();
+
+    const helpButtons = screen.getAllByRole("button", {
+      name: "What does this do?",
+    });
+    // CurrentCodexGlobalConfigCard is mocked in this suite, so the remaining
+    // engine rows still each expose a help affordance:
+    // background terminal, provider labels, custom path, custom models.
+    expect(helpButtons.length).toBeGreaterThanOrEqual(4);
+
+    fireEvent.click(helpButtons[0]);
+    expect(
+      await screen.findByText("Official default on this platform: enabled."),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Edit the official CODEX_HOME/config.toml unified_exec directly.",
+      ),
+    ).toBeTruthy();
+
+    // Close the open popover before opening the next row help.
+    fireEvent.click(helpButtons[0]);
+    fireEvent.click(helpButtons[1]);
+    expect(
+      await screen.findByText(
+        "Display Codex provider badges in the sidebar and pinned session lists.",
+      ),
     ).toBeTruthy();
   });
 

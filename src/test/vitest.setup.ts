@@ -989,6 +989,16 @@ const mockTranslate = (key: string, params?: Record<string, unknown>) => {
         "settings.backgroundTerminalOfficialWriteReloadFailed":
           "Official unified_exec was written, but refreshing the current Codex runtime failed: {{message}}",
         "settings.vendor.officialConfig": "Official Config",
+        "settings.vendor.engineSettings": "Engine settings",
+        "settings.vendor.whatIsThis": "What does this do?",
+        "settings.vendor.customPath": "Custom Path",
+        "settings.vendor.customPathUsingSystemPath": "Using system PATH",
+        "settings.vendor.customPathNoArgs": "No extra args",
+        "settings.vendor.pluginModels": "Custom Models",
+        "settings.vendor.pluginModelsDesc":
+          "Manage custom models available to this CLI in the model picker.",
+        "settings.vendor.customPathDescription":
+          "Configure the executable path for this CLI. Leave empty to resolve via system PATH.",
         "settings.vendor.edit": "Edit",
         "settings.vendor.inUse": "In Use",
         "settings.vendor.cancel": "Cancel",

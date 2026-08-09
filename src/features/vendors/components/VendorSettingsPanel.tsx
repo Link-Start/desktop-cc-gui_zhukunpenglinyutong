@@ -4,11 +4,15 @@ import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
 import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
 import ArrowLeftRight from "lucide-react/dist/esm/icons/arrow-left-right";
+import BookOpen from "lucide-react/dist/esm/icons/book-open";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
 import File from "lucide-react/dist/esm/icons/file";
 import Import from "lucide-react/dist/esm/icons/import";
 import Search from "lucide-react/dist/esm/icons/search";
+import Settings2 from "lucide-react/dist/esm/icons/settings-2";
 import type { CodexCustomModel, CodexProviderConfig, VendorTab } from "../types";
 import {
+  DISABLED_PROVIDER_ID,
   LOCAL_GROK_PROVIDER_ID,
   LOCAL_KIMI_PROVIDER_ID,
   LOCAL_OPENCODE_PROVIDER_ID,
@@ -55,6 +59,7 @@ import {
 import { CcSwitchImportDialog } from "./CcSwitchImportDialog";
 import { type CcSwitchImportTarget } from "../hooks/useCcSwitchImport";
 import { CurrentCodexGlobalConfigCard } from "./CurrentCodexGlobalConfigCard";
+import { LocalOfficialConfigCard } from "./LocalOfficialConfigCard";
 import {
   CLI_DOCS_HREF_BY_ID,
   buildCliEngineNavItems,
@@ -92,6 +97,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { SettingsRowHelp } from "./SettingsRowHelp";
 
 const CODEX_PLUGIN_MODELS_MIGRATION_MARKER =
   "codemoss-codex-plugin-models-migrated-v1";
@@ -117,6 +123,15 @@ type CliBrandHeaderProps = {
   actions?: ReactNode;
   monochromeLogo?: boolean;
 };
+
+function CliBrandDocsLabel({ label }: { label: string }) {
+  return (
+    <>
+      <BookOpen className="vendor-brand-help-icon" aria-hidden="true" />
+      <span>{label}</span>
+    </>
+  );
+}
 
 function CliBrandHeader({
   id,
@@ -149,7 +164,7 @@ function CliBrandHeader({
                   void openUrl(href);
                 }}
               >
-                ?
+                <CliBrandDocsLabel label={helpLabel} />
               </a>
             ) : (
               <span
@@ -157,7 +172,7 @@ function CliBrandHeader({
                 title={description}
                 aria-label={helpLabel}
               >
-                ?
+                <CliBrandDocsLabel label={helpLabel} />
               </span>
             )}
           </div>
@@ -165,6 +180,32 @@ function CliBrandHeader({
       </div>
       {actions ? <div className="vendor-brand-actions">{actions}</div> : null}
     </div>
+  );
+}
+
+/** Section block for engine settings / provider channels hierarchy. */
+function VendorSettingsSection({
+  label,
+  children,
+}: {
+  label?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="vendor-settings-section">
+      {label ? (
+        <h3 className="vendor-settings-section-label">
+          <Settings2
+            className="vendor-section-label-icon"
+            size={15}
+            strokeWidth={2}
+            aria-hidden
+          />
+          {label}
+        </h3>
+      ) : null}
+      {children}
+    </section>
   );
 }
 
@@ -292,7 +333,7 @@ export function VendorSettingsPanel({
   const renderCcSwitchImportButton = (target: CcSwitchImportTarget) => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button size="sm" variant="outline">
+        <Button size="xs" variant="outline" className="rounded-[4px]">
           <Import size={14} />
           {t("settings.vendor.ccSwitchImport.entry")}
         </Button>
@@ -324,7 +365,21 @@ export function VendorSettingsPanel({
     setModelDialogOpen(true);
   }, []);
 
-  const renderPluginModelsEntry = (target: ModelDialogTarget, count: number) => (
+  const pluginModelsHelp = (
+    <div className="vendor-settings-row-help-stack">
+      <p>
+        {t("settings.vendor.pluginModelsDesc", {
+          defaultValue:
+            "Manage custom models available to this CLI in the model picker.",
+        })}
+      </p>
+    </div>
+  );
+
+  const renderPluginModelsEntry = (
+    target: ModelDialogTarget,
+    count: number,
+  ) => (
     <div
       className="vendor-group-row vendor-group-row-clickable vendor-plugin-models-row"
       onClick={() => openModelDialog(target)}
@@ -339,21 +394,25 @@ export function VendorSettingsPanel({
       <div className="vendor-group-row-copy">
         <span className="vendor-group-row-title">
           {t("settings.vendor.pluginModels")}
+          <SettingsRowHelp>{pluginModelsHelp}</SettingsRowHelp>
         </span>
       </div>
-      {count > 0 ? (
-        <span className="vendor-plugin-model-entry-count">{count}</span>
-      ) : null}
-      <button
-        type="button"
-        className="vendor-plugin-models-manage-btn"
-        onClick={(event) => {
-          event.stopPropagation();
-          openModelDialog(target);
-        }}
-      >
-        {t("settings.vendor.manageModels")}
-      </button>
+      <div className="vendor-group-row-trailing">
+        {count > 0 ? (
+          <span className="vendor-plugin-model-entry-count">{count}</span>
+        ) : null}
+        <button
+          type="button"
+          className="vendor-group-row-chevron-btn"
+          aria-label={t("settings.vendor.manageModels")}
+          onClick={(event) => {
+            event.stopPropagation();
+            openModelDialog(target);
+          }}
+        >
+          <ChevronRight size={16} aria-hidden="true" />
+        </button>
+      </div>
     </div>
   );
 
@@ -418,11 +477,33 @@ export function VendorSettingsPanel({
 
   const renderCustomPathEntry = (engine: CliCustomPathEngine) => {
     const { path, args } = resolveCustomPathValue(engine);
+    const pathSummary = path?.trim()
+      ? path.trim()
+      : t("settings.vendor.customPathUsingSystemPath");
+    const argsSummary =
+      engine === "codex"
+        ? args?.trim()
+          ? args.trim()
+          : t("settings.vendor.customPathNoArgs")
+        : null;
+    const statusSummary = argsSummary
+      ? `${pathSummary} · ${argsSummary}`
+      : pathSummary;
+
+    // All CLI engine cards fold path status into the row help popover so the
+    // group list stays title + action only.
     return (
       <CliCustomPathEntry
+        engine={engine}
         path={path}
         args={args}
         showArgsSummary={engine === "codex"}
+        helpContent={
+          <div className="vendor-settings-row-help-stack">
+            <p>{t("settings.vendor.customPathDescription")}</p>
+            <p>{statusSummary}</p>
+          </div>
+        }
         onConfigure={() => setCustomPathDialogEngine(engine)}
       />
     );
@@ -780,6 +861,36 @@ export function VendorSettingsPanel({
   );
 
   const claudeHasConfig = Boolean(claude.currentConfig);
+  const kimiLocalProvider = useMemo(
+    () =>
+      kimi.kimiProviders.find(
+        (provider) =>
+          provider.id === LOCAL_KIMI_PROVIDER_ID || provider.isLocalProvider,
+      ) ?? null,
+    [kimi.kimiProviders],
+  );
+  const grokLocalProvider = useMemo(
+    () =>
+      grok.grokProviders.find(
+        (provider) =>
+          provider.id === LOCAL_GROK_PROVIDER_ID || provider.isLocalProvider,
+      ) ?? null,
+    [grok.grokProviders],
+  );
+  const openCodeLocalProvider = useMemo(
+    () =>
+      openCode.openCodeProviders.find(
+        (provider) =>
+          provider.id === LOCAL_OPENCODE_PROVIDER_ID ||
+          provider.isLocalProvider,
+      ) ?? null,
+    [openCode.openCodeProviders],
+  );
+  /** Codex official = no managed third-party currently active */
+  const codexOfficialInUse = useMemo(
+    () => !codex.codexProviders.some((provider) => provider.isActive),
+    [codex.codexProviders],
+  );
   const kimiHasConfig =
     Boolean(kimi.currentKimiConfig?.baseUrl) ||
     kimi.kimiProviders.some(
@@ -983,13 +1094,13 @@ export function VendorSettingsPanel({
         </button>
         {activeCli === "claude" ? (
           <CliLifecycleProvider engine="claude" active>
-            <div className="vendor-tab-content">
+            <div className="vendor-tab-content vendor-tab-content-dense">
             <CliBrandHeader
               id="claude"
               title="Claude Code CLI"
               description={t("settings.claudeDescription")}
               helpLabel={t("settings.vendor.openCliDocs", {
-                defaultValue: "Open docs",
+                defaultValue: "Official docs",
               })}
               href={CLI_DOCS_HREF_BY_ID.claude}
               actions={<CliLifecycleHeaderActions />}
@@ -1000,25 +1111,33 @@ export function VendorSettingsPanel({
                 {claude.providerError.message}
               </div>
             ) : null}
-            <div className="vendor-group-card">
-              <ClaudeLocalSettingsCard
-                localProvider={claude.localProvider}
+            <VendorSettingsSection
+              label={t("settings.vendor.engineSettings", {
+                defaultValue: "Engine settings",
+              })}
+            >
+              <div className="vendor-group-card">
+                <ClaudeLocalSettingsCard
+                  localProvider={claude.localProvider}
+                  onSwitch={claude.handleSwitchProvider}
+                  onEdit={claude.handleOpenClaudeSettingsJsonDialog}
+                />
+                {renderCustomPathEntry("claude")}
+                {renderPluginModelsEntry("claude", claudeModels.models.length)}
+              </div>
+            </VendorSettingsSection>
+            <VendorSettingsSection>
+              <ProviderList
+                providers={claude.providers}
+                loading={claude.loading}
+                headerActions={renderCcSwitchImportButton("claude")}
+                onAdd={claude.handleAddProvider}
+                onEdit={claude.handleEditProvider}
+                onDelete={claude.handleDeleteProvider}
+                onReorder={claude.handleReorderProviders}
                 onSwitch={claude.handleSwitchProvider}
-                onEdit={claude.handleOpenClaudeSettingsJsonDialog}
               />
-              {renderCustomPathEntry("claude")}
-              {renderPluginModelsEntry("claude", claudeModels.models.length)}
-            </div>
-            <ProviderList
-              providers={claude.providers}
-              loading={claude.loading}
-              headerActions={renderCcSwitchImportButton("claude")}
-              onAdd={claude.handleAddProvider}
-              onEdit={claude.handleEditProvider}
-              onDelete={claude.handleDeleteProvider}
-              onReorder={claude.handleReorderProviders}
-              onSwitch={claude.handleSwitchProvider}
-            />
+            </VendorSettingsSection>
             <ProviderDialog
               isOpen={claude.providerDialog.isOpen}
               provider={claude.providerDialog.provider}
@@ -1041,13 +1160,13 @@ export function VendorSettingsPanel({
           </CliLifecycleProvider>
         ) : activeCli === "codex" ? (
           <CliLifecycleProvider engine="codex" active>
-          <div className="vendor-tab-content">
+          <div className="vendor-tab-content vendor-tab-content-dense">
             <CliBrandHeader
               id="codex"
               title="Codex CLI"
               description={t("settings.codexDescription")}
               helpLabel={t("settings.vendor.openCliDocs", {
-                defaultValue: "Open docs",
+                defaultValue: "Official docs",
               })}
               href={CLI_DOCS_HREF_BY_ID.codex}
               actions={<CliLifecycleHeaderActions />}
@@ -1068,138 +1187,157 @@ export function VendorSettingsPanel({
                 {codex.codexProviderError}
               </div>
             )}
-            <div className="vendor-group-card">
-              <CurrentCodexGlobalConfigCard
-                configLoading={codexGlobalConfigLoading}
-                configContent={codexGlobalConfigContent}
-                configExists={codexGlobalConfigExists}
-                configTruncated={codexGlobalConfigTruncated}
-                configError={codexGlobalConfigError}
-                authLoading={codexAuthConfigLoading}
-                authContent={codexAuthConfigContent}
-                authExists={codexAuthConfigExists}
-                authTruncated={codexAuthConfigTruncated}
-                authError={codexAuthConfigError}
-                onSaved={refreshUnifiedExecConfigViews}
-              />
+            <VendorSettingsSection
+              label={t("settings.vendor.engineSettings", {
+                defaultValue: "Engine settings",
+              })}
+            >
+              <div className="vendor-group-card">
+                <CurrentCodexGlobalConfigCard
+                  configLoading={codexGlobalConfigLoading}
+                  configContent={codexGlobalConfigContent}
+                  configExists={codexGlobalConfigExists}
+                  configTruncated={codexGlobalConfigTruncated}
+                  configError={codexGlobalConfigError}
+                  authLoading={codexAuthConfigLoading}
+                  authContent={codexAuthConfigContent}
+                  authExists={codexAuthConfigExists}
+                  authTruncated={codexAuthConfigTruncated}
+                  authError={codexAuthConfigError}
+                  inUse={codexOfficialInUse}
+                  helpContent={
+                    <div className="vendor-settings-row-help-stack">
+                      <p>
+                        {`${t("settings.vendor.currentCodexGlobalConfig")} · ${t(
+                          "settings.vendor.currentCodexAuthConfig",
+                        )}`}
+                      </p>
+                    </div>
+                  }
+                  onUse={() => {
+                    void codex.handleSwitchCodexProvider(DISABLED_PROVIDER_ID);
+                  }}
+                  onSaved={refreshUnifiedExecConfigViews}
+                />
 
-              <div className="settings-toggle-row vendor-group-row">
-                <div className="vendor-group-row-copy">
-                  <span className="vendor-group-row-title">
-                    {t("settings.backgroundTerminal")}
-                  </span>
-                  {unifiedExecOfficialConfigDetail ? (
-                    <div className="settings-help">
-                      {unifiedExecOfficialConfigDetail}
-                    </div>
-                  ) : (
-                    <div className="settings-help">
-                      {t("settings.backgroundTerminalDesc")}
-                    </div>
-                  )}
-                  {unifiedExecOfficialDefaultDetail ? (
-                    <div className="settings-help">
-                      {unifiedExecOfficialDefaultDetail}
-                    </div>
-                  ) : null}
-                  {unifiedExecExternalStatusLoading &&
-                  !unifiedExecExternalStatus ? (
-                    <div className="settings-help" aria-live="polite">
-                      {t("settings.loading")}
-                    </div>
-                  ) : null}
-                  {unifiedExecExternalStatusError ? (
-                    <div className="settings-help">
-                      {unifiedExecExternalStatusError}
-                    </div>
-                  ) : null}
-                  {unifiedExecActionNotice ? (
-                    <div className="settings-help">
-                      {unifiedExecActionNotice.message}
-                    </div>
-                  ) : null}
-                </div>
-                <div
-                  className="settings-segmented vendor-codex-runtime-segmented"
-                  role="group"
-                  aria-label={t("settings.backgroundTerminal")}
-                >
-                  <button
-                    type="button"
-                    className={cn(
-                      "settings-segmented-btn",
-                      unifiedExecFollowActive && "active",
-                    )}
-                    onClick={() =>
-                      void handleRestoreUnifiedExecOfficialDefault()
-                    }
-                    disabled={unifiedExecSegmentDisabled}
-                  >
-                    {t("settings.backgroundTerminalFollowOfficial")}
-                  </button>
-                  <button
-                    type="button"
-                    className={cn(
-                      "settings-segmented-btn",
-                      unifiedExecEnabledActive && "active",
-                    )}
-                    onClick={() =>
-                      void handleSetUnifiedExecOfficialOverride(true)
-                    }
-                    disabled={unifiedExecSegmentDisabled}
-                  >
-                    {t("settings.backgroundTerminalOfficialWriteEnabled")}
-                  </button>
-                  <button
-                    type="button"
-                    className={cn(
-                      "settings-segmented-btn",
-                      unifiedExecDisabledActive && "active",
-                    )}
-                    onClick={() =>
-                      void handleSetUnifiedExecOfficialOverride(false)
-                    }
-                    disabled={unifiedExecSegmentDisabled}
-                  >
-                    {t("settings.backgroundTerminalOfficialWriteDisabled")}
-                  </button>
-                </div>
-              </div>
+                {renderCustomPathEntry("codex")}
+                {renderPluginModelsEntry("codex", codexModels.models.length)}
 
-              <div className="settings-toggle-row vendor-group-row">
-                <div className="vendor-group-row-copy">
-                  <span className="vendor-group-row-title">
-                    {t("settings.sidebarProviderLabels")}
-                  </span>
-                  <div className="settings-help">
-                    {t("settings.sidebarProviderLabelsDesc")}
+                <div className="settings-toggle-row vendor-group-row">
+                  <div className="vendor-group-row-copy">
+                    <span className="vendor-group-row-title">
+                      {t("settings.backgroundTerminal")}
+                      <SettingsRowHelp>
+                        <div className="vendor-settings-row-help-stack">
+                          <p>{t("settings.backgroundTerminalDesc")}</p>
+                          <p>{t("settings.backgroundTerminalMarkerDesc")}</p>
+                          {unifiedExecOfficialConfigDetail ? (
+                            <p>{unifiedExecOfficialConfigDetail}</p>
+                          ) : null}
+                          {unifiedExecOfficialDefaultDetail ? (
+                            <p>{unifiedExecOfficialDefaultDetail}</p>
+                          ) : null}
+                        </div>
+                      </SettingsRowHelp>
+                    </span>
+                    {unifiedExecExternalStatusLoading &&
+                    !unifiedExecExternalStatus ? (
+                      <div className="settings-help" aria-live="polite">
+                        {t("settings.loading")}
+                      </div>
+                    ) : null}
+                    {unifiedExecExternalStatusError ? (
+                      <div className="settings-help">
+                        {unifiedExecExternalStatusError}
+                      </div>
+                    ) : null}
+                    {unifiedExecActionNotice ? (
+                      <div className="settings-help">
+                        {unifiedExecActionNotice.message}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div
+                    className="settings-segmented vendor-codex-runtime-segmented"
+                    role="group"
+                    aria-label={t("settings.backgroundTerminal")}
+                  >
+                    <button
+                      type="button"
+                      className={cn(
+                        "settings-segmented-btn",
+                        unifiedExecFollowActive && "active",
+                      )}
+                      onClick={() =>
+                        void handleRestoreUnifiedExecOfficialDefault()
+                      }
+                      disabled={unifiedExecSegmentDisabled}
+                    >
+                      {t("settings.backgroundTerminalFollowOfficial")}
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        "settings-segmented-btn",
+                        unifiedExecEnabledActive && "active",
+                      )}
+                      onClick={() =>
+                        void handleSetUnifiedExecOfficialOverride(true)
+                      }
+                      disabled={unifiedExecSegmentDisabled}
+                    >
+                      {t("settings.backgroundTerminalOfficialWriteEnabled")}
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        "settings-segmented-btn",
+                        unifiedExecDisabledActive && "active",
+                      )}
+                      onClick={() =>
+                        void handleSetUnifiedExecOfficialOverride(false)
+                      }
+                      disabled={unifiedExecSegmentDisabled}
+                    >
+                      {t("settings.backgroundTerminalOfficialWriteDisabled")}
+                    </button>
                   </div>
                 </div>
-                <Switch
-                  checked={appSettings.showSidebarProviderLabels === true}
-                  aria-label={t("settings.sidebarProviderLabels")}
-                  onCheckedChange={(checked) =>
-                    void onUpdateAppSettings({
-                      ...appSettings,
-                      showSidebarProviderLabels: checked,
-                    })
-                  }
-                />
-              </div>
 
-              {renderCustomPathEntry("codex")}
-              {renderPluginModelsEntry("codex", codexModels.models.length)}
-            </div>
-            <CodexProviderList
-              providers={codex.codexProviders}
-              loading={codex.codexLoading}
-              headerActions={renderCcSwitchImportButton("codex")}
-              onAdd={codex.handleAddCodexProvider}
-              onEdit={codex.handleEditCodexProvider}
-              onDelete={codex.handleDeleteCodexProvider}
-              onReorder={codex.handleReorderCodexProviders}
-              onSwitch={codex.handleSwitchCodexProvider}
-            />
+                <div className="settings-toggle-row vendor-group-row">
+                  <div className="vendor-group-row-copy">
+                    <span className="vendor-group-row-title">
+                      {t("settings.sidebarProviderLabels")}
+                      <SettingsRowHelp>
+                        {t("settings.sidebarProviderLabelsDesc")}
+                      </SettingsRowHelp>
+                    </span>
+                  </div>
+                  <Switch
+                    checked={appSettings.showSidebarProviderLabels === true}
+                    aria-label={t("settings.sidebarProviderLabels")}
+                    onCheckedChange={(checked) =>
+                      void onUpdateAppSettings({
+                        ...appSettings,
+                        showSidebarProviderLabels: checked,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+            </VendorSettingsSection>
+            <VendorSettingsSection>
+              <CodexProviderList
+                providers={codex.codexProviders}
+                loading={codex.codexLoading}
+                headerActions={renderCcSwitchImportButton("codex")}
+                onAdd={codex.handleAddCodexProvider}
+                onEdit={codex.handleEditCodexProvider}
+                onDelete={codex.handleDeleteCodexProvider}
+                onReorder={codex.handleReorderCodexProviders}
+                onSwitch={codex.handleSwitchCodexProvider}
+              />
+            </VendorSettingsSection>
             <CodexProviderDialog
               isOpen={codex.codexProviderDialog.isOpen}
               provider={codex.codexProviderDialog.provider}
@@ -1216,7 +1354,7 @@ export function VendorSettingsPanel({
           </CliLifecycleProvider>
         ) : activeCli === "kimi" ? (
           <CliLifecycleProvider engine="kimi" active>
-          <div className="vendor-tab-content">
+          <div className="vendor-tab-content vendor-tab-content-dense">
             <CliBrandHeader
               id="kimi"
               title="Kimi CLI"
@@ -1225,7 +1363,7 @@ export function VendorSettingsPanel({
                   "Configure the Kimi CLI providers used by ccgui.",
               })}
               helpLabel={t("settings.vendor.openCliDocs", {
-                defaultValue: "Open docs",
+                defaultValue: "Official docs",
               })}
               href={CLI_DOCS_HREF_BY_ID.kimi}
               actions={<CliLifecycleHeaderActions />}
@@ -1237,47 +1375,33 @@ export function VendorSettingsPanel({
                 {kimi.kimiProviderError}
               </div>
             )}
-            <div className="vendor-group-card">
-              {renderCustomPathEntry("kimi")}
-            </div>
-            <div className="vendor-provider-list vendor-summary-card">
-              <div className="vendor-list-header">
-                <span className="vendor-list-title">
-                  {t("settings.vendor.kimiCurrentConfig")}
-                </span>
+            <VendorSettingsSection
+              label={t("settings.vendor.engineSettings", {
+                defaultValue: "Engine settings",
+              })}
+            >
+              <div className="vendor-group-card">
+                <LocalOfficialConfigCard
+                  inUse={Boolean(kimiLocalProvider?.isActive)}
+                  localProviderId={LOCAL_KIMI_PROVIDER_ID}
+                  description={t(
+                    "settings.vendor.kimiLocalProviderDescription",
+                  )}
+                  onSwitch={kimi.handleSwitchKimiProvider}
+                />
+                {renderCustomPathEntry("kimi")}
               </div>
-              {kimi.currentKimiConfig ? (
-                <>
-                  <div className="settings-help">
-                    {t("settings.vendor.kimiDefaultModel")}:{" "}
-                    {kimi.currentKimiConfig.defaultModel ||
-                      t("settings.vendor.notConfigured")}
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.vendor.kimiBaseUrl")}:{" "}
-                    {kimi.currentKimiConfig.baseUrl ||
-                      t("settings.vendor.notConfigured")}
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.vendor.kimiProvider")}:{" "}
-                    {kimi.currentKimiConfig.providerName ||
-                      t("settings.vendor.notConfigured")}
-                  </div>
-                </>
-              ) : (
-                <div className="settings-help">
-                  {t("settings.vendor.kimiNoConfig")}
-                </div>
-              )}
-            </div>
-            <KimiProviderList
-              providers={kimi.kimiProviders}
-              loading={kimi.kimiLoading}
-              onAdd={kimi.handleAddKimiProvider}
-              onEdit={kimi.handleEditKimiProvider}
-              onDelete={kimi.handleDeleteKimiProvider}
-              onSwitch={kimi.handleSwitchKimiProvider}
-            />
+            </VendorSettingsSection>
+            <VendorSettingsSection>
+              <KimiProviderList
+                providers={kimi.kimiProviders}
+                loading={kimi.kimiLoading}
+                onAdd={kimi.handleAddKimiProvider}
+                onEdit={kimi.handleEditKimiProvider}
+                onDelete={kimi.handleDeleteKimiProvider}
+                onSwitch={kimi.handleSwitchKimiProvider}
+              />
+            </VendorSettingsSection>
             <KimiProviderDialog
               isOpen={kimi.kimiProviderDialog.isOpen}
               provider={kimi.kimiProviderDialog.provider}
@@ -1294,7 +1418,7 @@ export function VendorSettingsPanel({
           </CliLifecycleProvider>
         ) : activeCli === "grok" ? (
           <CliLifecycleProvider engine="grok" active>
-          <div className="vendor-tab-content">
+          <div className="vendor-tab-content vendor-tab-content-dense">
             <CliBrandHeader
               id="grok"
               title="Grok CLI"
@@ -1303,7 +1427,7 @@ export function VendorSettingsPanel({
                   "Configure the Grok CLI providers used by ccgui.",
               })}
               helpLabel={t("settings.vendor.openCliDocs", {
-                defaultValue: "Open docs",
+                defaultValue: "Official docs",
               })}
               href={CLI_DOCS_HREF_BY_ID.grok}
               actions={<CliLifecycleHeaderActions />}
@@ -1315,47 +1439,33 @@ export function VendorSettingsPanel({
                 {grok.grokProviderError}
               </div>
             )}
-            <div className="vendor-group-card">
-              {renderCustomPathEntry("grok")}
-            </div>
-            <div className="vendor-provider-list vendor-summary-card">
-              <div className="vendor-list-header">
-                <span className="vendor-list-title">
-                  {t("settings.vendor.grokCurrentConfig")}
-                </span>
+            <VendorSettingsSection
+              label={t("settings.vendor.engineSettings", {
+                defaultValue: "Engine settings",
+              })}
+            >
+              <div className="vendor-group-card">
+                <LocalOfficialConfigCard
+                  inUse={Boolean(grokLocalProvider?.isActive)}
+                  localProviderId={LOCAL_GROK_PROVIDER_ID}
+                  description={t(
+                    "settings.vendor.grokLocalProviderDescription",
+                  )}
+                  onSwitch={grok.handleSwitchGrokProvider}
+                />
+                {renderCustomPathEntry("grok")}
               </div>
-              {grok.currentGrokConfig ? (
-                <>
-                  <div className="settings-help">
-                    {t("settings.vendor.grokDefaultModel")}:{" "}
-                    {grok.currentGrokConfig.defaultModel ||
-                      t("settings.vendor.notConfigured")}
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.vendor.grokBaseUrl")}:{" "}
-                    {grok.currentGrokConfig.baseUrl ||
-                      t("settings.vendor.notConfigured")}
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.vendor.grokProvider")}:{" "}
-                    {grok.currentGrokConfig.providerName ||
-                      t("settings.vendor.notConfigured")}
-                  </div>
-                </>
-              ) : (
-                <div className="settings-help">
-                  {t("settings.vendor.grokNoConfig")}
-                </div>
-              )}
-            </div>
-            <GrokProviderList
-              providers={grok.grokProviders}
-              loading={grok.grokLoading}
-              onAdd={grok.handleAddGrokProvider}
-              onEdit={grok.handleEditGrokProvider}
-              onDelete={grok.handleDeleteGrokProvider}
-              onSwitch={grok.handleSwitchGrokProvider}
-            />
+            </VendorSettingsSection>
+            <VendorSettingsSection>
+              <GrokProviderList
+                providers={grok.grokProviders}
+                loading={grok.grokLoading}
+                onAdd={grok.handleAddGrokProvider}
+                onEdit={grok.handleEditGrokProvider}
+                onDelete={grok.handleDeleteGrokProvider}
+                onSwitch={grok.handleSwitchGrokProvider}
+              />
+            </VendorSettingsSection>
             <GrokProviderDialog
               isOpen={grok.grokProviderDialog.isOpen}
               provider={grok.grokProviderDialog.provider}
@@ -1372,7 +1482,7 @@ export function VendorSettingsPanel({
           </CliLifecycleProvider>
         ) : activeCli === "opencode" ? (
           <CliLifecycleProvider engine="opencode" active>
-          <div className="vendor-tab-content">
+          <div className="vendor-tab-content vendor-tab-content-dense">
             <CliBrandHeader
               id="opencode"
               title="OpenCode CLI"
@@ -1381,7 +1491,7 @@ export function VendorSettingsPanel({
                   "Configure the OpenCode CLI providers used by ccgui.",
               })}
               helpLabel={t("settings.vendor.openCliDocs", {
-                defaultValue: "Open docs",
+                defaultValue: "Official docs",
               })}
               href={CLI_DOCS_HREF_BY_ID.opencode}
               actions={<CliLifecycleHeaderActions />}
@@ -1393,47 +1503,33 @@ export function VendorSettingsPanel({
                 {openCode.openCodeProviderError}
               </div>
             )}
-            <div className="vendor-group-card">
-              {renderCustomPathEntry("opencode")}
-            </div>
-            <div className="vendor-provider-list vendor-summary-card">
-              <div className="vendor-list-header">
-                <span className="vendor-list-title">
-                  {t("settings.vendor.opencodeCurrentConfig")}
-                </span>
+            <VendorSettingsSection
+              label={t("settings.vendor.engineSettings", {
+                defaultValue: "Engine settings",
+              })}
+            >
+              <div className="vendor-group-card">
+                <LocalOfficialConfigCard
+                  inUse={Boolean(openCodeLocalProvider?.isActive)}
+                  localProviderId={LOCAL_OPENCODE_PROVIDER_ID}
+                  description={t(
+                    "settings.vendor.opencodeLocalProviderDescription",
+                  )}
+                  onSwitch={openCode.handleSwitchOpenCodeProvider}
+                />
+                {renderCustomPathEntry("opencode")}
               </div>
-              {openCode.currentOpenCodeConfig ? (
-                <>
-                  <div className="settings-help">
-                    {t("settings.vendor.opencodeDefaultModel")}:{" "}
-                    {openCode.currentOpenCodeConfig.defaultModel ||
-                      t("settings.vendor.notConfigured")}
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.vendor.opencodeBaseUrl")}:{" "}
-                    {openCode.currentOpenCodeConfig.baseUrl ||
-                      t("settings.vendor.notConfigured")}
-                  </div>
-                  <div className="settings-help">
-                    {t("settings.vendor.opencodeProvider")}:{" "}
-                    {openCode.currentOpenCodeConfig.providerName ||
-                      t("settings.vendor.notConfigured")}
-                  </div>
-                </>
-              ) : (
-                <div className="settings-help">
-                  {t("settings.vendor.opencodeNoConfig")}
-                </div>
-              )}
-            </div>
-            <OpenCodeProviderList
-              providers={openCode.openCodeProviders}
-              loading={openCode.openCodeLoading}
-              onAdd={openCode.handleAddOpenCodeProvider}
-              onEdit={openCode.handleEditOpenCodeProvider}
-              onDelete={openCode.handleDeleteOpenCodeProvider}
-              onSwitch={openCode.handleSwitchOpenCodeProvider}
-            />
+            </VendorSettingsSection>
+            <VendorSettingsSection>
+              <OpenCodeProviderList
+                providers={openCode.openCodeProviders}
+                loading={openCode.openCodeLoading}
+                onAdd={openCode.handleAddOpenCodeProvider}
+                onEdit={openCode.handleEditOpenCodeProvider}
+                onDelete={openCode.handleDeleteOpenCodeProvider}
+                onSwitch={openCode.handleSwitchOpenCodeProvider}
+              />
+            </VendorSettingsSection>
             <OpenCodeProviderDialog
               isOpen={openCode.openCodeProviderDialog.isOpen}
               provider={openCode.openCodeProviderDialog.provider}
@@ -1460,7 +1556,7 @@ export function VendorSettingsPanel({
                 defaultValue: "Support is coming soon.",
               })}
               helpLabel={t("settings.vendor.openCliDocs", {
-                defaultValue: "Open docs",
+                defaultValue: "Official docs",
               })}
               href={
                 engineNavItems.find((item) => item.key === activeCli)?.docsUrl ??
