@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   STARTUP_GATE_FORCE_DISMISS_MS,
@@ -46,7 +46,24 @@ vi.mock("../../startup-orchestration/utils/startupOrchestrator", () => ({
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string) =>
+      ({
+        "runtimeNotice.startupTimeline.operations.i18n.title": "加载语言资源",
+        "runtimeNotice.startupTimeline.operations.i18n.description":
+          "加载当前语言的界面文案。",
+        "runtimeNotice.startupTimeline.operations.workspace-catalog.title":
+          "获取工作区",
+        "runtimeNotice.startupTimeline.operations.workspace-catalog.description":
+          "读取工作区清单、项目名称与路径。",
+        "runtimeNotice.startupTimeline.operations.interface-resources.title":
+          "挂载客户端界面",
+        "runtimeNotice.startupTimeline.operations.interface-resources.description":
+          "准备界面资源并挂载客户端外壳。",
+        "runtimeNotice.bootstrap.mountShell": "正在挂载客户端界面...",
+        "runtimeNotice.startupTimeline.status.started": "进行中",
+        "runtimeNotice.startupTimeline.status.completed": "完成",
+        "runtimeNotice.startupTimeline.globalProject": "全局",
+      })[key] ?? key,
   }),
 }));
 
@@ -63,6 +80,8 @@ describe("StartupGateOverlay", () => {
   });
 
   afterEach(() => {
+    // 先卸载订阅者，再清空全局 notice；避免 teardown 触发组件异步更新。
+    cleanup();
     vi.useRealTimers();
     resetStartupTraceForTests();
     resetStartupForceEnterForTests();
@@ -76,8 +95,8 @@ describe("StartupGateOverlay", () => {
     expect(screen.getByTestId("startup-gate-overlay")).toBeTruthy();
     expect(screen.queryByTestId("startup-gate-force-dismiss")).toBeNull();
     expect(screen.getByTestId("startup-gate-module-panel")).toBeTruthy();
-    // 诊断双栏默认折叠
-    expect(screen.queryByTestId("startup-gate-trace-list")).toBeNull();
+    // 诊断时间轴默认折叠
+    expect(screen.queryByTestId("startup-gate-timeline")).toBeNull();
     expect(
       screen.getByTestId("startup-gate-module-panel-toggle").getAttribute("aria-expanded"),
     ).toBe("false");
@@ -125,7 +144,7 @@ describe("StartupGateOverlay", () => {
     expect(screen.queryByTestId("startup-gate-overlay")).toBeNull();
   });
 
-  it("renders startupTrace task rows and runtimeNotice text when panel expanded", async () => {
+  it("renders the semantic startup/runtime timeline when panel expanded", async () => {
     render(<StartupGateOverlay />);
 
     await act(async () => {
@@ -161,20 +180,24 @@ describe("StartupGateOverlay", () => {
     });
 
     // 默认折叠：列表与复制按钮均未挂载
-    expect(screen.queryByTestId("startup-gate-trace-list")).toBeNull();
+    expect(screen.queryByTestId("startup-gate-timeline")).toBeNull();
     expect(screen.queryByTestId("startup-gate-copy-diagnostic")).toBeNull();
 
     await act(async () => {
       screen.getByTestId("startup-gate-module-panel-toggle").click();
     });
 
-    const traceList = screen.getByTestId("startup-gate-trace-list");
-    expect(traceList.textContent).toContain("i18n");
-    expect(traceList.textContent).toContain("bootstrap:i18n");
-    expect(traceList.textContent).toContain("completed");
+    const timeline = screen.getByTestId("startup-gate-timeline");
+    expect(timeline.textContent).toContain("加载语言资源");
+    expect(timeline.textContent).toContain("完成");
+    expect(timeline.textContent).toContain("挂载客户端界面");
+    expect(screen.queryByTestId("startup-gate-trace-list")).toBeNull();
+    expect(screen.queryByTestId("startup-gate-notice-list")).toBeNull();
 
-    const noticeList = screen.getByTestId("startup-gate-notice-list");
-    expect(noticeList.textContent).toContain("runtimeNotice.bootstrap.mountShell");
+    const i18nNode = screen
+      .getAllByTestId("startup-timeline-node")
+      .find((node) => node.getAttribute("data-operation") === "i18n");
+    expect(i18nNode).toBeTruthy();
     expect(screen.getByTestId("startup-gate-copy-diagnostic")).toBeTruthy();
   });
 

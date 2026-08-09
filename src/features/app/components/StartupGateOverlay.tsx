@@ -5,7 +5,6 @@ import {
   getStartupTraceSnapshot,
   subscribeStartupTrace,
   type StartupTraceEvent,
-  type StartupTaskLifecycleState,
 } from "../../startup-orchestration/utils/startupTrace";
 import {
   getGlobalRuntimeNoticesSnapshot,
@@ -17,6 +16,9 @@ import { markStartupForceEnter } from "../../startup-orchestration/utils/startup
 import { getFullCatalogAutoRetryBlockedSnapshot } from "../../startup-orchestration/utils/fullCatalogAutoRetry";
 import { getStartupGateReadyReason } from "../../startup-orchestration/utils/startupGateReady";
 import { isStartupGatePlatform } from "../../../utils/platform";
+import { loadSidebarSnapshot } from "../../threads/utils/sidebarSnapshot";
+import type { WorkspaceInfo } from "../../../types";
+import { StartupDiagnosticsTimeline } from "./StartupDiagnosticsTimeline";
 
 /**
  * Force-enter / max-visible unmask:
@@ -84,16 +86,6 @@ export const __startupGateAutoCloseRestore = {
   maxVisibleMs: STARTUP_GATE_MAX_VISIBLE_MS,
   forceDismissMs: STARTUP_GATE_FORCE_DISMISS_MS,
 } as const;
-
-function formatDurationMs(durationMs: number | null | undefined): string {
-  if (durationMs == null || !Number.isFinite(durationMs)) {
-    return "—";
-  }
-  if (durationMs < 10) {
-    return `${durationMs.toFixed(1)}ms`;
-  }
-  return `${Math.round(durationMs)}ms`;
-}
 
 function formatElapsedMs(elapsedMs: number): string {
   const seconds = elapsedMs / 1000;
@@ -288,55 +280,6 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
-function formatWorkspaceScope(
-  scope: Extract<StartupTraceEvent, { type: "task" }>["workspaceScope"],
-): string {
-  if (scope === "global") {
-    return "global";
-  }
-  return `ws:${scope.workspaceId.slice(0, 8)}`;
-}
-
-function lifecycleGlyph(state: StartupTaskLifecycleState): string {
-  switch (state) {
-    case "queued":
-      return "○";
-    case "started":
-      return "●";
-    case "completed":
-      return "✓";
-    case "failed":
-      return "✗";
-    case "timed-out":
-      return "⏱";
-    case "cancelled":
-      return "⊘";
-    case "degraded":
-      return "⚠";
-    default:
-      return "·";
-  }
-}
-
-function lifecycleToneClass(state: StartupTaskLifecycleState): string {
-  switch (state) {
-    case "started":
-    case "queued":
-      return "text-sky-300";
-    case "completed":
-      return "text-emerald-400";
-    case "failed":
-    case "timed-out":
-      return "text-rose-400";
-    case "cancelled":
-      return "text-amber-400/80";
-    case "degraded":
-      return "text-amber-300";
-    default:
-      return "text-muted-foreground";
-  }
-}
-
 function useRuntimeNoticesSnapshot(): readonly GlobalRuntimeNotice[] {
   const [notices, setNotices] = useState<readonly GlobalRuntimeNotice[]>(() =>
     getGlobalRuntimeNoticesSnapshot(),
@@ -351,120 +294,13 @@ function useRuntimeNoticesSnapshot(): readonly GlobalRuntimeNotice[] {
   return notices;
 }
 
-type TraceRow =
-  | {
-      key: string;
-      kind: "task";
-      sequence: number;
-      label: string;
-      detail: string;
-      state: StartupTaskLifecycleState;
-      durationMs: number | null;
-    }
-  | {
-      key: string;
-      kind: "milestone";
-      sequence: number;
-      label: string;
-      detail: string;
-    }
-  | {
-      key: string;
-      kind: "command";
-      sequence: number;
-      label: string;
-      detail: string;
-      status: "completed" | "failed";
-      durationMs: number;
-    }
-  | {
-      key: string;
-      kind: "notice";
-      sequence: number;
-      label: string;
-      detail: string;
-      severity: GlobalRuntimeNotice["severity"];
-    };
-
-function buildTraceRows(events: readonly StartupTraceEvent[]): TraceRow[] {
-  const rows: TraceRow[] = [];
-  for (const event of events) {
-    if (event.type === "task") {
-      rows.push({
-        key: `task-${event.sequence}`,
-        kind: "task",
-        sequence: event.sequence,
-        label: event.traceLabel || event.taskId,
-        detail: [
-          event.taskId,
-          event.lifecycleState,
-          event.phase,
-          formatWorkspaceScope(event.workspaceScope),
-          event.commandLabel ? `cmd:${event.commandLabel}` : null,
-          event.fallbackReason ? `fallback:${event.fallbackReason}` : null,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-        state: event.lifecycleState,
-        durationMs: event.durationMs,
-      });
-      continue;
-    }
-    if (event.type === "milestone") {
-      rows.push({
-        key: `milestone-${event.sequence}`,
-        kind: "milestone",
-        sequence: event.sequence,
-        label: `milestone:${event.milestone}`,
-        detail: `tasks-so-far:${event.taskSequences.length}`,
-      });
-      continue;
-    }
-    rows.push({
-      key: `command-${event.sequence}`,
-      kind: "command",
-      sequence: event.sequence,
-      label: `cmd:${event.commandLabel}`,
-      detail: [
-        event.status,
-        formatWorkspaceScope(event.workspaceScope),
-      ].join(" · "),
-      status: event.status,
-      durationMs: event.durationMs,
-    });
+function loadStartupTimelineWorkspaces(): readonly WorkspaceInfo[] {
+  try {
+    return loadSidebarSnapshot()?.workspaces ?? [];
+  } catch (error) {
+    console.warn("[startupGate] sidebar workspace snapshot unavailable", error);
+    return [];
   }
-  return rows;
-}
-
-type NoticeTraceRow = Extract<TraceRow, { kind: "notice" }>;
-
-function buildNoticeRows(
-  notices: readonly GlobalRuntimeNotice[],
-  t: (key: string, params?: Record<string, unknown>) => string,
-): NoticeTraceRow[] {
-  return notices.map((notice, index) => {
-    let resolved = notice.messageKey;
-    try {
-      resolved = t(notice.messageKey, notice.messageParams as Record<string, unknown> | undefined);
-    } catch {
-      // i18n 未就绪时回退 messageKey，保证冷启早期仍可见。
-    }
-    return {
-      key: `notice-${notice.id}`,
-      kind: "notice" as const,
-      sequence: index + 1,
-      label: resolved,
-      detail: [
-        notice.category,
-        notice.severity,
-        notice.repeatCount > 1 ? `×${notice.repeatCount}` : null,
-        notice.messageKey,
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      severity: notice.severity,
-    };
-  });
 }
 
 /**
@@ -485,21 +321,12 @@ export function StartupGateOverlay() {
   const [showForceDismiss, setShowForceDismiss] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [copyState, setCopyState] = useState<"idle" | "ok" | "fail">("idle");
-  /** 诊断双栏默认折叠，避免冷启遮罩占满屏；需要时再展开。 */
+  /** 诊断时间轴默认折叠，避免冷启遮罩占满屏；需要时再展开。 */
   const [modulePanelExpanded, setModulePanelExpanded] = useState(false);
-  const listEndRef = useRef<HTMLDivElement | null>(null);
+  const [timelineWorkspaces] = useState(loadStartupTimelineWorkspaces);
 
   const traceSnapshot = useStartupTraceSnapshot();
   const runtimeNotices = useRuntimeNoticesSnapshot();
-
-  const traceRows = useMemo(
-    () => buildTraceRows(traceSnapshot.events),
-    [traceSnapshot.events],
-  );
-  const noticeRows = useMemo(
-    () => buildNoticeRows(runtimeNotices, t),
-    [runtimeNotices, t],
-  );
 
   const diagnosticDump = useMemo(
     () =>
@@ -527,8 +354,6 @@ export function StartupGateOverlay() {
       traceSnapshot.milestones,
       runtimeNotices,
       t,
-      // recompute when trace/milestones change (gate reason lives outside React)
-      traceSnapshot.milestones["startup-gate-ready"],
     ],
   );
 
@@ -540,7 +365,7 @@ export function StartupGateOverlay() {
     }, 2_000);
   };
 
-  // 合并时间线：notice 没有 sequence 对齐，分栏展示更清晰
+  // 顶部摘要继续基于 raw facts，避免被时间轴聚合后的节点数误导。
   const taskStats = useMemo(() => {
     const latestByTaskId = new Map<string, Extract<StartupTraceEvent, { type: "task" }>>();
     for (const event of traceSnapshot.events) {
@@ -614,14 +439,6 @@ export function StartupGateOverlay() {
     };
   }, [enabled, open]);
 
-  // 展开时新事件滚到底，方便盯最新加载项。
-  useEffect(() => {
-    if (!open || !modulePanelExpanded) {
-      return;
-    }
-    listEndRef.current?.scrollIntoView({ block: "end" });
-  }, [open, modulePanelExpanded, traceRows.length, noticeRows.length]);
-
   if (!enabled || !open) {
     return null;
   }
@@ -685,150 +502,18 @@ export function StartupGateOverlay() {
           <span aria-hidden>{modulePanelExpanded ? "▼" : "▶"}</span>
           <span>
             {modulePanelExpanded ? "收起加载日志" : "展开加载日志"} · trace{" "}
-            {traceRows.length} · notices {noticeRows.length}
+            {traceSnapshot.events.length} · notices {runtimeNotices.length}
           </span>
         </button>
 
         {modulePanelExpanded ? (
           <>
-            <div className="flex max-h-[min(52vh,520px)] w-full shrink gap-3 overflow-hidden">
-              <section className="flex min-h-0 min-w-0 flex-1 flex-col rounded-md border border-border/60 bg-background/70 shadow-sm">
-                <header className="shrink-0 border-b border-border/50 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-                  startupTrace ({traceRows.length})
-                </header>
-                <ul
-                  className="min-h-0 flex-1 overflow-y-auto px-2 py-1.5 font-mono text-[11px] leading-relaxed"
-                  data-testid="startup-gate-trace-list"
-                >
-                  {traceRows.length === 0 ? (
-                    <li className="px-1 py-2 text-muted-foreground/70">
-                      waiting for first trace…
-                    </li>
-                  ) : (
-                    traceRows.map((row) => {
-                      if (row.kind === "task") {
-                        return (
-                          <li
-                            key={row.key}
-                            className={`border-b border-border/20 py-1 last:border-0 ${lifecycleToneClass(row.state)}`}
-                            data-startup-row="task"
-                            data-startup-state={row.state}
-                          >
-                            <div className="flex items-start gap-1.5">
-                              <span className="w-3 shrink-0 text-center" aria-hidden>
-                                {lifecycleGlyph(row.state)}
-                              </span>
-                              <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-                                  <span className="font-medium text-foreground/95">
-                                    {row.label}
-                                  </span>
-                                  <span className="shrink-0 text-muted-foreground/70">
-                                    {formatDurationMs(row.durationMs)}
-                                  </span>
-                                </div>
-                                <div className="truncate text-[10px] text-muted-foreground/75">
-                                  #{row.sequence} {row.detail}
-                                </div>
-                              </div>
-                            </div>
-                          </li>
-                        );
-                      }
-                      if (row.kind === "milestone") {
-                        return (
-                          <li
-                            key={row.key}
-                            className="border-b border-border/20 py-1 text-violet-300 last:border-0"
-                            data-startup-row="milestone"
-                          >
-                            <div className="flex items-start gap-1.5">
-                              <span className="w-3 shrink-0 text-center" aria-hidden>
-                                ◆
-                              </span>
-                              <div className="min-w-0 flex-1">
-                                <div className="font-medium text-foreground/95">
-                                  {row.label}
-                                </div>
-                                <div className="truncate text-[10px] text-muted-foreground/75">
-                                  #{row.sequence} {row.detail}
-                                </div>
-                              </div>
-                            </div>
-                          </li>
-                        );
-                      }
-                      if (row.kind !== "command") {
-                        return null;
-                      }
-                      return (
-                        <li
-                          key={row.key}
-                          className={`border-b border-border/20 py-1 last:border-0 ${
-                            row.status === "failed" ? "text-rose-400" : "text-teal-300"
-                          }`}
-                          data-startup-row="command"
-                        >
-                          <div className="flex items-start gap-1.5">
-                            <span className="w-3 shrink-0 text-center" aria-hidden>
-                              {row.status === "failed" ? "✗" : "›"}
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-                                <span className="font-medium text-foreground/95">
-                                  {row.label}
-                                </span>
-                                <span className="shrink-0 text-muted-foreground/70">
-                                  {formatDurationMs(row.durationMs)}
-                                </span>
-                              </div>
-                              <div className="truncate text-[10px] text-muted-foreground/75">
-                                #{row.sequence} {row.detail}
-                              </div>
-                            </div>
-                          </div>
-                        </li>
-                      );
-                    })
-                  )}
-                  <div ref={listEndRef} />
-                </ul>
-              </section>
-
-              <section className="flex min-h-0 min-w-0 flex-1 flex-col rounded-md border border-border/60 bg-background/70 shadow-sm">
-                <header className="shrink-0 border-b border-border/50 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-                  runtimeNotice / i18n text ({noticeRows.length})
-                </header>
-                <ul
-                  className="min-h-0 flex-1 overflow-y-auto px-2 py-1.5 font-mono text-[11px] leading-relaxed"
-                  data-testid="startup-gate-notice-list"
-                >
-                  {noticeRows.length === 0 ? (
-                    <li className="px-1 py-2 text-muted-foreground/70">
-                      waiting for notices…
-                    </li>
-                  ) : (
-                    noticeRows.map((row) => (
-                      <li
-                        key={row.key}
-                        className={`border-b border-border/20 py-1 last:border-0 ${
-                          row.severity === "error"
-                            ? "text-rose-400"
-                            : row.severity === "warning"
-                              ? "text-amber-300"
-                              : "text-slate-300"
-                        }`}
-                        data-startup-row="notice"
-                      >
-                        <div className="font-medium text-foreground/95">{row.label}</div>
-                        <div className="truncate text-[10px] text-muted-foreground/75">
-                          {row.detail}
-                        </div>
-                      </li>
-                    ))
-                  )}
-                </ul>
-              </section>
+            <div className="flex max-h-[min(52vh,520px)] min-h-0 w-full shrink overflow-hidden">
+              <StartupDiagnosticsTimeline
+                events={traceSnapshot.events}
+                notices={runtimeNotices}
+                workspaces={timelineWorkspaces}
+              />
             </div>
 
             <div className="flex shrink-0 justify-center">
