@@ -18,11 +18,14 @@ vi.mock("react-i18next", () => ({
       const labels: Record<string, string> = {
         "settings.vendor.customPathTitle": `Custom path for ${options?.engine ?? ""}`,
         "settings.vendor.customPathDescription":
-          "Configure the executable used by this CLI.",
+          "Configure the executable path for this CLI.",
+        "settings.vendor.customPathDescriptionHint":
+          "Leave empty to resolve via system PATH.",
         "settings.vendor.customPath": "Custom path",
         "settings.vendor.whatIsThis": "What does this do?",
         "settings.vendor.configurePath": "Configure path",
-        "settings.vendor.customPathUsingSystemPath": "Using system PATH",
+        "settings.vendor.customPathUsingSystemPath":
+          "Currently using: system PATH",
         "settings.vendor.customPathNoArgs": "No extra args",
         "settings.vendor.customPathSourceLabel": "Executable source",
         "settings.vendor.customPathModeSystem": "System PATH",
@@ -224,8 +227,8 @@ describe("CliCustomPathEntry", () => {
       />,
     );
 
-    expect(screen.getByText("Custom path")).not.toBeNull();
-    expect(screen.getByText("Using system PATH")).not.toBeNull();
+    expect(screen.getByText("Custom path for Claude Code CLI")).not.toBeNull();
+    expect(screen.getByText("Currently using: system PATH")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Configure path" }));
     expect(onConfigure).toHaveBeenCalled();
   });
@@ -241,7 +244,7 @@ describe("CliCustomPathEntry", () => {
       />,
     );
 
-    expect(screen.getByText("Custom path")).not.toBeNull();
+    expect(screen.getByText("Custom path for Codex CLI")).not.toBeNull();
     expect(
       screen.getByText("/bin/codex · --profile personal"),
     ).not.toBeNull();
@@ -255,24 +258,30 @@ describe("CliCustomPathEntry", () => {
         showArgsSummary
         helpContent={
           <div>
-            <p>Configure the executable used by this CLI.</p>
-            <p>Using system PATH · No extra args</p>
+            <p>Configure the executable path for this CLI.</p>
+            <p>Leave empty to resolve via system PATH.</p>
+            <p>Currently using: system PATH · No extra args</p>
           </div>
         }
         onConfigure={vi.fn()}
       />,
     );
 
-    expect(screen.getByText("Custom path")).not.toBeNull();
-    expect(screen.queryByText("Using system PATH · No extra args")).toBeNull();
+    expect(screen.getByText("Custom path for Codex CLI")).not.toBeNull();
+    expect(
+      screen.queryByText("Currently using: system PATH · No extra args"),
+    ).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "What does this do?" }));
 
     expect(
-      await screen.findByText("Using system PATH · No extra args"),
+      await screen.findByText("Currently using: system PATH · No extra args"),
     ).not.toBeNull();
     expect(
-      screen.getByText("Configure the executable used by this CLI."),
+      screen.getByText("Configure the executable path for this CLI."),
+    ).not.toBeNull();
+    expect(
+      screen.getByText("Leave empty to resolve via system PATH."),
     ).not.toBeNull();
   });
 });

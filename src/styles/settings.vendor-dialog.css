@@ -694,7 +694,7 @@
   flex-shrink: 0;
 }
 
-/* Text action for cancel / revoke — neutral by default, warm on hover */
+/* Text action for cancel / revoke — stay neutral; no warm accent background */
 .vendor-official-text-btn {
   appearance: none;
   border: 0;
@@ -712,20 +712,10 @@
     color 0.12s ease;
 }
 
-.vendor-official-text-btn:hover {
+.vendor-official-text-btn:hover,
+.vendor-official-text-btn-danger:hover {
   background: color-mix(in srgb, var(--surface-hover) 80%, transparent);
   color: var(--text-primary);
-}
-
-.vendor-official-text-btn-danger:hover {
-  color: #b45309;
-  background: color-mix(in srgb, #fff7ed 90%, transparent);
-}
-
-:root[data-theme="dark"] .vendor-official-text-btn-danger:hover,
-html.dark .vendor-official-text-btn-danger:hover {
-  color: #fdba74;
-  background: color-mix(in srgb, #9a3412 18%, transparent);
 }
 
 .vendor-official-use-btn {

@@ -365,17 +365,6 @@ export function VendorSettingsPanel({
     setModelDialogOpen(true);
   }, []);
 
-  const pluginModelsHelp = (
-    <div className="vendor-settings-row-help-stack">
-      <p>
-        {t("settings.vendor.pluginModelsDesc", {
-          defaultValue:
-            "Manage custom models available to this CLI in the model picker.",
-        })}
-      </p>
-    </div>
-  );
-
   const renderPluginModelsEntry = (
     target: ModelDialogTarget,
     count: number,
@@ -394,7 +383,11 @@ export function VendorSettingsPanel({
       <div className="vendor-group-row-copy">
         <span className="vendor-group-row-title">
           {t("settings.vendor.pluginModels")}
-          <SettingsRowHelp>{pluginModelsHelp}</SettingsRowHelp>
+          <span className="settings-help vendor-group-row-title-hint">
+            {t("settings.vendor.pluginModelsDesc", {
+              defaultValue: "Add custom models for this CLI",
+            })}
+          </span>
         </span>
       </div>
       <div className="vendor-group-row-trailing">
@@ -501,6 +494,7 @@ export function VendorSettingsPanel({
         helpContent={
           <div className="vendor-settings-row-help-stack">
             <p>{t("settings.vendor.customPathDescription")}</p>
+            <p>{t("settings.vendor.customPathDescriptionHint")}</p>
             <p>{statusSummary}</p>
           </div>
         }

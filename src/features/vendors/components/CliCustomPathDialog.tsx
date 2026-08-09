@@ -336,7 +336,7 @@ type CliCustomPathEntryProps = {
 };
 
 export function CliCustomPathEntry({
-  engine: _engine,
+  engine,
   path,
   args = null,
   showArgsSummary = false,
@@ -344,7 +344,7 @@ export function CliCustomPathEntry({
   onConfigure,
 }: CliCustomPathEntryProps) {
   const { t } = useTranslation();
-  void _engine;
+  const meta = CLI_CUSTOM_PATH_ENGINE_META[engine];
   const pathSummary = path?.trim()
     ? path.trim()
     : t("settings.vendor.customPathUsingSystemPath");
@@ -376,7 +376,9 @@ export function CliCustomPathEntry({
     >
       <div className="vendor-group-row-copy">
         <span className="vendor-group-row-title">
-          {t("settings.vendor.customPath")}
+          {t("settings.vendor.customPathTitle", {
+            engine: meta.displayName,
+          })}
           {helpContent ? <SettingsRowHelp>{helpContent}</SettingsRowHelp> : null}
         </span>
         {showInlineSummary ? (
