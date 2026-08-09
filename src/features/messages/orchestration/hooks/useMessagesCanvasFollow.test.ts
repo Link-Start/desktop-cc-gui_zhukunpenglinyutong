@@ -40,6 +40,18 @@ function createScrollableContainer() {
       scrollTopValue = Math.min(Math.max(0, value), maxScrollTop);
     },
   });
+  // jsdom 无原生 scrollTo；立即 clamp 落位，供 smooth 路径断言 options。
+  container.scrollTo = ((options?: ScrollToOptions | number) => {
+    if (typeof options === "number") {
+      const maxScrollTop = Math.max(0, scrollHeightValue - clientHeightValue);
+      scrollTopValue = Math.min(Math.max(0, options), maxScrollTop);
+      return;
+    }
+    if (options && typeof options.top === "number") {
+      const maxScrollTop = Math.max(0, scrollHeightValue - clientHeightValue);
+      scrollTopValue = Math.min(Math.max(0, options.top), maxScrollTop);
+    }
+  }) as typeof container.scrollTo;
 
   const timeline = document.createElement("div");
   timeline.className = "messages-timeline-root";
@@ -214,6 +226,92 @@ describe("useMessagesCanvasFollow (jetbrains P0)", () => {
     expect(result.current.userPausedRef.current).toBe(false);
     expect(result.current.isUserAtBottomRef.current).toBe(true);
     expect(getScrollTop()).toBe(600);
+  });
+
+  it("smooth-pins to bottom for user-initiated resume and re-arms follow after settle", () => {
+    vi.useFakeTimers();
+    const { container, getScrollTop, setScrollTop } = createScrollableContainer();
+    const scrollToSpy = vi.spyOn(container, "scrollTo");
+    const { result, rerender } = mountFollow({
+      followSignal: "s0",
+      isThinking: false,
+      renderScopeKey: "scope-0",
+    });
+
+    act(() => {
+      result.current.containerRef.current = container;
+      rerender({
+        followSignal: "s0",
+        isThinking: false,
+        renderScopeKey: "scope-1",
+      });
+    });
+
+    act(() => {
+      container.dispatchEvent(new WheelEvent("wheel", { deltaY: -40 }));
+      setScrollTop(100);
+    });
+    expect(result.current.userPausedRef.current).toBe(true);
+
+    act(() => {
+      result.current.resumeFollowAndSmoothPin();
+    });
+
+    expect(result.current.userPausedRef.current).toBe(false);
+    expect(result.current.isUserAtBottomRef.current).toBe(true);
+    expect(scrollToSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ top: 600, behavior: "smooth" }),
+    );
+    // mock scrollTo 立即落位到 600；finish 硬钉同样是 600
+    expect(getScrollTop()).toBe(600);
+
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(getScrollTop()).toBe(600);
+    expect(result.current.userPausedRef.current).toBe(false);
+    expect(result.current.isUserAtBottomRef.current).toBe(true);
+
+    vi.useRealTimers();
+  });
+
+  it("does not let ResizeObserver hard-pin interrupt an in-flight smooth pin", () => {
+    vi.useFakeTimers();
+    const { container, getScrollTop, setScrollTop, setScrollHeight } =
+      createScrollableContainer();
+    // 不立即改 scrollTop，便于观察 RO 是否中途硬钉。
+    container.scrollTo = vi.fn() as unknown as typeof container.scrollTo;
+    const { result, rerender } = mountFollow();
+
+    act(() => {
+      result.current.containerRef.current = container;
+      rerender({
+        followSignal: "s0",
+        isThinking: true,
+        renderScopeKey: "scope-1",
+      });
+    });
+
+    act(() => {
+      setScrollTop(100);
+      result.current.resumeFollowAndSmoothPin();
+    });
+
+    const topBeforeRo = getScrollTop();
+    act(() => {
+      setScrollHeight(1400);
+      resizeObserverCallback?.([], {} as ResizeObserver);
+    });
+    // smooth 动画罩期间 RO 不得瞬时写底
+    expect(getScrollTop()).toBe(topBeforeRo);
+
+    act(() => {
+      vi.runAllTimers();
+    });
+    // finish 硬钉后回到新底 1000
+    expect(getScrollTop()).toBe(1000);
+
+    vi.useRealTimers();
   });
 
   it("releases follow when user moves scrollTop up (real leave)", () => {

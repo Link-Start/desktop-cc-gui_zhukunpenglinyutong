@@ -14,6 +14,7 @@ import {
   getFileName,
 } from './toolConstants';
 import { ExploreInlineItemRow, ExploreInlineToolGroup } from './ExploreInlineToolGroup';
+import { ToolFileTypeIcon } from './ToolFileTypeIcon';
 
 type ToolItem = Extract<ConversationItem, { kind: 'tool' }>;
 
@@ -112,7 +113,7 @@ export const ReadToolGroupBlock = memo(function ReadToolGroupBlock({
 
   if (parsed.length === 0) return null;
 
-  const title = `${t('tools.batchReadFile')} (${parsed.length})`;
+  const title = t('tools.batchReadFile', { count: parsed.length });
 
   return (
     <ExploreInlineToolGroup
@@ -122,7 +123,16 @@ export const ReadToolGroupBlock = memo(function ReadToolGroupBlock({
       {parsed.map((entry) => (
         <ExploreInlineItemRow
           key={entry.id}
-          kind={entry.isDirectory ? 'List' : 'Read'}
+          kind={entry.isDirectory ? t('tools.kindList') : t('tools.kindRead')}
+          icon={
+            entry.filePath ? (
+              <ToolFileTypeIcon
+                filePath={entry.filePath}
+                isFolder={entry.isDirectory}
+                size={14}
+              />
+            ) : undefined
+          }
           label={entry.fileName || entry.filePath || '...'}
           detail={entry.lineInfo || undefined}
           title={entry.filePath}

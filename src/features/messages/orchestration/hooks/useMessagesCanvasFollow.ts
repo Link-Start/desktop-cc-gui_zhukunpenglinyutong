@@ -60,6 +60,9 @@ export function useMessagesCanvasFollow({
   const wheelRafRef = useRef<number | null>(null);
   const scrollRafRef = useRef<number | null>(null);
   const autoScrollClearRafRef = useRef<number | null>(null);
+  /** 用户主动「回底」smooth 动画代数；递增可取消未完成的 finish 回调。 */
+  const smoothPinTokenRef = useRef(0);
+  const smoothPinTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 假离底保护：区分「用户上滚」与「MD/工具高度暴涨」。
   const lastScrollTopRef = useRef(0);
   const lastScrollHeightRef = useRef(0);
@@ -150,6 +153,10 @@ export function useMessagesCanvasFollow({
     if (!liveAutoFollowEnabledRef.current) {
       return;
     }
+    // smooth 回底动画期间不要瞬时改写 scrollTop，否则会掐掉过渡。
+    if (isAutoScrollingRef.current) {
+      return;
+    }
     if (userPausedRef.current || !isUserAtBottomRef.current) {
       return;
     }
@@ -161,7 +168,8 @@ export function useMessagesCanvasFollow({
       if (
         !liveAutoFollowEnabledRef.current ||
         userPausedRef.current ||
-        !isUserAtBottomRef.current
+        !isUserAtBottomRef.current ||
+        isAutoScrollingRef.current
       ) {
         return;
       }
@@ -169,7 +177,17 @@ export function useMessagesCanvasFollow({
     });
   }, [liveAutoFollowEnabledRef, scrollToBottom]);
 
+  const clearSmoothPinTimer = useCallback(() => {
+    if (smoothPinTimeoutRef.current !== null) {
+      clearTimeout(smoothPinTimeoutRef.current);
+      smoothPinTimeoutRef.current = null;
+    }
+  }, []);
+
   const resumeFollowAndPin = useCallback(() => {
+    // 发送 / history-open 等强制瞬时钉底：取消进行中的 smooth，避免打架。
+    smoothPinTokenRef.current += 1;
+    clearSmoothPinTimer();
     userPausedRef.current = false;
     isUserAtBottomRef.current = true;
     scrollToBottom();
@@ -179,7 +197,65 @@ export function useMessagesCanvasFollow({
       }
     });
     syncScrollAnchoring();
-  }, [scrollToBottom, syncScrollAnchoring]);
+  }, [clearSmoothPinTimer, scrollToBottom, syncScrollAnchoring]);
+
+  /**
+   * 用户主动「回到底部」：与回顶对称的 smooth 动画，结束后再硬钉一次
+   * 以吃掉动画途中内容长高。send / turn-settle 仍走 resumeFollowAndPin 瞬时通道。
+   */
+  const resumeFollowAndSmoothPin = useCallback(() => {
+    const container = containerRef.current;
+    userPausedRef.current = false;
+    isUserAtBottomRef.current = true;
+    syncScrollAnchoring();
+
+    if (!container) {
+      return;
+    }
+
+    container.classList.remove(SCROLL_ANCHOR_ENABLED_CLASS);
+
+    const maxTop = Math.max(0, container.scrollHeight - container.clientHeight);
+    const distance = maxTop - container.scrollTop;
+    // 已在底附近：无动画空间，直接瞬时钉（与 resumeFollowAndPin 一致）。
+    if (distance <= 4) {
+      scrollToBottom();
+      return;
+    }
+
+    clearSmoothPinTimer();
+    const token = ++smoothPinTokenRef.current;
+
+    // 罩住整段 smooth，避免 scroll 回声 / RO 中途瞬时 pin 掐动画。
+    isAutoScrollingRef.current = true;
+    if (autoScrollClearRafRef.current !== null) {
+      cancelAnimationFrame(autoScrollClearRafRef.current);
+      autoScrollClearRafRef.current = null;
+    }
+
+    container.scrollTo({ top: maxTop, behavior: "smooth" });
+
+    let settled = false;
+    const finish = () => {
+      if (settled || token !== smoothPinTokenRef.current) {
+        return;
+      }
+      settled = true;
+      clearSmoothPinTimer();
+      container.removeEventListener("scrollend", finish);
+      if (userPausedRef.current) {
+        isAutoScrollingRef.current = false;
+        return;
+      }
+      // 终态硬钉：对齐动画途中可能的高度增长，并打开 continuous stick。
+      scrollToBottom();
+    };
+
+    container.addEventListener("scrollend", finish, { once: true });
+    // scrollend 在部分环境不可用（旧 WebKit / jsdom）；按距离给兜底超时。
+    const timeoutMs = Math.min(1000, Math.max(350, Math.round(distance * 0.55)));
+    smoothPinTimeoutRef.current = setTimeout(finish, timeoutMs);
+  }, [clearSmoothPinTimer, scrollToBottom, syncScrollAnchoring]);
 
   const settleFollow = useCallback(() => {
     if (userPausedRef.current) {
@@ -206,6 +282,11 @@ export function useMessagesCanvasFollow({
     if (autoScrollClearRafRef.current !== null) {
       cancelAnimationFrame(autoScrollClearRafRef.current);
       autoScrollClearRafRef.current = null;
+    }
+    smoothPinTokenRef.current += 1;
+    if (smoothPinTimeoutRef.current !== null) {
+      clearTimeout(smoothPinTimeoutRef.current);
+      smoothPinTimeoutRef.current = null;
     }
   }, [hasPendingJump, renderScopeKey]);
 
@@ -359,6 +440,11 @@ export function useMessagesCanvasFollow({
         cancelAnimationFrame(autoScrollClearRafRef.current);
         autoScrollClearRafRef.current = null;
       }
+      smoothPinTokenRef.current += 1;
+      if (smoothPinTimeoutRef.current !== null) {
+        clearTimeout(smoothPinTimeoutRef.current);
+        smoothPinTimeoutRef.current = null;
+      }
     };
   }, [
     liveAutoFollowEnabledRef,
@@ -382,6 +468,7 @@ export function useMessagesCanvasFollow({
     pauseFollow,
     pinIfFollowing,
     resumeFollowAndPin,
+    resumeFollowAndSmoothPin,
     scrollToBottom,
     settleFollow,
     userPausedRef,

@@ -379,7 +379,7 @@ describe("Messages live behavior", () => {
       {
         id: "tool-claude-read-old",
         kind: "tool",
-        title: "批量读取文件 (2)",
+        title: "批量读取2个文件",
         detail: "package.json pyproject.toml",
         toolType: "read",
         output: "",
@@ -388,7 +388,7 @@ describe("Messages live behavior", () => {
       {
         id: "tool-claude-read-latest",
         kind: "tool",
-        title: "批量读取文件 (4)",
+        title: "批量读取4个文件",
         detail: "AGENTS.md next.config.ts README.md",
         toolType: "read",
         output: "",
@@ -417,7 +417,7 @@ describe("Messages live behavior", () => {
       "这是一个包含多个子项目的目录。让我探索一下项目结构。",
     );
     expect(container.querySelector(".working-activity")?.textContent ?? "").toContain(
-      "批量读取文件 (4)",
+      "批量读取4个文件",
     );
   });
 
@@ -530,7 +530,9 @@ describe("Messages live behavior", () => {
       container.querySelector('[aria-expanded="false"]') ??
       Array.from(container.querySelectorAll("button, [role='button']")).find(
         (node) =>
+          (node.textContent ?? "").includes("批量修改") ||
           (node.textContent ?? "").includes("文件修改") ||
+          (node.textContent ?? "").includes("Batch edit") ||
           (node.textContent ?? "").includes("File changes") ||
           (node.textContent ?? "").includes("fileEditSceneCount"),
       );

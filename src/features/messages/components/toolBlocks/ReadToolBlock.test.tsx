@@ -56,4 +56,21 @@ describe("ReadToolBlock", () => {
     expect(screen.getByText(/const value = 1;/)).toBeTruthy();
     expect(screen.getByText(/console\.log\(value\);/)).toBeTruthy();
   });
+
+  it("shows a file-type icon for the read path", () => {
+    const item = createReadItem("tool-read-icon", { file_path: "src/main.ts" }, "ok");
+    const view = render(<ReadToolBlock item={item} isExpanded={false} onToggle={() => {}} />);
+    expect(view.container.querySelector(".tool-marker-file-type-icon")).toBeTruthy();
+    expect(screen.getByText("main.ts")).toBeTruthy();
+  });
+
+  it("shows monochrome action icon + kind label aligned with batch-read / search rows", () => {
+    const item = createReadItem("tool-read-kind", { file_path: "src/main.ts" }, "ok");
+    const view = render(<ReadToolBlock item={item} isExpanded={false} onToggle={() => {}} />);
+    expect(screen.getByText(/tools\.kindRead|Read|读取/)).toBeTruthy();
+    expect(view.container.querySelector(".explore-inline-kind")).toBeTruthy();
+    // 行首单色动作 icon（FileText）+ 文件名旁彩色类型 icon 并存
+    expect(view.container.querySelector('[data-slot="marker"] svg')).toBeTruthy();
+    expect(view.container.querySelector(".tool-marker-file-type-icon")).toBeTruthy();
+  });
 });

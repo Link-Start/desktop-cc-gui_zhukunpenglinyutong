@@ -2379,14 +2379,15 @@ svg.explore-inline-icon {
 }
 
 /* 内容：仅在展开时挂载；内边距负责展开态呼吸，不改外层 .explore-inline margin */
-/* 条目缩进对齐到标题文字起始处（图标 14 + gap 6） */
+/* 竖线右移到标题文字左缘（图标 14 + gap 6），与标题形成更清晰的层级分隔 */
+/* 底 margin 2px（原 6px）：展开列表底部不再比折叠 meta 行距更疏 */
 .explore-inline-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin: 2px 0 6px 0;
-  padding: 0 0 2px 20px;
-  border-left: 2px solid var(--border-subtle);
+  margin: 2px 0 2px 6px;
+  padding: 0 0 0 10px;
+  border-left: 1.5px solid var(--border-subtle);
 }
 
 .explore-inline.is-inline-summary .explore-inline-list,
@@ -2401,6 +2402,29 @@ svg.explore-inline-icon {
   gap: 6px;
   min-width: 0;
   font-size: 12px;
+}
+
+/* 带文件类型图标时垂直居中，避免彩色 badge 与文字基线错位 */
+.explore-inline-item.has-file-icon {
+  align-items: center;
+}
+
+.explore-inline-file-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.explore-inline-file-icon svg,
+/* ToolMarkerShell / Marker 前置彩色文件图标 */
+.tool-marker-file-type-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .explore-inline-kind {

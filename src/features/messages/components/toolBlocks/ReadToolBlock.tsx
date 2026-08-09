@@ -6,7 +6,6 @@
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import FileText from 'lucide-react/dist/esm/icons/file-text';
-import Folder from 'lucide-react/dist/esm/icons/folder';
 import type { ConversationItem } from '../../../../types';
 import { cn } from '@/lib/utils';
 import {
@@ -22,6 +21,7 @@ import {
   ToolStatusIcon,
   TOOL_MARKER_BODY_CLASS,
 } from './ToolMarkerShell';
+import { ToolFileTypeIcon } from './ToolFileTypeIcon';
 
 interface ReadToolBlockProps {
   item: Extract<ConversationItem, { kind: 'tool' }>;
@@ -135,13 +135,17 @@ export const ReadToolBlock = memo(function ReadToolBlock({
 
   const isDirectory = filePath?.endsWith('/') || fileName === '.' || fileName === '..';
   const actionText = isDirectory ? t("tools.readDirectory") : t("tools.readFile");
+  const kindLabel = isDirectory ? t("tools.kindList") : t("tools.kindRead");
 
   const status = resolveToolStatus(item.status, Boolean(renderedOutput));
   const hasBody = Boolean(renderedOutput);
 
+  // 行首用与「批量读取」组头同款的单色动作 icon（非彩色文件类型 icon）
+  // 彩色文件类型 icon 放在 kind 之后、文件名之前，与 ExploreInlineItemRow 同构
   return (
     <ToolMarkerShell
-      icon={isDirectory ? <Folder size={14} aria-hidden /> : <FileText size={14} aria-hidden />}
+      kind={kindLabel}
+      icon={<FileText size={14} aria-hidden />}
       label={actionText}
       labelHidden
       expanded={expanded && hasBody}
@@ -169,6 +173,15 @@ export const ReadToolBlock = memo(function ReadToolBlock({
         </div>
       }
     >
+      {filePath ? (
+        <span className="tool-marker-file-type-icon inline-flex shrink-0" aria-hidden>
+          <ToolFileTypeIcon
+            filePath={filePath}
+            isFolder={isDirectory}
+            size={14}
+          />
+        </span>
+      ) : null}
       {fileName && (
         <span className="truncate" title={filePath}>
           {fileName}

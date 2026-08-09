@@ -10,9 +10,16 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-/** 与 MessagesCore handleScrollControlRequest 同契约：瞬时落位（追底职责在 follow hook）。 */
+/** 与 MessagesCore handleScrollControlRequest 同契约：edge 上报后由 owner 落位。 */
 function applyScrollEdge(container: HTMLDivElement, edge: "top" | "bottom") {
-  container.scrollTop = edge === "bottom" ? container.scrollHeight : 0;
+  if (edge === "bottom") {
+    container.scrollTo({
+      top: Math.max(0, container.scrollHeight - container.clientHeight),
+      behavior: "smooth",
+    });
+    return;
+  }
+  container.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 /**
@@ -48,6 +55,16 @@ function makeContainer({
     },
     configurable: true,
   });
+  // jsdom 无原生 scrollTo；模拟浏览器 clamp + 立即落位（不测动画帧）。
+  container.scrollTo = ((options?: ScrollToOptions | number) => {
+    if (typeof options === "number") {
+      top = Math.max(0, Math.min(options, state.scrollHeight - clientHeight));
+      return;
+    }
+    if (options && typeof options.top === "number") {
+      top = Math.max(0, Math.min(options.top, state.scrollHeight - clientHeight));
+    }
+  }) as typeof container.scrollTo;
 
   return { container, state };
 }
@@ -95,16 +112,19 @@ describe("ScrollControl", () => {
     await waitFor(() => expect(container.scrollTop).toBe(0));
   });
 
-  // 新契约：ScrollControl 只上报 edge，落位是 owner 的瞬时写（content-visibility 已移除，
-  // 中途撑高由 follow hook 的 ResizeObserver 追底，不再依赖 smooth 动画追赶）。
-  it("jumps straight to the current bottom on click", async () => {
+  // 用户主动回底：owner 以 smooth 落位；中途撑高由 finish 后硬钉 + RO 追底。
+  it("requests smooth scroll to the current bottom on click", async () => {
     const { container } = makeContainer({ scrollTop: 300 });
+    const scrollToSpy = vi.spyOn(container, "scrollTo");
     renderScrollControl(container);
 
     fireEvent.wheel(container, { deltaY: 120 });
     const button = await screen.findByTestId("messages-scroll-control");
     fireEvent.click(button);
 
+    expect(scrollToSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ top: 1500, behavior: "smooth" }),
+    );
     // 2000 - 500 = 1500
     await waitFor(() => expect(container.scrollTop).toBe(1500));
   });

@@ -519,6 +519,7 @@ export const MessagesCore = memo(function MessagesCore({
     pauseFollow,
     pinIfFollowing,
     resumeFollowAndPin,
+    resumeFollowAndSmoothPin,
     settleFollow,
   } = useMessagesCanvasFollow({
     followSignal: canvasFollowSignal,
@@ -1316,8 +1317,8 @@ export const MessagesCore = memo(function MessagesCore({
   const handleCanvasScroll = useCallback(() => {
     scheduleAnchorUpdate("scroll");
   }, [scheduleAnchorUpdate]);
-  // ScrollControl 浮标：回底 = 清暂停锁 + 瞬时钉底（与 send 同一通道，对齐 jetbrains 追底瞬时性）；
-  // 回顶仍 smooth（用户主动导航，非 continuous follow）。
+  // ScrollControl 浮标：回顶 / 回底均为用户主动导航，对称 smooth；
+  // 回底结束后再硬钉一次并 re-arm follow。send / history-open 仍走瞬时 resumeFollowAndPin。
   const handleScrollControlRequest = useCallback(
     (edge: ConversationScrollEdge) => {
       const container = containerRef.current;
@@ -1325,14 +1326,20 @@ export const MessagesCore = memo(function MessagesCore({
         return;
       }
       if (edge === "bottom") {
-        resumeFollowAndPin();
+        clearPendingJumpMessage();
+        resumeFollowAndSmoothPin();
         return;
       }
       pauseFollow();
       clearPendingJumpMessage();
       container.scrollTo({ top: 0, behavior: "smooth" });
     },
-    [clearPendingJumpMessage, containerRef, pauseFollow, resumeFollowAndPin],
+    [
+      clearPendingJumpMessage,
+      containerRef,
+      pauseFollow,
+      resumeFollowAndSmoothPin,
+    ],
   );
   const clearTransientUiState = useCallback(() => {
     if (anchorUpdateRafRef.current !== null) {
