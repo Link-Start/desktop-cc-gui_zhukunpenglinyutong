@@ -353,3 +353,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1359: 根治冷启点击卡死
+
+**Date**: 2026-08-09
+**Task**: 根治冷启点击卡死
+**Branch**: `cxn-version-0.8.5`
+
+### Summary
+
+回滚延长 input-ready 的 S7 全局 barrier；收敛 startup diagnostic 单通道 ownership，StartupGate 改为 1Hz summary、点击冻结 snapshot、按需复制并保持 manual-only；Codex first-page 与 renderer diagnostics 使用有界工作预算。人工冷启验收通过；focused Vitest 138/138、target ESLint、typecheck、runtime contracts、OpenSpec strict validate 通过，按要求未跑全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3c3ac3f08` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
