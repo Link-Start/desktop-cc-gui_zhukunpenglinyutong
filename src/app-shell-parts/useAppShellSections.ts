@@ -645,6 +645,34 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     );
   };
 
+  /** Sidebar / settings-compatible within-group project reorder. */
+  const handleReorderWorkspaces = async (input: {
+    groupId: string | null;
+    orderedWorkspaceIds: string[];
+  }) => {
+    const { groupId, orderedWorkspaceIds } = input;
+    if (orderedWorkspaceIds.length === 0) {
+      return;
+    }
+    const targets = orderedWorkspaceIds.map((id) => workspacesById.get(id));
+    if (targets.some((entry) => !entry || (entry.kind ?? "main") === "worktree")) {
+      return;
+    }
+    const sameGroup = targets.every(
+      (entry) => (entry?.settings.groupId ?? null) === groupId,
+    );
+    if (!sameGroup) {
+      return;
+    }
+    await Promise.all(
+      orderedWorkspaceIds.map((id, idx) =>
+        updateWorkspaceSettings(id, {
+          sortOrder: idx,
+        }),
+      ),
+    );
+  };
+
   const shouldMountSpecHub = Boolean(activeWorkspace) && appMode === "chat";
   const showSpecHub = shouldMountSpecHub && activeTab === "spec";
   const rightPanelAvailable = Boolean(
@@ -1174,6 +1202,7 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     handleComposerQueueWithEditorFallback,
     taskProcessingMap,
     handleMoveWorkspace,
+    handleReorderWorkspaces,
     shouldMountSpecHub,
     showSpecHub,
     rightPanelAvailable,
