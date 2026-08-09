@@ -152,6 +152,7 @@ export function LocalOfficialConfigEditDialog({
             setError("");
           },
           ariaLabel: paneTitle ?? title,
+          format,
           showFormatJson: format === "json",
           onFormatJson: handleFormatJson,
         },

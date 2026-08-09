@@ -4,6 +4,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { openFolderInFileManager } from "../../../services/tauri";
 import { LocalOfficialConfigEditDialog } from "./LocalOfficialConfigEditDialog";
 
+vi.mock("./OfficialConfigCodeEditor", async () => {
+  const { OfficialConfigCodeEditorMock } = await import(
+    "./officialConfigCodeEditorTestMock"
+  );
+  return { OfficialConfigCodeEditor: OfficialConfigCodeEditorMock };
+});
+
 vi.mock("../../../services/tauri", async () => {
   const actual = await vi.importActual<
     typeof import("../../../services/tauri")
@@ -134,16 +141,13 @@ describe("LocalOfficialConfigEditDialog", () => {
       />,
     );
 
-    await waitFor(() => {
-      expect(readContent).toHaveBeenCalled();
-    });
+    expect(await screen.findByDisplayValue("{")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(
-        screen.getByText("settings.vendor.dialog.jsonError"),
-      ).toBeTruthy();
+      const errorNode = document.querySelector(".vendor-json-error");
+      expect(errorNode?.textContent?.trim()).toBeTruthy();
+      expect(saveContent).not.toHaveBeenCalled();
     });
-    expect(saveContent).not.toHaveBeenCalled();
   });
 });

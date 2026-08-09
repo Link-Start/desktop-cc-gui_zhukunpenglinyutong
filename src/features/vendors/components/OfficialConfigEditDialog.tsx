@@ -1,19 +1,20 @@
 /**
  * Shared shell for official CLI config editors (Claude / Codex / Kimi / Grok / OpenCode).
- * Supports one or more panes with consistent title · path · actions · textarea chrome.
+ * Supports one or more panes with consistent title · path · actions · CodeMirror chrome.
  */
 import {
   useEffect,
   useState,
-  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
 import FolderOpen from "lucide-react/dist/esm/icons/folder-open";
 import { Button } from "@/components/ui/button";
 import { openFolderInFileManager } from "../../../services/tauri";
+import { OfficialConfigCodeEditor } from "./OfficialConfigCodeEditor";
+import type { OfficialConfigEditorFormat } from "./OfficialConfigCodeEditorImpl";
 
-export type OfficialConfigEditorFormat = "toml" | "json" | "text";
+export type { OfficialConfigEditorFormat };
 
 export type OfficialConfigEditorPane = {
   id: string;
@@ -27,8 +28,10 @@ export type OfficialConfigEditorPane = {
   value: string;
   onChange: (value: string) => void;
   ariaLabel?: string;
-  /** Extra attributes on the textarea (e.g. data-codex-editor) */
+  /** Extra attributes on the editor host (e.g. data-codex-editor) */
   dataAttributes?: Record<string, string>;
+  /** Syntax mode for CodeMirror (default text) */
+  format?: OfficialConfigEditorFormat;
   /** When true, show reveal/hide sensitive control; caller supplies display value */
   sensitive?: boolean;
   sensitiveVisible?: boolean;
@@ -39,9 +42,7 @@ export type OfficialConfigEditorPane = {
   showOpenFolder?: boolean;
   readOnly?: boolean;
   disabled?: boolean;
-  rows?: number;
   headerActions?: ReactNode;
-  onKeyDown?: (event: ReactKeyboardEvent<HTMLTextAreaElement>) => void;
 };
 
 export type OfficialConfigEditDialogProps = {
@@ -57,25 +58,6 @@ export type OfficialConfigEditDialogProps = {
   /** Optional class on body for engine-specific tweaks */
   bodyClassName?: string;
 };
-
-function insertTwoSpaceTab(
-  event: ReactKeyboardEvent<HTMLTextAreaElement>,
-  onChange: (value: string) => void,
-) {
-  if (event.key !== "Tab") {
-    return false;
-  }
-  event.preventDefault();
-  const target = event.currentTarget;
-  const { selectionStart, selectionEnd, value } = target;
-  const nextValue = `${value.slice(0, selectionStart)}  ${value.slice(selectionEnd)}`;
-  onChange(nextValue);
-  requestAnimationFrame(() => {
-    const cursorPosition = selectionStart + 2;
-    target.setSelectionRange(cursorPosition, cursorPosition);
-  });
-  return true;
-}
 
 export function OfficialConfigEditDialog({
   isOpen,
@@ -163,12 +145,9 @@ export function OfficialConfigEditDialog({
             const folderTarget = (pane.openFolderPath ?? pane.pathLabel)?.trim();
             const showOpenFolder =
               Boolean(folderTarget) && pane.showOpenFolder !== false;
-            const dataProps = Object.fromEntries(
-              Object.entries(pane.dataAttributes ?? {}).map(([key, value]) => [
-                key.startsWith("data-") ? key : `data-${key}`,
-                value,
-              ]),
-            );
+            const editorFormat: OfficialConfigEditorFormat =
+              pane.format ??
+              (pane.showFormatJson ? "json" : "text");
 
             return (
               <div
@@ -253,31 +232,20 @@ export function OfficialConfigEditDialog({
                     </div>
                   ) : null}
                 </header>
-                <textarea
+                <OfficialConfigCodeEditor
                   className="vendor-json-editor vendor-official-json-editor"
-                  aria-label={pane.ariaLabel ?? pane.title}
+                  format={editorFormat}
+                  ariaLabel={pane.ariaLabel ?? pane.title}
                   value={displayValue}
-                  onChange={(event) => {
+                  onChange={(next) => {
                     if (pane.readOnly) {
                       return;
                     }
-                    pane.onChange(event.target.value);
+                    pane.onChange(next);
                   }}
-                  onKeyDown={(event) => {
-                    if (pane.onKeyDown) {
-                      pane.onKeyDown(event);
-                      return;
-                    }
-                    if (pane.readOnly || disabled) {
-                      return;
-                    }
-                    insertTwoSpaceTab(event, pane.onChange);
-                  }}
-                  rows={pane.rows ?? (multiPane ? 10 : 18)}
                   readOnly={pane.readOnly}
                   disabled={disabled}
-                  spellCheck={false}
-                  {...dataProps}
+                  dataAttributes={pane.dataAttributes}
                 />
               </div>
             );

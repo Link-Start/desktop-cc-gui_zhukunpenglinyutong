@@ -436,7 +436,10 @@
 }
 
 .vendor-official-config-dialog-body .vendor-official-config-pane {
+  display: flex;
   min-width: 0;
+  min-height: 0;
+  flex-direction: column;
   gap: 10px;
   padding: 12px;
   border: 1px solid var(--border-muted);
@@ -518,12 +521,22 @@
   gap: 5px;
 }
 
-.vendor-official-config-dialog-body .vendor-official-json-editor {
+/*
+ * CodeMirror needs a *fixed* height box to enable .cm-scroller overflow.
+ * min-height alone lets the editor grow with content → wheel does nothing.
+ */
+.vendor-official-config-dialog-body .vendor-official-json-editor,
+.vendor-official-config-dialog-body .vendor-official-code-editor {
+  height: clamp(280px, 48vh, 560px);
   min-height: clamp(280px, 48vh, 560px);
+  max-height: clamp(280px, 48vh, 560px);
 }
 
-.vendor-official-config-dialog-body.is-single-pane .vendor-official-json-editor {
+.vendor-official-config-dialog-body.is-single-pane .vendor-official-json-editor,
+.vendor-official-config-dialog-body.is-single-pane .vendor-official-code-editor {
+  height: clamp(320px, 52vh, 640px);
   min-height: clamp(320px, 52vh, 640px);
+  max-height: clamp(320px, 52vh, 640px);
 }
 
 .vendor-official-config-dialog-body > .vendor-json-error {
@@ -590,8 +603,11 @@
   gap: 6px;
 }
 
-.vendor-codex-official-dialog-body .vendor-official-json-editor {
+.vendor-codex-official-dialog-body .vendor-official-json-editor,
+.vendor-codex-official-dialog-body .vendor-official-code-editor {
+  height: clamp(280px, 48vh, 560px);
   min-height: clamp(280px, 48vh, 560px);
+  max-height: clamp(280px, 48vh, 560px);
 }
 
 .vendor-codex-official-dialog-body > .vendor-json-error {
@@ -687,10 +703,13 @@
   box-sizing: border-box;
 }
 
-.vendor-official-json-editor {
+.vendor-official-json-editor,
+.vendor-official-code-editor {
+  height: min(52vh, 520px);
   min-height: min(52vh, 520px);
-  padding: 14px 16px;
-  border-color: color-mix(in srgb, var(--border-muted) 86%, transparent);
+  max-height: min(52vh, 520px);
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--border-muted) 86%, transparent);
   border-radius: 8px;
   background:
     linear-gradient(
@@ -700,26 +719,90 @@
       transparent 44px
     ),
     var(--surface-card);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 5%, transparent);
+  box-shadow: none;
   font-family: var(--font-code), ui-monospace, SFMono-Regular, Menlo, Monaco,
     Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 13px;
   line-height: 1.65;
   tab-size: 2;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  resize: none;
+  box-sizing: border-box;
+  outline: none;
+}
+
+/* Plain-textarea fallback (tests / Suspense) keeps readable padding */
+textarea.vendor-official-json-editor,
+pre.vendor-official-code-editor {
+  padding: 14px 16px;
   white-space: pre-wrap;
   overflow: auto;
 }
 
+/* @uiw/react-codemirror root + cm-editor must fill the fixed host height */
+.vendor-official-code-editor > div {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.vendor-official-code-editor .cm-editor {
+  flex: 1 1 auto;
+  height: 100% !important;
+  min-height: 0;
+  max-height: 100%;
+  width: 100%;
+  background: transparent;
+  border-radius: inherit;
+  border: none;
+  outline: none;
+  box-shadow: none;
+}
+
+.vendor-official-code-editor .cm-editor.cm-focused {
+  outline: none;
+  border: none;
+  box-shadow: none;
+}
+
+.vendor-official-code-editor .cm-scroller {
+  overflow: auto !important;
+  min-height: 0;
+  height: 100%;
+}
+
+.vendor-official-code-editor .cm-gutters {
+  background: transparent;
+  color: var(--text-tertiary, var(--text-secondary));
+}
+
+.vendor-official-code-editor .cm-activeLineGutter,
+.vendor-official-code-editor .cm-activeLine {
+  background: color-mix(in srgb, var(--text-accent) 6%, transparent);
+}
+
+/* Ordinary vendor textareas keep accent focus; official CodeMirror host does not */
 .vendor-json-editor:focus,
 .vendor-code-editor:focus {
   border-color: var(--text-accent);
 }
 
-.vendor-official-json-editor:focus {
-  border-color: color-mix(in srgb, var(--text-accent) 72%, var(--border-strong));
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--text-accent) 12%, transparent),
-    inset 0 1px 0 color-mix(in srgb, #fff 5%, transparent);
+.vendor-json-editor.vendor-official-json-editor:focus,
+.vendor-json-editor.vendor-official-json-editor:focus-within,
+.vendor-json-editor.vendor-official-code-editor:focus,
+.vendor-json-editor.vendor-official-code-editor:focus-within,
+.vendor-official-json-editor:focus,
+.vendor-official-json-editor:focus-within,
+.vendor-official-code-editor:focus,
+.vendor-official-code-editor:focus-within {
+  border-color: color-mix(in srgb, var(--border-muted) 86%, transparent);
+  box-shadow: none;
+  outline: none;
 }
 
 .vendor-json-error {

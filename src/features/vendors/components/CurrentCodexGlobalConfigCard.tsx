@@ -284,6 +284,7 @@ export function CurrentCodexGlobalConfigCard({
               setSaveError("");
             },
             ariaLabel: t("settings.vendor.currentCodexGlobalConfig"),
+            format: "toml",
             dataAttributes: { "codex-editor": "config" },
           },
           {
@@ -301,6 +302,7 @@ export function CurrentCodexGlobalConfigCard({
               setSaveError("");
             },
             ariaLabel: t("settings.vendor.currentCodexAuthConfig"),
+            format: "json",
             dataAttributes: { "codex-editor": "auth" },
             sensitive: true,
             sensitiveVisible: authSensitiveVisible,

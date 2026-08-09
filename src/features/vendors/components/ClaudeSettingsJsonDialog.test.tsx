@@ -8,6 +8,13 @@ import {
 } from "../../../services/tauri";
 import { ClaudeSettingsJsonDialog } from "./ClaudeSettingsJsonDialog";
 
+vi.mock("./OfficialConfigCodeEditor", async () => {
+  const { OfficialConfigCodeEditorMock } = await import(
+    "./officialConfigCodeEditorTestMock"
+  );
+  return { OfficialConfigCodeEditor: OfficialConfigCodeEditorMock };
+});
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, options?: { defaultValue?: string }) =>

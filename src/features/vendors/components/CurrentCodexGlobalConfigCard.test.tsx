@@ -8,6 +8,13 @@ import {
 } from "../../../services/tauri";
 import { CurrentCodexGlobalConfigCard } from "./CurrentCodexGlobalConfigCard";
 
+vi.mock("./OfficialConfigCodeEditor", async () => {
+  const { OfficialConfigCodeEditorMock } = await import(
+    "./officialConfigCodeEditorTestMock"
+  );
+  return { OfficialConfigCodeEditor: OfficialConfigCodeEditorMock };
+});
+
 vi.mock("../../../services/tauri", async () => {
   const actual = await vi.importActual<
     typeof import("../../../services/tauri")
