@@ -485,3 +485,48 @@ e0ddd9e99 的零 CSS 写入修复了 Windows Blink compositor 阻塞, 但导致 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1363: 修复!提示词 soft-failure 永久空态
+
+**Date**: 2026-08-10
+**Task**: 修复!提示词 soft-failure 永久空态
+**Branch**: `cxn-version-0.8.6`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| OpenSpec | `fix-custom-prompts-stale-empty-cache`（proposal/design/tasks/specs/verification） |
+| 根因 | idle-prewarm soft-fail 把 `[]` stamp 为权威拉取，`!` 只读内存永不重试 |
+| 修复 | soft-cancel 保留缓存；硬失败可重试+toast；shared inFlight；`!` 空态 on-demand revalidate（skipIfAuthoritative） |
+| 测试 | useCustomPrompts + ChatInputBoxAdapter 70 passed |
+
+**Updated Files**:
+- `src/features/prompts/hooks/useCustomPrompts.ts`
+- `src/features/prompts/promptEvents.ts`
+- `src/features/composer/components/ChatInputBox/ChatInputBoxAdapter.tsx`
+- `openspec/changes/fix-custom-prompts-stale-empty-cache/**`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0e2411c08` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
