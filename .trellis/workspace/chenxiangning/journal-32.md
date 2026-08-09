@@ -577,3 +577,49 @@ e0ddd9e99 的零 CSS 写入修复了 Windows Blink compositor 阻塞, 但导致 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1365: 协作首段注入主幕对话上下文
+
+**Date**: 2026-08-10
+**Task**: 协作首段注入主幕对话上下文
+**Branch**: `cxn-version-0.8.6`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| OpenSpec | `add-collab-first-stage-main-canvas-context` |
+| 能力 | 主幕触发协作时，首段 model text 头部注入主幕已有对话 digest |
+| 显示 | 主幕卡标题用 userVisibleText；右栏注入上下文增加「主幕对话上下文」分区 |
+| 验证 | UI 验收通过；注入链路 requestText→首段 prompt 已核对；focused Vitest 通过 |
+
+**Updated Files**:
+- `src/features/multi-agent/runtime/mainCanvasContextInjection.ts`
+- `src/features/threads/hooks/useThreadMessaging.ts`
+- `src/features/multi-agent/components/HistoryFoldCard.tsx`
+- `src/features/multi-agent/utils/buildStageInjectContext.ts`
+- `openspec/changes/add-collab-first-stage-main-canvas-context/**`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `037f9e148` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
