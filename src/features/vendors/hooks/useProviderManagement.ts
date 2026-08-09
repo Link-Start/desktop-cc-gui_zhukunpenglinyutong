@@ -186,7 +186,8 @@ export function mergeClaudeProviderCustomModelsIntoStore(
 
 export function useProviderManagement() {
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Start true so the first paint shows a loading placeholder instead of an empty list.
+  const [loading, setLoading] = useState(true);
   const [currentConfig, setCurrentConfig] = useState<ClaudeCurrentConfig | null>(
     null,
   );

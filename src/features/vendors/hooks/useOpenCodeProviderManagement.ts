@@ -35,7 +35,8 @@ export function useOpenCodeProviderManagement() {
   const [openCodeProviders, setOpenCodeProviders] = useState<
     OpenCodeProviderConfig[]
   >([]);
-  const [openCodeLoading, setOpenCodeLoading] = useState(false);
+  // Start true so first paint shows a loading placeholder instead of an empty list.
+  const [openCodeLoading, setOpenCodeLoading] = useState(true);
   const [openCodeProviderError, setOpenCodeProviderError] = useState<
     string | null
   >(null);

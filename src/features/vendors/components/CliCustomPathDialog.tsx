@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
+import { cn } from "@/lib/utils";
 
 export type CliCustomPathEngine =
   | "claude"
@@ -14,6 +15,8 @@ export type CliCustomPathSavePayload = {
   args?: string | null;
 };
 
+type PathSourceMode = "system" | "custom";
+
 type CliCustomPathDialogProps = {
   isOpen: boolean;
   engine: CliCustomPathEngine;
@@ -23,41 +26,25 @@ type CliCustomPathDialogProps = {
   onClose: () => void;
 };
 
+/** Shared display meta for every CLI engine — single source, no per-engine branches in render. */
+const CLI_CUSTOM_PATH_ENGINE_META: Record<
+  CliCustomPathEngine,
+  { command: string; displayName: string }
+> = {
+  claude: { command: "claude", displayName: "Claude Code CLI" },
+  codex: { command: "codex", displayName: "Codex CLI" },
+  kimi: { command: "kimi", displayName: "Kimi CLI" },
+  grok: { command: "grok", displayName: "Grok CLI" },
+  opencode: { command: "opencode", displayName: "OpenCode CLI" },
+};
+
 function normalizeNullable(value: string): string | null {
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
 }
 
-function pathLabelKey(engine: CliCustomPathEngine): string {
-  switch (engine) {
-    case "claude":
-      return "settings.defaultClaudePath";
-    case "kimi":
-      return "settings.defaultKimiPath";
-    case "grok":
-      return "settings.defaultGrokPath";
-    case "opencode":
-      return "settings.defaultOpenCodePath";
-    case "codex":
-    default:
-      return "settings.defaultCodexPath";
-  }
-}
-
-function pathPlaceholderKey(engine: CliCustomPathEngine): string {
-  switch (engine) {
-    case "claude":
-      return "settings.claudePlaceholder";
-    case "kimi":
-      return "settings.kimiPlaceholder";
-    case "grok":
-      return "settings.grokPlaceholder";
-    case "opencode":
-      return "settings.openCodePlaceholder";
-    case "codex":
-    default:
-      return "settings.codexPlaceholder";
-  }
+function resolvePathSourceMode(path: string | null | undefined): PathSourceMode {
+  return path?.trim() ? "custom" : "system";
 }
 
 export function CliCustomPathDialog({
@@ -69,7 +56,12 @@ export function CliCustomPathDialog({
   onClose,
 }: CliCustomPathDialogProps) {
   const { t } = useTranslation();
+  const meta = CLI_CUSTOM_PATH_ENGINE_META[engine];
   const supportsArgs = engine === "codex";
+
+  const [mode, setMode] = useState<PathSourceMode>(() =>
+    resolvePathSourceMode(initialPath),
+  );
   const [pathDraft, setPathDraft] = useState(initialPath ?? "");
   const [argsDraft, setArgsDraft] = useState(initialArgs ?? "");
   const [isSaving, setIsSaving] = useState(false);
@@ -79,6 +71,7 @@ export function CliCustomPathDialog({
     if (!isOpen) {
       return;
     }
+    setMode(resolvePathSourceMode(initialPath));
     setPathDraft(initialPath ?? "");
     setArgsDraft(initialArgs ?? "");
     setIsSaving(false);
@@ -102,11 +95,21 @@ export function CliCustomPathDialog({
     return null;
   }
 
-  const nextPath = normalizeNullable(pathDraft);
+  const nextPath = mode === "system" ? null : normalizeNullable(pathDraft);
   const nextArgs = normalizeNullable(argsDraft);
+  const customPathMissing = mode === "custom" && nextPath === null;
   const dirty =
     nextPath !== (initialPath ?? null) ||
     (supportsArgs && nextArgs !== (initialArgs ?? null));
+  const canSave = dirty && !isSaving && !customPathMissing;
+
+  const handleModeChange = (nextMode: PathSourceMode) => {
+    if (isSaving || nextMode === mode) {
+      return;
+    }
+    setMode(nextMode);
+    setError(null);
+  };
 
   const handleBrowse = async () => {
     const selection = await openFileDialog({
@@ -116,11 +119,12 @@ export function CliCustomPathDialog({
     if (!selection || Array.isArray(selection)) {
       return;
     }
+    setMode("custom");
     setPathDraft(selection);
   };
 
   const handleSave = async () => {
-    if (!dirty || isSaving) {
+    if (!canSave) {
       return;
     }
     setIsSaving(true);
@@ -142,9 +146,12 @@ export function CliCustomPathDialog({
   };
 
   return (
-    <div className="vendor-dialog-overlay" onClick={() => !isSaving && onClose()}>
+    <div
+      className="vendor-dialog-overlay"
+      onClick={() => !isSaving && onClose()}
+    >
       <div
-        className="vendor-dialog"
+        className="vendor-dialog vendor-dialog-md"
         role="dialog"
         aria-modal="true"
         aria-labelledby="cli-custom-path-dialog-title"
@@ -152,47 +159,105 @@ export function CliCustomPathDialog({
       >
         <div className="vendor-dialog-header">
           <h3 id="cli-custom-path-dialog-title">
-            {t("settings.vendor.customPathTitle")}
+            {t("settings.vendor.customPathTitle", {
+              engine: meta.displayName,
+            })}
           </h3>
+          <button
+            type="button"
+            className="vendor-dialog-close"
+            onClick={() => !isSaving && onClose()}
+            disabled={isSaving}
+            aria-label={t("settings.vendor.cancel")}
+          >
+            &times;
+          </button>
         </div>
-        <div className="vendor-dialog-body">
-          <p className="settings-help">
-            {t("settings.vendor.customPathDescription")}
-          </p>
 
-          <label className="settings-field-label" htmlFor="cli-custom-path-input">
-            {t(pathLabelKey(engine))}
-          </label>
-          <div className="settings-field-row">
-            <input
-              id="cli-custom-path-input"
-              className="settings-input"
-              value={pathDraft}
-              placeholder={t(pathPlaceholderKey(engine))}
-              onChange={(event) => setPathDraft(event.target.value)}
-              disabled={isSaving}
-            />
-            <button
-              type="button"
-              className="ghost"
-              onClick={() => void handleBrowse()}
-              disabled={isSaving}
+        <div className="vendor-dialog-body vendor-dialog-body-compact">
+          <div className="cli-path-field">
+            <span className="settings-field-label" id="cli-path-source-label">
+              {t("settings.vendor.customPathSourceLabel")}
+            </span>
+            <div
+              className="settings-segmented cli-path-mode-segmented"
+              role="group"
+              aria-labelledby="cli-path-source-label"
             >
-              {t("settings.browse")}
-            </button>
-            <button
-              type="button"
-              className="ghost"
-              onClick={() => setPathDraft("")}
-              disabled={isSaving}
-            >
-              {t("settings.usePath")}
-            </button>
+              <button
+                type="button"
+                className={cn(
+                  "settings-segmented-btn",
+                  mode === "system" && "active",
+                )}
+                onClick={() => handleModeChange("system")}
+                disabled={isSaving}
+                aria-pressed={mode === "system"}
+              >
+                {t("settings.vendor.customPathModeSystem")}
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "settings-segmented-btn",
+                  mode === "custom" && "active",
+                )}
+                onClick={() => handleModeChange("custom")}
+                disabled={isSaving}
+                aria-pressed={mode === "custom"}
+              >
+                {t("settings.vendor.customPathModeCustom")}
+              </button>
+            </div>
           </div>
-          <div className="settings-help">{t("settings.pathResolutionDesc")}</div>
+
+          {mode === "system" ? (
+            <div className="cli-path-mode-status" role="status">
+              <span>{t("settings.vendor.customPathSystemHint")}</span>
+              <code>{meta.command}</code>
+            </div>
+          ) : (
+            <div className="cli-path-field">
+              <label
+                className="settings-field-label"
+                htmlFor="cli-custom-path-input"
+              >
+                {t("settings.vendor.customPathFieldLabel")}
+              </label>
+              <div className="settings-field-row">
+                <input
+                  id="cli-custom-path-input"
+                  className="settings-input"
+                  value={pathDraft}
+                  placeholder={t("settings.vendor.customPathPlaceholder", {
+                    command: meta.command,
+                  })}
+                  onChange={(event) => setPathDraft(event.target.value)}
+                  disabled={isSaving}
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => void handleBrowse()}
+                  disabled={isSaving}
+                >
+                  {t("settings.browse")}
+                </button>
+              </div>
+              <div className="settings-help">
+                {t("settings.vendor.customPathCustomHint")}
+              </div>
+              {customPathMissing ? (
+                <div className="settings-help" role="status">
+                  {t("settings.vendor.customPathRequired")}
+                </div>
+              ) : null}
+            </div>
+          )}
 
           {supportsArgs ? (
-            <>
+            <div className="cli-path-field">
               <label
                 className="settings-field-label"
                 htmlFor="cli-custom-args-input"
@@ -222,7 +287,7 @@ export function CliCustomPathDialog({
                 <code>{t("settings.appServer")}</code>
                 {t("settings.codexArgsDescSuffix")}
               </div>
-            </>
+            </div>
           ) : null}
 
           {error ? (
@@ -231,6 +296,7 @@ export function CliCustomPathDialog({
             </div>
           ) : null}
         </div>
+
         <div className="vendor-dialog-footer">
           <button
             type="button"
@@ -244,7 +310,7 @@ export function CliCustomPathDialog({
             type="button"
             className="vendor-btn-save"
             onClick={() => void handleSave()}
-            disabled={!dirty || isSaving}
+            disabled={!canSave}
           >
             {isSaving ? t("settings.saving") : t("common.save")}
           </button>
@@ -295,7 +361,10 @@ export function CliCustomPathEntry({
         <span className="vendor-group-row-title">
           {t("settings.vendor.customPath")}
         </span>
-        <div className="settings-help vendor-custom-path-summary" title={summary}>
+        <div
+          className="settings-help vendor-custom-path-summary"
+          title={summary}
+        >
           {summary}
         </div>
         {argsSummary ? (

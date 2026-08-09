@@ -33,7 +33,8 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 export function useGrokProviderManagement() {
   const [grokProviders, setGrokProviders] = useState<GrokProviderConfig[]>([]);
-  const [grokLoading, setGrokLoading] = useState(false);
+  // Start true so first paint shows a loading placeholder instead of an empty list.
+  const [grokLoading, setGrokLoading] = useState(true);
   const [grokProviderError, setGrokProviderError] = useState<string | null>(
     null,
   );

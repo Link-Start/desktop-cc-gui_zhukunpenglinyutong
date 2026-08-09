@@ -171,7 +171,8 @@ export function useCodexProviderManagement() {
   const [codexProviders, setCodexProviders] = useState<CodexProviderConfig[]>(
     [],
   );
-  const [codexLoading, setCodexLoading] = useState(false);
+  // Start true so first paint shows a loading placeholder instead of an empty list.
+  const [codexLoading, setCodexLoading] = useState(true);
   const [codexProviderError, setCodexProviderError] = useState<string | null>(null);
 
   const [codexProviderDialog, setCodexProviderDialog] =

@@ -33,7 +33,8 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 export function useKimiProviderManagement() {
   const [kimiProviders, setKimiProviders] = useState<KimiProviderConfig[]>([]);
-  const [kimiLoading, setKimiLoading] = useState(false);
+  // Start true so first paint shows a loading placeholder instead of an empty list.
+  const [kimiLoading, setKimiLoading] = useState(true);
   const [kimiProviderError, setKimiProviderError] = useState<string | null>(
     null,
   );

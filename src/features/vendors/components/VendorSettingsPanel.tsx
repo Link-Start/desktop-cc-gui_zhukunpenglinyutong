@@ -496,6 +496,11 @@ export function VendorSettingsPanel({
   const selectCli = useCallback((id: CliEngineId) => {
     setActiveCli(id);
     setMobilePane("detail");
+    // Codex detail pulls external status on enter — mark loading immediately so
+    // segmented controls do not paint a default "follow official" selection.
+    if (id === "codex") {
+      setUnifiedExecExternalStatusLoading(true);
+    }
   }, []);
 
   const applyPendingModelManagerRequest = useCallback(() => {
@@ -669,6 +674,22 @@ export function VendorSettingsPanel({
         : unifiedExecExternalStatus.explicitUnifiedExecValue === false
           ? t("settings.backgroundTerminalOfficialConfigDisabled")
           : t("settings.backgroundTerminalOfficialConfigInvalid");
+
+  const unifiedExecStatusReady = unifiedExecExternalStatus != null;
+  const unifiedExecSegmentDisabled =
+    unifiedExecActionBusy ||
+    (unifiedExecExternalStatusLoading && !unifiedExecStatusReady);
+  const unifiedExecFollowActive =
+    unifiedExecStatusReady &&
+    unifiedExecExternalStatus.hasExplicitUnifiedExec !== true;
+  const unifiedExecEnabledActive =
+    unifiedExecStatusReady &&
+    unifiedExecExternalStatus.hasExplicitUnifiedExec === true &&
+    unifiedExecExternalStatus.explicitUnifiedExecValue === true;
+  const unifiedExecDisabledActive =
+    unifiedExecStatusReady &&
+    unifiedExecExternalStatus.hasExplicitUnifiedExec === true &&
+    unifiedExecExternalStatus.explicitUnifiedExecValue === false;
 
   const currentDialogModels =
     dialogTarget === "codex"
@@ -1081,8 +1102,11 @@ export function VendorSettingsPanel({
                       {unifiedExecOfficialDefaultDetail}
                     </div>
                   ) : null}
-                  {unifiedExecExternalStatusLoading ? (
-                    <div className="settings-help">{t("settings.loading")}</div>
+                  {unifiedExecExternalStatusLoading &&
+                  !unifiedExecExternalStatus ? (
+                    <div className="settings-help" aria-live="polite">
+                      {t("settings.loading")}
+                    </div>
                   ) : null}
                   {unifiedExecExternalStatusError ? (
                     <div className="settings-help">
@@ -1104,11 +1128,12 @@ export function VendorSettingsPanel({
                     type="button"
                     className={cn(
                       "settings-segmented-btn",
-                      unifiedExecExternalStatus?.hasExplicitUnifiedExec !== true &&
-                        "active",
+                      unifiedExecFollowActive && "active",
                     )}
-                    onClick={() => void handleRestoreUnifiedExecOfficialDefault()}
-                    disabled={unifiedExecActionBusy}
+                    onClick={() =>
+                      void handleRestoreUnifiedExecOfficialDefault()
+                    }
+                    disabled={unifiedExecSegmentDisabled}
                   >
                     {t("settings.backgroundTerminalFollowOfficial")}
                   </button>
@@ -1116,12 +1141,12 @@ export function VendorSettingsPanel({
                     type="button"
                     className={cn(
                       "settings-segmented-btn",
-                      unifiedExecExternalStatus?.hasExplicitUnifiedExec === true &&
-                        unifiedExecExternalStatus.explicitUnifiedExecValue === true &&
-                        "active",
+                      unifiedExecEnabledActive && "active",
                     )}
-                    onClick={() => void handleSetUnifiedExecOfficialOverride(true)}
-                    disabled={unifiedExecActionBusy}
+                    onClick={() =>
+                      void handleSetUnifiedExecOfficialOverride(true)
+                    }
+                    disabled={unifiedExecSegmentDisabled}
                   >
                     {t("settings.backgroundTerminalOfficialWriteEnabled")}
                   </button>
@@ -1129,12 +1154,12 @@ export function VendorSettingsPanel({
                     type="button"
                     className={cn(
                       "settings-segmented-btn",
-                      unifiedExecExternalStatus?.hasExplicitUnifiedExec === true &&
-                        unifiedExecExternalStatus.explicitUnifiedExecValue === false &&
-                        "active",
+                      unifiedExecDisabledActive && "active",
                     )}
-                    onClick={() => void handleSetUnifiedExecOfficialOverride(false)}
-                    disabled={unifiedExecActionBusy}
+                    onClick={() =>
+                      void handleSetUnifiedExecOfficialOverride(false)
+                    }
+                    disabled={unifiedExecSegmentDisabled}
                   >
                     {t("settings.backgroundTerminalOfficialWriteDisabled")}
                   </button>
