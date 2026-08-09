@@ -530,3 +530,50 @@ e0ddd9e99 的零 CSS 写入修复了 Windows Blink compositor 阻塞, 但导致 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1364: 项目记忆 Grok/Kimi 与 Shared 整轮写入
+
+**Date**: 2026-08-10
+**Task**: 项目记忆 Grok/Kimi 与 Shared 整轮写入
+**Branch**: `cxn-version-0.8.6`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 任务1 | Native Grok/Kimi/Gemini TurnCompleted 始终发 text-lane item/completed，完整 conversation_turn 融合 |
+| 任务2 | Shared V2/V1 captureTurnInput；terminal 投影后触发 onAgentMessageCompleted |
+| OpenSpec | fix-grok-kimi-native-memory-completion、add-shared-session-project-memory-capture |
+| 提交策略 | 剥离 collab 主幕 inject 污染，仅提交记忆相关 18 文件 |
+
+**Updated Files**:
+- src-tauri/src/engine/commands.rs / commands_tests.rs
+- src-tauri/src/bin/cc_gui_daemon.rs / daemon_state.rs
+- src/features/app/hooks/useAppServerEvents.ts(+test)
+- src/features/threads/hooks/useThreadMessaging.ts(+tests)
+- openspec/changes/fix-grok-kimi-native-memory-completion/**
+- openspec/changes/add-shared-session-project-memory-capture/**
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1c2e84190` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
