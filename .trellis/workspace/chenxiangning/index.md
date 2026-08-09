@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-32.md`
-- **Total Sessions**: 1361
+- **Total Sessions**: 1362
 - **Last Active**: 2026-08-10
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-32.md` | ~454 | Active |
+| `journal-32.md` | ~487 | Active |
 | `journal-31.md` | ~1968 | Archived |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
@@ -60,6 +60,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1362 | 2026-08-10 | fix(startup): platform-split CSS 写入策略, 兼容 macOS/Windows 冷启点击卡死 | `26d07de4a` | `cxn-version-0.8.6` |
 | 1361 | 2026-08-10 | Sub2API/New API 中转额度查询与 HUD 展示 | `e9da94dff` | `cxn-version-0.8.6` |
 | 1360 | 2026-08-09 | 合并 upstream 0.8.5 更新 | `c4c382832` | `cxn-version-0.8.5` |
 | 1359 | 2026-08-09 | 根治冷启点击卡死 | `3c3ac3f08` | `cxn-version-0.8.5` |

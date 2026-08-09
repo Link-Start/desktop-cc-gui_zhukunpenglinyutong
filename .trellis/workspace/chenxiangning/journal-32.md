@@ -452,3 +452,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1362: fix(startup): platform-split CSS 写入策略, 兼容 macOS/Windows 冷启点击卡死
+
+**Date**: 2026-08-10
+**Task**: fix(startup): platform-split CSS 写入策略, 兼容 macOS/Windows 冷启点击卡死
+**Branch**: `cxn-version-0.8.6`
+
+### Summary
+
+e0ddd9e99 的零 CSS 写入修复了 Windows Blink compositor 阻塞, 但导致 macOS WKWebView CSSOM 懒加载未初始化——首次点击触发同步 layout 死锁。终局方案: applyUiScale 内按 rendererPlatform 分块, macOS 走无条件写入, Windows 走残留清除。4 files, +209/-63。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `26d07de4a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
