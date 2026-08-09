@@ -287,3 +287,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1357: 默认隐藏并按需恢复启动遮罩
+
+**Date**: 2026-08-09
+**Task**: 默认隐藏并按需恢复启动遮罩
+**Branch**: `cxn-version-0.8.5`
+
+### Summary
+
+默认隐藏 StartupGateOverlay，并在其他设置新增默认关闭、下次启动生效的本机测试开关；同步修复 AppShell ownership catalog 与 Sidebar 本地配置测试 drift。Focused tests 101/101、typecheck、target ESLint、diff check、OpenSpec strict validation 通过；按用户明确要求未重跑 full suite。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `本次合并提交` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

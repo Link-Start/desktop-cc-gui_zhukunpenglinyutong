@@ -568,6 +568,11 @@ const settings = {
     },
     otherDescription:
       "History completion, model mapping, and other configurations.",
+    startupGateOverlayTestTitle: "Startup loading overlay (test)",
+    startupGateOverlayTestDescription:
+      "Show the initialization loading overlay the next time the main window starts. Off by default.",
+    startupGateOverlayTestDetail:
+      "For cold-start verification only. Restart the app after changing this setting.",
     sharedProjectionTestTitle: "Shared Projection rollback control",
     sharedProjectionTestDescription:
       "Shared Sessions merge Canonical Projection with the Legacy snapshot by default. Turning this off explicitly selects Legacy-only reading.",

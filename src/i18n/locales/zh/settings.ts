@@ -547,6 +547,11 @@ const settings = {
       top: "放在变更文件列表上方。",
     },
     otherDescription: "历史记录补全、模型映射等其他配置。",
+    startupGateOverlayTestTitle: "启动 Loading 遮罩（测试）",
+    startupGateOverlayTestDescription:
+      "开启后，下次启动主窗口时显示初始化 Loading；默认关闭。",
+    startupGateOverlayTestDetail:
+      "仅用于冷启动验证。切换不会立即生效，请重启应用。",
     sharedProjectionTestTitle: "Shared Projection 回滚控制",
     sharedProjectionTestDescription:
       "Shared Session 默认合并 Canonical Projection 与 Legacy snapshot；关闭后显式回滚为 Legacy-only 读取。",

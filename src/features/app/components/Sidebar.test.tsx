@@ -2286,7 +2286,7 @@ describe("Sidebar", () => {
     const codexItem = screen.getByRole("menuitem", { name: /Codex/ });
     fireEvent.mouseEnter(codexItem);
     await act(async () => {
-      fireEvent.click(screen.getByRole("menuitemradio", { name: /codex-tui\/default-config/ }));
+      fireEvent.click(screen.getByRole("menuitemradio", { name: /本地配置/ }));
       fireEvent.click(codexItem);
     });
 
@@ -2930,7 +2930,7 @@ describe("Sidebar", () => {
     const codexItem = screen.getByRole("menuitem", { name: "Codex" });
     fireEvent.mouseEnter(codexItem);
     await act(async () => {
-      fireEvent.click(screen.getByRole("menuitemradio", { name: /codex-tui\/default-config/ }));
+      fireEvent.click(screen.getByRole("menuitemradio", { name: /本地配置/ }));
       fireEvent.click(codexItem);
     });
 
