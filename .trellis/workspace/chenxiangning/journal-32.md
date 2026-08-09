@@ -386,3 +386,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1360: 合并 upstream 0.8.5 更新
+
+**Date**: 2026-08-09
+**Task**: 合并 upstream 0.8.5 更新
+**Branch**: `cxn-version-0.8.5`
+
+### Summary
+
+将 upstream/chore/bump-version-0.8.5 的 6 个提交语义合并到 cxn-version-0.8.5，零冲突并保留本地冷启修复与上游 Vendor/Settings/Git 能力。同步 @codemirror/lint 6.9.7；修正上游遗漏的 VendorSettingsPanel help popover 陈旧断言。typecheck、runtime contracts、targeted ESLint 通过；定向测试原 61 项通过，修正后的唯一失败用例单测通过。未跑全量测试，未拉起 App，未 push。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c4c382832` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
