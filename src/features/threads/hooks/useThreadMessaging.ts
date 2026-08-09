@@ -1866,11 +1866,87 @@ export function useThreadMessaging({
                 },
               });
             }
+            // Project-memory input capture for shared V2 (native path is skipped
+            // by this early return). Prefer runtimeTurnId so fusion matches
+            // turn/completed / onAgentMessageCompleted turnId.
+            const sharedMemoryTurnId =
+              sharedRuntimeTurnId ||
+              asString(sharedV2Result.logicalTurnId).trim();
+            if (sharedMemoryTurnId && visibleUserText.trim()) {
+              void projectMemoryFacade
+                .captureTurnInput({
+                  workspaceId: workspace.id,
+                  userInput: visibleUserText,
+                  threadId,
+                  turnId: sharedMemoryTurnId,
+                  workspaceName: workspace.name ?? null,
+                  workspacePath: workspace.path ?? null,
+                  engine: sharedResolvedEngine,
+                })
+                .then((captured) => {
+                  onInputMemoryCaptured?.({
+                    workspaceId: workspace.id,
+                    threadId,
+                    turnId: sharedMemoryTurnId,
+                    inputText: visibleUserText,
+                    memoryId: captured?.id ?? null,
+                    workspaceName: workspace.name ?? null,
+                    workspacePath: workspace.path ?? null,
+                    engine: sharedResolvedEngine,
+                  });
+                })
+                .catch((err) => {
+                  if (shouldEmitThreadMessagingDevLogs) {
+                    console.warn(
+                      "[project-memory] shared auto capture failed:",
+                      err,
+                    );
+                  }
+                });
+            }
             // 此处只收敛 Shared UI projection；不得落入 Native turn-start lifecycle。
             markProcessing(threadId, false);
             setActiveTurnId(threadId, null);
             safeMessageActivity();
             return response as SendSharedSessionTurnV2Result;
+          }
+          // Shared V1 (or V2 without committed): still capture input when we have
+          // a stable turn identity; native capture block is not reached.
+          const sharedV1MemoryTurnId =
+            asString(response.runtimeTurnId ?? "").trim() ||
+            asString(sharedV2Result?.logicalTurnId).trim() ||
+            asString(response.logicalTurnId ?? response.turnId ?? "").trim();
+          if (sharedV1MemoryTurnId && visibleUserText.trim()) {
+            void projectMemoryFacade
+              .captureTurnInput({
+                workspaceId: workspace.id,
+                userInput: visibleUserText,
+                threadId,
+                turnId: sharedV1MemoryTurnId,
+                workspaceName: workspace.name ?? null,
+                workspacePath: workspace.path ?? null,
+                engine: sharedResolvedEngine,
+              })
+              .then((captured) => {
+                onInputMemoryCaptured?.({
+                  workspaceId: workspace.id,
+                  threadId,
+                  turnId: sharedV1MemoryTurnId,
+                  inputText: visibleUserText,
+                  memoryId: captured?.id ?? null,
+                  workspaceName: workspace.name ?? null,
+                  workspacePath: workspace.path ?? null,
+                  engine: sharedResolvedEngine,
+                });
+              })
+              .catch((err) => {
+                if (shouldEmitThreadMessagingDevLogs) {
+                  console.warn(
+                    "[project-memory] shared auto capture failed:",
+                    err,
+                  );
+                }
+              });
           }
         } else {
           const isClaudeSession = threadId.startsWith("claude:");
