@@ -250,6 +250,8 @@ export const ButtonArea = ({
               planLabel: codingPlanSnapshot.planLabel,
               windows: codingPlanSnapshot.windows,
               balance: codingPlanSnapshot.balance ?? null,
+              usageSummary: codingPlanSnapshot.usageSummary ?? null,
+              siteOrigin: codingPlanSnapshot.siteOrigin ?? null,
             }
           : null,
         codingPlanLoading,
