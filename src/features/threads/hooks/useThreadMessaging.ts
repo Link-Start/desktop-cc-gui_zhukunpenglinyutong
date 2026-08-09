@@ -66,6 +66,7 @@ import {
 } from "../../shared-session/target/types";
 import { requestAgentPlan } from "../../multi-agent/runtime/executor";
 import { injectCollabSkillContext } from "../../multi-agent/runtime/skillContextInjection";
+import { injectMainCanvasContext } from "../../multi-agent/runtime/mainCanvasContextInjection";
 import { getSelectedTemplate } from "../../multi-agent/templates/templateStore";
 import { templateToStageBindings } from "../../multi-agent/templates/types";
 import { subscribeMultiAgentConversationItems } from "../../multi-agent/runtime/conversationBridge";
@@ -641,9 +642,10 @@ export function useThreadMessaging({
           providerProfileSource: snapshot.providerProfileSource,
           runtimeCapabilityFingerprint: snapshot.runtimeCapabilityFingerprint,
         };
-        // 可见原文（主幕气泡）；model text 在此基础上叠 skill/记忆/便签
+        // 可见原文（主幕气泡）；model text 在此基础上叠 skill/记忆/便签/主幕历史
         // 纯图：可见可空，model 侧在 executor 内补占位
         // Context Fan-in 口径：
+        // - 主幕已有对话：digest 置顶注入 modelText（不进 visibleText / 主幕卡标题）
         // - 记忆/便签：正文注入进 modelText（与图不同，不走独立 image_refs 通道）
         // - skill：协作 prompt 包层后 slash 常失效 → 读 SKILL.md 正文注入首段
         // - 图 / 便签附图：firstStageImages + dispatch durable 回填
@@ -743,6 +745,12 @@ export function useThreadMessaging({
             new Set([...finalImages, ...noteInjection.imagePaths]),
           );
         }
+        // 主幕历史 digest 置顶（在 skill/记忆/便签之后 prepend，保证块在最终 modelText 头部）
+        // 不污染 visibleUserText / 主幕气泡；空历史 no-op
+        modelText = injectMainCanvasContext({
+          userText: modelText,
+          items: itemsByThread[threadId] ?? [],
+        }).finalText;
         finalImages = sanitizeImageAttachmentPaths(finalImages);
         if (
           finalImages.length > 0 &&
