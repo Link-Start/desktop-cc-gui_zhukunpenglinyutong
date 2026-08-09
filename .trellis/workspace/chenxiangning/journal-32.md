@@ -419,3 +419,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1361: Sub2API/New API 中转额度查询与 HUD 展示
+
+**Date**: 2026-08-10
+**Task**: Sub2API/New API 中转额度查询与 HUD 展示
+**Branch**: `cxn-version-0.8.6`
+
+### Summary
+
+未知中转站额度：Sub2API /v1/usage 优先、失败回退 New API /api/user/self；Grok local 读 config.toml；HUD 多行用量；供应商 {origin} {source}；友好错误与超时优化
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e9da94dff` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
