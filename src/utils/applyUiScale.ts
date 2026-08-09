@@ -50,43 +50,72 @@ export function resolveCssZoomLayoutTarget(root: HTMLElement): HTMLElement {
   return root;
 }
 
-function clearScaleLayoutStyles(el: HTMLElement): void {
-  el.style.zoom = "";
-  el.style.transform = "";
-  el.style.transformOrigin = "";
-  el.style.width = "";
-  el.style.height = "";
-  el.style.position = "";
-  el.style.top = "";
-  el.style.left = "";
-  el.style.right = "";
-  el.style.bottom = "";
+/**
+ * Cold-start CSS property writes on WebView2 (Chromium) trigger style recalc
+ * + layout even when the value is unchanged — the engine must re-resolve the
+ * cascade for every inline mutation.  On a 125%-DPI Windows machine the Blink
+ * layout pass is heavier than WKWebView, and an unconditional 20-property
+ * flush across <html> + <body> during the first effect after mount shifts the
+ * layout tree just as React commits its initial paint, which starves the
+ * compositor thread when a click arrives.
+ *
+ * Only touch properties that actually carry a residual value (hot-reload,
+ * earlier non-identity scale, or stale transform fill from an older build).
+ */
+/** CSSOM property names (kebab-case) for residual scale styles. */
+const ZOOM_FILL_CSS_PROPS = [
+  "zoom",
+  "transform",
+  "transform-origin",
+  "width",
+  "height",
+  "position",
+  "top",
+  "left",
+  "right",
+  "bottom",
+] as const;
+
+function clearResidualScaleStyles(el: HTMLElement): void {
+  for (const prop of ZOOM_FILL_CSS_PROPS) {
+    if (el.style.getPropertyValue(prop) !== "") {
+      el.style.removeProperty(prop);
+    }
+  }
 }
 
 /**
- * CSS zoom only. Always strips residual transform/fill from older builds.
+ * CSS zoom only.  Strips only residual transform/fill; leaves already-clean
+ * properties alone so cold-start first-paint does not invalidate layout.
  */
 function setScaleLayoutStyles(el: HTMLElement, scale: number): void {
-  el.style.transform = "";
-  el.style.transformOrigin = "";
-  el.style.width = "";
-  el.style.height = "";
-  el.style.position = "";
-  el.style.top = "";
-  el.style.left = "";
-  el.style.right = "";
-  el.style.bottom = "";
+  clearResidualScaleStyles(el);
 
   if (scale === 1) {
-    el.style.zoom = "";
     return;
   }
 
-  el.style.zoom = String(scale);
+  el.style.setProperty("zoom", String(scale));
 }
 
+function clearScaleLayoutStyles(el: HTMLElement): void {
+  clearResidualScaleStyles(el);
+}
+
+/**
+ * CSS :root already declares --ui-scale: 1 (themes.dark.css:92).  Writing the
+ * same value as an inline style shifts the cascade origin and forces Chromium
+ * Blink to re-resolve every var(--ui-scale) consumer, invalidating the style
+ * tree.  Only write --ui-scale for non-identity scales.
+ */
 function applyCssPageScaleStyles(root: HTMLElement, scale: number): void {
-  root.style.setProperty("--ui-scale", String(scale));
+  if (scale !== 1) {
+    root.style.setProperty("--ui-scale", String(scale));
+  } else if (root.style.getPropertyValue("--ui-scale")) {
+    // Clean up inline residue from a prior non-identity session (hot-reload,
+    // startup guard recovery, etc.).
+    root.style.removeProperty("--ui-scale");
+  }
 
   const layout = resolveCssZoomLayoutTarget(root);
   if (layout !== root) {
