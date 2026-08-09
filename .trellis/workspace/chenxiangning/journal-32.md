@@ -254,3 +254,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1356: 修复工作区切换全量会话扫描
+
+**Date**: 2026-08-09
+**Task**: 修复工作区切换全量会话扫描
+**Branch**: `cxn-version-0.8.5`
+
+### Summary
+
+移除 AppShell workspace navigation 对 exhaustive session projection summary 的依赖，改为本地 owner topology 推导；补齐回归测试、OpenSpec 与性能分析文档。自动门禁通过，用户手动切换性能验收待完成。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0f5f6ca76` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
