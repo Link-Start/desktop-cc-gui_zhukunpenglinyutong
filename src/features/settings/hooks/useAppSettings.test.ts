@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { createElement, StrictMode, type ReactNode } from "react";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppSettings, CodexDoctorResult } from "../../../types";
@@ -21,6 +22,11 @@ import {
   LEGACY_MONACO_UI_FONT_FAMILY,
   LEGACY_SYSTEM_UI_FONT_FAMILY,
 } from "../../../utils/fonts";
+import { applyDockIconPreference } from "../../theme/utils/dockIcon";
+import {
+  getStartupTraceSnapshot,
+  resetStartupTraceForTests,
+} from "../../startup-orchestration/utils/startupTrace";
 
 vi.mock("../../../services/tauri", () => ({
   getAppSettings: vi.fn(),
@@ -53,6 +59,11 @@ const updateAppSettingsMock = vi.mocked(updateAppSettings);
 const runCodexDoctorMock = vi.mocked(runCodexDoctor);
 const takeSettingsRecoveryNoticeMock = vi.mocked(takeSettingsRecoveryNotice);
 const pushErrorToastMock = vi.mocked(pushErrorToast);
+const applyDockIconPreferenceMock = vi.mocked(applyDockIconPreference);
+
+function StrictModeWrapper({ children }: { children: ReactNode }) {
+  return createElement(StrictMode, null, children);
+}
 
 describe("useAppSettings", () => {
   beforeEach(() => {
@@ -61,6 +72,7 @@ describe("useAppSettings", () => {
     // across cases (clearAllMocks does not reset implementations).
     takeSettingsRecoveryNoticeMock.mockResolvedValue(null);
     window.localStorage.clear();
+    resetStartupTraceForTests();
   });
 
   afterEach(() => {
@@ -130,6 +142,54 @@ describe("useAppSettings", () => {
       "caveman",
     ]);
     expect(result.current.settings.curatedSkillDefaultsVersion).toBe(1);
+  });
+
+  it("deduplicates the initial settings and recovery reads under StrictMode", async () => {
+    let resolveSettings: (value: AppSettings) => void = () => {};
+    getAppSettingsMock.mockReturnValue(
+      new Promise<AppSettings>((resolve) => {
+        resolveSettings = resolve;
+      }),
+    );
+
+    const { result } = renderHook(() => useAppSettings(), {
+      wrapper: StrictModeWrapper,
+    });
+
+    expect(getAppSettingsMock).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveSettings({ dockIconId: "default" } as AppSettings);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() =>
+      expect(takeSettingsRecoveryNoticeMock).toHaveBeenCalledTimes(1),
+    );
+
+    expect(getAppSettingsMock).toHaveBeenCalledTimes(1);
+    expect(applyDockIconPreferenceMock).not.toHaveBeenCalled();
+    expect(getStartupTraceSnapshot().events).toContainEqual(
+      expect.objectContaining({
+        type: "command",
+        commandLabel: "get_app_settings",
+        status: "completed",
+      }),
+    );
+  });
+
+  it("replays a persisted custom Dock icon but skips the bundled default", async () => {
+    getAppSettingsMock.mockResolvedValue({
+      dockIconId: "multi-orbit-hub",
+    } as AppSettings);
+
+    const { result } = renderHook(() => useAppSettings());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() =>
+      expect(applyDockIconPreferenceMock).toHaveBeenCalledWith(
+        "multi-orbit-hub",
+      ),
+    );
   });
 
   it("normalizes persisted disabled CLI engines", async () => {

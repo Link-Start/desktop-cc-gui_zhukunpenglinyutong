@@ -92,6 +92,79 @@ catch (error) {
 }
 ```
 
+## Scenario: Performance Diagnostics Must Not Amplify Renderer Jank
+
+### 1. Scope / Trigger
+
+- Trigger：修改 `src/services/rendererDiagnostics.ts`、`src/services/perfBaseline/frameDropMonitor.ts`、diagnostics live/export UI 或 diagnostics client-store persistence。
+- 目标：观测链不能形成「掉帧 → 全量序列化/写盘 → 再掉帧 → 再写盘」反馈环，尤其不能与 cold-start 点击竞争 renderer main thread。
+
+### 2. Signatures
+
+- `appendRendererDiagnostic(label, payload): void`：低频 durable evidence。
+- `appendVolatileRendererDiagnostic(label, payload): void`：session-only、memory-bounded evidence。
+- `exportRendererDiagnostics(): RendererDiagnosticEntry[]`：合并 durable、pending、buffered、volatile snapshot。
+- `MAX_PERSISTED_RENDERER_DIAGNOSTICS_BYTES = 256 * 1024`。
+- `DIAGNOSTICS_PERSIST_THROTTLE_MS = 30_000`。
+- severe frame durable cooldown：`60_000ms`。
+
+### 3. Contracts
+
+- 高频 sampler 的普通 `perf.frame-drop` MUST 写入 volatile ring，不得单独触发 `client_store_patch`。
+- severe frame MAY 低频写 durable；同 cooldown 内仅允许一次。recent hotspot 若包含 `diagnostics-persist`、`diagnostics-export`、`perf-jank-live-collect` 或 diagnostics store write，MUST 保持 volatile。
+- canonical durable payload MUST 同时受 category count 与 serialized UTF-8 byte budget 约束；超限时先淘汰最老 non-actionable，再淘汰最老 actionable，单个超大 entry 也不得突破 byte budget。
+- 普通 durable append MUST 使用 30s leading/trailing batch；`pagehide` / hidden MAY immediate flush。
+- volatile entry MUST 可从 live/export surface 读取并参与 revision，但 clear MUST 同时清除 durable、pending 与 volatile state。
+- Startup diagnostics MUST 只保留一个 normal lifecycle canonical channel；禁止把 success/milestone 复制到第二个 store 后再由同一 UI 同时 live subscribe。
+- 冷启 Overlay summary MUST 使用低频 pull（当前上限 1Hz）；展开 timeline MUST 冻结 user-click snapshot，收起再展开才刷新。copy MAY 在 click handler 按需读取 latest stores。
+- StartupGate loading MUST 保持 manual-only；diagnostic refresh、milestone 与 timeout 均不得自动关闭。
+
+### 4. Validation & Error Matrix
+
+| 场景 | 必须行为 | 禁止行为 |
+|---|---|---|
+| warn frame drop | volatile + exportable | durable write per sample |
+| severe frame，非 diagnostics hotspot | cooldown 内一次 durable | 每次 severe 都写盘 |
+| diagnostics-owned severe frame | volatile | 生成新的 durable frame-drop feedback |
+| legacy diagnostics >256 KiB | 下一次 persist 收敛到 byte budget | 只按 entry count 截断 |
+| page hidden with pending durable evidence | immediate flush | 丢失所有 pending evidence |
+| clear diagnostics | durable/pending/volatile 全清 | volatile 或 legacy entry 复活 |
+| cold-start normal trace burst | one canonical trace + ≤1Hz summary | trace/notice 双写 + event-cadence render |
+| <1s 展开 loading logs | frozen click snapshot；reopen refresh | expanded timeline 跟随 live burst 重投影 |
+
+### 5. Good / Base / Bad Cases
+
+- Good：raw frame samples 留在 200-entry volatile ring，severe evidence 按 cooldown durable sampling。
+- Base：低频 lifecycle/error diagnostic 继续走 `appendRendererDiagnostic`，保持 crash evidence。
+- Bad：frame monitor 每次调用 durable append；diagnostics 持久化本身造成的掉帧又追加同一 store。
+
+### 6. Tests Required
+
+- `rendererDiagnostics.test.ts` MUST 覆盖 30s batch、volatile zero-write/export/clear、256 KiB serialized cap 与 actionable retention。
+- `perfMonitoring.test.ts` MUST 覆盖 warn volatile、ordinary severe durable、cooldown、diagnostics-owned severe volatile。
+- `StartupGateOverlay.test.tsx` MUST 覆盖 summary pull cadence、expanded snapshot frozen/reopen、copy latest 与 manual-only loading。
+- `useGlobalRuntimeNoticeDock.test.tsx` MUST 覆盖 normal startup chatter 不镜像、abnormal evidence 保留。
+- 变更后运行 focused Vitest、`npm run typecheck` 与 target ESLint；涉及 startup orchestration 时追加 `npm run check:runtime-contracts`。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```typescript
+appendRendererDiagnostic("perf.frame-drop", payload);
+// 每次 rAF sample 都可能触发 diagnostics store 的全量序列化与写盘。
+```
+
+#### Correct
+
+```typescript
+if (isSevere && cooldownElapsed && !hasDiagnosticsOwnedHotspot(hotspots)) {
+  appendRendererDiagnostic("perf.frame-drop", payload);
+} else {
+  appendVolatileRendererDiagnostic("perf.frame-drop", payload);
+}
+```
+
 ## Large Tree / Commit Scope 性能约束
 
 - tree-based Git / worktree surface 的 descendant file 集合必须先在 topology helper 中预聚合，再交给 render 消费。

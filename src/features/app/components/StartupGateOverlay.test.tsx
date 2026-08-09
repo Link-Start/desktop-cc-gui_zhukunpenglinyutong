@@ -3,7 +3,7 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   STARTUP_GATE_FORCE_DISMISS_MS,
-  STARTUP_GATE_MIN_VISIBLE_MS,
+  STARTUP_GATE_MAX_VISIBLE_MS,
   StartupGateOverlay,
   buildStartupGateDiagnosticDump,
 } from "./StartupGateOverlay";
@@ -108,6 +108,37 @@ describe("StartupGateOverlay", () => {
     expect(screen.queryByTestId("startup-gate-overlay")).toBeNull();
   });
 
+  it("samples compact startup facts instead of subscribing at event cadence", async () => {
+    render(<StartupGateOverlay />);
+
+    act(() => {
+      recordStartupTaskTrace({
+        type: "task",
+        taskId: "bootstrap:i18n",
+        phase: "critical",
+        traceLabel: "i18n",
+        workspaceScope: "global",
+        lifecycleState: "started",
+        durationMs: null,
+        fallbackReason: null,
+        cancellationMode: null,
+        commandLabel: null,
+      });
+    });
+
+    expect(screen.getByTestId("startup-gate-elapsed").textContent).toContain(
+      "events 0",
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+
+    expect(screen.getByTestId("startup-gate-elapsed").textContent).toContain(
+      "events 1",
+    );
+  });
+
   it("shows force-dismiss after 10 seconds", async () => {
     render(<StartupGateOverlay />);
     expect(screen.queryByTestId("startup-gate-force-dismiss")).toBeNull();
@@ -128,20 +159,15 @@ describe("StartupGateOverlay", () => {
     expect(screen.getByTestId("startup-gate-overlay")).toBeTruthy();
   });
 
-  it("auto-hides after startup-gate-ready AND min visible time", async () => {
+  it("stays visible after startup-gate-ready until force-dismiss is clicked", async () => {
     render(<StartupGateOverlay />);
     await act(async () => {
       recordStartupMilestone("startup-gate-ready");
-      await vi.advanceTimersByTimeAsync(2_000);
+      await vi.advanceTimersByTimeAsync(STARTUP_GATE_MAX_VISIBLE_MS + 1_000);
     });
     expect(screen.getByTestId("startup-gate-overlay")).toBeTruthy();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(
-        STARTUP_GATE_MIN_VISIBLE_MS - 2_000 + 50,
-      );
-    });
-    expect(screen.queryByTestId("startup-gate-overlay")).toBeNull();
+    expect(screen.getByTestId("startup-gate-force-dismiss")).toBeTruthy();
+    expect(orchestratorMocks.cancelAllTasks).not.toHaveBeenCalled();
   });
 
   it("renders the semantic startup/runtime timeline when panel expanded", async () => {
@@ -201,6 +227,81 @@ describe("StartupGateOverlay", () => {
     expect(screen.getByTestId("startup-gate-copy-diagnostic")).toBeTruthy();
   });
 
+  it("freezes early diagnostics on expand and refreshes only after reopen", async () => {
+    const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView");
+    const view = render(<StartupGateOverlay />);
+
+    try {
+      expect(
+        screen.getByTestId("startup-gate-overlay").className,
+      ).not.toContain("backdrop-blur");
+
+      act(() => {
+        recordStartupTaskTrace({
+          type: "task",
+          taskId: "bootstrap:i18n",
+          phase: "critical",
+          traceLabel: "i18n",
+          workspaceScope: "global",
+          lifecycleState: "completed",
+          durationMs: 18,
+          fallbackReason: null,
+          cancellationMode: null,
+          commandLabel: null,
+        });
+      });
+
+      await act(async () => {
+        screen.getByTestId("startup-gate-module-panel-toggle").click();
+      });
+      expect(screen.getByTestId("startup-gate-timeline").textContent).toContain(
+        "加载语言资源",
+      );
+
+      act(() => {
+        recordStartupTaskTrace({
+          type: "task",
+          taskId: "bootstrap:workspace-list",
+          phase: "critical",
+          traceLabel: "workspace-list",
+          workspaceScope: "global",
+          lifecycleState: "started",
+          durationMs: null,
+          fallbackReason: null,
+          cancellationMode: null,
+          commandLabel: "list_workspaces",
+        });
+        pushGlobalRuntimeNotice({
+          severity: "info",
+          category: "bootstrap",
+          messageKey: "runtimeNotice.bootstrap.mountShell",
+        });
+      });
+
+      expect(screen.getByTestId("startup-gate-timeline").textContent).not.toContain(
+        "获取工作区",
+      );
+      expect(screen.getByTestId("startup-gate-timeline").textContent).not.toContain(
+        "挂载客户端界面",
+      );
+      expect(scrollIntoView).not.toHaveBeenCalled();
+
+      await act(async () => {
+        screen.getByTestId("startup-gate-module-panel-toggle").click();
+      });
+      await act(async () => {
+        screen.getByTestId("startup-gate-module-panel-toggle").click();
+      });
+
+      const refreshedTimeline = screen.getByTestId("startup-gate-timeline");
+      expect(refreshedTimeline.textContent).toContain("获取工作区");
+      expect(refreshedTimeline.textContent).toContain("挂载客户端界面");
+    } finally {
+      view.unmount();
+      scrollIntoView.mockRestore();
+    }
+  });
+
   it("force-dismiss cancels as stale and marks force-enter", async () => {
     render(<StartupGateOverlay />);
     await act(async () => {
@@ -256,6 +357,16 @@ describe("StartupGateOverlay", () => {
       screen.getByTestId("startup-gate-module-panel-toggle").click();
     });
 
+    act(() => {
+      recordStartupCommandTrace({
+        type: "command",
+        commandLabel: "post_expand_latest",
+        workspaceScope: "global",
+        durationMs: 123,
+        status: "completed",
+      });
+    });
+
     const copyButton = screen.getByTestId("startup-gate-copy-diagnostic");
     await act(async () => {
       copyButton.click();
@@ -267,6 +378,7 @@ describe("StartupGateOverlay", () => {
     expect(dump).toContain("--- command cost rank (IPC, desc) ---");
     expect(dump).toContain("list_threads");
     expect(dump).toContain("6091ms");
+    expect(dump).toContain("post_expand_latest");
     expect(dump).toContain("thread/list full-catalog hydration");
     expect(dump).toContain("runtimeNotice.bootstrap.ready");
     expect(screen.getByTestId("startup-gate-copy-diagnostic").textContent).toContain(

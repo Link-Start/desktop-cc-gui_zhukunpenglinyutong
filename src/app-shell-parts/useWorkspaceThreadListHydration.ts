@@ -2,7 +2,6 @@ import {
   startTransition,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -18,24 +17,15 @@ import {
   recordStartupMilestone,
   type StartupMilestoneName,
 } from "../features/startup-orchestration/utils/startupTrace";
-import {
-  isStartupForceEntered,
-  registerStartupIdleHydrationCancel,
-} from "../features/startup-orchestration/utils/startupForceEnter";
+import { isStartupForceEntered } from "../features/startup-orchestration/utils/startupForceEnter";
 import {
   clearFullCatalogAutoRetryCooldown,
   isFullCatalogAutoRetryBlocked,
   markFullCatalogAutoRetryCooldown,
 } from "../features/startup-orchestration/utils/fullCatalogAutoRetry";
 import { stampStartupGateReady } from "../features/startup-orchestration/utils/startupGateReady";
-import {
-  resolveNextWorkspaceThreadListHydrationId,
-  shouldSkipWorkspaceThreadListLoad,
-} from "./workspaceThreadListLoadGuard";
-import {
-  ensureInteractiveInputHooks,
-  scheduleWhenBrowserIdle,
-} from "../utils/interactiveMainThread";
+import { shouldSkipWorkspaceThreadListLoad } from "./workspaceThreadListLoadGuard";
+import { ensureInteractiveInputHooks } from "../utils/interactiveMainThread";
 
 function hasStartupGateReady(): boolean {
   return Boolean(getStartupTraceSnapshot().milestones["startup-gate-ready"]);
@@ -45,7 +35,8 @@ function hasStartupGateReady(): boolean {
  * Cold-start list guard until gate-ready / force-enter:
  * - only the current active workspace may hydrate (first-paint or full)
  * - no active yet → block all (wait for active assignment)
- * Home idle prewarm after gate is unchanged.
+ * No implicit full-catalog prewarm runs after the gate; complete history is
+ * loaded only by explicit Load older / Session Management / force refresh.
  */
 function isColdStartListGuardActive(): boolean {
   return !hasStartupGateReady() && !isStartupForceEntered();
@@ -58,8 +49,8 @@ function shouldSkipWorkspaceDuringColdStart(
   if (!isColdStartListGuardActive()) {
     return false;
   }
-  // No active yet (home): allow idle prewarm. Dual-scan was restore+active
-  // when active is set — that path still skips non-active below.
+  // Home has no active-list cold-start owner. Explicit on-demand/session-radar
+  // requests remain allowed; automatic full-catalog scheduling is removed.
   if (!activeWorkspaceId) {
     return false;
   }
@@ -125,9 +116,7 @@ function isDiscardedStaleHydrationResult(
   );
 }
 
-function isTimeoutHydrationResult(
-  result: ThreadListHydrationResult,
-): boolean {
+function isTimeoutHydrationResult(result: ThreadListHydrationResult): boolean {
   return (
     typeof result === "object" &&
     result !== null &&
@@ -205,26 +194,26 @@ function createThreadHydrationTask(
 
 function publishHydrationUiState(
   setHydrated: (next: Set<string>) => void,
-  setCycle: (updater: (current: number) => number) => void,
   nextHydrated: Set<string>,
 ): void {
   // Background lane — clicks stay urgent.
   startTransition(() => {
     setHydrated(nextHydrated);
-    setCycle((current) => current + 1);
   });
 }
 
-type ThreadListHydrationResult =
-  | void
-  | { applied?: boolean; stale?: boolean; timeout?: boolean };
+type ThreadListHydrationResult = void | {
+  applied?: boolean;
+  stale?: boolean;
+  timeout?: boolean;
+};
 const ACTIVE_WORKSPACE_READY_MILESTONE: StartupMilestoneName =
   "active-workspace-ready";
 const IDLE_PREWARM_DELAY_MS = 120;
 
 /**
  * Publish a new Set identity so memo(Sidebar) can see hydration progress.
- * Mutating a shared Set in place + setHydrationCycle alone is not enough:
+ * Mutating a shared Set in place is not enough:
  * layout passes the same Set reference into a memoized Sidebar and the
  * "加载中…" placeholder never leaves even after orchestrator timeout.
  */
@@ -246,7 +235,6 @@ export function useWorkspaceThreadListHydration({
   activeWorkspaceProjectionOwnerIds,
   listThreadsForWorkspace,
   threadListLoadingByWorkspace,
-  workspaces,
   workspacesById,
 }: UseWorkspaceThreadListHydrationOptions): UseWorkspaceThreadListHydrationResult {
   const hydratedThreadListWorkspaceIdsRef = useRef(new Set<string>());
@@ -273,12 +261,15 @@ export function useWorkspaceThreadListHydration({
       ) => void)
     | null
   >(null);
-  const idleHydrationCleanupByWorkspaceIdRef = useRef(new Map<string, () => void>());
+  const idleHydrationCleanupByWorkspaceIdRef = useRef(
+    new Map<string, () => void>(),
+  );
   // State carries the published Set identity for consumers (Sidebar via layout).
   // Ref stays the sync source of truth for in-flight guards.
   const [hydratedThreadListWorkspaceIds, setHydratedThreadListWorkspaceIds] =
-    useState<ReadonlySet<string>>(() => hydratedThreadListWorkspaceIdsRef.current);
-  const [hydrationCycle, setHydrationCycle] = useState(0);
+    useState<ReadonlySet<string>>(
+      () => hydratedThreadListWorkspaceIdsRef.current,
+    );
   const renderScheduler = useRenderScheduler({
     budgetMs: 0,
     idleTimeoutMs: IDLE_PREWARM_DELAY_MS,
@@ -300,27 +291,10 @@ export function useWorkspaceThreadListHydration({
     [renderScheduler],
   );
 
-  const backgroundHydrationWorkspaces = useMemo(() => {
-    const priorityIds = new Set(activeWorkspaceProjectionOwnerIds);
-    if (activeWorkspaceId) {
-      priorityIds.add(activeWorkspaceId);
-    }
-    const priorityWorkspaces: WorkspaceInfo[] = [];
-    const remainingWorkspaces: WorkspaceInfo[] = [];
-    workspaces.forEach((workspace) => {
-      if (priorityIds.has(workspace.id)) {
-        priorityWorkspaces.push(workspace);
-      } else {
-        remainingWorkspaces.push(workspace);
-      }
-    });
-    return [...priorityWorkspaces, ...remainingWorkspaces];
-  }, [activeWorkspaceId, activeWorkspaceProjectionOwnerIds, workspaces]);
-
   const listThreadsForWorkspaceTracked = useCallback<ListThreadsForWorkspace>(
     async (workspace, options) => {
       // Cold-start: restore/focus/reload must not dual-scan non-active workspaces
-      // (dump: mossx + 内容分析 first-paint both on-demand at t≈1.7s).
+      // (dump: two workspaces first-painted on-demand together at t≈1.7s).
       if (
         shouldSkipWorkspaceDuringColdStart(
           workspace.id,
@@ -333,8 +307,9 @@ export function useWorkspaceThreadListHydration({
       hydratingThreadListWorkspaceIdsRef.current.add(workspace.id);
       // Default path for direct callers (reload / rename): never assume full-catalog
       // on a never-hydrated workspace — that was the cold-start "no first-paint" bug.
-      const uiAlreadyHydrated =
-        hydratedThreadListWorkspaceIdsRef.current.has(workspace.id);
+      const uiAlreadyHydrated = hydratedThreadListWorkspaceIdsRef.current.has(
+        workspace.id,
+      );
       const kind: ThreadHydrationKind =
         hydrationKindByWorkspaceIdRef.current.get(workspace.id) ??
         (uiAlreadyHydrated ? "full-catalog" : "first-paint");
@@ -350,8 +325,7 @@ export function useWorkspaceThreadListHydration({
       let hydrationResult: ThreadListHydrationResult = undefined;
       const finishedKind = kind;
       try {
-        const mode =
-          kind === "first-paint" ? "first-paint" : "full-catalog";
+        const mode = kind === "first-paint" ? "first-paint" : "full-catalog";
         hydrationResult = await startupOrchestrator.run(
           createThreadHydrationTask(workspace, phase, kind, async (context) => {
             if (context.isStale()) {
@@ -370,8 +344,7 @@ export function useWorkspaceThreadListHydration({
           isDiscardedStaleHydrationResult(hydrationResult);
         const settledAsTimeout =
           !discardedAsStale && isTimeoutHydrationResult(hydrationResult);
-        const isStillActive =
-          workspace.id === activeWorkspaceIdRef.current;
+        const isStillActive = workspace.id === activeWorkspaceIdRef.current;
 
         if (
           !discardedAsStale &&
@@ -406,38 +379,10 @@ export function useWorkspaceThreadListHydration({
           }
           publishHydrationUiState(
             setHydratedThreadListWorkspaceIds,
-            setHydrationCycle,
             nextHydrated,
           );
-          if (
-            finishedKind === "first-paint" &&
-            isStillActive &&
-            !isStartupForceEntered() &&
-            !isFullCatalogAutoRetryBlocked(workspace.id)
-          ) {
-            // CRITICAL: do NOT setTimeout(0) full-catalog — wait for real idle.
-            const cancelIdleFullCatalog = scheduleWhenBrowserIdle(
-              () => {
-                if (
-                  isStartupForceEntered() ||
-                  isFullCatalogAutoRetryBlocked(workspace.id)
-                ) {
-                  return;
-                }
-                // Prefer hydrating the current active after gate, not a stale id.
-                const targetId =
-                  activeWorkspaceIdRef.current ?? workspace.id;
-                ensureWorkspaceThreadListLoadedRef.current?.(targetId, {
-                  preserveState: true,
-                });
-              },
-              { minDelayMs: 1_500, timeoutMs: 6_000 },
-            );
-            registerStartupIdleHydrationCancel(cancelIdleFullCatalog);
-          }
         } else {
-          // Stale discard: tick cycle for background scheduler + re-ensure first-paint.
-          setHydrationCycle((current) => current + 1);
+          // Stale discard: re-ensure first-paint only for the still-active owner.
           if (finishedKind === "first-paint") {
             autoHydratedActiveWorkspaceIdRef.current = null;
             Promise.resolve().then(() => {
@@ -590,69 +535,6 @@ export function useWorkspaceThreadListHydration({
     ],
   );
 
-  const prewarmFullCatalogForWorkspace = useCallback(
-    (workspaceId: string) => {
-      const workspace = workspacesById.get(workspaceId);
-      if (!workspace) {
-        return;
-      }
-      // While an active workspace is still in cold-start, do not prewarm others.
-      // Home (no active) may still idle-prewarm.
-      if (isColdStartListGuardActive() && activeWorkspaceId) {
-        return;
-      }
-      if (isStartupForceEntered() || isFullCatalogAutoRetryBlocked(workspaceId)) {
-        return;
-      }
-      if (threadListLoadingByWorkspace[workspaceId] ?? false) {
-        return;
-      }
-      if (hydratingThreadListWorkspaceIdsRef.current.has(workspaceId)) {
-        return;
-      }
-      if (fullyHydratedThreadListWorkspaceIdsRef.current.has(workspaceId)) {
-        return;
-      }
-      if (idleHydrationCleanupByWorkspaceIdRef.current.has(workspaceId)) {
-        return;
-      }
-      const cleanup = scheduleIdleHydration(() => {
-        idleHydrationCleanupByWorkspaceIdRef.current.delete(workspaceId);
-        if (
-          (isColdStartListGuardActive() && activeWorkspaceIdRef.current) ||
-          isStartupForceEntered()
-        ) {
-          return;
-        }
-        if (isFullCatalogAutoRetryBlocked(workspaceId)) {
-          return;
-        }
-        if (threadListLoadingByWorkspace[workspaceId] ?? false) {
-          return;
-        }
-        if (hydratingThreadListWorkspaceIdsRef.current.has(workspaceId)) {
-          return;
-        }
-        if (fullyHydratedThreadListWorkspaceIdsRef.current.has(workspaceId)) {
-          return;
-        }
-        hydrationPhaseByWorkspaceIdRef.current.set(workspaceId, "idle-prewarm");
-        hydrationKindByWorkspaceIdRef.current.set(workspaceId, "full-catalog");
-        void listThreadsForWorkspaceTracked(workspace, {
-          preserveState: true,
-        });
-      });
-      idleHydrationCleanupByWorkspaceIdRef.current.set(workspaceId, cleanup);
-    },
-    [
-      activeWorkspaceId,
-      listThreadsForWorkspaceTracked,
-      scheduleIdleHydration,
-      threadListLoadingByWorkspace,
-      workspacesById,
-    ],
-  );
-
   useEffect(() => {
     ensureInteractiveInputHooks();
   }, []);
@@ -731,6 +613,9 @@ export function useWorkspaceThreadListHydration({
       if (!workspacesById.has(workspaceId)) {
         return;
       }
+      if (hydratedThreadListWorkspaceIdsRef.current.has(workspaceId)) {
+        return;
+      }
       ensureWorkspaceThreadListLoaded(workspaceId, { preserveState: true });
     });
   }, [
@@ -738,45 +623,6 @@ export function useWorkspaceThreadListHydration({
     activeWorkspaceProjectionOwnerIds,
     ensureWorkspaceThreadListLoaded,
     workspacesById,
-  ]);
-
-  const nextBackgroundWorkspaceThreadHydrationId =
-    resolveNextWorkspaceThreadListHydrationId({
-      workspaces: backgroundHydrationWorkspaces,
-      activeWorkspaceProjectionOwnerIds:
-        activeWorkspaceProjectionOwnerIds.filter(
-          (workspaceId) => workspaceId !== activeWorkspaceId,
-        ),
-      hydratedWorkspaceIds: fullyHydratedThreadListWorkspaceIdsRef.current,
-      hydratingWorkspaceIds: hydratingThreadListWorkspaceIdsRef.current,
-      loadingByWorkspace: threadListLoadingByWorkspace,
-    });
-
-  void hydrationCycle;
-
-  useEffect(() => {
-    if (!nextBackgroundWorkspaceThreadHydrationId) {
-      return;
-    }
-    if (isColdStartListGuardActive() && activeWorkspaceId) {
-      return;
-    }
-    // Do not stack idle full-catalog on top of the active workspace scan —
-    // that overlap was the cold-start "any click freezes until list lands"
-    // window. Skip while the active id is still in-flight; after settle/stale
-    // the hydrating set clears and background can proceed (or retry).
-    if (
-      activeWorkspaceId &&
-      hydratingThreadListWorkspaceIdsRef.current.has(activeWorkspaceId)
-    ) {
-      return;
-    }
-    prewarmFullCatalogForWorkspace(nextBackgroundWorkspaceThreadHydrationId);
-  }, [
-    activeWorkspaceId,
-    nextBackgroundWorkspaceThreadHydrationId,
-    prewarmFullCatalogForWorkspace,
-    hydrationCycle,
   ]);
 
   useEffect(() => {

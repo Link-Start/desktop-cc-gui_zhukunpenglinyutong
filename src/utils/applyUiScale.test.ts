@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   applyUiScale,
   cssZoomLayoutFillSize,
   enqueueApplyUiScale,
-  resetUiScaleNativePinForTests,
+  resetApplyUiScaleQueueForTests,
   resolveCssZoomLayoutTarget,
   usesCssPageZoom,
 } from "./applyUiScale";
@@ -29,7 +29,7 @@ function clearEl(el: HTMLElement): void {
 }
 
 beforeEach(() => {
-  resetUiScaleNativePinForTests();
+  resetApplyUiScaleQueueForTests();
   clearEl(document.documentElement);
   clearEl(document.body);
 });
@@ -67,12 +67,10 @@ describe("resolveCssZoomLayoutTarget", () => {
 });
 
 describe("applyUiScale", () => {
-  it("windows: CSS zoom only, native zoom pinned to 1 once", async () => {
+  it("windows: applies CSS zoom without a native target", async () => {
     const root = makeRoot();
-    const setNativeZoom = vi.fn(async () => undefined);
     await applyUiScale(1.1, {
       root,
-      setNativeZoom,
       platform: "windows",
     });
     expect(root.style.zoom).toBe("1.1");
@@ -81,18 +79,14 @@ describe("applyUiScale", () => {
     expect(root.style.height).toBe("");
     expect(root.style.position).toBe("");
     expect(root.style.getPropertyValue("--ui-scale")).toBe("1.1");
-    expect(setNativeZoom).toHaveBeenCalledTimes(1);
-    expect(setNativeZoom).toHaveBeenCalledWith(1);
 
     await applyUiScale(0.8, {
       root,
-      setNativeZoom,
       platform: "windows",
     });
     expect(root.style.zoom).toBe("0.8");
     expect(root.style.transform).toBe("");
     expect(root.style.width).toBe("");
-    expect(setNativeZoom).toHaveBeenCalledTimes(1);
   });
 
   it("windows documentElement: zooms body and clears residual html transform", async () => {
@@ -130,37 +124,26 @@ describe("applyUiScale", () => {
 
   it("enqueueApplyUiScale serializes and keeps latest scale", async () => {
     const root = makeRoot();
-    const order: number[] = [];
-    const setNativeZoom = vi.fn(async (factor: number) => {
-      order.push(factor);
-      await new Promise((r) => setTimeout(r, 5));
-    });
     const slow = enqueueApplyUiScale(1.2, {
       root,
-      setNativeZoom,
       platform: "windows",
     });
     const fast = enqueueApplyUiScale(0.8, {
       root,
-      setNativeZoom,
       platform: "windows",
     });
     await Promise.all([slow, fast]);
     expect(root.style.zoom).toBe("0.8");
     expect(root.style.transform).toBe("");
-    expect(order[order.length - 1]).toBe(1);
   });
 
-  it("macos/linux: CSS zoom + native pin 1", async () => {
+  it("macos/linux: uses the same CSS-only path", async () => {
     for (const platform of ["macos", "linux"] as const) {
-      resetUiScaleNativePinForTests();
+      resetApplyUiScaleQueueForTests();
       const root = makeRoot();
-      const setNativeZoom = vi.fn(async () => undefined);
-      await applyUiScale(0.8, { root, setNativeZoom, platform });
+      await applyUiScale(0.8, { root, platform });
       expect(root.style.zoom).toBe("0.8");
       expect(root.style.transform).toBe("");
-      expect(setNativeZoom).toHaveBeenCalledWith(1);
-      expect(setNativeZoom).not.toHaveBeenCalledWith(0.8);
     }
   });
 });

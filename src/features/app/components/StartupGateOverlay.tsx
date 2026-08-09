@@ -1,14 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useStartupTraceSnapshot } from "../../startup-orchestration/hooks/useStartupTrace";
 import {
   getStartupTraceSnapshot,
-  subscribeStartupTrace,
   type StartupTraceEvent,
 } from "../../startup-orchestration/utils/startupTrace";
 import {
   getGlobalRuntimeNoticesSnapshot,
-  subscribeGlobalRuntimeNotices,
   type GlobalRuntimeNotice,
 } from "../../../services/globalRuntimeNotices";
 import { startupOrchestrator } from "../../startup-orchestration/utils/startupOrchestrator";
@@ -21,7 +18,7 @@ import type { WorkspaceInfo } from "../../../types";
 import { StartupDiagnosticsTimeline } from "./StartupDiagnosticsTimeline";
 
 /**
- * Force-enter / max-visible unmask:
+ * Manual force-enter unmask:
  * soft-cancel startup scans so late setThreads no-ops when the user clicks in.
  * Do NOT stamp startup-gate-ready here — that would immediately apply any
  * uiScale ≠ 1 (0.8 / 0.9 / 1.1 / 1.2 / …) into the same click window.
@@ -37,14 +34,12 @@ function forceEnterApp(setOpen: (open: boolean) => void) {
 
 /** After this delay, show the force-dismiss control. */
 export const STARTUP_GATE_FORCE_DISMISS_MS = 10_000;
+const STARTUP_GATE_SUMMARY_REFRESH_MS = 1_000;
 
-/**
- * Auto-unmask only after this much wall time AND a late-enough ready signal.
- * first-paint / early input-ready alone must NOT unmask.
- */
+/** @deprecated StartupGate 不再自动关闭；仅保留旧 import 兼容。 */
 export const STARTUP_GATE_MIN_VISIBLE_MS = 8_000;
 
-/** Absolute ceiling: auto-unmask even without milestone. */
+/** @deprecated StartupGate 不再自动关闭；仅保留旧 import 兼容。 */
 export const STARTUP_GATE_MAX_VISIBLE_MS = 20_000;
 
 /** @deprecated Prefer STARTUP_GATE_FORCE_DISMISS_MS */
@@ -57,35 +52,6 @@ export const WINDOWS_STARTUP_GATE_MAX_VISIBLE_MS = STARTUP_GATE_MAX_VISIBLE_MS;
 function nowMs(): number {
   return typeof performance !== "undefined" ? performance.now() : Date.now();
 }
-
-/**
- * Ready for auto-unmask (must still wait MIN_VISIBLE_MS).
- * - `startup-gate-ready`: first-paint / gate ready (preferred)
- * - home-only: `input-ready` without ever starting active workspace list
- */
-function isLateEnoughReady(): boolean {
-  const milestones = getStartupTraceSnapshot().milestones;
-  if (milestones["startup-gate-ready"]) {
-    return true;
-  }
-  if (
-    milestones["input-ready"] &&
-    !milestones["active-workspace-ready"]
-  ) {
-    return true;
-  }
-  return false;
-}
-
-/**
- * 自动关闭策略对照入口（便于单测/诊断引用阈值）。
- */
-export const __startupGateAutoCloseRestore = {
-  isLateEnoughReady,
-  minVisibleMs: STARTUP_GATE_MIN_VISIBLE_MS,
-  maxVisibleMs: STARTUP_GATE_MAX_VISIBLE_MS,
-  forceDismissMs: STARTUP_GATE_FORCE_DISMISS_MS,
-} as const;
 
 function formatElapsedMs(elapsedMs: number): string {
   const seconds = elapsedMs / 1000;
@@ -280,20 +246,6 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
-function useRuntimeNoticesSnapshot(): readonly GlobalRuntimeNotice[] {
-  const [notices, setNotices] = useState<readonly GlobalRuntimeNotice[]>(() =>
-    getGlobalRuntimeNoticesSnapshot(),
-  );
-
-  useEffect(() => {
-    return subscribeGlobalRuntimeNotices((snapshot) => {
-      setNotices(snapshot);
-    });
-  }, []);
-
-  return notices;
-}
-
 function loadStartupTimelineWorkspaces(): readonly WorkspaceInfo[] {
   try {
     return loadSidebarSnapshot()?.workspaces ?? [];
@@ -303,15 +255,80 @@ function loadStartupTimelineWorkspaces(): readonly WorkspaceInfo[] {
   }
 }
 
+type StartupGateSummary = {
+  elapsedMs: number;
+  events: number;
+  uniqueTasks: number;
+  notices: number;
+  running: number;
+  completed: number;
+  failed: number;
+  other: number;
+  milestones: string;
+};
+
+type StartupGateTimelineSnapshot = {
+  events: readonly StartupTraceEvent[];
+  notices: readonly GlobalRuntimeNotice[];
+};
+
+function readStartupGateSummary(elapsedMs: number): StartupGateSummary {
+  const traceSnapshot = getStartupTraceSnapshot();
+  const latestByTaskId = new Map<
+    string,
+    Extract<StartupTraceEvent, { type: "task" }>
+  >();
+  for (const event of traceSnapshot.events) {
+    if (event.type === "task") {
+      latestByTaskId.set(event.taskId, event);
+    }
+  }
+
+  let running = 0;
+  let completed = 0;
+  let failed = 0;
+  let other = 0;
+  for (const task of latestByTaskId.values()) {
+    if (task.lifecycleState === "started" || task.lifecycleState === "queued") {
+      running += 1;
+    } else if (task.lifecycleState === "completed") {
+      completed += 1;
+    } else if (
+      task.lifecycleState === "failed" ||
+      task.lifecycleState === "timed-out"
+    ) {
+      failed += 1;
+    } else {
+      other += 1;
+    }
+  }
+
+  return {
+    elapsedMs,
+    events: traceSnapshot.events.length,
+    uniqueTasks: latestByTaskId.size,
+    notices: getGlobalRuntimeNoticesSnapshot().length,
+    running,
+    completed,
+    failed,
+    other,
+    milestones: Object.keys(traceSnapshot.milestones).join(", ") || "—",
+  };
+}
+
+function captureStartupGateTimelineSnapshot(): StartupGateTimelineSnapshot {
+  return {
+    events: [...getStartupTraceSnapshot().events],
+    notices: getGlobalRuntimeNoticesSnapshot(),
+  };
+}
+
 /**
  * Desktop (Tauri: Windows / macOS / Linux) full-window mask during cold start so
  * users cannot click into the busy hydrate window.
  *
- * Close rules:
- * - Auto: late ready (`startup-gate-ready` / home input) AND min 8s visible
- * - Auto ceiling: 20s (+ force-enter cancel)
- * - Force: button after 10s (+ force-enter cancel)
- * - Overlay still lists startupTrace + runtimeNotice for diagnostics
+ * Close rule: only the user-visible force-enter button may dismiss the gate.
+ * Milestones remain diagnostic facts and never auto-hide loading.
  */
 export function StartupGateOverlay() {
   const { t } = useTranslation();
@@ -319,45 +336,35 @@ export function StartupGateOverlay() {
   const mountedAtRef = useRef(nowMs());
   const [open, setOpen] = useState(() => enabled);
   const [showForceDismiss, setShowForceDismiss] = useState(false);
-  const [elapsedMs, setElapsedMs] = useState(0);
+  const [taskStats, setTaskStats] = useState<StartupGateSummary>(() =>
+    readStartupGateSummary(0),
+  );
   const [copyState, setCopyState] = useState<"idle" | "ok" | "fail">("idle");
-  /** 诊断时间轴默认折叠，避免冷启遮罩占满屏；需要时再展开。 */
-  const [modulePanelExpanded, setModulePanelExpanded] = useState(false);
+  /** 展开时冻结点击瞬间的 facts；收起再展开才刷新。 */
+  const [timelineSnapshot, setTimelineSnapshot] =
+    useState<StartupGateTimelineSnapshot | null>(null);
   const [timelineWorkspaces] = useState(loadStartupTimelineWorkspaces);
 
-  const traceSnapshot = useStartupTraceSnapshot();
-  const runtimeNotices = useRuntimeNoticesSnapshot();
-
-  const diagnosticDump = useMemo(
-    () =>
-      buildStartupGateDiagnosticDump({
-        elapsedMs,
-        events: traceSnapshot.events,
-        milestones: traceSnapshot.milestones,
-        notices: runtimeNotices,
-        gateReadyReason: getStartupGateReadyReason(),
-        fullCatalogAutoRetryBlocked: getFullCatalogAutoRetryBlockedSnapshot(),
-        resolveNoticeLabel: (notice) => {
-          try {
-            return t(
-              notice.messageKey,
-              notice.messageParams as Record<string, unknown> | undefined,
-            );
-          } catch {
-            return notice.messageKey;
-          }
-        },
-      }),
-    [
-      elapsedMs,
-      traceSnapshot.events,
-      traceSnapshot.milestones,
-      runtimeNotices,
-      t,
-    ],
-  );
-
   const handleCopyDiagnostic = async () => {
+    const traceSnapshot = getStartupTraceSnapshot();
+    const diagnosticDump = buildStartupGateDiagnosticDump({
+      elapsedMs: nowMs() - mountedAtRef.current,
+      events: traceSnapshot.events,
+      milestones: traceSnapshot.milestones,
+      notices: getGlobalRuntimeNoticesSnapshot(),
+      gateReadyReason: getStartupGateReadyReason(),
+      fullCatalogAutoRetryBlocked: getFullCatalogAutoRetryBlockedSnapshot(),
+      resolveNoticeLabel: (notice) => {
+        try {
+          return t(
+            notice.messageKey,
+            notice.messageParams as Record<string, unknown> | undefined,
+          );
+        } catch {
+          return notice.messageKey;
+        }
+      },
+    });
     const ok = await copyTextToClipboard(diagnosticDump);
     setCopyState(ok ? "ok" : "fail");
     window.setTimeout(() => {
@@ -365,77 +372,36 @@ export function StartupGateOverlay() {
     }, 2_000);
   };
 
-  // 顶部摘要继续基于 raw facts，避免被时间轴聚合后的节点数误导。
-  const taskStats = useMemo(() => {
-    const latestByTaskId = new Map<string, Extract<StartupTraceEvent, { type: "task" }>>();
-    for (const event of traceSnapshot.events) {
-      if (event.type === "task") {
-        latestByTaskId.set(event.taskId, event);
-      }
+  const modulePanelExpanded = timelineSnapshot !== null;
+
+  const handleToggleTimeline = () => {
+    if (timelineSnapshot) {
+      setTimelineSnapshot(null);
+      return;
     }
-    let running = 0;
-    let completed = 0;
-    let failed = 0;
-    let other = 0;
-    for (const task of latestByTaskId.values()) {
-      if (task.lifecycleState === "started" || task.lifecycleState === "queued") {
-        running += 1;
-      } else if (task.lifecycleState === "completed") {
-        completed += 1;
-      } else if (
-        task.lifecycleState === "failed" ||
-        task.lifecycleState === "timed-out"
-      ) {
-        failed += 1;
-      } else {
-        other += 1;
-      }
-    }
-    return {
-      uniqueTasks: latestByTaskId.size,
-      events: traceSnapshot.events.length,
-      notices: runtimeNotices.length,
-      running,
-      completed,
-      failed,
-      other,
-      milestones: Object.keys(traceSnapshot.milestones).join(", ") || "—",
-    };
-  }, [traceSnapshot.events, traceSnapshot.milestones, runtimeNotices.length]);
+    setTimelineSnapshot(captureStartupGateTimelineSnapshot());
+  };
 
   useEffect(() => {
     if (!enabled || !open) {
       return;
     }
 
-    const tryAutoClose = () => {
-      const elapsed = nowMs() - mountedAtRef.current;
-      if (elapsed >= STARTUP_GATE_MAX_VISIBLE_MS) {
-        forceEnterApp(setOpen);
-        return;
-      }
-      if (isLateEnoughReady() && elapsed >= STARTUP_GATE_MIN_VISIBLE_MS) {
-        setOpen(false);
-      }
-    };
-
-    tryAutoClose();
-    const unsub = subscribeStartupTrace(tryAutoClose);
-    const tickTimer = window.setInterval(tryAutoClose, 250);
-
     const forceTimer = window.setTimeout(() => {
       setShowForceDismiss(true);
     }, STARTUP_GATE_FORCE_DISMISS_MS);
 
-    const elapsedTimer = window.setInterval(() => {
-      setElapsedMs(nowMs() - mountedAtRef.current);
-    }, 100);
+    const refreshSummary = () => {
+      setTaskStats(readStartupGateSummary(nowMs() - mountedAtRef.current));
+    };
+    const summaryTimer = window.setInterval(
+      refreshSummary,
+      STARTUP_GATE_SUMMARY_REFRESH_MS,
+    );
 
     return () => {
-      unsub();
       window.clearTimeout(forceTimer);
-      window.clearInterval(tickTimer);
-      window.clearInterval(elapsedTimer);
+      window.clearInterval(summaryTimer);
     };
   }, [enabled, open]);
 
@@ -445,7 +411,7 @@ export function StartupGateOverlay() {
 
   return (
     <div
-      className="fixed inset-0 z-[2147483000] flex flex-col items-center justify-center gap-3 bg-[color-mix(in_srgb,var(--surface-messages,#0d0f14)_92%,transparent)] px-4 text-foreground backdrop-blur-[2px]"
+      className="fixed inset-0 z-[2147483000] flex flex-col items-center justify-center gap-3 bg-[color-mix(in_srgb,var(--surface-messages,#0d0f14)_92%,transparent)] px-4 text-foreground"
       role="alertdialog"
       aria-modal="true"
       aria-busy="true"
@@ -471,7 +437,7 @@ export function StartupGateOverlay() {
         className="shrink-0 font-mono text-[11px] text-muted-foreground/80"
         data-testid="startup-gate-elapsed"
       >
-        elapsed {formatElapsedMs(elapsedMs)} · events {taskStats.events} · tasks{" "}
+        elapsed {formatElapsedMs(taskStats.elapsedMs)} · events {taskStats.events} · tasks{" "}
         {taskStats.uniqueTasks} · notices {taskStats.notices} · run{" "}
         {taskStats.running} · ok {taskStats.completed} · fail {taskStats.failed}
         {taskStats.other ? ` · other ${taskStats.other}` : ""}
@@ -496,22 +462,23 @@ export function StartupGateOverlay() {
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
-            setModulePanelExpanded((prev) => !prev);
+            handleToggleTimeline();
           }}
         >
           <span aria-hidden>{modulePanelExpanded ? "▼" : "▶"}</span>
           <span>
             {modulePanelExpanded ? "收起加载日志" : "展开加载日志"} · trace{" "}
-            {traceSnapshot.events.length} · notices {runtimeNotices.length}
+            {timelineSnapshot?.events.length ?? taskStats.events} · notices{" "}
+            {timelineSnapshot?.notices.length ?? taskStats.notices}
           </span>
         </button>
 
-        {modulePanelExpanded ? (
+        {timelineSnapshot ? (
           <>
             <div className="flex max-h-[min(52vh,520px)] min-h-0 w-full shrink overflow-hidden">
               <StartupDiagnosticsTimeline
-                events={traceSnapshot.events}
-                notices={runtimeNotices}
+                events={timelineSnapshot.events}
+                notices={timelineSnapshot.notices}
                 workspaces={timelineWorkspaces}
               />
             </div>
@@ -569,7 +536,9 @@ export function StartupGateOverlay() {
             force-enter in{" "}
             {Math.max(
               0,
-              Math.ceil((STARTUP_GATE_FORCE_DISMISS_MS - elapsedMs) / 1000),
+              Math.ceil(
+                (STARTUP_GATE_FORCE_DISMISS_MS - taskStats.elapsedMs) / 1000,
+              ),
             )}
             s
           </span>

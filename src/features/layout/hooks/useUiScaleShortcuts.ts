@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { useTranslation } from "react-i18next";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { AppSettings } from "../../../types";
 import { applyUiScaleToDocument } from "../../../utils/applyUiScale";
 import {
@@ -77,8 +76,9 @@ export function useUiScaleShortcuts({
     if (typeof window === "undefined" || typeof document === "undefined") {
       return;
     }
-    // CSS `zoom` carries uiScale; native webview zoom is pinned to 1 once.
-    // setZoom(≠1) and transform+fill freezes are documented in
+    // CSS `zoom` carries uiScale; native WebView zoom is never touched.
+    // setZoom (including identity writes during cold start) and transform+fill
+    // freezes are documented in
     // docs/analysis/windows-ccgui-startup-hang-2026-08-05.md.
     //
     // Cold-start deferral: ANY uiScale ≠ 1 (0.8 / 0.9 / 1.1 / 1.2 / …) + early
@@ -93,22 +93,17 @@ export function useUiScaleShortcuts({
       effectiveScale = 1;
       forcedIdentity = true;
     }
-    let setNativeZoom: ((factor: number) => Promise<void>) | undefined;
-    try {
-      const webview = getCurrentWebview();
-      setNativeZoom = (factor) => webview.setZoom(factor);
-    } catch {
-      setNativeZoom = undefined;
-    }
-
     let cancelled = false;
     const apply = (scale: number) => {
       if (cancelled) {
         return;
       }
-      void applyUiScaleToDocument(scale, { setNativeZoom }).catch(
-        () => undefined,
-      );
+      void applyUiScaleToDocument(scale).catch((error) => {
+        appendRendererDiagnostic("ui-scale/css-apply-failed", {
+          error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+          scale,
+        });
+      });
     };
 
     // Phase 1: always identity first (safe for WebView2 + cold-start clicks).
@@ -174,15 +169,9 @@ export function useUiScaleShortcuts({
         return;
       }
       const milestones = getStartupTraceSnapshot().milestones;
-      // Prefer full-catalog done. Home-only: input-ready without ever starting list.
-      if (
-        milestones["startup-gate-ready"] ||
-        (milestones["input-ready"] && !milestones["active-workspace-ready"])
-      ) {
-        applyUserScaleOnce();
-        return;
-      }
-      // Force-enter path: wait a short quiet window after unmask.
+      // force-enter also stamps startup-gate-ready. Honor its quiet window
+      // before the generic milestone branch so the click cannot immediately
+      // collide with a CSS relayout.
       if (isStartupForceEntered()) {
         const enteredAt = getStartupForceEnteredAtMs();
         const elapsed =
@@ -199,6 +188,15 @@ export function useUiScaleShortcuts({
             tryApplyUserScale();
           }, Math.max(0, UI_SCALE_AFTER_FORCE_ENTER_DELAY_MS - elapsed));
         }
+        return;
+      }
+      // Prefer full-catalog done. Home-only: input-ready without ever starting list.
+      if (
+        milestones["startup-gate-ready"] ||
+        (milestones["input-ready"] && !milestones["active-workspace-ready"])
+      ) {
+        applyUserScaleOnce();
+        return;
       }
     };
 
