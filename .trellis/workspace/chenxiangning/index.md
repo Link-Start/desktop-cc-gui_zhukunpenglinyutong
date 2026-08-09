@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-32.md`
-- **Total Sessions**: 1357
+- **Total Sessions**: 1360
 - **Last Active**: 2026-08-09
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-32.md` | ~322 | Active |
+| `journal-32.md` | ~421 | Active |
 | `journal-31.md` | ~1968 | Archived |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
@@ -60,6 +60,9 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1360 | 2026-08-09 | 合并 upstream 0.8.5 更新 | `c4c382832` | `cxn-version-0.8.5` |
+| 1359 | 2026-08-09 | 根治冷启点击卡死 | `3c3ac3f08` | `cxn-version-0.8.5` |
+| 1358 | 2026-08-09 | 重构启动诊断时间轴 | `db8b3c308` | `cxn-version-0.8.5` |
 | 1357 | 2026-08-09 | 默认隐藏并按需恢复启动遮罩 | `本次合并提交` | `cxn-version-0.8.5` |
 | 1356 | 2026-08-09 | 修复工作区切换全量会话扫描 | `0f5f6ca76` | `cxn-version-0.8.5` |
 | 1355 | 2026-08-08 | 冷启 first-paint 编排闭环收口 | `a094a67ab` | `cxn-version-0.8.4` |

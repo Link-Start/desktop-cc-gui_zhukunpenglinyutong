@@ -8,7 +8,7 @@ import {
 } from "./useUiScaleShortcuts";
 import type { AppSettings } from "../../../types";
 import type { RendererPlatform } from "../../../utils/rendererPlatform";
-import { resetUiScaleNativePinForTests } from "../../../utils/applyUiScale";
+import { resetApplyUiScaleQueueForTests } from "../../../utils/applyUiScale";
 import {
   readUiScaleStartupGuardRecord,
   resetUiScaleStartupGuardForTests,
@@ -22,17 +22,8 @@ import {
   resetStartupTraceForTests,
 } from "../../startup-orchestration/utils/startupTrace";
 
-const webviewMocks = vi.hoisted(() => ({
-  getCurrentWebview: vi.fn(),
-  setZoom: vi.fn(async () => undefined),
-}));
-
 const platformMocks = vi.hoisted(() => ({
   platform: "macos" as RendererPlatform,
-}));
-
-vi.mock("@tauri-apps/api/webview", () => ({
-  getCurrentWebview: webviewMocks.getCurrentWebview,
 }));
 
 vi.mock("../../../utils/rendererPlatform", async () => {
@@ -70,7 +61,7 @@ describe("useUiScaleShortcuts", () => {
   });
 
   beforeEach(() => {
-    resetUiScaleNativePinForTests();
+    resetApplyUiScaleQueueForTests();
     resetUiScaleStartupGuardForTests();
     resetStartupForceEnterForTests();
     resetStartupTraceForTests();
@@ -86,15 +77,9 @@ describe("useUiScaleShortcuts", () => {
     document.body.style.height = "";
     document.body.style.transform = "";
     document.body.style.position = "";
-    webviewMocks.setZoom.mockReset();
-    webviewMocks.setZoom.mockResolvedValue(undefined);
-    webviewMocks.getCurrentWebview.mockReset();
-    webviewMocks.getCurrentWebview.mockReturnValue({
-      setZoom: webviewMocks.setZoom,
-    });
   });
 
-  it("macos: CSS zoom on body, native zoom pinned to 1", async () => {
+  it("macos: applies CSS zoom on body", async () => {
     platformMocks.platform = "macos";
     document.documentElement.style.zoom = "0.8";
     document.body.style.zoom = "0.8";
@@ -111,12 +96,10 @@ describe("useUiScaleShortcuts", () => {
       expect(document.documentElement.style.zoom).toBe("");
       expect(document.body.style.zoom).toBe("1.1");
       expect(document.body.style.transform).toBe("");
-      expect(webviewMocks.setZoom).toHaveBeenCalledWith(1);
     });
-    expect(webviewMocks.setZoom).not.toHaveBeenCalledWith(1.1);
   });
 
-  it("linux: CSS zoom path (native pinned to 1)", async () => {
+  it("linux: applies the CSS zoom path", async () => {
     platformMocks.platform = "linux";
     renderHook(() =>
       useUiScaleShortcuts({
@@ -129,12 +112,10 @@ describe("useUiScaleShortcuts", () => {
     await waitFor(() => {
       expect(document.body.style.zoom).toBe("0.8");
       expect(document.body.style.transform).toBe("");
-      expect(webviewMocks.setZoom).toHaveBeenCalledWith(1);
     });
-    expect(webviewMocks.setZoom).not.toHaveBeenCalledWith(0.8);
   });
 
-  it("windows: CSS zoom on body, no transform fill, native pin 1", async () => {
+  it("windows: applies CSS zoom on body without transform fill", async () => {
     platformMocks.platform = "windows";
     renderHook(() =>
       useUiScaleShortcuts({
@@ -150,18 +131,11 @@ describe("useUiScaleShortcuts", () => {
       expect(document.body.style.transform).toBe("");
       expect(document.body.style.width).toBe("");
       expect(document.body.style.position).toBe("");
-      expect(webviewMocks.setZoom).toHaveBeenCalledWith(1);
     });
-    expect(webviewMocks.setZoom).not.toHaveBeenCalledWith(0.8);
   });
 
-  it("survives missing Tauri window metadata in browser previews", async () => {
+  it("works in browser previews without Tauri window metadata", async () => {
     platformMocks.platform = "unknown";
-    webviewMocks.getCurrentWebview.mockImplementation(() => {
-      throw new TypeError(
-        "Cannot read properties of undefined (reading 'metadata')",
-      );
-    });
 
     expect(() =>
       renderHook(() =>

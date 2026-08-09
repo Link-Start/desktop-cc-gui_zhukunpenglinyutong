@@ -24,6 +24,10 @@
 - `buildWorkspaceSessionSelectionKey(entry)`
 - `parse_codex_session_summary(...) -> Option<LocalUsageSessionSummary>`
 - `scan_codex_session_summaries(...) -> Vec<LocalUsageSessionSummary>`
+- `list_codex_session_previews_for_workspace(workspaces, workspaceId, limit) -> (workspacePath, Vec<LocalUsageSessionSummary>)`
+- `scan_codex_session_summaries_bounded_with_mode(..., uniqueSessionLimit, CodexSessionParseMode)`
+- `CodexSessionParseMode::{Full, ThreadPreview}`
+- `CODEX_THREAD_PREVIEW_MAX_BYTES = 256 * 1024`
 - `merge_duplicate_codex_session_summary(existing, candidate)`
 - `merge_unified_codex_thread_entries(...) -> Vec<Value>`
 - `dedupe_catalog_entries_and_apply_children_counts(...) -> Vec<WorkspaceSessionCatalogEntry>`
@@ -59,6 +63,9 @@
 - Codex rollout `session_meta.payload.source.subagent.thread_spawn` 是 parent relationship 的 source fact。scanner MUST 兼容 snake_case / camelCase，保留首次有效 `parent_thread_id`，且后续 copied parent `session_meta` MUST NOT 覆盖 child canonical UUID 或 relationship。
 - Codex child display title MUST 按 `agent_nickname` → `agent_path` basename → existing user-summary fallback 的顺序解析。不同 child UUID MUST NOT 因标题相同被合并；同一 canonical child UUID 的多个 physical rollout files MUST 在 usage aggregation 与 bounded truncation 前收敛为一个 source fact，usage/cost 不求和，并合并 aliases 与 relationship/title evidence。
 - Codex workspace/global catalog、native local-thread fallback 与 daemon adapter MUST 输出 `parentSessionId`；frontend boundary MUST normalize 为 `ThreadSummary.parentThreadId`，并复用既有 Sidebar tree projection。local/live merge 若保留 rollout filename alias 作为 visible row id，MUST 同时保留 canonical `canonicalSessionId`，并把当前可见 parent 的 canonical UUID 解析为 visible parent id。child usage/cost/transcript 仍属于 child 自己，禁止改写为 parent UUID 或从统计中删除。
+- Sidebar native local-thread fallback 与 daemon fallback MUST 共享 `ThreadPreview` scanner：候选按 mtime recent-first，`cursor + limit + next-page proof + fixed lookahead` 同时约束 unique session 与 candidate file work，单文件最多读取 256 KiB。MUST NOT 用 `usize::MAX` 完整解析全部 JSONL 后再 slice。
+- `ThreadPreview` 的 timestamp MUST 使用 file mtime，title/identity/source 只消费 bounded prefix；prefix 缺少 title 时 MAY 使用既有 generic preview。Session Management、usage/cost 与显式 exhaustive catalog MUST 保留 `Full` parser；`Full` MUST 在 limit truncation 前扫描并合并全部 physical duplicate evidence，禁止用 preview 的 partial usage 伪装完整统计。
+- Desktop unified list 与 daemon live fallback MUST 使用同一 preview API。只修 Desktop 而让 daemon fallback 继续 full parse 视为 parity regression。
 - Mutation writes MUST route by the row owner workspace and stable key, not by the currently selected aggregate workspace. Batch mutation results SHOULD expose `ownerWorkspaceId` and `stableSessionKey` for frontend reconciliation.
 - Stable metadata key MUST be `engine + ownerWorkspaceId + canonicalSessionId`; new writes use stable key while reads may keep legacy bare `sessionId` compatibility.
 - Source-fact cache is read-through acceleration only. It may cache bounded source facts, diagnostics, fingerprint, scanner/schema version, and cache metrics; it MUST NOT cache owner workspace, strict membership, archive/folder/custom title overlay, display window, selected state, or processing state.
@@ -82,6 +89,9 @@
 | later copied parent metadata appears in child rollout | keep first valid child identity / relationship | overwrite child UUID、parent link 或 agent title |
 | two files share one child canonical UUID | converge by canonical identity | 按 physical path 显示两条，或按 title 合并其他 distinct child UUID |
 | duplicate rollout lies inside bounded scan window | dedupe before limit；one page slot and one usage evidence | duplicate consumes multiple slots、false end-of-page 或 usage double count |
+| Sidebar `limit=5` + large Codex archive | bounded recent-first preview，单文件 ≤256 KiB，fixed candidate lookahead | 完整读取全部 archive 或先 full scan 后 `.take(5)` |
+| daemon live list unavailable | 使用同一 bounded preview fallback | daemon 独立走 full JSONL parser |
+| Session Management / usage explicit scan | 使用 `Full` parser，保留完整 usage/cost | 把 preview partial usage 当 authoritative |
 | visible parent id is a rollout filename alias | child link resolves canonical parent UUID to visible parent id | child remains a root because ids differ |
 | runtime native rename looks like `Agent 12` / `Claude Session` / short hex | `nativeTitle` bypasses fallback strength heuristic，仍低于 GUI custom/mapped title | 仅传普通 `title`，导致旧 first-message title 被保留 |
 | old backend omits `nativeTitle` | normalize 为 absent，继续既有 title projection | 把 optional field 当 required 而丢弃 catalog row |
@@ -92,9 +102,12 @@
 
 - Good：child rollout 保留自己的 UUID、usage 与 transcript，同时携带 `parentSessionId`；Sidebar 显示一个 parent root 与多个 agent-labelled children。
 - Good：catalog 同时输出 display `title` 与 optional `nativeTitle`，central projection 能区分 authoritative rename 和 weak fallback。
+- Good：Sidebar 与 daemon fallback 共用 bounded preview；Session Management 继续 full scan，read-path 意图清晰分离。
 - Base：普通 Codex session 没有 structured subagent metadata，继续使用既有 summary/title 与顶层 projection。
+- Base：preview prefix 有 session identity 但没有 user title，row 使用既有 generic Codex preview，Load older 仍可分页。
 - Base：旧 backend 或未重命名 session 不提供 `nativeTitle`，frontend 继续使用现有 title-strength fallback。
 - Bad：按 title 去重、把 child UUID 改成 parent UUID、忽略 object-form `source`，或只修 authoritative catalog 而遗漏 native/daemon fallback。
+- Bad：给 first page 传小 `limit`，backend 内部仍 `scan(..., usize::MAX)`；timeout 返回后 `spawn_blocking` 继续吞吐完整 archive。
 - Bad：把 runtime rename 只覆盖到 `title` / `firstMessage`，不保留来源，导致 `Agent N` 等合法名字被当成 fallback。
 
 ### 6. Tests Required
@@ -103,6 +116,8 @@
 - Rust mutation tests for archive, unarchive, delete, and folder assignment routing by owner workspace and stable key.
 - Rust cache tests for hit/miss/stale/schema mismatch/corrupt/deleted rebuild, plus cache exclusion of transcript body and organization overlay.
 - Rust parser/source tests for snake_case/camelCase subagent metadata、agent path basename fallback、later parent metadata sticky behavior，以及 canonical child UUID 在 aggregation/limit 前 dedupe（assert aliases、relationship/title、non-additive usage）。
+- Rust bounded scanner tests MUST assert recent candidate order、duplicate 不消费 unique budget、fixed candidate cap、preview 读不到 256 KiB 之后的 usage event，并使用 mtime timestamp。
+- Rust unified list tests MUST assert cursor offset + limit + fixed lookahead 的 scan target；source review MUST assert Desktop 与 daemon fallback 都调用 `list_codex_session_previews_for_workspace`。
 - Rust catalog/native/daemon mapping tests MUST assert `parentSessionId` survives every local projection。
 - Rust event-store test MUST assert all Binding rows for one Shared Session are queryable; frontend
   catalog test MUST assert a V2-only Native identity is removed from ordinary rows while the Shared
@@ -219,4 +234,24 @@ let target = resolve_session_mutation_target(&scope_entries, &workspaces, &sessi
 metadata_for(&target.owner_workspace_id)
     .archived_at_by_session_id
     .insert(target.stable_session_key, archived_at);
+```
+
+#### Wrong
+
+```rust
+let mut sessions = scan_codex_session_summaries(workspace, roots)?;
+sessions.truncate(requested_limit);
+// limit 只限制 response，不限制 JSONL read/parse work。
+```
+
+#### Correct
+
+```rust
+let (_, sessions) = list_codex_session_previews_for_workspace(
+    workspaces,
+    workspace_id,
+    requested_scan_limit,
+)
+.await?;
+// Sidebar/daemon preview bounded；显式 catalog 仍走 Full parser。
 ```

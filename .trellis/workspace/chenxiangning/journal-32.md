@@ -320,3 +320,102 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1358: 重构启动诊断时间轴
+
+**Date**: 2026-08-09
+**Task**: 重构启动诊断时间轴
+**Branch**: `cxn-version-0.8.5`
+
+### Summary
+
+将启动诊断双栏改为项目感知的紧凑竖向时间轴，合并相同操作并展示次数、耗时和语义说明；保留原始一键复制诊断内容，未纳入并行冷启动与临时调试改动。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `db8b3c308` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1359: 根治冷启点击卡死
+
+**Date**: 2026-08-09
+**Task**: 根治冷启点击卡死
+**Branch**: `cxn-version-0.8.5`
+
+### Summary
+
+回滚延长 input-ready 的 S7 全局 barrier；收敛 startup diagnostic 单通道 ownership，StartupGate 改为 1Hz summary、点击冻结 snapshot、按需复制并保持 manual-only；Codex first-page 与 renderer diagnostics 使用有界工作预算。人工冷启验收通过；focused Vitest 138/138、target ESLint、typecheck、runtime contracts、OpenSpec strict validate 通过，按要求未跑全量测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3c3ac3f08` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1360: 合并 upstream 0.8.5 更新
+
+**Date**: 2026-08-09
+**Task**: 合并 upstream 0.8.5 更新
+**Branch**: `cxn-version-0.8.5`
+
+### Summary
+
+将 upstream/chore/bump-version-0.8.5 的 6 个提交语义合并到 cxn-version-0.8.5，零冲突并保留本地冷启修复与上游 Vendor/Settings/Git 能力。同步 @codemirror/lint 6.9.7；修正上游遗漏的 VendorSettingsPanel help popover 陈旧断言。typecheck、runtime contracts、targeted ESLint 通过；定向测试原 61 项通过，修正后的唯一失败用例单测通过。未跑全量测试，未拉起 App，未 push。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c4c382832` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

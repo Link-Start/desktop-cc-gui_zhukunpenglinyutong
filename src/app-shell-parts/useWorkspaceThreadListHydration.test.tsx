@@ -75,10 +75,10 @@ describe("useWorkspaceThreadListHydration", () => {
     restoreIdleCallbackForTest?.();
   });
 
-  it("progresses to the next background workspace after the current hydration attempt settles", async () => {
+  it("does not automatically hydrate background workspaces", async () => {
+    vi.useFakeTimers();
     const restoreIdleCallback = installImmediateIdleCallback();
     const workspaces = [createWorkspace("ws-1"), createWorkspace("ws-2")];
-    const deferredFirst = createDeferred();
     const listThreadsForWorkspace = vi
       .fn<
         (
@@ -90,9 +90,6 @@ describe("useWorkspaceThreadListHydration", () => {
           },
         ) => Promise<void>
       >()
-      .mockImplementationOnce(async () => {
-        await deferredFirst.promise;
-      })
       .mockResolvedValue(undefined);
 
     renderHook(() =>
@@ -102,45 +99,19 @@ describe("useWorkspaceThreadListHydration", () => {
         listThreadsForWorkspace,
         threadListLoadingByWorkspace: {},
         workspaces,
-        workspacesById: new Map(workspaces.map((workspace) => [workspace.id, workspace])),
+        workspacesById: new Map(
+          workspaces.map((workspace) => [workspace.id, workspace]),
+        ),
       }),
     );
-
-    expect(listThreadsForWorkspace).not.toHaveBeenCalled();
-
-    await waitFor(() => {
-      expect(listThreadsForWorkspace).toHaveBeenCalledTimes(1);
-    });
-    expect(listThreadsForWorkspace).toHaveBeenCalledWith(
-      workspaces[0],
-      expect.objectContaining({
-        preserveState: true,
-        startupHydrationMode: "full-catalog",
-      }),
-    );
-    expect(listThreadsForWorkspace).not.toHaveBeenCalledWith(
-      workspaces[1],
-      expect.anything(),
-    );
-
-    deferredFirst.resolve();
 
     await act(async () => {
-      await deferredFirst.promise;
+      await vi.advanceTimersByTimeAsync(10_000);
     });
 
-    await waitFor(() => {
-      expect(listThreadsForWorkspace).toHaveBeenCalledTimes(2);
-      expect(listThreadsForWorkspace).toHaveBeenNthCalledWith(
-        2,
-        workspaces[1],
-        expect.objectContaining({
-          preserveState: true,
-          startupHydrationMode: "full-catalog",
-        }),
-      );
-    });
+    expect(listThreadsForWorkspace).not.toHaveBeenCalled();
     restoreIdleCallback();
+    vi.useRealTimers();
   });
 
   it("routes active workspace first-paint hydration before idle background hydration", async () => {
@@ -271,21 +242,23 @@ describe("useWorkspaceThreadListHydration", () => {
     ).toBe(true);
   });
 
-  it("does not stamp startup-gate-ready from full-catalog timeout", async () => {
+  it("does not stamp startup-gate-ready from an explicit full-catalog timeout", async () => {
     vi.useFakeTimers();
     const workspaces = [createWorkspace("ws-1")];
-    const listThreadsForWorkspace = vi.fn().mockImplementation(
-      () => new Promise(() => {}),
-    );
+    const listThreadsForWorkspace = vi
+      .fn()
+      .mockImplementation(() => new Promise(() => {}));
 
-    renderHook(() =>
+    const { result } = renderHook(() =>
       useWorkspaceThreadListHydration({
         activeWorkspaceId: "ws-1",
         activeWorkspaceProjectionOwnerIds: ["ws-1"],
         listThreadsForWorkspace,
         threadListLoadingByWorkspace: {},
         workspaces,
-        workspacesById: new Map(workspaces.map((workspace) => [workspace.id, workspace])),
+        workspacesById: new Map(
+          workspaces.map((workspace) => [workspace.id, workspace]),
+        ),
       }),
     );
 
@@ -296,11 +269,13 @@ describe("useWorkspaceThreadListHydration", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(8_000);
     });
-    expect(getStartupTraceSnapshot().milestones["startup-gate-ready"]).toBeTruthy();
+    expect(
+      getStartupTraceSnapshot().milestones["startup-gate-ready"],
+    ).toBeTruthy();
 
-    // Drive idle full-catalog schedule; hang past 20s timeout
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(6_000);
+      result.current.ensureWorkspaceThreadListLoaded("ws-1", { force: true });
+      await vi.advanceTimersByTimeAsync(0);
     });
     const gateSeqBefore = getStartupTraceSnapshot().events.filter(
       (e) => e.type === "milestone" && e.milestone === "startup-gate-ready",
@@ -319,18 +294,21 @@ describe("useWorkspaceThreadListHydration", () => {
     vi.useRealTimers();
   });
 
-  it("runs first-paint then full-catalog for active workspace cold start", async () => {
+  it("does not automatically run full-catalog after active first-paint", async () => {
+    vi.useFakeTimers();
     const workspaces = [createWorkspace("ws-1")];
-    const listThreadsForWorkspace = vi.fn<
-      (
-        workspace: WorkspaceInfo,
-        options?: {
-          preserveState?: boolean;
-          includeOpenCodeSessions?: boolean;
-          startupHydrationMode?: "full-catalog" | "first-paint";
-        },
-      ) => Promise<void>
-    >().mockResolvedValue(undefined);
+    const listThreadsForWorkspace = vi
+      .fn<
+        (
+          workspace: WorkspaceInfo,
+          options?: {
+            preserveState?: boolean;
+            includeOpenCodeSessions?: boolean;
+            startupHydrationMode?: "full-catalog" | "first-paint";
+          },
+        ) => Promise<void>
+      >()
+      .mockResolvedValue(undefined);
 
     renderHook(() =>
       useWorkspaceThreadListHydration({
@@ -339,50 +317,61 @@ describe("useWorkspaceThreadListHydration", () => {
         listThreadsForWorkspace,
         threadListLoadingByWorkspace: {},
         workspaces,
-        workspacesById: new Map(workspaces.map((workspace) => [workspace.id, workspace])),
+        workspacesById: new Map(
+          workspaces.map((workspace) => [workspace.id, workspace]),
+        ),
       }),
     );
 
-    await waitFor(() => {
-      expect(listThreadsForWorkspace).toHaveBeenCalledWith(
-        workspaces[0],
-        expect.objectContaining({
-          startupHydrationMode: "first-paint",
-        }),
-      );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
     });
 
-    await waitFor(() => {
-      expect(listThreadsForWorkspace).toHaveBeenCalledWith(
-        workspaces[0],
-        expect.objectContaining({
-          startupHydrationMode: "full-catalog",
-        }),
-      );
+    expect(listThreadsForWorkspace).toHaveBeenCalledWith(
+      workspaces[0],
+      expect.objectContaining({ startupHydrationMode: "first-paint" }),
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
     });
+
+    expect(
+      listThreadsForWorkspace.mock.calls.map(
+        (call) => call[1]?.startupHydrationMode,
+      ),
+    ).toEqual(["first-paint"]);
 
     const firstPaintEvents = getStartupTraceSnapshot().events.filter(
       (event): event is Extract<typeof event, { type: "task" }> =>
-        event.type === "task" && event.taskId === "thread-list:first-paint:ws-1",
+        event.type === "task" &&
+        event.taskId === "thread-list:first-paint:ws-1",
     );
-    expect(firstPaintEvents.some((event) => event.phase === "active-workspace")).toBe(
-      true,
-    );
+    expect(
+      firstPaintEvents.some((event) => event.phase === "active-workspace"),
+    ).toBe(true);
+    vi.useRealTimers();
   });
 
-  it("prioritizes active first-paint and defers unrelated workspaces until gate", async () => {
+  it("keeps unrelated workspaces cold after active first-paint reaches the gate", async () => {
+    vi.useFakeTimers();
     const restoreIdleCallback = installImmediateIdleCallback();
-    const workspaces = [createWorkspace("ws-older"), createWorkspace("ws-active")];
-    const listThreadsForWorkspace = vi.fn<
-      (
-        workspace: WorkspaceInfo,
-        options?: {
-          preserveState?: boolean;
-          includeOpenCodeSessions?: boolean;
-          startupHydrationMode?: "full-catalog" | "first-paint";
-        },
-      ) => Promise<void>
-    >().mockResolvedValue(undefined);
+    const workspaces = [
+      createWorkspace("ws-older"),
+      createWorkspace("ws-active"),
+    ];
+    const listThreadsForWorkspace = vi
+      .fn<
+        (
+          workspace: WorkspaceInfo,
+          options?: {
+            preserveState?: boolean;
+            includeOpenCodeSessions?: boolean;
+            startupHydrationMode?: "full-catalog" | "first-paint";
+          },
+        ) => Promise<void>
+      >()
+      .mockResolvedValue(undefined);
 
     renderHook(() =>
       useWorkspaceThreadListHydration({
@@ -391,34 +380,32 @@ describe("useWorkspaceThreadListHydration", () => {
         listThreadsForWorkspace,
         threadListLoadingByWorkspace: {},
         workspaces,
-        workspacesById: new Map(workspaces.map((workspace) => [workspace.id, workspace])),
+        workspacesById: new Map(
+          workspaces.map((workspace) => [workspace.id, workspace]),
+        ),
       }),
     );
 
-    await waitFor(() => {
-      expect(listThreadsForWorkspace).toHaveBeenCalledWith(
-        workspaces[1],
-        expect.objectContaining({ startupHydrationMode: "first-paint" }),
-      );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
     });
 
     // First list call must be active only.
     expect(listThreadsForWorkspace.mock.calls[0]?.[0]?.id).toBe("ws-active");
 
-    // After active first-paint stamps gate, idle prewarm may load older.
-    await waitFor(() => {
-      expect(getStartupTraceSnapshot().milestones["startup-gate-ready"]).toBeTruthy();
+    expect(
+      getStartupTraceSnapshot().milestones["startup-gate-ready"],
+    ).toBeTruthy();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
     });
-    await waitFor(() => {
-      expect(
-        listThreadsForWorkspace.mock.calls.some(
-          (call) => call[0]?.id === "ws-older",
-        ),
-      ).toBe(true);
-    });
-    // Active still first in the sequence.
-    expect(listThreadsForWorkspace.mock.calls[0]?.[0]?.id).toBe("ws-active");
+    expect(
+      listThreadsForWorkspace.mock.calls.some(
+        (call) => call[0]?.id === "ws-older",
+      ),
+    ).toBe(false);
     restoreIdleCallback();
+    vi.useRealTimers();
   });
 
   it("blocks non-active listThreadsForWorkspaceTracked during cold-start", async () => {

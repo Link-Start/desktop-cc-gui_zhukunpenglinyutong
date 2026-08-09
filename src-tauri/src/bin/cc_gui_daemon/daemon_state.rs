@@ -2952,7 +2952,7 @@ impl DaemonState {
                     .max(1);
                 let local_result = tokio::time::timeout(
                     Duration::from_millis(CODEX_DAEMON_LOCAL_THREAD_LIST_TIMEOUT_MS),
-                    local_usage::list_codex_session_summaries_for_workspace(
+                    local_usage::list_codex_session_previews_for_workspace(
                         &self.workspaces,
                         &workspace_id,
                         requested_scan_limit,

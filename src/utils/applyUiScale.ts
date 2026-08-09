@@ -6,7 +6,6 @@ import { clampUiScale } from "./uiScale";
 
 export type ApplyUiScaleTarget = {
   root: HTMLElement;
-  setNativeZoom?: (factor: number) => Promise<void>;
   platform: RendererPlatform;
 };
 
@@ -19,7 +18,7 @@ export type ApplyUiScaleTarget = {
  *    combined with cold-start list hydration + early pointer input.
  *
  * Current strategy: CSS `zoom` only (layout-participating, no expanded
- * pre-transform surface). Native zoom is pinned to 1 once per session.
+ * pre-transform surface). Production never calls native WebView zoom.
  *
  * Shell: html/body/#root/.app use a % height chain (base.css), not 100vh.
  */
@@ -96,12 +95,8 @@ function applyCssPageScaleStyles(root: HTMLElement, scale: number): void {
   setScaleLayoutStyles(layout, scale);
 }
 
-/** After first successful pin to 1, skip further setZoom(1). */
-let nativeIdentityPinned = false;
-
 /** @internal test helper */
-export function resetUiScaleNativePinForTests(): void {
-  nativeIdentityPinned = false;
+export function resetApplyUiScaleQueueForTests(): void {
   applyQueue = Promise.resolve();
   applyGeneration = 0;
 }
@@ -110,7 +105,7 @@ let applyQueue: Promise<void> = Promise.resolve();
 let applyGeneration = 0;
 
 /**
- * Serialise applies so rapid shortcut spam cannot reorder CSS/native writes.
+ * Serialise applies so rapid shortcut spam cannot reorder CSS writes.
  * Stale generations are skipped after they reach the head of the queue.
  */
 export function enqueueApplyUiScale(
@@ -135,18 +130,13 @@ export async function applyUiScale(
   const next = clampUiScale(scale);
 
   applyCssPageScaleStyles(target.root, next);
-  if (target.setNativeZoom && !nativeIdentityPinned) {
-    await target.setNativeZoom(1);
-    nativeIdentityPinned = true;
-  }
 }
 
-/** Convenience for production hook: detect platform + optional native zoom. */
+/** Convenience for production hook: detect platform and apply CSS-only zoom. */
 export async function applyUiScaleToDocument(
   scale: number,
   options?: {
     root?: HTMLElement;
-    setNativeZoom?: (factor: number) => Promise<void>;
     platform?: RendererPlatform;
     /** default true — use serial queue */
     enqueue?: boolean;
@@ -158,7 +148,6 @@ export async function applyUiScaleToDocument(
   }
   const target: ApplyUiScaleTarget = {
     root,
-    setNativeZoom: options?.setNativeZoom,
     platform: options?.platform ?? detectRendererPlatform(),
   };
   if (options?.enqueue === false) {
