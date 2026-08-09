@@ -320,3 +320,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1358: 重构启动诊断时间轴
+
+**Date**: 2026-08-09
+**Task**: 重构启动诊断时间轴
+**Branch**: `cxn-version-0.8.5`
+
+### Summary
+
+将启动诊断双栏改为项目感知的紧凑竖向时间轴，合并相同操作并展示次数、耗时和语义说明；保留原始一键复制诊断内容，未纳入并行冷启动与临时调试改动。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `db8b3c308` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
