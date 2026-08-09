@@ -1,13 +1,15 @@
 /**
  * Shared official-config row for Kimi / Grok / OpenCode local config.toml|json.
  * Pulls Local out of the third-party table into the unified official slot.
+ *
+ * Matches Codex: official is the default when no managed third-party is active.
+ * There is no "cancel official" — leave official by enabling a third-party row.
  */
 import { useTranslation } from "react-i18next";
-import { DISABLED_PROVIDER_ID } from "../types";
 import { VendorOfficialConfigCard } from "./VendorOfficialConfigCard";
 
 export type LocalOfficialConfigCardProps = {
-  /** Whether the local/official provider is currently active */
+  /** Whether the local/official provider is currently active (incl. default fallback) */
   inUse: boolean;
   /** Local provider id to switch to on "使用" */
   localProviderId: string;
@@ -38,7 +40,6 @@ export function LocalOfficialConfigCard({
       inUse={inUse}
       mode="local"
       onUse={() => onSwitch(localProviderId)}
-      onCancel={() => onSwitch(DISABLED_PROVIDER_ID)}
       onEdit={onEdit}
     />
   );

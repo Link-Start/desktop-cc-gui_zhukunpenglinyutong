@@ -1341,7 +1341,7 @@ const settings = {
       localProviderDisableTitle: "Cancel local settings.json authorization",
       localProviderDisableMessage: "This will stop using ~/.claude/settings.json and leave Claude with no active provider until you explicitly enable another one.",
       localProviderHelpTitle: "What is “Use Local settings.json”?",
-      localProviderHelpBody: "Lets the app read your existing ~/.claude/settings.json to make Claude requests — perfect if you already configure Claude through the CLI and want to reuse that exact setup.\n\n• The app only reads the file; it never modifies it.\n• You can revoke this authorization at any time.\n• Best for advanced users who manage config manually.\n• Ideal if you manage providers with a third-party tool like cc-switch.",
+      localProviderHelpBody: "Lets the app read your existing ~/.claude/settings.json to make Claude requests — perfect if you already configure Claude through the CLI and want to reuse that exact setup.\n\n• When no third-party provider is enabled, official/local config is the default.\n• The app reads this file by default; you can edit it from this row.\n• To leave official, enable a third-party provider below.\n• Best for advanced users and cc-switch users.",
       emptyState: 'No third-party configs yet. Click "Add" above to create one.',
       emptyCodexState:
         'No third-party configs yet. Click "Add" above to create one.',
@@ -1419,6 +1419,7 @@ const settings = {
         jsonConfigDescription:
           "Configure full settings.json content here, including fields like model, alwaysThinkingEnabled, ccSwitchProviderId, codemossProviderId, etc.",
         formatJson: "Format",
+        openContainingFolder: "Open file",
         jsonError: "Invalid JSON format",
         confirmAdd: "Add",
         saveChanges: "Save",
@@ -1470,6 +1471,9 @@ const settings = {
       kimiProvider: "Provider",
       kimiLocalProviderDescription:
         "Use configuration directly from ~/.kimi-code/config.toml",
+      kimiLocalConfigPath: "~/.kimi-code/config.toml",
+      kimiLocalConfigEditHint:
+        "Edit the official Kimi Code CLI config.toml. Env override: $KIMI_CODE_HOME/config.toml.",
       kimiProviderActionFailed: "Kimi provider operation failed",
       emptyKimiState:
         'No third-party configs yet. Click "Add" above to create one.',
@@ -1506,6 +1510,9 @@ const settings = {
       grokProvider: "Provider",
       grokLocalProviderDescription:
         "Use configuration directly from ~/.grok/config.toml",
+      grokLocalConfigPath: "~/.grok/config.toml",
+      grokLocalConfigEditHint:
+        "Edit the official Grok Build config.toml. Env override: $GROK_HOME/config.toml.",
       grokProviderActionFailed: "Grok provider operation failed",
       emptyGrokState:
         'No third-party configs yet. Click "Add" above to create one.',
@@ -1541,6 +1548,9 @@ const settings = {
       opencodeProvider: "Provider",
       opencodeLocalProviderDescription:
         "Use configuration directly from ~/.config/opencode/opencode.json",
+      opencodeLocalConfigPath: "~/.config/opencode/opencode.json",
+      opencodeLocalConfigEditHint:
+        "Edit the official OpenCode global config. Prefers $OPENCODE_CONFIG, else ~/.config/opencode/opencode.json(.jsonc).",
       opencodeProviderActionFailed: "OpenCode provider operation failed",
       emptyOpenCodeState:
         'No third-party configs yet. Click "Add" above to create one.',

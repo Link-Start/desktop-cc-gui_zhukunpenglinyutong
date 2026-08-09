@@ -324,6 +324,9 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  mockState.grokManagement.grokProviders = [];
+  mockState.openCodeManagement.openCodeProviders = [];
+  mockState.kimiManagement.kimiProviders = [];
 });
 
 describe("VendorSettingsPanel", () => {
@@ -540,6 +543,11 @@ describe("VendorSettingsPanel", () => {
     expect(screen.queryByText("settings.vendor.grokCurrentConfig")).toBeNull();
     expect(screen.queryByText("settings.vendor.grokNoConfig")).toBeNull();
     expect(screen.getByText("Official Config")).toBeTruthy();
+    // No third-party active → official defaults to in-use (Codex parity).
+    expect(screen.getByText("In Use")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "使用" })).toBeNull();
+    // Official config edit entry (pencil when in use).
+    expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
     expect(
       screen.queryByText("settings.vendor.grokLocalProviderDescription"),
     ).toBeNull();
@@ -549,6 +557,29 @@ describe("VendorSettingsPanel", () => {
     expect(
       await screen.findByText("settings.vendor.grokLocalProviderDescription"),
     ).toBeTruthy();
+  });
+
+  it("shows Grok official as Use when a managed third-party is active", async () => {
+    mockState.grokManagement.grokProviders = [
+      {
+        id: "third-party-a",
+        name: "Third Party A",
+        isActive: true,
+        baseUrl: "https://example.test",
+        apiKey: "k",
+        model: "m",
+      },
+    ];
+    renderPanel();
+
+    await waitFor(() => {
+      expect(readGlobalCodexConfigTomlMock).toHaveBeenCalled();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Grok CLI/ }));
+
+    expect(screen.getByText("Official Config")).toBeTruthy();
+    expect(screen.queryByText("In Use")).toBeNull();
+    expect(screen.getByRole("button", { name: "使用" })).toBeTruthy();
   });
 
   it("renders the OpenCode CLI tab with official config row and provider list", async () => {
@@ -583,6 +614,10 @@ describe("VendorSettingsPanel", () => {
     ).toBeNull();
     expect(screen.queryByText("settings.vendor.opencodeNoConfig")).toBeNull();
     expect(screen.getByText("Official Config")).toBeTruthy();
+    // No third-party active → official defaults to in-use (Codex parity).
+    expect(screen.getByText("In Use")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "使用" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
     expect(
       screen.queryByText("settings.vendor.opencodeLocalProviderDescription"),
     ).toBeNull();
@@ -594,6 +629,29 @@ describe("VendorSettingsPanel", () => {
         "settings.vendor.opencodeLocalProviderDescription",
       ),
     ).toBeTruthy();
+  });
+
+  it("shows OpenCode official as Use when a managed third-party is active", async () => {
+    mockState.openCodeManagement.openCodeProviders = [
+      {
+        id: "third-party-b",
+        name: "Third Party B",
+        isActive: true,
+        baseUrl: "https://example.test",
+        apiKey: "k",
+        model: "m",
+      },
+    ];
+    renderPanel();
+
+    await waitFor(() => {
+      expect(readGlobalCodexConfigTomlMock).toHaveBeenCalled();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /OpenCode CLI/ }));
+
+    expect(screen.getByText("Official Config")).toBeTruthy();
+    expect(screen.queryByText("In Use")).toBeNull();
+    expect(screen.getByRole("button", { name: "使用" })).toBeTruthy();
   });
 
   it("keeps the CLI engine list in its own scroll container", async () => {
@@ -799,6 +857,8 @@ describe("VendorSettingsPanel", () => {
     expect(screen.queryByText("settings.vendor.kimiCurrentConfig")).toBeNull();
     expect(screen.queryByText("settings.vendor.kimiNoConfig")).toBeNull();
     expect(screen.getByText("Official Config")).toBeTruthy();
+    expect(screen.getByText("In Use")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
     // Local provider explanation is folded into the row help popover.
     expect(
       screen.queryByText("settings.vendor.kimiLocalProviderDescription"),

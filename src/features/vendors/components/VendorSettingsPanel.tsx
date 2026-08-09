@@ -60,6 +60,7 @@ import { CcSwitchImportDialog } from "./CcSwitchImportDialog";
 import { type CcSwitchImportTarget } from "../hooks/useCcSwitchImport";
 import { CurrentCodexGlobalConfigCard } from "./CurrentCodexGlobalConfigCard";
 import { LocalOfficialConfigCard } from "./LocalOfficialConfigCard";
+import { LocalOfficialConfigEditDialog } from "./LocalOfficialConfigEditDialog";
 import {
   CLI_DOCS_HREF_BY_ID,
   buildCliEngineNavItems,
@@ -84,7 +85,13 @@ import {
   getCodexUnifiedExecExternalStatus,
   readGlobalCodexAuthJson,
   readGlobalCodexConfigToml,
+  readGrokConfigToml,
+  readKimiConfigToml,
+  readOpenCodeConfigJson,
   restoreCodexUnifiedExecOfficialDefault,
+  saveGrokConfigToml,
+  saveKimiConfigToml,
+  saveOpenCodeConfigJson,
   setCodexUnifiedExecOfficialOverride,
 } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
@@ -113,6 +120,22 @@ type VendorSettingsPanelProps = {
   handleReloadCodexRuntimeConfig: () => Promise<void>;
   onUpdateAppSettings: (next: AppSettings) => Promise<void>;
 };
+
+/** Managed third-party rows only — local/official slots are not counted. */
+function isManagedThirdPartyProviderActive(
+  provider: {
+    id: string;
+    isActive?: boolean;
+    isLocalProvider?: boolean;
+  },
+  localProviderId: string,
+): boolean {
+  return (
+    Boolean(provider.isActive) &&
+    provider.id !== localProviderId &&
+    !provider.isLocalProvider
+  );
+}
 
 type CliBrandHeaderProps = {
   id: CliEngineId;
@@ -256,6 +279,10 @@ export function VendorSettingsPanel({
     upcoming: true,
   });
   const [dialogTarget, setDialogTarget] = useState<ModelDialogTarget>("claude");
+  /** Which local/official config editor is open (kimi | grok | opencode). */
+  const [localOfficialEditEngine, setLocalOfficialEditEngine] = useState<
+    "kimi" | "grok" | "opencode" | null
+  >(null);
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const [modelDialogAddMode, setModelDialogAddMode] = useState(false);
   const [modelDialogPersistError, setModelDialogPersistError] = useState<
@@ -855,35 +882,46 @@ export function VendorSettingsPanel({
   );
 
   const claudeHasConfig = Boolean(claude.currentConfig);
-  const kimiLocalProvider = useMemo(
+  /**
+   * Claude official (local settings.json) is the runtime default when no managed
+   * third-party is active — same badge rule as Codex / Kimi / Grok / OpenCode.
+   */
+  const claudeOfficialInUse = useMemo(
     () =>
-      kimi.kimiProviders.find(
-        (provider) =>
-          provider.id === LOCAL_KIMI_PROVIDER_ID || provider.isLocalProvider,
-      ) ?? null,
-    [kimi.kimiProviders],
-  );
-  const grokLocalProvider = useMemo(
-    () =>
-      grok.grokProviders.find(
-        (provider) =>
-          provider.id === LOCAL_GROK_PROVIDER_ID || provider.isLocalProvider,
-      ) ?? null,
-    [grok.grokProviders],
-  );
-  const openCodeLocalProvider = useMemo(
-    () =>
-      openCode.openCodeProviders.find(
-        (provider) =>
-          provider.id === LOCAL_OPENCODE_PROVIDER_ID ||
-          provider.isLocalProvider,
-      ) ?? null,
-    [openCode.openCodeProviders],
+      !claude.providers.some((provider) =>
+        isManagedThirdPartyProviderActive(provider, LOCAL_SETTINGS_PROVIDER_ID),
+      ),
+    [claude.providers],
   );
   /** Codex official = no managed third-party currently active */
   const codexOfficialInUse = useMemo(
     () => !codex.codexProviders.some((provider) => provider.isActive),
     [codex.codexProviders],
+  );
+  /**
+   * Kimi / Grok / OpenCode official (local config) is the runtime default when no
+   * managed third-party is active — mirror Codex so the badge matches actual launch.
+   */
+  const kimiOfficialInUse = useMemo(
+    () =>
+      !kimi.kimiProviders.some((provider) =>
+        isManagedThirdPartyProviderActive(provider, LOCAL_KIMI_PROVIDER_ID),
+      ),
+    [kimi.kimiProviders],
+  );
+  const grokOfficialInUse = useMemo(
+    () =>
+      !grok.grokProviders.some((provider) =>
+        isManagedThirdPartyProviderActive(provider, LOCAL_GROK_PROVIDER_ID),
+      ),
+    [grok.grokProviders],
+  );
+  const openCodeOfficialInUse = useMemo(
+    () =>
+      !openCode.openCodeProviders.some((provider) =>
+        isManagedThirdPartyProviderActive(provider, LOCAL_OPENCODE_PROVIDER_ID),
+      ),
+    [openCode.openCodeProviders],
   );
   const kimiHasConfig =
     Boolean(kimi.currentKimiConfig?.baseUrl) ||
@@ -1113,6 +1151,7 @@ export function VendorSettingsPanel({
               <div className="vendor-group-card">
                 <ClaudeLocalSettingsCard
                   localProvider={claude.localProvider}
+                  inUse={claudeOfficialInUse}
                   onSwitch={claude.handleSwitchProvider}
                   onEdit={claude.handleOpenClaudeSettingsJsonDialog}
                 />
@@ -1376,12 +1415,13 @@ export function VendorSettingsPanel({
             >
               <div className="vendor-group-card">
                 <LocalOfficialConfigCard
-                  inUse={Boolean(kimiLocalProvider?.isActive)}
+                  inUse={kimiOfficialInUse}
                   localProviderId={LOCAL_KIMI_PROVIDER_ID}
                   description={t(
                     "settings.vendor.kimiLocalProviderDescription",
                   )}
                   onSwitch={kimi.handleSwitchKimiProvider}
+                  onEdit={() => setLocalOfficialEditEngine("kimi")}
                 />
                 {renderCustomPathEntry("kimi")}
               </div>
@@ -1407,6 +1447,18 @@ export function VendorSettingsPanel({
               providerName={kimi.deleteKimiConfirm.provider?.name ?? ""}
               onConfirm={kimi.confirmDeleteKimiProvider}
               onCancel={kimi.cancelDeleteKimiProvider}
+            />
+            <LocalOfficialConfigEditDialog
+              isOpen={localOfficialEditEngine === "kimi"}
+              title={t("settings.vendor.officialConfig")}
+              pathLabel={t("settings.vendor.kimiLocalConfigPath")}
+              format="toml"
+              onClose={() => setLocalOfficialEditEngine(null)}
+              onSaved={() => {
+                void kimi.loadKimiProviders();
+              }}
+              readContent={readKimiConfigToml}
+              saveContent={saveKimiConfigToml}
             />
           </div>
           </CliLifecycleProvider>
@@ -1440,12 +1492,13 @@ export function VendorSettingsPanel({
             >
               <div className="vendor-group-card">
                 <LocalOfficialConfigCard
-                  inUse={Boolean(grokLocalProvider?.isActive)}
+                  inUse={grokOfficialInUse}
                   localProviderId={LOCAL_GROK_PROVIDER_ID}
                   description={t(
                     "settings.vendor.grokLocalProviderDescription",
                   )}
                   onSwitch={grok.handleSwitchGrokProvider}
+                  onEdit={() => setLocalOfficialEditEngine("grok")}
                 />
                 {renderCustomPathEntry("grok")}
               </div>
@@ -1471,6 +1524,18 @@ export function VendorSettingsPanel({
               providerName={grok.deleteGrokConfirm.provider?.name ?? ""}
               onConfirm={grok.confirmDeleteGrokProvider}
               onCancel={grok.cancelDeleteGrokProvider}
+            />
+            <LocalOfficialConfigEditDialog
+              isOpen={localOfficialEditEngine === "grok"}
+              title={t("settings.vendor.officialConfig")}
+              pathLabel={t("settings.vendor.grokLocalConfigPath")}
+              format="toml"
+              onClose={() => setLocalOfficialEditEngine(null)}
+              onSaved={() => {
+                void grok.loadGrokProviders();
+              }}
+              readContent={readGrokConfigToml}
+              saveContent={saveGrokConfigToml}
             />
           </div>
           </CliLifecycleProvider>
@@ -1504,12 +1569,13 @@ export function VendorSettingsPanel({
             >
               <div className="vendor-group-card">
                 <LocalOfficialConfigCard
-                  inUse={Boolean(openCodeLocalProvider?.isActive)}
+                  inUse={openCodeOfficialInUse}
                   localProviderId={LOCAL_OPENCODE_PROVIDER_ID}
                   description={t(
                     "settings.vendor.opencodeLocalProviderDescription",
                   )}
                   onSwitch={openCode.handleSwitchOpenCodeProvider}
+                  onEdit={() => setLocalOfficialEditEngine("opencode")}
                 />
                 {renderCustomPathEntry("opencode")}
               </div>
@@ -1535,6 +1601,18 @@ export function VendorSettingsPanel({
               providerName={openCode.deleteOpenCodeConfirm.provider?.name ?? ""}
               onConfirm={openCode.confirmDeleteOpenCodeProvider}
               onCancel={openCode.cancelDeleteOpenCodeProvider}
+            />
+            <LocalOfficialConfigEditDialog
+              isOpen={localOfficialEditEngine === "opencode"}
+              title={t("settings.vendor.officialConfig")}
+              pathLabel={t("settings.vendor.opencodeLocalConfigPath")}
+              format="json"
+              onClose={() => setLocalOfficialEditEngine(null)}
+              onSaved={() => {
+                void openCode.loadOpenCodeProviders();
+              }}
+              readContent={readOpenCodeConfigJson}
+              saveContent={saveOpenCodeConfigJson}
             />
           </div>
           </CliLifecycleProvider>

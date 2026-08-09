@@ -1015,6 +1015,8 @@ const mockTranslate = (key: string, params?: Record<string, unknown>) => {
         "settings.vendor.codexAuthConfigWriteFailed":
           "Failed to write global auth.json",
         "settings.vendor.dialog.saveChanges": "Save",
+        "settings.vendor.dialog.openContainingFolder": "Open file",
+        "settings.vendor.dialog.formatJson": "Format",
         "settings.codexRuntimeReloadNoConnectedSessions":
           "No Codex session is currently connected. The config has been updated and will apply on the next connection.",
         "settings.steerMode": "Follow-up fusion",

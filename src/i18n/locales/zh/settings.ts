@@ -1267,7 +1267,7 @@ const settings = {
       localProviderDisableTitle: "取消本地 settings.json 授权",
       localProviderDisableMessage: "此操作会停止使用 ~/.claude/settings.json，并让 Claude 处于未启用任何供应商的状态，直到您再次显式启用其它供应商。",
       localProviderHelpTitle: "什么是「使用本地 settings.json」？",
-      localProviderHelpBody: "让应用读取你已有的 ~/.claude/settings.json 来发起 Claude 请求——如果你已经通过 CLI 配置好 Claude、想直接复用那套配置，选这个最合适。\n\n• 应用只会读取该文件，绝不会修改它。\n• 你随时可以取消授权。\n• 适合喜欢手动管理配置的高级用户。\n• 适合使用第三方 cc-switch 管理的用户。",
+      localProviderHelpBody: "让应用读取你已有的 ~/.claude/settings.json 来发起 Claude 请求——如果你已经通过 CLI 配置好 Claude、想直接复用那套配置，选这个最合适。\n\n• 没有启用第三方供应商时，默认使用本机官方配置。\n• 应用默认只读取该文件；你可在编辑入口中手动修改。\n• 要切换渠道，请在下方启用某个第三方供应商。\n• 适合喜欢手动管理配置的高级用户，以及使用 cc-switch 的用户。",
       emptyState: "暂无第三方配置，点击上方「添加」创建一个。",
       emptyCodexState: "暂无第三方配置，点击上方「添加」创建一个。",
       currentCodexGlobalConfig: "全局默认 Codex 配置",
@@ -1340,6 +1340,7 @@ const settings = {
         jsonConfigDescription:
           "此处可配置完整的 settings.json 内容，支持所有字段（如 model、alwaysThinkingEnabled、ccSwitchProviderId、codemossProviderId 等）",
         formatJson: "格式化",
+        openContainingFolder: "打开文件",
         jsonError: "JSON 格式无效",
         confirmAdd: "添加",
         saveChanges: "保存",
@@ -1390,6 +1391,9 @@ const settings = {
       kimiBaseUrl: "Base URL",
       kimiProvider: "供应商",
       kimiLocalProviderDescription: "直接使用 ~/.kimi-code/config.toml 中的配置",
+      kimiLocalConfigPath: "~/.kimi-code/config.toml",
+      kimiLocalConfigEditHint:
+        "编辑 Kimi Code CLI 官方 config.toml。环境变量覆盖：$KIMI_CODE_HOME/config.toml。",
       kimiProviderActionFailed: "Kimi 供应商操作失败",
       emptyKimiState: "暂无第三方配置，点击上方「添加」创建一个。",
       kimiPresets: {
@@ -1424,6 +1428,9 @@ const settings = {
       grokBaseUrl: "Base URL",
       grokProvider: "供应商",
       grokLocalProviderDescription: "直接使用 ~/.grok/config.toml 中的配置",
+      grokLocalConfigPath: "~/.grok/config.toml",
+      grokLocalConfigEditHint:
+        "编辑 Grok Build 官方 config.toml。环境变量覆盖：$GROK_HOME/config.toml。",
       grokProviderActionFailed: "Grok 供应商操作失败",
       emptyGrokState: "暂无第三方配置，点击上方「添加」创建一个。",
       grokPresets: {
@@ -1458,6 +1465,9 @@ const settings = {
       opencodeProvider: "供应商",
       opencodeLocalProviderDescription:
         "直接使用 ~/.config/opencode/opencode.json 中的配置",
+      opencodeLocalConfigPath: "~/.config/opencode/opencode.json",
+      opencodeLocalConfigEditHint:
+        "编辑 OpenCode 官方全局配置。优先 $OPENCODE_CONFIG，否则 ~/.config/opencode/opencode.json(.jsonc)。",
       opencodeProviderActionFailed: "OpenCode 供应商操作失败",
       emptyOpenCodeState: "暂无第三方配置，点击上方「添加」创建一个。",
       opencodePresets: {

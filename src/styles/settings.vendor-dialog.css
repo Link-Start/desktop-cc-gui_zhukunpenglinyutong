@@ -412,6 +412,125 @@
   padding: 0;
 }
 
+/* Shared official-config editor (Claude / Codex / Kimi / Grok / OpenCode) */
+.vendor-official-config-dialog-body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 18px;
+}
+
+.vendor-official-config-dialog-body.is-multi-pane {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 720px) {
+  .vendor-official-config-dialog-body.is-multi-pane {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.vendor-official-config-dialog-body .vendor-json-section {
+  min-width: 0;
+}
+
+.vendor-official-config-dialog-body .vendor-official-config-pane {
+  min-width: 0;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-muted);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-card-strong) 55%, transparent);
+}
+
+.vendor-official-config-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.vendor-official-config-pane-meta {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.vendor-official-config-pane-title {
+  flex-shrink: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.vendor-official-config-pane-path {
+  display: inline-block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-tertiary, var(--text-secondary));
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+.vendor-official-config-pane-actions {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.vendor-official-config-pane-action-btn {
+  border: 1px solid var(--border-muted);
+  border-radius: 7px;
+  background: var(--surface-card-strong);
+  color: var(--text-secondary);
+  padding: 3px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.vendor-official-config-pane-action-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--border-stronger);
+}
+
+.vendor-official-config-pane-action-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.vendor-official-config-pane-open-folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.vendor-official-config-dialog-body .vendor-official-json-editor {
+  min-height: clamp(280px, 48vh, 560px);
+}
+
+.vendor-official-config-dialog-body.is-single-pane .vendor-official-json-editor {
+  min-height: clamp(320px, 52vh, 640px);
+}
+
+.vendor-official-config-dialog-body > .vendor-json-error {
+  grid-column: 1 / -1;
+}
+
+/* Back-compat aliases (pre-unification class names) */
 .vendor-codex-official-dialog-body {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -421,6 +540,54 @@
 
 .vendor-codex-official-dialog-body .vendor-json-section {
   min-width: 0;
+}
+
+.vendor-codex-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.vendor-codex-pane-meta {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.vendor-codex-pane-title {
+  flex-shrink: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.vendor-codex-pane-path {
+  display: inline-block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-tertiary, var(--text-secondary));
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+.vendor-codex-pane-actions {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
 }
 
 .vendor-codex-official-dialog-body .vendor-official-json-editor {
@@ -817,6 +984,11 @@
   .vendor-codex-official-editor-heading {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .vendor-official-config-pane-header,
+  .vendor-codex-pane-header {
+    align-items: center;
   }
 
   .vendor-official-config-actions,

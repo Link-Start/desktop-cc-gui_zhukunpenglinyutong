@@ -1146,6 +1146,7 @@ const settings = {
         "jsonConfig": "JSON 設定",
         "jsonConfigDescription": "在此設定完整的 settings.json 內容，包含 model、alwaysThinkingEnabled、ccSwitchProviderId、codemossProviderId 等欄位。",
         "formatJson": "格式化",
+        "openContainingFolder": "開啟檔案",
         "jsonError": "JSON 格式無效",
         "confirmAdd": "新增",
         "saveChanges": "儲存",
