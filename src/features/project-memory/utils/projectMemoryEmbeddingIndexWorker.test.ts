@@ -19,10 +19,10 @@ const healthMock = vi.fn(async () => ({
 }));
 
 vi.mock("../../../services/tauri/projectMemoryEmbed", () => ({
-  projectMemoryEmbedIndexUpsert: (...args: unknown[]) => upsertMock(...args),
-  projectMemoryEmbedIndexDelete: (...args: unknown[]) => deleteMock(...args),
-  projectMemoryEmbedIndexList: (...args: unknown[]) => listMock(...args),
-  projectMemoryEmbedHealth: (...args: unknown[]) => healthMock(...args),
+  projectMemoryEmbedIndexUpsert: upsertMock,
+  projectMemoryEmbedIndexDelete: deleteMock,
+  projectMemoryEmbedIndexList: listMock,
+  projectMemoryEmbedHealth: healthMock,
   projectMemoryEmbedText: vi.fn(async () => {
     throw new Error("unavailable");
   }),

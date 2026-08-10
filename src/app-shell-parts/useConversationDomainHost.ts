@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import type { DebugEntry } from "../types";
 import { useCopyThread } from "../features/threads/hooks/useCopyThread";
 import { useRenameThreadPrompt } from "../features/threads/hooks/useRenameThreadPrompt";
 import { useDeleteThreadPrompt } from "../features/threads/hooks/useDeleteThreadPrompt";
@@ -29,7 +30,7 @@ export function useConversationDomainHost(input: {
   removeImagesForThread: (threadId: string) => void;
   alertError: (message: string) => void;
   deleteConversationFailedMessage: string;
-  addDebugEntry: (entry: unknown) => void;
+  addDebugEntry: (entry: DebugEntry) => void;
   reloadAgentCatalog: () => void | Promise<void>;
   settingsOpen: boolean;
 }) {
@@ -73,7 +74,7 @@ export function useConversationDomainHost(input: {
       input.clearDraftForThread(threadId);
       input.removeImagesForThread(threadId);
     },
-    onDeleteError: (message?: string) => {
+    onDeleteError: (message: string | null) => {
       input.alertError(
         message ?? input.deleteConversationFailedMessage,
       );
