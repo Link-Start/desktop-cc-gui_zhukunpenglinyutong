@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-32.md`
-- **Total Sessions**: 1366
+- **Total Sessions**: 1367
 - **Last Active**: 2026-08-10
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-32.md` | ~674 | Active |
+| `journal-32.md` | ~712 | Active |
 | `journal-31.md` | ~1968 | Archived |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
@@ -60,6 +60,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1367 | 2026-08-10 | 纠偏：侧栏隐藏 Shared 下崽 | `9bf25cf46` | `bump-version-0.8.7` |
 | 1366 | 2026-08-10 | Shared 子代理 parent-id 改挂收口 | `2f45c4c34` | `bump-version-0.8.7` |
 | 1365 | 2026-08-10 | 协作首段注入主幕对话上下文 | `037f9e148` | `cxn-version-0.8.6` |
 | 1364 | 2026-08-10 | 项目记忆 Grok/Kimi 与 Shared 整轮写入 | `1c2e84190` | `cxn-version-0.8.6` |

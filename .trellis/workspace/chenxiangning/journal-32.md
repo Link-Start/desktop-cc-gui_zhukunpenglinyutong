@@ -672,3 +672,41 @@ e0ddd9e99 的零 CSS 写入修复了 Windows Blink compositor 阻塞, 但导致 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1367: 纠偏：侧栏隐藏 Shared 下崽
+
+**Date**: 2026-08-10
+**Task**: 纠偏：侧栏隐藏 Shared 下崽
+**Branch**: `bump-version-0.8.7`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 纠偏 | 用户要的是侧栏隐藏崽子，不是只改挂 |
+| 动作 | useThreadRows + isSharedSidebarHiddenPup（parent-id） |
+| 边界 | store 保留 → 幕布/Strip 不扩散；Native 树不变 |
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9bf25cf46` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
