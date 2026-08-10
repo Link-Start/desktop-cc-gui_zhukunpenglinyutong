@@ -40,6 +40,10 @@ export type MemoryPresentationRecord = {
   memoryId: string;
   source: string;
   title: string;
+  /** 可选摘要（记忆挑选历史卡） */
+  summary?: string;
+  /** 可选相关分 */
+  score?: number;
 };
 
 export type MemoryPresentationPack = {

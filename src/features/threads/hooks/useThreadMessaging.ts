@@ -82,6 +82,30 @@ import {
   scoutProjectMemory,
   type MemoryBrief,
 } from "../../project-memory/utils/memoryScout";
+import {
+  normalizeMemoryPickComposerMode,
+  type LegacyMemoryReferenceMode,
+  type MemoryPickComposerMode,
+} from "../../project-memory/memoryPick/memoryPickTypes";
+import { decideMemoryPickGateEntry } from "../../project-memory/memoryPick/memoryPickPolicy";
+import {
+  getMemoryPickSessionPolicy,
+  markMemoryPickFirstPickDone,
+  markMemoryPickSessionDismissed,
+  setMemoryPickComposerMode,
+} from "../../project-memory/memoryPick/memoryPickSessionStore";
+import { openMemoryPickGate } from "../../project-memory/memoryPick/memoryPickGateStore";
+import { retrieveMemoryPickCandidates } from "../../project-memory/memoryPick/memoryPickRetrieval";
+import { injectMemoryPickContext } from "../../project-memory/memoryPick/injectMemoryPickContext";
+import { emitMemoryPickComposerMode } from "../../project-memory/memoryPick/memoryPickEvents";
+
+function emitMemoryPickComposerModeSync(
+  workspaceId: string,
+  threadId: string,
+  mode: MemoryPickComposerMode,
+) {
+  emitMemoryPickComposerMode({ mode, workspaceId, threadId });
+}
 import { noteCardsFacade } from "../../note-cards/services/noteCardsFacade";
 import {
   injectSelectedNoteCardsContext,
@@ -179,7 +203,13 @@ type SendMessageOptions = {
   resumeTurnId?: string | null;
   selectedMemoryIds?: string[];
   selectedMemoryInjectionMode?: MemoryContextInjectionMode;
+  /** @deprecated 使用 memoryReferenceMode；true 视为 always 静默兼容 */
   memoryReferenceEnabled?: boolean;
+  /**
+   * 记忆参考三态：off | pick | always（single 读入时归一为 pick）。
+   * Shared / Native 同一语义。
+   */
+  memoryReferenceMode?: LegacyMemoryReferenceMode;
   selectedNoteCardIds?: string[];
   selectedAgent?: SelectedAgentOption | null;
   browserContextAttachment?: BrowserContextSendAttachment | null;
@@ -697,19 +727,115 @@ export function useThreadMessaging({
             retrievalMs: Date.now() - retrievalStart,
           }).finalText;
         }
-        if (options?.memoryReferenceEnabled === true) {
-          const memoryBrief = await withMemoryScoutTimeout(
-            scoutProjectMemory({
-              workspaceId: workspace.id,
-              query: visibleUserText,
-              listFn: projectMemoryFacade.listSummary,
-            }),
+        // 协作首段：与 Native/Shared 同一记忆参考三态（pick 闸门 / always TopK）
+        {
+          const collabComposerMode = normalizeMemoryPickComposerMode(
+            options?.memoryReferenceMode ??
+              (options?.memoryReferenceEnabled === true ? "always" : "off"),
           );
-          modelText = injectMemoryScoutBriefContext({
-            userText: modelText,
-            brief: memoryBrief,
-            startIndex: 1,
-          }).finalText;
+          setMemoryPickComposerMode(
+            workspace.id,
+            threadId,
+            collabComposerMode,
+          );
+          const collabPolicy = getMemoryPickSessionPolicy(
+            workspace.id,
+            threadId,
+          );
+          const collabDecision = decideMemoryPickGateEntry({
+            composerMode: collabPolicy.composerMode,
+            policy: collabPolicy,
+            queryText: visibleUserText,
+            hasRetrievableText: visibleUserText.trim().length > 0,
+          });
+          let collabPickIds: string[] = [];
+          let collabPickMode: MemoryPickComposerMode = "pick";
+          if (collabDecision.kind === "show-ui") {
+            const resolution = await openMemoryPickGate({
+              workspaceId: workspace.id,
+              threadId,
+              queryText: visibleUserText,
+              mode:
+                collabDecision.reason === "always-mode" ||
+                collabPolicy.composerMode === "always"
+                  ? "always"
+                  : "pick",
+              firstPick: collabDecision.reason === "first-pick",
+              retrieve: () =>
+                retrieveMemoryPickCandidates({
+                  workspaceId: workspace.id,
+                  query: visibleUserText,
+                  listFn: projectMemoryFacade.listSummary,
+                }),
+            });
+            if (resolution.action === "cancel") {
+              return;
+            }
+            if (resolution.action === "dismiss") {
+              markMemoryPickSessionDismissed(workspace.id, threadId);
+              markMemoryPickFirstPickDone(workspace.id, threadId);
+            } else if (resolution.action === "skip") {
+              markMemoryPickFirstPickDone(workspace.id, threadId);
+              if (
+                collabDecision.reason === "first-pick" ||
+                collabPolicy.composerMode === "off"
+              ) {
+                setMemoryPickComposerMode(workspace.id, threadId, "pick");
+                emitMemoryPickComposerModeSync(workspace.id, threadId, "pick");
+              }
+            } else if (resolution.action === "confirm") {
+              collabPickIds = resolution.selectedIds;
+              collabPickMode = resolution.mode;
+              markMemoryPickFirstPickDone(workspace.id, threadId);
+              if (resolution.mode === "always") {
+                setMemoryPickComposerMode(workspace.id, threadId, "always");
+                emitMemoryPickComposerModeSync(
+                  workspace.id,
+                  threadId,
+                  "always",
+                );
+              } else {
+                setMemoryPickComposerMode(workspace.id, threadId, "pick");
+                emitMemoryPickComposerModeSync(workspace.id, threadId, "pick");
+              }
+            }
+          } else if (options?.memoryReferenceEnabled === true) {
+            const memoryBrief = await withMemoryScoutTimeout(
+              scoutProjectMemory({
+                workspaceId: workspace.id,
+                query: visibleUserText,
+                listFn: projectMemoryFacade.listSummary,
+              }),
+            );
+            modelText = injectMemoryScoutBriefContext({
+              userText: modelText,
+              brief: memoryBrief,
+              startIndex: 1,
+            }).finalText;
+          }
+          if (collabPickIds.length > 0) {
+            const manualIdSet = new Set(selectedMemoryIds);
+            const pickMemories = (
+              await Promise.all(
+                collabPickIds.map((memoryId) =>
+                  projectMemoryFacade
+                    .get(memoryId, workspace.id)
+                    .catch(() => null),
+                ),
+              )
+            ).filter(
+              (entry): entry is NonNullable<typeof entry> =>
+                entry !== null && !manualIdSet.has(entry.id),
+            );
+            if (pickMemories.length > 0) {
+              modelText = injectMemoryPickContext({
+                userText: modelText,
+                memories: pickMemories,
+                mode: collabPickMode,
+                queryText: visibleUserText,
+              }).finalText;
+            }
+          }
         }
         let finalImages = [...images];
         const selectedNoteCardIds = Array.from(
@@ -891,7 +1017,110 @@ export function useThreadMessaging({
             .filter((entry) => entry.length > 0),
         ),
       );
-      const memoryReferenceEnabled = options?.memoryReferenceEnabled === true;
+      // 记忆参考：三态 off|pick|always（Shared/Native 统一）；兼容旧 memoryReferenceEnabled
+      const composerModeFromOptions = normalizeMemoryPickComposerMode(
+        options?.memoryReferenceMode ??
+          (options?.memoryReferenceEnabled === true ? "always" : "off"),
+      );
+      const sessionPolicyBefore = getMemoryPickSessionPolicy(
+        workspace.id,
+        threadId,
+      );
+      // Composer 尚未刷到 gate 写入的 pick/always 时，勿用 off 覆盖 session（否则「下次对话闸门没了」）
+      // 用户在菜单显式选 off：仅当 session 也是 off，或带着 __force 语义——此处用：
+      // options 显式 off 且 session 为 pick/always 时，若 firstPick 已完成则尊重 Composer off。
+      // 但 first-pick 刚结束后我们会 emit pick；若仍收到 off，优先保留 session pick/always。
+      const effectiveComposerMode: MemoryPickComposerMode =
+        composerModeFromOptions !== "off"
+          ? composerModeFromOptions
+          : sessionPolicyBefore.composerMode === "pick" ||
+              sessionPolicyBefore.composerMode === "always"
+            ? sessionPolicyBefore.composerMode
+            : "off";
+      if (effectiveComposerMode !== sessionPolicyBefore.composerMode) {
+        setMemoryPickComposerMode(
+          workspace.id,
+          threadId,
+          effectiveComposerMode,
+        );
+      }
+      const pickPolicy = {
+        ...getMemoryPickSessionPolicy(workspace.id, threadId),
+        composerMode: effectiveComposerMode,
+      };
+      const pickDecision = decideMemoryPickGateEntry({
+        composerMode: pickPolicy.composerMode,
+        policy: pickPolicy,
+        queryText: visibleUserText,
+        hasRetrievableText: visibleUserText.trim().length > 0,
+      });
+
+      let pickMemoryIds: string[] = [];
+      let pickInjectMode: MemoryPickComposerMode = "pick";
+      let usedMemoryPickPath = false;
+      /** 写入用户气泡（可见层 strip pack 后展示「已注入」卡） */
+      let pickPackBlockForUserBubble: string | null = null;
+
+      if (pickDecision.kind === "show-ui") {
+        usedMemoryPickPath = true;
+        // 闸门等待期间不占用 processing 灯（尚未调模型）
+        markProcessing(threadId, false);
+        const resolution = await openMemoryPickGate({
+          workspaceId: workspace.id,
+          threadId,
+          queryText: visibleUserText,
+          mode:
+            pickDecision.reason === "always-mode" ||
+            pickPolicy.composerMode === "always"
+              ? "always"
+              : "pick",
+          firstPick: pickDecision.reason === "first-pick",
+          retrieve: () =>
+            retrieveMemoryPickCandidates({
+              workspaceId: workspace.id,
+              query: visibleUserText,
+              listFn: projectMemoryFacade.listSummary,
+            }),
+        });
+
+        if (resolution.action === "cancel") {
+          safeMessageActivity();
+          return;
+        }
+        if (resolution.action === "dismiss") {
+          markMemoryPickSessionDismissed(workspace.id, threadId);
+          markMemoryPickFirstPickDone(workspace.id, threadId);
+        } else if (resolution.action === "skip") {
+          markMemoryPickFirstPickDone(workspace.id, threadId);
+          // 跳过仍视为完成首次教育：默认切到 pick，下次继续出闸门（除非用户再 dismiss）
+          if (
+            pickDecision.reason === "first-pick" ||
+            pickPolicy.composerMode === "off"
+          ) {
+            setMemoryPickComposerMode(workspace.id, threadId, "pick");
+            emitMemoryPickComposerModeSync(workspace.id, threadId, "pick");
+          }
+        } else if (resolution.action === "confirm") {
+          pickMemoryIds = resolution.selectedIds;
+          pickInjectMode = resolution.mode;
+          markMemoryPickFirstPickDone(workspace.id, threadId);
+          if (resolution.mode === "always") {
+            setMemoryPickComposerMode(workspace.id, threadId, "always");
+            emitMemoryPickComposerModeSync(workspace.id, threadId, "always");
+          } else {
+            // 本轮挑选确认（含 0 勾）：固化 pick，避免回到 off 导致「下次没了」
+            setMemoryPickComposerMode(workspace.id, threadId, "pick");
+            emitMemoryPickComposerModeSync(workspace.id, threadId, "pick");
+          }
+        }
+        markProcessing(threadId, true);
+        safeMessageActivity();
+      }
+      // always 已并入 show-ui（每轮 matching + Top3 预览），不再 silent-always
+
+      // 旧路径兼容：未走 pick 编排且仍传 memoryReferenceEnabled 时保留 scout
+      const memoryReferenceEnabled =
+        !usedMemoryPickPath && options?.memoryReferenceEnabled === true;
       const selectedNoteCardIds = Array.from(
         new Set(
           (options?.selectedNoteCardIds ?? [])
@@ -947,7 +1176,47 @@ export function useThreadMessaging({
       const memoryScoutSummaryItemId = `memory-scout-context-${Date.now()}-${Math.random()
         .toString(36)
         .slice(2, 8)}`;
-      if (memoryReferenceEnabled) {
+      // Pick 闸门 / always TopK 注入（source=memory-pick）
+      if (pickMemoryIds.length > 0) {
+        const retrievalStart = Date.now();
+        const pickMemories = (
+          await Promise.all(
+            pickMemoryIds.map((memoryId) =>
+              projectMemoryFacade.get(memoryId, workspace.id).catch(() => null),
+            ),
+          )
+        ).filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+        // 与 manual 去重：已在 manual 中的 id 跳过 pick 再注
+        const manualIdSet = new Set(selectedMemoryIds);
+        const dedupedPickMemories = pickMemories.filter(
+          (memory) => !manualIdSet.has(memory.id),
+        );
+        if (dedupedPickMemories.length > 0) {
+          memoryScoutInjectionResult = injectMemoryPickContext({
+            userText: finalText,
+            memories: dedupedPickMemories,
+            mode: pickInjectMode,
+            queryText: visibleUserText,
+            retrievalMs: Date.now() - retrievalStart,
+            startIndex: injectionResult.injectedCount + 1,
+          });
+          finalText = memoryScoutInjectionResult.finalText;
+          pickPackBlockForUserBubble =
+            memoryScoutInjectionResult.packBlock?.trim() || null;
+        } else {
+          onDebug?.({
+            id: `${Date.now()}-memory-pick-get-empty`,
+            timestamp: Date.now(),
+            source: "client",
+            label: "memory/pick-get-empty",
+            payload: {
+              workspaceId: workspace.id,
+              threadId,
+              pickMemoryIds,
+            },
+          });
+        }
+      } else if (memoryReferenceEnabled) {
         dispatch({
           type: "upsertItem",
           workspaceId: workspace.id,
@@ -1144,7 +1413,13 @@ export function useThreadMessaging({
           hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
         });
       }
-      if (memoryReferenceEnabled && memoryScoutInjectionResult.previewText) {
+      // memory-pick：摘要只走用户消息 pack 展示（气泡下一行），不再插 assistant 幽灵摘要行
+      // 避免历史回放时「注入卡」与真实回复时序错位
+      if (
+        memoryReferenceEnabled &&
+        pickMemoryIds.length === 0 &&
+        memoryScoutInjectionResult.previewText
+      ) {
         dispatch({
           type: "upsertItem",
           workspaceId: workspace.id,
@@ -1158,6 +1433,7 @@ export function useThreadMessaging({
           hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
         });
       }
+
       if (
         noteInjectionResult.injectedCount > 0 &&
         noteInjectionResult.previewText
@@ -1177,15 +1453,19 @@ export function useThreadMessaging({
           hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
         });
       }
-      if (memoryReferenceEnabled) {
+      if (memoryReferenceEnabled || pickMemoryIds.length > 0) {
         onDebug?.({
           id: `${Date.now()}-memory-scout-result`,
           timestamp: Date.now(),
           source: "client",
           label:
-            memoryScoutInjectionResult.injectedCount > 0
-              ? "memory/scout-injected"
-              : "memory/scout-skipped",
+            pickMemoryIds.length > 0
+              ? memoryScoutInjectionResult.injectedCount > 0
+                ? "memory/pick-injected"
+                : "memory/pick-empty"
+              : memoryScoutInjectionResult.injectedCount > 0
+                ? "memory/scout-injected"
+                : "memory/scout-skipped",
           payload: {
             workspaceId: workspace.id,
             threadId,
@@ -1195,6 +1475,8 @@ export function useThreadMessaging({
             reason: memoryScoutInjectionResult.disabledReason,
             retrievalMode: memoryScoutBrief?.retrievalMode ?? "lexical",
             semanticDiagnostics: memoryScoutBrief?.semanticDiagnostics ?? null,
+            pickMode: pickInjectMode,
+            pickIds: pickMemoryIds,
           },
         });
       }
@@ -1428,12 +1710,16 @@ export function useThreadMessaging({
           options?.browserContextAttachment ||
           options?.intentCanvasContextAttachments?.length
         ) {
+          // pick pack 写回用户消息文本：气泡展示 strip pack 后的原文，
+          // 同时 presentation 解析 pack 渲染「已注入」摘要卡（实时 + 历史）
+          const userBubbleText = pickPackBlockForUserBubble
+            ? `${pickPackBlockForUserBubble}\n${optimisticDisplayText}`
+            : optimisticDisplayText;
           if (optimisticUserItem) {
             // 更新 early bubble：保留 id，补 agent 元数据与更完整附图
             optimisticUserItem = {
               ...optimisticUserItem,
-              // 用户可见正文保持原文（纯图仍为空），不写 injection
-              text: optimisticDisplayText,
+              text: userBubbleText,
               images:
                 optimisticImages.length > 0 ? optimisticImages : undefined,
               collaborationMode: userCollaborationMode,
@@ -1451,7 +1737,7 @@ export function useThreadMessaging({
                 .slice(2, 8)}`,
               kind: "message",
               role: "user",
-              text: optimisticDisplayText,
+              text: userBubbleText,
               images:
                 optimisticImages.length > 0 ? optimisticImages : undefined,
               collaborationMode: userCollaborationMode,

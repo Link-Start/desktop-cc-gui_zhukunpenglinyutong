@@ -12,7 +12,8 @@ import type { ExecutionTarget } from '../../../shared-session/target/types';
 // Core Entity Types
 // ============================================================
 
-export type MemoryReferenceMode = 'off' | 'single' | 'always';
+/** off | pick | always；历史 single 运行时归一为 pick */
+export type MemoryReferenceMode = "off" | "pick" | "always" | "single";
 
 /**
  * File tag information for backend context injection (Codex mode)

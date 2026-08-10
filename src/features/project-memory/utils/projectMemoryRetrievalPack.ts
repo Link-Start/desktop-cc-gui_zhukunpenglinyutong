@@ -5,7 +5,10 @@ import {
   resolveProjectMemoryDetailText,
 } from "./projectMemoryDisplay";
 
-export type ProjectMemoryRetrievalPackSource = "manual-selection" | "memory-scout";
+export type ProjectMemoryRetrievalPackSource =
+  | "manual-selection"
+  | "memory-scout"
+  | "memory-pick";
 
 export type ProjectMemoryRetrievalPackRecord = {
   index: string;

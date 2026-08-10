@@ -26,6 +26,7 @@ import {
 } from "../../shared-session/runtime/sharedSessionSummaries";
 import { getCollabWorkerNativeHideIds } from "../../multi-agent/runtime/collabNativeHideRegistry";
 import { asString } from "../utils/threadNormalize";
+import { sanitizeNativeSessionTitle } from "../utils/sessionDisplayProjection";
 import { clearLiveAssistantText } from "../utils/liveAssistantTextChannel";
 import { resolveCodexSubagentIdentity } from "../utils/codexSubagentIdentity";
 import { saveThreadActivity } from "../utils/threadStorage";
@@ -802,7 +803,9 @@ export function useThreadActions({
           .map((thread, index) => {
             const id = String(thread?.id ?? "");
             const preview = asString(thread?.preview ?? "").trim();
-            const nativeTitle = asString(thread?.nativeTitle ?? "").trim();
+            const nativeTitle = sanitizeNativeSessionTitle(
+              asString(thread?.nativeTitle ?? "").trim(),
+            );
             const mappedTitle = mappedTitles[id];
             const customName = getCustomName(workspace.id, id) || mappedTitle;
             const liveIdentity = resolveCodexSubagentIdentity(id, thread);
@@ -988,7 +991,9 @@ export function useThreadActions({
               const updatedAt = session.updatedAt;
               const mappedTitle = mappedTitles[id];
               const customTitle = getCustomName(workspace.id, id);
-              const nativeTitle = asString(session.nativeTitle).trim();
+              const nativeTitle = sanitizeNativeSessionTitle(
+                asString(session.nativeTitle).trim(),
+              );
               const previewName = previewThreadName(
                 session.firstMessage,
                 "Claude Session",

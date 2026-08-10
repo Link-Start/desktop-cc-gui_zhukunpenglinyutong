@@ -43,14 +43,27 @@ const NOOP_MODE = (_mode: PermissionMode) => {};
 const NOOP_REASONING = (_effort: ReasoningEffort | null) => {};
 
 // Memory reference modes offered inside the vertical tool menu submenu.
+// 文案与幕布 MemoryPickGate 策略轨对齐（memoryPick.mode.pick / always）
 const MEMORY_REFERENCE_OPTIONS: ReadonlyArray<{
   mode: MemoryReferenceMode;
   labelKey: string;
   fallback: string;
 }> = [
-  { mode: 'off', labelKey: 'composer.memoryReferenceDisable', fallback: '关闭' },
-  { mode: 'single', labelKey: 'composer.memoryReferenceEnableSingle', fallback: '单次引用' },
-  { mode: 'always', labelKey: 'composer.memoryReferenceEnableAlways', fallback: '常开引用' },
+  {
+    mode: "off",
+    labelKey: "composer.memoryReferenceDisable",
+    fallback: "整轮关闭记忆注入",
+  },
+  {
+    mode: "pick",
+    labelKey: "composer.memoryReferenceEnablePick",
+    fallback: "本轮挑选记忆注入",
+  },
+  {
+    mode: "always",
+    labelKey: "composer.memoryReferenceEnableAlways",
+    fallback: "整轮开启自动top(n)记忆注入",
+  },
 ];
 
 const ENGINE_TYPES: ReadonlySet<string> = new Set([
@@ -297,11 +310,13 @@ export const ButtonArea = ({
   }, [isToolDockOpen, onRefreshAccountRateLimits]);
 
   const memoryReferenceStateLabel =
-    memoryReferenceMode === 'always'
-      ? t('composer.memoryReferenceAlwaysOn')
-      : memoryReferenceMode === 'single'
-        ? t('composer.memoryReferenceSingleOn')
-        : t('composer.memoryReferenceToggle');
+    memoryReferenceMode === "always"
+      ? t("composer.memoryReferenceAlwaysOn")
+      : memoryReferenceMode === "pick" || memoryReferenceMode === "single"
+        ? t("composer.memoryReferencePickOn", {
+            defaultValue: "本轮挑选记忆注入",
+          })
+        : t("composer.memoryReferenceToggle");
 
   /**
    * Handle submit button click

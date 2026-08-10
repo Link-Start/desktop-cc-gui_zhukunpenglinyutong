@@ -25,6 +25,35 @@ describe("threadItemsUserMessage", () => {
     expect(normalizeUserMessageText(text)).toBe("继续拆分用户消息 helper");
   });
 
+  it("strips project-memory-pack from default thread title and visible user text", () => {
+    const text = [
+      '<project-memory-pack source="memory-pick" count="3" cleaned="true" cleanerStatus="cleaned" truncated="false">',
+      "Cleaned Context:",
+      "记忆摘要",
+      "</project-memory-pack>",
+      "",
+      "你好啊",
+    ].join("\n");
+
+    expect(normalizeUserMessageText(text)).toBe("你好啊");
+    expect(previewThreadName(text, "Agent 1")).toBe("你好啊");
+  });
+
+  it("does not name threads from truncated unclosed project-memory-pack firstMessage", () => {
+    // Grok/native 常把 firstMessage 截到半截 open tag，闭合标签丢失
+    const truncated = [
+      '<project-memory-pack source="memory-pick" count="2" cleaned="true"',
+      ' cleanerStatus="cleaned" truncated="false">',
+      "Cleaned Context:",
+      "你好啊",
+    ].join("");
+
+    expect(previewThreadName(truncated, "Grok Session")).toBe("Grok Session");
+    expect(previewThreadName(truncated.slice(0, 48), "Grok Session")).toBe(
+      "Grok Session",
+    );
+  });
+
   it("normalizes shared-session and mode fallback wrappers", () => {
     const sharedSessionText = [
       "Shared session context sync. Continue from these recent turns before answering the new request:",

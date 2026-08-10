@@ -1347,6 +1347,65 @@ function ComposerImpl({
   >([]);
   const [memoryReferenceMode, setMemoryReferenceMode] =
     useState<MemoryReferenceMode>("off");
+  // 闸门内切到 always/pick 时同步菜单（与幕布策略轨一致）
+  useEffect(() => {
+    const onMode = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{
+          mode?: MemoryReferenceMode;
+          workspaceId?: string;
+          threadId?: string;
+        }>
+      ).detail;
+      if (
+        detail?.workspaceId &&
+        activeWorkspaceId &&
+        detail.workspaceId !== activeWorkspaceId
+      ) {
+        return;
+      }
+      if (
+        detail?.threadId &&
+        activeThreadId &&
+        detail.threadId !== activeThreadId
+      ) {
+        return;
+      }
+      if (
+        detail?.mode === "always" ||
+        detail?.mode === "pick" ||
+        detail?.mode === "off"
+      ) {
+        setMemoryReferenceMode(detail.mode);
+      }
+    };
+    window.addEventListener("ccgui:memory-pick-composer-mode", onMode);
+    return () => {
+      window.removeEventListener("ccgui:memory-pick-composer-mode", onMode);
+    };
+  }, [activeThreadId, activeWorkspaceId]);
+  const handleSetMemoryReferenceMode = useCallback(
+    (mode: MemoryReferenceMode) => {
+      const normalized =
+        mode === "single" ? ("pick" as const) : mode === "pick" || mode === "always" || mode === "off"
+          ? mode
+          : ("off" as const);
+      setMemoryReferenceMode(normalized);
+      if (activeWorkspaceId && activeThreadId) {
+        // 动态 import 避免循环依赖；菜单显式 off 必须写回 session
+        void import("../../project-memory/memoryPick/memoryPickSessionStore").then(
+          ({ forceMemoryPickComposerModeFromMenu }) => {
+            forceMemoryPickComposerModeFromMenu(
+              activeWorkspaceId,
+              activeThreadId,
+              normalized === "single" ? "pick" : normalized,
+            );
+          },
+        );
+      }
+    },
+    [activeThreadId, activeWorkspaceId],
+  );
   const [carryOverManualMemoryIds, setCarryOverManualMemoryIds] = useState<
     string[]
   >([]);
@@ -2442,7 +2501,10 @@ function ComposerImpl({
       const selectedMemoryIds = selectedManualMemories.map((entry) => entry.id);
       const selectedNoteCardIds = selectedNoteCards.map((entry) => entry.id);
       const selectedMemoryInjectionMode = getManualMemoryInjectionMode();
-      const shouldReferenceMemory = memoryReferenceMode !== "off";
+      // 记忆参考三态：off | pick | always（single 归一 pick）；由发送链路统一闸门
+      const resolvedMemoryReferenceMode =
+        memoryReferenceMode === "single" ? "pick" : memoryReferenceMode;
+      const shouldPassMemoryReference = resolvedMemoryReferenceMode !== "off";
       // Context Fan-in（§8.6）：协作不再整类拦截 skill/记忆/便签；注入由发送链路首段消化。
       const browserContextAttachment = browserContext.attachment;
       const hasBrowserContextAttachment = Boolean(browserContextAttachment);
@@ -2466,14 +2528,20 @@ function ComposerImpl({
         skillInvocations.length > 0 ||
         selectedMemoryIds.length > 0 ||
         selectedNoteCardIds.length > 0 ||
-        shouldReferenceMemory ||
+        shouldPassMemoryReference ||
         hasBrowserContextAttachment ||
         createSessionTarget !== null ||
         isAgentSubmission
           ? {
               ...(skillInvocations.length > 0 ? { skillInvocations } : {}),
-              ...(shouldReferenceMemory
-                ? { memoryReferenceEnabled: true }
+              ...(shouldPassMemoryReference
+                ? {
+                    memoryReferenceMode: resolvedMemoryReferenceMode,
+                    // 兼容旧测试/路径：always 仍标 enabled
+                    ...(resolvedMemoryReferenceMode === "always"
+                      ? { memoryReferenceEnabled: true as const }
+                      : {}),
+                  }
                 : {}),
               ...(selectedMemoryIds.length > 0
                 ? { selectedMemoryIds, selectedMemoryInjectionMode }
@@ -3525,7 +3593,7 @@ function ComposerImpl({
               onCodexQuickCommand={handleCodexQuickCommand}
               onForkQuickStart={handleForkQuickStart}
               memoryReferenceMode={memoryReferenceMode}
-              onSetMemoryReferenceMode={setMemoryReferenceMode}
+              onSetMemoryReferenceMode={handleSetMemoryReferenceMode}
               hasMessages={items.length > 0}
               onRewind={handleRewind}
               showRewindEntry={canRewindSession}
