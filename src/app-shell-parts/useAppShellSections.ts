@@ -34,9 +34,9 @@ import {
 import { useAppShellKanbanComposerSection } from "./useAppShellKanbanComposerSection";
 import { useAppShellKanbanExecutionSection } from "./useAppShellKanbanExecutionSection";
 import {
+  APP_SHELL_CONSUMER_DOMAIN_SELECTION,
   adaptAppShellLegacyFlatContext,
   flattenSelectedAppShellDomainContextsMemoized,
-  type AppShellDomainContextName,
   type DomainFlattenIdentityCache,
 } from "./appShellDomainContexts";
 import type {
@@ -57,17 +57,9 @@ export {
   syncKanbanExecutionEngineAndModel,
 } from "./useAppShellSections.kanbanHelpers";
 
-const APP_SHELL_SECTIONS_DOMAIN_NAMES = [
-  "runtimeThreadContext",
-  "workspaceNavigationContext",
-  "composerContext",
-  "layoutContext",
-  "fileEditorContext",
-  "settingsContext",
-  "runtimeContext",
-  "modelSelectionContext",
-  "collaborationModeContext",
-] as const satisfies readonly AppShellDomainContextName[];
+/** bag-split PR-2：sections 读侧最小域（见 APP_SHELL_CONSUMER_DOMAIN_SELECTION） */
+const APP_SHELL_SECTIONS_DOMAIN_NAMES =
+  APP_SHELL_CONSUMER_DOMAIN_SELECTION.sections;
 
 export function useAppShellSections(input: UseAppShellSectionsInput) {
   const domainFlattenCacheRef = useRef<DomainFlattenIdentityCache>({

@@ -13,6 +13,7 @@ import {
   listAppShellDomainContextNames,
   reuseStableAppShellDomainContexts,
   flattenSelectedAppShellDomainContextsMemoized,
+  APP_SHELL_CONSUMER_DOMAIN_SELECTION,
   type AppShellDomainContextName,
   type AppShellDomainContexts,
   type DomainFlattenIdentityCache,
@@ -618,6 +619,26 @@ describe("appShellDomainContexts", () => {
     expect(layoutNodesSpreadIndex).toBeGreaterThan(sectionsSpreadIndex);
     // layoutNodes 之后只允许显式覆盖字段（wrapper 拦截），禁止再出现 context spread
     expect(adaptCallBody.lastIndexOf("...ctx.")).toBe(layoutNodesSpreadIndex);
+  });
+});
+
+describe("APP_SHELL_CONSUMER_DOMAIN_SELECTION", () => {
+  it("keeps sections/render smaller than layoutNodes (no full 9-domain flatten)", () => {
+    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.layoutNodes).toHaveLength(9);
+    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.sections.length).toBeLessThan(9);
+    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.render.length).toBeLessThan(9);
+    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.sections).not.toContain(
+      "modelSelectionContext",
+    );
+    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.sections).not.toContain(
+      "collaborationModeContext",
+    );
+    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.render).not.toContain(
+      "runtimeThreadContext",
+    );
+    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.render).not.toContain(
+      "modelSelectionContext",
+    );
   });
 });
 

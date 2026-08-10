@@ -809,6 +809,36 @@ export function flattenSelectedAppShellDomainContextsMemoized<
   return flattened;
 }
 
+/** 导出各 consumer 的 domain 选择集，供边界测试锁定，防止回潮成「全量 flatten」。 */
+export const APP_SHELL_CONSUMER_DOMAIN_SELECTION = {
+  layoutNodes: [
+    "runtimeThreadContext",
+    "workspaceNavigationContext",
+    "composerContext",
+    "layoutContext",
+    "fileEditorContext",
+    "settingsContext",
+    "runtimeContext",
+    "modelSelectionContext",
+    "collaborationModeContext",
+  ],
+  sections: [
+    "workspaceNavigationContext",
+    "composerContext",
+    "layoutContext",
+    "fileEditorContext",
+    "settingsContext",
+  ],
+  render: [
+    "workspaceNavigationContext",
+    "composerContext",
+    "layoutContext",
+    "fileEditorContext",
+    "settingsContext",
+    "runtimeContext",
+  ],
+} as const satisfies Record<string, readonly AppShellDomainContextName[]>;
+
 export function adaptAppShellLegacyFlatContext<TBoundary extends object>(
   context: AppShellLegacyFlatContext,
 ): TBoundary {

@@ -19,9 +19,9 @@ import {
 } from "../features/layout/utils/sidebarTogglePlacement";
 import { formatShortcutForPlatform } from "../utils/shortcuts";
 import {
+  APP_SHELL_CONSUMER_DOMAIN_SELECTION,
   adaptAppShellLegacyFlatContext,
   flattenSelectedAppShellDomainContextsMemoized,
-  type AppShellDomainContextName,
   type DomainFlattenIdentityCache,
 } from "./appShellDomainContexts";
 import {
@@ -38,17 +38,8 @@ import type {
   RenderAppShellFlattenedContext,
 } from "./renderAppShellTypes";
 
-const RENDER_APP_SHELL_DOMAIN_NAMES = [
-  "runtimeThreadContext",
-  "workspaceNavigationContext",
-  "composerContext",
-  "layoutContext",
-  "fileEditorContext",
-  "settingsContext",
-  "runtimeContext",
-  "modelSelectionContext",
-  "collaborationModeContext",
-] as const satisfies readonly AppShellDomainContextName[];
+/** bag-split PR-2：render 读侧最小域（见 APP_SHELL_CONSUMER_DOMAIN_SELECTION） */
+const RENDER_APP_SHELL_DOMAIN_NAMES = APP_SHELL_CONSUMER_DOMAIN_SELECTION.render;
 
 /** AppShell 单例渲染路径：按 domain 身份复用 flatten bag */
 const renderDomainFlattenCache: DomainFlattenIdentityCache = {

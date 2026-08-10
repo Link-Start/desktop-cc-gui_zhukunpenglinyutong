@@ -59,8 +59,8 @@ import {
   shouldPreserveEditorOnThreadSelect,
 } from "./threadEditorPreservation";
 import {
+  APP_SHELL_CONSUMER_DOMAIN_SELECTION,
   flattenSelectedAppShellDomainContextsMemoized,
-  type AppShellDomainContextName,
   type AppShellDomainContexts,
   type DomainFlattenIdentityCache,
 } from "./appShellDomainContexts";
@@ -84,17 +84,8 @@ type WorkspaceAliasPromptState = {
   isSaving: boolean;
 };
 
-const APP_SHELL_LAYOUT_NODES_DOMAIN_NAMES = [
-  "runtimeThreadContext",
-  "workspaceNavigationContext",
-  "composerContext",
-  "layoutContext",
-  "fileEditorContext",
-  "settingsContext",
-  "runtimeContext",
-  "modelSelectionContext",
-  "collaborationModeContext",
-] as const satisfies readonly AppShellDomainContextName[];
+const APP_SHELL_LAYOUT_NODES_DOMAIN_NAMES =
+  APP_SHELL_CONSUMER_DOMAIN_SELECTION.layoutNodes;
 
 // Stable empty-array sentinel so optional `string[]` fallbacks keep a constant
 // reference across renders (avoids defeating downstream React.memo shields).
