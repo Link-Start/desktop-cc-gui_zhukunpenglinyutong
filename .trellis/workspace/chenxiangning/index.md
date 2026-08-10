@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-32.md`
-- **Total Sessions**: 1367
+- **Total Sessions**: 1368
 - **Last Active**: 2026-08-10
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-32.md` | ~712 | Active |
+| `journal-32.md` | ~761 | Active |
 | `journal-31.md` | ~1968 | Archived |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
@@ -60,6 +60,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1368 | 2026-08-10 | 记忆挑选闸门 Phase-1 全量提交 | `89b0d025a` | `bump-version-0.8.7` |
 | 1367 | 2026-08-10 | 纠偏：侧栏隐藏 Shared 下崽 | `9bf25cf46` | `bump-version-0.8.7` |
 | 1366 | 2026-08-10 | Shared 子代理 parent-id 改挂收口 | `2f45c4c34` | `bump-version-0.8.7` |
 | 1365 | 2026-08-10 | 协作首段注入主幕对话上下文 | `037f9e148` | `cxn-version-0.8.6` |

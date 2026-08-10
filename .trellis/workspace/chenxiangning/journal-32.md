@@ -710,3 +710,52 @@ e0ddd9e99 的零 CSS 写入修复了 Windows Blink compositor 阻塞, 但导致 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1368: 记忆挑选闸门 Phase-1 全量提交
+
+**Date**: 2026-08-10
+**Task**: 记忆挑选闸门 Phase-1 全量提交
+**Branch**: `bump-version-0.8.7`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 维度 | 内容 |
+|------|------|
+| 功能 | 发送前 Memory Pick Gate：Native/Shared/Collab 统一 pick/always 编排 |
+| always | 预勾 n（默 3）可改、读秒 8s、记住 preferredCount |
+| UI | C 布局、portal 详情 Markdown、icon 底栏、固定 36px 行高 |
+| 标题 | strip project-memory-pack |
+| Composer | 幕布模式同步菜单；文案对齐 |
+| 文档 | openspec add-memory-pick-gate 二次回写 |
+| 测试 | 81 项 memory-pick 相关 vitest 全过 |
+
+**Updated paths (摘要)**:
+- `src/features/project-memory/memoryPick/**`
+- `src/features/project-memory/components/MemoryPickGate*.tsx`
+- `src/features/threads/hooks/useThreadMessaging.ts`
+- `src/styles/memory-pick-gate.css`
+- `openspec/changes/add-memory-pick-gate/**`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `89b0d025a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
