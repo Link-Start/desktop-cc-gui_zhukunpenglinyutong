@@ -1,3 +1,4 @@
+import type { DebugEntry } from "../../types";
 import { useSelectedComposerSession } from "./useSelectedComposerSession";
 import { useAppShellComposerModelSection } from "./useAppShellComposerModelSection";
 import { useSelectedAgentSession } from "./useSelectedAgentSession";
@@ -21,9 +22,9 @@ export function useComposerDomainHost(input: {
   activeThreadEngine: string | null | undefined;
   activeThreadEngineSource: string | null | undefined;
   activeThreadProviderProfileId: string | null;
-  resolveCanonicalThreadId: (threadId: string) => string | null;
+  resolveCanonicalThreadId: (threadId: string) => string;
   appSettingsLoading: boolean;
-  addDebugEntry: (entry: unknown) => void;
+  addDebugEntry: (entry: DebugEntry) => void;
   activeEngine: any;
   installedEngines: any;
   setActiveEngine: any;

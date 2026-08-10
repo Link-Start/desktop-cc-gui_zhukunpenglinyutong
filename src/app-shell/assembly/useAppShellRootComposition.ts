@@ -858,8 +858,6 @@ export function useAppShellRootComposition() {
   });
   // S4 PR-C：Composer 域 host
   const {
-    selectedComposerSelection,
-    handleSelectComposerSelection,
     persistComposerSelectionForThread,
     resolveComposerSelectionForThread,
     collaborationModePayload,
