@@ -37,6 +37,7 @@ export type {
   CodingPlanBalanceSnapshot,
   CodingPlanQuotaSnapshot,
   CodingPlanQuotaWindow,
+  CodingPlanUsageSummary,
 } from "./tauri/modelCatalog";
 export {
   getClaudeCommandsList,

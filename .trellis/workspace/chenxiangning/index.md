@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-32.md`
-- **Total Sessions**: 1360
-- **Last Active**: 2026-08-09
+- **Total Sessions**: 1365
+- **Last Active**: 2026-08-10
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-32.md` | ~421 | Active |
+| `journal-32.md` | ~625 | Active |
 | `journal-31.md` | ~1968 | Archived |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
@@ -60,6 +60,11 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1365 | 2026-08-10 | 协作首段注入主幕对话上下文 | `037f9e148` | `cxn-version-0.8.6` |
+| 1364 | 2026-08-10 | 项目记忆 Grok/Kimi 与 Shared 整轮写入 | `1c2e84190` | `cxn-version-0.8.6` |
+| 1363 | 2026-08-10 | 修复!提示词 soft-failure 永久空态 | `0e2411c08` | `cxn-version-0.8.6` |
+| 1362 | 2026-08-10 | fix(startup): platform-split CSS 写入策略, 兼容 macOS/Windows 冷启点击卡死 | `26d07de4a` | `cxn-version-0.8.6` |
+| 1361 | 2026-08-10 | Sub2API/New API 中转额度查询与 HUD 展示 | `e9da94dff` | `cxn-version-0.8.6` |
 | 1360 | 2026-08-09 | 合并 upstream 0.8.5 更新 | `c4c382832` | `cxn-version-0.8.5` |
 | 1359 | 2026-08-09 | 根治冷启点击卡死 | `3c3ac3f08` | `cxn-version-0.8.5` |
 | 1358 | 2026-08-09 | 重构启动诊断时间轴 | `db8b3c308` | `cxn-version-0.8.5` |

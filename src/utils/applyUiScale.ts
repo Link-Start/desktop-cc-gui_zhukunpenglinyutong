@@ -50,6 +50,39 @@ export function resolveCssZoomLayoutTarget(root: HTMLElement): HTMLElement {
   return root;
 }
 
+/**
+ * Platform-split CSS scale management.
+ *
+ * macOS WKWebView uses stale hit-test data.  When cold-start applyUiScale(1)
+ * writes zero CSS properties the CSSOM tree is never materialised in WKWebView;
+ * the first user click triggers hit-test → synchronous style recalc + layout
+ * that deadlocks the main thread.  Unconditional inline writes during the
+ * first effect force early CSSOM initialisation so hit-test data is fresh.
+ *
+ * Windows WebView2 (Chromium Blink) eagerly builds the CSSOM, so every inline
+ * write invalidates the style tree and triggers a full style recalc + layout
+ * that competes with the compositor for the first-paint hit-test.  Only touch
+ * properties that carry a residual value (hot-reload, earlier non-identity
+ * scale, or stale transform fill from an older build).
+ */
+
+/** CSSOM property names (kebab-case) for scale-related inline styles. */
+const ZOOM_FILL_CSS_PROPS = [
+  "zoom",
+  "transform",
+  "transform-origin",
+  "width",
+  "height",
+  "position",
+  "top",
+  "left",
+  "right",
+  "bottom",
+] as const;
+
+// ── macOS: unconditional path (validated before e0ddd9e99) ──
+
+/** Unconditionally clear all 10 scale-related inline properties. */
 function clearScaleLayoutStyles(el: HTMLElement): void {
   el.style.zoom = "";
   el.style.transform = "";
@@ -64,9 +97,11 @@ function clearScaleLayoutStyles(el: HTMLElement): void {
 }
 
 /**
- * CSS zoom only. Always strips residual transform/fill from older builds.
+ * macOS: unconditional fill clear + zoom write.
+ * Always touches 10 properties so WKWebView materialises the CSSOM before the
+ * first click arrives.
  */
-function setScaleLayoutStyles(el: HTMLElement, scale: number): void {
+function setScaleLayoutStyles_Mac(el: HTMLElement, scale: number): void {
   el.style.transform = "";
   el.style.transformOrigin = "";
   el.style.width = "";
@@ -85,14 +120,70 @@ function setScaleLayoutStyles(el: HTMLElement, scale: number): void {
   el.style.zoom = String(scale);
 }
 
-function applyCssPageScaleStyles(root: HTMLElement, scale: number): void {
-  root.style.setProperty("--ui-scale", String(scale));
+// ── Windows: residual-only path ──
+
+/** Only clear properties that carry a non-empty inline value. */
+function clearResidualScaleStyles(el: HTMLElement): void {
+  for (const prop of ZOOM_FILL_CSS_PROPS) {
+    if (el.style.getPropertyValue(prop) !== "") {
+      el.style.removeProperty(prop);
+    }
+  }
+}
+
+/**
+ * Windows: zero writes at scale=1 on cold start.  Leaves already-clean
+ * properties alone so first-paint does not invalidate the Blink layout tree.
+ *
+ * Uses `style.zoom =` (not setProperty) because jsdom does not map
+ * setProperty("zoom", …) to the style.zoom getter.  In Chromium / WKWebView
+ * both forms are equivalent — they trigger the same CSSOM mutation path.
+ */
+function setResidualScaleLayoutStyles(el: HTMLElement, scale: number): void {
+  clearResidualScaleStyles(el);
+
+  if (scale === 1) {
+    return;
+  }
+
+  el.style.zoom = String(scale);
+}
+
+function applyCssPageScaleStyles(
+  root: HTMLElement,
+  scale: number,
+  platform: RendererPlatform,
+): void {
+  const isMacOS = platform === "macos";
+
+  // macOS always writes --ui-scale to force CSSOM init.
+  // Windows only writes --ui-scale for non-identity scales (CSS :root already
+  // declares --ui-scale: 1 in themes.dark.css, an inline write of the same
+  // value shifts cascade origin and forces Chromium to re-resolve consumers).
+  if (isMacOS) {
+    root.style.setProperty("--ui-scale", String(scale));
+  } else {
+    if (scale !== 1) {
+      root.style.setProperty("--ui-scale", String(scale));
+    } else if (root.style.getPropertyValue("--ui-scale")) {
+      root.style.removeProperty("--ui-scale");
+    }
+  }
 
   const layout = resolveCssZoomLayoutTarget(root);
   if (layout !== root) {
-    clearScaleLayoutStyles(root);
+    if (isMacOS) {
+      clearScaleLayoutStyles(root);
+    } else {
+      clearResidualScaleStyles(root);
+    }
   }
-  setScaleLayoutStyles(layout, scale);
+
+  if (isMacOS) {
+    setScaleLayoutStyles_Mac(layout, scale);
+  } else {
+    setResidualScaleLayoutStyles(layout, scale);
+  }
 }
 
 /** @internal test helper */
@@ -129,7 +220,7 @@ export async function applyUiScale(
 ): Promise<void> {
   const next = clampUiScale(scale);
 
-  applyCssPageScaleStyles(target.root, next);
+  applyCssPageScaleStyles(target.root, next, target.platform);
 }
 
 /** Convenience for production hook: detect platform and apply CSS-only zoom. */

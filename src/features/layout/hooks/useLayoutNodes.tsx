@@ -732,6 +732,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
         onAddWorkspace={options.onAddWorkspace}
         onSelectHome={options.onSelectHome}
         onSelectWorkspace={options.onSelectWorkspace}
+        onReorderWorkspaces={options.onReorderWorkspaces}
         onConnectWorkspace={options.onConnectWorkspace}
         onAddAgent={options.onAddAgent}
         engineOptions={options.engineOptions}

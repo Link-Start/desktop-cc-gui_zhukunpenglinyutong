@@ -94,6 +94,8 @@ type BlankScreenWatchdogOptions = {
   intervalMs?: number;
   minConsecutiveSamples?: number;
   maxReports?: number;
+  /** Skip checks for this initial duration (ms) — avoids forced layout during cold-start gate. */
+  startDelayMs?: number;
 };
 
 type RendererHeartbeatOptions = {
@@ -675,9 +677,26 @@ function readPersistedDiagnosticsFromStores() {
 
 function getPersistedDiagnosticsSnapshot(): RendererDiagnosticEntry[] {
   if (persistedDiagnosticsCache === null) {
-    const loadedEntries = readPersistedDiagnosticsFromStores();
+    let loadedEntries = readPersistedDiagnosticsFromStores();
     if (!isPreloaded()) {
       return loadedEntries;
+    }
+    // Defensive: the persisted file can grow beyond the byte budget across
+    // multi-day sessions (field evidence: 401 KB on disk vs 256 KB budget).
+    // Trim once at cache-population so in-memory state stays bounded and the
+    // next persist writes a smaller file.
+    const untrimmedBytes =
+      2 +
+      Math.max(0, loadedEntries.length - 1) +
+      loadedEntries.reduce(
+        (sum, entry) => sum + utf8ByteLength(getDiagnosticEntrySignature(entry)),
+        0,
+      );
+    if (untrimmedBytes > MAX_PERSISTED_RENDERER_DIAGNOSTICS_BYTES) {
+      loadedEntries = trimDiagnosticsToByteBudget(
+        loadedEntries,
+        MAX_PERSISTED_RENDERER_DIAGNOSTICS_BYTES,
+      );
     }
     persistedDiagnosticsCache = loadedEntries;
     persistedDiagnosticSignatures = new Set(
@@ -1543,7 +1562,19 @@ export function startRendererBlankScreenWatchdog(
   );
   blankWatchdogConsecutiveSamples = 0;
   blankWatchdogReports = 0;
+
+  const startDelayMs = Math.max(0, options.startDelayMs ?? 0);
+  const startedAt = Date.now();
+
   blankWatchdogTimer = window.setInterval(() => {
+    // The full-screen StartupGate overlay covers everything during cold start
+    // so blank-screen detection has no user-facing value; getBoundingClientRect
+    // + getComputedStyle inside the check force a synchronous layout that
+    // competes with first-paint React commits on WebView2 (Chromium Blink).
+    if (startDelayMs > 0 && Date.now() - startedAt < startDelayMs) {
+      blankWatchdogConsecutiveSamples = 0;
+      return;
+    }
     // 隐藏窗口不存在"用户看到白屏"，跳过采样避免后台每 1.5s 两次强制回流
     // （getBoundingClientRect + getComputedStyle），并清零连续计数。
     if (document.visibilityState === "hidden") {

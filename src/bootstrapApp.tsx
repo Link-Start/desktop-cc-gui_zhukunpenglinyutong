@@ -238,7 +238,15 @@ async function bootstrap() {
     </React.StrictMode>,
   );
   appendRendererDiagnostic("bootstrap/render-committed");
-  startRendererBlankScreenWatchdog({ rootId: "root" });
+  startRendererBlankScreenWatchdog({
+    rootId: "root",
+    // getBoundingClientRect + getComputedStyle force synchronous layout on
+    // WebView2 (Chromium Blink).  During cold start the StartupGate overlay
+    // covers everything so blank-screen detection is worthless; defer until
+    // the gate window closes (first-paint ~4.4s, force-enter at 10s, uiScale
+    // phase-2 at 12s ceiling).
+    startDelayMs: 15_000,
+  });
   recordStartupMilestone("shell-ready");
   recordStartupPerfMarker("first-paint");
   pushBootstrapNotice("runtimeNotice.bootstrap.ready");

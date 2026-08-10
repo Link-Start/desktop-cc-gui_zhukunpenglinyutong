@@ -63,6 +63,7 @@ import {
   getPromptHeatLevel,
   getPromptUsageEntry,
 } from '../../../prompts/promptUsage';
+import { requestCustomPromptsRefresh } from '../../../prompts/promptEvents';
 import { appendComposerRenderBudgetDiagnostic } from '../../../../services/rendererDiagnostics';
 
 // Re-export the handle type for Composer to use
@@ -2019,8 +2020,25 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
           throw new DOMException('Aborted', 'AbortError');
         }
 
+        // 内存为空时 on-demand revalidate：修复启动 soft-failure 导致的永久空态。
+        // 非空时只读 props，避免每次 `!` 打 IPC。
+        let sourcePrompts = prompts;
+        if (sourcePrompts.length === 0 && workspaceId) {
+          const refreshed = await requestCustomPromptsRefresh(
+            workspaceId,
+            'on-demand',
+            { skipIfAuthoritative: true },
+          );
+          if (signal.aborted) {
+            throw new DOMException('Aborted', 'AbortError');
+          }
+          if (Array.isArray(refreshed) && refreshed.length > 0) {
+            sourcePrompts = refreshed;
+          }
+        }
+
         const normalizedQuery = query.trim().toLowerCase();
-        const filteredPrompts = prompts
+        const filteredPrompts = sourcePrompts
           .filter((prompt) => prompt.name)
           .filter((prompt) => {
             if (!normalizedQuery) {
@@ -2082,7 +2100,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
 
         return [...filteredPrompts, createPromptItem];
       },
-      [prompts, t],
+      [prompts, t, workspaceId],
     );
 
     return (

@@ -106,7 +106,13 @@ export function useUiScaleShortcuts({
       });
     };
 
-    // Phase 1: always identity first (safe for WebView2 + cold-start clicks).
+    // Phase 1: always identity first.
+    //
+    // On cold start every CSS property in ZOOM_FILL_PROPS is already empty and
+    // --ui-scale defaults to 1 in :root, so apply(1) is a true no-op that does
+    // not dirty the Blink layout tree.  The conditional clearing inside
+    // applyUiScale (clearResidualScaleStyles / hasResidualScaleStyle) guarantees
+    // we only write when there is a leftover value to remove.
     apply(1);
     confirmUiScaleHealthy();
 

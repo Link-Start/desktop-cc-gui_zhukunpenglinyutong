@@ -409,9 +409,17 @@ export function StartupGateOverlay() {
     return null;
   }
 
+  // color-mix(in_srgb, …) requires a GPU shader on WebView2 (Chromium) that
+  // competes with first-paint layout.  A separate opacity layer on top of a
+  // solid theme background avoids the shader cost.
+  const gateBgStyle = {
+    backgroundColor: 'var(--surface-messages, #0d0f14)',
+    opacity: 0.92,
+  } as const;
+
   return (
     <div
-      className="fixed inset-0 z-[2147483000] flex flex-col items-center justify-center gap-3 bg-[color-mix(in_srgb,var(--surface-messages,#0d0f14)_92%,transparent)] px-4 text-foreground"
+      className="fixed inset-0 z-[2147483000] text-foreground"
       role="alertdialog"
       aria-modal="true"
       aria-busy="true"
@@ -426,123 +434,128 @@ export function StartupGateOverlay() {
         event.stopPropagation();
       }}
     >
-      <div
-        className="size-9 shrink-0 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground"
-        aria-hidden
-      />
-      <p className="max-w-lg shrink-0 px-2 text-center text-sm text-muted-foreground">
-        {t("runtimeNotice.startupGate.message")}
-      </p>
-      <p
-        className="shrink-0 font-mono text-[11px] text-muted-foreground/80"
-        data-testid="startup-gate-elapsed"
-      >
-        elapsed {formatElapsedMs(taskStats.elapsedMs)} · events {taskStats.events} · tasks{" "}
-        {taskStats.uniqueTasks} · notices {taskStats.notices} · run{" "}
-        {taskStats.running} · ok {taskStats.completed} · fail {taskStats.failed}
-        {taskStats.other ? ` · other ${taskStats.other}` : ""}
-      </p>
-      <p className="max-w-3xl shrink-0 truncate px-2 font-mono text-[10px] text-muted-foreground/60">
-        milestones: {taskStats.milestones}
-      </p>
+      {/* Background: solid theme color with opacity — avoids color-mix() GPU shader */}
+      <div className="absolute inset-0" style={gateBgStyle} aria-hidden />
 
-      {/* 冷启诊断清单：默认折叠，点标题展开 */}
-      <div
-        className="flex w-full max-w-3xl shrink flex-col gap-2"
-        data-testid="startup-gate-module-panel"
-      >
-        <button
-          type="button"
-          className="mx-auto flex items-center gap-1.5 rounded-md border border-border/60 bg-background/70 px-3 py-1.5 font-mono text-[11px] text-muted-foreground shadow-sm hover:bg-background hover:text-foreground"
-          data-testid="startup-gate-module-panel-toggle"
-          aria-expanded={modulePanelExpanded}
-          onPointerDown={(event) => {
-            event.stopPropagation();
-          }}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            handleToggleTimeline();
-          }}
+      <div className="relative z-10 flex h-full flex-col items-center justify-center gap-3 px-4">
+        <div
+          className="size-9 shrink-0 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground"
+          aria-hidden
+        />
+        <p className="max-w-lg shrink-0 px-2 text-center text-sm text-muted-foreground">
+          {t("runtimeNotice.startupGate.message")}
+        </p>
+        <p
+          className="shrink-0 font-mono text-[11px] text-muted-foreground/80"
+          data-testid="startup-gate-elapsed"
         >
-          <span aria-hidden>{modulePanelExpanded ? "▼" : "▶"}</span>
-          <span>
-            {modulePanelExpanded ? "收起加载日志" : "展开加载日志"} · trace{" "}
-            {timelineSnapshot?.events.length ?? taskStats.events} · notices{" "}
-            {timelineSnapshot?.notices.length ?? taskStats.notices}
-          </span>
-        </button>
+          elapsed {formatElapsedMs(taskStats.elapsedMs)} · events {taskStats.events} · tasks{" "}
+          {taskStats.uniqueTasks} · notices {taskStats.notices} · run{" "}
+          {taskStats.running} · ok {taskStats.completed} · fail {taskStats.failed}
+          {taskStats.other ? ` · other ${taskStats.other}` : ""}
+        </p>
+        <p className="max-w-3xl shrink-0 truncate px-2 font-mono text-[10px] text-muted-foreground/60">
+          milestones: {taskStats.milestones}
+        </p>
 
-        {timelineSnapshot ? (
-          <>
-            <div className="flex max-h-[min(52vh,520px)] min-h-0 w-full shrink overflow-hidden">
-              <StartupDiagnosticsTimeline
-                events={timelineSnapshot.events}
-                notices={timelineSnapshot.notices}
-                workspaces={timelineWorkspaces}
-              />
-            </div>
-
-            <div className="flex shrink-0 justify-center">
-              <button
-                type="button"
-                className={
-                  copyState === "ok"
-                    ? "rounded-md border border-border bg-background/80 px-4 py-2 text-sm text-emerald-700 shadow-sm hover:bg-background dark:text-emerald-400"
-                    : copyState === "fail"
-                      ? "rounded-md border border-border bg-background/80 px-4 py-2 text-sm text-rose-700 shadow-sm hover:bg-background dark:text-rose-400"
-                      : "rounded-md border border-border bg-background/80 px-4 py-2 text-sm text-foreground shadow-sm hover:bg-background"
-                }
-                data-testid="startup-gate-copy-diagnostic"
-                onPointerDown={(event) => {
-                  event.stopPropagation();
-                }}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  void handleCopyDiagnostic();
-                }}
-              >
-                {copyState === "ok"
-                  ? "已复制 ✓ 直接粘贴发给我"
-                  : copyState === "fail"
-                    ? "复制失败，请重试"
-                    : "一键复制诊断包"}
-              </button>
-            </div>
-          </>
-        ) : null}
-      </div>
-
-      <div className="mt-1 flex shrink-0 flex-wrap items-center justify-center gap-2">
-        {showForceDismiss ? (
+        {/* 冷启诊断清单：默认折叠，点标题展开 */}
+        <div
+          className="flex w-full max-w-3xl shrink flex-col gap-2"
+          data-testid="startup-gate-module-panel"
+        >
           <button
             type="button"
-            className="rounded-md border border-border bg-background/80 px-4 py-2 text-sm text-foreground shadow-sm hover:bg-background"
-            data-testid="startup-gate-force-dismiss"
+            className="mx-auto flex items-center gap-1.5 rounded-md border border-border/60 bg-background/70 px-3 py-1.5 font-mono text-[11px] text-muted-foreground shadow-sm hover:bg-background hover:text-foreground"
+            data-testid="startup-gate-module-panel-toggle"
+            aria-expanded={modulePanelExpanded}
             onPointerDown={(event) => {
               event.stopPropagation();
             }}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              forceEnterApp(setOpen);
+              handleToggleTimeline();
             }}
           >
-            {t("runtimeNotice.startupGate.forceDismiss")}
+            <span aria-hidden>{modulePanelExpanded ? "▼" : "▶"}</span>
+            <span>
+              {modulePanelExpanded ? "收起加载日志" : "展开加载日志"} · trace{" "}
+              {timelineSnapshot?.events.length ?? taskStats.events} · notices{" "}
+              {timelineSnapshot?.notices.length ?? taskStats.notices}
+            </span>
           </button>
-        ) : (
-          <span className="font-mono text-[10px] text-muted-foreground/50">
-            force-enter in{" "}
-            {Math.max(
-              0,
-              Math.ceil(
-                (STARTUP_GATE_FORCE_DISMISS_MS - taskStats.elapsedMs) / 1000,
-              ),
-            )}
-            s
-          </span>
-        )}
+
+          {timelineSnapshot ? (
+            <>
+              <div className="flex max-h-[min(52vh,520px)] min-h-0 w-full shrink overflow-hidden">
+                <StartupDiagnosticsTimeline
+                  events={timelineSnapshot.events}
+                  notices={timelineSnapshot.notices}
+                  workspaces={timelineWorkspaces}
+                />
+              </div>
+
+              <div className="flex shrink-0 justify-center">
+                <button
+                  type="button"
+                  className={
+                    copyState === "ok"
+                      ? "rounded-md border border-border bg-background/80 px-4 py-2 text-sm text-emerald-700 shadow-sm hover:bg-background dark:text-emerald-400"
+                      : copyState === "fail"
+                        ? "rounded-md border border-border bg-background/80 px-4 py-2 text-sm text-rose-700 shadow-sm hover:bg-background dark:text-rose-400"
+                        : "rounded-md border border-border bg-background/80 px-4 py-2 text-sm text-foreground shadow-sm hover:bg-background"
+                  }
+                  data-testid="startup-gate-copy-diagnostic"
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                  }}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    void handleCopyDiagnostic();
+                  }}
+                >
+                  {copyState === "ok"
+                    ? "已复制 ✓ 直接粘贴发给我"
+                    : copyState === "fail"
+                      ? "复制失败，请重试"
+                      : "一键复制诊断包"}
+                </button>
+              </div>
+            </>
+          ) : null}
+        </div>
+
+        <div className="mt-1 flex shrink-0 flex-wrap items-center justify-center gap-2">
+          {showForceDismiss ? (
+            <button
+              type="button"
+              className="rounded-md border border-border bg-background/80 px-4 py-2 text-sm text-foreground shadow-sm hover:bg-background"
+              data-testid="startup-gate-force-dismiss"
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                forceEnterApp(setOpen);
+              }}
+            >
+              {t("runtimeNotice.startupGate.forceDismiss")}
+            </button>
+          ) : (
+            <span className="font-mono text-[10px] text-muted-foreground/50">
+              force-enter in{" "}
+              {Math.max(
+                0,
+                Math.ceil(
+                  (STARTUP_GATE_FORCE_DISMISS_MS - taskStats.elapsedMs) / 1000,
+                ),
+              )}
+              s
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

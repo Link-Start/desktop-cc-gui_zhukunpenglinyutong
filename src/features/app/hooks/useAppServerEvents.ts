@@ -2455,15 +2455,16 @@ export function dispatchAppServerEvent(
             textFromResult,
           )
         ) {
-          if (!emitSharedTerminalProjection(fallbackItemId, textFromResult)) {
-            handlers.onAgentMessageCompleted?.({
-              workspaceId: workspace_id,
-              threadId,
-              itemId: fallbackItemId,
-              text: textFromResult,
-              ...(turnId ? { turnId } : {}),
-            });
-          }
+          // Shared canvas projection is best-effort; project-memory fusion always
+          // needs onAgentMessageCompleted even when projection already succeeded.
+          emitSharedTerminalProjection(fallbackItemId, textFromResult);
+          handlers.onAgentMessageCompleted?.({
+            workspaceId: workspace_id,
+            threadId,
+            itemId: fallbackItemId,
+            text: textFromResult,
+            ...(turnId ? { turnId } : {}),
+          });
         }
       }
       if (

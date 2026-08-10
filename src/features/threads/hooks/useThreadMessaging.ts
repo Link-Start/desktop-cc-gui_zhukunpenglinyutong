@@ -66,6 +66,7 @@ import {
 } from "../../shared-session/target/types";
 import { requestAgentPlan } from "../../multi-agent/runtime/executor";
 import { injectCollabSkillContext } from "../../multi-agent/runtime/skillContextInjection";
+import { injectMainCanvasContext } from "../../multi-agent/runtime/mainCanvasContextInjection";
 import { getSelectedTemplate } from "../../multi-agent/templates/templateStore";
 import { templateToStageBindings } from "../../multi-agent/templates/types";
 import { subscribeMultiAgentConversationItems } from "../../multi-agent/runtime/conversationBridge";
@@ -641,9 +642,10 @@ export function useThreadMessaging({
           providerProfileSource: snapshot.providerProfileSource,
           runtimeCapabilityFingerprint: snapshot.runtimeCapabilityFingerprint,
         };
-        // 可见原文（主幕气泡）；model text 在此基础上叠 skill/记忆/便签
+        // 可见原文（主幕气泡）；model text 在此基础上叠 skill/记忆/便签/主幕历史
         // 纯图：可见可空，model 侧在 executor 内补占位
         // Context Fan-in 口径：
+        // - 主幕已有对话：digest 置顶注入 modelText（不进 visibleText / 主幕卡标题）
         // - 记忆/便签：正文注入进 modelText（与图不同，不走独立 image_refs 通道）
         // - skill：协作 prompt 包层后 slash 常失效 → 读 SKILL.md 正文注入首段
         // - 图 / 便签附图：firstStageImages + dispatch durable 回填
@@ -743,6 +745,12 @@ export function useThreadMessaging({
             new Set([...finalImages, ...noteInjection.imagePaths]),
           );
         }
+        // 主幕历史 digest 置顶（在 skill/记忆/便签之后 prepend，保证块在最终 modelText 头部）
+        // 不污染 visibleUserText / 主幕气泡；空历史 no-op
+        modelText = injectMainCanvasContext({
+          userText: modelText,
+          items: itemsByThread[threadId] ?? [],
+        }).finalText;
         finalImages = sanitizeImageAttachmentPaths(finalImages);
         if (
           finalImages.length > 0 &&
@@ -1866,11 +1874,87 @@ export function useThreadMessaging({
                 },
               });
             }
+            // Project-memory input capture for shared V2 (native path is skipped
+            // by this early return). Prefer runtimeTurnId so fusion matches
+            // turn/completed / onAgentMessageCompleted turnId.
+            const sharedMemoryTurnId =
+              sharedRuntimeTurnId ||
+              asString(sharedV2Result.logicalTurnId).trim();
+            if (sharedMemoryTurnId && visibleUserText.trim()) {
+              void projectMemoryFacade
+                .captureTurnInput({
+                  workspaceId: workspace.id,
+                  userInput: visibleUserText,
+                  threadId,
+                  turnId: sharedMemoryTurnId,
+                  workspaceName: workspace.name ?? null,
+                  workspacePath: workspace.path ?? null,
+                  engine: sharedResolvedEngine,
+                })
+                .then((captured) => {
+                  onInputMemoryCaptured?.({
+                    workspaceId: workspace.id,
+                    threadId,
+                    turnId: sharedMemoryTurnId,
+                    inputText: visibleUserText,
+                    memoryId: captured?.id ?? null,
+                    workspaceName: workspace.name ?? null,
+                    workspacePath: workspace.path ?? null,
+                    engine: sharedResolvedEngine,
+                  });
+                })
+                .catch((err) => {
+                  if (shouldEmitThreadMessagingDevLogs) {
+                    console.warn(
+                      "[project-memory] shared auto capture failed:",
+                      err,
+                    );
+                  }
+                });
+            }
             // 此处只收敛 Shared UI projection；不得落入 Native turn-start lifecycle。
             markProcessing(threadId, false);
             setActiveTurnId(threadId, null);
             safeMessageActivity();
             return response as SendSharedSessionTurnV2Result;
+          }
+          // Shared V1 (or V2 without committed): still capture input when we have
+          // a stable turn identity; native capture block is not reached.
+          const sharedV1MemoryTurnId =
+            asString(response.runtimeTurnId ?? "").trim() ||
+            asString(sharedV2Result?.logicalTurnId).trim() ||
+            asString(response.logicalTurnId ?? response.turnId ?? "").trim();
+          if (sharedV1MemoryTurnId && visibleUserText.trim()) {
+            void projectMemoryFacade
+              .captureTurnInput({
+                workspaceId: workspace.id,
+                userInput: visibleUserText,
+                threadId,
+                turnId: sharedV1MemoryTurnId,
+                workspaceName: workspace.name ?? null,
+                workspacePath: workspace.path ?? null,
+                engine: sharedResolvedEngine,
+              })
+              .then((captured) => {
+                onInputMemoryCaptured?.({
+                  workspaceId: workspace.id,
+                  threadId,
+                  turnId: sharedV1MemoryTurnId,
+                  inputText: visibleUserText,
+                  memoryId: captured?.id ?? null,
+                  workspaceName: workspace.name ?? null,
+                  workspacePath: workspace.path ?? null,
+                  engine: sharedResolvedEngine,
+                });
+              })
+              .catch((err) => {
+                if (shouldEmitThreadMessagingDevLogs) {
+                  console.warn(
+                    "[project-memory] shared auto capture failed:",
+                    err,
+                  );
+                }
+              });
           }
         } else {
           const isClaudeSession = threadId.startsWith("claude:");

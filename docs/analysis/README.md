@@ -22,6 +22,7 @@ status: active
 
 ## Resolved incidents and closure evidence
 
+- [Cold-start click freeze postmortem](./cold-start-click-freeze-postmortem-2026-08-10.md) — **Resolved 2026-08-10**；6 天全链路追踪，三层根因模型，最终通过 `applyUiScale` 条件 CSS 清除根治。关联：`windows-cold-start-click-freeze-and-uiscale-0.8-2026-08-07.md`、`windows-ccgui-startup-hang-2026-08-05.md`。
 - [Shared session model picker native fallback](./shared-session-model-picker-native-fallback-2026-08-02.md) — Resolved 2026-08-03；identity、optimistic persistence 与 stale hydrate protection 已闭环。
 - [Unify conversation canvas review](./unify-conversation-canvas-review-2026-08-01.md) — Implemented review/closure evidence。
 

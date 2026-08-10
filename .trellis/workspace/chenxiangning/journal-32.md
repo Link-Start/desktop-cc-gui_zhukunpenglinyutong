@@ -419,3 +419,207 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1361: Sub2API/New API 中转额度查询与 HUD 展示
+
+**Date**: 2026-08-10
+**Task**: Sub2API/New API 中转额度查询与 HUD 展示
+**Branch**: `cxn-version-0.8.6`
+
+### Summary
+
+未知中转站额度：Sub2API /v1/usage 优先、失败回退 New API /api/user/self；Grok local 读 config.toml；HUD 多行用量；供应商 {origin} {source}；友好错误与超时优化
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e9da94dff` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1362: fix(startup): platform-split CSS 写入策略, 兼容 macOS/Windows 冷启点击卡死
+
+**Date**: 2026-08-10
+**Task**: fix(startup): platform-split CSS 写入策略, 兼容 macOS/Windows 冷启点击卡死
+**Branch**: `cxn-version-0.8.6`
+
+### Summary
+
+e0ddd9e99 的零 CSS 写入修复了 Windows Blink compositor 阻塞, 但导致 macOS WKWebView CSSOM 懒加载未初始化——首次点击触发同步 layout 死锁。终局方案: applyUiScale 内按 rendererPlatform 分块, macOS 走无条件写入, Windows 走残留清除。4 files, +209/-63。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `26d07de4a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1363: 修复!提示词 soft-failure 永久空态
+
+**Date**: 2026-08-10
+**Task**: 修复!提示词 soft-failure 永久空态
+**Branch**: `cxn-version-0.8.6`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| OpenSpec | `fix-custom-prompts-stale-empty-cache`（proposal/design/tasks/specs/verification） |
+| 根因 | idle-prewarm soft-fail 把 `[]` stamp 为权威拉取，`!` 只读内存永不重试 |
+| 修复 | soft-cancel 保留缓存；硬失败可重试+toast；shared inFlight；`!` 空态 on-demand revalidate（skipIfAuthoritative） |
+| 测试 | useCustomPrompts + ChatInputBoxAdapter 70 passed |
+
+**Updated Files**:
+- `src/features/prompts/hooks/useCustomPrompts.ts`
+- `src/features/prompts/promptEvents.ts`
+- `src/features/composer/components/ChatInputBox/ChatInputBoxAdapter.tsx`
+- `openspec/changes/fix-custom-prompts-stale-empty-cache/**`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0e2411c08` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1364: 项目记忆 Grok/Kimi 与 Shared 整轮写入
+
+**Date**: 2026-08-10
+**Task**: 项目记忆 Grok/Kimi 与 Shared 整轮写入
+**Branch**: `cxn-version-0.8.6`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 任务1 | Native Grok/Kimi/Gemini TurnCompleted 始终发 text-lane item/completed，完整 conversation_turn 融合 |
+| 任务2 | Shared V2/V1 captureTurnInput；terminal 投影后触发 onAgentMessageCompleted |
+| OpenSpec | fix-grok-kimi-native-memory-completion、add-shared-session-project-memory-capture |
+| 提交策略 | 剥离 collab 主幕 inject 污染，仅提交记忆相关 18 文件 |
+
+**Updated Files**:
+- src-tauri/src/engine/commands.rs / commands_tests.rs
+- src-tauri/src/bin/cc_gui_daemon.rs / daemon_state.rs
+- src/features/app/hooks/useAppServerEvents.ts(+test)
+- src/features/threads/hooks/useThreadMessaging.ts(+tests)
+- openspec/changes/fix-grok-kimi-native-memory-completion/**
+- openspec/changes/add-shared-session-project-memory-capture/**
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1c2e84190` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 1365: 协作首段注入主幕对话上下文
+
+**Date**: 2026-08-10
+**Task**: 协作首段注入主幕对话上下文
+**Branch**: `cxn-version-0.8.6`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| OpenSpec | `add-collab-first-stage-main-canvas-context` |
+| 能力 | 主幕触发协作时，首段 model text 头部注入主幕已有对话 digest |
+| 显示 | 主幕卡标题用 userVisibleText；右栏注入上下文增加「主幕对话上下文」分区 |
+| 验证 | UI 验收通过；注入链路 requestText→首段 prompt 已核对；focused Vitest 通过 |
+
+**Updated Files**:
+- `src/features/multi-agent/runtime/mainCanvasContextInjection.ts`
+- `src/features/threads/hooks/useThreadMessaging.ts`
+- `src/features/multi-agent/components/HistoryFoldCard.tsx`
+- `src/features/multi-agent/utils/buildStageInjectContext.ts`
+- `openspec/changes/add-collab-first-stage-main-canvas-context/**`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `037f9e148` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
