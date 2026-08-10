@@ -838,3 +838,53 @@ e0ddd9e99 的零 CSS 写入修复了 Windows Blink compositor 阻塞, 但导致 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1371: memory-pick Phase-2 hybrid 检索与可感注入转接
+
+**Date**: 2026-08-10
+**Task**: memory-pick Phase-2 hybrid 检索与可感注入转接
+**Branch**: `bump-version-0.8.7`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 检索 | memoryRetrieveKernel：lexical + 可选 semantic/hybrid，诚实 retrievalMode |
+| 可感 | emptyReason → 主幕时间线 status（【记忆参考状态】），非全局 toast |
+| 埋点 | memoryPickTelemetry 白名单禁正文 |
+| 语义转接 | Pack Instruction Primary/REFERENCE/UNTRUSTED；Cleaner 导语；preview 为本轮提问参考 |
+| UI | 闸门/空结果中性色；列表高度收口 |
+| 文档 | OpenSpec enhance-memory-pick-retrieval-and-observability + research 06 |
+| 采集 | ABCD 路径零改动 |
+| 验收 | 相关 vitest 84 passed；用户手测通过 |
+
+**Updated Files**（主路径）:
+- `src/features/project-memory/memoryPick/memoryRetrieveKernel.ts`
+- `src/features/project-memory/memoryPick/memoryPickTelemetry.ts`
+- `src/features/project-memory/utils/projectMemoryRetrievalPack.ts`
+- `src/features/threads/hooks/useThreadMessaging.ts`
+- `openspec/changes/enhance-memory-pick-retrieval-and-observability/**`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `af112cdde` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-32.md`
-- **Total Sessions**: 1370
+- **Total Sessions**: 1371
 - **Last Active**: 2026-08-10
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-32.md` | ~840 | Active |
+| `journal-32.md` | ~890 | Active |
 | `journal-31.md` | ~1968 | Archived |
 | `journal-30.md` | ~1985 | Archived |
 | `journal-29.md` | ~1970 | Archived |
@@ -60,6 +60,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 1371 | 2026-08-10 | memory-pick Phase-2 hybrid 检索与可感注入转接 | `af112cdde` | `bump-version-0.8.7` |
 | 1370 | 2026-08-10 | memory-pick always 自动确认与顶栏 UI 校准 | `76c3f3158` | `bump-version-0.8.7` |
 | 1369 | 2026-08-10 | 记忆匹配态 logo 与 1s 最短展示 | `30bb1fe62` | `bump-version-0.8.7` |
 | 1368 | 2026-08-10 | 记忆挑选闸门 Phase-1 全量提交 | `89b0d025a` | `bump-version-0.8.7` |
