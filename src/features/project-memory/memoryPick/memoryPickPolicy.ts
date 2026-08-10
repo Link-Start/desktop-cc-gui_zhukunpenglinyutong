@@ -44,6 +44,12 @@ export function decideMemoryPickGateEntry(params: {
     return { kind: "skip", reason: "no-query-text" };
   }
 
+  // opt-in：Composer 未开启记忆参考时绝不进闸门（含取消历史 first-pick 强弹）
+  if (composerMode === "off") {
+    return { kind: "skip", reason: "mode-off" };
+  }
+
+  // 用户已开启 pick/always 时，新 session 首次仍可强制手勾一次
   if (policy.firstPickRequired && workspaceMayHaveMemories) {
     return { kind: "show-ui", reason: "first-pick" };
   }

@@ -244,7 +244,7 @@ const composer = {
     "memoryReferenceAlwaysOn": "Activar inyección automática top(n) en toda la ronda",
     "memoryReferenceOn": "Memoria activada",
     "memoryReferenceModeHint": "Igual que la estrategia del lienzo: elegir en este turno (manual) o auto top(n) en toda la ronda.",
-    "memoryReferenceOffHint": "Desactivado omite la puerta de selección (una sesión nueva aún puede avisar una vez).",
+    "memoryReferenceOffHint": "Desactivado por defecto. Al enviar no se abre la puerta de selección hasta que actives elegir o auto top(n) en el menú de herramientas.",
     "memoryReferenceArmedHint": "Este envío usa referencia de memoria: elegir en este turno o auto top(n).",
     "memoryReferenceDialogTitle": "Referencia de memoria",
     "memoryReferenceConfirm": "Elegir inyección de memoria en este turno",

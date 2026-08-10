@@ -244,7 +244,7 @@ const composer = {
     "memoryReferenceAlwaysOn": "पूरी राउंड auto top(n) मेमोरी इंजेक्शन चालू करें",
     "memoryReferenceOn": "मेमोरी चालू",
     "memoryReferenceModeHint": "कैनवास रणनीति जैसा: इस टर्न चुनें (मैनुअल) या पूरी राउंड auto top(n)।",
-    "memoryReferenceOffHint": "बंद होने पर pick gate नहीं खुलता (नई session एक बार पूछ सकती है)।",
+    "memoryReferenceOffHint": "डिफ़ॉल्ट बंद। बंद होने पर भेजने पर pick gate नहीं खुलेगा; टूल मेनू में pick या auto top(n) चालू करने के बाद ही।",
     "memoryReferenceArmedHint": "यह भेजना मेमोरी संदर्भ उपयोग करेगा: इस टर्न चुनें या auto top(n)।",
     "memoryReferenceDialogTitle": "मेमोरी संदर्भ",
     "memoryReferenceConfirm": "इस टर्न मेमोरी इंजेक्शन चुनें",

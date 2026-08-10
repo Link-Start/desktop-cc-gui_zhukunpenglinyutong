@@ -156,7 +156,7 @@ const composer = {
     memoryReferenceModeHint:
       "与幕布策略一致：本轮挑选记忆注入（手动勾选）或整轮开启自动 top(n) 记忆注入。",
     memoryReferenceOffHint:
-      "整轮关闭后不自动进入记忆挑选（新 session 首次仍可能提示一次）。",
+      "默认关闭。关闭后发送不进入记忆挑选；在工具菜单中开启「本轮挑选」或「自动 top(n)」后才会触发。",
     memoryReferenceArmedHint:
       "本次发送将经过记忆参考：本轮挑选记忆注入或整轮开启自动 top(n) 记忆注入。",
     memoryReferenceDialogTitle: "记忆参考",

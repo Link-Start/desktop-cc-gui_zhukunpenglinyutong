@@ -49,7 +49,7 @@ export function setMemoryPickComposerMode(
 
 /**
  * 用户从 Composer 菜单显式切换模式（含 off）。
- * off 时写入 session，覆盖 gate 固化的 pick，真正关闭后续闸门。
+ * off 时写入 session，覆盖 gate 固化的 pick，真正关闭后续闸门（opt-in）。
  */
 export function forceMemoryPickComposerModeFromMenu(
   workspaceId: string,
@@ -62,7 +62,9 @@ export function forceMemoryPickComposerModeFromMenu(
     policies.set(key, {
       ...prev,
       composerMode: "off",
-      // 显式关闭不等于 dismiss；仍可被 firstPick 触发（若仍 firstPick）
+      // 显式关闭 = 本功能关闭；不再被 firstPick 强弹
+      firstPickRequired: false,
+      dismissed: false,
     });
     emit();
     return;

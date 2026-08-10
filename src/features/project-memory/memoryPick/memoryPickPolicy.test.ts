@@ -23,14 +23,14 @@ describe("decideMemoryPickGateEntry", () => {
     expect(decision).toEqual({ kind: "skip", reason: "session-dismissed" });
   });
 
-  it("forces first-pick UI even when composer is off", () => {
+  it("skips when composer is off even if firstPickRequired (opt-in)", () => {
     const decision = decideMemoryPickGateEntry({
       composerMode: "off",
       policy: { ...basePolicy, firstPickRequired: true },
       queryText: "hello",
       hasRetrievableText: true,
     });
-    expect(decision).toEqual({ kind: "show-ui", reason: "first-pick" });
+    expect(decision).toEqual({ kind: "skip", reason: "mode-off" });
   });
 
   it("shows UI for pick mode", () => {
@@ -75,13 +75,25 @@ describe("decideMemoryPickGateEntry", () => {
 
   it("skips first-pick when workspace has no memories", () => {
     const decision = decideMemoryPickGateEntry({
-      composerMode: "off",
+      composerMode: "pick",
       policy: { firstPickRequired: true, dismissed: false },
       queryText: "hello",
       hasRetrievableText: true,
       workspaceMayHaveMemories: false,
     });
-    expect(decision).toEqual({ kind: "skip", reason: "mode-off" });
+    // 无记忆时不走 first-pick，回落到 pick-mode
+    expect(decision).toEqual({ kind: "show-ui", reason: "pick-mode" });
+  });
+
+  it("skips first-pick for pick mode when workspace has no memories and firstPick not required", () => {
+    const decision = decideMemoryPickGateEntry({
+      composerMode: "pick",
+      policy: { firstPickRequired: false, dismissed: false },
+      queryText: "hello",
+      hasRetrievableText: true,
+      workspaceMayHaveMemories: false,
+    });
+    expect(decision).toEqual({ kind: "show-ui", reason: "pick-mode" });
   });
 });
 

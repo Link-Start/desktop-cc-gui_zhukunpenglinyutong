@@ -244,7 +244,7 @@ const composer = {
     "memoryReferenceAlwaysOn": "Activer l'injection auto top(n) pour toute la ronde",
     "memoryReferenceOn": "Mémoire activée",
     "memoryReferenceModeHint": "Comme la stratégie du canvas : choisir ce tour (manuel) ou auto top(n) pour toute la ronde.",
-    "memoryReferenceOffHint": "Désactivé ignore la porte de sélection (une nouvelle session peut encore demander une fois).",
+    "memoryReferenceOffHint": "Désactivé par défaut. L'envoi n'ouvre pas la porte de sélection tant que vous n'activez pas choisir ou auto top(n) dans le menu d'outils.",
     "memoryReferenceArmedHint": "Cet envoi utilise la référence mémoire : choisir ce tour ou auto top(n).",
     "memoryReferenceDialogTitle": "Référence mémoire",
     "memoryReferenceConfirm": "Choisir l'injection mémoire pour ce tour",

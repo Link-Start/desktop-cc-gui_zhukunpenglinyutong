@@ -187,7 +187,7 @@ afterEach(() => {
 });
 
 describe("useThreadMessaging memory pick gate", () => {
-  it("first pick blocks send until confirm, then injects memory-pick pack", async () => {
+  it("pick mode blocks send until confirm, then injects memory-pick pack", async () => {
     const { result } = buildHook();
 
     let sendPromise!: Promise<unknown>;
@@ -197,7 +197,7 @@ describe("useThreadMessaging memory pick gate", () => {
         THREAD,
         "数据库 超时怎么办",
         [],
-        { skipPromptExpansion: true, memoryReferenceMode: "off" },
+        { skipPromptExpansion: true, memoryReferenceMode: "pick" },
       );
     });
 
@@ -226,6 +226,26 @@ describe("useThreadMessaging memory pick gate", () => {
     expect(
       getMemoryPickSessionPolicy(workspace.id, THREAD).firstPickRequired,
     ).toBe(false);
+  });
+
+  it("off mode never opens gate even when firstPickRequired (opt-in default)", async () => {
+    // 默认 firstPickRequired=true，但 mode=off 时不得强弹
+    const { result } = buildHook();
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        THREAD,
+        "默认关闭记忆参考",
+        [],
+        { skipPromptExpansion: true, memoryReferenceMode: "off" },
+      );
+    });
+
+    expect(getMemoryPickGateSnapshot(workspace.id, THREAD)).toBeNull();
+    expect(sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sendUserMessage).mock.calls[0]?.[2]).toBe(
+      "默认关闭记忆参考",
+    );
   });
 
   it("pick mode skip sends plain text without memory-pick pack", async () => {
@@ -262,7 +282,10 @@ describe("useThreadMessaging memory pick gate", () => {
     expect(textArg).not.toContain("memory-pick");
   });
 
-  it("after first-pick skip, session sticks to pick so next send still opens gate", async () => {
+  it("after pick-mode skip, next send with pick still opens gate; off does not", async () => {
+    markMemoryPickFirstPickDone(workspace.id, THREAD);
+    setMemoryPickComposerMode(workspace.id, THREAD, "pick");
+
     const { result } = buildHook();
     let first!: Promise<unknown>;
     act(() => {
@@ -271,7 +294,7 @@ describe("useThreadMessaging memory pick gate", () => {
         THREAD,
         "数据库 超时",
         [],
-        { skipPromptExpansion: true, memoryReferenceMode: "off" },
+        { skipPromptExpansion: true, memoryReferenceMode: "pick" },
       );
     });
     await vi.waitFor(
@@ -290,31 +313,22 @@ describe("useThreadMessaging memory pick gate", () => {
       "pick",
     );
 
+    // 用户关掉记忆参考后，下一轮不得再弹
     vi.mocked(sendUserMessage).mockClear();
-    let second!: Promise<unknown>;
-    act(() => {
-      second = result.current.sendUserMessageToThread(
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
         workspace,
         THREAD,
         "数据库 索引 优化",
         [],
-        // Composer 可能仍短暂传 off；session pick 不得被覆盖
         { skipPromptExpansion: true, memoryReferenceMode: "off" },
       );
     });
-    await vi.waitFor(
-      () => {
-        expect(getMemoryPickGateSnapshot(workspace.id, THREAD)?.phase).toBe(
-          "awaiting-choice",
-        );
-      },
-      { timeout: 3000 },
+    expect(getMemoryPickGateSnapshot(workspace.id, THREAD)).toBeNull();
+    expect(sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sendUserMessage).mock.calls[0]?.[2]).toBe(
+      "数据库 索引 优化",
     );
-    expect(sendUserMessage).not.toHaveBeenCalled();
-    skipMemoryPickGate(workspace.id, THREAD);
-    await act(async () => {
-      await second;
-    });
   });
 
   it("dismiss suppresses later gates in the same session", async () => {

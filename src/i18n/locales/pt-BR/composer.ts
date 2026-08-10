@@ -244,7 +244,7 @@ const composer = {
     "memoryReferenceAlwaysOn": "Ativar injeção automática top(n) na rodada inteira",
     "memoryReferenceOn": "Memória ativada",
     "memoryReferenceModeHint": "Igual à estratégia do canvas: escolher neste turno (manual) ou auto top(n) na rodada inteira.",
-    "memoryReferenceOffHint": "Desligado ignora o gate de seleção (uma nova sessão ainda pode avisar uma vez).",
+    "memoryReferenceOffHint": "Desligado por padrão. O envio não abre o gate de seleção até você ativar escolher ou auto top(n) no menu de ferramentas.",
     "memoryReferenceArmedHint": "Este envio usa referência de memória: escolher neste turno ou auto top(n).",
     "memoryReferenceDialogTitle": "Referência de memória",
     "memoryReferenceConfirm": "Escolher injeção de memória neste turno",

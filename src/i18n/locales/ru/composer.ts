@@ -244,7 +244,7 @@ const composer = {
     "memoryReferenceAlwaysOn": "Включить auto top(n) внедрение памяти на весь раунд",
     "memoryReferenceOn": "Память включена",
     "memoryReferenceModeHint": "Как стратегия canvas: выбор в этом ходе (вручную) или auto top(n) на весь раунд.",
-    "memoryReferenceOffHint": "Выкл. пропускает gate выбора (новая session всё ещё может спросить один раз).",
+    "memoryReferenceOffHint": "По умолчанию выкл. При отправке gate не открывается, пока не включите выбор или auto top(n) в меню инструментов.",
     "memoryReferenceArmedHint": "Эта отправка использует ссылку на память: выбор в этом ходе или auto top(n).",
     "memoryReferenceDialogTitle": "Ссылка на память",
     "memoryReferenceConfirm": "Выбрать внедрение памяти в этом ходе",

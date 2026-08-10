@@ -81,23 +81,38 @@
 - **THEN** 系统 SHALL NOT 提供「单次开启引用」选项
 - **AND** 原 single 语义 SHALL 由「本轮挑选」承载
 
-### Requirement: 新 session 首次强制挑选
+### Requirement: 记忆参考 opt-in（默认关闭）
 
-系统 MUST 在新 session 且 workspace 存在项目记忆时，对首次用户发送强制进入本轮挑选 UI 一次。
+系统 MUST 将记忆挑选闸门视为 opt-in：Composer 记忆参考模式为 `off` 时，发送 SHALL NOT 进入挑选闸门。
 
-#### Scenario: 有记忆的新 session 首次发送
+#### Scenario: 默认 off 不弹闸门
 
-- **GIVEN** 新 thread/session 且 workspace 记忆条数 ≥ 1
+- **GIVEN** Composer 记忆参考模式为 off（默认）
+- **WHEN** 用户主动发送
+- **THEN** 系统 SHALL NOT 展示挑选闸门
+- **AND** SHALL 以 0 条记忆注入继续发送（`@@` 手动关联仍可用）
+
+#### Scenario: 开启 pick/always 后才进闸门
+
+- **GIVEN** 用户在 Composer 工具菜单中选择「本轮挑选」或「整轮自动 top(n)」
+- **WHEN** 用户主动发送且有可检索文本
+- **THEN** 系统 SHALL 按对应模式进入挑选闸门
+
+#### Scenario: 已开启模式下的 first-pick
+
+- **GIVEN** Composer 模式为 pick 或 always
+- **AND** 新 thread/session 且 workspace 记忆条数 ≥ 1
 - **AND** 用户尚未完成 first-pick
 - **WHEN** 用户首次主动发送
-- **THEN** 系统 SHALL 展示 pick 手勾闸门（即使 Composer 模式为 off 或 always）
+- **THEN** 系统 SHALL 展示 pick 手勾闸门
 - **AND** 完成后 SHALL 清除 first-pick 要求
 
-#### Scenario: 无记忆不强制
+#### Scenario: 无记忆不强制 first-pick 空闸门
 
 - **GIVEN** workspace 无项目记忆
+- **AND** Composer 模式为 pick 或 always
 - **WHEN** 用户发送
-- **THEN** 系统 SHALL NOT 因 first-pick 展示空闸门
+- **THEN** 系统 SHALL NOT 因 first-pick 单独展示空闸门（可按检索空结果路径降级）
 
 ### Requirement: 检索与失败降级
 

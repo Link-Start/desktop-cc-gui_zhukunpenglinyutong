@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   __resetMemoryPickSessionStoreForTests,
   clearMemoryPickSessionDismissed,
+  forceMemoryPickComposerModeFromMenu,
   getMemoryPickSessionPolicy,
   markMemoryPickFirstPickDone,
   markMemoryPickSessionDismissed,
@@ -74,5 +75,14 @@ describe("memoryPickSessionStore", () => {
     markMemoryPickSessionDismissed("ws", "th");
     clearMemoryPickSessionDismissed("ws", "th");
     expect(getMemoryPickSessionPolicy("ws", "th").dismissed).toBe(false);
+  });
+
+  it("menu force off clears firstPick and closes feature (opt-in)", () => {
+    setMemoryPickComposerMode("ws", "th", "pick");
+    forceMemoryPickComposerModeFromMenu("ws", "th", "off");
+    const policy = getMemoryPickSessionPolicy("ws", "th");
+    expect(policy.composerMode).toBe("off");
+    expect(policy.firstPickRequired).toBe(false);
+    expect(policy.dismissed).toBe(false);
   });
 });

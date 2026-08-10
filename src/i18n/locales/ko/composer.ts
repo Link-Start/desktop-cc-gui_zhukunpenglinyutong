@@ -244,7 +244,7 @@ const composer = {
     "memoryReferenceAlwaysOn": "전체 라운드 자동 top(n) 메모리 주입 켜기",
     "memoryReferenceOn": "메모리 켜짐",
     "memoryReferenceModeHint": "캔버스 전략과 동일: 이번 라운드 선택(수동) 또는 전체 라운드 자동 top(n).",
-    "memoryReferenceOffHint": "끄면 선택 게이트를 건너뜁니다(새 세션에서는 한 번 물을 수 있음).",
+    "memoryReferenceOffHint": "기본은 꺼짐. 꺼져 있으면 전송 시 선택 게이트가 열리지 않습니다. 도구 메뉴에서 이번 라운드 선택 또는 자동 top(n)을 켠 뒤에만 동작합니다.",
     "memoryReferenceArmedHint": "이 전송은 메모리 참조를 사용합니다: 이번 라운드 선택 또는 자동 top(n).",
     "memoryReferenceDialogTitle": "메모리 참조",
     "memoryReferenceConfirm": "이번 라운드 메모리 주입 선택",

@@ -244,7 +244,7 @@ const composer = {
     "memoryReferenceAlwaysOn": "整輪開啟自動top(n)記憶注入",
     "memoryReferenceOn": "記憶已開啟",
     "memoryReferenceModeHint": "與畫布策略一致：本輪挑選記憶注入（手動勾選）或整輪開啟自動 top(n) 記憶注入。",
-    "memoryReferenceOffHint": "整輪關閉後不自動進入記憶挑選（新 session 首次仍可能提示一次）。",
+    "memoryReferenceOffHint": "預設關閉。關閉後傳送不進入記憶挑選；在工具選單中開啟「本輪挑選」或「自動 top(n)」後才會觸發。",
     "memoryReferenceArmedHint": "本次傳送將經過記憶參照：本輪挑選記憶注入或整輪開啟自動 top(n) 記憶注入。",
     "memoryReferenceDialogTitle": "記憶參照",
     "memoryReferenceConfirm": "本輪挑選記憶注入",

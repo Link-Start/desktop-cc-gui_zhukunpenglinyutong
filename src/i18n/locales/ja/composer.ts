@@ -244,7 +244,7 @@ const composer = {
     "memoryReferenceAlwaysOn": "ラウンド全体で自動 top(n) メモリ注入をオン",
     "memoryReferenceOn": "メモリオン",
     "memoryReferenceModeHint": "キャンバス戦略と同じ：本ラウンド選択（手動）またはラウンド全体の自動 top(n)。",
-    "memoryReferenceOffHint": "オフ時は選択ゲートをスキップ（新しい session では一度確認する場合あり）。",
+    "memoryReferenceOffHint": "デフォルトはオフ。オフのときは送信で選択ゲートを開きません。ツールメニューで本ラウンド選択または自動 top(n) を有効にすると発動します。",
     "memoryReferenceArmedHint": "この送信はメモリ参照を使います：本ラウンド選択または自動 top(n)。",
     "memoryReferenceDialogTitle": "メモリ参照",
     "memoryReferenceConfirm": "本ラウンドでメモリ注入を選ぶ",

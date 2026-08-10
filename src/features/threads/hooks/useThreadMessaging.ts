@@ -836,13 +836,7 @@ export function useThreadMessaging({
               markMemoryPickFirstPickDone(workspace.id, threadId);
             } else if (resolution.action === "skip") {
               markMemoryPickFirstPickDone(workspace.id, threadId);
-              if (
-                collabDecision.reason === "first-pick" ||
-                collabPolicy.composerMode === "off"
-              ) {
-                setMemoryPickComposerMode(workspace.id, threadId, "pick");
-                emitMemoryPickComposerModeSync(workspace.id, threadId, "pick");
-              }
+              // 跳过不自动把 off 升级为 pick；仅用户已开启 pick/always 时维持模式
               const emptyTimeline = resolution.emptyReason
                 ? buildMemoryPickEmptyTimelineText(resolution.emptyReason, t)
                 : null;
@@ -1104,6 +1098,7 @@ export function useThreadMessaging({
         ),
       );
       // 记忆参考：三态 off|pick|always（Shared/Native 统一）；兼容旧 memoryReferenceEnabled
+      // opt-in：Composer 传什么就用什么；off 默认不进闸门，需用户从菜单开启 pick/always
       const composerModeFromOptions = normalizeMemoryPickComposerMode(
         options?.memoryReferenceMode ??
           (options?.memoryReferenceEnabled === true ? "always" : "off"),
@@ -1112,17 +1107,8 @@ export function useThreadMessaging({
         workspace.id,
         threadId,
       );
-      // Composer 尚未刷到 gate 写入的 pick/always 时，勿用 off 覆盖 session（否则「下次对话闸门没了」）
-      // 用户在菜单显式选 off：仅当 session 也是 off，或带着 __force 语义——此处用：
-      // options 显式 off 且 session 为 pick/always 时，若 firstPick 已完成则尊重 Composer off。
-      // 但 first-pick 刚结束后我们会 emit pick；若仍收到 off，优先保留 session pick/always。
       const effectiveComposerMode: MemoryPickComposerMode =
-        composerModeFromOptions !== "off"
-          ? composerModeFromOptions
-          : sessionPolicyBefore.composerMode === "pick" ||
-              sessionPolicyBefore.composerMode === "always"
-            ? sessionPolicyBefore.composerMode
-            : "off";
+        composerModeFromOptions;
       if (effectiveComposerMode !== sessionPolicyBefore.composerMode) {
         setMemoryPickComposerMode(
           workspace.id,
@@ -1177,14 +1163,7 @@ export function useThreadMessaging({
           markMemoryPickFirstPickDone(workspace.id, threadId);
         } else if (resolution.action === "skip") {
           markMemoryPickFirstPickDone(workspace.id, threadId);
-          // 跳过仍视为完成首次教育：默认切到 pick，下次继续出闸门（除非用户再 dismiss）
-          if (
-            pickDecision.reason === "first-pick" ||
-            pickPolicy.composerMode === "off"
-          ) {
-            setMemoryPickComposerMode(workspace.id, threadId, "pick");
-            emitMemoryPickComposerModeSync(workspace.id, threadId, "pick");
-          }
+          // 跳过不自动升级为 pick；用户已在 Composer 选 pick/always 时保持原模式
           // 检索空/超时/失败：时间线可感（非全局 toast）
           const emptyTimeline = resolution.emptyReason
             ? buildMemoryPickEmptyTimelineText(resolution.emptyReason, t)

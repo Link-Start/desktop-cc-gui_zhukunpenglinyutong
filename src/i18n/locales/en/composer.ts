@@ -276,7 +276,7 @@ const composer = {
     memoryReferenceModeHint:
       "Same as canvas strategy: pick memory this turn (manual), or always-on auto top(n) injection.",
     memoryReferenceOffHint:
-      "Off skips the pick gate (a new session may still prompt once).",
+      "Off by default. Sending will not open the memory pick gate until you enable pick or always-on auto top(n) in the tool menu.",
     memoryReferenceArmedHint:
       "This send uses memory reference: pick this turn or always-on auto top(n).",
     memoryReferenceDialogTitle: "Memory reference",

@@ -174,10 +174,10 @@ idle ──pressSend──► retrieving ──has candidates──► awaiting-
 | 2 | 无可检索文本 | 否 | 0 + 原样 send |
 | 3 | streaming / 同 turn 重入 | 否（忽略） | — |
 | 4 | 队列自动 follow-up | 否 | 按队列策略（默认 0 额外 pick） |
-| 5 | `firstPickRequired` 且有记忆 | **是（pick 手勾）** | 用户选择 |
-| 6 | `composerMode=pick` 且未 dismissed | 是（有候选时） | 用户选择 |
-| 7 | `composerMode=always` 且未 dismissed | **是（预览 UI）** | 按 preferred count 预勾 + 可改；以 always 进入 awaiting 才读秒；见 §4.4 |
-| 8 | `composerMode=off` 且非 firstPick | 否 | 0（`@@` 仍可） |
+| 5 | `composerMode=off` | **否**（opt-in 默认关闭） | 0（`@@` 仍可） |
+| 6 | `firstPickRequired` 且有记忆 **且** mode 为 pick/always | **是（pick 手勾）** | 用户选择 |
+| 7 | `composerMode=pick` 且未 dismissed | 是（有候选时） | 用户选择 |
+| 8 | `composerMode=always` 且未 dismissed | **是（预览 UI）** | 按 preferred count 预勾 + 可改；以 always 进入 awaiting 才读秒；见 §4.4 |
 | 9 | 检索空 | 否（已进 retrieving） | 0 直发 |
 
 ### 4.4 always 路径（**Phase-1 合同**）
