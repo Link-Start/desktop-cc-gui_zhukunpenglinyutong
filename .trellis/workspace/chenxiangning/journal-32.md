@@ -623,3 +623,52 @@ e0ddd9e99 的零 CSS 写入修复了 Windows Blink compositor 阻塞, 但导致 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1366: Shared 子代理 parent-id 改挂收口
+
+**Date**: 2026-08-10
+**Task**: Shared 子代理 parent-id 改挂收口
+**Branch**: `bump-version-0.8.7`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| OpenSpec | `enhance-shared-subagent-parent-id-attach`（proposal/design/specs/tasks） |
+| 问题 | Shared×Codex 子代理 parent 指向 hidden native owner 后升顶层根（下崽） |
+| 方案 | 引擎无关 `lookupSharedOwnerByNativeParent`（raw / engine: 变体）；不扩大 hide、不删行 |
+| 接入 | list 主路径 / Grok merge / Kimi 异步 / sidebarInternals live 子树 |
+| 验证 | unit 43 + useThreadActions 集成测 1；openspec validate strict 通过 |
+
+**Updated Files**:
+- `src/features/shared-session/runtime/sharedSessionSummaries.ts`
+- `src/features/shared-session/runtime/sharedSessionSummaries.test.ts`
+- `src/features/threads/hooks/useThreadActions.ts`
+- `src/features/threads/hooks/useThreadActions.helpers.ts`
+- `src/features/threads/hooks/useThreadActions.shared-subagent-parent.test.tsx`
+- `src/features/app/components/sidebarInternals.ts`
+- `openspec/changes/enhance-shared-subagent-parent-id-attach/**`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2f45c4c34` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
