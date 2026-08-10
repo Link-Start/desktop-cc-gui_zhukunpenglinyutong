@@ -3,6 +3,7 @@ import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { useComposerRunStatus } from "./useComposerRunStatus";
 import type { TurnFileChangesSummary } from "../../../messages/utils/turnFileChanges";
+import type { SubagentInfo } from "../../../status-panel/types";
 
 const demoSessionFiles: TurnFileChangesSummary = {
   files: [
@@ -130,7 +131,7 @@ describe("useComposerRunStatus", () => {
 
   it("does not auto-expand when subagents start running", () => {
     const { result, rerender } = renderHook(
-      ({ subagents }) =>
+      ({ subagents }: { subagents: SubagentInfo[] }) =>
         useComposerRunStatus({
           todos: [],
           subagents,
@@ -147,9 +148,9 @@ describe("useComposerRunStatus", () => {
               id: "s1",
               type: "explore",
               description: "scan",
-              status: "running" as const,
+              status: "running",
             },
-          ],
+          ] as SubagentInfo[],
         },
       },
     );
@@ -164,13 +165,13 @@ describe("useComposerRunStatus", () => {
           id: "s1",
           type: "explore",
           description: "scan",
-          status: "completed" as const,
+          status: "completed",
         },
         {
           id: "s2",
           type: "agent",
           description: "next",
-          status: "running" as const,
+          status: "running",
         },
       ],
     });
