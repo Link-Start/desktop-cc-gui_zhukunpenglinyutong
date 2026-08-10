@@ -792,3 +792,49 @@ e0ddd9e99 的零 CSS 写入修复了 Windows Blink compositor 阻塞, 但导致 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1370: memory-pick always 自动确认与顶栏 UI 校准
+
+**Date**: 2026-08-10
+**Task**: memory-pick always 自动确认与顶栏 UI 校准
+**Branch**: `bump-version-0.8.7`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项 | 说明 |
+|----|------|
+| 自动确认 | 仅闸门以 always 进入 awaiting 时武装 8s 读秒；中途 pick→always 不启动 |
+| 打断 | 勾选/详情/取消/切 mode/skip/dismiss 打断后本轮不重启 |
+| UI | 策略菜单虚线框；顶栏强制单行 + ellipsis；count.always / alwaysCountdown 拆分 |
+| 文档 | 同步 OpenSpec design/spec/ux/proposal/README |
+| 测试 | MemoryPickGate.test.tsx 11/11 通过 |
+
+**Updated Files**:
+- `src/features/project-memory/components/MemoryPickGate.tsx`
+- `src/styles/memory-pick-gate.css`
+- `src/i18n/locales/zh/memory.ts` / `en/memory.ts`
+- `openspec/changes/add-memory-pick-gate/**`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `76c3f3158` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
