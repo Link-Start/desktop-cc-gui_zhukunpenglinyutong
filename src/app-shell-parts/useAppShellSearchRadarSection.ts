@@ -283,6 +283,8 @@ export function useAppShellSearchRadarSection({
     new Map<string, Promise<import("../features/project-map/types").ProjectMapApiEndpoint[]>>(),
   );
   const backgroundRenderGatingEnabled = isBackgroundRenderGatingEnabled();
+  // Session radar 完成预览依赖 threadItems，不能在搜索关闭时清空 deferred 表。
+  // 搜索路径已在 useUnifiedSearch 入参处按 isSearchPaletteOpen 门控。
   const deferredThreadItemsByThreadValue =
     useDeferredValue(threadItemsByThread);
   const deferredThreadItemsByThread = backgroundRenderGatingEnabled

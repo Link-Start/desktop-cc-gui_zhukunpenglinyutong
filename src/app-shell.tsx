@@ -24,20 +24,14 @@ import { useComposerEditorState } from "./features/composer/hooks/useComposerEdi
 import { useDictationController } from "./features/app/hooks/useDictationController";
 import { useComposerController } from "./features/app/hooks/useComposerController";
 import { useEngineController } from "./features/engine/hooks/useEngineController";
-import { useRenameThreadPrompt } from "./features/threads/hooks/useRenameThreadPrompt";
-import { useDeleteThreadPrompt } from "./features/threads/hooks/useDeleteThreadPrompt";
 import { useWorktreePrompt } from "./features/workspaces/hooks/useWorktreePrompt";
-import { useWorkspaceController } from "./features/app/hooks/useWorkspaceController";
 import { useWorkspaceSelection } from "./features/workspaces/hooks/useWorkspaceSelection";
 import { useGitHubPanelController } from "./features/app/hooks/useGitHubPanelController";
 import { useSettingsModalState } from "./features/app/hooks/useSettingsModalState";
 import { useLoadingProgressDialogState } from "./features/app/hooks/useLoadingProgressDialogState";
 import { useSyncSelectedDiffPath } from "./features/app/hooks/useSyncSelectedDiffPath";
 import { useWorkspaceActions } from "./features/app/hooks/useWorkspaceActions";
-import { useThreadRows } from "./features/app/hooks/useThreadRows";
 import { useLiquidGlassEffect } from "./features/app/hooks/useLiquidGlassEffect";
-import { useCopyThread } from "./features/threads/hooks/useCopyThread";
-import { useKanbanStore } from "./features/kanban/hooks/useKanbanStore";
 import { useGitCommitController } from "./features/app/hooks/useGitCommitController";
 import { useMultiRepositoryGitStatus } from "./features/git/hooks/useMultiRepositoryGitStatus";
 import {
@@ -49,16 +43,24 @@ import {
   unstageGitFile,
   unstageGitPaths,
 } from "./services/tauri";
-import { forceRefreshAgents } from "./features/composer/components/ChatInputBox/providers";
 import { normalizeFsPath } from "./utils/workspacePaths";
 import type {
   AppMode,
   ComposerEditorSettings,
 } from "./types";
-import { resolveEngineDefaultComposerSelection } from "./app-shell-parts/selectedComposerSession";
 import { useCodeCssVars } from "./features/app/hooks/useCodeCssVars";
 import { useAccountSwitching } from "./features/app/hooks/useAccountSwitching";
-import { extractPlanFromTimelineItems } from "./app-shell-parts/utils";
+import { useActiveSessionProjection } from "./app-shell-parts/activeSessionProjection";
+import { useWorkspaceSessionHost } from "./app-shell-parts/useWorkspaceSessionHost";
+import { useComposerDomainHost } from "./app-shell-parts/useComposerDomainHost";
+import { useConversationDomainHost } from "./app-shell-parts/useConversationDomainHost";
+import { useKanbanDomainHost } from "./app-shell-parts/useModeDomainHosts";
+import {
+  buildCollaborationModeDomainContextSlice,
+  buildModelSelectionDomainContextSlice,
+  buildRuntimeDomainContextSlice,
+  buildRuntimeThreadDomainContextSlice,
+} from "./app-shell-parts/buildAppShellDomainContextSlices";
 import { useAppShellPromptActionsSection } from "./app-shell-parts/useAppShellPromptActionsSection";
 import { useAppShellSearchRadarSection } from "./app-shell-parts/useAppShellSearchRadarSection";
 import { useAppShellSearchAndComposerSection } from "./app-shell-parts/useAppShellSearchAndComposerSection";
@@ -67,24 +69,16 @@ import { useAppShellLayoutNodesSection } from "./app-shell-parts/useAppShellLayo
 import { renderAppShell } from "./app-shell-parts/renderAppShell";
 import { useGitStatusRefreshOnTurnSettle } from "./app-shell-parts/useGitStatusRefreshOnTurnSettle";
 import { useAppShellGitWorkspaceOpsSection } from "./app-shell-parts/useAppShellGitWorkspaceOpsSection";
-import { useSelectedAgentSession } from "./app-shell-parts/useSelectedAgentSession";
-import { useSelectedComposerSession } from "./app-shell-parts/useSelectedComposerSession";
 import { APP_SHELL_LEGACY_CONTEXT_DEFAULTS } from "./app-shell-parts/legacyContextDefaults";
 import { usePanelLockState } from "./app-shell-parts/usePanelLockState";
-import { usePlanApplyHandlers } from "./app-shell-parts/usePlanApplyHandlers";
 import { useThreadScopedCollaborationMode } from "./app-shell-parts/useThreadScopedCollaborationMode";
 import { GitHubPanelData, SettingsView } from "./app-shell-parts/lazyViews";
 import { useCreateSessionLoading } from "./app-shell-parts/useCreateSessionLoading";
 import type { AgentTaskScrollRequest } from "./features/messages";
 import { useAppShellWorkspaceFlowsSection } from "./app-shell-parts/useAppShellWorkspaceFlowsSection";
-import { defineRuntimeThreadShellBoundary } from "./app-shell-parts/runtimeThreadBoundary";
-import { useAppShellWorkspaceHomeState } from "./app-shell-parts/useAppShellWorkspaceHomeState";
-import { useModelConfigRefresh } from "./app-shell-parts/useModelConfigRefresh";
 import { useWorkspacePathsIntake } from "./app-shell-parts/useWorkspacePathsIntake";
 import { useAppShellWorktreeChromeSection } from "./app-shell-parts/useAppShellWorktreeChromeSection";
 import { useCollaborationModeThreadSync } from "./app-shell-parts/useCollaborationModeThreadSync";
-import { useProviderModelCatalogSync } from "./app-shell-parts/useProviderModelCatalogSync";
-import { useAppShellComposerModelSection } from "./app-shell-parts/useAppShellComposerModelSection";
 import { useAppShellViewStateSection } from "./app-shell-parts/useAppShellViewStateSection";
 import { defineAppShellRuntimeActions } from "./app-shell-parts/appShellActionBoundaries";
 import {
@@ -92,10 +86,6 @@ import {
   reuseStableAppShellDomainContexts,
   type AppShellDomainContexts,
 } from "./app-shell-parts/appShellDomainContexts";
-
-const RETIRED_OPENCODE_AGENTS = Object.freeze([]);
-const resolveRetiredOpenCodeSelection = () => null;
-const ignoreRetiredOpenCodeSelection = () => {};
 import { useAppShellComposerPrefsPersistence } from "./app-shell-parts/useAppShellComposerPrefsPersistence";
 import { useAppShellAccessModeSection } from "./app-shell-parts/useAppShellAccessModeSection";
 import { useAppShellDesktopChrome } from "./app-shell-parts/useAppShellDesktopChrome";
@@ -104,7 +94,11 @@ import { useAppShellEditorLayoutSection } from "./app-shell-parts/useAppShellEdi
 import { useAppShellSearchPaletteSection } from "./app-shell-parts/useAppShellSearchPaletteSection";
 import { useAppShellQuickSwitcherSection } from "./app-shell-parts/useAppShellQuickSwitcherSection";
 import { useAppShellClaudeThinkingSection } from "./app-shell-parts/useAppShellClaudeThinkingSection";
-import { useAutoMigrateDisabledActiveEngine } from "./app-shell-parts/useAutoMigrateDisabledActiveEngine";
+
+const RETIRED_OPENCODE_AGENTS = Object.freeze([]);
+const resolveRetiredOpenCodeSelection = () => null;
+const ignoreRetiredOpenCodeSelection = () => {};
+
 export function AppShell() {
   const { t } = useTranslation();
   const handleOpenGitHistoryFromFileHistory = useCallback(() => {
@@ -206,24 +200,17 @@ export function AppShell() {
     deletingWorktreeIds,
     hasLoaded,
     refreshWorkspaces,
-  } = useWorkspaceController({
-    appSettings,
-    addDebugEntry,
-    queueSaveSettings,
-  });
-  const {
     homeOpen,
     homeWorkspaceDefaultId,
     homeWorkspaceSelectedId,
     setHomeOpen,
     workspacesById,
     workspacesByPath,
-  } = useAppShellWorkspaceHomeState({
-    activeWorkspaceId,
+  } = useWorkspaceSessionHost({
+    appSettings,
     appSettingsLoading,
-    groupedWorkspaces,
-    hasLoaded,
-    workspaces,
+    addDebugEntry,
+    queueSaveSettings,
   });
   const {
     sidebarWidth,
@@ -464,6 +451,7 @@ export function AppShell() {
     prDiffsError: gitPullRequestDiffsError,
     onOpenEditorLayoutRequest: requestEditorOpenLayout,
     onOpenGitHistoryRequest: handleOpenGitHistoryFromFileHistory,
+    appMode,
   });
 
   useEffect(() => {
@@ -596,7 +584,7 @@ export function AppShell() {
     updateTask: kanbanUpdateTask,
     deleteTask: kanbanDeleteTask,
     reorderTask: kanbanReorderTask,
-  } = useKanbanStore(workspaces);
+  } = useKanbanDomainHost({ workspaces, appMode });
 
   const {
     prompts,
@@ -848,40 +836,38 @@ export function AppShell() {
     queueGitStatusRefresh,
     threadStatusById,
   });
+  // S4：active session 派生集中在纯数据投影，避免 AppShell 根继续堆条件表达式。
+  const {
+    activeThreadSummary,
+    activeThreadEngine,
+    activeThreadProviderProfileId,
+    activeRateLimits,
+    activeTokenUsage,
+    timelinePlan,
+    activePlan,
+    canInterrupt,
+    isProcessing,
+    isReviewing,
+    activeTurnId,
+    hasPendingUserInput,
+  } = useActiveSessionProjection({
+    activeWorkspaceId,
+    activeThreadId,
+    threadsByWorkspace,
+    threadStatusById,
+    tokenUsageByThread,
+    rateLimitsByWorkspace,
+    planByThread,
+    activeItems,
+    activeTurnIdByThread,
+    userInputRequests,
+  });
+  // S4 PR-C：Composer 域 host
   const {
     selectedComposerSelection,
     handleSelectComposerSelection,
     persistComposerSelectionForThread,
     resolveComposerSelectionForThread,
-  } = useSelectedComposerSession({
-    activeThreadId,
-    activeWorkspaceId,
-    resolveCanonicalThreadId,
-    engineDefaultSelectionReady: !appSettingsLoading,
-    resolveEngineDefaultComposerSelection,
-    onDebug: addDebugEntry,
-  });
-  const activeThreadSummary = activeWorkspaceId
-    ? threadsByWorkspace[activeWorkspaceId]?.find(
-        (thread) => thread.id === activeThreadId,
-      )
-    : null;
-  const activeThreadEngine =
-    activeThreadSummary?.engineSource ??
-    activeThreadSummary?.selectedEngine ??
-    null;
-  useAutoMigrateDisabledActiveEngine({
-    activeEngine,
-    activeThreadEngine,
-    activeThreadId,
-    appSettingsLoading,
-    disabledCliEngineIds: appSettings.disabledCliEngines,
-    installedEngines,
-    setActiveEngine,
-  });
-  const activeThreadProviderProfileId =
-    activeThreadSummary?.providerProfileId ?? null;
-  const {
     collaborationModePayload,
     effectiveModels,
     effectiveReasoningOptions,
@@ -897,14 +883,30 @@ export function AppShell() {
     resolvedModel,
     setEngineSelectedModelIdByType,
     threadAccessMode,
-  } = useAppShellComposerModelSection({
-    accessMode,
-    activeEngine,
+    selectedAgent,
+    selectedAgentRef,
+    handleSelectAgent,
+    reloadSelectedAgent,
+    reloadAgentCatalog,
+    handleRefreshModelConfig,
+    isModelConfigRefreshing,
+    handleUserInputSubmitWithPlanApply,
+    handleExitPlanModeExecute,
+  } = useComposerDomainHost({
     activeThreadId,
-    activeProviderProfileId: activeThreadProviderProfileId,
     activeWorkspaceId,
-    appSettings,
+    activeThreadEngine,
+    activeThreadEngineSource:
+      activeThreadSummary?.engineSource ?? activeThreadSummary?.selectedEngine,
+    activeThreadProviderProfileId,
+    resolveCanonicalThreadId,
     appSettingsLoading,
+    addDebugEntry,
+    activeEngine,
+    installedEngines,
+    setActiveEngine,
+    appSettings,
+    accessMode,
     applySelectedCollaborationMode,
     collaborationModes,
     composerInputRef,
@@ -912,68 +914,27 @@ export function AppShell() {
     engineModelCatalogsAsOptions,
     engineModelsAsOptions,
     globalSelectionReady,
-    handleSelectComposerSelection,
     handleSetAccessMode,
     models,
     modelsReady,
     persistComposerEnginePref,
-    persistComposerSelectionForThread,
     queueSaveSettings,
     selectedCollaborationMode,
     selectedCollaborationModeId,
-    selectedComposerSelection,
     selectedEffort,
     selectedModelId,
     setAppSettings,
     setSelectedEffort,
     setSelectedModelId,
-  });
-  const {
-    selectedAgent,
-    selectedAgentRef,
-    handleSelectAgent,
-    reloadSelectedAgent,
-    reloadAgentCatalog,
-  } = useSelectedAgentSession({
-    activeThreadId,
-    activeWorkspaceId,
-    resolveCanonicalThreadId,
-    onDebug: addDebugEntry,
-  });
-
-  useProviderModelCatalogSync({
-    activeEngine,
-    activeThreadEngineSource:
-      activeThreadSummary?.engineSource ?? activeThreadSummary?.selectedEngine,
-    activeThreadId,
-    activeWorkspaceId,
-    providerProfileId: activeThreadProviderProfileId,
-    addDebugEntry,
     refreshEngineModels,
+    refreshModels,
+    handleUserInputSubmit,
+    interruptTurn,
+    resolveCollaborationRuntimeMode,
+    resolveCollaborationUiMode,
+    sendUserMessage,
+    settingsOpen,
   });
-  const { handleRefreshModelConfig, isModelConfigRefreshing } =
-    useModelConfigRefresh({
-      activeEngine,
-      activeProviderProfileId: activeThreadProviderProfileId,
-      addDebugEntry,
-      refreshEngineModels,
-      refreshModels,
-    });
-
-  const { handleUserInputSubmitWithPlanApply, handleExitPlanModeExecute } =
-    usePlanApplyHandlers({
-      activeEngine,
-      applySelectedCollaborationMode,
-      handleSetAccessMode,
-      handleUserInputSubmit,
-      interruptTurn,
-      resolveCollaborationRuntimeMode,
-      resolveCollaborationUiMode,
-      resolvedEffort,
-      resolvedModel,
-      selectedCollaborationModeId,
-      sendUserMessage,
-    });
   const {
     activeAccount,
     accountSwitching,
@@ -986,19 +947,6 @@ export function AppShell() {
     refreshAccountRateLimits,
     alertError,
   });
-  const activeThreadIdRef = useRef<string | null>(activeThreadId ?? null);
-  const { getThreadRows } = useThreadRows(threadParentById);
-  useEffect(() => {
-    activeThreadIdRef.current = activeThreadId ?? null;
-  }, [activeThreadId]);
-
-  useEffect(() => {
-    if (!settingsOpen) {
-      forceRefreshAgents();
-      void reloadAgentCatalog();
-    }
-  }, [reloadAgentCatalog, settingsOpen]);
-
   useAutoExitEmptyDiff({
     centerMode,
     autoExitEnabled: diffSource === "local",
@@ -1012,47 +960,6 @@ export function AppShell() {
     setActiveTab,
   });
 
-  const { handleCopyThread } = useCopyThread({
-    activeItems,
-    onDebug: addDebugEntry,
-  });
-
-  const {
-    renamePrompt,
-    openRenamePrompt,
-    handleRenamePromptChange,
-    handleRenamePromptCancel,
-    handleRenamePromptConfirm,
-  } = useRenameThreadPrompt({
-    threadsByWorkspace,
-    renameThread,
-  });
-
-  const {
-    deletePrompt: deleteThreadPrompt,
-    isDeleting: isDeleteThreadPromptBusy,
-    openDeletePrompt: openDeleteThreadPrompt,
-    handleDeletePromptCancel: handleDeleteThreadPromptCancel,
-    handleDeletePromptConfirm: handleDeleteThreadPromptConfirm,
-  } = useDeleteThreadPrompt({
-    threadsByWorkspace,
-    removeThread,
-    onDeleteSuccess: (threadId) => {
-      clearDraftForThread(threadId);
-      removeImagesForThread(threadId);
-    },
-    onDeleteError: (message) => {
-      alertError(message ?? t("workspace.deleteConversationFailed"));
-    },
-  });
-
-  const handleRenameThread = useCallback(
-    (workspaceId: string, threadId: string) => {
-      openRenamePrompt(workspaceId, threadId);
-    },
-    [openRenamePrompt],
-  );
-
   const { exitDiffView, selectWorkspace, selectHome } = useWorkspaceSelection({
     workspaces,
     isCompact,
@@ -1064,19 +971,6 @@ export function AppShell() {
     setSelectedDiffPath,
   });
 
-  const activeRateLimits = activeWorkspaceId
-    ? (rateLimitsByWorkspace[activeWorkspaceId] ?? null)
-    : null;
-  const activeTokenUsage = activeThreadId
-    ? (tokenUsageByThread[activeThreadId] ?? null)
-    : null;
-  const timelinePlan = useMemo(
-    () => extractPlanFromTimelineItems(activeItems),
-    [activeItems],
-  );
-  const activePlan = activeThreadId
-    ? (timelinePlan ?? planByThread[activeThreadId] ?? null)
-    : timelinePlan;
   useCollaborationModeThreadSync({
     activeEngine,
     activeThreadId,
@@ -1124,32 +1018,6 @@ export function AppShell() {
     setHomeOpen,
     tabletTab,
   });
-  const canInterrupt = activeThreadId
-    ? (threadStatusById[activeThreadId]?.isProcessing ?? false)
-    : false;
-  const isProcessing = activeThreadId
-    ? (threadStatusById[activeThreadId]?.isProcessing ?? false)
-    : false;
-  const isReviewing = activeThreadId
-    ? (threadStatusById[activeThreadId]?.isReviewing ?? false)
-    : false;
-  const activeTurnId = activeThreadId
-    ? (activeTurnIdByThread[activeThreadId] ?? null)
-    : null;
-  // An open AskUserQuestion for the active thread holds the send queue — the CLI
-  // turn is blocked awaiting the answer. Mirror AskUserQuestionDialog's filter:
-  // match on workspace + thread_id (empty thread_id = current thread).
-  const hasPendingUserInput = useMemo(
-    () =>
-      Boolean(activeThreadId) &&
-      userInputRequests.some((req) => {
-        const requestThreadId = (req.params.thread_id ?? "").trim();
-        if (requestThreadId && requestThreadId !== activeThreadId) return false;
-        if (activeWorkspaceId && req.workspace_id !== activeWorkspaceId) return false;
-        return true;
-      }),
-    [userInputRequests, activeThreadId, activeWorkspaceId],
-  );
   const {
     activeImages,
     attachImages,
@@ -1236,6 +1104,85 @@ export function AppShell() {
     getCodexCollaborationPayload: () => collaborationModePayload,
     interruptTurn,
   });
+
+  // S4 PR-D：Conversation 域 host（须在 useComposerController 之后，依赖 clearDraft/removeImages）
+  const {
+    runtimeThreadBoundary,
+    activeThreadIdRef,
+    getThreadRows,
+    handleCopyThread,
+    renamePrompt,
+    openRenamePrompt,
+    handleRenamePromptChange,
+    handleRenamePromptCancel,
+    handleRenamePromptConfirm,
+    deleteThreadPrompt,
+    isDeleteThreadPromptBusy,
+    openDeleteThreadPrompt,
+    handleDeleteThreadPromptCancel,
+    handleDeleteThreadPromptConfirm,
+  } = useConversationDomainHost({
+    runtimeThreadBoundaryInput: {
+      activeItems,
+      activeThreadId,
+      activeTurnId,
+      activeTurnIdByThread,
+      activeWorkspace,
+      activeWorkspaceId,
+      canInterrupt,
+      completionEmailIntentByThread,
+      handleFusionStalled,
+      historyLoadingByThreadId,
+      historyLoadingProgressByThreadId,
+      historyRestoredAtMsByThread,
+      interruptTurn,
+      isProcessing,
+      isReviewing,
+      listThreadsForWorkspace,
+      loadOlderThreadsForWorkspace,
+      rateLimitsByWorkspace,
+      refreshAccountInfo,
+      refreshAccountRateLimits,
+      refreshThread,
+      resetWorkspaceThreads,
+      resolveCanonicalThreadId,
+      sendUserMessage,
+      sendUserMessageToThread,
+      setActiveThreadId,
+      startSharedSessionForWorkspace,
+      startThreadForWorkspace,
+      threadItemsByThread,
+      threadListCursorByWorkspace,
+      threadListLoadingByWorkspace,
+      threadListPagingByWorkspace,
+      threadParentById,
+      threadStatusById,
+      threadsByWorkspace,
+      tokenUsageByThread,
+      toggleCompletionEmailIntent,
+    },
+    activeThreadId,
+    threadParentById,
+    activeItems,
+    threadsByWorkspace,
+    renameThread,
+    removeThread,
+    clearDraftForThread,
+    removeImagesForThread,
+    alertError,
+    deleteConversationFailedMessage: t("workspace.deleteConversationFailed"),
+    addDebugEntry,
+    reloadAgentCatalog,
+    settingsOpen,
+  });
+
+  const handleRenameThread = useCallback(
+    (workspaceId: string, threadId: string) => {
+      openRenamePrompt(workspaceId, threadId);
+    },
+    [openRenamePrompt],
+  );
+
   const {
     activePath,
     activeWorkspaceKanbanTasks,
@@ -1607,45 +1554,6 @@ export function AppShell() {
     handleAddWorkspaceFromPath,
   });
 
-  const runtimeThreadBoundary = defineRuntimeThreadShellBoundary({
-    activeItems,
-    activeThreadId,
-    activeTurnId,
-    activeTurnIdByThread,
-    activeWorkspace,
-    activeWorkspaceId,
-    canInterrupt,
-    completionEmailIntentByThread,
-    handleFusionStalled,
-    historyLoadingByThreadId,
-    historyLoadingProgressByThreadId,
-    historyRestoredAtMsByThread,
-    interruptTurn,
-    isProcessing,
-    isReviewing,
-    listThreadsForWorkspace,
-    loadOlderThreadsForWorkspace,
-    rateLimitsByWorkspace,
-    refreshAccountInfo,
-    refreshAccountRateLimits,
-    refreshThread,
-    resetWorkspaceThreads,
-    resolveCanonicalThreadId,
-    sendUserMessage,
-    sendUserMessageToThread,
-    setActiveThreadId,
-    startSharedSessionForWorkspace,
-    startThreadForWorkspace,
-    threadItemsByThread,
-    threadListCursorByWorkspace,
-    threadListLoadingByWorkspace,
-    threadListPagingByWorkspace,
-    threadParentById,
-    threadStatusById,
-    threadsByWorkspace,
-    tokenUsageByThread,
-    toggleCompletionEmailIntent,
-  });
   const runtimeActions = defineAppShellRuntimeActions({
     handleToggleRuntimeConsole,
     handleToggleTerminalPanel,
@@ -1654,11 +1562,11 @@ export function AppShell() {
   const agent = selectedAgent;
   const appShellDomainContextsRef = useRef<AppShellDomainContexts | null>(null);
   const rawAppShellDomainContexts = defineAppShellDomainContexts({
-    runtimeThreadContext: {
-      ...APP_SHELL_LEGACY_CONTEXT_DEFAULTS,
-      ...runtimeActions,
+    runtimeThreadContext: buildRuntimeThreadDomainContextSlice({
+      legacyDefaults: APP_SHELL_LEGACY_CONTEXT_DEFAULTS,
+      runtimeActions,
       runtimeThreadBoundary,
-    },
+    }),
     workspaceNavigationContext: {
       GitHubPanelData,
       RECENT_THREAD_LIMIT,
@@ -2331,10 +2239,10 @@ export function AppShell() {
       recentCompletedSessionCountByWorkspaceId:
         sessionRadarFeed.recentCountByWorkspaceId,
     },
-    runtimeContext: {
+    runtimeContext: buildRuntimeDomainContextSlice({
       runtimeRunState,
-    },
-    modelSelectionContext: {
+    }),
+    modelSelectionContext: buildModelSelectionDomainContextSlice({
       effectiveModels,
       effectiveReasoningSupported,
       effectiveSelectedModel,
@@ -2349,8 +2257,8 @@ export function AppShell() {
       selectedModelId: effectiveSelectedModelId,
       setSelectedEffort: handleSelectComposerEffort,
       setSelectedModelId,
-    },
-    collaborationModeContext: {
+    }),
+    collaborationModeContext: buildCollaborationModeDomainContextSlice({
       applySelectedCollaborationMode,
       collaborationModePayload,
       collaborationModes,
@@ -2366,7 +2274,7 @@ export function AppShell() {
       setCollaborationRuntimeModeByThread,
       setCollaborationUiModeByThread,
       setSelectedCollaborationModeId,
-    },
+    }),
   });
   const appShellDomainContexts = reuseStableAppShellDomainContexts(
     appShellDomainContextsRef.current,

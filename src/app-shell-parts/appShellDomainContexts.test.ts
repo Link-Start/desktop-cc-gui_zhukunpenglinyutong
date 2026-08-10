@@ -12,6 +12,7 @@ import {
   flattenSelectedAppShellDomainContexts,
   listAppShellDomainContextNames,
   reuseStableAppShellDomainContexts,
+  type AppShellDomainContextName,
   type AppShellDomainContexts,
 } from "./appShellDomainContexts";
 
@@ -85,6 +86,20 @@ function extractExplicitAppShellDomainContextKeysByDomain(
           continue;
         }
         const domainValue = domainProperty.initializer;
+        // S4 PR-F：干净域可用 build*DomainContextSlice(...)；其输出 keys 以 OWNED_KEYS 为准。
+        if (
+          ts.isCallExpression(domainValue) &&
+          /build\w+DomainContextSlice$/.test(
+            domainValue.expression.getText(sourceFile),
+          )
+        ) {
+          explicitKeysByDomain[domainName] = [
+            ...APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS[
+              domainName as AppShellDomainContextName
+            ],
+          ];
+          continue;
+        }
         if (!ts.isObjectLiteralExpression(domainValue)) {
           continue;
         }
@@ -485,7 +500,12 @@ describe("appShellDomainContexts", () => {
       "const rawAppShellDomainContexts = defineAppShellDomainContexts({",
     );
     for (const domainName of listAppShellDomainContextNames()) {
-      expect(appShellSource).toContain(`${domainName}: {`);
+      // 对象字面量，或 S4 PR-F 干净域 builder 调用
+      const hasObjectLiteral = appShellSource.includes(`${domainName}: {`);
+      const hasBuilderSlice = new RegExp(
+        `${domainName}:\\s*build\\w+DomainContextSlice\\(`,
+      ).test(appShellSource);
+      expect(hasObjectLiteral || hasBuilderSlice).toBe(true);
     }
     expect(appShellSource).toContain("reuseStableAppShellDomainContexts(");
     expect(appShellSource).toContain(
