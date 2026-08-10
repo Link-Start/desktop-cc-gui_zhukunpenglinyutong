@@ -295,10 +295,33 @@ html[data-theme="light"] .memory-pick-gate,
   width: 22px;
   height: 22px;
   border-radius: 7px;
-  background: var(--mpg-accent-soft);
+  overflow: hidden;
+  background: var(--mpg-elev);
   border: 1px solid color-mix(in srgb, var(--mpg-accent) 40%, var(--mpg-border));
-  font-size: 12px;
-  animation: memory-pick-spin 2.4s linear infinite;
+  flex: 0 0 auto;
+  /* 轻微呼吸感，避免整 logo 狂转 */
+  animation: memory-pick-logo-pulse 1.6s ease-in-out infinite;
+}
+
+.memory-pick-gate__match-logo-img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+}
+
+@keyframes memory-pick-logo-pulse {
+  0%,
+  100% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
 }
 
 .memory-pick-gate__match-dots {

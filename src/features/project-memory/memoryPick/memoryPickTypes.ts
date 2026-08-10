@@ -74,8 +74,8 @@ export type MemoryPickGateUiState = {
 export const PICK_CANDIDATE_LIMIT = 25;
 export const ALWAYS_TOP_K = 3;
 export const PICK_RETRIEVE_TIMEOUT_MS = 1000;
-/** 匹配动画最短展示（ms），避免检索过快导致 UX 闪断 */
-export const PICK_MATCH_MIN_DISPLAY_MS = 550;
+/** 匹配界面最短展示（ms），避免检索过快闪断（至少 1s） */
+export const PICK_MATCH_MIN_DISPLAY_MS = 1000;
 /** 一直开启：预览展示后客户端倒计时自动确认（ms），可取消 */
 export const ALWAYS_AUTO_CONFIRM_MS = 8000;
 

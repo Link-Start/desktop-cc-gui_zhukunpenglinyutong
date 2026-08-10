@@ -15,6 +15,7 @@ import ListChecks from "lucide-react/dist/esm/icons/list-checks";
 import Infinity from "lucide-react/dist/esm/icons/infinity";
 import Check from "lucide-react/dist/esm/icons/check";
 import { Markdown } from "../../../markdown/components/Markdown";
+import appLogo from "../../../assets/icon.png";
 import { formatRelativeTimeShort } from "../../../utils/time";
 import type { MemoryPickCandidate } from "../memoryPick/memoryPickTypes";
 import {
@@ -160,7 +161,12 @@ export function MemoryPickGate({ workspaceId, threadId }: MemoryPickGateProps) {
         <div className="memory-pick-gate__match" role="status">
           <div className="memory-pick-gate__match-brand">
             <span className="memory-pick-gate__match-logo" aria-hidden>
-              ✦
+              <img
+                src={appLogo}
+                alt=""
+                className="memory-pick-gate__match-logo-img"
+                draggable={false}
+              />
             </span>
             <span>
               {t("memoryPick.match.brand", {

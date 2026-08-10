@@ -51,7 +51,7 @@ describe("memoryPickGateStore", () => {
     });
 
     expect(getMemoryPickGateSnapshot("ws", "th")?.phase).toBe("retrieving");
-    await vi.advanceTimersByTimeAsync(600);
+    await vi.advanceTimersByTimeAsync(1100);
     await vi.waitFor(() => {
       expect(getMemoryPickGateSnapshot("ws", "th")?.phase).toBe(
         "awaiting-choice",
@@ -82,9 +82,9 @@ describe("memoryPickGateStore", () => {
       }),
     });
     expect(getMemoryPickGateSnapshot("ws", "th-min")?.phase).toBe("retrieving");
-    await vi.advanceTimersByTimeAsync(200);
-    expect(getMemoryPickGateSnapshot("ws", "th-min")?.phase).toBe("retrieving");
     await vi.advanceTimersByTimeAsync(400);
+    expect(getMemoryPickGateSnapshot("ws", "th-min")?.phase).toBe("retrieving");
+    await vi.advanceTimersByTimeAsync(700);
     await vi.waitFor(() => {
       expect(getMemoryPickGateSnapshot("ws", "th-min")?.phase).toBe(
         "awaiting-choice",
@@ -104,7 +104,7 @@ describe("memoryPickGateStore", () => {
       retrieve: async () => ({ candidates: [], error: null }),
     });
 
-    await vi.advanceTimersByTimeAsync(600);
+    await vi.advanceTimersByTimeAsync(1100);
     await expect(promise).resolves.toEqual({
       action: "skip",
       mode: "pick",
@@ -124,7 +124,7 @@ describe("memoryPickGateStore", () => {
         error: null,
       }),
     });
-    await vi.advanceTimersByTimeAsync(600);
+    await vi.advanceTimersByTimeAsync(1100);
     await vi.waitFor(() => {
       expect(getMemoryPickGateSnapshot("ws", "th-sel")?.phase).toBe(
         "awaiting-choice",
@@ -156,7 +156,7 @@ describe("memoryPickGateStore", () => {
         error: null,
       }),
     });
-    await vi.advanceTimersByTimeAsync(600);
+    await vi.advanceTimersByTimeAsync(1100);
     await vi.waitFor(() => {
       expect(getMemoryPickGateSnapshot("ws", "th-always")?.phase).toBe(
         "awaiting-choice",
@@ -192,7 +192,7 @@ describe("memoryPickGateStore", () => {
         error: null,
       }),
     });
-    await vi.advanceTimersByTimeAsync(600);
+    await vi.advanceTimersByTimeAsync(1100);
     await vi.waitFor(() => {
       expect(getMemoryPickGateSnapshot("ws", "th-pref")?.phase).toBe(
         "awaiting-choice",
@@ -218,7 +218,7 @@ describe("memoryPickGateStore", () => {
         error: null,
       }),
     });
-    await vi.advanceTimersByTimeAsync(600);
+    await vi.advanceTimersByTimeAsync(1100);
     await vi.waitFor(() => {
       expect(getMemoryPickGateSnapshot("ws", "th-pref")?.phase).toBe(
         "awaiting-choice",
@@ -249,7 +249,7 @@ describe("memoryPickGateStore", () => {
         error: null,
       }),
     });
-    await vi.advanceTimersByTimeAsync(600);
+    await vi.advanceTimersByTimeAsync(1100);
     await vi.waitFor(() => {
       expect(getMemoryPickGateSnapshot("ws", "th-mode")?.phase).toBe(
         "awaiting-choice",
@@ -279,7 +279,7 @@ describe("memoryPickGateStore", () => {
         error: null,
       }),
     });
-    await vi.advanceTimersByTimeAsync(600);
+    await vi.advanceTimersByTimeAsync(1100);
     await vi.waitFor(() => {
       expect(getMemoryPickGateSnapshot("ws", "th-skip")?.phase).toBe(
         "awaiting-choice",
@@ -302,7 +302,7 @@ describe("memoryPickGateStore", () => {
         error: null,
       }),
     });
-    await vi.advanceTimersByTimeAsync(600);
+    await vi.advanceTimersByTimeAsync(1100);
     await vi.waitFor(() => {
       expect(getMemoryPickGateSnapshot("ws", "th-dismiss")?.phase).toBe(
         "awaiting-choice",
@@ -336,7 +336,7 @@ describe("memoryPickGateStore", () => {
       }),
     });
     await expect(first).resolves.toEqual({ action: "cancel" });
-    await vi.advanceTimersByTimeAsync(600);
+    await vi.advanceTimersByTimeAsync(1100);
     await vi.waitFor(() => {
       expect(getMemoryPickGateSnapshot("ws", "th-replace")?.queryText).toBe(
         "q2",
