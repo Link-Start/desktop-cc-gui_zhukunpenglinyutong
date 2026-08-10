@@ -32,7 +32,8 @@ const MESSAGE_ROW_RENDER_DIAGNOSTIC_MIN_INTERVAL_MS = 5_000;
 const MESSAGE_ROW_RENDER_DIAGNOSTIC_RENDER_COUNT_STEP = 20;
 const EARLY_RENDERER_DIAGNOSTICS_STORAGE_KEY =
   "ccgui.bootstrapRendererDiagnostics";
-const DEFAULT_BLANK_WATCHDOG_INTERVAL_MS = 1_500;
+// 1.5s 曾导致冷启动后持续强制 reflow；拉长间隔并在 maxReports 后停表（见 start 内）。
+const DEFAULT_BLANK_WATCHDOG_INTERVAL_MS = 5_000;
 const DEFAULT_BLANK_WATCHDOG_MIN_CONSECUTIVE_SAMPLES = 2;
 const DEFAULT_BLANK_WATCHDOG_MAX_REPORTS = 6;
 const DEFAULT_RENDERER_HEARTBEAT_INTERVAL_MS = 15_000;
@@ -1575,10 +1576,18 @@ export function startRendererBlankScreenWatchdog(
       blankWatchdogConsecutiveSamples = 0;
       return;
     }
-    // 隐藏窗口不存在"用户看到白屏"，跳过采样避免后台每 1.5s 两次强制回流
+    // 隐藏窗口不存在"用户看到白屏"，跳过采样避免后台周期性强制回流
     // （getBoundingClientRect + getComputedStyle），并清零连续计数。
     if (document.visibilityState === "hidden") {
       blankWatchdogConsecutiveSamples = 0;
+      return;
+    }
+    // 已达报告上限：停表，避免「健康窗口」仍每 tick 强制 layout。
+    if (blankWatchdogReports >= maxReports) {
+      if (blankWatchdogTimer !== null) {
+        window.clearInterval(blankWatchdogTimer);
+        blankWatchdogTimer = null;
+      }
       return;
     }
     const snapshot = collectRendererBlankScreenSnapshot(rootId);
@@ -1587,10 +1596,7 @@ export function startRendererBlankScreenWatchdog(
       return;
     }
     blankWatchdogConsecutiveSamples += 1;
-    if (
-      blankWatchdogConsecutiveSamples < minConsecutiveSamples ||
-      blankWatchdogReports >= maxReports
-    ) {
+    if (blankWatchdogConsecutiveSamples < minConsecutiveSamples) {
       return;
     }
     blankWatchdogReports += 1;
@@ -1599,6 +1605,10 @@ export function startRendererBlankScreenWatchdog(
       intervalMs,
       ...snapshot,
     });
+    if (blankWatchdogReports >= maxReports && blankWatchdogTimer !== null) {
+      window.clearInterval(blankWatchdogTimer);
+      blankWatchdogTimer = null;
+    }
   }, intervalMs);
 }
 

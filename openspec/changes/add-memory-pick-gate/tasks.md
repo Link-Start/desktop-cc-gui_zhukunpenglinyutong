@@ -107,7 +107,7 @@ pnpm vitest run \
   src/features/composer/components/Composer.memory-reference.test.tsx
 ```
 
-- [ ] `git commit`（中文 conventional）+ Trellis session record
+- [ ] `git commit`（中文 conventional）
 
 建议 subject：
 

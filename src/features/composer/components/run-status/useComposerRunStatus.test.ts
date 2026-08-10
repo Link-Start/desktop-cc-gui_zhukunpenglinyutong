@@ -109,6 +109,12 @@ describe("useComposerRunStatus", () => {
     expect(result.current.editFileCount).toBe(2);
     expect(result.current.todoCompleted).toBe(1);
     expect(result.current.subagentRunning).toBe(true);
+    // 子代理 running 也不默认展开，避免挡住主线吐字；需用户点 pill
+    expect(result.current.expandedSection).toBeNull();
+
+    act(() => {
+      result.current.toggleSection("subagent");
+    });
     expect(result.current.expandedSection).toBe("subagent");
 
     act(() => {
@@ -119,6 +125,57 @@ describe("useComposerRunStatus", () => {
     act(() => {
       result.current.toggleSection("edit");
     });
+    expect(result.current.expandedSection).toBeNull();
+  });
+
+  it("does not auto-expand when subagents start running", () => {
+    const { result, rerender } = renderHook(
+      ({ subagents }) =>
+        useComposerRunStatus({
+          todos: [],
+          subagents,
+          plan: null,
+          isPlanMode: false,
+          isProcessing: true,
+          mergePlanIntoTodos: false,
+          sessionFileChanges: null,
+        }),
+      {
+        initialProps: {
+          subagents: [
+            {
+              id: "s1",
+              type: "explore",
+              description: "scan",
+              status: "running" as const,
+            },
+          ],
+        },
+      },
+    );
+
+    expect(result.current.showSubagentSection).toBe(true);
+    expect(result.current.subagentRunning).toBe(true);
+    expect(result.current.expandedSection).toBeNull();
+
+    rerender({
+      subagents: [
+        {
+          id: "s1",
+          type: "explore",
+          description: "scan",
+          status: "completed" as const,
+        },
+        {
+          id: "s2",
+          type: "agent",
+          description: "next",
+          status: "running" as const,
+        },
+      ],
+    });
+    expect(result.current.subagentTotal).toBe(2);
+    expect(result.current.subagentRunning).toBe(true);
     expect(result.current.expandedSection).toBeNull();
   });
 

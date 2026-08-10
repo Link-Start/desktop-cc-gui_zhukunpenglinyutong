@@ -1303,6 +1303,9 @@ describe("rendererDiagnostics", () => {
     }
     const rootElement = new TestHTMLElement({ width: 800, height: 600 });
     const bodyElement = new TestHTMLElement({ width: 800, height: 600 });
+    const clearIntervalSpy = vi.fn((handle: ReturnType<typeof setInterval>) => {
+      globalThis.clearInterval(handle);
+    });
     vi.stubGlobal("HTMLElement", TestHTMLElement);
     vi.stubGlobal("document", {
       body: bodyElement,
@@ -1313,7 +1316,7 @@ describe("rendererDiagnostics", () => {
       getElementById: (id: string) => (id === "root" ? rootElement : null),
     });
     vi.stubGlobal("window", {
-      clearInterval: globalThis.clearInterval,
+      clearInterval: clearIntervalSpy,
       location: { href: "tauri://localhost" },
       setInterval: globalThis.setInterval,
       getComputedStyle: () => ({
@@ -1352,6 +1355,8 @@ describe("rendererDiagnostics", () => {
         }),
       ],
     );
+    // maxReports=1 后必须停表，避免健康窗口仍周期性 getBoundingClientRect 强制回流。
+    expect(clearIntervalSpy).toHaveBeenCalled();
   });
 
   it("does not report a blank screen when the root has visible content", async () => {

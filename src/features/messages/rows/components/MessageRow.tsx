@@ -163,9 +163,11 @@ function shouldUseLongFoldedMarkdownStreamingSurface(
   );
 }
 
-const STREAMING_PLAIN_TEXT_COLLAPSE_THRESHOLD = 20_000;
-const STREAMING_PLAIN_TEXT_HEAD_CHARS = 4_000;
-const STREAMING_PLAIN_TEXT_TAIL_CHARS = 2_000;
+// 流式中过长正文更早切到 lightweight / 折叠 head+tail，压低 Markdown 重解析成本。
+// 不裁剪列表长度（STREAMING_VISIBLE_WINDOW 仍为 0），避免 stick-to-bottom 高度跳变。
+const STREAMING_PLAIN_TEXT_COLLAPSE_THRESHOLD = 8_000;
+const STREAMING_PLAIN_TEXT_HEAD_CHARS = 3_000;
+const STREAMING_PLAIN_TEXT_TAIL_CHARS = 1_500;
 
 function resolveStreamingPlainTextCollapsedView({
   text,

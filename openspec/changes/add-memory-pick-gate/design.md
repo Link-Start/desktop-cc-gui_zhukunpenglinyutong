@@ -659,5 +659,5 @@ feat(memory-pick): 发送前记忆挑选闸门 Phase-1
 - [x] design / proposal / tasks / specs 与代码对齐（本次）  
 - [ ] 提交前：`pnpm vitest run` 记忆相关套件  
 - [ ] 提交前：`openspec validate add-memory-pick-gate --strict --no-interactive`（若环境可用）  
-- [ ] `git commit` + Trellis session record  
+- [ ] `git commit`
 - [ ] 人工冒烟：pick / always 读秒 / dismiss / 详情 MD / 侧栏标题

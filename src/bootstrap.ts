@@ -7,8 +7,8 @@ import "./styles/sidebar.footer.css";
 import "./styles/home.css";
 import "./styles/home-chat.css";
 import "./styles/main.css";
-import "./styles/extensions.css";
-import "./styles/tokentracker-dashboard.css";
+// extensions / tokentracker 仅 Extensions 视图需要，改为 feature loader 懒加载
+// （见 loadExtensionsStyles），避免进启动 CSS 与首屏 style 图。
 import "./styles/messages.css";
 import "./styles/collapsible-reveal.css";
 import "./styles/approval-toasts.css";

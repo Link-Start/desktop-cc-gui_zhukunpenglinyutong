@@ -14,7 +14,7 @@ status: active
 | 产品能力、安装、命令、版本 | [`../README.md`](../README.md) | 当前产品入口 |
 | 仓库规则与 delivery gate | [`../AGENTS.md`](../AGENTS.md) | 规则入口 |
 | 行为契约与 change lifecycle | [`../openspec/`](../openspec/) | Behavior single source of truth |
-| Frontend/backend 实现规范 | [`../.trellis/spec/`](../.trellis/spec/) | Code-level rule |
+| Frontend/backend 实现规范 | [`../dev-guidelines/`](../dev-guidelines/) | Code-level rule |
 | 文档治理 | [`GOVERNANCE.md`](GOVERNANCE.md) | 分类、生命周期、索引与退役规则 |
 
 ## 当前文档
@@ -86,6 +86,7 @@ status: active
 - [`chat-canvas-conversation-curtain-contracts.md`](chat-canvas-conversation-curtain-contracts.md)
 - [`codex-collaboration-mode-enforcement-runbook.md`](codex-collaboration-mode-enforcement-runbook.md)
 - [`curated-skill-onboarding.md`](curated-skill-onboarding.md)
+- [`openspec-playbook.md`](openspec-playbook.md)
 - [`openspec-trellis-playbook.md`](openspec-trellis-playbook.md)
 - [`markdown-doc1-claude-chat-canvas-rendering.md`](markdown-doc1-claude-chat-canvas-rendering.md)
 - [`markdown-doc2-codex-chat-canvas-rendering.md`](markdown-doc2-codex-chat-canvas-rendering.md)
