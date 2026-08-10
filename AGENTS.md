@@ -75,6 +75,16 @@
 - 校准行必须带可核对的代码事实源（repo-relative 文件路径或 OpenSpec change id），禁止只写概念。
 - 未回写的 change 不得标记收口 / 归档。
 
+### AppShell Structure Gate（P1-5）
+
+- 改 `src/app-shell/**` / domain bag / shell providers 时：
+  1. 先读执行计划 `docs/plans/2026-08-11-app-shell-cohesion-optimization.md` 与 Ownership Matrix `docs/plans/app-shell-ownership-matrix.md`
+  2. **新 shell 状态必须有 owner domain**（写入 `APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS` + 对应 builder/consumer）；禁止无主塞 bag 尾
+  3. 生产路径禁止 `flattenAppShellDomainContexts` 与 `adaptAppShellLegacyFlatContext` 直调；用 `selectAppShellDomainBag` / `mergeAppShellDomainBag`
+  4. 本地 / CI 须通过：`npm run check:app-shell:governance`
+- Domain key：soft 80 / hard 见 freeze 表（终态目标 60）；navigation hard ≤ 80
+- Composition：`src/app-shell/assembly/AppShell.tsx` 禁止直接 `useState` 业务状态
+
 ### Merge Guardrails
 
 - 高风险文件冲突时，禁止整文件 `--ours` / `--theirs` 覆盖。
