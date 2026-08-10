@@ -16,6 +16,7 @@ import {
   classifyContextProtocolText,
   isMossxProgramControlTitle,
 } from "../../../utils/contextProtocol";
+import { remapThreadParentsToSharedOwners } from "../../shared-session/runtime/sharedSessionSummaries";
 
 const CLAUDE_HISTORY_MESSAGE_ID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1531,17 +1532,8 @@ export function mergeGrokSessionSummaries(
   if (!nativeOwnerToSharedThreadId || nativeOwnerToSharedThreadId.size === 0) {
     return merged;
   }
-  return merged.map((thread) => {
-    const parent = thread.parentThreadId?.trim() || "";
-    if (!parent) {
-      return thread;
-    }
-    const remapped = nativeOwnerToSharedThreadId.get(parent);
-    if (!remapped || remapped === parent) {
-      return thread;
-    }
-    return { ...thread, parentThreadId: remapped };
-  });
+  // 与主路径 remap 共用 lookup（raw / engine: 变体），禁止 exact map.get only
+  return remapThreadParentsToSharedOwners(merged, nativeOwnerToSharedThreadId);
 }
 
 function normalizeCatalogEngine(

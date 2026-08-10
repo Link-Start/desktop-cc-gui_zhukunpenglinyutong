@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildNativeOwnerToSharedThreadMap,
   expandHiddenSharedBindingIds,
+  lookupSharedOwnerByNativeParent,
   normalizeSharedSessionSummary,
+  remapParentThreadIdToSharedOwner,
   remapThreadParentsToSharedOwners,
 } from "./sharedSessionSummaries";
 
@@ -107,5 +109,139 @@ describe("sharedSessionSummaries", () => {
     expect(remapped.find((t) => t.id === "grok:child-1")?.parentThreadId).toBe(
       "shared:shared-session-1",
     );
+  });
+
+  it("lookupSharedOwnerByNativeParent matches codex raw vs engine-prefixed owners", () => {
+    const summary = normalizeSharedSessionSummary({
+      id: "shared-codex",
+      threadId: "shared:shared-codex",
+      title: "Shared Codex",
+      updatedAt: 1,
+      selectedEngine: "codex",
+      nativeThreadIds: ["codex:019d767b-5541-7010-a30d-a454864bccd8"],
+    });
+    expect(summary).not.toBeNull();
+    const map = buildNativeOwnerToSharedThreadMap([summary!]);
+    const sharedId = "shared:shared-codex";
+
+    // binding 带 codex:，child parent 为 raw uuid（live Codex 常见）
+    expect(
+      lookupSharedOwnerByNativeParent(
+        "019d767b-5541-7010-a30d-a454864bccd8",
+        map,
+      ),
+    ).toBe(sharedId);
+    expect(
+      lookupSharedOwnerByNativeParent(
+        "codex:019d767b-5541-7010-a30d-a454864bccd8",
+        map,
+      ),
+    ).toBe(sharedId);
+
+    // binding 为 raw，child parent 为 codex:
+    const rawBinding = normalizeSharedSessionSummary({
+      id: "shared-codex-2",
+      threadId: "shared:shared-codex-2",
+      title: "Shared Codex 2",
+      updatedAt: 1,
+      selectedEngine: "codex",
+      nativeThreadIds: ["aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"],
+    });
+    const mapRaw = buildNativeOwnerToSharedThreadMap([rawBinding!]);
+    expect(
+      lookupSharedOwnerByNativeParent(
+        "codex:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        mapRaw,
+      ),
+    ).toBe("shared:shared-codex-2");
+  });
+
+  it("remaps codex/claude/grok parent variants onto shared without touching unrelated trees", () => {
+    const sessions = [
+      normalizeSharedSessionSummary({
+        id: "s-codex",
+        threadId: "shared:s-codex",
+        title: "S Codex",
+        updatedAt: 1,
+        selectedEngine: "codex",
+        nativeThreadIds: ["codex:parent-codex"],
+      })!,
+      normalizeSharedSessionSummary({
+        id: "s-claude",
+        threadId: "shared:s-claude",
+        title: "S Claude",
+        updatedAt: 1,
+        selectedEngine: "claude",
+        nativeThreadIds: ["claude:parent-claude"],
+      })!,
+      normalizeSharedSessionSummary({
+        id: "s-grok",
+        threadId: "shared:s-grok",
+        title: "S Grok",
+        updatedAt: 1,
+        selectedEngine: "grok",
+        nativeThreadIds: ["grok:parent-grok"],
+      })!,
+    ];
+    const map = buildNativeOwnerToSharedThreadMap(sessions);
+
+    const input = [
+      {
+        id: "child-codex",
+        name: "Archimedes",
+        updatedAt: 2,
+        engineSource: "codex" as const,
+        parentThreadId: "parent-codex", // raw vs codex: binding
+      },
+      {
+        id: "claude:child-1",
+        name: "Explore",
+        updatedAt: 2,
+        engineSource: "claude" as const,
+        parentThreadId: "parent-claude", // bare vs claude: binding
+      },
+      {
+        id: "grok:child-1",
+        name: "子代理",
+        updatedAt: 2,
+        engineSource: "grok" as const,
+        parentThreadId: "grok:parent-grok",
+      },
+      {
+        id: "codex:normal-child",
+        name: "Native nest",
+        updatedAt: 2,
+        engineSource: "codex" as const,
+        parentThreadId: "codex:visible-parent", // 非 shared owner
+      },
+      {
+        id: "orphan-no-parent",
+        name: "Top level",
+        updatedAt: 2,
+        engineSource: "codex" as const,
+      },
+    ];
+
+    const remapped = remapThreadParentsToSharedOwners(input, map);
+    expect(remapped.find((t) => t.id === "child-codex")?.parentThreadId).toBe(
+      "shared:s-codex",
+    );
+    expect(remapped.find((t) => t.id === "claude:child-1")?.parentThreadId).toBe(
+      "shared:s-claude",
+    );
+    expect(remapped.find((t) => t.id === "grok:child-1")?.parentThreadId).toBe(
+      "shared:s-grok",
+    );
+    expect(
+      remapped.find((t) => t.id === "codex:normal-child")?.parentThreadId,
+    ).toBe("codex:visible-parent");
+    expect(remapped.find((t) => t.id === "orphan-no-parent")?.parentThreadId).toBe(
+      undefined,
+    );
+
+    // 无 map / 空 parent：恒等
+    expect(remapThreadParentsToSharedOwners(input, new Map())).toBe(input);
+    expect(remapParentThreadIdToSharedOwner(null, map)).toBeNull();
+    expect(lookupSharedOwnerByNativeParent("codex:visible-parent", map)).toBeNull();
   });
 });

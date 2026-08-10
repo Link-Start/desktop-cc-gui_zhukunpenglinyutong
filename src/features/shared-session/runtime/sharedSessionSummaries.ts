@@ -152,7 +152,7 @@ export function toSharedThreadSummary(summary: SharedSessionSummary): ThreadSumm
 
 /**
  * native owner id（含 raw / engine: 前缀）→ shared: threadId。
- * 用于把 Grok/Codex 子代理的 parent 从「被 hide 的 native owner」改挂到 Shared 会话。
+ * 用于把 Shared 隐藏 native owner 下的子代理 parent 改挂到 Shared 会话（引擎无关）。
  */
 export function buildNativeOwnerToSharedThreadMap(
   sharedSessions: readonly SharedSessionSummary[],
@@ -174,7 +174,48 @@ export function buildNativeOwnerToSharedThreadMap(
   return map;
 }
 
-/** 若 parent 是某 Shared 的 hidden native owner，则改写为 shared: 会话 id */
+/**
+ * 用 parent id 查找 Shared 父会话（引擎无关）。
+ * 覆盖 exact / bare / `engine:raw` 变体，与 expandHiddenSharedBindingIds 对称。
+ * 未命中返回 null（调用方保留原 parent，禁止猜标题）。
+ */
+export function lookupSharedOwnerByNativeParent(
+  parentThreadId: string | null | undefined,
+  nativeToShared: Map<string, string>,
+): string | null {
+  const parent = parentThreadId?.trim() || "";
+  if (!parent || nativeToShared.size === 0) {
+    return null;
+  }
+  const exact = nativeToShared.get(parent);
+  if (exact) {
+    return exact;
+  }
+  const colon = parent.indexOf(":");
+  if (colon > 0) {
+    const bare = parent.slice(colon + 1).trim();
+    if (bare) {
+      const byBare = nativeToShared.get(bare);
+      if (byBare) {
+        return byBare;
+      }
+    }
+    return null;
+  }
+  // bare / pending：补 engine 前缀再查
+  for (const engine of SHARED_HIDE_ENGINE_PREFIXES) {
+    const byPrefixed = nativeToShared.get(`${engine}:${parent}`);
+    if (byPrefixed) {
+      return byPrefixed;
+    }
+  }
+  return null;
+}
+
+/**
+ * 若 parent 是某 Shared 的 hidden native owner，则改写为 shared: 会话 id。
+ * 未命中 owner map 时返回原 parent（保持 native 父子树）。
+ */
 export function remapParentThreadIdToSharedOwner(
   parentThreadId: string | null | undefined,
   nativeToShared: Map<string, string>,
@@ -183,11 +224,12 @@ export function remapParentThreadIdToSharedOwner(
   if (!parent) {
     return null;
   }
-  return nativeToShared.get(parent) ?? parent;
+  return lookupSharedOwnerByNativeParent(parent, nativeToShared) ?? parent;
 }
 
 /**
  * 批量把 threads 上指向 hidden native owner 的 parent 改挂到 Shared。
+ * 不删行、不碰 hide set；仅改 parentThreadId。
  */
 export function remapThreadParentsToSharedOwners(
   threads: ThreadSummary[],

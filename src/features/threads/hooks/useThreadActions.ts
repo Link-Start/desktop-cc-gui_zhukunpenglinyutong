@@ -1800,18 +1800,24 @@ export function useThreadActions({
               ...hiddenSharedBindingIds,
               ...getCollabWorkerNativeHideIds(),
             ]);
-            const nextSummaries = mergeKimiSessionSummaries(
-              baselineSummaries,
-              normalizedKimiSessions.filter(
-                (session) =>
-                  !freshHiddenSharedBindingIds.has(
-                    `kimi:${session.sessionId}`,
-                  ),
+            const nativeOwnerToSharedKimi =
+              buildNativeOwnerToSharedThreadMap(sharedSessionsForKimiHide);
+            // 与 Grok 异步路径对齐：merge 后 parent-id 改挂 shared:（有 parent 才生效）
+            const nextSummaries = remapThreadParentsToSharedOwners(
+              mergeKimiSessionSummaries(
+                baselineSummaries,
+                normalizedKimiSessions.filter(
+                  (session) =>
+                    !freshHiddenSharedBindingIds.has(
+                      `kimi:${session.sessionId}`,
+                    ),
+                ),
+                workspace.id,
+                mappedTitles,
+                getCustomName,
+                freshHiddenSharedBindingIds,
               ),
-              workspace.id,
-              mappedTitles,
-              getCustomName,
-              freshHiddenSharedBindingIds,
+              nativeOwnerToSharedKimi,
             );
             const visibleNextSummaries = applySessionArchiveState(
               stripHiddenSharedBindingSummaries(
@@ -1830,7 +1836,8 @@ export function useThreadActions({
                   prev.name === entry.name &&
                   prev.updatedAt === entry.updatedAt &&
                   prev.engineSource === entry.engineSource &&
-                  prev.threadKind === entry.threadKind
+                  prev.threadKind === entry.threadKind &&
+                  (prev.parentThreadId ?? null) === (entry.parentThreadId ?? null)
                 );
               });
             if (!unchanged && isLatestThreadListRequest()) {
