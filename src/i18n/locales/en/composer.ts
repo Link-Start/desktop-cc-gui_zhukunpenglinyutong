@@ -285,6 +285,8 @@ const composer = {
     memoryReferenceEnableSingle: "Pick memory injection this turn",
     memoryReferenceEnablePick: "Pick memory injection this turn",
     memoryReferenceEnableAlways: "Always-on auto top(n) memory injection",
+    memoryReferenceRestore: "Restore memory reference",
+    memoryReferenceDismissed: "Reference closed for this session",
     noteCardSelection: "{{count}} note card(s) linked for this send",
     noteCardSelectionHint: "Click × to remove. Selection clears after send.",
     noteCardRemove: "Remove note: {{title}}",

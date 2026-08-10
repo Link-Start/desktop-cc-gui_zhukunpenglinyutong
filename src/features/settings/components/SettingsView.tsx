@@ -101,6 +101,7 @@ import { DetachedExternalChangeToggles } from "./settings-view/sections/Detached
 import { WebServiceSettings } from "./settings-view/sections/WebServiceSettings";
 import { EmailSenderSettings } from "./settings-view/sections/EmailSenderSettings";
 import { DictationSection } from "./settings-view/sections/DictationSection";
+import { EmbedModelSection } from "./settings-view/sections/EmbedModelSection";
 import { ExperimentalToggleRow } from "./settings-view/components/ExperimentalToggleRow";
 import { BasicBehaviorSection } from "./settings-view/sections/BasicBehaviorSection";
 import {
@@ -1742,6 +1743,11 @@ export function SettingsView({
           title: t("settings.dictationTitle"),
           description: t("settings.dictationDescription"),
         };
+      case "memory":
+        return {
+          title: t("settings.sidebarMemory"),
+          description: t("settings.memoryDescription"),
+        };
       case "git":
         return {
           title: t("settings.gitTitle"),
@@ -1850,6 +1856,18 @@ export function SettingsView({
             <span className="codicon codicon-robot" aria-hidden />
             <span className="settings-nav-label">
               {t("settings.sidebarAgentPromptManagement")}
+            </span>
+          </button>
+          <button
+            type="button"
+            className={`settings-nav ${activeSection === "memory" ? "active" : ""}`}
+            onClick={() => setActiveSection("memory")}
+            aria-label={t("settings.sidebarMemory")}
+            title={t("settings.sidebarMemory")}
+          >
+            <span className="codicon codicon-library" aria-hidden />
+            <span className="settings-nav-label">
+              {t("settings.sidebarMemory")}
             </span>
           </button>
           <button
@@ -2377,6 +2395,7 @@ export function SettingsView({
             onCancelDictationDownload={onCancelDictationDownload}
             onRemoveDictationModel={onRemoveDictationModel}
           />
+          <EmbedModelSection active={activeSection === "memory"} t={t} />
           {activeSection === "git" && (
             <section className="settings-section">
               <DetachedExternalChangeToggles

@@ -8,7 +8,10 @@ import {
   retrieveMemoryCandidatesKernel,
   type MemoryRetrieveListFn,
 } from "./memoryRetrieveKernel";
-import type { ProjectMemoryEmbeddingProvider } from "../utils/projectMemorySemanticRetrieval";
+import type {
+  ProjectMemoryEmbeddingIndexRecord,
+  ProjectMemoryEmbeddingProvider,
+} from "../utils/projectMemorySemanticRetrieval";
 
 /**
  * 检索候选：统一走 MemoryRetrieveKernel（lexical + 可选 semantic hybrid）。
@@ -24,6 +27,7 @@ export async function retrieveMemoryPickCandidates(params: {
   timeoutMs?: number;
   semanticProvider?: ProjectMemoryEmbeddingProvider | null;
   allowTestSemanticProvider?: boolean;
+  indexRecords?: ProjectMemoryEmbeddingIndexRecord[];
 }): Promise<MemoryPickRetrieveResult> {
   return retrieveMemoryCandidatesKernel(params);
 }

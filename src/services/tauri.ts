@@ -338,6 +338,19 @@ export {
   projectMemoryUpdate,
   projectMemoryUpdateSettings,
 } from "./tauri/projectMemory";
+export {
+  projectMemoryEmbedHealth,
+  projectMemoryEmbedText,
+  projectMemoryEmbedIndexList,
+  projectMemoryEmbedIndexUpsert,
+  projectMemoryEmbedIndexDelete,
+  projectMemoryEmbedIndexClear,
+} from "./tauri/projectMemoryEmbed";
+export type {
+  ProjectMemoryEmbedHealthDto,
+  ProjectMemoryEmbedResultDto,
+  ProjectMemoryEmbedIndexRecordDto,
+} from "./tauri/projectMemoryEmbed";
 export type {
   NormalizedConversationTurnPayload,
   ProjectMemoryDiagnosticsResult,

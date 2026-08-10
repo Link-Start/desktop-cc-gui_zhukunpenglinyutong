@@ -11,7 +11,8 @@ export type MemoryPickTelemetryEvent =
   | "memory_pick_dismiss"
   | "memory_pick_cancel"
   | "memory_pick_auto_confirm"
-  | "memory_pick_inject";
+  | "memory_pick_inject"
+  | "memory_pick_embed_index";
 
 export type MemoryPickTelemetryPropValue = string | number | boolean | null;
 
@@ -42,6 +43,9 @@ export const MEMORY_PICK_TELEMETRY_ALLOWED_KEYS = new Set([
   "queryHash",
   "fallbackReason",
   "error",
+  "reason",
+  "count",
+  "workspaceIdLength",
 ]);
 
 /** 明确禁止的键（正文 / 原文） */

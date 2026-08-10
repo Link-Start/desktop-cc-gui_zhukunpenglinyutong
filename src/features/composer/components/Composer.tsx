@@ -1347,6 +1347,40 @@ function ComposerImpl({
   >([]);
   const [memoryReferenceMode, setMemoryReferenceMode] =
     useState<MemoryReferenceMode>("off");
+  const [memoryReferenceDismissed, setMemoryReferenceDismissed] =
+    useState(false);
+  // hydrate session 习惯（localStorage → memoryPickSessionStore）
+  useEffect(() => {
+    if (!activeWorkspaceId || !activeThreadId) {
+      setMemoryReferenceMode("off");
+      setMemoryReferenceDismissed(false);
+      return;
+    }
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+    void import("../../project-memory/memoryPick/memoryPickSessionStore").then(
+      ({
+        getMemoryPickSessionPolicy,
+        subscribeMemoryPickSessionStore,
+      }) => {
+        if (cancelled) return;
+        const syncFromStore = () => {
+          const policy = getMemoryPickSessionPolicy(
+            activeWorkspaceId,
+            activeThreadId,
+          );
+          setMemoryReferenceMode(policy.composerMode);
+          setMemoryReferenceDismissed(policy.dismissed);
+        };
+        syncFromStore();
+        unsubscribe = subscribeMemoryPickSessionStore(syncFromStore);
+      },
+    );
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, [activeThreadId, activeWorkspaceId]);
   // 闸门内切到 always/pick 时同步菜单（与幕布策略轨一致）
   useEffect(() => {
     const onMode = (event: Event) => {
@@ -1406,6 +1440,17 @@ function ComposerImpl({
     },
     [activeThreadId, activeWorkspaceId],
   );
+  const handleRestoreMemoryReference = useCallback(() => {
+    if (!activeWorkspaceId || !activeThreadId) return;
+    void import("../../project-memory/memoryPick/memoryPickSessionStore").then(
+      ({ restoreMemoryPickFromDismiss }) => {
+        restoreMemoryPickFromDismiss(activeWorkspaceId, activeThreadId);
+        setMemoryReferenceMode("pick");
+        setMemoryReferenceDismissed(false);
+      },
+    );
+  }, [activeThreadId, activeWorkspaceId]);
+
   const [carryOverManualMemoryIds, setCarryOverManualMemoryIds] = useState<
     string[]
   >([]);
@@ -3593,7 +3638,9 @@ function ComposerImpl({
               onCodexQuickCommand={handleCodexQuickCommand}
               onForkQuickStart={handleForkQuickStart}
               memoryReferenceMode={memoryReferenceMode}
+              memoryReferenceDismissed={memoryReferenceDismissed}
               onSetMemoryReferenceMode={handleSetMemoryReferenceMode}
+              onRestoreMemoryReference={handleRestoreMemoryReference}
               hasMessages={items.length > 0}
               onRewind={handleRewind}
               showRewindEntry={canRewindSession}

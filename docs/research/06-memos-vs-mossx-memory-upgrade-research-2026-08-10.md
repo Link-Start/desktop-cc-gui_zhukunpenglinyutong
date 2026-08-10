@@ -15,7 +15,8 @@ status: active
 > **读法**  
 > - 本文是 **调研与决策**，不是 OpenSpec 行为合同。  
 > - 合同仍以 `openspec/specs/project-memory-*` 与 `openspec/changes/add-memory-pick-gate/**` 为准。  
-> - Phase-2 实现 change：**`openspec/changes/enhance-memory-pick-retrieval-and-observability/`**（proposal/design/tasks/delta 已建，待实现）。
+> - Phase-2 实现 change：**`openspec/changes/enhance-memory-pick-retrieval-and-observability/`**（已实现合入）。  
+> - Phase-3 下一 change：**`openspec/changes/enhance-memory-pick-phase3-habit-and-semantic/`**（生产语义索引 + session 持久化 + dismiss 恢复）。
 
 ---
 
