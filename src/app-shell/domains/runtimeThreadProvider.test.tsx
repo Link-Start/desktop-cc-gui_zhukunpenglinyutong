@@ -36,7 +36,7 @@ function createValue(
 
 describe("runtimeThreadProvider (T2.1 POC)", () => {
   it("shallow-equals only when every field is Object.is-equal", () => {
-    const items = [];
+    const items: unknown[] = [];
     const boundary = { kind: "boundary" };
     const left = createValue({
       canInterrupt: true,

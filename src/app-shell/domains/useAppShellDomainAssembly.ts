@@ -16,6 +16,7 @@ import {
 import {
   defineAppShellDomainContexts,
   reuseStableAppShellDomainContexts,
+  type AppShellDomainContextValue,
   type AppShellDomainContexts,
 } from "./appShellDomainContexts";
 
@@ -36,7 +37,7 @@ export function assembleAppShellDomainContexts(
 {
     runtimeThreadContext: buildRuntimeThreadDomainContextSlice({
       legacyDefaults: APP_SHELL_LEGACY_CONTEXT_DEFAULTS,
-      runtimeActions: source.runtimeActions,
+      runtimeActions: source.runtimeActions as AppShellDomainContextValue,
       runtimeThreadBoundary: source.runtimeThreadBoundary,
       // 高 churn 会话投影：独立 domain，避免打坏 workspaceNavigation shallow equal
       sessionHot: {

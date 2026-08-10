@@ -34,7 +34,6 @@ import {
 import { useAppShellKanbanComposerSection } from "../useAppShellKanbanComposerSection";
 import { useAppShellKanbanExecutionSection } from "../useAppShellKanbanExecutionSection";
 import {
-  bindAppShellDomainBag,
   mergeAppShellDomainBag,
   selectAppShellDomainBag,
 } from "../../domains/selectAppShellDomainBag";

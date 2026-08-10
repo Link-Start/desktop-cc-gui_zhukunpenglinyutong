@@ -128,10 +128,7 @@ export function findDuplicateRawContextKeys(
   return duplicateKeys.sort();
 }
 
-function getPropertyNameText(
-  name: ts.PropertyName,
-  sourceFile: ts.SourceFile,
-): string | null {
+function getPropertyNameText(name: ts.PropertyName): string | null {
   if (
     ts.isIdentifier(name) ||
     ts.isStringLiteral(name) ||
@@ -144,7 +141,6 @@ function getPropertyNameText(
 
 function collectObjectLiteralPropertyNames(
   objectLiteral: ts.ObjectLiteralExpression,
-  sourceFile: ts.SourceFile,
 ): string[] {
   const keys: string[] = [];
   for (const property of objectLiteral.properties) {
@@ -154,7 +150,7 @@ function collectObjectLiteralPropertyNames(
     ) {
       continue;
     }
-    const key = getPropertyNameText(property.name, sourceFile);
+    const key = getPropertyNameText(property.name);
     if (key) {
       keys.push(key);
     }
@@ -208,7 +204,7 @@ export function extractExplicitAppShellDomainContextKeysByDomain(
         if (!ts.isPropertyAssignment(domainProperty)) {
           continue;
         }
-        const domainName = getPropertyNameText(domainProperty.name, sourceFile);
+        const domainName = getPropertyNameText(domainProperty.name);
         if (!domainName) {
           continue;
         }
@@ -229,17 +225,14 @@ export function extractExplicitAppShellDomainContextKeysByDomain(
             if (!ts.isPropertyAssignment(property)) {
               continue;
             }
-            const key = getPropertyNameText(property.name, sourceFile);
+            const key = getPropertyNameText(property.name);
             if (!key) {
               continue;
             }
             if (ts.isObjectLiteralExpression(property.initializer)) {
               // nested bag（sessionHot）：只收内层 field，忽略 wrapper 名
               keys.push(
-                ...collectObjectLiteralPropertyNames(
-                  property.initializer,
-                  sourceFile,
-                ),
+                ...collectObjectLiteralPropertyNames(property.initializer),
               );
               continue;
             }
@@ -255,10 +248,8 @@ export function extractExplicitAppShellDomainContextKeysByDomain(
         if (!ts.isObjectLiteralExpression(domainValue)) {
           continue;
         }
-        explicitKeysByDomain[domainName] = collectObjectLiteralPropertyNames(
-          domainValue,
-          sourceFile,
-        );
+        explicitKeysByDomain[domainName] =
+          collectObjectLiteralPropertyNames(domainValue);
       }
     }
 

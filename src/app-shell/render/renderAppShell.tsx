@@ -19,7 +19,6 @@ import {
 } from "../../features/layout/utils/sidebarTogglePlacement";
 import { formatShortcutForPlatform } from "../../utils/shortcuts";
 import {
-  bindAppShellDomainBag,
   mergeAppShellDomainBag,
   selectAppShellDomainBag,
 } from "../domains/selectAppShellDomainBag";
