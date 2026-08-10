@@ -25,18 +25,12 @@ export type ConversationTurnLabels = {
   userInput: string;
   assistantResponse: string;
   assistantThinkingSummary: string;
-  threadId: string;
-  turnId: string;
-  engine: string;
 };
 
 const DEFAULT_CONVERSATION_TURN_LABELS: ConversationTurnLabels = {
   userInput: "用户输入",
   assistantResponse: "AI 回复",
   assistantThinkingSummary: "AI 思考摘要",
-  threadId: "threadId",
-  turnId: "turnId",
-  engine: "engine",
 };
 
 export function getProjectMemoryDisplayRecordKind(
@@ -138,12 +132,7 @@ export function resolveProjectMemorySourceLocator(
 export function buildConversationTurnMarkdown(
   memory: Partial<Pick<
     ProjectMemoryItem,
-    | "userInput"
-    | "assistantResponse"
-    | "assistantThinkingSummary"
-    | "threadId"
-    | "turnId"
-    | "engine"
+    "userInput" | "assistantResponse" | "assistantThinkingSummary"
   >>,
   labels: Partial<ConversationTurnLabels> = {},
 ) {
@@ -151,20 +140,8 @@ export function buildConversationTurnMarkdown(
     ...DEFAULT_CONVERSATION_TURN_LABELS,
     ...labels,
   };
+  // 正文只展示对话内容；threadId/turnId/engine 由 UI 副标题与 source locator 承担，不进详情/注入文本
   const sections: string[] = [];
-  const metadata: string[] = [];
-  if (memory.threadId?.trim()) {
-    metadata.push(`${mergedLabels.threadId}: ${memory.threadId.trim()}`);
-  }
-  if (memory.turnId?.trim()) {
-    metadata.push(`${mergedLabels.turnId}: ${memory.turnId.trim()}`);
-  }
-  if (memory.engine?.trim()) {
-    metadata.push(`${mergedLabels.engine}: ${memory.engine.trim()}`);
-  }
-  if (metadata.length > 0) {
-    sections.push(metadata.join("\n"));
-  }
   if (memory.userInput?.trim()) {
     sections.push(`${mergedLabels.userInput}:\n${memory.userInput.trim()}`);
   }
