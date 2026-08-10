@@ -15,3 +15,4 @@
 - [x] 3.2 `openspec validate enhance-shared-subagent-parent-id-attach --strict`
 - [x] 3.3 换角度 code review（回归面 / 漏路径 / 误挂）并修缺口；**不 commit**
 - [x] 3.4 补 `useThreadActions` 集成测：Shared×Codex raw parent 改挂 + 未命中/无 parent 恒等 + 不删行
+- [x] 3.5 纠偏：侧栏 `useThreadRows` 隐藏 Shared 下崽（parent-id）；store 保留给幕布/Strip；补 useThreadRows 单测

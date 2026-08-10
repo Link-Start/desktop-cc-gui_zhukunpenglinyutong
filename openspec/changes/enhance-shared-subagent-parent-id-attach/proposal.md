@@ -29,11 +29,11 @@ Shared Session 使用 Codex（及其它会 spawn 子会话的 CLI）时，native
 
 ## What Changes
 
-- 增强 `remapParentThreadIdToSharedOwner`（及对称 lookup）：对 parent 做 raw / `engine:` 前缀变体匹配，引擎无关。
-- 保持 `remapThreadParentsToSharedOwners` 为唯一批量入口；Grok merge 等自建 remap 对齐同一 lookup。
-- `sidebarInternals` Shared 改挂路径与 expand hide 变体对齐（避免 live 子树漏挂）。
-- 单测：Codex/Claude/Grok parent 变体 → `shared:`；普通 native / 无 parent 不变。
-- Spec delta：`subagent-session-tree-navigation` 明确跨引擎 id 形态与 orphan 升根防护。
+- 增强 parent-id lookup（raw / `engine:` 变体），用于识别 Shared 下崽。
+- **侧栏精准隐藏**：`useThreadRows` 对 parent 命中 Shared hidden owner / `shared:` 的 native 行不进入侧栏树（不下崽）。
+- **store 仍保留**子会话行，供幕布 / Strip / `childSubagentThreads`；**不**改幕布 subAgent 展示规则。
+- list 路径可继续 remap parent→`shared:`（辅助识别/对齐）；侧栏清洁以 **hide 动作** 为准，不是「展开可见的嵌套」。
+- 单测：侧栏隐藏 + lookup 变体 + native 树不受影响。
 
 ## 技术方案对比与取舍
 

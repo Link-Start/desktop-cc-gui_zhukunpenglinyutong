@@ -2,39 +2,40 @@
 
 ### Requirement: Shared parent replaces hidden native owner
 
-Shared 场景下，子会话 parent 指向被隐藏的 native owner 时，系统 MUST 将会话树上的挂载点改为对应 `shared:` 父会话。
+Shared 场景下，子会话 parent 指向被隐藏的 native owner 时，系统 MUST 能用 parent-id（含 raw / `engine:raw` 变体，engine ∈ Claude / Codex / Grok / Kimi / OpenCode）识别该子会话属于 Shared 执行树，并可选择将 `parentThreadId` 对齐到对应 `shared:`（辅助识别；**不是**侧栏清洁的充分条件）。
 
-Parent 匹配 MUST 为引擎无关，且 MUST 覆盖 native id 形态变体（至少：raw session id 与 `engine:raw`，engine ∈ Claude / Codex / Grok / Kimi / OpenCode）。系统 MUST NOT 仅因 hidden owner 已从侧栏 strip、而 child 仍携带指向该 owner 的 parent 元数据，就把该 child 投影为顶层根会话。
+#### Scenario: parent id variants resolve to shared owner
 
-本要求只改写会话树 `parentThreadId` 挂载点；MUST NOT 因此删除子会话行（子会话仍可供侧栏树、Strip、childSubagent 消费），也 MUST NOT 放宽 Shared Hidden Native Binding 的 id hide 规则。
-
-#### Scenario: shared grok children re-parented
-
-- **WHEN** Shared Grok 会话的子代理 parent 是 hidden 的 `grok:` owner
-- **THEN** 会话树 MUST 把子代理挂在 `shared:` 父会话下
-- **AND** 详情/点击导航 MUST 使用与侧栏一致的子会话 id
-
-#### Scenario: shared codex children re-parented across id shapes
-
-- **WHEN** Shared Codex 会话的 hidden native owner 在 binding 中记为 `codex:{uuid}`（或 raw `{uuid}`）
-- **AND** 子会话 `parentThreadId` / `parent_thread_id` 为对端形态（raw 或 `codex:{uuid}`）
-- **THEN** 会话树 MUST 把该子会话挂在对应 `shared:` 父会话下
-- **AND** MUST NOT 将该子会话显示为与 Shared 并列的顶层根
-
-#### Scenario: shared claude children re-parented across id shapes
-
-- **WHEN** Shared Claude 会话的 hidden native owner 为 `claude:{sessionId}` 或 raw `{sessionId}`
+- **WHEN** Shared 的 hidden native owner 记为 `codex:{uuid}`（或 raw）
 - **AND** 子会话 parent 为对端形态
-- **THEN** 会话树 MUST 把该子会话挂在对应 `shared:` 父会话下
+- **THEN** 系统 MUST 能将 parent 识别为该 Shared 的 owned subagent parent
 
-#### Scenario: non-shared native parent links stay untouched
+## ADDED Requirements
 
-- **WHEN** 子会话 parent 指向普通可见 native 父会话（非任何 Shared 的 hidden native owner）
-- **THEN** 系统 MUST NOT 改写该 `parentThreadId`
-- **AND** 侧栏 MUST 继续将子会话挂在该 native 父下
+### Requirement: Shared sidebar hides owned subagent pups
+
+工作区**侧栏会话列表** MUST 隐藏 Shared-owned 子代理会话（下崽）。判定依据为 parent-id 匹配：parent 为 `shared:*`，或 parent 命中 Shared hidden native owner 的 id 变体。系统 MUST NOT 仅靠改挂嵌套来冒充清洁——侧栏 MUST NOT 展示这些崽子为顶层根，也 MUST NOT 在展开 Shared 时展示为可见子行。
+
+隐藏动作 MUST 限于侧栏树投影（`useThreadRows` 或等价 UI 层）。系统 MUST NOT 因此从 threads store 删除子会话摘要（幕布 subAgent 正常规则、Strip / `childSubagentThreads` 仍可消费）。系统 MUST NOT 放宽 Shared Hidden Native Binding 的 id hide 规则，MUST NOT 改变幕布内 subAgent tool/persona 的既有展示契约。
+
+#### Scenario: shared codex pups hidden from sidebar by parent id
+
+- **WHEN** Shared Codex 的 hidden native owner 为 `codex:{uuid}`（或 raw）
+- **AND** 子会话 parent 为对端形态或已对齐为 `shared:…`
+- **THEN** 侧栏 MUST NOT 展示该子会话（含顶层与 Shared 展开子行）
+- **AND** threads store MAY 仍保留该子会话摘要
+
+#### Scenario: native subagent tree stays visible
+
+- **WHEN** 子会话 parent 指向普通可见 native 父会话（非 Shared owner）
+- **THEN** 侧栏 MUST 继续在该 native 父下展示子会话
+
+#### Scenario: canvas subagent rules unchanged by sidebar hide
+
+- **WHEN** 侧栏隐藏 Shared 下崽
+- **THEN** 幕布内既有 subAgent tool / persona 展示规则 MUST NOT 因本隐藏而改写
 
 #### Scenario: missing parent metadata is not inferred
 
 - **WHEN** 子会话没有 authoritative parent 元数据
-- **THEN** 系统 MUST NOT 仅凭标题、昵称或 agent 名推断 Shared 父子关系
-- **AND** 既有 id hide / control-plane title hide 规则 MUST 保持独立生效
+- **THEN** 系统 MUST NOT 仅凭标题、昵称推断为 Shared 下崽并隐藏

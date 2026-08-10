@@ -230,6 +230,7 @@ export function remapParentThreadIdToSharedOwner(
 /**
  * 批量把 threads 上指向 hidden native owner 的 parent 改挂到 Shared。
  * 不删行、不碰 hide set；仅改 parentThreadId。
+ * 侧栏「不展示崽子」由 useThreadRows 的 isSharedSidebarHiddenPup 负责（store 保留给幕布/Strip）。
  */
 export function remapThreadParentsToSharedOwners(
   threads: ThreadSummary[],
@@ -252,4 +253,72 @@ export function remapThreadParentsToSharedOwners(
     return { ...thread, parentThreadId: remapped };
   });
   return changed ? next : threads;
+}
+
+/**
+ * 侧栏隐藏用：从当前 list 中 Shared 会话收集「藏崽」父 id 键
+ * （shared: 自身 + nativeThreadIds 的 raw/engine: 变体）。
+ */
+export function buildSharedSidebarHiddenParentKeys(
+  threads: readonly ThreadSummary[],
+): Set<string> {
+  const keys = new Set<string>();
+  for (const thread of threads) {
+    const isShared =
+      thread.threadKind === "shared" || thread.id.startsWith("shared:");
+    if (!isShared) {
+      continue;
+    }
+    const sharedId = thread.id.trim();
+    if (sharedId) {
+      keys.add(sharedId);
+    }
+    expandHiddenSharedBindingIds(thread.nativeThreadIds ?? []).forEach((id) => {
+      if (id) {
+        keys.add(id);
+      }
+    });
+  }
+  return keys;
+}
+
+/**
+ * Shared 下崽侧栏隐藏判定（仅 UI 树；不删 store 行）。
+ * - parent 为 shared:…
+ * - parent 命中 Shared hidden native owner（含 id 形态变体）
+ * Native 父子树（parent 为可见 native）→ false。
+ */
+export function isSharedSidebarHiddenPup(
+  thread: { id: string; threadKind?: string | null },
+  parentThreadId: string | null | undefined,
+  hiddenParentKeys: ReadonlySet<string>,
+): boolean {
+  if (thread.threadKind === "shared" || thread.id.startsWith("shared:")) {
+    return false;
+  }
+  if (hiddenParentKeys.size === 0) {
+    return false;
+  }
+  const parent = parentThreadId?.trim() || "";
+  if (!parent) {
+    return false;
+  }
+  if (parent.startsWith("shared:")) {
+    return true;
+  }
+  if (hiddenParentKeys.has(parent)) {
+    return true;
+  }
+  // 与 lookupSharedOwnerByNativeParent 对称的形态变体
+  const colon = parent.indexOf(":");
+  if (colon > 0) {
+    const bare = parent.slice(colon + 1).trim();
+    return Boolean(bare && hiddenParentKeys.has(bare));
+  }
+  for (const engine of SHARED_HIDE_ENGINE_PREFIXES) {
+    if (hiddenParentKeys.has(`${engine}:${parent}`)) {
+      return true;
+    }
+  }
+  return false;
 }

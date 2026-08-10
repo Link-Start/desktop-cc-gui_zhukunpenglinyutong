@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildNativeOwnerToSharedThreadMap,
+  buildSharedSidebarHiddenParentKeys,
   expandHiddenSharedBindingIds,
+  isSharedSidebarHiddenPup,
   lookupSharedOwnerByNativeParent,
   normalizeSharedSessionSummary,
   remapParentThreadIdToSharedOwner,
@@ -243,5 +245,60 @@ describe("sharedSessionSummaries", () => {
     expect(remapThreadParentsToSharedOwners(input, new Map())).toBe(input);
     expect(remapParentThreadIdToSharedOwner(null, map)).toBeNull();
     expect(lookupSharedOwnerByNativeParent("codex:visible-parent", map)).toBeNull();
+  });
+
+  it("isSharedSidebarHiddenPup hides shared-owned pups by parent id shapes only", () => {
+    const threads = [
+      {
+        id: "shared:s1",
+        name: "S",
+        updatedAt: 1,
+        engineSource: "codex" as const,
+        threadKind: "shared" as const,
+        nativeThreadIds: ["codex:hidden-owner"],
+      },
+    ];
+    const keys = buildSharedSidebarHiddenParentKeys(threads);
+    expect(keys.has("shared:s1")).toBe(true);
+    expect(keys.has("codex:hidden-owner")).toBe(true);
+    expect(keys.has("hidden-owner")).toBe(true);
+
+    expect(
+      isSharedSidebarHiddenPup(
+        { id: "pup-1" },
+        "shared:s1",
+        keys,
+      ),
+    ).toBe(true);
+    expect(
+      isSharedSidebarHiddenPup(
+        { id: "pup-2" },
+        "hidden-owner",
+        keys,
+      ),
+    ).toBe(true);
+    expect(
+      isSharedSidebarHiddenPup(
+        { id: "pup-3" },
+        "codex:hidden-owner",
+        keys,
+      ),
+    ).toBe(true);
+    // Native 父子 / 无 parent / Shared 自身
+    expect(
+      isSharedSidebarHiddenPup(
+        { id: "codex:child" },
+        "codex:visible-parent",
+        keys,
+      ),
+    ).toBe(false);
+    expect(isSharedSidebarHiddenPup({ id: "solo" }, null, keys)).toBe(false);
+    expect(
+      isSharedSidebarHiddenPup(
+        { id: "shared:s1", threadKind: "shared" },
+        null,
+        keys,
+      ),
+    ).toBe(false);
   });
 });
