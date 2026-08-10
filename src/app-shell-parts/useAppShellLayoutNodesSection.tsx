@@ -59,9 +59,10 @@ import {
   shouldPreserveEditorOnThreadSelect,
 } from "./threadEditorPreservation";
 import {
-  flattenSelectedAppShellDomainContexts,
+  flattenSelectedAppShellDomainContextsMemoized,
   type AppShellDomainContextName,
   type AppShellDomainContexts,
+  type DomainFlattenIdentityCache,
 } from "./appShellDomainContexts";
 
 type AppShellLayoutNodesContext = Record<string, any>;
@@ -84,6 +85,7 @@ type WorkspaceAliasPromptState = {
 };
 
 const APP_SHELL_LAYOUT_NODES_DOMAIN_NAMES = [
+  "runtimeThreadContext",
   "workspaceNavigationContext",
   "composerContext",
   "layoutContext",
@@ -128,13 +130,19 @@ function resolveProjectMapSelectedGenerationModel(
   return matchedModel?.model ?? trimmedSelection;
 }
 
-function flattenAppShellLayoutNodesContext(
+export function useAppShellLayoutNodesSection(
   input: AppShellLayoutNodesSectionInput,
-): AppShellLayoutNodesContext {
-  return {
-    ...flattenSelectedAppShellDomainContexts(
+) {
+  // domain 身份缓存：未变 domain 不重 flatten（配合 reuseStableAppShellDomainContexts）
+  const domainFlattenCacheRef = useRef<DomainFlattenIdentityCache>({
+    domainValues: null,
+    flattened: null,
+  });
+  const ctx: AppShellLayoutNodesContext = {
+    ...flattenSelectedAppShellDomainContextsMemoized(
       input.appShellDomainContexts,
       APP_SHELL_LAYOUT_NODES_DOMAIN_NAMES,
+      domainFlattenCacheRef.current,
     ),
     ...input.searchAndComposerSection,
     ...input.sections,
@@ -142,12 +150,6 @@ function flattenAppShellLayoutNodesContext(
     isPullRequestComposerFromSections: input.isPullRequestComposerFromSections,
     sections: input.sections,
   };
-}
-
-export function useAppShellLayoutNodesSection(
-  input: AppShellLayoutNodesSectionInput,
-) {
-  const ctx = flattenAppShellLayoutNodesContext(input);
   const runtimeRunState = input.appShellDomainContexts.runtimeContext
     .runtimeRunState as any;
   const clientUiVisibility = useClientUiVisibility();

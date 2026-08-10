@@ -39,6 +39,16 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
 > = {
   runtimeThreadContext: [
     "runtimeThreadBoundary",
+    // S4 bag-split PR-1：会话热路径（从 workspaceNavigation / settings 迁入）
+    "activeItems",
+    "activePlan",
+    "activeRateLimits",
+    "activeTokenUsage",
+    "activeTurnId",
+    "canInterrupt",
+    "isProcessing",
+    "isReviewing",
+    "timelinePlan",
   ],
   workspaceNavigationContext: [
     "GitHubPanelData",
@@ -60,13 +70,10 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "fileCompareSession",
     "fileHistoryTabs",
     "activeGitHistoryTabId",
-    "activeItems",
     "activeParentWorkspace",
     "activePath",
-    "activePlan",
     "activeQueue",
     "activeQueuedHandoffBubble",
-    "activeRateLimits",
     "activeRenamePrompt",
     "activeTab",
     "agentTaskScrollRequest",
@@ -74,8 +81,6 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "activeThreadId",
     "activeThreadIdForModeRef",
     "activeThreadIdRef",
-    "activeTurnId",
-    "activeTokenUsage",
     "activeWorkspace",
     "activeWorkspaceId",
     "activeWorkspaceIdRef",
@@ -101,7 +106,6 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "branches",
     "canFuseActiveQueue",
     "fuseDisabledReasonKey",
-    "canInterrupt",
     "cancelClonePrompt",
     "cancelWorktreePrompt",
     "centerMode",
@@ -407,8 +411,6 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "isPhone",
     "isPlanMode",
     "isPlanPanelDismissed",
-    "isProcessing",
-    "isReviewing",
     "isSearchPaletteOpen",
   ],
   layoutContext: [
@@ -665,7 +667,6 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "historyLoadingProgressByThreadId",
     "historyRestoredAtMsByThread",
     "threadsByWorkspace",
-    "timelinePlan",
     "tokenUsageByThread",
     "toggleCompletionEmailIntent",
     "triggerAutoThreadTitle",
@@ -773,6 +774,39 @@ export function flattenSelectedAppShellDomainContexts<
   domainNames: readonly TDomainName[],
 ): AppShellLegacyFlatContext {
   return Object.assign({}, ...domainNames.map((name) => contexts[name]));
+}
+
+/**
+ * 按 domain 对象身份缓存 flatten 结果。
+ * 当 reuseStableAppShellDomainContexts 保住未变 domain 引用时，
+ * flatten 不再每帧分配新 bag（层 4 协调/effect 输入更稳）。
+ */
+export type DomainFlattenIdentityCache = {
+  domainValues: readonly unknown[] | null;
+  flattened: AppShellLegacyFlatContext | null;
+};
+
+export function flattenSelectedAppShellDomainContextsMemoized<
+  TDomainName extends AppShellDomainContextName,
+>(
+  contexts: AppShellDomainContextSelection<TDomainName>,
+  domainNames: readonly TDomainName[],
+  cache: DomainFlattenIdentityCache,
+): AppShellLegacyFlatContext {
+  const domainValues = domainNames.map((name) => contexts[name]);
+  const previous = cache.domainValues;
+  if (
+    previous &&
+    previous.length === domainValues.length &&
+    previous.every((value, index) => Object.is(value, domainValues[index])) &&
+    cache.flattened
+  ) {
+    return cache.flattened;
+  }
+  const flattened = Object.assign({}, ...domainValues) as AppShellLegacyFlatContext;
+  cache.domainValues = domainValues;
+  cache.flattened = flattened;
+  return flattened;
 }
 
 export function adaptAppShellLegacyFlatContext<TBoundary extends object>(

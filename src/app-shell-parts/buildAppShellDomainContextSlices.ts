@@ -6,15 +6,35 @@ import type { AppShellDomainContextValue } from "./appShellDomainContexts";
  * 必须经这些 builder 进入 defineAppShellDomainContexts。
  */
 
+/**
+ * 会话热路径字段：回合生命周期 / token / plan / activeItems。
+ * 从 workspaceNavigation / settings 大 bag 拆出，避免一次 isProcessing 抖动
+ * 打坏 200+ key 的 shallow equal。
+ */
+export type RuntimeThreadSessionHotFields = {
+  activeItems: unknown;
+  activePlan: unknown;
+  activeRateLimits: unknown;
+  activeTokenUsage: unknown;
+  activeTurnId: unknown;
+  canInterrupt: unknown;
+  isProcessing: unknown;
+  isReviewing: unknown;
+  timelinePlan: unknown;
+};
+
 export function buildRuntimeThreadDomainContextSlice(input: {
   legacyDefaults: AppShellDomainContextValue;
   runtimeActions: AppShellDomainContextValue;
   runtimeThreadBoundary: unknown;
+  /** S4 bag-split PR-1：高 churn 会话投影 */
+  sessionHot?: RuntimeThreadSessionHotFields;
 }): AppShellDomainContextValue {
   return {
     ...input.legacyDefaults,
     ...input.runtimeActions,
     runtimeThreadBoundary: input.runtimeThreadBoundary,
+    ...(input.sessionHot ?? {}),
   };
 }
 

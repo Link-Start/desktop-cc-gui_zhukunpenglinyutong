@@ -12,8 +12,10 @@ import {
   flattenSelectedAppShellDomainContexts,
   listAppShellDomainContextNames,
   reuseStableAppShellDomainContexts,
+  flattenSelectedAppShellDomainContextsMemoized,
   type AppShellDomainContextName,
   type AppShellDomainContexts,
+  type DomainFlattenIdentityCache,
 } from "./appShellDomainContexts";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
@@ -191,6 +193,18 @@ describe("appShellDomainContexts", () => {
     expect(APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS.runtimeThreadContext).toContain(
       "runtimeThreadBoundary",
     );
+    expect(APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS.runtimeThreadContext).toContain(
+      "isProcessing",
+    );
+    expect(APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS.runtimeThreadContext).toContain(
+      "activeItems",
+    );
+    expect(
+      APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS.workspaceNavigationContext,
+    ).not.toContain("isProcessing");
+    expect(
+      APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS.workspaceNavigationContext,
+    ).not.toContain("activeItems");
     expect(APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS.settingsContext).toContain(
       "sidebarCollapsed",
     );
@@ -526,11 +540,13 @@ describe("appShellDomainContexts", () => {
       );
     }
     expect(renderAppShellSource).toContain(
-      "flattenSelectedAppShellDomainContexts(",
+      "flattenSelectedAppShellDomainContextsMemoized(",
     );
-    expect(sectionsSource).toContain("flattenSelectedAppShellDomainContexts(");
+    expect(sectionsSource).toContain(
+      "flattenSelectedAppShellDomainContextsMemoized(",
+    );
     expect(layoutNodesSource).toContain(
-      "flattenSelectedAppShellDomainContexts(",
+      "flattenSelectedAppShellDomainContextsMemoized(",
     );
     expect(renderAppShellSource).toContain(
       "adaptAppShellLegacyFlatContext<RenderAppShellFlattenedContext>",
@@ -588,7 +604,7 @@ describe("appShellDomainContexts", () => {
     );
 
     const flattenedSpreadIndex = adaptCallBody.indexOf(
-      "...flattenSelectedAppShellDomainContexts(",
+      "...flattenSelectedAppShellDomainContextsMemoized(",
     );
     const searchComposerSpreadIndex = adaptCallBody.indexOf(
       "...ctx.searchAndComposerSection,",
@@ -602,5 +618,73 @@ describe("appShellDomainContexts", () => {
     expect(layoutNodesSpreadIndex).toBeGreaterThan(sectionsSpreadIndex);
     // layoutNodes 之后只允许显式覆盖字段（wrapper 拦截），禁止再出现 context spread
     expect(adaptCallBody.lastIndexOf("...ctx.")).toBe(layoutNodesSpreadIndex);
+  });
+});
+
+describe("flattenSelectedAppShellDomainContextsMemoized", () => {
+  it("reuses flattened bag when domain identities are unchanged", () => {
+    const runtimeThreadContext = { isProcessing: true, activeTurnId: "t1" };
+    const composerContext = { handleSend: () => {} };
+    const contexts = {
+      runtimeThreadContext,
+      workspaceNavigationContext: {},
+      composerContext,
+      layoutContext: {},
+      fileEditorContext: {},
+      settingsContext: {},
+      runtimeContext: {},
+      modelSelectionContext: {},
+      collaborationModeContext: {},
+    };
+    const cache: DomainFlattenIdentityCache = {
+      domainValues: null,
+      flattened: null,
+    };
+    const first = flattenSelectedAppShellDomainContextsMemoized(
+      contexts,
+      ["runtimeThreadContext", "composerContext"],
+      cache,
+    );
+    const second = flattenSelectedAppShellDomainContextsMemoized(
+      contexts,
+      ["runtimeThreadContext", "composerContext"],
+      cache,
+    );
+    expect(second).toBe(first);
+    expect(first.isProcessing).toBe(true);
+  });
+
+  it("rebuilds when a domain identity changes", () => {
+    const cache: DomainFlattenIdentityCache = {
+      domainValues: null,
+      flattened: null,
+    };
+    const base = {
+      runtimeThreadContext: { isProcessing: false },
+      workspaceNavigationContext: {},
+      composerContext: { a: 1 },
+      layoutContext: {},
+      fileEditorContext: {},
+      settingsContext: {},
+      runtimeContext: {},
+      modelSelectionContext: {},
+      collaborationModeContext: {},
+    };
+    const first = flattenSelectedAppShellDomainContextsMemoized(
+      base,
+      ["runtimeThreadContext", "composerContext"],
+      cache,
+    );
+    const next = {
+      ...base,
+      runtimeThreadContext: { isProcessing: true },
+    };
+    const second = flattenSelectedAppShellDomainContextsMemoized(
+      next,
+      ["runtimeThreadContext", "composerContext"],
+      cache,
+    );
+    expect(second).not.toBe(first);
+    expect(second.isProcessing).toBe(true);
   });
 });

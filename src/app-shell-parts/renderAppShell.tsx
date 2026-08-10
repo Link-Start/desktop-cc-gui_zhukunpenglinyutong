@@ -20,8 +20,9 @@ import {
 import { formatShortcutForPlatform } from "../utils/shortcuts";
 import {
   adaptAppShellLegacyFlatContext,
-  flattenSelectedAppShellDomainContexts,
+  flattenSelectedAppShellDomainContextsMemoized,
   type AppShellDomainContextName,
+  type DomainFlattenIdentityCache,
 } from "./appShellDomainContexts";
 import {
   ExtensionsView,
@@ -38,6 +39,7 @@ import type {
 } from "./renderAppShellTypes";
 
 const RENDER_APP_SHELL_DOMAIN_NAMES = [
+  "runtimeThreadContext",
   "workspaceNavigationContext",
   "composerContext",
   "layoutContext",
@@ -47,6 +49,12 @@ const RENDER_APP_SHELL_DOMAIN_NAMES = [
   "modelSelectionContext",
   "collaborationModeContext",
 ] as const satisfies readonly AppShellDomainContextName[];
+
+/** AppShell 单例渲染路径：按 domain 身份复用 flatten bag */
+const renderDomainFlattenCache: DomainFlattenIdentityCache = {
+  domainValues: null,
+  flattened: null,
+};
 
 export function injectSidebarTopbarNode(
   sidebarNode: React.ReactNode,
@@ -80,9 +88,10 @@ export function injectSidebarTopbarNode(
 export function renderAppShell(ctx: RenderAppShellContext) {
   const legacyCtx =
     adaptAppShellLegacyFlatContext<RenderAppShellFlattenedContext>({
-      ...flattenSelectedAppShellDomainContexts(
+      ...flattenSelectedAppShellDomainContextsMemoized(
         ctx.appShellDomainContexts,
         RENDER_APP_SHELL_DOMAIN_NAMES,
+        renderDomainFlattenCache,
       ),
       ...ctx.searchAndComposerSection,
       ...ctx.sections,

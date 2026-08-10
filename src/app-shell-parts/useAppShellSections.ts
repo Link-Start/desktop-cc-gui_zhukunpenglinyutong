@@ -35,8 +35,9 @@ import { useAppShellKanbanComposerSection } from "./useAppShellKanbanComposerSec
 import { useAppShellKanbanExecutionSection } from "./useAppShellKanbanExecutionSection";
 import {
   adaptAppShellLegacyFlatContext,
-  flattenSelectedAppShellDomainContexts,
+  flattenSelectedAppShellDomainContextsMemoized,
   type AppShellDomainContextName,
+  type DomainFlattenIdentityCache,
 } from "./appShellDomainContexts";
 import type {
   UseAppShellSectionsContext,
@@ -57,6 +58,7 @@ export {
 } from "./useAppShellSections.kanbanHelpers";
 
 const APP_SHELL_SECTIONS_DOMAIN_NAMES = [
+  "runtimeThreadContext",
   "workspaceNavigationContext",
   "composerContext",
   "layoutContext",
@@ -67,20 +69,19 @@ const APP_SHELL_SECTIONS_DOMAIN_NAMES = [
   "collaborationModeContext",
 ] as const satisfies readonly AppShellDomainContextName[];
 
-function flattenAppShellSectionsContext(
-  input: UseAppShellSectionsInput,
-): UseAppShellSectionsContext {
-  return adaptAppShellLegacyFlatContext<UseAppShellSectionsContext>({
-    ...flattenSelectedAppShellDomainContexts(
+export function useAppShellSections(input: UseAppShellSectionsInput) {
+  const domainFlattenCacheRef = useRef<DomainFlattenIdentityCache>({
+    domainValues: null,
+    flattened: null,
+  });
+  const ctx = adaptAppShellLegacyFlatContext<UseAppShellSectionsContext>({
+    ...flattenSelectedAppShellDomainContextsMemoized(
       input.appShellDomainContexts,
       APP_SHELL_SECTIONS_DOMAIN_NAMES,
+      domainFlattenCacheRef.current,
     ),
     ...input.searchAndComposerSection,
   });
-}
-
-export function useAppShellSections(input: UseAppShellSectionsInput) {
-  const ctx = flattenAppShellSectionsContext(input);
   const {
     activeWorkspace,
     workspaces,
