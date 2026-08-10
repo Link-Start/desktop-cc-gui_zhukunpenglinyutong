@@ -759,3 +759,36 @@ e0ddd9e99 的零 CSS 写入修复了 Windows Blink compositor 阻塞, 但导致 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 1369: 记忆匹配态 logo 与 1s 最短展示
+
+**Date**: 2026-08-10
+**Task**: 记忆匹配态 logo 与 1s 最短展示
+**Branch**: `bump-version-0.8.7`
+
+### Summary
+
+匹配 UI 改用项目 logo（assets/icon.png）+ 呼吸动画；PICK_MATCH_MIN_DISPLAY_MS=1000；相关单测已同步。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `30bb1fe62` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
