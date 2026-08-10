@@ -1398,7 +1398,7 @@ function ComposerImpl({
             forceMemoryPickComposerModeFromMenu(
               activeWorkspaceId,
               activeThreadId,
-              normalized === "single" ? "pick" : normalized,
+              normalized,
             );
           },
         );

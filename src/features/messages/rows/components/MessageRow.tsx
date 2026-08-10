@@ -1183,11 +1183,14 @@ export const MessageRow = memo(function MessageRow({
                   void import(
                     "../../../project-memory/services/projectMemoryFacade",
                   )
-                    .then(({ projectMemoryFacade }) =>
-                      projectMemoryFacade
-                        .get(record.memoryId, workspaceId ?? undefined)
-                        .catch(() => null),
-                    )
+                    .then(({ projectMemoryFacade }) => {
+                      if (!workspaceId) {
+                        return null;
+                      }
+                      return projectMemoryFacade
+                        .get(record.memoryId, workspaceId)
+                        .catch(() => null);
+                    })
                     .then((full) => {
                       setMemoryRecordDetail((prev) => {
                         if (!prev || prev.memoryId !== record.memoryId) {

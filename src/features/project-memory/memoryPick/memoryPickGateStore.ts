@@ -3,7 +3,6 @@ import {
   selectTopKIds,
 } from "./memoryPickPolicy";
 import type {
-  MemoryPickCandidate,
   MemoryPickComposerMode,
   MemoryPickGateUiState,
   MemoryPickResolution,

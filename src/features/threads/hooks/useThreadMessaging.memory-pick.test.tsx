@@ -134,7 +134,7 @@ function buildHook() {
       interruptedThreadsRef: { current: new Map() },
       dispatch,
       getCustomName: vi.fn(),
-      getThreadEngine: vi.fn(() => "codex"),
+      getThreadEngine: vi.fn(() => "codex" as const),
       markProcessing: vi.fn(),
       markReviewing: vi.fn(),
       setActiveTurnId: vi.fn(),

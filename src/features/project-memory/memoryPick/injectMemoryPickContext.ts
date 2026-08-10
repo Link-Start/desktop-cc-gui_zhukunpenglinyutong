@@ -27,7 +27,7 @@ export function buildMemoryPickPreviewText(
   const scoreOf = (id: string): number | undefined => {
     if (!scoresById) return undefined;
     if (scoresById instanceof Map) return scoresById.get(id);
-    return scoresById[id];
+    return (scoresById as Record<string, number>)[id];
   };
   // 语义转接：强调「为本轮提问参考」，避免「已发送记忆当任务」口吻
   const header =
