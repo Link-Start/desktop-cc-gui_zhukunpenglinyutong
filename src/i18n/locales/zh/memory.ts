@@ -197,7 +197,9 @@ const memory = {
     detail: "详情",
     count: {
       empty: "候选 0 条",
-      always: "整轮自动 · 已选 {{n}} · {{sec}}s 后自动确认 · 可改勾选",
+      always: "整轮自动 · 已选 {{n}} · 可改勾选",
+      alwaysCountdown:
+        "整轮自动 · 已选 {{n}} · {{sec}}s 后自动确认 · 可改勾选",
       pick: "已选 {{n}} · 默认全不选",
     },
     strategyTitle: "策略",

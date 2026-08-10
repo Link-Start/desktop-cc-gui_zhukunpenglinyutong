@@ -57,6 +57,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   __resetMemoryPickGateStoreForTests();
+  vi.useRealTimers();
 });
 
 describe("MemoryPickGate", () => {
@@ -197,6 +198,129 @@ describe("MemoryPickGate", () => {
       action: "skip",
       mode: "pick",
     });
+  });
+
+  /** 假时钟下推进到 awaiting（含匹配最短展示 1s） */
+  async function flushToAwaitingChoice() {
+    await act(async () => {
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(1100);
+      await Promise.resolve();
+    });
+  }
+
+  it("always mode on open starts auto-confirm countdown", async () => {
+    vi.useFakeTimers();
+    const resolution = openMemoryPickGate({
+      workspaceId: "ws",
+      threadId: "th-auto-open",
+      queryText: "q",
+      mode: "always",
+      firstPick: false,
+      retrieve: async () => ({
+        candidates: [
+          candidate("a", 0.9),
+          candidate("b", 0.8),
+          candidate("c", 0.7),
+        ],
+        error: null,
+      }),
+    });
+
+    render(<MemoryPickGate workspaceId="ws" threadId="th-auto-open" />);
+    await flushToAwaitingChoice();
+
+    expect(screen.getByRole("button", { name: "取消自动确认" })).toBeTruthy();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(8500);
+    });
+    await expect(resolution).resolves.toMatchObject({
+      action: "confirm",
+      mode: "always",
+    });
+  });
+
+  it("switching pick→always mid-gate does not start auto-confirm", async () => {
+    vi.useFakeTimers();
+    void openMemoryPickGate({
+      workspaceId: "ws",
+      threadId: "th-switch-no-auto",
+      queryText: "q",
+      mode: "pick",
+      firstPick: false,
+      retrieve: async () => ({
+        candidates: [
+          candidate("a", 0.9),
+          candidate("b", 0.8),
+          candidate("c", 0.7),
+        ],
+        error: null,
+      }),
+    });
+
+    render(<MemoryPickGate workspaceId="ws" threadId="th-switch-no-auto" />);
+    await flushToAwaitingChoice();
+    expect(screen.getByText("a")).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole("radio", { name: /整轮开启自动top\(n\)记忆注入/ }),
+    );
+    expect(getMemoryPickGateSnapshot("ws", "th-switch-no-auto")?.mode).toBe(
+      "always",
+    );
+
+    // 中途切换不得出现「取消自动确认」
+    expect(screen.queryByRole("button", { name: "取消自动确认" })).toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9000);
+    });
+
+    expect(screen.queryByRole("button", { name: "取消自动确认" })).toBeNull();
+    expect(getMemoryPickGateSnapshot("ws", "th-switch-no-auto")?.phase).toBe(
+      "awaiting-choice",
+    );
+  });
+
+  it("user interaction interrupts auto-confirm and does not restart", async () => {
+    vi.useFakeTimers();
+    const resolution = openMemoryPickGate({
+      workspaceId: "ws",
+      threadId: "th-interrupt",
+      queryText: "q",
+      mode: "always",
+      firstPick: false,
+      retrieve: async () => ({
+        candidates: [
+          candidate("a", 0.9),
+          candidate("b", 0.8),
+          candidate("c", 0.7),
+        ],
+        error: null,
+      }),
+    });
+
+    render(<MemoryPickGate workspaceId="ws" threadId="th-interrupt" />);
+    await flushToAwaitingChoice();
+    expect(screen.getByRole("button", { name: "取消自动确认" })).toBeTruthy();
+
+    // 勾选交互打断
+    const boxes = screen.getAllByRole("checkbox");
+    fireEvent.click(boxes[0]!);
+    expect(screen.queryByRole("button", { name: "取消自动确认" })).toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9000);
+    });
+
+    // 仍停留在挑选态，未自动 confirm
+    expect(getMemoryPickGateSnapshot("ws", "th-interrupt")?.phase).toBe(
+      "awaiting-choice",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "确认并发送" }));
+    await expect(resolution).resolves.toMatchObject({ action: "confirm" });
   });
 
   it("matching phase is compact: no strategy rail or confirm buttons", async () => {

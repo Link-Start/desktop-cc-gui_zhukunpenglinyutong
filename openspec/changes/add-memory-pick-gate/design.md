@@ -1,7 +1,7 @@
 # Memory Pick Gate · Technical Design
 
 > **Change**: `add-memory-pick-gate`  
-> **Status**: **Phase-1 ready for commit**（2026-08-10 · 工作区代码二次校准）  
+> **Status**: **Phase-1 ready for commit**（2026-08-10 · 自动确认 arm/interrupt 与顶栏 UI 校准）  
 > **UI 定稿**: `ux.md` · 金样 `docs/prototypes/memory-pick-gate-ui-variants.html`  
 > **范围入口**: `proposal.md`  
 > **校准说明**: §1 / §3.2 / §4.4 / §5 / §6 / §7 / §10 / §17–§23 以当前实现为唯一事实源。
@@ -36,7 +36,7 @@
 | 详情 Dialog | **portal → `document.body`**；仅详情 Markdown（无摘要分区）；无 header 关闭 icon |
 | Composer | `off \| pick \| always`；`single` → `pick`；幕布切模式 **emit 同步菜单** |
 | 侧栏标题 | `previewThreadName` / `stripInjectedProjectMemoryBlock` 含 `-pack` |
-| 常量 | `ALWAYS_TOP_K=3`（默认预勾）、`ALWAYS_AUTO_CONFIRM_MS=8000`、`PICK_MATCH_MIN_DISPLAY_MS=550` |
+| 常量 | `ALWAYS_TOP_K=3`（默认预勾）、`ALWAYS_AUTO_CONFIRM_MS=8000`、`PICK_MATCH_MIN_DISPLAY_MS=1000` |
 
 ### 1.2 问题（背景）
 
@@ -44,7 +44,7 @@
 
 ### 1.3 解法
 
-发送前 **Pick Gate**：本地检索 → 幕布确认（always = 按 preferred count 预勾 + 可改数量 + 8s 读秒自动确认）→ 再真正 send。  
+发送前 **Pick Gate**：本地检索 → 幕布确认（always = 按 preferred count 预勾 + 可改数量；**仅闸门以 always 进入 awaiting 时** 8s 读秒自动确认）→ 再真正 send。  
 **禁止** off 且无手动/闸门时静默注入。
 
 ---
@@ -176,7 +176,7 @@ idle ──pressSend──► retrieving ──has candidates──► awaiting-
 | 4 | 队列自动 follow-up | 否 | 按队列策略（默认 0 额外 pick） |
 | 5 | `firstPickRequired` 且有记忆 | **是（pick 手勾）** | 用户选择 |
 | 6 | `composerMode=pick` 且未 dismissed | 是（有候选时） | 用户选择 |
-| 7 | `composerMode=always` 且未 dismissed | **是（预览 UI）** | 按 preferred count 预勾 + 可改 + 读秒；见 §4.4 |
+| 7 | `composerMode=always` 且未 dismissed | **是（预览 UI）** | 按 preferred count 预勾 + 可改；以 always 进入 awaiting 才读秒；见 §4.4 |
 | 8 | `composerMode=off` 且非 firstPick | 否 | 0（`@@` 仍可） |
 | 9 | 检索空 | 否（已进 retrieving） | 0 直发 |
 
@@ -186,11 +186,16 @@ idle ──pressSend──► retrieving ──has candidates──► awaiting-
 
 1. **always 且非 firstPick**：`show-ui` / `always-mode` → matching → awaiting-choice。  
 2. **预勾**：`selectTopKIds(candidates, resolveAlwaysPrefillCount(alwaysPreferredCount))`；默认 `ALWAYS_TOP_K=3`。  
-3. **可改**：checkbox 自由增减；详情 Dialog 可「勾选本条并关闭」。手改勾选会**取消读秒**。  
-4. **读秒**：`ALWAYS_AUTO_CONFIRM_MS=8000`；列表下方 count 行实时 `Ns 后自动确认`；底栏确认文案同步读秒；可「取消自动确认」。  
-5. **记住数量**：confirm 时 `setMemoryPickAlwaysPreferredCount(selectedIds.length)`；下轮按相同条数按相关分预勾。  
-6. **firstPick**：偏好 always 时第一次仍走 **pick 手勾**；完成后 `firstPickRequired=false`。  
-7. **空/超时/失败**：auto-skip 0 注入。
+3. **可改**：checkbox 自由增减；详情 Dialog 可「勾选本条并关闭」。  
+4. **读秒武装（arm）**：`ALWAYS_AUTO_CONFIRM_MS=8000`；**仅当进入 `awaiting-choice` 瞬间 `mode` 已是 always** 才武装并启动读秒。  
+   - 闸门内 **中途** pick→always：只切换策略/预勾 UI，**不**启动读秒。  
+   - count 文案：`count.always`（无读秒）/ `count.alwaysCountdown`（`{{n}}` + `{{sec}}`）。  
+   - 确认钮底边进度条 + 「取消自动确认」；顶栏 count 行绿色 `is-countdown`。  
+5. **打断（interrupt）**：本轮闸门内任意用户操作默认打断读秒，且**本轮不再重启**（勾选、详情、取消自动、切 mode、skip/dismiss/确认等）。  
+   - 实现：`MemoryPickGate` 内 `autoConfirmArmedRef` + `autoConfirmInterruptedRef` + `autoConfirmEpoch`；effect **不**依赖整份 `gate`（避免勾选变更误重启）。  
+6. **记住数量**：confirm 时 `setMemoryPickAlwaysPreferredCount(selectedIds.length)`；下轮按相同条数按相关分预勾。  
+7. **firstPick**：偏好 always 时第一次仍走 **pick 手勾**；完成后 `firstPickRequired=false`。  
+8. **空/超时/失败**：auto-skip 0 注入。
 
 ### 4.5 时序铁律
 
@@ -206,7 +211,7 @@ idle ──pressSend──► retrieving ──has candidates──► awaiting-
 | 模式 id | 用户文案（zh 示意） | 行为 | 列表 |
 |---------|---------------------|------|------|
 | `pick` | 本轮挑选记忆注入 | 手勾；默认全不选；仅本次 | 可勾；行高固定 36px |
-| `always` | 整轮开启自动 top(n) 记忆注入 | session 每轮预勾 n 条（可改 n）+ 读秒 | 可勾；TOP 徽章仅为排序提示 |
+| `always` | 整轮开启自动 top(n) 记忆注入 | session 每轮预勾 n 条（可改 n）；**以 always 打开闸门时**才读秒 | 可勾；TOP 徽章仅为排序提示 |
 | `dismissed` | 本 session 不再提示 · 整轮关闭记忆注入 | 本轮 0 + 本 session 不再弹 | 无 |
 
 **删除**
@@ -228,7 +233,7 @@ idle ──pressSend──► retrieving ──has candidates──► awaiting-
 - 闸门内 `setMode(pick|always)` → `setMemoryPickComposerMode` + `emitMemoryPickComposerMode`。  
 - Composer 监听 `ccgui:memory-pick-composer-mode`，按 workspace/thread 过滤后更新菜单勾选。
 
-> 旧 always = 每轮 Scout 静默注入。新 always = 每轮 UI + 预勾 n（可改）+ 读秒，first 次可强制手勾。
+> 旧 always = 每轮 Scout 静默注入。新 always = 每轮 UI + 预勾 n（可改）+ 以 always 进入 awaiting 才读秒，first 次可强制手勾。
 
 **底栏（icon + 文案）**
 
@@ -344,7 +349,8 @@ turn-group
 - 无厚外框；hairline 分隔。  
 - 列表行高 **固定 36px**；`align-content: start`（条目少不撑开）。  
 - 底栏：**icon + 文案** 文字操作（Send / SkipForward / BellOff），去圆角填充按钮。  
-- always 读秒：列表下方 count 行绿色高亮实时 `Ns`。  
+- always 读秒：顶栏 count 行绿色高亮实时 `Ns`（`count.alwaysCountdown`）；仅 arm 后展示。  
+- 顶栏强制单行 + ellipsis；策略菜单与操作区虚线框。  
 - 详情 Dialog：portal 全屏遮罩 `z-index: 10050`；**仅详情 Markdown**（无摘要 section）；footer 关闭 + 勾选本条。  
 - 行背景：仅 **已勾选** 高亮（pick accent / always green）；TOP 徽章不刷底。
 
@@ -534,7 +540,8 @@ turn-group
 | A4 | skip | 0 注入；first-pick 后固化 pick | ✅ |
 | A5 | dismiss | 0 + session 静音 | ✅ 内存 |
 | A6 | firstPick | 首次强制 pick UI | ✅ |
-| A7 | always | 预勾 n（默 3，可改）+ 读秒 + 记住 n | ✅ |
+| A7 | always | 预勾 n（默 3，可改）+ 以 always 进入 awaiting 才读秒 + 交互打断本轮不重启 + 记住 n | ✅ |
+| A7b | always 中途切 | pick→always 不启动读秒 | ✅ |
 | A8 | 空检索 | auto-skip | ✅ |
 | A9 | 超时 | 0 注入 | ✅ |
 | A10 | Shared / Collab | 同入口 | ✅ |

@@ -19,7 +19,7 @@
 4. **新 session 首次**（workspace 有记忆时）强制走本轮挑选一次。
 5. 注入 `source="memory-pick"`；与 `manual-selection` id 去重。
 6. UI：**C · 列表优先 · 窄策略轨**；详情 Dialog portal + 仅详情 Markdown；gate 与主消息列同宽（750px）。
-7. always：**每轮 matching + 预勾 n（可改）+ 8s 读秒自动确认**（可取消）；**不锁死勾选**。
+7. always：**每轮 matching + 预勾 n（可改）**；**仅以 always 进入 awaiting 时** 8s 读秒自动确认（可取消；任意交互打断后本轮不重启）；**不锁死勾选**。
 
 ### 边界
 
@@ -83,7 +83,7 @@
 2. pick 默认 0 勾；确认 k 条 → pack source=memory-pick。
 3. skip = 0 注入；dismiss = session 静音 + 本轮 0。
 4. 新 session 首次（有记忆）强制 pick 一次。
-5. always：按 n 预勾（默 3，可改）；读秒 8s 可取消；确认后下轮同 n。
+5. always：按 n 预勾（默 3，可改）；以 always 进入 awaiting 才读秒 8s（可取消；交互打断本轮不重启）；确认后下轮同 n。
 6. 空/超时：auto-skip 不卡死。
 7. Native / Shared / Collab 首段同入口。
 8. UI：无厚框；36px 行；icon 底栏；详情 portal+Markdown（无摘要分区）。

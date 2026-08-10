@@ -206,7 +206,8 @@ const memory = {
     detail: "Detail",
     count: {
       empty: "0 candidates",
-      always:
+      always: "Always-on · selected {{n}} · adjustable",
+      alwaysCountdown:
         "Always-on · selected {{n}} · auto-confirm in {{sec}}s · adjustable",
       pick: "Selected {{n}} · none by default",
     },

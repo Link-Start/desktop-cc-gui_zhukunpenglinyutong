@@ -40,19 +40,40 @@ export function MemoryPickGate({ workspaceId, threadId }: MemoryPickGateProps) {
     confirm,
     skip,
     dismiss,
-    cancel,
   } = useMemoryPickGate(workspaceId, threadId);
 
   const [detail, setDetail] = useState<MemoryPickCandidate | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  /** 一直开启：预览后倒计时自动确认（可取消） */
+  /** 一直开启：预览后倒计时自动确认（可取消）；null = 未在倒计时 */
   const [autoConfirmSec, setAutoConfirmSec] = useState<number | null>(null);
-  const autoConfirmCancelledRef = useRef(false);
+  /**
+   * 本轮闸门是否已打断自动确认。
+   * 任意用户交互后置 true，本轮不再重启倒计时。
+   */
+  const autoConfirmInterruptedRef = useRef(false);
+  /**
+   * 仅当「进入 awaiting 时 mode 已是 always」才武装自动确认。
+   * 中途 pick→always 不武装（只改策略，不立刻倒计时）。
+   */
+  const autoConfirmArmedRef = useRef(false);
+  /** 跟踪上一次 phase，用于识别「进入 awaiting」瞬间 */
+  const prevPhaseRef = useRef<string | null>(null);
+  /**
+   * 打断代数：interrupt 时 +1，驱动 countdown effect cleanup，
+   * 避免 interval 在打断后仍空转。
+   */
+  const [autoConfirmEpoch, setAutoConfirmEpoch] = useState(0);
   const confirmRef = useRef(confirm);
   confirmRef.current = confirm;
 
   useEffect(() => {
-    if (!gate) setDetail(null);
+    if (!gate) {
+      setDetail(null);
+      autoConfirmInterruptedRef.current = false;
+      autoConfirmArmedRef.current = false;
+      prevPhaseRef.current = null;
+      setAutoConfirmSec(null);
+    }
   }, [gate]);
 
   const selectedSet = useMemo(
@@ -68,19 +89,65 @@ export function MemoryPickGate({ workspaceId, threadId }: MemoryPickGateProps) {
     isAwaiting && gate && gate.candidates.length === 0,
   );
 
-  // 一直开启：进入 awaiting 且有候选后启动 8s 自动确认
+  /** 本轮任意用户操作：打断自动确认，且本轮不再重启 */
+  const interruptAutoConfirm = () => {
+    autoConfirmInterruptedRef.current = true;
+    autoConfirmArmedRef.current = false;
+    setAutoConfirmSec(null);
+    setAutoConfirmEpoch((n) => n + 1);
+  };
+
+  // 进入 awaiting 瞬间：仅 mode 已是 always 时武装；闸门关闭时复位
   useEffect(() => {
-    if (!gate || !isAlways || !isAwaiting || isEmpty || isFlushing) {
+    if (!gate) {
+      prevPhaseRef.current = null;
+      return;
+    }
+    const phase = gate.phase;
+    const prev = prevPhaseRef.current;
+    prevPhaseRef.current = phase;
+
+    if (phase === "awaiting-choice" && prev !== "awaiting-choice") {
+      // 新一轮 awaiting：复位打断标志，并按进入时 mode 决定是否武装
+      autoConfirmInterruptedRef.current = false;
+      const shouldArm = gate.mode === "always" && gate.candidates.length > 0;
+      autoConfirmArmedRef.current = shouldArm;
+      if (shouldArm) {
+        // 触发 countdown effect 启动
+        setAutoConfirmEpoch((n) => n + 1);
+      } else {
+        setAutoConfirmSec(null);
+      }
+    }
+  }, [gate, gate?.phase, gate?.mode, gate?.candidates.length]);
+
+  // 武装且未打断时跑 8s 倒计时；依赖 epoch + phase，不因勾选变更重启
+  useEffect(() => {
+    if (
+      !gate ||
+      !isAlways ||
+      !isAwaiting ||
+      isEmpty ||
+      isFlushing ||
+      !autoConfirmArmedRef.current ||
+      autoConfirmInterruptedRef.current
+    ) {
       setAutoConfirmSec(null);
       return undefined;
     }
-    autoConfirmCancelledRef.current = false;
+
     const deadline = Date.now() + ALWAYS_AUTO_CONFIRM_MS;
     const tick = () => {
-      if (autoConfirmCancelledRef.current) return;
+      if (
+        autoConfirmInterruptedRef.current ||
+        !autoConfirmArmedRef.current
+      ) {
+        return;
+      }
       const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
       setAutoConfirmSec(left);
       if (left <= 0) {
+        autoConfirmArmedRef.current = false;
         confirmRef.current();
       }
     };
@@ -89,7 +156,15 @@ export function MemoryPickGate({ workspaceId, threadId }: MemoryPickGateProps) {
     return () => {
       window.clearInterval(id);
     };
-  }, [gate?.phase, gate?.mode, gate?.candidates.length, isAlways, isAwaiting, isEmpty, isFlushing, gate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- epoch 表达 interrupt/arm；避免 selectedIds 误重启
+  }, [
+    isAlways,
+    isAwaiting,
+    isEmpty,
+    isFlushing,
+    gate?.phase,
+    autoConfirmEpoch,
+  ]);
 
   if (!gate) return null;
 
@@ -98,6 +173,7 @@ export function MemoryPickGate({ workspaceId, threadId }: MemoryPickGateProps) {
     isAlways && isAwaiting && !isEmpty && autoConfirmSec !== null;
 
   const openDetail = async (candidate: MemoryPickCandidate) => {
+    interruptAutoConfirm();
     setDetail(candidate);
     if (candidate.rawItem || candidate.detail) return;
     setDetailLoading(true);
@@ -120,13 +196,15 @@ export function MemoryPickGate({ workspaceId, threadId }: MemoryPickGateProps) {
     }
   };
 
-  /** 手改勾选时取消 always 自动确认，避免误提交 */
+  /** 手改勾选时打断自动确认，避免误提交 */
   const handleToggleSelected = (memoryId: string) => {
-    if (autoConfirmActive) {
-      autoConfirmCancelledRef.current = true;
-      setAutoConfirmSec(null);
-    }
+    interruptAutoConfirm();
     toggleSelected(memoryId);
+  };
+
+  const handleSetMode = (mode: "pick" | "always") => {
+    interruptAutoConfirm();
+    setMode(mode);
   };
 
   const selectFromDetail = () => {
@@ -207,8 +285,7 @@ export function MemoryPickGate({ workspaceId, threadId }: MemoryPickGateProps) {
               className={`memory-pick-gate__action is-primary${autoConfirmActive ? " is-auto-confirm" : ""}`}
               disabled={disabled || (isEmpty && isAlways)}
               onClick={() => {
-                autoConfirmCancelledRef.current = true;
-                setAutoConfirmSec(null);
+                interruptAutoConfirm();
                 confirm();
               }}
               style={
@@ -242,8 +319,7 @@ export function MemoryPickGate({ workspaceId, threadId }: MemoryPickGateProps) {
                 className="memory-pick-gate__action is-warn"
                 disabled={disabled}
                 onClick={() => {
-                  autoConfirmCancelledRef.current = true;
-                  setAutoConfirmSec(null);
+                  interruptAutoConfirm();
                 }}
               >
                 <TimerOff
@@ -264,8 +340,7 @@ export function MemoryPickGate({ workspaceId, threadId }: MemoryPickGateProps) {
               className="memory-pick-gate__action"
               disabled={disabled}
               onClick={() => {
-                autoConfirmCancelledRef.current = true;
-                setAutoConfirmSec(null);
+                interruptAutoConfirm();
                 skip();
               }}
             >
@@ -287,18 +362,37 @@ export function MemoryPickGate({ workspaceId, threadId }: MemoryPickGateProps) {
               autoConfirmActive && autoConfirmSec !== null ? " is-countdown" : ""
             }`}
             aria-live="polite"
+            title={
+              isEmpty
+                ? undefined
+                : isAlways
+                  ? autoConfirmActive && autoConfirmSec !== null
+                    ? t("memoryPick.count.alwaysCountdown", {
+                        defaultValue: `整轮自动 · 已选 ${selectedSet.size} · ${autoConfirmSec}s 后自动确认 · 可改勾选`,
+                        n: selectedSet.size,
+                        sec: autoConfirmSec,
+                      })
+                    : t("memoryPick.count.always", {
+                        defaultValue: `整轮自动 · 已选 ${selectedSet.size} · 可改勾选`,
+                        n: selectedSet.size,
+                      })
+                  : t("memoryPick.count.pick", {
+                      defaultValue: `已选 ${selectedSet.size} · 默认全不选`,
+                      n: selectedSet.size,
+                    })
+            }
           >
             {isEmpty
               ? t("memoryPick.count.empty", { defaultValue: "候选 0 条" })
               : isAlways
                 ? autoConfirmActive && autoConfirmSec !== null
                   ? t("memoryPick.count.alwaysCountdown", {
-                      defaultValue: `已选 ${selectedSet.size} · ${autoConfirmSec}s 后自动确认`,
+                      defaultValue: `整轮自动 · 已选 ${selectedSet.size} · ${autoConfirmSec}s 后自动确认 · 可改勾选`,
                       n: selectedSet.size,
                       sec: autoConfirmSec,
                     })
                   : t("memoryPick.count.always", {
-                      defaultValue: `已选 ${selectedSet.size} · 可改勾选`,
+                      defaultValue: `整轮自动 · 已选 ${selectedSet.size} · 可改勾选`,
                       n: selectedSet.size,
                     })
                 : t("memoryPick.count.pick", {
@@ -309,13 +403,15 @@ export function MemoryPickGate({ workspaceId, threadId }: MemoryPickGateProps) {
         </div>
         <button
           type="button"
-          className="memory-pick-gate__action is-danger"
+          className="memory-pick-gate__action is-danger memory-pick-gate__dismiss"
           disabled={disabled}
           onClick={() => {
-            autoConfirmCancelledRef.current = true;
-            setAutoConfirmSec(null);
+            interruptAutoConfirm();
             dismiss();
           }}
+          title={t("memoryPick.action.dismiss", {
+            defaultValue: "本 session 不再提示 · 整轮关闭记忆注入",
+          })}
         >
           <BellOff
             size={14}
@@ -463,7 +559,7 @@ export function MemoryPickGate({ workspaceId, threadId }: MemoryPickGateProps) {
               aria-checked={!isAlways}
               className={!isAlways ? "is-on" : undefined}
               disabled={disabled}
-              onClick={() => setMode("pick")}
+              onClick={() => handleSetMode("pick")}
             >
               <ListChecks
                 className="memory-pick-gate__mode-icon"
@@ -495,7 +591,7 @@ export function MemoryPickGate({ workspaceId, threadId }: MemoryPickGateProps) {
               aria-checked={isAlways}
               className={isAlways ? "is-on is-always-mode" : "is-always-mode"}
               disabled={disabled || isEmpty}
-              onClick={() => setMode("always")}
+              onClick={() => handleSetMode("always")}
             >
               <Infinity
                 className="memory-pick-gate__mode-icon"
@@ -621,7 +717,10 @@ export function MemoryPickGate({ workspaceId, threadId }: MemoryPickGateProps) {
                   <button
                     type="button"
                     className="memory-pick-gate__btn"
-                    onClick={() => setDetail(null)}
+                    onClick={() => {
+                      interruptAutoConfirm();
+                      setDetail(null);
+                    }}
                   >
                     {t("memoryPick.detailClose", { defaultValue: "关闭" })}
                   </button>

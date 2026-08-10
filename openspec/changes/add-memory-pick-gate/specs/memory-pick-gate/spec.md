@@ -48,10 +48,24 @@
 - **THEN** 系统 SHALL 展示挑选流（matching 后进入预览）
 - **AND** SHALL 按相关分预勾 n 条（n 默认 3，或为 session 内上次确认的 preferred count）
 - **AND** 用户 SHALL 能自由增减勾选（SHALL NOT 锁定勾选）
-- **AND** MAY 在配置的倒计时（默认约 8s）后自动确认，并在 UI 展示实时读秒
+- **AND** 当闸门进入 awaiting 时 mode 已是 always 时，MAY 在配置的倒计时（默认约 8s）后自动确认，并在 UI 展示实时读秒
 - **AND** 用户 SHALL 能取消自动确认并手动确认或跳过
 - **AND** 用户确认时系统 SHALL 记住本次勾选条数供下轮预勾
 - **AND** SHALL NOT 在无预览 UI 的情况下静默注入
+
+#### Scenario: 中途切换 always 不启动读秒
+
+- **WHEN** 闸门以 pick 进入 awaiting-choice
+- **AND** 用户在闸门内切换到 always
+- **THEN** 系统 SHALL 应用 always 预勾/策略 UI
+- **AND** SHALL NOT 仅因该次切换启动自动确认倒计时
+
+#### Scenario: 用户操作打断读秒且本轮不重启
+
+- **WHEN** always 读秒进行中
+- **AND** 用户进行勾选、打开详情、取消自动确认、切换策略、skip/dismiss 等交互
+- **THEN** 系统 SHALL 立即取消读秒
+- **AND** SHALL NOT 在本轮闸门展示期内再次自动启动读秒
 
 #### Scenario: dismiss 关闭本 session 询问
 

@@ -32,9 +32,9 @@ Research：`docs/research/05-project-memory-pick-gate-pointer.md`
 | 项 | 结论 |
 |----|------|
 | 模式 | pick / always(top n) / dismissed；无 single |
-| always | 每轮 UI；预勾 n（默 3，可改）；读秒 8s；记住 n |
+| always | 每轮 UI；预勾 n（默 3，可改）；**以 always 进入 awaiting 才**读秒 8s（交互打断本轮不重启）；记住 n |
 | 时序 | 用户气泡 → 挑选流 → 模型 |
-| UI | C 布局；36px 行；icon 底栏；详情 portal+Markdown |
+| UI | C 布局；顶栏单行+ellipsis；策略/操作虚线框；详情 portal+Markdown |
 | 标题 | strip `project-memory-pack` |
 | 同步 | 幕布策略 ↔ Composer 菜单 |
 
