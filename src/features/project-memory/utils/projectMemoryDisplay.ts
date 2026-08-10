@@ -86,15 +86,18 @@ export function resolveProjectMemoryCompactSummary(
     | "cleanText"
     | "detail"
     | "userInput"
+    | "assistantResponse"
     | "assistantThinkingSummary"
     | "title"
   >>,
 ) {
+  // 对话轮次：摘要优先带 AI 回复线索，避免列表/候选只剩用户半句
   return (
     firstNonEmpty(
       memory.summary,
-      memory.userInput,
+      memory.assistantResponse,
       memory.assistantThinkingSummary,
+      memory.userInput,
       memory.cleanText,
       memory.detail,
       memory.title,

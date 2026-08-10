@@ -2,6 +2,44 @@
 
 ---
 
+### **2026年8月10日（v0.8.7）**
+
+中文：
+
+这一版将应用升到 **0.8.7**，主线是「发送前可挑记忆、Shared 下崽侧栏不串台」：Native / Shared / Collab 统一接入发送前记忆挑选闸门（pick / always），always 预勾可改且 8s 读秒可取消；Phase-2 统一 Pick/Scout 检索核（lexical + 可选 semantic/hybrid），空结果与注入转接在主幕可感；Shared 子代理按 parent-id 改挂到 shared 会话并在侧栏隐藏下崽，幕布 / Strip 数据源不动。
+
+✨ Features
+- **发送前记忆挑选闸门（Phase-1）**：Native / Shared / Collab 统一 `pick` / `always` 闸门与 memory-pick 注入；always 可改预勾条数并记忆，8s 读秒可取消；详情 Dialog portal + Markdown；底栏 icon 文案、固定行高；侧栏标题剥离 `project-memory-pack`；幕布与 Composer 模式同步
+- **Hybrid 检索与可感注入转接（Phase-2）**：统一 Pick / Scout 检索核（lexical + 可选 semantic/hybrid）；`emptyReason` 走主幕时间线 status 可感；telemetry 白名单禁正文；Pack Instruction 钉死 Primary task 与 UNTRUSTED 参考语义；闸门 / 空结果 UI 中性色与列表高度收口（采集 ABCD 路径零改动）
+- **项目记忆习惯与本地语义（Phase-3）**：session 策略 localStorage 持久化；Composer dismiss 恢复为 pick；设置「项目记忆」规则说明 + 语义模型按需下载到用户主目录 `.ccgui/models/embedding/`（展示本机绝对路径，跨平台）；embed-index 旁路异步索引；用户可关语义强制词面；hybrid 最低门槛与词面满分抬升；匹配最短 1s 冻结
+
+🔧 Improvements
+- 将应用版本号提升到 `0.8.7`（`package.json` / `package-lock.json` / `src-tauri/tauri.conf.json`），与本补丁发版元数据对齐
+
+🐛 Fixes
+- **Shared 子代理 parent 改挂**：隐藏 native owner 后，按引擎无关 lookup（raw / `engine:` 变体）将子代理 parent 改挂到 shared 会话，避免仅 exact 匹配漏挂并升为顶层根；统一 list / Grok / Kimi / live 改挂路径，不扩大 hide、不删子代理行
+- **侧栏隐藏 Shared 下崽**：在 `useThreadRows` 按 parent-id 精准剔除 Shared-owned 子代理（含 raw / `engine:` 与 `shared:` parent）；threads store 保留行供幕布 / Strip / `childSubagentThreads`，不改幕布展示规则
+- **记忆挑选匹配态与 always 读秒**：匹配品牌改用项目 logo 并轻微呼吸动画，最短展示 1s 避免闪断；仅闸门以 always 进入 awaiting 时武装 8s 读秒，任意交互打断后本轮不重启；顶栏单行 ellipsis，策略菜单虚线框
+
+English:
+
+This release moves the app to **0.8.7**. The headline is a pre-send memory pick gate and Shared subagents that stay out of the sidebar tree: Native / Shared / Collab share a pick / always gate before send (always countdown cancellable, preview counts remembered); Phase-2 unifies Pick/Scout retrieval (lexical + optional semantic/hybrid) with timeline-visible empty reasons and safer pack injection; Shared children reparent by parent-id onto the shared session and are filtered from the sidebar while canvas / Strip data stays intact.
+
+✨ Features
+- **Pre-send memory pick gate (Phase-1)**: unified `pick` / `always` gate and memory-pick injection across Native / Shared / Collab; always remembers editable pre-check counts with an 8s cancellable countdown; portal Dialog + Markdown details; icon+label footer, fixed row height; strip `project-memory-pack` from sidebar titles; canvas and Composer modes stay in sync
+- **Hybrid retrieval and explainable injection (Phase-2)**: shared Pick / Scout kernel (lexical + optional semantic/hybrid); `emptyReason` surfaces on the main timeline status lane; telemetry whitelist excludes body text; pack instructions pin Primary task and UNTRUSTED reference semantics; neutral empty-state chrome and list height polish (capture ABCD paths unchanged)
+- **Project memory habits and local semantics (Phase-3)**: persist session policy in localStorage; Composer dismiss restore to pick; Settings “Project Memory” rules + on-demand semantic model download under user-home `.ccgui/models/embedding/` (absolute path per machine); async embed-index side path; optional force-lexical toggle; hybrid min thresholds and full-lexical score floor; match UI min 1s frozen
+
+🔧 Improvements
+- Bump the app version to `0.8.7` across frontend package metadata, the lockfile, and Tauri bundle configuration so this patch ship matches SemVer and packaging metadata
+
+🐛 Fixes
+- **Shared subagent parent reattach**: after native owners are hidden, engine-agnostic lookup (raw / `engine:` variants) reparents children onto the shared session so exact-only matches no longer promote them to top-level roots; list / Grok / Kimi / live reparent paths share the fix without widening hide or deleting child rows
+- **Hide Shared children in the sidebar**: `useThreadRows` drops Shared-owned subagents by parent-id (raw / `engine:` and `shared:` parents); the threads store keeps rows for canvas / Strip / `childSubagentThreads` without changing canvas display rules
+- **Memory-pick match chrome and always countdown**: match state uses the project logo with a light pulse and a 1s minimum display; the 8s always countdown arms only when the gate enters awaiting as always, and any interaction cancels restart for that turn; top bar single-line ellipsis and dashed strategy menu chrome
+
+---
+
 ### **2026年8月10日（v0.8.6）**
 
 中文：

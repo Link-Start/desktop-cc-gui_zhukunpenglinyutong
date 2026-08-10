@@ -165,6 +165,8 @@ const composer = {
     memoryReferenceEnableSingle: "本轮挑选记忆注入",
     memoryReferenceEnablePick: "本轮挑选记忆注入",
     memoryReferenceEnableAlways: "整轮开启自动top(n)记忆注入",
+    memoryReferenceRestore: "恢复记忆参考",
+    memoryReferenceDismissed: "本会话已关闭参考",
     noteCardSelection: "本次已关联便签 {{count}} 条",
     noteCardSelectionHint: "点击 × 可移除，发送后自动清空",
     noteCardRemove: "移除便签：{{title}}",

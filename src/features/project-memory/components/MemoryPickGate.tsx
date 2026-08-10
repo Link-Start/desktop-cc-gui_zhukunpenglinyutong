@@ -25,6 +25,7 @@ import {
 import { emitMemoryPickTelemetry } from "../memoryPick/memoryPickTelemetry";
 import { useMemoryPickGate } from "../memoryPick/useMemoryPickGate";
 import { projectMemoryFacade } from "../services/projectMemoryFacade";
+import { resolveProjectMemoryDetailText } from "../utils/projectMemoryDisplay";
 import "../../../styles/memory-pick-gate.css";
 
 type MemoryPickGateProps = {
@@ -186,21 +187,39 @@ export function MemoryPickGate({ workspaceId, threadId }: MemoryPickGateProps) {
 
   const openDetail = async (candidate: MemoryPickCandidate) => {
     interruptAutoConfirm();
+    // 列表项可能是投影/仅用户输入：先展示摘要，再强制 get 全量（含 AI 回复）
     setDetail(candidate);
-    if (candidate.rawItem || candidate.detail) return;
     setDetailLoading(true);
     try {
       const item = await projectMemoryFacade
         .get(candidate.id, workspaceId)
         .catch(() => null);
       if (item) {
+        const detailText =
+          resolveProjectMemoryDetailText(item).trim() ||
+          item.detail?.trim() ||
+          item.cleanText?.trim() ||
+          item.rawText?.trim() ||
+          candidate.detail?.trim() ||
+          candidate.summary?.trim() ||
+          "";
         setDetail({
           ...candidate,
-          detail:
-            item.detail ?? item.cleanText ?? item.rawText ?? candidate.summary,
+          detail: detailText || candidate.detail,
           rawItem: item,
           title: item.title || candidate.title,
           summary: item.summary || candidate.summary,
+        });
+      } else if (candidate.rawItem) {
+        // get 失败时仍用本地 raw 拼 conversation 详情
+        const detailText =
+          resolveProjectMemoryDetailText(candidate.rawItem).trim() ||
+          candidate.detail?.trim() ||
+          candidate.summary?.trim() ||
+          "";
+        setDetail({
+          ...candidate,
+          detail: detailText || candidate.detail,
         });
       }
     } finally {

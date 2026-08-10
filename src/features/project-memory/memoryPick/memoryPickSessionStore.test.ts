@@ -77,6 +77,17 @@ describe("memoryPickSessionStore", () => {
     expect(getMemoryPickSessionPolicy("ws", "th").dismissed).toBe(false);
   });
 
+  it("restoreMemoryPickFromDismiss sets pick and never always", async () => {
+    const { restoreMemoryPickFromDismiss } = await import("./memoryPickSessionStore");
+    setMemoryPickComposerMode("ws", "th", "always");
+    markMemoryPickSessionDismissed("ws", "th");
+    restoreMemoryPickFromDismiss("ws", "th");
+    const policy = getMemoryPickSessionPolicy("ws", "th");
+    expect(policy.composerMode).toBe("pick");
+    expect(policy.dismissed).toBe(false);
+    expect(policy.firstPickRequired).toBe(false);
+  });
+
   it("menu force off clears firstPick and closes feature (opt-in)", () => {
     setMemoryPickComposerMode("ws", "th", "pick");
     forceMemoryPickComposerModeFromMenu("ws", "th", "off");

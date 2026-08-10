@@ -118,14 +118,36 @@ function emitMemoryPickComposerModeSync(
  * 空结果可感改走主幕时间线（见 dispatchMemoryPickEmptyTimelineNotice），不用全局 toast。
  * 仅消费侧；不碰 capture 时序。
  */
+async function resolvePickSemanticContext(workspaceId: string) {
+  const [{ resolveSemanticProviderForRetrieve }, { loadPersistedEmbeddingIndex }] =
+    await Promise.all([
+      import("../../project-memory/utils/resolveSemanticProviderForRetrieve"),
+      import("../../project-memory/utils/projectMemoryEmbeddingIndexWorker"),
+    ]);
+  const semanticProvider = await resolveSemanticProviderForRetrieve();
+  const indexRecords = semanticProvider
+    ? await loadPersistedEmbeddingIndex(workspaceId)
+    : undefined;
+  return {
+    semanticProvider,
+    indexRecords:
+      indexRecords && indexRecords.length > 0 ? indexRecords : undefined,
+  };
+}
+
 async function retrieveMemoryPickWithObservability(params: {
   workspaceId: string;
   query: string;
 }) {
+  const { semanticProvider, indexRecords } = await resolvePickSemanticContext(
+    params.workspaceId,
+  );
   const result = await retrieveMemoryPickCandidates({
     workspaceId: params.workspaceId,
     query: params.query,
     listFn: projectMemoryFacade.listSummary,
+    semanticProvider,
+    indexRecords,
   });
   const d = result.diagnostics;
   emitMemoryPickTelemetry("memory_pick_retrieve", {
@@ -873,11 +895,15 @@ export function useThreadMessaging({
               }
             }
           } else if (options?.memoryReferenceEnabled === true) {
+            const { semanticProvider } = await resolvePickSemanticContext(
+              workspace.id,
+            );
             const memoryBrief = await withMemoryScoutTimeout(
               scoutProjectMemory({
                 workspaceId: workspace.id,
                 query: visibleUserText,
                 listFn: projectMemoryFacade.listSummary,
+                semanticProvider,
               }),
             );
             modelText = injectMemoryScoutBriefContext({
@@ -1319,11 +1345,14 @@ export function useThreadMessaging({
           },
           hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
         });
+        const { semanticProvider: scoutProvider } =
+          await resolvePickSemanticContext(workspace.id);
         const memoryBrief = await withMemoryScoutTimeout(
           scoutProjectMemory({
             workspaceId: workspace.id,
             query: visibleUserText,
             listFn: projectMemoryFacade.listSummary,
+            semanticProvider: scoutProvider,
           }),
         );
         memoryScoutBrief = memoryBrief;

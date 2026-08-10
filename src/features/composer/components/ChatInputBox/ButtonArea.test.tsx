@@ -411,6 +411,32 @@ describe("ButtonArea custom model storage refresh", () => {
     expect(onSetMemoryReferenceMode).toHaveBeenCalledWith("off");
   });
 
+  it("shows restore entry when dismissed and restores via callback", () => {
+    const onRestoreMemoryReference = vi.fn();
+    render(
+      <ButtonArea
+        currentProvider="codex"
+        models={[]}
+        selectedModel=""
+        hasInputContent
+        onSubmit={vi.fn()}
+        shortcutActions={[]}
+        memoryReferenceMode="pick"
+        memoryReferenceDismissed
+        onSetMemoryReferenceMode={vi.fn()}
+        onRestoreMemoryReference={onRestoreMemoryReference}
+      />,
+    );
+
+    openMemoryReferenceMenu();
+
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "恢复记忆参考" }),
+    );
+
+    expect(onRestoreMemoryReference).toHaveBeenCalled();
+  });
+
   it("keeps the stop action clickable while advisory stream phase changes", () => {
     const onStop = vi.fn();
     const { rerender } = render(

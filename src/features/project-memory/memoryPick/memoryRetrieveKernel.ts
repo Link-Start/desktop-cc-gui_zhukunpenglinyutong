@@ -16,6 +16,7 @@ import type { ProjectMemoryListResult } from "../../../services/tauri";
 import {
   hybridRerankProjectMemories,
   retrieveProjectMemorySemanticCandidates,
+  type ProjectMemoryEmbeddingIndexRecord,
   type ProjectMemoryEmbeddingProvider,
   type ProjectMemoryRetrievalMode,
 } from "../utils/projectMemorySemanticRetrieval";
@@ -117,6 +118,8 @@ export async function retrieveMemoryCandidatesKernel(params: {
   timeoutMs?: number;
   semanticProvider?: ProjectMemoryEmbeddingProvider | null;
   allowTestSemanticProvider?: boolean;
+  /** 持久 embed index；提供时跳过检索路径全量 build */
+  indexRecords?: ProjectMemoryEmbeddingIndexRecord[];
 }): Promise<MemoryPickRetrieveResult> {
   const limit = params.limit ?? PICK_CANDIDATE_LIMIT;
   const timeoutMs = params.timeoutMs ?? PICK_LIST_TIMEOUT_MS;
@@ -229,6 +232,7 @@ export async function retrieveMemoryCandidatesKernel(params: {
         provider,
         allowTestProvider: params.allowTestSemanticProvider,
         topK: limit,
+        indexRecords: params.indexRecords,
       });
 
       if (
@@ -247,11 +251,15 @@ export async function retrieveMemoryCandidatesKernel(params: {
           if (!hasVector) {
             retrievalMode = "lexical";
           }
+          // 展示分已在 scoreCandidate 做词面满分抬升；再滤一层防弱分漏网
           finalCandidates = semanticResult.candidates
+            .filter(
+              (c) =>
+                c.score.lexicalScore >= RELEVANCE_THRESHOLD ||
+                c.score.finalScore >= RELEVANCE_THRESHOLD,
+            )
             .slice(0, limit)
-            .map((c) =>
-              toCandidate(c.memory, c.score.finalScore),
-            );
+            .map((c) => toCandidate(c.memory, c.score.finalScore));
         } else {
           // provider 可用但 0 语义命中：保留 lexical 排序，mode 仍 lexical
           retrievalMode = "lexical";

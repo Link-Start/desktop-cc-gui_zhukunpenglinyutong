@@ -64,7 +64,10 @@ status: active
 - [`research/05-project-memory-pick-gate-pointer.md`](research/05-project-memory-pick-gate-pointer.md)（闸门 + Phase-2 指针）
 - [`research/06-memos-vs-mossx-memory-upgrade-research-2026-08-10.md`](research/06-memos-vs-mossx-memory-upgrade-research-2026-08-10.md)（**MemOS 对照 + Phase-2 匹配/可观测/转接**）
 - Contract：`openspec/specs/project-memory-*/spec.md`
-- Changes：闸门 Phase-1 `openspec/changes/add-memory-pick-gate/` · 检索/可感 Phase-2 `openspec/changes/enhance-memory-pick-retrieval-and-observability/`
+- Changes：  
+  - Phase-1 闸门 `openspec/changes/add-memory-pick-gate/`  
+  - Phase-2 检索/可感 `openspec/changes/enhance-memory-pick-retrieval-and-observability/`  
+  - Phase-3 习惯/真语义 `openspec/changes/enhance-memory-pick-phase3-habit-and-semantic/`  
 - Implementation：`src/features/project-memory/`、`src-tauri/src/project_memory/`
 
 ### Performance 与卡顿

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { normalizeMemoryPickComposerMode } from "./memoryPickTypes";
+import {
+  normalizeMemoryPickComposerMode,
+  PICK_MATCH_MIN_DISPLAY_MS,
+} from "./memoryPickTypes";
 
 describe("normalizeMemoryPickComposerMode", () => {
   it("maps single to pick", () => {
@@ -12,5 +15,11 @@ describe("normalizeMemoryPickComposerMode", () => {
   it("defaults to off", () => {
     expect(normalizeMemoryPickComposerMode(undefined)).toBe("off");
     expect(normalizeMemoryPickComposerMode("nope")).toBe("off");
+  });
+});
+
+describe("PICK_MATCH_MIN_DISPLAY_MS freeze (Phase-3 G5)", () => {
+  it("remains at least 1000ms product floor", () => {
+    expect(PICK_MATCH_MIN_DISPLAY_MS).toBeGreaterThanOrEqual(1000);
   });
 });

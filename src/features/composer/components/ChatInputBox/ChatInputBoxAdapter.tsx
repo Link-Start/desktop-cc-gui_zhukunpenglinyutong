@@ -510,7 +510,9 @@ export interface ChatInputBoxAdapterProps {
   onSelectCollaborationMode?: (id: string | null) => void;
   onCodexQuickCommand?: (command: string) => void | Promise<void>;
   memoryReferenceMode?: MemoryReferenceMode;
+  memoryReferenceDismissed?: boolean;
   onSetMemoryReferenceMode?: (mode: MemoryReferenceMode) => void;
+  onRestoreMemoryReference?: () => void;
 
   // Queue
   queuedMessages?: ComposerQueuedMessage[];
@@ -1057,7 +1059,9 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       onSelectCollaborationMode,
       onCodexQuickCommand,
       memoryReferenceMode,
+      memoryReferenceDismissed,
       onSetMemoryReferenceMode,
+      onRestoreMemoryReference,
       queuedMessages,
       sendReadiness,
       onJumpToRequest,
@@ -2190,7 +2194,9 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         onCodexSpeedModeChange={handleCodexSpeedModeChange}
         onCodexReviewQuickStart={handleCodexReviewQuickStart}
         memoryReferenceMode={memoryReferenceMode}
+        memoryReferenceDismissed={memoryReferenceDismissed}
         onSetMemoryReferenceMode={onSetMemoryReferenceMode}
+        onRestoreMemoryReference={onRestoreMemoryReference}
         messageQueue={messageQueue}
         sendReadiness={sendReadiness}
         onJumpToRequest={onJumpToRequest}

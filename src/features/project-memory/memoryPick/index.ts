@@ -1,6 +1,7 @@
 export * from "./memoryPickTypes";
 export * from "./memoryPickPolicy";
 export * from "./memoryPickSessionStore";
+export * from "./memoryPickSessionPersistence";
 export * from "./memoryPickGateStore";
 export * from "./memoryPickRetrieval";
 export * from "./memoryRetrieveKernel";
