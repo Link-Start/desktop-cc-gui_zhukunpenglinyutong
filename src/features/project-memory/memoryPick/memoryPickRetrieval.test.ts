@@ -5,6 +5,7 @@ import {
   retrieveMemoryPickCandidates,
 } from "./memoryPickRetrieval";
 import type { MemoryPickCandidate } from "./memoryPickTypes";
+import type { ProjectMemoryEmbeddingProvider } from "../utils/projectMemorySemanticRetrieval";
 
 function item(id: string, title: string, summary: string, updatedAt: number) {
   return {
@@ -16,7 +17,7 @@ function item(id: string, title: string, summary: string, updatedAt: number) {
     detail: summary,
     cleanText: summary,
     rawText: summary,
-    tags: [],
+    tags: [] as string[],
     importance: "medium",
     source: "manual",
     fingerprint: id,
@@ -25,8 +26,25 @@ function item(id: string, title: string, summary: string, updatedAt: number) {
   };
 }
 
+function mockProvider(overrides?: {
+  healthStatus?: "available" | "unavailable" | "error";
+  embed?: (text: string) => number[];
+}): ProjectMemoryEmbeddingProvider {
+  return {
+    providerId: "test-provider",
+    modelId: "test-model",
+    dimensions: 4,
+    embeddingVersion: "v1",
+    scope: "test",
+    health: () => ({
+      status: overrides?.healthStatus ?? "available",
+    }),
+    embed: overrides?.embed ?? (() => [1, 0, 0, 0]),
+  };
+}
+
 describe("retrieveMemoryPickCandidates", () => {
-  it("returns related candidates by relevance threshold", async () => {
+  it("returns related candidates by relevance threshold (lexical)", async () => {
     const listFn = vi.fn(async () => ({
       items: [
         item("a", "数据库连接池", "超时与连接上限", 10),
@@ -45,11 +63,13 @@ describe("retrieveMemoryPickCandidates", () => {
     });
 
     expect(result.error).toBeNull();
+    expect(result.diagnostics.emptyReason).toBe("ok");
+    expect(result.diagnostics.retrievalMode).toBe("lexical");
+    expect(result.diagnostics.providerStatus).toBe("skipped");
     expect(result.candidates.length).toBeGreaterThan(0);
     expect(result.candidates.some((c) => c.id === "a" || c.id === "c")).toBe(
       true,
     );
-    // 无关 UI 主题不应因「无正分就全塞」而出现
     expect(listFn).toHaveBeenCalledWith(
       expect.objectContaining({ page: 0, pageSize: 200 }),
     );
@@ -73,6 +93,24 @@ describe("retrieveMemoryPickCandidates", () => {
 
     expect(result.error).toBeNull();
     expect(result.candidates).toEqual([]);
+    // CJK bigram 存在但无命中 → no_match（非 no_query_terms）
+    expect(result.diagnostics.emptyReason).toBe("no_match");
+    expect(result.diagnostics.retrievalMode).toBe("lexical");
+  });
+
+  it("maps no_query_terms when normalize yields empty", async () => {
+    const listFn = vi.fn(async () => ({
+      items: [item("a", "数据库", "x", 1)],
+      total: 1,
+    }));
+    const result = await retrieveMemoryPickCandidates({
+      workspaceId: "ws",
+      query: "   ",
+      listFn: listFn as never,
+    });
+    expect(result.candidates).toEqual([]);
+    expect(result.diagnostics.emptyReason).toBe("no_query_terms");
+    expect(listFn).not.toHaveBeenCalled();
   });
 
   it("returns timeout only when list hangs past budget", async () => {
@@ -90,16 +128,103 @@ describe("retrieveMemoryPickCandidates", () => {
     });
     expect(result.candidates).toEqual([]);
     expect(result.error).toBe("timeout");
+    expect(result.diagnostics.emptyReason).toBe("timeout");
   });
 
   it("returns empty without error when no memories", async () => {
     const listFn = vi.fn(async () => ({ items: [], total: 0 }));
     const result = await retrieveMemoryPickCandidates({
       workspaceId: "ws",
-      query: "x",
+      query: "database timeout",
       listFn: listFn as never,
     });
-    expect(result).toEqual({ candidates: [], error: null });
+    expect(result.candidates).toEqual([]);
+    expect(result.error).toBeNull();
+    expect(result.diagnostics.emptyReason).toBe("no_match");
+  });
+
+  it("reports retrieve_failed as emptyReason error", async () => {
+    const listFn = vi.fn(async () => {
+      throw new Error("backend down");
+    });
+    const result = await retrieveMemoryPickCandidates({
+      workspaceId: "ws",
+      query: "database",
+      listFn: listFn as never,
+    });
+    expect(result.error).toBe("retrieve_failed");
+    expect(result.diagnostics.emptyReason).toBe("error");
+  });
+
+  it("without provider stays lexical even when semantic would help", async () => {
+    const listFn = vi.fn(async () => ({
+      items: [item("a", "连接池调优", "maxIdle", 10)],
+      total: 1,
+    }));
+    const result = await retrieveMemoryPickCandidates({
+      workspaceId: "ws",
+      query: "连接池",
+      listFn: listFn as never,
+    });
+    expect(result.diagnostics.retrievalMode).toBe("lexical");
+    expect(result.diagnostics.providerStatus).toBe("skipped");
+  });
+
+  it("with available mock provider may report hybrid/semantic honestly", async () => {
+    const listFn = vi.fn(async () => ({
+      items: [
+        item("a", "数据库连接池", "超时与连接上限", 10),
+        item("b", "UI 主题", "暗色模式", 20),
+      ],
+      total: 2,
+    }));
+    const provider = mockProvider({
+      embed: (text: string) => {
+        // 查询与 a 同向，与 b 正交
+        if (text.includes("数据库") || text.includes("连接")) {
+          return [1, 0, 0, 0];
+        }
+        if (text.includes("UI") || text.includes("主题")) {
+          return [0, 1, 0, 0];
+        }
+        return [1, 0, 0, 0];
+      },
+    });
+
+    const result = await retrieveMemoryPickCandidates({
+      workspaceId: "ws",
+      query: "数据库 连接",
+      listFn: listFn as never,
+      semanticProvider: provider,
+      allowTestSemanticProvider: true,
+      limit: 10,
+    });
+
+    expect(result.error).toBeNull();
+    // provider 可用时不应伪装；lexical|semantic|hybrid 均可
+    expect(["lexical", "semantic", "hybrid"]).toContain(
+      result.diagnostics.retrievalMode,
+    );
+    if (result.diagnostics.retrievalMode !== "lexical") {
+      expect(result.diagnostics.providerStatus).toBe("available");
+    }
+  });
+
+  it("unavailable provider falls back to lexical without lying", async () => {
+    const listFn = vi.fn(async () => ({
+      items: [item("a", "数据库连接池", "超时", 10)],
+      total: 1,
+    }));
+    const result = await retrieveMemoryPickCandidates({
+      workspaceId: "ws",
+      query: "数据库",
+      listFn: listFn as never,
+      semanticProvider: mockProvider({ healthStatus: "unavailable" }),
+      allowTestSemanticProvider: true,
+    });
+    expect(result.diagnostics.retrievalMode).toBe("lexical");
+    expect(result.diagnostics.providerStatus).toBe("unavailable");
+    expect(result.candidates.length).toBeGreaterThan(0);
   });
 });
 

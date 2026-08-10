@@ -524,9 +524,10 @@ turn-group
 
 | 阶段 | 内容 | 状态 |
 |------|------|------|
-| **Phase-1（本轮提交收口）** | 时序 + C UI + dismiss + firstPick + inject + Composer 三态同步 + always 可改预勾/读秒 + Dialog portal/Markdown + 侧栏 strip pack + 底栏 icon 文案 + 固定行高 + 测试 + 文档 | **代码已齐 · 待 commit** |
-| **P1** | session policy 持久化（含 preferred count）；dismissed 恢复入口；cancel 回填 Composer；toast；埋点 | 未做 |
-| **P2** | collab worker 独立 Pick；不相关反馈；设置页调 n/超时；feature flag | 未做 |
+| **Phase-1（本轮提交收口）** | 时序 + C UI + dismiss + firstPick + inject + Composer 三态同步 + always 可改预勾/读秒 + Dialog portal/Markdown + 侧栏 strip pack + 底栏 icon 文案 + 固定行高 + 测试 + 文档 | **代码已合** |
+| **Phase-2（消费匹配 + 可感 + 转接）** | Pick/Scout hybrid 同核；emptyReason + toast + telemetry；Pack 语义转接（记忆服务原文）；**不改 ABCD 采集** | **调研完成** · 见 `docs/research/06-memos-vs-mossx-memory-upgrade-research-2026-08-10.md`；待独立 OpenSpec change |
+| **P1** | session policy 持久化（含 preferred count）；dismissed 恢复入口；cancel 回填 Composer | 未做 |
+| **P2 更后** | collab worker 独立 Pick；不相关反馈；设置页调 n/超时；feature flag；L2/L3 类分层记忆 | 未做 · 勿照搬 MemOS 全栈 |
 
 ---
 

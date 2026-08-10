@@ -48,6 +48,7 @@ import { Markdown } from "../../components/Markdown";
 import { IntentCanvasContextSummaryCard } from "../../components/context/IntentCanvasContextSummaryCard";
 import { NoteCardContextSummaryCard } from "../../components/context/NoteCardContextSummaryCard";
 import "../../../../styles/memory-pick-gate.css";
+import appLogo from "../../../../assets/icon.png";
 import { MEMORY_CONTEXT_SUMMARY_PREFIX } from "../../../project-memory/utils/memoryMarkers";
 import {
   analyzeStreamingMarkdownComplexity,
@@ -1032,9 +1033,12 @@ export const MessageRow = memo(function MessageRow({
           document.body,
         )
       : null;
+  const isMemoryPickEmptyStatus =
+    resolvedMemorySummary?.source === "memory-pick-empty";
   const isMemoryPickSummary =
-    Boolean(resolvedMemorySummary?.source?.includes("memory-pick")) ||
-    memorySummaryRecords.some((record) => record.source === "memory-pick");
+    !isMemoryPickEmptyStatus &&
+    (Boolean(resolvedMemorySummary?.source?.includes("memory-pick")) ||
+      memorySummaryRecords.some((record) => record.source === "memory-pick"));
   const memoryInjectCount =
     memorySummaryRecords.length > 0
       ? memorySummaryRecords.length
@@ -1081,9 +1085,54 @@ export const MessageRow = memo(function MessageRow({
     .filter(Boolean)
     .join(" · ");
 
+  const memoryPickEmptyStatusLabel = isMemoryPickEmptyStatus
+    ? [
+        resolvedMemorySummary?.lines[0] ||
+          t("memoryPick.toast.title", { defaultValue: "记忆参考" }),
+        resolvedMemorySummary?.lines[1] ||
+          resolvedMemorySummary?.preview ||
+          t("memoryPick.toast.noMatch", {
+            defaultValue: "未找到相关记忆，已按原文发送",
+          }),
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
+
   const memorySummaryNode = resolvedMemorySummary ? (
     <>
-      {isMemoryPickSummary && memorySummaryRecords.length > 0 ? (
+      {isMemoryPickEmptyStatus ? (
+        <div
+          className="memory-pick-empty-status"
+          role="status"
+          aria-label={memoryPickEmptyStatusLabel ?? undefined}
+        >
+          <span className="memory-pick-empty-status-logo" aria-hidden>
+            <img
+              src={appLogo}
+              alt=""
+              className="memory-pick-empty-status-logo-img"
+              draggable={false}
+            />
+          </span>
+          <span className="memory-pick-empty-status-text">
+            <span className="memory-pick-empty-status-brand">
+              {resolvedMemorySummary.lines[0] ||
+                t("memoryPick.toast.title", { defaultValue: "记忆参考" })}
+            </span>
+            <span className="memory-pick-empty-status-sep" aria-hidden>
+              ·
+            </span>
+            <span className="memory-pick-empty-status-msg">
+              {resolvedMemorySummary.lines[1] ||
+                resolvedMemorySummary.preview ||
+                t("memoryPick.toast.noMatch", {
+                  defaultValue: "未找到相关记忆，已按原文发送",
+                })}
+            </span>
+          </span>
+        </div>
+      ) : isMemoryPickSummary && memorySummaryRecords.length > 0 ? (
         <div
           className={`memory-inject-summary${
             memorySummaryExpanded ? " is-expanded" : " is-collapsed"

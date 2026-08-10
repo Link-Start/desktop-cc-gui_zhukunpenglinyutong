@@ -1379,6 +1379,87 @@
   border-color: var(--border-strong, var(--border-subtle));
 }
 
+/* 记忆参考 · 空/超时/失败：logo + 文案；中性黑白/灰，浅深主题 token 适配，无 accent 彩 */
+.memory-pick-empty-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  align-self: stretch;
+  justify-self: stretch;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  margin: 6px 0 10px;
+  padding: 2px 0 4px;
+  border: none;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.memory-pick-empty-status-logo {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  overflow: hidden;
+  flex: 0 0 auto;
+  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+  border: 1px solid var(--border-subtle);
+}
+
+.memory-pick-empty-status-logo-img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.92;
+}
+
+.memory-pick-empty-status-text {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+
+.memory-pick-empty-status-brand {
+  flex: 0 0 auto;
+  font-weight: 650;
+  color: var(--text-secondary);
+}
+
+.memory-pick-empty-status-sep {
+  flex: 0 0 auto;
+  font-weight: 500;
+  color: var(--text-faint);
+}
+
+.memory-pick-empty-status-msg {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+:root[data-theme="light"] .memory-pick-empty-status-logo,
+html[data-theme="light"] .memory-pick-empty-status-logo {
+  background: color-mix(in srgb, var(--text-primary) 5%, #fff);
+  border-color: var(--border-subtle);
+}
+
 /* 记忆挑选 · 已注入摘要
  * 折叠头与「已处理 · 思考 N 次 ›」同构：label + chevron + 全宽 hairline。
  * 色系只走正文语义 token；min-width:0 防止 nowrap 撑破主幕布横向滚动。
@@ -1853,10 +1934,16 @@
 .message-context-stack.is-user > .intent-canvas-context-summary-card,
 .message-context-stack.is-user > .note-card-context-summary-card,
 .message-context-stack.is-user > .message-code-annotation-context,
-.message-context-stack.is-user > .memory-inject-summary {
+.message-context-stack.is-user > .memory-inject-summary,
+.message-context-stack.is-user > .memory-pick-empty-status {
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
+}
+
+.message-context-stack > .memory-pick-empty-status {
+  max-width: 100%;
+  min-width: 0;
 }
 
 .message-code-annotation-context {

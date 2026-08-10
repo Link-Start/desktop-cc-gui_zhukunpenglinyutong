@@ -1,14 +1,17 @@
 /* Memory Pick Gate — C layout；深/浅主题变量编排；与 .messages-full 同列宽 */
 
 .memory-pick-gate {
-  /* 深色默认（与主幕布一致） */
+  /*
+   * 中性色板：仅黑白/灰阶 + 主题 token，无蓝/绿/红强调色。
+   * 关键信息靠字重，不靠彩色。
+   */
   --mpg-ink: var(--text-primary, #f1f5f9);
   --mpg-muted: var(--text-muted, #94a3b8);
   --mpg-faint: var(--text-faint, #64748b);
-  --mpg-accent: var(--text-accent, #60a5fa);
-  --mpg-accent-strong: #93c5fd;
-  --mpg-accent-soft: color-mix(in srgb, #3b82f6 22%, transparent);
-  --mpg-accent-row: color-mix(in srgb, #3b82f6 16%, transparent);
+  --mpg-accent: var(--text-primary, #f1f5f9);
+  --mpg-accent-strong: var(--text-primary, #f8fafc);
+  --mpg-accent-soft: color-mix(in srgb, #fff 8%, transparent);
+  --mpg-accent-row: color-mix(in srgb, #fff 7%, transparent);
   --mpg-border: var(--border-subtle, rgba(148, 163, 184, 0.16));
   --mpg-border-strong: var(--border-strong, rgba(148, 163, 184, 0.28));
   --mpg-elev: color-mix(in srgb, #fff 6%, transparent);
@@ -16,13 +19,14 @@
   --mpg-card: var(--surface-card, #121820);
   --mpg-panel: color-mix(in srgb, #fff 3.5%, transparent);
   --mpg-overlay: color-mix(in srgb, #000 55%, transparent);
-  --mpg-danger: #f87171;
-  --mpg-always: #4ade80;
-  --mpg-always-ink: #bbf7d0;
-  --mpg-always-soft: color-mix(in srgb, #22c55e 16%, transparent);
-  --mpg-always-badge-bg: color-mix(in srgb, #22c55e 22%, transparent);
-  --mpg-warn: #f59e0b;
-  --mpg-warn-soft: color-mix(in srgb, #f59e0b 22%, transparent);
+  /* 危险/always/warn 全部中性化，保留变量名以免大面积改类名 */
+  --mpg-danger: var(--text-primary, #f1f5f9);
+  --mpg-always: var(--text-primary, #f1f5f9);
+  --mpg-always-ink: var(--text-primary, #f8fafc);
+  --mpg-always-soft: color-mix(in srgb, #fff 8%, transparent);
+  --mpg-always-badge-bg: color-mix(in srgb, #fff 10%, transparent);
+  --mpg-warn: var(--text-primary, #f1f5f9);
+  --mpg-warn-soft: color-mix(in srgb, #fff 8%, transparent);
   --mpg-muted-opacity: 0.42;
 
   width: 100%;
@@ -33,17 +37,17 @@
   color: var(--mpg-ink);
 }
 
-/* 浅色：高对比、避免洗白绿/洗白蓝 */
+/* 浅色：近黑正文 + 中性灰，无彩色 */
 :root[data-theme="light"] .memory-pick-gate,
 html[data-theme="light"] .memory-pick-gate,
 :root[data-theme="light"] .memory-pick-gate-slot .memory-pick-gate {
   --mpg-ink: var(--text-primary, #18181b);
   --mpg-muted: var(--text-muted, rgba(24, 24, 27, 0.72));
   --mpg-faint: var(--text-faint, rgba(24, 24, 27, 0.5));
-  --mpg-accent: var(--text-accent, #1d4ed8);
-  --mpg-accent-strong: #1e40af;
-  --mpg-accent-soft: color-mix(in srgb, #2563eb 12%, #fff);
-  --mpg-accent-row: color-mix(in srgb, #2563eb 10%, #fff);
+  --mpg-accent: var(--text-primary, #18181b);
+  --mpg-accent-strong: var(--text-primary, #09090b);
+  --mpg-accent-soft: color-mix(in srgb, #18181b 6%, #fff);
+  --mpg-accent-row: color-mix(in srgb, #18181b 5%, #fff);
   --mpg-border: var(--border-subtle, rgba(24, 24, 27, 0.1));
   --mpg-border-strong: var(--border-strong, rgba(24, 24, 27, 0.16));
   --mpg-elev: color-mix(in srgb, #18181b 6%, #fff);
@@ -51,13 +55,13 @@ html[data-theme="light"] .memory-pick-gate,
   --mpg-card: var(--surface-popover, #ffffff);
   --mpg-panel: color-mix(in srgb, #18181b 4%, #fff);
   --mpg-overlay: color-mix(in srgb, #18181b 42%, transparent);
-  --mpg-danger: #dc2626;
-  --mpg-always: #166534;
-  --mpg-always-ink: #14532d;
-  --mpg-always-soft: color-mix(in srgb, #16a34a 12%, #fff);
-  --mpg-always-badge-bg: color-mix(in srgb, #16a34a 16%, #fff);
-  --mpg-warn: #b45309;
-  --mpg-warn-soft: color-mix(in srgb, #f59e0b 18%, #fff);
+  --mpg-danger: var(--text-primary, #18181b);
+  --mpg-always: var(--text-primary, #18181b);
+  --mpg-always-ink: var(--text-primary, #09090b);
+  --mpg-always-soft: color-mix(in srgb, #18181b 6%, #fff);
+  --mpg-always-badge-bg: color-mix(in srgb, #18181b 8%, #fff);
+  --mpg-warn: var(--text-primary, #18181b);
+  --mpg-warn-soft: color-mix(in srgb, #18181b 6%, #fff);
   --mpg-muted-opacity: 0.48;
 }
 
@@ -129,27 +133,29 @@ html[data-theme="light"] .memory-pick-gate,
 .memory-pick-gate__split {
   display: grid;
   grid-template-columns: 1.55fr 0.78fr;
-  grid-template-rows: minmax(0, 1fr);
+  /* 顶对齐；列表/策略各自 max-height 对齐，避免右栏拖出左下空白 */
+  grid-template-rows: auto;
+  align-items: start;
   border-top: 1px solid var(--mpg-border);
   padding-top: 6px;
   overflow: hidden;
 }
 
-/* 整体高度约压 1/3：48vh/420 → 32vh/280 */
 .memory-pick-gate--ready .memory-pick-gate__split {
-  max-height: min(32vh, 280px);
+  /* 仅封顶，不设 min-height，条目少时整块跟着收 */
+  max-height: min(30vh, 260px);
 }
 
 @media (max-width: 720px) {
   .memory-pick-gate--ready .memory-pick-gate__split {
     grid-template-columns: 1fr;
-    max-height: min(38vh, 320px);
+    max-height: min(38vh, 300px);
   }
 
   .memory-pick-gate--ready .memory-pick-gate__right {
     border-left: none !important;
     border-top: 1px solid var(--mpg-border);
-    max-height: 110px;
+    max-height: none;
   }
 }
 
@@ -160,6 +166,7 @@ html[data-theme="light"] .memory-pick-gate,
   border-right: 1px solid var(--mpg-border);
   display: flex;
   flex-direction: column;
+  justify-content: flex-start;
   overflow: hidden;
 }
 
@@ -169,7 +176,8 @@ html[data-theme="light"] .memory-pick-gate,
   padding: 2px 2px 2px 14px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  justify-content: flex-start;
+  gap: 4px;
   overflow: hidden;
 }
 
@@ -191,8 +199,8 @@ html[data-theme="light"] .memory-pick-gate,
 }
 
 .memory-pick-gate__list-hint.is-always {
-  color: var(--mpg-always);
-  font-weight: 600;
+  color: var(--mpg-ink);
+  font-weight: 650;
 }
 
 .memory-pick-gate__count {
@@ -226,20 +234,20 @@ html[data-theme="light"] .memory-pick-gate,
   white-space: nowrap;
 }
 
-/* 一直开启读秒进行中：绿色高亮 */
+/* 一直开启读秒进行中：加粗强调，不着色 */
 .memory-pick-gate__count.is-countdown {
-  color: var(--mpg-always);
+  color: var(--mpg-ink);
   font-weight: 700;
 }
 
 .memory-pick-gate__list {
   display: grid;
   gap: 1px;
-  /* 条目少时不把行高撑开：内容从顶部堆叠 */
   align-content: start;
-  flex: 1 1 auto;
+  /* 高度 = 行内容；超过上限才滚，绝不 flex-grow 出空白行 */
+  flex: 0 1 auto;
   min-height: 0;
-  max-height: min(27vh, 185px);
+  max-height: min(20vh, 152px);
   overflow: auto;
 }
 
@@ -302,7 +310,7 @@ html[data-theme="light"] .memory-pick-gate,
   gap: 8px;
   font-size: 12.5px;
   font-weight: 700;
-  color: var(--mpg-accent-strong);
+  color: var(--mpg-ink);
 }
 
 .memory-pick-gate__match-logo {
@@ -313,7 +321,7 @@ html[data-theme="light"] .memory-pick-gate,
   border-radius: 7px;
   overflow: hidden;
   background: var(--mpg-elev);
-  border: 1px solid color-mix(in srgb, var(--mpg-accent) 40%, var(--mpg-border));
+  border: 1px solid var(--mpg-border-strong);
   flex: 0 0 auto;
   /* 轻微呼吸感，避免整 logo 狂转 */
   animation: memory-pick-logo-pulse 1.6s ease-in-out infinite;
@@ -350,7 +358,7 @@ html[data-theme="light"] .memory-pick-gate,
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--mpg-accent);
+  background: var(--mpg-muted);
   animation: memory-pick-dot 1s ease-in-out infinite;
 }
 
@@ -416,7 +424,7 @@ html[data-theme="light"] .memory-pick-gate,
 
 .memory-pick-gate__row input {
   margin: 0;
-  accent-color: var(--mpg-accent);
+  accent-color: var(--mpg-ink);
 }
 
 .memory-pick-gate__row-idx {
@@ -440,6 +448,11 @@ html[data-theme="light"] .memory-pick-gate,
   color: var(--mpg-ink);
 }
 
+.memory-pick-gate__row.is-on .memory-pick-gate__row-title,
+.memory-pick-gate__row.is-auto .memory-pick-gate__row-title {
+  font-weight: 700;
+}
+
 .memory-pick-gate__row-time {
   flex: 0 0 auto;
   font-size: 11px;
@@ -460,9 +473,9 @@ html[data-theme="light"] .memory-pick-gate,
   font-size: 9px;
   font-weight: 750;
   text-transform: uppercase;
-  color: var(--mpg-always);
+  color: var(--mpg-ink);
   background: var(--mpg-always-badge-bg);
-  border: 1px solid color-mix(in srgb, var(--mpg-always) 30%, transparent);
+  border: 1px solid var(--mpg-border-strong);
   vertical-align: middle;
 }
 
@@ -470,14 +483,14 @@ html[data-theme="light"] .memory-pick-gate,
   font-size: 10px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--mpg-accent);
+  color: var(--mpg-ink);
   white-space: nowrap;
 }
 
 .memory-pick-gate__detail-btn {
   border: none;
   background: transparent;
-  color: var(--mpg-accent);
+  color: var(--mpg-ink);
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
@@ -486,8 +499,9 @@ html[data-theme="light"] .memory-pick-gate,
 }
 
 .memory-pick-gate__detail-btn:hover {
-  color: var(--mpg-accent-strong);
+  color: var(--mpg-ink);
   text-decoration: underline;
+  opacity: 0.85;
 }
 
 /* 策略选项：与顶栏操作区同系虚线框包围 */
@@ -532,12 +546,14 @@ html[data-theme="light"] .memory-pick-gate,
 }
 
 .memory-pick-gate__mode-menu button.is-on {
-  color: var(--mpg-accent-strong);
+  color: var(--mpg-ink);
+  font-weight: 650;
   background: transparent;
 }
 
 .memory-pick-gate__mode-menu button.is-on.is-always-mode {
-  color: var(--mpg-always-ink);
+  color: var(--mpg-ink);
+  font-weight: 650;
   background: transparent;
 }
 
@@ -548,11 +564,11 @@ html[data-theme="light"] .memory-pick-gate,
 }
 
 .memory-pick-gate__mode-menu button.is-on .memory-pick-gate__mode-icon {
-  color: var(--mpg-accent-strong);
+  color: var(--mpg-ink);
 }
 
 .memory-pick-gate__mode-menu button.is-on.is-always-mode .memory-pick-gate__mode-icon {
-  color: var(--mpg-always);
+  color: var(--mpg-ink);
 }
 
 .memory-pick-gate__mode-text {
@@ -573,6 +589,10 @@ html[data-theme="light"] .memory-pick-gate,
   white-space: nowrap;
 }
 
+.memory-pick-gate__mode-menu button.is-on .memory-pick-gate__mode-title {
+  font-weight: 700;
+}
+
 .memory-pick-gate__mode-sub {
   font-size: 10.5px;
   font-weight: 500;
@@ -584,11 +604,11 @@ html[data-theme="light"] .memory-pick-gate,
 }
 
 .memory-pick-gate__mode-menu button.is-on .memory-pick-gate__mode-sub {
-  color: color-mix(in srgb, var(--mpg-accent) 85%, var(--mpg-faint));
+  color: var(--mpg-muted);
 }
 
 .memory-pick-gate__mode-menu button.is-on.is-always-mode .memory-pick-gate__mode-sub {
-  color: color-mix(in srgb, var(--mpg-always) 80%, var(--mpg-faint));
+  color: var(--mpg-muted);
 }
 
 /* 勾选标识：仅 ✓，无方框边框 */
@@ -608,20 +628,22 @@ html[data-theme="light"] .memory-pick-gate,
 .memory-pick-gate__mode-menu button.is-on .memory-pick-gate__mode-check {
   border: none;
   background: transparent;
-  color: var(--mpg-accent-strong);
+  color: var(--mpg-ink);
 }
 
 .memory-pick-gate__mode-menu button.is-on.is-always-mode .memory-pick-gate__mode-check {
   border: none;
   background: transparent;
-  color: var(--mpg-always);
+  color: var(--mpg-ink);
 }
 
 .memory-pick-gate__strategy-panel {
-  flex: 1 1 auto;
+  /* 与列表同量级上限：右栏不比左列表拖更长，减少左下对空 */
+  flex: 0 1 auto;
   min-height: 0;
+  max-height: min(12vh, 96px);
   overflow: auto;
-  padding: 2px 0 4px;
+  padding: 2px 0 2px;
 }
 
 .memory-pick-gate__strategy-kicker {
@@ -629,18 +651,18 @@ html[data-theme="light"] .memory-pick-gate,
   font-weight: 750;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--mpg-accent);
+  color: var(--mpg-muted);
   margin-bottom: 2px;
 }
 
 .memory-pick-gate__strategy-panel.is-always .memory-pick-gate__strategy-kicker {
-  color: var(--mpg-always);
+  color: var(--mpg-muted);
 }
 
 .memory-pick-gate__strategy-heading {
   margin: 0 0 4px;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 750;
   color: var(--mpg-ink);
 }
 
@@ -755,30 +777,31 @@ html[data-theme="light"] .memory-pick-gate,
 }
 
 .memory-pick-gate__action.is-primary {
-  color: var(--mpg-accent-strong);
-  font-weight: 650;
+  color: var(--mpg-ink);
+  font-weight: 700;
   background: transparent;
 }
 
 .memory-pick-gate__action.is-primary:hover:not(:disabled) {
-  color: var(--mpg-accent);
+  color: var(--mpg-ink);
   background: transparent;
+  opacity: 0.88;
 }
 
 .memory-pick-gate__action.is-warn {
-  color: var(--mpg-warn);
-  font-weight: 600;
+  color: var(--mpg-ink);
+  font-weight: 650;
   background: transparent;
 }
 
 .memory-pick-gate__action.is-danger {
-  color: var(--mpg-danger);
-  font-weight: 600;
+  color: var(--mpg-ink);
+  font-weight: 700;
   background: transparent;
 }
 
 .memory-pick-gate__action.is-danger:hover:not(:disabled) {
-  filter: brightness(0.92);
+  opacity: 0.88;
   background: transparent;
 }
 
@@ -809,7 +832,7 @@ html[data-theme="light"] .memory-pick-gate,
   width: 0;
   height: 2px;
   border-radius: 1px;
-  background: color-mix(in srgb, var(--mpg-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--mpg-ink) 45%, transparent);
   z-index: 0;
   pointer-events: none;
 }
@@ -820,8 +843,8 @@ html[data-theme="light"] .memory-pick-gate,
 
 .memory-pick-gate__auto-hint {
   font-size: 11px;
-  color: var(--mpg-always);
-  font-weight: 600;
+  color: var(--mpg-ink);
+  font-weight: 650;
 }
 
 .memory-pick-gate__action:disabled {
@@ -862,9 +885,10 @@ html[data-theme="light"] .memory-pick-gate,
 }
 
 .memory-pick-gate__btn.is-primary {
-  border-color: color-mix(in srgb, var(--mpg-accent) 45%, var(--mpg-border));
-  background: color-mix(in srgb, var(--mpg-accent) 22%, var(--mpg-card));
-  color: var(--mpg-accent-strong);
+  border-color: var(--mpg-border-strong);
+  background: color-mix(in srgb, var(--mpg-ink) 8%, var(--mpg-card));
+  color: var(--mpg-ink);
+  font-weight: 700;
 }
 
 .memory-pick-gate__btn:disabled {

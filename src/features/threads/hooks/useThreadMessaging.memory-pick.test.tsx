@@ -21,9 +21,17 @@ import {
   resetMemoryPickSessionPolicy,
   setMemoryPickComposerMode,
 } from "../../project-memory/memoryPick/memoryPickSessionStore";
+import {
+  setMemoryPickTelemetrySink,
+} from "../../project-memory/memoryPick/memoryPickTelemetry";
+import { pushErrorToast } from "../../../services/toasts";
 
 vi.mock("@sentry/react", () => ({
   metrics: { count: vi.fn() },
+}));
+
+vi.mock("../../../services/toasts", () => ({
+  pushErrorToast: vi.fn(() => "toast-1"),
 }));
 
 vi.mock("./useReviewPrompt", () => ({
@@ -108,7 +116,8 @@ function memoryItem(id: string, title: string, summary: string) {
 }
 
 function buildHook() {
-  return renderHook(() =>
+  const dispatch = vi.fn();
+  const hook = renderHook(() =>
     useThreadMessaging({
       activeWorkspace: workspace,
       activeThreadId: THREAD,
@@ -123,7 +132,7 @@ function buildHook() {
       rateLimitsByWorkspace: {},
       pendingInterruptsRef: { current: new Map() },
       interruptedThreadsRef: { current: new Map() },
-      dispatch: vi.fn(),
+      dispatch,
       getCustomName: vi.fn(),
       getThreadEngine: vi.fn(() => "codex"),
       markProcessing: vi.fn(),
@@ -142,6 +151,7 @@ function buildHook() {
       onInputMemoryCaptured: vi.fn(),
     }),
   );
+  return { ...hook, dispatch };
 }
 
 beforeEach(() => {
@@ -191,11 +201,14 @@ describe("useThreadMessaging memory pick gate", () => {
       );
     });
 
-    await vi.waitFor(() => {
-      expect(getMemoryPickGateSnapshot(workspace.id, THREAD)?.phase).toBe(
-        "awaiting-choice",
-      );
-    });
+    await vi.waitFor(
+      () => {
+        expect(getMemoryPickGateSnapshot(workspace.id, THREAD)?.phase).toBe(
+          "awaiting-choice",
+        );
+      },
+      { timeout: 3000 },
+    );
     expect(sendUserMessage).not.toHaveBeenCalled();
 
     setMemoryPickGateSelectedIds(workspace.id, THREAD, ["m-db"]);
@@ -209,6 +222,7 @@ describe("useThreadMessaging memory pick gate", () => {
     expect(textArg).toContain('source="memory-pick"');
     expect(textArg).toContain("数据库连接池");
     expect(textArg).toContain("数据库 超时怎么办");
+    expect(textArg).toContain("Primary task");
     expect(
       getMemoryPickSessionPolicy(workspace.id, THREAD).firstPickRequired,
     ).toBe(false);
@@ -415,5 +429,98 @@ describe("useThreadMessaging memory pick gate", () => {
 
     expect(getMemoryPickGateSnapshot(workspace.id, THREAD)).toBeNull();
     expect(vi.mocked(sendUserMessage).mock.calls[0]?.[2]).toBe("plain");
+  });
+
+  it("no_match empty result posts timeline notice and still sends without blocking", async () => {
+    markMemoryPickFirstPickDone(workspace.id, THREAD);
+    setMemoryPickComposerMode(workspace.id, THREAD, "pick");
+    // 有库但与 query 无关 → no_match auto-skip
+    vi.mocked(projectMemoryFacade.listSummary).mockResolvedValue({
+      items: [memoryItem("m-ui", "UI 主题", "暗色模式")],
+      total: 1,
+    } as never);
+
+    const events: Array<{ event: string; props: Record<string, unknown> }> = [];
+    setMemoryPickTelemetrySink((event, props) => {
+      events.push({ event, props });
+    });
+
+    const { result, dispatch } = buildHook();
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        THREAD,
+        "数据库连接池 超时怎么办",
+        [],
+        { skipPromptExpansion: true, memoryReferenceMode: "pick" },
+      );
+    });
+
+    expect(getMemoryPickGateSnapshot(workspace.id, THREAD)).toBeNull();
+    expect(sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sendUserMessage).mock.calls[0]?.[2]).toBe(
+      "数据库连接池 超时怎么办",
+    );
+    // 不再弹全局 toast
+    expect(pushErrorToast).not.toHaveBeenCalled();
+    // 主幕时间线：【记忆参考状态】轻量 status（非旧摘要卡）
+    const emptyNotices = vi
+      .mocked(dispatch)
+      .mock.calls.map((call) => call[0] as { type?: string; item?: { text?: string } })
+      .filter(
+        (action) =>
+          action?.type === "upsertItem" &&
+          typeof action.item?.text === "string" &&
+          action.item.text.includes("【记忆参考状态】") &&
+          action.item.text.includes("未找到"),
+      );
+    expect(emptyNotices.length).toBeGreaterThan(0);
+    const retrieveEvents = events.filter(
+      (e) => e.event === "memory_pick_retrieve",
+    );
+    expect(retrieveEvents.length).toBeGreaterThan(0);
+    expect(retrieveEvents[0]?.props.emptyReason).toBe("no_match");
+    setMemoryPickTelemetrySink(null);
+  });
+
+  it("timeout empty result posts timeline notice and still sends", async () => {
+    markMemoryPickFirstPickDone(workspace.id, THREAD);
+    setMemoryPickComposerMode(workspace.id, THREAD, "pick");
+    // list 抛 memory-pick-timeout → kernel emptyReason timeout
+    vi.mocked(projectMemoryFacade.listSummary).mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          window.setTimeout(
+            () => reject(new Error("memory-pick-timeout")),
+            5,
+          );
+        }) as never,
+    );
+
+    const { result, dispatch } = buildHook();
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        THREAD,
+        "anything related query",
+        [],
+        { skipPromptExpansion: true, memoryReferenceMode: "pick" },
+      );
+    });
+
+    expect(sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(pushErrorToast).not.toHaveBeenCalled();
+    const textArg = vi.mocked(sendUserMessage).mock.calls[0]?.[2] as string;
+    expect(textArg).toBe("anything related query");
+    const emptyNotices = vi
+      .mocked(dispatch)
+      .mock.calls.map((call) => call[0] as { type?: string; item?: { text?: string } })
+      .filter(
+        (action) =>
+          action?.type === "upsertItem" &&
+          typeof action.item?.text === "string" &&
+          action.item.text.includes("【记忆参考状态】"),
+      );
+    expect(emptyNotices.length).toBeGreaterThan(0);
   });
 });

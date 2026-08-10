@@ -22,6 +22,7 @@ import {
   ALWAYS_AUTO_CONFIRM_MS,
   ALWAYS_TOP_K,
 } from "../memoryPick/memoryPickTypes";
+import { emitMemoryPickTelemetry } from "../memoryPick/memoryPickTelemetry";
 import { useMemoryPickGate } from "../memoryPick/useMemoryPickGate";
 import { projectMemoryFacade } from "../services/projectMemoryFacade";
 import "../../../styles/memory-pick-gate.css";
@@ -91,10 +92,17 @@ export function MemoryPickGate({ workspaceId, threadId }: MemoryPickGateProps) {
 
   /** 本轮任意用户操作：打断自动确认，且本轮不再重启 */
   const interruptAutoConfirm = () => {
+    const wasArmed = autoConfirmArmedRef.current;
     autoConfirmInterruptedRef.current = true;
     autoConfirmArmedRef.current = false;
     setAutoConfirmSec(null);
     setAutoConfirmEpoch((n) => n + 1);
+    if (wasArmed) {
+      emitMemoryPickTelemetry("memory_pick_auto_confirm", {
+        action: "interrupt",
+        mode: "always",
+      });
+    }
   };
 
   // 进入 awaiting 瞬间：仅 mode 已是 always 时武装；闸门关闭时复位
@@ -148,6 +156,10 @@ export function MemoryPickGate({ workspaceId, threadId }: MemoryPickGateProps) {
       setAutoConfirmSec(left);
       if (left <= 0) {
         autoConfirmArmedRef.current = false;
+        emitMemoryPickTelemetry("memory_pick_auto_confirm", {
+          action: "fire",
+          mode: "always",
+        });
         confirmRef.current();
       }
     };

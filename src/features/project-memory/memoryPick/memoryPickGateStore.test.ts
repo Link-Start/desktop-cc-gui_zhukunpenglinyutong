@@ -108,6 +108,7 @@ describe("memoryPickGateStore", () => {
     await expect(promise).resolves.toEqual({
       action: "skip",
       mode: "pick",
+      emptyReason: "no_match",
     });
     expect(getMemoryPickGateSnapshot("ws", "th-empty")).toBeNull();
   });

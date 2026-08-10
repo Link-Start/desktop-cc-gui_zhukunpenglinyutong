@@ -29,10 +29,11 @@ export function buildMemoryPickPreviewText(
     if (scoresById instanceof Map) return scoresById.get(id);
     return scoresById[id];
   };
+  // 语义转接：强调「为本轮提问参考」，避免「已发送记忆当任务」口吻
   const header =
     mode === "always"
-      ? `记忆挑选 · 一直开启 · 已注入 ${memories.length} 条`
-      : `记忆挑选 · 本轮 · 已注入 ${memories.length} 条`;
+      ? `为本轮提问参考 · 一直开启 · ${memories.length} 条`
+      : `为本轮提问参考 · 本轮 · ${memories.length} 条`;
   const lines = memories.map((memory, index) => {
     const title = resolveProjectMemoryCompactTitle(memory) || memory.id;
     const summary = resolveProjectMemoryCompactSummary(memory);

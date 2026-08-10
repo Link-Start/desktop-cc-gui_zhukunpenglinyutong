@@ -40,6 +40,14 @@ export type MemoryPickSessionPolicy = {
   alwaysPreferredCount: number;
 };
 
+/** 检索空结果 / 失败原因（贯通 retrieve → 幕布时间线可感 → telemetry） */
+export type MemoryRetrieveEmptyReason =
+  | "ok"
+  | "no_query_terms"
+  | "no_match"
+  | "timeout"
+  | "error";
+
 export type MemoryPickResolution =
   | {
       action: "confirm";
@@ -50,6 +58,8 @@ export type MemoryPickResolution =
   | {
       action: "skip";
       mode: MemoryPickComposerMode;
+      /** 检索空/超时/失败 auto-skip 时带回，供幕布时间线可感 */
+      emptyReason?: MemoryRetrieveEmptyReason | null;
     }
   | {
       action: "dismiss";
@@ -73,11 +83,42 @@ export type MemoryPickGateUiState = {
 
 export const PICK_CANDIDATE_LIMIT = 25;
 export const ALWAYS_TOP_K = 3;
+/** @deprecated 历史合同 1s；实际 list 预算见 PICK_LIST_TIMEOUT_MS */
 export const PICK_RETRIEVE_TIMEOUT_MS = 1000;
+/**
+ * Pick / 统一检索核 list 总预算（ms）。
+ * 原 1000 对大库易假超时，与 memoryPickRetrieval 现网对齐为 4s。
+ */
+export const PICK_LIST_TIMEOUT_MS = 4000;
 /** 匹配界面最短展示（ms），避免检索过快闪断（至少 1s） */
 export const PICK_MATCH_MIN_DISPLAY_MS = 1000;
 /** 一直开启：预览展示后客户端倒计时自动确认（ms），可取消 */
 export const ALWAYS_AUTO_CONFIRM_MS = 8000;
+
+export type MemoryRetrieveMode = "lexical" | "semantic" | "hybrid";
+
+export type MemoryRetrieveProviderStatus =
+  | "available"
+  | "unavailable"
+  | "error"
+  | "skipped";
+
+export type MemoryRetrieveDiagnostics = {
+  retrievalMode: MemoryRetrieveMode;
+  emptyReason: MemoryRetrieveEmptyReason;
+  providerStatus: MemoryRetrieveProviderStatus;
+  scannedCount: number;
+  candidateCount: number;
+  elapsedMs: number;
+  fallbackReason?: string | null;
+};
+
+export type MemoryPickRetrieveResult = {
+  candidates: MemoryPickCandidate[];
+  /** 兼容闸门 store：timeout / retrieve_failed */
+  error: "timeout" | "retrieve_failed" | null;
+  diagnostics: MemoryRetrieveDiagnostics;
+};
 
 export function normalizeMemoryPickComposerMode(
   mode: LegacyMemoryReferenceMode | string | null | undefined,

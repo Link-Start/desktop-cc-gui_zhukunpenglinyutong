@@ -7,12 +7,14 @@ import type {
   MemoryPickComposerMode,
   MemoryPickGateUiState,
   MemoryPickResolution,
+  MemoryPickRetrieveResult,
 } from "./memoryPickTypes";
 import { PICK_MATCH_MIN_DISPLAY_MS } from "./memoryPickTypes";
 import {
   getMemoryPickSessionPolicy,
   setMemoryPickAlwaysPreferredCount,
 } from "./memoryPickSessionStore";
+import { emitMemoryPickTelemetry } from "./memoryPickTelemetry";
 
 const gates = new Map<string, MemoryPickGateUiState>();
 const resolvers = new Map<string, (resolution: MemoryPickResolution) => void>();
@@ -141,9 +143,37 @@ function settleGate(
   const key = keyOf(workspaceId, threadId);
   const resolve = resolvers.get(key);
   if (!resolve && !gates.has(key)) return;
+  const record = gates.get(key);
   gates.delete(key);
   resolvers.delete(key);
   emit();
+  if (record) {
+    if (resolution.action === "confirm") {
+      emitMemoryPickTelemetry("memory_pick_confirm", {
+        mode: resolution.mode,
+        selectedCount: resolution.selectedIds.length,
+        candidateCount: record.candidates.length,
+        firstPick: record.firstPick,
+        phase: record.phase,
+      });
+    } else if (resolution.action === "skip") {
+      emitMemoryPickTelemetry("memory_pick_skip", {
+        mode: resolution.mode,
+        candidateCount: record.candidates.length,
+        phase: record.phase,
+      });
+    } else if (resolution.action === "dismiss") {
+      emitMemoryPickTelemetry("memory_pick_dismiss", {
+        mode: record.mode,
+        phase: record.phase,
+      });
+    } else if (resolution.action === "cancel") {
+      emitMemoryPickTelemetry("memory_pick_cancel", {
+        mode: record.mode,
+        phase: record.phase,
+      });
+    }
+  }
   resolve?.(resolution);
 }
 
@@ -190,10 +220,10 @@ export function openMemoryPickGate(params: {
   queryText: string;
   mode: MemoryPickComposerMode;
   firstPick: boolean;
-  retrieve: () => Promise<{
-    candidates: MemoryPickCandidate[];
-    error: "timeout" | "retrieve_failed" | null;
-  }>;
+  retrieve: () => Promise<
+    Pick<MemoryPickRetrieveResult, "candidates" | "error"> &
+      Partial<Pick<MemoryPickRetrieveResult, "diagnostics">>
+  >;
 }): Promise<MemoryPickResolution> {
   const { workspaceId, threadId, queryText, mode, firstPick, retrieve } =
     params;
@@ -249,9 +279,17 @@ export function openMemoryPickGate(params: {
           gates.delete(key);
           resolvers.delete(key);
           emit();
+          emitMemoryPickTelemetry("memory_pick_skip", {
+            mode: current.mode === "always" ? "always" : "pick",
+            candidateCount: 0,
+            phase: "retrieving",
+            emptyReason: result.diagnostics?.emptyReason ?? null,
+            error: result.error,
+          });
           r?.({
             action: "skip",
             mode: current.mode === "always" ? "always" : "pick",
+            emptyReason: result.diagnostics?.emptyReason ?? "no_match",
           });
           return;
         }
@@ -277,6 +315,13 @@ export function openMemoryPickGate(params: {
           error: result.error,
         });
         emit();
+        emitMemoryPickTelemetry("memory_pick_gate_shown", {
+          mode: nextMode,
+          candidateCount: result.candidates.length,
+          firstPick: current.firstPick,
+          retrievalMode: result.diagnostics?.retrievalMode ?? "lexical",
+          phase: "awaiting-choice",
+        });
       })
       .catch(async () => {
         await settleAfterMinDisplay(null);
@@ -287,9 +332,16 @@ export function openMemoryPickGate(params: {
         gates.delete(key);
         resolvers.delete(key);
         emit();
+        emitMemoryPickTelemetry("memory_pick_skip", {
+          mode: current.mode === "always" ? "always" : "pick",
+          candidateCount: 0,
+          phase: "retrieving",
+          emptyReason: "error",
+        });
         r?.({
           action: "skip",
           mode: current.mode === "always" ? "always" : "pick",
+          emptyReason: "error",
         });
       });
   });

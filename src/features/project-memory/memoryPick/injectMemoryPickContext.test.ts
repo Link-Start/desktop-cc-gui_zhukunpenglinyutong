@@ -39,8 +39,11 @@ describe("injectMemoryPickContext", () => {
     expect(result.injectedCount).toBe(1);
     expect(result.finalText).toContain('source="memory-pick"');
     expect(result.finalText.endsWith("hello world")).toBe(true);
-    expect(result.previewText).toContain("记忆挑选");
+    expect(result.previewText).toContain("为本轮提问参考");
     expect(result.previewText).toMatch(/#1 \| m1 \| Decision \|/);
+    expect(result.finalText).toContain("Primary task");
+    expect(result.finalText).toContain("PRIOR PROJECT REFERENCE");
+    expect(result.finalText).toContain("UNTRUSTED");
   });
 
   it("returns empty when no memories", () => {

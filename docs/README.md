@@ -59,9 +59,12 @@ status: active
 
 ### Project Memory
 
-- [`research/00-project-memory-feature-overview.md`](research/00-project-memory-feature-overview.md)
-- [`research/04-project-memory-consumption-research.md`](research/04-project-memory-consumption-research.md)
+- [`research/00-project-memory-feature-overview.md`](research/00-project-memory-feature-overview.md)（historical）
+- [`research/04-project-memory-consumption-research.md`](research/04-project-memory-consumption-research.md)（superseded 消费调研）
+- [`research/05-project-memory-pick-gate-pointer.md`](research/05-project-memory-pick-gate-pointer.md)（闸门 + Phase-2 指针）
+- [`research/06-memos-vs-mossx-memory-upgrade-research-2026-08-10.md`](research/06-memos-vs-mossx-memory-upgrade-research-2026-08-10.md)（**MemOS 对照 + Phase-2 匹配/可观测/转接**）
 - Contract：`openspec/specs/project-memory-*/spec.md`
+- Changes：闸门 Phase-1 `openspec/changes/add-memory-pick-gate/` · 检索/可感 Phase-2 `openspec/changes/enhance-memory-pick-retrieval-and-observability/`
 - Implementation：`src/features/project-memory/`、`src-tauri/src/project_memory/`
 
 ### Performance 与卡顿

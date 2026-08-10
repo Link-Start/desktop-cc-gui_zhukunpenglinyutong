@@ -203,6 +203,18 @@ const memory = {
       error: "Retrieval failed; no usable memory found.",
       none: "No matching project memory.",
     },
+    /** Empty / timeout / error toasts (never block send) */
+    toast: {
+      title: "Memory reference",
+      timeout: "Memory retrieval timed out; sent without memory injection.",
+      noMatch: "No related memory found; sent without injection.",
+      error: "Memory retrieval failed; sent without injection.",
+      noQueryTerms: "No searchable keywords in the input; sent without injection.",
+    },
+    preview: {
+      always: "Reference for this request · always-on · {{n}} items",
+      pick: "Reference for this request · this turn · {{n}} items",
+    },
     detail: "Detail",
     count: {
       empty: "0 candidates",

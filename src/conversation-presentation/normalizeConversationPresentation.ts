@@ -16,7 +16,10 @@ import {
   stripIntentCanvasContextPrompt,
 } from "../features/intent-canvas/utils/messageContext";
 import { NOTE_CARD_CONTEXT_SUMMARY_PREFIX } from "../features/note-cards/utils/noteCardContextInjection";
-import { MEMORY_CONTEXT_SUMMARY_PREFIX } from "../features/project-memory/utils/memoryMarkers";
+import {
+  MEMORY_CONTEXT_SUMMARY_PREFIX,
+  MEMORY_PICK_STATUS_PREFIX,
+} from "../features/project-memory/utils/memoryMarkers";
 import { parseProjectMemoryRetrievalPackPrefix } from "../features/project-memory/utils/projectMemoryRetrievalPack";
 import { extractCommandMessageDisplayText } from "../utils/commandMessageTags";
 import {
@@ -198,8 +201,41 @@ function parseInjectedMemoryContext(text: string): {
   return null;
 }
 
+function parseMemoryPickEmptyStatusContext(
+  text: string,
+): ConversationPresentationContext | null {
+  const normalized = text.trim();
+  if (!normalized.startsWith(MEMORY_PICK_STATUS_PREFIX)) {
+    return null;
+  }
+  const body = normalized.slice(MEMORY_PICK_STATUS_PREFIX.length).trim();
+  const lines = body
+    .split(/\r?\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  // reason \n title \n message
+  const reason = lines[0] ?? "no_match";
+  const title = lines[1] ?? "记忆参考";
+  const message = lines.slice(2).join(" ") || lines[1] || body;
+  return {
+    kind: "memory",
+    preview: message,
+    lines: [title, message],
+    markdown: message,
+    source: "memory-pick-empty",
+    records: [],
+    packs: [],
+    // reason 放 markdown 旁路字段不够；用 rawPayload 轻量携带
+    rawPayload: reason,
+  };
+}
+
 function parseAssistantMemoryContext(text: string): ConversationPresentationContext | null {
   const normalized = text.trim();
+  const emptyStatus = parseMemoryPickEmptyStatusContext(normalized);
+  if (emptyStatus) {
+    return emptyStatus;
+  }
   if (!normalized.startsWith(MEMORY_CONTEXT_SUMMARY_PREFIX)) {
     return null;
   }

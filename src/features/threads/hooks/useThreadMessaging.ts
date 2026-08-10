@@ -95,9 +95,15 @@ import {
   setMemoryPickComposerMode,
 } from "../../project-memory/memoryPick/memoryPickSessionStore";
 import { openMemoryPickGate } from "../../project-memory/memoryPick/memoryPickGateStore";
-import { retrieveMemoryPickCandidates } from "../../project-memory/memoryPick/memoryPickRetrieval";
 import { injectMemoryPickContext } from "../../project-memory/memoryPick/injectMemoryPickContext";
+import { retrieveMemoryPickCandidates } from "../../project-memory/memoryPick/memoryPickRetrieval";
 import { emitMemoryPickComposerMode } from "../../project-memory/memoryPick/memoryPickEvents";
+import {
+  emitMemoryPickTelemetry,
+  hashQueryForTelemetry,
+} from "../../project-memory/memoryPick/memoryPickTelemetry";
+import { formatMemoryPickEmptyTimelineItemText } from "../../project-memory/memoryPick/memoryEmptyReasonToast";
+import type { MemoryRetrieveEmptyReason } from "../../project-memory/memoryPick/memoryPickTypes";
 
 function emitMemoryPickComposerModeSync(
   workspaceId: string,
@@ -105,6 +111,61 @@ function emitMemoryPickComposerModeSync(
   mode: MemoryPickComposerMode,
 ) {
   emitMemoryPickComposerMode({ mode, workspaceId, threadId });
+}
+
+/**
+ * Pick 检索 + telemetry。
+ * 空结果可感改走主幕时间线（见 dispatchMemoryPickEmptyTimelineNotice），不用全局 toast。
+ * 仅消费侧；不碰 capture 时序。
+ */
+async function retrieveMemoryPickWithObservability(params: {
+  workspaceId: string;
+  query: string;
+}) {
+  const result = await retrieveMemoryPickCandidates({
+    workspaceId: params.workspaceId,
+    query: params.query,
+    listFn: projectMemoryFacade.listSummary,
+  });
+  const d = result.diagnostics;
+  emitMemoryPickTelemetry("memory_pick_retrieve", {
+    emptyReason: d.emptyReason,
+    retrievalMode: d.retrievalMode,
+    providerStatus: d.providerStatus,
+    ms: d.elapsedMs,
+    candidateCount: d.candidateCount,
+    scannedCount: d.scannedCount,
+    queryLength: params.query.length,
+    queryHash: hashQueryForTelemetry(params.query),
+    error: result.error,
+    fallbackReason: d.fallbackReason ?? null,
+  });
+  return result;
+}
+
+/** 空/超时/失败：主幕时间线轻量 status（非旧摘要卡） */
+function buildMemoryPickEmptyTimelineText(
+  emptyReason: MemoryRetrieveEmptyReason,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string | null {
+  return formatMemoryPickEmptyTimelineItemText(emptyReason, {
+    includeNoQueryTerms: true,
+    copy: {
+      title: t("memoryPick.toast.title", { defaultValue: "记忆参考" }),
+      timeout: t("memoryPick.toast.timeout", {
+        defaultValue: "记忆检索超时，已按原文发送（未注入记忆）",
+      }),
+      no_match: t("memoryPick.toast.noMatch", {
+        defaultValue: "未找到相关记忆，已按原文发送",
+      }),
+      error: t("memoryPick.toast.error", {
+        defaultValue: "记忆检索失败，已按原文发送",
+      }),
+      no_query_terms: t("memoryPick.toast.noQueryTerms", {
+        defaultValue: "当前输入缺少可检索关键词，已按原文发送",
+      }),
+    },
+  });
 }
 import { noteCardsFacade } from "../../note-cards/services/noteCardsFacade";
 import {
@@ -762,10 +823,9 @@ export function useThreadMessaging({
                   : "pick",
               firstPick: collabDecision.reason === "first-pick",
               retrieve: () =>
-                retrieveMemoryPickCandidates({
+                retrieveMemoryPickWithObservability({
                   workspaceId: workspace.id,
                   query: visibleUserText,
-                  listFn: projectMemoryFacade.listSummary,
                 }),
             });
             if (resolution.action === "cancel") {
@@ -782,6 +842,25 @@ export function useThreadMessaging({
               ) {
                 setMemoryPickComposerMode(workspace.id, threadId, "pick");
                 emitMemoryPickComposerModeSync(workspace.id, threadId, "pick");
+              }
+              const emptyTimeline = resolution.emptyReason
+                ? buildMemoryPickEmptyTimelineText(resolution.emptyReason, t)
+                : null;
+              if (emptyTimeline) {
+                dispatch({
+                  type: "upsertItem",
+                  workspaceId: workspace.id,
+                  threadId,
+                  item: {
+                    id: `memory-pick-empty-${Date.now()}-${Math.random()
+                      .toString(36)
+                      .slice(2, 8)}`,
+                    kind: "message",
+                    role: "assistant",
+                    text: emptyTimeline,
+                  },
+                  hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
+                });
               }
             } else if (resolution.action === "confirm") {
               collabPickIds = resolution.selectedIds;
@@ -828,12 +907,19 @@ export function useThreadMessaging({
                 entry !== null && !manualIdSet.has(entry.id),
             );
             if (pickMemories.length > 0) {
-              modelText = injectMemoryPickContext({
+              const collabInject = injectMemoryPickContext({
                 userText: modelText,
                 memories: pickMemories,
                 mode: collabPickMode,
                 queryText: visibleUserText,
-              }).finalText;
+              });
+              modelText = collabInject.finalText;
+              emitMemoryPickTelemetry("memory_pick_inject", {
+                mode: collabPickMode,
+                injectedCount: collabInject.injectedCount,
+                packChars: collabInject.injectedChars,
+                cleanerStatus: "cleaned",
+              });
             }
           }
         }
@@ -1076,10 +1162,9 @@ export function useThreadMessaging({
               : "pick",
           firstPick: pickDecision.reason === "first-pick",
           retrieve: () =>
-            retrieveMemoryPickCandidates({
+            retrieveMemoryPickWithObservability({
               workspaceId: workspace.id,
               query: visibleUserText,
-              listFn: projectMemoryFacade.listSummary,
             }),
         });
 
@@ -1099,6 +1184,26 @@ export function useThreadMessaging({
           ) {
             setMemoryPickComposerMode(workspace.id, threadId, "pick");
             emitMemoryPickComposerModeSync(workspace.id, threadId, "pick");
+          }
+          // 检索空/超时/失败：时间线可感（非全局 toast）
+          const emptyTimeline = resolution.emptyReason
+            ? buildMemoryPickEmptyTimelineText(resolution.emptyReason, t)
+            : null;
+          if (emptyTimeline) {
+            dispatch({
+              type: "upsertItem",
+              workspaceId: workspace.id,
+              threadId,
+              item: {
+                id: `memory-pick-empty-${Date.now()}-${Math.random()
+                  .toString(36)
+                  .slice(2, 8)}`,
+                kind: "message",
+                role: "assistant",
+                text: emptyTimeline,
+              },
+              hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
+            });
           }
         } else if (resolution.action === "confirm") {
           pickMemoryIds = resolution.selectedIds;
@@ -1203,6 +1308,12 @@ export function useThreadMessaging({
           finalText = memoryScoutInjectionResult.finalText;
           pickPackBlockForUserBubble =
             memoryScoutInjectionResult.packBlock?.trim() || null;
+          emitMemoryPickTelemetry("memory_pick_inject", {
+            mode: pickInjectMode,
+            injectedCount: memoryScoutInjectionResult.injectedCount,
+            packChars: memoryScoutInjectionResult.injectedChars,
+            cleanerStatus: "cleaned",
+          });
         } else {
           onDebug?.({
             id: `${Date.now()}-memory-pick-get-empty`,
