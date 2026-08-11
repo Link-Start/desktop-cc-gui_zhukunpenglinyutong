@@ -19,6 +19,9 @@ import {
   useQueuedSend,
 } from "./useQueuedSend";
 
+/** renderHook 的 props 宽类型，避免 initialProps 字面量收窄导致 rerender 报错 */
+type QueuedSendHookProps = Parameters<typeof useQueuedSend>[0];
+
 const workspace: WorkspaceInfo = {
   id: "workspace-1",
   name: "ccgui",
@@ -2169,12 +2172,12 @@ describe("useQueuedSend", () => {
       sendUserMessageToThread: vi.fn().mockResolvedValue(undefined),
     });
     const { result, rerender } = renderHook(
-      (props: Parameters<typeof useQueuedSend>[0]) => useQueuedSend(props),
+      (props: QueuedSendHookProps) => useQueuedSend(props),
       {
         initialProps: {
           ...options,
           activeItems: [],
-        },
+        } as QueuedSendHookProps,
       },
     );
 
@@ -2187,7 +2190,7 @@ describe("useQueuedSend", () => {
     expect(result.current.activeQueuedHandoffBubble).not.toBeNull();
 
     await act(async () => {
-      rerender(options as Parameters<typeof useQueuedSend>[0]);
+      rerender(options as QueuedSendHookProps);
     });
     await act(async () => {
       await Promise.resolve();
@@ -2220,7 +2223,7 @@ describe("useQueuedSend", () => {
       sendUserMessageToThread,
     });
     const { result, rerender } = renderHook(
-      (props: Parameters<typeof useQueuedSend>[0]) => useQueuedSend(props),
+      (props: QueuedSendHookProps) => useQueuedSend(props),
       {
         initialProps: {
           ...options,
@@ -2231,7 +2234,7 @@ describe("useQueuedSend", () => {
             "thread-a": { isProcessing: true, terminalPulse: 0 },
             "thread-b": { isProcessing: false, terminalPulse: 0 },
           },
-        },
+        } as QueuedSendHookProps,
       },
     );
 
@@ -2246,7 +2249,7 @@ describe("useQueuedSend", () => {
     );
 
     await act(async () => {
-      rerender(options as Parameters<typeof useQueuedSend>[0]);
+      rerender(options as QueuedSendHookProps);
     });
     await act(async () => {
       await Promise.resolve();
@@ -2283,7 +2286,7 @@ describe("useQueuedSend", () => {
       sendUserMessageToThread,
     });
     const { result, rerender } = renderHook(
-      (props: Parameters<typeof useQueuedSend>[0]) => useQueuedSend(props),
+      (props: QueuedSendHookProps) => useQueuedSend(props),
       {
         initialProps: {
           ...options,
@@ -2294,7 +2297,7 @@ describe("useQueuedSend", () => {
             "thread-a": { isProcessing: true, terminalPulse: 0 },
             "thread-b": { isProcessing: false, terminalPulse: 0 },
           },
-        },
+        } as QueuedSendHookProps,
       },
     );
 
@@ -2306,7 +2309,7 @@ describe("useQueuedSend", () => {
     });
 
     await act(async () => {
-      rerender(options as Parameters<typeof useQueuedSend>[0]);
+      rerender(options as QueuedSendHookProps);
     });
     await act(async () => {
       await Promise.resolve();
@@ -2454,7 +2457,7 @@ describe("useQueuedSend", () => {
       sendUserMessageToThread,
     });
     const { result, rerender } = renderHook(
-      (props: Parameters<typeof useQueuedSend>[0]) => useQueuedSend(props),
+      (props: QueuedSendHookProps) => useQueuedSend(props),
       {
         initialProps: {
           ...options,
@@ -2467,7 +2470,7 @@ describe("useQueuedSend", () => {
           },
           resolveWorkspace: (id: string) =>
             id === workspace.id ? workspace : null,
-        },
+        } as QueuedSendHookProps,
       },
     );
 
@@ -2476,7 +2479,7 @@ describe("useQueuedSend", () => {
     });
 
     await act(async () => {
-      rerender(options as Parameters<typeof useQueuedSend>[0]);
+      rerender(options as QueuedSendHookProps);
     });
     await act(async () => {
       await Promise.resolve();
