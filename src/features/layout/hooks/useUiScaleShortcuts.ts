@@ -114,7 +114,19 @@ export function useUiScaleShortcuts({
     // applyUiScale (clearResidualScaleStyles / hasResidualScaleStyle) guarantees
     // we only write when there is a leftover value to remove.
     apply(1);
-    confirmUiScaleHealthy();
+    // Defer localStorage I/O off the first paint effect — synchronous
+    // removeItem during cold-start mount competed with hit-test on WebView2.
+    const healthyRaf =
+      typeof window.requestAnimationFrame === "function"
+        ? window.requestAnimationFrame(() => {
+            if (!cancelled) {
+              confirmUiScaleHealthy();
+            }
+          })
+        : null;
+    if (healthyRaf == null) {
+      confirmUiScaleHealthy();
+    }
 
     if (forcedIdentity) {
       appendRendererDiagnostic("ui-scale/startup-guard-forced-identity", {
@@ -129,12 +141,18 @@ export function useUiScaleShortcuts({
       });
       return () => {
         cancelled = true;
+        if (healthyRaf != null) {
+          window.cancelAnimationFrame(healthyRaf);
+        }
       };
     }
 
     if (effectiveScale === 1) {
       return () => {
         cancelled = true;
+        if (healthyRaf != null) {
+          window.cancelAnimationFrame(healthyRaf);
+        }
       };
     }
 
@@ -215,6 +233,9 @@ export function useUiScaleShortcuts({
 
     return () => {
       cancelled = true;
+      if (healthyRaf != null) {
+        window.cancelAnimationFrame(healthyRaf);
+      }
       unsubTrace();
       unsubForce();
       window.clearTimeout(ceilingTimer);

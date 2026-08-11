@@ -482,6 +482,7 @@ const settings = {
     sidebarWebService: "Web 服务",
     sidebarEmail: "邮件发送",
     sidebarGit: "Git",
+    sidebarMemory: "项目记忆",
     sidebarOther: "其他设置",
     sidebarReleaseNotes: "版本记录",
     sidebarVendors: "CLI配置管理",
@@ -1042,6 +1043,45 @@ const settings = {
     radarHistoryDeleteNotFound: "部分记录不存在或已删除。",
     dictationTitle: "语音输入",
     dictationDescription: "启用带设备端转录的麦克风语音输入。",
+    memoryDescription:
+      "管理本机项目记忆的写入与检索：对话沉淀、发送前参考注入，以及可选的本地语义模型。",
+    memoryRulesTitle: "项目记忆规则",
+    memoryRulesStorage:
+      "存储位置：本机用户主目录下的 .ccgui/project-memory/（macOS/Linux 形如 ~/…/.ccgui/…，Windows 形如 %USERPROFILE%\\.ccgui\\…），按工作区隔离；不会上传到云端。",
+    memoryRulesWrite:
+      "写入规则：对话回合结束后自动采集（可在工作区关闭）；支持手动新增/编辑/删除；敏感内容会脱敏与去重。",
+    memoryRulesRead:
+      "使用规则：Composer 开启记忆参考后，发送前本地检索并让你确认注入；默认可关键词匹配，下载语义模型后可提升模糊召回。",
+    memoryRulesInject:
+      "注入规则：记忆仅作当前用户原文的参考（prior context），用户气泡只显示原文；注入失败不阻塞发送。",
+    memoryEmbedModelTitle: "本地语义模型",
+    memoryEmbedModelDesc:
+      "下载约 90MB 语义模型后，记忆参考使用设备端向量匹配提升准确度。模型落在本机用户主目录 .ccgui/models/embedding/ 下（下方「存储位置」为当前机器实际绝对路径），不会上传。",
+    memoryEmbedPhaseTokenizer: "下载分词器中…",
+    memoryEmbedPhaseModel: "下载语义模型中…",
+    memoryEmbedNotDownloadable: "当前环境暂不可下载。",
+    memoryEmbedModelPath: "存储位置",
+    memoryEmbedDeleteModel: "删除模型",
+    memoryEmbedDeleteConfirm:
+      "确定删除本地语义模型？删除后记忆参考将回退为关键词匹配，可随时重新下载。",
+    memorySemanticRetrievalToggle: "检索时使用语义模型",
+    memorySemanticRetrievalToggleDesc:
+      "关闭后即使已下载模型，也只用默认文本检索。可随时再打开。",
+    memorySemanticRetrievalNeedModel: "请先下载并就绪语义模型",
+    memorySemanticRetrievalLexicalHint: "当前：默认文本检索（关键词）",
+    memorySemanticRetrievalSemanticHint: "当前：语义模型检索（可用时 hybrid）",
+    memoryReferencePreviewTitle: "开启后效果示意",
+    memoryReferencePreviewDesc:
+      "发送前会先匹配项目记忆，再由你确认注入。以下为静态示意，非真实会话。",
+    memoryReferencePreviewMatchLabel: "① 匹配中",
+    memoryReferencePreviewMatchRole: "发送前 · 本地检索 · 尚未调用模型",
+    memoryReferencePreviewPickLabel: "② 挑选并确认",
+    memoryReferencePreviewEmptyLabel: "③ 无相关记忆",
+    memoryReferencePreviewInjectLabel: "④ 确认后注入",
+    memoryReferencePreviewInjectHead: "已注入 3 条项目记忆 · 本轮挑选记忆注入",
+    memoryReferencePreviewInjectRow1: "我的判断：可以收了，不必再大改。",
+    memoryReferencePreviewInjectRow2: "全部修复：hybrid 门槛、分数语义与检索…",
+    memoryReferencePreviewInjectRow3: "查清「你好」满分词面为何只显示 ~0.5…",
     enableDictationDesc: "首次使用时下载所选的 Whisper 模型。",
     downloadSize: "下载大小：",
     preferredDictationLanguage: "首选语音输入语言",

@@ -2,9 +2,15 @@ import { lazy, Suspense, useState } from "react";
 import { useWindowLabel } from "./features/layout/hooks/useWindowLabel";
 import { isDetachedFileExplorerWindowLabel } from "./features/files/detachedFileExplorer";
 import { isBrowserAgentDockWindowLabel } from "./features/browser-agent/browserAgentDockWindow";
-import { AppShell } from "./app-shell";
 import { StartupGateOverlay } from "./features/app/components/StartupGateOverlay";
 import { isStartupGateOverlayTestEnabled } from "./features/startup-orchestration/utils/startupGateOverlayTestFlag";
+
+// AppShell 占主包大头；lazy 后主窗与 about/detached 窗入口分离，压 App-*.js 启动图。
+const AppShell = lazy(() =>
+  import("./app-shell").then((module) => ({
+    default: module.AppShell,
+  })),
+);
 
 const AboutView = lazy(() =>
   import("./features/about/components/AboutView").then((module) => ({
@@ -78,7 +84,9 @@ export function AppRouter() {
   }
   return (
     <>
-      <AppShell />
+      <Suspense fallback={null}>
+        <AppShell />
+      </Suspense>
       {startupGateOverlayEnabledAtMount ? <StartupGateOverlay /> : null}
     </>
   );

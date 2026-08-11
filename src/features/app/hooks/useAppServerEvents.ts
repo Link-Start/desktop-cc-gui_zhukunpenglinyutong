@@ -287,6 +287,8 @@ export type AppServerEventHandlers = {
 
 type UseAppServerEventsOptions = {
   useNormalizedRealtimeAdapters?: boolean;
+  /** false = 不订阅事件总线（测试/特殊宿主可关） */
+  enabled?: boolean;
 };
 
 export type DispatchAppServerEventOptions = {
@@ -3237,6 +3239,7 @@ export function useAppServerEvents(
   handlers: AppServerEventHandlers,
   options: UseAppServerEventsOptions = {},
 ) {
+  const eventsEnabled = options.enabled !== false;
   const threadAgentDeltaSeenRef = useRef<Record<string, true>>({});
   const threadAgentCompletedSeenRef = useRef<ThreadAgentCompletedItemTracker>(
     {},
@@ -3261,7 +3264,8 @@ export function useAppServerEvents(
     threadAgentCompletedSeenRef,
     threadAgentSnapshotSeenRef,
   };
-  const batchConsumerEnabled = isAppServerEventBatchConsumerEnabled();
+  const batchConsumerEnabled =
+    eventsEnabled && isAppServerEventBatchConsumerEnabled();
   const rawFallbackQueueRef = useRef<AppServerEvent[]>([]);
   const rawFallbackSchedule = resolveDispatchSchedule({
     tier: readStreamingScheduleTier(),
@@ -3314,11 +3318,11 @@ export function useAppServerEvents(
   }, []);
   useAppServerEventBatchDispatch(handlers, {
     ...dispatcherOptionsRef.current,
-    enableInternalBatchSubscription: batchConsumerEnabled,
+    enableInternalBatchSubscription: batchConsumerEnabled && eventsEnabled,
   });
 
   useEffect(() => {
-    if (batchConsumerEnabled) {
+    if (!eventsEnabled || batchConsumerEnabled) {
       return undefined;
     }
     const rawFallbackQueue = rawFallbackQueueRef.current;
@@ -3331,5 +3335,10 @@ export function useAppServerEvents(
       rawFallbackQueue.length = 0;
       rawFallbackScheduler.cancel();
     };
-  }, [batchConsumerEnabled, dispatchRawFallbackQueue, rawFallbackScheduler]);
+  }, [
+    batchConsumerEnabled,
+    dispatchRawFallbackQueue,
+    eventsEnabled,
+    rawFallbackScheduler,
+  ]);
 }

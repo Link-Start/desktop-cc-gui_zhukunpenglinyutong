@@ -493,6 +493,7 @@ const settings = {
     sidebarWebService: "Web Service",
     sidebarEmail: "Email",
     sidebarGit: "Git",
+    sidebarMemory: "Project Memory",
     sidebarOther: "Other",
     sidebarReleaseNotes: "Release Notes",
     sidebarVendors: "Vendors",
@@ -1110,6 +1111,47 @@ const settings = {
     dictationTitle: "Dictation",
     dictationDescription:
       "Enable microphone dictation with on-device transcription.",
+    memoryDescription:
+      "Manage on-device project memory: capture from chats, pre-send reference injection, and an optional local semantic model.",
+    memoryRulesTitle: "Project memory rules",
+    memoryRulesStorage:
+      "Storage: under .ccgui/project-memory/ in the user home directory (macOS/Linux: ~/…/.ccgui/…; Windows: %USERPROFILE%\\.ccgui\\…), isolated per workspace; never uploaded.",
+    memoryRulesWrite:
+      "Write: auto-captured after conversation turns (can disable per workspace); manual create/edit/delete; desensitize and dedupe applied.",
+    memoryRulesRead:
+      "Use: with Memory Reference on in Composer, local retrieve-and-confirm before send; keyword matching by default; optional semantic model improves fuzzy recall.",
+    memoryRulesInject:
+      "Inject: memories are prior context for the current user message only; the user bubble shows original text; failures never block send.",
+    memoryEmbedModelTitle: "Local semantic model",
+    memoryEmbedModelDesc:
+      "Download ~90MB semantic model for on-device vector matching. Files live under .ccgui/models/embedding/ in the user home directory (the absolute path for this machine is shown below as Storage location). Never uploaded.",
+    memoryEmbedPhaseTokenizer: "Downloading tokenizer…",
+    memoryEmbedPhaseModel: "Downloading semantic model…",
+    memoryEmbedNotDownloadable: "Not downloadable in this environment.",
+    memoryEmbedModelPath: "Storage location",
+    memoryEmbedDeleteModel: "Delete model",
+    memoryEmbedDeleteConfirm:
+      "Delete the local semantic model? Memory reference will fall back to keyword matching. You can download again anytime.",
+    memorySemanticRetrievalToggle: "Use semantic model for retrieval",
+    memorySemanticRetrievalToggleDesc:
+      "When off, retrieval uses keyword matching even if the model is installed. You can turn it back on anytime.",
+    memorySemanticRetrievalNeedModel: "Download and ready the model first",
+    memorySemanticRetrievalLexicalHint: "Current: keyword text retrieval",
+    memorySemanticRetrievalSemanticHint:
+      "Current: semantic model retrieval (hybrid when available)",
+    memoryReferencePreviewTitle: "What it looks like when enabled",
+    memoryReferencePreviewDesc:
+      "Before send, the app matches project memory for you to confirm. Static previews only — not a live chat.",
+    memoryReferencePreviewMatchLabel: "① Matching",
+    memoryReferencePreviewMatchRole: "Pre-send · local search · model not called yet",
+    memoryReferencePreviewPickLabel: "② Pick and confirm",
+    memoryReferencePreviewEmptyLabel: "③ No related memory",
+    memoryReferencePreviewInjectLabel: "④ After confirm",
+    memoryReferencePreviewInjectHead:
+      "Injected 3 project memories · pick for this turn",
+    memoryReferencePreviewInjectRow1: "My take: good to ship, no big changes.",
+    memoryReferencePreviewInjectRow2: "All fixes: hybrid thresholds, scores…",
+    memoryReferencePreviewInjectRow3: "Why exact “你好” showed ~0.5…",
     enableDictationDesc: "Downloads the selected Whisper model on first use.",
     downloadSize: "Download size:",
     preferredDictationLanguage: "Preferred dictation language",

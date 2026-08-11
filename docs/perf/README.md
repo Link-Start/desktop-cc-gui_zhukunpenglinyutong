@@ -28,6 +28,7 @@ status: active
 - [Render Jank Knife Experiments (2026-07-08)](render-jank-knife-experiments-2026-07-08.md) — 有日期的实验记录；其中数值不是永久基线（AGENTS 仍引用其四层根因框架）
 - [A4 Live Text Externalization Plan](a4-live-text-externalization-plan.md) — 已实现的 live-text 旁路；2026-07-30 演进为 accumulated/published 分离 + 48ms cadence
 - [Streaming Render Stall Design (2026-07-30)](streaming-render-stall-design-2026-07-30.md) — 已实现 `1537211a1`；OpenSpec `17/17` 并于 2026-08-03 归档；idle virtualization 后续由 `4e932e672` 恢复
+- [React Best Practices P0 Follow-up Execution Plan (2026-08-10)](2026-08-10-react-best-practices-p0-followup-execution-plan.md) — P0 首批落地后的可执行后续：S0 验收 → S1 memo → S2 bundle → S3 appMode → S4 AppShell 分域
 
 ## 与 0.7.x 幕布相关（交叉，非本目录全文）
 

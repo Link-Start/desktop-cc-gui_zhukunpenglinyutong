@@ -14,7 +14,7 @@ status: active
 | 产品能力、安装、命令、版本 | [`../README.md`](../README.md) | 当前产品入口 |
 | 仓库规则与 delivery gate | [`../AGENTS.md`](../AGENTS.md) | 规则入口 |
 | 行为契约与 change lifecycle | [`../openspec/`](../openspec/) | Behavior single source of truth |
-| Frontend/backend 实现规范 | [`../.trellis/spec/`](../.trellis/spec/) | Code-level rule |
+| Frontend/backend 实现规范 | [`../dev-guidelines/`](../dev-guidelines/) | Code-level rule |
 | 文档治理 | [`GOVERNANCE.md`](GOVERNANCE.md) | 分类、生命周期、索引与退役规则 |
 
 ## 当前文档
@@ -59,9 +59,15 @@ status: active
 
 ### Project Memory
 
-- [`research/00-project-memory-feature-overview.md`](research/00-project-memory-feature-overview.md)
-- [`research/04-project-memory-consumption-research.md`](research/04-project-memory-consumption-research.md)
+- [`research/00-project-memory-feature-overview.md`](research/00-project-memory-feature-overview.md)（historical）
+- [`research/04-project-memory-consumption-research.md`](research/04-project-memory-consumption-research.md)（superseded 消费调研）
+- [`research/05-project-memory-pick-gate-pointer.md`](research/05-project-memory-pick-gate-pointer.md)（闸门 + Phase-2 指针）
+- [`research/06-memos-vs-mossx-memory-upgrade-research-2026-08-10.md`](research/06-memos-vs-mossx-memory-upgrade-research-2026-08-10.md)（**MemOS 对照 + Phase-2 匹配/可观测/转接**）
 - Contract：`openspec/specs/project-memory-*/spec.md`
+- Changes：  
+  - Phase-1 闸门 `openspec/changes/add-memory-pick-gate/`  
+  - Phase-2 检索/可感 `openspec/changes/enhance-memory-pick-retrieval-and-observability/`  
+  - Phase-3 习惯/真语义 `openspec/changes/enhance-memory-pick-phase3-habit-and-semantic/`  
 - Implementation：`src/features/project-memory/`、`src-tauri/src/project_memory/`
 
 ### Performance 与卡顿
@@ -83,6 +89,7 @@ status: active
 - [`chat-canvas-conversation-curtain-contracts.md`](chat-canvas-conversation-curtain-contracts.md)
 - [`codex-collaboration-mode-enforcement-runbook.md`](codex-collaboration-mode-enforcement-runbook.md)
 - [`curated-skill-onboarding.md`](curated-skill-onboarding.md)
+- [`openspec-playbook.md`](openspec-playbook.md)
 - [`openspec-trellis-playbook.md`](openspec-trellis-playbook.md)
 - [`markdown-doc1-claude-chat-canvas-rendering.md`](markdown-doc1-claude-chat-canvas-rendering.md)
 - [`markdown-doc2-codex-chat-canvas-rendering.md`](markdown-doc2-codex-chat-canvas-rendering.md)

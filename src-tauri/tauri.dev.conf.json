@@ -1,8 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "ccgui-dev",
+  "productName": "cc-gui-debug",
   "identifier": "com.zhukunpenglinyutong.ccgui.dev",
-  "build": {
-    "devUrl": "http://localhost:1430"
-  }
+  "mainBinaryName": "cc-gui-debug"
 }

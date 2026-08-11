@@ -10,12 +10,43 @@ describe("sessionDisplayProjection", () => {
   it("classifies ordinal agent and generic session names as weak titles", () => {
     expect(isWeakSessionDisplayTitle("Agent 202")).toBe(true);
     expect(isWeakSessionDisplayTitle("Claude Session")).toBe(true);
+    expect(isWeakSessionDisplayTitle("Grok Session")).toBe(true);
+    expect(isWeakSessionDisplayTitle("Kimi Session")).toBe(true);
     expect(isWeakSessionDisplayTitle("分析左侧栏消失问题")).toBe(false);
   });
 
   it("classifies clipped raw command-tag names as weak titles", () => {
     expect(isWeakSessionDisplayTitle("<command-m")).toBe(true);
     expect(isWeakSessionDisplayTitle("<local-command-stdout>")).toBe(true);
+  });
+
+  it("classifies project-memory-pack residue as weak and keeps prior readable title", () => {
+    expect(isWeakSessionDisplayTitle("<project-memory-pack s")).toBe(true);
+    expect(
+      isWeakSessionDisplayTitle(
+        '<project-memory-pack source="memory-pick" count="2"',
+      ),
+    ).toBe(true);
+
+    const previous: ThreadSummary = {
+      id: "grok:session-1",
+      name: "你好啊",
+      updatedAt: 100,
+      engineSource: "grok",
+      threadKind: "native",
+    };
+    const polluted = {
+      ...previous,
+      name: '<project-memory-pack source="memory-pick" count="2"',
+      updatedAt: 120,
+    };
+
+    expect(mergeSessionDisplaySummary(previous, polluted).name).toBe("你好啊");
+    expect(
+      mergeSessionDisplaySummary(previous, polluted, {
+        nativeTitle: "<project-memory-pack s",
+      }).name,
+    ).toBe("你好啊");
   });
 
   it("treats context protocol titles as weak and ignores mapped protocol titles", () => {
