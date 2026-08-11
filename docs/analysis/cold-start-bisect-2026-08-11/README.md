@@ -2,19 +2,20 @@
 
 | 项 | 路径 |
 |----|------|
-| 主记录（过程+清单） | [`../cold-start-action-bisect-checklist-2026-08-11.md`](../cold-start-action-bisect-checklist-2026-08-11.md) |
+| **全流程收口报告（详细）** | [`../cold-start-composer-freeze-closeout-2026-08-11.md`](../cold-start-composer-freeze-closeout-2026-08-11.md) |
+| 逐步二分日志 | [`../cold-start-action-bisect-checklist-2026-08-11.md`](../cold-start-action-bisect-checklist-2026-08-11.md) |
 | 截图 | [`./screenshots/`](./screenshots/) |
-| 开关代码 | `src/features/startup-orchestration/utils/coldStartBisectFlags.ts` |
+| 止血提交 | `d21e1b989` |
 
 ## 结论摘要（最终）
 
-1. **根因**：冷启/Cmd+R 时立即挂载完整 `Composer.tsx`（~3.7k 行 + 多 store 订阅），与早期点击撞主线程 → 假死。  
-2. **非根因**：WebView、AppLayout 骨架、真 Sidebar/Messages、ChatInputBox、Adapter、composition hooks 单独均不卡。  
-3. **修复**：`DeferredComposerMount`（v3）— 先挂轻量 `ChatInputBox`（可发送），用户停手后再 `renderFull()` 完整 Composer。  
-4. **验证**：步21 essentials 不卡；**步22 Mac 生产形态全程不卡**（仅数秒轻量→完整输入框过渡）。  
-5. **bisect 档位**默认 `off`；修复代码保留在生产路径 `useLayoutNodes`。  
-6. **体验说明**：初始化几秒内输入框为轻量形态，停手后升级完整 Composer——属预期过渡，不是卡死。  
+1. **根因**：冷启/Cmd+R **立即挂载完整 `Composer.tsx`**（重 hooks + store），与猛点撞主线程 → 假死。  
+2. **非根因**：WebView、AppLayout、Sidebar/Messages、ChatInputBox、Adapter、composition hooks 单独均不卡。  
+3. **止血**：延迟挂载完整 Composer（曾 `DeferredComposerMount`）。  
+4. **根治形态**：`ComposerGate` + `ComposerLight`（Adapter + `sendReadiness` 静态模型位）→ 停手后 `ComposerImpl`；**无** atomic catalog 于轻量层。  
+5. **UX**：模型位始终占位（「加载中」→ 真名）；Light 使用 `footer.composer` 同宽；工具栏不 `1fr` 撑空。  
+6. **Mac 验收**：不卡 + 布局正确（用户确认）。Win 未测。  
 
 ## 截图命名
 
-`step-NN-<tier>-ok|freeze.ext` 或 `00-user-feedback-*.ext`
+`step-NN-<desc>-ok|FREEZE.ext` · `00-user-feedback-*.ext` · `step-22-prod-off-mac-ok-*.jpg`

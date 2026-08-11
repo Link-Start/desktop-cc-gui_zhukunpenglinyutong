@@ -4,24 +4,24 @@
 |----|-----|
 | 日期 | 2026-08-11 |
 | 现象 | 开发者模式启动后 **Cmd+R**，立刻猛点界面 → 高概率整窗假死 |
-| 对照 | `ultra` 探针不卡；`essentials` 真 App 卡 |
-| 开关 | `src/features/startup-orchestration/utils/coldStartBisectFlags.ts` → `COLD_START_BISECT_TIER` |
-| 界面指示 | 右上角红条（只看 App，不看控制台） |
+| 状态 | **已关闭（Mac 验收：不卡 + UX 正确）** |
+| 详细收口报告 | [`cold-start-composer-freeze-closeout-2026-08-11.md`](./cold-start-composer-freeze-closeout-2026-08-11.md) |
 | 证据图 | `docs/analysis/cold-start-bisect-2026-08-11/screenshots/` |
-| 规则 | **本文件只追加、不覆盖历史**；每步结果写入「调试过程」 |
+| 规则 | **本文件只追加、不覆盖历史**；逐步结果在 §2.3 |
 
 ---
 
-## 1. 当前状态
+## 1. 当前状态（最终）
 
 | 项 | 值 |
 |----|-----|
-| 当前档位 | **`off`（生产全路径）** |
-| 已确认 | 步21–22 Mac **全程不卡** |
-| 结论 | **根因：`Composer.tsx` 冷启立即挂载**；修复有效 |
-| 修复（生产保留） | `DeferredComposerMount` + list quiet 调度等 |
-| 已知体验 | 冷启几秒轻量→完整输入框过渡，**不卡死** |
-| **手工收口** | 已删除全部 bisect 脚手架；见文末「收口清单」 |
+| 根因 | 完整 `Composer.tsx` 冷启立即挂载（Adapter/ChatInputBox 不卡） |
+| 生产形态 | `ComposerGate` → 先 `ComposerLight`（正确工具栏 + 模型 loading）→ 停手后 `ComposerImpl` |
+| 副改进 | list/restore quiet、home gate stamp、uiScale healthy rAF 等 |
+| 二分脚手架 | **已全部删除** |
+| Mac | **不卡**；模型位 loading→真名；输入框宽度稳定；无大空洞 |
+| Win | 本轮未复测 |
+| 止血 commit | `d21e1b989` |
 
 ---
 
@@ -74,6 +74,8 @@
 | 20 | 2026-08-11 | essentials + DeferredComposer v2 | Cmd+R 猛点 / 点选择模型 | **仍卡** | 4s 无人升级或真侧栏+消息+轻壳组合；用户标注「选择模型出来后点就卡」 | 用户 |
 | 21 | 2026-08-11 | essentials + DeferredComposer v3 | Cmd+R 猛点；滞后后点选择模型 | **不卡**（出来前不卡，滞后出来后也不卡） | **修复验证通过** | 用户 |
 | 22 | 2026-08-11 | `off` 生产全路径 · **Mac** | 冷启/Cmd+R 全程猛点 + 切换会话/新建菜单 | **全程不卡**；仅有数秒输入框过渡 | **Mac 验收通过** | 用户 |
+| 23 | 2026-08-11 | 根治：ComposerGate+ComposerLight | Cmd+R 猛点 | **不卡** | 仍有模型条硬切 UX | 用户 |
+| 24 | 2026-08-11 | UX 修订：模型位 loading；Light 同宽；工具栏不撑空 | 冷启/开历史 | **用户确认：都对了也不卡了** | **根治+UX 收口** | 用户 |
 
 > 新结果请**在表末追加行**，不要改写上面已填格。
 
@@ -139,6 +141,7 @@
 | **步20 结论** | 延迟 v2 仍卡 |
 | **步21 结论** | **DeferredComposer v3 验证通过，不卡** |
 | **步22 结论** | **Mac 生产形态全程不卡**（仅数秒转换过渡） |
+| **步23–24 结论** | **ComposerGate+Light + 模型位 loading + 布局宽度/间距修正；用户确认 OK** |
 
 ### 2.5 代码联调改动摘要（过程资产，未提交）
 
@@ -261,47 +264,43 @@ FLAGS 加回：改 `COLD_START_BISECT_FLAGS` 对应项为 `true`。
 
 ---
 
-## 7. 手工收口清单（2026-08-11 最终形态）
+## 7. 手工收口清单（2026-08-11 最终形态 · 修订）
 
-### 7.1 生产必须保留（修复成功形态）
+> 完整叙述见 [`cold-start-composer-freeze-closeout-2026-08-11.md`](./cold-start-composer-freeze-closeout-2026-08-11.md)。
+
+### 7.1 生产必须保留
 
 | 项 | 路径 | 作用 |
 |----|------|------|
-| **DeferredComposerMount** | `src/features/composer/components/DeferredComposerMount.tsx` | **主修复**：先轻量 ChatInputBox，停手后再挂完整 Composer |
-| useLayoutNodes 包裹 | `src/features/layout/hooks/useLayoutNodes.tsx` | composerNode / homeComposerNode 走延迟挂载 |
-| scheduleWhenInteractiveQuiet 等 | `src/utils/interactiveMainThread.ts` | Composer 延迟与 list quiet 共用 |
+| **ComposerGate** | `Composer.tsx` | light → full；warm 后直开 full |
+| **ComposerLight** | `ComposerLight.tsx` | Adapter + `sendReadiness`；**无** atomic catalog |
+| **模型位 loading** | `ModelSelect.tsx` / `ComposerReadinessBar.tsx` | 未解析显示加载中，同位置替换真名 |
+| **工具栏不撑空** | `toolbar.css` / `banners.css` | readiness 不 `1fr` 拉出大空洞 |
+| **Light 同宽** | `ComposerLight` 使用 `footer.composer` | 与完整态 `max-width: 750px` 一致 |
+| list/restore quiet 等 | hydration / restore / interactiveMainThread | 副改进（止血提交已含） |
 
-### 7.2 有用副改进（保留，非主因但合理）
-
-| 项 | 路径 | 说明 |
-|----|------|------|
-| list first-paint quiet 调度 | `useWorkspaceThreadListHydration.ts` | 冷启/切区 list 错峰 |
-| restore quiet + first-paint | `useWorkspaceRestore.ts` | 避免与 hydration 同 tick 双开 list |
-| pointer soft-cancel in-flight list | hydration | 点击时 stale 掉 list apply |
-| home-input-ready stamp | `useAppShellWorkspaceHomeState.ts` | home 无 active 时 gate 诚实 |
-| uiScale healthy rAF | `useUiScaleShortcuts.ts` | 首帧少同步 localStorage |
-| useAppServerEvents.enabled | `useAppServerEvents.ts` | 可选关订阅，默认 true |
-
-### 7.3 已删除（二分脚手架，勿进生产）
+### 7.2 已删除 / 勿回潮
 
 | 项 | 说明 |
 |----|------|
-| `coldStartBisectFlags.ts` | 档位开关 |
-| `ColdStart*.tsx` / BisectBadge / Probe / ShellLite 等 | 全部分层探针组件 |
-| AppShell / bootstrap / router 二分分支 | 已还原 HEAD 干净入口 |
+| 全部 ColdStart 二分脚手架 | 探针组件、flags、入口短路 |
+| **外层 DeferredComposerMount** | 逻辑已内聚到 ComposerGate |
+| Light 上 `onExecutionTargetChange` | 会开 atomic catalog → **假死复现** |
 
-### 7.4 文档 / OpenSpec（档案保留）
+### 7.3 文档档案
 
 | 项 | 说明 |
 |----|------|
-| 本 checklist + screenshots | 联调证据，保留 |
-| `openspec/changes/defer-thread-list-hydration-until-idle-or-intent/` | list 滞后提案，可后续正式落地/归档 |
+| 本 checklist + screenshots | 逐步日志与证据 |
+| `cold-start-composer-freeze-closeout-2026-08-11.md` | **全流程详细收口** |
+| OpenSpec list 滞后 change | 提案归档 |
 
-### 7.5 是否「最终形态」
+### 7.4 最终形态问答
 
 | 问题 | 答案 |
 |------|------|
-| 现在是修复成功后的样子吗？ | **是**：生产路径无红条、无二分短路；**主修复是 DeferredComposer** |
-| 还有过渡吗？ | **有**：数秒轻量输入框 → 完整 Composer，**预期行为** |
-| 是否还要拆 Composer 内部？ | 可选后续（根治后可缩短/取消延迟） |
-| 是否已 commit？ | **否**，仅工作区收口 |
+| 现在是修复成功后的样子吗？ | **是**（Mac 用户确认不卡且 UX 对） |
+| 轻量层还会缺模型位吗？ | **否**：有 `sendReadiness` 静态模型位 + loading |
+| 输入框还会先全宽再缩吗？ | **否**：Light 与 Full 同用 `.composer` 限宽 |
+| 止血 commit？ | `d21e1b989` |
+| 根治+UX 代码？ | 工作区变更，建议再 commit 一次 |

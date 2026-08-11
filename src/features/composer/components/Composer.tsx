@@ -60,7 +60,13 @@ import {
 import { computeDictationInsertion } from "../../../utils/dictation";
 import { useComposerAutocompleteState } from "../hooks/useComposerAutocompleteState";
 import { useComposerDraft } from "../hooks/composerDraftStore";
+import {
+  ensureInteractiveInputHooks,
+  getLastInteractiveInputAtMs,
+  hadRecentInteractiveInput,
+} from "../../../utils/interactiveMainThread";
 import { ChatInputBoxAdapter } from "./ChatInputBox/ChatInputBoxAdapter";
+import { ComposerLight } from "./ComposerLight";
 import type { ChatInputBoxHandle } from "./ChatInputBox/ChatInputBoxAdapter";
 import { isSameProviderExecutionProfile } from "./ChatInputBox/selectors/ModelSelect";
 import {
@@ -220,7 +226,7 @@ function resolveClaudeWindowUsedTokens(
   return hasWindowSnapshot ? inputTokens + cachedInputTokens : null;
 }
 
-type ComposerProps = {
+export type ComposerProps = {
   kanbanContextMode?: "new" | "inherit";
   onKanbanContextModeChange?: (mode: "new" | "inherit") => void;
   items?: ConversationItem[];
@@ -3783,4 +3789,84 @@ function areComposerPropsShallowEqual(
   return true;
 }
 
-export const Composer = memo(ComposerImpl, areComposerPropsEqual);
+/**
+ * 根治路径：先挂 ComposerLight（与完整态同一套工具栏结构：模型位始终占位 loading），
+ * 停手后再挂 ComposerImpl。模型未就绪时只在「模型选择」槽显示 loading，禁止缺位布局。
+ * warm 后直开 full，避免历史会话再走一遍残缺态。
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const IS_VITEST =
+  typeof import.meta !== "undefined" && (import.meta as any).env?.MODE === "test";
+
+/** 进程内 warm：完整 Composer 安全挂过一次后，后续挂载直开 full */
+let composerHeavyWarmed = false;
+
+function ComposerGate(props: ComposerProps) {
+  const [full, setFull] = useState(() => IS_VITEST || composerHeavyWarmed);
+
+  useEffect(() => {
+    if (IS_VITEST || full) {
+      return;
+    }
+    ensureInteractiveInputHooks();
+    const mountedAt = Date.now();
+    let cancelled = false;
+    let timerId: number | null = null;
+
+    const tick = () => {
+      if (cancelled) {
+        return;
+      }
+      const now = Date.now();
+      const lastInput = getLastInteractiveInputAtMs();
+      const elapsed = now - mountedAt;
+      const hadInputSinceMount = lastInput >= mountedAt;
+      const quietFor = now - lastInput;
+
+      if (hadInputSinceMount && quietFor >= 1_200 && elapsed >= 1_000) {
+        if (hadRecentInteractiveInput(250)) {
+          timerId = window.setTimeout(tick, 150);
+          return;
+        }
+        composerHeavyWarmed = true;
+        setFull(true);
+        return;
+      }
+
+      // 无人操作：catalog 通常已就绪后再上完整层（模型位已有 loading 占位，不靠缺位）
+      if (!hadInputSinceMount && elapsed >= 2_800) {
+        composerHeavyWarmed = true;
+        setFull(true);
+        return;
+      }
+
+      timerId = window.setTimeout(tick, 120);
+    };
+
+    timerId = window.setTimeout(tick, 400);
+    return () => {
+      cancelled = true;
+      if (timerId != null) {
+        window.clearTimeout(timerId);
+      }
+    };
+  }, [full]);
+
+  useEffect(() => {
+    if (full) {
+      composerHeavyWarmed = true;
+    }
+  }, [full]);
+
+  if (full) {
+    return <ComposerImpl {...props} />;
+  }
+  return <ComposerLight {...props} />;
+}
+
+export const Composer = memo(ComposerGate, areComposerPropsEqual);
+
+/** @internal 测试可重置 warm，避免污染其它用例 */
+export function __resetComposerHeavyWarmForTests(): void {
+  composerHeavyWarmed = false;
+}
