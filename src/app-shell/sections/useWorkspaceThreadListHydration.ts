@@ -25,7 +25,11 @@ import {
 } from "../../features/startup-orchestration/utils/fullCatalogAutoRetry";
 import { stampStartupGateReady } from "../../features/startup-orchestration/utils/startupGateReady";
 import { shouldSkipWorkspaceThreadListLoad } from "./workspaceThreadListLoadGuard";
-import { ensureInteractiveInputHooks } from "../../utils/interactiveMainThread";
+import {
+  ensureInteractiveInputHooks,
+  hadRecentInteractiveInput,
+  scheduleWhenInteractiveQuiet,
+} from "../../utils/interactiveMainThread";
 
 function hasStartupGateReady(): boolean {
   return Boolean(getStartupTraceSnapshot().milestones["startup-gate-ready"]);
@@ -98,13 +102,31 @@ type UseWorkspaceThreadListHydrationResult = {
 type ThreadHydrationPhase = "active-workspace" | "idle-prewarm" | "on-demand";
 type ThreadHydrationKind = "full-catalog" | "session-radar" | "first-paint";
 
-/** Delay before first active list so open + first clicks stay free (0.7.15 often skipped load via race). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const COLD_START_FIRST_PAINT_DELAY_MS =
-  typeof import.meta !== "undefined" &&
-  (import.meta as any).env?.MODE === "test"
-    ? 0
-    : 500;
+const IS_VITEST =
+  typeof import.meta !== "undefined" && (import.meta as any).env?.MODE === "test";
+
+/**
+ * Cold-start / first bind / Cmd+R: do not start first-paint until the user has
+ * been quiet. Rapid click after reload freezes WebView when list IPC + setThreads
+ * overlap hit-test (field repro).
+ * @internal exported for tests
+ */
+export const COLD_START_IDLE_MIN_DELAY_MS = IS_VITEST ? 0 : 1_500;
+/** Must stay quiet this long before auto first-paint may start. */
+export const COLD_START_INPUT_QUIET_MS = IS_VITEST ? 0 : 1_000;
+/** Absolute ceiling so list still converges if the user never stops clicking. */
+export const COLD_START_IDLE_TIMEOUT_MS = IS_VITEST ? 0 : 15_000;
+/**
+ * User switched workspace (A→B): short intent delay, still quiet-gated slightly.
+ * @internal exported for tests
+ */
+export const WORKSPACE_SWITCH_INTENT_DELAY_MS = IS_VITEST ? 0 : 100;
+export const WORKSPACE_SWITCH_INPUT_QUIET_MS = IS_VITEST ? 0 : 300;
+
+/** @deprecated Prefer COLD_START_IDLE_* / WORKSPACE_SWITCH_INTENT_DELAY_MS */
+export const COLD_START_FIRST_PAINT_DELAY_MS = COLD_START_IDLE_MIN_DELAY_MS;
+
 function isDiscardedStaleHydrationResult(
   result: ThreadListHydrationResult,
 ): boolean {
@@ -250,6 +272,10 @@ export function useWorkspaceThreadListHydration({
   const previousActiveWorkspaceIdRef = useRef<string | null>(null);
   const activeWorkspaceIdRef = useRef(activeWorkspaceId);
   activeWorkspaceIdRef.current = activeWorkspaceId;
+  /** Pending cold-idle or intent-timer for auto first-paint (not session-radar). */
+  const pendingAutoFirstPaintCleanupRef = useRef<(() => void) | null>(null);
+  /** Re-arm quiet first-paint after pointer soft-cancel during cold window. */
+  const rescheduleAutoFirstPaintRef = useRef<(() => void) | null>(null);
   const ensureWorkspaceThreadListLoadedRef = useRef<
     | ((
         workspaceId: string,
@@ -541,10 +567,11 @@ export function useWorkspaceThreadListHydration({
 
   useEffect(() => {
     const previousActiveWorkspaceId = previousActiveWorkspaceIdRef.current;
-    if (
-      previousActiveWorkspaceId &&
-      previousActiveWorkspaceId !== activeWorkspaceId
-    ) {
+    const isIntentSwitch =
+      previousActiveWorkspaceId != null &&
+      previousActiveWorkspaceId !== activeWorkspaceId;
+
+    if (isIntentSwitch && previousActiveWorkspaceId) {
       // Spec: stale workspace hydration is cancelled on switch. Soft-ignore
       // marks the generation stale so late list apply no-ops via isStale.
       startupOrchestrator.cancelWorkspaceTasks(
@@ -560,11 +587,20 @@ export function useWorkspaceThreadListHydration({
           previousActiveWorkspaceId,
         );
       }
+      // Drop scheduled auto first-paint for the previous target.
+      pendingAutoFirstPaintCleanupRef.current?.();
+      pendingAutoFirstPaintCleanupRef.current = null;
+      if (autoHydratedActiveWorkspaceIdRef.current === previousActiveWorkspaceId) {
+        autoHydratedActiveWorkspaceIdRef.current = null;
+      }
     }
+
     previousActiveWorkspaceIdRef.current = activeWorkspaceId;
 
     if (!activeWorkspaceId) {
       autoHydratedActiveWorkspaceIdRef.current = null;
+      pendingAutoFirstPaintCleanupRef.current?.();
+      pendingAutoFirstPaintCleanupRef.current = null;
       return;
     }
     if (autoHydratedActiveWorkspaceIdRef.current === activeWorkspaceId) {
@@ -577,26 +613,119 @@ export function useWorkspaceThreadListHydration({
     if (!workspacesById.has(activeWorkspaceId)) {
       return;
     }
-    // Defer first-paint list so cold-start clicks stay interactive. 0.7.15 often
-    // skipped load via the workspacesById race; we keep correctness of 9e3c1bdd8
-    // but do not start multi-engine work in the same frame as first paint.
+
+    // Cancel any prior pending schedule for a different bind of the same id
+    // (e.g. map late-arrival re-entry) before rescheduling.
+    pendingAutoFirstPaintCleanupRef.current?.();
+    pendingAutoFirstPaintCleanupRef.current = null;
+
     const targetId = activeWorkspaceId;
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      if (cancelled) {
+
+    const startEnsure = () => {
+      if (activeWorkspaceIdRef.current !== targetId) {
         return;
       }
       if (autoHydratedActiveWorkspaceIdRef.current === targetId) {
         return;
       }
+      if (!workspacesById.has(targetId)) {
+        return;
+      }
+      // Last-moment gate: if the user is still clicking, do not mark auto-done
+      // and re-arm quiet schedule (Cmd+R press-test).
+      if (
+        hadRecentInteractiveInput(
+          isIntentSwitch
+            ? Math.max(WORKSPACE_SWITCH_INPUT_QUIET_MS, 48)
+            : Math.max(COLD_START_INPUT_QUIET_MS, 48),
+        )
+      ) {
+        pendingAutoFirstPaintCleanupRef.current = scheduleWhenInteractiveQuiet(
+          startEnsure,
+          {
+            quietMs: isIntentSwitch
+              ? WORKSPACE_SWITCH_INPUT_QUIET_MS
+              : COLD_START_INPUT_QUIET_MS,
+            minDelayMs: 0,
+            maxWaitMs: COLD_START_IDLE_TIMEOUT_MS,
+          },
+        );
+        return;
+      }
       autoHydratedActiveWorkspaceIdRef.current = targetId;
+      pendingAutoFirstPaintCleanupRef.current = null;
       ensureWorkspaceThreadListLoaded(targetId, { preserveState: true });
-    }, COLD_START_FIRST_PAINT_DELAY_MS);
+    };
+
+    const armQuietSchedule = () => {
+      pendingAutoFirstPaintCleanupRef.current?.();
+      pendingAutoFirstPaintCleanupRef.current = scheduleWhenInteractiveQuiet(
+        startEnsure,
+        {
+          quietMs: isIntentSwitch
+            ? WORKSPACE_SWITCH_INPUT_QUIET_MS
+            : COLD_START_INPUT_QUIET_MS,
+          minDelayMs: isIntentSwitch
+            ? WORKSPACE_SWITCH_INTENT_DELAY_MS
+            : COLD_START_IDLE_MIN_DELAY_MS,
+          maxWaitMs: COLD_START_IDLE_TIMEOUT_MS,
+        },
+      );
+    };
+
+    rescheduleAutoFirstPaintRef.current = () => {
+      if (activeWorkspaceIdRef.current !== targetId) {
+        return;
+      }
+      if (autoHydratedActiveWorkspaceIdRef.current === targetId) {
+        return;
+      }
+      armQuietSchedule();
+    };
+
+    // Quiet-gated for both cold bind and workspace switch — switch still cancels
+    // the previous workspace first (above).
+    armQuietSchedule();
+
     return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
+      pendingAutoFirstPaintCleanupRef.current?.();
+      pendingAutoFirstPaintCleanupRef.current = null;
+      if (rescheduleAutoFirstPaintRef.current) {
+        rescheduleAutoFirstPaintRef.current = null;
+      }
     };
   }, [activeWorkspaceId, ensureWorkspaceThreadListLoaded, workspacesById]);
+
+  // While gate is not ready, any pointerdown soft-cancels in-flight list apply
+  // so clicks never collide with setThreads (Cmd+R / reload stress).
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    ensureInteractiveInputHooks();
+    const onPointerDown = () => {
+      if (hasStartupGateReady() || isStartupForceEntered()) {
+        return;
+      }
+      const activeId = activeWorkspaceIdRef.current;
+      if (!activeId) {
+        return;
+      }
+      startupOrchestrator.cancelWorkspaceTasks(activeId, "stale");
+      // Allow quiet scheduler to retry after the user stops clicking.
+      if (autoHydratedActiveWorkspaceIdRef.current === activeId) {
+        autoHydratedActiveWorkspaceIdRef.current = null;
+        rescheduleAutoFirstPaintRef.current?.();
+      }
+    };
+    window.addEventListener("pointerdown", onPointerDown, {
+      capture: true,
+      passive: true,
+    });
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown, true);
+    };
+  }, []);
 
   useEffect(() => {
     if (!activeWorkspaceId || activeWorkspaceProjectionOwnerIds.length <= 1) {

@@ -118,6 +118,7 @@ import {
   type ActiveCanvasSnapshot,
 } from "./activeCanvasStore";
 import { ActiveCanvasComposer } from "./activeCanvasComposerNode";
+import { DeferredComposerMount } from "../../composer/components/DeferredComposerMount";
 import { SharedSendStatusBar } from "../../shared-session/components/SharedSendStatusBar";
 import { ProviderContinuationContextCard } from "../../shared-session/components/ProviderContinuationContextCard";
 import { buildProviderContinuationSourceExcerpt } from "../../shared-session/components/providerContinuationSourceExcerpt";
@@ -2027,14 +2028,32 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   );
 
   const composerNode = useMemo(
-    () => renderComposerNode(false, true, noteCardSelectionRequest),
-    [renderComposerNode, noteCardSelectionRequest],
+    () => (
+      <DeferredComposerMount
+        key="composer-deferred"
+        onLightSubmit={async (text) => {
+          await options.onSend?.(text, [], undefined);
+        }}
+        renderFull={() =>
+          renderComposerNode(false, true, noteCardSelectionRequest)
+        }
+      />
+    ),
+    [noteCardSelectionRequest, options.onSend, renderComposerNode],
   );
 
   // 首页：分支徽标与工作区选择并排渲染在 HomeChat 里，故 Composer 内不再重复
   const homeComposerNode = useMemo(
-    () => renderComposerNode(false, false, null, true),
-    [renderComposerNode],
+    () => (
+      <DeferredComposerMount
+        key="home-composer-deferred"
+        onLightSubmit={async (text) => {
+          await options.onSend?.(text, [], undefined);
+        }}
+        renderFull={() => renderComposerNode(false, false, null, true)}
+      />
+    ),
+    [options.onSend, renderComposerNode],
   );
   const approvalToastsNode = null;
 

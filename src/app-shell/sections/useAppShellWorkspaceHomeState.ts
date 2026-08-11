@@ -5,6 +5,7 @@ import {
   resolveHomeWorkspaceId,
 } from "../../features/home/utils/homeWorkspaceOptions";
 import { recordStartupMilestone } from "../../features/startup-orchestration/utils/startupTrace";
+import { stampStartupGateReady } from "../../features/startup-orchestration/utils/startupGateReady";
 import { recordStartupPerfMarker } from "../../services/perfBaseline/startupMarkers";
 
 type WorkspaceHomeStateParams = {
@@ -31,7 +32,12 @@ export function useAppShellWorkspaceHomeState({
     inputReadyMilestoneRecordedRef.current = true;
     recordStartupMilestone("input-ready");
     recordStartupPerfMarker("first-interactive");
-  }, [appSettingsLoading, hasLoaded]);
+    // Home shell (no active workspace list owner): open the click gate without
+    // waiting for first-paint list.
+    if (!activeWorkspaceId) {
+      stampStartupGateReady("home-input-ready");
+    }
+  }, [activeWorkspaceId, appSettingsLoading, hasLoaded]);
 
   const workspacesById = useMemo(
     () => new Map(workspaces.map((workspace) => [workspace.id, workspace])),

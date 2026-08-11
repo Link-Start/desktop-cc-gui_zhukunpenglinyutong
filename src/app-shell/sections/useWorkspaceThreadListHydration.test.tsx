@@ -12,7 +12,12 @@ import {
   markStartupForceEnter,
   resetStartupForceEnterForTests,
 } from "../../features/startup-orchestration/utils/startupForceEnter";
-import { useWorkspaceThreadListHydration } from "./useWorkspaceThreadListHydration";
+import {
+  useWorkspaceThreadListHydration,
+  COLD_START_IDLE_MIN_DELAY_MS,
+  WORKSPACE_SWITCH_INTENT_DELAY_MS,
+} from "./useWorkspaceThreadListHydration";
+import { startupOrchestrator } from "../../features/startup-orchestration/utils/startupOrchestrator";
 
 let restoreIdleCallbackForTest: (() => void) | null = null;
 
@@ -73,6 +78,98 @@ describe("useWorkspaceThreadListHydration", () => {
 
   afterEach(() => {
     restoreIdleCallbackForTest?.();
+  });
+
+  it("defers cold-start first-paint until idle (not same-tick auto ensure)", async () => {
+    vi.useFakeTimers();
+    // Do not install immediate idle — prove schedule is deferred via idle path.
+    const workspaces = [createWorkspace("ws-1")];
+    const listThreadsForWorkspace = vi.fn().mockResolvedValue(undefined);
+
+    renderHook(() =>
+      useWorkspaceThreadListHydration({
+        activeWorkspaceId: "ws-1",
+        activeWorkspaceProjectionOwnerIds: ["ws-1"],
+        listThreadsForWorkspace,
+        threadListLoadingByWorkspace: {},
+        workspaces,
+        workspacesById: new Map(
+          workspaces.map((workspace) => [workspace.id, workspace]),
+        ),
+      }),
+    );
+
+    // Synchronous bind must not start IPC list (even when test delays are 0,
+    // idle still goes through a macrotask).
+    expect(listThreadsForWorkspace).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(
+        Math.max(COLD_START_IDLE_MIN_DELAY_MS, 0) + 1,
+      );
+      await Promise.resolve();
+    });
+
+    expect(listThreadsForWorkspace).toHaveBeenCalledWith(
+      workspaces[0],
+      expect.objectContaining({ startupHydrationMode: "first-paint" }),
+    );
+    vi.useRealTimers();
+  });
+
+  it("treats workspace switch as intent: cancels previous and schedules B", async () => {
+    vi.useFakeTimers();
+    const cancelSpy = vi.spyOn(startupOrchestrator, "cancelWorkspaceTasks");
+    const workspaces = [createWorkspace("ws-a"), createWorkspace("ws-b")];
+    const listThreadsForWorkspace = vi.fn().mockResolvedValue(undefined);
+    const map = new Map(
+      workspaces.map((workspace) => [workspace.id, workspace]),
+    );
+
+    const { rerender } = renderHook(
+      ({ activeId }: { activeId: string }) =>
+        useWorkspaceThreadListHydration({
+          activeWorkspaceId: activeId,
+          activeWorkspaceProjectionOwnerIds: [activeId],
+          listThreadsForWorkspace,
+          threadListLoadingByWorkspace: {},
+          workspaces,
+          workspacesById: map,
+        }),
+      { initialProps: { activeId: "ws-a" } },
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+      await Promise.resolve();
+    });
+    expect(listThreadsForWorkspace).toHaveBeenCalledWith(
+      workspaces[0],
+      expect.objectContaining({ startupHydrationMode: "first-paint" }),
+    );
+    listThreadsForWorkspace.mockClear();
+    cancelSpy.mockClear();
+
+    rerender({ activeId: "ws-b" });
+
+    expect(cancelSpy).toHaveBeenCalledWith("ws-a", "stale");
+    // Intent path uses short timer; not yet fired on same tick when delay>0.
+    // In test mode delay is 0 → still a macrotask.
+    expect(listThreadsForWorkspace).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(
+        Math.max(WORKSPACE_SWITCH_INTENT_DELAY_MS, 0) + 1,
+      );
+      await Promise.resolve();
+    });
+
+    expect(listThreadsForWorkspace).toHaveBeenCalledWith(
+      workspaces[1],
+      expect.objectContaining({ startupHydrationMode: "first-paint" }),
+    );
+    cancelSpy.mockRestore();
+    vi.useRealTimers();
   });
 
   it("does not automatically hydrate background workspaces", async () => {

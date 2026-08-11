@@ -5,9 +5,14 @@ import { useAppShellWorkspaceHomeState } from "./useAppShellWorkspaceHomeState";
 
 const recordStartupMilestoneMock = vi.hoisted(() => vi.fn());
 const recordStartupPerfMarkerMock = vi.hoisted(() => vi.fn());
+const stampStartupGateReadyMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../../features/startup-orchestration/utils/startupTrace", () => ({
   recordStartupMilestone: recordStartupMilestoneMock,
+}));
+
+vi.mock("../../features/startup-orchestration/utils/startupGateReady", () => ({
+  stampStartupGateReady: stampStartupGateReadyMock,
 }));
 
 vi.mock("../../services/perfBaseline/startupMarkers", () => ({
@@ -29,6 +34,7 @@ describe("useAppShellWorkspaceHomeState", () => {
   beforeEach(() => {
     recordStartupMilestoneMock.mockReset();
     recordStartupPerfMarkerMock.mockReset();
+    stampStartupGateReadyMock.mockReset();
   });
 
   it("records input-ready and first-interactive once after workspace home is loaded", () => {
@@ -46,5 +52,22 @@ describe("useAppShellWorkspaceHomeState", () => {
     expect(recordStartupMilestoneMock).toHaveBeenCalledWith("input-ready");
     expect(recordStartupPerfMarkerMock).toHaveBeenCalledTimes(1);
     expect(recordStartupPerfMarkerMock).toHaveBeenCalledWith("first-interactive");
+    // No active workspace → home shell may open the click gate immediately.
+    expect(stampStartupGateReadyMock).toHaveBeenCalledWith("home-input-ready");
+  });
+
+  it("does not stamp home-input-ready when an active workspace owns first-paint", () => {
+    renderHook(() =>
+      useAppShellWorkspaceHomeState(
+        createParams({
+          activeWorkspaceId: "ws-1",
+          appSettingsLoading: false,
+          hasLoaded: true,
+        }),
+      ),
+    );
+
+    expect(recordStartupMilestoneMock).toHaveBeenCalledWith("input-ready");
+    expect(stampStartupGateReadyMock).not.toHaveBeenCalled();
   });
 });
