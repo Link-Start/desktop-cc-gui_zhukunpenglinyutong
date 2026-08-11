@@ -21,7 +21,15 @@ const isolatedConfig = JSON.stringify({
 
 const child = spawn(
   tauriBin,
-  ["dev", "--config", "src-tauri/tauri.dev.conf.json", "--config", isolatedConfig],
+  [
+    "dev",
+    "--config",
+    "src-tauri/tauri.dev.conf.json",
+    "--config",
+    isolatedConfig,
+    "--features",
+    "debug-bin",
+  ],
   {
     env: {
       ...process.env,

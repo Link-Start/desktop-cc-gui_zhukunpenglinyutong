@@ -4,13 +4,17 @@ version = "0.3.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
-# Local `tauri dev` / `cargo run` uses this binary name as the macOS Dock tooltip.
+# Local `cargo run --features debug-bin` / `tauri dev --features debug-bin` Dock tooltip.
+# Release builds must NOT enable `debug-bin` (keeps cc-gui-debug out of the app bundle).
 default-run = "cc-gui-debug"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
+# Dev-only second binary for distinct Dock label. Never enable on release packaging:
+# shipping it into Contents/MacOS regressed Intel codesign (nested unsigned helpers).
+debug-bin = []
 
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary
@@ -19,7 +23,8 @@ custom-protocol = ["tauri/custom-protocol"]
 name = "cc_gui_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
-# Release packaging keeps `cc-gui`; debug runs as `cc-gui-debug` (distinct Dock label).
+# Release packaging keeps `cc-gui` (+ auto-discovered `cc_gui_daemon`).
+# `cc-gui-debug` is feature-gated so release bundles never include it.
 [[bin]]
 name = "cc-gui"
 path = "src/main.rs"
@@ -27,6 +32,7 @@ path = "src/main.rs"
 [[bin]]
 name = "cc-gui-debug"
 path = "src/main.rs"
+required-features = ["debug-bin"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
