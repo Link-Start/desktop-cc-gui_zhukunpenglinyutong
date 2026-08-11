@@ -23,6 +23,7 @@ import { trackHotspot } from "../../../../services/perfBaseline/hotspotTracker";
 import { useRenderHotspot } from "../../../../services/perfBaseline/useRenderHotspot";
 import type { ConversationItem } from "../../../../types";
 import { useLiveAssistantText } from "../../../threads/hooks/useLiveAssistantText";
+import { resolveResidualLiveAssistantDisplayText } from "../../../threads/utils/liveAssistantTextChannel";
 import { isLiveTextExternalizationEnabled } from "../../../threads/utils/realtimePerfFlags";
 import {
   noteThreadLiveRowRenderMeasured,
@@ -273,6 +274,8 @@ export const MessageRow = memo(function MessageRow({
   // （通道自首条 delta 起全量累计，item.text 仅为建壳首段），后续 delta 只驱动
   // 本行小树渲染。非流式行/flag 关闭时订阅为空、零开销；终稿落地或中断 drain
   // 后通道条目清除，本行自然切回读 item.text。
+  // 若 settle 竞态导致 isStreaming 已关、通道仍有更长全文，peek residual 避免
+  // 界面只剩建壳首字（「这」/「已」/「**」），重开历史才恢复。
   const liveAssistantTextEntry = useLiveAssistantText(
     threadId,
     LIVE_TEXT_EXTERNALIZATION_ENABLED && isStreaming && item.role === "assistant",
@@ -311,8 +314,20 @@ export const MessageRow = memo(function MessageRow({
     parsedUserTextContent,
     imageItems,
   } = staticPresentation;
+  const residualLiveAssistantText =
+    canUseLiveAssistantText &&
+    LIVE_TEXT_EXTERNALIZATION_ENABLED &&
+    !isStreaming &&
+    item.role === "assistant" &&
+    threadId
+      ? resolveResidualLiveAssistantDisplayText(
+          threadId,
+          item.id,
+          staticDisplayText,
+        )
+      : null;
   const displayText = canUseLiveAssistantText
-    ? liveAssistantText ?? staticDisplayText
+    ? liveAssistantText ?? residualLiveAssistantText ?? staticDisplayText
     : staticDisplayText;
   const hasText = displayText.trim().length > 0;
   // jetbrains 同帧 stick：流式正文不再 useDeferredValue，避免「字先长高、钉底晚一帧」闪一下。

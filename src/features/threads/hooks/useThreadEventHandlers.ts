@@ -2010,18 +2010,20 @@ export function useThreadEventHandlers({
         if (canFallbackSettle) {
           // 与 onTurnCompleted 主路径一致：fallback settle 也必须先把 live 全文
           // 写入 durable state，否则 markProcessing(false) 后 UI 只剩建壳首段。
-          const liveEntry = peekLiveAssistantText(threadId);
-          if (liveEntry?.text) {
-            dispatch({
-              type: "completeAgentMessage",
-              workspaceId,
-              threadId,
-              itemId: liveEntry.itemId,
-              text: liveEntry.text,
-              hasCustomName: true,
-              timestamp: Date.now(),
-            });
-            clearLiveAssistantText(threadId);
+          {
+            const liveEntry = peekLiveAssistantText(threadId);
+            if (liveEntry?.text) {
+              dispatch({
+                type: "completeAgentMessage",
+                workspaceId,
+                threadId,
+                itemId: liveEntry.itemId,
+                text: liveEntry.text,
+                hasCustomName: true,
+                timestamp: Date.now(),
+              });
+              clearLiveAssistantText(threadId);
+            }
           }
           dispatch({
             type: "clearProcessingGeneratedImages",
