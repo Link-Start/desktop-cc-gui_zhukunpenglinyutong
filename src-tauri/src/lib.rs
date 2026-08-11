@@ -373,7 +373,8 @@ pub fn run() {
             }
 
             // Debug dock icon + badge after NSApplication is alive.
-            // Dock *tooltip* comes from binary name `cc-gui-debug` (Cargo default-run).
+            // Dock *tooltip* comes from binary filename `cc-gui-debug`
+            // (`tauri.dev.conf.json` mainBinaryName + `--features debug-bin`).
             #[cfg(all(debug_assertions, target_os = "macos"))]
             {
                 let window_for_identity = window.clone();

@@ -3,7 +3,9 @@
 //! macOS Dock tooltip for a bare cargo binary is the **executable file name**.
 //! Cosmetic APIs (`setProcessName`, badge label, productName alone) are unreliable
 //! for that surface. The durable fix is running as binary `cc-gui-debug`
-//! (`Cargo.toml` `default-run` + `[[bin]]`), plus a high-contrast dock icon.
+//! (`tauri.dev.conf.json` `mainBinaryName` + Cargo `[[bin]]` with
+//! `--features debug-bin`). Release `default-run` must stay `cc-gui` so Tauri
+//! does not force-package a missing feature-gated binary.
 
 /// Shown as window title in debug builds. Dock tooltip comes from the binary name.
 pub const DEBUG_APP_DISPLAY_NAME: &str = "cc-gui-debug";
