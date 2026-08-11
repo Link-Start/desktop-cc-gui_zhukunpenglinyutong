@@ -382,21 +382,33 @@ describe("modelSelection", () => {
     expect(isReasoningEffortSupportedForEngine("grok", [])).toBe(true);
   });
 
-  it("keeps Claude effort empty until the user selects a thread or draft value", () => {
+  it("restores Claude durable preferred effort when thread/draft is empty", () => {
+    expect(
+      getEffectiveSelectedEffort({
+        activeEngine: "claude",
+        hasActiveThread: false,
+        selectedEffort: null,
+        preferredEffort: "medium",
+        activeThreadSelection: null,
+        reasoningOptions: CLAUDE_REASONING_OPTIONS,
+      }),
+    ).toBe("medium");
     expect(
       getEffectiveSelectedEffort({
         activeEngine: "claude",
         hasActiveThread: false,
         selectedEffort: "medium",
+        preferredEffort: null,
         activeThreadSelection: null,
         reasoningOptions: CLAUDE_REASONING_OPTIONS,
       }),
-    ).toBeNull();
+    ).toBe("medium");
     expect(
       getEffectiveSelectedEffort({
         activeEngine: "claude",
         hasActiveThread: true,
         selectedEffort: "medium",
+        preferredEffort: "low",
         activeThreadSelection: {
           modelId: "claude-custom",
           effort: "high",
@@ -409,6 +421,7 @@ describe("modelSelection", () => {
         activeEngine: "claude",
         hasActiveThread: false,
         selectedEffort: "medium",
+        preferredEffort: "low",
         activeThreadSelection: {
           modelId: "claude-custom",
           effort: "high",
@@ -416,23 +429,36 @@ describe("modelSelection", () => {
         reasoningOptions: CLAUDE_REASONING_OPTIONS,
       }),
     ).toBe("high");
+    // No durable or draft value → stay empty (no silent default)
+    expect(
+      getEffectiveSelectedEffort({
+        activeEngine: "claude",
+        hasActiveThread: false,
+        selectedEffort: null,
+        preferredEffort: null,
+        activeThreadSelection: null,
+        reasoningOptions: CLAUDE_REASONING_OPTIONS,
+      }),
+    ).toBeNull();
   });
 
-  it("keeps Grok effort empty until the user selects a thread or draft value", () => {
+  it("restores Grok durable preferred effort on startup and keeps thread override", () => {
     expect(
       getEffectiveSelectedEffort({
         activeEngine: "grok",
         hasActiveThread: false,
-        selectedEffort: "medium",
+        selectedEffort: null,
+        preferredEffort: "medium",
         activeThreadSelection: null,
         reasoningOptions: GROK_REASONING_OPTIONS,
       }),
-    ).toBeNull();
+    ).toBe("medium");
     expect(
       getEffectiveSelectedEffort({
         activeEngine: "grok",
         hasActiveThread: true,
         selectedEffort: "medium",
+        preferredEffort: "low",
         activeThreadSelection: {
           modelId: "grok-4.5",
           effort: "high",
@@ -442,12 +468,39 @@ describe("modelSelection", () => {
     ).toBe("high");
   });
 
-  it("ignores unsupported Claude effort instead of injecting a fallback value", () => {
+  it("remembers Codex global effort over silent first-option fallback when still supported", () => {
+    expect(
+      getEffectiveSelectedEffort({
+        activeEngine: "codex",
+        hasActiveThread: false,
+        selectedEffort: "high",
+        preferredEffort: "medium",
+        activeThreadSelection: null,
+        reasoningOptions: ["low", "medium", "high"],
+      }),
+    ).toBe("high");
+    expect(
+      getEffectiveSelectedEffort({
+        activeEngine: "codex",
+        hasActiveThread: true,
+        selectedEffort: "high",
+        preferredEffort: "medium",
+        activeThreadSelection: {
+          modelId: "codex-alt",
+          effort: null,
+        },
+        reasoningOptions: ["low", "medium", "high"],
+      }),
+    ).toBe("high");
+  });
+
+  it("ignores unsupported Claude effort and falls back to durable preferred only", () => {
     expect(
       getEffectiveSelectedEffort({
         activeEngine: "claude",
         hasActiveThread: true,
-        selectedEffort: "medium",
+        selectedEffort: null,
+        preferredEffort: null,
         activeThreadSelection: {
           modelId: "claude-custom",
           effort: "ultra",
@@ -455,14 +508,28 @@ describe("modelSelection", () => {
         reasoningOptions: CLAUDE_REASONING_OPTIONS,
       }),
     ).toBeNull();
+    expect(
+      getEffectiveSelectedEffort({
+        activeEngine: "claude",
+        hasActiveThread: true,
+        selectedEffort: null,
+        preferredEffort: "high",
+        activeThreadSelection: {
+          modelId: "claude-custom",
+          effort: "ultra",
+        },
+        reasoningOptions: CLAUDE_REASONING_OPTIONS,
+      }),
+    ).toBe("high");
   });
 
-  it("ignores unsupported Grok effort instead of injecting a fallback value", () => {
+  it("ignores unsupported Grok effort and falls back to durable preferred only", () => {
     expect(
       getEffectiveSelectedEffort({
         activeEngine: "grok",
         hasActiveThread: true,
-        selectedEffort: "medium",
+        selectedEffort: null,
+        preferredEffort: null,
         activeThreadSelection: {
           modelId: "grok-4.5",
           effort: "xhigh",
@@ -470,6 +537,19 @@ describe("modelSelection", () => {
         reasoningOptions: GROK_REASONING_OPTIONS,
       }),
     ).toBeNull();
+    expect(
+      getEffectiveSelectedEffort({
+        activeEngine: "grok",
+        hasActiveThread: true,
+        selectedEffort: null,
+        preferredEffort: "medium",
+        activeThreadSelection: {
+          modelId: "grok-4.5",
+          effort: "xhigh",
+        },
+        reasoningOptions: GROK_REASONING_OPTIONS,
+      }),
+    ).toBe("medium");
   });
 
   it("drops stale reasoning effort for unsupported engines", () => {

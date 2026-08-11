@@ -378,6 +378,71 @@ describe("useAppShellComposerModelSection handleSelectModel", () => {
     });
   });
 
+  it("persists Grok effort even while a thread is active so restart can restore it", () => {
+    const persistComposerEnginePref = vi.fn();
+    const handleSelectComposerSelection = vi.fn();
+    const { result } = renderSection({
+      activeEngine: "grok",
+      activeThreadId: "grok:session-1",
+      engineModelsAsOptions: [makeModel("grok-4.5", { isDefault: true })],
+      selectedComposerSelection: {
+        modelId: "grok-4.5",
+        effort: "low",
+      },
+      persistComposerEnginePref,
+      handleSelectComposerSelection,
+    });
+
+    act(() => {
+      result.current.handleSelectComposerEffort("medium");
+    });
+
+    expect(persistComposerEnginePref).toHaveBeenCalledWith("grok", {
+      effort: "medium",
+    });
+    expect(handleSelectComposerSelection).toHaveBeenCalledWith({
+      modelId: "grok-4.5",
+      effort: "medium",
+    });
+  });
+
+  it("updates Codex global effort while a thread is active", () => {
+    const setSelectedEffort = vi.fn();
+    const handleSelectComposerSelection = vi.fn();
+    const { result } = renderSection({
+      activeEngine: "codex",
+      activeThreadId: "codex:session-1",
+      models: [
+        makeModel("gpt-5.5", {
+          isDefault: true,
+          supportedReasoningEfforts: [
+            { reasoningEffort: "low", description: "Low" },
+            { reasoningEffort: "medium", description: "Medium" },
+            { reasoningEffort: "high", description: "High" },
+          ],
+          defaultReasoningEffort: "low",
+        }),
+      ],
+      selectedModelId: "gpt-5.5",
+      selectedComposerSelection: {
+        modelId: "gpt-5.5",
+        effort: "low",
+      },
+      setSelectedEffort,
+      handleSelectComposerSelection,
+    });
+
+    act(() => {
+      result.current.handleSelectComposerEffort("high");
+    });
+
+    expect(setSelectedEffort).toHaveBeenCalledWith("high");
+    expect(handleSelectComposerSelection).toHaveBeenCalledWith({
+      modelId: "gpt-5.5",
+      effort: "high",
+    });
+  });
+
   it("accepts freeform model ids not present in engine catalogs", () => {
     const persistComposerEnginePref = vi.fn();
     const handleSelectComposerSelection = vi.fn();
