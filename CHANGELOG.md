@@ -2,6 +2,48 @@
 
 ---
 
+### **2026年8月11日（v0.8.7）**
+
+中文：
+
+这一版在 **0.8.7** 上继续收口「Cmd+R / 冷启猛点假死」与队列续跑：分层二分锁定假死在完整 `Composer` 挂载；`ComposerGate` 先轻量输入区（模型位 loading 占位）再进完整 Composer；队列 auto-drain 与 `startup-gate` 对齐，避免冷启与后台 drain 抢主线程。Mac 验收不卡死；约 98% 收口（ComposerImpl 仍重、Win 未复测）。
+
+✨ Features
+- **Composer 冷启轻量门控（ComposerGate / ComposerLight）**：冷启先挂 Adapter 轻量层，工具栏结构与最终态一致；模型选择位始终占位（「加载中」→ 真模型名同位置替换）；停手后再挂完整 `ComposerImpl`（状态条等重能力）
+- **模型位 / Readiness 静态占位**：轻量路径经 `sendReadiness` 渲染 Readiness 模型位，**不**在冷启开 atomic catalog（避免假死复现）；未解析模型时转圈 + 文案，就绪后替换
+
+🔧 Improvements
+- **队列 drain 非对抗调度**：无 queue/inflight 时 drain signal 稳定 `empty`；有队列才跟 status；放行与 `startup-gate-ready` / force-enter 对齐，gate 后短静默再开 auto-drain；用户 `handleSend` / `queueMessage` 始终可用
+- **冷启 list / restore quiet 副线**：first-paint 与 restore 错峰、点击 soft-cancel 进行中 list；home 无 active 时 stamp `home-input-ready`；uiScale healthy 确认 rAF 延后
+- **Composer 空闲 memo**：非流式忽略 ActiveCanvas 热 props，减轻 history hydrate 重渲
+- 联调证据与收口文档：`docs/analysis/cold-start-composer-freeze-closeout-2026-08-11.md`、二分 checklist 与截图包
+
+🐛 Fixes
+- **Cmd+R / 冷启猛点整窗假死**：根因完整 `Composer.tsx` 立即挂载与点击撞主线程；轻量层不卡，完整层停手后再挂（Mac 验收通过）
+- **假死回归（队列 auto-drain）**：`dc97acd5c` 默认开 S1 drain 并下灌 `threadStatusById` / `activeItems`，冷启猛点窗复现假死；改为启动门后放行 + 近点击跳过 settlement/auto-drain，保留防重发与 cap=1
+- **输入区 UX**：模型位与「全自动」间无大空洞（readiness 不 `1fr` 撑空）；轻量层使用 `footer.composer` 与完整态同宽（`max-width: 750px`），避免先全宽再缩
+
+English:
+
+This **0.8.7** follow-up closes the Cmd+R / cold-start click freeze loop and steadies queue auto-drain: layered bisect pinned the freeze to mounting full `Composer`; `ComposerGate` paints a light Adapter shell first (model slot reserved with loading) then promotes to full `ComposerImpl` after quiet; queue auto-drain is gated on `startup-gate` so cold-start clicks and drain no longer fight the main thread. Mac verification: no hard freeze (~98% closeout; full Composer still heavy; Windows not re-tested this pass).
+
+✨ Features
+- **Composer cold-start light gate (`ComposerGate` / `ComposerLight`)**: mount Adapter-light first with final toolbar structure; model slot always reserved (“loading” → real model name in place); promote to full `ComposerImpl` after the user stops interacting (status strip and heavy hooks)
+- **Model slot / Readiness static placeholder**: light path uses `sendReadiness` so Readiness shows the model slot without enabling the atomic catalog on cold start; spinner + copy while unresolved, then replace
+
+🔧 Improvements
+- **Non-adversarial queue drain scheduling**: stable `empty` drain signal with no queue/inflight; status only for threads with work; release after `startup-gate-ready` / force-enter plus a short quiet; `handleSend` / `queueMessage` always available
+- **Cold-start list / restore quiet side path**: staggered first-paint and restore, soft-cancel in-flight list on click; stamp `home-input-ready` when no active workspace; defer uiScale healthy localStorage write via rAF
+- **Composer idle memo**: ignore ActiveCanvas hot props when not processing to cut history-hydrate re-renders
+- Investigation notes and evidence: `docs/analysis/cold-start-composer-freeze-closeout-2026-08-11.md`, bisect checklist, screenshot pack
+
+🐛 Fixes
+- **Cmd+R / cold-start full-window freeze**: root cause was mounting full `Composer.tsx` immediately under early clicks; light path stays clickable, full path mounts after quiet (Mac verified)
+- **Freeze regression from queue auto-drain**: `dc97acd5c` enabled S1 drain by default and passed `threadStatusById` / `activeItems` into the composition hot path; release drain after startup-gate and skip settlement/auto-drain under recent input; keep anti-resend gates and cap=1
+- **Composer chrome UX**: no large gap between model loading and mode pills (readiness no longer grows with `1fr`); light shell uses `footer.composer` max-width 750px so the box does not go full-width then shrink
+
+---
+
 ### **2026年8月10日（v0.8.7）**
 
 中文：
