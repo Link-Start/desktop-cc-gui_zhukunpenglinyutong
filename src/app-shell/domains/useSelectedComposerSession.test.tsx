@@ -3,9 +3,17 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { StrictMode } from "react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ComposerEnginePrefs } from "../../types";
 import { useSelectedComposerSession } from "./useSelectedComposerSession";
 
 type Store = Record<string, unknown>;
+
+const emptyComposerEnginePref: ComposerEnginePrefs = {
+  modelId: null,
+  effort: null,
+  accessMode: null,
+  collaborationModeId: null,
+};
 
 const {
   composerStore,
@@ -27,12 +35,14 @@ const {
         composerStore[key] = value;
       }
     }),
-    getComposerEnginePrefForEngine: vi.fn(() => ({
-      modelId: null,
-      effort: null,
-      accessMode: null,
-      collaborationModeId: null,
-    })),
+    getComposerEnginePrefForEngine: vi.fn(
+      (): ComposerEnginePrefs => ({
+        modelId: null,
+        effort: null,
+        accessMode: null,
+        collaborationModeId: null,
+      }),
+    ),
   };
 });
 
@@ -51,12 +61,7 @@ describe("useSelectedComposerSession", () => {
     getClientStoreSync.mockClear();
     writeClientStoreValue.mockClear();
     getComposerEnginePrefForEngine.mockReset();
-    getComposerEnginePrefForEngine.mockReturnValue({
-      modelId: null,
-      effort: null,
-      accessMode: null,
-      collaborationModeId: null,
-    });
+    getComposerEnginePrefForEngine.mockReturnValue(emptyComposerEnginePref);
   });
 
   it("applies a draft selection to a pending thread and migrates it to the finalized thread", async () => {
@@ -696,6 +701,7 @@ describe("useSelectedComposerSession", () => {
     type HookProps = {
       activeThreadId: string | null;
     };
+    const initialProps: HookProps = { activeThreadId: null };
     const { result, rerender } = renderHook(
       ({ activeThreadId }: HookProps) =>
         useSelectedComposerSession({
@@ -704,7 +710,7 @@ describe("useSelectedComposerSession", () => {
           resolveCanonicalThreadId: (threadId: string) => threadId,
         }),
       {
-        initialProps: { activeThreadId: null },
+        initialProps,
       },
     );
 
