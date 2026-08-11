@@ -24,38 +24,6 @@ fn main() {
     validate_curated_skills_bundled_in_conf();
     validate_agent_catalog();
     validate_agent_catalog_bundled_in_conf();
-    warn_embedding_model_missing();
-}
-
-/// 编译时检查 embedding 模型是否存在。缺失仅 warn，不阻断构建。
-/// 模型运行时从 `~/.ccgui/models/embedding/` 自动下载（前端触发），无需打包进安装包。
-fn warn_embedding_model_missing() {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let model_dir = manifest_dir.join("resources").join("models").join("embedding");
-    let onnx = model_dir.join("memory-embed-v1.onnx");
-    let tokenizer = model_dir.join("tokenizer.json");
-
-    let onnx_found = onnx.is_file();
-    let tokenizer_found = tokenizer.is_file();
-
-    if !onnx_found || !tokenizer_found {
-        println!(
-            "cargo:warning=[embed] Embedding model not bundled (expected — now downloaded at runtime)."
-        );
-        println!(
-            "cargo:warning=[embed] Users download the model in Settings → 记忆参考 to ~/.ccgui/models/embedding/."
-        );
-        println!(
-            "cargo:warning=[embed] Without the model, the app falls back to lexical search — that is normal."
-        );
-    }
-
-    if onnx_found {
-        println!(
-            "cargo:warning=[embed] Found ONNX model at {} (dev use; not bundled into installer)",
-            onnx.display()
-        );
-    }
 }
 
 fn validate_agent_catalog_bundled_in_conf() {

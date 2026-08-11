@@ -37,10 +37,12 @@ export function EmbedModelSection({ active, t }: EmbedModelSectionProps) {
 
   const downloading = status?.state === "downloading";
   const ready = status?.state === "ready";
+  const disabled = status?.state === "disabled";
   const progress = downloading ? status : null;
   const displayPath = modelPath || modelDir;
   const semanticToggleOn = retrievalPref === "semantic";
-  const semanticToggleDisabled = !ready && !downloading;
+  // 无 ONNX runtime 时禁止开启语义；下载中也不切换
+  const semanticToggleDisabled = disabled || (!ready && !downloading);
 
   const onToggleSemantic = (next: boolean) => {
     const pref: SemanticRetrievalPreference = next ? "semantic" : "lexical";
@@ -101,6 +103,11 @@ export function EmbedModelSection({ active, t }: EmbedModelSectionProps) {
                 </div>
                 <div className="settings-help">
                   {ready && t("settings.modelReady")}
+                  {disabled &&
+                    t("settings.memoryEmbedRuntimeDisabled", {
+                      defaultValue:
+                        "当前版本未包含本地语义推理运行时，记忆参考使用关键词匹配。",
+                    })}
                   {status.state === "missing" && t("settings.modelNotDownloaded")}
                   {downloading && t("settings.modelDownloading")}
                   {status.state === "error" &&
@@ -194,6 +201,14 @@ export function EmbedModelSection({ active, t }: EmbedModelSectionProps) {
                 {t("settings.memoryEmbedNotDownloadable")}
               </div>
             )}
+            {disabled ? (
+              <div className="settings-help">
+                {t("settings.memoryEmbedRuntimeDisabledHint", {
+                  defaultValue:
+                    "已移除 ONNX Runtime 以恢复 Intel macOS 打包；语义向量检索将在后续可跨平台方案中恢复。",
+                })}
+              </div>
+            ) : null}
           </div>
         )}
 

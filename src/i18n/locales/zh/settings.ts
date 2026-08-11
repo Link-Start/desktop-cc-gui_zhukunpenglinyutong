@@ -1056,18 +1056,22 @@ const settings = {
       "注入规则：记忆仅作当前用户原文的参考（prior context），用户气泡只显示原文；注入失败不阻塞发送。",
     memoryEmbedModelTitle: "本地语义模型",
     memoryEmbedModelDesc:
-      "下载约 90MB 语义模型后，记忆参考使用设备端向量匹配提升准确度。模型落在本机用户主目录 .ccgui/models/embedding/ 下（下方「存储位置」为当前机器实际绝对路径），不会上传。",
+      "记忆参考默认使用关键词匹配。设备端语义向量（ONNX）已从本版本移除以保障 Intel macOS 打包，后续将以可跨平台方案恢复。",
     memoryEmbedPhaseTokenizer: "下载分词器中…",
     memoryEmbedPhaseModel: "下载语义模型中…",
     memoryEmbedNotDownloadable: "当前环境暂不可下载。",
+    memoryEmbedRuntimeDisabled:
+      "当前版本未包含本地语义推理运行时，记忆参考使用关键词匹配。",
+    memoryEmbedRuntimeDisabledHint:
+      "已移除 ONNX Runtime 以恢复 Intel macOS 打包；语义向量检索将在后续可跨平台方案中恢复。",
     memoryEmbedModelPath: "存储位置",
     memoryEmbedDeleteModel: "删除模型",
     memoryEmbedDeleteConfirm:
       "确定删除本地语义模型？删除后记忆参考将回退为关键词匹配，可随时重新下载。",
     memorySemanticRetrievalToggle: "检索时使用语义模型",
     memorySemanticRetrievalToggleDesc:
-      "关闭后即使已下载模型，也只用默认文本检索。可随时再打开。",
-    memorySemanticRetrievalNeedModel: "请先下载并就绪语义模型",
+      "当前构建无语义运行时；开关在模型可用前保持关闭。",
+    memorySemanticRetrievalNeedModel: "当前版本暂不可用语义模型",
     memorySemanticRetrievalLexicalHint: "当前：默认文本检索（关键词）",
     memorySemanticRetrievalSemanticHint: "当前：语义模型检索（可用时 hybrid）",
     memoryReferencePreviewTitle: "开启后效果示意",

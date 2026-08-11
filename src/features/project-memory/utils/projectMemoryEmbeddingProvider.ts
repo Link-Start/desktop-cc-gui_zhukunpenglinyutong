@@ -1,6 +1,7 @@
 /**
- * 生产侧 ProjectMemoryEmbeddingProvider（方案 A：应用内 ONNX）。
- * health unavailable 时 retrieve 走 lexical；禁止引导用户安装第三方。
+ * 生产侧 ProjectMemoryEmbeddingProvider。
+ * 当前构建未链接 ONNX Runtime（Intel macOS 打包兼容），health 恒为 unavailable → lexical。
+ * 命令面仍保留，便于后续恢复推理而不改前端 contract。
  */
 import {
   projectMemoryEmbedDownload,
