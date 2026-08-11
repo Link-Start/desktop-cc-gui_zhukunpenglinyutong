@@ -1052,6 +1052,10 @@ export function useAppShellRootComposition() {
       ? (threadStatusById[activeThreadId]?.isContextCompacting ?? false)
       : false,
     hasPendingUserInput,
+    threadStatusById,
+    activeItems,
+    resolveWorkspace: (workspaceId: string) =>
+      workspacesById.get(workspaceId) ?? null,
     steerEnabled: appSettings.experimentalSteerEnabled,
     activeEngine,
     // 身份 id-first（fix-shared-session-identity-id-first）：
