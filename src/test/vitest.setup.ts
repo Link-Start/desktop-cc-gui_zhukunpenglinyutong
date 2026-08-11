@@ -70,13 +70,7 @@ if (typeof Element !== "undefined" && !Element.prototype.scrollIntoView) {
 }
 
 // Mock react-i18next to return keys or fallback text during tests
-vi.mock("react-i18next", () => ({
-  initReactI18next: {
-    type: "3rdParty",
-    init: vi.fn(),
-  },
-  useTranslation: () => ({
-    t: (key: string, params?: Record<string, unknown>) => {
+const mockTranslate = (key: string, params?: Record<string, unknown>) => {
       // Map keys to Chinese text for tests (matching default language)
       const translations: Record<string, string> = {
         "update.title": "Update",
@@ -231,8 +225,9 @@ vi.mock("react-i18next", () => ({
         "home.addWorkspace": "Add Workspace",
         "home.usageSnapshot": "Usage snapshot",
         "home.refreshUsage": "Refresh usage",
+        "messages.responding": "响应中...",
         "messages.totalDuration": "本次耗时",
-        "messages.durationSeconds": "耗时{{seconds}}s",
+        "messages.durationSeconds": "耗时{{duration}}",
         "messages.tokenUsage": "输入 {{input}} / 输出 {{output}}",
         "messages.tokenUsageTooltip": "输入 {{input}} token / 输出 {{output}} token",
         "messages.finalMessageBoundary": "Final Message",
@@ -994,6 +989,18 @@ vi.mock("react-i18next", () => ({
         "settings.backgroundTerminalOfficialWriteReloadFailed":
           "Official unified_exec was written, but refreshing the current Codex runtime failed: {{message}}",
         "settings.vendor.officialConfig": "Official Config",
+        "settings.vendor.engineSettings": "Engine settings",
+        "settings.vendor.whatIsThis": "What does this do?",
+        "settings.vendor.customPath": "Custom Path",
+        "settings.vendor.customPathUsingSystemPath":
+          "Currently using: system PATH",
+        "settings.vendor.customPathNoArgs": "No extra args",
+        "settings.vendor.pluginModels": "Custom Models",
+        "settings.vendor.pluginModelsDesc": "Add custom models for this CLI",
+        "settings.vendor.customPathDescription":
+          "Configure the executable path for this CLI.",
+        "settings.vendor.customPathDescriptionHint":
+          "Leave empty to resolve via system PATH.",
         "settings.vendor.edit": "Edit",
         "settings.vendor.inUse": "In Use",
         "settings.vendor.cancel": "Cancel",
@@ -1008,6 +1015,8 @@ vi.mock("react-i18next", () => ({
         "settings.vendor.codexAuthConfigWriteFailed":
           "Failed to write global auth.json",
         "settings.vendor.dialog.saveChanges": "Save",
+        "settings.vendor.dialog.openContainingFolder": "Open file",
+        "settings.vendor.dialog.formatJson": "Format",
         "settings.codexRuntimeReloadNoConnectedSessions":
           "No Codex session is currently connected. The config has been updated and will apply on the next connection.",
         "settings.steerMode": "Follow-up fusion",
@@ -1121,19 +1130,35 @@ vi.mock("react-i18next", () => ({
         "workspace.homeBranchLabelMain": "主分支",
         "workspace.homeBranchLabelWorktree": "工作树",
       };
-      // Simple interpolation for test environment
-      let template = translations[key] ?? String(params?.defaultValue ?? key);
-      if (params && typeof template === "string") {
-        Object.entries(params).forEach(([paramKey, value]) => {
-          template = template.replace(new RegExp(`{{${paramKey}}}`, "g"), String(value));
-        });
-      }
-      return template;
-    },
+  // Simple interpolation for test environment
+  let template = translations[key] ?? String(params?.defaultValue ?? key);
+  if (params && typeof template === "string") {
+    Object.entries(params).forEach(([paramKey, value]) => {
+      template = template.replace(
+        new RegExp(`{{${paramKey}}}`, "g"),
+        String(value),
+      );
+    });
+  }
+  return template;
+};
+
+vi.mock("react-i18next", () => ({
+  initReactI18next: {
+    type: "3rdParty",
+    init: vi.fn(),
+  },
+  useTranslation: () => ({
+    t: mockTranslate,
     i18n: {
       language: "en",
       changeLanguage: vi.fn(),
     },
+  }),
+  getI18n: () => ({
+    t: mockTranslate,
+    language: "en",
+    changeLanguage: vi.fn(),
   }),
 }));
 

@@ -37,6 +37,7 @@ export type {
   CodingPlanBalanceSnapshot,
   CodingPlanQuotaSnapshot,
   CodingPlanQuotaWindow,
+  CodingPlanUsageSummary,
 } from "./tauri/modelCatalog";
 export {
   getClaudeCommandsList,
@@ -337,6 +338,19 @@ export {
   projectMemoryUpdate,
   projectMemoryUpdateSettings,
 } from "./tauri/projectMemory";
+export {
+  projectMemoryEmbedHealth,
+  projectMemoryEmbedText,
+  projectMemoryEmbedIndexList,
+  projectMemoryEmbedIndexUpsert,
+  projectMemoryEmbedIndexDelete,
+  projectMemoryEmbedIndexClear,
+} from "./tauri/projectMemoryEmbed";
+export type {
+  ProjectMemoryEmbedHealthDto,
+  ProjectMemoryEmbedResultDto,
+  ProjectMemoryEmbedIndexRecordDto,
+} from "./tauri/projectMemoryEmbed";
 export type {
   NormalizedConversationTurnPayload,
   ProjectMemoryDiagnosticsResult,
@@ -382,6 +396,9 @@ export {
   getClaudeAlwaysThinkingEnabled,
   getClaudeProviders,
   readClaudeSettingsJson,
+  readGrokConfigToml,
+  readKimiConfigToml,
+  readOpenCodeConfigJson,
   getCodexProviders,
   getCurrentClaudeConfig,
   getCurrentGrokConfig,
@@ -398,6 +415,9 @@ export {
   reorderCodexProviders,
   saveGeminiVendorSettings,
   saveClaudeSettingsJson,
+  saveGrokConfigToml,
+  saveKimiConfigToml,
+  saveOpenCodeConfigJson,
   setClaudeAlwaysThinkingEnabled,
   switchClaudeProvider,
   switchCodexProvider,
@@ -439,6 +459,8 @@ export {
   noteWebServiceReconnected,
   openNewWindow,
   openWorkspaceIn,
+  revealInFileManager,
+  openFolderInFileManager,
   prewarmCodexDiskRuntime,
   queryTurnReconciliationStatus,
   readPanelLockPasswordFile,

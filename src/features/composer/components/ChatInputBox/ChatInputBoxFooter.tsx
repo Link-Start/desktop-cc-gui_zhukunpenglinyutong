@@ -225,6 +225,7 @@ export function ChatInputBoxFooter({
   models,
   permissionMode,
   currentProvider,
+  currentProviderProfileId = null,
   workspaceId = null,
   providerAvailability,
   providerVersions,
@@ -242,7 +243,9 @@ export function ChatInputBoxFooter({
   onCodexReviewQuickStart,
   onForkQuickStart,
   memoryReferenceMode,
+  memoryReferenceDismissed,
   onSetMemoryReferenceMode,
+  onRestoreMemoryReference,
   onSubmit,
   onStop,
   onModeSelect,
@@ -276,6 +279,7 @@ export function ChatInputBoxFooter({
   toolSurface,
   panelToggleSurface,
   curatedSkillSurface,
+  squadSurface,
   tooltip,
   promptEnhancer,
   t,
@@ -289,6 +293,7 @@ export function ChatInputBoxFooter({
   models?: ModelInfo[];
   permissionMode: PermissionMode;
   currentProvider: string;
+  currentProviderProfileId?: string | null;
   workspaceId?: string | null;
   providerAvailability?: Partial<Record<ProviderId, boolean>>;
   providerVersions?: Partial<Record<ProviderId, string | null>>;
@@ -306,7 +311,9 @@ export function ChatInputBoxFooter({
   onCodexReviewQuickStart?: () => void;
   onForkQuickStart?: () => void;
   memoryReferenceMode?: MemoryReferenceMode;
+  memoryReferenceDismissed?: boolean;
   onSetMemoryReferenceMode?: (mode: MemoryReferenceMode) => void;
+  onRestoreMemoryReference?: () => void;
   onSubmit: () => void;
   onStop?: () => void;
   onModeSelect?: (mode: PermissionMode) => void;
@@ -340,6 +347,7 @@ export function ChatInputBoxFooter({
   toolSurface?: React.ReactNode;
   panelToggleSurface?: React.ReactNode;
   curatedSkillSurface?: React.ReactNode;
+  squadSurface?: React.ReactNode;
   tooltip: TooltipState | null;
   promptEnhancer: {
     isOpen: boolean;
@@ -528,6 +536,7 @@ export function ChatInputBoxFooter({
         models={models}
         permissionMode={permissionMode}
         currentProvider={currentProvider}
+        currentProviderProfileId={currentProviderProfileId}
         providerAvailability={providerAvailability}
         providerVersions={providerVersions}
         providerStatusLabels={providerStatusLabels}
@@ -544,7 +553,9 @@ export function ChatInputBoxFooter({
         onCodexReviewQuickStart={onCodexReviewQuickStart}
         onForkQuickStart={onForkQuickStart}
         memoryReferenceMode={memoryReferenceMode}
+        memoryReferenceDismissed={memoryReferenceDismissed}
         onSetMemoryReferenceMode={onSetMemoryReferenceMode}
+        onRestoreMemoryReference={onRestoreMemoryReference}
         onSubmit={onSubmit}
         onStop={onStop}
         onModeSelect={onModeSelect}
@@ -569,6 +580,7 @@ export function ChatInputBoxFooter({
         toolSurface={toolSurface}
         panelToggleSurface={panelToggleSurface}
         curatedSkillSurface={curatedSkillSurface}
+        squadSurface={squadSurface}
       />
 
       {/* @ file reference dropdown menu */}

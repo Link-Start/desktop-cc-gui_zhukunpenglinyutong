@@ -493,6 +493,7 @@ const settings = {
     sidebarWebService: "Web Service",
     sidebarEmail: "Email",
     sidebarGit: "Git",
+    sidebarMemory: "Project Memory",
     sidebarOther: "Other",
     sidebarReleaseNotes: "Release Notes",
     sidebarVendors: "Vendors",
@@ -568,6 +569,11 @@ const settings = {
     },
     otherDescription:
       "History completion, model mapping, and other configurations.",
+    startupGateOverlayTestTitle: "Startup loading overlay (test)",
+    startupGateOverlayTestDescription:
+      "Show the initialization loading overlay the next time the main window starts. Off by default.",
+    startupGateOverlayTestDetail:
+      "For cold-start verification only. Restart the app after changing this setting.",
     sharedProjectionTestTitle: "Shared Projection rollback control",
     sharedProjectionTestDescription:
       "Shared Sessions merge Canonical Projection with the Legacy snapshot by default. Turning this off explicitly selects Legacy-only reading.",
@@ -1105,6 +1111,47 @@ const settings = {
     dictationTitle: "Dictation",
     dictationDescription:
       "Enable microphone dictation with on-device transcription.",
+    memoryDescription:
+      "Manage on-device project memory: capture from chats, pre-send reference injection, and an optional local semantic model.",
+    memoryRulesTitle: "Project memory rules",
+    memoryRulesStorage:
+      "Storage: under .ccgui/project-memory/ in the user home directory (macOS/Linux: ~/…/.ccgui/…; Windows: %USERPROFILE%\\.ccgui\\…), isolated per workspace; never uploaded.",
+    memoryRulesWrite:
+      "Write: auto-captured after conversation turns (can disable per workspace); manual create/edit/delete; desensitize and dedupe applied.",
+    memoryRulesRead:
+      "Use: with Memory Reference on in Composer, local retrieve-and-confirm before send; keyword matching by default; optional semantic model improves fuzzy recall.",
+    memoryRulesInject:
+      "Inject: memories are prior context for the current user message only; the user bubble shows original text; failures never block send.",
+    memoryEmbedModelTitle: "Local semantic model",
+    memoryEmbedModelDesc:
+      "Download ~90MB semantic model for on-device vector matching. Files live under .ccgui/models/embedding/ in the user home directory (the absolute path for this machine is shown below as Storage location). Never uploaded.",
+    memoryEmbedPhaseTokenizer: "Downloading tokenizer…",
+    memoryEmbedPhaseModel: "Downloading semantic model…",
+    memoryEmbedNotDownloadable: "Not downloadable in this environment.",
+    memoryEmbedModelPath: "Storage location",
+    memoryEmbedDeleteModel: "Delete model",
+    memoryEmbedDeleteConfirm:
+      "Delete the local semantic model? Memory reference will fall back to keyword matching. You can download again anytime.",
+    memorySemanticRetrievalToggle: "Use semantic model for retrieval",
+    memorySemanticRetrievalToggleDesc:
+      "When off, retrieval uses keyword matching even if the model is installed. You can turn it back on anytime.",
+    memorySemanticRetrievalNeedModel: "Download and ready the model first",
+    memorySemanticRetrievalLexicalHint: "Current: keyword text retrieval",
+    memorySemanticRetrievalSemanticHint:
+      "Current: semantic model retrieval (hybrid when available)",
+    memoryReferencePreviewTitle: "What it looks like when enabled",
+    memoryReferencePreviewDesc:
+      "Before send, the app matches project memory for you to confirm. Static previews only — not a live chat.",
+    memoryReferencePreviewMatchLabel: "① Matching",
+    memoryReferencePreviewMatchRole: "Pre-send · local search · model not called yet",
+    memoryReferencePreviewPickLabel: "② Pick and confirm",
+    memoryReferencePreviewEmptyLabel: "③ No related memory",
+    memoryReferencePreviewInjectLabel: "④ After confirm",
+    memoryReferencePreviewInjectHead:
+      "Injected 3 project memories · pick for this turn",
+    memoryReferencePreviewInjectRow1: "My take: good to ship, no big changes.",
+    memoryReferencePreviewInjectRow2: "All fixes: hybrid thresholds, scores…",
+    memoryReferencePreviewInjectRow3: "Why exact “你好” showed ~0.5…",
     enableDictationDesc: "Downloads the selected Whisper model on first use.",
     downloadSize: "Download size:",
     preferredDictationLanguage: "Preferred dictation language",
@@ -1243,8 +1290,10 @@ const settings = {
     vendor: {
       officialConfig: "Official Config",
       thirdPartyConfig: "Third-party Config",
+      engineSettings: "Engine settings",
+      providerChannels: "Provider channels",
       ccSwitchImport: {
-        entry: "Import",
+        entry: "Import ccswitch",
         title: "Import cc-switch Configuration",
         summary: "Found {{total}} configurations, including",
         newCount: "{{count}} new",
@@ -1291,13 +1340,22 @@ const settings = {
       optional: "optional",
       customModels: "custom models",
       pluginModels: "Custom Models",
+      pluginModelsDesc: "Add custom models for this CLI",
       manageModels: "Manage Models",
       customPath: "Custom Path",
       configurePath: "Configure Path",
-      customPathTitle: "Custom Path",
-      customPathDescription:
-        "Configure the executable path for this CLI. Leave empty to resolve via system PATH.",
-      customPathUsingSystemPath: "Using system PATH",
+      customPathTitle: "Custom path for {{engine}}",
+      customPathDescription: "Configure the executable path for this CLI.",
+      customPathDescriptionHint: "Leave empty to resolve via system PATH.",
+      customPathSourceLabel: "Executable source",
+      customPathModeSystem: "System PATH",
+      customPathModeCustom: "Custom path",
+      customPathFieldLabel: "Executable path",
+      customPathPlaceholder: "/path/to/{{command}}",
+      customPathSystemHint: "Will resolve this command via the system PATH:",
+      customPathCustomHint: "Pick an executable or paste an absolute path.",
+      customPathRequired: "Enter an executable path, or switch back to System PATH.",
+      customPathUsingSystemPath: "Currently using: system PATH",
       customPathNoArgs: "No extra args",
       cliSearchPlaceholder: "搜索CLI",
       cliComingSoon: "Support is coming soon.",
@@ -1309,12 +1367,14 @@ const settings = {
       cliMoreActions: "More actions",
       cliDisableEngine: "Disable",
       cliEnableEngine: "Enable",
-      openCliDocs: "Open docs",
+      openCliDocs: "Official docs",
       localProviderName: "Authorized local settings.json",
       localProviderDescription: "Explicitly authorize reading ~/.claude/settings.json",
       allProviders: "All Providers",
       authorizeAndEnable: "Authorize and Enable",
       revokeAuthorization: "Revoke Authorization",
+      useOfficialConfig: "Use",
+      cancelOfficialConfig: "Stop using",
       whatIsThis: "What does this do?",
       gotIt: "Got it",
       localProviderAuthorizeTitle: "Authorize local settings.json access",
@@ -1323,7 +1383,7 @@ const settings = {
       localProviderDisableTitle: "Cancel local settings.json authorization",
       localProviderDisableMessage: "This will stop using ~/.claude/settings.json and leave Claude with no active provider until you explicitly enable another one.",
       localProviderHelpTitle: "What is “Use Local settings.json”?",
-      localProviderHelpBody: "Lets the app read your existing ~/.claude/settings.json to make Claude requests — perfect if you already configure Claude through the CLI and want to reuse that exact setup.\n\n• The app only reads the file; it never modifies it.\n• You can revoke this authorization at any time.\n• Best for advanced users who manage config manually.\n• Ideal if you manage providers with a third-party tool like cc-switch.",
+      localProviderHelpBody: "Lets the app read your existing ~/.claude/settings.json to make Claude requests — perfect if you already configure Claude through the CLI and want to reuse that exact setup.\n\n• When no third-party provider is enabled, official/local config is the default.\n• The app reads this file by default; you can edit it from this row.\n• To leave official, enable a third-party provider below.\n• Best for advanced users and cc-switch users.",
       emptyState: 'No third-party configs yet. Click "Add" above to create one.',
       emptyCodexState:
         'No third-party configs yet. Click "Add" above to create one.',
@@ -1351,6 +1411,9 @@ const settings = {
           "Custom models appear at the top of the model selector in chat input.",
         empty: "No custom models yet.",
         addModel: "Add Model",
+        provider: "Provider",
+        localProvider: "Local configuration",
+        persistFailed: "Failed to sync custom models to providers. Please retry.",
         modelIdPlaceholder: "Model ID (required, e.g. gpt-5.1-codex-mini)",
         modelLabelPlaceholder: "Display name (optional)",
         modelDescriptionPlaceholder: "Model description (optional)",
@@ -1398,6 +1461,7 @@ const settings = {
         jsonConfigDescription:
           "Configure full settings.json content here, including fields like model, alwaysThinkingEnabled, ccSwitchProviderId, codemossProviderId, etc.",
         formatJson: "Format",
+        openContainingFolder: "Open file",
         jsonError: "Invalid JSON format",
         confirmAdd: "Add",
         saveChanges: "Save",
@@ -1449,6 +1513,9 @@ const settings = {
       kimiProvider: "Provider",
       kimiLocalProviderDescription:
         "Use configuration directly from ~/.kimi-code/config.toml",
+      kimiLocalConfigPath: "~/.kimi-code/config.toml",
+      kimiLocalConfigEditHint:
+        "Edit the official Kimi Code CLI config.toml. Env override: $KIMI_CODE_HOME/config.toml.",
       kimiProviderActionFailed: "Kimi provider operation failed",
       emptyKimiState:
         'No third-party configs yet. Click "Add" above to create one.',
@@ -1485,6 +1552,9 @@ const settings = {
       grokProvider: "Provider",
       grokLocalProviderDescription:
         "Use configuration directly from ~/.grok/config.toml",
+      grokLocalConfigPath: "~/.grok/config.toml",
+      grokLocalConfigEditHint:
+        "Edit the official Grok Build config.toml. Env override: $GROK_HOME/config.toml.",
       grokProviderActionFailed: "Grok provider operation failed",
       emptyGrokState:
         'No third-party configs yet. Click "Add" above to create one.',
@@ -1520,6 +1590,9 @@ const settings = {
       opencodeProvider: "Provider",
       opencodeLocalProviderDescription:
         "Use configuration directly from ~/.config/opencode/opencode.json",
+      opencodeLocalConfigPath: "~/.config/opencode/opencode.json",
+      opencodeLocalConfigEditHint:
+        "Edit the official OpenCode global config. Prefers $OPENCODE_CONFIG, else ~/.config/opencode/opencode.json(.jsonc).",
       opencodeProviderActionFailed: "OpenCode provider operation failed",
       emptyOpenCodeState:
         'No third-party configs yet. Click "Add" above to create one.',

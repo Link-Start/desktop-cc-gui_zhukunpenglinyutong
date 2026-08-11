@@ -12,7 +12,8 @@ import type { ExecutionTarget } from '../../../shared-session/target/types';
 // Core Entity Types
 // ============================================================
 
-export type MemoryReferenceMode = 'off' | 'single' | 'always';
+/** off | pick | always；历史 single 运行时归一为 pick */
+export type MemoryReferenceMode = "off" | "pick" | "always" | "single";
 
 /**
  * File tag information for backend context injection (Codex mode)
@@ -593,10 +594,16 @@ export interface ChatInputBoxProps {
   onCodexReviewQuickStart?: () => void;
   /** Trigger fork quick action (codex/claude only) */
   onForkQuickStart?: () => void;
+  /** Shared Session Agent Squad one-shot control beside Send. */
+  squadSurface?: ReactNode;
   /** Current explicit project memory reference mode */
   memoryReferenceMode?: MemoryReferenceMode;
+  /** Session dismissed: gate suppressed until restore */
+  memoryReferenceDismissed?: boolean;
   /** Set explicit project memory reference mode */
   onSetMemoryReferenceMode?: (mode: MemoryReferenceMode) => void;
+  /** Restore memory reference after session dismiss → mode=pick */
+  onRestoreMemoryReference?: () => void;
   /** Whether always thinking is enabled */
   alwaysThinkingEnabled?: boolean;
   /** Attachment list */
@@ -781,6 +788,8 @@ export interface ButtonAreaProps {
   permissionMode?: PermissionMode;
   /** Current provider */
   currentProvider?: string;
+  /** Active provider profile id (managed providers: deepseek/minimax/kimi/…) */
+  currentProviderProfileId?: string | null;
   /** Provider availability override (installed state from host app) */
   providerAvailability?: Partial<Record<ProviderId, boolean>>;
   /** Provider CLI versions (from host app detection) */
@@ -813,8 +822,12 @@ export interface ButtonAreaProps {
   onForkQuickStart?: () => void;
   /** Current explicit project memory reference mode */
   memoryReferenceMode?: MemoryReferenceMode;
+  /** Session dismissed: gate suppressed until restore */
+  memoryReferenceDismissed?: boolean;
   /** Set explicit project memory reference mode */
   onSetMemoryReferenceMode?: (mode: MemoryReferenceMode) => void;
+  /** Restore memory reference after session dismiss → mode=pick */
+  onRestoreMemoryReference?: () => void;
 
   // Event callbacks
   onSubmit?: () => void;
@@ -860,6 +873,8 @@ export interface ButtonAreaProps {
   panelToggleSurface?: ReactNode;
   /** Curated-skill indicator relocated into the tool popover surface row */
   curatedSkillSurface?: ReactNode;
+  /** Shared Session Agent Squad one-shot control rendered immediately before Send. */
+  squadSurface?: ReactNode;
 }
 
 export interface ShortcutAction {

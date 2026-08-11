@@ -224,6 +224,11 @@ export type LayoutNodesFlatOptions = {
   onAddWorkspace: () => void;
   onSelectHome: () => void;
   onSelectWorkspace: (workspaceId: string) => void;
+  /** Sidebar within-group project reorder; persists sortOrder for the listed ids. */
+  onReorderWorkspaces?: (input: {
+    groupId: string | null;
+    orderedWorkspaceIds: string[];
+  }) => void | Promise<void>;
   onConnectWorkspace: (workspace: WorkspaceInfo) => Promise<void>;
   onAddAgent: (
     workspace: WorkspaceInfo,
@@ -262,6 +267,12 @@ export type LayoutNodesFlatOptions = {
   deleteConfirmBusy?: boolean;
   onCancelDeleteConfirm?: () => void;
   onConfirmDeleteConfirm?: () => void;
+  renameThreadId?: string | null;
+  renameWorkspaceId?: string | null;
+  renameName?: string;
+  onRenameChange?: (value: string) => void;
+  onRenameCancel?: () => void;
+  onRenameConfirm?: () => void;
   onSyncThread: (workspaceId: string, threadId: string) => void;
   pinThread: (workspaceId: string, threadId: string) => boolean;
   unpinThread: (workspaceId: string, threadId: string) => void;
@@ -311,6 +322,10 @@ export type LayoutNodesFlatOptions = {
   onOpenProjectMemory: () => void;
   onOpenReleaseNotes: () => void;
   onOpenGlobalSearch: () => void;
+  /** non-macOS 主导航 Quick Switcher */
+  onOpenQuickSwitcher?: () => void;
+  /** non-macOS 设置菜单收起侧栏 */
+  onCollapseSidebar?: () => void;
   globalSearchShortcut: string | null;
   openChatShortcut: string | null;
   openKanbanShortcut: string | null;
@@ -856,6 +871,7 @@ export type ChromeLayoutNodesOptions = Pick<
   | "onAddWorkspace"
   | "onSelectHome"
   | "onSelectWorkspace"
+  | "onReorderWorkspaces"
   | "onConnectWorkspace"
   | "onAddAgent"
   | "engineOptions"
@@ -874,6 +890,12 @@ export type ChromeLayoutNodesOptions = Pick<
   | "deleteConfirmBusy"
   | "onCancelDeleteConfirm"
   | "onConfirmDeleteConfirm"
+  | "renameThreadId"
+  | "renameWorkspaceId"
+  | "renameName"
+  | "onRenameChange"
+  | "onRenameCancel"
+  | "onRenameConfirm"
   | "onSyncThread"
   | "pinThread"
   | "unpinThread"
@@ -1281,6 +1303,8 @@ export type PanelsLayoutNodesOptions = Pick<
   | "focusedWorkspaceNoteId"
   | "focusedWorkspaceNoteRequestKey"
   | "onOpenGlobalSearch"
+  | "onOpenQuickSwitcher"
+  | "onCollapseSidebar"
   | "globalSearchShortcut"
   | "openChatShortcut"
   | "openKanbanShortcut"

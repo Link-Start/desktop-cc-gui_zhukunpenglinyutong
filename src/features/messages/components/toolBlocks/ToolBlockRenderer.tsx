@@ -19,7 +19,6 @@ import { BashToolBlock } from './BashToolBlock';
 import { SearchToolBlock } from './SearchToolBlock';
 import { McpToolBlock } from './McpToolBlock';
 import { RequestUserInputSubmittedBlock } from './RequestUserInputSubmittedBlock';
-import { isSubagentTool, SubagentSquadGrid } from '../../../subagent-ui';
 
 interface ToolBlockRendererProps {
   item: Extract<ConversationItem, { kind: 'tool' }>;
@@ -71,11 +70,6 @@ export const ToolBlockRenderer = memo(function ToolBlockRenderer({
     return <RequestUserInputSubmittedBlock item={item} />;
   }
 
-  // 0.1 subAgent：未进入 group 时的单卡兜底（S10 分段条 + Ring 格）
-  if (isSubagentTool(item)) {
-    return <SubagentSquadGrid items={[item]} />;
-  }
-
   // ExitPlanMode handoff must keep its dedicated card even if the runtime
   // classifies it as a command-like tool item.
   if (isExitPlanModeTool) {
@@ -109,10 +103,13 @@ export const ToolBlockRenderer = memo(function ToolBlockRenderer({
   }
 
   // 2. 读取文件工具（Grok/Kimi/OpenCode Read / read_file / list_dir…）
+  // 图片读取在 ReadToolBlock 内展开为真实预览（ImageViewToolContent），
+  // 不再只显示 “Read image file: /path” 文案。
   if (isReadTool(lower)) {
     return (
       <ReadToolBlock
         item={item}
+        workspaceId={workspaceId}
         isExpanded={isExpanded}
         onToggle={onToggle}
       />

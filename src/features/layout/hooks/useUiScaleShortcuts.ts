@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { useTranslation } from "react-i18next";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { AppSettings } from "../../../types";
 import { applyUiScaleToDocument } from "../../../utils/applyUiScale";
 import {
@@ -17,6 +16,37 @@ import {
   matchesShortcutForPlatform,
 } from "../../../utils/shortcuts";
 import { clampUiScale, UI_SCALE_STEP } from "../../../utils/uiScale";
+import {
+  getStartupTraceSnapshot,
+  subscribeStartupTrace,
+} from "../../startup-orchestration/utils/startupTrace";
+import {
+  getStartupForceEnteredAtMs,
+  isStartupForceEntered,
+  subscribeStartupForceEnter,
+} from "../../startup-orchestration/utils/startupForceEnter";
+
+/**
+ * Hard ceiling: apply stored uiScale even if startup-gate-ready never fires
+ * (home-only shell / no workspace list).
+ * Field: ANY uiScale ≠ 1 (0.8 / 0.9 / 1.1 / 1.2 / …) + early click during
+ * full-catalog freezes on macOS and Windows — not a single-preset bug.
+ */
+export const UI_SCALE_COLD_START_MAX_DELAY_MS = 12_000;
+
+/**
+ * After force-enter, wait this long before applying ≠1 so the click window
+ * is not stacked with CSS zoom + residual IPC.
+ */
+export const UI_SCALE_AFTER_FORCE_ENTER_DELAY_MS = 2_000;
+
+/** @internal test-only: exercise production cold-start defer path under vitest. */
+let forceColdStartDeferForTests = false;
+
+/** @internal */
+export function setUiScaleColdStartDeferForTests(enabled: boolean): void {
+  forceColdStartDeferForTests = enabled;
+}
 
 type UseUiScaleShortcutsOptions = {
   settings: AppSettings;
@@ -46,41 +76,58 @@ export function useUiScaleShortcuts({
     if (typeof window === "undefined" || typeof document === "undefined") {
       return;
     }
-    // All platforms apply uiScale via CSS transform scale; native webview zoom
-    // (WebView2 SetZoomFactor / WKWebView setPageZoom) is pinned to 1 once —
-    // native zoom ≠1 has frozen renderers in the field. See
-    // docs/analysis/windows-ccgui-startup-hang-2026-08-05.md,
-    // openspec/changes/fix-windows-ui-scale-webview2-hang/ and
-    // openspec/changes/fix-ui-scale-native-zoom-freeze-all-platforms/.
+    // CSS `zoom` carries uiScale; native WebView zoom is never touched.
+    // setZoom (including identity writes during cold start) and transform+fill
+    // freezes are documented in
+    // docs/analysis/windows-ccgui-startup-hang-2026-08-05.md.
     //
-    // Startup guard: if the previous session applied a non-identity scale and
-    // never proved healthy (renderer froze before it could clear the pending
-    // record), apply scale 1 for THIS session only — the stored setting is
-    // never rewritten, so the user keeps their preference and can retry.
+    // Cold-start deferral: ANY uiScale ≠ 1 (0.8 / 0.9 / 1.1 / 1.2 / …) + early
+    // clicks during list hydrate freezes WebView2 / WKWebView. Stay at identity
+    // until cold-start is late-ready, then apply the stored scale.
+    //
+    // Startup guard: previous unhealthy ≠1 session → force 1 this session only
+    // (never rewrite settings).
     let effectiveScale = uiScale;
     let forcedIdentity = false;
     if (uiScale !== 1 && shouldForceUiScaleIdentity()) {
       effectiveScale = 1;
       forcedIdentity = true;
     }
-    let setNativeZoom: ((factor: number) => Promise<void>) | undefined;
-    try {
-      // getCurrentWebview() reads window.__TAURI_INTERNALS__.metadata
-      // synchronously; missing metadata throws before setZoom's rejection path.
-      const webview = getCurrentWebview();
-      setNativeZoom = (factor) => webview.setZoom(factor);
-    } catch {
-      // Non-Tauri runtimes (browser dev server, vitest) skip native zoom.
-      setNativeZoom = undefined;
-    }
-    void applyUiScaleToDocument(effectiveScale, { setNativeZoom }).catch(
-      () => undefined,
-    );
-    if (effectiveScale === 1) {
+    let cancelled = false;
+    const apply = (scale: number) => {
+      if (cancelled) {
+        return;
+      }
+      void applyUiScaleToDocument(scale).catch((error) => {
+        appendRendererDiagnostic("ui-scale/css-apply-failed", {
+          error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+          scale,
+        });
+      });
+    };
+
+    // Phase 1: always identity first.
+    //
+    // On cold start every CSS property in ZOOM_FILL_PROPS is already empty and
+    // --ui-scale defaults to 1 in :root, so apply(1) is a true no-op that does
+    // not dirty the Blink layout tree.  The conditional clearing inside
+    // applyUiScale (clearResidualScaleStyles / hasResidualScaleStyle) guarantees
+    // we only write when there is a leftover value to remove.
+    apply(1);
+    // Defer localStorage I/O off the first paint effect — synchronous
+    // removeItem during cold-start mount competed with hit-test on WebView2.
+    const healthyRaf =
+      typeof window.requestAnimationFrame === "function"
+        ? window.requestAnimationFrame(() => {
+            if (!cancelled) {
+              confirmUiScaleHealthy();
+            }
+          })
+        : null;
+    if (healthyRaf == null) {
       confirmUiScaleHealthy();
-    } else {
-      markUiScalePending(effectiveScale);
     }
+
     if (forcedIdentity) {
       appendRendererDiagnostic("ui-scale/startup-guard-forced-identity", {
         storedScale: uiScale,
@@ -92,7 +139,110 @@ export function useUiScaleShortcuts({
         messageParams: { scale: Math.round(uiScale * 100) },
         dedupeKey: "ui-scale:startup-guard-forced-identity",
       });
+      return () => {
+        cancelled = true;
+        if (healthyRaf != null) {
+          window.cancelAnimationFrame(healthyRaf);
+        }
+      };
     }
+
+    if (effectiveScale === 1) {
+      return () => {
+        cancelled = true;
+        if (healthyRaf != null) {
+          window.cancelAnimationFrame(healthyRaf);
+        }
+      };
+    }
+
+    // Phase 2: apply ANY user scale ≠ 1 only after cold-start is late-ready,
+    // or after a hard ceiling. Earlier (0.8–3s idle) still overlapped
+    // full-catalog + pointer on macOS / WebView2 for every non-identity scale.
+    const isVitest =
+      typeof import.meta !== "undefined" &&
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (import.meta as any).env?.MODE === "test";
+    // Default tests apply immediately; opt into real defer via test helper.
+    const useImmediateApply = isVitest && !forceColdStartDeferForTests;
+
+    let appliedUserScale = false;
+    const applyUserScaleOnce = () => {
+      if (cancelled || appliedUserScale) {
+        return;
+      }
+      appliedUserScale = true;
+      apply(effectiveScale);
+      markUiScalePending(effectiveScale);
+    };
+
+    if (useImmediateApply) {
+      const t = window.setTimeout(() => {
+        applyUserScaleOnce();
+      }, 0);
+      return () => {
+        cancelled = true;
+        window.clearTimeout(t);
+      };
+    }
+
+    let forceEnterTimer: number | null = null;
+
+    const tryApplyUserScale = () => {
+      if (cancelled || appliedUserScale) {
+        return;
+      }
+      const milestones = getStartupTraceSnapshot().milestones;
+      // force-enter also stamps startup-gate-ready. Honor its quiet window
+      // before the generic milestone branch so the click cannot immediately
+      // collide with a CSS relayout.
+      if (isStartupForceEntered()) {
+        const enteredAt = getStartupForceEnteredAtMs();
+        const elapsed =
+          (typeof performance !== "undefined" && typeof performance.now === "function"
+            ? performance.now()
+            : Date.now()) - enteredAt;
+        if (elapsed >= UI_SCALE_AFTER_FORCE_ENTER_DELAY_MS) {
+          applyUserScaleOnce();
+          return;
+        }
+        if (forceEnterTimer == null) {
+          forceEnterTimer = window.setTimeout(() => {
+            forceEnterTimer = null;
+            tryApplyUserScale();
+          }, Math.max(0, UI_SCALE_AFTER_FORCE_ENTER_DELAY_MS - elapsed));
+        }
+        return;
+      }
+      // Prefer full-catalog done. Home-only: input-ready without ever starting list.
+      if (
+        milestones["startup-gate-ready"] ||
+        (milestones["input-ready"] && !milestones["active-workspace-ready"])
+      ) {
+        applyUserScaleOnce();
+        return;
+      }
+    };
+
+    tryApplyUserScale();
+    const unsubTrace = subscribeStartupTrace(tryApplyUserScale);
+    const unsubForce = subscribeStartupForceEnter(tryApplyUserScale);
+    const ceilingTimer = window.setTimeout(() => {
+      applyUserScaleOnce();
+    }, UI_SCALE_COLD_START_MAX_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      if (healthyRaf != null) {
+        window.cancelAnimationFrame(healthyRaf);
+      }
+      unsubTrace();
+      unsubForce();
+      window.clearTimeout(ceilingTimer);
+      if (forceEnterTimer != null) {
+        window.clearTimeout(forceEnterTimer);
+      }
+    };
   }, [uiScale]);
 
   const scaleShortcutTitle = useMemo(() => {

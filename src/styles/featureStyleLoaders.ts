@@ -123,6 +123,14 @@ export function loadKanbanStyles() {
   ]);
 }
 
+/** Extensions 面板 + TokenTracker 仪表盘壳层样式（非首屏路径）。 */
+export function loadExtensionsStyles() {
+  return loadStyles([
+    () => import("./extensions.css"),
+    () => import("./tokentracker-dashboard.css"),
+  ]);
+}
+
 export function loadBrowserAgentStyles() {
   return loadStyles([
     () => import("./browser-agent-window.css"),

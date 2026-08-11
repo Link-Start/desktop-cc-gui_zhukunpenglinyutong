@@ -32,15 +32,11 @@ const CLAUDE_RENDER_DEBUG_FLAG_KEY = "ccgui.debug.claude.render";
 export const MESSAGES_SLOW_RENDER_WARN_MS = 18;
 export const MESSAGES_SLOW_ANCHOR_WARN_MS = 8;
 export const VISIBLE_MESSAGE_WINDOW = 10000;
-// 流式期（isThinking）的 live 尾窗口。buildLiveTailWorkingSet 仅在 isThinking 时按此裁剪，
-// 保留最近约 STREAMING_VISIBLE_WINDOW*2 个条目（含最新用户提问，供 bottom-follow 锚定），
-// 其余折叠进既有的「显示更早」指示器（omittedBeforeWorkingSetCount）。这把流式期每帧的
-// 渲染/协调/DOM 规模从 O(全历史) 压到 O(尾窗)，直击「越聊越卡」；idle/展开态仍用
-// VISIBLE_MESSAGE_WINDOW=10000 全量渲染，行为不变。走的是现成、已测试的窗口机器，未触碰
-// TIMELINE_VIRTUALIZATION_DURING_STREAMING_ENABLED（故意 false）。
-// ⚠️ 改动了流式期的可见集：必须真机验证长对话在流式「开始/结束」瞬间 bottom-follow 自动跟随
-// 不跳动、「显示更早」可展开；若跟随跳动，调大此值或改走「已完成行降级为占位」方案。
-export const STREAMING_VISIBLE_WINDOW = 60;
+// 流式 live 尾窗：2026-08 起关闭（值 ≤0 = 不裁剪）。
+// 原因：流式结束 idle 时尾窗→全量会在上方突然插回历史，scrollTop 相对「往上走」，
+// 与 jetbrains 全量消息列表的丝滑 stick-to-bottom 冲突。产品选择性能换丝滑。
+// buildLiveTailWorkingSet 在 visibleWindow<=0 时恒返回全量 items。
+export const STREAMING_VISIBLE_WINDOW = 0;
 
 export type MessagesEngine = "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
 
@@ -257,15 +253,17 @@ export function formatCompletedTimeMs(timestampMs: number) {
 
 type TranslateFn = (key: string, options?: Record<string, unknown>) => string;
 
-/** Whole seconds for compact duration labels like "耗时13s". */
+/**
+ * Compact duration for final-boundary labels, e.g. "13s" / "1m21s" / "1h1m1s"
+ * (no spaces — denser than formatDurationCompact).
+ */
 export function formatDurationSecondsLabel(durationMs: number) {
-  const seconds = Math.max(0, Math.floor(durationMs / 1000));
-  return `${seconds}s`;
+  return formatDurationCompact(durationMs).replaceAll(" ", "");
 }
 
 /**
  * Build final-boundary meta next to message actions, e.g.
- * "07-31 20:42:26 耗时13s · 输入 41.1K token / 输出 105 token"
+ * "07-31 20:42:26 耗时1m21s · 输入 41.1K token / 输出 105 token"
  */
 export function buildAssistantFinalBoundaryMetaText(options: {
   finalDurationMs?: number;
@@ -288,7 +286,7 @@ export function buildAssistantFinalBoundaryMetaText(options: {
   ) {
     headParts.push(
       options.t("messages.durationSeconds", {
-        seconds: Math.max(0, Math.floor(options.finalDurationMs / 1000)),
+        duration: formatDurationSecondsLabel(options.finalDurationMs),
       }),
     );
   }
@@ -609,8 +607,7 @@ export function countRenderableCollapsedEntries(
     if (
       entry.kind === "readGroup" ||
       entry.kind === "editGroup" ||
-      entry.kind === "searchGroup" ||
-      entry.kind === "subagentGroup"
+      entry.kind === "searchGroup"
     ) {
       return count + Math.max(1, entry.items.length);
     }

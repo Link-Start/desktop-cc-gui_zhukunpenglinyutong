@@ -2,7 +2,7 @@ use chrono::{DateTime, Duration, Local, TimeZone, Utc};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::time::{Duration as StdDuration, SystemTime, UNIX_EPOCH};
 use tauri::State;
@@ -13,8 +13,8 @@ use crate::app_paths;
 use crate::codex::home::{resolve_default_codex_home, resolve_workspace_codex_home};
 use crate::state::AppState;
 use crate::types::{
-    LocalUsageDay, LocalUsageModel, LocalUsageSessionSummary, LocalUsageSnapshot,
-    LocalUsageTotals, LocalUsageUsageData, WorkspaceEntry,
+    LocalUsageDay, LocalUsageModel, LocalUsageSessionSummary, LocalUsageSnapshot, LocalUsageTotals,
+    LocalUsageUsageData, WorkspaceEntry,
 };
 
 #[path = "local_usage/codex_rewind.rs"]
@@ -44,8 +44,16 @@ struct UsageTotals {
 
 const MAX_ACTIVITY_GAP_MS: i64 = 2 * 60 * 1000;
 const LOCAL_SESSION_SCAN_TIMEOUT: StdDuration = StdDuration::from_secs(60);
+const CODEX_THREAD_PREVIEW_MAX_BYTES: u64 = 256 * 1024;
+const CODEX_BOUNDED_CANDIDATE_LOOKAHEAD: usize = 20;
 const CODEX_PROVIDER_PROFILE_SOURCE_MANAGED: &str = "managed";
 const CODEX_PROVIDER_PROFILE_AVAILABILITY_UNKNOWN: &str = "unknown";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CodexSessionParseMode {
+    Full,
+    ThreadPreview,
+}
 
 #[derive(Default, Clone, Copy)]
 struct CostRates {
@@ -105,10 +113,40 @@ pub(crate) async fn list_codex_session_summaries_for_workspace(
     Ok((result.workspace_path, result.sessions))
 }
 
+pub(crate) async fn list_codex_session_previews_for_workspace(
+    workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
+    workspace_id: &str,
+    limit: usize,
+) -> Result<(String, Vec<LocalUsageSessionSummary>), String> {
+    let result = list_codex_session_summary_list_for_workspace_with_mode(
+        workspaces,
+        workspace_id,
+        limit,
+        CodexSessionParseMode::ThreadPreview,
+    )
+    .await?;
+    Ok((result.workspace_path, result.sessions))
+}
+
 pub(crate) async fn list_codex_session_summary_list_for_workspace(
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
     workspace_id: &str,
     limit: usize,
+) -> Result<CodexSessionSummaryList, String> {
+    list_codex_session_summary_list_for_workspace_with_mode(
+        workspaces,
+        workspace_id,
+        limit,
+        CodexSessionParseMode::Full,
+    )
+    .await
+}
+
+async fn list_codex_session_summary_list_for_workspace_with_mode(
+    workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
+    workspace_id: &str,
+    limit: usize,
+    parse_mode: CodexSessionParseMode,
 ) -> Result<CodexSessionSummaryList, String> {
     let workspace_id = workspace_id.trim();
     if workspace_id.is_empty() {
@@ -136,11 +174,12 @@ pub(crate) async fn list_codex_session_summary_list_for_workspace(
     let sessions = timeout(
         LOCAL_SESSION_SCAN_TIMEOUT,
         tokio::task::spawn_blocking(move || {
-            let mut summaries =
-                scan_codex_session_summaries(Some(workspace_path.as_path()), &sessions_roots)?;
-            if summaries.len() > requested_limit {
-                summaries.truncate(requested_limit);
-            }
+            let (summaries, _) = scan_codex_session_summaries_bounded_with_mode(
+                Some(workspace_path.as_path()),
+                &sessions_roots,
+                requested_limit,
+                parse_mode,
+            )?;
             Ok::<Vec<LocalUsageSessionSummary>, String>(summaries)
         }),
     )
@@ -174,10 +213,8 @@ pub(crate) async fn list_global_codex_session_summaries(
     let sessions = timeout(
         LOCAL_SESSION_SCAN_TIMEOUT,
         tokio::task::spawn_blocking(move || {
-            let mut summaries = scan_codex_session_summaries(None, &sessions_roots)?;
-            if summaries.len() > requested_limit {
-                summaries.truncate(requested_limit);
-            }
+            let (summaries, _) =
+                scan_codex_session_summaries_bounded(None, &sessions_roots, requested_limit)?;
             Ok::<Vec<LocalUsageSessionSummary>, String>(summaries)
         }),
     )
@@ -443,7 +480,6 @@ fn build_snapshot(
     }
 }
 
-
 fn calculate_usage_cost(usage: &LocalUsageUsageData, rates: CostRates) -> f64 {
     let input_cost = (usage.input_tokens as f64 / 1_000_000.0) * rates.input;
     let output_cost = (usage.output_tokens as f64 / 1_000_000.0) * rates.output;
@@ -461,38 +497,115 @@ fn codex_cost_rates() -> CostRates {
     }
 }
 
-
+#[cfg(test)]
 fn scan_codex_session_summaries(
     workspace_path: Option<&Path>,
     sessions_roots: &[PathBuf],
 ) -> Result<Vec<LocalUsageSessionSummary>, String> {
+    scan_codex_session_summaries_bounded_with_mode(
+        workspace_path,
+        sessions_roots,
+        usize::MAX,
+        CodexSessionParseMode::Full,
+    )
+    .map(|(sessions, _)| sessions)
+}
+
+#[derive(Debug)]
+struct CodexSessionCandidate {
+    path: PathBuf,
+    codex_home: Option<PathBuf>,
+    modified_at: SystemTime,
+}
+
+fn scan_codex_session_summaries_bounded(
+    workspace_path: Option<&Path>,
+    sessions_roots: &[PathBuf],
+    unique_session_limit: usize,
+) -> Result<(Vec<LocalUsageSessionSummary>, usize), String> {
+    scan_codex_session_summaries_bounded_with_mode(
+        workspace_path,
+        sessions_roots,
+        unique_session_limit,
+        CodexSessionParseMode::Full,
+    )
+}
+
+fn resolve_codex_candidate_scan_limit(unique_session_limit: usize) -> usize {
+    if unique_session_limit == usize::MAX {
+        usize::MAX
+    } else {
+        unique_session_limit.saturating_add(CODEX_BOUNDED_CANDIDATE_LOOKAHEAD)
+    }
+}
+
+fn scan_codex_session_summaries_bounded_with_mode(
+    workspace_path: Option<&Path>,
+    sessions_roots: &[PathBuf],
+    unique_session_limit: usize,
+    parse_mode: CodexSessionParseMode,
+) -> Result<(Vec<LocalUsageSessionSummary>, usize), String> {
+    let unique_session_limit = unique_session_limit.max(1);
+    let candidate_scan_limit = match parse_mode {
+        CodexSessionParseMode::Full => usize::MAX,
+        CodexSessionParseMode::ThreadPreview => {
+            resolve_codex_candidate_scan_limit(unique_session_limit)
+        }
+    };
     let mut seen_files = HashSet::new();
-    let mut native_titles_by_home = HashMap::<PathBuf, HashMap<String, String>>::new();
-    let mut sessions_by_id = HashMap::<String, LocalUsageSessionSummary>::new();
+    let mut candidates = Vec::new();
     for root in sessions_roots {
-        let native_titles = codex_home_for_sessions_root(root).map(|codex_home| {
-            native_titles_by_home
-                .entry(codex_home.clone())
-                .or_insert_with(|| read_codex_native_session_titles(&codex_home))
-        });
+        let codex_home = codex_home_for_sessions_root(root);
         let mut files = Vec::new();
         collect_jsonl_files(root, &mut files, &mut seen_files);
-        for file in files {
-            let Some(mut summary) = parse_codex_session_summary(&file, workspace_path)? else {
-                continue;
-            };
-            if let Some(native_title) = native_titles
-                .as_deref()
-                .and_then(|titles| titles.get(&summary.session_id))
-            {
-                summary.summary = Some(native_title.clone());
-                summary.native_title = Some(native_title.clone());
+        candidates.extend(files.into_iter().map(|path| {
+            CodexSessionCandidate {
+                modified_at: fs::metadata(&path)
+                    .and_then(|metadata| metadata.modified())
+                    .unwrap_or(UNIX_EPOCH),
+                path,
+                codex_home: codex_home.clone(),
             }
-            if let Some(existing) = sessions_by_id.get_mut(&summary.session_id) {
-                merge_duplicate_codex_session_summary(existing, summary);
-            } else {
-                sessions_by_id.insert(summary.session_id.clone(), summary);
-            }
+        }));
+    }
+    candidates.sort_by(|left, right| {
+        right.modified_at.cmp(&left.modified_at).then_with(|| {
+            left.path
+                .to_string_lossy()
+                .cmp(&right.path.to_string_lossy())
+        })
+    });
+
+    let mut native_titles_by_home = HashMap::<PathBuf, HashMap<String, String>>::new();
+    let mut sessions_by_id = HashMap::<String, LocalUsageSessionSummary>::new();
+    let mut scanned_file_count = 0;
+    for candidate in candidates.into_iter().take(candidate_scan_limit) {
+        scanned_file_count += 1;
+        let Some(mut summary) =
+            parse_codex_session_summary_with_mode(&candidate.path, workspace_path, parse_mode)?
+        else {
+            continue;
+        };
+        let native_title = candidate.codex_home.as_ref().and_then(|codex_home| {
+            native_titles_by_home
+                .entry(codex_home.clone())
+                .or_insert_with(|| read_codex_native_session_titles(codex_home))
+                .get(&summary.session_id)
+                .cloned()
+        });
+        if let Some(native_title) = native_title {
+            summary.summary = Some(native_title.clone());
+            summary.native_title = Some(native_title);
+        }
+        if let Some(existing) = sessions_by_id.get_mut(&summary.session_id) {
+            merge_duplicate_codex_session_summary(existing, summary);
+        } else {
+            sessions_by_id.insert(summary.session_id.clone(), summary);
+        }
+        if parse_mode == CodexSessionParseMode::ThreadPreview
+            && sessions_by_id.len() >= unique_session_limit
+        {
+            break;
         }
     }
     let mut sessions = sessions_by_id.into_values().collect::<Vec<_>>();
@@ -502,7 +615,8 @@ fn scan_codex_session_summaries(
             .cmp(&left.timestamp)
             .then_with(|| left.session_id.cmp(&right.session_id))
     });
-    Ok(sessions)
+    sessions.truncate(unique_session_limit);
+    Ok((sessions, scanned_file_count))
 }
 
 fn codex_home_for_sessions_root(root: &Path) -> Option<PathBuf> {
@@ -659,15 +773,34 @@ fn collect_jsonl_files(root: &Path, output: &mut Vec<PathBuf>, seen: &mut HashSe
     }
 }
 
+#[cfg(test)]
 fn parse_codex_session_summary(
     path: &Path,
     workspace_path: Option<&Path>,
+) -> Result<Option<LocalUsageSessionSummary>, String> {
+    parse_codex_session_summary_with_mode(path, workspace_path, CodexSessionParseMode::Full)
+}
+
+fn parse_codex_session_summary_with_mode(
+    path: &Path,
+    workspace_path: Option<&Path>,
+    parse_mode: CodexSessionParseMode,
 ) -> Result<Option<LocalUsageSessionSummary>, String> {
     let file = match File::open(path) {
         Ok(file) => file,
         Err(_) => return Ok(None),
     };
-    let reader = BufReader::new(file);
+    let file_modified_at_ms = fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .ok()
+        .and_then(|modified_at| modified_at.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis() as i64);
+    let reader: Box<dyn BufRead> = match parse_mode {
+        CodexSessionParseMode::Full => Box::new(BufReader::new(file)),
+        CodexSessionParseMode::ThreadPreview => {
+            Box::new(BufReader::new(file).take(CODEX_THREAD_PREVIEW_MAX_BYTES))
+        }
+    };
     let mut usage = LocalUsageUsageData::default();
     let mut summary: Option<String> = None;
     let mut model: Option<String> = None;
@@ -971,7 +1104,11 @@ fn parse_codex_session_summary(
     }
     let model = model.unwrap_or_else(|| "gpt-5.1".to_string());
     let cost = calculate_usage_cost(&usage, codex_cost_rates());
-    let timestamp = if latest_timestamp > 0 {
+    let timestamp = if parse_mode == CodexSessionParseMode::ThreadPreview {
+        file_modified_at_ms
+            .filter(|timestamp| *timestamp > 0)
+            .unwrap_or(latest_timestamp)
+    } else if latest_timestamp > 0 {
         latest_timestamp
     } else {
         SystemTime::now()

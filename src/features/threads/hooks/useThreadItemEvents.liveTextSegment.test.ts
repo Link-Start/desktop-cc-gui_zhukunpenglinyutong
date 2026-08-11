@@ -10,8 +10,10 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildConversationItem } from "../../../utils/threadItems";
 import {
+  clearLiveAssistantText,
   getLiveAssistantTextSnapshot,
   LIVE_ASSISTANT_TEXT_PUBLISH_INTERVAL_MS,
+  peekLiveAssistantText,
   resetLiveAssistantTextChannelForTests,
 } from "../utils/liveAssistantTextChannel";
 import { useThreadItemEvents } from "./useThreadItemEvents";
@@ -267,6 +269,137 @@ describe("useThreadItemEvents live-text segmentation", () => {
     });
     expect(getLiveAssistantTextSnapshot(THREAD_ID)?.text).toBe(
       "截图右侧黑卡片。",
+    );
+  });
+
+  it("flushes the live channel body when complete text is only the shell first token", () => {
+    // 回归：流式首 delta 为 Markdown `**`，全文在 live 通道；provider complete
+    // 若只带回壳文本却 clear 通道，结束后 UI 只剩 `**`，重开历史才完整。
+    const { result, dispatch } = makeHook();
+    const fullText =
+      "**Todo 演示已就绪（刻意放慢更新，方便你看 pill 过程）：**\n\n表格正文";
+
+    act(() => {
+      result.current.onAgentMessageDelta({
+        workspaceId: WORKSPACE_ID,
+        threadId: THREAD_ID,
+        itemId: ITEM_ID,
+        delta: "**",
+      });
+      result.current.onAgentMessageDelta({
+        workspaceId: WORKSPACE_ID,
+        threadId: THREAD_ID,
+        itemId: ITEM_ID,
+        delta: "Todo 演示已就绪（刻意放慢更新，方便你看 pill 过程）：**\n\n表格正文",
+      });
+    });
+
+    expect(peekLiveAssistantText(THREAD_ID)?.text).toBe(fullText);
+    expect(agentDeltaCalls(dispatch).map((action) => action.delta)).toEqual([
+      "**",
+    ]);
+
+    act(() => {
+      result.current.onAgentMessageCompleted({
+        workspaceId: WORKSPACE_ID,
+        threadId: THREAD_ID,
+        itemId: ITEM_ID,
+        // 不完整终稿：仅建壳首段
+        text: "**",
+      });
+    });
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "flushAgentCompletedBatch",
+        threadId: THREAD_ID,
+        itemId: ITEM_ID,
+        text: fullText,
+      }),
+    );
+    expect(getLiveAssistantTextSnapshot(THREAD_ID)).toBeNull();
+    expect(peekLiveAssistantText(THREAD_ID)).toBeNull();
+  });
+
+  it("salvages residual live text when complete arrives after the turn is terminal", () => {
+    const { result, dispatch } = makeHook();
+    const fullText = "**结论文本完整内容**";
+
+    act(() => {
+      result.current.noteRealtimeTurnStarted(THREAD_ID, "turn-1");
+      result.current.onAgentMessageDelta({
+        workspaceId: WORKSPACE_ID,
+        threadId: THREAD_ID,
+        itemId: ITEM_ID,
+        delta: "**",
+      });
+      result.current.onAgentMessageDelta({
+        workspaceId: WORKSPACE_ID,
+        threadId: THREAD_ID,
+        itemId: ITEM_ID,
+        delta: "结论文本完整内容**",
+      });
+      // 模拟 turn settle 先于 complete，且未 drain 成功（通道仍在）
+      result.current.markRealtimeTurnTerminal(THREAD_ID, "turn-1");
+    });
+
+    dispatch.mockClear();
+
+    act(() => {
+      result.current.onAgentMessageCompleted({
+        workspaceId: WORKSPACE_ID,
+        threadId: THREAD_ID,
+        itemId: ITEM_ID,
+        text: "**",
+        turnId: "turn-1",
+      });
+    });
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "flushAgentCompletedBatch",
+        text: fullText,
+      }),
+    );
+    expect(peekLiveAssistantText(THREAD_ID)).toBeNull();
+  });
+
+  it("salvages provider final text after turn already cleared the live channel", () => {
+    // 回归：turn 已 clear 通道，旧 salvage 要求 residual 存在而直接 return，
+    // 即使 provider complete 带着完整终稿也不会写入 → 界面只剩建壳「已」。
+    const { result, dispatch } = makeHook();
+    const fullText = "已把方案定稿：接口与字段直接写死。";
+
+    act(() => {
+      result.current.noteRealtimeTurnStarted(THREAD_ID, "turn-1");
+      result.current.onAgentMessageDelta({
+        workspaceId: WORKSPACE_ID,
+        threadId: THREAD_ID,
+        itemId: ITEM_ID,
+        delta: "已",
+      });
+      result.current.markRealtimeTurnTerminal(THREAD_ID, "turn-1");
+      // 模拟 turn settle 已 clear 通道
+      clearLiveAssistantText(THREAD_ID);
+    });
+
+    dispatch.mockClear();
+
+    act(() => {
+      result.current.onAgentMessageCompleted({
+        workspaceId: WORKSPACE_ID,
+        threadId: THREAD_ID,
+        itemId: ITEM_ID,
+        text: fullText,
+        turnId: "turn-1",
+      });
+    });
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "flushAgentCompletedBatch",
+        text: fullText,
+      }),
     );
   });
 });

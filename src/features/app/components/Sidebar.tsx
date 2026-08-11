@@ -35,9 +35,14 @@ import { SidebarTopbarSlot } from "./SidebarTopbarSlot";
 import { SidebarVersionTag } from "./SidebarVersionTag";
 import { SidebarWorkspaceDropOverlay } from "./SidebarWorkspaceDropOverlay";
 import { SidebarWorkspaceMenuOverlay } from "./SidebarWorkspaceMenuOverlay";
+import {
+  SidebarWorkspaceSortableList,
+  type SidebarWorkspaceDragChrome,
+} from "./SidebarWorkspaceSortableList";
 import { ProviderContinuationDialog } from "./ProviderContinuationDialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RendererContextMenu } from "../../../components/ui/RendererContextMenu";
+import type { SidebarWorkspaceReorderRequest } from "../../workspaces/utils/sidebarWorkspaceReorder";
 import { useCollapsedGroups } from "../hooks/useCollapsedGroups";
 import { useExitedSessionVisibility } from "../hooks/useExitedSessionVisibility";
 import {
@@ -84,6 +89,7 @@ import ArrowRight from "lucide-react/dist/esm/icons/arrow-right";
 import Eye from "lucide-react/dist/esm/icons/eye";
 import EyeOff from "lucide-react/dist/esm/icons/eye-off";
 import FolderTree from "lucide-react/dist/esm/icons/folder-tree";
+import GalleryVerticalEnd from "lucide-react/dist/esm/icons/gallery-vertical-end";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import House from "lucide-react/dist/esm/icons/house";
 import Blocks from "lucide-react/dist/esm/icons/blocks";
@@ -126,6 +132,9 @@ import {
   runWithLoadingProgress,
   type LoadingProgressController,
 } from "../utils/loadingProgressActions";
+/** 与 useAppShellQuickSwitcherSection 硬编码 shortcut 一致 */
+const QUICK_SWITCHER_SHORTCUT = "cmd+e";
+
 type SidebarProps = {
   workspaces: WorkspaceInfo[];
   groupedWorkspaces: WorkspaceGroupSection[];
@@ -164,6 +173,9 @@ type SidebarProps = {
   onAddWorkspace: () => void;
   onSelectHome: () => void;
   onSelectWorkspace: (id: string) => void;
+  onReorderWorkspaces?: (
+    input: SidebarWorkspaceReorderRequest,
+  ) => void | Promise<void>;
   onConnectWorkspace: (workspace: WorkspaceInfo) => void;
   onAddAgent: (
     workspace: WorkspaceInfo,
@@ -204,6 +216,12 @@ type SidebarProps = {
   deleteConfirmBusy?: boolean;
   onCancelDeleteConfirm?: () => void;
   onConfirmDeleteConfirm?: () => void;
+  renameThreadId?: string | null;
+  renameWorkspaceId?: string | null;
+  renameName?: string;
+  onRenameChange?: (value: string) => void;
+  onRenameCancel?: () => void;
+  onRenameConfirm?: () => void;
   onSyncThread: (workspaceId: string, threadId: string) => void;
   pinThread: (workspaceId: string, threadId: string) => boolean;
   unpinThread: (workspaceId: string, threadId: string) => void;
@@ -245,6 +263,10 @@ type SidebarProps = {
   onOpenSpecHub: () => void;
   onOpenWorkspaceHome: (workspaceId?: string) => void;
   onOpenGlobalSearch: () => void;
+  /** non-macOS 主导航 Quick Switcher（Ctrl+E）；mac 用 titlebar */
+  onOpenQuickSwitcher?: () => void;
+  /** non-macOS 设置菜单「隐藏对话侧边栏」；mac 用 titlebar */
+  onCollapseSidebar?: () => void;
   globalSearchShortcut: string | null;
   openChatShortcut: string | null;
   openKanbanShortcut: string | null;
@@ -258,6 +280,8 @@ type SidebarProps = {
   /** 打开运行时提示（入口在设置二级菜单，不在侧栏底部外显） */
   onOpenRuntimeNotice?: () => void;
   showRuntimeNoticeMenuItem?: boolean;
+  /** 运行时提示是否有失败（控制设置菜单/固定入口的对号↔叹号） */
+  runtimeNoticeHasError?: boolean;
 };
 
 function SidebarImpl({
@@ -292,6 +316,7 @@ function SidebarImpl({
   onAddWorkspace,
   onSelectHome: _onSelectHome,
   onSelectWorkspace,
+  onReorderWorkspaces,
   onConnectWorkspace,
   onAddAgent,
   engineOptions = [],
@@ -310,6 +335,12 @@ function SidebarImpl({
   deleteConfirmBusy = false,
   onCancelDeleteConfirm,
   onConfirmDeleteConfirm,
+  renameThreadId = null,
+  renameWorkspaceId = null,
+  renameName = "",
+  onRenameChange,
+  onRenameCancel,
+  onRenameConfirm,
   onSyncThread,
   pinThread,
   unpinThread,
@@ -344,6 +375,8 @@ function SidebarImpl({
   onOpenSpecHub,
   onOpenWorkspaceHome,
   onOpenGlobalSearch,
+  onOpenQuickSwitcher,
+  onCollapseSidebar,
   globalSearchShortcut,
   openChatShortcut,
   openKanbanShortcut,
@@ -356,14 +389,18 @@ function SidebarImpl({
   runtimeNoticeDockNode = null,
   onOpenRuntimeNotice,
   showRuntimeNoticeMenuItem = false,
+  runtimeNoticeHasError = false,
 }: SidebarProps) {
   const { t } = useTranslation();
   const quickSearchLabel = t("sidebar.quickSearch");
+  const quickSwitcherLabel = t("quickSwitcher.open");
   const isMac = isMacPlatform();
-  // Tauri macOS hosts move global search into the sidebar titlebar; keep the
-  // primary-nav entry on Windows / non-Tauri previews where that topbar slot is
-  // hidden or unavailable.
-  const showPrimaryNavGlobalSearch = !isMacDesktopHost();
+  // mac titlebar 已有搜索 / Quick Switcher / 收起侧栏；Win 与 non-Tauri 走主导航与设置菜单
+  const showWinChromeEntries = !isMacDesktopHost();
+  const showPrimaryNavQuickSwitcher =
+    showWinChromeEntries && Boolean(onOpenQuickSwitcher);
+  const showHideThreadsSidebar =
+    showWinChromeEntries && Boolean(onCollapseSidebar);
   const quickChatShortcutLabel = useMemo(
     () => formatShortcutForPlatform(openChatShortcut, isMac),
     [isMac, openChatShortcut],
@@ -371,6 +408,10 @@ function SidebarImpl({
   const quickKanbanShortcutLabel = useMemo(
     () => formatShortcutForPlatform(openKanbanShortcut, isMac),
     [isMac, openKanbanShortcut],
+  );
+  const quickSwitcherShortcutLabel = useMemo(
+    () => formatShortcutForPlatform(QUICK_SWITCHER_SHORTCUT, isMac),
+    [isMac],
   );
   const quickSearchShortcutLabel = useMemo(
     () => formatShortcutForPlatform(globalSearchShortcut, isMac),
@@ -1826,7 +1867,10 @@ function SidebarImpl({
     [sessionFolderOverrideByWorkspaceId, sessionFoldersByWorkspaceId, t],
   );
 
-  const renderWorkspaceEntry = useCallback((entry: WorkspaceInfo) => {
+  const renderWorkspaceEntry = useCallback((
+    entry: WorkspaceInfo,
+    drag: SidebarWorkspaceDragChrome | null = null,
+  ) => {
     const threads = threadsByWorkspace[entry.id] ?? [];
     const isCollapsed = entry.settings.sidebarCollapsed;
     const isExpanded = expandedWorkspaces.has(entry.id);
@@ -1897,6 +1941,8 @@ function SidebarImpl({
         onSelectWorkspace={onSelectWorkspace}
         onToggleWorkspaceCollapse={onToggleWorkspaceCollapse}
         pinnedRowActions={buildWorkspaceRowPinnedActions(entry, hideExitedSessions)}
+        isDragging={drag?.isDragging ?? false}
+        collapsePointerHandlers={drag?.collapsePointerHandlers ?? null}
       >
         {worktrees.length > 0 && (
           <WorktreeSection
@@ -1938,6 +1984,12 @@ function SidebarImpl({
             deleteConfirmBusy={deleteConfirmBusy}
             onCancelDeleteConfirm={onCancelDeleteConfirm}
             onConfirmDeleteConfirm={onConfirmDeleteConfirm}
+            renameThreadId={renameThreadId}
+            renameWorkspaceId={renameWorkspaceId}
+            renameName={renameName}
+            onRenameChange={onRenameChange}
+            onRenameCancel={onRenameCancel}
+            onRenameConfirm={onRenameConfirm}
             onShowWorktreeMenu={showWorktreeMenu}
             onToggleExpanded={handleToggleExpanded}
             onLoadOlderThreads={onLoadOlderThreads}
@@ -1981,6 +2033,12 @@ function SidebarImpl({
               deleteConfirmBusy,
               onCancelDeleteConfirm,
               onConfirmDeleteConfirm,
+              renameThreadId,
+              renameWorkspaceId,
+              renameName,
+              onRenameChange,
+              onRenameCancel,
+              onRenameConfirm,
               nextCursor,
               isPaging,
               showLoadOlder: true,
@@ -2019,6 +2077,12 @@ function SidebarImpl({
             deleteConfirmBusy={deleteConfirmBusy}
             onCancelDeleteConfirm={onCancelDeleteConfirm}
             onConfirmDeleteConfirm={onConfirmDeleteConfirm}
+            renameThreadId={renameThreadId}
+            renameWorkspaceId={renameWorkspaceId}
+            renameName={renameName}
+            onRenameChange={onRenameChange}
+            onRenameCancel={onRenameCancel}
+            onRenameConfirm={onRenameConfirm}
           />
         ) : null}
         {sessionFolderErrorByWorkspaceId[entry.id] ? (
@@ -2038,6 +2102,12 @@ function SidebarImpl({
     deleteConfirmBusy,
     deleteConfirmThreadId,
     deleteConfirmWorkspaceId,
+    renameName,
+    renameThreadId,
+    renameWorkspaceId,
+    onRenameCancel,
+    onRenameChange,
+    onRenameConfirm,
     deletingWorktreeIds,
     expandedWorkspaces,
     getPinTimestamp,
@@ -2090,6 +2160,29 @@ function SidebarImpl({
     worktreesByParent,
     _threadListLoadingByWorkspace,
   ]);
+
+  const isWorkspaceReorderDisabled =
+    isSearchActive || !onReorderWorkspaces;
+
+  const handleReorderUngrouped = useCallback(
+    (orderedWorkspaceIds: string[]) => {
+      void onReorderWorkspaces?.({
+        groupId: null,
+        orderedWorkspaceIds,
+      });
+    },
+    [onReorderWorkspaces],
+  );
+
+  const handleReorderNamedGroup = useCallback(
+    (groupId: string, orderedWorkspaceIds: string[]) => {
+      void onReorderWorkspaces?.({
+        groupId,
+        orderedWorkspaceIds,
+      });
+    },
+    [onReorderWorkspaces],
+  );
 
   return (
     <aside
@@ -2167,7 +2260,7 @@ function SidebarImpl({
               <Blocks className="sidebar-primary-nav-icon" aria-hidden size={20} strokeWidth={1.8} />
               <span className="sidebar-primary-nav-text">{t("sidebar.extensions")}</span>
             </button>
-            {showPrimaryNavGlobalSearch ? (
+            {showWinChromeEntries ? (
               <button
                 type="button"
                 className="sidebar-primary-nav-item sidebar-primary-nav-subitem"
@@ -2183,6 +2276,27 @@ function SidebarImpl({
                 <span className="sidebar-primary-nav-text">{quickSearchLabel}</span>
                 <span className="sidebar-primary-nav-shortcut" aria-hidden>
                   {quickSearchShortcutLabel}
+                </span>
+              </button>
+            ) : null}
+            {showPrimaryNavQuickSwitcher ? (
+              <button
+                type="button"
+                className="sidebar-primary-nav-item sidebar-primary-nav-subitem"
+                onClick={onOpenQuickSwitcher}
+                title={`${quickSwitcherLabel} (${quickSwitcherShortcutLabel})`}
+                aria-label={quickSwitcherLabel}
+                data-tauri-drag-region="false"
+              >
+                <GalleryVerticalEnd
+                  className="sidebar-primary-nav-icon"
+                  aria-hidden
+                  size={20}
+                  strokeWidth={1.8}
+                />
+                <span className="sidebar-primary-nav-text">{quickSwitcherLabel}</span>
+                <span className="sidebar-primary-nav-shortcut" aria-hidden>
+                  {quickSwitcherShortcutLabel}
                 </span>
               </button>
             ) : null}
@@ -2216,6 +2330,12 @@ function SidebarImpl({
                   deleteConfirmBusy={deleteConfirmBusy}
                   onCancelDeleteConfirm={onCancelDeleteConfirm}
                   onConfirmDeleteConfirm={onConfirmDeleteConfirm}
+                  renameThreadId={renameThreadId}
+                  renameWorkspaceId={renameWorkspaceId}
+                  renameName={renameName}
+                  onRenameChange={onRenameChange}
+                  onRenameCancel={onRenameCancel}
+                  onRenameConfirm={onRenameConfirm}
                 />
               </div>
             )}
@@ -2255,8 +2375,16 @@ function SidebarImpl({
               </TooltipIconButton>
             </div>
             <div className="workspace-list">
-          {defaultWorkspaceEntries.map(renderWorkspaceEntry)}
-          {ungroupedWorkspaceEntries.map(renderWorkspaceEntry)}
+          {defaultWorkspaceEntries.map((entry) => renderWorkspaceEntry(entry))}
+          {ungroupedWorkspaceEntries.length > 0 ? (
+            <SidebarWorkspaceSortableList
+              groupId={null}
+              workspaces={ungroupedWorkspaceEntries}
+              isDragDisabled={isWorkspaceReorderDisabled}
+              onReorder={handleReorderUngrouped}
+              renderWorkspace={renderWorkspaceEntry}
+            />
+          ) : null}
           {namedGroupedWorkspaces.map((group) => {
             const toggleId = group.id;
             const isGroupCollapsed = Boolean(
@@ -2273,7 +2401,17 @@ function SidebarImpl({
                 isCollapsed={isGroupCollapsed}
                 onToggleCollapse={toggleGroupCollapse}
               >
-                {visibleWorkspaces.map(renderWorkspaceEntry)}
+                {visibleWorkspaces.length > 0 ? (
+                  <SidebarWorkspaceSortableList
+                    groupId={group.id}
+                    workspaces={visibleWorkspaces}
+                    isDragDisabled={isWorkspaceReorderDisabled}
+                    onReorder={(orderedWorkspaceIds) =>
+                      handleReorderNamedGroup(group.id, orderedWorkspaceIds)
+                    }
+                    renderWorkspace={renderWorkspaceEntry}
+                  />
+                ) : null}
               </WorkspaceGroup>
             );
           })}
@@ -2304,6 +2442,9 @@ function SidebarImpl({
               onAppModeChange={onAppModeChange}
               onOpenRuntimeNotice={onOpenRuntimeNotice}
               showRuntimeNotice={showRuntimeNoticeMenuItem}
+              runtimeNoticeHasError={runtimeNoticeHasError}
+              showHideThreadsSidebar={showHideThreadsSidebar}
+              onCollapseSidebar={onCollapseSidebar}
             />
             {/* 锚点保留在侧栏底部供展开面板定位；外显气泡入口已收入设置二级菜单 */}
             {runtimeNoticeDockNode}

@@ -178,6 +178,7 @@ mod shared_sessions;
 mod skills;
 mod skills_hub;
 mod snapshot_throttle;
+pub mod agent_orchestration;
 mod startup_guard;
 mod state;
 mod storage;

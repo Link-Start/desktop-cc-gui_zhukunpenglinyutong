@@ -442,6 +442,21 @@ fn next_gemini_routed_item_id(
     routed_item_id
 }
 
+/// Prefer the last text-lane item id so synthetic `item/completed` upserts the
+/// same assistant bubble as streamed TextDelta (Claude-parity; avoids double bubbles).
+pub(crate) fn gemini_agent_completion_item_id(
+    state: &GeminiRenderRoutingState,
+    base_item_id: &str,
+) -> String {
+    if let Some(id) = state.active_text_item_id.as_ref() {
+        return id.clone();
+    }
+    match state.text_run_index {
+        0 | 1 => base_item_id.to_string(),
+        n => format!("{base_item_id}:text-{n}"),
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenCodeCommandEntry {
@@ -2461,10 +2476,14 @@ pub async fn engine_send_message(
                         } else {
                             accumulated_agent_text.clone()
                         };
-                        // Preserve realtime interleaving for Gemini: when text deltas
-                        // already streamed, don't collapse them back into a single
-                        // synthetic completed assistant message.
-                        if !completed_text.trim().is_empty() && !render_state.saw_text_delta {
+                        // Always emit agentMessage item/completed so project-memory
+                        // fusion (onAgentMessageCompleted) runs even after TextDelta.
+                        // Use text-lane id so the frontend upserts the streamed bubble.
+                        if !completed_text.trim().is_empty() {
+                            let completion_item_id = gemini_agent_completion_item_id(
+                                &render_state,
+                                &item_id_clone,
+                            );
                             let synthetic = AppServerEvent {
                                 workspace_id: event.workspace_id().to_string(),
                                 message: json!({
@@ -2472,7 +2491,7 @@ pub async fn engine_send_message(
                                     "params": {
                                         "threadId": &current_thread_id,
                                         "item": {
-                                            "id": &routed_item_id,
+                                            "id": completion_item_id,
                                             "type": "agentMessage",
                                             "text": completed_text,
                                             "status": "completed",
@@ -2723,9 +2742,14 @@ pub async fn engine_send_message(
                         } else {
                             accumulated_agent_text.clone()
                         };
-                        // Kimi text blocks always arrive as TextDelta, so this
-                        // synthetic completion only fires as a safety net.
-                        if !completed_text.trim().is_empty() && !render_state.saw_text_delta {
+                        // Always emit agentMessage item/completed so project-memory
+                        // fusion runs after normal TextDelta streaming (Claude-parity).
+                        // Use text-lane id so the frontend upserts the streamed bubble.
+                        if !completed_text.trim().is_empty() {
+                            let completion_item_id = gemini_agent_completion_item_id(
+                                &render_state,
+                                &item_id_clone,
+                            );
                             let synthetic = AppServerEvent {
                                 workspace_id: event.workspace_id().to_string(),
                                 message: json!({
@@ -2733,7 +2757,7 @@ pub async fn engine_send_message(
                                     "params": {
                                         "threadId": &current_thread_id,
                                         "item": {
-                                            "id": &routed_item_id,
+                                            "id": completion_item_id,
                                             "type": "agentMessage",
                                             "text": completed_text,
                                             "status": "completed",
@@ -2986,9 +3010,14 @@ pub async fn engine_send_message(
                         } else {
                             accumulated_agent_text.clone()
                         };
-                        // Grok text blocks always arrive as TextDelta, so this
-                        // synthetic completion only fires as a safety net.
-                        if !completed_text.trim().is_empty() && !render_state.saw_text_delta {
+                        // Always emit agentMessage item/completed so project-memory
+                        // fusion runs after normal TextDelta streaming (Claude-parity).
+                        // Use text-lane id so the frontend upserts the streamed bubble.
+                        if !completed_text.trim().is_empty() {
+                            let completion_item_id = gemini_agent_completion_item_id(
+                                &render_state,
+                                &item_id_clone,
+                            );
                             let synthetic = AppServerEvent {
                                 workspace_id: event.workspace_id().to_string(),
                                 message: json!({
@@ -2996,7 +3025,7 @@ pub async fn engine_send_message(
                                     "params": {
                                         "threadId": &current_thread_id,
                                         "item": {
-                                            "id": &routed_item_id,
+                                            "id": completion_item_id,
                                             "type": "agentMessage",
                                             "text": completed_text,
                                             "status": "completed",
@@ -3244,14 +3273,13 @@ pub async fn engine_send_message_sync(
             };
 
             let effective_provider_profile_id = {
-                let from_session =
-                    crate::session_management::resolve_engine_provider_profile_id(
-                        state.storage_path.as_path(),
-                        &workspace_id,
-                        session_id.as_deref(),
-                        "opencode",
-                        None,
-                    )?;
+                let from_session = crate::session_management::resolve_engine_provider_profile_id(
+                    state.storage_path.as_path(),
+                    &workspace_id,
+                    session_id.as_deref(),
+                    "opencode",
+                    None,
+                )?;
                 if from_session.is_some() {
                     from_session
                 } else {
@@ -3260,10 +3288,11 @@ pub async fn engine_send_message_sync(
                         .and_then(|config| config.opencode.current)
                 }
             };
-            let provider_launch_profile = crate::engine::opencode_provider_profile::resolve_opencode_provider_launch_profile(
-                &workspace_id,
-                effective_provider_profile_id.as_deref(),
-            )?;
+            let provider_launch_profile =
+                crate::engine::opencode_provider_profile::resolve_opencode_provider_launch_profile(
+                    &workspace_id,
+                    effective_provider_profile_id.as_deref(),
+                )?;
             let session = manager
                 .get_or_create_opencode_session_for_runtime(
                     &workspace_id,
@@ -3321,9 +3350,7 @@ pub async fn engine_send_message_sync(
             .await
             .map_err(|_| "OpenCode response timed out".to_string())??;
             if let Some(binding) = provider_launch_profile.binding.as_ref() {
-                let binding_session_id = response_session_id
-                    .as_deref()
-                    .unwrap_or(turn_id.as_str());
+                let binding_session_id = response_session_id.as_deref().unwrap_or(turn_id.as_str());
                 crate::session_management::record_engine_provider_binding_core(
                     &state.workspaces,
                     state.storage_path.as_path(),
@@ -3451,14 +3478,13 @@ pub async fn engine_send_message_sync(
             // 与 async send 对齐：无 session 绑定时回落到 vendors.kimi.current，
             // 让 commit-message 等 helper 也能吃到 managed provider 的 API key。
             let effective_provider_profile_id = {
-                let from_session =
-                    crate::session_management::resolve_engine_provider_profile_id(
-                        state.storage_path.as_path(),
-                        &workspace_id,
-                        session_id.as_deref(),
-                        "kimi",
-                        None,
-                    )?;
+                let from_session = crate::session_management::resolve_engine_provider_profile_id(
+                    state.storage_path.as_path(),
+                    &workspace_id,
+                    session_id.as_deref(),
+                    "kimi",
+                    None,
+                )?;
                 if from_session.is_some() {
                     from_session
                 } else {
@@ -3516,9 +3542,7 @@ pub async fn engine_send_message_sync(
             .map_err(|_| "Kimi response timed out".to_string())??;
             let response_session_id = session.get_session_id().await;
             if let Some(binding) = provider_launch_profile.binding.as_ref() {
-                let binding_session_id = response_session_id
-                    .as_deref()
-                    .unwrap_or(turn_id.as_str());
+                let binding_session_id = response_session_id.as_deref().unwrap_or(turn_id.as_str());
                 crate::session_management::record_engine_provider_binding_core(
                     &state.workspaces,
                     state.storage_path.as_path(),
@@ -3556,14 +3580,13 @@ pub async fn engine_send_message_sync(
             // 根因：旧 sync 路径走 bare get_or_create_grok_session（无 provider home），
             // 导致 managed Grok API key 不会被注入，commit-message 出现 401 Unauthorized。
             let effective_provider_profile_id = {
-                let from_session =
-                    crate::session_management::resolve_engine_provider_profile_id(
-                        state.storage_path.as_path(),
-                        &workspace_id,
-                        session_id.as_deref(),
-                        "grok",
-                        None,
-                    )?;
+                let from_session = crate::session_management::resolve_engine_provider_profile_id(
+                    state.storage_path.as_path(),
+                    &workspace_id,
+                    session_id.as_deref(),
+                    "grok",
+                    None,
+                )?;
                 if from_session.is_some() {
                     from_session
                 } else {
@@ -3633,9 +3656,7 @@ pub async fn engine_send_message_sync(
             .map_err(|_| "Grok response timed out".to_string())??;
             let response_session_id = session.get_session_id().await;
             if let Some(binding) = provider_launch_profile.binding.as_ref() {
-                let binding_session_id = response_session_id
-                    .as_deref()
-                    .unwrap_or(turn_id.as_str());
+                let binding_session_id = response_session_id.as_deref().unwrap_or(turn_id.as_str());
                 crate::session_management::record_engine_provider_binding_core(
                     &state.workspaces,
                     state.storage_path.as_path(),

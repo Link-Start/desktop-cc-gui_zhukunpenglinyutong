@@ -154,6 +154,40 @@ export function resolveActiveProviderProfileId(
   return targetProfileId ?? LOCAL_PROVIDER_PROFILE_IDS[providerId] ?? null;
 }
 
+/**
+ * Claude 列表行展示名：catalog runtime 优先于全局 localStorage mapping。
+ * Shared 打开历史会话时 mapping 常滞后于 selectedNextTarget 渠道。
+ */
+export function resolveClaudeCatalogModelLabel(
+  model: Pick<ModelInfo, "id" | "model" | "label" | "providerProfileId">,
+  modelMapping: ModelMapping,
+): string {
+  const runtime = model.model?.trim() || "";
+  const catalogId = model.id.trim();
+  if (runtime) {
+    if (model.providerProfileId?.trim() || runtime !== catalogId) {
+      return runtime;
+    }
+  } else if (
+    model.providerProfileId?.trim() &&
+    model.label &&
+    model.label.trim() !== catalogId
+  ) {
+    return model.label.trim();
+  }
+
+  const mappedName = resolveModelMappingValue(model.id, modelMapping);
+  if (mappedName) {
+    return mappedName;
+  }
+
+  const parentLabel = model.label?.trim() || "";
+  if (parentLabel) {
+    return parentLabel;
+  }
+  return catalogId || model.id;
+}
+
 export function isSameProviderExecutionProfile(
   currentProvider: ProviderId,
   currentProviderProfileId: string | null | undefined,
@@ -287,11 +321,11 @@ export function resolveAtomicSelectedModelDisplay(
 
 /**
  * Resolve the model id used for brand-icon matching.
- * Prefer the mapped runtime model (e.g. kimi-k3) so third-party providers show
- * their own logo instead of the Claude glyph.
- * Claude ANTHROPIC_* mapping is Claude-scoped only — never rewrite other CLIs.
+ * Claude：与列表文案同源（{@link resolveClaudeCatalogModelLabel}）——
+ * catalog runtime 优先，禁止陈旧 localStorage mapping 把「k3」行画成 DeepSeek 鲸。
+ * 其它 CLI：runtime / id。
  */
-function resolveModelIdForIcon(
+export function resolveModelIdForIcon(
   model: ModelInfo | null | undefined,
   mapping: ModelMapping,
   providerId?: string | null,
@@ -299,7 +333,13 @@ function resolveModelIdForIcon(
   if (!model) {
     return null;
   }
-  if (!providerId || providerId === 'claude') {
+  if (!providerId || providerId === "claude") {
+    // 与 getModelLabel 一致：catalog 改写后的 runtime 优先于全局 mapping
+    const runtime = model.model?.trim() || "";
+    const catalogId = model.id.trim();
+    if (runtime && (model.providerProfileId?.trim() || runtime !== catalogId)) {
+      return runtime;
+    }
     const mapped = resolveModelMappingValue(model.id, mapping);
     if (mapped) {
       return mapped;
@@ -650,28 +690,17 @@ export const ModelSelect = memo(({
     model: ModelInfo,
     providerId?: string | null,
   ): string => {
-    // Provider-scoped catalog（Shared 按渠道拉取）已把 runtime 写到 model.model；
-    // 优先展示它，避免全局 localStorage 映射仍停留在上一渠道（Native 切会话也会同步 mapping，
-    // 但 Shared 只改 next target 时 mapping 可能滞后）。
-    if (
-      (!providerId || providerId === "claude") &&
-      model.providerProfileId?.trim()
-    ) {
-      const scopedRuntime =
-        model.model?.trim() ||
-        (model.label && model.label.trim() !== model.id
-          ? model.label.trim()
-          : "");
-      if (scopedRuntime) {
-        return scopedRuntime;
-      }
-    }
-
-    // Claude ANTHROPIC_* mapping only — never rewrite Codex/Grok/Kimi labels.
     if (!providerId || providerId === "claude") {
-      const mappedName = resolveModelMappingValue(model.id, modelMapping);
-      if (mappedName) {
-        return mappedName;
+      const claudeLabel = resolveClaudeCatalogModelLabel(model, modelMapping);
+      if (claudeLabel) {
+        // 无 mapping / runtime 时可能只剩 catalog id；再尝试 i18n 档位名。
+        if (claudeLabel === model.id.trim()) {
+          const labelKey = MODEL_LABEL_KEYS[model.id];
+          if (labelKey) {
+            return t(labelKey);
+          }
+        }
+        return claudeLabel;
       }
     }
 
@@ -708,9 +737,11 @@ export const ModelSelect = memo(({
     hasTargetGroups && executionTarget?.engine
       ? executionTarget.engine
       : currentProvider;
-  const currentModelLabel = currentModel
-    ? getModelLabel(currentModel, selectedModelProvider)
-    : t('models.selectModel');
+  const modelResolved = Boolean(currentModel);
+  // 未解析到已选模型时：固定占位 loading，禁止用「选择模型」空缺再闪成真名（冷启/切会话 UX）
+  const currentModelLabel = modelResolved
+    ? getModelLabel(currentModel!, selectedModelProvider)
+    : t('models.loading', { defaultValue: '加载中' });
   const hasConfigActions = Boolean(onAddModel || onRefreshConfig);
 
   const isGroupCurrent = (group: PickerModelGroup): boolean =>
@@ -1002,21 +1033,40 @@ export const ModelSelect = memo(({
   const trigger = (
     <button
       className={triggerVariant === 'readiness' ? 'composer-readiness-target composer-readiness-target-button' : 'selector-button'}
-      title={t('chat.currentModel', { model: currentModelLabel })}
-      aria-label={t('chat.currentModel', { model: currentModelLabel })}
+      title={
+        modelResolved
+          ? t('chat.currentModel', { model: currentModelLabel })
+          : t('models.loading', { defaultValue: '加载中' })
+      }
+      aria-label={
+        modelResolved
+          ? t('chat.currentModel', { model: currentModelLabel })
+          : t('models.loading', { defaultValue: '加载中' })
+      }
+      aria-busy={!modelResolved}
+      data-model-loading={modelResolved ? undefined : 'true'}
+      // 加载中不展开菜单；宽度跟内容走，避免与 ModeSelect 之间被撑空
+      disabled={!modelResolved}
     >
       {triggerVariant === 'readiness' ? (
         <>
           <span className="composer-readiness-icon" aria-hidden="true">
-            <ModelIcon
-              provider={selectedModelProvider}
-              model={currentModel}
-              modelIdForIcon={getModelIconId(
-                currentModel,
-                selectedModelProvider,
-              )}
-              size={16}
-            />
+            {modelResolved ? (
+              <ModelIcon
+                provider={selectedModelProvider}
+                model={currentModel}
+                modelIdForIcon={getModelIconId(
+                  currentModel,
+                  selectedModelProvider,
+                )}
+                size={16}
+              />
+            ) : (
+              <span
+                className="codicon codicon-loading selector-refresh-icon-spinning"
+                style={{ fontSize: 14 }}
+              />
+            )}
           </span>
           <span className="composer-readiness-model">
             {currentModelLabel}
@@ -1024,17 +1074,27 @@ export const ModelSelect = memo(({
         </>
       ) : (
         <>
-          <ModelIcon
-            provider={selectedModelProvider}
-            model={currentModel}
-            modelIdForIcon={getModelIconId(
-              currentModel,
-              selectedModelProvider,
-            )}
-            size={12}
-          />
+          {modelResolved ? (
+            <ModelIcon
+              provider={selectedModelProvider}
+              model={currentModel}
+              modelIdForIcon={getModelIconId(
+                currentModel,
+                selectedModelProvider,
+              )}
+              size={12}
+            />
+          ) : (
+            <span
+              className="codicon codicon-loading selector-refresh-icon-spinning"
+              style={{ fontSize: 12 }}
+              aria-hidden
+            />
+          )}
           <span className="selector-button-text">{currentModelLabel}</span>
-          <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={{ fontSize: '10px', marginLeft: '2px' }} />
+          {modelResolved ? (
+            <span className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} style={{ fontSize: '10px', marginLeft: '2px' }} />
+          ) : null}
         </>
       )}
     </button>

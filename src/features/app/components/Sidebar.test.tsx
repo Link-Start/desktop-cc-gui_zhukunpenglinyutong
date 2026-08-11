@@ -12,6 +12,8 @@ import {
   listWorkspaceSessionFolders,
   renameWorkspaceSessionFolder,
 } from "../../../services/tauri";
+import { writeClientStoreValue } from "../../../services/clientStorage";
+import { SIDEBAR_SETTINGS_PINNED_ACTIONS_KEY } from "../hooks/useSidebarSettingsPinnedActions";
 import { pushErrorToast } from "../../../services/toasts";
 
 import { Sidebar } from "./Sidebar";
@@ -193,6 +195,90 @@ describe("Sidebar", () => {
     expect(container.querySelector(".sidebar-settings-dropdown")).toBeNull();
   });
 
+  it("switches the runtime notice menu icon to alert when errors exist", async () => {
+    const { container, rerender } = render(
+      <Sidebar
+        {...baseProps}
+        showRuntimeNoticeMenuItem
+        onOpenRuntimeNotice={vi.fn()}
+        runtimeNoticeHasError={false}
+      />,
+    );
+
+    const settingsToggle = container.querySelector(".sidebar-primary-nav-item-bottom");
+    expect(settingsToggle).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(settingsToggle as Element);
+    });
+
+    expect(
+      container.querySelector(".sidebar-settings-runtime-notice-icon.is-idle"),
+    ).toBeTruthy();
+    expect(
+      container.querySelector(".sidebar-settings-runtime-notice-icon.is-has-error"),
+    ).toBeNull();
+
+    await act(async () => {
+      rerender(
+        <Sidebar
+          {...baseProps}
+          showRuntimeNoticeMenuItem
+          onOpenRuntimeNotice={vi.fn()}
+          runtimeNoticeHasError
+        />,
+      );
+    });
+
+    expect(
+      container.querySelector(".sidebar-settings-runtime-notice-icon.is-has-error"),
+    ).toBeTruthy();
+    expect(
+      container.querySelector(".sidebar-settings-runtime-notice-icon.is-idle"),
+    ).toBeNull();
+  });
+
+  it("mirrors runtime notice error state on the pinned settings entry", async () => {
+    writeClientStoreValue("app", SIDEBAR_SETTINGS_PINNED_ACTIONS_KEY, ["runtime-notice"]);
+
+    const { container, rerender } = render(
+      <Sidebar
+        {...baseProps}
+        showRuntimeNoticeMenuItem
+        onOpenRuntimeNotice={vi.fn()}
+        runtimeNoticeHasError={false}
+      />,
+    );
+
+    const pinnedIdle = container.querySelector(
+      '.sidebar-settings-pinned-item[data-runtime-notice-status="idle"]',
+    );
+    expect(pinnedIdle).toBeTruthy();
+    expect(pinnedIdle?.classList.contains("is-runtime-notice-error")).toBe(false);
+    expect(
+      pinnedIdle?.querySelector(".sidebar-settings-runtime-notice-icon.is-idle"),
+    ).toBeTruthy();
+
+    await act(async () => {
+      rerender(
+        <Sidebar
+          {...baseProps}
+          showRuntimeNoticeMenuItem
+          onOpenRuntimeNotice={vi.fn()}
+          runtimeNoticeHasError
+        />,
+      );
+    });
+
+    const pinnedError = container.querySelector(
+      '.sidebar-settings-pinned-item[data-runtime-notice-status="has-error"]',
+    );
+    expect(pinnedError).toBeTruthy();
+    expect(pinnedError?.classList.contains("is-runtime-notice-error")).toBe(true);
+    expect(
+      pinnedError?.querySelector(".sidebar-settings-runtime-notice-icon.is-has-error"),
+    ).toBeTruthy();
+  });
+
   it("pins up to two settings actions beside the gear and blocks a third pin", async () => {
     const onOpenSpecHub = vi.fn();
     const onOpenProjectMemory = vi.fn();
@@ -314,20 +400,54 @@ describe("Sidebar", () => {
       configurable: true,
     });
     try {
-      const { container } = render(<Sidebar {...baseProps} />);
+      const onOpenQuickSwitcher = vi.fn();
+      const { container } = render(
+        <Sidebar {...baseProps} onOpenQuickSwitcher={onOpenQuickSwitcher} />,
+      );
       expect(screen.queryByText("Ctrl+J")).toBeNull();
       expect(screen.getByText("Ctrl+K")).toBeTruthy();
       expect(screen.getByText("Ctrl+O")).toBeTruthy();
-      expect(container.querySelectorAll(".sidebar-primary-nav .sidebar-primary-nav-shortcut")).toHaveLength(2);
+      expect(screen.getByText("Ctrl+E")).toBeTruthy();
+      expect(
+        container.querySelectorAll(
+          ".sidebar-primary-nav .sidebar-primary-nav-shortcut",
+        ),
+      ).toHaveLength(3);
       expect(screen.getByRole("button", { name: "Home" }).getAttribute("title")).toContain("Ctrl+J");
       expect(screen.getByRole("button", { name: "Automation" }).getAttribute("title")).toContain("Ctrl+K");
       expect(screen.getByRole("button", { name: "Search" }).getAttribute("title")).toContain("Ctrl+O");
+      expect(
+        screen.getByRole("button", { name: "Quick Switcher" }).getAttribute("title"),
+      ).toContain("Ctrl+E");
+      fireEvent.click(screen.getByRole("button", { name: "Quick Switcher" }));
+      expect(onOpenQuickSwitcher).toHaveBeenCalledTimes(1);
     } finally {
       Object.defineProperty(window.navigator, "platform", {
         value: originalPlatform,
         configurable: true,
       });
     }
+  });
+
+  it("exposes hide conversation sidebar in settings menu when collapse handler is provided", async () => {
+    const onCollapseSidebar = vi.fn();
+    const { container } = render(
+      <Sidebar {...baseProps} onCollapseSidebar={onCollapseSidebar} />,
+    );
+
+    const settingsToggle = container.querySelector(".sidebar-primary-nav-item-bottom");
+    expect(settingsToggle).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(settingsToggle as Element);
+    });
+
+    const dropdown = container.querySelector(".sidebar-settings-dropdown");
+    expect(dropdown).toBeTruthy();
+    const hideItem = within(dropdown as HTMLElement).getByRole("menuitem", {
+      name: "Hide conversation sidebar",
+    });
+    fireEvent.click(hideItem);
+    expect(onCollapseSidebar).toHaveBeenCalledTimes(1);
   });
 
   it("reflects cleared quick mode shortcuts in button hints", () => {
@@ -375,6 +495,9 @@ describe("Sidebar", () => {
     expect(menu.queryByRole("menuitem", { name: "Home" })).toBeNull();
     expect(menu.queryByRole("menuitem", { name: "Automation" })).toBeNull();
     expect(menu.queryByRole("menuitem", { name: "Skills" })).toBeNull();
+    expect(
+      menu.queryByRole("menuitem", { name: "Hide conversation sidebar" }),
+    ).toBeNull();
     expect(menu.getByRole("menuitem", { name: "Lock" })).toBeTruthy();
     expect(menu.queryByRole("menuitem", { name: "Long-term Memory" })).toBeNull();
     expect(menu.getByRole("menuitem", { name: "Spec Hub" })).toBeTruthy();
@@ -2040,7 +2163,15 @@ describe("Sidebar", () => {
     );
 
     expect(await screen.findByText("Planning")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "New folder in project" }));
+    const planningRow = screen
+      .getByText("Planning")
+      .closest(".workspace-session-folder-row") as HTMLElement | null;
+    expect(planningRow).toBeTruthy();
+    if (!planningRow) {
+      throw new Error("Missing Planning folder row");
+    }
+    fireEvent.click(within(planningRow).getByRole("button", { name: "Folder actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "New folder in project" }));
     fireEvent.change(screen.getByLabelText("Folder name"), {
       target: { value: " Follow ups " },
     });
@@ -2053,14 +2184,8 @@ describe("Sidebar", () => {
     );
     expect(await screen.findByText("Follow ups")).toBeTruthy();
 
-    const planningRow = screen
-      .getByText("Planning")
-      .closest(".workspace-session-folder-row") as HTMLElement | null;
-    expect(planningRow).toBeTruthy();
-    if (!planningRow) {
-      throw new Error("Missing Planning folder row");
-    }
-    fireEvent.click(within(planningRow).getByRole("button", { name: "Rename folder" }));
+    fireEvent.click(within(planningRow).getByRole("button", { name: "Folder actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Rename folder" }));
     const renameInput = screen.getByDisplayValue("Planning");
     fireEvent.change(renameInput, { target: { value: " Roadmap " } });
     fireEvent.keyDown(renameInput, { key: "Enter" });
@@ -2161,7 +2286,7 @@ describe("Sidebar", () => {
     const codexItem = screen.getByRole("menuitem", { name: /Codex/ });
     fireEvent.mouseEnter(codexItem);
     await act(async () => {
-      fireEvent.click(screen.getByRole("menuitemradio", { name: /codex-tui\/default-config/ }));
+      fireEvent.click(screen.getByRole("menuitemradio", { name: /本地配置/ }));
       fireEvent.click(codexItem);
     });
 
@@ -2805,7 +2930,7 @@ describe("Sidebar", () => {
     const codexItem = screen.getByRole("menuitem", { name: "Codex" });
     fireEvent.mouseEnter(codexItem);
     await act(async () => {
-      fireEvent.click(screen.getByRole("menuitemradio", { name: /codex-tui\/default-config/ }));
+      fireEvent.click(screen.getByRole("menuitemradio", { name: /本地配置/ }));
       fireEvent.click(codexItem);
     });
 
@@ -2958,6 +3083,92 @@ describe("Sidebar", () => {
       expect.objectContaining({ title: "Could not move session" }),
     );
     expect(await screen.findByText("Shared Session")).toBeTruthy();
+  });
+
+  it("enables long-press reorder on collapse controls without a separate grip column", () => {
+    const workspaces = [
+      {
+        id: "ws-a",
+        name: "alpha",
+        path: "/tmp/alpha",
+        connected: true,
+        kind: "main" as const,
+        settings: { sidebarCollapsed: true, groupId: "g1", sortOrder: 0 },
+      },
+      {
+        id: "ws-b",
+        name: "beta",
+        path: "/tmp/beta",
+        connected: true,
+        kind: "main" as const,
+        settings: { sidebarCollapsed: true, groupId: "g1", sortOrder: 1 },
+      },
+    ];
+    const { container } = render(
+      <Sidebar
+        {...baseProps}
+        workspaces={workspaces}
+        groupedWorkspaces={[
+          {
+            id: "g1",
+            name: "开源项目",
+            workspaces,
+          },
+        ]}
+        onReorderWorkspaces={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector(".workspace-sortable-list")).not.toBeNull();
+    expect(container.querySelectorAll(".workspace-drag-handle")).toHaveLength(0);
+    expect(container.querySelectorAll(".workspace-card.is-reorderable")).toHaveLength(2);
+    expect(container.querySelectorAll(".workspace-collapse-toggle.is-reorder-entry")).toHaveLength(
+      2,
+    );
+  });
+
+  it("disables long-press reorder when callback is missing or the group has one project", () => {
+    const alone = {
+      id: "ws-a",
+      name: "alpha",
+      path: "/tmp/alpha",
+      connected: true,
+      kind: "main" as const,
+      settings: { sidebarCollapsed: true, groupId: null, sortOrder: 0 },
+    };
+    const pair = [
+      alone,
+      {
+        id: "ws-b",
+        name: "beta",
+        path: "/tmp/beta",
+        connected: true,
+        kind: "main" as const,
+        settings: { sidebarCollapsed: true, groupId: null, sortOrder: 1 },
+      },
+    ];
+
+    const withoutCallback = render(
+      <Sidebar
+        {...baseProps}
+        workspaces={pair}
+        groupedWorkspaces={[{ id: null, name: "Ungrouped", workspaces: pair }]}
+      />,
+    );
+    expect(
+      withoutCallback.container.querySelectorAll(".workspace-card.is-reorderable"),
+    ).toHaveLength(0);
+    withoutCallback.unmount();
+
+    const single = render(
+      <Sidebar
+        {...baseProps}
+        workspaces={[alone]}
+        groupedWorkspaces={[{ id: null, name: "Ungrouped", workspaces: [alone] }]}
+        onReorderWorkspaces={vi.fn()}
+      />,
+    );
+    expect(single.container.querySelectorAll(".workspace-card.is-reorderable")).toHaveLength(0);
   });
 
 });

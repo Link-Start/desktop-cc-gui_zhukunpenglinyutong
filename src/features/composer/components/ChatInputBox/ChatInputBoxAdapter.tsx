@@ -63,6 +63,7 @@ import {
   getPromptHeatLevel,
   getPromptUsageEntry,
 } from '../../../prompts/promptUsage';
+import { requestCustomPromptsRefresh } from '../../../prompts/promptEvents';
 import { appendComposerRenderBudgetDiagnostic } from '../../../../services/rendererDiagnostics';
 
 // Re-export the handle type for Composer to use
@@ -509,7 +510,9 @@ export interface ChatInputBoxAdapterProps {
   onSelectCollaborationMode?: (id: string | null) => void;
   onCodexQuickCommand?: (command: string) => void | Promise<void>;
   memoryReferenceMode?: MemoryReferenceMode;
+  memoryReferenceDismissed?: boolean;
   onSetMemoryReferenceMode?: (mode: MemoryReferenceMode) => void;
+  onRestoreMemoryReference?: () => void;
 
   // Queue
   queuedMessages?: ComposerQueuedMessage[];
@@ -561,6 +564,7 @@ export interface ChatInputBoxAdapterProps {
   onRefreshModelConfig?: (providerId?: string) => Promise<void> | void;
   isModelConfigRefreshing?: boolean;
   onForkQuickStart?: () => void;
+  squadSurface?: React.ReactNode;
   hasMessages?: boolean;
   onRewind?: () => void;
   showRewindEntry?: boolean;
@@ -1055,7 +1059,9 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       onSelectCollaborationMode,
       onCodexQuickCommand,
       memoryReferenceMode,
+      memoryReferenceDismissed,
       onSetMemoryReferenceMode,
+      onRestoreMemoryReference,
       queuedMessages,
       sendReadiness,
       onJumpToRequest,
@@ -1095,6 +1101,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       onRefreshModelConfig,
       isModelConfigRefreshing,
       onForkQuickStart,
+      squadSurface,
       hasMessages,
       onRewind,
       showRewindEntry,
@@ -2017,8 +2024,25 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
           throw new DOMException('Aborted', 'AbortError');
         }
 
+        // 内存为空时 on-demand revalidate：修复启动 soft-failure 导致的永久空态。
+        // 非空时只读 props，避免每次 `!` 打 IPC。
+        let sourcePrompts = prompts;
+        if (sourcePrompts.length === 0 && workspaceId) {
+          const refreshed = await requestCustomPromptsRefresh(
+            workspaceId,
+            'on-demand',
+            { skipIfAuthoritative: true },
+          );
+          if (signal.aborted) {
+            throw new DOMException('Aborted', 'AbortError');
+          }
+          if (Array.isArray(refreshed) && refreshed.length > 0) {
+            sourcePrompts = refreshed;
+          }
+        }
+
         const normalizedQuery = query.trim().toLowerCase();
-        const filteredPrompts = prompts
+        const filteredPrompts = sourcePrompts
           .filter((prompt) => prompt.name)
           .filter((prompt) => {
             if (!normalizedQuery) {
@@ -2080,7 +2104,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
 
         return [...filteredPrompts, createPromptItem];
       },
-      [prompts, t],
+      [prompts, t, workspaceId],
     );
 
     return (
@@ -2146,6 +2170,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         onRefreshModelConfig={onRefreshModelConfig}
         isModelConfigRefreshing={isModelConfigRefreshing}
         onForkQuickStart={onForkQuickStart}
+        squadSurface={squadSurface}
         hasMessages={hasMessages}
         onRewind={onRewind}
         showRewindEntry={showRewindEntry}
@@ -2169,7 +2194,9 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         onCodexSpeedModeChange={handleCodexSpeedModeChange}
         onCodexReviewQuickStart={handleCodexReviewQuickStart}
         memoryReferenceMode={memoryReferenceMode}
+        memoryReferenceDismissed={memoryReferenceDismissed}
         onSetMemoryReferenceMode={onSetMemoryReferenceMode}
+        onRestoreMemoryReference={onRestoreMemoryReference}
         messageQueue={messageQueue}
         sendReadiness={sendReadiness}
         onJumpToRequest={onJumpToRequest}

@@ -36,6 +36,8 @@ describe("messages context stack layout", () => {
     expect(userBubbleRule).toContain(
       "max-width: var(--message-user-bubble-max-width, 85%);",
     );
+    // 复制入口用叠层衬底，不再固定预留 padding-right（避免短气泡右侧空一块）
+    expect(userBubbleRule).not.toMatch(/padding-right\s*:/);
     expect(userStackRule).toContain(
       "width: var(--message-user-bubble-max-width, 85%);",
     );
@@ -43,6 +45,15 @@ describe("messages context stack layout", () => {
     expect(userStackRule).toContain("margin-left: auto;");
     expect(userStackRule).toContain("justify-items: end;");
     expect(stackedBubbleRule).toContain("max-width: 100%;");
+  });
+
+  it("overlays user bubble copy actions with a matching scrim instead of reserved width", () => {
+    const actionsRule = getCssRuleBlock(messagesPart1Css, ".message-user-bubble-actions");
+
+    expect(actionsRule).toContain("position: absolute;");
+    expect(actionsRule).toContain("pointer-events: none;");
+    expect(actionsRule).toMatch(/background:\s*color-mix\(/);
+    expect(actionsRule).toMatch(/box-shadow:\s*0 0 10px 6px/);
   });
 
   it("bounds appended user context cards inside the shared user column", () => {
@@ -53,7 +64,9 @@ describe("messages context stack layout", () => {
         ".message-context-stack.is-user > .browser-context-summary-card,",
         ".message-context-stack.is-user > .intent-canvas-context-summary-card,",
         ".message-context-stack.is-user > .note-card-context-summary-card,",
-        ".message-context-stack.is-user > .message-code-annotation-context",
+        ".message-context-stack.is-user > .message-code-annotation-context,",
+        ".message-context-stack.is-user > .memory-inject-summary,",
+        ".message-context-stack.is-user > .memory-pick-empty-status",
       ].join("\n"),
     );
 
@@ -62,13 +75,21 @@ describe("messages context stack layout", () => {
     expect(contextCardRule).toContain("box-sizing: border-box;");
   });
 
-  it("keeps image-bearing rows out of content-visibility clipping", () => {
-    const imageMessageRule = getCssRuleBlock(
-      messagesPart1Css,
+  it("does not use content-visibility on message rows (jetbrains scroll stability)", () => {
+    // 2026-08：对齐 jetbrains-cc-gui——content-visibility 占位→真高跳变是
+    // 「视口上跳卡中部」根因，messages 行全面禁用，不再需要 image 行例外规则。
+    expect(messagesPart1Css).not.toMatch(
+      /^\s*content-visibility\s*:/m,
+    );
+    expect(messagesPart1Css).not.toContain(
       ".message:has(.message-image-grid, .message-deferred-image-list, .message-generated-image-card)",
     );
-
-    expect(imageMessageRule).toContain("content-visibility: visible;");
-    expect(imageMessageRule).toContain("contain-intrinsic-block-size: auto;");
+    // 允许 layout/style containment 隔离样式污染；禁止 size containment 以免高度跳变。
+    expect(messagesPart1Css).toMatch(
+      /^\.message\s*\{[\s\S]*?^\s*contain:\s*layout\s+style\s*;/m,
+    );
+    expect(messagesPart1Css).not.toMatch(
+      /^\.message\s*\{[\s\S]*?^\s*contain:\s*[^;]*\bsize\b/m,
+    );
   });
 });
