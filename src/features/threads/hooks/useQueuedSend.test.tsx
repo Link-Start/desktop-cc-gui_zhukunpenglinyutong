@@ -159,6 +159,36 @@ describe("buildQueueDrainSignal", () => {
     });
     expect(busy).not.toBe(idle);
   });
+
+  it("stays empty/stable when no queue and no inflight even if active status churns", () => {
+    const base = {
+      queuedByThread: {},
+      inFlightByThread: {},
+      activeThreadId: "thread-active",
+      isReviewing: false,
+      isContextCompacting: false,
+      hasPendingUserInput: false,
+      backgroundEnabled: true,
+    };
+    const a = buildQueueDrainSignal({
+      ...base,
+      isProcessing: true,
+      activeTerminalPulse: 1,
+      threadStatusById: {
+        "thread-active": { isProcessing: true, terminalPulse: 1 },
+      },
+    });
+    const b = buildQueueDrainSignal({
+      ...base,
+      isProcessing: false,
+      activeTerminalPulse: 9,
+      threadStatusById: {
+        "thread-active": { isProcessing: false, terminalPulse: 9 },
+      },
+    });
+    expect(a).toBe("empty|bg:1");
+    expect(b).toBe("empty|bg:1");
+  });
 });
 
 describe("useQueuedSend", () => {

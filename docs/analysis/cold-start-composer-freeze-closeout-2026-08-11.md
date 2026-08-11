@@ -202,16 +202,36 @@ useLayoutNodes.renderComposerNode
 
 ## 7. 验收清单（回归）
 
-- [x] Mac Cmd+R 猛点不卡  
+- [x] Mac Cmd+R 猛点不卡（止血 + 步24）  
 - [x] 工具栏模型位始终存在（加载中 → 真名）  
 - [x] 模型与「全自动」之间无大空洞  
 - [x] 输入框冷启宽度与最终态一致（无先全宽再缩）  
 - [ ] Win 同样路径冒烟（可选）  
-- [ ] 提交根治+UX 变更（若尚未 commit）  
+- [x] 根治+UX 提交 `973ec1fd0`  
+- [x] 用户纠正：`973ec1fd0` 为根治正确基线，**假死回归在该提交之后**  
+- [ ] **步25–26**：重点审查 `dc97acd5c`（队列 auto-drain + 传入 threadStatusById/activeItems）；冷启安静前禁止 drain  
 
 ---
 
-## 8. 关联文档
+## 8. 队列 drain 非对抗改写（`dc97acd5c` 之后 · 2026-08-11 晚）
+
+**问题**：S1 auto-drain 正确，但冷启与猛点窗同抢主线程。  
+**不该做**：永久关 drain、或与业务对着干。  
+**该做**：改触发与依赖。
+
+| 改动 | 说明 |
+|------|------|
+| `buildQueueDrainSignal` | **无 queue/inflight → 稳定 `empty\|bg:*`**；不再强制塞 activeThreadId（免 active 心跳刷 signal） |
+| 放行条件 | **`startup-gate-ready` 或 force-enter** 后，再短静默无点击才 `queueDrainReleased` |
+| drain/settlement | 未放行或近 300ms 有点击则跳过；**handleSend / queueMessage 始终可用** |
+| handoff 匹配 | `activeItems` 用 ref + 尾部信号，避免流式每 delta 跑 effect |
+| Composer memo | 非流式忽略 canvas 大 props（与 queue 并列，减重渲） |
+
+测试：`useQueuedSend.test.tsx` 含 empty signal 稳定性用例。
+
+---
+
+## 9. 关联文档
 
 | 文档 | 用途 |
 |------|------|

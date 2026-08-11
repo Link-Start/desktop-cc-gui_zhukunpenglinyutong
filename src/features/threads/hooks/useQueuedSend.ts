@@ -8,6 +8,15 @@ import type {
   WorkspaceInfo,
 } from "../../../types";
 import {
+  ensureInteractiveInputHooks,
+  hadRecentInteractiveInput,
+} from "../../../utils/interactiveMainThread";
+import {
+  getStartupTraceSnapshot,
+  subscribeStartupTrace,
+} from "../../startup-orchestration/utils/startupTrace";
+import { isStartupForceEntered } from "../../startup-orchestration/utils/startupForceEnter";
+import {
   getSharedSendActiveAttemptId,
   getSharedSendState,
   getSharedSendStateRevision,
@@ -65,6 +74,10 @@ const NATIVE_INFLIGHT_SETTLE_FALLBACK_MS = 3_000;
 /**
  * 仅由「有队列 / inFlight 的 thread」状态拼出 drain 触发信号。
  * 纯函数便于测试：无关会话 heartbeat 不得改变返回值。
+ *
+ * 写法要点（相对 dc97acd5c 对抗式门控的正确化）：
+ * - **不**再强制把 activeThreadId 塞进集合（无队列时 active 心跳会无意义刷新 signal）
+ * - 无任何 queue/inflight 时返回稳定 empty 信号，effect 不因 status 表 churn 重跑
  */
 export function buildQueueDrainSignal(input: {
   queuedByThread: Record<string, QueuedMessage[] | undefined>;
@@ -89,8 +102,8 @@ export function buildQueueDrainSignal(input: {
       ids.add(threadId);
     }
   }
-  if (input.activeThreadId) {
-    ids.add(input.activeThreadId);
+  if (ids.size === 0) {
+    return `empty|bg:${input.backgroundEnabled ? 1 : 0}`;
   }
   const parts: string[] = [];
   for (const threadId of [...ids].sort()) {
@@ -609,6 +622,85 @@ export function useQueuedSend({
   activeTerminalPulseRef.current = activeTerminalPulse;
   const hasPendingUserInputRef = useRef(hasPendingUserInput);
   hasPendingUserInputRef.current = hasPendingUserInput;
+  /**
+   * 产品化冷启门：startup-gate-ready（或 force-enter）之后，再等一小段无点击才放行 drain。
+   * 不是「对抗」关掉 S1，而是 drain 调度与启动门对齐；用户 handleSend/queueMessage 始终可用。
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const isVitest =
+    typeof import.meta !== "undefined" &&
+    (import.meta as any).env?.MODE === "test";
+  const [queueDrainReleased, setQueueDrainReleased] = useState(() => {
+    if (isVitest) {
+      return true;
+    }
+    return (
+      Boolean(getStartupTraceSnapshot().milestones["startup-gate-ready"]) ||
+      isStartupForceEntered()
+    );
+  });
+  const queueDrainReleasedRef = useRef(queueDrainReleased);
+  queueDrainReleasedRef.current = queueDrainReleased;
+
+  useEffect(() => {
+    if (isVitest || queueDrainReleased) {
+      return;
+    }
+    ensureInteractiveInputHooks();
+    let cancelled = false;
+    let quietTimer: number | null = null;
+
+    const clearQuietTimer = () => {
+      if (quietTimer != null) {
+        window.clearTimeout(quietTimer);
+        quietTimer = null;
+      }
+    };
+
+    const tryRelease = (): boolean => {
+      if (cancelled) {
+        return false;
+      }
+      const gateOpen =
+        Boolean(getStartupTraceSnapshot().milestones["startup-gate-ready"]) ||
+        isStartupForceEntered();
+      if (!gateOpen) {
+        return false;
+      }
+      // gate 已开：仍等短静默，避免 unmask 瞬间与猛点叠 drain
+      if (hadRecentInteractiveInput(400)) {
+        clearQuietTimer();
+        quietTimer = window.setTimeout(() => {
+          void tryRelease();
+        }, 200);
+        return false;
+      }
+      setQueueDrainReleased(true);
+      return true;
+    };
+
+    if (tryRelease()) {
+      return () => {
+        cancelled = true;
+        clearQuietTimer();
+      };
+    }
+
+    const unsubTrace = subscribeStartupTrace(() => {
+      void tryRelease();
+    });
+    // 门未开时也轮询 force-enter / 晚到的 quiet
+    const pollTimer = window.setInterval(() => {
+      void tryRelease();
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearQuietTimer();
+      unsubTrace();
+      window.clearInterval(pollTimer);
+    };
+  }, [isVitest, queueDrainReleased]);
 
   useEffect(() => {
     queuedByThreadRef.current = queuedByThread;
@@ -1812,10 +1904,15 @@ export function useQueuedSend({
     isContextCompacting,
     activeTerminalPulse,
     hasPendingUserInput,
-    backgroundEnabled: getEnableBackgroundQueueDrain(),
+    backgroundEnabled:
+      getEnableBackgroundQueueDrain() && queueDrainReleased,
   });
 
   useEffect(() => {
+    // 启动门未放行 / 刚有点击：跳过 settlement 写状态（让出主线程）
+    if (!queueDrainReleasedRef.current || hadRecentInteractiveInput(300)) {
+      return;
+    }
     // Per-thread inFlight settlement（只用 ref 记 hasStarted，deps 不含 hasStarted state）。
     const statusMap = threadStatusByIdRef.current;
     let nextInFlight: Record<string, QueuedMessage | null> | null = null;
@@ -1966,6 +2063,12 @@ export function useQueuedSend({
   ]);
 
   // Codex handoff: clear state once real user bubble is visible (not only skip-append).
+  // 用长度+末 id 信号代替 activeItems 全表依赖，避免流式每 delta 都跑 effect。
+  const activeItemsRef = useRef(activeItems);
+  activeItemsRef.current = activeItems;
+  const activeItemsTailSignal = `${activeItems.length}:${
+    activeItems[activeItems.length - 1]?.id ?? ""
+  }`;
   useEffect(() => {
     if (!activeThreadId) {
       return;
@@ -1974,7 +2077,7 @@ export function useQueuedSend({
     if (!handoff) {
       return;
     }
-    const hasMatch = activeItems.some((item) =>
+    const hasMatch = activeItemsRef.current.some((item) =>
       doesConversationItemMatchUserBubble(item, handoff),
     );
     if (!hasMatch) {
@@ -1986,9 +2089,17 @@ export function useQueuedSend({
       }
       return { ...prev, [activeThreadId]: null };
     });
-  }, [activeItems, activeThreadId, queuedHandoffByThread]);
+  }, [activeItemsTailSignal, activeThreadId, queuedHandoffByThread]);
 
   useEffect(() => {
+    // 启动门未放行：禁止 auto-drain（用户显式 handleSend/queueMessage 仍可用）
+    if (!queueDrainReleasedRef.current) {
+      return;
+    }
+    // 刚有点击：让出一帧级调度，不和 hit-test 硬撞
+    if (hadRecentInteractiveInput(300)) {
+      return;
+    }
     const readThreadProcessing = (threadId: string): boolean => {
       const status = threadStatusByIdRef.current?.[threadId];
       if (status && typeof status.isProcessing === "boolean") {

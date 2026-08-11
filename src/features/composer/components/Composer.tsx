@@ -492,12 +492,20 @@ const COMPOSER_INPUT_INTERACTION_IDLE_MS = 320;
 const BROWSER_OPEN_DOCK_EVENT = "browser-agent:open-dock";
 const BROWSER_OPEN_URL_EVENT = "browser-agent:open-url";
 const PENDING_BROWSER_URL_KEY = "ccgui.browserAgent.pendingUrl";
+/** ActiveCanvas 下灌的热字段：轻量/空闲时忽略，避免历史 hydrate 打爆 Composer 重渲 */
 const COMPOSER_CANVAS_ONLY_PROPS = new Set<keyof ComposerProps>([
   "items",
   "threadItemsByThread",
   "threadStatusById",
+  "threadParentById",
   "contextUsage",
   "accountRateLimits",
+  "userInputRequests",
+  "isContextCompacting",
+  "codexCompactionLifecycleState",
+  "codexCompactionSource",
+  "codexCompactionCompletedAt",
+  "lastTokenUsageUpdatedAt",
 ]);
 
 function toContextChipCarryOverKey(chip: ContextSelectionChip) {
@@ -3750,6 +3758,17 @@ function areComposerPropsEqual(
   previous: ComposerProps,
   next: ComposerProps,
 ): boolean {
+  // 非流式：忽略 canvas 大对象。冷启 list/history hydrate 会高频换 items 引用，
+  // 若每帧重渲 ComposerLight/Impl，与点击叠在一起会假死（973 之后 dc97 加重了 status/items 下灌）。
+  const eitherProcessing =
+    Boolean(previous.isProcessing) || Boolean(next.isProcessing);
+  if (!eitherProcessing) {
+    return areComposerPropsShallowEqual(
+      previous,
+      next,
+      COMPOSER_CANVAS_ONLY_PROPS,
+    );
+  }
   const shouldUseInteractionLaneComparator =
     Boolean(previous.isProcessing) && Boolean(next.isProcessing);
   if (!shouldUseInteractionLaneComparator) {
