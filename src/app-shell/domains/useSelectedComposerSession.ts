@@ -4,6 +4,7 @@ import { getClientStoreSync, writeClientStoreValue } from "../../services/client
 import type { DebugEntry } from "../../types";
 import {
   extractClaudeForkParentThreadId,
+  fillPendingComposerSelectionEffortFromEnginePref,
   getThreadComposerSelectionStorageKey,
   normalizeComposerSessionSelection,
   normalizeComposerSessionSelectionForThread,
@@ -322,6 +323,20 @@ export function useSelectedComposerSession({
         }
       }
       if (hasCandidate) {
+        cacheSelectionForSessionKey(sessionKey, candidate);
+      }
+    }
+
+    // Draft / partial seed can leave effort:null on pending threads even when the
+    // engine pref still remembers high — fill only null, never clobber explicit effort.
+    if (candidate && activeThreadId.includes("-pending-")) {
+      const filled = fillPendingComposerSelectionEffortFromEnginePref(
+        candidate,
+        activeThreadId,
+      );
+      if (filled && filled.effort !== candidate.effort) {
+        candidate = filled;
+        writeSelectionForSessionKey(sessionKey, candidate);
         cacheSelectionForSessionKey(sessionKey, candidate);
       }
     }

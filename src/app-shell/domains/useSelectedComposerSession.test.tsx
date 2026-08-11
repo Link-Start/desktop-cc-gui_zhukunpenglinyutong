@@ -7,7 +7,12 @@ import { useSelectedComposerSession } from "./useSelectedComposerSession";
 
 type Store = Record<string, unknown>;
 
-const { composerStore, getClientStoreSync, writeClientStoreValue } = vi.hoisted(() => {
+const {
+  composerStore,
+  getClientStoreSync,
+  writeClientStoreValue,
+  getComposerEnginePrefForEngine,
+} = vi.hoisted(() => {
   const composerStore: Store = {};
   return {
     composerStore,
@@ -22,6 +27,12 @@ const { composerStore, getClientStoreSync, writeClientStoreValue } = vi.hoisted(
         composerStore[key] = value;
       }
     }),
+    getComposerEnginePrefForEngine: vi.fn(() => ({
+      modelId: null,
+      effort: null,
+      accessMode: null,
+      collaborationModeId: null,
+    })),
   };
 });
 
@@ -30,11 +41,22 @@ vi.mock("../../services/clientStorage", () => ({
   writeClientStoreValue,
 }));
 
+vi.mock("../../features/composer/hooks/composerEnginePrefsStore", () => ({
+  getComposerEnginePrefForEngine,
+}));
+
 describe("useSelectedComposerSession", () => {
   beforeEach(() => {
     Object.keys(composerStore).forEach((key) => delete composerStore[key]);
     getClientStoreSync.mockClear();
     writeClientStoreValue.mockClear();
+    getComposerEnginePrefForEngine.mockReset();
+    getComposerEnginePrefForEngine.mockReturnValue({
+      modelId: null,
+      effort: null,
+      accessMode: null,
+      collaborationModeId: null,
+    });
   });
 
   it("applies a draft selection to a pending thread and migrates it to the finalized thread", async () => {
@@ -661,5 +683,79 @@ describe("useSelectedComposerSession", () => {
       "selectedModelByThread.ws-a:gemini-pending-1",
       { modelId: "gemini-2.5-pro", effort: null },
     );
+  });
+
+  it("fills draft effort:null on a Grok pending thread from engine pref", async () => {
+    getComposerEnginePrefForEngine.mockReturnValue({
+      modelId: "grok-4.5",
+      effort: "high",
+      accessMode: null,
+      collaborationModeId: null,
+    });
+
+    type HookProps = {
+      activeThreadId: string | null;
+    };
+    const { result, rerender } = renderHook(
+      ({ activeThreadId }: HookProps) =>
+        useSelectedComposerSession({
+          activeWorkspaceId: "ws-a",
+          activeThreadId,
+          resolveCanonicalThreadId: (threadId: string) => threadId,
+        }),
+      {
+        initialProps: { activeThreadId: null },
+      },
+    );
+
+    act(() => {
+      // Draft carries model only — the common path that used to block remembered high.
+      result.current.handleSelectComposerSelection({
+        modelId: "grok-4.5",
+        effort: null,
+      });
+    });
+
+    rerender({ activeThreadId: "grok-pending-1" });
+
+    await waitFor(() => {
+      expect(result.current.selectedComposerSelection).toEqual({
+        modelId: "grok-4.5",
+        effort: "high",
+      });
+    });
+    expect(writeClientStoreValue).toHaveBeenCalledWith(
+      "composer",
+      "selectedModelByThread.ws-a:grok-pending-1",
+      { modelId: "grok-4.5", effort: "high" },
+    );
+  });
+
+  it("fills stored pending effort:null from engine pref without changing model", async () => {
+    getComposerEnginePrefForEngine.mockReturnValue({
+      modelId: "other-model",
+      effort: "medium",
+      accessMode: null,
+      collaborationModeId: null,
+    });
+    composerStore["selectedModelByThread.ws-a:grok-pending-2"] = {
+      modelId: "grok-4.5",
+      effort: null,
+    };
+
+    const { result } = renderHook(() =>
+      useSelectedComposerSession({
+        activeWorkspaceId: "ws-a",
+        activeThreadId: "grok-pending-2",
+        resolveCanonicalThreadId: (threadId: string) => threadId,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.selectedComposerSelection).toEqual({
+        modelId: "grok-4.5",
+        effort: "medium",
+      });
+    });
   });
 });

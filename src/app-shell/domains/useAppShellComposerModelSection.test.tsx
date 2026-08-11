@@ -342,9 +342,9 @@ describe("useAppShellComposerModelSection handleSelectModel", () => {
     expect(result.current.engineSelectedModelIdByType.kimi).toBe(
       "kimi-code/kimi-for-coding",
     );
+    // effort:null must not be written — would wipe a remembered high on that engine.
     expect(persistComposerEnginePref).toHaveBeenCalledWith("kimi", {
       modelId: "kimi-code/kimi-for-coding",
-      effort: null,
     });
     expect(handleSelectComposerSelection).toHaveBeenCalledWith({
       modelId: "kimi-code/kimi-for-coding",
@@ -370,11 +370,67 @@ describe("useAppShellComposerModelSection handleSelectModel", () => {
     );
     expect(persistComposerEnginePref).toHaveBeenCalledWith("claude", {
       modelId: "claude-sonnet-4-6",
-      effort: null,
     });
     expect(handleSelectComposerSelection).toHaveBeenCalledWith({
       modelId: "claude-sonnet-4-6",
       effort: null,
+    });
+  });
+
+  it("does not persist effort:null when selecting a Grok model with no thread effort", () => {
+    const persistComposerEnginePref = vi.fn();
+    const handleSelectComposerSelection = vi.fn();
+    const grokModels = [
+      makeModel("grok-4.5", { isDefault: true }),
+      makeModel("grok-4"),
+    ];
+    const { result } = renderSection({
+      activeEngine: "grok",
+      activeThreadId: "grok-pending-1",
+      engineModelsAsOptions: grokModels,
+      selectedComposerSelection: { modelId: "grok-4.5", effort: null },
+      persistComposerEnginePref,
+      handleSelectComposerSelection,
+    });
+
+    act(() => {
+      result.current.handleSelectModel("grok-4");
+    });
+
+    expect(persistComposerEnginePref).toHaveBeenCalledWith("grok", {
+      modelId: "grok-4",
+    });
+    expect(handleSelectComposerSelection).toHaveBeenCalledWith({
+      modelId: "grok-4",
+      effort: null,
+    });
+  });
+
+  it("still persists a concrete effort when model select carries one", () => {
+    const persistComposerEnginePref = vi.fn();
+    const handleSelectComposerSelection = vi.fn();
+    const { result } = renderSection({
+      activeEngine: "claude",
+      activeThreadId: "claude-pending-1",
+      selectedComposerSelection: {
+        modelId: "claude-opus-4-8",
+        effort: "high",
+      },
+      persistComposerEnginePref,
+      handleSelectComposerSelection,
+    });
+
+    act(() => {
+      result.current.handleSelectModel("claude-sonnet-4-6");
+    });
+
+    expect(persistComposerEnginePref).toHaveBeenCalledWith("claude", {
+      modelId: "claude-sonnet-4-6",
+      effort: "high",
+    });
+    expect(handleSelectComposerSelection).toHaveBeenCalledWith({
+      modelId: "claude-sonnet-4-6",
+      effort: "high",
     });
   });
 

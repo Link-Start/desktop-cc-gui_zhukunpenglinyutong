@@ -203,3 +203,34 @@ export function resolveEngineDefaultComposerSelection(
   }
   return { modelId: pref.modelId, effort: pref.effort };
 }
+
+/**
+ * Pending threads often arrive with draft/model selection where effort is null.
+ * That null would stick as UI「默认」and block lastComposerPrefsByEngine.effort.
+ * Only fill when effort is null; never override an explicit effort (including a
+ * deliberate「默认」after the user cleared the engine pref).
+ * Codex keeps its own global-selection path.
+ */
+export function fillPendingComposerSelectionEffortFromEnginePref(
+  selection: ComposerSessionSelection | null,
+  threadId: string | null,
+): ComposerSessionSelection | null {
+  if (!selection || !threadId || !threadId.includes("-pending-")) {
+    return selection;
+  }
+  if (selection.effort !== null) {
+    return selection;
+  }
+  const engine = resolveThreadEngine(threadId);
+  if (!engine || engine === "codex") {
+    return selection;
+  }
+  const prefEffort = getComposerEnginePrefForEngine(engine).effort;
+  if (!prefEffort) {
+    return selection;
+  }
+  return normalizeComposerSessionSelectionForThread(threadId, {
+    modelId: selection.modelId,
+    effort: prefEffort,
+  });
+}

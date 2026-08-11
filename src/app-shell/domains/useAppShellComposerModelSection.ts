@@ -295,9 +295,11 @@ export function useAppShellComposerModelSection({
             previousSelectionByEngine: prev,
           }),
         );
+        // Model switch must not wipe a remembered high with effort:null.
+        // Explicit effort changes go through handleSelectComposerEffort.
         persistComposerEnginePref?.(targetEngine, {
           modelId: nextSelectedModel.id,
-          effort: nextSelectedEffort,
+          ...(nextSelectedEffort !== null ? { effort: nextSelectedEffort } : {}),
         });
       }
       handleSelectComposerSelection({

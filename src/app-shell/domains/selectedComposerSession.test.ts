@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   extractClaudeForkParentThreadId,
+  fillPendingComposerSelectionEffortFromEnginePref,
   getThreadComposerSelectionStorageKey,
   normalizeComposerSessionSelectionForThread,
   shouldApplyDraftComposerSelectionToThread,
@@ -8,6 +9,14 @@ import {
   shouldMigrateComposerSelectionBetweenThreadIds,
   type ComposerSessionSelection,
 } from "./selectedComposerSession";
+
+const { getComposerEnginePrefForEngine } = vi.hoisted(() => ({
+  getComposerEnginePrefForEngine: vi.fn(),
+}));
+
+vi.mock("../../features/composer/hooks/composerEnginePrefsStore", () => ({
+  getComposerEnginePrefForEngine,
+}));
 
 describe("selectedComposerSession", () => {
   const identity = (threadId: string) => threadId;
@@ -142,6 +151,75 @@ describe("selectedComposerSession", () => {
     ).toEqual({
       modelId: "gpt-5.4",
       effort: "high",
+    });
+  });
+
+  describe("fillPendingComposerSelectionEffortFromEnginePref", () => {
+    beforeEach(() => {
+      getComposerEnginePrefForEngine.mockReset();
+      getComposerEnginePrefForEngine.mockReturnValue({
+        modelId: "grok-4.5",
+        effort: "high",
+        accessMode: null,
+        collaborationModeId: null,
+      });
+    });
+
+    it("fills null effort on a Grok pending thread from the engine pref", () => {
+      expect(
+        fillPendingComposerSelectionEffortFromEnginePref(
+          { modelId: "grok-4.5", effort: null },
+          "grok-pending-1",
+        ),
+      ).toEqual({ modelId: "grok-4.5", effort: "high" });
+    });
+
+    it("does not override an explicit effort on the pending thread", () => {
+      expect(
+        fillPendingComposerSelectionEffortFromEnginePref(
+          { modelId: "grok-4.5", effort: "low" },
+          "grok-pending-1",
+        ),
+      ).toEqual({ modelId: "grok-4.5", effort: "low" });
+    });
+
+    it("does not fill finalized threads or engines without effort prefs", () => {
+      expect(
+        fillPendingComposerSelectionEffortFromEnginePref(
+          { modelId: "grok-4.5", effort: null },
+          "grok:session-1",
+        ),
+      ).toEqual({ modelId: "grok-4.5", effort: null });
+
+      getComposerEnginePrefForEngine.mockReturnValue({
+        modelId: "gemini-2.5-pro",
+        effort: "high",
+        accessMode: null,
+        collaborationModeId: null,
+      });
+      // gemini normalizes effort away; fill still runs only when prefEffort is truthy
+      // but normalize strips unsupported effort → stays null for model-only selection.
+      expect(
+        fillPendingComposerSelectionEffortFromEnginePref(
+          { modelId: "gemini-2.5-pro", effort: null },
+          "gemini-pending-1",
+        ),
+      ).toEqual({ modelId: "gemini-2.5-pro", effort: null });
+    });
+
+    it("does not invent effort when the engine pref effort is also null", () => {
+      getComposerEnginePrefForEngine.mockReturnValue({
+        modelId: "grok-4.5",
+        effort: null,
+        accessMode: null,
+        collaborationModeId: null,
+      });
+      expect(
+        fillPendingComposerSelectionEffortFromEnginePref(
+          { modelId: "grok-4.5", effort: null },
+          "grok-pending-1",
+        ),
+      ).toEqual({ modelId: "grok-4.5", effort: null });
     });
   });
 });
