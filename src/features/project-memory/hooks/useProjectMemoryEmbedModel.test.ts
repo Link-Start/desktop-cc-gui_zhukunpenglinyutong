@@ -1,6 +1,6 @@
 /**
  * useProjectMemoryEmbedModel 状态机测试。
- * 覆盖：health 探测 → missing/ready；下载 → 进度事件 → ready；下载失败 → error。
+ * 覆盖：disabled / missing / ready；下载进度；失败；remove。
  */
 // @vitest-environment jsdom
 import { act, renderHook, waitFor } from "@testing-library/react";
@@ -38,6 +38,23 @@ describe("useProjectMemoryEmbedModel", () => {
     healthMock.mockReset();
     downloadMock.mockReset();
     removeMock.mockReset();
+  });
+
+  it("ONNX runtime 已移除 → status=disabled", async () => {
+    healthMock.mockResolvedValue({
+      status: "unavailable",
+      reason: "onnx_runtime_removed",
+      downloadable: false,
+      modelDir: "/home/u/.ccgui/models/embedding",
+    });
+    const { result } = renderHook(() => useProjectMemoryEmbedModel());
+    await waitFor(() => expect(result.current.status).not.toBeNull());
+    expect(result.current.status).toEqual({
+      state: "disabled",
+      reason: "onnx_runtime_removed",
+      modelDir: "/home/u/.ccgui/models/embedding",
+    });
+    expect(result.current.modelDir).toBe("/home/u/.ccgui/models/embedding");
   });
 
   it("模型缺失且可下载 → status=missing", async () => {
@@ -126,7 +143,7 @@ describe("useProjectMemoryEmbedModel", () => {
     });
   });
 
-  it("remove 成功 → status=missing downloadable", async () => {
+  it("remove 成功 → status=disabled（当前构建无 runtime）", async () => {
     healthMock.mockResolvedValue({
       status: "available",
       downloadable: false,
@@ -135,7 +152,8 @@ describe("useProjectMemoryEmbedModel", () => {
     });
     removeMock.mockResolvedValue({
       status: "unavailable",
-      downloadable: true,
+      reason: "onnx_runtime_removed",
+      downloadable: false,
       modelDir: "/home/u/.ccgui/models/embedding",
     });
 
@@ -148,8 +166,8 @@ describe("useProjectMemoryEmbedModel", () => {
 
     expect(removeMock).toHaveBeenCalledOnce();
     expect(result.current.status).toEqual({
-      state: "missing",
-      downloadable: true,
+      state: "disabled",
+      reason: "onnx_runtime_removed",
       modelDir: "/home/u/.ccgui/models/embedding",
     });
   });

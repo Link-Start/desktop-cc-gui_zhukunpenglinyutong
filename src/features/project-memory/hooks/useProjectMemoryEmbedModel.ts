@@ -1,6 +1,7 @@
 /**
- * 本地语义模型（ONNX embedding）下载状态控制器。
- * 落盘：`~/.ccgui/models/embedding/`；状态机 missing → downloading → ready / error。
+ * 本地语义模型状态控制器。
+ * 当前构建已移除 ONNX Runtime（Intel macOS 打包兼容）：health 为 disabled。
+ * 状态机：disabled | missing → downloading → ready / error。
  */
 import { useCallback, useEffect, useState } from "react";
 import { projectMemoryEmbedHealth } from "../../../services/tauri/projectMemoryEmbed";
@@ -12,6 +13,11 @@ import {
 } from "../utils/projectMemoryEmbeddingProvider";
 
 export type ProjectMemoryEmbedModelStatus =
+  | {
+      state: "disabled";
+      reason: string;
+      modelDir?: string | null;
+    }
   | { state: "missing"; downloadable: boolean; modelDir?: string | null }
   | {
       state: "downloading";
@@ -40,6 +46,8 @@ type EmbedHealthLike = {
   modelDir?: string | null;
 };
 
+const ONNX_RUNTIME_REMOVED = "onnx_runtime_removed";
+
 function toStatus(health: EmbedHealthLike): ProjectMemoryEmbedModelStatus {
   if (health.status === "available") {
     return {
@@ -54,6 +62,17 @@ function toStatus(health: EmbedHealthLike): ProjectMemoryEmbedModelStatus {
       error: health.reason ?? "unknown_error",
       modelDir: health.modelDir,
       modelPath: health.modelPath,
+    };
+  }
+  // 构建未链接 ONNX：不可下载，诚实展示 disabled
+  if (
+    health.reason === ONNX_RUNTIME_REMOVED ||
+    (health.status === "unavailable" && health.downloadable !== true)
+  ) {
+    return {
+      state: "disabled",
+      reason: health.reason ?? ONNX_RUNTIME_REMOVED,
+      modelDir: health.modelDir,
     };
   }
   return {

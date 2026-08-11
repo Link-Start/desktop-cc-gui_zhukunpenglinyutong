@@ -1124,18 +1124,23 @@ const settings = {
       "Inject: memories are prior context for the current user message only; the user bubble shows original text; failures never block send.",
     memoryEmbedModelTitle: "Local semantic model",
     memoryEmbedModelDesc:
-      "Download ~90MB semantic model for on-device vector matching. Files live under .ccgui/models/embedding/ in the user home directory (the absolute path for this machine is shown below as Storage location). Never uploaded.",
+      "Memory reference uses keyword matching by default. On-device ONNX semantic vectors were removed from this build to restore Intel macOS packaging; a cross-platform approach will return later.",
     memoryEmbedPhaseTokenizer: "Downloading tokenizer…",
     memoryEmbedPhaseModel: "Downloading semantic model…",
     memoryEmbedNotDownloadable: "Not downloadable in this environment.",
+    memoryEmbedRuntimeDisabled:
+      "This build does not include a local semantic runtime; memory reference uses keyword matching.",
+    memoryEmbedRuntimeDisabledHint:
+      "ONNX Runtime was removed to restore Intel macOS packaging; semantic vector retrieval will return with a cross-platform solution.",
     memoryEmbedModelPath: "Storage location",
     memoryEmbedDeleteModel: "Delete model",
     memoryEmbedDeleteConfirm:
       "Delete the local semantic model? Memory reference will fall back to keyword matching. You can download again anytime.",
     memorySemanticRetrievalToggle: "Use semantic model for retrieval",
     memorySemanticRetrievalToggleDesc:
-      "When off, retrieval uses keyword matching even if the model is installed. You can turn it back on anytime.",
-    memorySemanticRetrievalNeedModel: "Download and ready the model first",
+      "No semantic runtime in this build; the switch stays off until a model is available.",
+    memorySemanticRetrievalNeedModel:
+      "Semantic model is not available in this build",
     memorySemanticRetrievalLexicalHint: "Current: keyword text retrieval",
     memorySemanticRetrievalSemanticHint:
       "Current: semantic model retrieval (hybrid when available)",
