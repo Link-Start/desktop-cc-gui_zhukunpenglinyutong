@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ModelOption } from "../../types";
 import { useCollaborationModeSelection } from "../../features/collaboration/hooks/useCollaborationModeSelection";
-import {
-  getComposerEnginePrefForEngine,
-  useComposerEnginePrefs,
-} from "../../features/composer/hooks/composerEnginePrefsStore";
 import { useComposerMenuActions } from "../../features/composer/hooks/useComposerMenuActions";
 import { useComposerShortcuts } from "../../features/composer/hooks/useComposerShortcuts";
 import { usePersistComposerSettings } from "../../features/app/hooks/usePersistComposerSettings";
@@ -54,25 +50,7 @@ export function useAppShellComposerModelSection({
 }: any) {
   const [engineSelectedModelIdByType, setEngineSelectedModelIdByType] =
     useState<Record<string, string | null>>({});
-  // Subscribe so engine-pref effort/model restores re-render after seed / user pick.
-  useComposerEnginePrefs();
   const activeEngineSelectedModelId = engineSelectedModelIdByType[activeEngine] ?? null;
-  /** Durable last effort for the active engine (and codex global selectedEffort). */
-  const durablePreferredEffort = useMemo(() => {
-    if (activeEngine === "codex") {
-      return selectedEffort;
-    }
-    return getComposerEnginePrefForEngine(activeEngine).effort;
-  }, [activeEngine, selectedEffort]);
-  const resolveDurablePreferredEffort = useCallback(
-    (engine: string) => {
-      if (engine === "codex") {
-        return selectedEffort;
-      }
-      return getComposerEnginePrefForEngine(engine as typeof activeEngine).effort;
-    },
-    [selectedEffort],
-  );
   const effectiveModels = useMemo<ModelOption[]>(() => {
     if (
       activeEngine === "codex" &&
@@ -97,37 +75,11 @@ export function useAppShellComposerModelSection({
     [activeEngine, effectiveModels, engineModelCatalogsAsOptions, models],
   );
 
-  // Restore last model for non-codex engines from durable prefs (startup / engine switch).
   useEffect(() => {
-    if (appSettingsLoading || activeEngine === "codex") {
-      return;
-    }
-    const storedModelId = getComposerEnginePrefForEngine(activeEngine).modelId;
-    if (!storedModelId) {
-      return;
-    }
-    setEngineSelectedModelIdByType((prev) => {
-      if (prev[activeEngine] === storedModelId) {
-        return prev;
-      }
-      return upsertEngineSelectedModelId({
-        activeEngine,
-        nextModelId: storedModelId,
-        previousSelectionByEngine: prev,
-      });
-    });
-  }, [activeEngine, appSettingsLoading]);
-
-  useEffect(() => {
-    const preferredSelection =
-      activeEngine === "codex"
-        ? activeEngineSelectedModelId
-        : (activeEngineSelectedModelId ??
-          getComposerEnginePrefForEngine(activeEngine).modelId);
     const nextDefault = getNextEngineSelectedModelId({
       activeEngine,
       engineModelsAsOptions,
-      currentSelection: preferredSelection,
+      currentSelection: activeEngineSelectedModelId,
     });
     if (!nextDefault) {
       return;
@@ -193,7 +145,6 @@ export function useAppShellComposerModelSection({
       activeEngine: "codex",
       hasActiveThread: false,
       selectedEffort,
-      preferredEffort: selectedEffort,
       activeThreadSelection: null,
       reasoningOptions: persistedGlobalComposerReasoningOptions,
     });
@@ -212,13 +163,11 @@ export function useAppShellComposerModelSection({
       activeEngine,
       hasActiveThread: hasActiveComposerThread,
       selectedEffort,
-      preferredEffort: durablePreferredEffort,
       activeThreadSelection: selectedComposerSelection,
       reasoningOptions: effectiveReasoningOptions,
     });
   }, [
     activeEngine,
-    durablePreferredEffort,
     effectiveReasoningOptions,
     hasActiveComposerThread,
     selectedEffort,
@@ -250,6 +199,10 @@ export function useAppShellComposerModelSection({
       ? claudeRuntimeResolution?.runtime ?? null
       : (effectiveSelectedModel?.model ?? effectiveSelectedModelId ?? null);
   const resolvedModelSource = effectiveSelectedModel?.source ?? "unknown";
+  // Codex: custom/catalog models may carry providerProfileId for first-send binding.
+  // Claude (and others): MUST stay null here — session open / Shared hydrate /
+  // Native create authority is thread or explicit provider pick, not reverse
+  // inference from custom-model ownership metadata (custom-model-provider-binding).
   const resolvedProviderProfileId =
     activeEngine === "codex"
       ? (effectiveSelectedModel?.providerProfileId?.trim() || null)
@@ -301,21 +254,13 @@ export function useAppShellComposerModelSection({
         };
       }
       const isCrossEngineSelection = targetEngine !== activeEngine;
-      const targetPreferredEffort = resolveDurablePreferredEffort(targetEngine);
-      // Same-engine model switch: keep current effort when still allowlisted.
-      // Cross-engine: restore that engine's durable last effort (not source engine's).
-      const candidateEffort = isCrossEngineSelection
-        ? targetPreferredEffort
-        : effectiveSelectedEffort;
       const nextSelectedEffort =
         getEffectiveSelectedEffort({
           activeEngine: targetEngine,
           hasActiveThread: isCrossEngineSelection
             ? false
             : hasActiveComposerThread,
-          selectedEffort:
-            targetEngine === "codex" ? selectedEffort : candidateEffort,
-          preferredEffort: targetPreferredEffort,
+          selectedEffort: effectiveSelectedEffort,
           activeThreadSelection:
             !isCrossEngineSelection &&
             (hasActiveComposerThread ||
@@ -323,7 +268,7 @@ export function useAppShellComposerModelSection({
               activeEngine === "grok")
               ? {
                   modelId: nextSelectedModel.id,
-                  effort: candidateEffort,
+                  effort: effectiveSelectedEffort,
                 }
               : null,
           reasoningOptions: getEffectiveReasoningOptions(
@@ -340,10 +285,6 @@ export function useAppShellComposerModelSection({
       if (targetEngine === "codex") {
         if (isCrossEngineSelection || !hasActiveComposerThread) {
           setSelectedModelId(nextSelectedModel.id);
-        }
-        // Keep global codex effort in sync when switching models so restart restores it.
-        if (nextSelectedEffort !== null || candidateEffort !== null) {
-          setSelectedEffort(nextSelectedEffort);
         }
       } else {
         // 幂等：id 未变不换 map 引用，避免父树无意义 rerender（#185）
@@ -372,9 +313,6 @@ export function useAppShellComposerModelSection({
       hasActiveComposerThread,
       persistComposerEnginePref,
       providerModelCatalogs,
-      resolveDurablePreferredEffort,
-      selectedEffort,
-      setSelectedEffort,
       setSelectedModelId,
     ],
   );
@@ -384,7 +322,6 @@ export function useAppShellComposerModelSection({
         activeEngine,
         hasActiveThread: hasActiveComposerThread,
         selectedEffort: effort,
-        preferredEffort: durablePreferredEffort,
         activeThreadSelection:
           hasActiveComposerThread ||
           activeEngine === "claude" ||
@@ -396,10 +333,9 @@ export function useAppShellComposerModelSection({
             : null,
         reasoningOptions: effectiveReasoningOptions,
       });
-      // Always remember the user's effort, even while a thread is active.
-      if (activeEngine === "codex") {
+      if (activeEngine === "codex" && !hasActiveComposerThread) {
         setSelectedEffort(nextEffort);
-      } else {
+      } else if (activeEngine !== "codex") {
         persistComposerEnginePref?.(activeEngine, { effort: nextEffort });
       }
       handleSelectComposerSelection({
@@ -409,7 +345,6 @@ export function useAppShellComposerModelSection({
     },
     [
       activeEngine,
-      durablePreferredEffort,
       effectiveSelectedModelId,
       effectiveReasoningOptions,
       handleSelectComposerSelection,
@@ -476,16 +411,11 @@ export function useAppShellComposerModelSection({
     selectedComposerSelection,
   ]);
   usePersistComposerSettings({
-    // Always keep effort durable; only write global model when no thread (avoid freeform clobber).
-    enabled: true,
+    enabled: !hasActiveComposerThread,
     appSettingsLoading,
     selectionReady: globalSelectionReady,
     selectedModelId: persistedGlobalComposerModelId,
-    // Prefer useModels selectedEffort (last user/global choice) so thread-scoped
-    // picks still update lastComposerReasoningEffort for the next startup.
-    selectedEffort: selectedEffort ?? persistedGlobalComposerEffort,
-    persistModelId: !hasActiveComposerThread,
-    persistEffort: true,
+    selectedEffort: persistedGlobalComposerEffort,
     setAppSettings,
     queueSaveSettings,
   });

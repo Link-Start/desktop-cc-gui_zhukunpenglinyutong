@@ -57,37 +57,6 @@ describe("usePersistComposerSettings", () => {
     });
   });
 
-  it("persists effort while keeping the previous model when only effort should be saved", async () => {
-    const queueSaveSettings = vi.fn(async (next: AppSettings) => next);
-    const setAppSettings = vi.fn((updater: (current: AppSettings) => AppSettings) =>
-      updater({
-        lastComposerModelId: "gpt-5.5",
-        lastComposerReasoningEffort: "low",
-      } as AppSettings),
-    );
-
-    renderHook(() =>
-      usePersistComposerSettings({
-        enabled: true,
-        appSettingsLoading: false,
-        selectionReady: true,
-        selectedModelId: "thread-freeform-model",
-        selectedEffort: "high",
-        persistModelId: false,
-        persistEffort: true,
-        setAppSettings,
-        queueSaveSettings,
-      }),
-    );
-
-    await waitFor(() => {
-      expect(queueSaveSettings).toHaveBeenCalledWith({
-        lastComposerModelId: "gpt-5.5",
-        lastComposerReasoningEffort: "high",
-      });
-    });
-  });
-
   it("clears previously persisted composer defaults when the global selection becomes empty", async () => {
     const queueSaveSettings = vi.fn(async (next: AppSettings) => next);
     const setAppSettings = vi.fn((updater: (current: AppSettings) => AppSettings) =>

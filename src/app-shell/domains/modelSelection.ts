@@ -30,11 +30,6 @@ type GetEffectiveSelectedEffortOptions = {
   selectedEffort: string | null;
   activeThreadSelection: ComposerSessionSelection | null;
   reasoningOptions: string[];
-  /**
-   * Durable last-user effort for this engine (engine prefs / lastComposerReasoningEffort).
-   * Used when thread/draft has no effort yet so startup and engine switches keep the user's choice.
-   */
-  preferredEffort?: string | null;
 };
 
 export const CLAUDE_REASONING_OPTIONS = ["low", "medium", "high", "xhigh", "max"];
@@ -219,13 +214,9 @@ export function getEffectiveSelectedEffort({
   selectedEffort,
   activeThreadSelection,
   reasoningOptions,
-  preferredEffort = null,
 }: GetEffectiveSelectedEffortOptions) {
   const normalizedReasoningOptions = getNormalizedReasoningOptions(reasoningOptions);
-  const normalizeEffort = (
-    value: string | null | undefined,
-    options?: { fallbackToFirst: boolean },
-  ) => {
+  const normalizeEffort = (value: string | null, options?: { fallbackToFirst: boolean }) => {
     if (typeof value !== "string") {
       return null;
     }
@@ -241,53 +232,25 @@ export function getEffectiveSelectedEffort({
     }
     return trimmed;
   };
-  /**
-   * Prefer the first candidate still on the allowlist.
-   * Only when every non-empty candidate is unsupported and fallbackToFirst is on,
-   * fall back to options[0] (Codex UI needs a concrete value).
-   */
-  const pickRememberedEffort = (
-    candidates: Array<string | null | undefined>,
-    options?: { fallbackToFirst: boolean },
-  ) => {
-    let sawUnsupported = false;
-    for (const candidate of candidates) {
-      if (typeof candidate !== "string" || !candidate.trim()) {
-        continue;
-      }
-      const accepted = normalizeEffort(candidate, { fallbackToFirst: false });
-      if (accepted) {
-        return accepted;
-      }
-      sawUnsupported = true;
-    }
-    if (options?.fallbackToFirst && sawUnsupported) {
-      return normalizedReasoningOptions[0] ?? null;
-    }
-    return null;
-  };
   if (!isReasoningEffortSupportedForEngine(activeEngine, normalizedReasoningOptions)) {
     return null;
   }
-  // Claude / Grok: thread/draft first, then durable preferred. Never invent a default.
+  // Claude / Grok: fixed CLI allowlist; only surface thread/draft selection (no silent default).
   if (activeEngine === "claude" || activeEngine === "grok") {
-    return pickRememberedEffort([
-      activeThreadSelection?.effort,
-      preferredEffort,
-      // selectedEffort is codex-global; only use when no engine preferred yet.
-      selectedEffort,
-    ]);
+    return normalizeEffort(activeThreadSelection?.effort ?? null, {
+      fallbackToFirst: false,
+    });
   }
-  // Codex: thread → in-memory global → durable preferred → unsupported fallback.
-  if (hasActiveThread) {
-    return pickRememberedEffort(
-      [activeThreadSelection?.effort, selectedEffort, preferredEffort],
-      { fallbackToFirst: true },
-    );
+  if (activeEngine !== "codex" || !hasActiveThread) {
+    return normalizeEffort(selectedEffort, { fallbackToFirst: true });
   }
-  return pickRememberedEffort([selectedEffort, preferredEffort], {
-    fallbackToFirst: true,
-  });
+  if (!activeThreadSelection) {
+    return normalizeEffort(selectedEffort, { fallbackToFirst: true });
+  }
+  return (
+    normalizeEffort(activeThreadSelection.effort, { fallbackToFirst: true }) ??
+    normalizeEffort(selectedEffort, { fallbackToFirst: true })
+  );
 }
 
 export function getReasoningOptionsForModel(model: ModelOption | null): string[] {

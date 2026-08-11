@@ -7,16 +7,6 @@ type Params = {
   selectionReady: boolean;
   selectedModelId: string | null;
   selectedEffort: string | null;
-  /**
-   * When false, keep the previously stored lastComposerModelId (e.g. while a
-   * thread-scoped freeform model is active and should not clobber global pref).
-   */
-  persistModelId?: boolean;
-  /**
-   * When false, keep the previously stored lastComposerReasoningEffort.
-   * Default true so user effort is remembered across threads and restarts.
-   */
-  persistEffort?: boolean;
   setAppSettings: (updater: (current: AppSettings) => AppSettings) => void;
   queueSaveSettings: (next: AppSettings) => Promise<AppSettings>;
 };
@@ -35,8 +25,6 @@ export function usePersistComposerSettings({
   selectionReady,
   selectedModelId,
   selectedEffort,
-  persistModelId = true,
-  persistEffort = true,
   setAppSettings,
   queueSaveSettings,
 }: Params) {
@@ -44,19 +32,12 @@ export function usePersistComposerSettings({
     if (!enabled || appSettingsLoading || !selectionReady) {
       return;
     }
-    if (!persistModelId && !persistEffort) {
-      return;
-    }
     setAppSettings((current) => {
       // null / "" / undefined 归一，避免 preferred 回写抖动叠满 useModels layout
+      const nextModelId = normalizeComposerPref(selectedModelId);
+      const nextEffort = normalizeComposerPref(selectedEffort);
       const currentModelId = normalizeComposerPref(current.lastComposerModelId);
       const currentEffort = normalizeComposerPref(current.lastComposerReasoningEffort);
-      const nextModelId = persistModelId
-        ? normalizeComposerPref(selectedModelId)
-        : currentModelId;
-      const nextEffort = persistEffort
-        ? normalizeComposerPref(selectedEffort)
-        : currentEffort;
       if (currentModelId === nextModelId && currentEffort === nextEffort) {
         return current;
       }
@@ -72,8 +53,6 @@ export function usePersistComposerSettings({
     enabled,
     appSettingsLoading,
     selectionReady,
-    persistEffort,
-    persistModelId,
     queueSaveSettings,
     selectedEffort,
     selectedModelId,
