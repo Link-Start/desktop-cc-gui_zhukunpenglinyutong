@@ -4,9 +4,13 @@ version = "0.3.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
-# Local `cargo run --features debug-bin` / `tauri dev --features debug-bin` Dock tooltip.
-# Release builds must NOT enable `debug-bin` (keeps cc-gui-debug out of the app bundle).
-default-run = "cc-gui-debug"
+# MUST stay `cc-gui` (release main binary).
+# Tauri bundler treats `package.default-run` as a hard packaging target: if this
+# points at a feature-gated bin that is not built (e.g. `cc-gui-debug` without
+# `--features debug-bin`), AppImage/NSIS/macOS packaging fails with
+# "Failed to copy binary ... does not exist" on every platform.
+# Dev Dock label uses `tauri.dev.conf.json` `mainBinaryName` + `--features debug-bin`.
+default-run = "cc-gui"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

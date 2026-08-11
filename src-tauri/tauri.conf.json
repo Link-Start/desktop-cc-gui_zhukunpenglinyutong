@@ -3,6 +3,7 @@
   "productName": "ccgui",
   "version": "0.8.7",
   "identifier": "com.zhukunpenglinyutong.ccgui",
+  "mainBinaryName": "cc-gui",
   "build": {
     "beforeDevCommand": "node scripts/tauri-dev-frontend.mjs",
     "devUrl": "http://localhost:1420",
