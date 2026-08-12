@@ -17,12 +17,21 @@ import {
   recordStartupMilestone,
   type StartupMilestoneName,
 } from "../../features/startup-orchestration/utils/startupTrace";
-import { isStartupForceEntered } from "../../features/startup-orchestration/utils/startupForceEnter";
+import {
+  isStartupForceEntered,
+  registerStartupIdleHydrationCancel,
+  subscribeStartupForceEnter,
+} from "../../features/startup-orchestration/utils/startupForceEnter";
 import {
   clearFullCatalogAutoRetryCooldown,
   isFullCatalogAutoRetryBlocked,
   markFullCatalogAutoRetryCooldown,
 } from "../../features/startup-orchestration/utils/fullCatalogAutoRetry";
+import {
+  clearFullCatalogFresh,
+  isFullCatalogFresh,
+  markFullCatalogFresh,
+} from "../../features/startup-orchestration/utils/fullCatalogFreshness";
 import { stampStartupGateReady } from "../../features/startup-orchestration/utils/startupGateReady";
 import { shouldSkipWorkspaceThreadListLoad } from "./workspaceThreadListLoadGuard";
 import {
@@ -39,8 +48,9 @@ function hasStartupGateReady(): boolean {
  * Cold-start list guard until gate-ready / force-enter:
  * - only the current active workspace may hydrate (first-paint or full)
  * - no active yet → block all (wait for active assignment)
- * No implicit full-catalog prewarm runs after the gate; complete history is
- * loaded only by explicit Load older / Session Management / force refresh.
+ * After active first-paint, a quiet idle full-catalog is scheduled once so the
+ * sidebar converges beyond snapshot / Codex-only first-paint (multi-engine).
+ * Background workspaces stay cold until explicit expand / Session Management.
  */
 function isColdStartListGuardActive(): boolean {
   return !hasStartupGateReady() && !isStartupForceEntered();
@@ -54,7 +64,7 @@ function shouldSkipWorkspaceDuringColdStart(
     return false;
   }
   // Home has no active-list cold-start owner. Explicit on-demand/session-radar
-  // requests remain allowed; automatic full-catalog scheduling is removed.
+  // requests remain allowed; background auto full-catalog is still gated.
   if (!activeWorkspaceId) {
     return false;
   }
@@ -69,6 +79,11 @@ type ListThreadsForWorkspace = (
     deletedThreadIds?: string[];
     startupHydrationMode?: "full-catalog" | "first-paint";
     allowRuntimeReconnect?: boolean;
+    /**
+     * Soft recovery callers (focus-refresh) must not re-run multi-engine
+     * full-catalog while the catalog is still fresh after a successful settle.
+     */
+    recoverySource?: string;
     /** When true mid-flight, list apply must no-op (workspace cancelled/switched). */
     isStale?: () => boolean;
   },
@@ -123,6 +138,15 @@ export const COLD_START_IDLE_TIMEOUT_MS = IS_VITEST ? 0 : 15_000;
  */
 export const WORKSPACE_SWITCH_INTENT_DELAY_MS = IS_VITEST ? 0 : 100;
 export const WORKSPACE_SWITCH_INPUT_QUIET_MS = IS_VITEST ? 0 : 300;
+
+/**
+ * After active first-paint: quiet-gated multi-engine full-catalog so sidebar
+ * leaves stale snapshot / Codex-only rows without competing with first clicks.
+ * @internal exported for tests
+ */
+export const POST_FIRST_PAINT_FULL_CATALOG_MIN_DELAY_MS = IS_VITEST ? 0 : 800;
+export const POST_FIRST_PAINT_FULL_CATALOG_QUIET_MS = IS_VITEST ? 0 : 600;
+export const POST_FIRST_PAINT_FULL_CATALOG_MAX_WAIT_MS = IS_VITEST ? 0 : 8_000;
 
 /** @deprecated Prefer COLD_START_IDLE_* / WORKSPACE_SWITCH_INTENT_DELAY_MS */
 export const COLD_START_FIRST_PAINT_DELAY_MS = COLD_START_IDLE_MIN_DELAY_MS;
@@ -287,6 +311,13 @@ export function useWorkspaceThreadListHydration({
       ) => void)
     | null
   >(null);
+  /** Quiet idle full-catalog after active first-paint (or force-enter re-arm). */
+  const pendingPostFirstPaintFullCatalogCleanupRef = useRef<(() => void) | null>(
+    null,
+  );
+  const postFirstPaintFullCatalogTargetIdRef = useRef<string | null>(null);
+  /** Workspaces that already had a post-first-paint full-catalog attempt scheduled. */
+  const postFirstPaintFullCatalogArmedIdsRef = useRef(new Set<string>());
   const idleHydrationCleanupByWorkspaceIdRef = useRef(
     new Map<string, () => void>(),
   );
@@ -317,6 +348,89 @@ export function useWorkspaceThreadListHydration({
     [renderScheduler],
   );
 
+  const cancelPendingPostFirstPaintFullCatalog = useCallback(() => {
+    pendingPostFirstPaintFullCatalogCleanupRef.current?.();
+    pendingPostFirstPaintFullCatalogCleanupRef.current = null;
+    postFirstPaintFullCatalogTargetIdRef.current = null;
+  }, []);
+
+  /**
+   * Quiet-gated multi-engine full-catalog for the active workspace after
+   * first-paint (or force-enter). Prevents sidebar from remaining on stale
+   * sidebarSnapshot / Codex-only first-paint forever.
+   */
+  const schedulePostFirstPaintFullCatalog = useCallback(
+    (workspaceId: string, options?: { allowRepeat?: boolean }) => {
+      const id = workspaceId.trim();
+      if (!id) {
+        return;
+      }
+      if (
+        !options?.allowRepeat &&
+        postFirstPaintFullCatalogArmedIdsRef.current.has(id)
+      ) {
+        return;
+      }
+      if (fullyHydratedThreadListWorkspaceIdsRef.current.has(id)) {
+        return;
+      }
+      if (isFullCatalogAutoRetryBlocked(id)) {
+        return;
+      }
+
+      cancelPendingPostFirstPaintFullCatalog();
+      postFirstPaintFullCatalogArmedIdsRef.current.add(id);
+      postFirstPaintFullCatalogTargetIdRef.current = id;
+
+      let unregisterForceCancel: (() => void) | null = null;
+      const detachSchedule = () => {
+        unregisterForceCancel?.();
+        unregisterForceCancel = null;
+        if (postFirstPaintFullCatalogTargetIdRef.current === id) {
+          postFirstPaintFullCatalogTargetIdRef.current = null;
+        }
+        pendingPostFirstPaintFullCatalogCleanupRef.current = null;
+      };
+
+      const runFullCatalog = () => {
+        detachSchedule();
+        if (activeWorkspaceIdRef.current !== id) {
+          return;
+        }
+        if (fullyHydratedThreadListWorkspaceIdsRef.current.has(id)) {
+          return;
+        }
+        if (isFullCatalogAutoRetryBlocked(id)) {
+          return;
+        }
+        // After force-enter, non-force auto full-catalog is blocked for the
+        // session; use force so multi-engine list still converges once quiet.
+        const force = isStartupForceEntered();
+        ensureWorkspaceThreadListLoadedRef.current?.(id, {
+          preserveState: true,
+          force,
+        });
+      };
+
+      const quietCleanup = scheduleWhenInteractiveQuiet(runFullCatalog, {
+        quietMs: POST_FIRST_PAINT_FULL_CATALOG_QUIET_MS,
+        minDelayMs: POST_FIRST_PAINT_FULL_CATALOG_MIN_DELAY_MS,
+        maxWaitMs: POST_FIRST_PAINT_FULL_CATALOG_MAX_WAIT_MS,
+      });
+      // Force-enter / gate dismiss cancels pending idle full-catalog schedules.
+      unregisterForceCancel = registerStartupIdleHydrationCancel(() => {
+        quietCleanup();
+        detachSchedule();
+      });
+      const combinedCleanup = () => {
+        quietCleanup();
+        detachSchedule();
+      };
+      pendingPostFirstPaintFullCatalogCleanupRef.current = combinedCleanup;
+    },
+    [cancelPendingPostFirstPaintFullCatalog],
+  );
+
   const listThreadsForWorkspaceTracked = useCallback<ListThreadsForWorkspace>(
     async (workspace, options) => {
       // Cold-start: restore/focus/reload must not dual-scan non-active workspaces
@@ -330,20 +444,44 @@ export function useWorkspaceThreadListHydration({
         return { applied: false, stale: true };
       }
 
-      hydratingThreadListWorkspaceIdsRef.current.add(workspace.id);
       // Default path for direct callers (reload / rename): never assume full-catalog
       // on a never-hydrated workspace — that was the cold-start "no first-paint" bug.
       const uiAlreadyHydrated = hydratedThreadListWorkspaceIdsRef.current.has(
         workspace.id,
       );
-      const kind: ThreadHydrationKind =
+      const fullyHydrated = fullyHydratedThreadListWorkspaceIdsRef.current.has(
+        workspace.id,
+      );
+      let kind: ThreadHydrationKind =
         hydrationKindByWorkspaceIdRef.current.get(workspace.id) ??
         (uiAlreadyHydrated ? "full-catalog" : "first-paint");
+
+      // Focus-refresh historically forced full-catalog ~30s after first settle
+      // (cold-start dump: second opencode_session_list + list_claude_sessions).
+      // While full-catalog is still fresh, skip the multi-engine fan-out entirely.
+      if (
+        options?.recoverySource === "focus-refresh" &&
+        fullyHydrated &&
+        isFullCatalogFresh(workspace.id) &&
+        options?.startupHydrationMode !== "first-paint"
+      ) {
+        return { applied: false, stale: false };
+      }
+
+      // Explicit first-paint from restore / soft paths wins over default full-catalog.
+      if (options?.startupHydrationMode === "first-paint") {
+        kind = "first-paint";
+      } else if (options?.startupHydrationMode === "full-catalog") {
+        kind = "full-catalog";
+      }
+
       const phase: ThreadHydrationPhase =
         hydrationPhaseByWorkspaceIdRef.current.get(workspace.id) ??
         (workspace.id === activeWorkspaceIdRef.current
           ? "active-workspace"
           : "on-demand");
+
+      hydratingThreadListWorkspaceIdsRef.current.add(workspace.id);
       // Keep maps aligned for concurrent ensure/skip guards.
       hydrationKindByWorkspaceIdRef.current.set(workspace.id, kind);
       hydrationPhaseByWorkspaceIdRef.current.set(workspace.id, phase);
@@ -397,11 +535,18 @@ export function useWorkspaceThreadListHydration({
             );
             if (settledAsTimeout) {
               markFullCatalogAutoRetryCooldown(workspace.id, "timeout");
+              clearFullCatalogFresh(workspace.id);
+            } else {
+              // Successful multi-engine settle — block soft re-scans (focus-refresh).
+              markFullCatalogFresh(workspace.id);
             }
             // MUST NOT stamp startup-gate-ready from full-catalog settle.
           } else if (isStillActive) {
             // Only active first-paint opens the click gate (not a side workspace).
             stampStartupGateReady("first-paint-complete");
+            // Converge multi-engine list after quiet; first-paint intentionally
+            // skipped project catalog / Claude disk / other engines.
+            schedulePostFirstPaintFullCatalog(workspace.id);
           }
           publishHydrationUiState(
             setHydratedThreadListWorkspaceIds,
@@ -424,7 +569,7 @@ export function useWorkspaceThreadListHydration({
         }
       }
     },
-    [listThreadsForWorkspace],
+    [listThreadsForWorkspace, schedulePostFirstPaintFullCatalog],
   );
 
   const ensureWorkspaceThreadListLoaded = useCallback(
@@ -477,6 +622,17 @@ export function useWorkspaceThreadListHydration({
       }
       if (force && kind === "full-catalog") {
         clearFullCatalogAutoRetryCooldown(workspaceId);
+        clearFullCatalogFresh(workspaceId);
+      }
+      // Soft ensure after a successful full-catalog: do not re-fan-out engines
+      // until freshness expires (force / explicit user refresh still wins).
+      if (
+        !force &&
+        kind === "full-catalog" &&
+        fullyHydrated &&
+        isFullCatalogFresh(workspaceId)
+      ) {
+        return;
       }
       const hasHydratedThreadList =
         kind === "first-paint" ? uiHydrated : fullyHydrated;
@@ -590,6 +746,13 @@ export function useWorkspaceThreadListHydration({
       // Drop scheduled auto first-paint for the previous target.
       pendingAutoFirstPaintCleanupRef.current?.();
       pendingAutoFirstPaintCleanupRef.current = null;
+      // Drop pending full-catalog for the workspace the user already left.
+      if (
+        postFirstPaintFullCatalogTargetIdRef.current ===
+        previousActiveWorkspaceId
+      ) {
+        cancelPendingPostFirstPaintFullCatalog();
+      }
       if (autoHydratedActiveWorkspaceIdRef.current === previousActiveWorkspaceId) {
         autoHydratedActiveWorkspaceIdRef.current = null;
       }
@@ -694,7 +857,32 @@ export function useWorkspaceThreadListHydration({
         rescheduleAutoFirstPaintRef.current = null;
       }
     };
-  }, [activeWorkspaceId, ensureWorkspaceThreadListLoaded, workspacesById]);
+  }, [
+    activeWorkspaceId,
+    cancelPendingPostFirstPaintFullCatalog,
+    ensureWorkspaceThreadListLoaded,
+    workspacesById,
+  ]);
+
+  // Force-enter cancels pending idle full-catalog; re-arm once quiet so the
+  // active sidebar still leaves stale snapshot after the user unmasks early.
+  useEffect(() => {
+    return subscribeStartupForceEnter(() => {
+      const activeId = activeWorkspaceIdRef.current;
+      if (!activeId) {
+        return;
+      }
+      if (!hydratedThreadListWorkspaceIdsRef.current.has(activeId)) {
+        return;
+      }
+      if (fullyHydratedThreadListWorkspaceIdsRef.current.has(activeId)) {
+        return;
+      }
+      // Allow one re-arm after force-enter cancelled the first schedule.
+      postFirstPaintFullCatalogArmedIdsRef.current.delete(activeId);
+      schedulePostFirstPaintFullCatalog(activeId, { allowRepeat: true });
+    });
+  }, [schedulePostFirstPaintFullCatalog]);
 
   // While gate is not ready, any pointerdown soft-cancels in-flight list apply
   // so clicks never collide with setThreads (Cmd+R / reload stress).
@@ -759,8 +947,9 @@ export function useWorkspaceThreadListHydration({
     return () => {
       cleanupByWorkspaceId.forEach((cleanup) => cleanup());
       cleanupByWorkspaceId.clear();
+      cancelPendingPostFirstPaintFullCatalog();
     };
-  }, []);
+  }, [cancelPendingPostFirstPaintFullCatalog]);
 
   return {
     ensureWorkspaceThreadListLoaded,

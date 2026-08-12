@@ -63,9 +63,17 @@ describe("AppShell lazy feature boundaries", () => {
 
   it("keeps release notes changelog data out of startup static imports", () => {
     const source = readSource(releaseNotesControllerPath);
+    const catalogSource = readSource(
+      join(srcDir, "features/update/utils/releaseNotesCatalog.ts"),
+    );
 
-    expect(source).not.toContain(`from "../../../../CHANGELOG.md?raw"`);
-    expect(source).toContain(`import("../../../../CHANGELOG.md?raw")`);
+    // Full CHANGELOG must never be pulled into the cold-start graph.
+    expect(source).not.toContain(`CHANGELOG.md?raw`);
+    expect(catalogSource).not.toContain(`CHANGELOG.md?raw`);
+    // Cold path loads a light index + per-version JSON chunks only.
+    expect(catalogSource).toContain(`import.meta.glob`);
+    expect(catalogSource).toContain(`../generated/entries/*.json`);
+    expect(catalogSource).toContain(`../generated/index.json`);
   });
 
   it("mounts heavy canvas surfaces only when their surface is active", () => {
