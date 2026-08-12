@@ -7,14 +7,6 @@ const kanbanCss = readFileSync(
   "utf8",
 ).replace(/\r\n/g, "\n");
 
-function getCssRuleBlock(css: string, selector: string): string {
-  const escapedSelector = selector
-    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    .replace(/\s+/g, "\\s+");
-  const match = css.match(new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`, "s"));
-  return match?.[1] ?? "";
-}
-
 describe("kanban Windows titlebar inset", () => {
   it("reserves window-control space and matches titlebar vertical center on Windows", () => {
     const hasInset =
