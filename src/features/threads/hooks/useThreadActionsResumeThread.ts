@@ -23,7 +23,10 @@ import {
 import { parseGeminiHistoryMessages } from "../loaders/geminiHistoryParser";
 import { parseGrokHistoryMessages } from "../loaders/grokHistoryParser";
 import { parseKimiHistoryMessages } from "../loaders/kimiHistoryParser";
-import { hydrateHistory } from "../assembly/conversationAssembler";
+import {
+  hydrateHistory,
+  mergeHistoryProjectionItems,
+} from "../assembly/conversationAssembler";
 import { asString } from "../utils/threadNormalize";
 import {
   collectKnownCodexThreadIds,
@@ -132,6 +135,11 @@ export function useThreadActionsResumeThreadForWorkspace(
   } = deps;
   const resumeRequestGenerationByScopeRef = useRef<Record<string, number>>({});
   const automaticRecoveryFailedByScopeRef = useRef<Record<string, true>>({});
+  // Late Shared projection merge must read the live canvas, not resume-start snapshot.
+  const itemsByThreadRef = useRef(itemsByThread);
+  itemsByThreadRef.current = itemsByThread;
+  const threadStatusByIdRef = useRef(threadStatusById);
+  threadStatusByIdRef.current = threadStatusById;
 
   const resumeThreadForWorkspace = useCallback(
     async (
@@ -318,6 +326,16 @@ export function useThreadActionsResumeThreadForWorkspace(
         return threadId;
       }
       if (useUnifiedHistoryLoader) {
+        // hydrateHistorySnapshot is assigned below; Shared soft-timeout merge calls it late.
+        let hydrateHistorySnapshot: (
+          effectiveThreadId: string,
+          snapshot: Awaited<
+            ReturnType<
+              ReturnType<typeof createThreadHistoryLoaderForThread>["load"]
+            >
+          >,
+        ) => Promise<boolean> = async () => false;
+
         const createHistoryLoader = (targetThreadId: string) =>
           createThreadHistoryLoaderForThread({
             targetThreadId,
@@ -335,8 +353,38 @@ export function useThreadActionsResumeThreadForWorkspace(
                   setThreadHistoryLoadingProgress(targetThreadId, progress);
                 }
               : undefined,
+            onSharedProjectionMerged: (mergedSnapshot) => {
+              // Recovery「已解锁」与 history projection 解耦：后台 merge 不得挡发送。
+              // 仅在仍是本次 resume 且线程未在跑 live turn 时应用。
+              if (!isCurrentResumeRequest()) {
+                return;
+              }
+              if (threadStatusByIdRef.current[targetThreadId]?.isProcessing) {
+                return;
+              }
+              // 用「当前画布 ⊕ 迟到 projection」而不是整表覆盖，避免冲掉 V0 之后的本地/实时消息。
+              const liveItems =
+                itemsByThreadRef.current[targetThreadId] ?? [];
+              const projectionItems = mergedSnapshot.items;
+              const nextItems =
+                liveItems.length > 0
+                  ? mergeHistoryProjectionItems(
+                      liveItems,
+                      projectionItems,
+                      {
+                        workspaceId,
+                        threadId: targetThreadId,
+                        engine: mergedSnapshot.engine,
+                      },
+                    )
+                  : projectionItems;
+              void hydrateHistorySnapshot(targetThreadId, {
+                ...mergedSnapshot,
+                items: nextItems,
+              });
+            },
           });
-        const hydrateHistorySnapshot = async (
+        hydrateHistorySnapshot = async (
           effectiveThreadId: string,
           snapshot: Awaited<
             ReturnType<ReturnType<typeof createHistoryLoader>["load"]>
@@ -500,6 +548,7 @@ export function useThreadActionsResumeThreadForWorkspace(
           setThreadLoaded(effectiveThreadId, true);
           return true;
         };
+        // end hydrateHistorySnapshot assignment
         const loadHistorySnapshotWithBoundedEmptyRecovery = async (
           targetThreadId: string,
           initialSnapshot?: Awaited<
