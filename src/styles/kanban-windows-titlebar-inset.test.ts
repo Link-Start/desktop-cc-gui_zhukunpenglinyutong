@@ -16,20 +16,7 @@ function getCssRuleBlock(css: string, selector: string): string {
 }
 
 describe("kanban Windows titlebar inset", () => {
-  it("reserves window-control space for kanban topbars on Windows", () => {
-    const rule = getCssRuleBlock(
-      kanbanCss,
-      ".app.windows-desktop.kanban-active .kanban-board-header,\n.app.windows-desktop.kanban-active .kanban-projects-topbar",
-    );
-
-    // Fallback: selector may be written with flexible whitespace
-    const ruleText =
-      rule ||
-      getCssRuleBlock(
-        kanbanCss,
-        ".app.windows-desktop.kanban-active .kanban-board-header, .app.windows-desktop.kanban-active .kanban-projects-topbar",
-      );
-
+  it("reserves window-control space and matches titlebar vertical center on Windows", () => {
     const hasInset =
       kanbanCss.includes(
         ".app.windows-desktop.kanban-active .kanban-board-header",
@@ -41,8 +28,14 @@ describe("kanban Windows titlebar inset", () => {
       kanbanCss.includes("var(--titlebar-toggle-side-gap");
 
     expect(hasInset).toBe(true);
-    expect(ruleText || kanbanCss).toMatch(
+    expect(kanbanCss).toMatch(
       /padding-right:\s*calc\([\s\S]*titlebar-window-controls-width/,
     );
+    // Same vertical band as .titlebar-controls / window controls.
+    expect(kanbanCss).toMatch(
+      /height:\s*var\(--main-topbar-height,\s*44px\)/,
+    );
+    expect(kanbanCss).toMatch(/padding-top:\s*0;/);
+    expect(kanbanCss).toMatch(/padding-bottom:\s*0;/);
   });
 });
