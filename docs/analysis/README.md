@@ -18,7 +18,7 @@ status: active
 - [Native vs Shared CLI explained](./native-vs-shared-cli-explained.md) — Active product/engineering guide。
 - [Shared create / open local catalog stale mapping](./shared-create-local-catalog-stale-mapping-2026-08-08.md) — Active fix reference；Shared 创建权威 catalog + 打开历史文案/图标 mapping 同源。
 - [Workspace switch session catalog performance regression](./workspace-switch-session-catalog-performance-regression-2026-08-08.md) — Active incident analysis；校准 v0.7.16/v0.8.0 commits、exhaustive projection 主根因、首轮修复证伪与性能治理顺序。
-- [React #185 Maximum Update Depth playbook](./react-185-maximum-update-depth-playbook.md) — Active troubleshooting runbook；最新 case `C-20260805-01`（0.7.16 Messages canvas 空集合 thrash / `App-BG-8EZ_F`；前案 C-20260804-01..03）。
+- [React #185 / ErrorBoundary Crash playbook](./react-185-maximum-update-depth-playbook.md) — Active troubleshooting runbook；主线 `#185` + 并列家族 `RangeError` 栈溢出（AP-08）；最新 case `C-20260811-01`（0.8.6 Markdown table row count / #1066；前案 C-20260805-01 等）。
 
 ## Resolved incidents and closure evidence
 
