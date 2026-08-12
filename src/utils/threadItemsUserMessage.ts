@@ -18,6 +18,12 @@ const PROJECT_MEMORY_BLOCK_REGEX =
 /** 未闭合/被 engine firstMessage 截断的注入包（侧栏标题污染源） */
 const PROJECT_MEMORY_OPEN_TAG_PREFIX_REGEX =
   /^<project-memory(?:-pack)?\b/i;
+/**
+ * Grok CLI bootstrap 信封（user_info + rules 等）被截断进 firstMessage 时的
+ * 侧栏污染形态：`<user_info> OS Version: macos Shell...`
+ */
+const GROK_RUNTIME_CONTEXT_OPEN_TAG_PREFIX_REGEX =
+  /^<(?:user_info|rules|git_status|system-reminder|open_and_recently_viewed_files|agent_skills|mcp_servers|image_compression_notice)\b/i;
 const PROJECT_MEMORY_CLOSE_TAG_REGEX =
   /<\/project-memory(?:-pack)?>/i;
 const PROJECT_MEMORY_LINE_PREFIX_REGEX =
@@ -378,8 +384,12 @@ export function previewThreadName(text: string, fallback: string) {
   const extractedUserInput = extractLatestUserInputTextPreserveFormatting(strippedSharedSync);
   const strippedInjectedPrefix = stripInjectedPrefixLines(extractedUserInput);
   const collapsed = strippedInjectedPrefix.replace(/\s+/g, " ").trim();
-  // 二次闸：strip 后仍以注入包开标签开头 → 不要截成侧栏污染名
-  if (!collapsed || PROJECT_MEMORY_OPEN_TAG_PREFIX_REGEX.test(collapsed)) {
+  // 二次闸：strip 后仍以注入包 / Grok bootstrap 开标签开头 → 不要截成侧栏污染名
+  if (
+    !collapsed ||
+    PROJECT_MEMORY_OPEN_TAG_PREFIX_REGEX.test(collapsed) ||
+    GROK_RUNTIME_CONTEXT_OPEN_TAG_PREFIX_REGEX.test(collapsed)
+  ) {
     return fallback;
   }
   const clipped = clipByChars(collapsed, MAX_DEFAULT_THREAD_TITLE_CHARS).trim();

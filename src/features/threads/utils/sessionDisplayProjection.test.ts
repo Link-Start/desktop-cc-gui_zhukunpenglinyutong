@@ -49,6 +49,39 @@ describe("sessionDisplayProjection", () => {
     ).toBe("你好啊");
   });
 
+  it("classifies Grok runtime-context titles as weak and upgrades to real prompt", () => {
+    const pollutedTitle =
+      "<user_info> OS Version: macos Shell: /bin/zsh Workspace Path: /Users/me/fx";
+    expect(isWeakSessionDisplayTitle(pollutedTitle)).toBe(true);
+    expect(isWeakSessionDisplayTitle("<rules> # Development Guidelines")).toBe(
+      true,
+    );
+
+    const previous: ThreadSummary = {
+      id: "grok:session-bootstrap",
+      name: pollutedTitle,
+      updatedAt: 100,
+      engineSource: "grok",
+      threadKind: "native",
+    };
+    const fixed = {
+      ...previous,
+      name: "阅读下本地未提交代码",
+      updatedAt: 120,
+    };
+
+    expect(mergeSessionDisplaySummary(previous, fixed).name).toBe(
+      "阅读下本地未提交代码",
+    );
+    expect(
+      mergeSessionDisplaySummary(previous, {
+        ...previous,
+        name: pollutedTitle,
+        updatedAt: 130,
+      }).name,
+    ).toBe("");
+  });
+
   it("treats context protocol titles as weak and ignores mapped protocol titles", () => {
     const protocolTitle =
       `MOSSX_CONTEXT_PACKAGE:sha256:${"a".repeat(64)}:` +

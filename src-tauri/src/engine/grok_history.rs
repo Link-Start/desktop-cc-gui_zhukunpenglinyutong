@@ -13,8 +13,11 @@
 //!   - `user` — prompt (`content: [{type:"text", text:"<user_query>…</user_query>"}]`);
 //!     lines carrying `synthetic_reason` are synthetic reminders and skipped.
 //!     Runtime context envelopes Grok injects without `synthetic_reason`
-//!     (`<user_info>`, `<git_status>`, bare `<system-reminder>`, …) are also
-//!     skipped so they do not appear as user bubbles or drive sidebar titles.
+//!     (`<user_info>`, `<rules>`, `<git_status>`, bare `<system-reminder>`, …)
+//!     are also skipped so they do not appear as user bubbles or drive sidebar
+//!     titles. Bootstrap lines often concatenate several envelopes without a
+//!     `<user_query>`; those whole lines are treated as context even when
+//!     residual markup remains after stripping a short known-tag list.
 //!   - `reasoning` — `{id, summary}` (summary string or parts array)
 //!   - `assistant` — `{content, tool_calls:[{id, function:{name, arguments}}]}`
 //!   - `tool_result` — `{tool_call_id, content}`
@@ -735,8 +738,12 @@ fn strip_user_query_wrapper(text: &str) -> String {
 
 /// Known Grok runtime envelopes that are stored as `type:"user"` but are not
 /// human prompts. Grok only marks some of these with `synthetic_reason`.
+///
+/// `rules` is the large AGENTS.md / workspace-rules pack Grok often appends to
+/// the same line as `<user_info>` (still without `synthetic_reason`).
 const GROK_RUNTIME_CONTEXT_TAGS: &[&str] = &[
     "user_info",
+    "rules",
     "git_status",
     "system-reminder",
     "open_and_recently_viewed_files",
@@ -780,9 +787,27 @@ fn strip_grok_runtime_context_envelopes(text: &str) -> String {
     rest
 }
 
+/// True when `text` begins with a known Grok bootstrap open tag (`<user_info>`,
+/// `<rules>`, …), optionally with attributes. Case-insensitive.
+fn starts_with_grok_runtime_bootstrap_open_tag(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    for tag in GROK_RUNTIME_CONTEXT_TAGS {
+        let open = format!("<{tag}");
+        if !lower.starts_with(&open) {
+            continue;
+        }
+        let after = &lower[open.len()..];
+        // `<tag>` or `<tag attrs…>`
+        if after.starts_with('>') || after.starts_with(|c: char| c.is_whitespace()) {
+            return true;
+        }
+    }
+    false
+}
+
 /// True when a Grok `user` history line is runtime-injected context rather than
 /// a real human prompt. Covers envelopes Grok writes without `synthetic_reason`
-/// (notably `<user_info>` / `<git_status>`).
+/// (notably `<user_info>` / `<rules>` / `<git_status>`).
 fn is_grok_runtime_context_user_text(raw: &str) -> bool {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -791,6 +816,12 @@ fn is_grok_runtime_context_user_text(raw: &str) -> bool {
     // Explicit user prompts (including multimodal) are never treated as context.
     if trimmed.contains("<user_query>") || trimmed.contains("<image_files>") {
         return false;
+    }
+    // Bootstrap-only lines often start with `<user_info>` then append a large
+    // `<rules>` pack (and nested rule markup). Do not require strip-to-empty —
+    // residual unknown envelopes would otherwise pollute first_message titles.
+    if starts_with_grok_runtime_bootstrap_open_tag(trimmed) {
+        return true;
     }
     // After stripping known envelopes, pure context leaves nothing behind.
     // Free-text prompts (legacy / plain) remain and are kept.
@@ -2073,6 +2104,47 @@ mod tests {
     }
 
     #[test]
+    fn skips_user_info_plus_rules_bootstrap_without_synthetic_reason() {
+        // Real Grok CLI shape: first non-synthetic user line is user_info + a
+        // large rules pack (AGENTS.md etc.). Residual <rules> used to leak into
+        // first_message as "<user_info> OS Version: macos Shell...".
+        let bootstrap = concat!(
+            "<user_info>\n",
+            "OS Version: macos\n",
+            "Shell: /bin/zsh\n",
+            "Workspace Path: /Users/me/fx-data-web\n",
+            "</user_info>\n",
+            "\n",
+            "<rules>\n",
+            "# Development Guidelines\n",
+            "## Overview\n",
+            "AGENTS.md and nested workspace rules...\n",
+            "</rules>",
+        );
+        let chat_history = format!(
+            "{}\n{}\n{}\n",
+            serde_json::json!({
+                "type": "user",
+                "content": [{"type": "text", "text": bootstrap}],
+            }),
+            r#"{"type":"user","content":[{"type":"text","text":"<user_query>\n阅读下本地未提交代码\n</user_query>"}],"prompt_index":0}"#,
+            r#"{"type":"assistant","content":"好的。","model_id":"grok-build"}"#,
+        );
+
+        assert!(is_grok_runtime_context_user_text(bootstrap));
+        assert_eq!(
+            first_user_prompt_text(&chat_history).as_deref(),
+            Some("阅读下本地未提交代码")
+        );
+
+        let result = parse_messages_from_chat_history(&chat_history);
+        assert_eq!(result.messages.len(), 2);
+        assert_eq!(result.messages[0].role, "user");
+        assert_eq!(result.messages[0].text, "阅读下本地未提交代码");
+        assert_eq!(result.messages[1].role, "assistant");
+    }
+
+    #[test]
     fn first_user_prompt_skips_runtime_context_and_returns_real_query() {
         let chat_history = concat!(
             r#"{"type":"user","content":[{"type":"text","text":"<user_info>\nOS Version: macos\n</user_info>"}]}"#,
@@ -2086,6 +2158,9 @@ mod tests {
         );
         assert!(is_grok_runtime_context_user_text(
             "<user_info>\nOS Version: macos\n</user_info>"
+        ));
+        assert!(is_grok_runtime_context_user_text(
+            "<rules>\n# Development Guidelines\n</rules>"
         ));
         assert!(!is_grok_runtime_context_user_text(
             "<user_query>\n你好\n</user_query>"

@@ -12,6 +12,9 @@ const SHORT_HEX_TITLE_PATTERN = /^[a-f0-9]{4,8}$/i;
 const COMMAND_TAG_TITLE_PATTERN = /^<(?:command-|local-command-)/i;
 // 记忆注入 pack 残片（含 engine firstMessage 截断后的半截 open tag）
 const PROJECT_MEMORY_TAG_TITLE_PATTERN = /^<project-memory(?:-pack)?\b/i;
+// Grok CLI bootstrap 信封污染（user_info + rules 等截成侧栏名）
+const GROK_RUNTIME_CONTEXT_TAG_TITLE_PATTERN =
+  /^<(?:user_info|rules|git_status|system-reminder|open_and_recently_viewed_files|agent_skills|mcp_servers|image_compression_notice)\b/i;
 
 type SessionDisplayTitleStrength = 0 | 1 | 2;
 
@@ -42,6 +45,7 @@ export function sanitizeNativeSessionTitle(
   }
   if (
     PROJECT_MEMORY_TAG_TITLE_PATTERN.test(normalized) ||
+    GROK_RUNTIME_CONTEXT_TAG_TITLE_PATTERN.test(normalized) ||
     COMMAND_TAG_TITLE_PATTERN.test(normalized) ||
     isMossxProgramControlTitle(normalized) ||
     classifyContextProtocolText(normalized) !== null
@@ -61,6 +65,7 @@ function getSessionDisplayTitleStrength(
     || SHORT_HEX_TITLE_PATTERN.test(normalized)
     || COMMAND_TAG_TITLE_PATTERN.test(normalized)
     || PROJECT_MEMORY_TAG_TITLE_PATTERN.test(normalized)
+    || GROK_RUNTIME_CONTEXT_TAG_TITLE_PATTERN.test(normalized)
     || isMossxProgramControlTitle(normalized)
     || classifyContextProtocolText(normalized) !== null
   ) {
@@ -110,10 +115,20 @@ export function selectProjectedSessionDisplayName(
   ) {
     return params.previous.name;
   }
-  // 注入包残片不能落成侧栏名（无 previous 时回退空，由调用方 fallback）
-  if (PROJECT_MEMORY_TAG_TITLE_PATTERN.test(nextName)) {
+  // 注入包 / Grok bootstrap 残片不能落成侧栏名（无 previous 时回退空，由调用方 fallback）
+  if (
+    PROJECT_MEMORY_TAG_TITLE_PATTERN.test(nextName) ||
+    GROK_RUNTIME_CONTEXT_TAG_TITLE_PATTERN.test(nextName)
+  ) {
     const previousName = normalizeSessionDisplayTitle(params.previous?.name);
-    return previousName || "";
+    if (
+      previousName &&
+      !PROJECT_MEMORY_TAG_TITLE_PATTERN.test(previousName) &&
+      !GROK_RUNTIME_CONTEXT_TAG_TITLE_PATTERN.test(previousName)
+    ) {
+      return previousName;
+    }
+    return "";
   }
 
   return nextName;
