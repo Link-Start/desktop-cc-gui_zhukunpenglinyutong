@@ -1,46 +1,17 @@
-import { lazy, Suspense, useState } from "react";
+import { Suspense, useState } from "react";
 import { useWindowLabel } from "./features/layout/hooks/useWindowLabel";
 import { isDetachedFileExplorerWindowLabel } from "./features/files/detachedFileExplorer";
 import { isBrowserAgentDockWindowLabel } from "./features/browser-agent/browserAgentDockWindow";
 import { StartupGateOverlay } from "./features/app/components/StartupGateOverlay";
 import { isStartupGateOverlayTestEnabled } from "./features/startup-orchestration/utils/startupGateOverlayTestFlag";
-
-// AppShell 占主包大头；lazy 后主窗与 about/detached 窗入口分离，压 App-*.js 启动图。
-const AppShell = lazy(() =>
-  import("./app-shell").then((module) => ({
-    default: module.AppShell,
-  })),
-);
-
-const AboutView = lazy(() =>
-  import("./features/about/components/AboutView").then((module) => ({
-    default: module.AboutView,
-  })),
-);
-
-const DetachedFileExplorerWindow = lazy(() =>
-  import("./features/files/components/DetachedFileExplorerWindow").then((module) => ({
-    default: module.DetachedFileExplorerWindow,
-  })),
-);
-
-const DetachedSpecHubWindow = lazy(() =>
-  import("./features/spec/components/DetachedSpecHubWindow").then((module) => ({
-    default: module.DetachedSpecHubWindow,
-  })),
-);
-
-const ClientDocumentationWindow = lazy(() =>
-  import("./features/client-documentation/components/ClientDocumentationWindow").then((module) => ({
-    default: module.ClientDocumentationWindow,
-  })),
-);
-
-const DetachedBrowserAgentWindow = lazy(() =>
-  import("./features/browser-agent/components/DetachedBrowserAgentWindow").then((module) => ({
-    default: module.DetachedBrowserAgentWindow,
-  })),
-);
+import { LazyAppShell } from "./router/lazyAppShell";
+import {
+  LazyAboutView,
+  LazyClientDocumentationWindow,
+  LazyDetachedBrowserAgentWindow,
+  LazyDetachedFileExplorerWindow,
+  LazyDetachedSpecHubWindow,
+} from "./router/lazyWindows";
 
 export function AppRouter() {
   const windowLabel = useWindowLabel();
@@ -50,42 +21,42 @@ export function AppRouter() {
   if (windowLabel === "about") {
     return (
       <Suspense fallback={null}>
-        <AboutView />
+        <LazyAboutView />
       </Suspense>
     );
   }
   if (isDetachedFileExplorerWindowLabel(windowLabel)) {
     return (
       <Suspense fallback={null}>
-        <DetachedFileExplorerWindow />
+        <LazyDetachedFileExplorerWindow />
       </Suspense>
     );
   }
   if (windowLabel === "spec-hub") {
     return (
       <Suspense fallback={null}>
-        <DetachedSpecHubWindow />
+        <LazyDetachedSpecHubWindow />
       </Suspense>
     );
   }
   if (windowLabel === "client-documentation") {
     return (
       <Suspense fallback={null}>
-        <ClientDocumentationWindow />
+        <LazyClientDocumentationWindow />
       </Suspense>
     );
   }
   if (isBrowserAgentDockWindowLabel(windowLabel)) {
     return (
       <Suspense fallback={null}>
-        <DetachedBrowserAgentWindow />
+        <LazyDetachedBrowserAgentWindow />
       </Suspense>
     );
   }
   return (
     <>
       <Suspense fallback={null}>
-        <AppShell />
+        <LazyAppShell />
       </Suspense>
       {startupGateOverlayEnabledAtMount ? <StartupGateOverlay /> : null}
     </>

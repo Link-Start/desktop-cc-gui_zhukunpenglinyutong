@@ -66,33 +66,35 @@ describe("resolveCssZoomLayoutTarget", () => {
   });
 });
 
-describe("applyUiScale", () => {
-  it("windows: applies CSS zoom without a native target", async () => {
+describe("applyUiScale (locked to 100%)", () => {
+  it("windows: never applies non-identity zoom; clears residuals", async () => {
     const root = makeRoot();
+    root.style.zoom = "0.8";
+    root.style.transform = "scale(0.8)";
+    root.style.width = "125%";
+
     await applyUiScale(1.1, {
       root,
       platform: "windows",
     });
-    expect(root.style.zoom).toBe("1.1");
+    expect(root.style.zoom).toBe("");
     expect(root.style.transform).toBe("");
     expect(root.style.width).toBe("");
-    expect(root.style.height).toBe("");
-    expect(root.style.position).toBe("");
-    expect(root.style.getPropertyValue("--ui-scale")).toBe("1.1");
+    expect(root.style.getPropertyValue("--ui-scale")).toBe("");
 
     await applyUiScale(0.8, {
       root,
       platform: "windows",
     });
-    expect(root.style.zoom).toBe("0.8");
+    expect(root.style.zoom).toBe("");
     expect(root.style.transform).toBe("");
-    expect(root.style.width).toBe("");
   });
 
-  it("windows documentElement: zooms body and clears residual html transform", async () => {
+  it("windows documentElement: clears residual html/body scale styles", async () => {
     document.documentElement.style.zoom = "0.8";
     document.documentElement.style.width = "125%";
     document.documentElement.style.transform = "scale(0.8)";
+    document.body.style.zoom = "0.9";
 
     await applyUiScale(0.8, {
       root: document.documentElement,
@@ -102,7 +104,7 @@ describe("applyUiScale", () => {
     expect(document.documentElement.style.zoom).toBe("");
     expect(document.documentElement.style.width).toBe("");
     expect(document.documentElement.style.transform).toBe("");
-    expect(document.body.style.zoom).toBe("0.8");
+    expect(document.body.style.zoom).toBe("");
     expect(document.body.style.transform).toBe("");
   });
 
@@ -122,8 +124,9 @@ describe("applyUiScale", () => {
     expect(root.style.position).toBe("");
   });
 
-  it("enqueueApplyUiScale serializes and keeps latest scale", async () => {
+  it("enqueueApplyUiScale serializes and always ends at identity", async () => {
     const root = makeRoot();
+    root.style.zoom = "1.2";
     const slow = enqueueApplyUiScale(1.2, {
       root,
       platform: "windows",
@@ -133,16 +136,18 @@ describe("applyUiScale", () => {
       platform: "windows",
     });
     await Promise.all([slow, fast]);
-    expect(root.style.zoom).toBe("0.8");
-    expect(root.style.transform).toBe("");
+    // jsdom may expose cleared zoom as "" or undefined depending on path.
+    expect(root.style.zoom || "").toBe("");
+    expect(root.style.transform || "").toBe("");
   });
 
-  it("macos/linux: uses the same CSS-only path", async () => {
+  it("macos/linux: same identity-only path", async () => {
     for (const platform of ["macos", "linux"] as const) {
       resetApplyUiScaleQueueForTests();
       const root = makeRoot();
+      root.style.zoom = "0.8";
       await applyUiScale(0.8, { root, platform });
-      expect(root.style.zoom).toBe("0.8");
+      expect(root.style.zoom).toBe("");
       expect(root.style.transform).toBe("");
     }
   });

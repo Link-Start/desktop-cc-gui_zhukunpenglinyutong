@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { captureBrowserAgentSnapshot } from "../../services/tauri";
+import { captureBrowserAgentSnapshot } from "../../services/tauri/browserAgent";
 import { isKanbanThreadCompatibleWithEngine } from "../../features/kanban/utils/contextMode";
 import { findTaskDownstream } from "../../features/kanban/utils/chaining";
 import {

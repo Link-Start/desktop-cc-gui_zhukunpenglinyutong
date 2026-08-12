@@ -11,6 +11,7 @@ import {
   updatePrompt as updatePromptService,
 } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
+import { scheduleCatalogIdlePrewarm } from "../../startup-orchestration/utils/scheduleCatalogIdlePrewarm";
 import { startupOrchestrator } from "../../startup-orchestration/utils/startupOrchestrator";
 import {
   dispatchCustomPromptsChanged,
@@ -196,7 +197,15 @@ export function useCustomPrompts({ activeWorkspace, onDebug }: UseCustomPromptsO
     if (lastFetchedWorkspaceId.current === workspaceId) {
       return;
     }
-    void refreshPrompts("idle-prewarm");
+    // P1-3/P1-4: defer catalog prewarm past StartupGate when workspace is active.
+    return scheduleCatalogIdlePrewarm({
+      run: () => {
+        if (lastFetchedWorkspaceId.current === workspaceId) {
+          return;
+        }
+        void refreshPrompts("idle-prewarm");
+      },
+    });
   }, [isConnected, refreshPrompts, workspaceId]);
 
   useEffect(() => {

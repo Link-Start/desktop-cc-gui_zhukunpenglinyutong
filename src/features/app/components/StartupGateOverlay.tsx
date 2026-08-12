@@ -11,6 +11,7 @@ import {
 import { startupOrchestrator } from "../../startup-orchestration/utils/startupOrchestrator";
 import { markStartupForceEnter } from "../../startup-orchestration/utils/startupForceEnter";
 import { getFullCatalogAutoRetryBlockedSnapshot } from "../../startup-orchestration/utils/fullCatalogAutoRetry";
+import { getFullCatalogFreshSnapshot } from "../../startup-orchestration/utils/fullCatalogFreshness";
 import { getStartupGateReadyReason } from "../../startup-orchestration/utils/startupGateReady";
 import { isStartupGatePlatform } from "../../../utils/platform";
 import { loadSidebarSnapshot } from "../../threads/utils/sidebarSnapshot";
@@ -72,6 +73,7 @@ export function buildStartupGateDiagnosticDump(input: {
   ) => string;
   gateReadyReason?: string | null;
   fullCatalogAutoRetryBlocked?: readonly string[];
+  fullCatalogFresh?: readonly string[];
 }): string {
   const lines: string[] = [];
   const elapsedSec = (input.elapsedMs / 1000).toFixed(1);
@@ -122,6 +124,10 @@ export function buildStartupGateDiagnosticDump(input: {
     input.fullCatalogAutoRetryBlocked !== undefined
       ? input.fullCatalogAutoRetryBlocked
       : getFullCatalogAutoRetryBlockedSnapshot();
+  const fullCatalogFresh =
+    input.fullCatalogFresh !== undefined
+      ? input.fullCatalogFresh
+      : getFullCatalogFreshSnapshot();
 
   lines.push("=== mossx cold-start diagnostic dump ===");
   lines.push(`capturedAt: ${new Date().toISOString()}`);
@@ -135,6 +141,11 @@ export function buildStartupGateDiagnosticDump(input: {
   lines.push(
     `fullCatalogAutoRetryBlocked: ${
       fullCatalogBlocked.length > 0 ? fullCatalogBlocked.join(" | ") : "—"
+    }`,
+  );
+  lines.push(
+    `fullCatalogFresh: ${
+      fullCatalogFresh.length > 0 ? fullCatalogFresh.join(" | ") : "—"
     }`,
   );
   lines.push(
@@ -354,6 +365,7 @@ export function StartupGateOverlay() {
       notices: getGlobalRuntimeNoticesSnapshot(),
       gateReadyReason: getStartupGateReadyReason(),
       fullCatalogAutoRetryBlocked: getFullCatalogAutoRetryBlockedSnapshot(),
+      fullCatalogFresh: getFullCatalogFreshSnapshot(),
       resolveNoticeLabel: (notice) => {
         try {
           return t(

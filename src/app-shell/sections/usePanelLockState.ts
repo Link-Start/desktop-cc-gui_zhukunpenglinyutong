@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import {
   readPanelLockPasswordFile,
   writePanelLockPasswordFile,
-} from "../../services/tauri";
+} from "../../services/tauri/workspaceRuntime";
 import { PANEL_LOCK_INITIAL_PASSWORD } from "./utils";
 
 type UsePanelLockStateResult = {

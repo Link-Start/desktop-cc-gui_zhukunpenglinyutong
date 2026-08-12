@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  getWorkspaceFiles,
-  revealInFileManager,
-} from "../../../services/tauri";
+import { getWorkspaceFiles } from "../../../services/tauri/workspaceFiles";
+import { revealInFileManager } from "../../../services/tauri/workspaceRuntime";
 import { pushErrorToast } from "../../../services/toasts";
 import { useSoloMode } from "../../../features/layout/hooks/useSoloMode";
 import { useLiveEditPreview } from "../../../features/live-edit-preview/hooks/useLiveEditPreview";
@@ -18,11 +16,6 @@ import { useMenuLocalization } from "../../../features/app/hooks/useMenuLocaliza
 import { runWithLoadingProgress } from "../../../features/app/utils/loadingProgressActions";
 import { resolveSharedSessionCreateInitialTarget } from "../../../features/shared-session/target/resolveSharedSessionCreateInitialTarget";
 import type { SharedSessionSupportedEngine } from "../../../features/shared-session/utils/sharedSessionEngines";
-import {
-  buildDetachedSpecHubSession,
-  openOrFocusDetachedSpecHub,
-} from "../../../features/spec/detachedSpecHub";
-import { openOrFocusClientDocumentationWindow } from "../../../features/client-documentation/clientDocumentationWindow";
 import type { WorkspaceHomeDeleteResult } from "../../../features/workspaces/components/WorkspaceHome";
 import type { EngineType, WorkspaceInfo } from "../../../types";
 import { isRewindSupportedThreadId } from "../useAppShellSections.kanbanHelpers";
@@ -897,10 +890,14 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     }
     closeSettings();
     setActiveTab((current: string) => (current === "spec" ? "codex" : current));
-    void getWorkspaceFiles(activeWorkspace.id)
-      .then((result) =>
-        openOrFocusDetachedSpecHub(
-          buildDetachedSpecHubSession({
+    // Dynamic import keeps detached SpecHub out of AppShell first-hop mapDeps (P0-3).
+    void Promise.all([
+      getWorkspaceFiles(activeWorkspace.id),
+      import("../../../features/spec/detachedSpecHub"),
+    ])
+      .then(([result, detachedSpecHub]) =>
+        detachedSpecHub.openOrFocusDetachedSpecHub(
+          detachedSpecHub.buildDetachedSpecHubSession({
             workspaceId: activeWorkspace.id,
             workspaceName: activeWorkspace.name,
             files: result.files,
@@ -917,12 +914,17 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
   }, [activeWorkspace, closeSettings, setActiveTab, t]);
 
   const handleOpenClientDocumentation = useCallback(() => {
-    void openOrFocusClientDocumentationWindow().catch((error) => {
-      pushErrorToast({
-        title: t("clientDocumentation.open"),
-        message: error instanceof Error ? error.message : String(error),
+    // Dynamic import keeps client documentation window out of AppShell first-hop mapDeps (P0-3).
+    void import("../../../features/client-documentation/clientDocumentationWindow")
+      .then(({ openOrFocusClientDocumentationWindow }) =>
+        openOrFocusClientDocumentationWindow(),
+      )
+      .catch((error) => {
+        pushErrorToast({
+          title: t("clientDocumentation.open"),
+          message: error instanceof Error ? error.message : String(error),
+        });
       });
-    });
   }, [t]);
 
   const handleOpenHomeChat = useCallback(() => {

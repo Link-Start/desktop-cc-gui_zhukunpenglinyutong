@@ -252,6 +252,65 @@ async function bootstrap() {
   pushBootstrapNotice("runtimeNotice.bootstrap.ready");
   void markRendererReady();
   void runPostRenderBootstrapTasks();
+  scheduleDeferredBaiduTongji();
+}
+
+/**
+ * P1-2: install analytics after shell-ready on idle / first interaction,
+ * never on the synchronous cold-start critical path.
+ */
+function scheduleDeferredBaiduTongji() {
+  let installed = false;
+  const install = () => {
+    if (installed) {
+      return;
+    }
+    installed = true;
+    cleanup();
+    void import("./services/baiduTongji")
+      .then(({ installBaiduTongji }) => {
+        installBaiduTongji();
+      })
+      .catch((error) => {
+        console.warn(
+          "[bootstrap] deferred Baidu Tongji install failed",
+          error instanceof Error ? error.message : String(error),
+        );
+      });
+  };
+  const onFirstInteraction = () => install();
+  const idleHandle =
+    typeof window !== "undefined" && typeof window.requestIdleCallback === "function"
+      ? window.requestIdleCallback(() => install(), { timeout: 8_000 })
+      : null;
+  const timeoutHandle =
+    typeof window !== "undefined"
+      ? window.setTimeout(install, idleHandle == null ? 2_500 : 12_000)
+      : null;
+  const cleanup = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.removeEventListener("pointerdown", onFirstInteraction, true);
+    window.removeEventListener("keydown", onFirstInteraction, true);
+    if (idleHandle != null && typeof window.cancelIdleCallback === "function") {
+      window.cancelIdleCallback(idleHandle);
+    }
+    if (timeoutHandle != null) {
+      window.clearTimeout(timeoutHandle);
+    }
+  };
+  if (typeof window !== "undefined") {
+    window.addEventListener("pointerdown", onFirstInteraction, {
+      capture: true,
+      once: true,
+      passive: true,
+    });
+    window.addEventListener("keydown", onFirstInteraction, {
+      capture: true,
+      once: true,
+    });
+  }
 }
 
 export async function startApp() {

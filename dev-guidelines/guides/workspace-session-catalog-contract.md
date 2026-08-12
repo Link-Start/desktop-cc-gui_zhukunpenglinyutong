@@ -42,7 +42,9 @@
 
 ### 3. Contracts
 
-- Backend catalog active strict projection MUST be the default membership truth for Sidebar and Session Management.
+- **Sidebar cold path (first-paint / ordinary refresh)** MUST prefer Session Index (`list_session_index_for_workspace` → `~/.ccgui/session-index.sqlite3`) for list-level rows (title/time/engine/path). Session Index is **not** archive/folder/usage authority.
+- Backend catalog active strict projection MUST remain the membership truth for **Session Management**, load-older convergence, and explicit force full-catalog — not the default cold-start sidebar owner.
+- Automatic post-first-paint exhaustive full-catalog is forbidden once Session Index seeds multi-engine first-paint; force refresh / Session Management MAY still call catalog.
 - AppShell workspace navigation 若只需要 owner topology，MUST 通过 `resolveWorkspaceProjectionOwnerIds` 从已加载 workspace registry 推导：main = self + direct `parentId` children（path/name/id stable order），worktree = self，registry pending = active id fallback。MUST NOT 为 topology 调用 `get_workspace_session_projection_summary` 或等价 exhaustive inventory；session membership 仍由 bounded catalog projection 决定。
 - Session Management may use a larger first-page catalog window than Sidebar. Current Settings catalog hook uses page size `9999` and does not expose user-visible pagination; Sidebar keeps its own startup/load-older catalog page size to avoid broadening startup pressure.
 - Workspace Home MUST NOT derive an independent session membership set from `recentThreads`; if it later displays sessions, it MUST consume the same catalog projection or document an explicit display-window difference.

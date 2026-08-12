@@ -426,6 +426,7 @@ describe("StartupGateOverlay", () => {
     expect(dump).toContain("firstPaintPresent: false");
     expect(dump).toContain("gateReadyReason: null");
     expect(dump).toContain("fullCatalogAutoRetryBlocked: —");
+    expect(dump).toContain("fullCatalogFresh: —");
     const rankSection = dump.split("--- task cost rank")[0] ?? dump;
     const listIdx = rankSection.indexOf("list_threads");
     const openIdx = rankSection.indexOf("opencode_session_list");

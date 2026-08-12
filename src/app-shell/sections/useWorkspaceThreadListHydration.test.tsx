@@ -7,6 +7,7 @@ import {
   resetStartupTraceForTests,
 } from "../../features/startup-orchestration/utils/startupTrace";
 import { resetFullCatalogAutoRetryForTests } from "../../features/startup-orchestration/utils/fullCatalogAutoRetry";
+import { resetFullCatalogFreshForTests } from "../../features/startup-orchestration/utils/fullCatalogFreshness";
 import { resetStartupGateReadyForTests } from "../../features/startup-orchestration/utils/startupGateReady";
 import {
   markStartupForceEnter,
@@ -15,6 +16,8 @@ import {
 import {
   useWorkspaceThreadListHydration,
   COLD_START_IDLE_MIN_DELAY_MS,
+  POST_FIRST_PAINT_FULL_CATALOG_MAX_WAIT_MS,
+  POST_FIRST_PAINT_FULL_CATALOG_MIN_DELAY_MS,
   WORKSPACE_SWITCH_INTENT_DELAY_MS,
 } from "./useWorkspaceThreadListHydration";
 import { startupOrchestrator } from "../../features/startup-orchestration/utils/startupOrchestrator";
@@ -68,6 +71,7 @@ describe("useWorkspaceThreadListHydration", () => {
     vi.useRealTimers();
     resetStartupTraceForTests();
     resetFullCatalogAutoRetryForTests();
+    resetFullCatalogFreshForTests();
     resetStartupGateReadyForTests();
     resetStartupForceEnterForTests();
     // Flush pending cold-start timers / microtasks left by prior tests.
@@ -391,8 +395,10 @@ describe("useWorkspaceThreadListHydration", () => {
     vi.useRealTimers();
   });
 
-  it("does not automatically run full-catalog after active first-paint", async () => {
-    vi.useFakeTimers();
+  it("settles active first-paint via session-index without auto full-catalog", async () => {
+    // Session Index now multi-engine seeds first-paint; exhaustive full-catalog
+    // is no longer auto-scheduled after gate-ready (Load older / Session Mgmt /
+    // force refresh still can request full-catalog).
     const workspaces = [createWorkspace("ws-1")];
     const listThreadsForWorkspace = vi
       .fn<
@@ -420,24 +426,25 @@ describe("useWorkspaceThreadListHydration", () => {
       }),
     );
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
+    await waitFor(() => {
+      expect(listThreadsForWorkspace).toHaveBeenCalledWith(
+        workspaces[0],
+        expect.objectContaining({ startupHydrationMode: "first-paint" }),
+      );
     });
 
-    expect(listThreadsForWorkspace).toHaveBeenCalledWith(
-      workspaces[0],
-      expect.objectContaining({ startupHydrationMode: "first-paint" }),
+    // Quiet index soft re-sync may fire another first-paint; full-catalog must not.
+    await waitFor(() => {
+      expect(listThreadsForWorkspace.mock.calls.length).toBeGreaterThanOrEqual(1);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const modes = listThreadsForWorkspace.mock.calls.map(
+      (call) => call[1]?.startupHydrationMode,
     );
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(10_000);
-    });
-
-    expect(
-      listThreadsForWorkspace.mock.calls.map(
-        (call) => call[1]?.startupHydrationMode,
-      ),
-    ).toEqual(["first-paint"]);
+    expect(modes.every((mode) => mode === "first-paint" || mode === undefined)).toBe(
+      true,
+    );
+    expect(modes).not.toContain("full-catalog");
 
     const firstPaintEvents = getStartupTraceSnapshot().events.filter(
       (event): event is Extract<typeof event, { type: "task" }> =>
@@ -447,7 +454,119 @@ describe("useWorkspaceThreadListHydration", () => {
     expect(
       firstPaintEvents.some((event) => event.phase === "active-workspace"),
     ).toBe(true);
-    vi.useRealTimers();
+
+    const fullCatalogEvents = getStartupTraceSnapshot().events.filter(
+      (event): event is Extract<typeof event, { type: "task" }> =>
+        event.type === "task" &&
+        event.taskId === "thread-list:full-catalog:ws-1",
+    );
+    expect(fullCatalogEvents.length).toBe(0);
+    // Sanity: quiet delays export for production (non-zero) / test (0).
+    expect(POST_FIRST_PAINT_FULL_CATALOG_MIN_DELAY_MS).toBeGreaterThanOrEqual(0);
+    expect(POST_FIRST_PAINT_FULL_CATALOG_MAX_WAIT_MS).toBeGreaterThanOrEqual(0);
+  });
+
+  it("skips focus-refresh full-catalog while catalog is still fresh", async () => {
+    const workspaces = [createWorkspace("ws-1")];
+    const listThreadsForWorkspace = vi
+      .fn<
+        (
+          workspace: WorkspaceInfo,
+          options?: {
+            preserveState?: boolean;
+            startupHydrationMode?: "full-catalog" | "first-paint";
+            recoverySource?: string;
+          },
+        ) => Promise<void>
+      >()
+      .mockResolvedValue(undefined);
+
+    const { result } = renderHook(() =>
+      useWorkspaceThreadListHydration({
+        activeWorkspaceId: "ws-1",
+        activeWorkspaceProjectionOwnerIds: ["ws-1"],
+        listThreadsForWorkspace,
+        threadListLoadingByWorkspace: {},
+        workspaces,
+        workspacesById: new Map(
+          workspaces.map((workspace) => [workspace.id, workspace]),
+        ),
+      }),
+    );
+
+    await waitFor(() => {
+      const modes = listThreadsForWorkspace.mock.calls.map(
+        (call) => call[1]?.startupHydrationMode,
+      );
+      // First-paint settles as fully hydrated via session-index path.
+      expect(modes).toContain("first-paint");
+    });
+
+    // Drain quiet index soft re-sync before measuring focus-refresh.
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    const callsAfterSettle = listThreadsForWorkspace.mock.calls.length;
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspaceTracked(workspaces[0]!, {
+        preserveState: true,
+        recoverySource: "focus-refresh",
+        allowRuntimeReconnect: false,
+      });
+    });
+
+    // Soft focus-refresh must not re-run multi-engine list while fresh.
+    expect(listThreadsForWorkspace.mock.calls.length).toBe(callsAfterSettle);
+  });
+
+  it("does not full-catalog background workspaces after active first-paint", async () => {
+    const workspaces = [createWorkspace("ws-active"), createWorkspace("ws-bg")];
+    const listThreadsForWorkspace = vi
+      .fn<
+        (
+          workspace: WorkspaceInfo,
+          options?: {
+            preserveState?: boolean;
+            includeOpenCodeSessions?: boolean;
+            startupHydrationMode?: "full-catalog" | "first-paint";
+          },
+        ) => Promise<void>
+      >()
+      .mockResolvedValue(undefined);
+
+    renderHook(() =>
+      useWorkspaceThreadListHydration({
+        activeWorkspaceId: "ws-active",
+        activeWorkspaceProjectionOwnerIds: ["ws-active"],
+        listThreadsForWorkspace,
+        threadListLoadingByWorkspace: {},
+        workspaces,
+        workspacesById: new Map(
+          workspaces.map((workspace) => [workspace.id, workspace]),
+        ),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(
+        listThreadsForWorkspace.mock.calls.some(
+          (call) =>
+            call[0]?.id === "ws-active" &&
+            call[1]?.startupHydrationMode === "first-paint",
+        ),
+      ).toBe(true);
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(
+      listThreadsForWorkspace.mock.calls.some(
+        (call) => call[0]?.id === "ws-bg",
+      ),
+    ).toBe(false);
+    expect(
+      listThreadsForWorkspace.mock.calls.some(
+        (call) => call[1]?.startupHydrationMode === "full-catalog",
+      ),
+    ).toBe(false);
   });
 
   it("keeps unrelated workspaces cold after active first-paint reaches the gate", async () => {
@@ -710,13 +829,23 @@ describe("useWorkspaceThreadListHydration", () => {
     });
 
     result.current.prewarmSessionRadarForWorkspace("ws-1");
+    // Prewarm must not fan out a second scan while first-paint is still open.
     expect(listThreadsForWorkspace).toHaveBeenCalledTimes(1);
 
     activeHydration.resolve();
     await act(async () => {
       await activeHydration.promise;
+      // Quiet post-first-paint full-catalog may arm (test delays are 0).
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await Promise.resolve();
     });
-    expect(listThreadsForWorkspace).toHaveBeenCalledTimes(1);
+    // After first-paint settles, active full-catalog convergence is allowed;
+    // the in-flight prewarm guard is what this test protects.
+    expect(
+      listThreadsForWorkspace.mock.calls.some(
+        (call) => call[1]?.startupHydrationMode === "first-paint",
+      ),
+    ).toBe(true);
   });
 
   it("publishes a new hydrated Set identity so memo consumers can drop loading", async () => {

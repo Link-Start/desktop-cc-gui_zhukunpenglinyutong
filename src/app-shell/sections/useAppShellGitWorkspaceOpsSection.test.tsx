@@ -5,7 +5,7 @@ import type { GitBranchListItem, GitRepositorySummary, WorkspaceInfo } from "../
 import { useGitBranches } from "../../features/git/hooks/useGitBranches";
 import { useGitRepositories } from "../../features/git/hooks/useGitRepositories";
 import { useGitActions } from "../../features/git/hooks/useGitActions";
-import { pickWorkspacePath } from "../../services/tauri";
+import { pickWorkspacePath } from "../../services/tauri/filePickers";
 import { pushErrorToast } from "../../services/toasts";
 import { useAppShellGitWorkspaceOpsSection } from "./useAppShellGitWorkspaceOpsSection";
 
@@ -26,7 +26,7 @@ vi.mock("../../features/files/detachedFileExplorer", () => ({
   openOrFocusDetachedFileExplorer: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../../services/tauri", () => ({
+vi.mock("../../services/tauri/filePickers", () => ({
   pickWorkspacePath: vi.fn(),
 }));
 

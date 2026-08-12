@@ -48,7 +48,8 @@ status: active
 3. [`analysis/live-settle-assistant-tool-order-2026-08-04.md`](analysis/live-settle-assistant-tool-order-2026-08-04.md) — live settle 后结论文本落到工具前（Shared×Claude 已确认；跨 CLI 矩阵）
 4. [`plans/2026-08-01-conversation-canvas-scroll-ownership-architecture.md`](plans/2026-08-01-conversation-canvas-scroll-ownership-architecture.md)
 5. [`reference/conversation/conversation-curtain-contracts.md`](reference/conversation/conversation-curtain-contracts.md)
-6. 历史单引擎链路见 [`archive/conversation-rendering/README.md`](archive/conversation-rendering/README.md)
+6. [`reference/conversation/user-input-elicitation-capability-matrix.md`](reference/conversation/user-input-elicitation-capability-matrix.md) — AskUserQuestion / requestUserInput 能力矩阵 + **单 UI 入口**（Claude/Codex/未适配引擎）
+7. 历史单引擎链路见 [`archive/conversation-rendering/README.md`](archive/conversation-rendering/README.md)
 
 ### Provider、Shared Session 与多 CLI
 
