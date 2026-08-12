@@ -35,9 +35,11 @@
 | [`fix-shared-sidebar-hide-set-staleness`](fix-shared-sidebar-hide-set-staleness/proposal.md) | open | sidebar hide set | [proposal](fix-shared-sidebar-hide-set-staleness/proposal.md) · [tasks](fix-shared-sidebar-hide-set-staleness/tasks.md) |
 | [`fix-codex-collab-subagent-live-parity`](fix-codex-collab-subagent-live-parity/proposal.md) | implemented / need manual smoke | 代码已落地 + focused vitest/tsc 绿；待 Codex live wait 与其他 CLI 人工冒烟后 verify/archive | [proposal](fix-codex-collab-subagent-live-parity/proposal.md) · [design](fix-codex-collab-subagent-live-parity/design.md) · [tasks](fix-codex-collab-subagent-live-parity/tasks.md) · [specs](fix-codex-collab-subagent-live-parity/specs/) · [verification](fix-codex-collab-subagent-live-parity/verification.md) |
 | [`add-linux-native-menu-localization`](add-linux-native-menu-localization/proposal.md) | 4/5 | NOT READY archive — Linux non-default language native menu smoke（原 GTK 缺陷边界，未在本机验证） | [proposal](add-linux-native-menu-localization/proposal.md) · [design](add-linux-native-menu-localization/design.md) · [tasks](add-linux-native-menu-localization/tasks.md) · [specs](add-linux-native-menu-localization/specs/) · [verification](add-linux-native-menu-localization/verification.md) |
+| [`open-with-cross-platform-ux`](open-with-cross-platform-ux/proposal.md) | implemented / user accepted | 打开方式跨平台 UX：预设/Browse、懒探测、系统图标、顶栏开当前文件、底栏下拉修复；用户验收通过 | [proposal](open-with-cross-platform-ux/proposal.md) · [design](open-with-cross-platform-ux/design.md) · [tasks](open-with-cross-platform-ux/tasks.md) · [specs](open-with-cross-platform-ux/specs/) · [原型](../../docs/prototypes/open-with-redesign-v1.html) |
 
 ## Active backlog notes（2026-08-08）
 
+- **新增** `open-with-cross-platform-ux`（2026-08-12）：设置「打开方式」跨平台 UX；预设网格 + Browse + 懒 probe；P0/P1 已实现，待手测 Win/mac。
 - **新增** `fix-shared-history-projection-nonblocking`（2026-08-12）：社区 Shared 打开卡 58% projection +「解锁仍久」体感；V0 first-paint / projection 非阻塞；与 `fix-shared-session-recovery-exit-closure` 正交。
 - **已归档** `add-local-html-open-in-builtin-browser` → `archive/2026-08-08-add-local-html-open-in-builtin-browser`：本地 HTML 内置 Browser Agent；三入口 + 全局 toast i18n；main specs 已同步。
 - **已提交** `add-windows-sidebar-quick-switcher-and-collapse`：Win 侧栏补 Quick Switcher（Ctrl+E）与设置菜单「隐藏对话侧边栏」；mac titlebar 互斥；手测通过。

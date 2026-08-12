@@ -2101,6 +2101,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           worktreePath={
             options.isWorktreeWorkspace ? options.activeWorkspace.path : null
           }
+          activeFilePath={options.activeComposerFilePath}
           openTargets={options.openAppTargets}
           openAppIconById={options.openAppIconById}
           selectedOpenAppId={options.selectedOpenAppId}
@@ -2133,6 +2134,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       options.activeWorkspace,
       options.activeParentWorkspace?.name,
       options.isWorktreeWorkspace,
+      options.activeComposerFilePath,
       options.openAppTargets,
       options.openAppIconById,
       options.selectedOpenAppId,

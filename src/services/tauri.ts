@@ -450,7 +450,11 @@ export type {
   GeminiVendorSettings,
   VendorModelListResult,
 } from "./tauri/vendors";
-export type { WorktreeSetupStatus } from "./tauri/workspaceRuntime";
+export type {
+  OpenAppPresetProbeResult,
+  OpenAppTargetProbeResult,
+  WorktreeSetupStatus,
+} from "./tauri/workspaceRuntime";
 export {
   addClone,
   addWorkspace,
@@ -462,6 +466,8 @@ export {
   ensureWorkspacePathDir,
   exportDiagnosticsBundle,
   getOpenAppIcon,
+  probeOpenAppPresets,
+  probeOpenAppTarget,
   getRuntimePoolSnapshot,
   getWorktreeSetupStatus,
   isWorkspacePathDir,

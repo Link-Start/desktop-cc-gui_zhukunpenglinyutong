@@ -1298,19 +1298,34 @@ export function SettingsView({
     void handleCommitOpenApps(next, nextSelected);
   };
 
-  const handleAddOpenApp = () => {
+  const handleAddOpenApp = (initial?: Partial<OpenAppDraft>): string => {
+    const kind = initial?.kind ?? "app";
+    const preferredId = initial?.id?.trim();
+    const id =
+      preferredId && !openAppDrafts.some((item) => item.id === preferredId)
+        ? preferredId
+        : createOpenAppId();
     const newTarget: OpenAppDraft = {
-      id: createOpenAppId(),
-      label: t("settings.newApp"),
-      kind: "app",
-      appName: "",
-      command: null,
-      args: [],
-      argsText: "",
+      id,
+      label: initial?.label?.trim() || t("settings.newApp"),
+      kind,
+      appName:
+        kind === "app"
+          ? (initial?.appName ?? "")
+          : kind === "finder"
+            ? null
+            : (initial?.appName ?? null),
+      command:
+        kind === "command"
+          ? (initial?.command ?? "")
+          : (initial?.command ?? null),
+      args: initial?.args ?? [],
+      argsText: initial?.argsText ?? "",
     };
     const next = [...openAppDrafts, newTarget];
     setOpenAppDrafts(next);
     void handleCommitOpenApps(next, newTarget.id);
+    return newTarget.id;
   };
 
   const handleSelectOpenAppDefault = (id: string) => {

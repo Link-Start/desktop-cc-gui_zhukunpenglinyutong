@@ -288,6 +288,8 @@ pub(crate) fn invoke_handler(
         crate::workspaces::configure_detached_external_change_monitor,
         crate::workspaces::clear_detached_external_change_monitor,
         crate::workspaces::get_open_app_icon,
+        crate::workspaces::probe_open_app_presets,
+        crate::workspaces::probe_open_app_target,
         // Git
         crate::git::get_git_status,
         crate::git::list_git_roots,
