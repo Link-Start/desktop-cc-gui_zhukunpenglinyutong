@@ -184,6 +184,17 @@ export {
   renameWorkspaceSessionFolder,
   unarchiveWorkspaceSessions,
 } from "./tauri/sessionManagement";
+export type {
+  SessionIndexEngine,
+  SessionIndexListPage,
+  SessionIndexRow,
+  SessionIndexSyncReport,
+} from "./tauri/sessionIndex";
+export {
+  invalidateSessionIndexForWorkspace,
+  listSessionIndexForWorkspace,
+  syncSessionIndexForWorkspace,
+} from "./tauri/sessionIndex";
 export type { CodexRuntimeReloadResult, DockIconApplyResult, SettingsRecoveryNotice } from "./tauri/settings";
 export { getAppSettings, getCodexConfigPath, getCodexUnifiedExecExternalStatus, reloadCodexRuntimeConfig, restoreCodexUnifiedExecOfficialDefault, setCodexUnifiedExecOfficialOverride, setDockIcon, takeSettingsRecoveryNotice, updateAppSettings } from "./tauri/settings";
 export type {

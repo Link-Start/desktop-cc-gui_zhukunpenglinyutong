@@ -165,6 +165,7 @@ mod renderer_stability;
 mod rules;
 mod runtime;
 mod runtime_log;
+mod session_index;
 mod session_management;
 mod settings;
 mod shared;

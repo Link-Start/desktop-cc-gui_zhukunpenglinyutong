@@ -71,6 +71,7 @@ import {
 } from "./useThreadActions.threadList";
 import { type UseThreadActionsOptions } from "./useThreadActions.types";
 import type { HistoryLoadingProgress } from "../utils/historyLoadingProgress";
+import { dispatchThreadItemsProgressively } from "../utils/dispatchThreadItemsProgressively";
 
 export type ResumeThreadForWorkspaceOptions = {
   preferLocalCodexHistory?: boolean;
@@ -456,11 +457,17 @@ export function useThreadActionsResumeThreadForWorkspace(
             return false;
           }
           setThreadHistoryRecoveryFailed(effectiveThreadId, false);
-          dispatch({
-            type: "setThreadItems",
-            threadId: effectiveThreadId,
-            items: snapshotItems,
-          });
+          // Large tool-heavy histories: progressive setThreadItems so the first
+          // paint is not one multi-thousand-item main-thread commit.
+          await dispatchThreadItemsProgressively(
+            dispatch,
+            effectiveThreadId,
+            snapshotItems,
+            { shouldContinue: () => isCurrentResumeRequest() },
+          );
+          if (!isCurrentResumeRequest()) {
+            return false;
+          }
           dispatch({
             type: "setThreadPlan",
             threadId: effectiveThreadId,
@@ -1141,7 +1148,15 @@ export function useThreadActionsResumeThreadForWorkspace(
             });
             if (items.length > 0) {
               setThreadHistoryRecoveryFailed(threadId, false);
-              dispatch({ type: "setThreadItems", threadId, items });
+              await dispatchThreadItemsProgressively(
+                dispatch,
+                threadId,
+                items,
+                { shouldContinue: () => isCurrentResumeRequest() },
+              );
+              if (!isCurrentResumeRequest()) {
+                return threadId;
+              }
               onDebug?.(
                 createThreadHistoryReadableSurfaceDebugEntry({
                   workspaceId,
@@ -1263,7 +1278,15 @@ export function useThreadActionsResumeThreadForWorkspace(
             const items = parseGeminiHistoryMessages(messagesData);
             if (items.length > 0) {
               setThreadHistoryRecoveryFailed(threadId, false);
-              dispatch({ type: "setThreadItems", threadId, items });
+              await dispatchThreadItemsProgressively(
+                dispatch,
+                threadId,
+                items,
+                { shouldContinue: () => isCurrentResumeRequest() },
+              );
+              if (!isCurrentResumeRequest()) {
+                return threadId;
+              }
             } else {
               markHistoryRecoveryFailure(
                 threadId,
@@ -1310,7 +1333,7 @@ export function useThreadActionsResumeThreadForWorkspace(
               (result as { messages?: unknown }).messages ?? result;
             const items = parseGrokHistoryMessages(messagesData);
             if (items.length > 0) {
-              dispatch({ type: "setThreadItems", threadId, items });
+              await dispatchThreadItemsProgressively(dispatch, threadId, items);
             }
             dispatch({
               type: "setThreadHistoryRestoredAt",
@@ -1342,7 +1365,7 @@ export function useThreadActionsResumeThreadForWorkspace(
               (result as { messages?: unknown }).messages ?? result;
             const items = parseKimiHistoryMessages(messagesData);
             if (items.length > 0) {
-              dispatch({ type: "setThreadItems", threadId, items });
+              await dispatchThreadItemsProgressively(dispatch, threadId, items);
             }
             dispatch({
               type: "setThreadHistoryRestoredAt",
@@ -1452,11 +1475,15 @@ export function useThreadActionsResumeThreadForWorkspace(
               : localItems;
           if (mergedItems.length > 0) {
             setThreadHistoryRecoveryFailed(threadId, false);
-            dispatch({
-              type: "setThreadItems",
+            await dispatchThreadItemsProgressively(
+              dispatch,
               threadId,
-              items: mergedItems,
-            });
+              mergedItems,
+              { shouldContinue: () => isCurrentResumeRequest() },
+            );
+            if (!isCurrentResumeRequest()) {
+              return threadId;
+            }
           } else {
             markHistoryRecoveryFailure(
               threadId,

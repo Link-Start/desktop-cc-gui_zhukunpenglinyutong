@@ -84,6 +84,8 @@ type ListThreadsForWorkspace = (
      * full-catalog while the catalog is still fresh after a successful settle.
      */
     recoverySource?: string;
+    /** Quiet post-first-paint index re-scan (writers), not cold first paint. */
+    forceSessionIndexSync?: boolean;
     /** When true mid-flight, list apply must no-op (workspace cancelled/switched). */
     isStale?: () => boolean;
   },
@@ -127,9 +129,15 @@ const IS_VITEST =
  * overlap hit-test (field repro).
  * @internal exported for tests
  */
-export const COLD_START_IDLE_MIN_DELAY_MS = IS_VITEST ? 0 : 1_500;
+/**
+ * Cold start used to wait 1.5s before any list work so clicks wouldn't race
+ * setThreads. That left stale sidebarSnapshot visible far too long.
+ * Session Index early-paint is cheap; start almost immediately when we already
+ * have a cached list that needs correcting.
+ */
+export const COLD_START_IDLE_MIN_DELAY_MS = IS_VITEST ? 0 : 120;
 /** Must stay quiet this long before auto first-paint may start. */
-export const COLD_START_INPUT_QUIET_MS = IS_VITEST ? 0 : 1_000;
+export const COLD_START_INPUT_QUIET_MS = IS_VITEST ? 0 : 80;
 /** Absolute ceiling so list still converges if the user never stops clicking. */
 export const COLD_START_IDLE_TIMEOUT_MS = IS_VITEST ? 0 : 15_000;
 /**
@@ -355,9 +363,9 @@ export function useWorkspaceThreadListHydration({
   }, []);
 
   /**
-   * Quiet-gated multi-engine full-catalog for the active workspace after
-   * first-paint (or force-enter). Prevents sidebar from remaining on stale
-   * sidebarSnapshot / Codex-only first-paint forever.
+   * Quiet soft re-sync of Session Index after first-paint (NOT exhaustive
+   * full-catalog). Picks up CLI-created sessions for Gemini/Grok/OpenCode
+   * without multi-GB inventory. Force refresh still uses full-catalog.
    */
   const schedulePostFirstPaintFullCatalog = useCallback(
     (workspaceId: string, options?: { allowRepeat?: boolean }) => {
@@ -369,12 +377,6 @@ export function useWorkspaceThreadListHydration({
         !options?.allowRepeat &&
         postFirstPaintFullCatalogArmedIdsRef.current.has(id)
       ) {
-        return;
-      }
-      if (fullyHydratedThreadListWorkspaceIdsRef.current.has(id)) {
-        return;
-      }
-      if (isFullCatalogAutoRetryBlocked(id)) {
         return;
       }
 
@@ -392,32 +394,30 @@ export function useWorkspaceThreadListHydration({
         pendingPostFirstPaintFullCatalogCleanupRef.current = null;
       };
 
-      const runFullCatalog = () => {
+      const runIndexSoftRefresh = () => {
         detachSchedule();
         if (activeWorkspaceIdRef.current !== id) {
           return;
         }
-        if (fullyHydratedThreadListWorkspaceIdsRef.current.has(id)) {
+        // Soft path: first-paint again with preserveState so Session Index can
+        // re-sync (fingerprint window / force) without OpenCode full fan-out.
+        const workspace = workspacesById.get(id);
+        if (!workspace) {
           return;
         }
-        if (isFullCatalogAutoRetryBlocked(id)) {
-          return;
-        }
-        // After force-enter, non-force auto full-catalog is blocked for the
-        // session; use force so multi-engine list still converges once quiet.
-        const force = isStartupForceEntered();
-        ensureWorkspaceThreadListLoadedRef.current?.(id, {
+        void listThreadsForWorkspace(workspace, {
           preserveState: true,
-          force,
+          startupHydrationMode: "first-paint",
+          allowRuntimeReconnect: false,
+          forceSessionIndexSync: true,
         });
       };
 
-      const quietCleanup = scheduleWhenInteractiveQuiet(runFullCatalog, {
+      const quietCleanup = scheduleWhenInteractiveQuiet(runIndexSoftRefresh, {
         quietMs: POST_FIRST_PAINT_FULL_CATALOG_QUIET_MS,
         minDelayMs: POST_FIRST_PAINT_FULL_CATALOG_MIN_DELAY_MS,
         maxWaitMs: POST_FIRST_PAINT_FULL_CATALOG_MAX_WAIT_MS,
       });
-      // Force-enter / gate dismiss cancels pending idle full-catalog schedules.
       unregisterForceCancel = registerStartupIdleHydrationCancel(() => {
         quietCleanup();
         detachSchedule();
@@ -428,7 +428,7 @@ export function useWorkspaceThreadListHydration({
       };
       pendingPostFirstPaintFullCatalogCleanupRef.current = combinedCleanup;
     },
-    [cancelPendingPostFirstPaintFullCatalog],
+    [cancelPendingPostFirstPaintFullCatalog, listThreadsForWorkspace, workspacesById],
   );
 
   const listThreadsForWorkspaceTracked = useCallback<ListThreadsForWorkspace>(
@@ -544,8 +544,15 @@ export function useWorkspaceThreadListHydration({
           } else if (isStillActive) {
             // Only active first-paint opens the click gate (not a side workspace).
             stampStartupGateReady("first-paint-complete");
-            // Converge multi-engine list after quiet; first-paint intentionally
-            // skipped project catalog / Claude disk / other engines.
+            // Session Index seeds multi-engine rows. Mark settled for soft
+            // focus-refresh, then quiet-schedule one index soft re-sync so
+            // CLI-created Gemini/Grok/OpenCode sessions appear without
+            // exhaustive full-catalog.
+            publishHydratedWorkspaceId(
+              fullyHydratedThreadListWorkspaceIdsRef,
+              workspace.id,
+            );
+            markFullCatalogFresh(workspace.id);
             schedulePostFirstPaintFullCatalog(workspace.id);
           }
           publishHydrationUiState(

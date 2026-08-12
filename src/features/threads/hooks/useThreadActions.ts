@@ -10,7 +10,11 @@ import {
   listGrokSessions as listGrokSessionsService,
   listKimiSessions as listKimiSessionsService,
   getOpenCodeSessionList as getOpenCodeSessionListService,
+  listSessionIndexForWorkspace as listSessionIndexForWorkspaceService,
 } from "../../../services/tauri";
+import {
+  sessionIndexRowsToThreadSummaries,
+} from "./sessionIndexThreadSummaries";
 import * as tauriServices from "../../../services/tauri";
 import {
   getThreadTimestamp,
@@ -322,6 +326,11 @@ export function useThreadActions({
         recoverySource?: AutomaticRuntimeRecoverySource;
         allowRuntimeReconnect?: boolean;
         startupHydrationMode?: StartupThreadHydrationMode;
+        /**
+         * Force Session Index writers to rescan (quiet soft re-sync after
+         * first-paint). Default false so warm SQLite answers in ms.
+         */
+        forceSessionIndexSync?: boolean;
         /** Orchestrator cancel/stale flag — skip late setThreads after soft-ignore cancel. */
         isStale?: () => boolean;
       },
@@ -429,15 +438,100 @@ export function useThreadActions({
             return abandoned;
           }
         }
+        // Session Index: list-level multi-engine source (SQLite).
+        // CRITICAL UX: on first-paint, await index FIRST and paint immediately.
+        // Do NOT wait for titles/shared/codex live list — that left the sidebar
+        // stuck on stale sidebarSnapshot for seconds (user: old list → late correct).
+        const sessionIndexLimit = Math.max(
+          resolveInitialThreadListTargetCount(workspace) * 4,
+          50,
+        );
+        // Only explicit soft re-sync forces writers; cold first-paint must hit
+        // warm SQLite (ms) so stale sidebarSnapshot is replaced immediately.
+        const forceIndexSync = Boolean(options?.forceSessionIndexSync);
+        const sessionIndexTimeoutMs = isFirstPaintHydration
+          ? forceIndexSync
+            ? 6_000
+            : 2_500
+          : NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS;
+        let sessionIndexPage: Awaited<
+          ReturnType<typeof listSessionIndexForWorkspaceService>
+        > | null = null;
+        if (typeof listSessionIndexForWorkspaceService === "function") {
+          sessionIndexPage = await withTimeout(
+            listSessionIndexForWorkspaceService(workspace.id, {
+              limit: sessionIndexLimit,
+              // Warm SQLite should answer without rescan; force only soft re-sync.
+              syncIfNeeded: true,
+              forceSync: forceIndexSync,
+            })
+              .then((page) => page ?? null)
+              .catch(() => null),
+            sessionIndexTimeoutMs,
+          );
+        }
+        {
+          const abandoned = abandonIfStale();
+          if (abandoned) {
+            return abandoned;
+          }
+        }
+        // Progressive paint: replace stale snapshot ASAP with index rows.
+        // Urgent dispatch (not startTransition) so WebView paints before heavy work.
+        let earlyIndexPaintApplied = false;
+        if (
+          isFirstPaintHydration &&
+          sessionIndexPage &&
+          Array.isArray(sessionIndexPage.data) &&
+          sessionIndexPage.data.length > 0
+        ) {
+          const earlyIndexSummaries = sessionIndexRowsToThreadSummaries(
+            sessionIndexPage.data,
+            {
+              workspaceId: workspace.id,
+              mappedTitles: {},
+              getCustomName,
+              hiddenSharedBindingIds: new Set(),
+            },
+          );
+          if (earlyIndexSummaries.length > 0 && isLatestThreadListRequest()) {
+            dispatch({
+              type: "setThreads",
+              workspaceId: workspace.id,
+              threads: earlyIndexSummaries,
+            });
+            earlyIndexPaintApplied = true;
+            appliedThreadListUpdate = true;
+            onDebug?.({
+              id: `${Date.now()}-client-session-index-early-paint`,
+              timestamp: Date.now(),
+              source: "client",
+              label: "thread/list session-index early-paint",
+              payload: {
+                workspaceId: workspace.id,
+                rowCount: earlyIndexSummaries.length,
+                source: sessionIndexPage.source,
+                syncMs: sessionIndexPage.syncMs ?? null,
+                engines: sessionIndexPage.engines,
+              },
+            });
+          }
+        } else if (sessionIndexPage === null) {
+          rememberPartialSource("session-index-timeout");
+        }
+
         let mappedTitles: Record<string, string> = {};
         try {
           // Titles/shared must not hang the whole list path forever: orchestrator
           // timeout alone still leaves this promise running under soft-ignore.
+          // Prefer shorter title timeout after early index paint.
           const titlesResult = await withTimeout(
             // Coerce null→{} before the race so withTimeout's null strictly
             // means "timed out" (invoke may legitimately resolve null).
             listThreadTitlesService(workspace.id).then((value) => value ?? {}),
-            NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS,
+            earlyIndexPaintApplied
+              ? Math.min(NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS, 4_000)
+              : NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS,
           );
           if (titlesResult === null) {
             mappedTitles = {};
@@ -846,6 +940,70 @@ export function useThreadActions({
           workspace.id,
         );
         const nativeSessionListLimit = resolveNativeSessionListLimit(workspace);
+
+        // Merge Session Index into live codex page (titles now available).
+        // Early paint already showed index; this enrich names + keep live identity.
+        {
+          const abandoned = abandonIfStale();
+          if (abandoned) {
+            return abandoned;
+          }
+        }
+        if (sessionIndexPage) {
+          rememberPartialSource(sessionIndexPage.partialSource);
+          const indexSummaries = sessionIndexRowsToThreadSummaries(
+            sessionIndexPage.data ?? [],
+            {
+              workspaceId: workspace.id,
+              mappedTitles,
+              getCustomName,
+              hiddenSharedBindingIds,
+            },
+          );
+          // Index is list authority for first-paint multi-engine membership:
+          // seed missing engines and prefer newer timestamps.
+          indexSummaries.forEach((summary) => {
+            const prev = mergedById.get(summary.id);
+            if (!prev) {
+              mergedById.set(summary.id, summary);
+              return;
+            }
+            if (summary.updatedAt >= prev.updatedAt) {
+              mergedById.set(summary.id, {
+                ...summary,
+                name:
+                  mappedTitles[summary.id] ||
+                  getCustomName(workspace.id, summary.id) ||
+                  prev.name ||
+                  summary.name,
+                folderId: prev.folderId ?? summary.folderId,
+                autoSession: prev.autoSession ?? summary.autoSession,
+                providerProfileId:
+                  prev.providerProfileId ?? summary.providerProfileId,
+                parentThreadId: prev.parentThreadId ?? summary.parentThreadId,
+              });
+            }
+          });
+          if (!earlyIndexPaintApplied) {
+            onDebug?.({
+              id: `${Date.now()}-client-session-index`,
+              timestamp: Date.now(),
+              source: "client",
+              label: "thread/list session-index",
+              payload: {
+                workspaceId: workspace.id,
+                source: sessionIndexPage.source,
+                synced: sessionIndexPage.synced,
+                syncMs: sessionIndexPage.syncMs,
+                rowCount: sessionIndexPage.data?.length ?? 0,
+                engines: sessionIndexPage.engines,
+                partialSource: sessionIndexPage.partialSource ?? null,
+                firstPaint: isFirstPaintHydration,
+              },
+            });
+          }
+        }
+
         // Yield so clicks queued during codex paging can run before catalog.
         // Must abandon BEFORE starting multi-engine fan-out (soft-ignore cancel).
         await new Promise<void>((resolve) => {
@@ -867,8 +1025,8 @@ export function useThreadActions({
               [] as Awaited<ReturnType<typeof getOpenCodeSessionListService>>,
             );
         // Cold-start first-paint: skip multi-engine project catalog + Claude
-        // disk seed. That path is the multi-second main-thread/IPC freeze window
-        // (list_workspace_sessions walks every engine). Full-catalog runs idle.
+        // disk seed. Session Index already seeded Claude/Codex/Kimi above.
+        // Full catalog remains for Session Management / explicit force refresh.
         const projectCatalogSessionsPromise =
           !isFirstPaintHydration && canListWorkspaceSessions
             ? loadActiveProjectCatalogSessions(
@@ -1505,8 +1663,10 @@ export function useThreadActions({
             timestamp: getThreadTimestamp(thread) ?? Date.now(),
           });
         });
-        // Background lane: clicks stay urgent.
-        startTransition(() => {
+        // After early index paint, final setThreads must still land promptly so
+        // titles/shared/live codex enrichments show. Prefer urgent dispatch on
+        // first-paint (user already waited for stale snapshot to clear).
+        const applyFinalThreadList = () => {
           if (!isLatestThreadListRequest()) {
             return;
           }
@@ -1528,7 +1688,14 @@ export function useThreadActions({
               timestamp: entry.timestamp,
             });
           });
-        });
+        };
+        if (isFirstPaintHydration || earlyIndexPaintApplied) {
+          applyFinalThreadList();
+        } else {
+          startTransition(() => {
+            applyFinalThreadList();
+          });
+        }
         appliedThreadListUpdate = true;
         if (hasHealthyThreadSummaries(visibleSummaries)) {
           latestThreadsByWorkspaceRef.current = {

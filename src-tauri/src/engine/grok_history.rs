@@ -25,16 +25,41 @@
 //!   `summary.json`'s `updated_at`. Grok CLI may bulk-rewrite summary metadata
 //!   (including `updated_at`) without new conversation activity; trusting the
 //!   summary stamp alone makes every row look like "刚刚".
+//!
+//! Performance (list / load):
+//! - Sidebar list streams `chat_history.jsonl` with `BufReader` and stops at the
+//!   first real user prompt (or uses `summary.json` title fallback). It never
+//!   loads whole multi-MB histories just for a row title.
+//! - Session load streams line-by-line, redacts large string fields
+//!   (`encrypted_content`, image `url` / `data`, oversized `text`/`content`),
+//!   and applies tool-output budgets before returning to the UI.
+//! - Session lookup prefers O(1) `sessions/<urlencode(cwd-variant)>/<id>/`
+//!   candidates, falling back to a workspace-filtered directory scan only when
+//!   the direct path is missing.
 
 use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::borrow::Cow;
+use std::io::{BufRead, BufReader as StdBufReader};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::fs;
+use tokio::io::{AsyncBufReadExt, BufReader as AsyncBufReader};
 use tokio::time::timeout;
 
 const LOCAL_SESSION_SCAN_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Lines at or below this size are parsed as-is (still may strip heavy keys).
+const GROK_LARGE_LINE_BYTE_BUDGET: usize = 512 * 1024;
+/// Max bytes kept for individual heavy JSON string fields before parse.
+const GROK_STRING_FIELD_BYTE_BUDGET: usize = 16 * 1024;
+/// Soft budget for free-form text/content fields on large lines.
+const GROK_TEXT_FIELD_BYTE_BUDGET: usize = 64 * 1024;
+/// Tool result / tool input text returned to the renderer.
+const GROK_TOOL_OUTPUT_CHAR_BUDGET: usize = 48 * 1024;
+const GROK_TOOL_INPUT_JSON_BYTE_BUDGET: usize = 32 * 1024;
+const GROK_OMITTED_PAYLOAD_SENTINEL: &str = "__ccgui_omitted_large_grok_payload__";
 
 fn normalize_session_id(session_id: &str) -> Result<String, String> {
     let normalized = session_id.trim();
@@ -294,6 +319,350 @@ fn url_decode_dir_name(encoded: &str) -> String {
         index += 1;
     }
     String::from_utf8_lossy(&decoded).to_string()
+}
+
+/// Percent-encode a cwd path the way Grok CLI names `sessions/<dir>`
+/// (UTF-8 bytes; unreserved characters stay literal; others → `%XX`).
+fn url_encode_dir_name(path: &str) -> String {
+    let mut encoded = String::with_capacity(path.len().saturating_mul(3));
+    for &byte in path.as_bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded.push(byte as char);
+            }
+            _ => {
+                use std::fmt::Write as _;
+                let _ = write!(encoded, "%{:02X}", byte);
+            }
+        }
+    }
+    encoded
+}
+
+fn candidate_encoded_cwd_names(workspace_path: &Path) -> Vec<String> {
+    let mut names: Vec<String> = build_workspace_path_variants(workspace_path)
+        .into_iter()
+        .map(|variant| url_encode_dir_name(&variant))
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
+fn session_dir_looks_valid(session_dir: &Path) -> bool {
+    session_dir.is_dir()
+        && (session_dir.join("chat_history.jsonl").is_file()
+            || session_dir.join("summary.json").is_file())
+}
+
+fn find_json_string_end(input: &str, value_start: usize) -> Option<usize> {
+    let bytes = input.as_bytes();
+    let mut cursor = value_start;
+    let mut escaped = false;
+    while cursor < bytes.len() {
+        let byte = bytes[cursor];
+        if escaped {
+            escaped = false;
+        } else if byte == b'\\' {
+            escaped = true;
+        } else if byte == b'"' {
+            return Some(cursor);
+        }
+        cursor += 1;
+    }
+    None
+}
+
+/// Redact oversized JSON string values for a target key before `serde_json` parse.
+/// Mirrors Claude history large-payload handling so multi-MB image / encrypted
+/// blobs never enter the Value tree.
+fn redact_json_string_field_values(
+    input: &str,
+    target_key: &str,
+    value_byte_budget: usize,
+    replacement: &str,
+) -> String {
+    let mut output = String::with_capacity(input.len().min(GROK_LARGE_LINE_BYTE_BUDGET));
+    let mut index = 0;
+    let key_pattern = format!("\"{}\"", target_key);
+
+    while let Some(relative_key_start) = input[index..].find(&key_pattern) {
+        let key_start = index + relative_key_start;
+        output.push_str(&input[index..key_start + key_pattern.len()]);
+        let mut cursor = key_start + key_pattern.len();
+
+        while let Some(byte) = input.as_bytes().get(cursor) {
+            if byte.is_ascii_whitespace() {
+                output.push(*byte as char);
+                cursor += 1;
+                continue;
+            }
+            break;
+        }
+
+        if input.as_bytes().get(cursor) != Some(&b':') {
+            index = cursor;
+            continue;
+        }
+        output.push(':');
+        cursor += 1;
+
+        while let Some(byte) = input.as_bytes().get(cursor) {
+            if byte.is_ascii_whitespace() {
+                output.push(*byte as char);
+                cursor += 1;
+                continue;
+            }
+            break;
+        }
+
+        if input.as_bytes().get(cursor) != Some(&b'"') {
+            index = cursor;
+            continue;
+        }
+
+        let value_start = cursor + 1;
+        let Some(value_end) = find_json_string_end(input, value_start) else {
+            index = cursor;
+            continue;
+        };
+        let value = &input[value_start..value_end];
+        if value.len() > value_byte_budget {
+            output.push('"');
+            output.push_str(replacement);
+            output.push('"');
+        } else {
+            output.push_str(&input[cursor..=value_end]);
+        }
+        index = value_end + 1;
+    }
+
+    output.push_str(&input[index..]);
+    output
+}
+
+fn blank_json_array_field(input: &str, target_key: &str) -> String {
+    let key_pattern = format!("\"{}\"", target_key);
+    let Some(key_start) = input.find(&key_pattern) else {
+        return input.to_string();
+    };
+    let mut cursor = key_start + key_pattern.len();
+    let bytes = input.as_bytes();
+    while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
+        cursor += 1;
+    }
+    if bytes.get(cursor) != Some(&b':') {
+        return input.to_string();
+    }
+    cursor += 1;
+    while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
+        cursor += 1;
+    }
+    if bytes.get(cursor) != Some(&b'[') {
+        return input.to_string();
+    }
+    let array_start = cursor;
+    let mut depth = 0i32;
+    let mut in_string = false;
+    let mut escaped = false;
+    while cursor < bytes.len() {
+        let byte = bytes[cursor];
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                in_string = false;
+            }
+        } else {
+            match byte {
+                b'"' => in_string = true,
+                b'[' => depth += 1,
+                b']' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        let mut out =
+                            String::with_capacity(input.len().saturating_sub(cursor - array_start));
+                        out.push_str(&input[..array_start]);
+                        out.push_str("[]");
+                        out.push_str(&input[cursor + 1..]);
+                        return out;
+                    }
+                }
+                _ => {}
+            }
+        }
+        cursor += 1;
+    }
+    input.to_string()
+}
+
+/// Prepare a JSONL line for parse: strip / budget heavy payloads the UI never needs.
+fn prepare_grok_history_line_for_parse(line: &str) -> Cow<'_, str> {
+    let has_heavy_keys = line.contains("encrypted_content")
+        || line.contains("\"images\"")
+        || line.contains("data:image")
+        || line.len() > GROK_LARGE_LINE_BYTE_BUDGET;
+    if !has_heavy_keys {
+        return Cow::Borrowed(line);
+    }
+
+    let mut prepared = line.to_string();
+    if prepared.contains("\"images\"") {
+        prepared = blank_json_array_field(&prepared, "images");
+    }
+    prepared = redact_json_string_field_values(
+        &prepared,
+        "encrypted_content",
+        GROK_STRING_FIELD_BYTE_BUDGET,
+        GROK_OMITTED_PAYLOAD_SENTINEL,
+    );
+    prepared = redact_json_string_field_values(
+        &prepared,
+        "url",
+        GROK_STRING_FIELD_BYTE_BUDGET,
+        GROK_OMITTED_PAYLOAD_SENTINEL,
+    );
+    prepared = redact_json_string_field_values(
+        &prepared,
+        "data",
+        GROK_STRING_FIELD_BYTE_BUDGET,
+        GROK_OMITTED_PAYLOAD_SENTINEL,
+    );
+    if prepared.len() > GROK_LARGE_LINE_BYTE_BUDGET || prepared.contains("data:image") {
+        prepared = redact_json_string_field_values(
+            &prepared,
+            "text",
+            GROK_TEXT_FIELD_BYTE_BUDGET,
+            GROK_OMITTED_PAYLOAD_SENTINEL,
+        );
+        prepared = redact_json_string_field_values(
+            &prepared,
+            "content",
+            GROK_TEXT_FIELD_BYTE_BUDGET,
+            GROK_OMITTED_PAYLOAD_SENTINEL,
+        );
+        prepared = redact_json_string_field_values(
+            &prepared,
+            "arguments",
+            GROK_TOOL_INPUT_JSON_BYTE_BUDGET,
+            GROK_OMITTED_PAYLOAD_SENTINEL,
+        );
+    }
+    Cow::Owned(prepared)
+}
+
+fn strip_embedded_data_urls(text: &str) -> String {
+    if !text.contains("data:image") {
+        return text.to_string();
+    }
+    let mut out = String::with_capacity(text.len().min(GROK_TEXT_FIELD_BYTE_BUDGET));
+    let bytes = text.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if let Some(rel) = text[index..].find("data:image") {
+            let start = index + rel;
+            out.push_str(&text[index..start]);
+            out.push_str("[omitted-inline-image]");
+            // Skip until whitespace, quote, or end.
+            let mut cursor = start + "data:image".len();
+            while cursor < bytes.len() {
+                let b = bytes[cursor];
+                if b.is_ascii_whitespace() || b == b'"' || b == b'\'' || b == b')' || b == b']' {
+                    break;
+                }
+                cursor += 1;
+            }
+            index = cursor;
+        } else {
+            out.push_str(&text[index..]);
+            break;
+        }
+    }
+    out
+}
+
+fn budget_tool_text(text: &str) -> String {
+    if text.chars().count() <= GROK_TOOL_OUTPUT_CHAR_BUDGET {
+        return text.to_string();
+    }
+    let truncated: String = text.chars().take(GROK_TOOL_OUTPUT_CHAR_BUDGET).collect();
+    format!(
+        "{}\n\n…[truncated {} chars for history load]",
+        truncated,
+        text.chars().count().saturating_sub(GROK_TOOL_OUTPUT_CHAR_BUDGET)
+    )
+}
+
+fn budget_tool_input_value(value: Option<Value>) -> Option<Value> {
+    let Some(value) = value else {
+        return None;
+    };
+    match serde_json::to_string(&value) {
+        Ok(raw) if raw.len() <= GROK_TOOL_INPUT_JSON_BYTE_BUDGET => Some(value),
+        Ok(raw) => {
+            let truncated: String = raw.chars().take(GROK_TOOL_INPUT_JSON_BYTE_BUDGET).collect();
+            Some(Value::String(format!(
+                "{}…[truncated tool input]",
+                truncated
+            )))
+        }
+        Err(_) => Some(Value::String(GROK_OMITTED_PAYLOAD_SENTINEL.to_string())),
+    }
+}
+
+/// Unescape a fragment taken from inside a JSON string (raw JSONL bytes).
+fn unescape_json_string_fragment(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            out.push(ch);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => out.push('\n'),
+            Some('r') => out.push('\r'),
+            Some('t') => out.push('\t'),
+            Some('"') => out.push('"'),
+            Some('\\') => out.push('\\'),
+            Some('/') => out.push('/'),
+            Some('u') => {
+                let hex: String = chars.by_ref().take(4).collect();
+                if hex.len() == 4 {
+                    if let Ok(code) = u16::from_str_radix(&hex, 16) {
+                        if let Some(decoded) = char::from_u32(u32::from(code)) {
+                            out.push(decoded);
+                            continue;
+                        }
+                    }
+                }
+                out.push_str("\\u");
+                out.push_str(&hex);
+            }
+            Some(other) => {
+                out.push('\\');
+                out.push(other);
+            }
+            None => out.push('\\'),
+        }
+    }
+    out
+}
+
+fn extract_user_query_body_from_raw(line: &str) -> Option<String> {
+    let start = line.rfind("<user_query>")? + "<user_query>".len();
+    let rest = &line[start..];
+    let end = rest.find("</user_query>")?;
+    // Body is still JSON-escaped when taken from the raw line.
+    let body = unescape_json_string_fragment(&rest[..end]);
+    let body = body.trim();
+    if body.is_empty() {
+        None
+    } else {
+        Some(body.to_string())
+    }
 }
 
 fn extract_timestamp_text(value: &Value) -> Option<String> {
@@ -559,11 +928,15 @@ fn extract_grok_image_files_paths(text: &str) -> Vec<String> {
 }
 
 fn stringify_tool_result_content(content: Option<&Value>) -> String {
-    match content {
-        Some(Value::String(text)) => text.clone(),
-        Some(other) => serde_json::to_string(other).unwrap_or_default(),
+    let raw = match content {
+        Some(Value::String(text)) => strip_embedded_data_urls(text),
+        Some(other) => {
+            let text = serde_json::to_string(other).unwrap_or_default();
+            strip_embedded_data_urls(&text)
+        }
         None => String::new(),
-    }
+    };
+    budget_tool_text(&raw)
 }
 
 /// Live tool signal extracted from `chat_history.jsonl` (Grok stdout has no tool events).
@@ -645,7 +1018,8 @@ fn drain_new_tool_signals_from_chat_history_with_counter(
         if line.is_empty() {
             continue;
         }
-        let Ok(value) = serde_json::from_str::<Value>(line) else {
+        let prepared = prepare_grok_history_line_for_parse(line);
+        let Ok(value) = serde_json::from_str::<Value>(prepared.as_ref()) else {
             continue;
         };
         let line_type = value.get("type").and_then(|v| v.as_str()).unwrap_or("");
@@ -837,50 +1211,93 @@ fn resolve_tool_call_arguments(call: &Value) -> Option<Value> {
     Some(arguments.clone())
 }
 
-/// Parse `chat_history.jsonl` content into normalized messages.
-/// Grok history lines carry no usage data, so `usage` is always `None`.
-fn parse_messages_from_chat_history(raw: &str) -> GrokSessionLoadResult {
-    let mut messages: Vec<GrokSessionMessage> = Vec::new();
-    let mut counter = 0usize;
+/// Parse one prepared chat_history JSONL line into zero or more messages.
+fn append_messages_from_history_line(
+    line: &str,
+    messages: &mut Vec<GrokSessionMessage>,
+    counter: &mut usize,
+) {
+    let line = line.trim();
+    if line.is_empty() || !line.contains("\"type\"") {
+        return;
+    }
+    let prepared = prepare_grok_history_line_for_parse(line);
+    let Ok(value) = serde_json::from_str::<Value>(prepared.as_ref()) else {
+        return;
+    };
+    let line_type = value.get("type").and_then(|v| v.as_str()).unwrap_or("");
+    let timestamp = extract_timestamp_text(&value);
 
-    for line in raw.lines() {
-        let line = line.trim();
-        if line.is_empty() || !line.contains("\"type\"") {
-            continue;
+    match line_type {
+        "user" => {
+            // Synthetic reminders (`synthetic_reason`) are not user prompts.
+            if value.get("synthetic_reason").is_some() {
+                return;
+            }
+            let raw_text = strip_embedded_data_urls(&extract_content_text(value.get("content")));
+            // Grok also injects `<user_info>` / `<git_status>` as plain user
+            // lines without `synthetic_reason` — hide those from the UI.
+            if is_grok_runtime_context_user_text(&raw_text) {
+                return;
+            }
+            let (display_text, image_paths) = parse_grok_user_prompt_for_display(&raw_text);
+            if display_text.is_empty() && image_paths.is_empty() {
+                return;
+            }
+            *counter += 1;
+            messages.push(GrokSessionMessage {
+                id: format!("grok-user-{}", counter),
+                role: "user".to_string(),
+                text: display_text,
+                images: if image_paths.is_empty() {
+                    None
+                } else {
+                    Some(image_paths)
+                },
+                timestamp,
+                kind: "message".to_string(),
+                tool_type: None,
+                title: None,
+                tool_input: None,
+                tool_output: None,
+            });
         }
-        let Ok(value) = serde_json::from_str::<Value>(line) else {
-            continue;
-        };
-        let line_type = value.get("type").and_then(|v| v.as_str()).unwrap_or("");
-        let timestamp = extract_timestamp_text(&value);
-
-        match line_type {
-            "user" => {
-                // Synthetic reminders (`synthetic_reason`) are not user prompts.
-                if value.get("synthetic_reason").is_some() {
-                    continue;
-                }
-                let raw_text = extract_content_text(value.get("content"));
-                // Grok also injects `<user_info>` / `<git_status>` as plain user
-                // lines without `synthetic_reason` — hide those from the UI.
-                if is_grok_runtime_context_user_text(&raw_text) {
-                    continue;
-                }
-                let (display_text, image_paths) = parse_grok_user_prompt_for_display(&raw_text);
-                if display_text.is_empty() && image_paths.is_empty() {
-                    continue;
-                }
-                counter += 1;
+        "reasoning" => {
+            let text = extract_reasoning_summary(value.get("summary"));
+            if text.trim().is_empty() {
+                return;
+            }
+            let part_id = value
+                .get("id")
+                .and_then(|v| v.as_str())
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| {
+                    *counter += 1;
+                    format!("grok-reasoning-{}", *counter)
+                });
+            messages.push(GrokSessionMessage {
+                id: format!("{}-reasoning", part_id),
+                role: "assistant".to_string(),
+                text,
+                images: None,
+                timestamp,
+                kind: "reasoning".to_string(),
+                tool_type: None,
+                title: None,
+                tool_input: None,
+                tool_output: None,
+            });
+        }
+        "assistant" => {
+            let text = strip_embedded_data_urls(&extract_content_text(value.get("content")));
+            if !text.trim().is_empty() {
+                *counter += 1;
                 messages.push(GrokSessionMessage {
-                    id: format!("grok-user-{}", counter),
-                    role: "user".to_string(),
-                    text: display_text,
-                    images: if image_paths.is_empty() {
-                        None
-                    } else {
-                        Some(image_paths)
-                    },
-                    timestamp,
+                    id: format!("grok-assistant-{}", counter),
+                    role: "assistant".to_string(),
+                    text,
+                    images: None,
+                    timestamp: timestamp.clone(),
                     kind: "message".to_string(),
                     tool_type: None,
                     title: None,
@@ -888,140 +1305,177 @@ fn parse_messages_from_chat_history(raw: &str) -> GrokSessionLoadResult {
                     tool_output: None,
                 });
             }
-            "reasoning" => {
-                let text = extract_reasoning_summary(value.get("summary"));
-                if text.trim().is_empty() {
-                    continue;
-                }
-                let part_id = value
-                    .get("id")
-                    .and_then(|v| v.as_str())
-                    .map(|value| value.to_string())
-                    .unwrap_or_else(|| {
-                        counter += 1;
-                        format!("grok-reasoning-{}", counter)
-                    });
-                messages.push(GrokSessionMessage {
-                    id: format!("{}-reasoning", part_id),
-                    role: "assistant".to_string(),
-                    text,
-                    images: None,
-                    timestamp,
-                    kind: "reasoning".to_string(),
-                    tool_type: None,
-                    title: None,
-                    tool_input: None,
-                    tool_output: None,
-                });
-            }
-            "assistant" => {
-                let text = extract_content_text(value.get("content"));
-                if !text.trim().is_empty() {
-                    counter += 1;
+            if let Some(tool_calls) = value.get("tool_calls").and_then(|v| v.as_array()) {
+                for call in tool_calls {
+                    let tool_name = resolve_tool_call_name(call);
+                    let call_id = call
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .map(|value| value.to_string())
+                        .unwrap_or_else(|| {
+                            *counter += 1;
+                            format!("grok-tool-{}", *counter)
+                        });
+                    let input_value = budget_tool_input_value(resolve_tool_call_arguments(call));
+                    let input_text = input_value
+                        .as_ref()
+                        .and_then(|v| serde_json::to_string_pretty(v).ok())
+                        .map(|text| budget_tool_text(&text))
+                        .unwrap_or_default();
                     messages.push(GrokSessionMessage {
-                        id: format!("grok-assistant-{}", counter),
+                        id: call_id,
                         role: "assistant".to_string(),
-                        text,
+                        text: input_text,
                         images: None,
                         timestamp: timestamp.clone(),
-                        kind: "message".to_string(),
-                        tool_type: None,
-                        title: None,
-                        tool_input: None,
+                        kind: "tool".to_string(),
+                        tool_type: Some(tool_name.clone()),
+                        title: Some(tool_name),
+                        tool_input: input_value,
                         tool_output: None,
                     });
                 }
-                if let Some(tool_calls) = value.get("tool_calls").and_then(|v| v.as_array()) {
-                    for call in tool_calls {
-                        let tool_name = resolve_tool_call_name(call);
-                        let call_id = call
-                            .get("id")
-                            .and_then(|v| v.as_str())
-                            .map(|value| value.to_string())
-                            .unwrap_or_else(|| {
-                                counter += 1;
-                                format!("grok-tool-{}", counter)
-                            });
-                        let input_value = resolve_tool_call_arguments(call);
-                        let input_text = input_value
-                            .as_ref()
-                            .and_then(|v| serde_json::to_string_pretty(v).ok())
-                            .unwrap_or_default();
-                        messages.push(GrokSessionMessage {
-                            id: call_id,
-                            role: "assistant".to_string(),
-                            text: input_text,
-                            images: None,
-                            timestamp: timestamp.clone(),
-                            kind: "tool".to_string(),
-                            tool_type: Some(tool_name.clone()),
-                            title: Some(tool_name),
-                            tool_input: input_value,
-                            tool_output: None,
-                        });
-                    }
-                }
             }
-            "tool_result" => {
-                let output_text = stringify_tool_result_content(value.get("content"));
-                if output_text.trim().is_empty() {
-                    continue;
-                }
-                let call_id = value
-                    .get("tool_call_id")
-                    .and_then(|v| v.as_str())
-                    .map(|value| value.to_string())
-                    .unwrap_or_else(|| {
-                        counter += 1;
-                        format!("grok-tool-{}", counter)
-                    });
-                messages.push(GrokSessionMessage {
-                    id: format!("{}-result", call_id),
-                    role: "assistant".to_string(),
-                    text: output_text,
-                    images: None,
-                    timestamp,
-                    kind: "tool".to_string(),
-                    tool_type: Some("result".to_string()),
-                    title: Some("Result".to_string()),
-                    tool_input: None,
-                    tool_output: value.get("content").cloned(),
-                });
-            }
-            _ => {}
         }
+        "tool_result" => {
+            let output_text = stringify_tool_result_content(value.get("content"));
+            if output_text.trim().is_empty() {
+                return;
+            }
+            let call_id = value
+                .get("tool_call_id")
+                .and_then(|v| v.as_str())
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| {
+                    *counter += 1;
+                    format!("grok-tool-{}", *counter)
+                });
+            // Never re-attach raw multi-MB content/images — budgeted text only.
+            messages.push(GrokSessionMessage {
+                id: format!("{}-result", call_id),
+                role: "assistant".to_string(),
+                text: output_text.clone(),
+                images: None,
+                timestamp,
+                kind: "tool".to_string(),
+                tool_type: Some("result".to_string()),
+                title: Some("Result".to_string()),
+                tool_input: None,
+                tool_output: Some(Value::String(output_text)),
+            });
+        }
+        _ => {}
     }
+}
 
+/// Parse `chat_history.jsonl` content into normalized messages.
+/// Grok history lines carry no usage data, so `usage` is always `None`.
+fn parse_messages_from_chat_history(raw: &str) -> GrokSessionLoadResult {
+    let mut messages: Vec<GrokSessionMessage> = Vec::new();
+    let mut counter = 0usize;
+    for line in raw.lines() {
+        append_messages_from_history_line(line, &mut messages, &mut counter);
+    }
     GrokSessionLoadResult {
         messages,
         usage: None,
     }
 }
 
-/// Extract the first real user prompt text from `chat_history.jsonl` content.
-fn first_user_prompt_text(raw: &str) -> Option<String> {
-    for line in raw.lines() {
-        let line = line.trim();
-        if line.is_empty() || !line.contains("\"type\":\"user\"") {
-            continue;
+fn parse_messages_from_chat_history_reader<R: BufRead>(
+    reader: R,
+) -> Result<GrokSessionLoadResult, String> {
+    let mut messages: Vec<GrokSessionMessage> = Vec::new();
+    let mut counter = 0usize;
+    for line in reader.lines() {
+        let line = line.map_err(|error| format!("Failed to read Grok chat history: {}", error))?;
+        append_messages_from_history_line(&line, &mut messages, &mut counter);
+    }
+    Ok(GrokSessionLoadResult {
+        messages,
+        usage: None,
+    })
+}
+
+/// Extract a sidebar preview from one raw JSONL line (cheap path for large lines).
+fn first_user_prompt_from_line(line: &str) -> Option<String> {
+    let line = line.trim();
+    if line.is_empty() {
+        return None;
+    }
+    // Accept both compact and pretty-ish type markers.
+    if !(line.contains("\"type\":\"user\"") || line.contains("\"type\": \"user\"")) {
+        return None;
+    }
+    if line.contains("synthetic_reason") {
+        return None;
+    }
+
+    // Fast path: pull `<user_query>` without full JSON parse (avoids multi-MB serde).
+    if let Some(body) = extract_user_query_body_from_raw(line) {
+        let wrapped = format!("<user_query>\n{}\n</user_query>", body);
+        if is_grok_runtime_context_user_text(&wrapped) {
+            return None;
         }
-        let Ok(value) = serde_json::from_str::<Value>(line) else {
-            continue;
-        };
-        if value.get("synthetic_reason").is_some() {
-            continue;
-        }
-        let raw = extract_content_text(value.get("content"));
-        if is_grok_runtime_context_user_text(&raw) {
-            continue;
-        }
-        let (display_text, image_paths) = parse_grok_user_prompt_for_display(&raw);
+        let (display_text, image_paths) = parse_grok_user_prompt_for_display(&wrapped);
         let preview = if display_text.is_empty() && !image_paths.is_empty() {
             format!("[{} image(s)]", image_paths.len())
         } else {
             display_text
         };
         if !preview.is_empty() {
+            return Some(preview);
+        }
+    }
+
+    let prepared = prepare_grok_history_line_for_parse(line);
+    let Ok(value) = serde_json::from_str::<Value>(prepared.as_ref()) else {
+        return None;
+    };
+    if value.get("type").and_then(|v| v.as_str()) != Some("user") {
+        return None;
+    }
+    if value.get("synthetic_reason").is_some() {
+        return None;
+    }
+    let raw = strip_embedded_data_urls(&extract_content_text(value.get("content")));
+    if is_grok_runtime_context_user_text(&raw) {
+        return None;
+    }
+    let (display_text, image_paths) = parse_grok_user_prompt_for_display(&raw);
+    let preview = if display_text.is_empty() && !image_paths.is_empty() {
+        format!("[{} image(s)]", image_paths.len())
+    } else {
+        display_text
+    };
+    if preview.is_empty() {
+        None
+    } else {
+        Some(preview)
+    }
+}
+
+/// Extract the first real user prompt text from `chat_history.jsonl` content.
+fn first_user_prompt_text(raw: &str) -> Option<String> {
+    for line in raw.lines() {
+        if let Some(preview) = first_user_prompt_from_line(line) {
+            return Some(preview);
+        }
+    }
+    None
+}
+
+/// Stream `chat_history.jsonl` until the first real user prompt (list path).
+async fn first_user_prompt_from_chat_history_path(path: &Path) -> Option<String> {
+    let file = fs::File::open(path).await.ok()?;
+    let mut lines = AsyncBufReader::new(file).lines();
+    loop {
+        let line = match lines.next_line().await {
+            Ok(Some(line)) => line,
+            Ok(None) => break,
+            Err(_) => break,
+        };
+        if let Some(preview) = first_user_prompt_from_line(&line) {
             return Some(preview);
         }
     }
@@ -1087,11 +1541,12 @@ async fn build_summary_from_session_dir(
     let summary_path = session_dir.join("summary.json");
     let chat_history_path = session_dir.join("chat_history.jsonl");
 
+    // List path: summary.json + mtime + stream-to-first-user only.
+    // Never full-read multi-MB chat_history.jsonl for sidebar rows.
     let summary_value = fs::read_to_string(&summary_path)
         .await
         .ok()
         .and_then(|raw| serde_json::from_str::<Value>(&raw).ok());
-    let chat_history_raw = fs::read_to_string(&chat_history_path).await.ok();
 
     let chat_history_mtime_millis = file_mtime_millis(&chat_history_path);
     let summary_mtime_millis = file_mtime_millis(&summary_path);
@@ -1144,20 +1599,13 @@ async fn build_summary_from_session_dir(
                 .and_then(|v| v.as_u64())
         })
         .map(|value| value as usize)
-        .or_else(|| {
-            chat_history_raw.as_deref().map(|raw| {
-                raw.lines()
-                    .filter(|line| line.contains("\"type\":\"user\""))
-                    .count()
-            })
-        })
         .unwrap_or(0);
 
     // Prefer the human's first real prompt over Grok's AI `generated_title`
     // so the sidebar shows e.g. "你好" instead of "Chinese Hello Greeting Session".
-    let first_message = chat_history_raw
-        .as_deref()
-        .and_then(first_user_prompt_text)
+    // Stream until first user; never load the whole file.
+    let first_message = first_user_prompt_from_chat_history_path(&chat_history_path)
+        .await
         .or(title)
         .map(|text| truncate_chars(&text, 60))
         .unwrap_or_else(|| session_id.to_string());
@@ -1272,6 +1720,19 @@ async fn find_workspace_session_dir(
     custom_home: Option<&str>,
 ) -> Result<PathBuf, String> {
     let normalized_session_id = normalize_session_id(session_id)?;
+    let sessions_root = resolve_grok_base_dir(custom_home).join("sessions");
+
+    // O(1) candidates: sessions/<urlencode(cwd-variant)>/<session_id>/
+    for encoded_cwd in candidate_encoded_cwd_names(workspace_path) {
+        let candidate = sessions_root
+            .join(&encoded_cwd)
+            .join(&normalized_session_id);
+        if session_dir_looks_valid(&candidate) {
+            return Ok(candidate);
+        }
+    }
+
+    // Fallback: workspace-filtered scan (encoding edge cases / older layouts).
     let session_dirs = timeout(
         LOCAL_SESSION_SCAN_TIMEOUT,
         resolve_workspace_session_dirs(workspace_path, custom_home),
@@ -1293,16 +1754,16 @@ pub async fn load_grok_session(
 ) -> Result<GrokSessionLoadResult, String> {
     let session_dir = find_workspace_session_dir(workspace_path, session_id, custom_home).await?;
     let chat_history_path = session_dir.join("chat_history.jsonl");
-    let raw = fs::read_to_string(&chat_history_path)
-        .await
-        .map_err(|error| {
-            format!(
-                "Failed to read Grok session chat history {}: {}",
-                chat_history_path.display(),
-                error
-            )
-        })?;
-    Ok(parse_messages_from_chat_history(&raw))
+    // Stream line-by-line; never load multi-MB history as one String.
+    let file = std::fs::File::open(&chat_history_path).map_err(|error| {
+        format!(
+            "Failed to read Grok session chat history {}: {}",
+            chat_history_path.display(),
+            error
+        )
+    })?;
+    let reader = StdBufReader::new(file);
+    parse_messages_from_chat_history_reader(reader)
 }
 
 /// Delete a Grok session: remove the whole session directory.
@@ -1331,10 +1792,12 @@ pub async fn delete_grok_session(
 #[cfg(test)]
 mod tests {
     use super::{
-        file_mtime_millis, first_user_prompt_text, is_grok_runtime_context_user_text,
-        matches_workspace_path, parse_grok_user_prompt_for_display,
-        parse_messages_from_chat_history, parse_timestamp_millis, resolve_session_activity_millis,
-        strip_user_query_wrapper, url_decode_dir_name,
+        file_mtime_millis, first_user_prompt_from_line, first_user_prompt_text,
+        is_grok_runtime_context_user_text, matches_workspace_path,
+        parse_grok_user_prompt_for_display, parse_messages_from_chat_history, parse_timestamp_millis,
+        prepare_grok_history_line_for_parse, resolve_session_activity_millis,
+        strip_user_query_wrapper, url_decode_dir_name, url_encode_dir_name,
+        GROK_OMITTED_PAYLOAD_SENTINEL, GROK_TOOL_OUTPUT_CHAR_BUDGET,
     };
     use std::path::Path;
 
@@ -1914,6 +2377,162 @@ mod tests {
                 .await
                 .expect("list after delete");
         assert!(remaining.is_empty());
+
+        let _ = std::fs::remove_dir_all(&fixture_root);
+    }
+
+    #[test]
+    fn url_encode_dir_name_percent_encodes_utf8_bytes() {
+        assert_eq!(url_encode_dir_name("/private/tmp"), "%2Fprivate%2Ftmp");
+        assert_eq!(
+            url_encode_dir_name("/Users/demo/my repo"),
+            "%2FUsers%2Fdemo%2Fmy%20repo"
+        );
+        // Chinese "项目" → UTF-8 E9 A1 B9 E7 9B AE
+        assert_eq!(
+            url_encode_dir_name("/tmp/项目"),
+            "%2Ftmp%2F%E9%A1%B9%E7%9B%AE"
+        );
+        assert_eq!(
+            url_decode_dir_name(&url_encode_dir_name("/Users/demo/CC GUI 项目")),
+            "/Users/demo/CC GUI 项目"
+        );
+    }
+
+    #[test]
+    fn first_user_prompt_from_line_extracts_query_without_parsing_huge_payload() {
+        let huge_b64 = "A".repeat(200_000);
+        let line = format!(
+            r#"{{"type":"user","content":[{{"type":"text","text":"<image_files>\n1. /tmp/a.png\n</image_files>\n\n<user_query>\nanalyze chart\n</user_query>\n{}"}}],"prompt_index":0}}"#,
+            format!("data:image/png;base64,{}", huge_b64)
+        );
+        assert!(line.len() > 100_000);
+        assert_eq!(
+            first_user_prompt_from_line(&line).as_deref(),
+            Some("analyze chart")
+        );
+    }
+
+    #[test]
+    fn load_parser_strips_tool_result_images_and_budgets_output() {
+        let huge = "x".repeat(GROK_TOOL_OUTPUT_CHAR_BUDGET + 8_000);
+        let chat_history = format!(
+            concat!(
+                r#"{{"type":"tool_result","tool_call_id":"call_img","content":"{}","images":[{{"type":"image","url":"data:image/jpeg;base64,{}"}}]}}"#,
+                "\n",
+                r#"{{"type":"reasoning","id":"r-big","summary":"ok","encrypted_content":"{}"}}"#,
+                "\n"
+            ),
+            huge,
+            "B".repeat(120_000),
+            "C".repeat(80_000)
+        );
+        let result = parse_messages_from_chat_history(&chat_history);
+        assert_eq!(result.messages.len(), 2);
+        let tool = &result.messages[0];
+        assert_eq!(tool.kind, "tool");
+        assert!(tool.text.chars().count() <= GROK_TOOL_OUTPUT_CHAR_BUDGET + 80);
+        assert!(tool.text.contains("truncated"));
+        assert!(
+            tool.tool_output
+                .as_ref()
+                .and_then(|v| v.as_str())
+                .is_some_and(|s| !s.contains("data:image")),
+            "tool_output must not carry raw images"
+        );
+        let reasoning = &result.messages[1];
+        assert_eq!(reasoning.kind, "reasoning");
+        assert_eq!(reasoning.text, "ok");
+        // Encrypted blob must not appear in normalized messages.
+        assert!(!reasoning.text.contains(&"C".repeat(100)));
+    }
+
+    #[test]
+    fn prepare_line_redacts_encrypted_content_and_blanks_images() {
+        let line = format!(
+            r#"{{"type":"tool_result","tool_call_id":"c1","content":"hi","images":[{{"type":"image","url":"{}"}}],"encrypted_content":"{}"}}"#,
+            "Z".repeat(40_000),
+            "E".repeat(40_000)
+        );
+        let prepared = prepare_grok_history_line_for_parse(&line);
+        assert!(prepared.contains("\"images\":[]"));
+        assert!(prepared.contains(GROK_OMITTED_PAYLOAD_SENTINEL));
+        assert!(!prepared.contains(&"Z".repeat(1000)));
+        assert!(!prepared.contains(&"E".repeat(1000)));
+    }
+
+    #[tokio::test]
+    async fn load_session_uses_direct_path_without_full_tree_scan_dependency() {
+        let fixture_root = std::env::temp_dir().join(format!(
+            "grok-history-o1-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let workspace = fixture_root.join("workspace");
+        let grok_home = fixture_root.join("grok-home");
+        std::fs::create_dir_all(&workspace).expect("create workspace");
+        let canonical_workspace = std::fs::canonicalize(&workspace).expect("canonical workspace");
+        let encoded_cwd = url_encode_dir_name(&canonical_workspace.to_string_lossy());
+        let session_id = "019fa245-0000-4000-8000-000000000099";
+        let session_dir = grok_home
+            .join("sessions")
+            .join(&encoded_cwd)
+            .join(session_id);
+        std::fs::create_dir_all(&session_dir).expect("create session dir");
+        // Decoy cwd with huge irrelevant session — direct path must still win.
+        let decoy = grok_home
+            .join("sessions")
+            .join(url_encode_dir_name("/unrelated/path"))
+            .join("decoy-session");
+        std::fs::create_dir_all(&decoy).expect("decoy");
+        std::fs::write(
+            decoy.join("chat_history.jsonl"),
+            format!(
+                "{{\"type\":\"user\",\"content\":\"{}\"}}\n",
+                "y".repeat(50_000)
+            ),
+        )
+        .expect("decoy history");
+        std::fs::write(
+            session_dir.join("summary.json"),
+            format!(
+                "{{\"info\":{{\"id\":\"{}\",\"cwd\":\"{}\"}},\"num_chat_messages\":1,\"created_at\":\"2026-07-27T06:31:41.023Z\",\"updated_at\":\"2026-07-27T07:31:41.023Z\"}}",
+                session_id,
+                canonical_workspace.display()
+            ),
+        )
+        .expect("summary");
+        std::fs::write(
+            session_dir.join("chat_history.jsonl"),
+            concat!(
+                "{\"type\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"<user_query>\\ndirect path\\n</user_query>\"}],\"prompt_index\":0}\n",
+                "{\"type\":\"assistant\",\"content\":\"ok\"}\n"
+            ),
+        )
+        .expect("history");
+
+        let loaded = super::load_grok_session(
+            &workspace,
+            session_id,
+            Some(grok_home.to_string_lossy().as_ref()),
+        )
+        .await
+        .expect("load");
+        assert_eq!(loaded.messages.len(), 2);
+        assert_eq!(loaded.messages[0].text, "direct path");
+
+        let listed = super::list_grok_sessions(
+            &workspace,
+            None,
+            Some(grok_home.to_string_lossy().as_ref()),
+        )
+        .await
+        .expect("list");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].first_message, "direct path");
 
         let _ = std::fs::remove_dir_all(&fixture_root);
     }

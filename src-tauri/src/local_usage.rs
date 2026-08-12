@@ -314,6 +314,10 @@ fn find_codex_session_file(
         .ok_or_else(|| format!("codex session file not found for session {}", session_id))
 }
 
+/// Match list-scan policy: skip multi-MB JSONL lines that are almost always
+/// tool dumps / embedded media the restore UI cannot usefully render whole.
+const CODEX_LOAD_LARGE_LINE_BYTE_BUDGET: usize = 512_000;
+
 fn load_codex_session_entries(
     session_id: &str,
     workspace_path: &Path,
@@ -332,6 +336,10 @@ fn load_codex_session_entries(
     for line in reader.lines() {
         let line = line.map_err(|err| err.to_string())?;
         if line.trim().is_empty() {
+            continue;
+        }
+        // Align with parse_codex_session_summary_with_mode list path.
+        if line.len() > CODEX_LOAD_LARGE_LINE_BYTE_BUDGET {
             continue;
         }
         let value: Value = serde_json::from_str(&line).map_err(|err| {
@@ -539,6 +547,20 @@ fn resolve_codex_candidate_scan_limit(unique_session_limit: usize) -> usize {
     }
 }
 
+/// Session-index / sidebar writer entry: ThreadPreview only, never Full archive parse.
+pub(crate) fn scan_codex_session_summaries_for_index(
+    workspace_path: Option<&Path>,
+    sessions_roots: &[PathBuf],
+    unique_session_limit: usize,
+) -> Result<(Vec<LocalUsageSessionSummary>, usize), String> {
+    scan_codex_session_summaries_bounded_with_mode(
+        workspace_path,
+        sessions_roots,
+        unique_session_limit,
+        CodexSessionParseMode::ThreadPreview,
+    )
+}
+
 fn scan_codex_session_summaries_bounded_with_mode(
     workspace_path: Option<&Path>,
     sessions_roots: &[PathBuf],
@@ -549,32 +571,49 @@ fn scan_codex_session_summaries_bounded_with_mode(
     let candidate_scan_limit = match parse_mode {
         CodexSessionParseMode::Full => usize::MAX,
         CodexSessionParseMode::ThreadPreview => {
-            resolve_codex_candidate_scan_limit(unique_session_limit)
+            // Workspace filter rejects many recent global files; expand collect
+            // budget so first-page can still fill without full-tree walk.
+            let base = resolve_codex_candidate_scan_limit(unique_session_limit);
+            if workspace_path.is_some() {
+                base.saturating_mul(8).clamp(base, 400)
+            } else {
+                base
+            }
         }
     };
-    let mut seen_files = HashSet::new();
-    let mut candidates = Vec::new();
-    for root in sessions_roots {
-        let codex_home = codex_home_for_sessions_root(root);
-        let mut files = Vec::new();
-        collect_jsonl_files(root, &mut files, &mut seen_files);
-        candidates.extend(files.into_iter().map(|path| {
-            CodexSessionCandidate {
-                modified_at: fs::metadata(&path)
-                    .and_then(|metadata| metadata.modified())
-                    .unwrap_or(UNIX_EPOCH),
-                path,
-                codex_home: codex_home.clone(),
+    // ThreadPreview MUST NOT walk the entire sessions/** tree (can be GB-scale).
+    // Prefer date-partition reverse walk + early stop; Full keeps exhaustive collect.
+    let candidates = match parse_mode {
+        CodexSessionParseMode::ThreadPreview => {
+            collect_codex_jsonl_candidates_recent_first(sessions_roots, candidate_scan_limit)
+        }
+        CodexSessionParseMode::Full => {
+            let mut seen_files = HashSet::new();
+            let mut candidates = Vec::new();
+            for root in sessions_roots {
+                let codex_home = codex_home_for_sessions_root(root);
+                let mut files = Vec::new();
+                collect_jsonl_files(root, &mut files, &mut seen_files);
+                candidates.extend(files.into_iter().map(|path| {
+                    CodexSessionCandidate {
+                        modified_at: fs::metadata(&path)
+                            .and_then(|metadata| metadata.modified())
+                            .unwrap_or(UNIX_EPOCH),
+                        path,
+                        codex_home: codex_home.clone(),
+                    }
+                }));
             }
-        }));
-    }
-    candidates.sort_by(|left, right| {
-        right.modified_at.cmp(&left.modified_at).then_with(|| {
-            left.path
-                .to_string_lossy()
-                .cmp(&right.path.to_string_lossy())
-        })
-    });
+            candidates.sort_by(|left, right| {
+                right.modified_at.cmp(&left.modified_at).then_with(|| {
+                    left.path
+                        .to_string_lossy()
+                        .cmp(&right.path.to_string_lossy())
+                })
+            });
+            candidates
+        }
+    };
 
     let mut native_titles_by_home = HashMap::<PathBuf, HashMap<String, String>>::new();
     let mut sessions_by_id = HashMap::<String, LocalUsageSessionSummary>::new();
@@ -762,6 +801,269 @@ fn collect_jsonl_files(root: &Path, output: &mut Vec<PathBuf>, seen: &mut HashSe
     for path in paths {
         if path.is_dir() {
             collect_jsonl_files(&path, output, seen);
+            continue;
+        }
+        if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
+            continue;
+        }
+        if seen.insert(path.clone()) {
+            output.push(path);
+        }
+    }
+}
+
+/// Collect Codex rollout candidates newest-first without enumerating the full
+/// archive when roots follow `sessions/YYYY/MM/DD/` (or archived_sessions).
+/// Stops once `max_candidates` unique files are collected.
+fn collect_codex_jsonl_candidates_recent_first(
+    sessions_roots: &[PathBuf],
+    max_candidates: usize,
+) -> Vec<CodexSessionCandidate> {
+    if max_candidates == 0 || max_candidates == usize::MAX {
+        let mut seen = HashSet::new();
+        let mut candidates = Vec::new();
+        for root in sessions_roots {
+            let codex_home = codex_home_for_sessions_root(root);
+            let mut root_files = Vec::new();
+            collect_jsonl_files(root, &mut root_files, &mut seen);
+            for path in root_files {
+                candidates.push(CodexSessionCandidate {
+                    modified_at: fs::metadata(&path)
+                        .and_then(|metadata| metadata.modified())
+                        .unwrap_or(UNIX_EPOCH),
+                    path,
+                    codex_home: codex_home.clone(),
+                });
+            }
+        }
+        candidates.sort_by(|left, right| {
+            right.modified_at.cmp(&left.modified_at).then_with(|| {
+                left.path
+                    .to_string_lossy()
+                    .cmp(&right.path.to_string_lossy())
+            })
+        });
+        return candidates;
+    }
+
+    let mut seen = HashSet::new();
+    let mut candidates = Vec::new();
+    for root in sessions_roots {
+        if candidates.len() >= max_candidates {
+            break;
+        }
+        let codex_home = codex_home_for_sessions_root(root);
+        collect_codex_jsonl_candidates_from_root_recent_first(
+            root,
+            codex_home.as_ref(),
+            max_candidates,
+            &mut seen,
+            &mut candidates,
+        );
+    }
+    candidates.sort_by(|left, right| {
+        right.modified_at.cmp(&left.modified_at).then_with(|| {
+            left.path
+                .to_string_lossy()
+                .cmp(&right.path.to_string_lossy())
+        })
+    });
+    if candidates.len() > max_candidates {
+        candidates.truncate(max_candidates);
+    }
+    candidates
+}
+
+fn collect_codex_jsonl_candidates_from_root_recent_first(
+    root: &Path,
+    codex_home: Option<&PathBuf>,
+    max_candidates: usize,
+    seen: &mut HashSet<PathBuf>,
+    candidates: &mut Vec<CodexSessionCandidate>,
+) {
+    if candidates.len() >= max_candidates {
+        return;
+    }
+    if looks_like_codex_date_partitioned_root(root) {
+        collect_date_partitioned_jsonl_recent_first(
+            root,
+            codex_home,
+            max_candidates,
+            seen,
+            candidates,
+        );
+        return;
+    }
+    // Non-partitioned layout: still avoid full-tree collect by streaming with
+    // a hard cap via shallow walk + mtime sort of discovered files only up to cap*4.
+    let mut files = Vec::new();
+    collect_jsonl_files_capped(root, &mut files, seen, max_candidates.saturating_mul(4));
+    let mut local: Vec<CodexSessionCandidate> = files
+        .into_iter()
+        .map(|path| CodexSessionCandidate {
+            modified_at: fs::metadata(&path)
+                .and_then(|metadata| metadata.modified())
+                .unwrap_or(UNIX_EPOCH),
+            path,
+            codex_home: codex_home.cloned(),
+        })
+        .collect();
+    local.sort_by(|left, right| {
+        right
+            .modified_at
+            .cmp(&left.modified_at)
+            .then_with(|| left.path.to_string_lossy().cmp(&right.path.to_string_lossy()))
+    });
+    for candidate in local {
+        if candidates.len() >= max_candidates {
+            break;
+        }
+        candidates.push(candidate);
+    }
+}
+
+fn looks_like_codex_date_partitioned_root(root: &Path) -> bool {
+    let Ok(entries) = fs::read_dir(root) else {
+        return false;
+    };
+    let mut year_dirs = 0usize;
+    let mut total_dirs = 0usize;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        total_dirs += 1;
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.len() == 4 && name.chars().all(|c| c.is_ascii_digit()) {
+            year_dirs += 1;
+        }
+    }
+    year_dirs > 0 && year_dirs * 2 >= total_dirs.max(1)
+}
+
+fn collect_date_partitioned_jsonl_recent_first(
+    root: &Path,
+    codex_home: Option<&PathBuf>,
+    max_candidates: usize,
+    seen: &mut HashSet<PathBuf>,
+    candidates: &mut Vec<CodexSessionCandidate>,
+) {
+    let mut years = list_numeric_child_dirs(root);
+    years.sort_by(|left, right| right.0.cmp(&left.0));
+    for (_year, year_path) in years {
+        if candidates.len() >= max_candidates {
+            return;
+        }
+        let mut months = list_numeric_child_dirs(&year_path);
+        months.sort_by(|left, right| right.0.cmp(&left.0));
+        for (_month, month_path) in months {
+            if candidates.len() >= max_candidates {
+                return;
+            }
+            let mut days = list_numeric_child_dirs(&month_path);
+            days.sort_by(|left, right| right.0.cmp(&left.0));
+            for (_day, day_path) in days {
+                if candidates.len() >= max_candidates {
+                    return;
+                }
+                push_jsonl_candidates_from_dir(
+                    &day_path,
+                    codex_home,
+                    max_candidates,
+                    seen,
+                    candidates,
+                );
+            }
+        }
+    }
+}
+
+fn list_numeric_child_dirs(root: &Path) -> Vec<(i32, PathBuf)> {
+    let Ok(entries) = fs::read_dir(root) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if let Ok(value) = name.parse::<i32>() {
+            out.push((value, path));
+        }
+    }
+    out
+}
+
+fn push_jsonl_candidates_from_dir(
+    dir: &Path,
+    codex_home: Option<&PathBuf>,
+    max_candidates: usize,
+    seen: &mut HashSet<PathBuf>,
+    candidates: &mut Vec<CodexSessionCandidate>,
+) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    let mut files: Vec<PathBuf> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("jsonl"))
+        .collect();
+    // Within a day dir, sort by mtime newest first so early stop keeps recent.
+    files.sort_by(|left, right| {
+        let left_mtime = fs::metadata(left)
+            .and_then(|metadata| metadata.modified())
+            .unwrap_or(UNIX_EPOCH);
+        let right_mtime = fs::metadata(right)
+            .and_then(|metadata| metadata.modified())
+            .unwrap_or(UNIX_EPOCH);
+        right_mtime
+            .cmp(&left_mtime)
+            .then_with(|| left.to_string_lossy().cmp(&right.to_string_lossy()))
+    });
+    for path in files {
+        if candidates.len() >= max_candidates {
+            return;
+        }
+        if !seen.insert(path.clone()) {
+            continue;
+        }
+        candidates.push(CodexSessionCandidate {
+            modified_at: fs::metadata(&path)
+                .and_then(|metadata| metadata.modified())
+                .unwrap_or(UNIX_EPOCH),
+            path,
+            codex_home: codex_home.cloned(),
+        });
+    }
+}
+
+fn collect_jsonl_files_capped(
+    root: &Path,
+    output: &mut Vec<PathBuf>,
+    seen: &mut HashSet<PathBuf>,
+    max_files: usize,
+) {
+    if output.len() >= max_files {
+        return;
+    }
+    let entries = match fs::read_dir(root) {
+        Ok(entries) => entries,
+        Err(_) => return,
+    };
+    let mut paths: Vec<PathBuf> = entries.flatten().map(|entry| entry.path()).collect();
+    paths.sort_by(|left, right| left.to_string_lossy().cmp(&right.to_string_lossy()));
+    for path in paths {
+        if output.len() >= max_files {
+            return;
+        }
+        if path.is_dir() {
+            collect_jsonl_files_capped(&path, output, seen, max_files);
             continue;
         }
         if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
@@ -2274,7 +2576,7 @@ fn merge_codex_session_roots_with_provider_homes(
     }
 }
 
-fn resolve_sessions_roots(
+pub(crate) fn resolve_sessions_roots(
     workspaces: &HashMap<String, WorkspaceEntry>,
     workspace_path: Option<&Path>,
 ) -> Vec<PathBuf> {
