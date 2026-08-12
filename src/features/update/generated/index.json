@@ -1,9 +1,17 @@
 {
-  "generatedAt": "2026-08-12T05:05:09.410Z",
+  "generatedAt": "2026-08-12T14:20:48.597Z",
   "source": "CHANGELOG.md",
-  "sourceSha256": "34b82765d114cfe41d8221ca69db39a6545a8e1d84da8932d293186783251cc9",
-  "entryCount": 107,
+  "sourceSha256": "cd3040231bfb90cfee0b94529537f94dd1bfa7ddf1e73881de28793f95eef765",
+  "entryCount": 108,
   "entries": [
+    {
+      "id": "0.8.8",
+      "tagName": "v0.8.8",
+      "version": "0.8.8",
+      "title": "v0.8.8",
+      "dateLabel": "2026/08/12",
+      "file": "entries/0.8.8.json"
+    },
     {
       "id": "0.8.7",
       "tagName": "v0.8.7",
