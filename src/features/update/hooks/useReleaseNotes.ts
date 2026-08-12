@@ -24,6 +24,12 @@ export {
 
 const RELEASE_NOTES_LAST_SEEN_KEY = "releaseNotesLastSeenVersion";
 
+/**
+ * Cold-start auto-open delay after AppShell mounts and a version bump is detected.
+ * Keeps release-notes work off the first paint / hydrate window.
+ */
+export const RELEASE_NOTES_AUTO_OPEN_DELAY_MS = 2_000;
+
 type OpenReleaseNotesOptions = {
   preferredVersion?: string | null;
   forceRefresh?: boolean;
@@ -39,6 +45,14 @@ function mergeEntryIntoList(
   entry: ReleaseNotesEntry,
 ): ReleaseNotesEntry[] {
   return list.map((item) => (item.version === entry.version ? entry : item));
+}
+
+function markReleaseNotesSeen(version: string | null | undefined): void {
+  const normalized = normalizeReleaseVersion(version);
+  if (!normalized) {
+    return;
+  }
+  writeClientStoreValue("app", RELEASE_NOTES_LAST_SEEN_KEY, normalized);
 }
 
 export function useReleaseNotes({
@@ -111,6 +125,9 @@ export function useReleaseNotes({
         entriesRef.current = nextEntries;
         setEntries(nextEntries);
         setActiveIndex(nextActiveIndex);
+        // Mark seen as soon as content is ready to show — not only on close —
+        // so a freeze mid-modal does not re-auto-open on every next launch.
+        markReleaseNotesSeen(preferredVersion ?? appVersionRef.current);
       } catch (caughtError) {
         if (generation !== loadGenerationRef.current) {
           return;
@@ -136,9 +153,8 @@ export function useReleaseNotes({
 
   const closeReleaseNotes = useCallback(() => {
     setIsOpen(false);
-    if (appVersionRef.current) {
-      writeClientStoreValue("app", RELEASE_NOTES_LAST_SEEN_KEY, appVersionRef.current);
-    }
+    // Idempotent: open path already writes lastSeen; keep close for manual safety.
+    markReleaseNotesSeen(appVersionRef.current);
   }, []);
 
   const goToPrevious = useCallback(() => {
@@ -198,6 +214,7 @@ export function useReleaseNotes({
     }
     autoCheckDoneRef.current = true;
     let cancelled = false;
+    let autoOpenTimer: ReturnType<typeof setTimeout> | null = null;
 
     void getVersion()
       .then((version) => {
@@ -220,8 +237,13 @@ export function useReleaseNotes({
           return;
         }
 
-        // Only load index + current version body — never the full CHANGELOG.
-        void openReleaseNotes({ preferredVersion: normalizedVersion });
+        // Defer past cold-start hydrate: only load index + current version body.
+        autoOpenTimer = setTimeout(() => {
+          if (cancelled) {
+            return;
+          }
+          void openReleaseNotes({ preferredVersion: normalizedVersion });
+        }, RELEASE_NOTES_AUTO_OPEN_DELAY_MS);
       })
       .catch((caughtError) => {
         const message =
@@ -237,6 +259,9 @@ export function useReleaseNotes({
 
     return () => {
       cancelled = true;
+      if (autoOpenTimer !== null) {
+        clearTimeout(autoOpenTimer);
+      }
     };
   }, [enabled, onDebug, openReleaseNotes]);
 
