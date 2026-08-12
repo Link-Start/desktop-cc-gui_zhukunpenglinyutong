@@ -677,7 +677,7 @@ describe("useAppSettings", () => {
         theme: "system",
         lightThemePresetId: "vscode-light-modern",
         darkThemePresetId: "vscode-dark-modern",
-        uiScale: 0.8,
+        uiScale: 1,
         uiFontFamily: DEFAULT_UI_FONT_FAMILY,
         codeFontFamily: DEFAULT_CODE_FONT_FAMILY,
         codeFontSize: 9,
@@ -688,7 +688,8 @@ describe("useAppSettings", () => {
     );
     expect(returned).toEqual(saved);
     expect(result.current.settings.theme).toBe("dark");
-    expect(result.current.settings.uiScale).toBe(1.25);
+    // Backend may echo a legacy scale; normalize always re-locks to 100%.
+    expect(result.current.settings.uiScale).toBe(UI_SCALE_DEFAULT);
   });
 
   it("sanitizes preset slots before persisting settings", async () => {

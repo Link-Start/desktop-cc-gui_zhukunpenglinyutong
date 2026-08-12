@@ -16,11 +16,7 @@ import {
   CODEX_AUTO_COMPACTION_THRESHOLD_DEFAULT_PERCENT,
   normalizeCodexAutoCompactionThresholdPercent,
 } from "../../codex/constants/codexAutoCompactionThreshold";
-import {
-  clampUiScale,
-  sanitizeUiScale,
-  UI_SCALE_DEFAULT,
-} from "../../../utils/uiScale";
+import { UI_SCALE_DEFAULT } from "../../../utils/uiScale";
 import {
   DEFAULT_CODE_FONT_FAMILY,
   DEFAULT_UI_FONT_FAMILY,
@@ -432,9 +428,8 @@ function normalizeAppSettings(
     systemProxyUrl: settings.systemProxyUrl?.trim()
       ? settings.systemProxyUrl.trim()
       : null,
-    uiScale: options?.fallbackUiScaleToDefault
-      ? sanitizeUiScale(settings.uiScale)
-      : clampUiScale(settings.uiScale),
+    // Permanently locked to 100% — ignore legacy disk values (0.8 / 0.9 / …).
+    uiScale: UI_SCALE_DEFAULT,
     theme: allowedThemes.has(settings.theme) ? settings.theme : "system",
     dockIconId: sanitizeDockIconId(settings.dockIconId),
     lightThemePresetId: sanitizeLightThemePresetId(settings.lightThemePresetId),

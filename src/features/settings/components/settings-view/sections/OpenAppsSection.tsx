@@ -158,7 +158,6 @@ export function OpenAppsSection({
         label: "",
         appName: "",
         command: null,
-        args: [],
       });
 
   const closeEditor = () => {
@@ -180,7 +179,6 @@ export function OpenAppsSection({
         label: preset.label,
         appName: preset.appName ?? (preset.kind === "app" ? preset.label : null),
         command: preset.command ?? null,
-        args: [],
       },
       presetLazyIconById,
     );

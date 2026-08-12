@@ -213,25 +213,24 @@ describe("useAppShellSearchAndComposerSection", () => {
     expect(boundary.setIsSearchPaletteOpen).toHaveBeenCalledWith(false);
   });
 
-  it("creates a session and executes UI scale actions through existing handlers", async () => {
+  it("creates a session through the search action registry", async () => {
     const boundary = createBoundary({ isSearchPaletteOpen: true });
     const { result } = renderHook(() => useAppShellSearchAndComposerSection(boundary));
 
-    for (const actionId of ["new-session", "increase-ui-scale", "decrease-ui-scale", "reset-ui-scale"]) {
-      act(() => result.current.handleSelectSearchResult({
-        id: `action:${actionId}`,
-        kind: "action",
-        title: actionId,
-        score: 0,
-        actionId,
-      }));
-    }
+    act(() => result.current.handleSelectSearchResult({
+      id: "action:new-session",
+      kind: "action",
+      title: "new-session",
+      score: 0,
+      actionId: "new-session",
+    }));
     await act(async () => Promise.resolve());
 
     expect(boundary.handleAddAgent).toHaveBeenCalledWith(boundary.activeWorkspace);
-    expect(boundary.increaseUiScale).toHaveBeenCalledOnce();
-    expect(boundary.decreaseUiScale).toHaveBeenCalledOnce();
-    expect(boundary.resetUiScale).toHaveBeenCalledOnce();
+    // UI scale search actions removed — scale permanently locked to 100%.
+    expect(boundary.increaseUiScale).not.toHaveBeenCalled();
+    expect(boundary.decreaseUiScale).not.toHaveBeenCalled();
+    expect(boundary.resetUiScale).not.toHaveBeenCalled();
   });
 
   it("toggles search content filters through the shared filter helper", () => {

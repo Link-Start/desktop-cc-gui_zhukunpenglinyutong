@@ -35,7 +35,6 @@ describe("openAppIcons", () => {
         label: "Google Chrome",
         appName: "/Applications/Google Chrome.app",
         command: null,
-        args: [],
       },
       { "chrome-1": osIcon },
     );
@@ -49,7 +48,6 @@ describe("openAppIcons", () => {
       label: "访达",
       appName: null,
       command: null,
-      args: [],
     });
     expect(icon).toBeTruthy();
     expect(icon).not.toBe(GENERIC_APP_ICON);
@@ -62,7 +60,6 @@ describe("openAppIcons", () => {
       label: "命令",
       appName: null,
       command: "",
-      args: [],
     });
     expect(icon).toBeTruthy();
   });
