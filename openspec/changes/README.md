@@ -11,6 +11,7 @@
 
 | Change | Progress | Current gate | Artifacts |
 | ------ | -------: | ------------ | --------- |
+| [`fix-askuserquestion-settlement-tombstone`](fix-askuserquestion-settlement-tombstone/proposal.md) | implemented / user accepted | 幽灵重弹 + skip 继续 + 单 UI 样式定稿；tombstone/MCP sole-waiter/历史防 rehydrate；用户 2026-08-12 验收通过 | [proposal](fix-askuserquestion-settlement-tombstone/proposal.md) · [design](fix-askuserquestion-settlement-tombstone/design.md) · [tasks](fix-askuserquestion-settlement-tombstone/tasks.md) · [specs](fix-askuserquestion-settlement-tombstone/specs/) · [能力矩阵](../../docs/reference/conversation/user-input-elicitation-capability-matrix.md) |
 | [`rewrite-sidebar-session-index`](rewrite-sidebar-session-index/proposal.md) | implemented / await human check | Index-first 侧栏：SQLite + Claude/Codex/Kimi writers；Codex recent-first；禁 auto full-catalog；**不 commit，交用户冷启验收** | [proposal](rewrite-sidebar-session-index/proposal.md) · [design](rewrite-sidebar-session-index/design.md) · [tasks](rewrite-sidebar-session-index/tasks.md) · [specs](rewrite-sidebar-session-index/specs/) |
 | [`fix-shared-history-projection-nonblocking`](fix-shared-history-projection-nonblocking/proposal.md) | artifacts ready / await apply | Shared 历史 V0 first-paint + projection 后台/超时；解耦 recovery「已解锁」与 curtain 58%；**提案齐，待审后实现** | [proposal](fix-shared-history-projection-nonblocking/proposal.md) · [design](fix-shared-history-projection-nonblocking/design.md) · [tasks](fix-shared-history-projection-nonblocking/tasks.md) · [specs](fix-shared-history-projection-nonblocking/specs/) |
 | [`fix-custom-prompts-stale-empty-cache`](fix-custom-prompts-stale-empty-cache/proposal.md) | implemented / await human check | `!` 提示词 soft-failure 永久空态：soft-cancel 保留缓存 + 空态 on-demand revalidate；vitest 70+19 绿；**不 commit，交用户验收** | [proposal](fix-custom-prompts-stale-empty-cache/proposal.md) · [design](fix-custom-prompts-stale-empty-cache/design.md) · [tasks](fix-custom-prompts-stale-empty-cache/tasks.md) · [specs](fix-custom-prompts-stale-empty-cache/specs/) |
@@ -39,6 +40,7 @@
 
 ## Active backlog notes（2026-08-08）
 
+- **验收通过** `fix-askuserquestion-settlement-tombstone`（2026-08-12）：幽灵重弹/skip 卡死/双已提交卡 + 幕布扁平 UI；用户手测通过；能力矩阵见 `docs/reference/conversation/user-input-elicitation-capability-matrix.md`。
 - **新增** `open-with-cross-platform-ux`（2026-08-12）：设置「打开方式」跨平台 UX；预设网格 + Browse + 懒 probe；P0/P1 已实现，待手测 Win/mac。
 - **新增** `fix-shared-history-projection-nonblocking`（2026-08-12）：社区 Shared 打开卡 58% projection +「解锁仍久」体感；V0 first-paint / projection 非阻塞；与 `fix-shared-session-recovery-exit-closure` 正交。
 - **已归档** `add-local-html-open-in-builtin-browser` → `archive/2026-08-08-add-local-html-open-in-builtin-browser`：本地 HTML 内置 Browser Agent；三入口 + 全局 toast i18n；main specs 已同步。

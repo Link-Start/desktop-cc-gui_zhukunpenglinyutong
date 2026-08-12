@@ -574,16 +574,12 @@ export function RequestUserInputMessage({
     collapseActiveRequestLocally();
   };
 
-  const settleSkippedRequest = async (
+  const buildAllSkippedQuestionIds = (
     targetRequest: RequestUserInputRequest,
-    targetRequestKey: string,
   ) => {
-    if (!onDismiss) {
-      settleRequestLocally(targetRequestKey);
-      return;
-    }
-    await dismissRequest(targetRequest, targetRequestKey);
-    settleRequestLocally(targetRequestKey);
+    return targetRequest.params.questions
+      .map((question) => question.id)
+      .filter((questionId) => questionId.trim().length > 0);
   };
 
   const handleSkip = async (
@@ -593,23 +589,29 @@ export function RequestUserInputMessage({
     setSubmitError(null);
     setIsSubmitting(true);
     try {
-      const answers = buildAnswers();
-      if (
+      // Skip MUST use the same runtime path as submit (not dismiss-only local hide).
+      // Empty answers + skippedQuestionIds unblocks MCP and writes durable audit.
+      const answers =
+        targetRequest === activeRequest ? buildAnswers() : {};
+      const preservePartial =
         targetRequest === activeRequest &&
-        shouldPreservePartialAnswersOnSkip(answers)
-      ) {
+        shouldPreservePartialAnswersOnSkip(answers);
+      const skippedQuestionIds = preservePartial
+        ? buildSkippedQuestionIds()
+        : buildAllSkippedQuestionIds(targetRequest);
+      if (onSubmit) {
         await submitRequest(
           targetRequest,
           {
-            answers,
-            skippedQuestionIds: buildSkippedQuestionIds(),
+            answers: preservePartial ? answers : {},
+            ...(skippedQuestionIds.length > 0 ? { skippedQuestionIds } : {}),
           },
           targetRequestKey,
         );
-        settleRequestLocally(targetRequestKey);
-        return;
+      } else if (onDismiss) {
+        await dismissRequest(targetRequest, targetRequestKey);
       }
-      await settleSkippedRequest(targetRequest, targetRequestKey);
+      settleRequestLocally(targetRequestKey);
     } catch {
       setSubmitError(t("approval.submitFailed"));
       expandRequestLocally(targetRequestKey);
