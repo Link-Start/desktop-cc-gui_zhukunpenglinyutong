@@ -11,6 +11,7 @@
 
 | Change | Progress | Current gate | Artifacts |
 | ------ | -------: | ------------ | --------- |
+| [`fix-native-parallel-provider-model-isolation`](fix-native-parallel-provider-model-isolation/proposal.md) | implemented / await human check | 并行 Native 跨供应商 model residual（MiniMax→DeepSeek 400）：扩展 residual 启发式 + vitest 钉死；Shared 零改；**不 commit，交用户验收** | [proposal](fix-native-parallel-provider-model-isolation/proposal.md) · [design](fix-native-parallel-provider-model-isolation/design.md) · [tasks](fix-native-parallel-provider-model-isolation/tasks.md) · [specs](fix-native-parallel-provider-model-isolation/specs/) |
 | [`fix-askuserquestion-settlement-tombstone`](fix-askuserquestion-settlement-tombstone/proposal.md) | implemented / user accepted | 幽灵重弹 + skip 继续 + 单 UI 样式定稿；tombstone/MCP sole-waiter/历史防 rehydrate；用户 2026-08-12 验收通过 | [proposal](fix-askuserquestion-settlement-tombstone/proposal.md) · [design](fix-askuserquestion-settlement-tombstone/design.md) · [tasks](fix-askuserquestion-settlement-tombstone/tasks.md) · [specs](fix-askuserquestion-settlement-tombstone/specs/) · [能力矩阵](../../docs/reference/conversation/user-input-elicitation-capability-matrix.md) |
 | [`rewrite-sidebar-session-index`](rewrite-sidebar-session-index/proposal.md) | implemented / await human check | Index-first 侧栏：SQLite + Claude/Codex/Kimi writers；Codex recent-first；禁 auto full-catalog；**不 commit，交用户冷启验收** | [proposal](rewrite-sidebar-session-index/proposal.md) · [design](rewrite-sidebar-session-index/design.md) · [tasks](rewrite-sidebar-session-index/tasks.md) · [specs](rewrite-sidebar-session-index/specs/) |
 | [`fix-shared-history-projection-nonblocking`](fix-shared-history-projection-nonblocking/proposal.md) | artifacts ready / await apply | Shared 历史 V0 first-paint + projection 后台/超时；解耦 recovery「已解锁」与 curtain 58%；**提案齐，待审后实现** | [proposal](fix-shared-history-projection-nonblocking/proposal.md) · [design](fix-shared-history-projection-nonblocking/design.md) · [tasks](fix-shared-history-projection-nonblocking/tasks.md) · [specs](fix-shared-history-projection-nonblocking/specs/) |
@@ -40,6 +41,7 @@
 
 ## Active backlog notes（2026-08-08）
 
+- **新增并落地** `fix-native-parallel-provider-model-isolation`（2026-08-12）：并行 Native 不同供应商后历史会话 residual model（MiniMax-M3 打 DeepSeek）→ 扩展 `claudeManagedRuntimeModel` residual；vitest 24+73 绿；Shared 零改；待手测、不 commit。
 - **验收通过** `fix-askuserquestion-settlement-tombstone`（2026-08-12）：幽灵重弹/skip 卡死/双已提交卡 + 幕布扁平 UI；用户手测通过；能力矩阵见 `docs/reference/conversation/user-input-elicitation-capability-matrix.md`。
 - **新增** `open-with-cross-platform-ux`（2026-08-12）：设置「打开方式」跨平台 UX；预设网格 + Browse + 懒 probe；P0/P1 已实现，待手测 Win/mac。
 - **新增** `fix-shared-history-projection-nonblocking`（2026-08-12）：社区 Shared 打开卡 58% projection +「解锁仍久」体感；V0 first-paint / projection 非阻塞；与 `fix-shared-session-recovery-exit-closure` 正交。

@@ -56,6 +56,22 @@ describe("selectedComposerSession", () => {
     ).toBe(false);
   });
 
+  // 并行 native：离开会话 A 后 draft 不得污染历史会话 B（finalized）。
+  it("does not apply MiniMax draft onto a finalized DeepSeek-bound historical session", () => {
+    const minimaxDraft: ComposerSessionSelection = {
+      modelId: "MiniMax-M3",
+      effort: null,
+    };
+    expect(
+      shouldApplyDraftComposerSelectionToThread({
+        candidate: null,
+        shouldApplyDraftToNextThread: true,
+        draftComposerSelection: minimaxDraft,
+        activeThreadId: "claude:historical-deepseek-session",
+      }),
+    ).toBe(false);
+  });
+
   it("migrates a persisted selection from pending to finalized thread ids", () => {
     expect(
       shouldMigrateComposerSelectionBetweenThreadIds({
