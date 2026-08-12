@@ -4,21 +4,12 @@ version = "0.3.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
-# MUST stay `cc-gui` (release main binary).
-# Tauri bundler treats `package.default-run` as a hard packaging target: if this
-# points at a feature-gated bin that is not built (e.g. `cc-gui-debug` without
-# `--features debug-bin`), AppImage/NSIS/macOS packaging fails with
-# "Failed to copy binary ... does not exist" on every platform.
-# Dev Dock label uses `tauri.dev.conf.json` `mainBinaryName` + `--features debug-bin`.
 default-run = "cc-gui"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
-# Dev-only second binary for distinct Dock label. Never enable on release packaging:
-# shipping it into Contents/MacOS regressed Intel codesign (nested unsigned helpers).
-debug-bin = []
 
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary
@@ -26,17 +17,6 @@ debug-bin = []
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "cc_gui_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
-
-# Release packaging keeps `cc-gui` (+ auto-discovered `cc_gui_daemon`).
-# `cc-gui-debug` is feature-gated so release bundles never include it.
-[[bin]]
-name = "cc-gui"
-path = "src/main.rs"
-
-[[bin]]
-name = "cc-gui-debug"
-path = "src/main.rs"
-required-features = ["debug-bin"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

@@ -136,7 +136,6 @@ mod coding_plan_quota;
 mod command_registry;
 mod computer_use;
 mod curated_skills;
-pub mod debug_identity;
 mod diagnostics_bundle;
 mod dictation;
 mod email;
@@ -313,15 +312,9 @@ pub fn run() {
             // Create the main window programmatically so we can register on_navigation
             // to intercept external URLs (e.g. links inside iframes) and open them
             // in the system browser instead of navigating the webview.
-            // Debug builds mark the title so Dock / app switcher are not confused with release.
-            #[cfg(debug_assertions)]
-            let app_window_title = debug_identity::DEBUG_APP_DISPLAY_NAME;
-            #[cfg(not(debug_assertions))]
-            let app_window_title = "ccgui";
-
             let mut win_builder =
                 WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
-                    .title(app_window_title)
+                    .title("ccgui")
                     .inner_size(1300.0, 800.0)
                     .min_inner_size(800.0, 600.0)
                     .devtools(true);
@@ -372,18 +365,7 @@ pub fn run() {
                 let _ = window.hide_menu();
             }
 
-            // Debug dock icon + badge after NSApplication is alive.
-            // Dock *tooltip* comes from binary filename `cc-gui-debug`
-            // (`tauri.dev.conf.json` mainBinaryName + `--features debug-bin`).
-            #[cfg(all(debug_assertions, target_os = "macos"))]
-            {
-                let window_for_identity = window.clone();
-                let _ = window_for_identity.run_on_main_thread(|| {
-                    debug_identity::apply_debug_dock_identity();
-                });
-            }
-
-            // Suppress unused variable warning on non-Windows / non-debug paths
+            // Suppress unused variable warning on non-Windows
             let _ = &window;
 
             Ok(())

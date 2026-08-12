@@ -261,8 +261,6 @@ async function buildMacOS(arch, options = {}) {
       // Inside-out: dylibs → helpers → main → .app
       const identity = CONFIG.codesignIdentity;
       const entitlements = CONFIG.entitlements;
-      const debugBin = join(bundlePath, "Contents/MacOS/cc-gui-debug");
-      exec(`rm -f "${debugBin}"`, { ignoreError: true });
       exec(`codesign --force --options runtime --sign "${identity}" --timestamp "${frameworksPath}/libcrypto.3.dylib"`);
       exec(`codesign --force --options runtime --sign "${identity}" --timestamp "${frameworksPath}/libssl.3.dylib"`);
       exec(`codesign --force --options runtime --sign "${identity}" --entitlements "${entitlements}" --timestamp "${bundlePath}/Contents/MacOS/cc_gui_daemon"`);

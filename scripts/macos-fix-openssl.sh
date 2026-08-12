@@ -53,15 +53,6 @@ if [[ ! -f "${libssl}" || ! -f "${libcrypto}" ]]; then
   exit 1
 fi
 
-# Release must not ship the dev-only binary (distinct Dock label for local runs).
-# Leftover copies break nested codesign on some Intel runners.
-for stray in "${macos_dir}/cc-gui-debug" "${macos_dir}/cc-gui-debug-debug"; do
-  if [[ -e "${stray}" ]]; then
-    echo "Removing non-release binary from app bundle: ${stray}"
-    rm -f "${stray}"
-  fi
-done
-
 mkdir -p "${frameworks_dir}"
 cp -f "${libssl}" "${frameworks_dir}/"
 cp -f "${libcrypto}" "${frameworks_dir}/"
