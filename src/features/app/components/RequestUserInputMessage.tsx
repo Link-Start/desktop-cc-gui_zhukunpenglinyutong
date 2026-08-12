@@ -389,20 +389,6 @@ export function RequestUserInputMessage({
     return onSubmit(targetRequest, response);
   };
 
-  const dismissRequest = (
-    targetRequest: RequestUserInputRequest,
-    targetRequestKey: string,
-  ) => {
-    if (!onDismiss) {
-      return undefined;
-    }
-    const settlementOptions = getSettlementOptions(targetRequestKey);
-    if (settlementOptions) {
-      return onDismiss(targetRequest, settlementOptions);
-    }
-    return onDismiss(targetRequest);
-  };
-
   const handleOptionToggle = (
     questionId: string,
     optionKey: string,
@@ -599,18 +585,15 @@ export function RequestUserInputMessage({
       const skippedQuestionIds = preservePartial
         ? buildSkippedQuestionIds()
         : buildAllSkippedQuestionIds(targetRequest);
-      if (onSubmit) {
-        await submitRequest(
-          targetRequest,
-          {
-            answers: preservePartial ? answers : {},
-            ...(skippedQuestionIds.length > 0 ? { skippedQuestionIds } : {}),
-          },
-          targetRequestKey,
-        );
-      } else if (onDismiss) {
-        await dismissRequest(targetRequest, targetRequestKey);
-      }
+      // onSubmit is required; skip always goes through submit with skippedQuestionIds.
+      await submitRequest(
+        targetRequest,
+        {
+          answers: preservePartial ? answers : {},
+          ...(skippedQuestionIds.length > 0 ? { skippedQuestionIds } : {}),
+        },
+        targetRequestKey,
+      );
       settleRequestLocally(targetRequestKey);
     } catch {
       setSubmitError(t("approval.submitFailed"));

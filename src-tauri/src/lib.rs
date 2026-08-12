@@ -182,6 +182,7 @@ pub mod agent_orchestration;
 mod startup_guard;
 mod state;
 mod storage;
+mod system_notification;
 mod terminal;
 mod text_encoding;
 mod tokentracker;

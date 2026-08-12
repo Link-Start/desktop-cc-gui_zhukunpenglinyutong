@@ -49,7 +49,10 @@ import {
   getClientStoreSync,
   writeClientStoreValue,
 } from "../../services/clientStorage";
-import { sendSystemNotification } from "../../services/systemNotification";
+import {
+  requestSystemNotificationPermission,
+  sendSystemNotification,
+} from "../../services/systemNotification";
 import { getWorkspaceFiles } from "../../services/tauri/workspaceFiles";
 import type {
   AppSettings,
@@ -844,6 +847,16 @@ export function useAppShellSearchRadarSection({
   // completion tracker effect 的依赖里触发 W×T 全量扫描。
   const completionPreviewItemsRef = useRef(deferredThreadItemsByThread);
   completionPreviewItemsRef.current = deferredThreadItemsByThread;
+
+  // macOS: request UNUserNotificationCenter authorization early so the app
+  // appears in System Settings → Notifications under the real bundle id.
+  // Legacy tauri-plugin-notification never prompted / registered on recent macOS.
+  useEffect(() => {
+    if (!appSettings.systemNotificationEnabled) {
+      return;
+    }
+    void requestSystemNotificationPermission();
+  }, [appSettings.systemNotificationEnabled]);
 
   useEffect(() => {
     const previous = completionTrackerBySessionRef.current;

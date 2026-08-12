@@ -1879,8 +1879,6 @@ export function parseClaudeHistoryMessages(
     }
 
     const toolName = getClaudeToolName(message);
-    const normalizedToolName = normalizeClaudeToolName(toolName);
-    const normalizedToolType = normalizeClaudeToolName(toolType);
     const isAskUserQuestion =
       isClaudeAskUserQuestionToolName(toolName) ||
       isClaudeAskUserQuestionToolName(toolType);
