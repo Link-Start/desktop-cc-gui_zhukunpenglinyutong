@@ -67,6 +67,7 @@ import {
   type AppShellDomainContexts,
   type DomainFlattenIdentityCache,
 } from "../../domains/appShellDomainContexts";
+import { isSharedSessionThreadId } from "../../../features/shared-session/utils/sharedSessionIdentity";
 
 type AppShellLayoutNodesContext = Record<string, any>;
 
@@ -1753,9 +1754,12 @@ export function useAppShellLayoutNodesSection(
     startCompact("/compact"),
   );
   const handleToggleCompletionEmail = useEventCallback(() => {
-    if (activeThreadId) {
-      toggleCompletionEmailIntent(activeThreadId);
+    // Shared V2 不以 activeTurnId 作 turn lifecycle，完成邮件匹配会静默失败；
+    // UI 在 shared 会话隐藏入口，handler 再 hard-guard 防旁路调用。
+    if (!activeThreadId || isSharedSessionThreadId(activeThreadId)) {
+      return;
     }
+    toggleCompletionEmailIntent(activeThreadId);
   });
   const handleForkFromMessage = useEventCallback(
     async (messageId: string, options?: CodexProviderProfileSelection) => {
@@ -2245,11 +2249,18 @@ export function useAppShellLayoutNodesSection(
       onQueue: handleComposerQueueWithIntentCanvas,
       onRequestContextCompaction: handleRequestContextCompaction,
       onStop: interruptTurn,
+      // Shared CLI：完成邮件与 Native turn lifecycle 脱节，隐藏入口避免假能力。
+      // ContextBar 以 onToggleCompletionEmail 是否传入决定是否渲染邮件图标。
       completionEmailSelected: Boolean(
-        activeThreadId && completionEmailIntentByThread?.[activeThreadId],
+        activeThreadId &&
+          !isSharedSessionThreadId(activeThreadId) &&
+          completionEmailIntentByThread?.[activeThreadId],
       ),
-      completionEmailDisabled: !activeThreadId,
-      onToggleCompletionEmail: handleToggleCompletionEmail,
+      completionEmailDisabled:
+        !activeThreadId || isSharedSessionThreadId(activeThreadId),
+      onToggleCompletionEmail: isSharedSessionThreadId(activeThreadId)
+        ? undefined
+        : handleToggleCompletionEmail,
       onRewind: handleRewindFromMessage,
       onForkFromMessage: handleForkFromMessage,
       canStop: canInterrupt,
