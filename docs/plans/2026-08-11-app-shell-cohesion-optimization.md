@@ -590,6 +590,14 @@ PY
 
 ## 10. Progress Log（只追加，勿删历史）
 
+### 2026-08-12 — cold-start P2-1 / 治理门禁同步
+
+- **动作**：新用户冷启动 P2 清单收口时复核 AppShell 分域状态；`npm run check:app-shell:governance` 全绿；file-size gate allowlist 增补 `sections/useWorkspaceThreadListHydration.ts`（962 行，过渡巨石）。  
+- **路径**：`src/app-shell/assembly/appShellFileSizeGate.test.ts`；证据 `.artifacts/perf/cold-start-20260812/p2-app-shell-governance.txt`、`p2-snapshot.json`。  
+- **结构事实**：`src/app-shell.tsx` 仍为 1 行 re-export；根 composition 单 hook 架构保持。  
+- **未做**：端到端根渲染 &lt;30ms Profiler 重采样（需 tauri:dev 关 scan 人工/探针）。  
+- **下一步**：可选削巨石（layoutNodes / hydration / rootComposition）与 keys 再压。  
+
 ### 2026-08-11 — 计划创建
 
 - **动作**：写入本执行计划；固化诊断、Phase、Todo、AI 回写协议。  

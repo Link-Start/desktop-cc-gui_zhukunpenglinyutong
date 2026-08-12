@@ -9,10 +9,6 @@ const require = createRequire(import.meta.url);
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
 const ensureDevPortScript = path.join(scriptDir, "ensure-dev-port.mjs");
-const generateReleaseNotesScript = path.join(
-  scriptDir,
-  "generate-release-notes.mjs",
-);
 const vitePackageJsonPath = require.resolve("vite/package.json");
 const viteBinPath = path.join(path.dirname(vitePackageJsonPath), "bin", "vite.js");
 
@@ -72,8 +68,9 @@ function spawnViteDevServer() {
 async function main() {
   await ensureTauriDevResourcePlaceholders(repoRoot);
   await runNodeScript(ensureDevPortScript);
-  // Keep per-version release-notes slices in sync before Vite resolves imports.
-  await runNodeScript(generateReleaseNotesScript);
+  // Release notes catalog is generated manually (or on production build):
+  //   npm run release-notes:generate
+  // Dev no longer rewrites generated/* on every start.
   spawnViteDevServer();
 }
 

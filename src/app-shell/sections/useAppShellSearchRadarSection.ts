@@ -50,7 +50,7 @@ import {
   writeClientStoreValue,
 } from "../../services/clientStorage";
 import { sendSystemNotification } from "../../services/systemNotification";
-import { getWorkspaceFiles } from "../../services/tauri";
+import { getWorkspaceFiles } from "../../services/tauri/workspaceFiles";
 import type {
   AppSettings,
   ConversationItem,

@@ -83,7 +83,7 @@ describe("getOpenCodeSessionList", () => {
   });
 
   it("coalesces concurrent lists into one in-flight invoke", async () => {
-    let resolveInvoke: ((value: unknown) => void) | null = null;
+    let resolveInvoke: ((value: unknown) => void) | undefined;
     vi.mocked(invoke).mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -95,7 +95,8 @@ describe("getOpenCodeSessionList", () => {
     const b = getOpenCodeSessionList("ws-1");
     expect(invoke).toHaveBeenCalledTimes(1);
 
-    resolveInvoke?.([
+    expect(resolveInvoke).toBeTypeOf("function");
+    resolveInvoke!([
       {
         sessionId: "s1",
         title: "Demo",

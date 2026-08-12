@@ -46,13 +46,12 @@ import {
   pushQuickSwitcherSelectWorkspaceToast,
   type QuickSwitcherNavigationState,
 } from "../quickSwitcherNavigationState";
+import { getEngineModels } from "../../../services/tauri/appServer";
+import { archiveWorkspaceSessions } from "../../../services/tauri/sessionManagement";
 import {
-  archiveWorkspaceSessions,
   clearDetachedExternalChangeMonitor,
   configureDetachedExternalChangeMonitor,
-  getEngineModels,
-} from "../../../services/tauri";
-import { openOrFocusBrowserAgentDockWindow } from "../../../features/browser-agent/browserAgentDockWindow";
+} from "../../../services/tauri/workspaceFiles";
 import { shouldEnableMainFileExternalChangeMonitoring } from "../fileExternalMonitoring";
 import {
   getThreadSelectDiffCleanupAction,
@@ -948,14 +947,22 @@ export function useAppShellLayoutNodesSection(
       clientUiVisibility.isControlVisible("topTool.rightPanel"),
   };
   const browserDockOpen = false;
-  const handleToggleBrowserDock = useCallback(() => {
-    void openOrFocusBrowserAgentDockWindow({
-      workspaceId: activeWorkspaceId,
-      workspaceName: activeWorkspace?.name ?? null,
-    }).catch((error) => {
-      alertError(error instanceof Error ? error.message : String(error));
-    });
+  const openBrowserAgentDock = useCallback(() => {
+    // Dynamic import keeps browser-agent dock out of AppShell first-hop mapDeps (P0-3).
+    void import("../../../features/browser-agent/browserAgentDockWindow")
+      .then(({ openOrFocusBrowserAgentDockWindow }) =>
+        openOrFocusBrowserAgentDockWindow({
+          workspaceId: activeWorkspaceId,
+          workspaceName: activeWorkspace?.name ?? null,
+        }),
+      )
+      .catch((error) => {
+        alertError(error instanceof Error ? error.message : String(error));
+      });
   }, [activeWorkspace?.name, activeWorkspaceId, alertError]);
+  const handleToggleBrowserDock = useCallback(() => {
+    openBrowserAgentDock();
+  }, [openBrowserAgentDock]);
   const mainHeaderActions = useMainHeaderActionItems({
     isCompact,
     rightPanelCollapsed,
@@ -1097,20 +1104,10 @@ export function useAppShellLayoutNodesSection(
 
   useEffect(() => {
     const handleExternalToggle = () => {
-      void openOrFocusBrowserAgentDockWindow({
-        workspaceId: activeWorkspaceId,
-        workspaceName: activeWorkspace?.name ?? null,
-      }).catch((error) => {
-        alertError(error instanceof Error ? error.message : String(error));
-      });
+      openBrowserAgentDock();
     };
     const handleExternalOpen = () => {
-      void openOrFocusBrowserAgentDockWindow({
-        workspaceId: activeWorkspaceId,
-        workspaceName: activeWorkspace?.name ?? null,
-      }).catch((error) => {
-        alertError(error instanceof Error ? error.message : String(error));
-      });
+      openBrowserAgentDock();
     };
 
     window.addEventListener("browser-agent:toggle-dock", handleExternalToggle);
@@ -1122,7 +1119,7 @@ export function useAppShellLayoutNodesSection(
       );
       window.removeEventListener("browser-agent:open-dock", handleExternalOpen);
     };
-  }, [activeWorkspace?.name, activeWorkspaceId, alertError]);
+  }, [openBrowserAgentDock]);
 
   // Stabilized handler/prop references for the useLayoutNodes options object.
   // Each was previously an inline arrow/object literal recreated every render,

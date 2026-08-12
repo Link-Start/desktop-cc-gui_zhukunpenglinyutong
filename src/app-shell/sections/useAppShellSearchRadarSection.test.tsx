@@ -92,7 +92,7 @@ vi.mock("../../services/systemNotification", () => ({
   sendSystemNotification: vi.fn(),
 }));
 
-vi.mock("../../services/tauri", () => ({
+vi.mock("../../services/tauri/workspaceFiles", () => ({
   getWorkspaceFiles: getWorkspaceFilesMock,
 }));
 

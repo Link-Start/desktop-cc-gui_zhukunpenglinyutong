@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { revealInFileManager } from "../../services/tauri";
+import { revealInFileManager } from "../../services/tauri/workspaceRuntime";
 import type { WorkspaceInfo } from "../../types";
 
 type PromptScope = "workspace" | "global";

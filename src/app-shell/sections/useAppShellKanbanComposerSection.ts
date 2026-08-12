@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { homeDir } from "@tauri-apps/api/path";
-import { ensureWorkspacePathDir, isWebServiceRuntime } from "../../services/tauri";
+import { ensureWorkspacePathDir } from "../../services/tauri/workspaceRuntime";
+import { isWebServiceRuntime } from "../../services/tauri/runtimeMode";
 import { resolveKanbanThreadCreationStrategy } from "../../features/kanban/utils/contextMode";
 import { deriveKanbanTaskTitle } from "../../features/kanban/utils/taskTitle";
 import {

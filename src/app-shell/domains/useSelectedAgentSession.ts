@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { getClientStoreSync, writeClientStoreValue } from "../../services/clientStorage";
-import { listAgentConfigs, listBuiltInAgents } from "../../services/tauri";
+import { listAgentConfigs, listBuiltInAgents } from "../../services/tauri/agents";
 import type { DebugEntry, SelectedAgentOption } from "../../types";
 import {
   BUILT_IN_AGENT_CATALOG_CHANGED_EVENT,

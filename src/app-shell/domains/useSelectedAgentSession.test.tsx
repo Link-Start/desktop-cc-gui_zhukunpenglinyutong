@@ -37,7 +37,7 @@ vi.mock("../../services/clientStorage", () => ({
   writeClientStoreValue,
 }));
 
-vi.mock("../../services/tauri", () => ({
+vi.mock("../../services/tauri/agents", () => ({
   listAgentConfigs,
   listBuiltInAgents,
 }));

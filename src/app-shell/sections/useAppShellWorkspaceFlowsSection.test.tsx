@@ -3,7 +3,7 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceInfo } from "../../types";
 import * as systemNotification from "../../services/systemNotification";
-import { writeTerminalSession } from "../../services/tauri";
+import { writeTerminalSession } from "../../services/tauri/terminalRuntime";
 import { useTerminalController } from "../../features/terminal/hooks/useTerminalController";
 import type { TerminalSessionState } from "../../features/terminal/hooks/useTerminalSession";
 import { useWorkspaceRuntimeRun } from "../../features/app/hooks/useWorkspaceRuntimeRun";
@@ -17,7 +17,7 @@ vi.mock("../../services/clientStorage", () => ({
   writeClientStoreValue: vi.fn(),
 }));
 
-vi.mock("../../services/tauri", () => ({
+vi.mock("../../services/tauri/terminalRuntime", () => ({
   writeTerminalSession: vi.fn(),
 }));
 

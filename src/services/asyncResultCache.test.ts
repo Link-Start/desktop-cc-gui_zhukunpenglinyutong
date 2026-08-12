@@ -12,7 +12,7 @@ describe("createAsyncResultCache", () => {
 
   it("joins concurrent loaders", async () => {
     const cache = createAsyncResultCache<number>({ ttlMs: 60_000 });
-    let resolveLoader: ((value: number) => void) | null = null;
+    let resolveLoader: ((value: number) => void) | undefined;
     const loader = vi.fn(
       () =>
         new Promise<number>((resolve) => {
@@ -23,7 +23,8 @@ describe("createAsyncResultCache", () => {
     const a = cache.getOrLoad("k", loader);
     const b = cache.getOrLoad("k", loader);
     expect(loader).toHaveBeenCalledTimes(1);
-    resolveLoader?.(7);
+    expect(resolveLoader).toBeTypeOf("function");
+    resolveLoader!(7);
     await expect(a).resolves.toBe(7);
     await expect(b).resolves.toBe(7);
   });

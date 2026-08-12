@@ -2,11 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useGitBranches } from "../../features/git/hooks/useGitBranches";
 import { useGitRepositories } from "../../features/git/hooks/useGitRepositories";
 import { useGitActions } from "../../features/git/hooks/useGitActions";
-import {
-  buildDetachedFileExplorerSession,
-  openOrFocusDetachedFileExplorer,
-} from "../../features/files/detachedFileExplorer";
-import { pickWorkspacePath } from "../../services/tauri";
+import { pickWorkspacePath } from "../../services/tauri/filePickers";
 import { useEventCallback } from "../../utils/useEventCallback";
 import { resolveWorkspaceRelativePath } from "../../utils/workspacePaths";
 import { pushErrorToast } from "../../services/toasts";
@@ -268,6 +264,11 @@ export function useAppShellGitWorkspaceOpsSection({
         return;
       }
       try {
+        // Dynamic import keeps detached file explorer out of AppShell first-hop mapDeps (P0-3).
+        const {
+          buildDetachedFileExplorerSession,
+          openOrFocusDetachedFileExplorer,
+        } = await import("../../features/files/detachedFileExplorer");
         await openOrFocusDetachedFileExplorer(
           buildDetachedFileExplorerSession({
             workspaceId: activeWorkspace.id,

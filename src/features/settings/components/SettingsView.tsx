@@ -37,6 +37,7 @@ import type {
   WorkspaceInfo,
 } from "../../../types";
 import { loadSettingsStyles } from "../../../styles/featureStyleLoaders";
+import { useFeatureStylesReady } from "../../../styles/useFeatureStylesReady";
 import wxqImage from "../../../assets/wxq.png";
 import { buildShortcutValue } from "../../../utils/shortcuts";
 import { clampUiScale } from "../../../utils/uiScale";
@@ -352,9 +353,9 @@ export function SettingsView({
   initialSection,
   initialHighlightTarget,
 }: SettingsViewProps) {
-  useEffect(() => {
-    void loadSettingsStyles();
-  }, []);
+  // Block first paint of settings until styles are ready (avoids FOUC).
+  // i18n settings.* keys now ship with the full locale pack at startup.
+  const settingsStylesReady = useFeatureStylesReady(loadSettingsStyles);
   const { t } = useTranslation();
   const runCodexDoctor = onRunCodexDoctor ?? onRunDoctor;
   const [activeSection, setActiveSection] =
@@ -1781,6 +1782,10 @@ export function SettingsView({
         };
     }
   }, [activeSection, t]);
+
+  if (!settingsStylesReady) {
+    return null;
+  }
 
   return (
     <div className="settings-embedded">

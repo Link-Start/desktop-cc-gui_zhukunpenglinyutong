@@ -5,7 +5,7 @@ import {
   setComposerEnginePref,
 } from "../../features/composer/hooks/composerEnginePrefsStore";
 import { seedCliEngineVisibility } from "../../features/composer/hooks/cliEngineVisibilityStore";
-import { updateAppSettings } from "../../services/tauri";
+import { updateAppSettings } from "../../services/tauri/settings";
 import type { AppSettings, ComposerEnginePrefs, EngineType } from "../../types";
 
 type UseAppShellComposerPrefsPersistenceInput = {

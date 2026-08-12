@@ -42,7 +42,7 @@ import {
   unstageGitAll,
   unstageGitFile,
   unstageGitPaths,
-} from "../../services/tauri";
+} from "../../services/tauri/git";
 import { normalizeFsPath } from "../../utils/workspacePaths";
 import type {
   AppMode,
@@ -503,7 +503,8 @@ export function useAppShellRootComposition() {
     setSelectedCollaborationModeId,
   } = useCollaborationModes({
     activeWorkspace,
-    enabled: true,
+    // P1-3: no active workspace → skip collaboration catalog host work entirely.
+    enabled: Boolean(activeWorkspace?.id),
     onDebug: addDebugEntry,
   });
   const {
