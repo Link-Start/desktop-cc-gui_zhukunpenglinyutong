@@ -1,4 +1,4 @@
-export type ReplayProfile = "baseline" | "optimized";
+export type ReplayProfile = "baseline" | "optimized" | "liveDelta";
 
 type ReplayEventBase = {
   id: string;
