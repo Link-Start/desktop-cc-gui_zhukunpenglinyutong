@@ -21,6 +21,7 @@ import {
   type StartupPhase,
 } from "./features/startup-orchestration/utils/startupTrace";
 import { recordStartupPerfMarker } from "./services/perfBaseline/startupMarkers";
+import { scheduleFullMarkdownRuntimePrewarm } from "./markdown/prewarmFullMarkdownRuntime";
 
 function renderBootstrapFallback(error: unknown) {
   const root = document.getElementById("root");
@@ -253,6 +254,10 @@ async function bootstrap() {
   void markRendererReady();
   void runPostRenderBootstrapTasks();
   scheduleDeferredBaiduTongji();
+  // Cold-start: warm the vendor-markdown chunk during idle once the startup
+  // gate opens, so the first message render does not compile it on the
+  // user's first-click path (no-op until startup-gate-ready).
+  scheduleFullMarkdownRuntimePrewarm();
 }
 
 /**
