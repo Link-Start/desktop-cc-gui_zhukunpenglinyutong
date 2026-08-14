@@ -16,6 +16,7 @@ import {
 import {
   useWorkspaceThreadListHydration,
   COLD_START_IDLE_MIN_DELAY_MS,
+  POST_FIRST_PAINT_FULL_CATALOG_MAX_DEFERS,
   POST_FIRST_PAINT_FULL_CATALOG_MAX_WAIT_MS,
   POST_FIRST_PAINT_FULL_CATALOG_MIN_DELAY_MS,
   WORKSPACE_SWITCH_INTENT_DELAY_MS,
@@ -985,5 +986,178 @@ describe("useWorkspaceThreadListHydration", () => {
       workspaces[0],
       expect.objectContaining({ preserveState: true }),
     );
+  });
+
+  describe("pointerdown soft-cancel shield", () => {
+    type SoftRefreshOptions = {
+      preserveState?: boolean;
+      startupHydrationMode?: "full-catalog" | "first-paint";
+      forceSessionIndexSync?: boolean;
+      isStale?: () => boolean;
+    };
+
+    /** First-paint resolves; post-first-paint soft re-sync hangs in flight. */
+    function createSoftRefreshMock() {
+      const softRefreshCalls: Array<{ options?: SoftRefreshOptions }> = [];
+      const listThreadsForWorkspace = vi.fn(
+        (_workspace: WorkspaceInfo, options?: SoftRefreshOptions) => {
+          if (options?.forceSessionIndexSync) {
+            softRefreshCalls.push({ options });
+            // Raw off-orchestrator call: a hanging promise is safe to leak.
+            return new Promise<void>(() => {});
+          }
+          return Promise.resolve(undefined);
+        },
+      );
+      return { softRefreshCalls, listThreadsForWorkspace };
+    }
+
+    function renderActiveHydration(
+      listThreadsForWorkspace: ReturnType<typeof vi.fn>,
+      workspaceId: string,
+    ) {
+      const workspaces = [createWorkspace(workspaceId)];
+      renderHook(() =>
+        useWorkspaceThreadListHydration({
+          activeWorkspaceId: workspaceId,
+          activeWorkspaceProjectionOwnerIds: [workspaceId],
+          listThreadsForWorkspace,
+          threadListLoadingByWorkspace: {},
+          workspaces,
+          workspacesById: new Map(
+            workspaces.map((workspace) => [workspace.id, workspace]),
+          ),
+        }),
+      );
+    }
+
+    async function reachInFlightSoftRefresh(
+      listThreadsForWorkspace: ReturnType<typeof vi.fn>,
+    ) {
+      // first-paint settles → gate-ready → quiet post-first-paint soft re-sync
+      // (test delays are 0, so the quiet schedule fires on a macrotask).
+      await waitFor(() => {
+        expect(
+          listThreadsForWorkspace.mock.calls.some(
+            (call) =>
+              (call[1] as SoftRefreshOptions | undefined)
+                ?.forceSessionIndexSync === true,
+          ),
+        ).toBe(true);
+      });
+      expect(
+        getStartupTraceSnapshot().milestones["startup-gate-ready"],
+      ).toBeTruthy();
+    }
+
+    const dispatchPointerDown = () => {
+      act(() => {
+        window.dispatchEvent(new window.Event("pointerdown"));
+      });
+    };
+
+    it("keeps the pre-gate shield: pointerdown cancels first-paint and re-arms", async () => {
+      // Unique workspace id per test: the global orchestrator dedupes by
+      // `thread-list:<kind>:<id>` and a hanging task would otherwise attach
+      // the next test's first-paint to this one.
+      const workspaceId = "ws-pre-gate";
+      // Hanging tasks occupy the single active-workspace orchestrator slot —
+      // collect resolvers and settle them before the test ends.
+      const pendingResolvers: Array<() => void> = [];
+      const listThreadsForWorkspace = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            pendingResolvers.push(resolve);
+          }),
+      );
+      const cancelSpy = vi.spyOn(startupOrchestrator, "cancelWorkspaceTasks");
+      renderActiveHydration(listThreadsForWorkspace, workspaceId);
+
+      await waitFor(() => {
+        expect(listThreadsForWorkspace).toHaveBeenCalledTimes(1);
+      });
+      expect(
+        getStartupTraceSnapshot().milestones["startup-gate-ready"],
+      ).toBeFalsy();
+
+      dispatchPointerDown();
+      expect(cancelSpy).toHaveBeenCalledWith(workspaceId, "stale");
+
+      // Quiet re-arm re-ensures first-paint for the still-active workspace.
+      await waitFor(() => {
+        expect(
+          listThreadsForWorkspace.mock.calls.length,
+        ).toBeGreaterThanOrEqual(2);
+      });
+      cancelSpy.mockRestore();
+      pendingResolvers.forEach((resolve) => resolve());
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    });
+
+    it("post-gate: pointerdown soft-cancels an in-flight soft re-sync and re-arms quiet", async () => {
+      const { softRefreshCalls, listThreadsForWorkspace } =
+        createSoftRefreshMock();
+      renderActiveHydration(listThreadsForWorkspace, "ws-post-gate");
+      await reachInFlightSoftRefresh(listThreadsForWorkspace);
+
+      expect(softRefreshCalls.length).toBe(1);
+      const firstRunStale = softRefreshCalls[0]!.options!.isStale!;
+      expect(firstRunStale()).toBe(false);
+
+      dispatchPointerDown();
+      // Generation bump: the orphan run's late apply must no-op.
+      expect(firstRunStale()).toBe(true);
+
+      // Quiet re-arm starts a replacement run once the schedule fires.
+      await waitFor(() => {
+        expect(softRefreshCalls.length).toBe(2);
+      });
+      expect(softRefreshCalls[1]!.options!.isStale!()).toBe(false);
+    });
+
+    it("forces one run after the defer ceiling, then resets the counter", async () => {
+      const { softRefreshCalls, listThreadsForWorkspace } =
+        createSoftRefreshMock();
+      renderActiveHydration(listThreadsForWorkspace, "ws-defer-ceiling");
+      await reachInFlightSoftRefresh(listThreadsForWorkspace);
+
+      // Each click soft-cancels the in-flight run and re-arms a fresh one.
+      for (let defer = 1; defer <= POST_FIRST_PAINT_FULL_CATALOG_MAX_DEFERS; defer++) {
+        dispatchPointerDown();
+        await waitFor(() => {
+          expect(softRefreshCalls.length).toBe(defer + 1);
+        });
+        expect(
+          softRefreshCalls[defer]!.options!.isStale!(),
+          `replacement run #${defer + 1} must start un-cancelled`,
+        ).toBe(false);
+      }
+
+      // Ceiling reached: the next click must NOT cancel the in-flight run —
+      // it is forced through even though the user is still clicking.
+      const forcedRunStale =
+        softRefreshCalls[POST_FIRST_PAINT_FULL_CATALOG_MAX_DEFERS]!.options!
+          .isStale!;
+      dispatchPointerDown();
+      expect(forcedRunStale()).toBe(false);
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(softRefreshCalls.length).toBe(
+        POST_FIRST_PAINT_FULL_CATALOG_MAX_DEFERS + 1,
+      );
+
+      // Counter reset: the following click may defer (soft-cancel) again.
+      dispatchPointerDown();
+      expect(forcedRunStale()).toBe(true);
+      await waitFor(() => {
+        expect(softRefreshCalls.length).toBe(
+          POST_FIRST_PAINT_FULL_CATALOG_MAX_DEFERS + 2,
+        );
+      });
+    });
   });
 });
