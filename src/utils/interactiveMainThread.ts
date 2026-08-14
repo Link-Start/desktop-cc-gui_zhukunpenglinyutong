@@ -130,6 +130,19 @@ function yieldMacrotask(): Promise<void> {
   });
 }
 
+/**
+ * Between list-apply batches: yield exactly one macrotask when input is
+ * pending so a queued click/key reaches the WebView before the next setThreads
+ * commit. Synchronous fast path when the user is quiet — unlike
+ * yieldToInteractiveInput, this never waits a frame when idle.
+ */
+export async function yieldIfInteractiveInputPending(): Promise<void> {
+  if (!isInputPending()) {
+    return;
+  }
+  await yieldMacrotask();
+}
+
 function yieldAnimationFrame(): Promise<void> {
   return new Promise((resolve) => {
     if (typeof requestAnimationFrame === "function") {

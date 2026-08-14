@@ -1,5 +1,8 @@
 import { startTransition, useCallback, useMemo, useRef } from "react";
-import { yieldToInteractiveInput } from "../../../utils/interactiveMainThread";
+import {
+  yieldIfInteractiveInputPending,
+  yieldToInteractiveInput,
+} from "../../../utils/interactiveMainThread";
 import type { ThreadSummary, WorkspaceInfo } from "../../../types";
 import {
   connectWorkspace as connectWorkspaceService,
@@ -496,6 +499,12 @@ export function useThreadActions({
               hiddenSharedBindingIds: new Set(),
             },
           );
+          if (earlyIndexSummaries.length > 0) {
+            // Urgent early paint still yields one macrotask when a click is
+            // pending — WebView2 hit-test starvation freezes harder than a
+            // one-tick delay. Staleness is re-checked after the yield below.
+            await yieldIfInteractiveInputPending();
+          }
           if (earlyIndexSummaries.length > 0 && isLatestThreadListRequest()) {
             dispatch({
               type: "setThreads",
@@ -1796,7 +1805,14 @@ export function useThreadActions({
                   prev.threadKind === entry.threadKind
                 );
               });
-            if (!unchanged && isLatestThreadListRequest()) {
+            if (!unchanged) {
+              // Input-aware batch boundary: let a pending click land before
+              // this commit, then re-verify freshness — a newer list request
+              // (or soft-cancel) during the yield must win over this apply.
+              await yieldIfInteractiveInputPending();
+              if (!isLatestThreadListRequest()) {
+                return;
+              }
               dispatch({
                 type: "setThreads",
                 workspaceId: workspace.id,
@@ -1909,7 +1925,14 @@ export function useThreadActions({
                   (prev.parentThreadId ?? null) === (entry.parentThreadId ?? null)
                 );
               });
-            if (!unchanged && isLatestThreadListRequest()) {
+            if (!unchanged) {
+              // Input-aware batch boundary: let a pending click land before
+              // this commit, then re-verify freshness — a newer list request
+              // (or soft-cancel) during the yield must win over this apply.
+              await yieldIfInteractiveInputPending();
+              if (!isLatestThreadListRequest()) {
+                return;
+              }
               dispatch({
                 type: "setThreads",
                 workspaceId: workspace.id,
@@ -2014,7 +2037,14 @@ export function useThreadActions({
                   (prev.parentThreadId ?? null) === (entry.parentThreadId ?? null)
                 );
               });
-            if (!unchanged && isLatestThreadListRequest()) {
+            if (!unchanged) {
+              // Input-aware batch boundary: let a pending click land before
+              // this commit, then re-verify freshness — a newer list request
+              // (or soft-cancel) during the yield must win over this apply.
+              await yieldIfInteractiveInputPending();
+              if (!isLatestThreadListRequest()) {
+                return;
+              }
               dispatch({
                 type: "setThreads",
                 workspaceId: workspace.id,
