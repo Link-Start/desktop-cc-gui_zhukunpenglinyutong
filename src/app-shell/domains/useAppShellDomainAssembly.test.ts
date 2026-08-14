@@ -100,12 +100,6 @@ describe("assembleAppShellDomainContexts", () => {
     expect(contexts.workspaceNavigationContext).not.toHaveProperty(
       "activeAccount",
     );
-    expect(contexts.dictationSurfaceContext.dictationState).toBe(
-      "owned:dictationSurfaceContext:dictationState",
-    );
-    expect(contexts.workspaceNavigationContext).not.toHaveProperty(
-      "dictationState",
-    );
     expect(
       Object.keys(contexts.workspaceNavigationContext).length,
     ).toBeLessThanOrEqual(80);
@@ -216,7 +210,6 @@ describe("assembleAppShellDomainContexts", () => {
       ["modeRoutingContext", "isCompact"],
       ["modeRoutingContext", "hasActivePlan"],
       ["accountSurfaceContext", "handleSwitchAccount"],
-      ["dictationSurfaceContext", "handleToggleDictation"],
       ["workspaceCatalogContext", "groupedWorkspaces"],
       ["workspaceCatalogContext", "handleAddWorkspace"],
       ["workspaceNavigationContext", "handleCopyDebug"],
@@ -289,7 +282,7 @@ describe("assembleAppShellDomainContexts", () => {
     // 归位后的新 owner（抽查各目标域一把）
     const rehomed: Array<[string, string]> = [
       ["modeRoutingContext", "setAppMode"],
-      ["modeRoutingContext", "showKanban"],
+      ["modeRoutingContext", "showExtensions"],
       ["sessionIdentityContext", "setActiveThreadId"],
       ["gitSurfaceContext", "queueGitStatusRefresh"],
       ["workspaceCatalogContext", "workspaces"],
@@ -302,7 +295,7 @@ describe("assembleAppShellDomainContexts", () => {
       ["composerContext", "prompts"],
       ["accountSurfaceContext", "refreshAccountRateLimits"],
       ["modelSelectionContext", "refreshEngines"],
-      ["layoutContext", "setKanbanViewState"],
+      ["layoutContext", "setLiveEditPreviewEnabled"],
       ["settingsContext", "openSettings"],
     ];
     for (const [domain, key] of rehomed) {

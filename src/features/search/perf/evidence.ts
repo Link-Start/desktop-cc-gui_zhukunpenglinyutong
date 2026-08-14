@@ -108,8 +108,6 @@ export function providerIdToKind(provider: string): SearchResultKind | null {
       return "thread";
     case "messages":
       return "message";
-    case "kanban":
-      return "kanban";
     case "history":
       return "history";
     case "skills":

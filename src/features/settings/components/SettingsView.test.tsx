@@ -226,7 +226,6 @@ const baseSettings: AppSettings = {
   archiveThreadShortcut: null,
   closeCurrentSessionShortcut: null,
   openChatShortcut: null,
-  openKanbanShortcut: null,
   cycleOpenSessionPrevShortcut: null,
   cycleOpenSessionNextShortcut: null,
   toggleLeftConversationSidebarShortcut: null,
@@ -305,10 +304,6 @@ const baseSettings: AppSettings = {
   chatCanvasUseNormalizedRealtime: true,
   chatCanvasUseUnifiedHistoryLoader: true,
   chatCanvasUsePresentationProfile: false,
-  dictationEnabled: false,
-  dictationModelId: "base",
-  dictationPreferredLanguage: null,
-  dictationHoldKey: null,
   composerEditorPreset: "default",
   composerSendShortcut: "enter",
   composerFenceExpandOnSpace: false,
@@ -410,10 +405,6 @@ const renderDisplaySection = (
     scaleShortcutTitle: "Scale shortcut",
     scaleShortcutText: "Use Command +/-",
     onTestNotificationSound: vi.fn(),
-    dictationModelStatus: null,
-    onDownloadDictationModel: vi.fn(),
-    onCancelDictationDownload: vi.fn(),
-    onRemoveDictationModel: vi.fn(),
     initialSection:
       options.initialSection === null
         ? undefined
@@ -467,10 +458,6 @@ const renderComposerSection = (
     scaleShortcutTitle: "Scale shortcut",
     scaleShortcutText: "Use Command +/-",
     onTestNotificationSound: vi.fn(),
-    dictationModelStatus: null,
-    onDownloadDictationModel: vi.fn(),
-    onCancelDictationDownload: vi.fn(),
-    onRemoveDictationModel: vi.fn(),
     initialSection: "composer",
   };
 
@@ -516,10 +503,6 @@ describe("SettingsView prompts workspace routing", () => {
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
-        dictationModelStatus={null}
-        onDownloadDictationModel={vi.fn()}
-        onCancelDictationDownload={vi.fn()}
-        onRemoveDictationModel={vi.fn()}
         initialSection="agent-prompt-management"
         initialHighlightTarget="prompt-library"
       />,
@@ -584,10 +567,6 @@ describe("SettingsView projects display", () => {
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
-        dictationModelStatus={null}
-        onDownloadDictationModel={vi.fn()}
-        onCancelDictationDownload={vi.fn()}
-        onRemoveDictationModel={vi.fn()}
         initialSection="project-management"
       />,
     );
@@ -668,9 +647,6 @@ describe("SettingsView Display", () => {
     }
     const sidebarQueries = within(sidebar);
 
-    expect(
-      sidebarQueries.queryByRole("button", { name: "Dictation" }),
-    ).toBeNull();
     expect(sidebarQueries.queryByRole("button", { name: "Git" })).toBeNull();
     expect(
       sidebarQueries.queryByRole("button", { name: "Projects" }),
@@ -786,10 +762,6 @@ describe("SettingsView Display", () => {
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
-        dictationModelStatus={null}
-        onDownloadDictationModel={vi.fn()}
-        onCancelDictationDownload={vi.fn()}
-        onRemoveDictationModel={vi.fn()}
         initialSection="experimental"
       />,
     );
@@ -831,10 +803,6 @@ describe("SettingsView Display", () => {
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
-        dictationModelStatus={null}
-        onDownloadDictationModel={vi.fn()}
-        onCancelDictationDownload={vi.fn()}
-        onRemoveDictationModel={vi.fn()}
         initialSection="experimental"
       />,
     );
@@ -897,10 +865,6 @@ describe("SettingsView Display", () => {
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
-        dictationModelStatus={null}
-        onDownloadDictationModel={vi.fn()}
-        onCancelDictationDownload={vi.fn()}
-        onRemoveDictationModel={vi.fn()}
         initialSection="runtime-environment"
         initialHighlightTarget="cli-validation"
       />,
@@ -959,10 +923,6 @@ describe("SettingsView Display", () => {
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
-        dictationModelStatus={null}
-        onDownloadDictationModel={vi.fn()}
-        onCancelDictationDownload={vi.fn()}
-        onRemoveDictationModel={vi.fn()}
         initialSection="runtime-environment"
         initialHighlightTarget="cli-validation"
       />,
@@ -1014,10 +974,6 @@ describe("SettingsView Display", () => {
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
-        dictationModelStatus={null}
-        onDownloadDictationModel={vi.fn()}
-        onCancelDictationDownload={vi.fn()}
-        onRemoveDictationModel={vi.fn()}
         initialSection="runtime-environment"
         initialHighlightTarget="cli-validation"
       />,
@@ -1065,10 +1021,6 @@ describe("SettingsView Display", () => {
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
-        dictationModelStatus={null}
-        onDownloadDictationModel={vi.fn()}
-        onCancelDictationDownload={vi.fn()}
-        onRemoveDictationModel={vi.fn()}
         initialSection="runtime-environment"
         initialHighlightTarget="cli-validation"
       />,
@@ -1122,10 +1074,6 @@ describe("SettingsView Display", () => {
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
-        dictationModelStatus={null}
-        onDownloadDictationModel={vi.fn()}
-        onCancelDictationDownload={vi.fn()}
-        onRemoveDictationModel={vi.fn()}
         initialSection="runtime-environment"
         initialHighlightTarget="cli-validation"
       />,
@@ -1942,10 +1890,6 @@ describe("SettingsView Session management", () => {
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
-        dictationModelStatus={null}
-        onDownloadDictationModel={vi.fn()}
-        onCancelDictationDownload={vi.fn()}
-        onRemoveDictationModel={vi.fn()}
         initialSection="project-management"
         initialHighlightTarget="project-sessions"
       />,
@@ -2020,10 +1964,6 @@ describe("SettingsView Session management", () => {
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
-        dictationModelStatus={null}
-        onDownloadDictationModel={vi.fn()}
-        onCancelDictationDownload={vi.fn()}
-        onRemoveDictationModel={vi.fn()}
         initialSection="project-management"
         initialHighlightTarget="project-sessions"
       />,
@@ -2104,10 +2044,6 @@ describe("SettingsView Session management", () => {
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
-        dictationModelStatus={null}
-        onDownloadDictationModel={vi.fn()}
-        onCancelDictationDownload={vi.fn()}
-        onRemoveDictationModel={vi.fn()}
         initialSection="project-management"
         initialHighlightTarget="project-sessions"
       />,
@@ -2188,10 +2124,6 @@ describe("SettingsView Session management", () => {
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
-        dictationModelStatus={null}
-        onDownloadDictationModel={vi.fn()}
-        onCancelDictationDownload={vi.fn()}
-        onRemoveDictationModel={vi.fn()}
         initialSection="project-management"
         initialHighlightTarget="project-sessions"
       />,
@@ -2329,10 +2261,6 @@ describe("SettingsView Shortcuts", () => {
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
-        dictationModelStatus={null}
-        onDownloadDictationModel={vi.fn()}
-        onCancelDictationDownload={vi.fn()}
-        onRemoveDictationModel={vi.fn()}
       />,
     );
 
@@ -2374,10 +2302,6 @@ describe("SettingsView Shortcuts", () => {
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
-        dictationModelStatus={null}
-        onDownloadDictationModel={vi.fn()}
-        onCancelDictationDownload={vi.fn()}
-        onRemoveDictationModel={vi.fn()}
       />,
     );
     unmount = rendered.unmount;
@@ -2420,10 +2344,6 @@ describe("SettingsView Shortcuts", () => {
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
-        dictationModelStatus={null}
-        onDownloadDictationModel={vi.fn()}
-        onCancelDictationDownload={vi.fn()}
-        onRemoveDictationModel={vi.fn()}
       />,
     );
     unmount = rendered.unmount;

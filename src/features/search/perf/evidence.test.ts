@@ -82,7 +82,6 @@ describe("providerIdToKind", () => {
     expect(providerIdToKind("apis")).toBe("api");
     expect(providerIdToKind("threads")).toBe("thread");
     expect(providerIdToKind("messages")).toBe("message");
-    expect(providerIdToKind("kanban")).toBe("kanban");
     expect(providerIdToKind("history")).toBe("history");
     expect(providerIdToKind("skills")).toBe("skill");
     expect(providerIdToKind("commands")).toBe("command");

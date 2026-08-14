@@ -5,9 +5,9 @@
  * title. We rewrite them to use the application design-system tokens so the
  * fullscreen viewer matches the rest of the application surface.
  *
- * z-index: the variable sits above the highest hard-coded z-index in
- * the repo today (kanban.css: z-index 1200) with a 100 px buffer so
- * future toast / sheet layers do not need to re-tune this file.
+ * z-index: the variable sits above remaining overlay layers with a
+ * 100 px buffer so future toast / sheet layers do not need to re-tune
+ * this file.
  *
  * Backdrop: we apply a per-theme blur so the dimmed surface behind the
  * diagram feels frosted, not just dimmed. The blur radius and tint

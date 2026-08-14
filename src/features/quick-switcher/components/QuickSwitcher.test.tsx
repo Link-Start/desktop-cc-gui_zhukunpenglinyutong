@@ -158,7 +158,6 @@ describe("QuickSwitcher", () => {
       "files",
       "git",
       "history",
-      "kanban",
       "spec",
       "intentCanvas",
       "projectMap",

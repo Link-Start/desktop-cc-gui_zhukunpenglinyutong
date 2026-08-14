@@ -28,8 +28,6 @@ export function useLayoutController({
     onTerminalPanelResizeStart,
     debugPanelHeight,
     onDebugPanelResizeStart,
-    kanbanConversationWidth,
-    onKanbanConversationResizeStart,
   } = useResizablePanels();
 
   // Responsive layout is intentionally disabled: the app always runs in
@@ -77,13 +75,11 @@ export function useLayoutController({
     planPanelHeight,
     terminalPanelHeight,
     debugPanelHeight,
-    kanbanConversationWidth,
     onSidebarResizeStart,
     onRightPanelResizeStart,
     onPlanPanelResizeStart,
     onTerminalPanelResizeStart,
     onDebugPanelResizeStart,
-    onKanbanConversationResizeStart,
     sidebarCollapsed,
     rightPanelCollapsed,
     collapseSidebar,

@@ -4,7 +4,7 @@ status: active
 owner: app-shell
 related_plan: docs/plans/2026-08-11-app-shell-cohesion-optimization.md
 created: 2026-08-11
-updated: 2026-08-11
+updated: 2026-08-15
 source_of_truth_code:
   - src/app-shell-parts/appShellDomainContexts.ts
   - src/app-shell-parts/buildAppShellDomainContextSlices.ts
@@ -27,7 +27,7 @@ source_of_truth_code:
 
 | 类型 | Domains | 说明 |
 |------|---------|------|
-| **干净域**（有 dedicated builder，语义清晰） | `runtimeThread` / `sessionIdentity` / `workspaceCatalog` / `gitSurface` / `modeRouting` / `accountSurface` / `dictationSurface`（T1.7） / `modelSelection` / `collaborationMode` / `runtime` | 新 key 优先走 builder；禁止回灌 mega bag |
+| **干净域**（有 dedicated builder，语义清晰） | `runtimeThread` / `sessionIdentity` / `workspaceCatalog` / `gitSurface` / `modeRouting` / `accountSurface` / `modelSelection` / `collaborationMode` / `runtime` | 新 key 优先走 builder；禁止回灌 mega bag。`dictationSurface` 已随 `remove-dictation-feature` 整域删除 |
 | **历史字母序切 bag** | `workspaceNavigation` / `composer` / `layout` / `fileEditor` / `settings` | 名字≠语义边界；key 多按标识符字母序落入不同 domain |
 
 **推论（指导 P0-1）**：
@@ -37,26 +37,25 @@ source_of_truth_code:
 3. 新增 **collaboration mode** → **`collaborationModeContext`**。  
 4. 其余业务 key：先查本矩阵「建议子域 / 目标归宿」；过渡期若仍只能塞进 legacy bag，**只减不增** 地选语义最接近的簇，并在 PR 注明后续拆分目标。
 
-### 0.2 Domain key 计数（2026-08-11 实测）
+### 0.2 Domain key 计数（2026-08-15 freeze 表；`APP_SHELL_DOMAIN_KEY_HARD_BUDGETS`）
 
 | Domain | Keys | 目标（计划终态） |
 |--------|-----:|------------------|
-| `runtimeThreadContext` | 10 | ~10–20（保持窄热路径） |
-| `sessionIdentityContext` | **12**（T1.2） | 保持窄身份域 |
-| `workspaceCatalogContext` | **29**（T1.3） | 保持 catalog 语义 |
-| `gitSurfaceContext` | **79**（T1.4） | 与 git panel 同频 |
-| `modeRoutingContext` | **6**（T1.5） | 保持窄 mode 路由 |
-| `accountSurfaceContext` | **4**（T1.6） | 保持窄 account 面 |
-| `dictationSurfaceContext` | **10**（T1.7） | 贴近 composer |
-| `workspaceNavigationContext` | **78**（T1.7 自 218，≤80 达标） | ≤ 80 → ~40–60 |
-| `composerContext` | 141 | ≤ 60 |
-| `layoutContext` | 103 | ≤ 60 |
-| `fileEditorContext` | 41 | ≤ 60（已可） |
-| `settingsContext` | 147 | ≤ 60 |
+| `runtimeThreadContext` | **51** | ~10–20（保持窄热路径） |
+| `sessionIdentityContext` | **14** | 保持窄身份域 |
+| `workspaceCatalogContext` | **73** | 保持 catalog 语义 |
+| `gitSurfaceContext` | **105** | 与 git panel 同频 |
+| `modeRoutingContext` | **32**（remove-kanban 出账 `"kanban"`） | 保持窄 mode 路由 |
+| `accountSurfaceContext` | **11** | 保持窄 account 面 |
+| `workspaceNavigationContext` | **78** | ≤ 80 → ~40–60 |
+| `composerContext` | **41** | ≤ 60 |
+| `layoutContext` | **35**（remove-kanban 出账 12 keys） | ≤ 60 |
+| `fileEditorContext` | **66**（remove-kanban 出账 3 keys） | ≤ 60 |
+| `settingsContext` | **36** | ≤ 60 |
 | `runtimeContext` | 1 | 保持极窄 |
-| `modelSelectionContext` | 14 | 保持窄 |
+| `modelSelectionContext` | **22** | 保持窄 |
 | `collaborationModeContext` | 15 | 保持窄 |
-| **合计** | **690** | 显著下降 + 语义对齐 |
+| **合计** | **580**（14 domains；`dictationSurface` 已删） | 显著下降 + 语义对齐 |
 
 ### 0.3 Consumer 读侧（当前锁定）
 
@@ -64,9 +63,9 @@ source_of_truth_code:
 
 | Consumer | 路径 | 订购 domains |
 |----------|------|--------------|
-| **layoutNodes** | `useAppShellLayoutNodesSection.tsx` | **全 15 域**（仍最宽） |
-| **sections** | `useAppShellSections.ts` | sessionIdentity, catalog, gitSurface, modeRouting, accountSurface, dictation, navigation, composer, layout, fileEditor, settings（**无** runtimeThread / model / collab / runtime） |
-| **render** | `renderAppShell.tsx` | sessionIdentity, catalog, gitSurface, modeRouting, accountSurface, dictation, navigation, composer, layout, fileEditor, settings, runtime（**无** runtimeThread / model / collab） |
+| **layoutNodes** | `useAppShellLayoutNodesSection.tsx` | **14 域**（无 runtime；无 dictation） |
+| **sections** | `useAppShellSections.ts` | sessionIdentity, catalog, gitSurface, modeRouting, accountSurface, navigation, composer, layout, fileEditor, settings（**无** runtimeThread / model / collab / runtime） |
+| **render** | `renderAppShell.tsx` | sessionIdentity, catalog, gitSurface, modeRouting, accountSurface, navigation, layout, fileEditor, settings, runtime（**无** runtimeThread / model / collab / composer） |
 
 > 跨域依赖红线：canvas 热投影不得为了 sidebar/git 便利重新 flatten 进 navigation。
 
@@ -88,16 +87,15 @@ source_of_truth_code:
 | `sessionIdentityContext` | 12 | **干净**（T1.2） | `buildSessionIdentityDomainContextSlice` + workspace/session hosts | workspace/thread select 与 refs 同步 | layoutNodes / sections / render | mid | 可被 composer/runtime **只读**；禁止塞 git/hot items |
 | `workspaceCatalogContext` | 29 | **干净**（T1.3） | `buildWorkspaceCatalogDomainContextSlice` + workspace flows / session host | CRUD/group/clone/worktree/fork/repos 列表 | sidebar / home / sections | mid | 不依赖 canvas items；不含 git stage/diff |
 | `gitSurfaceContext` | 79 | **干净**（T1.4） | `buildGitSurfaceDomainContextSlice` + git workspace ops section | diff/status/PR/branch/multi-repo ops | git panel / right chrome | mid | 可依赖 sessionIdentity；**禁止**依赖 `activeItems` |
-| `modeRoutingContext` | 6 | **干净**（T1.5） | `buildModeRoutingDomainContextSlice` + view state / access mode | appMode/tab/centerMode/accessMode/filePanelMode | top chrome / lazy surfaces | mid | 驱动 lazy；不反灌热会话 |
-| `accountSurfaceContext` | 4 | **干净**（T1.6） | `buildAccountSurfaceDomainContextSlice` + account hooks | account 切换 / approvals | settings / chrome | cold–mid | 窄读 |
-| `dictationSurfaceContext` | 10 | **干净**（T1.7） | `buildDictationSurfaceDomainContextSlice` | dictation 状态机 | composer 区 | mid | 过渡独立域；勿回灌 navigation |
+| `modeRoutingContext` | 32 | **干净**（T1.5；kanban mode 已删） | `buildModeRoutingDomainContextSlice` + view state / access mode | appMode/tab/centerMode/accessMode/filePanelMode | top chrome / lazy surfaces | mid | 驱动 lazy；不反灌热会话；`AppMode` 无 `"kanban"` |
+| `accountSurfaceContext` | 11 | **干净**（T1.6） | `buildAccountSurfaceDomainContextSlice` + account hooks | account 切换 / approvals | settings / chrome | cold–mid | 窄读 |
 | `workspaceNavigationContext` | **78** | residual（≤80 达标） | assembly bag residual | residual 混装 | layoutNodes / sections / render | mid | 只减不增；可继续削 engine/debug/layout |
-| `composerContext` | 141 | **名不符实**（~117 为 `handle*` 动作总线） | `useComposerDomainHost` + `useAppShellSearchAndComposerSection` + 大量 section handlers | section 产出的 handlers 被字母序灌入 bag | layoutNodes / sections / render | mid | 动作应随业务域走，勿再当「composer 专属」 |
-| `layoutContext` | 103 | **混装** | `useAppShellViewStateSection` / kanban host / panel chrome | view state、kanban store、resize handlers | layoutNodes / sections / render | mid–cold | kanban 数据宜 mode 边界；勿绑热会话 |
-| `fileEditorContext` | 41 | **中等混装** | `useAppShellEditorLayoutSection` + search palette 相关 | editor tabs/split、search hydration、部分 worktree rename | layoutNodes / sections / render | mid | 可与 layout 合并或保持窄文件域 |
-| `settingsContext` | 147 | **混装**（大量 `set*` + threads/workspaces 投影） | 根 settings state + threads bags 投影 | `set*` setters、threadsByWorkspace、workspaces 列表尾段 | layoutNodes / sections / render | mid–cold | threads 全量 map **禁止**进 left/right 无差别订阅（性能红线） |
+| `composerContext` | 41 | **干净**（S4 后达标；Home send 抽出 `useAppShellComposerSendSection`） | `useComposerDomainHost` + `useAppShellSearchAndComposerSection` + composer send section | composer/search handlers | layoutNodes / sections | mid | 动作应随业务域走；无 kanban `&@` send |
+| `layoutContext` | 35 | **干净**（remove-kanban 出账 12 keys） | `useAppShellViewStateSection` / panel chrome | view state、resize handlers | layoutNodes / sections / render | mid–cold | 勿绑热会话；无 kanban host |
+| `fileEditorContext` | 66 | **中等混装** | `useAppShellEditorLayoutSection` + search palette 相关 | editor tabs/split、search hydration、部分 worktree rename | layoutNodes / sections / render | mid | 可与 layout 合并或保持窄文件域 |
+| `settingsContext` | 36 | **干净**（S4 后达标） | 根 settings state | settings open / appearance setters | layoutNodes / sections / render | mid–cold | threads 全量 map **禁止**进 left/right 无差别订阅（性能红线） |
 | `runtimeContext` | 1 | **干净** | `buildRuntimeDomainContextSlice` | `runtimeRunState` | layoutNodes / render | mid | 保持单字段级窄域 |
-| `modelSelectionContext` | 14 | **干净** | `useComposerDomainHost` → model section + `buildModelSelectionDomainContextSlice` | model/effort setters & catalog | layoutNodes（composer chrome） | mid | 改 model **不应**必改 navigation bag |
+| `modelSelectionContext` | 22 | **干净** | `useComposerDomainHost` → model section + `buildModelSelectionDomainContextSlice` | model/effort setters & catalog | layoutNodes（composer chrome） | mid | 改 model **不应**必改 navigation bag |
 | `collaborationModeContext` | 15 | **干净** | collab mode hooks + `buildCollaborationModeDomainContextSlice` | mode resolve / apply / per-thread maps | layoutNodes | mid | 与 composer host 输入耦合，但 context 独立 |
 
 ---
@@ -118,7 +116,7 @@ source_of_truth_code:
 | **accountSurface** | **4（已落地）** | `accountByWorkspace`, `activeAccount`, `accountSwitching`, `approvals` | `accountSurfaceContext` + `buildAccountSurfaceDomainContextSlice` | switch account / approvals | settings、chrome | cold–mid | **T1.6 [x]** | 窄读 |
 | **threadChrome** | ~11 | queue/fuse、rename/delete prompt 入口、`getThreadRows`、completion tracker refs | `useConversationDomainHost` + thread features | thread chrome actions | sidebar thread list | mid | 可并入 session 或 conversation | 可与 runtimeThread 协作，但 items 仍在 runtimeThread |
 | **engineDoctor** | ~13 | `activeEngine`, `doctor*`, `engineStatuses`, `commands` | engine / doctor 路径 | refresh engines | settings、composer chrome | cold–mid | residual 或 settings 旁路 | 勿进 hot path |
-| **dictation** | **10（已落地 T1.7）** | `dictation*` | `dictationSurfaceContext` + builder | dictation state machine | composer | mid | **T1.7 [x]**（独立域达标 ≤80；远期可并 composer） | 与 send 同区 |
+| **dictation** | **0（remove-dictation-feature 整域删除）** | — | 已删除 | — | — | — | **retired** | 勿回灌 navigation / composer |
 | **debugChrome** | ~8 | `debug*`, `errorToasts`, `alertError` | desktop/debug chrome | debug panel | overlay | cold | residual / layout | 低频 |
 | **editorNavLeak** | ~16 | `activeEditor*`, `files`, `fileHistory*`, terminal ensure | `useAppShellEditorLayoutSection` | open file / tabs | center editor | mid | 归 **fileEditor / layout** | 与 git diff 可共享 path，不共享 items |
 | **composerLeak** | ~7 | `activeImages`, `composerInputRef`, `attachImages` | composer host | 附件/输入 ref | composer | mid | 归 **composer** 真域 | — |
@@ -161,7 +159,6 @@ source_of_truth_code:
 
 | 语义簇 | 代表 | Owner | Churn |
 |--------|------|-------|-------|
-| Kanban | `kanban*`, `scoped` 相关在 fileEditor | `useKanbanDomainHost` | mid（surface 外仍可能跑 execution） |
 | Chrome / resize | `onSidebarResizeStart`, panel widths 相关在 settings | view state / desktop chrome | mid |
 | Thread list ops | `listThreads*`, `loadOlderThreads*`, `navigateToThread` | threads features | mid |
 | Transparency / window | `reduceTransparency`, `windowOpacity` | desktop chrome | cold |
@@ -197,7 +194,7 @@ source_of_truth_code:
 | `useWorkspaceSessionHost` | domain host | workspace 列表/分组/连接 + home 投影 | navigation + settings 尾段 |
 | `useComposerDomainHost` | domain host | composer selection、model、agent、plan-apply | modelSelection + composer 部分 + collab 输入 |
 | `useConversationDomainHost` | domain host | `runtimeThreadBoundary`、thread chrome、copy/rename/delete | runtimeThread + navigation threadChrome |
-| `useKanbanDomainHost` / `useModeDomainHosts` | domain host | appMode surface flags + kanban store | layout（kanban*）+ mode flags |
+| `useModeDomainHosts` | re-export | appMode surface flags | mode flags |
 | `useActiveSessionProjection` | projection | isProcessing / activeItems / plan / tokens… | **runtimeThread** |
 | `useAppShellGitWorkspaceOpsSection` | section | git stage/commit/diff/PR/repo | navigation gitSurface + composer git handlers |
 | `useAppShellViewStateSection` | section | mode/tab/panel/layout chrome state | layout + settings setters + navigation mode |
@@ -210,7 +207,6 @@ source_of_truth_code:
 | `useAppShellDesktopChrome` | section | 桌面窗体/透明等 | layout / settings |
 | `useAppShellQuickSwitcherSection` | section | quick switcher | navigation / layout 读 |
 | `useAppShellSearchPaletteSection` / SearchRadar | section | palette + radar | fileEditor search + settings radar |
-| `useAppShellKanbanExecutionSection` | section | kanban 执行（可后台） | layout kanban；须保持非 eager 根重依赖 |
 | `build*DomainContextSlice` | pure builders | 干净域组装 | runtimeThread / model / collab / runtime |
 | `defineAppShellDomainContexts` + `reuseStable*` | contract | owner map 校验 + shallow reuse | 全部 |
 
@@ -258,7 +254,6 @@ settings bootstrap ──► 广读但应稳定
 | account switch | 目标 **accountSurface** | git |
 | composer send handler | composer 真语义区 | navigation |
 | settings 面板 open/section | settings UI 簇 | hot path domains |
-| kanban task CRUD | kanban host → layout 过渡 | navigation 再堆 |
 
 ---
 

@@ -16,7 +16,6 @@ import type { ConversationState } from "../../threads/contracts/conversationCurt
 import type { PresentationProfile } from "../../../conversation-presentation/presentationProfile";
 import type { RuntimeReconnectRecoveryCallbackResult } from "../../../runtime-recovery/runtimeReconnect";
 import type { AgentTaskScrollRequest } from "../types";
-import type { TaskRunRecord } from "../../tasks/types";
 import type { NoteCaptureDraft } from "../../note-cards/types";
 import type { HistoryLoadingProgress } from "../../threads/utils/historyLoadingProgress";
 
@@ -108,7 +107,6 @@ export type MessagesProps = {
     | RuntimeReconnectRecoveryCallbackResult;
   onForkFromMessage?: (messageId: string) => void;
   onRewindFromMessage?: (messageId: string) => void;
-  taskRuns?: TaskRunRecord[];
   /** 稳定 metadata slot；不得承载普通 message/streaming lifecycle。 */
   timelineLeadingNode?: ReactNode;
   /**

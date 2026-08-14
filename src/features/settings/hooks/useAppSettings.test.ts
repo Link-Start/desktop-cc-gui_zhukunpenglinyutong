@@ -624,7 +624,6 @@ describe("useAppSettings", () => {
     );
     expect(result.current.settings.backendMode).toBe("local");
     expect(result.current.settings.disabledCliEngines).toEqual([]);
-    expect(result.current.settings.dictationModelId).toBe("base");
     expect(result.current.settings.interruptShortcut).toBeTruthy();
     expect(result.current.settings.performanceCompatibilityModeEnabled).toBe(
       false,

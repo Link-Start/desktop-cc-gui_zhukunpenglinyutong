@@ -21,7 +21,6 @@ import { useUpdaterController } from "../../features/app/hooks/useUpdaterControl
 import { useReleaseNotes } from "../../features/update/hooks/useReleaseNotes";
 import { useErrorToasts } from "../../features/notifications/hooks/useErrorToasts";
 import { useComposerEditorState } from "../../features/composer/hooks/useComposerEditorState";
-import { useDictationController } from "../../features/app/hooks/useDictationController";
 import { useComposerController } from "../../features/app/hooks/useComposerController";
 import { useEngineController } from "../../features/engine/hooks/useEngineController";
 import { useWorktreePrompt } from "../../features/workspaces/hooks/useWorktreePrompt";
@@ -47,7 +46,6 @@ import { resolveWorkspaceFilesLoadFlags } from "../domains/workspaceFilesGating"
 import { useWorkspaceSessionHost } from "../domains/useWorkspaceSessionHost";
 import { useComposerDomainHost } from "../domains/useComposerDomainHost";
 import { useConversationDomainHost } from "../domains/useConversationDomainHost";
-import { useKanbanDomainHost } from "../domains/useModeDomainHosts";
 import { useAppShellPromptActionsSection } from "../sections/useAppShellPromptActionsSection";
 import { useAppShellSearchRadarSection } from "../sections/useAppShellSearchRadarSection";
 import { useGitStatusRefreshOnTurnSettle } from "../sections/useGitStatusRefreshOnTurnSettle";
@@ -128,19 +126,6 @@ export function useAppShellRootComposition() {
     appSettingsLoading,
   });
   const {
-    dictationModel,
-    dictationState,
-    dictationLevel,
-    dictationTranscript,
-    dictationError,
-    dictationHint,
-    dictationReady,
-    handleToggleDictation,
-    clearDictationTranscript,
-    clearDictationError,
-    clearDictationHint,
-  } = useDictationController(appSettings);
-  const {
     debugOpen,
     setDebugOpen,
     debugEntries,
@@ -210,8 +195,6 @@ export function useAppShellRootComposition() {
     onTerminalPanelResizeStart,
     debugPanelHeight,
     onDebugPanelResizeStart,
-    kanbanConversationWidth,
-    onKanbanConversationResizeStart,
     isCompact,
     isTablet,
     isPhone,
@@ -556,20 +539,6 @@ export function useAppShellRootComposition() {
     },
     [closeSettings],
   );
-  const {
-    panels: kanbanPanels,
-    tasks: kanbanTasks,
-    kanbanViewState,
-    setKanbanViewState,
-    createPanel: kanbanCreatePanel,
-    updatePanel: kanbanUpdatePanel,
-    deletePanel: kanbanDeletePanel,
-    createTask: kanbanCreateTask,
-    updateTask: kanbanUpdateTask,
-    deleteTask: kanbanDeleteTask,
-    reorderTask: kanbanReorderTask,
-  } = useKanbanDomainHost({ workspaces, appMode });
-
   const {
     prompts,
     createPrompt,
@@ -934,13 +903,10 @@ export function useAppShellRootComposition() {
     isPlanMode,
     isPlanPanelDismissed,
     openPlanPanel,
-    selectedKanbanTaskId,
-    setSelectedKanbanTaskId,
     setWorkspaceHomeWorkspaceId,
     showGitHistory,
     showExtensions,
     showHome,
-    showKanban,
     showWorkspaceHome,
   } = useAppShellViewStateSection({
     activePlan,
@@ -1093,7 +1059,6 @@ export function useAppShellRootComposition() {
 
   const {
     activePath,
-    activeWorkspaceKanbanTasks,
     activeWorkspaceThreads,
     ensureWorkspaceThreadListLoaded,
     handleEnsureWorkspaceThreadsForSettings,
@@ -1103,7 +1068,6 @@ export function useAppShellRootComposition() {
     lockLiveSessions,
     RECENT_THREAD_LIMIT,
     recentThreads,
-    scopedKanbanTasks,
     searchApiHydrationStatus,
     searchFileHydrationStatus,
     searchResults,
@@ -1130,7 +1094,6 @@ export function useAppShellRootComposition() {
     isFilesLoading,
     isProcessing,
     isSearchPaletteOpen,
-    kanbanTasks,
     lastAgentMessageByThread,
     listThreadsForWorkspace,
     rightPanelCollapsed,
@@ -1236,7 +1199,6 @@ export function useAppShellRootComposition() {
     },
     setCenterMode,
     setHomeOpen,
-    setSelectedKanbanTaskId,
     t,
     terminalOpen,
     threadsByWorkspace,
@@ -1470,7 +1432,6 @@ export function useAppShellRootComposition() {
     activeWorkspace,
     activeWorkspaceId,
     activeWorkspaceIdRef,
-    activeWorkspaceKanbanTasks,
     activeWorkspaceRef,
     activeWorkspaceThreads,
     addCloneAgent,
@@ -1522,9 +1483,6 @@ export function useAppShellRootComposition() {
     claudeThinkingVisible,
     clearCloneCopiesFolder,
     clearDebugEntries,
-    clearDictationError,
-    clearDictationHint,
-    clearDictationTranscript,
     clearDraftForThread,
     clearGitOperationErrors,
     checkForUpdates,
@@ -1565,13 +1523,6 @@ export function useAppShellRootComposition() {
     deleteThreadPrompt,
     deleteWorkspaceGroup,
     deletingWorktreeIds,
-    dictationError,
-    dictationHint,
-    dictationLevel,
-    dictationModel,
-    dictationReady,
-    dictationState,
-    dictationTranscript,
     diffScrollRequestId,
     diffSource,
     directories,
@@ -1740,7 +1691,6 @@ export function useAppShellRootComposition() {
     handleFuseQueued,
     handleSync,
     handleTestNotificationSound,
-    handleToggleDictation,
     handleToggleRuntimeConsole,
     handleToggleTerminalPanel,
     handleUnlockPanel,
@@ -1779,17 +1729,6 @@ export function useAppShellRootComposition() {
     isWindowsDesktop,
     isWorkspaceDropActive,
     isWorktreeWorkspace,
-    kanbanConversationWidth,
-    kanbanCreatePanel,
-    kanbanCreateTask,
-    kanbanDeletePanel,
-    kanbanDeleteTask,
-    kanbanPanels,
-    kanbanReorderTask,
-    kanbanTasks,
-    kanbanUpdatePanel,
-    kanbanUpdateTask,
-    kanbanViewState,
     launchScriptState,
     launchScriptsState,
     listThreadsForWorkspaceTracked,
@@ -1803,7 +1742,6 @@ export function useAppShellRootComposition() {
     onCloseTerminal,
     onDebugPanelResizeStart,
     onGitHistoryPanelResizeStart,
-    onKanbanConversationResizeStart,
     onNewTerminal,
     onPlanPanelResizeStart,
     onRightPanelResizeStart,
@@ -1870,7 +1808,6 @@ export function useAppShellRootComposition() {
     scaleShortcutText,
     scaleShortcutTitle,
     scanGitRoots,
-    scopedKanbanTasks,
     searchContentFilters,
     searchApiHydrationStatus,
     searchFileHydrationStatus,
@@ -1888,7 +1825,6 @@ export function useAppShellRootComposition() {
     selectedCommitSha,
     selectedDiffPath,
     selectedAgentRef,
-    selectedKanbanTaskId,
     selectedOpenCodeAgent,
     selectedOpenCodeVariant,
     selectedPullRequest,
@@ -1916,7 +1852,6 @@ export function useAppShellRootComposition() {
     setHighlightedPresetIndex,
     setIsEditorFileMaximized,
     setIsSearchPaletteOpen,
-    setKanbanViewState,
     setLiveEditPreviewEnabled,
     setPrefillDraft,
     setReduceTransparency,
@@ -1928,7 +1863,6 @@ export function useAppShellRootComposition() {
     setSearchScope,
     setSelectedCommitSha,
     setSelectedDiffPath,
-    setSelectedKanbanTaskId,
     setSelectedPullRequest,
     setHomeOpen,
     setWorkspaceHomeWorkspaceId,
@@ -1945,7 +1879,6 @@ export function useAppShellRootComposition() {
     showGitHistory,
     showExtensions,
     showHome,
-    showKanban,
     showNextReleaseNotes,
     showPresetStep,
     showPreviousReleaseNotes,
@@ -2123,7 +2056,6 @@ export function useAppShellRootComposition() {
       activeWorkspace,
       activeWorkspaceId,
       workspacesById,
-      workspacesByPath,
       appSettings,
       isCompact,
     },
@@ -2157,8 +2089,6 @@ export function useAppShellRootComposition() {
       setDiffSource,
       exitDiffView,
       handleOpenFile,
-      setKanbanViewState,
-      setSelectedKanbanTaskId,
     },
     search: {
       isSearchPaletteOpen,
@@ -2195,7 +2125,6 @@ export function useAppShellRootComposition() {
       increaseUiScale,
       decreaseUiScale,
       resetUiScale,
-      kanbanTasks,
     },
   };
 

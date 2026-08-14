@@ -699,7 +699,6 @@ export type ModeRoutingDomainFields = {
   showExtensions: unknown;
   showGitHistory: unknown;
   showHome: unknown;
-  showKanban: unknown;
   showWorkspaceHome: unknown;
 };
 
@@ -740,7 +739,6 @@ export function buildModeRoutingDomainContextSlice(
     showExtensions: input.showExtensions,
     showGitHistory: input.showGitHistory,
     showHome: input.showHome,
-    showKanban: input.showKanban,
     showWorkspaceHome: input.showWorkspaceHome,
   };
 }
@@ -786,44 +784,6 @@ export function buildAccountSurfaceDomainContextSlice(
 
 
 /**
- * T1.7：dictation 表面（从 workspaceNavigation residual 拆出，达 navigation ≤80 门禁）。
- * 语义上贴近 composer；独立 domain 避免继续污染 navigation bag。
- */
-export type DictationSurfaceDomainFields = {
-  clearDictationError: unknown;
-  clearDictationHint: unknown;
-  clearDictationTranscript: unknown;
-  dictationError: unknown;
-  dictationHint: unknown;
-  dictationLevel: unknown;
-  dictationModel: unknown;
-  dictationReady: unknown;
-  dictationState: unknown;
-  dictationTranscript: unknown;
-  /** S4 PR-C：听写开关（从 composerContext 归位） */
-  handleToggleDictation: unknown;
-};
-
-export function buildDictationSurfaceDomainContextSlice(
-  input: DictationSurfaceDomainFields,
-): AppShellDomainContextValue {
-  return {
-    clearDictationError: input.clearDictationError,
-    clearDictationHint: input.clearDictationHint,
-    clearDictationTranscript: input.clearDictationTranscript,
-    dictationError: input.dictationError,
-    dictationHint: input.dictationHint,
-    dictationLevel: input.dictationLevel,
-    dictationModel: input.dictationModel,
-    dictationReady: input.dictationReady,
-    dictationState: input.dictationState,
-    dictationTranscript: input.dictationTranscript,
-    handleToggleDictation: input.handleToggleDictation,
-  };
-}
-
-
-/**
  * T1.9：workspaceNavigation residual 也走 dedicated builder，
  * 避免 defineAppShellDomainContexts 内继续内联大 object literal。
  */
@@ -837,7 +797,6 @@ export type WorkspaceNavigationDomainFields = {
   activeRenamePrompt: unknown;
   agentTaskScrollRequest: unknown;
   activeTerminalId: unknown;
-  activeWorkspaceKanbanTasks: unknown;
   addDebugEntry: unknown;
   agent: unknown;
   alertError: unknown;
@@ -924,7 +883,6 @@ export function buildWorkspaceNavigationDomainContextSlice(
     activeRenamePrompt: input.activeRenamePrompt,
     agentTaskScrollRequest: input.agentTaskScrollRequest,
     activeTerminalId: input.activeTerminalId,
-    activeWorkspaceKanbanTasks: input.activeWorkspaceKanbanTasks,
     addDebugEntry: input.addDebugEntry,
     agent: input.agent,
     alertError: input.alertError,

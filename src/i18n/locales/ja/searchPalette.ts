@@ -4,7 +4,7 @@
 // Machine translation of src/i18n/locales/en/searchPalette.ts; keys mirror the English source.
 const searchPalette = {
   "searchPalette": {
-    "placeholder": "ファイル、カンバン、スレッド、メッセージ、Skill、コマンドを検索...",
+    "placeholder": "ファイル、スレッド、メッセージ、Skill、コマンドを検索...",
     "placeholderFiltered": "{{content}}を検索...",
     "inputAria": "検索入力",
     "scope": "範囲",
@@ -27,7 +27,6 @@ const searchPalette = {
     "locationTag": "場所",
     "typeAction": "操作",
     "typeFile": "ファイル",
-    "typeKanban": "カンバン",
     "typeThread": "スレッド",
     "typeMessage": "メッセージ",
     "typeHistory": "履歴",
@@ -35,7 +34,6 @@ const searchPalette = {
     "typeCommand": "コマンド",
     "sourceActions": "アプリ操作",
     "sourceFiles": "ファイルインデックス",
-    "sourceKanban": "カンバンデータ",
     "sourceThreads": "スレッドタイトル",
     "sourceMessages": "メッセージ内容",
     "sourceHistory": "入力履歴",
@@ -44,7 +42,6 @@ const searchPalette = {
     "contentAll": "すべて",
     "contentActions": "操作",
     "contentFiles": "ファイル",
-    "contentKanban": "カンバン",
     "contentThreads": "スレッド",
     "contentMessages": "メッセージ",
     "contentHistory": "履歴",

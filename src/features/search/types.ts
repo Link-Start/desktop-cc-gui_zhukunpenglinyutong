@@ -2,7 +2,6 @@ export type SearchResultKind =
   | "action"
   | "file"
   | "api"
-  | "kanban"
   | "thread"
   | "message"
   | "history"
@@ -38,7 +37,6 @@ export type SearchContentFilter =
   | "actions"
   | "files"
   | "apis"
-  | "kanban"
   | "threads"
   | "messages"
   | "history"
@@ -55,8 +53,6 @@ export type SearchResult = {
   workspaceName?: string;
   threadId?: string;
   messageId?: string;
-  panelId?: string;
-  taskId?: string;
   filePath?: string;
   fileLine?: number;
   fileColumn?: number;
@@ -69,7 +65,6 @@ export type SearchResult = {
     | "actions"
     | "files"
     | "apis"
-    | "kanban"
     | "threads"
     | "messages"
     | "history"

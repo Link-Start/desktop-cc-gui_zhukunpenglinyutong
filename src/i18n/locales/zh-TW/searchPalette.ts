@@ -4,7 +4,7 @@
 // Machine translation of src/i18n/locales/en/searchPalette.ts; keys mirror the English source.
 const searchPalette = {
   "searchPalette": {
-    "placeholder": "搜尋檔案、看板、討論串、訊息、技能、命令…",
+    "placeholder": "搜尋檔案、討論串、訊息、技能、命令…",
     "placeholderFiltered": "搜尋{{content}}…",
     "inputAria": "搜尋輸入",
     "scope": "範圍",
@@ -27,7 +27,6 @@ const searchPalette = {
     "locationTag": "位置",
     "typeAction": "操作",
     "typeFile": "檔案",
-    "typeKanban": "看板",
     "typeThread": "討論串",
     "typeMessage": "訊息",
     "typeHistory": "歷史",
@@ -35,7 +34,6 @@ const searchPalette = {
     "typeCommand": "命令",
     "sourceActions": "應用程式操作",
     "sourceFiles": "檔案索引",
-    "sourceKanban": "看板資料",
     "sourceThreads": "討論串標題",
     "sourceMessages": "訊息內容",
     "sourceHistory": "輸入歷史",
@@ -44,7 +42,6 @@ const searchPalette = {
     "contentAll": "全部",
     "contentActions": "操作",
     "contentFiles": "檔案",
-    "contentKanban": "看板",
     "contentThreads": "討論串",
     "contentMessages": "訊息",
     "contentHistory": "歷史",

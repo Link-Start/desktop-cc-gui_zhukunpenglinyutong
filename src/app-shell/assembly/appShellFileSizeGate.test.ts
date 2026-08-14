@@ -10,7 +10,6 @@ const HARD = 800;
 const ALLOWLIST = new Set([
   "sections/layoutNodes/useAppShellLayoutNodesSection.tsx",
   "sections/core/useAppShellSections.ts",
-  "sections/useAppShellKanbanExecutionSection.ts",
   "sections/useAppShellSearchRadarSection.ts",
   // P2-1: hydration host grew with multi-engine list recovery; still transitional.
   "sections/useWorkspaceThreadListHydration.ts",

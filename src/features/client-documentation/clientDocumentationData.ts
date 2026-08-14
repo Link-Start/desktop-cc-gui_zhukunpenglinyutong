@@ -133,7 +133,7 @@ export const CLIENT_DOCUMENTATION_MODULE_MAPPINGS: ClientDocumentationModuleMapp
     moduleId: "composer-input",
     moduleTitle: "Composer 输入区",
     entryEvidence: "主窗体底部 Composer",
-    sourceEvidence: ["src/features/composer", "src/features/dictation", "src/features/note-cards"],
+    sourceEvidence: ["src/features/composer", "src/features/note-cards"],
   },
   {
     moduleId: "ai-engines-models",
@@ -174,8 +174,8 @@ export const CLIENT_DOCUMENTATION_MODULE_MAPPINGS: ClientDocumentationModuleMapp
   {
     moduleId: "tasks-status",
     moduleTitle: "任务与状态面板",
-    entryEvidence: "Tasks / Kanban / Status panel / Session activity",
-    sourceEvidence: ["src/features/tasks", "src/features/kanban", "src/features/status-panel", "src/features/session-activity"],
+    entryEvidence: "Status panel / Session activity",
+    sourceEvidence: ["src/features/status-panel", "src/features/session-activity"],
   },
   {
     moduleId: "search-navigation",
@@ -307,8 +307,7 @@ const MODULE_USAGE_STEPS: Record<string, string[]> = {
   ],
   "tasks-status": [
     "长任务开始后先查看计划或 checkpoint，确认当前阶段、阻塞点和下一步动作。",
-    "在 task center 或 run history 中回看历史执行，判断是继续、重试还是开新任务。",
-    "使用 Kanban 或 status panel 跟踪多个并行事项，避免只靠聊天顺序判断状态。",
+    "使用 status panel 跟踪当前回合的计划、checkpoint 与并行事项，避免只靠聊天顺序判断状态。",
     "看到完成提醒后仍要检查验证命令、测试结果或业务输出，通知不等于质量门禁通过。",
     "任务失败时记录错误事实、复现条件和已尝试修复，减少下一轮重复排查。",
     "说明窗口不写入任务状态，真实状态仍由任务模块、会话和验证命令决定。",
@@ -806,16 +805,15 @@ export const CLIENT_DOCUMENTATION_TREE: ClientDocumentationNode[] = [
   module(
     "composer-input",
     "Composer 输入区",
-    "组织文本、文件引用、note card 和语音输入。",
+    "组织文本、文件引用和 note card。",
     "主窗体底部 Composer。",
     "把用户意图转换成可发送给当前引擎的结构化输入。",
-    ["文本输入与发送快捷键", "文件/路径引用", "note card 引用", "prompt history", "queued follow-up 与输入保留", "dictation 语音输入"],
+    ["文本输入与发送快捷键", "文件/路径引用", "note card 引用", "prompt history", "queued follow-up 与输入保留"],
     ["输入任务描述。", "按需附加文件、路径或 note card。", "选择发送快捷键或排队 follow-up。"],
-    ["IME 输入与 streaming 期间应保持可响应。", "语音输入能力可能受平台权限影响。"],
+    ["IME 输入与 streaming 期间应保持可响应。"],
     ["对话与会话", "文件与代码阅读", "项目记忆与上下文"],
     [
       feature("composer-file-reference", "文件/路径引用", "把项目文件作为上下文引用。", "Composer attach/reference controls", "减少手动复制路径和代码片段。", ["文件引用", "路径引用", "拖拽引用"], ["路径展示需兼容 Windows 与 POSIX。"], ["文件与代码阅读"]),
-      feature("composer-dictation", "dictation 语音输入", "把语音转成输入草稿。", "Composer dictation control", "降低长文本输入成本。", ["语音录入", "模型状态", "错误提示"], ["macOS 权限和 Windows 支持状态可能不同。"], ["设置中心"]),
     ],
   ),
   module("ai-engines-models", "AI 引擎与模型", "管理引擎、模型和运行模式。", "Composer engine/model selector、供应商设置。", "让用户为不同任务选择合适的 AI backend。", ["Claude Code", "Codex", "Gemini / vendor 配置", "OpenCode", "模型选择与 reasoning effort", "engine control plane 与 runtime 隔离"], ["选择引擎。", "选择模型和 reasoning effort。", "必要时打开供应商设置或 CLI doctor。"], ["不同引擎能力和权限不同。", "control plane 数据不得污染 transcript。"], ["Runtime 与终端", "设置中心"], [
@@ -842,8 +840,7 @@ export const CLIENT_DOCUMENTATION_TREE: ClientDocumentationNode[] = [
     feature("project-memory-crud", "Project Memory CRUD", "管理项目记忆条目。", "Memory panel", "沉淀稳定项目知识。", ["create", "update", "delete", "consume"], ["删除前确认作用范围。"], ["设置中心"]),
     feature("context-ledger", "context ledger", "追踪上下文来源和引用。", "Context ledger surface", "解释当前上下文来自哪里。", ["source attribution", "navigation", "transition diff"], ["说明窗口只描述上下文机制，不读取用户记忆。"], ["搜索与导航"]),
   ]),
-  module("tasks-status", "任务与状态面板", "管理任务、计划、checkpoint 和状态反馈。", "Tasks、Kanban、Status panel、Session activity。", "让长任务执行过程可观察、可恢复。", ["task center / task run history", "Kanban", "plan / checkpoint", "status panel", "session activity", "operation facts"], ["创建或查看任务。", "跟踪 run history。", "通过 status panel 观察 checkpoint。"], ["任务状态来自业务模块，说明窗口不写入状态。"], ["对话与会话", "Spec Hub 与规范工作流"], [
-    feature("task-run-history", "task center / task run history", "查看任务运行记录。", "Task center", "帮助复盘和恢复任务。", ["run lifecycle", "history", "retry/cancel"], ["不要把说明窗口作为任务执行入口。"], ["Runtime 与终端"]),
+  module("tasks-status", "任务与状态面板", "观察计划、checkpoint 和会话状态。", "Status panel、Session activity。", "让长任务执行过程可观察。", ["plan / checkpoint", "status panel", "session activity", "operation facts"], ["通过 status panel 观察 checkpoint。", "查看 session activity。"], ["状态来自业务模块，说明窗口不写入状态。"], ["对话与会话", "Spec Hub 与规范工作流"], [
     feature("status-panel-checkpoint", "plan / checkpoint / status panel", "展示计划、结果和检查点。", "Status panel", "减少长任务黑箱感。", ["plan view", "checkpoint facts", "latest user message"], ["状态展示不等于自动验证通过。"], ["对话与会话"]),
   ]),
   module("search-navigation", "搜索与导航", "跨文件、会话和上下文进行搜索跳转。", "Global search、文件/来源跳转入口。", "让用户快速回到目标内容。", ["全局搜索入口", "搜索 provider / ranking", "文件、会话、上下文跳转", "快捷键导航"], ["打开全局搜索。", "输入关键词。", "选择结果跳转到目标 surface。"], ["搜索结果受 provider 索引范围影响。"], ["文件与代码阅读", "项目记忆与上下文"], [

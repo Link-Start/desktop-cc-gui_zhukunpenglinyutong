@@ -6,7 +6,6 @@ use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 
 use crate::app_paths;
-use crate::dictation::DictationState;
 use crate::engine::{EngineConfig, EngineManager, EngineType};
 use crate::shared::proxy_core;
 use crate::shared::settings_core::{SettingsRecoveryNotice, WorkspacesRecoveryNotice};
@@ -37,7 +36,6 @@ pub(crate) struct AppState {
     pub(crate) computer_use_activation_lock: Mutex<()>,
     pub(crate) computer_use_activation_verification:
         Mutex<Option<crate::computer_use::ComputerUseActivationVerification>>,
-    pub(crate) dictation: Mutex<DictationState>,
     pub(crate) codex_login_cancels: Mutex<HashMap<String, oneshot::Sender<()>>>,
     pub(crate) detached_external_change_runtime: Mutex<DetachedExternalChangeRuntime>,
     pub(crate) claude_commands_watches: Mutex<crate::claude_commands_watch::CommandsWatchRegistry>,
@@ -204,7 +202,6 @@ impl AppState {
             codex_runtime_reload_lock: Mutex::new(()),
             computer_use_activation_lock: Mutex::new(()),
             computer_use_activation_verification: Mutex::new(None),
-            dictation: Mutex::new(DictationState::default()),
             codex_login_cancels: Mutex::new(HashMap::new()),
             detached_external_change_runtime: Mutex::new(DetachedExternalChangeRuntime::default()),
             claude_commands_watches: Mutex::new(

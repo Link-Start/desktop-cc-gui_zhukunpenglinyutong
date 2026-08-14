@@ -123,10 +123,6 @@ const runtimeNotice = {
           title: "Read Git diff",
           description: "Reads file-change summaries for diff panels and commit scope decisions.",
         },
-        dictation: {
-          title: "Check dictation model",
-          description: "Checks whether the local dictation model is available for voice input.",
-        },
         "input-history": {
           title: "Restore input history",
           description: "Restores local drafts and input history so unfinished text survives restart.",

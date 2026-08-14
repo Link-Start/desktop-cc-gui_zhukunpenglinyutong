@@ -10,7 +10,7 @@ describe("feature style loader contracts", () => {
   it("loads shared diff styles before Git History is considered ready", () => {
     const gitHistoryLoader = loaderSource.slice(
       loaderSource.indexOf("export function loadGitHistoryStyles"),
-      loaderSource.indexOf("export function loadKanbanStyles"),
+      loaderSource.indexOf("export function loadExtensionsStyles"),
     );
 
     expect(gitHistoryLoader).toContain("loadDiffStyles()");

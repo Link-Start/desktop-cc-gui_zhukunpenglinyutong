@@ -57,10 +57,6 @@ const capabilityNodes: FeatureCard[] = [
 
 const capabilityHighlights: FeatureCard[] = [
   {
-    titleKey: "lockScreen.features.kanbanDispatchTitle",
-    descriptionKey: "lockScreen.features.kanbanDispatchDesc",
-  },
-  {
     titleKey: "lockScreen.features.memoryEngineTitle",
     descriptionKey: "lockScreen.features.memoryEngineDesc",
   },
@@ -109,10 +105,6 @@ const elementCards: FeatureCard[] = [
   {
     titleKey: "lockScreen.elements.gitPanelTitle",
     descriptionKey: "lockScreen.elements.gitPanelDesc",
-  },
-  {
-    titleKey: "lockScreen.elements.kanbanTitle",
-    descriptionKey: "lockScreen.elements.kanbanDesc",
   },
   {
     titleKey: "lockScreen.elements.searchTitle",

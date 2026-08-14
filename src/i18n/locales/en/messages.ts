@@ -55,8 +55,6 @@ const messages = {
     queue: "Queue",
     send: "Send",
     emptyThread: "Start a thread and send a prompt to the agent.",
-    linkedRunEyebrow: "Linked run",
-    openLinkedRun: "Open run detail",
     restoringHistory: "Loading conversation window…",
     restoringHistoryHint: "Loading the local transcript and session state.",
     restoringSharedHistory: "Restoring Shared session…",

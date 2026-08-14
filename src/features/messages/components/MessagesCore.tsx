@@ -105,10 +105,6 @@ import {
   useMessagesCanvasFollow,
 } from "../orchestration/hooks/useMessagesCanvasFollow";
 import { useMessagesInteractions } from "../orchestration/hooks/useMessagesInteractions";
-import { MessagesLinkedRunBanner } from "../orchestration/components/MessagesLinkedRunBanner";
-
-const EMPTY_TASK_RUNS: NonNullable<MessagesCoreProps["runtime"]["taskRuns"]> = [];
-
 const ANCHOR_TITLE_MAX_LENGTH = 60;
 const ANCHOR_DESCRIPTION_MAX_LENGTH = 160;
 
@@ -200,7 +196,6 @@ export const MessagesCore = memo(function MessagesCore({
     lastDurationMs = null,
     codexSilentSuspectedAt = null,
     approvals = [],
-    taskRuns = EMPTY_TASK_RUNS,
   } = runtime;
   const {
     onRetryHistory,
@@ -1796,11 +1791,6 @@ export const MessagesCore = memo(function MessagesCore({
         onScroll={handleCanvasScroll}
         onContextMenu={handleConversationContextMenu}
       >
-        <MessagesLinkedRunBanner
-          taskRuns={taskRuns}
-          threadId={threadId}
-          workspaceId={workspaceId}
-        />
         {timelineLeadingNode}
         <MessagesTimeline {...timelineModels} />
         {/* 与 .messages-full 同宽同中（勿复用 min-height:100% 的 messages-full） */}

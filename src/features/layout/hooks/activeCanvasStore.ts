@@ -27,7 +27,6 @@ export type ActiveCanvasSnapshot = Pick<
   | "lastDurationMs"
   | "heartbeatPulse"
   | "codexSilentSuspectedAt"
-  | "taskRuns"
 > & {
   activeWorkspaceId: string | null;
   activeTurnId: string | null;
@@ -67,10 +66,6 @@ export const EMPTY_ACTIVE_CANVAS_THREAD_STATUS: Record<
   string,
   ThreadActivityStatus
 > = {};
-export const EMPTY_ACTIVE_CANVAS_TASK_RUNS: NonNullable<
-  MessagesProps["taskRuns"]
-> = [];
-
 /** 空数组必须是模块级单例：layout 每帧 `?? []` / `filter→[]` 会击穿 setSnapshot 顶层 shallowEqual。 */
 export const EMPTY_ACTIVE_CANVAS_USER_INPUT_REQUESTS: NonNullable<
   MessagesProps["userInputRequests"]
@@ -101,7 +96,6 @@ export const EMPTY_ACTIVE_CANVAS_SNAPSHOT: ActiveCanvasSnapshot = {
   lastDurationMs: null,
   heartbeatPulse: 0,
   codexSilentSuspectedAt: null,
-  taskRuns: EMPTY_ACTIVE_CANVAS_TASK_RUNS,
   threadItemsByThread: EMPTY_ACTIVE_CANVAS_THREAD_ITEMS,
   threadStatusById: EMPTY_ACTIVE_CANVAS_THREAD_STATUS,
   activeThreadStatus: null,

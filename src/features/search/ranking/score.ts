@@ -9,11 +9,10 @@ const SEARCH_RESULT_KIND_PRIORITY: Record<SearchResult["kind"], number> = {
   file: 1,
   thread: 2,
   api: 3,
-  kanban: 4,
-  skill: 5,
-  command: 6,
-  message: 7,
-  history: 8,
+  skill: 4,
+  command: 5,
+  message: 6,
+  history: 7,
 };
 
 function computeRecencyBonus(resultId: string, recencyMap: RecencyMap): number {

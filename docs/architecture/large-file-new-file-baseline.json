@@ -743,16 +743,7 @@
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
-    {
-      "path": "src/styles/kanban.css",
-      "lines": 2071,
-      "type": "css",
-      "policyId": "styles",
-      "priority": "P1",
-      "warnThreshold": 2200,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
+
     {
       "path": "src/features/threads/loaders/claudeHistoryLoader.test.ts",
       "lines": 2069,
@@ -1443,16 +1434,7 @@
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
-    {
-      "path": "src-tauri/src/dictation/real.rs",
-      "lines": 1467,
-      "type": "rust",
-      "policyId": "default-source",
-      "priority": "P1",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
+
     {
       "path": "src/features/session-activity/adapters/buildWorkspaceSessionActivity.test.ts",
       "lines": 1465,
@@ -1493,16 +1475,7 @@
       "failThreshold": 800,
       "thresholdSource": "new-file-ratchet"
     },
-    {
-      "path": "src/app-shell-parts/useAppShellKanbanExecutionSection.ts",
-      "lines": 1432,
-      "type": "ts/tsx",
-      "policyId": "default-source",
-      "priority": "P1",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
+
     {
       "path": "src-tauri/src/email/mod.rs",
       "lines": 1429,
@@ -2754,16 +2727,6 @@
       "thresholdSource": "new-file-ratchet"
     },
     {
-      "path": "src/features/kanban/components/KanbanBoard.tsx",
-      "lines": 892,
-      "type": "ts/tsx",
-      "policyId": "default-source",
-      "priority": "P1",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
       "path": "src/features/status-panel/components/StatusPanel.tsx",
       "lines": 887,
       "type": "ts/tsx",
@@ -2947,16 +2910,6 @@
       "path": "src-tauri/src/workspaces/external_changes.rs",
       "lines": 833,
       "type": "rust",
-      "policyId": "default-source",
-      "priority": "P1",
-      "warnThreshold": 2600,
-      "failThreshold": 800,
-      "thresholdSource": "new-file-ratchet"
-    },
-    {
-      "path": "src/features/kanban/components/KanbanColumn.tsx",
-      "lines": 828,
-      "type": "ts/tsx",
       "policyId": "default-source",
       "priority": "P1",
       "warnThreshold": 2600,

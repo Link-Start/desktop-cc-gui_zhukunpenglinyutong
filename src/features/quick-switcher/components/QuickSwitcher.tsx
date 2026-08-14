@@ -8,7 +8,6 @@ import {
 import { useTranslation } from "react-i18next";
 import Bot from "lucide-react/dist/esm/icons/bot";
 import Brain from "lucide-react/dist/esm/icons/brain";
-import Columns3 from "lucide-react/dist/esm/icons/columns-3";
 import FileClock from "lucide-react/dist/esm/icons/file-clock";
 import FolderOpen from "lucide-react/dist/esm/icons/folder-open";
 import GitCompareArrows from "lucide-react/dist/esm/icons/git-compare-arrows";
@@ -44,7 +43,6 @@ const NAVIGATION_ITEMS: QuickSwitcherNavigationId[] = [
   "files",
   "git",
   "history",
-  "kanban",
   "spec",
   "intentCanvas",
   "projectMap",
@@ -60,7 +58,6 @@ const NAVIGATION_ICONS = {
   files: FolderOpen,
   git: GitCompareArrows,
   history: History,
-  kanban: Columns3,
   spec: Bot,
   intentCanvas: PanelsTopLeft,
   projectMap: MapIcon,

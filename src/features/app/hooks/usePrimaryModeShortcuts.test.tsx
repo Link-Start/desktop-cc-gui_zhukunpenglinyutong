@@ -5,16 +5,13 @@ import { usePrimaryModeShortcuts } from "./usePrimaryModeShortcuts";
 
 type HarnessProps = {
   onOpenChat: () => void;
-  onOpenKanban: () => void;
 };
 
-function ShortcutHarness({ onOpenChat, onOpenKanban }: HarnessProps) {
+function ShortcutHarness({ onOpenChat }: HarnessProps) {
   usePrimaryModeShortcuts({
     isEnabled: true,
     openChatShortcut: "cmd+j",
-    openKanbanShortcut: "cmd+k",
     onOpenChat,
-    onOpenKanban,
   });
   return <input aria-label="editor" />;
 }
@@ -32,32 +29,9 @@ describe("usePrimaryModeShortcuts", () => {
     });
     try {
       const onOpenChat = vi.fn();
-      const onOpenKanban = vi.fn();
-      render(<ShortcutHarness onOpenChat={onOpenChat} onOpenKanban={onOpenKanban} />);
+      render(<ShortcutHarness onOpenChat={onOpenChat} />);
       fireEvent.keyDown(window, { key: "j", ctrlKey: true });
       expect(onOpenChat).toHaveBeenCalledTimes(1);
-      expect(onOpenKanban).not.toHaveBeenCalled();
-    } finally {
-      Object.defineProperty(window.navigator, "platform", {
-        value: originalPlatform,
-        configurable: true,
-      });
-    }
-  });
-
-  it("triggers kanban mode on Ctrl+K in Windows", () => {
-    const originalPlatform = window.navigator.platform;
-    Object.defineProperty(window.navigator, "platform", {
-      value: "Win32",
-      configurable: true,
-    });
-    try {
-      const onOpenChat = vi.fn();
-      const onOpenKanban = vi.fn();
-      render(<ShortcutHarness onOpenChat={onOpenChat} onOpenKanban={onOpenKanban} />);
-      fireEvent.keyDown(window, { key: "k", ctrlKey: true });
-      expect(onOpenKanban).toHaveBeenCalledTimes(1);
-      expect(onOpenChat).not.toHaveBeenCalled();
     } finally {
       Object.defineProperty(window.navigator, "platform", {
         value: originalPlatform,
@@ -74,14 +48,11 @@ describe("usePrimaryModeShortcuts", () => {
     });
     try {
       const onOpenChat = vi.fn();
-      const onOpenKanban = vi.fn();
-      render(<ShortcutHarness onOpenChat={onOpenChat} onOpenKanban={onOpenKanban} />);
+      render(<ShortcutHarness onOpenChat={onOpenChat} />);
       const input = screen.getByLabelText("editor");
       input.focus();
       fireEvent.keyDown(input, { key: "j", ctrlKey: true });
-      fireEvent.keyDown(input, { key: "k", ctrlKey: true });
       expect(onOpenChat).not.toHaveBeenCalled();
-      expect(onOpenKanban).not.toHaveBeenCalled();
     } finally {
       Object.defineProperty(window.navigator, "platform", {
         value: originalPlatform,
@@ -98,17 +69,12 @@ describe("usePrimaryModeShortcuts", () => {
     });
     try {
       const onOpenChat = vi.fn();
-      const onOpenKanban = vi.fn();
-      render(<ShortcutHarness onOpenChat={onOpenChat} onOpenKanban={onOpenKanban} />);
+      render(<ShortcutHarness onOpenChat={onOpenChat} />);
       fireEvent.keyDown(window, { key: "j", ctrlKey: true });
-      fireEvent.keyDown(window, { key: "k", ctrlKey: true });
       expect(onOpenChat).not.toHaveBeenCalled();
-      expect(onOpenKanban).not.toHaveBeenCalled();
 
       fireEvent.keyDown(window, { key: "j", metaKey: true });
-      fireEvent.keyDown(window, { key: "k", metaKey: true });
       expect(onOpenChat).toHaveBeenCalledTimes(1);
-      expect(onOpenKanban).toHaveBeenCalledTimes(1);
     } finally {
       Object.defineProperty(window.navigator, "platform", {
         value: originalPlatform,

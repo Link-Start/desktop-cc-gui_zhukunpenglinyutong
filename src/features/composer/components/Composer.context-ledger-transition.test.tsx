@@ -104,7 +104,6 @@ function renderComposer({
       commands={[]}
       files={[]}
       onDraftChange={() => {}}
-      dictationEnabled={false}
       activeWorkspaceId="ws-1"
       activeThreadId={activeThreadId}
     />,
@@ -159,7 +158,6 @@ describe("Composer context selection session transitions", () => {
         commands={[]}
         files={[]}
         onDraftChange={() => {}}
-        dictationEnabled={false}
         activeWorkspaceId="ws-1"
         activeThreadId="thread-2"
       />,

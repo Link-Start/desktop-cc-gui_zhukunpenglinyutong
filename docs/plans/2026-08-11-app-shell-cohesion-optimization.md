@@ -4,7 +4,7 @@ status: active
 owner: app-shell
 priority: P0-structure + P0-perf-adjacent
 created: 2026-08-11
-updated: 2026-08-11
+updated: 2026-08-15
 ---
 
 <!-- DOC-LIFECYCLE: active-execution-plan -->
@@ -15,7 +15,7 @@ updated: 2026-08-11
 > **日期**：2026-08-11  
 > **状态**：active backlog（**执行真相源**；完成后必须回写本文）  
 > **主文件**：`src/app-shell.tsx`（基线约 **2403** 行）  
-> **伴生巨石**：`useAppShellLayoutNodesSection.tsx`（~2477）、`useAppShellSections.ts`（~1223）、`useAppShellKanbanExecutionSection.ts`（~1483）、`useAppShellSearchRadarSection.ts`（~1037）  
+> **伴生巨石**：`useAppShellLayoutNodesSection.tsx`（~2477）、`useAppShellSections.ts`（~1223）、`useAppShellSearchRadarSection.ts`（~1037）。`useAppShellKanbanExecutionSection.ts` 已随 `remove-kanban-and-task-center` 删除。  
 > **OpenSpec 锚点**：  
 > - `openspec/specs/app-shell-domain-context-isolation/spec.md`  
 > - `openspec/specs/app-shell-runtime-boundaries/spec.md`  
@@ -95,23 +95,23 @@ updated: 2026-08-11
 | `sessionIdentityContext` keys | — | **12**（T1.2） | 保持窄身份域 |
 | `workspaceCatalogContext` keys | — | **29**（T1.3） | 保持 catalog 语义 |
 | `gitSurfaceContext` keys | — | **79**（T1.4） | 与 git panel 同频 |
-| `modeRoutingContext` keys | — | **6**（T1.5） | 保持窄 mode 路由 |
-| `accountSurfaceContext` keys | — | **4**（T1.6） | 保持窄 account 面 |
-| `dictationSurfaceContext` keys | — | **10**（T1.7 新建） | 贴近 composer；独立以免污染 navigation |
+| `modeRoutingContext` keys | — | **32**（S4 后；remove-kanban 出 `"kanban"`） | 保持窄 mode 路由 |
+| `accountSurfaceContext` keys | — | **11**（S4 后） | 保持窄 account 面 |
+| `dictationSurfaceContext` keys | — | **0**（2026-08-15 整域删除） | 已 retire；勿回灌 |
 | `workspaceNavigationContext` keys | **218** | **78**（≤80 第一刀达标） | ≤ 80（第一刀）→ 再压至 ~40–60 |
-| `composerContext` keys | 141 | **141** | ≤ 60 |
-| `settingsContext` keys | 147 | **147** | ≤ 60 |
-| `layoutContext` keys | 103 | **103** | ≤ 60 |
-| `fileEditorContext` keys | **41** | **41** | ≤ 60 |
-| `runtimeThreadContext` keys | **10** | **10** | 保持窄热路径 |
+| `composerContext` keys | 141 | **41**（S4 后） | ≤ 60 |
+| `settingsContext` keys | 147 | **36**（S4 后） | ≤ 60 |
+| `layoutContext` keys | 103 | **35**（remove-kanban 出账） | ≤ 60 |
+| `fileEditorContext` keys | **41** | **66**（S4 归位后；remove-kanban 出 3） | ≤ 60 |
+| `runtimeThreadContext` keys | **10** | **51**（S4 归位后） | 保持窄热路径 |
 | `runtimeContext` keys | **1** | **1** | 保持极窄 |
-| `modelSelectionContext` keys | **14** | **14** | 保持窄 |
+| `modelSelectionContext` keys | **14** | **22**（S4 后） | 保持窄 |
 | `collaborationModeContext` keys | **15** | **15** | 保持窄 |
-| domain keys **合计** | **690** | **690** | 显著下降 + 语义对齐 |
+| domain keys **合计** | **690** | **580**（14 domains） | 显著下降 + 语义对齐 |
 | `useAppShellDomainAssembly.ts` 行数 | — | **760** | 随 T1.2+ 子域 builder 再拆 |
 | `useAppShellLayoutNodesSection.tsx` 行数 | **2477** | **2477** | ≤ 800（过渡），理想 ≤ 400×N 文件 |
 | `useAppShellSections.ts` 行数 | **1223** | **1223** | 随 P1-3 下降 |
-| `useAppShellKanbanExecutionSection.ts` 行数 | **1483** | **1483** | 落 lazy/mode 边界 |
+| `useAppShellKanbanExecutionSection.ts` 行数 | **1483** | **0**（2026-08-15 删除） | 已删除 |
 | `useAppShellSearchRadarSection.ts` 行数 | **1037** | **1037** | 独立边界 |
 | `appShellDomainContexts.ts` 行数 | **942** | **942** | 随 bag 瘦身可降 |
 | `renderAppShell.tsx` 行数 | **791** | **791** | 退化为 zone 拼装 |
@@ -892,6 +892,21 @@ PY
 - **风险 / 未决**：composer/settings/layout 仍 soft 超限（freeze hard 防膨胀）；TARGET 60 待后续压 keys  
 - **下一步指针**：提交本轮大改；可选继续削 composition/layout 巨石  
 
+### 2026-08-15 — remove-dictation-feature + remove-kanban-and-task-center
+
+- **完成 Todo**：dictation 整域出账；kanban 17 keys 出账；两个 feature 目录删除
+- **动作**：
+  1. 删除 `dictationSurfaceContext` 整域（domains 15→14）
+  2. 删除 `useAppShellKanbanExecutionSection` / `useAppShellKanbanComposerSection`；Home send 抽出 `useAppShellComposerSendSection`
+  3. `AppMode` 去掉 `"kanban"`；layout 48→35、fileEditor 69→66、modeRouting 33→32、navigation 79→78
+  4. 删除 `src/features/kanban/`、`src/features/tasks/`、`WorkspaceHome` Task Center 页、`MessagesLinkedRunBanner`
+  5. 回写本矩阵与本计划 §1.1；补 OpenSpec 改写 delta
+- **路径**：`src/app-shell/**`、`src/features/{kanban,tasks,dictation}`（已删）、ownership gate freeze 表、OpenSpec two changes
+- **验证**：`check:app-shell:governance` / runtime-contract / typecheck / 受影响 vitest（进行中）
+- **计划变更**：Kanban execution 巨石从伴生列表移除；dictation 域 retire
+- **风险 / 未决**：`AppShellTaskRunActions` 空合同仍留作 action-family 分类；存量用户数据不清理
+- **下一步指针**：跑完 gate 后等用户授权 commit
+
 ## 附录 A — Ownership Matrix
 
 > **完整矩阵（T0.1 真相源）**：[`docs/plans/app-shell-ownership-matrix.md`](./app-shell-ownership-matrix.md)
@@ -906,10 +921,9 @@ PY
 | gitSurfaceContext | 79 | 干净（T1.4） | `buildGitSurfaceDomainContextSlice` | mid | diff/status/PR/branch/multi-repo ops |
 | modeRoutingContext | 6 | 干净（T1.5） | `buildModeRoutingDomainContextSlice` | mid | appMode/tab/centerMode/accessMode/filePanelMode |
 | accountSurfaceContext | 4 | 干净（T1.6） | `buildAccountSurfaceDomainContextSlice` | cold–mid | account 切换 / approvals |
-| dictationSurfaceContext | 10 | 干净（T1.7） | `buildDictationSurfaceDomainContextSlice` | mid | dictation 状态机；贴近 composer |
 | workspaceNavigationContext | **78** | residual（已过 ≤80） | assembly bag residual | mid | 可继续削 engine/debug/layout 泄漏 |
-| composerContext | 141 | 名不符实 | composer host + search/composer section；大量 `handle*` 总线 | mid | 动作应按业务域再挂 |
-| layoutContext | 103 | 混装 | view state + kanban host + chrome | mid–cold | |
+| composerContext | 41 | 干净（S4） | composer host + search/composer + Home send section | mid | 无 kanban send |
+| layoutContext | 35 | 干净（remove-kanban） | view state + chrome | mid–cold | 无 kanban host |
 | fileEditorContext | 41 | 中等 | editor layout + search | mid | |
 | settingsContext | 147 | 混装 | setters + threads/workspaces 投影 | mid–cold | 全量 thread maps 性能红线 |
 | runtimeContext | 1 | 干净 | runtime slice builder | mid | |

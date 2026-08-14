@@ -58,8 +58,6 @@ const messages = {
     "queue": "Очередь",
     "send": "Отправить",
     "emptyThread": "Начните thread и отправьте подсказку агенту.",
-    "linkedRunEyebrow": "Связанный запуск",
-    "openLinkedRun": "Открыть детали запуска",
     "restoringHistory": "Загрузка окна беседы…",
     "restoringHistoryHint": "Загрузка локального транскрипта и состояния сессии.",
     "generatingResponse": "Генерация ответа...",

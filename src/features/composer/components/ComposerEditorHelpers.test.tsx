@@ -121,7 +121,6 @@ function ComposerHarness({
       files={[]}
       onDraftChange={() => {}}
       attachedImages={attachedImages}
-      dictationEnabled={false}
       editorSettings={editorSettings}
       activeWorkspaceId="ws-1"
       activeThreadId="thread-1"

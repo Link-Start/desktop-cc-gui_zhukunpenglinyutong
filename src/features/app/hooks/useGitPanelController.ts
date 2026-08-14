@@ -256,7 +256,7 @@ export function useGitPanelController({
   prDiffsError: string | null;
   onOpenEditorLayoutRequest?: () => void;
   onOpenGitHistoryRequest?: () => void;
-  appMode?: "chat" | "kanban" | "gitHistory" | "extensions";
+  appMode?: "chat" | "gitHistory" | "extensions";
 }) {
   const [centerMode, setCenterMode] = useState<CenterMode>("chat");
   const [fileCompareSession, setFileCompareSession] =

@@ -206,7 +206,6 @@ pub(crate) struct BrowserSession {
     pub(crate) feature_phase: BrowserAgentFeaturePhase,
     pub(crate) platform_capability: BrowserPlatformCapability,
     pub(crate) linked_thread_id: Option<String>,
-    pub(crate) linked_task_run_id: Option<String>,
     pub(crate) linked_orchestration_task_id: Option<String>,
     pub(crate) last_snapshot_id: Option<String>,
     pub(crate) last_action_id: Option<String>,

@@ -9,12 +9,6 @@ export type StartupOwnerRecord = {
 
 export const STARTUP_OWNER_RECORDS: readonly StartupOwnerRecord[] = [
   {
-    commandLabel: "dictation_model_status",
-    ownerKind: "orchestrator-task",
-    ownerId: "dictation-status:on-demand",
-    scope: "global",
-  },
-  {
     commandLabel: "skills_list",
     ownerKind: "orchestrator-task",
     ownerId: "skills-list:idle-prewarm",

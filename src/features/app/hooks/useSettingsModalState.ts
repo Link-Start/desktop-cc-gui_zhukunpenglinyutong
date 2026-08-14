@@ -10,7 +10,6 @@ export type SettingsSection =
   | "commit"
   | "agent-prompt-management"
   | "composer"
-  | "dictation"
   | "git"
   | "other"
   | "community"

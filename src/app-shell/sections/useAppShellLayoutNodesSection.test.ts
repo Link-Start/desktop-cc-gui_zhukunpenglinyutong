@@ -783,31 +783,6 @@ describe("useAppShellLayoutNodesSection quick switcher wrapper behavior", () => 
     expect(fixture.expandRightPanel).not.toHaveBeenCalled();
   });
 
-  it("toggles kanban via setAppMode and delegates the open path to base", () => {
-    const openFixture = createQuickSwitcherWrapperFixture({
-      appMode: "kanban",
-    });
-    const { result: openResult } = renderHook(() =>
-      useAppShellLayoutNodesSection(openFixture.input),
-    );
-    act(() => openResult.current.handleQuickSwitcherNavigate("kanban"));
-    expect(openFixture.setAppMode).toHaveBeenCalledWith("chat");
-    expect(openFixture.closeQuickSwitcher).toHaveBeenCalledTimes(1);
-    expect(openFixture.handleBaseQuickSwitcherNavigate).not.toHaveBeenCalled();
-
-    const closedFixture = createQuickSwitcherWrapperFixture({
-      appMode: "chat",
-    });
-    const { result: closedResult } = renderHook(() =>
-      useAppShellLayoutNodesSection(closedFixture.input),
-    );
-    act(() => closedResult.current.handleQuickSwitcherNavigate("kanban"));
-    expect(closedFixture.handleBaseQuickSwitcherNavigate).toHaveBeenCalledWith(
-      "kanban",
-    );
-    expect(closedFixture.setAppMode).not.toHaveBeenCalled();
-  });
-
   it("routes history through the existing gitHistory toggle in both directions", () => {
     for (const appMode of ["chat", "gitHistory"] as const) {
       const fixture = createQuickSwitcherWrapperFixture({ appMode });
@@ -954,7 +929,6 @@ describe("useAppShellLayoutNodesSection quick switcher wrapper behavior", () => 
         state: { filePanelMode: "memory", rightPanelCollapsed: false },
         expected: ["memory"],
       },
-      { state: { appMode: "kanban" }, expected: ["kanban"] },
       { state: { appMode: "gitHistory" }, expected: ["history"] },
       { state: { centerMode: "projectMap" }, expected: ["projectMap"] },
       { state: { centerMode: "intentCanvas" }, expected: ["intentCanvas"] },

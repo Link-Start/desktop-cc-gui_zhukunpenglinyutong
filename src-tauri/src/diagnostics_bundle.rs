@@ -230,10 +230,6 @@ fn sanitize_app_settings(settings: &AppSettings) -> Value {
         json!(settings.chat_canvas_use_presentation_profile),
     );
     root.insert(
-        "dictationEnabled".to_string(),
-        json!(settings.dictation_enabled),
-    );
-    root.insert(
         "composerEditorPreset".to_string(),
         json!(settings.composer_editor_preset),
     );

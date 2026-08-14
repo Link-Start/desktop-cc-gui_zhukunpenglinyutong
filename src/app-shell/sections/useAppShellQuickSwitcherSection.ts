@@ -196,7 +196,7 @@ export function useAppShellQuickSwitcherSection(
           setActiveTab("codex");
           setCenterMode("chat");
           break;
-        // files/git/kanban/settings 的「已开 → 回切」拦截已上移到 wrapper
+        // files/git/settings 的「已开 → 回切」拦截已上移到 wrapper
         // （useAppShellLayoutNodesSection 的 handleQuickSwitcherNavigate，
         // design.md D1）；这里的 case 保留为兜底 open action，服务未经
         // wrapper 的入口路径（如 command palette）。
@@ -214,9 +214,6 @@ export function useAppShellQuickSwitcherSection(
           break;
         case "history":
           setAppMode("gitHistory");
-          break;
-        case "kanban":
-          setAppMode("kanban");
           break;
         case "spec":
         case "intentCanvas":

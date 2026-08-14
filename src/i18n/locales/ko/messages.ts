@@ -58,8 +58,6 @@ const messages = {
     "queue": "큐",
     "send": "보내기",
     "emptyThread": "스레드를 시작하고 Agent에게 프롬프트를 보내세요.",
-    "linkedRunEyebrow": "연결된 실행",
-    "openLinkedRun": "실행 세부 정보 열기",
     "restoringHistory": "대화 창 로드 중…",
     "restoringHistoryHint": "로컬 트랜스크립트와 세션 상태를 불러오는 중입니다.",
     "generatingResponse": "응답 생성 중...",

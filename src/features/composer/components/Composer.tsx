@@ -15,7 +15,6 @@ import type {
   ConversationItem,
   CustomCommandOption,
   CustomPromptOption,
-  DictationTranscript,
   EngineType,
   MessageSendOptions,
   ModelOption,
@@ -57,7 +56,6 @@ import {
   CODEX_DISK_PROVIDER_PROFILE_ID,
   LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
 } from "../../threads/constants/codexProviderProfiles";
-import { computeDictationInsertion } from "../../../utils/dictation";
 import { useComposerAutocompleteState } from "../hooks/useComposerAutocompleteState";
 import { useComposerDraft } from "../hooks/composerDraftStore";
 import {
@@ -227,8 +225,6 @@ function resolveClaudeWindowUsedTokens(
 }
 
 export type ComposerProps = {
-  kanbanContextMode?: "new" | "inherit";
-  onKanbanContextModeChange?: (mode: "new" | "inherit") => void;
   items?: ConversationItem[];
   onSend: (
     text: string,
@@ -349,19 +345,8 @@ export type ComposerProps = {
   sendShortcut?: ComposerSendShortcut;
   textareaHeight?: number;
   onTextareaHeightChange?: (height: number) => void;
-  dictationEnabled?: boolean;
-  dictationState?: "idle" | "listening" | "processing";
-  dictationLevel?: number;
-  onToggleDictation?: () => void;
-  onOpenDictationSettings?: () => void;
   onOpenSkillsSettings?: () => void;
   onOpenExperimentalSettings?: () => void;
-  dictationTranscript?: DictationTranscript | null;
-  onDictationTranscriptHandled?: (id: string) => void;
-  dictationError?: string | null;
-  onDismissDictationError?: () => void;
-  dictationHint?: string | null;
-  onDismissDictationHint?: () => void;
   reviewPrompt?: ReviewPromptState;
   onReviewPromptClose?: () => void;
   onReviewPromptShowPreset?: () => void;
@@ -387,15 +372,6 @@ export type ComposerProps = {
   onReviewPromptConfirmCommit?: () => Promise<void>;
   onReviewPromptUpdateCustomInstructions?: (value: string) => void;
   onReviewPromptConfirmCustom?: () => Promise<void>;
-  linkedKanbanPanels?: {
-    id: string;
-    name: string;
-    workspaceId: string;
-    createdAt?: number;
-  }[];
-  selectedLinkedKanbanPanelId?: string | null;
-  onSelectLinkedKanbanPanel?: (panelId: string | null) => void;
-  onOpenLinkedKanbanPanel?: (panelId: string) => void;
   activeFilePath?: string | null;
   activeFileLineRange?: { startLine: number; endLine: number } | null;
   fileReferenceMode?: "path" | "none";
@@ -552,8 +528,6 @@ function normalizeCommandChipName(name: string) {
 }
 
 function ComposerImpl({
-  kanbanContextMode: _kanbanContextMode = "new",
-  onKanbanContextModeChange: _onKanbanContextModeChange,
   items = EMPTY_ITEMS,
   onSend,
   onQueue,
@@ -648,19 +622,8 @@ function ComposerImpl({
   sendShortcut = "enter",
   textareaHeight = 80,
   onTextareaHeightChange,
-  dictationEnabled: _dictationEnabled = false,
-  dictationState: _dictationState = "idle",
-  dictationLevel: _dictationLevel = 0,
-  onToggleDictation: _onToggleDictation,
-  onOpenDictationSettings: _onOpenDictationSettings,
   onOpenSkillsSettings: _onOpenSkillsSettings,
   onOpenExperimentalSettings: _onOpenExperimentalSettings,
-  dictationTranscript = null,
-  onDictationTranscriptHandled,
-  dictationError: _dictationError = null,
-  onDismissDictationError: _onDismissDictationError,
-  dictationHint: _dictationHint = null,
-  onDismissDictationHint: _onDismissDictationHint,
   reviewPrompt,
   onReviewPromptClose: _onReviewPromptClose,
   onReviewPromptShowPreset: _onReviewPromptShowPreset,
@@ -681,10 +644,6 @@ function ComposerImpl({
   onReviewPromptUpdateCustomInstructions:
     _onReviewPromptUpdateCustomInstructions,
   onReviewPromptConfirmCustom: _onReviewPromptConfirmCustom,
-  linkedKanbanPanels: _linkedKanbanPanels = [],
-  selectedLinkedKanbanPanelId: _selectedLinkedKanbanPanelId = null,
-  onSelectLinkedKanbanPanel: _onSelectLinkedKanbanPanel,
-  onOpenLinkedKanbanPanel: _onOpenLinkedKanbanPanel,
   activeFilePath = null,
   activeFileLineRange = null,
   fileReferenceMode = "path",
@@ -2077,7 +2036,7 @@ function ComposerImpl({
     );
   }, []);
 
-  const { isAutocompleteOpen, handleTextChange, handleSelectionChange } =
+  const { isAutocompleteOpen, handleTextChange } =
     useComposerAutocompleteState({
       text,
       selectionStart,
@@ -2822,44 +2781,6 @@ function ComposerImpl({
     setComposerText(insertText.text);
     onInsertHandled?.(insertText.id);
   }, [insertText, onInsertHandled, setComposerText]);
-
-  useEffect(() => {
-    if (!dictationTranscript) {
-      return;
-    }
-    const textToInsert = dictationTranscript.text.trim();
-    if (!textToInsert) {
-      onDictationTranscriptHandled?.(dictationTranscript.id);
-      return;
-    }
-    const textarea = textareaRef.current;
-    const start = textarea?.selectionStart ?? selectionStart ?? text.length;
-    const end = textarea?.selectionEnd ?? start;
-    const { nextText, nextCursor } = computeDictationInsertion(
-      text,
-      textToInsert,
-      start,
-      end,
-    );
-    setComposerText(nextText);
-    requestAnimationFrame(() => {
-      if (!textareaRef.current) {
-        return;
-      }
-      textareaRef.current.focus();
-      textareaRef.current.setSelectionRange(nextCursor, nextCursor);
-      handleSelectionChange(nextCursor);
-    });
-    onDictationTranscriptHandled?.(dictationTranscript.id);
-  }, [
-    dictationTranscript,
-    handleSelectionChange,
-    onDictationTranscriptHandled,
-    selectionStart,
-    setComposerText,
-    text,
-    textareaRef,
-  ]);
 
   const claudeContextUsage = useMemo<ClaudeContextUsageViewModel | null>(() => {
     if (!contextUsage || selectedEngine !== "claude") {

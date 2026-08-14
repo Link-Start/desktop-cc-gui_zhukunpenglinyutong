@@ -127,7 +127,6 @@ export function migrateLocalStorageToFileStore(): void {
     ["ccgui.planPanelHeight", "planPanelHeight"],
     ["ccgui.terminalPanelHeight", "terminalPanelHeight"],
     ["ccgui.debugPanelHeight", "debugPanelHeight"],
-    ["ccgui.kanbanConversationWidth", "kanbanConversationWidth"],
   ];
   for (const [localKey, jsonKey] of layoutNumKeys) {
     const v = readLocalNum(localKey);
@@ -183,8 +182,6 @@ export function migrateLocalStorageToFileStore(): void {
   if (language) app.language = language;
   const openApp = readLocalString("open-workspace-app");
   if (openApp) app.openWorkspaceApp = openApp;
-  const kanban = readLocalJson("ccgui.kanban");
-  if (kanban) app.kanban = kanban;
   if (Object.keys(app).length > 0) {
     writeClientStoreData("app", app);
   }

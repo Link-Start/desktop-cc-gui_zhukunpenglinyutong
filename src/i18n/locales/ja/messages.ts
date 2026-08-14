@@ -58,8 +58,6 @@ const messages = {
     "queue": "キュー",
     "send": "送信",
     "emptyThread": "スレッドを開始し、Agent にプロンプトを送信してください。",
-    "linkedRunEyebrow": "連携した実行",
-    "openLinkedRun": "実行の詳細を開く",
     "restoringHistory": "会話ウィンドウを読み込み中…",
     "restoringHistoryHint": "ローカルの記録とセッション状態を読み込んでいます。",
     "generatingResponse": "応答を生成中...",

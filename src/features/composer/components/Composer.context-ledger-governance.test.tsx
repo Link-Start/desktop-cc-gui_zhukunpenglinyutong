@@ -102,7 +102,6 @@ function renderComposer(
       commands={[]}
       files={[]}
       onDraftChange={() => {}}
-      dictationEnabled={false}
       activeWorkspaceId="ws-1"
       activeThreadId="thread-1"
       {...overrides}

@@ -8,7 +8,6 @@ import codexModes from "./codexModes";
 import debug from "./debug";
 import engineTaskOutput from "./engineTaskOutput";
 import intentCanvas from "./intentCanvas";
-import kanban from "./kanban";
 import memory from "./memory";
 import multiAgent from "./multiAgent";
 import projectMap from "./projectMap";
@@ -31,7 +30,6 @@ const deferred = {
   ...debug,
   ...engineTaskOutput,
   ...intentCanvas,
-  ...kanban,
   ...memory,
   ...multiAgent,
   ...projectMap,

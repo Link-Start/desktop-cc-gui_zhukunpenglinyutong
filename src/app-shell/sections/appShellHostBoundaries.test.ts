@@ -59,7 +59,7 @@ describe("AppShell S4 host boundaries", () => {
     );
   });
 
-  it("routes composer / conversation / kanban through domain hosts", () => {
+  it("routes composer / conversation through domain hosts", () => {
     const source = readSource(compositionPath);
 
     expect(source).toContain('from "../domains/useComposerDomainHost"');
@@ -68,8 +68,7 @@ describe("AppShell S4 host boundaries", () => {
       'from "../domains/useConversationDomainHost"',
     );
     expect(source).toContain("useConversationDomainHost({");
-    expect(source).toContain('from "../domains/useModeDomainHosts"');
-    expect(source).toContain("useKanbanDomainHost({");
+    expect(source).not.toContain("useKanbanDomainHost({");
 
     // 不得再直接挂这些已下沉 hooks
     expect(source).not.toContain(
@@ -128,7 +127,6 @@ describe("AppShell S4 host boundaries", () => {
     expect(assembly).toContain("buildGitSurfaceDomainContextSlice");
     expect(assembly).toContain("buildModeRoutingDomainContextSlice");
     expect(assembly).toContain("buildAccountSurfaceDomainContextSlice");
-    expect(assembly).toContain("buildDictationSurfaceDomainContextSlice");
     expect(assembly).toContain("buildWorkspaceNavigationDomainContextSlice");
     expect(assembly).toContain("buildModelSelectionDomainContextSlice");
     expect(assembly).toContain("buildCollaborationModeDomainContextSlice");

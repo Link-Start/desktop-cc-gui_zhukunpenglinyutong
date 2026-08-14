@@ -15,7 +15,6 @@ import type {
 import { useComposerInsert } from "../../features/app/hooks/useComposerInsert";
 import { loadHistoryWithImportance } from "../../features/composer/hooks/useInputHistoryStore";
 import type { HistoryItem } from "../../features/composer/hooks/useInputHistoryStore";
-import type { KanbanTask } from "../../features/kanban/types";
 import {
   readProjectMapRelationships,
   scanProjectMapRelationships,
@@ -134,7 +133,6 @@ type UseAppShellSearchRadarSectionOptions = {
   isFilesLoading: boolean;
   isProcessing: boolean;
   isSearchPaletteOpen: boolean;
-  kanbanTasks: KanbanTask[];
   lastAgentMessageByThread: Record<
     string,
     LastAgentMessageSnapshot | undefined
@@ -179,7 +177,6 @@ export function useAppShellSearchRadarSection({
   isFilesLoading,
   isProcessing,
   isSearchPaletteOpen,
-  kanbanTasks,
   lastAgentMessageByThread,
   listThreadsForWorkspace,
   rightPanelCollapsed,
@@ -293,13 +290,6 @@ export function useAppShellSearchRadarSection({
   const deferredThreadItemsByThread = backgroundRenderGatingEnabled
     ? deferredThreadItemsByThreadValue
     : threadItemsByThread;
-  const activeWorkspaceKanbanTasks = useMemo(
-    () =>
-      activePath
-        ? kanbanTasks.filter((task) => task.workspaceId === activePath)
-        : [],
-    [activePath, kanbanTasks],
-  );
 
   const activeWorkspaceProjectionOwnerIds = useMemo(
     () => resolveWorkspaceProjectionOwnerIds(workspaces, activeWorkspaceId),
@@ -798,10 +788,6 @@ export function useAppShellSearchRadarSection({
     workspaces,
   ]);
 
-  const scopedKanbanTasks = useMemo(
-    () => (searchScope === "global" ? kanbanTasks : activeWorkspaceKanbanTasks),
-    [activeWorkspaceKanbanTasks, kanbanTasks, searchScope],
-  );
   const historySearchItems = useMemo<HistoryItem[]>(
     () => (isSearchPaletteOpen ? loadHistoryWithImportance() : []),
     [isSearchPaletteOpen],
@@ -815,7 +801,6 @@ export function useAppShellSearchRadarSection({
     query: searchPaletteQuery,
     contentFilters: searchContentFilters,
     workspaceSources: workspaceSearchSources,
-    kanbanTasks: scopedKanbanTasks,
     threadItemsByThread: isSearchPaletteOpen ? deferredThreadItemsByThread : {},
     historyItems: historySearchItems,
     skills,
@@ -1025,7 +1010,6 @@ export function useAppShellSearchRadarSection({
 
   return {
     activePath,
-    activeWorkspaceKanbanTasks,
     activeWorkspaceThreads,
     ensureWorkspaceThreadListLoaded,
     handleEnsureWorkspaceThreadsForSettings,
@@ -1038,7 +1022,6 @@ export function useAppShellSearchRadarSection({
     perfSnapshotRef,
     RECENT_THREAD_LIMIT,
     recentThreads,
-    scopedKanbanTasks,
     searchApiHydrationStatus,
     searchFileHydrationStatus,
     searchResults,

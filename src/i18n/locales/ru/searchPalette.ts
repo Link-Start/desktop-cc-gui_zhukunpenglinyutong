@@ -4,7 +4,7 @@
 // Machine translation of src/i18n/locales/en/searchPalette.ts; keys mirror the English source.
 const searchPalette = {
   "searchPalette": {
-    "placeholder": "Поиск файлов, канбана, тредов, сообщений, навыков, команд…",
+    "placeholder": "Поиск файлов, тредов, сообщений, навыков, команд…",
     "placeholderFiltered": "Поиск {{content}}…",
     "inputAria": "Поле поиска",
     "scope": "Область",
@@ -27,7 +27,6 @@ const searchPalette = {
     "locationTag": "Расположение",
     "typeAction": "Действие",
     "typeFile": "Файл",
-    "typeKanban": "Канбан",
     "typeThread": "Тред",
     "typeMessage": "Сообщение",
     "typeHistory": "История",
@@ -35,7 +34,6 @@ const searchPalette = {
     "typeCommand": "Команда",
     "sourceActions": "Действия приложения",
     "sourceFiles": "Индекс файлов",
-    "sourceKanban": "Данные канбана",
     "sourceThreads": "Названия тредов",
     "sourceMessages": "Содержимое сообщений",
     "sourceHistory": "История ввода",
@@ -44,7 +42,6 @@ const searchPalette = {
     "contentAll": "Все",
     "contentActions": "Действия",
     "contentFiles": "Файлы",
-    "contentKanban": "Канбан",
     "contentThreads": "Треды",
     "contentMessages": "Сообщения",
     "contentHistory": "История",

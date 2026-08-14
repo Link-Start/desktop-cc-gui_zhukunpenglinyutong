@@ -69,9 +69,6 @@ const lockScreen = {
       gitIntelligenceTitle: "Git Intelligence",
       gitIntelligenceDesc:
         "Diff、Log、Commit、PR、Issue 一体化，减少“切窗口-丢上下文”的摩擦。",
-      kanbanDispatchTitle: "Kanban Dispatch",
-      kanbanDispatchDesc:
-        "从看板任务一键创建并驱动会话执行，支持任务状态与处理进度联动。",
       memoryEngineTitle: "Memory Engine",
       memoryEngineDesc:
         "对项目认知进行持久化沉淀，让后续会话无需重复解释同一背景。",
@@ -107,8 +104,6 @@ const lockScreen = {
       gitPanelTitle: "Git Hub",
       gitPanelDesc:
         "集成 diff/log/commit/pr/issue 信息，减少在外部工具间来回切换。",
-      kanbanTitle: "Kanban Dispatch",
-      kanbanDesc: "任务可一键投递到 AI 会话执行，保持状态与处理进度可追踪。",
       searchTitle: "Unified Search",
       searchDesc: "跨文件、会话、消息、skills 与 commands 的统一搜索入口。",
       memoryTitle: "Memory Engine",

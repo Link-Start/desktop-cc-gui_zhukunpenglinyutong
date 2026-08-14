@@ -10,37 +10,8 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConversationItem } from "../../../types";
-import {
-  OPEN_TASK_RUN_EVENT,
-  readOpenTaskRunEvent,
-} from "../../tasks/utils/taskRunNavigationEvents";
-import type { TaskRunRecord } from "../../tasks/types";
 import { Messages } from "./Messages";
 import { MessagesAnchorRail } from "./conversation/MessagesAnchorRail";
-
-function makeRun(overrides: Partial<TaskRunRecord> = {}): TaskRunRecord {
-  return {
-    runId: "run-1",
-    task: {
-      taskId: "task-1",
-      source: "kanban",
-      workspaceId: "ws-1",
-      title: "Ship linked run",
-    },
-    engine: "codex",
-    status: "running",
-    trigger: "manual",
-    linkedThreadId: "thread-1",
-    currentStep: "Rendering linked run",
-    latestOutputSummary: "Linked run output",
-    blockedReason: null,
-    failureReason: null,
-    artifacts: [],
-    availableRecoveryActions: ["open_conversation"],
-    updatedAt: 20,
-    ...overrides,
-  };
-}
 
 describe("Messages", () => {
   afterEach(() => {
@@ -315,54 +286,6 @@ describe("Messages", () => {
       expect(updateDepthErrors).toHaveLength(0);
     } finally {
       consoleErrorSpy.mockRestore();
-    }
-  });
-
-  it("renders the linked TaskRun indicator for the active thread and opens run detail", () => {
-    const openedRunIds: string[] = [];
-    const handleOpenTaskRun = (event: Event) => {
-      const runId = readOpenTaskRunEvent(event);
-      if (runId) {
-        openedRunIds.push(runId);
-      }
-    };
-    window.addEventListener(OPEN_TASK_RUN_EVENT, handleOpenTaskRun);
-
-    try {
-      render(
-        <Messages
-          items={[]}
-          threadId="thread-1"
-          workspaceId="ws-1"
-          isThinking={false}
-          activeEngine="codex"
-          openTargets={[]}
-          selectedOpenAppId=""
-          taskRuns={[
-            makeRun(),
-            makeRun({
-              runId: "run-other",
-              linkedThreadId: "thread-other",
-              task: {
-                taskId: "task-other",
-                source: "kanban",
-                workspaceId: "ws-1",
-                title: "Other run",
-              },
-            }),
-          ]}
-        />,
-      );
-
-      expect(screen.getByText("Ship linked run")).toBeTruthy();
-      expect(screen.getByText(/Linked run output/)).toBeTruthy();
-      expect(screen.queryByText("Other run")).toBeNull();
-
-      fireEvent.click(screen.getByText("messages.openLinkedRun"));
-
-      expect(openedRunIds).toEqual(["run-1"]);
-    } finally {
-      window.removeEventListener(OPEN_TASK_RUN_EVENT, handleOpenTaskRun);
     }
   });
 
@@ -1450,7 +1373,10 @@ describe("Messages", () => {
     Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
       configurable: true,
       get() {
-        return this.classList.contains("user-collapsible-content") ? 280 : 0;
+        return this.classList.contains("user-collapsible-text-content") ||
+          this.classList.contains("user-collapsible-content")
+          ? 280
+          : 0;
       },
     });
 

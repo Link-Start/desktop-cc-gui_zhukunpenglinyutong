@@ -11,7 +11,6 @@ import {
   buildGitSurfaceDomainContextSlice,
   buildModeRoutingDomainContextSlice,
   buildAccountSurfaceDomainContextSlice,
-  buildDictationSurfaceDomainContextSlice,
   buildWorkspaceNavigationDomainContextSlice,
 } from "./buildAppShellDomainContextSlices";
 import {
@@ -337,7 +336,6 @@ export function assembleAppShellDomainContexts(
       showExtensions: source.showExtensions,
       showGitHistory: source.showGitHistory,
       showHome: source.showHome,
-      showKanban: source.showKanban,
       showWorkspaceHome: source.showWorkspaceHome,
     }),
     accountSurfaceContext: buildAccountSurfaceDomainContextSlice({
@@ -355,20 +353,6 @@ export function assembleAppShellDomainContexts(
       // S4 PR-E：归位 keys（口径见 APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS）
       refreshAccountRateLimits: source.refreshAccountRateLimits,
     }),
-    dictationSurfaceContext: buildDictationSurfaceDomainContextSlice({
-      clearDictationError: source.clearDictationError,
-      clearDictationHint: source.clearDictationHint,
-      clearDictationTranscript: source.clearDictationTranscript,
-      dictationError: source.dictationError,
-      dictationHint: source.dictationHint,
-      dictationLevel: source.dictationLevel,
-      dictationModel: source.dictationModel,
-      dictationReady: source.dictationReady,
-      dictationState: source.dictationState,
-      dictationTranscript: source.dictationTranscript,
-      // S4 PR-C：听写开关（从 composerContext 归位）
-      handleToggleDictation: source.handleToggleDictation,
-    }),
     workspaceNavigationContext: buildWorkspaceNavigationDomainContextSlice({
       SettingsView: source.SettingsView,
       activeEditorFilePath: source.activeEditorFilePath,
@@ -379,7 +363,6 @@ export function assembleAppShellDomainContexts(
       activeRenamePrompt: source.activeRenamePrompt,
       agentTaskScrollRequest: source.agentTaskScrollRequest,
       activeTerminalId: source.activeTerminalId,
-      activeWorkspaceKanbanTasks: source.activeWorkspaceKanbanTasks,
       addDebugEntry: source.addDebugEntry,
       agent: source.agent,
       alertError: source.alertError,
@@ -456,7 +439,7 @@ export function assembleAppShellDomainContexts(
       // S4 PR-C：composer 输入面（draft/queue/images/prefill/insert + 发送/队列
       // handlers + prompts 库 + agent/access-mode 选择 + interruptTurn）。
       // 原 141 把钥匙中无 bag 读者的已删除，其余按语义归位到
-      // gitSurface / fileEditor / modeRouting / accountSurface / dictationSurface /
+      // gitSurface / fileEditor / modeRouting / accountSurface /
       // workspaceCatalog / workspaceNavigation / runtimeThread / modelSelection。
       activeFusingMessageId: source.activeFusingMessageId,
       activeImages: source.activeImages,
@@ -503,17 +486,6 @@ export function assembleAppShellDomainContexts(
       prompts: source.prompts,
     },
     layoutContext: {
-      kanbanConversationWidth: source.kanbanConversationWidth,
-      kanbanCreatePanel: source.kanbanCreatePanel,
-      kanbanCreateTask: source.kanbanCreateTask,
-      kanbanDeletePanel: source.kanbanDeletePanel,
-      kanbanDeleteTask: source.kanbanDeleteTask,
-      kanbanPanels: source.kanbanPanels,
-      kanbanReorderTask: source.kanbanReorderTask,
-      kanbanTasks: source.kanbanTasks,
-      kanbanUpdatePanel: source.kanbanUpdatePanel,
-      kanbanUpdateTask: source.kanbanUpdateTask,
-      kanbanViewState: source.kanbanViewState,
       liveEditPreviewEnabled: source.liveEditPreviewEnabled,
       lockLiveSessions: source.lockLiveSessions,
       models: source.models,
@@ -522,7 +494,6 @@ export function assembleAppShellDomainContexts(
       onCloseTerminal: source.onCloseTerminal,
       onDebugPanelResizeStart: source.onDebugPanelResizeStart,
       onGitHistoryPanelResizeStart: source.onGitHistoryPanelResizeStart,
-      onKanbanConversationResizeStart: source.onKanbanConversationResizeStart,
       onNewTerminal: source.onNewTerminal,
       onPlanPanelResizeStart: source.onPlanPanelResizeStart,
       onRightPanelResizeStart: source.onRightPanelResizeStart,
@@ -545,7 +516,6 @@ export function assembleAppShellDomainContexts(
       removeThread: source.removeThread,
       removeThreads: source.removeThreads,
       // S4 PR-E：归位 keys（口径见 APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS）
-      setKanbanViewState: source.setKanbanViewState,
       setLiveEditPreviewEnabled: source.setLiveEditPreviewEnabled,
       setReduceTransparency: source.setReduceTransparency,
       setWindowOpacity: source.setWindowOpacity,
@@ -592,7 +562,6 @@ export function assembleAppShellDomainContexts(
       scaleShortcutText: source.scaleShortcutText,
       scaleShortcutTitle: source.scaleShortcutTitle,
       scanGitRoots: source.scanGitRoots,
-      scopedKanbanTasks: source.scopedKanbanTasks,
       searchContentFilters: source.searchContentFilters,
       searchApiHydrationStatus: source.searchApiHydrationStatus,
       searchFileHydrationStatus: source.searchFileHydrationStatus,
@@ -610,7 +579,6 @@ export function assembleAppShellDomainContexts(
       selectedCommitSha: source.selectedCommitSha,
       selectedDiffPath: source.selectedDiffPath,
       selectedAgentRef: source.selectedAgentRef,
-      selectedKanbanTaskId: source.selectedKanbanTaskId,
       selectedOpenCodeAgent: source.selectedOpenCodeAgent,
       selectedOpenCodeVariant: source.selectedOpenCodeVariant,
       selectedPullRequest: source.selectedPullRequest,
@@ -623,7 +591,6 @@ export function assembleAppShellDomainContexts(
       setSearchScope: source.setSearchScope,
       setSelectedCommitSha: source.setSelectedCommitSha,
       setSelectedDiffPath: source.setSelectedDiffPath,
-      setSelectedKanbanTaskId: source.setSelectedKanbanTaskId,
       setSelectedPullRequest: source.setSelectedPullRequest,
     },
     settingsContext: {
@@ -724,10 +691,10 @@ export function useAppShellDomainAssembly(
   const previousRef = useRef<AppShellDomainContexts | null>(null);
   const raw = assembleAppShellDomainContexts(source);
   // S4 PR-E：Git 表面按 appMode 条件装配（与 S3 合流）。
-  // 非 git 表面模式（kanban / extensions）下冻结 gitSurface bag 引用：
-  // 后台 git 更新（如 kanban 任务 turn settle 触发的 status 刷新）不再
-  // 触发 gitSurface 浅比较与向 layoutNodes 的扇出；切回 chat/gitHistory
-  // 时恢复正常装配，新值即刻生效。首次渲染尚无旧 bag 时先完整装配一次。
+  // 非 git 表面模式（extensions）下冻结 gitSurface bag 引用：
+  // 后台 git 更新不再触发 gitSurface 浅比较与向 layoutNodes 的扇出；
+  // 切回 chat/gitHistory 时恢复正常装配，新值即刻生效。
+  // 首次渲染尚无旧 bag 时先完整装配一次。
   const isGitSurfaceMode = resolveAppModeSurfaceFlags(
     source.appMode as AppMode,
   ).isGitSurfaceMode;

@@ -34,7 +34,6 @@ describe("computeUnifiedSearchResults", () => {
     const base = {
       query: "hello",
       contentFilters: ["all"] as SearchContentFilter[],
-      kanbanTasks: [],
       threadItemsByThread: {} as Record<string, ConversationItem[]>,
       historyItems: [],
       skills: [] as SkillOption[],
@@ -64,7 +63,6 @@ describe("computeUnifiedSearchResults", () => {
       query: "plan",
       contentFilters: ["skills", "commands"],
       workspaceSources: [],
-      kanbanTasks: [],
       threadItemsByThread: {},
       historyItems: [],
       skills: [{ name: "plan-writer", path: "/skill/plan", description: "Plan helper" }],
@@ -131,7 +129,6 @@ describe("computeUnifiedSearchResults", () => {
       query,
       contentFilters: ["all"],
       workspaceSources,
-      kanbanTasks: [],
       threadItemsByThread,
       historyItems: [],
       skills: [],
@@ -160,7 +157,6 @@ describe("useUnifiedSearch", () => {
     const baseOptions = {
       contentFilters: ["skills"] as SearchContentFilter[],
       workspaceSources: [],
-      kanbanTasks: [],
       threadItemsByThread: {},
       historyItems: [],
       skills: [
@@ -197,7 +193,6 @@ describe("useUnifiedSearch", () => {
     const baseOptions = {
       contentFilters: ["skills"] as SearchContentFilter[],
       workspaceSources: [],
-      kanbanTasks: [],
       threadItemsByThread: {},
       historyItems: [],
       skills: [
@@ -255,7 +250,6 @@ describe("useUnifiedSearch stale query guard integration", () => {
     const baseOptions = {
       contentFilters: ["skills"] as SearchContentFilter[],
       workspaceSources: [],
-      kanbanTasks: [],
       threadItemsByThread: {},
       historyItems: [],
       skills: [
@@ -292,7 +286,6 @@ describe("useUnifiedSearch stale query guard integration", () => {
     const baseOptions = {
       contentFilters: ["skills"] as SearchContentFilter[],
       workspaceSources: [],
-      kanbanTasks: [],
       threadItemsByThread: {},
       historyItems: [],
       skills: [
@@ -386,8 +379,7 @@ describe("useUnifiedSearch metrics integration (regression for elapsedMs: 0 bug)
         query: "alpha",
         contentFilters: ["skills"],
         workspaceSources: [],
-        kanbanTasks: [],
-        threadItemsByThread: {},
+          threadItemsByThread: {},
         historyItems: [],
         skills: [
           { name: "alpha-runner", path: "/s/alpha", description: "A" },

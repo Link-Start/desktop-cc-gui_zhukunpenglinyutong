@@ -67,7 +67,6 @@ vi.mock("react-i18next", () => ({
         "sidebar.sessionFolderCount": "session count",
         "sidebar.sessionFolderLoadFailed": "Session folders unavailable.",
         "sidebar.quickNewThread": "Home",
-        "sidebar.quickAutomation": "Automation",
         "sidebar.quickSearch": "Search",
         "sidebar.quickSkills": "Skills",
         "lockScreen.lock": "Lock",
@@ -300,7 +299,6 @@ const baseProps = {
   onOpenGlobalSearch: vi.fn(),
   globalSearchShortcut: "cmd+o",
   openChatShortcut: "cmd+j",
-  openKanbanShortcut: "cmd+k",
   onOpenSpecHub: vi.fn(),
   onOpenWorkspaceHome: vi.fn(),
 };

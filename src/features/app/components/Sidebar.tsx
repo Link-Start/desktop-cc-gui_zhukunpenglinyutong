@@ -269,7 +269,6 @@ type SidebarProps = {
   onCollapseSidebar?: () => void;
   globalSearchShortcut: string | null;
   openChatShortcut: string | null;
-  openKanbanShortcut: string | null;
   isExitedSessionsHidden?: (workspacePath: string) => boolean;
   onToggleExitedSessionsHidden?: (workspacePath: string) => void;
   rootSessionFolderDraftRequestByWorkspaceId?: Record<string, number>;
@@ -379,7 +378,6 @@ function SidebarImpl({
   onCollapseSidebar,
   globalSearchShortcut,
   openChatShortcut,
-  openKanbanShortcut,
   isExitedSessionsHidden: controlledIsExitedSessionsHidden,
   onToggleExitedSessionsHidden: controlledToggleExitedSessionsHidden,
   rootSessionFolderDraftRequestByWorkspaceId: controlledRootSessionFolderDraftRequestByWorkspaceId,
@@ -404,10 +402,6 @@ function SidebarImpl({
   const quickChatShortcutLabel = useMemo(
     () => formatShortcutForPlatform(openChatShortcut, isMac),
     [isMac, openChatShortcut],
-  );
-  const quickKanbanShortcutLabel = useMemo(
-    () => formatShortcutForPlatform(openKanbanShortcut, isMac),
-    [isMac, openKanbanShortcut],
   );
   const quickSwitcherShortcutLabel = useMemo(
     () => formatShortcutForPlatform(QUICK_SWITCHER_SHORTCUT, isMac),
@@ -2219,24 +2213,6 @@ function SidebarImpl({
             >
               <House className="sidebar-primary-nav-icon" aria-hidden size={20} strokeWidth={1.8} />
               <span className="sidebar-primary-nav-text">{t("sidebar.quickNewThread")}</span>
-            </button>
-            <button
-              type="button"
-              className={`sidebar-primary-nav-item sidebar-primary-nav-mode-item ${appMode === "kanban" ? "is-active" : ""}`}
-              onClick={() => onAppModeChange("kanban")}
-              title={`${t("sidebar.quickAutomation")} (${quickKanbanShortcutLabel})`}
-              aria-label={t("sidebar.quickAutomation")}
-              data-tauri-drag-region="false"
-            >
-              <svg className="sidebar-primary-nav-icon" aria-hidden width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M10 3.25V16C10 16.1989 9.92098 16.3897 9.78033 16.5303C9.63968 16.671 9.44891 16.75 9.25 16.75H4.75C4.35218 16.75 3.97064 16.592 3.68934 16.3107C3.40804 16.0294 3.25 15.6478 3.25 15.25V4.75C3.25 4.35218 3.40804 3.97064 3.68934 3.68934C3.97064 3.40804 4.35218 3.25 4.75 3.25H15.25C15.6478 3.25 16.0294 3.40804 16.3107 3.68934C16.592 3.97064 16.75 4.35218 16.75 4.75V9.25C16.75 9.44891 16.671 9.63968 16.5303 9.78033C16.3897 9.92098 16.1989 10 16 10H3.25" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M13 15.25H17.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M15.25 17.5V13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <span className="sidebar-primary-nav-text">{t("sidebar.quickAutomation")}</span>
-              <span className="sidebar-primary-nav-shortcut" aria-hidden>
-                {quickKanbanShortcutLabel}
-              </span>
             </button>
             <button
               type="button"

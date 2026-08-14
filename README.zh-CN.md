@@ -48,8 +48,6 @@
 ### 任务多了也不乱
 
 - **Plan 面板**：AI 的执行计划一步步列出来，做到哪了一眼看清。
-- **Kanban 看板**：任务卡片拖来拖去，管理整个迭代。
-- **任务中心**：查看 Kanban/orchestration task run、日志和 artifact 摘要；仅在 run 与 engine 支持时提供 retry、resume、cancel 或 fork。
 - **意图画布**：在画布上拖节点做规划，想清楚再动手。
 
 ### 项目智能（ccgui 比较独特的部分）

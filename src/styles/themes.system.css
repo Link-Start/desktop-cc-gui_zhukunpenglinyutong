@@ -185,27 +185,6 @@
   }
 
 
-  /* Kanban - softer borders in system light mode */
-  :root:not([data-theme]) .kanban-column {
-    border-right-color: rgba(24, 24, 27, 0.08);
-  }
-
-  :root:not([data-theme]) .kanban-column-header {
-    border-bottom-color: rgba(24, 24, 27, 0.08);
-  }
-
-  :root:not([data-theme]) .kanban-card {
-    border-bottom-color: rgba(24, 24, 27, 0.06);
-  }
-
-  :root:not([data-theme]) .kanban-board-header {
-    border-bottom-color: rgba(24, 24, 27, 0.08);
-  }
-
-  :root:not([data-theme]) .kanban-search-box {
-    border-color: rgba(24, 24, 27, 0.1);
-  }
-
   /* Native select/option light mode override (Windows WebView2) */
   :root:not([data-theme]) select,
   :root:not([data-theme]) select option {

@@ -427,15 +427,6 @@ pub(crate) fn invoke_handler(
         crate::session_management::delete_workspace_session_folder,
         crate::session_management::assign_workspace_session_folder,
         crate::session_management::assign_workspace_session_folders,
-        // Dictation
-        crate::dictation::dictation_model_status,
-        crate::dictation::dictation_download_model,
-        crate::dictation::dictation_cancel_download,
-        crate::dictation::dictation_remove_model,
-        crate::dictation::dictation_start,
-        crate::dictation::dictation_request_permission,
-        crate::dictation::dictation_stop,
-        crate::dictation::dictation_cancel,
         // Local usage
         crate::local_usage::local_usage_snapshot,
         // TokenTracker
@@ -451,7 +442,6 @@ pub(crate) fn invoke_handler(
         crate::client_storage::client_store_read,
         crate::client_storage::client_store_write,
         crate::client_storage::client_store_patch,
-        crate::client_storage::client_save_kanban_image,
         crate::client_storage::client_panel_lock_password_read,
         crate::client_storage::client_panel_lock_password_write,
         // Input history

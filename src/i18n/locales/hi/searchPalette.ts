@@ -4,7 +4,7 @@
 // Machine translation of src/i18n/locales/en/searchPalette.ts; keys mirror the English source.
 const searchPalette = {
   "searchPalette": {
-    "placeholder": "फ़ाइलें, kanban, थ्रेड, संदेश, स्किल, कमांड खोजें...",
+    "placeholder": "फ़ाइलें, थ्रेड, संदेश, स्किल, कमांड खोजें...",
     "placeholderFiltered": "{{content}} खोजें...",
     "inputAria": "खोज इनपुट",
     "scope": "दायरा",
@@ -27,7 +27,6 @@ const searchPalette = {
     "locationTag": "स्थान",
     "typeAction": "क्रिया",
     "typeFile": "फ़ाइल",
-    "typeKanban": "Kanban",
     "typeThread": "थ्रेड",
     "typeMessage": "संदेश",
     "typeHistory": "इतिहास",
@@ -35,7 +34,6 @@ const searchPalette = {
     "typeCommand": "कमांड",
     "sourceActions": "ऐप क्रियाएँ",
     "sourceFiles": "फ़ाइल इंडेक्स",
-    "sourceKanban": "Kanban डेटा",
     "sourceThreads": "थ्रेड शीर्षक",
     "sourceMessages": "संदेश सामग्री",
     "sourceHistory": "इनपुट इतिहास",
@@ -44,7 +42,6 @@ const searchPalette = {
     "contentAll": "सभी",
     "contentActions": "क्रियाएँ",
     "contentFiles": "फ़ाइलें",
-    "contentKanban": "Kanban",
     "contentThreads": "थ्रेड",
     "contentMessages": "संदेश",
     "contentHistory": "इतिहास",

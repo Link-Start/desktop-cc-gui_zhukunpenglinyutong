@@ -58,8 +58,6 @@ const messages = {
     "queue": "Cola",
     "send": "Enviar",
     "emptyThread": "Inicia un hilo y envía un prompt al Agent.",
-    "linkedRunEyebrow": "Ejecución vinculada",
-    "openLinkedRun": "Abrir detalle de ejecución",
     "restoringHistory": "Cargando la ventana de conversación…",
     "restoringHistoryHint": "Cargando la transcripción local y el estado de la sesión.",
     "generatingResponse": "Generando respuesta...",

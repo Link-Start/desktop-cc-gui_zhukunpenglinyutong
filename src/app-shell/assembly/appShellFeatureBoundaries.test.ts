@@ -13,7 +13,6 @@ const FEATURE_SHELL_BRIDGE_ALLOWLIST = new Set([
   "features/composer/hooks/composerEnginePrefsStore.ts",
   "features/settings/hooks/useAppSettings.ts",
   "features/session-activity/hooks/useSessionRadarFeed.ts",
-  "features/tasks/utils/taskRunTelemetry.ts",
 ]);
 
 describe("appShellFeatureBoundaries (T3.5/T3.6/T3.7)", () => {

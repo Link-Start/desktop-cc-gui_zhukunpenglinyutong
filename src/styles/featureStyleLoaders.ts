@@ -117,12 +117,6 @@ export function loadFileHistoryStyles() {
   ]).then(() => undefined);
 }
 
-export function loadKanbanStyles() {
-  return loadStyles([
-    () => import("./kanban.css"),
-  ]);
-}
-
 /** Extensions 面板 + TokenTracker 仪表盘壳层样式（非首屏路径）。 */
 export function loadExtensionsStyles() {
   return loadStyles([
@@ -134,12 +128,6 @@ export function loadExtensionsStyles() {
 export function loadBrowserAgentStyles() {
   return loadStyles([
     () => import("./browser-agent-window.css"),
-  ]);
-}
-
-export function loadWorkspaceHomeStyles() {
-  return loadStyles([
-    () => import("./workspace-home.css"),
   ]);
 }
 

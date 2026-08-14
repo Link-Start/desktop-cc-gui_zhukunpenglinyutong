@@ -32,7 +32,6 @@ vi.mock("react-i18next", () => ({
         "sidebar.projects": "Projects",
         "sidebar.threadsSection": "Threads",
         "sidebar.quickNewThread": "Home",
-        "sidebar.quickAutomation": "Automation",
         "sidebar.quickSearch": "Search",
         "sidebar.openHome": "Open home",
         "sidebar.emptyWorkspaceSessions": "No sessions yet.",
@@ -241,7 +240,6 @@ const baseProps = {
   onOpenGlobalSearch: vi.fn(),
   globalSearchShortcut: "cmd+o",
   openChatShortcut: "cmd+j",
-  openKanbanShortcut: "cmd+k",
   onOpenSpecHub: vi.fn(),
   onOpenWorkspaceHome: vi.fn(),
 };

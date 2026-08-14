@@ -31,7 +31,6 @@ function createDomainContexts(): AppShellDomainContexts {
     gitSurfaceContext: {},
     modeRoutingContext: {},
     accountSurfaceContext: {},
-    dictationSurfaceContext: {},
     workspaceNavigationContext: { activeWorkspaceId: "workspace-1" },
     composerContext: { activeDraft: "hello" },
     layoutContext: { centerMode: "chat" },
@@ -174,7 +173,7 @@ function findDuplicateRawContextKeys(
 }
 
 describe("appShellDomainContexts", () => {
-  it("defines the fifteen app shell domain contexts in migration order", () => {
+  it("defines the fourteen app shell domain contexts in migration order", () => {
     expect(listAppShellDomainContextNames()).toEqual([
       "runtimeThreadContext",
       "sessionIdentityContext",
@@ -182,7 +181,6 @@ describe("appShellDomainContexts", () => {
       "gitSurfaceContext",
       "modeRoutingContext",
       "accountSurfaceContext",
-      "dictationSurfaceContext",
       "workspaceNavigationContext",
       "composerContext",
       "layoutContext",
@@ -271,12 +269,6 @@ describe("appShellDomainContexts", () => {
     expect(
       APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS.workspaceNavigationContext,
     ).not.toContain("approvals");
-    expect(APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS.dictationSurfaceContext).toContain(
-      "dictationState",
-    );
-    expect(
-      APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS.workspaceNavigationContext,
-    ).not.toContain("dictationState");
     expect(
       APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS.workspaceNavigationContext.length,
     ).toBeLessThanOrEqual(80);
@@ -383,7 +375,6 @@ describe("appShellDomainContexts", () => {
       gitSurfaceContext: {},
       modeRoutingContext: {},
       accountSurfaceContext: {},
-      dictationSurfaceContext: {},
       workspaceNavigationContext: { activeWorkspaceId: "workspace-1" },
       composerContext: { activeDraft: "hello" },
       layoutContext: { centerMode: "chat" },
@@ -400,7 +391,6 @@ describe("appShellDomainContexts", () => {
       gitSurfaceContext: {},
       modeRoutingContext: {},
       accountSurfaceContext: {},
-      dictationSurfaceContext: {},
       workspaceNavigationContext: { activeWorkspaceId: "workspace-1" },
       composerContext: { activeDraft: "hello" },
       layoutContext: { centerMode: "chat" },
@@ -659,8 +649,9 @@ describe("appShellDomainContexts", () => {
 
 describe("APP_SHELL_CONSUMER_DOMAIN_SELECTION", () => {
   it("keeps sections/render smaller than layoutNodes (no full-domain flatten)", () => {
-    // S4 PR-C：layoutNodes 15 → 14（runtimeContext 直读不经 bag）
-    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.layoutNodes).toHaveLength(14);
+    // S4 PR-C：layoutNodes 15 → 14（runtimeContext 直读不经 bag）；
+    // 当前选择集 13（kanban 出账后不再订阅额外域）
+    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.layoutNodes).toHaveLength(13);
     expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.sections.length).toBeLessThan(15);
     expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.render.length).toBeLessThan(15);
     expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.sections).toContain(
@@ -678,14 +669,8 @@ describe("APP_SHELL_CONSUMER_DOMAIN_SELECTION", () => {
     expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.sections).toContain(
       "accountSurfaceContext",
     );
-    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.sections).toContain(
-      "dictationSurfaceContext",
-    );
     expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.render).toContain(
       "sessionIdentityContext",
-    );
-    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.render).toContain(
-      "dictationSurfaceContext",
     );
     expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.render).toContain(
       "modeRoutingContext",

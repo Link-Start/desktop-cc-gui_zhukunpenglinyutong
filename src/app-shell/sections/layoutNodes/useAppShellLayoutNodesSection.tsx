@@ -38,7 +38,6 @@ import {
   isQuickSwitcherGitActive,
   isQuickSwitcherGlobalSearchActive,
   isQuickSwitcherIntentCanvasActive,
-  isQuickSwitcherKanbanActive,
   isQuickSwitcherMemoryActive,
   isQuickSwitcherNotesActive,
   isQuickSwitcherProjectMapActive,
@@ -241,9 +240,6 @@ export function useAppShellLayoutNodesSection(
     choosePreset,
     claudeThinkingVisible,
     clearDebugEntries,
-    clearDictationError,
-    clearDictationHint,
-    clearDictationTranscript,
     closeQuickSwitcher,
     closePlanPanel,
     closeReviewPrompt,
@@ -262,8 +258,6 @@ export function useAppShellLayoutNodesSection(
     composerEditorSettings,
     composerInputRef,
     composerInsert,
-    composerKanbanContextMode,
-    composerLinkedKanbanPanels,
     composerSendLabel,
     confirmBranch,
     confirmCommit,
@@ -277,12 +271,6 @@ export function useAppShellLayoutNodesSection(
     handleRenamePromptConfirm,
     renamePrompt,
     deletingWorktreeIds,
-    dictationError,
-    dictationHint,
-    dictationLevel,
-    dictationReady,
-    dictationState,
-    dictationTranscript,
     diffScrollRequestId,
     diffSource,
     directories,
@@ -390,7 +378,6 @@ export function useAppShellLayoutNodesSection(
     handleInsertComposerText,
     handleLockPanel,
     handleMovePrompt,
-    handleOpenComposerKanbanPanel,
     handleOpenDetachedFileExplorer,
     handleOpenWorkspaceFileCompare,
     handleOpenScratchFileCompare,
@@ -439,7 +426,6 @@ export function useAppShellLayoutNodesSection(
     handleSwitchAccount,
     handleFuseQueued,
     handleSync,
-    handleToggleDictation,
     handleToggleRuntimeConsole,
     handleToggleSearchPalette,
     handleToggleTerminalPanel,
@@ -528,7 +514,6 @@ export function useAppShellLayoutNodesSection(
     selectedAgent,
     selectedCollaborationModeId,
     selectedCommitSha,
-    selectedComposerKanbanPanelId,
     selectedDiffPath,
     selectedEffort,
     selectedOpenCodeAgent,
@@ -543,7 +528,6 @@ export function useAppShellLayoutNodesSection(
     setAppMode,
     setCenterMode,
     setComposerInsert,
-    setComposerKanbanContextMode,
     setEditorSplitCompanion,
     setEditorSplitLayout,
     setFilePanelMode,
@@ -558,7 +542,6 @@ export function useAppShellLayoutNodesSection(
     setLiveEditPreviewEnabled,
     setPrefillDraft,
     setSelectedCommitSha,
-    setSelectedComposerKanbanPanelId,
     setSelectedDiffPath,
     setSelectedEffort,
     setHomeOpen,
@@ -1195,9 +1178,6 @@ export function useAppShellLayoutNodesSection(
   const handleOpenCliSettings = useEventCallback(() =>
     openSettings("providers"),
   );
-  const handleOpenDictationSettings = useEventCallback(() =>
-    openSettings("dictation"),
-  );
   // Manual git panel refresh should dismiss stale commit/push/sync error banners.
   const handleManualGitStatusRefresh = useCallback(() => {
     clearGitOperationErrors();
@@ -1696,7 +1676,7 @@ export function useAppShellLayoutNodesSection(
         handleOpenGitHistoryPanel();
         return;
       }
-      // files/git/kanban/settings：wrapper 只拦截「已开 → 回切」分支；
+      // files/git/settings：wrapper 只拦截「已开 → 回切」分支；
       // 未开时委托 base handler 执行既有 open action（base 保留兜底 case）。
       if (target === "files" || target === "git") {
         const isActive =
@@ -1707,16 +1687,6 @@ export function useAppShellLayoutNodesSection(
           closeQuickSwitcher();
           closeHomeSurface();
           collapseRightPanel();
-          return;
-        }
-        handleBaseQuickSwitcherNavigate(target);
-        return;
-      }
-      if (target === "kanban") {
-        if (isQuickSwitcherKanbanActive(navigationState)) {
-          closeQuickSwitcher();
-          closeHomeSurface();
-          setAppMode("chat");
           return;
         }
         handleBaseQuickSwitcherNavigate(target);
@@ -1804,9 +1774,6 @@ export function useAppShellLayoutNodesSection(
     if (composerInsert?.id === id) {
       setComposerInsert(null);
     }
-  });
-  const handleDictationTranscriptHandled = useEventCallback((id: string) => {
-    clearDictationTranscript(id);
   });
   const handleOpenExperimentalSettings = useEventCallback(() =>
     openSettings("experimental", "experimental-collaboration-modes"),
@@ -1980,7 +1947,6 @@ export function useAppShellLayoutNodesSection(
       onOpenCliSettings: handleOpenCliSettings,
       onRefreshModelConfig: handleRefreshModelConfig,
       isModelConfigRefreshing,
-      onOpenDictationSettings: handleOpenDictationSettings,
       onOpenSkillsSettings: handleOpenSkillsSettings,
       onOpenDebug: handleDebugClick,
       showDebugButton,
@@ -2361,24 +2327,8 @@ export function useAppShellLayoutNodesSection(
       composerSendShortcut: appSettings.composerSendShortcut,
       textareaHeight,
       onTextareaHeightChange,
-      dictationEnabled: appSettings.dictationEnabled && dictationReady,
-      dictationState,
-      dictationLevel,
-      onToggleDictation: handleToggleDictation,
-      dictationTranscript,
-      onDictationTranscriptHandled: handleDictationTranscriptHandled,
-      dictationError,
-      onDismissDictationError: clearDictationError,
-      dictationHint,
-      onDismissDictationHint: clearDictationHint,
       onOpenExperimentalSettings: handleOpenExperimentalSettings,
       composerSendLabel,
-      composerLinkedKanbanPanels,
-      selectedComposerKanbanPanelId,
-      composerKanbanContextMode,
-      onSelectComposerKanbanPanel: setSelectedComposerKanbanPanelId,
-      onComposerKanbanContextModeChange: setComposerKanbanContextMode,
-      onOpenComposerKanbanPanel: handleOpenComposerKanbanPanel,
       activeComposerFilePath: activeEditorFilePath,
       activeComposerFileLineRange: activeEditorLineRange,
       activeCodeSelectionAnchor: activeIntentCanvasCodeSelectionAnchor,
@@ -2434,7 +2384,6 @@ export function useAppShellLayoutNodesSection(
       onCollapseSidebar: collapseSidebar,
       globalSearchShortcut: appSettings.toggleGlobalSearchShortcut,
       openChatShortcut: appSettings.openChatShortcut,
-      openKanbanShortcut: appSettings.openKanbanShortcut,
       cycleOpenSessionPrevShortcut: appSettings.cycleOpenSessionPrevShortcut,
       cycleOpenSessionNextShortcut: appSettings.cycleOpenSessionNextShortcut,
       closeCurrentSessionShortcut: appSettings.closeCurrentSessionShortcut,

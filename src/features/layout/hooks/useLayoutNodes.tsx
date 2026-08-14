@@ -52,7 +52,6 @@ import {
   buildGitStatusProjectMapImpactInput,
   type ProjectMapImpactInput,
 } from "../../project-map/utils/impactSources";
-import { useTaskRunStore } from "../../tasks/hooks/useTaskRunStore";
 import { WorkspaceNoteCardPanel } from "../../note-cards/components/WorkspaceNoteCardPanel";
 import type {
   NoteCaptureDraft,
@@ -111,7 +110,6 @@ import {
   EMPTY_ACTIVE_CANVAS_CHILD_SUBAGENT_THREADS,
   EMPTY_ACTIVE_CANVAS_ITEMS,
   EMPTY_ACTIVE_CANVAS_NATIVE_THREAD_IDS,
-  EMPTY_ACTIVE_CANVAS_TASK_RUNS,
   EMPTY_ACTIVE_CANVAS_USER_INPUT_REQUESTS,
   setActiveCanvasSnapshot,
   stabilizeListByMemberIdentity,
@@ -821,7 +819,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           onCollapseSidebar={options.onCollapseSidebar}
           globalSearchShortcut={options.globalSearchShortcut}
           openChatShortcut={options.openChatShortcut}
-          openKanbanShortcut={options.openKanbanShortcut}
           showLoadingProgressDialog={options.showLoadingProgressDialog}
           hideLoadingProgressDialog={options.hideLoadingProgressDialog}
           onOpenSpecHub={options.onOpenSpecHub}
@@ -919,7 +916,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       options.onWorkspaceDragOver,
       options.onWorkspaceDrop,
       options.openChatShortcut,
-      options.openKanbanShortcut,
       options.pinThread,
       options.pinnedThreadsVersion,
       options.renameName,
@@ -1130,8 +1126,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     );
   }, []);
 
-  const taskRunStore = useTaskRunStore();
-
   // childSubagent / nativeThreadIds：禁止每帧 `[]` 或 filter 新数组击穿 canvas shallowEqual（#185 / App-BG-8EZ_F）
   // stabilize 放在 useMemo 内：仅 deps 变化时比较；避免每帧 render 写 ref（Concurrent 更干净）。
   const childSubagentThreadsStableRef = useRef(
@@ -1193,10 +1187,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     options.approvals.length === 0
       ? EMPTY_ACTIVE_CANVAS_APPROVALS
       : options.approvals;
-  const canvasTaskRuns =
-    taskRunStore.runs.length === 0
-      ? EMPTY_ACTIVE_CANVAS_TASK_RUNS
-      : taskRunStore.runs;
 
   const activeCanvasSnapshot = useMemo<ActiveCanvasSnapshot>(
     () => ({
@@ -1220,7 +1210,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       heartbeatPulse: heartbeatPulseRef.current ?? 0,
       codexSilentSuspectedAt:
         activeThreadStatus?.codexSilentSuspectedAt ?? null,
-      taskRuns: canvasTaskRuns,
       threadItemsByThread: options.threadItemsByThread,
       threadStatusById: sidebarThreadStatusById,
       activeThreadStatus,
@@ -1245,7 +1234,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       activeThreadHistoryLoadingProgress,
       activeThreadHistoryRecoveryFailureReason,
       activeThreadStatus,
-      canvasTaskRuns,
       options.threadItemsByThread,
       sidebarThreadStatusById,
       options.activeTokenUsage,
@@ -1374,7 +1362,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           lastDurationMs: null,
           heartbeatPulse: 0,
           codexSilentSuspectedAt: null,
-          taskRuns: EMPTY_ACTIVE_CANVAS_TASK_RUNS,
         },
         forkConfirmDialogProps: {
           userMessageId: forkConfirmUserMessageId,
@@ -1809,25 +1796,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           sendShortcut={options.composerSendShortcut}
           textareaHeight={options.textareaHeight}
           onTextareaHeightChange={options.onTextareaHeightChange}
-          dictationEnabled={options.dictationEnabled}
-          dictationState={options.dictationState}
-          dictationLevel={options.dictationLevel}
-          onToggleDictation={options.onToggleDictation}
-          onOpenDictationSettings={options.onOpenDictationSettings}
           onOpenSkillsSettings={options.onOpenSkillsSettings}
           onOpenExperimentalSettings={options.onOpenExperimentalSettings}
-          dictationTranscript={options.dictationTranscript}
-          onDictationTranscriptHandled={options.onDictationTranscriptHandled}
-          dictationError={options.dictationError}
-          onDismissDictationError={options.onDismissDictationError}
-          dictationHint={options.dictationHint}
-          onDismissDictationHint={options.onDismissDictationHint}
-          linkedKanbanPanels={options.composerLinkedKanbanPanels}
-          selectedLinkedKanbanPanelId={options.selectedComposerKanbanPanelId}
-          onSelectLinkedKanbanPanel={options.onSelectComposerKanbanPanel}
-          kanbanContextMode={options.composerKanbanContextMode}
-          onKanbanContextModeChange={options.onComposerKanbanContextModeChange}
-          onOpenLinkedKanbanPanel={options.onOpenComposerKanbanPanel}
           activeFilePath={options.activeComposerFilePath}
           activeFileLineRange={options.activeComposerFileLineRange}
           fileReferenceMode={options.fileReferenceMode}
@@ -1989,25 +1959,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       options.composerSendShortcut,
       options.textareaHeight,
       options.onTextareaHeightChange,
-      options.dictationEnabled,
-      options.dictationState,
-      options.dictationLevel,
-      options.onToggleDictation,
-      options.onOpenDictationSettings,
       options.onOpenSkillsSettings,
       options.onOpenExperimentalSettings,
-      options.dictationTranscript,
-      options.onDictationTranscriptHandled,
-      options.dictationError,
-      options.onDismissDictationError,
-      options.dictationHint,
-      options.onDismissDictationHint,
-      options.composerLinkedKanbanPanels,
-      options.selectedComposerKanbanPanelId,
-      options.onSelectComposerKanbanPanel,
-      options.composerKanbanContextMode,
-      options.onComposerKanbanContextModeChange,
-      options.onOpenComposerKanbanPanel,
       options.activeComposerFilePath,
       options.activeComposerFileLineRange,
       options.fileReferenceMode,

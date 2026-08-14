@@ -26,7 +26,6 @@ const APP_SHELL_DOMAIN_CONTEXT_NAMES = new Set([
   "gitSurfaceContext",
   "modeRoutingContext",
   "accountSurfaceContext",
-  "dictationSurfaceContext",
   "workspaceNavigationContext",
   "composerContext",
   "layoutContext",

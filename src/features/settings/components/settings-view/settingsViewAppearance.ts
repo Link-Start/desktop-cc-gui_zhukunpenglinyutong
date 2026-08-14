@@ -11,7 +11,6 @@ export type SettingsSection =
   | "commit"
   | "agent-prompt-management"
   | "composer"
-  | "dictation"
   | "memory"
   | "git"
   | "runtime-environment"

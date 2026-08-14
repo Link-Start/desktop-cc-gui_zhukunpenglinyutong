@@ -4,7 +4,7 @@
 // Machine translation of src/i18n/locales/en/searchPalette.ts; keys mirror the English source.
 const searchPalette = {
   "searchPalette": {
-    "placeholder": "Buscar archivos, kanban, hilos, mensajes, skills, comandos...",
+    "placeholder": "Buscar archivos, hilos, mensajes, skills, comandos...",
     "placeholderFiltered": "Buscar {{content}}...",
     "inputAria": "Campo de búsqueda",
     "scope": "Alcance",
@@ -27,7 +27,6 @@ const searchPalette = {
     "locationTag": "Ubicación",
     "typeAction": "Acción",
     "typeFile": "Archivo",
-    "typeKanban": "Kanban",
     "typeThread": "Hilo",
     "typeMessage": "Mensaje",
     "typeHistory": "Historial",
@@ -35,7 +34,6 @@ const searchPalette = {
     "typeCommand": "Comando",
     "sourceActions": "Acciones de la aplicación",
     "sourceFiles": "Índice de archivos",
-    "sourceKanban": "Datos de kanban",
     "sourceThreads": "Títulos de hilos",
     "sourceMessages": "Contenido de mensajes",
     "sourceHistory": "Historial de entrada",
@@ -44,7 +42,6 @@ const searchPalette = {
     "contentAll": "Todo",
     "contentActions": "Acciones",
     "contentFiles": "Archivos",
-    "contentKanban": "Kanban",
     "contentThreads": "Hilos",
     "contentMessages": "Mensajes",
     "contentHistory": "Historial",

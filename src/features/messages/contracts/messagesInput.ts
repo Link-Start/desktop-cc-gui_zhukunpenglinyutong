@@ -18,7 +18,6 @@ export type MessagesRuntimeInput = Pick<
   | "lastDurationMs"
   | "codexSilentSuspectedAt"
   | "approvals"
-  | "taskRuns"
 >;
 
 export type MessagesInteractionInput = Pick<
@@ -119,7 +118,6 @@ export function adaptLegacyMessagesProps(props: MessagesProps): MessagesCoreProp
       lastDurationMs: props.lastDurationMs ?? null,
       codexSilentSuspectedAt: props.codexSilentSuspectedAt ?? null,
       approvals: props.approvals ?? [],
-      taskRuns: props.taskRuns ?? [],
     },
     interactions: {
       onRetryHistory: props.onRetryHistory,

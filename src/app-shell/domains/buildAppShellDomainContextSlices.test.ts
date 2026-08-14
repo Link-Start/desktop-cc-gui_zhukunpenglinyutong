@@ -9,7 +9,6 @@ import {
   buildGitSurfaceDomainContextSlice,
   buildModeRoutingDomainContextSlice,
   buildAccountSurfaceDomainContextSlice,
-  buildDictationSurfaceDomainContextSlice,
   buildWorkspaceNavigationDomainContextSlice,
 } from "./buildAppShellDomainContextSlices";
 
@@ -415,7 +414,6 @@ describe("buildAppShellDomainContextSlices", () => {
       showExtensions: false,
       showGitHistory: false,
       showHome: false,
-      showKanban: false,
       showWorkspaceHome: false,
       isSearchPaletteOpen: false,
     });
@@ -452,7 +450,6 @@ describe("buildAppShellDomainContextSlices", () => {
         "showExtensions",
         "showGitHistory",
         "showHome",
-        "showKanban",
         "showWorkspaceHome",
       ].sort(),
     );
@@ -495,27 +492,6 @@ describe("buildAppShellDomainContextSlices", () => {
     expect(slice).not.toHaveProperty("appMode");
   });
 
-  it("builds dictationSurface slice with dictation keys only (T1.7)", () => {
-    const slice = buildDictationSurfaceDomainContextSlice({
-      clearDictationError: () => {},
-      clearDictationHint: () => {},
-      clearDictationTranscript: () => {},
-      dictationError: null,
-      dictationHint: null,
-      dictationLevel: 0,
-      dictationModel: null,
-      dictationReady: true,
-      dictationState: "idle",
-      dictationTranscript: "",
-      // S4 PR-C：听写开关
-      handleToggleDictation: () => {},
-    });
-    expect(slice.dictationState).toBe("idle");
-    expect(slice).toHaveProperty("dictationTranscript");
-    expect(slice).not.toHaveProperty("appMode");
-    expect(Object.keys(slice)).toHaveLength(11);
-  });
-
   it("builds workspaceNavigation residual slice (T1.9)", () => {
     const slice = buildWorkspaceNavigationDomainContextSlice({
       SettingsView: null,
@@ -527,7 +503,6 @@ describe("buildAppShellDomainContextSlices", () => {
       activeRenamePrompt: null,
       agentTaskScrollRequest: null,
       activeTerminalId: null,
-      activeWorkspaceKanbanTasks: [],
       addDebugEntry: () => {},
       agent: null,
       alertError: () => {},
@@ -600,7 +575,7 @@ describe("buildAppShellDomainContextSlices", () => {
       setFileReferenceMode: () => {},
       handleTestNotificationSound: () => {},
     } as any);
-    expect(Object.keys(slice).length).toBe(79);
+    expect(Object.keys(slice).length).toBe(78);
     expect(slice).toHaveProperty("appSettings");
     expect(slice).not.toHaveProperty("activeWorkspaceId");
     expect(slice).not.toHaveProperty("gitStatus");

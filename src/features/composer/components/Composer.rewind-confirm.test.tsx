@@ -817,7 +817,6 @@ function ComposerHarness({
       prompts={[]}
       commands={[]}
       files={[]}
-      dictationEnabled={false}
       activeWorkspaceId="ws-1"
       rewindWorkspaceGitState={rewindWorkspaceGitState}
       activeThreadId={activeThreadId}

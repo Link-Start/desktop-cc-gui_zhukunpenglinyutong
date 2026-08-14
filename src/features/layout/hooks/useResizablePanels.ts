@@ -12,19 +12,16 @@ const MIN_TERMINAL_PANEL_HEIGHT = 140;
 const MAX_TERMINAL_PANEL_HEIGHT = 480;
 const MIN_DEBUG_PANEL_HEIGHT = 120;
 const MAX_DEBUG_PANEL_HEIGHT = 420;
-const MIN_KANBAN_CONVERSATION_WIDTH = 340;
-const MAX_KANBAN_CONVERSATION_WIDTH = 800;
 const DEFAULT_SIDEBAR_WIDTH = 210;
 const DEFAULT_RIGHT_PANEL_WIDTH = 230;
 const DEFAULT_PLAN_PANEL_HEIGHT = 220;
 const DEFAULT_TERMINAL_PANEL_HEIGHT = 220;
 const DEFAULT_DEBUG_PANEL_HEIGHT = 180;
-const DEFAULT_KANBAN_CONVERSATION_WIDTH = 420;
 const PANEL_RESIZING_DATASET_KEY = "panelResizing";
 const GIT_HISTORY_SIDEBAR_MIN_WIDTH = 360;
 
 type ResizeState = {
-  type: "sidebar" | "right-panel" | "plan-panel" | "terminal-panel" | "debug-panel" | "kanban-conversation";
+  type: "sidebar" | "right-panel" | "plan-panel" | "terminal-panel" | "debug-panel";
   startX: number;
   startY: number;
   startWidth: number;
@@ -125,9 +122,6 @@ function applyLiveSizeCssVar(
     case "debug-panel":
       app.style.setProperty("--debug-panel-height", `${value}px`);
       break;
-    case "kanban-conversation":
-      app.style.setProperty("--kanban-conversation-width", `${value}px`);
-      break;
     default:
       break;
   }
@@ -186,9 +180,6 @@ export function useResizablePanels() {
   const [debugPanelHeight, setDebugPanelHeight] = useState(() =>
     readStoredNum("debugPanelHeight", DEFAULT_DEBUG_PANEL_HEIGHT, MIN_DEBUG_PANEL_HEIGHT, MAX_DEBUG_PANEL_HEIGHT),
   );
-  const [kanbanConversationWidth, setKanbanConversationWidth] = useState(() =>
-    readStoredNum("kanbanConversationWidth", DEFAULT_KANBAN_CONVERSATION_WIDTH, MIN_KANBAN_CONVERSATION_WIDTH, MAX_KANBAN_CONVERSATION_WIDTH),
-  );
   const resizeRef = useRef<ResizeState | null>(null);
   const liveSizesRef = useRef({
     sidebarWidth,
@@ -196,7 +187,6 @@ export function useResizablePanels() {
     planPanelHeight,
     terminalPanelHeight,
     debugPanelHeight,
-    kanbanConversationWidth,
   });
   const resizeRafRef = useRef<number | null>(null);
   const pendingValueRef = useRef<number | null>(null);
@@ -247,11 +237,6 @@ export function useResizablePanels() {
     writeClientStoreValue("layout", "debugPanelHeight", debugPanelHeight);
   }, [debugPanelHeight]);
 
-  useEffect(() => {
-    liveSizesRef.current.kanbanConversationWidth = kanbanConversationWidth;
-    writeClientStoreValue("layout", "kanbanConversationWidth", kanbanConversationWidth);
-  }, [kanbanConversationWidth]);
-
   const getAppNode = useCallback(() => {
     if (appNodeRef.current?.isConnected) {
       return appNodeRef.current;
@@ -295,8 +280,6 @@ export function useResizablePanels() {
         setPlanPanelHeight((current) => (current === next ? current : next));
       } else if (resizeRef.current.type === "terminal-panel") {
         setTerminalPanelHeight((current) => (current === next ? current : next));
-      } else if (resizeRef.current.type === "kanban-conversation") {
-        setKanbanConversationWidth((current) => (current === next ? current : next));
       } else {
         setDebugPanelHeight((current) => (current === next ? current : next));
       }
@@ -353,15 +336,6 @@ export function useResizablePanels() {
         );
         liveSizesRef.current.terminalPanelHeight = next;
         applyLiveSizeCssVar("terminal-panel", next);
-      } else if (resizeRef.current.type === "kanban-conversation") {
-        const delta = event.clientX - resizeRef.current.startX;
-        const next = clamp(
-          resizeRef.current.startWidth - delta,
-          MIN_KANBAN_CONVERSATION_WIDTH,
-          MAX_KANBAN_CONVERSATION_WIDTH,
-        );
-        liveSizesRef.current.kanbanConversationWidth = next;
-        applyLiveSizeCssVar("kanban-conversation", next);
       } else {
         const delta = event.clientY - resizeRef.current.startY;
         const next = clamp(
@@ -399,7 +373,6 @@ export function useResizablePanels() {
       setPlanPanelHeight(liveSizesRef.current.planPanelHeight);
       setTerminalPanelHeight(liveSizesRef.current.terminalPanelHeight);
       setDebugPanelHeight(liveSizesRef.current.debugPanelHeight);
-      setKanbanConversationWidth(liveSizesRef.current.kanbanConversationWidth);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
       document.body.style.webkitUserSelect = "";
@@ -555,29 +528,6 @@ export function useResizablePanels() {
     [debugPanelHeight, rightPanelWidth, setResizingMode],
   );
 
-  const onKanbanConversationResizeStart = useCallback(
-    (event: ReactMouseEvent) => {
-      if (event.button !== 0) {
-        return;
-      }
-      event.preventDefault();
-      stopResizeEventPropagation(event);
-      setResizingMode(true);
-      resizeRef.current = {
-        type: "kanban-conversation",
-        startX: event.clientX,
-        startY: event.clientY,
-        startWidth: kanbanConversationWidth,
-        startHeight: 0,
-      };
-      setPanelResizing(true);
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-      document.body.style.webkitUserSelect = "none";
-    },
-    [kanbanConversationWidth, setResizingMode],
-  );
-
   const setRightPanelWidth = useCallback((nextWidth: number) => {
     const next = clamp(nextWidth, MIN_RIGHT_PANEL_WIDTH, getRightPanelMaxWidth());
     liveSizesRef.current.rightPanelWidth = next;
@@ -591,13 +541,11 @@ export function useResizablePanels() {
     planPanelHeight,
     terminalPanelHeight,
     debugPanelHeight,
-    kanbanConversationWidth,
     onSidebarResizeStart,
     onRightPanelResizeStart,
     onPlanPanelResizeStart,
     onTerminalPanelResizeStart,
     onDebugPanelResizeStart,
-    onKanbanConversationResizeStart,
     setRightPanelWidth,
   };
 }

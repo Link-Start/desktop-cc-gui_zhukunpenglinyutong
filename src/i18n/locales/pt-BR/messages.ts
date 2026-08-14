@@ -58,8 +58,6 @@ const messages = {
     "queue": "Fila",
     "send": "Enviar",
     "emptyThread": "Inicie um thread e envie um prompt para o agent.",
-    "linkedRunEyebrow": "Execução vinculada",
-    "openLinkedRun": "Abrir detalhe da execução",
     "restoringHistory": "Carregando a janela da conversa…",
     "restoringHistoryHint": "Carregando a transcrição local e o estado da sessão.",
     "generatingResponse": "Gerando resposta...",

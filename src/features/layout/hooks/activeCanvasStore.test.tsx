@@ -7,7 +7,6 @@ import {
   EMPTY_ACTIVE_CANVAS_CHILD_SUBAGENT_THREADS,
   EMPTY_ACTIVE_CANVAS_NATIVE_THREAD_IDS,
   EMPTY_ACTIVE_CANVAS_SNAPSHOT,
-  EMPTY_ACTIVE_CANVAS_TASK_RUNS,
   activeCanvasStore,
   createActiveCanvasStore,
   setActiveCanvasSnapshot,
@@ -192,7 +191,6 @@ describe("activeCanvasStore", () => {
       threadId: "thread-1",
       childSubagentThreads: EMPTY_ACTIVE_CANVAS_CHILD_SUBAGENT_THREADS,
       activeNativeThreadIds: EMPTY_ACTIVE_CANVAS_NATIVE_THREAD_IDS,
-      taskRuns: EMPTY_ACTIVE_CANVAS_TASK_RUNS,
     });
     const store = createActiveCanvasStore(base);
     const listener = vi.fn();
@@ -214,7 +212,6 @@ describe("activeCanvasStore", () => {
         ...base,
         childSubagentThreads: stabilizedChildren,
         activeNativeThreadIds: stabilizedNative,
-        taskRuns: EMPTY_ACTIVE_CANVAS_TASK_RUNS,
       });
     }
     expect(listener).not.toHaveBeenCalled();

@@ -1284,7 +1284,6 @@ mod tests {
             codex_runtime_reload_lock: tokio::sync::Mutex::new(()),
             computer_use_activation_lock: tokio::sync::Mutex::new(()),
             computer_use_activation_verification: tokio::sync::Mutex::new(None),
-            dictation: tokio::sync::Mutex::new(crate::dictation::DictationState::default()),
             codex_login_cancels: tokio::sync::Mutex::new(std::collections::HashMap::new()),
             detached_external_change_runtime: tokio::sync::Mutex::new(
                 crate::workspaces::DetachedExternalChangeRuntime::default(),

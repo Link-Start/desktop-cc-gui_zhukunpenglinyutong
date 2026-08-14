@@ -5,7 +5,6 @@ export const APP_SHELL_DOMAIN_CONTEXT_NAMES = [
   "gitSurfaceContext",
   "modeRoutingContext",
   "accountSurfaceContext",
-  "dictationSurfaceContext",
   "workspaceNavigationContext",
   "composerContext",
   "layoutContext",
@@ -28,7 +27,6 @@ export type AppShellDomainContexts = {
   gitSurfaceContext: AppShellDomainContextValue;
   modeRoutingContext: AppShellDomainContextValue;
   accountSurfaceContext: AppShellDomainContextValue;
-  dictationSurfaceContext: AppShellDomainContextValue;
   workspaceNavigationContext: AppShellDomainContextValue;
   composerContext: AppShellDomainContextValue;
   layoutContext: AppShellDomainContextValue;
@@ -346,7 +344,6 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "showExtensions",
     "showGitHistory",
     "showHome",
-    "showKanban",
     "showWorkspaceHome",
   ],
   accountSurfaceContext: [
@@ -364,20 +361,6 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     // S4 PR-E：账号 rate limit 刷新（从 layout 归位）
     "refreshAccountRateLimits",
   ],
-  dictationSurfaceContext: [
-    "clearDictationError",
-    "clearDictationHint",
-    "clearDictationTranscript",
-    "dictationError",
-    "dictationHint",
-    "dictationLevel",
-    "dictationModel",
-    "dictationReady",
-    "dictationState",
-    "dictationTranscript",
-    // S4 PR-C：听写开关（从 composerContext 归位）
-    "handleToggleDictation",
-  ],
   workspaceNavigationContext: [
     "SettingsView",
     "activeEditorFilePath",
@@ -388,7 +371,6 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "activeRenamePrompt",
     "agentTaskScrollRequest",
     "activeTerminalId",
-    "activeWorkspaceKanbanTasks",
     "addDebugEntry",
     "agent",
     "alertError",
@@ -464,8 +446,7 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
   composerContext: [
     // S4 PR-C：composer 域瘦身（141 → 39）。只保留 composer 输入面真正消费的
     // 字段：draft/queue/images/prefill/insert 输入态 + 发送与队列 handlers +
-    // prompts 库 + agent/access-mode 选择 + interruptTurn（sections 经 kanban
-    // execution 仍读，故 sections 保留本域订阅；render 已不读本域）。
+    // prompts 库 + agent/access-mode 选择 + interruptTurn。
     "activeFusingMessageId",
     "activeImages",
     "activeQueue",
@@ -510,17 +491,6 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "prompts",
   ],
   layoutContext: [
-    "kanbanConversationWidth",
-    "kanbanCreatePanel",
-    "kanbanCreateTask",
-    "kanbanDeletePanel",
-    "kanbanDeleteTask",
-    "kanbanPanels",
-    "kanbanReorderTask",
-    "kanbanTasks",
-    "kanbanUpdatePanel",
-    "kanbanUpdateTask",
-    "kanbanViewState",
     "liveEditPreviewEnabled",
     "lockLiveSessions",
     "models",
@@ -529,7 +499,6 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "onCloseTerminal",
     "onDebugPanelResizeStart",
     "onGitHistoryPanelResizeStart",
-    "onKanbanConversationResizeStart",
     "onNewTerminal",
     "onPlanPanelResizeStart",
     "onRightPanelResizeStart",
@@ -552,7 +521,6 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "removeThread",
     "removeThreads",
     // S4 PR-E：layout 态 setters 与 releaseNotes 翻页（从 settings 归位）
-    "setKanbanViewState",
     "setLiveEditPreviewEnabled",
     "setReduceTransparency",
     "setWindowOpacity",
@@ -600,7 +568,6 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "scaleShortcutText",
     "scaleShortcutTitle",
     "scanGitRoots",
-    "scopedKanbanTasks",
     "searchContentFilters",
     "searchApiHydrationStatus",
     "searchFileHydrationStatus",
@@ -618,7 +585,6 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "selectedCommitSha",
     "selectedDiffPath",
     "selectedAgentRef",
-    "selectedKanbanTaskId",
     "selectedOpenCodeAgent",
     "selectedOpenCodeVariant",
     "selectedPullRequest",
@@ -631,7 +597,6 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "setSearchScope",
     "setSelectedCommitSha",
     "setSelectedDiffPath",
-    "setSelectedKanbanTaskId",
     "setSelectedPullRequest",
   ],
   settingsContext: [
@@ -743,7 +708,6 @@ export const APP_SHELL_CONSUMER_DOMAIN_SELECTION = {
     "gitSurfaceContext",
     "modeRoutingContext",
     "accountSurfaceContext",
-    "dictationSurfaceContext",
     "workspaceNavigationContext",
     "composerContext",
     "layoutContext",
@@ -758,7 +722,6 @@ export const APP_SHELL_CONSUMER_DOMAIN_SELECTION = {
     "gitSurfaceContext",
     "modeRoutingContext",
     "accountSurfaceContext",
-    "dictationSurfaceContext",
     "workspaceNavigationContext",
     "composerContext",
     "layoutContext",
@@ -775,7 +738,6 @@ export const APP_SHELL_CONSUMER_DOMAIN_SELECTION = {
     "gitSurfaceContext",
     "modeRoutingContext",
     "accountSurfaceContext",
-    "dictationSurfaceContext",
     "workspaceNavigationContext",
     "layoutContext",
     "fileEditorContext",

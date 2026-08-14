@@ -385,11 +385,10 @@ describe("Sidebar", () => {
     expect(onOpenGlobalSearch).toHaveBeenCalledTimes(1);
   });
 
-  it("does not render an automation badge in the primary nav", () => {
+  it("does not render an automation entry in the primary nav", () => {
     const { container } = render(<Sidebar {...baseProps} />);
-    const automationButton = screen.getByRole("button", { name: "Automation" });
 
-    expect(within(automationButton).queryByText("new task!")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Automation" })).toBeNull();
     expect(container.querySelector(".sidebar-primary-nav-badge")).toBeNull();
   });
 
@@ -405,16 +404,16 @@ describe("Sidebar", () => {
         <Sidebar {...baseProps} onOpenQuickSwitcher={onOpenQuickSwitcher} />,
       );
       expect(screen.queryByText("Ctrl+J")).toBeNull();
-      expect(screen.getByText("Ctrl+K")).toBeTruthy();
+      expect(screen.queryByText("Ctrl+K")).toBeNull();
       expect(screen.getByText("Ctrl+O")).toBeTruthy();
       expect(screen.getByText("Ctrl+E")).toBeTruthy();
       expect(
         container.querySelectorAll(
           ".sidebar-primary-nav .sidebar-primary-nav-shortcut",
         ),
-      ).toHaveLength(3);
+      ).toHaveLength(2);
       expect(screen.getByRole("button", { name: "Home" }).getAttribute("title")).toContain("Ctrl+J");
-      expect(screen.getByRole("button", { name: "Automation" }).getAttribute("title")).toContain("Ctrl+K");
+      expect(screen.queryByRole("button", { name: "Automation" })).toBeNull();
       expect(screen.getByRole("button", { name: "Search" }).getAttribute("title")).toContain("Ctrl+O");
       expect(
         screen.getByRole("button", { name: "Quick Switcher" }).getAttribute("title"),
@@ -451,21 +450,15 @@ describe("Sidebar", () => {
   });
 
   it("reflects cleared quick mode shortcuts in button hints", () => {
-    const { container } = render(
+    render(
       <Sidebar
         {...baseProps}
         openChatShortcut={null}
-        openKanbanShortcut={null}
         globalSearchShortcut={null}
       />,
     );
 
     expect(screen.getByRole("button", { name: "Home" }).getAttribute("title")).toContain("Not set");
-    const automationButton = screen.getByRole("button", { name: "Automation" });
-    expect(automationButton.getAttribute("title")).toContain("Not set");
-    expect(
-      container.querySelector(".sidebar-primary-nav-mode-item .sidebar-primary-nav-shortcut")?.textContent,
-    ).toBe("Not set");
     expect(screen.getByRole("button", { name: "Search" }).getAttribute("title")).toContain("Not set");
   });
 

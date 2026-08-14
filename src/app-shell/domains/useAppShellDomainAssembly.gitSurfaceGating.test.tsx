@@ -9,7 +9,7 @@ import { useAppShellDomainAssembly } from "./useAppShellDomainAssembly";
 
 /**
  * S4 PR-E：Git 表面按 appMode 条件装配（懒装配 + 引用稳定）。
- * 非 git 表面模式（kanban/extensions）下 gitSurface bag 冻结：
+ * 非 git 表面模式（extensions）下 gitSurface bag 冻结：
  * 后台 git 更新不再扇出；切回 chat/gitHistory 时新值即刻生效。
  */
 
@@ -46,18 +46,18 @@ describe("useAppShellDomainAssembly git surface gating (S4 PR-E)", () => {
     expect(result.current.gitSurfaceContext.gitStatus).toEqual({ dirty: 1 });
   });
 
-  it("kanban 模式下冻结 gitSurface bag：git 源更新不换引用、不扇出", () => {
+  it("extensions 模式下冻结 gitSurface bag：git 源更新不换引用、不扇出", () => {
     const { result, rerender } = renderHook(
       ({ source }) => useAppShellDomainAssembly(source),
       { initialProps: { source: buildSource("chat") } },
     );
-    // 切到 kanban：gitSurface 保持既有 bag
-    rerender({ source: buildSource("kanban") });
+    // 切到 extensions：gitSurface 保持既有 bag
+    rerender({ source: buildSource("extensions") });
     const frozen = result.current.gitSurfaceContext;
 
-    // 后台 git 更新（如 kanban 任务 turn settle 触发的 status 刷新）
+    // 后台 git 更新（如 extensions 表面下 status 刷新）
     const nextSource = {
-      ...buildSource("kanban"),
+      ...buildSource("extensions"),
       gitStatus: { dirty: 2 },
       gitLogTotal: 99,
       // 非 git 域仍正常更新
@@ -72,13 +72,13 @@ describe("useAppShellDomainAssembly git surface gating (S4 PR-E)", () => {
     expect(result.current.settingsContext.settingsOpen).toBe(true);
   });
 
-  it("kanban → chat 切回后 gitSurface 恢复装配，新值即刻生效", () => {
+  it("extensions → chat 切回后 gitSurface 恢复装配，新值即刻生效", () => {
     const { result, rerender } = renderHook(
       ({ source }) => useAppShellDomainAssembly(source),
       { initialProps: { source: buildSource("chat") } },
     );
     rerender({
-      source: { ...buildSource("kanban"), gitStatus: { dirty: 3 } },
+      source: { ...buildSource("extensions"), gitStatus: { dirty: 3 } },
     });
     expect(result.current.gitSurfaceContext.gitStatus).not.toEqual({
       dirty: 3,

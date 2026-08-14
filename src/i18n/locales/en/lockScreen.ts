@@ -74,9 +74,6 @@ const lockScreen = {
       gitIntelligenceTitle: "Git Intelligence",
       gitIntelligenceDesc:
         "Diff, Log, Commit, PR, and Issue views in one workflow without context hopping.",
-      kanbanDispatchTitle: "Kanban Dispatch",
-      kanbanDispatchDesc:
-        "Create sessions from tasks and keep execution status synced with board progress.",
       memoryEngineTitle: "Memory Engine",
       memoryEngineDesc:
         "Persist project knowledge and preferences so future sessions start with context.",
@@ -88,7 +85,7 @@ const lockScreen = {
         "Built-in terminal and debug traces make troubleshooting faster and auditable.",
       composerControlTitle: "Composer Control",
       composerControlDesc:
-        "Centralized control for presets, shortcuts, fence rules, paste behavior, and dictation.",
+        "Centralized control for presets, shortcuts, fence rules, and paste behavior.",
       promptAssetsTitle: "Prompt Assets",
       promptAssetsDesc:
         "Manage workspace/global prompt assets and reuse them across delivery tasks.",
@@ -108,13 +105,10 @@ const lockScreen = {
         "Manage workspace/worktree groups, thread lists, search filters, and quick project context switching.",
       composerTitle: "Composer Workspace",
       composerDesc:
-        "Rich input, code fences, commands, dictation, and context assembly in a single editor loop.",
+        "Rich input, code fences, commands, and context assembly in a single editor loop.",
       gitPanelTitle: "Git Hub",
       gitPanelDesc:
         "Diff, log, commit, PR, and issue context in one surface to reduce tool hopping.",
-      kanbanTitle: "Kanban Dispatch",
-      kanbanDesc:
-        "Dispatch tasks into AI sessions and keep status linked to execution progress.",
       searchTitle: "Unified Search",
       searchDesc:
         "A single entry point across files, threads, messages, skills, and commands.",

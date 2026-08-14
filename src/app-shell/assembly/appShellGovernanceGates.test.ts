@@ -88,10 +88,10 @@ describe("appShellGovernanceGates (T5)", () => {
     );
   });
 
-  it("T5.1: settings/layout 达标终态目标且 hard 咬实测（S4 PR-E：36/48；S4 PR-F 收紧）", () => {
+  it("T5.1: settings/layout 达标终态目标且 hard 咬实测（S4 PR-E：36/48；remove-kanban layout 48→35）", () => {
     const measuredFreeze = {
       settingsContext: 36,
-      layoutContext: 48,
+      layoutContext: 35,
     } as const;
     for (const domain of ["settingsContext", "layoutContext"] as const) {
       const count = APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS[domain].length;
