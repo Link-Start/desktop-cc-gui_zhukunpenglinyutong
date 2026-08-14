@@ -57,6 +57,7 @@ export function createAppShellHostBus(): AppShellHostBus {
   const keyed = new Map<string, Set<Listener>>();
   const fielded = new Map<string, Set<Listener>>();
   const all = new Set<Listener>();
+  const pendingNotify = new Map<string, readonly string[] | null>();
 
   const notify = (key: string, changedFields: readonly string[] | null) => {
     keyed.get(key)?.forEach((listener) => listener());
@@ -95,17 +96,40 @@ export function createAppShellHostBus(): AppShellHostBus {
     getSnapshot: () => snapshot,
     get: (key) => snapshot[key],
     publish: (key, value, options) => {
+      const shouldNotify = options?.notify !== false;
+      const flushPending = () => {
+        if (!pendingNotify.has(key)) {
+          return;
+        }
+        const pending = pendingNotify.get(key) ?? null;
+        pendingNotify.delete(key);
+        // 克隆 snapshot，让 useSyncExternalStore 一定看到新身份。
+        snapshot = { ...snapshot };
+        notify(key, pending);
+      };
+
       if (Object.is(snapshot[key], value)) {
+        // render 期静默写入后，layout 会带着同一引用再 publish 一次。
+        if (shouldNotify) {
+          flushPending();
+        }
         return;
       }
       const changedFields = listChangedFields(snapshot[key], value);
       if (changedFields && changedFields.length === 0) {
+        // 新对象但字段相同：仍换引用，保留已有 pending，避免 Strict Mode 双渲染吞通知。
+        snapshot = { ...snapshot, [key]: value };
+        if (shouldNotify) {
+          flushPending();
+        }
         return;
       }
       snapshot = { ...snapshot, [key]: value };
-      if (options?.notify === false) {
+      if (!shouldNotify) {
+        pendingNotify.set(key, changedFields);
         return;
       }
+      pendingNotify.delete(key);
       notify(key, changedFields);
     },
     subscribe: (key, listener) => {

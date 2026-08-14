@@ -32,6 +32,38 @@ describe("createAppShellHostBus", () => {
     expect(ticks).toBe(1);
   });
 
+  it("flushes a silent publish when a new equal-field object is published later", () => {
+    const bus = createAppShellHostBus();
+    let ticks = 0;
+    bus.subscribe('session', () => {
+      ticks += 1;
+    });
+    bus.publish('session', { settingsOpen: true }, { notify: false });
+    expect(ticks).toBe(0);
+    bus.publish('session', { settingsOpen: true });
+    expect(ticks).toBe(1);
+  });
+
+  it("flushes a silent publish when the same reference is published again", () => {
+    const bus = createAppShellHostBus();
+    const slice = { settingsOpen: true, openSettings: () => {} };
+    let sessionTicks = 0;
+    let fieldTicks = 0;
+    bus.subscribe('session', () => {
+      sessionTicks += 1;
+    });
+    bus.subscribeFields('session', ['settingsOpen'], () => {
+      fieldTicks += 1;
+    });
+    bus.publish('session', slice, { notify: false });
+    expect(sessionTicks).toBe(0);
+    expect(fieldTicks).toBe(0);
+    expect(bus.get('session')).toBe(slice);
+    bus.publish('session', slice);
+    expect(sessionTicks).toBe(1);
+    expect(fieldTicks).toBe(1);
+  });
+
   it("notifies field subscribers only when those fields change", () => {
     const bus = createAppShellHostBus();
     let idTicks = 0;

@@ -20,6 +20,7 @@ const SESSION_FIELDS = [
   "t",
   "workspacesById",
   "connectWorkspace",
+  "persistComposerEnginePref",
 ] as const;
 
 const CATALOG_FIELDS = [
@@ -44,7 +45,6 @@ const CATALOG_FIELDS = [
   "models",
   "modelsReady",
   "movePrompt",
-  "persistComposerEnginePref",
   "refreshEngineModels",
   "refreshModels",
   "resolveCollaborationRuntimeMode",
@@ -140,7 +140,7 @@ export function useAppShellComposerHost() {
   const models = catalog.models as any;
   const modelsReady = catalog.modelsReady as any;
   const movePrompt = catalog.movePrompt as any;
-  const persistComposerEnginePref = catalog.persistComposerEnginePref as any;
+  const persistComposerEnginePref = session.persistComposerEnginePref as any;
   const refreshEngineModels = catalog.refreshEngineModels as any;
   const refreshModels = catalog.refreshModels as any;
   const resolveCollaborationRuntimeMode = catalog.resolveCollaborationRuntimeMode as any;

@@ -3,11 +3,15 @@ import { useAppShellDomainAssembly } from "../domains/useAppShellDomainAssembly"
 import { useMemoizedRuntimeThreadProviderValue } from "../domains/runtimeThreadProvider";
 import { useMemoizedComposerProviderValue } from "../domains/composerProvider";
 import { useMemoizedLayoutChromeProviderValue } from "../domains/layoutChromeProvider";
-import { useHostSnapshot } from "./appShellHostBus";
-
-function pick(source: Record<string, unknown> | undefined) {
-  return source ?? {};
-}
+import {
+  CATALOG_FIELDS,
+  COMPOSER_FIELDS,
+  FLOWS_FIELDS,
+  GIT_FIELDS,
+  RUNTIME_FIELDS,
+  SESSION_FIELDS,
+} from "./appShellAssemblyHostFields";
+import { useHostFields } from "./appShellHostBus";
 
 function mergeHostSlices(
   ...slices: Array<Record<string, unknown>>
@@ -15,15 +19,17 @@ function mergeHostSlices(
   return Object.assign({}, ...slices);
 }
 
-/** 刀 3：只做 bag / zone value 装配，不再跑业务 hooks。 */
+/**
+ * 刀 3：只做 bag / zone value 装配，不再跑业务 hooks。
+ * 禁止全量 snapshot 订阅：任意 Host 切片一变就会重跑整棵视图。
+ */
 export function useAppShellAssemblyHost() {
-  const snapshot = useHostSnapshot();
-  const session = pick(snapshot.session);
-  const catalog = pick(snapshot.catalog);
-  const git = pick(snapshot.git);
-  const runtime = pick(snapshot.runtime);
-  const composer = pick(snapshot.composer);
-  const flows = pick(snapshot.flows);
+  const session = useHostFields("session", SESSION_FIELDS);
+  const catalog = useHostFields("catalog", CATALOG_FIELDS);
+  const git = useHostFields("git", GIT_FIELDS);
+  const runtime = useHostFields("runtime", RUNTIME_FIELDS);
+  const composer = useHostFields("composer", COMPOSER_FIELDS);
+  const flows = useHostFields("flows", FLOWS_FIELDS);
   const merged = mergeHostSlices(session, catalog, git, runtime, composer, flows);
   const agent = composer.selectedAgent;
   const sessionRadarFeed = (flows.sessionRadarFeed ?? {}) as Record<string, unknown>;

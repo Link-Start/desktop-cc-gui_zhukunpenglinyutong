@@ -43,10 +43,30 @@ describe("AppShell host tree isolation", () => {
     expect(flows).toContain("resolveAppShellFeatureActivation");
   });
 
+  it("reads persistComposerEnginePref from the session host, not catalog", () => {
+    const composer = read("useAppShellComposerHost.ts");
+    expect(composer).toContain('"persistComposerEnginePref"');
+    expect(composer).toContain(
+      "const persistComposerEnginePref = session.persistComposerEnginePref",
+    );
+    expect(composer).not.toContain(
+      "const persistComposerEnginePref = catalog.persistComposerEnginePref",
+    );
+  });
+
   it("keeps runtime threads off the session host fiber", () => {
     const session = read("useAppShellSessionHost.ts");
     expect(session).not.toContain("useThreads(");
     const runtime = read("useAppShellRuntimeThreadHost.ts");
     expect(runtime).toContain("useThreads(");
+  });
+
+  it("assembles from field subscriptions, not the full host snapshot", () => {
+    const assembly = read("useAppShellAssemblyHost.ts");
+    expect(assembly).toContain("useHostFields(");
+    expect(assembly).toContain("SESSION_FIELDS");
+    expect(assembly).toContain("RUNTIME_FIELDS");
+    expect(assembly).not.toMatch(/import\s*\{[^}]*useHostSnapshot/);
+    expect(assembly).not.toMatch(/\buseHostSnapshot\s*\(/);
   });
 });

@@ -78,8 +78,8 @@ updated: 2026-08-15
 | 字段 | 当前值 |
 |------|--------|
 | 计划状态 | `active`（Phase 全清；持续削债务） |
-| 当前 Phase | **三刀 Host 子树**（刀 1/2/3 已落地，待流式探针） |
-| 推荐下一步 | 提交本轮改动；后续：GUI 30s Profiler 实测根 commit |
+| 当前 Phase | **Assembly 字段订阅**（已落地，待 GUI 30s Profiler） |
+| 推荐下一步 | 提交本轮改动；后续：GUI 30s Profiler 实测 Assembly / AppShellView commit |
 | 基线采集日 | **2026-08-11（T0.2 实测）**；T1.2 后指标见「当前」列 |
 | Ownership Matrix | [`docs/plans/app-shell-ownership-matrix.md`](./app-shell-ownership-matrix.md)（T0.1 已完成） |
 
@@ -493,7 +493,7 @@ src/app-shell-parts/*      # re-export 兼容层（features 既有 bridge）
 
 | 字段 | 值 |
 |------|-----|
-| **当前项** | **（主计划 Phase 已清）** 提交改动 / 可选继续削巨石与 keys |
+| **当前项** | **（主计划 Phase 已清）** 提交 Assembly 字段订阅；后续 GUI 30s Profiler / 收窄 layoutNodes |
 | **所属 Phase** | — |
 | **阻塞** | 无 |
 | **完成后指针移到** | 按业务需要开新迭代 |
@@ -591,6 +591,25 @@ PY
 ---
 
 ## 10. Progress Log（只追加，勿删历史）
+
+### 2026-08-16 — Assembly 去掉 subscribe('*')
+
+- **完成 Todo**：收窄 `useAppShellAssemblyHost` 订阅面（P0-1 follow-up）
+- **动作**：
+  1. Assembly 不再 `useHostSnapshot()` / `subscribe('*')`，改为按 slice 的 `useHostFields`
+  2. 字段表抽到 `appShellAssemblyHostFields.ts`，只订装配层实际读取的 key
+  3. 明确不订 `runtime.lastAgentMessageByThread` / `threadsController` 等热且未读字段
+  4. 契约测试锁：未发布字段不得订、读到的字段必须订、禁止回流 snapshot
+- **路径**：
+  - `src/app-shell/hosts/useAppShellAssemblyHost.ts`
+  - `src/app-shell/hosts/appShellAssemblyHostFields.ts`
+  - `src/app-shell/hosts/appShellHostFieldContract.test.ts`
+  - `src/app-shell/hosts/appShellHostTreeIsolation.test.ts`
+- **验证**：本轮跑 host isolation / field contract / governance 相关 vitest
+- **指标**：session 144 / catalog 50 / git 156 / runtime 80 / composer 66 / flows 87（相对各 Host 全量 published 少订 18/14/6/24/2/10）
+- **计划变更**：无
+- **风险 / 未决**：Assembly 仍合并 mega bag 再喂 `AppShellView`；layoutNodes 仍一次解构宽 bag；GUI 30s Profiler 仍未跑
+- **下一步指针**：提交本轮改动；GUI 流式探针
 
 ### 2026-08-12 — cold-start P2-1 / 治理门禁同步
 
