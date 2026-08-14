@@ -80,6 +80,14 @@ export function bindAppShellDomainBag<TBoundary extends object>(
 /**
  * 合并 selected domain bag 与额外 section 输出（search/sections/layoutNodes）。
  */
+export function mergeAppShellDomainBag(
+  domainBag: AppShellDomainBag,
+  ...extras: Array<Record<string, unknown>>
+): AppShellDomainBag;
+export function mergeAppShellDomainBag<TBoundary extends object>(
+  domainBag: AppShellDomainBag,
+  ...extras: Array<Record<string, unknown>>
+): TBoundary;
 export function mergeAppShellDomainBag<TBoundary extends object>(
   domainBag: AppShellDomainBag,
   ...extras: Array<Record<string, unknown>>

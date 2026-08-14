@@ -87,8 +87,12 @@ type WorkspaceAliasPromptState = {
   isSaving: boolean;
 };
 
-const APP_SHELL_LAYOUT_NODES_DOMAIN_NAMES =
-  APP_SHELL_CONSUMER_DOMAIN_SELECTION.layoutNodes;
+const APP_SHELL_LAYOUT_NODES_CANVAS_DOMAIN_NAMES =
+  APP_SHELL_CONSUMER_DOMAIN_SELECTION.layoutNodesCanvas;
+const APP_SHELL_LAYOUT_NODES_CHROME_DOMAIN_NAMES =
+  APP_SHELL_CONSUMER_DOMAIN_SELECTION.layoutNodesChrome;
+const APP_SHELL_LAYOUT_NODES_GIT_DOMAIN_NAMES =
+  APP_SHELL_CONSUMER_DOMAIN_SELECTION.layoutNodesGit;
 
 // Stable empty-array sentinel so optional `string[]` fallbacks keep a constant
 // reference across renders (avoids defeating downstream React.memo shields).
@@ -118,16 +122,35 @@ export function useAppShellLayoutNodesSection(
   input: AppShellLayoutNodesSectionInput,
 ) {
   // domain 身份缓存：未变 domain 不重 flatten（配合 reuseStableAppShellDomainContexts）
-  const domainFlattenCacheRef = useRef<DomainFlattenIdentityCache>({
+  // 按 zone 拆 cache，流式热域变化不再重建 chrome / git bag。
+  const canvasFlattenCacheRef = useRef<DomainFlattenIdentityCache>({
     domainValues: null,
     flattened: null,
   });
-  // T4.2：selected domain bag API
-  const domainBag = selectAppShellDomainBag(
+  const chromeFlattenCacheRef = useRef<DomainFlattenIdentityCache>({
+    domainValues: null,
+    flattened: null,
+  });
+  const gitFlattenCacheRef = useRef<DomainFlattenIdentityCache>({
+    domainValues: null,
+    flattened: null,
+  });
+  const canvasBag = selectAppShellDomainBag(
     input.appShellDomainContexts,
-    APP_SHELL_LAYOUT_NODES_DOMAIN_NAMES,
-    domainFlattenCacheRef.current,
+    APP_SHELL_LAYOUT_NODES_CANVAS_DOMAIN_NAMES,
+    canvasFlattenCacheRef.current,
   );
+  const chromeBag = selectAppShellDomainBag(
+    input.appShellDomainContexts,
+    APP_SHELL_LAYOUT_NODES_CHROME_DOMAIN_NAMES,
+    chromeFlattenCacheRef.current,
+  );
+  const gitBag = selectAppShellDomainBag(
+    input.appShellDomainContexts,
+    APP_SHELL_LAYOUT_NODES_GIT_DOMAIN_NAMES,
+    gitFlattenCacheRef.current,
+  );
+  const domainBag = mergeAppShellDomainBag(canvasBag, chromeBag, gitBag);
   const ctx: AppShellLayoutNodesContext = mergeAppShellDomainBag(
     domainBag,
     input.searchAndComposerSection,

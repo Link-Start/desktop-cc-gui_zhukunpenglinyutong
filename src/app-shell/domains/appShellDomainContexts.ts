@@ -701,6 +701,7 @@ export function defineAppShellDomainContexts<T extends AppShellDomainContexts>(
 export const APP_SHELL_CONSUMER_DOMAIN_SELECTION = {
   // S4 PR-C：runtimeContext（runtimeRunState）由 layoutNodes 直读
   // input.appShellDomainContexts.runtimeContext，不经 bag flatten，故移出选择集
+  // 三刀后续：layoutNodes 按 zone 拆 bag，热域变化不再重建 chrome/git flatten。
   layoutNodes: [
     "runtimeThreadContext",
     "sessionIdentityContext",
@@ -715,6 +716,25 @@ export const APP_SHELL_CONSUMER_DOMAIN_SELECTION = {
     "settingsContext",
     "modelSelectionContext",
     "collaborationModeContext",
+  ],
+  layoutNodesCanvas: [
+    "runtimeThreadContext",
+    "sessionIdentityContext",
+    "composerContext",
+    "modelSelectionContext",
+    "collaborationModeContext",
+  ],
+  layoutNodesChrome: [
+    "workspaceCatalogContext",
+    "modeRoutingContext",
+    "accountSurfaceContext",
+    "workspaceNavigationContext",
+    "layoutContext",
+    "settingsContext",
+  ],
+  layoutNodesGit: [
+    "gitSurfaceContext",
+    "fileEditorContext",
   ],
   sections: [
     "sessionIdentityContext",

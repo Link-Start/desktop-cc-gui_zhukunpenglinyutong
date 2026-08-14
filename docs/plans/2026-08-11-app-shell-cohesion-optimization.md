@@ -79,7 +79,7 @@ updated: 2026-08-15
 |------|--------|
 | 计划状态 | `active`（Phase 全清；持续削债务） |
 | 当前 Phase | **三刀 Host 子树**（刀 1/2/3 已落地，待流式探针） |
-| 推荐下一步 | 提交本轮改动；后续：流式 30s 探针 + 收窄 layoutNodes 全 domain 订阅 |
+| 推荐下一步 | 提交本轮改动；后续：GUI 30s Profiler 实测根 commit |
 | 基线采集日 | **2026-08-11（T0.2 实测）**；T1.2 后指标见「当前」列 |
 | Ownership Matrix | [`docs/plans/app-shell-ownership-matrix.md`](./app-shell-ownership-matrix.md)（T0.1 已完成） |
 
@@ -809,6 +809,17 @@ PY
 - **计划变更**：无  
 - **风险 / 未决**：Provider 在 search section hook **之后**挂载，故 composer 路径当前仍走 prop fallback 直到后续把 section hooks 下沉到 Provider 子树；T2.2 ComposerProvider 可一并处理  
 - **下一步指针**：T2.2  
+
+### 2026-08-16 — layoutNodes zone bag + streaming probe
+
+- **完成 Todo**：收窄 layoutNodes flatten；补 CI 可跑的流式 bag 探针
+- **动作**：
+  1. `APP_SHELL_CONSUMER_DOMAIN_SELECTION` 增加 canvas / chrome / git 三组 zone
+  2. `useAppShellLayoutNodesSection` 按 zone 独立 cache flatten，热域变化不再重建 chrome/git bag
+  3. 新增 `appShellStreamingBagProbe.test.ts` + `docs/perf/app-shell-streaming-bag-probe.md`
+- **验证**：streaming bag probe / render isolation / domain selection tests
+- **风险 / 未决**：layoutNodes 组件本身仍一次解构宽 bag；GUI 30s Profiler 仍未跑
+- **下一步指针**：GUI 流式探针
 
 ### 2026-08-16 — 三刀：真 Host 子树 + 激活门 + 拆巨石
 

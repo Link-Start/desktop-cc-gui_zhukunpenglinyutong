@@ -649,9 +649,22 @@ describe("appShellDomainContexts", () => {
 
 describe("APP_SHELL_CONSUMER_DOMAIN_SELECTION", () => {
   it("keeps sections/render smaller than layoutNodes (no full-domain flatten)", () => {
-    // S4 PR-C：layoutNodes 15 → 14（runtimeContext 直读不经 bag）；
-    // 当前选择集 13（kanban 出账后不再订阅额外域）
+    // 兼容全集仍为 13；真实 flatten 已拆成 canvas/chrome/git zone。
     expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.layoutNodes).toHaveLength(13);
+    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.layoutNodesCanvas).toEqual([
+      "runtimeThreadContext",
+      "sessionIdentityContext",
+      "composerContext",
+      "modelSelectionContext",
+      "collaborationModeContext",
+    ]);
+    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.layoutNodesChrome).not.toContain(
+      "runtimeThreadContext",
+    );
+    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.layoutNodesGit).toEqual([
+      "gitSurfaceContext",
+      "fileEditorContext",
+    ]);
     expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.sections.length).toBeLessThan(15);
     expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.render.length).toBeLessThan(15);
     expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.sections).toContain(
