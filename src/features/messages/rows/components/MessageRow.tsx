@@ -776,6 +776,7 @@ export const MessageRow = memo(function MessageRow({
             workspaceId={workspaceId}
             codeBlockStyle="message"
             codeBlockCopyUseModifier={codeBlockCopyUseModifier}
+            streaming={isStreaming}
             streamingThrottleMs={resolveAssistantMessageStreamingThrottleMs(
               item,
               isStreaming,

@@ -29,6 +29,13 @@ const FullMarkdownRuntime = lazy(() =>
     default: module.FullMarkdownRuntime,
   })),
 );
+// 流式增量渲染器与 FullMarkdownRuntime 共用 react-markdown 解析栈，
+// 同样走 lazy() 保持全量解析器不进入首屏 chunk（见 Markdown.lazy-runtime.test.ts）。
+const IncrementalMarkdown = lazy(() =>
+  import("../incremental/IncrementalMarkdown").then((module) => ({
+    default: module.IncrementalMarkdown,
+  })),
+);
 import {
   decodeFileLink,
   isFileLinkUrl,
@@ -88,6 +95,14 @@ type MarkdownProps = {
   codeBlockStyle?: "default" | "message";
   codeBlockCopyUseModifier?: boolean;
   streamingThrottleMs?: number;
+  /**
+   * 流式中（消息仍在追加）。仅当同时 liveRenderMode === "full" 时生效：
+   * 正文改走 IncrementalMarkdown 增量排版（冻结块 memo，单帧成本与正文长度
+   * 脱钩）；流式期间代码 fence 走纯文本、不渲染 TeX，settle（streaming 翻回
+   * false）后由 FullMarkdownRuntime 全量渲染一次自愈（高亮 / KaTeX / 引用式
+   * 链接 / 脚注）。
+   */
+  streaming?: boolean;
   softBreaks?: boolean;
   preserveFormatting?: boolean;
   liveRenderMode?: "full" | "lightweight";
@@ -123,6 +138,7 @@ function areMarkdownPropsEqual(prev: MarkdownProps, next: MarkdownProps) {
     prev.codeBlockStyle === next.codeBlockStyle &&
     prev.codeBlockCopyUseModifier === next.codeBlockCopyUseModifier &&
     prev.streamingThrottleMs === next.streamingThrottleMs &&
+    prev.streaming === next.streaming &&
     prev.softBreaks === next.softBreaks &&
     prev.preserveFormatting === next.preserveFormatting &&
     prev.liveRenderMode === next.liveRenderMode &&
@@ -144,6 +160,7 @@ export const Markdown = memo(function Markdown({
   codeBlockStyle = "default",
   codeBlockCopyUseModifier = false,
   streamingThrottleMs = 80,
+  streaming = false,
   softBreaks = false,
   preserveFormatting = false,
   liveRenderMode = "full",
@@ -610,6 +627,28 @@ export const Markdown = memo(function Markdown({
         />
       );
     }
+    if (streaming) {
+      // 流式 full 模式：装订式增量排版。冻结块 memo 不随电报重排，只有尾部
+      // ≤2 块每帧重渲染；fence 纯文本、不渲染 TeX。IncrementalMarkdown 自身
+      // 不持有定时器，settle 切回 FullMarkdownRuntime 时直接卸载，无残留。
+      return (
+        <Suspense
+          fallback={(
+            <LightweightMarkdown
+              value={nextContent}
+              renderLink={renderLightweightLink}
+            />
+          )}
+        >
+          <IncrementalMarkdown
+            value={nextContent}
+            softBreaks={softBreaks}
+            urlTransform={urlTransform}
+            components={components}
+          />
+        </Suspense>
+      );
+    }
     return (
       <Suspense
         fallback={(
@@ -634,6 +673,7 @@ export const Markdown = memo(function Markdown({
     liveRenderMode,
     renderLightweightLink,
     softBreaks,
+    streaming,
     streamingThrottleMs,
     urlTransform,
   ]);
