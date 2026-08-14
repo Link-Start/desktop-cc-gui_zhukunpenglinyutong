@@ -23,6 +23,16 @@
 //
 // 诚实标注：jsdom 没有真实 layout/paint，这道门守的是「打根次数 + 主线程任务
 // 时长」；浏览器里的绘制卡顿仍靠 03/05 号清单的手动 Profiler 验收兜底。
+//
+// Task 3 反例验证记录（2026-08-14，改动已还原、未入库）：
+// - 反例：loadHook 内临时把 ccgui.perf.liveDeltaExternalization 置 "0"（关专线、
+//   逐 delta 经 32ms 批量直接打根），跑 npm run perf:streaming:stress → 变红：
+//   round=1 rootDispatch=100391，断言「根 dispatch 必须有界」失败
+//   （expected 100391 to be less than or equal to 50）。
+// - 还原后复跑 → 变绿：三轮 rootDispatch=3，lagMax 中位 45.4ms < 250ms。
+// - 注：dispatch 是 vi.fn() 计数桩，反例下 lag 不升（4.7ms）属预期——这道门对
+//   「逐 delta 打根」回归的拦截齿是断言②（dispatch 有界），断言①守入口链路
+//   自身的主线程任务时长。
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
