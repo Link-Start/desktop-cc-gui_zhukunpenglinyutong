@@ -603,7 +603,7 @@ describe("MessagesRows stream mitigation", () => {
   });
 
   it("uses a folded lightweight Markdown surface for very long Claude streaming output", () => {
-    const longText = `${"太虚山下，云海翻涌。".repeat(2_200)}\n\n第二段仍需保留。`;
+    const longText = `${"太虚山下，云海翻涌。".repeat(2_700)}\n\n第二段仍需保留。`;
     const messageItem = {
       id: "assistant-claude-long",
       kind: "message" as const,
@@ -647,7 +647,7 @@ describe("MessagesRows stream mitigation", () => {
     const longText = [
       "# 终章",
       "",
-      "太虚山下，云海翻涌。".repeat(2_200),
+      "太虚山下，云海翻涌。".repeat(2_700),
       "",
       "- 第一条",
       "- 第二条",
@@ -705,7 +705,7 @@ describe("MessagesRows stream mitigation", () => {
     );
   });
 
-  it("keeps Codex markdown stream recovery on lightweight Markdown after visible stall evidence", () => {
+  it("keeps Codex markdown stream recovery on the incremental full Markdown path after visible stall evidence", () => {
     const messageItem = {
       id: "assistant-codex-recovery",
       kind: "message" as const,
@@ -733,10 +733,10 @@ describe("MessagesRows stream mitigation", () => {
 
     expect(screen.queryByText("## 审计结论")).toBeNull();
     expect(screen.getByTestId("markdown").getAttribute("data-live-render-mode")).toBe(
-      "lightweight",
+      "full",
     );
     expect(screen.getByTestId("markdown").getAttribute("data-progressive-reveal")).toBe(
-      "true",
+      "false",
     );
     expect(screen.getByTestId("markdown").textContent).toContain("审计结论");
     expect(onAssistantVisibleTextRender).toHaveBeenCalled();
@@ -782,7 +782,7 @@ describe("MessagesRows stream mitigation", () => {
     );
   });
 
-  it("reports lightweight Codex recovery text when Markdown rendered callback is delayed", () => {
+  it("reports Codex recovery text when Markdown rendered callback is delayed", () => {
     markdownCalls.deferRenderedValueChange = true;
     const messageItem = {
       id: "assistant-codex-recovery-delayed-render",
@@ -794,7 +794,7 @@ describe("MessagesRows stream mitigation", () => {
         "- delta 已经进入当前 assistant item",
         "- Markdown callback 可能晚于 row render",
         "- diagnostics 不能继续停在旧 item",
-        "- recovery surface 仍保持 lightweight Markdown",
+        "- recovery surface 走增量 full Markdown",
         "- final output 继续回到完整 Markdown",
         "- 这条测试覆盖 callback 延迟",
       ].join("\n"),
@@ -818,10 +818,10 @@ describe("MessagesRows stream mitigation", () => {
     );
 
     expect(screen.getByTestId("markdown").getAttribute("data-live-render-mode")).toBe(
-      "lightweight",
+      "full",
     );
     expect(screen.getByTestId("markdown").getAttribute("data-progressive-reveal")).toBe(
-      "true",
+      "false",
     );
     expect(onAssistantVisibleTextRender).toHaveBeenCalledWith({
       itemId: "assistant-codex-recovery-delayed-render",
@@ -849,14 +849,14 @@ describe("MessagesRows stream mitigation", () => {
 
     expect(screen.getByTestId("markdown").getAttribute("data-throttle")).toBe("160");
     expect(screen.getByTestId("markdown").getAttribute("data-live-render-mode")).toBe(
-      "lightweight",
+      "full",
     );
     expect(screen.getByTestId("markdown").getAttribute("data-progressive-reveal")).toBe(
-      "true",
+      "false",
     );
   });
 
-  it("uses lightweight markdown from the first tokens of short Codex streaming output", () => {
+  it("streams short Codex output through the incremental full markdown path", () => {
     const messageItem = {
       id: "assistant-codex-short",
       kind: "message" as const,
@@ -876,7 +876,7 @@ describe("MessagesRows stream mitigation", () => {
 
     expect(screen.getByTestId("markdown").getAttribute("data-throttle")).toBe("72");
     expect(screen.getByTestId("markdown").getAttribute("data-live-render-mode")).toBe(
-      "lightweight",
+      "full",
     );
     expect(screen.getByTestId("markdown").getAttribute("data-progressive-reveal")).toBe(
       "false",
@@ -905,7 +905,7 @@ describe("MessagesRows stream mitigation", () => {
     expect(screen.getByTestId("markdown").textContent).toBe(messageItem.text);
     expect(screen.getByTestId("markdown").getAttribute("data-throttle")).toBe("160");
     expect(screen.getByTestId("markdown").getAttribute("data-live-render-mode")).toBe(
-      "lightweight",
+      "full",
     );
 
     rerender(
@@ -950,7 +950,7 @@ describe("MessagesRows stream mitigation", () => {
     expect(screen.getByTestId("markdown").textContent).toBe(messageItem.text);
   });
 
-  it("uses the Gemini baseline profile for assistant streaming without Codex staged throttle", () => {
+  it("routes Gemini assistant streaming through the same staged incremental markdown path", () => {
     const messageItem = {
       id: "assistant-gemini-large",
       kind: "message" as const,
@@ -978,7 +978,7 @@ describe("MessagesRows stream mitigation", () => {
       />,
     );
 
-    expect(screen.getByTestId("markdown").getAttribute("data-throttle")).toBe("80");
+    expect(screen.getByTestId("markdown").getAttribute("data-throttle")).toBe("160");
     expect(screen.getByTestId("markdown").getAttribute("data-live-render-mode")).toBe(
       "full",
     );
@@ -1004,10 +1004,10 @@ describe("MessagesRows stream mitigation", () => {
 
     expect(screen.getByTestId("markdown").getAttribute("data-throttle")).toBe("80");
     expect(screen.getByTestId("markdown").getAttribute("data-live-render-mode")).toBe(
-      "lightweight",
+      "full",
     );
     expect(screen.getByTestId("markdown").getAttribute("data-progressive-reveal")).toBe(
-      "true",
+      "false",
     );
   });
 
@@ -1044,10 +1044,10 @@ describe("MessagesRows stream mitigation", () => {
 
     expect(screen.getByTestId("markdown").getAttribute("data-throttle")).toBe("160");
     expect(screen.getByTestId("markdown").getAttribute("data-live-render-mode")).toBe(
-      "lightweight",
+      "full",
     );
     expect(screen.getByTestId("markdown").getAttribute("data-progressive-reveal")).toBe(
-      "true",
+      "false",
     );
   });
 
@@ -1081,7 +1081,7 @@ describe("MessagesRows stream mitigation", () => {
 
     expect(screen.getByTestId("markdown").getAttribute("data-throttle")).toBe("220");
     expect(screen.getByTestId("markdown").getAttribute("data-live-render-mode")).toBe(
-      "lightweight",
+      "full",
     );
   });
 

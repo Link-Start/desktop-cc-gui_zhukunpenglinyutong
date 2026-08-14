@@ -158,21 +158,21 @@ function finalizeStreamingMarkdownComplexity(counts: {
 }
 
 /**
- * 判定某引擎的流式 assistant 消息是否启用 staged 轻量 markdown 渲染。
+ * 判定某引擎的流式 assistant 消息是否启用 staged 流式 markdown 路径。
  *
- * 历史上仅 codex 走该路径(useCodexStagedMarkdownThrottle);Claude 作为主引擎却
- * 恒走 full react-markdown 全量重解析,是 Issue #721 对话页 6FPS 的主因。此处把
- * codex 已在生产验证的轻量流式路径同样启用给 claude;opencode 与其它引擎保持不变,
- * 除非 presentationProfile 显式开启。
+ * 历史上仅 codex 走该路径（useCodexStagedMarkdownThrottle），后来扩到 claude；
+ * Gemini / Grok / Kimi / opencode 等引擎被排除在外、每帧全量 re-parse，长回答
+ * 越写越卡。自 IncrementalMarkdown 增量排版落地起，staged 路径（增量渲染 +
+ * staged 节流档位）对全部引擎统一生效——单帧排版成本已与正文长度脱钩，
+ * 不再保留按引擎区分的旧白名单。
  */
 export function shouldUseStagedStreamingMarkdown(
   activeEngine: MessagesEngine,
   presentationProfile: PresentationProfile | null | undefined,
 ): boolean {
-  if (presentationProfile?.useCodexStagedMarkdownThrottle === true) {
-    return true;
-  }
-  return activeEngine === "codex" || activeEngine === "claude";
+  void activeEngine;
+  void presentationProfile;
+  return true;
 }
 
 export function resolveAssistantMessageStreamingThrottleMs(
