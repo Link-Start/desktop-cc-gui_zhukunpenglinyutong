@@ -33,8 +33,8 @@ export const APP_SHELL_DOMAIN_KEY_HARD_BUDGETS: Record<
   runtimeThreadContext: 80,
   sessionIdentityContext: 80,
   workspaceCatalogContext: 80,
-  /** S4 PR-C：composer 域 git handlers 归位后 freeze（实测 110，soft 债务待 PR-E 条件挂载压缩） */
-  gitSurfaceContext: 110,
+  /** S4 PR-E：git setters 归位 + 删 7 个无读者 keys 后 freeze（实测 108，仍超 soft 待 PR-F 压缩） */
+  gitSurfaceContext: 108,
   modeRoutingContext: 80,
   accountSurfaceContext: 80,
   dictationSurfaceContext: 80,
@@ -42,11 +42,11 @@ export const APP_SHELL_DOMAIN_KEY_HARD_BUDGETS: Record<
   workspaceNavigationContext: 80,
   /** S4 PR-C：141 → 实测 39 达标，hard 直接咬终态目标 60 */
   composerContext: 60,
-  /** S4 PR-C：103→100→95（composer 输入态归位后 freeze） */
-  layoutContext: 95,
+  /** S4 PR-E：95 → 实测 48 达标（删 20 无读者 + kanban 外误置归位），hard 咬终态目标 60 */
+  layoutContext: 60,
   fileEditorContext: 80,
-  /** S4 PR-C：147→140→124（composer slash 发送动作删 bag + 输入态归位后 freeze） */
-  settingsContext: 124,
+  /** S4 PR-E：124 → 实测 36 达标（删 17 无读者 + setter 与 state 同域归位），hard 咬终态目标 60 */
+  settingsContext: 60,
   runtimeContext: 80,
   modelSelectionContext: 80,
   collaborationModeContext: 80,

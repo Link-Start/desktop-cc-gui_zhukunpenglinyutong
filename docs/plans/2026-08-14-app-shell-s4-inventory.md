@@ -290,3 +290,66 @@ governance 7 文件 21 测试、typecheck、app-shell 分组测试（domains+ass
 - sections 仍订阅 composerContext（唯一起因 `interruptTurn`，其语义家在 runtimeThread 但 sections 订阅 runtimeThread 会引入 sessionHot 扇出，PR-D 已否决）；后续若 kanban execution 改从 runtimeThreadProvider 读 interruptTurn，sections 可再退订 composer。
 - 根仍持有 `useThreads`（owner）与 ~770 行 `useAppShellDomainAssembly` 装配面。
 - `useComposerEditorState`（textareaHeight）仍是根上 useState：仅展开/收起点击触发，非逐键高频；彻底 ref 化可并入 Task 5.2 scroll 路径 ref 化。
+
+---
+
+## 9. PR-E 完成回写（2026-08-14）
+
+**主题**：Settings/Git/Kanban 模式 host 条件挂载（与 S3 按 appMode 条件挂载合流）——settings/layout 真减到 ≤60 达标（非冻结）；gitSurface bag 在非 git 表面模式下冻结装配，后台 git 更新不再扇出。
+
+### 行数与 keys（实测）
+
+| 指标 | 改前 | 改后 | 门禁收紧 |
+|------|-----:|-----:|----------|
+| `useAppShellRootComposition.ts` | 2280 行 | **2217 行（-63）** | `ROOT_COMPOSITION_HARD_LINES` 2320 → **2260** |
+| 15 域 keys 合计 | 656 | **612（-44）** | — |
+| settingsContext | 124 | **36** | hard freeze 124 → **60（TARGET_HARD 达标）** |
+| layoutContext | 95 | **48** | hard freeze 95 → **60（TARGET_HARD 达标）** |
+| gitSurfaceContext | 110 | **108** | hard freeze 110 → **108**（仍超 soft 80，唯一 soft 债务域） |
+| runtimeThreadContext | 32 | 51 | 80 不变 |
+| workspaceCatalogContext | 41 | 73 | 80 不变 |
+| workspaceNavigationContext | 67 | 79 | 80 不变（贴近上限，PR-F 留意） |
+| fileEditorContext | 59 | 69 | 80 不变 |
+| composerContext | 39 | 41 | 60 不变 |
+| modeRoutingContext | 19 | 33 | 80 不变 |
+| sessionIdentityContext | 12 | 14 | 80 不变 |
+| accountSurfaceContext | 10 | 11 | 80 不变 |
+| modelSelectionContext | 21 | 22 | 80 不变 |
+
+### 读侧盘点方法（同 PR-C，含一处口径修正）
+
+对 settings 124 / layout 95 / gitSurface 110 共 329 把 keys 逐字扫描 bag 消费方（sections / render / layoutNodes）。**口径修正**：`useAppShellSections` 把整袋 ctx 透传给 `useAppShellKanbanComposerSection` / `useAppShellKanbanExecutionSection`，这两个文件必须计入 sections 读侧（否则 `kanbanCreateTask` 等会被误判无读者）。归位约束：key 的全部读者必须订阅目标域。
+
+### 删 / 留 / 归位口径
+
+1. **删（44 keys，无 bag 读者，根层使用点均为 section hook 直传，不经 bag，行为不变）**：settings 17（`setAccessMode`/`setDebugOpen`/`setRightPanelWidth`/`threadAccessMode`/`updateThreadParent`/`updatePrompt`/`workspaceFilesPollingEnabled`/`workspaceNameByPath` 等）、layout 20（`movePrompt`/`navigateToThread`/`openTerminal`/`perfSnapshotRef`/`refreshAccountInfo`/`refreshGitStatus`/`refreshWorkspaces`/`renameThread`/`renameWorktree` 等）、gitSurface 7（`checkoutBranch`/`createBranch`/`clearGitRootCandidates`/`gitCommitDiffs`/`gitHistoryPanelHeightRef`/`gitPullRequestDiffsError`/`gitPullRequestDiffsLoading`）。根 composition 源袋同步收窄，19 个因此失去唯一用途的解构一并清理。
+2. **归位（109 keys，原则：setter 与 state 同域 + 语义 owner）**：
+   - settings → modeRouting 11（`setAppMode`/`setCenterMode`/`setActiveTab`/`showKanban`/`showHome` 等 mode/surface 路由）、→ sessionIdentity 2（`setActiveThreadId`/`setActiveWorkspaceId`）、→ gitSurface 5（git state setters）、→ runtimeThread 10（`userInputRequests`/`startCompact`/`unpinThread`/review highlight setters 等，读侧仅 layoutNodes）、→ fileEditor 9（search/选择 setters，state 本在 fileEditor）、→ workspaceNavigation 6（editor/appSettings setters）、→ workspaceCatalog 22（worktree/clone/workspace 设置与 `workspaces`/`workspacesById` 等目录态）、→ layout 7（layout 态 setters + releaseNotes 翻页）。
+   - layout → runtimeThread 9（`pinThread`/`isThreadPinned`/`refreshThread`/`renamePrompt`/`openDeleteThreadPrompt` 等 thread 级动作）、→ workspaceCatalog 8、→ workspaceNavigation 6（releaseNotes 态）、→ gitSurface 3（`queueGitStatusRefresh`/`refreshGitDiffs`/`refreshGitLog` 误置 git 动作）、→ composer 2（`prompts`/`persistComposerSelectionForThread`）、→ fileEditor 1、→ modeRouting 2（`isTablet`/`isWindowsDesktop` 环境标志）、→ accountSurface 1、→ modelSelection 1、→ settings 1（`openSettings` 归位）。
+   - gitSurface → workspaceCatalog 2（`gitignoredFiles`/`gitignoredDirectories` 文件树态）、→ modeRouting 1（`exitDiffView` 视图路由）。
+3. **留 settings（36）/ layout（48）**：settings 保留 settings modal/loading dialog/threads 四 bags（PR-D 已论证不动）/session radar/terminal 等真读者；layout 保留 kanban 视图态 11（无独立 kanban 域，视图布局态留 layout）+ resize handlers + terminal/面板动作等真读者。
+
+### 条件挂载（与 S3 合流）
+
+- **Git 表面冻结装配（懒装配 + 引用稳定）**：`useAppShellDomainAssembly` 按 `resolveAppModeSurfaceFlags(appMode).isGitSurfaceMode` 门控——kanban/extensions 模式下 `gitSurfaceContext` 复用上一 bag 引用（不重建、不进浅比较、不向 layoutNodes 扇出）；切回 chat/gitHistory 即刻恢复；首帧即非 git 模式时先完整装配一次。实际收益：kanban 后台任务 turn settle 触发的 git status 刷新不再打扇出链。jsdom 单测 4 用例锁定（chat 正常更新 / kanban 冻结且其它域不受影响 / 切回恢复 / 首帧非 git 模式完整装配）。
+- **surface flags 独立纯模块**：`resolveAppModeSurfaceFlags` 从 `useModeDomainHosts.ts` 抽到 `appModeSurfaceFlags.ts`（避免 assembly 拖入 kanban store 依赖链），原文件 re-export 兼容。
+- **Kanban**：store 保持常驻（scheduled/autoStart 任务非看板视图仍须执行，`useKanbanDomainHost` 注释已锁定）；kanban bags 因 sections 全模式可读（execution/composer）不做冻结，surface flag 出口保留供后续按任务态细化。
+- **Settings**：SettingsView 本就走 lazy 边界；本 PR 以 key 瘦身收口（36 keys），无常驻重逻辑可摘。
+
+### 订阅面变化（测试锁定）
+
+- `APP_SHELL_CONSUMER_DOMAIN_SELECTION` 三读侧域选择集不变（归位全部满足读者 ⊆ 目标域订阅方，无需增删订阅）。
+- 变化的是域内 key 分布：turn 级/后台更新（`userInputRequests`/`pinThread`/git setters 等）进一步离开 settings/layout，sections/render 被误伤的面积同步收窄。
+- assembly 测试新增 PR-E 用例（归位 owner 抽查 17 组 + 44 删除 keys 全域不存在 + settings/layout ≤60 达标）；governance T5.1 新增 settings/layout 达标断言；soft 债务名单只剩 gitSurface。
+
+### 验证
+
+governance 7 文件 22 测试、typecheck、app-shell 分组测试（domains+assembly 35 文件 231 测试；sections+render 28 文件 213 测试）、改动文件 eslint、`perf:realtime:boundary-guard`、`perf:streaming:stress` 全绿；kanban 13 文件 69 测试全绿；`src/features/git` 14 个失败经 stash 对照 base 复现为**预存失败**（commit-message UI 测试族，非回归）。新增/更新测试：git 条件装配 jsdom 4 用例（新文件）、assembly +1 PR-E 用例、governance +1 T5.1 用例、slice builder fixtures 8 处、`useModeDomainHosts.test` 改指新纯模块。
+
+### 遗留（交 PR-F）
+
+- gitSurface 108 为唯一超 soft 域（freeze 108）；31 把 PR-C 归位涌入的 handlers 读侧真实（layoutNodes 的 git 面板节点），继续压缩需要 git 面板读侧改造或域再分（如 multi-repo/GitHub panel 析出），量级超 PR-E。
+- workspaceNavigationContext 79/80 贴近上限：PR-F 删 legacy flatten 时若需新 key 必须先出后进。
+- sections 仍订阅 composerContext（唯一起因 `interruptTurn`，同 PR-C 遗留；kanban execution 改读 runtimeThreadProvider 后可退订，本次未动）。
+- 根仍持有 `useThreads`（owner）与 ~700 行 `useAppShellDomainAssembly` 装配面（PR-F 删 legacy flatten 时一并收口）。
+- layout 内 kanban 视图态 11 keys 无独立域可去；若 PR-F 析 kanbanSurfaceContext 可再降 layout。

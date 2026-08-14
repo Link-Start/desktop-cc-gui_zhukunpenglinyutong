@@ -43,6 +43,26 @@ describe("buildAppShellDomainContextSlices", () => {
       highlightedBranchIndex: 0,
       highlightedCommitIndex: 0,
       highlightedPresetIndex: 0,
+      // S4 PR-E：thread 级动作与 review/highlight setters（归位）
+      isThreadAutoNaming: false,
+      isThreadPinned: false,
+      listThreadsForWorkspaceTracked: async () => {},
+      loadOlderThreadsForWorkspace: async () => {},
+      openDeleteThreadPrompt: () => {},
+      pinThread: () => {},
+      pinnedThreadsVersion: 0,
+      refreshThread: async () => {},
+      renamePrompt: null,
+      setHighlightedBranchIndex: () => {},
+      setHighlightedCommitIndex: () => {},
+      setHighlightedPresetIndex: () => {},
+      showPresetStep: () => {},
+      startCompact: async () => {},
+      toggleCompletionEmailIntent: () => {},
+      triggerAutoThreadTitle: () => {},
+      unpinThread: () => {},
+      updateCustomInstructions: async () => {},
+      userInputRequests: [],
       sessionHot: {
         activeItems: [],
         activePlan: null,
@@ -94,6 +114,8 @@ describe("buildAppShellDomainContextSlices", () => {
       handleSelectModel: () => {},
       handleSelectOpenCodeAgent: () => {},
       handleSelectOpenCodeVariant: () => {},
+      // S4 PR-E：engine 刷新（归位）
+      refreshEngines: async () => {},
       isModelConfigRefreshing: false,
     });
     expect(Object.keys(slice).sort()).toEqual(
@@ -112,6 +134,7 @@ describe("buildAppShellDomainContextSlices", () => {
         "providerModelCatalogs",
         "reasoningOptions",
         "reasoningSupported",
+        "refreshEngines",
         "refreshEngineModels",
         "resolvedEffort",
         "resolvedModel",
@@ -162,6 +185,9 @@ describe("buildAppShellDomainContextSlices", () => {
       activeWorkspaceIdRef: { current: "ws-1" },
       activeWorkspaceRef: { current: { id: "ws-1" } },
       activeWorkspaceThreads: [],
+      // S4 PR-E：identity setters 与 state 同域
+      setActiveThreadId: () => {},
+      setActiveWorkspaceId: () => {},
       baseWorkspaceRef: { current: null },
     });
     expect(Object.keys(slice).sort()).toEqual(
@@ -177,6 +203,8 @@ describe("buildAppShellDomainContextSlices", () => {
         "activeWorkspaceIdRef",
         "activeWorkspaceRef",
         "activeWorkspaceThreads",
+        "setActiveThreadId",
+        "setActiveWorkspaceId",
         "baseWorkspaceRef",
       ].sort(),
     );
@@ -227,6 +255,39 @@ describe("buildAppShellDomainContextSlices", () => {
       handleWorkspaceDragEnter: () => {},
       handleWorkspaceDragLeave: () => {},
       handleWorkspaceDragOver: () => {},
+      // S4 PR-E：worktree/clone/workspace 设置与目录态（归位）
+      gitignoredDirectories: [],
+      gitignoredFiles: [],
+      homeWorkspaceSelectedId: null,
+      isWorkspaceDropActive: false,
+      isWorktreeWorkspace: false,
+      launchScriptState: null,
+      launchScriptsState: null,
+      removeWorkspace: async () => {},
+      removeWorktree: async () => {},
+      moveWorkspaceGroup: () => {},
+      renameWorkspaceGroup: () => {},
+      setWorkspaceHomeWorkspaceId: () => {},
+      ungroupedLabel: "Ungrouped",
+      updateCloneCopyName: () => {},
+      updateWorkspaceCodexBin: async () => {},
+      updateWorkspaceSettings: async () => {},
+      updateWorktreeBaseRef: () => {},
+      updateWorktreeBranch: () => {},
+      updateWorktreePublishToOrigin: () => {},
+      updateWorktreeSetupScript: () => {},
+      useSuggestedCloneCopiesFolder: () => {},
+      workspaceGroups: [],
+      workspaces: [],
+      workspacesById: new Map(),
+      workspacesByPath: new Map(),
+      worktreeApplyError: null,
+      worktreeApplyLoading: false,
+      worktreeApplySuccess: null,
+      worktreeCreateResult: null,
+      worktreeLabel: null,
+      worktreePrompt: null,
+      worktreeRename: null,
       handleWorkspaceDrop: () => {},
     });
     expect(slice).toHaveProperty("addWorkspace");
@@ -248,9 +309,7 @@ describe("buildAppShellDomainContextSlices", () => {
       activeGitHistoryTabId: null,
       branchError: null,
       branches: [],
-      checkoutBranch: async () => {},
       clearGitOperationErrors: () => {},
-      clearGitRootCandidates: () => {},
       commitError: null,
       commitLoading: false,
       commitMessage: "",
@@ -258,17 +317,13 @@ describe("buildAppShellDomainContextSlices", () => {
       commitMessageLoading: false,
       confirmBranch: async () => {},
       confirmCommit: async () => {},
-      createBranch: async () => {},
       currentBranch: null,
       diffScrollRequestId: 0,
       diffSource: null,
-      exitDiffView: () => {},
       fileStatus: null,
-      gitCommitDiffs: [],
       gitDiffListView: "list",
       gitDiffViewStyle: "unified",
       gitHistoryPanelHeight: 200,
-      gitHistoryPanelHeightRef: { current: 200 },
       gitIssues: [],
       gitIssuesError: null,
       gitIssuesLoading: false,
@@ -287,8 +342,6 @@ describe("buildAppShellDomainContextSlices", () => {
       gitPullRequestCommentsError: null,
       gitPullRequestCommentsLoading: false,
       gitPullRequestDiffs: [],
-      gitPullRequestDiffsError: null,
-      gitPullRequestDiffsLoading: false,
       gitPullRequests: [],
       gitPullRequestsError: null,
       gitPullRequestsLoading: false,
@@ -300,8 +353,6 @@ describe("buildAppShellDomainContextSlices", () => {
       gitRootScanHasScanned: false,
       gitRootScanLoading: false,
       gitStatus: null,
-      gitignoredDirectories: [],
-      gitignoredFiles: [],
       localBranches: [],
       remoteBranches: [],
       repositoryError: null,
@@ -318,6 +369,15 @@ describe("buildAppShellDomainContextSlices", () => {
       handleCommitRepositories: async () => {},
       repositoryCommitSummary: null,
       selectRepository: () => {},
+      // S4 PR-E：git state setters 与刷新动作（归位）
+      queueGitStatusRefresh: () => {},
+      refreshGitDiffs: async () => {},
+      refreshGitLog: async () => {},
+      setDiffSource: () => {},
+      setGitDiffListView: () => {},
+      setGitDiffViewStyle: () => {},
+      setGitPanelMode: () => {},
+      setGitRootScanDepth: () => {},
       selectedRepositoryRoot: null,
     } as any);
     expect(slice).toHaveProperty("gitStatus");
@@ -347,6 +407,21 @@ describe("buildAppShellDomainContextSlices", () => {
       isMacDesktop: true,
       isPanelLocked: false,
       isPhone: false,
+      // S4 PR-E：mode/surface 路由 setters 与环境标志（归位）
+      exitDiffView: () => {},
+      isTablet: false,
+      isWindowsDesktop: false,
+      setActiveTab: () => {},
+      setAppMode: () => {},
+      setCenterMode: () => {},
+      setFilePanelMode: () => {},
+      setHomeOpen: () => {},
+      setIsSearchPaletteOpen: () => {},
+      showExtensions: false,
+      showGitHistory: false,
+      showHome: false,
+      showKanban: false,
+      showWorkspaceHome: false,
       isSearchPaletteOpen: false,
     });
     expect(Object.keys(slice).sort()).toEqual(
@@ -370,6 +445,20 @@ describe("buildAppShellDomainContextSlices", () => {
         "isPanelLocked",
         "isPhone",
         "isSearchPaletteOpen",
+        "exitDiffView",
+        "isTablet",
+        "isWindowsDesktop",
+        "setActiveTab",
+        "setAppMode",
+        "setCenterMode",
+        "setFilePanelMode",
+        "setHomeOpen",
+        "setIsSearchPaletteOpen",
+        "showExtensions",
+        "showGitHistory",
+        "showHome",
+        "showKanban",
+        "showWorkspaceHome",
       ].sort(),
     );
     expect(slice.appMode).toBe("chat");
@@ -388,6 +477,8 @@ describe("buildAppShellDomainContextSlices", () => {
       handleApprovalRemember: () => {},
       handleCancelSwitchAccount: () => {},
       handleOpenMailSession: () => {},
+      // S4 PR-E：账号 rate limit 刷新（归位）
+      refreshAccountRateLimits: async () => {},
       handleSwitchAccount: () => {},
     });
     expect(Object.keys(slice).sort()).toEqual(
@@ -402,6 +493,7 @@ describe("buildAppShellDomainContextSlices", () => {
         "handleCancelSwitchAccount",
         "handleOpenMailSession",
         "handleSwitchAccount",
+        "refreshAccountRateLimits",
       ].sort(),
     );
     expect(slice.accountSwitching).toBe(false);
@@ -498,9 +590,22 @@ describe("buildAppShellDomainContextSlices", () => {
       globalSearchFilesByWorkspace: {},
       // S4 PR-C：debug/updater 动作
       handleCopyDebug: () => {},
+      // S4 PR-E：editor/appSettings setters 与 releaseNotes 态（归位）
+      openReleaseNotes: () => {},
+      releaseNotesActiveIndex: 0,
+      releaseNotesEntries: [],
+      releaseNotesError: null,
+      releaseNotesLoading: false,
+      releaseNotesOpen: false,
+      setActiveEditorLineRange: () => {},
+      setActiveEngine: () => {},
+      setAppSettings: () => {},
+      setEditorSplitCompanion: () => {},
+      setEditorSplitLayout: () => {},
+      setFileReferenceMode: () => {},
       handleTestNotificationSound: () => {},
     } as any);
-    expect(Object.keys(slice).length).toBe(67);
+    expect(Object.keys(slice).length).toBe(79);
     expect(slice).toHaveProperty("appSettings");
     expect(slice).not.toHaveProperty("activeWorkspaceId");
     expect(slice).not.toHaveProperty("gitStatus");

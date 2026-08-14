@@ -277,4 +277,73 @@ describe("assembleAppShellDomainContexts", () => {
     expect(stable.gitSurfaceContext).toBe(previous.gitSurfaceContext);
     expect(stable.runtimeThreadContext).toBe(previous.runtimeThreadContext);
   });
+
+  it("S4 PR-E：settings/layout 瘦身达标（≤60），setter 与 state 同域归位", () => {
+    const contexts = assembleAppShellDomainContexts(buildMinimalAssemblySource());
+
+    // settings / layout 压到终态目标（非冻结）
+    expect(Object.keys(contexts.settingsContext).length).toBeLessThanOrEqual(
+      60,
+    );
+    expect(Object.keys(contexts.layoutContext).length).toBeLessThanOrEqual(60);
+
+    // 归位后的新 owner（抽查各目标域一把）
+    const rehomed: Array<[string, string]> = [
+      ["modeRoutingContext", "setAppMode"],
+      ["modeRoutingContext", "showKanban"],
+      ["sessionIdentityContext", "setActiveThreadId"],
+      ["gitSurfaceContext", "setDiffSource"],
+      ["gitSurfaceContext", "queueGitStatusRefresh"],
+      ["workspaceCatalogContext", "workspaces"],
+      ["workspaceCatalogContext", "worktreePrompt"],
+      ["workspaceNavigationContext", "setAppSettings"],
+      ["workspaceNavigationContext", "releaseNotesOpen"],
+      ["fileEditorContext", "setSearchScope"],
+      ["runtimeThreadContext", "pinThread"],
+      ["runtimeThreadContext", "userInputRequests"],
+      ["composerContext", "prompts"],
+      ["accountSurfaceContext", "refreshAccountRateLimits"],
+      ["modelSelectionContext", "refreshEngines"],
+      ["layoutContext", "setKanbanViewState"],
+      ["settingsContext", "openSettings"],
+    ];
+    for (const [domain, key] of rehomed) {
+      expect(contexts[domain as keyof typeof contexts][key]).toBe(
+        `owned:${domain}:${key}`,
+      );
+      if (domain !== "settingsContext") {
+        expect(contexts.settingsContext).not.toHaveProperty(key);
+      }
+    }
+
+    // 无 bag 读者的 keys 已从根 bag 删除（任何域都不得再持有）
+    for (const key of [
+      "checkoutBranch",
+      "createBranch",
+      "gitCommitDiffs",
+      "gitHistoryPanelHeightRef",
+      "movePrompt",
+      "navigateToThread",
+      "openTerminal",
+      "perfSnapshotRef",
+      "refreshAccountInfo",
+      "refreshGitStatus",
+      "refreshWorkspaces",
+      "renameThread",
+      "renameWorktree",
+      "setAccessMode",
+      "setDebugOpen",
+      "setRightPanelWidth",
+      "threadAccessMode",
+      "updateThreadParent",
+      "updatePrompt",
+      "workspaceFilesPollingEnabled",
+      "workspaceNameByPath",
+      "worktreeSetupScriptState",
+    ]) {
+      for (const domainName of APP_SHELL_DOMAIN_CONTEXT_NAMES) {
+        expect(contexts[domainName]).not.toHaveProperty(key);
+      }
+    }
+  });
 });

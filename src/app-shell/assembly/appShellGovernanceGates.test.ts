@@ -32,8 +32,8 @@ const assemblyPath = join(
 
 const COMPOSITION_SOFT_LINES = 600;
 const COMPOSITION_HARD_LINES = 800;
-/** RootComposition 仍为过渡巨石：冻结 hard，禁止继续涨（PR-B 2362 → 2400；PR-D 2314 → 2350；PR-C 2280 → 2320 咬住进步） */
-const ROOT_COMPOSITION_HARD_LINES = 2320;
+/** RootComposition 仍为过渡巨石：冻结 hard，禁止继续涨（PR-B 2362 → 2400；PR-D 2314 → 2350；PR-C 2280 → 2320；PR-E 2217 → 2260 咬住进步） */
+const ROOT_COMPOSITION_HARD_LINES = 2260;
 
 function lineCount(path: string): number {
   return readFileSync(path, "utf8").split("\n").length;
@@ -69,12 +69,12 @@ describe("appShellGovernanceGates (T5)", () => {
       readFileSync(assemblyPath, "utf8"),
     );
     const soft = listDomainOwnershipSoftFailures(report);
-    // S4 PR-C 后遗留：gitSurface（composer 归位涌入）/ layout / settings 仍 > 80；
-    // composer 已压到 ≤60 达标，退出 soft 债务名单
+    // S4 PR-E 后遗留：仅 gitSurface 仍 > 80（108，freeze 待 PR-F）；
+    // composer / layout / settings 均已压到 ≤60 达标，退出 soft 债务名单
     expect(soft.some((line) => line.includes("composerContext"))).toBe(false);
     expect(soft.some((line) => line.includes("gitSurfaceContext"))).toBe(true);
-    expect(soft.some((line) => line.includes("settingsContext"))).toBe(true);
-    expect(soft.some((line) => line.includes("layoutContext"))).toBe(true);
+    expect(soft.some((line) => line.includes("settingsContext"))).toBe(false);
+    expect(soft.some((line) => line.includes("layoutContext"))).toBe(false);
     expect(listDomainOwnershipHardFailures(report)).toEqual([]);
   });
 
@@ -84,6 +84,16 @@ describe("appShellGovernanceGates (T5)", () => {
     expect(APP_SHELL_DOMAIN_KEY_HARD_BUDGETS.composerContext).toBe(
       APP_SHELL_DOMAIN_KEY_TARGET_HARD,
     );
+  });
+
+  it("T5.1: settings/layout 达标终态目标（S4 PR-E：124/95 → ≤60，非冻结）", () => {
+    for (const domain of ["settingsContext", "layoutContext"] as const) {
+      const count = APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS[domain].length;
+      expect(count).toBeLessThanOrEqual(APP_SHELL_DOMAIN_KEY_TARGET_HARD);
+      expect(APP_SHELL_DOMAIN_KEY_HARD_BUDGETS[domain]).toBe(
+        APP_SHELL_DOMAIN_KEY_TARGET_HARD,
+      );
+    }
   });
 
   it("T5.2: AppShell composition entry within soft/hard line budgets", () => {

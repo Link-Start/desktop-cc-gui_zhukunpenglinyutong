@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveAppModeSurfaceFlags } from "./useModeDomainHosts";
+import { resolveAppModeSurfaceFlags } from "./appModeSurfaceFlags";
 
 describe("resolveAppModeSurfaceFlags", () => {
   it("marks kanban surface only for kanban mode", () => {
