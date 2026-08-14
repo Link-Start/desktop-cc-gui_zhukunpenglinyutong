@@ -237,3 +237,56 @@ governance 7 文件 20 测试、typecheck、app-shell 分组测试（domains+ass
 
 - 根仍持有 `useThreads`（owner）：settingsContext 内 `threadStatusById` / `threadItemsByThread` 仍 turn 级变更并扇出 sections/render，彻底解耦需 threads store 下移 Provider 子树（PR-E/F 量级）。
 - 根余量大头仍是 ~700 行 `useAppShellDomainAssembly` bag 装配（PR-C/E 战场）。
+
+---
+
+## 8. PR-C 完成回写（2026-08-14）
+
+**主题**：Composer 域下沉——composerContext 只暴露 composer 输入面真正消费的字段（141 → **39**，hard 咬终态目标 60，非冻结）；输入路径（draft/贴图/队列/prefill/textarea）全部归 composer 域，render 读侧与输入路径完全解耦。
+
+### 行数与 keys（实测）
+
+| 指标 | 改前 | 改后 | 门禁收紧 |
+|------|-----:|-----:|----------|
+| `useAppShellRootComposition.ts` | 2314 行 | **2280 行（-34）** | `ROOT_COMPOSITION_HARD_LINES` 2350 → **2320** |
+| 15 域 keys 合计 | 686（PR-D 回写口径 680，实测口径 686） | **656（-30）** | — |
+| composerContext | 141 | **39** | hard freeze 141 → **60（TARGET_HARD）** |
+| gitSurfaceContext | 79 | **110** | hard 80 → **110**（freeze，soft 债务待 PR-E 压缩） |
+| layoutContext | 100 | **95** | hard freeze 100 → **95** |
+| settingsContext | 140 | **124** | hard freeze 140 → **124** |
+| workspaceNavigationContext | 78 | **67** | 80 不变 |
+| runtimeThreadContext | 16 | **32** | 80 不变 |
+| fileEditorContext | 41 | **59** | 80 不变 |
+| workspaceCatalogContext | 29 | **41** | 80 不变 |
+| modeRoutingContext | 6 | **19** | 80 不变 |
+| accountSurfaceContext | 4 | **10** | 80 不变 |
+| dictationSurfaceContext | 10 | **11** | 80 不变 |
+| modelSelectionContext | 14 | **21** | 80 不变 |
+
+### 读侧盘点方法（141 keys 口径）
+
+用脚本对 141 个 composer keys 逐字扫描三个 bag 消费方（sections 3 文件 / render / layoutNodes 2 文件，word-boundary 全文件匹配），读者分布：**无读者 14**、仅 layoutNodes 88、layoutNodes+render 4、layoutNodes+sections 7、三方 4、render 13、sections 10、render+sections 1。另核 `useAppShellSearchAndComposerSection` / `useAppShellSections` 输出无同名 key 覆盖，读者全部来自 bag。
+
+### 删 / 留 / 归位口径
+
+1. **删（30 keys，无 bag 读者，根层使用点不经 bag，行为不变）**：composer 域 14（`handleSend`/`hasLoaded`/`hasPlanData`/`historySearchItems`/`installedEngines`/`handleWorktreeCreated`/`handleToggleTerminal`/`handleAddWorkspaceFromPath`/`handleDropWorkspacePaths`/`handleOpenRenameWorktree`/`handleRenameWorktreeCancel`/`handleRenameWorktreeChange`/`handleRenameWorktreeConfirm`/`hydratedThreadListWorkspaceIdsRef`）；settings 域 12（`startFork`/`startReview`/`startResume`/`startMcp`/`startSpecRoot`/`startStatus`/`startFast`/`startMode`/`startExport`/`startImport`/`startLsp`/`startShare`——composer slash 发送动作，仅作根内 `useComposerController` 入参）；fileEditor 1（`sendUserMessage`）、layout 1（`queueMessage`）、nav 2（`clearActiveImages`/`codexComposerModeRef`）。
+2. **留 composer（39 keys）**：输入态（`activeImages`/`activeQueue`/`activeQueuedHandoffBubble`/`activeFusingMessageId`/`composerInsert`/`prefillDraft`/`textareaHeight`/`attachImages`/`pickImages`/`removeImage`/`setComposerInsert`/`setPrefillDraft`/`onTextareaHeightChange`）+ 发送/队列 handlers + prompts 库 + agent/access-mode 选择 + `interruptTurn`（sections 经 kanban execution 仍读）+ `composerEditorSettings`/`composerInputRef`/`skills`。其中 18 个是从 nav/layout/settings **拉入** composer 的原生 composer 字段（附带收益：nav 78→67、layout 100→95、settings 140→124）。
+3. **归位（106 keys 出 composer）**：git 操作 31 → gitSurface；文件 tab/editor/compare/file-history 19 → fileEditor；UI 模式/面板路由与环境标志 13 → modeRouting；账号/审批/邮件 6 → accountSurface；conversation UI 与 review-prompt 15 → runtimeThread（另 nav 的 `choosePreset` 同去）；workspace/agent 入口与拖放 12 → workspaceCatalog；模型/engine 选择 7 → modelSelection；debug/updater 2 → workspaceNavigation；听写开关 1 → dictationSurface。归位全部满足「读者 ⊆ 目标域订阅方」约束。
+
+### 订阅面变化（测试锁定）
+
+- `APP_SHELL_CONSUMER_DOMAIN_SELECTION`：**render 12 → 11**（移出 composerContext——render 原读的 composer keys 已全部归位，实测 render 对 39 个保留 key 零引用）；**layoutNodes 15 → 14**（`runtimeRunState` 直读 `appShellDomainContexts.runtimeContext`，不经 bag flatten）；sections 11 不变（`interruptTurn` 留 composer）。
+- 输入路径解耦证据：`activeImages`/`activeQueue`/`prefillDraft`/`textareaHeight` 等输入态归 composerContext 后，render 不再订阅 composer → **贴图/队列/prefill/textarea 更新不再扇出 render 的 flatten**；assembly 测试新增引用稳定用例（输入 churn 只换 composerContext 引用，settings/layout/nav/gitSurface/runtimeThread 全保旧引用）。
+- 打字/粘贴草稿路径本就不经 React state（`composerDraftStore` 模块级 store，`useComposerController.ts:205` 注释与 `composerDraftStore.test.ts` 锁定），本 PR 未动该边界。
+- 顺手项：`useComposerDomainHost.ts` 的 `composerSelectionResolverRef: any` 换成 PR-B 导出的 `RefObject<ComposerSelectionSnapshot>`。
+
+### 验证
+
+governance 7 文件 21 测试、typecheck、app-shell 分组测试（domains+assembly 34 文件 225 测试；sections+render 28 文件 213 测试）、改动文件 eslint、`perf:realtime:boundary-guard`、`perf:streaming:stress`（rootDispatch 仍 3/回合，lag P95 1.7ms）全绿；composer 分组 6 个预存失败持平（非回归）。新增/更新测试：assembly +2 用例（PR-C 归位+删除断言 / 输入 churn 引用稳定）、governance +1 用例（composer ≤60 达标断言）、consumer selection 断言更新（render 不含 composer、layoutNodes 不含 runtime）、slice builder 6 用例更新。
+
+### 遗留（交 PR-E/F）
+
+- gitSurface 110 为新的 soft 债务域（composer 归位涌入，freeze 110）；settings 124 / layout 95 仍超 soft 80——PR-E 条件挂载主战场。
+- sections 仍订阅 composerContext（唯一起因 `interruptTurn`，其语义家在 runtimeThread 但 sections 订阅 runtimeThread 会引入 sessionHot 扇出，PR-D 已否决）；后续若 kanban execution 改从 runtimeThreadProvider 读 interruptTurn，sections 可再退订 composer。
+- 根仍持有 `useThreads`（owner）与 ~770 行 `useAppShellDomainAssembly` 装配面。
+- `useComposerEditorState`（textareaHeight）仍是根上 useState：仅展开/收起点击触发，非逐键高频；彻底 ref 化可并入 Task 5.2 scroll 路径 ref 化。

@@ -26,6 +26,23 @@ describe("buildAppShellDomainContextSlices", () => {
       threadListCursorByWorkspace: { "ws-1": "cursor" },
       threadListPagingByWorkspace: { "ws-1": true },
       threadParentById: { t1: "parent" },
+      // S4 PR-C：conversation UI + review-prompt 流程
+      handleCopyThread: () => {},
+      handleDeleteThreadPromptCancel: () => {},
+      handleDeleteThreadPromptConfirm: () => {},
+      handleRenamePromptCancel: () => {},
+      handleRenamePromptChange: () => {},
+      handleRenamePromptConfirm: () => {},
+      handleRenameThread: () => {},
+      hydratedThreadListWorkspaceIds: ["ws-1"],
+      isDeleteThreadPromptBusy: false,
+      choosePreset: () => {},
+      handleReviewPromptKeyDown: () => {},
+      handleSelectCommit: () => {},
+      handleSelectStatusPanelSubagent: () => {},
+      highlightedBranchIndex: 0,
+      highlightedCommitIndex: 0,
+      highlightedPresetIndex: 0,
       sessionHot: {
         activeItems: [],
         activePlan: null,
@@ -47,6 +64,11 @@ describe("buildAppShellDomainContextSlices", () => {
     expect(slice.historyLoadingByThreadId).toEqual({ t1: true });
     expect(slice.threadParentById).toEqual({ t1: "parent" });
     expect(slice.threadListCursorByWorkspace).toEqual({ "ws-1": "cursor" });
+    // S4 PR-C：conversation UI / review-prompt keys 进入 runtimeThread slice
+    expect(slice.hydratedThreadListWorkspaceIds).toEqual(["ws-1"]);
+    expect(slice.highlightedPresetIndex).toBe(0);
+    expect(typeof slice.handleCopyThread).toBe("function");
+    expect(typeof slice.choosePreset).toBe("function");
   });
 
   it("builds model selection slice with only model keys", () => {
@@ -65,13 +87,28 @@ describe("buildAppShellDomainContextSlices", () => {
       selectedModelId: "m1",
       setSelectedEffort: () => {},
       setSelectedModelId: () => {},
+      // S4 PR-C：模型/engine 选择动作
+      availableEngines: ["claude"],
+      handleOpenModelSettings: () => {},
+      handleRefreshModelConfig: () => {},
+      handleSelectModel: () => {},
+      handleSelectOpenCodeAgent: () => {},
+      handleSelectOpenCodeVariant: () => {},
+      isModelConfigRefreshing: false,
     });
     expect(Object.keys(slice).sort()).toEqual(
       [
+        "availableEngines",
         "effectiveModels",
         "effectiveReasoningSupported",
         "effectiveSelectedModel",
         "effectiveSelectedModelId",
+        "handleOpenModelSettings",
+        "handleRefreshModelConfig",
+        "handleSelectModel",
+        "handleSelectOpenCodeAgent",
+        "handleSelectOpenCodeVariant",
+        "isModelConfigRefreshing",
         "providerModelCatalogs",
         "reasoningOptions",
         "reasoningSupported",
@@ -178,10 +215,25 @@ describe("buildAppShellDomainContextSlices", () => {
       repositories: [],
       repositoriesLoading: false,
       isMultiRepository: false,
+      // S4 PR-C：workspace/agent 入口与拖放 intake
+      groupedWorkspaces: [],
+      handleAddAgent: () => {},
+      handleAddCloneAgent: () => {},
+      handleAddWorkspace: () => {},
+      handleAddWorktreeAgent: () => {},
+      handleArchiveActiveThread: () => {},
+      handleEnsureWorkspaceThreadsForSettings: async () => {},
+      handleOpenNewWindow: () => {},
+      handleWorkspaceDragEnter: () => {},
+      handleWorkspaceDragLeave: () => {},
+      handleWorkspaceDragOver: () => {},
+      handleWorkspaceDrop: () => {},
     });
     expect(slice).toHaveProperty("addWorkspace");
     expect(slice).toHaveProperty("connectWorkspace");
     expect(slice).toHaveProperty("repositories");
+    expect(slice).toHaveProperty("groupedWorkspaces");
+    expect(slice).toHaveProperty("handleAddWorkspace");
     expect(slice).not.toHaveProperty("activeWorkspaceId");
     expect(slice).not.toHaveProperty("activeDiffs");
   });
@@ -282,6 +334,20 @@ describe("buildAppShellDomainContextSlices", () => {
       centerMode: "chat",
       claudeAccessModeRef: { current: "default" },
       filePanelMode: "files",
+      // S4 PR-C：UI 模式/面板路由与环境标志
+      handleAppModeChange: () => {},
+      handleDebugClick: () => {},
+      handleLockPanel: () => {},
+      handleResolvedClaudeThinkingVisibleChange: () => {},
+      handleToggleRuntimeConsole: () => {},
+      handleToggleTerminalPanel: () => {},
+      handleUnlockPanel: () => {},
+      hasActivePlan: false,
+      isCompact: false,
+      isMacDesktop: true,
+      isPanelLocked: false,
+      isPhone: false,
+      isSearchPaletteOpen: false,
     });
     expect(Object.keys(slice).sort()).toEqual(
       [
@@ -291,6 +357,19 @@ describe("buildAppShellDomainContextSlices", () => {
         "centerMode",
         "claudeAccessModeRef",
         "filePanelMode",
+        "handleAppModeChange",
+        "handleDebugClick",
+        "handleLockPanel",
+        "handleResolvedClaudeThinkingVisibleChange",
+        "handleToggleRuntimeConsole",
+        "handleToggleTerminalPanel",
+        "handleUnlockPanel",
+        "hasActivePlan",
+        "isCompact",
+        "isMacDesktop",
+        "isPanelLocked",
+        "isPhone",
+        "isSearchPaletteOpen",
       ].sort(),
     );
     expect(slice.appMode).toBe("chat");
@@ -303,9 +382,27 @@ describe("buildAppShellDomainContextSlices", () => {
       accountSwitching: false,
       activeAccount: null,
       approvals: [],
+      // S4 PR-C：账号切换 / 审批 / 邮件会话入口
+      handleApprovalBatchAccept: () => {},
+      handleApprovalDecision: () => {},
+      handleApprovalRemember: () => {},
+      handleCancelSwitchAccount: () => {},
+      handleOpenMailSession: () => {},
+      handleSwitchAccount: () => {},
     });
     expect(Object.keys(slice).sort()).toEqual(
-      ["accountByWorkspace", "accountSwitching", "activeAccount", "approvals"].sort(),
+      [
+        "accountByWorkspace",
+        "accountSwitching",
+        "activeAccount",
+        "approvals",
+        "handleApprovalBatchAccept",
+        "handleApprovalDecision",
+        "handleApprovalRemember",
+        "handleCancelSwitchAccount",
+        "handleOpenMailSession",
+        "handleSwitchAccount",
+      ].sort(),
     );
     expect(slice.accountSwitching).toBe(false);
     expect(slice).not.toHaveProperty("appMode");
@@ -323,11 +420,13 @@ describe("buildAppShellDomainContextSlices", () => {
       dictationReady: true,
       dictationState: "idle",
       dictationTranscript: "",
+      // S4 PR-C：听写开关
+      handleToggleDictation: () => {},
     });
     expect(slice.dictationState).toBe("idle");
     expect(slice).toHaveProperty("dictationTranscript");
     expect(slice).not.toHaveProperty("appMode");
-    expect(Object.keys(slice)).toHaveLength(10);
+    expect(Object.keys(slice)).toHaveLength(11);
   });
 
   it("builds workspaceNavigation residual slice (T1.9)", () => {
@@ -336,12 +435,8 @@ describe("buildAppShellDomainContextSlices", () => {
       activeEditorFilePath: null,
       activeEditorLineRange: null,
       activeEngine: null,
-      activeImages: [],
-      activeFusingMessageId: null,
       fileCompareSession: null,
       fileHistoryTabs: [],
-      activeQueue: [],
-      activeQueuedHandoffBubble: null,
       activeRenamePrompt: null,
       agentTaskScrollRequest: null,
       activeTerminalId: null,
@@ -352,12 +447,7 @@ describe("buildAppShellDomainContextSlices", () => {
       appRootRef: { current: null },
       appSettings: {},
       appSettingsLoading: false,
-      attachImages: () => {},
-      canFuseActiveQueue: false,
-      fuseDisabledReasonKey: null,
-      choosePreset: () => {},
       claudeThinkingVisible: false,
-      clearActiveImages: () => {},
       clearDebugEntries: () => {},
       clearDraftForThread: () => {},
       closePlanPanel: () => {},
@@ -366,16 +456,12 @@ describe("buildAppShellDomainContextSlices", () => {
       closeReviewPrompt: () => {},
       closeSettings: () => {},
       closeTerminalPanel: () => {},
-      codexComposerModeRef: { current: null },
       collapseRightPanel: () => {},
       collapseSidebar: () => {},
       commands: [],
       completionEmailIntentByThread: {},
       completionTrackerBySessionRef: { current: {} },
       completionTrackerReadyRef: { current: false },
-      composerEditorSettings: {},
-      composerInputRef: { current: null },
-      composerInsert: null,
       confirmCustom: () => {},
       createPrompt: () => {},
       debugEntries: [],
@@ -410,10 +496,17 @@ describe("buildAppShellDomainContextSlices", () => {
       getPinTimestamp: () => 0,
       getThreadRows: () => [],
       globalSearchFilesByWorkspace: {},
+      // S4 PR-C：debug/updater 动作
+      handleCopyDebug: () => {},
+      handleTestNotificationSound: () => {},
     } as any);
-    expect(Object.keys(slice).length).toBe(78);
+    expect(Object.keys(slice).length).toBe(67);
     expect(slice).toHaveProperty("appSettings");
     expect(slice).not.toHaveProperty("activeWorkspaceId");
     expect(slice).not.toHaveProperty("gitStatus");
+    // S4 PR-C：composer 输入态已归 composerContext，不再污染 navigation
+    expect(slice).not.toHaveProperty("activeImages");
+    expect(slice).not.toHaveProperty("composerInsert");
+    expect(slice).not.toHaveProperty("choosePreset");
   });
 });

@@ -710,7 +710,8 @@ describe("appShellDomainContexts", () => {
 
 describe("APP_SHELL_CONSUMER_DOMAIN_SELECTION", () => {
   it("keeps sections/render smaller than layoutNodes (no full-domain flatten)", () => {
-    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.layoutNodes).toHaveLength(15);
+    // S4 PR-C：layoutNodes 15 → 14（runtimeContext 直读不经 bag）
+    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.layoutNodes).toHaveLength(14);
     expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.sections.length).toBeLessThan(15);
     expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.render.length).toBeLessThan(15);
     expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.sections).toContain(
@@ -760,6 +761,20 @@ describe("APP_SHELL_CONSUMER_DOMAIN_SELECTION", () => {
     );
     expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.render).not.toContain(
       "modelSelectionContext",
+    );
+    // S4 PR-C：render 不再读 composerContext（输入态只扇出 sections/layoutNodes）；
+    // layoutNodes 直读 runtimeContext，不经 bag flatten
+    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.render).not.toContain(
+      "composerContext",
+    );
+    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.layoutNodes).not.toContain(
+      "runtimeContext",
+    );
+    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.layoutNodes).toContain(
+      "composerContext",
+    );
+    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.sections).toContain(
+      "composerContext",
     );
   });
 });

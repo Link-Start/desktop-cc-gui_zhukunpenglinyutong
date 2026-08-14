@@ -1,4 +1,5 @@
 import type { DebugEntry } from "../../types";
+import type { RefObject } from "react";
 import { useSelectedComposerSession } from "./useSelectedComposerSession";
 import { useAppShellComposerModelSection } from "./useAppShellComposerModelSection";
 import { useSelectedAgentSession } from "./useSelectedAgentSession";
@@ -7,6 +8,7 @@ import { useModelConfigRefresh } from "./useModelConfigRefresh";
 import { usePlanApplyHandlers } from "../sections/usePlanApplyHandlers";
 import { useAutoMigrateDisabledActiveEngine } from "./useAutoMigrateDisabledActiveEngine";
 import { resolveEngineDefaultComposerSelection } from "./selectedComposerSession";
+import type { ComposerSelectionSnapshot } from "./composerSelectionResolver";
 
 /**
  * S4 PR-C：Composer 域 host（无 UI）。
@@ -33,7 +35,7 @@ export function useComposerDomainHost(input: {
   applySelectedCollaborationMode: any;
   collaborationModes: any;
   composerInputRef: any;
-  composerSelectionResolverRef: any;
+  composerSelectionResolverRef: RefObject<ComposerSelectionSnapshot>;
   engineModelCatalogsAsOptions: any;
   engineModelsAsOptions: any;
   globalSelectionReady: any;

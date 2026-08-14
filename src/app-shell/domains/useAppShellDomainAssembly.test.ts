@@ -184,4 +184,97 @@ describe("assembleAppShellDomainContexts", () => {
       "thread-1": true,
     });
   });
+
+  it("S4 PR-C：composer 输入面归 composerContext，git/file/mode 等 handlers 归位", () => {
+    const contexts = assembleAppShellDomainContexts(buildMinimalAssemblySource());
+
+    // composer 域只保留 composer 输入面（39 keys，≤60 达标）
+    const composerKeys = Object.keys(contexts.composerContext);
+    expect(composerKeys.length).toBeLessThanOrEqual(60);
+    for (const key of [
+      "activeImages",
+      "activeQueue",
+      "composerInsert",
+      "prefillDraft",
+      "textareaHeight",
+      "handleDraftChange",
+      "handleSendPrompt",
+      "handleFuseQueued",
+      "interruptTurn",
+      "skills",
+    ]) {
+      expect(contexts.composerContext[key]).toBe(
+        `owned:composerContext:${key}`,
+      );
+    }
+
+    // 归位后的新 owner
+    const rehomed: Array<[string, string]> = [
+      ["gitSurfaceContext", "handleCommit"],
+      ["gitSurfaceContext", "handleGitPullRequestsChange"],
+      ["fileEditorContext", "handleOpenFile"],
+      ["fileEditorContext", "handleActivateFileTab"],
+      ["modeRoutingContext", "isCompact"],
+      ["modeRoutingContext", "hasActivePlan"],
+      ["accountSurfaceContext", "handleSwitchAccount"],
+      ["dictationSurfaceContext", "handleToggleDictation"],
+      ["workspaceCatalogContext", "groupedWorkspaces"],
+      ["workspaceCatalogContext", "handleAddWorkspace"],
+      ["workspaceNavigationContext", "handleCopyDebug"],
+      ["runtimeThreadContext", "handleRenameThread"],
+      ["runtimeThreadContext", "choosePreset"],
+      ["modelSelectionContext", "handleSelectModel"],
+    ];
+    for (const [domain, key] of rehomed) {
+      expect(contexts[domain as keyof typeof contexts][key]).toBe(
+        `owned:${domain}:${key}`,
+      );
+      expect(contexts.composerContext).not.toHaveProperty(key);
+    }
+
+    // 无 bag 读者的 keys 已从根 bag 删除（任何域都不得再持有）
+    for (const key of [
+      "handleSend",
+      "hasLoaded",
+      "hasPlanData",
+      "historySearchItems",
+      "installedEngines",
+      "startFork",
+      "startReview",
+      "sendUserMessage",
+      "queueMessage",
+      "clearActiveImages",
+      "codexComposerModeRef",
+    ]) {
+      for (const domainName of APP_SHELL_DOMAIN_CONTEXT_NAMES) {
+        expect(contexts[domainName]).not.toHaveProperty(key);
+      }
+    }
+  });
+
+  it("S4 PR-C：输入路径 churn 只敲 composerContext，settings/layout/nav 引用稳定", () => {
+    const source = buildMinimalAssemblySource();
+    const previous = assembleAppShellDomainContexts(source);
+    // 模拟输入路径高频更新：贴图 / 队列变化 / prefill / textarea 高度
+    const next = assembleAppShellDomainContexts({
+      ...source,
+      activeImages: ["img-1.png"],
+      activeQueue: [{ id: "q1" }],
+      prefillDraft: { id: "p1", text: "draft" },
+      textareaHeight: 120,
+    });
+
+    const stable = reuseStableAppShellDomainContexts(previous, next);
+    // 输入态全部归 composerContext：只有 composer 域换引用
+    expect(stable.composerContext).toBe(next.composerContext);
+    expect(stable.composerContext.textareaHeight).toBe(120);
+    // sections/render 仍订阅的其它域全部保持旧引用（render 已不再订阅 composer）
+    expect(stable.settingsContext).toBe(previous.settingsContext);
+    expect(stable.layoutContext).toBe(previous.layoutContext);
+    expect(stable.workspaceNavigationContext).toBe(
+      previous.workspaceNavigationContext,
+    );
+    expect(stable.gitSurfaceContext).toBe(previous.gitSurfaceContext);
+    expect(stable.runtimeThreadContext).toBe(previous.runtimeThreadContext);
+  });
 });

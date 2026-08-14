@@ -33,18 +33,20 @@ export const APP_SHELL_DOMAIN_KEY_HARD_BUDGETS: Record<
   runtimeThreadContext: 80,
   sessionIdentityContext: 80,
   workspaceCatalogContext: 80,
-  /** freeze：实测 79 */
-  gitSurfaceContext: 80,
+  /** S4 PR-C：composer 域 git handlers 归位后 freeze（实测 110，soft 债务待 PR-E 条件挂载压缩） */
+  gitSurfaceContext: 110,
   modeRoutingContext: 80,
   accountSurfaceContext: 80,
   dictationSurfaceContext: 80,
   /** T1.7 门 */
   workspaceNavigationContext: 80,
-  /** freeze 遗留巨域（S4 PR-D：141 持平；layout 103→100；settings 147→140） */
-  composerContext: 141,
-  layoutContext: 100,
+  /** S4 PR-C：141 → 实测 39 达标，hard 直接咬终态目标 60 */
+  composerContext: 60,
+  /** S4 PR-C：103→100→95（composer 输入态归位后 freeze） */
+  layoutContext: 95,
   fileEditorContext: 80,
-  settingsContext: 140,
+  /** S4 PR-C：147→140→124（composer slash 发送动作删 bag + 输入态归位后 freeze） */
+  settingsContext: 124,
   runtimeContext: 80,
   modelSelectionContext: 80,
   collaborationModeContext: 80,
