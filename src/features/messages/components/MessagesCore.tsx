@@ -72,7 +72,9 @@ import {
   shouldDisplayWorkingActivityLabel,
   shouldHideClaudeReasoningModule,
   STREAMING_VISIBLE_WINDOW,
+  VISIBLE_MESSAGE_WINDOW,
 } from "../utils/messagesRenderUtils";
+import { readHistoryWindowSize } from "../orchestration/presentation/messagesHistoryWindow";
 import {
   buildMessageActionTargets,
   buildMessagesScrollKey,
@@ -266,6 +268,8 @@ export const MessagesCore = memo(function MessagesCore({
     requestPendingJumpMessage,
     resetHistoryScope,
     revealAllHistoryItems,
+    revealNextHistoryPage,
+    revealedHistoryItemCount,
     showAllHistoryItems,
   } = useMessagesHistoryWindow({ firstItemId: items[0]?.id ?? null });
   const renderStartedAt =
@@ -516,6 +520,7 @@ export const MessagesCore = memo(function MessagesCore({
   const {
     containerRef,
     getPendingScrollResourceCount,
+    isUserAtBottomRef,
     messagesEndRef,
     pauseFollow,
     pinIfFollowing,
@@ -1083,11 +1088,13 @@ export const MessagesCore = memo(function MessagesCore({
     isWorking,
     liveTailWorkingSet,
     readableWindowRecoveryActive,
+    revealedHistoryItemCount,
     showAllHistoryItems,
     supportsStreamingReadableWindowRecovery,
     threadId,
     timelineItems,
     visibleStallRecoveryActive,
+    windowCollapseAllowedRef: isUserAtBottomRef,
     workspaceId,
   });
   const {
@@ -1286,9 +1293,54 @@ export const MessagesCore = memo(function MessagesCore({
       threadId,
     ],
   );
+  // 历史分页（03 号清单）：chip 点击 = 按页多展开一页，屏幕不跳。
+  // 快照 → 展开 → useLayoutEffect 按 scrollHeight 增量恢复 scrollTop；
+  // 锚点思路对照 deepseek-harness ChatView.tsx:237-249（prepend 后相对 top 恢复）。
+  const pendingHistoryPageScrollRef = useRef<{
+    scrollHeight: number;
+    scrollTop: number;
+  } | null>(null);
   const handleShowAllHistoryItems = useCallback(() => {
-    revealAllHistoryItems("manual");
-  }, [revealAllHistoryItems]);
+    const container = containerRef.current;
+    if (container) {
+      pendingHistoryPageScrollRef.current = {
+        scrollHeight: container.scrollHeight,
+        scrollTop: container.scrollTop,
+      };
+    }
+    // 展开期间暂停钉底，防止 RO/高度变化把视口拽回底；用户阅读旧历史时保持释放。
+    pauseFollow();
+    // 页大小 = 窗口大小；flag 关闭时窗口即 VISIBLE_MESSAGE_WINDOW（等价一次全展）。
+    const flagWindowSize = readHistoryWindowSize();
+    revealNextHistoryPage(
+      flagWindowSize > 0
+        ? Math.min(flagWindowSize, VISIBLE_MESSAGE_WINDOW)
+        : VISIBLE_MESSAGE_WINDOW,
+    );
+  }, [containerRef, pauseFollow, revealNextHistoryPage]);
+  useLayoutEffect(() => {
+    const snapshot = pendingHistoryPageScrollRef.current;
+    if (!snapshot) {
+      return;
+    }
+    pendingHistoryPageScrollRef.current = null;
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+    if (
+      !Number.isFinite(snapshot.scrollHeight) ||
+      !Number.isFinite(container.scrollHeight)
+    ) {
+      return;
+    }
+    const insertedHeight = container.scrollHeight - snapshot.scrollHeight;
+    if (insertedHeight <= 0) {
+      return;
+    }
+    container.scrollTop = snapshot.scrollTop + insertedHeight;
+    scheduleAnchorUpdate("sync");
+  }, [containerRef, presentationCollapsedHistoryItemCount, scheduleAnchorUpdate]);
   useLayoutEffect(() => {
     if (!showAllHistoryItems) {
       discardPendingHistoryExpansion();
