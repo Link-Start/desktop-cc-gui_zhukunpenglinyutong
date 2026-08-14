@@ -37,10 +37,6 @@ vi.mock("../../../services/tauri", async (importOriginal) => {
   };
 });
 
-vi.mock("../../engine/components/EngineSelector", () => ({
-  EngineSelector: () => null,
-}));
-
 
 vi.mock("../../status-panel/hooks/useStatusPanelData", () => ({
   useStatusPanelData: () => ({

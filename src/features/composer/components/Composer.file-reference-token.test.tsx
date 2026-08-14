@@ -54,10 +54,6 @@ vi.mock("../../../services/toasts", () => ({
   pushErrorToast: vi.fn(),
 }));
 
-vi.mock("../../engine/components/EngineSelector", () => ({
-  EngineSelector: () => null,
-}));
-
 
 vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
   ChatInputBoxAdapter: ({

@@ -19,10 +19,6 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(async () => null),
 }));
 
-vi.mock("../../engine/components/EngineSelector", () => ({
-  EngineSelector: () => null,
-}));
-
 
 vi.mock("../../status-panel/components/StatusPanel", () => ({
   StatusPanel: () => <div data-testid="status-panel" />,
