@@ -166,4 +166,111 @@ describe("useThreadItemEvents live-item-delta externalization", () => {
       types.filter((type) => type === "appendReasoningSummaryBoundary"),
     ).toHaveLength(1);
   });
+
+  it("drains the lane tail into the reducer when the item completes", () => {
+    const { result, dispatch } = makeHook();
+
+    act(() => {
+      result.current.onReasoningTextDelta(
+        WORKSPACE_ID,
+        THREAD_ID,
+        "reasoning-1",
+        "先",
+      );
+      result.current.onReasoningTextDelta(
+        WORKSPACE_ID,
+        THREAD_ID,
+        "reasoning-1",
+        "后",
+      );
+    });
+    // 流式期间只有建壳首段落 reducer。
+    expect(
+      dispatchedTypes(dispatch).filter(
+        (type) => type === "appendReasoningContent",
+      ),
+    ).toHaveLength(1);
+
+    act(() => {
+      result.current.onItemCompleted(WORKSPACE_ID, THREAD_ID, {
+        type: "reasoning",
+        id: "reasoning-1",
+        summary: "",
+        content: "先后",
+      });
+    });
+
+    // itemCompleted：尾段灌回（merge 层对快照已覆盖部分去重），lane 条目清除。
+    const contentDeltas = dispatch.mock.calls
+      .map(([action]) => action as Record<string, unknown>)
+      .filter((action) => action.type === "appendReasoningContent")
+      .map((action) => action.delta);
+    expect(contentDeltas).toEqual(["先", "后"]);
+    expect(peekLiveItemDelta(THREAD_ID, "reasoning-1", "reasoningContent")).toBe(
+      "",
+    );
+
+    // turn settle 不再重复灌回同一 lane。
+    act(() => {
+      result.current.drainLiveItemDeltasForThread(THREAD_ID);
+    });
+    const contentDeltasAfterTurnDrain = dispatch.mock.calls
+      .map(([action]) => action as Record<string, unknown>)
+      .filter((action) => action.type === "appendReasoningContent")
+      .map((action) => action.delta);
+    expect(contentDeltasAfterTurnDrain).toEqual(["先", "后"]);
+  });
+
+  it("drains all remaining lanes at turn settle", () => {
+    const { result, dispatch } = makeHook();
+
+    act(() => {
+      result.current.onReasoningSummaryDelta(
+        WORKSPACE_ID,
+        THREAD_ID,
+        "reasoning-1",
+        "摘要一",
+      );
+      result.current.onReasoningSummaryDelta(
+        WORKSPACE_ID,
+        THREAD_ID,
+        "reasoning-1",
+        "摘要二",
+      );
+      result.current.onReasoningTextDelta(
+        WORKSPACE_ID,
+        THREAD_ID,
+        "reasoning-1",
+        "正文一",
+      );
+      result.current.onReasoningTextDelta(
+        WORKSPACE_ID,
+        THREAD_ID,
+        "reasoning-1",
+        "正文二",
+      );
+    });
+
+    act(() => {
+      result.current.drainLiveItemDeltasForThread(THREAD_ID);
+    });
+
+    const actions = dispatch.mock.calls.map(
+      ([action]) => action as Record<string, unknown>,
+    );
+    const summaryDeltas = actions
+      .filter((action) => action.type === "appendReasoningSummary")
+      .map((action) => action.delta);
+    const contentDeltas = actions
+      .filter((action) => action.type === "appendReasoningContent")
+      .map((action) => action.delta);
+    expect(summaryDeltas).toEqual(["摘要一", "摘要二"]);
+    expect(contentDeltas).toEqual(["正文一", "正文二"]);
+    expect(peekLiveItemDelta(THREAD_ID, "reasoning-1", "reasoningSummary")).toBe(
+      "",
+    );
+    expect(peekLiveItemDelta(THREAD_ID, "reasoning-1", "reasoningContent")).toBe(
+      "",
+    );
+  });
 });

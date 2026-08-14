@@ -2,7 +2,7 @@
  * 工具块分发器 - 根据工具类型选择合适的组件展示
  * Tool Block Renderer - selects appropriate component based on tool type
  */
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import type { ConversationItem } from '../../../../types';
 import {
   extractToolName,
@@ -11,6 +11,7 @@ import {
   isEditTool,
   isBashTool,
   isSearchTool,
+  resolveToolStatus,
 } from './toolConstants';
 import { GenericToolBlock } from './GenericToolBlock';
 import { ReadToolBlock } from './ReadToolBlock';
@@ -19,10 +20,20 @@ import { BashToolBlock } from './BashToolBlock';
 import { SearchToolBlock } from './SearchToolBlock';
 import { McpToolBlock } from './McpToolBlock';
 import { RequestUserInputSubmittedBlock } from './RequestUserInputSubmittedBlock';
+import {
+  resolveResidualLiveItemDeltaText,
+  useLiveItemDelta,
+} from '../../../threads/hooks/useLiveItemDelta';
+import { isLiveDeltaExternalizationEnabled } from '../../../threads/utils/realtimePerfFlags';
+
+// A4 二期 live-delta 外部化：模块加载时读一次，翻转 flag 需刷新页面
+//（与 MessageRow 的 LIVE_TEXT_EXTERNALIZATION_ENABLED 同语义）。
+const LIVE_DELTA_EXTERNALIZATION_ENABLED = isLiveDeltaExternalizationEnabled();
 
 interface ToolBlockRendererProps {
   item: Extract<ConversationItem, { kind: 'tool' }>;
   workspaceId?: string | null;
+  threadId?: string | null;
   isExpanded: boolean;
   onToggle: (id: string) => void;
   onRequestAutoScroll?: () => void;
@@ -45,6 +56,7 @@ interface ToolBlockRendererProps {
 export const ToolBlockRenderer = memo(function ToolBlockRenderer({
   item,
   workspaceId = null,
+  threadId = null,
   isExpanded,
   onToggle,
   onRequestAutoScroll,
@@ -56,18 +68,49 @@ export const ToolBlockRenderer = memo(function ToolBlockRenderer({
   selectedExitPlanExecutionMode = null,
   onExitPlanModeExecute,
 }: ToolBlockRendererProps) {
-  const toolName = extractToolName(item.title);
+  const isToolStreaming =
+    resolveToolStatus(item.status, Boolean(item.output)) === 'processing';
+  // A4 二期：流式中的工具输出订阅 liveItemDeltaChannel 的 toolOutput lane
+  //（通道自首条 delta 起全量累计，durable output 仅为建壳首段），后续 delta
+  // 只驱动本块小树渲染；非流式/flag 关闭时订阅为空、零开销。residual 兜底
+  // settle 竞态（对齐 MessageRow 正文 residual 模式）。
+  const liveToolOutput = useLiveItemDelta(
+    threadId,
+    item.id,
+    'toolOutput',
+    LIVE_DELTA_EXTERNALIZATION_ENABLED && isToolStreaming,
+  );
+  const residualToolOutput =
+    LIVE_DELTA_EXTERNALIZATION_ENABLED && !isToolStreaming && threadId
+      ? resolveResidualLiveItemDeltaText(
+          threadId,
+          item.id,
+          'toolOutput',
+          item.output ?? '',
+        )
+      : null;
+  const liveOutputOverride = liveToolOutput ?? residualToolOutput;
+  // 覆盖 output 后的展示 item：下游所有工具块（Bash/Generic/...）原样读
+  // item.output，无需逐块改接线。
+  const displayItem = useMemo(
+    () =>
+      liveOutputOverride != null && liveOutputOverride !== item.output
+        ? { ...item, output: liveOutputOverride }
+        : item,
+    [item, liveOutputOverride],
+  );
+  const toolName = extractToolName(displayItem.title);
   const lower = toolName.toLowerCase();
   const normalizedToolName = toolName.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-  const normalizedTitle = item.title.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  const normalizedTitle = displayItem.title.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
   const isExitPlanModeTool =
     normalizedToolName === "exitplanmode" ||
     normalizedToolName.endsWith("exitplanmode") ||
     normalizedTitle.includes("exitplanmode");
 
   // 0. 已提交的 request user input 历史卡片
-  if (item.toolType === 'requestUserInputSubmitted') {
-    return <RequestUserInputSubmittedBlock item={item} />;
+  if (displayItem.toolType === 'requestUserInputSubmitted') {
+    return <RequestUserInputSubmittedBlock item={displayItem} />;
   }
 
   // ExitPlanMode handoff must keep its dedicated card even if the runtime
@@ -75,7 +118,7 @@ export const ToolBlockRenderer = memo(function ToolBlockRenderer({
   if (isExitPlanModeTool) {
     return (
       <GenericToolBlock
-        item={item}
+        item={displayItem}
         workspaceId={workspaceId}
         isExpanded={isExpanded}
         onToggle={onToggle}
@@ -91,10 +134,10 @@ export const ToolBlockRenderer = memo(function ToolBlockRenderer({
   }
 
   // 1. 命令执行工具
-  if (item.toolType === 'commandExecution' || isBashTool(lower)) {
+  if (displayItem.toolType === 'commandExecution' || isBashTool(lower)) {
     return (
       <BashToolBlock
-        item={item}
+        item={displayItem}
         isExpanded={isExpanded}
         onToggle={onToggle}
         onRequestAutoScroll={onRequestAutoScroll}
@@ -108,7 +151,7 @@ export const ToolBlockRenderer = memo(function ToolBlockRenderer({
   if (isReadTool(lower)) {
     return (
       <ReadToolBlock
-        item={item}
+        item={displayItem}
         workspaceId={workspaceId}
         isExpanded={isExpanded}
         onToggle={onToggle}
@@ -120,10 +163,10 @@ export const ToolBlockRenderer = memo(function ToolBlockRenderer({
   // MUST keep GenericToolBlock → FileChangeToolContent path: +N/-N stats, unified
   // diff expand, and onOpenDiffPath for open-file when diff is missing.
   // Do NOT route these through EditToolBlock (single-file arg polish only).
-  if (item.toolType === 'fileChange') {
+  if (displayItem.toolType === 'fileChange') {
     return (
       <GenericToolBlock
-        item={item}
+        item={displayItem}
         workspaceId={workspaceId}
         isExpanded={isExpanded}
         onToggle={onToggle}
@@ -142,7 +185,7 @@ export const ToolBlockRenderer = memo(function ToolBlockRenderer({
   if (isEditTool(lower)) {
     return (
       <EditToolBlock
-        item={item}
+        item={displayItem}
         onOpenDiffPath={onOpenFilePath ?? onOpenDiffPath}
       />
     );
@@ -152,7 +195,7 @@ export const ToolBlockRenderer = memo(function ToolBlockRenderer({
   if (isSearchTool(lower)) {
     return (
       <SearchToolBlock
-        item={item}
+        item={displayItem}
         isExpanded={isExpanded}
         onToggle={onToggle}
       />
@@ -160,10 +203,10 @@ export const ToolBlockRenderer = memo(function ToolBlockRenderer({
   }
 
   // 6. MCP 工具（仅真正 mcp__ 前缀；agent 通用 tool 名走专用块或 generic）
-  if (isMcpTool(item.title) || (item.toolType === 'mcpToolCall' && isMcpTool(item.title))) {
+  if (isMcpTool(displayItem.title) || (displayItem.toolType === 'mcpToolCall' && isMcpTool(displayItem.title))) {
     return (
       <McpToolBlock
-        item={item}
+        item={displayItem}
         isExpanded={isExpanded}
         onToggle={onToggle}
       />
@@ -173,7 +216,7 @@ export const ToolBlockRenderer = memo(function ToolBlockRenderer({
   // 7. 其他工具使用通用组件（Task / Web / 未知 agent 工具）
   return (
     <GenericToolBlock
-      item={item}
+      item={displayItem}
       workspaceId={workspaceId}
       isExpanded={isExpanded}
       onToggle={onToggle}

@@ -32,6 +32,7 @@ import { getCollabWorkerNativeHideIds } from "../../multi-agent/runtime/collabNa
 import { asString } from "../utils/threadNormalize";
 import { sanitizeNativeSessionTitle } from "../utils/sessionDisplayProjection";
 import { clearLiveAssistantText } from "../utils/liveAssistantTextChannel";
+import { clearLiveItemDelta } from "../utils/liveItemDeltaChannel";
 import { resolveCodexSubagentIdentity } from "../utils/codexSubagentIdentity";
 import { saveThreadActivity } from "../utils/threadStorage";
 import {
@@ -391,6 +392,7 @@ export function useThreadActions({
         loadedThreadsRef.current[threadId] = false;
         removeThreadFromCachedSummaries(workspace.id, threadId);
         clearLiveAssistantText(threadId);
+        clearLiveItemDelta(threadId);
         dispatch({ type: "removeThread", workspaceId: workspace.id, threadId });
       });
       if (!preserveState) {

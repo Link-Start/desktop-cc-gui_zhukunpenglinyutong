@@ -22,6 +22,7 @@ import {
   clearLiveAssistantText,
   peekLiveAssistantText,
 } from "../utils/liveAssistantTextChannel";
+import { drainLiveItemDeltaTail } from "../utils/liveItemDeltaChannel";
 
 type EmitTurnDiagnostic = (
   label: string,
@@ -194,6 +195,32 @@ export function useThreadTurnSettlementReconciliation({
             timestamp: Date.now(),
           });
           clearLiveAssistantText(input.threadId);
+        }
+      }
+      // A4 二期：同一段 residual cleanup 也要把 reasoning/toolOutput 通道尾段
+      // 灌回 durable items（flag 关时通道为空、天然 no-op），否则这些行只剩建壳首段。
+      for (const tail of drainLiveItemDeltaTail(input.threadId)) {
+        if (tail.lane === "reasoningContent") {
+          dispatch({
+            type: "appendReasoningContent",
+            threadId: input.threadId,
+            itemId: tail.itemId,
+            delta: tail.text,
+          });
+        } else if (tail.lane === "reasoningSummary") {
+          dispatch({
+            type: "appendReasoningSummary",
+            threadId: input.threadId,
+            itemId: tail.itemId,
+            delta: tail.text,
+          });
+        } else {
+          dispatch({
+            type: "appendToolOutput",
+            threadId: input.threadId,
+            itemId: tail.itemId,
+            delta: tail.text,
+          });
         }
       }
       markProcessing(input.threadId, false);

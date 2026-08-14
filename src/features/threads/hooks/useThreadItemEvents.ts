@@ -41,6 +41,9 @@ import {
 } from "../utils/liveAssistantTextChannel";
 import {
   appendLiveItemDelta,
+  clearLiveItemDeltaForItem,
+  drainLiveItemDeltaTail,
+  peekLiveItemDeltaEntry,
   type LiveItemDeltaLane,
 } from "../utils/liveItemDeltaChannel";
 import {
@@ -810,6 +813,78 @@ export function useThreadItemEvents({
     ],
   );
 
+  // A4 二期 settle 对齐：把某 lane 的通道尾段作为一条普通 delta 直接 dispatch
+  // 回根 reducer（与 A4 正文 drain 同款做法；reducer merge 对「快照已覆盖」做
+  // 重叠去重，幂等）。不走 applyRealtimeDeltaOperation——中断/终态守卫只拦
+  // 实时事件，不该拦结算灌回。
+  const dispatchLiveItemDeltaTail = useCallback(
+    (
+      threadId: string,
+      itemId: string,
+      lane: LiveItemDeltaLane,
+      tail: string,
+    ) => {
+      if (!tail) {
+        return;
+      }
+      if (lane === "reasoningContent") {
+        dispatch({ type: "appendReasoningContent", threadId, itemId, delta: tail });
+        return;
+      }
+      if (lane === "reasoningSummary") {
+        dispatch({ type: "appendReasoningSummary", threadId, itemId, delta: tail });
+        return;
+      }
+      dispatch({ type: "appendToolOutput", threadId, itemId, delta: tail });
+    },
+    [dispatch],
+  );
+
+  // item 完成快照是权威文本：快照 upsert 落地后，把该 item 各 lane 尚未落账的
+  // 尾段灌回 durable items，再清 lane 条目，避免 turn settle 时重复灌回。
+  const settleLiveItemDeltaForCompletedItem = useCallback(
+    (threadId: string, itemId: string) => {
+      if (!LIVE_DELTA_EXTERNALIZATION_ENABLED || !itemId) {
+        return;
+      }
+      const lanes: LiveItemDeltaLane[] = [
+        "reasoningContent",
+        "reasoningSummary",
+        "toolOutput",
+      ];
+      for (const lane of lanes) {
+        const entry = peekLiveItemDeltaEntry(threadId, itemId, lane);
+        if (!entry) {
+          continue;
+        }
+        dispatchLiveItemDeltaTail(
+          threadId,
+          itemId,
+          lane,
+          entry.text.slice(entry.shellTextLength),
+        );
+      }
+      clearLiveItemDeltaForItem(threadId, itemId);
+    },
+    [dispatchLiveItemDeltaTail],
+  );
+
+  // 回合结算（terminal causal barrier 建立前） drain 全线程通道尾段。
+  // 对齐正文 drain 的既有接线：先收敛未落账内容，再由调用方立 exact-turn
+  // barrier——结算不越过正文。
+  const drainLiveItemDeltasForThread = useCallback(
+    (threadId: string) => {
+      if (!LIVE_DELTA_EXTERNALIZATION_ENABLED || !threadId) {
+        return;
+      }
+      const drained = drainLiveItemDeltaTail(threadId);
+      for (const entry of drained) {
+        dispatchLiveItemDeltaTail(threadId, entry.itemId, entry.lane, entry.text);
+      }
+    },
+    [dispatchLiveItemDeltaTail],
+  );
+
   const dispatchNormalizedRealtimeEvent = useCallback(
     (
       normalizedEvent: NormalizedThreadEvent,
@@ -1574,6 +1649,12 @@ export function useThreadItemEvents({
           });
         }
       }
+      // A4 二期：itemCompleted（shouldMarkProcessing=false）的完成快照是权威
+      // 文本。快照 upsert 落地后灌回该 item 各 lane 的通道尾段并清条目——
+      // 结算不越过正文，也避免 turn settle 时重复灌回。
+      if (!shouldMarkProcessing) {
+        settleLiveItemDeltaForCompletedItem(threadId, itemId);
+      }
       safeMessageActivity();
     },
     [
@@ -1593,6 +1674,7 @@ export function useThreadItemEvents({
       onExitPlanModeToolCompleted,
       resolveCollaborationUiMode,
       safeMessageActivity,
+      settleLiveItemDeltaForCompletedItem,
     ],
   );
 
@@ -2219,5 +2301,6 @@ export function useThreadItemEvents({
     isRealtimeTurnTerminalExact,
     noteRealtimeTurnStarted,
     markRealtimeTurnTerminal,
+    drainLiveItemDeltasForThread,
   };
 }

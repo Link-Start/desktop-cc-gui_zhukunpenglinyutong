@@ -61,6 +61,7 @@ import {
   shouldShowHistoryLoadingForSelectionThread,
 } from "../utils/claudeThreadContinuity";
 import { clearLiveAssistantText } from "../utils/liveAssistantTextChannel";
+import { clearLiveItemDelta } from "../utils/liveItemDeltaChannel";
 import {
   resolvePendingThreadIdForSession,
   resolvePendingThreadIdForTurn,
@@ -2488,6 +2489,7 @@ export function useThreads({
     });
     evictedThreadIds.forEach((threadId) => {
       clearLiveAssistantText(threadId);
+      clearLiveItemDelta(threadId);
     });
     dispatch({ type: "evictThreadItems", threadIds: evictedThreadIds });
   }, [

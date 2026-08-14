@@ -57,12 +57,14 @@ const itemHookFactory = vi.hoisted(() => {
   let isRealtimeTurnTerminalExact = vi.fn(() => false);
   let noteRealtimeTurnStarted = vi.fn();
   let markRealtimeTurnTerminal = vi.fn();
+  let drainLiveItemDeltasForThread = vi.fn();
   return {
     reset() {
       flushPendingRealtimeEvents = vi.fn();
       isRealtimeTurnTerminalExact = vi.fn(() => false);
       noteRealtimeTurnStarted = vi.fn();
       markRealtimeTurnTerminal = vi.fn();
+      drainLiveItemDeltasForThread = vi.fn();
     },
     getFlushPendingRealtimeEvents() {
       return flushPendingRealtimeEvents;
@@ -75,6 +77,9 @@ const itemHookFactory = vi.hoisted(() => {
     },
     getMarkRealtimeTurnTerminal() {
       return markRealtimeTurnTerminal;
+    },
+    getDrainLiveItemDeltasForThread() {
+      return drainLiveItemDeltasForThread;
     },
   };
 });
@@ -204,6 +209,7 @@ vi.mock("./useThreadItemEvents", () => ({
     isRealtimeTurnTerminalExact: itemHookFactory.getIsRealtimeTurnTerminalExact(),
     noteRealtimeTurnStarted: itemHookFactory.getNoteRealtimeTurnStarted(),
     markRealtimeTurnTerminal: itemHookFactory.getMarkRealtimeTurnTerminal(),
+    drainLiveItemDeltasForThread: itemHookFactory.getDrainLiveItemDeltasForThread(),
   })),
 }));
 

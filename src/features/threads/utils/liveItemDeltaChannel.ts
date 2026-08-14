@@ -15,6 +15,8 @@
 //   文本拼接；drain 只返回「尚未落 reducer 的尾段」（全长减建壳首段）。
 // 方案文档：docs/perf/a4-live-text-externalization-plan.md（§2.3 预留的二期）
 
+import { doesLiveAssistantTextMatchItem } from "./liveAssistantTextChannel";
+
 export type LiveItemDeltaLane =
   | "reasoningContent"
   | "reasoningSummary"
@@ -242,6 +244,95 @@ export function getLiveItemDeltaSnapshot(
   threadId: string,
 ): ReadonlyMap<string, string> {
   return publishedEntriesByThread.get(threadId) ?? EMPTY_PUBLISHED_SNAPSHOT;
+}
+
+/**
+ * 快照 key 是否命中「某 item 的某 lane」。reducer 会把 reasoning item id 改写成
+ * `base-seg-N`（agentSegment 递增后），事件层 itemId 与 renderItem.id 常不一致，
+ * 复用正文通道的 doesLiveAssistantTextMatchItem 容忍双向 -seg- 前缀。
+ */
+function matchesLaneSnapshotKey(
+  key: string,
+  itemId: string,
+  lane: LiveItemDeltaLane,
+): boolean {
+  const suffix = `:${lane}`;
+  if (!key.endsWith(suffix)) {
+    return false;
+  }
+  const keyItemId = key.slice(0, key.length - suffix.length);
+  return doesLiveAssistantTextMatchItem(keyItemId, itemId);
+}
+
+/** 在已发布快照里按 itemId（容忍 -seg-N 改写）取某 lane 的文本；无命中返回 null。 */
+export function resolveLiveItemDeltaSnapshotText(
+  snapshot: ReadonlyMap<string, string>,
+  itemId: string,
+  lane: LiveItemDeltaLane,
+): string | null {
+  const exact = snapshot.get(laneKey(itemId, lane));
+  if (exact !== undefined) {
+    return exact;
+  }
+  for (const [key, text] of snapshot) {
+    if (matchesLaneSnapshotKey(key, itemId, lane)) {
+      return text;
+    }
+  }
+  return null;
+}
+
+/** 在权威累积里按 itemId（容忍 -seg-N 改写）取某 lane 条目；无命中返回 null。 */
+export function peekLiveItemDeltaMatching(
+  threadId: string,
+  itemId: string,
+  lane: LiveItemDeltaLane,
+): LiveItemDeltaEntry | null {
+  const entries = entriesByThread.get(threadId);
+  if (!entries) {
+    return null;
+  }
+  const exact = entries.get(laneKey(itemId, lane));
+  if (exact) {
+    return exact;
+  }
+  for (const [key, entry] of entries) {
+    if (matchesLaneSnapshotKey(key, itemId, lane)) {
+      return entry;
+    }
+  }
+  return null;
+}
+
+/** 会话 id 迁移（pending → canonical）时随迁条目。 */
+export function renameLiveItemDeltaThread(
+  oldThreadId: string,
+  newThreadId: string,
+): void {
+  if (oldThreadId === newThreadId) {
+    return;
+  }
+  const entries = entriesByThread.get(oldThreadId);
+  const published = publishedEntriesByThread.get(oldThreadId);
+  if (!entries && !published) {
+    return;
+  }
+  cancelPendingPublish(oldThreadId);
+  cancelPendingPublish(newThreadId);
+  entriesByThread.delete(oldThreadId);
+  publishedEntriesByThread.delete(oldThreadId);
+  lastPublishedAtByThread.delete(oldThreadId);
+  if (entries) {
+    entriesByThread.set(newThreadId, entries);
+    publishThreadEntries(newThreadId);
+  } else if (published) {
+    publishedEntriesByThread.set(newThreadId, published);
+    lastPublishedAtByThread.set(newThreadId, Date.now());
+    notifyThread(newThreadId);
+  }
+  if (published) {
+    notifyThread(oldThreadId);
+  }
 }
 
 export function subscribeLiveItemDelta(

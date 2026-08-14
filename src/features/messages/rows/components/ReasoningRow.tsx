@@ -1,4 +1,4 @@
-import { memo, type MouseEvent } from "react";
+import { memo, useMemo, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import Brain from "lucide-react/dist/esm/icons/brain";
 import type { ConversationItem } from "../../../../types";
@@ -12,10 +12,20 @@ import {
 } from "../presentation/messagesStreamingComplexity";
 import { Markdown } from "../../components/Markdown";
 import type { MessagesEngine } from "../../utils/messagesRenderUtils";
+import {
+  resolveResidualLiveItemDeltaText,
+  useLiveItemDelta,
+} from "../../../threads/hooks/useLiveItemDelta";
+import { isLiveDeltaExternalizationEnabled } from "../../../threads/utils/realtimePerfFlags";
+
+// A4 二期 live-delta 外部化：模块加载时读一次，翻转 flag 需刷新页面
+//（与 MessageRow 的 LIVE_TEXT_EXTERNALIZATION_ENABLED 同语义）。
+const LIVE_DELTA_EXTERNALIZATION_ENABLED = isLiveDeltaExternalizationEnabled();
 
 type ReasoningRowProps = {
   item: Extract<ConversationItem, { kind: "reasoning" }>;
   workspaceId?: string | null;
+  threadId?: string | null;
   parsed: ReturnType<typeof parseReasoning>;
   isExpanded: boolean;
   isLive: boolean;
@@ -30,6 +40,7 @@ type ReasoningRowProps = {
 export const ReasoningRow = memo(function ReasoningRow({
   item,
   workspaceId = null,
+  threadId = null,
   parsed,
   isExpanded,
   isLive,
@@ -41,18 +52,72 @@ export const ReasoningRow = memo(function ReasoningRow({
   streamMitigationProfile = null,
 }: ReasoningRowProps) {
   const { t } = useTranslation();
-  const { bodyText } = parsed;
+  // A4 二期：流式中的思考行订阅 liveItemDeltaChannel 两个 lane（通道自首条
+  // delta 起全量累计，durable summary/content 仅为建壳首段），后续 delta 只
+  // 驱动本行小树渲染。非 live 行/flag 关闭时订阅为空、零开销。
+  // 若 settle 竞态导致 isLive 已关、通道仍有更长全文，residual 兜底避免界面
+  // 只剩建壳首段（对齐 MessageRow 正文 residual 模式）。
+  const liveReasoningContent = useLiveItemDelta(
+    threadId,
+    item.id,
+    "reasoningContent",
+    LIVE_DELTA_EXTERNALIZATION_ENABLED && isLive,
+  );
+  const liveReasoningSummary = useLiveItemDelta(
+    threadId,
+    item.id,
+    "reasoningSummary",
+    LIVE_DELTA_EXTERNALIZATION_ENABLED && isLive,
+  );
+  const residualReasoningContent =
+    LIVE_DELTA_EXTERNALIZATION_ENABLED && !isLive && threadId
+      ? resolveResidualLiveItemDeltaText(
+          threadId,
+          item.id,
+          "reasoningContent",
+          item.content,
+        )
+      : null;
+  const residualReasoningSummary =
+    LIVE_DELTA_EXTERNALIZATION_ENABLED && !isLive && threadId
+      ? resolveResidualLiveItemDeltaText(
+          threadId,
+          item.id,
+          "reasoningSummary",
+          item.summary,
+        )
+      : null;
+  const effectiveContent =
+    liveReasoningContent ?? residualReasoningContent ?? item.content;
+  const effectiveSummary =
+    liveReasoningSummary ?? residualReasoningSummary ?? item.summary;
+  const hasLiveOverride =
+    effectiveContent !== item.content || effectiveSummary !== item.summary;
+  // 有 live 覆盖时按覆盖后的全文重新 parse（保持 title 剥离/去重语义一致）；
+  // 无覆盖时直接用父级按 durable item 算好的 parsed，零额外成本。
+  const effectiveParsed = useMemo(
+    () =>
+      hasLiveOverride
+        ? parseReasoning({
+            ...item,
+            content: effectiveContent,
+            summary: effectiveSummary,
+          })
+        : parsed,
+    [hasLiveOverride, item, effectiveContent, effectiveSummary, parsed],
+  );
+  const { bodyText } = effectiveParsed;
   // header 固定显示「思考过程 / 思考中」，不会渲染 summaryTitle。
   // 当 summary 与 content 同为多行正文时，parseReasoning 会把首行当 title 剥掉，
   // 导致合并后的相邻思考丢失第一段；此时直接用 raw content。
   const shouldPreferRawReasoningContent =
-    item.summary.trim().length > 0 &&
-    item.content.trim().length > 0 &&
-    item.summary.trim() === item.content.trim() &&
-    item.content.includes("\n");
+    effectiveSummary.trim().length > 0 &&
+    effectiveContent.trim().length > 0 &&
+    effectiveSummary.trim() === effectiveContent.trim() &&
+    effectiveContent.includes("\n");
   const thinkingText = shouldPreferRawReasoningContent
-    ? item.content
-    : bodyText || item.content || item.summary || "";
+    ? effectiveContent
+    : bodyText || effectiveContent || effectiveSummary || "";
   // jetbrains 同帧 stick：live 思考正文不再 deferred，避免折叠/长高与钉底错拍。
   const renderThinkingText = thinkingText;
   const isEncryptedCodexReasoning =

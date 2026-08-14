@@ -3,6 +3,7 @@ import type { Dispatch, MutableRefObject } from "react";
 import type { DebugEntry, ThreadSummary } from "../../../types";
 import { isPendingThreadId } from "./useThreadActions.helpers";
 import { clearLiveAssistantText } from "../utils/liveAssistantTextChannel";
+import { clearLiveItemDelta } from "../utils/liveItemDeltaChannel";
 import type { ArchivedSessionMapResult } from "./useThreadActionsSessionCatalog";
 import type { ThreadAction, ThreadState } from "./useThreadsReducer";
 
@@ -72,6 +73,7 @@ export function useReconcileMissingClaudeThread({
       }
       removeThreadFromCachedSummaries(workspaceId, threadId);
       clearLiveAssistantText(threadId);
+      clearLiveItemDelta(threadId);
       dispatch({ type: "removeThread", workspaceId, threadId });
       return false;
     },
