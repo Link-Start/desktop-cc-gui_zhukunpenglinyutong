@@ -31,13 +31,19 @@ export const testBatchedInternals = {
   shellQuote,
 };
 
+const HEAVY_TEST_FILE_SUFFIXES = [".integration.test.tsx", ".stress.test.ts"];
+
+function isHeavyTestFile(file) {
+  return HEAVY_TEST_FILE_SUFFIXES.some((suffix) => file.endsWith(suffix));
+}
+
 export function runVitestBatches(argv = process.argv.slice(2), env = process.env) {
   const { batchSize, includeHeavyIntegration } = parseVitestBatchConfig(argv, env);
   const testFiles = listTestFiles().filter((file) => {
     if (includeHeavyIntegration) {
       return true;
     }
-    return !file.endsWith(".integration.test.tsx");
+    return !isHeavyTestFile(file);
   });
 
   if (testFiles.length === 0) {
@@ -47,7 +53,7 @@ export function runVitestBatches(argv = process.argv.slice(2), env = process.env
 
   if (!includeHeavyIntegration) {
     console.log(
-      "[vitest-batch] heavy *.integration.test.tsx suites are excluded by default; set VITEST_INCLUDE_HEAVY=1 or pass --include-heavy to include.",
+      "[vitest-batch] heavy *.integration.test.tsx / *.stress.test.ts suites are excluded by default; set VITEST_INCLUDE_HEAVY=1 or pass --include-heavy to include.",
     );
   }
 
