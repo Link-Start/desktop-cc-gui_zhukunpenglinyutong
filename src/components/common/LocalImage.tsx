@@ -137,6 +137,10 @@ export const LocalImage = memo(function LocalImage({
 
   return (
     <img
+      // decode 移出主线程（hint，不支持的环境直接忽略），配合各调用点的
+      // loading="lazy"：流式期间历史行图片 decode 不掉帧（Task 4 单价手术）。
+      // 放在 {...props} 之前，调用方显式传 decoding 可覆盖。
+      decoding="async"
       {...props}
       src={resolvedSrc}
       onError={handleError}

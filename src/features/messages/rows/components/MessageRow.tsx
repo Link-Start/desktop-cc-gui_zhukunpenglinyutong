@@ -699,7 +699,7 @@ export const MessageRow = memo(function MessageRow({
                     }}
                     aria-label={`Open image ${index + 1}`}
                   >
-                    <img src={state.src} alt={`Deferred Claude image ${index + 1}`} loading="lazy" />
+                    <img src={state.src} alt={`Deferred Claude image ${index + 1}`} loading="lazy" decoding="async" />
                   </button>
                 ) : (
                   <>
