@@ -16,7 +16,6 @@ import { useAppShellDomainAssembly } from "./useAppShellDomainAssembly";
 function buildSource(appMode: string): Record<string, unknown> {
   const source: Record<string, unknown> = {
     appMode,
-    runtimeActions: { handleToggleRuntimeConsole: () => {} },
     runtimeThreadBoundary: { kind: "runtime-thread-boundary" },
     runtimeRunState: { phase: "idle" },
     effectiveReasoningOptions: [],

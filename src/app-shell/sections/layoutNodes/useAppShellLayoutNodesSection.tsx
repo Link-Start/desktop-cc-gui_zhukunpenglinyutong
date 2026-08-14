@@ -61,11 +61,11 @@ import { EMPTY_STRING_ARRAY, formatWorkspaceAliasError } from "./helpers";
 import {
   mergeAppShellDomainBag,
   selectAppShellDomainBag,
+  type DomainFlattenIdentityCache,
 } from "../../domains/selectAppShellDomainBag";
 import {
   APP_SHELL_CONSUMER_DOMAIN_SELECTION,
   type AppShellDomainContexts,
-  type DomainFlattenIdentityCache,
 } from "../../domains/appShellDomainContexts";
 import { isSharedSessionThreadId } from "../../../features/shared-session/utils/sharedSessionIdentity";
 

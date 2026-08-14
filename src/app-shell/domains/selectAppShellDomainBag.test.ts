@@ -108,3 +108,45 @@ describe("selectAppShellDomainBag (T4)", () => {
     expect(merged.extra).toBe(1);
   });
 });
+
+describe("selectAppShellDomainBag identity cache (S4 PR-F：memoized flatten 引擎收敛本模块)", () => {
+  it("reuses flattened bag when ad-hoc domain subset identities are unchanged", () => {
+    const cache = createDomainFlattenCache();
+    const base = createContexts({
+      runtimeThreadContext: { isProcessing: true, activeTurnId: "t1" },
+    });
+    const first = selectAppShellDomainBag(
+      base,
+      ["runtimeThreadContext", "composerContext"],
+      cache,
+    );
+    const second = selectAppShellDomainBag(
+      base,
+      ["runtimeThreadContext", "composerContext"],
+      cache,
+    );
+    expect(second).toBe(first);
+    expect(first.isProcessing).toBe(true);
+    expect(first).not.toHaveProperty("settingsOpen");
+  });
+
+  it("rebuilds ad-hoc subset bag when a domain identity changes", () => {
+    const cache = createDomainFlattenCache();
+    const base = createContexts();
+    const first = selectAppShellDomainBag(
+      base,
+      ["runtimeThreadContext", "composerContext"],
+      cache,
+    );
+    const next = createContexts({
+      runtimeThreadContext: { isProcessing: true },
+    });
+    const second = selectAppShellDomainBag(
+      next,
+      ["runtimeThreadContext", "composerContext"],
+      cache,
+    );
+    expect(second).not.toBe(first);
+    expect(second.isProcessing).toBe(true);
+  });
+});

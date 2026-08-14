@@ -32,8 +32,8 @@ const assemblyPath = join(
 
 const COMPOSITION_SOFT_LINES = 600;
 const COMPOSITION_HARD_LINES = 800;
-/** RootComposition 仍为过渡巨石：冻结 hard，禁止继续涨（PR-B 2362 → 2400；PR-D 2314 → 2350；PR-C 2280 → 2320；PR-E 2217 → 2260 咬住进步） */
-const ROOT_COMPOSITION_HARD_LINES = 2260;
+/** RootComposition 仍为过渡巨石：冻结 hard，禁止继续涨（PR-B 2362 → 2400；PR-D 2314 → 2350；PR-C 2280 → 2320；PR-E 2217 → 2260；PR-F 2210 → 2211 咬实测零余量，门禁口径 wc+1） */
+const ROOT_COMPOSITION_HARD_LINES = 2211;
 
 function lineCount(path: string): number {
   return readFileSync(path, "utf8").split("\n").length;
@@ -69,7 +69,7 @@ describe("appShellGovernanceGates (T5)", () => {
       readFileSync(assemblyPath, "utf8"),
     );
     const soft = listDomainOwnershipSoftFailures(report);
-    // S4 PR-E 后遗留：仅 gitSurface 仍 > 80（108，freeze 待 PR-F）；
+    // S4 PR-F 后遗留：仅 gitSurface 仍 > 80（105，hard 咬实测冻结）；
     // composer / layout / settings 均已压到 ≤60 达标，退出 soft 债务名单
     expect(soft.some((line) => line.includes("composerContext"))).toBe(false);
     expect(soft.some((line) => line.includes("gitSurfaceContext"))).toBe(true);
@@ -78,20 +78,29 @@ describe("appShellGovernanceGates (T5)", () => {
     expect(listDomainOwnershipHardFailures(report)).toEqual([]);
   });
 
-  it("T5.1: composerContext 达标终态目标（S4 PR-C：141 → ≤60，非冻结）", () => {
+  it("T5.1: composerContext 达标终态目标且 hard 咬实测（S4 PR-C：141 → 39；S4 PR-F：41）", () => {
     const count = APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS.composerContext.length;
     expect(count).toBeLessThanOrEqual(APP_SHELL_DOMAIN_KEY_TARGET_HARD);
-    expect(APP_SHELL_DOMAIN_KEY_HARD_BUDGETS.composerContext).toBe(
-      APP_SHELL_DOMAIN_KEY_TARGET_HARD,
+    // S4 PR-F：hard 从 TARGET 60 收紧到实测 41，新增 key 必须先出后进
+    expect(APP_SHELL_DOMAIN_KEY_HARD_BUDGETS.composerContext).toBe(41);
+    expect(count).toBeLessThanOrEqual(
+      APP_SHELL_DOMAIN_KEY_HARD_BUDGETS.composerContext,
     );
   });
 
-  it("T5.1: settings/layout 达标终态目标（S4 PR-E：124/95 → ≤60，非冻结）", () => {
+  it("T5.1: settings/layout 达标终态目标且 hard 咬实测（S4 PR-E：36/48；S4 PR-F 收紧）", () => {
+    const measuredFreeze = {
+      settingsContext: 36,
+      layoutContext: 48,
+    } as const;
     for (const domain of ["settingsContext", "layoutContext"] as const) {
       const count = APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS[domain].length;
       expect(count).toBeLessThanOrEqual(APP_SHELL_DOMAIN_KEY_TARGET_HARD);
       expect(APP_SHELL_DOMAIN_KEY_HARD_BUDGETS[domain]).toBe(
-        APP_SHELL_DOMAIN_KEY_TARGET_HARD,
+        measuredFreeze[domain],
+      );
+      expect(count).toBeLessThanOrEqual(
+        APP_SHELL_DOMAIN_KEY_HARD_BUDGETS[domain],
       );
     }
   });

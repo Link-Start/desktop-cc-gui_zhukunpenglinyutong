@@ -14,10 +14,8 @@ import {
 } from "./buildAppShellDomainContextSlices";
 
 describe("buildAppShellDomainContextSlices", () => {
-  it("builds runtimeThread slice with boundary, actions, and session hot fields", () => {
+  it("builds runtimeThread slice with boundary and session hot fields", () => {
     const slice = buildRuntimeThreadDomainContextSlice({
-      legacyDefaults: { legacy: true },
-      runtimeActions: { handleToggleTerminalPanel: () => {} },
       runtimeThreadBoundary: { activeThreadId: "t1" },
       // S4 PR-D：turn 级 conversation bags
       historyLoadingByThreadId: { t1: true },
@@ -75,9 +73,9 @@ describe("buildAppShellDomainContextSlices", () => {
         timelinePlan: null,
       },
     });
-    expect(slice.legacy).toBe(true);
+    expect(slice.legacy).toBeUndefined();
+    expect(slice.handleToggleTerminalPanel).toBeUndefined();
     expect(slice.runtimeThreadBoundary).toEqual({ activeThreadId: "t1" });
-    expect(typeof slice.handleToggleTerminalPanel).toBe("function");
     expect(slice.isProcessing).toBe(true);
     expect(slice.canInterrupt).toBe(true);
     expect(slice.activeTurnId).toBe("turn-1");
@@ -341,7 +339,6 @@ describe("buildAppShellDomainContextSlices", () => {
       gitPullRequestComments: [],
       gitPullRequestCommentsError: null,
       gitPullRequestCommentsLoading: false,
-      gitPullRequestDiffs: [],
       gitPullRequests: [],
       gitPullRequestsError: null,
       gitPullRequestsLoading: false,
@@ -373,10 +370,8 @@ describe("buildAppShellDomainContextSlices", () => {
       queueGitStatusRefresh: () => {},
       refreshGitDiffs: async () => {},
       refreshGitLog: async () => {},
-      setDiffSource: () => {},
       setGitDiffListView: () => {},
       setGitDiffViewStyle: () => {},
-      setGitPanelMode: () => {},
       setGitRootScanDepth: () => {},
       selectedRepositoryRoot: null,
     } as any);

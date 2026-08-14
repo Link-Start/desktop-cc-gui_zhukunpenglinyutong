@@ -353,3 +353,72 @@ governance 7 文件 22 测试、typecheck、app-shell 分组测试（domains+ass
 - sections 仍订阅 composerContext（唯一起因 `interruptTurn`，同 PR-C 遗留；kanban execution 改读 runtimeThreadProvider 后可退订，本次未动）。
 - 根仍持有 `useThreads`（owner）与 ~700 行 `useAppShellDomainAssembly` 装配面（PR-F 删 legacy flatten 时一并收口）。
 - layout 内 kanban 视图态 11 keys 无独立域可去；若 PR-F 析 kanbanSurfaceContext 可再降 layout。
+
+---
+
+## 10. PR-F 完成回写（S4 收口，2026-08-14）
+
+**主题**：删除/收窄 legacy flat context 与冗余 key bag，freeze 表全部咬实测值，防回潮门禁推进为「禁止复活」。
+
+### 删除 / 收窄清单
+
+1. **legacy flatten 门面与 API 全量删除（生产路径早已零调用，本次连根拔除）**：
+   - 删文件：`src/app-shell/legacy/legacyFlatten.ts`（@deprecated 门面，零 importer）、`src/app-shell/legacy/legacyContextDefaults.ts`、`src/app-shell-parts/legacyContextDefaults.ts`（死 re-export，零 importer）；`src/app-shell/legacy/` 目录清空移除。
+   - `appShellDomainContexts.ts` 删 4 个 legacy 导出：`flattenAppShellDomainContexts`（full-flatten）、`flattenSelectedAppShellDomainContexts`（非 memoized）、`adaptAppShellLegacyFlatContext`、`AppShellLegacyFlatContext` 类型——残留调用点仅为自身单测，已同步删除/迁移。
+   - **收窄**：memoized selected-flatten 引擎（`flattenSelectedAppShellDomainContextsMemoized` + `DomainFlattenIdentityCache`）从 `appShellDomainContexts.ts` 迁入 `selectAppShellDomainBag.ts` 并改为模块私有——域定义模块从此零 flatten API，生产 consumer 只能走 `selectAppShellDomainBag` / `bind` / `merge`。
+2. **冗余 key bag 删除**：
+   - runtimeThread slice 删 `legacyDefaults`（93 个恒 undefined 的 legacy flat context 占位 keys）与 `runtimeActions`（2 个与 modeRouting 完全重复的 keys：`handleToggleRuntimeConsole`/`handleToggleTerminalPanel`）——runtimeThread 运行时 bag 从 ~146 keys 瘦到 51 个纯 owned keys，浅比较/flatten 合并成本同步下降；assembly 测试新增「runtimeThread bag keys === OWNED_KEYS」断言咬死。
+   - gitSurface 再删 3 个无 bag 读者 keys：`gitPullRequestDiffs`/`setDiffSource`/`setGitPanelMode`（search 段经根 composition `searchAndComposerInput` 直传，不经 bag；108 → **105**）。读者扫描口径同 PR-C/E（sections 含 kanban 透传 2 文件 + render + layoutNodes 2 文件，word-boundary）。
+   - 根 composition 顺带减 7 行（`runtimeActions` 装配块 + import）：**2217 → 2210 行**。
+3. **防回潮门禁推进**：
+   - freeze 表（`APP_SHELL_DOMAIN_KEY_HARD_BUDGETS`）**全部咬实测值**：runtimeThread 51 / sessionIdentity 14 / workspaceCatalog 73 / gitSurface 105 / modeRouting 33 / accountSurface 11 / dictationSurface 11 / workspaceNavigation 79（原 T1.7 门 80 收紧）/ composer 41（原 TARGET 60 收紧）/ layout 48 / fileEditor 69 / settings 36 / runtime 1 / modelSelection 22 / collaborationMode 15——新增 key 零余量，必须先出后进或先改表。
+   - `ROOT_COMPOSITION_HARD_LINES` 2260 → **2211**（咬实测，门禁口径 wc+1）。
+   - `appShellLegacyFlattenRetirement.test.ts` 从「隔离 legacy 门面」推进为「禁止复活」：断言门面/defaults 文件不存在、域模块无任何 legacy flatten/adapt 命名、memoized 引擎只在 bag 模块内。
+   - `appShellFlattenGate.test.ts` 与 `scripts/check-app-shell-runtime-contract.mjs` 的 full-flatten/legacy-adapt 禁令**零豁免化**（删除 appShellDomainContexts.ts / legacyFlatten.ts 白名单与定义豁免行）。
+   - `AGENTS.md` Structure Gate 同步：legacy flatten API 标注「已删除，禁止重新引入」；navigation hard ≤ 79。
+
+### 交接项逐项处置
+
+| 交接项 | 处置 | 理由 |
+|--------|------|------|
+| gitSurface 108 超 soft | **部分做**：删 3 个无 bag 读者 keys → 105（freeze 咬 105） | 剩余 105 keys 读侧真实（layoutNodes git 面板节点）；再压需 git 面板读侧改造或析子域（multi-repo/GitHub panel），属结构性改造，超出删除型 PR 的风险预算，不做 |
+| workspaceNavigation 79/80 贴顶 | **做**：hard 80 → 79 咬实测 | 零余量冻结，新增必须先出后进，门禁强制执行 |
+| kanban 视图态 11 keys 析 kanbanSurfaceContext | **不做** | layout 48 已达 ≤60 终态目标；析第 16 个域是纯结构新增（provider + consumer selection + builders + 测试矩阵），无行为收益，违背 PR-F 删除/收窄定位与最小改动纪律 |
+| sections 退订 composer（`interruptTurn`） | **不做** | `interruptTurn` 由 kanban execution / plan apply handlers（sections 内）消费；改读 runtimeThreadProvider 需 sections 订阅 runtimeThreadContext，其含 sessionHot（activeItems/isProcessing 等逐回合高频），会让 sections 被 sessionHot 扇出打中——PR-D 已论证否决，收益（少订 1 域）远不抵扇出风险 |
+
+### S4 终态数字总表（对照 PR-A 基线）
+
+| 指标 | PR-A 基线（8-14） | S4 终态（PR-F） | 变化 |
+|------|-----:|-----:|-----:|
+| `useAppShellRootComposition.ts` 行数 | 2420 | **2210** | **-210** |
+| 15 域 keys 合计 | 690 | **609** | **-81** |
+| composerContext | 141 | **41**（≤60 达标） | -100 |
+| settingsContext | 147 | **36**（≤60 达标） | -111 |
+| layoutContext | 103 | **48**（≤60 达标） | -55 |
+| gitSurfaceContext | 79 | 105（唯一超 soft 80，freeze 咬死） | +26 |
+| workspaceNavigationContext | 78 | 79（hard 咬 79） | +1 |
+| runtimeThreadContext | 10 | 51（sessionHot/turn 级归位） | +41 |
+| workspaceCatalogContext | 29 | 73 | +44 |
+| fileEditorContext | 41 | 69 | +28 |
+| modeRoutingContext | 6 | 33 | +27 |
+| sessionIdentityContext | 12 | 14 | +2 |
+| accountSurfaceContext | 4 | 11 | +7 |
+| dictationSurfaceContext | 10 | 11 | +1 |
+| modelSelectionContext | 14 | 22 | +8 |
+| collaborationModeContext | 15 | 15 | 0 |
+| runtimeContext | 1 | 1 | 0 |
+| consumer 订阅域数（layoutNodes/sections/render） | 15 / 11 / 12 | **14 / 11 / 11** | render 退订 composer、layoutNodes 退订 runtime |
+| runtimeThread 运行时 bag 实际 keys | ~146（含 93 undefined legacy defaults + 2 重复） | **51（纯 owned）** | ~-95 |
+| legacy flatten/adapt API | 门面 + 4 导出存在 | **全量删除，门禁禁止复活** | — |
+
+注：部分域 keys 较基线上涨是 PR-C/D/E「归位」的既定结果（误置在 composer/settings/layout 的 keys 回到语义 owner 域）；三巨域合计 391 → **125**，跨域误置清零（`findOverlappingAppShellDomainKeys` 为空）。
+
+### 验证
+
+governance 7 文件 22 测试、typecheck、app-shell 分组测试（domains+assembly 35 文件 229 测试；sections+render 28 文件 213 测试）、改动文件 eslint（仅 `check-app-shell-runtime-contract.mjs` 2 个 unused-vars 为 base 预存，stash 对照复现）、`perf:realtime:boundary-guard`、`perf:streaming:stress`（10 万 chunk rootDispatch 仍 3/回合，lag P95 1.5ms）全绿；`src/app-shell.startup.test.tsx` IPC 崩溃经 stash 对照 base 复现为预存问题。新增/更新测试：assembly +1 PR-F 用例（runtimeThread bag 纯 owned + gitSurface 删 key 断言）、retirement 门禁推进 3 用例、flatten gate 零豁免、slice builder/selection bag/governance/ownership gate 用例同步。
+
+### 遗留（交 Task 4/5）
+
+- 根仍持有 `useThreads`（owner）：settingsContext 内 `threadsByWorkspace`/`threadStatusById` 等 4 bags 仍 turn 级变更并扇出 sections/render；彻底解耦需 threads store 下移 Provider 子树（Task 4 量级，行为风险超 S4）。
+- gitSurface 105 仍是唯一超 soft 域（freeze 咬死，再压需 git 面板读侧改造或析子域）。
+- 根余量大头仍是 `useAppShellDomainAssembly` 装配面（750 → 743 行，PR-F 只顺带收窄；不为降行数引入新抽象）。

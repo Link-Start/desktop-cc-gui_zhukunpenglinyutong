@@ -900,14 +900,11 @@ async function main() {
 
 /**
  * T5.4：生产路径禁止 full-flatten（flattenAppShellDomainContexts 调用）。
- * 允许：domains 定义文件、legacy 门面、测试文件。
+ * S4 PR-F：legacy flatten 已全量删除，零豁免——任何生产文件出现即违规
+ * （测试文件本就豁免，不在扫描范围）。
  */
 function checkNoProductionFullFlatten() {
   const root = path.resolve(process.cwd(), "src/app-shell");
-  const allowName = new Set([
-    "appShellDomainContexts.ts",
-    "legacyFlatten.ts",
-  ]);
   const issues = [];
 
   function walk(dir) {
@@ -918,25 +915,19 @@ function checkNoProductionFullFlatten() {
         continue;
       }
       if (!/\.(ts|tsx)$/.test(name) || name.includes(".test.")) continue;
-      if (allowName.has(name)) continue;
       const source = readFileSync(full, "utf8");
       const lines = source.split("\n");
       lines.forEach((line, index) => {
         if (
           line.includes("flattenAppShellDomainContexts(") &&
-          !line.includes("export function flattenAppShellDomainContexts") &&
           !line.includes("flattenSelectedAppShellDomainContexts")
         ) {
           issues.push(
             `[full-flatten ban] ${path.relative(process.cwd(), full)}:${index + 1}: ${line.trim()}`,
           );
         }
-        // 生产 consumer 不得调用 Legacy adapt（定义 / re-export / 注释除外）
-        if (
-          /adaptAppShellLegacyFlatContext\s*[<(]/.test(line) &&
-          !line.includes("export function adaptAppShellLegacyFlatContext") &&
-          !full.includes(`${path.sep}legacy${path.sep}`)
-        ) {
+        // 生产 consumer 不得调用 Legacy adapt（已删除，禁止复活）
+        if (/adaptAppShellLegacyFlatContext\s*[<(]/.test(line)) {
           issues.push(
             `[legacy-adapt ban] ${path.relative(process.cwd(), full)}:${index + 1}: ${line.trim()}`,
           );

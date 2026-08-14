@@ -8,7 +8,6 @@ import { assembleAppShellDomainContexts } from "./useAppShellDomainAssembly";
 
 function buildMinimalAssemblySource(): Record<string, unknown> {
   const source: Record<string, unknown> = {
-    runtimeActions: { handleToggleRuntimeConsole: () => {} },
     runtimeThreadBoundary: { kind: "runtime-thread-boundary" },
     runtimeRunState: { phase: "idle" },
     effectiveReasoningOptions: [],
@@ -292,7 +291,6 @@ describe("assembleAppShellDomainContexts", () => {
       ["modeRoutingContext", "setAppMode"],
       ["modeRoutingContext", "showKanban"],
       ["sessionIdentityContext", "setActiveThreadId"],
-      ["gitSurfaceContext", "setDiffSource"],
       ["gitSurfaceContext", "queueGitStatusRefresh"],
       ["workspaceCatalogContext", "workspaces"],
       ["workspaceCatalogContext", "worktreePrompt"],
@@ -345,5 +343,40 @@ describe("assembleAppShellDomainContexts", () => {
         expect(contexts[domainName]).not.toHaveProperty(key);
       }
     }
+  });
+
+  it("S4 PR-F：runtimeThreadContext 不再携带 legacyDefaults / runtimeActions 冗余 keys", () => {
+    const contexts = assembleAppShellDomainContexts(buildMinimalAssemblySource());
+
+    // legacy flat context 时代的 93 个 undefined defaults 与 modeRouting 重复的
+    // runtimeActions 已删除：runtimeThread bag 只剩 owned keys（+ sessionHot 展开）
+    expect(
+      Object.keys(contexts.runtimeThreadContext).sort(),
+    ).toEqual(
+      [...APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS.runtimeThreadContext].sort(),
+    );
+    expect(contexts.runtimeThreadContext).not.toHaveProperty("legacy");
+    // handleToggleRuntimeConsole / handleToggleTerminalPanel 仍由 modeRouting 域持有
+    expect(contexts.modeRoutingContext).toHaveProperty(
+      "handleToggleRuntimeConsole",
+    );
+    expect(contexts.modeRoutingContext).toHaveProperty(
+      "handleToggleTerminalPanel",
+    );
+
+    // S4 PR-F：gitSurface 再删 3 个无 bag 读者 keys（search 段经
+    // searchAndComposerInput 直传，不经 bag；任何域都不得再持有）
+    for (const key of [
+      "gitPullRequestDiffs",
+      "setDiffSource",
+      "setGitPanelMode",
+    ]) {
+      for (const domainName of APP_SHELL_DOMAIN_CONTEXT_NAMES) {
+        expect(contexts[domainName]).not.toHaveProperty(key);
+      }
+    }
+    expect(APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS.gitSurfaceContext).toHaveLength(
+      105,
+    );
   });
 });

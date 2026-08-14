@@ -5,18 +5,13 @@ import { fileURLToPath } from "node:url";
 import * as ts from "typescript";
 import {
   APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS,
-  adaptAppShellLegacyFlatContext,
   defineAppShellDomainContexts,
   findOverlappingAppShellDomainKeys,
-  flattenAppShellDomainContexts,
-  flattenSelectedAppShellDomainContexts,
   listAppShellDomainContextNames,
   reuseStableAppShellDomainContexts,
-  flattenSelectedAppShellDomainContextsMemoized,
   APP_SHELL_CONSUMER_DOMAIN_SELECTION,
   type AppShellDomainContextName,
   type AppShellDomainContexts,
-  type DomainFlattenIdentityCache,
 } from "./appShellDomainContexts";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
@@ -376,52 +371,6 @@ describe("appShellDomainContexts", () => {
     );
   });
 
-  it("flattens domains for legacy consumers without mutating source domains", () => {
-    const contexts = createDomainContexts();
-    const flattenedContext = flattenAppShellDomainContexts(contexts);
-
-    expect(flattenedContext).toMatchObject({
-      activeThreadId: "thread-1",
-      activeWorkspaceId: "workspace-1",
-      activeDraft: "hello",
-      centerMode: "chat",
-      activeEditorFilePath: "src/app-shell.tsx",
-      appSettings: { theme: "system" },
-      runtimeRunState: { runtimeConsoleVisible: false },
-      effectiveSelectedModelId: "model-1",
-    });
-    expect(flattenedContext).not.toBe(contexts.runtimeThreadContext);
-    expect(contexts.runtimeThreadContext).toEqual({
-      activeThreadId: "thread-1",
-    });
-  });
-
-  it("flattens only selected domains for section hook adapters", () => {
-    const contexts = createDomainContexts();
-
-    const selectedContext = flattenSelectedAppShellDomainContexts(contexts, [
-      "composerContext",
-      "settingsContext",
-    ]);
-
-    expect(selectedContext).toEqual({
-      activeDraft: "hello",
-      appSettings: { theme: "system" },
-    });
-    expect(selectedContext).not.toHaveProperty("activeThreadId");
-    expect(selectedContext).not.toHaveProperty("activeEditorFilePath");
-  });
-
-  it("adapts legacy flat contexts through one named migration boundary", () => {
-    type RequiredLegacyBoundary = { activeDraft: string };
-    const adaptedContext =
-      adaptAppShellLegacyFlatContext<RequiredLegacyBoundary>({
-        activeDraft: "hello",
-      });
-
-    expect(adaptedContext.activeDraft).toBe("hello");
-  });
-
   it("reuses all domain references when shallow values are stable", () => {
     const appSettings = { theme: "system" };
     const runtimeRunState = { runtimeConsoleVisible: false };
@@ -779,82 +728,3 @@ describe("APP_SHELL_CONSUMER_DOMAIN_SELECTION", () => {
   });
 });
 
-describe("flattenSelectedAppShellDomainContextsMemoized", () => {
-  it("reuses flattened bag when domain identities are unchanged", () => {
-    const runtimeThreadContext = { isProcessing: true, activeTurnId: "t1" };
-    const composerContext = { handleSend: () => {} };
-    const contexts = {
-      runtimeThreadContext,
-      sessionIdentityContext: {},
-      workspaceCatalogContext: {},
-      gitSurfaceContext: {},
-      modeRoutingContext: {},
-      accountSurfaceContext: {},
-      dictationSurfaceContext: {},
-      workspaceNavigationContext: {},
-      composerContext,
-      layoutContext: {},
-      fileEditorContext: {},
-      settingsContext: {},
-      runtimeContext: {},
-      modelSelectionContext: {},
-      collaborationModeContext: {},
-    };
-    const cache: DomainFlattenIdentityCache = {
-      domainValues: null,
-      flattened: null,
-    };
-    const first = flattenSelectedAppShellDomainContextsMemoized(
-      contexts,
-      ["runtimeThreadContext", "composerContext"],
-      cache,
-    );
-    const second = flattenSelectedAppShellDomainContextsMemoized(
-      contexts,
-      ["runtimeThreadContext", "composerContext"],
-      cache,
-    );
-    expect(second).toBe(first);
-    expect(first.isProcessing).toBe(true);
-  });
-
-  it("rebuilds when a domain identity changes", () => {
-    const cache: DomainFlattenIdentityCache = {
-      domainValues: null,
-      flattened: null,
-    };
-    const base = {
-      runtimeThreadContext: { isProcessing: false },
-      sessionIdentityContext: {},
-      workspaceCatalogContext: {},
-      gitSurfaceContext: {},
-      modeRoutingContext: {},
-      accountSurfaceContext: {},
-      dictationSurfaceContext: {},
-      workspaceNavigationContext: {},
-      composerContext: { a: 1 },
-      layoutContext: {},
-      fileEditorContext: {},
-      settingsContext: {},
-      runtimeContext: {},
-      modelSelectionContext: {},
-      collaborationModeContext: {},
-    };
-    const first = flattenSelectedAppShellDomainContextsMemoized(
-      base,
-      ["runtimeThreadContext", "composerContext"],
-      cache,
-    );
-    const next = {
-      ...base,
-      runtimeThreadContext: { isProcessing: true },
-    };
-    const second = flattenSelectedAppShellDomainContextsMemoized(
-      next,
-      ["runtimeThreadContext", "composerContext"],
-      cache,
-    );
-    expect(second).not.toBe(first);
-    expect(second.isProcessing).toBe(true);
-  });
-});

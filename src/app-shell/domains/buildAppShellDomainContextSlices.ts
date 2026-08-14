@@ -2,8 +2,9 @@ import type { AppShellDomainContextValue } from "./appShellDomainContexts";
 
 /**
  * S4 PR-F：按域构造 context slice，避免在 AppShell 里继续「字母序切 bag」。
- * flatten 仍兼容 legacy 全量读侧；但 model / collab / runtimeThread 等干净域
- * 必须经这些 builder 进入 defineAppShellDomainContexts。
+ * model / collab / runtimeThread 等干净域必须经这些 builder 进入
+ * defineAppShellDomainContexts。legacyDefaults / runtimeActions 冗余
+ * key bag 已随 PR-F 删除（runtimeThread slice 只保留 owned keys）。
  */
 
 /**
@@ -25,8 +26,6 @@ export type RuntimeThreadSessionHotFields = {
 };
 
 export function buildRuntimeThreadDomainContextSlice(input: {
-  legacyDefaults: AppShellDomainContextValue;
-  runtimeActions: AppShellDomainContextValue;
   runtimeThreadBoundary: unknown;
   /** S4 PR-D：turn 级 conversation bags（history / thread list 分页 / parent 映射） */
   historyLoadingByThreadId: unknown;
@@ -77,8 +76,6 @@ export function buildRuntimeThreadDomainContextSlice(input: {
   userInputRequests: unknown;
 }): AppShellDomainContextValue {
   return {
-    ...input.legacyDefaults,
-    ...input.runtimeActions,
     runtimeThreadBoundary: input.runtimeThreadBoundary,
     historyLoadingByThreadId: input.historyLoadingByThreadId,
     historyLoadingProgressByThreadId: input.historyLoadingProgressByThreadId,
@@ -479,7 +476,6 @@ export type GitSurfaceDomainFields = {
   gitPullRequestComments: unknown;
   gitPullRequestCommentsError: unknown;
   gitPullRequestCommentsLoading: unknown;
-  gitPullRequestDiffs: unknown;
   gitPullRequests: unknown;
   gitPullRequestsError: unknown;
   gitPullRequestsLoading: unknown;
@@ -544,10 +540,8 @@ export type GitSurfaceDomainFields = {
   queueGitStatusRefresh: unknown;
   refreshGitDiffs: unknown;
   refreshGitLog: unknown;
-  setDiffSource: unknown;
   setGitDiffListView: unknown;
   setGitDiffViewStyle: unknown;
-  setGitPanelMode: unknown;
   setGitRootScanDepth: unknown;
 };
 
@@ -595,7 +589,6 @@ export function buildGitSurfaceDomainContextSlice(
     gitPullRequestComments: input.gitPullRequestComments,
     gitPullRequestCommentsError: input.gitPullRequestCommentsError,
     gitPullRequestCommentsLoading: input.gitPullRequestCommentsLoading,
-    gitPullRequestDiffs: input.gitPullRequestDiffs,
     gitPullRequests: input.gitPullRequests,
     gitPullRequestsError: input.gitPullRequestsError,
     gitPullRequestsLoading: input.gitPullRequestsLoading,
@@ -661,10 +654,8 @@ export function buildGitSurfaceDomainContextSlice(
     queueGitStatusRefresh: input.queueGitStatusRefresh,
     refreshGitDiffs: input.refreshGitDiffs,
     refreshGitLog: input.refreshGitLog,
-    setDiffSource: input.setDiffSource,
     setGitDiffListView: input.setGitDiffListView,
     setGitDiffViewStyle: input.setGitDiffViewStyle,
-    setGitPanelMode: input.setGitPanelMode,
     setGitRootScanDepth: input.setGitRootScanDepth,
   };
 }

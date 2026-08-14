@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import type { AppMode } from "../../types";
-import { APP_SHELL_LEGACY_CONTEXT_DEFAULTS } from "../legacy/legacyContextDefaults";
 import { resolveAppModeSurfaceFlags } from "./appModeSurfaceFlags";
 import {
   buildCollaborationModeDomainContextSlice,
@@ -18,7 +17,6 @@ import {
 import {
   defineAppShellDomainContexts,
   reuseStableAppShellDomainContexts,
-  type AppShellDomainContextValue,
   type AppShellDomainContexts,
 } from "./appShellDomainContexts";
 
@@ -38,8 +36,6 @@ export function assembleAppShellDomainContexts(
   return defineAppShellDomainContexts(
 {
     runtimeThreadContext: buildRuntimeThreadDomainContextSlice({
-      legacyDefaults: APP_SHELL_LEGACY_CONTEXT_DEFAULTS,
-      runtimeActions: source.runtimeActions as AppShellDomainContextValue,
       runtimeThreadBoundary: source.runtimeThreadBoundary,
       // S4 PR-D：turn 级 conversation bags 归 conversation 域（runtimeThreadContext）。
       // 读侧仅 layoutNodes（订阅全 15 域）；sections/render 不订阅本域，
@@ -236,7 +232,6 @@ export function assembleAppShellDomainContexts(
       gitPullRequestComments: source.gitPullRequestComments,
       gitPullRequestCommentsError: source.gitPullRequestCommentsError,
       gitPullRequestCommentsLoading: source.gitPullRequestCommentsLoading,
-      gitPullRequestDiffs: source.gitPullRequestDiffs,
       gitPullRequests: source.gitPullRequests,
       gitPullRequestsError: source.gitPullRequestsError,
       gitPullRequestsLoading: source.gitPullRequestsLoading,
@@ -303,10 +298,8 @@ export function assembleAppShellDomainContexts(
       queueGitStatusRefresh: source.queueGitStatusRefresh,
       refreshGitDiffs: source.refreshGitDiffs,
       refreshGitLog: source.refreshGitLog,
-      setDiffSource: source.setDiffSource,
       setGitDiffListView: source.setGitDiffListView,
       setGitDiffViewStyle: source.setGitDiffViewStyle,
-      setGitPanelMode: source.setGitPanelMode,
       setGitRootScanDepth: source.setGitRootScanDepth,
     }),
     modeRoutingContext: buildModeRoutingDomainContextSlice({

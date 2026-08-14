@@ -39,8 +39,6 @@ export type AppShellDomainContexts = {
   collaborationModeContext: AppShellDomainContextValue;
 };
 
-export type AppShellLegacyFlatContext = Record<string, any>;
-
 export type AppShellDomainContextSelection<
   TDomainName extends AppShellDomainContextName,
 > = Pick<AppShellDomainContexts, TDomainName>;
@@ -244,7 +242,6 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "gitPullRequestComments",
     "gitPullRequestCommentsError",
     "gitPullRequestCommentsLoading",
-    "gitPullRequestDiffs",
     "gitPullRequests",
     "gitPullRequestsError",
     "gitPullRequestsLoading",
@@ -309,12 +306,11 @@ export const APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS: Record<
     "queueGitStatusRefresh",
     "refreshGitDiffs",
     "refreshGitLog",
-    "setDiffSource",
     "setGitDiffListView",
     "setGitDiffViewStyle",
-    "setGitPanelMode",
     "setGitRootScanDepth",
     // S4 PR-E：删 7 个无 bag 读者 keys（checkoutBranch/createBranch/clearGitRootCandidates/gitCommitDiffs/gitHistoryPanelHeightRef/gitPullRequestDiffsError/gitPullRequestDiffsLoading；根层直传不经 bag）
+    // S4 PR-F：再删 3 个无 bag 读者 keys（gitPullRequestDiffs/setDiffSource/setGitPanelMode；search 段经 searchAndComposerInput 直传，不经 bag）
   ],
   modeRoutingContext: [
     "accessMode",
@@ -736,57 +732,6 @@ export function defineAppShellDomainContexts<T extends AppShellDomainContexts>(
   return contexts;
 }
 
-export function flattenAppShellDomainContexts(
-  contexts: AppShellDomainContexts,
-): AppShellLegacyFlatContext {
-  return Object.assign(
-    {},
-    ...APP_SHELL_DOMAIN_CONTEXT_NAMES.map((name) => contexts[name]),
-  );
-}
-
-export function flattenSelectedAppShellDomainContexts<
-  TDomainName extends AppShellDomainContextName,
->(
-  contexts: AppShellDomainContextSelection<TDomainName>,
-  domainNames: readonly TDomainName[],
-): AppShellLegacyFlatContext {
-  return Object.assign({}, ...domainNames.map((name) => contexts[name]));
-}
-
-/**
- * 按 domain 对象身份缓存 flatten 结果。
- * 当 reuseStableAppShellDomainContexts 保住未变 domain 引用时，
- * flatten 不再每帧分配新 bag（层 4 协调/effect 输入更稳）。
- */
-export type DomainFlattenIdentityCache = {
-  domainValues: readonly unknown[] | null;
-  flattened: AppShellLegacyFlatContext | null;
-};
-
-export function flattenSelectedAppShellDomainContextsMemoized<
-  TDomainName extends AppShellDomainContextName,
->(
-  contexts: AppShellDomainContextSelection<TDomainName>,
-  domainNames: readonly TDomainName[],
-  cache: DomainFlattenIdentityCache,
-): AppShellLegacyFlatContext {
-  const domainValues = domainNames.map((name) => contexts[name]);
-  const previous = cache.domainValues;
-  if (
-    previous &&
-    previous.length === domainValues.length &&
-    previous.every((value, index) => Object.is(value, domainValues[index])) &&
-    cache.flattened
-  ) {
-    return cache.flattened;
-  }
-  const flattened = Object.assign({}, ...domainValues) as AppShellLegacyFlatContext;
-  cache.domainValues = domainValues;
-  cache.flattened = flattened;
-  return flattened;
-}
-
 /** 导出各 consumer 的 domain 选择集，供边界测试锁定，防止回潮成「全量 flatten」。 */
 export const APP_SHELL_CONSUMER_DOMAIN_SELECTION = {
   // S4 PR-C：runtimeContext（runtimeRunState）由 layoutNodes 直读
@@ -838,16 +783,6 @@ export const APP_SHELL_CONSUMER_DOMAIN_SELECTION = {
     "runtimeContext",
   ],
 } as const satisfies Record<string, readonly AppShellDomainContextName[]>;
-
-/**
- * @deprecated 生产路径请用 `bindAppShellDomainBag`（selectAppShellDomainBag.ts）。
- * 保留实现以便测试与 legacy 门面 re-export。
- */
-export function adaptAppShellLegacyFlatContext<TBoundary extends object>(
-  context: AppShellLegacyFlatContext,
-): TBoundary {
-  return context as TBoundary;
-}
 
 function areAppShellDomainContextValuesShallowEqual(
   left: AppShellDomainContextValue,

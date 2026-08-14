@@ -62,7 +62,6 @@ import { useWorkspacePathsIntake } from "../sections/useWorkspacePathsIntake";
 import { useAppShellWorktreeChromeSection } from "../sections/useAppShellWorktreeChromeSection";
 import { useCollaborationModeThreadSync } from "../domains/useCollaborationModeThreadSync";
 import { useAppShellViewStateSection } from "../sections/useAppShellViewStateSection";
-import { defineAppShellRuntimeActions } from "../domains/appShellActionBoundaries";
 import { useAppShellDomainAssembly } from "../domains/useAppShellDomainAssembly";
 import { useAppShellComposerPrefsPersistence } from "../domains/useAppShellComposerPrefsPersistence";
 import { useAppShellAccessModeSection } from "../sections/useAppShellAccessModeSection";
@@ -1426,14 +1425,8 @@ export function useAppShellRootComposition() {
     handleAddWorkspaceFromPath,
   });
 
-  const runtimeActions = defineAppShellRuntimeActions({
-    handleToggleRuntimeConsole,
-    handleToggleTerminalPanel,
-  });
-
   const agent = selectedAgent;
   const appShellDomainContexts = useAppShellDomainAssembly({
-    runtimeActions,
     runtimeThreadBoundary,
     activeItems,
     activePlan,

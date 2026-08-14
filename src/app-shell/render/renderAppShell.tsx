@@ -21,11 +21,9 @@ import { formatShortcutForPlatform } from "../../utils/shortcuts";
 import {
   mergeAppShellDomainBag,
   selectAppShellDomainBag,
-} from "../domains/selectAppShellDomainBag";
-import {
-  APP_SHELL_CONSUMER_DOMAIN_SELECTION,
   type DomainFlattenIdentityCache,
-} from "../domains/appShellDomainContexts";
+} from "../domains/selectAppShellDomainBag";
+import { APP_SHELL_CONSUMER_DOMAIN_SELECTION } from "../domains/appShellDomainContexts";
 import {
   ExtensionsView,
   GitHistoryPanel,
