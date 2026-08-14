@@ -679,18 +679,34 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const globalRuntimeNoticeDock = useGlobalRuntimeNoticeDock(
     options.workspaces,
   );
-  const globalRuntimeNoticeDockNode = showGlobalRuntimeNoticeDock ? (
-    <GlobalRuntimeNoticeDock
-      notices={globalRuntimeNoticeDock.notices}
-      visibility={globalRuntimeNoticeDock.visibility}
-      status={globalRuntimeNoticeDock.status}
-      onExpand={globalRuntimeNoticeDock.expand}
-      onMinimize={globalRuntimeNoticeDock.minimize}
-      onClear={globalRuntimeNoticeDock.clear}
-      // 桌面侧栏：不外显气泡，入口在设置二级菜单；手机端仍用底部气泡。
-      hideMinimizedTrigger={!options.isPhone}
-    />
-  ) : null;
+  // 稳定 dock 元素身份：它既作为 prop 直接进 AppLayout（手机端），又经
+  // sidebarRuntimeNoticeDockNode 进入 sidebarNode 的 deps；若每次 render 新建元素，
+  // 两条 memo 链都会失效（与 sidebarNode 同构处理）。
+  const globalRuntimeNoticeDockNode = useMemo(
+    () =>
+      showGlobalRuntimeNoticeDock ? (
+        <GlobalRuntimeNoticeDock
+          notices={globalRuntimeNoticeDock.notices}
+          visibility={globalRuntimeNoticeDock.visibility}
+          status={globalRuntimeNoticeDock.status}
+          onExpand={globalRuntimeNoticeDock.expand}
+          onMinimize={globalRuntimeNoticeDock.minimize}
+          onClear={globalRuntimeNoticeDock.clear}
+          // 桌面侧栏：不外显气泡，入口在设置二级菜单；手机端仍用底部气泡。
+          hideMinimizedTrigger={!options.isPhone}
+        />
+      ) : null,
+    [
+      showGlobalRuntimeNoticeDock,
+      globalRuntimeNoticeDock.notices,
+      globalRuntimeNoticeDock.visibility,
+      globalRuntimeNoticeDock.status,
+      globalRuntimeNoticeDock.expand,
+      globalRuntimeNoticeDock.minimize,
+      globalRuntimeNoticeDock.clear,
+      options.isPhone,
+    ],
+  );
   const sidebarRuntimeNoticeDockNode = options.isPhone ? null : globalRuntimeNoticeDockNode;
   const appRuntimeNoticeDockNode = options.isPhone ? globalRuntimeNoticeDockNode : null;
   const sidebarActiveItems = shellRuntimeSummary.sidebarSubagentItems;
@@ -1461,8 +1477,17 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     isSharedSession,
   );
   const sharedSendState = isSharedSession ? sharedSendEntry.state : "idle";
-  const rewindWorkspaceGitState = deriveRewindWorkspaceGitState(
-    options.gitStatus,
+  const gitStatusError = options.gitStatus.error;
+  const gitStatusFiles = options.gitStatus.files;
+  // deriveRewindWorkspaceGitState 每次 render 返回新对象；它是 renderComposerNode
+  // 的 deps，若不 memo 会让 composerNode / homeComposerNode 的 memo 永远失效。
+  const rewindWorkspaceGitState = useMemo(
+    () =>
+      deriveRewindWorkspaceGitState({
+        error: gitStatusError,
+        files: gitStatusFiles,
+      }),
+    [gitStatusError, gitStatusFiles],
   );
   const selectGitRoot = options.onSelectGitRoot;
   const clearGitRoot = options.onClearGitRoot;
