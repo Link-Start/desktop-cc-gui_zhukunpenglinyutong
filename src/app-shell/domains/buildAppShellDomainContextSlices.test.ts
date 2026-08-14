@@ -19,6 +19,13 @@ describe("buildAppShellDomainContextSlices", () => {
       legacyDefaults: { legacy: true },
       runtimeActions: { handleToggleTerminalPanel: () => {} },
       runtimeThreadBoundary: { activeThreadId: "t1" },
+      // S4 PR-D：turn 级 conversation bags
+      historyLoadingByThreadId: { t1: true },
+      historyLoadingProgressByThreadId: { t1: 0.5 },
+      historyRestoredAtMsByThread: { t1: 123 },
+      threadListCursorByWorkspace: { "ws-1": "cursor" },
+      threadListPagingByWorkspace: { "ws-1": true },
+      threadParentById: { t1: "parent" },
       sessionHot: {
         activeItems: [],
         activePlan: null,
@@ -37,6 +44,9 @@ describe("buildAppShellDomainContextSlices", () => {
     expect(slice.isProcessing).toBe(true);
     expect(slice.canInterrupt).toBe(true);
     expect(slice.activeTurnId).toBe("turn-1");
+    expect(slice.historyLoadingByThreadId).toEqual({ t1: true });
+    expect(slice.threadParentById).toEqual({ t1: "parent" });
+    expect(slice.threadListCursorByWorkspace).toEqual({ "ws-1": "cursor" });
   });
 
   it("builds model selection slice with only model keys", () => {

@@ -38,7 +38,7 @@ import { normalizeFsPath } from "../../utils/workspacePaths";
 import type { AppMode } from "../../types";
 import { useCodeCssVars } from "../../features/app/hooks/useCodeCssVars";
 import { useAccountSwitching } from "../../features/app/hooks/useAccountSwitching";
-import { useActiveSessionProjection } from "../domains/activeSessionProjection";
+import { useRuntimeThreadDomainHost } from "../domains/useRuntimeThreadDomainHost";
 import { useComposerEditorSettings } from "../domains/composerEditorSettings";
 import { useComposerSelectionResolver } from "../domains/composerSelectionResolver";
 import { resolveShouldLoadGitHubPanelData } from "../domains/gitHubPanelGating";
@@ -678,6 +678,32 @@ export function useAppShellRootComposition() {
   const { composerSelectionResolverRef, resolveComposerSelection } =
     useComposerSelectionResolver();
 
+  // S4 PR-D：threads controller 先整体持有，turn 级投影与 runtimeThreadBoundary
+  // 由 useRuntimeThreadDomainHost 装配；根只解构其余消费方需要的字段。
+  const threadsController = useThreads({
+    activeWorkspace,
+    onWorkspaceConnected: markWorkspaceConnected,
+    onWorkspaceModelsRefresh: refreshModels,
+    onDebug: addDebugEntry,
+    model: null,
+    effort: null,
+    collaborationMode: null,
+    resolveComposerSelection,
+    claudeThinkingVisible,
+    accessMode,
+    steerEnabled: appSettings.experimentalSteerEnabled,
+    customPrompts: prompts,
+    activeEngine,
+    useNormalizedRealtimeAdapters: appSettings.chatCanvasUseNormalizedRealtime,
+    useUnifiedHistoryLoader: appSettings.chatCanvasUseUnifiedHistoryLoader,
+    sessionAttributionMode: appSettings.sessionAttributionMode,
+    resolveOpenCodeAgent: resolveOpenCodeAgentForThread,
+    resolveOpenCodeVariant: resolveOpenCodeVariantForThread,
+    resolveCollaborationUiMode,
+    resolveCollaborationRuntimeMode,
+    onCollaborationModeResolved: handleCollaborationModeResolved,
+    runWithCreateSessionLoading,
+  });
   const {
     setActiveThreadId,
     activeThreadId,
@@ -691,16 +717,12 @@ export function useAppShellRootComposition() {
     threadStatusById,
     historyLoadingByThreadId,
     historyLoadingProgressByThreadId,
-    activeTurnIdByThread,
     completionEmailIntentByThread,
     toggleCompletionEmailIntent,
     threadListLoadingByWorkspace,
     threadListPagingByWorkspace,
     threadListCursorByWorkspace,
-    tokenUsageByThread,
-    rateLimitsByWorkspace,
     accountByWorkspace,
-    planByThread,
     lastAgentMessageByThread,
     interruptTurn,
     removeThread,
@@ -766,30 +788,7 @@ export function useAppShellRootComposition() {
     handleUserInputSubmit,
     refreshAccountInfo,
     refreshAccountRateLimits,
-  } = useThreads({
-    activeWorkspace,
-    onWorkspaceConnected: markWorkspaceConnected,
-    onWorkspaceModelsRefresh: refreshModels,
-    onDebug: addDebugEntry,
-    model: null,
-    effort: null,
-    collaborationMode: null,
-    resolveComposerSelection,
-    claudeThinkingVisible,
-    accessMode,
-    steerEnabled: appSettings.experimentalSteerEnabled,
-    customPrompts: prompts,
-    activeEngine,
-    useNormalizedRealtimeAdapters: appSettings.chatCanvasUseNormalizedRealtime,
-    useUnifiedHistoryLoader: appSettings.chatCanvasUseUnifiedHistoryLoader,
-    sessionAttributionMode: appSettings.sessionAttributionMode,
-    resolveOpenCodeAgent: resolveOpenCodeAgentForThread,
-    resolveOpenCodeVariant: resolveOpenCodeVariantForThread,
-    resolveCollaborationUiMode,
-    resolveCollaborationRuntimeMode,
-    onCollaborationModeResolved: handleCollaborationModeResolved,
-    runWithCreateSessionLoading,
-  });
+  } = threadsController;
 
   const handleSelectOpenCodeAgent = ignoreRetiredOpenCodeSelection;
   const handleSelectOpenCodeVariant = ignoreRetiredOpenCodeSelection;
@@ -800,7 +799,8 @@ export function useAppShellRootComposition() {
     queueGitStatusRefresh,
     threadStatusById,
   });
-  // S4：active session 派生集中在纯数据投影，避免 AppShell 根继续堆条件表达式。
+  // S4 PR-D：turn 级会话投影 + runtimeThreadBoundary 装配下沉到 runtimeThread 域
+  // host；根不再直接向 bag/投影传递 threads 全量 bags。
   const {
     activeThreadSummary,
     activeThreadEngine,
@@ -814,17 +814,12 @@ export function useAppShellRootComposition() {
     isReviewing,
     activeTurnId,
     hasPendingUserInput,
-  } = useActiveSessionProjection({
+    runtimeThreadBoundary,
+  } = useRuntimeThreadDomainHost({
+    threads: threadsController,
+    activeWorkspace,
     activeWorkspaceId,
     activeThreadId,
-    threadsByWorkspace,
-    threadStatusById,
-    tokenUsageByThread,
-    rateLimitsByWorkspace,
-    planByThread,
-    activeItems,
-    activeTurnIdByThread,
-    userInputRequests,
   });
   // S4 PR-C：Composer 域 host
   const {
@@ -1073,7 +1068,6 @@ export function useAppShellRootComposition() {
 
   // S4 PR-D：Conversation 域 host（须在 useComposerController 之后，依赖 clearDraft/removeImages）
   const {
-    runtimeThreadBoundary,
     activeThreadIdRef,
     getThreadRows,
     handleCopyThread,
@@ -1088,45 +1082,7 @@ export function useAppShellRootComposition() {
     handleDeleteThreadPromptCancel,
     handleDeleteThreadPromptConfirm,
   } = useConversationDomainHost({
-    runtimeThreadBoundaryInput: {
-      activeItems,
-      activeThreadId,
-      activeTurnId,
-      activeTurnIdByThread,
-      activeWorkspace,
-      activeWorkspaceId,
-      canInterrupt,
-      completionEmailIntentByThread,
-      handleFusionStalled,
-      historyLoadingByThreadId,
-      historyLoadingProgressByThreadId,
-      historyRestoredAtMsByThread,
-      interruptTurn,
-      isProcessing,
-      isReviewing,
-      listThreadsForWorkspace,
-      loadOlderThreadsForWorkspace,
-      rateLimitsByWorkspace,
-      refreshAccountInfo,
-      refreshAccountRateLimits,
-      refreshThread,
-      resetWorkspaceThreads,
-      resolveCanonicalThreadId,
-      sendUserMessage,
-      sendUserMessageToThread,
-      setActiveThreadId,
-      startSharedSessionForWorkspace,
-      startThreadForWorkspace,
-      threadItemsByThread,
-      threadListCursorByWorkspace,
-      threadListLoadingByWorkspace,
-      threadListPagingByWorkspace,
-      threadParentById,
-      threadStatusById,
-      threadsByWorkspace,
-      tokenUsageByThread,
-      toggleCompletionEmailIntent,
-    },
+    runtimeThreadBoundary,
     activeThreadId,
     threadParentById,
     activeItems,
@@ -1887,7 +1843,6 @@ export function useAppShellRootComposition() {
     kanbanUpdatePanel,
     kanbanUpdateTask,
     kanbanViewState,
-    lastAgentMessageByThread,
     lastCodexModeSyncThreadRef,
     launchScriptState,
     launchScriptsState,
@@ -1932,7 +1887,6 @@ export function useAppShellRootComposition() {
     pickImages,
     pinThread,
     pinnedThreadsVersion,
-    planByThread,
     planPanelHeight,
     prefillDraft,
     prompts,
@@ -1941,7 +1895,6 @@ export function useAppShellRootComposition() {
     queueGitStatusRefresh,
     queueMessage,
     queueSaveSettings,
-    rateLimitsByWorkspace,
     recentThreads,
     reduceTransparency,
     windowTransparencyEnabled,
@@ -2119,7 +2072,6 @@ export function useAppShellRootComposition() {
     historyLoadingProgressByThreadId,
     historyRestoredAtMsByThread,
     threadsByWorkspace,
-    tokenUsageByThread,
     toggleCompletionEmailIntent,
     triggerAutoThreadTitle,
     ungroupedLabel,

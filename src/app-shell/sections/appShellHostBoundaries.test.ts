@@ -34,13 +34,22 @@ describe("AppShell S4 host boundaries", () => {
     );
   });
 
-  it("routes active session flags through useActiveSessionProjection", () => {
+  it("routes active session flags through useRuntimeThreadDomainHost (S4 PR-D)", () => {
     const source = readSource(compositionPath);
 
+    // 根不再直接调投影：turn 级投影 + runtimeThreadBoundary 由域 host 装配
     expect(source).toContain(
-      'from "../domains/activeSessionProjection"',
+      'from "../domains/useRuntimeThreadDomainHost"',
     );
-    expect(source).toContain("useActiveSessionProjection({");
+    expect(source).toContain("useRuntimeThreadDomainHost({");
+    expect(source).not.toContain("useActiveSessionProjection({");
+    expect(source).not.toContain("runtimeThreadBoundaryInput");
+    // 域 host 内部走纯数据投影
+    const host = readSource(
+      join(currentDir, "../domains/useRuntimeThreadDomainHost.ts"),
+    );
+    expect(host).toContain("useActiveSessionProjection({");
+    expect(host).toContain("defineRuntimeThreadShellBoundary({");
     // 根上不再手写 active thread find + processing 三元组
     expect(source).not.toMatch(
       /threadsByWorkspace\[activeWorkspaceId\]\?\.find\(/,

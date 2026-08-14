@@ -27,6 +27,13 @@ export function buildRuntimeThreadDomainContextSlice(input: {
   legacyDefaults: AppShellDomainContextValue;
   runtimeActions: AppShellDomainContextValue;
   runtimeThreadBoundary: unknown;
+  /** S4 PR-D：turn 级 conversation bags（history / thread list 分页 / parent 映射） */
+  historyLoadingByThreadId: unknown;
+  historyLoadingProgressByThreadId: unknown;
+  historyRestoredAtMsByThread: unknown;
+  threadListCursorByWorkspace: unknown;
+  threadListPagingByWorkspace: unknown;
+  threadParentById: unknown;
   /** S4 bag-split PR-1：高 churn 会话投影 */
   sessionHot?: RuntimeThreadSessionHotFields;
 }): AppShellDomainContextValue {
@@ -34,6 +41,12 @@ export function buildRuntimeThreadDomainContextSlice(input: {
     ...input.legacyDefaults,
     ...input.runtimeActions,
     runtimeThreadBoundary: input.runtimeThreadBoundary,
+    historyLoadingByThreadId: input.historyLoadingByThreadId,
+    historyLoadingProgressByThreadId: input.historyLoadingProgressByThreadId,
+    historyRestoredAtMsByThread: input.historyRestoredAtMsByThread,
+    threadListCursorByWorkspace: input.threadListCursorByWorkspace,
+    threadListPagingByWorkspace: input.threadListPagingByWorkspace,
+    threadParentById: input.threadParentById,
     ...(input.sessionHot ?? {}),
   };
 }

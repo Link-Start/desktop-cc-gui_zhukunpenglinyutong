@@ -40,11 +40,11 @@ export const APP_SHELL_DOMAIN_KEY_HARD_BUDGETS: Record<
   dictationSurfaceContext: 80,
   /** T1.7 门 */
   workspaceNavigationContext: 80,
-  /** freeze 遗留巨域 */
+  /** freeze 遗留巨域（S4 PR-D：141 持平；layout 103→100；settings 147→140） */
   composerContext: 141,
-  layoutContext: 103,
+  layoutContext: 100,
   fileEditorContext: 80,
-  settingsContext: 147,
+  settingsContext: 140,
   runtimeContext: 80,
   modelSelectionContext: 80,
   collaborationModeContext: 80,

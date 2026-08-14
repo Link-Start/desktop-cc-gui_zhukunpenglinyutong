@@ -198,3 +198,42 @@ branch: fix/performance-optimization
 | `workspaceFilesGating.ts`（`resolveWorkspaceFilesLoadFlags`） | workspaceCatalog | :598-600 |
 
 新增单测 5 文件 18 测试全绿；governance 7 文件 20 测试全绿；`perf:realtime:boundary-guard` / `perf:streaming:stress` 无回退。未新增 shell 状态（`APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS` 不变，690 keys 冻结口径不破）。剩余 inline 派生已所剩无几——根余量主要在 ~700 行 `useAppShellDomainAssembly` bag 装配（PR-C/E 战场）与 `useThreads` 直订（PR-D 战场）。
+
+---
+
+## 7. PR-D 完成回写（2026-08-14）
+
+**主题**：Messages/Conversation 域下沉——turn 级投影与 bags 归 runtimeThread 域，与 01 号 channel 边界对齐（live 数据不进根 bag，压测门禁兜底）。
+
+### 行数与 keys（实测）
+
+| 指标 | 改前 | 改后 | 门禁收紧 |
+|------|-----:|-----:|----------|
+| `useAppShellRootComposition.ts` | 2362 行 | **2314 行（-48）** | `ROOT_COMPOSITION_HARD_LINES` 2400 → **2350** |
+| 15 域 keys 合计 | 690 | **680（-10）** | — |
+| settingsContext | 147 | **140** | hard freeze 147 → **140** |
+| layoutContext | 103 | **100** | hard freeze 103 → **100** |
+| runtimeThreadContext | 10 | **16** | 80 不变（远低于线） |
+
+### 下沉与收窄内容
+
+1. **新 host `useRuntimeThreadDomainHost`**（`src/app-shell/domains/`，无 UI，3 个单测）：收编根上的 `useActiveSessionProjection` 调用与 `runtimeThreadBoundary` 装配（原 `useConversationDomainHost` 内 39 行 inline input）。根改为 `const threadsController = useThreads(...)` 整体持有后传入 host；`useConversationDomainHost` 改为接收装配好的 `runtimeThreadBoundary`。
+2. **6 个 turn 级 conversation bags 迁移** settingsContext → runtimeThreadContext：`historyLoadingByThreadId` / `historyLoadingProgressByThreadId` / `historyRestoredAtMsByThread` / `threadListCursorByWorkspace` / `threadListPagingByWorkspace` / `threadParentById`。这些 bag 的读侧只有 layoutNodes（订阅全 15 域），迁移不改变任何消费方可读性。
+3. **4 个无 bag 读者的 bags 从根 bag 删除**：`tokenUsageByThread`（原 settings）、`rateLimitsByWorkspace` / `planByThread` / `lastAgentMessageByThread`（原 layout）。根层使用点（projection / boundary / searchRadar 直传）不经 bag，行为不变。
+4. **留在 settingsContext 的 conversation keys**（sections/render 仍读，不订阅 runtimeThreadContext）：`threadsByWorkspace` / `threadStatusById` / `threadItemsByThread` / `threadListLoadingByWorkspace`——迁走会让 sections/render 被迫订阅 sessionHot，反而加剧扇出，故本 PR 不动。
+
+### 订阅面变化（测试锁定）
+
+- 改前：history 加载进度 / 翻页 cursor / parent 映射等 turn 级更新 → settingsContext 浅比较失败 → sections / render / layoutNodes 三读侧 bag 全换引用。
+- 改后：上述更新只敲 runtimeThreadContext；`reuseStableAppShellDomainContexts` 保持 settings / layout / workspaceNavigation 引用（`useAppShellDomainAssembly.test.ts` 新增引用稳定用例锁定）；sections（11 域）/ render（12 域）不订阅 runtimeThreadContext，不再因此级联。
+- `APP_SHELL_CONSUMER_DOMAIN_SELECTION` 三读侧域选择集不变（收窄选择集会引入 sessionHot 扇出，经评估不动）。
+- live 边界未动：10 万 chunk 压测根 dispatch 仍为 **3/回合**（lag P95 2.7ms），`perf:realtime:boundary-guard` 绿。
+
+### 验证
+
+governance 7 文件 20 测试、typecheck、app-shell 分组测试（domains+assembly 34 文件 222 测试；sections+render 28 文件 213 测试）、改动文件 eslint、`perf:realtime:boundary-guard`、`perf:streaming:stress` 全绿。新增单测 1 文件 3 测试（host）+ assembly 2 用例（bags 归属 / 引用稳定）+ slice builder 1 用例更新 + host 边界测试改到新路由。
+
+### 遗留（交 PR-C/E/F）
+
+- 根仍持有 `useThreads`（owner）：settingsContext 内 `threadStatusById` / `threadItemsByThread` 仍 turn 级变更并扇出 sections/render，彻底解耦需 threads store 下移 Provider 子树（PR-E/F 量级）。
+- 根余量大头仍是 ~700 行 `useAppShellDomainAssembly` bag 装配（PR-C/E 战场）。

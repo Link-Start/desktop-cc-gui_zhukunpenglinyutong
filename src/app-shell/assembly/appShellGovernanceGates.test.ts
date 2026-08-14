@@ -32,8 +32,8 @@ const assemblyPath = join(
 
 const COMPOSITION_SOFT_LINES = 600;
 const COMPOSITION_HARD_LINES = 800;
-/** RootComposition 仍为过渡巨石：冻结 hard，禁止继续涨（PR-B 后 2362 行，收紧 2600 → 2400 咬住进步） */
-const ROOT_COMPOSITION_HARD_LINES = 2400;
+/** RootComposition 仍为过渡巨石：冻结 hard，禁止继续涨（PR-B 2362 → 2400；PR-D 2314 → 2350 咬住进步） */
+const ROOT_COMPOSITION_HARD_LINES = 2350;
 
 function lineCount(path: string): number {
   return readFileSync(path, "utf8").split("\n").length;
