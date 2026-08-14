@@ -182,3 +182,19 @@ branch: fix/performance-optimization
 - 本盘点是 `2026-08-11-app-shell-cohesion-optimization.md` §1.1 结构基线的 2026-08-14 复测：**keys 690→690、根 2420 行（文档口径 2424，实测 2420）、根仍订阅 threads**——「冻结现状」未变，PR-B~F 仍需真减。
 - 读侧/ownership 结论与 `app-shell-ownership-matrix.md` 一致，无漂移。
 - S1 根链 memo 补全（Task 2）已于 `3970a5bf4` 落地，与本文档同日。
+
+---
+
+## 6. PR-B 完成回写（2026-08-14）
+
+`useAppShellRootComposition.ts` **2420 → 2362 行**（-58）；`ROOT_COMPOSITION_HARD_LINES` 门禁 2600 → **2400** 咬住进步。收编的纯数据 host/selector（均无 UI、配单测、行为不变）：
+
+| 抽离物 | 域 | 原位置 |
+|--------|-----|--------|
+| `useGitSurfaceRepositoryActionsHost`（multi-repo stage/unstage/revert 7 handler） | gitSurface | :1380-1415 |
+| `composerEditorSettings.ts`（`buildComposerEditorSettings` + `useComposerEditorSettings`，字段级 deps 口径不变） | composer | :668-689 |
+| `composerSelectionResolver.ts`（`useComposerSelectionResolver`，ref 账本 + 读取器） | composer | :699-710 |
+| `gitHubPanelGating.ts`（`resolveShouldLoadGitHubPanelData`） | gitSurface | :462-465 |
+| `workspaceFilesGating.ts`（`resolveWorkspaceFilesLoadFlags`） | workspaceCatalog | :598-600 |
+
+新增单测 5 文件 18 测试全绿；governance 7 文件 20 测试全绿；`perf:realtime:boundary-guard` / `perf:streaming:stress` 无回退。未新增 shell 状态（`APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS` 不变，690 keys 冻结口径不破）。剩余 inline 派生已所剩无几——根余量主要在 ~700 行 `useAppShellDomainAssembly` bag 装配（PR-C/E 战场）与 `useThreads` 直订（PR-D 战场）。

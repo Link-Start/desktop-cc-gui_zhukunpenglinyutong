@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useThreads } from "../../features/threads/hooks/useThreads";
 import { resolveIsSharedSession } from "../../features/shared-session/utils/sharedSessionIdentity";
@@ -34,23 +34,16 @@ import { useWorkspaceActions } from "../../features/app/hooks/useWorkspaceAction
 import { useLiquidGlassEffect } from "../../features/app/hooks/useLiquidGlassEffect";
 import { useGitCommitController } from "../../features/app/hooks/useGitCommitController";
 import { useMultiRepositoryGitStatus } from "../../features/git/hooks/useMultiRepositoryGitStatus";
-import {
-  revertGitFile,
-  revertGitPaths,
-  stageGitAll,
-  stageGitFile,
-  unstageGitAll,
-  unstageGitFile,
-  unstageGitPaths,
-} from "../../services/tauri/git";
 import { normalizeFsPath } from "../../utils/workspacePaths";
-import type {
-  AppMode,
-  ComposerEditorSettings,
-} from "../../types";
+import type { AppMode } from "../../types";
 import { useCodeCssVars } from "../../features/app/hooks/useCodeCssVars";
 import { useAccountSwitching } from "../../features/app/hooks/useAccountSwitching";
 import { useActiveSessionProjection } from "../domains/activeSessionProjection";
+import { useComposerEditorSettings } from "../domains/composerEditorSettings";
+import { useComposerSelectionResolver } from "../domains/composerSelectionResolver";
+import { resolveShouldLoadGitHubPanelData } from "../domains/gitHubPanelGating";
+import { useGitSurfaceRepositoryActionsHost } from "../domains/useGitSurfaceRepositoryActionsHost";
+import { resolveWorkspaceFilesLoadFlags } from "../domains/workspaceFilesGating";
 import { useWorkspaceSessionHost } from "../domains/useWorkspaceSessionHost";
 import { useComposerDomainHost } from "../domains/useComposerDomainHost";
 import { useConversationDomainHost } from "../domains/useConversationDomainHost";
@@ -459,10 +452,11 @@ export function useAppShellRootComposition() {
     setIsEditorFileMaximized,
   ]);
 
-  const shouldLoadGitHubPanelData =
-    gitPanelMode === "issues" ||
-    gitPanelMode === "prs" ||
-    (shouldLoadDiffs && diffSource === "pr");
+  const shouldLoadGitHubPanelData = resolveShouldLoadGitHubPanelData({
+    gitPanelMode,
+    shouldLoadDiffs,
+    diffSource,
+  });
 
   useEffect(() => {
     resetGitHubPanelState();
@@ -595,9 +589,15 @@ export function useAppShellRootComposition() {
     activeEngine,
     workspaceId: activeWorkspace?.id ?? null,
   });
-  const workspaceFilesInitialLoadEnabled = Boolean(activeWorkspace?.id);
-  const workspaceFilesPollingEnabled =
-    !isCompact && !rightPanelCollapsed && filePanelMode === "files";
+  const {
+    initialLoadEnabled: workspaceFilesInitialLoadEnabled,
+    pollingEnabled: workspaceFilesPollingEnabled,
+  } = resolveWorkspaceFilesLoadFlags({
+    activeWorkspaceId: activeWorkspace?.id,
+    isCompact,
+    rightPanelCollapsed,
+    filePanelMode,
+  });
   const {
     files,
     directories,
@@ -665,28 +665,7 @@ export function useAppShellRootComposition() {
 
   const { textareaHeight, onTextareaHeightChange } = useComposerEditorState();
 
-  const composerEditorSettings = useMemo<ComposerEditorSettings>(
-    () => ({
-      preset: appSettings.composerEditorPreset,
-      expandFenceOnSpace: appSettings.composerFenceExpandOnSpace,
-      expandFenceOnEnter: appSettings.composerFenceExpandOnEnter,
-      fenceLanguageTags: appSettings.composerFenceLanguageTags,
-      fenceWrapSelection: appSettings.composerFenceWrapSelection,
-      autoWrapPasteMultiline: appSettings.composerFenceAutoWrapPasteMultiline,
-      autoWrapPasteCodeLike: appSettings.composerFenceAutoWrapPasteCodeLike,
-      continueListOnShiftEnter: appSettings.composerListContinuation,
-    }),
-    [
-      appSettings.composerEditorPreset,
-      appSettings.composerFenceExpandOnSpace,
-      appSettings.composerFenceExpandOnEnter,
-      appSettings.composerFenceLanguageTags,
-      appSettings.composerFenceWrapSelection,
-      appSettings.composerFenceAutoWrapPasteMultiline,
-      appSettings.composerFenceAutoWrapPasteCodeLike,
-      appSettings.composerListContinuation,
-    ],
-  );
+  const composerEditorSettings = useComposerEditorSettings(appSettings);
 
   useSyncSelectedDiffPath({
     diffSource,
@@ -696,18 +675,8 @@ export function useAppShellRootComposition() {
     selectedDiffPath,
     setSelectedDiffPath,
   });
-  const composerSelectionResolverRef = useRef({
-    id: null as string | null,
-    model: null as string | null,
-    source: null as string | null,
-    providerProfileId: null as string | null,
-    effort: null as string | null,
-    collaborationMode: null as Record<string, unknown> | null,
-  });
-  const resolveComposerSelection = useCallback(
-    () => composerSelectionResolverRef.current,
-    [],
-  );
+  const { composerSelectionResolverRef, resolveComposerSelection } =
+    useComposerSelectionResolver();
 
   const {
     setActiveThreadId,
@@ -1377,42 +1346,15 @@ export function useAppShellRootComposition() {
     isMultiRepository,
     refresh: refreshRepositoryStatuses,
   } = useMultiRepositoryGitStatus(activeWorkspace, repositories);
-  const handleStageRepositoryFile = useCallback(async (repositoryRoot: string, path: string) => {
-    if (!activeWorkspace) return;
-    await stageGitFile(activeWorkspace.id, path, repositoryRoot);
-  }, [activeWorkspace]);
-  const handleUnstageRepositoryFile = useCallback(async (repositoryRoot: string, path: string) => {
-    if (!activeWorkspace) return;
-    await unstageGitFile(activeWorkspace.id, path, repositoryRoot);
-  }, [activeWorkspace]);
-  const handleUnstageRepositoryAll = useCallback(async (repositoryRoot: string) => {
-    if (!activeWorkspace) return;
-    await unstageGitAll(activeWorkspace.id, repositoryRoot);
-  }, [activeWorkspace]);
-  const handleUnstageRepositoryFiles = useCallback(async (repositoryRoot: string, paths: string[]) => {
-    if (!activeWorkspace || paths.length === 0) return;
-    if (paths.length === 1) {
-      await unstageGitFile(activeWorkspace.id, paths[0]!, repositoryRoot);
-      return;
-    }
-    await unstageGitPaths(activeWorkspace.id, paths, repositoryRoot);
-  }, [activeWorkspace]);
-  const handleRevertRepositoryFile = useCallback(async (repositoryRoot: string, path: string) => {
-    if (!activeWorkspace) return;
-    await revertGitFile(activeWorkspace.id, path, repositoryRoot);
-  }, [activeWorkspace]);
-  const handleRevertRepositoryFiles = useCallback(async (repositoryRoot: string, paths: string[]) => {
-    if (!activeWorkspace || paths.length === 0) return;
-    if (paths.length === 1) {
-      await revertGitFile(activeWorkspace.id, paths[0]!, repositoryRoot);
-      return;
-    }
-    await revertGitPaths(activeWorkspace.id, paths, repositoryRoot);
-  }, [activeWorkspace]);
-  const handleStageRepositoryAll = useCallback(async (repositoryRoot: string) => {
-    if (!activeWorkspace) return;
-    await stageGitAll(activeWorkspace.id, repositoryRoot);
-  }, [activeWorkspace]);
+  const {
+    handleStageRepositoryFile,
+    handleUnstageRepositoryFile,
+    handleUnstageRepositoryAll,
+    handleUnstageRepositoryFiles,
+    handleRevertRepositoryFile,
+    handleRevertRepositoryFiles,
+    handleStageRepositoryAll,
+  } = useGitSurfaceRepositoryActionsHost({ activeWorkspace });
 
   const {
     commitMessage,
