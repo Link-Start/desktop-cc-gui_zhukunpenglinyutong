@@ -39,7 +39,14 @@ import {
   resolveLiveAssistantSettlementText,
   updateLiveAssistantTextSnapshot,
 } from "../utils/liveAssistantTextChannel";
-import { isLiveTextExternalizationEnabled } from "../utils/realtimePerfFlags";
+import {
+  appendLiveItemDelta,
+  type LiveItemDeltaLane,
+} from "../utils/liveItemDeltaChannel";
+import {
+  isLiveDeltaExternalizationEnabled,
+  isLiveTextExternalizationEnabled,
+} from "../utils/realtimePerfFlags";
 import {
   noteRealtimeCoalescedFlush,
   noteThreadReducerWorkMeasured,
@@ -51,6 +58,9 @@ const CLAUDE_STREAM_DEBUG_FLAG_KEY = "ccgui.debug.claude.stream";
 // A4 流式正文外部化（docs/perf/a4-live-text-externalization-plan.md）：
 // 模块加载时读一次，翻转 flag 需刷新页面（与其余 perf flag 同语义）。
 const LIVE_TEXT_EXTERNALIZATION_ENABLED = isLiveTextExternalizationEnabled();
+// A4 二期：reasoningContent / reasoningSummary / toolOutput 三类电报外部化
+//（liveItemDeltaChannel）。同样模块加载时读一次，翻转 flag 需刷新页面。
+const LIVE_DELTA_EXTERNALIZATION_ENABLED = isLiveDeltaExternalizationEnabled();
 
 /**
  * Infer engine type from thread ID.
@@ -246,6 +256,8 @@ type RealtimeDeltaOperation =
 // 32ms (~30 flush/s)：12ms 时顶层 thread reducer 每秒最高 dispatch ~83 次，
 // 每次 flush 都触发 app-shell 大子树 re-render，是流式卡顿的放大器。
 // 视觉平滑度由 Markdown streaming throttle + progressive reveal 保证。
+// A4 二期：liveDeltaExternalization 开时 reasoning/toolOutput 三类 delta
+// 不再入此队列（走 liveItemDeltaChannel 48ms 节奏，见 enqueueRealtimeDeltaOperation）。
 const REALTIME_DELTA_BATCH_FLUSH_MS = 32;
 const NORMALIZED_REALTIME_BATCH_FLUSH_MS = 32;
 
@@ -554,6 +566,33 @@ export function useThreadItemEvents({
         droppedLateRealtimeEventCountRef.current += 1;
         return;
       }
+      // A4 二期：flag 开时三类文本 delta 先累积进 liveItemDeltaChannel。
+      // 非首条直接返回——不打根 dispatch（连 ensureThread 也不发），订阅行按
+      // 通道 48ms 节奏渲染；首条落回原路径建壳，保证 durable item 存在、key
+      // 稳定（与 A4 正文同款做法）。reasoningSummaryBoundary 是边界事件
+      //（每回合仅几次，不是 30 次/秒的来源），不在此列，仍走原 dispatch。
+      if (
+        LIVE_DELTA_EXTERNALIZATION_ENABLED &&
+        (operation.kind === "reasoningContentDelta" ||
+          operation.kind === "reasoningSummaryDelta" ||
+          operation.kind === "toolOutputDelta")
+      ) {
+        const lane: LiveItemDeltaLane =
+          operation.kind === "reasoningContentDelta"
+            ? "reasoningContent"
+            : operation.kind === "reasoningSummaryDelta"
+              ? "reasoningSummary"
+              : "toolOutput";
+        const { isFirst } = appendLiveItemDelta(
+          threadId,
+          operation.itemId,
+          lane,
+          operation.delta,
+        );
+        if (!isFirst) {
+          return;
+        }
+      }
       const ensuredThreads = context?.ensuredThreads;
       const markedProcessingThreads = context?.markedProcessingThreads;
       if (!ensuredThreads || !ensuredThreads.has(threadId)) {
@@ -733,6 +772,19 @@ export function useThreadItemEvents({
         // 首个 assistant shell 是结构性 lifecycle 事件。先提交已排队的前一段
         // tail，再同步建壳；其它 thread 的队列保持原 cadence。
         flushRealtimeDeltaOpsForThread(operation.threadId);
+        applyRealtimeDeltaOperation(operation);
+        safeMessageActivity();
+        return;
+      }
+      // A4 二期：flag 开时三类 delta 不再进 32ms 批量队列——liveItemDeltaChannel
+      // 自带 48ms 发布节奏，排队只会延迟建壳与通道累积。同步 apply（内部首条
+      // 建壳、其余只进通道），urgent 语义仍由上方 urgent 分支保留。
+      if (
+        LIVE_DELTA_EXTERNALIZATION_ENABLED &&
+        (operation.kind === "reasoningContentDelta" ||
+          operation.kind === "reasoningSummaryDelta" ||
+          operation.kind === "toolOutputDelta")
+      ) {
         applyRealtimeDeltaOperation(operation);
         safeMessageActivity();
         return;
