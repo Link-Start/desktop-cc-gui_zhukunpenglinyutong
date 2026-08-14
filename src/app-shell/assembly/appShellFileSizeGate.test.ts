@@ -13,7 +13,6 @@ const ALLOWLIST = new Set([
   "sections/useAppShellSearchRadarSection.ts",
   // P2-1: hydration host grew with multi-engine list recovery; still transitional.
   "sections/useWorkspaceThreadListHydration.ts",
-  "assembly/useAppShellRootComposition.ts",
   "domains/useAppShellDomainAssembly.ts",
   "domains/buildAppShellDomainContextSlices.ts",
   "domains/appShellDomainContexts.ts",

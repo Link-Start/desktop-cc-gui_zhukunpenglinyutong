@@ -7,11 +7,14 @@ const currentDir = dirname(fileURLToPath(import.meta.url));
 const appShellPath = join(currentDir, "..", "..", "app-shell.tsx");
 /** T3.2：真实 composition 入口 */
 const appShellEntryPath = join(currentDir, "../assembly/AppShell.tsx");
-/** T2.6：业务 hooks 下沉到 composition host */
-const compositionPath = join(
+const sessionHostPath = join(currentDir, "../hosts/useAppShellSessionHost.ts");
+const runtimeHostPath = join(
   currentDir,
-  "../assembly/useAppShellRootComposition.ts",
+  "../hosts/useAppShellRuntimeThreadHost.ts",
 );
+const composerHostPath = join(currentDir, "../hosts/useAppShellComposerHost.ts");
+const assemblyHostPath = join(currentDir, "../hosts/useAppShellAssemblyHost.ts");
+const hostTreePath = join(currentDir, "../hosts/AppShellHostTree.tsx");
 
 function readSource(path: string): string {
   return readFileSync(path, "utf8");
@@ -19,7 +22,7 @@ function readSource(path: string): string {
 
 describe("AppShell S4 host boundaries", () => {
   it("routes workspace list/home through useWorkspaceSessionHost", () => {
-    const source = readSource(compositionPath);
+    const source = readSource(sessionHostPath);
 
     expect(source).toContain(
       'from "../domains/useWorkspaceSessionHost"',
@@ -35,7 +38,7 @@ describe("AppShell S4 host boundaries", () => {
   });
 
   it("routes active session flags through useRuntimeThreadDomainHost (S4 PR-D)", () => {
-    const source = readSource(compositionPath);
+    const source = readSource(runtimeHostPath);
 
     // 根不再直接调投影：turn 级投影 + runtimeThreadBoundary 由域 host 装配
     expect(source).toContain(
@@ -60,7 +63,7 @@ describe("AppShell S4 host boundaries", () => {
   });
 
   it("routes composer / conversation through domain hosts", () => {
-    const source = readSource(compositionPath);
+    const source = readSource(composerHostPath);
 
     expect(source).toContain('from "../domains/useComposerDomainHost"');
     expect(source).toContain("useComposerDomainHost({");
@@ -89,7 +92,7 @@ describe("AppShell S4 host boundaries", () => {
   });
 
   it("assembles domain contexts via useAppShellDomainAssembly (T1.1)", () => {
-    const source = readSource(compositionPath);
+    const source = readSource(assemblyHostPath);
 
     expect(source).toContain(
       'from "../domains/useAppShellDomainAssembly"',
@@ -107,9 +110,10 @@ describe("AppShell S4 host boundaries", () => {
     const reexport = readSource(appShellPath);
     expect(reexport).toContain('from "./app-shell/assembly/AppShell"');
     const source = readSource(appShellEntryPath);
-    expect(source).toContain("useAppShellRootComposition");
-    expect(source).toContain("AppShellZoneProviders");
-    expect(source).toContain("AppShellView");
+    expect(source).toContain("AppShellHostTree");
+    const tree = readSource(hostTreePath);
+    expect(tree).toContain("AppShellZoneProviders");
+    expect(tree).toContain("AppShellView");
     // composition 入口不得直接挂业务 section / threads hooks
     expect(source).not.toContain("useThreads(");
     expect(source).not.toContain("useComposerController(");
@@ -142,22 +146,22 @@ describe("AppShell S4 host boundaries", () => {
     expect(source).not.toContain("defineAppShellDomainContexts(");
     expect(source).not.toContain("reuseStableAppShellDomainContexts(");
     expect(source).not.toContain("buildAppShellDomainContextSlices");
-    const composition = readSource(compositionPath);
-    expect(composition).toContain("useAppShellDomainAssembly({");
+    const assembly = readSource(assemblyHostPath);
+    expect(assembly).toContain("useAppShellDomainAssembly({");
   });
 
   it("wraps shell view with zone providers (T2.1–T2.3)", () => {
-    const source = readSource(appShellEntryPath);
-    expect(source).toContain("AppShellZoneProviders");
-    expect(source).toContain("AppShellView");
+    const tree = readSource(hostTreePath);
+    expect(tree).toContain("AppShellZoneProviders");
+    expect(tree).toContain("AppShellView");
     const view = readSource(join(currentDir, "../assembly/appShellView.tsx"));
     expect(view).toContain("useAppShellSearchAndComposerSection(");
     expect(view).toContain("useAppShellSections(");
     expect(view).toContain("useAppShellLayoutNodesSection(");
-    const composition = readSource(compositionPath);
-    expect(composition).toContain("useMemoizedRuntimeThreadProviderValue");
-    expect(composition).toContain("useMemoizedComposerProviderValue");
-    expect(composition).toContain("useMemoizedLayoutChromeProviderValue");
+    const assembly = readSource(assemblyHostPath);
+    expect(assembly).toContain("useMemoizedRuntimeThreadProviderValue");
+    expect(assembly).toContain("useMemoizedComposerProviderValue");
+    expect(assembly).toContain("useMemoizedLayoutChromeProviderValue");
   });
 });
 

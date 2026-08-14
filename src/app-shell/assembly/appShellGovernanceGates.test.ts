@@ -23,6 +23,23 @@ const currentDir = dirname(fileURLToPath(import.meta.url));
 const appShellEntryPath = join(currentDir, "AppShell.tsx");
 const appShellReexportPath = join(currentDir, "..", "..", "app-shell.tsx");
 const compositionPath = join(currentDir, "useAppShellRootComposition.ts");
+const sessionHostPath = join(currentDir, "..", "hosts", "useAppShellSessionHost.ts");
+const catalogHostPath = join(currentDir, "..", "hosts", "useAppShellCatalogHost.ts");
+const gitHostPath = join(currentDir, "..", "hosts", "useAppShellGitSurfaceHost.ts");
+const runtimeHostPath = join(
+  currentDir,
+  "..",
+  "hosts",
+  "useAppShellRuntimeThreadHost.ts",
+);
+const composerHostPath = join(currentDir, "..", "hosts", "useAppShellComposerHost.ts");
+const flowsHostPath = join(
+  currentDir,
+  "..",
+  "hosts",
+  "useAppShellWorkspaceFlowsHost.ts",
+);
+const assemblyHostPath = join(currentDir, "..", "hosts", "useAppShellAssemblyHost.ts");
 const assemblyPath = join(
   currentDir,
   "..",
@@ -32,8 +49,9 @@ const assemblyPath = join(
 
 const COMPOSITION_SOFT_LINES = 600;
 const COMPOSITION_HARD_LINES = 800;
-/** RootComposition 仍为过渡巨石：冻结 hard，禁止继续涨（PR-B 2362 → 2400；PR-D 2314 → 2350；PR-C 2280 → 2320；PR-E 2217 → 2260；PR-F 2210 → 2211 咬实测零余量，门禁口径 wc+1） */
-const ROOT_COMPOSITION_HARD_LINES = 2211;
+/** 三刀后根 facade 不再持有业务 hooks；Host 模块各自硬顶 800。 */
+const ROOT_COMPOSITION_HARD_LINES = 80;
+const HOST_HARD_LINES = 800;
 
 function lineCount(path: string): number {
   return readFileSync(path, "utf8").split("\n").length;
@@ -111,10 +129,23 @@ describe("appShellGovernanceGates (T5)", () => {
     expect(entryLines).toBeLessThanOrEqual(COMPOSITION_SOFT_LINES);
     expect(entryLines).toBeLessThanOrEqual(COMPOSITION_HARD_LINES);
     expect(reexportLines).toBeLessThanOrEqual(20);
-    // 过渡巨石冻结
     expect(lineCount(compositionPath)).toBeLessThanOrEqual(
       ROOT_COMPOSITION_HARD_LINES,
     );
+    for (const path of [
+      sessionHostPath,
+      catalogHostPath,
+      gitHostPath,
+      runtimeHostPath,
+      composerHostPath,
+      flowsHostPath,
+      assemblyHostPath,
+    ]) {
+      expect(
+        lineCount(path),
+        `${path} exceeds host hard ${HOST_HARD_LINES}`,
+      ).toBeLessThanOrEqual(HOST_HARD_LINES);
+    }
   });
 
   it("T5.3: forbids business useState in AppShell entry files", () => {

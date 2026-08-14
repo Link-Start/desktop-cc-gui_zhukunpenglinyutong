@@ -5,9 +5,9 @@ import { ESLint } from "eslint";
 import ts from "typescript";
 
 const APP_SHELL_FILE = "src/app-shell.tsx";
-/** T2.6：业务 hooks / assembly 入参在 composition host */
+/** 三刀后：bag / search input 装配在 assembly host */
 const APP_SHELL_COMPOSITION_FILE =
-  "src/app-shell/assembly/useAppShellRootComposition.ts";
+  "src/app-shell/hosts/useAppShellAssemblyHost.ts";
 /** T2.1–T2.3：section hooks 在 AppShellView（Providers 下） */
 const APP_SHELL_VIEW_FILE = "src/app-shell/assembly/appShellView.tsx";
 /** T1.1：domain bag 字面量在 assembly 模块 */

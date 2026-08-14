@@ -78,8 +78,8 @@ updated: 2026-08-15
 | 字段 | 当前值 |
 |------|--------|
 | 计划状态 | `active`（Phase 全清；持续削债务） |
-| 当前 Phase | **P1-5 治理门禁**（T5.1–T5.6 done）— 主计划 Phase 全清 |
-| 推荐下一步 | 提交本轮改动；后续可选：削巨石 / 压 keys / 性能探针 |
+| 当前 Phase | **三刀 Host 子树**（刀 1/2/3 已落地，待流式探针） |
+| 推荐下一步 | 提交本轮改动；后续：流式 30s 探针 + 收窄 layoutNodes 全 domain 订阅 |
 | 基线采集日 | **2026-08-11（T0.2 实测）**；T1.2 后指标见「当前」列 |
 | Ownership Matrix | [`docs/plans/app-shell-ownership-matrix.md`](./app-shell-ownership-matrix.md)（T0.1 已完成） |
 
@@ -87,11 +87,13 @@ updated: 2026-08-15
 
 | 指标 | 基线（2026-08-11 T0.2） | 当前（T1.1 后） | 目标（终态） |
 |------|------------------------|----------------|--------------|
-| `src/app-shell.tsx` 行数 | **2403** | **31**（T2.6 pure composition） | ≤ 400（过渡 ≤ 600） |
+| `src/app-shell.tsx` 行数 | **2403** | **1** re-export；`AppShell.tsx` **9** 行 | ≤ 400（过渡 ≤ 600） |
 | `defineAppShellDomainContexts` 在 `app-shell.tsx` | **718** 行内联 | **0**（T1.1/T1.9：完全不在根内联） | 保持 0 |
 | assembly 内 bag 跨度（`defineAppShellDomainContexts`） | — | ~**730**（builder 拼装） | 理想 ≤200（partial） |
-| 根 hook 唯一种类 | **~67** | **1**（`useAppShellRootComposition`） | composition hooks ≤ 15–20 种 |
-| 根解构绑定约数 | **~685** | 同量级 | 显著下降（无硬顶，趋势向下） |
+| 根 hook 唯一种类 | **~67** | **0**（`AppShell` 只挂 `AppShellHostTree`） | composition hooks ≤ 15–20 种 |
+| 根解构绑定约数 | **~685** | **0**（业务 hooks 在独立 Host） | 显著下降（无硬顶，趋势向下） |
+| `useAppShellRootComposition.ts` 行数 | **2139** | **5**（facade re-export） | ≤ 80 |
+| Host 模块 | — | Session 423 / Catalog 252 / Git 492 / Runtime 320 / Composer 501 / Flows 652 / Assembly 747 | 各 ≤ 800 |
 | `sessionIdentityContext` keys | — | **12**（T1.2） | 保持窄身份域 |
 | `workspaceCatalogContext` keys | — | **29**（T1.3） | 保持 catalog 语义 |
 | `gitSurfaceContext` keys | — | **79**（T1.4） | 与 git panel 同频 |
@@ -141,7 +143,7 @@ wc -l src/app-shell.tsx \
 |-------|------|--------|------|------|
 | **P0-0** | 冻结与度量 | P0 | `done` | 0.5–1 天 |
 | **P0-1** | Domain bag 瘦身 + 子域拆分 | P0 | `done`（自动化验收绿；B1–B8 待人工勾选） | 2–4 天 / 多 PR |
-| **P0-2** | Host 子树化（切断根 re-render 面） | P0 | `done` | 3–6 天 / 多 PR |
+| **P0-2** | Host 子树化（切断根 re-render 面） | P0 | `done`（三刀后真正切断根 fiber） | 3–6 天 / 多 PR |
 | **P1-3** | 物理模块化与目录所有权 | P1 | `done` | 2–4 天 |
 | **P2-4** | Legacy flatten 退役 | P2 | `done` | 持续 |
 | **P1-5** | 治理门禁防回流 | P1 | `done` | 1–2 天 |
@@ -807,6 +809,27 @@ PY
 - **计划变更**：无  
 - **风险 / 未决**：Provider 在 search section hook **之后**挂载，故 composer 路径当前仍走 prop fallback 直到后续把 section hooks 下沉到 Provider 子树；T2.2 ComposerProvider 可一并处理  
 - **下一步指针**：T2.2  
+
+### 2026-08-16 — 三刀：真 Host 子树 + 激活门 + 拆巨石
+
+- **完成 Todo**：刀 1 / 刀 2 / 刀 3（用户授权同轮落地）
+- **动作**：
+  1. **刀 1**：`AppShellHostTree` 用嵌套 memo Host 切断根 fiber。Session / Git / Catalog / Runtime / Composer / Flows / Assembly 各自跑 hook 图；跨 Host 只通过 `appShellHostBus` 字段订阅。
+  2. **刀 2**：`resolveAppShellFeatureActivation` 统一表面门。Git remote / multi-repo 在非 git 表面跳过 IO；Search Radar query 只在 palette 打开时启用。
+  3. **刀 3**：`useAppShellRootComposition.ts` 从 2139 行收成 5 行 facade；业务逻辑拆到 `src/app-shell/hosts/*`，单文件均 ≤ 800。
+  4. 治理：`ROOT_COMPOSITION_HARD_LINES` 2211 → 80；file-size allowlist 去掉 composition 巨石；runtime-contract 指向 assembly host。
+- **路径**：
+  - `src/app-shell/hosts/*`
+  - `src/app-shell/assembly/AppShell.tsx`
+  - `src/app-shell/assembly/useAppShellRootComposition.ts`
+  - `src/features/git/hooks/useGitRemote.ts`
+  - `src/features/git/hooks/useMultiRepositoryGitStatus.ts`
+  - `scripts/check-app-shell-runtime-contract.mjs`
+- **验证**：`npx tsc --noEmit` OK；`npm run check:app-shell:governance` OK；host isolation / bus / activation / multi-repo enabled 测试绿
+- **指标**：AppShell entry **9** 行 / 0 业务 hook；composition facade **5** 行；最大 Host **747**（assembly）/ **652**（flows）
+- **计划变更**：P0-2 从「假模块化根总线」升级为真实 Host 子树；流式 30s 探针仍未做
+- **风险 / 未决**：Host 切片仍用宽 `Record<string, unknown>`；layoutNodes 仍订全 domain；Assembly 仍合并 mega bag
+- **下一步指针**：流式探针 + 收窄 layoutNodes
 
 ### 2026-08-11 — P0-2 全量收口（T2.2–T2.9）
 

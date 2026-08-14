@@ -530,7 +530,7 @@ describe("appShellDomainContexts", () => {
 
   it("wires app-shell production context through the domain objects", () => {
     const appShellSource = readSourceFile("../../app-shell.tsx");
-    const compositionSource = readSourceFile("../assembly/useAppShellRootComposition.ts");
+    const compositionSource = readSourceFile("../hosts/useAppShellAssemblyHost.ts");
     const assemblySource = readSourceFile("useAppShellDomainAssembly.ts");
     const renderAppShellSource = readSourceFile("../render/renderAppShell.tsx");
     const searchAndComposerSource = readSourceFile(
