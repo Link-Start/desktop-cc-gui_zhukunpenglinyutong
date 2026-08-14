@@ -455,6 +455,51 @@ describe("useGitStatus", () => {
     consoleErrorSpy.mockRestore();
   });
 
+  it("skips polling while the window is hidden and resumes after it becomes visible", async () => {
+    const getGitStatusMock = vi.mocked(getGitStatus);
+    getGitStatusMock.mockResolvedValue(makeStatus("main", 0, 0, 1));
+    const originalVisibilityState = document.visibilityState;
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+
+    try {
+      const { unmount } = renderHook(
+        ({ active }: { active: WorkspaceInfo | null }) => useGitStatus(active),
+        { initialProps: { active: workspace } },
+      );
+      await act(async () => {
+        await Promise.resolve();
+      });
+      // 隐藏期间：首轮与后续轮询全部跳过，只重排程。
+      expect(getGitStatusMock).toHaveBeenCalledTimes(0);
+
+      await act(async () => {
+        vi.advanceTimersByTime(45000);
+        await Promise.resolve();
+      });
+      expect(getGitStatusMock).toHaveBeenCalledTimes(0);
+
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        value: "visible",
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(15000);
+        await Promise.resolve();
+      });
+      expect(getGitStatusMock).toHaveBeenCalledTimes(1);
+
+      unmount();
+    } finally {
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        value: originalVisibilityState,
+      });
+    }
+  });
+
   it("does not force unknown branch when the first fetch fails", async () => {
     const getGitStatusMock = vi.mocked(getGitStatus);
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
