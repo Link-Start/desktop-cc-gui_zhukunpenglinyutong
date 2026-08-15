@@ -68,6 +68,8 @@ describe("RunStatusSubagentRows", () => {
     expect(screen.getByText("演示运行态子代理")).toBeTruthy();
     expect(container.querySelector(".subagent-progress")).toBeNull();
     expect(container.querySelectorAll(".crs-subagent-row")).toHaveLength(2);
+    expect(container.querySelector(".crs-subagent-row.is-completed")).toBeTruthy();
+    expect(container.querySelector(".crs-subagent-row.is-running")).toBeTruthy();
   });
 
   it("opens inspector on row click", () => {

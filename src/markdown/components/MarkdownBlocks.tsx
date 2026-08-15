@@ -6,7 +6,7 @@ import { buildLatexRenderEntries, isKatexRenderReady, loadKatexAssets, renderLat
 import { highlightLine } from "../../utils/syntax";
 import { CodeBlockCopyButton, CodeBlockLanguageBadge } from "../presentation/codeBlockLanguageIcon";
 import { shouldDeferCodeBlock } from "../presentation/markdownHeavyIslands";
-import { extractCodeFromPre, extractLanguageTag, extractLatexContent, extractMarkdownContent, extractMermaidContent, extractUrlLines, shouldRenderMarkdownFenceAsCard, type MarkdownPreNode } from "../presentation/markdownCodeBlockHelpers";
+import { extractCodeFenceMeta, extractCodeFromPre, extractLanguageTag, extractLatexContent, extractMarkdownContent, extractMermaidContent, extractUrlLines, shouldRenderMarkdownFenceAsCard, type MarkdownPreNode } from "../presentation/markdownCodeBlockHelpers";
 
 const MermaidBlock = lazy(() => import("../runtime/MermaidBlock"));
 
@@ -71,8 +71,9 @@ function renderHighlightedCodeLines(value: string, languageTag: string | null) {
 }
 
 function CodeBlock({ className, value, copyUseModifier }: CodeBlockProps) {
-  const languageTag = extractLanguageTag(className);
-  const languageLabel = languageTag ?? "Code";
+  const fenceMeta = extractCodeFenceMeta(className);
+  const languageTag = fenceMeta.languageTag;
+  const languageLabel = fenceMeta.label;
   const fencedValue = `\`\`\`${languageTag ?? ""}\n${value}\n\`\`\``;
   const highlightedLines = useMemo(
     () => renderHighlightedCodeLines(value, languageTag),
@@ -82,7 +83,11 @@ function CodeBlock({ className, value, copyUseModifier }: CodeBlockProps) {
   return (
     <div className="markdown-codeblock">
       <div className="markdown-codeblock-header">
-        <CodeBlockLanguageBadge languageTag={languageTag} label={languageLabel} />
+        <CodeBlockLanguageBadge
+          languageTag={languageTag}
+          label={languageLabel}
+          title={fenceMeta.filePath ?? undefined}
+        />
         <div className="markdown-codeblock-actions">
           <CodeBlockCopyButton
             value={value}
@@ -107,7 +112,8 @@ function DeferredCodeBlock({
 }: DeferredCodeBlockProps) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
-  const languageTag = extractLanguageTag(className);
+  const fenceMeta = extractCodeFenceMeta(className);
+  const languageTag = fenceMeta.languageTag;
   const fencedValue = `\`\`\`${languageTag ?? ""}\n${value}\n\`\`\``;
 
   if (expanded) {
@@ -123,7 +129,11 @@ function DeferredCodeBlock({
   return (
     <div className="markdown-codeblock markdown-heavy-island-placeholder">
       <div className="markdown-codeblock-header">
-        <CodeBlockLanguageBadge languageTag={languageTag} label={languageLabel} />
+        <CodeBlockLanguageBadge
+          languageTag={languageTag}
+          label={languageLabel}
+          title={fenceMeta.filePath ?? undefined}
+        />
         <div className="markdown-codeblock-actions">
           <CodeBlockCopyButton
             value={value}
@@ -403,7 +413,7 @@ export function PreBlock({
         className={className}
         value={value}
         copyUseModifier={copyUseModifier}
-        languageLabel={languageTag ?? "Code"}
+        languageLabel={extractCodeFenceMeta(className).label}
         lineCount={codeLineCount}
       />
     );

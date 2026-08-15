@@ -261,6 +261,7 @@ export const ExploreRow = memo(function ExploreRow({
             {item.entries.map((entry, index) => (
               <div key={`${entry.kind}-${entry.label}-${index}`} className="explore-inline-item">
                 <span className="explore-inline-kind">{exploreKindLabel(entry.kind)}</span>
+                <span className="tool-meta-sep" aria-hidden />
                 <span className="explore-inline-label">{entry.label}</span>
                 {entry.detail && entry.detail !== entry.label && (
                   <span className="explore-inline-detail">{entry.detail}</span>

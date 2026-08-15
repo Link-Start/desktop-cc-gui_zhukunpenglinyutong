@@ -311,7 +311,7 @@ export const ReadToolBlock = memo(function ReadToolBlock({
         </span>
       ) : null}
       {fileName && (
-        <span className="truncate" title={filePath}>
+        <span className="tool-meta-path truncate" title={filePath}>
           {fileName}
         </span>
       )}

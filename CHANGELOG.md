@@ -2,6 +2,32 @@
 
 ---
 
+### **2026年8月15日（v0.8.9-fix2）**
+
+中文：
+
+这一版将应用升到 **0.8.9-fix2**，主线是「Windows 冷启动一点就假死」。安装或升级后前几秒关掉版本记录、点权限选择、或点到任意可见控件，Windows WebView2 可能整窗卡住约一分钟；根因是冷启主线程仍被 first-paint / catalog / Markdown / Composer 升级占满时，第一次点击还被当成可以开重活。本版把自动弹层、deferred store / i18n、Composer 升级都挪到 startup-gate-ready 之后，第一次点击只让路、不再开扫。0.8.9 / 0.8.9-fix1 没有独立版本说明，本条覆盖那两版用户应看到的修复。
+
+🐛 Fixes
+- **Windows 冷启动点击假死**：版本记录自动弹出改为 startup-gate-ready + 交互空闲后再开；关闭弹窗会作废在途加载，避免关完再被晚到的 catalog 打回来
+- **Composer 冷启不升 full**：`ComposerGate` 必须等 startup-gate-ready，且 Light 最短停留；早期点击只推迟升级，不再挂 `ComposerImpl`
+- **Light 输入区不再泄漏模型选择**：没有 `onExecutionTargetChange` 时不传可点 picker，也不走 atomic catalog
+- **identity 缩放不再空写样式**：`applyUiScale` 在 100% 路径 verify-before-write，避免冷启无 residual 仍清 html/body inline style
+- 将应用版本号提升到 `0.8.9-fix2`，与本热修发版元数据对齐，已看过 0.8.9 / 0.8.9-fix1 的用户会再次看到本条说明
+
+English:
+
+This release moves the app to **0.8.9-fix2**. The headline is the Windows cold-start click freeze: in the first seconds after install or upgrade, closing release notes, tapping permission / mode select, or hitting any visible chrome could stall the whole WebView2 window for about a minute. The compositor was still waiting on first-paint / catalog / Markdown / Composer work, and the first click was also treated as a hydrate starter. Auto-open overlays, deferred stores / i18n, and Composer upgrades now wait for startup-gate-ready; the first click only yields, it does not start a sweep. 0.8.9 and 0.8.9-fix1 had no standalone notes; this entry is what those users should see.
+
+🐛 Fixes
+- **Windows cold-start click freeze**: auto-open release notes only after startup-gate-ready plus an interactive quiet slice; closing the overlay invalidates in-flight loads so a late catalog resolve cannot reopen it
+- **Composer stays light on cold start**: `ComposerGate` requires startup-gate-ready and a Light floor; early clicks delay the upgrade instead of mounting `ComposerImpl`
+- **Light composer no longer leaks ModelSelect**: do not pass a clickable picker or the atomic catalog unless `onExecutionTargetChange` is actually wired
+- **Identity UI scale no longer writes empty styles**: `applyUiScale` verify-before-write on the 100% path so cold start does not clear html/body inline styles with no residual
+- Bump the app version to `0.8.9-fix2` so users who already marked 0.8.9 / 0.8.9-fix1 as seen will get this note
+
+---
+
 ### **2026年8月12日（v0.8.8）**
 
 中文：

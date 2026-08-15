@@ -145,12 +145,19 @@ export interface WorkspaceSessionSourceCacheMetrics {
   failures: number;
 }
 
+export type WorkspaceSessionScanQuality = "preview" | "full";
+
 export interface WorkspaceSessionCatalogQuery {
   keyword?: string | null;
   engine?: string | null;
   status?: "active" | "archived" | "all" | null;
   folderId?: string | null;
   sessionAttributionMode?: WorkspaceSessionAttributionMode | null;
+  /**
+   * Sidebar history uses `preview` so Codex stays on ThreadPreview.
+   * Session Management omits this and keeps the full inventory parse.
+   */
+  scanQuality?: WorkspaceSessionScanQuality | null;
 }
 
 export interface WorkspaceSessionCatalogPage {

@@ -118,12 +118,13 @@ export const ExploreInlineItemRow = memo(function ExploreInlineItemRow({
       title={title}
     >
       {kind ? <span className="explore-inline-kind">{kind}</span> : null}
+      {kind ? <span className="tool-meta-sep" aria-hidden /> : null}
       {icon != null ? (
         <span className="explore-inline-file-icon" aria-hidden>
           {icon}
         </span>
       ) : null}
-      <span className="explore-inline-label">{label}</span>
+      <span className={cn("explore-inline-label", icon != null && "tool-meta-path")}>{label}</span>
       {detail ? <span className="explore-inline-detail">{detail}</span> : null}
     </div>
   );

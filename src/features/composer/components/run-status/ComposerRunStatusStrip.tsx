@@ -377,8 +377,8 @@ function ExpandedBody({
 }) {
   if (section === "todo") {
     return (
-      <div className="composer-run-status-body">
-        <TodoList todos={todos} />
+      <div className="composer-run-status-body composer-run-status-body--todos">
+        <TodoList todos={todos} showTitle />
       </div>
     );
   }

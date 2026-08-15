@@ -1,3 +1,5 @@
+import { resolvePreviewLanguageFromPath } from "../../utils/fileLanguageRegistry";
+
 export type MarkdownPreNode = {
   tagName?: string;
   position?: {
@@ -11,7 +13,17 @@ export type MarkdownPreNode = {
   }>;
 };
 
+export type CodeFenceMeta = {
+  languageTag: string | null;
+  label: string;
+  filePath: string | null;
+  startLine: number | null;
+  endLine: number | null;
+};
+
 const MARKDOWN_LANGUAGE_SET = new Set(["markdown", "md", "mdx"]);
+const CITATION_FENCE_PATTERN = /^(\d+):(\d+):(.+)$/;
+const FILE_EXTENSION_PATTERN = /\.[a-zA-Z][a-zA-Z0-9]{0,8}$/;
 
 export function extractLanguageTag(className?: string) {
   if (!className) {
@@ -22,6 +34,88 @@ export function extractLanguageTag(className?: string) {
     return null;
   }
   return match[1] ?? null;
+}
+
+function extractRawFenceInfo(className?: string): string | null {
+  if (!className) {
+    return null;
+  }
+  const match = className.match(/language-(\S+)/i);
+  const raw = match?.[1]?.trim();
+  return raw || null;
+}
+
+function looksLikeFilePath(value: string): boolean {
+  return /[\\/]/.test(value) || FILE_EXTENSION_PATTERN.test(value);
+}
+
+function fileNameFromPath(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, "/");
+  const segments = normalized.split("/");
+  return segments[segments.length - 1] || filePath;
+}
+
+function formatCitationLabel(
+  filePath: string,
+  startLine: number | null,
+  endLine: number | null,
+): string {
+  const fileName = fileNameFromPath(filePath);
+  if (startLine == null) {
+    return fileName;
+  }
+  if (endLine == null || endLine === startLine) {
+    return `${fileName}:${startLine}`;
+  }
+  return `${fileName}:${startLine}-${endLine}`;
+}
+
+export function extractCodeFenceMeta(className?: string): CodeFenceMeta {
+  const raw = extractRawFenceInfo(className);
+  if (!raw) {
+    return {
+      languageTag: null,
+      label: "Code",
+      filePath: null,
+      startLine: null,
+      endLine: null,
+    };
+  }
+
+  const citation = raw.match(CITATION_FENCE_PATTERN);
+  if (citation) {
+    const startLine = Number(citation[1]);
+    const endLine = Number(citation[2]);
+    const filePath = (citation[3] ?? "").trim();
+    if (filePath) {
+      return {
+        languageTag: resolvePreviewLanguageFromPath(filePath),
+        label: formatCitationLabel(filePath, startLine, endLine),
+        filePath,
+        startLine,
+        endLine,
+      };
+    }
+  }
+
+  if (looksLikeFilePath(raw)) {
+    return {
+      languageTag: resolvePreviewLanguageFromPath(raw),
+      label: formatCitationLabel(raw, null, null),
+      filePath: raw,
+      startLine: null,
+      endLine: null,
+    };
+  }
+
+  const languageTag = extractLanguageTag(`language-${raw}`) ?? raw;
+  return {
+    languageTag,
+    label: languageTag,
+    filePath: null,
+    startLine: null,
+    endLine: null,
+  };
 }
 
 function isLatexLanguage(languageTag: string | null) {

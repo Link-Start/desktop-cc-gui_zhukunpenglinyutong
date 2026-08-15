@@ -336,6 +336,7 @@ async fn build_workspace_scope_catalog_data(
     workspace_id: &str,
     scan_mode: SessionCatalogScanMode,
     attribution_mode: WorkspaceSessionAttributionMode,
+    scan_quality: WorkspaceSessionScanQuality,
 ) -> Result<WorkspaceScopeCatalogData, String> {
     let workspace_scope = catalog_workspace_scope(workspaces, workspace_id).await?;
     let workspaces_snapshot = workspaces.lock().await.clone();
@@ -379,12 +380,25 @@ async fn build_workspace_scope_catalog_data(
             .cloned()
             .unwrap_or_default();
 
-        match local_usage::list_codex_session_summary_list_for_workspace(
-            workspaces,
-            &owner_workspace_id,
-            scan_mode.limit(),
-        )
-        .await
+        let codex_summary_list = match scan_quality {
+            WorkspaceSessionScanQuality::Preview => {
+                local_usage::list_codex_session_summary_list_for_workspace_preview(
+                    workspaces,
+                    &owner_workspace_id,
+                    scan_mode.limit(),
+                )
+                .await
+            }
+            WorkspaceSessionScanQuality::Full => {
+                local_usage::list_codex_session_summary_list_for_workspace(
+                    workspaces,
+                    &owner_workspace_id,
+                    scan_mode.limit(),
+                )
+                .await
+            }
+        };
+        match codex_summary_list
         {
             Ok(summary_list) => {
                 let has_provider_home_diagnostics =

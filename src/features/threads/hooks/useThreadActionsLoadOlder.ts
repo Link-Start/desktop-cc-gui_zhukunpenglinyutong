@@ -144,7 +144,11 @@ export function useLoadOlderThreadsForWorkspace({
           const response: WorkspaceSessionCatalogPage | null =
             await withTimeout(
               listWorkspaceSessionsService(workspace.id, {
-                query: { status: "active", sessionAttributionMode },
+                query: {
+                  status: "active",
+                  sessionAttributionMode,
+                  scanQuality: "preview",
+                },
                 cursor: cursorState.cursor,
                 limit: SESSION_CATALOG_PAGE_SIZE,
               }),

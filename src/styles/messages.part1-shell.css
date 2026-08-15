@@ -5,6 +5,13 @@
   --message-title-font-size: var(--client-title-font-size, 14px);
   /* 思考正文比 meta(12px) 再小一档、比 caption(10px) 大，介于两者之间以示轻盈 */
   --message-thinking-font-size: 11px;
+  /* 活动 meta 行（thinking / explore / tool）：介于原 12/20 与参考 14/24 之间。
+     只作用于活动栈，不抬全局 meta（时间戳、footer 等仍走 --message-meta-font-size）。 */
+  --message-tool-row-font-size: 13px;
+  --message-tool-row-line-height: 24px;
+  --message-tool-row-min-height: 28px;
+  --message-tool-row-icon-gap: 8px;
+  --message-tool-row-margin-y: 8px;
   position: relative;
   container-type: inline-size;
   display: flex;
@@ -284,8 +291,19 @@
 .message-tool-block-shell {
   display: flex;
   flex-direction: column;
-  /* 与 thinking / explore 同 6px 外层节奏；展开体内部自带留白，不在 shell 上随展开加减 margin */
-  margin: 6px 0;
+  /* 与 thinking / explore 同外层节奏；展开体内部自带留白，不在 shell 上随展开加减 margin */
+  margin: var(--message-tool-row-margin-y, 8px) 0;
+}
+
+/* 时间线已给工具包一层 shell：内部 explore / tool-inline / tcb 不再各自再吃 8/12 */
+.message-tool-block-shell > :is(.explore-inline, .tool-inline, .tcb-marker) {
+  margin: 0;
+}
+
+/* 活动行相邻只留上一块的 margin-bottom。flex 不折叠；shell+explore 双层也不折叠。 */
+:is(.thinking-block, .explore-inline, .message-tool-block-shell, .tcb-marker)
+  + :is(.thinking-block, .explore-inline, .message-tool-block-shell, .tcb-marker) {
+  margin-top: 0;
 }
 
 /* meta 活动栈结束后接正文：给黑字段落一点呼吸 */

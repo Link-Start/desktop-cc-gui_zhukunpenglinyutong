@@ -9,7 +9,7 @@ use super::{
     normalize_workspace_id, read_catalog_metadata, remove_folder_assignment_for_session,
     replace_batch_results_for_targets, resolve_session_mutation_target,
     with_catalog_metadata_mutation, SessionCatalogScanMode, WorkspaceSessionBatchMutationResponse,
-    WorkspaceSessionMutationTarget,
+    WorkspaceSessionMutationTarget, WorkspaceSessionScanQuality,
 };
 use crate::engine;
 use crate::types::{WorkspaceEntry, WorkspaceSessionAttributionMode};
@@ -38,6 +38,7 @@ pub(crate) async fn assign_workspace_session_folders_core(
         &workspace_id,
         SessionCatalogScanMode::Exhaustive,
         WorkspaceSessionAttributionMode::Related,
+        WorkspaceSessionScanQuality::Full,
     )
     .await?;
     let workspaces_snapshot = workspaces.lock().await.clone();

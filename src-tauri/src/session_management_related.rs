@@ -55,6 +55,7 @@ pub(crate) async fn list_project_related_sessions_core(
         storage_path,
         scan_mode,
         engine_filter.as_deref(),
+        normalized_query.scan_quality(),
     )
     .await?;
     let related_entries = global_entries

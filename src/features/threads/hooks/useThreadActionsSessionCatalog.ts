@@ -161,7 +161,11 @@ export function useThreadActionsSessionCatalog({
       }
       const response: WorkspaceSessionCatalogPage | null = await withTimeout(
         listWorkspaceSessionsService(workspaceId, {
-          query: { status: "active", sessionAttributionMode },
+          query: {
+            status: "active",
+            sessionAttributionMode,
+            scanQuality: "preview",
+          },
           cursor: null,
           // First-paint catalog page matches sidebar initial page (default 5).
           limit: SESSION_CATALOG_INITIAL_PAGE_SIZE,

@@ -2644,9 +2644,9 @@ html[data-theme="light"] .memory-pick-empty-status-logo {
 
 /* 归组块：无边框极简（参考 AI SDK Task），标题行整行可点、内容沿左侧 rail 缩进展开 */
 /* 根层级不画竖线：覆盖 .tool-inline 的 border-left / padding-left，rail 只在展开列表上 */
-/* 外层 margin 折叠/展开恒定（与 thinking-block 同 6px），收起只卸列表高度、不改行距 */
+/* 外层 margin 折叠/展开恒定（与 thinking-block 同活动行节奏），收起只卸列表高度、不改行距 */
 .explore-inline {
-  margin: 6px 0;
+  margin: var(--message-tool-row-margin-y, 8px) 0;
   box-sizing: border-box;
   max-width: 100%;
   min-width: 0;
@@ -2670,12 +2670,13 @@ html[data-theme="light"] .memory-pick-empty-status-logo {
 .explore-inline-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 2px 0;
-  min-height: 22px;
+  gap: var(--message-tool-row-icon-gap, 8px);
+  padding: 0;
+  min-height: var(--message-tool-row-min-height, 28px);
   background: transparent;
-  font-size: var(--message-meta-font-size, 12px);
-  line-height: 20px;
+  font-size: var(--message-tool-row-font-size, 13px);
+  line-height: var(--message-tool-row-line-height, 24px);
+  letter-spacing: 0.01em;
   color: var(--text-muted);
   width: 100%;
   box-sizing: border-box;
@@ -2684,9 +2685,9 @@ html[data-theme="light"] .memory-pick-empty-status-logo {
 .explore-inline-header-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 22px;
-  padding: 0;
+  gap: var(--message-tool-row-icon-gap, 8px);
+  min-height: var(--message-tool-row-min-height, 28px);
+  padding: 2px 0;
   margin: 0;
   border: none;
   background: transparent;
@@ -2740,7 +2741,7 @@ svg.explore-inline-icon {
 .search-tool-inline-title {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: var(--message-tool-row-icon-gap, 8px);
   white-space: nowrap;
 }
 
@@ -2757,14 +2758,13 @@ svg.explore-inline-icon {
 }
 
 /* 内容：仅在展开时挂载；内边距负责展开态呼吸，不改外层 .explore-inline margin */
-/* 竖线右移到标题文字左缘（图标 14 + gap 6），与标题形成更清晰的层级分隔 */
-/* 底 margin 2px（原 6px）：展开列表底部不再比折叠 meta 行距更疏 */
+/* 竖线右移到标题文字左缘（图标 14 + icon-gap），与标题形成更清晰的层级分隔 */
 .explore-inline-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin: 2px 0 2px 6px;
-  padding: 0 0 0 10px;
+  gap: 6px;
+  margin: 4px 0 4px 6px;
+  padding: 0 0 0 12px;
   border-left: 1.5px solid var(--border-subtle);
 }
 
@@ -2777,9 +2777,10 @@ svg.explore-inline-icon {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--message-tool-row-icon-gap, 8px);
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--message-tool-row-font-size, 13px);
+  line-height: var(--message-tool-row-line-height, 24px);
 }
 
 /* 带文件类型图标时垂直居中，避免彩色 badge 与文字基线错位 */
@@ -2811,6 +2812,26 @@ svg.explore-inline-icon {
   flex: 0 0 auto;
 }
 
+/* 活动行 title · summary 分隔点：参考 8px 两侧留白，保留咱们的 muted 色 */
+.tool-meta-sep {
+  flex: none;
+  width: 2px;
+  height: 2px;
+  border-radius: 1px;
+  margin: 0;
+  background: var(--text-faint, var(--muted-foreground));
+  align-self: center;
+}
+
+/* 文件路径：浅下划线拉开字形，不做成网页蓝链 */
+.tool-meta-path {
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
 .explore-inline-label {
   color: var(--text-muted);
   min-width: 0;
@@ -2821,7 +2842,7 @@ svg.explore-inline-icon {
 
 .explore-inline-detail {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: var(--message-caption-font-size, 11px);
   min-width: 0;
   flex: 1 1 auto;
   overflow-wrap: break-word;

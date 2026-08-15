@@ -215,7 +215,7 @@ export const FileChangeRow = memo(function FileChangeRow({
           <ToolFileTypeIcon filePath={filePath} size={14} />
         </span>
       ) : null}
-      <span className="min-w-0 truncate" title={filePath}>
+      <span className="tool-meta-path min-w-0 truncate" title={filePath}>
         {fileName}
       </span>
       {hasStats && (

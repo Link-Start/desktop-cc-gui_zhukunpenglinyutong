@@ -28,6 +28,36 @@ describe("ComposerRunStatusStrip styles", () => {
       /\.composer-run-status-panel-shell\.is-open\s*\{[\s\S]*margin-bottom\s*:/,
     );
   });
+
+  it("loads TodoList layout CSS without waiting for StatusPanel", () => {
+    const stripCss = readFileSync(
+      resolve(process.cwd(), "src/styles/composer-run-status.css"),
+      "utf8",
+    );
+    const todoCss = readFileSync(
+      resolve(process.cwd(), "src/styles/todo-list.css"),
+      "utf8",
+    );
+
+    expect(stripCss).toMatch(/@import\s+["']\.\/todo-list\.css["']/);
+    expect(todoCss).toMatch(/\.sp-todo-header\s*\{[\s\S]*display:\s*flex/);
+    expect(todoCss).toMatch(/\.sp-todo-item\s*\{[\s\S]*display:\s*flex/);
+  });
+
+  it("uses success green only inside completed subagent rows", () => {
+    const css = readFileSync(
+      resolve(process.cwd(), "src/styles/composer-run-status.css"),
+      "utf8",
+    );
+
+    expect(css).not.toMatch(/\.composer-run-status-pill\.is-completed/);
+    expect(css).toMatch(
+      /\.crs-subagent-row\.is-completed \.crs-subagent-dot[\s\S]*--status-success/,
+    );
+    expect(css).toMatch(
+      /\.crs-subagent-row\.is-completed \.crs-subagent-status[\s\S]*--status-success/,
+    );
+  });
 });
 
 describe("ComposerRunStatusStrip", () => {

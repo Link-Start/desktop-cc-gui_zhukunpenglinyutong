@@ -19,7 +19,7 @@ import { FileIcon } from './FileIcon';
 import { cn } from '@/lib/utils';
 import { Marker, MarkerContent, MarkerIcon } from '../../../../components/ui/marker';
 import { CollapsibleReveal } from '../../../../components/common/CollapsibleReveal';
-import { ToolStatusIcon } from './ToolMarkerShell';
+import { TOOL_META_ROW_CLASS, ToolStatusIcon } from './ToolMarkerShell';
 import { ExitPlanToolContent, type ExitPlanToolCopy } from './ExitPlanToolContent';
 import { FileChangeToolContent } from './FileChangeToolContent';
 import {
@@ -386,8 +386,7 @@ export const GenericToolBlock = memo(function GenericToolBlock({
       <Marker
         {...(isInteractive ? { onClick: handleClick } : {})}
         className={cn(
-          // 与 ToolMarkerShell 同 meta 尺度：12px 字 + 14px 图标 + 20px 行高 + py-0.5 呼吸
-          'min-h-5 gap-1.5 rounded-md py-0.5 pr-1 text-[length:var(--message-meta-font-size,12px)] leading-5 transition-colors',
+          TOOL_META_ROW_CLASS,
           '[&_svg]:!size-3.5',
           isInteractive && 'cursor-pointer select-none hover:bg-accent/50',
         )}
@@ -396,10 +395,11 @@ export const GenericToolBlock = memo(function GenericToolBlock({
           {resolveToolMarkerIcon(codiconClass)}
         </MarkerIcon>
         <span className="shrink-0">{displayName}</span>
+        {summary ? <span className="tool-meta-sep" aria-hidden /> : null}
         <MarkerContent className="flex min-w-0 items-center gap-2">
           {summary && (
             <span
-              className="truncate"
+              className={cn('truncate', (isFile || isDirectory) && 'tool-meta-path')}
               title={summary}
               style={(isFile || isDirectory) ? { display: 'inline-flex', alignItems: 'center', gap: '4px' } : undefined}
             >
