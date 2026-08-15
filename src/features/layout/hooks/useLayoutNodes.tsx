@@ -150,6 +150,11 @@ const FileViewPanel = lazy(() =>
     default: m.FileViewPanel,
   })),
 );
+const BrowserDock = lazy(() =>
+  import("../../browser-agent/components/BrowserDock").then((m) => ({
+    default: m.BrowserDock,
+  })),
+);
 const ProjectMapPanel = lazy(() =>
   import("../../project-map/components/ProjectMapPanel").then((m) => ({
     default: m.ProjectMapPanel,
@@ -2957,7 +2962,19 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     diffLabel: t("workspace.diff"),
     onBackFromDiff: options.onBackFromDiff,
   });
-  const browserDockNode = null;
+  const browserDockNode =
+    options.browserDockOpen &&
+    options.centerMode === "chat" &&
+    options.activeWorkspaceId ? (
+      <Suspense fallback={<HeavyPanelFallback />}>
+        <BrowserDock
+          workspaceId={options.activeWorkspaceId}
+          ownerSurface="main-split-browser-dock"
+          displayMode="embedded"
+          className="browser-agent-center-panel-dock"
+        />
+      </Suspense>
+    ) : null;
 
   return {
     codeAnnotationBridgeProps,

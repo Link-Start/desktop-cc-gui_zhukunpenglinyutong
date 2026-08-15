@@ -953,23 +953,16 @@ export function useAppShellLayoutNodesSection(
       sidebarToggleProps.rightPanelAvailable &&
       clientUiVisibility.isControlVisible("topTool.rightPanel"),
   };
-  const browserDockOpen = false;
-  const openBrowserAgentDock = useCallback(() => {
-    // Dynamic import keeps browser-agent dock out of AppShell first-hop mapDeps (P0-3).
-    void import("../../../features/browser-agent/browserAgentDockWindow")
-      .then(({ openOrFocusBrowserAgentDockWindow }) =>
-        openOrFocusBrowserAgentDockWindow({
-          workspaceId: activeWorkspaceId,
-          workspaceName: activeWorkspace?.name ?? null,
-        }),
-      )
-      .catch((error) => {
-        alertError(error instanceof Error ? error.message : String(error));
-      });
-  }, [activeWorkspace?.name, activeWorkspaceId, alertError]);
+  const [browserDockOpen, setBrowserDockOpen] = useState(false);
   const handleToggleBrowserDock = useCallback(() => {
-    openBrowserAgentDock();
-  }, [openBrowserAgentDock]);
+    setBrowserDockOpen((current) => {
+      const next = !current;
+      if (next) {
+        setCenterMode("chat");
+      }
+      return next;
+    });
+  }, [setCenterMode]);
   const mainHeaderActions = useMainHeaderActionItems({
     isCompact,
     rightPanelCollapsed,
@@ -999,7 +992,7 @@ export function useAppShellLayoutNodesSection(
     onOpenFileCompare: handleOpenScratchFileCompare,
   });
   const handleCloseBrowserDock = useCallback(() => {
-    // Browser Agent now lives in its own tool window.
+    setBrowserDockOpen(false);
   }, []);
 
   const handleOpenIntentCanvas = useCallback(
