@@ -57,6 +57,7 @@ export function loadIntentCanvasStyles() {
 export function loadSettingsStyles() {
   return loadStyles([
     () => import("./settings.css"),
+    () => import("./settings.vendor-pi-auth.css"),
   ]);
 }
 

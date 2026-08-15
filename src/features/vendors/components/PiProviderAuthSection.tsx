@@ -27,6 +27,8 @@ import {
   PI_AUTH_OAUTH_PROVIDERS,
   type PiAuthUiProvider,
 } from "../piAuthProviderCatalog";
+import { loadSettingsStyles } from "../../../styles/featureStyleLoaders";
+import { useFeatureStylesReady } from "../../../styles/useFeatureStylesReady";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { ProviderBrandIconImg } from "./ProviderBrandIconImg";
 
@@ -46,6 +48,7 @@ function PiAuthBrandIcon({ iconSrc }: { iconSrc: string | null }) {
 }
 
 export function PiProviderAuthSection({ piBin }: { piBin?: string | null }) {
+  useFeatureStylesReady(loadSettingsStyles);
   const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<PiAuthListResult | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);

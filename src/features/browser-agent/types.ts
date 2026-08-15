@@ -309,6 +309,7 @@ export type BrowserUserAnnotation = {
   region: BrowserUserAnnotationRegion | null;
   nearbyText: string | null;
   nearestElement: BrowserUserAnnotationNearestElement | null;
+  locate?: BrowserSelectionLocate | null;
   privacy: BrowserPrivacyReport;
   staleReasons: BrowserObservationStaleReason[];
   diagnostics: BrowserObservationDiagnostic[];
