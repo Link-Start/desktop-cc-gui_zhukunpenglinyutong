@@ -35,6 +35,7 @@ const SUPPORTED: EngineType[] = [
   "kimi",
   "grok",
   "opencode",
+  "pi",
 ];
 
 export function isMultiAgentTargetSupported(

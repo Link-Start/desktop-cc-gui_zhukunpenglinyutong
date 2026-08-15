@@ -488,7 +488,8 @@ pub(super) fn validate_agent_target(target: &ExecutionTargetInput) -> Result<(),
         | EngineType::Claude
         | EngineType::Kimi
         | EngineType::Grok
-        | EngineType::OpenCode => Ok(()),
+        | EngineType::OpenCode
+        | EngineType::Pi => Ok(()),
         other => Err(format!(
             "agent-target-unavailable:{other:?}: unsupported Shared engine"
         )),
