@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
 import { pushErrorToast } from "../../../services/toasts";
+import { loadSubagentStyles } from "../../../styles/featureStyleLoaders";
+import { useFeatureStylesReady } from "../../../styles/useFeatureStylesReady";
 import type { EngineType } from "../../../types";
 import {
   selectTemplate,
@@ -54,6 +56,7 @@ export function MultiAgentComposerToggle({
   onArm,
 }: ComposerToggleProps) {
   const { t } = useTranslation();
+  const stylesReady = useFeatureStylesReady(loadSubagentStyles);
   const targetSupported = isMultiAgentTargetSupported(engine);
   const unavailable = !targetSupported;
   const selected = useSelectedTemplate();
@@ -182,7 +185,7 @@ export function MultiAgentComposerToggle({
   };
 
   const popover =
-    popOpen && popPos
+    popOpen && popPos && stylesReady
       ? createPortal(
           <div
             ref={popRef}
@@ -335,7 +338,7 @@ export function MultiAgentComposerToggle({
       {popover}
 
       <TemplateManagerModal
-        open={modalOpen}
+        open={modalOpen && stylesReady}
         initialTemplateId={selected.id}
         onClose={() => setModalOpen(false)}
       />
