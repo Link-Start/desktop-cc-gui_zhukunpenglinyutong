@@ -5,7 +5,8 @@ use tauri::State;
 use tokio::time::timeout;
 
 use super::store::{
-    list_for_workspace_path, open_connection, SessionIndexListPage, SessionIndexSyncReport,
+    list_for_workspace_path, list_for_workspace_path_before, open_connection,
+    SessionIndexListPage, SessionIndexSyncReport,
 };
 use super::writers::{
     commit_engine_rows, engine_source_is_fresh, gemini_home_fingerprint, grok_home_fingerprint,
@@ -19,7 +20,7 @@ use crate::engine::opencode_session_list_core;
 use crate::local_usage::resolve_sessions_roots;
 use crate::state::AppState;
 
-const DEFAULT_SIDEBAR_INDEX_LIMIT: usize = 50;
+const DEFAULT_SIDEBAR_INDEX_LIMIT: usize = 20;
 const ASYNC_ENGINE_LIST_TIMEOUT: Duration = Duration::from_secs(3);
 const OPENCODE_INDEX_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -395,6 +396,8 @@ pub async fn list_session_index_for_workspace(
     limit: Option<u32>,
     sync_if_needed: Option<bool>,
     force_sync: Option<bool>,
+    before_updated_at: Option<i64>,
+    before_session_id: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<SessionIndexListPage, String> {
     let started = Instant::now();
@@ -435,12 +438,22 @@ pub async fn list_session_index_for_workspace(
     }
 
     let path_for_list = path_str.clone();
-    let data = tokio::task::spawn_blocking(move || {
+    let before = before_updated_at.map(|updated_at| {
+        (
+            updated_at,
+            before_session_id.unwrap_or_default().trim().to_string(),
+        )
+    });
+    let mut data = tokio::task::spawn_blocking(move || {
         let connection = open_connection()?;
-        list_for_workspace_path(&connection, &path_for_list, limit)
+        list_for_workspace_path_before(&connection, &path_for_list, limit.saturating_add(1), before)
     })
     .await
     .map_err(|error| error.to_string())??;
+    let has_more = data.len() > limit;
+    if has_more {
+        data.truncate(limit);
+    }
 
     if engines.is_empty() {
         let mut seen = std::collections::HashSet::new();
@@ -462,6 +475,7 @@ pub async fn list_session_index_for_workspace(
         sync_ms: sync_ms.or_else(|| Some(started.elapsed().as_millis() as u64)),
         engines,
         partial_source,
+        has_more,
     })
 }
 

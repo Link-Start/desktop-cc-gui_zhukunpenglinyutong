@@ -73,6 +73,8 @@ pub struct SessionIndexListPage {
     pub engines: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub partial_source: Option<String>,
+    #[serde(default)]
+    pub has_more: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -289,6 +291,15 @@ pub(crate) fn list_for_workspace_path(
     workspace_path: &str,
     limit: usize,
 ) -> Result<Vec<SessionIndexRow>, String> {
+    list_for_workspace_path_before(connection, workspace_path, limit, None)
+}
+
+pub(crate) fn list_for_workspace_path_before(
+    connection: &Connection,
+    workspace_path: &str,
+    limit: usize,
+    before: Option<(i64, String)>,
+) -> Result<Vec<SessionIndexRow>, String> {
     let limit = limit.clamp(1, 500);
     let key = normalize_path_key(workspace_path);
     if key.is_empty() {
@@ -296,18 +307,32 @@ pub(crate) fn list_for_workspace_path(
     }
     // Prefer exact workspace_path / cwd match in SQL; post-filter with
     // paths_equivalent for Windows case folding edge cases.
+    let fetch_limit = (limit.saturating_add(1)) as i64;
     let mut statement = connection
         .prepare(
             "SELECT engine, session_id, title, native_title, updated_at, created_at,
                     cwd, workspace_path, physical_path, parent_session_id, size_bytes
              FROM session_index
-             WHERE workspace_path = ?1 OR cwd = ?1
+             WHERE (workspace_path = ?1 OR cwd = ?1)
+               AND (
+                 ?3 IS NULL
+                 OR updated_at < ?3
+                 OR (updated_at = ?3 AND session_id > ?4)
+               )
              ORDER BY updated_at DESC, session_id ASC
              LIMIT ?2",
         )
         .map_err(|error| error.to_string())?;
+    let before_updated = before.as_ref().map(|(updated_at, _)| *updated_at);
+    let before_id = before
+        .as_ref()
+        .map(|(_, session_id)| session_id.as_str())
+        .unwrap_or("");
     let mut rows = statement
-        .query_map(params![key, limit as i64], map_row)
+        .query_map(
+            params![key, fetch_limit, before_updated, before_id],
+            map_row,
+        )
         .map_err(|error| error.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())?;

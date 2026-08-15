@@ -163,6 +163,7 @@ pub(crate) fn invoke_handler(
         crate::codex::codex_preview_launch_profile,
         crate::codex::claude_doctor,
         crate::codex::kimi_doctor,
+        crate::codex::pi_doctor,
         crate::codex::grok_doctor,
         crate::codex::opencode_doctor,
         crate::codex::cli_install_plan,

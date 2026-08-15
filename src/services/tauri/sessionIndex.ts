@@ -30,6 +30,7 @@ export type SessionIndexListPage = {
   syncMs?: number | null;
   engines: string[];
   partialSource?: string | null;
+  hasMore?: boolean;
 };
 
 export type SessionIndexSyncReport = {
@@ -46,13 +47,17 @@ export async function listSessionIndexForWorkspace(
     limit?: number | null;
     syncIfNeeded?: boolean | null;
     forceSync?: boolean | null;
+    beforeUpdatedAt?: number | null;
+    beforeSessionId?: string | null;
   },
 ): Promise<SessionIndexListPage> {
   return invoke<SessionIndexListPage>("list_session_index_for_workspace", {
     workspaceId,
-    limit: options?.limit ?? null,
+    limit: options?.limit ?? 20,
     syncIfNeeded: options?.syncIfNeeded ?? true,
     forceSync: options?.forceSync ?? false,
+    beforeUpdatedAt: options?.beforeUpdatedAt ?? null,
+    beforeSessionId: options?.beforeSessionId ?? null,
   });
 }
 

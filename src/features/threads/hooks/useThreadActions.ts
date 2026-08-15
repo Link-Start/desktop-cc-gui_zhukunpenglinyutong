@@ -454,10 +454,7 @@ export function useThreadActions({
         // CRITICAL UX: on first-paint, await index FIRST and paint immediately.
         // Do NOT wait for titles/shared/codex live list — that left the sidebar
         // stuck on stale sidebarSnapshot for seconds (user: old list → late correct).
-        const sessionIndexLimit = Math.max(
-          resolveInitialThreadListTargetCount(workspace) * 4,
-          50,
-        );
+        const sessionIndexLimit = 20;
         // Only explicit soft re-sync forces writers; cold first-paint must hit
         // warm SQLite (ms) so stale sidebarSnapshot is replaced immediately.
         const forceIndexSync = Boolean(options?.forceSessionIndexSync);

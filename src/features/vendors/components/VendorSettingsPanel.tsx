@@ -449,6 +449,8 @@ export function VendorSettingsPanel({
         return { path: appSettings.grokBin ?? null, args: null };
       case "opencode":
         return { path: appSettings.opencodeBin ?? null, args: null };
+      case "pi":
+        return { path: appSettings.piBin ?? null, args: null };
       case "codex":
         return {
           path: appSettings.codexBin ?? null,
@@ -482,6 +484,12 @@ export function VendorSettingsPanel({
           await onUpdateAppSettings({
             ...appSettings,
             opencodeBin: payload.path,
+          });
+          break;
+        case "pi":
+          await onUpdateAppSettings({
+            ...appSettings,
+            piBin: payload.path,
           });
           break;
         case "codex":
@@ -950,9 +958,16 @@ export function VendorSettingsPanel({
         kimiHasConfig,
         grokHasConfig,
         openCodeHasConfig,
-        piHasConfig: false,
+        piHasConfig: Boolean(appSettings.piBin?.trim()),
       }),
-    [claudeHasConfig, codexGlobalConfigExists, kimiHasConfig, grokHasConfig, openCodeHasConfig],
+    [
+      appSettings.piBin,
+      claudeHasConfig,
+      codexGlobalConfigExists,
+      kimiHasConfig,
+      grokHasConfig,
+      openCodeHasConfig,
+    ],
   );
   const filteredEngineNavItems = useMemo(() => {
     const normalizedQuery = cliSearchQuery.trim().toLowerCase();
@@ -1619,27 +1634,46 @@ export function VendorSettingsPanel({
           </div>
           </CliLifecycleProvider>
         ) : activeCli === "pi" ? (
+          <CliLifecycleProvider engine="pi" active>
           <div className="vendor-tab-content vendor-tab-content-dense">
             <CliBrandHeader
               id="pi"
               title="PI CLI"
               description={t("settings.piDescription", {
                 defaultValue:
-                  "Configure PI CLI auth and models. Credentials stay in ~/.pi.",
+                  "Install and configure the PI CLI used by ccgui. Auth and models stay in ~/.pi.",
               })}
               helpLabel={t("settings.vendor.openCliDocs", {
                 defaultValue: "Official docs",
               })}
               href={CLI_DOCS_HREF_BY_ID.pi}
+              actions={<CliLifecycleHeaderActions />}
             />
+            <CliLifecycleInstallerPanel />
+            <VendorSettingsSection
+              label={t("settings.vendor.engineSettings", {
+                defaultValue: "Engine settings",
+              })}
+            >
+              <div className="vendor-group-card">
+                <div className="settings-help" style={{ padding: "8px 12px" }}>
+                  {t("settings.piCliLifecycleHint", {
+                    defaultValue:
+                      "Install, update, or uninstall the local PI CLI via npm package @earendil-works/pi-coding-agent. Auth and models stay in ~/.pi.",
+                  })}
+                </div>
+                {renderCustomPathEntry("pi")}
+              </div>
+            </VendorSettingsSection>
             <VendorSettingsSection
               label={t("settings.vendor.piAuth.sectionTitle", {
                 defaultValue: "供应商认证",
               })}
             >
-              <PiProviderAuthSection />
+              <PiProviderAuthSection piBin={appSettings.piBin ?? null} />
             </VendorSettingsSection>
           </div>
+          </CliLifecycleProvider>
         ) : (
           <div className="vendor-tab-content">
             <CliBrandHeader
