@@ -1493,6 +1493,12 @@ export function useThreadItemEvents({
             });
           }
         }
+        // A4 二期思考外置与正文同契约：分段前灌回 reasoning/toolOutput 尾段。
+        // Grok jsonl 工具会多次 increment；不灌回则 durable 只剩建壳首 token，
+        // collapse 再用 `\n\n` 拼成孤立标点 / 半截英文。
+        if (LIVE_DELTA_EXTERNALIZATION_ENABLED) {
+          drainLiveItemDeltasForThread(threadId);
+        }
         dispatch({ type: "incrementAgentSegment", threadId });
       }
 
@@ -1675,6 +1681,7 @@ export function useThreadItemEvents({
       resolveCollaborationUiMode,
       safeMessageActivity,
       settleLiveItemDeltaForCompletedItem,
+      drainLiveItemDeltasForThread,
     ],
   );
 

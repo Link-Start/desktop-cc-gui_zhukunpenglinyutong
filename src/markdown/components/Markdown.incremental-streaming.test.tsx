@@ -96,4 +96,23 @@ describe("Markdown streaming incremental fork", () => {
     });
     expect(container.textContent).toContain("第一段落。");
   });
+
+  it("merges grok-style first-token fragments before incremental streaming", async () => {
+    const value = ["这是", "一段", "很短", "但是", "连续", "的文字"].join("\n\n");
+    const { container } = render(
+      <Markdown
+        value={value}
+        className="markdown"
+        streaming
+        streamingThrottleMs={0}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(container.textContent?.replace(/\s+/g, "")).toContain(
+        "这是一段很短但是连续的文字",
+      );
+    });
+    expect(container.querySelectorAll("p").length).toBeLessThan(6);
+  });
 });

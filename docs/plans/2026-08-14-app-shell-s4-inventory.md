@@ -11,6 +11,7 @@ branch: fix/performance-optimization
 # AppShell S4 结构手术前现状盘点（PR-A）
 
 > **用途**：S4「AppShell 分域结构手术」PR-B~F 的施工底图。只读盘点，不改生产代码。
+> **收口复盘**：整包性能主因 / 解法 / 防再犯见 [`docs/perf/pr-1092-performance-retrospective.md`](../perf/pr-1092-performance-retrospective.md)。
 > **采样日**：2026-08-14（commit `3970a5bf4`，S1 根链 memo 补全之后）。
 > **口径**：全部数字为当日代码实测（`wc -l` / 解析 `APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS` / 逐 hook grep），非历史文档转抄。
 

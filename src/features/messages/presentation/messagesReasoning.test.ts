@@ -63,6 +63,28 @@ describe("appendReasoningRunText", () => {
     const incoming = `${base}新增的尾部增量`;
     expect(appendReasoningRunText(base, incoming)).toBe(incoming);
   });
+
+  it("joins A4 first-token shells inline instead of breaking mid-word", () => {
+    expect(appendReasoningRunText("token", "-meter")).toBe("token-meter");
+    expect(appendReasoningRunText("token", "ization")).toBe("tokenization");
+    expect(appendReasoningRunText("先看配置", "，")).toBe("先看配置，");
+    expect(appendReasoningRunText("，", "然后继续检查")).toBe("，然后继续检查");
+  });
+
+  it("keeps a paragraph break between sentence-complete reasoning runs", () => {
+    expect(appendReasoningRunText("Let me verify the file.", "Wait for completion")).toBe(
+      "Let me verify the file.\n\nWait for completion",
+    );
+  });
+
+  it("does not glue two complete English thoughts at a mid-sentence tool cut", () => {
+    expect(
+      appendReasoningRunText("Let me check the config", "and then verify the path."),
+    ).toBe("Let me check the config\n\nand then verify the path.");
+    expect(appendReasoningRunText("OK", "Next I will check")).toBe(
+      "OK\n\nNext I will check",
+    );
+  });
 });
 
 describe("compactComparableReasoningText", () => {
@@ -123,6 +145,27 @@ describe("collapseConsecutiveReasoningRuns", () => {
       expect(collapsed[0].content).toContain("typechecks");
       expect(collapsed[0].content).toContain("Wait for completion");
       expect(collapsed[0].content).toContain("\n\n");
+    }
+  });
+
+  it("collapses adjacent first-token reasoning shells without mid-word gaps", () => {
+    const items: ConversationItem[] = [
+      makeReasoningItem({
+        id: "reasoning-a-seg-1",
+        summary: "token",
+        content: "token",
+      }),
+      makeReasoningItem({
+        id: "reasoning-b-seg-2",
+        summary: "-meter",
+        content: "-meter",
+      }),
+    ];
+
+    const collapsed = collapseConsecutiveReasoningRuns(items, true, true);
+    expect(collapsed).toHaveLength(1);
+    if (collapsed[0]?.kind === "reasoning") {
+      expect(collapsed[0].content).toBe("token-meter");
     }
   });
 

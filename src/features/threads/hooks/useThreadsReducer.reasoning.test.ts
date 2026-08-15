@@ -784,4 +784,43 @@ describe("threadReducer reasoning", () => {
       expect(item.content).toBe("结论：\n\n- 第一项");
     }
   });
+
+  it("keeps drained grok reasoning on the old segment before increment", () => {
+    const threadId = "grok:session-fragment";
+    const withShell = threadReducer(initialState, {
+      type: "appendReasoningContent",
+      threadId,
+      itemId: "reasoning-1",
+      delta: "token",
+    });
+    const withDrain = threadReducer(withShell, {
+      type: "appendReasoningContent",
+      threadId,
+      itemId: "reasoning-1",
+      delta: "-meter 用量先核对。",
+    });
+    const withSegment = threadReducer(withDrain, {
+      type: "incrementAgentSegment",
+      threadId,
+    });
+    const withNextShell = threadReducer(withSegment, {
+      type: "appendReasoningContent",
+      threadId,
+      itemId: "reasoning-1",
+      delta: "然后",
+    });
+
+    const reasoningItems = (withNextShell.itemsByThread[threadId] ?? []).filter(
+      (item) => item.kind === "reasoning",
+    );
+    expect(reasoningItems).toHaveLength(2);
+    expect(reasoningItems[0]?.id).toBe("reasoning-1");
+    if (reasoningItems[0]?.kind === "reasoning") {
+      expect(reasoningItems[0].content).toContain("token-meter 用量先核对。");
+    }
+    expect(reasoningItems[1]?.id).toBe("reasoning-1-seg-1");
+    if (reasoningItems[1]?.kind === "reasoning") {
+      expect(reasoningItems[1].content).toBe("然后");
+    }
+  });
 });

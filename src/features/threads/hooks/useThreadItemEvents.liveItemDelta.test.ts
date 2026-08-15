@@ -273,4 +273,59 @@ describe("useThreadItemEvents live-item-delta externalization", () => {
       "",
     );
   });
+
+  it("drains reasoning tails before incrementAgentSegment at a tool boundary", () => {
+    // A4 二期：思考只有建壳首段落 reducer。Grok jsonl 工具开始时前端会
+    // incrementAgentSegment；若不先灌回思考尾段，collapse 只会把多个首 token
+    // 用 \n\n 拼成「token / ， / -meter」沙拉。
+    const { result, dispatch } = makeHook();
+
+    act(() => {
+      result.current.onReasoningTextDelta(
+        WORKSPACE_ID,
+        THREAD_ID,
+        "reasoning-1",
+        "token",
+      );
+      result.current.onReasoningTextDelta(
+        WORKSPACE_ID,
+        THREAD_ID,
+        "reasoning-1",
+        "-meter 用量先核对。",
+      );
+    });
+
+    expect(
+      dispatchedTypes(dispatch).filter(
+        (type) => type === "appendReasoningContent",
+      ),
+    ).toHaveLength(1);
+    expect(peekLiveItemDelta(THREAD_ID, "reasoning-1", "reasoningContent")).toBe(
+      "token-meter 用量先核对。",
+    );
+
+    act(() => {
+      result.current.onItemStarted(WORKSPACE_ID, THREAD_ID, {
+        type: "commandExecution",
+        id: "tool-1",
+      });
+    });
+
+    const actions = dispatch.mock.calls.map(
+      ([action]) => action as Record<string, unknown>,
+    );
+    const contentDeltas = actions
+      .filter((action) => action.type === "appendReasoningContent")
+      .map((action) => action.delta);
+    expect(contentDeltas).toEqual(["token", "-meter 用量先核对。"]);
+
+    const types = dispatchedTypes(dispatch);
+    const drainIndex = types.lastIndexOf("appendReasoningContent");
+    const incrementIndex = types.indexOf("incrementAgentSegment");
+    expect(incrementIndex).toBeGreaterThan(-1);
+    expect(drainIndex).toBeLessThan(incrementIndex);
+    expect(peekLiveItemDelta(THREAD_ID, "reasoning-1", "reasoningContent")).toBe(
+      "",
+    );
+  });
 });

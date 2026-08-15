@@ -496,7 +496,38 @@ export function appendReasoningRunText(existing: string, incoming: string) {
     const suffix = sliceByComparableLength(normalizedIncoming, overlapLength).trimStart();
     return suffix ? `${normalizedExisting}${suffix}` : normalizedExisting;
   }
+  if (shouldJoinReasoningFragmentsInline(normalizedExisting, normalizedIncoming)) {
+    return `${normalizedExisting}${normalizedIncoming}`;
+  }
   return `${normalizedExisting}\n\n${normalizedIncoming}`;
+}
+
+const SENTENCE_TERMINAL_RE = /[。！？.!?…]["'""「」『』）)\]]*$/;
+const MARKDOWN_BLOCK_START_RE = /^(?:[-*+]\s|\d+\.\s|#{1,6}\s|```|>\s)/;
+const CONTINUATION_PUNCT_RE = /^[，,、；;：:）)】\]》>'"''""\-–—]/;
+const LATIN_WORD_END_RE = /[A-Za-z0-9]$/;
+
+function isIsolatedReasoningFragmentShell(text: string) {
+  if (/^[，,、；;：:\-–—。！？.!?'"''""）)】\]》>]+$/.test(text)) {
+    return true;
+  }
+  return text.length <= 2 && /^[\u3400-\u9fff]+$/.test(text);
+}
+
+function shouldJoinReasoningFragmentsInline(existing: string, incoming: string) {
+  if (!existing || !incoming) {
+    return false;
+  }
+  if (MARKDOWN_BLOCK_START_RE.test(incoming)) {
+    return false;
+  }
+  if (SENTENCE_TERMINAL_RE.test(existing)) {
+    return false;
+  }
+  if (CONTINUATION_PUNCT_RE.test(incoming) || isIsolatedReasoningFragmentShell(existing)) {
+    return true;
+  }
+  return LATIN_WORD_END_RE.test(existing) && /^[a-z]{1,12}$/.test(incoming);
 }
 
 export function mergeReasoningRunText(

@@ -20,6 +20,7 @@ status: active
 - [Workspace switch session catalog performance regression](./workspace-switch-session-catalog-performance-regression-2026-08-08.md) — Active incident analysis；校准 v0.7.16/v0.8.0 commits、exhaustive projection 主根因、首轮修复证伪与性能治理顺序。
 - [React #185 / ErrorBoundary Crash playbook](./react-185-maximum-update-depth-playbook.md) — Active troubleshooting runbook；主线 `#185` + 并列家族 `RangeError` 栈溢出（AP-08）；最新 case `C-20260811-01`（0.8.6 Markdown table row count / #1066；前案 C-20260805-01 等）。
 - [Windows cold-start click freeze（版本记录 + 权限选择 + first-click）](./windows-cold-start-click-freeze-release-notes-and-composer-2026-08-14.md) — Active incident analysis；2026-08-14 P0。执行禁令见 `dev-guidelines/guides/windows-cold-start-click-freeze-pitfall.md`。
+- [PR #1092 性能复盘](../perf/pr-1092-performance-retrospective.md) — 流式 / AppShell / 长历史 / 冷启动的主因、解法与防再犯；冷启只是其中一条战线。
 
 ## Resolved incidents and closure evidence
 

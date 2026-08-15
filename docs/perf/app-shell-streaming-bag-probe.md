@@ -1,3 +1,8 @@
+---
+type: evidence
+status: active
+---
+
 # AppShell streaming bag probe
 
 日期：2026-08-16

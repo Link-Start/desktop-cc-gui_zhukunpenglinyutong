@@ -11,6 +11,10 @@ import {
   type StreamMitigationProfile,
 } from "../presentation/messagesStreamingComplexity";
 import { Markdown } from "../../components/Markdown";
+import {
+  normalizeFragmentedLineBreaks,
+  normalizeFragmentedParagraphBreaks,
+} from "../../../../markdown/presentation/markdownTextNormalizers";
 import type { MessagesEngine } from "../../utils/messagesRenderUtils";
 import {
   resolveResidualLiveItemDeltaText,
@@ -118,8 +122,17 @@ export const ReasoningRow = memo(function ReasoningRow({
   const thinkingText = shouldPreferRawReasoningContent
     ? effectiveContent
     : bodyText || effectiveContent || effectiveSummary || "";
-  // jetbrains 同帧 stick：live 思考正文不再 deferred，避免折叠/长高与钉底错拍。
-  const renderThinkingText = thinkingText;
+  // live lightweight 会跳过 Markdown 的 fragment normalize；A4 首 token 沙拉
+  // 必须在进渲染前拼回，否则孤立 `，` / 半截英文会各自占一段。
+  const renderThinkingText = useMemo(
+    () =>
+      thinkingText
+        ? normalizeFragmentedLineBreaks(
+            normalizeFragmentedParagraphBreaks(thinkingText.replace(/\r\n/g, "\n")),
+          )
+        : thinkingText,
+    [thinkingText],
+  );
   const isEncryptedCodexReasoning =
     activeEngine === "codex" && thinkingText.trim() === "Encrypted reasoning";
   useRenderHotspot(

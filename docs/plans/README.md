@@ -16,6 +16,7 @@ status: active
 ## Active execution plans
 
 - [AppShell 高内聚低耦合优化](./2026-08-11-app-shell-cohesion-optimization.md) — **活文档**：P0-0 度量 → bag 瘦身 → Host 子树化 → 物理模块化；完成 Todo 后必须回写进度与 Progress Log。
+- [AppShell S4 结构手术前现状盘点](./2026-08-14-app-shell-s4-inventory.md) — PR #1092 内 S4 PR-A~F 的施工底图与完成回写；整包复盘见 [`../perf/pr-1092-performance-retrospective.md`](../perf/pr-1092-performance-retrospective.md)。
 
 ## Implemented historical plans
 

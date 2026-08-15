@@ -2823,13 +2823,9 @@ svg.explore-inline-icon {
   align-self: center;
 }
 
-/* 文件路径：浅下划线拉开字形，不做成网页蓝链 */
+/* 文件路径：muted 文本，不做链接下划线 */
 .tool-meta-path {
   color: var(--text-muted);
-  text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
-  text-underline-offset: 3px;
-  text-decoration-thickness: 1px;
 }
 
 .explore-inline-label {
