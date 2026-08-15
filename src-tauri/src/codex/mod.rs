@@ -430,7 +430,8 @@ pub(crate) async fn spawn_workspace_session_with_launch_options(
         app_settings_snapshot.codex_auto_compaction_enabled,
     );
     let event_sink = build_event_sink(app_handle);
-    spawn_workspace_session_inner_with_settings(
+    // Box 到堆，避免 spawn 深链内联出超大栈帧（Windows 主线程默认仅 1MB）。
+    Box::pin(spawn_workspace_session_inner_with_settings(
         entry,
         default_codex_bin,
         codex_args,
@@ -442,7 +443,7 @@ pub(crate) async fn spawn_workspace_session_with_launch_options(
         launch_options,
         provider_runtime_key,
         app_settings_snapshot,
-    )
+    ))
     .await
 }
 
@@ -2152,12 +2153,12 @@ pub(crate) async fn respond_to_server_request(
     }
 
     // Native control request keeps the existing request-id routing contract.
-    for session in state
+    let claude_sessions_for_workspace = state
         .engine_manager
         .claude_manager
         .sessions_for_workspace(&workspace_id)
-        .await
-    {
+        .await;
+    for session in &claude_sessions_for_workspace {
         if session.has_pending_user_input(&request_id) {
             return session.respond_to_user_input(request_id, result).await;
         }
@@ -2166,6 +2167,18 @@ pub(crate) async fn respond_to_server_request(
                 .respond_to_approval_request(request_id, result)
                 .await;
         }
+    }
+
+    // Late AskUserQuestion: no Claude session still has this ask-* pending.
+    // Falling through to Codex only yields "workspace not connected".
+    if let Some(ask_request_id) = expired_claude_ask_request_id(
+        &request_id,
+        !claude_sessions_for_workspace.is_empty(),
+        is_user_input_response,
+    ) {
+        return Err(format!(
+            "AskUserQuestion request {ask_request_id} already expired or was answered"
+        ));
     }
 
     let codex_runtime_key =
@@ -3028,6 +3041,22 @@ Task:\n{cleaned_prompt}"
         "title": title,
         "worktreeName": worktree_name
     }))
+}
+
+/// Late Claude AskUserQuestion answer. All three conditions are load-bearing:
+/// no Claude session → keep generic connectivity; approval must not match;
+/// only `ask-` ids (not `ccgui-plan-blocker:`).
+fn expired_claude_ask_request_id(
+    request_id: &Value,
+    has_claude_session: bool,
+    is_user_input_response: bool,
+) -> Option<&str> {
+    if !has_claude_session || !is_user_input_response {
+        return None;
+    }
+    request_id
+        .as_str()
+        .filter(|value| value.starts_with("ask-"))
 }
 
 #[cfg(test)]
