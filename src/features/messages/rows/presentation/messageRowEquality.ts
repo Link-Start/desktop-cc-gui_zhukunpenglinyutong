@@ -46,6 +46,7 @@ export type MessageRowEqualityProps = {
   userActionNode?: ReactNode;
   codeBlockCopyUseModifier?: boolean;
   onOpenFileLink?: (path: string) => void;
+  onOpenHtmlInBrowser?: (path: string) => void;
   onOpenFileLinkMenu?: (event: React.MouseEvent, path: string) => void;
   streamMitigationProfile?: StreamMitigationProfile | null;
   onAssistantVisibleTextRender?: (payload: {
@@ -179,6 +180,7 @@ export function areMessageRowPropsEqual(
     ) &&
     previous.codeBlockCopyUseModifier === next.codeBlockCopyUseModifier &&
     previous.onOpenFileLink === next.onOpenFileLink &&
+    previous.onOpenHtmlInBrowser === next.onOpenHtmlInBrowser &&
     previous.onOpenFileLinkMenu === next.onOpenFileLinkMenu &&
     previous.onOutlineReady === next.onOutlineReady &&
     (

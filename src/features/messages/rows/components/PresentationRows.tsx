@@ -13,6 +13,7 @@ type ReviewRowProps = {
   item: Extract<ConversationItem, { kind: "review" }>;
   workspaceId?: string | null;
   onOpenFileLink?: (path: string) => void;
+  onOpenHtmlInBrowser?: (path: string) => void;
   onOpenFileLinkMenu?: (event: React.MouseEvent, path: string) => void;
 };
 
@@ -156,6 +157,7 @@ export const ReviewRow = memo(function ReviewRow({
   item,
   workspaceId = null,
   onOpenFileLink,
+  onOpenHtmlInBrowser,
   onOpenFileLinkMenu,
 }: ReviewRowProps) {
   const title = item.state === "started" ? "Review started" : "Review completed";
@@ -173,6 +175,7 @@ export const ReviewRow = memo(function ReviewRow({
           className="item-text markdown"
           workspaceId={workspaceId}
           onOpenFileLink={onOpenFileLink}
+          onOpenHtmlInBrowser={onOpenHtmlInBrowser}
           onOpenFileLinkMenu={onOpenFileLinkMenu}
         />
       )}

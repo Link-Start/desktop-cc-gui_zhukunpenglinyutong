@@ -1,9 +1,15 @@
 import { useCallback, useRef, useState } from "react";
 import type { MouseEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { openWorkspaceIn, revealInFileManager } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
 import type { OpenAppTarget } from "../../../types";
+import {
+  formatOpenHtmlInBrowserError,
+  isHtmlFilePath,
+  openHtmlInBrowser,
+} from "../../files/utils/openHtmlInBrowser";
 import {
   clampRendererContextMenuPosition,
   estimateRendererContextMenuHeight,
@@ -31,6 +37,7 @@ const DEFAULT_OPEN_TARGET: OpenTarget = {
 
 type FileLinkOpenerConfig = {
   workspacePath: string | null;
+  workspaceId: string | null;
   openTargets: OpenAppTarget[];
   selectedOpenAppId: string;
   onOpenWorkspaceFile?: ((path: string) => void) | null;
@@ -117,6 +124,11 @@ function resolveFilePath(path: string, workspacePath?: string | null) {
   return `${base}/${trimmed}`;
 }
 
+function isAbsoluteLocalFilePath(path: string) {
+  const trimmed = normalizeLocalFilePath(path);
+  return trimmed.startsWith("/") || isWindowsAbsolutePath(trimmed);
+}
+
 function stripLineSuffix(path: string) {
   const withoutHashLine = path.replace(/#L?\d+(?:C\d+)?$/i, "");
   const match = withoutHashLine.match(/^(.*?)(?::\d+(?::\d+)?)?$/);
@@ -142,15 +154,19 @@ export function useFileLinkOpener(
   openTargets: OpenAppTarget[],
   selectedOpenAppId: string,
   onOpenWorkspaceFile?: ((path: string) => void) | null,
+  workspaceId?: string | null,
 ) {
+  const { t } = useTranslation();
   const configRef = useRef<FileLinkOpenerConfig>({
     workspacePath,
+    workspaceId: workspaceId ?? null,
     openTargets,
     selectedOpenAppId,
     onOpenWorkspaceFile,
   });
   configRef.current = {
     workspacePath,
+    workspaceId: workspaceId ?? null,
     openTargets,
     selectedOpenAppId,
     onOpenWorkspaceFile,
@@ -264,6 +280,47 @@ export function useFileLinkOpener(
     [openFileLinkInConfiguredTarget],
   );
 
+  const openHtmlFileInBrowser = useCallback(
+    (rawPath: string) => {
+      const {
+        workspacePath: currentWorkspacePath,
+        workspaceId: currentWorkspaceId,
+      } = configRef.current;
+      const resolvedWorkspaceId = currentWorkspaceId?.trim() ?? "";
+      if (!resolvedWorkspaceId) {
+        pushErrorToast({
+          title: t("files.openInBrowser"),
+          message: t("files.openInBrowserNoWorkspace"),
+        });
+        return;
+      }
+      const resolvedPath = resolveFilePath(
+        stripLineSuffix(rawPath),
+        currentWorkspacePath,
+      );
+      if (!isHtmlFilePath(resolvedPath)) {
+        return;
+      }
+      if (!isAbsoluteLocalFilePath(resolvedPath)) {
+        pushErrorToast({
+          title: t("files.openInBrowser"),
+          message: t("files.openInBrowserNoWorkspace"),
+        });
+        return;
+      }
+      void openHtmlInBrowser(resolvedPath, {
+        workspaceId: resolvedWorkspaceId,
+      }).catch((error) => {
+        console.warn("[file-link] openHtmlInBrowser failed", error);
+        pushErrorToast({
+          title: t("files.openInBrowser"),
+          message: formatOpenHtmlInBrowserError(error, t),
+        });
+      });
+    },
+    [t],
+  );
+
   const showFileLinkMenu = useCallback(
     (event: MouseEvent, rawPath: string) => {
       event.preventDefault();
@@ -288,6 +345,18 @@ export function useFileLinkOpener(
             await openFileLink(rawPath);
           },
         },
+        ...(isHtmlFilePath(resolvedPath)
+          ? [
+              {
+                type: "item" as const,
+                id: "open-in-browser",
+                label: t("files.openInBrowser"),
+                onSelect: () => {
+                  openHtmlFileInBrowser(rawPath);
+                },
+              },
+            ]
+          : []),
         {
           type: "item",
           id: "open-configured-target",
@@ -360,8 +429,14 @@ export function useFileLinkOpener(
         items,
       });
     },
-    [openFileLink, openFileLinkInConfiguredTarget, reportOpenError],
+    [openFileLink, openFileLinkInConfiguredTarget, openHtmlFileInBrowser, reportOpenError],
   );
 
-  return { openFileLink, showFileLinkMenu, fileLinkMenu, closeFileLinkMenu };
+  return {
+    openFileLink,
+    openHtmlFileInBrowser,
+    showFileLinkMenu,
+    fileLinkMenu,
+    closeFileLinkMenu,
+  };
 }
