@@ -1,16 +1,16 @@
 {
-  "generatedAt": "2026-08-15T08:22:54.811Z",
+  "generatedAt": "2026-08-15T12:46:21.829Z",
   "source": "CHANGELOG.md",
-  "sourceSha256": "791702bb2180273414355fb021acd872ec76927947178ea4897fcd88758e6751",
+  "sourceSha256": "1c7308e5880fb11d1888fb16c2b9fa57e32bfe6f27a0714ece402348ccb0abc9",
   "entryCount": 109,
   "entries": [
     {
-      "id": "0.8.9-fix2",
-      "tagName": "v0.8.9-fix2",
-      "version": "0.8.9-fix2",
-      "title": "v0.8.9-fix2",
+      "id": "0.8.9",
+      "tagName": "v0.8.9",
+      "version": "0.8.9",
+      "title": "v0.8.9",
       "dateLabel": "2026/08/15",
-      "file": "entries/0.8.9-fix2.json"
+      "file": "entries/0.8.9.json"
     },
     {
       "id": "0.8.8",
