@@ -68,12 +68,23 @@ if [[ -n "${crypto_ref}" && "${crypto_ref}" != "@rpath/libcrypto.3.dylib" ]]; th
 fi
 
 # Fix binary references dynamically (helpers first, then main).
+if [[ ! -d "${macos_dir}" ]]; then
+  echo "ERROR: incomplete app bundle: ${macos_dir} is missing"
+  exit 1
+fi
+
 bins_to_fix=()
 if [[ -f "${daemon_path}" ]]; then
   bins_to_fix+=("${daemon_path}")
 fi
 if [[ -f "${bin_path}" ]]; then
   bins_to_fix+=("${bin_path}")
+fi
+
+if [[ ${#bins_to_fix[@]} -eq 0 ]]; then
+  echo "ERROR: no binaries found to fix under ${macos_dir}"
+  echo "Expected: ${bin_path}"
+  exit 1
 fi
 
 for bin in "${bins_to_fix[@]}"; do

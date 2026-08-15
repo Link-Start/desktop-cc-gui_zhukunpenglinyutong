@@ -5,6 +5,13 @@
   --message-title-font-size: var(--client-title-font-size, 14px);
   /* 思考正文比 meta(12px) 再小一档、比 caption(10px) 大，介于两者之间以示轻盈 */
   --message-thinking-font-size: 11px;
+  /* 活动 meta 行（thinking / explore / tool）：介于原 12/20 与参考 14/24 之间。
+     只作用于活动栈，不抬全局 meta（时间戳、footer 等仍走 --message-meta-font-size）。 */
+  --message-tool-row-font-size: 13px;
+  --message-tool-row-line-height: 24px;
+  --message-tool-row-min-height: 28px;
+  --message-tool-row-icon-gap: 8px;
+  --message-tool-row-margin-y: 8px;
   position: relative;
   container-type: inline-size;
   display: flex;
@@ -12,118 +19,6 @@
   flex: 1;
   min-height: 0;
   min-width: 0;
-}
-
-.messages-linked-run {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  max-width: min(860px, calc(100% - 24px));
-  margin: 0 auto 14px;
-  padding: 12px 14px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 18px;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.14), transparent 48%),
-    rgba(15, 23, 42, 0.72);
-  color: rgba(255, 255, 255, 0.88);
-  animation: messages-linked-run-enter 220ms cubic-bezier(0.22, 1, 0.36, 1);
-  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
-}
-
-.messages-linked-run > div {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.messages-linked-run strong,
-.messages-linked-run span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.messages-linked-run strong {
-  font-size: 13px;
-}
-
-.messages-linked-run span {
-  color: rgba(255, 255, 255, 0.58);
-  font-size: 12px;
-}
-
-.messages-linked-run .messages-linked-run-eyebrow {
-  color: rgba(147, 197, 253, 0.88);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.messages-linked-run button {
-  flex: 0 0 auto;
-  min-height: 32px;
-  padding: 0 12px;
-  border: 1px solid rgba(147, 197, 253, 0.34);
-  border-radius: 999px;
-  background: rgba(37, 99, 235, 0.18);
-  color: rgba(219, 234, 254, 0.96);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 750;
-}
-
-.messages-linked-run button:hover,
-.messages-linked-run button:focus-visible {
-  transform: translateY(-1px);
-}
-
-@keyframes messages-linked-run-enter {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .messages-linked-run {
-    animation: none;
-    transition: none;
-  }
-
-  .messages-linked-run button:hover,
-  .messages-linked-run button:focus-visible {
-    transform: none;
-  }
-}
-
-.messages-linked-run--attention,
-.messages-linked-run--danger {
-  border-color: rgba(245, 158, 11, 0.34);
-  background:
-    linear-gradient(135deg, rgba(245, 158, 11, 0.14), transparent 48%),
-    rgba(15, 23, 42, 0.72);
-}
-
-[data-theme="light"] .messages-linked-run {
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.1), transparent 48%),
-    rgba(255, 255, 255, 0.9);
-  color: rgba(15, 23, 42, 0.9);
-}
-
-[data-theme="light"] .messages-linked-run span {
-  color: rgba(15, 23, 42, 0.58);
-}
-
-[data-theme="light"] .messages-linked-run .messages-linked-run-eyebrow {
-  color: #2563eb;
 }
 
 .messages {
@@ -396,8 +291,19 @@
 .message-tool-block-shell {
   display: flex;
   flex-direction: column;
-  /* 与 thinking / explore 同 6px 外层节奏；展开体内部自带留白，不在 shell 上随展开加减 margin */
-  margin: 6px 0;
+  /* 与 thinking / explore 同外层节奏；展开体内部自带留白，不在 shell 上随展开加减 margin */
+  margin: var(--message-tool-row-margin-y, 8px) 0;
+}
+
+/* 时间线已给工具包一层 shell：内部 explore / tool-inline / tcb 不再各自再吃 8/12 */
+.message-tool-block-shell > :is(.explore-inline, .tool-inline, .tcb-marker) {
+  margin: 0;
+}
+
+/* 活动行相邻只留上一块的 margin-bottom。flex 不折叠；shell+explore 双层也不折叠。 */
+:is(.thinking-block, .explore-inline, .message-tool-block-shell, .tcb-marker)
+  + :is(.thinking-block, .explore-inline, .message-tool-block-shell, .tcb-marker) {
+  margin-top: 0;
 }
 
 /* meta 活动栈结束后接正文：给黑字段落一点呼吸 */

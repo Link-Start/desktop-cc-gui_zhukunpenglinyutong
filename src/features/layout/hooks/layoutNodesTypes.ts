@@ -37,8 +37,6 @@ import type {
   CustomPromptOption,
   AccountSnapshot,
   DebugEntry,
-  DictationSessionState,
-  DictationTranscript,
   EngineType,
   GitFileStatus,
   GitBranchListItem,
@@ -217,7 +215,6 @@ export type LayoutNodesFlatOptions = {
   onOpenSettings: () => void;
   onOpenShortcutsSettings?: () => void;
   onOpenExperimentalSettings: () => void;
-  onOpenDictationSettings?: () => void;
   onOpenSkillsSettings?: () => void;
   onOpenDebug: () => void;
   showDebugButton: boolean;
@@ -328,7 +325,6 @@ export type LayoutNodesFlatOptions = {
   onCollapseSidebar?: () => void;
   globalSearchShortcut: string | null;
   openChatShortcut: string | null;
-  openKanbanShortcut: string | null;
   showLoadingProgressDialog?: (config: LoadingProgressDialogConfig) => string;
   hideLoadingProgressDialog?: (requestId: string) => void;
   cycleOpenSessionPrevShortcut: string | null;
@@ -739,29 +735,8 @@ export type LayoutNodesFlatOptions = {
   composerSendShortcut: "enter" | "cmdEnter";
   textareaHeight: number;
   onTextareaHeightChange: (height: number) => void;
-  dictationEnabled: boolean;
-  dictationState: DictationSessionState;
-  dictationLevel: number;
-  onToggleDictation: () => void;
-  dictationTranscript: DictationTranscript | null;
-  onDictationTranscriptHandled: (id: string) => void;
-  dictationError: string | null;
-  onDismissDictationError: () => void;
-  dictationHint: string | null;
-  onDismissDictationHint: () => void;
   showComposer: boolean;
   composerSendLabel?: string;
-  composerLinkedKanbanPanels: {
-    id: string;
-    name: string;
-    workspaceId: string;
-    createdAt?: number;
-  }[];
-  selectedComposerKanbanPanelId: string | null;
-  composerKanbanContextMode: "new" | "inherit";
-  onSelectComposerKanbanPanel: (panelId: string | null) => void;
-  onComposerKanbanContextModeChange: (mode: "new" | "inherit") => void;
-  onOpenComposerKanbanPanel: (panelId: string) => void;
   activeComposerFilePath: string | null;
   activeComposerFileLineRange: { startLine: number; endLine: number } | null;
   activeCodeSelectionAnchor: IntentCanvasCodeSelectionAnchor | null;
@@ -864,7 +839,6 @@ export type ChromeLayoutNodesOptions = Pick<
   | "onOpenCliSettings"
   | "onRefreshModelConfig"
   | "isModelConfigRefreshing"
-  | "onOpenDictationSettings"
   | "onOpenSkillsSettings"
   | "onOpenDebug"
   | "showDebugButton"
@@ -1234,24 +1208,8 @@ export type ComposerLayoutNodesOptions = Pick<
   | "composerSendShortcut"
   | "textareaHeight"
   | "onTextareaHeightChange"
-  | "dictationEnabled"
-  | "dictationState"
-  | "dictationLevel"
-  | "onToggleDictation"
-  | "dictationTranscript"
-  | "onDictationTranscriptHandled"
-  | "dictationError"
-  | "onDismissDictationError"
-  | "dictationHint"
-  | "onDismissDictationHint"
   | "onOpenExperimentalSettings"
   | "composerSendLabel"
-  | "composerLinkedKanbanPanels"
-  | "selectedComposerKanbanPanelId"
-  | "composerKanbanContextMode"
-  | "onSelectComposerKanbanPanel"
-  | "onComposerKanbanContextModeChange"
-  | "onOpenComposerKanbanPanel"
   | "activeComposerFilePath"
   | "activeComposerFileLineRange"
   | "activeCodeSelectionAnchor"
@@ -1307,7 +1265,6 @@ export type PanelsLayoutNodesOptions = Pick<
   | "onCollapseSidebar"
   | "globalSearchShortcut"
   | "openChatShortcut"
-  | "openKanbanShortcut"
   | "cycleOpenSessionPrevShortcut"
   | "cycleOpenSessionNextShortcut"
   | "closeCurrentSessionShortcut"

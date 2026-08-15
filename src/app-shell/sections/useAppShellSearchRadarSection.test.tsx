@@ -86,6 +86,8 @@ vi.mock("./useWorkspaceThreadListHydration", () => ({
 vi.mock("../../services/clientStorage", () => ({
   getClientStoreSync: vi.fn(() => null),
   writeClientStoreValue: vi.fn(),
+  isClientStoreReady: () => true,
+  subscribeClientStoreHydrated: () => () => {},
 }));
 
 vi.mock("../../services/systemNotification", () => ({
@@ -134,7 +136,6 @@ function createSearchRadarOptions(
     isFilesLoading: false,
     isProcessing: false,
     isSearchPaletteOpen: true,
-    kanbanTasks: [],
     lastAgentMessageByThread: {},
     listThreadsForWorkspace: vi.fn(async () => {}),
     rightPanelCollapsed: false,
@@ -248,7 +249,6 @@ describe("useAppShellSearchRadarSection", () => {
         isFilesLoading: false,
         isProcessing: false,
         isSearchPaletteOpen: false,
-        kanbanTasks: [],
         lastAgentMessageByThread: {},
         listThreadsForWorkspace: vi.fn(async () => {}),
         rightPanelCollapsed: false,
@@ -329,7 +329,6 @@ describe("useAppShellSearchRadarSection", () => {
         isFilesLoading: false,
         isProcessing: false,
         isSearchPaletteOpen: false,
-        kanbanTasks: [],
         lastAgentMessageByThread: {},
         listThreadsForWorkspace: vi.fn(async () => {}),
         rightPanelCollapsed: false,
@@ -379,7 +378,6 @@ describe("useAppShellSearchRadarSection", () => {
         isFilesLoading: false,
         isProcessing: true,
         isSearchPaletteOpen: false,
-        kanbanTasks: [],
         lastAgentMessageByThread: {},
         listThreadsForWorkspace: vi.fn(async () => {}),
         rightPanelCollapsed: false,
@@ -568,27 +566,8 @@ describe("useAppShellSearchRadarSection", () => {
     expect(getWorkspaceFilesMock).toHaveBeenCalledTimes(2);
   });
 
-  it("scans disk when the API cache is missing and then publishes endpoints", async () => {
-    const apiEndpoint = {
-      id: "http:get:/users",
-      protocol: "http",
-      language: "java",
-      method: "GET",
-      path: "/users",
-      sourceFile: "src/UserController.java",
-      parameters: [],
-      responses: [],
-      groupIds: [],
-      callChainIds: [],
-      confidence: "high",
-      evidence: [],
-    };
-    readProjectMapRelationshipsMock
-      .mockResolvedValueOnce({ apiContracts: null })
-      .mockResolvedValueOnce({
-        apiContracts: { endpoints: [apiEndpoint] },
-        staleSummary: { isFresh: true },
-      });
+  it("does not scan disk when the API cache is missing", async () => {
+    readProjectMapRelationshipsMock.mockResolvedValue({ apiContracts: null });
     const options = createSearchRadarOptions({
       searchContentFilters: ["apis"],
       searchPaletteQuery: "/users",
@@ -600,17 +579,19 @@ describe("useAppShellSearchRadarSection", () => {
 
     expect(result.current.searchApiHydrationStatus).toBe("loading");
     await waitFor(() => {
-      expect(result.current.searchApiHydrationStatus).toBe("complete");
+      expect(result.current.searchApiHydrationStatus).toBe("empty");
     });
-    expect(scanProjectMapRelationshipsMock).toHaveBeenCalledWith({
+    expect(scanProjectMapRelationshipsMock).not.toHaveBeenCalled();
+    expect(readProjectMapRelationshipsMock).toHaveBeenCalledWith({
       workspaceId: "ws-1",
+      include: ["manifest", "apiContracts", "stale"],
     });
     expect(useUnifiedSearchMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
         apiSources: [
           expect.objectContaining({
             workspaceId: "ws-1",
-            endpoints: [apiEndpoint],
+            endpoints: [],
           }),
         ],
       }),
@@ -650,7 +631,7 @@ describe("useAppShellSearchRadarSection", () => {
     expect(scanProjectMapRelationshipsMock).not.toHaveBeenCalled();
   });
 
-  it("keeps stale API endpoints searchable while refreshing them", async () => {
+  it("keeps stale API endpoints searchable without scanning disk", async () => {
     const staleEndpoint = {
       id: "stale-endpoint",
       protocol: "http",
@@ -665,22 +646,10 @@ describe("useAppShellSearchRadarSection", () => {
       confidence: "medium",
       evidence: [],
     };
-    const freshEndpoint = { ...staleEndpoint, id: "fresh-endpoint", path: "/fresh" };
-    let resolveScan: (() => void) | undefined;
-    scanProjectMapRelationshipsMock.mockImplementation(
-      () => new Promise<void>((resolve) => {
-        resolveScan = resolve;
-      }),
-    );
-    readProjectMapRelationshipsMock
-      .mockResolvedValueOnce({
-        apiContracts: { endpoints: [staleEndpoint] },
-        staleSummary: { isFresh: false },
-      })
-      .mockResolvedValueOnce({
-        apiContracts: { endpoints: [freshEndpoint] },
-        staleSummary: { isFresh: true },
-      });
+    readProjectMapRelationshipsMock.mockResolvedValue({
+      apiContracts: { endpoints: [staleEndpoint] },
+      staleSummary: { isFresh: false },
+    });
 
     const options = createSearchRadarOptions({
       searchContentFilters: ["apis"],
@@ -691,6 +660,7 @@ describe("useAppShellSearchRadarSection", () => {
     );
 
     await waitFor(() => {
+      expect(result.current.searchApiHydrationStatus).toBe("stale");
       expect(useUnifiedSearchMock).toHaveBeenLastCalledWith(
         expect.objectContaining({
           apiSources: [
@@ -699,48 +669,11 @@ describe("useAppShellSearchRadarSection", () => {
         }),
       );
     });
-    expect(result.current.searchApiHydrationStatus).toBe("refreshing");
-    resolveScan?.();
-    await waitFor(() => {
-      expect(result.current.searchApiHydrationStatus).toBe("complete");
-      expect(useUnifiedSearchMock).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          apiSources: [
-            expect.objectContaining({ endpoints: [freshEndpoint] }),
-          ],
-        }),
-      );
-    });
+    expect(scanProjectMapRelationshipsMock).not.toHaveBeenCalled();
   });
 
-  it("reuses an in-flight API scan after the palette closes and reopens", async () => {
-    const refreshedEndpoint = {
-      id: "refreshed-endpoint",
-      protocol: "http",
-      language: "java",
-      method: "DELETE",
-      path: "/api/web/bs-cs/v1/faq/{id}",
-      sourceFile: "src/FaqController.java",
-      parameters: [],
-      responses: [],
-      groupIds: [],
-      callChainIds: [],
-      confidence: "high",
-      evidence: [],
-    };
-    let resolveScan: (() => void) | undefined;
-    scanProjectMapRelationshipsMock.mockImplementation(
-      () => new Promise<void>((resolve) => {
-        resolveScan = resolve;
-      }),
-    );
-    readProjectMapRelationshipsMock
-      .mockResolvedValueOnce({ apiContracts: null })
-      .mockResolvedValueOnce({ apiContracts: null })
-      .mockResolvedValueOnce({
-        apiContracts: { endpoints: [refreshedEndpoint] },
-        staleSummary: { isFresh: true },
-      });
+  it("does not start a scan after the palette closes and reopens on an empty index", async () => {
+    readProjectMapRelationshipsMock.mockResolvedValue({ apiContracts: null });
     const options = createSearchRadarOptions({
       searchContentFilters: ["apis"],
       searchPaletteQuery: "/api/web/bs-cs/v1/faq",
@@ -755,26 +688,14 @@ describe("useAppShellSearchRadarSection", () => {
     );
 
     await waitFor(() => {
-      expect(scanProjectMapRelationshipsMock).toHaveBeenCalledTimes(1);
+      expect(result.current.searchApiHydrationStatus).toBe("empty");
     });
     rerender({ isOpen: false });
     rerender({ isOpen: true });
     await waitFor(() => {
-      expect(readProjectMapRelationshipsMock).toHaveBeenCalledTimes(2);
+      expect(result.current.searchApiHydrationStatus).toBe("empty");
     });
-    expect(scanProjectMapRelationshipsMock).toHaveBeenCalledTimes(1);
-
-    resolveScan?.();
-    await waitFor(() => {
-      expect(result.current.searchApiHydrationStatus).toBe("complete");
-      expect(useUnifiedSearchMock).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          apiSources: [
-            expect.objectContaining({ endpoints: [refreshedEndpoint] }),
-          ],
-        }),
-      );
-    });
+    expect(scanProjectMapRelationshipsMock).not.toHaveBeenCalled();
   });
 
   it("does not block global API search when one workspace already has cached endpoints", async () => {
@@ -798,9 +719,6 @@ describe("useAppShellSearchRadarSection", () => {
         staleSummary: { isFresh: false },
       })
       .mockResolvedValueOnce({ apiContracts: null });
-    scanProjectMapRelationshipsMock.mockImplementation(
-      () => new Promise<void>(() => undefined),
-    );
     const options = createSearchRadarOptions({
       workspaces: [
         createWorkspace("ws-1", "mall-v2"),
@@ -816,7 +734,7 @@ describe("useAppShellSearchRadarSection", () => {
     );
 
     await waitFor(() => {
-      expect(result.current.searchApiHydrationStatus).toBe("refreshing");
+      expect(result.current.searchApiHydrationStatus).toBe("stale");
       expect(useUnifiedSearchMock).toHaveBeenLastCalledWith(
         expect.objectContaining({
           apiSources: expect.arrayContaining([
@@ -828,11 +746,11 @@ describe("useAppShellSearchRadarSection", () => {
         }),
       );
     });
+    expect(scanProjectMapRelationshipsMock).not.toHaveBeenCalled();
   });
 
-  it("exposes API scan errors without starting file hydration", async () => {
-    readProjectMapRelationshipsMock.mockResolvedValue({ apiContracts: null });
-    scanProjectMapRelationshipsMock.mockRejectedValue(new Error("API scan failed"));
+  it("exposes API read errors without starting file hydration", async () => {
+    readProjectMapRelationshipsMock.mockRejectedValue(new Error("API read failed"));
 
     const options = createSearchRadarOptions({
       searchContentFilters: ["apis"],

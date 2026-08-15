@@ -142,6 +142,20 @@ pub(crate) async fn list_codex_session_summary_list_for_workspace(
     .await
 }
 
+pub(crate) async fn list_codex_session_summary_list_for_workspace_preview(
+    workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
+    workspace_id: &str,
+    limit: usize,
+) -> Result<CodexSessionSummaryList, String> {
+    list_codex_session_summary_list_for_workspace_with_mode(
+        workspaces,
+        workspace_id,
+        limit,
+        CodexSessionParseMode::ThreadPreview,
+    )
+    .await
+}
+
 async fn list_codex_session_summary_list_for_workspace_with_mode(
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
     workspace_id: &str,
@@ -198,6 +212,27 @@ pub(crate) async fn list_global_codex_session_summaries(
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
     limit: usize,
 ) -> Result<Vec<LocalUsageSessionSummary>, String> {
+    list_global_codex_session_summaries_with_mode(workspaces, limit, CodexSessionParseMode::Full)
+        .await
+}
+
+pub(crate) async fn list_global_codex_session_summaries_preview(
+    workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
+    limit: usize,
+) -> Result<Vec<LocalUsageSessionSummary>, String> {
+    list_global_codex_session_summaries_with_mode(
+        workspaces,
+        limit,
+        CodexSessionParseMode::ThreadPreview,
+    )
+    .await
+}
+
+async fn list_global_codex_session_summaries_with_mode(
+    workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
+    limit: usize,
+    parse_mode: CodexSessionParseMode,
+) -> Result<Vec<LocalUsageSessionSummary>, String> {
     let requested_limit = limit.max(1);
     let root_resolution = {
         let workspaces = workspaces.lock().await;
@@ -213,8 +248,12 @@ pub(crate) async fn list_global_codex_session_summaries(
     let sessions = timeout(
         LOCAL_SESSION_SCAN_TIMEOUT,
         tokio::task::spawn_blocking(move || {
-            let (summaries, _) =
-                scan_codex_session_summaries_bounded(None, &sessions_roots, requested_limit)?;
+            let (summaries, _) = scan_codex_session_summaries_bounded_with_mode(
+                None,
+                &sessions_roots,
+                requested_limit,
+                parse_mode,
+            )?;
             Ok::<Vec<LocalUsageSessionSummary>, String>(summaries)
         }),
     )

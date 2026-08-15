@@ -190,11 +190,11 @@ describe("useGitPanelController git status polling visibility", () => {
     expect(getLastGitStatusPollingMode()).toBe("active");
   });
 
-  it("uses background polling in kanban appMode even when right panel is expanded", () => {
+  it("uses background polling in extensions appMode even when right panel is expanded", () => {
     renderHook(() =>
       useGitPanelController(
         makeProps({
-          appMode: "kanban",
+          appMode: "extensions",
           rightPanelCollapsed: false,
         }),
       ),

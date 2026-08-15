@@ -4,7 +4,7 @@
 // Machine translation of src/i18n/locales/en/searchPalette.ts; keys mirror the English source.
 const searchPalette = {
   "searchPalette": {
-    "placeholder": "Поиск файлов, канбана, тредов, сообщений, навыков, команд…",
+    "placeholder": "Поиск файлов, тредов, сообщений, навыков, команд…",
     "placeholderFiltered": "Поиск {{content}}…",
     "inputAria": "Поле поиска",
     "scope": "Область",
@@ -18,6 +18,10 @@ const searchPalette = {
     "fileIndexLoading": "Дополняется индекс файлов...",
     "fileIndexPartial": "Индекс файлов неполный, поэтому некоторые файлы могут отсутствовать.",
     "fileIndexError": "Не удалось загрузить индекс. Откройте поиск снова, чтобы повторить попытку.",
+    "apiIndexLoading": "Загружается последний список API...",
+    "apiIndexStale": "Список API устарел. Предыдущие результаты по-прежнему доступны для поиска. Обновите его сканированием связей в Project Map.",
+    "apiIndexEmpty": "Списка API ещё нет. Создайте его сканированием связей в Project Map.",
+    "apiIndexError": "Не удалось загрузить список API. Откройте поиск снова, чтобы повторить попытку.",
     "navigate": "Навигация",
     "open": "Открыть",
     "close": "Закрыть",
@@ -27,7 +31,6 @@ const searchPalette = {
     "locationTag": "Расположение",
     "typeAction": "Действие",
     "typeFile": "Файл",
-    "typeKanban": "Канбан",
     "typeThread": "Тред",
     "typeMessage": "Сообщение",
     "typeHistory": "История",
@@ -35,7 +38,6 @@ const searchPalette = {
     "typeCommand": "Команда",
     "sourceActions": "Действия приложения",
     "sourceFiles": "Индекс файлов",
-    "sourceKanban": "Данные канбана",
     "sourceThreads": "Названия тредов",
     "sourceMessages": "Содержимое сообщений",
     "sourceHistory": "История ввода",
@@ -44,7 +46,6 @@ const searchPalette = {
     "contentAll": "Все",
     "contentActions": "Действия",
     "contentFiles": "Файлы",
-    "contentKanban": "Канбан",
     "contentThreads": "Треды",
     "contentMessages": "Сообщения",
     "contentHistory": "История",

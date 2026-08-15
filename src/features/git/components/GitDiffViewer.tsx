@@ -623,7 +623,6 @@ export function GitDiffViewer({
   const ignoreActivePathUntilRef = useRef<number>(0);
   const lastScrollRequestIdRef = useRef<number | null>(null);
   const onActivePathChangeRef = useRef(onActivePathChange);
-  const rowResizeObserversRef = useRef(new Map<Element, ResizeObserver>());
   const rowNodesByPathRef = useRef(new Map<string, HTMLDivElement>());
   const hasActivePathHandler = !toolbarOnly && Boolean(onActivePathChange);
   const effectiveDiffs = useMemo(() => {
@@ -652,28 +651,18 @@ export function GitDiffViewer({
   const virtualItems = rowVirtualizer.getVirtualItems();
   const setRowRef = useCallback(
     (path: string) => (node: HTMLDivElement | null) => {
-      const prevNode = rowNodesByPathRef.current.get(path);
-      if (prevNode && prevNode !== node) {
-        const prevObserver = rowResizeObserversRef.current.get(prevNode);
-        if (prevObserver) {
-          prevObserver.disconnect();
-          rowResizeObserversRef.current.delete(prevNode);
-        }
-      }
       if (!node) {
         rowNodesByPathRef.current.delete(path);
+        // 转发 detach：virtual-core 借此清理已断连节点的内部观察。
+        rowVirtualizer.measureElement(null);
         return;
       }
       rowNodesByPathRef.current.set(path, node);
+      // measureElement 内部已把节点注册进 virtual-core 自带的共享
+      // ResizeObserver（换节点自动 unobserve 旧节点、resize 自动重测，
+      // 见 virtual-core _measureElement / this.observer）；组件再为每行
+      // 各建一个 observer 是重复观察（Task 4 单价手术删除，行为等价）。
       rowVirtualizer.measureElement(node);
-      if (rowResizeObserversRef.current.has(node)) {
-        return;
-      }
-      const observer = new ResizeObserver(() => {
-        rowVirtualizer.measureElement(node);
-      });
-      observer.observe(node);
-      rowResizeObserversRef.current.set(node, observer);
     },
     [rowVirtualizer],
   );
@@ -705,16 +694,6 @@ export function GitDiffViewer({
     rowVirtualizer.scrollToIndex(index, { align: "start" });
     lastScrollRequestIdRef.current = scrollRequestId;
   }, [selectedPath, scrollRequestId, indexByPath, rowVirtualizer]);
-
-  useEffect(() => {
-    const observers = rowResizeObserversRef.current;
-    return () => {
-      for (const observer of observers.values()) {
-        observer.disconnect();
-      }
-      observers.clear();
-    };
-  }, []);
 
   useEffect(() => {
     activePathRef.current = selectedPath;

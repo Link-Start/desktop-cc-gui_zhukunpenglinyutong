@@ -36,6 +36,7 @@ import {
   peekLiveAssistantText,
   renameLiveAssistantTextThread,
 } from "../utils/liveAssistantTextChannel";
+import { renameLiveItemDeltaThread } from "../utils/liveItemDeltaChannel";
 import { resolveCodexSubagentIdentity } from "../utils/codexSubagentIdentity";
 import {
   inferEngineFromLegacyThreadId,
@@ -1375,6 +1376,7 @@ export function useThreadTurnEvents({
       // A4 live-text 外部化：随迁通道条目，流式中改名后订阅（新 threadId）
       // 才能继续读到累计文本。
       renameLiveAssistantTextThread(sourceThreadId, newThreadId);
+      renameLiveItemDeltaThread(sourceThreadId, newThreadId);
       renameCustomNameKey(workspaceId, sourceThreadId, newThreadId);
       renameAutoTitlePendingKey(workspaceId, sourceThreadId, newThreadId);
       renamePendingMemoryCaptureKey(sourceThreadId, newThreadId);

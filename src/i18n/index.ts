@@ -1,6 +1,11 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
-import { getClientStoreSync, writeClientStoreValue } from "../services/clientStorage";
+import {
+  getClientStoreSync,
+  isClientStoreReady,
+  whenClientStoreReady,
+  writeClientStoreValue,
+} from "../services/clientStorage";
 
 export type SupportedLanguage =
   | "zh"
@@ -41,28 +46,36 @@ const supportedLanguages = new Set<SupportedLanguage>(
 
 const DEFAULT_LANGUAGE: SupportedLanguage = "zh";
 
+type LocalePackLoader = () => Promise<{ default: Record<string, unknown> }>;
+
 /**
- * Full locale loaders. P2-3 tried critical/deferred split for cold-start size, but
- * shell/settings surfaces regressed (raw keys like files.loadingFiles /
- * settings.sidebarBasic) whenever deferred packs lagged. Product correctness
- * wins: load the complete language pack before rendering i18n-backed UI.
- *
- * locales star critical.ts and deferred.ts remain as source organization helpers
- * composed by locales star index.ts; runtime always imports the full index.
+ * First-paint loaders. Settings / about / debug copy lives in deferred packs so
+ * the full locale index no longer blocks shell mount.
  */
-const localeLoaders: Partial<
-  Record<SupportedLanguage, () => Promise<{ default: Record<string, unknown> }>>
-> = {
-  en: () => import("./locales/en"),
-  "zh-TW": () => import("./locales/zh-TW"),
-  hi: () => import("./locales/hi"),
-  es: () => import("./locales/es"),
-  fr: () => import("./locales/fr"),
-  ja: () => import("./locales/ja"),
-  ru: () => import("./locales/ru"),
-  ko: () => import("./locales/ko"),
-  "pt-BR": () => import("./locales/pt-BR"),
-  zh: () => import("./locales/zh"),
+const criticalLocaleLoaders: Partial<Record<SupportedLanguage, LocalePackLoader>> = {
+  en: () => import("./locales/en/critical"),
+  "zh-TW": () => import("./locales/zh-TW/critical"),
+  hi: () => import("./locales/hi/critical"),
+  es: () => import("./locales/es/critical"),
+  fr: () => import("./locales/fr/critical"),
+  ja: () => import("./locales/ja/critical"),
+  ru: () => import("./locales/ru/critical"),
+  ko: () => import("./locales/ko/critical"),
+  "pt-BR": () => import("./locales/pt-BR/critical"),
+  zh: () => import("./locales/zh/critical"),
+};
+
+const deferredLocaleLoaders: Partial<Record<SupportedLanguage, LocalePackLoader>> = {
+  en: () => import("./locales/en/deferred"),
+  "zh-TW": () => import("./locales/zh-TW/deferred"),
+  hi: () => import("./locales/hi/deferred"),
+  es: () => import("./locales/es/deferred"),
+  fr: () => import("./locales/fr/deferred"),
+  ja: () => import("./locales/ja/deferred"),
+  ru: () => import("./locales/ru/deferred"),
+  ko: () => import("./locales/ko/deferred"),
+  "pt-BR": () => import("./locales/pt-BR/deferred"),
+  zh: () => import("./locales/zh/deferred"),
 };
 
 /**
@@ -89,7 +102,8 @@ const i18nextFallback = SUPPORTED_LANGUAGES.reduce<Record<string, string[]>>(
   { default: DEFAULT_FALLBACK },
 );
 
-const loadedLanguages = new Set<SupportedLanguage>();
+const loadedCriticalLanguages = new Set<SupportedLanguage>();
+const loadedDeferredLanguages = new Set<SupportedLanguage>();
 const loadedResources: Partial<Record<SupportedLanguage, Record<string, unknown>>> = {};
 
 function normalizeLanguage(lang: string | undefined): SupportedLanguage {
@@ -98,10 +112,12 @@ function normalizeLanguage(lang: string | undefined): SupportedLanguage {
     : DEFAULT_LANGUAGE;
 }
 
-const getStoredLanguage = (): SupportedLanguage => {
-  const stored = getClientStoreSync<string>("app", "language");
-  return normalizeLanguage(stored);
-};
+async function resolveStoredLanguage(): Promise<SupportedLanguage> {
+  if (!isClientStoreReady("app")) {
+    await whenClientStoreReady("app");
+  }
+  return normalizeLanguage(getClientStoreSync<string>("app", "language"));
+}
 
 export const saveLanguage = (lang: string): void => {
   writeClientStoreValue("app", "language", normalizeLanguage(lang));
@@ -113,32 +129,53 @@ if (initReactI18next && typeof initReactI18next === "object") {
 
 const i18nInstance = i18n;
 
-/** Load a single full bundle if it exists and hasn't been loaded yet (idempotent). */
-async function loadBundle(lang: SupportedLanguage): Promise<void> {
-  if (loadedLanguages.has(lang)) {
-    return;
-  }
-  const loader = localeLoaders[lang];
-  if (!loader) {
-    return; // no bundle for this language yet — handled by fallback chain
-  }
-  const resource = await loader();
-  loadedResources[lang] = resource.default;
+function applyResourceBundle(lang: SupportedLanguage, resource: Record<string, unknown>): void {
   if (i18nInstance.isInitialized && typeof i18nInstance.addResourceBundle === "function") {
-    i18nInstance.addResourceBundle(lang, "translation", resource.default, true, true);
+    i18nInstance.addResourceBundle(lang, "translation", resource, true, true);
   }
-  loadedLanguages.add(lang);
 }
 
-async function loadLanguageResource(lang: string | undefined): Promise<SupportedLanguage> {
+function mergeResourceBundle(
+  lang: SupportedLanguage,
+  resource: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged = {
+    ...(loadedResources[lang] ?? {}),
+    ...resource,
+  };
+  loadedResources[lang] = merged;
+  applyResourceBundle(lang, merged);
+  return merged;
+}
+
+async function loadLocalePack(
+  lang: SupportedLanguage,
+  phase: "critical" | "deferred",
+): Promise<void> {
+  const loaded =
+    phase === "critical" ? loadedCriticalLanguages : loadedDeferredLanguages;
+  if (loaded.has(lang)) {
+    return;
+  }
+  const loader =
+    phase === "critical" ? criticalLocaleLoaders[lang] : deferredLocaleLoaders[lang];
+  if (!loader) {
+    return;
+  }
+  const resource = await loader();
+  mergeResourceBundle(lang, resource.default);
+  loaded.add(lang);
+}
+
+async function loadLanguagePhase(
+  lang: string | undefined,
+  phase: "critical" | "deferred",
+): Promise<SupportedLanguage> {
   const normalized = normalizeLanguage(lang);
-  await loadBundle(normalized);
-  // Languages without their own bundle need fallback resources loaded so that
-  // i18next can resolve keys instead of showing raw key strings. Languages with
-  // an explicit custom chain keep that chain warm as a recovery path.
-  if (!localeLoaders[normalized] || fallbackChains[normalized]) {
+  await loadLocalePack(normalized, phase);
+  if (!criticalLocaleLoaders[normalized] || fallbackChains[normalized]) {
     for (const fallback of fallbackChainFor(normalized)) {
-      await loadBundle(fallback);
+      await loadLocalePack(fallback, phase);
     }
   }
   return normalized;
@@ -150,12 +187,17 @@ i18nInstance.changeLanguage = (async (
   lang?: string,
   callback?: Parameters<typeof i18nInstance.changeLanguage>[1],
 ) => {
-  const normalized = await loadLanguageResource(lang ?? getStoredLanguage());
+  const requested = lang ?? (await resolveStoredLanguage());
+  const normalized = await loadLanguagePhase(requested, "critical");
+  await loadLanguagePhase(normalized, "deferred");
   return originalChangeLanguage(normalized, callback);
 }) as typeof i18nInstance.changeLanguage;
 
-export const i18nReady = (async () => {
-  const initialLanguage = await loadLanguageResource(getStoredLanguage());
+export const i18nCriticalReady = (async () => {
+  const initialLanguage = await loadLanguagePhase(
+    await resolveStoredLanguage(),
+    "critical",
+  );
   const resources = Object.entries(loadedResources).reduce<
     Record<string, { translation: Record<string, unknown> }>
   >((acc, [lng, resource]) => {
@@ -172,5 +214,43 @@ export const i18nReady = (async () => {
   });
   return i18nInstance;
 })();
+
+let i18nReadyPromise: Promise<typeof i18nInstance> | null = null;
+
+export function ensureI18nReady(): Promise<typeof i18nInstance> {
+  if (!i18nReadyPromise) {
+    i18nReadyPromise = (async () => {
+      const instance = await i18nCriticalReady;
+      const language = normalizeLanguage(instance.language);
+      await loadLanguagePhase(language, "deferred");
+      const merged = loadedResources[language];
+      if (merged) {
+        applyResourceBundle(language, merged);
+      }
+      return instance;
+    })();
+  }
+  return i18nReadyPromise;
+}
+
+/** Full locale pack. Lazy: deferred resources start only when this thenable is awaited. */
+export const i18nReady = {
+  then<TResult1 = typeof i18nInstance, TResult2 = never>(
+    onFulfilled?:
+      | ((value: typeof i18nInstance) => TResult1 | PromiseLike<TResult1>)
+      | null,
+    onRejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ) {
+    return ensureI18nReady().then(onFulfilled, onRejected);
+  },
+  catch<TResult = never>(
+    onRejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | null,
+  ) {
+    return ensureI18nReady().catch(onRejected);
+  },
+  finally(onFinally?: (() => void) | null) {
+    return ensureI18nReady().finally(onFinally ?? undefined);
+  },
+} as Promise<typeof i18nInstance>;
 
 export default i18n;

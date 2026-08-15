@@ -88,7 +88,6 @@ status: generated
 | `src/styles/tool-blocks.css` | 2144 | css | styles | P1 | 2200 | 800 | fail | captured |  |  |
 | `src/styles/status-panel.css` | 2123 | css | styles | P1 | 2200 | 800 | fail | captured |  |  |
 | `src-tauri/src/engine/claude/tests_core.rs` | 2115 | rust | bridge-runtime-critical | P0 | 2200 | 800 | fail | captured |  |  |
-| `src/styles/kanban.css` | 2071 | css | styles | P1 | 2200 | 800 | fail | captured |  |  |
 | `src/features/threads/loaders/claudeHistoryLoader.test.ts` | 2069 | ts/tsx | test-files | P2 | 2600 | 800 | fail | captured |  |  |
 | `src/features/composer/components/ChatInputBox/ChatInputBoxAdapter.test.tsx` | 2065 | ts/tsx | test-files | P2 | 2600 | 800 | fail | captured |  |  |
 | `src-tauri/src/shared/workspaces_core.rs` | 2063 | rust | default-source | P1 | 2600 | 800 | fail | captured |  |  |
@@ -158,12 +157,10 @@ status: generated
 | `src/features/threads/hooks/useThreads.memory-race.integration.test.tsx` | 1517 | ts/tsx | test-files | P2 | 2600 | 800 | fail | captured |  |  |
 | `src/app-shell.startup.test.tsx` | 1506 | ts/tsx | test-files | P2 | 2600 | 800 | fail | captured |  |  |
 | `src-tauri/src/engine/status.rs` | 1492 | rust | bridge-runtime-critical | P0 | 2200 | 800 | fail | captured |  |  |
-| `src-tauri/src/dictation/real.rs` | 1467 | rust | default-source | P1 | 2600 | 800 | fail | captured |  |  |
 | `src/features/session-activity/adapters/buildWorkspaceSessionActivity.test.ts` | 1465 | ts/tsx | test-files | P2 | 2600 | 800 | fail | captured |  |  |
 | `src/styles/project-map.relationship-workspace.css` | 1462 | css | styles | P1 | 2200 | 800 | fail | captured |  |  |
 | `src/features/spec/hooks/useSpecHub.test.tsx` | 1453 | ts/tsx | test-files | P2 | 2600 | 800 | fail | captured |  |  |
 | `src/features/threads/contracts/realtimeHistoryParity.test.ts` | 1440 | ts/tsx | test-files | P2 | 2600 | 800 | fail | captured |  |  |
-| `src/app-shell-parts/useAppShellKanbanExecutionSection.ts` | 1432 | ts/tsx | default-source | P1 | 2600 | 800 | fail | captured |  |  |
 | `src-tauri/src/email/mod.rs` | 1429 | rust | default-source | P1 | 2600 | 800 | fail | captured |  |  |
 | `src/features/spec/runtime.test.ts` | 1428 | ts/tsx | test-files | P2 | 2600 | 800 | fail | captured |  |  |
 | `src-tauri/src/vendors/commands.rs` | 1416 | rust | default-source | P1 | 2600 | 800 | fail | captured |  |  |
@@ -289,7 +286,6 @@ status: generated
 | `src/styles/settings.session-management.css` | 899 | css | styles | P1 | 2200 | 800 | fail | captured |  |  |
 | `src/features/project-map/components/ProjectMapRelationshipGraphWorkspace.tsx` | 896 | ts/tsx | default-source | P1 | 2600 | 800 | fail | captured |  |  |
 | `src/features/app/components/RequestUserInputMessage.test.tsx` | 893 | ts/tsx | test-files | P2 | 2600 | 800 | fail | captured |  |  |
-| `src/features/kanban/components/KanbanBoard.tsx` | 892 | ts/tsx | default-source | P1 | 2600 | 800 | fail | captured |  |  |
 | `src/features/status-panel/components/StatusPanel.tsx` | 887 | ts/tsx | default-source | P1 | 2600 | 800 | fail | captured |  |  |
 | `src/features/client-documentation/clientDocumentationData.ts` | 881 | ts/tsx | default-source | P1 | 2600 | 800 | fail | captured |  |  |
 | `src/features/composer/components/ClaudeRewindConfirmDialog.tsx` | 880 | ts/tsx | feature-hotpath | P1 | 2400 | 800 | fail | captured |  |  |
@@ -309,7 +305,6 @@ status: generated
 | `src/features/settings/components/settings-view/sections/WebServiceSettings.tsx` | 839 | ts/tsx | feature-hotpath | P1 | 2400 | 800 | fail | captured |  |  |
 | `src/features/threads/assembly/conversationAssembler.ts` | 834 | ts/tsx | feature-hotpath | P1 | 2400 | 800 | fail | captured |  |  |
 | `src-tauri/src/workspaces/external_changes.rs` | 833 | rust | default-source | P1 | 2600 | 800 | fail | captured |  |  |
-| `src/features/kanban/components/KanbanColumn.tsx` | 828 | ts/tsx | default-source | P1 | 2600 | 800 | fail | captured |  |  |
 | `src/features/workspaces/hooks/useWorkspaceFiles.test.tsx` | 828 | ts/tsx | test-files | P2 | 2600 | 800 | fail | captured |  |  |
 | `src/features/extensions/tokentracker-dashboard/hooks/use-trend-data.ts` | 825 | ts/tsx | default-source | P1 | 2600 | 800 | fail | captured |  |  |
 | `src/features/layout/components/DesktopLayout.tsx` | 824 | ts/tsx | default-source | P1 | 2600 | 800 | fail | captured |  |  |

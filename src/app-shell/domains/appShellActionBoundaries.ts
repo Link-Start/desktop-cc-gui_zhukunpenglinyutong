@@ -14,8 +14,6 @@ export type AppShellTaskRunActions = {
   handleCancelTaskRun: AppShellBoundaryAction;
   handleForkTaskRun: AppShellBoundaryAction;
   handleCloseTaskConversation: AppShellBoundaryAction;
-  handleKanbanCreateTask: AppShellBoundaryAction;
-  handleDragToInProgress: AppShellBoundaryAction;
 };
 
 export type AppShellNavigationActions = {
@@ -95,7 +93,7 @@ const ACTION_FAMILY_MATCHERS: ReadonlyArray<{
   },
   {
     family: "task-run",
-    patterns: [/Task/i, /TaskRun/i, /Orchestration/i, /Kanban/i],
+    patterns: [/Task/i, /TaskRun/i, /Orchestration/i],
   },
   {
     family: "navigation",

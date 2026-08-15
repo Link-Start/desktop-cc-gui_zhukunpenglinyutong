@@ -12,7 +12,6 @@ export type ShortcutSettingKey =
   | "archiveThreadShortcut"
   | "closeCurrentSessionShortcut"
   | "openChatShortcut"
-  | "openKanbanShortcut"
   | "cycleOpenSessionPrevShortcut"
   | "cycleOpenSessionNextShortcut"
   | "toggleLeftConversationSidebarShortcut"
@@ -57,7 +56,6 @@ export type ShortcutDraftKey =
   | "archiveThread"
   | "closeCurrentSession"
   | "openChat"
-  | "openKanban"
   | "cycleOpenSessionPrev"
   | "cycleOpenSessionNext"
   | "leftConversationSidebar"
@@ -196,16 +194,6 @@ export const shortcutActions: ShortcutActionMetadata[] = [
     category: "app",
     labelKey: "settings.openChatMode",
     defaultShortcut: "cmd+j",
-    scope: "global",
-    triggerSurface: "dom",
-  },
-  {
-    id: "open-kanban-mode",
-    setting: "openKanbanShortcut",
-    draftKey: "openKanban",
-    category: "app",
-    labelKey: "settings.openKanbanMode",
-    defaultShortcut: "cmd+k",
     scope: "global",
     triggerSurface: "dom",
   },
@@ -618,7 +606,6 @@ export const shortcutDraftKeyBySetting: Record<
   archiveThreadShortcut: "archiveThread",
   closeCurrentSessionShortcut: "closeCurrentSession",
   openChatShortcut: "openChat",
-  openKanbanShortcut: "openKanban",
   cycleOpenSessionPrevShortcut: "cycleOpenSessionPrev",
   cycleOpenSessionNextShortcut: "cycleOpenSessionNext",
   toggleLeftConversationSidebarShortcut: "leftConversationSidebar",

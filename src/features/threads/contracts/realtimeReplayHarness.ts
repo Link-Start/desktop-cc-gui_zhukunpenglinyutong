@@ -2,6 +2,12 @@ import { createHash } from "node:crypto";
 import type { ConversationItem } from "../../../types";
 import type { ThreadAction, ThreadState } from "../hooks/useThreadsReducer";
 import { __resetRealtimePerfFlagCacheForTests } from "../utils/realtimePerfFlags";
+import {
+  appendLiveItemDelta,
+  drainLiveItemDeltaTail,
+  resetLiveItemDeltaChannelForTests,
+  type LiveItemDeltaLane,
+} from "../utils/liveItemDeltaChannel";
 import { inferEngineFromLegacyThreadId as inferEngineFromThreadId } from "./engineRuntimeIdentity";
 import type { ReplayProfile, RealtimeReplayEvent } from "./realtimeReplayTypes";
 
@@ -10,19 +16,30 @@ const FRAME_BUCKET_MS = 16;
 const FLAG_PREFIX = "ccgui.perf.";
 const PROFILE_FLAG_VALUES: Record<
   ReplayProfile,
-  Record<"realtimeBatching" | "reducerNoopGuard" | "incrementalDerivation" | "debugLightPath", string>
+  Record<"realtimeBatching" | "reducerNoopGuard" | "incrementalDerivation" | "debugLightPath" | "liveDeltaExternalization", string>
 > = {
   baseline: {
     realtimeBatching: "0",
     reducerNoopGuard: "0",
     incrementalDerivation: "0",
     debugLightPath: "0",
+    liveDeltaExternalization: "0",
   },
   optimized: {
     realtimeBatching: "1",
     reducerNoopGuard: "1",
     incrementalDerivation: "1",
     debugLightPath: "1",
+    liveDeltaExternalization: "0",
+  },
+  // A4 二期：optimized 之上再开 reasoning/toolOutput 电报外部化——三类 delta
+  // 只进 liveItemDeltaChannel（首条建壳 + settle drain 落回），不逐条打根。
+  liveDelta: {
+    realtimeBatching: "1",
+    reducerNoopGuard: "1",
+    incrementalDerivation: "1",
+    debugLightPath: "1",
+    liveDeltaExternalization: "1",
   },
 };
 
@@ -167,6 +184,41 @@ function isDeltaEvent(
     || event.kind === "toolOutputDelta"
   );
 }
+
+// A4 二期外部化的三类电报（agentDelta 正文已走 A4 一期专线，不在此列）。
+function isLiveItemDeltaEvent(
+  event: RealtimeReplayEvent,
+): event is Extract<
+  RealtimeReplayEvent,
+  { kind: "reasoningSummaryDelta" | "reasoningContentDelta" | "toolOutputDelta" }
+> {
+  return (
+    event.kind === "reasoningSummaryDelta"
+    || event.kind === "reasoningContentDelta"
+    || event.kind === "toolOutputDelta"
+  );
+}
+
+function resolveLiveItemDeltaLaneForReplay(
+  kind: "reasoningSummaryDelta" | "reasoningContentDelta" | "toolOutputDelta",
+): LiveItemDeltaLane {
+  if (kind === "reasoningContentDelta") {
+    return "reasoningContent";
+  }
+  if (kind === "reasoningSummaryDelta") {
+    return "reasoningSummary";
+  }
+  return "toolOutput";
+}
+
+const LIVE_ITEM_DRAIN_ACTION_TYPE: Record<
+  LiveItemDeltaLane,
+  "appendReasoningSummary" | "appendReasoningContent" | "appendToolOutput"
+> = {
+  reasoningSummary: "appendReasoningSummary",
+  reasoningContent: "appendReasoningContent",
+  toolOutput: "appendToolOutput",
+};
 
 function appendEnsureThread(actions: TimedThreadAction[], event: RealtimeReplayEvent) {
   actions.push({
@@ -351,6 +403,77 @@ export function expandReplayEventsToActions(
         continue;
       }
       appendNonDeltaActions(actions, event);
+    }
+    return actions;
+  }
+
+  // liveDelta：照 A4 二期生产接线建速写——三类电报经真实 liveItemDeltaChannel
+  // 累积，首条建壳、settle（agentCompleted / 流末尾）drain 尾段落回；agentDelta
+  // 正文保持 baseline 式即时 dispatch（A4 一期专线不在本 profile 建模范围）。
+  if (profile === "liveDelta") {
+    resetLiveItemDeltaChannelForTests();
+    const ensuredThreads = new Set<string>();
+    const markedProcessingThreads = new Set<string>();
+    const ensureShellContextOnce = (event: RealtimeReplayEvent) => {
+      if (!ensuredThreads.has(event.threadId)) {
+        appendEnsureThread(actions, event);
+        ensuredThreads.add(event.threadId);
+      }
+      if (!markedProcessingThreads.has(event.threadId)) {
+        appendMarkProcessing(actions, event, true);
+        markedProcessingThreads.add(event.threadId);
+      }
+    };
+    const drainThreadTail = (threadId: string, atMs: number) => {
+      for (const tail of drainLiveItemDeltaTail(threadId)) {
+        actions.push({
+          atMs,
+          sourceEventId: `live-item-delta-drain:${threadId}:${tail.itemId}:${tail.lane}`,
+          action: {
+            type: LIVE_ITEM_DRAIN_ACTION_TYPE[tail.lane],
+            threadId,
+            itemId: tail.itemId,
+            delta: tail.text,
+          } as ThreadAction,
+        });
+      }
+    };
+    try {
+      for (const event of orderedEvents) {
+        if (isLiveItemDeltaEvent(event)) {
+          const lane = resolveLiveItemDeltaLaneForReplay(event.kind);
+          const { isFirst } = appendLiveItemDelta(
+            event.threadId,
+            event.itemId,
+            lane,
+            event.delta,
+          );
+          // 首条 delta 照旧 dispatch 建壳（保证 durable item 存在、key 稳定）；
+          // 后续只进通道，不进根 dispatch。
+          if (isFirst) {
+            ensureShellContextOnce(event);
+            appendDeltaAction(actions, event);
+          }
+          continue;
+        }
+        if (isDeltaEvent(event)) {
+          appendEnsureThread(actions, event);
+          appendMarkProcessing(actions, event, true);
+          appendDeltaAction(actions, event);
+          continue;
+        }
+        if (event.kind === "agentCompleted") {
+          // terminal causal barrier：结算动作落账前先 drain 通道尾段。
+          drainThreadTail(event.threadId, event.atMs);
+        }
+        appendNonDeltaActions(actions, event);
+      }
+      const lastAtMs = orderedEvents[orderedEvents.length - 1]?.atMs ?? 0;
+      for (const threadId of ensuredThreads) {
+        drainThreadTail(threadId, lastAtMs);
+      }
+    } finally {
+      resetLiveItemDeltaChannelForTests();
     }
     return actions;
   }

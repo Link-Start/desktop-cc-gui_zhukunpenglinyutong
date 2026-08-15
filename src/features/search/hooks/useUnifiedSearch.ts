@@ -5,7 +5,6 @@ import type {
   SkillOption,
   ThreadSummary,
 } from "../../../types";
-import type { KanbanTask } from "../../kanban/types";
 import type { HistoryItem } from "../../composer/hooks/useInputHistoryStore";
 import { takeLimited } from "../perf/chunker";
 import {
@@ -26,7 +25,6 @@ import {
 import { searchCommands } from "../providers/commandsProvider";
 import { searchFiles } from "../providers/filesProvider";
 import { searchHistory } from "../providers/historyProvider";
-import { searchKanbanTasks } from "../providers/kanbanProvider";
 import { searchMessages } from "../providers/messageProvider";
 import { searchSkills } from "../providers/skillsProvider";
 import { searchThreads } from "../providers/threadProvider";
@@ -50,7 +48,6 @@ type UseUnifiedSearchOptions = {
   query: string;
   contentFilters: SearchContentFilter[];
   workspaceSources: WorkspaceSearchSource[];
-  kanbanTasks: KanbanTask[];
   threadItemsByThread: Record<string, ConversationItem[]>;
   historyItems: HistoryItem[];
   skills: SkillOption[];
@@ -102,7 +99,6 @@ export function useUnifiedSearch({
   query,
   contentFilters,
   workspaceSources,
-  kanbanTasks,
   threadItemsByThread,
   historyItems,
   skills,
@@ -145,7 +141,6 @@ export function useUnifiedSearch({
       query: debouncedQuery,
       contentFilters,
       workspaceSources,
-      kanbanTasks,
       threadItemsByThread,
       historyItems,
       skills,
@@ -166,7 +161,6 @@ export function useUnifiedSearch({
   }, [
     debouncedQuery,
     historyItems,
-    kanbanTasks,
     maxResults,
     contentFilters,
     commands,
@@ -187,7 +181,6 @@ export function computeUnifiedSearchResults({
   query,
   contentFilters,
   workspaceSources,
-  kanbanTasks,
   threadItemsByThread,
   historyItems,
   skills,
@@ -278,14 +271,6 @@ export function computeUnifiedSearchResults({
     }
   }
 
-  if (shouldIncludeSection(contentFilters, "kanban")) {
-    collectProviderResults(
-      "kanban",
-      kanbanTasks.length,
-      SEARCH_PROVIDER_LIMITS.kanban,
-      () => searchKanbanTasks(normalizedQuery, kanbanTasks),
-    );
-  }
   if (shouldIncludeSection(contentFilters, "history")) {
     collectProviderResults(
       "history",

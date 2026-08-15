@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { renderHook } from "@testing-library/react";
+import { createRef } from "react";
 import { describe, expect, it } from "vitest";
 import type { ConversationItem } from "../../../../types";
 import { useMessagesHistoryPresentationWindow } from "./useMessagesHistoryWindow";
@@ -10,6 +11,9 @@ const readableAssistantItem: ConversationItem = {
   role: "assistant",
   text: "workspace A readable response",
 };
+
+const alwaysCollapseAllowedRef = createRef<boolean>() as React.MutableRefObject<boolean>;
+alwaysCollapseAllowedRef.current = true;
 
 describe("useMessagesHistoryPresentationWindow", () => {
   it("does not reuse a readable window across workspaces with matching thread ids", () => {
@@ -31,11 +35,13 @@ describe("useMessagesHistoryPresentationWindow", () => {
             preservedUserMessageId: null,
           },
           readableWindowRecoveryActive: props.recoveryActive,
+          revealedHistoryItemCount: 0,
           showAllHistoryItems: false,
           supportsStreamingReadableWindowRecovery: true,
           threadId: "shared-thread",
           timelineItems: props.timelineItems,
           visibleStallRecoveryActive: false,
+          windowCollapseAllowedRef: alwaysCollapseAllowedRef,
           workspaceId: props.workspaceId,
         }),
       {

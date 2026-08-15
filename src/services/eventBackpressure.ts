@@ -39,8 +39,18 @@ const DEFAULT_MAX_EVENTS_PER_FLUSH = 200;
 const DEFAULT_MAX_BYTES_PER_FLUSH = 128 * 1024;
 const DEFAULT_MAX_QUEUE_DEPTH = 2_000;
 const DEFAULT_RAW_RETAINED_LIMIT = 5_000;
+/** 窗口隐藏时的低频排水周期：rAF 停发期间靠它把队列压住。 */
+const HIDDEN_FLUSH_INTERVAL_MS = 100;
 
 function defaultSchedule(callback: () => void) {
+  // 窗口隐藏时 rAF 停发（Windows WebView2 最小化即如此）；protected 类事件
+  // （terminal-output 等不可丢）若仍按 rAF 排程会在队列里无界积压，恢复可见
+  // 时前台要一次性吞掉整个积压。隐藏时改低频 timeout 继续排水（Task 5.3）。
+  // 注意必须 === "hidden"：jsdom 默认 "prerender"，!== "visible" 会误伤。
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+    setTimeout(callback, HIDDEN_FLUSH_INTERVAL_MS);
+    return;
+  }
   const inputPending =
     typeof navigator !== "undefined" &&
     (

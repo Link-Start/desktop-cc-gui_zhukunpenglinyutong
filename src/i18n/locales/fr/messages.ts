@@ -58,8 +58,6 @@ const messages = {
     "queue": "File d'attente",
     "send": "Envoyer",
     "emptyThread": "Démarrez un fil et envoyez une invite à l'agent.",
-    "linkedRunEyebrow": "Exécution liée",
-    "openLinkedRun": "Ouvrir le détail de l'exécution",
     "restoringHistory": "Chargement de la fenêtre de conversation…",
     "restoringHistoryHint": "Chargement de la transcription locale et de l'état de la session.",
     "generatingResponse": "Génération de la réponse...",

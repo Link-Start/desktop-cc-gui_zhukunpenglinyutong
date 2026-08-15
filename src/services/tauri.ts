@@ -312,16 +312,6 @@ export type {
   ComputerUseOfficialParentHandoffMethod,
 } from "../types";
 export {
-  cancelDictation,
-  cancelDictationDownload,
-  downloadDictationModel,
-  getDictationModelStatus,
-  removeDictationModel,
-  requestDictationPermission,
-  startDictation,
-  stopDictation,
-} from "./tauri/dictation";
-export {
   closeTerminalSession,
   openTerminalSession,
   resizeTerminalSession,

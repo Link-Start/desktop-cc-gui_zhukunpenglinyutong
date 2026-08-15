@@ -138,6 +138,8 @@ jobs:
         run: npm ci
       - name: Tests
         run: npm run test
+      - name: Streaming stress gate (100k reasoning chunks)
+        run: npm run perf:streaming:stress
   test-windows:
     runs-on: windows-latest
     needs:

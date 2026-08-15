@@ -15,6 +15,14 @@ export const ALL_CLIENT_STORES: ClientStoreName[] = [
   "diagnostics",
 ];
 
+/** First-paint shell (StartupGate + Home) only needs layout geometry and app prefs. */
+export const CRITICAL_CLIENT_STORES: readonly ClientStoreName[] = ["layout", "app"];
+
+/** Remaining stores hydrate after mount via idle / first interaction. */
+export const DEFERRED_CLIENT_STORES: readonly ClientStoreName[] = ALL_CLIENT_STORES.filter(
+  (store) => !CRITICAL_CLIENT_STORES.includes(store),
+);
+
 export const CLIENT_STORE_SCHEMA_VERSION = 1;
 export const CLIENT_STORE_SCHEMA_VERSION_KEY = "__schemaVersion";
 

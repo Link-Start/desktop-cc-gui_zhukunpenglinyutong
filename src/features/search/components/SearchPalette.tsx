@@ -20,7 +20,6 @@ const SEARCH_RESULT_KIND_ORDER: SearchResult["kind"][] = [
   "file",
   "thread",
   "api",
-  "kanban",
   "skill",
   "command",
   "message",
@@ -146,7 +145,6 @@ export function SearchPalette({
     action: t("searchPalette.typeAction"),
     file: t("searchPalette.typeFile"),
     api: t("searchPalette.typeApi"),
-    kanban: t("searchPalette.typeKanban"),
     thread: t("searchPalette.typeThread"),
     message: t("searchPalette.typeMessage"),
     history: t("searchPalette.typeHistory"),
@@ -158,7 +156,6 @@ export function SearchPalette({
     actions: t("searchPalette.sourceActions"),
     files: t("searchPalette.sourceFiles"),
     apis: t("searchPalette.sourceApis"),
-    kanban: t("searchPalette.sourceKanban"),
     threads: t("searchPalette.sourceThreads"),
     messages: t("searchPalette.sourceMessages"),
     history: t("searchPalette.sourceHistory"),
@@ -173,7 +170,6 @@ export function SearchPalette({
     { value: "actions", label: t("searchPalette.contentActions") },
     { value: "files", label: t("searchPalette.contentFiles") },
     { value: "apis", label: t("searchPalette.contentApis") },
-    { value: "kanban", label: t("searchPalette.contentKanban") },
     { value: "threads", label: t("searchPalette.contentThreads") },
     { value: "messages", label: t("searchPalette.contentMessages") },
     { value: "history", label: t("searchPalette.contentHistory") },
@@ -201,8 +197,10 @@ export function SearchPalette({
   const apiHydrationMessage =
     apiHydrationStatus === "loading"
       ? t("searchPalette.apiIndexLoading")
-      : apiHydrationStatus === "refreshing"
-        ? t("searchPalette.apiIndexRefreshing")
+      : apiHydrationStatus === "stale"
+        ? t("searchPalette.apiIndexStale")
+      : apiHydrationStatus === "empty"
+        ? t("searchPalette.apiIndexEmpty")
       : apiHydrationStatus === "error"
         ? t("searchPalette.apiIndexError")
         : null;
@@ -341,6 +339,8 @@ export function SearchPalette({
               <div className="search-palette-empty-title">
                 {apiHydrationStatus === "loading"
                   ? t("searchPalette.apiIndexLoading")
+                  : apiHydrationStatus === "empty"
+                    ? t("searchPalette.apiIndexEmpty")
                   : fileHydrationStatus === "loading"
                   ? t("searchPalette.fileIndexLoading")
                   : t("searchPalette.noResults")}

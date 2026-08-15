@@ -20,6 +20,7 @@ import type {
   ProjectMapRelatedArtifact,
   ProjectMapRelation,
   ProjectMapRelationshipReadResponse,
+  ProjectMapRelationshipReadSection,
   ProjectMapRelationshipScanOptions,
   ProjectMapRelationshipScanResponse,
   ProjectMapRelationshipWriteSnapshotInput,
@@ -1083,10 +1084,12 @@ export async function scanProjectMapRelationships(input: {
 export async function readProjectMapRelationships(input: {
   workspaceId: string;
   storageLocation?: ProjectMapStorageLocation;
+  include?: ProjectMapRelationshipReadSection[];
 }): Promise<ProjectMapRelationshipReadResponse> {
   return invoke<ProjectMapRelationshipReadResponse>("project_map_relationship_read", {
     workspaceId: input.workspaceId,
     storageMode: input.storageLocation,
+    include: input.include,
   });
 }
 

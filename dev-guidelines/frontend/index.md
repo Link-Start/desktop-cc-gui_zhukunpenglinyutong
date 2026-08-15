@@ -42,12 +42,13 @@
 ## Pre-Development Checklist（开始开发前必读）
 
 - 若任务同时涉及项目规则入口或文档治理边界，先读 `../guides/project-instruction-layering-guide.md`。
+- 若任务改冷启动编排、自动弹层、ComposerGate、first-click 副作用，或处理 Windows「一点就卡死」，先读 `../guides/windows-cold-start-click-freeze-pitfall.md`。
 - 先读 [Directory Structure](./directory-structure.md)，确认文件放在哪个 feature slice。
 - 涉及设置页 / 偏好列表 / 表单型管理 UI 时，先读 [Preference Settings UI / UX Guide](../../../docs/ui-ux/preference-settings-ui-guide.md)。
 - 涉及 `useEffect`、polling、listener 时先读 [Hook Guidelines](./hook-guidelines.md)。
 - 涉及 refactor 或大文件修改时先读 [Quality Guidelines](./quality-guidelines.md)。
 - 涉及 CodeMirror / `@uiw/react-codemirror` 拆分 lazy 边界、压缩 startup bundle 时，先读 [CodeMirror State-Coupled Extensions 不可跨越 Lazy Boundary](./quality-guidelines.md#codemirror-state-coupled-extensions-不可跨越-lazy-boundary)。
-- 涉及多 session 并行 / 长 turn 实时对话 / 性能卡顿排查时，额外读 [Parallel Conversation Runtime Residuals](./parallel-conversation-runtime-residuals.md) + [docs/perf/parallel-conversation-jank-handbook.md](../../../docs/perf/parallel-conversation-jank-handbook.md)。
+- 涉及多 session 并行 / 长 turn 实时对话 / 性能卡顿排查时，额外读 [Parallel Conversation Runtime Residuals](./parallel-conversation-runtime-residuals.md) + [docs/perf/parallel-conversation-jank-handbook.md](../../../docs/perf/parallel-conversation-jank-handbook.md) + [PR #1092 性能复盘](../../../docs/perf/pr-1092-performance-retrospective.md)。
 - 涉及 live conversation message / Markdown / timeline render path 时，额外读 [Messages Streaming Render Contract](./messages-streaming-render-contract.md)。
 - 涉及 UI -> service -> tauri/rust 的跨层变更，额外读：
   - `../guides/cross-layer-thinking-guide.md`

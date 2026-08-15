@@ -5,8 +5,9 @@ import { describe, expect, it } from "vitest";
 
 /**
  * T2.5：禁止新增 full-flatten 调用点。
- * 生产路径只允许 flattenSelected*Memoized；全量 flattenAppShellDomainContexts
- * 仅限测试或显式 legacy 工具。
+ * S4 PR-F：legacy full-flatten（flattenAppShellDomainContexts）已删除，
+ * 本门禁零豁免——任何生产文件（含域定义模块）出现 full-flatten 即红。
+ * selected-flatten 引擎只允许留在 selectAppShellDomainBag 模块内部。
  */
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
@@ -32,7 +33,7 @@ describe("appShellFlattenGate (T2.5)", () => {
     const files = listTsFiles(srcRoot);
     const offenders: string[] = [];
     for (const file of files) {
-      if (file.endsWith("appShellDomainContexts.ts")) continue;
+      // S4 PR-F：零豁免——域定义模块内的 full-flatten 定义/调用同样禁止
       const source = readFileSync(file, "utf8");
       // 直接调用全量 flatten（非 selected / 非 memoized）
       if (
@@ -41,12 +42,11 @@ describe("appShellFlattenGate (T2.5)", () => {
           source.match(/flattenAppShellDomainContexts\s*\(/)?.[0] ?? "",
         )
       ) {
-        // 精确：行内出现 flattenAppShellDomainContexts( 且不是定义
+        // 精确：行内出现 flattenAppShellDomainContexts( 即违规（定义亦不可）
         const lines = source.split("\n");
         lines.forEach((line, index) => {
           if (
             line.includes("flattenAppShellDomainContexts(") &&
-            !line.includes("export function flattenAppShellDomainContexts") &&
             !line.includes("flattenSelectedAppShellDomainContexts")
           ) {
             offenders.push(`${file}:${index + 1}: ${line.trim()}`);

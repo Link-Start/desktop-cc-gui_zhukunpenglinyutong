@@ -33,7 +33,6 @@ const SKIP_PATH_PATTERNS = [
   /^src\/features\/runtime-log\/hooks\/useRuntimeLogSession\.ts$/,
   /^src\/features\/runtime-log\/components\/RuntimeLogPanel(?:\.test)?\.tsx$/,
   /^src\/features\/workspaces\/utils\/defaultWorkspace(?:\.test)?\.ts$/,
-  /^src\/app-shell-parts\/useAppShellSections\.ts$/,
   /^src-tauri\/src\/app_paths\.rs$/,
   /^src-tauri\/src\/codex\/home\.rs$/,
   /^src-tauri\/src\/codex\/mod\.rs$/,

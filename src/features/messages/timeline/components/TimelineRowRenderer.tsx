@@ -480,6 +480,7 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
           key={itemRenderKey}
           item={renderItem}
           workspaceId={workspaceId}
+          threadId={threadId ?? null}
           parsed={parsed}
           isExpanded={isExpanded}
           isLive={isLiveReasoning}
@@ -524,6 +525,7 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
           <ToolBlockRenderer
             item={renderItem}
             workspaceId={workspaceId}
+            threadId={threadId ?? null}
             isExpanded={isExpanded}
             onToggle={toggleExpanded}
             onRequestAutoScroll={requestAutoScroll}

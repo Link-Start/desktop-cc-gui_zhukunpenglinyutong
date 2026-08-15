@@ -235,16 +235,6 @@
 }
 
 
-/* Kanban modal - ensure opaque background in dark mode (Tauri window is transparent) */
-.kanban-modal-overlay {
-  background: rgba(0, 0, 0, 0.75);
-}
-
-.kanban-modal {
-  background: #1e1e1e;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
-}
-
 /* Native select/option dark mode fix (Windows WebView2) */
 select,
 select option {

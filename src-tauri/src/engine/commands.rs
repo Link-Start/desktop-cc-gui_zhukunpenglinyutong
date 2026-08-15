@@ -380,7 +380,7 @@ impl Default for GeminiRenderLane {
 }
 
 #[derive(Default)]
-struct GeminiRenderRoutingState {
+pub(crate) struct GeminiRenderRoutingState {
     last_render_lane: GeminiRenderLane,
     text_run_index: usize,
     reasoning_run_index: usize,

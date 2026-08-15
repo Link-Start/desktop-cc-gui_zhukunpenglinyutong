@@ -127,7 +127,6 @@ const SEMANTIC_DEFINITIONS: readonly SemanticDefinition[] = [
   { key: "agents", pattern: /(?:agents? list|list agents?)/ },
   { key: "git-diff", pattern: /(?:get git diffs?|git diffs?)/ },
   { key: "git-status", pattern: /(?:get git status|git status)/ },
-  { key: "dictation", pattern: /(?:dictation model status|dictation status)/ },
   { key: "input-history", pattern: /(?:input history)/ },
   { key: "storage-migration", pattern: /(?:storage migration|local storage migration|migration)/ },
   { key: "storage-preload", pattern: /(?:storage preload|preload client store|local state)/ },

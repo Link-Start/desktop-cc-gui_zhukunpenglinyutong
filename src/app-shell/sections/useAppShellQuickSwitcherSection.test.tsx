@@ -252,9 +252,6 @@ describe("useAppShellQuickSwitcherSection", () => {
     act(() => result.current.handleQuickSwitcherNavigate("history"));
     expect(input.setAppMode).toHaveBeenLastCalledWith("gitHistory");
 
-    act(() => result.current.handleQuickSwitcherNavigate("kanban"));
-    expect(input.setAppMode).toHaveBeenLastCalledWith("kanban");
-
     act(() => result.current.handleQuickSwitcherNavigate("terminal"));
     expect(input.handleToggleTerminalPanel).toHaveBeenCalledTimes(1);
 

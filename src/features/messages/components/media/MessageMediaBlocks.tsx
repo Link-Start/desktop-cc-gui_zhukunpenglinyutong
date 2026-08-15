@@ -93,7 +93,7 @@ const ManagedMessageImage = memo(function ManagedMessageImage({
       />
     );
   }
-  return <img src={renderSrc} alt={alt} loading={loading} />;
+  return <img src={renderSrc} alt={alt} loading={loading} decoding="async" />;
 });
 
 export const MessageImageGrid = memo(function MessageImageGrid({

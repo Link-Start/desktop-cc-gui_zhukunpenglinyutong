@@ -14,7 +14,6 @@
   margin: 0;
   padding: 0;
   background: rgba(8, 10, 16, 0.58);
-  backdrop-filter: blur(2px);
   cursor: default;
 }
 

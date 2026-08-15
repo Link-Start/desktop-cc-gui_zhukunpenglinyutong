@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
+import { subscribeStartupGateReady } from "../../../features/startup-orchestration/utils/startupGateReady";
 import { getClientStoreSync, writeClientStoreValue } from "../../../services/clientStorage";
 import type { DebugEntry } from "../../../types";
+import { scheduleWhenInteractiveQuiet } from "../../../utils/interactiveMainThread";
 import {
   findReleaseIndex,
   normalizeReleaseVersion,
@@ -25,10 +27,15 @@ export {
 const RELEASE_NOTES_LAST_SEEN_KEY = "releaseNotesLastSeenVersion";
 
 /**
- * Cold-start auto-open delay after AppShell mounts and a version bump is detected.
- * Keeps release-notes work off the first paint / hydrate window.
+ * Auto-open is gated on startup-gate-ready, then a quiet scheduler.
+ * minDelay is only a first-paint flush, not a freeze timeout: the modal
+ * must not compete with AppShell hydrate / Composer first mount / Markdown
+ * chunk compile. maxWait is a convergence ceiling so a clicking user still
+ * sees the notes.
  */
-export const RELEASE_NOTES_AUTO_OPEN_DELAY_MS = 2_000;
+export const RELEASE_NOTES_AUTO_OPEN_MIN_DELAY_MS = 400;
+export const RELEASE_NOTES_AUTO_OPEN_QUIET_MS = 800;
+export const RELEASE_NOTES_AUTO_OPEN_MAX_WAIT_MS = 12_000;
 
 type OpenReleaseNotesOptions = {
   preferredVersion?: string | null;
@@ -152,8 +159,11 @@ export function useReleaseNotes({
   );
 
   const closeReleaseNotes = useCallback(() => {
+    // Invalidate in-flight open so a late index/body resolve cannot reopen
+    // state or punch another AppShell domain update after the overlay is gone.
+    loadGenerationRef.current += 1;
     setIsOpen(false);
-    // Idempotent: open path already writes lastSeen; keep close for manual safety.
+    setLoading(false);
     markReleaseNotesSeen(appVersionRef.current);
   }, []);
 
@@ -214,7 +224,8 @@ export function useReleaseNotes({
     }
     autoCheckDoneRef.current = true;
     let cancelled = false;
-    let autoOpenTimer: ReturnType<typeof setTimeout> | null = null;
+    let unsubscribeGate: (() => void) | null = null;
+    let cancelQuiet: (() => void) | null = null;
 
     void getVersion()
       .then((version) => {
@@ -237,13 +248,28 @@ export function useReleaseNotes({
           return;
         }
 
-        // Defer past cold-start hydrate: only load index + current version body.
-        autoOpenTimer = setTimeout(() => {
+        // Wait for first-paint / home-input / force-enter, then a quiet
+        // slice. A fixed 2s timeout still landed inside the cold-start
+        // click-freeze window (field: close the auto-opened modal in the
+        // first seconds and WebView2 hit-test stalls until catalog settle).
+        unsubscribeGate = subscribeStartupGateReady(() => {
           if (cancelled) {
             return;
           }
-          void openReleaseNotes({ preferredVersion: normalizedVersion });
-        }, RELEASE_NOTES_AUTO_OPEN_DELAY_MS);
+          cancelQuiet = scheduleWhenInteractiveQuiet(
+            () => {
+              if (cancelled) {
+                return;
+              }
+              void openReleaseNotes({ preferredVersion: normalizedVersion });
+            },
+            {
+              quietMs: RELEASE_NOTES_AUTO_OPEN_QUIET_MS,
+              minDelayMs: RELEASE_NOTES_AUTO_OPEN_MIN_DELAY_MS,
+              maxWaitMs: RELEASE_NOTES_AUTO_OPEN_MAX_WAIT_MS,
+            },
+          );
+        });
       })
       .catch((caughtError) => {
         const message =
@@ -259,9 +285,9 @@ export function useReleaseNotes({
 
     return () => {
       cancelled = true;
-      if (autoOpenTimer !== null) {
-        clearTimeout(autoOpenTimer);
-      }
+      autoCheckDoneRef.current = false;
+      unsubscribeGate?.();
+      cancelQuiet?.();
     };
   }, [enabled, onDebug, openReleaseNotes]);
 

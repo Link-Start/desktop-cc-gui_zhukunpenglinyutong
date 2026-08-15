@@ -1,30 +1,9 @@
-import { AppShellView } from "./appShellView";
-import { AppShellZoneProviders } from "../domains/appShellZoneProviders";
-import { useAppShellRootComposition } from "./useAppShellRootComposition";
+import { AppShellHostTree } from "../hosts/AppShellHostTree";
 
 /**
- * AppShell composition 入口（T2.6）。
- * 业务 hooks 在 useAppShellRootComposition；zone providers + view 在此组装。
+ * AppShell composition 入口。
+ * 业务 hooks 在独立 Host 子树；本文件只挂载 Host 树。
  */
 export function AppShell() {
-  const {
-    runtimeThreadProviderValue,
-    composerProviderValue,
-    layoutChromeProviderValue,
-    appShellDomainContexts,
-    searchAndComposerInput,
-  } = useAppShellRootComposition();
-
-  return (
-    <AppShellZoneProviders
-      runtimeThread={runtimeThreadProviderValue}
-      composer={composerProviderValue}
-      layoutChrome={layoutChromeProviderValue}
-    >
-      <AppShellView
-        appShellDomainContexts={appShellDomainContexts}
-        searchAndComposerInput={searchAndComposerInput}
-      />
-    </AppShellZoneProviders>
-  );
+  return <AppShellHostTree />;
 }

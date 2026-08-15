@@ -39,7 +39,17 @@ import {
   resolveLiveAssistantSettlementText,
   updateLiveAssistantTextSnapshot,
 } from "../utils/liveAssistantTextChannel";
-import { isLiveTextExternalizationEnabled } from "../utils/realtimePerfFlags";
+import {
+  appendLiveItemDelta,
+  clearLiveItemDeltaForItem,
+  drainLiveItemDeltaTail,
+  peekLiveItemDeltaEntry,
+  type LiveItemDeltaLane,
+} from "../utils/liveItemDeltaChannel";
+import {
+  isLiveDeltaExternalizationEnabled,
+  isLiveTextExternalizationEnabled,
+} from "../utils/realtimePerfFlags";
 import {
   noteRealtimeCoalescedFlush,
   noteThreadReducerWorkMeasured,
@@ -51,6 +61,9 @@ const CLAUDE_STREAM_DEBUG_FLAG_KEY = "ccgui.debug.claude.stream";
 // A4 流式正文外部化（docs/perf/a4-live-text-externalization-plan.md）：
 // 模块加载时读一次，翻转 flag 需刷新页面（与其余 perf flag 同语义）。
 const LIVE_TEXT_EXTERNALIZATION_ENABLED = isLiveTextExternalizationEnabled();
+// A4 二期：reasoningContent / reasoningSummary / toolOutput 三类电报外部化
+//（liveItemDeltaChannel）。同样模块加载时读一次，翻转 flag 需刷新页面。
+const LIVE_DELTA_EXTERNALIZATION_ENABLED = isLiveDeltaExternalizationEnabled();
 
 /**
  * Infer engine type from thread ID.
@@ -246,6 +259,8 @@ type RealtimeDeltaOperation =
 // 32ms (~30 flush/s)：12ms 时顶层 thread reducer 每秒最高 dispatch ~83 次，
 // 每次 flush 都触发 app-shell 大子树 re-render，是流式卡顿的放大器。
 // 视觉平滑度由 Markdown streaming throttle + progressive reveal 保证。
+// A4 二期：liveDeltaExternalization 开时 reasoning/toolOutput 三类 delta
+// 不再入此队列（走 liveItemDeltaChannel 48ms 节奏，见 enqueueRealtimeDeltaOperation）。
 const REALTIME_DELTA_BATCH_FLUSH_MS = 32;
 const NORMALIZED_REALTIME_BATCH_FLUSH_MS = 32;
 
@@ -554,6 +569,33 @@ export function useThreadItemEvents({
         droppedLateRealtimeEventCountRef.current += 1;
         return;
       }
+      // A4 二期：flag 开时三类文本 delta 先累积进 liveItemDeltaChannel。
+      // 非首条直接返回——不打根 dispatch（连 ensureThread 也不发），订阅行按
+      // 通道 48ms 节奏渲染；首条落回原路径建壳，保证 durable item 存在、key
+      // 稳定（与 A4 正文同款做法）。reasoningSummaryBoundary 是边界事件
+      //（每回合仅几次，不是 30 次/秒的来源），不在此列，仍走原 dispatch。
+      if (
+        LIVE_DELTA_EXTERNALIZATION_ENABLED &&
+        (operation.kind === "reasoningContentDelta" ||
+          operation.kind === "reasoningSummaryDelta" ||
+          operation.kind === "toolOutputDelta")
+      ) {
+        const lane: LiveItemDeltaLane =
+          operation.kind === "reasoningContentDelta"
+            ? "reasoningContent"
+            : operation.kind === "reasoningSummaryDelta"
+              ? "reasoningSummary"
+              : "toolOutput";
+        const { isFirst } = appendLiveItemDelta(
+          threadId,
+          operation.itemId,
+          lane,
+          operation.delta,
+        );
+        if (!isFirst) {
+          return;
+        }
+      }
       const ensuredThreads = context?.ensuredThreads;
       const markedProcessingThreads = context?.markedProcessingThreads;
       if (!ensuredThreads || !ensuredThreads.has(threadId)) {
@@ -737,6 +779,19 @@ export function useThreadItemEvents({
         safeMessageActivity();
         return;
       }
+      // A4 二期：flag 开时三类 delta 不再进 32ms 批量队列——liveItemDeltaChannel
+      // 自带 48ms 发布节奏，排队只会延迟建壳与通道累积。同步 apply（内部首条
+      // 建壳、其余只进通道），urgent 语义仍由上方 urgent 分支保留。
+      if (
+        LIVE_DELTA_EXTERNALIZATION_ENABLED &&
+        (operation.kind === "reasoningContentDelta" ||
+          operation.kind === "reasoningSummaryDelta" ||
+          operation.kind === "toolOutputDelta")
+      ) {
+        applyRealtimeDeltaOperation(operation);
+        safeMessageActivity();
+        return;
+      }
       if (!enableRealtimeBatchingRef.current) {
         applyRealtimeDeltaOperation(operation);
         safeMessageActivity();
@@ -756,6 +811,78 @@ export function useThreadItemEvents({
       flushRealtimeDeltaOpsForThread,
       safeMessageActivity,
     ],
+  );
+
+  // A4 二期 settle 对齐：把某 lane 的通道尾段作为一条普通 delta 直接 dispatch
+  // 回根 reducer（与 A4 正文 drain 同款做法；reducer merge 对「快照已覆盖」做
+  // 重叠去重，幂等）。不走 applyRealtimeDeltaOperation——中断/终态守卫只拦
+  // 实时事件，不该拦结算灌回。
+  const dispatchLiveItemDeltaTail = useCallback(
+    (
+      threadId: string,
+      itemId: string,
+      lane: LiveItemDeltaLane,
+      tail: string,
+    ) => {
+      if (!tail) {
+        return;
+      }
+      if (lane === "reasoningContent") {
+        dispatch({ type: "appendReasoningContent", threadId, itemId, delta: tail });
+        return;
+      }
+      if (lane === "reasoningSummary") {
+        dispatch({ type: "appendReasoningSummary", threadId, itemId, delta: tail });
+        return;
+      }
+      dispatch({ type: "appendToolOutput", threadId, itemId, delta: tail });
+    },
+    [dispatch],
+  );
+
+  // item 完成快照是权威文本：快照 upsert 落地后，把该 item 各 lane 尚未落账的
+  // 尾段灌回 durable items，再清 lane 条目，避免 turn settle 时重复灌回。
+  const settleLiveItemDeltaForCompletedItem = useCallback(
+    (threadId: string, itemId: string) => {
+      if (!LIVE_DELTA_EXTERNALIZATION_ENABLED || !itemId) {
+        return;
+      }
+      const lanes: LiveItemDeltaLane[] = [
+        "reasoningContent",
+        "reasoningSummary",
+        "toolOutput",
+      ];
+      for (const lane of lanes) {
+        const entry = peekLiveItemDeltaEntry(threadId, itemId, lane);
+        if (!entry) {
+          continue;
+        }
+        dispatchLiveItemDeltaTail(
+          threadId,
+          itemId,
+          lane,
+          entry.text.slice(entry.shellTextLength),
+        );
+      }
+      clearLiveItemDeltaForItem(threadId, itemId);
+    },
+    [dispatchLiveItemDeltaTail],
+  );
+
+  // 回合结算（terminal causal barrier 建立前） drain 全线程通道尾段。
+  // 对齐正文 drain 的既有接线：先收敛未落账内容，再由调用方立 exact-turn
+  // barrier——结算不越过正文。
+  const drainLiveItemDeltasForThread = useCallback(
+    (threadId: string) => {
+      if (!LIVE_DELTA_EXTERNALIZATION_ENABLED || !threadId) {
+        return;
+      }
+      const drained = drainLiveItemDeltaTail(threadId);
+      for (const entry of drained) {
+        dispatchLiveItemDeltaTail(threadId, entry.itemId, entry.lane, entry.text);
+      }
+    },
+    [dispatchLiveItemDeltaTail],
   );
 
   const dispatchNormalizedRealtimeEvent = useCallback(
@@ -1366,6 +1493,12 @@ export function useThreadItemEvents({
             });
           }
         }
+        // A4 二期思考外置与正文同契约：分段前灌回 reasoning/toolOutput 尾段。
+        // Grok jsonl 工具会多次 increment；不灌回则 durable 只剩建壳首 token，
+        // collapse 再用 `\n\n` 拼成孤立标点 / 半截英文。
+        if (LIVE_DELTA_EXTERNALIZATION_ENABLED) {
+          drainLiveItemDeltasForThread(threadId);
+        }
         dispatch({ type: "incrementAgentSegment", threadId });
       }
 
@@ -1522,6 +1655,12 @@ export function useThreadItemEvents({
           });
         }
       }
+      // A4 二期：itemCompleted（shouldMarkProcessing=false）的完成快照是权威
+      // 文本。快照 upsert 落地后灌回该 item 各 lane 的通道尾段并清条目——
+      // 结算不越过正文，也避免 turn settle 时重复灌回。
+      if (!shouldMarkProcessing) {
+        settleLiveItemDeltaForCompletedItem(threadId, itemId);
+      }
       safeMessageActivity();
     },
     [
@@ -1541,6 +1680,8 @@ export function useThreadItemEvents({
       onExitPlanModeToolCompleted,
       resolveCollaborationUiMode,
       safeMessageActivity,
+      settleLiveItemDeltaForCompletedItem,
+      drainLiveItemDeltasForThread,
     ],
   );
 
@@ -2167,5 +2308,6 @@ export function useThreadItemEvents({
     isRealtimeTurnTerminalExact,
     noteRealtimeTurnStarted,
     markRealtimeTurnTerminal,
+    drainLiveItemDeltasForThread,
   };
 }

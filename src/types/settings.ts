@@ -50,7 +50,7 @@ export type DockIconId =
   | "adaptive-routing-fabric"
   | "triadic-router";
 
-export type AppMode = "chat" | "kanban" | "gitHistory" | "extensions";
+export type AppMode = "chat" | "gitHistory" | "extensions";
 
 export type ComposerEditorPreset = "default" | "helpful" | "smart";
 
@@ -122,7 +122,6 @@ export type AppSettings = {
   archiveThreadShortcut: string | null;
   closeCurrentSessionShortcut: string | null;
   openChatShortcut: string | null;
-  openKanbanShortcut: string | null;
   cycleOpenSessionPrevShortcut: string | null;
   cycleOpenSessionNextShortcut: string | null;
   toggleLeftConversationSidebarShortcut: string | null;
@@ -191,10 +190,6 @@ export type AppSettings = {
   chatCanvasUseNormalizedRealtime: boolean;
   chatCanvasUseUnifiedHistoryLoader: boolean;
   chatCanvasUsePresentationProfile: boolean;
-  dictationEnabled: boolean;
-  dictationModelId: string;
-  dictationPreferredLanguage: string | null;
-  dictationHoldKey: string | null;
   composerEditorPreset: ComposerEditorPreset;
   composerSendShortcut: ComposerSendShortcut;
   composerFenceExpandOnSpace: boolean;

@@ -10,7 +10,7 @@ mod types;
 #[cfg(test)]
 mod types_test;
 
-pub use commands::*;
+pub(crate) use commands::*;
 pub use projection::project_agent_runs;
 pub use support::require_agent_enabled;
 pub use types::*;

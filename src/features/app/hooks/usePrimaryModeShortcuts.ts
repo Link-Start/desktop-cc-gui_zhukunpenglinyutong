@@ -8,17 +8,13 @@ import { registerKeydownHandler } from "./keyboardDispatcher";
 type UsePrimaryModeShortcutsOptions = {
   isEnabled: boolean;
   openChatShortcut: string | null;
-  openKanbanShortcut: string | null;
   onOpenChat: () => void;
-  onOpenKanban: () => void;
 };
 
 export function usePrimaryModeShortcuts({
   isEnabled,
   openChatShortcut,
-  openKanbanShortcut,
   onOpenChat,
-  onOpenKanban,
 }: UsePrimaryModeShortcutsOptions) {
   useEffect(() => {
     if (!isEnabled) {
@@ -35,25 +31,13 @@ export function usePrimaryModeShortcuts({
       ) {
         return;
       }
-      const matchesChatShortcut = matchesShortcutForPlatform(
-        event,
-        openChatShortcut,
-      );
-      const matchesKanbanShortcut = matchesShortcutForPlatform(
-        event,
-        openKanbanShortcut,
-      );
-      if (!matchesChatShortcut && !matchesKanbanShortcut) {
+      if (!matchesShortcutForPlatform(event, openChatShortcut)) {
         return;
       }
       event.preventDefault();
-      if (matchesChatShortcut) {
-        onOpenChat();
-        return;
-      }
-      onOpenKanban();
+      onOpenChat();
     };
 
     return registerKeydownHandler(handleKeyDown);
-  }, [isEnabled, onOpenChat, onOpenKanban, openChatShortcut, openKanbanShortcut]);
+  }, [isEnabled, onOpenChat, openChatShortcut]);
 }

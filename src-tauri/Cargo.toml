@@ -71,10 +71,6 @@ tauri-plugin-updater = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-notification = "2"
 
-[target."cfg(not(target_os = \"windows\"))".dependencies]
-cpal = "0.15"
-whisper-rs = "0.12"
-
 [target."cfg(target_os = \"windows\")".dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
 
@@ -82,13 +78,12 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_Wind
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", features = ["NSAppearance", "NSApplication", "NSDockTile", "NSImage", "NSResponder", "NSWindow", "objc2-core-foundation"] }
 objc2-foundation = { version = "0.3", features = ["NSString", "NSProcessInfo", "NSUUID", "NSDictionary", "NSError", "NSBundle", "NSURL"] }
-objc2-av-foundation = { version = "0.3", features = ["AVCaptureDevice", "AVMediaFormat"] }
 block2 = "0.6"
 # Modern UserNotifications path (see system_notification.rs). Required because
 # tauri-plugin-notification desktop uses deprecated NSUserNotificationCenter.
 objc2-user-notifications = "0.3"
 
-# Binary size: strip + fat LTO + size-biased opt (whisper.cpp C code keeps its own -O3).
+# Binary size: strip + fat LTO + size-biased opt.
 # No panic="abort": tokio task isolation relies on unwinding; a task panic must not kill the app.
 [profile.release]
 strip = true

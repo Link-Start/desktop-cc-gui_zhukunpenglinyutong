@@ -7,7 +7,7 @@ import type {
   BrowserObservationState,
   BrowserUserAnnotation,
 } from "../types";
-import type { TaskRunBrowserEvidenceRef } from "../../tasks/types";
+import type { TaskRunBrowserEvidenceRef } from "../types";
 
 export type BrowserEvidenceSectionState = BrowserObservationState | "empty";
 

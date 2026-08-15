@@ -33,13 +33,14 @@ describe("appShellDomainOwnershipGate (T1.8)", () => {
     expect(report.hardBudgetViolations).toEqual([]);
   });
 
-  it("locks workspaceNavigation hard budget at 80 (T1.7/T5.1)", () => {
+  it("locks workspaceNavigation hard budget at measured 78 (T1.7/T5.1 + S4 PR-F)", () => {
+    // S4 PR-F：原 T1.7 门 80 → 咬实测；kanban 出账后 79 → 78（贴顶，新增 key 必须先出后进）
     expect(APP_SHELL_DOMAIN_KEY_HARD_BUDGETS.workspaceNavigationContext).toBe(
-      80,
+      78,
     );
     expect(
       APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS.workspaceNavigationContext.length,
-    ).toBeLessThanOrEqual(80);
+    ).toBeLessThanOrEqual(78);
   });
 
   it("covers every domain name in the ownership map with hard budgets (T5.1)", () => {

@@ -121,10 +121,6 @@ const runtimeNotice = {
           title: "读取 Git Diff",
           description: "读取项目文件差异摘要，供变更面板和提交范围判断使用。",
         },
-        dictation: {
-          title: "检查语音模型",
-          description: "检查本地 dictation model 是否可用，供语音输入入口使用。",
-        },
         "input-history": {
           title: "恢复输入历史",
           description: "从本地状态恢复输入草稿与历史，避免重启后丢失未完成内容。",

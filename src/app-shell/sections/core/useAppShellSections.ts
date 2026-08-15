@@ -16,24 +16,21 @@ import { useMenuLocalization } from "../../../features/app/hooks/useMenuLocaliza
 import { runWithLoadingProgress } from "../../../features/app/utils/loadingProgressActions";
 import { resolveSharedSessionCreateInitialTarget } from "../../../features/shared-session/target/resolveSharedSessionCreateInitialTarget";
 import type { SharedSessionSupportedEngine } from "../../../features/shared-session/utils/sharedSessionEngines";
-import type { WorkspaceHomeDeleteResult } from "../../../features/workspaces/components/WorkspaceHome";
+import type { WorkspaceHomeDeleteResult } from "../../../features/workspaces/types";
 import type { EngineType, WorkspaceInfo } from "../../../types";
-import { isRewindSupportedThreadId } from "../useAppShellSections.kanbanHelpers";
+import { isRewindSupportedThreadId } from "../../../features/threads/utils/rewindSupportedThreadId";
 import {
   getThreadSelectDiffCleanupAction,
   shouldCollapseRightPanelOnThreadSelect,
   shouldPreserveEditorOnThreadSelect,
 } from "../threadEditorPreservation";
-import { useAppShellKanbanComposerSection } from "../useAppShellKanbanComposerSection";
-import { useAppShellKanbanExecutionSection } from "../useAppShellKanbanExecutionSection";
+import { useAppShellComposerSendSection } from "../useAppShellComposerSendSection";
 import {
   mergeAppShellDomainBag,
   selectAppShellDomainBag,
-} from "../../domains/selectAppShellDomainBag";
-import {
-  APP_SHELL_CONSUMER_DOMAIN_SELECTION,
   type DomainFlattenIdentityCache,
-} from "../../domains/appShellDomainContexts";
+} from "../../domains/selectAppShellDomainBag";
+import { APP_SHELL_CONSUMER_DOMAIN_SELECTION } from "../../domains/appShellDomainContexts";
 import type {
   UseAppShellSectionsContext,
   UseAppShellSectionsInput,
@@ -42,15 +39,7 @@ import {
   defineAppShellContextActions,
   defineAppShellNavigationActions,
   defineAppShellRuntimeActions,
-  defineAppShellTaskRunActions,
 } from "../../domains/appShellActionBoundaries";
-export {
-  resolvePendingSessionThreadCandidate,
-  resolveTaskThreadId,
-  shouldSyncComposerEngineForKanbanExecution,
-  stripComposerKanbanTagsPreserveFormatting,
-  syncKanbanExecutionEngineAndModel,
-} from "../useAppShellSections.kanbanHelpers";
 
 /** bag-split PR-2：sections 读侧最小域（见 APP_SHELL_CONSUMER_DOMAIN_SELECTION） */
 const APP_SHELL_SECTIONS_DOMAIN_NAMES =
@@ -106,7 +95,6 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     removeImagesForThread,
     t,
     appMode,
-    selectedKanbanTaskId,
     setActiveWorkspaceId,
     setWorkspaceHomeWorkspaceId,
     updateWorkspaceSettings,
@@ -162,7 +150,6 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     refreshAccountRateLimits,
     setHomeOpen,
     showHome,
-    showKanban,
     showGitHistory,
     showLoadingProgressDialog,
     hideLoadingProgressDialog,
@@ -174,15 +161,9 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
   } = ctx;
 
   const {
-    selectedComposerKanbanPanelId,
-    setSelectedComposerKanbanPanelId,
-    composerKanbanContextMode,
-    setComposerKanbanContextMode,
-    composerLinkedKanbanPanels,
-    handleOpenComposerKanbanPanel,
     handleComposerSendWithEditorFallback,
     handleComposerQueueWithEditorFallback,
-  } = useAppShellKanbanComposerSection(ctx);
+  } = useAppShellComposerSendSection(ctx);
 
   const handleRewindFromMessage = useCallback(
     async (
@@ -572,18 +553,6 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     ],
   );
 
-  const {
-    handleOpenTaskConversation,
-    handleRetryTaskRun,
-    handleResumeTaskRun,
-    handleCancelTaskRun,
-    handleForkTaskRun,
-    handleCloseTaskConversation,
-    handleKanbanCreateTask,
-    taskProcessingMap,
-    handleDragToInProgress,
-  } = useAppShellKanbanExecutionSection(ctx);
-
   const orderValue = (entry: WorkspaceInfo) =>
     typeof entry.settings.sortOrder === "number"
       ? entry.settings.sortOrder
@@ -772,7 +741,6 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
   }, [handleExitEditor, markLiveEditPreviewManualNavigation]);
 
   const showComposer =
-    Boolean(selectedKanbanTaskId) ||
     showWorkspaceHome ||
     (!isCompact
       ? (centerMode === "chat" ||
@@ -1008,12 +976,6 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     ],
   );
 
-  const handleOpenKanbanMode = useCallback(() => {
-    setHomeOpen(false);
-    setAppMode("kanban");
-    closeSettings();
-  }, [closeSettings, setAppMode, setHomeOpen]);
-
   const handleOpenFilesSurface = useCallback(() => {
     closeSettings();
     setAppMode("chat");
@@ -1036,9 +998,7 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
   usePrimaryModeShortcuts({
     isEnabled: true,
     openChatShortcut: appSettings.openChatShortcut,
-    openKanbanShortcut: appSettings.openKanbanShortcut,
     onOpenChat: handleOpenHomeChat,
-    onOpenKanban: handleOpenKanbanMode,
   });
 
   useAppSurfaceShortcuts({
@@ -1138,23 +1098,13 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
     !isCompact && rightPanelCollapsed ? " right-panel-collapsed" : ""
   }${shouldShowSidebarTopbarContent ? " sidebar-title-relocated" : ""}${
     showHome ? " home-active" : ""
-  }${showKanban ? " kanban-active" : ""}${
+  }${
     showGitHistory ? " git-history-active" : ""
   }${isSoloMode ? " solo-mode" : ""}`;
 
   const runtimeActions = defineAppShellRuntimeActions({
     handleToggleRuntimeConsole,
     handleToggleTerminalPanel,
-  });
-  const taskRunActions = defineAppShellTaskRunActions({
-    handleOpenTaskConversation,
-    handleRetryTaskRun,
-    handleResumeTaskRun,
-    handleCancelTaskRun,
-    handleForkTaskRun,
-    handleCloseTaskConversation,
-    handleKanbanCreateTask,
-    handleDragToInProgress,
   });
   const navigationActions = defineAppShellNavigationActions({
     handleSelectWorkspaceInstance,
@@ -1185,21 +1135,13 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
 
   return {
     ...runtimeActions,
-    ...taskRunActions,
     ...navigationActions,
     ...contextActions,
     // Tab reorder is purely cosmetic (no active-file/navigation change), so it
     // skips the live-edit-preview navigation marking the other tab actions use.
     handleReorderWorkspaceFileTabs: handleReorderFileTabs,
-    selectedComposerKanbanPanelId,
-    setSelectedComposerKanbanPanelId,
-    composerKanbanContextMode,
-    setComposerKanbanContextMode,
-    composerLinkedKanbanPanels,
-    handleOpenComposerKanbanPanel,
     handleComposerSendWithEditorFallback,
     handleComposerQueueWithEditorFallback,
-    taskProcessingMap,
     handleMoveWorkspace,
     handleReorderWorkspaces,
     shouldMountSpecHub,

@@ -54,12 +54,10 @@ function createDesktopLayout(overrides: Partial<ComponentProps<typeof DesktopLay
       homeNode={<div>home</div>}
       showHome={false}
       showWorkspace
-      showKanban={false}
       showExtensions={false}
       showGitHistory={false}
       hideRightPanel={false}
       isSoloMode={false}
-      kanbanNode={<div>kanban</div>}
       extensionsNode={<div>extensions</div>}
       gitHistoryNode={<div>git-history</div>}
       settingsOpen={false}

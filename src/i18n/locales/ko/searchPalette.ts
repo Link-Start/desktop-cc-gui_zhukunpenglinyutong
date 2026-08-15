@@ -4,7 +4,7 @@
 // Machine translation of src/i18n/locales/en/searchPalette.ts; keys mirror the English source.
 const searchPalette = {
   "searchPalette": {
-    "placeholder": "파일, 칸반, 스레드, 메시지, 스킬, 명령 검색...",
+    "placeholder": "파일, 스레드, 메시지, 스킬, 명령 검색...",
     "placeholderFiltered": "{{content}} 검색...",
     "inputAria": "검색 입력",
     "scope": "범위",
@@ -18,6 +18,10 @@ const searchPalette = {
     "fileIndexLoading": "파일 인덱스를 완성하는 중...",
     "fileIndexPartial": "파일 인덱스가 불완전하여 일부 파일이 누락될 수 있습니다.",
     "fileIndexError": "파일 인덱스를 불러오지 못했습니다. 검색을 다시 열어 재시도하세요.",
+    "apiIndexLoading": "마지막 스캔된 API 목록을 불러오는 중...",
+    "apiIndexStale": "API 목록이 최신이 아닙니다. 이전 결과는 계속 검색할 수 있습니다. 업데이트하려면 Project Map에서 관계 스캔을 실행하세요.",
+    "apiIndexEmpty": "아직 API 목록이 없습니다. Project Map에서 관계 스캔을 실행하세요.",
+    "apiIndexError": "API 목록을 불러오지 못했습니다. 검색을 다시 열어 재시도하세요.",
     "navigate": "이동",
     "open": "열기",
     "close": "닫기",
@@ -27,7 +31,6 @@ const searchPalette = {
     "locationTag": "위치",
     "typeAction": "작업",
     "typeFile": "파일",
-    "typeKanban": "칸반",
     "typeThread": "스레드",
     "typeMessage": "메시지",
     "typeHistory": "히스토리",
@@ -35,7 +38,6 @@ const searchPalette = {
     "typeCommand": "명령",
     "sourceActions": "앱 작업",
     "sourceFiles": "파일 인덱스",
-    "sourceKanban": "칸반 데이터",
     "sourceThreads": "스레드 제목",
     "sourceMessages": "메시지 내용",
     "sourceHistory": "입력 히스토리",
@@ -44,7 +46,6 @@ const searchPalette = {
     "contentAll": "전체",
     "contentActions": "작업",
     "contentFiles": "파일",
-    "contentKanban": "칸반",
     "contentThreads": "스레드",
     "contentMessages": "메시지",
     "contentHistory": "히스토리",

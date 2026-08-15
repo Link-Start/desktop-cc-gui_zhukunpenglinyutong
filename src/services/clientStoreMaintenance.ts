@@ -80,7 +80,7 @@ function pruneCustomNamesBacklog(): void {
 }
 
 /**
- * 启动期 client store 存量止血。必须在 preloadClientStores 完成后调用
+ * 启动期 client store 存量止血。必须在 deferred stores hydrate 完成后调用
  * （依赖同步 cache 读取）。幂等：清理后的存量再跑一遍是 no-op。
  */
 export function runClientStoreMaintenance(): void {

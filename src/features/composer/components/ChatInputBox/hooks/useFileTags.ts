@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { escapeHtmlAttr } from '../utils/htmlEscape.js';
-import { getFileIcon } from '../../../utils/fileIcons.js';
-import { icon_folder, icon_terminal, icon_server } from '../../../utils/icons.js';
+import {
+  getFileIcon,
+  getFolderIcon,
+  getServerIcon,
+  getTerminalIcon,
+} from '../../../../../utils/fileIcons';
 import { debugError, debugWarn, perfTimer } from '../../../utils/debug.js';
 import { sanitizeSvg } from '../utils/sanitize.js';
 import {
@@ -358,11 +362,11 @@ export function useFileTags({
 
       let iconSvg = '';
       if (isTerminal) {
-        iconSvg = icon_terminal;
+        iconSvg = getTerminalIcon();
       } else if (isService) {
-        iconSvg = icon_server;
+        iconSvg = getServerIcon();
       } else if (isDirectory) {
-        iconSvg = icon_folder;
+        iconSvg = getFolderIcon(pureFileName, false);
       } else {
         const extension = pureFileName.indexOf('.') !== -1 ? pureFileName.split('.').pop() : '';
         iconSvg = getFileIcon(extension, pureFileName);

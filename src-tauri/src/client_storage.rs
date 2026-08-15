@@ -271,52 +271,6 @@ pub(crate) fn client_store_patch(store: String, patch: Value) -> Result<(), Stri
     patch_store(&format!("{store}.json"), patch_map)
 }
 
-const KANBAN_IMAGE_DIR_NAME: &str = "kanban-images";
-const MAX_KANBAN_IMAGE_BYTES: usize = 20 * 1024 * 1024;
-
-fn kanban_image_extension(media_type: &str) -> Option<&'static str> {
-    match media_type {
-        "image/png" => Some("png"),
-        "image/jpeg" | "image/jpg" => Some("jpg"),
-        "image/gif" => Some("gif"),
-        "image/webp" => Some("webp"),
-        "image/bmp" => Some("bmp"),
-        "image/avif" => Some("avif"),
-        _ => None,
-    }
-}
-
-/// 将 kanban 任务里的 base64 data URL 图片落盘为文件，返回绝对路径。
-/// 避免把 MB 级 base64 存进 client store JSON（曾把 app.json 撑到 24MB）。
-#[tauri::command]
-pub(crate) fn client_save_kanban_image(data_url: String) -> Result<String, String> {
-    use base64::Engine;
-
-    let (media_type, payload) = data_url
-        .strip_prefix("data:")
-        .and_then(|rest| rest.split_once(";base64,"))
-        .ok_or_else(|| "client_save_kanban_image expects a base64 image data URL".to_string())?;
-    let extension = kanban_image_extension(media_type)
-        .ok_or_else(|| format!("Unsupported kanban image media type: {media_type}"))?;
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(payload.trim().as_bytes())
-        .map_err(|error| format!("Invalid kanban image base64 payload: {error}"))?;
-    if bytes.is_empty() {
-        return Err("Kanban image payload is empty".to_string());
-    }
-    if bytes.len() > MAX_KANBAN_IMAGE_BYTES {
-        return Err(format!(
-            "Kanban image payload too large: {} bytes",
-            bytes.len()
-        ));
-    }
-    let dir = client_storage_dir()?.join(KANBAN_IMAGE_DIR_NAME);
-    std::fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
-    let path = dir.join(format!("kanban-{}.{extension}", Uuid::new_v4()));
-    std::fs::write(&path, &bytes).map_err(|error| error.to_string())?;
-    Ok(path.to_string_lossy().to_string())
-}
-
 #[cfg(test)]
 mod tests {
     use super::{patch_store_at_path, read_store};
@@ -436,12 +390,5 @@ mod tests {
         assert_eq!(value, json!({ "keep": "value", "extra": 2 }));
 
         std::fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn save_kanban_image_extension_mapping() {
-        assert_eq!(super::kanban_image_extension("image/png"), Some("png"));
-        assert_eq!(super::kanban_image_extension("image/jpeg"), Some("jpg"));
-        assert_eq!(super::kanban_image_extension("text/plain"), None);
     }
 }

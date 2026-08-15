@@ -138,6 +138,67 @@ describe("clientStorage", () => {
     });
   });
 
+  it("hydrates only layout and app on the critical path", async () => {
+    const invokeMock = vi.mocked(invoke);
+    const storage = await import("./clientStorage");
+    storage.resetClientStorageForTests();
+    invokeMock.mockImplementation(async (command, payload) => {
+      const args =
+        payload && typeof payload === "object" && !Array.isArray(payload)
+          ? (payload as Record<string, unknown>)
+          : null;
+      if (command === "client_store_read") {
+        return { __schemaVersion: 1, from: args?.store };
+      }
+      return null;
+    });
+
+    await storage.preloadCriticalClientStores();
+
+    expect(storage.isClientStoreReady("layout")).toBe(true);
+    expect(storage.isClientStoreReady("app")).toBe(true);
+    expect(storage.isClientStoreReady("threads")).toBe(false);
+    expect(storage.isPreloaded()).toBe(false);
+    expect(invokeMock.mock.calls.filter(([command]) => command === "client_store_read")).toHaveLength(2);
+    expect(storage.getClientStoreSync("layout", "from")).toBe("layout");
+    expect(storage.getClientStoreSync("threads", "from")).toBeUndefined();
+  });
+
+  it("keeps in-memory dirty keys when a deferred store hydrates later", async () => {
+    const invokeMock = vi.mocked(invoke);
+    const storage = await import("./clientStorage");
+    storage.resetClientStorageForTests();
+    invokeMock.mockImplementation(async (command, payload) => {
+      const args =
+        payload && typeof payload === "object" && !Array.isArray(payload)
+          ? (payload as Record<string, unknown>)
+          : null;
+      if (command === "client_store_read" && args?.store === "threads") {
+        return {
+          __schemaVersion: 1,
+          customNames: { "ws:disk": "Disk" },
+          pinnedThreads: { "ws:old": 1 },
+        };
+      }
+      if (command === "client_store_read") {
+        return null;
+      }
+      return null;
+    });
+
+    storage.writeClientStoreValue("threads", "customNames", { "ws:memory": "Memory" });
+    await storage.preloadDeferredClientStores();
+
+    expect(storage.getClientStoreSync("threads", "customNames")).toEqual({
+      "ws:memory": "Memory",
+    });
+    expect(storage.getClientStoreSync("threads", "pinnedThreads")).toEqual({
+      "ws:old": 1,
+    });
+    expect(storage.isClientStoreReady("threads")).toBe(true);
+    expect(storage.isPreloaded()).toBe(false);
+  });
+
   it("rehydrates persisted schema stores after an in-memory reset without exposing schema metadata", async () => {
     const invokeMock = vi.mocked(invoke);
     const storage = await import("./clientStorage");

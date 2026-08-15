@@ -63,7 +63,7 @@ pub(crate) fn ensure_supported_shared_session_engine(
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-struct SharedEngineBinding {
+pub(crate) struct SharedEngineBinding {
     engine: EngineType,
     native_thread_id: String,
     created_at: u64,

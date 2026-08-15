@@ -39,6 +39,23 @@
     }
 
     #[test]
+    fn catalog_query_defaults_to_full_scan_quality_and_accepts_preview() {
+        assert_eq!(
+            WorkspaceSessionCatalogQuery::default().scan_quality(),
+            WorkspaceSessionScanQuality::Full
+        );
+        let preview = WorkspaceSessionCatalogQuery {
+            scan_quality: Some(WorkspaceSessionScanQuality::Preview),
+            ..Default::default()
+        };
+        assert_eq!(preview.scan_quality(), WorkspaceSessionScanQuality::Preview);
+        assert_ne!(
+            catalog_query_fingerprint(&preview),
+            catalog_query_fingerprint(&WorkspaceSessionCatalogQuery::default())
+        );
+    }
+
+    #[test]
     fn global_codex_catalog_entry_preserves_parent_session_id() {
         let summary: crate::types::LocalUsageSessionSummary = serde_json::from_value(
             serde_json::json!({

@@ -86,15 +86,12 @@ describe("adaptLegacyMessagesProps", () => {
   it("maps callbacks and runtime collections without changing references", () => {
     const onOpenWorkspaceFile = vi.fn();
     const approvals: NonNullable<MessagesProps["approvals"]> = [];
-    const taskRuns: NonNullable<MessagesProps["taskRuns"]> = [];
     const result = adaptLegacyMessagesProps(buildProps({
       approvals,
-      taskRuns,
       onOpenWorkspaceFile,
     }));
 
     expect(result.runtime.approvals).toBe(approvals);
-    expect(result.runtime.taskRuns).toBe(taskRuns);
     expect(result.interactions.onOpenWorkspaceFile).toBe(onOpenWorkspaceFile);
   });
 });

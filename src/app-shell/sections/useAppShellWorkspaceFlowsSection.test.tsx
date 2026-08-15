@@ -149,7 +149,6 @@ function createContext(overrides: Partial<Parameters<typeof useAppShellWorkspace
     setAppSettings: vi.fn(),
     setCenterMode: vi.fn(),
     setHomeOpen: vi.fn(),
-    setSelectedKanbanTaskId: vi.fn(),
     t: (key: string) => key,
     terminalOpen: false,
     threadsByWorkspace: {
@@ -214,7 +213,6 @@ describe("useAppShellWorkspaceFlowsSection", () => {
     expect(context.setActiveTab).toHaveBeenCalledWith("codex");
     expect(context.setHomeOpen).toHaveBeenCalledWith(false);
     expect(context.collapseRightPanel).toHaveBeenCalled();
-    expect(context.setSelectedKanbanTaskId).toHaveBeenCalledWith(null);
     expect(context.selectWorkspace).toHaveBeenCalledWith("ws-1");
     expect(context.setActiveThreadId).toHaveBeenCalledWith("thread-1", "ws-1");
     expect(context.setActiveEngine).toHaveBeenCalledWith("codex");

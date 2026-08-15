@@ -572,6 +572,3 @@ export function StartupGateOverlay() {
     </div>
   );
 }
-
-/** @deprecated Prefer StartupGateOverlay */
-export const WindowsStartupGateOverlay = StartupGateOverlay;

@@ -4,7 +4,7 @@
 // Machine translation of src/i18n/locales/en/searchPalette.ts; keys mirror the English source.
 const searchPalette = {
   "searchPalette": {
-    "placeholder": "ファイル、カンバン、スレッド、メッセージ、Skill、コマンドを検索...",
+    "placeholder": "ファイル、スレッド、メッセージ、Skill、コマンドを検索...",
     "placeholderFiltered": "{{content}}を検索...",
     "inputAria": "検索入力",
     "scope": "範囲",
@@ -18,6 +18,10 @@ const searchPalette = {
     "fileIndexLoading": "ファイルインデックスを補完しています…",
     "fileIndexPartial": "ファイルインデックスが不完全なため、一部のファイルが見つからない可能性があります。",
     "fileIndexError": "ファイルインデックスを読み込めませんでした。検索を開き直して再試行してください。",
+    "apiIndexLoading": "前回スキャンした API 一覧を読み込んでいます…",
+    "apiIndexStale": "API 一覧は最新ではありません。前回の結果は検索できます。更新するには Project Map で関係スキャンを実行してください。",
+    "apiIndexEmpty": "API 一覧はまだありません。Project Map で関係スキャンを実行してください。",
+    "apiIndexError": "API 一覧を読み込めませんでした。検索を開き直して再試行してください。",
     "navigate": "移動",
     "open": "開く",
     "close": "閉じる",
@@ -27,7 +31,6 @@ const searchPalette = {
     "locationTag": "場所",
     "typeAction": "操作",
     "typeFile": "ファイル",
-    "typeKanban": "カンバン",
     "typeThread": "スレッド",
     "typeMessage": "メッセージ",
     "typeHistory": "履歴",
@@ -35,7 +38,6 @@ const searchPalette = {
     "typeCommand": "コマンド",
     "sourceActions": "アプリ操作",
     "sourceFiles": "ファイルインデックス",
-    "sourceKanban": "カンバンデータ",
     "sourceThreads": "スレッドタイトル",
     "sourceMessages": "メッセージ内容",
     "sourceHistory": "入力履歴",
@@ -44,7 +46,6 @@ const searchPalette = {
     "contentAll": "すべて",
     "contentActions": "操作",
     "contentFiles": "ファイル",
-    "contentKanban": "カンバン",
     "contentThreads": "スレッド",
     "contentMessages": "メッセージ",
     "contentHistory": "履歴",

@@ -52,7 +52,6 @@ import {
   buildGitStatusProjectMapImpactInput,
   type ProjectMapImpactInput,
 } from "../../project-map/utils/impactSources";
-import { useTaskRunStore } from "../../tasks/hooks/useTaskRunStore";
 import { WorkspaceNoteCardPanel } from "../../note-cards/components/WorkspaceNoteCardPanel";
 import type {
   NoteCaptureDraft,
@@ -111,7 +110,6 @@ import {
   EMPTY_ACTIVE_CANVAS_CHILD_SUBAGENT_THREADS,
   EMPTY_ACTIVE_CANVAS_ITEMS,
   EMPTY_ACTIVE_CANVAS_NATIVE_THREAD_IDS,
-  EMPTY_ACTIVE_CANVAS_TASK_RUNS,
   EMPTY_ACTIVE_CANVAS_USER_INPUT_REQUESTS,
   setActiveCanvasSnapshot,
   stabilizeListByMemberIdentity,
@@ -679,18 +677,34 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
   const globalRuntimeNoticeDock = useGlobalRuntimeNoticeDock(
     options.workspaces,
   );
-  const globalRuntimeNoticeDockNode = showGlobalRuntimeNoticeDock ? (
-    <GlobalRuntimeNoticeDock
-      notices={globalRuntimeNoticeDock.notices}
-      visibility={globalRuntimeNoticeDock.visibility}
-      status={globalRuntimeNoticeDock.status}
-      onExpand={globalRuntimeNoticeDock.expand}
-      onMinimize={globalRuntimeNoticeDock.minimize}
-      onClear={globalRuntimeNoticeDock.clear}
-      // 桌面侧栏：不外显气泡，入口在设置二级菜单；手机端仍用底部气泡。
-      hideMinimizedTrigger={!options.isPhone}
-    />
-  ) : null;
+  // 稳定 dock 元素身份：它既作为 prop 直接进 AppLayout（手机端），又经
+  // sidebarRuntimeNoticeDockNode 进入 sidebarNode 的 deps；若每次 render 新建元素，
+  // 两条 memo 链都会失效（与 sidebarNode 同构处理）。
+  const globalRuntimeNoticeDockNode = useMemo(
+    () =>
+      showGlobalRuntimeNoticeDock ? (
+        <GlobalRuntimeNoticeDock
+          notices={globalRuntimeNoticeDock.notices}
+          visibility={globalRuntimeNoticeDock.visibility}
+          status={globalRuntimeNoticeDock.status}
+          onExpand={globalRuntimeNoticeDock.expand}
+          onMinimize={globalRuntimeNoticeDock.minimize}
+          onClear={globalRuntimeNoticeDock.clear}
+          // 桌面侧栏：不外显气泡，入口在设置二级菜单；手机端仍用底部气泡。
+          hideMinimizedTrigger={!options.isPhone}
+        />
+      ) : null,
+    [
+      showGlobalRuntimeNoticeDock,
+      globalRuntimeNoticeDock.notices,
+      globalRuntimeNoticeDock.visibility,
+      globalRuntimeNoticeDock.status,
+      globalRuntimeNoticeDock.expand,
+      globalRuntimeNoticeDock.minimize,
+      globalRuntimeNoticeDock.clear,
+      options.isPhone,
+    ],
+  );
   const sidebarRuntimeNoticeDockNode = options.isPhone ? null : globalRuntimeNoticeDockNode;
   const appRuntimeNoticeDockNode = options.isPhone ? globalRuntimeNoticeDockNode : null;
   const sidebarActiveItems = shellRuntimeSummary.sidebarSubagentItems;
@@ -805,7 +819,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           onCollapseSidebar={options.onCollapseSidebar}
           globalSearchShortcut={options.globalSearchShortcut}
           openChatShortcut={options.openChatShortcut}
-          openKanbanShortcut={options.openKanbanShortcut}
           showLoadingProgressDialog={options.showLoadingProgressDialog}
           hideLoadingProgressDialog={options.hideLoadingProgressDialog}
           onOpenSpecHub={options.onOpenSpecHub}
@@ -903,7 +916,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       options.onWorkspaceDragOver,
       options.onWorkspaceDrop,
       options.openChatShortcut,
-      options.openKanbanShortcut,
       options.pinThread,
       options.pinnedThreadsVersion,
       options.renameName,
@@ -1114,8 +1126,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     );
   }, []);
 
-  const taskRunStore = useTaskRunStore();
-
   // childSubagent / nativeThreadIds：禁止每帧 `[]` 或 filter 新数组击穿 canvas shallowEqual（#185 / App-BG-8EZ_F）
   // stabilize 放在 useMemo 内：仅 deps 变化时比较；避免每帧 render 写 ref（Concurrent 更干净）。
   const childSubagentThreadsStableRef = useRef(
@@ -1177,10 +1187,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     options.approvals.length === 0
       ? EMPTY_ACTIVE_CANVAS_APPROVALS
       : options.approvals;
-  const canvasTaskRuns =
-    taskRunStore.runs.length === 0
-      ? EMPTY_ACTIVE_CANVAS_TASK_RUNS
-      : taskRunStore.runs;
 
   const activeCanvasSnapshot = useMemo<ActiveCanvasSnapshot>(
     () => ({
@@ -1204,7 +1210,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       heartbeatPulse: heartbeatPulseRef.current ?? 0,
       codexSilentSuspectedAt:
         activeThreadStatus?.codexSilentSuspectedAt ?? null,
-      taskRuns: canvasTaskRuns,
       threadItemsByThread: options.threadItemsByThread,
       threadStatusById: sidebarThreadStatusById,
       activeThreadStatus,
@@ -1229,7 +1234,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       activeThreadHistoryLoadingProgress,
       activeThreadHistoryRecoveryFailureReason,
       activeThreadStatus,
-      canvasTaskRuns,
       options.threadItemsByThread,
       sidebarThreadStatusById,
       options.activeTokenUsage,
@@ -1358,7 +1362,6 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           lastDurationMs: null,
           heartbeatPulse: 0,
           codexSilentSuspectedAt: null,
-          taskRuns: EMPTY_ACTIVE_CANVAS_TASK_RUNS,
         },
         forkConfirmDialogProps: {
           userMessageId: forkConfirmUserMessageId,
@@ -1461,8 +1464,17 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     isSharedSession,
   );
   const sharedSendState = isSharedSession ? sharedSendEntry.state : "idle";
-  const rewindWorkspaceGitState = deriveRewindWorkspaceGitState(
-    options.gitStatus,
+  const gitStatusError = options.gitStatus.error;
+  const gitStatusFiles = options.gitStatus.files;
+  // deriveRewindWorkspaceGitState 每次 render 返回新对象；它是 renderComposerNode
+  // 的 deps，若不 memo 会让 composerNode / homeComposerNode 的 memo 永远失效。
+  const rewindWorkspaceGitState = useMemo(
+    () =>
+      deriveRewindWorkspaceGitState({
+        error: gitStatusError,
+        files: gitStatusFiles,
+      }),
+    [gitStatusError, gitStatusFiles],
   );
   const selectGitRoot = options.onSelectGitRoot;
   const clearGitRoot = options.onClearGitRoot;
@@ -1784,25 +1796,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           sendShortcut={options.composerSendShortcut}
           textareaHeight={options.textareaHeight}
           onTextareaHeightChange={options.onTextareaHeightChange}
-          dictationEnabled={options.dictationEnabled}
-          dictationState={options.dictationState}
-          dictationLevel={options.dictationLevel}
-          onToggleDictation={options.onToggleDictation}
-          onOpenDictationSettings={options.onOpenDictationSettings}
           onOpenSkillsSettings={options.onOpenSkillsSettings}
           onOpenExperimentalSettings={options.onOpenExperimentalSettings}
-          dictationTranscript={options.dictationTranscript}
-          onDictationTranscriptHandled={options.onDictationTranscriptHandled}
-          dictationError={options.dictationError}
-          onDismissDictationError={options.onDismissDictationError}
-          dictationHint={options.dictationHint}
-          onDismissDictationHint={options.onDismissDictationHint}
-          linkedKanbanPanels={options.composerLinkedKanbanPanels}
-          selectedLinkedKanbanPanelId={options.selectedComposerKanbanPanelId}
-          onSelectLinkedKanbanPanel={options.onSelectComposerKanbanPanel}
-          kanbanContextMode={options.composerKanbanContextMode}
-          onKanbanContextModeChange={options.onComposerKanbanContextModeChange}
-          onOpenLinkedKanbanPanel={options.onOpenComposerKanbanPanel}
           activeFilePath={options.activeComposerFilePath}
           activeFileLineRange={options.activeComposerFileLineRange}
           fileReferenceMode={options.fileReferenceMode}
@@ -1964,25 +1959,8 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
       options.composerSendShortcut,
       options.textareaHeight,
       options.onTextareaHeightChange,
-      options.dictationEnabled,
-      options.dictationState,
-      options.dictationLevel,
-      options.onToggleDictation,
-      options.onOpenDictationSettings,
       options.onOpenSkillsSettings,
       options.onOpenExperimentalSettings,
-      options.dictationTranscript,
-      options.onDictationTranscriptHandled,
-      options.dictationError,
-      options.onDismissDictationError,
-      options.dictationHint,
-      options.onDismissDictationHint,
-      options.composerLinkedKanbanPanels,
-      options.selectedComposerKanbanPanelId,
-      options.onSelectComposerKanbanPanel,
-      options.composerKanbanContextMode,
-      options.onComposerKanbanContextModeChange,
-      options.onOpenComposerKanbanPanel,
       options.activeComposerFilePath,
       options.activeComposerFileLineRange,
       options.fileReferenceMode,

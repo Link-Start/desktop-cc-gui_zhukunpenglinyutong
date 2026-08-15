@@ -21,33 +21,43 @@ export const APP_SHELL_DOMAIN_KEY_TARGET_HARD = 60;
 export const APP_SHELL_DOMAIN_KEY_DEFAULT_SOFT = 80;
 
 /**
- * Hard budgets：
- * - 已达标域：hard = 80（不得再涨过 soft 线）
- * - 仍超 soft 的遗留巨域：hard = 当前 OWNED 规模冻结（禁止继续加 key）
+ * Hard budgets（S4 PR-F：全部咬在实测值，任何新增 key 必须先改本表）：
+ * - 已达标域（≤60）：hard = 实测 keys 数（零余量，先出后进）
+ * - 仍超 soft 的遗留域：hard = 实测 keys 数冻结（禁止继续加 key）
  * 后续压到 60 时再下调 hard。
  */
 export const APP_SHELL_DOMAIN_KEY_HARD_BUDGETS: Record<
   AppShellDomainContextName,
   number
 > = {
-  runtimeThreadContext: 80,
-  sessionIdentityContext: 80,
-  workspaceCatalogContext: 80,
-  /** freeze：实测 79 */
-  gitSurfaceContext: 80,
-  modeRoutingContext: 80,
-  accountSurfaceContext: 80,
-  dictationSurfaceContext: 80,
-  /** T1.7 门 */
-  workspaceNavigationContext: 80,
-  /** freeze 遗留巨域 */
-  composerContext: 141,
-  layoutContext: 103,
-  fileEditorContext: 80,
-  settingsContext: 147,
-  runtimeContext: 80,
-  modelSelectionContext: 80,
-  collaborationModeContext: 80,
+  /** S4 PR-F：实测 51 咬死（PR-D/E 归位涌入后冻结） */
+  runtimeThreadContext: 51,
+  /** S4 PR-F：实测 14 咬死 */
+  sessionIdentityContext: 14,
+  /** S4 PR-F：实测 73 咬死（贴 soft 80，先出后进） */
+  workspaceCatalogContext: 73,
+  /** S4 PR-F：108 → 删 3 个无 bag 读者 keys（gitPullRequestDiffs/setDiffSource/setGitPanelMode 经 searchAndComposerInput 直传）后实测 105 咬死（仍超 soft 的唯一债务域） */
+  gitSurfaceContext: 105,
+  /** S4 PR-F：实测 33 咬死 */
+  modeRoutingContext: 32,
+  /** S4 PR-F：实测 11 咬死 */
+  accountSurfaceContext: 11,
+  /** S4 PR-F：实测 79 咬死（原 T1.7 门 80 → 贴顶，新增必须先出后进） */
+  workspaceNavigationContext: 78,
+  /** S4 PR-C：141 → 39 达标；S4 PR-F：实测 41 咬死（≤60 目标内零余量） */
+  composerContext: 41,
+  /** S4 PR-E：95 → 48 达标；S4 PR-F：实测 48 咬死 */
+  layoutContext: 35,
+  /** S4 PR-F：实测 69 咬死 */
+  fileEditorContext: 66,
+  /** S4 PR-E：124 → 36 达标；S4 PR-F：实测 36 咬死 */
+  settingsContext: 36,
+  /** S4 PR-F：实测 1 咬死 */
+  runtimeContext: 1,
+  /** S4 PR-F：实测 22 咬死 */
+  modelSelectionContext: 22,
+  /** S4 PR-F：实测 15 咬死 */
+  collaborationModeContext: 15,
 };
 
 /** Soft：所有域默认 80；未列入 map 的也按 DEFAULT_SOFT 计 */
@@ -160,11 +170,9 @@ function collectObjectLiteralPropertyNames(
 
 /**
  * builder 入参里仅作装配的 wrapper，不是 domain owned keys。
- * （runtimeThread 的 legacyDefaults / runtimeActions / sessionHot）
+ * （runtimeThread 的 sessionHot；S4 PR-F 已删 legacyDefaults / runtimeActions 冗余 bag）
  */
 const BUILDER_INPUT_WRAPPER_KEYS = new Set([
-  "legacyDefaults",
-  "runtimeActions",
   "sessionHot",
 ]);
 
@@ -175,7 +183,7 @@ const BUILDER_INPUT_WRAPPER_KEYS = new Set([
  * - build*DomainContextSlice 域：
  *   - 顶层「非 object literal 值」的属性名（真实 domain fields）
  *   - 一层嵌套 object（如 sessionHot）内的属性名
- *   - 忽略 wrapper 字段名本身（legacyDefaults / runtimeActions / sessionHot）
+ *   - 忽略 wrapper 字段名本身（sessionHot）
  */
 export function extractExplicitAppShellDomainContextKeysByDomain(
   assemblySource: string,

@@ -374,7 +374,11 @@ describe("useThreadActions thread list recovery and pagination", () => {
     });
 
     expect(listWorkspaceSessions).toHaveBeenCalledWith("ws-1", {
-      query: { status: "active", sessionAttributionMode: "related" },
+      query: {
+        status: "active",
+        sessionAttributionMode: "related",
+        scanQuality: "preview",
+      },
       cursor: "offset:200",
       // Load older keeps the larger catalog page size.
       limit: 100,

@@ -4,7 +4,7 @@ status: active
 owner: app-shell
 priority: P0-structure + P0-perf-adjacent
 created: 2026-08-11
-updated: 2026-08-11
+updated: 2026-08-15
 ---
 
 <!-- DOC-LIFECYCLE: active-execution-plan -->
@@ -15,7 +15,7 @@ updated: 2026-08-11
 > **日期**：2026-08-11  
 > **状态**：active backlog（**执行真相源**；完成后必须回写本文）  
 > **主文件**：`src/app-shell.tsx`（基线约 **2403** 行）  
-> **伴生巨石**：`useAppShellLayoutNodesSection.tsx`（~2477）、`useAppShellSections.ts`（~1223）、`useAppShellKanbanExecutionSection.ts`（~1483）、`useAppShellSearchRadarSection.ts`（~1037）  
+> **伴生巨石**：`useAppShellLayoutNodesSection.tsx`（~2477）、`useAppShellSections.ts`（~1223）、`useAppShellSearchRadarSection.ts`（~1037）。`useAppShellKanbanExecutionSection.ts` 已随 `remove-kanban-and-task-center` 删除。  
 > **OpenSpec 锚点**：  
 > - `openspec/specs/app-shell-domain-context-isolation/spec.md`  
 > - `openspec/specs/app-shell-runtime-boundaries/spec.md`  
@@ -78,8 +78,8 @@ updated: 2026-08-11
 | 字段 | 当前值 |
 |------|--------|
 | 计划状态 | `active`（Phase 全清；持续削债务） |
-| 当前 Phase | **P1-5 治理门禁**（T5.1–T5.6 done）— 主计划 Phase 全清 |
-| 推荐下一步 | 提交本轮改动；后续可选：削巨石 / 压 keys / 性能探针 |
+| 当前 Phase | **Assembly 字段订阅**（已落地，待 GUI 30s Profiler） |
+| 推荐下一步 | 提交本轮改动；后续：GUI 30s Profiler 实测 Assembly / AppShellView commit |
 | 基线采集日 | **2026-08-11（T0.2 实测）**；T1.2 后指标见「当前」列 |
 | Ownership Matrix | [`docs/plans/app-shell-ownership-matrix.md`](./app-shell-ownership-matrix.md)（T0.1 已完成） |
 
@@ -87,31 +87,33 @@ updated: 2026-08-11
 
 | 指标 | 基线（2026-08-11 T0.2） | 当前（T1.1 后） | 目标（终态） |
 |------|------------------------|----------------|--------------|
-| `src/app-shell.tsx` 行数 | **2403** | **31**（T2.6 pure composition） | ≤ 400（过渡 ≤ 600） |
+| `src/app-shell.tsx` 行数 | **2403** | **1** re-export；`AppShell.tsx` **9** 行 | ≤ 400（过渡 ≤ 600） |
 | `defineAppShellDomainContexts` 在 `app-shell.tsx` | **718** 行内联 | **0**（T1.1/T1.9：完全不在根内联） | 保持 0 |
 | assembly 内 bag 跨度（`defineAppShellDomainContexts`） | — | ~**730**（builder 拼装） | 理想 ≤200（partial） |
-| 根 hook 唯一种类 | **~67** | **1**（`useAppShellRootComposition`） | composition hooks ≤ 15–20 种 |
-| 根解构绑定约数 | **~685** | 同量级 | 显著下降（无硬顶，趋势向下） |
+| 根 hook 唯一种类 | **~67** | **0**（`AppShell` 只挂 `AppShellHostTree`） | composition hooks ≤ 15–20 种 |
+| 根解构绑定约数 | **~685** | **0**（业务 hooks 在独立 Host） | 显著下降（无硬顶，趋势向下） |
+| `useAppShellRootComposition.ts` 行数 | **2139** | **5**（facade re-export） | ≤ 80 |
+| Host 模块 | — | Session 423 / Catalog 252 / Git 492 / Runtime 320 / Composer 501 / Flows 652 / Assembly 747 | 各 ≤ 800 |
 | `sessionIdentityContext` keys | — | **12**（T1.2） | 保持窄身份域 |
 | `workspaceCatalogContext` keys | — | **29**（T1.3） | 保持 catalog 语义 |
 | `gitSurfaceContext` keys | — | **79**（T1.4） | 与 git panel 同频 |
-| `modeRoutingContext` keys | — | **6**（T1.5） | 保持窄 mode 路由 |
-| `accountSurfaceContext` keys | — | **4**（T1.6） | 保持窄 account 面 |
-| `dictationSurfaceContext` keys | — | **10**（T1.7 新建） | 贴近 composer；独立以免污染 navigation |
+| `modeRoutingContext` keys | — | **32**（S4 后；remove-kanban 出 `"kanban"`） | 保持窄 mode 路由 |
+| `accountSurfaceContext` keys | — | **11**（S4 后） | 保持窄 account 面 |
+| `dictationSurfaceContext` keys | — | **0**（2026-08-15 整域删除） | 已 retire；勿回灌 |
 | `workspaceNavigationContext` keys | **218** | **78**（≤80 第一刀达标） | ≤ 80（第一刀）→ 再压至 ~40–60 |
-| `composerContext` keys | 141 | **141** | ≤ 60 |
-| `settingsContext` keys | 147 | **147** | ≤ 60 |
-| `layoutContext` keys | 103 | **103** | ≤ 60 |
-| `fileEditorContext` keys | **41** | **41** | ≤ 60 |
-| `runtimeThreadContext` keys | **10** | **10** | 保持窄热路径 |
+| `composerContext` keys | 141 | **41**（S4 后） | ≤ 60 |
+| `settingsContext` keys | 147 | **36**（S4 后） | ≤ 60 |
+| `layoutContext` keys | 103 | **35**（remove-kanban 出账） | ≤ 60 |
+| `fileEditorContext` keys | **41** | **66**（S4 归位后；remove-kanban 出 3） | ≤ 60 |
+| `runtimeThreadContext` keys | **10** | **51**（S4 归位后） | 保持窄热路径 |
 | `runtimeContext` keys | **1** | **1** | 保持极窄 |
-| `modelSelectionContext` keys | **14** | **14** | 保持窄 |
+| `modelSelectionContext` keys | **14** | **22**（S4 后） | 保持窄 |
 | `collaborationModeContext` keys | **15** | **15** | 保持窄 |
-| domain keys **合计** | **690** | **690** | 显著下降 + 语义对齐 |
+| domain keys **合计** | **690** | **580**（14 domains） | 显著下降 + 语义对齐 |
 | `useAppShellDomainAssembly.ts` 行数 | — | **760** | 随 T1.2+ 子域 builder 再拆 |
 | `useAppShellLayoutNodesSection.tsx` 行数 | **2477** | **2477** | ≤ 800（过渡），理想 ≤ 400×N 文件 |
 | `useAppShellSections.ts` 行数 | **1223** | **1223** | 随 P1-3 下降 |
-| `useAppShellKanbanExecutionSection.ts` 行数 | **1483** | **1483** | 落 lazy/mode 边界 |
+| `useAppShellKanbanExecutionSection.ts` 行数 | **1483** | **0**（2026-08-15 删除） | 已删除 |
 | `useAppShellSearchRadarSection.ts` 行数 | **1037** | **1037** | 独立边界 |
 | `appShellDomainContexts.ts` 行数 | **942** | **942** | 随 bag 瘦身可降 |
 | `renderAppShell.tsx` 行数 | **791** | **791** | 退化为 zone 拼装 |
@@ -141,7 +143,7 @@ wc -l src/app-shell.tsx \
 |-------|------|--------|------|------|
 | **P0-0** | 冻结与度量 | P0 | `done` | 0.5–1 天 |
 | **P0-1** | Domain bag 瘦身 + 子域拆分 | P0 | `done`（自动化验收绿；B1–B8 待人工勾选） | 2–4 天 / 多 PR |
-| **P0-2** | Host 子树化（切断根 re-render 面） | P0 | `done` | 3–6 天 / 多 PR |
+| **P0-2** | Host 子树化（切断根 re-render 面） | P0 | `done`（三刀后真正切断根 fiber） | 3–6 天 / 多 PR |
 | **P1-3** | 物理模块化与目录所有权 | P1 | `done` | 2–4 天 |
 | **P2-4** | Legacy flatten 退役 | P2 | `done` | 持续 |
 | **P1-5** | 治理门禁防回流 | P1 | `done` | 1–2 天 |
@@ -491,7 +493,7 @@ src/app-shell-parts/*      # re-export 兼容层（features 既有 bridge）
 
 | 字段 | 值 |
 |------|-----|
-| **当前项** | **（主计划 Phase 已清）** 提交改动 / 可选继续削巨石与 keys |
+| **当前项** | **（主计划 Phase 已清）** 提交 Assembly 字段订阅；后续 GUI 30s Profiler / 收窄 layoutNodes |
 | **所属 Phase** | — |
 | **阻塞** | 无 |
 | **完成后指针移到** | 按业务需要开新迭代 |
@@ -589,6 +591,25 @@ PY
 ---
 
 ## 10. Progress Log（只追加，勿删历史）
+
+### 2026-08-16 — Assembly 去掉 subscribe('*')
+
+- **完成 Todo**：收窄 `useAppShellAssemblyHost` 订阅面（P0-1 follow-up）
+- **动作**：
+  1. Assembly 不再 `useHostSnapshot()` / `subscribe('*')`，改为按 slice 的 `useHostFields`
+  2. 字段表抽到 `appShellAssemblyHostFields.ts`，只订装配层实际读取的 key
+  3. 明确不订 `runtime.lastAgentMessageByThread` / `threadsController` 等热且未读字段
+  4. 契约测试锁：未发布字段不得订、读到的字段必须订、禁止回流 snapshot
+- **路径**：
+  - `src/app-shell/hosts/useAppShellAssemblyHost.ts`
+  - `src/app-shell/hosts/appShellAssemblyHostFields.ts`
+  - `src/app-shell/hosts/appShellHostFieldContract.test.ts`
+  - `src/app-shell/hosts/appShellHostTreeIsolation.test.ts`
+- **验证**：本轮跑 host isolation / field contract / governance 相关 vitest
+- **指标**：session 144 / catalog 50 / git 156 / runtime 80 / composer 66 / flows 87（相对各 Host 全量 published 少订 18/14/6/24/2/10）
+- **计划变更**：无
+- **风险 / 未决**：Assembly 仍合并 mega bag 再喂 `AppShellView`；layoutNodes 仍一次解构宽 bag；GUI 30s Profiler 仍未跑
+- **下一步指针**：提交本轮改动；GUI 流式探针
 
 ### 2026-08-12 — cold-start P2-1 / 治理门禁同步
 
@@ -808,6 +829,38 @@ PY
 - **风险 / 未决**：Provider 在 search section hook **之后**挂载，故 composer 路径当前仍走 prop fallback 直到后续把 section hooks 下沉到 Provider 子树；T2.2 ComposerProvider 可一并处理  
 - **下一步指针**：T2.2  
 
+### 2026-08-16 — layoutNodes zone bag + streaming probe
+
+- **完成 Todo**：收窄 layoutNodes flatten；补 CI 可跑的流式 bag 探针
+- **动作**：
+  1. `APP_SHELL_CONSUMER_DOMAIN_SELECTION` 增加 canvas / chrome / git 三组 zone
+  2. `useAppShellLayoutNodesSection` 按 zone 独立 cache flatten，热域变化不再重建 chrome/git bag
+  3. 新增 `appShellStreamingBagProbe.test.ts` + `docs/perf/app-shell-streaming-bag-probe.md`
+- **验证**：streaming bag probe / render isolation / domain selection tests
+- **风险 / 未决**：layoutNodes 组件本身仍一次解构宽 bag；GUI 30s Profiler 仍未跑
+- **下一步指针**：GUI 流式探针
+
+### 2026-08-16 — 三刀：真 Host 子树 + 激活门 + 拆巨石
+
+- **完成 Todo**：刀 1 / 刀 2 / 刀 3（用户授权同轮落地）
+- **动作**：
+  1. **刀 1**：`AppShellHostTree` 用嵌套 memo Host 切断根 fiber。Session / Git / Catalog / Runtime / Composer / Flows / Assembly 各自跑 hook 图；跨 Host 只通过 `appShellHostBus` 字段订阅。
+  2. **刀 2**：`resolveAppShellFeatureActivation` 统一表面门。Git remote / multi-repo 在非 git 表面跳过 IO；Search Radar query 只在 palette 打开时启用。
+  3. **刀 3**：`useAppShellRootComposition.ts` 从 2139 行收成 5 行 facade；业务逻辑拆到 `src/app-shell/hosts/*`，单文件均 ≤ 800。
+  4. 治理：`ROOT_COMPOSITION_HARD_LINES` 2211 → 80；file-size allowlist 去掉 composition 巨石；runtime-contract 指向 assembly host。
+- **路径**：
+  - `src/app-shell/hosts/*`
+  - `src/app-shell/assembly/AppShell.tsx`
+  - `src/app-shell/assembly/useAppShellRootComposition.ts`
+  - `src/features/git/hooks/useGitRemote.ts`
+  - `src/features/git/hooks/useMultiRepositoryGitStatus.ts`
+  - `scripts/check-app-shell-runtime-contract.mjs`
+- **验证**：`npx tsc --noEmit` OK；`npm run check:app-shell:governance` OK；host isolation / bus / activation / multi-repo enabled 测试绿
+- **指标**：AppShell entry **9** 行 / 0 业务 hook；composition facade **5** 行；最大 Host **747**（assembly）/ **652**（flows）
+- **计划变更**：P0-2 从「假模块化根总线」升级为真实 Host 子树；流式 30s 探针仍未做
+- **风险 / 未决**：Host 切片仍用宽 `Record<string, unknown>`；layoutNodes 仍订全 domain；Assembly 仍合并 mega bag
+- **下一步指针**：流式探针 + 收窄 layoutNodes
+
 ### 2026-08-11 — P0-2 全量收口（T2.2–T2.9）
 
 - **完成 Todo**：T2.2, T2.3, T2.4, T2.5, T2.6, T2.7, T2.8, T2.9  
@@ -892,6 +945,21 @@ PY
 - **风险 / 未决**：composer/settings/layout 仍 soft 超限（freeze hard 防膨胀）；TARGET 60 待后续压 keys  
 - **下一步指针**：提交本轮大改；可选继续削 composition/layout 巨石  
 
+### 2026-08-15 — remove-dictation-feature + remove-kanban-and-task-center
+
+- **完成 Todo**：dictation 整域出账；kanban 17 keys 出账；两个 feature 目录删除
+- **动作**：
+  1. 删除 `dictationSurfaceContext` 整域（domains 15→14）
+  2. 删除 `useAppShellKanbanExecutionSection` / `useAppShellKanbanComposerSection`；Home send 抽出 `useAppShellComposerSendSection`
+  3. `AppMode` 去掉 `"kanban"`；layout 48→35、fileEditor 69→66、modeRouting 33→32、navigation 79→78
+  4. 删除 `src/features/kanban/`、`src/features/tasks/`、`WorkspaceHome` Task Center 页、`MessagesLinkedRunBanner`
+  5. 回写本矩阵与本计划 §1.1；补 OpenSpec 改写 delta
+- **路径**：`src/app-shell/**`、`src/features/{kanban,tasks,dictation}`（已删）、ownership gate freeze 表、OpenSpec two changes
+- **验证**：`check:app-shell:governance` / runtime-contract / typecheck / 受影响 vitest（进行中）
+- **计划变更**：Kanban execution 巨石从伴生列表移除；dictation 域 retire
+- **风险 / 未决**：`AppShellTaskRunActions` 空合同仍留作 action-family 分类；存量用户数据不清理
+- **下一步指针**：跑完 gate 后等用户授权 commit
+
 ## 附录 A — Ownership Matrix
 
 > **完整矩阵（T0.1 真相源）**：[`docs/plans/app-shell-ownership-matrix.md`](./app-shell-ownership-matrix.md)
@@ -906,10 +974,9 @@ PY
 | gitSurfaceContext | 79 | 干净（T1.4） | `buildGitSurfaceDomainContextSlice` | mid | diff/status/PR/branch/multi-repo ops |
 | modeRoutingContext | 6 | 干净（T1.5） | `buildModeRoutingDomainContextSlice` | mid | appMode/tab/centerMode/accessMode/filePanelMode |
 | accountSurfaceContext | 4 | 干净（T1.6） | `buildAccountSurfaceDomainContextSlice` | cold–mid | account 切换 / approvals |
-| dictationSurfaceContext | 10 | 干净（T1.7） | `buildDictationSurfaceDomainContextSlice` | mid | dictation 状态机；贴近 composer |
 | workspaceNavigationContext | **78** | residual（已过 ≤80） | assembly bag residual | mid | 可继续削 engine/debug/layout 泄漏 |
-| composerContext | 141 | 名不符实 | composer host + search/composer section；大量 `handle*` 总线 | mid | 动作应按业务域再挂 |
-| layoutContext | 103 | 混装 | view state + kanban host + chrome | mid–cold | |
+| composerContext | 41 | 干净（S4） | composer host + search/composer + Home send section | mid | 无 kanban send |
+| layoutContext | 35 | 干净（remove-kanban） | view state + chrome | mid–cold | 无 kanban host |
 | fileEditorContext | 41 | 中等 | editor layout + search | mid | |
 | settingsContext | 147 | 混装 | setters + threads/workspaces 投影 | mid–cold | 全量 thread maps 性能红线 |
 | runtimeContext | 1 | 干净 | runtime slice builder | mid | |

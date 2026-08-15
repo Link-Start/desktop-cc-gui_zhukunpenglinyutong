@@ -16,6 +16,7 @@ const REALTIME_PERF_FLAG_IDS = [
   "stagedHydration",
   "debugLightPath",
   "liveTextExternalization",
+  "liveDeltaExternalization",
 ] as const;
 
 export type RealtimePerfFlagId = (typeof REALTIME_PERF_FLAG_IDS)[number];
@@ -94,6 +95,17 @@ const PERF_FLAG_DEFINITIONS: readonly RealtimePerfFlagDefinition[] = [
     defaultValue: true,
     testDefaultValue: false,
     metric: "streaming agent-text delta root-render bypass",
+  },
+  {
+    // A4 二期（reasoning/toolOutput 电报外部化）：reasoningContent /
+    // reasoningSummary / toolOutput 三类 delta 只写 liveItemDeltaChannel
+    //（订阅行小树渲染），不再逐条 dispatch 进根 reducer；首条 delta 仍
+    // dispatch 建壳，settle 时 drain 尾部落回。异常时 localStorage 置
+    // ccgui.perf.liveDeltaExternalization=0 回退旧路径。
+    id: "liveDeltaExternalization",
+    defaultValue: true,
+    testDefaultValue: false,
+    metric: "streaming reasoning/tool-output delta root-render bypass",
   },
 ];
 
@@ -181,6 +193,10 @@ export function isReducerNoopGuardEnabled(): boolean {
 
 export function isLiveTextExternalizationEnabled(): boolean {
   return readRealtimePerfFlagById("liveTextExternalization");
+}
+
+export function isLiveDeltaExternalizationEnabled(): boolean {
+  return readRealtimePerfFlagById("liveDeltaExternalization");
 }
 
 export function isIncrementalDerivationEnabled(): boolean {

@@ -1,19 +1,19 @@
 /* Thinking Block - Minimalist (synced with idea-claude-code-gui)
  * 外层 margin 折叠/展开恒定：收起时只卸掉正文高度，不改行间距（避免「每收起一个间距少一截」）。
- * 展开留白交给 .thinking-content 内部，不在根节点上加减 margin。
- * 与 tool / explore 共用 6px 节奏：外层行距与块内标题→正文同拍，避免展开后突然疏一截。 */
+ * 展开留白交给 .thinking-content 的子孙，不挂在 CollapsibleReveal inner 上（0fr 会漏 margin）。
+ * 与 tool / explore 共用活动行节奏：外层行距与块内标题→正文同拍，避免展开后突然疏一截。 */
 .thinking-block {
-  margin: 6px 0;
-  font-size: var(--message-meta-font-size);
+  margin: var(--message-tool-row-margin-y, 8px) 0;
+  font-size: var(--message-tool-row-font-size, 13px);
 }
 
 .thinking-header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--message-tool-row-icon-gap, 8px);
   width: fit-content;
   max-width: 100%;
-  min-height: 22px;
+  min-height: var(--message-tool-row-min-height, 28px);
   padding: 2px 0;
   border: none;
   cursor: pointer;
@@ -22,14 +22,15 @@
   transition: opacity 0.2s;
   background: transparent;
   font-weight: 400;
-  font-size: var(--message-meta-font-size);
-  line-height: 20px;
+  font-size: var(--message-tool-row-font-size, 13px);
+  line-height: var(--message-tool-row-line-height, 24px);
+  letter-spacing: 0.01em;
 }
 
 .thinking-header-copy {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--message-tool-row-icon-gap, 8px);
   min-width: 0;
 }
 
@@ -56,9 +57,12 @@
   opacity: 0.8;
 }
 
+/* keepMounted 折叠时本节点仍在：margin 会从 0fr grid item 漏出成标题下空白洞 */
+.thinking-content-reveal:not(.is-open) {
+  overflow: hidden;
+}
+
 .thinking-content {
-  /* 与外层 .thinking-block margin 同 6px：标题→正文不再比行间距更疏 */
-  margin-top: 6px;
   color: var(--color-thinking-text, rgb(115, 115, 115));
   font-family: inherit;
   font-size: var(--message-caption-font-size);
@@ -68,13 +72,18 @@
   max-width: 100%;
 }
 
+/* 展开间距放在 overflow:hidden 的子孙上，折叠时被 0fr 裁掉 */
+.thinking-content > * {
+  margin-top: var(--message-tool-row-margin-y, 8px);
+}
+
 .reasoning-markdown-surface {
   position: relative;
   margin-left: 4px;
   border: none;
   border-left: 1px solid color-mix(in srgb, var(--color-thinking-border, var(--border-subtle)) 88%, transparent);
   border-radius: 0;
-  /* 上下 0：块内垂直呼吸只交给 .thinking-content 的 6px，避免再叠 2px */
+  /* 上下 0：块内垂直呼吸只交给 .thinking-content > * 的行距，避免再叠 padding */
   padding: 0 0 0 16px;
   background: transparent;
   box-shadow: none;

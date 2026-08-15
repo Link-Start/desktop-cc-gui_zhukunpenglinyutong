@@ -10,10 +10,36 @@ export type StartupGateReadyReason =
   | "home-input-ready"
   | "force-enter";
 
+export type StartupGateReadyListener = (
+  reason: StartupGateReadyReason | null,
+) => void;
+
 let gateReadyReason: StartupGateReadyReason | null = null;
+const gateReadyListeners = new Set<StartupGateReadyListener>();
 
 export function getStartupGateReadyReason(): StartupGateReadyReason | null {
   return gateReadyReason;
+}
+
+/**
+ * The gate opens once per app run. Subscribers fire exactly once on stamp;
+ * a late subscriber (mounted after the gate already opened) fires immediately.
+ */
+export function subscribeStartupGateReady(
+  listener: StartupGateReadyListener,
+): () => void {
+  if (getStartupTraceSnapshot().milestones["startup-gate-ready"]) {
+    try {
+      listener(gateReadyReason);
+    } catch {
+      // ignore listener failures
+    }
+    return () => {};
+  }
+  gateReadyListeners.add(listener);
+  return () => {
+    gateReadyListeners.delete(listener);
+  };
 }
 
 /**
@@ -29,10 +55,19 @@ export function stampStartupGateReady(reason: StartupGateReadyReason): boolean {
   }
   gateReadyReason = reason;
   recordStartupMilestone("startup-gate-ready");
+  gateReadyListeners.forEach((listener) => {
+    try {
+      listener(reason);
+    } catch {
+      // ignore listener failures
+    }
+  });
+  gateReadyListeners.clear();
   return true;
 }
 
 /** @internal */
 export function resetStartupGateReadyForTests(): void {
   gateReadyReason = null;
+  gateReadyListeners.clear();
 }

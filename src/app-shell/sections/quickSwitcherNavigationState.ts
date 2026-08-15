@@ -49,10 +49,6 @@ export const isQuickSwitcherMemoryActive = (
   state: QuickSwitcherNavigationState,
 ): boolean => isRightPanelEntryActive(state, "memory");
 
-export const isQuickSwitcherKanbanActive = (
-  state: QuickSwitcherNavigationState,
-): boolean => state.appMode === "kanban";
-
 export const isQuickSwitcherHistoryActive = (
   state: QuickSwitcherNavigationState,
 ): boolean => state.appMode === "gitHistory";
@@ -93,9 +89,6 @@ export function computeQuickSwitcherActiveNavigationIds(
   }
   if (isQuickSwitcherHistoryActive(state)) {
     ids.push("history");
-  }
-  if (isQuickSwitcherKanbanActive(state)) {
-    ids.push("kanban");
   }
   if (isQuickSwitcherIntentCanvasActive(state)) {
     ids.push("intentCanvas");

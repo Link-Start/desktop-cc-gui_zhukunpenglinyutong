@@ -35,6 +35,7 @@ use super::claude_history_subagents::{
 use super::EngineConfig;
 
 const LOCAL_SESSION_SCAN_TIMEOUT: Duration = Duration::from_secs(60);
+const CLAUDE_LIST_PREVIEW_MAX_LINES: usize = 40;
 const CLAUDE_ATTRIBUTION_STRICT_MATCH: &str = "strict-match";
 pub(crate) const CLAUDE_ATTRIBUTION_REASON_PROJECT_DIRECTORY: &str = "claude-project-directory";
 const CLAUDE_ATTRIBUTION_REASON_TRANSCRIPT_CWD: &str = "claude-transcript-cwd";
@@ -43,7 +44,9 @@ const CLAUDE_SOURCE_FACT_CACHE_SCHEMA_VERSION: u32 = 1;
 // v5: explicit transcript cwd outside attribution scope is always rejected (no project-dir
 // fallback override). Invalidates caches that previously leaked foreign history via
 // non-ASCII path collisions (e.g. 新的空文件夹 vs 个人财务管理).
-const CLAUDE_SOURCE_FACT_SCANNER_VERSION: u32 = 5;
+// v6: sidebar/catalog list peeks a bounded head and uses file mtime for
+// updated_at instead of scanning every jsonl to EOF.
+const CLAUDE_SOURCE_FACT_SCANNER_VERSION: u32 = 6;
 const CLAUDE_SESSION_TITLE_PREVIEW_MAX_CHARS: usize = 60;
 fn normalize_session_id(session_id: &str) -> Result<String, String> {
     normalize_claude_session_id(session_id)
@@ -474,6 +477,39 @@ fn build_scan_diagnostic(
     }
 }
 
+fn file_mtime_millis_sync(path: &Path) -> i64 {
+    std::fs::metadata(path)
+        .ok()
+        .and_then(|metadata| metadata.modified().ok())
+        .and_then(system_time_to_epoch_millis)
+        .unwrap_or(0)
+}
+
+fn cap_claude_scan_paths_by_mtime(
+    jsonl_paths: &mut Vec<(PathBuf, bool)>,
+    subagent_jsonl_paths: &mut Vec<(PathBuf, String, bool)>,
+    limit: usize,
+) {
+    if jsonl_paths.len() <= limit {
+        return;
+    }
+    jsonl_paths.sort_by(|left, right| {
+        file_mtime_millis_sync(&right.0)
+            .cmp(&file_mtime_millis_sync(&left.0))
+            .then_with(|| left.0.cmp(&right.0))
+    });
+    jsonl_paths.truncate(limit);
+    let selected_parents: HashSet<String> = jsonl_paths
+        .iter()
+        .filter_map(|(path, _)| {
+            path.file_stem()
+                .and_then(|name| name.to_str())
+                .map(str::to_string)
+        })
+        .collect();
+    subagent_jsonl_paths.retain(|(_, parent_session_id, _)| selected_parents.contains(parent_session_id));
+}
+
 fn system_time_to_epoch_millis(value: SystemTime) -> Option<i64> {
     value
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -662,8 +698,12 @@ async fn scan_session_source_file_with_cache(
         }
     }
 
-    let outcome =
-        scan_session_source_file(path, attribution_scopes, allow_project_directory_fallback).await;
+    let outcome = scan_session_source_file_preview(
+        path,
+        attribution_scopes,
+        allow_project_directory_fallback,
+    )
+    .await;
 
     if let (Some(cache_path), Some(namespace)) = (cache_path.as_ref(), cache_namespace) {
         write_cached_source_fact_outcome(
@@ -681,12 +721,49 @@ async fn scan_session_source_file_with_cache(
     outcome
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClaudeSessionScanDepth {
+    /// Sidebar / catalog list: stop after a bounded head peek.
+    Preview,
+    /// Cache rebuild / diagnostic path: read to EOF for counts and last title.
+    Full,
+}
+
 /// Scan a single JSONL file and extract session summary metadata.
-/// Reads the file line-by-line to find the native title, first user message, and timestamps.
+/// Preview stops after a bounded head peek; Full reads to EOF.
 async fn scan_session_source_file(
     path: &Path,
     attribution_scopes: &[ClaudeSessionAttributionScope],
     allow_project_directory_fallback: bool,
+) -> ClaudeSessionScanOutcome {
+    scan_session_source_file_with_depth(
+        path,
+        attribution_scopes,
+        allow_project_directory_fallback,
+        ClaudeSessionScanDepth::Full,
+    )
+    .await
+}
+
+async fn scan_session_source_file_preview(
+    path: &Path,
+    attribution_scopes: &[ClaudeSessionAttributionScope],
+    allow_project_directory_fallback: bool,
+) -> ClaudeSessionScanOutcome {
+    scan_session_source_file_with_depth(
+        path,
+        attribution_scopes,
+        allow_project_directory_fallback,
+        ClaudeSessionScanDepth::Preview,
+    )
+    .await
+}
+
+async fn scan_session_source_file_with_depth(
+    path: &Path,
+    attribution_scopes: &[ClaudeSessionAttributionScope],
+    allow_project_directory_fallback: bool,
+    depth: ClaudeSessionScanDepth,
 ) -> ClaudeSessionScanOutcome {
     let mut diagnostics = Vec::new();
     let file = match fs::File::open(path).await {
@@ -711,8 +788,8 @@ async fn scan_session_source_file(
     let file_mtime_ms = file_metadata
         .and_then(|metadata| metadata.modified().ok())
         .and_then(system_time_to_epoch_millis);
-    let reader = BufReader::new(file);
-    let mut lines = reader.lines();
+    let mut lines = BufReader::new(file).lines();
+    let mut preview_lines_seen = 0usize;
 
     let mut first_user_message: Option<String> = None;
     let mut latest_native_title: Option<String> = None;
@@ -737,6 +814,12 @@ async fn scan_session_source_file(
         let line = line.trim().to_string();
         if line.is_empty() {
             continue;
+        }
+        if depth == ClaudeSessionScanDepth::Preview {
+            preview_lines_seen += 1;
+            if preview_lines_seen > CLAUDE_LIST_PREVIEW_MAX_LINES {
+                break;
+            }
         }
 
         let entry: Value = match parse_claude_summary_entry(&line) {
@@ -943,8 +1026,13 @@ async fn scan_session_source_file(
             } else {
                 "complete".to_string()
             },
-            updated_at: last_timestamp.unwrap_or(now_ms),
-            created_at: first_timestamp.unwrap_or(now_ms),
+            updated_at: match depth {
+                ClaudeSessionScanDepth::Preview => file_mtime_ms
+                    .or(last_timestamp)
+                    .unwrap_or(now_ms),
+                ClaudeSessionScanDepth::Full => last_timestamp.unwrap_or(now_ms),
+            },
+            created_at: first_timestamp.or(file_mtime_ms).unwrap_or(now_ms),
             message_count,
             file_size_bytes,
             file_mtime_ms,
@@ -970,7 +1058,7 @@ async fn scan_session_file(
     attribution_scopes: &[ClaudeSessionAttributionScope],
     allow_project_directory_fallback: bool,
 ) -> Option<ClaudeSessionSummary> {
-    scan_session_source_file(path, attribution_scopes, allow_project_directory_fallback)
+    scan_session_source_file_preview(path, attribution_scopes, allow_project_directory_fallback)
         .await
         .into_summary()
 }
@@ -1223,9 +1311,16 @@ pub(crate) async fn list_workspace_only_claude_session_source_facts_from_base_di
             });
         }
 
+        let discovered_candidates = jsonl_paths.len() + subagent_jsonl_paths.len();
+        cap_claude_scan_paths_by_mtime(
+            &mut jsonl_paths,
+            &mut subagent_jsonl_paths,
+            limit.unwrap_or(200),
+        );
         jsonl_paths.sort_by(|left, right| left.0.cmp(&right.0));
         subagent_jsonl_paths.sort_by(|left, right| left.0.cmp(&right.0));
         let scanned_candidates = jsonl_paths.len() + subagent_jsonl_paths.len();
+        let scan_cap_reached = discovered_candidates > limit.unwrap_or(200);
         let mut facts = Vec::new();
         let mut cache_metrics = ClaudeSessionSourceFactCacheMetrics::default();
 
@@ -1285,7 +1380,7 @@ pub(crate) async fn list_workspace_only_claude_session_source_facts_from_base_di
             diagnostics,
             scanned_candidates,
             skipped_candidates,
-            scan_cap_reached: scanned_candidates > limit.unwrap_or(200),
+            scan_cap_reached,
             cache_metrics,
         })
     })
@@ -1401,9 +1496,16 @@ pub(crate) async fn list_claude_session_source_facts_from_base_dir(
             });
         }
 
+        let discovered_candidates = jsonl_paths.len() + subagent_jsonl_paths.len();
+        cap_claude_scan_paths_by_mtime(
+            &mut jsonl_paths,
+            &mut subagent_jsonl_paths,
+            limit.unwrap_or(200),
+        );
         jsonl_paths.sort_by(|left, right| left.0.cmp(&right.0));
         subagent_jsonl_paths.sort_by(|left, right| left.0.cmp(&right.0));
         let scanned_candidates = jsonl_paths.len() + subagent_jsonl_paths.len();
+        let scan_cap_reached = discovered_candidates > limit.unwrap_or(200);
         let mut facts = Vec::new();
         let mut cache_metrics = ClaudeSessionSourceFactCacheMetrics::default();
 
@@ -1463,7 +1565,7 @@ pub(crate) async fn list_claude_session_source_facts_from_base_dir(
             diagnostics,
             scanned_candidates,
             skipped_candidates,
-            scan_cap_reached: scanned_candidates > limit.unwrap_or(200),
+            scan_cap_reached,
             cache_metrics,
         })
     })
@@ -1551,6 +1653,12 @@ pub(crate) async fn list_claude_sessions_from_base_dir(
         if !found_dir {
             return Ok(Vec::new());
         }
+
+        cap_claude_scan_paths_by_mtime(
+            &mut jsonl_paths,
+            &mut subagent_jsonl_paths,
+            limit.unwrap_or(200),
+        );
 
         // Scan all session files concurrently with a concurrency limit to prevent
         // memory exhaustion from spawning too many parallel file reads.

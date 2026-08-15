@@ -41,6 +41,14 @@ const icon_git = outlineIcon(
   '<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
 );
 
+const icon_terminal = outlineIcon(
+  '<polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>',
+);
+
+const icon_server = outlineIcon(
+  '<rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/>',
+);
+
 /** 源码 / 样式 / 配置等代码类扩展名 */
 const CODE_EXTENSIONS = new Set([
   // 编程语言
@@ -134,4 +142,13 @@ export function getFileIcon(extension?: string, fileName?: string): string {
  */
 export function getFolderIcon(_folderName: string, isOpen: boolean = false): string {
   return isOpen ? icon_folder_open : icon_folder;
+}
+
+/** Composer @-mention chips for terminal:// and service:// references. */
+export function getTerminalIcon(): string {
+  return icon_terminal;
+}
+
+export function getServerIcon(): string {
+  return icon_server;
 }

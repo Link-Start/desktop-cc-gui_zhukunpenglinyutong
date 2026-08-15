@@ -37,10 +37,6 @@ vi.mock("../../../services/tauri", async (importOriginal) => {
   };
 });
 
-vi.mock("../../engine/components/EngineSelector", () => ({
-  EngineSelector: () => null,
-}));
-
 
 vi.mock("../../status-panel/hooks/useStatusPanelData", () => ({
   useStatusPanelData: () => ({
@@ -821,7 +817,6 @@ function ComposerHarness({
       prompts={[]}
       commands={[]}
       files={[]}
-      dictationEnabled={false}
       activeWorkspaceId="ws-1"
       rewindWorkspaceGitState={rewindWorkspaceGitState}
       activeThreadId={activeThreadId}

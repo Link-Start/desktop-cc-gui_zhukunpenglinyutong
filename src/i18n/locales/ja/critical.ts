@@ -34,7 +34,6 @@ import noteCards from "./noteCards";
 import searchPalette from "./searchPalette";
 import threadCompletion from "./threadCompletion";
 import usage from "./usage";
-import taskCenter from "./taskCenter";
 
 const critical = {
   ...common,
@@ -73,7 +72,6 @@ const critical = {
   ...searchPalette,
   ...threadCompletion,
   ...usage,
-  ...taskCenter,
 };
 
 export default critical;

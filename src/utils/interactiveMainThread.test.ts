@@ -5,6 +5,7 @@ import {
   resetInteractiveMainThreadForTests,
   scheduleWhenBrowserIdle,
   scheduleWhenInteractiveQuiet,
+  yieldIfInteractiveInputPending,
   yieldToInteractiveInput,
 } from "./interactiveMainThread";
 
@@ -95,5 +96,30 @@ describe("yieldToInteractiveInput", () => {
     const p = yieldToInteractiveInput({ maxRounds: 2 });
     await vi.advanceTimersByTimeAsync(50);
     await expect(p).resolves.toBeUndefined();
+  });
+});
+
+describe("yieldIfInteractiveInputPending", () => {
+  it("passes through without a macrotask when no input is pending", async () => {
+    let resolved = false;
+    const promise = yieldIfInteractiveInputPending().then(() => {
+      resolved = true;
+    });
+    await Promise.resolve();
+    expect(resolved).toBe(true);
+    await promise;
+  });
+
+  it("yields one macrotask while input is pending", async () => {
+    markInteractiveInputForTests();
+    let resolved = false;
+    const promise = yieldIfInteractiveInputPending().then(() => {
+      resolved = true;
+    });
+    await Promise.resolve();
+    expect(resolved).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(resolved).toBe(true);
+    await promise;
   });
 });

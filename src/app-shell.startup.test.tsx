@@ -212,6 +212,8 @@ vi.mock("./services/clientStorage", () => ({
       startupState.clientStore[store][key] = value;
     },
   ),
+  isClientStoreReady: () => true,
+  subscribeClientStoreHydrated: () => () => {},
 }));
 
 vi.mock("./app-shell-parts/useSelectedComposerSession", () => ({
@@ -354,22 +356,6 @@ vi.mock("./features/app/hooks/useAppSettingsController", () => ({
   }),
 }));
 
-vi.mock("./features/app/hooks/useDictationController", () => ({
-  useDictationController: () => ({
-    dictationModel: null,
-    dictationState: "idle",
-    dictationLevel: null,
-    dictationTranscript: "",
-    dictationError: null,
-    dictationHint: null,
-    dictationReady: false,
-    handleToggleDictation: createNoopFunction(),
-    clearDictationTranscript: createNoopFunction(),
-    clearDictationError: createNoopFunction(),
-    clearDictationHint: createNoopFunction(),
-  }),
-}));
-
 vi.mock("./features/debug/hooks/useDebugLog", () => ({
   useDebugLog: () => ({
     debugOpen: false,
@@ -395,8 +381,7 @@ vi.mock("./features/app/hooks/useLayoutController", () => ({
     onTerminalPanelResizeStart: createNoopFunction(),
     debugPanelHeight: 260,
     onDebugPanelResizeStart: createNoopFunction(),
-    kanbanConversationWidth: 360,
-    onKanbanConversationResizeStart: createNoopFunction(),
+
     isCompact: false,
     isTablet: false,
     isPhone: false,
@@ -660,22 +645,6 @@ vi.mock("./features/engine/hooks/useEngineController", () => ({
     engineStatuses: {},
     refreshEngineModels: createNoopFunction(),
     refreshEngines: createNoopFunction(),
-  }),
-}));
-
-vi.mock("./features/kanban/hooks/useKanbanStore", () => ({
-  useKanbanStore: () => ({
-    panels: [],
-    tasks: [],
-    kanbanViewState: null,
-    setKanbanViewState: createNoopFunction(),
-    createPanel: createNoopFunction(),
-    updatePanel: createNoopFunction(),
-    deletePanel: createNoopFunction(),
-    createTask: createNoopFunction(),
-    updateTask: createNoopFunction(),
-    deleteTask: createNoopFunction(),
-    reorderTask: createNoopFunction(),
   }),
 }));
 
@@ -998,7 +967,6 @@ vi.mock("./features/workspaces/hooks/useClonePrompt", () => ({
 vi.mock("./app-shell-parts/useAppShellSearchRadarSection", () => ({
   useAppShellSearchRadarSection: () => ({
     activePath: null,
-    activeWorkspaceKanbanTasks: [],
     activeWorkspaceThreads: [],
     ensureWorkspaceThreadListLoaded: createNoopFunction(),
     handleEnsureWorkspaceThreadsForSettings: createNoopFunction(),
@@ -1010,7 +978,6 @@ vi.mock("./app-shell-parts/useAppShellSearchRadarSection", () => ({
     perfSnapshotRef: { current: null },
     RECENT_THREAD_LIMIT: 5,
     recentThreads: [],
-    scopedKanbanTasks: [],
     searchResults: [],
     sessionRadarFeed: {
       runningSessions: [],
@@ -1289,7 +1256,6 @@ vi.mock("./app-shell-parts/renderAppShell", () => ({
           ...(domainContexts.gitSurfaceContext ?? {}),
           ...(domainContexts.modeRoutingContext ?? {}),
           ...(domainContexts.accountSurfaceContext ?? {}),
-          ...(domainContexts.dictationSurfaceContext ?? {}),
           ...(domainContexts.workspaceNavigationContext ?? {}),
           ...(domainContexts.composerContext ?? {}),
           ...(domainContexts.layoutContext ?? {}),

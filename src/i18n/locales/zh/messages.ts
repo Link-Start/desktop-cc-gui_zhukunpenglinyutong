@@ -52,8 +52,6 @@ const messages = {
     queue: "队列",
     send: "发送",
     emptyThread: "今天想构建什么？向AI提问吧",
-    linkedRunEyebrow: "关联运行",
-    openLinkedRun: "打开运行详情",
     restoringHistory: "正在加载对话窗口…",
     restoringHistoryHint: "正在加载本地 transcript 和会话状态。",
     restoringSharedHistory: "正在恢复 Shared 会话…",

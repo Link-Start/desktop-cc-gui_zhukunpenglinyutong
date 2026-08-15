@@ -54,10 +54,6 @@ vi.mock("../../../services/toasts", () => ({
   pushErrorToast: vi.fn(),
 }));
 
-vi.mock("../../engine/components/EngineSelector", () => ({
-  EngineSelector: () => null,
-}));
-
 
 vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
   ChatInputBoxAdapter: ({
@@ -279,7 +275,6 @@ function ComposerHarness({
       commands={[]}
       files={[]}
       textareaRef={textareaRef}
-      dictationEnabled={false}
       editorSettings={editorSettings}
       activeWorkspaceId="ws-1"
       activeThreadId={activeThreadId}

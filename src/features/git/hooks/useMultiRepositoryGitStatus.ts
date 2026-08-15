@@ -49,7 +49,9 @@ function areRepositoryStatusesEqual(
 export function useMultiRepositoryGitStatus(
   activeWorkspace: WorkspaceInfo | null,
   repositories: GitRepositorySummary[],
+  options?: { enabled?: boolean },
 ) {
+  const enabled = options?.enabled ?? true;
   const [statuses, setStatuses] = useState<RepositoryGitStatus[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const requestIdRef = useRef(0);
@@ -60,7 +62,7 @@ export function useMultiRepositoryGitStatus(
   const refresh = useCallback(async () => {
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
-    if (!workspaceId || !isMultiRepository) {
+    if (!enabled || !workspaceId || !isMultiRepository) {
       setStatuses([]);
       setIsLoading(false);
       return;
@@ -111,12 +113,12 @@ export function useMultiRepositoryGitStatus(
       areRepositoryStatusesEqual(previous, results) ? previous : results,
     );
     setIsLoading(false);
-  }, [isMultiRepository, repositories, workspaceId]);
+  }, [enabled, isMultiRepository, repositories, workspaceId]);
 
   useEffect(() => {
     // refresh 顶部已自增 requestIdRef 使旧请求失效,这里无需重复自增。
     void refresh();
-  }, [refresh, signature, workspaceId]);
+  }, [enabled, refresh, signature, workspaceId]);
 
   return { statuses, isLoading, isMultiRepository, refresh };
 }

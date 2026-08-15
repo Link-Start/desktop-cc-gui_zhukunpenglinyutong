@@ -21,15 +21,12 @@ import { formatShortcutForPlatform } from "../../utils/shortcuts";
 import {
   mergeAppShellDomainBag,
   selectAppShellDomainBag,
-} from "../domains/selectAppShellDomainBag";
-import {
-  APP_SHELL_CONSUMER_DOMAIN_SELECTION,
   type DomainFlattenIdentityCache,
-} from "../domains/appShellDomainContexts";
+} from "../domains/selectAppShellDomainBag";
+import { APP_SHELL_CONSUMER_DOMAIN_SELECTION } from "../domains/appShellDomainContexts";
 import {
   ExtensionsView,
   GitHistoryPanel,
-  KanbanView,
   QuickSwitcher,
   ReleaseNotesModal,
   SearchPalette,
@@ -136,7 +133,6 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     debugPanelNode,
     deleteWorkspaceGroup,
     desktopTopbarLeftNode,
-    dictationModel,
     diffSource,
     directories,
     doctor,
@@ -146,7 +142,6 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     opencodeDoctor,
     editorSplitCompanion,
     editorSplitLayout,
-    engineStatuses,
     errorToastsNode,
     fileViewPanelNode,
     noteCardsPanelNode,
@@ -166,25 +161,19 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     gitHistoryWorkspace,
     gitPanelMode,
     groupedWorkspaces,
-    handleAddWorkspace,
-    handleAppModeChange,
     handleCloseGitHistoryPanel,
     handleActivateGitHistoryTab,
     handleCloseFileHistory,
     handleCloseOtherFileHistories,
     handleCloseAllFileHistories,
-    handleCloseTaskConversation,
     handleDeleteWorkspaceConversationsInSettings,
-    handleDragToInProgress,
     handleEnsureWorkspaceThreadsForSettings,
     handleGitIssuesChange,
     handleGitPullRequestCommentsChange,
     handleGitPullRequestDiffsChange,
     handleGitPullRequestsChange,
-    handleKanbanCreateTask,
     handleMoveWorkspace,
     handleOpenMailSession,
-    handleOpenTaskConversation,
     handleOpenSearchPalette,
     handleOpenQuickSwitcher,
     handleQuickSwitcherNavigate,
@@ -197,7 +186,6 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     handleSelectRepositoryForGitHistory,
     handleTestNotificationSound,
     handleToggleSearchContentFilter,
-    handleToggleTerminalPanel,
     handleUnlockPanel,
     hasActivePlan,
     homeNode,
@@ -209,24 +197,12 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     isSearchPaletteOpen,
     isQuickSwitcherOpen,
     isSoloMode,
-    kanbanConversationWidth,
-    kanbanCreatePanel,
-    kanbanDeletePanel,
-    kanbanDeleteTask,
-    kanbanPanels,
-    kanbanReorderTask,
-    kanbanTasks,
-    kanbanUpdatePanel,
-    kanbanUpdateTask,
-    kanbanViewState,
     lockLiveSessions,
     loadingProgressDialog,
     mainHeaderNode,
     messagesNode,
-    models,
     moveWorkspaceGroup,
     onGitHistoryPanelResizeStart,
-    onKanbanConversationResizeStart,
     onPlanPanelResizeStart,
     onRightPanelResizeStart,
     onSidebarResizeStart,
@@ -261,12 +237,10 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     searchPaletteSelectedIndex,
     searchResults,
     searchScope,
-    selectedKanbanTaskId,
     selectedPullRequest,
     setActiveTab,
     setAppSettings,
     setGitDiffListView,
-    setKanbanViewState,
     setReduceTransparency,
     setWindowTransparencyEnabled,
     setWindowOpacity,
@@ -284,7 +258,6 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     showGitHistory,
     showExtensions,
     showHome,
-    showKanban,
     showNextReleaseNotes,
     showPreviousReleaseNotes,
     startUpdate,
@@ -298,9 +271,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     tabBarNode,
     tabletNavNode,
     tabletTab,
-    taskProcessingMap,
     terminalDockNode,
-    terminalOpen,
     terminalPanelHeight,
     threadListLoadingByWorkspace,
     threadsByWorkspace,
@@ -356,13 +327,6 @@ export function renderAppShell(ctx: RenderAppShellContext) {
   ) : (
     workspacePrimaryNode
   );
-
-  const kanbanConversationNode = selectedKanbanTaskId ? (
-    <div className="kanban-conversation-content">
-      {messagesNode}
-      {composerNode}
-    </div>
-  ) : null;
 
   const gitHistoryNode = showGitHistory ? (
     <Suspense fallback={null}>
@@ -524,48 +488,10 @@ export function renderAppShell(ctx: RenderAppShellContext) {
       ) : null}
       <AppLayout
         showHome={showHome}
-        showKanban={showKanban}
         showExtensions={showExtensions}
         showGitHistory={showGitHistory}
         hideRightPanel={activeTab === "spec" && rightPanelCollapsed}
         isSoloMode={isSoloMode}
-        kanbanNode={
-          showKanban ? (
-            <Suspense fallback={null}>
-              <KanbanView
-                viewState={kanbanViewState}
-                onViewStateChange={setKanbanViewState}
-                workspaces={workspaces}
-                panels={kanbanPanels}
-                tasks={kanbanTasks}
-                onCreateTask={handleKanbanCreateTask}
-                onUpdateTask={kanbanUpdateTask}
-                onDeleteTask={kanbanDeleteTask}
-                onReorderTask={kanbanReorderTask}
-                onCreatePanel={kanbanCreatePanel}
-                onUpdatePanel={kanbanUpdatePanel}
-                onDeletePanel={kanbanDeletePanel}
-                onAddWorkspace={handleAddWorkspace}
-                onAppModeChange={handleAppModeChange}
-                codexModels={models}
-                engineStatuses={engineStatuses}
-                conversationNode={kanbanConversationNode}
-                selectedTaskId={selectedKanbanTaskId}
-                taskProcessingMap={taskProcessingMap}
-                onOpenTaskConversation={handleOpenTaskConversation}
-                onCloseTaskConversation={handleCloseTaskConversation}
-                onDragToInProgress={handleDragToInProgress}
-                kanbanConversationWidth={kanbanConversationWidth}
-                onKanbanConversationResizeStart={
-                  onKanbanConversationResizeStart
-                }
-                gitPanelNode={gitDiffPanelNode}
-                terminalOpen={terminalOpen}
-                onToggleTerminal={handleToggleTerminalPanel}
-              />
-            </Suspense>
-          ) : null
-        }
         extensionsNode={
           showExtensions ? (
             <Suspense fallback={null}>
@@ -680,10 +606,6 @@ export function renderAppShell(ctx: RenderAppShellContext) {
                 scaleShortcutTitle={scaleShortcutTitle}
                 scaleShortcutText={scaleShortcutText}
                 onTestNotificationSound={handleTestNotificationSound}
-                dictationModelStatus={dictationModel.status}
-                onDownloadDictationModel={dictationModel.download}
-                onCancelDictationDownload={dictationModel.cancel}
-                onRemoveDictationModel={dictationModel.remove}
                 onClose={closeSettings}
                 initialSection={settingsSection ?? undefined}
                 initialHighlightTarget={settingsHighlightTarget ?? undefined}

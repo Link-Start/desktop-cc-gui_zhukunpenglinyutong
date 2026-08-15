@@ -137,6 +137,7 @@ function DetailField({ label, children }: { label: string; children: ReactNode }
   return (
     <div className="explore-inline-item">
       <span className="explore-inline-kind">{label}</span>
+      <span className="tool-meta-sep" aria-hidden />
       <span className="explore-inline-label" style={{ flex: '1 1 auto' }}>
         {children}
       </span>
@@ -224,6 +225,7 @@ export const SearchToolBlock = memo(function SearchToolBlock({
             {/* 与批量搜索行同构：kind + 短 query + matches */}
             <span className="explore-inline-title search-tool-inline-title" title={headerTitle}>
               <span className="explore-inline-kind">{kindLabel}</span>
+              {primaryLabel ? <span className="tool-meta-sep" aria-hidden /> : null}
               {primaryLabel ? (
                 <LinkedText text={primaryLabel} className="explore-inline-label" title={headerTitle} />
               ) : null}

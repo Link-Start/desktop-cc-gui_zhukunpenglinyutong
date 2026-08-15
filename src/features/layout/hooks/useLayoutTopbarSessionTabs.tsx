@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import { TopbarSessionTabs } from "../../app/components/TopbarSessionTabs";
 import {
   clampRendererContextMenuPosition,
@@ -58,7 +58,7 @@ function toTopbarTabKey(workspaceId: string, threadId: string): string {
 export function useLayoutTopbarSessionTabs(
   input: UseLayoutTopbarSessionTabsInput,
 ): UseLayoutTopbarSessionTabsResult {
-  const [, forceTopbarSessionRender] = useReducer((value: number) => value + 1, 0);
+  const [topbarSessionEpoch, forceTopbarSessionRender] = useReducer((value: number) => value + 1, 0);
   const [topbarTabContextMenu, setTopbarTabContextMenu] =
     useState<RendererContextMenuState | null>(null);
   const topbarSessionWindowsRef = useRef<TopbarSessionWindows>(
@@ -168,6 +168,13 @@ export function useLayoutTopbarSessionTabs(
   const selectedThreadId = input.activeThreadId;
   const selectThread = input.onSelectThread;
   const selectWorkspace = input.onSelectWorkspace;
+  // 解构为裸标识符供 useMemo/useCallback deps 使用：eslint-plugin-react-hooks v4
+  // 对 input.x 形式的成员依赖会误报 missing 'input'，裸标识符可精确匹配。
+  const threadStatusById = input.threadStatusById;
+  const t = input.t;
+  const isPhone = input.isPhone;
+  const isTablet = input.isTablet;
+  const showTopSessionTabs = input.showTopSessionTabs;
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -220,18 +227,33 @@ export function useLayoutTopbarSessionTabs(
     selectThread,
   ]);
 
-  const topbarSessionTabItems = buildTopbarSessionTabItems(
-    highlightedWorkspaceId,
-    highlightedThreadId,
-    input.threadsByWorkspace,
-    topbarSessionWindowsRef.current,
-    input.t("threads.untitledThread"),
-    {
-      codex: input.t("settings.projectSessionEngineCodex"),
-      claude: input.t("settings.projectSessionEngineClaude"),
-      gemini: input.t("settings.projectSessionEngineGemini"),
-      opencode: input.t("settings.projectSessionEngineOpencode"),
-    },
+  // 稳定 tab items 身份：sessionTabsNode 的 useMemo 依赖它，若每次 render 新建数组
+  // 会让 mainHeaderNode / desktopTopbarLeftNode 的 memo 失效（AppLayout 无法提前返回）。
+  // topbarSessionWindowsRef 在 render 期被同步/mutation 推进，mutation 路径由
+  // forceTopbarSessionRender 触发重渲染，故用 epoch 作为 ref 内容的版本号入 deps。
+  const topbarSessionTabItems = useMemo(
+    () =>
+      buildTopbarSessionTabItems(
+        highlightedWorkspaceId,
+        highlightedThreadId,
+        input.threadsByWorkspace,
+        topbarSessionWindowsRef.current,
+        input.t("threads.untitledThread"),
+        {
+          codex: input.t("settings.projectSessionEngineCodex"),
+          claude: input.t("settings.projectSessionEngineClaude"),
+          gemini: input.t("settings.projectSessionEngineGemini"),
+          opencode: input.t("settings.projectSessionEngineOpencode"),
+        },
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- topbarSessionEpoch 是 topbarSessionWindowsRef 的版本号
+    [
+      highlightedWorkspaceId,
+      highlightedThreadId,
+      input.threadsByWorkspace,
+      input.t,
+      topbarSessionEpoch,
+    ],
   );
 
   const applyTopbarWindowMutation = useCallback(
@@ -345,7 +367,7 @@ export function useLayoutTopbarSessionTabs(
       const hasLeftTabs = targetIndex > 0;
       const hasRightTabs = targetIndex < currentWindows.tabs.length - 1;
       const hasCompletedTabs = currentWindows.tabs.some(
-        (tab) => input.threadStatusById[tab.threadId]?.isProcessing === false,
+        (tab) => threadStatusById[tab.threadId]?.isProcessing === false,
       );
       const clampedPosition = clampRendererContextMenuPosition(position.x, position.y, {
         width: 260,
@@ -353,12 +375,12 @@ export function useLayoutTopbarSessionTabs(
       });
       setTopbarTabContextMenu({
         ...clampedPosition,
-        label: input.t("threads.topbarSessionTabsAriaLabel"),
+        label: t("threads.topbarSessionTabsAriaLabel"),
         items: [
           {
             type: "item",
             id: "close-tab",
-            label: input.t("threads.closeTab"),
+            label: t("threads.closeTab"),
             onSelect: () => {
               applyTopbarWindowMutation(
                 (windows) => dismissTopbarSessionTab(windows, workspaceId, threadId),
@@ -369,7 +391,7 @@ export function useLayoutTopbarSessionTabs(
           {
             type: "item",
             id: "close-left-tabs",
-            label: input.t("threads.closeLeftTabs"),
+            label: t("threads.closeLeftTabs"),
             disabled: !hasLeftTabs,
             onSelect: () => {
               applyTopbarWindowMutation(
@@ -381,7 +403,7 @@ export function useLayoutTopbarSessionTabs(
           {
             type: "item",
             id: "close-right-tabs",
-            label: input.t("threads.closeRightTabs"),
+            label: t("threads.closeRightTabs"),
             disabled: !hasRightTabs,
             onSelect: () => {
               applyTopbarWindowMutation(
@@ -393,7 +415,7 @@ export function useLayoutTopbarSessionTabs(
           {
             type: "item",
             id: "close-all-tabs",
-            label: input.t("threads.closeAllTabs"),
+            label: t("threads.closeAllTabs"),
             onSelect: () => {
               applyTopbarWindowMutation(
                 (windows) => dismissAllTopbarSessionTabs(windows),
@@ -404,11 +426,11 @@ export function useLayoutTopbarSessionTabs(
           {
             type: "item",
             id: "close-completed-tabs",
-            label: input.t("threads.closeCompletedTabs"),
+            label: t("threads.closeCompletedTabs"),
             disabled: !hasCompletedTabs,
             onSelect: () => {
               applyTopbarWindowMutation(
-                (windows) => dismissCompletedTopbarSessionTabs(windows, input.threadStatusById),
+                (windows) => dismissCompletedTopbarSessionTabs(windows, threadStatusById),
                 workspaceId,
               );
             },
@@ -416,18 +438,21 @@ export function useLayoutTopbarSessionTabs(
         ],
       });
     },
-    [applyTopbarWindowMutation, input],
+    [applyTopbarWindowMutation, threadStatusById, t],
   );
 
-  const sessionTabsNode =
-    !input.isPhone && !input.isTablet && input.showTopSessionTabs ? (
+  // 稳定 sessionTabsNode / contextMenuNode 身份：它们经 mainHeaderNode /
+  // desktopTopbarLeftNode 传入 AppLayout，若每次 render 新建元素，AppLayout memo 失效。
+  const sessionTabsNode = useMemo(
+    () =>
+      !isPhone && !isTablet && showTopSessionTabs ? (
       <TopbarSessionTabs
         tabs={topbarSessionTabItems}
-        ariaLabel={input.t("threads.topbarSessionTabsAriaLabel")}
+        ariaLabel={t("threads.topbarSessionTabsAriaLabel")}
         onSelectThread={(workspaceId, threadId) => {
           const isCurrentTab =
-            workspaceId === input.activeWorkspaceId &&
-            threadId === input.activeThreadId;
+            workspaceId === selectedWorkspaceId &&
+            threadId === selectedThreadId;
           if (isCurrentTab) {
             return;
           }
@@ -437,7 +462,7 @@ export function useLayoutTopbarSessionTabs(
             setAt: Date.now(),
           };
           forceTopbarSessionRender();
-          input.onSelectThread(workspaceId, threadId);
+          selectThread(workspaceId, threadId);
         }}
         onCloseThread={(workspaceId, threadId) => {
           applyTopbarWindowMutation(
@@ -447,15 +472,32 @@ export function useLayoutTopbarSessionTabs(
         }}
         onShowTabMenu={showTopbarTabMenu}
       />
-    ) : null;
+      ) : null,
+    [
+      isPhone,
+      isTablet,
+      showTopSessionTabs,
+      topbarSessionTabItems,
+      t,
+      selectedWorkspaceId,
+      selectedThreadId,
+      selectThread,
+      applyTopbarWindowMutation,
+      showTopbarTabMenu,
+    ],
+  );
 
-  const contextMenuNode = topbarTabContextMenu ? (
-    <RendererContextMenu
-      menu={topbarTabContextMenu}
-      onClose={() => setTopbarTabContextMenu(null)}
-      className="renderer-context-menu topbar-session-context-menu"
-    />
-  ) : null;
+  const contextMenuNode = useMemo(
+    () =>
+      topbarTabContextMenu ? (
+        <RendererContextMenu
+          menu={topbarTabContextMenu}
+          onClose={() => setTopbarTabContextMenu(null)}
+          className="renderer-context-menu topbar-session-context-menu"
+        />
+      ) : null,
+    [topbarTabContextMenu],
+  );
 
   return {
     contextMenuNode,

@@ -49,6 +49,8 @@ const {
 vi.mock("../../services/clientStorage", () => ({
   getClientStoreSync,
   writeClientStoreValue,
+  isClientStoreReady: () => true,
+  subscribeClientStoreHydrated: () => () => {},
 }));
 
 vi.mock("../../features/composer/hooks/composerEnginePrefsStore", () => ({

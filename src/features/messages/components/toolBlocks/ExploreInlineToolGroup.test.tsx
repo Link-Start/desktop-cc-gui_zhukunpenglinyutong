@@ -28,6 +28,8 @@ describe("ExploreInlineToolGroup", () => {
     expect(screen.getByText("L1-10")).toBeTruthy();
     expect(screen.getByTestId("file-type-icon")).toBeTruthy();
     expect(container.querySelector(".explore-inline-item.has-file-icon")).toBeTruthy();
+    expect(container.querySelectorAll(".tool-meta-sep").length).toBeGreaterThan(0);
+    expect(container.querySelector(".tool-meta-path")?.textContent).toBe("b.ts");
   });
 
   it("collapses the list when header is toggled", () => {

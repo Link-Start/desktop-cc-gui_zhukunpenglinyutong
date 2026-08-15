@@ -36,6 +36,18 @@ const response = (branchName: string) => ({
 describe("useMultiRepositoryGitStatus", () => {
   beforeEach(() => vi.mocked(getGitStatus).mockReset());
 
+  it("skips IO when the git surface is disabled", async () => {
+    vi.mocked(getGitStatus).mockResolvedValue(response("main"));
+    const repositories = [repository("a"), repository("b")];
+    const { result } = renderHook(() =>
+      useMultiRepositoryGitStatus(workspace, repositories, { enabled: false }),
+    );
+    await act(async () => undefined);
+    expect(result.current.isMultiRepository).toBe(true);
+    expect(result.current.statuses).toEqual([]);
+    expect(getGitStatus).not.toHaveBeenCalled();
+  });
+
   it("keeps single repository on the legacy status path", async () => {
     const repositories = [repository("")];
     const { result } = renderHook(() => useMultiRepositoryGitStatus(workspace, repositories));

@@ -2,7 +2,7 @@
  * 工具块共享外壳 - 统一 Marker 风格的折叠行
  * Shared shell for tool blocks rendered as shadcn Marker rows.
  * 定稿口径：对齐 thinking / explore meta 行 ——
- * --message-meta-font-size(12px) + 图标 14px + gap-1.5 + 行高 20px，
+ * --message-tool-row-font-size(13px) + 图标 14px + gap-2 + 行高 24 / 行盒 28px，
  * 无边框、muted —— 灰色 lucide 描边图标 + 内容 + 靠右状态图标 + 折叠体。
  *
  * 图标尺寸硬约束（勿再只靠调用方 size prop）：
@@ -29,6 +29,10 @@ import { CollapsibleReveal } from './CollapsibleReveal';
 /** 与 thinking Brain / explore Search 同为 14px */
 export const TOOL_META_ICON_PX = 14;
 const META_ICON_CLASS = 'size-3.5 shrink-0';
+
+/** thinking / explore / 单工具 Marker 共用的活动行尺度（13/24，不抬全局 meta） */
+export const TOOL_META_ROW_CLASS =
+  'min-h-[var(--message-tool-row-min-height,28px)] gap-[var(--message-tool-row-icon-gap,8px)] rounded-md py-0.5 pr-1 text-[length:var(--message-tool-row-font-size,13px)] leading-[var(--message-tool-row-line-height,24px)] tracking-[0.01em] transition-colors';
 
 /** 单块统一折叠体容器类：淡边框 + 2px 圆角 + muted/30 底、与头部小间距 */
 export const TOOL_MARKER_BODY_CLASS =
@@ -148,9 +152,8 @@ export function ToolMarkerShell({
             }
           : {})}
         className={cn(
-          // 覆盖 Marker 默认 text-sm/size-4，对齐 thinking / explore 的 meta 尺度
-          // py-0.5 给折叠行一点纵向呼吸，与 thinking/explore header 的 2px padding 对齐
-          'min-h-5 gap-1.5 rounded-md py-0.5 pr-1 text-[length:var(--message-meta-font-size,12px)] leading-5 transition-colors',
+          // 覆盖 Marker 默认 text-sm/size-4，对齐 thinking / explore 的活动行尺度
+          TOOL_META_ROW_CLASS,
           // ! 强制压过 Marker 的 size-4；选择器不依赖 :not(size-) 以免 merge/引号踩坑
           '[&_svg]:!size-3.5',
           clickable && 'cursor-pointer select-none',
@@ -165,12 +168,15 @@ export function ToolMarkerShell({
           {normalizeMetaIcon(icon)}
         </MarkerIcon>
         {hasKind ? <span className="explore-inline-kind">{kind}</span> : null}
+        {hasKind && (children != null || !labelHidden) ? (
+          <span className="tool-meta-sep" aria-hidden />
+        ) : null}
         <span className={labelHidden ? 'sr-only' : 'min-w-0 truncate font-normal'}>
           {label}
         </span>
         {children != null && (
           <MarkerContent
-            className={cn('flex min-w-0 items-center gap-1.5 font-normal', contentClassName)}
+            className={cn('flex min-w-0 items-center gap-2 font-normal', contentClassName)}
           >
             {children}
           </MarkerContent>

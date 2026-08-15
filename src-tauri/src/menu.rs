@@ -27,6 +27,8 @@ struct MenuLabels {
     new_window: &'static str,
     add_workspace: &'static str,
     close_window: &'static str,
+    // Linux File menu only; macOS/Windows use the predefined quit item.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     quit: &'static str,
     edit: &'static str,
     composer: &'static str,
@@ -45,9 +47,13 @@ struct MenuLabels {
     prev_agent: &'static str,
     next_workspace: &'static str,
     prev_workspace: &'static str,
+    // Linux View/Window menus only; other platforms use predefined items.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     fullscreen: &'static str,
     window: &'static str,
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     minimize: &'static str,
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     maximize: &'static str,
     reload_window: &'static str,
     help: &'static str,

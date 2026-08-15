@@ -226,6 +226,14 @@ pub(crate) struct WorkspaceSessionSourceCacheMetrics {
     pub(crate) failures: usize,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum WorkspaceSessionScanQuality {
+    #[default]
+    Full,
+    Preview,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct WorkspaceSessionCatalogQuery {
@@ -239,6 +247,16 @@ pub(crate) struct WorkspaceSessionCatalogQuery {
     pub(crate) folder_id: Option<String>,
     #[serde(default)]
     pub(crate) session_attribution_mode: Option<WorkspaceSessionAttributionMode>,
+    /// Sidebar list uses `preview` (bounded Codex ThreadPreview). Session
+    /// Management / mutations keep the default `full` inventory parse.
+    #[serde(default)]
+    pub(crate) scan_quality: Option<WorkspaceSessionScanQuality>,
+}
+
+impl WorkspaceSessionCatalogQuery {
+    pub(crate) fn scan_quality(&self) -> WorkspaceSessionScanQuality {
+        self.scan_quality.unwrap_or_default()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -641,6 +659,7 @@ pub(crate) fn catalog_query_fingerprint(query: &WorkspaceSessionCatalogQuery) ->
         status: String,
         folder_id: Option<String>,
         session_attribution_mode: String,
+        scan_quality: String,
     }
 
     let status = match parse_status_filter(query.status.as_deref()) {
@@ -659,6 +678,10 @@ pub(crate) fn catalog_query_fingerprint(query: &WorkspaceSessionCatalogQuery) ->
         session_attribution_mode: WorkspaceSessionAttributionMode::from_query(query)
             .as_str()
             .to_string(),
+        scan_quality: match query.scan_quality() {
+            WorkspaceSessionScanQuality::Preview => "preview".to_string(),
+            WorkspaceSessionScanQuality::Full => "full".to_string(),
+        },
     };
     serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string())
 }

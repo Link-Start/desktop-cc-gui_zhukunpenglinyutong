@@ -1500,7 +1500,6 @@ pub(crate) async fn create_browser_agent_session(
         feature_phase: BrowserAgentFeaturePhase::ReadOnlySnapshot,
         platform_capability: platform::current_platform_capability(),
         linked_thread_id: None,
-        linked_task_run_id: None,
         linked_orchestration_task_id: None,
         last_snapshot_id: None,
         last_action_id: None,

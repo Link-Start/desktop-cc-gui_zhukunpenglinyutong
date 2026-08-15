@@ -35,7 +35,7 @@ The app is built with **Tauri 2 + React 19 + TypeScript + Rust** and runs on mac
 - The input box supports `@` file references, slash commands, pasted images, and attachments.
 - Supported file edits, shell/tool calls, and reads show up as live cards.
 - Claude/Codex sessions expose **rewind** and **fork** where the current runtime capability supports them.
-- Too lazy to type? Use **voice dictation**. Bad at prompts? The built-in **prompt enhancer** polishes them for you.
+- Bad at prompts? The built-in **prompt enhancer** polishes them for you.
 - Queue follow-ups: while the AI is busy, line up your next question.
 
 ### Not just chat — a full set of dev panels
@@ -48,8 +48,6 @@ The app is built with **Tauri 2 + React 19 + TypeScript + Rust** and runs on mac
 ### Stay organized when tasks pile up
 
 - **Plan panel**: the AI's execution plan listed step by step, so you always know where it is.
-- **Kanban board**: drag task cards around to manage your iteration.
-- **Task Center**: inspect Kanban/orchestration task runs, logs, and artifact summaries; retry, resume, cancel, or fork when the run and engine support that action.
 - **Intent Canvas**: sketch your plan on a canvas before writing any code.
 
 ### Project intelligence (the part that makes ccgui different)

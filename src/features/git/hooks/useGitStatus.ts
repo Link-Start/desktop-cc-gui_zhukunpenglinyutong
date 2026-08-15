@@ -225,6 +225,15 @@ export function useGitStatus(
       if (cancelled) {
         return;
       }
+      // 窗口隐藏时跳过本轮 refresh 只重排程（与 useGitRepositories 同一 idiom）：
+      // 隐藏期间轮询结果不可见，且 Windows WebView2 后台节流叠加慢 IPC
+      // 纯属浪费（Task 5.3）。必须 === "hidden"：jsdom 默认 "prerender"。
+      if (document.visibilityState === "hidden") {
+        timeoutId = window.setTimeout(() => {
+          runAndSchedule();
+        }, resolveNextRefreshInterval());
+        return;
+      }
       refresh()
         .catch(() => {})
         .finally(() => {

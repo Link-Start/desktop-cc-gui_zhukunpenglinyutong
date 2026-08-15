@@ -957,7 +957,6 @@ async fn open_browser_toolbar_url(
                 feature_phase: BrowserAgentFeaturePhase::ReadOnlySnapshot,
                 platform_capability: platform::current_platform_capability(),
                 linked_thread_id: None,
-                linked_task_run_id: None,
                 linked_orchestration_task_id: None,
                 last_snapshot_id: None,
                 last_action_id: None,

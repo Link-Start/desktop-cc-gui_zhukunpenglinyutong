@@ -10,6 +10,18 @@ vi.mock("../../services/tauri", () => ({
     readLocalImageDataUrlMock(workspaceId, path),
 }));
 
+describe("LocalImage decoding hint", () => {
+  it("defaults decoding to async so decode stays off the main thread", () => {
+    render(<LocalImage src="asset://localhost/tmp/a.png" alt="decode-default" />);
+    expect(screen.getByAltText("decode-default").getAttribute("decoding")).toBe("async");
+  });
+
+  it("lets callers override the decoding hint", () => {
+    render(<LocalImage src="asset://localhost/tmp/a.png" alt="decode-override" decoding="sync" />);
+    expect(screen.getByAltText("decode-override").getAttribute("decoding")).toBe("sync");
+  });
+});
+
 describe("LocalImage resolved-source cache", () => {
   beforeEach(() => {
     readLocalImageDataUrlMock.mockReset();

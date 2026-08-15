@@ -1,6 +1,6 @@
 use std::sync::{Mutex, OnceLock};
 
-use serde_json::{json, Value};
+use serde_json::json;
 use tauri::State;
 
 use crate::shared_event_log::canonical::types::{

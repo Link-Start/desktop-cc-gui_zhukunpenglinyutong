@@ -57,7 +57,6 @@ export type BrowserSession = {
   featurePhase: BrowserAgentFeaturePhase;
   platformCapability: BrowserPlatformCapability;
   linkedThreadId?: string | null;
-  linkedTaskRunId?: string | null;
   linkedOrchestrationTaskId?: string | null;
   lastSnapshotId?: string | null;
   lastActionId?: string | null;
@@ -67,6 +66,42 @@ export type BrowserSession = {
   updatedAt: number;
   lastActivatedAt: number;
   closedAt?: number | null;
+};
+
+/** Browser evidence snapshot previously owned by Task Center; kept local so browser-agent can render standalone. */
+export type TaskRunBrowserEvidenceRef = {
+  attachmentId: string;
+  browserSessionId: string;
+  snapshotId: string;
+  url: string;
+  title?: string | null;
+  capturedAt: number;
+  state: "available" | "stale" | "expired" | "degraded" | "deleted" | "unsupported";
+  summary?: string | null;
+  diagnostics?: string[];
+  redactedKinds?: string[];
+  codeCandidates?: Array<{
+    filePath: string;
+    reason:
+      | "route_match"
+      | "file_name_match"
+      | "visible_text_match"
+      | "heading_match"
+      | "button_label_match"
+      | "form_label_match"
+      | "aria_label_match"
+      | "test_id_match"
+      | "component_symbol_match"
+      | "manual_hint";
+    confidence: "high" | "medium" | "low";
+    matchedText?: string | null;
+    sourceEvidence?: string[];
+    explanation?: string;
+    openAction?: {
+      kind: "open_file";
+      filePath: string;
+    } | null;
+  }>;
 };
 
 export type BrowserUrlValidationResult = {

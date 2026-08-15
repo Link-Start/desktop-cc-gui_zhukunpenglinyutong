@@ -1,8 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import type {
   AppServerEvent,
-  DictationEvent,
-  DictationModelStatus,
   RuntimePoolSnapshot,
 } from "../types";
 import type { CliInstallProgressEvent } from "../types";
@@ -338,9 +336,6 @@ const appServerEventDeliverHub = createEventHub<AppServerEvent>(
 const appServerBatchHub = createEventHub<readonly AppServerEvent[]>(
   "app-server-event-batch",
 );
-const dictationDownloadHub =
-  createEventHub<DictationModelStatus>("dictation-download");
-const dictationEventHub = createEventHub<DictationEvent>("dictation-event");
 const terminalOutputHub =
   createEventHub<TerminalOutputEvent>("terminal-output", {
     backpressure: terminalOutputBackpressure,
@@ -522,20 +517,6 @@ export function subscribeWebServiceReconnect(
   return () => {
     window.removeEventListener(WEB_SERVICE_RECONNECTED_EVENT, handler);
   };
-}
-
-export function subscribeDictationDownload(
-  onEvent: (event: DictationModelStatus) => void,
-  options?: SubscriptionOptions,
-): Unsubscribe {
-  return dictationDownloadHub.subscribe(onEvent, options);
-}
-
-export function subscribeDictationEvents(
-  onEvent: (event: DictationEvent) => void,
-  options?: SubscriptionOptions,
-): Unsubscribe {
-  return dictationEventHub.subscribe(onEvent, options);
 }
 
 export function subscribeTerminalOutput(

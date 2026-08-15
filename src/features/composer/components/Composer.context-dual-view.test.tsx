@@ -17,10 +17,6 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(async () => null),
 }));
 
-vi.mock("../../engine/components/EngineSelector", () => ({
-  EngineSelector: () => null,
-}));
-
 
 vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
   ChatInputBoxAdapter: ({
@@ -170,7 +166,6 @@ function ComposerHarness({
       commands={[]}
       files={[]}
       onDraftChange={() => {}}
-      dictationEnabled={false}
       activeWorkspaceId="ws-1"
       activeThreadId="thread-1"
       contextUsage={contextUsage}

@@ -137,7 +137,6 @@ mod command_registry;
 mod computer_use;
 mod curated_skills;
 mod diagnostics_bundle;
-mod dictation;
 mod email;
 mod engine;
 mod engine_policy;

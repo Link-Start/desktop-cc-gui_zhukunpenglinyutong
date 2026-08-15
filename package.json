@@ -61,6 +61,7 @@
     "perf:realtime:runtime-report": "node scripts/perf-realtime-runtime-report.mjs",
     "perf:renderer-diagnostics:export": "node scripts/perf-export-renderer-diagnostics.mjs",
     "perf:realtime:boundary-guard": "vitest run src/features/threads/contracts/realtimeBoundaryGuard.test.ts",
+    "perf:streaming:stress": "vitest run src/features/threads/stress/reasoning-chunks.stress.test.ts",
     "perf:long-list:baseline": "npm exec vite-node -- scripts/perf-long-list-baseline.ts",
     "perf:long-list:browser-scroll": "node scripts/perf-long-list-browser-scroll.mjs",
     "perf:composer:baseline": "npm exec vite-node -- scripts/perf-composer-baseline.ts",

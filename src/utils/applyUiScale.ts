@@ -50,18 +50,33 @@ export function resolveCssZoomLayoutTarget(root: HTMLElement): HTMLElement {
   return root;
 }
 
-/** Unconditionally clear all scale-related inline properties. */
+const SCALE_LAYOUT_STYLE_KEYS = [
+  "zoom",
+  "transform",
+  "transformOrigin",
+  "width",
+  "height",
+  "position",
+  "top",
+  "left",
+  "right",
+  "bottom",
+] as const;
+
+function hasResidualScaleStyle(el: HTMLElement): boolean {
+  return SCALE_LAYOUT_STYLE_KEYS.some((key) => Boolean(el.style[key]));
+}
+
+/** Clear scale-related inline properties only when a residual value exists. */
 function clearScaleLayoutStyles(el: HTMLElement): void {
-  el.style.zoom = "";
-  el.style.transform = "";
-  el.style.transformOrigin = "";
-  el.style.width = "";
-  el.style.height = "";
-  el.style.position = "";
-  el.style.top = "";
-  el.style.left = "";
-  el.style.right = "";
-  el.style.bottom = "";
+  if (!hasResidualScaleStyle(el)) {
+    return;
+  }
+  for (const key of SCALE_LAYOUT_STYLE_KEYS) {
+    if (el.style[key]) {
+      el.style[key] = "";
+    }
+  }
 }
 
 function applyCssPageScaleStyles(

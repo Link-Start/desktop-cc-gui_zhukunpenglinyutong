@@ -194,6 +194,7 @@ export function ReleaseNotesModal({
                   <Markdown
                     value={currentEntry.englishBody || t("update.releaseNotesEmpty")}
                     className="release-notes-markdown markdown"
+                    liveRenderMode="lightweight"
                   />
                 </section>
                 <section className="release-notes-language-block">
@@ -203,6 +204,7 @@ export function ReleaseNotesModal({
                   <Markdown
                     value={currentEntry.chineseBody || t("update.releaseNotesEmpty")}
                     className="release-notes-markdown markdown"
+                    liveRenderMode="lightweight"
                   />
                 </section>
               </div>

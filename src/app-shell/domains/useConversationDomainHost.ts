@@ -5,21 +5,19 @@ import { useRenameThreadPrompt } from "../../features/threads/hooks/useRenameThr
 import { useDeleteThreadPrompt } from "../../features/threads/hooks/useDeleteThreadPrompt";
 import { useThreadRows } from "../../features/app/hooks/useThreadRows";
 import { forceRefreshAgents } from "../../features/composer/components/ChatInputBox/providers";
-import {
-  defineRuntimeThreadShellBoundary,
-  type RuntimeThreadShellBoundary,
-} from "./runtimeThreadBoundary";
+import type { RuntimeThreadShellBoundary } from "./runtimeThreadBoundary";
 
 /**
  * S4 PR-D：Conversation / Messages 域 host（无 UI）。
  *
- * - 组装 runtimeThreadBoundary（与 live channel / threads bags 对齐）
+ * - 接收 useRuntimeThreadDomainHost 装配好的 runtimeThreadBoundary
+ *   （与 live channel / threads bags 对齐）
  * - thread chrome：copy / rename / delete
  * - activeThreadIdRef 同步
  * - settings 关闭时刷新 agent catalog（与会话工具栏耦合的轻副作用）
  */
 export function useConversationDomainHost(input: {
-  runtimeThreadBoundaryInput: RuntimeThreadShellBoundary;
+  runtimeThreadBoundary: RuntimeThreadShellBoundary;
   activeThreadId: string | null;
   threadParentById: Record<string, string>;
   activeItems: unknown[];
@@ -34,9 +32,7 @@ export function useConversationDomainHost(input: {
   reloadAgentCatalog: () => void | Promise<void>;
   settingsOpen: boolean;
 }) {
-  const runtimeThreadBoundary = defineRuntimeThreadShellBoundary(
-    input.runtimeThreadBoundaryInput,
-  );
+  const runtimeThreadBoundary = input.runtimeThreadBoundary;
 
   const activeThreadIdRef = useRef<string | null>(input.activeThreadId ?? null);
   useEffect(() => {

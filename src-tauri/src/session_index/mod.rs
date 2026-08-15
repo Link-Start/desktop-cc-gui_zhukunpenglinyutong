@@ -9,6 +9,3 @@
 pub(crate) mod commands;
 mod store;
 mod writers;
-
-pub(crate) use commands::{list_session_index_for_workspace, sync_session_index_for_workspace};
-pub(crate) use store::{SessionIndexListPage, SessionIndexRow, SessionIndexSyncReport};

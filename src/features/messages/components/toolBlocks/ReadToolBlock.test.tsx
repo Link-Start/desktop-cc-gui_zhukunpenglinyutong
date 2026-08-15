@@ -69,6 +69,8 @@ describe("ReadToolBlock", () => {
     const view = render(<ReadToolBlock item={item} isExpanded={false} onToggle={() => {}} />);
     expect(screen.getByText(/tools\.kindRead|Read|读取/)).toBeTruthy();
     expect(view.container.querySelector(".explore-inline-kind")).toBeTruthy();
+    expect(view.container.querySelector(".tool-meta-sep")).toBeTruthy();
+    expect(view.container.querySelector(".tool-meta-path")).toBeTruthy();
     // 行首单色动作 icon（FileText）+ 文件名旁彩色类型 icon 并存
     expect(view.container.querySelector('[data-slot="marker"] svg')).toBeTruthy();
     expect(view.container.querySelector(".tool-marker-file-type-icon")).toBeTruthy();

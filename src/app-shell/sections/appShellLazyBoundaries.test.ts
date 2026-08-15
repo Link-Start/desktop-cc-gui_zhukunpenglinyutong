@@ -7,12 +7,15 @@ const currentDir = dirname(fileURLToPath(import.meta.url));
 const srcDir = join(currentDir, "..", "..");
 
 const lazyFeatureImports = [
-  "../../features/kanban/components/KanbanView",
   "../../features/git-history/components/GitHistoryPanel",
-  "../../features/workspaces/components/WorkspaceHome",
   "../../features/spec/components/SpecHub",
   "../../features/search/components/SearchPalette",
   "../../features/update/components/ReleaseNotesModal",
+] as const;
+
+const retiredLazyFeatureImports = [
+  "../../features/kanban/components/KanbanView",
+  "../../features/workspaces/components/WorkspaceHome",
 ] as const;
 
 // project-map / intent-canvas 动态 import 位于 layout feature（非 lazyViews）
@@ -58,6 +61,23 @@ describe("AppShell lazy feature boundaries", () => {
     }
     for (const importPath of layoutLazyImports) {
       expect(layoutNodesSource).toContain(`import("${importPath}")`);
+    }
+  });
+
+  it("no longer lazy-loads KanbanView or WorkspaceHome", () => {
+    const lazyViewsSource = readSource(join(currentDir, "../render/lazyViews.tsx"));
+
+    for (const importPath of retiredLazyFeatureImports) {
+      expect(lazyViewsSource).not.toContain(`import("${importPath}")`);
+      expect(lazyViewsSource).not.toContain(importPath);
+    }
+    for (const sourcePath of shellStaticImportFiles) {
+      const source = readSource(sourcePath);
+      for (const importPath of retiredLazyFeatureImports) {
+        expect(source).not.toContain(`from "${importPath}"`);
+        expect(source).not.toContain(`from '${importPath}'`);
+        expect(source).not.toContain(`import("${importPath}")`);
+      }
     }
   });
 

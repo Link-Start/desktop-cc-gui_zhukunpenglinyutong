@@ -25,6 +25,8 @@ status: active
 - [Budget Decision Table](budget-decision-table.md) — performance budget 与判定口径
 - [Parallel Conversation Jank Index](parallel-conversation-jank-index.md) — historical/reusable 诊断入口；原 P0 change 已归档
 - [Parallel Conversation Jank Handbook](parallel-conversation-jank-handbook.md) — 先留 evidence 再 Settings Reset；七类 residual 不是当前 backlog
+- [PR #1092 Performance Retrospective](pr-1092-performance-retrospective.md) — 2026-08-14/15 性能收口复盘：主因（四层乘法）、各战线解法、防再犯红线与门禁；数值是 PR 当时实测，不是永久 KPI
+- [AppShell Streaming Bag Probe](app-shell-streaming-bag-probe.md) — CI 结构探针：runtimeThread 变化不得扇出 chrome/git flatten；不是 GUI Profiler
 - [Render Jank Knife Experiments (2026-07-08)](render-jank-knife-experiments-2026-07-08.md) — 有日期的实验记录；其中数值不是永久基线（AGENTS 仍引用其四层根因框架）
 - [A4 Live Text Externalization Plan](a4-live-text-externalization-plan.md) — 已实现的 live-text 旁路；2026-07-30 演进为 accumulated/published 分离 + 48ms cadence
 - [Streaming Render Stall Design (2026-07-30)](streaming-render-stall-design-2026-07-30.md) — 已实现 `1537211a1`；OpenSpec `17/17` 并于 2026-08-03 归档；idle virtualization 后续由 `4e932e672` 恢复
@@ -96,3 +98,4 @@ status: active
 | 2026-08-01 | Batch 4：校准 A4/streaming/render-jank 的落地状态、48ms cadence、deferred/transition 与 idle virtualization 现状 |
 | 2026-08-01 | Review 补漏：给 v0.5.8/v0.5.10/v0.5.14 与空白 jank worksheet 补 direct-open lifecycle，阻止旧 proxy/placeholder 被当 current evidence |
 | 2026-08-03 | 校准到 0.7.16；记录 streaming change 已归档，并补齐 generated/historical/deprecated lifecycle 边界 |
+| 2026-08-16 | 增加 PR #1092 性能复盘入口（`pr-1092-performance-retrospective.md`） |

@@ -16,7 +16,6 @@ export type QuickSwitcherNavigationId =
   | "files"
   | "git"
   | "history"
-  | "kanban"
   | "spec"
   | "intentCanvas"
   | "projectMap"

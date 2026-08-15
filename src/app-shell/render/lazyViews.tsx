@@ -12,12 +12,6 @@ export const GitHubPanelData = lazy(() =>
   })),
 );
 
-export const KanbanView = lazy(() =>
-  import("../../features/kanban/components/KanbanView").then((module) => ({
-    default: module.KanbanView,
-  })),
-);
-
 export const GitHistoryPanel = lazy(() =>
   import("../../features/git-history/components/GitHistoryPanel").then((module) => ({
     default: module.GitHistoryPanel,
@@ -27,12 +21,6 @@ export const GitHistoryPanel = lazy(() =>
 export const ExtensionsView = lazy(() =>
   import("../../features/extensions/components/ExtensionsView").then((module) => ({
     default: module.ExtensionsView,
-  })),
-);
-
-export const WorkspaceHome = lazy(() =>
-  import("../../features/workspaces/components/WorkspaceHome").then((module) => ({
-    default: module.WorkspaceHome,
   })),
 );
 

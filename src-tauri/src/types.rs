@@ -988,11 +988,6 @@ pub(crate) struct AppSettings {
     #[serde(default = "default_open_chat_shortcut", rename = "openChatShortcut")]
     pub(crate) open_chat_shortcut: Option<String>,
     #[serde(
-        default = "default_open_kanban_shortcut",
-        rename = "openKanbanShortcut"
-    )]
-    pub(crate) open_kanban_shortcut: Option<String>,
-    #[serde(
         default = "default_cycle_open_session_prev_shortcut",
         rename = "cycleOpenSessionPrevShortcut"
     )]
@@ -1274,14 +1269,6 @@ pub(crate) struct AppSettings {
         rename = "chatCanvasUsePresentationProfile"
     )]
     pub(crate) chat_canvas_use_presentation_profile: bool,
-    #[serde(default = "default_dictation_enabled", rename = "dictationEnabled")]
-    pub(crate) dictation_enabled: bool,
-    #[serde(default = "default_dictation_model_id", rename = "dictationModelId")]
-    pub(crate) dictation_model_id: String,
-    #[serde(default, rename = "dictationPreferredLanguage")]
-    pub(crate) dictation_preferred_language: Option<String>,
-    #[serde(default = "default_dictation_hold_key", rename = "dictationHoldKey")]
-    pub(crate) dictation_hold_key: String,
     #[serde(
         default = "default_composer_editor_preset",
         rename = "composerEditorPreset"
@@ -1548,10 +1535,6 @@ fn default_open_chat_shortcut() -> Option<String> {
     Some("cmd+j".to_string())
 }
 
-fn default_open_kanban_shortcut() -> Option<String> {
-    Some("cmd+k".to_string())
-}
-
 fn default_cycle_open_session_prev_shortcut() -> Option<String> {
     Some("cmd+shift+[".to_string())
 }
@@ -1714,18 +1697,6 @@ fn default_chat_canvas_use_unified_history_loader() -> bool {
 
 fn default_chat_canvas_use_presentation_profile() -> bool {
     false
-}
-
-fn default_dictation_enabled() -> bool {
-    false
-}
-
-fn default_dictation_model_id() -> String {
-    "base".to_string()
-}
-
-fn default_dictation_hold_key() -> String {
-    "alt".to_string()
 }
 
 fn default_composer_editor_preset() -> String {
@@ -1978,7 +1949,6 @@ impl Default for AppSettings {
             open_settings_shortcut: default_open_settings_shortcut(),
             new_window_shortcut: default_new_window_shortcut(),
             open_chat_shortcut: default_open_chat_shortcut(),
-            open_kanban_shortcut: default_open_kanban_shortcut(),
             cycle_open_session_prev_shortcut: default_cycle_open_session_prev_shortcut(),
             cycle_open_session_next_shortcut: default_cycle_open_session_next_shortcut(),
             toggle_left_conversation_sidebar_shortcut:
@@ -2056,10 +2026,6 @@ impl Default for AppSettings {
             chat_canvas_use_normalized_realtime: false,
             chat_canvas_use_unified_history_loader: false,
             chat_canvas_use_presentation_profile: false,
-            dictation_enabled: false,
-            dictation_model_id: default_dictation_model_id(),
-            dictation_preferred_language: None,
-            dictation_hold_key: default_dictation_hold_key(),
             composer_editor_preset: default_composer_editor_preset(),
             composer_send_shortcut: default_composer_send_shortcut(),
             composer_fence_expand_on_space: default_composer_fence_expand_on_space(),
@@ -2317,7 +2283,6 @@ mod tests {
             "openSettingsShortcut": "cmd+alt+,",
             "newWindowShortcut": "cmd+alt+w",
             "openChatShortcut": "cmd+alt+j",
-            "openKanbanShortcut": "cmd+alt+k",
             "cycleOpenSessionPrevShortcut": "cmd+alt+left",
             "cycleOpenSessionNextShortcut": "cmd+alt+right",
             "toggleLeftConversationSidebarShortcut": "cmd+ctrl+[",
@@ -2349,6 +2314,18 @@ mod tests {
         {
             assert_eq!(echoed.get(key), Some(expected), "shortcut field {key}");
         }
+    }
+
+    #[test]
+    fn app_settings_ignores_legacy_open_kanban_shortcut() {
+        let settings: AppSettings = serde_json::from_value(serde_json::json!({
+            "openKanbanShortcut": "cmd+alt+k",
+            "openChatShortcut": "cmd+alt+j",
+        }))
+        .expect("legacy settings deserialize");
+        assert_eq!(settings.open_chat_shortcut.as_deref(), Some("cmd+alt+j"));
+        let echoed = serde_json::to_value(settings).expect("settings serialize");
+        assert!(echoed.get("openKanbanShortcut").is_none());
     }
 
     #[test]
@@ -2491,10 +2468,6 @@ mod tests {
         assert!(!settings.chat_canvas_use_normalized_realtime);
         assert!(!settings.chat_canvas_use_unified_history_loader);
         assert!(!settings.chat_canvas_use_presentation_profile);
-        assert!(!settings.dictation_enabled);
-        assert_eq!(settings.dictation_model_id, "base");
-        assert!(settings.dictation_preferred_language.is_none());
-        assert_eq!(settings.dictation_hold_key, "alt");
         assert_eq!(settings.composer_editor_preset, "default");
         assert_eq!(settings.composer_send_shortcut, "enter");
         assert!(!settings.composer_fence_expand_on_space);

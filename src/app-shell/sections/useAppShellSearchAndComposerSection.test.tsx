@@ -44,10 +44,6 @@ function createBoundary(
   overrides: Partial<ComposerSearchShellBoundary> = {},
 ): ComposerSearchShellBoundary {
   const activeWorkspace = createWorkspace();
-  const kanbanWorkspace = createWorkspace({
-    id: "workspace-kanban",
-    path: "/tmp/workspace-kanban",
-  });
 
   return {
     activeEditorFilePath: "src/current.ts",
@@ -81,13 +77,6 @@ function createBoundary(
     isCompact: false,
     isQuickSwitcherOpen: false,
     isSearchPaletteOpen: false,
-    kanbanTasks: [
-      {
-        id: "task-1",
-        panelId: "todo",
-        workspaceId: kanbanWorkspace.path,
-      } as any,
-    ],
     queueMessage: vi.fn(async () => undefined),
     quickSwitcherRecentFileGroups: [],
     quickSwitcherRunningSessions: [],
@@ -107,7 +96,6 @@ function createBoundary(
     setDiffSource: vi.fn(),
     setGitPanelMode: vi.fn(),
     setIsSearchPaletteOpen: vi.fn(),
-    setKanbanViewState: vi.fn(),
     setPrefillDraft: vi.fn(),
     setSearchContentFilters: vi.fn(),
     setSearchPaletteQuery: vi.fn(),
@@ -115,10 +103,8 @@ function createBoundary(
     setSearchScope: vi.fn(),
     setSelectedCommitSha: vi.fn(),
     setSelectedDiffPath: vi.fn(),
-    setSelectedKanbanTaskId: vi.fn(),
     setSelectedPullRequest: vi.fn(),
     startThreadForWorkspace: vi.fn(async () => "thread-1"),
-    workspacesByPath: new Map([[kanbanWorkspace.path, kanbanWorkspace]]),
     workspacesById: new Map([
       [activeWorkspace.id, activeWorkspace],
       ["workspace-2", { ...activeWorkspace, id: "workspace-2" }],
@@ -142,8 +128,8 @@ describe("useAppShellSearchAndComposerSection", () => {
     expect(COMPOSER_SEARCH_BOUNDARY_FIELD_GROUPS.gitSearchOpen).toContain(
       "setGitPanelMode",
     );
-    expect(COMPOSER_SEARCH_BOUNDARY_FIELD_GROUPS.kanbanBridge).toContain(
-      "setKanbanViewState",
+    expect(COMPOSER_SEARCH_BOUNDARY_FIELD_GROUPS.searchPalette).toContain(
+      "setAppMode",
     );
   });
 
@@ -250,7 +236,7 @@ describe("useAppShellSearchAndComposerSection", () => {
     expect(boundary.setSearchPaletteSelectedIndex).toHaveBeenCalledWith(0);
   });
 
-  it("opens API, file, thread, kanban, and history search results without domain input", () => {
+  it("opens API, file, thread, and history search results without domain input", () => {
     const boundary = createBoundary();
     const { result } = renderHook(() =>
       useAppShellSearchAndComposerSection(boundary),
@@ -308,21 +294,6 @@ describe("useAppShellSearchAndComposerSection", () => {
       "thread-2",
       "workspace-1",
     );
-
-    openResult({
-      id: "kanban-result",
-      kind: "kanban",
-      title: "Task",
-      score: 1,
-      taskId: "task-1",
-    });
-    expect(boundary.setAppMode).toHaveBeenCalledWith("kanban");
-    expect(boundary.setSelectedKanbanTaskId).toHaveBeenCalledWith("task-1");
-    expect(boundary.setKanbanViewState).toHaveBeenCalledWith({
-      view: "board",
-      workspaceId: "/tmp/workspace-kanban",
-      panelId: "todo",
-    });
 
     openResult({
       id: "history-result",

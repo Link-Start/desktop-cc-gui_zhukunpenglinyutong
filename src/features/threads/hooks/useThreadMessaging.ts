@@ -261,6 +261,7 @@ import {
   shouldDeferCodexActivityUntilTurnAccepted,
 } from "../utils/codexConversationLiveness";
 import { drainLiveAssistantTextTail } from "../utils/liveAssistantTextChannel";
+import { drainLiveItemDeltaTail } from "../utils/liveItemDeltaChannel";
 import { formatBrowserContextPromptOnce } from "../../browser-agent";
 import {
   buildLocalizedMemoryScoutPreviewText,
@@ -3533,6 +3534,33 @@ export function useThreadMessaging({
           delta: liveTextTail.tailDelta,
           hasCustomName: true,
         });
+      }
+      // A4 二期：中断同样把 reasoning/toolOutput 通道里「尚未落 reducer 的尾段」
+      // 灌回 items（flag 关时通道为空、天然 no-op），否则中断后这些行会回退到
+      // 建壳首段。
+      for (const tail of drainLiveItemDeltaTail(activeThreadId)) {
+        if (tail.lane === "reasoningContent") {
+          dispatch({
+            type: "appendReasoningContent",
+            threadId: activeThreadId,
+            itemId: tail.itemId,
+            delta: tail.text,
+          });
+        } else if (tail.lane === "reasoningSummary") {
+          dispatch({
+            type: "appendReasoningSummary",
+            threadId: activeThreadId,
+            itemId: tail.itemId,
+            delta: tail.text,
+          });
+        } else {
+          dispatch({
+            type: "appendToolOutput",
+            threadId: activeThreadId,
+            itemId: tail.itemId,
+            delta: tail.text,
+          });
+        }
       }
       // Queue fusion immediately starts a successor turn on the same curtain; a
       // long-lived interrupted guard would drop that successor's realtime output.

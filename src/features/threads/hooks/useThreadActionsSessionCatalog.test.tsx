@@ -42,7 +42,11 @@ describe("useThreadActionsSessionCatalog", () => {
       await result.current.loadActiveProjectCatalogSessions("ws-1");
 
     expect(listWorkspaceSessionsService).toHaveBeenNthCalledWith(1, "ws-1", {
-      query: { status: "active", sessionAttributionMode: "related" },
+      query: {
+        status: "active",
+        sessionAttributionMode: "related",
+        scanQuality: "preview",
+      },
       cursor: null,
       limit: 5,
     });
@@ -110,7 +114,11 @@ describe("useThreadActionsSessionCatalog", () => {
     );
 
     expect(listWorkspaceSessionsService).toHaveBeenCalledWith("ws-1", {
-      query: { status: "active", sessionAttributionMode: "workspace-only" },
+      query: {
+        status: "active",
+        sessionAttributionMode: "workspace-only",
+        scanQuality: "preview",
+      },
       cursor: null,
       limit: 5,
     });

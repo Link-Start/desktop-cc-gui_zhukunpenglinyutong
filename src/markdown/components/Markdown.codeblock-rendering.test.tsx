@@ -86,6 +86,31 @@ describe("Markdown fenced block rendering", () => {
     expect(container.textContent).toContain("# Demo Title");
   });
 
+  it("shows the filename instead of the start line for citation fences", async () => {
+    const value = [
+      "```247:249:src/features/update/hooks/useReleaseNotes.ts",
+      "        if (seenVersion === normalizedVersion) {",
+      "          return;",
+      "        }",
+      "```",
+    ].join("\n");
+
+    const { container } = render(
+      <Markdown value={value} className="markdown" codeBlockStyle="message" />,
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector(".markdown-codeblock")).toBeTruthy();
+    });
+    expect(
+      container.querySelector(".markdown-codeblock-language-text")?.textContent,
+    ).toBe("useReleaseNotes.ts:247-249");
+    expect(
+      container.querySelector(".markdown-codeblock-language")?.getAttribute("title"),
+    ).toBe("src/features/update/hooks/useReleaseNotes.ts");
+    expect(container.textContent).toContain("seenVersion === normalizedVersion");
+  });
+
   it("renders multiline code blocks with per-line selection wrappers", async () => {
     const value = [
       "```text",

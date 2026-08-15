@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import type { ConversationItem } from "../../../../types";
 import { VISIBLE_MESSAGE_WINDOW } from "../../utils/messagesRenderUtils";
+import {
+  readHistoryWindowSize,
+  resolveHistoryWindowCutIndex,
+} from "../presentation/messagesHistoryWindow";
 import {
   buildRenderedItemsWindow,
   resolveMessagesPresentationMode,
@@ -21,6 +25,8 @@ export function useMessagesHistoryWindow({ firstItemId }: UseMessagesHistoryWind
   const [historyExpansionMode, setHistoryExpansionMode] =
     useState<MessagesHistoryExpansionMode>(null);
   const [pendingJumpMessageId, setPendingJumpMessageId] = useState<string | null>(null);
+  // 会话内分页：chip 每点一次按页多展开 revealedHistoryItemCount 条（不跳屏）。
+  const [revealedHistoryItemCount, setRevealedHistoryItemCount] = useState(0);
   const pendingHistoryExpansionModeRef = useRef<MessagesHistoryExpansionMode>(null);
   const firstItemIdRef = useRef<string | null>(firstItemId);
 
@@ -34,6 +40,7 @@ export function useMessagesHistoryWindow({ firstItemId }: UseMessagesHistoryWind
       setPendingJumpMessageId((previous) =>
         previous === null ? previous : null,
       );
+      setRevealedHistoryItemCount((previous) => (previous === 0 ? previous : 0));
       pendingHistoryExpansionModeRef.current = null;
     }
     firstItemIdRef.current = firstItemId;
@@ -43,6 +50,12 @@ export function useMessagesHistoryWindow({ firstItemId }: UseMessagesHistoryWind
     pendingHistoryExpansionModeRef.current = mode;
     setHistoryExpansionMode(mode);
     setShowAllHistoryItems(true);
+  }, []);
+  const revealNextHistoryPage = useCallback((pageSize: number) => {
+    if (pageSize <= 0) {
+      return;
+    }
+    setRevealedHistoryItemCount((previous) => previous + pageSize);
   }, []);
   const consumePendingHistoryExpansionMode = useCallback(() => {
     const mode = pendingHistoryExpansionModeRef.current;
@@ -62,6 +75,7 @@ export function useMessagesHistoryWindow({ firstItemId }: UseMessagesHistoryWind
     setShowAllHistoryItems((previous) => (previous ? false : previous));
     setHistoryExpansionMode((previous) => (previous === null ? previous : null));
     setPendingJumpMessageId((previous) => (previous === null ? previous : null));
+    setRevealedHistoryItemCount((previous) => (previous === 0 ? previous : 0));
     pendingHistoryExpansionModeRef.current = null;
   }, []);
 
@@ -74,6 +88,8 @@ export function useMessagesHistoryWindow({ firstItemId }: UseMessagesHistoryWind
     requestPendingJumpMessage,
     resetHistoryScope,
     revealAllHistoryItems,
+    revealNextHistoryPage,
+    revealedHistoryItemCount,
     showAllHistoryItems,
   };
 }
@@ -92,11 +108,18 @@ type UseMessagesHistoryPresentationWindowInput = {
   isWorking: boolean;
   liveTailWorkingSet: LiveTailWorkingSet;
   readableWindowRecoveryActive: boolean;
+  revealedHistoryItemCount: number;
   showAllHistoryItems: boolean;
   supportsStreamingReadableWindowRecovery: boolean;
   threadId: string | null;
   timelineItems: ConversationItem[];
   visibleStallRecoveryActive: boolean;
+  /**
+   * 钉底跟随 ref（useMessagesCanvasFollow.isUserAtBottomRef）。
+   * 用户上翻阅读时（false）冻结窗口：新追加不收起最老段，避免阅读锚点被裁跳屏；
+   * 展开（切口回缩）不受此闸门限制，随时生效。
+   */
+  windowCollapseAllowedRef: MutableRefObject<boolean>;
   workspaceId: string | null;
 };
 
@@ -109,11 +132,13 @@ export function useMessagesHistoryPresentationWindow({
   isWorking,
   liveTailWorkingSet,
   readableWindowRecoveryActive,
+  revealedHistoryItemCount,
   showAllHistoryItems,
   supportsStreamingReadableWindowRecovery,
   threadId,
   timelineItems,
   visibleStallRecoveryActive,
+  windowCollapseAllowedRef,
   workspaceId,
 }: UseMessagesHistoryPresentationWindowInput) {
   const preservedReadableWindowRef = useRef<PreservedReadableWindow>({
@@ -123,10 +148,42 @@ export function useMessagesHistoryPresentationWindow({
     renderedItems: [],
     visibleCollapsedHistoryItemCount: 0,
   });
-  const timelineCollapsedHistoryItemCount =
-    !showAllHistoryItems && timelineItems.length > VISIBLE_MESSAGE_WINDOW
-      ? timelineItems.length - VISIBLE_MESSAGE_WINDOW
-      : 0;
+  // 历史窗口（03 号清单）：flag 开时生效的小窗口 + VISIBLE_MESSAGE_WINDOW 硬兜底。
+  const historyWindowSize = readHistoryWindowSize();
+  const effectiveWindowSize =
+    historyWindowSize > 0
+      ? Math.min(historyWindowSize, VISIBLE_MESSAGE_WINDOW)
+      : VISIBLE_MESSAGE_WINDOW;
+  const targetTimelineCollapsedCount = showAllHistoryItems
+    ? 0
+    : resolveHistoryWindowCutIndex({
+        items: timelineItems,
+        windowSize: effectiveWindowSize,
+        revealedItemCount: revealedHistoryItemCount,
+        activeTurnId,
+      });
+  // 冻结闸门：仅钉底时允许切口加深（收起更多）；用户上翻阅读时保持既有窗口。
+  // 展开（目标 < 当前）始终立即生效；跨会话 scope 切换时重置。
+  const collapseScopeRef = useRef<{ scopeKey: string; collapsedCount: number }>({
+    scopeKey: "",
+    collapsedCount: 0,
+  });
+  const collapseScopeKey = `${workspaceId ?? ""}\u0000${threadId ?? ""}`;
+  if (collapseScopeRef.current.scopeKey !== collapseScopeKey) {
+    collapseScopeRef.current = {
+      scopeKey: collapseScopeKey,
+      collapsedCount: targetTimelineCollapsedCount,
+    };
+  } else if (
+    windowCollapseAllowedRef.current ||
+    targetTimelineCollapsedCount < collapseScopeRef.current.collapsedCount
+  ) {
+    collapseScopeRef.current = {
+      scopeKey: collapseScopeKey,
+      collapsedCount: targetTimelineCollapsedCount,
+    };
+  }
+  const timelineCollapsedHistoryItemCount = collapseScopeRef.current.collapsedCount;
   const collapsedHistoryItemCount =
     liveTailWorkingSet.omittedBeforeWorkingSetCount + timelineCollapsedHistoryItemCount;
   const renderedItemsWindow = useMemo(

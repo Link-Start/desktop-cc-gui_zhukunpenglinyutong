@@ -52,8 +52,6 @@ describe("appShellActionBoundaries", () => {
       handleCancelTaskRun: retryTaskRun,
       handleForkTaskRun: retryTaskRun,
       handleCloseTaskConversation: retryTaskRun,
-      handleKanbanCreateTask: retryTaskRun,
-      handleDragToInProgress: retryTaskRun,
     });
     const navigationActions = defineAppShellNavigationActions({
       handleSelectWorkspaceInstance: openSpecHub,

@@ -214,37 +214,6 @@
   --desktop-sidebar-background: #ffffff;
 }
 
-/* Kanban - softer borders in light mode */
-:root[data-theme="light"] .kanban-column {
-  border-right-color: rgba(24, 24, 27, 0.08);
-}
-
-:root[data-theme="light"] .kanban-column-header {
-  border-bottom-color: rgba(24, 24, 27, 0.08);
-}
-
-:root[data-theme="light"] .kanban-card {
-  border-bottom-color: rgba(24, 24, 27, 0.06);
-}
-
-:root[data-theme="light"] .kanban-board-header {
-  border-bottom-color: rgba(24, 24, 27, 0.08);
-}
-
-:root[data-theme="light"] .kanban-search-box {
-  border-color: rgba(24, 24, 27, 0.1);
-}
-
-/* Kanban modal - ensure opaque background in light mode (Tauri window is transparent) */
-:root[data-theme="light"] .kanban-modal-overlay {
-  background: rgba(0, 0, 0, 0.45);
-}
-
-:root[data-theme="light"] .kanban-modal {
-  background: #ffffff;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.06);
-}
-
 /* Native select/option light mode override */
 :root[data-theme="light"] select,
 :root[data-theme="light"] select option {

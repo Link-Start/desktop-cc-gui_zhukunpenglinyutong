@@ -35,12 +35,10 @@ export function useAppShellViewStateSection({
   const closePlanPanel = useCallback(() => {
     setIsPlanPanelDismissed(true);
   }, []);
-  const showKanban = appMode === "kanban";
   const showGitHistory = appMode === "gitHistory";
   const showExtensions = appMode === "extensions";
-  const [selectedKanbanTaskId, setSelectedKanbanTaskId] = useState<string | null>(null);
   const [workspaceHomeWorkspaceId, setWorkspaceHomeWorkspaceId] = useState<string | null>(null);
-  const showHome = (!activeWorkspace || homeOpen) && !showKanban && !showExtensions;
+  const showHome = (!activeWorkspace || homeOpen) && !showExtensions;
   const showWorkspaceHome = Boolean(
     activeWorkspace &&
       !showHome &&
@@ -95,14 +93,11 @@ export function useAppShellViewStateSection({
     isPlanMode,
     isPlanPanelDismissed,
     openPlanPanel,
-    selectedKanbanTaskId,
     setIsPlanPanelDismissed,
-    setSelectedKanbanTaskId,
     setWorkspaceHomeWorkspaceId,
     showGitHistory,
     showExtensions,
     showHome,
-    showKanban,
     showWorkspaceHome,
     workspaceHomeWorkspaceId,
   };

@@ -58,8 +58,6 @@ const messages = {
     "queue": "कतार",
     "send": "भेजें",
     "emptyThread": "एक thread शुरू करें और agent को एक प्रॉम्प्ट भेजें।",
-    "linkedRunEyebrow": "जुड़ा हुआ रन",
-    "openLinkedRun": "रन विवरण खोलें",
     "restoringHistory": "बातचीत विंडो लोड हो रही है…",
     "restoringHistoryHint": "स्थानीय ट्रांसक्रिप्ट और सत्र स्थिति लोड हो रही है।",
     "generatingResponse": "प्रतिक्रिया उत्पन्न हो रही है...",

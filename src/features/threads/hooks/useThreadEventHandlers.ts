@@ -1254,6 +1254,7 @@ export function useThreadEventHandlers({
     isRealtimeTurnTerminalExact,
     noteRealtimeTurnStarted,
     markRealtimeTurnTerminal,
+    drainLiveItemDeltasForThread,
   } = useThreadItemEvents({
     activeThreadId,
     dispatch,
@@ -1281,6 +1282,9 @@ export function useThreadEventHandlers({
       // Durable Shared commit 是 control authority。先收敛已排队内容，再建立
       // exact-turn barrier，后续迟到 event 只能被丢弃，不能复燃 processing。
       flushPendingRealtimeEvents();
+      // A4 二期：barrier 建立前把 reasoning/toolOutput 通道尾段灌回 durable
+      // items——结算不越过正文（与正文 drain 同一道 terminal causal barrier）。
+      drainLiveItemDeltasForThread(normalizedThreadId);
       markRealtimeTurnTerminal(normalizedThreadId, normalizedRuntimeTurnId);
       onDebug?.({
         id: `${Date.now()}-shared-durable-terminal-barrier-installed`,
@@ -1293,7 +1297,7 @@ export function useThreadEventHandlers({
         },
       });
     },
-    [flushPendingRealtimeEvents, markRealtimeTurnTerminal, onDebug],
+    [drainLiveItemDeltasForThread, flushPendingRealtimeEvents, markRealtimeTurnTerminal, onDebug],
   );
   useLayoutEffect(() => {
     return onDurableRealtimeTurnSettlementReady?.(settleDurableRealtimeTurn);
@@ -1980,6 +1984,9 @@ export function useThreadEventHandlers({
       normalizedTurnId: string,
       rawTurnId: string | null = normalizedTurnId,
     ) => {
+      // A4 二期：建立 terminal barrier 前把 reasoning/toolOutput 通道尾段
+      // 灌回 durable items——结算不越过正文（与正文 drain 同一道 causal barrier）。
+      drainLiveItemDeltasForThread(threadId);
       markRealtimeTurnTerminal(threadId, normalizedTurnId);
       quarantineCodexTurn(
         workspaceId,
@@ -2155,6 +2162,7 @@ export function useThreadEventHandlers({
     },
     [
       dispatch,
+      drainLiveItemDeltasForThread,
       emitThreeEvidenceDryRunDiagnostic,
       emitTurnDiagnostic,
       emitForegroundSettlementDiagnostic,
@@ -2467,6 +2475,9 @@ export function useThreadEventHandlers({
     ) => {
       const normalizedTurnId = resolveTerminalSettlementTurnId(threadId, turnId);
       flushPendingRealtimeEvents();
+      // A4 二期：barrier 建立前把 reasoning/toolOutput 通道尾段灌回 durable
+      // items——结算不越过正文（与正文 drain 同一道 terminal causal barrier）。
+      drainLiveItemDeltasForThread(threadId);
       markRealtimeTurnTerminal(threadId, normalizedTurnId);
       onTurnError(workspaceId, threadId, normalizedTurnId, payload);
       if (payload.willRetry) {
@@ -2500,6 +2511,7 @@ export function useThreadEventHandlers({
       });
     },
     [
+      drainLiveItemDeltasForThread,
       finalizeTurnDiagnostic,
       emitTurnDomainEvent,
       flushPendingRealtimeEvents,
@@ -2528,6 +2540,9 @@ export function useThreadEventHandlers({
     ) => {
       const normalizedTurnId = resolveTerminalSettlementTurnId(threadId, turnId);
       flushPendingRealtimeEvents();
+      // A4 二期：barrier 建立前把 reasoning/toolOutput 通道尾段灌回 durable
+      // items——结算不越过正文（与正文 drain 同一道 terminal causal barrier）。
+      drainLiveItemDeltasForThread(threadId);
       markRealtimeTurnTerminal(threadId, normalizedTurnId);
       onTurnStalled(workspaceId, threadId, normalizedTurnId, payload);
       quarantineCodexTurn(
@@ -2563,6 +2578,7 @@ export function useThreadEventHandlers({
       });
     },
     [
+      drainLiveItemDeltasForThread,
       finalizeTurnDiagnostic,
       emitTurnDomainEvent,
       flushPendingRealtimeEvents,

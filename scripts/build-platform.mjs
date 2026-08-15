@@ -65,9 +65,13 @@ function createChildProcessEnv(overrides = {}) {
   return childEnv;
 }
 
+function isTauriBuildCommand(cmd) {
+  return cmd.includes("tauri") && /\bbuild\b/.test(cmd);
+}
+
 function exec(cmd, options = {}) {
   console.log(`\n> ${cmd}\n`);
-  const { env, ignoreError, ...execOptions } = options;
+  const { env, ignoreError, requireArtifact, ...execOptions } = options;
   try {
     execSync(cmd, {
       stdio: "inherit",
@@ -77,14 +81,18 @@ function exec(cmd, options = {}) {
     });
     return true;
   } catch (error) {
-    // Ignore TAURI_SIGNING_PRIVATE_KEY error - it's just for auto-updates
-    // This error has exit code 1 but the build actually succeeded
+    // Missing TAURI_SIGNING_PRIVATE_KEY makes `tauri build` exit 1 after a
+    // successful bundle (updater signature only). stdio is inherited, so do
+    // not treat every tauri-build exit 1 as that warning — require the
+    // expected artifact when one is known.
     const errorStr = String(error.stderr || error.stdout || error.message || "");
-    if (
-      errorStr.includes("TAURI_SIGNING_PRIVATE_KEY") ||
-      (error.status === 1 && cmd.includes("tauri") && cmd.includes("build"))
-    ) {
-      // Check if the build actually produced output
+    const canIgnoreUpdaterSigning =
+      error.status === 1 &&
+      isTauriBuildCommand(cmd) &&
+      (requireArtifact
+        ? existsSync(requireArtifact)
+        : errorStr.includes("TAURI_SIGNING_PRIVATE_KEY"));
+    if (canIgnoreUpdaterSigning) {
       console.log("\n(Build completed - TAURI_SIGNING_PRIVATE_KEY warning only affects auto-updates)\n");
       return true;
     }
@@ -92,6 +100,15 @@ function exec(cmd, options = {}) {
       return false;
     }
     throw error;
+  }
+}
+
+function assertMacAppBundle(bundlePath) {
+  const mainBin = join(bundlePath, "Contents/MacOS/cc-gui");
+  if (!existsSync(mainBin)) {
+    throw new Error(
+      `Incomplete macOS app bundle: missing ${mainBin}. tauri build did not produce a runnable .app.`,
+    );
   }
 }
 
@@ -212,7 +229,11 @@ async function buildMacOS(arch, options = {}) {
   // on Intel). Post-sign via macos-fix-openssl.sh / explicit codesign below.
   const opensslEnv = arch === "arm64" ? "" : `X86_64_APPLE_DARWIN_OPENSSL_DIR=${CONFIG.openssl.x64} `;
   const buildEnv = `${opensslEnv}env -u APPLE_SIGNING_IDENTITY `;
-  exec(`${buildEnv}npm run tauri -- build --target ${target} --bundles app`);
+  const macMainBin = join(bundlePath, "Contents/MacOS/cc-gui");
+  exec(`${buildEnv}npm run tauri -- build --target ${target} --bundles app`, {
+    requireArtifact: macMainBin,
+  });
+  assertMacAppBundle(bundlePath);
 
   // For universal builds, merge daemon binary
   if (arch === "universal") {
@@ -223,7 +244,10 @@ async function buildMacOS(arch, options = {}) {
       -output ${TAURI_DIR}/target/universal-apple-darwin/release/cc_gui_daemon`);
 
     // Rebuild bundle
-    exec(`${buildEnv}npm run tauri -- build --target ${target} --bundles app`);
+    exec(`${buildEnv}npm run tauri -- build --target ${target} --bundles app`, {
+      requireArtifact: macMainBin,
+    });
+    assertMacAppBundle(bundlePath);
   }
 
   // Sign and bundle OpenSSL
@@ -316,12 +340,13 @@ async function buildWindows(arch, options = {}) {
   }
 
   // Build on Windows
-  exec("npm run tauri:build:win -- --bundles msi,nsis");
-
   const installerPath = join(
     TAURI_DIR,
     `target/release/bundle/nsis/ccgui_${version}_x64-setup.exe`,
   );
+  exec("npm run tauri:build:win -- --bundles msi,nsis", {
+    requireArtifact: installerPath,
+  });
 
   console.log(`\n========================================`);
   console.log(`Windows ${arch} build complete!`);
@@ -363,13 +388,13 @@ async function buildLinux(arch, options = {}) {
     process.exit(1);
   }
 
-  // Build AppImage
-  exec("NO_STRIP=1 npm run tauri -- build --bundles appimage");
-
   const appImagePath = join(
     TAURI_DIR,
     `target/release/bundle/appimage/ccgui_${version}_${arch === "arm64" ? "aarch64" : "amd64"}.AppImage`,
   );
+  exec("NO_STRIP=1 npm run tauri -- build --bundles appimage", {
+    requireArtifact: appImagePath,
+  });
   pruneLinuxAppImageWaylandLibraries(appImagePath);
 
   console.log(`\n========================================`);

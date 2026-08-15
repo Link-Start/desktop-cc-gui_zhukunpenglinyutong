@@ -444,7 +444,43 @@ export function appendReasoningRunText(existing: string, incoming: string) {
     const suffix = sliceByComparableLength(normalizedIncoming, overlapLength).trimStart();
     return suffix ? `${normalizedExisting}${suffix}` : normalizedExisting;
   }
+  if (shouldJoinReasoningFragmentsInline(normalizedExisting, normalizedIncoming)) {
+    return `${normalizedExisting}${normalizedIncoming}`;
+  }
   return `${normalizedExisting}\n\n${normalizedIncoming}`;
+}
+
+const SENTENCE_TERMINAL_RE = /[。！？.!?…]["'""「」『』）)\]]*$/;
+const MARKDOWN_BLOCK_START_RE = /^(?:[-*+]\s|\d+\.\s|#{1,6}\s|```|>\s)/;
+const CONTINUATION_PUNCT_RE = /^[，,、；;：:）)】\]》>'"''""\-–—]/;
+const LATIN_WORD_END_RE = /[A-Za-z0-9]$/;
+
+/**
+ * A4 思考外置后，collapse 看到的经常是建壳首 token（`，` / `token` / `-meter`）。
+ * 这些碎片用 `\n\n` 拼接会变成独立段落；句子已经结束的两段思考仍走段落分隔。
+ */
+function isIsolatedReasoningFragmentShell(text: string) {
+  if (/^[，,、；;：:\-–—。！？.!?'"''""）)】\]》>]+$/.test(text)) {
+    return true;
+  }
+  return text.length <= 2 && /^[\u3400-\u9fff]+$/.test(text);
+}
+
+function shouldJoinReasoningFragmentsInline(existing: string, incoming: string) {
+  if (!existing || !incoming) {
+    return false;
+  }
+  if (MARKDOWN_BLOCK_START_RE.test(incoming)) {
+    return false;
+  }
+  if (SENTENCE_TERMINAL_RE.test(existing)) {
+    return false;
+  }
+  if (CONTINUATION_PUNCT_RE.test(incoming) || isIsolatedReasoningFragmentShell(existing)) {
+    return true;
+  }
+  // 只粘词中后缀（token+ization）。完整英文词带空格的下一段仍走段落分隔。
+  return LATIN_WORD_END_RE.test(existing) && /^[a-z]{1,12}$/.test(incoming);
 }
 
 function mergeReasoningRunText(

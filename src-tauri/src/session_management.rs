@@ -487,6 +487,7 @@ pub(crate) async fn list_workspace_sessions_core(
         &workspace_id,
         scan_mode,
         attribution_mode,
+        normalized_query.scan_quality(),
     )
     .await?;
     Ok(build_catalog_page(
@@ -522,6 +523,7 @@ pub(crate) async fn get_workspace_session_projection_summary_core(
         &workspace_id,
         scan_mode,
         attribution_mode,
+        normalized_query.scan_quality(),
     )
     .await?;
     let counts = build_catalog_count_summary(&scope_catalog.entries, &normalized_query);
@@ -561,6 +563,7 @@ pub(crate) async fn list_global_codex_sessions_core(
         storage_path,
         scan_mode,
         None,
+        normalized_query.scan_quality(),
     )
     .await?;
 
@@ -625,6 +628,7 @@ pub(crate) async fn archive_workspace_sessions_core(
         &workspace_id,
         SessionCatalogScanMode::Exhaustive,
         WorkspaceSessionAttributionMode::Related,
+        WorkspaceSessionScanQuality::Full,
     )
     .await?;
     let workspaces_snapshot = workspaces.lock().await.clone();
@@ -726,6 +730,7 @@ pub(crate) async fn unarchive_workspace_sessions_core(
         &workspace_id,
         SessionCatalogScanMode::Exhaustive,
         WorkspaceSessionAttributionMode::Related,
+        WorkspaceSessionScanQuality::Full,
     )
     .await?;
     let workspaces_snapshot = workspaces.lock().await.clone();
@@ -804,6 +809,7 @@ pub(crate) async fn delete_workspace_sessions_core(
         &workspace_id,
         SessionCatalogScanMode::Exhaustive,
         WorkspaceSessionAttributionMode::Related,
+        WorkspaceSessionScanQuality::Full,
     )
     .await?;
     let workspaces_snapshot = workspaces.lock().await.clone();
@@ -2628,6 +2634,7 @@ pub(crate) async fn assign_workspace_session_folder_core(
         &workspace_id,
         SessionCatalogScanMode::Exhaustive,
         WorkspaceSessionAttributionMode::Related,
+        WorkspaceSessionScanQuality::Full,
     )
     .await?;
     let workspaces_snapshot = workspaces.lock().await.clone();
@@ -2803,9 +2810,17 @@ async fn build_global_codex_catalog_entries(
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
     storage_path: &Path,
     scan_mode: SessionCatalogScanMode,
+    scan_quality: WorkspaceSessionScanQuality,
 ) -> Result<Vec<WorkspaceSessionCatalogEntry>, String> {
-    let global_summaries =
-        local_usage::list_global_codex_session_summaries(workspaces, scan_mode.limit()).await?;
+    let global_summaries = match scan_quality {
+        WorkspaceSessionScanQuality::Preview => {
+            local_usage::list_global_codex_session_summaries_preview(workspaces, scan_mode.limit())
+                .await?
+        }
+        WorkspaceSessionScanQuality::Full => {
+            local_usage::list_global_codex_session_summaries(workspaces, scan_mode.limit()).await?
+        }
+    };
     let workspaces_snapshot = workspaces.lock().await.clone();
     let metadata_by_workspace_id = read_catalog_metadata_for_scope(
         storage_path,
@@ -2839,6 +2854,7 @@ async fn build_global_engine_catalog_entries(
     storage_path: &Path,
     scan_mode: SessionCatalogScanMode,
     engine_filter: Option<&str>,
+    scan_quality: WorkspaceSessionScanQuality,
 ) -> Result<(Vec<WorkspaceSessionCatalogEntry>, Vec<String>), String> {
     let include_engine = |engine: &str| engine_filter.is_none_or(|filter| filter == engine);
     let workspaces_snapshot = workspaces.lock().await.clone();
@@ -2846,7 +2862,7 @@ async fn build_global_engine_catalog_entries(
     let metadata_by_workspace_id =
         read_catalog_metadata_for_scope(storage_path, &workspace_entries)?;
     let mut entries = if include_engine("codex") {
-        build_global_codex_catalog_entries(workspaces, storage_path, scan_mode).await?
+        build_global_codex_catalog_entries(workspaces, storage_path, scan_mode, scan_quality).await?
     } else {
         Vec::new()
     };

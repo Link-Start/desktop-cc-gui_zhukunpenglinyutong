@@ -58,8 +58,6 @@ const messages = {
     "queue": "佇列",
     "send": "傳送",
     "emptyThread": "開啟一段對話並向 Agent 傳送提示。",
-    "linkedRunEyebrow": "已連結的執行",
-    "openLinkedRun": "開啟執行詳細資訊",
     "restoringHistory": "正在載入對話視窗…",
     "restoringHistoryHint": "正在載入本機逐字稿與工作階段狀態。",
     "generatingResponse": "正在產生回應…",

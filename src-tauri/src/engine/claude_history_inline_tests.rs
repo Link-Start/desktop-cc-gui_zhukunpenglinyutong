@@ -1720,3 +1720,87 @@ async fn load_claude_session_formats_local_control_events_and_hides_internal_row
 
     let _ = std::fs::remove_dir_all(&temp_root);
 }
+
+#[tokio::test]
+async fn list_claude_sessions_peeks_head_and_caps_by_mtime() {
+    let unique = Uuid::new_v4().to_string();
+    let temp_root = std::env::temp_dir().join(format!("ccgui-claude-list-preview-{}", unique));
+    let base_dir = temp_root.join("claude-projects");
+    let workspace_path = temp_root.join("workspace");
+    std::fs::create_dir_all(&workspace_path).expect("create workspace path");
+    std::fs::create_dir_all(&base_dir).expect("create base dir");
+    let project_dir = create_project_dir(&base_dir, &workspace_path);
+
+    let newest_id = format!("newest-{}", unique);
+    let older_id = format!("older-{}", unique);
+    let newest_path = project_dir.join(format!("{}.jsonl", newest_id));
+    let older_path = project_dir.join(format!("{}.jsonl", older_id));
+
+    let mut newest_lines = vec![json!({
+        "uuid": "newest-user",
+        "timestamp": "2026-05-09T08:00:00.000Z",
+        "session_id": newest_id,
+        "cwd": workspace_path.to_string_lossy(),
+        "message": { "role": "user", "content": "newest first prompt" }
+    })];
+    for index in 0..80 {
+        newest_lines.push(json!({
+            "uuid": format!("padding-{index}"),
+            "timestamp": "2026-05-09T08:00:01.000Z",
+            "session_id": newest_id,
+            "cwd": workspace_path.to_string_lossy(),
+            "message": { "role": "assistant", "content": format!("padding {index}") }
+        }));
+    }
+    newest_lines.push(json!({
+        "type": "custom-title",
+        "customTitle": "late title after peek window",
+        "timestamp": "2026-05-09T09:00:00.000Z",
+        "session_id": newest_id,
+        "cwd": workspace_path.to_string_lossy()
+    }));
+    write_jsonl_lines(&newest_path, &newest_lines, "\n");
+    write_jsonl_lines(
+        &older_path,
+        &[json!({
+            "uuid": "older-user",
+            "timestamp": "2026-04-01T08:00:00.000Z",
+            "session_id": older_id,
+            "cwd": workspace_path.to_string_lossy(),
+            "message": { "role": "user", "content": "older session" }
+        })],
+        "\n",
+    );
+
+    let older_mtime = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(100);
+    let newer_mtime = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(200);
+    let older_file = std::fs::File::open(&older_path).expect("open older");
+    older_file.set_modified(older_mtime).expect("set older mtime");
+    let newest_file = std::fs::File::open(&newest_path).expect("open newest");
+    newest_file
+        .set_modified(newer_mtime)
+        .expect("set newest mtime");
+
+    let attribution_scopes = vec![ClaudeSessionAttributionScope::workspace_path(
+        workspace_path.clone(),
+    )];
+    let sessions = list_claude_sessions_from_base_dir(
+        &base_dir,
+        &workspace_path,
+        &attribution_scopes,
+        Some(1),
+    )
+    .await
+    .expect("list newest only");
+
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].session_id, newest_id);
+    assert_eq!(sessions[0].first_message, "newest first prompt");
+    assert_ne!(
+        sessions[0].native_title.as_deref(),
+        Some("late title after peek window")
+    );
+    assert_eq!(sessions[0].updated_at, 200_000);
+
+    let _ = std::fs::remove_dir_all(&temp_root);
+}

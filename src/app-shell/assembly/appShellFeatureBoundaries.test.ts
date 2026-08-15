@@ -13,7 +13,6 @@ const FEATURE_SHELL_BRIDGE_ALLOWLIST = new Set([
   "features/composer/hooks/composerEnginePrefsStore.ts",
   "features/settings/hooks/useAppSettings.ts",
   "features/session-activity/hooks/useSessionRadarFeed.ts",
-  "features/tasks/utils/taskRunTelemetry.ts",
 ]);
 
 describe("appShellFeatureBoundaries (T3.5/T3.6/T3.7)", () => {
@@ -29,11 +28,11 @@ describe("appShellFeatureBoundaries (T3.5/T3.6/T3.7)", () => {
       "utf8",
     );
     expect(searchComposer).not.toContain("useAppShellSearchRadarSection");
-    const composition = readFileSync(
-      join(currentDir, "useAppShellRootComposition.ts"),
+    const flows = readFileSync(
+      join(currentDir, "../hosts/useAppShellWorkspaceFlowsHost.ts"),
       "utf8",
     );
-    expect(composition).toContain("useAppShellSearchRadarSection");
+    expect(flows).toContain("useAppShellSearchRadarSection");
   });
 
   it("keeps features/* free of new app-shell internal imports (T3.7)", () => {

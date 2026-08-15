@@ -73,9 +73,11 @@ pub use askuser_mcp::{global as askuser_mcp_global, AskUserMcpServer};
 #[allow(unused_imports)]
 pub use askuser_mcp::init_global as init_askuser_mcp_global;
 pub use manager::ClaudeSessionManager;
-pub(crate) use provider_profile::{
-    resolve_claude_provider_launch_profile, CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
-};
+pub(crate) use provider_profile::resolve_claude_provider_launch_profile;
+// Used by the Tauri lib entrypoint and tests; the daemon compiles this module
+// but reads the constant via a different path, so allow the unused re-export.
+#[allow(unused_imports)]
+pub(crate) use provider_profile::CLAUDE_LOCAL_PROVIDER_PROFILE_ID;
 #[cfg(test)]
 use stream_helpers::extract_text_from_content;
 #[cfg(test)]

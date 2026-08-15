@@ -3,7 +3,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { BrowserEvidencePanel } from "./BrowserEvidencePanel";
-import type { TaskRunBrowserEvidenceRef } from "../../tasks/types";
+import type { TaskRunBrowserEvidenceRef } from "../types";
 
 function makeTaskRunEvidence(state: TaskRunBrowserEvidenceRef["state"]): TaskRunBrowserEvidenceRef {
   return {

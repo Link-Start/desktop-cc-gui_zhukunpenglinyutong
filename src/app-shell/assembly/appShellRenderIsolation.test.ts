@@ -39,8 +39,14 @@ describe("appShellRenderIsolation (T2.7/T2.8 structural)", () => {
     expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.render).not.toContain(
       "runtimeThreadContext",
     );
-    // layoutNodes 需要 canvas 热路径，可以订 runtimeThread
-    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.layoutNodes).toContain(
+    // canvas zone 需要热路径；chrome / git zone 不得订 runtimeThread
+    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.layoutNodesCanvas).toContain(
+      "runtimeThreadContext",
+    );
+    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.layoutNodesChrome).not.toContain(
+      "runtimeThreadContext",
+    );
+    expect(APP_SHELL_CONSUMER_DOMAIN_SELECTION.layoutNodesGit).not.toContain(
       "runtimeThreadContext",
     );
   });

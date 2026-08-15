@@ -1,6 +1,8 @@
 //! Read Gemini CLI session history from ~/.gemini/{tmp,history}/**/chats/session-*.json
 //!
 //! Performance notes:
+//! - List peeks a bounded file head for `sessionId` / title / timestamps and
+//!   uses filesystem mtime. It never `read_to_string`s the full chat JSON.
 //! - Load peeks `sessionId` from the file head and only fully parses the match
 //!   (never re-parses every workspace session just to open one).
 //! - Load also budgets oversized string fields (inline images / tool dumps) before
@@ -19,6 +21,7 @@ use tokio::time::timeout;
 
 const LOCAL_SESSION_SCAN_TIMEOUT: Duration = Duration::from_secs(60);
 const GEMINI_SESSION_ID_PEEK_BYTES: usize = 8 * 1024;
+const GEMINI_LIST_PEEK_BYTES: usize = 64 * 1024;
 const GEMINI_STRING_FIELD_BYTE_BUDGET: usize = 64 * 1024;
 const GEMINI_OMITTED_PAYLOAD_SENTINEL: &str = "__ccgui_omitted_large_gemini_payload__";
 
@@ -1191,6 +1194,100 @@ async fn read_json(path: &Path) -> Result<Value, String> {
     })
 }
 
+fn file_mtime_millis(path: &Path) -> Option<i64> {
+    std::fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .ok()
+        .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
+        .and_then(|duration| i64::try_from(duration.as_millis()).ok())
+}
+
+fn extract_json_quoted_string_for_key(input: &str, key: &str) -> Option<String> {
+    let pattern = format!("\"{key}\"");
+    let idx = input.find(&pattern)?;
+    let after = input[idx + pattern.len()..].trim_start();
+    let after = after.strip_prefix(':')?.trim_start();
+    let after = after.strip_prefix('"')?;
+    let mut output = String::new();
+    let mut escaped = false;
+    for ch in after.chars() {
+        if escaped {
+            match ch {
+                'n' => output.push('\n'),
+                't' => output.push('\t'),
+                'r' => output.push('\r'),
+                other => output.push(other),
+            }
+            escaped = false;
+            continue;
+        }
+        if ch == '\\' {
+            escaped = true;
+            continue;
+        }
+        if ch == '"' {
+            return Some(output);
+        }
+        output.push(ch);
+        if output.len() > 400 {
+            break;
+        }
+    }
+    if output.trim().is_empty() {
+        None
+    } else {
+        Some(output)
+    }
+}
+
+fn peek_gemini_session_id_from_head(head: &str) -> Option<String> {
+    extract_json_quoted_string_for_key(head, "sessionId")
+        .or_else(|| extract_json_quoted_string_for_key(head, "session_id"))
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn peek_first_user_preview_from_head(head: &str) -> Option<String> {
+    let mut search_from = 0usize;
+    while search_from < head.len() {
+        let rest = &head[search_from..];
+        let marker = ["\"type\":\"user\"", "\"type\": \"user\""]
+            .iter()
+            .filter_map(|needle| rest.find(needle).map(|idx| (idx, needle.len())))
+            .min_by_key(|(idx, _)| *idx);
+        let Some((idx, marker_len)) = marker else {
+            break;
+        };
+        let window_end = rest.len().min(idx.saturating_add(8_000));
+        let window = &rest[idx..window_end];
+        if let Some(text) = extract_json_quoted_string_for_key(window, "displayContent")
+            .or_else(|| extract_json_quoted_string_for_key(window, "display_content"))
+            .or_else(|| extract_json_quoted_string_for_key(window, "text"))
+        {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                return Some(truncate_chars(trimmed, 60));
+            }
+        }
+        search_from = search_from.saturating_add(idx.saturating_add(marker_len));
+    }
+    None
+}
+
+fn session_id_from_gemini_path(path: &Path) -> Option<String> {
+    let stem = path.file_stem()?.to_str()?.trim();
+    let session_id = stem
+        .strip_prefix("session-")
+        .unwrap_or(stem)
+        .trim()
+        .to_string();
+    if session_id.is_empty() {
+        None
+    } else {
+        Some(session_id)
+    }
+}
+
 /// Peek `sessionId` from the head of a Gemini session JSON without loading the
 /// full multi-MB messages array.
 async fn peek_gemini_session_id(path: &Path) -> Option<String> {
@@ -1198,21 +1295,40 @@ async fn peek_gemini_session_id(path: &Path) -> Option<String> {
     let mut buf = vec![0u8; GEMINI_SESSION_ID_PEEK_BYTES];
     let n = file.read(&mut buf).await.ok()?;
     let head = String::from_utf8_lossy(&buf[..n]);
-    // Prefer exact key match near file start.
-    for key in ["\"sessionId\"", "\"session_id\""] {
-        if let Some(idx) = head.find(key) {
-            let after = &head[idx + key.len()..];
-            let after = after.trim_start();
-            let after = after.strip_prefix(':')?.trim_start();
-            let after = after.strip_prefix('"')?;
-            let end = after.find('"')?;
-            let id = after[..end].trim();
-            if !id.is_empty() {
-                return Some(id.to_string());
-            }
-        }
-    }
-    None
+    peek_gemini_session_id_from_head(&head)
+}
+
+async fn peek_gemini_list_summary(path: &Path) -> Option<GeminiSessionSummary> {
+    let mut file = fs::File::open(path).await.ok()?;
+    let mut buf = vec![0u8; GEMINI_LIST_PEEK_BYTES];
+    let n = file.read(&mut buf).await.ok()?;
+    let head = String::from_utf8_lossy(&buf[..n]);
+    let session_id = peek_gemini_session_id_from_head(&head).or_else(|| session_id_from_gemini_path(path))?;
+    let mtime = file_mtime_millis(path);
+    let created_at = extract_json_quoted_string_for_key(&head, "startTime")
+        .or_else(|| extract_json_quoted_string_for_key(&head, "start_time"))
+        .as_deref()
+        .and_then(parse_timestamp_millis)
+        .or(mtime)
+        .unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
+    let updated_at = extract_json_quoted_string_for_key(&head, "lastUpdated")
+        .or_else(|| extract_json_quoted_string_for_key(&head, "last_updated"))
+        .as_deref()
+        .and_then(parse_timestamp_millis)
+        .or(mtime)
+        .unwrap_or(created_at);
+    let first_message = peek_first_user_preview_from_head(&head).unwrap_or_else(|| session_id.clone());
+    Some(GeminiSessionSummary {
+        canonical_session_id: Some(session_id.clone()),
+        session_id,
+        first_message,
+        updated_at,
+        created_at,
+        message_count: 0,
+        file_size_bytes: std::fs::metadata(path).ok().map(|metadata| metadata.len()),
+        engine: Some("gemini".to_string()),
+        attribution_status: Some("strict-match".to_string()),
+    })
 }
 
 fn budget_gemini_string(value: &str) -> String {
@@ -1310,15 +1426,22 @@ pub async fn list_gemini_sessions(
     custom_home: Option<&str>,
 ) -> Result<Vec<GeminiSessionSummary>, String> {
     timeout(LOCAL_SESSION_SCAN_TIMEOUT, async {
-        let matched_files = resolve_workspace_session_files(workspace_path, custom_home).await;
+        let mut matched_files = resolve_workspace_session_paths(workspace_path, custom_home).await;
+        matched_files.sort_by(|left, right| {
+            file_mtime_millis(right)
+                .cmp(&file_mtime_millis(left))
+                .then_with(|| left.cmp(right))
+        });
+        let limit = limit.unwrap_or(200);
+        matched_files.truncate(limit.saturating_mul(2).max(limit));
         let mut sessions = Vec::new();
-        for (path, value) in matched_files {
-            if let Some(summary) = parse_summary_from_value(&path, &value) {
+        for path in matched_files {
+            if let Some(summary) = peek_gemini_list_summary(&path).await {
                 sessions.push(summary);
             }
         }
         sessions.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
-        sessions.truncate(limit.unwrap_or(200));
+        sessions.truncate(limit);
         Ok(sessions)
     })
     .await
@@ -1434,6 +1557,7 @@ pub async fn delete_gemini_session(
 mod tests {
     use super::{
         matches_workspace_path, parse_messages_from_value, parse_summary_from_value,
+        peek_first_user_preview_from_head, peek_gemini_session_id_from_head,
         resolve_gemini_base_dir,
     };
     use serde_json::json;
@@ -1463,6 +1587,22 @@ mod tests {
             Some("gemini-session-1")
         );
         assert_eq!(summary.attribution_status.as_deref(), Some("strict-match"));
+    }
+
+    #[test]
+    fn peek_helpers_read_session_id_and_first_user_from_file_head() {
+        let head = concat!(
+            r#"{"sessionId":"gemini-session-1","startTime":"2026-04-12T12:00:00.000Z","messages":["#,
+            r#"{"type":"user","displayContent":"hello gemini"}]}"#
+        );
+        assert_eq!(
+            peek_gemini_session_id_from_head(head).as_deref(),
+            Some("gemini-session-1")
+        );
+        assert_eq!(
+            peek_first_user_preview_from_head(head).as_deref(),
+            Some("hello gemini")
+        );
     }
 
     #[test]

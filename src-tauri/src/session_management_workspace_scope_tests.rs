@@ -120,6 +120,7 @@
             "parent",
             SessionCatalogScanMode::Bounded(20),
             WorkspaceSessionAttributionMode::Related,
+            WorkspaceSessionScanQuality::Full,
         )
         .await
         .expect("build parent catalog data");
@@ -130,6 +131,7 @@
             "child",
             SessionCatalogScanMode::Bounded(20),
             WorkspaceSessionAttributionMode::Related,
+            WorkspaceSessionScanQuality::Full,
         )
         .await
         .expect("build child catalog data");
@@ -654,6 +656,7 @@
             "parent",
             SessionCatalogScanMode::Bounded(20),
             WorkspaceSessionAttributionMode::Related,
+            WorkspaceSessionScanQuality::Full,
         )
         .await
         .expect("build parent catalog data");
@@ -664,6 +667,7 @@
             "child",
             SessionCatalogScanMode::Bounded(20),
             WorkspaceSessionAttributionMode::Related,
+            WorkspaceSessionScanQuality::Full,
         )
         .await
         .expect("build child catalog data");

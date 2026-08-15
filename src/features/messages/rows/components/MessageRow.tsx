@@ -35,7 +35,6 @@ import {
   buildEngineTaskOutputSnapshot,
   buildTaskOutputSourceFromNotification,
 } from "../../../engine-task-output/utils/engineTaskOutputProjection";
-import type { PresentationProfile } from "../../../../conversation-presentation/presentationProfile";
 import {
   CollapsibleUserTextBlock,
   UserCodeAnnotationContextBlock,
@@ -120,35 +119,19 @@ function shouldUsePlainTextStreamingSurface(
 }
 
 /**
- * staged streaming 引擎（claude / codex）的流式 assistant 消息自首个非空 token
- * 起统一走 lightweight markdown。历史上早期阶段（<260 chars 且非结构化）仍走
- * full react-markdown，每次 48ms throttled 更新都触发全量重解析 + Prism 同步
- * 高亮，是对话页 5 FPS / 单组件 225ms 的主因之一；settle 后由 full markdown
- * 渲染最终内容，视觉结果不变。
+ * 流式期间的 lightweight markdown 降级判定。
+ *
+ * 历史行为：staged 引擎（claude / codex）的流式 assistant 消息自首个非空 token
+ * 起统一走 lightweight markdown，因为 full react-markdown 每次 48ms throttled
+ * 更新都触发全量重解析 + Prism 同步高亮，曾是对话页 5 FPS / 单组件 225ms 的
+ * 主因之一。IncrementalMarkdown 增量排版（冻结块 memo，只重排尾部 ≤2 块）落地
+ * 后该根因已消除，全引擎流式统一走增量 full 渲染；lightweight 仅剩极端兜底
+ * （超长折叠 surface）与 Markdown 内部的 inline-code fallback 使用，settle 后
+ * 仍由 full markdown 渲染最终内容，视觉结果不变。
  */
 // A4 流式正文外部化（docs/perf/a4-live-text-externalization-plan.md）：
 // 模块加载时读一次 flag，翻转需刷新页面（与其余 perf flag 同语义）。
 const LIVE_TEXT_EXTERNALIZATION_ENABLED = isLiveTextExternalizationEnabled();
-
-function shouldUseLightweightStreamingMarkdown(
-  item: Extract<ConversationItem, { kind: "message" }>,
-  isStreaming: boolean,
-  activeEngine: MessagesEngine,
-  presentationProfile: PresentationProfile | null | undefined,
-  complexity: StreamingMarkdownComplexity,
-) {
-  if (item.role !== "assistant" || !isStreaming) {
-    return false;
-  }
-  const useStagedMarkdownThrottle = shouldUseStagedStreamingMarkdown(
-    activeEngine,
-    presentationProfile,
-  );
-  if (!useStagedMarkdownThrottle) {
-    return false;
-  }
-  return complexity.trimmedText.length > 0;
-}
 
 function shouldUseLongFoldedMarkdownStreamingSurface(
   item: Extract<ConversationItem, { kind: "message" }>,
@@ -164,9 +147,11 @@ function shouldUseLongFoldedMarkdownStreamingSurface(
   );
 }
 
-// 流式中过长正文更早切到 lightweight / 折叠 head+tail，压低 Markdown 重解析成本。
-// 不裁剪列表长度（STREAMING_VISIBLE_WINDOW 仍为 0），避免 stick-to-bottom 高度跳变。
-const STREAMING_PLAIN_TEXT_COLLAPSE_THRESHOLD = 8_000;
+// 极端兜底：流式中异常超长正文切到 lightweight / 折叠 head+tail，压低 Markdown
+// 重解析成本。增量排版（IncrementalMarkdown）生效后常规长度不再触发本路径，
+// 阈值由 8k 放宽到 24k 仅作保险。不裁剪列表长度（STREAMING_VISIBLE_WINDOW
+// 仍为 0），避免 stick-to-bottom 高度跳变。
+const STREAMING_PLAIN_TEXT_COLLAPSE_THRESHOLD = 24_000;
 const STREAMING_PLAIN_TEXT_HEAD_CHARS = 3_000;
 const STREAMING_PLAIN_TEXT_TAIL_CHARS = 1_500;
 
@@ -462,16 +447,10 @@ export const MessageRow = memo(function MessageRow({
     activeEngine,
     streamingDisplayText,
   );
-  const useLightweightStreamingMarkdown = !usePlainTextStreamingSurface && (
-    useLongFoldedMarkdownStreamingSurface ||
-    shouldUseLightweightStreamingMarkdown(
-      item,
-      isStreaming,
-      activeEngine,
-      presentationProfile,
-      streamingMarkdownComplexity,
-    )
-  );
+  // 常规流式统一走增量 full 渲染（Markdown 内部 streaming && full →
+  // IncrementalMarkdown）；lightweight 只剩超长折叠兜底这一条触发路径。
+  const useLightweightStreamingMarkdown =
+    !usePlainTextStreamingSurface && useLongFoldedMarkdownStreamingSurface;
   const livePlainTextClassName = `${resolvedMarkdownClassName} markdown-live-plain-text`;
   const streamingPlainTextCollapsedOmittedChars = useMemo(() => {
     if (!useLongFoldedMarkdownStreamingSurface) {
@@ -524,15 +503,18 @@ export const MessageRow = memo(function MessageRow({
     handleRenderedAssistantValue,
     usePlainTextStreamingSurface,
   ]);
+  // 诊断用可见文本上报：不依赖 Markdown 的 onRenderedValueChange 回调（节流 /
+  // 懒加载会让它滞后），流式期间每次 displayText 更新都直接上报最新文本。
+  // 全引擎统一走增量 full 渲染后本 effect 不再限定 lightweight 路径；plain-text
+  // surface 有专属 effect（上文），此处跳过避免重复上报。
   useEffect(() => {
-    if (usePlainTextStreamingSurface || !useLightweightStreamingMarkdown) {
+    if (usePlainTextStreamingSurface) {
       return;
     }
     handleRenderedAssistantValue(streamingDisplayText);
   }, [
     streamingDisplayText,
     handleRenderedAssistantValue,
-    useLightweightStreamingMarkdown,
     usePlainTextStreamingSurface,
   ]);
   useEffect(() => {
@@ -717,7 +699,7 @@ export const MessageRow = memo(function MessageRow({
                     }}
                     aria-label={`Open image ${index + 1}`}
                   >
-                    <img src={state.src} alt={`Deferred Claude image ${index + 1}`} loading="lazy" />
+                    <img src={state.src} alt={`Deferred Claude image ${index + 1}`} loading="lazy" decoding="async" />
                   </button>
                 ) : (
                   <>
@@ -776,6 +758,7 @@ export const MessageRow = memo(function MessageRow({
             workspaceId={workspaceId}
             codeBlockStyle="message"
             codeBlockCopyUseModifier={codeBlockCopyUseModifier}
+            streaming={isStreaming}
             streamingThrottleMs={resolveAssistantMessageStreamingThrottleMs(
               item,
               isStreaming,

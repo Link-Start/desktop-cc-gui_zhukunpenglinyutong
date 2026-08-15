@@ -317,4 +317,8 @@ export type ThreadAction =
       workspaceId: string;
       oldThreadId: string;
       newThreadId: string;
+    }
+  | {
+      type: "hydrateSidebarSnapshot";
+      threadsByWorkspace: Record<string, ThreadSummary[]>;
     };

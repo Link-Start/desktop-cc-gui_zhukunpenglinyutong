@@ -137,7 +137,7 @@ struct InstallerCommandSpec {
 /// Grok CLI install/update both use the official curl installer (no npm distribution, no uninstall).
 pub(crate) fn resolve_effective_strategy(
     engine: CliInstallEngine,
-    action: CliInstallAction,
+    _action: CliInstallAction,
     requested: CliInstallStrategy,
 ) -> CliInstallStrategy {
     match engine {
@@ -647,7 +647,7 @@ struct SemVerParts {
     patch: u64,
 }
 
-pub(crate) fn extract_semver(raw: &str) -> Option<SemVerParts> {
+fn extract_semver(raw: &str) -> Option<SemVerParts> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return None;

@@ -45,7 +45,8 @@ describe("appShellRootHookBudget (T2.6)", () => {
     expect(
       custom,
       `custom root hooks (${custom.length}): ${custom.join(", ")}`,
-    ).toEqual(["useAppShellRootComposition"]);
+    ).toEqual([]);
+    expect(source).toContain("AppShellHostTree");
     expect(custom.length).toBeLessThanOrEqual(20);
     expect(kinds.length).toBeLessThanOrEqual(20);
   });

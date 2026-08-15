@@ -4,7 +4,7 @@
 // Machine translation of src/i18n/locales/en/searchPalette.ts; keys mirror the English source.
 const searchPalette = {
   "searchPalette": {
-    "placeholder": "फ़ाइलें, kanban, थ्रेड, संदेश, स्किल, कमांड खोजें...",
+    "placeholder": "फ़ाइलें, थ्रेड, संदेश, स्किल, कमांड खोजें...",
     "placeholderFiltered": "{{content}} खोजें...",
     "inputAria": "खोज इनपुट",
     "scope": "दायरा",
@@ -18,6 +18,10 @@ const searchPalette = {
     "fileIndexLoading": "फ़ाइल इंडेक्स पूरा किया जा रहा है...",
     "fileIndexPartial": "फ़ाइल इंडेक्स अधूरा है, इसलिए कुछ फ़ाइलें छूट सकती हैं।",
     "fileIndexError": "फ़ाइल इंडेक्स लोड नहीं हुआ। फिर प्रयास करने के लिए खोज दोबारा खोलें।",
+    "apiIndexLoading": "आखिरी स्कैन की गई API सूची लोड हो रही है...",
+    "apiIndexStale": "API सूची ताज़ा नहीं है। पिछली सूची अभी भी खोजी जा सकती है। अपडेट के लिए Project Map में संबंध स्कैन करें।",
+    "apiIndexEmpty": "अभी API सूची नहीं है। बनाने के लिए Project Map में संबंध स्कैन करें।",
+    "apiIndexError": "API सूची लोड नहीं हुई। फिर प्रयास करने के लिए खोज दोबारा खोलें।",
     "navigate": "नेविगेट करें",
     "open": "खोलें",
     "close": "बंद करें",
@@ -27,7 +31,6 @@ const searchPalette = {
     "locationTag": "स्थान",
     "typeAction": "क्रिया",
     "typeFile": "फ़ाइल",
-    "typeKanban": "Kanban",
     "typeThread": "थ्रेड",
     "typeMessage": "संदेश",
     "typeHistory": "इतिहास",
@@ -35,7 +38,6 @@ const searchPalette = {
     "typeCommand": "कमांड",
     "sourceActions": "ऐप क्रियाएँ",
     "sourceFiles": "फ़ाइल इंडेक्स",
-    "sourceKanban": "Kanban डेटा",
     "sourceThreads": "थ्रेड शीर्षक",
     "sourceMessages": "संदेश सामग्री",
     "sourceHistory": "इनपुट इतिहास",
@@ -44,7 +46,6 @@ const searchPalette = {
     "contentAll": "सभी",
     "contentActions": "क्रियाएँ",
     "contentFiles": "फ़ाइलें",
-    "contentKanban": "Kanban",
     "contentThreads": "थ्रेड",
     "contentMessages": "संदेश",
     "contentHistory": "इतिहास",

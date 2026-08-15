@@ -108,7 +108,6 @@ export type WorkspaceShellBoundary = {
   setAppSettings: Dispatch<SetStateAction<WorkspaceShellSettings>>;
   setCenterMode: Dispatch<SetStateAction<WorkspaceShellCenterMode>>;
   setHomeOpen: (open: boolean) => void;
-  setSelectedKanbanTaskId: (taskId: string | null) => void;
   t: (key: string, params?: Record<string, unknown>) => string;
   terminalOpen: boolean;
   threadsByWorkspace: Record<string, Array<{ id: string; engineSource?: string | null }>>;
@@ -158,7 +157,6 @@ export function useAppShellWorkspaceFlowsSection(
     setAppSettings,
     setCenterMode,
     setHomeOpen,
-    setSelectedKanbanTaskId,
     t,
     terminalOpen,
     threadsByWorkspace,
@@ -456,7 +454,6 @@ export function useAppShellWorkspaceFlowsSection(
         ) {
           collapseRightPanel();
         }
-        setSelectedKanbanTaskId(null);
       });
     },
     [
@@ -472,7 +469,6 @@ export function useAppShellWorkspaceFlowsSection(
       setActiveThreadId,
       setAppMode,
       setHomeOpen,
-      setSelectedKanbanTaskId,
       threadsByWorkspace,
     ],
   );

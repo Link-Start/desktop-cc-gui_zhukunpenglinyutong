@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
-import { getClientStoreSync, writeClientStoreValue } from "../../services/clientStorage";
+import {
+  getClientStoreSync,
+  isClientStoreReady,
+  subscribeClientStoreHydrated,
+  writeClientStoreValue,
+} from "../../services/clientStorage";
 import type { DebugEntry } from "../../types";
 import {
   extractClaudeForkParentThreadId,
@@ -138,6 +143,9 @@ export function useSelectedComposerSession({
   const writeSelectionForSessionKey = useCallback(
     (sessionKey: string, selection: ComposerSessionSelection | null) => {
       cacheSelectionForSessionKey(sessionKey, selection);
+      if (!isClientStoreReady("composer")) {
+        return;
+      }
       const stored = readStoredThreadComposerSelectionEntryBySessionKey(sessionKey);
       if (stored.exists && selectionsEqual(stored.value, selection)) {
         return;
@@ -455,6 +463,18 @@ export function useSelectedComposerSession({
 
   useLayoutEffect(() => {
     reloadSelectedComposerSelection();
+  }, [reloadSelectedComposerSelection]);
+
+  useEffect(() => {
+    if (isClientStoreReady("composer")) {
+      reloadSelectedComposerSelection();
+      return;
+    }
+    return subscribeClientStoreHydrated((store) => {
+      if (store === "composer") {
+        reloadSelectedComposerSelection();
+      }
+    });
   }, [reloadSelectedComposerSelection]);
 
   return {

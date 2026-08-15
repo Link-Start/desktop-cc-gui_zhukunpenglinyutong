@@ -218,7 +218,11 @@ describe("useThreadActions native session bridges", () => {
 
     expect(connectWorkspace).toHaveBeenCalledWith("ws-1", "thread-list-live");
     expect(listWorkspaceSessions).toHaveBeenCalledWith("ws-1", {
-      query: { status: "active", sessionAttributionMode: "related" },
+      query: {
+        status: "active",
+        sessionAttributionMode: "related",
+        scanQuality: "preview",
+      },
       cursor: null,
       limit: 5,
     });

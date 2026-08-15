@@ -945,6 +945,24 @@ export type ProjectMapApiContractGraph = {
   skipped?: Array<{ reason: string; count: number }>;
 };
 
+export type ProjectMapRelationshipReadSection =
+  | "manifest"
+  | "profile"
+  | "run"
+  | "scan"
+  | "filesManifest"
+  | "files"
+  | "relations"
+  | "relationsByFile"
+  | "relationsByType"
+  | "symbols"
+  | "modules"
+  | "impact"
+  | "contextPack"
+  | "apiContracts"
+  | "stale"
+  | "repair";
+
 export type ProjectMapRelationshipReadResponse = {
   storageKey: string;
   storageDir: string;

@@ -13,10 +13,6 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(async () => null),
 }));
 
-vi.mock("../../engine/components/EngineSelector", () => ({
-  EngineSelector: () => null,
-}));
-
 vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
   ChatInputBoxAdapter: ({
     onTextChange,
@@ -108,7 +104,6 @@ function renderComposer({
       commands={[]}
       files={[]}
       onDraftChange={() => {}}
-      dictationEnabled={false}
       activeWorkspaceId="ws-1"
       activeThreadId={activeThreadId}
     />,
@@ -163,7 +158,6 @@ describe("Composer context selection session transitions", () => {
         commands={[]}
         files={[]}
         onDraftChange={() => {}}
-        dictationEnabled={false}
         activeWorkspaceId="ws-1"
         activeThreadId="thread-2"
       />,

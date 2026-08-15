@@ -81,13 +81,15 @@ export function getCodeBlockLanguageIcon(languageTag: string | null): LucideIcon
 export function CodeBlockLanguageBadge({
   languageTag,
   label,
+  title,
 }: {
   languageTag: string | null;
   label: string;
+  title?: string;
 }) {
   const Icon = getCodeBlockLanguageIcon(languageTag);
   return (
-    <span className="markdown-codeblock-language">
+    <span className="markdown-codeblock-language" title={title}>
       <Icon className="markdown-codeblock-language-icon" aria-hidden="true" />
       <span className="markdown-codeblock-language-text">{label}</span>
     </span>

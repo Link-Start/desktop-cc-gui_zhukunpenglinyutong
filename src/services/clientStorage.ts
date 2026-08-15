@@ -1,13 +1,23 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
   ALL_CLIENT_STORES,
+  CRITICAL_CLIENT_STORES,
+  DEFERRED_CLIENT_STORES,
   normalizeClientStoreSnapshot,
   serializeClientStoreSnapshot,
   type ClientStoreName,
 } from "./clientStorageSchema";
 import { recordHotspotSample } from "./perfBaseline/hotspotTracker";
 
+export {
+  CRITICAL_CLIENT_STORES,
+  DEFERRED_CLIENT_STORES,
+} from "./clientStorageSchema";
+
 const cache: Partial<Record<ClientStoreName, Record<string, unknown>>> = {};
+const hydratedStores = new Set<ClientStoreName>();
+const inFlightReads = new Map<ClientStoreName, Promise<void>>();
+const hydratedListeners = new Set<(store: ClientStoreName) => void>();
 
 let preloaded = false;
 
@@ -17,41 +27,150 @@ const dirtyKeys: Partial<Record<ClientStoreName, Set<string>>> = {};
 const pendingFullReplace: Partial<Record<ClientStoreName, boolean>> = {};
 const writeChainByStore: Partial<Record<ClientStoreName, Promise<void>>> = {};
 
+function notifyStoreHydrated(store: ClientStoreName): void {
+  for (const listener of hydratedListeners) {
+    listener(store);
+  }
+}
+
+function markStoreHydrated(store: ClientStoreName): void {
+  if (hydratedStores.has(store)) {
+    return;
+  }
+  hydratedStores.add(store);
+  notifyStoreHydrated(store);
+}
+
+function refreshPreloadedFlag(): void {
+  preloaded = ALL_CLIENT_STORES.every((store) => hydratedStores.has(store));
+}
+
+function mergeHydratedStoreData(
+  store: ClientStoreName,
+  diskData: Record<string, unknown>,
+): Record<string, unknown> {
+  if (pendingFullReplace[store] === true) {
+    return cache[store] ?? {};
+  }
+  const memory = cache[store];
+  if (!memory) {
+    return diskData;
+  }
+  const dirty = dirtyKeys[store];
+  if (!dirty || dirty.size === 0) {
+    return diskData;
+  }
+  const merged: Record<string, unknown> = { ...diskData };
+  for (const key of dirty) {
+    merged[key] = memory[key];
+  }
+  return merged;
+}
+
+async function readClientStoreSnapshot(
+  store: ClientStoreName,
+): Promise<{ data: Record<string, unknown>; recoveryReason: boolean }> {
+  try {
+    const raw = await invoke<unknown>("client_store_read", { store });
+    const normalized = normalizeClientStoreSnapshot(raw);
+    return {
+      data: normalized.data,
+      recoveryReason: Boolean(normalized.recoveryReason),
+    };
+  } catch {
+    return {
+      data: {},
+      recoveryReason: false,
+    };
+  }
+}
+
+async function hydrateClientStores(
+  stores: readonly ClientStoreName[],
+): Promise<void> {
+  const pending = stores.filter((store) => !hydratedStores.has(store));
+  if (pending.length === 0) {
+    refreshPreloadedFlag();
+    return;
+  }
+  await Promise.all(
+    pending.map((store) => {
+      const inFlight = inFlightReads.get(store);
+      if (inFlight) {
+        return inFlight;
+      }
+      const next = (async () => {
+        const snapshot = await readClientStoreSnapshot(store);
+        const shouldPreserveMemoryReplace = pendingFullReplace[store] === true;
+        cache[store] = mergeHydratedStoreData(store, snapshot.data);
+        markStoreHydrated(store);
+        if (snapshot.recoveryReason && !shouldPreserveMemoryReplace) {
+          queueMicrotask(() => {
+            writeClientStoreData(store, cache[store] ?? {}, { immediate: true });
+          });
+        }
+      })().finally(() => {
+        inFlightReads.delete(store);
+      });
+      inFlightReads.set(store, next);
+      return next;
+    }),
+  );
+  refreshPreloadedFlag();
+}
+
+export async function preloadCriticalClientStores(): Promise<void> {
+  await hydrateClientStores(CRITICAL_CLIENT_STORES);
+}
+
+export async function preloadDeferredClientStores(): Promise<void> {
+  await hydrateClientStores(DEFERRED_CLIENT_STORES);
+}
+
 export async function preloadClientStores(): Promise<void> {
   if (preloaded) {
     return;
   }
-  const results = await Promise.all(
-    ALL_CLIENT_STORES.map(async (store) => {
-      try {
-        const raw = await invoke<unknown>(
-          "client_store_read",
-          { store },
-        );
-        const normalized = normalizeClientStoreSnapshot(raw);
-        if (normalized.recoveryReason) {
-          queueMicrotask(() => {
-            writeClientStoreData(store, normalized.data, { immediate: true });
-          });
-        }
-        return [store, normalized.data] as const;
-      } catch {
-        return [store, {}] as const;
-      }
-    }),
-  );
-  for (const [store, data] of results) {
-    cache[store] = data;
-  }
-  preloaded = true;
+  await hydrateClientStores(ALL_CLIENT_STORES);
 }
 
 export function isPreloaded(): boolean {
   return preloaded;
 }
 
+export function isClientStoreReady(store: ClientStoreName): boolean {
+  return hydratedStores.has(store);
+}
+
+export function whenClientStoreReady(store: ClientStoreName): Promise<void> {
+  if (hydratedStores.has(store)) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    const unsubscribe = subscribeClientStoreHydrated((readyStore) => {
+      if (readyStore !== store) {
+        return;
+      }
+      unsubscribe();
+      resolve();
+    });
+  });
+}
+
+export function subscribeClientStoreHydrated(
+  listener: (store: ClientStoreName) => void,
+): () => void {
+  hydratedListeners.add(listener);
+  return () => {
+    hydratedListeners.delete(listener);
+  };
+}
+
 export function resetClientStorageForTests(): void {
   preloaded = false;
+  hydratedStores.clear();
+  inFlightReads.clear();
+  hydratedListeners.clear();
   for (const store of ALL_CLIENT_STORES) {
     delete cache[store];
     if (pendingTimers[store] != null) {

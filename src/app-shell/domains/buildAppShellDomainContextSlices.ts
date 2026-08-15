@@ -2,8 +2,9 @@ import type { AppShellDomainContextValue } from "./appShellDomainContexts";
 
 /**
  * S4 PR-F：按域构造 context slice，避免在 AppShell 里继续「字母序切 bag」。
- * flatten 仍兼容 legacy 全量读侧；但 model / collab / runtimeThread 等干净域
- * 必须经这些 builder 进入 defineAppShellDomainContexts。
+ * model / collab / runtimeThread 等干净域必须经这些 builder 进入
+ * defineAppShellDomainContexts。legacyDefaults / runtimeActions 冗余
+ * key bag 已随 PR-F 删除（runtimeThread slice 只保留 owned keys）。
  */
 
 /**
@@ -21,20 +22,104 @@ export type RuntimeThreadSessionHotFields = {
   isProcessing: unknown;
   isReviewing: unknown;
   timelinePlan: unknown;
+
 };
 
 export function buildRuntimeThreadDomainContextSlice(input: {
-  legacyDefaults: AppShellDomainContextValue;
-  runtimeActions: AppShellDomainContextValue;
   runtimeThreadBoundary: unknown;
+  /** S4 PR-D：turn 级 conversation bags（history / thread list 分页 / parent 映射） */
+  historyLoadingByThreadId: unknown;
+  historyLoadingProgressByThreadId: unknown;
+  historyRestoredAtMsByThread: unknown;
+  threadListCursorByWorkspace: unknown;
+  threadListPagingByWorkspace: unknown;
+  threadParentById: unknown;
+  /** S4 PR-C：conversation UI（rename/delete prompt / copy / hydration） */
+  handleCopyThread: unknown;
+  handleDeleteThreadPromptCancel: unknown;
+  handleDeleteThreadPromptConfirm: unknown;
+  handleRenamePromptCancel: unknown;
+  handleRenamePromptChange: unknown;
+  handleRenamePromptConfirm: unknown;
+  handleRenameThread: unknown;
+  hydratedThreadListWorkspaceIds: unknown;
+  isDeleteThreadPromptBusy: unknown;
+  /** S4 PR-C：review-prompt 流程（preset / branch / commit 选择） */
+  choosePreset: unknown;
+  handleReviewPromptKeyDown: unknown;
+  handleSelectCommit: unknown;
+  handleSelectStatusPanelSubagent: unknown;
+  highlightedBranchIndex: unknown;
+  highlightedCommitIndex: unknown;
+  highlightedPresetIndex: unknown;
   /** S4 bag-split PR-1：高 churn 会话投影 */
   sessionHot?: RuntimeThreadSessionHotFields;
+  /** S4 PR-E：归位 keys（见 OWNED_KEYS） */
+  isThreadAutoNaming: unknown;
+  isThreadPinned: unknown;
+  listThreadsForWorkspaceTracked: unknown;
+  loadOlderThreadsForWorkspace: unknown;
+  openDeleteThreadPrompt: unknown;
+  pinThread: unknown;
+  pinnedThreadsVersion: unknown;
+  refreshThread: unknown;
+  renamePrompt: unknown;
+  setHighlightedBranchIndex: unknown;
+  setHighlightedCommitIndex: unknown;
+  setHighlightedPresetIndex: unknown;
+  showPresetStep: unknown;
+  startCompact: unknown;
+  toggleCompletionEmailIntent: unknown;
+  triggerAutoThreadTitle: unknown;
+  unpinThread: unknown;
+  updateCustomInstructions: unknown;
+  userInputRequests: unknown;
 }): AppShellDomainContextValue {
   return {
-    ...input.legacyDefaults,
-    ...input.runtimeActions,
     runtimeThreadBoundary: input.runtimeThreadBoundary,
+    historyLoadingByThreadId: input.historyLoadingByThreadId,
+    historyLoadingProgressByThreadId: input.historyLoadingProgressByThreadId,
+    historyRestoredAtMsByThread: input.historyRestoredAtMsByThread,
+    threadListCursorByWorkspace: input.threadListCursorByWorkspace,
+    threadListPagingByWorkspace: input.threadListPagingByWorkspace,
+    threadParentById: input.threadParentById,
+    handleCopyThread: input.handleCopyThread,
+    handleDeleteThreadPromptCancel: input.handleDeleteThreadPromptCancel,
+    handleDeleteThreadPromptConfirm: input.handleDeleteThreadPromptConfirm,
+    handleRenamePromptCancel: input.handleRenamePromptCancel,
+    handleRenamePromptChange: input.handleRenamePromptChange,
+    handleRenamePromptConfirm: input.handleRenamePromptConfirm,
+    handleRenameThread: input.handleRenameThread,
+    hydratedThreadListWorkspaceIds: input.hydratedThreadListWorkspaceIds,
+    isDeleteThreadPromptBusy: input.isDeleteThreadPromptBusy,
+    choosePreset: input.choosePreset,
+    handleReviewPromptKeyDown: input.handleReviewPromptKeyDown,
+    handleSelectCommit: input.handleSelectCommit,
+    handleSelectStatusPanelSubagent: input.handleSelectStatusPanelSubagent,
+    highlightedBranchIndex: input.highlightedBranchIndex,
+    highlightedCommitIndex: input.highlightedCommitIndex,
+    highlightedPresetIndex: input.highlightedPresetIndex,
     ...(input.sessionHot ?? {}),
+    // S4 PR-E：归位 keys
+    isThreadAutoNaming: input.isThreadAutoNaming,
+    isThreadPinned: input.isThreadPinned,
+    listThreadsForWorkspaceTracked: input.listThreadsForWorkspaceTracked,
+    loadOlderThreadsForWorkspace: input.loadOlderThreadsForWorkspace,
+    openDeleteThreadPrompt: input.openDeleteThreadPrompt,
+    pinThread: input.pinThread,
+    pinnedThreadsVersion: input.pinnedThreadsVersion,
+    refreshThread: input.refreshThread,
+    renamePrompt: input.renamePrompt,
+    setHighlightedBranchIndex: input.setHighlightedBranchIndex,
+    setHighlightedCommitIndex: input.setHighlightedCommitIndex,
+    setHighlightedPresetIndex: input.setHighlightedPresetIndex,
+    showPresetStep: input.showPresetStep,
+    startCompact: input.startCompact,
+    toggleCompletionEmailIntent: input.toggleCompletionEmailIntent,
+    triggerAutoThreadTitle: input.triggerAutoThreadTitle,
+    unpinThread: input.unpinThread,
+    updateCustomInstructions: input.updateCustomInstructions,
+    userInputRequests: input.userInputRequests,
   };
 }
 
@@ -53,6 +138,16 @@ export function buildModelSelectionDomainContextSlice(input: {
   selectedModelId: unknown;
   setSelectedEffort: unknown;
   setSelectedModelId: unknown;
+  /** S4 PR-C：模型/engine 选择动作（从 composerContext 归位） */
+  availableEngines: unknown;
+  handleOpenModelSettings: unknown;
+  handleRefreshModelConfig: unknown;
+  handleSelectModel: unknown;
+  handleSelectOpenCodeAgent: unknown;
+  handleSelectOpenCodeVariant: unknown;
+  isModelConfigRefreshing: unknown;
+  /** S4 PR-E：归位 keys（见 OWNED_KEYS） */
+  refreshEngines: unknown;
 }): AppShellDomainContextValue {
   return {
     effectiveModels: input.effectiveModels,
@@ -69,6 +164,15 @@ export function buildModelSelectionDomainContextSlice(input: {
     selectedModelId: input.selectedModelId,
     setSelectedEffort: input.setSelectedEffort,
     setSelectedModelId: input.setSelectedModelId,
+    availableEngines: input.availableEngines,
+    handleOpenModelSettings: input.handleOpenModelSettings,
+    handleRefreshModelConfig: input.handleRefreshModelConfig,
+    handleSelectModel: input.handleSelectModel,
+    handleSelectOpenCodeAgent: input.handleSelectOpenCodeAgent,
+    handleSelectOpenCodeVariant: input.handleSelectOpenCodeVariant,
+    isModelConfigRefreshing: input.isModelConfigRefreshing,
+    // S4 PR-E：归位 keys
+    refreshEngines: input.refreshEngines,
   };
 }
 
@@ -134,6 +238,9 @@ export type SessionIdentityDomainFields = {
   activeWorkspaceRef: unknown;
   activeWorkspaceThreads: unknown;
   baseWorkspaceRef: unknown;
+  /** S4 PR-E：归位 keys（见 OWNED_KEYS） */
+  setActiveThreadId: unknown;
+  setActiveWorkspaceId: unknown;
 };
 
 export function buildSessionIdentityDomainContextSlice(
@@ -152,6 +259,9 @@ export function buildSessionIdentityDomainContextSlice(
     activeWorkspaceRef: input.activeWorkspaceRef,
     activeWorkspaceThreads: input.activeWorkspaceThreads,
     baseWorkspaceRef: input.baseWorkspaceRef,
+    // S4 PR-E：归位 keys
+    setActiveThreadId: input.setActiveThreadId,
+    setActiveWorkspaceId: input.setActiveWorkspaceId,
   };
 }
 
@@ -190,6 +300,52 @@ export type WorkspaceCatalogDomainFields = {
   repositories: unknown;
   repositoriesLoading: unknown;
   isMultiRepository: unknown;
+  /** S4 PR-C：workspace/agent 入口与拖放 intake（从 composerContext 归位） */
+  groupedWorkspaces: unknown;
+  handleAddAgent: unknown;
+  handleAddCloneAgent: unknown;
+  handleAddWorkspace: unknown;
+  handleAddWorktreeAgent: unknown;
+  handleArchiveActiveThread: unknown;
+  handleEnsureWorkspaceThreadsForSettings: unknown;
+  handleOpenNewWindow: unknown;
+  handleWorkspaceDragEnter: unknown;
+  handleWorkspaceDragLeave: unknown;
+  handleWorkspaceDragOver: unknown;
+  handleWorkspaceDrop: unknown;
+  /** S4 PR-E：归位 keys（见 OWNED_KEYS） */
+  gitignoredDirectories: unknown;
+  gitignoredFiles: unknown;
+  homeWorkspaceSelectedId: unknown;
+  isWorkspaceDropActive: unknown;
+  isWorktreeWorkspace: unknown;
+  launchScriptState: unknown;
+  launchScriptsState: unknown;
+  moveWorkspaceGroup: unknown;
+  removeWorkspace: unknown;
+  removeWorktree: unknown;
+  renameWorkspaceGroup: unknown;
+  setWorkspaceHomeWorkspaceId: unknown;
+  ungroupedLabel: unknown;
+  updateCloneCopyName: unknown;
+  updateWorkspaceCodexBin: unknown;
+  updateWorkspaceSettings: unknown;
+  updateWorktreeBaseRef: unknown;
+  updateWorktreeBranch: unknown;
+  updateWorktreePublishToOrigin: unknown;
+  updateWorktreeSetupScript: unknown;
+  useSuggestedCloneCopiesFolder: unknown;
+  workspaceGroups: unknown;
+  workspaces: unknown;
+  workspacesById: unknown;
+  workspacesByPath: unknown;
+  worktreeApplyError: unknown;
+  worktreeApplyLoading: unknown;
+  worktreeApplySuccess: unknown;
+  worktreeCreateResult: unknown;
+  worktreeLabel: unknown;
+  worktreePrompt: unknown;
+  worktreeRename: unknown;
 };
 
 export function buildWorkspaceCatalogDomainContextSlice(
@@ -225,6 +381,52 @@ export function buildWorkspaceCatalogDomainContextSlice(
     repositories: input.repositories,
     repositoriesLoading: input.repositoriesLoading,
     isMultiRepository: input.isMultiRepository,
+    groupedWorkspaces: input.groupedWorkspaces,
+    handleAddAgent: input.handleAddAgent,
+    handleAddCloneAgent: input.handleAddCloneAgent,
+    handleAddWorkspace: input.handleAddWorkspace,
+    handleAddWorktreeAgent: input.handleAddWorktreeAgent,
+    handleArchiveActiveThread: input.handleArchiveActiveThread,
+    handleEnsureWorkspaceThreadsForSettings:
+      input.handleEnsureWorkspaceThreadsForSettings,
+    handleOpenNewWindow: input.handleOpenNewWindow,
+    handleWorkspaceDragEnter: input.handleWorkspaceDragEnter,
+    handleWorkspaceDragLeave: input.handleWorkspaceDragLeave,
+    handleWorkspaceDragOver: input.handleWorkspaceDragOver,
+    handleWorkspaceDrop: input.handleWorkspaceDrop,
+    // S4 PR-E：归位 keys
+    gitignoredDirectories: input.gitignoredDirectories,
+    gitignoredFiles: input.gitignoredFiles,
+    homeWorkspaceSelectedId: input.homeWorkspaceSelectedId,
+    isWorkspaceDropActive: input.isWorkspaceDropActive,
+    isWorktreeWorkspace: input.isWorktreeWorkspace,
+    launchScriptState: input.launchScriptState,
+    launchScriptsState: input.launchScriptsState,
+    moveWorkspaceGroup: input.moveWorkspaceGroup,
+    removeWorkspace: input.removeWorkspace,
+    removeWorktree: input.removeWorktree,
+    renameWorkspaceGroup: input.renameWorkspaceGroup,
+    setWorkspaceHomeWorkspaceId: input.setWorkspaceHomeWorkspaceId,
+    ungroupedLabel: input.ungroupedLabel,
+    updateCloneCopyName: input.updateCloneCopyName,
+    updateWorkspaceCodexBin: input.updateWorkspaceCodexBin,
+    updateWorkspaceSettings: input.updateWorkspaceSettings,
+    updateWorktreeBaseRef: input.updateWorktreeBaseRef,
+    updateWorktreeBranch: input.updateWorktreeBranch,
+    updateWorktreePublishToOrigin: input.updateWorktreePublishToOrigin,
+    updateWorktreeSetupScript: input.updateWorktreeSetupScript,
+    useSuggestedCloneCopiesFolder: input.useSuggestedCloneCopiesFolder,
+    workspaceGroups: input.workspaceGroups,
+    workspaces: input.workspaces,
+    workspacesById: input.workspacesById,
+    workspacesByPath: input.workspacesByPath,
+    worktreeApplyError: input.worktreeApplyError,
+    worktreeApplyLoading: input.worktreeApplyLoading,
+    worktreeApplySuccess: input.worktreeApplySuccess,
+    worktreeCreateResult: input.worktreeCreateResult,
+    worktreeLabel: input.worktreeLabel,
+    worktreePrompt: input.worktreePrompt,
+    worktreeRename: input.worktreeRename,
   };
 }
 
@@ -242,9 +444,7 @@ export type GitSurfaceDomainFields = {
   activeGitHistoryTabId: unknown;
   branchError: unknown;
   branches: unknown;
-  checkoutBranch: unknown;
   clearGitOperationErrors: unknown;
-  clearGitRootCandidates: unknown;
   commitError: unknown;
   commitLoading: unknown;
   commitMessage: unknown;
@@ -252,17 +452,13 @@ export type GitSurfaceDomainFields = {
   commitMessageLoading: unknown;
   confirmBranch: unknown;
   confirmCommit: unknown;
-  createBranch: unknown;
   currentBranch: unknown;
   diffScrollRequestId: unknown;
   diffSource: unknown;
-  exitDiffView: unknown;
   fileStatus: unknown;
-  gitCommitDiffs: unknown;
   gitDiffListView: unknown;
   gitDiffViewStyle: unknown;
   gitHistoryPanelHeight: unknown;
-  gitHistoryPanelHeightRef: unknown;
   gitIssues: unknown;
   gitIssuesError: unknown;
   gitIssuesLoading: unknown;
@@ -280,9 +476,6 @@ export type GitSurfaceDomainFields = {
   gitPullRequestComments: unknown;
   gitPullRequestCommentsError: unknown;
   gitPullRequestCommentsLoading: unknown;
-  gitPullRequestDiffs: unknown;
-  gitPullRequestDiffsError: unknown;
-  gitPullRequestDiffsLoading: unknown;
   gitPullRequests: unknown;
   gitPullRequestsError: unknown;
   gitPullRequestsLoading: unknown;
@@ -294,8 +487,6 @@ export type GitSurfaceDomainFields = {
   gitRootScanHasScanned: unknown;
   gitRootScanLoading: unknown;
   gitStatus: unknown;
-  gitignoredDirectories: unknown;
-  gitignoredFiles: unknown;
   localBranches: unknown;
   remoteBranches: unknown;
   repositoryError: unknown;
@@ -313,6 +504,45 @@ export type GitSurfaceDomainFields = {
   repositoryCommitSummary: unknown;
   selectRepository: unknown;
   selectedRepositoryRoot: unknown;
+  /** S4 PR-C：git 操作 handlers 从 composerContext 归位（含 GitHub panel 变更回调） */
+  handleActivateGitHistoryTab: unknown;
+  handleActiveDiffPath: unknown;
+  handleApplyWorktreeChanges: unknown;
+  handleCheckoutBranch: unknown;
+  handleCommit: unknown;
+  handleCommitAndPush: unknown;
+  handleCommitAndSync: unknown;
+  handleCommitMessageChange: unknown;
+  handleCreateBranch: unknown;
+  handleGenerateCommitMessage: unknown;
+  handleGitIssuesChange: unknown;
+  handleGitPanelModeChange: unknown;
+  handleGitPullRequestCommentsChange: unknown;
+  handleGitPullRequestDiffsChange: unknown;
+  handleGitPullRequestsChange: unknown;
+  handlePickGitRoot: unknown;
+  handlePush: unknown;
+  handleRevertAllGitChanges: unknown;
+  handleRevertGitFile: unknown;
+  handleRevertGitPaths: unknown;
+  handleSetGitRoot: unknown;
+  handleStageGitAll: unknown;
+  handleStageGitFile: unknown;
+  handleSync: unknown;
+  handleUnstageGitAll: unknown;
+  handleUnstageGitFile: unknown;
+  handleUnstageGitPaths: unknown;
+  handleUpdateBranch: unknown;
+  handleUpdateAllRepositories: unknown;
+  handleCheckoutAllRepositories: unknown;
+  handleLoadCommonRepositoryBranches: unknown;
+  /** S4 PR-E：归位 keys（见 OWNED_KEYS） */
+  queueGitStatusRefresh: unknown;
+  refreshGitDiffs: unknown;
+  refreshGitLog: unknown;
+  setGitDiffListView: unknown;
+  setGitDiffViewStyle: unknown;
+  setGitRootScanDepth: unknown;
 };
 
 export function buildGitSurfaceDomainContextSlice(
@@ -327,9 +557,7 @@ export function buildGitSurfaceDomainContextSlice(
     activeGitHistoryTabId: input.activeGitHistoryTabId,
     branchError: input.branchError,
     branches: input.branches,
-    checkoutBranch: input.checkoutBranch,
     clearGitOperationErrors: input.clearGitOperationErrors,
-    clearGitRootCandidates: input.clearGitRootCandidates,
     commitError: input.commitError,
     commitLoading: input.commitLoading,
     commitMessage: input.commitMessage,
@@ -337,17 +565,13 @@ export function buildGitSurfaceDomainContextSlice(
     commitMessageLoading: input.commitMessageLoading,
     confirmBranch: input.confirmBranch,
     confirmCommit: input.confirmCommit,
-    createBranch: input.createBranch,
     currentBranch: input.currentBranch,
     diffScrollRequestId: input.diffScrollRequestId,
     diffSource: input.diffSource,
-    exitDiffView: input.exitDiffView,
     fileStatus: input.fileStatus,
-    gitCommitDiffs: input.gitCommitDiffs,
     gitDiffListView: input.gitDiffListView,
     gitDiffViewStyle: input.gitDiffViewStyle,
     gitHistoryPanelHeight: input.gitHistoryPanelHeight,
-    gitHistoryPanelHeightRef: input.gitHistoryPanelHeightRef,
     gitIssues: input.gitIssues,
     gitIssuesError: input.gitIssuesError,
     gitIssuesLoading: input.gitIssuesLoading,
@@ -365,9 +589,6 @@ export function buildGitSurfaceDomainContextSlice(
     gitPullRequestComments: input.gitPullRequestComments,
     gitPullRequestCommentsError: input.gitPullRequestCommentsError,
     gitPullRequestCommentsLoading: input.gitPullRequestCommentsLoading,
-    gitPullRequestDiffs: input.gitPullRequestDiffs,
-    gitPullRequestDiffsError: input.gitPullRequestDiffsError,
-    gitPullRequestDiffsLoading: input.gitPullRequestDiffsLoading,
     gitPullRequests: input.gitPullRequests,
     gitPullRequestsError: input.gitPullRequestsError,
     gitPullRequestsLoading: input.gitPullRequestsLoading,
@@ -379,8 +600,6 @@ export function buildGitSurfaceDomainContextSlice(
     gitRootScanHasScanned: input.gitRootScanHasScanned,
     gitRootScanLoading: input.gitRootScanLoading,
     gitStatus: input.gitStatus,
-    gitignoredDirectories: input.gitignoredDirectories,
-    gitignoredFiles: input.gitignoredFiles,
     localBranches: input.localBranches,
     remoteBranches: input.remoteBranches,
     repositoryError: input.repositoryError,
@@ -398,6 +617,46 @@ export function buildGitSurfaceDomainContextSlice(
     repositoryCommitSummary: input.repositoryCommitSummary,
     selectRepository: input.selectRepository,
     selectedRepositoryRoot: input.selectedRepositoryRoot,
+    handleActivateGitHistoryTab: input.handleActivateGitHistoryTab,
+    handleActiveDiffPath: input.handleActiveDiffPath,
+    handleApplyWorktreeChanges: input.handleApplyWorktreeChanges,
+    handleCheckoutBranch: input.handleCheckoutBranch,
+    handleCommit: input.handleCommit,
+    handleCommitAndPush: input.handleCommitAndPush,
+    handleCommitAndSync: input.handleCommitAndSync,
+    handleCommitMessageChange: input.handleCommitMessageChange,
+    handleCreateBranch: input.handleCreateBranch,
+    handleGenerateCommitMessage: input.handleGenerateCommitMessage,
+    handleGitIssuesChange: input.handleGitIssuesChange,
+    handleGitPanelModeChange: input.handleGitPanelModeChange,
+    handleGitPullRequestCommentsChange:
+      input.handleGitPullRequestCommentsChange,
+    handleGitPullRequestDiffsChange: input.handleGitPullRequestDiffsChange,
+    handleGitPullRequestsChange: input.handleGitPullRequestsChange,
+    handlePickGitRoot: input.handlePickGitRoot,
+    handlePush: input.handlePush,
+    handleRevertAllGitChanges: input.handleRevertAllGitChanges,
+    handleRevertGitFile: input.handleRevertGitFile,
+    handleRevertGitPaths: input.handleRevertGitPaths,
+    handleSetGitRoot: input.handleSetGitRoot,
+    handleStageGitAll: input.handleStageGitAll,
+    handleStageGitFile: input.handleStageGitFile,
+    handleSync: input.handleSync,
+    handleUnstageGitAll: input.handleUnstageGitAll,
+    handleUnstageGitFile: input.handleUnstageGitFile,
+    handleUnstageGitPaths: input.handleUnstageGitPaths,
+    handleUpdateBranch: input.handleUpdateBranch,
+    handleUpdateAllRepositories: input.handleUpdateAllRepositories,
+    handleCheckoutAllRepositories: input.handleCheckoutAllRepositories,
+    handleLoadCommonRepositoryBranches:
+      input.handleLoadCommonRepositoryBranches,
+    // S4 PR-E：归位 keys
+    queueGitStatusRefresh: input.queueGitStatusRefresh,
+    refreshGitDiffs: input.refreshGitDiffs,
+    refreshGitLog: input.refreshGitLog,
+    setGitDiffListView: input.setGitDiffListView,
+    setGitDiffViewStyle: input.setGitDiffViewStyle,
+    setGitRootScanDepth: input.setGitRootScanDepth,
   };
 }
 
@@ -413,6 +672,34 @@ export type ModeRoutingDomainFields = {
   centerMode: unknown;
   claudeAccessModeRef: unknown;
   filePanelMode: unknown;
+  /** S4 PR-C：UI 模式/面板路由与环境标志（从 composerContext 归位） */
+  handleAppModeChange: unknown;
+  handleDebugClick: unknown;
+  handleLockPanel: unknown;
+  handleResolvedClaudeThinkingVisibleChange: unknown;
+  handleToggleRuntimeConsole: unknown;
+  handleToggleTerminalPanel: unknown;
+  handleUnlockPanel: unknown;
+  hasActivePlan: unknown;
+  isCompact: unknown;
+  isMacDesktop: unknown;
+  isPanelLocked: unknown;
+  isPhone: unknown;
+  isSearchPaletteOpen: unknown;
+  /** S4 PR-E：归位 keys（见 OWNED_KEYS） */
+  exitDiffView: unknown;
+  isTablet: unknown;
+  isWindowsDesktop: unknown;
+  setActiveTab: unknown;
+  setAppMode: unknown;
+  setCenterMode: unknown;
+  setFilePanelMode: unknown;
+  setHomeOpen: unknown;
+  setIsSearchPaletteOpen: unknown;
+  showExtensions: unknown;
+  showGitHistory: unknown;
+  showHome: unknown;
+  showWorkspaceHome: unknown;
 };
 
 export function buildModeRoutingDomainContextSlice(
@@ -425,6 +712,34 @@ export function buildModeRoutingDomainContextSlice(
     centerMode: input.centerMode,
     claudeAccessModeRef: input.claudeAccessModeRef,
     filePanelMode: input.filePanelMode,
+    handleAppModeChange: input.handleAppModeChange,
+    handleDebugClick: input.handleDebugClick,
+    handleLockPanel: input.handleLockPanel,
+    handleResolvedClaudeThinkingVisibleChange:
+      input.handleResolvedClaudeThinkingVisibleChange,
+    handleToggleRuntimeConsole: input.handleToggleRuntimeConsole,
+    handleToggleTerminalPanel: input.handleToggleTerminalPanel,
+    handleUnlockPanel: input.handleUnlockPanel,
+    hasActivePlan: input.hasActivePlan,
+    isCompact: input.isCompact,
+    isMacDesktop: input.isMacDesktop,
+    isPanelLocked: input.isPanelLocked,
+    isPhone: input.isPhone,
+    isSearchPaletteOpen: input.isSearchPaletteOpen,
+    // S4 PR-E：归位 keys
+    exitDiffView: input.exitDiffView,
+    isTablet: input.isTablet,
+    isWindowsDesktop: input.isWindowsDesktop,
+    setActiveTab: input.setActiveTab,
+    setAppMode: input.setAppMode,
+    setCenterMode: input.setCenterMode,
+    setFilePanelMode: input.setFilePanelMode,
+    setHomeOpen: input.setHomeOpen,
+    setIsSearchPaletteOpen: input.setIsSearchPaletteOpen,
+    showExtensions: input.showExtensions,
+    showGitHistory: input.showGitHistory,
+    showHome: input.showHome,
+    showWorkspaceHome: input.showWorkspaceHome,
   };
 }
 
@@ -437,6 +752,15 @@ export type AccountSurfaceDomainFields = {
   accountSwitching: unknown;
   activeAccount: unknown;
   approvals: unknown;
+  /** S4 PR-C：账号切换 / 审批 / 邮件会话入口（从 composerContext 归位） */
+  handleApprovalBatchAccept: unknown;
+  handleApprovalDecision: unknown;
+  handleApprovalRemember: unknown;
+  handleCancelSwitchAccount: unknown;
+  handleOpenMailSession: unknown;
+  handleSwitchAccount: unknown;
+  /** S4 PR-E：归位 keys（见 OWNED_KEYS） */
+  refreshAccountRateLimits: unknown;
 };
 
 export function buildAccountSurfaceDomainContextSlice(
@@ -447,41 +771,14 @@ export function buildAccountSurfaceDomainContextSlice(
     accountSwitching: input.accountSwitching,
     activeAccount: input.activeAccount,
     approvals: input.approvals,
-  };
-}
-
-
-/**
- * T1.7：dictation 表面（从 workspaceNavigation residual 拆出，达 navigation ≤80 门禁）。
- * 语义上贴近 composer；独立 domain 避免继续污染 navigation bag。
- */
-export type DictationSurfaceDomainFields = {
-  clearDictationError: unknown;
-  clearDictationHint: unknown;
-  clearDictationTranscript: unknown;
-  dictationError: unknown;
-  dictationHint: unknown;
-  dictationLevel: unknown;
-  dictationModel: unknown;
-  dictationReady: unknown;
-  dictationState: unknown;
-  dictationTranscript: unknown;
-};
-
-export function buildDictationSurfaceDomainContextSlice(
-  input: DictationSurfaceDomainFields,
-): AppShellDomainContextValue {
-  return {
-    clearDictationError: input.clearDictationError,
-    clearDictationHint: input.clearDictationHint,
-    clearDictationTranscript: input.clearDictationTranscript,
-    dictationError: input.dictationError,
-    dictationHint: input.dictationHint,
-    dictationLevel: input.dictationLevel,
-    dictationModel: input.dictationModel,
-    dictationReady: input.dictationReady,
-    dictationState: input.dictationState,
-    dictationTranscript: input.dictationTranscript,
+    handleApprovalBatchAccept: input.handleApprovalBatchAccept,
+    handleApprovalDecision: input.handleApprovalDecision,
+    handleApprovalRemember: input.handleApprovalRemember,
+    handleCancelSwitchAccount: input.handleCancelSwitchAccount,
+    handleOpenMailSession: input.handleOpenMailSession,
+    handleSwitchAccount: input.handleSwitchAccount,
+    // S4 PR-E：归位 keys
+    refreshAccountRateLimits: input.refreshAccountRateLimits,
   };
 }
 
@@ -495,28 +792,18 @@ export type WorkspaceNavigationDomainFields = {
   activeEditorFilePath: unknown;
   activeEditorLineRange: unknown;
   activeEngine: unknown;
-  activeImages: unknown;
-  activeFusingMessageId: unknown;
   fileCompareSession: unknown;
   fileHistoryTabs: unknown;
-  activeQueue: unknown;
-  activeQueuedHandoffBubble: unknown;
   activeRenamePrompt: unknown;
   agentTaskScrollRequest: unknown;
   activeTerminalId: unknown;
-  activeWorkspaceKanbanTasks: unknown;
   addDebugEntry: unknown;
   agent: unknown;
   alertError: unknown;
   appRootRef: unknown;
   appSettings: unknown;
   appSettingsLoading: unknown;
-  attachImages: unknown;
-  canFuseActiveQueue: unknown;
-  fuseDisabledReasonKey: unknown;
-  choosePreset: unknown;
   claudeThinkingVisible: unknown;
-  clearActiveImages: unknown;
   clearDebugEntries: unknown;
   clearDraftForThread: unknown;
   closePlanPanel: unknown;
@@ -525,16 +812,12 @@ export type WorkspaceNavigationDomainFields = {
   closeReviewPrompt: unknown;
   closeSettings: unknown;
   closeTerminalPanel: unknown;
-  codexComposerModeRef: unknown;
   collapseRightPanel: unknown;
   collapseSidebar: unknown;
   commands: unknown;
   completionEmailIntentByThread: unknown;
   completionTrackerBySessionRef: unknown;
   completionTrackerReadyRef: unknown;
-  composerEditorSettings: unknown;
-  composerInputRef: unknown;
-  composerInsert: unknown;
   confirmCustom: unknown;
   createPrompt: unknown;
   debugEntries: unknown;
@@ -569,6 +852,22 @@ export type WorkspaceNavigationDomainFields = {
   getPinTimestamp: unknown;
   getThreadRows: unknown;
   globalSearchFilesByWorkspace: unknown;
+  /** S4 PR-C：debug/updater 动作（从 composerContext 归位） */
+  handleCopyDebug: unknown;
+  handleTestNotificationSound: unknown;
+  /** S4 PR-E：归位 keys（见 OWNED_KEYS） */
+  openReleaseNotes: unknown;
+  releaseNotesActiveIndex: unknown;
+  releaseNotesEntries: unknown;
+  releaseNotesError: unknown;
+  releaseNotesLoading: unknown;
+  releaseNotesOpen: unknown;
+  setActiveEditorLineRange: unknown;
+  setActiveEngine: unknown;
+  setAppSettings: unknown;
+  setEditorSplitCompanion: unknown;
+  setEditorSplitLayout: unknown;
+  setFileReferenceMode: unknown;
 };
 
 export function buildWorkspaceNavigationDomainContextSlice(
@@ -579,28 +878,18 @@ export function buildWorkspaceNavigationDomainContextSlice(
     activeEditorFilePath: input.activeEditorFilePath,
     activeEditorLineRange: input.activeEditorLineRange,
     activeEngine: input.activeEngine,
-    activeImages: input.activeImages,
-    activeFusingMessageId: input.activeFusingMessageId,
     fileCompareSession: input.fileCompareSession,
     fileHistoryTabs: input.fileHistoryTabs,
-    activeQueue: input.activeQueue,
-    activeQueuedHandoffBubble: input.activeQueuedHandoffBubble,
     activeRenamePrompt: input.activeRenamePrompt,
     agentTaskScrollRequest: input.agentTaskScrollRequest,
     activeTerminalId: input.activeTerminalId,
-    activeWorkspaceKanbanTasks: input.activeWorkspaceKanbanTasks,
     addDebugEntry: input.addDebugEntry,
     agent: input.agent,
     alertError: input.alertError,
     appRootRef: input.appRootRef,
     appSettings: input.appSettings,
     appSettingsLoading: input.appSettingsLoading,
-    attachImages: input.attachImages,
-    canFuseActiveQueue: input.canFuseActiveQueue,
-    fuseDisabledReasonKey: input.fuseDisabledReasonKey,
-    choosePreset: input.choosePreset,
     claudeThinkingVisible: input.claudeThinkingVisible,
-    clearActiveImages: input.clearActiveImages,
     clearDebugEntries: input.clearDebugEntries,
     clearDraftForThread: input.clearDraftForThread,
     closePlanPanel: input.closePlanPanel,
@@ -609,16 +898,12 @@ export function buildWorkspaceNavigationDomainContextSlice(
     closeReviewPrompt: input.closeReviewPrompt,
     closeSettings: input.closeSettings,
     closeTerminalPanel: input.closeTerminalPanel,
-    codexComposerModeRef: input.codexComposerModeRef,
     collapseRightPanel: input.collapseRightPanel,
     collapseSidebar: input.collapseSidebar,
     commands: input.commands,
     completionEmailIntentByThread: input.completionEmailIntentByThread,
     completionTrackerBySessionRef: input.completionTrackerBySessionRef,
     completionTrackerReadyRef: input.completionTrackerReadyRef,
-    composerEditorSettings: input.composerEditorSettings,
-    composerInputRef: input.composerInputRef,
-    composerInsert: input.composerInsert,
     confirmCustom: input.confirmCustom,
     createPrompt: input.createPrompt,
     debugEntries: input.debugEntries,
@@ -653,5 +938,20 @@ export function buildWorkspaceNavigationDomainContextSlice(
     getPinTimestamp: input.getPinTimestamp,
     getThreadRows: input.getThreadRows,
     globalSearchFilesByWorkspace: input.globalSearchFilesByWorkspace,
+    handleCopyDebug: input.handleCopyDebug,
+    handleTestNotificationSound: input.handleTestNotificationSound,
+    // S4 PR-E：归位 keys
+    openReleaseNotes: input.openReleaseNotes,
+    releaseNotesActiveIndex: input.releaseNotesActiveIndex,
+    releaseNotesEntries: input.releaseNotesEntries,
+    releaseNotesError: input.releaseNotesError,
+    releaseNotesLoading: input.releaseNotesLoading,
+    releaseNotesOpen: input.releaseNotesOpen,
+    setActiveEditorLineRange: input.setActiveEditorLineRange,
+    setActiveEngine: input.setActiveEngine,
+    setAppSettings: input.setAppSettings,
+    setEditorSplitCompanion: input.setEditorSplitCompanion,
+    setEditorSplitLayout: input.setEditorSplitLayout,
+    setFileReferenceMode: input.setFileReferenceMode,
   };
 }

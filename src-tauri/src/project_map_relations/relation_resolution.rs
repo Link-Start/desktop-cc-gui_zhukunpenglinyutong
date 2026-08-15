@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use super::file_classification::module_label;
 use super::{
     relation_id, relative_path, stable_hash, FileRelation, FileRelationIndex, ModuleSummary,
-    RelationEvidence, RelationshipSymbol, RepairIssue, ScannedFile,
+    RelationEvidence, RelationshipSymbol, ScannedFile,
 };
 
 pub(super) fn first_quoted_value(text: &str) -> Option<String> {
@@ -899,29 +899,18 @@ pub(super) fn push_relation(
     });
 }
 
-pub(super) fn dedupe_relations(
-    relations: Vec<FileRelation>,
-) -> (Vec<FileRelation>, Vec<RepairIssue>) {
+pub(super) fn dedupe_relations(relations: Vec<FileRelation>) -> (Vec<FileRelation>, usize) {
     let mut seen = HashSet::new();
     let mut deduped = Vec::new();
-    let mut issues = Vec::new();
+    let mut duplicate_count = 0usize;
     for relation in relations {
         if seen.insert(relation.fingerprint.clone()) {
             deduped.push(relation);
             continue;
         }
-        issues.push(RepairIssue {
-            id: format!("repair-{}", stable_hash(&relation.fingerprint)),
-            kind: "duplicate-relation".to_string(),
-            severity: "info".to_string(),
-            message: "Duplicate deterministic relationship was quarantined.".to_string(),
-            file_id: Some(relation.source_file_id.clone()),
-            relation_id: Some(relation.id.clone()),
-            path: relation.evidence.first().map(|item| item.path.clone()),
-            action: "quarantined".to_string(),
-        });
+        duplicate_count += 1;
     }
-    (deduped, issues)
+    (deduped, duplicate_count)
 }
 
 pub(super) fn build_indexes(

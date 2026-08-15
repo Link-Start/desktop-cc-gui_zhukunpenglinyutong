@@ -80,9 +80,9 @@
 - 改 `src/app-shell/**` / domain bag / shell providers 时：
   1. 先读执行计划 `docs/plans/2026-08-11-app-shell-cohesion-optimization.md` 与 Ownership Matrix `docs/plans/app-shell-ownership-matrix.md`
   2. **新 shell 状态必须有 owner domain**（写入 `APP_SHELL_DOMAIN_CONTEXT_OWNED_KEYS` + 对应 builder/consumer）；禁止无主塞 bag 尾
-  3. 生产路径禁止 `flattenAppShellDomainContexts` 与 `adaptAppShellLegacyFlatContext` 直调；用 `selectAppShellDomainBag` / `mergeAppShellDomainBag`
+  3. legacy flatten/adapt API（`flattenAppShellDomainContexts` / `adaptAppShellLegacyFlatContext` / `legacy/legacyFlatten.ts` 门面）已于 S4 PR-F 全量删除，禁止重新引入；生产路径用 `selectAppShellDomainBag` / `mergeAppShellDomainBag`
   4. 本地 / CI 须通过：`npm run check:app-shell:governance`
-- Domain key：soft 80 / hard 见 freeze 表（终态目标 60）；navigation hard ≤ 80
+- Domain key：soft 80 / hard 见 freeze 表（S4 PR-F 起全部咬实测值，新增 key 必须先出后进；终态目标 60）；navigation hard ≤ 79
 - Composition：`src/app-shell/assembly/AppShell.tsx` 禁止直接 `useState` 业务状态
 
 ### Merge Guardrails
@@ -100,7 +100,8 @@
 ### Render Perf Baseline
 
 - 2026-07-08 实验基线曾观察到 AppShell 根渲染单次阻塞主线程 100~350ms；该数值是有日期的历史测量，不是永久 current value。改动对话/流式/后台任务链路前，读 `docs/perf/render-jank-knife-experiments-2026-07-08.md`（四层根因），并以重新测量结果为准。
-- 硬红线：① 高频 setState（每事件/日志/轮询级）禁挂根 hook 链；② 数组追加型 setState 禁入根链；③ 根链 store 用事件驱动 + ≥30s 兜底轮询，禁秒级轮询；④ 流式正文走 `liveAssistantTextChannel`（flag `liveTextExternalization` 默认开），禁恢复逐 delta dispatch 进 reducer。
+- 硬红线：① 高频 setState（每事件/日志/轮询级）禁挂根 hook 链；② 数组追加型 setState 禁入根链；③ 根链 store 用事件驱动 + ≥30s 兜底轮询，禁秒级轮询；④ 流式正文走 `liveAssistantTextChannel`（flag `liveTextExternalization` 默认开），禁恢复逐 delta dispatch 进 reducer；⑤ 思考/工具输出走 `liveItemDeltaChannel`（flag `liveDeltaExternalization` 默认开），禁把三类电报重新打根。
+- 完整复盘（主因 / 解法 / 防再犯清单 / 回退开关）：`docs/perf/pr-1092-performance-retrospective.md`（PR #1092）。
 - 渲染风暴排查用归因面板 + React `memoizedUpdaters` 追踪（复现指南见上述文档 §七）；react-scan 2~3x 放大，测量前关。
 
 ### Native WebView API Gate（2026-08-06 uiScale P0 沉淀）
@@ -108,6 +109,12 @@
 - 调用任何 native / WebView 系统能力（zoom、DPI、窗口、透明度、Tauri command）前，必读 `dev-guidelines/guides/native-webview-api-risk-gate.md` 并过三问：① 有无纯 Web 替代（有则一律用，如 CSS `transform: scale()` 替代 native zoom）；② 出错用户能否自救；③ 验收矩阵是否覆盖平台 × 取值 × 系统 DPI。
 - 「启动时生效的持久化设置」若错误值可致起不来 / 进不了设置页，必须配 startup guard（模板 `src/utils/uiScaleStartupGuard.ts`）：危险值留 pending 记录，未证明健康则下次会话临时回退安全值，**禁止改写用户存储**，禁止拿 timeout 当修复。
 - 平台结论必须按证据分级（已证实 / 已排除 / 未验证）；「没接到投诉」不算安全证据。
+
+### Windows Cold-Start Click Freeze Gate（2026-08-14 版本记录 / 权限选择 P0 沉淀）
+
+- 改 `bootstrapApp` / Release Notes auto-open / ComposerGate / `ChatInputBox` Light 路径 / first-click 调度，或处理「Windows 启动后点按钮卡死」前，必读 `dev-guidelines/guides/windows-cold-start-click-freeze-pitfall.md`。
+- 硬红线：① 禁止用固定 timeout 当冷启动修复；② 禁止用第一次 pointerdown/keydown 启动 deferred stores / i18n / updater / Markdown compile / ComposerImpl；③ 禁止假设 StartupGateOverlay 默认在挡用户；④ 禁止 Light 层泄漏可点 ModelSelect / atomic catalog。
+- 分析与入口表见 `docs/analysis/windows-cold-start-click-freeze-release-notes-and-composer-2026-08-14.md`。只修用户点到的那一个按钮不算修完。
 
 ## 仓库卫生
 

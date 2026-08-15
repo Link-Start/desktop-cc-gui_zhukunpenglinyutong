@@ -44,7 +44,6 @@ const selectActiveCanvasMessagesProps = (
   | "processingStartedAt"
   | "lastDurationMs"
   | "codexSilentSuspectedAt"
-  | "taskRuns"
 > => ({
   items: snapshot.items,
   threadId: snapshot.threadId,
@@ -62,7 +61,6 @@ const selectActiveCanvasMessagesProps = (
   processingStartedAt: snapshot.processingStartedAt,
   lastDurationMs: snapshot.lastDurationMs,
   codexSilentSuspectedAt: snapshot.codexSilentSuspectedAt,
-  taskRuns: snapshot.taskRuns,
 });
 
 function ActiveCanvasMessages({

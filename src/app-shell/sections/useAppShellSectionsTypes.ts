@@ -43,7 +43,6 @@ export type UseAppShellSectionsContext = {
   removeImagesForThread: any;
   t: any;
   appMode: any;
-  selectedKanbanTaskId: any;
   setActiveWorkspaceId: any;
   setWorkspaceHomeWorkspaceId: any;
   updateWorkspaceSettings: any;
@@ -99,7 +98,6 @@ export type UseAppShellSectionsContext = {
   refreshAccountRateLimits: any;
   setHomeOpen: any;
   showHome: any;
-  showKanban: any;
   showGitHistory: any;
   showLoadingProgressDialog: any;
   hideLoadingProgressDialog: any;

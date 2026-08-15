@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { BrowserEvidenceViewModel } from "../evidence";
-import type { TaskRunBrowserEvidenceRef } from "../../tasks/types";
+import type { TaskRunBrowserEvidenceRef } from "../types";
 import {
   buildBrowserEvidenceViewModel,
   buildBrowserEvidenceViewModelFromTaskRunEvidence,

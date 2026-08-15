@@ -18,7 +18,6 @@ import {
   type SearchActionDescriptor,
 } from "../../features/search/providers/actionsProvider";
 import { projectRecentDiscoveryResults } from "../../features/search/providers/recentDiscoveryProvider";
-import type { KanbanTask } from "../../features/kanban/types";
 import type {
   SearchContentFilter,
   SearchResult,
@@ -28,6 +27,7 @@ import { resolveSearchScopeOnOpen } from "../../features/search/utils/scope";
 import { toggleSearchContentFilters } from "../../features/search/utils/contentFilters";
 import { useEventCallback } from "../../utils/useEventCallback";
 import type {
+  AppMode,
   AppSettings,
   GitHubPullRequest,
   GitHubPullRequestDiff,
@@ -83,6 +83,7 @@ export const COMPOSER_SEARCH_BOUNDARY_FIELD_GROUPS = {
     "selectWorkspace",
     "setActiveTab",
     "setActiveThreadId",
+    "setAppMode",
     "setDiffSource",
     "setIsSearchPaletteOpen",
     "setSearchContentFilters",
@@ -110,13 +111,6 @@ export const COMPOSER_SEARCH_BOUNDARY_FIELD_GROUPS = {
     "setCenterMode",
     "setGitPanelMode",
     "setPrefillDraft",
-  ],
-  kanbanBridge: [
-    "kanbanTasks",
-    "setAppMode",
-    "setKanbanViewState",
-    "setSelectedKanbanTaskId",
-    "workspacesByPath",
   ],
 } as const;
 
@@ -152,6 +146,7 @@ export type SearchPaletteBoundary = {
   selectWorkspace: (workspaceId: string) => void;
   setActiveTab: (tab: AppShellTab) => void;
   setActiveThreadId: (threadId: string, workspaceId: string) => void;
+  setAppMode: (mode: AppMode) => void;
   setDiffSource: (source: DiffSource) => void;
   setIsSearchPaletteOpen: (open: boolean) => void;
   setSearchContentFilters: (
@@ -209,22 +204,9 @@ export type GitSearchOpenBoundary = {
   }) => void;
 };
 
-export type KanbanComposerBridgeBoundary = {
-  kanbanTasks: KanbanTask[];
-  setAppMode: (mode: "chat" | "kanban") => void;
-  setKanbanViewState: (state: {
-    view: "board";
-    workspaceId: string;
-    panelId: string;
-  }) => void;
-  setSelectedKanbanTaskId: (taskId: string | null) => void;
-  workspacesByPath: Map<string, WorkspaceInfo>;
-};
-
 export type ComposerSearchShellBoundary = SearchPaletteBoundary &
   ComposerSendBoundary &
-  GitSearchOpenBoundary &
-  KanbanComposerBridgeBoundary & {
+  GitSearchOpenBoundary & {
     closeQuickSwitcher: () => void;
     handleOpenQuickSwitcher: () => void;
     handleAddAgent: (workspace: WorkspaceInfo) => Promise<unknown>;
@@ -249,7 +231,6 @@ export type AppShellSearchAndComposerSectionInput = {
     activeWorkspace: WorkspaceInfo | null;
     activeWorkspaceId: string | null;
     workspacesById: Map<string, WorkspaceInfo>;
-    workspacesByPath: Map<string, WorkspaceInfo>;
     appSettings: SearchPaletteBoundary["appSettings"];
     isCompact: boolean;
   };
@@ -265,12 +246,10 @@ export type AppShellSearchAndComposerSectionInput = {
     selectWorkspace: SearchPaletteBoundary["selectWorkspace"];
     setActiveTab: SearchPaletteBoundary["setActiveTab"];
     setActiveThreadId: SearchPaletteBoundary["setActiveThreadId"];
-    setAppMode: KanbanComposerBridgeBoundary["setAppMode"];
+    setAppMode: SearchPaletteBoundary["setAppMode"];
     setDiffSource: SearchPaletteBoundary["setDiffSource"];
     exitDiffView: SearchPaletteBoundary["exitDiffView"];
     handleOpenFile: SearchPaletteBoundary["handleOpenFile"];
-    setKanbanViewState: KanbanComposerBridgeBoundary["setKanbanViewState"];
-    setSelectedKanbanTaskId: KanbanComposerBridgeBoundary["setSelectedKanbanTaskId"];
   };
   search: {
     isSearchPaletteOpen: boolean;
@@ -304,7 +283,6 @@ export type AppShellSearchAndComposerSectionInput = {
     increaseUiScale: () => void;
     decreaseUiScale: () => void;
     resetUiScale: () => void;
-    kanbanTasks: KanbanTask[];
   };
 };
 
@@ -363,7 +341,6 @@ export function useAppShellSearchAndComposerSection(
     isCompact,
     isSearchPaletteOpen,
     isQuickSwitcherOpen,
-    kanbanTasks,
     queueMessage,
     quickSwitcherRecentFileGroups,
     quickSwitcherRunningSessions,
@@ -383,7 +360,6 @@ export function useAppShellSearchAndComposerSection(
     setDiffSource,
     setGitPanelMode,
     setIsSearchPaletteOpen,
-    setKanbanViewState,
     setPrefillDraft,
     setSearchContentFilters,
     setSearchPaletteQuery,
@@ -391,11 +367,9 @@ export function useAppShellSearchAndComposerSection(
     setSearchScope,
     setSelectedCommitSha,
     setSelectedDiffPath,
-    setSelectedKanbanTaskId,
     setSelectedPullRequest,
     startThreadForWorkspace,
     workspacesById,
-    workspacesByPath,
   } = boundary;
   const canInterrupt = resolveRuntimeThreadCanInterrupt({
     propCanInterrupt,
@@ -638,24 +612,6 @@ export function useAppShellSearchAndComposerSection(
             setDiffSource("local");
             selectWorkspace(result.workspaceId);
             setActiveThreadId(result.threadId, result.workspaceId);
-          }
-          break;
-        case "kanban":
-          if (result.taskId) {
-            const task = kanbanTasks.find(
-              (entry) => entry.id === result.taskId,
-            );
-            if (task) {
-              const taskWs = workspacesByPath.get(task.workspaceId);
-              setAppMode("kanban");
-              setSelectedKanbanTaskId(task.id);
-              if (taskWs) selectWorkspace(taskWs.id);
-              setKanbanViewState({
-                view: "board",
-                workspaceId: task.workspaceId,
-                panelId: task.panelId,
-              });
-            }
           }
           break;
         case "history":

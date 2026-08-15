@@ -86,7 +86,6 @@ describe("search compute evidence (representative fixture)", () => {
       query,
       contentFilters: ["all"] as SearchContentFilter[],
       workspaceSources,
-      kanbanTasks: [],
       threadItemsByThread,
       historyItems: [],
       skills: [] as SkillOption[],
@@ -111,7 +110,6 @@ describe("search compute evidence (representative fixture)", () => {
       query,
       contentFilters: ["all"] as SearchContentFilter[],
       workspaceSources,
-      kanbanTasks: [],
       threadItemsByThread,
       historyItems: [],
       skills: [] as SkillOption[],
@@ -136,7 +134,6 @@ describe("search compute evidence (representative fixture)", () => {
       query,
       contentFilters: ["all"] as SearchContentFilter[],
       workspaceSources,
-      kanbanTasks: [],
       threadItemsByThread,
       historyItems: [],
       skills: [] as SkillOption[],
@@ -158,7 +155,6 @@ describe("search compute evidence (representative fixture)", () => {
       query,
       contentFilters: ["all"] as SearchContentFilter[],
       workspaceSources,
-      kanbanTasks: [],
       threadItemsByThread,
       historyItems: [],
       skills: [] as SkillOption[],
@@ -184,7 +180,6 @@ describe("search compute evidence (representative fixture)", () => {
       query,
       contentFilters: ["all"] as SearchContentFilter[],
       workspaceSources,
-      kanbanTasks: [],
       threadItemsByThread,
       historyItems: [],
       skills: [] as SkillOption[],
@@ -211,7 +206,6 @@ describe("search compute evidence (representative fixture)", () => {
       query,
       contentFilters: ["all"] as SearchContentFilter[],
       workspaceSources,
-      kanbanTasks: [{ id: "k-1", title: "alpha", description: "d", workspaceId: "w-0", panelId: "p-1" } as never],
       threadItemsByThread,
       historyItems: [{ text: "alpha history", importance: 1 }],
       skills: [] as SkillOption[],
@@ -223,9 +217,7 @@ describe("search compute evidence (representative fixture)", () => {
     });
 
     const evidence = buffer.last() as SearchEvidence;
-    const kanbanRows = evidence.providerTimings.filter((t) => t.provider === "kanban").length;
     const historyRows = evidence.providerTimings.filter((t) => t.provider === "history").length;
-    expect(kanbanRows).toBe(1);
     expect(historyRows).toBe(1);
   });
 
@@ -235,7 +227,6 @@ describe("search compute evidence (representative fixture)", () => {
     const options = {
       contentFilters: ["all"] as SearchContentFilter[],
       workspaceSources,
-      kanbanTasks: [],
       threadItemsByThread,
       historyItems: [],
       skills: [] as SkillOption[],

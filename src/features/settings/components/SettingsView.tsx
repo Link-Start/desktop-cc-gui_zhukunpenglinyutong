@@ -28,7 +28,6 @@ import Bot from "lucide-react/dist/esm/icons/bot";
 import type {
   AppSettings,
   CodexDoctorResult,
-  DictationModelStatus,
   ThemePresetId,
   ThreadSummary,
   WorkspaceSettings,
@@ -101,7 +100,6 @@ import {
 import { DetachedExternalChangeToggles } from "./settings-view/sections/DetachedExternalChangeToggles";
 import { WebServiceSettings } from "./settings-view/sections/WebServiceSettings";
 import { EmailSenderSettings } from "./settings-view/sections/EmailSenderSettings";
-import { DictationSection } from "./settings-view/sections/DictationSection";
 import { EmbedModelSection } from "./settings-view/sections/EmbedModelSection";
 import { ExperimentalToggleRow } from "./settings-view/components/ExperimentalToggleRow";
 import { BasicBehaviorSection } from "./settings-view/sections/BasicBehaviorSection";
@@ -199,10 +197,6 @@ export type SettingsViewProps = {
   scaleShortcutTitle: string;
   scaleShortcutText: string;
   onTestNotificationSound: (soundId?: string, customSoundPath?: string) => void;
-  dictationModelStatus?: DictationModelStatus | null;
-  onDownloadDictationModel?: () => void;
-  onCancelDictationDownload?: () => void;
-  onRemoveDictationModel?: () => void;
   initialSection?: SettingsViewSection;
   initialHighlightTarget?:
     | "experimental-collaboration-modes"
@@ -346,10 +340,6 @@ export function SettingsView({
   scaleShortcutTitle,
   scaleShortcutText,
   onTestNotificationSound,
-  dictationModelStatus,
-  onDownloadDictationModel,
-  onCancelDictationDownload,
-  onRemoveDictationModel,
   initialSection,
   initialHighlightTarget,
 }: SettingsViewProps) {
@@ -1754,11 +1744,6 @@ export function SettingsView({
           title: t("settings.sidebarComposer"),
           description: t("settings.composerDescription"),
         };
-      case "dictation":
-        return {
-          title: t("settings.dictationTitle"),
-          description: t("settings.dictationDescription"),
-        };
       case "memory":
         return {
           title: t("settings.sidebarMemory"),
@@ -2404,16 +2389,6 @@ export function SettingsView({
             historyCompletionEnabled={historyCompletionEnabled}
             handleHistoryCompletionToggle={handleHistoryCompletionToggle}
             reduceTransparency={reduceTransparency}
-          />
-          <DictationSection
-            active={activeSection === "dictation"}
-            t={t}
-            appSettings={appSettings}
-            onUpdateAppSettings={onUpdateAppSettings}
-            dictationModelStatus={dictationModelStatus}
-            onDownloadDictationModel={onDownloadDictationModel}
-            onCancelDictationDownload={onCancelDictationDownload}
-            onRemoveDictationModel={onRemoveDictationModel}
           />
           <EmbedModelSection active={activeSection === "memory"} t={t} />
           {activeSection === "git" && (
