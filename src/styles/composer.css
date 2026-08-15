@@ -25,24 +25,17 @@
 }
 
 .composer-browser-context-card {
-  --browser-context-accent: #2563eb;
-  --browser-context-accent-rgb: 37 99 235;
+  --browser-context-accent: var(--text-secondary, #4b5563);
+  --browser-context-accent-rgb: 75 85 99;
   --browser-context-ink: var(--text-primary, var(--foreground, #111827));
   --browser-context-muted: var(--text-muted, var(--muted-foreground, #4b5563));
-  --browser-context-soft: color-mix(in srgb, var(--browser-context-ink) 82%, transparent);
-  --browser-context-chip-text: color-mix(in srgb, var(--browser-context-ink) 88%, transparent);
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  border: 1px solid color-mix(in srgb, var(--browser-context-accent) 44%, var(--border, #d1d5db));
-  border-radius: 13px;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--browser-context-accent) 11%, transparent), transparent 52%),
-    color-mix(in srgb, var(--background, #ffffff) 94%, var(--browser-context-accent) 6%);
-  box-shadow: 0 6px 20px color-mix(in srgb, var(--browser-context-accent) 12%, transparent);
-  color: var(--browser-context-ink);
-  padding: 9px 10px;
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
 }
 
 .composer-browser-context-card.is-expired {

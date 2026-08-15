@@ -38,6 +38,8 @@ struct GeneratedModelCatalogEngines {
     kimi: Vec<GeneratedModelEntry>,
     #[serde(default)]
     opencode: Vec<GeneratedModelEntry>,
+    #[serde(default)]
+    pi: Vec<GeneratedModelEntry>,
 }
 
 #[derive(Deserialize)]
@@ -65,7 +67,8 @@ fn get_generated_fallback_models(engine: EngineType) -> Vec<ModelInfo> {
         EngineType::Codex => catalog.engines.codex,
         EngineType::Gemini => catalog.engines.gemini,
         EngineType::Grok => catalog.engines.grok,
-        EngineType::Kimi | EngineType::Pi => catalog.engines.kimi,
+        EngineType::Kimi => catalog.engines.kimi,
+        EngineType::Pi => catalog.engines.pi,
         EngineType::OpenCode => catalog.engines.opencode,
         _ => return Vec::new(),
     };
