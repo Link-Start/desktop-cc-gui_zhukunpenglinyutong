@@ -648,6 +648,7 @@ export {
   setGlobalMcpServerEnabled,
   listGrokSessions,
   listKimiSessions,
+  listPiSessions,
   listMcpServerStatus,
   listThreads,
   loadClaudeSession,

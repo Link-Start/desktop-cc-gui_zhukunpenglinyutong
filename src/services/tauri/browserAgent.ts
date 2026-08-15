@@ -123,20 +123,25 @@ export async function hideBrowserAgentWebview(
 }
 
 export async function showBrowserAgentTabContextMenuOverlay(
-  _request: BrowserTabContextMenuRequest,
+  request: BrowserTabContextMenuRequest,
 ): Promise<void> {
-  // Rust overlay command is not on 0.9 yet; HTML tab menus still work.
+  return invoke<void>("show_browser_agent_tab_context_menu_overlay", { request });
 }
 
 export async function startBrowserAgentElementSelect(
-  _browserSessionId: string,
+  browserSessionId: string,
 ): Promise<void> {
-  // Element-select rust command is not on 0.9 yet.
+  return invoke<void>("start_browser_agent_element_select", {
+    browserSessionId,
+  });
 }
 
 export async function stopBrowserAgentElementSelect(
-  _browserSessionId: string,
+  browserSessionId: string,
 ): Promise<void> {
+  return invoke<void>("stop_browser_agent_element_select", {
+    browserSessionId,
+  });
 }
 
 export async function listBrowserAgentEvidence(

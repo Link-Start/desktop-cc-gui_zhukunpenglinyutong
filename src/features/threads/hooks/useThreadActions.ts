@@ -12,6 +12,7 @@ import {
   listGeminiSessions as listGeminiSessionsService,
   listGrokSessions as listGrokSessionsService,
   listKimiSessions as listKimiSessionsService,
+  listPiSessions as listPiSessionsService,
   getOpenCodeSessionList as getOpenCodeSessionListService,
   listSessionIndexForWorkspace as listSessionIndexForWorkspaceService,
 } from "../../../services/tauri";
@@ -68,10 +69,12 @@ import {
   mergeGeminiSessionSummaries,
   mergeGrokSessionSummaries,
   mergeKimiSessionSummaries,
+  mergePiSessionSummaries,
   mergeThreadSummaryPreservingStableIdentity,
   normalizeGeminiSessionSummaries,
   normalizeGrokSessionSummaries,
   normalizeKimiSessionSummaries,
+  normalizePiSessionSummaries,
   normalizeThreadListPartialSource,
   resolveThreadSourceMeta,
   seedLastGoodClaudeIntoMerged,
@@ -175,6 +178,10 @@ export function useThreadActions({
     Record<string, { fetchedAt: number; sessions: KimiSessionSummary[] }>
   >({});
   const kimiRefreshAttemptedRef = useRef<Record<string, boolean>>({});
+  const piSessionCacheRef = useRef<
+    Record<string, { fetchedAt: number; sessions: KimiSessionSummary[] }>
+  >({});
+  const piRefreshAttemptedRef = useRef<Record<string, boolean>>({});
   const grokSessionCacheRef = useRef<
     Record<string, { fetchedAt: number; sessions: GrokSessionSummary[] }>
   >({});
@@ -2055,6 +2062,59 @@ export function useThreadActions({
                 [workspace.id]: visibleNextSummaries,
               };
             }
+          })();
+        }
+        const shouldRefreshPiSessions =
+          isLatestThreadListRequest() &&
+          !isFirstPaintHydration &&
+          (piRefreshAttemptedRef.current[workspace.id] !== true ||
+            (latestThreadsByWorkspaceRef.current[workspace.id] ?? []).some(
+              (thread) => thread.engineSource === "pi",
+            ) ||
+            !!piSessionCacheRef.current[workspace.id]);
+        if (shouldRefreshPiSessions) {
+          void (async () => {
+            piRefreshAttemptedRef.current[workspace.id] = true;
+            const piResult = await withTimeout(
+              listPiSessionsService(workspace.path, 50),
+              KIMI_SESSION_FETCH_TIMEOUT_MS,
+            );
+            if (!isLatestThreadListRequest() || piResult === null) {
+              return;
+            }
+            const normalizedPiSessions = normalizePiSessionSummaries(piResult);
+            piSessionCacheRef.current[workspace.id] = {
+              fetchedAt: Date.now(),
+              sessions: normalizedPiSessions,
+            };
+            const currentSnapshot =
+              latestThreadsByWorkspaceRef.current[workspace.id] ?? [];
+            const baselineSummaries =
+              currentSnapshot.length > 0 ? currentSnapshot : allSummaries;
+            const nextSummaries = mergePiSessionSummaries(
+              baselineSummaries,
+              normalizedPiSessions,
+              workspace.id,
+              mappedTitles,
+              getCustomName,
+              hiddenSharedBindingIds,
+            );
+            const visibleNextSummaries = applySessionArchiveState(
+              nextSummaries,
+              await archivedSessionMapPromise,
+            );
+            if (!isLatestThreadListRequest()) {
+              return;
+            }
+            dispatch({
+              type: "setThreads",
+              workspaceId: workspace.id,
+              threads: visibleNextSummaries,
+            });
+            latestThreadsByWorkspaceRef.current = {
+              ...latestThreadsByWorkspaceRef.current,
+              [workspace.id]: visibleNextSummaries,
+            };
           })();
         }
       } catch (error) {

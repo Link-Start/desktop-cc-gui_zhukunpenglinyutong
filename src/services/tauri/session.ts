@@ -407,6 +407,18 @@ export async function loadKimiSession(workspacePath: string, sessionId: string):
   });
 }
 
+export async function listPiSessions(
+  workspacePath: string,
+  limit?: number | null,
+): Promise<Record<string, unknown> | unknown[] | null> {
+  return traceStartupInvoke("list_pi_sessions", "global", () =>
+    invoke<Record<string, unknown> | unknown[] | null>("list_pi_sessions", {
+      workspacePath,
+      limit: limit ?? null,
+    }),
+  );
+}
+
 export async function loadPiSession(
   workspacePath: string,
   sessionId: string,

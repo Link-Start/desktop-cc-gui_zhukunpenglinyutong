@@ -1659,6 +1659,23 @@ const settings = {
     grokPlaceholder: "grok",
     opencodeDescription:
       "Configure OpenCode CLI providers and local settings used by ccgui.",
+    piDescription: "Configure PI CLI auth and models. Credentials stay in ~/.pi.",
+    piCliLifecycleHint:
+      "Install or update the local PI CLI via npm package @earendil-works/pi-coding-agent. Auth and models stay in ~/.pi.",
+    piAuth: {
+      sectionTitle: "Provider authentication",
+      oauthTitle: "Subscriptions",
+      oauthHint: "OAuth sign-in; tokens auto-refresh and are stored in auth.json",
+      subscribed: "Authorized · auto-refresh",
+      notSubscribed: "Not authorized",
+      login: "Log in",
+      apiKeyTitle: "API Key",
+      apiKeyHint: "Written to ~/.pi/agent/auth.json · takes priority over env vars",
+      searchPlaceholder: "Filter providers…",
+      configured: "Configured",
+      notConfigured: "Not configured",
+      envActive: "Env var active",
+    },
     defaultOpenCodePath: "Default OpenCode CLI path",
     openCodePlaceholder: "opencode",
     defaultCodexPath: "Default Codex path",

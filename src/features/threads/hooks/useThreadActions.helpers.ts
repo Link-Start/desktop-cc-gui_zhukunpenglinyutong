@@ -1146,6 +1146,12 @@ export function normalizeKimiSessionSummaries(
   return normalizeGeminiSessionSummaries(value);
 }
 
+export function normalizePiSessionSummaries(
+  value: unknown,
+): KimiSessionSummary[] {
+  return normalizeGeminiSessionSummaries(value);
+}
+
 function normalizeGrokSessionSummary(value: unknown): GrokSessionSummary | null {
   const base = normalizeGeminiSessionSummary(value);
   if (!base) {
@@ -1355,8 +1361,8 @@ function mergeNativeCliSessionSummaries(params: {
       sessionKind?: string | null;
     }
   >;
-  idPrefix: "gemini" | "grok" | "kimi";
-  engineSource: "gemini" | "grok" | "kimi";
+  idPrefix: "gemini" | "grok" | "kimi" | "pi";
+  engineSource: "gemini" | "grok" | "kimi" | "pi";
   fallbackTitle: string;
   workspaceId: string;
   mappedTitles: Record<string, string>;
@@ -1496,6 +1502,27 @@ export function mergeKimiSessionSummaries(
     idPrefix: "kimi",
     engineSource: "kimi",
     fallbackTitle: "Kimi Session",
+    workspaceId,
+    mappedTitles,
+    getCustomName,
+    hiddenSharedBindingIds,
+  });
+}
+
+export function mergePiSessionSummaries(
+  baseSummaries: ThreadSummary[],
+  piSessions: KimiSessionSummary[],
+  workspaceId: string,
+  mappedTitles: Record<string, string>,
+  getCustomName: (workspaceId: string, threadId: string) => string | undefined,
+  hiddenSharedBindingIds?: ReadonlySet<string>,
+): ThreadSummary[] {
+  return mergeNativeCliSessionSummaries({
+    baseSummaries,
+    sessions: piSessions,
+    idPrefix: "pi",
+    engineSource: "pi",
+    fallbackTitle: "PI Session",
     workspaceId,
     mappedTitles,
     getCustomName,

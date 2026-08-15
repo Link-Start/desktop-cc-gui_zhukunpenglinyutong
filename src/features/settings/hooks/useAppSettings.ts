@@ -214,6 +214,7 @@ function normalizeDisabledCliEngines(value: unknown): string[] {
 const defaultSettings: AppSettings = {
   claudeBin: null,
   kimiBin: null,
+  piBin: null,
   grokBin: null,
   opencodeBin: null,
   codexBin: null,
@@ -402,6 +403,7 @@ function normalizeAppSettings(
     experimentalUnifiedExecEnabled: undefined,
     claudeBin: settings.claudeBin?.trim() ? settings.claudeBin.trim() : null,
     kimiBin: settings.kimiBin?.trim() ? settings.kimiBin.trim() : null,
+    piBin: settings.piBin?.trim() ? settings.piBin.trim() : null,
     grokBin: settings.grokBin?.trim() ? settings.grokBin.trim() : null,
     opencodeBin: settings.opencodeBin?.trim()
       ? settings.opencodeBin.trim()
