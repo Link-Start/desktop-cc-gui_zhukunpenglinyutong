@@ -768,6 +768,7 @@ export function useProjectMapDataset(
       const response = await readProjectMapRelationships({
         workspaceId,
         storageLocation: readLocation,
+        include: ["manifest", "contextPack", "stale"],
       });
       setRelationshipContextPack(normalizeRelationshipContextPack(response.contextPack));
       setRelationshipStaleSummary(normalizeRelationshipStaleSummary(response.stale));

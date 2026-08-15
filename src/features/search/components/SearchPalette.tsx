@@ -197,8 +197,10 @@ export function SearchPalette({
   const apiHydrationMessage =
     apiHydrationStatus === "loading"
       ? t("searchPalette.apiIndexLoading")
-      : apiHydrationStatus === "refreshing"
-        ? t("searchPalette.apiIndexRefreshing")
+      : apiHydrationStatus === "stale"
+        ? t("searchPalette.apiIndexStale")
+      : apiHydrationStatus === "empty"
+        ? t("searchPalette.apiIndexEmpty")
       : apiHydrationStatus === "error"
         ? t("searchPalette.apiIndexError")
         : null;
@@ -337,6 +339,8 @@ export function SearchPalette({
               <div className="search-palette-empty-title">
                 {apiHydrationStatus === "loading"
                   ? t("searchPalette.apiIndexLoading")
+                  : apiHydrationStatus === "empty"
+                    ? t("searchPalette.apiIndexEmpty")
                   : fileHydrationStatus === "loading"
                   ? t("searchPalette.fileIndexLoading")
                   : t("searchPalette.noResults")}

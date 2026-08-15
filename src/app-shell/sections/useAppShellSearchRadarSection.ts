@@ -15,10 +15,7 @@ import type {
 import { useComposerInsert } from "../../features/app/hooks/useComposerInsert";
 import { loadHistoryWithImportance } from "../../features/composer/hooks/useInputHistoryStore";
 import type { HistoryItem } from "../../features/composer/hooks/useInputHistoryStore";
-import {
-  readProjectMapRelationships,
-  scanProjectMapRelationships,
-} from "../../features/project-map/services/projectMapPersistence";
+import { readProjectMapRelationships } from "../../features/project-map/services/projectMapPersistence";
 import { normalizeProjectMapRelationshipDashboardData } from "../../features/project-map/utils/relationshipDashboardModel";
 import { useUnifiedSearch } from "../../features/search/hooks/useUnifiedSearch";
 import type {
@@ -279,9 +276,6 @@ export function useAppShellSearchRadarSection({
   >({});
   const apiSnapshotsByWorkspaceRef = useRef(apiSnapshotsByWorkspace);
   apiSnapshotsByWorkspaceRef.current = apiSnapshotsByWorkspace;
-  const apiHydrationInFlightByWorkspaceRef = useRef(
-    new Map<string, Promise<import("../../features/project-map/types").ProjectMapApiEndpoint[]>>(),
-  );
   const backgroundRenderGatingEnabled = isBackgroundRenderGatingEnabled();
   // Session radar 完成预览依赖 threadItems，不能在搜索关闭时清空 deferred 表。
   // 搜索路径已在 useUnifiedSearch 入参处按 isSearchPaletteOpen 门控。
@@ -567,66 +561,23 @@ export function useAppShellSearchRadarSection({
       });
     }
     let cancelled = false;
-    const refreshEndpoints = (workspaceId: string) => {
-      const inFlight =
-        apiHydrationInFlightByWorkspaceRef.current.get(workspaceId);
-      if (inFlight) return inFlight;
-      const request = (async () => {
-        await scanProjectMapRelationships({ workspaceId });
-        const refreshed = await readProjectMapRelationships({ workspaceId });
-        return (
-          normalizeProjectMapRelationshipDashboardData(refreshed)
-            .apiContracts?.endpoints ?? []
-        );
-      })();
-      apiHydrationInFlightByWorkspaceRef.current.set(workspaceId, request);
-      const clearCompletedRequest = () => {
-        if (
-          apiHydrationInFlightByWorkspaceRef.current.get(workspaceId) ===
-          request
-        ) {
-          apiHydrationInFlightByWorkspaceRef.current.delete(workspaceId);
-        }
-      };
-      void request.then(clearCompletedRequest, clearCompletedRequest);
-      return request;
-    };
     const hydrate = async (workspaceId: string) => {
       try {
-        const response = await readProjectMapRelationships({ workspaceId });
+        const response = await readProjectMapRelationships({
+          workspaceId,
+          include: ["manifest", "apiContracts", "stale"],
+        });
         const dashboard =
           normalizeProjectMapRelationshipDashboardData(response);
-        const graph = dashboard.apiContracts;
-        if (graph && dashboard.staleSummary?.isFresh === false && !cancelled) {
-          setApiSnapshotsByWorkspace((current) => ({
-            ...current,
-            [workspaceId]: {
-              endpoints: graph?.endpoints ?? [],
-              status: "refreshing",
-              error: null,
-            },
-          }));
-        }
-        if (!graph || dashboard.staleSummary?.isFresh === false) {
-          const endpoints = await refreshEndpoints(workspaceId);
-          if (!cancelled) {
-            setApiSnapshotsByWorkspace((current) => ({
-              ...current,
-              [workspaceId]: {
-                endpoints,
-                status: "complete",
-                error: null,
-              },
-            }));
-          }
-          return;
-        }
+        const endpoints = dashboard.apiContracts?.endpoints ?? [];
+        const hasEndpoints = endpoints.length > 0;
+        const isFresh = dashboard.staleSummary?.isFresh !== false;
         if (!cancelled) {
           setApiSnapshotsByWorkspace((current) => ({
             ...current,
             [workspaceId]: {
-              endpoints: graph?.endpoints ?? [],
-              status: "complete",
+              endpoints,
+              status: hasEndpoints ? (isFresh ? "complete" : "stale") : "empty",
               error: null,
             },
           }));
@@ -774,10 +725,11 @@ export function useAppShellSearchRadarSection({
         (apiSnapshotsByWorkspace[workspaceId]?.endpoints.length ?? 0) > 0,
     );
     if (statuses.some((status) => !status || status === "loading")) {
-      return hasSearchableEndpoints ? "refreshing" : "loading";
+      return hasSearchableEndpoints ? "stale" : "loading";
     }
-    if (statuses.some((status) => status === "refreshing")) return "refreshing";
     if (statuses.some((status) => status === "error")) return "error";
+    if (statuses.some((status) => status === "stale")) return "stale";
+    if (statuses.every((status) => status === "empty")) return "empty";
     return "complete";
   }, [
     activeWorkspaceId,

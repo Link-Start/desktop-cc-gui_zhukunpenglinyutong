@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 mod context_pack;
 mod file_classification;
@@ -40,6 +41,11 @@ use crate::project_map_api_contracts::build_api_contract_artifact;
 use crate::state::AppState;
 use crate::storage::{with_storage_lock, write_string_atomically};
 use crate::types::WorkspaceEntry;
+
+const RELATIONSHIP_REPAIR_SAMPLE_LIMIT: usize = 20;
+const RELATIONSHIP_BACKUP_KEEP_COUNT: usize = 2;
+const RELATIONSHIP_BACKUP_BUDGET_BYTES: u64 = 200 * 1024 * 1024;
+const RELATIONSHIP_BACKUP_DIR_PREFIX: &str = "backup-";
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -448,6 +454,7 @@ fn write_relationship_snapshot_files(
             atomic_write(&target, &file.content)?;
         }
 
+        gc_relationship_backups(root)?;
         Ok(())
     })
 }
@@ -573,6 +580,184 @@ fn relative_matches_requested_path(relative: &str, requested: &str) -> bool {
         Some(tail) => tail.starts_with('/'),
         None => false,
     }
+}
+
+fn relationship_read_includes_section(include: Option<&[String]>, section: &str) -> bool {
+    let Some(sections) = include else {
+        return true;
+    };
+    if sections.is_empty() {
+        return true;
+    }
+    sections.iter().any(|item| {
+        item.trim().eq_ignore_ascii_case(section)
+            || (section == "relationsByFile" && item.trim() == "relations_by_file")
+            || (section == "relationsByType" && item.trim() == "relations_by_type")
+            || (section == "contextPack" && item.trim() == "context_pack")
+            || (section == "apiContracts" && item.trim() == "api_contracts")
+            || (section == "filesManifest" && item.trim() == "files_manifest")
+    })
+}
+
+fn compact_relationship_repair_value(value: Value) -> Value {
+    if value
+        .get("schemaVersion")
+        .and_then(Value::as_u64)
+        .unwrap_or(1)
+        >= 2
+    {
+        return value;
+    }
+
+    let generated_at = value
+        .get("generatedAt")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    let issues = value
+        .get("issues")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    compact_relationship_repair_from_issues(generated_at, &issues)
+}
+
+fn compact_relationship_repair_from_issues(generated_at: String, issues: &[Value]) -> Value {
+    let mut by_kind = BTreeMap::<String, usize>::new();
+    let mut samples = BTreeMap::<String, Vec<Value>>::new();
+    for issue in issues {
+        let kind = issue
+            .get("kind")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown")
+            .to_string();
+        *by_kind.entry(kind.clone()).or_insert(0) += 1;
+        let kind_samples = samples.entry(kind).or_default();
+        if kind_samples.len() < RELATIONSHIP_REPAIR_SAMPLE_LIMIT {
+            kind_samples.push(issue.clone());
+        }
+    }
+    let sample_count = samples.values().map(Vec::len).sum::<usize>();
+    json!({
+        "schemaVersion": 2,
+        "generatedAt": generated_at,
+        "issueCount": issues.len(),
+        "byKind": by_kind,
+        "issues": samples.into_values().flatten().collect::<Vec<_>>(),
+        "truncated": sample_count < issues.len()
+    })
+}
+
+fn compact_relationship_repair_from_structs(
+    generated_at: &str,
+    issues: &[RepairIssue],
+    duplicate_count: usize,
+) -> Value {
+    let values = issues
+        .iter()
+        .filter(|issue| issue.kind != "duplicate-relation")
+        .map(|issue| {
+            json!({
+                "id": issue.id,
+                "kind": issue.kind,
+                "severity": issue.severity,
+                "message": issue.message,
+                "fileId": issue.file_id,
+                "relationId": issue.relation_id,
+                "path": issue.path,
+                "action": issue.action
+            })
+        })
+        .collect::<Vec<_>>();
+    let mut compact = compact_relationship_repair_from_issues(generated_at.to_string(), &values);
+    if duplicate_count > 0 {
+        if let Some(count) = compact.get("issueCount").and_then(Value::as_u64) {
+            compact["issueCount"] = json!(count + duplicate_count as u64);
+        }
+        compact["byKind"]["duplicate-relation"] = json!(duplicate_count);
+        compact["truncated"] = json!(true);
+    }
+    compact
+}
+
+fn parse_relationship_backup_stamp(name: &str) -> Option<&str> {
+    let stamp = name.strip_prefix(RELATIONSHIP_BACKUP_DIR_PREFIX)?;
+    if stamp.len() != 16 || !stamp.ends_with('Z') {
+        return None;
+    }
+    if stamp[..8].chars().all(|ch| ch.is_ascii_digit())
+        && stamp.as_bytes().get(8) == Some(&b'T')
+        && stamp[9..15].chars().all(|ch| ch.is_ascii_digit())
+    {
+        Some(stamp)
+    } else {
+        None
+    }
+}
+
+fn directory_size(path: &Path) -> u64 {
+    let mut total = 0;
+    let Ok(entries) = fs::read_dir(path) else {
+        return 0;
+    };
+    for entry in entries.flatten() {
+        let child = entry.path();
+        if child.is_dir() {
+            total += directory_size(&child);
+        } else if let Ok(metadata) = entry.metadata() {
+            total += metadata.len();
+        }
+    }
+    total
+}
+
+fn gc_relationship_backups(root: &Path) -> Result<(), String> {
+    let backups_root = root.join("backups");
+    if !backups_root.is_dir() {
+        return Ok(());
+    }
+    let mut backups = Vec::new();
+    let entries = fs::read_dir(&backups_root)
+        .map_err(|err| format!("Failed to list relationship backups: {err}"))?;
+    for entry in entries {
+        let entry = entry.map_err(|err| format!("Failed to read relationship backup: {err}"))?;
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+            continue;
+        };
+        let Some(stamp) = parse_relationship_backup_stamp(name) else {
+            continue;
+        };
+        let modified = entry
+            .metadata()
+            .and_then(|metadata| metadata.modified())
+            .unwrap_or(SystemTime::UNIX_EPOCH);
+        backups.push((stamp.to_string(), modified, path));
+    }
+    backups.sort_by(|left, right| right.0.cmp(&left.0).then(right.1.cmp(&left.1)));
+
+    let mut kept = 0usize;
+    let mut kept_bytes = 0u64;
+    for (_, _, path) in backups {
+        let size = directory_size(&path);
+        let over_count = kept >= RELATIONSHIP_BACKUP_KEEP_COUNT;
+        let over_budget = kept_bytes + size > RELATIONSHIP_BACKUP_BUDGET_BYTES;
+        if over_count || over_budget {
+            fs::remove_dir_all(&path).map_err(|err| {
+                format!(
+                    "Failed to remove expired relationship backup {}: {err}",
+                    path.display()
+                )
+            })?;
+            continue;
+        }
+        kept += 1;
+        kept_bytes += size;
+    }
+    Ok(())
 }
 
 fn read_json_with_errors(
@@ -1131,8 +1316,7 @@ fn scan_workspace(
         }
     }
 
-    let (relations, duplicate_issues) = dedupe_relations(relations);
-    repair_issues.extend(duplicate_issues);
+    let (relations, duplicate_count) = dedupe_relations(relations);
     let (by_file, by_type, hotspots, modules) = build_indexes(&files, &relations);
     let (git_common_root, git_commit_hash) = git_metadata(&scan_root);
     let (impact_artifact, mut context_pack_artifact) = build_relationship_impact_and_context(
@@ -1220,7 +1404,7 @@ fn scan_workspace(
             "repair": api_repair
         },
         "ignoredCount": ignored_paths.len(),
-        "repairIssueCount": repair_issues.len(),
+        "repairIssueCount": repair_issues.len() + duplicate_count,
         "source": "deterministic-scan"
     });
     let snapshot_files = vec![
@@ -1384,15 +1568,15 @@ fn scan_workspace(
         },
         ProjectMapRelationshipWriteFile {
             relative_path: "repair/latest.json".to_string(),
-            content: serde_json::to_string_pretty(&json!({
-                "schemaVersion": 1,
-                "generatedAt": generated_at,
-                "issues": repair_issues
-            }))
+            content: serde_json::to_string_pretty(&compact_relationship_repair_from_structs(
+                &generated_at,
+                &repair_issues,
+                duplicate_count,
+            ))
             .map_err(|err| format!("Failed to serialize relationship repair summary: {err}"))?,
         },
     ];
-    write_relationship_snapshot_files(storage_root, storage_key, snapshot_files, true)?;
+    write_relationship_snapshot_files(storage_root, storage_key, snapshot_files, false)?;
 
     Ok(ProjectMapRelationshipScanResponse {
         storage_key: storage_key.to_string(),
@@ -1405,7 +1589,7 @@ fn scan_workspace(
         api_endpoint_count,
         api_group_count,
         ignored_count: ignored_paths.len(),
-        repair_issue_count: repair_issues.len(),
+        repair_issue_count: repair_issues.len() + duplicate_count,
     })
 }
 
@@ -1434,43 +1618,102 @@ pub(crate) async fn project_map_relationship_scan(
 pub(crate) async fn project_map_relationship_read(
     workspace_id: String,
     storage_mode: Option<String>,
+    include: Option<Vec<String>>,
     state: State<'_, AppState>,
 ) -> Result<ProjectMapRelationshipReadResponse, String> {
     let entry = workspace_entry(&state, &workspace_id).await?;
     let (key, root) = relationship_root_for_mode(&entry, storage_mode.as_deref())?;
+    let include_ref = include.as_deref();
     let exists = root.join("manifest.json").is_file();
     let mut read_errors = Vec::new();
-    let manifest = read_json_with_errors(&root, "manifest.json", &mut read_errors);
-    let profile = read_json_with_errors(&root, "profile.json", &mut read_errors);
-    let run = read_json_with_errors(&root, "runs/latest.json", &mut read_errors);
-    let scan = read_json_with_errors(&root, "scans/latest.json", &mut read_errors);
-    let files_manifest = read_json_with_errors(&root, "files/manifest.json", &mut read_errors);
-    let files = read_json_with_errors(&root, "files/chunks-000.json", &mut read_errors);
-    let relations = read_json_with_errors(&root, "relations/latest.json", &mut read_errors);
-    let relations_by_file =
-        read_json_with_errors(&root, "relations/by-file.json", &mut read_errors);
-    let relations_by_type =
-        read_json_with_errors(&root, "relations/by-type.json", &mut read_errors);
-    let symbols = read_json_with_errors(&root, "symbols/chunks-000.json", &mut read_errors);
-    let modules = read_json_with_errors(&root, "modules/latest.json", &mut read_errors);
-    let impact = read_json_with_errors(&root, "impact/latest.json", &mut read_errors);
-    let context_pack = read_json_with_errors(&root, "context-packs/latest.json", &mut read_errors);
-    let api_contracts = read_api_contracts_with_ownership(&root, &key, &mut read_errors);
-    let stale = exists
+    let want_manifest = relationship_read_includes_section(include_ref, "manifest");
+    let want_profile = relationship_read_includes_section(include_ref, "profile");
+    let want_run = relationship_read_includes_section(include_ref, "run");
+    let want_scan = relationship_read_includes_section(include_ref, "scan");
+    let want_files_manifest = relationship_read_includes_section(include_ref, "filesManifest")
+        || relationship_read_includes_section(include_ref, "files");
+    let want_files = relationship_read_includes_section(include_ref, "files");
+    let want_relations = relationship_read_includes_section(include_ref, "relations");
+    let want_relations_by_file = relationship_read_includes_section(include_ref, "relationsByFile");
+    let want_relations_by_type = relationship_read_includes_section(include_ref, "relationsByType");
+    let want_symbols = relationship_read_includes_section(include_ref, "symbols");
+    let want_modules = relationship_read_includes_section(include_ref, "modules");
+    let want_impact = relationship_read_includes_section(include_ref, "impact");
+    let want_context_pack = relationship_read_includes_section(include_ref, "contextPack");
+    let want_api_contracts = relationship_read_includes_section(include_ref, "apiContracts");
+    let want_stale = relationship_read_includes_section(include_ref, "stale");
+    let want_repair = relationship_read_includes_section(include_ref, "repair");
+
+    let manifest = if want_manifest || want_stale {
+        read_json_with_errors(&root, "manifest.json", &mut read_errors)
+    } else {
+        None
+    };
+    let profile = want_profile
+        .then(|| read_json_with_errors(&root, "profile.json", &mut read_errors))
+        .flatten();
+    let run = want_run
+        .then(|| read_json_with_errors(&root, "runs/latest.json", &mut read_errors))
+        .flatten();
+    let scan = want_scan
+        .then(|| read_json_with_errors(&root, "scans/latest.json", &mut read_errors))
+        .flatten();
+    let files_manifest = want_files_manifest
+        .then(|| read_json_with_errors(&root, "files/manifest.json", &mut read_errors))
+        .flatten();
+    let files = if want_files || want_stale {
+        read_json_with_errors(&root, "files/chunks-000.json", &mut read_errors)
+    } else {
+        None
+    };
+    let relations = want_relations
+        .then(|| read_json_with_errors(&root, "relations/latest.json", &mut read_errors))
+        .flatten();
+    let relations_by_file = want_relations_by_file
+        .then(|| read_json_with_errors(&root, "relations/by-file.json", &mut read_errors))
+        .flatten();
+    let relations_by_type = want_relations_by_type
+        .then(|| read_json_with_errors(&root, "relations/by-type.json", &mut read_errors))
+        .flatten();
+    let symbols = want_symbols
+        .then(|| read_json_with_errors(&root, "symbols/chunks-000.json", &mut read_errors))
+        .flatten();
+    let modules = want_modules
+        .then(|| read_json_with_errors(&root, "modules/latest.json", &mut read_errors))
+        .flatten();
+    let impact = want_impact
+        .then(|| read_json_with_errors(&root, "impact/latest.json", &mut read_errors))
+        .flatten();
+    let context_pack = want_context_pack
+        .then(|| read_json_with_errors(&root, "context-packs/latest.json", &mut read_errors))
+        .flatten();
+    let api_contracts = want_api_contracts
+        .then(|| read_api_contracts_with_ownership(&root, &key, &mut read_errors))
+        .flatten();
+    let stale = (exists && want_stale)
         .then(|| summarize_relationship_stale_state(Path::new(&entry.path), &manifest, &files));
-    let context_pack = enrich_context_pack_with_stale_state(context_pack, &stale);
-    let repair = read_json_with_errors(&root, "repair/latest.json", &mut read_errors);
+    let context_pack = if want_context_pack {
+        enrich_context_pack_with_stale_state(context_pack, &stale)
+    } else {
+        None
+    };
+    let repair = want_repair
+        .then(|| {
+            read_json_with_errors(&root, "repair/latest.json", &mut read_errors)
+                .map(compact_relationship_repair_value)
+        })
+        .flatten();
 
     Ok(ProjectMapRelationshipReadResponse {
         storage_key: key,
         storage_dir: root.to_string_lossy().to_string(),
         exists,
-        manifest,
+        manifest: if want_manifest { manifest } else { None },
         profile,
         run,
         scan,
         files_manifest,
-        files,
+        files: if want_files { files } else { None },
         relations,
         relations_by_file,
         relations_by_type,
@@ -1479,7 +1722,7 @@ pub(crate) async fn project_map_relationship_read(
         impact,
         context_pack,
         api_contracts,
-        stale,
+        stale: if want_stale { stale } else { None },
         repair,
         read_errors,
     })
@@ -1518,9 +1761,14 @@ pub(crate) async fn project_map_relationship_clear(
 #[cfg(test)]
 mod tests {
     use super::{
+        compact_relationship_repair_value, gc_relationship_backups,
+        parse_relationship_backup_stamp, relationship_read_includes_section,
         validate_relationship_snapshot_ownership, validate_relative_relationship_path,
-        ProjectMapRelationshipWriteFile,
+        ProjectMapRelationshipWriteFile, RELATIONSHIP_BACKUP_DIR_PREFIX,
     };
+    use serde_json::json;
+    use std::fs;
+    use std::time::UNIX_EPOCH;
 
     #[test]
     fn relationship_write_paths_are_constrained() {
@@ -1562,5 +1810,90 @@ mod tests {
         assert!(validate_relationship_snapshot_ownership("project-12345678", &files).is_ok());
         assert!(validate_relationship_snapshot_ownership("other-12345678", &files).is_err());
         assert!(validate_relationship_snapshot_ownership("project-12345678", &[]).is_err());
+    }
+
+    #[test]
+    fn relationship_read_include_defaults_to_all_sections() {
+        assert!(relationship_read_includes_section(None, "relations"));
+        assert!(relationship_read_includes_section(Some(&[]), "repair"));
+        assert!(relationship_read_includes_section(
+            Some(&["manifest".to_string(), "stale".to_string()]),
+            "stale"
+        ));
+        assert!(!relationship_read_includes_section(
+            Some(&["manifest".to_string(), "apiContracts".to_string()]),
+            "relations"
+        ));
+    }
+
+    #[test]
+    fn compact_repair_caps_legacy_issue_arrays() {
+        let issues = (0..50)
+            .map(|index| {
+                json!({
+                    "id": format!("repair-{index}"),
+                    "kind": "duplicate-relation",
+                    "severity": "info",
+                    "message": "Duplicate deterministic relationship was quarantined.",
+                    "action": "quarantined"
+                })
+            })
+            .collect::<Vec<_>>();
+        let compact = compact_relationship_repair_value(json!({
+            "schemaVersion": 1,
+            "generatedAt": "2026-08-12T05:20:05Z",
+            "issues": issues
+        }));
+        assert_eq!(compact["schemaVersion"], 2);
+        assert_eq!(compact["issueCount"], 50);
+        assert_eq!(compact["byKind"]["duplicate-relation"], 50);
+        assert_eq!(compact["issues"].as_array().map(Vec::len), Some(20));
+        assert_eq!(compact["truncated"], true);
+    }
+
+    #[test]
+    fn relationship_backup_stamp_only_matches_utc_directories() {
+        assert_eq!(
+            parse_relationship_backup_stamp("backup-20260812T052012Z"),
+            Some("20260812T052012Z")
+        );
+        assert!(parse_relationship_backup_stamp("backup-notes").is_none());
+        assert!(parse_relationship_backup_stamp("keep-me").is_none());
+        assert!(parse_relationship_backup_stamp(&format!(
+            "{RELATIONSHIP_BACKUP_DIR_PREFIX}latest"
+        ))
+        .is_none());
+    }
+
+    #[test]
+    fn relationship_backup_gc_keeps_newest_two_timestamped_dirs() {
+        let root = std::env::temp_dir().join(format!(
+            "ccgui-relationship-backup-gc-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let backups = root.join("backups");
+        fs::create_dir_all(&backups).expect("create backups");
+        for (index, name) in [
+            "backup-20260719T153052Z",
+            "backup-20260801T080748Z",
+            "backup-20260812T052012Z",
+            "notes",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let dir = backups.join(name);
+            fs::create_dir_all(&dir).expect("create backup dir");
+            fs::write(dir.join("manifest.json"), format!("{index}")).expect("write marker");
+            let _ = fs::File::open(&dir).and_then(|file| {
+                file.set_modified(UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000 + index as u64))
+            });
+        }
+        gc_relationship_backups(&root).expect("gc backups");
+        assert!(!backups.join("backup-20260719T153052Z").exists());
+        assert!(backups.join("backup-20260801T080748Z").exists());
+        assert!(backups.join("backup-20260812T052012Z").exists());
+        assert!(backups.join("notes").exists());
+        let _ = fs::remove_dir_all(&root);
     }
 }

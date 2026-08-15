@@ -18,7 +18,8 @@ export type SearchFileHydrationStatus =
 export type SearchApiHydrationStatus =
   | "idle"
   | "loading"
-  | "refreshing"
+  | "stale"
+  | "empty"
   | "complete"
   | "error";
 export type WorkspaceSearchApiSnapshot = {

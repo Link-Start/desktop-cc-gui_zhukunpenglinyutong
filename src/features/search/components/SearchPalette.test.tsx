@@ -435,7 +435,7 @@ describe("SearchPalette", () => {
           apiEndpointId: "product-page",
           filePath: "src/ProductController.java",
         }]}
-        apiHydrationStatus="refreshing"
+        apiHydrationStatus="stale"
         selectedIndex={0}
         onQueryChange={() => undefined}
         onMoveSelection={() => undefined}
@@ -446,7 +446,7 @@ describe("SearchPalette", () => {
       />,
     );
 
-    expect(screen.getByText("searchPalette.apiIndexRefreshing")).toBeTruthy();
+    expect(screen.getByText("searchPalette.apiIndexStale")).toBeTruthy();
     expect(
       screen.getByText("POST /api/mobile/pd-sub/v1/plan/product/page"),
     ).toBeTruthy();
