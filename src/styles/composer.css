@@ -3,6 +3,7 @@
 @import "./composer.part2.css";
 @import "./shared-send-status.css";
 @import "./composer-run-status.css";
+@import "./browser-agent-excerpt.css";
 
 .composer-browser-context {
   display: flex;

@@ -1298,6 +1298,7 @@ pub(crate) async fn add_workspace(
         None,
         None,
         None,
+        None,
     )
     .await;
 

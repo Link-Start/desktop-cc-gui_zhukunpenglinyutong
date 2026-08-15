@@ -837,18 +837,128 @@ pub async fn detect_pi_status(custom_bin: Option<&str>) -> EngineStatus {
     if !installed {
         return not_installed_status(EngineType::Pi, error);
     }
+    let home_dir = get_pi_home_dir();
+    let (models, config_diagnostic) = get_pi_models(&bin, path_env.as_ref()).await;
+    let default_model = models.iter().find(|m| m.default).map(|m| m.id.clone());
     EngineStatus {
         engine_type: EngineType::Pi,
         installed: true,
         version,
         bin_path: Some(bin.to_string()),
-        home_dir: dirs::home_dir().map(|home| {
-            home.join(".pi").join("agent").to_string_lossy().to_string()
-        }),
-        models: get_generated_fallback_models(EngineType::Pi),
-        default_model: None,
+        home_dir: home_dir.map(|p| p.to_string_lossy().to_string()),
+        models,
+        default_model,
         features: EngineFeatures::pi(),
-        error: None,
+        error: config_diagnostic,
+    }
+}
+
+fn get_pi_home_dir() -> Option<PathBuf> {
+    if let Ok(agent_dir) = std::env::var("PI_CODING_AGENT_DIR") {
+        let trimmed = agent_dir.trim();
+        if !trimmed.is_empty() {
+            return Some(PathBuf::from(trimmed));
+        }
+    }
+    dirs::home_dir().map(|home| home.join(".pi").join("agent"))
+}
+
+/// Parse `pi --list-models` fixed-width table into ModelInfo entries.
+pub(crate) fn parse_pi_models_output(stdout: &str) -> Vec<ModelInfo> {
+    let mut models = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for raw_line in stdout.lines() {
+        let line = {
+            let mut out = String::new();
+            let mut chars = raw_line.chars().peekable();
+            while let Some(ch) = chars.next() {
+                if ch == '\u{1b}' {
+                    if chars.peek() == Some(&'[') {
+                        chars.next();
+                        while let Some(c) = chars.next() {
+                            if c.is_ascii_alphabetic() {
+                                break;
+                            }
+                        }
+                    }
+                    continue;
+                }
+                out.push(ch);
+            }
+            out.trim().to_string()
+        };
+        if line.is_empty() {
+            continue;
+        }
+        let parts: Vec<String> = line
+            .split(|c: char| c.is_whitespace())
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .collect();
+        if parts.len() < 2 {
+            continue;
+        }
+        let provider = &parts[0];
+        let model = &parts[1];
+        if provider == "provider" && model == "model" {
+            continue;
+        }
+        if provider
+            .chars()
+            .any(|c| !c.is_ascii_alphanumeric() && c != '-' && c != '_')
+        {
+            continue;
+        }
+        let id = format!("{provider}/{model}");
+        if !seen.insert(id.clone()) {
+            continue;
+        }
+        models.push(
+            ModelInfo::new(id.clone(), id.clone())
+                .with_description(id.clone())
+                .with_provider(provider.clone())
+                .with_protocol("pi")
+                .with_provenance("cli:pi-list-models")
+                .with_source("detected"),
+        );
+    }
+    models
+}
+
+async fn get_pi_models(bin: &str, path_env: Option<&String>) -> (Vec<ModelInfo>, Option<String>) {
+    let mut cmd = crate::backend::app_server::build_command_for_binary(bin);
+    cmd.arg("--list-models");
+    if let Some(path) = path_env {
+        cmd.env("PATH", path);
+    }
+    match timeout(DETECTION_TIMEOUT, cmd.output()).await {
+        Ok(Ok(output)) if output.status.success() => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let models = parse_pi_models_output(&stdout);
+            if models.is_empty() {
+                (
+                    get_generated_fallback_models(EngineType::Pi),
+                    Some("pi --list-models returned no models".to_string()),
+                )
+            } else {
+                (models, None)
+            }
+        }
+        Ok(Ok(output)) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            (
+                get_generated_fallback_models(EngineType::Pi),
+                Some(format!("pi --list-models failed: {}", stderr.trim())),
+            )
+        }
+        Ok(Err(error)) => (
+            get_generated_fallback_models(EngineType::Pi),
+            Some(format!("failed to run pi --list-models: {error}")),
+        ),
+        Err(_) => (
+            get_generated_fallback_models(EngineType::Pi),
+            Some("pi --list-models timed out".to_string()),
+        ),
     }
 }
 
@@ -1690,10 +1800,19 @@ pub async fn detect_all_engines(
     opencode_bin: Option<&str>,
     kimi_bin: Option<&str>,
     grok_bin: Option<&str>,
+    pi_bin: Option<&str>,
     gemini_enabled: bool,
 ) -> Vec<EngineStatus> {
     // Run detections in parallel
-    let (claude_status, codex_status, gemini_status, opencode_status, kimi_status, grok_status) = tokio::join!(
+    let (
+        claude_status,
+        codex_status,
+        gemini_status,
+        opencode_status,
+        kimi_status,
+        grok_status,
+        pi_status,
+    ) = tokio::join!(
         detect_claude_status(claude_bin),
         detect_codex_status(codex_bin),
         async {
@@ -1706,6 +1825,7 @@ pub async fn detect_all_engines(
         detect_opencode_status(opencode_bin),
         detect_kimi_status(kimi_bin),
         detect_grok_status(grok_bin),
+        detect_pi_status(pi_bin),
     );
 
     vec![
@@ -1715,6 +1835,7 @@ pub async fn detect_all_engines(
         opencode_status,
         kimi_status,
         grok_status,
+        pi_status,
     ]
 }
 
@@ -1727,8 +1848,17 @@ pub async fn detect_preferred_engine(
     opencode_bin: Option<&str>,
     kimi_bin: Option<&str>,
     grok_bin: Option<&str>,
+    pi_bin: Option<&str>,
 ) -> EngineType {
-    let (claude_status, codex_status, gemini_status, opencode_status, kimi_status, grok_status) = tokio::join!(
+    let (
+        claude_status,
+        codex_status,
+        gemini_status,
+        opencode_status,
+        kimi_status,
+        grok_status,
+        _pi_status,
+    ) = tokio::join!(
         detect_claude_status(claude_bin),
         detect_codex_status(codex_bin),
         async {
@@ -1741,6 +1871,7 @@ pub async fn detect_preferred_engine(
         detect_opencode_status(opencode_bin),
         detect_kimi_status(kimi_bin),
         detect_grok_status(grok_bin),
+        detect_pi_status(pi_bin),
     );
 
     // Priority: Claude first (more users have it installed)
@@ -1781,6 +1912,7 @@ pub async fn resolve_engine_type(
     opencode_bin: Option<&str>,
     kimi_bin: Option<&str>,
     grok_bin: Option<&str>,
+    pi_bin: Option<&str>,
 ) -> EngineType {
     // 1. Check workspace-specific setting
     if let Some(engine) = workspace_engine.filter(|s| !s.is_empty()) {
@@ -1792,6 +1924,7 @@ pub async fn resolve_engine_type(
             "opencode" => return EngineType::OpenCode,
             "kimi" => return EngineType::Kimi,
             "grok" => return EngineType::Grok,
+            "pi" => return EngineType::Pi,
             _ => {} // Invalid value, fall through
         }
     }
@@ -1806,6 +1939,7 @@ pub async fn resolve_engine_type(
             "opencode" => return EngineType::OpenCode,
             "kimi" => return EngineType::Kimi,
             "grok" => return EngineType::Grok,
+            "pi" => return EngineType::Pi,
             _ => {} // Invalid value, fall through
         }
     }
@@ -1819,6 +1953,7 @@ pub async fn resolve_engine_type(
         opencode_bin,
         kimi_bin,
         grok_bin,
+        pi_bin,
     ))
     .await
 }
@@ -2280,6 +2415,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         )
         .await;
         assert_eq!(resolved, EngineType::OpenCode);
@@ -2290,6 +2426,7 @@ mod tests {
         let resolved = resolve_engine_type(
             Some("gemini"),
             Some("claude"),
+            None,
             None,
             None,
             None,
@@ -2321,6 +2458,7 @@ mod tests {
             None,
             None,
             Some(script_path.to_string_lossy().as_ref()),
+            None,
             None,
             None,
             None,
@@ -2362,6 +2500,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         )
         .await;
 
@@ -2386,6 +2525,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         )
         .await;
         assert_eq!(resolved, EngineType::Kimi);
@@ -2396,6 +2536,7 @@ mod tests {
         let resolved = resolve_engine_type(
             Some("grok"),
             Some("claude"),
+            None,
             None,
             None,
             None,

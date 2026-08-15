@@ -235,7 +235,7 @@ impl EngineManager {
 
     pub async fn detect_engines_with_gates(&self, gemini_enabled: bool) -> Vec<EngineStatus> {
         let gemini_enabled = gemini_enabled && crate::engine_policy::GEMINI_RUNTIME_ENABLED;
-        let (claude_bin, codex_bin, gemini_bin, opencode_bin, kimi_bin, grok_bin) = {
+        let (claude_bin, codex_bin, gemini_bin, opencode_bin, kimi_bin, grok_bin, pi_bin) = {
             let configs = self.engine_configs.read().await;
             (
                 configs
@@ -256,6 +256,9 @@ impl EngineManager {
                 configs
                     .get(&EngineType::Grok)
                     .and_then(|c| c.bin_path.clone()),
+                configs
+                    .get(&EngineType::Pi)
+                    .and_then(|c| c.bin_path.clone()),
             )
         };
 
@@ -266,6 +269,7 @@ impl EngineManager {
             opencode_bin.as_deref(),
             kimi_bin.as_deref(),
             grok_bin.as_deref(),
+            pi_bin.as_deref(),
             gemini_enabled,
         )
         .await;

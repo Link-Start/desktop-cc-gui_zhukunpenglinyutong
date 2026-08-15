@@ -131,6 +131,8 @@ export function loadExtensionsStyles() {
 export function loadBrowserAgentStyles() {
   return loadStyles([
     () => import("./browser-agent-window.css"),
+    () => import("./browser-agent-dock.css"),
+    () => import("./browser-agent-excerpt.css"),
   ]);
 }
 
