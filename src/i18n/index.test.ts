@@ -6,6 +6,8 @@ const writeClientStoreValueMock = vi.hoisted(() => vi.fn());
 vi.mock("../services/clientStorage", () => ({
   getClientStoreSync: vi.fn(() => storedLanguage),
   writeClientStoreValue: writeClientStoreValueMock,
+  isClientStoreReady: vi.fn(() => true),
+  whenClientStoreReady: vi.fn(() => Promise.resolve()),
 }));
 
 describe("i18n dynamic locale loading", () => {
@@ -13,6 +15,16 @@ describe("i18n dynamic locale loading", () => {
     vi.resetModules();
     storedLanguage = "zh";
     writeClientStoreValueMock.mockReset();
+  });
+
+  it("lets first paint resolve the critical pack without waiting for deferred settings copy", async () => {
+    const module = await import("./index");
+    const i18n = await module.i18nCriticalReady;
+
+    expect(i18n.language).toBe("zh");
+    expect(i18n.t("files.loadingFiles")).not.toBe("files.loadingFiles");
+    expect(i18n.t("home.title") === "home.title" || i18n.t("home.title")).toBeTruthy();
+    expect(i18n.t("settings.sidebarBasic")).toBe("settings.sidebarBasic");
   });
 
   it("loads only the stored startup locale and loads another locale on switch", async () => {

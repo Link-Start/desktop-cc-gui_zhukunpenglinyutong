@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import {
+  isClientStoreReady,
+  subscribeClientStoreHydrated,
+} from "../../../services/clientStorage";
+import {
   MAX_PINS_SOFT_LIMIT,
   buildUpdatedThreadAliases,
   buildClearedThreadAliases,
@@ -75,7 +79,28 @@ export function useThreadStorage(): UseThreadStorageResult {
   const customNamesRef = useRef<CustomNamesMap>({});
 
   useEffect(() => {
-    customNamesRef.current = loadCustomNames();
+    const hydrateThreadStorage = () => {
+      customNamesRef.current = loadCustomNames();
+      const nextPinned = loadPinnedThreads();
+      const nextAliases = loadThreadAliases();
+      const nextActivity = loadThreadActivity();
+      threadActivityRef.current = nextActivity;
+      pinnedThreadsRef.current = nextPinned;
+      threadAliasesRef.current = nextAliases;
+      setPinnedThreads(nextPinned);
+      if (Object.keys(nextPinned).length > 0) {
+        setPinnedThreadsVersion((version) => (version === 0 ? 1 : version));
+      }
+    };
+    if (isClientStoreReady("threads")) {
+      hydrateThreadStorage();
+      return;
+    }
+    return subscribeClientStoreHydrated((store) => {
+      if (store === "threads") {
+        hydrateThreadStorage();
+      }
+    });
   }, []);
 
   useEffect(() => {

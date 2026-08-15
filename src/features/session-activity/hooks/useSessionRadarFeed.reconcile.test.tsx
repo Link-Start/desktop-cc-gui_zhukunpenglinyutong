@@ -18,6 +18,8 @@ vi.mock("../../../services/clientStorage", () => ({
   writeClientStoreValue: vi.fn((store: string, key: string, value: unknown) => {
     clientStoreCache.set(`${store}:${key}`, value);
   }),
+  isClientStoreReady: () => true,
+  subscribeClientStoreHydrated: () => () => {},
 }));
 
 function createWorkspace(id: string, name: string): WorkspaceInfo {

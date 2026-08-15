@@ -1,7 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { recordHotspotSample } from "./services/perfBaseline/hotspotTracker";
-import { preloadClientStores } from "./services/clientStorage";
+import {
+  preloadCriticalClientStores,
+  preloadDeferredClientStores,
+} from "./services/clientStorage";
 import { runClientStoreMaintenance } from "./services/clientStoreMaintenance";
 import {
   pushGlobalRuntimeNotice,
@@ -201,24 +204,104 @@ async function runPostRenderBootstrapTasks() {
   }
 }
 
+function scheduleIdleOrFirstInteraction(run: () => void, options?: {
+  idleTimeoutMs?: number;
+  fallbackDelayMs?: number;
+  busyTimeoutMs?: number;
+}): () => void {
+  let started = false;
+  const start = () => {
+    if (started) {
+      return;
+    }
+    started = true;
+    cleanup();
+    run();
+  };
+  const idleHandle =
+    typeof window !== "undefined" && typeof window.requestIdleCallback === "function"
+      ? window.requestIdleCallback(start, { timeout: options?.idleTimeoutMs ?? 8_000 })
+      : null;
+  const timeoutHandle =
+    typeof window !== "undefined"
+      ? window.setTimeout(
+          start,
+          idleHandle == null
+            ? (options?.fallbackDelayMs ?? 2_500)
+            : (options?.busyTimeoutMs ?? 12_000),
+        )
+      : null;
+  const cleanup = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.removeEventListener("pointerdown", start, true);
+    window.removeEventListener("keydown", start, true);
+    if (idleHandle != null && typeof window.cancelIdleCallback === "function") {
+      window.cancelIdleCallback(idleHandle);
+    }
+    if (timeoutHandle != null) {
+      window.clearTimeout(timeoutHandle);
+    }
+  };
+  if (typeof window !== "undefined") {
+    window.addEventListener("pointerdown", start, {
+      capture: true,
+      once: true,
+      passive: true,
+    });
+    window.addEventListener("keydown", start, {
+      capture: true,
+      once: true,
+    });
+  }
+  return cleanup;
+}
+
+async function runDeferredClientStoreHydration() {
+  try {
+    await traceBootstrapTask(
+      "bootstrap:storage-deferred",
+      "storage-deferred",
+      preloadDeferredClientStores,
+      "first-paint",
+    );
+    runClientStoreMaintenance();
+    flushRendererDiagnosticsBuffer();
+    appendRendererDiagnostic("bootstrap/deferred-stores-ready");
+  } catch (error) {
+    appendRendererDiagnostic("bootstrap/deferred-stores-failed", {
+      error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+    });
+  }
+}
+
 async function bootstrap() {
   appendRendererDiagnostic("bootstrap/start");
   pushBootstrapNotice("runtimeNotice.bootstrap.start");
   const appImportPromise = traceBootstrapTask("bootstrap:app-import", "app-import", () => import("./App"));
-  const i18nImportPromise = traceBootstrapTask("bootstrap:i18n", "i18n", async () => {
+  const criticalStoresPromise = traceBootstrapTask(
+    "bootstrap:storage-critical",
+    "storage-critical",
+    preloadCriticalClientStores,
+  );
+  const i18nImportPromise = traceBootstrapTask("bootstrap:i18n-critical", "i18n-critical", async () => {
     const module = await import("./i18n");
-    await module.i18nReady;
+    await module.i18nCriticalReady;
     return module;
   });
   void appImportPromise.catch(() => undefined);
+  void criticalStoresPromise.catch(() => undefined);
   void i18nImportPromise.catch(() => undefined);
-  await traceBootstrapTask("bootstrap:storage-preload", "storage-preload", preloadClientStores);
-  runClientStoreMaintenance();
-  flushRendererDiagnosticsBuffer();
+  const [appModule, i18nModule] = await Promise.all([
+    appImportPromise,
+    i18nImportPromise,
+    criticalStoresPromise,
+  ]).then(([loadedApp, loadedI18n]) => [loadedApp, loadedI18n] as const);
+  const { default: App } = appModule;
   appendRendererDiagnostic("bootstrap/preload-complete");
   pushBootstrapNotice("runtimeNotice.bootstrap.interfaceResources");
-  const [{ default: App }] = await Promise.all([appImportPromise, i18nImportPromise]);
-  appendRendererDiagnostic("bootstrap/i18n-ready");
+  appendRendererDiagnostic("bootstrap/i18n-critical-ready");
   pushBootstrapNotice("runtimeNotice.bootstrap.mountShell");
   const root = resolveRootElement();
   ReactDOM.createRoot(root).render(
@@ -253,6 +336,18 @@ async function bootstrap() {
   pushBootstrapNotice("runtimeNotice.bootstrap.ready");
   void markRendererReady();
   void runPostRenderBootstrapTasks();
+  scheduleIdleOrFirstInteraction(() => {
+    void runDeferredClientStoreHydration();
+    void i18nModule.ensureI18nReady().catch((error) => {
+      appendRendererDiagnostic("bootstrap/i18n-deferred-failed", {
+        error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+      });
+    });
+  }, {
+    idleTimeoutMs: 2_500,
+    fallbackDelayMs: 0,
+    busyTimeoutMs: 4_000,
+  });
   scheduleDeferredBaiduTongji();
   // Cold-start: warm the vendor-markdown chunk during idle once the startup
   // gate opens, so the first message render does not compile it on the
@@ -265,13 +360,7 @@ async function bootstrap() {
  * never on the synchronous cold-start critical path.
  */
 function scheduleDeferredBaiduTongji() {
-  let installed = false;
-  const install = () => {
-    if (installed) {
-      return;
-    }
-    installed = true;
-    cleanup();
+  scheduleIdleOrFirstInteraction(() => {
     void import("./services/baiduTongji")
       .then(({ installBaiduTongji }) => {
         installBaiduTongji();
@@ -282,40 +371,7 @@ function scheduleDeferredBaiduTongji() {
           error instanceof Error ? error.message : String(error),
         );
       });
-  };
-  const onFirstInteraction = () => install();
-  const idleHandle =
-    typeof window !== "undefined" && typeof window.requestIdleCallback === "function"
-      ? window.requestIdleCallback(() => install(), { timeout: 8_000 })
-      : null;
-  const timeoutHandle =
-    typeof window !== "undefined"
-      ? window.setTimeout(install, idleHandle == null ? 2_500 : 12_000)
-      : null;
-  const cleanup = () => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    window.removeEventListener("pointerdown", onFirstInteraction, true);
-    window.removeEventListener("keydown", onFirstInteraction, true);
-    if (idleHandle != null && typeof window.cancelIdleCallback === "function") {
-      window.cancelIdleCallback(idleHandle);
-    }
-    if (timeoutHandle != null) {
-      window.clearTimeout(timeoutHandle);
-    }
-  };
-  if (typeof window !== "undefined") {
-    window.addEventListener("pointerdown", onFirstInteraction, {
-      capture: true,
-      once: true,
-      passive: true,
-    });
-    window.addEventListener("keydown", onFirstInteraction, {
-      capture: true,
-      once: true,
-    });
-  }
+  });
 }
 
 export async function startApp() {

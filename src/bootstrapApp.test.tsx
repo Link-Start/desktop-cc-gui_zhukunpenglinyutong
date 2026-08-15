@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createRootMock = vi.hoisted(() => vi.fn());
 const renderMock = vi.hoisted(() => vi.fn());
-const preloadClientStoresMock = vi.hoisted(() => vi.fn());
+const preloadCriticalClientStoresMock = vi.hoisted(() => vi.fn());
+const preloadDeferredClientStoresMock = vi.hoisted(() => vi.fn());
 const migrateLocalStorageToFileStoreMock = vi.hoisted(() => vi.fn());
 const initInputHistoryStoreMock = vi.hoisted(() => vi.fn());
 const appendRendererDiagnosticMock = vi.hoisted(() => vi.fn());
@@ -15,6 +16,7 @@ const recordStartupTaskTraceMock = vi.hoisted(() => vi.fn());
 const recordStartupPerfMarkerMock = vi.hoisted(() => vi.fn());
 const invokeMock = vi.hoisted(() => vi.fn());
 const isTauriMock = vi.hoisted(() => vi.fn(() => false));
+const i18nReadyMock = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 
 vi.mock("react-dom/client", () => ({
   default: {
@@ -23,7 +25,8 @@ vi.mock("react-dom/client", () => ({
 }));
 
 vi.mock("./services/clientStorage", () => ({
-  preloadClientStores: preloadClientStoresMock,
+  preloadCriticalClientStores: preloadCriticalClientStoresMock,
+  preloadDeferredClientStores: preloadDeferredClientStoresMock,
 }));
 
 vi.mock("./services/migrateLocalStorage", () => ({
@@ -54,7 +57,11 @@ vi.mock("./services/perfBaseline/startupMarkers", () => ({
 }));
 
 vi.mock("./i18n", () => ({
-  i18nReady: Promise.resolve(),
+  i18nCriticalReady: Promise.resolve(),
+  ensureI18nReady: () => i18nReadyMock(),
+  get i18nReady() {
+    return i18nReadyMock();
+  },
 }));
 
 vi.mock("./App", () => ({
@@ -76,7 +83,10 @@ describe("startApp", () => {
     document.body.innerHTML = '<div id="root"></div>';
     createRootMock.mockReset();
     renderMock.mockReset();
-    preloadClientStoresMock.mockReset();
+    preloadCriticalClientStoresMock.mockReset();
+    preloadCriticalClientStoresMock.mockResolvedValue(undefined);
+    preloadDeferredClientStoresMock.mockReset();
+    preloadDeferredClientStoresMock.mockResolvedValue(undefined);
     migrateLocalStorageToFileStoreMock.mockReset();
     initInputHistoryStoreMock.mockReset();
     appendRendererDiagnosticMock.mockReset();
@@ -89,6 +99,8 @@ describe("startApp", () => {
     invokeMock.mockReset();
     isTauriMock.mockReset();
     isTauriMock.mockReturnValue(false);
+    i18nReadyMock.mockReset();
+    i18nReadyMock.mockResolvedValue(undefined);
     createRootMock.mockReturnValue({ render: renderMock });
   });
 
@@ -105,7 +117,8 @@ describe("startApp", () => {
       "runtimeNotice.bootstrap.storageMigrationCheck",
       "runtimeNotice.bootstrap.inputHistoryRestore",
     ]);
-    expect(preloadClientStoresMock).toHaveBeenCalledTimes(1);
+    expect(preloadCriticalClientStoresMock).toHaveBeenCalledTimes(1);
+    expect(preloadDeferredClientStoresMock).not.toHaveBeenCalled();
     expect(migrateLocalStorageToFileStoreMock).toHaveBeenCalledTimes(1);
     expect(initInputHistoryStoreMock).toHaveBeenCalledTimes(1);
     expect(createRootMock).toHaveBeenCalledWith(document.getElementById("root"));
@@ -122,11 +135,48 @@ describe("startApp", () => {
         lifecycleState: "started",
       }),
     );
+    expect(recordStartupTaskTraceMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: "bootstrap:storage-critical",
+        lifecycleState: "started",
+      }),
+    );
   });
 
-  it("renders the bootstrap fallback and flushes diagnostics when preload fails early", async () => {
+  it("mounts the shell before deferred stores and the full locale pack", async () => {
+    let resolveDeferredStores: (() => void) | undefined;
+    let resolveI18nReady: (() => void) | undefined;
+    preloadDeferredClientStoresMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveDeferredStores = resolve;
+        }),
+    );
+    i18nReadyMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveI18nReady = resolve;
+        }),
+    );
+    const { startApp } = await import("./bootstrapApp");
+
+    await startApp();
+
+    expect(renderMock).toHaveBeenCalledTimes(1);
+    expect(preloadDeferredClientStoresMock).not.toHaveBeenCalled();
+    expect(recordStartupPerfMarkerMock).toHaveBeenCalledWith("first-paint");
+
+    window.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    await vi.waitFor(() => {
+      expect(preloadDeferredClientStoresMock).toHaveBeenCalledTimes(1);
+    });
+    resolveDeferredStores?.();
+    resolveI18nReady?.();
+  });
+
+  it("renders the bootstrap fallback and flushes diagnostics when critical preload fails early", async () => {
     const preloadError = new Error("preload failed");
-    preloadClientStoresMock.mockRejectedValue(preloadError);
+    preloadCriticalClientStoresMock.mockRejectedValue(preloadError);
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { startApp } = await import("./bootstrapApp");
 

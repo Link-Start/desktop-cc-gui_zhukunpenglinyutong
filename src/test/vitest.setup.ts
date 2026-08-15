@@ -1237,7 +1237,12 @@ vi.mock("../services/clientStorage", () => {
   const cache: Record<string, Record<string, unknown>> = {};
   return {
     preloadClientStores: vi.fn(() => Promise.resolve()),
+    preloadCriticalClientStores: vi.fn(() => Promise.resolve()),
+    preloadDeferredClientStores: vi.fn(() => Promise.resolve()),
     isPreloaded: vi.fn(() => true),
+    isClientStoreReady: vi.fn(() => true),
+    whenClientStoreReady: vi.fn(() => Promise.resolve()),
+    subscribeClientStoreHydrated: vi.fn(() => () => {}),
     getClientStoreSync: vi.fn((store: string, key: string) => {
       return cache[store]?.[key];
     }),

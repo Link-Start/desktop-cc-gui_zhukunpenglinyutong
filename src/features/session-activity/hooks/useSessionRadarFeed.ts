@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ConversationItem, ThreadSummary, WorkspaceInfo } from "../../../types";
 import { resolveLockLivePreview } from "../../../app-shell-parts/utils";
-import { getClientStoreSync, writeClientStoreValue } from "../../../services/clientStorage";
+import {
+  getClientStoreSync,
+  isClientStoreReady,
+  subscribeClientStoreHydrated,
+  writeClientStoreValue,
+} from "../../../services/clientStorage";
 import { isIncrementalDerivationEnabled } from "../../threads/utils/realtimePerfFlags";
 import {
   RADAR_RECENT_GLOBAL_LIMIT,
@@ -501,6 +506,20 @@ export function useSessionRadarFeed(input: UseSessionRadarFeedInput): SessionRad
   const [recentHistorySnapshot, setRecentHistorySnapshot] = useState<RecentHistorySnapshot>(() =>
     readRecentHistorySnapshot(),
   );
+  useEffect(() => {
+    const applyPersistedHistory = () => {
+      setRecentHistorySnapshot(readRecentHistorySnapshot());
+    };
+    if (isClientStoreReady("leida")) {
+      applyPersistedHistory();
+      return;
+    }
+    return subscribeClientStoreHydrated((store) => {
+      if (store === "leida") {
+        applyPersistedHistory();
+      }
+    });
+  }, []);
   const cachedLiveThreadEntriesRef = useRef<Record<string, CachedLiveThreadEntry>>({});
 
   const liveFeed = useMemo(
@@ -712,6 +731,9 @@ export function useSessionRadarFeed(input: UseSessionRadarFeedInput): SessionRad
       return;
     }
     lastPersistedRecentSignatureRef.current = persistedRecentSignature;
+    if (!isClientStoreReady(RADAR_STORE_NAME)) {
+      return;
+    }
     writeClientStoreValue(RADAR_STORE_NAME, SESSION_RADAR_RECENT_STORAGE_KEY, persistedRecentRefs, {
       immediate: true,
     });

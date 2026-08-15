@@ -35,6 +35,10 @@ import {
 import { isDefaultWorkspacePath } from "../utils/defaultWorkspace";
 import { isWindowsPlatform } from "../../../utils/platform";
 import { traceStartupCommand } from "../../startup-orchestration/utils/startupTrace";
+import {
+  isClientStoreReady,
+  subscribeClientStoreHydrated,
+} from "../../../services/clientStorage";
 
 const GROUP_ID_RANDOM_MODULUS = 1_000_000;
 const RESERVED_GROUP_NAME = "Ungrouped";
@@ -153,6 +157,26 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
       return undefined;
     }
   }, [commitWorkspaceEntries]);
+
+  useEffect(() => {
+    const applyCachedWorkspaces = () => {
+      const cached = loadSidebarSnapshot()?.workspaces ?? [];
+      if (cached.length === 0) {
+        return;
+      }
+      setWorkspaces((current) => (current.length > 0 ? current : cached));
+      setHasLoaded(true);
+    };
+    if (isClientStoreReady("threads")) {
+      applyCachedWorkspaces();
+      return;
+    }
+    return subscribeClientStoreHydrated((store) => {
+      if (store === "threads") {
+        applyCachedWorkspaces();
+      }
+    });
+  }, []);
 
   useEffect(() => {
     let active = true;

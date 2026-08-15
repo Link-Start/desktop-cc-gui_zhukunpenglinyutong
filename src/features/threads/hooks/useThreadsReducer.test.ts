@@ -2820,5 +2820,34 @@ describe("threadReducer", () => {
     expect(cleared.userInputRequests).toEqual([requestThreadTwo]);
   });
 
+  it("hydrates empty workspace lists from a deferred sidebar snapshot without clobbering live rows", () => {
+    const snapshotThread: ThreadSummary = {
+      id: "thread-cached",
+      name: "Cached",
+      createdAt: 1,
+      updatedAt: 1,
+    } as ThreadSummary;
+    const liveThread: ThreadSummary = {
+      id: "thread-live",
+      name: "Live",
+      createdAt: 2,
+      updatedAt: 2,
+    } as ThreadSummary;
+    const withLive = threadReducer(initialState, {
+      type: "setThreads",
+      workspaceId: "ws-live",
+      threads: [liveThread],
+    });
 
+    const hydrated = threadReducer(withLive, {
+      type: "hydrateSidebarSnapshot",
+      threadsByWorkspace: {
+        "ws-empty": [snapshotThread],
+        "ws-live": [snapshotThread],
+      },
+    });
+
+    expect(hydrated.threadsByWorkspace["ws-empty"]).toEqual([snapshotThread]);
+    expect(hydrated.threadsByWorkspace["ws-live"]).toEqual([liveThread]);
+  });
 });

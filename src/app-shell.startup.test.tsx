@@ -212,6 +212,8 @@ vi.mock("./services/clientStorage", () => ({
       startupState.clientStore[store][key] = value;
     },
   ),
+  isClientStoreReady: () => true,
+  subscribeClientStoreHydrated: () => () => {},
 }));
 
 vi.mock("./app-shell-parts/useSelectedComposerSession", () => ({

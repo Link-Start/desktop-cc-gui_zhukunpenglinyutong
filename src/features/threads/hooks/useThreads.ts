@@ -80,7 +80,11 @@ import {
   makeCustomNameKey,
   saveCustomName,
 } from "../utils/threadStorage";
-import { writeClientStoreValue } from "../../../services/clientStorage";
+import {
+  isClientStoreReady,
+  subscribeClientStoreHydrated,
+  writeClientStoreValue,
+} from "../../../services/clientStorage";
 import { appendRendererDiagnostic } from "../../../services/rendererDiagnostics";
 import { isWebServiceRuntime } from "../../../services/tauri/runtimeMode";
 import {
@@ -229,6 +233,27 @@ export function useThreads({
     loadSidebarSnapshot(),
     createInitialThreadState,
   );
+  useEffect(() => {
+    const applySidebarSnapshot = () => {
+      const snapshot = loadSidebarSnapshot();
+      if (!snapshot) {
+        return;
+      }
+      dispatch({
+        type: "hydrateSidebarSnapshot",
+        threadsByWorkspace: snapshot.threadsByWorkspace,
+      });
+    };
+    if (isClientStoreReady("threads")) {
+      applySidebarSnapshot();
+      return;
+    }
+    return subscribeClientStoreHydrated((store) => {
+      if (store === "threads") {
+        applySidebarSnapshot();
+      }
+    });
+  }, []);
   const domainEventRuntimeController = useMemo(
     () => createDomainEventRuntimeController(),
     [],

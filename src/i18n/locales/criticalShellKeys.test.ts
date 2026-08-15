@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import zh from "./zh";
 import en from "./en";
+import zhCritical from "./zh/critical";
+import enCritical from "./en/critical";
 
 /**
  * Regression guard: full locale packs must resolve shell + settings keys
@@ -17,6 +19,21 @@ describe("i18n full locale shell keys", () => {
     expect((zh as { settings?: { sidebarBasic?: string } }).settings?.sidebarBasic).not.toBe(
       "settings.sidebarBasic",
     );
+  });
+
+  it("keeps settings copy out of the first-paint critical pack", () => {
+    expect(
+      (zhCritical as { files?: { loadingFiles?: string } }).files?.loadingFiles,
+    ).toBeTruthy();
+    expect(
+      (enCritical as { files?: { loadingFiles?: string } }).files?.loadingFiles,
+    ).toBeTruthy();
+    expect(
+      (zhCritical as { settings?: { sidebarBasic?: string } }).settings?.sidebarBasic,
+    ).toBeUndefined();
+    expect(
+      (enCritical as { settings?: { sidebarBasic?: string } }).settings?.sidebarBasic,
+    ).toBeUndefined();
   });
 
   it("includes common chat/message surface roots used by the main shell", () => {

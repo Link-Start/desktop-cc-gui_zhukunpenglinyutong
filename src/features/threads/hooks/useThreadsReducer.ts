@@ -2951,6 +2951,28 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           [action.threadId]: 0,
         },
       };
+    case "hydrateSidebarSnapshot": {
+      const nextThreadsByWorkspace = { ...state.threadsByWorkspace };
+      let changed = false;
+      for (const [workspaceId, snapshotThreads] of Object.entries(
+        action.threadsByWorkspace,
+      )) {
+        if ((nextThreadsByWorkspace[workspaceId] ?? []).length > 0) {
+          continue;
+        }
+        if (snapshotThreads.length === 0) {
+          continue;
+        }
+        nextThreadsByWorkspace[workspaceId] = snapshotThreads;
+        changed = true;
+      }
+      return changed
+        ? {
+            ...state,
+            threadsByWorkspace: nextThreadsByWorkspace,
+          }
+        : state;
+    }
     default:
       return state;
   }

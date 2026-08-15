@@ -86,6 +86,8 @@ vi.mock("./useWorkspaceThreadListHydration", () => ({
 vi.mock("../../services/clientStorage", () => ({
   getClientStoreSync: vi.fn(() => null),
   writeClientStoreValue: vi.fn(),
+  isClientStoreReady: () => true,
+  subscribeClientStoreHydrated: () => () => {},
 }));
 
 vi.mock("../../services/systemNotification", () => ({
