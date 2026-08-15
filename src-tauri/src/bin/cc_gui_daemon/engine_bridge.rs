@@ -503,6 +503,7 @@ pub enum EngineType {
     Grok,
     OpenCode,
     Kimi,
+    Pi,
 }
 
 impl Default for EngineType {
@@ -520,6 +521,7 @@ impl EngineType {
             EngineType::Grok => "Grok CLI",
             EngineType::OpenCode => "OpenCode",
             EngineType::Kimi => "Kimi CLI",
+            EngineType::Pi => "PI",
         }
     }
 
@@ -531,6 +533,7 @@ impl EngineType {
             EngineType::Grok => "grok",
             EngineType::OpenCode => "opencode",
             EngineType::Kimi => "kimi",
+            EngineType::Pi => "pi",
         }
     }
 }
@@ -551,7 +554,7 @@ pub(crate) fn engine_enabled_in_settings(
         | EngineType::Claude
         | EngineType::Codex
         | EngineType::Grok
-        | EngineType::Kimi => true,
+        | EngineType::Kimi | EngineType::Pi => true,
     }
 }
 
@@ -562,7 +565,7 @@ pub(crate) fn engine_disabled_diagnostic(engine_type: EngineType) -> Option<&'st
         | EngineType::Claude
         | EngineType::Codex
         | EngineType::Grok
-        | EngineType::Kimi => None,
+        | EngineType::Kimi | EngineType::Pi => None,
     }
 }
 
@@ -791,6 +794,18 @@ impl EngineFeatures {
             mcp: false,
         }
     }
+
+    pub fn pi() -> Self {
+        Self {
+            reasoning_effort: false,
+            collaboration_mode: false,
+            image_input: true,
+            session_resume: true,
+            tools_control: true,
+            streaming: true,
+            mcp: false,
+        }
+    }
 }
 
 pub(crate) fn disabled_engine_status(engine_type: EngineType) -> EngineStatus {
@@ -800,7 +815,7 @@ pub(crate) fn disabled_engine_status(engine_type: EngineType) -> EngineStatus {
         EngineType::Gemini => EngineFeatures::gemini(),
         EngineType::OpenCode => EngineFeatures::opencode(),
         EngineType::Grok => EngineFeatures::grok(),
-        EngineType::Kimi => EngineFeatures::kimi(),
+        EngineType::Kimi | EngineType::Pi => EngineFeatures::kimi(),
     };
     EngineStatus {
         engine_type,

@@ -65,7 +65,7 @@ fn get_generated_fallback_models(engine: EngineType) -> Vec<ModelInfo> {
         EngineType::Codex => catalog.engines.codex,
         EngineType::Gemini => catalog.engines.gemini,
         EngineType::Grok => catalog.engines.grok,
-        EngineType::Kimi => catalog.engines.kimi,
+        EngineType::Kimi | EngineType::Pi => catalog.engines.kimi,
         EngineType::OpenCode => catalog.engines.opencode,
         _ => return Vec::new(),
     };
@@ -108,6 +108,7 @@ fn public_models_for_engine(engine_type: EngineType) -> Vec<ModelInfo> {
             get_generated_fallback_models(engine_type)
         }
         EngineType::Gemini => Vec::new(),
+        EngineType::Pi => get_generated_fallback_models(engine_type),
     }
 }
 
@@ -191,7 +192,7 @@ pub(crate) fn get_local_engine_models_for_validation(
             Some(dedupe_models_preserve_order(models))
         }
         EngineType::Codex => Some(get_codex_models()),
-        EngineType::Kimi => Some(get_kimi_models(get_kimi_home_dir().as_deref()).0),
+        EngineType::Kimi | EngineType::Pi => Some(get_kimi_models(get_kimi_home_dir().as_deref()).0),
         EngineType::Grok => Some(get_grok_models(get_grok_home_dir().as_deref()).0),
         EngineType::OpenCode => Some(resolve_opencode_validation_catalog(
             cached_opencode_runtime_models(),
@@ -430,7 +431,7 @@ pub(crate) fn get_provider_scoped_engine_models(
             };
             codex_provider_models_from_config(provider_profile_id, &config_toml, custom_models)?
         }
-        EngineType::Kimi => {
+        EngineType::Kimi | EngineType::Pi => {
             let Some(provider) =
                 crate::engine::kimi_provider_profile::resolve_kimi_provider_model_config(
                     provider_profile_id,
@@ -822,6 +823,32 @@ pub async fn detect_kimi_status(custom_bin: Option<&str>) -> EngineStatus {
         default_model,
         features: EngineFeatures::kimi(),
         error: config_diagnostic,
+    }
+}
+
+pub async fn detect_pi_status(custom_bin: Option<&str>) -> EngineStatus {
+    let bin_path = resolve_bin_path("pi", custom_bin);
+    let bin = bin_path
+        .as_ref()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|| "pi".to_string());
+    let path_env = build_codex_path_env(custom_bin);
+    let (installed, version, error) = probe_cli_version(&bin, "pi", path_env.as_ref()).await;
+    if !installed {
+        return not_installed_status(EngineType::Pi, error);
+    }
+    EngineStatus {
+        engine_type: EngineType::Pi,
+        installed: true,
+        version,
+        bin_path: Some(bin.to_string()),
+        home_dir: dirs::home_dir().map(|home| {
+            home.join(".pi").join("agent").to_string_lossy().to_string()
+        }),
+        models: get_generated_fallback_models(EngineType::Pi),
+        default_model: None,
+        features: EngineFeatures::pi(),
+        error: None,
     }
 }
 

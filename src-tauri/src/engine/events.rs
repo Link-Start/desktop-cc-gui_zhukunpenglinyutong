@@ -437,7 +437,7 @@ pub fn engine_event_to_app_server_event_with_turn_context(
                     EngineType::Gemini => "gemini",
                     EngineType::Grok => "grok",
                     EngineType::OpenCode => "opencode",
-                    EngineType::Kimi => "kimi",
+                    EngineType::Kimi | EngineType::Pi => "kimi",
                 },
             }
         }),

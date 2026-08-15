@@ -192,6 +192,7 @@ impl EngineManager {
             EngineType::OpenCode => detect_opencode_status(bin).await,
             EngineType::Kimi => detect_kimi_status(bin).await,
             EngineType::Grok => detect_grok_status(bin).await,
+            EngineType::Pi => crate::engine::status::detect_pi_status(bin).await,
         };
 
         // Cache the result

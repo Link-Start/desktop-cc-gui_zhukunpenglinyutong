@@ -39,6 +39,10 @@ pub(crate) mod grok_provider_profile;
 pub mod kimi;
 pub mod kimi_history;
 pub(crate) mod kimi_provider_profile;
+pub mod pi;
+pub(crate) mod pi_auth;
+pub(crate) mod pi_history;
+pub(crate) mod pi_provider_profile;
 pub mod manager;
 pub mod opencode;
 pub(crate) mod opencode_provider_profile;
@@ -72,6 +76,8 @@ pub enum EngineType {
     OpenCode,
     /// Kimi Code CLI
     Kimi,
+    /// PI CLI
+    Pi,
 }
 
 impl Default for EngineType {
@@ -90,6 +96,7 @@ impl EngineType {
             EngineType::Grok => "Grok CLI",
             EngineType::OpenCode => "OpenCode",
             EngineType::Kimi => "Kimi CLI",
+            EngineType::Pi => "PI",
         }
     }
 
@@ -102,6 +109,7 @@ impl EngineType {
             EngineType::Grok => "grok",
             EngineType::OpenCode => "opencode",
             EngineType::Kimi => "kimi",
+            EngineType::Pi => "pi",
         }
     }
 }
@@ -116,7 +124,8 @@ pub(crate) fn engine_enabled_in_settings(
         | EngineType::Claude
         | EngineType::Codex
         | EngineType::Grok
-        | EngineType::Kimi => true,
+        | EngineType::Kimi
+        | EngineType::Pi => true,
     }
 }
 
@@ -127,7 +136,8 @@ pub(crate) fn engine_disabled_diagnostic(engine_type: EngineType) -> Option<&'st
         | EngineType::Claude
         | EngineType::Codex
         | EngineType::Grok
-        | EngineType::Kimi => None,
+        | EngineType::Kimi
+        | EngineType::Pi => None,
     }
 }
 
@@ -139,6 +149,7 @@ pub(crate) fn disabled_engine_status(engine_type: EngineType) -> EngineStatus {
         EngineType::Grok => EngineFeatures::grok(),
         EngineType::OpenCode => EngineFeatures::opencode(),
         EngineType::Kimi => EngineFeatures::kimi(),
+        EngineType::Pi => EngineFeatures::pi(),
     };
     EngineStatus {
         engine_type,
@@ -404,6 +415,18 @@ impl EngineFeatures {
             reasoning_effort: true,
             collaboration_mode: false,
             // Headless multimodal via `grok --prompt-file` ACP image blocks.
+            image_input: true,
+            session_resume: true,
+            tools_control: true,
+            streaming: true,
+            mcp: false,
+        }
+    }
+
+    pub fn pi() -> Self {
+        Self {
+            reasoning_effort: false,
+            collaboration_mode: false,
             image_input: true,
             session_resume: true,
             tools_control: true,

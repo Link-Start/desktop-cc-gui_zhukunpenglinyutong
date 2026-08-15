@@ -475,7 +475,7 @@ pub(crate) fn is_pending_shared_binding_thread_id(engine: EngineType, thread_id:
     match engine {
         EngineType::Claude => normalized.starts_with("claude-pending-shared-"),
         EngineType::Codex => normalized.starts_with("codex-pending-shared-"),
-        EngineType::Kimi => normalized.starts_with("kimi-pending-shared-"),
+        EngineType::Kimi | EngineType::Pi => normalized.starts_with("kimi-pending-shared-"),
         EngineType::Grok => normalized.starts_with("grok-pending-shared-"),
         EngineType::OpenCode => normalized.starts_with("opencode-pending-shared-"),
         EngineType::Gemini => false,
@@ -489,7 +489,11 @@ pub(crate) fn binding_uses_established_native_thread(engine: EngineType, thread_
     }
     // 兼容 `engine:{raw}` 与历史 raw id；strip 前缀后再判 pending。
     let raw = match engine {
-        EngineType::Claude | EngineType::Kimi | EngineType::Grok | EngineType::OpenCode => {
+        EngineType::Claude
+        | EngineType::Kimi
+        | EngineType::Pi
+        | EngineType::Grok
+        | EngineType::OpenCode => {
             let prefix = format!("{}:", engine.icon());
             normalized
                 .strip_prefix(prefix.as_str())
@@ -503,7 +507,11 @@ pub(crate) fn binding_uses_established_native_thread(engine: EngineType, thread_
     }
     match engine {
         EngineType::Claude => normalized.contains(':'),
-        EngineType::Codex | EngineType::Kimi | EngineType::Grok | EngineType::OpenCode => true,
+        EngineType::Codex
+        | EngineType::Kimi
+        | EngineType::Pi
+        | EngineType::Grok
+        | EngineType::OpenCode => true,
         EngineType::Gemini => false,
     }
 }
@@ -512,7 +520,7 @@ pub(crate) fn engine_binding_thread_id(engine: EngineType, seed: &str) -> String
     match engine {
         EngineType::Claude => format!("claude-pending-shared-{seed}"),
         EngineType::Codex => format!("codex-pending-shared-{seed}"),
-        EngineType::Kimi => format!("kimi-pending-shared-{seed}"),
+        EngineType::Kimi | EngineType::Pi => format!("kimi-pending-shared-{seed}"),
         EngineType::Grok => format!("grok-pending-shared-{seed}"),
         EngineType::OpenCode => format!("opencode-pending-shared-{seed}"),
         EngineType::Gemini => format!("gemini-pending-shared-{seed}"),
@@ -1781,7 +1789,7 @@ pub async fn send_shared_session_message(
             write_shared_session_meta(&meta)?;
             response
         }
-        EngineType::Gemini | EngineType::OpenCode | EngineType::Grok | EngineType::Kimi => {
+        EngineType::Gemini | EngineType::OpenCode | EngineType::Grok | EngineType::Kimi | EngineType::Pi => {
             return Err(format!(
                 "Unsupported shared session engine: {}",
                 engine.icon()

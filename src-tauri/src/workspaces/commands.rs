@@ -1329,7 +1329,7 @@ pub(crate) async fn add_workspace(
             // Gemini follows local CLI session model (no persistent daemon session).
             add_workspace_for_cli_engine(EngineType::Gemini, path, codex_bin, &state).await
         }
-        EngineType::Kimi => {
+        EngineType::Kimi | EngineType::Pi => {
             // Kimi follows local CLI session model (no persistent daemon session).
             add_workspace_for_cli_engine(EngineType::Kimi, path, codex_bin, &state).await
         }
@@ -1361,7 +1361,7 @@ async fn add_workspace_for_cli_engine(
         EngineType::Claude => "claude",
         EngineType::Gemini => "gemini",
         EngineType::OpenCode => "opencode",
-        EngineType::Kimi => "kimi",
+        EngineType::Kimi | EngineType::Pi => "kimi",
         EngineType::Grok => "grok",
         _ => return Err(format!("Unsupported CLI engine: {:?}", engine_type)),
     };
@@ -1394,7 +1394,7 @@ async fn add_workspace_for_cli_engine(
                 .await
                 .installed
         }
-        EngineType::Kimi => {
+        EngineType::Kimi | EngineType::Pi => {
             let kimi_bin = {
                 let settings = state.app_settings.lock().await;
                 settings.kimi_bin.clone()

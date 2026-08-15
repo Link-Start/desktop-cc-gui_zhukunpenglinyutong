@@ -147,7 +147,7 @@ fn features_for_engine(engine: EngineType) -> super::EngineFeatures {
         EngineType::Gemini => super::EngineFeatures::gemini(),
         EngineType::Grok => super::EngineFeatures::grok(),
         EngineType::OpenCode => super::EngineFeatures::opencode(),
-        EngineType::Kimi => super::EngineFeatures::kimi(),
+        EngineType::Kimi | EngineType::Pi => super::EngineFeatures::kimi(),
     }
 }
 
@@ -214,7 +214,7 @@ fn collect_stale_child_candidates(
             }
             let progress_evidence = match workspace.engine {
                 EngineType::Claude => "timing-only",
-                EngineType::OpenCode | EngineType::Gemini | EngineType::Grok | EngineType::Kimi => {
+                EngineType::OpenCode | EngineType::Gemini | EngineType::Grok | EngineType::Kimi | EngineType::Pi => {
                     "unsupported"
                 }
                 // Codex is intentionally not part of this child-process parity
@@ -242,7 +242,7 @@ fn engine_type_label(engine: EngineType) -> &'static str {
         EngineType::Gemini => "gemini",
         EngineType::Codex => "codex",
         EngineType::Grok => "grok",
-        EngineType::Kimi => "kimi",
+        EngineType::Kimi | EngineType::Pi => "kimi",
     }
 }
 
@@ -1467,7 +1467,7 @@ pub async fn get_engine_models(
             Ok(fresh_models)
         }
         EngineType::Gemini => Ok(Vec::new()),
-        EngineType::Kimi => {
+        EngineType::Kimi | EngineType::Pi => {
             let config = manager.get_engine_config(EngineType::Kimi).await;
             let custom_bin = config
                 .as_ref()
@@ -2573,7 +2573,7 @@ pub async fn engine_send_message(
                 }
             }))
         }
-        EngineType::Kimi => {
+        EngineType::Kimi | EngineType::Pi => {
             let workspace_path = {
                 let workspaces = state.workspaces.lock().await;
                 workspaces
@@ -3466,7 +3466,7 @@ pub async fn engine_send_message_sync(
                 "text": response
             }))
         }
-        EngineType::Kimi => {
+        EngineType::Kimi | EngineType::Pi => {
             let workspace_path = {
                 let workspaces = state.workspaces.lock().await;
                 workspaces
@@ -3727,7 +3727,7 @@ pub async fn engine_interrupt(
             }
             Ok(())
         }
-        EngineType::Kimi => manager.interrupt_kimi_sessions(&workspace_id, None).await,
+        EngineType::Kimi | EngineType::Pi => manager.interrupt_kimi_sessions(&workspace_id, None).await,
         EngineType::Grok => manager.interrupt_grok_sessions(&workspace_id, None).await,
     }
 }
@@ -3802,7 +3802,7 @@ pub async fn engine_interrupt_turn(
             }
             Ok(())
         }
-        EngineType::Kimi => {
+        EngineType::Kimi | EngineType::Pi => {
             manager
                 .interrupt_kimi_sessions(&workspace_id, Some(&turn_id))
                 .await
