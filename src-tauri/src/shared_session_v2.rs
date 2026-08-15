@@ -3650,7 +3650,7 @@ fn import_legacy_snapshot_items(
 }
 
 #[tauri::command]
-pub async fn shared_session_v2_begin_turn(
+pub(crate) async fn shared_session_v2_begin_turn(
     workspace_id: String,
     thread_id: String,
     target: ExecutionTargetInput,
@@ -3693,7 +3693,7 @@ pub async fn shared_session_v2_begin_turn(
 }
 
 #[tauri::command]
-pub async fn shared_session_v2_prepare_context(
+pub(crate) async fn shared_session_v2_prepare_context(
     workspace_id: String,
     thread_id: String,
     target: ExecutionTargetInput,
@@ -3746,7 +3746,7 @@ pub async fn shared_session_v2_prepare_context(
 /// Tx3：基于 Tx1 之后的固定 source snapshot 编译 package，先原子保存 artifact，
 /// 再原子追加 deliveryPrepared + pending。当前 attempt 自身不进入历史 package。
 #[tauri::command]
-pub async fn shared_session_v2_prepare_delivery(
+pub(crate) async fn shared_session_v2_prepare_delivery(
     workspace_id: String,
     thread_id: String,
     attempt_id: String,
@@ -3883,7 +3883,7 @@ pub async fn shared_session_v2_prepare_delivery(
 /// `conversation.turnRequested` 读取；Binding 只读写 SQLite shared_binding_state。
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-pub async fn shared_session_v2_dispatch_turn(
+pub(crate) async fn shared_session_v2_dispatch_turn(
     workspace_id: String,
     thread_id: String,
     attempt_id: String,
@@ -4596,7 +4596,7 @@ pub async fn shared_session_v2_dispatch_turn(
 }
 
 #[tauri::command]
-pub async fn shared_context_retrieve_artifact(
+pub(crate) async fn shared_context_retrieve_artifact(
     workspace_id: String,
     thread_id: String,
     artifact_id: String,
@@ -4618,7 +4618,7 @@ pub async fn shared_context_retrieve_artifact(
 }
 
 #[tauri::command]
-pub async fn shared_context_scan_orphans(state: State<'_, AppState>) -> Result<Value, String> {
+pub(crate) async fn shared_context_scan_orphans(state: State<'_, AppState>) -> Result<Value, String> {
     let writer = require_writer(&state)?;
     // ponytail: report-only maintenance path，按 artifact 读取 session events；
     // artifact 量显著增长后可升级为一次性 packageId index。
@@ -4650,7 +4650,7 @@ pub async fn shared_context_scan_orphans(state: State<'_, AppState>) -> Result<V
 }
 
 #[tauri::command]
-pub async fn shared_session_v2_await_turn_terminal(
+pub(crate) async fn shared_session_v2_await_turn_terminal(
     workspace_id: String,
     thread_id: String,
     attempt_id: String,
@@ -4696,7 +4696,7 @@ pub async fn shared_session_v2_await_turn_terminal(
 }
 
 #[tauri::command]
-pub async fn shared_session_v2_commit_turn(
+pub(crate) async fn shared_session_v2_commit_turn(
     workspace_id: String,
     thread_id: String,
     attempt_id: String,
@@ -4749,7 +4749,7 @@ pub async fn shared_session_v2_commit_turn(
 
 /// ACK 不确定（超时/崩溃/未知）：provisioning → recovery-required，禁止盲目重建。
 #[tauri::command]
-pub async fn shared_session_v2_mark_recovery(
+pub(crate) async fn shared_session_v2_mark_recovery(
     workspace_id: String,
     thread_id: String,
     attempt_id: String,
@@ -4824,7 +4824,7 @@ pub async fn shared_session_v2_mark_recovery(
 /// 用户在 actual package 确认阶段取消：此时 Runtime side effect 尚未开始。
 /// 只允许消费 exact prepared Attempt；任何已注册 Runtime owner 都 fail closed。
 #[tauri::command]
-pub async fn shared_session_v2_cancel_attempt(
+pub(crate) async fn shared_session_v2_cancel_attempt(
     workspace_id: String,
     thread_id: String,
     attempt_id: String,
@@ -4893,7 +4893,7 @@ fn committed_attempt_sequence(
 }
 
 #[tauri::command]
-pub async fn shared_session_v2_interrupt_turn(
+pub(crate) async fn shared_session_v2_interrupt_turn(
     workspace_id: String,
     thread_id: String,
     attempt_id: String,
@@ -5083,7 +5083,7 @@ fn active_recovery_response(
 /// Attempt-first recovery mutation。Probe 只是 UI 动作名；Backend 必须重新读取
 /// durable evidence，并且只在强证据下落 Terminal Fact 后返回可解锁状态。
 #[tauri::command]
-pub async fn shared_session_v2_recover_attempt(
+pub(crate) async fn shared_session_v2_recover_attempt(
     workspace_id: String,
     thread_id: String,
     attempt_id: String,
@@ -5162,7 +5162,7 @@ pub async fn shared_session_v2_recover_attempt(
 /// 用户显式重建：归档旧 Binding（durable 留痕），新 Native Session 重新 provisioning。
 /// Shared Session Identity 不变；committed cursor 清空（新 binding 未消费任何历史）。
 #[tauri::command]
-pub async fn shared_session_v2_rebuild_binding(
+pub(crate) async fn shared_session_v2_rebuild_binding(
     workspace_id: String,
     thread_id: String,
     binding_key: String,
@@ -5308,7 +5308,7 @@ fn clear_binding_recovery_if_idle(
 /// - `force_stop=true` → best-effort interrupt；**interrupt 失败也必须 durable cancel + 清 coordinator**
 ///   （否则停不掉时「跳过本轮」会永久锁死会话）
 #[tauri::command]
-pub async fn shared_session_v2_abandon_unresolved_attempt(
+pub(crate) async fn shared_session_v2_abandon_unresolved_attempt(
     workspace_id: String,
     thread_id: String,
     attempt_id: Option<String>,
@@ -5450,7 +5450,7 @@ pub async fn shared_session_v2_abandon_unresolved_attempt(
 /// Probe（B.4.3）：读取 durable evidence 供前端定性（active / terminal / not-accepted）。
 /// 不触碰 runtime，不修改任何状态。
 #[tauri::command]
-pub async fn shared_session_v2_probe_binding(
+pub(crate) async fn shared_session_v2_probe_binding(
     workspace_id: String,
     thread_id: String,
     binding_key: String,
@@ -5647,7 +5647,7 @@ pub async fn shared_session_v2_probe_binding(
 /// 重启恢复（B.6.5）：返回 durable evidence，前端据此恢复 running/settling/recovery-required，
 /// 而不是落回 idle。只读。
 #[tauri::command]
-pub async fn shared_session_v2_turn_state(
+pub(crate) async fn shared_session_v2_turn_state(
     workspace_id: String,
     thread_id: String,
     state: State<'_, AppState>,
