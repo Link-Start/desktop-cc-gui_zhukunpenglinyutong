@@ -30,7 +30,7 @@ function defaultYieldBetweenBatches(): Promise<void> {
 /**
  * Dispatch history items into the thread store without one multi-thousand-item
  * main-thread commit. Small lists use a single `setThreadItems`; large lists
- * paint a prefix first, then expand until complete.
+ * paint the newest window first, then prepend older batches.
  */
 export async function dispatchThreadItemsProgressively(
   dispatch: ThreadItemsDispatch,
@@ -58,21 +58,21 @@ export async function dispatchThreadItemsProgressively(
     return;
   }
 
-  let end = batchSize;
+  let visible = batchSize;
   while (true) {
     if (!shouldContinue()) {
       return;
     }
-    const sliceEnd = Math.min(end, items.length);
+    const start = Math.max(0, items.length - visible);
     dispatch({
       type: "setThreadItems",
       threadId,
-      items: items.slice(0, sliceEnd),
+      items: items.slice(start),
     });
-    if (sliceEnd >= items.length) {
+    if (start === 0) {
       return;
     }
     await yieldBetweenBatches();
-    end += batchSize;
+    visible = Math.min(visible + batchSize, items.length);
   }
 }
