@@ -7,14 +7,11 @@ import {
   resolveOpenHtmlInBrowserErrorKind,
 } from "./openHtmlInBrowser";
 
-const createBrowserAgentSessionMock = vi.fn();
-const openBrowserAgentWindowMock = vi.fn();
+const requestBrowserDockOpenUrlMock = vi.fn();
 
-vi.mock("../../../services/tauri", () => ({
-  createBrowserAgentSession: (...args: unknown[]) =>
-    createBrowserAgentSessionMock(...args),
-  openBrowserAgentWindow: (...args: unknown[]) =>
-    openBrowserAgentWindowMock(...args),
+vi.mock("../../browser-agent/state/dockEvents", () => ({
+  requestBrowserDockOpenUrl: (...args: unknown[]) =>
+    requestBrowserDockOpenUrlMock(...args),
 }));
 
 describe("isHtmlFilePath", () => {
@@ -57,41 +54,24 @@ describe("buildLocalFileUrl", () => {
 
 describe("openHtmlInBrowser", () => {
   beforeEach(() => {
-    createBrowserAgentSessionMock.mockReset();
-    openBrowserAgentWindowMock.mockReset();
-    createBrowserAgentSessionMock.mockResolvedValue({
-      browserSessionId: "session-1",
-    });
-    openBrowserAgentWindowMock.mockResolvedValue({
-      browserSessionId: "session-1",
-    });
+    requestBrowserDockOpenUrlMock.mockReset();
   });
 
-  it("opens the encoded file:// URL via built-in Browser Agent", async () => {
+  it("opens the encoded file:// URL via the embedded Browser Dock", async () => {
     await openHtmlInBrowser("/repo/docs/demo.html", {
       workspaceId: "ws-1",
       ownerSurface: "file-view",
     });
-    expect(createBrowserAgentSessionMock).toHaveBeenCalledWith({
-      workspaceId: "ws-1",
-      url: "file:///repo/docs/demo.html",
-      ownerSurface: "file-view",
-    });
-    expect(openBrowserAgentWindowMock).toHaveBeenCalledWith("session-1", null);
+    expect(requestBrowserDockOpenUrlMock).toHaveBeenCalledWith(
+      "file:///repo/docs/demo.html",
+    );
   });
 
   it("requires workspaceId", async () => {
     await expect(
       openHtmlInBrowser("/repo/a.html", { workspaceId: "  " }),
     ).rejects.toThrow(/workspaceId is required/);
-    expect(createBrowserAgentSessionMock).not.toHaveBeenCalled();
-  });
-
-  it("propagates Browser Agent failures", async () => {
-    createBrowserAgentSessionMock.mockRejectedValue(new Error("blocked"));
-    await expect(
-      openHtmlInBrowser("/repo/a.html", { workspaceId: "ws-1" }),
-    ).rejects.toThrow("blocked");
+    expect(requestBrowserDockOpenUrlMock).not.toHaveBeenCalled();
   });
 });
 

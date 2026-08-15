@@ -48,6 +48,7 @@ import { CodexProviderDialog } from "./CodexProviderDialog";
 import { KimiProviderDialog } from "./KimiProviderDialog";
 import { GrokProviderDialog } from "./GrokProviderDialog";
 import { OpenCodeProviderDialog } from "./OpenCodeProviderDialog";
+import { PiProviderAuthSection } from "./PiProviderAuthSection";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { CustomModelDialog } from "./CustomModelDialog";
 import {
@@ -949,6 +950,7 @@ export function VendorSettingsPanel({
         kimiHasConfig,
         grokHasConfig,
         openCodeHasConfig,
+        piHasConfig: false,
       }),
     [claudeHasConfig, codexGlobalConfigExists, kimiHasConfig, grokHasConfig, openCodeHasConfig],
   );
@@ -1616,6 +1618,28 @@ export function VendorSettingsPanel({
             />
           </div>
           </CliLifecycleProvider>
+        ) : activeCli === "pi" ? (
+          <div className="vendor-tab-content vendor-tab-content-dense">
+            <CliBrandHeader
+              id="pi"
+              title="PI CLI"
+              description={t("settings.piDescription", {
+                defaultValue:
+                  "Configure PI CLI auth and models. Credentials stay in ~/.pi.",
+              })}
+              helpLabel={t("settings.vendor.openCliDocs", {
+                defaultValue: "Official docs",
+              })}
+              href={CLI_DOCS_HREF_BY_ID.pi}
+            />
+            <VendorSettingsSection
+              label={t("settings.vendor.piAuth.sectionTitle", {
+                defaultValue: "供应商认证",
+              })}
+            >
+              <PiProviderAuthSection />
+            </VendorSettingsSection>
+          </div>
         ) : (
           <div className="vendor-tab-content">
             <CliBrandHeader

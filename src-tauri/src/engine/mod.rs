@@ -40,7 +40,7 @@ pub mod kimi;
 pub mod kimi_history;
 pub(crate) mod kimi_provider_profile;
 pub mod pi;
-pub(crate) mod pi_auth;
+pub mod pi_auth;
 pub(crate) mod pi_history;
 pub(crate) mod pi_provider_profile;
 pub mod manager;
@@ -57,6 +57,9 @@ pub use commands::*;
 pub use manager::EngineManager;
 pub use rewind_commands::*;
 pub use session_history_commands::*;
+pub use pi_auth::{
+    pi_auth_delete_credential, pi_auth_list_providers, pi_auth_set_api_key,
+};
 pub use status::resolve_engine_type;
 pub use task_output::*;
 

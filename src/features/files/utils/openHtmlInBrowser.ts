@@ -1,7 +1,4 @@
-import {
-  createBrowserAgentSession,
-  openBrowserAgentWindow,
-} from "../../../services/tauri";
+import { requestBrowserDockOpenUrl } from "../../browser-agent/state/dockEvents";
 
 const HTML_FILE_EXTENSION_PATTERN = /\.(html|htm)$/i;
 
@@ -118,10 +115,5 @@ export async function openHtmlInBrowser(
   }
 
   const fileUrl = buildLocalFileUrl(absolutePath);
-  const session = await createBrowserAgentSession({
-    workspaceId,
-    url: fileUrl,
-    ownerSurface: options.ownerSurface?.trim() || "file-view",
-  });
-  await openBrowserAgentWindow(session.browserSessionId, options.locale ?? null);
+  requestBrowserDockOpenUrl(fileUrl);
 }

@@ -43,6 +43,14 @@ pub mod kimi;
 pub mod kimi_history;
 #[path = "../../engine/kimi_provider_profile.rs"]
 pub(crate) mod kimi_provider_profile;
+#[path = "../../engine/pi.rs"]
+pub mod pi;
+#[path = "../../engine/pi_auth.rs"]
+pub mod pi_auth;
+#[path = "../../engine/pi_history.rs"]
+pub mod pi_history;
+#[path = "../../engine/pi_provider_profile.rs"]
+pub(crate) mod pi_provider_profile;
 #[allow(dead_code)]
 #[path = "../../engine/manager.rs"]
 pub mod manager;
