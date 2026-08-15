@@ -35,6 +35,7 @@ describe("BashToolGroupBlock", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: /tools\.bashGroupBatchRun/ }));
     fireEvent.click(screen.getByText("npm run lint"));
 
     const outputLines = document.querySelectorAll(".bash-output-line");
@@ -67,11 +68,52 @@ describe("BashToolGroupBlock", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: /tools\.bashGroupBatchRun/ }));
+
     expect(screen.getByText("Show working tree status")).toBeTruthy();
     expect(screen.getByText("Show staged and unstaged changes")).toBeTruthy();
     expect(document.querySelectorAll(".bash-item-status")).toHaveLength(2);
 
     const allCompletedNode = screen.queryByText("全部完成") ?? screen.queryByText("tools.bashGroupAllCompleted");
     expect(allCompletedNode).toBeTruthy();
+  });
+
+  it("stays expanded while a command is processing", () => {
+    render(
+      <BashToolGroupBlock
+        items={[
+          makeToolItem("bash-live-1", "npm run build", "ok"),
+          makeToolItem("bash-live-2", "npm run test", "", "in_progress"),
+        ]}
+      />,
+    );
+
+    expect(document.querySelectorAll(".bash-timeline-item")).toHaveLength(2);
+  });
+
+  it("auto-collapses once all commands finish", () => {
+    const { rerender } = render(
+      <BashToolGroupBlock
+        items={[
+          makeToolItem("bash-done-1", "npm run lint", "ok"),
+          makeToolItem("bash-done-2", "npm run test", "", "in_progress"),
+        ]}
+      />,
+    );
+
+    expect(document.querySelectorAll(".bash-timeline-item")).toHaveLength(2);
+
+    rerender(
+      <BashToolGroupBlock
+        items={[
+          makeToolItem("bash-done-1", "npm run lint", "ok"),
+          makeToolItem("bash-done-2", "npm run test", "ok"),
+        ]}
+      />,
+    );
+
+    expect(document.querySelectorAll(".bash-timeline-item")).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: /tools\.bashGroupBatchRun/ }));
+    expect(document.querySelectorAll(".bash-timeline-item")).toHaveLength(2);
   });
 });
