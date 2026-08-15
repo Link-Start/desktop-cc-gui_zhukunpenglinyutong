@@ -2608,7 +2608,8 @@ fn engine_token(engine: EngineType) -> &'static str {
         EngineType::Codex => "codex",
         EngineType::Gemini => "gemini",
         EngineType::OpenCode => "opencode",
-        EngineType::Kimi | EngineType::Pi => "kimi",
+        EngineType::Kimi => "kimi",
+        EngineType::Pi => "pi",
         EngineType::Grok => "grok",
     }
 }

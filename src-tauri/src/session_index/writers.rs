@@ -531,6 +531,19 @@ pub(crate) fn gemini_home_fingerprint() -> String {
     mtime_fingerprint(&home)
 }
 
+pub(crate) fn pi_home_fingerprint() -> String {
+    let sessions = crate::engine::pi_history::resolve_pi_sessions_root(None);
+    let home = sessions
+        .parent()
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_else(|| sessions.clone());
+    format!(
+        "{}|{}",
+        mtime_fingerprint(&home),
+        mtime_fingerprint(&sessions)
+    )
+}
+
 pub(crate) fn grok_home_fingerprint() -> String {
     let home = std::env::var("GROK_HOME")
         .ok()
@@ -574,6 +587,39 @@ pub(crate) fn rows_from_gemini_summaries(
             };
             SessionIndexRow {
                 engine: "gemini".into(),
+                session_id: session.session_id.clone(),
+                title,
+                native_title: None,
+                updated_at: session.updated_at,
+                created_at: Some(session.created_at).filter(|value| *value > 0),
+                cwd: Some(workspace_key.clone()),
+                workspace_path: Some(workspace_key.clone()),
+                physical_path: None,
+                parent_session_id: None,
+                size_bytes: session.file_size_bytes,
+            }
+        })
+        .collect()
+}
+
+pub(crate) fn rows_from_pi_summaries(
+    workspace_path: &Path,
+    sessions: &[crate::engine::pi_history::PiSessionSummary],
+) -> Vec<SessionIndexRow> {
+    let workspace_key = normalize_path_key(&workspace_path.to_string_lossy());
+    sessions
+        .iter()
+        .map(|session| {
+            let title = {
+                let trimmed = session.first_message.trim();
+                if trimmed.is_empty() {
+                    "PI Session".to_string()
+                } else {
+                    truncate_title(trimmed, 80)
+                }
+            };
+            SessionIndexRow {
+                engine: "pi".into(),
                 session_id: session.session_id.clone(),
                 title,
                 native_title: None,

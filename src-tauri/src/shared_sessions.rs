@@ -475,7 +475,8 @@ pub(crate) fn is_pending_shared_binding_thread_id(engine: EngineType, thread_id:
     match engine {
         EngineType::Claude => normalized.starts_with("claude-pending-shared-"),
         EngineType::Codex => normalized.starts_with("codex-pending-shared-"),
-        EngineType::Kimi | EngineType::Pi => normalized.starts_with("kimi-pending-shared-"),
+        EngineType::Kimi => normalized.starts_with("kimi-pending-shared-"),
+        EngineType::Pi => normalized.starts_with("pi-pending-shared-"),
         EngineType::Grok => normalized.starts_with("grok-pending-shared-"),
         EngineType::OpenCode => normalized.starts_with("opencode-pending-shared-"),
         EngineType::Gemini => false,
@@ -520,7 +521,8 @@ pub(crate) fn engine_binding_thread_id(engine: EngineType, seed: &str) -> String
     match engine {
         EngineType::Claude => format!("claude-pending-shared-{seed}"),
         EngineType::Codex => format!("codex-pending-shared-{seed}"),
-        EngineType::Kimi | EngineType::Pi => format!("kimi-pending-shared-{seed}"),
+        EngineType::Kimi => format!("kimi-pending-shared-{seed}"),
+        EngineType::Pi => format!("pi-pending-shared-{seed}"),
         EngineType::Grok => format!("grok-pending-shared-{seed}"),
         EngineType::OpenCode => format!("opencode-pending-shared-{seed}"),
         EngineType::Gemini => format!("gemini-pending-shared-{seed}"),
