@@ -59,3 +59,4 @@
 | 看门狗模板 | `src/utils/uiScaleStartupGuard.ts` |
 | 事故分析 | `docs/analysis/windows-ccgui-startup-hang-2026-08-05.md` |
 | 错误登记 | `.learnings/ERRORS.md` ERR-20260806-001 |
+| 冷启动点击假死（同族，非 zoom） | `windows-cold-start-click-freeze-pitfall.md` |

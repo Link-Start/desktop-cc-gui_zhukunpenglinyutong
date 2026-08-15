@@ -157,3 +157,138 @@ src-tauri/src/bin/cc_gui_daemon/daemon_state.rs
 - **Notes**: 重新读取 daemon sync 分支并拆分 patch。
 
 ---
+
+## [ERR-20260814-001] windows_release_notes_close_freeze_on_cold_start
+
+**Logged**: 2026-08-14T11:35:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+
+Windows 安装最新版后自动弹出版本记录；启动后前几秒点叉号整窗假死，等约一分钟再点则正常。2s `setTimeout` auto-open 仍落在 cold-start 脆弱窗；关 overlay 同时拆掉全屏盾、卸载 Markdown、触发 first-click deferred hydrate。
+
+### Error
+
+```text
+现象: 新装/升级弹出版本记录，立刻点叉号卡死；等 ~60s 再关不卡
+根因: RELEASE_NOTES_AUTO_OPEN_DELAY_MS=2000 不读 startup-gate-ready；
+      close 不取消 in-flight open；弹窗默认 FullMarkdownRuntime
+```
+
+### Context
+
+- 仓库已有 cold-start click freeze / ComposerGate / 60s catalog freshness 结论；生产 StartupGateOverlay 默认关闭。
+- 作者已预见到 freeze mid-modal，只把 lastSeen 提前，没有修卡死本身。
+- 「等一分钟就不卡」对应 full-catalog 60s freshness/cooldown settle，不是 click unfreeze timer。
+
+### Suggested Fix
+
+1. auto-open 改为 `subscribeStartupGateReady` + `scheduleWhenInteractiveQuiet`，禁止用固定 timeout 当修复。
+2. `closeReleaseNotes` bump generation，丢弃 late catalog resolve。
+3. 弹窗 Markdown 走 `liveRenderMode="lightweight"`，去掉 backdrop-filter。
+
+### Metadata
+
+- Reproducible: field report (Windows); unit-covered for gate-ready / close-cancel
+- Related Files: src/features/update/hooks/useReleaseNotes.ts, src/features/update/components/ReleaseNotesModal.tsx, src/styles/release-notes.css, docs/analysis/cold-start-click-freeze-postmortem-2026-08-10.md
+
+### Resolution
+
+- **Resolved**: 2026-08-14T11:35:00+08:00
+- **Notes**: focused vitest 25/25 green. Windows 真机「新装立刻关弹窗」仍需用户确认。
+
+---
+
+## [ERR-20260814-002] windows_cold_start_permission_button_freeze
+
+**Logged**: 2026-08-14T11:45:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+
+Windows 进入页面后即使没有版本记录弹窗，快速点输入框「权限选择」(ModeSelect) 也会整窗假死。与关版本记录同一冷启动窗，但触发器是 ComposerGate 把早期 pointerdown 当成可以挂 ComposerImpl。
+
+### Error
+
+```text
+现象: 冷启后立刻点权限模式 / 类似 composer chrome，整窗假死
+根因: ComposerGate 旧条件「点过 + 静默 1.2s / 无人 2.8s」升 full
+```
+
+### Suggested Fix
+
+Light 最短停留 6s；点过之后还须再静默 1.8s；idle 上限 8s。早期点击只推迟升级。
+
+### Metadata
+
+- Related Files: src/features/composer/utils/composerGateUpgrade.ts, src/features/composer/components/Composer.tsx, src/features/composer/components/ChatInputBox/selectors/ModeSelect.tsx
+
+### Resolution
+
+- **Resolved**: 2026-08-14T11:45:00+08:00
+- **Notes**: ComposerGate upgrade helper unit-tested. Windows 真机「冷启立刻点权限按钮」仍需确认。
+
+---
+
+## [ERR-20260814-003] windows_any_first_click_deferred_hydrate_freeze
+
+**Logged**: 2026-08-14T11:50:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+
+Windows 冷启后点任意可见按钮都可能假死，因为第一次 pointerdown/keydown 会启动 deferred client stores + 完整 i18n + Baidu Tongji。这不是某个按钮的 bug，是公共 first-click 调度。
+
+### Error
+
+```text
+scheduleIdleOrFirstInteraction(runDeferredStores / ensureI18nReady / baidu)
+on first pointerdown/keydown during cold start
+```
+
+### Suggested Fix
+
+改为 subscribeStartupGateReady 后再 idle，禁止用第一次点击当启动器。applyUiScale 恢复 verify-before-write，避免冷启无条件写空 inline。updater auto-check 同样等 gate-ready。
+
+### Metadata
+
+- Related Files: src/bootstrapApp.tsx, src/utils/applyUiScale.ts, src/features/update/hooks/useUpdater.ts
+
+### Resolution
+
+- **Resolved**: 2026-08-14T11:50:00+08:00
+- **Notes**: bootstrap / applyUiScale / updater focused tests green.
+
+---
+
+## [ERR-20260814-004] composer_light_model_select_catalog_leak
+
+**Logged**: 2026-08-14T11:55:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+
+ComposerLight 故意不传 onExecutionTargetChange，指望 ReadinessBar 走静态模型位。ChatInputBox 却永远传入 truthy wrapper + useAtomicProviderTargetCatalog({ enabled: true })，冷启点模型位仍会打开 Radix ModelSelect 并 ensureProfiles/ensureModels。
+
+### Suggested Fix
+
+enabled 跟随真正的 onExecutionTargetChange；没有回调时不要把 wrapper / ensureProfiles / ensureModels 传给 ReadinessBar。
+
+### Metadata
+
+- Related Files: src/features/composer/components/ChatInputBox/ChatInputBox.tsx, src/features/composer/components/ChatInputBox/ComposerReadinessBar.tsx
+
+### Resolution
+
+- **Resolved**: 2026-08-14T11:55:00+08:00
+- **Notes**: ComposerReadinessBar static-chip test green.
+
+---

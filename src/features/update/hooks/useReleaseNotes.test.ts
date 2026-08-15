@@ -33,13 +33,19 @@ import {
   findReleaseIndex,
   normalizeReleaseVersion,
   parseChangelogEntries,
-  RELEASE_NOTES_AUTO_OPEN_DELAY_MS,
+  RELEASE_NOTES_AUTO_OPEN_MAX_WAIT_MS,
+  RELEASE_NOTES_AUTO_OPEN_MIN_DELAY_MS,
   useReleaseNotes,
 } from "./useReleaseNotes";
 import {
   loadReleaseNotesEntry,
   loadReleaseNotesIndex,
 } from "../utils/releaseNotesCatalog";
+import {
+  resetStartupGateReadyForTests,
+  stampStartupGateReady,
+} from "../../../features/startup-orchestration/utils/startupGateReady";
+import { resetStartupTraceForTests } from "../../../features/startup-orchestration/utils/startupTrace";
 
 const getVersionMock = vi.mocked(getVersion);
 const getClientStoreSyncMock = vi.mocked(getClientStoreSync);
@@ -112,10 +118,23 @@ English:
   });
 });
 
+async function flushVersionThenAdvance(ms: number) {
+  await act(async () => {
+    await Promise.resolve();
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 describe("useReleaseNotes auto-open + lastSeen", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    resetStartupTraceForTests();
+    resetStartupGateReadyForTests();
     mockCatalogReady();
     getVersionMock.mockResolvedValue("0.8.8");
     getClientStoreSyncMock.mockReturnValue(null);
@@ -123,30 +142,42 @@ describe("useReleaseNotes auto-open + lastSeen", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    resetStartupTraceForTests();
+    resetStartupGateReadyForTests();
   });
 
-  it("delays auto-open by RELEASE_NOTES_AUTO_OPEN_DELAY_MS on version bump", async () => {
+  it("does not auto-open before startup-gate-ready even after the quiet delay", async () => {
     const { result } = renderHook(() => useReleaseNotes());
 
-    // Flush getVersion().then(...) so the 2s timer is armed.
+    await flushVersionThenAdvance(RELEASE_NOTES_AUTO_OPEN_MAX_WAIT_MS + 50);
+
+    expect(result.current.isOpen).toBe(false);
+    expect(loadIndexMock).not.toHaveBeenCalled();
+  });
+
+  it("auto-opens after startup-gate-ready plus the quiet minDelay", async () => {
+    const { result } = renderHook(() => useReleaseNotes());
+
     await act(async () => {
       await Promise.resolve();
     });
-
     expect(result.current.isOpen).toBe(false);
     expect(loadIndexMock).not.toHaveBeenCalled();
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(RELEASE_NOTES_AUTO_OPEN_DELAY_MS - 1);
+      stampStartupGateReady("first-paint-complete");
+    });
+    expect(result.current.isOpen).toBe(false);
+    expect(loadIndexMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(RELEASE_NOTES_AUTO_OPEN_MIN_DELAY_MS - 1);
     });
     expect(result.current.isOpen).toBe(false);
     expect(loadIndexMock).not.toHaveBeenCalled();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1);
-    });
-    // openReleaseNotes is async: flush microtasks after the timer fires.
-    await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -169,7 +200,8 @@ describe("useReleaseNotes auto-open + lastSeen", () => {
 
     await act(async () => {
       await Promise.resolve();
-      await vi.advanceTimersByTimeAsync(RELEASE_NOTES_AUTO_OPEN_DELAY_MS + 50);
+      stampStartupGateReady("first-paint-complete");
+      await vi.advanceTimersByTimeAsync(RELEASE_NOTES_AUTO_OPEN_MAX_WAIT_MS + 50);
       await Promise.resolve();
     });
 
@@ -204,5 +236,68 @@ describe("useReleaseNotes auto-open + lastSeen", () => {
 
     expect(result.current.error).toContain("index missing");
     expect(writeClientStoreValueMock).not.toHaveBeenCalled();
+  });
+
+  it("close cancels an in-flight open so late catalog resolve cannot reopen", async () => {
+    let resolveIndex: ((value: {
+      generatedAt: string;
+      source: string;
+      sourceSha256: string;
+      entryCount: number;
+      entries: Array<{
+        id: string;
+        tagName: string;
+        version: string;
+        title: string;
+        dateLabel: string;
+        file: string;
+      }>;
+    }) => void) | null = null;
+    loadIndexMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveIndex = resolve;
+        }),
+    );
+
+    const { result } = renderHook(() => useReleaseNotes({ enabled: false }));
+
+    let openPromise: Promise<void> | undefined;
+    await act(async () => {
+      openPromise = result.current.openReleaseNotes({ preferredVersion: "0.8.8" });
+    });
+    expect(result.current.isOpen).toBe(true);
+    expect(result.current.loading).toBe(true);
+
+    await act(async () => {
+      result.current.closeReleaseNotes();
+    });
+    expect(result.current.isOpen).toBe(false);
+    expect(result.current.loading).toBe(false);
+
+    await act(async () => {
+      resolveIndex?.({
+        generatedAt: "2026-08-12T00:00:00.000Z",
+        source: "CHANGELOG.md",
+        sourceSha256: "test",
+        entryCount: 1,
+        entries: [
+          {
+            id: sampleEntry.id,
+            tagName: sampleEntry.tagName,
+            version: sampleEntry.version,
+            title: sampleEntry.title,
+            dateLabel: sampleEntry.dateLabel,
+            file: "entries/0.8.8.json",
+          },
+        ],
+      });
+      await openPromise;
+    });
+
+    expect(result.current.isOpen).toBe(false);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.entries).toEqual([]);
+    expect(loadEntryMock).not.toHaveBeenCalled();
   });
 });

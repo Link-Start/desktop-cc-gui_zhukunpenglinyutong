@@ -32,7 +32,17 @@ vi.mock("react-i18next", () => ({
 }));
 
 vi.mock("../../../markdown/components/Markdown", () => ({
-  Markdown: ({ value }: { value: string }) => <div data-testid="release-markdown">{value}</div>,
+  Markdown: ({
+    value,
+    liveRenderMode,
+  }: {
+    value: string;
+    liveRenderMode?: string;
+  }) => (
+    <div data-testid="release-markdown" data-live-render-mode={liveRenderMode}>
+      {value}
+    </div>
+  ),
 }));
 
 import { ReleaseNotesModal } from "./ReleaseNotesModal";
@@ -104,6 +114,11 @@ describe("ReleaseNotesModal", () => {
     expect(screen.getAllByTestId("release-markdown")).toHaveLength(2);
     expect(screen.getAllByTestId("release-markdown")[0]?.textContent).toContain("Added changelog modal");
     expect(screen.getAllByTestId("release-markdown")[1]?.textContent).toContain("新增版本记录弹窗");
+    expect(
+      screen.getAllByTestId("release-markdown").every(
+        (node) => node.getAttribute("data-live-render-mode") === "lightweight",
+      ),
+    ).toBe(true);
     expect(screen.getByText("1 / 2")).toBeTruthy();
   });
 

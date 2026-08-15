@@ -12,6 +12,29 @@ const flushRendererDiagnosticsBufferMock = vi.hoisted(() => vi.fn());
 const startRendererBlankScreenWatchdogMock = vi.hoisted(() => vi.fn());
 const pushGlobalRuntimeNoticeMock = vi.hoisted(() => vi.fn());
 const recordStartupMilestoneMock = vi.hoisted(() => vi.fn());
+const subscribeStartupGateReadyMock = vi.hoisted(() => {
+  let pending: Array<(reason: string | null) => void> = [];
+  const mock = vi.fn((listener: (reason: string | null) => void) => {
+    pending.push(listener);
+    return () => {
+      pending = pending.filter((item) => item !== listener);
+    };
+  });
+  (mock as typeof mock & { flush: (reason?: string | null) => void }).flush = (
+    reason = "first-paint-complete",
+  ) => {
+    const listeners = [...pending];
+    pending = [];
+    listeners.forEach((listener) => listener(reason));
+  };
+  (mock as typeof mock & { resetQueue: () => void }).resetQueue = () => {
+    pending = [];
+  };
+  return mock as typeof mock & {
+    flush: (reason?: string | null) => void;
+    resetQueue: () => void;
+  };
+});
 const recordStartupTaskTraceMock = vi.hoisted(() => vi.fn());
 const recordStartupPerfMarkerMock = vi.hoisted(() => vi.fn());
 const invokeMock = vi.hoisted(() => vi.fn());
@@ -50,6 +73,10 @@ vi.mock("./services/globalRuntimeNotices", () => ({
 vi.mock("./features/startup-orchestration/utils/startupTrace", () => ({
   recordStartupMilestone: recordStartupMilestoneMock,
   recordStartupTaskTrace: recordStartupTaskTraceMock,
+}));
+
+vi.mock("./features/startup-orchestration/utils/startupGateReady", () => ({
+  subscribeStartupGateReady: subscribeStartupGateReadyMock,
 }));
 
 vi.mock("./services/perfBaseline/startupMarkers", () => ({
@@ -94,6 +121,8 @@ describe("startApp", () => {
     startRendererBlankScreenWatchdogMock.mockReset();
     pushGlobalRuntimeNoticeMock.mockReset();
     recordStartupMilestoneMock.mockReset();
+    subscribeStartupGateReadyMock.resetQueue();
+    subscribeStartupGateReadyMock.mockClear();
     recordStartupTaskTraceMock.mockReset();
     recordStartupPerfMarkerMock.mockReset();
     invokeMock.mockReset();
@@ -165,8 +194,12 @@ describe("startApp", () => {
     expect(renderMock).toHaveBeenCalledTimes(1);
     expect(preloadDeferredClientStoresMock).not.toHaveBeenCalled();
     expect(recordStartupPerfMarkerMock).toHaveBeenCalledWith("first-paint");
+    expect(subscribeStartupGateReadyMock).toHaveBeenCalled();
 
     window.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    expect(preloadDeferredClientStoresMock).not.toHaveBeenCalled();
+
+    subscribeStartupGateReadyMock.flush("first-paint-complete");
     await vi.waitFor(() => {
       expect(preloadDeferredClientStoresMock).toHaveBeenCalledTimes(1);
     });

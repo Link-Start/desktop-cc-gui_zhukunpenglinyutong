@@ -42,6 +42,7 @@
 ## Pre-Development Checklist（开始开发前必读）
 
 - 若任务同时涉及项目规则入口或文档治理边界，先读 `../guides/project-instruction-layering-guide.md`。
+- 若任务改冷启动编排、自动弹层、ComposerGate、first-click 副作用，或处理 Windows「一点就卡死」，先读 `../guides/windows-cold-start-click-freeze-pitfall.md`。
 - 先读 [Directory Structure](./directory-structure.md)，确认文件放在哪个 feature slice。
 - 涉及设置页 / 偏好列表 / 表单型管理 UI 时，先读 [Preference Settings UI / UX Guide](../../../docs/ui-ux/preference-settings-ui-guide.md)。
 - 涉及 `useEffect`、polling、listener 时先读 [Hook Guidelines](./hook-guidelines.md)。

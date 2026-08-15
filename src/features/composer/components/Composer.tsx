@@ -9,6 +9,8 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { useEventCallback } from "../../../utils/useEventCallback";
+import { shouldUpgradeComposerFromLight } from "../utils/composerGateUpgrade";
+import { getStartupGateReadyReason } from "../../startup-orchestration/utils/startupGateReady";
 import type {
   ComposerSendShortcut,
   ComposerEditorSettings,
@@ -3763,24 +3765,24 @@ function ComposerGate(props: ComposerProps) {
       const hadInputSinceMount = lastInput >= mountedAt;
       const quietFor = now - lastInput;
 
-      if (hadInputSinceMount && quietFor >= 1_200 && elapsed >= 1_000) {
-        if (hadRecentInteractiveInput(250)) {
-          timerId = window.setTimeout(tick, 150);
-          return;
-        }
+      // 冷启点权限模式 / 模型位 / 输入框也是 pointerdown。旧逻辑把
+      // 「点过 + 静默 1.2s」当成可以挂 ComposerImpl，正好复现
+      // 2026-08-11 Composer freeze。早期点击只推迟升级，不升级。
+      if (
+        shouldUpgradeComposerFromLight({
+          elapsedMs: elapsed,
+          hadInputSinceMount,
+          quietForMs: quietFor,
+          recentInput: hadRecentInteractiveInput(250),
+          startupGateReady: getStartupGateReadyReason() != null,
+        })
+      ) {
         composerHeavyWarmed = true;
         setFull(true);
         return;
       }
 
-      // 无人操作：catalog 通常已就绪后再上完整层（模型位已有 loading 占位，不靠缺位）
-      if (!hadInputSinceMount && elapsed >= 2_800) {
-        composerHeavyWarmed = true;
-        setFull(true);
-        return;
-      }
-
-      timerId = window.setTimeout(tick, 120);
+      timerId = window.setTimeout(tick, 150);
     };
 
     timerId = window.setTimeout(tick, 400);

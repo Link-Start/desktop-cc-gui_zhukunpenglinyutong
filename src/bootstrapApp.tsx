@@ -25,6 +25,7 @@ import {
 } from "./features/startup-orchestration/utils/startupTrace";
 import { recordStartupPerfMarker } from "./services/perfBaseline/startupMarkers";
 import { scheduleFullMarkdownRuntimePrewarm } from "./markdown/prewarmFullMarkdownRuntime";
+import { subscribeStartupGateReady } from "./features/startup-orchestration/utils/startupGateReady";
 
 function renderBootstrapFallback(error: unknown) {
   const root = document.getElementById("root");
@@ -204,12 +205,14 @@ async function runPostRenderBootstrapTasks() {
   }
 }
 
-function scheduleIdleOrFirstInteraction(run: () => void, options?: {
+function scheduleAfterStartupGateReady(run: () => void, options?: {
   idleTimeoutMs?: number;
   fallbackDelayMs?: number;
   busyTimeoutMs?: number;
 }): () => void {
   let started = false;
+  let idleHandle: number | null = null;
+  let timeoutHandle: number | null = null;
   const start = () => {
     if (started) {
       return;
@@ -218,25 +221,27 @@ function scheduleIdleOrFirstInteraction(run: () => void, options?: {
     cleanup();
     run();
   };
-  const idleHandle =
-    typeof window !== "undefined" && typeof window.requestIdleCallback === "function"
-      ? window.requestIdleCallback(start, { timeout: options?.idleTimeoutMs ?? 8_000 })
-      : null;
-  const timeoutHandle =
-    typeof window !== "undefined"
-      ? window.setTimeout(
-          start,
-          idleHandle == null
-            ? (options?.fallbackDelayMs ?? 2_500)
-            : (options?.busyTimeoutMs ?? 12_000),
-        )
-      : null;
+  const armIdle = () => {
+    if (started || typeof window === "undefined") {
+      return;
+    }
+    if (typeof window.requestIdleCallback === "function") {
+      idleHandle = window.requestIdleCallback(start, {
+        timeout: options?.idleTimeoutMs ?? 8_000,
+      });
+      timeoutHandle = window.setTimeout(start, options?.busyTimeoutMs ?? 12_000);
+      return;
+    }
+    timeoutHandle = window.setTimeout(start, options?.fallbackDelayMs ?? 2_500);
+  };
+  const unsubscribeGate = subscribeStartupGateReady(() => {
+    armIdle();
+  });
   const cleanup = () => {
+    unsubscribeGate();
     if (typeof window === "undefined") {
       return;
     }
-    window.removeEventListener("pointerdown", start, true);
-    window.removeEventListener("keydown", start, true);
     if (idleHandle != null && typeof window.cancelIdleCallback === "function") {
       window.cancelIdleCallback(idleHandle);
     }
@@ -244,17 +249,6 @@ function scheduleIdleOrFirstInteraction(run: () => void, options?: {
       window.clearTimeout(timeoutHandle);
     }
   };
-  if (typeof window !== "undefined") {
-    window.addEventListener("pointerdown", start, {
-      capture: true,
-      once: true,
-      passive: true,
-    });
-    window.addEventListener("keydown", start, {
-      capture: true,
-      once: true,
-    });
-  }
   return cleanup;
 }
 
@@ -336,7 +330,7 @@ async function bootstrap() {
   pushBootstrapNotice("runtimeNotice.bootstrap.ready");
   void markRendererReady();
   void runPostRenderBootstrapTasks();
-  scheduleIdleOrFirstInteraction(() => {
+  scheduleAfterStartupGateReady(() => {
     void runDeferredClientStoreHydration();
     void i18nModule.ensureI18nReady().catch((error) => {
       appendRendererDiagnostic("bootstrap/i18n-deferred-failed", {
@@ -345,7 +339,7 @@ async function bootstrap() {
     });
   }, {
     idleTimeoutMs: 2_500,
-    fallbackDelayMs: 0,
+    fallbackDelayMs: 800,
     busyTimeoutMs: 4_000,
   });
   scheduleDeferredBaiduTongji();
@@ -360,7 +354,7 @@ async function bootstrap() {
  * never on the synchronous cold-start critical path.
  */
 function scheduleDeferredBaiduTongji() {
-  scheduleIdleOrFirstInteraction(() => {
+  scheduleAfterStartupGateReady(() => {
     void import("./services/baiduTongji")
       .then(({ installBaiduTongji }) => {
         installBaiduTongji();

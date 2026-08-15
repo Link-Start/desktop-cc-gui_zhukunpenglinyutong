@@ -5,6 +5,7 @@ import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import type { DownloadEvent, Update } from "@tauri-apps/plugin-updater";
 import { withTimeout } from "../../files/utils/fileViewNavigationUtils";
+import { subscribeStartupGateReady } from "../../startup-orchestration/utils/startupGateReady";
 import type { DebugEntry } from "../../../types";
 
 type UpdateStage =
@@ -318,7 +319,9 @@ export function useUpdater({ enabled = true, onDebug }: UseUpdaterOptions) {
     if (!effectiveEnabled || import.meta.env.DEV || !isTauri()) {
       return;
     }
-    void checkForUpdates();
+    return subscribeStartupGateReady(() => {
+      void checkForUpdates();
+    });
   }, [checkForUpdates, effectiveEnabled]);
 
   useEffect(() => {

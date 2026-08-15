@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   applyUiScale,
   cssZoomLayoutFillSize,
@@ -139,6 +139,15 @@ describe("applyUiScale (locked to 100%)", () => {
     // jsdom may expose cleared zoom as "" or undefined depending on path.
     expect(root.style.zoom || "").toBe("");
     expect(root.style.transform || "").toBe("");
+  });
+
+  it("does not write empty inline styles when there is no residual scale", async () => {
+    const root = makeRoot();
+    const setProperty = vi.spyOn(root.style, "setProperty");
+    await applyUiScale(1, { root, platform: "windows" });
+    expect(root.style.zoom || "").toBe("");
+    expect(setProperty).not.toHaveBeenCalled();
+    setProperty.mockRestore();
   });
 
   it("macos/linux: same identity-only path", async () => {

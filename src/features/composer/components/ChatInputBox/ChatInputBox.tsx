@@ -384,7 +384,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       [modelStorageSnapshot],
     );
     const atomicProviderTargetCatalog = useAtomicProviderTargetCatalog({
-      enabled: true,
+      enabled: Boolean(onExecutionTargetChange),
       workspaceId,
       mode: providerTargetPickerMode,
       currentProvider: currentProvider as ProviderId,
@@ -1645,10 +1645,18 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
         models={availableModels}
         targetGroups={atomicProviderTargetCatalog.groups}
         executionTarget={executionTarget}
-        onExecutionTargetChange={handleProviderTargetSelect}
-        onOpenTargetCatalog={atomicProviderTargetCatalog.ensureProfiles}
-        onOpenProviderProfile={atomicProviderTargetCatalog.ensureModels}
-        onReloadProviderConfig={atomicProviderTargetCatalog.reloadConfig}
+        onExecutionTargetChange={
+          onExecutionTargetChange ? handleProviderTargetSelect : undefined
+        }
+        onOpenTargetCatalog={
+          onExecutionTargetChange ? atomicProviderTargetCatalog.ensureProfiles : undefined
+        }
+        onOpenProviderProfile={
+          onExecutionTargetChange ? atomicProviderTargetCatalog.ensureModels : undefined
+        }
+        onReloadProviderConfig={
+          onExecutionTargetChange ? atomicProviderTargetCatalog.reloadConfig : undefined
+        }
         targetCatalogError={atomicProviderTargetCatalog.profileLoadError}
         currentProvider={currentProvider}
         onAddModel={

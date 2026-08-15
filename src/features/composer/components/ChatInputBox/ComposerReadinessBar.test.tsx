@@ -89,6 +89,26 @@ describe('ComposerReadinessBar', () => {
     expect(screen.queryByText('no-extra-context')).toBeNull();
   });
 
+  it('keeps the model chip static when no execution-target picker is wired', () => {
+    const readiness = buildComposerSendReadiness({
+      engine: 'codex',
+      providerLabel: 'Codex',
+      modelLabel: 'gpt-5.5',
+      draftText: 'continue',
+    });
+
+    render(
+      <ComposerReadinessBar
+        readiness={readiness}
+        onExecutionTargetChange={undefined}
+      />,
+    );
+
+    expect(screen.getByTestId('composer-readiness-model-static')).toBeTruthy();
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(screen.queryByRole('button', { name: /gpt-5.5|Codex/i })).toBeNull();
+  });
+
   it('renders the right accessory inside the readiness bar wrapper', () => {
     const readiness = buildComposerSendReadiness({
       engine: 'codex',

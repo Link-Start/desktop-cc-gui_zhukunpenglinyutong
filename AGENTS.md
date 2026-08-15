@@ -109,6 +109,12 @@
 - 「启动时生效的持久化设置」若错误值可致起不来 / 进不了设置页，必须配 startup guard（模板 `src/utils/uiScaleStartupGuard.ts`）：危险值留 pending 记录，未证明健康则下次会话临时回退安全值，**禁止改写用户存储**，禁止拿 timeout 当修复。
 - 平台结论必须按证据分级（已证实 / 已排除 / 未验证）；「没接到投诉」不算安全证据。
 
+### Windows Cold-Start Click Freeze Gate（2026-08-14 版本记录 / 权限选择 P0 沉淀）
+
+- 改 `bootstrapApp` / Release Notes auto-open / ComposerGate / `ChatInputBox` Light 路径 / first-click 调度，或处理「Windows 启动后点按钮卡死」前，必读 `dev-guidelines/guides/windows-cold-start-click-freeze-pitfall.md`。
+- 硬红线：① 禁止用固定 timeout 当冷启动修复；② 禁止用第一次 pointerdown/keydown 启动 deferred stores / i18n / updater / Markdown compile / ComposerImpl；③ 禁止假设 StartupGateOverlay 默认在挡用户；④ 禁止 Light 层泄漏可点 ModelSelect / atomic catalog。
+- 分析与入口表见 `docs/analysis/windows-cold-start-click-freeze-release-notes-and-composer-2026-08-14.md`。只修用户点到的那一个按钮不算修完。
+
 ## 仓库卫生
 
 - `.omx/**`、`.ccgui/**`、client-local state 等本地 state 属于 runtime artifact 或 local-only state。
