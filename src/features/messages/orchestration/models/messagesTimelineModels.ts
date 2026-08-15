@@ -41,6 +41,7 @@ export type TimelineSnapshotModel = {
       exploreCount: number;
     };
     insertBeforeItemId: string;
+    collapsedAnchorItemId?: string;
     assistantItemId: string;
     hiddenItemIds: readonly string[];
   }>;
