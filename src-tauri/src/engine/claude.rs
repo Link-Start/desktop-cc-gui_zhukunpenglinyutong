@@ -324,6 +324,9 @@ const CLAUDE_POST_RESULT_GRACE: Duration = Duration::from_secs(5);
 // stderr handling.
 const CLAUDE_POST_RESULT_STDERR_DRAIN: Duration = Duration::from_secs(2);
 const CLAUDE_REASONING_EFFORTS: &[&str] = &["low", "medium", "high", "xhigh", "max"];
+const ASK_USER_QUESTION_TIMEOUT_SECS: u64 = 1800;
+/// CLI MCP fetch timeout must exceed the server wait, or the race is zero-width.
+const ASK_USER_QUESTION_CLI_TIMEOUT_MARGIN_SECS: u64 = 30;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ClaudeCommandProfile {
@@ -1185,12 +1188,16 @@ impl ClaudeSession {
                 cmd.arg(crate::engine::claude::AskUserMcpServer::allowed_tool_name());
                 // The CLI's per-request MCP tool-call fetch timeout defaults to 60s
                 // for remote HTTP servers. Our AskUserQuestion server blocks up to
-                // 1800s waiting for the user, so without this the CLI abandons the
-                // call early. Raise it to match our server bound (ms). Only set when
-                // our MCP ask is actually wired; the user can still override via env.
-                // Keep ≥ frontend USER_INPUT_TIMEOUT_SECONDS (30 min).
+                // ASK_USER_QUESTION_TIMEOUT_SECS waiting for the user, so without
+                // this the CLI abandons the call early. Raise it past the server
+                // bound (ms) so scheduling jitter cannot still lose the answer.
+                // Only set when our MCP ask is actually wired; the user can still
+                // override via env.
                 if std::env::var_os("MCP_TOOL_TIMEOUT").is_none() {
-                    cmd.env("MCP_TOOL_TIMEOUT", "1800000");
+                    let timeout_ms = (ASK_USER_QUESTION_TIMEOUT_SECS
+                        + ASK_USER_QUESTION_CLI_TIMEOUT_MARGIN_SECS)
+                        * 1000;
+                    cmd.env("MCP_TOOL_TIMEOUT", timeout_ms.to_string());
                 }
             } else {
                 log::warn!(

@@ -5,7 +5,8 @@ use super::thread_listing::{
 };
 use super::{
     codex_provider_binding_lookup_keys, create_session_runtime_recovering_error,
-    resolve_shared_control_response_route, run_start_thread_with_hook_safe_fallback,
+    expired_claude_ask_request_id, resolve_shared_control_response_route,
+    run_start_thread_with_hook_safe_fallback,
     run_start_thread_with_hook_safe_fallback_and_recovery_probe, run_start_thread_with_retry,
     run_start_thread_with_retry_and_recovery_probe,
 };
@@ -1408,4 +1409,37 @@ async fn sessionstart_hook_matrix_plain_thread_timeout_does_not_fallback() {
     assert_eq!(error, "thread/start timed out after 300 seconds");
     assert_eq!(fallback_ensure_calls.load(Ordering::SeqCst), 0);
     assert_eq!(start_calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn expired_claude_ask_is_recognized_only_for_claude_origin_user_input() {
+    assert_eq!(
+        expired_claude_ask_request_id(&json!("ask-0123456789abcdef"), true, true),
+        Some("ask-0123456789abcdef"),
+    );
+}
+
+#[test]
+fn expired_claude_ask_ignores_non_askuserquestion_request_ids() {
+    assert_eq!(
+        expired_claude_ask_request_id(&json!("ccgui-plan-blocker:1"), true, true),
+        None,
+    );
+    assert_eq!(
+        expired_claude_ask_request_id(&json!("ask-0123456789abcdef"), true, false),
+        None,
+    );
+    assert_eq!(expired_claude_ask_request_id(&json!(42), true, true), None);
+    assert_eq!(
+        expired_claude_ask_request_id(&json!("task-ask-1"), true, true),
+        None,
+    );
+}
+
+#[test]
+fn expired_claude_ask_requires_a_live_claude_session_in_the_workspace() {
+    assert_eq!(
+        expired_claude_ask_request_id(&json!("ask-0123456789abcdef"), false, true),
+        None,
+    );
 }
