@@ -4,7 +4,7 @@ import Crosshair from 'lucide-react/dist/esm/icons/crosshair';
 import Mail from 'lucide-react/dist/esm/icons/mail';
 import { AgentIcon } from '../../../../components/AgentIcon';
 import { ContextUsageIcon } from '@/components/ai-elements/context';
-import { getFileIcon } from '../../utils/fileIcons';
+import { getFileIcon } from '../../../../utils/fileIcons';
 import { TokenIndicator } from './TokenIndicator';
 import type {
   ClaudeContextUsageViewModel,

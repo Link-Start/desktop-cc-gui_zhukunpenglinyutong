@@ -1,6 +1,10 @@
 import type { FileItem, DropdownItemData } from '../types';
-import { getFileIcon, getFolderIcon } from '../../../utils/fileIcons';
-import { icon_terminal, icon_server } from '../../../utils/icons';
+import {
+  getFileIcon,
+  getFolderIcon,
+  getServerIcon,
+  getTerminalIcon,
+} from '../../../../../utils/fileIcons';
 import { debugError, debugLog, debugWarn } from '../../../utils/debug.js';
 
 // Request queue management
@@ -205,10 +209,10 @@ export function fileToDropdownItem(file: FileItem): DropdownItemData {
   let type: 'directory' | 'file' | 'terminal' | 'service';
 
   if (file.type === 'terminal') {
-    iconSvg = icon_terminal;
+    iconSvg = getTerminalIcon();
     type = 'terminal';
   } else if (file.type === 'service') {
-    iconSvg = icon_server;
+    iconSvg = getServerIcon();
     type = 'service';
   } else if (file.type === 'directory') {
     iconSvg = getFolderIcon(file.name, false);
