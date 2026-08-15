@@ -742,7 +742,7 @@ function inferGeminiReasoningHintFromThreadId(
 
 function inferRawMethodEngine(
   method: string,
-): "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | undefined {
+): "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | undefined {
   switch (method) {
     case "claude/raw":
       return "claude";
@@ -1453,7 +1453,7 @@ function tryRouteNormalizedRealtimeEvent({
   handlers: AppServerEventHandlers;
   workspaceId: string;
   message: Record<string, unknown>;
-  engineOverride?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
+  engineOverride?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi";
   threadIdOverride?: string;
   sharedBinding?: SharedSessionNativeBinding | null;
   threadAgentDeltaSeenRef: MutableRefObject<Record<string, true>>;

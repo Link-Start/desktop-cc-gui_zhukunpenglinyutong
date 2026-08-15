@@ -253,6 +253,9 @@ export {
   routeBrowserAgentProvider,
   runBrowserAgentAction,
   syncBrowserAgentWebviewBounds,
+  showBrowserAgentTabContextMenuOverlay,
+  startBrowserAgentElementSelect,
+  stopBrowserAgentElementSelect,
   updateBrowserAgentSession,
   validateBrowserAgentUrl,
 } from "./tauri/browserAgent";
@@ -652,6 +655,7 @@ export {
   loadGeminiSession,
   loadGrokSession,
   loadKimiSession,
+  loadPiSession,
   resumeThread,
   rewindCodexThread,
   startThread,

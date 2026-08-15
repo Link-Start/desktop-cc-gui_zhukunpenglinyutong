@@ -553,7 +553,7 @@ export type LayoutNodesFlatOptions = {
   onCommitMessageChange: (value: string) => void;
   onGenerateCommitMessage: (
     language?: "zh" | "en",
-    engine?: "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode",
+    engine?: "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode" | "pi",
     selectedPaths?: string[],
     repositorySelections?: RepositoryCommitSelection[],
   ) => void | Promise<void>;

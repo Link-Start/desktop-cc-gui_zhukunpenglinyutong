@@ -72,7 +72,7 @@ const LIVE_DELTA_EXTERNALIZATION_ENABLED = isLiveDeltaExternalizationEnabled();
 const inferEngineFromThreadId = inferEngineFromLegacyThreadId;
 
 export function canProgressEventStartProcessing(
-  engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode",
+  engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi",
 ) {
   return engine !== "codex";
 }
@@ -123,7 +123,7 @@ function isKimiEventThread(
 function inferItemEngineSource(
   item: Record<string, unknown>,
   threadId: string,
-): "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" {
+): "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" {
   const rawEngineSource = asString(item.engineSource ?? item.engine_source ?? "")
     .trim()
     .toLowerCase();
@@ -1600,7 +1600,7 @@ export function useThreadItemEvents({
           itemEngineSource === "codex"
             ? {
                 ...converted,
-                engineSource: itemEngineSource as "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode",
+                engineSource: itemEngineSource as "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi",
               }
             : converted;
         const threadEngine = inferEngineFromThreadId(threadId);

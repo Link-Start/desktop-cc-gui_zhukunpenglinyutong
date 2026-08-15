@@ -749,7 +749,7 @@ export function BrowserDock({
             resolveBrowserTabCloseTargets(sessionIds, browserSessionId, action)
               .length === 0,
         ),
-      }).catch((error) => {
+      }).catch((error: unknown) => {
         setNotice({
           kind: "error",
           message: error instanceof Error ? error.message : String(error),

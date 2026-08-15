@@ -361,7 +361,7 @@ export function useThreadActionsSessionRuntime({
       workspaceId: string,
       options?: {
         activate?: boolean;
-        engine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
+        engine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi";
         folderId?: string | null;
         autoSession?: AutoSessionMetadata | null;
         providerProfileId?: string | null;

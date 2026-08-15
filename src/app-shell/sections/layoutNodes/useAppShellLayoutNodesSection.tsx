@@ -759,7 +759,7 @@ export function useAppShellLayoutNodesSection(
   );
 
   const handleSelectConversationEngine = useCallback(
-    async (engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode") => {
+    async (engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi") => {
       const thread =
         activeWorkspaceId && activeThreadId
           ? (threadsByWorkspace[activeWorkspaceId] ?? []).find(
@@ -1104,10 +1104,11 @@ export function useAppShellLayoutNodesSection(
 
   useEffect(() => {
     const handleExternalToggle = () => {
-      openBrowserAgentDock();
+      handleToggleBrowserDock();
     };
     const handleExternalOpen = () => {
-      openBrowserAgentDock();
+      setBrowserDockOpen(true);
+      setCenterMode("chat");
     };
 
     window.addEventListener("browser-agent:toggle-dock", handleExternalToggle);
@@ -1119,7 +1120,7 @@ export function useAppShellLayoutNodesSection(
       );
       window.removeEventListener("browser-agent:open-dock", handleExternalOpen);
     };
-  }, [openBrowserAgentDock]);
+  }, [handleToggleBrowserDock, setCenterMode]);
 
   // Stabilized handler/prop references for the useLayoutNodes options object.
   // Each was previously an inline arrow/object literal recreated every render,

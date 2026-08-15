@@ -17,6 +17,7 @@ import type {
   BrowserWebviewMountRequest,
   BrowserPlatformCapability,
   BrowserProviderRouteDecision,
+  BrowserTabContextMenuRequest,
 } from "../../features/browser-agent/types";
 
 export async function getBrowserAgentStatus(): Promise<BrowserAgentStatus> {
@@ -119,6 +120,23 @@ export async function hideBrowserAgentWebview(
   browserSessionId: string,
 ): Promise<void> {
   return invoke<void>("hide_browser_agent_webview", { browserSessionId });
+}
+
+export async function showBrowserAgentTabContextMenuOverlay(
+  _request: BrowserTabContextMenuRequest,
+): Promise<void> {
+  // Rust overlay command is not on 0.9 yet; HTML tab menus still work.
+}
+
+export async function startBrowserAgentElementSelect(
+  _browserSessionId: string,
+): Promise<void> {
+  // Element-select rust command is not on 0.9 yet.
+}
+
+export async function stopBrowserAgentElementSelect(
+  _browserSessionId: string,
+): Promise<void> {
 }
 
 export async function listBrowserAgentEvidence(

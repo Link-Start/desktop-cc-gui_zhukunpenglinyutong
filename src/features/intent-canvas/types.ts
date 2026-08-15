@@ -296,6 +296,7 @@ export type IntentCanvasIndexEntry = {
   linkedProjectMapNodeCount: number;
   linkedThreadCount: number;
   elementCount: number;
+  thumbnailSvg?: string | null;
 };
 
 export type IntentCanvasIndexFile = {

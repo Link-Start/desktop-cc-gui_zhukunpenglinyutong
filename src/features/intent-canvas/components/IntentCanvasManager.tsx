@@ -13,7 +13,6 @@ import {
 import { useTranslation } from "react-i18next";
 import AlertTriangle from "lucide-react/dist/esm/icons/alert-triangle";
 import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
-import Copy from "lucide-react/dist/esm/icons/copy";
 import FileSearch from "lucide-react/dist/esm/icons/file-search";
 import FileText from "lucide-react/dist/esm/icons/file-text";
 import FolderOpen from "lucide-react/dist/esm/icons/folder-open";
@@ -21,15 +20,11 @@ import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import LinkIcon from "lucide-react/dist/esm/icons/link";
 import LoaderCircle from "lucide-react/dist/esm/icons/loader-circle";
 import MessageSquareText from "lucide-react/dist/esm/icons/message-square-text";
-import Plus from "lucide-react/dist/esm/icons/plus";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import Save from "lucide-react/dist/esm/icons/save";
-import Search from "lucide-react/dist/esm/icons/search";
-import Trash2 from "lucide-react/dist/esm/icons/trash-2";
 
 import { cn } from "../../../lib/utils";
 import type { WorkspaceInfo } from "../../../types";
-import { ThreadDeleteConfirmBubble } from "../../threads/components/ThreadDeleteConfirmBubble";
 import { IntentCanvasHome } from "./manager-home/IntentCanvasHome";
 import { groupCanvasEntriesByEra, type CanvasEra } from "../utils/eraGrouping";
 import type {

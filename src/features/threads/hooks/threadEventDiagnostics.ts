@@ -324,7 +324,7 @@ export function extractTurnIdFromRawItem(item: Record<string, unknown>) {
 export function inferRawItemEngine(
   threadId: string,
   item: Record<string, unknown>,
-): "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" {
+): "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" {
   const rawEngine = asString(item.engineSource ?? item.engine_source)
     .trim()
     .toLowerCase();
@@ -392,7 +392,7 @@ export function createTurnDiagnosticState(
 
 export function inferThreadEngine(
   threadId: string,
-): "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" {
+): "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" {
   if (threadId.startsWith("claude:") || threadId.startsWith("claude-pending-")) {
     return "claude";
   }

@@ -9,6 +9,16 @@ import type {
 } from "../types";
 import type { TaskRunBrowserEvidenceRef } from "../types";
 
+export type BrowserExcerptKind =
+  | "paragraph"
+  | "heading"
+  | "button"
+  | "link"
+  | "list"
+  | "image"
+  | "snapshot"
+  | "excerpt";
+
 export type BrowserEvidenceSectionState = BrowserObservationState | "empty";
 
 export type BrowserEvidenceViewModelSection = {

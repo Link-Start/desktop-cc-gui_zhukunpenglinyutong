@@ -154,7 +154,7 @@ function extractThreadProviderMetadata(thread: Record<string, unknown>) {
 }
 
 function isPendingThreadForEngine(
-  engine: "claude" | "gemini" | "grok" | "kimi" | "opencode",
+  engine: "claude" | "gemini" | "grok" | "kimi" | "opencode" | "pi",
   threadId: string | null | undefined,
 ): threadId is string {
   if (!threadId) {
@@ -204,11 +204,11 @@ type UseThreadTurnEventsOptions = {
   ) => Promise<void>;
   resolvePendingThreadForSession?: (
     workspaceId: string,
-    engine: "claude" | "gemini" | "grok" | "kimi" | "opencode",
+    engine: "claude" | "gemini" | "grok" | "kimi" | "opencode" | "pi",
   ) => string | null;
   resolvePendingThreadForTurn?: (
     workspaceId: string,
-    engine: "claude" | "gemini" | "grok" | "kimi" | "opencode",
+    engine: "claude" | "gemini" | "grok" | "kimi" | "opencode" | "pi",
     turnId: string | null | undefined,
   ) => string | null;
   getActiveTurnIdForThread?: (threadId: string) => string | null;

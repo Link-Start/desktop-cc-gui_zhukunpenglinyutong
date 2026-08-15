@@ -1844,6 +1844,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         gemini: isEngineEnabled('gemini'),
         grok: isEngineEnabled('grok'),
         kimi: isEngineEnabled('kimi'),
+        pi: isEngineEnabled('pi'),
       } as const;
     }, [engines, isSharedSession]);
 
@@ -1868,6 +1869,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         gemini: resolveStatusLabel('gemini'),
         grok: resolveStatusLabel('grok'),
         kimi: resolveStatusLabel('kimi'),
+        pi: resolveStatusLabel('pi'),
       } as const;
     }, [engines, t]);
 
@@ -1883,6 +1885,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         grok: 'Grok CLI',
         kimi: 'Kimi CLI',
         opencode: 'OpenCode',
+        pi: 'PI CLI',
       };
 
       const byEngine = new Map(engines.map((entry) => [entry.type, entry]));
@@ -1908,6 +1911,7 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         gemini: resolveVersion('gemini'),
         grok: resolveVersion('grok'),
         kimi: resolveVersion('kimi'),
+        pi: resolveVersion('pi'),
       } as const;
     }, [engines]);
 
