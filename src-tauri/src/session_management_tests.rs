@@ -418,6 +418,12 @@
                 session_id: "plain-codex-id".to_string()
             }
         );
+        assert_eq!(
+            parse_catalog_identity("pi:019fe705-27fd-712e-a1be-f972ef3773f3"),
+            SessionCatalogIdentity::Pi {
+                session_id: "019fe705-27fd-712e-a1be-f972ef3773f3".to_string()
+            }
+        );
     }
 
     #[test]

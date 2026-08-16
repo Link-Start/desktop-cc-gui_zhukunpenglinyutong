@@ -9,6 +9,7 @@ import {
   deleteGeminiSession,
   deleteOpenCodeSession,
   deletePiSession,
+  deleteWorkspaceSessions,
   tombstoneSessionIndexRows,
   connectWorkspace,
   createWorkspaceDirectory,
@@ -72,6 +73,7 @@ vi.mock("../../../services/tauri", () => ({
   deleteGeminiSession: vi.fn(),
   deleteOpenCodeSession: vi.fn(),
   deletePiSession: vi.fn(),
+  deleteWorkspaceSessions: vi.fn(),
   tombstoneSessionIndexRows: vi.fn(),
   trashWorkspaceItem: vi.fn(),
   writeWorkspaceFile: vi.fn(),
@@ -140,6 +142,19 @@ describe("useThreadActions native session bridges", () => {
       method: "filesystem",
     });
     vi.mocked(deletePiSession).mockResolvedValue(undefined);
+    vi.mocked(deleteWorkspaceSessions).mockImplementation(
+      async (_workspaceId: string, sessionIds: string[]) => ({
+        results: sessionIds.map((sessionId) => ({
+          sessionId,
+          ok: true,
+          archivedAt: null,
+          error: null,
+          code: "SESSION_DELETED",
+          deletedFromDisk: true,
+          metadataCleaned: true,
+        })),
+      }),
+    );
     vi.mocked(tombstoneSessionIndexRows).mockResolvedValue(0);
     vi.mocked(deleteCodexSession).mockResolvedValue({
       deleted: true,
@@ -490,7 +505,7 @@ describe("useThreadActions native session bridges", () => {
     });
   });
 
-  it("routes opencode hard delete to backend adapter", async () => {
+  it("routes opencode delete to the unified backend delete", async () => {
     const { result } = renderActions();
 
     await act(async () => {
@@ -501,11 +516,13 @@ describe("useThreadActions native session bridges", () => {
     });
 
     expect(archiveThread).not.toHaveBeenCalled();
-    expect(deleteOpenCodeSession).toHaveBeenCalledWith("ws-1", "ses_opc_1");
-    expect(tombstoneSessionIndexRows).toHaveBeenCalledWith(["opencode:ses_opc_1"]);
+    expect(deleteOpenCodeSession).not.toHaveBeenCalled();
+    expect(deleteWorkspaceSessions).toHaveBeenCalledWith("ws-1", [
+      "opencode:ses_opc_1",
+    ]);
   });
 
-  it("routes pi delete to disk delete and tombstones the session index", async () => {
+  it("routes pi delete to the unified backend delete", async () => {
     const { result } = renderActions();
 
     await act(async () => {
@@ -520,11 +537,13 @@ describe("useThreadActions native session bridges", () => {
 
     expect(archiveThread).not.toHaveBeenCalled();
     expect(deleteCodexSession).not.toHaveBeenCalled();
-    expect(deletePiSession).toHaveBeenCalledWith("/tmp/codex", "ses_pi_1");
-    expect(tombstoneSessionIndexRows).toHaveBeenCalledWith(["pi:ses_pi_1"]);
+    expect(deletePiSession).not.toHaveBeenCalled();
+    expect(deleteWorkspaceSessions).toHaveBeenCalledWith("ws-1", [
+      "pi:ses_pi_1",
+    ]);
   });
 
-  it("routes codex delete to filesystem delete instead of archive", async () => {
+  it("routes codex delete to the unified backend delete", async () => {
     const { result } = renderActions();
 
     await act(async () => {
@@ -535,10 +554,10 @@ describe("useThreadActions native session bridges", () => {
     });
 
     expect(archiveThread).not.toHaveBeenCalled();
-    expect(deleteCodexSession).toHaveBeenCalledWith(
-      "ws-1",
+    expect(deleteCodexSession).not.toHaveBeenCalled();
+    expect(deleteWorkspaceSessions).toHaveBeenCalledWith("ws-1", [
       "019d767b-5541-7010-a30d-a454864bccd8",
-    );
+    ]);
   });
 
   it("keeps deleted claude sessions absent after reload", async () => {
@@ -574,10 +593,9 @@ describe("useThreadActions native session bridges", () => {
       );
     });
 
-    expect(deleteClaudeSession).toHaveBeenCalledWith(
-      "/tmp/codex",
-      "session-delete-me",
-    );
+    expect(deleteWorkspaceSessions).toHaveBeenCalledWith("ws-1", [
+      "claude:session-delete-me",
+    ]);
 
     await act(async () => {
       await result.current.listThreadsForWorkspace(workspace, {

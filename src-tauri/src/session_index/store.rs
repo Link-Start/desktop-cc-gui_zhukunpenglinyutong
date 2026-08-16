@@ -621,11 +621,27 @@ pub(crate) fn tombstone_session_ids(
                 OR (engine || ':' || session_id) = ?2",
         )
         .map_err(|error| error.to_string())?;
+    // 持久删除标记：UPDATE 只能盖住已存在的行；对尚未入索引的 id 直接插入
+    // tombstoned 占位行，让后续 rescan 的 INSERT 撞上 (engine, session_id)
+    // 冲突并被 ON CONFLICT 的 tombstoned_at IS NULL 守卫挡下，防止已删会话
+    // 在重启后的 sync/backfill 中复活。
+    let mut marker = connection
+        .prepare(
+            "INSERT INTO session_index (
+                engine, session_id, title, updated_at, indexed_at, tombstoned_at
+             ) VALUES (?1, ?2, '', ?3, ?3, ?3)
+             ON CONFLICT(engine, session_id) DO NOTHING",
+        )
+        .map_err(|error| error.to_string())?;
     for raw in session_ids {
         let full = raw.trim();
         if full.is_empty() {
             continue;
         }
+        let engine_hint = full
+            .split_once(':')
+            .map(|(head, _)| head.trim().to_ascii_lowercase())
+            .filter(|head| INDEX_LIST_ENGINES.contains(&head.as_str()));
         let bare = full
             .split_once(':')
             .map(|(_, rest)| rest.trim())
@@ -634,6 +650,25 @@ pub(crate) fn tombstone_session_ids(
         updated += statement
             .execute(params![marked_at, full, bare])
             .map_err(|error| error.to_string())? as usize;
+        match engine_hint {
+            Some(engine) => {
+                marker
+                    .execute(params![engine, bare, marked_at])
+                    .map_err(|error| error.to_string())?;
+            }
+            None if !full.contains(':') => {
+                // 裸 id（如 codex threadId）无法判定 engine，为所有已知
+                // engine 落标记；UUID 跨 engine 碰撞可忽略。
+                for engine in INDEX_LIST_ENGINES {
+                    marker
+                        .execute(params![engine, full, marked_at])
+                        .map_err(|error| error.to_string())?;
+                }
+            }
+            None => {
+                // 未知前缀（如 shared:）不入索引，无需标记。
+            }
+        }
     }
     Ok(updated)
 }
@@ -763,6 +798,36 @@ mod tests {
         assert_eq!(updated, 1);
         let listed = list_for_workspace_path(&connection, "/tmp/codex", 10).expect("list");
         assert!(listed.is_empty(), "tombstoned PI rows must leave the sidebar page");
+    }
+
+    #[test]
+    fn tombstone_unknown_id_blocks_later_rescan_resurrection() {
+        let connection = Connection::open_in_memory().expect("open");
+        connection.execute_batch(DDL).expect("ddl");
+        // 行尚不存在（会话只经磁盘列表进过侧栏）：tombstone 也要留下持久标记
+        let updated = tombstone_session_ids(&connection, &["pi:ses_ghost".into()]).expect("tombstone");
+        assert_eq!(updated, 0);
+        // 重启后 rescan 重新 upsert 同一个 (engine, session_id)
+        upsert_rows(&connection, &[index_row("pi", "ses_ghost", 300)]).expect("upsert");
+        let listed = list_for_workspace_path(&connection, "/tmp/proj", 10).expect("list");
+        assert!(
+            listed.is_empty(),
+            "tombstone marker must block rescan resurrection"
+        );
+    }
+
+    #[test]
+    fn tombstone_bare_id_marks_all_known_engines() {
+        let connection = Connection::open_in_memory().expect("open");
+        connection.execute_batch(DDL).expect("ddl");
+        // 裸 id（codex 等不带 engine 前缀的 threadId）
+        tombstone_session_ids(&connection, &["ses_bare".into()]).expect("tombstone");
+        upsert_rows(&connection, &[index_row("codex", "ses_bare", 300)]).expect("upsert");
+        let listed = list_for_workspace_path(&connection, "/tmp/proj", 10).expect("list");
+        assert!(
+            listed.is_empty(),
+            "bare-id tombstone markers must cover every known engine"
+        );
     }
 
     #[test]

@@ -357,3 +357,63 @@
 
         std::fs::remove_dir_all(base).ok();
     }
+
+    #[tokio::test]
+    async fn batch_delete_removes_pi_session_file() {
+        let base = std::env::temp_dir().join(format!("session-pi-delete-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&base).expect("create temp dir");
+        let storage_path = base.join("workspaces.json");
+        std::fs::write(&storage_path, "[]").expect("seed storage path");
+        let workspace = workspace_with_codex_home(
+            "ws-1",
+            "Workspace",
+            "/tmp/ws-1",
+            &base.join("codex-home"),
+        );
+        let workspaces = Mutex::new(HashMap::from([(workspace.id.clone(), workspace)]));
+        let sessions = Mutex::new(HashMap::new());
+        let engine_manager = engine::EngineManager::new();
+        let pi_home = base.join("pi-agent");
+        engine_manager
+            .set_engine_config(
+                engine::EngineType::Pi,
+                engine::EngineConfig {
+                    home_dir: Some(pi_home.to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await;
+        let session_id = "019fe705-27fd-712e-a1be-f972ef3773f3";
+        let session_dir = pi_home.join("sessions").join("--tmp-ws-1--");
+        std::fs::create_dir_all(&session_dir).expect("create pi session dir");
+        let file = session_dir.join(format!("2026-08-09T14-55-02-653Z_{session_id}.jsonl"));
+        let mut handle = std::fs::File::create(&file).expect("create pi session file");
+        writeln!(
+            handle,
+            r#"{{"type":"session","version":3,"id":"{session_id}","timestamp":"2026-08-09T14:55:02.653Z","cwd":"/tmp/ws-1"}}"#
+        )
+        .unwrap();
+
+        let response = delete_workspace_sessions_core(
+            &workspaces,
+            &sessions,
+            &engine_manager,
+            &storage_path,
+            "ws-1".to_string(),
+            vec![format!("pi:{session_id}")],
+        )
+        .await
+        .expect("delete pi session");
+
+        assert_eq!(response.results.len(), 1);
+        assert!(
+            response.results[0].ok,
+            "pi batch delete must succeed: {:?}",
+            response.results[0].error
+        );
+        assert!(
+            !file.exists(),
+            "pi session file must be removed from disk"
+        );
+        std::fs::remove_dir_all(base).ok();
+    }

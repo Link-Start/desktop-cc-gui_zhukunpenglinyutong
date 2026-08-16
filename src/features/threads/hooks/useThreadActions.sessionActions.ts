@@ -1,18 +1,14 @@
 import type { Dispatch, MutableRefObject } from "react";
 
 import type { DebugEntry, ThreadSummary } from "../../../types";
-import { archiveThread as archiveThreadService } from "../../../services/tauri";
+import {
+  archiveThread as archiveThreadService,
+  deleteWorkspaceSessions as deleteWorkspaceSessionsService,
+} from "../../../services/tauri";
 import {
   deleteClaudeSession as deleteClaudeSessionService,
-  deleteGeminiSession as deleteGeminiSessionService,
-  deleteGrokSession as deleteGrokSessionService,
-  deleteKimiSession as deleteKimiSessionService,
-  deleteOpenCodeSession as deleteOpenCodeSessionService,
-  deleteCodexSession as deleteCodexSessionService,
-  deletePiSession as deletePiSessionService,
   renameThreadTitleKey as renameThreadTitleKeyService,
   setThreadTitle as setThreadTitleService,
-  tombstoneSessionIndexRows as tombstoneSessionIndexRowsService,
 } from "../../../services/tauri";
 import { asNumber, asString } from "../utils/threadNormalize";
 import {
@@ -172,68 +168,32 @@ export function createArchiveClaudeThreadAction(params: {
 }
 
 export function createDeleteThreadForWorkspaceAction(params: {
-  archiveClaudeThread: (workspaceId: string, threadId: string) => Promise<void>;
   threadsByWorkspace: Record<string, ThreadSummary[] | undefined>;
-  workspacePathsByIdRef: MutableRefObject<Record<string, string>>;
 }) {
-  const { archiveClaudeThread, threadsByWorkspace, workspacePathsByIdRef } = params;
+  const { threadsByWorkspace } = params;
 
   return async (workspaceId: string, threadId: string) => {
     if (threadId.includes("-pending-")) {
       return;
     }
-    await tombstoneSessionIndexRowsService([threadId]).catch(() => 0);
     const thread = (threadsByWorkspace[workspaceId] ?? []).find((entry) => entry.id === threadId);
     if (thread?.threadKind === "shared" || threadId.startsWith("shared:")) {
       await deleteSharedSessionService(workspaceId, threadId);
       return;
     }
-    if (threadId.startsWith("claude:")) {
-      await archiveClaudeThread(workspaceId, threadId);
-      return;
+    // 统一走后端 delete_workspace_sessions：owner workspace 解析、磁盘删除、
+    // catalog 元数据清理、session index tombstone 都在一条链路完成，
+    // 所有 native CLI（claude/codex/gemini/grok/kimi/pi/opencode）行为一致。
+    const response = await deleteWorkspaceSessionsService(workspaceId, [threadId]);
+    const result =
+      response.results.find((item) => item.sessionId === threadId) ??
+      response.results[0];
+    if (!result) {
+      throw new Error("Missing session delete result");
     }
-    if (threadId.startsWith("opencode:")) {
-      const sessionId = threadId.slice("opencode:".length);
-      await deleteOpenCodeSessionService(workspaceId, sessionId);
-      return;
+    if (!result.ok) {
+      throw new Error(result.error ?? "Failed to delete session");
     }
-    if (threadId.startsWith("gemini:")) {
-      const sessionId = threadId.slice("gemini:".length);
-      const workspacePath = workspacePathsByIdRef.current[workspaceId];
-      if (!workspacePath) {
-        throw new Error("workspace not connected");
-      }
-      await deleteGeminiSessionService(workspacePath, sessionId);
-      return;
-    }
-    if (threadId.startsWith("grok:")) {
-      const sessionId = threadId.slice("grok:".length);
-      const workspacePath = workspacePathsByIdRef.current[workspaceId];
-      if (!workspacePath) {
-        throw new Error("workspace not connected");
-      }
-      await deleteGrokSessionService(workspacePath, sessionId);
-      return;
-    }
-    if (threadId.startsWith("kimi:")) {
-      const sessionId = threadId.slice("kimi:".length);
-      const workspacePath = workspacePathsByIdRef.current[workspaceId];
-      if (!workspacePath) {
-        throw new Error("workspace not connected");
-      }
-      await deleteKimiSessionService(workspacePath, sessionId);
-      return;
-    }
-    if (threadId.startsWith("pi:")) {
-      const sessionId = threadId.slice("pi:".length);
-      const workspacePath = workspacePathsByIdRef.current[workspaceId];
-      if (!workspacePath) {
-        throw new Error("workspace not connected");
-      }
-      await deletePiSessionService(workspacePath, sessionId);
-      return;
-    }
-    await deleteCodexSessionService(workspaceId, threadId);
   };
 }
 

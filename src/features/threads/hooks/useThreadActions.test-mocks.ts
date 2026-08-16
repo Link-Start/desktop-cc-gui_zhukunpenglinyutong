@@ -9,6 +9,7 @@ import {
   deleteKimiSession,
   deleteOpenCodeSession,
   deletePiSession,
+  deleteWorkspaceSessions,
   tombstoneSessionIndexRows,
   getOpenCodeSessionList,
   listClaudeSessions,
@@ -71,6 +72,7 @@ vi.mock("../../../services/tauri", () => ({
   deleteKimiSession: vi.fn(),
   deleteOpenCodeSession: vi.fn(),
   deletePiSession: vi.fn(),
+  deleteWorkspaceSessions: vi.fn(),
   tombstoneSessionIndexRows: vi.fn(),
   trashWorkspaceItem: vi.fn(),
   writeWorkspaceFile: vi.fn(),
@@ -152,6 +154,19 @@ export function resetUseThreadActionsTestMocks() {
     method: "filesystem",
   });
   vi.mocked(deletePiSession).mockResolvedValue(undefined);
+  vi.mocked(deleteWorkspaceSessions).mockImplementation(
+    async (_workspaceId: string, sessionIds: string[]) => ({
+      results: sessionIds.map((sessionId) => ({
+        sessionId,
+        ok: true,
+        archivedAt: null,
+        error: null,
+        code: "SESSION_DELETED",
+        deletedFromDisk: true,
+        metadataCleaned: true,
+      })),
+    }),
+  );
   vi.mocked(tombstoneSessionIndexRows).mockResolvedValue(0);
   vi.mocked(deleteCodexSession).mockResolvedValue({
     deleted: true,

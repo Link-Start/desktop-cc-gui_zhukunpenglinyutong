@@ -808,7 +808,10 @@ pub async fn delete_pi_session(
 ) -> Result<(), String> {
     let session_id = normalize_session_id(session_id)?;
     let root = resolve_pi_sessions_root(home_dir);
-    let Some(file) = resolve_session_file(&root, &session_id, workspace_path, false).await? else {
+    // session id 全局唯一（UUID），cwd 只是归属提示：list/load 都放宽匹配，
+    // delete 必须同样放宽，否则 header 缺 cwd 的会话「能列出却删不掉」，
+    // 前端把 SESSION_NOT_FOUND 当成功吞下后文件残留，重启 rescan 即复活。
+    let Some(file) = resolve_session_file(&root, &session_id, workspace_path, true).await? else {
         return Err(format!(
             "[SESSION_NOT_FOUND] PI session not found: {session_id}"
         ));
@@ -890,6 +893,40 @@ mod tests {
         delete_pi_session(&project, session_id, Some(&agent_dir))
             .await
             .expect("delete");
+        assert!(!file.exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn deletes_pi_session_with_foreign_or_missing_cwd() {
+        // 回归：header cwd 与 workspace 不匹配（或缺失）的会话能被 list/load
+        // 命中，delete 也必须能删掉，否则前端吞下 SESSION_NOT_FOUND 后文件
+        // 残留，重启 rescan 会让已删会话复活。
+        let dir = std::env::temp_dir().join(format!(
+            "pi-history-delete-fallback-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let sessions = dir.join("sessions");
+        let cwd_dir = sessions.join("--somewhere-else--");
+        std::fs::create_dir_all(&cwd_dir).expect("mkdir");
+        let session_id = "019fe705-27fd-712e-a1be-f972ef3773f3";
+        let file = cwd_dir.join(format!("2026-08-09T14-55-02-653Z_{session_id}.jsonl"));
+        let project = dir.join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        let mut handle = std::fs::File::create(&file).expect("create");
+        writeln!(
+            handle,
+            r#"{{"type":"session","version":3,"id":"{session_id}","timestamp":"2026-08-09T14:55:02.653Z","cwd":"/somewhere/else"}}"#
+        )
+        .unwrap();
+
+        let agent_dir = dir.to_string_lossy().to_string();
+        delete_pi_session(&project, session_id, Some(&agent_dir))
+            .await
+            .expect("delete must fall back to the globally-unique session id");
         assert!(!file.exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
