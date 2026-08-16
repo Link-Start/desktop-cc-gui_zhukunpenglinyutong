@@ -92,17 +92,24 @@ export function ComposerReadinessBar({
   });
   const canJumpToRequest =
     Boolean(onJumpToRequest) && readiness.requestPointer?.canJumpToRequest === true;
+  const hideCliDuringLoading =
+    Boolean(isModelConfigRefreshing) ||
+    readiness.readiness.disabledReason === "config-loading";
 
   return (
     <div
       className={`composer-readiness-bar composer-readiness-bar--${readiness.activity.severity}`}
       data-activity={readiness.activity.kind}
       data-primary-action={readiness.readiness.primaryAction}
-      aria-label={t('composer.readinessAriaLabel', {
-        target: readiness.target.providerLabel,
-        model: readiness.target.modelLabel,
-        activity: readiness.activity.shortLabel,
-      })}
+      aria-label={
+        hideCliDuringLoading
+          ? readiness.target.modelLabel
+          : t('composer.readinessAriaLabel', {
+              target: readiness.target.providerLabel,
+              model: readiness.target.modelLabel,
+              activity: readiness.activity.shortLabel,
+            })
+      }
     >
       <div className="composer-readiness-target-group" title={readiness.activity.detailLabel}>
         {onModelSelect || onExecutionTargetChange ? (
@@ -128,36 +135,23 @@ export function ComposerReadinessBar({
             onReloadProviderConfig={onReloadProviderConfig}
           />
         ) : (
-          // 无交互选择器：引擎 + 模型固定占位；模型未就绪仅模型名显示 loading
+          // 无交互选择器：只展示图标 + 模型名，不带 CLI 前缀
           <div
             className="composer-readiness-target"
             data-testid="composer-readiness-model-static"
-            aria-busy={Boolean(isModelConfigRefreshing)}
+            aria-busy={hideCliDuringLoading}
           >
             <span className="composer-readiness-icon" aria-hidden="true">
-              <EngineIcon engine={readiness.target.engine} size={17} />
-            </span>
-            <span className="composer-readiness-provider">
-              {readiness.target.providerLabel}
-            </span>
-            <span className="composer-readiness-divider" aria-hidden="true">
-              /
-            </span>
-            <span
-              className="composer-readiness-model"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-              }}
-            >
-              {isModelConfigRefreshing ? (
+              {hideCliDuringLoading ? (
                 <span
                   className="codicon codicon-loading selector-refresh-icon-spinning"
-                  style={{ fontSize: 12 }}
-                  aria-hidden
+                  style={{ fontSize: 14 }}
                 />
-              ) : null}
+              ) : (
+                <EngineIcon engine={readiness.target.engine} size={17} />
+              )}
+            </span>
+            <span className="composer-readiness-model">
               {readiness.target.modelLabel}
             </span>
           </div>

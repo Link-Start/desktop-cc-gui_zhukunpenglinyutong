@@ -38,7 +38,9 @@ describe('ComposerReadinessBar', () => {
     // prop the readiness bar must not leave a visual placeholder.
     expect(container.querySelector('.curated-indicator')).toBeNull();
     expect(container.querySelector('.composer-readiness-right-accessory')).toBeNull();
-    expect(screen.getByText('Codex')).toBeTruthy();
+    expect(screen.queryByText('Codex')).toBeNull();
+    expect(container.querySelector('.composer-readiness-provider')).toBeNull();
+    expect(container.querySelector('.composer-readiness-divider')).toBeNull();
     expect(screen.getByText('gpt-5.5')).toBeTruthy();
     // The permission mode now lives in its own primary-row pill, so the
     // readiness bar no longer renders a duplicate mode/access chip.
@@ -107,6 +109,38 @@ describe('ComposerReadinessBar', () => {
     expect(screen.getByTestId('composer-readiness-model-static')).toBeTruthy();
     expect(screen.queryByRole('combobox')).toBeNull();
     expect(screen.queryByRole('button', { name: /gpt-5.5|Codex/i })).toBeNull();
+    expect(screen.queryByText('Codex')).toBeNull();
+    expect(screen.getByText('gpt-5.5')).toBeTruthy();
+  });
+
+  it('hides the CLI provider while the static chip is still loading', () => {
+    const readiness = buildComposerSendReadiness({
+      engine: 'claude',
+      providerLabel: 'Claude Code',
+      modelLabel: '加载中',
+      draftText: '',
+      configLoading: true,
+    });
+
+    const { container } = render(
+      <ComposerReadinessBar
+        readiness={readiness}
+        isModelConfigRefreshing
+      />,
+    );
+
+    expect(screen.getByTestId('composer-readiness-model-static')).toBeTruthy();
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(screen.queryByText('Claude Code')).toBeNull();
+    expect(container.querySelector('.composer-readiness-provider')).toBeNull();
+    expect(container.querySelector('.composer-readiness-divider')).toBeNull();
+    expect(container.querySelector('.composer-readiness-icon svg')).toBeNull();
+    expect(screen.getByText('加载中')).toBeTruthy();
+    expect(container.querySelector('.codicon-loading')).toBeTruthy();
+    expect(
+      container.querySelector('.composer-readiness-bar')?.getAttribute('aria-label'),
+    ).toBe('加载中');
   });
 
   it('renders the right accessory inside the readiness bar wrapper', () => {
