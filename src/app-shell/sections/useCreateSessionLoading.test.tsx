@@ -16,6 +16,7 @@ const workspace: WorkspaceInfo = {
 
 const t = (key: string, options?: Record<string, unknown>) => {
   if (key === "workspace.engineCodex") return "Codex";
+  if (key === "workspace.enginePi") return "PI CLI";
   if (key === "workspace.loadingProgressCreateSessionMessage") {
     return `Creating ${String(options?.engine)} in ${String(options?.workspace)}`;
   }
@@ -46,6 +47,30 @@ describe("useCreateSessionLoading", () => {
     ).resolves.toBe("thread-1");
 
     expect(controller.hideLoadingProgressDialog).toHaveBeenCalledWith("loading-1");
+  });
+
+  it("labels PI session creation as PI CLI instead of Claude Code", async () => {
+    const controller = {
+      showLoadingProgressDialog: vi.fn(() => "loading-pi"),
+      hideLoadingProgressDialog: vi.fn(),
+    };
+    const { result } = renderHook(() =>
+      useCreateSessionLoading({
+        ...controller,
+        t,
+        createSessionTimeoutMs: 100,
+      }),
+    );
+
+    await expect(
+      result.current({ workspace, engine: "pi" }, async () => "pi-pending-1"),
+    ).resolves.toBe("pi-pending-1");
+
+    expect(controller.showLoadingProgressDialog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Creating PI CLI in Workspace One",
+      }),
+    );
   });
 
   it("preserves the original action failure before timeout", async () => {

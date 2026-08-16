@@ -8,6 +8,7 @@ import {
   getOpenCodeSessionList,
   listClaudeSessions,
   listGeminiSessions,
+  listPiSessions,
   listThreadTitles,
   listThreads,
   listWorkspaceSessions,
@@ -36,7 +37,14 @@ vi.mock("../../../services/tauri", () => ({
   listClaudeSessions: vi.fn(),
   listGeminiSessions: vi.fn(),
   listKimiSessions: vi.fn(),
+  listPiSessions: vi.fn(),
   listGrokSessions: vi.fn(),
+  listSessionIndexForWorkspace: vi.fn(async () => ({
+    data: [],
+    source: "session-index",
+    synced: false,
+    engines: [],
+  })),
   getOpenCodeSessionList: vi.fn(),
   listWorkspaceSessions: vi.fn(),
   loadClaudeSession: vi.fn(),
@@ -89,7 +97,22 @@ vi.mock("../../../services/globalRuntimeNotices", async () => {
   return actual;
 });
 
-const NEVER_RESOLVES = () => new Promise<never>(() => {});
+const NEVER_RESOLVES = async (
+  _workspaceId: string,
+  options?: { timeoutMs?: number },
+) => {
+  if (
+    typeof options?.timeoutMs === "number" &&
+    Number.isFinite(options.timeoutMs) &&
+    options.timeoutMs > 0
+  ) {
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, options.timeoutMs);
+    });
+    return [];
+  }
+  return new Promise<never>(() => {});
+};
 
 function makeCachedOpenCodeSummary(idSuffix: string, updatedAt: number): ThreadSummary {
   return {
@@ -165,6 +188,7 @@ describe("useThreadActions opencode sidebar listing timeout fallback", () => {
     vi.mocked(listSharedSessions).mockResolvedValue([]);
     vi.mocked(listClaudeSessions).mockResolvedValue([]);
     vi.mocked(listGeminiSessions).mockResolvedValue([]);
+    vi.mocked(listPiSessions).mockResolvedValue([]);
     vi.mocked(getOpenCodeSessionList).mockResolvedValue([]);
     vi.mocked(listWorkspaceSessions).mockResolvedValue({
       data: [],
@@ -206,7 +230,10 @@ describe("useThreadActions opencode sidebar listing timeout fallback", () => {
       });
     });
 
-    expect(getOpenCodeSessionList).toHaveBeenCalledWith("ws-1");
+    expect(getOpenCodeSessionList).toHaveBeenCalledWith(
+      "ws-1",
+      expect.objectContaining({ timeoutMs: expect.any(Number) }),
+    );
   });
 
   it(
@@ -306,6 +333,7 @@ describe("useThreadActions opencode sidebar listing timeout fallback", () => {
         await result.current.listThreadsForWorkspace(workspace, {
           preserveState: true,
           includeOpenCodeSessions: true,
+  
         });
       });
 
@@ -370,6 +398,7 @@ describe("useThreadActions opencode sidebar listing timeout fallback", () => {
       const firstRun = result.current.listThreadsForWorkspace(workspace, {
         preserveState: true,
         includeOpenCodeSessions: true,
+
       });
       await act(async () => {
         await vi.advanceTimersByTimeAsync(30_001);
@@ -402,6 +431,7 @@ describe("useThreadActions opencode sidebar listing timeout fallback", () => {
       const secondRun = result.current.listThreadsForWorkspace(workspace, {
         preserveState: true,
         includeOpenCodeSessions: true,
+
       });
       await act(async () => {
         await vi.advanceTimersByTimeAsync(30_001);
@@ -471,6 +501,7 @@ describe("useThreadActions opencode sidebar listing timeout fallback", () => {
       const run = result.current.listThreadsForWorkspace(workspace, {
         preserveState: true,
         includeOpenCodeSessions: true,
+
       });
       await act(async () => {
         await vi.advanceTimersByTimeAsync(30_001);

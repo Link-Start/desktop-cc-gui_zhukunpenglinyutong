@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { useRenderScheduler } from "../../hooks/useRenderScheduler";
 import type { MutableRefObject } from "react";
 import type { WorkspaceInfo } from "../../types";
@@ -86,6 +87,9 @@ type ListThreadsForWorkspace = (
     recoverySource?: string;
     /** Quiet post-first-paint index re-scan (writers), not cold first paint. */
     forceSessionIndexSync?: boolean;
+    includeEngineDiskLists?: boolean;
+    /** Importer refresh: merge SQLite rows onto the current list. */
+    mergeExistingThreads?: boolean;
     /** When true mid-flight, list apply must no-op (workspace cancelled/switched). */
     isStale?: () => boolean;
   },
@@ -107,6 +111,8 @@ type UseWorkspaceThreadListHydrationResult = {
       preserveState?: boolean;
       force?: boolean;
       deletedThreadIds?: string[];
+      startupHydrationMode?: "full-catalog" | "first-paint";
+      mergeExistingThreads?: boolean;
     },
   ) => void;
   /** Immutable snapshot identity for UI (memo-safe). Prefer this over the ref for render props. */
@@ -703,6 +709,8 @@ export function useWorkspaceThreadListHydration({
         preserveState?: boolean;
         force?: boolean;
         deletedThreadIds?: string[];
+        startupHydrationMode?: "full-catalog" | "first-paint";
+        mergeExistingThreads?: boolean;
       },
     ) => {
       const workspace = workspacesById.get(workspaceId);
@@ -718,6 +726,10 @@ export function useWorkspaceThreadListHydration({
       // first-paint if UI never ready; else full-catalog until fully done.
       const kind: ThreadHydrationKind = force
         ? "full-catalog"
+        : options?.startupHydrationMode === "first-paint"
+          ? "first-paint"
+        : options?.startupHydrationMode === "full-catalog"
+          ? "full-catalog"
         : !uiHydrated
           ? "first-paint"
           : "full-catalog";
@@ -759,7 +771,11 @@ export function useWorkspaceThreadListHydration({
         return;
       }
       const hasHydratedThreadList =
-        kind === "first-paint" ? uiHydrated : fullyHydrated;
+        options?.startupHydrationMode === "first-paint"
+          ? false
+          : kind === "first-paint"
+            ? uiHydrated
+            : fullyHydrated;
       const isHydratingThreadList =
         hydratingThreadListWorkspaceIdsRef.current.has(workspaceId);
       if (
@@ -784,6 +800,7 @@ export function useWorkspaceThreadListHydration({
         deletedThreadIds: options?.deletedThreadIds,
         startupHydrationMode:
           kind === "first-paint" ? "first-paint" : "full-catalog",
+        mergeExistingThreads: options?.mergeExistingThreads,
       });
     },
     [
@@ -1081,6 +1098,38 @@ export function useWorkspaceThreadListHydration({
       cancelPendingPostFirstPaintFullCatalog();
     };
   }, [cancelPendingPostFirstPaintFullCatalog]);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void listen<{ workspaceIds?: string[]; upserted?: number }>(
+      "session-index-imported",
+      (event) => {
+        const ids = event.payload?.workspaceIds ?? [];
+        ids.forEach((workspaceId) => {
+          ensureWorkspaceThreadListLoaded(workspaceId, {
+            preserveState: true,
+            startupHydrationMode: "first-paint",
+            mergeExistingThreads: true,
+          });
+        });
+      },
+    )
+      .then((fn) => {
+        if (disposed) {
+          void fn();
+          return;
+        }
+        unlisten = () => {
+          void fn();
+        };
+      })
+      .catch(() => undefined);
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [ensureWorkspaceThreadListLoaded]);
 
   return {
     ensureWorkspaceThreadListLoaded,

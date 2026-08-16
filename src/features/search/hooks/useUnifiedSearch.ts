@@ -54,6 +54,7 @@ type UseUnifiedSearchOptions = {
   commands: CustomCommandOption[];
   apiSources?: WorkspaceApiSearchSource[];
   activeWorkspaceId?: string | null;
+  activeThreadId?: string | null;
   maxResults?: number;
   workspaceNameByPath?: Map<string, string>;
 };
@@ -105,6 +106,7 @@ export function useUnifiedSearch({
   commands,
   apiSources = [],
   activeWorkspaceId,
+  activeThreadId,
   maxResults = SEARCH_TOTAL_LIMIT,
   workspaceNameByPath,
 }: UseUnifiedSearchOptions) {
@@ -147,6 +149,7 @@ export function useUnifiedSearch({
       commands,
       apiSources,
       activeWorkspaceId,
+      activeThreadId,
       maxResults,
       recencyMap,
       reportMetrics: true,
@@ -167,6 +170,7 @@ export function useUnifiedSearch({
     apiSources,
     skills,
     activeWorkspaceId,
+    activeThreadId,
     threadItemsByThread,
     workspaceSources,
     workspaceNameByPath,
@@ -187,6 +191,7 @@ export function computeUnifiedSearchResults({
   commands,
   apiSources = [],
   activeWorkspaceId,
+  activeThreadId,
   maxResults = SEARCH_TOTAL_LIMIT,
   recencyMap,
   reportMetrics = false,
@@ -255,6 +260,8 @@ export function computeUnifiedSearchResults({
             workspaceId: source.workspaceId,
             threads: source.threads,
             threadItemsByThread,
+            activeThreadId:
+              source.workspaceId === activeWorkspaceId ? activeThreadId : null,
           }),
       );
     }

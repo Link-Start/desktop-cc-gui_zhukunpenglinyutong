@@ -89,7 +89,7 @@ describe("Provider target catalog owners", () => {
     discoverCodexModelsMock.mockResolvedValue({ data: [] });
   });
 
-  it.each(["claude", "codex", "grok", "kimi", "opencode"])(
+  it.each(["claude", "codex", "grok", "kimi", "opencode", "pi"])(
     "recognizes %s as a Provider Profile engine",
     (engine) => {
       expect(isProviderProfileEngine(engine)).toBe(true);
@@ -124,10 +124,11 @@ describe("Provider target catalog owners", () => {
       "grok",
       "kimi",
       "opencode",
+      "pi",
     ]);
     expect(
       result.current.groups.filter((group) => group.enabled),
-    ).toHaveLength(5);
+    ).toHaveLength(6);
     expect(
       result.current.groups.flatMap((group) => group.profiles).every(
         (profile) => profile.enabled !== false,
@@ -202,7 +203,7 @@ describe("Provider target catalog owners", () => {
     },
   );
 
-  it("exposes the same five CLI groups on Home create-session", async () => {
+  it("exposes the same six CLI groups on Home create-session", async () => {
     const { result } = renderHook(() =>
       useAtomicProviderTargetCatalog({
         enabled: true,
@@ -224,8 +225,52 @@ describe("Provider target catalog owners", () => {
       "grok",
       "kimi",
       "opencode",
+      "pi",
     ]);
     expect(result.current.groups.every((group) => group.enabled)).toBe(true);
+  });
+
+  it("loads PI local models on Home create-session instead of returning an empty catalog", async () => {
+    getEngineModelsMock.mockResolvedValueOnce([
+      {
+        id: "kimi-coding/k3",
+        model: "kimi-coding/k3",
+        displayName: "kimi-coding/k3",
+        description: "",
+        isDefault: true,
+        providerProfileId: null,
+      },
+    ]);
+    const { result } = renderHook(() =>
+      useAtomicProviderTargetCatalog({
+        enabled: true,
+        mode: "create-session",
+        currentProvider: "pi",
+        currentProviderProfileId: "__local_pi__",
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "source only",
+      }),
+    );
+
+    await act(async () => {
+      await result.current.ensureProfiles();
+      await result.current.ensureModels("pi", "__local_pi__");
+    });
+
+    expect(getEngineModelsMock).toHaveBeenCalledWith("pi", {
+      providerProfileId: "__local_pi__",
+    });
+    expect(
+      result.current.groups
+        .find((group) => group.providerId === "pi")
+        ?.profiles.find((profile) => profile.id === "__local_pi__")
+        ?.models,
+    ).toEqual([
+      expect.objectContaining({
+        id: "kimi-coding/k3",
+        model: "kimi-coding/k3",
+      }),
+    ]);
   });
 
   it("preserves a backend-returned Claude Local profile and produces a resolved model target", async () => {
@@ -940,6 +985,7 @@ describe("Provider target catalog owners", () => {
         "claude",
         "codex",
         "kimi",
+        "pi",
       ]);
     });
 
@@ -963,6 +1009,7 @@ describe("Provider target catalog owners", () => {
         "grok",
         "kimi",
         "opencode",
+        "pi",
       ]);
     });
 
@@ -978,7 +1025,7 @@ describe("Provider target catalog owners", () => {
         }),
       );
 
-      expect(result.current.groups).toHaveLength(5);
+      expect(result.current.groups).toHaveLength(6);
 
       act(() => {
         seedCliEngineVisibility(["opencode"]);
@@ -989,6 +1036,7 @@ describe("Provider target catalog owners", () => {
         "codex",
         "grok",
         "kimi",
+        "pi",
       ]);
     });
   });

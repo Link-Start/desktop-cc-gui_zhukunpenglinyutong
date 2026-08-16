@@ -5,15 +5,19 @@ use tauri::State;
 use tokio::time::timeout;
 
 use super::store::{
-    list_for_workspace_path, list_for_workspace_path_before, open_connection,
-    SessionIndexListPage, SessionIndexSyncReport,
+    count_for_workspace_path, list_for_workspace_path, list_for_workspace_path_before,
+    load_backfill_state, normalize_path_key, open_connection, save_backfill_state,
+    tombstone_session_ids, upsert_rows, workspace_index_sources_invalidated, BackfillState,
+    SessionIndexListPage, SessionIndexRow, SessionIndexSyncReport,
 };
 use super::writers::{
+    backfill_claude_for_workspace, backfill_codex_for_workspace, backfill_kimi_for_workspace,
     commit_engine_rows, engine_source_is_fresh, gemini_home_fingerprint, grok_home_fingerprint,
     invalidate_workspace_sources, opencode_source_fingerprint, pi_home_fingerprint,
     rows_from_gemini_summaries, rows_from_grok_summaries, rows_from_opencode_entries,
     rows_from_pi_summaries, sync_claude_for_workspace, sync_codex_for_workspace,
-    sync_kimi_for_workspace, WriterResult,
+    sync_kimi_for_workspace, BackfillBatchResult, WriterResult, CLAUDE_BACKFILL_BATCH_SIZE,
+    CODEX_BACKFILL_PARTITIONS_PER_BATCH, KIMI_BACKFILL_BATCH_SIZE,
 };
 use crate::engine::gemini_history::list_gemini_sessions;
 use crate::engine::grok_history::list_grok_sessions;
@@ -400,13 +404,15 @@ pub(crate) async fn sync_session_index_core(
     )
     .await?;
 
-    let gemini = sync_gemini_engine(workspace_path.clone(), limit, force).await;
+    // Gemini / Grok / PI each have their own 3s timeout. Join them so a
+    // slow Gemini probe cannot serialize PI off the first-paint window.
+    let (gemini, grok, pi) = tokio::join!(
+        sync_gemini_engine(workspace_path.clone(), limit, force),
+        sync_grok_engine(workspace_path.clone(), limit, force),
+        sync_pi_engine(workspace_path.clone(), limit, force),
+    );
     merge_writer(&mut aggregated, gemini);
-
-    let grok = sync_grok_engine(workspace_path.clone(), limit, force).await;
     merge_writer(&mut aggregated, grok);
-
-    let pi = sync_pi_engine(workspace_path.clone(), limit, force).await;
     merge_writer(&mut aggregated, pi);
 
     let opencode =
@@ -420,6 +426,211 @@ pub(crate) async fn sync_session_index_core(
         partial_source: aggregated.partial_source,
         skipped_fresh: aggregated.skipped_fresh,
     })
+}
+
+const ASYNC_BACKFILL_PAGE: usize = 200;
+const ASYNC_BACKFILL_MAX_LIMIT: usize = 5_000;
+
+async fn backfill_async_engine<S, F, Fut, C>(
+    engine: &str,
+    workspace_path: PathBuf,
+    fetch: F,
+    convert: C,
+) -> WriterResult
+where
+    F: FnOnce(PathBuf, usize) -> Fut,
+    Fut: std::future::Future<Output = Result<Vec<S>, String>>,
+    C: FnOnce(&std::path::Path, &[S]) -> Vec<SessionIndexRow>,
+{
+    let engine_key = engine.trim().to_ascii_lowercase();
+    let source_key = format!(
+        "{}:{}",
+        engine_key,
+        normalize_path_key(&workspace_path.to_string_lossy())
+    );
+    let state = tokio::task::spawn_blocking({
+        let source_key = source_key.clone();
+        move || {
+            let connection = open_connection()?;
+            load_backfill_state(&connection, &source_key)
+        }
+    })
+    .await
+    .ok()
+    .and_then(|result| result.ok())
+    .unwrap_or_default();
+    if state.complete {
+        return WriterResult {
+            skipped_fresh: true,
+            engines: vec![engine_key],
+            ..WriterResult::default()
+        };
+    }
+    let covered: usize = state.cursor.trim().parse().unwrap_or(0);
+    let request = covered
+        .saturating_add(ASYNC_BACKFILL_PAGE)
+        .min(ASYNC_BACKFILL_MAX_LIMIT);
+
+    let list_result = timeout(
+        ASYNC_ENGINE_LIST_TIMEOUT,
+        fetch(workspace_path.clone(), request),
+    )
+    .await;
+    let sessions = match list_result {
+        Ok(Ok(sessions)) => sessions,
+        Ok(Err(error)) => {
+            return WriterResult {
+                engines: vec![engine_key.clone()],
+                partial_source: Some(format!(
+                    "{engine_key}-backfill-error:{}",
+                    truncate_error(&error)
+                )),
+                ..WriterResult::default()
+            };
+        }
+        Err(_) => {
+            return WriterResult {
+                engines: vec![engine_key.clone()],
+                partial_source: Some(format!("{engine_key}-backfill-timeout")),
+                ..WriterResult::default()
+            };
+        }
+    };
+    let total = sessions.len();
+    let rows = convert(&workspace_path, &sessions);
+    let complete = total < request || request >= ASYNC_BACKFILL_MAX_LIMIT;
+
+    tokio::task::spawn_blocking(move || {
+        let connection = open_connection()?;
+        let upserted = upsert_rows(&connection, &rows)?;
+        save_backfill_state(
+            &connection,
+            &source_key,
+            &BackfillState {
+                cursor: total.to_string(),
+                complete,
+            },
+        )?;
+        Ok::<usize, String>(upserted)
+    })
+    .await
+    .ok()
+    .and_then(|result| result.ok())
+    .map(|upserted| WriterResult {
+        upserted,
+        engines: vec![engine_key.clone()],
+        ..WriterResult::default()
+    })
+    .unwrap_or_else(|| WriterResult {
+        engines: vec![engine_key.clone()],
+        partial_source: Some(format!("{engine_key}-backfill-commit-error")),
+        ..WriterResult::default()
+    })
+}
+
+fn merge_backfill(
+    into: &mut WriterResult,
+    engine: &str,
+    from: Result<BackfillBatchResult, String>,
+) {
+    match from {
+        Ok(result) => {
+            into.upserted += result.upserted;
+            if !into.engines.iter().any(|existing| existing == engine) {
+                into.engines.push(engine.to_string());
+            }
+        }
+        Err(error) => {
+            if into.partial_source.is_none() {
+                into.partial_source =
+                    Some(format!("{engine}-backfill-error:{}", truncate_error(&error)));
+            }
+            if !into.engines.iter().any(|existing| existing == engine) {
+                into.engines.push(engine.to_string());
+            }
+        }
+    }
+}
+
+/// One bounded historical-backfill batch per engine for a workspace.
+/// OpenCode has no durable disk index (soft-empty) and is intentionally skipped.
+pub(crate) async fn backfill_session_index_core(
+    state: &AppState,
+    workspace_id: &str,
+) -> Result<WriterResult, String> {
+    let (_path_str, workspace_path) = resolve_workspace_path_async(state, workspace_id).await?;
+    let sessions_roots = {
+        let workspaces = state.workspaces.lock().await;
+        resolve_sessions_roots(&workspaces, Some(workspace_path.as_path()))
+    };
+
+    let mut aggregated = WriterResult::default();
+
+    let disk = tokio::task::spawn_blocking({
+        let workspace_path = workspace_path.clone();
+        move || {
+            let connection = open_connection()?;
+            let mut result = WriterResult::default();
+            merge_backfill(
+                &mut result,
+                "claude",
+                backfill_claude_for_workspace(
+                    &connection,
+                    &workspace_path,
+                    CLAUDE_BACKFILL_BATCH_SIZE,
+                ),
+            );
+            merge_backfill(
+                &mut result,
+                "codex",
+                backfill_codex_for_workspace(
+                    &connection,
+                    &workspace_path,
+                    &sessions_roots,
+                    CODEX_BACKFILL_PARTITIONS_PER_BATCH,
+                ),
+            );
+            merge_backfill(
+                &mut result,
+                "kimi",
+                backfill_kimi_for_workspace(
+                    &connection,
+                    &workspace_path,
+                    KIMI_BACKFILL_BATCH_SIZE,
+                ),
+            );
+            Ok::<WriterResult, String>(result)
+        }
+    })
+    .await
+    .map_err(|error| error.to_string())??;
+    merge_writer(&mut aggregated, disk);
+
+    let (gemini, grok, pi) = tokio::join!(
+        backfill_async_engine(
+            "gemini",
+            workspace_path.clone(),
+            |path, limit| async move { list_gemini_sessions(&path, Some(limit), None).await },
+            rows_from_gemini_summaries,
+        ),
+        backfill_async_engine(
+            "grok",
+            workspace_path.clone(),
+            |path, limit| async move { list_grok_sessions(&path, Some(limit), None).await },
+            rows_from_grok_summaries,
+        ),
+        backfill_async_engine(
+            "pi",
+            workspace_path.clone(),
+            |path, limit| async move { list_pi_sessions(&path, Some(limit), None).await },
+            rows_from_pi_summaries,
+        ),
+    );
+    merge_writer(&mut aggregated, gemini);
+    merge_writer(&mut aggregated, grok);
+    merge_writer(&mut aggregated, pi);
+
+    Ok(aggregated)
 }
 
 /// Sync light indexes for all supported engines into SQLite.
@@ -454,6 +665,33 @@ pub async fn invalidate_session_index_for_workspace(
     Ok(changed as u32)
 }
 
+/// Mark Session Index rows deleted so sidebar hydrate cannot resurrect them.
+#[tauri::command]
+pub async fn tombstone_session_index_rows(session_ids: Vec<String>) -> Result<u32, String> {
+    let changed = tokio::task::spawn_blocking(move || {
+        let connection = open_connection()?;
+        tombstone_session_ids(&connection, &session_ids)
+    })
+    .await
+    .map_err(|error| error.to_string())??;
+    Ok(changed as u32)
+}
+
+/// Client-created sessions write the sidebar Index directly. No disk scan.
+#[tauri::command]
+pub async fn upsert_session_index_rows(rows: Vec<SessionIndexRow>) -> Result<u32, String> {
+    if rows.is_empty() {
+        return Ok(0);
+    }
+    let changed = tokio::task::spawn_blocking(move || {
+        let connection = open_connection()?;
+        upsert_rows(&connection, &rows)
+    })
+    .await
+    .map_err(|error| error.to_string())??;
+    Ok(changed as u32)
+}
+
 /// List sidebar sessions from SQLite. Optionally sync first when stale/empty.
 #[tauri::command]
 pub async fn list_session_index_for_workspace(
@@ -470,8 +708,15 @@ pub async fn list_session_index_for_workspace(
         .map(|value| value as usize)
         .unwrap_or(DEFAULT_SIDEBAR_INDEX_LIMIT)
         .clamp(1, 500);
-    let sync_if_needed = sync_if_needed.unwrap_or(true);
-    let force_sync = force_sync.unwrap_or(false);
+    let keyset_before = before_updated_at.map(|updated_at| {
+        (
+            updated_at,
+            before_session_id.unwrap_or_default().trim().to_string(),
+        )
+    });
+    // Keyset "更多" is a pure page query — never block paging on a writer rescan.
+    let sync_if_needed = sync_if_needed.unwrap_or(true) && keyset_before.is_none();
+    let force_sync = force_sync.unwrap_or(false) && keyset_before.is_none();
     let (path_str, _workspace_path) = resolve_workspace_path_async(&state, &workspace_id).await?;
 
     let mut synced = false;
@@ -480,22 +725,21 @@ pub async fn list_session_index_for_workspace(
     let mut engines = Vec::new();
 
     if sync_if_needed || force_sync {
-        let needs_sync = force_sync || {
-            let path_for_check = path_str.clone();
-            tokio::task::spawn_blocking(move || {
+        let path_for_check = path_str.clone();
+        let index_empty = force_sync
+            || tokio::task::spawn_blocking(move || {
                 let connection = open_connection()?;
                 let existing = list_for_workspace_path(&connection, &path_for_check, 1)?;
-                Ok::<bool, String>(existing.is_empty())
+                if existing.is_empty() {
+                    return Ok(true);
+                }
+                workspace_index_sources_invalidated(&connection, &path_for_check)
             })
             .await
-            .map_err(|error| error.to_string())??
-        };
-
-        if needs_sync || force_sync {
-            let report =
-                sync_session_index_core(&state, &workspace_id, limit, force_sync || needs_sync)
-                    .await?;
-            synced = !report.skipped_fresh || needs_sync;
+            .map_err(|error| error.to_string())??;
+        if force_sync || index_empty {
+            let report = sync_session_index_core(&state, &workspace_id, limit, force_sync).await?;
+            synced = !report.skipped_fresh || index_empty;
             sync_ms = Some(report.duration_ms);
             partial_source = report.partial_source;
             engines = report.engines;
@@ -503,22 +747,32 @@ pub async fn list_session_index_for_workspace(
     }
 
     let path_for_list = path_str.clone();
-    let before = before_updated_at.map(|updated_at| {
-        (
-            updated_at,
-            before_session_id.unwrap_or_default().trim().to_string(),
-        )
-    });
-    let mut data = tokio::task::spawn_blocking(move || {
+    let (data, has_more) = tokio::task::spawn_blocking(move || {
         let connection = open_connection()?;
-        list_for_workspace_path_before(&connection, &path_for_list, limit.saturating_add(1), before)
+        match keyset_before {
+            Some((before_updated_at, before_session_id)) => {
+                let mut rows = list_for_workspace_path_before(
+                    &connection,
+                    &path_for_list,
+                    limit.saturating_add(1),
+                    Some((before_updated_at, before_session_id)),
+                )?;
+                let more = rows.len() > limit;
+                if more {
+                    rows.truncate(limit);
+                }
+                Ok::<(Vec<SessionIndexRow>, bool), String>((rows, more))
+            }
+            None => {
+                let rows = list_for_workspace_path(&connection, &path_for_list, limit)?;
+                let total = count_for_workspace_path(&connection, &path_for_list)?;
+                let more = total > rows.len() as i64;
+                Ok((rows, more))
+            }
+        }
     })
     .await
     .map_err(|error| error.to_string())??;
-    let has_more = data.len() > limit;
-    if has_more {
-        data.truncate(limit);
-    }
 
     if engines.is_empty() {
         let mut seen = std::collections::HashSet::new();
@@ -528,6 +782,16 @@ pub async fn list_session_index_for_workspace(
             }
         }
     }
+
+    let event_log_path = state
+        .storage_path
+        .parent()
+        .map(|parent| parent.join("shared-event-log-v2.sqlite3"));
+    let visibility = super::shared_visibility::load_shared_native_visibility_projection(
+        &workspace_id,
+        event_log_path.as_deref(),
+        &data,
+    );
 
     Ok(SessionIndexListPage {
         data,
@@ -541,6 +805,7 @@ pub async fn list_session_index_for_workspace(
         engines,
         partial_source,
         has_more,
+        visibility: Some(visibility),
     })
 }
 

@@ -41,7 +41,8 @@ function isEngineType(value: unknown): value is EngineType {
     value === "gemini" ||
     value === "grok" ||
     value === "kimi" ||
-    value === "opencode"
+    value === "opencode" ||
+    value === "pi"
   );
 }
 

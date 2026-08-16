@@ -93,11 +93,15 @@ function isKimiThread(threadId: string) {
   return threadId.startsWith("kimi:") || threadId.startsWith("kimi-pending-");
 }
 
+function isPiThread(threadId: string) {
+  return threadId.startsWith("pi:") || threadId.startsWith("pi-pending-");
+}
+
 function readHighResolutionNowMs() {
   return typeof performance !== "undefined" ? performance.now() : Date.now();
 }
 
-type ReasoningEngineHint = "gemini" | "grok" | "kimi" | null;
+type ReasoningEngineHint = "gemini" | "grok" | "kimi" | "pi" | null;
 
 function isGeminiEventThread(
   threadId: string,
@@ -120,6 +124,13 @@ function isKimiEventThread(
   return engineHint === "kimi" || isKimiThread(threadId);
 }
 
+function isPiEventThread(
+  threadId: string,
+  engineHint?: ReasoningEngineHint,
+) {
+  return engineHint === "pi" || isPiThread(threadId);
+}
+
 function inferItemEngineSource(
   item: Record<string, unknown>,
   threadId: string,
@@ -133,7 +144,8 @@ function inferItemEngineSource(
     rawEngineSource === "gemini" ||
     rawEngineSource === "grok" ||
     rawEngineSource === "kimi" ||
-    rawEngineSource === "opencode"
+    rawEngineSource === "opencode" ||
+    rawEngineSource === "pi"
   ) {
     return rawEngineSource;
   }
@@ -612,7 +624,8 @@ export function useThreadItemEvents({
       const isGeminiReasoningDelta =
         (isGeminiEventThread(threadId, reasoningEngineHint) ||
           isGrokEventThread(threadId, reasoningEngineHint) ||
-          isKimiEventThread(threadId, reasoningEngineHint)) &&
+          isKimiEventThread(threadId, reasoningEngineHint) ||
+          isPiEventThread(threadId, reasoningEngineHint)) &&
         (operation.kind === "reasoningSummaryDelta" ||
           operation.kind === "reasoningSummaryBoundary" ||
           operation.kind === "reasoningContentDelta");
@@ -1597,7 +1610,8 @@ export function useThreadItemEvents({
           itemEngineSource === "grok" ||
           itemEngineSource === "kimi" ||
           itemEngineSource === "opencode" ||
-          itemEngineSource === "codex"
+          itemEngineSource === "codex" ||
+          itemEngineSource === "pi"
             ? {
                 ...converted,
                 engineSource: itemEngineSource as "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi",

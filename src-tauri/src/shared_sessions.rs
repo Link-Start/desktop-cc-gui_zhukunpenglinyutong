@@ -37,6 +37,7 @@ fn is_supported_shared_session_engine(engine: EngineType) -> bool {
             | EngineType::Kimi
             | EngineType::Grok
             | EngineType::OpenCode
+            | EngineType::Pi
     )
 }
 
@@ -937,6 +938,60 @@ pub(crate) fn read_shared_session_meta(
         serde_json::from_str(&raw).map_err(|error| error.to_string())?;
     sanitize_shared_session_meta(&mut meta);
     Ok(meta)
+}
+
+/// Filesystem-only Shared ownership seed (V0 metadata). Does not touch EventWriter.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct WorkspaceSharedOwnershipSeed {
+    pub session_ids: Vec<String>,
+    pub native_ids: Vec<String>,
+    pub skipped_meta: usize,
+}
+
+pub(crate) fn load_workspace_shared_ownership_seed(
+    workspace_id: &str,
+) -> Result<WorkspaceSharedOwnershipSeed, String> {
+    let directory = workspace_shared_sessions_dir(workspace_id)?;
+    if !directory.exists() {
+        return Ok(WorkspaceSharedOwnershipSeed::default());
+    }
+    let mut seed = WorkspaceSharedOwnershipSeed::default();
+    for entry in std::fs::read_dir(&directory).map_err(|error| error.to_string())? {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let file_type = entry.file_type().map_err(|error| error.to_string())?;
+        if !file_type.is_dir() {
+            continue;
+        }
+        let shared_session_id = entry.file_name().to_string_lossy().to_string();
+        if shared_session_id.trim().is_empty() {
+            continue;
+        }
+        let meta = match read_shared_session_meta(workspace_id, &shared_session_id) {
+            Ok(meta) => meta,
+            Err(_) => {
+                seed.skipped_meta += 1;
+                continue;
+            }
+        };
+        seed.session_ids.push(meta.id.clone());
+        for binding in meta.bindings_by_engine.values() {
+            let native_id = binding.native_thread_id.trim();
+            if !native_id.is_empty() {
+                seed.native_ids.push(native_id.to_string());
+            }
+        }
+        for binding in meta.bindings_by_target.values() {
+            let native_id = binding.native_thread_id.trim();
+            if !native_id.is_empty() {
+                seed.native_ids.push(native_id.to_string());
+            }
+        }
+    }
+    seed.session_ids.sort();
+    seed.session_ids.dedup();
+    seed.native_ids.sort();
+    seed.native_ids.dedup();
+    Ok(seed)
 }
 
 pub(crate) fn write_shared_session_meta(meta: &SharedSessionMeta) -> Result<(), String> {
@@ -1942,6 +1997,7 @@ mod tests {
             EngineType::Kimi,
             EngineType::Grok,
             EngineType::OpenCode,
+            EngineType::Pi,
         ] {
             assert!(is_pending_shared_binding_thread_id(
                 engine,
@@ -1980,7 +2036,12 @@ mod tests {
             EngineType::Codex,
             "codex-native-thread-1"
         ));
-        for engine in [EngineType::Kimi, EngineType::Grok, EngineType::OpenCode] {
+        for engine in [
+            EngineType::Kimi,
+            EngineType::Grok,
+            EngineType::OpenCode,
+            EngineType::Pi,
+        ] {
             assert!(!binding_uses_established_native_thread(
                 engine,
                 &format!("{}-pending-shared-1", engine.icon()),
@@ -1999,7 +2060,12 @@ mod tests {
 
     #[test]
     fn resolved_local_targets_validate_for_new_shared_cli_engines() {
-        for engine in [EngineType::Kimi, EngineType::Grok, EngineType::OpenCode] {
+        for engine in [
+            EngineType::Kimi,
+            EngineType::Grok,
+            EngineType::OpenCode,
+            EngineType::Pi,
+        ] {
             let catalog = crate::engine::status::get_local_engine_models_for_validation(engine)
                 .unwrap_or_else(|| panic!("missing local catalog for {engine:?}"));
             let selected = catalog

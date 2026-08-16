@@ -226,7 +226,9 @@ describe("useThreadActions Claude history refresh", () => {
       await result.current.refreshThread("ws-1", "claude:session-1");
     });
 
-    expect(loadClaudeSession).toHaveBeenCalledWith("/tmp/codex", "session-1");
+    expect(loadClaudeSession).toHaveBeenCalledWith("/tmp/codex", "session-1", {
+      limit: 80,
+    });
     expect(resumeThread).not.toHaveBeenCalled();
     expect(dispatch).toHaveBeenCalledWith({
       type: "setThreadItems",
@@ -291,7 +293,9 @@ describe("useThreadActions Claude history refresh", () => {
       await result.current.refreshThread("ws-1", "claude:session-1");
     });
 
-    expect(loadClaudeSession).toHaveBeenCalledWith("/tmp/codex", "session-1");
+    expect(loadClaudeSession).toHaveBeenCalledWith("/tmp/codex", "session-1", {
+      limit: 80,
+    });
     expect(dispatch).toHaveBeenCalledWith({
       type: "setThreadItems",
       threadId: "claude:session-1",
@@ -379,6 +383,7 @@ describe("useThreadActions Claude history refresh", () => {
     expect(loadClaudeSession).toHaveBeenCalledWith(
       "/tmp/codex",
       "issue-529-session",
+      { limit: 80 },
     );
     expect(dispatch).toHaveBeenCalledWith({
       type: "setThreadItems",
@@ -609,7 +614,9 @@ describe("useThreadActions Claude history refresh", () => {
     });
 
     expect(resumed).toBe("claude:session-missing");
-    expect(loadClaudeSession).toHaveBeenCalledWith("/tmp/codex", "session-missing");
+    expect(loadClaudeSession).toHaveBeenCalledWith("/tmp/codex", "session-missing", {
+      limit: 80,
+    });
     expect(dispatch).toHaveBeenCalledWith({
       type: "clearUserInputRequestsForThread",
       workspaceId: "ws-1",

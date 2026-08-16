@@ -1110,6 +1110,43 @@ mod tests {
     }
 
     #[test]
+    fn parses_live_print_json_turn_without_dropping_text() {
+        // Captured from `pi --print --mode json` 0.84.1 on this machine:
+        // session → thinking deltas → one text_delta "pong" → turn_end.
+        let events = [
+            json!({"type":"session","id":"01a0073b-b1da-77a1-a9e3-390cf2c88680"}),
+            json!({
+                "type":"message_update",
+                "assistantMessageEvent":{"type":"thinking_delta","delta":"The user wants "}
+            }),
+            json!({
+                "type":"message_update",
+                "assistantMessageEvent":{"type":"text_delta","delta":"pong"}
+            }),
+            json!({"type":"turn_end"}),
+            json!({"type":"agent_end"}),
+            json!({"type":"agent_settled"}),
+        ];
+
+        let parsed: Vec<PiStreamLine> = events.iter().map(parse_pi_stream_line).collect();
+        assert!(matches!(
+            &parsed[0],
+            PiStreamLine::SessionId(id) if id == "01a0073b-b1da-77a1-a9e3-390cf2c88680"
+        ));
+        assert!(matches!(
+            &parsed[1],
+            PiStreamLine::ThinkingDelta(delta) if delta == "The user wants "
+        ));
+        assert!(matches!(
+            &parsed[2],
+            PiStreamLine::TextDelta(delta) if delta == "pong"
+        ));
+        assert!(matches!(parsed[3], PiStreamLine::Other));
+        assert!(matches!(parsed[4], PiStreamLine::Other));
+        assert!(matches!(parsed[5], PiStreamLine::Other));
+    }
+
+    #[test]
     fn model_and_thinking_flags_filter_defaults() {
         assert_eq!(resolve_model_flag(Some("auto")), None);
         assert_eq!(

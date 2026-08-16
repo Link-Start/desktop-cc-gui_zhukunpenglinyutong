@@ -32,7 +32,18 @@ const browserAgent = {
       "windowOpened": "पेज एक अलग Browser Agent विंडो में खुला है।",
       "closePanel": "ब्राउज़र डॉक बंद करें",
       "close": "Browser Agent सत्र बंद करें",
+      "tabContextMenu": "ब्राउज़र टैब क्रियाएँ",
+      "closeTab": "टैब बंद करें",
+      "closeOtherTabs": "अन्य टैब बंद करें",
+      "closeTabsToTheRight": "दाईं ओर के टैब बंद करें",
+      "closeAllTabs": "सभी टैब बंद करें",
       "info": "Browser Agent विवरण दिखाएं",
+      "collapseDock": "ब्राउज़र नियंत्रण समेटें",
+      "expandDock": "ब्राउज़र नियंत्रण फैलाएँ",
+      "attachContext": "ब्राउज़र संदर्भ संलग्न करें",
+      "selectElement": "चैट के लिए पेज तत्व चुनें",
+      "cancelSelectElement": "पेज तत्व चयन रद्द करें",
+      "popOutWindow": "अलग विंडो में खोलें",
       "footnote": "MVP कच्चा DOM, cookies, headers, या पेज सीक्रेट संग्रहीत नहीं करता।"
     },
     "composer": {

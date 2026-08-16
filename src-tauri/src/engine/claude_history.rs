@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::time::SystemTime;
 use tokio::fs;
@@ -35,7 +35,63 @@ use super::claude_history_subagents::{
 use super::EngineConfig;
 
 const LOCAL_SESSION_SCAN_TIMEOUT: Duration = Duration::from_secs(60);
-const CLAUDE_LIST_PREVIEW_MAX_LINES: usize = 40;
+/// Sidebar list scan: stop after this many content bytes (align Index peek).
+pub(crate) const CLAUDE_LIST_SCAN_MAX_BYTES: u64 = 64 * 1024;
+/// Sidebar list scan: stop after this many non-empty lines.
+pub(crate) const CLAUDE_LIST_SCAN_MAX_LINES: usize = 40;
+const CLAUDE_LIST_PREVIEW_MAX_LINES: usize = CLAUDE_LIST_SCAN_MAX_LINES;
+/// Skip a single JSONL line larger than this once a title already exists.
+const CLAUDE_LIST_SKIP_LINE_BYTES: usize = 200_000;
+const CLAUDE_LIST_DEFAULT_LIMIT: usize = 200;
+
+#[derive(Default)]
+struct ClaudeScanIoLog {
+    /// (absolute path, opens, bytes)
+    entries: Vec<(String, u64, u64)>,
+}
+
+static CLAUDE_SCAN_IO: Mutex<ClaudeScanIoLog> = Mutex::new(ClaudeScanIoLog { entries: Vec::new() });
+
+#[allow(dead_code)]
+pub(crate) fn reset_claude_list_io_stats() {
+    if let Ok(mut guard) = CLAUDE_SCAN_IO.lock() {
+        guard.entries.clear();
+    }
+}
+
+pub(crate) fn claude_list_io_stats_for_prefix(prefix: &Path) -> (u64, u64) {
+    let prefix = prefix.to_string_lossy();
+    let Ok(guard) = CLAUDE_SCAN_IO.lock() else {
+        return (0, 0);
+    };
+    let mut opens = 0;
+    let mut bytes = 0;
+    for (path, open_count, read_bytes) in &guard.entries {
+        if path.starts_with(prefix.as_ref()) {
+            opens += *open_count;
+            bytes += *read_bytes;
+        }
+    }
+    (opens, bytes)
+}
+
+fn record_claude_scan_open(path: &Path) {
+    let key = path.to_string_lossy().into_owned();
+    if let Ok(mut guard) = CLAUDE_SCAN_IO.lock() {
+        guard.entries.push((key, 1, 0));
+    }
+}
+
+fn record_claude_scan_read_bytes(path: &Path, bytes: u64) {
+    let key = path.to_string_lossy().into_owned();
+    if let Ok(mut guard) = CLAUDE_SCAN_IO.lock() {
+        if let Some(entry) = guard.entries.iter_mut().rev().find(|(p, _, _)| p == &key) {
+            entry.2 += bytes;
+        } else {
+            guard.entries.push((key, 0, bytes));
+        }
+    }
+}
 const CLAUDE_ATTRIBUTION_STRICT_MATCH: &str = "strict-match";
 pub(crate) const CLAUDE_ATTRIBUTION_REASON_PROJECT_DIRECTORY: &str = "claude-project-directory";
 const CLAUDE_ATTRIBUTION_REASON_TRANSCRIPT_CWD: &str = "claude-transcript-cwd";
@@ -767,7 +823,10 @@ async fn scan_session_source_file_with_depth(
 ) -> ClaudeSessionScanOutcome {
     let mut diagnostics = Vec::new();
     let file = match fs::File::open(path).await {
-        Ok(file) => file,
+        Ok(file) => {
+            record_claude_scan_open(path);
+            file
+        }
         Err(_) => {
             diagnostics.push(build_scan_diagnostic(
                 ClaudeSessionScanDiagnosticCode::UnreadableFile,
@@ -788,8 +847,12 @@ async fn scan_session_source_file_with_depth(
     let file_mtime_ms = file_metadata
         .and_then(|metadata| metadata.modified().ok())
         .and_then(system_time_to_epoch_millis);
+    // Do not `take(64KiB)` on the reader: a first-line custom-title / first-user
+    // payload can be larger (redacted image) and must still parse. Preview stops
+    // after the budget in the line loop, so sparse tails are never consumed.
     let mut lines = BufReader::new(file).lines();
     let mut preview_lines_seen = 0usize;
+    let mut preview_bytes_seen: u64 = 0;
 
     let mut first_user_message: Option<String> = None;
     let mut latest_native_title: Option<String> = None;
@@ -811,6 +874,11 @@ async fn scan_session_source_file_with_depth(
         }) else {
             break;
         };
+        let line_bytes = line.len() as u64 + 1;
+        if depth == ClaudeSessionScanDepth::Preview {
+            record_claude_scan_read_bytes(path, line_bytes);
+            preview_bytes_seen = preview_bytes_seen.saturating_add(line_bytes);
+        }
         let line = line.trim().to_string();
         if line.is_empty() {
             continue;
@@ -818,6 +886,11 @@ async fn scan_session_source_file_with_depth(
         if depth == ClaudeSessionScanDepth::Preview {
             preview_lines_seen += 1;
             if preview_lines_seen > CLAUDE_LIST_PREVIEW_MAX_LINES {
+                break;
+            }
+            if line.len() > CLAUDE_LIST_SKIP_LINE_BYTES
+                && (first_user_message.is_some() || latest_native_title.is_some())
+            {
                 break;
             }
         }
@@ -905,6 +978,19 @@ async fn scan_session_source_file_with_depth(
                         CLAUDE_SESSION_TITLE_PREVIEW_MAX_CHARS,
                     ));
                 }
+            }
+        }
+
+        if depth == ClaudeSessionScanDepth::Preview {
+            let has_title = first_user_message.is_some() || latest_native_title.is_some();
+            if has_title && first_timestamp.is_some() {
+                break;
+            }
+            if preview_lines_seen >= CLAUDE_LIST_PREVIEW_MAX_LINES {
+                break;
+            }
+            if preview_bytes_seen >= CLAUDE_LIST_SCAN_MAX_BYTES {
+                break;
             }
         }
     }
@@ -1596,7 +1682,6 @@ pub(crate) async fn list_claude_sessions_from_base_dir(
         }
 
         let mut jsonl_paths: Vec<(PathBuf, bool)> = Vec::new();
-        let mut subagent_jsonl_paths: Vec<(PathBuf, String, bool)> = Vec::new();
         let mut seen_paths = HashSet::new();
         let mut found_dir = false;
 
@@ -1618,33 +1703,6 @@ pub(crate) async fn list_claude_sessions_from_base_dir(
                         if seen_paths.insert(path.clone()) {
                             jsonl_paths.push((path.clone(), allow_session_fallback));
                         }
-                        let parent_session_id = name.trim_end_matches(".jsonl").to_string();
-                        let subagents_dir = path.with_extension("").join("subagents");
-                        if subagents_dir.exists() {
-                            let mut subagent_entries =
-                                fs::read_dir(&subagents_dir).await.map_err(|e| {
-                                    format!("Failed to read Claude subagent directory: {}", e)
-                                })?;
-                            while let Ok(Some(subagent_entry)) = subagent_entries.next_entry().await
-                            {
-                                let subagent_path = subagent_entry.path();
-                                let Some(subagent_name) =
-                                    subagent_path.file_name().and_then(|n| n.to_str())
-                                else {
-                                    continue;
-                                };
-                                if subagent_name.starts_with("agent-")
-                                    && subagent_name.ends_with(".jsonl")
-                                    && seen_paths.insert(subagent_path.clone())
-                                {
-                                    subagent_jsonl_paths.push((
-                                        subagent_path,
-                                        parent_session_id.clone(),
-                                        allow_session_fallback,
-                                    ));
-                                }
-                            }
-                        }
                     }
                 }
             }
@@ -1654,10 +1712,13 @@ pub(crate) async fn list_claude_sessions_from_base_dir(
             return Ok(Vec::new());
         }
 
+        // IO-before-limit: metadata/mtime only, then scan the newest `limit` files.
+        // Sidebar list does not inventory subagent jsonl.
+        let mut unused_subagent_jsonl_paths: Vec<(PathBuf, String, bool)> = Vec::new();
         cap_claude_scan_paths_by_mtime(
             &mut jsonl_paths,
-            &mut subagent_jsonl_paths,
-            limit.unwrap_or(200),
+            &mut unused_subagent_jsonl_paths,
+            limit.unwrap_or(CLAUDE_LIST_DEFAULT_LIMIT),
         );
 
         // Scan all session files concurrently with a concurrency limit to prevent
@@ -1674,20 +1735,6 @@ pub(crate) async fn list_claude_sessions_from_base_dir(
                 scan_session_file(&path, &workspace_path, &attribution_scopes, allow_fallback).await
             }));
         }
-        for (path, parent_session_id, allow_fallback) in subagent_jsonl_paths {
-            let permit = semaphore.clone();
-            let attribution_scopes = attribution_scopes.to_vec();
-            handles.push(tokio::spawn(async move {
-                let _permit = permit.acquire().await;
-                scan_subagent_session_file(
-                    &path,
-                    &parent_session_id,
-                    &attribution_scopes,
-                    allow_fallback,
-                )
-                .await
-            }));
-        }
 
         let mut sessions: Vec<ClaudeSessionSummary> = Vec::new();
         for handle in handles {
@@ -1701,7 +1748,7 @@ pub(crate) async fn list_claude_sessions_from_base_dir(
 
         Ok(limit_claude_sessions_preserving_relationships(
             sessions,
-            limit.unwrap_or(200),
+            limit.unwrap_or(CLAUDE_LIST_DEFAULT_LIMIT),
         ))
     })
     .await

@@ -8,12 +8,18 @@ import {
   deleteClaudeSession,
   deleteGeminiSession,
   deleteOpenCodeSession,
+  deletePiSession,
+  tombstoneSessionIndexRows,
   connectWorkspace,
   createWorkspaceDirectory,
   getOpenCodeSessionList,
   listWorkspaceSessions,
   listClaudeSessions,
   listGeminiSessions,
+  listKimiSessions,
+  listGrokSessions,
+  listPiSessions,
+  listSessionIndexForWorkspace,
   loadClaudeSession,
   loadGeminiSession,
   loadCodexSession,
@@ -47,8 +53,10 @@ vi.mock("../../../services/tauri", () => ({
   listGeminiSessions: vi.fn(),
   listKimiSessions: vi.fn(),
   listGrokSessions: vi.fn(),
+  listPiSessions: vi.fn(),
   getOpenCodeSessionList: vi.fn(),
   listWorkspaceSessions: vi.fn(),
+  listSessionIndexForWorkspace: vi.fn(),
   loadClaudeSession: vi.fn(),
   loadGeminiSession: vi.fn(),
   loadCodexSession: vi.fn(),
@@ -63,6 +71,8 @@ vi.mock("../../../services/tauri", () => ({
   deleteClaudeSession: vi.fn(),
   deleteGeminiSession: vi.fn(),
   deleteOpenCodeSession: vi.fn(),
+  deletePiSession: vi.fn(),
+  tombstoneSessionIndexRows: vi.fn(),
   trashWorkspaceItem: vi.fn(),
   writeWorkspaceFile: vi.fn(),
 }));
@@ -93,6 +103,20 @@ describe("useThreadActions native session bridges", () => {
     vi.useRealTimers();
     vi.mocked(listThreadTitles).mockResolvedValue({});
     vi.mocked(listGeminiSessions).mockResolvedValue([]);
+    vi.mocked(listKimiSessions).mockResolvedValue([]);
+    vi.mocked(listGrokSessions).mockResolvedValue([]);
+    vi.mocked(listPiSessions).mockResolvedValue([]);
+    vi.mocked(listSessionIndexForWorkspace).mockResolvedValue({
+      data: [],
+      source: "session-index",
+      synced: false,
+      engines: [],
+      visibility: {
+        available: true,
+        freshness: "verified",
+        hiddenNativeIds: [],
+      },
+    });
     vi.mocked(getOpenCodeSessionList).mockResolvedValue([]);
     vi.mocked(listWorkspaceSessions).mockResolvedValue({
       data: [],
@@ -115,6 +139,8 @@ describe("useThreadActions native session bridges", () => {
       deleted: true,
       method: "filesystem",
     });
+    vi.mocked(deletePiSession).mockResolvedValue(undefined);
+    vi.mocked(tombstoneSessionIndexRows).mockResolvedValue(0);
     vi.mocked(deleteCodexSession).mockResolvedValue({
       deleted: true,
       deletedCount: 1,
@@ -476,6 +502,26 @@ describe("useThreadActions native session bridges", () => {
 
     expect(archiveThread).not.toHaveBeenCalled();
     expect(deleteOpenCodeSession).toHaveBeenCalledWith("ws-1", "ses_opc_1");
+    expect(tombstoneSessionIndexRows).toHaveBeenCalledWith(["opencode:ses_opc_1"]);
+  });
+
+  it("routes pi delete to disk delete and tombstones the session index", async () => {
+    const { result } = renderActions();
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace, {
+        preserveState: true,
+      });
+    });
+
+    await act(async () => {
+      await result.current.deleteThreadForWorkspace("ws-1", "pi:ses_pi_1");
+    });
+
+    expect(archiveThread).not.toHaveBeenCalled();
+    expect(deleteCodexSession).not.toHaveBeenCalled();
+    expect(deletePiSession).toHaveBeenCalledWith("/tmp/codex", "ses_pi_1");
+    expect(tombstoneSessionIndexRows).toHaveBeenCalledWith(["pi:ses_pi_1"]);
   });
 
   it("routes codex delete to filesystem delete instead of archive", async () => {
@@ -653,7 +699,9 @@ describe("useThreadActions native session bridges", () => {
       await result.current.resumeThreadForWorkspace("ws-1", "claude:session-1");
     });
 
-    expect(loadClaudeSession).toHaveBeenCalledWith("/tmp/codex", "session-1");
+    expect(loadClaudeSession).toHaveBeenCalledWith("/tmp/codex", "session-1", {
+      limit: 80,
+    });
 
     const setThreadItemsCall = dispatch.mock.calls.find(
       ([action]) =>

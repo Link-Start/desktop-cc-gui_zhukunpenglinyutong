@@ -72,6 +72,9 @@ export async function loadOrderedSharedCreateProviders(
         isLocalProvider: entry.isLocalProvider,
       }));
       break;
+    case "pi":
+      // PI 无多 Provider store：不拉 vendor 列表，落到本地 sentinel。
+      break;
   }
 
   const normalized = raw

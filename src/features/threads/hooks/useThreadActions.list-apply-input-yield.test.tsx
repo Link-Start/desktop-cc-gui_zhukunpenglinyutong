@@ -17,6 +17,7 @@ import {
   listGeminiSessions,
   listGrokSessions,
   listKimiSessions,
+  listPiSessions,
   listThreadTitles,
   listThreads,
   listWorkspaceSessions,
@@ -77,6 +78,7 @@ vi.mock("../../../services/tauri", () => ({
   listClaudeSessions: vi.fn(),
   listGeminiSessions: vi.fn(),
   listKimiSessions: vi.fn(),
+  listPiSessions: vi.fn(),
   listGrokSessions: vi.fn(),
   getOpenCodeSessionList: vi.fn(),
   listWorkspaceSessions: vi.fn(),
@@ -160,6 +162,7 @@ describe("useThreadActions list apply input-aware yield", () => {
     vi.mocked(listClaudeSessions).mockResolvedValue([]);
     vi.mocked(listKimiSessions).mockResolvedValue([]);
     vi.mocked(listGrokSessions).mockResolvedValue([]);
+    vi.mocked(listPiSessions).mockResolvedValue([]);
     vi.mocked(getOpenCodeSessionList).mockResolvedValue([]);
     vi.mocked(listWorkspaceSessions).mockResolvedValue({
       data: [],
@@ -213,6 +216,7 @@ describe("useThreadActions list apply input-aware yield", () => {
       result.current.listThreadsForWorkspace(workspace, {
         preserveState: true,
         startupHydrationMode: "full-catalog",
+        includeEngineDiskLists: true,
       }),
     );
 
@@ -246,6 +250,7 @@ describe("useThreadActions list apply input-aware yield", () => {
       result.current.listThreadsForWorkspace(workspace, {
         preserveState: true,
         startupHydrationMode: "full-catalog",
+        includeEngineDiskLists: true,
       }),
     );
 
@@ -275,6 +280,7 @@ describe("useThreadActions list apply input-aware yield", () => {
       result.current.listThreadsForWorkspace(workspace, {
         preserveState: true,
         startupHydrationMode: "full-catalog",
+        includeEngineDiskLists: true,
       }),
     );
     await waitFor(() => {
@@ -288,6 +294,7 @@ describe("useThreadActions list apply input-aware yield", () => {
       result.current.listThreadsForWorkspace(workspace, {
         preserveState: true,
         startupHydrationMode: "full-catalog",
+        includeEngineDiskLists: true,
         isStale: () => true,
       }),
     );

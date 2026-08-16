@@ -1590,6 +1590,9 @@ fn build_provider_engine_dispatch_receipt(
             ) | (
                 EngineType::OpenCode,
                 super::opencode_provider_profile::OPENCODE_LOCAL_PROVIDER_PROFILE_ID
+            ) | (
+                EngineType::Pi,
+                super::pi_provider_profile::PI_LOCAL_PROVIDER_PROFILE_ID
             )
         )
     });
@@ -3857,9 +3860,99 @@ pub async fn engine_send_message_sync(
                 "text": response
             }))
         }
-        EngineType::Pi => Err(
-            "PI does not support synchronous helper send; use the chat send path".to_string(),
-        ),
+        EngineType::Pi => {
+            let workspace_path = {
+                let workspaces = state.workspaces.lock().await;
+                workspaces
+                    .get(&workspace_id)
+                    .map(|w| std::path::PathBuf::from(&w.path))
+                    .ok_or_else(|| "Workspace not found".to_string())?
+            };
+
+            let effective_provider_profile_id =
+                crate::session_management::resolve_engine_provider_profile_id(
+                    state.storage_path.as_path(),
+                    &workspace_id,
+                    session_id.as_deref(),
+                    "pi",
+                    None,
+                )?;
+            let provider_launch_profile =
+                crate::engine::pi_provider_profile::resolve_pi_provider_launch_profile(
+                    &workspace_id,
+                    effective_provider_profile_id.as_deref(),
+                    None,
+                )?;
+            let session = manager
+                .get_or_create_pi_session_for_runtime(
+                    &workspace_id,
+                    &workspace_path,
+                    &provider_launch_profile.runtime_key,
+                    provider_launch_profile.home_dir.as_deref(),
+                )
+                .await;
+            let resolved_session_id = resolve_pi_session_id_for_engine_send(
+                continue_session,
+                session_id,
+                session.get_session_id().await,
+            );
+            let runtime_model = model
+                .as_ref()
+                .map(|value| value.trim())
+                .filter(|value| !value.is_empty())
+                .map(|value| value.to_string());
+
+            let params = super::SendMessageParams {
+                text,
+                model: runtime_model,
+                effort,
+                disable_thinking: false,
+                access_mode,
+                images,
+                continue_session,
+                session_id: resolved_session_id,
+                fork_session_id: None,
+                agent: None,
+                variant: None,
+                collaboration_mode: None,
+                custom_spec_root: normalized_custom_spec_root.clone(),
+            };
+
+            let turn_id = format!("pi-sync-{}", uuid::Uuid::new_v4());
+            let response = timeout(
+                Duration::from_secs(900),
+                session.send_message(params, &turn_id),
+            )
+            .await
+            .map_err(|_| "PI response timed out".to_string())??;
+            let response_session_id = session.get_session_id().await;
+            if let Some(binding) = provider_launch_profile.binding.as_ref() {
+                let binding_session_id = response_session_id.as_deref().unwrap_or(turn_id.as_str());
+                crate::session_management::record_engine_provider_binding_core(
+                    &state.workspaces,
+                    state.storage_path.as_path(),
+                    workspace_id.clone(),
+                    binding_session_id.to_string(),
+                    "pi".to_string(),
+                    binding.clone(),
+                )
+                .await?;
+            }
+            record_auto_session_metadata_if_present(
+                &state,
+                &workspace_id,
+                response_session_id.as_deref(),
+                auto_session,
+                "pi",
+            )
+            .await;
+
+            Ok(json!({
+                "engine": "pi",
+                "sessionId": response_session_id,
+                "text": response
+            }))
+        }
         EngineType::Grok => {
             let workspace_path = {
                 let workspaces = state.workspaces.lock().await;

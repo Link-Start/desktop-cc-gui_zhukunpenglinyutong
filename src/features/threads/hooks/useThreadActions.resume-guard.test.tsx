@@ -2,8 +2,8 @@
 import { act } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resetUseThreadActionsTestMocks } from "./useThreadActions.test-mocks";
-import { resumeThread } from "../../../services/tauri";
-import { renderActions } from "./useThreadActions.test-utils";
+import { loadPiSession, resumeThread } from "../../../services/tauri";
+import { renderActions, workspace } from "./useThreadActions.test-utils";
 
 describe("useThreadActions resume guards", () => {
   beforeEach(() => {
@@ -55,5 +55,51 @@ describe("useThreadActions resume guards", () => {
     });
 
     expect(resumeThread).toHaveBeenCalledWith("ws-1", "thread-1");
+  });
+
+  it("loads native PI history instead of the Codex resume path", async () => {
+    vi.mocked(loadPiSession).mockResolvedValue({
+      messages: [
+        {
+          id: "pi-user-1",
+          kind: "message",
+          role: "user",
+          text: "1+1",
+        },
+        {
+          id: "pi-assistant-1",
+          kind: "message",
+          role: "assistant",
+          text: "2",
+        },
+      ],
+    });
+    const { result, dispatch, loadedThreadsRef } = renderActions({
+      resolveWorkspacePath: () => workspace.path,
+    });
+
+    let threadId: string | null = null;
+    await act(async () => {
+      threadId = await result.current.resumeThreadForWorkspace(
+        "ws-1",
+        "pi:019ffb7b-dedc-7b36-8d2f-f85f35501036",
+      );
+    });
+
+    expect(threadId).toBe("pi:019ffb7b-dedc-7b36-8d2f-f85f35501036");
+    expect(resumeThread).not.toHaveBeenCalled();
+    expect(loadPiSession).toHaveBeenCalledWith(
+      workspace.path,
+      "019ffb7b-dedc-7b36-8d2f-f85f35501036",
+    );
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "pi:019ffb7b-dedc-7b36-8d2f-f85f35501036",
+      engine: "pi",
+    });
+    expect(
+      loadedThreadsRef.current["pi:019ffb7b-dedc-7b36-8d2f-f85f35501036"],
+    ).toBe(true);
   });
 });

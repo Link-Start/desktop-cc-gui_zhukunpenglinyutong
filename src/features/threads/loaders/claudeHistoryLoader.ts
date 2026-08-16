@@ -2396,7 +2396,11 @@ export function createClaudeHistoryLoader({
       const result = await loadClaudeSession(workspacePath, sessionId, {
         limit: CLAUDE_UI_HISTORY_WINDOW,
       });
-      const record = result as { messages?: unknown };
+      const record = result as {
+        messages?: unknown;
+        hasMore?: boolean;
+        nextCursor?: string | null;
+      };
       const messagesData = record.messages ?? result;
       const parsedItems = parseClaudeHistoryMessagesWithShadowRecovery({
         messagesData,
@@ -2426,6 +2430,8 @@ export function createClaudeHistoryLoader({
           isThinking: false,
           heartbeatPulse: null,
           historyRestoredAtMs: Date.now(),
+          historyHasMore: record.hasMore === true,
+          historyNextCursor: record.nextCursor ?? null,
         },
       });
     },

@@ -9,6 +9,7 @@ import {
   runGrokDoctor,
   runKimiDoctor,
   runOpenCodeDoctor,
+  runPiDoctor,
   takeSettingsRecoveryNotice,
   updateAppSettings,
 } from "../../../services/tauri";
@@ -741,6 +742,10 @@ export function useAppSettings() {
     return runOpenCodeDoctor(opencodeBin);
   }, []);
 
+  const piDoctor = useCallback(async (piBin: string | null) => {
+    return runPiDoctor(piBin);
+  }, []);
+
   return {
     settings,
     setSettings,
@@ -750,6 +755,7 @@ export function useAppSettings() {
     kimiDoctor,
     grokDoctor,
     opencodeDoctor,
+    piDoctor,
     isLoading,
   };
 }

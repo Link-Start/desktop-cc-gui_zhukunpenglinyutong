@@ -8,5 +8,6 @@
 
 pub(crate) mod commands;
 pub(crate) mod importer;
+mod shared_visibility;
 mod store;
 mod writers;

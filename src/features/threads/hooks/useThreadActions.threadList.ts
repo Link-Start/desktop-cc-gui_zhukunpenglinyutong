@@ -43,6 +43,8 @@ export const GROK_SESSION_CACHE_TTL_MS = 60_000;
 export const GROK_SESSION_FETCH_TIMEOUT_MS = SIDEBAR_THREAD_LIST_TIMEOUT_MS;
 export const KIMI_SESSION_CACHE_TTL_MS = 60_000;
 export const KIMI_SESSION_FETCH_TIMEOUT_MS = SIDEBAR_THREAD_LIST_TIMEOUT_MS;
+export const PI_SESSION_CACHE_TTL_MS = 60_000;
+export const PI_SESSION_FETCH_TIMEOUT_MS = SIDEBAR_THREAD_LIST_TIMEOUT_MS;
 export const NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS =
   SIDEBAR_THREAD_LIST_TIMEOUT_MS;
 
@@ -55,6 +57,9 @@ export const CODEX_SESSION_CATALOG_FETCH_TIMEOUT_MS =
   SIDEBAR_THREAD_LIST_TIMEOUT_MS;
 /** Load-older / recovery catalog page size. */
 export const SESSION_CATALOG_PAGE_SIZE = 100;
+/** Session Index sidebar page — matches `list_session_index_for_workspace` default. */
+export const SESSION_INDEX_PAGE_SIZE = 20;
+export const SESSION_INDEX_LOAD_OLDER_TIMEOUT_MS = 4_000;
 /** First catalog page on startup hydration — matches initial sidebar page. */
 export const SESSION_CATALOG_INITIAL_PAGE_SIZE =
   DEFAULT_VISIBLE_THREAD_ROOT_COUNT;
@@ -74,7 +79,7 @@ const WORKSPACE_SESSION_SOURCE_COMPLETENESS_VALUES =
     "uncertain_empty",
   ]);
 
-type ThreadListCursorSource = "catalog" | "runtime";
+type ThreadListCursorSource = "catalog" | "runtime" | "session-index";
 
 /**
  * - first-paint: codex page + last-good only; skip multi-engine project catalog
@@ -155,6 +160,19 @@ export function decodeThreadListCursorState(
       cursor: value === THREAD_LIST_CURSOR_CATALOG_ROOT ? null : value,
     };
   }
+  if (
+    trimmedCursor.startsWith(
+      `session-index${THREAD_LIST_CURSOR_SOURCE_SEPARATOR}`,
+    )
+  ) {
+    const value = trimmedCursor.slice(
+      `session-index${THREAD_LIST_CURSOR_SOURCE_SEPARATOR}`.length,
+    );
+    return {
+      source: "session-index",
+      cursor: value === THREAD_LIST_CURSOR_CATALOG_ROOT ? null : value,
+    };
+  }
   if (trimmedCursor.startsWith("offset:")) {
     return { source: "catalog", cursor: trimmedCursor };
   }
@@ -186,6 +204,14 @@ export function resolveThreadListCursorForDisplay(params: {
   catalogCursor: string | null;
   catalogPartialSource: string | null;
   runtimeCursor: string | null;
+  /**
+   * Session Index keyset paging fallback (sidebar 更多 without a disk
+   * scan): when neither catalog nor runtime cursor exists and SQLite still
+   * holds rows beyond the current page, synthesize a `session-index::`
+   * cursor from the oldest row of the current page.
+   */
+  sessionIndexHasMore?: boolean | null;
+  sessionIndexOldestKey?: { updatedAt: number; sessionId: string } | null;
 }): string | null {
   if (params.catalogCursor) {
     return encodeThreadListCursorState("catalog", params.catalogCursor);
@@ -193,7 +219,48 @@ export function resolveThreadListCursorForDisplay(params: {
   if (params.runtimeCursor) {
     return encodeThreadListCursorState("runtime", params.runtimeCursor);
   }
+  const oldest = params.sessionIndexOldestKey ?? null;
+  if (
+    params.sessionIndexHasMore === true &&
+    oldest &&
+    Number.isFinite(oldest.updatedAt) &&
+    oldest.sessionId
+  ) {
+    return encodeSessionIndexThreadListCursor(oldest);
+  }
   return null;
+}
+
+/** Encode the Session Index keyset cursor (payload = oldest row of the page). */
+export function encodeSessionIndexThreadListCursor(key: {
+  updatedAt: number;
+  sessionId: string;
+}): string {
+  const updatedAt = Math.max(0, Math.floor(key.updatedAt));
+  return encodeThreadListCursorState(
+    "session-index",
+    `${updatedAt}:${key.sessionId.trim()}`,
+  );
+}
+
+/** Decode a `session-index::` cursor payload back into a keyset key. */
+export function decodeSessionIndexThreadListCursor(
+  cursor: string | null,
+): { updatedAt: number; sessionId: string } | null {
+  const payload = (cursor ?? "").trim();
+  if (!payload) {
+    return null;
+  }
+  const separator = payload.indexOf(":");
+  if (separator <= 0) {
+    return null;
+  }
+  const updatedAt = Number.parseInt(payload.slice(0, separator), 10);
+  const sessionId = payload.slice(separator + 1).trim();
+  if (!Number.isFinite(updatedAt) || updatedAt < 0 || !sessionId) {
+    return null;
+  }
+  return { updatedAt, sessionId };
 }
 
 export function countSummariesByEngine(summaries: ThreadSummary[]) {

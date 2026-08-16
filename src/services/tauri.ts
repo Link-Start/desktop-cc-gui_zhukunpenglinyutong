@@ -189,11 +189,15 @@ export type {
   SessionIndexListPage,
   SessionIndexRow,
   SessionIndexSyncReport,
+  SharedNativeVisibilityProjection,
 } from "./tauri/sessionIndex";
 export {
   invalidateSessionIndexForWorkspace,
   listSessionIndexForWorkspace,
   syncSessionIndexForWorkspace,
+  tombstoneSessionIndexRows,
+  upsertSessionIndexRows,
+  writeClientCreatedSessionIndex,
 } from "./tauri/sessionIndex";
 export type { CodexRuntimeReloadResult, DockIconApplyResult, SettingsRecoveryNotice } from "./tauri/settings";
 export { getAppSettings, getCodexConfigPath, getCodexUnifiedExecExternalStatus, reloadCodexRuntimeConfig, restoreCodexUnifiedExecOfficialDefault, setCodexUnifiedExecOfficialOverride, setDockIcon, takeSettingsRecoveryNotice, updateAppSettings } from "./tauri/settings";
@@ -638,6 +642,7 @@ export {
   deleteGrokSession,
   deleteKimiSession,
   deleteOpenCodeSession,
+  deletePiSession,
   forkClaudeSession,
   forkClaudeSessionFromMessage,
   forkThread,

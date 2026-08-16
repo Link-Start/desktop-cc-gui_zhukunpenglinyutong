@@ -32,7 +32,18 @@ const browserAgent = {
       "windowOpened": "ページは別の Browser Agent ウィンドウで開かれています。",
       "closePanel": "ブラウザドックを閉じる",
       "close": "Browser Agent セッションを閉じる",
+      "tabContextMenu": "ブラウザタブの操作",
+      "closeTab": "タブを閉じる",
+      "closeOtherTabs": "他のタブを閉じる",
+      "closeTabsToTheRight": "右側のタブを閉じる",
+      "closeAllTabs": "すべてのタブを閉じる",
       "info": "Browser Agent の詳細を表示",
+      "collapseDock": "ブラウザコントロールを折りたたむ",
+      "expandDock": "ブラウザコントロールを展開",
+      "attachContext": "ブラウザコンテキストを添付",
+      "selectElement": "チャット用にページ要素を選択",
+      "cancelSelectElement": "ページ要素の選択をキャンセル",
+      "popOutWindow": "別ウィンドウで開く",
       "footnote": "MVP では生の DOM、Cookie、ヘッダー、ページのシークレットを保存しません。"
     },
     "composer": {

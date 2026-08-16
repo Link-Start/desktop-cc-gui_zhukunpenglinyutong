@@ -759,6 +759,7 @@ export function useAppShellSearchRadarSection({
     commands,
     apiSources: apiSearchSources,
     activeWorkspaceId,
+    activeThreadId,
     workspaceNameByPath,
   });
   const normalizedSearchPaletteQuery = searchPaletteQuery

@@ -946,6 +946,9 @@ const settings = {
     projectSessionEngineClaude: "Claude",
     projectSessionEngineGemini: "Gemini",
     projectSessionEngineOpencode: "OpenCode",
+    projectSessionEngineKimi: "Kimi CLI",
+    projectSessionEngineGrok: "Grok CLI",
+    projectSessionEnginePi: "PI CLI",
     projectSessionEngineShared: "Shared CLI",
     sessionManagementDescription:
       "Manage real session history per project with paged loading, filtering, batch archive, unarchive, and deletion.",
@@ -1637,6 +1640,7 @@ const settings = {
     cliValidationTabOpenCodeCli: "OpenCode CLI",
     cliValidationTabKimiCli: "Kimi CLI",
     cliValidationTabGrokCli: "Grok CLI",
+    cliValidationTabPiCli: "PI CLI",
     cliEngineEnabledLabel: "Engine enabled",
     geminiCliDisableDescription:
       "Disable Gemini CLI entirely. Once disabled, startup detection and engine entry points stop immediately.",
@@ -1908,6 +1912,9 @@ const settings = {
     runOpenCodeDoctor: "Run OpenCode Doctor",
     openCodeLooksGood: "OpenCode CLI looks good",
     openCodeIssueDetected: "OpenCode CLI issue detected",
+    runPiDoctor: "Run PI Doctor",
+    piLooksGood: "PI CLI looks good",
+    piIssueDetected: "PI CLI issue detected",
     cliInstallLatest: "Install",
     cliUpdateLatest: "Update",
     cliUninstall: "Uninstall",

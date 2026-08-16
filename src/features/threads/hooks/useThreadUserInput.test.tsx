@@ -432,6 +432,41 @@ describe("useThreadUserInput", () => {
     });
   });
 
+  it("settles an expired AskUserQuestion without a local timeout hint", async () => {
+    const dispatch = vi.fn();
+    vi.mocked(respondToUserInputRequest).mockRejectedValue(
+      new Error("AskUserQuestion request ask-1 already expired or was answered"),
+    );
+
+    const { result } = renderHook(() => useThreadUserInput({ dispatch }));
+
+    await act(async () => {
+      await result.current.handleUserInputSubmit(request, {
+        answers: {
+          age: {
+            answers: ["18-25岁 (Recommended)"],
+          },
+        },
+      });
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "removeUserInputRequest",
+      requestId: "req-1",
+      workspaceId: "ws-1",
+      request,
+    });
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "upsertItem",
+        item: expect.objectContaining({
+          toolType: "askuserquestion",
+          status: "completed",
+        }),
+      }),
+    );
+  });
+
   it("keeps empty submit retryable when workspace disconnects", async () => {
     const dispatch = vi.fn();
     vi.mocked(respondToUserInputRequest).mockRejectedValue(

@@ -791,6 +791,25 @@ impl EngineManager {
         session
     }
 
+    pub async fn get_pi_session(&self, workspace_id: &str) -> Option<Arc<PiSession>> {
+        let sessions = self.pi_sessions.lock().await;
+        sessions
+            .values()
+            .find(|entry| entry.workspace_id == workspace_id)
+            .map(|entry| entry.session.clone())
+    }
+
+    pub async fn get_pi_session_for_runtime(
+        &self,
+        runtime_key: &str,
+    ) -> Option<Arc<PiSession>> {
+        self.pi_sessions
+            .lock()
+            .await
+            .get(runtime_key)
+            .map(|entry| entry.session.clone())
+    }
+
     pub async fn get_pi_sessions(&self, workspace_id: &str) -> Vec<Arc<PiSession>> {
         let sessions = self.pi_sessions.lock().await;
         sessions

@@ -21,6 +21,8 @@ mod claude_history_issue529_tests;
 pub(crate) mod claude_history_large_payload;
 #[cfg(test)]
 mod claude_history_large_payload_tests;
+#[cfg(test)]
+mod claude_history_list_budget_tests;
 pub(crate) mod claude_history_subagents;
 pub(crate) mod claude_message_content;
 pub(crate) mod cli_image_input;
@@ -99,7 +101,7 @@ impl EngineType {
             EngineType::Grok => "Grok CLI",
             EngineType::OpenCode => "OpenCode",
             EngineType::Kimi => "Kimi CLI",
-            EngineType::Pi => "PI",
+            EngineType::Pi => "PI CLI",
         }
     }
 
@@ -428,7 +430,8 @@ impl EngineFeatures {
 
     pub fn pi() -> Self {
         Self {
-            reasoning_effort: false,
+            // PI: `--thinking` levels (off/minimal/low/medium/high/xhigh/max).
+            reasoning_effort: true,
             collaboration_mode: false,
             image_input: true,
             session_resume: true,
@@ -518,6 +521,7 @@ mod tests {
     fn engine_type_display_names() {
         assert_eq!(EngineType::Claude.display_name(), "Claude Code");
         assert_eq!(EngineType::Codex.display_name(), "Codex");
+        assert_eq!(EngineType::Pi.display_name(), "PI CLI");
     }
 
     #[test]
@@ -556,6 +560,12 @@ mod tests {
         assert!(grok.reasoning_effort);
         assert!(grok.image_input);
         assert!(!grok.mcp);
+
+        let pi = EngineFeatures::pi();
+        assert!(pi.reasoning_effort);
+        assert!(pi.image_input);
+        assert!(pi.session_resume);
+        assert!(!pi.mcp);
     }
 
     #[test]

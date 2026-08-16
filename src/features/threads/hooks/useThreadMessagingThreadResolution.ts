@@ -97,6 +97,9 @@ export function useThreadMessagingThreadResolution({
   const kimiSessionIdByPendingThreadRef = useRef<Map<string, string>>(
     new Map(),
   );
+  const piSessionIdByPendingThreadRef = useRef<Map<string, string>>(
+    new Map(),
+  );
 
   const normalizeEngineSelection = useCallback(
     (engine: ThreadEngine | undefined): ThreadEngine =>
@@ -108,9 +111,11 @@ export function useThreadMessagingThreadResolution({
             ? "gemini"
             : engine === "grok"
               ? "grok"
-            : engine === "kimi"
-              ? "kimi"
-              : "codex",
+              : engine === "kimi"
+                ? "kimi"
+                : engine === "pi"
+                  ? "pi"
+                  : "codex",
     [],
   );
 
@@ -118,7 +123,7 @@ export function useThreadMessagingThreadResolution({
     (workspaceId: string, threadId: string): ThreadEngine => {
       const persistedEngine = getThreadEngine(workspaceId, threadId);
       if (persistedEngine) {
-        return persistedEngine;
+        return normalizeEngineSelection(persistedEngine);
       }
       if (isClaudeRuntimeThreadId(threadId)) {
         return "claude";
@@ -140,6 +145,9 @@ export function useThreadMessagingThreadResolution({
         threadId.startsWith("kimi-pending-")
       ) {
         return "kimi";
+      }
+      if (threadId.startsWith("pi:") || threadId.startsWith("pi-pending-")) {
+        return "pi";
       }
       if (
         threadId.startsWith("opencode:") ||
@@ -181,12 +189,16 @@ export function useThreadMessagingThreadResolution({
           threadId.startsWith("kimi-pending-")
         );
       }
+      if (engine === "pi") {
+        return threadId.startsWith("pi:") || threadId.startsWith("pi-pending-");
+      }
       if (engine === "opencode") {
         return (
           threadId.startsWith("opencode:") ||
           threadId.startsWith("opencode-pending-")
         );
       }
+      // Codex: UUID / codex-pending; never accept other CLI prefixes (incl. pi).
       return (
         !threadId.startsWith("claude:") &&
         !threadId.startsWith("claude-pending-") &&
@@ -196,6 +208,8 @@ export function useThreadMessagingThreadResolution({
         !threadId.startsWith("grok-pending-") &&
         !threadId.startsWith("kimi:") &&
         !threadId.startsWith("kimi-pending-") &&
+        !threadId.startsWith("pi:") &&
+        !threadId.startsWith("pi-pending-") &&
         !threadId.startsWith("opencode:") &&
         !threadId.startsWith("opencode-pending-")
       );
@@ -328,6 +342,7 @@ export function useThreadMessagingThreadResolution({
     geminiSessionIdByPendingThreadRef,
     grokSessionIdByPendingThreadRef,
     kimiSessionIdByPendingThreadRef,
+    piSessionIdByPendingThreadRef,
     isClaudePendingThreadAwaitingNativeSession,
     isThreadIdCompatibleWithEngine,
     normalizeEngineSelection,

@@ -636,6 +636,32 @@ describe("useThreadActions.helpers", () => {
     );
   });
 
+  it("keeps catalog PI rows as PI instead of collapsing them to Codex", () => {
+    const merged = mergeCodexCatalogSessionSummaries(
+      [],
+      [
+        {
+          sessionId: "pi:session-1",
+          workspaceId: "workspace-1",
+          title: "PI session",
+          updatedAt: 120,
+          engine: "pi",
+        },
+      ],
+      "workspace-1",
+      {},
+      () => undefined,
+    );
+
+    expect(merged.find((thread) => thread.id === "pi:session-1")).toEqual(
+      expect.objectContaining({
+        id: "pi:session-1",
+        engineSource: "pi",
+        name: "PI session",
+      }),
+    );
+  });
+
   it("projects provider-backed Codex metadata from catalog rows", () => {
     const merged = mergeCodexCatalogSessionSummaries(
       [],

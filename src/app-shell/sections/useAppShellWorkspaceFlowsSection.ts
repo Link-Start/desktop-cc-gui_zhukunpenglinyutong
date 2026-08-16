@@ -68,7 +68,15 @@ type WorkspaceShellTab = "projects" | "codex" | "spec" | "git" | "log";
 type WorkspaceShellCenterMode = CenterMode;
 
 function isEngineType(value: unknown): value is EngineType {
-  return value === "claude" || value === "codex" || value === "gemini" || value === "grok" || value === "kimi" || value === "opencode";
+  return (
+    value === "claude" ||
+    value === "codex" ||
+    value === "gemini" ||
+    value === "grok" ||
+    value === "kimi" ||
+    value === "opencode" ||
+    value === "pi"
+  );
 }
 
 export type WorkspaceShellBoundary = {

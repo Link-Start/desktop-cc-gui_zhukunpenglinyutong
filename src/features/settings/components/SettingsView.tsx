@@ -173,6 +173,7 @@ export type SettingsViewProps = {
   onRunOpenCodeDoctor?: (
     opencodeBin: string | null,
   ) => Promise<CodexDoctorResult>;
+  onRunPiDoctor?: (piBin: string | null) => Promise<CodexDoctorResult>;
   onRunDoctor?: (
     codexBin: string | null,
     codexArgs: string | null,
@@ -328,6 +329,7 @@ export function SettingsView({
   onRunKimiDoctor,
   onRunGrokDoctor,
   onRunOpenCodeDoctor,
+  onRunPiDoctor,
   onRunDoctor,
   activeWorkspace,
   activeThreadId = null,
@@ -462,6 +464,10 @@ export function SettingsView({
     result: CodexDoctorResult | null;
   }>({ status: "idle", result: null });
   const [openCodeDoctorState, setOpenCodeDoctorState] = useState<{
+    status: "idle" | "running" | "done";
+    result: CodexDoctorResult | null;
+  }>({ status: "idle", result: null });
+  const [piDoctorState, setPiDoctorState] = useState<{
     status: "idle" | "running" | "done";
     result: CodexDoctorResult | null;
   }>({ status: "idle", result: null });
@@ -1481,6 +1487,33 @@ export function SettingsView({
     }
   };
 
+  const handleRunPiDoctor = async () => {
+    const piBin = appSettings.piBin ?? null;
+    setPiDoctorState({ status: "running", result: null });
+    try {
+      if (!onRunPiDoctor) {
+        throw new Error("PI doctor is not available.");
+      }
+      const result = await onRunPiDoctor(piBin);
+      setPiDoctorState({ status: "done", result });
+    } catch (error) {
+      setPiDoctorState({
+        status: "done",
+        result: {
+          ok: false,
+          codexBin: piBin,
+          version: null,
+          appServerOk: false,
+          details: error instanceof Error ? error.message : String(error),
+          path: null,
+          nodeOk: false,
+          nodeVersion: null,
+          nodeDetails: null,
+        },
+      });
+    }
+  };
+
   const handleReloadCodexRuntimeConfig = useCallback(async () => {
     setCodexRuntimeReloadState({ status: "reloading", message: null });
     try {
@@ -2314,6 +2347,8 @@ export function SettingsView({
                 grokDoctorState={grokDoctorState}
                 handleRunOpenCodeDoctor={handleRunOpenCodeDoctor}
                 openCodeDoctorState={openCodeDoctorState}
+                handleRunPiDoctor={handleRunPiDoctor}
+                piDoctorState={piDoctorState}
                 handleRunDoctor={handleRunDoctor}
                 doctorState={doctorState}
                 remoteHostDraft={remoteHostDraft}
@@ -2338,6 +2373,8 @@ export function SettingsView({
                     setGrokDoctorState({ status: "done", result });
                   } else if (engine === "opencode") {
                     setOpenCodeDoctorState({ status: "done", result });
+                  } else if (engine === "pi") {
+                    setPiDoctorState({ status: "done", result });
                   } else {
                     setClaudeDoctorState({ status: "done", result });
                   }

@@ -70,7 +70,6 @@ function renderChrome(
     onNewTab: vi.fn(),
     onPopOut: vi.fn(),
     onEnable: vi.fn(),
-    onMinimize: vi.fn(),
     setBusy: vi.fn(),
     setNotice: vi.fn(),
     ...overrides,
@@ -97,13 +96,13 @@ describe("BrowserDockEditorChrome", () => {
 
     const urlBar = document.querySelector(".browser-agent-editor-urlbar");
     expect(urlBar).toBeTruthy();
-    expect(urlBar?.querySelectorAll(".browser-agent-dock-icon")).toHaveLength(5);
+    expect(urlBar?.querySelectorAll(".browser-agent-dock-icon")).toHaveLength(4);
 
     expect(screen.getByRole("button", { name: "Open" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Attach browser context" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Select page element for chat" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Pop out to a separate window" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Collapse browser controls" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Collapse browser controls" })).toBeNull();
   });
 
   it("shows a short file name instead of the raw file url", () => {
@@ -211,14 +210,12 @@ describe("BrowserDockEditorChrome", () => {
     expect(tabBar?.querySelector(".browser-agent-editor-attach")).toBeNull();
   });
 
-  it("invokes open and collapse from icon buttons", () => {
+  it("invokes open from the url-bar icon", () => {
     const { props } = renderChrome();
 
     fireEvent.click(screen.getByRole("button", { name: "Open" }));
-    fireEvent.click(screen.getByRole("button", { name: "Collapse browser controls" }));
 
     expect(props.onOpen).toHaveBeenCalledTimes(1);
-    expect(props.onMinimize).toHaveBeenCalledTimes(1);
   });
 
   it("toggles element select on and off instead of restarting", async () => {

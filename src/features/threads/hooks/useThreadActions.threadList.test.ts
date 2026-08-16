@@ -7,6 +7,8 @@ import {
   THREAD_LIST_INITIAL_TARGET_COUNT,
   THREAD_LIST_LOAD_OLDER_PAGE_SIZE,
   THREAD_LIST_LOAD_OLDER_TARGET_COUNT,
+  decodeSessionIndexThreadListCursor,
+  encodeSessionIndexThreadListCursor,
   normalizeProjectCatalogSession,
   resolveInitialThreadListTargetCount,
   resolveThreadListCursorForDisplay,
@@ -138,6 +140,45 @@ describe("useThreadActions.threadList", () => {
         runtimeCursor: null,
       }),
     ).toBe("catalog::offset:200");
+  });
+
+  it("falls back to a session-index keyset cursor when catalog and runtime are empty", () => {
+    expect(
+      resolveThreadListCursorForDisplay({
+        catalogCursor: null,
+        catalogPartialSource: null,
+        runtimeCursor: null,
+        sessionIndexHasMore: true,
+        sessionIndexOldestKey: {
+          updatedAt: 1_730_500_000_000,
+          sessionId: "sess-old",
+        },
+      }),
+    ).toBe("session-index::1730500000000:sess-old");
+    expect(
+      decodeSessionIndexThreadListCursor("1730500000000:sess-old"),
+    ).toEqual({
+      updatedAt: 1_730_500_000_000,
+      sessionId: "sess-old",
+    });
+    expect(
+      encodeSessionIndexThreadListCursor({
+        updatedAt: 1_730_500_000_000,
+        sessionId: "sess-old",
+      }),
+    ).toBe("session-index::1730500000000:sess-old");
+    expect(
+      resolveThreadListCursorForDisplay({
+        catalogCursor: null,
+        catalogPartialSource: null,
+        runtimeCursor: null,
+        sessionIndexHasMore: false,
+        sessionIndexOldestKey: {
+          updatedAt: 1_730_500_000_000,
+          sessionId: "sess-old",
+        },
+      }),
+    ).toBeNull();
   });
 
   it("first-paint list target defaults to 5 and stays smaller than load-older batches", () => {

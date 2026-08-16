@@ -529,7 +529,7 @@ impl EngineType {
             EngineType::Grok => "Grok CLI",
             EngineType::OpenCode => "OpenCode",
             EngineType::Kimi => "Kimi CLI",
-            EngineType::Pi => "PI",
+            EngineType::Pi => "PI CLI",
         }
     }
 
@@ -823,7 +823,8 @@ pub(crate) fn disabled_engine_status(engine_type: EngineType) -> EngineStatus {
         EngineType::Gemini => EngineFeatures::gemini(),
         EngineType::OpenCode => EngineFeatures::opencode(),
         EngineType::Grok => EngineFeatures::grok(),
-        EngineType::Kimi | EngineType::Pi => EngineFeatures::kimi(),
+        EngineType::Kimi => EngineFeatures::kimi(),
+        EngineType::Pi => EngineFeatures::pi(),
     };
     EngineStatus {
         engine_type,

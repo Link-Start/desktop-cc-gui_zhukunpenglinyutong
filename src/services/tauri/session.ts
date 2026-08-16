@@ -435,6 +435,16 @@ export async function loadPiSession(
   });
 }
 
+export async function deletePiSession(
+  workspacePath: string,
+  sessionId: string,
+): Promise<void> {
+  return invoke<void>("delete_pi_session", {
+    workspacePath,
+    sessionId,
+  });
+}
+
 /**
  * Delete a Kimi CLI session (remove session file from disk).
  */

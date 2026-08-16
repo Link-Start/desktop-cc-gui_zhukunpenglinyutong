@@ -37,7 +37,7 @@ vi.mock("./useThreadAccountInfo", () => ({
 vi.mock("../../../services/tauri", () => ({
   respondToServerRequest: vi.fn(),
   respondToUserInputRequest: vi.fn(),
-  listThreadTitles: vi.fn(),
+  listThreadTitles: vi.fn().mockResolvedValue({}),
   setThreadTitle: vi.fn(),
   renameThreadTitleKey: vi.fn(),
   generateThreadTitle: vi.fn(),
@@ -73,6 +73,11 @@ vi.mock("../../../services/tauri", () => ({
     nextCursor: null,
     partialSource: null,
   }),
+  listWorkspaceSessionArchiveEvidence: vi.fn().mockResolvedValue({
+    archivedAtBySessionId: {},
+    sourceStatuses: [],
+    partialSource: null,
+  }),
   listWorkspacePlugins: vi.fn(),
   addWorkspacePlugin: vi.fn(),
   removeWorkspacePlugin: vi.fn(),
@@ -87,6 +92,18 @@ vi.mock("../../../services/tauri", () => ({
   listGeminiSessions: vi.fn().mockResolvedValue([]),
   listGrokSessions: vi.fn().mockResolvedValue([]),
   listKimiSessions: vi.fn().mockResolvedValue([]),
+  listPiSessions: vi.fn().mockResolvedValue([]),
+  listSessionIndexForWorkspace: vi.fn().mockResolvedValue({
+    data: [],
+    source: "session-index",
+    synced: false,
+    engines: [],
+    visibility: {
+      available: true,
+      freshness: "verified",
+      hiddenNativeIds: [],
+    },
+  }),
   listClaudeSessions: vi.fn().mockResolvedValue([]),
   getOpenCodeSessionList: vi.fn().mockResolvedValue([]),
   getEmailInboundListenerStatus: vi.fn().mockResolvedValue({
@@ -373,7 +390,6 @@ describe("useThreads sidebar cache", () => {
   });
 
   it("tracks Claude history loading while selecting an unloaded session", async () => {
-    vi.useFakeTimers();
     vi.mocked(listThreads).mockResolvedValue({
       result: { data: [], nextCursor: null },
     } as never);
@@ -385,18 +401,19 @@ describe("useThreads sidebar cache", () => {
         }) as never,
     );
 
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+
+    vi.useFakeTimers();
     try {
-      const { result } = renderHook(() =>
-        useThreads({
-          activeWorkspace: workspace,
-          onWorkspaceConnected: vi.fn(),
-        }),
-      );
-
-      await act(async () => {
-        await result.current.listThreadsForWorkspace(workspace);
-      });
-
       act(() => {
         result.current.setActiveThreadId("claude:session-history");
       });
@@ -412,6 +429,7 @@ describe("useThreads sidebar cache", () => {
       expect(vi.mocked(loadClaudeSession)).toHaveBeenCalledWith(
         "/tmp/codex",
         "session-history",
+        { limit: 80 },
       );
       expect(
         result.current.historyLoadingByThreadId["claude:session-history"],
@@ -490,6 +508,7 @@ describe("useThreads sidebar cache", () => {
       expect(loadClaudeSession).toHaveBeenCalledWith(
         workspace.path,
         "cached-session",
+        { limit: 80 },
       );
       expect(
         result.current.historyLoadingByThreadId["claude:cached-session"],

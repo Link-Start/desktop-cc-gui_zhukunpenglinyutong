@@ -2984,7 +2984,8 @@ export function useThreads({
               thread.engineSource === "gemini" ||
               thread.engineSource === "grok" ||
               thread.engineSource === "kimi" ||
-              thread.engineSource === "opencode"
+              thread.engineSource === "opencode" ||
+              thread.engineSource === "pi"
                 ? thread.engineSource
                 : undefined,
             selectedEngine:
@@ -2993,7 +2994,8 @@ export function useThreads({
               thread.selectedEngine === "gemini" ||
               thread.selectedEngine === "grok" ||
               thread.selectedEngine === "kimi" ||
-              thread.selectedEngine === "opencode"
+              thread.selectedEngine === "opencode" ||
+              thread.selectedEngine === "pi"
                 ? thread.selectedEngine
                 : undefined,
             threadKind:

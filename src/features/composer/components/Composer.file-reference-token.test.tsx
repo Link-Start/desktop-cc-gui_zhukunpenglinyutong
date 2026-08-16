@@ -72,7 +72,7 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
     providerProfileId?: string | null;
     selectedEffort?: string | null;
     onExecutionTargetChange?: (target: {
-      engine: "claude" | "codex";
+      engine: EngineType;
       providerProfileId?: string | null;
       modelCatalogEntryId?: string | null;
       model?: string | null;
@@ -159,6 +159,21 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
             providerProfileId: null,
             modelCatalogEntryId: "settings-main",
             model: "kimi-for-coding",
+            reasoning: null,
+            providerProfileNameSnapshot: "本地配置",
+            providerProfileSource: "disk",
+          })
+        }
+      />
+      <button
+        type="button"
+        data-testid="select-pi-local-target"
+        onClick={() =>
+          onExecutionTargetChange?.({
+            engine: "pi",
+            providerProfileId: null,
+            modelCatalogEntryId: "kimi-coding/k3",
+            model: "kimi-coding/k3",
             reasoning: null,
             providerProfileNameSnapshot: "本地配置",
             providerProfileSource: "disk",
@@ -425,6 +440,48 @@ describe("Composer file reference token", () => {
           providerProfileSource: "disk",
           modelCatalogEntryId: "settings-main",
           model: "kimi-for-coding",
+          effort: null,
+        },
+      }),
+    );
+  });
+
+  it("accepts a PI local model as the Home creation target", async () => {
+    const onSend = vi.fn();
+    const onSelectEngine = vi.fn();
+    const view = render(
+      <ComposerHarness
+        onSend={onSend}
+        createSessionTargetPicker
+        onSelectEngine={onSelectEngine}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(view.getByTestId("select-pi-local-target"));
+      await Promise.resolve();
+    });
+    expect(onSelectEngine).toHaveBeenCalledWith("pi");
+
+    const textarea = getTextarea(view.container);
+    expect(textarea.dataset.providerProfileId).toBe("null");
+
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: "pi target" } });
+      fireEvent.keyDown(textarea, { key: "Enter" });
+      await Promise.resolve();
+    });
+
+    expect(onSend).toHaveBeenCalledWith(
+      "pi target",
+      expect.objectContaining({
+        createSessionTarget: {
+          engine: "pi",
+          providerProfileId: null,
+          providerProfileName: "本地配置",
+          providerProfileSource: "disk",
+          modelCatalogEntryId: "kimi-coding/k3",
+          model: "kimi-coding/k3",
           effort: null,
         },
       }),

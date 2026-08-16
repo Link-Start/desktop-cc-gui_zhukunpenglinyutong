@@ -6,6 +6,7 @@ import { createGeminiHistoryLoader } from "./geminiHistoryLoader";
 import { parseGeminiHistoryMessages } from "./geminiHistoryParser";
 import { createGrokHistoryLoader } from "./grokHistoryLoader";
 import { createKimiHistoryLoader } from "./kimiHistoryLoader";
+import { createPiHistoryLoader } from "./piHistoryLoader";
 
 describe("history loaders", () => {
   it("loads codex history into normalized snapshot", async () => {
@@ -762,6 +763,65 @@ describe("history loaders", () => {
     const snapshot = await loader.load("kimi:session-1");
     expect(snapshot.engine).toBe("kimi");
     expect(snapshot.threadId).toBe("kimi:session-1");
+    expect(snapshot.items).toHaveLength(0);
+  });
+
+  it("loads pi history into normalized snapshot", async () => {
+    const loadPiSession = vi.fn().mockResolvedValue({
+      messages: [
+        {
+          id: "pi-user-1",
+          kind: "message",
+          role: "user",
+          text: "1+1",
+        },
+        {
+          id: "pi-assistant-1",
+          kind: "message",
+          role: "assistant",
+          text: "2",
+        },
+      ],
+    });
+    const loader = createPiHistoryLoader({
+      workspaceId: "ws-pi",
+      workspacePath: "/tmp/workspace",
+      loadPiSession,
+    });
+
+    const snapshot = await loader.load("pi:019ffb7b-dedc-7b36-8d2f-f85f35501036");
+    expect(loadPiSession).toHaveBeenCalledWith(
+      "/tmp/workspace",
+      "019ffb7b-dedc-7b36-8d2f-f85f35501036",
+    );
+    expect(snapshot.engine).toBe("pi");
+    expect(snapshot.threadId).toBe("pi:019ffb7b-dedc-7b36-8d2f-f85f35501036");
+    expect(snapshot.items).toEqual([
+      expect.objectContaining({
+        kind: "message",
+        role: "user",
+        text: "1+1",
+      }),
+      expect.objectContaining({
+        kind: "message",
+        role: "assistant",
+        text: "2",
+      }),
+    ]);
+  });
+
+  it("returns an empty pi snapshot when workspace path is missing", async () => {
+    const loadPiSession = vi.fn();
+    const loader = createPiHistoryLoader({
+      workspaceId: "ws-pi",
+      workspacePath: null,
+      loadPiSession,
+    });
+
+    const snapshot = await loader.load("pi:session-1");
+    expect(loadPiSession).not.toHaveBeenCalled();
+    expect(snapshot.engine).toBe("pi");
+    expect(snapshot.threadId).toBe("pi:session-1");
     expect(snapshot.items).toHaveLength(0);
   });
 

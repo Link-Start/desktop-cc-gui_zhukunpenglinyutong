@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+// @vitest-environment jsdom
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   buildLocalFileUrl,
   formatOpenHtmlInBrowserError,
@@ -6,13 +7,11 @@ import {
   openHtmlInBrowser,
   resolveOpenHtmlInBrowserErrorKind,
 } from "./openHtmlInBrowser";
-
-const requestBrowserDockOpenUrlMock = vi.fn();
-
-vi.mock("../../browser-agent/state/dockEvents", () => ({
-  requestBrowserDockOpenUrl: (...args: unknown[]) =>
-    requestBrowserDockOpenUrlMock(...args),
-}));
+import {
+  BROWSER_OPEN_DOCK_EVENT,
+  BROWSER_OPEN_URL_EVENT,
+  PENDING_BROWSER_URL_KEY,
+} from "../../browser-agent/state/dockEvents";
 
 describe("isHtmlFilePath", () => {
   it("accepts .html and .htm regardless of case", () => {
@@ -54,15 +53,33 @@ describe("buildLocalFileUrl", () => {
 
 describe("openHtmlInBrowser", () => {
   beforeEach(() => {
-    requestBrowserDockOpenUrlMock.mockReset();
+    window.sessionStorage.clear();
   });
 
-  it("opens the encoded file:// URL via the embedded Browser Dock", async () => {
-    await openHtmlInBrowser("/repo/docs/demo.html", {
-      workspaceId: "ws-1",
-      ownerSurface: "file-view",
-    });
-    expect(requestBrowserDockOpenUrlMock).toHaveBeenCalledWith(
+  it("routes the encoded file:// URL to the embedded dock event chain", async () => {
+    const events: Array<{ type: string; url?: string }> = [];
+    const record = (type: string) => (event: Event) => {
+      events.push({
+        type,
+        url: (event as CustomEvent<{ url?: string }>).detail?.url,
+      });
+    };
+    const recordOpenDock = record(BROWSER_OPEN_DOCK_EVENT);
+    const recordOpenUrl = record(BROWSER_OPEN_URL_EVENT);
+    window.addEventListener(BROWSER_OPEN_DOCK_EVENT, recordOpenDock);
+    window.addEventListener(BROWSER_OPEN_URL_EVENT, recordOpenUrl);
+    try {
+      await openHtmlInBrowser("/repo/docs/demo.html", { workspaceId: "ws-1" });
+    } finally {
+      window.removeEventListener(BROWSER_OPEN_DOCK_EVENT, recordOpenDock);
+      window.removeEventListener(BROWSER_OPEN_URL_EVENT, recordOpenUrl);
+    }
+
+    expect(events).toEqual([
+      { type: BROWSER_OPEN_DOCK_EVENT, url: undefined },
+      { type: BROWSER_OPEN_URL_EVENT, url: "file:///repo/docs/demo.html" },
+    ]);
+    expect(window.sessionStorage.getItem(PENDING_BROWSER_URL_KEY)).toBe(
       "file:///repo/docs/demo.html",
     );
   });
@@ -71,7 +88,7 @@ describe("openHtmlInBrowser", () => {
     await expect(
       openHtmlInBrowser("/repo/a.html", { workspaceId: "  " }),
     ).rejects.toThrow(/workspaceId is required/);
-    expect(requestBrowserDockOpenUrlMock).not.toHaveBeenCalled();
+    expect(window.sessionStorage.getItem(PENDING_BROWSER_URL_KEY)).toBeNull();
   });
 });
 

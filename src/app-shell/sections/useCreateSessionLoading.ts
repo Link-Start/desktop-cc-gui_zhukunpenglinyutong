@@ -65,6 +65,8 @@ export function useCreateSessionLoading({
               ? t("workspace.engineGrok")
             : params.engine === "kimi"
               ? t("workspace.engineKimi")
+            : params.engine === "pi"
+              ? t("workspace.enginePi")
             : params.engine === "opencode"
               ? t("workspace.engineOpenCode")
               : t("workspace.engineClaudeCode");

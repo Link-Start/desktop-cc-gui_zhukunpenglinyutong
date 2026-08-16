@@ -809,15 +809,21 @@ pub(crate) fn browser_element_selector_script(
 
   const host = document.createElement("div");
   host.setAttribute(selectorRootAttribute, "true");
+  host.style.cssText = "position:fixed;inset:0;z-index:2147483646;pointer-events:none;display:block;";
   const shadow = host.attachShadow({ mode: "open" });
   shadow.innerHTML = `
     <style>
-      :host { all: initial; }
-      * { box-sizing: border-box; }
-      .selector-layer {
+      :host {
         position: fixed;
         inset: 0;
         z-index: 2147483646;
+        pointer-events: none;
+        display: block;
+      }
+      * { box-sizing: border-box; }
+      .selector-layer {
+        position: absolute;
+        inset: 0;
         pointer-events: none;
         font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
@@ -827,16 +833,15 @@ pub(crate) fn browser_element_selector_script(
         background: transparent;
       }
       .selector-outline {
-        position: fixed;
+        position: absolute;
         border: 2px solid #2563eb;
         border-radius: 8px;
-        background: rgba(37, 99, 235, 0.08);
-        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.72);
-        transform: translate3d(0, 0, 0);
-        transition: left 70ms ease, top 70ms ease, width 70ms ease, height 70ms ease;
+        background: rgba(37, 99, 235, 0.16);
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.88), 0 0 0 3px rgba(37, 99, 235, 0.28);
+        pointer-events: none;
       }
       .selector-card {
-        position: fixed;
+        position: absolute;
         width: min(340px, calc(100vw - 24px));
         border: 1px solid rgba(15, 23, 42, 0.08);
         border-radius: 12px;
@@ -915,6 +920,25 @@ pub(crate) fn browser_element_selector_script(
   const cardMeta = shadow.querySelector(".selector-meta");
   const cardPage = shadow.querySelector(".selector-page");
   let activeCandidate = null;
+  let paintedElement = null;
+  const clearPaintedElement = () => {
+    if (!paintedElement) return;
+    paintedElement.style.outline = paintedElement.getAttribute("data-ccgui-prev-outline") || "";
+    paintedElement.style.outlineOffset = paintedElement.getAttribute("data-ccgui-prev-outline-offset") || "";
+    paintedElement.removeAttribute("data-ccgui-prev-outline");
+    paintedElement.removeAttribute("data-ccgui-prev-outline-offset");
+    paintedElement = null;
+  };
+  const paintElement = (element) => {
+    if (paintedElement === element) return;
+    clearPaintedElement();
+    if (!element || !element.style) return;
+    paintedElement = element;
+    paintedElement.setAttribute("data-ccgui-prev-outline", paintedElement.style.outline || "");
+    paintedElement.setAttribute("data-ccgui-prev-outline-offset", paintedElement.style.outlineOffset || "");
+    paintedElement.style.outline = "2px solid #2563eb";
+    paintedElement.style.outlineOffset = "2px";
+  };
 
   const describeCandidate = (candidate) => {
     const kind = candidateKind(candidate);
@@ -948,11 +972,13 @@ pub(crate) fn browser_element_selector_script(
   };
   const hideOverlay = () => {
     activeCandidate = null;
+    clearPaintedElement();
     outline.classList.add("is-hidden");
     card.classList.add("is-hidden");
   };
   const showOverlay = (candidate) => {
     activeCandidate = candidate;
+    paintElement(candidate.element);
     const rect = candidate.rect;
     outline.classList.remove("is-hidden");
     card.classList.remove("is-hidden");
@@ -979,6 +1005,7 @@ pub(crate) fn browser_element_selector_script(
     document.removeEventListener("pointermove", onPointerMove, true);
     document.removeEventListener("click", onClick, true);
     document.removeEventListener("keydown", onKeyDown, true);
+    clearPaintedElement();
     host.remove();
     window[cleanupKey] = undefined;
   };
@@ -1651,6 +1678,10 @@ mod tests {
         assert!(script.contains(r#"tag === "main" || tag === "section""#));
         assert!(script.contains("selector-card"));
         assert!(script.contains("selector-kicker"));
+        assert!(script.contains("position:fixed;inset:0;z-index:2147483646"));
+        assert!(script.contains("background: rgba(37, 99, 235, 0.16)"));
+        assert!(script.contains("paintedElement.style.outline = \"2px solid #2563eb\""));
+        assert!(!script.contains(":host { all: initial; }"));
         assert!(script.contains("kindLabels"));
         assert!(script.contains("role: inferredRole(element)"));
         assert!(script.contains("eventTouchesToolbarChrome"));

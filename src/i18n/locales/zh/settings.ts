@@ -885,6 +885,9 @@ const settings = {
     projectSessionEngineClaude: "Claude",
     projectSessionEngineGemini: "Gemini",
     projectSessionEngineOpencode: "OpenCode",
+    projectSessionEngineKimi: "Kimi CLI",
+    projectSessionEngineGrok: "Grok CLI",
+    projectSessionEnginePi: "PI CLI",
     projectSessionEngineShared: "Shared CLI",
     sessionManagementDescription:
       "按项目统一管理真实会话历史，支持分页读取、筛选、批量归档、取消归档与删除。",
@@ -1552,6 +1555,7 @@ const settings = {
     cliValidationTabOpenCodeCli: "OpenCode CLI",
     cliValidationTabKimiCli: "Kimi CLI",
     cliValidationTabGrokCli: "Grok CLI",
+    cliValidationTabPiCli: "PI CLI",
     cliEngineEnabledLabel: "引擎启用",
     geminiCliDisableDescription:
       "彻底禁用 Gemini CLI。禁用后，启动探测和相关入口会立刻停止。",
@@ -1814,6 +1818,9 @@ const settings = {
     runOpenCodeDoctor: "运行 OpenCode Doctor",
     openCodeLooksGood: "OpenCode CLI 良好",
     openCodeIssueDetected: "检测到 OpenCode CLI 问题",
+    runPiDoctor: "运行 PI Doctor",
+    piLooksGood: "PI CLI 状态正常",
+    piIssueDetected: "PI CLI 检测到问题",
     cliInstallLatest: "安装",
     cliUpdateLatest: "更新",
     cliUninstall: "卸载",

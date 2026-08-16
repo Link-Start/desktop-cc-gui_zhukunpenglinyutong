@@ -240,6 +240,33 @@ describe("recoverThreadBindingForManualRecovery", () => {
     });
   });
 
+  it("infers PI from a pi: thread id when catalog metadata is missing", async () => {
+    const refreshThread = vi.fn(async () => null);
+    const startThreadForWorkspace = vi.fn(async () => "pi-pending-new");
+
+    const result = await recoverThreadBindingForManualRecovery({
+      workspaceId: "ws-1",
+      threadId: "pi:session-stale",
+      threadsByWorkspace: {
+        "ws-1": [{ id: "pi:session-stale" }],
+      },
+      refreshThread,
+      startThreadForWorkspace,
+      allowFreshThread: true,
+    });
+
+    expect(result).toEqual({
+      kind: "fresh",
+      threadId: "pi-pending-new",
+      retryable: true,
+      userAction: "start-fresh-thread",
+    });
+    expect(startThreadForWorkspace).toHaveBeenCalledWith("ws-1", {
+      activate: true,
+      engine: "pi",
+    });
+  });
+
   it("keeps the engine family when stale non-codex recovery falls back to a fresh thread", async () => {
     const refreshThread = vi.fn(async () => null);
     const startThreadForWorkspace = vi.fn(async () => "claude-pending-new");

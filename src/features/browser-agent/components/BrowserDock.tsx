@@ -8,18 +8,8 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
-import AlertCircle from "lucide-react/dist/esm/icons/alert-circle";
-import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
 import Globe from "lucide-react/dist/esm/icons/globe";
-import Info from "lucide-react/dist/esm/icons/info";
-import Minus from "lucide-react/dist/esm/icons/minus";
-import Plus from "lucide-react/dist/esm/icons/plus";
-import X from "lucide-react/dist/esm/icons/x";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { RendererContextMenu } from "@/components/ui/RendererContextMenu";
 import { loadBrowserAgentStyles } from "../../../styles/featureStyleLoaders";
 import type {
   BrowserSession,
@@ -41,12 +31,10 @@ import {
   unmountEmbeddedBrowserWebview,
   useEmbeddedBrowserWebview,
 } from "../hooks/useEmbeddedBrowserWebview";
-import { useBrowserTabContextMenu } from "../hooks/useBrowserTabContextMenu";
 import {
   BrowserDockEditorChrome,
   type BrowserDockNotice,
 } from "./BrowserDockEditorChrome";
-import { resolveBrowserTabLabel } from "../utils/browserTabLabel";
 import {
   resolveBrowserTabCloseTargets,
   type BrowserTabCloseAction,
@@ -110,25 +98,6 @@ function normalizeUrlDraft(value: string): string {
   return `https://${trimmed}`;
 }
 
-function sessionStatusKey(session: BrowserSession | null): string {
-  if (!session) {
-    return "browserAgent.dock.statusDisconnected";
-  }
-  if (session.status === "loading") {
-    return "browserAgent.dock.statusLoading";
-  }
-  if (session.status === "ready") {
-    return "browserAgent.dock.statusReady";
-  }
-  if (session.status === "closed") {
-    return "browserAgent.dock.statusClosed";
-  }
-  if (session.status === "failed" || session.status === "blocked") {
-    return "browserAgent.dock.statusNeedsAttention";
-  }
-  return "browserAgent.dock.statusPreparing";
-}
-
 function hasTauriEventBridge(): boolean {
   if (typeof window === "undefined") {
     return false;
@@ -188,15 +157,12 @@ export function BrowserDock({
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [notice, setNotice] = useState<BrowserDockNotice | null>(null);
   const [busy, setBusy] = useState(false);
-  const [infoOpen, setInfoOpen] = useState(false);
-  // 岛 ⇄ 状态行形变：纯展示态，不影响会话逻辑
-  const [docked, setDocked] = useState(false);
   const openInFlightRef = useRef(false);
   const openSessionsRef = useRef<BrowserSession[]>([]);
   const activeSessionRef = useRef<BrowserSession | null>(null);
   const onSessionChangeRef = useRef(onSessionChange);
   const isEmbedded = displayMode === "embedded";
-  // 内嵌模式：native 子 webview 对齐此容器矩形（岛下方 webview-frame 区域）
+  // 内嵌模式：native 子 webview 对齐此容器矩形（tab 栏与地址行之间的 webview-frame）
   const webviewContainerRef = useRef<HTMLDivElement | null>(null);
 
   const openSessions = useMemo(
@@ -213,14 +179,7 @@ export function BrowserDock({
   activeSessionRef.current = activeSession;
   onSessionChangeRef.current = onSessionChange;
 
-  const statusLabel = useMemo(
-    () => t(sessionStatusKey(activeSession)),
-    [activeSession, t],
-  );
   const resolvedEnabled = enabled ?? statusEnabled;
-  const infoMessage = notice?.message
-    ? `${notice.message}\n${t("browserAgent.dock.footnote")}`
-    : t("browserAgent.dock.footnote");
 
   // 内嵌显隐纪律：切会话/关 dock/离开 chat（组件卸载）时显式 hide，bounds 随容器同步。
   // 右键菜单注入 child WebView 自身；它与页面同层渲染，不会触发 hide 或重建。
@@ -812,29 +771,6 @@ export function BrowserDock({
     };
   }, [handleCloseSessions, isEmbedded]);
 
-  const handleCloseActiveSession = useCallback(async () => {
-    if (!activeSession) {
-      return;
-    }
-    await handleCloseSession(activeSession.browserSessionId);
-  }, [activeSession, handleCloseSession]);
-
-  const islandSessionIds = useMemo(
-    () => openSessions.map((session) => session.browserSessionId),
-    [openSessions],
-  );
-  const {
-    menu: islandTabContextMenu,
-    openMenu: openIslandTabContextMenu,
-    closeMenu: closeIslandTabContextMenu,
-  } = useBrowserTabContextMenu({
-    sessionIds: islandSessionIds,
-    busy,
-    onCloseSessions: (sessionIds, options) => {
-      void handleCloseSessions(sessionIds, options);
-    },
-  });
-
   // 弹出独立窗体：释放唯一内嵌 renderer，当前会话移交浮动窗（含注入工具条）。
   const handlePopOut = useCallback(async () => {
     if (!activeSession || busy) {
@@ -863,167 +799,39 @@ export function BrowserDock({
   return (
     <Card className={className} data-browser-agent-dock="true">
       <CardContent
-        className={`browser-agent-dock-content${docked ? " is-docked" : ""}${resolvedEnabled ? "" : " is-disabled"}${isEmbedded ? " is-embedded p-0" : ""}`}
+        className={`browser-agent-dock-content${resolvedEnabled ? "" : " is-disabled"} is-embedded p-0`}
       >
-        {docked ? null : isEmbedded ? (
-          <BrowserDockEditorChrome
-            workspaceId={workspaceId}
-            openSessions={openSessions}
-            activeSession={activeSession}
-            activeSessionId={activeSessionId}
-            busy={busy}
-            resolvedEnabled={resolvedEnabled}
-            notice={notice}
-            urlDraft={urlDraft}
-            onUrlDraftChange={setUrlDraft}
-            onOpen={() => void handleOpen()}
-            onActivateSession={handleActivateSession}
-            onCloseSession={(sessionId) => void handleCloseSession(sessionId)}
-            onCloseSessions={(sessionIds, options) => {
-              void handleCloseSessions(sessionIds, options);
-            }}
-            onEmbeddedTabContextMenu={
-              hasTauriEventBridge() ? handleEmbeddedTabContextMenu : undefined
-            }
-            onNewTab={() => {
-              setActiveSessionId(null);
-              setUrlDraft("");
-              onSessionChange?.(null);
-            }}
-            onPopOut={() => void handlePopOut()}
-            onEnable={() => void handleEnableBrowserAgent()}
-            onMinimize={() => setDocked(true)}
-            setBusy={setBusy}
-            setNotice={setNotice}
-          />
-        ) : (
-          <div className="browser-agent-dock-island">
-            <span className="browser-agent-dock-dot" aria-hidden />
-            <div className="browser-agent-tab-track" role="tablist" aria-label={t("browserAgent.dock.tabs")}>
-              {openSessions.map((session) => (
-                <div
-                  key={session.browserSessionId}
-                  className={`browser-agent-tab${session.browserSessionId === activeSessionId ? " is-active" : ""}`}
-                  role="presentation"
-                  onContextMenu={(event) =>
-                    openIslandTabContextMenu(event, session.browserSessionId)
-                  }
-                >
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={session.browserSessionId === activeSessionId}
-                    className="browser-agent-tab-main"
-                    onClick={() => handleActivateSession(session)}
-                    title={resolveBrowserTabLabel(session)}
-                  >
-                    <span className="browser-agent-tab-main-content">
-                      <Globe size={12} aria-hidden />
-                      <span className="browser-agent-tab-label">
-                        {resolveBrowserTabLabel(session)}
-                      </span>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="browser-agent-tab-close"
-                    aria-label={t("browserAgent.dock.close")}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void handleCloseSession(session.browserSessionId);
-                    }}
-                    disabled={busy}
-                  >
-                    <X size={11} aria-hidden />
-                  </button>
-                </div>
-              ))}
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="browser-agent-tab-new"
-                onClick={() => {
-                  setActiveSessionId(null);
-                  setUrlDraft("");
-                  onSessionChange?.(null);
-                }}
-                aria-label={t("browserAgent.dock.newTab")}
-              >
-                <Plus size={14} aria-hidden />
-              </Button>
-            </div>
-            {!resolvedEnabled ? (
-              <Button type="button" className="browser-agent-dock-enable" onClick={() => void handleEnableBrowserAgent()} disabled={busy}>
-                {busy ? t("browserAgent.dock.busy") : t("browserAgent.dock.enable")}
-              </Button>
-            ) : (
-              <div className="browser-agent-dock-url-pill">
-                <Input
-                  className="browser-agent-dock-url-input"
-                  value={urlDraft}
-                  onChange={(event) => setUrlDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      void handleOpen();
-                    }
-                  }}
-                  placeholder="https://example.com"
-                  disabled={!resolvedEnabled || busy}
-                  aria-label="Browser Agent URL"
-                />
-                <Button
-                  type="button"
-                  className="browser-agent-dock-open"
-                  onClick={() => void handleOpen()}
-                  disabled={!resolvedEnabled || busy}
-                >
-                  {busy ? t("browserAgent.dock.busy") : t("browserAgent.dock.open")}
-                </Button>
-              </div>
-            )}
-            <Badge className="browser-agent-dock-status" variant={resolvedEnabled ? "default" : "outline"}>
-              {resolvedEnabled ? statusLabel : t("browserAgent.dock.disabled")}
-            </Badge>
-            <Button
-              type="button"
-              variant="outline"
-              className="browser-agent-dock-icon"
-              onClick={() => void handleCloseActiveSession()}
-              disabled={!activeSession || busy}
-              aria-label={t("browserAgent.dock.close")}
-            >
-              <X size={14} aria-hidden />
-            </Button>
-            <span className="browser-agent-dock-info-wrap">
-              <button
-                type="button"
-                className={`browser-agent-dock-info${notice ? ` is-${notice.kind}` : ""}`}
-                aria-label={t("browserAgent.dock.info")}
-                aria-expanded={infoOpen}
-                onClick={() => setInfoOpen((current) => !current)}
-              >
-                {notice ? <AlertCircle size={14} aria-hidden /> : <Info size={14} aria-hidden />}
-              </button>
-              {infoOpen ? (
-                <div className={`browser-agent-dock-popover${notice ? ` is-${notice.kind}` : ""}`} role="status">
-                  {infoMessage.split("\n").map((line, index) => (
-                    <p key={`${index}-${line}`}>{line}</p>
-                  ))}
-                </div>
-              ) : null}
-            </span>
-            <button
-              type="button"
-              className="browser-agent-dock-icon browser-agent-dock-minimize"
-              onClick={() => setDocked(true)}
-              aria-label={t("browserAgent.dock.collapseDock")}
-              title={t("browserAgent.dock.collapseDock")}
-            >
-              <Minus size={14} aria-hidden />
-            </button>
-          </div>
-        )}
+        <BrowserDockEditorChrome
+          workspaceId={workspaceId}
+          openSessions={openSessions}
+          activeSession={activeSession}
+          activeSessionId={activeSessionId}
+          busy={busy}
+          resolvedEnabled={resolvedEnabled}
+          notice={notice}
+          urlDraft={urlDraft}
+          onUrlDraftChange={setUrlDraft}
+          onOpen={() => void handleOpen()}
+          onActivateSession={handleActivateSession}
+          onCloseSession={(sessionId) => void handleCloseSession(sessionId)}
+          onCloseSessions={(sessionIds, options) => {
+            void handleCloseSessions(sessionIds, options);
+          }}
+          onEmbeddedTabContextMenu={
+            isEmbedded && hasTauriEventBridge()
+              ? handleEmbeddedTabContextMenu
+              : undefined
+          }
+          onNewTab={() => {
+            setActiveSessionId(null);
+            setUrlDraft("");
+            onSessionChange?.(null);
+          }}
+          onPopOut={() => void handlePopOut()}
+          onEnable={() => void handleEnableBrowserAgent()}
+          setBusy={setBusy}
+          setNotice={setNotice}
+        />
         {activeSession && resolvedEnabled ? (
           <div
             className="browser-agent-webview-frame"
@@ -1040,40 +848,6 @@ export function BrowserDock({
             {t("browserAgent.dock.noPage")}
           </div>
         )}
-        {docked ? (
-          <button
-            type="button"
-            className="browser-agent-dock-restore"
-            onClick={() => setDocked(false)}
-            aria-label={t("browserAgent.dock.expandDock")}
-            title={t("browserAgent.dock.expandDock")}
-          >
-            <span
-              className="browser-agent-dock-restore-seg is-status"
-              title={resolvedEnabled ? statusLabel : t("browserAgent.dock.disabled")}
-            >
-              <span className="browser-agent-dock-dot" aria-hidden />
-            </span>
-            <span className="browser-agent-dock-restore-seg is-host">
-              {activeSession?.title || activeSession?.normalizedUrl || t("browserAgent.dock.noPage")}
-            </span>
-            <span className="browser-agent-dock-restore-rest">
-              <span className="browser-agent-dock-restore-count">
-                {openSessions.length}
-              </span>
-              <span className="browser-agent-dock-restore-up">
-                <ChevronUp size={12} aria-hidden />
-              </span>
-            </span>
-          </button>
-        ) : null}
-        {islandTabContextMenu && !isEmbedded ? (
-          <RendererContextMenu
-            menu={islandTabContextMenu}
-            onClose={closeIslandTabContextMenu}
-            className="renderer-context-menu"
-          />
-        ) : null}
       </CardContent>
     </Card>
   );

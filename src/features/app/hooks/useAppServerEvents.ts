@@ -108,7 +108,7 @@ export type AppServerEventHandlers = {
     workspaceId: string,
     threadId: string,
     sessionId: string,
-    engine?: "claude" | "opencode" | "codex" | "gemini" | "grok" | "kimi" | null,
+    engine?: "claude" | "opencode" | "codex" | "gemini" | "grok" | "kimi" | "pi" | null,
     turnId?: string | null,
   ) => void;
   onBackgroundThreadAction?: (
@@ -219,14 +219,14 @@ export type AppServerEventHandlers = {
     threadId: string,
     itemId: string,
     delta: string,
-    engineHint?: "gemini" | "grok" | "kimi" | null,
+    engineHint?: "gemini" | "grok" | "kimi" | "pi" | null,
     turnId?: string | null,
   ) => void;
   onReasoningSummaryBoundary?: (
     workspaceId: string,
     threadId: string,
     itemId: string,
-    engineHint?: "gemini" | "grok" | "kimi" | null,
+    engineHint?: "gemini" | "grok" | "kimi" | "pi" | null,
     turnId?: string | null,
   ) => void;
   onReasoningTextDelta?: (
@@ -234,7 +234,7 @@ export type AppServerEventHandlers = {
     threadId: string,
     itemId: string,
     delta: string,
-    engineHint?: "gemini" | "grok" | "kimi" | null,
+    engineHint?: "gemini" | "grok" | "kimi" | "pi" | null,
     turnId?: string | null,
   ) => void;
   onCommandOutputDelta?: (
@@ -572,7 +572,8 @@ function extractAgentMessageDeltaPayload(
     !isClaudeThreadId(threadId) &&
     !isGeminiThreadId(threadId) &&
     !isGrokThreadId(threadId) &&
-    !isKimiThreadId(threadId)
+    !isKimiThreadId(threadId) &&
+    !isPiThreadId(threadId)
   ) {
     return null;
   }
@@ -719,6 +720,10 @@ function isKimiThreadId(threadId: string): boolean {
   );
 }
 
+function isPiThreadId(threadId: string): boolean {
+  return threadId.startsWith("pi:") || threadId.startsWith("pi-pending-");
+}
+
 function isGrokThreadId(threadId: string): boolean {
   return (
     threadId.startsWith("grok:") || threadId.startsWith("grok-pending-")
@@ -727,7 +732,7 @@ function isGrokThreadId(threadId: string): boolean {
 
 function inferGeminiReasoningHintFromThreadId(
   threadId: string,
-): "gemini" | "grok" | "kimi" | null {
+): "gemini" | "grok" | "kimi" | "pi" | null {
   if (!threadId) {
     return null;
   }
@@ -736,6 +741,9 @@ function inferGeminiReasoningHintFromThreadId(
   }
   if (isKimiThreadId(threadId)) {
     return "kimi";
+  }
+  if (isPiThreadId(threadId)) {
+    return "pi";
   }
   return isGeminiThreadId(threadId) ? "gemini" : null;
 }
@@ -756,6 +764,8 @@ function inferRawMethodEngine(
       return "kimi";
     case "opencode/raw":
       return "opencode";
+    case "pi/raw":
+      return "pi";
     default:
       return undefined;
   }
@@ -993,7 +1003,7 @@ function emitReasoningSummaryDelta(
   threadId: string,
   itemId: string,
   delta: string,
-  engineHint: "gemini" | "grok" | "kimi" | null,
+  engineHint: "gemini" | "grok" | "kimi" | "pi" | null,
   turnId: string | null,
 ): void {
   if (turnId) {
@@ -1025,7 +1035,7 @@ function emitReasoningSummaryBoundary(
   workspaceId: string,
   threadId: string,
   itemId: string,
-  engineHint: "gemini" | "grok" | "kimi" | null,
+  engineHint: "gemini" | "grok" | "kimi" | "pi" | null,
   turnId: string | null,
 ): void {
   if (turnId) {
@@ -1056,7 +1066,7 @@ function emitReasoningTextDelta(
   threadId: string,
   itemId: string,
   delta: string,
-  engineHint: "gemini" | "grok" | "kimi" | null,
+  engineHint: "gemini" | "grok" | "kimi" | "pi" | null,
   turnId: string | null,
 ): void {
   if (turnId) {

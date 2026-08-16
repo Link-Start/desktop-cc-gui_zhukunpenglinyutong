@@ -74,6 +74,18 @@ describe("collectSessionQuotaTargets", () => {
     expect(targets[0]?.model).toBe("k3");
   });
 
+  it("includes PI fallback instead of dropping it as an unknown engine", () => {
+    const targets = collectSessionQuotaTargets([], {
+      engine: "pi",
+      providerProfileId: null,
+      providerLabel: "PI CLI",
+      model: "composer-2",
+    });
+    expect(targets).toHaveLength(1);
+    expect(targets[0]?.engine).toBe("pi");
+    expect(targets[0]?.key).toBe(buildSessionQuotaTargetKey("pi", null));
+  });
+
   it("does not duplicate fallback when already present in items", () => {
     const items: ConversationItem[] = [
       assistant("a1", {

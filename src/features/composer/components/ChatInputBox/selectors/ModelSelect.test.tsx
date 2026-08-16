@@ -7,6 +7,7 @@ import {
   buildProviderExecutionTarget,
   isSameProviderExecutionProfile,
   ModelSelect,
+  normalizeExecutionProviderProfileId,
   resolveActiveProviderProfileId,
   resolveAtomicSelectedModelDisplay,
   resolveClaudeCatalogModelLabel,
@@ -2001,6 +2002,15 @@ describe("resolveActiveProviderProfileId", () => {
         providerProfileId: null,
       }),
     ).toBe("__local_opencode_json__");
+    expect(
+      resolveActiveProviderProfileId("pi", {
+        engine: "claude",
+        providerProfileId: null,
+      }),
+    ).toBe("__local_pi__");
+    expect(
+      normalizeExecutionProviderProfileId("pi", "__local_pi__"),
+    ).toBeNull();
   });
 
   it("returns null for engines without provider profiles", () => {

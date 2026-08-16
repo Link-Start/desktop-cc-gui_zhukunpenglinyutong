@@ -56,6 +56,18 @@ describe("feature style loader contracts", () => {
     expect(loaderSource).toContain('import("./tool-blocks.css")');
     expect(loaderSource).toContain('import("./status-panel.css")');
   });
+
+  it("loads run-status todo/plan list slices without the status-panel bundle", () => {
+    const runStatusLoader = loaderSource.slice(
+      loaderSource.indexOf("export function loadComposerRunStatusListStyles"),
+      loaderSource.indexOf("export function loadSubagentStyles"),
+    );
+
+    expect(runStatusLoader).toContain('import("./todo-list.css")');
+    expect(runStatusLoader).toContain('import("./status-panel.plan-list.css")');
+    expect(runStatusLoader).not.toContain('import("./status-panel.css")');
+    expect(runStatusLoader).not.toContain('import("./engine-task-output.css")');
+  });
 });
 
 describe("bootstrap critical CSS surface (P1-1)", () => {

@@ -13,7 +13,6 @@ import Crosshair from "lucide-react/dist/esm/icons/crosshair";
 import ExternalLink from "lucide-react/dist/esm/icons/external-link";
 import Globe from "lucide-react/dist/esm/icons/globe";
 import Link2 from "lucide-react/dist/esm/icons/link-2";
-import Minus from "lucide-react/dist/esm/icons/minus";
 import Plus from "lucide-react/dist/esm/icons/plus";
 import X from "lucide-react/dist/esm/icons/x";
 import { Button } from "@/components/ui/button";
@@ -88,14 +87,13 @@ type BrowserDockEditorChromeProps = {
   onNewTab: () => void;
   onPopOut: () => void;
   onEnable: () => void;
-  onMinimize: () => void;
   setBusy: (busy: boolean) => void;
   setNotice: (notice: BrowserDockNotice | null) => void;
 };
 
 /**
- * 内嵌模式的编辑器标签 chrome：顶栏只留 tab，地址行沉底且仅 icon 操作。
- * floating 模式的悬浮岛不经过此组件。
+ * Dock 编辑器标签 chrome：顶栏只留 tab，地址行沉底且仅 icon 操作。
+ * 旧悬浮岛 / 恢复条不再走这条渲染路径。
  */
 export function BrowserDockEditorChrome({
   workspaceId,
@@ -116,7 +114,6 @@ export function BrowserDockEditorChrome({
   onNewTab,
   onPopOut,
   onEnable,
-  onMinimize,
   setBusy,
   setNotice,
 }: BrowserDockEditorChromeProps) {
@@ -379,15 +376,6 @@ export function BrowserDockEditorChrome({
             title={t("browserAgent.dock.popOutWindow")}
           >
             <ExternalLink size={14} aria-hidden />
-          </button>
-          <button
-            type="button"
-            className="browser-agent-dock-icon"
-            onClick={onMinimize}
-            aria-label={t("browserAgent.dock.collapseDock")}
-            title={t("browserAgent.dock.collapseDock")}
-          >
-            <Minus size={14} aria-hidden />
           </button>
         </div>
       </div>

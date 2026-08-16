@@ -9,8 +9,10 @@ import {
   deleteKimiSession as deleteKimiSessionService,
   deleteOpenCodeSession as deleteOpenCodeSessionService,
   deleteCodexSession as deleteCodexSessionService,
+  deletePiSession as deletePiSessionService,
   renameThreadTitleKey as renameThreadTitleKeyService,
   setThreadTitle as setThreadTitleService,
+  tombstoneSessionIndexRows as tombstoneSessionIndexRowsService,
 } from "../../../services/tauri";
 import { asNumber, asString } from "../utils/threadNormalize";
 import {
@@ -180,6 +182,7 @@ export function createDeleteThreadForWorkspaceAction(params: {
     if (threadId.includes("-pending-")) {
       return;
     }
+    await tombstoneSessionIndexRowsService([threadId]).catch(() => 0);
     const thread = (threadsByWorkspace[workspaceId] ?? []).find((entry) => entry.id === threadId);
     if (thread?.threadKind === "shared" || threadId.startsWith("shared:")) {
       await deleteSharedSessionService(workspaceId, threadId);
@@ -219,6 +222,15 @@ export function createDeleteThreadForWorkspaceAction(params: {
         throw new Error("workspace not connected");
       }
       await deleteKimiSessionService(workspacePath, sessionId);
+      return;
+    }
+    if (threadId.startsWith("pi:")) {
+      const sessionId = threadId.slice("pi:".length);
+      const workspacePath = workspacePathsByIdRef.current[workspaceId];
+      if (!workspacePath) {
+        throw new Error("workspace not connected");
+      }
+      await deletePiSessionService(workspacePath, sessionId);
       return;
     }
     await deleteCodexSessionService(workspaceId, threadId);

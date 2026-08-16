@@ -31,7 +31,6 @@ export function useAppShellAssemblyHost() {
   const composer = useHostFields("composer", COMPOSER_FIELDS);
   const flows = useHostFields("flows", FLOWS_FIELDS);
   const merged = mergeHostSlices(session, catalog, git, runtime, composer, flows);
-  const agent = composer.selectedAgent;
   const sessionRadarFeed = (flows.sessionRadarFeed ?? {}) as Record<string, unknown>;
 
   const appShellDomainContexts = useAppShellDomainAssembly({
@@ -177,6 +176,7 @@ export function useAppShellAssemblyHost() {
     kimiDoctor: merged.kimiDoctor,
     grokDoctor: merged.grokDoctor,
     opencodeDoctor: merged.opencodeDoctor,
+    piDoctor: merged.piDoctor,
     editorHighlightTarget: merged.editorHighlightTarget,
     editorNavigationTarget: merged.editorNavigationTarget,
     editorSplitCompanion: merged.editorSplitCompanion,
@@ -611,7 +611,6 @@ export function useAppShellAssemblyHost() {
     handleSelectComposerEffort: merged.handleSelectComposerEffort,
     GitHubPanelData,
     SettingsView,
-    agent,
     sessionRadarRunningSessions: sessionRadarFeed.runningSessions,
     sessionRadarRecentCompletedSessions: sessionRadarFeed.recentCompletedSessions,
     runningSessionCountByWorkspaceId: sessionRadarFeed.runningCountByWorkspaceId,

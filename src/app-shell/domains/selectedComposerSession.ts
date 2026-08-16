@@ -88,7 +88,7 @@ export function normalizeComposerSessionSelectionForThread(
     effort = effort && CLAUDE_REASONING_EFFORTS.has(effort) ? effort : null;
   } else if (engine === "grok") {
     effort = effort && GROK_REASONING_EFFORTS.has(effort) ? effort : null;
-  } else if (engine === "gemini" || engine === "kimi" || engine === "opencode") {
+  } else if (engine === "gemini" || engine === "kimi" || engine === "opencode" || engine === "pi") {
     effort = null;
   }
 

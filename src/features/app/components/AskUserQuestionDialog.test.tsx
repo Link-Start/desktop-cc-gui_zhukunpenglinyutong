@@ -108,6 +108,7 @@ describe('AskUserQuestionDialog', () => {
     fireEvent.click(optionA);
     expect(optionA.classList.contains('is-selected')).toBe(true);
     expect(optionA.querySelector('.user-input-question-option-check')).toBeTruthy();
+    expect(optionA.getAttribute('aria-pressed')).toBe('true');
 
     // Clicking Option B should deselect A (single-select mode)
     fireEvent.click(optionB);
@@ -115,6 +116,7 @@ describe('AskUserQuestionDialog', () => {
     expect(optionB.querySelector('.user-input-question-option-check')).toBeTruthy();
     expect(optionA.classList.contains('is-selected')).toBe(false);
     expect(optionA.querySelector('.user-input-question-option-check')).toBeNull();
+    expect(optionA.getAttribute('aria-pressed')).toBe('false');
   });
 
   it('allows deselecting a single-select option by clicking it again', () => {
@@ -351,7 +353,7 @@ describe('AskUserQuestionDialog', () => {
 
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({ request_id: 1 }),
-      { answers: {} },
+      expect.objectContaining({ answers: {} }),
     );
   });
 
@@ -363,7 +365,7 @@ describe('AskUserQuestionDialog', () => {
 
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({ request_id: 1 }),
-      { answers: {} },
+      expect.objectContaining({ answers: {} }),
     );
   });
 

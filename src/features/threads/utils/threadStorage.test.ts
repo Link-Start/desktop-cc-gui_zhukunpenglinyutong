@@ -82,9 +82,17 @@ describe("threadStorage aliases", () => {
           "opencode:session-a": "opencode:session-b",
           "gemini:session-a": "gemini:session-b",
           "kimi:session-a": "kimi:session-b",
+          "pi:session-a": "pi:session-b",
         },
         "claude:session-current",
         "claude:session-next",
+      ),
+    ).toEqual({});
+    expect(
+      buildUpdatedThreadAliases(
+        {},
+        "pi:session-current",
+        "pi:session-next",
       ),
     ).toEqual({});
     expect(
