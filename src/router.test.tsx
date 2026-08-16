@@ -19,6 +19,10 @@ vi.mock("./features/app/components/StartupGateOverlay", () => ({
   ),
 }));
 
+vi.mock("./features/onboarding/components/FirstRunSetupHost", () => ({
+  FirstRunSetupHost: () => null,
+}));
+
 vi.mock(
   "./features/startup-orchestration/utils/startupGateOverlayTestFlag",
   () => ({

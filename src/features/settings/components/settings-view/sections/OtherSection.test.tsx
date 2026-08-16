@@ -16,6 +16,9 @@ const TRANSLATIONS: Record<string, string> = {
   "settings.performanceFlagsResetButton": "Reset",
   "settings.performanceFlagsResetAlreadyDefault": "Already default",
   "settings.startupGateOverlayTestTitle": "Startup loading overlay (test)",
+  "settings.rerunOnboardingTitle": "First-run setup",
+  "settings.rerunOnboardingDesc": "Replay the first-run wizard.",
+  "settings.rerunOnboardingAction": "Run setup again",
 };
 
 vi.mock("react-i18next", () => ({
@@ -48,7 +51,7 @@ vi.mock("../../SessionRadarHistoryManagementSection", () => ({
   ),
 }));
 
-function renderOtherSection() {
+function renderOtherSection(onCloseSettings?: () => void) {
   return render(
     <OtherSection
       title="Other"
@@ -57,6 +60,7 @@ function renderOtherSection() {
       onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
       sessionRadarRecentCompletedSessions={[]}
       onDeleteSessionRadarHistory={vi.fn()}
+      onCloseSettings={onCloseSettings}
     />,
   );
 }
@@ -149,6 +153,19 @@ describe("OtherSection", () => {
     );
 
     expect(screen.getByText("Already default")).toBeTruthy();
+  });
+
+  it("closes settings and reopens the first-run wizard", () => {
+    const onCloseSettings = vi.fn();
+    const reopen = vi.fn();
+    window.addEventListener("ccgui:first-run-setup-reopen", reopen);
+    renderOtherSection(onCloseSettings);
+
+    fireEvent.click(screen.getByTestId("rerun-first-run-setup"));
+
+    expect(onCloseSettings).toHaveBeenCalledTimes(1);
+    expect(reopen).toHaveBeenCalledTimes(1);
+    window.removeEventListener("ccgui:first-run-setup-reopen", reopen);
   });
 
   it("defaults the startup loading test to off and persists explicit changes", () => {

@@ -6,6 +6,7 @@ import "./styles/sidebar.css";
 import "./styles/sidebar.footer.css";
 import "./styles/home.css";
 import "./styles/home-chat.css";
+import "./styles/first-run-setup.css";
 import "./styles/main.css";
 // extensions / tokentracker 仅 Extensions 视图需要，改为 feature loader 懒加载
 // （见 loadExtensionsStyles），避免进启动 CSS 与首屏 style 图。
