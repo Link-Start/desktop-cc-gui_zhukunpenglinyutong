@@ -108,7 +108,7 @@ export type AppServerEventHandlers = {
     workspaceId: string,
     threadId: string,
     sessionId: string,
-    engine?: "claude" | "opencode" | "codex" | "gemini" | "grok" | "kimi" | "pi" | null,
+    engine?: "claude" | "opencode" | "codex" | "gemini" | "grok" | "kimi" | "pi" | "dsh" | null,
     turnId?: string | null,
   ) => void;
   onBackgroundThreadAction?: (
@@ -219,14 +219,14 @@ export type AppServerEventHandlers = {
     threadId: string,
     itemId: string,
     delta: string,
-    engineHint?: "gemini" | "grok" | "kimi" | "pi" | null,
+    engineHint?: "gemini" | "grok" | "kimi" | "pi" | "dsh" | null,
     turnId?: string | null,
   ) => void;
   onReasoningSummaryBoundary?: (
     workspaceId: string,
     threadId: string,
     itemId: string,
-    engineHint?: "gemini" | "grok" | "kimi" | "pi" | null,
+    engineHint?: "gemini" | "grok" | "kimi" | "pi" | "dsh" | null,
     turnId?: string | null,
   ) => void;
   onReasoningTextDelta?: (
@@ -234,7 +234,7 @@ export type AppServerEventHandlers = {
     threadId: string,
     itemId: string,
     delta: string,
-    engineHint?: "gemini" | "grok" | "kimi" | "pi" | null,
+    engineHint?: "gemini" | "grok" | "kimi" | "pi" | "dsh" | null,
     turnId?: string | null,
   ) => void;
   onCommandOutputDelta?: (
@@ -573,7 +573,8 @@ function extractAgentMessageDeltaPayload(
     !isGeminiThreadId(threadId) &&
     !isGrokThreadId(threadId) &&
     !isKimiThreadId(threadId) &&
-    !isPiThreadId(threadId)
+    !isPiThreadId(threadId) &&
+    !isDshThreadId(threadId)
   ) {
     return null;
   }
@@ -730,9 +731,15 @@ function isGrokThreadId(threadId: string): boolean {
   );
 }
 
+function isDshThreadId(threadId: string): boolean {
+  return (
+    threadId.startsWith("dsh:") || threadId.startsWith("dsh-pending-")
+  );
+}
+
 function inferGeminiReasoningHintFromThreadId(
   threadId: string,
-): "gemini" | "grok" | "kimi" | "pi" | null {
+): "gemini" | "grok" | "kimi" | "pi" | "dsh" | null {
   if (!threadId) {
     return null;
   }
@@ -745,12 +752,15 @@ function inferGeminiReasoningHintFromThreadId(
   if (isPiThreadId(threadId)) {
     return "pi";
   }
+  if (isDshThreadId(threadId)) {
+    return "dsh";
+  }
   return isGeminiThreadId(threadId) ? "gemini" : null;
 }
 
 function inferRawMethodEngine(
   method: string,
-): "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | undefined {
+): "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh" | undefined {
   switch (method) {
     case "claude/raw":
       return "claude";
@@ -766,6 +776,8 @@ function inferRawMethodEngine(
       return "opencode";
     case "pi/raw":
       return "pi";
+    case "dsh/raw":
+      return "dsh";
     default:
       return undefined;
   }
@@ -1004,7 +1016,7 @@ function emitReasoningSummaryDelta(
   threadId: string,
   itemId: string,
   delta: string,
-  engineHint: "gemini" | "grok" | "kimi" | "pi" | null,
+  engineHint: "gemini" | "grok" | "kimi" | "pi" | "dsh" | null,
   turnId: string | null,
 ): void {
   if (turnId) {
@@ -1036,7 +1048,7 @@ function emitReasoningSummaryBoundary(
   workspaceId: string,
   threadId: string,
   itemId: string,
-  engineHint: "gemini" | "grok" | "kimi" | "pi" | null,
+  engineHint: "gemini" | "grok" | "kimi" | "pi" | "dsh" | null,
   turnId: string | null,
 ): void {
   if (turnId) {
@@ -1067,7 +1079,7 @@ function emitReasoningTextDelta(
   threadId: string,
   itemId: string,
   delta: string,
-  engineHint: "gemini" | "grok" | "kimi" | "pi" | null,
+  engineHint: "gemini" | "grok" | "kimi" | "pi" | "dsh" | null,
   turnId: string | null,
 ): void {
   if (turnId) {
@@ -1464,7 +1476,7 @@ function tryRouteNormalizedRealtimeEvent({
   handlers: AppServerEventHandlers;
   workspaceId: string;
   message: Record<string, unknown>;
-  engineOverride?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi";
+  engineOverride?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh";
   threadIdOverride?: string;
   sharedBinding?: SharedSessionNativeBinding | null;
   threadAgentDeltaSeenRef: MutableRefObject<Record<string, true>>;
@@ -1648,6 +1660,7 @@ export function dispatchAppServerEvent(
         | "grok"
         | "kimi"
         | "opencode"
+        | "dsh"
         | "pi"
         | undefined);
     if (
@@ -1983,8 +1996,9 @@ export function dispatchAppServerEvent(
       rawEngine === "codex" ||
       rawEngine === "grok" ||
       rawEngine === "kimi" ||
+      rawEngine === "gemini" ||
       rawEngine === "pi" ||
-      rawEngine === "gemini"
+      rawEngine === "dsh"
         ? rawEngine
         : null;
 
@@ -2038,6 +2052,7 @@ export function dispatchAppServerEvent(
         sessionId &&
         sessionId !== "pending" &&
         eventEngine &&
+        eventEngine !== "dsh" &&
         shouldRebindSharedNativeThreadOnStartedEvent(eventEngine)
       ) {
         const finalizedNativeThreadId = `${eventEngine}:${sessionId}`;

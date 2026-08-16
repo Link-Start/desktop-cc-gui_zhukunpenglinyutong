@@ -96,6 +96,10 @@ export type AppSettings = {
   piBin: string | null;
   grokBin: string | null;
   opencodeBin: string | null;
+  dshBin: string | null;
+  dshHost: string;
+  dshPort: number;
+  dshAutoStart: boolean;
   codexBin: string | null;
   codexArgs: string | null;
   terminalShellPath: string | null;

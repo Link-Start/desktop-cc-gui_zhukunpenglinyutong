@@ -69,7 +69,7 @@ fn is_legacy_local_provider(engine: EngineType, provider_profile_id: &str) -> bo
         EngineType::Pi => {
             provider_profile_id == crate::engine::pi_provider_profile::PI_LOCAL_PROVIDER_PROFILE_ID
         }
-        EngineType::Gemini => false,
+        EngineType::Gemini | EngineType::Dsh => false,
     }
 }
 

@@ -663,6 +663,7 @@ function looksLikeLoadableThreadId(id: string): boolean {
     raw.startsWith("kimi:") ||
     raw.startsWith("gemini:") ||
     raw.startsWith("opencode:") ||
+    raw.startsWith("dsh:") ||
     raw.startsWith("shared:")
   ) {
     return true;

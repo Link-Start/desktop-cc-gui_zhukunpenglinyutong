@@ -625,6 +625,8 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           ? "pi"
         : action.threadId.startsWith("opencode:")
           ? "opencode"
+        : action.threadId.startsWith("dsh:")
+          ? "dsh"
           : null;
       if (pendingEngine) {
         const pendingThreadId = resolvePendingThreadIdForSession({

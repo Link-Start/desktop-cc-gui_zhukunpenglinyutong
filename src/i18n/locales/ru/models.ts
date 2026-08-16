@@ -19,6 +19,7 @@ const models = {
     "discoveringModels": "Поиск моделей...",
     "emptyChannelModelsTitle": "У этого провайдера пока нет моделей",
     "emptyChannelModelsHint": "Нажмите «Добавить модель» ниже, чтобы добавить пользовательскую модель",
+    "emptyDshHostHint": "Настройте модели в DeepSeek Harness. Нажмите здесь, чтобы открыть настройки.",
     "refreshConfigFailed": "Не удалось обновить: {{message}}",
         "claude": {
       "fable5": {

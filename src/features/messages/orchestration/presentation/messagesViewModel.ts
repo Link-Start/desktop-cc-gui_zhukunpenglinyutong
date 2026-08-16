@@ -348,7 +348,7 @@ export function resolveVisibleMessageItems(options: {
       return false;
     }
     if (
-      (activeEngine === "gemini" || activeEngine === "grok" || activeEngine === "kimi" || activeEngine === "opencode") &&
+      (activeEngine === "gemini" || activeEngine === "grok" || activeEngine === "kimi" || activeEngine === "opencode" || activeEngine === "dsh") &&
       isExplicitReasoningSegmentId(item.id)
     ) {
       return true;
@@ -365,7 +365,7 @@ export function resolveVisibleMessageItems(options: {
   // 必须先丢掉这些不可见工具，再做相邻 reasoning 合并——对话中与完成后同一条路径。
   const canvasVisible = filterCanvasHiddenProcessTools(filtered, activeEngine);
   const appendReasoningRuns =
-    activeEngine === "claude" || activeEngine === "gemini" || activeEngine === "grok" || activeEngine === "kimi" || activeEngine === "opencode" || activeEngine === "pi";
+    activeEngine === "claude" || activeEngine === "gemini" || activeEngine === "grok" || activeEngine === "kimi" || activeEngine === "opencode" || activeEngine === "dsh" || activeEngine === "pi";
   const deduped = dedupeAdjacentReasoningItems(
     canvasVisible,
     reasoningMetaById,
@@ -492,7 +492,8 @@ export function resolveCollapsedTimelineItems(options: {
       activeEngine === "gemini" ||
       activeEngine === "grok" ||
       activeEngine === "kimi" ||
-      activeEngine === "opencode",
+      activeEngine === "opencode" ||
+      activeEngine === "dsh",
   );
   if (canvasItems.length <= 2) {
     return emptyCollapsedTimelineResult(canvasItems);

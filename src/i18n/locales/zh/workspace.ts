@@ -70,6 +70,7 @@ const workspace = {
     enginePi: "PI CLI",
     engineGrok: "Grok CLI",
     engineOpenCode: "OpenCode",
+    engineDsh: "DeepSeek Harness",
     engineStatusLoading: "检测中...",
     engineStatusRequiresLogin: "需先登录",
     engineComingSoon: "即将支持",
@@ -316,6 +317,9 @@ const workspace = {
     deleteWorktreeConfirm: '确定要删除 "{{name}}" 吗？',
     deleteWorktreeMessage: "这将关闭代理、移除工作树，并从 ccgui 中删除它。",
     deleteWorktreeFailed: "删除工作树失败",
+  },
+  sharedSession: {
+    dshUnsupported: "Shared Session 暂不支持 DSH",
   },
 };
 

@@ -115,6 +115,8 @@ function renderCodexSection(
       grokDoctorState={{ status: "idle", result: null }}
       handleRunOpenCodeDoctor={vi.fn()}
       openCodeDoctorState={{ status: "idle", result: null }}
+      handleRunDshDoctor={vi.fn()}
+      dshDoctorState={{ status: "idle", result: null }}
       handleRunPiDoctor={vi.fn()}
       piDoctorState={{ status: "idle", result: null }}
       handleRunDoctor={vi.fn()}

@@ -155,6 +155,10 @@ pub(crate) fn invoke_handler(
         crate::engine::list_grok_sessions,
         crate::engine::load_grok_session,
         crate::engine::delete_grok_session,
+        crate::engine::list_dsh_sessions,
+        crate::engine::load_dsh_session,
+        crate::engine::fork_dsh_session,
+        crate::engine::delete_dsh_session,
         crate::local_usage::list_codex_session_summaries,
         crate::local_usage::load_codex_session,
         // Codex
@@ -166,6 +170,7 @@ pub(crate) fn invoke_handler(
         crate::codex::pi_doctor,
         crate::codex::grok_doctor,
         crate::codex::opencode_doctor,
+        crate::codex::dsh_doctor,
         crate::codex::cli_install_plan,
         crate::codex::cli_install_run,
         crate::codex::cli_version_status,

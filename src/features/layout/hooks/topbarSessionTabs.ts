@@ -43,6 +43,7 @@ const DEFAULT_ENGINE_LABEL_BY_TYPE: Record<EngineType, string> = {
   grok: "Grok",
   kimi: "Kimi",
   pi: "PI CLI",
+  dsh: "DSH",
 };
 
 export function createEmptyTopbarSessionWindows(): TopbarSessionWindows {
@@ -98,6 +99,7 @@ export function resolveEngineType(
     engineSource === "grok" ||
     engineSource === "kimi" ||
     engineSource === "opencode" ||
+    engineSource === "dsh" ||
     engineSource === "pi"
   ) {
     return engineSource;

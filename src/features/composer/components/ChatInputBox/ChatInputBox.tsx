@@ -405,7 +405,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       const engine = executionTarget?.engine;
       if (
         !engine ||
-        !["claude", "codex", "kimi", "grok", "opencode", "pi"].includes(engine)
+        !["claude", "codex", "grok", "kimi", "opencode", "pi", "dsh"].includes(engine)
       ) {
         return;
       }
@@ -454,7 +454,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       }
       const engine = currentProvider as EngineType;
       if (
-        !["claude", "codex", "kimi", "grok", "opencode", "pi"].includes(engine)
+        !["claude", "codex", "grok", "kimi", "opencode", "pi", "dsh"].includes(engine)
       ) {
         return;
       }
@@ -512,7 +512,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
             (entry) => entry.id === profileId,
           );
           // groups 可能尚未投影出 profile label/source：本地渠道回落「本地配置」+ disk，
-          // 保证 isResolvedExecutionTarget 可通过，否则 handleCreationTargetChange 会静默丢弃。
+          // 保证 isResolvedCreationExecutionTarget 可通过，否则 handleCreationTargetChange 会静默丢弃。
           createSessionTargetSeedKeyRef.current = seedKey;
           onExecutionTargetChange(
             buildProviderExecutionTarget(

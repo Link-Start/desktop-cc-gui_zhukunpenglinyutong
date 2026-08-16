@@ -37,6 +37,8 @@ type CodexSectionProps = {
   grokDoctorState: DoctorState;
   handleRunOpenCodeDoctor: () => Promise<void>;
   openCodeDoctorState: DoctorState;
+  handleRunDshDoctor: () => Promise<void>;
+  dshDoctorState: DoctorState;
   handleRunPiDoctor: () => Promise<void>;
   piDoctorState: DoctorState;
   handleRunDoctor: () => Promise<void>;
@@ -69,7 +71,14 @@ type PreviewState = {
   error: string | null;
 };
 
-type CliValidationTab = "codex" | "claude" | "kimi" | "grok" | "opencode" | "pi";
+type CliValidationTab =
+  | "codex"
+  | "claude"
+  | "kimi"
+  | "grok"
+  | "opencode"
+  | "dsh"
+  | "pi";
 
 // Deprecated: Gemini CLI validation entry is intentionally hidden.
 const DEPRECATED_CLI_VALIDATION_ENGINES = new Set(["gemini"]);
@@ -425,6 +434,8 @@ export function CodexSection({
   grokDoctorState,
   handleRunOpenCodeDoctor,
   openCodeDoctorState,
+  handleRunDshDoctor,
+  dshDoctorState,
   handleRunPiDoctor,
   piDoctorState,
   handleRunDoctor,
@@ -719,9 +730,11 @@ export function CodexSection({
                   ? "grok"
                   : value === "opencode"
                     ? "opencode"
-                    : value === "pi"
-                      ? "pi"
-                    : "codex",
+                    : value === "dsh"
+                      ? "dsh"
+                      : value === "pi"
+                        ? "pi"
+                        : "codex",
           );
         }}
       >
@@ -735,6 +748,7 @@ export function CodexSection({
           <TabsTab value="opencode">
             {t("settings.cliValidationTabOpenCodeCli")}
           </TabsTab>
+          <TabsTab value="dsh">{t("settings.cliValidationTabDshCli")}</TabsTab>
           <TabsTab value="pi">{t("settings.cliValidationTabPiCli")}</TabsTab>
         </TabsList>
 
@@ -1089,6 +1103,50 @@ export function CodexSection({
               state={openCodeDoctorState}
               successTitleKey="settings.openCodeLooksGood"
               errorTitleKey="settings.openCodeIssueDetected"
+              showAppServer={false}
+            />
+          </div>
+        </TabsPanel>
+
+        <TabsPanel value="dsh">
+          <div className="settings-field">
+            <div className="settings-help">
+              {t("settings.cliPathManagedInVendors")}
+            </div>
+            <div className="settings-field-actions">
+              <button
+                type="button"
+                className="ghost settings-button-compact"
+                onClick={() => {
+                  void handleRunDshDoctor();
+                }}
+                disabled={dshDoctorState.status === "running"}
+              >
+                <Stethoscope aria-hidden />
+                {dshDoctorState.status === "running"
+                  ? t("settings.running")
+                  : t("settings.runDshDoctor")}
+              </button>
+              <button
+                type="button"
+                className="ghost settings-button-compact"
+                onClick={() => {
+                  void requestInstallPlan("dsh", dshDoctorState.result);
+                }}
+                disabled={installerBusy}
+              >
+                {resolveInstallerAction(dshDoctorState.result) ===
+                "installLatest"
+                  ? t("settings.cliInstallLatest")
+                  : t("settings.cliUpdateLatest")}
+              </button>
+            </div>
+
+            <DoctorResultCard
+              t={t}
+              state={dshDoctorState}
+              successTitleKey="settings.dshLooksGood"
+              errorTitleKey="settings.dshIssueDetected"
               showAppServer={false}
             />
           </div>

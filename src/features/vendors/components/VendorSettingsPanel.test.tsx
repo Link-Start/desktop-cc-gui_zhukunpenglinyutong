@@ -379,14 +379,15 @@ describe("VendorSettingsPanel", () => {
         (button) =>
           button.querySelector(".min-w-0")?.textContent?.trim() ?? "",
       )
-      .filter((label) => label.endsWith("CLI"));
-    expect(navLabels.slice(0, 9)).toEqual([
+      .filter((label) => label.endsWith("CLI") || label === "DeepSeek Harness");
+    expect(navLabels.slice(0, 10)).toEqual([
       "Claude Code CLI",
       "Codex CLI",
       "Kimi CLI",
       "Grok CLI",
       "OpenCode CLI",
       "PI CLI",
+      "DeepSeek Harness",
       "Gemini CLI",
       "GLM CLI",
       "Trae CLI",
@@ -439,6 +440,14 @@ describe("VendorSettingsPanel", () => {
     );
     expect(openCodeIcon).toBeTruthy();
     expect((openCodeIcon as HTMLElement).className).toContain("mono");
+
+    const dshNavButton = screen.getByRole("button", {
+      name: /DeepSeek Harness/,
+    });
+    expect((dshNavButton as HTMLButtonElement).disabled).toBe(false);
+    const dshIcon = dshNavButton.querySelector(".vendor-engine-icon img");
+    expect(dshIcon).toBeTruthy();
+    expect((dshIcon as HTMLElement).className).not.toContain("mono");
 
     const unsupportedButtons = [
       "Gemini CLI",
@@ -1255,7 +1264,7 @@ describe("VendorSettingsPanel", () => {
   it("shows the empty hint when every supported CLI is disabled", async () => {
     renderPanel({
       appSettings: {
-        disabledCliEngines: ["claude", "codex", "kimi", "grok", "opencode", "pi"],
+        disabledCliEngines: ["claude", "codex", "kimi", "grok", "opencode", "pi", "dsh"],
       },
     });
 
@@ -1265,5 +1274,38 @@ describe("VendorSettingsPanel", () => {
 
     expect(screen.getByText("没有已启用的 CLI")).toBeTruthy();
     expect(screen.getByRole("button", { name: "未启用" })).toBeTruthy();
+  });
+
+  it("renders the DeepSeek Harness tab with host settings and open-UI action", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderPanel({
+      appSettings: {
+        dshHost: "127.0.0.1",
+        dshPort: 3080,
+        dshAutoStart: true,
+      },
+      onUpdateAppSettings,
+    });
+
+    await waitFor(() => {
+      expect(readGlobalCodexConfigTomlMock).toHaveBeenCalled();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /DeepSeek Harness/ }));
+
+    expect(screen.getByRole("heading", { name: "DeepSeek Harness" })).toBeTruthy();
+    expect(screen.getByLabelText("settings.vendor.dshHost")).toBeTruthy();
+    expect(screen.getByLabelText("settings.vendor.dshPort")).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: "settings.vendor.dshOpenUi" }),
+    );
+    expect(openUrlMock).toHaveBeenCalledWith("http://127.0.0.1:3080");
+
+    const hostInput = screen.getByLabelText("settings.vendor.dshHost");
+    fireEvent.change(hostInput, { target: { value: "10.0.0.8" } });
+    expect(onUpdateAppSettings).not.toHaveBeenCalled();
+    fireEvent.blur(hostInput);
+    expect(onUpdateAppSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ dshHost: "10.0.0.8" }),
+    );
   });
 });

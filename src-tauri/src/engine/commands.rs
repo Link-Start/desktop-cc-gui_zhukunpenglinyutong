@@ -150,6 +150,7 @@ fn features_for_engine(engine: EngineType) -> super::EngineFeatures {
         EngineType::OpenCode => super::EngineFeatures::opencode(),
         EngineType::Kimi => super::EngineFeatures::kimi(),
         EngineType::Pi => super::EngineFeatures::pi(),
+        EngineType::Dsh => super::EngineFeatures::dsh(),
     }
 }
 
@@ -216,9 +217,12 @@ fn collect_stale_child_candidates(
             }
             let progress_evidence = match workspace.engine {
                 EngineType::Claude => "timing-only",
-                EngineType::OpenCode | EngineType::Gemini | EngineType::Grok | EngineType::Kimi | EngineType::Pi => {
-                    "unsupported"
-                }
+                EngineType::OpenCode
+                | EngineType::Gemini
+                | EngineType::Grok
+                | EngineType::Kimi
+                | EngineType::Pi
+                | EngineType::Dsh => "unsupported",
                 // Codex is intentionally not part of this child-process parity
                 // path (it has its own wrapper runtime).
                 EngineType::Codex => "unsupported",
@@ -246,6 +250,7 @@ fn engine_type_label(engine: EngineType) -> &'static str {
         EngineType::Grok => "grok",
         EngineType::Kimi => "kimi",
         EngineType::Pi => "pi",
+        EngineType::Dsh => "dsh",
     }
 }
 
@@ -1546,6 +1551,28 @@ pub async fn get_engine_models(
                 .await;
             Ok(status.models)
         }
+        EngineType::Dsh => {
+            let runtime = crate::engine::dsh::runtime_settings_from_app(&settings);
+            match crate::engine::dsh::load_dsh_models(&runtime).await {
+                Ok(models) if !models.is_empty() => Ok(models),
+                Ok(models) => {
+                    if let Some(cached) = manager.get_engine_status(EngineType::Dsh).await {
+                        if !cached.models.is_empty() {
+                            return Ok(cached.models);
+                        }
+                    }
+                    Ok(models)
+                }
+                Err(_) => {
+                    if let Some(cached) = manager.get_engine_status(EngineType::Dsh).await {
+                        if !cached.models.is_empty() {
+                            return Ok(cached.models);
+                        }
+                    }
+                    Ok(Vec::new())
+                }
+            }
+        }
     }
 }
 
@@ -1590,6 +1617,9 @@ fn build_provider_engine_dispatch_receipt(
             ) | (
                 EngineType::OpenCode,
                 super::opencode_provider_profile::OPENCODE_LOCAL_PROVIDER_PROFILE_ID
+            ) | (
+                EngineType::Dsh,
+                super::dsh_provider_profile::DSH_LOCAL_PROVIDER_PROFILE_ID
             ) | (
                 EngineType::Pi,
                 super::pi_provider_profile::PI_LOCAL_PROVIDER_PROFILE_ID
@@ -3401,6 +3431,52 @@ pub async fn engine_send_message(
                 }
             }))
         }
+        EngineType::Dsh => {
+            let workspace_path = {
+                let workspaces = state.workspaces.lock().await;
+                workspaces
+                    .get(&workspace_id)
+                    .map(|w| std::path::PathBuf::from(&w.path))
+                    .ok_or_else(|| "Workspace not found".to_string())?
+            };
+            let runtime = crate::engine::dsh::runtime_settings_from_app(&settings);
+            let resume_id = session_id.as_deref().or(thread_id.as_deref());
+            let outcome = crate::engine::dsh::send_user_turn(
+                &runtime,
+                Some(app.clone()),
+                &workspace_id,
+                &workspace_path,
+                &text,
+                model.as_deref(),
+                effort.as_deref(),
+                images.as_deref(),
+                resume_id,
+                continue_session,
+            )
+            .await?;
+            record_auto_session_metadata_if_present(
+                &state,
+                &workspace_id,
+                Some(outcome.native_session_id.as_str()),
+                auto_session,
+                "dsh",
+            )
+            .await;
+            Ok(json!({
+                "engine": "dsh",
+                "sessionId": outcome.thread_id,
+                "result": {
+                    "turn": {
+                        "id": outcome.turn_id,
+                        "status": "started"
+                    },
+                },
+                "turn": {
+                    "id": outcome.turn_id,
+                    "status": "started"
+                }
+            }))
+        }
     }
 }
 
@@ -4067,6 +4143,51 @@ pub async fn engine_send_message_sync(
                 "text": response
             }))
         }
+        EngineType::Dsh => {
+            let workspace_path = {
+                let workspaces = state.workspaces.lock().await;
+                workspaces
+                    .get(&workspace_id)
+                    .map(|w| std::path::PathBuf::from(&w.path))
+                    .ok_or_else(|| "Workspace not found".to_string())?
+            };
+            let runtime = crate::engine::dsh::runtime_settings_from_app(&settings);
+            let resume_id = session_id.as_deref();
+            let outcome = crate::engine::dsh::send_user_turn(
+                &runtime,
+                Some(app.clone()),
+                &workspace_id,
+                &workspace_path,
+                &text,
+                model.as_deref(),
+                effort.as_deref(),
+                images.as_deref(),
+                resume_id,
+                continue_session,
+            )
+            .await?;
+            let (_snapshot, client) = crate::engine::dsh::ensure_ready(&runtime).await?;
+            let response = crate::engine::dsh::collect_turn_text(
+                &client,
+                &outcome.native_session_id,
+                outcome.turn_waiter,
+                Duration::from_secs(900),
+            )
+            .await?;
+            record_auto_session_metadata_if_present(
+                &state,
+                &workspace_id,
+                Some(outcome.native_session_id.as_str()),
+                auto_session,
+                "dsh",
+            )
+            .await;
+            Ok(json!({
+                "engine": "dsh",
+                "sessionId": outcome.thread_id,
+                "text": response
+            }))
+        }
     }
 }
 
@@ -4115,6 +4236,11 @@ pub async fn engine_interrupt(
         EngineType::Kimi => manager.interrupt_kimi_sessions(&workspace_id, None).await,
         EngineType::Pi => manager.interrupt_pi_sessions(&workspace_id, None).await,
         EngineType::Grok => manager.interrupt_grok_sessions(&workspace_id, None).await,
+        EngineType::Dsh => {
+            let settings = read_app_settings_snapshot(&state).await;
+            let runtime = crate::engine::dsh::runtime_settings_from_app(&settings);
+            crate::engine::dsh::interrupt_workspace(&runtime, &workspace_id).await
+        }
     }
 }
 
@@ -4202,6 +4328,11 @@ pub async fn engine_interrupt_turn(
             manager
                 .interrupt_grok_sessions(&workspace_id, Some(&turn_id))
                 .await
+        }
+        EngineType::Dsh => {
+            let settings = read_app_settings_snapshot(&state).await;
+            let runtime = crate::engine::dsh::runtime_settings_from_app(&settings);
+            crate::engine::dsh::interrupt_turn(&runtime, &turn_id).await
         }
     }
 }

@@ -17,6 +17,7 @@ const SUPPORTED_TASK_OUTPUT_ENGINES: readonly EngineTaskOutputEngine[] = [
   "grok",
   "kimi",
   "opencode",
+  "dsh",
 ];
 
 function normalizeTaskOutputEngine(

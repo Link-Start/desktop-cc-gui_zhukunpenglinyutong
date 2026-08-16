@@ -81,7 +81,7 @@ export type ThreadAction =
       type: "ensureThread";
       workspaceId: string;
       threadId: string;
-      engine?: "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode" | "pi";
+      engine?: "codex" | "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh";
       name?: string | null;
       parentThreadId?: string | null;
       folderId?: string | null;
@@ -167,7 +167,7 @@ export type ThreadAction =
       type: "setThreadEngine";
       workspaceId: string;
       threadId: string;
-      engine: "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode" | "pi";
+      engine: "codex" | "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh";
     }
   | {
       type: "setThreadTimestamp";

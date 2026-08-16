@@ -380,6 +380,7 @@ const mockTranslate = (key: string, params?: Record<string, unknown>) => {
         "settings.cliValidationTabOpenCodeCli": "OpenCode CLI",
         "settings.cliValidationTabKimiCli": "Kimi CLI",
         "settings.cliValidationTabGrokCli": "Grok CLI",
+        "settings.cliValidationTabDshCli": "DeepSeek Harness",
         "settings.cliEngineEnabledLabel": "Engine enabled",
         "settings.geminiCliDisableDescription":
           "Disable Gemini CLI entirely. Once disabled, startup detection and engine entry points stop immediately.",
@@ -406,6 +407,9 @@ const mockTranslate = (key: string, params?: Record<string, unknown>) => {
         "settings.runOpenCodeDoctor": "Run OpenCode Doctor",
         "settings.openCodeLooksGood": "OpenCode CLI looks good",
         "settings.openCodeIssueDetected": "OpenCode CLI issue detected",
+        "settings.runDshDoctor": "Run DSH Doctor",
+        "settings.dshLooksGood": "DSH CLI looks good",
+        "settings.dshIssueDetected": "DSH CLI issue detected",
         "settings.cliValidationTabPiCli": "PI CLI",
         "settings.runPiDoctor": "Run PI Doctor",
         "settings.piLooksGood": "PI CLI looks good",

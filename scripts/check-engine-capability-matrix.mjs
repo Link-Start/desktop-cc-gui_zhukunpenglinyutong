@@ -26,6 +26,7 @@ const ENGINE_VARIANTS = {
   opencode: "OpenCode",
   kimi: "Kimi",
   pi: "Pi",
+  dsh: "Dsh",
 };
 const VALID_STATE = new Set(["supported", "compat-input", "unsupported", "unknown"]);
 const VALID_DOMAIN = new Set([

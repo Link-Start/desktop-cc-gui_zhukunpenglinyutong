@@ -49,7 +49,9 @@ export function isCodexOwnershipFallbackCandidate(
     normalizedId.startsWith("pi:") ||
     normalizedId.startsWith("pi-pending-") ||
     normalizedId.startsWith("opencode:") ||
-    normalizedId.startsWith("opencode-pending-")
+    normalizedId.startsWith("opencode-pending-") ||
+    normalizedId.startsWith("dsh:") ||
+    normalizedId.startsWith("dsh-pending-")
   );
 }
 

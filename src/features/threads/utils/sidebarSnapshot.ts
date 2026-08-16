@@ -156,7 +156,8 @@ function normalizeThreadSummary(value: unknown): ThreadSummary | null {
     value.engineSource === "gemini" ||
     value.engineSource === "grok" ||
     value.engineSource === "kimi" ||
-    value.engineSource === "opencode"
+    value.engineSource === "opencode" ||
+    value.engineSource === "dsh"
   ) {
     summary.engineSource = value.engineSource;
   }

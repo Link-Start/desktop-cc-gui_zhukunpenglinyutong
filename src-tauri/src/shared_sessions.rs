@@ -480,7 +480,7 @@ pub(crate) fn is_pending_shared_binding_thread_id(engine: EngineType, thread_id:
         EngineType::Pi => normalized.starts_with("pi-pending-shared-"),
         EngineType::Grok => normalized.starts_with("grok-pending-shared-"),
         EngineType::OpenCode => normalized.starts_with("opencode-pending-shared-"),
-        EngineType::Gemini => false,
+        EngineType::Gemini | EngineType::Dsh => false,
     }
 }
 
@@ -495,7 +495,8 @@ pub(crate) fn binding_uses_established_native_thread(engine: EngineType, thread_
         | EngineType::Kimi
         | EngineType::Pi
         | EngineType::Grok
-        | EngineType::OpenCode => {
+        | EngineType::OpenCode
+        | EngineType::Dsh => {
             let prefix = format!("{}:", engine.icon());
             normalized
                 .strip_prefix(prefix.as_str())
@@ -514,7 +515,7 @@ pub(crate) fn binding_uses_established_native_thread(engine: EngineType, thread_
         | EngineType::Pi
         | EngineType::Grok
         | EngineType::OpenCode => true,
-        EngineType::Gemini => false,
+        EngineType::Gemini | EngineType::Dsh => false,
     }
 }
 
@@ -527,6 +528,7 @@ pub(crate) fn engine_binding_thread_id(engine: EngineType, seed: &str) -> String
         EngineType::Grok => format!("grok-pending-shared-{seed}"),
         EngineType::OpenCode => format!("opencode-pending-shared-{seed}"),
         EngineType::Gemini => format!("gemini-pending-shared-{seed}"),
+        EngineType::Dsh => format!("dsh-pending-shared-{seed}"),
     }
 }
 
@@ -1846,7 +1848,12 @@ pub async fn send_shared_session_message(
             write_shared_session_meta(&meta)?;
             response
         }
-        EngineType::Gemini | EngineType::OpenCode | EngineType::Grok | EngineType::Kimi | EngineType::Pi => {
+        EngineType::Gemini
+        | EngineType::OpenCode
+        | EngineType::Grok
+        | EngineType::Kimi
+        | EngineType::Pi
+        | EngineType::Dsh => {
             return Err(format!(
                 "Unsupported shared session engine: {}",
                 engine.icon()

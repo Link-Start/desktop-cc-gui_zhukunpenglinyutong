@@ -76,7 +76,9 @@ export function resolveRewindSupportedEngineFromThreadId(
     normalized.startsWith("kimi:") ||
     normalized.startsWith("kimi-pending-") ||
     normalized.startsWith("opencode:") ||
-    normalized.startsWith("opencode-pending-")
+    normalized.startsWith("opencode-pending-") ||
+    normalized.startsWith("dsh:") ||
+    normalized.startsWith("dsh-pending-")
   ) {
     return null;
   }

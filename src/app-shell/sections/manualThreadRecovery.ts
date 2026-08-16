@@ -1,6 +1,6 @@
 import { isEngineExecutionEnabled } from "../../utils/engineExecutionPolicy";
 
-type ManualRecoveryEngine = "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi";
+type ManualRecoveryEngine = "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh";
 type ManualRecoveryWorkspace = {
   id: string;
   connected: boolean;
@@ -82,6 +82,9 @@ function inferManualRecoveryEngine(
   }
   if (normalizedThreadId.startsWith("opencode:") || normalizedThreadId.startsWith("opencode-pending-")) {
     return "opencode";
+  }
+  if (normalizedThreadId.startsWith("dsh:") || normalizedThreadId.startsWith("dsh-pending-")) {
+    return "dsh";
   }
   return "codex";
 }

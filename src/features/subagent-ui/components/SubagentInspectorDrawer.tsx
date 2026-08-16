@@ -86,6 +86,7 @@ export const SubagentInspectorDrawer = memo(function SubagentInspectorDrawer({
         fromCard.startsWith("kimi:") ||
         fromCard.startsWith("gemini:") ||
         fromCard.startsWith("opencode:") ||
+        fromCard.startsWith("dsh:") ||
         fromCard.startsWith("shared:"))
     ) {
       return fromCard;

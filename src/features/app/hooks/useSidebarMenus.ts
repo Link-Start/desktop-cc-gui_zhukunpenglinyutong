@@ -75,6 +75,7 @@ const NEW_SESSION_ENGINE_ACTION_IDS: Readonly<Record<string, EngineType>> = {
   "new-session-kimi": "kimi",
   "new-session-grok": "grok",
   "new-session-pi": "pi",
+  "new-session-dsh": "dsh",
 };
 
 const LAST_PROVIDER_PROFILE_KEYS = {
@@ -199,6 +200,7 @@ export type WorkspaceMenuIconKind =
   | "engine-kimi"
   | "engine-grok"
   | "engine-pi"
+  | "engine-dsh"
   | "new-shared"
   | "alias"
   | "assign-group"
@@ -367,6 +369,8 @@ function resolveEngineDisplayName(engineType: EngineType): string {
       return "Kimi CLI";
     case "grok":
       return "Grok CLI";
+    case "dsh":
+      return "DeepSeek Harness";
     case "claude":
     default:
       return "Claude Code";
@@ -1791,6 +1795,16 @@ export function useSidebarMenus({
               );
             },
           })),
+        },
+        {
+          id: "new-session-dsh",
+          label: t("workspace.engineDsh"),
+          iconKind: "engine-dsh",
+          ...resolveEngineActionMeta(workspace, "dsh"),
+          onSelect: async () => {
+            const threadId = await runAddAgent("dsh");
+            await handleCreatedSession(threadId);
+          },
         },
       ] satisfies WorkspaceMenuAction[];
 

@@ -9,6 +9,7 @@ import {
   listGeminiSessions,
   listGrokSessions,
   listKimiSessions,
+  listDshSessions,
   listPiSessions,
   listWorkspaceSessions,
   listThreadTitles,
@@ -41,6 +42,7 @@ vi.mock("../../../services/tauri", () => ({
   listClaudeSessions: vi.fn(),
   listGeminiSessions: vi.fn(),
   listKimiSessions: vi.fn(),
+  listDshSessions: vi.fn(),
   listPiSessions: vi.fn(),
   listGrokSessions: vi.fn(),
   listSessionIndexForWorkspace: vi.fn(async () => ({
@@ -136,6 +138,7 @@ describe("useThreadActions shared/native compatibility", () => {
     vi.mocked(listClaudeSessions).mockResolvedValue([]);
     vi.mocked(listGeminiSessions).mockResolvedValue([]);
     vi.mocked(listPiSessions).mockResolvedValue([]);
+    vi.mocked(listDshSessions).mockResolvedValue([]);
     vi.mocked(listWorkspaceSessions).mockResolvedValue({
       data: [],
       nextCursor: null,

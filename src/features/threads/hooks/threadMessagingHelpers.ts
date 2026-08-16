@@ -229,6 +229,45 @@ export function extractSessionIdFromEngineSendResponse(
   return null;
 }
 
+type NativePendingEngine = "claude" | "gemini" | "grok" | "kimi" | "opencode" | "dsh";
+
+export function resolveNativeSessionIdForSend(input: {
+  engine: EngineType;
+  threadId: string;
+  pendingSessionByEngine: Partial<Record<NativePendingEngine, string | null | undefined>>;
+}): string | null {
+  const { engine, threadId, pendingSessionByEngine } = input;
+  const prefix = `${engine}:`;
+  const pendingPrefix = `${engine}-pending-`;
+  if (threadId.startsWith(prefix)) {
+    return threadId.slice(prefix.length);
+  }
+  if (threadId.startsWith(pendingPrefix)) {
+    // Claude pending stays unbound until native confirmation; the send
+    // path blocks separately instead of guessing a session id.
+    if (engine === "claude") {
+      return null;
+    }
+    return pendingSessionByEngine[engine as NativePendingEngine] ?? null;
+  }
+  return null;
+}
+
+export function resolveDshModelForSend(input: {
+  catalogId?: string | null;
+  runtimeModel?: string | null;
+}): string | null {
+  const catalogId = input.catalogId?.trim() || "";
+  if (catalogId.includes("/")) {
+    return catalogId;
+  }
+  const runtimeModel = input.runtimeModel?.trim() || "";
+  if (runtimeModel.includes("/")) {
+    return runtimeModel;
+  }
+  return catalogId || runtimeModel || null;
+}
+
 type GeminiSessionSummary = {
   sessionId: string;
   updatedAt: number;

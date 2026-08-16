@@ -1292,7 +1292,7 @@ function ComposerImpl({
   );
   const handleCreationTargetChange = useCallback(
     (target: ExecutionTarget) => {
-      // create-session 必须用 Atomic 校验（含 PI 等非 Shared 引擎）；
+      // create-session 必须用 Atomic 校验（含 PI/DSH 等非 Shared 引擎）；
       // isResolvedExecutionTarget 仅 Shared 子集，会静默丢掉 PI 点击。
       if (!createSessionTargetPicker || !isAtomicExecutionTarget(target)) {
         return;

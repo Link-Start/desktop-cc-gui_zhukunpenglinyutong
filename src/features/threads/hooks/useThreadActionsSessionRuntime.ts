@@ -17,6 +17,7 @@ import {
   deleteClaudeSession as deleteClaudeSessionService,
   deleteCodexSession as deleteCodexSessionService,
   forkClaudeSessionFromMessage as forkClaudeSessionFromMessageService,
+  forkDshSession as forkDshSessionService,
   forkThread as forkThreadService,
   loadClaudeSession as loadClaudeSessionService,
   rewindCodexThread as rewindCodexThreadService,
@@ -362,7 +363,7 @@ export function useThreadActionsSessionRuntime({
       workspaceId: string,
       options?: {
         activate?: boolean;
-        engine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi";
+        engine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh";
         folderId?: string | null;
         autoSession?: AutoSessionMetadata | null;
         providerProfileId?: string | null;
@@ -407,7 +408,14 @@ export function useThreadActionsSessionRuntime({
         selectedProviderBinding,
       });
 
-      if (engine === "claude" || engine === "grok" || engine === "kimi" || engine === "opencode" || engine === "pi") {
+      if (
+        engine === "claude" ||
+        engine === "grok" ||
+        engine === "kimi" ||
+        engine === "opencode" ||
+        engine === "pi" ||
+        engine === "dsh"
+      ) {
         const prefix = engine;
         const threadId = `${prefix}-pending-${Date.now()}-${Math.random()
           .toString(36)
@@ -660,6 +668,15 @@ export function useThreadActionsSessionRuntime({
           threadId.startsWith("kimi-pending-")
         ) {
           return null;
+        } else if (threadId.startsWith("dsh-pending-")) {
+          return null;
+        } else if (threadId.startsWith("dsh:")) {
+          const sessionId = threadId.slice("dsh:".length).trim();
+          const workspacePath = workspacePathsByIdRef.current[workspaceId];
+          if (!sessionId || !workspacePath) {
+            return null;
+          }
+          response = await forkDshSessionService(workspacePath, sessionId);
         } else {
           response = await forkThreadService(workspaceId, threadId, null, {
             providerProfileId,
@@ -682,7 +699,9 @@ export function useThreadActionsSessionRuntime({
             ? "gemini"
             : forkedThreadId.startsWith("kimi:")
               ? "kimi"
-              : "codex";
+              : forkedThreadId.startsWith("dsh:")
+                ? "dsh"
+                : "codex";
         dispatch({
           type: "ensureThread",
           workspaceId,
@@ -742,6 +761,7 @@ export function useThreadActionsSessionRuntime({
       onDebug,
       resumeThreadForWorkspace,
       threadsByWorkspace,
+      workspacePathsByIdRef,
     ],
   );
 

@@ -1,0 +1,142 @@
+## ADDED Requirements
+
+### Requirement: DSH is a first-class Native Engine
+
+mossx SHALL expose DeepSeek Harness as engine id `dsh` with display name
+`DeepSeek Harness`, protocol family `dsh-host-rpc`, and
+`executionModel: persistent`. DSH SHALL NOT be modeled as a vendor preset or
+an embedded Web UI.
+
+#### Scenario: User selects DSH in the engine picker
+
+- **WHEN** the user opens the composer engine / provider picker
+- **THEN** mossx SHALL show a DSH group labeled DeepSeek Harness / DSH
+- **AND** the provider mapping SHALL be `dsh` → `dsh` (not silently Claude)
+
+#### Scenario: Protocol family is not stream-json
+
+- **WHEN** the adapter registry reports the builtin `dsh` entry
+- **THEN** `protocolFamily` SHALL be `dsh-host-rpc`
+- **AND** `executionModel` SHALL be `persistent`
+
+### Requirement: Global DSH host supervisor
+
+mossx SHALL discover or start at most one `dsh web` host for the whole app.
+Probe authority is `host.describe`. Ownership is `spawned` or `adopted`.
+
+#### Scenario: User already runs dsh web
+
+- **WHEN** `host.describe` succeeds on the configured host/port
+- **THEN** mossx SHALL adopt that host
+- **AND** mossx exit SHALL NOT kill the adopted process
+
+#### Scenario: No healthy host and auto-start is on
+
+- **WHEN** no `host.describe` succeeds and `dshAutoStart` is true
+- **AND** a `dsh` binary is resolvable
+- **THEN** mossx SHALL spawn `dsh web --host 127.0.0.1 --port <chosen>`
+- **AND** wait for `host.describe` before treating the engine as ready
+- **AND** mossx exit SHALL only kill that spawned process
+
+#### Scenario: Port is occupied by a non-DSH process
+
+- **WHEN** TCP is open but `host.describe` fails
+- **THEN** mossx SHALL NOT send session RPCs to that port
+- **AND** it SHALL pick another port or surface a recoverable error
+
+### Requirement: Native DSH session identity
+
+A mossx DSH thread SHALL map 1:1 to a DSH `sessionId`. Canonical thread id is
+`dsh:<sessionId>`. `dsh-pending-*` is only an optimistic alias before
+`session.create` returns.
+
+#### Scenario: New DSH session
+
+- **WHEN** the user creates a DSH conversation in mossx workspace path P
+- **THEN** mossx SHALL call `workspace.create({ path: P })` then
+  `session.create({ workspaceId })`
+- **AND** the backend SHALL use the returned DSH `sessionId` as canonical identity
+- **AND** the backend SHALL NOT invent a durable UUID to stand in for it
+
+#### Scenario: Pending promotion
+
+- **WHEN** the composer shows `dsh-pending-*` before create returns
+- **THEN** promotion SHALL merge that row into `dsh:<sessionId>`
+- **AND** sidebar SHALL keep exactly one row
+
+### Requirement: Prompt ACK and turn terminal
+
+Input ACK MUST be the unary `session.prompt` `{ accepted: true }`. Logical
+terminal MUST be mux/history `turn/end`. Host process liveness MUST NOT be a
+turn terminal.
+
+#### Scenario: Send a text turn
+
+- **WHEN** the user sends text on a DSH thread
+- **THEN** mossx MAY call `session.selectModel` if the `{ provider, model,
+  reasoningEffort }` selection changed
+- **AND** mossx SHALL call `session.prompt` with `mode: "queue"`
+- **AND** mossx SHALL treat `{ accepted: true }` as input ACK only
+- **AND** mossx SHALL settle the turn when `turn/end` arrives
+
+#### Scenario: Stop
+
+- **WHEN** the user stops an in-flight DSH turn
+- **THEN** mossx SHALL call `session.cancel` and wait for turn settlement
+- **AND** the DSH host process SHALL remain running
+
+### Requirement: Live mux projection
+
+mossx SHALL subscribe to the host live stream (`/api/events.mux`, WebSocket on
+published 0.1.x) and project known DSH events into `NormalizedThreadEvent`.
+Unknown event types SHALL be skipped.
+
+#### Scenario: Streaming assistant text
+
+- **WHEN** mux delivers `session/event` with `assistant/chunk` for the active thread
+- **THEN** the curtain SHALL update via `liveAssistantTextChannel` / item delta
+  channels
+- **AND** the DSH engine SHALL be on the streaming whitelist so the cursor shows
+
+### Requirement: Model catalog comes from the DSH host
+
+`get_engine_models(Dsh)` SHALL call `llm.models` after ensure-host. Catalog
+entries SHALL preserve the DSH `{ provider, model }` pair.
+
+#### Scenario: Host has configured providers
+
+- **WHEN** `llm.models` returns non-empty `groups`
+- **THEN** the picker SHALL list `${providerName} / ${model.name}`
+- **AND** the stored model id SHALL be sufficient to call `session.selectModel`
+
+#### Scenario: Empty catalog
+
+- **WHEN** the host is down, or no keys are configured, or only `failures[]` exist
+- **THEN** mossx SHALL NOT show a generic “engine not installed” for a present CLI
+- **AND** send SHALL stay disabled until a selectable model exists
+- **AND** the copy SHALL point the user to open DSH Settings
+
+### Requirement: DSH stays out of Shared Session
+
+DSH SHALL NOT be added to `SHARED_SESSION_SUPPORTED_ENGINES` or
+`is_supported_shared_session_engine()` in this change.
+
+#### Scenario: Shared target picker
+
+- **WHEN** the user opens Shared target selection
+- **THEN** DSH SHALL be unavailable
+- **AND** mossx SHALL show an unsupported reason
+- **AND** persist / resolve paths SHALL reject a `dsh` Shared target instead of writing a DSH binding
+
+### Requirement: Approval and question bridge
+
+DSH `approval/requested` and `question/requested` SHALL reuse the existing
+user-input elicitation UI. Answers SHALL go to `POST /api/respond` with the
+mux frame `rpcId`.
+
+#### Scenario: Tool asks for approval
+
+- **WHEN** mux emits `approval/requested` for the active DSH session
+- **THEN** mossx SHALL render the existing approval card
+- **AND** the user's allow/reject SHALL be posted to `/api/respond`
+- **AND** mossx SHALL NOT invent a DSH-only modal

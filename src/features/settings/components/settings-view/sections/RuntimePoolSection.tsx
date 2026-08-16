@@ -42,9 +42,10 @@ const SESSION_ENGINE_ORDER: RuntimeSessionEngine[] = [
   "codex",
   "gemini",
   "opencode",
+  "dsh",
 ];
 
-export type RuntimeSessionEngine = "claude" | "codex" | "gemini" | "opencode";
+export type RuntimeSessionEngine = "claude" | "codex" | "gemini" | "opencode" | "dsh";
 
 export type RuntimeSessionEngineCount = {
   engine: RuntimeSessionEngine;
@@ -232,6 +233,8 @@ function getRuntimeEngineLabel(
       return t("settings.runtimeEngineGemini");
     case "opencode":
       return t("settings.runtimeEngineOpenCode");
+    case "dsh":
+      return t("settings.runtimeEngineDsh", { defaultValue: "DSH" });
     default:
       return t("settings.runtimeEngineCodex");
   }

@@ -820,6 +820,8 @@ export function ThreadList({
             ? "OpenCode"
           : engineSource === "pi"
             ? "PI CLI"
+            : engineSource === "dsh"
+              ? "DSH"
             : "Codex";
     const engineTitle = isSharedThread
       ? `Shared Session · ${baseEngineTitle}`

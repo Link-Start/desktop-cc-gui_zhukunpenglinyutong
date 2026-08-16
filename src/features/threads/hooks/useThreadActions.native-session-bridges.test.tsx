@@ -19,6 +19,7 @@ import {
   listGeminiSessions,
   listKimiSessions,
   listGrokSessions,
+  listDshSessions,
   listPiSessions,
   listSessionIndexForWorkspace,
   loadClaudeSession,
@@ -54,6 +55,7 @@ vi.mock("../../../services/tauri", () => ({
   listGeminiSessions: vi.fn(),
   listKimiSessions: vi.fn(),
   listGrokSessions: vi.fn(),
+  listDshSessions: vi.fn(),
   listPiSessions: vi.fn(),
   getOpenCodeSessionList: vi.fn(),
   listWorkspaceSessions: vi.fn(),
@@ -108,6 +110,7 @@ describe("useThreadActions native session bridges", () => {
     vi.mocked(listKimiSessions).mockResolvedValue([]);
     vi.mocked(listGrokSessions).mockResolvedValue([]);
     vi.mocked(listPiSessions).mockResolvedValue([]);
+    vi.mocked(listDshSessions).mockResolvedValue([]);
     vi.mocked(listSessionIndexForWorkspace).mockResolvedValue({
       data: [],
       source: "session-index",

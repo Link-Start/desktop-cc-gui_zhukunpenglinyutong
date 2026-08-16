@@ -18,10 +18,11 @@ export function shouldShowHistoryLoadingForSelectionThread(
     return false;
   }
   // Shared 与 Native 一样需要画布 loading，避免空态闪烁；
-  // gemini/opencode 历史链路较轻，仍保持原排除策略。
+  // gemini/opencode/dsh 历史链路较轻，仍保持原排除策略。
   return (
     !normalizedThreadId.startsWith("gemini:") &&
-    !normalizedThreadId.startsWith("opencode:")
+    !normalizedThreadId.startsWith("opencode:") &&
+    !normalizedThreadId.startsWith("dsh:")
   );
 }
 
@@ -32,7 +33,7 @@ type ResolveClaudeContinuationThreadIdInput = {
   resolveCanonicalThreadId: (threadId: string) => string;
   resolvePendingThreadForSession?: (
     workspaceId: string,
-    engine: "claude" | "gemini" | "grok" | "kimi" | "opencode",
+    engine: "claude" | "gemini" | "grok" | "kimi" | "opencode" | "dsh",
   ) => string | null;
   getActiveTurnIdForThread?: (threadId: string) => string | null;
 };

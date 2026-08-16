@@ -90,7 +90,7 @@ describe("engineTaskOutputProjection", () => {
   });
 
   it("keeps the real engine for non-codex engines instead of relabeling as claude", () => {
-    for (const engine of ["gemini", "kimi", "opencode"] as const) {
+    for (const engine of ["gemini", "kimi", "opencode", "dsh"] as const) {
       const source = buildTaskOutputSourceFromNotification({
         itemId: "message-1",
         engine,

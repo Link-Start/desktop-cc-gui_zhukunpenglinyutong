@@ -35,6 +35,8 @@ const ProviderIcon = ({ providerId, size = 16 }: { providerId: string; size?: nu
       return <EngineIcon engine="opencode" size={size} style={imgStyle} />;
     case 'pi':
       return <EngineIcon engine="pi" size={size} style={imgStyle} />;
+    case 'dsh':
+      return <EngineIcon engine="dsh" size={size} style={imgStyle} />;
     default:
       return <EngineIcon engine="claude" size={size} style={imgStyle} />;
   }

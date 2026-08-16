@@ -8,6 +8,7 @@ import {
   getOpenCodeSessionList,
   listClaudeSessions,
   listGeminiSessions,
+  listDshSessions,
   listPiSessions,
   listThreadTitles,
   listThreads,
@@ -37,6 +38,7 @@ vi.mock("../../../services/tauri", () => ({
   listClaudeSessions: vi.fn(),
   listGeminiSessions: vi.fn(),
   listKimiSessions: vi.fn(),
+  listDshSessions: vi.fn(),
   listPiSessions: vi.fn(),
   listGrokSessions: vi.fn(),
   listSessionIndexForWorkspace: vi.fn(async () => ({
@@ -189,6 +191,7 @@ describe("useThreadActions opencode sidebar listing timeout fallback", () => {
     vi.mocked(listClaudeSessions).mockResolvedValue([]);
     vi.mocked(listGeminiSessions).mockResolvedValue([]);
     vi.mocked(listPiSessions).mockResolvedValue([]);
+    vi.mocked(listDshSessions).mockResolvedValue([]);
     vi.mocked(getOpenCodeSessionList).mockResolvedValue([]);
     vi.mocked(listWorkspaceSessions).mockResolvedValue({
       data: [],

@@ -1036,6 +1036,67 @@ describe("useThreadTurnEvents", () => {
     );
   });
 
+  it("renames local mappings when dsh pending thread gets real session id", () => {
+    const {
+      result,
+      dispatch,
+      renameCustomNameKey,
+      renameThreadTitleMapping,
+    } = makeOptions();
+
+    act(() => {
+      result.current.onThreadSessionIdUpdated(
+        "ws-1",
+        "dsh-pending-abc",
+        "session-1",
+        "dsh",
+      );
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "renameThreadId",
+      workspaceId: "ws-1",
+      oldThreadId: "dsh-pending-abc",
+      newThreadId: "dsh:session-1",
+    });
+    expect(renameCustomNameKey).toHaveBeenCalledWith(
+      "ws-1",
+      "dsh-pending-abc",
+      "dsh:session-1",
+    );
+    expect(renameThreadTitleMapping).toHaveBeenCalledWith(
+      "ws-1",
+      "dsh-pending-abc",
+      "dsh:session-1",
+    );
+  });
+
+  it("rebinds finalized dsh thread id onto the active pending thread", () => {
+    const { result, dispatch, resolvePendingThreadForSession } = makeOptions({
+      activeThreadId: "dsh-pending-abc",
+    });
+    resolvePendingThreadForSession.mockImplementation(
+      (_workspaceId: string, engine: string) =>
+        engine === "dsh" ? "dsh-pending-abc" : null,
+    );
+
+    act(() => {
+      result.current.onThreadSessionIdUpdated(
+        "ws-1",
+        "dsh:session-1",
+        "session-1",
+        "dsh",
+      );
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "renameThreadId",
+      workspaceId: "ws-1",
+      oldThreadId: "dsh-pending-abc",
+      newThreadId: "dsh:session-1",
+    });
+  });
+
   it("migrates interrupt guards when claude pending thread gets real session id", () => {
     const {
       result,

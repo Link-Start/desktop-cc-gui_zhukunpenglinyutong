@@ -72,7 +72,7 @@ const LIVE_DELTA_EXTERNALIZATION_ENABLED = isLiveDeltaExternalizationEnabled();
 const inferEngineFromThreadId = inferEngineFromLegacyThreadId;
 
 export function canProgressEventStartProcessing(
-  engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi",
+  engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh",
 ) {
   return engine !== "codex";
 }
@@ -93,6 +93,10 @@ function isKimiThread(threadId: string) {
   return threadId.startsWith("kimi:") || threadId.startsWith("kimi-pending-");
 }
 
+function isDshThread(threadId: string) {
+  return threadId.startsWith("dsh:") || threadId.startsWith("dsh-pending-");
+}
+
 function isPiThread(threadId: string) {
   return threadId.startsWith("pi:") || threadId.startsWith("pi-pending-");
 }
@@ -101,7 +105,7 @@ function readHighResolutionNowMs() {
   return typeof performance !== "undefined" ? performance.now() : Date.now();
 }
 
-type ReasoningEngineHint = "gemini" | "grok" | "kimi" | "pi" | null;
+type ReasoningEngineHint = "gemini" | "grok" | "kimi" | "pi" | "dsh" | null;
 
 function isGeminiEventThread(
   threadId: string,
@@ -124,6 +128,13 @@ function isKimiEventThread(
   return engineHint === "kimi" || isKimiThread(threadId);
 }
 
+function isDshEventThread(
+  threadId: string,
+  engineHint?: ReasoningEngineHint,
+) {
+  return engineHint === "dsh" || isDshThread(threadId);
+}
+
 function isPiEventThread(
   threadId: string,
   engineHint?: ReasoningEngineHint,
@@ -134,7 +145,7 @@ function isPiEventThread(
 function inferItemEngineSource(
   item: Record<string, unknown>,
   threadId: string,
-): "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" {
+): "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh" {
   const rawEngineSource = asString(item.engineSource ?? item.engine_source ?? "")
     .trim()
     .toLowerCase();
@@ -145,7 +156,8 @@ function inferItemEngineSource(
     rawEngineSource === "grok" ||
     rawEngineSource === "kimi" ||
     rawEngineSource === "opencode" ||
-    rawEngineSource === "pi"
+    rawEngineSource === "pi" ||
+    rawEngineSource === "dsh"
   ) {
     return rawEngineSource;
   }
@@ -625,7 +637,8 @@ export function useThreadItemEvents({
         (isGeminiEventThread(threadId, reasoningEngineHint) ||
           isGrokEventThread(threadId, reasoningEngineHint) ||
           isKimiEventThread(threadId, reasoningEngineHint) ||
-          isPiEventThread(threadId, reasoningEngineHint)) &&
+          isPiEventThread(threadId, reasoningEngineHint) ||
+          isDshEventThread(threadId, reasoningEngineHint)) &&
         (operation.kind === "reasoningSummaryDelta" ||
           operation.kind === "reasoningSummaryBoundary" ||
           operation.kind === "reasoningContentDelta");
@@ -1610,11 +1623,12 @@ export function useThreadItemEvents({
           itemEngineSource === "grok" ||
           itemEngineSource === "kimi" ||
           itemEngineSource === "opencode" ||
-          itemEngineSource === "codex" ||
-          itemEngineSource === "pi"
+          itemEngineSource === "pi" ||
+          itemEngineSource === "dsh" ||
+          itemEngineSource === "codex"
             ? {
                 ...converted,
-                engineSource: itemEngineSource as "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi",
+                engineSource: itemEngineSource as "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh",
               }
             : converted;
         const threadEngine = inferEngineFromThreadId(threadId);

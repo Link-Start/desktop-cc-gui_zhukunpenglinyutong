@@ -3,6 +3,7 @@ import { claudeRealtimeAdapter } from "./claudeRealtimeAdapter";
 import { codexRealtimeAdapter } from "./codexRealtimeAdapter";
 import { geminiRealtimeAdapter } from "./geminiRealtimeAdapter";
 import { grokRealtimeAdapter } from "./grokRealtimeAdapter";
+import { dshRealtimeAdapter } from "./dshRealtimeAdapter";
 import { kimiRealtimeAdapter } from "./kimiRealtimeAdapter";
 import { opencodeRealtimeAdapter } from "./opencodeRealtimeAdapter";
 import { getRealtimeAdapterByEngine } from "./realtimeAdapterRegistry";
@@ -10,7 +11,15 @@ import type { ConversationEngine } from "../contracts/conversationCurtainContrac
 
 describe("realtime adapters", () => {
   it("keeps unknown realtime methods non-fatal for every governance engine", () => {
-    const engines: ConversationEngine[] = ["claude", "codex", "gemini", "grok", "kimi", "opencode"];
+    const engines: ConversationEngine[] = [
+      "claude",
+      "codex",
+      "gemini",
+      "grok",
+      "kimi",
+      "opencode",
+      "dsh",
+    ];
 
     for (const engine of engines) {
       const event = getRealtimeAdapterByEngine(engine).mapEvent({
@@ -520,6 +529,24 @@ describe("realtime adapters", () => {
     });
     expect(event).toBeTruthy();
     expect(event?.engine).toBe("gemini");
+    expect(event?.operation).toBe("appendAgentMessageDelta");
+    expect(event?.item.kind).toBe("message");
+  });
+
+  it("maps dsh text:delta alias to assistant delta", () => {
+    const event = dshRealtimeAdapter.mapEvent({
+      workspaceId: "ws-dsh",
+      message: {
+        method: "text:delta",
+        params: {
+          threadId: "dsh:session-1",
+          itemId: "agent-1",
+          delta: "working",
+        },
+      },
+    });
+    expect(event).toBeTruthy();
+    expect(event?.engine).toBe("dsh");
     expect(event?.operation).toBe("appendAgentMessageDelta");
     expect(event?.item.kind).toBe("message");
   });

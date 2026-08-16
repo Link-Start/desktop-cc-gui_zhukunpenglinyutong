@@ -45,6 +45,8 @@ pub mod pi;
 pub mod pi_auth;
 pub(crate) mod pi_history;
 pub(crate) mod pi_provider_profile;
+pub mod dsh;
+pub(crate) mod dsh_provider_profile;
 pub mod manager;
 pub mod opencode;
 pub(crate) mod opencode_provider_profile;
@@ -83,6 +85,8 @@ pub enum EngineType {
     Kimi,
     /// PI CLI
     Pi,
+    /// DeepSeek Harness (dsh web host)
+    Dsh,
 }
 
 impl Default for EngineType {
@@ -102,6 +106,7 @@ impl EngineType {
             EngineType::OpenCode => "OpenCode",
             EngineType::Kimi => "Kimi CLI",
             EngineType::Pi => "PI CLI",
+            EngineType::Dsh => "DeepSeek Harness",
         }
     }
 
@@ -115,6 +120,7 @@ impl EngineType {
             EngineType::OpenCode => "opencode",
             EngineType::Kimi => "kimi",
             EngineType::Pi => "pi",
+            EngineType::Dsh => "dsh",
         }
     }
 }
@@ -130,7 +136,8 @@ pub(crate) fn engine_enabled_in_settings(
         | EngineType::Codex
         | EngineType::Grok
         | EngineType::Kimi
-        | EngineType::Pi => true,
+        | EngineType::Pi
+        | EngineType::Dsh => true,
     }
 }
 
@@ -142,7 +149,8 @@ pub(crate) fn engine_disabled_diagnostic(engine_type: EngineType) -> Option<&'st
         | EngineType::Codex
         | EngineType::Grok
         | EngineType::Kimi
-        | EngineType::Pi => None,
+        | EngineType::Pi
+        | EngineType::Dsh => None,
     }
 }
 
@@ -155,6 +163,7 @@ pub(crate) fn disabled_engine_status(engine_type: EngineType) -> EngineStatus {
         EngineType::OpenCode => EngineFeatures::opencode(),
         EngineType::Kimi => EngineFeatures::kimi(),
         EngineType::Pi => EngineFeatures::pi(),
+        EngineType::Dsh => EngineFeatures::dsh(),
     };
     EngineStatus {
         engine_type,
@@ -431,6 +440,19 @@ impl EngineFeatures {
     pub fn pi() -> Self {
         Self {
             // PI: `--thinking` levels (off/minimal/low/medium/high/xhigh/max).
+            reasoning_effort: true,
+            collaboration_mode: false,
+            image_input: true,
+            session_resume: true,
+            tools_control: true,
+            streaming: true,
+            mcp: false,
+        }
+    }
+
+    /// Features for DeepSeek Harness (host-managed tools / catalog).
+    pub fn dsh() -> Self {
+        Self {
             reasoning_effort: true,
             collaboration_mode: false,
             image_input: true,

@@ -45,6 +45,7 @@ impl EngineId {
 pub enum EngineProtocolFamily {
     StreamJsonCli,
     AppServerJsonRpc,
+    DshHostRpc,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -162,18 +163,17 @@ impl BuiltinEngineProtocol {
 
 impl EngineProtocol for BuiltinEngineProtocol {
     fn family(&self) -> EngineProtocolFamily {
-        if self.engine == EngineType::Codex {
-            EngineProtocolFamily::AppServerJsonRpc
-        } else {
-            EngineProtocolFamily::StreamJsonCli
+        match self.engine {
+            EngineType::Codex => EngineProtocolFamily::AppServerJsonRpc,
+            EngineType::Dsh => EngineProtocolFamily::DshHostRpc,
+            _ => EngineProtocolFamily::StreamJsonCli,
         }
     }
 
     fn execution_model(&self) -> EngineExecutionModel {
-        if self.engine == EngineType::Codex {
-            EngineExecutionModel::Persistent
-        } else {
-            EngineExecutionModel::OneShot
+        match self.engine {
+            EngineType::Codex | EngineType::Dsh => EngineExecutionModel::Persistent,
+            _ => EngineExecutionModel::OneShot,
         }
     }
 
@@ -208,6 +208,7 @@ impl EngineAdapterRegistry {
             EngineType::Kimi,
             EngineType::OpenCode,
             EngineType::Pi,
+            EngineType::Dsh,
         ] {
             let protocol = BuiltinEngineProtocol::new(engine);
             let adapter = BuiltinEngineAdapter::new(engine);
@@ -283,6 +284,7 @@ pub fn engine_id(engine: EngineType) -> &'static str {
         EngineType::Kimi => "kimi",
         EngineType::OpenCode => "opencode",
         EngineType::Pi => "pi",
+        EngineType::Dsh => "dsh",
     }
 }
 
@@ -315,6 +317,11 @@ mod tests {
                 .execution_model,
             EngineExecutionModel::Persistent
         );
+        let dsh = registry
+            .get(&EngineId::builtin(EngineType::Dsh))
+            .expect("dsh");
+        assert_eq!(dsh.execution_model, EngineExecutionModel::Persistent);
+        assert_eq!(dsh.protocol_family, EngineProtocolFamily::DshHostRpc);
     }
 
     #[test]

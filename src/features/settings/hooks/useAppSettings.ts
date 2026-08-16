@@ -125,6 +125,25 @@ function normalizeWebServicePort(value: number | null | undefined): number {
   return normalized;
 }
 
+const DSH_DEFAULT_HOST = "127.0.0.1";
+const DSH_DEFAULT_PORT = 3080;
+
+function normalizeDshHost(value: string | null | undefined): string {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : DSH_DEFAULT_HOST;
+}
+
+function normalizeDshPort(value: number | null | undefined): number {
+  if (!Number.isFinite(value)) {
+    return DSH_DEFAULT_PORT;
+  }
+  const normalized = Math.round(value as number);
+  if (normalized < 1 || normalized > 65535) {
+    return DSH_DEFAULT_PORT;
+  }
+  return normalized;
+}
+
 function normalizeWebServiceToken(
   value: string | null | undefined,
 ): string | null {
@@ -218,6 +237,10 @@ const defaultSettings: AppSettings = {
   piBin: null,
   grokBin: null,
   opencodeBin: null,
+  dshBin: null,
+  dshHost: "127.0.0.1",
+  dshPort: 3080,
+  dshAutoStart: true,
   codexBin: null,
   codexArgs: null,
   terminalShellPath: null,
@@ -409,6 +432,10 @@ function normalizeAppSettings(
     opencodeBin: settings.opencodeBin?.trim()
       ? settings.opencodeBin.trim()
       : null,
+    dshBin: settings.dshBin?.trim() ? settings.dshBin.trim() : null,
+    dshHost: normalizeDshHost(settings.dshHost),
+    dshPort: normalizeDshPort(settings.dshPort),
+    dshAutoStart: settings.dshAutoStart !== false,
     codexBin: settings.codexBin?.trim() ? settings.codexBin.trim() : null,
     codexArgs: settings.codexArgs?.trim() ? settings.codexArgs.trim() : null,
     terminalShellPath: settings.terminalShellPath?.trim()

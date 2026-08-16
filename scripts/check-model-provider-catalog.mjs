@@ -9,7 +9,12 @@ const artifactPath = path.join(
 const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
 const failures = [];
 
-for (const engine of ["codex", "gemini", "grok", "kimi", "opencode"]) {
+// DSH catalog is host-runtime (`llm.models`). A static fallback roster would
+// lie about models the user has not configured. Empty / absent is the decision.
+const STATIC_FALLBACK_ENGINES = ["codex", "gemini", "grok", "kimi", "opencode"];
+const RUNTIME_ONLY_ENGINES = ["dsh"];
+
+for (const engine of STATIC_FALLBACK_ENGINES) {
   const entries = artifact.engines?.[engine];
   if (!Array.isArray(entries) || entries.length === 0) {
     failures.push(`${engine} fallback roster is empty`);
@@ -49,10 +54,18 @@ if (/#\[serde\(skip_serializing\)\]\s*pub provider/.test(rustDto)) {
   failures.push("Rust ModelInfo still suppresses provider metadata");
 }
 
+for (const engine of RUNTIME_ONLY_ENGINES) {
+  const entries = artifact.engines?.[engine];
+  if (entries != null && !Array.isArray(entries)) {
+    failures.push(`${engine} runtime-only catalog must be an array or omitted`);
+  }
+}
+
 if (failures.length > 0) {
   console.error(failures.join("\n"));
   process.exit(1);
 }
+
 console.log(
-  `model provider catalog valid: codex=${artifact.engines.codex.length}, gemini=${artifact.engines.gemini.length}, grok=${artifact.engines.grok.length}, kimi=${artifact.engines.kimi.length}, opencode=${artifact.engines.opencode.length}`,
+  `model provider catalog valid: codex=${artifact.engines.codex.length}, gemini=${artifact.engines.gemini.length}, grok=${artifact.engines.grok.length}, kimi=${artifact.engines.kimi.length}, opencode=${artifact.engines.opencode.length}, dsh=runtime-only`,
 );

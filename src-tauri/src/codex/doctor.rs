@@ -700,12 +700,158 @@ pub(crate) async fn run_opencode_doctor_with_settings(
     }))
 }
 
+pub(crate) const DSH_NODE_REQUIREMENT: &str = "^22.19.0 || >=24.0.0";
+
+fn parse_node_semver(raw: &str) -> Option<(u64, u64, u64)> {
+    let trimmed = raw.trim().trim_start_matches('v').trim_start_matches('V');
+    if trimmed.is_empty() {
+        return None;
+    }
+    let bytes = trimmed.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() && !bytes[index].is_ascii_digit() {
+        index += 1;
+    }
+    if index >= bytes.len() {
+        return None;
+    }
+    let rest = &trimmed[index..];
+    let mut parts = rest.split(|ch: char| !ch.is_ascii_digit());
+    let major = parts.next()?.parse::<u64>().ok()?;
+    let minor = parts.next()?.parse::<u64>().ok()?;
+    let patch = parts.next().and_then(|value| value.parse::<u64>().ok()).unwrap_or(0);
+    Some((major, minor, patch))
+}
+
+pub(crate) fn node_satisfies_dsh_requirement(version: &str) -> bool {
+    let Some((major, minor, _patch)) = parse_node_semver(version) else {
+        return false;
+    };
+    (major == 22 && minor >= 19) || major >= 24
+}
+
+pub(crate) fn dsh_node_requirement_error(found: Option<&str>) -> String {
+    match found {
+        Some(version) => format!("DSH requires Node {DSH_NODE_REQUIREMENT}; found {version}."),
+        None => format!(
+            "DSH requires Node {DSH_NODE_REQUIREMENT}; Node version could not be determined."
+        ),
+    }
+}
+
+pub(crate) async fn run_dsh_doctor_with_settings(
+    dsh_bin: Option<String>,
+    settings: &AppSettings,
+) -> Result<Value, String> {
+    let default_bin = settings.dsh_bin.clone();
+    let resolved = dsh_bin
+        .clone()
+        .filter(|value| !value.trim().is_empty())
+        .or(default_bin);
+    let requested_bin = resolved
+        .clone()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "dsh".to_string());
+    let path_env = build_codex_path_env(Some(requested_bin.as_str()));
+    let debug_info = get_cli_debug_info(Some(requested_bin.as_str()));
+    let version_result = check_cli_binary(&requested_bin, path_env.clone()).await;
+    let (version, cli_error, fallback_retried) = match version_result {
+        Ok(Some(version)) => (Some(version), None, false),
+        Ok(None) => (Some("unknown".to_string()), None, true),
+        Err(error) => (None, Some(error), false),
+    };
+    let launch_context = resolve_codex_launch_context(Some(requested_bin.as_str()));
+
+    let (node_present, node_version, node_probe_details) =
+        probe_node_runtime(path_env.as_ref()).await;
+    let node_requirement_ok = node_version
+        .as_deref()
+        .is_some_and(node_satisfies_dsh_requirement);
+    let node_ok = node_present && node_requirement_ok;
+    let node_details = if node_present && !node_requirement_ok {
+        Some(dsh_node_requirement_error(node_version.as_deref()))
+    } else {
+        node_probe_details
+    };
+
+    // Optional host.describe: never spawn `dsh web`. Host down ≠ CLI missing.
+    let runtime = crate::engine::dsh::runtime_settings_from_app(settings);
+    let origin = crate::engine::dsh::host::origin_from_host_port(&runtime.host, runtime.port);
+    let host_describe = if version.is_some() {
+        match crate::engine::dsh::supervisor::probe_describe(&origin).await {
+            Ok(value) => json!({
+                "ok": true,
+                "origin": origin,
+                "describe": value,
+            }),
+            Err(error) => json!({
+                "ok": false,
+                "origin": origin,
+                "error": error,
+                "details": "DSH host is not running; CLI is still installed. Host down is not a missing-binary failure.",
+            }),
+        }
+    } else {
+        Value::Null
+    };
+
+    let mut details = cli_error.clone();
+    if details.is_none() {
+        if let Some(node_error) = node_details
+            .as_deref()
+            .filter(|_| !node_ok)
+        {
+            details = Some(node_error.to_string());
+        }
+    }
+
+    let environment_diagnosis =
+        build_engine_environment_diagnosis("dsh", Some(requested_bin.as_str()), &debug_info);
+    let proxy_diagnosis = debug_info
+        .get("proxyDiagnosis")
+        .cloned()
+        .unwrap_or(Value::Null);
+    let network_diagnosis = if version.is_some() {
+        Value::Null
+    } else {
+        json!({
+            "category": classify_endpoint_failure(cli_error.as_deref()),
+            "proxy": proxy_diagnosis,
+        })
+    };
+
+    // Host describe failure must not flip `ok` to a missing-CLI diagnosis.
+    Ok(json!({
+        "ok": version.is_some() && node_ok,
+        "codexBin": resolved,
+        "version": version,
+        "appServerOk": host_describe.get("ok").and_then(|value| value.as_bool()).unwrap_or(false),
+        "details": details,
+        "path": path_env,
+        "nodeOk": node_ok,
+        "nodeVersion": node_version,
+        "nodeDetails": node_details,
+        "resolvedBinaryPath": launch_context.resolved_bin,
+        "wrapperKind": launch_context.wrapper_kind,
+        "pathEnvUsed": launch_context.path_env,
+        "proxyEnvSnapshot": debug_info.get("proxyEnvSnapshot").cloned().unwrap_or(Value::Null),
+        "appServerProbeStatus": Value::Null,
+        "fallbackRetried": fallback_retried,
+        "environmentDiagnosis": environment_diagnosis,
+        "proxyDiagnosis": proxy_diagnosis,
+        "networkDiagnosis": network_diagnosis,
+        "hostDescribe": host_describe,
+        "debug": debug_info,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
+        dsh_node_requirement_error, node_satisfies_dsh_requirement,
         opencode_default_model_probe_from_document, run_claude_doctor_with_settings,
-        run_grok_doctor_with_settings, run_kimi_doctor_with_settings,
-        run_opencode_doctor_with_settings,
+        run_dsh_doctor_with_settings, run_grok_doctor_with_settings,
+        run_kimi_doctor_with_settings, run_opencode_doctor_with_settings,
     };
     use crate::types::AppSettings;
     use serde_json::{json, Value};
@@ -740,6 +886,114 @@ mod tests {
         assert_eq!(diagnostics["ok"], false);
         assert!(diagnostics["kimiDoctor"].is_null());
         assert!(diagnostics["debug"].is_object());
+    }
+
+    #[tokio::test]
+    async fn dsh_doctor_failure_keeps_structured_diagnostics_fields() {
+        let diagnostics = run_dsh_doctor_with_settings(
+            Some("/definitely/missing/dsh".to_string()),
+            &AppSettings::default(),
+        )
+        .await
+        .expect("doctor should return structured diagnostics even on failure");
+
+        for key in [
+            "ok",
+            "codexBin",
+            "version",
+            "details",
+            "nodeOk",
+            "environmentDiagnosis",
+            "networkDiagnosis",
+            "hostDescribe",
+            "debug",
+        ] {
+            assert!(
+                diagnostics.get(key).is_some(),
+                "missing structured diagnostics field: {key}"
+            );
+        }
+
+        assert_eq!(diagnostics["codexBin"], "/definitely/missing/dsh");
+        assert_eq!(diagnostics["ok"], false);
+        assert!(diagnostics["hostDescribe"].is_null());
+        assert!(diagnostics["debug"].is_object());
+    }
+
+    #[test]
+    fn dsh_node_requirement_accepts_supported_versions() {
+        assert!(node_satisfies_dsh_requirement("v22.19.0"));
+        assert!(node_satisfies_dsh_requirement("22.20.1"));
+        assert!(node_satisfies_dsh_requirement("v24.0.0"));
+        assert!(node_satisfies_dsh_requirement("25.1.0"));
+        assert!(!node_satisfies_dsh_requirement("v22.18.9"));
+        assert!(!node_satisfies_dsh_requirement("23.11.0"));
+        assert!(!node_satisfies_dsh_requirement("20.19.0"));
+        assert!(!node_satisfies_dsh_requirement("not-a-version"));
+        assert!(dsh_node_requirement_error(Some("v20.11.0")).contains("^22.19.0 || >=24.0.0"));
+        assert!(dsh_node_requirement_error(Some("v20.11.0")).contains("found v20.11.0"));
+    }
+
+    #[cfg(unix)]
+    fn write_fake_dsh_script(body: &str) -> std::path::PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let unique = format!(
+            "ccgui-dsh-doctor-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        );
+        let dir = std::env::temp_dir().join(unique);
+        std::fs::create_dir_all(&dir).expect("create temp cli dir");
+        let script_path = dir.join("dsh");
+        std::fs::write(&script_path, body).expect("write temp cli script");
+        let mut permissions = std::fs::metadata(&script_path)
+            .expect("stat temp cli script")
+            .permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&script_path, permissions).expect("chmod temp cli script");
+        script_path
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn dsh_doctor_host_down_does_not_report_cli_missing() {
+        let script_path = write_fake_dsh_script(
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo '0.1.0'\n  exit 0\nfi\nexit 0\n",
+        );
+        let script_bin = script_path.to_string_lossy().to_string();
+        let mut settings = AppSettings::default();
+        settings.dsh_host = Some("127.0.0.1".to_string());
+        settings.dsh_port = Some(1);
+
+        let diagnostics = run_dsh_doctor_with_settings(Some(script_bin.clone()), &settings)
+            .await
+            .expect("doctor should return structured diagnostics");
+
+        assert_eq!(diagnostics["codexBin"], script_bin);
+        assert_eq!(diagnostics["version"], "0.1.0");
+        assert_eq!(diagnostics["hostDescribe"]["ok"], false);
+        let details = diagnostics["details"].as_str().unwrap_or("");
+        let host_error = diagnostics["hostDescribe"]["error"]
+            .as_str()
+            .unwrap_or_default();
+        let host_details = diagnostics["hostDescribe"]["details"]
+            .as_str()
+            .unwrap_or_default();
+        assert!(
+            !details.to_ascii_lowercase().contains("not installed"),
+            "host-down must not be reported as missing CLI: {details}"
+        );
+        assert!(
+            host_details.contains("Host down is not a missing-binary failure")
+                || host_error.contains("dsh"),
+            "expected host.describe failure details, got error={host_error} details={host_details}"
+        );
+
+        let _ = std::fs::remove_file(&script_path);
+        let _ = std::fs::remove_dir_all(script_path.parent().unwrap_or(std::path::Path::new("")));
     }
 
     #[tokio::test]

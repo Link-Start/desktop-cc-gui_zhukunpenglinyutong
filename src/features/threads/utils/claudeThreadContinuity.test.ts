@@ -25,6 +25,9 @@ describe("claudeThreadContinuity", () => {
     expect(shouldShowHistoryLoadingForSelectionThread("gemini:session-1")).toBe(
       false,
     );
+    expect(shouldShowHistoryLoadingForSelectionThread("dsh:session-1")).toBe(
+      false,
+    );
   });
 
   it("prefers persisted canonical aliases for Claude continuation", () => {

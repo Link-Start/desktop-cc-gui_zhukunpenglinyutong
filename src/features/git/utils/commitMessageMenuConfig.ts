@@ -42,9 +42,11 @@ export const getVisibleCommitMessageEngines = (
   disabledEngineIds: ReadonlySet<string> = EMPTY_DISABLED_COMMIT_MESSAGE_ENGINES,
 ): LastCommitMessageConfig["engine"][] =>
   BUILTIN_ENGINE_TYPES.filter(
-    (engine) =>
-      isEngineExecutionEnabled(engine) && !disabledEngineIds.has(engine),
-  ) as LastCommitMessageConfig["engine"][];
+    (engine): engine is LastCommitMessageConfig["engine"] =>
+      engine !== "dsh" &&
+      isEngineExecutionEnabled(engine) &&
+      !disabledEngineIds.has(engine),
+  );
 
 export const readCommitMessageMenuPreferences = (
   disabledEngineIds: ReadonlySet<string> = EMPTY_DISABLED_COMMIT_MESSAGE_ENGINES,

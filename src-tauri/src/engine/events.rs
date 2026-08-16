@@ -439,6 +439,7 @@ pub fn engine_event_to_app_server_event_with_turn_context(
                     EngineType::OpenCode => "opencode",
                     EngineType::Kimi => "kimi",
                     EngineType::Pi => "pi",
+                    EngineType::Dsh => "dsh",
                 },
             }
         }),

@@ -17,6 +17,7 @@ import {
   listGeminiSessions,
   listGrokSessions,
   listKimiSessions,
+  listDshSessions,
   listPiSessions,
   listThreadTitles,
   listThreads,
@@ -78,6 +79,7 @@ vi.mock("../../../services/tauri", () => ({
   listClaudeSessions: vi.fn(),
   listGeminiSessions: vi.fn(),
   listKimiSessions: vi.fn(),
+  listDshSessions: vi.fn(),
   listPiSessions: vi.fn(),
   listGrokSessions: vi.fn(),
   getOpenCodeSessionList: vi.fn(),
@@ -163,6 +165,7 @@ describe("useThreadActions list apply input-aware yield", () => {
     vi.mocked(listKimiSessions).mockResolvedValue([]);
     vi.mocked(listGrokSessions).mockResolvedValue([]);
     vi.mocked(listPiSessions).mockResolvedValue([]);
+    vi.mocked(listDshSessions).mockResolvedValue([]);
     vi.mocked(getOpenCodeSessionList).mockResolvedValue([]);
     vi.mocked(listWorkspaceSessions).mockResolvedValue({
       data: [],

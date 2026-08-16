@@ -52,6 +52,7 @@ vi.mock("../../../services/tauri", () => ({
   getOpenCodeSessionList: vi.fn(),
   listWorkspaceSessions: vi.fn(),
   listSessionIndexForWorkspace: vi.fn(),
+  listDshSessions: vi.fn(),
   listPiSessions: vi.fn(),
   listWorkspaceSessionArchiveEvidence: vi.fn(),
   loadClaudeSession: vi.fn(),

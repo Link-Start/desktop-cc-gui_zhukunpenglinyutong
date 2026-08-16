@@ -69,6 +69,8 @@ export function useCreateSessionLoading({
               ? t("workspace.enginePi")
             : params.engine === "opencode"
               ? t("workspace.engineOpenCode")
+              : params.engine === "dsh"
+                ? t("workspace.engineDsh")
               : t("workspace.engineClaudeCode");
       const workspaceLabel = params.workspace.name.trim() || params.workspace.path;
       return runWithLoadingProgress(

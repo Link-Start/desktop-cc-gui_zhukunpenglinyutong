@@ -83,7 +83,8 @@ export function useMessagesRuntimeState({
     activeEngine === "gemini" ||
     activeEngine === "grok" ||
     activeEngine === "kimi" ||
-    activeEngine === "opencode";
+    activeEngine === "opencode" ||
+    activeEngine === "dsh";
   const visibleStallRecoveryActive =
     supportsStreamingReadableWindowRecovery &&
     isThinking &&
@@ -232,7 +233,8 @@ export function useMessagesRuntimeState({
     activeEngine === "gemini" ||
     activeEngine === "grok" ||
     activeEngine === "kimi" ||
-    activeEngine === "opencode";
+    activeEngine === "opencode" ||
+    activeEngine === "dsh";
   const isAssistantCompletionFrame =
     supportsAssistantFinalizingWindow &&
     previousAssistantScopeKeyRef.current === renderScopeKey &&

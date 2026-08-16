@@ -100,6 +100,10 @@ describe("Provider target catalog owners", () => {
     expect(isProviderProfileEngine("gemini")).toBe(false);
   });
 
+  it("keeps DSH outside the Provider Profile picker", () => {
+    expect(isProviderProfileEngine("dsh")).toBe(false);
+  });
+
   it("loads profiles once and models only for the opened binding", async () => {
     const { result } = renderHook(() =>
       useAtomicProviderTargetCatalog({
@@ -203,7 +207,32 @@ describe("Provider target catalog owners", () => {
     },
   );
 
-  it("exposes the same six CLI groups on Home create-session", async () => {
+  it("keeps Shared fail-closed with no DSH group even if current provider is dsh", () => {
+    const { result } = renderHook(() =>
+      useAtomicProviderTargetCatalog({
+        enabled: true,
+        mode: "shared",
+        currentProvider: "dsh",
+        currentProviderProfileId: "__dsh_host_catalog__",
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "source only",
+      }),
+    );
+
+    expect(result.current.groups.map((group) => group.providerId)).toEqual([
+      "claude",
+      "codex",
+      "grok",
+      "kimi",
+      "opencode",
+      "pi",
+    ]);
+    expect(
+      result.current.groups.some((group) => group.providerId === "dsh"),
+    ).toBe(false);
+  });
+
+  it("exposes DSH as a Native engine on Home create-session without making it a Provider Profile engine", async () => {
     const { result } = renderHook(() =>
       useAtomicProviderTargetCatalog({
         enabled: true,
@@ -226,8 +255,58 @@ describe("Provider target catalog owners", () => {
       "kimi",
       "opencode",
       "pi",
+      "dsh",
     ]);
     expect(result.current.groups.every((group) => group.enabled)).toBe(true);
+    expect(isProviderProfileEngine("dsh")).toBe(false);
+    expect(
+      result.current.groups.find((group) => group.providerId === "dsh")?.profiles,
+    ).toEqual([
+      expect.objectContaining({
+        id: "__dsh_host_catalog__",
+        source: "disk",
+      }),
+    ]);
+  });
+
+  it("loads DSH models from the host catalog without a provider profile", async () => {
+    getEngineModelsMock.mockResolvedValueOnce([
+      {
+        id: "deepseek/deepseek-v4-pro",
+        model: "deepseek-v4-pro",
+        displayName: "DeepSeek V4 Pro",
+        description: "",
+        isDefault: true,
+      },
+    ]);
+    const { result } = renderHook(() =>
+      useAtomicProviderTargetCatalog({
+        enabled: true,
+        mode: "create-session",
+        currentProvider: "dsh",
+        resolveProviderLabel: (provider) => provider,
+        kimiDisabledReason: "native only",
+      }),
+    );
+
+    await act(async () => {
+      await result.current.ensureModels("dsh", "__dsh_host_catalog__");
+    });
+
+    expect(getEngineModelsMock).toHaveBeenCalledWith("dsh", {
+      providerProfileId: "__dsh_host_catalog__",
+    });
+    expect(
+      result.current.groups
+        .find((group) => group.providerId === "dsh")
+        ?.profiles.find((profile) => profile.id === "__dsh_host_catalog__")
+        ?.models,
+    ).toEqual([
+      expect.objectContaining({
+        id: "deepseek/deepseek-v4-pro",
+        model: "deepseek-v4-pro",
+      }),
+    ]);
   });
 
   it("loads PI local models on Home create-session instead of returning an empty catalog", async () => {
@@ -967,6 +1046,30 @@ describe("Provider target catalog owners", () => {
   });
 
   describe("CLI engine visibility", () => {
+    it("hides user-disabled DSH from Home create-session groups", () => {
+      seedCliEngineVisibility(["dsh"]);
+
+      const { result } = renderHook(() =>
+        useAtomicProviderTargetCatalog({
+          enabled: true,
+          mode: "create-session",
+          currentProvider: "claude",
+          currentProviderProfileId: null,
+          resolveProviderLabel: (provider) => provider,
+          kimiDisabledReason: "source only",
+        }),
+      );
+
+      expect(result.current.groups.map((group) => group.providerId)).toEqual([
+        "claude",
+        "codex",
+        "grok",
+        "kimi",
+        "opencode",
+        "pi",
+      ]);
+    });
+
     it("hides user-disabled engines from the shared picker groups", () => {
       seedCliEngineVisibility(["grok", "opencode"]);
 

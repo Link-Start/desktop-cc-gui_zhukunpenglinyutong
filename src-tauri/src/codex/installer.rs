@@ -28,6 +28,8 @@ pub(crate) enum CliInstallEngine {
     #[serde(rename = "opencode")]
     OpenCode,
     Pi,
+    #[serde(rename = "dsh")]
+    Dsh,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -146,10 +148,11 @@ pub(crate) fn resolve_effective_strategy(
         CliInstallEngine::Codex
         | CliInstallEngine::Kimi
         | CliInstallEngine::OpenCode
-        | CliInstallEngine::Pi => {
+        | CliInstallEngine::Pi
+        | CliInstallEngine::Dsh => {
             match requested {
                 CliInstallStrategy::NpmGlobal => CliInstallStrategy::NpmGlobal,
-                // Codex/Kimi/OpenCode/Pi self-update stays blocked; keep requested so plan can explain.
+                // Codex/Kimi/OpenCode/Pi/DSH self-update stays blocked; keep requested so plan can explain.
                 other => other,
             }
         }
@@ -177,6 +180,7 @@ pub(crate) fn package_name_for_engine(engine: CliInstallEngine) -> &'static str 
         CliInstallEngine::Kimi => "@moonshot-ai/kimi-code@latest",
         CliInstallEngine::Pi => "@earendil-works/pi-coding-agent@latest",
         CliInstallEngine::OpenCode => "opencode-ai@latest",
+        CliInstallEngine::Dsh => "@deepseek-ai/dsh@latest",
         // Grok CLI is not distributed via npm; it uses the official curl installer.
         CliInstallEngine::Grok => unreachable!("grok is not distributed via npm"),
     }
@@ -194,13 +198,18 @@ fn uninstall_package_name_for_engine(engine: CliInstallEngine) -> &'static str {
         CliInstallEngine::OpenCode => {
             unreachable!("opencode uninstall is intentionally not supported")
         }
+        // DSH uninstall is intentionally not supported (protects $DSH_HOME).
+        CliInstallEngine::Dsh => {
+            unreachable!("dsh uninstall is intentionally not supported")
+        }
     }
 }
 
 pub(crate) fn registry_package_name_for_engine(engine: CliInstallEngine) -> &'static str {
     match engine {
-        // OpenCode has no uninstall name but is probed on the npm registry.
+        // OpenCode / DSH have no uninstall name but are probed on the npm registry.
         CliInstallEngine::OpenCode => "opencode-ai",
+        CliInstallEngine::Dsh => "@deepseek-ai/dsh",
         other => uninstall_package_name_for_engine(other),
     }
 }
@@ -293,7 +302,7 @@ fn command_preview_for(engine: CliInstallEngine, action: CliInstallAction) -> Ve
                 uninstall_package_name_for_engine(engine).to_string(),
             ],
         },
-        CliInstallEngine::OpenCode => match action {
+        CliInstallEngine::OpenCode | CliInstallEngine::Dsh => match action {
             CliInstallAction::InstallLatest | CliInstallAction::UpdateLatest => vec![
                 "npm".to_string(),
                 "install".to_string(),
@@ -302,8 +311,13 @@ fn command_preview_for(engine: CliInstallEngine, action: CliInstallAction) -> Ve
             ],
             CliInstallAction::Uninstall => vec![
                 "echo".to_string(),
-                "OpenCode CLI uninstall is intentionally not supported (protects opencode auth and sessions)."
-                    .to_string(),
+                if engine == CliInstallEngine::Dsh {
+                    "DSH CLI uninstall is intentionally not supported (protects $DSH_HOME auth and sessions)."
+                        .to_string()
+                } else {
+                    "OpenCode CLI uninstall is intentionally not supported (protects opencode auth and sessions)."
+                        .to_string()
+                },
             ],
         },
     }
@@ -333,6 +347,7 @@ fn engine_binary_name(engine: CliInstallEngine) -> &'static str {
         CliInstallEngine::Grok => "grok",
         CliInstallEngine::OpenCode => "opencode",
         CliInstallEngine::Pi => "pi",
+        CliInstallEngine::Dsh => "dsh",
     }
 }
 
@@ -344,6 +359,7 @@ fn engine_explicit_bin<'a>(engine: CliInstallEngine, settings: &'a AppSettings) 
         CliInstallEngine::Grok => settings.grok_bin.as_deref(),
         CliInstallEngine::OpenCode => settings.opencode_bin.as_deref(),
         CliInstallEngine::Pi => settings.pi_bin.as_deref(),
+        CliInstallEngine::Dsh => settings.dsh_bin.as_deref(),
     }
     .filter(|value| !value.trim().is_empty())
 }
@@ -591,7 +607,7 @@ async fn resolve_installer_command(
                 .to_string(),
         ),
         (
-            CliInstallEngine::OpenCode,
+            CliInstallEngine::OpenCode | CliInstallEngine::Dsh,
             CliInstallStrategy::NpmGlobal,
             CliInstallAction::InstallLatest | CliInstallAction::UpdateLatest,
         ) => {
@@ -614,6 +630,14 @@ async fn resolve_installer_command(
             CliInstallAction::Uninstall,
         ) => Err(
             "OpenCode CLI uninstall is intentionally not supported (protects opencode auth and sessions)."
+                .to_string(),
+        ),
+        (
+            CliInstallEngine::Dsh,
+            CliInstallStrategy::NpmGlobal,
+            CliInstallAction::Uninstall,
+        ) => Err(
+            "DSH CLI uninstall is intentionally not supported (protects $DSH_HOME auth and sessions)."
                 .to_string(),
         ),
         (
@@ -889,12 +913,18 @@ pub(crate) async fn resolve_cli_version_status(
     settings: &AppSettings,
 ) -> CliVersionStatus {
     let path_env = build_codex_path_env(engine_explicit_bin(engine, settings));
-    let node_available = run_binary_version("node", path_env.as_ref()).await.is_ok();
+    let node_version_result = run_binary_version("node", path_env.as_ref()).await;
+    let node_available = node_version_result.is_ok();
+    let node_version = node_version_result.ok().flatten();
     let npm_available = run_binary_version("npm", path_env.as_ref()).await.is_ok();
     let registry_ok = node_available && npm_available;
     // `node_ok` gates lifecycle mutation buttons in the UI.
     // Claude native install does not require Node/npm; Codex/Kimi/OpenCode still do.
+    // DSH is npm-global and also requires Node ^22.19.0 || >=24.0.0.
     // Grok uses the official bash installer, so it needs a supported Unix platform.
+    let dsh_node_requirement_ok = node_version
+        .as_deref()
+        .is_some_and(crate::codex::node_satisfies_dsh_requirement);
     let node_ok = match engine {
         CliInstallEngine::Claude => !matches!(current_platform(), CliInstallPlatform::Unknown),
         CliInstallEngine::Grok => !matches!(
@@ -905,9 +935,15 @@ pub(crate) async fn resolve_cli_version_status(
         | CliInstallEngine::Kimi
         | CliInstallEngine::OpenCode
         | CliInstallEngine::Pi => registry_ok,
+        CliInstallEngine::Dsh => registry_ok && dsh_node_requirement_ok,
     };
 
     let mut details: Option<String> = None;
+    if engine == CliInstallEngine::Dsh && node_available && !dsh_node_requirement_ok {
+        details = Some(crate::codex::dsh_node_requirement_error(
+            node_version.as_deref(),
+        ));
+    }
     let local_version = match engine {
         CliInstallEngine::Claude => {
             let (version, resolve_details) =
@@ -919,7 +955,8 @@ pub(crate) async fn resolve_cli_version_status(
         | CliInstallEngine::Kimi
         | CliInstallEngine::Grok
         | CliInstallEngine::OpenCode
-        | CliInstallEngine::Pi => {
+        | CliInstallEngine::Pi
+        | CliInstallEngine::Dsh => {
             match check_cli_binary(engine_binary_name(engine), path_env.clone()).await {
                 Ok(Some(version)) => Some(version),
                 Ok(None) => None,
@@ -1021,6 +1058,31 @@ pub(crate) async fn build_cli_install_plan_with_backend(
                     "OpenCode CLI uninstall is intentionally not supported (protects opencode auth and sessions)."
                         .to_string(),
                 );
+            }
+            if engine == CliInstallEngine::Dsh && action == CliInstallAction::Uninstall {
+                blockers.push(
+                    "DSH CLI uninstall is intentionally not supported (protects $DSH_HOME auth and sessions)."
+                        .to_string(),
+                );
+            }
+            if engine == CliInstallEngine::Dsh
+                && matches!(
+                    action,
+                    CliInstallAction::InstallLatest | CliInstallAction::UpdateLatest
+                )
+            {
+                match run_binary_version("node", path_env.as_ref()).await {
+                    Ok(Some(version))
+                        if !crate::codex::node_satisfies_dsh_requirement(&version) =>
+                    {
+                        blockers.push(crate::codex::dsh_node_requirement_error(Some(&version)));
+                    }
+                    Ok(None) => {
+                        blockers.push(crate::codex::dsh_node_requirement_error(None));
+                    }
+                    Err(_) => {}
+                    Ok(Some(_)) => {}
+                }
             }
         }
         CliInstallStrategy::OfficialNative => {
@@ -1347,6 +1409,7 @@ async fn run_post_install_doctor(
             crate::codex::run_opencode_doctor_with_settings(None, settings).await
         }
         CliInstallEngine::Pi => crate::codex::run_pi_doctor_with_settings(None, settings).await,
+        CliInstallEngine::Dsh => crate::codex::run_dsh_doctor_with_settings(None, settings).await,
     }
 }
 
@@ -1540,6 +1603,29 @@ mod tests {
                 .join(" ")
                 .contains("uninstall is intentionally not supported")
         );
+        assert_eq!(
+            command_preview_for(CliInstallEngine::Dsh, CliInstallAction::InstallLatest),
+            vec![
+                "npm".to_string(),
+                "install".to_string(),
+                "-g".to_string(),
+                "@deepseek-ai/dsh@latest".to_string()
+            ]
+        );
+        assert_eq!(
+            command_preview_for(CliInstallEngine::Dsh, CliInstallAction::UpdateLatest),
+            vec![
+                "npm".to_string(),
+                "install".to_string(),
+                "-g".to_string(),
+                "@deepseek-ai/dsh@latest".to_string()
+            ]
+        );
+        assert!(
+            command_preview_for(CliInstallEngine::Dsh, CliInstallAction::Uninstall)
+                .join(" ")
+                .contains("uninstall is intentionally not supported")
+        );
     }
 
     #[test]
@@ -1616,12 +1702,45 @@ mod tests {
             ),
             CliInstallStrategy::CliSelfUpdate
         );
+        assert_eq!(
+            resolve_effective_strategy(
+                CliInstallEngine::Dsh,
+                CliInstallAction::InstallLatest,
+                CliInstallStrategy::NpmGlobal,
+            ),
+            CliInstallStrategy::NpmGlobal
+        );
+        assert_eq!(
+            resolve_effective_strategy(
+                CliInstallEngine::Dsh,
+                CliInstallAction::UpdateLatest,
+                CliInstallStrategy::CliSelfUpdate,
+            ),
+            CliInstallStrategy::CliSelfUpdate
+        );
     }
 
     #[tokio::test]
     async fn opencode_uninstall_plan_is_blocked() {
         let plan = build_cli_install_plan(
             CliInstallEngine::OpenCode,
+            CliInstallAction::Uninstall,
+            CliInstallStrategy::NpmGlobal,
+            &AppSettings::default(),
+        )
+        .await;
+
+        assert!(!plan.can_run);
+        assert!(plan
+            .blockers
+            .iter()
+            .any(|blocker| blocker.contains("uninstall is intentionally not supported")));
+    }
+
+    #[tokio::test]
+    async fn dsh_uninstall_plan_is_blocked() {
+        let plan = build_cli_install_plan(
+            CliInstallEngine::Dsh,
             CliInstallAction::Uninstall,
             CliInstallStrategy::NpmGlobal,
             &AppSettings::default(),
@@ -1826,6 +1945,10 @@ mod tests {
         assert_eq!(
             registry_package_name_for_engine(CliInstallEngine::OpenCode),
             "opencode-ai"
+        );
+        assert_eq!(
+            registry_package_name_for_engine(CliInstallEngine::Dsh),
+            "@deepseek-ai/dsh"
         );
     }
 }

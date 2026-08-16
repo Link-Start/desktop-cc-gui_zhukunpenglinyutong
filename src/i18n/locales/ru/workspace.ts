@@ -65,6 +65,7 @@ const workspace = {
     "enginePi": "PI CLI",
     "engineGrok": "Grok CLI",
     "engineOpenCode": "OpenCode",
+    "engineDsh": "DeepSeek Harness",
     "engineStatusLoading": "Проверка...",
     "engineStatusRequiresLogin": "Требуется вход",
     "engineComingSoon": "Скоро",

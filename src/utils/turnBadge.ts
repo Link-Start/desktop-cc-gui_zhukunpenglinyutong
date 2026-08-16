@@ -55,6 +55,8 @@ function resolveEngineLabel(engine: EngineType): string {
       return "PI CLI";
     case "opencode":
       return "OpenCode";
+    case "dsh":
+      return "DeepSeek Harness";
   }
 }
 

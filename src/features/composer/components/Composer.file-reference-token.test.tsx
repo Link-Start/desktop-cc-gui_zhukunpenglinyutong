@@ -167,6 +167,21 @@ vi.mock("./ChatInputBox/ChatInputBoxAdapter", () => ({
       />
       <button
         type="button"
+        data-testid="select-dsh-target"
+        onClick={() =>
+          onExecutionTargetChange?.({
+            engine: "dsh",
+            providerProfileId: null,
+            modelCatalogEntryId: "grok-4.6/Grok 4.5",
+            model: "Grok 4.5",
+            reasoning: null,
+            providerProfileNameSnapshot: "本地配置",
+            providerProfileSource: "disk",
+          })
+        }
+      />
+      <button
+        type="button"
         data-testid="select-pi-local-target"
         onClick={() =>
           onExecutionTargetChange?.({
@@ -440,6 +455,48 @@ describe("Composer file reference token", () => {
           providerProfileSource: "disk",
           modelCatalogEntryId: "settings-main",
           model: "kimi-for-coding",
+          effort: null,
+        },
+      }),
+    );
+  });
+
+  it("accepts a DeepSeek Harness host model as the Home creation target", async () => {
+    const onSend = vi.fn();
+    const onSelectEngine = vi.fn();
+    const view = render(
+      <ComposerHarness
+        onSend={onSend}
+        createSessionTargetPicker
+        onSelectEngine={onSelectEngine}
+        selectedEngine="grok"
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(view.getByTestId("select-dsh-target"));
+      await Promise.resolve();
+    });
+
+    expect(onSelectEngine).toHaveBeenCalledWith("dsh");
+
+    const textarea = getTextarea(view.container);
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: "dsh target" } });
+      fireEvent.keyDown(textarea, { key: "Enter" });
+      await Promise.resolve();
+    });
+
+    expect(onSend).toHaveBeenCalledWith(
+      "dsh target",
+      expect.objectContaining({
+        createSessionTarget: {
+          engine: "dsh",
+          providerProfileId: null,
+          providerProfileName: "本地配置",
+          providerProfileSource: "disk",
+          modelCatalogEntryId: "grok-4.6/Grok 4.5",
+          model: "Grok 4.5",
           effort: null,
         },
       }),

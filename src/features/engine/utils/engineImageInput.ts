@@ -9,6 +9,7 @@ const ENGINE_IMAGE_LABEL: Record<EngineType, string> = {
   kimi: "Kimi CLI",
   opencode: "OpenCode",
   pi: "PI CLI",
+  dsh: "DeepSeek Harness",
 };
 
 /**

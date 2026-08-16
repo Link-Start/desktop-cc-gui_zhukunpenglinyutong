@@ -250,6 +250,19 @@ describe("resolved Execution Target contract", () => {
     ).toBe(false);
   });
 
+  it("keeps DSH fail-closed for Shared even with a complete host catalog identity", () => {
+    expect(
+      isResolvedExecutionTarget({
+        engine: "dsh",
+        providerProfileId: null,
+        modelCatalogEntryId: "grok-4.6/Grok 4.5",
+        model: "Grok 4.5",
+        providerProfileNameSnapshot: "本地配置",
+        providerProfileSource: "disk",
+      }),
+    ).toBe(false);
+  });
+
   it("keeps legacy partial metadata non-executable instead of guessing local", () => {
     const target = normalizePersistedExecutionTarget({ engine: "codex" });
 

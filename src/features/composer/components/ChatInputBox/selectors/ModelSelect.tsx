@@ -14,6 +14,7 @@ import { PROVIDER_CONTINUATION_UI_ROLLBACK_EVENT } from "../../../../threads/ser
 import {
   CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
   CODEX_DISK_PROVIDER_PROFILE_ID,
+  DSH_LOCAL_PROVIDER_PROFILE_ID,
   GROK_LOCAL_PROVIDER_PROFILE_ID,
   KIMI_LOCAL_PROVIDER_PROFILE_ID,
   OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
@@ -122,6 +123,7 @@ const LOCAL_PROVIDER_PROFILE_IDS: Partial<Record<ProviderId, string>> = {
   grok: GROK_LOCAL_PROVIDER_PROFILE_ID,
   opencode: OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
   pi: PI_LOCAL_PROVIDER_PROFILE_ID,
+  dsh: DSH_LOCAL_PROVIDER_PROFILE_ID,
 };
 
 export function normalizeExecutionProviderProfileId(
@@ -405,6 +407,7 @@ const ENGINE_NATIVE_BRAND_SRC: Partial<Record<string, string>> = {
   codex: PROVIDER_BRAND_ICON_SRC.openai,
   kimi: PROVIDER_BRAND_ICON_SRC.kimi,
   opencode: PROVIDER_BRAND_ICON_SRC.opencode,
+  dsh: PROVIDER_BRAND_ICON_SRC.deepseek,
 };
 
 function renderBrandIcon(src: string, size: number) {
@@ -460,6 +463,9 @@ const ModelIcon = ({
   // glyph for this CLI (provider row + model list + trigger must match).
   if (provider === 'kimi') {
     return renderBrandIcon(PROVIDER_BRAND_ICON_SRC.kimi, size);
+  }
+  if (provider === 'dsh') {
+    return renderBrandIcon(PROVIDER_BRAND_ICON_SRC.deepseek, size);
   }
 
   switch (provider) {
@@ -1123,7 +1129,10 @@ export const ModelSelect = memo(({
             {pickerGroups.map((group, groupIndex) => {
               const groupRefresh = resolveGroupRefresh(group);
               const hasChannelSwitcher =
-                hasTargetGroups && group.profiles.length > 0;
+                hasTargetGroups &&
+                group.providerId !== 'dsh' &&
+                group.profiles.length > 0;
+              const canAddModel = Boolean(onAddModel) && group.providerId !== 'dsh';
               return (
                 <Fragment key={group.providerId}>
                   {groupIndex > 0 && <DropdownMenuSeparator />}
@@ -1204,9 +1213,23 @@ export const ModelSelect = memo(({
                         !group.error &&
                         group.models.length === 0 && (
                           <DropdownMenuItem
-                            disabled
+                            disabled={
+                              group.providerId === 'dsh'
+                                ? !onOpenCliSettings
+                                : true
+                            }
                             className="items-start gap-2"
                             data-empty-channel-models={group.providerId}
+                            onSelect={(event) => {
+                              if (
+                                group.providerId !== 'dsh' ||
+                                !onOpenCliSettings
+                              ) {
+                                return;
+                              }
+                              event.preventDefault();
+                              handleOpenCliSettings();
+                            }}
                           >
                             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                               <span className="text-sm">
@@ -1215,10 +1238,15 @@ export const ModelSelect = memo(({
                                 })}
                               </span>
                               <span className="text-xs text-muted-foreground whitespace-normal">
-                                {t('models.emptyChannelModelsHint', {
-                                  defaultValue:
-                                    '可点击下方「添加模型」，在自定义模型中添加后使用',
-                                })}
+                                {group.providerId === 'dsh'
+                                  ? t('models.emptyDshHostHint', {
+                                      defaultValue:
+                                        '请在 DeepSeek Harness 中配置模型。点击此项打开设置。',
+                                    })
+                                  : t('models.emptyChannelModelsHint', {
+                                      defaultValue:
+                                        '可点击下方「添加模型」，在自定义模型中添加后使用',
+                                    })}
                               </span>
                             </div>
                           </DropdownMenuItem>
@@ -1262,7 +1290,7 @@ export const ModelSelect = memo(({
                           </DropdownMenuItem>
                         );
                       })}
-                      {(hasChannelSwitcher || onAddModel) && (
+                      {(hasChannelSwitcher || canAddModel) && (
                         <>
                           <DropdownMenuSeparator />
                           {hasChannelSwitcher ? (
@@ -1318,7 +1346,7 @@ export const ModelSelect = memo(({
                                   />
                                 )}
                               </button>
-                              {onAddModel && (
+                              {canAddModel && (
                                 <button
                                   type="button"
                                   className={SUBMENU_FOOTER_BUTTON_CLASS}

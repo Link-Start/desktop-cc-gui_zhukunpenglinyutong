@@ -14,7 +14,8 @@ export function isEngineExecutionEnabled(
     engine === "grok" ||
     engine === "kimi" ||
     engine === "opencode" ||
-    engine === "pi"
+    engine === "pi" ||
+    engine === "dsh"
   );
 }
 

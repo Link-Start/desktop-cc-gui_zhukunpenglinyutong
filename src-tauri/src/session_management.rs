@@ -936,6 +936,9 @@ pub(crate) async fn delete_workspace_sessions_core(
         .get_engine_config(engine::EngineType::Pi)
         .await
         .and_then(|item| item.home_dir);
+    let dsh_config = engine_manager
+        .get_engine_config(engine::EngineType::Dsh)
+        .await;
     let mut async_delete_handles: Vec<(
         WorkspaceSessionMutationTarget,
         JoinHandle<Result<(), String>>,
@@ -1011,6 +1014,17 @@ pub(crate) async fn delete_workspace_sessions_core(
                         pi_home_dir.as_deref(),
                     )
                     .await
+                });
+                async_delete_handles.push((target, handle));
+            }
+            "dsh" => {
+                let raw_id = target.native_session_id.clone();
+                let dsh_config = dsh_config.clone();
+                let handle = tokio::spawn(async move {
+                    let runtime =
+                        crate::engine::dsh::runtime_settings_from_engine_config(dsh_config.as_ref());
+                    let (_snapshot, client) = crate::engine::dsh::connect_existing(&runtime).await?;
+                    crate::engine::dsh::history::archive_dsh_session(&client, &raw_id).await
                 });
                 async_delete_handles.push((target, handle));
             }
@@ -2911,6 +2925,9 @@ async fn build_global_engine_catalog_entries(
     let grok_config = engine_manager
         .get_engine_config(engine::EngineType::Grok)
         .await;
+    let dsh_config = engine_manager
+        .get_engine_config(engine::EngineType::Dsh)
+        .await;
     let claude_config = engine_manager
         .get_engine_config(engine::EngineType::Claude)
         .await;
@@ -3239,6 +3256,86 @@ async fn build_global_engine_catalog_entries(
                     error
                 );
                     partial_sources.push(SESSION_CATALOG_PARTIAL_GROK.to_string());
+                }
+            }
+        }
+
+        if include_engine("dsh") {
+            let runtime = crate::engine::dsh::runtime_settings_from_engine_config(dsh_config.as_ref());
+            match async {
+                let (_snapshot, client) = crate::engine::dsh::connect_existing(&runtime).await?;
+                crate::engine::dsh::history::list_dsh_sessions(
+                    &client,
+                    &workspace_path,
+                    Some(scan_mode.limit()),
+                )
+                .await
+            }
+            .await
+            {
+                Ok(sessions) => {
+                    for session in sessions {
+                        let session_id = format!("dsh:{}", session.session_id);
+                        let archived_at =
+                            metadata_by_workspace_id
+                                .get(&workspace.id)
+                                .and_then(|metadata| {
+                                    archived_at_for_session(metadata, &workspace.id, &session_id)
+                                });
+                        let entry = WorkspaceSessionCatalogEntry {
+                            session_id,
+                            stable_session_key: None,
+                            canonical_session_id: session.canonical_session_id,
+                            parent_session_id: None,
+                            workspace_id: workspace.id.clone(),
+                            workspace_label: Some(workspace.name.clone()),
+                            engine: session.engine.unwrap_or_else(|| "dsh".to_string()),
+                            title: session.first_message,
+                            native_title: None,
+                            updated_at: session.updated_at.max(0),
+                            archived_at,
+                            thread_kind: "native".to_string(),
+                            source: None,
+                            source_label: None,
+                            provider_profile_id: None,
+                            provider_profile_source: None,
+                            provider_profile_name: None,
+                            provider_availability: None,
+                            source_completeness: None,
+                            source_status_reason: None,
+                            size_bytes: None,
+                            cwd: None,
+                            attribution_status: Some(
+                                SessionCatalogAttributionStatus::StrictMatch
+                                    .as_str()
+                                    .to_string(),
+                            ),
+                            attribution_reason: None,
+                            attribution_confidence: None,
+                            matched_workspace_id: Some(workspace.id.clone()),
+                            matched_workspace_label: Some(workspace.name.clone()),
+                            folder_id: None,
+                            auto_session: None,
+                            exists_on_disk: false,
+                            inconsistency_code: None,
+                            delete_mode: None,
+                            physical_path: None,
+                            children_count: None,
+                            continuation: ProviderContinuationProjection::default(),
+                        };
+                        entries.push(finalize_existing_catalog_entry(
+                            entry,
+                            &metadata_by_workspace_id,
+                        ));
+                    }
+                }
+                Err(error) => {
+                    log::warn!(
+                    "[session_management.list_global_codex_sessions] dsh history unavailable for workspace {}: {}",
+                    workspace.id,
+                    error
+                );
+                    partial_sources.push(SESSION_CATALOG_PARTIAL_DSH.to_string());
                 }
             }
         }

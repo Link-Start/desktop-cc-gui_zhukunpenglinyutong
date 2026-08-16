@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import type { EngineType } from "../../../types";
 
 // 导入官方模型图标
+import deepseekIcon from "@lobehub/icons-static-svg/icons/deepseek-color.svg";
 import claudeIcon from "../../../assets/model-icons/claude.svg";
 import geminiIcon from "../../../assets/model-icons/gemini.svg";
 import piCliIcon from "@lobehub/icons-static-svg/icons/pi.svg";
@@ -148,6 +149,16 @@ export function EngineIcon({
         <img
           src={piCliIcon}
           alt="PI CLI"
+          className={className}
+          style={iconStyle}
+          aria-hidden
+        />
+      );
+    case "dsh":
+      return (
+        <img
+          src={deepseekIcon}
+          alt="DeepSeek Harness"
           className={className}
           style={iconStyle}
           aria-hidden

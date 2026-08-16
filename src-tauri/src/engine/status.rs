@@ -110,8 +110,8 @@ fn public_models_for_engine(engine_type: EngineType) -> Vec<ModelInfo> {
         EngineType::Codex | EngineType::Grok | EngineType::Kimi | EngineType::OpenCode => {
             get_generated_fallback_models(engine_type)
         }
-        EngineType::Gemini => Vec::new(),
         EngineType::Pi => get_generated_fallback_models(engine_type),
+        EngineType::Gemini | EngineType::Dsh => Vec::new(),
     }
 }
 
@@ -203,7 +203,7 @@ pub(crate) fn get_local_engine_models_for_validation(
             cached_opencode_runtime_models(),
             public_models_for_engine(EngineType::OpenCode),
         )),
-        EngineType::Gemini => None,
+        EngineType::Gemini | EngineType::Dsh => None,
     }
 }
 
@@ -474,7 +474,7 @@ pub(crate) fn get_provider_scoped_engine_models(
                 &provider,
             )));
         }
-        EngineType::Gemini | EngineType::Pi => return Ok(None),
+        EngineType::Gemini | EngineType::Pi | EngineType::Dsh => return Ok(None),
     };
     Ok(Some(merge_provider_models_with_public(
         provider_models,
@@ -1835,6 +1835,7 @@ pub async fn detect_all_engines(
     kimi_bin: Option<&str>,
     grok_bin: Option<&str>,
     pi_bin: Option<&str>,
+    dsh_settings: &crate::engine::dsh::supervisor::DshRuntimeSettings,
     gemini_enabled: bool,
 ) -> Vec<EngineStatus> {
     // Run detections in parallel
@@ -1846,6 +1847,7 @@ pub async fn detect_all_engines(
         kimi_status,
         grok_status,
         pi_status,
+        dsh_status,
     ) = tokio::join!(
         detect_claude_status(claude_bin),
         detect_codex_status(codex_bin),
@@ -1860,6 +1862,7 @@ pub async fn detect_all_engines(
         detect_kimi_status(kimi_bin),
         detect_grok_status(grok_bin),
         detect_pi_status(pi_bin),
+        crate::engine::dsh::detect_dsh_status(dsh_settings),
     );
 
     vec![
@@ -1870,6 +1873,7 @@ pub async fn detect_all_engines(
         kimi_status,
         grok_status,
         pi_status,
+        dsh_status,
     ]
 }
 
@@ -1883,7 +1887,10 @@ pub async fn detect_preferred_engine(
     kimi_bin: Option<&str>,
     grok_bin: Option<&str>,
     pi_bin: Option<&str>,
+    dsh_settings: Option<&crate::engine::dsh::supervisor::DshRuntimeSettings>,
 ) -> EngineType {
+    let default_dsh = crate::engine::dsh::supervisor::DshRuntimeSettings::default();
+    let dsh_settings = dsh_settings.unwrap_or(&default_dsh);
     let (
         claude_status,
         codex_status,
@@ -1892,6 +1899,7 @@ pub async fn detect_preferred_engine(
         kimi_status,
         grok_status,
         pi_status,
+        dsh_status,
     ) = tokio::join!(
         detect_claude_status(claude_bin),
         detect_codex_status(codex_bin),
@@ -1906,6 +1914,7 @@ pub async fn detect_preferred_engine(
         detect_kimi_status(kimi_bin),
         detect_grok_status(grok_bin),
         detect_pi_status(pi_bin),
+        crate::engine::dsh::detect_dsh_status(dsh_settings),
     );
 
     // Priority: Claude first (more users have it installed)
@@ -1929,6 +1938,9 @@ pub async fn detect_preferred_engine(
     }
     if pi_status.installed {
         return EngineType::Pi;
+    }
+    if dsh_status.installed {
+        return EngineType::Dsh;
     }
 
     // Default to Claude so error message is helpful
@@ -1962,6 +1974,7 @@ pub async fn resolve_engine_type(
             "kimi" => return EngineType::Kimi,
             "grok" => return EngineType::Grok,
             "pi" => return EngineType::Pi,
+            "dsh" => return EngineType::Dsh,
             _ => {} // Invalid value, fall through
         }
     }
@@ -1977,6 +1990,7 @@ pub async fn resolve_engine_type(
             "kimi" => return EngineType::Kimi,
             "grok" => return EngineType::Grok,
             "pi" => return EngineType::Pi,
+            "dsh" => return EngineType::Dsh,
             _ => {} // Invalid value, fall through
         }
     }
@@ -1991,6 +2005,7 @@ pub async fn resolve_engine_type(
         kimi_bin,
         grok_bin,
         pi_bin,
+        None,
     ))
     .await
 }
@@ -2521,6 +2536,7 @@ anthropic claude-opus    200k   32k    no       yes
             None,
             None,
             Some(script_path.to_string_lossy().as_ref()),
+            None,
             None,
             None,
             None,

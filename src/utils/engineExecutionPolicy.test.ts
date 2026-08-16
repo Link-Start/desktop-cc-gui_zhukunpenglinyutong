@@ -26,4 +26,10 @@ describe("engineExecutionPolicy", () => {
     expect(isEngineExecutionEnabled("opencode")).toBe(true);
     expect(() => assertEngineExecutionEnabled("opencode")).not.toThrow();
   });
+
+  it("treats DSH as an executable Native engine", () => {
+    expect(isEngineExecutionEnabled("dsh")).toBe(true);
+    expect(normalizeEngineForExecution("dsh")).toBe("dsh");
+    expect(() => assertEngineExecutionEnabled("dsh")).not.toThrow();
+  });
 });

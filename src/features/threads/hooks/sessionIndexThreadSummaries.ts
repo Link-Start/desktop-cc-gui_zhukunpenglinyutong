@@ -12,6 +12,7 @@ const ENGINE_PREFIX: Record<string, string> = {
   kimi: "kimi:",
   pi: "pi:",
   opencode: "opencode:",
+  dsh: "dsh:",
 };
 
 function normalizeEngine(
@@ -27,7 +28,8 @@ function normalizeEngine(
     value === "grok" ||
     value === "kimi" ||
     value === "pi" ||
-    value === "opencode"
+    value === "opencode" ||
+    value === "dsh"
   ) {
     return value;
   }
@@ -87,7 +89,9 @@ export function sessionIndexRowsToThreadSummaries(
                 ? "Grok Session"
                 : engine === "pi"
                   ? "PI Session"
-                  : "Session";
+                  : engine === "dsh"
+                    ? "DeepSeek Harness Session"
+                    : "Session";
     const mappedTitle = options.mappedTitles[id];
     const customName =
       options.getCustomName(options.workspaceId, id) || mappedTitle;

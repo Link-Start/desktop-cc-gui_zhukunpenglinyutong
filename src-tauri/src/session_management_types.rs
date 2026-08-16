@@ -17,6 +17,7 @@ pub(crate) const SESSION_CATALOG_PARTIAL_CLAUDE_UNCERTAIN_EMPTY: &str = "claude-
 pub(crate) const SESSION_CATALOG_PARTIAL_GEMINI: &str = "gemini-history-unavailable";
 pub(crate) const SESSION_CATALOG_PARTIAL_GROK: &str = "grok-history-unavailable";
 pub(crate) const SESSION_CATALOG_PARTIAL_KIMI: &str = "kimi-history-unavailable";
+pub(crate) const SESSION_CATALOG_PARTIAL_DSH: &str = "dsh-history-unavailable";
 pub(crate) const SESSION_CATALOG_PARTIAL_PI: &str = "pi-history-unavailable";
 pub(crate) const SESSION_CATALOG_PARTIAL_OPENCODE: &str = "opencode-history-unavailable";
 pub(crate) const SESSION_CATALOG_PARTIAL_SHARED: &str = "shared-history-unavailable";
@@ -569,6 +570,7 @@ pub(crate) enum SessionCatalogIdentity {
     Kimi { session_id: String },
     Pi { session_id: String },
     OpenCode { session_id: String },
+    Dsh { session_id: String },
     Shared { session_id: String },
 }
 
@@ -582,6 +584,7 @@ impl SessionCatalogIdentity {
             Self::Kimi { .. } => "kimi",
             Self::Pi { .. } => "pi",
             Self::OpenCode { .. } => "opencode",
+            Self::Dsh { .. } => "dsh",
             Self::Shared { .. } => "shared",
         }
     }
@@ -595,6 +598,7 @@ impl SessionCatalogIdentity {
             | Self::Kimi { session_id }
             | Self::Pi { session_id }
             | Self::OpenCode { session_id }
+            | Self::Dsh { session_id }
             | Self::Shared { session_id } => session_id,
         }
     }
@@ -628,6 +632,11 @@ pub(crate) fn parse_catalog_identity(session_id: &str) -> SessionCatalogIdentity
     }
     if let Some(raw_id) = session_id.strip_prefix("opencode:") {
         return SessionCatalogIdentity::OpenCode {
+            session_id: raw_id.to_string(),
+        };
+    }
+    if let Some(raw_id) = session_id.strip_prefix("dsh:") {
+        return SessionCatalogIdentity::Dsh {
             session_id: raw_id.to_string(),
         };
     }

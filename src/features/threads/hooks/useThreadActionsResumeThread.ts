@@ -7,6 +7,7 @@ import {
   loadGeminiSession as loadGeminiSessionService,
   loadGrokSession as loadGrokSessionService,
   loadKimiSession as loadKimiSessionService,
+  loadDshSession as loadDshSessionService,
   loadPiSession as loadPiSessionService,
   resumeThread as resumeThreadService,
 } from "../../../services/tauri";
@@ -25,6 +26,7 @@ import {
 import { parseGeminiHistoryMessages } from "../loaders/geminiHistoryParser";
 import { parseGrokHistoryMessages } from "../loaders/grokHistoryParser";
 import { parseKimiHistoryMessages } from "../loaders/kimiHistoryParser";
+import { parseDshHistoryMessages } from "../loaders/dshHistoryParser";
 import { parsePiHistoryMessages } from "../loaders/piHistoryParser";
 import {
   hydrateHistory,
@@ -1486,6 +1488,38 @@ export function useThreadActionsResumeThreadForWorkspace(
             });
           } catch {
             // Failed to load Kimi session history — not fatal
+          }
+        }
+        loadedThreadsRef.current[threadId] = true;
+        return threadId;
+      }
+      if (threadId.startsWith("dsh:")) {
+        dispatch({
+          type: "ensureThread",
+          workspaceId,
+          threadId,
+          engine: "dsh",
+        });
+        if (workspacePath && !loadedThreadsRef.current[threadId]) {
+          const realSessionId = threadId.slice("dsh:".length);
+          try {
+            const result = await loadDshSessionService(
+              workspacePath,
+              realSessionId,
+            );
+            const messagesData =
+              (result as { messages?: unknown }).messages ?? result;
+            const items = parseDshHistoryMessages(messagesData);
+            if (items.length > 0) {
+              await applyHydratedItems(threadId, items);
+            }
+            dispatch({
+              type: "setThreadHistoryRestoredAt",
+              threadId,
+              timestamp: Date.now(),
+            });
+          } catch {
+            // Failed to load DSH session history — not fatal
           }
         }
         loadedThreadsRef.current[threadId] = true;

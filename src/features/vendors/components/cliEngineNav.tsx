@@ -5,6 +5,8 @@ import codexCliIcon from "@lobehub/icons-static-svg/icons/codex-color.svg";
 import codexCliMonoIcon from "@lobehub/icons-static-svg/icons/codex.svg";
 import copilotCliMonoIcon from "@lobehub/icons-static-svg/icons/copilot.svg";
 import cursorCliIcon from "@lobehub/icons-static-svg/icons/cursor.svg";
+import deepseekCliIcon from "@lobehub/icons-static-svg/icons/deepseek-color.svg";
+import deepseekCliMonoIcon from "@lobehub/icons-static-svg/icons/deepseek.svg";
 import geminiCliMonoIcon from "@lobehub/icons-static-svg/icons/geminicli.svg";
 import glmCliMonoIcon from "@lobehub/icons-static-svg/icons/chatglm.svg";
 import grokCliMonoIcon from "@lobehub/icons-static-svg/icons/grok.svg";
@@ -98,6 +100,7 @@ export const CLI_DOCS_HREF_BY_ID: Record<CliEngineId, string> = {
   gemini: "https://developers.google.com/gemini-code-assist/docs/gemini-cli",
   grok: "https://x.ai/cli",
   opencode: "https://opencode.ai/docs/",
+  dsh: "https://github.com/deepseek-ai/dsh",
   glm: "https://docs.z.ai/devpack/quick-start",
   trae: "https://docs.trae.ai/",
   cursor: "https://cursor.com/docs/cli/overview",
@@ -120,6 +123,7 @@ const CLI_ICON_BY_ID: Record<CliEngineId, string | null> = {
   gemini: geminiCliMonoIcon,
   grok: grokCliMonoIcon,
   opencode: openCodeCliIcon,
+  dsh: deepseekCliIcon,
   glm: glmCliMonoIcon,
   trae: traeCliMonoIcon,
   cursor: cursorCliIcon,
@@ -142,6 +146,7 @@ const CLI_MONO_ICON_BY_ID: Record<CliEngineId, string | null> = {
   gemini: geminiCliMonoIcon,
   grok: grokCliMonoIcon,
   opencode: openCodeCliMonoIcon,
+  dsh: deepseekCliMonoIcon,
   glm: glmCliMonoIcon,
   trae: traeCliMonoIcon,
   cursor: cursorCliIcon,
@@ -158,7 +163,7 @@ const CLI_MONO_ICON_BY_ID: Record<CliEngineId, string | null> = {
   kiro: null,
 };
 
-const COLOR_CLI_ICON_IDS = new Set<CliEngineId>(["claude", "codex"]);
+const COLOR_CLI_ICON_IDS = new Set<CliEngineId>(["claude", "codex", "dsh"]);
 
 export function buildCliEngineNavItems(options: {
   claudeHasConfig: boolean;
@@ -167,6 +172,7 @@ export function buildCliEngineNavItems(options: {
   grokHasConfig: boolean;
   openCodeHasConfig: boolean;
   piHasConfig: boolean;
+  dshHasConfig: boolean;
 }): CliEngineNavItem[] {
   return [
     { key: "claude", label: "Claude Code CLI", hasConfig: options.claudeHasConfig, supported: true, docsUrl: CLI_DOCS_HREF_BY_ID.claude },
@@ -176,6 +182,7 @@ export function buildCliEngineNavItems(options: {
     { key: "grok", label: "Grok CLI", hasConfig: options.grokHasConfig, supported: true, docsUrl: CLI_DOCS_HREF_BY_ID.grok },
     { key: "opencode", label: "OpenCode CLI", hasConfig: options.openCodeHasConfig, supported: true, docsUrl: CLI_DOCS_HREF_BY_ID.opencode },
     { key: "pi", label: "PI CLI", hasConfig: options.piHasConfig, supported: true, docsUrl: CLI_DOCS_HREF_BY_ID.pi },
+    { key: "dsh", label: "DeepSeek Harness", hasConfig: options.dshHasConfig, supported: true, docsUrl: CLI_DOCS_HREF_BY_ID.dsh },
     { key: "glm", label: "GLM CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.glm },
     { key: "trae", label: "Trae CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.trae },
     { key: "cursor", label: "Cursor CLI", supported: false, docsUrl: CLI_DOCS_HREF_BY_ID.cursor },

@@ -143,7 +143,9 @@ function isLikelyCodexThreadId(threadId: string): boolean {
     normalized.startsWith("pi:") ||
     normalized.startsWith("pi-pending-") ||
     normalized.startsWith("opencode:") ||
-    normalized.startsWith("opencode-pending-")
+    normalized.startsWith("opencode-pending-") ||
+    normalized.startsWith("dsh:") ||
+    normalized.startsWith("dsh-pending-")
   );
 }
 
