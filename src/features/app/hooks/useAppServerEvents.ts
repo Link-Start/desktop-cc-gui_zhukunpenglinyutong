@@ -807,7 +807,7 @@ function isCodexRawGeneratedImageEvent(
 }
 
 function shouldRebindSharedNativeThreadOnStartedEvent(
-  engine: "claude" | "opencode" | "codex" | "gemini" | "grok" | "kimi",
+  engine: "claude" | "opencode" | "codex" | "gemini" | "grok" | "kimi" | "pi",
 ): boolean {
   // Claude 与 local CLIs 在 thread/started 上可能从 pending 占位收敛到
   // `engine:{sessionId}`；Codex 使用 raw thread id，不在此路径做前缀 rebind。
@@ -815,6 +815,7 @@ function shouldRebindSharedNativeThreadOnStartedEvent(
     engine === "claude" ||
     engine === "kimi" ||
     engine === "grok" ||
+    engine === "pi" ||
     engine === "opencode"
   );
 }
@@ -1358,7 +1359,7 @@ function routeNormalizedRealtimeEvent({
         threadId,
         itemId,
         delta,
-        event.engine === "gemini" || event.engine === "grok" || event.engine === "kimi" ? event.engine : null,
+        event.engine === "gemini" || event.engine === "grok" || event.engine === "kimi" || event.engine === "pi" ? event.engine : null,
         turnId,
       );
       return true;
@@ -1373,7 +1374,7 @@ function routeNormalizedRealtimeEvent({
         workspaceId,
         threadId,
         itemId,
-        event.engine === "gemini" || event.engine === "grok" || event.engine === "kimi" ? event.engine : null,
+        event.engine === "gemini" || event.engine === "grok" || event.engine === "kimi" || event.engine === "pi" ? event.engine : null,
         turnId,
       );
       return true;
@@ -1402,7 +1403,7 @@ function routeNormalizedRealtimeEvent({
         threadId,
         itemId,
         delta,
-        event.engine === "gemini" || event.engine === "grok" || event.engine === "kimi" ? event.engine : null,
+        event.engine === "gemini" || event.engine === "grok" || event.engine === "kimi" || event.engine === "pi" ? event.engine : null,
         turnId,
       );
       return true;
@@ -1647,6 +1648,7 @@ export function dispatchAppServerEvent(
         | "grok"
         | "kimi"
         | "opencode"
+        | "pi"
         | undefined);
     if (
       tryRouteNormalizedRealtimeEvent({
@@ -1981,6 +1983,7 @@ export function dispatchAppServerEvent(
       rawEngine === "codex" ||
       rawEngine === "grok" ||
       rawEngine === "kimi" ||
+      rawEngine === "pi" ||
       rawEngine === "gemini"
         ? rawEngine
         : null;
@@ -1993,6 +1996,7 @@ export function dispatchAppServerEvent(
         eventEngine === "claude" ||
         eventEngine === "kimi" ||
         eventEngine === "grok" ||
+        eventEngine === "pi" ||
         eventEngine === "opencode")
     ) {
       const pendingBinding = resolvePendingSharedSessionBindingForEngine(

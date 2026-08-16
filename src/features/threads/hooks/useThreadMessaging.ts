@@ -2518,10 +2518,18 @@ export function useThreadMessaging({
                               ? (kimiSessionIdByPendingThreadRef.current.get(
                                   threadId,
                                 ) ?? null)
-                              : resolvedEngine === "opencode" &&
-                                  isOpenCodeSession
-                                ? threadId.slice("opencode:".length)
-                                : null;
+                              : resolvedEngine === "pi" &&
+                                  threadId.startsWith("pi:")
+                                ? threadId.slice("pi:".length)
+                                : resolvedEngine === "pi" &&
+                                    threadId.startsWith("pi-pending-")
+                                  ? (piSessionIdByPendingThreadRef.current.get(
+                                      threadId,
+                                    ) ?? null)
+                                  : resolvedEngine === "opencode" &&
+                                      isOpenCodeSession
+                                    ? threadId.slice("opencode:".length)
+                                    : null;
           const shouldAttachCliSpecRootHint =
             realSessionId === null && Boolean(customSpecRoot);
 
