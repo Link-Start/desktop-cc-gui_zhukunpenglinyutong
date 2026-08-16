@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getClientStoreSync, writeClientStoreValue } from "../../../services/clientStorage";
 import { useEventCallback } from "../../../utils/useEventCallback";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useLayoutNodes } from "../../../features/layout/hooks/useLayoutNodes";
@@ -953,7 +954,12 @@ export function useAppShellLayoutNodesSection(
       sidebarToggleProps.rightPanelAvailable &&
       clientUiVisibility.isControlVisible("topTool.rightPanel"),
   };
-  const [browserDockOpen, setBrowserDockOpen] = useState(false);
+  const [browserDockOpen, setBrowserDockOpen] = useState<boolean>(
+    () => getClientStoreSync<boolean>("layout", "browserDockOpen") === true,
+  );
+  useEffect(() => {
+    writeClientStoreValue("layout", "browserDockOpen", browserDockOpen);
+  }, [browserDockOpen]);
   const handleToggleBrowserDock = useCallback(() => {
     setBrowserDockOpen((current) => {
       const next = !current;

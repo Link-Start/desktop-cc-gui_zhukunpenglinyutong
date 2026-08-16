@@ -188,7 +188,7 @@ export function RequestUserInputMessage({
   }, [activeRequestKey]);
 
   useEffect(() => {
-    if (!activeRequestKey || isSubmitting || submitError) {
+    if (!activeRequestKey) {
       return undefined;
     }
     const timerId = window.setInterval(() => {
@@ -197,7 +197,7 @@ export function RequestUserInputMessage({
     return () => {
       window.clearInterval(timerId);
     };
-  }, [activeRequestKey, isSubmitting, submitError]);
+  }, [activeRequestKey]);
 
   const remainingSecondsFor = (requestKey: string | null, now = clockMs) => {
     if (!requestKey) {

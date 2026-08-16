@@ -339,6 +339,13 @@ export function pickLikelyKimiSessionId(
   return pickLikelyGeminiSessionId(payload, minUpdatedAt);
 }
 
+export function pickLikelyPiSessionId(
+  payload: unknown,
+  minUpdatedAt: number,
+): string | null {
+  return pickLikelyGeminiSessionId(payload, minUpdatedAt);
+}
+
 export function pickLikelyGrokSessionId(
   payload: unknown,
   minUpdatedAt: number,

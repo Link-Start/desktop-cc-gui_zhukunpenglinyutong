@@ -32,7 +32,18 @@ const browserAgent = {
       "windowOpened": "페이지가 별도의 Browser Agent 창에서 열려 있습니다.",
       "closePanel": "브라우저 독 닫기",
       "close": "Browser Agent 세션 닫기",
+      "tabContextMenu": "브라우저 탭 작업",
+      "closeTab": "탭 닫기",
+      "closeOtherTabs": "다른 탭 닫기",
+      "closeTabsToTheRight": "오른쪽 탭 닫기",
+      "closeAllTabs": "모든 탭 닫기",
       "info": "Browser Agent 세부 정보 표시",
+      "collapseDock": "브라우저 컨트롤 접기",
+      "expandDock": "브라우저 컨트롤 펼치기",
+      "attachContext": "브라우저 컨텍스트 첨부",
+      "selectElement": "채팅에 넣을 페이지 요소 선택",
+      "cancelSelectElement": "페이지 요소 선택 취소",
+      "popOutWindow": "별도 창으로 분리",
       "footnote": "MVP는 원시 DOM, 쿠키, 헤더 또는 페이지 시크릿을 저장하지 않습니다."
     },
     "composer": {

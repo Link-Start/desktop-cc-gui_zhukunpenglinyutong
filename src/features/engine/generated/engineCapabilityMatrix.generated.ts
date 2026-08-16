@@ -138,7 +138,7 @@ export const GENERATED_ENGINE_CAPABILITY_MATRIX: Readonly<
     "streaming.tool-output": "supported",
     "tool.use": "supported",
     "tool.mcp": "unsupported",
-    "reasoning.effort": "unsupported",
+    "reasoning.effort": "supported",
     "collaboration.mode": "unsupported",
     "session.continuation": "supported",
     "image.input": "supported",

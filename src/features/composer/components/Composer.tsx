@@ -42,6 +42,7 @@ import {
 } from "../../shared-session/target/targetStore";
 import {
   freezeTurnSnapshot,
+  isAtomicExecutionTarget,
   isResolvedExecutionTarget,
   resolveBackendAuthoritativeExecutionTarget,
   type ExecutionTarget,
@@ -49,10 +50,7 @@ import {
 import { persistSharedSessionSelectedTarget } from "../../shared-session/services/sharedSessions";
 import { shouldSuppressSharedTargetPersistToast } from "../../shared-session/target/sharedTargetPersistErrors";
 import { resolveComposerAtomicSelectedModelId } from "../utils/resolveComposerAtomicSelectedModelId";
-import {
-  isResolvedCreationExecutionTarget,
-  resolveDefaultCreationExecutionTarget,
-} from "../utils/resolveDefaultCreationExecutionTarget";
+import { resolveDefaultCreationExecutionTarget } from "../utils/resolveDefaultCreationExecutionTarget";
 import { isSharedSessionThreadId } from "../../shared-session/utils/sharedSessionIdentity";
 import { dispatchSharedSendEvent } from "../../shared-session/runtime/sharedSendStateStore";
 import { requestProviderContinuationDialog } from "../../threads/services/providerContinuationRequests";
@@ -177,6 +175,7 @@ import {
 } from "../../browser-agent";
 import { IntentCanvasAttachmentCard } from "../../intent-canvas/components/IntentCanvasAttachmentCard";
 import type { IntentCanvasDocument } from "../../intent-canvas/types";
+import { requestBrowserDockOpenUrl } from "../../browser-agent/state/dockEvents";
 import { resolveBrowserNavigationUrl } from "../utils/browserNavigation";
 import { useAgentProjection } from "../../multi-agent/store/agentStore";
 import { useCollabUiState } from "../../multi-agent/store/collabUiStore";
@@ -470,9 +469,7 @@ const EMPTY_ITEMS: ConversationItem[] = [];
 const COMPOSER_MIN_HEIGHT = 20;
 const COMPOSER_EXPAND_HEIGHT = 80;
 const COMPOSER_INPUT_INTERACTION_IDLE_MS = 320;
-const BROWSER_OPEN_DOCK_EVENT = "browser-agent:open-dock";
-const BROWSER_OPEN_URL_EVENT = "browser-agent:open-url";
-const PENDING_BROWSER_URL_KEY = "ccgui.browserAgent.pendingUrl";
+
 /** ActiveCanvas 下灌的热字段：轻量/空闲时忽略，避免历史 hydrate 打爆 Composer 重渲 */
 const COMPOSER_CANVAS_ONLY_PROPS = new Set<keyof ComposerProps>([
   "items",
@@ -1042,7 +1039,7 @@ function ComposerImpl({
     }
     if (
       createSessionTargetPicker &&
-      isResolvedCreationExecutionTarget(effectiveCreationTarget)
+      isAtomicExecutionTarget(effectiveCreationTarget)
     ) {
       return effectiveCreationTarget.engine;
     }
@@ -1295,10 +1292,9 @@ function ComposerImpl({
   );
   const handleCreationTargetChange = useCallback(
     (target: ExecutionTarget) => {
-      if (
-        !createSessionTargetPicker ||
-        !isResolvedCreationExecutionTarget(target)
-      ) {
+      // create-session 必须用 Atomic 校验（含 PI/DSH 等非 Shared 引擎）；
+      // isResolvedExecutionTarget 仅 Shared 子集，会静默丢掉 PI 点击。
+      if (!createSessionTargetPicker || !isAtomicExecutionTarget(target)) {
         return;
       }
       // 首页 engine 选择必须同步全局 activeEngine + client store，否则重启后首页
@@ -2467,16 +2463,7 @@ function ComposerImpl({
           ? resolveBrowserNavigationUrl(trimmed)
           : null;
       if (browserNavigationUrl && activeWorkspaceId) {
-        window.sessionStorage.setItem(
-          PENDING_BROWSER_URL_KEY,
-          browserNavigationUrl,
-        );
-        window.dispatchEvent(new CustomEvent(BROWSER_OPEN_DOCK_EVENT));
-        window.dispatchEvent(
-          new CustomEvent(BROWSER_OPEN_URL_EVENT, {
-            detail: { url: browserNavigationUrl },
-          }),
-        );
+        requestBrowserDockOpenUrl(browserNavigationUrl);
         clearComposerContextSelections();
         setComposerText("");
         return;
@@ -2536,7 +2523,7 @@ function ComposerImpl({
       const hasBrowserContextAttachment = Boolean(browserContextAttachment);
       const createSessionTarget =
         createSessionTargetPicker &&
-        isResolvedCreationExecutionTarget(effectiveCreationTarget)
+        isAtomicExecutionTarget(effectiveCreationTarget)
           ? {
               engine: effectiveCreationTarget.engine,
               providerProfileId:
@@ -3489,7 +3476,7 @@ function ComposerImpl({
                           reasoning: effort ? { effort } : null,
                         })
                     : createSessionTargetPicker &&
-                        isResolvedCreationExecutionTarget(effectiveCreationTarget)
+                        isAtomicExecutionTarget(effectiveCreationTarget)
                       ? (effort) =>
                           setSelectedCreationTarget({
                             ...effectiveCreationTarget,

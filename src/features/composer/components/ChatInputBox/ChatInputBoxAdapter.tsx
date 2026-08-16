@@ -722,7 +722,7 @@ function attachmentToGeminiImageInput(attachment: Attachment): string | null {
 
 function attachmentsToImageInputs(
   attachments: Attachment[] | undefined,
-  provider: 'claude' | 'codex' | 'gemini' | 'grok' | 'kimi' | 'opencode' | 'dsh' = 'claude',
+  provider: 'claude' | 'codex' | 'gemini' | 'grok' | 'kimi' | 'opencode' | 'pi' | 'dsh' = 'claude',
 ): string[] | undefined {
   if (!attachments || attachments.length === 0) {
     return undefined;
@@ -742,7 +742,7 @@ function attachmentsToImageInputs(
 /**
  * Maps Composer engine types to ChatInputBox provider IDs
  */
-type ChatInputProvider = 'claude' | 'codex' | 'gemini' | 'grok' | 'kimi' | 'opencode' | 'dsh';
+type ChatInputProvider = 'claude' | 'codex' | 'gemini' | 'grok' | 'kimi' | 'opencode' | 'pi' | 'dsh';
 
 function engineToProvider(engine?: EngineType): ChatInputProvider {
   switch (engine) {
@@ -756,6 +756,8 @@ function engineToProvider(engine?: EngineType): ChatInputProvider {
       return 'grok';
     case 'kimi':
       return 'kimi';
+    case 'pi':
+      return 'pi';
     case 'dsh':
       return 'dsh';
     case 'claude':

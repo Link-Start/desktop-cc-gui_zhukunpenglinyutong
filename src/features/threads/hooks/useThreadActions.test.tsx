@@ -1583,7 +1583,19 @@ describe("useThreadActions", () => {
       () => new Promise(() => undefined),
     );
     vi.mocked(getOpenCodeSessionList).mockImplementation(
-      () => new Promise(() => undefined),
+      async (_workspaceId: string, options?: { timeoutMs?: number }) => {
+        if (
+          typeof options?.timeoutMs === "number" &&
+          Number.isFinite(options.timeoutMs) &&
+          options.timeoutMs > 0
+        ) {
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, options.timeoutMs);
+          });
+          return [];
+        }
+        return new Promise(() => undefined);
+      },
     );
 
     const { result, dispatch } = renderActions();
@@ -1623,11 +1635,8 @@ describe("useThreadActions", () => {
       return { promise, resolve };
     };
 
-    const firstResponse = createDeferred<ThreadListResponse>();
-    const secondResponse = createDeferred<ThreadListResponse>();
-    vi.mocked(listThreads)
-      .mockImplementationOnce(() => firstResponse.promise)
-      .mockImplementationOnce(() => secondResponse.promise);
+    const liveResponse = createDeferred<ThreadListResponse>();
+    vi.mocked(listThreads).mockImplementation(() => liveResponse.promise);
     vi.mocked(listClaudeSessions).mockResolvedValue([]);
     vi.mocked(getOpenCodeSessionList).mockResolvedValue([]);
     vi.mocked(getThreadTimestamp).mockImplementation((thread) => {
@@ -1643,8 +1652,15 @@ describe("useThreadActions", () => {
     const firstRefresh = result.current.listThreadsForWorkspace(workspace);
     const secondRefresh = result.current.listThreadsForWorkspace(workspace);
 
+    // Index is awaited before the live Codex list. The older request is
+    // abandoned there, so only the latest refresh should reach listThreads.
     await act(async () => {
-      secondResponse.resolve({
+      await Promise.resolve();
+    });
+    expect(listThreads).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      liveResponse.resolve({
         result: {
           data: [
             {
@@ -1652,23 +1668,6 @@ describe("useThreadActions", () => {
               cwd: "/tmp/codex",
               preview: "new",
               updated_at: 200,
-            },
-          ],
-          nextCursor: null,
-        },
-      });
-      await Promise.resolve();
-    });
-
-    await act(async () => {
-      firstResponse.resolve({
-        result: {
-          data: [
-            {
-              id: "thread-old",
-              cwd: "/tmp/codex",
-              preview: "old",
-              updated_at: 100,
             },
           ],
           nextCursor: null,
@@ -1696,6 +1695,7 @@ describe("useThreadActions", () => {
           updatedAt: 200,
         }),
       ],
+      mode: undefined,
     });
   });
 
@@ -2527,13 +2527,16 @@ describe("useThreadActions", () => {
     const { result, dispatch } = renderActions();
 
     await act(async () => {
-      await result.current.listThreadsForWorkspace({
-        ...workspace,
-        settings: {
-          ...workspace.settings,
-          visibleThreadRootCount: 200,
+      await result.current.listThreadsForWorkspace(
+        {
+          ...workspace,
+          settings: {
+            ...workspace.settings,
+            visibleThreadRootCount: 200,
+          },
         },
-      });
+        { includeEngineDiskLists: true },
+      );
     });
 
     expect(listClaudeSessions).toHaveBeenCalledWith("/tmp/codex", 5);
@@ -2600,12 +2603,17 @@ describe("useThreadActions", () => {
     const { result, dispatch } = renderActions();
 
     await act(async () => {
-      await result.current.listThreadsForWorkspace(workspace);
+      await result.current.listThreadsForWorkspace(workspace, {
+        includeEngineDiskLists: true,
+      });
     });
 
     expect(listThreads).toHaveBeenCalledTimes(1);
     expect(listClaudeSessions).toHaveBeenCalled();
-    expect(getOpenCodeSessionList).toHaveBeenCalledWith("ws-1");
+    expect(getOpenCodeSessionList).toHaveBeenCalledWith(
+      "ws-1",
+      expect.objectContaining({ timeoutMs: expect.any(Number) }),
+    );
     expect(listWorkspaceSessions).toHaveBeenCalledWith("ws-1", {
       query: {
         status: "active",
@@ -2703,7 +2711,9 @@ describe("useThreadActions", () => {
     });
 
     await act(async () => {
-      await result.current.listThreadsForWorkspace(workspace);
+      await result.current.listThreadsForWorkspace(workspace, {
+        includeEngineDiskLists: true,
+      });
     });
 
     expect(listClaudeSessions).toHaveBeenCalled();
@@ -3083,6 +3093,7 @@ describe("useThreadActions", () => {
     await act(async () => {
       await result.current.listThreadsForWorkspace(workspace, {
         includeOpenCodeSessions: true,
+        includeEngineDiskLists: true,
       });
     });
 

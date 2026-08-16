@@ -13,7 +13,7 @@ const GROK_REASONING_EFFORTS = new Set(["low", "medium", "high"]);
 
 export function resolveThreadEngine(
   threadId: string,
-): "claude" | "gemini" | "grok" | "kimi" | "opencode" | "dsh" | "codex" | null {
+): "claude" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh" | "codex" | null {
   if (
     threadId.startsWith("claude:") ||
     threadId.startsWith("claude-pending-") ||
@@ -35,6 +35,9 @@ export function resolveThreadEngine(
   }
   if (threadId.startsWith("dsh:") || threadId.startsWith("dsh-pending-")) {
     return "dsh";
+  }
+  if (threadId.startsWith("pi:") || threadId.startsWith("pi-pending-")) {
+    return "pi";
   }
   if (threadId.startsWith("codex:") || threadId.startsWith("codex-pending-")) {
     return "codex";
@@ -91,7 +94,7 @@ export function normalizeComposerSessionSelectionForThread(
     effort = effort && CLAUDE_REASONING_EFFORTS.has(effort) ? effort : null;
   } else if (engine === "grok") {
     effort = effort && GROK_REASONING_EFFORTS.has(effort) ? effort : null;
-  } else if (engine === "gemini" || engine === "kimi" || engine === "opencode") {
+  } else if (engine === "gemini" || engine === "kimi" || engine === "opencode" || engine === "pi") {
     effort = null;
   }
 

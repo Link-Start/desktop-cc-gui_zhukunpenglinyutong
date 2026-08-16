@@ -5,6 +5,7 @@ import {
   DSH_LOCAL_PROVIDER_PROFILE_ID,
   GROK_LOCAL_PROVIDER_PROFILE_ID,
   LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
+  PI_LOCAL_PROVIDER_PROFILE_ID,
 } from "../../threads/constants/codexProviderProfiles";
 import {
   isResolvedCreationExecutionTarget,
@@ -195,6 +196,33 @@ describe("resolveDefaultCreationExecutionTarget", () => {
 
     expect(target?.engine).toBe("claude");
     expect(target?.providerProfileSource).toBe("disk");
+    expect(isResolvedExecutionTarget(target)).toBe(true);
+  });
+
+  it("treats the PI local sentinel as disk, not a managed profile", () => {
+    const target = resolveDefaultCreationExecutionTarget({
+      enabled: true,
+      selectedEngine: "pi",
+      selectedModelId: "kimi-coding/k3",
+      providerProfileId: PI_LOCAL_PROVIDER_PROFILE_ID,
+      models: [
+        {
+          id: "kimi-coding/k3",
+          model: "kimi-coding/k3",
+          isDefault: true,
+        },
+      ],
+    });
+
+    expect(target).toEqual({
+      engine: "pi",
+      providerProfileId: null,
+      modelCatalogEntryId: "kimi-coding/k3",
+      model: "kimi-coding/k3",
+      reasoning: null,
+      providerProfileNameSnapshot: LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
+      providerProfileSource: "disk",
+    });
     expect(isResolvedExecutionTarget(target)).toBe(true);
   });
 });

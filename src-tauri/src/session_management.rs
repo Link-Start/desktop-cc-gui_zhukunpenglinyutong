@@ -932,6 +932,13 @@ pub(crate) async fn delete_workspace_sessions_core(
         .get_engine_config(engine::EngineType::Grok)
         .await
         .and_then(|item| item.home_dir);
+    let pi_home_dir = engine_manager
+        .get_engine_config(engine::EngineType::Pi)
+        .await
+        .and_then(|item| item.home_dir);
+    let dsh_config = engine_manager
+        .get_engine_config(engine::EngineType::Dsh)
+        .await;
     let mut async_delete_handles: Vec<(
         WorkspaceSessionMutationTarget,
         JoinHandle<Result<(), String>>,
@@ -993,6 +1000,31 @@ pub(crate) async fn delete_workspace_sessions_core(
                         grok_home_dir.as_deref(),
                     )
                     .await
+                });
+                async_delete_handles.push((target, handle));
+            }
+            "pi" => {
+                let workspace_path = target.owner_workspace_path.clone();
+                let pi_home_dir = pi_home_dir.clone();
+                let raw_id = target.native_session_id.clone();
+                let handle = tokio::spawn(async move {
+                    engine::pi_history::delete_pi_session(
+                        &workspace_path,
+                        &raw_id,
+                        pi_home_dir.as_deref(),
+                    )
+                    .await
+                });
+                async_delete_handles.push((target, handle));
+            }
+            "dsh" => {
+                let raw_id = target.native_session_id.clone();
+                let dsh_config = dsh_config.clone();
+                let handle = tokio::spawn(async move {
+                    let runtime =
+                        crate::engine::dsh::runtime_settings_from_engine_config(dsh_config.as_ref());
+                    let (_snapshot, client) = crate::engine::dsh::connect_existing(&runtime).await?;
+                    crate::engine::dsh::history::archive_dsh_session(&client, &raw_id).await
                 });
                 async_delete_handles.push((target, handle));
             }
@@ -1127,6 +1159,23 @@ pub(crate) async fn delete_workspace_sessions_core(
         }
     }
 
+    // 统一删除绕过前端 fan-out，这里必须自己打 tombstone（含持久标记），
+    // 否则重启后 sync/backfill 的 rescan 会把已删会话重新插回侧栏。
+    if !metadata_cleanup_targets.is_empty() {
+        let tombstone_ids: Vec<String> = metadata_cleanup_targets
+            .iter()
+            .map(|target| format!("{}:{}", target.engine, target.native_session_id))
+            .collect();
+        if let Err(error) =
+            crate::session_index::commands::tombstone_session_index_rows(tombstone_ids).await
+        {
+            log::warn!(
+                "[session_management.delete_workspace_sessions] tombstone session index failed for workspace {}: {}",
+                workspace_id,
+                error
+            );
+        }
+    }
     if !metadata_cleanup_targets.is_empty() {
         let mut targets_by_owner = HashMap::<String, Vec<WorkspaceSessionMutationTarget>>::new();
         for target in metadata_cleanup_targets {
@@ -1803,7 +1852,7 @@ fn is_stable_catalog_metadata_key(session_id: &str) -> bool {
     let canonical_session_id = parts.next().unwrap_or_default();
     matches!(
         engine,
-        "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode" | "shared"
+        "codex" | "claude" | "gemini" | "grok" | "kimi" | "pi" | "opencode" | "shared"
     ) && !workspace_id.trim().is_empty()
         && !canonical_session_id.trim().is_empty()
 }

@@ -58,6 +58,8 @@ function getEngineLabel(engine: EngineType): string {
       return "OpenCode";
     case "dsh":
       return "DSH";
+    case "pi":
+      return "PI CLI";
     case "codex":
     default:
       return "Codex";

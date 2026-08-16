@@ -77,6 +77,9 @@ function inferManualRecoveryEngine(
   if (normalizedThreadId.startsWith("kimi:") || normalizedThreadId.startsWith("kimi-pending-")) {
     return "kimi";
   }
+  if (normalizedThreadId.startsWith("pi:") || normalizedThreadId.startsWith("pi-pending-")) {
+    return "pi";
+  }
   if (normalizedThreadId.startsWith("opencode:") || normalizedThreadId.startsWith("opencode-pending-")) {
     return "opencode";
   }

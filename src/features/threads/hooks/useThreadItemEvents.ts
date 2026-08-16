@@ -97,11 +97,15 @@ function isDshThread(threadId: string) {
   return threadId.startsWith("dsh:") || threadId.startsWith("dsh-pending-");
 }
 
+function isPiThread(threadId: string) {
+  return threadId.startsWith("pi:") || threadId.startsWith("pi-pending-");
+}
+
 function readHighResolutionNowMs() {
   return typeof performance !== "undefined" ? performance.now() : Date.now();
 }
 
-type ReasoningEngineHint = "gemini" | "grok" | "kimi" | "dsh" | null;
+type ReasoningEngineHint = "gemini" | "grok" | "kimi" | "pi" | "dsh" | null;
 
 function isGeminiEventThread(
   threadId: string,
@@ -131,6 +135,13 @@ function isDshEventThread(
   return engineHint === "dsh" || isDshThread(threadId);
 }
 
+function isPiEventThread(
+  threadId: string,
+  engineHint?: ReasoningEngineHint,
+) {
+  return engineHint === "pi" || isPiThread(threadId);
+}
+
 function inferItemEngineSource(
   item: Record<string, unknown>,
   threadId: string,
@@ -145,6 +156,7 @@ function inferItemEngineSource(
     rawEngineSource === "grok" ||
     rawEngineSource === "kimi" ||
     rawEngineSource === "opencode" ||
+    rawEngineSource === "pi" ||
     rawEngineSource === "dsh"
   ) {
     return rawEngineSource;
@@ -625,6 +637,7 @@ export function useThreadItemEvents({
         (isGeminiEventThread(threadId, reasoningEngineHint) ||
           isGrokEventThread(threadId, reasoningEngineHint) ||
           isKimiEventThread(threadId, reasoningEngineHint) ||
+          isPiEventThread(threadId, reasoningEngineHint) ||
           isDshEventThread(threadId, reasoningEngineHint)) &&
         (operation.kind === "reasoningSummaryDelta" ||
           operation.kind === "reasoningSummaryBoundary" ||
@@ -1610,6 +1623,7 @@ export function useThreadItemEvents({
           itemEngineSource === "grok" ||
           itemEngineSource === "kimi" ||
           itemEngineSource === "opencode" ||
+          itemEngineSource === "pi" ||
           itemEngineSource === "dsh" ||
           itemEngineSource === "codex"
             ? {

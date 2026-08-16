@@ -154,4 +154,62 @@ describe("useAppShellComposerSendSection Home target creation", () => {
       }),
     );
   });
+
+  it("creates a local PI pending thread from the Home picker without a managed profile", async () => {
+    const context = createContext();
+    const { result } = renderHook(() =>
+      useAppShellComposerSendSection(context as never),
+    );
+    const options: MessageSendOptions = {
+      createSessionTarget: {
+        engine: "pi",
+        providerProfileId: null,
+        providerProfileName: "本地配置",
+        providerProfileSource: "disk",
+        modelCatalogEntryId: "kimi-coding/k3",
+        model: "kimi-coding/k3",
+        effort: null,
+      },
+    };
+
+    await act(async () => {
+      await result.current.handleComposerSendWithEditorFallback(
+        "hello pi",
+        [],
+        options,
+      );
+    });
+
+    expect(context.setActiveEngine).toHaveBeenCalledWith("pi");
+    expect(context.startThreadForWorkspace).toHaveBeenCalledWith(
+      "workspace-1",
+      {
+        engine: "pi",
+        activate: true,
+        providerProfileId: null,
+        providerProfile: null,
+      },
+    );
+    expect(context.persistComposerSelectionForThread).toHaveBeenCalledWith(
+      "workspace-1",
+      "thread-created",
+      {
+        modelId: "kimi-coding/k3",
+        effort: null,
+      },
+    );
+    expect(context.sendUserMessageToThread).toHaveBeenCalledWith(
+      context.activeWorkspace,
+      "thread-created",
+      "hello pi",
+      [],
+      expect.objectContaining({
+        model: "kimi-coding/k3",
+        effort: null,
+      }),
+    );
+    const forwardedOptions = vi.mocked(context.sendUserMessageToThread).mock
+      .calls[0]?.[4] as MessageSendOptions;
+    expect(forwardedOptions.createSessionTarget).toBeUndefined();
+  });
 });

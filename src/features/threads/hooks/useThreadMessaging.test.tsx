@@ -18,6 +18,7 @@ import {
   engineSendMessage,
   interruptTurn,
   listGeminiSessions,
+  invalidateSessionIndexForWorkspace,
   loadClaudeSession,
   projectMemoryCaptureTurnInput,
   resolveEnabledBuiltInAgent,
@@ -79,7 +80,7 @@ describe("useThreadMessaging", () => {
     },
   );
 
-  it.each(["claude", "grok", "kimi", "opencode"] as const)(
+  it.each(["claude", "grok", "kimi", "opencode", "pi"] as const)(
     "does not block %s sends with non-empty images at client boundary",
     async (engine) => {
       const { result, pushThreadErrorMessage } = makeThreadMessagingHook(engine, {
@@ -1763,6 +1764,65 @@ describe("useThreadMessaging", () => {
       "claude-pending-snake",
       CLAUDE_PENDING_NATIVE_SESSION_WAIT_MESSAGE,
     );
+  });
+
+  it("continues finalized pi session with native thread id", async () => {
+    const { result } = makeThreadMessagingHook("pi", {
+      activeThreadId: "pi:019ffb7b-dedc-7b36-8d2f-f85f35501036",
+      ensuredThreadId: "pi:019ffb7b-dedc-7b36-8d2f-f85f35501036",
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "pi:019ffb7b-dedc-7b36-8d2f-f85f35501036",
+        "1+1",
+      );
+    });
+
+    expect(engineSendMessage).toHaveBeenCalledWith(
+      "ws-1",
+      expect.objectContaining({
+        engine: "pi",
+        continueSession: true,
+        sessionId: "019ffb7b-dedc-7b36-8d2f-f85f35501036",
+        threadId: "pi:019ffb7b-dedc-7b36-8d2f-f85f35501036",
+      }),
+    );
+  });
+
+  it("invalidates session index after pending pi send caches native id", async () => {
+    vi.mocked(engineSendMessage).mockResolvedValue({
+      sessionId: "019ffb98-e96c-7914-aeac-52d5744c65de",
+      result: { turn: { id: "turn-pi-1" } },
+    });
+    vi.mocked(invalidateSessionIndexForWorkspace).mockResolvedValue(1);
+
+    const { result } = makeThreadMessagingHook("pi", {
+      activeThreadId: "pi-pending-abc",
+      ensuredThreadId: "pi-pending-abc",
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "pi-pending-abc",
+        "1+1",
+      );
+    });
+
+    expect(engineSendMessage).toHaveBeenCalledWith(
+      "ws-1",
+      expect.objectContaining({
+        engine: "pi",
+        continueSession: false,
+        sessionId: null,
+        threadId: "pi-pending-abc",
+      }),
+    );
+    await waitFor(() => {
+      expect(invalidateSessionIndexForWorkspace).toHaveBeenCalledWith("ws-1");
+    });
   });
 
   it("continues finalized claude session with native thread id", async () => {

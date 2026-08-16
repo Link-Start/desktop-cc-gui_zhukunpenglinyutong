@@ -32,7 +32,18 @@ const browserAgent = {
       "windowOpened": "頁面已在獨立的 Browser Agent 視窗中開啟。",
       "closePanel": "關閉瀏覽器 Dock",
       "close": "關閉 Browser Agent 工作階段",
+      "tabContextMenu": "瀏覽器分頁操作",
+      "closeTab": "關閉分頁",
+      "closeOtherTabs": "關閉其他分頁",
+      "closeTabsToTheRight": "關閉右側分頁",
+      "closeAllTabs": "關閉全部分頁",
       "info": "顯示 Browser Agent 詳細資訊",
+      "collapseDock": "收合瀏覽器控制列",
+      "expandDock": "展開瀏覽器控制列",
+      "attachContext": "附加瀏覽器情境",
+      "selectElement": "選擇網頁元素加入聊天",
+      "cancelSelectElement": "取消選擇網頁元素",
+      "popOutWindow": "彈出為獨立視窗",
       "footnote": "MVP 不會儲存原始 DOM、cookie、標頭或頁面機密。"
     },
     "composer": {

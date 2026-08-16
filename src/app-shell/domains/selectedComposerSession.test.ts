@@ -168,6 +168,15 @@ describe("selectedComposerSession", () => {
       modelId: "gpt-5.4",
       effort: "high",
     });
+    expect(
+      normalizeComposerSessionSelectionForThread("pi:session-1", {
+        modelId: "composer-2",
+        effort: "high",
+      }),
+    ).toEqual({
+      modelId: "composer-2",
+      effort: null,
+    });
   });
 
   describe("fillPendingComposerSelectionEffortFromEnginePref", () => {

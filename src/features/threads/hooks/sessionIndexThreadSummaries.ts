@@ -2,6 +2,7 @@ import type { ThreadSummary } from "../../../types";
 import type { SessionIndexRow } from "../../../services/tauri";
 import { previewThreadName } from "../../../utils/threadItems";
 import { sanitizeNativeSessionTitle } from "../utils/sessionDisplayProjection";
+import { shouldExcludeOrdinaryNativeRow } from "./sharedNativeVisibility";
 
 const ENGINE_PREFIX: Record<string, string> = {
   claude: "claude:",
@@ -9,6 +10,7 @@ const ENGINE_PREFIX: Record<string, string> = {
   gemini: "gemini:",
   grok: "grok:",
   kimi: "kimi:",
+  pi: "pi:",
   opencode: "opencode:",
   dsh: "dsh:",
 };
@@ -25,6 +27,7 @@ function normalizeEngine(
     value === "gemini" ||
     value === "grok" ||
     value === "kimi" ||
+    value === "pi" ||
     value === "opencode" ||
     value === "dsh"
   ) {
@@ -63,7 +66,10 @@ export function sessionIndexRowsToThreadSummaries(
     if (!engine || !id) {
       continue;
     }
-    if (hidden.has(id) || hidden.has(row.sessionId)) {
+    if (
+      shouldExcludeOrdinaryNativeRow(id, hidden) ||
+      shouldExcludeOrdinaryNativeRow(row.sessionId, hidden)
+    ) {
       continue;
     }
     const nativeTitle = sanitizeNativeSessionTitle(
@@ -81,9 +87,11 @@ export function sessionIndexRowsToThreadSummaries(
               ? "Gemini Session"
               : engine === "grok"
                 ? "Grok Session"
-                : engine === "dsh"
-                  ? "DeepSeek Harness Session"
-                  : "Session";
+                : engine === "pi"
+                  ? "PI Session"
+                  : engine === "dsh"
+                    ? "DeepSeek Harness Session"
+                    : "Session";
     const mappedTitle = options.mappedTitles[id];
     const customName =
       options.getCustomName(options.workspaceId, id) || mappedTitle;
@@ -157,4 +165,63 @@ export function mergeSessionIndexRowsIntoSummaries(
     }
   }
   return Array.from(byId.values()).sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+export function filterSessionIndexRowsByEngine(
+  rows: SessionIndexRow[],
+  engine: string,
+): SessionIndexRow[] {
+  const wanted = engine.trim().toLowerCase();
+  if (!wanted) {
+    return [];
+  }
+  return rows.filter(
+    (row) => String(row.engine ?? "").trim().toLowerCase() === wanted,
+  );
+}
+
+function summaryEngineKey(summary: ThreadSummary): string {
+  const id = String(summary.id ?? "").trim();
+  if (summary.threadKind === "shared" || id.startsWith("shared:")) {
+    return "shared";
+  }
+  const engine = String(summary.engineSource ?? "")
+    .trim()
+    .toLowerCase();
+  if (engine) {
+    return engine;
+  }
+  const prefix = id.split(":")[0]?.toLowerCase() ?? "";
+  return prefix || "codex";
+}
+
+/**
+ * Index-only first-paint can return a partial engine set. Keep last-good /
+ * snapshot rows for engines the Index page did not include so the list still
+ * shows every native type the workspace already knew about.
+ */
+export function mergeSummariesForMissingEngines(
+  incoming: ThreadSummary[],
+  continuity: ThreadSummary[],
+): ThreadSummary[] {
+  if (continuity.length === 0) {
+    return incoming;
+  }
+  const present = new Set(incoming.map(summaryEngineKey));
+  const incomingIds = new Set(incoming.map((row) => row.id));
+  const extras = continuity.filter((row) => {
+    if (!row.id || incomingIds.has(row.id)) {
+      return false;
+    }
+    return !present.has(summaryEngineKey(row));
+  });
+  if (extras.length === 0) {
+    return incoming;
+  }
+  return [...incoming, ...extras].sort((left, right) => {
+    if (right.updatedAt !== left.updatedAt) {
+      return right.updatedAt - left.updatedAt;
+    }
+    return left.id.localeCompare(right.id);
+  });
 }

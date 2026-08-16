@@ -388,6 +388,40 @@ describe("useAppShellLayoutNodesSection adapter contract", () => {
     );
   });
 
+  it("opens the center-split dock and switches to chat on browser-agent:open-dock", () => {
+    const source = readFileSync(
+      join(currentDir, "layoutNodes/useAppShellLayoutNodesSection.tsx"),
+      "utf8",
+    );
+    const openDockListener = source.slice(
+      source.indexOf("const handleExternalOpen = () => {"),
+      source.indexOf(
+        'window.addEventListener("browser-agent:toggle-dock"',
+        source.indexOf("const handleExternalOpen = () => {"),
+      ),
+    );
+
+    expect(source).toContain(
+      'window.addEventListener("browser-agent:open-dock", handleExternalOpen)',
+    );
+    expect(openDockListener).toContain("setBrowserDockOpen(true)");
+    expect(openDockListener).toContain('setCenterMode("chat")');
+  });
+
+  it("persists the center-split dock open state in the layout store", () => {
+    const source = readFileSync(
+      join(currentDir, "layoutNodes/useAppShellLayoutNodesSection.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain(
+      'getClientStoreSync<boolean>("layout", "browserDockOpen") === true',
+    );
+    expect(source).toContain(
+      'writeClientStoreValue("layout", "browserDockOpen", browserDockOpen)',
+    );
+  });
+
   it("routes message-tail fork through message anchored fork with provider options", () => {
     const source = readFileSync(
       join(currentDir, "layoutNodes/useAppShellLayoutNodesSection.tsx"),

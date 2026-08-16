@@ -67,6 +67,14 @@ export function renameThreadStateIdentity({
     delete newHistoryRestoredAtMsByThread[oldThreadId];
   }
 
+  const newHistoryWindowByThread = { ...state.historyWindowByThread };
+  if (newHistoryWindowByThread[oldThreadId] !== undefined) {
+    newHistoryWindowByThread[newThreadId] =
+      newHistoryWindowByThread[newThreadId]
+      ?? newHistoryWindowByThread[oldThreadId];
+    delete newHistoryWindowByThread[oldThreadId];
+  }
+
   const newThreadsByWorkspace = { ...state.threadsByWorkspace };
   const workspaceThreads = newThreadsByWorkspace[workspaceId];
   if (workspaceThreads) {
@@ -247,6 +255,7 @@ export function renameThreadStateIdentity({
     activeThreadIdByWorkspace: newActiveThreadIdByWorkspace,
     itemsByThread: newItemsByThread,
     historyRestoredAtMsByThread: newHistoryRestoredAtMsByThread,
+    historyWindowByThread: newHistoryWindowByThread,
     threadsByWorkspace: newThreadsByWorkspace,
     threadStatusById: newThreadStatusById,
     activeTurnIdByThread: newActiveTurnIdByThread,

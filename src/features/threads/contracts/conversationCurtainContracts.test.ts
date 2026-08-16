@@ -22,6 +22,30 @@ describe("conversationCurtainContracts", () => {
     expect(state.meta.threadId).toBe("thread-1");
   });
 
+  it("preserves Claude disk-window hasMore metadata", () => {
+    const snapshot = normalizeHistorySnapshot({
+      engine: "claude",
+      workspaceId: "ws-window",
+      threadId: "claude:session-window",
+      items: [],
+      userInputQueue: [],
+      plan: null,
+      meta: {
+        workspaceId: "ws-window",
+        threadId: "claude:session-window",
+        engine: "claude",
+        activeTurnId: null,
+        isThinking: false,
+        heartbeatPulse: null,
+        historyRestoredAtMs: 1,
+        historyHasMore: true,
+        historyNextCursor: "80",
+      },
+    });
+    expect(snapshot.meta.historyHasMore).toBe(true);
+    expect(snapshot.meta.historyNextCursor).toBe("80");
+  });
+
   it("normalizes missing history fields with explicit fallback warnings", () => {
     const snapshot = normalizeHistorySnapshot({
       engine: "claude",

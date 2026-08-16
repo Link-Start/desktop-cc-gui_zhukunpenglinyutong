@@ -140,6 +140,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
     kimiDoctor,
     grokDoctor,
     opencodeDoctor,
+    piDoctor,
     editorSplitCompanion,
     editorSplitLayout,
     errorToastsNode,
@@ -577,6 +578,7 @@ export function renderAppShell(ctx: RenderAppShellContext) {
                 onRunKimiDoctor={kimiDoctor}
                 onRunGrokDoctor={grokDoctor}
                 onRunOpenCodeDoctor={opencodeDoctor}
+                onRunPiDoctor={piDoctor}
                 activeWorkspace={activeWorkspace}
                 activeThreadId={activeThreadId}
                 activeEngine={activeEngine}

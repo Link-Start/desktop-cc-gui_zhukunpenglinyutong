@@ -3,9 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceInfo } from "../../../types";
 import {
-  deleteClaudeSession,
-  deleteCodexSession,
-  deleteOpenCodeSession,
+  deleteWorkspaceSessions,
   getOpenCodeSessionList,
   listClaudeSessions,
   listGeminiSessions,
@@ -101,9 +99,7 @@ vi.mock("../../../services/tauri", () => ({
   })),
   resumeThread: vi.fn(),
   archiveThread: vi.fn(),
-  deleteClaudeSession: vi.fn(),
-  deleteCodexSession: vi.fn(),
-  deleteOpenCodeSession: vi.fn(),
+  deleteWorkspaceSessions: vi.fn(),
   getAccountRateLimits: vi.fn(),
   getAccountInfo: vi.fn(),
   interruptTurn: vi.fn(),
@@ -150,17 +146,19 @@ describe("useThreads engine source", () => {
     handlers = null;
     delete window.__MOSSX_WEB_SERVICE__;
     vi.clearAllMocks();
-    vi.mocked(deleteClaudeSession).mockResolvedValue(undefined);
-    vi.mocked(deleteCodexSession).mockResolvedValue({
-      deleted: true,
-      deletedCount: 1,
-      method: "filesystem",
-      archivedBeforeDelete: true,
-    });
-    vi.mocked(deleteOpenCodeSession).mockResolvedValue({
-      deleted: true,
-      method: "filesystem",
-    });
+    vi.mocked(deleteWorkspaceSessions).mockImplementation(
+      async (_workspaceId: string, sessionIds: string[]) => ({
+        results: sessionIds.map((sessionId) => ({
+          sessionId,
+          ok: true,
+          archivedAt: null,
+          error: null,
+          code: "SESSION_DELETED",
+          deletedFromDisk: true,
+          metadataCleaned: true,
+        })),
+      }),
+    );
     vi.mocked(listClaudeSessions).mockResolvedValue([]);
     vi.mocked(listGeminiSessions).mockResolvedValue([]);
     vi.mocked(getOpenCodeSessionList).mockResolvedValue([]);
@@ -340,7 +338,7 @@ describe("useThreads engine source", () => {
   });
 
   it("removes stale claude sidebar entries when delete returns session not found", async () => {
-    vi.mocked(deleteClaudeSession).mockRejectedValue(
+    vi.mocked(deleteWorkspaceSessions).mockRejectedValue(
       new Error("[SESSION_NOT_FOUND] Session file not found: session-missing"),
     );
 
@@ -387,7 +385,7 @@ describe("useThreads engine source", () => {
   });
 
   it("removes stale codex sidebar entries when delete returns session not found", async () => {
-    vi.mocked(deleteCodexSession).mockRejectedValue(
+    vi.mocked(deleteWorkspaceSessions).mockRejectedValue(
       new Error("codex session file not found for session session-missing"),
     );
 
@@ -428,7 +426,7 @@ describe("useThreads engine source", () => {
   });
 
   it("removes stale opencode sidebar entries when delete returns session not found", async () => {
-    vi.mocked(deleteOpenCodeSession).mockRejectedValue(
+    vi.mocked(deleteWorkspaceSessions).mockRejectedValue(
       new Error("[SESSION_NOT_FOUND] OpenCode session file not found: ses_opc_missing"),
     );
 
@@ -512,7 +510,7 @@ describe("useThreads engine source", () => {
   });
 
   it("keeps opencode sidebar entries when delete fails with invalid session id", async () => {
-    vi.mocked(deleteOpenCodeSession).mockRejectedValue(
+    vi.mocked(deleteWorkspaceSessions).mockRejectedValue(
       new Error("[SESSION_NOT_FOUND] Invalid OpenCode session id"),
     );
 
@@ -553,7 +551,9 @@ describe("useThreads engine source", () => {
   });
 
   it("keeps claude sidebar entries when delete fails with a retryable error", async () => {
-    vi.mocked(deleteClaudeSession).mockRejectedValue(new Error("temporary delete failure"));
+    vi.mocked(deleteWorkspaceSessions).mockRejectedValue(
+      new Error("temporary delete failure"),
+    );
 
     const { result } = renderHook(() =>
       useThreads({

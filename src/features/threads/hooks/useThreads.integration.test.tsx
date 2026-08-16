@@ -6,7 +6,7 @@ import type { useAppServerEvents } from "../../app/hooks/useAppServerEvents";
 import { useThreadRows } from "../../app/hooks/useThreadRows";
 import {
   archiveThread,
-  deleteOpenCodeSession,
+  deleteWorkspaceSessions,
   engineInterruptTurn,
   interruptTurn,
   resumeThread,
@@ -52,6 +52,8 @@ vi.mock("../../../services/tauri", () => ({
   resumeThread: vi.fn(),
   archiveThread: vi.fn(),
   deleteOpenCodeSession: vi.fn(),
+  deleteWorkspaceSessions: vi.fn(),
+  writeClientCreatedSessionIndex: vi.fn(),
   getAccountRateLimits: vi.fn(),
   getAccountInfo: vi.fn(),
   engineInterrupt: vi.fn(),
@@ -431,10 +433,19 @@ describe("useThreads UX integration", () => {
     });
   });
 
-  it("deletes opencode sessions through backend hard-delete path", async () => {
-    vi.mocked(deleteOpenCodeSession).mockResolvedValue({
-      deleted: true,
-      method: "filesystem",
+  it("deletes opencode sessions through unified backend delete", async () => {
+    vi.mocked(deleteWorkspaceSessions).mockResolvedValue({
+      results: [
+        {
+          sessionId: "opencode:ses_opc_1",
+          ok: true,
+          archivedAt: null,
+          error: null,
+          code: "DELETED",
+          deletedFromDisk: true,
+          metadataCleaned: true,
+        },
+      ],
     });
     const { result } = renderHook(() =>
       useThreads({
@@ -455,11 +466,13 @@ describe("useThreads UX integration", () => {
       message: null,
     });
     expect(archiveThread).not.toHaveBeenCalled();
-    expect(deleteOpenCodeSession).toHaveBeenCalledWith("ws-1", "ses_opc_1");
+    expect(deleteWorkspaceSessions).toHaveBeenCalledWith("ws-1", [
+      "opencode:ses_opc_1",
+    ]);
   });
 
   it("maps workspace-not-connected errors from opencode hard-delete", async () => {
-    vi.mocked(deleteOpenCodeSession).mockRejectedValue(
+    vi.mocked(deleteWorkspaceSessions).mockRejectedValue(
       new Error("[WORKSPACE_NOT_CONNECTED] Workspace not found"),
     );
     const { result } = renderHook(() =>

@@ -2204,4 +2204,14 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
 
     expect(latest.currentProvider).toBe('kimi');
   });
+
+  it('reports pi as the current provider when the pi engine is selected', async () => {
+    renderAdapter({ selectedEngine: 'pi' });
+
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+
+    const latest = mockState.latestProps as { currentProvider?: string };
+
+    expect(latest.currentProvider).toBe('pi');
+  });
 });

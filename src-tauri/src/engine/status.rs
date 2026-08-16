@@ -110,7 +110,6 @@ fn public_models_for_engine(engine_type: EngineType) -> Vec<ModelInfo> {
         EngineType::Codex | EngineType::Grok | EngineType::Kimi | EngineType::OpenCode => {
             get_generated_fallback_models(engine_type)
         }
-        EngineType::Gemini => Vec::new(),
         EngineType::Pi => get_generated_fallback_models(engine_type),
         EngineType::Gemini | EngineType::Dsh => Vec::new(),
     }
@@ -196,7 +195,9 @@ pub(crate) fn get_local_engine_models_for_validation(
             Some(dedupe_models_preserve_order(models))
         }
         EngineType::Codex => Some(get_codex_models()),
-        EngineType::Kimi | EngineType::Pi => Some(get_kimi_models(get_kimi_home_dir().as_deref()).0),
+        EngineType::Kimi => Some(get_kimi_models(get_kimi_home_dir().as_deref()).0),
+        // PI models are async CLI-probed; callers use detect_pi_status / refresh path.
+        EngineType::Pi => Some(get_generated_fallback_models(EngineType::Pi)),
         EngineType::Grok => Some(get_grok_models(get_grok_home_dir().as_deref()).0),
         EngineType::OpenCode => Some(resolve_opencode_validation_catalog(
             cached_opencode_runtime_models(),
@@ -435,7 +436,7 @@ pub(crate) fn get_provider_scoped_engine_models(
             };
             codex_provider_models_from_config(provider_profile_id, &config_toml, custom_models)?
         }
-        EngineType::Kimi | EngineType::Pi => {
+        EngineType::Kimi => {
             let Some(provider) =
                 crate::engine::kimi_provider_profile::resolve_kimi_provider_model_config(
                     provider_profile_id,
@@ -473,7 +474,7 @@ pub(crate) fn get_provider_scoped_engine_models(
                 &provider,
             )));
         }
-        EngineType::Gemini | EngineType::Dsh => return Ok(None),
+        EngineType::Gemini | EngineType::Pi | EngineType::Dsh => return Ok(None),
     };
     Ok(Some(merge_provider_models_with_public(
         provider_models,
@@ -917,14 +918,43 @@ pub(crate) fn parse_pi_models_output(stdout: &str) -> Vec<ModelInfo> {
         if !seen.insert(id.clone()) {
             continue;
         }
+        let thinking = parts.get(4).map(|s| s.as_str()) == Some("yes");
+        let images = parts.get(5).map(|s| s.as_str()) == Some("yes");
+        let mut details = Vec::new();
+        if let Some(ctx) = parts.get(2) {
+            details.push(format!("ctx {ctx}"));
+        }
+        if thinking {
+            details.push("thinking".to_string());
+        }
+        if images {
+            details.push("vision".to_string());
+        }
+        let description = if details.is_empty() {
+            id.clone()
+        } else {
+            details.join(" · ")
+        };
         models.push(
             ModelInfo::new(id.clone(), id.clone())
-                .with_description(id.clone())
+                .with_description(description)
                 .with_provider(provider.clone())
                 .with_protocol("pi")
                 .with_provenance("cli:pi-list-models")
                 .with_source("detected"),
         );
+    }
+    if models.is_empty() {
+        models.push(
+            ModelInfo::new("auto", "PI Auto")
+                .with_description("Use PI CLI default model")
+                .with_provider("pi")
+                .with_protocol("pi")
+                .with_source("fallback")
+                .as_default(),
+        );
+    } else if let Some(first) = models.first_mut() {
+        first.default = true;
     }
     models
 }
@@ -1868,7 +1898,7 @@ pub async fn detect_preferred_engine(
         opencode_status,
         kimi_status,
         grok_status,
-        _pi_status,
+        pi_status,
         dsh_status,
     ) = tokio::join!(
         detect_claude_status(claude_bin),
@@ -1905,6 +1935,9 @@ pub async fn detect_preferred_engine(
     }
     if grok_status.installed {
         return EngineType::Grok;
+    }
+    if pi_status.installed {
+        return EngineType::Pi;
     }
     if dsh_status.installed {
         return EngineType::Dsh;
@@ -1986,6 +2019,32 @@ mod tests {
 
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn parse_pi_models_output_keeps_thinking_vision_and_default() {
+        let models = parse_pi_models_output(
+            "provider model          ctx  max     thinking images
+openai   gpt-5.2        400k  128k    yes      yes
+anthropic claude-opus    200k   32k    no       yes
+",
+        );
+        assert_eq!(models.len(), 2);
+        assert_eq!(models[0].id, "openai/gpt-5.2");
+        assert!(models[0].default);
+        assert_eq!(models[0].description, "ctx 400k · thinking · vision");
+        assert_eq!(models[1].id, "anthropic/claude-opus");
+        assert!(!models[1].default);
+        assert_eq!(models[1].description, "ctx 200k · vision");
+    }
+
+    #[test]
+    fn parse_pi_models_output_falls_back_to_auto_when_table_is_empty() {
+        let models = parse_pi_models_output("provider model ctx max thinking images\n");
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].id, "auto");
+        assert!(models[0].default);
+        assert_eq!(models[0].source, "fallback");
+    }
 
     #[test]
     fn model_catalog_pair_separates_selection_id_from_runtime_model() {

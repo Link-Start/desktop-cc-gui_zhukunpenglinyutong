@@ -54,7 +54,7 @@ fn is_legacy_local_provider(engine: EngineType, provider_profile_id: &str) -> bo
         EngineType::Codex => {
             provider_profile_id == crate::codex::provider_profile::CODEX_DISK_PROVIDER_PROFILE_ID
         }
-        EngineType::Kimi | EngineType::Pi => {
+        EngineType::Kimi => {
             provider_profile_id
                 == crate::engine::kimi_provider_profile::KIMI_LOCAL_PROVIDER_PROFILE_ID
         }
@@ -65,6 +65,9 @@ fn is_legacy_local_provider(engine: EngineType, provider_profile_id: &str) -> bo
         EngineType::OpenCode => {
             provider_profile_id
                 == crate::engine::opencode_provider_profile::OPENCODE_LOCAL_PROVIDER_PROFILE_ID
+        }
+        EngineType::Pi => {
+            provider_profile_id == crate::engine::pi_provider_profile::PI_LOCAL_PROVIDER_PROFILE_ID
         }
         EngineType::Gemini | EngineType::Dsh => false,
     }

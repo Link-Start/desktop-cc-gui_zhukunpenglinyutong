@@ -1388,6 +1388,7 @@ describe("useThreads memory race integration", () => {
       expect(vi.mocked(loadClaudeSession)).toHaveBeenCalledWith(
         "/tmp/codemoss",
         "session-1",
+        { limit: 80 },
       );
       expect(vi.mocked(loadClaudeSession)).toHaveBeenCalledTimes(1);
     } finally {

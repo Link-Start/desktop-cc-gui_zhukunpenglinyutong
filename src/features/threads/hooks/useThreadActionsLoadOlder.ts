@@ -12,7 +12,19 @@ import {
   listThreads as listThreadsService,
   listSessionIndexForWorkspace as listSessionIndexForWorkspaceService,
 } from "../../../services/tauri";
-import { sessionIndexRowsToThreadSummaries } from "./sessionIndexThreadSummaries";
+import {
+  filterSessionIndexRowsByEngine,
+  sessionIndexRowsToThreadSummaries,
+} from "./sessionIndexThreadSummaries";
+import { expandHiddenSharedBindingIds } from "../../shared-session/runtime/sharedSessionSummaries";
+import { getCollabWorkerNativeHideIds } from "../../multi-agent/runtime/collabNativeHideRegistry";
+import {
+  expandVisibilityHideSet,
+  hasVerifiedSharedHide,
+  isUsableSharedNativeVisibility,
+  lastVerifiedSharedHide,
+  unionHideSets,
+} from "./sharedNativeVisibility";
 import {
   getThreadTimestamp,
   previewThreadName,
@@ -33,12 +45,16 @@ import {
 import {
   CODEX_SESSION_CATALOG_FETCH_TIMEOUT_MS,
   SESSION_CATALOG_PAGE_SIZE,
+  SESSION_INDEX_LOAD_OLDER_TIMEOUT_MS,
+  SESSION_INDEX_PAGE_SIZE,
   THREAD_LIST_LOAD_OLDER_PAGE_SIZE,
   THREAD_LIST_LOAD_OLDER_TARGET_COUNT,
   THREAD_LIST_MAX_EMPTY_PAGES_LOAD_OLDER,
   THREAD_LIST_MAX_FETCH_DURATION_MS,
   THREAD_LIST_MAX_TOTAL_PAGES,
+  decodeSessionIndexThreadListCursor,
   decodeThreadListCursorState,
+  encodeSessionIndexThreadListCursor,
   normalizeProjectCatalogSession,
   resolveThreadListCursorForDisplay,
   sortThreadSummariesForDisplay,
@@ -134,60 +150,112 @@ export function useLoadOlderThreadsForWorkspace({
         } catch {
           mappedTitles = {};
         }
-        const oldest = [...existing].sort((left, right) => left.updatedAt - right.updatedAt)[0];
-        if (oldest && typeof listSessionIndexForWorkspaceService === "function") {
-          const olderIndexPage = await withTimeout(
-            listSessionIndexForWorkspaceService(workspace.id, {
-              limit: 20,
-              syncIfNeeded: false,
-              forceSync: false,
-              beforeUpdatedAt: oldest.updatedAt,
-              beforeSessionId: oldest.id.includes(":")
-                ? oldest.id.slice(oldest.id.indexOf(":") + 1)
-                : oldest.id,
-            }).catch(() => null),
-            4_000,
-          );
-          if (olderIndexPage && Array.isArray(olderIndexPage.data) && olderIndexPage.data.length > 0) {
-            const olderSummaries = sessionIndexRowsToThreadSummaries(
-              olderIndexPage.data,
-              {
-                workspaceId: workspace.id,
-                mappedTitles,
-                getCustomName,
-                hiddenSharedBindingIds: new Set(),
-              },
-            );
-            const merged = sortThreadSummariesForDisplay([
-              ...existing,
-              ...olderSummaries.filter(
-                (entry) => !existing.some((current) => current.id === entry.id),
-              ),
-            ]);
-            dispatch({
-              type: "setThreads",
-              workspaceId: workspace.id,
-              threads: applySessionArchiveState(
-                merged,
-                await archivedSessionMapPromise,
-              ),
-            });
-            latestThreadsByWorkspaceRef.current = {
-              ...latestThreadsByWorkspaceRef.current,
-              [workspace.id]: merged,
-            };
-            dispatch({
-              type: "setThreadListPaging",
-              workspaceId: workspace.id,
-              isLoading: false,
-            });
+        if (cursorState.source === "session-index") {
+          const keyset = decodeSessionIndexThreadListCursor(cursorState.cursor);
+          if (!keyset || typeof listSessionIndexForWorkspaceService !== "function") {
             dispatch({
               type: "setThreadListCursor",
               workspaceId: workspace.id,
-              cursor: olderIndexPage.hasMore ? encodedNextCursor : null,
+              cursor: null,
             });
             return;
           }
+          const page = await withTimeout(
+            listSessionIndexForWorkspaceService(workspace.id, {
+              limit: SESSION_INDEX_PAGE_SIZE + 1,
+              syncIfNeeded: false,
+              forceSync: false,
+              beforeUpdatedAt: keyset.updatedAt,
+              beforeSessionId: keyset.sessionId,
+            })
+              .then((value) => value ?? null)
+              .catch(() => null),
+            SESSION_INDEX_LOAD_OLDER_TIMEOUT_MS,
+          );
+          if (page && Array.isArray(page.data)) {
+            const hasMore = page.data.length > SESSION_INDEX_PAGE_SIZE;
+            const pageRows = hasMore
+              ? page.data.slice(0, SESSION_INDEX_PAGE_SIZE)
+              : page.data;
+            const visibility = page.visibility ?? null;
+            const canProjectIndexNatives =
+              isUsableSharedNativeVisibility(visibility) ||
+              hasVerifiedSharedHide(workspace.id);
+            const hideSet = unionHideSets(
+              expandVisibilityHideSet(visibility),
+              lastVerifiedSharedHide(workspace.id),
+              expandHiddenSharedBindingIds([
+                ...getCollabWorkerNativeHideIds(),
+              ]),
+            );
+            const rows = canProjectIndexNatives
+              ? pageRows
+              : filterSessionIndexRowsByEngine(pageRows, "pi");
+            const indexSummaries = sessionIndexRowsToThreadSummaries(rows, {
+              workspaceId: workspace.id,
+              mappedTitles,
+              getCustomName,
+              hiddenSharedBindingIds: hideSet,
+            });
+            const existingIds = new Set(existing.map((thread) => thread.id));
+            const additions = indexSummaries.filter(
+              (summary) => !existingIds.has(summary.id),
+            );
+            const archivedSessionMap = await archivedSessionMapPromise;
+            const merged = sortThreadSummariesForDisplay(
+              applySessionArchiveState(
+                [...existing, ...additions],
+                archivedSessionMap,
+              ),
+            );
+            const mergedSignature = merged
+              .map((thread) => thread.id)
+              .join("\u0000");
+            const existingSignature = existing
+              .map((thread) => thread.id)
+              .join("\u0000");
+            if (mergedSignature !== existingSignature) {
+              dispatch({
+                type: "setThreads",
+                workspaceId: workspace.id,
+                threads: merged,
+              });
+              latestThreadsByWorkspaceRef.current = {
+                ...latestThreadsByWorkspaceRef.current,
+                [workspace.id]: merged,
+              };
+            }
+            const oldest = pageRows[pageRows.length - 1] ?? null;
+            const nextKey =
+              hasMore && oldest
+                ? {
+                    updatedAt: Number(oldest.updatedAt) || 0,
+                    sessionId: String(oldest.sessionId ?? "").trim(),
+                  }
+                : null;
+            dispatch({
+              type: "setThreadListCursor",
+              workspaceId: workspace.id,
+              cursor:
+                nextKey && nextKey.sessionId
+                  ? encodeSessionIndexThreadListCursor(nextKey)
+                  : null,
+            });
+            onDebug?.({
+              id: `${Date.now()}-client-thread-list-older-index`,
+              timestamp: Date.now(),
+              source: "client",
+              label: "thread/list older session-index",
+              payload: {
+                workspaceId: workspace.id,
+                keyset,
+                rowCount: pageRows.length,
+                additions: additions.length,
+                hasMore,
+              },
+            });
+          }
+          return;
         }
         let catalogCursor: string | null = null;
         let didLoadCatalogPage = false;

@@ -1128,7 +1128,7 @@ export function useThreadTurnEvents({
       workspaceId: string,
       threadId: string,
       sessionId: string,
-      engineHint?: "claude" | "opencode" | "codex" | "gemini" | "grok" | "kimi" | "dsh" | null,
+      engineHint?: "claude" | "opencode" | "codex" | "gemini" | "grok" | "kimi" | "pi" | "dsh" | null,
       turnId?: string | null,
     ) => {
       const explicitEnginePrefix = threadId.startsWith("claude:")
@@ -1144,6 +1144,9 @@ export function useThreadTurnEvents({
         : threadId.startsWith("kimi:")
           || threadId.startsWith("kimi-pending-")
           ? "kimi"
+        : threadId.startsWith("pi:")
+          || threadId.startsWith("pi-pending-")
+          ? "pi"
         : threadId.startsWith("opencode:")
           || threadId.startsWith("opencode-pending-")
           ? "opencode"
@@ -1152,7 +1155,7 @@ export function useThreadTurnEvents({
           ? "dsh"
           : null;
       const hintedEngine =
-        engineHint === "claude" || engineHint === "gemini" || engineHint === "grok" || engineHint === "kimi" || engineHint === "opencode" || engineHint === "dsh"
+        engineHint === "claude" || engineHint === "gemini" || engineHint === "grok" || engineHint === "kimi" || engineHint === "pi" || engineHint === "opencode" || engineHint === "dsh"
           ? engineHint
           : null;
       const pendingByEngine: Record<PendingNativeEngine, string | null> = {
@@ -1168,6 +1171,7 @@ export function useThreadTurnEvents({
       const pendingGemini = pendingByEngine.gemini;
       const pendingGrok = pendingByEngine.grok;
       const pendingKimi = pendingByEngine.kimi;
+      const pendingPi = pendingByEngine.pi;
       const pendingClaude = pendingByEngine.claude;
       const pendingDsh = pendingByEngine.dsh;
       logSessionTrace("event", {
@@ -1181,6 +1185,7 @@ export function useThreadTurnEvents({
         pendingGemini,
         pendingGrok,
         pendingKimi,
+        pendingPi,
         pendingClaude,
         pendingDsh,
       });
@@ -1199,6 +1204,7 @@ export function useThreadTurnEvents({
           pendingGemini,
           pendingGrok,
           pendingKimi,
+          pendingPi,
           pendingClaude,
           pendingDsh,
         });
@@ -1220,6 +1226,8 @@ export function useThreadTurnEvents({
         || threadId.startsWith("grok-pending-")
         || threadId.startsWith("kimi:")
         || threadId.startsWith("kimi-pending-")
+        || threadId.startsWith("pi:")
+        || threadId.startsWith("pi-pending-")
         || threadId.startsWith("opencode:")
         || threadId.startsWith("opencode-pending-")
         || threadId.startsWith("dsh:")
@@ -1229,6 +1237,7 @@ export function useThreadTurnEvents({
         || (enginePrefix !== "gemini" && (threadId.startsWith("gemini:") || threadId.startsWith("gemini-pending-")))
         || (enginePrefix !== "grok" && (threadId.startsWith("grok:") || threadId.startsWith("grok-pending-")))
         || (enginePrefix !== "kimi" && (threadId.startsWith("kimi:") || threadId.startsWith("kimi-pending-")))
+        || (enginePrefix !== "pi" && (threadId.startsWith("pi:") || threadId.startsWith("pi-pending-")))
         || (enginePrefix !== "opencode" && (threadId.startsWith("opencode:") || threadId.startsWith("opencode-pending-")))
         || (enginePrefix !== "dsh" && (threadId.startsWith("dsh:") || threadId.startsWith("dsh-pending-")))
       );

@@ -386,14 +386,14 @@ describe("VendorSettingsPanel", () => {
       "Kimi CLI",
       "Grok CLI",
       "OpenCode CLI",
+      "PI CLI",
       "DeepSeek Harness",
       "Gemini CLI",
       "GLM CLI",
       "Trae CLI",
-      "Cursor CLI",
     ]);
     expect(navLabels).toEqual(
-      expect.arrayContaining(["瑞幸 CLI", "DevEco CLI", "PI CLI", "iFlow CLI"]),
+      expect.arrayContaining(["瑞幸 CLI", "DevEco CLI", "Cursor CLI", "iFlow CLI"]),
     );
     expect(screen.queryByRole("button", { name: /Droid CLI/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Goose CLI/ })).toBeNull();
@@ -525,6 +525,34 @@ describe("VendorSettingsPanel", () => {
     );
     expect(screen.queryByTestId("provider-list-stub")).toBeNull();
     expect(screen.queryByTestId("current-codex-config-stub")).toBeNull();
+  });
+
+  it("renders the PI CLI tab with lifecycle and custom path instead of coming-soon", async () => {
+    renderPanel();
+
+    await waitFor(() => {
+      expect(readGlobalCodexConfigTomlMock).toHaveBeenCalled();
+      expect(readGlobalCodexAuthJsonMock).toHaveBeenCalled();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /PI CLI/ }));
+
+    const brandHeader = screen
+      .getByRole("heading", { name: "PI CLI" })
+      .closest(".vendor-brand-header") as HTMLElement;
+    expect(brandHeader).toBeTruthy();
+    const docsLink = within(brandHeader).getByRole("link", {
+      name: "Official docs",
+    });
+    expect(docsLink.getAttribute("href")).toBe(
+      "https://pi.dev/docs/latest/usage",
+    );
+    expect(screen.queryByText("正在适配此CLI，即将开放")).toBeNull();
+    expect(screen.queryByTestId("provider-list-stub")).toBeNull();
+    expect(screen.queryByTestId("kimi-provider-list-stub")).toBeNull();
+    // Custom path entry is present for supported engines.
+    expect(
+      screen.getByRole("button", { name: /自定义路径|Custom path|Configure/i }),
+    ).toBeTruthy();
   });
 
   it("renders the Grok CLI tab with official config row and provider list", async () => {
@@ -1236,7 +1264,7 @@ describe("VendorSettingsPanel", () => {
   it("shows the empty hint when every supported CLI is disabled", async () => {
     renderPanel({
       appSettings: {
-        disabledCliEngines: ["claude", "codex", "kimi", "grok", "opencode", "dsh"],
+        disabledCliEngines: ["claude", "codex", "kimi", "grok", "opencode", "pi", "dsh"],
       },
     });
 

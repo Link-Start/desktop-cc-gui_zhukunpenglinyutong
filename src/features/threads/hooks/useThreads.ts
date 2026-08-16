@@ -97,7 +97,7 @@ import {
   resumeThread,
   setThreadTitle,
   projectMemoryCompleteTurn,
-  deleteCodexSessions,
+  deleteWorkspaceSessions,
   noteWebServiceReconnected,
 } from "../../../services/tauri";
 import { buildAssistantOutputDigest } from "../../project-memory/utils/outputDigest";
@@ -2662,7 +2662,7 @@ export function useThreads({
       }
 
       const workspaceThreads = state.threadsByWorkspace[workspaceId] ?? [];
-      const codexThreadIds = threadIds.filter((threadId) => {
+      const batchedThreadIds = threadIds.filter((threadId) => {
         const thread = workspaceThreads.find((entry) => entry.id === threadId);
         if (thread?.threadKind === "shared") {
           return false;
@@ -2678,18 +2678,18 @@ export function useThreads({
         );
       });
 
-      const codexResultByThreadId = new Map<string, ThreadDeleteResult>();
-      if (codexThreadIds.length > 1) {
+      const batchedResultByThreadId = new Map<string, ThreadDeleteResult>();
+      if (batchedThreadIds.length > 1) {
         try {
-          const response = await deleteCodexSessions(
+          const response = await deleteWorkspaceSessions(
             workspaceId,
-            codexThreadIds,
+            batchedThreadIds,
           );
           response.results.forEach((result) => {
             const message =
-              (result.error ?? "").trim() || "Failed to delete codex session";
+              (result.error ?? "").trim() || "Failed to delete session";
             const code = mapDeleteErrorCode(message);
-            if (result.deleted || shouldSettleDeleteAsSuccess(message)) {
+            if (result.ok || shouldSettleDeleteAsSuccess(message)) {
               loadedThreadsRef.current[result.sessionId] = false;
               unpinThread(workspaceId, result.sessionId);
               dispatch({
@@ -2702,7 +2702,7 @@ export function useThreads({
                 workspaceId,
                 threadId: result.sessionId,
               });
-              codexResultByThreadId.set(result.sessionId, {
+              batchedResultByThreadId.set(result.sessionId, {
                 threadId: result.sessionId,
                 success: true,
                 code: null,
@@ -2710,7 +2710,7 @@ export function useThreads({
               });
               return;
             }
-            codexResultByThreadId.set(result.sessionId, {
+            batchedResultByThreadId.set(result.sessionId, {
               threadId: result.sessionId,
               success: false,
               code,
@@ -2720,8 +2720,8 @@ export function useThreads({
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);
-          codexThreadIds.forEach((threadId) => {
-            codexResultByThreadId.set(threadId, {
+          batchedThreadIds.forEach((threadId) => {
+            batchedResultByThreadId.set(threadId, {
               threadId,
               success: false,
               code: mapDeleteErrorCode(message),
@@ -2733,7 +2733,7 @@ export function useThreads({
 
       const results: ThreadDeleteResult[] = [];
       for (const threadId of threadIds) {
-        const fastPathResult = codexResultByThreadId.get(threadId);
+        const fastPathResult = batchedResultByThreadId.get(threadId);
         if (fastPathResult) {
           results.push(fastPathResult);
           continue;
@@ -2985,6 +2985,7 @@ export function useThreads({
               thread.engineSource === "grok" ||
               thread.engineSource === "kimi" ||
               thread.engineSource === "opencode" ||
+              thread.engineSource === "pi" ||
               thread.engineSource === "dsh"
                 ? thread.engineSource
                 : undefined,
@@ -2995,6 +2996,7 @@ export function useThreads({
               thread.selectedEngine === "grok" ||
               thread.selectedEngine === "kimi" ||
               thread.selectedEngine === "opencode" ||
+              thread.selectedEngine === "pi" ||
               thread.selectedEngine === "dsh"
                 ? thread.selectedEngine
                 : undefined,

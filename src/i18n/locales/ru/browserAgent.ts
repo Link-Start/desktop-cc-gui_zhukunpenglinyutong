@@ -32,7 +32,18 @@ const browserAgent = {
       "windowOpened": "Страница открыта в отдельном окне Browser Agent.",
       "closePanel": "Закрыть панель браузера",
       "close": "Закрыть сессию Browser Agent",
+      "tabContextMenu": "Действия с вкладкой браузера",
+      "closeTab": "Закрыть вкладку",
+      "closeOtherTabs": "Закрыть другие вкладки",
+      "closeTabsToTheRight": "Закрыть вкладки справа",
+      "closeAllTabs": "Закрыть все вкладки",
       "info": "Показать детали Browser Agent",
+      "collapseDock": "Свернуть элементы управления браузера",
+      "expandDock": "Развернуть элементы управления браузера",
+      "attachContext": "Прикрепить контекст браузера",
+      "selectElement": "Выбрать элемент страницы для чата",
+      "cancelSelectElement": "Отменить выбор элемента страницы",
+      "popOutWindow": "Открыть в отдельном окне",
       "footnote": "MVP не хранит необработанный DOM, cookie, заголовки или секреты страниц."
     },
     "composer": {

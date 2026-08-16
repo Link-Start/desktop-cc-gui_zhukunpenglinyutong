@@ -11,10 +11,12 @@ import {
   createWorkspaceDirectory,
   getOpenCodeSessionList,
   listWorkspaceSessions,
+  listWorkspaceSessionArchiveEvidence,
   listClaudeSessions,
   listGeminiSessions,
   loadGeminiSession,
   listThreadTitles,
+  listSessionIndexForWorkspace,
   renameThreadTitleKey,
   setThreadTitle,
   listThreads,
@@ -49,6 +51,10 @@ vi.mock("../../../services/tauri", () => ({
   listGrokSessions: vi.fn(),
   getOpenCodeSessionList: vi.fn(),
   listWorkspaceSessions: vi.fn(),
+  listSessionIndexForWorkspace: vi.fn(),
+  listDshSessions: vi.fn(),
+  listPiSessions: vi.fn(),
+  listWorkspaceSessionArchiveEvidence: vi.fn(),
   loadClaudeSession: vi.fn(),
   loadGeminiSession: vi.fn(),
   loadCodexSession: vi.fn(),
@@ -107,6 +113,23 @@ describe("useThreadActions thread list recovery and pagination", () => {
       data: [],
       nextCursor: null,
       partialSource: null,
+    });
+    vi.mocked(listSessionIndexForWorkspace).mockResolvedValue({
+      data: [],
+      source: "session-index",
+      synced: false,
+      engines: [],
+      hasMore: false,
+      visibility: {
+        available: true,
+        freshness: "verified",
+        hiddenNativeIds: [],
+      },
+    });
+    vi.mocked(listWorkspaceSessionArchiveEvidence).mockResolvedValue({
+      archivedAtBySessionId: {},
+      partialSource: null,
+      sourceStatuses: [],
     });
     vi.mocked(renameThreadTitleKey).mockResolvedValue(undefined);
     vi.mocked(setThreadTitle).mockResolvedValue("title");
@@ -178,13 +201,15 @@ describe("useThreadActions thread list recovery and pagination", () => {
     const leaderRefresh = result.current.listThreadsForWorkspace(workspace, {
       recoverySource: "thread-list-live",
     });
+    await waitFor(() => {
+      expect(connectWorkspace).toHaveBeenCalledTimes(1);
+    });
     const waiterRefresh = result.current.listThreadsForWorkspace(workspace, {
       preserveState: true,
       recoverySource: "focus-refresh",
     });
-
     await waitFor(() => {
-      expect(connectWorkspace).toHaveBeenCalledTimes(1);
+      expect(listThreads).toHaveBeenCalledTimes(2);
     });
 
     resolveRecovery();
@@ -525,6 +550,19 @@ describe("useThreadActions thread list recovery and pagination", () => {
   });
 
   it("does not resurrect archived codex sessions from last-good continuity during degraded partial refresh", async () => {
+    vi.mocked(listWorkspaceSessionArchiveEvidence).mockResolvedValue({
+      archivedAtBySessionId: {
+        "thread-archived": 1_710_000_000_000,
+      },
+      partialSource: null,
+      sourceStatuses: [
+        {
+          engine: "codex",
+          sourceKind: "cli",
+          completeness: "complete",
+        },
+      ],
+    });
     vi.mocked(listThreads).mockResolvedValue({
       result: {
         data: [

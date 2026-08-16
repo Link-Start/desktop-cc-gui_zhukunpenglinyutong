@@ -130,6 +130,19 @@ mod rules;
 #[allow(dead_code)]
 #[path = "../runtime/mod.rs"]
 mod runtime;
+// session_management.rs 的删除核心在收口时会打 session index tombstone；
+// daemon 没有本地 SQLite index（web 模式走 legacy list），用 no-op 保持
+// 共享核心可编译，行为与桌面端一致（桌面端走完整 session_index 模块）。
+#[allow(dead_code)]
+mod session_index {
+    pub(crate) mod commands {
+        pub(crate) async fn tombstone_session_index_rows(
+            _session_ids: Vec<String>,
+        ) -> Result<u32, String> {
+            Ok(0)
+        }
+    }
+}
 // session_management now catalogs/deletes shared sessions via crate::shared_sessions.
 // The desktop app gets the full module from lib.rs; the daemon only needs the pure
 // filesystem list/delete surface, so keep a minimal local adapter here instead of

@@ -1,4 +1,4 @@
-import { useCallback, useRef, type MutableRefObject } from "react";
+import { useCallback, useEffect, useRef, type MutableRefObject } from "react";
 import type { ConversationItem, ThreadSummary } from "../../../types";
 import {
   listThreads as listThreadsService,
@@ -8,6 +8,7 @@ import {
   loadGrokSession as loadGrokSessionService,
   loadKimiSession as loadKimiSessionService,
   loadDshSession as loadDshSessionService,
+  loadPiSession as loadPiSessionService,
   resumeThread as resumeThreadService,
 } from "../../../services/tauri";
 import {
@@ -20,11 +21,13 @@ import {
 import {
   extractClaudeHistoryTokenUsage,
   parseClaudeHistoryMessagesWithShadowRecovery,
+  CLAUDE_UI_HISTORY_WINDOW,
 } from "../loaders/claudeHistoryLoader";
 import { parseGeminiHistoryMessages } from "../loaders/geminiHistoryParser";
 import { parseGrokHistoryMessages } from "../loaders/grokHistoryParser";
 import { parseKimiHistoryMessages } from "../loaders/kimiHistoryParser";
 import { parseDshHistoryMessages } from "../loaders/dshHistoryParser";
+import { parsePiHistoryMessages } from "../loaders/piHistoryParser";
 import {
   hydrateHistory,
   mergeHistoryProjectionItems,
@@ -74,6 +77,15 @@ import {
 import { type UseThreadActionsOptions } from "./useThreadActions.types";
 import type { HistoryLoadingProgress } from "../utils/historyLoadingProgress";
 import { dispatchThreadItemsProgressively } from "../utils/dispatchThreadItemsProgressively";
+import {
+  clearPendingOlderHistory,
+  getPendingOlderHistory,
+  hasPendingOlderHistory,
+  rememberFullHistoryForWindow,
+  replacePendingOlderHistoryItems,
+  takeNextOlderHistoryBatch,
+} from "../utils/pendingOlderHistory";
+import { setOlderHistoryRequester } from "../utils/olderHistoryRequestBridge";
 
 export type ResumeThreadForWorkspaceOptions = {
   preferLocalCodexHistory?: boolean;
@@ -144,6 +156,31 @@ export function useThreadActionsResumeThreadForWorkspace(
   const threadStatusByIdRef = useRef(threadStatusById);
   threadStatusByIdRef.current = threadStatusById;
 
+  useEffect(() => {
+    setOlderHistoryRequester((targetThreadId) => {
+      const batch = takeNextOlderHistoryBatch(targetThreadId);
+      if (batch.length === 0) {
+        return false;
+      }
+      rawDispatch({
+        type: "prependThreadItems",
+        threadId: targetThreadId,
+        items: batch,
+      });
+      const hasMore = hasPendingOlderHistory(targetThreadId);
+      rawDispatch({
+        type: "setThreadHistoryWindow",
+        threadId: targetThreadId,
+        hasMore,
+        nextCursor: hasMore ? "memory" : null,
+      });
+      return true;
+    });
+    return () => {
+      setOlderHistoryRequester(null);
+    };
+  }, [rawDispatch]);
+
   const resumeThreadForWorkspace = useCallback(
     async (
       workspaceId: string,
@@ -211,6 +248,40 @@ export function useThreadActionsResumeThreadForWorkspace(
         if (isCurrentResumeRequest()) {
           loadedThreadsRef.current[targetThreadId] = loaded;
         }
+      };
+      const applyHydratedItems = async (
+        targetThreadId: string,
+        items: ConversationItem[],
+        options?: { mode?: "tail-first" | "atomic" },
+      ) => {
+        const result = await dispatchThreadItemsProgressively(
+          dispatch,
+          targetThreadId,
+          items,
+          {
+            mode: options?.mode ?? "tail-first",
+            shouldContinue: () => isCurrentResumeRequest(),
+          },
+        );
+        if (!isCurrentResumeRequest()) {
+          return false;
+        }
+        if (result.remainingOlderCount > 0) {
+          rememberFullHistoryForWindow(
+            targetThreadId,
+            items,
+            result.displayedCount,
+          );
+          dispatch({
+            type: "setThreadHistoryWindow",
+            threadId: targetThreadId,
+            hasMore: true,
+            nextCursor: "memory",
+          });
+        } else {
+          clearPendingOlderHistory(targetThreadId);
+        }
+        return true;
       };
       const localItems = itemsByThread[threadId] ?? [];
       if (isPendingThreadId(threadId)) {
@@ -337,6 +408,7 @@ export function useThreadActionsResumeThreadForWorkspace(
               ReturnType<typeof createThreadHistoryLoaderForThread>["load"]
             >
           >,
+          options?: { mode?: "tail-first" | "atomic" },
         ) => Promise<boolean> = async () => false;
 
         const createHistoryLoader = (targetThreadId: string) =>
@@ -365,14 +437,16 @@ export function useThreadActionsResumeThreadForWorkspace(
               if (threadStatusByIdRef.current[targetThreadId]?.isProcessing) {
                 return;
               }
-              // 用「当前画布 ⊕ 迟到 projection」而不是整表覆盖，避免冲掉 V0 之后的本地/实时消息。
+              // 用「缓存全量 ⊕ 迟到 projection」而不是整表从头刷。
               const liveItems =
                 itemsByThreadRef.current[targetThreadId] ?? [];
+              const cached = getPendingOlderHistory(targetThreadId);
+              const baseItems = cached?.items ?? liveItems;
               const projectionItems = mergedSnapshot.items;
               const nextItems =
-                liveItems.length > 0
+                baseItems.length > 0
                   ? mergeHistoryProjectionItems(
-                      liveItems,
+                      baseItems,
                       projectionItems,
                       {
                         workspaceId,
@@ -381,10 +455,33 @@ export function useThreadActionsResumeThreadForWorkspace(
                       },
                     )
                   : projectionItems;
-              void hydrateHistorySnapshot(targetThreadId, {
-                ...mergedSnapshot,
-                items: nextItems,
-              });
+              if (cached) {
+                const pending = replacePendingOlderHistoryItems(
+                  targetThreadId,
+                  nextItems,
+                );
+                if (pending) {
+                  dispatch({
+                    type: "setThreadItems",
+                    threadId: targetThreadId,
+                    items: nextItems.slice(-pending.displayedCount),
+                  });
+                  dispatch({
+                    type: "setThreadHistoryWindow",
+                    threadId: targetThreadId,
+                    hasMore: true,
+                    nextCursor: "memory",
+                  });
+                  return;
+                }
+              }
+              void hydrateHistorySnapshot(
+                targetThreadId,
+                {
+                  ...mergedSnapshot,
+                  items: nextItems,
+                },
+              );
             },
           });
         hydrateHistorySnapshot = async (
@@ -392,6 +489,7 @@ export function useThreadActionsResumeThreadForWorkspace(
           snapshot: Awaited<
             ReturnType<ReturnType<typeof createHistoryLoader>["load"]>
           >,
+          options?: { mode?: "tail-first" | "atomic" },
         ) => {
           if (!isCurrentResumeRequest()) {
             return false;
@@ -459,15 +557,12 @@ export function useThreadActionsResumeThreadForWorkspace(
             return false;
           }
           setThreadHistoryRecoveryFailed(effectiveThreadId, false);
-          // Large tool-heavy histories: progressive setThreadItems so the first
-          // paint is not one multi-thousand-item main-thread commit.
-          await dispatchThreadItemsProgressively(
-            dispatch,
+          const applied = await applyHydratedItems(
             effectiveThreadId,
             snapshotItems,
-            { shouldContinue: () => isCurrentResumeRequest() },
+            { mode: options?.mode ?? "tail-first" },
           );
-          if (!isCurrentResumeRequest()) {
+          if (!applied) {
             return false;
           }
           dispatch({
@@ -480,6 +575,14 @@ export function useThreadActionsResumeThreadForWorkspace(
             threadId: effectiveThreadId,
             timestamp: assembledSnapshot.meta.historyRestoredAtMs,
           });
+          if (!hasPendingOlderHistory(effectiveThreadId)) {
+            dispatch({
+              type: "setThreadHistoryWindow",
+              threadId: effectiveThreadId,
+              hasMore: assembledSnapshot.meta.historyHasMore === true,
+              nextCursor: assembledSnapshot.meta.historyNextCursor ?? null,
+            });
+          }
           if (snapshot.tokenUsage) {
             dispatch({
               type: "setThreadTokenUsage",
@@ -1134,13 +1237,18 @@ export function useThreadActionsResumeThreadForWorkspace(
             const result = await loadClaudeSessionService(
               workspacePath,
               realSessionId,
+              { limit: CLAUDE_UI_HISTORY_WINDOW },
             );
             if (!isCurrentResumeRequest()) {
               return threadId;
             }
+            const claudeRecord = result as {
+              messages?: unknown;
+              hasMore?: boolean;
+              nextCursor?: string | null;
+            };
             // Handle both new format { messages, usage } and old format (array)
-            const messagesData =
-              (result as { messages?: unknown }).messages ?? result;
+            const messagesData = claudeRecord.messages ?? result;
 
             const items = parseClaudeHistoryMessagesWithShadowRecovery({
               messagesData,
@@ -1150,13 +1258,11 @@ export function useThreadActionsResumeThreadForWorkspace(
             });
             if (items.length > 0) {
               setThreadHistoryRecoveryFailed(threadId, false);
-              await dispatchThreadItemsProgressively(
-                dispatch,
+              const appliedClaudeItems = await applyHydratedItems(
                 threadId,
                 items,
-                { shouldContinue: () => isCurrentResumeRequest() },
               );
-              if (!isCurrentResumeRequest()) {
+              if (!appliedClaudeItems) {
                 return threadId;
               }
               onDebug?.(
@@ -1181,6 +1287,14 @@ export function useThreadActionsResumeThreadForWorkspace(
               threadId,
               timestamp: Date.now(),
             });
+            if (!hasPendingOlderHistory(threadId)) {
+              dispatch({
+                type: "setThreadHistoryWindow",
+                threadId,
+                hasMore: claudeRecord.hasMore === true,
+                nextCursor: claudeRecord.nextCursor ?? null,
+              });
+            }
 
             // Dispatch usage data if available
             const restoredTokenUsage = extractClaudeHistoryTokenUsage(result);
@@ -1280,13 +1394,11 @@ export function useThreadActionsResumeThreadForWorkspace(
             const items = parseGeminiHistoryMessages(messagesData);
             if (items.length > 0) {
               setThreadHistoryRecoveryFailed(threadId, false);
-              await dispatchThreadItemsProgressively(
-                dispatch,
+              const appliedGeminiItems = await applyHydratedItems(
                 threadId,
                 items,
-                { shouldContinue: () => isCurrentResumeRequest() },
               );
-              if (!isCurrentResumeRequest()) {
+              if (!appliedGeminiItems) {
                 return threadId;
               }
             } else {
@@ -1335,7 +1447,7 @@ export function useThreadActionsResumeThreadForWorkspace(
               (result as { messages?: unknown }).messages ?? result;
             const items = parseGrokHistoryMessages(messagesData);
             if (items.length > 0) {
-              await dispatchThreadItemsProgressively(dispatch, threadId, items);
+              await applyHydratedItems(threadId, items);
             }
             dispatch({
               type: "setThreadHistoryRestoredAt",
@@ -1367,7 +1479,7 @@ export function useThreadActionsResumeThreadForWorkspace(
               (result as { messages?: unknown }).messages ?? result;
             const items = parseKimiHistoryMessages(messagesData);
             if (items.length > 0) {
-              await dispatchThreadItemsProgressively(dispatch, threadId, items);
+              await applyHydratedItems(threadId, items);
             }
             dispatch({
               type: "setThreadHistoryRestoredAt",
@@ -1399,7 +1511,7 @@ export function useThreadActionsResumeThreadForWorkspace(
               (result as { messages?: unknown }).messages ?? result;
             const items = parseDshHistoryMessages(messagesData);
             if (items.length > 0) {
-              await dispatchThreadItemsProgressively(dispatch, threadId, items);
+              await applyHydratedItems(threadId, items);
             }
             dispatch({
               type: "setThreadHistoryRestoredAt",
@@ -1408,6 +1520,38 @@ export function useThreadActionsResumeThreadForWorkspace(
             });
           } catch {
             // Failed to load DSH session history — not fatal
+          }
+        }
+        loadedThreadsRef.current[threadId] = true;
+        return threadId;
+      }
+      if (threadId.startsWith("pi:")) {
+        dispatch({
+          type: "ensureThread",
+          workspaceId,
+          threadId,
+          engine: "pi",
+        });
+        if (workspacePath && !loadedThreadsRef.current[threadId]) {
+          const realSessionId = threadId.slice("pi:".length);
+          try {
+            const result = await loadPiSessionService(
+              workspacePath,
+              realSessionId,
+            );
+            const messagesData =
+              (result as { messages?: unknown }).messages ?? result;
+            const items = parsePiHistoryMessages(messagesData);
+            if (items.length > 0) {
+              await applyHydratedItems(threadId, items);
+            }
+            dispatch({
+              type: "setThreadHistoryRestoredAt",
+              threadId,
+              timestamp: Date.now(),
+            });
+          } catch {
+            // Failed to load PI session history — not fatal
           }
         }
         loadedThreadsRef.current[threadId] = true;
@@ -1509,13 +1653,11 @@ export function useThreadActionsResumeThreadForWorkspace(
               : localItems;
           if (mergedItems.length > 0) {
             setThreadHistoryRecoveryFailed(threadId, false);
-            await dispatchThreadItemsProgressively(
-              dispatch,
+            const appliedMergedItems = await applyHydratedItems(
               threadId,
               mergedItems,
-              { shouldContinue: () => isCurrentResumeRequest() },
             );
-            if (!isCurrentResumeRequest()) {
+            if (!appliedMergedItems) {
               return threadId;
             }
           } else {

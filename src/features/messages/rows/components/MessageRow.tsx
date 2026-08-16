@@ -802,6 +802,7 @@ export const MessageRow = memo(function MessageRow({
       codeBlockCopyUseModifier={codeBlockCopyUseModifier}
       onOpenFileLink={onOpenFileLink}
       onOpenFileLinkMenu={onOpenFileLinkMenu}
+      onOpenHtmlInBrowser={onOpenHtmlInBrowser}
     />
   ) : null;
   const browserContextSummaryNode = browserContextSummary ? (
@@ -1358,7 +1359,7 @@ export const MessageRow = memo(function MessageRow({
         isMemoryPickSummary && memorySummaryRecords.length > 0
           ? " has-memory-inject"
           : ""
-      }`}
+      }${browserContextSummary ? " has-browser-excerpt" : ""}`}
     >
       {item.role === "user" ? (
         <>

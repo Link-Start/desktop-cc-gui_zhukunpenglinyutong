@@ -66,6 +66,7 @@ describe("sessionLifecycleController", () => {
     "__local_settings_json__",
     "__local_config_toml__",
     "__local_opencode_json__",
+    "__local_pi__",
   ])("normalizes local profile %s to no managed binding", (profileId) => {
     expect(
       providerBindingFromSelectedProfile({

@@ -97,7 +97,7 @@ pub(crate) fn context_capabilities(target: &ExecutionTargetInput) -> RuntimeCont
             // response 当作 context acceptance。fingerprint 只用于审计，不参与降级。
             strong_context_ack: true,
         },
-        EngineType::Kimi | EngineType::Grok | EngineType::OpenCode => RuntimeContextCapabilities {
+        EngineType::Kimi | EngineType::Grok | EngineType::OpenCode | EngineType::Pi => RuntimeContextCapabilities {
             native_delta: false,
             structured_history_import: false,
             native_clone: false,
@@ -407,7 +407,7 @@ mod execution_target_contract_tests {
 
     #[test]
     fn execution_target_validation_accepts_new_shared_cli_local_catalogs() {
-        for engine in [EngineType::Kimi, EngineType::Grok, EngineType::OpenCode] {
+        for engine in [EngineType::Kimi, EngineType::Grok, EngineType::OpenCode, EngineType::Pi] {
             let catalog = crate::engine::status::get_local_engine_models_for_validation(engine)
                 .unwrap_or_else(|| panic!("missing local catalog for {engine:?}"));
             let selected = catalog
@@ -488,7 +488,7 @@ mod execution_target_contract_tests {
 
     #[test]
     fn newly_supported_shared_engines_use_weak_user_channel_context() {
-        for engine in [EngineType::Kimi, EngineType::Grok, EngineType::OpenCode] {
+        for engine in [EngineType::Kimi, EngineType::Grok, EngineType::OpenCode, EngineType::Pi] {
             let target = ExecutionTargetInput {
                 engine,
                 provider_profile_id: None,
@@ -536,6 +536,20 @@ mod execution_target_contract_tests {
                 format!("{}::workspace-1::{managed_suffix}", engine.icon()),
             );
         }
+    }
+
+    #[test]
+    fn pi_shared_runtime_key_matches_native_ownership() {
+        assert_eq!(
+            provider_runtime_key_for_target("workspace-1", EngineType::Pi, None)
+                .expect("pi local runtime key"),
+            "workspace-1",
+        );
+        assert_eq!(
+            provider_runtime_key_for_target("workspace-1", EngineType::Pi, Some("custom"))
+                .expect("pi named runtime key"),
+            "workspace-1::pi::custom",
+        );
     }
 
     #[test]
@@ -2623,6 +2637,10 @@ pub(crate) fn provider_runtime_key_for_target(
                 provider_profile_id,
             ),
         ),
+        EngineType::Pi => Ok(crate::engine::pi_provider_profile::pi_runtime_key(
+            workspace_id,
+            provider_profile_id,
+        )),
         _ => Err("dispatch receipt has unsupported Shared engine".to_string()),
     }
 }
@@ -3496,9 +3514,9 @@ async fn materialize_attempt_binding(
                 .unwrap_or_else(|| Uuid::new_v4().to_string());
             format!("grok:{raw_session_id}")
         }
-        // Kimi / OpenCode 真实 id 由 CLI 事后回写；首轮可暂存 pending，settlement
-        // 后 rebind 到 `engine:{raw}`。若已有 established 前缀 id 则复用。
-        EngineType::Kimi | EngineType::OpenCode => {
+        // Kimi / OpenCode / Pi 真实 id 由 CLI 事后回写；首轮可暂存 pending，
+        // settlement 后 rebind 到 `engine:{raw}`。若已有 established 前缀 id 则复用。
+        EngineType::Kimi | EngineType::OpenCode | EngineType::Pi => {
             if let Some(existing_id) = existing.as_deref().filter(|value| {
                 crate::shared_sessions::binding_uses_established_native_thread(owner.engine, value)
             }) {
@@ -4298,7 +4316,7 @@ pub(crate) async fn shared_session_v2_dispatch_turn(
             )
             .await
         }
-        EngineType::Kimi | EngineType::Grok | EngineType::OpenCode => {
+        EngineType::Kimi | EngineType::Grok | EngineType::OpenCode | EngineType::Pi => {
             let runtime_provider_profile_id = owner.provider_profile_id.clone().or_else(|| {
                 Some(
                     match owner.engine {
@@ -4311,13 +4329,16 @@ pub(crate) async fn shared_session_v2_dispatch_turn(
                         EngineType::OpenCode => {
                             crate::engine::opencode_provider_profile::OPENCODE_LOCAL_PROVIDER_PROFILE_ID
                         }
+                        EngineType::Pi => {
+                            crate::engine::pi_provider_profile::PI_LOCAL_PROVIDER_PROFILE_ID
+                        }
                         _ => unreachable!("new Shared engine branch is exhaustively matched"),
                     }
                     .to_string(),
                 )
             });
             // 对齐 Claude：established identity 始终把 raw session id 传给 runtime。
-            // Grok 首轮 continue=false 仍带 pre-assigned id（`-s`）；Kimi/OpenCode
+            // Grok 首轮 continue=false 仍带 pre-assigned id（`-s`）；Kimi/OpenCode/Pi
             // pending 时 raw 可能是 pending 占位，runtime 自行忽略/新建。
             let established = crate::shared_sessions::binding_uses_established_native_thread(
                 owner.engine,
@@ -5010,6 +5031,24 @@ pub(crate) async fn shared_session_v2_interrupt_turn(
                     })?;
                 session.interrupt_turn(&route.runtime_turn_id).await
             }
+            EngineType::Pi => {
+                let runtime_key = provider_runtime_key_for_target(
+                    &workspace_id,
+                    route.engine,
+                    route.provider_profile_id.as_deref(),
+                )?;
+                let session = state
+                    .engine_manager
+                    .get_pi_session_for_runtime(&runtime_key)
+                    .await
+                    .ok_or_else(|| {
+                        format!(
+                            "shared-control-owner-unavailable: Pi runtime missing for attempt {}",
+                            route.attempt_id
+                        )
+                    })?;
+                session.interrupt_turn(&route.runtime_turn_id).await
+            }
             unsupported => Err(format!(
                 "target-unavailable: unsupported Shared interrupt engine {}",
                 unsupported.icon()
@@ -5607,6 +5646,40 @@ pub(crate) async fn shared_session_v2_probe_binding(
                 None => json!({ "status": "runtime-missing", "runtimeKey": runtime_key }),
             }
         }
+        Some(row) if row.engine == EngineType::Pi.icon() => {
+            let runtime_key = provider_runtime_key_for_target(
+                &workspace_id,
+                EngineType::Pi,
+                row.provider_profile_id.as_deref(),
+            )?;
+            match state
+                .engine_manager
+                .get_pi_session_for_runtime(&runtime_key)
+                .await
+            {
+                Some(session) => {
+                    let runtime_session_id = session.get_session_id().await;
+                    let expected_session_id = row
+                        .native_session_id
+                        .as_deref()
+                        .and_then(|value| raw_engine_session_id(EngineType::Pi, value));
+                    json!({
+                        "status": if runtime_session_id.as_deref() == expected_session_id {
+                            "matched"
+                        } else if expected_session_id
+                            .is_some_and(|value| value.starts_with("pi-pending-shared-"))
+                        {
+                            "runtime-created-awaiting-session"
+                        } else {
+                            "mismatch"
+                        },
+                        "runtimeKey": runtime_key,
+                        "runtimeSessionId": runtime_session_id,
+                    })
+                }
+                None => json!({ "status": "runtime-missing", "runtimeKey": runtime_key }),
+            }
+        }
         Some(_) => json!({ "status": "unsupported-engine" }),
         None => json!({ "status": "binding-missing" }),
     };
@@ -5825,9 +5898,8 @@ mod shared_interrupt_owner_tests {
                 EngineType::Kimi => "kimi-k2".to_string(),
                 EngineType::Grok => "ccgui/grok-4.5".to_string(),
                 EngineType::OpenCode => "ccgui/opencode-model".to_string(),
-                EngineType::Gemini | EngineType::Pi | EngineType::Dsh => {
-                    "unsupported".to_string()
-                }
+                EngineType::Pi => "auto".to_string(),
+                EngineType::Gemini | EngineType::Dsh => "unsupported".to_string(),
             }),
             reasoning_effort: Some("medium".to_string()),
             provider_profile_name_snapshot: Some(provider.to_string()),
@@ -5891,7 +5963,7 @@ mod shared_interrupt_owner_tests {
         assert_eq!(route.provider_profile_id.as_deref(), Some(provider));
         assert_eq!(route.binding_key, binding_key);
         // 与 SharedRuntimeCoordinator::normalize_native_session_identity 对齐：
-        // Claude/Kimi/Grok/OpenCode 使用 engine: 前缀；Codex 保持 raw。
+        // Claude/Kimi/Pi/Grok/OpenCode 使用 engine: 前缀；Codex/Gemini/Dsh 保持 raw。
         let expected_native_thread_id = match engine {
             EngineType::Claude
             | EngineType::Kimi
@@ -6269,6 +6341,7 @@ mod shared_interrupt_owner_tests {
         assert_route(EngineType::Kimi, "provider-kimi");
         assert_route(EngineType::Grok, "provider-grok");
         assert_route(EngineType::OpenCode, "provider-opencode");
+        assert_route(EngineType::Pi, "provider-pi");
     }
 
     #[test]

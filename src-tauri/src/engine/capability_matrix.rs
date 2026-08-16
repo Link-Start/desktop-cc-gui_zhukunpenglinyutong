@@ -125,6 +125,30 @@ mod tests {
     }
 
     #[test]
+    fn pi_supports_image_input_via_at_file_transport() {
+        assert_eq!(
+            spec_capability_state(EngineType::Pi, "image.input"),
+            "supported"
+        );
+        assert_eq!(
+            capability_state(EngineType::Pi, "image.input"),
+            "supported"
+        );
+    }
+
+    #[test]
+    fn pi_supports_thinking_effort() {
+        assert_eq!(
+            spec_capability_state(EngineType::Pi, "reasoning.effort"),
+            "supported"
+        );
+        assert_eq!(
+            capability_state(EngineType::Pi, "reasoning.effort"),
+            "supported"
+        );
+    }
+
+    #[test]
     fn generated_spec_stance_covers_foundation_capabilities() {
         assert_eq!(
             spec_capability_state(EngineType::Kimi, "input.mid-turn"),

@@ -407,6 +407,9 @@ export function inferThreadEngine(
   if (threadId.startsWith("kimi:") || threadId.startsWith("kimi-pending-")) {
     return "kimi";
   }
+  if (threadId.startsWith("pi:") || threadId.startsWith("pi-pending-")) {
+    return "pi";
+  }
   if (threadId.startsWith("opencode:") || threadId.startsWith("opencode-pending-")) {
     return "opencode";
   }

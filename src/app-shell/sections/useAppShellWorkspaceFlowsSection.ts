@@ -14,7 +14,6 @@ import { useTerminalController } from "../../features/terminal/hooks/useTerminal
 import { useWorkspaceLaunchScript } from "../../features/app/hooks/useWorkspaceLaunchScript";
 import { useWorkspaceRuntimeRun } from "../../features/app/hooks/useWorkspaceRuntimeRun";
 import { useWorkspaceLaunchScripts } from "../../features/app/hooks/useWorkspaceLaunchScripts";
-import type { CenterMode } from "../../features/app/hooks/useGitPanelController";
 import { useWorktreeSetupScript } from "../../features/app/hooks/useWorktreeSetupScript";
 import { buildClaudeResumeTerminalCommand } from "../../features/app/utils/claudeResumeCommand";
 import {
@@ -25,7 +24,6 @@ import { writeTerminalSession } from "../../services/tauri/terminalRuntime";
 import type { AgentTaskScrollRequest } from "../../features/messages";
 import type {
   AppMode,
-  AppSettings,
   DebugEntry,
   EngineType,
   WorkspaceInfo,
@@ -35,41 +33,18 @@ import {
   shouldCollapseRightPanelOnThreadSelect,
   shouldPreserveEditorOnThreadSelect,
 } from "./threadEditorPreservation";
+import {
+  isEngineType,
+  type NotificationActionExtra,
+  type PendingClaudeTuiOpen,
+  type PendingTerminalCommand,
+  type ThreadSwitchScope,
+  type WorkspaceShellCenterMode,
+  type WorkspaceShellSettings,
+  type WorkspaceShellTab,
+} from "./workspaceFlowsTypes";
 
 const EMPTY_OPEN_APP_ICON_MAP: Record<string, string> = {};
-
-type NotificationActionExtra = {
-  workspaceId?: unknown;
-  threadId?: unknown;
-};
-
-type PendingClaudeTuiOpen = {
-  workspaceId: string;
-  terminalId: string;
-  command: string;
-};
-
-type PendingTerminalCommand = {
-  workspaceId: string;
-  terminalId: string;
-  command: string;
-  followUpCommand?: string;
-  followUpDelayMs?: number;
-};
-
-type ThreadSwitchScope = {
-  workspaceId: string;
-  threadId: string;
-};
-
-type WorkspaceShellSettings = Pick<AppSettings, "workspaceGroups"> &
-  Partial<Pick<AppSettings, "selectedOpenAppId">>;
-type WorkspaceShellTab = "projects" | "codex" | "spec" | "git" | "log";
-type WorkspaceShellCenterMode = CenterMode;
-
-function isEngineType(value: unknown): value is EngineType {
-  return value === "claude" || value === "codex" || value === "gemini" || value === "grok" || value === "kimi" || value === "opencode";
-}
 
 export type WorkspaceShellBoundary = {
   activeEditorFilePath: string | null;

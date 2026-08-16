@@ -25,6 +25,9 @@ const providers = {
     },
     "dsh": {
       "label": "DeepSeek Harness"
+    },
+    "pi": {
+      "label": "PI CLI"
     }
   }
 };

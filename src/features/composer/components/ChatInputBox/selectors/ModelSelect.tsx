@@ -18,6 +18,7 @@ import {
   GROK_LOCAL_PROVIDER_PROFILE_ID,
   KIMI_LOCAL_PROVIDER_PROFILE_ID,
   OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
+  PI_LOCAL_PROVIDER_PROFILE_ID,
 } from '../../../../threads/constants/codexProviderProfiles';
 import { EngineIcon } from '../../../../engine/components/EngineIcon';
 import { ProviderBrandIconImg } from '../../../../vendors/components/ProviderBrandIconImg';
@@ -121,6 +122,7 @@ const LOCAL_PROVIDER_PROFILE_IDS: Partial<Record<ProviderId, string>> = {
   kimi: KIMI_LOCAL_PROVIDER_PROFILE_ID,
   grok: GROK_LOCAL_PROVIDER_PROFILE_ID,
   opencode: OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
+  pi: PI_LOCAL_PROVIDER_PROFILE_ID,
   dsh: DSH_LOCAL_PROVIDER_PROFILE_ID,
 };
 
@@ -475,6 +477,8 @@ const ModelIcon = ({
       return <EngineIcon engine="grok" size={size} style={imgStyle} />;
     case 'opencode':
       return <EngineIcon engine="opencode" size={size} style={imgStyle} />;
+    case 'pi':
+      return <EngineIcon engine="pi" size={size} style={imgStyle} />;
     case 'claude':
     default:
       return <EngineIcon engine="claude" size={size} style={imgStyle} />;

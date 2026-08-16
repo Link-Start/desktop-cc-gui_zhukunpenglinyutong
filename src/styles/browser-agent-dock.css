@@ -1,7 +1,7 @@
-/* Browser Agent 内嵌 dock 编辑器标签 chrome（BrowserDock 挂载时经 loadBrowserAgentStyles 懒加载）。
-   与 main.css 中悬浮岛/恢复条样式同源，此处仅承载 embedded 模式专属规则。 */
+/* Browser Agent dock 编辑器标签 chrome（BrowserDock 挂载时经 loadBrowserAgentStyles 懒加载）。
+   只保留 tab 顶栏 + 地址行沉底；旧岛 / 恢复条皮肤不再使用。 */
 
-/* ===== 内嵌编辑器标签模式 chrome（tab 顶栏 + 地址行沉底，webview 铺满中间） ===== */
+/* ===== 编辑器标签模式 chrome（tab 顶栏 + 地址行沉底，webview 铺满中间） ===== */
 
 .browser-agent-dock-content.is-embedded {
   display: flex;
@@ -23,10 +23,6 @@
 
 .browser-agent-dock-content.is-embedded .browser-agent-editor-urlbar {
   order: 3;
-}
-
-.browser-agent-dock-content.is-embedded .browser-agent-dock-restore {
-  order: 4;
 }
 
 .browser-agent-editor-tabbar {
@@ -211,6 +207,25 @@
 }
 
 .browser-agent-editor-urlbar .browser-agent-dock-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 26px;
   height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.browser-agent-editor-urlbar .browser-agent-dock-icon:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-strong);
+}
+
+.browser-agent-editor-urlbar .browser-agent-dock-icon.is-on {
+  background: color-mix(in srgb, var(--surface-bubble-user) 18%, transparent);
+  color: var(--surface-bubble-user);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--surface-bubble-user) 55%, transparent);
 }

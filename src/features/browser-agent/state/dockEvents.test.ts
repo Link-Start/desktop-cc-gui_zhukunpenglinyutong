@@ -45,4 +45,28 @@ describe("pending browser URL queue", () => {
     expect(dequeuePendingBrowserUrl()).toBe("file:///one.html");
     expect(dequeuePendingBrowserUrl()).toBe("file:///two.html");
   });
+
+  it("dispatches open-dock then open-url so AppShell can expand the center split", () => {
+    const events: Array<{ type: string; url?: string }> = [];
+    const record = (type: string) => (event: Event) => {
+      events.push({
+        type,
+        url: (event as CustomEvent<{ url?: string }>).detail?.url,
+      });
+    };
+    const recordOpenDock = record("browser-agent:open-dock");
+    const recordOpenUrl = record("browser-agent:open-url");
+    window.addEventListener("browser-agent:open-dock", recordOpenDock);
+    window.addEventListener("browser-agent:open-url", recordOpenUrl);
+    try {
+      requestBrowserDockOpenUrl("file:///repo/docs/demo.html");
+      expect(events).toEqual([
+        { type: "browser-agent:open-dock", url: undefined },
+        { type: "browser-agent:open-url", url: "file:///repo/docs/demo.html" },
+      ]);
+    } finally {
+      window.removeEventListener("browser-agent:open-dock", recordOpenDock);
+      window.removeEventListener("browser-agent:open-url", recordOpenUrl);
+    }
+  });
 });
