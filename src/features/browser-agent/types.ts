@@ -328,6 +328,7 @@ export type BrowserSelectedElementEvidence = {
     BrowserViewportState,
     "width" | "height" | "scrollX" | "scrollY" | "devicePixelRatio"
   >;
+  locate?: BrowserSelectionLocate | null;
   selectedAt: number;
 };
 

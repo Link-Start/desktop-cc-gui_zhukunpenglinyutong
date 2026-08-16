@@ -66,6 +66,9 @@ export function useMessagesCanvasFollow({
   // 假离底保护：区分「用户上滚」与「MD/工具高度暴涨」。
   const lastScrollTopRef = useRef(0);
   const lastScrollHeightRef = useRef(0);
+  // history-open / send 钉过一次之前，followSignal 与 RO 不得追底。
+  // 否则首屏 setThreadItems 会带着测高把视口从顶拽到底，像向上回放。
+  const continuousFollowArmedRef = useRef(false);
 
   const syncScrollAnchoring = useCallback(() => {
     const container = containerRef.current;
@@ -188,6 +191,7 @@ export function useMessagesCanvasFollow({
     // 发送 / history-open 等强制瞬时钉底：取消进行中的 smooth，避免打架。
     smoothPinTokenRef.current += 1;
     clearSmoothPinTimer();
+    continuousFollowArmedRef.current = true;
     userPausedRef.current = false;
     isUserAtBottomRef.current = true;
     scrollToBottom();
@@ -205,6 +209,7 @@ export function useMessagesCanvasFollow({
    */
   const resumeFollowAndSmoothPin = useCallback(() => {
     const container = containerRef.current;
+    continuousFollowArmedRef.current = true;
     userPausedRef.current = false;
     isUserAtBottomRef.current = true;
     syncScrollAnchoring();
@@ -275,6 +280,7 @@ export function useMessagesCanvasFollow({
     isAutoScrollingRef.current = false;
     lastScrollTopRef.current = 0;
     lastScrollHeightRef.current = 0;
+    continuousFollowArmedRef.current = false;
     if (pinRafRef.current !== null) {
       cancelAnimationFrame(pinRafRef.current);
       pinRafRef.current = null;
@@ -291,10 +297,14 @@ export function useMessagesCanvasFollow({
   }, [hasPendingJump, renderScopeKey]);
 
   // layout 同步钉底（paint 前）；与 jetbrains 一致，避免内容先 paint 再 rAF 钉。
+  // 首屏 hydrate 未钉过之前不跟 followSignal，交给 history-open / send。
   useLayoutEffect(() => {
     void followSignal;
     void isThinking;
     syncScrollAnchoring();
+    if (!continuousFollowArmedRef.current) {
+      return;
+    }
     if (!liveAutoFollowEnabledRef.current) {
       return;
     }
@@ -399,6 +409,9 @@ export function useMessagesCanvasFollow({
 
     // RO：rAF 合并钉底，避免 MD 每 token reflow 同步狂写 scrollTop。
     const observer = new ResizeObserver(() => {
+      if (!continuousFollowArmedRef.current) {
+        return;
+      }
       if (userPausedRef.current) {
         syncScrollAnchoring();
         return;

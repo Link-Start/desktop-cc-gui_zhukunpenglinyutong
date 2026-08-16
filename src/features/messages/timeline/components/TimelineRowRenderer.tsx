@@ -410,7 +410,8 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
                   activeEngine === "gemini" ||
                   activeEngine === "grok" ||
                   activeEngine === "kimi" ||
-                  activeEngine === "opencode") &&
+                  activeEngine === "opencode" ||
+                  activeEngine === "pi") &&
                 renderItem.role === "assistant" &&
                 renderItem.recoveredFromLiveShadow !== true &&
                 renderItem.id === liveAssistantMessageId

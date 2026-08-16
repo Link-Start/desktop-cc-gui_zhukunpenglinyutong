@@ -9,6 +9,7 @@ import type {
   BrowserSelectionLocate,
 } from "../types";
 import type { TaskRunBrowserEvidenceRef } from "../types";
+import { dedupeBrowserUserAnnotations } from "../annotations";
 
 export type BrowserExcerptKind =
   | "paragraph"
@@ -127,6 +128,22 @@ function elementNameFromAnnotation(annotation: BrowserUserAnnotation): string {
   return selectorTag || annotation.nearestElement?.role || annotation.anchor;
 }
 
+function firstMeaningfulLine(value: string): string {
+  return value.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? value.trim();
+}
+
+function pickLongestText(values: Array<string | null | undefined>): string {
+  return values
+    .map((value) => value?.trim() ?? "")
+    .filter(Boolean)
+    .sort((left, right) => right.length - left.length)[0] ?? "";
+}
+
+function boundMultilineText(value: string, limit: number): string {
+  const trimmed = value.replace(/[ \t]+\n/g, "\n").trim();
+  return trimmed.length > limit ? `${trimmed.slice(0, limit)}...` : trimmed;
+}
+
 function selectedElementTitle(annotation: BrowserUserAnnotation): string {
   return compactEvidenceText(
     annotation.userNote ||
@@ -138,8 +155,98 @@ function selectedElementTitle(annotation: BrowserUserAnnotation): string {
   );
 }
 
+function pageContextTexts(
+  attachment: Pick<
+    BrowserEvidenceAttachmentLike,
+    "primaryContent" | "visibleTextExcerpt" | "readableBlocks"
+  >,
+): string[] {
+  return [
+    ...(attachment.readableBlocks ?? []).map((block) => block.text),
+    attachment.primaryContent,
+    attachment.visibleTextExcerpt,
+  ].filter((value): value is string => Boolean(value?.trim()));
+}
+
+function selectedElementBody(
+  annotation: BrowserUserAnnotation,
+  title: string,
+  pageTexts: string[],
+): string {
+  const seed = pickLongestText([
+    annotation.nearbyText,
+    annotation.userNote,
+    annotation.nearestElement?.label,
+    title,
+  ]);
+  const needle = firstMeaningfulLine(seed);
+  if (needle.length >= 8) {
+    const matchedPageText = pageTexts.find(
+      (text) => text.trimStart().startsWith(needle) && text.length > seed.length,
+    );
+    if (matchedPageText) {
+      return boundMultilineText(matchedPageText, 4_000);
+    }
+  }
+  return boundMultilineText(seed, 4_000);
+}
+
+function selectedElementKind(annotation: BrowserUserAnnotation): BrowserExcerptKind {
+  const role = annotation.nearestElement?.role?.toLowerCase() ?? "";
+  const tag = annotation.nearestElement?.selectorHint?.toLowerCase() ?? "";
+  const token = `${role} ${tag}`;
+  if (/\b(h[1-6]|heading)\b/.test(token)) {
+    return "heading";
+  }
+  if (/\bbutton\b/.test(token)) {
+    return "button";
+  }
+  if (/\b(link|a)\b/.test(token)) {
+    return "link";
+  }
+  if (/\b(listitem|li)\b/.test(token)) {
+    return "list";
+  }
+  if (/\b(img|image)\b/.test(token)) {
+    return "image";
+  }
+  return "paragraph";
+}
+
+function resolveSelectionLocate(
+  annotation: BrowserUserAnnotation,
+): BrowserSelectionLocate | null {
+  if (annotation.locate) {
+    return annotation.locate;
+  }
+  if (!annotation.region) {
+    return null;
+  }
+  const scrollX = annotation.viewport.scrollX ?? 0;
+  const scrollY = annotation.viewport.scrollY ?? 0;
+  return {
+    documentX: scrollX + annotation.region.x,
+    documentY: scrollY + annotation.region.y,
+    viewportX: annotation.region.x,
+    viewportY: annotation.region.y,
+    width: annotation.region.width,
+    height: annotation.region.height,
+    scrollX,
+    scrollY,
+    listIndex: null,
+    listLength: null,
+    previousText: null,
+    nextText: null,
+    ancestorLabel: null,
+    cssPath: null,
+  };
+}
+
 function buildBrowserSelectedElementPreviewFromAnnotation(
-  attachment: Pick<BrowserEvidenceAttachmentLike, "title" | "url">,
+  attachment: Pick<
+    BrowserEvidenceAttachmentLike,
+    "title" | "url" | "primaryContent" | "visibleTextExcerpt" | "readableBlocks"
+  >,
   annotation: BrowserUserAnnotation,
 ): BrowserSelectedElementPreview {
   const elementName = elementNameFromAnnotation(annotation);
@@ -147,18 +254,9 @@ function buildBrowserSelectedElementPreviewFromAnnotation(
   const size = formatRegionSize(annotation.region);
   const boundsLabel = formatRegionBounds(annotation.region);
   const title = selectedElementTitle(annotation);
-  const body = annotation.nearbyText?.trim() || title;
-  const kind: BrowserExcerptKind =
-    annotation.nearestElement?.role === "heading"
-      ? "heading"
-      : annotation.nearestElement?.role === "button"
-        ? "button"
-        : annotation.nearestElement?.role === "link"
-          ? "link"
-          : annotation.anchor === "element"
-            ? "excerpt"
-            : "snapshot";
-  const locate = annotation.locate ?? null;
+  const body = selectedElementBody(annotation, title, pageContextTexts(attachment));
+  const kind = selectedElementKind(annotation);
+  const locate = resolveSelectionLocate(annotation);
   const meta = [
     elementName,
     role ? `role=${role}` : null,
@@ -168,12 +266,28 @@ function buildBrowserSelectedElementPreviewFromAnnotation(
   const sourceUrl = annotation.url || attachment.url;
   const copySafeText = [
     "Selected browser element:",
-    `- text: ${title}`,
+    "- intent: user pointed at this exact page target; treat it as the subject of the question",
+    `- text: ${body}`,
     `- element: ${meta || elementName}`,
-    boundsLabel ? `- bounds: ${boundsLabel}` : null,
-    annotation.nearestElement?.selectorHint
-      ? `- selector: ${annotation.nearestElement.selectorHint}`
+    locate
+      ? `- documentPosition: x=${formatRoundedNumber(locate.documentX)} y=${formatRoundedNumber(locate.documentY)}`
       : null,
+    locate
+      ? `- viewportBox: x=${formatRoundedNumber(locate.viewportX)} y=${formatRoundedNumber(locate.viewportY)} w=${formatRoundedNumber(locate.width)} h=${formatRoundedNumber(locate.height)}`
+      : boundsLabel
+        ? `- bounds: ${boundsLabel}`
+        : null,
+    locate && locate.listIndex && locate.listLength
+      ? `- inList: ${locate.listIndex} of ${locate.listLength}`
+      : null,
+    locate?.previousText ? `- previous: ${locate.previousText}` : null,
+    locate?.nextText ? `- next: ${locate.nextText}` : null,
+    locate?.ancestorLabel ? `- ancestor: ${locate.ancestorLabel}` : null,
+    locate?.cssPath
+      ? `- cssPath: ${locate.cssPath}`
+      : annotation.nearestElement?.selectorHint
+        ? `- selector: ${annotation.nearestElement.selectorHint}`
+        : null,
     annotation.nearestElement?.hrefOrigin
       ? `- href origin: ${annotation.nearestElement.hrefOrigin}`
       : null,
@@ -199,15 +313,21 @@ function buildBrowserSelectedElementPreviewFromAnnotation(
 }
 
 export function buildBrowserSelectedElementPreviews(
-  attachment: Pick<BrowserEvidenceAttachmentLike, "title" | "url" | "annotations">,
+  attachment: Pick<
+    BrowserEvidenceAttachmentLike,
+    "title" | "url" | "annotations" | "primaryContent" | "visibleTextExcerpt" | "readableBlocks"
+  >,
 ): BrowserSelectedElementPreview[] {
-  return (attachment.annotations ?? [])
+  return dedupeBrowserUserAnnotations(attachment.annotations ?? [])
     .filter((annotation) => annotation.anchor === "element")
     .map((annotation) => buildBrowserSelectedElementPreviewFromAnnotation(attachment, annotation));
 }
 
 export function buildBrowserSelectedElementPreview(
-  attachment: Pick<BrowserEvidenceAttachmentLike, "title" | "url" | "annotations">,
+  attachment: Pick<
+    BrowserEvidenceAttachmentLike,
+    "title" | "url" | "annotations" | "primaryContent" | "visibleTextExcerpt" | "readableBlocks"
+  >,
 ): BrowserSelectedElementPreview | null {
   return buildBrowserSelectedElementPreviews(attachment)[0] ?? null;
 }
