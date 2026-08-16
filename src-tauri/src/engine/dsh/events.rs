@@ -23,8 +23,23 @@ pub struct DshSessionBinding {
     pub item_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DshGoalPhase {
+    Active,
+    Paused,
+    Blocked,
+    Complete,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct DshGoalSessionState {
+    phase: Option<DshGoalPhase>,
+    awaiting_session_idle: bool,
+}
+
 struct MuxHub {
     bindings: HashMap<String, DshSessionBinding>,
+    goal_states: HashMap<String, DshGoalSessionState>,
     turn_waiters: HashMap<String, Vec<oneshot::Sender<String>>>,
     app: Option<AppHandle>,
     stop: Option<oneshot::Sender<()>>,
@@ -37,6 +52,7 @@ fn mux() -> &'static Mutex<MuxHub> {
     MUX.get_or_init(|| {
         Mutex::new(MuxHub {
             bindings: HashMap::new(),
+            goal_states: HashMap::new(),
             turn_waiters: HashMap::new(),
             app: None,
             stop: None,
@@ -51,7 +67,9 @@ pub async fn bind_session(session_id: &str, binding: DshSessionBinding) {
 }
 
 pub async fn unbind_session(session_id: &str) {
-    mux().lock().await.bindings.remove(session_id);
+    let mut hub = mux().lock().await;
+    hub.bindings.remove(session_id);
+    hub.goal_states.remove(session_id);
 }
 
 pub async fn session_ids_for_workspace(workspace_id: &str) -> Vec<String> {
@@ -210,6 +228,150 @@ fn turn_end_kind(event: &EngineEvent) -> Option<&str> {
     }
 }
 
+fn parse_dsh_goal_phase(raw: &str) -> Option<DshGoalPhase> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "active" => Some(DshGoalPhase::Active),
+        "paused" => Some(DshGoalPhase::Paused),
+        "blocked" => Some(DshGoalPhase::Blocked),
+        "complete" | "completed" => Some(DshGoalPhase::Complete),
+        _ => None,
+    }
+}
+
+fn dsh_goal_change_operation(data: &Value) -> Option<&str> {
+    data.get("operation")
+        .or_else(|| data.pointer("/goal/operation"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
+fn apply_dsh_goal_change(state: &mut DshGoalSessionState, data: &Value) {
+    let operation = dsh_goal_change_operation(data).map(|value| value.to_ascii_lowercase());
+    if matches!(operation.as_deref(), Some("clear")) {
+        state.phase = None;
+        return;
+    }
+    if data.get("goal").map(Value::is_null).unwrap_or(false) {
+        state.phase = None;
+        return;
+    }
+    let phase = data
+        .pointer("/goal/phase")
+        .or_else(|| data.get("phase"))
+        .and_then(Value::as_str)
+        .and_then(parse_dsh_goal_phase);
+    if let Some(phase) = phase {
+        state.phase = Some(phase);
+    }
+}
+
+fn is_dsh_failure_turn_end(kind: &str) -> bool {
+    matches!(kind, "cancelled" | "aborted" | "error" | "failed")
+}
+
+fn turn_end_reason_kind(data: &Value) -> &str {
+    data.pointer("/reason/kind")
+        .and_then(Value::as_str)
+        .unwrap_or("completed")
+}
+
+fn session_event_parts<'a>(frame_type: &str, frame: &'a Value) -> Option<(&'a str, &'a Value)> {
+    if frame_type != "session/event" {
+        return None;
+    }
+    let event = frame.get("event").unwrap_or(frame);
+    let event_type = event.get("type").and_then(Value::as_str).unwrap_or("");
+    let data = event.get("data").unwrap_or(&Value::Null);
+    Some((event_type, data))
+}
+
+fn apply_dsh_goal_settlement(
+    state: &mut DshGoalSessionState,
+    event_type: &str,
+    event_data: &Value,
+    mut events: Vec<EngineEvent>,
+    workspace_id: &str,
+) -> (Vec<EngineEvent>, bool) {
+    if event_type == "goal/change" {
+        apply_dsh_goal_change(state, event_data);
+        if state.awaiting_session_idle && state.phase != Some(DshGoalPhase::Active) {
+            events.push(EngineEvent::TurnCompleted {
+                workspace_id: workspace_id.to_string(),
+                result: Some(event_data.clone()),
+            });
+            state.awaiting_session_idle = false;
+        }
+        return (events, false);
+    }
+
+    if event_type == "turn/start" {
+        state.awaiting_session_idle = false;
+        return (events, false);
+    }
+
+    if event_type != "turn/end" {
+        return (events, false);
+    }
+
+    let kind = turn_end_reason_kind(event_data);
+    if is_dsh_failure_turn_end(kind) {
+        return (events, true);
+    }
+
+    if state.phase == Some(DshGoalPhase::Active) {
+        events.retain(|event| !matches!(event, EngineEvent::TurnCompleted { .. }));
+        state.awaiting_session_idle = true;
+    }
+    (events, false)
+}
+
+fn dsh_user_message_text(data: &Value) -> String {
+    data.get("text")
+        .and_then(Value::as_str)
+        .or_else(|| {
+            data.get("content").and_then(Value::as_array).and_then(|blocks| {
+                blocks
+                    .iter()
+                    .find_map(|block| block.get("text").and_then(Value::as_str))
+            })
+        })
+        .unwrap_or("")
+        .to_string()
+}
+
+fn is_dsh_goal_source(data: &Value) -> bool {
+    data.pointer("/source/kind")
+        .and_then(Value::as_str)
+        .map(|kind| kind.eq_ignore_ascii_case("goal"))
+        .unwrap_or(false)
+}
+
+fn project_dsh_goal_injection(
+    workspace_id: &str,
+    thread_id: &str,
+    data: &Value,
+) -> Vec<EngineEvent> {
+    if !is_dsh_goal_source(data) {
+        return Vec::new();
+    }
+    let text = dsh_user_message_text(data);
+    if text.trim().is_empty() {
+        return Vec::new();
+    }
+    vec![EngineEvent::Raw {
+        workspace_id: workspace_id.to_string(),
+        engine: EngineType::Dsh,
+        data: serde_json::json!({
+            "kind": "dsh-goal-injection",
+            "threadId": thread_id,
+            "text": text,
+            "source": data.get("source").cloned().unwrap_or(Value::Null),
+            "id": data.get("id").cloned().unwrap_or(Value::Null),
+        }),
+    }]
+}
+
 async fn dispatch_mux_text(text: &str) {
     let Ok(raw) = serde_json::from_str::<Value>(text) else {
         return;
@@ -228,16 +390,29 @@ async fn dispatch_mux_text(text: &str) {
         let Some(binding) = hub.bindings.get(&session_id).cloned() else {
             return;
         };
-        let events = project_mux_frame(
+        let projected = project_mux_frame(
             frame_type,
             &frame,
             &binding,
             &session_id,
             rpc_id.as_deref(),
         );
-        if let Some(kind) = events.iter().find_map(turn_end_kind) {
+        if let Some(kind) = projected.iter().find_map(turn_end_kind) {
             notify_turn_end(&session_id, kind, &mut hub);
+        }
+        let (event_type, event_data) = session_event_parts(frame_type, &frame)
+            .unwrap_or(("", &Value::Null));
+        let goal_state = hub.goal_states.entry(session_id.clone()).or_default();
+        let (events, should_unbind) = apply_dsh_goal_settlement(
+            goal_state,
+            event_type,
+            event_data,
+            projected,
+            &binding.workspace_id,
+        );
+        if should_unbind {
             hub.bindings.remove(&session_id);
+            hub.goal_states.remove(&session_id);
         }
         (binding, app, events)
     };
@@ -485,7 +660,8 @@ pub fn project_session_event(
                 error,
             }]
         }
-        "user/message" | "step/start" | "step/end" | "goal/change" | "llm/retry"
+        "user/message" => project_dsh_goal_injection(&workspace_id, &binding.thread_id, &data),
+        "step/start" | "step/end" | "goal/change" | "llm/retry"
         | "command/run" | "command/done" | "permission/preset" | "sandbox/mode"
         | "approval/policy" => Vec::new(),
         _ => Vec::new(),
@@ -929,5 +1105,157 @@ mod tests {
                 .all(|event| !matches!(event, EngineEvent::ToolOutputDelta { .. })),
             "partial args must not become tool output"
         );
+    }
+
+    #[test]
+    fn applies_goal_change_phase_and_clear_tombstone() {
+        let mut state = DshGoalSessionState::default();
+        apply_dsh_goal_change(
+            &mut state,
+            &json!({ "operation": "create", "goal": { "id": "g1", "phase": "active" } }),
+        );
+        assert_eq!(state.phase, Some(DshGoalPhase::Active));
+
+        apply_dsh_goal_change(
+            &mut state,
+            &json!({ "operation": "pause", "goal": { "phase": "paused" } }),
+        );
+        assert_eq!(state.phase, Some(DshGoalPhase::Paused));
+
+        apply_dsh_goal_change(&mut state, &json!({ "operation": "clear", "goal": null }));
+        assert_eq!(state.phase, None);
+    }
+
+    #[test]
+    fn completed_hop_without_goal_emits_turn_completed_and_stays_bound() {
+        let mut state = DshGoalSessionState::default();
+        let projected = vec![EngineEvent::TurnCompleted {
+            workspace_id: "ws-1".to_string(),
+            result: Some(json!({ "reason": { "kind": "completed" } })),
+        }];
+        let (events, unbind) = apply_dsh_goal_settlement(
+            &mut state,
+            "turn/end",
+            &json!({ "reason": { "kind": "completed" } }),
+            projected,
+            "ws-1",
+        );
+        assert!(!unbind);
+        assert!(matches!(events.first(), Some(EngineEvent::TurnCompleted { .. })));
+        assert!(!state.awaiting_session_idle);
+    }
+
+    #[test]
+    fn active_goal_suppresses_turn_completed_and_stays_bound() {
+        let mut state = DshGoalSessionState {
+            phase: Some(DshGoalPhase::Active),
+            awaiting_session_idle: false,
+        };
+        let projected = vec![EngineEvent::TurnCompleted {
+            workspace_id: "ws-1".to_string(),
+            result: Some(json!({ "reason": { "kind": "completed" } })),
+        }];
+        let (events, unbind) = apply_dsh_goal_settlement(
+            &mut state,
+            "turn/end",
+            &json!({ "reason": { "kind": "completed" } }),
+            projected,
+            "ws-1",
+        );
+        assert!(!unbind);
+        assert!(events.is_empty());
+        assert!(state.awaiting_session_idle);
+    }
+
+    #[test]
+    fn goal_complete_emits_deferred_turn_completed() {
+        let mut state = DshGoalSessionState {
+            phase: Some(DshGoalPhase::Active),
+            awaiting_session_idle: true,
+        };
+        let (events, unbind) = apply_dsh_goal_settlement(
+            &mut state,
+            "goal/change",
+            &json!({ "operation": "complete", "goal": { "phase": "complete" } }),
+            Vec::new(),
+            "ws-1",
+        );
+        assert!(!unbind);
+        assert!(matches!(events.first(), Some(EngineEvent::TurnCompleted { .. })));
+        assert_eq!(state.phase, Some(DshGoalPhase::Complete));
+        assert!(!state.awaiting_session_idle);
+    }
+
+    #[test]
+    fn blocked_goal_settles_but_keeps_binding() {
+        let mut state = DshGoalSessionState {
+            phase: Some(DshGoalPhase::Active),
+            awaiting_session_idle: true,
+        };
+        let (events, unbind) = apply_dsh_goal_settlement(
+            &mut state,
+            "goal/change",
+            &json!({ "operation": "block", "goal": { "phase": "blocked" } }),
+            Vec::new(),
+            "ws-1",
+        );
+        assert!(!unbind);
+        assert!(matches!(events.first(), Some(EngineEvent::TurnCompleted { .. })));
+        assert_eq!(state.phase, Some(DshGoalPhase::Blocked));
+    }
+
+    #[test]
+    fn cancelled_hop_unbinds() {
+        let mut state = DshGoalSessionState {
+            phase: Some(DshGoalPhase::Active),
+            awaiting_session_idle: true,
+        };
+        let projected = vec![EngineEvent::TurnError {
+            workspace_id: "ws-1".to_string(),
+            error: "cancelled".to_string(),
+            code: Some("cancelled".to_string()),
+        }];
+        let (_events, unbind) = apply_dsh_goal_settlement(
+            &mut state,
+            "turn/end",
+            &json!({ "reason": { "kind": "cancelled" } }),
+            projected,
+            "ws-1",
+        );
+        assert!(unbind);
+    }
+
+    #[test]
+    fn projects_goal_injection_as_raw_and_skips_other_injections() {
+        let goal = json!({
+            "type": "user/message",
+            "data": {
+                "id": "msg-goal-1",
+                "text": "<goal_round>\ncontinue\n</goal_round>",
+                "source": { "kind": "goal", "goalId": "g1", "round": 2 }
+            }
+        });
+        let events = project_session_event(&goal, &binding(), "session-1");
+        match events.first() {
+            Some(EngineEvent::Raw { engine, data, .. }) => {
+                assert_eq!(*engine, EngineType::Dsh);
+                assert_eq!(data.get("kind").and_then(Value::as_str), Some("dsh-goal-injection"));
+                assert_eq!(data.get("threadId").and_then(Value::as_str), Some("dsh:session-1"));
+                assert_eq!(
+                    data.get("text").and_then(Value::as_str),
+                    Some("<goal_round>\ncontinue\n</goal_round>")
+                );
+            }
+            other => panic!("expected Raw goal injection, got {other:?}"),
+        }
+
+        let plugin = json!({
+            "type": "user/message",
+            "data": {
+                "text": "Current runtime context.",
+                "source": { "kind": "plugin", "plugin": "dsh-system-prompt" }
+            }
+        });
+        assert!(project_session_event(&plugin, &binding(), "session-1").is_empty());
     }
 }

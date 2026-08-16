@@ -1760,6 +1760,7 @@ html[data-theme="light"] .memory-pick-empty-status-logo {
 .message-context-stack.is-user > .browser-context-summary-card,
 .message-context-stack.is-user > .intent-canvas-context-summary-card,
 .message-context-stack.is-user > .note-card-context-summary-card,
+.message-context-stack.is-user > .dsh-goal-context-summary-card,
 .message-context-stack.is-user > .message-code-annotation-context,
 .message-context-stack.is-user > .memory-inject-summary,
 .message-context-stack.is-user > .memory-pick-empty-status {
@@ -2138,6 +2139,19 @@ html[data-theme="light"] .memory-pick-empty-status-logo {
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.dsh-goal-context-summary-body {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-item) 78%, var(--surface-card));
+  color: var(--text-secondary);
+  font-size: var(--message-meta-font-size);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
 }
 
 .note-card-context-summary-images {

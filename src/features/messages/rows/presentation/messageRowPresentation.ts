@@ -175,6 +175,9 @@ export function buildMessageRowPresentation(input: {
   const intentCanvasContextSummary = item.role === "user"
     ? getPresentationContexts(presentationMetadata, "intent-canvas")
     : [];
+  const dshGoalContext = item.role === "user"
+    ? getPresentationContext(presentationMetadata, "dsh-goal")
+    : null;
   const shouldHideSuppressedInjectedContextText =
     item.role === "user" &&
     !agentTaskNotification &&
@@ -250,6 +253,7 @@ export function buildMessageRowPresentation(input: {
     suppressSubagentAgentTaskCard,
     browserContextSummary,
     intentCanvasContextSummary,
+    dshGoalContext,
     displayText,
     canUseLiveAssistantText:
       item.role === "assistant" &&

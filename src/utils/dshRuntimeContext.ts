@@ -1,16 +1,23 @@
+import type { MessagePresentationMetadata } from "../types";
+
 /**
  * DSH durable user-role injections that must not render as chat bubbles.
  *
  * DSH persists workspace instructions, runtime snapshots, and skill catalogs as
  * `user/message` events. Real human prompts carry `source.kind === "user"`;
- * everything else is producer-supplied context (see DSH MessageSourceMap).
+ * Goal hops carry `source.kind === "goal"` and render as a collapsible card.
+ * Everything else is producer-supplied context (see DSH MessageSourceMap).
  */
 
 const DSH_RUNTIME_CONTEXT_TAGS = [
   "system-reminder",
   "available_skills",
   "agent_skills",
+  "goal_round",
 ] as const;
+
+const DSH_GOAL_CONTEXT_TITLE = "Context injection";
+const DSH_GOAL_SOURCE_LABEL = "goal";
 
 const DSH_RUNTIME_CONTEXT_PROSE_PREFIX = /^current runtime context(?:\.|:)/i;
 
@@ -76,12 +83,31 @@ export function isDshRuntimeContextText(text: string): boolean {
   return stripDshRuntimeContextEnvelopes(trimmed).trim().length === 0;
 }
 
+export function isDshGoalInjection(sourceKind?: string | null): boolean {
+  return sourceKind?.trim().toLowerCase() === "goal";
+}
+
+export function buildDshGoalPresentationMetadata(text: string): MessagePresentationMetadata {
+  return {
+    displayText: "",
+    stickyCandidateText: "",
+    contexts: [
+      {
+        kind: "dsh-goal",
+        title: DSH_GOAL_CONTEXT_TITLE,
+        sourceLabel: DSH_GOAL_SOURCE_LABEL,
+        body: text,
+      },
+    ],
+  };
+}
+
 export function isDshInjectedContextMessage(params: {
   text: string;
   sourceKind?: string | null;
 }): boolean {
   const sourceKind = params.sourceKind?.trim().toLowerCase() ?? "";
-  if (sourceKind === "user") {
+  if (sourceKind === "user" || isDshGoalInjection(sourceKind)) {
     return false;
   }
   if (sourceKind) {

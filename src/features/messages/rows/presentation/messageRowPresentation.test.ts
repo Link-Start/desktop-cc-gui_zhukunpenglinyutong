@@ -79,4 +79,38 @@ describe("buildMessageRowPresentation", () => {
     expect(result.imageItems[0]?.localPath).toBe(stagingPath);
     expect(result.imageItems[0]?.src).toBeTruthy();
   });
+
+  it("keeps DSH Goal injections visible as a card without a user bubble", () => {
+    const result = buildMessageRowPresentation({
+      item: {
+        id: "dsh-goal-1",
+        kind: "message",
+        role: "user",
+        text: "<goal_round>\nContinue the active goal.\n</goal_round>",
+        presentationMetadata: {
+          displayText: "",
+          stickyCandidateText: "",
+          contexts: [
+            {
+              kind: "dsh-goal",
+              title: "Context injection",
+              sourceLabel: "goal",
+              body: "<goal_round>\nContinue the active goal.\n</goal_round>",
+            },
+          ],
+        },
+      },
+      enableCollaborationBadge: false,
+      suppressMemorySummaryCard: false,
+      suppressNoteCardSummaryCard: false,
+    });
+
+    expect(result.displayText).toBe("");
+    expect(result.dshGoalContext).toEqual({
+      kind: "dsh-goal",
+      title: "Context injection",
+      sourceLabel: "goal",
+      body: "<goal_round>\nContinue the active goal.\n</goal_round>",
+    });
+  });
 });

@@ -106,6 +106,12 @@ export type ConversationPresentationContext =
       summary: string;
       notes: NoteCardPresentationNote[];
       imagePaths: string[];
+    }
+  | {
+      kind: "dsh-goal";
+      title: string;
+      sourceLabel: string;
+      body: string;
     };
 
 export type MessagePresentationMetadata = {

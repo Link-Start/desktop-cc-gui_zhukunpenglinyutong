@@ -533,6 +533,46 @@ describe("realtime adapters", () => {
     expect(event?.item.kind).toBe("message");
   });
 
+  it("maps dsh goal injection raw events to a user card item", () => {
+    const event = dshRealtimeAdapter.mapEvent({
+      workspaceId: "ws-dsh",
+      message: {
+        method: "dsh/raw",
+        params: {
+          kind: "dsh-goal-injection",
+          threadId: "dsh:session-1",
+          id: "goal-msg-1",
+          text: "<goal_round>\ncontinue\n</goal_round>",
+          source: { kind: "goal" },
+        },
+      },
+    });
+
+    expect(event).toBeTruthy();
+    expect(event?.engine).toBe("dsh");
+    expect(event?.operation).toBe("itemStarted");
+    expect(event?.item).toEqual(
+      expect.objectContaining({
+        id: "goal-msg-1",
+        kind: "message",
+        role: "user",
+        text: "<goal_round>\ncontinue\n</goal_round>",
+        presentationMetadata: {
+          displayText: "",
+          stickyCandidateText: "",
+          contexts: [
+            {
+              kind: "dsh-goal",
+              title: "Context injection",
+              sourceLabel: "goal",
+              body: "<goal_round>\ncontinue\n</goal_round>",
+            },
+          ],
+        },
+      }),
+    );
+  });
+
   it("maps dsh text:delta alias to assistant delta", () => {
     const event = dshRealtimeAdapter.mapEvent({
       workspaceId: "ws-dsh",

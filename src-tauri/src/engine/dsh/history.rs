@@ -154,6 +154,7 @@ async fn load_history_pages(
 pub async fn archive_dsh_session(client: &DshHostClient, session_id: &str) -> Result<(), String> {
     let session_id = session_id_from_thread(session_id);
     session::archive_session(client, &session_id).await?;
+    super::events::unbind_session(&session_id).await;
     Ok(())
 }
 
@@ -365,7 +366,7 @@ fn is_dsh_runtime_context_text(text: &str) -> bool {
     let mut rest = trimmed.to_string();
     for _ in 0..12 {
         let before = rest.clone();
-        for tag in ["system-reminder", "available_skills", "agent_skills"] {
+        for tag in ["system-reminder", "available_skills", "agent_skills", "goal_round"] {
             rest = strip_dsh_runtime_xml_block(&rest, tag);
         }
         if rest == before {
@@ -378,6 +379,7 @@ fn is_dsh_runtime_context_text(text: &str) -> bool {
 fn is_dsh_injected_user_message(data: &Value, text: &str) -> bool {
     match dsh_source_kind(data) {
         Some(kind) if kind.eq_ignore_ascii_case("user") => false,
+        Some(kind) if kind.eq_ignore_ascii_case("goal") => false,
         Some(_) => true,
         None => is_dsh_runtime_context_text(text),
     }
@@ -722,6 +724,58 @@ mod tests {
             ""
         );
         assert_eq!(sanitize_dsh_sidebar_title("你好"), "你好");
+        assert_eq!(
+            sanitize_dsh_sidebar_title("<goal_round>\nContinue the active goal.\n</goal_round>"),
+            ""
+        );
+    }
+
+    #[test]
+    fn keeps_goal_injection_and_still_skips_plugin() {
+        let entries = vec![
+            json!({
+                "event": {
+                    "type": "user/message",
+                    "data": {
+                        "text": "写一个 todo",
+                        "source": { "kind": "user" }
+                    }
+                }
+            }),
+            json!({
+                "event": {
+                    "type": "user/message",
+                    "data": {
+                        "text": "<goal_round>\nContinue the active goal.\n</goal_round>",
+                        "source": { "kind": "goal", "goalId": "g1", "round": 2 }
+                    }
+                }
+            }),
+            json!({
+                "event": {
+                    "type": "user/message",
+                    "data": {
+                        "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.",
+                        "source": { "kind": "plugin", "plugin": "dsh-system-prompt" }
+                    }
+                }
+            }),
+            json!({
+                "event": {
+                    "type": "assistant/chunk",
+                    "data": { "chunk": { "type": "text-delta", "text": "好的" } }
+                }
+            }),
+            json!({ "event": { "type": "turn/end", "data": { "reason": { "kind": "completed" } } } }),
+        ];
+        let messages = fold_history_events(&entries);
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[0].source_kind.as_deref(), Some("user"));
+        assert_eq!(messages[0].text, "写一个 todo");
+        assert_eq!(messages[1].source_kind.as_deref(), Some("goal"));
+        assert!(messages[1].text.contains("<goal_round>"));
+        assert_eq!(messages[2].role, "assistant");
+        assert_eq!(messages[2].text, "好的");
     }
 
     #[test]
