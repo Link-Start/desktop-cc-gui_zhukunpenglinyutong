@@ -10,7 +10,7 @@ import { loadClaudeSession as loadClaudeSessionService } from "../../../services
 import { parseClaudeHistoryMessagesWithShadowRecovery } from "../loaders/claudeHistoryLoader";
 import type { ThreadAction } from "./useThreadsReducer";
 
-type ThreadEngine = "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
+type ThreadEngine = "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "dsh";
 
 type RunWithCreateSessionLoading = <T>(
   params: {
@@ -97,20 +97,20 @@ export function useThreadMessagingThreadResolution({
   const kimiSessionIdByPendingThreadRef = useRef<Map<string, string>>(
     new Map(),
   );
+  const dshSessionIdByPendingThreadRef = useRef<Map<string, string>>(
+    new Map(),
+  );
 
   const normalizeEngineSelection = useCallback(
     (engine: ThreadEngine | undefined): ThreadEngine =>
-      engine === "claude"
-        ? "claude"
-        : engine === "opencode"
-          ? "opencode"
-          : engine === "gemini"
-            ? "gemini"
-            : engine === "grok"
-              ? "grok"
-            : engine === "kimi"
-              ? "kimi"
-              : "codex",
+      engine === "claude" ||
+      engine === "opencode" ||
+      engine === "gemini" ||
+      engine === "grok" ||
+      engine === "kimi" ||
+      engine === "dsh"
+        ? engine
+        : "codex",
     [],
   );
 
@@ -146,6 +146,12 @@ export function useThreadMessagingThreadResolution({
         threadId.startsWith("opencode-pending-")
       ) {
         return "opencode";
+      }
+      if (
+        threadId.startsWith("dsh:") ||
+        threadId.startsWith("dsh-pending-")
+      ) {
+        return "dsh";
       }
       return normalizeEngineSelection(activeEngine);
     },
@@ -187,6 +193,12 @@ export function useThreadMessagingThreadResolution({
           threadId.startsWith("opencode-pending-")
         );
       }
+      if (engine === "dsh") {
+        return (
+          threadId.startsWith("dsh:") ||
+          threadId.startsWith("dsh-pending-")
+        );
+      }
       return (
         !threadId.startsWith("claude:") &&
         !threadId.startsWith("claude-pending-") &&
@@ -197,7 +209,9 @@ export function useThreadMessagingThreadResolution({
         !threadId.startsWith("kimi:") &&
         !threadId.startsWith("kimi-pending-") &&
         !threadId.startsWith("opencode:") &&
-        !threadId.startsWith("opencode-pending-")
+        !threadId.startsWith("opencode-pending-") &&
+        !threadId.startsWith("dsh:") &&
+        !threadId.startsWith("dsh-pending-")
       );
     },
     [],
@@ -328,6 +342,7 @@ export function useThreadMessagingThreadResolution({
     geminiSessionIdByPendingThreadRef,
     grokSessionIdByPendingThreadRef,
     kimiSessionIdByPendingThreadRef,
+    dshSessionIdByPendingThreadRef,
     isClaudePendingThreadAwaitingNativeSession,
     isThreadIdCompatibleWithEngine,
     normalizeEngineSelection,

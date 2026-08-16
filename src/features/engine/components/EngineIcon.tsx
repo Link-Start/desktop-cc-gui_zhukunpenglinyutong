@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import type { EngineType } from "../../../types";
 
 // 导入官方模型图标
+import deepseekIcon from "@lobehub/icons-static-svg/icons/deepseek-color.svg";
 import claudeIcon from "../../../assets/model-icons/claude.svg";
 import geminiIcon from "../../../assets/model-icons/gemini.svg";
 
@@ -142,6 +143,16 @@ export function EngineIcon({
       );
     case "opencode":
       return <OpenCodeGlyph size={size} className={className} style={style} />;
+    case "dsh":
+      return (
+        <img
+          src={deepseekIcon}
+          alt="DeepSeek Harness"
+          className={className}
+          style={iconStyle}
+          aria-hidden
+        />
+      );
     default:
       return <OpenAIGlyph size={size} className={className} style={style} />;
   }

@@ -43,6 +43,7 @@ import { clampUiScale } from "../../../utils/uiScale";
 import {
   exportDiagnosticsBundle,
   reloadCodexRuntimeConfig,
+  runDshDoctor,
 } from "../../../services/tauri";
 import {
   DEFAULT_CODE_FONT_FAMILY,
@@ -225,6 +226,8 @@ function normalizeRuntimeSessionEngine(
       return "gemini";
     case "opencode":
       return "opencode";
+    case "dsh":
+      return "dsh";
     case "codex":
       return "codex";
     default:
@@ -243,6 +246,9 @@ function inferRuntimeSessionEngineFromThreadId(
   }
   if (threadId.startsWith("opencode:") || threadId.startsWith("opencode-pending-")) {
     return "opencode";
+  }
+  if (threadId.startsWith("dsh:") || threadId.startsWith("dsh-pending-")) {
+    return "dsh";
   }
   return "codex";
 }
@@ -267,6 +273,7 @@ function buildRuntimeSessionEngineCounts(params: {
     codex: { engine: "codex", count: 0, activeCount: 0 },
     gemini: { engine: "gemini", count: 0, activeCount: 0 },
     opencode: { engine: "opencode", count: 0, activeCount: 0 },
+    dsh: { engine: "dsh", count: 0, activeCount: 0 },
   };
   const knownWorkspaceIds =
     params.workspaces.length > 0
@@ -462,6 +469,10 @@ export function SettingsView({
     result: CodexDoctorResult | null;
   }>({ status: "idle", result: null });
   const [openCodeDoctorState, setOpenCodeDoctorState] = useState<{
+    status: "idle" | "running" | "done";
+    result: CodexDoctorResult | null;
+  }>({ status: "idle", result: null });
+  const [dshDoctorState, setDshDoctorState] = useState<{
     status: "idle" | "running" | "done";
     result: CodexDoctorResult | null;
   }>({ status: "idle", result: null });
@@ -1481,6 +1492,30 @@ export function SettingsView({
     }
   };
 
+  const handleRunDshDoctor = async () => {
+    const dshBin = appSettings.dshBin ?? null;
+    setDshDoctorState({ status: "running", result: null });
+    try {
+      const result = await runDshDoctor(dshBin);
+      setDshDoctorState({ status: "done", result });
+    } catch (error) {
+      setDshDoctorState({
+        status: "done",
+        result: {
+          ok: false,
+          codexBin: dshBin,
+          version: null,
+          appServerOk: false,
+          details: error instanceof Error ? error.message : String(error),
+          path: null,
+          nodeOk: false,
+          nodeVersion: null,
+          nodeDetails: null,
+        },
+      });
+    }
+  };
+
   const handleReloadCodexRuntimeConfig = useCallback(async () => {
     setCodexRuntimeReloadState({ status: "reloading", message: null });
     try {
@@ -2314,6 +2349,8 @@ export function SettingsView({
                 grokDoctorState={grokDoctorState}
                 handleRunOpenCodeDoctor={handleRunOpenCodeDoctor}
                 openCodeDoctorState={openCodeDoctorState}
+                handleRunDshDoctor={handleRunDshDoctor}
+                dshDoctorState={dshDoctorState}
                 handleRunDoctor={handleRunDoctor}
                 doctorState={doctorState}
                 remoteHostDraft={remoteHostDraft}
@@ -2338,6 +2375,8 @@ export function SettingsView({
                     setGrokDoctorState({ status: "done", result });
                   } else if (engine === "opencode") {
                     setOpenCodeDoctorState({ status: "done", result });
+                  } else if (engine === "dsh") {
+                    setDshDoctorState({ status: "done", result });
                   } else {
                     setClaudeDoctorState({ status: "done", result });
                   }

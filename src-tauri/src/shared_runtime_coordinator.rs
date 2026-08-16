@@ -2588,7 +2588,7 @@ fn normalize_native_session_identity(engine: EngineType, value: Option<&str>) ->
             }
             Some(format!("{prefix}{raw}"))
         }
-        EngineType::Codex | EngineType::Gemini => Some(normalized.to_string()),
+        EngineType::Codex | EngineType::Gemini | EngineType::Dsh => Some(normalized.to_string()),
     }
 }
 
@@ -2606,6 +2606,7 @@ fn engine_token(engine: EngineType) -> &'static str {
         EngineType::OpenCode => "opencode",
         EngineType::Kimi => "kimi",
         EngineType::Grok => "grok",
+        EngineType::Dsh => "dsh",
     }
 }
 

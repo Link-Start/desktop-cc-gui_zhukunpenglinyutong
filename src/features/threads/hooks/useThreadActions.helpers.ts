@@ -65,6 +65,8 @@ export type GeminiSessionSummary = {
 // Kimi session summaries share the Gemini summary shape (id/message/updatedAt/size).
 export type KimiSessionSummary = GeminiSessionSummary;
 
+export type DshSessionSummary = GeminiSessionSummary;
+
 // Grok：在 Gemini 形状上扩展 parent / sessionKind（子代理树）
 export type GrokSessionSummary = GeminiSessionSummary & {
   parentSessionId?: string | null;
@@ -281,6 +283,12 @@ export function inferThreadEngineSource(
   ) {
     return "opencode";
   }
+  if (
+    normalized.startsWith("dsh:") ||
+    normalized.startsWith("dsh-pending-")
+  ) {
+    return "dsh";
+  }
   return "codex";
 }
 
@@ -292,6 +300,7 @@ export function isPendingThreadId(threadId: string): boolean {
     normalized.startsWith("grok-pending-") ||
     normalized.startsWith("kimi-pending-") ||
     normalized.startsWith("opencode-pending-") ||
+    normalized.startsWith("dsh-pending-") ||
     normalized.startsWith("codex-pending-")
   );
 }
@@ -1146,6 +1155,21 @@ export function normalizeKimiSessionSummaries(
   return normalizeGeminiSessionSummaries(value);
 }
 
+export function normalizeDshSessionSummaries(
+  value: unknown,
+): DshSessionSummary[] {
+  if (Array.isArray(value)) {
+    return normalizeGeminiSessionSummaries(value);
+  }
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+  const record = value as Record<string, unknown>;
+  return normalizeGeminiSessionSummaries(
+    record.sessions ?? record.items ?? record.data,
+  );
+}
+
 function normalizeGrokSessionSummary(value: unknown): GrokSessionSummary | null {
   const base = normalizeGeminiSessionSummary(value);
   if (!base) {
@@ -1355,8 +1379,8 @@ function mergeNativeCliSessionSummaries(params: {
       sessionKind?: string | null;
     }
   >;
-  idPrefix: "gemini" | "grok" | "kimi";
-  engineSource: "gemini" | "grok" | "kimi";
+  idPrefix: "gemini" | "grok" | "kimi" | "dsh";
+  engineSource: "gemini" | "grok" | "kimi" | "dsh";
   fallbackTitle: string;
   workspaceId: string;
   mappedTitles: Record<string, string>;
@@ -1503,6 +1527,27 @@ export function mergeKimiSessionSummaries(
   });
 }
 
+export function mergeDshSessionSummaries(
+  baseSummaries: ThreadSummary[],
+  dshSessions: DshSessionSummary[],
+  workspaceId: string,
+  mappedTitles: Record<string, string>,
+  getCustomName: (workspaceId: string, threadId: string) => string | undefined,
+  hiddenSharedBindingIds?: ReadonlySet<string>,
+): ThreadSummary[] {
+  return mergeNativeCliSessionSummaries({
+    baseSummaries,
+    sessions: dshSessions,
+    idPrefix: "dsh",
+    engineSource: "dsh",
+    fallbackTitle: "DSH Session",
+    workspaceId,
+    mappedTitles,
+    getCustomName,
+    hiddenSharedBindingIds,
+  });
+}
+
 export function mergeGrokSessionSummaries(
   baseSummaries: ThreadSummary[],
   grokSessions: GrokSessionSummary[],
@@ -1541,6 +1586,7 @@ function normalizeCatalogEngine(
     case "grok":
     case "kimi":
     case "opencode":
+    case "dsh":
       return engine;
     default:
       return "codex";
@@ -1654,7 +1700,9 @@ export function mergeCodexCatalogSessionSummaries(
               ? "Kimi Session"
               : engineSource === "opencode"
                 ? "OpenCode Session"
-                : "Codex Session";
+                : engineSource === "dsh"
+                  ? "DSH Session"
+                  : "Codex Session";
     const continuationSourceName = session.sourceSessionId
       ? mergedById.get(session.sourceSessionId)?.name?.trim()
       : null;
@@ -1742,6 +1790,7 @@ const PENDING_PREFIXES_BY_ENGINE: Partial<Record<EngineSource, string>> = {
   claude: "claude-pending-",
   codex: "codex-pending-",
   opencode: "opencode-pending-",
+  dsh: "dsh-pending-",
 };
 
 function isPendingEngineThreadId(
@@ -2048,7 +2097,9 @@ export function resolveRewindSupportedEngine(
     normalized.startsWith("kimi:") ||
     normalized.startsWith("kimi-pending-") ||
     normalized.startsWith("opencode:") ||
-    normalized.startsWith("opencode-pending-")
+    normalized.startsWith("opencode-pending-") ||
+    normalized.startsWith("dsh:") ||
+    normalized.startsWith("dsh-pending-")
   ) {
     return null;
   }

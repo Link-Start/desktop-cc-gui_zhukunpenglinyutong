@@ -64,6 +64,7 @@ const workspace = {
     "engineKimi": "Kimi CLI",
     "engineGrok": "Grok CLI",
     "engineOpenCode": "OpenCode",
+    "engineDsh": "DeepSeek Harness",
     "engineStatusLoading": "जांच कर रहे हैं...",
     "engineStatusRequiresLogin": "साइन इन आवश्यक",
     "engineComingSoon": "जल्द आ रहा है",

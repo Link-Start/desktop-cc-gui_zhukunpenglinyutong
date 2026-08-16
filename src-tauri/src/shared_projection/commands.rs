@@ -66,7 +66,7 @@ fn is_legacy_local_provider(engine: EngineType, provider_profile_id: &str) -> bo
             provider_profile_id
                 == crate::engine::opencode_provider_profile::OPENCODE_LOCAL_PROVIDER_PROFILE_ID
         }
-        EngineType::Gemini => false,
+        EngineType::Gemini | EngineType::Dsh => false,
     }
 }
 

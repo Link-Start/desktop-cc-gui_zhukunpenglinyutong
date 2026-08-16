@@ -11,6 +11,7 @@ import {
   addWorkspace,
   forkClaudeSession,
   forkClaudeSessionFromMessage,
+  forkDshSession,
   forkThread,
   rewindCodexThread,
   generateThreadTitle,
@@ -1597,6 +1598,18 @@ describe("tauri invoke wrappers", () => {
     expect(invokeMock).toHaveBeenCalledWith("fork_claude_session", {
       workspacePath: "/tmp/project",
       sessionId: "claude-session-1",
+    });
+  });
+
+  it("maps workspacePath and sessionId for fork_dsh_session", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await forkDshSession("/tmp/project", "session-dsh-1");
+
+    expect(invokeMock).toHaveBeenCalledWith("fork_dsh_session", {
+      workspacePath: "/tmp/project",
+      sessionId: "session-dsh-1",
     });
   });
 

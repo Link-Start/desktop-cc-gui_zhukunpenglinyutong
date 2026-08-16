@@ -924,6 +924,14 @@ pub(crate) struct AppSettings {
     pub(crate) claude_bin: Option<String>,
     #[serde(default, rename = "kimiBin")]
     pub(crate) kimi_bin: Option<String>,
+    #[serde(default, rename = "dshBin")]
+    pub(crate) dsh_bin: Option<String>,
+    #[serde(default, rename = "dshHost")]
+    pub(crate) dsh_host: Option<String>,
+    #[serde(default, rename = "dshPort")]
+    pub(crate) dsh_port: Option<u16>,
+    #[serde(default, rename = "dshAutoStart")]
+    pub(crate) dsh_auto_start: Option<bool>,
     #[serde(default, rename = "grokBin")]
     pub(crate) grok_bin: Option<String>,
     #[serde(default, rename = "opencodeBin")]
@@ -1924,6 +1932,10 @@ impl Default for AppSettings {
             codex_bin: None,
             claude_bin: None,
             kimi_bin: None,
+            dsh_bin: None,
+            dsh_host: None,
+            dsh_port: None,
+            dsh_auto_start: None,
             grok_bin: None,
             opencode_bin: None,
             codex_args: None,

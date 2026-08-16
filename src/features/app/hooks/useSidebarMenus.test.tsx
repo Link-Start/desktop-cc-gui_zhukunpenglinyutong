@@ -86,6 +86,7 @@ vi.mock("react-i18next", () => ({
         "workspace.engineGemini": "Gemini",
         "workspace.engineKimi": "Kimi CLI",
         "workspace.engineGrok": "Grok CLI",
+        "workspace.engineDsh": "DeepSeek Harness",
         "workspace.engineStatusLoading": "Checking...",
         "workspace.engineStatusRequiresLogin": "Sign in required",
         "threads.reloadThreads": "Reload threads",
@@ -2537,6 +2538,7 @@ describe("useSidebarMenus", () => {
       "new-session-opencode",
       "new-session-kimi",
       "new-session-grok",
+      "new-session-dsh",
     ]);
   });
 });

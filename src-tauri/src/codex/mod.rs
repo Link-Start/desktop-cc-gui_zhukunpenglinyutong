@@ -31,7 +31,8 @@ pub(crate) mod thread_mode_state;
 use self::args::resolve_workspace_codex_args;
 use self::commit_message::{build_commit_message_prompt, combine_repository_diff_sections};
 pub(crate) use self::doctor::{
-    run_claude_doctor_with_settings, run_codex_doctor_with_settings, run_grok_doctor_with_settings,
+    dsh_node_requirement_error, node_satisfies_dsh_requirement, run_claude_doctor_with_settings,
+    run_codex_doctor_with_settings, run_dsh_doctor_with_settings, run_grok_doctor_with_settings,
     run_kimi_doctor_with_settings, run_opencode_doctor_with_settings,
 };
 pub(crate) use self::home::{resolve_default_codex_home, resolve_workspace_codex_home};
@@ -553,6 +554,15 @@ pub(crate) fn remote_opencode_doctor_request(
     )
 }
 
+pub(crate) fn remote_dsh_doctor_request(dsh_bin: Option<String>) -> (&'static str, Value) {
+    (
+        "dsh_doctor",
+        json!({
+            "dshBin": dsh_bin.map(remote_backend::normalize_path_for_remote),
+        }),
+    )
+}
+
 #[tauri::command]
 pub(crate) async fn opencode_doctor(
     opencode_bin: Option<String>,
@@ -566,6 +576,21 @@ pub(crate) async fn opencode_doctor(
 
     let settings = state.app_settings.lock().await.clone();
     run_opencode_doctor_with_settings(opencode_bin, &settings).await
+}
+
+#[tauri::command]
+pub(crate) async fn dsh_doctor(
+    dsh_bin: Option<String>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        let (method, params) = remote_dsh_doctor_request(dsh_bin);
+        return remote_backend::call_remote(&*state, app, method, params).await;
+    }
+
+    let settings = state.app_settings.lock().await.clone();
+    run_dsh_doctor_with_settings(dsh_bin, &settings).await
 }
 
 #[tauri::command]
@@ -2148,6 +2173,13 @@ pub(crate) async fn respond_to_server_request(
                     .await;
             }
         }
+        return Ok(());
+    }
+
+    if let Some(dsh_request) = crate::engine::dsh::parse_control_request(&request_id) {
+        let settings = state.app_settings.lock().await.clone();
+        let runtime = crate::engine::dsh::runtime_settings_from_app(&settings);
+        crate::engine::dsh::respond_to_control(&runtime, dsh_request, &result).await?;
         return Ok(());
     }
 

@@ -71,6 +71,7 @@ const workspace = {
     engineKimi: "Kimi CLI",
     engineGrok: "Grok CLI",
     engineOpenCode: "OpenCode",
+    engineDsh: "DeepSeek Harness",
     engineStatusLoading: "Checking...",
     engineStatusRequiresLogin: "Sign in required",
     engineComingSoon: "Coming soon",
@@ -337,6 +338,9 @@ const workspace = {
     deleteWorktreeMessage:
       "This will close the agent, remove its worktree, and delete it from ccgui.",
     deleteWorktreeFailed: "Delete worktree failed",
+  },
+  sharedSession: {
+    dshUnsupported: "Not available in Shared Session",
   },
 };
 

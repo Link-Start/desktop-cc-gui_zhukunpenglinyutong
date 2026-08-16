@@ -1337,6 +1337,9 @@ pub(crate) async fn add_workspace(
             // Grok follows local CLI session model (no persistent daemon session).
             add_workspace_for_cli_engine(EngineType::Grok, path, codex_bin, &state).await
         }
+        EngineType::Dsh => {
+            add_workspace_for_cli_engine(EngineType::Dsh, path, codex_bin, &state).await
+        }
     }
 }
 
@@ -1363,6 +1366,7 @@ async fn add_workspace_for_cli_engine(
         EngineType::OpenCode => "opencode",
         EngineType::Kimi => "kimi",
         EngineType::Grok => "grok",
+        EngineType::Dsh => "dsh",
         _ => return Err(format!("Unsupported CLI engine: {:?}", engine_type)),
     };
 
@@ -1408,6 +1412,8 @@ async fn add_workspace_for_cli_engine(
             };
             detect_grok_status(grok_bin.as_deref()).await.installed
         }
+        // Host can start later; do not refuse the workspace if dsh is not installed yet.
+        EngineType::Dsh => true,
         _ => false,
     };
     if !cli_installed {

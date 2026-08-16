@@ -49,7 +49,10 @@ import {
 import { persistSharedSessionSelectedTarget } from "../../shared-session/services/sharedSessions";
 import { shouldSuppressSharedTargetPersistToast } from "../../shared-session/target/sharedTargetPersistErrors";
 import { resolveComposerAtomicSelectedModelId } from "../utils/resolveComposerAtomicSelectedModelId";
-import { resolveDefaultCreationExecutionTarget } from "../utils/resolveDefaultCreationExecutionTarget";
+import {
+  isResolvedCreationExecutionTarget,
+  resolveDefaultCreationExecutionTarget,
+} from "../utils/resolveDefaultCreationExecutionTarget";
 import { isSharedSessionThreadId } from "../../shared-session/utils/sharedSessionIdentity";
 import { dispatchSharedSendEvent } from "../../shared-session/runtime/sharedSendStateStore";
 import { requestProviderContinuationDialog } from "../../threads/services/providerContinuationRequests";
@@ -1039,7 +1042,7 @@ function ComposerImpl({
     }
     if (
       createSessionTargetPicker &&
-      isResolvedExecutionTarget(effectiveCreationTarget)
+      isResolvedCreationExecutionTarget(effectiveCreationTarget)
     ) {
       return effectiveCreationTarget.engine;
     }
@@ -1292,7 +1295,10 @@ function ComposerImpl({
   );
   const handleCreationTargetChange = useCallback(
     (target: ExecutionTarget) => {
-      if (!createSessionTargetPicker || !isResolvedExecutionTarget(target)) {
+      if (
+        !createSessionTargetPicker ||
+        !isResolvedCreationExecutionTarget(target)
+      ) {
         return;
       }
       // 首页 engine 选择必须同步全局 activeEngine + client store，否则重启后首页
@@ -2530,7 +2536,7 @@ function ComposerImpl({
       const hasBrowserContextAttachment = Boolean(browserContextAttachment);
       const createSessionTarget =
         createSessionTargetPicker &&
-        isResolvedExecutionTarget(effectiveCreationTarget)
+        isResolvedCreationExecutionTarget(effectiveCreationTarget)
           ? {
               engine: effectiveCreationTarget.engine,
               providerProfileId:
@@ -3483,7 +3489,7 @@ function ComposerImpl({
                           reasoning: effort ? { effort } : null,
                         })
                     : createSessionTargetPicker &&
-                        isResolvedExecutionTarget(effectiveCreationTarget)
+                        isResolvedCreationExecutionTarget(effectiveCreationTarget)
                       ? (effort) =>
                           setSelectedCreationTarget({
                             ...effectiveCreationTarget,

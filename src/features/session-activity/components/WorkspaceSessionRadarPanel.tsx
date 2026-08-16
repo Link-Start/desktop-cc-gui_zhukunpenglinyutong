@@ -235,7 +235,7 @@ export function WorkspaceSessionRadarPanel({
     });
   };
 
-  const resolveEngine = (entry: SessionRadarEntry): "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode" => {
+  const resolveEngine = (entry: SessionRadarEntry): "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode" | "dsh" => {
     const normalizedEngine = entry.engine.toUpperCase();
     if (normalizedEngine === "CLAUDE") {
       return "claude";
@@ -251,6 +251,9 @@ export function WorkspaceSessionRadarPanel({
     }
     if (normalizedEngine === "OPENCODE") {
       return "opencode";
+    }
+    if (normalizedEngine === "DSH") {
+      return "dsh";
     }
     return "codex";
   };

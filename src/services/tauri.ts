@@ -286,7 +286,7 @@ export type {
   BrowserSnapshotBudget,
   BrowserTextNode,
 } from "../features/browser-agent/types";
-export { previewCodexLaunchProfile, runClaudeDoctor, runCodexDoctor, runGrokDoctor, runKimiDoctor, runOpenCodeDoctor } from "./tauri/doctor";
+export { previewCodexLaunchProfile, runClaudeDoctor, runCodexDoctor, runDshDoctor, runGrokDoctor, runKimiDoctor, runOpenCodeDoctor } from "./tauri/doctor";
 export { getCliInstallPlan, getCliVersionStatus, runCliInstaller } from "./tauri/cliInstaller";
 export type {
   ComputerUseActivationFailureKind,
@@ -634,8 +634,10 @@ export {
   deleteGeminiSession,
   deleteGrokSession,
   deleteKimiSession,
+  deleteDshSession,
   deleteOpenCodeSession,
   forkClaudeSession,
+  forkDshSession,
   forkClaudeSessionFromMessage,
   forkThread,
   hydrateClaudeDeferredImage,
@@ -645,6 +647,7 @@ export {
   setGlobalMcpServerEnabled,
   listGrokSessions,
   listKimiSessions,
+  listDshSessions,
   listMcpServerStatus,
   listThreads,
   loadClaudeSession,
@@ -652,6 +655,7 @@ export {
   loadGeminiSession,
   loadGrokSession,
   loadKimiSession,
+  loadDshSession,
   resumeThread,
   rewindCodexThread,
   startThread,

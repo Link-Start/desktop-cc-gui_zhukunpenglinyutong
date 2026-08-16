@@ -2092,6 +2092,7 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
         { type: 'opencode', installed: true, version: '1.0.0' },
         { type: 'kimi', installed: true, version: '1.0.0' },
         { type: 'grok', installed: true, version: '1.0.0' },
+        { type: 'dsh', installed: true, version: '1.0.0' },
       ],
     });
 
@@ -2108,6 +2109,7 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
       opencode: true,
       kimi: true,
       grok: true,
+      dsh: false,
     });
   });
 

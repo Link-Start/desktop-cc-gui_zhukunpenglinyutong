@@ -455,7 +455,8 @@ export const MessagesCore = memo(function MessagesCore({
         activeEngine === "claude" ||
         activeEngine === "gemini" ||
         activeEngine === "grok" ||
-        activeEngine === "kimi"),
+        activeEngine === "kimi" ||
+        activeEngine === "dsh"),
     items: renderSourceItems,
   });
   const {
@@ -1471,7 +1472,7 @@ export const MessagesCore = memo(function MessagesCore({
 
   useEffect(() => {
     if (
-      (activeEngine !== "claude" && activeEngine !== "codex" && activeEngine !== "gemini" && activeEngine !== "grok" && activeEngine !== "kimi") ||
+      (activeEngine !== "claude" && activeEngine !== "codex" && activeEngine !== "gemini" && activeEngine !== "grok" && activeEngine !== "kimi" && activeEngine !== "dsh") ||
       (!isThinking && !isAssistantFinalizing) ||
       !threadId
     ) {
@@ -1653,7 +1654,7 @@ export const MessagesCore = memo(function MessagesCore({
     ],
   );
   const timelineHeartbeatPulse =
-    (presentationProfile?.heartbeatWaitingHint ?? activeEngine === "opencode")
+    (presentationProfile?.heartbeatWaitingHint ?? (activeEngine === "opencode" || activeEngine === "dsh"))
       ? heartbeatPulse
       : 0;
   const { handlePendingJumpTargetReady, requestScrollToAnchor } =

@@ -232,6 +232,8 @@ import {
 import {
   buildReviewCommandText,
   extractSessionIdFromEngineSendResponse,
+  resolveDshModelForSend,
+  resolveNativeSessionIdForSend,
   isCodexMissingThreadBindingError,
   isInvalidReviewThreadIdError,
   isLikelyForeignModelForGemini,
@@ -331,7 +333,7 @@ type HandleFusionStalledOptions = {
 type RunWithCreateSessionLoading = <T>(
   params: {
     workspace: WorkspaceInfo;
-    engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
+    engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "dsh";
   },
   action: () => Promise<T>,
 ) => Promise<T>;
@@ -372,7 +374,7 @@ type UseThreadMessagingOptions = {
   claudeThinkingVisible?: boolean;
   steerEnabled: boolean;
   customPrompts: CustomPromptOption[];
-  activeEngine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
+  activeEngine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "dsh";
   threadStatusById: ThreadState["threadStatusById"];
   itemsByThread: ThreadState["itemsByThread"];
   activeTurnIdByThread: ThreadState["activeTurnIdByThread"];
@@ -389,7 +391,7 @@ type UseThreadMessagingOptions = {
   getThreadEngine: (
     workspaceId: string,
     threadId: string,
-  ) => "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | undefined;
+  ) => "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "dsh" | undefined;
   getThreadKind?: (
     workspaceId: string,
     threadId: string,
@@ -429,7 +431,7 @@ type UseThreadMessagingOptions = {
     workspaceId: string,
     options?: {
       activate?: boolean;
-      engine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
+      engine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "dsh";
       folderId?: string | null;
       autoSession?: AutoSessionMetadata | null;
       providerProfileId?: string | null;
@@ -526,6 +528,7 @@ export function useThreadMessaging({
     geminiSessionIdByPendingThreadRef,
     grokSessionIdByPendingThreadRef,
     kimiSessionIdByPendingThreadRef,
+    dshSessionIdByPendingThreadRef,
     isClaudePendingThreadAwaitingNativeSession,
     isThreadIdCompatibleWithEngine,
     normalizeEngineSelection,
@@ -1720,7 +1723,12 @@ export function useThreadMessaging({
       const modelForSend =
         resolvedEngine === "opencode"
           ? (sanitizedOpenCodeModel ?? "openai/gpt-5.3-codex")
-          : sanitizedOpenCodeModel;
+          : resolvedEngine === "dsh"
+            ? resolveDshModelForSend({
+                catalogId: selectedModelId,
+                runtimeModel: sanitizedOpenCodeModel,
+              })
+            : sanitizedOpenCodeModel;
       if (resolvedEngine === "opencode") {
         const normalizedModel = (modelForSend ?? "").trim().toLowerCase();
         const prevModel = lastOpenCodeModelByThreadRef.current.get(threadId);
@@ -2363,8 +2371,6 @@ export function useThreadMessaging({
               });
           }
         } else {
-          const isClaudeSession = threadId.startsWith("claude:");
-          const isOpenCodeSession = threadId.startsWith("opencode:");
           const cliEngine = resolvedEngine === "codex" ? null : resolvedEngine;
           const threadItems = itemsByThread[threadId] ?? [];
           const sessionSpecKey = `${workspace.id}:${threadId}`;
@@ -2483,41 +2489,18 @@ export function useThreadMessaging({
             });
           }
           const realSessionId =
-            resolvedEngine === "claude" && isClaudeSession
-              ? threadId.slice("claude:".length)
-              : resolvedEngine === "claude" && isClaudeForkThreadId(threadId)
-                ? null
-                : resolvedEngine === "claude" &&
-                    threadId.startsWith("claude-pending-")
-                  ? null
-                  : resolvedEngine === "gemini" &&
-                      threadId.startsWith("gemini:")
-                    ? threadId.slice("gemini:".length)
-                    : resolvedEngine === "gemini" &&
-                        threadId.startsWith("gemini-pending-")
-                      ? (geminiSessionIdByPendingThreadRef.current.get(
-                          threadId,
-                        ) ?? null)
-                      : resolvedEngine === "grok" &&
-                          threadId.startsWith("grok:")
-                        ? threadId.slice("grok:".length)
-                        : resolvedEngine === "grok" &&
-                            threadId.startsWith("grok-pending-")
-                          ? (grokSessionIdByPendingThreadRef.current.get(
-                              threadId,
-                            ) ?? null)
-                          : resolvedEngine === "kimi" &&
-                              threadId.startsWith("kimi:")
-                            ? threadId.slice("kimi:".length)
-                            : resolvedEngine === "kimi" &&
-                                threadId.startsWith("kimi-pending-")
-                              ? (kimiSessionIdByPendingThreadRef.current.get(
-                                  threadId,
-                                ) ?? null)
-                              : resolvedEngine === "opencode" &&
-                                  isOpenCodeSession
-                                ? threadId.slice("opencode:".length)
-                                : null;
+            resolvedEngine === "claude" && isClaudeForkThreadId(threadId)
+              ? null
+              : resolveNativeSessionIdForSend({
+                  engine: resolvedEngine,
+                  threadId,
+                  pendingSessionByEngine: {
+                    gemini: geminiSessionIdByPendingThreadRef.current.get(threadId),
+                    grok: grokSessionIdByPendingThreadRef.current.get(threadId),
+                    kimi: kimiSessionIdByPendingThreadRef.current.get(threadId),
+                    dsh: dshSessionIdByPendingThreadRef.current.get(threadId),
+                  },
+                });
           const shouldAttachCliSpecRootHint =
             realSessionId === null && Boolean(customSpecRoot);
 
@@ -2830,6 +2813,34 @@ export function useThreadMessaging({
                     threadId,
                     sessionId: responseSessionId,
                     source: "kimiSessionListFallback",
+                  },
+                });
+              }
+            }
+            if (
+              resolvedEngine === "dsh" &&
+              threadId.startsWith("dsh-pending-")
+            ) {
+              const rawSessionId =
+                extractSessionIdFromEngineSendResponse(response);
+              const responseSessionId = rawSessionId?.startsWith("dsh:")
+                ? rawSessionId.slice("dsh:".length)
+                : rawSessionId;
+              if (responseSessionId) {
+                dshSessionIdByPendingThreadRef.current.set(
+                  threadId,
+                  responseSessionId,
+                );
+                onDebug?.({
+                  id: `${Date.now()}-client-dsh-session-cache`,
+                  timestamp: Date.now(),
+                  source: "client",
+                  label: "thread/session cached",
+                  payload: {
+                    workspaceId: workspace.id,
+                    threadId,
+                    sessionId: responseSessionId,
+                    source: "engineSendMessageResponse",
                   },
                 });
               }
@@ -3170,6 +3181,7 @@ export function useThreadMessaging({
       geminiSessionIdByPendingThreadRef,
       grokSessionIdByPendingThreadRef,
       kimiSessionIdByPendingThreadRef,
+      dshSessionIdByPendingThreadRef,
       getCustomName,
       getThreadEngine,
       isClaudePendingThreadAwaitingNativeSession,

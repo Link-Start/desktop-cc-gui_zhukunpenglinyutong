@@ -25,6 +25,7 @@ const ENGINE_VARIANTS = {
   grok: "Grok",
   opencode: "OpenCode",
   kimi: "Kimi",
+  dsh: "Dsh",
 };
 const VALID_STATE = new Set(["supported", "compat-input", "unsupported", "unknown"]);
 const VALID_DOMAIN = new Set([

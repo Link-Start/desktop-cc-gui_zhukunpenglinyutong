@@ -19,6 +19,7 @@ const models = {
     "discoveringModels": "모델 검색 중...",
     "emptyChannelModelsTitle": "이 공급자에는 아직 모델이 없습니다",
     "emptyChannelModelsHint": "아래의 「모델 추가」를 클릭하여 사용자 지정 모델을 추가하세요",
+    "emptyDshHostHint": "DeepSeek Harness에서 모델을 구성하세요. 여기를 클릭하면 설정이 열립니다.",
     "refreshConfigFailed": "새로고침 실패: {{message}}",
         "claude": {
       "fable5": {

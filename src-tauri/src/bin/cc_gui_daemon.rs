@@ -321,7 +321,8 @@ mod workspace_settings;
 mod codex {
     pub(crate) type WorkspaceSession = crate::backend::app_server::WorkspaceSession;
     pub(crate) use crate::codex_doctor::{
-        run_claude_doctor_with_settings, run_codex_doctor_with_settings,
+        dsh_node_requirement_error, node_satisfies_dsh_requirement, run_claude_doctor_with_settings,
+        run_codex_doctor_with_settings, run_dsh_doctor_with_settings,
         run_grok_doctor_with_settings, run_kimi_doctor_with_settings,
         run_opencode_doctor_with_settings,
     };
@@ -1060,6 +1061,7 @@ fn parse_engine_type_string(value: Option<&str>) -> Option<engine::EngineType> {
         "opencode" => Some(engine::EngineType::OpenCode),
         "kimi" => Some(engine::EngineType::Kimi),
         "grok" => Some(engine::EngineType::Grok),
+        "dsh" => Some(engine::EngineType::Dsh),
         _ => None,
     }
 }
@@ -1846,6 +1848,10 @@ async fn handle_rpc_request(
         "opencode_doctor" => {
             let opencode_bin = parse_optional_string(&params, "opencodeBin");
             state.opencode_doctor(opencode_bin).await
+        }
+        "dsh_doctor" => {
+            let dsh_bin = parse_optional_string(&params, "dshBin");
+            state.dsh_doctor(dsh_bin).await
         }
         "cli_install_plan" => {
             let engine =

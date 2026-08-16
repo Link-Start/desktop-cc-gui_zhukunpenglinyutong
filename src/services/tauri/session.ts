@@ -448,3 +448,48 @@ export async function deleteGrokSession(workspacePath: string, sessionId: string
     sessionId,
   });
 }
+
+/**
+ * List DSH host sessions for a workspace path.
+ */
+export async function listDshSessions(workspacePath: string, limit?: number | null): Promise<Record<string, unknown> | unknown[] | null> {
+  return traceStartupInvoke("list_dsh_sessions", "global", () =>
+    invoke<Record<string, unknown> | unknown[] | null>("list_dsh_sessions", {
+      workspacePath,
+      limit: limit ?? null,
+    }),
+  );
+}
+
+/**
+ * Load DSH session history. Does not resume the agent.
+ */
+export async function loadDshSession(workspacePath: string, sessionId: string): Promise<Record<string, unknown> | null> {
+  return invoke<Record<string, unknown> | null>("load_dsh_session", {
+    workspacePath,
+    sessionId,
+  });
+}
+
+/**
+ * Archive a DSH session via the host.
+ */
+export async function deleteDshSession(workspacePath: string, sessionId: string): Promise<void> {
+  return invoke<void>("delete_dsh_session", {
+    workspacePath,
+    sessionId,
+  });
+}
+
+/**
+ * Fork a completed DSH session. Incomplete turns fail closed.
+ */
+export async function forkDshSession(
+  workspacePath: string,
+  sessionId: string,
+): Promise<Record<string, unknown> | null> {
+  return invoke<Record<string, unknown> | null>("fork_dsh_session", {
+    workspacePath,
+    sessionId,
+  });
+}

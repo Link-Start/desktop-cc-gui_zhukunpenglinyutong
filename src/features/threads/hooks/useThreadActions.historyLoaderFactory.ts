@@ -4,6 +4,7 @@ import {
   loadGeminiSession as loadGeminiSessionService,
   loadGrokSession as loadGrokSessionService,
   loadKimiSession as loadKimiSessionService,
+  loadDshSession as loadDshSessionService,
   resumeThread as resumeThreadService,
 } from "../../../services/tauri";
 import { createClaudeHistoryLoader } from "../loaders/claudeHistoryLoader";
@@ -11,6 +12,7 @@ import { createCodexHistoryLoader } from "../loaders/codexHistoryLoader";
 import { createGeminiHistoryLoader } from "../loaders/geminiHistoryLoader";
 import { createGrokHistoryLoader } from "../loaders/grokHistoryLoader";
 import { createKimiHistoryLoader } from "../loaders/kimiHistoryLoader";
+import { createDshHistoryLoader } from "../loaders/dshHistoryLoader";
 import { createOpenCodeHistoryLoader } from "../loaders/opencodeHistoryLoader";
 import { createSharedHistoryLoader } from "../loaders/sharedHistoryLoader";
 import {
@@ -78,6 +80,13 @@ export function createThreadHistoryLoaderForThread({
       workspaceId,
       workspacePath,
       loadKimiSession: loadKimiSessionService,
+    });
+  }
+  if (targetThreadId.startsWith("dsh:")) {
+    return createDshHistoryLoader({
+      workspaceId,
+      workspacePath,
+      loadDshSession: loadDshSessionService,
     });
   }
   if (targetThreadId.startsWith("opencode:")) {

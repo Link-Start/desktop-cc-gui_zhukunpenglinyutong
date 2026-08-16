@@ -110,4 +110,48 @@ describe("useAppShellComposerSendSection Home target creation", () => {
       .calls[0]?.[4] as MessageSendOptions;
     expect(forwardedOptions.createSessionTarget).toBeUndefined();
   });
+
+  it("sends the DSH catalog id so host RPC can split provider/model", async () => {
+    const context = createContext();
+    const { result } = renderHook(() =>
+      useAppShellComposerSendSection(context as never),
+    );
+    const options: MessageSendOptions = {
+      createSessionTarget: {
+        engine: "dsh",
+        providerProfileId: null,
+        providerProfileName: "本地配置",
+        providerProfileSource: "disk",
+        modelCatalogEntryId: "grok-4.6/Grok 4.5",
+        model: "Grok 4.5",
+        effort: null,
+      },
+    };
+
+    await act(async () => {
+      await result.current.handleComposerSendWithEditorFallback(
+        "hello dsh",
+        [],
+        options,
+      );
+    });
+
+    expect(context.setActiveEngine).toHaveBeenCalledWith("dsh");
+    expect(context.startThreadForWorkspace).toHaveBeenCalledWith(
+      "workspace-1",
+      expect.objectContaining({
+        engine: "dsh",
+      }),
+    );
+    expect(context.sendUserMessageToThread).toHaveBeenCalledWith(
+      context.activeWorkspace,
+      "thread-created",
+      "hello dsh",
+      [],
+      expect.objectContaining({
+        model: "grok-4.6/Grok 4.5",
+        effort: null,
+      }),
+    );
+  });
 });

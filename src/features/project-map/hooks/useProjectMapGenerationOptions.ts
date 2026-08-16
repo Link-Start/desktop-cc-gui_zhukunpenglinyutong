@@ -33,6 +33,7 @@ const ENGINE_LABELS: Record<EngineType, string> = {
   grok: "Grok CLI",
   kimi: "Kimi CLI",
   opencode: "OpenCode",
+  dsh: "DeepSeek Harness",
 };
 
 const KNOWN_ENGINES: EngineType[] = ["codex", "claude", "grok", "kimi", "opencode"];

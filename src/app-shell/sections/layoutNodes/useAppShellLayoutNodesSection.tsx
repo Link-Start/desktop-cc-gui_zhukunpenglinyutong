@@ -759,7 +759,7 @@ export function useAppShellLayoutNodesSection(
   );
 
   const handleSelectConversationEngine = useCallback(
-    async (engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode") => {
+    async (engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "dsh") => {
       const thread =
         activeWorkspaceId && activeThreadId
           ? (threadsByWorkspace[activeWorkspaceId] ?? []).find(

@@ -109,6 +109,17 @@ impl AppState {
                 },
             )
             .await;
+
+        self.engine_manager
+            .set_engine_config(
+                EngineType::Dsh,
+                EngineConfig {
+                    bin_path: settings.dsh_bin.clone(),
+                    ..Default::default()
+                },
+            )
+            .await;
+        let _ = crate::engine::dsh::runtime_settings_from_app(&settings);
     }
 
     pub(crate) fn load(app: &AppHandle) -> Self {

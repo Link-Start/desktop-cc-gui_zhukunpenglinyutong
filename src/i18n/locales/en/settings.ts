@@ -1581,6 +1581,13 @@ const settings = {
         modelsHint:
           "Separate multiple models with commas; leave empty to allow all.",
       },
+      dshHost: "Host",
+      dshPort: "Port",
+      dshAutoStart: "Auto-start host",
+      dshOpenUi: "Open DSH Settings",
+      dshHostDown: "Host not running",
+      dshNotInstalled: "DSH CLI not installed",
+      dshModelsHint: "Models come from the running DSH host.",
       gemini: {
         subtitle: "Google official Gemini CLI configuration",
         enabled: "Enabled",
@@ -1637,6 +1644,7 @@ const settings = {
     cliValidationTabOpenCodeCli: "OpenCode CLI",
     cliValidationTabKimiCli: "Kimi CLI",
     cliValidationTabGrokCli: "Grok CLI",
+    cliValidationTabDshCli: "DeepSeek Harness",
     cliEngineEnabledLabel: "Engine enabled",
     geminiCliDisableDescription:
       "Disable Gemini CLI entirely. Once disabled, startup detection and engine entry points stop immediately.",
@@ -1659,6 +1667,8 @@ const settings = {
     grokPlaceholder: "grok",
     opencodeDescription:
       "Configure OpenCode CLI providers and local settings used by ccgui.",
+    dshDescription:
+      "DeepSeek Harness is a local Node host (dsh web). Configure models and API keys in the DSH Web UI, not in mossx.",
     defaultOpenCodePath: "Default OpenCode CLI path",
     openCodePlaceholder: "opencode",
     defaultCodexPath: "Default Codex path",
@@ -1883,6 +1893,9 @@ const settings = {
     runOpenCodeDoctor: "Run OpenCode Doctor",
     openCodeLooksGood: "OpenCode CLI looks good",
     openCodeIssueDetected: "OpenCode CLI issue detected",
+    runDshDoctor: "Run DSH Doctor",
+    dshLooksGood: "DSH CLI looks good",
+    dshIssueDetected: "DSH CLI issue detected",
     cliInstallLatest: "Install",
     cliUpdateLatest: "Update",
     cliUninstall: "Uninstall",

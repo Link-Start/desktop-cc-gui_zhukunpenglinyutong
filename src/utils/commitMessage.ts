@@ -2,7 +2,7 @@ import type {
   CommitMessageEngine,
   CommitMessageLanguage,
 } from "../services/tauri";
-import { normalizeEngineForExecution } from "./engineExecutionPolicy";
+import { isEngineExecutionEnabled } from "./engineExecutionPolicy";
 
 const LAST_COMMIT_MESSAGE_CONFIG_KEY = "ccgui.git.lastCommitMessageConfig";
 const COMMIT_MESSAGE_ENGINES: readonly CommitMessageEngine[] = [
@@ -20,6 +20,16 @@ export type LastCommitMessageConfig = {
   language: CommitMessageLanguage;
 };
 
+function normalizeCommitMessageEngine(
+  engine: unknown,
+): CommitMessageEngine | null {
+  if (!COMMIT_MESSAGE_ENGINES.includes(engine as CommitMessageEngine)) {
+    return null;
+  }
+  const typed = engine as CommitMessageEngine;
+  return isEngineExecutionEnabled(typed) ? typed : "codex";
+}
+
 export function readLastCommitMessageConfig(): LastCommitMessageConfig | null {
   try {
     const raw = window.localStorage.getItem(LAST_COMMIT_MESSAGE_CONFIG_KEY);
@@ -27,14 +37,15 @@ export function readLastCommitMessageConfig(): LastCommitMessageConfig | null {
       return null;
     }
     const parsed = JSON.parse(raw) as Partial<LastCommitMessageConfig>;
+    const engine = normalizeCommitMessageEngine(parsed.engine);
     if (
-      !COMMIT_MESSAGE_ENGINES.includes(parsed.engine as CommitMessageEngine) ||
+      !engine ||
       !COMMIT_MESSAGE_LANGUAGES.includes(parsed.language as CommitMessageLanguage)
     ) {
       return null;
     }
     return {
-      engine: normalizeEngineForExecution(parsed.engine),
+      engine,
       language: parsed.language as CommitMessageLanguage,
     };
   } catch {
@@ -48,7 +59,7 @@ export function saveLastCommitMessageConfig(config: LastCommitMessageConfig): vo
       LAST_COMMIT_MESSAGE_CONFIG_KEY,
       JSON.stringify({
         ...config,
-        engine: normalizeEngineForExecution(config.engine),
+        engine: normalizeCommitMessageEngine(config.engine) ?? "codex",
       }),
     );
   } catch {

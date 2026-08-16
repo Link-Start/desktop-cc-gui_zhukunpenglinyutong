@@ -39,4 +39,9 @@ describe("resolveCliInstallStrategy", () => {
       "npmGlobal",
     );
   });
+
+  it("keeps npm global for DSH", () => {
+    expect(resolveCliInstallStrategy("dsh", "installLatest")).toBe("npmGlobal");
+    expect(resolveCliInstallStrategy("dsh", "updateLatest")).toBe("npmGlobal");
+  });
 });

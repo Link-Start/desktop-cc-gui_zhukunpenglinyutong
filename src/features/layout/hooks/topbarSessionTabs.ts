@@ -42,6 +42,7 @@ const DEFAULT_ENGINE_LABEL_BY_TYPE: Record<EngineType, string> = {
   gemini: "Gemini",
   grok: "Grok",
   kimi: "Kimi",
+  dsh: "DSH",
 };
 
 export function createEmptyTopbarSessionWindows(): TopbarSessionWindows {
@@ -93,7 +94,8 @@ function resolveEngineType(engineSource: ThreadSummary["engineSource"] | undefin
     engineSource === "gemini" ||
     engineSource === "grok" ||
     engineSource === "kimi" ||
-    engineSource === "opencode"
+    engineSource === "opencode" ||
+    engineSource === "dsh"
   ) {
     return engineSource;
   }

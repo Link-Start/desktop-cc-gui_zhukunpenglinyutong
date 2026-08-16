@@ -464,6 +464,7 @@ pub fn run() {
                 if let Err(error) = manager.shutdown_grok_sessions().await {
                     log::error!("[app_exit] Grok shutdown failed: {error}");
                 }
+                crate::engine::dsh::supervisor::drop_host().await;
                 if state
                     .app_settings
                     .lock()

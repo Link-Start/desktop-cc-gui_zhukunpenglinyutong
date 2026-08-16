@@ -153,8 +153,19 @@ function extractThreadProviderMetadata(thread: Record<string, unknown>) {
   };
 }
 
+type PendingNativeEngine = "claude" | "gemini" | "grok" | "kimi" | "opencode" | "dsh";
+
+function uniquePendingEngine(
+  pendingByEngine: Record<PendingNativeEngine, string | null>,
+): PendingNativeEngine | null {
+  const active = (Object.entries(pendingByEngine) as Array<
+    [PendingNativeEngine, string | null]
+  >).filter(([, threadId]) => Boolean(threadId));
+  return active.length === 1 ? active[0][0] : null;
+}
+
 function isPendingThreadForEngine(
-  engine: "claude" | "gemini" | "grok" | "kimi" | "opencode",
+  engine: PendingNativeEngine,
   threadId: string | null | undefined,
 ): threadId is string {
   if (!threadId) {
@@ -204,11 +215,11 @@ type UseThreadTurnEventsOptions = {
   ) => Promise<void>;
   resolvePendingThreadForSession?: (
     workspaceId: string,
-    engine: "claude" | "gemini" | "grok" | "kimi" | "opencode",
+    engine: "claude" | "gemini" | "grok" | "kimi" | "opencode" | "dsh",
   ) => string | null;
   resolvePendingThreadForTurn?: (
     workspaceId: string,
-    engine: "claude" | "gemini" | "grok" | "kimi" | "opencode",
+    engine: "claude" | "gemini" | "grok" | "kimi" | "opencode" | "dsh",
     turnId: string | null | undefined,
   ) => string | null;
   getActiveTurnIdForThread?: (threadId: string) => string | null;
@@ -331,6 +342,8 @@ export function useThreadTurnEvents({
           ? "gemini"
         : threadId.startsWith("claude:")
           ? "claude"
+        : threadId.startsWith("dsh:")
+          ? "dsh"
           : null;
       if (!engine) {
         return null;
@@ -1115,7 +1128,7 @@ export function useThreadTurnEvents({
       workspaceId: string,
       threadId: string,
       sessionId: string,
-      engineHint?: "claude" | "opencode" | "codex" | "gemini" | "grok" | "kimi" | null,
+      engineHint?: "claude" | "opencode" | "codex" | "gemini" | "grok" | "kimi" | "dsh" | null,
       turnId?: string | null,
     ) => {
       const explicitEnginePrefix = threadId.startsWith("claude:")
@@ -1134,16 +1147,28 @@ export function useThreadTurnEvents({
         : threadId.startsWith("opencode:")
           || threadId.startsWith("opencode-pending-")
           ? "opencode"
+        : threadId.startsWith("dsh:")
+          || threadId.startsWith("dsh-pending-")
+          ? "dsh"
           : null;
       const hintedEngine =
-        engineHint === "claude" || engineHint === "gemini" || engineHint === "grok" || engineHint === "kimi" || engineHint === "opencode"
+        engineHint === "claude" || engineHint === "gemini" || engineHint === "grok" || engineHint === "kimi" || engineHint === "opencode" || engineHint === "dsh"
           ? engineHint
           : null;
-      const pendingOpenCode = resolvePendingThreadForSession?.(workspaceId, "opencode") ?? null;
-      const pendingGemini = resolvePendingThreadForSession?.(workspaceId, "gemini") ?? null;
-      const pendingGrok = resolvePendingThreadForSession?.(workspaceId, "grok") ?? null;
-      const pendingKimi = resolvePendingThreadForSession?.(workspaceId, "kimi") ?? null;
-      const pendingClaude = resolvePendingThreadForSession?.(workspaceId, "claude") ?? null;
+      const pendingByEngine: Record<PendingNativeEngine, string | null> = {
+        opencode: resolvePendingThreadForSession?.(workspaceId, "opencode") ?? null,
+        gemini: resolvePendingThreadForSession?.(workspaceId, "gemini") ?? null,
+        grok: resolvePendingThreadForSession?.(workspaceId, "grok") ?? null,
+        kimi: resolvePendingThreadForSession?.(workspaceId, "kimi") ?? null,
+        claude: resolvePendingThreadForSession?.(workspaceId, "claude") ?? null,
+        dsh: resolvePendingThreadForSession?.(workspaceId, "dsh") ?? null,
+      };
+      const pendingOpenCode = pendingByEngine.opencode;
+      const pendingGemini = pendingByEngine.gemini;
+      const pendingGrok = pendingByEngine.grok;
+      const pendingKimi = pendingByEngine.kimi;
+      const pendingClaude = pendingByEngine.claude;
+      const pendingDsh = pendingByEngine.dsh;
       logSessionTrace("event", {
         workspaceId,
         threadId,
@@ -1156,22 +1181,13 @@ export function useThreadTurnEvents({
         pendingGrok,
         pendingKimi,
         pendingClaude,
+        pendingDsh,
       });
 
       const enginePrefix =
         explicitEnginePrefix
         ?? hintedEngine
-        ?? (pendingOpenCode && !pendingGemini && !pendingGrok && !pendingKimi && !pendingClaude
-          ? "opencode"
-          : pendingGemini && !pendingOpenCode && !pendingGrok && !pendingKimi && !pendingClaude
-            ? "gemini"
-          : pendingGrok && !pendingOpenCode && !pendingGemini && !pendingKimi && !pendingClaude
-            ? "grok"
-          : pendingKimi && !pendingOpenCode && !pendingGemini && !pendingGrok && !pendingClaude
-            ? "kimi"
-          : pendingClaude && !pendingOpenCode && !pendingGemini && !pendingGrok && !pendingKimi
-            ? "claude"
-            : null);
+        ?? uniquePendingEngine(pendingByEngine);
       if (!enginePrefix) {
         logSessionTrace("skip:no-engine-prefix", {
           workspaceId,
@@ -1183,6 +1199,7 @@ export function useThreadTurnEvents({
           pendingGrok,
           pendingKimi,
           pendingClaude,
+          pendingDsh,
         });
         return;
       }
@@ -1203,13 +1220,16 @@ export function useThreadTurnEvents({
         || threadId.startsWith("kimi:")
         || threadId.startsWith("kimi-pending-")
         || threadId.startsWith("opencode:")
-        || threadId.startsWith("opencode-pending-");
+        || threadId.startsWith("opencode-pending-")
+        || threadId.startsWith("dsh:")
+        || threadId.startsWith("dsh-pending-");
       const hasForeignEnginePrefix = (
         (enginePrefix !== "claude" && (threadId.startsWith("claude:") || threadId.startsWith("claude-pending-")))
         || (enginePrefix !== "gemini" && (threadId.startsWith("gemini:") || threadId.startsWith("gemini-pending-")))
         || (enginePrefix !== "grok" && (threadId.startsWith("grok:") || threadId.startsWith("grok-pending-")))
         || (enginePrefix !== "kimi" && (threadId.startsWith("kimi:") || threadId.startsWith("kimi-pending-")))
         || (enginePrefix !== "opencode" && (threadId.startsWith("opencode:") || threadId.startsWith("opencode-pending-")))
+        || (enginePrefix !== "dsh" && (threadId.startsWith("dsh:") || threadId.startsWith("dsh-pending-")))
       );
 
       if (
@@ -1239,15 +1259,7 @@ export function useThreadTurnEvents({
         // Some runtimes emit session-id updates with finalized thread ids only.
         // Rebind conservatively: prefer an exact turn-bound pending match, and
         // otherwise only fall back to the active pending thread for the engine.
-        const pendingThreadId = enginePrefix === "opencode"
-          ? pendingOpenCode
-          : enginePrefix === "gemini"
-            ? pendingGemini
-          : enginePrefix === "grok"
-            ? pendingGrok
-          : enginePrefix === "kimi"
-            ? pendingKimi
-            : pendingClaude;
+        const pendingThreadId = pendingByEngine[enginePrefix];
         if (isPendingThreadForEngine(enginePrefix, turnBoundPendingThreadId)) {
           sourceThreadId = turnBoundPendingThreadId;
         } else if (
@@ -1280,15 +1292,7 @@ export function useThreadTurnEvents({
       } else if (isPendingThreadForEngine(enginePrefix, threadId)) {
         sourceThreadId = threadId;
       } else if (!hasAnyEnginePrefix && !hasForeignEnginePrefix) {
-        const pendingThreadId = enginePrefix === "opencode"
-          ? pendingOpenCode
-          : enginePrefix === "gemini"
-            ? pendingGemini
-          : enginePrefix === "grok"
-            ? pendingGrok
-          : enginePrefix === "kimi"
-            ? pendingKimi
-          : pendingClaude;
+        const pendingThreadId = pendingByEngine[enginePrefix];
         // Safety boundary: for non-prefixed thread ids, only bind to the
         // currently active pending thread unless a turn-bound mapping exists.
         // Turn-bound matches are safe to rebind even when the user has already

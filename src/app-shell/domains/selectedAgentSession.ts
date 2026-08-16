@@ -75,7 +75,7 @@ export function parseStoredThreadAgentSelectionEntry(raw: unknown): {
   };
 }
 
-function resolveThreadEngine(threadId: string): "claude" | "gemini" | "grok" | "kimi" | "opencode" | "codex" | null {
+function resolveThreadEngine(threadId: string): "claude" | "gemini" | "grok" | "kimi" | "opencode" | "dsh" | "codex" | null {
   if (threadId.startsWith("claude:") || threadId.startsWith("claude-pending-")) {
     return "claude";
   }
@@ -90,6 +90,9 @@ function resolveThreadEngine(threadId: string): "claude" | "gemini" | "grok" | "
   }
   if (threadId.startsWith("opencode:") || threadId.startsWith("opencode-pending-")) {
     return "opencode";
+  }
+  if (threadId.startsWith("dsh:") || threadId.startsWith("dsh-pending-")) {
+    return "dsh";
   }
   if (threadId.startsWith("codex:") || threadId.startsWith("codex-pending-")) {
     return "codex";

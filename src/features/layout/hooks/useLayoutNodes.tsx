@@ -184,7 +184,7 @@ const EMPTY_PROJECT_MAP_IMPACT_INPUT: ProjectMapImpactInput = {
 function toConversationEngine(
   engine: EngineType | undefined,
 ): ConversationEngine {
-  if (engine === "claude" || engine === "gemini" || engine === "grok" || engine === "kimi" || engine === "opencode") {
+  if (engine === "claude" || engine === "gemini" || engine === "grok" || engine === "kimi" || engine === "opencode" || engine === "dsh") {
     return engine;
   }
   return "codex";
@@ -227,6 +227,12 @@ function inferConversationEngineFromThreadId(
     normalizedThreadId.startsWith("opencode-pending-")
   ) {
     return "opencode";
+  }
+  if (
+    normalizedThreadId.startsWith("dsh:") ||
+    normalizedThreadId.startsWith("dsh-pending-")
+  ) {
+    return "dsh";
   }
   if (
     normalizedThreadId.startsWith("codex:") ||

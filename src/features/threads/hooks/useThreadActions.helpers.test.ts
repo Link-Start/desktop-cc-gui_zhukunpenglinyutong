@@ -16,6 +16,7 @@ import {
   mergeGeminiSessionSummaries,
   mergeGrokSessionSummaries,
   mergeKimiSessionSummaries,
+  mergeDshSessionSummaries,
   mergeThreadSummaryPreservingStableIdentity,
   resolveThreadSourceMeta,
   seedLastGoodEngineIntoMerged,
@@ -1188,6 +1189,61 @@ describe("useThreadActions.helpers", () => {
       hidden,
     );
     expect(merged.map((row) => row.id)).toEqual(["kimi:ok"]);
+  });
+
+  it("mergeDsh prefixes native session ids and keeps workspace membership", () => {
+    const merged = mergeDshSessionSummaries(
+      [
+        {
+          id: "claude:other",
+          name: "Claude",
+          updatedAt: 1,
+          engineSource: "claude",
+        },
+      ],
+      [
+        {
+          sessionId: "sess-a",
+          firstMessage: "hello from dsh",
+          updatedAt: 30,
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+    expect(merged.map((row) => row.id)).toEqual(["dsh:sess-a", "claude:other"]);
+    expect(merged[0]).toMatchObject({
+      id: "dsh:sess-a",
+      engineSource: "dsh",
+      name: "hello from dsh",
+    });
+  });
+
+  it("mergeDsh clears leaked baseline with empty sessions", () => {
+    const hidden = new Set(["dsh:leaked"]);
+    const merged = mergeDshSessionSummaries(
+      [
+        {
+          id: "dsh:leaked",
+          name: "Leaked",
+          updatedAt: 1,
+          engineSource: "dsh",
+        },
+        {
+          id: "dsh:ok",
+          name: "OK",
+          updatedAt: 2,
+          engineSource: "dsh",
+        },
+      ],
+      [],
+      "ws-1",
+      {},
+      () => undefined,
+      hidden,
+    );
+    expect(merged.map((row) => row.id)).toEqual(["dsh:ok"]);
   });
 
 });

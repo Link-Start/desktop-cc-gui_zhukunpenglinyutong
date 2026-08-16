@@ -59,6 +59,23 @@ describe("CliCustomPathDialog", () => {
     vi.clearAllMocks();
   });
 
+  it("renders DSH as a custom path engine", () => {
+    render(
+      <CliCustomPathDialog
+        isOpen
+        engine="dsh"
+        initialPath={null}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Custom path for DeepSeek Harness" }),
+    ).not.toBeNull();
+    expect(screen.getByText("dsh")).not.toBeNull();
+  });
+
   it("renders a unified title and system mode for every engine", () => {
     render(
       <CliCustomPathDialog

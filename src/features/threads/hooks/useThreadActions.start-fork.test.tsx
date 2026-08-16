@@ -608,6 +608,29 @@ describe("useThreadActions start/fork", () => {
     ]);
   });
 
+  it("creates an optimistic DSH pending thread instead of falling back to Codex", async () => {
+    const { result, dispatch, loadedThreadsRef } = renderActions();
+
+    let threadId: string | null = null;
+    await act(async () => {
+      threadId = await result.current.startThreadForWorkspace("ws-1", {
+        engine: "dsh",
+      });
+    });
+
+    expect(threadId).toMatch(/^dsh-pending-/);
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "ensureThread",
+        workspaceId: "ws-1",
+        threadId,
+        engine: "dsh",
+      }),
+    );
+    expect(threadId ? loadedThreadsRef.current[threadId] : false).toBe(true);
+    expect(startThread).not.toHaveBeenCalled();
+  });
+
   it("allows opencode thread creation past the execution policy gate", async () => {
     const { result, dispatch, loadedThreadsRef } = renderActions();
 

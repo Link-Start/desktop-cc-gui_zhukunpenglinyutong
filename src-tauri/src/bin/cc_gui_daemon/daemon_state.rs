@@ -665,6 +665,11 @@ impl DaemonState {
         crate::codex::run_opencode_doctor_with_settings(opencode_bin, &settings).await
     }
 
+    pub(super) async fn dsh_doctor(&self, dsh_bin: Option<String>) -> Result<Value, String> {
+        let settings = self.app_settings.lock().await.clone();
+        crate::codex::run_dsh_doctor_with_settings(dsh_bin, &settings).await
+    }
+
     pub(super) async fn cli_install_plan(
         &self,
         engine: crate::codex_installer::CliInstallEngine,
@@ -887,6 +892,18 @@ impl DaemonState {
                 },
             )
             .await;
+        self.engine_manager
+            .set_engine_config(
+                engine::EngineType::Dsh,
+                engine::EngineConfig {
+                    bin_path: settings.dsh_bin.clone(),
+                    home_dir: None,
+                    custom_args: None,
+                    default_model: None,
+                },
+            )
+            .await;
+        let _ = engine::dsh::runtime_settings_from_app(&settings);
     }
 
     pub(super) async fn detect_engines(&self) -> Vec<engine::EngineStatus> {
@@ -1341,6 +1358,9 @@ impl DaemonState {
                                     }
                                     engine::EngineType::Grok => {
                                         current_thread_id = format!("grok:{}", session_id);
+                                    }
+                                    engine::EngineType::Dsh => {
+                                        current_thread_id = format!("dsh:{}", session_id);
                                     }
                                     engine::EngineType::Codex => {}
                                 }
@@ -2325,6 +2345,45 @@ impl DaemonState {
                     }
                 }))
             }
+            engine::EngineType::Dsh => {
+                let workspace_path = self.workspace_path_for_engine(&workspace_id).await?;
+                let runtime = engine::dsh::runtime_settings_from_app(&settings);
+                let resume_id = session_id.as_deref().or(thread_id.as_deref());
+                let outcome = engine::dsh::send_user_turn(
+                    &runtime,
+                    None,
+                    &workspace_id,
+                    &workspace_path,
+                    &text,
+                    model.as_deref(),
+                    effort.as_deref(),
+                    images.as_deref(),
+                    resume_id,
+                    continue_session,
+                )
+                .await?;
+                self.record_auto_session_metadata_if_present(
+                    &workspace_id,
+                    Some(outcome.native_session_id.as_str()),
+                    auto_session,
+                    "dsh",
+                )
+                .await;
+                Ok(json!({
+                    "engine": "dsh",
+                    "sessionId": outcome.thread_id,
+                    "result": {
+                        "turn": {
+                            "id": outcome.turn_id,
+                            "status": "started",
+                        }
+                    },
+                    "turn": {
+                        "id": outcome.turn_id,
+                        "status": "started",
+                    }
+                }))
+            }
         }
     }
 
@@ -2680,6 +2739,44 @@ impl DaemonState {
                     "text": response,
                 }))
             }
+            engine::EngineType::Dsh => {
+                let workspace_path = self.workspace_path_for_engine(&workspace_id).await?;
+                let runtime = engine::dsh::runtime_settings_from_app(&settings);
+                let resume_id = session_id.as_deref();
+                let outcome = engine::dsh::send_user_turn(
+                    &runtime,
+                    None,
+                    &workspace_id,
+                    &workspace_path,
+                    &text,
+                    model.as_deref(),
+                    effort.as_deref(),
+                    images.as_deref(),
+                    resume_id,
+                    continue_session,
+                )
+                .await?;
+                let (_snapshot, client) = engine::dsh::ensure_ready(&runtime).await?;
+                let response = engine::dsh::collect_turn_text(
+                    &client,
+                    &outcome.native_session_id,
+                    outcome.turn_waiter,
+                    std::time::Duration::from_secs(900),
+                )
+                .await?;
+                self.record_auto_session_metadata_if_present(
+                    &workspace_id,
+                    Some(outcome.native_session_id.as_str()),
+                    auto_session,
+                    "dsh",
+                )
+                .await;
+                Ok(json!({
+                    "engine": "dsh",
+                    "sessionId": outcome.thread_id,
+                    "text": response,
+                }))
+            }
         }
     }
 
@@ -2714,6 +2811,14 @@ impl DaemonState {
                 self.engine_manager
                     .interrupt_grok_sessions(&workspace_id, None)
                     .await
+            }
+            engine::EngineType::Dsh => {
+                let settings = self.app_settings.lock().await.clone();
+                engine::dsh::interrupt_workspace(
+                    &engine::dsh::runtime_settings_from_app(&settings),
+                    &workspace_id,
+                )
+                .await
             }
         }
     }
@@ -2776,6 +2881,14 @@ impl DaemonState {
                 self.engine_manager
                     .interrupt_grok_sessions(&workspace_id, Some(&turn_id))
                     .await
+            }
+            engine::EngineType::Dsh => {
+                let settings = self.app_settings.lock().await.clone();
+                engine::dsh::interrupt_turn(
+                    &engine::dsh::runtime_settings_from_app(&settings),
+                    &turn_id,
+                )
+                .await
             }
         }
     }
@@ -3949,6 +4062,12 @@ impl DaemonState {
         result: Value,
         provider_profile_id: Option<String>,
     ) -> Result<Value, String> {
+        if let Some(dsh_request) = crate::engine::dsh::parse_control_request(&request_id) {
+            let settings = self.app_settings.lock().await.clone();
+            let runtime = crate::engine::dsh::runtime_settings_from_app(&settings);
+            crate::engine::dsh::respond_to_control(&runtime, dsh_request, &result).await?;
+            return Ok(json!({ "ok": true }));
+        }
         if request_id.is_string() {
             for session in self
                 .engine_manager

@@ -15,6 +15,8 @@ describe("sharedSessionEngines", () => {
 
   it("keeps unsupported engines on claude fallback", () => {
     expect(isSharedSessionSupportedEngine("gemini")).toBe(false);
+    expect(isSharedSessionSupportedEngine("dsh")).toBe(false);
     expect(normalizeSharedSessionEngine("gemini")).toBe("claude");
+    expect(normalizeSharedSessionEngine("dsh")).toBe("claude");
   });
 });

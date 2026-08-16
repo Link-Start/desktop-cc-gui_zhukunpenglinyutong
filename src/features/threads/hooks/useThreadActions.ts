@@ -12,6 +12,7 @@ import {
   listGeminiSessions as listGeminiSessionsService,
   listGrokSessions as listGrokSessionsService,
   listKimiSessions as listKimiSessionsService,
+  listDshSessions as listDshSessionsService,
   getOpenCodeSessionList as getOpenCodeSessionListService,
   listSessionIndexForWorkspace as listSessionIndexForWorkspaceService,
 } from "../../../services/tauri";
@@ -68,10 +69,12 @@ import {
   mergeGeminiSessionSummaries,
   mergeGrokSessionSummaries,
   mergeKimiSessionSummaries,
+  mergeDshSessionSummaries,
   mergeThreadSummaryPreservingStableIdentity,
   normalizeGeminiSessionSummaries,
   normalizeGrokSessionSummaries,
   normalizeKimiSessionSummaries,
+  normalizeDshSessionSummaries,
   normalizeThreadListPartialSource,
   resolveThreadSourceMeta,
   seedLastGoodClaudeIntoMerged,
@@ -87,6 +90,7 @@ import {
   type GeminiSessionSummary,
   type GrokSessionSummary,
   type KimiSessionSummary,
+  type DshSessionSummary,
 } from "./useThreadActions.helpers";
 import { buildPartialHistoryDiagnostic } from "../utils/stabilityDiagnostics";
 import { buildThreadDebugCorrelation } from "../utils/threadDebugCorrelation";
@@ -106,6 +110,8 @@ import {
   GROK_SESSION_FETCH_TIMEOUT_MS,
   KIMI_SESSION_CACHE_TTL_MS,
   KIMI_SESSION_FETCH_TIMEOUT_MS,
+  DSH_SESSION_CACHE_TTL_MS,
+  DSH_SESSION_FETCH_TIMEOUT_MS,
   NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS,
   OPENCODE_FULL_CATALOG_FETCH_TIMEOUT_MS,
   THREAD_LIST_LIVE_REQUEST_TIMEOUT_MS,
@@ -179,6 +185,10 @@ export function useThreadActions({
     Record<string, { fetchedAt: number; sessions: GrokSessionSummary[] }>
   >({});
   const grokRefreshAttemptedRef = useRef<Record<string, boolean>>({});
+  const dshSessionCacheRef = useRef<
+    Record<string, { fetchedAt: number; sessions: DshSessionSummary[] }>
+  >({});
+  const dshRefreshAttemptedRef = useRef<Record<string, boolean>>({});
   const threadListRequestSeqRef = useRef<Record<string, number>>({});
   const lastGoodThreadSummariesByWorkspaceEngineRef = useRef<
     Record<string, LastGoodThreadSummariesByEngine>
@@ -635,10 +645,24 @@ export function useThreadActions({
           activeThreadId.startsWith("grok:") ||
           activeThreadId.startsWith("grok-pending-") ||
           Object.keys(mappedTitles).some((id) => id.startsWith("grok:"));
+        const hasDshSignal =
+          existingThreads.some(
+            (thread) =>
+              thread.engineSource === "dsh" ||
+              thread.id.startsWith("dsh:") ||
+              thread.id.startsWith("dsh-pending-"),
+          ) ||
+          activeThreadId.startsWith("dsh:") ||
+          activeThreadId.startsWith("dsh-pending-") ||
+          Object.keys(mappedTitles).some((id) => id.startsWith("dsh:"));
         const cachedGrok = grokSessionCacheRef.current[workspace.id];
         const hasFreshGrokCache =
           !!cachedGrok &&
           Date.now() - cachedGrok.fetchedAt <= GROK_SESSION_CACHE_TTL_MS;
+        const cachedDsh = dshSessionCacheRef.current[workspace.id];
+        const hasFreshDshCache =
+          !!cachedDsh &&
+          Date.now() - cachedDsh.fetchedAt <= DSH_SESSION_CACHE_TTL_MS;
         const knownActivityByThread =
           threadActivityRef.current[workspace.id] ?? {};
         const hasKnownActivity = Object.keys(knownActivityByThread).length > 0;
@@ -1438,6 +1462,48 @@ export function useThreadActions({
             }
           });
         }
+        if (hasDshSignal) {
+          existingThreads.forEach((thread) => {
+            if (
+              thread.threadKind === "shared" ||
+              hiddenSharedBindingIds.has(thread.id)
+            ) {
+              return;
+            }
+            const isDshThread =
+              thread.engineSource === "dsh" ||
+              thread.id.startsWith("dsh:") ||
+              thread.id.startsWith("dsh-pending-");
+            if (
+              !isDshThread ||
+              !isRetainableEngineContinuitySummary("dsh", thread)
+            ) {
+              return;
+            }
+            const prev = mergedById.get(thread.id);
+            const threadUpdatedAt = Number.isFinite(thread.updatedAt)
+              ? Math.max(0, thread.updatedAt)
+              : 0;
+            const updatedAt =
+              threadUpdatedAt ||
+              nextActivityByThread[thread.id] ||
+              prev?.updatedAt ||
+              0;
+            if (updatedAt > (nextActivityByThread[thread.id] ?? 0)) {
+              nextActivityByThread[thread.id] = updatedAt;
+              didChangeActivity = true;
+            }
+            const next: ThreadSummary = {
+              ...thread,
+              updatedAt,
+              engineSource: "dsh",
+              threadKind: thread.threadKind ?? "native",
+            };
+            if (!prev || next.updatedAt >= prev.updatedAt) {
+              mergedById.set(thread.id, next);
+            }
+          });
+        }
         allSummaries = Array.from(mergedById.values()).sort(
           (a, b) => b.updatedAt - a.updatedAt,
         );
@@ -1478,6 +1544,19 @@ export function useThreadActions({
             mappedTitles,
             getCustomName,
             nativeOwnerToSharedThreadId,
+            hiddenSharedBindingIds,
+          );
+        }
+        if (hasFreshDshCache && cachedDsh.sessions.length > 0) {
+          allSummaries = mergeDshSessionSummaries(
+            allSummaries,
+            cachedDsh.sessions.filter(
+              (session) =>
+                !hiddenSharedBindingIds.has(`dsh:${session.sessionId}`),
+            ),
+            workspace.id,
+            mappedTitles,
+            getCustomName,
             hiddenSharedBindingIds,
           );
         }
@@ -1838,6 +1917,12 @@ export function useThreadActions({
           isLatestThreadListRequest() &&
           !isFirstPaintHydration &&
           (hasGrokSignal || !!cachedGrok || !hasAttemptedGrokRefresh);
+        const hasAttemptedDshRefresh =
+          dshRefreshAttemptedRef.current[workspace.id] === true;
+        const shouldRefreshDshSessions =
+          isLatestThreadListRequest() &&
+          !isFirstPaintHydration &&
+          (hasDshSignal || !!cachedDsh || !hasAttemptedDshRefresh);
         if (shouldRefreshGrokSessions) {
           void (async () => {
             grokRefreshAttemptedRef.current[workspace.id] = true;
@@ -2041,6 +2126,87 @@ export function useThreadActions({
               // Input-aware batch boundary: let a pending click land before
               // this commit, then re-verify freshness — a newer list request
               // (or soft-cancel) during the yield must win over this apply.
+              await yieldIfInteractiveInputPending();
+              if (!isLatestThreadListRequest()) {
+                return;
+              }
+              dispatch({
+                type: "setThreads",
+                workspaceId: workspace.id,
+                threads: visibleNextSummaries,
+              });
+              latestThreadsByWorkspaceRef.current = {
+                ...latestThreadsByWorkspaceRef.current,
+                [workspace.id]: visibleNextSummaries,
+              };
+            }
+          })();
+        }
+        if (shouldRefreshDshSessions) {
+          void (async () => {
+            dshRefreshAttemptedRef.current[workspace.id] = true;
+            const dshResult = await withTimeout(
+              listDshSessionsService(workspace.path, 50),
+              DSH_SESSION_FETCH_TIMEOUT_MS,
+            );
+            if (!isLatestThreadListRequest()) {
+              return;
+            }
+            if (dshResult === null) {
+              onDebug?.({
+                id: `${Date.now()}-client-dsh-session-timeout`,
+                timestamp: Date.now(),
+                source: "client",
+                label: "thread/list dsh timeout",
+                payload: {
+                  workspaceId: workspace.id,
+                  timeoutMs: DSH_SESSION_FETCH_TIMEOUT_MS,
+                },
+              });
+              return;
+            }
+            const normalizedDshSessions =
+              normalizeDshSessionSummaries(dshResult);
+            dshSessionCacheRef.current[workspace.id] = {
+              fetchedAt: Date.now(),
+              sessions: normalizedDshSessions,
+            };
+            const currentSnapshot =
+              latestThreadsByWorkspaceRef.current[workspace.id] ?? [];
+            const baselineSummaries =
+              currentSnapshot.length > 0 ? currentSnapshot : allSummaries;
+            const nextSummaries = mergeDshSessionSummaries(
+              baselineSummaries,
+              normalizedDshSessions.filter(
+                (session) =>
+                  !hiddenSharedBindingIds.has(`dsh:${session.sessionId}`),
+              ),
+              workspace.id,
+              mappedTitles,
+              getCustomName,
+              hiddenSharedBindingIds,
+            );
+            const visibleNextSummaries = applySessionArchiveState(
+              stripHiddenSharedBindingSummaries(
+                nextSummaries,
+                hiddenSharedBindingIds,
+              ),
+              await archivedSessionMapPromise,
+            );
+            const unchanged =
+              visibleNextSummaries.length === baselineSummaries.length &&
+              visibleNextSummaries.every((entry, index) => {
+                const prev = baselineSummaries[index];
+                return (
+                  !!prev &&
+                  prev.id === entry.id &&
+                  prev.name === entry.name &&
+                  prev.updatedAt === entry.updatedAt &&
+                  prev.engineSource === entry.engineSource &&
+                  prev.threadKind === entry.threadKind
+                );
+              });
+            if (!unchanged) {
               await yieldIfInteractiveInputPending();
               if (!isLatestThreadListRequest()) {
                 return;

@@ -5825,7 +5825,7 @@ mod shared_interrupt_owner_tests {
                 EngineType::Kimi => "kimi-k2".to_string(),
                 EngineType::Grok => "ccgui/grok-4.5".to_string(),
                 EngineType::OpenCode => "ccgui/opencode-model".to_string(),
-                EngineType::Gemini => "unsupported".to_string(),
+                EngineType::Gemini | EngineType::Dsh => "unsupported".to_string(),
             }),
             reasoning_effort: Some("medium".to_string()),
             provider_profile_name_snapshot: Some(provider.to_string()),
@@ -5894,7 +5894,9 @@ mod shared_interrupt_owner_tests {
             EngineType::Claude | EngineType::Kimi | EngineType::Grok | EngineType::OpenCode => {
                 format!("{}:native-{provider}", engine.icon())
             }
-            EngineType::Codex | EngineType::Gemini => format!("native-{provider}"),
+            EngineType::Codex | EngineType::Gemini | EngineType::Dsh => {
+                format!("native-{provider}")
+            }
         };
         assert_eq!(route.native_thread_id, expected_native_thread_id);
         assert_eq!(route.runtime_turn_id, format!("run-{provider}"));

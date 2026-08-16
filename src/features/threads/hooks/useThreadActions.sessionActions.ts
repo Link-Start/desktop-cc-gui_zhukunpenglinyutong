@@ -7,6 +7,7 @@ import {
   deleteGeminiSession as deleteGeminiSessionService,
   deleteGrokSession as deleteGrokSessionService,
   deleteKimiSession as deleteKimiSessionService,
+  deleteDshSession as deleteDshSessionService,
   deleteOpenCodeSession as deleteOpenCodeSessionService,
   deleteCodexSession as deleteCodexSessionService,
   renameThreadTitleKey as renameThreadTitleKeyService,
@@ -219,6 +220,15 @@ export function createDeleteThreadForWorkspaceAction(params: {
         throw new Error("workspace not connected");
       }
       await deleteKimiSessionService(workspacePath, sessionId);
+      return;
+    }
+    if (threadId.startsWith("dsh:")) {
+      const sessionId = threadId.slice("dsh:".length);
+      const workspacePath = workspacePathsByIdRef.current[workspaceId];
+      if (!workspacePath) {
+        throw new Error("workspace not connected");
+      }
+      await deleteDshSessionService(workspacePath, sessionId);
       return;
     }
     await deleteCodexSessionService(workspaceId, threadId);
