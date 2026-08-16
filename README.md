@@ -12,7 +12,9 @@
 
 </div>
 
-**ccgui** is an open-source desktop client for AI coding. In plain words: it brings command-line AI coding runtimes such as Claude Code, Codex CLI, Gemini CLI, and OpenCode into one graphical interface.
+**ccgui** is an open-source **multi-engine AI coding desktop client**. In plain words: it brings command-line AI coding runtimes such as Claude Code, Codex CLI, Gemini CLI, OpenCode, and **DeepSeek Harness (DSH)** into one graphical interface.
+
+It is **not** a DSH Web UI shell and **not** a `dsh-plugin`. DSH is one of several native engines; models and API keys for DSH still live in the DSH host / Web UI, while ccgui provides the unified chat, files, Git, and project intelligence surface.
 
 No more staring at a black terminal. Open ccgui, pick a project, and chat with AI to write code, fix bugs, and commit to Git. File and tool activity is visible as it happens; token usage and estimated cost appear when the selected runtime supplies the required metadata.
 
@@ -26,8 +28,9 @@ The app is built with **Tauri 2 + React 19 + TypeScript + Rust** and runs on mac
 
 ### One client, multiple AI engines
 
-- Registers runtime adapters for **Claude Code**, **Codex CLI**, **Gemini CLI**, and **OpenCode**. Gemini is enabled by default; OpenCode is optional. Their planned retirement remains an active migration, not shipped behavior.
+- Registers runtime adapters for **Claude Code**, **Codex CLI**, **Gemini CLI**, **OpenCode**, and **DeepSeek Harness (DSH)**. Gemini is enabled by default; OpenCode is optional. Their planned retirement remains an active migration, not shipped behavior.
 - Claude and Codex support managed provider profiles. Gemini and OpenCode retain the provider/configuration model exposed by their own runtimes.
+- **DeepSeek Harness** is a native engine (`dsh-host-rpc`): ccgui can adopt a running local `dsh web` host or start one, then create / resume / fork DSH sessions in the same GUI as the other engines. Models and credentials stay in DSH — this repo is not installable via `dsh plugin add`.
 - Sessions survive restarts: close the app and your conversation history is still there. Resume broken sessions and see how much context each one is using.
 
 ### A chat box designed for coding
@@ -81,6 +84,15 @@ Grab the installer for your platform from the [Releases page](https://github.com
 | Linux | `.AppImage` |
 
 After installing, configure your AI engine in Settings (e.g. a Claude Code API key or local CLI), add a project folder, and you're good to go.
+
+### Using DeepSeek Harness (DSH)
+
+1. Install the DSH CLI on your machine (for example `npm i -g @deepseek-ai/dsh`, or use a local binary you already have).
+2. Configure models and API keys in the **DSH Web UI** / host — not as a separate vendor preset inside ccgui.
+3. In ccgui Settings → CLI validation / engine settings, pick **DeepSeek Harness**, set host/port if needed, and optionally enable auto-start of the local host.
+4. Select **DeepSeek Harness** in the composer engine picker and start chatting.
+
+ccgui is a multi-engine desktop client for DSH, not a plugin package and not a re-skinned official Web UI.
 
 ---
 
@@ -276,6 +288,11 @@ Not sure where to start? Browse the [Issues](https://github.com/zhukunpenglinyut
 ## Friendship Link
 
 Thanks for the support and feedback from the friends at [LINUX DO](https://linux.do/).
+
+### DeepSeek Harness ecosystem
+
+- Public DSH plugin discovery: [github.com/topics/dsh-plugin](https://github.com/topics/dsh-plugin) (plugins only — this client is **not** a `dsh-plugin`).
+- Curated ecosystem list: [Awesome DeepSeek Harness](https://github.com/0xsline/awesome-deepseek-harness) — proposed under **IDE & Clients** as a multi-engine desktop client.
 
 ---
 
