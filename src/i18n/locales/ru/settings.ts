@@ -1281,7 +1281,6 @@ const settings = {
     "cliValidationTabKimiCli": "Kimi CLI",
     "cliValidationTabGrokCli": "Grok CLI",
     "cliValidationTabPiCli": "PI CLI",
-    "cliValidationTabPiCli": "PI CLI",
     "cliEngineEnabledLabel": "Движок включён",
     "geminiCliDisableDescription": "Полностью отключить Gemini CLI. После отключения определение при запуске и точки входа движка немедленно останавливаются.",
     "openCodeCliDisableDescription": "Полностью отключить OpenCode CLI. После отключения проверка при запуске, проверки поставщиков и точки входа движка немедленно останавливаются.",

@@ -587,7 +587,6 @@ export function useThreadActions({
               type: "setThreads",
               workspaceId: workspace.id,
               threads: earlyIndexSummaries,
-              mode: options?.mergeExistingThreads ? "merge" : undefined,
             });
             earlyIndexPaintApplied = true;
             appliedThreadListUpdate = true;
@@ -637,7 +636,6 @@ export function useThreadActions({
               type: "setThreads",
               workspaceId: workspace.id,
               threads: earlyPiSummaries,
-              mode: options?.mergeExistingThreads ? "merge" : undefined,
             });
             earlyIndexPaintApplied = true;
             appliedThreadListUpdate = true;
@@ -1890,7 +1888,6 @@ export function useThreadActions({
             type: "setThreads",
             workspaceId: workspace.id,
             threads: visibleSummaries,
-            mode: options?.mergeExistingThreads ? "merge" : undefined,
           });
           dispatch({
             type: "setThreadListCursor",

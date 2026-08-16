@@ -10,8 +10,6 @@ import {
   getWorkspaceFiles,
   interruptTurn,
   listGeminiSessions,
-  listPiSessions,
-  invalidateSessionIndexForWorkspace,
   listMcpServerStatus,
   loadClaudeSession,
   resolveEnabledBuiltInAgent,

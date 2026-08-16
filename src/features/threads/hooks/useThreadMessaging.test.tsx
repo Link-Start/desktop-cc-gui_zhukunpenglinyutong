@@ -18,7 +18,6 @@ import {
   engineSendMessage,
   interruptTurn,
   listGeminiSessions,
-  listPiSessions,
   invalidateSessionIndexForWorkspace,
   loadClaudeSession,
   projectMemoryCaptureTurnInput,

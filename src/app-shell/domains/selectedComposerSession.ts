@@ -13,7 +13,7 @@ const GROK_REASONING_EFFORTS = new Set(["low", "medium", "high"]);
 
 export function resolveThreadEngine(
   threadId: string,
-): "claude" | "gemini" | "grok" | "kimi" | "opencode" | "codex" | null {
+): "claude" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "codex" | null {
   if (
     threadId.startsWith("claude:") ||
     threadId.startsWith("claude-pending-") ||
@@ -32,6 +32,9 @@ export function resolveThreadEngine(
   }
   if (threadId.startsWith("opencode:") || threadId.startsWith("opencode-pending-")) {
     return "opencode";
+  }
+  if (threadId.startsWith("pi:") || threadId.startsWith("pi-pending-")) {
+    return "pi";
   }
   if (threadId.startsWith("codex:") || threadId.startsWith("codex-pending-")) {
     return "codex";

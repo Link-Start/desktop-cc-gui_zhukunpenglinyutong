@@ -151,6 +151,8 @@ export function resetUseThreadActionsTestMocks() {
     deleted: true,
     method: "filesystem",
   });
+  vi.mocked(deletePiSession).mockResolvedValue(undefined);
+  vi.mocked(tombstoneSessionIndexRows).mockResolvedValue(0);
   vi.mocked(deleteCodexSession).mockResolvedValue({
     deleted: true,
     deletedCount: 1,

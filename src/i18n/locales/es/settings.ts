@@ -1281,7 +1281,6 @@ const settings = {
     "cliValidationTabKimiCli": "Kimi CLI",
     "cliValidationTabGrokCli": "Grok CLI",
     "cliValidationTabPiCli": "PI CLI",
-    "cliValidationTabPiCli": "PI CLI",
     "cliEngineEnabledLabel": "Motor activado",
     "geminiCliDisableDescription": "Desactiva Gemini CLI por completo. Una vez desactivado, la detección de inicio y los puntos de entrada del motor se detienen de inmediato.",
     "openCodeCliDisableDescription": "Desactiva OpenCode CLI por completo. Una vez desactivado, el sondeo de inicio, las comprobaciones del proveedor y los puntos de entrada del motor se detienen de inmediato.",
