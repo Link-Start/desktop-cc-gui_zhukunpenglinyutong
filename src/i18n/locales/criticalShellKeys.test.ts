@@ -44,4 +44,15 @@ describe("i18n full locale shell keys", () => {
       expect(pack.settings ?? pack).toBeTruthy();
     }
   });
+
+  it("includes first-run onboarding copy in the critical pack", () => {
+    expect(
+      (zhCritical as { onboarding?: { welcome?: { title?: string } } }).onboarding
+        ?.welcome?.title,
+    ).toBeTruthy();
+    expect(
+      (enCritical as { onboarding?: { welcome?: { start?: string } } }).onboarding
+        ?.welcome?.start,
+    ).toBeTruthy();
+  });
 });

@@ -497,6 +497,14 @@ const settings = {
       "Basic configuration for appearance, behavior, and environment.",
     basicAppearance: "Appearance",
     basicBehavior: "Behavior",
+    rerunOnboardingTitle: "First-run setup",
+    rerunOnboardingDesc:
+      "Choose your editor again, and validate at least one AI engine.",
+    rerunOnboardingAction: "Run setup again",
+    editorHabitTitle: "Editor habit",
+    editorHabitDesc:
+      "Used for opening files and later Git / editor adaptations. You can change this anytime.",
+    editorHabitUnset: "Not set",
     behaviorStreaming: "Streaming Output",
     behaviorStreamingDesc:
       "When enabled, responses appear word by word. Disable to show complete responses at once.",

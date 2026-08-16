@@ -485,6 +485,12 @@ const settings = {
     basicDescription: "外观、行为和环境的基础配置。",
     basicAppearance: "外观",
     basicBehavior: "行为",
+    rerunOnboardingTitle: "新手设置",
+    rerunOnboardingDesc: "重新选择编辑器习惯，并验证至少一个 AI 引擎。",
+    rerunOnboardingAction: "重新运行新手设置",
+    editorHabitTitle: "编辑器习惯",
+    editorHabitDesc: "决定文件打开、以及后续 Git 展示等适配。可以随时更换。",
+    editorHabitUnset: "未选择",
     behaviorStreaming: "流式输出",
     behaviorStreamingDesc:
       "启用后响应将逐字显示。禁用则等待完整响应后一次性展示。",

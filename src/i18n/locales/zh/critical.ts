@@ -35,6 +35,7 @@ import noteCards from "./noteCards";
 import searchPalette from "./searchPalette";
 import threadCompletion from "./threadCompletion";
 import usage from "./usage";
+import onboarding from "./onboarding";
 
 const critical = {
   ...common,
@@ -74,6 +75,7 @@ const critical = {
   ...searchPalette,
   ...threadCompletion,
   ...usage,
+  ...onboarding,
 };
 
 export default critical;

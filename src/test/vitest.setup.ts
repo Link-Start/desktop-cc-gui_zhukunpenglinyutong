@@ -422,6 +422,14 @@ const mockTranslate = (key: string, params?: Record<string, unknown>) => {
           "Choose the icon used in the Dock/taskbar and across the app.",
         "settings.dockIconDefault": "Default",
         "settings.basicBehavior": "Behavior",
+        "settings.rerunOnboardingTitle": "First-run setup",
+        "settings.rerunOnboardingDesc":
+          "Choose your editor again, and validate at least one AI engine.",
+        "settings.rerunOnboardingAction": "Run setup again",
+        "settings.editorHabitTitle": "Editor habit",
+        "settings.editorHabitDesc":
+          "Used for opening files and later Git / editor adaptations.",
+        "settings.editorHabitUnset": "Not set",
         "settings.browserAgentTitle": "Built-in Browser Agent",
         "settings.browserAgentDesc":
           "Let AI conversations use the client's embedded browser context for web page understanding and later browser actions.",
