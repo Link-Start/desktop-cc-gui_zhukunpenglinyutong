@@ -5,6 +5,7 @@ describe("openAppPresets", () => {
   it("excludes mac-only presets on windows", () => {
     const ids = getOpenAppPresetsForHost("windows").map((p) => p.id);
     expect(ids).toContain("vscode");
+    expect(ids).toContain("idea");
     expect(ids).toContain("notepad");
     expect(ids).not.toContain("ghostty");
   });

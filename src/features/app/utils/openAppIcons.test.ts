@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   CHROME_APP_ICON,
   GENERIC_APP_ICON,
+  IDEA_APP_ICON,
   SUBLIME_APP_ICON,
+  getKnownOpenAppIcon,
   getKnownOpenAppIconByRef,
   resolveOpenAppDisplayIcon,
 } from "./openAppIcons";
@@ -24,6 +26,12 @@ describe("openAppIcons", () => {
     expect(sublime).not.toContain("%2523");
     expect(chrome).toContain("%23"); // encodeURIComponent('#')
     expect(sublime).toContain("FF9800");
+  });
+
+  it("uses the official IntelliJ product icon instead of the three-bar placeholder", () => {
+    expect(getKnownOpenAppIcon("idea")).toBe(IDEA_APP_ICON);
+    expect(IDEA_APP_ICON).not.toContain("data:image/svg+xml");
+    expect(IDEA_APP_ICON).toMatch(/idea\.png/);
   });
 
   it("prefers OS-extracted icons over built-in fallbacks", () => {

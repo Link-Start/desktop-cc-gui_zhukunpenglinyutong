@@ -40,6 +40,13 @@ export const OPEN_APP_PRESET_CATALOG: OpenAppPresetDef[] = [
     platforms: ["macos", "windows", "linux"],
   },
   {
+    id: "idea",
+    label: "IntelliJ IDEA",
+    kind: "app",
+    appName: "IntelliJ IDEA",
+    platforms: ["macos", "windows", "linux"],
+  },
+  {
     id: "sublime",
     label: "Sublime Text",
     kind: "app",
